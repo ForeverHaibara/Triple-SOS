@@ -1,5 +1,6 @@
 import sympy as sp
 import numpy as np
+from math import gcd
 
 def NextPermute(f):
     '''a^3 * b^2 * c   ->   b^3 * c^2 * a'''
@@ -177,18 +178,24 @@ def PreprocessText(poly, cyc=False, retText=False, retn=False):
     if cyc:
         poly = PreprocessText_Cyclize(poly)
     else:
-        poly = sp.polys.polytools.Poly(poly)
-
+        try:
+            poly = sp.polys.polytools.Poly(poly)
+        except:
+            poly = None
+    
     if retn:
-        n = deg(poly)
+        if poly is not None:
+            n = deg(poly)
+        else:
+            n = 0
         return poly, n
         
     return poly
 
 
-def prettyprint(y, names, precision=6, linefeed=2):
+def prettyprint(y, names, precision=6, linefeed=2, formatt=0, dectofrac=False):
     '''
-    prettily format a cyclic polynomial sum into LaTeX format
+    prettily format a cyclic polynomial sum into a certain formatt
 
     Params
     -------
@@ -204,6 +211,11 @@ def prettyprint(y, names, precision=6, linefeed=2):
     linefeed: int
         feed a new line every certain terms, no linefeed if set to zero
 
+    formatt: 
+        0: LaTeX   2: formatted
+
+    dectofrac: bool
+        whether or not convert all decimals to fractions
 
     Return
     -------
@@ -230,24 +242,53 @@ def prettyprint(y, names, precision=6, linefeed=2):
                 result += f'+ {round(coeff[0],precision)}'
             tmp = sp.latex(sp.sympify(name))
             flg = 0
-            parenthesis = 0
-            for char in tmp:
-                if char == '(':
-                    parenthesis += 1
-                elif char == ')':
-                    parenthesis -= 1
-                if parenthesis == 0 and (char == '+' or char == '-'):
-                    flg = 1
-                    break
-            if flg == 0:
-                result += '\\sum ' + sp.latex(sp.sympify(name))
+            if formatt == 0:
+                parenthesis = 0
+                for char in tmp:
+                    if char == '(':
+                        parenthesis += 1
+                    elif char == ')':
+                        parenthesis -= 1
+                    if parenthesis == 0 and (char == '+' or char == '-'):
+                        flg = 1
+                        break
+                if flg == 0:
+                    result += '\\sum ' + sp.latex(sp.sympify(name))
+                else:
+                    result += '\\sum (' + sp.latex(sp.sympify(name)) +')'
             else:
-                result += '\\sum (' + sp.latex(sp.sympify(name)) +')'
+                result += 's(' + sp.latex(sp.sympify(name)) +')'
+
+    if dectofrac:
+        i = 0
+        while i < len(result):
+            if result[i] == '.':
+                j1 = i - 1
+                while j1 >= 0 and 48 <= ord(result[j1]) <= 57: # '0'~'9'
+                    j1 -= 1
+                j2 = i + 1
+                while j2 < len(result) and 48 <= ord(result[j2]) <= 57:
+                    j2 += 1
+                a , b = int(result[j1+1:i]) , int(result[i+1:j2])
+                m = 10 ** (j2 - i - 1)
+                a , b = a*m + b , m
+                _gcd = gcd(a,b)
+                a //= _gcd
+                b //= _gcd
+                result = result[:j1+1] + '\\frac{%d}{%d}'%(a,b) + result[j2:]
+                i = j1 + 10
+            i += 1
 
     if result.startswith('+ '):
         result = result[2:]
-    result = '$$' + result + '$$'
+    if formatt == 0:
+        result = '$$' + result + '$$'
+    else:
+        result = result.replace(' ','').replace('\\','').replace('frac','')
+        result = result.replace('left','').replace('right','')
+        result = result.replace('}{','/').replace('{','').replace('}','')
 
-    
     return result
 
+if __name__ == '__main__':
+    print(prettyprint([(1,2)], ['a(a-0.5*b)^2'],dectofrac=True))

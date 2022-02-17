@@ -81,7 +81,10 @@ def base_tangent(m, tangents):
     where its degree is m
     '''
     for tangent in tangents:
-        n = deg(sp.polys.polytools.Poly(tangent))
+        try:
+            n = deg(sp.polys.polytools.Poly(tangent))
+        except:
+            continue
         for _ in range(3):
             for i in range(1, m//(2*n)+1):
                 for j in range(0, (m-2*n*i)//2+1):
@@ -141,8 +144,9 @@ def generate_basis(n, dict_monom, inv_monom, tangents = None, strict_roots = Non
     nontrivial_roots = False
     if strict_roots is not None and len(strict_roots) > 0:
         for (a,b) in strict_roots:
-            if abs(a-1) > 5e-3 and abs(b-1) > 5e-3 and abs(a-b) > 5e-3:
+            if min((abs(a-1),abs(b-1),abs(a-b),abs(a),abs(b))) > 5e-3:
                 nontrivial_roots = True
+                break
 
     if not nontrivial_roots:
 

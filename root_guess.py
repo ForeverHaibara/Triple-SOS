@@ -212,7 +212,8 @@ def findroot(poly, alpha=2e-1, drawback=1e-3, tol=1e-7, maxiter=5000, roots=None
     alpha = _alpha
     
     val1, val2 = 100, 100
-    a, val2 = findbest(np.linspace(0.2,1.8,num=61), lambda x: float(poly(x)))
+    a, val2 = findbest((1./4, 3./4, 5./4, 7./4), lambda x: float(poly(x)))
+    a, val2 = findbest(np.linspace(0.2,1.8,num=61), lambda x: float(poly(x)), a, val2)
 
     # do not use Newton method to avoid nonzero local minima cases
     # still use gradient descent
@@ -282,12 +283,14 @@ def root_tengents(roots, tol=1e-6, rounding=0.19, mod=(180,252,336)):
         if abs(a - 0.643104) < tol and abs(b - 0.198062) < tol:
             tangents += ['b2+a2-2ab-bc','2c2+ab-3ac-bc','b2-a2+ab+ac-2bc','s(a3-a2b-2ab2)+6abc',
                 '2ab2-ca2-a2b-bc2+c2a','3a3+3b3-6c3+3b2c-c2a-2a2b-2bc2+16ca2-14ab2','s(2a2b-3ab2)+3abc',
-                '16a3-38a2b+a2c+17ab2+15abc-6ac2-6b2c+bc2','a3c+bc3+a2bc+4ab2c-5abc2-2ab3']
+                '16a3-38a2b+a2c+17ab2+15abc-6ac2-6b2c+bc2','a3c+bc3+a2bc+4ab2c-5abc2-2ab3',
+                'a2b+b2c+c2a-6abc']
             continue
         elif abs(a - 0.198062) < tol and abs(b - 0.643104) < tol:
             tangents += ['b2+c2-2cb-ba', '2a2+cb-3ca-ba', 'b2-c2+cb+ca-2ba', 's(c3-c2b-2cb2)+6cba', 
                 '2cb2-ac2-c2b-ba2+a2c', '3c3+3b3-6a3+3b2a-a2c-2c2b-2ba2+16ac2-14cb2', 's(2c2b-3cb2)+3cba',
-                '16c3-38c2b+c2a+17cb2+15cba-6ca2-6b2a+ba2','c3a+ba3+c2ba+4cb2a-5cba2-2cb3']
+                '16c3-38c2b+c2a+17cb2+15cba-6ca2-6b2a+ba2','c3a+ba3+c2ba+4cb2a-5cba2-2cb3',
+                'ab2+bc2+ca2-6abc']
             continue
 
         a = rationalize(a, rounding=1e-1, mod=mod)
@@ -319,6 +322,7 @@ def root_tengents(roots, tol=1e-6, rounding=0.19, mod=(180,252,336)):
 
         # initialize
         p , q , p2 , q2 = -1 , -1 , -1 , -1
+        p3 , q3 , r3 = 0 , 0 , 0
         if a[1] != -1 and b[1] != -1: # both rational numbers
             a , b = sp.Rational(a[0],a[1]) , sp.Rational(b[0],b[1])
 

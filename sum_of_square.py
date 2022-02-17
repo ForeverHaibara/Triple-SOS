@@ -72,6 +72,7 @@ def SOS(poly, tangents = [], maxiter=5000, roots = [], tangent_points = [], upde
 
     if type(tangents) == str:
         tangents = [tangents]
+    tangents += ['a2-bc','a3-bc2','a3-b2c']
 
     if type(tangent_points) == tuple:
         tangent_points = [tangent_points]
@@ -149,5 +150,5 @@ def SOS(poly, tangents = [], maxiter=5000, roots = [], tangent_points = [], upde
     return result
 
 if __name__ == '__main__':
-    s = r's(a2)(s(c(4b2-c2)(a-b)2)-11s(c2(b-a)3))'
-    x = SOS(s)
+    s = r's(a2-ab)'
+    x = SOS(s,[],maxiter=00,precision=10,updeg=10,roots=[])
