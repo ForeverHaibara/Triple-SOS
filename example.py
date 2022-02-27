@@ -8,7 +8,7 @@ from sum_of_square import *
 # pip install scipy
 # pip install numpy
 
-example = 1
+example = 2
 
 if example == 1:
     # Example 1

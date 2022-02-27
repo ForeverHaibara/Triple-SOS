@@ -1,7 +1,7 @@
 #pyinstaller --clean -Fw -p D:/Qt graphics_main.py 
+#pyinstaller --clean -w -p D:/Qt --hidden-import PySide6  graphics_main.py 
 import sys
 
-from graphviz import render
 from sum_of_square import *
 from sos_GUI import *
 from PySide6 import QtCore, QtWidgets, QtGui
@@ -101,7 +101,7 @@ class MyWidget(QtWidgets.QWidget):
         QtGui.QPainter.drawText(QtGui.QPainter(self),w*29//40,h*52//80,w*7//40,h//40,
                                     QtGui.Qt.AlignLeft,"Generated Tangents")
         
-        print('Hi')
+        #print('Hi')
         printPolyTriangle(self)
         printGridTriangle(self)
 
@@ -191,15 +191,6 @@ class MyWidget(QtWidgets.QWidget):
         self.SOS_Manager.maxiter = self.spinbox_searchstep.value()
         self.SOS_Manager.GUI_SOS(self.txt_input.text())
 
-
-
-class ShadowWidget(QtWidgets.QWidget):
-    def __init__(self):
-        super().__init__()
-        #self.setPalette(QtGui.QColor(255,255,255))
-        self.setStyleSheet('background-color:black;')
-        self.setWindowOpacity(0.2)
-        #self.setWindowFlags()
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication([])
