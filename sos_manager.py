@@ -3,6 +3,7 @@ import sympy as sp
 import numpy as np 
 import matplotlib.pyplot as plt
 from copy import deepcopy
+from numbers import Number as PythonNumber 
 
 class SOS_Manager():
     def __init__(self,GUI=None):
@@ -16,7 +17,11 @@ class SOS_Manager():
         self.sosresults = ['','','']
 
         self.zeropoly = sp.polys.polytools.Poly('a+b+c') - sp.polys.polytools.Poly('a+b+c')
+        self.polytxt = None 
         self.poly = None
+        self.poly_ishom = False 
+        self.poly_iscyc = False 
+        self.poly_isfrac = False 
         self.multiplier = None
         self.deg = 0
         self.updeg = 10
@@ -41,6 +46,7 @@ class SOS_Manager():
         self.grid_deglim = 18
         self.gridInit()
 
+
     def gridInit(self):
         '''
         Initialize the grid and preprocess some values.
@@ -61,6 +67,7 @@ class SOS_Manager():
             self.grid_precal.append( [1, i] )
             for _ in range(self.grid_deglim - 1):
                 self.grid_precal[i].append(self.grid_precal[i][-1] * i)
+
 
     def renderGrid(self):
         '''
@@ -122,14 +129,18 @@ class SOS_Manager():
                 self.grid_val[k] = (255, 255, 255, 255)
         
 
-    def setPoly(self,txt,render_grid=True):
+    def setPoly(self, txt, cancel = False, render_grid=True):
         '''
         Set the processed polynomial to some text. If render_grid == True, the grid will also be updated.
         
         Warning: The result might not refresh if the input is invalid.
         '''
+
+        if self.polytxt == txt:
+            return True 
+        
         try:
-            poly = PreprocessText(txt)
+            poly , isfrac = PreprocessText(txt, cancel = cancel)
             if poly is not None:
                 # add a zero polynomial, to ensure it has variables 'a','b','c'
                 self.poly = self.zeropoly + poly
@@ -169,30 +180,86 @@ class SOS_Manager():
         else: # empty
             self.std_monoms = []
             
+
         if render_grid:
             try:
                 self.renderGrid()
             except:
                 pass
         
+        self.polytxt = txt 
+        self.poly_isfrac = isfrac
+        self.poly_ishom, self.poly_iscyc = CheckHomCyclic(self.poly, self.deg)
         return True 
 
 
+    def getStandardForm(self, formatt = 'short'): 
+        if formatt == 'short':
+            def TitleParser(char, deg):
+                return '' if deg == 0 else (char if deg == 1 else (char + str(deg)))
+            def Formatter(x):
+                if x == 1:
+                    return '+'
+                elif x >= 0:
+                    return f'+{x}'
+                elif x == -1:
+                    return f'-'
+                else:
+                    return f'{x}'
+            if self.poly_iscyc:
+                txt = ''
+                for coeff, monom in zip(self.poly.coeffs(), self.poly.monoms()):
+                    a , b , c = monom 
+                    if a >= b and a >= c:
+                        if a == b and a == c:
+                            txt += Formatter(coeff/3) + TitleParser('a',a) + TitleParser('b',b) + TitleParser('c',c)
+                        elif (a != b and a != c) or a == b:
+                            txt += Formatter(coeff) + TitleParser('a',a) + TitleParser('b',b) + TitleParser('c',c)
+                if txt.startswith('+'):
+                    txt = txt[1:]
+                return 's(' + txt + ')'
+
+            else: # not cyclic 
+                txt = ''
+                for coeff, monom in zip(self.poly.coeffs(), self.poly.monoms()):
+                    a , b , c = monom
+                    txt += Formatter(coeff) + TitleParser('a',a) + TitleParser('b',b) + TitleParser('c', c)
+                if txt.startswith('+'):
+                    txt = txt[1:]
+                return txt 
+
     def GUI_findRoot(self):
+        if self.deg <= 1 or (not self.poly_iscyc):
+            return 
         self.roots, self.strict_roots = findroot(self.poly, maxiter=self.maxiter, roots=self.roots)
         if len(self.roots) > 0:
             self.rootsinfo = 'Local Minima Approx:'
+            print(self.roots)
+            def Formatter(root, precision = self.precision, maxlen = 20):
+                if isinstance(root, PythonNumber):
+                    return round(root, precision)
+                elif len(str(root)) > maxlen:
+                    return round(complex(root).real, precision)
+                else:
+                    return root 
             for root in self.roots:
-                self.rootsinfo += f'\n({round(root[0],self.precision)},{round(root[1],self.precision)},1)'
-                self.rootsinfo += f' = {round(float(self.poly(*root,1)),self.precision)}'
+                self.rootsinfo += f'\n({Formatter(root[0])},{Formatter(root[1])},1)'
+                self.rootsinfo += f' = {Formatter(self.poly(complex(root[0]).real, float(root[1]),1))}'
+        else:
+            self.rootsinfo = ''
+        return self.rootsinfo
+                
 
     def GUI_getTangents(self):
-        self.tangents = self.tangents_default[:] + root_tengents(self.roots)
+        self.tangents = sorted(self.tangents_default[:] + root_tangents(self.roots), key = lambda x:len(x))
+        return self.tangents
+
 
     def GUI_prettyResult(self, y, names, n):
         # 0: LaTeX
         self.sosresults[0] = prettyprint(y, names, 
                         precision=self.precision, linefeed=self.linefeed).strip('$')
+                        
         if n - self.deg >= 2:
             self.sosresults[0] = '$$\\left(\\sum a^{%d}\\right)f(a,b,c) = '%(n - self.deg) + self.sosresults[0] + '$$'
             self.sosresults[2] = 's(a^{%d})f(a,b,c) = '%(n - self.deg)
@@ -216,45 +283,48 @@ class SOS_Manager():
                         precision=self.precision, linefeed=self.linefeed, formatt=2, dectofrac=True)
                         
 
+    def GUI_stateUpdate(self, stage = None):
+        if stage is not None: 
+            self.stage = stage 
+        if self.GUI is not None:
+            self.GUI.displaySOS()
 
 
-    def GUI_SOS(self,txt):
+    def GUI_SOS(self, txt, skip_setpoly = False, skip_findroots = False, skip_tangents = False,
+                verbose_updeg = False):
         self.rootsinfo = ''
         self.stage = 0
-        if not self.setPoly(txt):
+        if (not skip_setpoly) and (not self.setPoly(txt)):
             self.stage = 70
             return ''
-        self.stage = 10
-        if self.deg <= 1 or self.deg >= self.deglim or self.poly is None:
-            self.stage = 70
-            if self.GUI is not None: self.GUI.displaySOS() #self.GUI.interface = 0
+            
+        if self.deg <= 1 or self.deg >= self.deglim or (not self.poly_iscyc) or self.poly is None:
+            self.GUI_stateUpdate(70)
             return ''
-        if self.GUI is not None: self.GUI.displaySOS() #self.GUI.repaint()
+        self.GUI_stateUpdate(10)
         self.updeg = min(self.updeg, self.deglim)
 
-        if self.maxiter > 0:
+        if self.maxiter > 0 and not skip_findroots:
             self.GUI_findRoot()
-        self.stage = 20
+            
+        self.GUI_stateUpdate(20)
 
-        if self.GUI is not None: self.GUI.displaySOS() #self.GUI.repaint()
-        self.GUI_getTangents()
-        self.stage = 30
+        if not skip_tangents:
+            self.GUI_getTangents()
 
-        if self.GUI is not None: self.GUI.displaySOS() #self.GUI.repaint()
-        retry = 1
-        while retry:
-            poly = self.poly 
-            n = self.deg
-            if self.multiplier != None:
-                poly = poly * self.multiplier 
-                n += deg(self.multiplier)
+        self.GUI_stateUpdate(30)
+        
+        # copy here to avoid troubles in async
+        strict_roots = self.strict_roots.copy()
+        tangents = self.tangents.copy()
 
+        for multiplier, poly, n in UpDegree(self.poly, self.deg, self.updeg):
             if not (n in self.dict_monoms.keys()):
                 self.dict_monoms[n] , self.inv_monoms[n] = generate_expr(n)
             
             dict_monom = self.dict_monoms[n]
-            inv_monom  = self.inv_monoms[n]           
-            b = arraylize(poly,dict_monom,inv_monom)    
+            inv_monom  = self.inv_monoms[n]        
+            b = arraylize(poly, dict_monom, inv_monom)    
                 
             # generate basis with degree n
             # make use of already-generated ones
@@ -262,10 +332,10 @@ class SOS_Manager():
                 self.names[n], self.polys[n], self.basis[n] = generate_basis(n,dict_monom,inv_monom,['a2-bc','a3-bc2','a3-b2c'],[])
 
             names, polys, basis = deepcopy(self.names[n]), deepcopy(self.polys[n]), self.basis[n].copy()
-            names, polys, basis = append_basis(n, dict_monom, inv_monom, names, polys, basis, self.tangents)
+            names, polys, basis = append_basis(n, dict_monom, inv_monom, names, polys, basis, tangents)
         
             # reduce the basis according to the strict roots
-            names, polys, basis = reduce_basis(n,dict_monom,inv_monom,names,polys,basis,self.strict_roots)
+            names, polys, basis = reduce_basis(n,dict_monom,inv_monom,names,polys,basis,strict_roots)
             x = None
 
             if len(names) > 0:
@@ -277,45 +347,38 @@ class SOS_Manager():
                     except:
                         pass
         
-            if len(names) == 0 or x is None or not x.success:
-                if n < self.updeg:
-                    # move up a degree and retry!
-                    codeg = n + 1 - self.deg
-                    self.multiplier = sp.polys.polytools.Poly(f'a^{codeg}+b^{codeg}+c^{codeg}')
-
-                    self.stage = 30 + n
-                    if self.GUI is not None: self.GUI.displaySOS() #self.GUI.repaint()
-                else: # failed
-                    self.stage = 70
-                    if self.GUI is not None: self.GUI.displaySOS() #self.GUI.repaint()
-                    return ''
-            else:
-                retry = 0
+            if len(names) != 0 and (x is not None) and x.success:
                 self.stage = 50
                 #if self.GUI is not None: self.GUI.repaint()
+                break 
+
+            self.GUI_stateUpdate(30+n)
+            if verbose_updeg:
+                print('Failed with degree %d'%n)
+        else: # failed                    
+            self.GUI_stateUpdate(70)
+            return ''
         
         # Approximates the coefficients to fractions if possible
         rounding = 0.1
-        y = rationalize_array(x.x, rounding=rounding, mod=self.mod)
+        y = rationalize_array(x.x, rounding=rounding, mod=self.mod, reliable=True)
 
         # check if the approximation works, if not, cut down the rounding and retry
         while (not verify(y,polys,poly,tol=1e-8)) and rounding > 1e-9:
             rounding *= 0.1
-            y = rationalize_array(x.x, rounding=rounding, mod=self.mod)
+            y = rationalize_array(x.x, rounding=rounding, mod=self.mod, reliable=True)
             
         # obtain the LaTeX format
         self.GUI_prettyResult(y, names, n)
         self.stage = 50
 
         if self.GUI is not None: 
-            self.GUI.displaySOS() #
+            self.GUI_stateUpdate(50)
             #self.GUI.txt_displayResult.setText(self.sosresults[self.GUI.btn_displaymodeselect])
             #self.GUI.repaint()
 
             renderLaTeX(self.sosresults[0],'Formula.png')
-            self.stage = 60
-            
-            self.GUI.displaySOS() #self.GUI.repaint()
+            self.GUI_stateUpdate(60)
 
         return self.sosresults[0]
 
@@ -474,11 +537,14 @@ if __name__ == '__main__':
     s = '3a3+3b3-6c3+3b2c-c2a-2a2b-2bc2+16ca2-14ab2'     # input
     sos.setPoly(s)   # input the text 
     sos.saveHeatmap('heatmap.png')  # save the heatmap to 'heatmap.png'
+    print(sos.getStandardForm())
     
     # another example
     s = 's(a6)+12p(a2)-78p(a(a-b))'   # input
     sos.setPoly(s)   # input the text
+    sos.saveCoeffs('coeffs.png')  # save the coefficient triangle
     x = sos.LaTeXCoeffs()  # get the latex coefficients
+    print(sos.getStandardForm())
     print(x, end='\n\n')
 
     # auto sum of square

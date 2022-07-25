@@ -1,10 +1,22 @@
+# todos:
+# 1. transfer to flask (html support)
+# 2. enable async / await
+# 3. enable mousehover hint / highlight 
+
+
+
 #pyinstaller --clean -Fw -p D:/Qt graphics_main.py 
 #pyinstaller --clean -w -p D:/Qt --hidden-import PySide6  graphics_main.py 
 import sys
 
 from sum_of_square import *
 from sos_GUI import *
-from PySide6 import QtCore, QtWidgets, QtGui
+try:
+    from PySide6 import QtCore, QtWidgets, QtGui
+    from PySide6.QtWidgets import QApplication
+except:
+    from PySide2 import QtCore, QtWidgets, QtGui
+    from PySide2.QtWidgets import QApplication
 
 class MyWidget(QtWidgets.QWidget):
     def __init__(self):
@@ -193,7 +205,7 @@ class MyWidget(QtWidgets.QWidget):
 
 
 if __name__ == "__main__":
-    app = QtWidgets.QApplication([])
+    app = QApplication([])
 
     widget = MyWidget()
     widget.resize(800, 600)

@@ -138,7 +138,7 @@ def PreprocessText_Completion(poly):
     return poly
 
 
-def PreprocessText_Cyclize(poly, tol=1e-7):
+def PreprocessText_Cyclize(poly, tol=1e-10):
     '''automatically perform cycle expansion on poly if it is not cyclic'''
     cyc_poly = sp.polys.polytools.Poly(CycleExpansion(poly))
     poly = sp.polys.polytools.Poly(poly)
@@ -149,7 +149,35 @@ def PreprocessText_Cyclize(poly, tol=1e-7):
     return poly
 
 
-def PreprocessText(poly, cyc=False, retText=False, retn=False):
+def CheckHomCyclic(poly, n):
+    '''check whether a polynomial is homogenous and cyclic'''
+    if len(poly.args) != 4:
+        for monom in poly.monoms():
+            if sum(monom) != n:
+                return False, False
+        return True, False
+
+    coeffs = {}
+    for coeff, monom in zip(poly.coeffs(), poly.monoms()):
+        if sum(monom) != n:
+            return False, False
+        coeffs[(monom[0], monom[1])] = coeff 
+        
+    for i in range((n-1)//3+1, n+1):
+        # 0 <= k = n-i-j <= i
+        for j in range(max(0,n-2*i), min(i+1,n-i+1)):
+            # a^i * b^j * c^{n-i-j}
+            u = coeffs.get((i,j))
+            v = coeffs.get((j,n-i-j))
+            if u == v: # Nones are treated the same
+                w = coeffs.get((n-i-j,i))
+                if u == w:
+                    continue 
+            return True, False 
+    return True, True 
+
+
+def PreprocessText(poly, cyc=False, retText=False, cancel=False, variables = None):
     '''
     Params
     -------
@@ -157,9 +185,9 @@ def PreprocessText(poly, cyc=False, retText=False, retn=False):
         check whether the polynomial is cyclic, if not then cyclize it
     retText: bool
         whether return the preprocessed text rather than a sympy polynomial
-    retn: bool
-        whether return the degree of the polynomial, only available when retText = False
-    
+    cancel: bool
+        whether cancel the denominator when encountering fractions 
+
     Return
     -------
     '''
@@ -175,21 +203,37 @@ def PreprocessText(poly, cyc=False, retText=False, retn=False):
         else:
             return poly
         
-    if cyc:
-        poly = PreprocessText_Cyclize(poly)
+    if cancel or (variables is not None):
+        assert (not cyc), 'Cyclic is not enabled when cancel == True or variabels is not None'
+        poly = sp.sympify(poly)
+        if variables is not None: 
+            for name, value in variables.items():
+                try:
+                    poly = poly.subs(name, value)
+                except:
+                    pass 
+            
+        if cancel:
+            frac = sp.fraction(sp.cancel(poly))
+            if not frac[1].is_constant():
+                poly = sp.polys.polytools.Poly(frac[0])
+                return poly , True 
+            else:
+                poly = sp.polys.polytools.Poly(poly)
+                return poly , False 
+                
+        poly = sp.polys.polytools.Poly(poly)
     else:
-        try:
-            poly = sp.polys.polytools.Poly(poly)
-        except:
-            poly = None
-    
-    if retn:
-        if poly is not None:
-            n = deg(poly)
+        if cyc:
+            poly = PreprocessText_Cyclize(poly)
         else:
-            n = 0
-        return poly, n
-        
+            try:
+                poly = sp.polys.polytools.Poly(poly)
+            except:
+                poly = None
+
+    if cancel:
+        return poly , False 
     return poly
 
 

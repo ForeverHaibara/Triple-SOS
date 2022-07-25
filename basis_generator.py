@@ -15,6 +15,17 @@ def arraylize(poly, dict_monom, inv_monom):
             coeffs[dict_monom[(i,j,k)]] = coeff
     return coeffs 
 
+def arraylize_sp(poly, dict_monom, inv_monom):
+    '''
+    Turn a sympy polynomial into sympy-arraylike representation.
+    '''
+    coeffs = sp.zeros(len(inv_monom), 1)
+    for coeff, monom in zip(poly.coeffs(),poly.monoms()):
+        i , j , k = monom 
+        if i >= j and (i > k or (i == k and i == j)):
+            coeffs[dict_monom[(i,j,k)]] = coeff
+    return coeffs 
+
 def invarraylize(poly, dict_monom, inv_monom):
     '''
     Turn a sympy polynomial into arraylike representation.

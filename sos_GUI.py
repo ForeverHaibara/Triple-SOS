@@ -1,6 +1,9 @@
 from sum_of_square import *
 from sos_manager import *
-from PySide6 import QtCore, QtWidgets, QtGui
+try:
+    from PySide6 import QtCore, QtWidgets, QtGui
+except:
+    from PySide2 import QtCore, QtWidgets, QtGui
 
 def printPolyTriangle(self):
     '''print the coefficient triangle in the Qt canva'''

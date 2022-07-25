@@ -9,9 +9,25 @@ from scipy.optimize import OptimizeWarning
 from itertools import product
 import warnings
 
-def SOS(poly, tangents = [], maxiter=5000, roots = [], tangent_points = [], updeg=10,
+
+
+def UpDegree(poly, n, updeg):
+    """
+    Generator that returns 
+    """
+    
+    for m in range(n, updeg+1):
+        codeg = m - n 
+        if codeg > 0:
+            multiplier = sp.polys.polytools.Poly(f'a^{codeg}+b^{codeg}+c^{codeg}')
+        else:
+            multiplier = 1
+        
+        yield multiplier, poly * multiplier, m 
+
+def SOS(poly, tangents = [], maxiter = 5000, roots = [], tangent_points = [], updeg = 10,
         silent = False, show_tangents = True, show_roots = True,
-        mod=None, verifytol = 1e-8,
+        mod = None, verifytol = 1e-8,
         precision = 6, linefeed = 2):
     '''
     Represent a cyclic, homogenous, 3-variable (a,b,c) polynomial into Sum of Squares form.
@@ -87,13 +103,14 @@ def SOS(poly, tangents = [], maxiter=5000, roots = [], tangent_points = [], upde
         roots += tangent_points
 
         # generate the tangents
-        tangents += root_tengents(roots)
+        tangents += root_tangents(roots)
         if show_tangents and not silent:
             print('Tangents =',tangents)
 
     while retry:
         if type(poly) == str:
-            poly , n = PreprocessText(poly,cyc=True,retn=True)
+            poly = PreprocessText(poly,cyc=True)
+            n = deg(poly)
         
         dict_monom , inv_monom = generate_expr(n)
 
@@ -135,12 +152,12 @@ def SOS(poly, tangents = [], maxiter=5000, roots = [], tangent_points = [], upde
 
     # Approximates the coefficients to fractions if possible
     rounding = 0.1
-    y = rationalize_array(x.x, rounding=rounding, mod=mod)
+    y = rationalize_array(x.x, rounding=rounding, mod=mod, reliable=True)
 
     # check if the approximation works, if not, cut down the rounding and retry
     while (not verify(y,polys,poly,tol=verifytol)) and rounding > 1e-9:
         rounding *= 0.1
-        y = rationalize_array(x.x, rounding=rounding, mod=mod)
+        y = rationalize_array(x.x, rounding=rounding, mod=mod, reliable=True)
         
     # obtain the LaTeX format
     result = prettyprint(y, names, precision=precision, linefeed=linefeed)
