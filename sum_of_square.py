@@ -83,7 +83,8 @@ def SOS(poly, tangents = [], maxiter = 5000, roots = [], tangent_points = [], up
     retry = True
 
     # get the polynomial from text and obtain the degree
-    poly , n = PreprocessText(poly,cyc=True,retn=True)
+    poly = PreprocessText(poly,cyc=True)
+    n = deg(poly)
     original_n = n 
 
     if type(tangents) == str:
@@ -155,10 +156,45 @@ def SOS(poly, tangents = [], maxiter = 5000, roots = [], tangent_points = [], up
     y = rationalize_array(x.x, rounding=rounding, mod=mod, reliable=True)
 
     # check if the approximation works, if not, cut down the rounding and retry
-    while (not verify(y,polys,poly,tol=verifytol)) and rounding > 1e-9:
-        rounding *= 0.1
-        y = rationalize_array(x.x, rounding=rounding, mod=mod, reliable=True)
+    # while (not verify(y,polys,poly,tol=verifytol)) and rounding > 1e-9:
+    #     rounding *= 0.1
+    #     y = rationalize_array(x.x, rounding=rounding, mod=mod, reliable=True)
         
+    # Filter out zero coefficients
+    index = list(filter(lambda i: y[i][0] !=0 , list(range(len(y)))))
+    y = [y[i] for i in index]
+    names = [names[i] for i in index]
+    polys = [polys[i] for i in index]
+
+    # verify whether the equation is strict
+    if not verify(y, polys, poly, 0): 
+        # backsubstitude to re-solve the coefficients
+        equal = False 
+        try:
+            b2 = arraylize_sp(poly,dict_monom,inv_monom)
+            basis = sp.Matrix([arraylize_sp(poly,dict_monom,inv_monom) for poly in polys])
+            basis = basis.reshape(len(polys), b2.shape[0]).T
+        
+            new_y = basis.LUsolve(b2)
+            new_y = [(r.p, r.q) for r in new_y]
+            for coeff in new_y:
+                if coeff[0] < 0:
+                    break 
+            else:
+                if verify(new_y, polys, poly, 0):
+                    equal = True 
+                    y = new_y
+                
+                    # Filter out zero coefficients
+                    index = list(filter(lambda i: y[i][0] !=0 , list(range(len(y)))))
+                    y = [y[i] for i in index]
+                    names = [names[i] for i in index]
+                    polys = [polys[i] for i in index]
+        except:
+            pass             
+    else:
+        equal = True 
+    
     # obtain the LaTeX format
     result = prettyprint(y, names, precision=precision, linefeed=linefeed)
     if not silent:
@@ -167,5 +203,5 @@ def SOS(poly, tangents = [], maxiter = 5000, roots = [], tangent_points = [], up
     return result
 
 if __name__ == '__main__':
-    s = r's(a2-ab)'
-    x = SOS(s,[],maxiter=00,precision=10,updeg=10,roots=[])
+    s = r'(21675abcs(a)3+250s(a2b)s(a)3-185193abcs(a2b))/250'
+    x = SOS(s,[],maxiter=1,precision=10,updeg=10)

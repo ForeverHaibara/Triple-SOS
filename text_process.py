@@ -196,7 +196,6 @@ def PreprocessText(poly, cyc=False, retText=False, cancel=False, variables = Non
     poly = PreprocessText_Expansion(poly)
     poly = PreprocessText_Completion(poly)
     
-    #print(poly)
     if retText:
         if cyc:
             return CycleExpansion(poly)
@@ -205,6 +204,7 @@ def PreprocessText(poly, cyc=False, retText=False, cancel=False, variables = Non
         
     if cancel or (variables is not None):
         assert (not cyc), 'Cyclic is not enabled when cancel == True or variabels is not None'
+        
         poly = sp.sympify(poly)
         if variables is not None: 
             for name, value in variables.items():
@@ -212,17 +212,23 @@ def PreprocessText(poly, cyc=False, retText=False, cancel=False, variables = Non
                     poly = poly.subs(name, value)
                 except:
                     pass 
-            
-        if cancel:
-            frac = sp.fraction(sp.cancel(poly))
-            if not frac[1].is_constant():
-                poly = sp.polys.polytools.Poly(frac[0])
-                return poly , True 
-            else:
-                poly = sp.polys.polytools.Poly(poly)
-                return poly , False 
                 
-        poly = sp.polys.polytools.Poly(poly)
+        if cancel:
+            try:
+                frac = sp.fraction(sp.cancel(poly))
+                if not frac[1].is_constant():
+                    poly = sp.polys.polytools.Poly(frac[0])
+                    return poly , True 
+                else:
+                    poly = sp.polys.polytools.Poly(poly)
+                    return poly , False 
+            except:
+                return None, True 
+        
+        try:
+            poly = sp.polys.polytools.Poly(poly)
+        except:
+            return None
     else:
         if cyc:
             poly = PreprocessText_Cyclize(poly)
@@ -231,15 +237,194 @@ def PreprocessText(poly, cyc=False, retText=False, cancel=False, variables = Non
                 poly = sp.polys.polytools.Poly(poly)
             except:
                 poly = None
-
+                
     if cancel:
         return poly , False 
     return poly
 
 
+def DegreeofZero(poly):
+    '''Compute the degree of a homogeneous zero polynomial
+    idea: delete the additions and substractions, which do not affect the degree'''
+    poly = poly.lower()
+    poly = PreprocessText_DeLatex(poly)
+    poly = PreprocessText_Expansion(poly)
+    poly = PreprocessText_Completion(poly)
+    
+    i = 0
+    length = len(poly)
+    bracket = 0
+    while i < length:
+        if poly[i] == '+' or poly[i] == '-': 
+            # run to the end of this bracket (sum does not affect the degree)
+            # e.g. a*(a^2+a*b)*c -> a*(a^2)*c
+            bracket_cur = bracket
+            j = i + 1
+            is_constant = True 
+            while j < length:
+                if poly[j] == '(':
+                    bracket += 1
+                elif poly[j] == ')':
+                    bracket -= 1
+                    if bracket < bracket_cur:
+                        break 
+                elif poly[j] in 'abc':
+                    is_constant = False 
+                j += 1
+            if is_constant == False:
+                poly = poly[:i] + poly[j:]
+                length = len(poly)
+        elif poly[i] == ')':
+            bracket -= 1
+        elif poly[i] == '(':
+            bracket += 1
+            # e.g. a*(-b*c) ,    a*(--+-b*c)
+            i += 1
+            while i < length and (poly[i] == '-' or poly[i] == '+'):
+                i += 1
+            if i == length:
+                break 
+            
+        i += 1
+        
+    try:
+    #     degree = deg(sp.polys.polytools.Poly(poly))
+        poly = sp.fraction(sp.sympify(poly))
+        if poly[1].is_constant():
+            degree = deg(sp.polys.polytools.Poly(poly[0]))
+        else:
+            degree = deg(sp.polys.polytools.Poly(poly[0])) - deg(sp.polys.polytools.Poly(poly[1]))
+    except:
+        degree = 0
+        
+    return degree
+
+
+def getsuffix(name):
+    try:
+        bracket = 0
+        right = 0
+        left = 0 
+        j = len(name) - 1
+        is_square = False 
+        while j >= 0:
+            if name[j] == '^':
+                is_square = True
+            elif name[j] == ')':
+                if bracket == 0: # first right bracket 
+                    if is_square:
+                        right = j
+                    else: # not square, e.g. a*(a-b)*(a-c)
+                        return None 
+                bracket += 1
+            elif name[j] == '(':
+                bracket -= 1
+                if bracket == 0:
+                    left = j
+                    break 
+            j -= 1
+        
+        # permute the first alphabet to 'b' for alignment,
+        # e.g. (a2-b2+2bc-2ca) and (b2-c2+2ca-2ab) are the same
+        for i in range(left, right):
+            if name[i] in 'abc':
+                alpha = name[i]
+                break 
+        else:
+            return None 
+
+        for i in range(left, -1, -1):
+            if name[i] == '*':
+                cut = i 
+                break 
+        
+        if alpha == 'a':
+            return (NextPermute(name), cut, left, right)
+        elif alpha == 'c':
+            return (NextPermute(NextPermute(name)), cut, left, right)
+        return (name, cut, left, right)
+    except:
+        return None 
+
+
+def TextCompresser(y, names):    
+    new_y = []
+    new_names = []
+
+    suffixes = {}
+    for coeff, name in zip(y, names):
+        result = getsuffix(name)
+        if result is not None:
+            name, cut, left, right = result 
+            analogue = suffixes.get(name[left:])
+            if analogue is not None: 
+                analogue.append((coeff, name[:cut]))
+            else:
+                suffixes[name[left:]] = [(coeff, name[:cut])]
+        else:
+            new_y.append(coeff)
+            new_names.append(name)
+
+    for suffix, val in suffixes.items():
+        merge = 0 
+        p , q = 0, 1
+        for coeff, _ in val:
+            p = gcd(p, coeff[0]) 
+            q = q * coeff[1] // gcd(q, coeff[1])
+
+        for coeff, prefix in val:
+            # ASSUME ALL COEFFS ARE RATIONALS
+            merge += (coeff[0]//p) * (q//coeff[1]) * sp.sympify(prefix)
+        new_y.append((p,q))
+        new_names.append(merge * sp.sympify(suffix))
+        
+    return new_y, new_names 
+
+
+def TextSorter(y, names):
+    '''
+    Sort the texts of 'sum of square' in order to balance the length of each line.
+    '''
+
+    # first evaluate the length of latex of each name 
+    lengths = []
+    for coeff, name in zip(y, names):
+        if isinstance(name, str):
+            latex = sp.latex(sp.sympify(name))
+        else:
+            latex = sp.latex(name) 
+        length = max(len(str(coeff[0])), len(str(coeff[1]))) + 4 # assume '+sum' is of length 4
+        for i in latex:
+            if 48 <= ord(i) <= 57 or 97 <= ord(i) <= 99 or i == '+' or i == '-': # 0123456789 abc +-
+                length += 1
+        lengths.append(length)
+
+    # after that, sort the lengths
+    index = sorted(list(range(len(lengths))), key = lambda i: lengths[i])
+
+    # length of each line should not exceeed the linelength
+    linelength = max(40, sum(lengths) * 2 // len(lengths))
+
+    linefeed = [False] * len(lengths)
+    accumulate_length = 10 # the first line is longer because it starts with f(a,b,c)=
+    new_y = []
+    new_names = []
+    for j in range(len(lengths)):
+        i = index[j]
+        accumulate_length += lengths[i]
+        if accumulate_length > linelength: # start a new line
+            linefeed[j] = True 
+            accumulate_length = lengths[i]
+        
+        new_y.append(y[i])
+        new_names.append(names[i])
+    
+    return new_y, new_names, linefeed 
+
+
 def prettyprint(y, names, precision=6, linefeed=2, formatt=0, dectofrac=False):
     '''
-    prettily format a cyclic polynomial sum into a certain formatt
+    Prettily format a cyclic polynomial sum into a certain formatt
 
     Params
     -------
@@ -266,12 +451,16 @@ def prettyprint(y, names, precision=6, linefeed=2, formatt=0, dectofrac=False):
     a string, the formatted result
     '''
     result = ''
+
     linefeed_terms = 0
     for coeff, name in zip(y, names):
         if coeff[0] != 0:
             # write a new line every {linefeed} terms
             linefeed_terms += 1
-            if linefeed > 0 and linefeed_terms > 1 and linefeed_terms % linefeed == 1:
+            if isinstance(linefeed, list):
+                if linefeed[linefeed_terms-1]:
+                    result += r'\\ '
+            elif linefeed > 0 and linefeed_terms > 1 and linefeed_terms % linefeed == 1:
                 result += r'\\ '
 
             # coefficient
@@ -284,11 +473,15 @@ def prettyprint(y, names, precision=6, linefeed=2, formatt=0, dectofrac=False):
                     result += f'+ '
             else: # decimal format
                 result += f'+ {round(coeff[0],precision)}'
-            tmp = sp.latex(sp.sympify(name))
+            
+            if isinstance(name, str):
+                latex = sp.latex(sp.sympify(name))
+            else:
+                latex = sp.latex(name)
             flg = 0
             if formatt == 0:
                 parenthesis = 0
-                for char in tmp:
+                for char in latex:
                     if char == '(':
                         parenthesis += 1
                     elif char == ')':
@@ -297,11 +490,11 @@ def prettyprint(y, names, precision=6, linefeed=2, formatt=0, dectofrac=False):
                         flg = 1
                         break
                 if flg == 0:
-                    result += '\\sum ' + sp.latex(sp.sympify(name))
+                    result += '\\sum ' + latex
                 else:
-                    result += '\\sum (' + sp.latex(sp.sympify(name)) +')'
+                    result += '\\sum (' + latex +')'
             else:
-                result += 's(' + sp.latex(sp.sympify(name)) +')'
+                result += 's(' + latex +')'
 
     if dectofrac:
         i = 0

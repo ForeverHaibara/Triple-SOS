@@ -18,19 +18,20 @@ CORS(app)
 def preprocess():
     app.SOS_Manager.setPoly(request.get_json()['poly'], cancel = True)
     poly = app.SOS_Manager.poly
-    if poly is None:
-        return 
+    
+    # if poly is None:
+    #     return 
 
     if app.SOS_Manager.poly_isfrac:
         cancel = app.SOS_Manager.getStandardForm()
     else:
         cancel = ''
 
-    n = deg(poly)
+    n = app.SOS_Manager.deg
     coeffs = poly.coeffs()
     monoms = app.SOS_Manager.std_monoms
     monoms.append((-1,-1,0))  # tail flag
-
+    
     t = 0
     txts = [] 
     for i in range(n+1):

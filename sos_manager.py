@@ -18,10 +18,11 @@ class SOS_Manager():
 
         self.zeropoly = sp.polys.polytools.Poly('a+b+c') - sp.polys.polytools.Poly('a+b+c')
         self.polytxt = None 
-        self.poly = None
+        self.poly = self.zeropoly
         self.poly_ishom = False 
         self.poly_iscyc = False 
         self.poly_isfrac = False 
+        self.poly_iszero = False 
         self.multiplier = None
         self.deg = 0
         self.updeg = 10
@@ -129,7 +130,7 @@ class SOS_Manager():
                 self.grid_val[k] = (255, 255, 255, 255)
         
 
-    def setPoly(self, txt, cancel = False, render_grid=True):
+    def setPoly(self, txt, cancel = True, render_grid=True):
         '''
         Set the processed polynomial to some text. If render_grid == True, the grid will also be updated.
         
@@ -141,6 +142,7 @@ class SOS_Manager():
         
         try:
             poly , isfrac = PreprocessText(txt, cancel = cancel)
+            
             if poly is not None:
                 # add a zero polynomial, to ensure it has variables 'a','b','c'
                 self.poly = self.zeropoly + poly
@@ -149,13 +151,20 @@ class SOS_Manager():
                 self.roots = []
                 self.strict_roots = []
             else:
-                # zero polynomial (or invalid input)
-                if self.GUI is None: self.poly = None
+                # zero polynomial 
+                self.poly = self.zeropoly
                 self.rootsinfo = ''
                 self.grid_val = [(255,255,255,255)] * len(self.grid_coor)
-                self.std_monoms = []
+                n = DegreeofZero(txt)
+                self.deg = self.deg if n <= 0 else n 
+                self.std_monoms = [(0,0,0)] * ((self.deg + 2) * (self.deg + 1) // 2)
+                self.roots = []
+                self.strict_roots = []
+                self.poly_isfrac = False 
+                self.poly_ishom = True 
+                self.poly_iszero = True 
                 return True
-        except:
+        except: # invalid input
             return False
 
         
@@ -189,6 +198,7 @@ class SOS_Manager():
         
         self.polytxt = txt 
         self.poly_isfrac = isfrac
+        self.poly_iszero = False
         self.poly_ishom, self.poly_iscyc = CheckHomCyclic(self.poly, self.deg)
         return True 
 
@@ -229,7 +239,7 @@ class SOS_Manager():
                 return txt 
 
     def GUI_findRoot(self):
-        if self.deg <= 1 or (not self.poly_iscyc):
+        if self.deg <= 1 or (not self.poly_iscyc) or (self.poly_iszero) or (not self.poly_ishom):
             return 
         self.roots, self.strict_roots = findroot(self.poly, maxiter=self.maxiter, roots=self.roots)
         if len(self.roots) > 0:
@@ -255,10 +265,14 @@ class SOS_Manager():
         return self.tangents
 
 
-    def GUI_prettyResult(self, y, names, n):
+    def GUI_prettyResult(self, y, names, n, equal = True):
+        y , names = TextCompresser(y, names)
+
+        y , names , linefeed = TextSorter(y, names)
+        
         # 0: LaTeX
         self.sosresults[0] = prettyprint(y, names, 
-                        precision=self.precision, linefeed=self.linefeed).strip('$')
+                        precision=self.precision, linefeed=linefeed).strip('$')
                         
         if n - self.deg >= 2:
             self.sosresults[0] = '$$\\left(\\sum a^{%d}\\right)f(a,b,c) = '%(n - self.deg) + self.sosresults[0] + '$$'
@@ -282,6 +296,11 @@ class SOS_Manager():
         self.sosresults[2] += prettyprint(y, names, 
                         precision=self.precision, linefeed=self.linefeed, formatt=2, dectofrac=True)
                         
+        if not equal:
+            self.sosresults[0] = self.sosresults[0].replace('=', '\\approx') 
+            self.sosresults[1] = self.sosresults[1].replace('=', '≈')
+            self.sosresults[2] = self.sosresults[2].replace('=', '≈')
+
 
     def GUI_stateUpdate(self, stage = None):
         if stage is not None: 
@@ -364,12 +383,47 @@ class SOS_Manager():
         y = rationalize_array(x.x, rounding=rounding, mod=self.mod, reliable=True)
 
         # check if the approximation works, if not, cut down the rounding and retry
-        while (not verify(y,polys,poly,tol=1e-8)) and rounding > 1e-9:
-            rounding *= 0.1
-            y = rationalize_array(x.x, rounding=rounding, mod=self.mod, reliable=True)
+        # while (not verify(y,polys,poly,tol=1e-8)) and rounding > 1e-9:
+        #     rounding *= 0.1
+        #     y = rationalize_array(x.x, rounding=rounding, mod=self.mod, reliable=True)
             
+        # Filter out zero coefficients
+        index = list(filter(lambda i: y[i][0] !=0 , list(range(len(y)))))
+        y = [y[i] for i in index]
+        names = [names[i] for i in index]
+        polys = [polys[i] for i in index]
+
+        # verify whether the equation is strict
+        if not verify(y, polys, poly, 0): 
+            # backsubstitude to re-solve the coefficients
+            equal = False 
+            try:
+                b2 = arraylize_sp(poly,dict_monom,inv_monom)
+                basis = sp.Matrix([arraylize_sp(poly,dict_monom,inv_monom) for poly in polys])
+                basis = basis.reshape(len(polys), b2.shape[0]).T
+            
+                new_y = basis.LUsolve(b2)
+                new_y = [(r.p, r.q) for r in new_y]
+                for coeff in new_y:
+                    if coeff[0] < 0:
+                        break 
+                else:
+                    if verify(new_y, polys, poly, 0):
+                        equal = True 
+                        y = new_y
+                    
+                        # Filter out zero coefficients
+                        index = list(filter(lambda i: y[i][0] !=0 , list(range(len(y)))))
+                        y = [y[i] for i in index]
+                        names = [names[i] for i in index]
+                        polys = [polys[i] for i in index]
+            except:
+                pass             
+        else:
+            equal = True                 
+
         # obtain the LaTeX format
-        self.GUI_prettyResult(y, names, n)
+        self.GUI_prettyResult(y, names, n, equal = equal)
         self.stage = 50
 
         if self.GUI is not None: 
@@ -549,6 +603,7 @@ if __name__ == '__main__':
 
     # auto sum of square
     s = 's(a2)2-3s(a3b)'
+    s = '4s(ab)s((a+b)^2(a+c)^2)-9p((a+b)^2)'
     # no need to call setPoly when using GUI_SOS 
     x = sos.GUI_SOS(s).strip('$')
     print(x, end='\n\n')

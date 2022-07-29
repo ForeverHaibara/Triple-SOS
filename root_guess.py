@@ -73,8 +73,8 @@ def rationalize(v, rounding = 1e-2, mod=None, reliable = False):
                     x = 1 / x 
 
                 x = 1 / x
-                if abs(v - x) < 1e-6: # close approximation
-                    return x.p , x.q
+                # if abs(v - x) < 1e-6: # close approximation
+                return x.p , x.q
             else: # not reliable
                 # if not reliable, we accept the result only when p,q is not too large
                 # theorem: |x - p/q| < 1/(2q²) only if p/q is continued fraction of x
@@ -123,7 +123,7 @@ def rationalize(v, rounding = 1e-2, mod=None, reliable = False):
     return v , -1
     
 
-def rationalize_array(x, rounding = 1e-2, tol=1e-7, mod=None, reliable=False):
+def rationalize_array(x, rounding = 1e-2, tol = 1e-7, mod=None, reliable=False):
     '''
     Approximates each NONNEGATIVE floating number to a reasonable fraction and
     leave the floating number unchanged if failed.
@@ -157,7 +157,7 @@ def verify(y, polys, poly, tol = 1e-7):
     for coeff, f in zip(y, polys):
         if coeff[0] != 0:
             if coeff[1] != -1:
-                poly -= (coeff[0] / coeff[1]) * f
+                poly -= sp.Rational(coeff[0] , coeff[1]) * f
             else:
                 poly -= coeff[0] * f
 
@@ -194,7 +194,7 @@ def findbest(choices, func, init_choice=None, init_val=2147483647):
     return best_choice , val
 
 
-def findroot(poly, alpha=2e-1, drawback=1e-3, tol=1e-7, maxiter=5000, roots=None):
+def findroot(poly, alpha=2e-1, drawback=1e-3, tol=1e-7, maxiter=5000, roots=None, most=5):
     '''
     Find the possible roots of a cyclic polynomial by gradient descent and guessing. 
     The polynomial is automatically standardlized so no need worry the stability. 
@@ -362,7 +362,14 @@ def findroot(poly, alpha=2e-1, drawback=1e-3, tol=1e-7, maxiter=5000, roots=None
         strict_roots = [root for root in result_roots if verify_isstrict(lambda x: float(poly_reg(*x)), root)]
     else:
         # check whether each root is strict
-        strict_roots = [root for root in result_roots if verify_isstrict(lambda x: float(poly_reg(*x)), root)]
+        vals = [float(poly_reg(*root)) for root in result_roots]
+        if len(result_roots) > most:
+            index = sorted(range(len(vals)), key = lambda i: vals[i])[:most]
+            result_roots = [result_roots[i] for i in index] 
+            vals = [vals[i] for i in index]
+
+        strict_roots = [root for i, root in enumerate(result_roots) if abs(vals[i]) < 1e-6]
+        # strict_roots = [root for root in result_roots if verify_isstrict(lambda x: float(poly_reg(*x)), root)]
 
         # use sympy root finding strategy
         for root in sp.polys.polyroots.roots(poly_univariate):
@@ -373,7 +380,7 @@ def findroot(poly, alpha=2e-1, drawback=1e-3, tol=1e-7, maxiter=5000, roots=None
                 strict_roots.append((complex(root).real, 0))
                 break 
             
-    
+
     return result_roots, strict_roots
 
 
@@ -619,7 +626,7 @@ def root_tangents(roots, tol=1e-6, rounding=0.001, mod=(180,252,336)):
 if __name__ == '__main__':
     from tqdm import tqdm 
     for i in range(1, 3):
-        for j in tqdm(range(1, 65536)):
+        for j in tqdm(range(1, 65537)):
             if gcd(i,j) == 1:
                 p, q = rationalize(i/j, reliable=True)
                 if q*i != p*j:
