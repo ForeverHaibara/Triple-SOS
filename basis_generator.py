@@ -4,7 +4,7 @@ import numpy as np
 import sympy as sp
 
 
-def arraylize(poly, dict_monom, inv_monom):
+def arraylize(poly, dict_monom: dict, inv_monom: list):
     '''
     Turn a sympy polynomial into arraylike representation.
     '''
@@ -15,7 +15,8 @@ def arraylize(poly, dict_monom, inv_monom):
             coeffs[dict_monom[(i,j,k)]] = coeff
     return coeffs 
 
-def arraylize_sp(poly, dict_monom, inv_monom):
+
+def arraylize_sp(poly, dict_monom: dict, inv_monom: list):
     '''
     Turn a sympy polynomial into sympy-arraylike representation.
     '''
@@ -26,7 +27,8 @@ def arraylize_sp(poly, dict_monom, inv_monom):
             coeffs[dict_monom[(i,j,k)]] = coeff
     return coeffs 
 
-def invarraylize(poly, dict_monom, inv_monom):
+
+def invarraylize(poly, dict_monom: dict, inv_monom: list):
     '''
     Turn a sympy polynomial into arraylike representation.
     '''
@@ -38,7 +40,8 @@ def invarraylize(poly, dict_monom, inv_monom):
         val += f'+ {coeff} * a^{i} * b^{j} * c^{k}'
     return sp.polys.polytools.Poly(CycleExpansion(val))
     
-def generate_expr(n):
+
+def generate_expr(n: int):
     '''
     For cyclic, homogenous, 3-variable polynomials, only part of monoms are needed:
 
@@ -63,7 +66,7 @@ def generate_expr(n):
     return dict_monom, inv_monom
 
 
-def base_square(m):
+def base_square(m: int) -> str:
     '''
     (a-b)^2i * (b-c)^2j * (c-a)^2k
 
@@ -74,8 +77,9 @@ def base_square(m):
         for j in range(0, m-i+1):
             prefix = f'(a-b)^{2*i} * (b-c)^{2*j} * (c-a)^{2*(m-i-j)}'
             yield prefix
+            
 
-def base_trivial(m):
+def base_trivial(m: int) -> str:
     '''
     a^i * b^j * c^k 
     where i+j+k = m  and  k <= i
@@ -86,7 +90,7 @@ def base_trivial(m):
             name = f'a^{i} * b^{j} * c^{m-i-j}'
             yield name
             
-def base_tangent(m, tangents):
+def base_tangent(m: int, tangents: list) -> str:
     '''
     (a-b)^2i * (b-c)^2j * (c-a)^2k * a^u * b^v * c^w * f(a,b,c)^2t
     where its degree is m
@@ -106,7 +110,8 @@ def base_tangent(m, tangents):
             tangent = NextPermute(tangent)
 
 
-def append_basis(n, dict_monom, inv_monom, names, polys, basis, tangents = None):
+def append_basis(n: int, dict_monom: dict, inv_monom: list, 
+                names: list, polys: list, basis: np.ndarray, tangents = None):
     '''
     Add basis generated from tangents.
     '''
@@ -135,7 +140,7 @@ def append_basis(n, dict_monom, inv_monom, names, polys, basis, tangents = None)
     return names, polys, basis
 
 
-def generate_basis(n, dict_monom, inv_monom, tangents = None, strict_roots = None):
+def generate_basis(n: int, dict_monom: dict, inv_monom: list, tangents = None, strict_roots = None):
     '''
     Return
     -------
@@ -174,8 +179,7 @@ def generate_basis(n, dict_monom, inv_monom, tangents = None, strict_roots = Non
         for i in range(1,n-1):
             for j in range(1, n-i):
                 k = n - i - j
-                name = f'a^{i+1}*b^{j}*c^{k-1} + a^{i}*b^{j+1}*c^{k-1} + a^{i-1}*b^{j-1}*c^{k+2}'
-                name += f'- 3*a^{i}*b^{j}*c^{k}'
+                name = f'a^{i+1}*b^{j}*c^{k-1} + a^{i}*b^{j+1}*c^{k-1} + a^{i-1}*b^{j-1}*c^{k+2} - 3*a^{i}*b^{j}*c^{k}'
                 names.append(name)
             
         aux = []

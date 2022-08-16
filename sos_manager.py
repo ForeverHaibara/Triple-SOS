@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from copy import deepcopy
 from numbers import Number as PythonNumber 
+import re 
 
 class SOS_Manager():
     def __init__(self,GUI=None):
@@ -238,6 +239,23 @@ class SOS_Manager():
                     txt = txt[1:]
                 return txt 
 
+
+    def InquireMonoms(self, n: int):        
+        if not (n in self.dict_monoms.keys()):
+            self.dict_monoms[n] , self.inv_monoms[n] = generate_expr(n)
+                
+        dict_monom = self.dict_monoms[n]
+        inv_monom  = self.inv_monoms[n]  
+        return dict_monom, inv_monom 
+
+    def InquireBasis(self, n: int):
+        if not (n in self.names.keys()):
+            dict_monom, inv_monom = self.InquireMonoms(n)
+            self.names[n], self.polys[n], self.basis[n] = generate_basis(n, dict_monom, inv_monom, ['a2-bc','a3-bc2','a3-b2c'],[])
+
+        names, polys, basis = deepcopy(self.names[n]), deepcopy(self.polys[n]), self.basis[n].copy()
+        return names, polys, basis 
+
     def GUI_findRoot(self):
         if self.deg <= 1 or (not self.poly_iscyc) or (self.poly_iszero) or (not self.poly_ishom):
             return 
@@ -265,30 +283,41 @@ class SOS_Manager():
         return self.tangents
 
 
-    def GUI_prettyResult(self, y, names, n, equal = True):
+    def GUI_prettyResult(self, y, names, multipliers = None, equal = True):
         y , names = TextCompresser(y, names)
 
         y , names , linefeed = TextSorter(y, names)
         
+        multiplier_txt = TextMultiplier(multipliers)
+
         # 0: LaTeX
         self.sosresults[0] = prettyprint(y, names, 
                         precision=self.precision, linefeed=linefeed).strip('$')
                         
-        if n - self.deg >= 2:
-            self.sosresults[0] = '$$\\left(\\sum a^{%d}\\right)f(a,b,c) = '%(n - self.deg) + self.sosresults[0] + '$$'
-            self.sosresults[2] = 's(a^{%d})f(a,b,c) = '%(n - self.deg)
-        elif n - self.deg == 1:
-            self.sosresults[0] = '$$\\left(\\sum a\\right)f(a,b,c) = ' + self.sosresults[0] + '$$'
-            self.sosresults[2] = 's(a)f(a,b,c) = '
-        else:
-            self.sosresults[0] = '$$f(a,b,c) = ' + self.sosresults[0] + '$$'
-            self.sosresults[2] = 'f(a,b,c) = '
+        # if n - origin_deg >= 2:
+        #     self.sosresults[0] = '$$\\left(\\sum a^{%d}\\right)f(a,b,c) = '%(n - self.deg) + self.sosresults[0] + '$$'
+        #     self.sosresults[2] = 's(a^{%d})f(a,b,c) = '%(n - self.deg)
+        # elif n - origin_deg == 1:
+        #     self.sosresults[0] = '$$\\left(\\sum a\\right)f(a,b,c) = ' + self.sosresults[0] + '$$'
+        #     self.sosresults[2] = 's(a)f(a,b,c) = '
+        # else:
+        self.sosresults[0] = '$$' + multiplier_txt[0] + 'f(a,b,c) = ' + self.sosresults[0] + '$$'
+        self.sosresults[2] = multiplier_txt[1] + 'f(a,b,c) = '
 
         # 1: txt
-        self.sosresults[1] = self.sosresults[0].strip('$').replace('}{','/')
-        self.sosresults[1] = self.sosresults[1].replace(' ','').replace('left','').replace('right','')
-        self.sosresults[1] = self.sosresults[1].replace('\\','').replace('sum','Σ').replace('frac','')
+        self.sosresults[1] = self.sosresults[0].strip('$').replace(' ','') 
+        self.sosresults[1] = self.sosresults[1].replace('left','').replace('right','')
+        self.sosresults[1] = self.sosresults[1].replace('\\','').replace('sum','Σ')
+        
+        parener = lambda x: '(%s)'%x if '+' in x or '-' in x else x
+        self.sosresults[1] = re.sub('frac\{(.*?)\}\{(.*?)\}', 
+                        lambda x: '%s/%s'%(parener(x.group(1)), parener(x.group(2))),
+                        self.sosresults[1])
+
         self.sosresults[1] = self.sosresults[1].replace('{','').replace('}','')
+
+        self.sosresults[1] = self.sosresults[1].replace('sqrt','√')
+
         for i, idx in enumerate('²³⁴⁵⁶⁷⁸⁹'):
             self.sosresults[1] = self.sosresults[1].replace('^%d'%(i+2),idx)
 
@@ -310,14 +339,15 @@ class SOS_Manager():
 
 
     def GUI_SOS(self, txt, skip_setpoly = False, skip_findroots = False, skip_tangents = False,
-                verbose_updeg = False):
+                verbose_updeg = False, use_structural_method = True):
         self.rootsinfo = ''
         self.stage = 0
         if (not skip_setpoly) and (not self.setPoly(txt)):
             self.stage = 70
             return ''
             
-        if self.deg <= 1 or self.deg >= self.deglim or (not self.poly_iscyc) or self.poly is None:
+        origin_deg = self.deg
+        if origin_deg <= 1 or origin_deg >= self.deglim or (not self.poly_iscyc) or self.poly is None:
             self.GUI_stateUpdate(70)
             return ''
         self.GUI_stateUpdate(10)
@@ -334,27 +364,36 @@ class SOS_Manager():
         self.GUI_stateUpdate(30)
         
         # copy here to avoid troubles in async
+        original_poly = self.poly 
         strict_roots = self.strict_roots.copy()
         tangents = self.tangents.copy()
 
-        for multiplier, poly, n in UpDegree(self.poly, self.deg, self.updeg):
-            if not (n in self.dict_monoms.keys()):
-                self.dict_monoms[n] , self.inv_monoms[n] = generate_expr(n)
-            
-            dict_monom = self.dict_monoms[n]
-            inv_monom  = self.inv_monoms[n]        
+        # initialization with None
+        x , names , polys , basis , multipliers = None , None , None , None , []
+
+        for multiplier, poly, n in UpDegree(self.poly, origin_deg, self.updeg):
+            multipliers = [multiplier] 
+
+            # try SOS on special structures 
+            if use_structural_method:
+                special_result = SOS_Special(poly, n) 
+                if special_result is not None:
+                    new_multipliers , y , names = special_result
+                    multipliers += new_multipliers
+                    polys = None 
+                    break 
+
+            dict_monom, inv_monom = self.InquireMonoms(n)
             b = arraylize(poly, dict_monom, inv_monom)    
                 
             # generate basis with degree n
             # make use of already-generated ones
-            if not (n in self.names.keys()):
-                self.names[n], self.polys[n], self.basis[n] = generate_basis(n,dict_monom,inv_monom,['a2-bc','a3-bc2','a3-b2c'],[])
-
-            names, polys, basis = deepcopy(self.names[n]), deepcopy(self.polys[n]), self.basis[n].copy()
+            names, polys, basis = self.InquireBasis(n)
             names, polys, basis = append_basis(n, dict_monom, inv_monom, names, polys, basis, tangents)
         
             # reduce the basis according to the strict roots
             names, polys, basis = reduce_basis(n,dict_monom,inv_monom,names,polys,basis,strict_roots)
+
             x = None
 
             if len(names) > 0:
@@ -362,6 +401,7 @@ class SOS_Manager():
                     warnings.simplefilter('once')
                     try:
                         x = linprog(np.ones(basis.shape[0]), A_eq=basis.T, b_eq=b, method='simplex')
+                        y = x.x 
                     #, options={'tol':1e-9})
                     except:
                         pass
@@ -374,56 +414,16 @@ class SOS_Manager():
             self.GUI_stateUpdate(30+n)
             if verbose_updeg:
                 print('Failed with degree %d'%n)
+                
         else: # failed                    
             self.GUI_stateUpdate(70)
             return ''
         
-        # Approximates the coefficients to fractions if possible
-        rounding = 0.1
-        y = rationalize_array(x.x, rounding=rounding, mod=self.mod, reliable=True)
-
-        # check if the approximation works, if not, cut down the rounding and retry
-        # while (not verify(y,polys,poly,tol=1e-8)) and rounding > 1e-9:
-        #     rounding *= 0.1
-        #     y = rationalize_array(x.x, rounding=rounding, mod=self.mod, reliable=True)
-            
-        # Filter out zero coefficients
-        index = list(filter(lambda i: y[i][0] !=0 , list(range(len(y)))))
-        y = [y[i] for i in index]
-        names = [names[i] for i in index]
-        polys = [polys[i] for i in index]
-
-        # verify whether the equation is strict
-        if not verify(y, polys, poly, 0): 
-            # backsubstitude to re-solve the coefficients
-            equal = False 
-            try:
-                b2 = arraylize_sp(poly,dict_monom,inv_monom)
-                basis = sp.Matrix([arraylize_sp(poly,dict_monom,inv_monom) for poly in polys])
-                basis = basis.reshape(len(polys), b2.shape[0]).T
-            
-                new_y = basis.LUsolve(b2)
-                new_y = [(r.p, r.q) for r in new_y]
-                for coeff in new_y:
-                    if coeff[0] < 0:
-                        break 
-                else:
-                    if verify(new_y, polys, poly, 0):
-                        equal = True 
-                        y = new_y
-                    
-                        # Filter out zero coefficients
-                        index = list(filter(lambda i: y[i][0] !=0 , list(range(len(y)))))
-                        y = [y[i] for i in index]
-                        names = [names[i] for i in index]
-                        polys = [polys[i] for i in index]
-            except:
-                pass             
-        else:
-            equal = True                 
+        y , names, equal = ExactCoefficient(original_poly, multipliers, y, names, polys, self)
+        
 
         # obtain the LaTeX format
-        self.GUI_prettyResult(y, names, n, equal = equal)
+        self.GUI_prettyResult(y, names, multipliers, equal = equal)
         self.stage = 50
 
         if self.GUI is not None: 

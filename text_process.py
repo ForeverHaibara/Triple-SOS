@@ -1,8 +1,9 @@
 import sympy as sp
 import numpy as np
 from math import gcd
+import re 
 
-def NextPermute(f):
+def NextPermute(f: str) -> str:
     '''a^3 * b^2 * c   ->   b^3 * c^2 * a'''
     fb = f.replace('a','#')
     fb = fb.replace('c','a')
@@ -10,7 +11,7 @@ def NextPermute(f):
     fb = fb.replace('#','b')
     return fb
 
-def ReflectPermute(f):
+def ReflectPermute(f: str) -> str:
     '''a^3 * b^2 * c   ->   c^3 * b^2 * a'''
     fb = f.replace('a','#')
     fb = fb.replace('c','a')
@@ -207,11 +208,12 @@ def PreprocessText(poly, cyc=False, retText=False, cancel=False, variables = Non
         
         poly = sp.sympify(poly)
         if variables is not None: 
-            for name, value in variables.items():
-                try:
-                    poly = poly.subs(name, value)
-                except:
-                    pass 
+            poly = poly.subs(variables)
+            # for name, value in variables.items():
+            #     try:
+            #         poly = poly.subs(name, value)
+            #     except:
+            #         pass 
                 
         if cancel:
             try:
@@ -347,7 +349,8 @@ def getsuffix(name):
         return None 
 
 
-def TextCompresser(y, names):    
+def TextCompresser(y, names):   
+    print(y)
     new_y = []
     new_names = []
 
@@ -366,15 +369,32 @@ def TextCompresser(y, names):
             new_names.append(name)
 
     for suffix, val in suffixes.items():
-        merge = 0 
-        p , q = 0, 1
-        for coeff, _ in val:
-            p = gcd(p, coeff[0]) 
-            q = q * coeff[1] // gcd(q, coeff[1])
+        if len(val) > 1: # more than 1
+            merge = 0 
+            p , q = 0, 1
+            is_fraction = True 
+            for coeff, _ in val:
+                is_fraction = is_fraction and (isinstance(coeff[0], int) or coeff[0].is_integer)
+                if is_fraction:
+                    p = gcd(p, coeff[0]) 
+                print(q)
+                q = q * coeff[1] // gcd(q, coeff[1])
 
-        for coeff, prefix in val:
-            # ASSUME ALL COEFFS ARE RATIONALS
-            merge += (coeff[0]//p) * (q//coeff[1]) * sp.sympify(prefix)
+            if not is_fraction:
+                p = 1
+                
+            for coeff, prefix in val:
+                is_fraction = (isinstance(coeff[0], int) or coeff[0].is_integer)
+                if is_fraction:
+                    merge += (coeff[0]//p) * (q//coeff[1]) * sp.sympify(prefix)
+                else: # p = 1
+                    merge += coeff[0] * (q//coeff[1]) * sp.sympify(prefix)
+        else:
+            # only one term
+            coeff, prefix = val[0]
+            p , q = coeff 
+            merge = sp.sympify(prefix)
+                  
         new_y.append((p,q))
         new_names.append(merge * sp.sympify(suffix))
         
@@ -466,11 +486,16 @@ def prettyprint(y, names, precision=6, linefeed=2, formatt=0, dectofrac=False):
             # coefficient
             if coeff[1] != -1: # fraction format
                 if coeff[1] != 1:
-                    result += '+ \\frac{%d}{%d}'%(coeff[0],coeff[1])
+                    coeff_str = sp.latex(coeff[0]) if isinstance(coeff[0], sp.Expr) else str(coeff[0]) 
+                    result += '+ \\frac{%s}{%d}'%(coeff_str,coeff[1])
                 elif coeff[0] != 1:
-                    result += f'+ {coeff[0]} '
+                    coeff_str = sp.latex(coeff[0]) if isinstance(coeff[0], sp.Expr) else str(coeff[0]) 
+                        
+                    if isinstance(coeff[0], sp.Add):
+                        coeff_str = '\\left(%s\\right)'%coeff_str 
+                    result += f'+ {coeff_str} '
                 else:
-                    result += f'+ '
+                    result += '+ '
             else: # decimal format
                 result += f'+ {round(coeff[0],precision)}'
             
@@ -521,11 +546,55 @@ def prettyprint(y, names, precision=6, linefeed=2, formatt=0, dectofrac=False):
     if formatt == 0:
         result = '$$' + result + '$$'
     else:
-        result = result.replace(' ','').replace('\\','').replace('frac','')
+        result = result.replace(' ','').replace('\\','')
         result = result.replace('left','').replace('right','')
-        result = result.replace('}{','/').replace('{','').replace('}','')
 
+        # handle fractions
+        parener = lambda x: '(%s)'%x if '+' in x or '-' in x else x
+        result = re.sub('frac\{(.*?)\}\{(.*?)\}', 
+                        lambda x: '%s/%s'%(parener(x.group(1)), parener(x.group(2))),
+                        result)
+
+
+        # handle sqrt, e.g. 8sqrt{13} -> 8*13^0.5
+        result = re.sub('(\d+?)sqrt\{(\d+?)\}', lambda x: x.group(1)+'*'+x.group(2)+'^0.5', result)
+        result = re.sub('sqrt\{(\d+?)\}', lambda x: x.group(1)+'^0.5', result)
+    
+        result = result.replace('{','').replace('}','')
+    
     return result
+
+
+
+def TextMultiplier(multipliers):
+    """
+    Return the LaTeX text and formatted text for the multipliers.
+    """
+    
+    if multipliers is None or len(multipliers) == 0:
+        return '', '' 
+    
+    merged_multipliers = {}
+    for multiplier in multipliers:
+        if multiplier is None:
+            continue
+        multiplier = multiplier.replace(' ','')
+        t = merged_multipliers.get(multiplier) 
+        if t is not None:
+            merged_multipliers[multiplier] = t + 1
+        else:
+            merged_multipliers[multiplier] = 1
+
+    result_latex , result_txt = '' , ''
+    for multiplier, power in merged_multipliers.items():
+        multiplier = sp.latex(sp.sympify(multiplier))
+        power_suffix = '^{%d}'%power if power > 1 else ''
+        result_latex += '\\left(\\sum %s\\right)%s'%(multiplier, power_suffix)
+        result_txt   += 's(%s)%s'%(multiplier, power_suffix)
+    
+    # result_txt = result_txt.replace('^','')
+    return result_latex, result_txt
+
 
 if __name__ == '__main__':
     print(prettyprint([(1,2)], ['a(a-0.5*b)^2'],dectofrac=True))

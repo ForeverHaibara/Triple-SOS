@@ -3,7 +3,7 @@ import sympy as sp
 from math import gcd
 from itertools import product
 
-def rationalize(v, rounding = 1e-2, mod=None, reliable = False):
+def rationalize(v, rounding = 1e-2, mod = None, reliable = False) -> tuple:
     '''
     Approximates a floating number to a reasonable fraction.
 
@@ -123,33 +123,32 @@ def rationalize(v, rounding = 1e-2, mod=None, reliable = False):
     return v , -1
     
 
-def rationalize_array(x, rounding = 1e-2, tol = 1e-7, mod=None, reliable=False):
+def rationalize_array(x, tol = 1e-7, reliable = True):
     '''
     Approximates each NONNEGATIVE floating number to a reasonable fraction and
     leave the floating number unchanged if failed.
 
     Params
     ------
-    x: ndarray
+    x: arraylike
 
-    rounding: float
-        Maximize rounding error allowed.
-
-    tol: float
-        When some number is below the tolerance, then set it to 0.
-
-    mod: unsigned int / list / ...
-        Possible denominators that put into tries. Set to None to trigger default settings.
-
+    tol: values smaller than tolerance get set to zero
     '''
-    x = np.where(x > tol, x, 0)
     y = []
     for v in x:
-        y.append(rationalize(v, rounding=rounding, mod=mod, reliable=reliable))
+        if isinstance(v, float) or isinstance(v, sp.Float):
+            if abs(v) < tol: 
+                y.append((0, 1))
+            else:            
+                y.append(rationalize(v, reliable = reliable))
+        elif isinstance(v, tuple):
+            y.append(v)
+        elif isinstance(v, sp.Expr):
+            y.append(v.as_numer_denom())
     return y
 
 
-def verify(y, polys, poly, tol = 1e-7):
+def verify(y, polys, poly, tol: float = 1e-10) -> bool:
     '''
     Verify whether the fraction approximation is valid
     by substracting the partial sums and checking whether the remainder is zero.
@@ -157,7 +156,10 @@ def verify(y, polys, poly, tol = 1e-7):
     for coeff, f in zip(y, polys):
         if coeff[0] != 0:
             if coeff[1] != -1:
-                poly -= sp.Rational(coeff[0] , coeff[1]) * f
+                if not isinstance(coeff[0], sp.Expr):
+                    poly -= sp.Rational(coeff[0] , coeff[1]) * f
+                else: 
+                    poly -= coeff[0] / coeff[1] * f 
             else:
                 poly -= coeff[0] * f
 
@@ -168,7 +170,7 @@ def verify(y, polys, poly, tol = 1e-7):
     return True
 
 
-def verify_isstrict(func, root, tol=2e-6):
+def verify_isstrict(func, root, tol=1e-9):
     '''
     Verify whether a root is strict.
 
@@ -372,12 +374,14 @@ def findroot(poly, alpha=2e-1, drawback=1e-3, tol=1e-7, maxiter=5000, roots=None
         # strict_roots = [root for root in result_roots if verify_isstrict(lambda x: float(poly_reg(*x)), root)]
 
         # use sympy root finding strategy
-        for root in sp.polys.polyroots.roots(poly_univariate):
+        for root in sp.polys.polyroots.roots(poly_univariate.diff('a')):
             root_numerical = complex(root)
             # real nonnegative root
             if abs(root_numerical.imag) < 1e-7 and root_numerical.real > 0:
                 result_roots.append((root, 0))
-                strict_roots.append((complex(root).real, 0))
+                root_numerical = root_numerical.real 
+                if abs(root_numerical * reg) < 1e-10:
+                    strict_roots.append((root_numerical, 0))
                 break 
             
 
@@ -437,27 +441,32 @@ def root_tangents(roots, tol=1e-6, rounding=0.001, mod=(180,252,336)):
                     # e.g. cubic roots with imaginary unit returns None when querying is_real
                     
                     # e.g. x*x-5*x+1   -> a*a-5*a*c+c*c + b*b-5*b*c + 7*b*a
-                    mini_poly = sp.polys.polytools.Poly(sp.minimal_polynomial(a))
-                    if mini_poly.degree() == 2:
-                        if (1,) not in mini_poly.monoms(): # no degree-1 term:
-                            u , w = mini_poly.coeffs()
-                            v = 0
-                        else:
-                            u , v , w = mini_poly.coeffs()
-                        tangents.append(f'{u}*a*a+{v}*a*c+{w}*c*c')
-                        t = - u - v - w - w*w/u - w*v/u
-                        tangents.append(f'{u}*a*a+{v}*a*c+{w}*c*c+{w*w}/{u}*b*b+{w*v}/{u}*b*c+{t.p}/{t.q}*b*a')
-                        t = - u - v - w - u*u/w - u*v/w
-                        tangents.append(f'{w}*c*c+{v}*a*c+{u}*a*a+{u*u}/{w}*b*b+{u*v}/{w}*b*a+{t.p}/{t.q}*b*c')
-                        # a = (complex(a).real, -1)
+                    try:
+                        mini_poly = sp.polys.polytools.Poly(sp.minimal_polynomial(a))
+                        if mini_poly.degree() == 2:
+                            if (1,) not in mini_poly.monoms(): # no degree-1 term:
+                                u , w = mini_poly.coeffs()
+                                v = 0
+                            else:
+                                u , v , w = mini_poly.coeffs()
+                            tangents.append(f'{u}*a*a+{v}*a*c+{w}*c*c')
+                            t = - u - v - w - w*w/u - w*v/u
+                            tangents.append(f'{u}*a*a+{v}*a*c+{w}*c*c+{w*w}/{u}*b*b+{w*v}/{u}*b*c+{t.p}/{t.q}*b*a')
+                            t = - u - v - w - u*u/w - u*v/w
+                            tangents.append(f'{w}*c*c+{v}*a*c+{u}*a*a+{u*u}/{w}*b*b+{u*v}/{w}*b*a+{t.p}/{t.q}*b*c')
+                            # a = (complex(a).real, -1)
 
-                        # Symmetric Forms 
-                        if abs(a) > 1e-3:
-                            v = complex(a + 1 / a).real
-                            v = rationalize(v, rounding=rounding, mod=mod)
-                            if v[1] != -1:
-                                tangents += [f'a2+b2+c2-{v[0]}/{v[1]}*(ab+bc+ca)']
-                        continue
+                            # Symmetric Forms 
+                            if abs(a) > 1e-3:
+                                v = complex(a + 1 / a).real
+                                v = rationalize(v, rounding=rounding, mod=mod)
+                                if v[1] != -1:
+                                    tangents += [f'a2+b2+c2-{v[0]}/{v[1]}*(ab+bc+ca)']
+                            continue
+                    except: 
+                        # sympy.polys.polyerrors.NotAlgebraic: 
+                        # 0.932752395204472 doesn't seem to be an algebraic element
+                        pass 
             elif a == 1:
                 tangents.append('a+b-c')
                 continue 

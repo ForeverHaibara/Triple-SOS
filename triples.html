@@ -9,14 +9,31 @@
     </style>
     <!-- <script src="https://requirejs.org/docs/release/2.3.6/minified/require.js"></script> -->
     <script src="https://cdn.bootcdn.net/ajax/libs/axios/0.21.1/axios.min.js"></script>
-    <script type="text/javascript" id="MathJax-script" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+    <script type="text/javascript" id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
     <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>  -->
 </head>
 <body>
 <div id="frontpage" 
 style="width: 100%;height: 100%;position: absolute; display: flex; background: rgb(240,240,240);">
-<div id="frontpageleft" style="width: 24.5%; height: 100%; position: relative">
+<div id="frontpageleft" style="width: 24%; margin-right: 0.5%; height: 100%; position: relative; 
+    border-right: 2px solid rgb(220,220,220); background: rgb(255,255,255)">
+    <!-- <div id="variables" style="width: 100%; height: 28px; text-align: left; display: inline-block;
+    background: -webkit-linear-gradient(top, rgb(247,247,247),rgb(234,234,234));
+    color: black; vertical-align: middle; border-bottom: 1px solid rgb(216,216,216); font-size: 19px;">
+    &nbsp  ·&nbsp Variables</div> -->
+    <div id="settings" style="width:100%; height: 30%;">
+    <div id="settings_head" style="width: 100%; height: 28px; text-align: left; display: inline-block;
+    background: -webkit-linear-gradient(top, rgb(247,247,247),rgb(234,234,234));
+    color: black; vertical-align: middle; border-bottom: 1px solid rgb(216,216,216); font-size: 19px;">
+    &nbsp  ·&nbsp Settings
+    </div>
+    <input type="checkbox" id="setting_use_structural_method" checked="checked" style="font-size: 14px; margin-top: 10px; margin-left: 10px;" >&nbsp; Use Structural Method</input>
+    </div>
+    <div id="advertisement" style="position: absolute; left: 5px; bottom: 2%; text-align: left; vertical-align: baseline; font-size: 12px">
+    <!-- <a href = "https://github.com/ForeverHaibara/Triple-SOS">GitHub</a> &nbsp; QQ 875413273 -->
+    </div>
 </div>
+
 <div id="frontpagemid" style="width: 50%; height: 100%; position: relative">
     <div id="inputs" style="width: 100%; height: 5%; margin-top: 1%">    
         <input type="text" id="input_poly" name="poly" style="border: 1px solid black; border-radius: 8px; 
@@ -89,6 +106,7 @@ style="width: 100%;height: 100%;position: absolute; display: flex; background: r
     var sos_deg = 0;
     var sos_results = {latex: '', txt: '', formatted: '', show: 'latex', displaying: 0};
     var sos_work = {num: 0};
+    var sos_variables = {names: [], range: [[-5,0,5],[-5,0,5],[-5,0,5]]};
 
 
     // heatmap triangle
@@ -111,6 +129,21 @@ style="width: 100%;height: 100%;position: absolute; display: flex; background: r
     }
 
 
+    function CreateVariables(){
+        const n = sos_variables.names.length; 
+        for (let i = 0; i < n; ++i){
+            let variable = document.createElement('div');
+            document.getElementById('frontpageleft').appendChild(variable);
+            variable.setAttribute('style', 'width: 100%; height: 10%;');
+            variable.innerHTML = '<br>&nbsp;&nbsp;' + sos_variables.names[i];
+            if (i % 2 === 1){
+                variable.style.backgroundColor = 'rgb(245,245,245)';
+            }else{
+                variable.style.backgroundColor = 'rgb(255,255,255)';
+            }
+        }
+    }
+    CreateVariables();
 
     // functions
 
@@ -254,7 +287,9 @@ style="width: 100%;height: 100%;position: absolute; display: flex; background: r
         function SOS_callback(){
             const input_poly = document.getElementById('input_poly').value;
             const tangents = document.getElementById('input_tangents').value;
-            axios.post('http://127.0.0.1:5000/process/sos',{poly: input_poly, tangents: tangents}
+            const use_structural_method = document.getElementById("setting_use_structural_method").checked;
+            axios.post('http://127.0.0.1:5000/process/sos',{
+                poly: input_poly, tangents: tangents, use_structural_method: use_structural_method}
             ).then(res=>{
                 sos_results.latex = res.data.latex; 
                 sos_results.txt   = res.data.txt;
@@ -343,6 +378,8 @@ style="width: 100%;height: 100%;position: absolute; display: flex; background: r
             }
         }
     }
+
+
 
     document.onkeyup = function(e) {
         // 兼容FF和IE和Opera
