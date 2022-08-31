@@ -37,10 +37,11 @@ def preprocess():
     for i in range(n+1):
         for j in range(i+1):
             if monoms[t][0] == n - i and monoms[t][1] == i - j:
-                if isinstance(coeffs[t],sp.core.numbers.Float):
+                if isinstance(coeffs[t], sp.core.numbers.Float):
                     txt = f'{round(float(coeffs[t]),4)}'
                 else:
-                    txt = f'{coeffs[t].p}' + (f'/{coeffs[t].q}' if coeffs[t].q != 1 else '')
+                    v = coeffs[t].as_numer_denom()
+                    txt = f'{v[0]}' + (f'/{v[1]}' if v[1] != 1 else '')
                     if len(txt) > 10:
                         txt = f'{round(float(coeffs[t]),4)}'
                 t += 1

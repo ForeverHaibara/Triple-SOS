@@ -153,22 +153,29 @@ def verify(y, polys, poly, tol: float = 1e-10) -> bool:
     Verify whether the fraction approximation is valid
     by substracting the partial sums and checking whether the remainder is zero.
     '''
-    for coeff, f in zip(y, polys):
-        if coeff[0] != 0:
-            if coeff[1] != -1:
-                if not isinstance(coeff[0], sp.Expr):
-                    poly -= sp.Rational(coeff[0] , coeff[1]) * f
-                else: 
-                    poly -= coeff[0] / coeff[1] * f 
-            else:
-                poly -= coeff[0] * f
+    try:
+        for coeff, f in zip(y, polys):
+            if coeff[0] != 0:
+                if coeff[1] != -1:
+                    if not isinstance(coeff[0], sp.Expr):
+                        poly = poly - sp.Rational(coeff[0] , coeff[1]) * f
+                    else: 
+                        v = coeff[0] / coeff[1]
+                        coeff_dom = PreprocessText_GetDomain(str(v))
+                        if coeff_dom != sp.QQ:
+                            v = sp.polys.polytools.Poly(str(v)+'+a', domain=coeff_dom)\
+                                 - sp.polys.polytools.Poly('a',domain=coeff_dom)
+                        poly = poly - v * f 
+                else:
+                    poly = poly - coeff[0] * f
 
-    for coeff in poly.coeffs():
-        # some coefficient is larger than tolerance, approximation failed
-        if abs(coeff) > tol:
-            return False
-    return True
-
+        for coeff in poly.coeffs():
+            # some coefficient is larger than tolerance, approximation failed
+            if abs(coeff) > tol:
+                return False    
+        return True
+    except:
+        return False 
 
 def verify_isstrict(func, root, tol=1e-9):
     '''

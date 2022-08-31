@@ -49,7 +49,6 @@ def deg(f):
 def PreprocessText_DeLatex(poly):
     '''convert a latex formula to normal representation'''
 
-    poly = poly.replace(' ','')
     poly = poly.replace('$','')
 
     # \frac{..}{...} -> (..)/(...)
@@ -102,7 +101,7 @@ def PreprocessText_Expansion(poly):
 
     i = 0
     while i < len(poly):
-        if poly[i] == 's' or poly[i] == 'p':
+        if (poly[i] == 's' and i+4 <= len(poly) and poly[i:i+4]!='sqrt')  or poly[i] == 'p':
             paren_depth.append(parenthesis)
             cycle_begin.append(i)
         elif poly[i] == '(':
@@ -119,7 +118,7 @@ def PreprocessText_Expansion(poly):
     return poly
 
 
-def PreprocessText_Completion(poly):
+def PreprocessText_Completion(poly: str):
     '''1/5a3b2c   ->   1/5*a^3*b^2*c'''
     poly = poly.replace(' ','')
     i = 0 
@@ -136,6 +135,8 @@ def PreprocessText_Completion(poly):
                 poly = poly[:i+1] + '^' + poly[i+1:]  
                 i += 1     
         i += 1
+
+    poly = poly.replace('s*q*r*t*','sqrt')
     return poly
 
 
@@ -178,6 +179,27 @@ def CheckHomCyclic(poly, n):
     return True, True 
 
 
+def PreprocessText_GetDomain(poly: str):
+    """
+    Get the domain of a polynomial, e.g.
+    (5^0.5 + 1)/2 a -> QQ(sqrt(5))
+    """
+    extensions = re.findall('sqrt\((.*?)\)', poly)
+    domain_ext = set()
+    if len(extensions) > 0:
+        for ext in extensions:
+            t = sp.sympify(ext)
+            if isinstance(t, sp.Rational):
+                t_ = abs(sp.ntheory.factor_.core(t.p) * sp.ntheory.factor_.core(t.q))
+                if t_ != 1 and t_ != 0:
+                    domain_ext.add(int(t))
+
+    if len(domain_ext) == 0:
+        return sp.QQ 
+    
+    return sp.QQ.algebraic_field(*tuple(sp.sqrt(i) for i in domain_ext))
+
+
 def PreprocessText(poly, cyc=False, retText=False, cancel=False, variables = None):
     '''
     Params
@@ -193,7 +215,9 @@ def PreprocessText(poly, cyc=False, retText=False, cancel=False, variables = Non
     -------
     '''
     poly = poly.lower()
+    poly = poly.replace(' ','')
     poly = PreprocessText_DeLatex(poly)
+    dom = PreprocessText_GetDomain(poly)
     poly = PreprocessText_Expansion(poly)
     poly = PreprocessText_Completion(poly)
     
@@ -219,16 +243,16 @@ def PreprocessText(poly, cyc=False, retText=False, cancel=False, variables = Non
             try:
                 frac = sp.fraction(sp.cancel(poly))
                 if not frac[1].is_constant():
-                    poly = sp.polys.polytools.Poly(frac[0])
+                    poly = sp.polys.polytools.Poly(frac[0], domain = dom)
                     return poly , True 
                 else:
-                    poly = sp.polys.polytools.Poly(poly)
+                    poly = sp.polys.polytools.Poly(poly, domain = dom)
                     return poly , False 
             except:
                 return None, True 
         
         try:
-            poly = sp.polys.polytools.Poly(poly)
+            poly = sp.polys.polytools.Poly(poly, domain = dom)
         except:
             return None
     else:
@@ -236,7 +260,7 @@ def PreprocessText(poly, cyc=False, retText=False, cancel=False, variables = Non
             poly = PreprocessText_Cyclize(poly)
         else:
             try:
-                poly = sp.polys.polytools.Poly(poly)
+                poly = sp.polys.polytools.Poly(poly, domain = dom)
             except:
                 poly = None
                 
@@ -597,4 +621,5 @@ def TextMultiplier(multipliers):
 
 
 if __name__ == '__main__':
-    print(prettyprint([(1,2)], ['a(a-0.5*b)^2'],dectofrac=True))
+    # print(prettyprint([(1,2)], ['a(a-0.5*b)^2'],dectofrac=True))
+    print(PreprocessText('s((a2-b2-(sqrt(5)-1)/2(ac-ab)+(sqrt(5)+1)/2(bc-ab))2)/2+(sqrt(5)-1)/2s(ab((a-c)-(sqrt(5)+1)/2(b-c))2)'))

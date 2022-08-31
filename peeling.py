@@ -311,9 +311,9 @@ if __name__ == '__main__':
     s = s.replace('m',m.__str__()).replace('n',n.__str__()).replace('p',p.__str__()).replace('q',q.__str__())
     s = '-(%s)'%s
     poly = sp.polys.polytools.Poly(s)
-    a , b = OptimizeDeterminant(poly, soft=True)
-    print(s)
-    print(a, b, poly(a,b))
+    # a , b = OptimizeDeterminant(poly, soft=True)
+    # print(s)
+    # print(a, b, poly(a,b))
 
 
     # txt = '3s(a2)3-(s(a3+2a2b))2-2s(a(a-b)(a-c))2-s(ac(2a2-2ab+(b2-ab)+x(ac-ab)+y(bc-ab))2)'
@@ -331,4 +331,5 @@ if __name__ == '__main__':
     txt = 's(18a4b4+9a5b2c+11a4b3c-66a3b4c+2a2b5c+10a4b2c2+16a3b3c2)-s(ab(3(b2c-abc)-1(a2c-abc)+(-4)(bc2-abc)+(5)(ac2-abc))2)-1s(ab((a2c-abc)+x(bc2-abc)+y(ac2-abc))2)'
     txt = 's(a3b3+7a4bc-29a3b2c+12a3bc2+9a2b2c2)s(ab)-7s(ab((b2c-abc)-(a2c-abc)+x(bc2-abc)+y(ac2-abc))2)'
     txt = 's(a5b+7a5c-7a4b2-5a4bc-19a4c2+18a3b3+2a3b2c+8a3bc2-5a2b2c2)-1/55s(ab((b2-ac)-(a2-ac)+x(c2-ac)-y(bc-ac)+(ab-ac))2)'
-    # print(SearchPositive(txt))
+    txt = '(s(a6c2-6a4b2c2+5a3b3c2)-s((a3c-a2bc)2))/a/b/c*s(a2-ab)-2s(c(a3-a2c+(bc2-abc)-x(a2b-abc)+y(ab2-abc))2)'
+    print(SearchPositive(txt))

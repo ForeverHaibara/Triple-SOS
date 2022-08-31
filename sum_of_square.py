@@ -1,5 +1,6 @@
 # author: https://github.com/ForeverHaibara 
 
+from re import M
 from basis_generator import * 
 from root_guess import *
 from text_process import *
@@ -62,10 +63,12 @@ def ExactCoefficient(poly, multipliers, y, names, polys, sos_manager):
     # Filter out zero coefficients
     y , names , polys = FilterZero(y, names, polys)
     if polys is None:
-        polys = [sp.polys.polytools.Poly(CycleExpansion(name)) for name in names]
+        polys = [sp.polys.polytools.Poly(CycleExpansion(name),
+                                    domain = PreprocessText_GetDomain(name)) for name in names]
 
     # verify whether the equation is strict
     equal = verify(y, polys, poly, 0)
+    
     if not equal: 
         # backsubstitude to re-solve the coefficients
         try:
@@ -324,7 +327,7 @@ def TryPeturbations(poly, degree, multipliers, a, b, base, name: str, times = 4)
     return multipliers, y, names 
 
 
-def SOS_Special(poly, degree):
+def SOS_Special(poly, degree, ext = False):
     """
     SOS for special structures.
 
@@ -349,8 +352,9 @@ def SOS_Special(poly, degree):
     """
     coeffs = {}
     for coeff, monom in zip(poly.coeffs(), poly.monoms()):
-        if not isinstance(coeff, sp.Rational):
+        if degree > 4 and not isinstance(coeff, sp.Rational): #isinstance(coeff, sp.Float):
             coeff = sp.Rational(*rationalize(coeff, reliable = True))
+            # coeff = coeff.as_numer_denom()
         coeffs[monom] = coeff 
     
     if len(coeffs) == 1 and poly.monoms()[0] == (0,0,0): # zero polynomial
@@ -413,20 +417,69 @@ def SOS_Special(poly, degree):
         p = coeff((3,1,0))
         q = coeff((1,3,0))
         if m > 0:
-            r = 3*m*(m+n)-(p*p+p*q+q*q)
-            if r >= 0 and (p != 0 or q != 0):
-                y = [m/2, r/(18*m*(p*p+p*q+q*q)), coeff((2,1,1))+m+n+p+q]
-                names = [f'(a*a-b*b+{(p+2*q)/m/3}*c*a+{(p-q)/m/3}*a*b-{(2*p+q)/m/3}*b*c)^2',
-                        f'({p+2*q}*c*a+{p-q}*a*b-{2*p+q}*b*c)^2',
+            det = 3*m*(m+n)-(p*p+p*q+q*q)
+            if det >= 0 and (p != 0 or q != 0):
+                y = [m/2, det/6/m, coeff((2,1,1))+m+n+p+q]
+                all_rational = isinstance(m,sp.Rational) and isinstance(n,sp.Rational) and isinstance(p,sp.Rational) and isinstance(q,sp.Rational)
+                formatter = (lambda x: x) if all_rational else (lambda x: '(%s)'%sp.simplify(x))
+                names = [f'(a*a-b*b+{formatter((p+2*q)/m/3)}*c*a+{formatter((p-q)/m/3)}*a*b-{formatter((2*p+q)/m/3)}*b*c)^2',
+                        f'a^2*(b-c)^2',
                         f'a^2*b*c']
-                if p + 2*q != 0:
-                    t = p + 2*q
-                    y[1] = y[1] * t * t
-                    names[1] = f'(c*a+{(p-q)/t}*a*b-{(2*p+q)/t}*b*c)^2'
-                else: # p+2q = 0  but  p != q
-                    t = p - q
-                    y[1] = y[1] * t * t
-                    names[1] = f'({(p+2*q)/t}*c*a+a*b-{(2*p+q)/t}*b*c)^2'
+                        
+                if not all_rational:
+                    y = [sp.simplify(i) for i in y]
+                
+            else:
+                # try substracting t*s(ab(a-c-u(b-c))2) and use theorem
+                # solve all extrema
+                n , p , q = n / m , p / m , q / m
+                extrema = sp.polys.polyroots.roots(
+                            sp.polys.polytools.Poly(f'2*x^4+{p}*x^3-{q}*x-2'))
+                    
+                symmetric = lambda _x: ((2*q+p)*_x + 6)*_x + 2*p+q
+                for root in extrema:
+                    if root.is_real and root > -1e-6 and sp.minimal_polynomial(root, polys=True).degree() < 3:
+                        symmetric_axis = symmetric(root)
+                        if symmetric_axis >= 0:
+                            det = sp.simplify(p*p+p*q+q*q-3*n-3-symmetric_axis*symmetric_axis/(4*(root*root*(root*root+1)+1)))
+                            if det == 0 or (det < 0 and isinstance(det, sp.Rational)):
+                                # we need simplify det here for quadratic roots
+                                # e.g. (s(a2+ab))2-4s(a)s(a2b)
+                                if det < 0:
+                                    # we consider rational approximations
+                                    numer_r = float(root)
+                                    for rounding in (.5, .2, .1, 1e-2, 1e-3, 1e-4, 1e-6, 1e-8):
+                                        numer_r2 = sp.Rational(*rationalize(numer_r, rounding=rounding, reliable=False))
+                                        symmetric_axis = symmetric(numer_r2)
+                                        if symmetric_axis >= 0 and \
+                                            p*p+p*q+q*q-3*n-3-symmetric_axis*symmetric_axis/(4*(numer_r2**2*(numer_r2**2+1)+1)) <= 0:
+                                            root = numer_r2
+                                            break 
+                            elif det > 0:
+                                continue 
+                        else:
+                            continue
+                    else:
+                        numer_r = complex(root)
+                        if numer_r.imag < -1e-6 or abs(numer_r.imag) > 1e-12 or symmetric(numer_r.real) < 1e-6:
+                            continue
+                        numer_r = numer_r.real 
+                        for rounding in (.5, .2, .1, 1e-2, 1e-3, 1e-4, 1e-6, 1e-8):
+                            numer_r2 = sp.Rational(*rationalize(numer_r, rounding=rounding, reliable=False))
+                            symmetric_axis = symmetric(numer_r2)
+                            if symmetric_axis >= 0 and \
+                                p*p+p*q+q*q-3*n-3-symmetric_axis*symmetric_axis/(4*(numer_r2**2*(numer_r2**2+1)+1)) <= 0:
+                                root = numer_r2 
+                                break 
+                        else:
+                            continue 
+                    
+                    y = [sp.simplify(symmetric_axis / (2*(root*root*(root*root+1)+1)) * m)]
+                    names = [f'a*b*(a-c-({root})*(b-c))^2']
+                    poly2 = poly - y[0] * sp.sympify(CycleExpansion(names[0]))
+                    multipliers , y , names = MergeSOSResults(multipliers, y, names, SOS_Special(poly2, 4))
+
+
 
     elif degree == 5:
         if coeff((5,0,0))==0:
@@ -539,6 +592,38 @@ def SOS_Special(poly, degree):
                         y, names = None, None 
                     else: # positive
                         multipliers , y , names = MergeSOSResults(multipliers, y, names, SOS_Special(poly2, 6))
+        elif coeff((5,1,0))==0 and coeff((5,0,1))==0 and coeff((4,2,0))==0 and coeff((4,0,2))==0\
+            and coeff((3,2,1))==0 and coeff((3,1,2))==0:
+            t = coeff((6,0,0))
+            # t != 0 by assumption
+            u = coeff((3,3,0))/t
+            if u >= -2:
+                v = coeff((4,1,1))/t
+                roots = sp.polys.polyroots.roots(sp.polys.polytools.Poly('x^3-3*x')-u)
+                for r in roots:
+                    numer_r = complex(r)
+                    if abs(numer_r.imag) < 1e-12 and numer_r.real >= 1:
+                        numer_r = numer_r.real 
+                        if not isinstance(r, sp.Rational):
+                            for gap, rounding in ((.5, .1), (.3, .1), (.2, .1), (.1, .1), (.05, .01), (.01, .002),
+                                                (1e-3, 2e-4), (1e-4, 2e-5), (1e-5, 2e-6), (1e-6, 1e-7)):
+                                r = sp.Rational(*rationalize(numer_r-gap, rounding=rounding, reliable = False))
+                                if r*r*r-3*r <= u and 3*r*(r-1)+v >= 0:
+                                    break 
+                                rounding *= .1
+                            else:
+                                break 
+                        elif 3*r*(r-1)+v < 0:
+                            break 
+                        
+                        # now r is rational 
+                        y = [t/2, t*(u-(r*r*r-3*r)), t*(v+3*r*(r-1)), 
+                            coeff((2,2,2))/3+coeff((6,0,0))+coeff((4,1,1))+coeff((3,3,0))]
+                        names = [f'(a^2+b^2+c^2+{r}*(a*b+b*c+c*a))*(a-b)^2*(a+b-{r}*c)^2',
+                                'a^3*b^3-a^2*b^2*c^2',
+                                'a^4*b*c-a^2*b^2*c^2',
+                                'a^2*b^2*c^2']
+
 
     elif degree == 7:
         if coeff((7,0,0))==0 and coeff((6,1,0))==0 and coeff((6,0,1))==0:
@@ -834,7 +919,7 @@ def SOS_Special(poly, degree):
     if (y is None) or (names is None) or len(y) == 0:
         return None 
     
-    y = [(x.p, x.q) if not isinstance(x, tuple) else x for x in y]
+    y = [x.as_numer_denom() if not isinstance(x, tuple) else x for x in y]
     return multipliers, y , names 
 
 
@@ -868,6 +953,6 @@ if __name__ == '__main__':
     # s = '(s(a2(a-b)(a2+ab-5bc))-s(a(a2-ab+0(b2-ab)-7/10(ac-ab)+2/3(bc-ab))2))s(ab)-0*(29-21*117*117/10000)/(1-117*117/10000)s(a)s(a2b-ab2)2'
     
     
-    
+    s = '(s(a2+ab))2-4s(a)s(a2b)'
     s = PreprocessText(s) if isinstance(s, str) else s 
     print(SOS_Special(s, deg(s)))
