@@ -332,4 +332,6 @@ if __name__ == '__main__':
     txt = 's(a3b3+7a4bc-29a3b2c+12a3bc2+9a2b2c2)s(ab)-7s(ab((b2c-abc)-(a2c-abc)+x(bc2-abc)+y(ac2-abc))2)'
     txt = 's(a5b+7a5c-7a4b2-5a4bc-19a4c2+18a3b3+2a3b2c+8a3bc2-5a2b2c2)-1/55s(ab((b2-ac)-(a2-ac)+x(c2-ac)-y(bc-ac)+(ab-ac))2)'
     txt = '(s(a6c2-6a4b2c2+5a3b3c2)-s((a3c-a2bc)2))/a/b/c*s(a2-ab)-2s(c(a3-a2c+(bc2-abc)-x(a2b-abc)+y(ab2-abc))2)'
+    
+    txt = 's(ab)(s(a)(s(a4c)s(a)-6abcs(ab)s(a)+45a2b2c2)-s(c(a3-a2c-(a2b-abc))2))-s(a2c(0(a2b-abc)+2a2c-2b2c+4(b2c-abc)+0(a2b-abc)-2(ab2-abc)-x(bc2-abc)+y(b3-abc))2)'
     print(SearchPositive(txt))

@@ -2,6 +2,7 @@ from sum_of_square import *
 import sympy as sp 
 import numpy as np 
 import matplotlib.pyplot as plt
+# from matplotlib import pyplot as plt
 from copy import deepcopy
 from numbers import Number as PythonNumber 
 import re 

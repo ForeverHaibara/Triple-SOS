@@ -909,7 +909,7 @@ def SOS_Special(poly, degree, ext = False):
                         names[i] = str(name2).replace('**','^')
                         if isinstance(y[i], sp.Expr):
                             y[i] = y[i] / denominator
-                        else:
+                        elif y[i][0] != 0: # y[i] is tuple
                             d = gcd(denominator, y[i][0])
                             y[i] = (y[i][0] // d, y[i][1] * (denominator // d))
             
