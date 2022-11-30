@@ -1,7 +1,11 @@
-from text_process import *
-import sympy as sp
 from math import gcd
 from itertools import product
+
+import sympy as sp
+import numpy as np
+
+from text_process import PreprocessText, PreprocessText_GetDomain, deg
+
 
 def rationalize(v, rounding = 1e-2, mod = None, reliable = False) -> tuple:
     '''
@@ -148,6 +152,32 @@ def rationalize_array(x, tol = 1e-7, reliable = True):
     return y
 
 
+def square_perturbation(a, b, times = 4):
+    """
+    Find t such that (a-t)/(b-t) is square, please be sure a/b is not a square
+    """
+    if a > b:
+        z = max(1, int((a / b)**0.5))
+    else:
+        z = max(1, int((b / a)**0.5))
+    z = sp.Rational(z)  # convert to rational
+
+    for i in range(times): # Newton has quadratic convergence, we only try a few times
+        # (a-t)/(b-t) = z^2  =>  t = (a - z^2 b) / (1 - z^2) 
+        if i > 0 or z == 1:
+            # easy to see z > sqrt(a/b) (or z > sqrt(b/a))
+            z = (z + a/b/z)/2 if a > b else (z + b/a/z)/2
+        if a > b:
+            t = (a - z*z*b) / (1 - z*z)
+            if t < 0 or b < t:
+                continue 
+        else:
+            t = (b - z*z*a) / (1 - z*z)
+            if t < 0 or a < t: 
+                continue 
+        yield t 
+
+
 def verify(y, polys, poly, tol: float = 1e-10) -> bool:
     '''
     Verify whether the fraction approximation is valid
@@ -177,6 +207,7 @@ def verify(y, polys, poly, tol: float = 1e-10) -> bool:
     except:
         return False 
 
+
 def verify_isstrict(func, root, tol=1e-9):
     '''
     Verify whether a root is strict.
@@ -203,7 +234,73 @@ def findbest(choices, func, init_choice=None, init_val=2147483647):
     return best_choice , val
 
 
-def findroot(poly, alpha=2e-1, drawback=1e-3, tol=1e-7, maxiter=5000, roots=None, most=5):
+def optimize_determinant(determinant, soft = False):
+    best_choice = (2147483647, 0, 0)
+    for a, b in product(range(-5, 7, 2), repeat = 2): # integer
+        v = determinant(a, b)
+        if v <= 0:
+            best_choice = (v, a, b)
+            break  
+        elif v < best_choice[0]:
+            best_choice = (v, a, b)
+
+    v , a , b = best_choice
+    if v > 0:
+        for a, b in product(range(a-1, a+2), range(b-1, b+2)): # search a neighborhood
+            v = determinant(a, b)
+            if v <= 0:
+                best_choice = (v, a, b)
+                break  
+            elif v < best_choice[0]:
+                best_choice = (v, a, b)
+
+    if v > 0:
+        a = a * 1.0
+        b = b * 1.0
+        da = determinant.diff('x')
+        db = determinant.diff('y')
+        da2 = da.diff('x')
+        dab = da.diff('y')
+        db2 = db.diff('y')
+        # x =[a',b'] <- x - inv(nabla)^-1 @ grad 
+        for i in range(20):
+            lasta , lastb = a , b 
+            da_  = da(a,b)
+            db_  = db(a,b)
+            da2_ = da2(a,b)
+            dab_ = dab(a,b)
+            db2_ = db2(a,b)
+            det_ = da2_ * db2_ - dab_ * dab_ 
+            if det_ == 0:
+                break 
+            else:
+                a , b = a - (db2_ * da_ - dab_ * db_) / det_ , b - (-dab_ * da_ + da2_ * db_) / det_
+                if abs(lasta - a) < 1e-9 and abs(lastb - b) < 1e-9:
+                    break 
+        v = determinant(a, b)
+        
+    if v > 1e-6 and not soft:
+        return None
+
+    # iterative deepening
+    a_ , b_ = (a, 1), (b, 1)
+    rounding = 0.5
+    for i in range(5):
+        a_ = sp.Rational(*rationalize(a, rounding, reliable = False))
+        b_ = sp.Rational(*rationalize(b, rounding, reliable = False))
+        v = determinant(a_, b_)
+        if v <= 0:
+            break 
+        rounding *= .1
+    else:
+        return (a_, b_) if soft else None 
+
+    a , b = a_ , b_
+
+    return a , b
+
+
+def root_findroot(poly, alpha=2e-1, drawback=1e-3, tol=1e-7, maxiter=5000, roots=None, most=5):
     '''
     Find the possible roots of a cyclic polynomial by gradient descent and guessing. 
     The polynomial is automatically standardlized so no need worry the stability. 
@@ -300,7 +397,7 @@ def findroot(poly, alpha=2e-1, drawback=1e-3, tol=1e-7, maxiter=5000, roots=None
         da2 = da.diff('a')
         dab = da.diff('b')
         db2 = db.diff('b')
-        for a , b in product(np.linspace(0.1,0.9,num=10),repeat=2):
+        for a , b in product(np.linspace(0.1,0.9,num=10), repeat=2):
             for iter in range(20): # by experiment, 20 is oftentimes more than enough
                 # x =[a',b'] <- x - inv(nabla)^-1 @ grad 
                 lasta = a

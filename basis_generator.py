@@ -1,7 +1,8 @@
-from root_guess import *
-from text_process import *
 import numpy as np
 import sympy as sp
+
+# from root_guess import verify_isstrict
+from text_process import PreprocessText, cycle_expansion, next_permute, reflect_permute, deg
 
 
 def arraylize(poly, dict_monom: dict, inv_monom: list):
@@ -38,7 +39,7 @@ def invarraylize(poly, dict_monom: dict, inv_monom: list):
             continue
         i , j , k = inv_monom[monom]
         val += f'+ {coeff} * a^{i} * b^{j} * c^{k}'
-    return sp.polys.polytools.Poly(CycleExpansion(val))
+    return sp.polys.polytools.Poly(cycle_expansion(val))
     
 
 def generate_expr(n: int):
@@ -107,7 +108,7 @@ def base_tangent(m: int, tangents: list) -> str:
                         for suffix in base_trivial(m-2*(n*i+j)):
                             name = prefix + ' * ' + suffix + ' * (' + tangent + f')^{2*i}'
                             yield name
-            tangent = NextPermute(tangent)
+            tangent = next_permute(tangent)
 
 
 def append_basis(n: int, dict_monom: dict, inv_monom: list, 
@@ -129,7 +130,7 @@ def append_basis(n: int, dict_monom: dict, inv_monom: list,
         return names, polys, basis
 
     for name in names[old_names:]:
-        polys.append(sp.polys.polytools.Poly(CycleExpansion(name)))
+        polys.append(sp.polys.polytools.Poly(cycle_expansion(name)))
         
     new_basis = np.array([arraylize(poly,dict_monom,inv_monom) for poly in polys[old_names:]])
     if type(basis) == list and len(basis) == 0:
@@ -193,7 +194,7 @@ def generate_basis(n: int, dict_monom: dict, inv_monom: list, tangents = None, s
         names = names + aux
         names.append(f'a^{n-2}*(a-b)*(a-c)')
         
-        polys = [sp.polys.polytools.Poly(CycleExpansion(name)) for name in names]
+        polys = [sp.polys.polytools.Poly(cycle_expansion(name)) for name in names]
         basis = np.array([arraylize(poly,dict_monom,inv_monom) for poly in polys])
 
 

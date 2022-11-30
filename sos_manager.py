@@ -1,11 +1,21 @@
-from sum_of_square import *
+from copy import deepcopy
+from numbers import Number as PythonNumber 
+import re
+import warnings
+
 import sympy as sp 
 import numpy as np 
 import matplotlib.pyplot as plt
+from scipy.optimize import linprog
+from scipy.optimize import OptimizeWarning
 # from matplotlib import pyplot as plt
-from copy import deepcopy
-from numbers import Number as PythonNumber 
-import re 
+
+from text_process import deg, verify_hom_cyclic, degree_of_zero
+from text_process import PreprocessText, prettyprint, text_compresser, text_sorter, text_multiplier
+from basis_generator import arraylize, invarraylize, generate_expr, generate_basis, append_basis, reduce_basis
+from root_guess import root_findroot, root_tangents
+from sum_of_square import exact_coefficient, up_degree, SOS_Special
+
 
 class SOS_Manager():
     def __init__(self,GUI=None):
@@ -27,7 +37,7 @@ class SOS_Manager():
         self.poly_iszero = False 
         self.multiplier = None
         self.deg = 0
-        self.updeg = 10
+        self.updeg = 11
         self.deglim = 18
 
         self.maxiter = 5000
@@ -47,10 +57,10 @@ class SOS_Manager():
         self.grid_precal = []
         self.grid_val = []
         self.grid_deglim = 18
-        self.gridInit()
+        self._grid_init()
 
 
-    def gridInit(self):
+    def _grid_init(self):
         '''
         Initialize the grid and preprocess some values.
         '''
@@ -72,7 +82,7 @@ class SOS_Manager():
                 self.grid_precal[i].append(self.grid_precal[i][-1] * i)
 
 
-    def renderGrid(self):
+    def _render_grid(self):
         '''
         Render the grid by computing the values and setting the grid_val to rgba colors.
         '''
@@ -157,7 +167,7 @@ class SOS_Manager():
                 self.poly = self.zeropoly
                 self.rootsinfo = ''
                 self.grid_val = [(255,255,255,255)] * len(self.grid_coor)
-                n = DegreeofZero(txt)
+                n = degree_of_zero(txt)
                 self.deg = self.deg if n <= 0 else n 
                 self.std_monoms = [(0,0,0)] * ((self.deg + 2) * (self.deg + 1) // 2)
                 self.roots = []
@@ -194,14 +204,14 @@ class SOS_Manager():
 
         if render_grid:
             try:
-                self.renderGrid()
+                self._render_grid()
             except:
                 pass
         
         self.polytxt = txt 
         self.poly_isfrac = isfrac
         self.poly_iszero = False
-        self.poly_ishom, self.poly_iscyc = CheckHomCyclic(self.poly, self.deg)
+        self.poly_ishom, self.poly_iscyc = verify_hom_cyclic(self.poly, self.deg)
         return True 
 
 
@@ -241,7 +251,7 @@ class SOS_Manager():
                 return txt 
 
 
-    def InquireMonoms(self, n: int):        
+    def _inquire_monoms(self, n: int):        
         if not (n in self.dict_monoms.keys()):
             self.dict_monoms[n] , self.inv_monoms[n] = generate_expr(n)
                 
@@ -249,18 +259,19 @@ class SOS_Manager():
         inv_monom  = self.inv_monoms[n]  
         return dict_monom, inv_monom 
 
-    def InquireBasis(self, n: int):
+    def _inquire_basis(self, n: int):
         if not (n in self.names.keys()):
-            dict_monom, inv_monom = self.InquireMonoms(n)
+            dict_monom, inv_monom = self._inquire_monoms(n)
             self.names[n], self.polys[n], self.basis[n] = generate_basis(n, dict_monom, inv_monom, ['a2-bc','a3-bc2','a3-b2c'],[])
 
         names, polys, basis = deepcopy(self.names[n]), deepcopy(self.polys[n]), self.basis[n].copy()
         return names, polys, basis 
+    
 
     def GUI_findRoot(self):
         if self.deg <= 1 or (not self.poly_iscyc) or (self.poly_iszero) or (not self.poly_ishom):
             return 
-        self.roots, self.strict_roots = findroot(self.poly, maxiter=self.maxiter, roots=self.roots)
+        self.roots, self.strict_roots = root_findroot(self.poly, maxiter=self.maxiter, roots=self.roots)
         if len(self.roots) > 0:
             self.rootsinfo = 'Local Minima Approx:'
             print(self.roots)
@@ -285,11 +296,11 @@ class SOS_Manager():
 
 
     def GUI_prettyResult(self, y, names, multipliers = None, equal = True):
-        y , names = TextCompresser(y, names)
+        y , names = text_compresser(y, names)
 
-        y , names , linefeed = TextSorter(y, names)
+        y , names , linefeed = text_sorter(y, names)
         
-        multiplier_txt = TextMultiplier(multipliers)
+        multiplier_txt = text_multiplier(multipliers)
 
         # 0: LaTeX
         self.sosresults[0] = prettyprint(y, names, 
@@ -372,7 +383,7 @@ class SOS_Manager():
         # initialization with None
         x , names , polys , basis , multipliers = None , None , None , None , []
 
-        for multiplier, poly, n in UpDegree(self.poly, origin_deg, self.updeg):
+        for multiplier, poly, n in up_degree(self.poly, origin_deg, self.updeg):
             multipliers = [multiplier] 
 
             # try SOS on special structures 
@@ -384,12 +395,12 @@ class SOS_Manager():
                     polys = None 
                     break 
 
-            dict_monom, inv_monom = self.InquireMonoms(n)
+            dict_monom, inv_monom = self._inquire_monoms(n)
             b = arraylize(poly, dict_monom, inv_monom)    
                 
             # generate basis with degree n
             # make use of already-generated ones
-            names, polys, basis = self.InquireBasis(n)
+            names, polys, basis = self._inquire_basis(n)
             names, polys, basis = append_basis(n, dict_monom, inv_monom, names, polys, basis, tangents)
         
             # reduce the basis according to the strict roots
@@ -420,7 +431,7 @@ class SOS_Manager():
             self.GUI_stateUpdate(70)
             return ''
         
-        y , names, equal = ExactCoefficient(original_poly, multipliers, y, names, polys, self)
+        y , names, equal = exact_coefficient(original_poly, multipliers, y, names, polys, self)
         
 
         # obtain the LaTeX format

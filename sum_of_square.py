@@ -1,20 +1,24 @@
 # author: https://github.com/ForeverHaibara 
-
-from re import M
-from basis_generator import * 
-from root_guess import *
-from text_process import *
-from peeling import * 
-
-from scipy.optimize import linprog
-from scipy.optimize import OptimizeWarning
-from sympy.solvers.diophantine.diophantine import diop_DN 
+from math import gcd
 from itertools import product
 import warnings
+import re
+
+import sympy as sp
+import numpy as np
+from scipy.optimize import linprog
+from scipy.optimize import OptimizeWarning
+from sympy.solvers.diophantine.diophantine import diop_DN
+
+from basis_generator import arraylize, arraylize_sp, invarraylize, reduce_basis, generate_expr, generate_basis
+from text_process import deg, next_permute, reflect_permute, cycle_expansion
+from text_process import PreprocessText, PreprocessText_GetDomain, prettyprint
+from root_guess import rationalize, rationalize_array, root_findroot, root_tangents
+from root_guess import verify, optimize_determinant, square_perturbation
+from peeling import FastPositiveChecker
 
 
-
-def UpDegree(poly, n, updeg):
+def up_degree(poly, n, updeg):
     """
     Generator that returns 
     """
@@ -31,7 +35,7 @@ def UpDegree(poly, n, updeg):
         yield multiplier, poly_mul, m 
 
 
-def ExactCoefficient(poly, multipliers, y, names, polys, sos_manager):
+def exact_coefficient(poly, multipliers, y, names, polys, sos_manager):
     '''
     Get the exact coefficients of y that sum up to polynomials 
 
@@ -48,9 +52,9 @@ def ExactCoefficient(poly, multipliers, y, names, polys, sos_manager):
     for multiplier in multipliers:
         if multiplier is None:
             continue 
-        poly = poly * sp.polys.polytools.Poly(CycleExpansion(multiplier))
+        poly = poly * sp.polys.polytools.Poly(cycle_expansion(multiplier))
 
-    def FilterZero(y, names, polys):
+    def _filter_zero(y, names, polys):
         index = list(filter(lambda i: y[i][0] != 0 , list(range(len(y)))))
         y     = [y[i]     for i in index] 
         names = [names[i] for i in index] if names is not None else names 
@@ -61,9 +65,9 @@ def ExactCoefficient(poly, multipliers, y, names, polys, sos_manager):
     y = rationalize_array(y, reliable = True)
         
     # Filter out zero coefficients
-    y , names , polys = FilterZero(y, names, polys)
+    y , names , polys = _filter_zero(y, names, polys)
     if polys is None:
-        polys = [sp.polys.polytools.Poly(CycleExpansion(name),
+        polys = [sp.polys.polytools.Poly(cycle_expansion(name),
                                     domain = PreprocessText_GetDomain(name)) for name in names]
 
     # verify whether the equation is strict
@@ -84,7 +88,7 @@ def ExactCoefficient(poly, multipliers, y, names, polys, sos_manager):
             else:
                 if verify(new_y, polys, poly, 0):
                     equal = True 
-                    y , names , polys = FilterZero(new_y, names, polys)
+                    y , names , polys = _filter_zero(new_y, names, polys)
         except:
             equal = False 
         
@@ -176,7 +180,7 @@ def SOS(poly, tangents = [], maxiter = 5000, roots = [], tangent_points = [], up
     # search the roots
     strict_roots = []
     if maxiter:
-        roots, strict_roots = findroot(poly, maxiter=maxiter, roots=roots)
+        roots, strict_roots = root_findroot(poly, maxiter=maxiter, roots=roots)
         if show_roots and not silent:
             print('Roots =',roots)
         
@@ -277,7 +281,7 @@ def SOS(poly, tangents = [], maxiter = 5000, roots = [], tangent_points = [], up
     return result
 
 
-def MergeSOSResults(multipliers, y, names, result, abc = False):
+def _merge_sos_results(multipliers, y, names, result, abc = False):
     """
     Merge SOS results in DFS.
     """
@@ -301,7 +305,7 @@ def MergeSOSResults(multipliers, y, names, result, abc = False):
             if names[i][0] != '(' or names[i][-1] != ')':
                 names[i] = '(' + names[i] + ')'
             for m in m2:
-                names[i] = '('+m+'+'+NextPermute(m)+'+'+NextPermute(NextPermute(m))+')*' + names[i]
+                names[i] = '('+m+'+'+next_permute(m)+'+'+next_permute(next_permute(m))+')*' + names[i]
     if abc:
         for i in range(len(names2)):
             if names2[i][0] != '(' or names2[i][-1] != ')':
@@ -313,14 +317,14 @@ def MergeSOSResults(multipliers, y, names, result, abc = False):
     return multipliers , y , names 
 
 
-def TryPeturbations(poly, degree, multipliers, a, b, base, name: str, times = 4):
-    substractor = sp.polys.polytools.Poly(CycleExpansion(name))
+def _try_perturbations(poly, degree, multipliers, a, b, base, name: str, times = 4):
+    substractor = sp.polys.polytools.Poly(cycle_expansion(name))
     
-    for t in SquarePerturbation(a, b, times = times):
+    for t in square_perturbation(a, b, times = times):
         y = [t * base]
         names = [name]
         poly2 = poly - y[0] * substractor 
-        multipliers , y , names = MergeSOSResults(multipliers, y, names, SOS_Special(poly2, degree))
+        multipliers , y , names = _merge_sos_results(multipliers, y, names, SOS_Special(poly2, degree))
         if y is not None:
             break 
 
@@ -476,8 +480,8 @@ def SOS_Special(poly, degree, ext = False):
                     
                     y = [sp.simplify(symmetric_axis / (2*(root*root*(root*root+1)+1)) * m)]
                     names = [f'a*b*(a-c-({root})*(b-c))^2']
-                    poly2 = poly - y[0] * sp.sympify(CycleExpansion(names[0]))
-                    multipliers , y , names = MergeSOSResults(multipliers, y, names, SOS_Special(poly2, 4))
+                    poly2 = poly - y[0] * sp.sympify(cycle_expansion(names[0]))
+                    multipliers , y , names = _merge_sos_results(multipliers, y, names, SOS_Special(poly2, 4))
 
 
 
@@ -486,7 +490,7 @@ def SOS_Special(poly, degree, ext = False):
             # try hexagon
             multipliers = ['a*b']
             poly2 = poly * sp.polys.polytools.Poly('a*b+b*c+c*a')
-            multipliers , y , names = MergeSOSResults(multipliers, y, names, SOS_Special(poly2, 7))
+            multipliers , y , names = _merge_sos_results(multipliers, y, names, SOS_Special(poly2, 7))
         else:
             a = coeff((5,0,0))
             if a > 0:
@@ -495,20 +499,20 @@ def SOS_Special(poly, degree, ext = False):
                 if b >= -2 * a:
                     fpc = FastPositiveChecker()
                     name = '(a^2+b^2+c^2-a*b-b*c-c*a)*a*(a-b)*(a-c)'
-                    poly2 = poly - a * sp.sympify(CycleExpansion(name))
+                    poly2 = poly - a * sp.sympify(cycle_expansion(name))
                     fpc.setPoly(poly2)
                     if fpc.check() == 0:
                         y = [a]
                         names = [name]
-                        multipliers , y , names = MergeSOSResults(multipliers, y, names, SOS_Special(poly2, 5))
+                        multipliers , y , names = _merge_sos_results(multipliers, y, names, SOS_Special(poly2, 5))
                     if y is None and b >= -a:
                         name = 'a^3*(a-b)*(a-c)'
-                        poly2 = poly - a * sp.sympify(CycleExpansion(name))
+                        poly2 = poly - a * sp.sympify(cycle_expansion(name))
                         fpc.setPoly(poly2)
                         if fpc.check() == 0:
                             y = [a]
                             names = [name]
-                            multipliers , y , names = MergeSOSResults(multipliers, y, names, SOS_Special(poly2, 5))
+                            multipliers , y , names = _merge_sos_results(multipliers, y, names, SOS_Special(poly2, 5))
                         
 
             
@@ -532,7 +536,7 @@ def SOS_Special(poly, degree, ext = False):
                     if v != 0:
                         y, names = None, None 
                     else: # positive
-                        multipliers , y , names = MergeSOSResults(multipliers, y, names, SOS_Special(poly2, 6))
+                        multipliers , y , names = _merge_sos_results(multipliers, y, names, SOS_Special(poly2, 6))
 
                 # CASE 2. 
                 else:
@@ -546,7 +550,7 @@ def SOS_Special(poly, degree, ext = False):
                         if v != 0:
                             y, names = None, None 
                         else: # positive
-                            multipliers , y , names = MergeSOSResults(multipliers, y, names, SOS_Special(poly2, 6))
+                            multipliers , y , names = _merge_sos_results(multipliers, y, names, SOS_Special(poly2, 6))
 
                     # CASE 3.
                     # a = t(p^2+1) , b = t(q^2+1)
@@ -571,8 +575,8 @@ def SOS_Special(poly, degree, ext = False):
                                 continue 
                             y = [t]
                             names = [f'(a*a*c-b*b*c-{p}*(a*a*b-a*b*c)+{q}*(a*b*b-a*b*c))^2']
-                            poly2 = poly - t * sp.sympify(CycleExpansion(names[0]))
-                            multipliers , y , names = MergeSOSResults(multipliers, y, names, SOS_Special(poly2, 6))
+                            poly2 = poly - t * sp.sympify(cycle_expansion(names[0]))
+                            multipliers , y , names = _merge_sos_results(multipliers, y, names, SOS_Special(poly2, 6))
                             if y is not None:
                                 break                 
 
@@ -581,7 +585,7 @@ def SOS_Special(poly, degree, ext = False):
                 if coeff((4,2,0)) == 0:
                     # hexagram (star)
                     poly = poly * sp.polys.polytools.Poly('a+b+c')
-                    multipliers , y , names = MergeSOSResults(['a'], y, names, SOS_Special(poly, 7))
+                    multipliers , y , names = _merge_sos_results(['a'], y, names, SOS_Special(poly, 7))
                 else:
                     y = [coeff((4,2,0)) / 3] 
                     names = [f'(a-b)^2*(b-c)^2*(c-a)^2']
@@ -591,7 +595,7 @@ def SOS_Special(poly, degree, ext = False):
                     if v != 0:
                         y, names = None, None 
                     else: # positive
-                        multipliers , y , names = MergeSOSResults(multipliers, y, names, SOS_Special(poly2, 6))
+                        multipliers , y , names = _merge_sos_results(multipliers, y, names, SOS_Special(poly2, 6))
         elif coeff((5,1,0))==0 and coeff((5,0,1))==0 and coeff((4,2,0))==0 and coeff((4,0,2))==0\
             and coeff((3,2,1))==0 and coeff((3,1,2))==0:
             t = coeff((6,0,0))
@@ -656,7 +660,7 @@ def SOS_Special(poly, degree, ext = False):
                             determinant = sp.polys.polytools.Poly(determinant)
                         determinant = determinant.subs((('m',coeff((5,1,1))/t), ('n',coeff((3,3,1))/t), ('p',coeff((4,2,1))/t), ('q',coeff((2,4,1))/t)))#, simultaneous=True)
                         
-                        result = OptimizeDeterminant(determinant)
+                        result = optimize_determinant(determinant)
                         if result is None:
                             return 
                         a , b = result 
@@ -670,13 +674,13 @@ def SOS_Special(poly, degree, ext = False):
                             names = [f'b*((b*c^2-a*b*c)+{a+b}*(a^2*c-a*b*c)+{b-a}*(a*c^2-a*b*c))^2']
 
 
-                        poly = poly - t * sp.polys.polytools.Poly(CycleExpansion(names[0]))
+                        poly = poly - t * sp.polys.polytools.Poly(cycle_expansion(names[0]))
                     
                     try:
                         poly = sp.cancel(poly / sp.polys.polytools.Poly('a*b*c'))
                         poly = sp.polys.polytools.Poly(poly)
                         
-                        multipliers , y , names = MergeSOSResults(multipliers, y, names, 
+                        multipliers , y , names = _merge_sos_results(multipliers, y, names, 
                                                                 SOS_Special(poly, 4), abc = True)
                     except:
                         # zero polynomial
@@ -692,7 +696,7 @@ def SOS_Special(poly, degree, ext = False):
                     
                     name = 'c*(a^2*b-a^2*c-a*b^2+b^2*c)^2'
                     
-                    multipliers, y, names = TryPeturbations(poly, degree, multipliers, a, b,
+                    multipliers, y, names = _try_perturbations(poly, degree, multipliers, a, b,
                                                             coeff((4,3,0))/b, name)
 
             else:
@@ -797,20 +801,20 @@ def SOS_Special(poly, degree, ext = False):
                         determinant = determinant.subs((('u', u), ('v', v), ('z', z), ('w', w), 
                                             ('m', coeff((5,1,1))/t), ('n', coeff((3,3,1))/t), ('p', coeff((4,2,1))/t), ('q', coeff((2,4,1))/t)))
                         
-                        result = OptimizeDeterminant(determinant, soft = True)
+                        result = optimize_determinant(determinant, soft = True)
                         if result is None:
                             continue
                         a , b = result
                         
                         y = [t] 
                         names = [f'a*({u}*(a^2*b-a*b*c)-{v}*(a^2*c-a*b*c)+{a}*(b*c^2-a*b*c)+{b}*(b^2*c-a*b*c)+{z}*(a*c^2-a*b*c)+{w}*(a*b^2-a*b*c))^2']
-                        poly2 = poly - t * sp.polys.polytools.Poly(CycleExpansion(names[0]))
-                        multipliers , y , names = MergeSOSResults(multipliers, y, names, SOS_Special(poly2, 7))
+                        poly2 = poly - t * sp.polys.polytools.Poly(cycle_expansion(names[0]))
+                        multipliers , y , names = _merge_sos_results(multipliers, y, names, SOS_Special(poly2, 7))
                         if y is not None:
                             break 
                 elif a > 0 and b > 0:
                     name = 'a*(a-b)^2*(b-c)^2*(c-a)^2'
-                    multipliers, y, names = TryPeturbations(poly, degree, multipliers, a, b,
+                    multipliers, y, names = _try_perturbations(poly, degree, multipliers, a, b,
                                                             coeff((5,2,0))/b, name)
 
     elif degree == 8:
@@ -820,7 +824,7 @@ def SOS_Special(poly, degree, ext = False):
             # equivalent to degree-7 hexagon when applying (a,b,c) -> (1/a,1/b,1/c)
             poly2 = f'{coeff((0,3,5))}*a^5*b^2+{coeff((1,2,5))}*a^4*b^3+{coeff((2,1,5))}*a^3*b^4+{coeff((3,0,5))}*a^2*b^5+{coeff((3,3,2))}*a^2*b^2*c^3'
             poly2 += f'+{coeff((0,4,4))}*a^5*b*c+{coeff((1,3,4))}*a^4*b^2*c+{coeff((2,2,4))}*a^3*b^3*c+{coeff((3,1,4))}*a^2*b^4*c'
-            poly2 = sp.polys.polytools.Poly(CycleExpansion(poly2))
+            poly2 = sp.polys.polytools.Poly(cycle_expansion(poly2))
             result = SOS_Special(poly2, 7)
             if False:
                 if coeff((5,1,2))==0 and coeff((5,2,1))==0:
@@ -872,7 +876,7 @@ def SOS_Special(poly, degree, ext = False):
                             determinant = sp.polys.polytools.Poly(determinant)
                         determinant = determinant.subs((('m',coeff((4,4,0))/t), ('n',coeff((2,4,2))/t), ('p',coeff((3,4,1))/t), ('q',coeff((1,4,3))/t)))#, simultaneous=True)
                         
-                        result = OptimizeDeterminant(determinant)
+                        result = optimize_determinant(determinant)
                         if result is None:
                             return 
                         a , b = result
@@ -886,8 +890,8 @@ def SOS_Special(poly, degree, ext = False):
                             names = [f'a*b*c*c*((a^2-a*b)+{a+b}*(a*c-a*b)-{a-b}*(b*c-a*b))^2']
 
 
-                        poly2 = poly - t * sp.polys.polytools.Poly(CycleExpansion(names[0]))
-                        multipliers , y , names = MergeSOSResults(multipliers, y, names, SOS_Special(poly2, 8))
+                        poly2 = poly - t * sp.polys.polytools.Poly(cycle_expansion(names[0]))
+                        multipliers , y , names = _merge_sos_results(multipliers, y, names, SOS_Special(poly2, 8))
                 
                     elif a > 0 and b > 0:
                         # Similarly to degree 7, we actually do not require a/b is square
@@ -895,7 +899,7 @@ def SOS_Special(poly, degree, ext = False):
                         # but we can make a sufficiently small perturbation such that a/b is square 
                             
                         name = 'a*b*c*(a*b+b*c+c*a)*a*(a-b)*(a-c)'
-                        multipliers, y, names = TryPeturbations(poly, degree, multipliers, a, b,
+                        multipliers, y, names = _try_perturbations(poly, degree, multipliers, a, b,
                                                                 coeff((5,2,1))/b, name)
             
             if result is not None:

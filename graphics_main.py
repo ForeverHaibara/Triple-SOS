@@ -9,14 +9,15 @@
 #pyinstaller --clean -w -p D:/Qt --hidden-import PySide6  graphics_main.py 
 import sys
 
-from sum_of_square import *
-from sos_GUI import *
 try:
     from PySide6 import QtCore, QtWidgets, QtGui
     from PySide6.QtWidgets import QApplication
 except:
     from PySide2 import QtCore, QtWidgets, QtGui
     from PySide2.QtWidgets import QApplication
+
+from sos_manager import SOS_Manager
+from sos_GUI import *
 
 class MyWidget(QtWidgets.QWidget):
     def __init__(self):

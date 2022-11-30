@@ -1,9 +1,10 @@
-import sympy as sp
-import numpy as np
 from math import gcd
 import re 
 
-def NextPermute(f: str) -> str:
+import sympy as sp
+import numpy as np
+
+def next_permute(f: str) -> str:
     '''a^3 * b^2 * c   ->   b^3 * c^2 * a'''
     fb = f.replace('a','#')
     fb = fb.replace('c','a')
@@ -11,14 +12,14 @@ def NextPermute(f: str) -> str:
     fb = fb.replace('#','b')
     return fb
 
-def ReflectPermute(f: str) -> str:
+def reflect_permute(f: str) -> str:
     '''a^3 * b^2 * c   ->   c^3 * b^2 * a'''
     fb = f.replace('a','#')
     fb = fb.replace('c','a')
     fb = fb.replace('#','c')
     return fb
 
-def CycleExpansion(f, symbol='s'):
+def cycle_expansion(f, symbol='s'):
     '''
     Params
     -------
@@ -35,8 +36,8 @@ def CycleExpansion(f, symbol='s'):
     -------
     a string, the result of cycle expansion
     '''
-    fb = NextPermute(f)
-    fc = NextPermute(fb)
+    fb = next_permute(f)
+    fc = next_permute(fb)
     if symbol != 'p':
         return ' + '.join([f, fb, fc])
     return ' * '.join([f, fb, fc])
@@ -109,7 +110,7 @@ def PreprocessText_Expansion(poly):
         elif poly[i] == ')':
             parenthesis -= 1
             if paren_depth[-1] == parenthesis:
-                tmp = '(' + CycleExpansion(poly[cycle_begin[-1]+1:i+1], symbol=poly[cycle_begin[-1]]) + ')'
+                tmp = '(' + cycle_expansion(poly[cycle_begin[-1]+1:i+1], symbol=poly[cycle_begin[-1]]) + ')'
                 poly = poly[:cycle_begin[-1]] + tmp + poly[i+1:]
                 i = cycle_begin[-1] + len(tmp) - 1
                 paren_depth.pop()
@@ -142,7 +143,7 @@ def PreprocessText_Completion(poly: str):
 
 def PreprocessText_Cyclize(poly, tol=1e-10):
     '''automatically perform cycle expansion on poly if it is not cyclic'''
-    cyc_poly = sp.polys.polytools.Poly(CycleExpansion(poly))
+    cyc_poly = sp.polys.polytools.Poly(cycle_expansion(poly))
     poly = sp.polys.polytools.Poly(poly)
     for coeff in (cyc_poly - 3*poly).coeffs():
         # some coefficient is larger than tolerance, not cyclic
@@ -151,7 +152,7 @@ def PreprocessText_Cyclize(poly, tol=1e-10):
     return poly
 
 
-def CheckHomCyclic(poly, n):
+def verify_hom_cyclic(poly, n):
     '''check whether a polynomial is homogenous and cyclic'''
     if len(poly.args) != 4:
         for monom in poly.monoms():
@@ -223,7 +224,7 @@ def PreprocessText(poly, cyc=False, retText=False, cancel=False, variables = Non
     
     if retText:
         if cyc:
-            return CycleExpansion(poly)
+            return cycle_expansion(poly)
         else:
             return poly
         
@@ -269,7 +270,7 @@ def PreprocessText(poly, cyc=False, retText=False, cancel=False, variables = Non
     return poly
 
 
-def DegreeofZero(poly):
+def degree_of_zero(poly):
     '''Compute the degree of a homogeneous zero polynomial
     idea: delete the additions and substractions, which do not affect the degree'''
     poly = poly.lower()
@@ -326,7 +327,7 @@ def DegreeofZero(poly):
     return degree
 
 
-def getsuffix(name):
+def _get_suffix(name):
     try:
         bracket = 0
         right = 0
@@ -365,22 +366,22 @@ def getsuffix(name):
                 break 
         
         if alpha == 'a':
-            return (NextPermute(name), cut, left, right)
+            return (next_permute(name), cut, left, right)
         elif alpha == 'c':
-            return (NextPermute(NextPermute(name)), cut, left, right)
+            return (next_permute(next_permute(name)), cut, left, right)
         return (name, cut, left, right)
     except:
         return None 
 
 
-def TextCompresser(y, names):   
+def text_compresser(y, names):   
     print(y)
     new_y = []
     new_names = []
 
     suffixes = {}
     for coeff, name in zip(y, names):
-        result = getsuffix(name)
+        result = _get_suffix(name)
         if result is not None:
             name, cut, left, right = result 
             analogue = suffixes.get(name[left:])
@@ -425,7 +426,7 @@ def TextCompresser(y, names):
     return new_y, new_names 
 
 
-def TextSorter(y, names):
+def text_sorter(y, names):
     '''
     Sort the texts of 'sum of square' in order to balance the length of each line.
     '''
@@ -590,7 +591,7 @@ def prettyprint(y, names, precision=6, linefeed=2, formatt=0, dectofrac=False):
 
 
 
-def TextMultiplier(multipliers):
+def text_multiplier(multipliers):
     """
     Return the LaTeX text and formatted text for the multipliers.
     """

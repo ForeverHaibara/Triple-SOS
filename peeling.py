@@ -1,74 +1,12 @@
-from text_process import * 
-from root_guess import * 
-from itertools import product
-from scipy.spatial import ConvexHull 
 from math import ceil as ceiling 
+from itertools import product
 
+import sympy as sp
+import numpy as np
+from scipy.spatial import ConvexHull
 
-def OptimizeDeterminant(determinant, soft = False):
-    best_choice = (2147483647, 0, 0)
-    for a, b in product(range(-5, 7, 2), repeat = 2): # integer
-        v = determinant(a, b)
-        if v <= 0:
-            best_choice = (v, a, b)
-            break  
-        elif v < best_choice[0]:
-            best_choice = (v, a, b)
-
-    v , a , b = best_choice
-    if v > 0:
-        for a, b in product(range(a-1, a+2), range(b-1, b+2)): # search a neighborhood
-            v = determinant(a, b)
-            if v <= 0:
-                best_choice = (v, a, b)
-                break  
-            elif v < best_choice[0]:
-                best_choice = (v, a, b)
-
-    if v > 0:
-        a = a * 1.0
-        b = b * 1.0
-        da = determinant.diff('x')
-        db = determinant.diff('y')
-        da2 = da.diff('x')
-        dab = da.diff('y')
-        db2 = db.diff('y')
-        # x =[a',b'] <- x - inv(nabla)^-1 @ grad 
-        for i in range(20):
-            lasta , lastb = a , b 
-            da_  = da(a,b)
-            db_  = db(a,b)
-            da2_ = da2(a,b)
-            dab_ = dab(a,b)
-            db2_ = db2(a,b)
-            det_ = da2_ * db2_ - dab_ * dab_ 
-            if det_ == 0:
-                break 
-            else:
-                a , b = a - (db2_ * da_ - dab_ * db_) / det_ , b - (-dab_ * da_ + da2_ * db_) / det_
-                if abs(lasta - a) < 1e-9 and abs(lastb - b) < 1e-9:
-                    break 
-        v = determinant(a, b)
-        
-    if v > 1e-6 and not soft:
-        return None
-
-    # iterative deepening
-    a_ , b_ = (a, 1), (b, 1)
-    rounding = 0.5
-    for i in range(5):
-        a_ = sp.Rational(*rationalize(a, rounding, reliable = False))
-        b_ = sp.Rational(*rationalize(b, rounding, reliable = False))
-        v = determinant(a_, b_)
-        if v <= 0:
-            break 
-        rounding *= .1
-    else:
-        return (a_, b_) if soft else None 
-
-    a , b = a_ , b_
-
-    return a , b
+from text_process import PreprocessText, deg
+from root_guess import rationalize, square_perturbation
 
 
 class FastPositiveChecker():
@@ -152,7 +90,7 @@ class FastPositiveChecker():
         return args 
 
 
-def SearchPositive(poly_str: str):
+def search_positive(poly_str: str):
     poly = PreprocessText(poly_str)
     
     fpc = FastPositiveChecker()
@@ -209,7 +147,7 @@ def SearchPositive(poly_str: str):
     return result
 
 
-def ConvexHullPoly(poly):
+def convex_hull_poly(poly):
     """
     Compute the convex hull of a polynomial
     """
@@ -278,30 +216,6 @@ def ConvexHullPoly(poly):
     return convex_hull, vertices
 
 
-def SquarePerturbation(a, b, times = 4):
-    """
-    Find t such that (a-t)/(b-t) is square, please be sure a/b is not a square
-    """
-    if a > b:
-        z = max(1, int((a / b)**0.5))
-    else:
-        z = max(1, int((b / a)**0.5))
-    z = sp.Rational(z)  # convert to rational
-
-    for i in range(times): # Newton has quadratic convergence, we only try a few times
-        # (a-t)/(b-t) = z^2  =>  t = (a - z^2 b) / (1 - z^2) 
-        if i > 0 or z == 1:
-            # easy to see z > sqrt(a/b) (or z > sqrt(b/a))
-            z = (z + a/b/z)/2 if a > b else (z + b/a/z)/2
-        if a > b:
-            t = (a - z*z*b) / (1 - z*z)
-            if t < 0 or b < t:
-                continue 
-        else:
-            t = (b - z*z*a) / (1 - z*z)
-            if t < 0 or a < t: 
-                continue 
-        yield t 
 
 
 if __name__ == '__main__':    
@@ -311,8 +225,10 @@ if __name__ == '__main__':
     s = s.replace('m',m.__str__()).replace('n',n.__str__()).replace('p',p.__str__()).replace('q',q.__str__())
     s = '-(%s)'%s
     poly = sp.polys.polytools.Poly(s)
+    print(s)
+
+    poly = sp.polys.polytools.Poly('115911-(x^3*y+y^3*(6-x-y)+(6-x-y)^3*x-64*x*y*(6-x-y))')
     # a , b = OptimizeDeterminant(poly, soft=True)
-    # print(s)
     # print(a, b, poly(a,b))
 
 
@@ -334,4 +250,6 @@ if __name__ == '__main__':
     txt = '(s(a6c2-6a4b2c2+5a3b3c2)-s((a3c-a2bc)2))/a/b/c*s(a2-ab)-2s(c(a3-a2c+(bc2-abc)-x(a2b-abc)+y(ab2-abc))2)'
     
     txt = 's(ab)(s(a)(s(a4c)s(a)-6abcs(ab)s(a)+45a2b2c2)-s(c(a3-a2c-(a2b-abc))2))-s(a2c(0(a2b-abc)+2a2c-2b2c+4(b2c-abc)+0(a2b-abc)-2(ab2-abc)-x(bc2-abc)+y(b3-abc))2)'
-    print(SearchPositive(txt))
+    # print(SearchPositive(txt))
+
+    
