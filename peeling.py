@@ -109,7 +109,7 @@ def search_positive(poly_str: str):
     else:
         search_range = product(range(-1, 2), repeat = len(argnames)) # 3^n 
     
-    def GridSearch(poly_str, search_range):
+    def _grid_search(poly_str, search_range):
         best_choice = None 
         for args in search_range:
             v = fpc.check(dict(zip(argnames, args)))
@@ -121,7 +121,7 @@ def search_positive(poly_str: str):
                 return poly_str , best_choice 
         return None , best_choice 
     
-    result , best_choice = GridSearch(poly_str, search_range)
+    result , best_choice = _grid_search(poly_str, search_range)
     if result is not None:
         return result 
     if best_choice[0] <= 30: # promising
@@ -142,7 +142,7 @@ def search_positive(poly_str: str):
             biased_args = tuple(a+b for a, b in zip(best_choice[1], search_range[i]))
             search_range[i] = biased_args
             
-        result , best_choice = GridSearch(poly_str, search_range)
+        result , best_choice = _grid_search(poly_str, search_range)
 
     return result
 
@@ -219,16 +219,16 @@ def convex_hull_poly(poly):
 
 
 if __name__ == '__main__':    
-    s = '3*m*(m+n-(-2*x*y))-(p-(-2*x+y^2))^2-(q-(x^2-2*y))^2-(p-(-2*x+y^2))*(q-(x^2-2*y))'
-    a,m,p,n,q = 1,1,-2,-5,-2#25,50,-261,146,1
-    m,p,n,q = [sp.Rational(i,a) for i in (m,p,n,q)]
-    s = s.replace('m',m.__str__()).replace('n',n.__str__()).replace('p',p.__str__()).replace('q',q.__str__())
-    s = '-(%s)'%s
-    poly = sp.polys.polytools.Poly(s)
-    print(s)
+    # s = '3*m*(m+n-(-2*x*y))-(p-(-2*x+y^2))^2-(q-(x^2-2*y))^2-(p-(-2*x+y^2))*(q-(x^2-2*y))'
+    # a,m,p,n,q = 1,1,-2,-5,-2#25,50,-261,146,1
+    # m,p,n,q = [sp.Rational(i,a) for i in (m,p,n,q)]
+    # s = s.replace('m',m.__str__()).replace('n',n.__str__()).replace('p',p.__str__()).replace('q',q.__str__())
+    # s = '-(%s)'%s
+    # poly = sp.polys.polytools.Poly(s)
+    # print(s)
 
-    poly = sp.polys.polytools.Poly('115911-(x^3*y+y^3*(6-x-y)+(6-x-y)^3*x-64*x*y*(6-x-y))')
-    # a , b = OptimizeDeterminant(poly, soft=True)
+    # poly = sp.polys.polytools.Poly('115911-(x^3*y+y^3*(6-x-y)+(6-x-y)^3*x-64*x*y*(6-x-y))')
+    # a , b = optimize_determinant(poly, soft=True)
     # print(a, b, poly(a,b))
 
 
@@ -250,6 +250,10 @@ if __name__ == '__main__':
     txt = '(s(a6c2-6a4b2c2+5a3b3c2)-s((a3c-a2bc)2))/a/b/c*s(a2-ab)-2s(c(a3-a2c+(bc2-abc)-x(a2b-abc)+y(ab2-abc))2)'
     
     txt = 's(ab)(s(a)(s(a4c)s(a)-6abcs(ab)s(a)+45a2b2c2)-s(c(a3-a2c-(a2b-abc))2))-s(a2c(0(a2b-abc)+2a2c-2b2c+4(b2c-abc)+0(a2b-abc)-2(ab2-abc)-x(bc2-abc)+y(b3-abc))2)'
-    # print(SearchPositive(txt))
+    txt = 's(6a6b2c+6a5b4-35a5b2c2+12a5bc3-35a4b4c+63a4b3c2+18a4b2c3-35a3b3c3)-6s(bc2(a2c-b2c-(12/5+x)(a2b-abc)+y(ab2-abc))2)'
+    # txt = 's(a2b(a-b)(a-b-c))s(a2-ab)-s(b(a3-ab2+x(a2c-abc)+y(ac2-abc))2)'
+    # txt = 's(a5c2+a4b3-7a4bc2+2a4c3+2a3b3c+a3b2c2)-s(a(a2c-abc-(ac2-abc)+x(b2c-abc)-y(ab2-abc))2) '
+    
+    print(search_positive(txt))
 
     

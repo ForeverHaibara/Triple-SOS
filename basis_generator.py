@@ -141,7 +141,7 @@ def append_basis(n: int, dict_monom: dict, inv_monom: list,
     return names, polys, basis
 
 
-def generate_basis(n: int, dict_monom: dict, inv_monom: list, tangents = None, strict_roots = None):
+def generate_basis(n: int, dict_monom: dict, inv_monom: list, tangents = None, strict_roots = None, aux = None):
     '''
     Return
     -------
@@ -183,7 +183,8 @@ def generate_basis(n: int, dict_monom: dict, inv_monom: list, tangents = None, s
                 name = f'a^{i+1}*b^{j}*c^{k-1} + a^{i}*b^{j+1}*c^{k-1} + a^{i-1}*b^{j-1}*c^{k+2} - 3*a^{i}*b^{j}*c^{k}'
                 names.append(name)
             
-        aux = []
+        if aux is None:
+            aux = []
         if n == 3:
             aux = ['a^2*b-a*b*c','a*b^2-a*b*c']
         elif n == 5:

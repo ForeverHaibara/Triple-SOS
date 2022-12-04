@@ -319,6 +319,7 @@ class SOS_Manager():
         # 1: txt
         self.sosresults[1] = self.sosresults[0].strip('$').replace(' ','') 
         self.sosresults[1] = self.sosresults[1].replace('left','').replace('right','')
+        self.sosresults[1] = self.sosresults[1].replace('cdot','')
         self.sosresults[1] = self.sosresults[1].replace('\\','').replace('sum','Σ')
         
         parener = lambda x: '(%s)'%x if '+' in x or '-' in x else x
@@ -404,7 +405,7 @@ class SOS_Manager():
             names, polys, basis = append_basis(n, dict_monom, inv_monom, names, polys, basis, tangents)
         
             # reduce the basis according to the strict roots
-            names, polys, basis = reduce_basis(n,dict_monom,inv_monom,names,polys,basis,strict_roots)
+            names, polys, basis = reduce_basis(n, dict_monom, inv_monom, names, polys, basis, strict_roots)
 
             x = None
 
@@ -431,7 +432,7 @@ class SOS_Manager():
             self.GUI_stateUpdate(70)
             return ''
         
-        y , names, equal = exact_coefficient(original_poly, multipliers, y, names, polys, self)
+        y, names, equal = exact_coefficient(original_poly, multipliers, y, names, polys, self)
         
 
         # obtain the LaTeX format
@@ -449,10 +450,10 @@ class SOS_Manager():
         return self.sosresults[0]
 
     
-    def saveHeatmap(self,path,dpi=None,backgroundcolor=211):
+    def saveHeatmap(self, path, dpi=None, backgroundcolor=211):
         '''save the heatmap to the path'''
         n = self.grid_size
-        x = np.full((n+1,n+1,3),backgroundcolor,dtype='uint8')
+        x = np.full((n+1,n+1,3), backgroundcolor, dtype='uint8')
         for i in range(n+1):
             t = i * 15 // 26   # i * 15/26 ~ i / sqrt(3)
             r = t << 1         # row of grid triangle = i / (sqrt(3)/2)
@@ -470,7 +471,7 @@ class SOS_Manager():
         plt.close()
 
 
-    def saveCoeffs(self,path,dpi=500,fontsize=20):
+    def saveCoeffs(self, path, dpi=500, fontsize=20):
         '''save the coefficient triangle (as an image) to path'''
         coeffs = self.poly.coeffs()
         monoms = self.std_monoms
@@ -519,7 +520,7 @@ class SOS_Manager():
         plt.close()
 
     
-    def LaTeXCoeffs(self,tabular=True):
+    def LaTeXCoeffs(self, tabular=True):
         '''return the LaTeX format of the coefficient triangle'''
         n = self.deg
         emptyline = '\\\\ ' + '\\ &'*((n<<1)) + '\\  \\\\ '

@@ -612,10 +612,16 @@ def text_multiplier(multipliers):
 
     result_latex , result_txt = '' , ''
     for multiplier, power in merged_multipliers.items():
-        multiplier = sp.latex(sp.sympify(multiplier))
+        multiplier_= multiplier
+        multiplier = sp.sympify(multiplier)
+        need_paren = isinstance(multiplier.as_expr(), sp.Add)
+        multiplier = sp.latex(multiplier)
+        if need_paren:
+            multiplier = '\\left(%s\\right)'%(multiplier)
+
         power_suffix = '^{%d}'%power if power > 1 else ''
         result_latex += '\\left(\\sum %s\\right)%s'%(multiplier, power_suffix)
-        result_txt   += 's(%s)%s'%(multiplier, power_suffix)
+        result_txt   += 's(%s)%s'%(multiplier_, power_suffix)
     
     # result_txt = result_txt.replace('^','')
     return result_latex, result_txt
