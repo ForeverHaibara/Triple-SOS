@@ -3,7 +3,7 @@ from flask import Flask, render_template, request, jsonify
 from flask_cors import CORS
 
 # from sum_of_square import *
-from sos_manager import SOS_Manager
+from src.core.sos_manager import SOS_Manager
 
 _debug_ = False 
 

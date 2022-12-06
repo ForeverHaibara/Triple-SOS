@@ -1,10 +1,3 @@
-# todos:
-# 1. transfer to flask (html support)
-# 2. enable async / await
-# 3. enable mousehover hint / highlight 
-
-
-
 #pyinstaller --clean -Fw -p D:/Qt graphics_main.py 
 #pyinstaller --clean -w -p D:/Qt --hidden-import PySide6  graphics_main.py 
 import sys
@@ -16,8 +9,8 @@ except:
     from PySide2 import QtCore, QtWidgets, QtGui
     from PySide2.QtWidgets import QApplication
 
-from sos_manager import SOS_Manager
-from sos_GUI import *
+from src.core.sos_manager import SOS_Manager
+from src.gui.sos_GUI import _print_poly_triangle, _print_grid_triangle
 
 class MyWidget(QtWidgets.QWidget):
     def __init__(self):
@@ -115,8 +108,8 @@ class MyWidget(QtWidgets.QWidget):
                                     QtGui.Qt.AlignLeft,"Generated Tangents")
         
         #print('Hi')
-        printPolyTriangle(self)
-        printGridTriangle(self)
+        _print_poly_triangle(self)
+        _print_grid_triangle(self)
 
         return super().paintEvent(event)
 
