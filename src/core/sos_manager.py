@@ -1,3 +1,4 @@
+# author: https://github.com/ForeverHaibara
 from copy import deepcopy
 from numbers import Number as PythonNumber 
 import re
@@ -18,7 +19,7 @@ from .sum_of_square import exact_coefficient, up_degree, SOS_Special
 
 
 class SOS_Manager():
-    def __init__(self,GUI=None):
+    def __init__(self, GUI=None):
         self.names = {}
         self.basis = {}
         self.polys = {}
@@ -258,6 +259,7 @@ class SOS_Manager():
         dict_monom = self.dict_monoms[n]
         inv_monom  = self.inv_monoms[n]  
         return dict_monom, inv_monom 
+
 
     def _inquire_basis(self, n: int):
         if not (n in self.names.keys()):
