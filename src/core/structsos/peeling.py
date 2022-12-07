@@ -5,8 +5,89 @@ import sympy as sp
 import numpy as np
 from scipy.spatial import ConvexHull
 
-from ...utils.text_process import PreprocessText, deg
+from ...utils.text_process import PreprocessText, next_permute, cycle_expansion, deg
 from ...utils.root_guess import rationalize, square_perturbation
+
+def _merge_sos_results(multipliers, y, names, result, abc = False):
+    """
+    Merge SOS results in DFS.
+    """
+    if result is None:
+        return None, None, None  
+    if y is None:
+        y = []
+        names = [] 
+    if multipliers is None:
+        multipliers = [] 
+
+    # (multipliers * f - y * names )  *  m' == y' * names'
+    m2 , y2 , names2 = result 
+
+    multipliers += m2 
+    y = y + y2 
+
+    # names: e.g.  m2 = ['a','a^2'] -> names = ['(a+b+c)*(a^2+b^2+c^2)'*...]
+    if len(m2) > 0:
+        for i in range(len(names)):
+            if names[i][0] != '(' or names[i][-1] != ')':
+                names[i] = '(' + names[i] + ')'
+            for m in m2:
+                names[i] = '('+m+'+'+next_permute(m)+'+'+next_permute(next_permute(m))+')*' + names[i]
+    if abc:
+        for i in range(len(names2)):
+            if names2[i][0] != '(' or names2[i][-1] != ')':
+                names2[i] = '(' + names2[i] + ')'
+            names2[i] = 'a*b*c*' + names2[i]
+
+    names = names + names2 
+
+    return multipliers , y , names 
+
+
+def _make_coeffs_helper(poly, degree):    
+    coeffs = {}
+    for coeff, monom in zip(poly.coeffs(), poly.monoms()):
+        if degree > 4 and not isinstance(coeff, sp.Rational): #isinstance(coeff, sp.Float):
+            coeff = sp.Rational(*rationalize(coeff, reliable = True))
+            # coeff = coeff.as_numer_denom()
+        coeffs[monom] = coeff 
+    
+    if len(coeffs) == 1 and poly.monoms()[0] == (0,0,0): # zero polynomial
+        return [], [(0,1)], [f'a^{degree}+b^{degree}+c^{degree}']
+
+    def coeff(x):
+        t = coeffs.get(x)
+        if t is None:
+            return 0
+        return t 
+
+    return coeff, coeffs
+
+
+def _try_perturbations(
+        poly, 
+        degree, 
+        multipliers, 
+        a, 
+        b, 
+        base, 
+        name: str, 
+        recurrsion = None, 
+        times = 4, 
+        **kwargs
+    ):
+    substractor = sp.polys.polytools.Poly(cycle_expansion(name))
+    
+    for t in square_perturbation(a, b, times = times):
+        y = [t * base]
+        names = [name]
+        poly2 = poly - y[0] * substractor 
+        multipliers , y , names = _merge_sos_results(
+            multipliers, y, names, recurrsion(poly2, degree, **kwargs))
+        if y is not None:
+            break 
+
+    return multipliers, y, names 
 
 
 class FastPositiveChecker():
