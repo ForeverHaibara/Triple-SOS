@@ -1,37 +1,28 @@
 # Triple-SOS
-Automatic sum of square representation calculator.
 
-Now it only supports cyclic, homogenous and 3-variable (a,b,c) polynomial with domain R+. For example, (a^2+b^2+c^2)^2 - 3*(a^3b+b^3c+c^3a). 
-
-For a quick start, just run the **example.py** !
-
-## Requirements
-
-* numpy
-* scipy
-* sympy
-
-## SOS_Manager
-
-Packed in **sos_manager.py**, SOS_Manager is a class designed for OOP (object oriented programming). It prepares some data in the memory or cache and avoids repeated work when processing a large number of polynomials. For example, the manager halves the execution time on a 12-degree polynomial the second time, simply because it has preloaded the information necessary for 12-degree polynomials. 
-
-Check out sos_manager.py and try! 
-
-## graphics_main
-
-The file **graphics_main.py** requires PySide6 to build a GUI program, with which one can easily work with GUI rather codes.
-![fig1](https://user-images.githubusercontent.com/69423537/156883000-496843aa-dd68-4c4d-9462-451f84fcaea2.png)
+Triple-SOS 是由 forever豪3 开发的开源且**具备图形化界面**的自动**三元齐次轮换**不等式配方器。
 
 
-## Algorithms
+## 快速开始
 
-The alogrithm behind the sum of square calculator is complicated and elaborate. Instead of turning to semidefinite programming, the core of this alogrithm lies in constructing 
+1. 安装依赖: 
+```
+pip install sympy
+pip install numpy
+pip install scipy
+pip install matplotlib
+pip install flask
+pip install flask_cors
+```
 
-a^i * b^j * c^k * (a-b)^2m * (b-c)^2n * (c-a)^2p * g(a,b,c) ^ 2l
+2. 控制台中运行 `python web_main.py` 启动后端。
 
-By computing suitable nonnegative coefficients that sum up to the original polynomial, one can obtain a SOS representation. This can be done by linear programming in scipy.
+3. 浏览器打开 `triples.html` 即可使用。
 
-The additional term, g(a,b,c) in the formula above is called 'tangent' where chances are born. If the given polynomial has some nontrivial roots, the program will search these roots by gradient decreasing in advance and generate some possible tangents accordingly.
+输入关于 a,b,c 的齐次轮换式。注: 幂符号 ^ 可以省略，函数 s 与 p 分别表示轮换和与轮换积，例如 s(a2) 表示 a^2+b^2+c^2。
 
-For example, if f(0.643104,0.198062,1) = 0 is founded, then one of the tangents automatically generated is g(a,b,c) = a^2 + b^2 - ab - bc + 2bc. This is because the function 
-g has the property that g(0.643104,0.198062,1) = 0, a key that highly possibly leads to the success.
+![image](https://github.com/ForeverHaibara/Triple-SOS/blob/main/notebooks/triple_sos_example.png?raw=true)
+
+## 讨论交流
+
+配方器基于多种算法尝试配方，核心思想与系数阵紧密相关。但其无法保证 100% 配出，程序还在不断改进，三元齐次不等式的研究也在不断发展。进一步交流可加入 QQ 群 875413273。
