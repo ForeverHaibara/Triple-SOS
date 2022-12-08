@@ -572,7 +572,7 @@ def prettyprint(y, names, precision=6, linefeed=2, formatt=0, dectofrac=False):
         result = '$$' + result + '$$'
     else:
         result = result.replace(' ','').replace('\\','')
-        result = result.replace('left','').replace('right','')
+        result = result.replace('left','').replace('right','').replace('cdot','')
 
         # handle fractions
         parener = lambda x: '(%s)'%x if '+' in x or '-' in x else x
