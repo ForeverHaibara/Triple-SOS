@@ -6,18 +6,11 @@ import numpy as np
 
 def next_permute(f: str) -> str:
     '''a^3 * b^2 * c   ->   b^3 * c^2 * a'''
-    fb = f.replace('a','#')
-    fb = fb.replace('c','a')
-    fb = fb.replace('b','c')
-    fb = fb.replace('#','b')
-    return fb
+    return f.translate({97: 98, 98: 99, 99: 97})
 
 def reflect_permute(f: str) -> str:
     '''a^3 * b^2 * c   ->   c^3 * b^2 * a'''
-    fb = f.replace('a','#')
-    fb = fb.replace('c','a')
-    fb = fb.replace('#','c')
-    return fb
+    return f.translate({97: 99, 98: 97, 99: 98})
 
 def cycle_expansion(f, symbol='s'):
     '''
@@ -374,8 +367,7 @@ def _get_suffix(name):
         return None 
 
 
-def text_compresser(y, names):   
-    print(y)
+def text_compresser(y, names):
     new_y = []
     new_names = []
 
