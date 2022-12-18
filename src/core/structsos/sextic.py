@@ -73,9 +73,36 @@ def _sos_struct_sextic(poly, degree, coeff, recurrsion):
 
         else:# coeff((4,2,0)) == coeff((4,0,2)):
             if coeff((4,2,0)) == 0:
-                # hexagram (star)
-                poly = poly * sp.polys.polytools.Poly('a+b+c')
-                multipliers , y , names = _merge_sos_results(['a'], y, names, recurrsion(poly, 7))
+                if coeff((3,2,1)) == coeff((2,3,1)) and coeff((3,3,0)) != 0:
+                    # https://tieba.baidu.com/p/8039371307 
+                    x_, y_, z_ = coeff((4,1,1)) / coeff((3,3,0)), -coeff((3,2,1)) / coeff((3,3,0)), coeff((2,2,2)) / coeff((3,3,0))
+                    z0 = x_**2 + x_*y_ + y_**2/3 - y_ + (y_ + 3)**3/(27*x_)
+                    if x_ > 0 and 3 * x_ + y_ + 3 >= 0 and z_ >= z0:
+                        ker = 324 * x_ * (27*x_**3 + 27*x_**2*y_ + 81*x_**2 + 9*x_*y_**2 - 189*x_*y_ + 81*x_ + y_**3 + 9*y_**2 + 27*y_ + 27)
+                        if ker > 0:
+                            w1 = -(9*x_**2 + 6*x_*y_ - 306*x_ + y_**2 + 6*y_ + 9) / ker
+                            if w1 > 0:
+                                w2 = 1 / ker
+                                phi2 = (36*x_**2 + 15*x_*y_ - 117*x_ + y_**2 + 6*y_ + 9)
+                                phi1 = (9*x_**2 + 6*x_*y_ - 117*x_ + y_**2 + 15*y_ + 36)
+
+                                multipliers = ['a', 'a*b']
+                                y = [w1, w2, z_ - z0]
+                                y = [_ * coeff((3,3,0)) for _ in y]
+                                names = [f'c*({-9*x_**2-3*x_*y_+18*x_}*a^3*b+{-9*x_**2+9*x_+y_**2-9}*a^2*b^2+{9*x_**2+3*x_*y_-3*y_-9}*a^2*b*c'
+                                        +f'+{-18*x_+3*y_+9}*a^2*c^2+{-9*x_**2-3*x_*y_+18*x_}*a*b^3+{9*x_**2+3*x_*y_-3*y_-9}*a*b^2*c'
+                                        +f'+{9*x_**2-9*x_-y_**2+9}*a*b*c^2+{-18*x_+3*y_+9}*b^2*c^2)^2',
+
+                                         f'c*(+{-3*phi1*x_}*a^3*b+{-3*phi1*x_+phi1*y_+3*phi1-3*phi2}*a^2*b^2+{-3*phi1*x_+phi1*y_+3*phi1+3*phi2*x_+phi2*y_-3*phi2}*a^2*b*c'
+                                        +f'+{-3*phi2}*a^2*c^2+{-3*phi1*x_}*a*b^3+{-3*phi1*x_+phi1*y_+3*phi1+3*phi2*x_+phi2*y_-3*phi2}*a*b^2*c'
+                                        +f'+{-3*phi1*x_+3*phi2*x_+phi2*y_-3*phi2}*a*b*c^2+{-3*phi2}*b^2*c^2)^2']
+                                    
+                                names += [f'a^3*b^3*c^2*(a+b+c)']
+                
+                if y is None:
+                    # hexagram (star)
+                    poly = poly * sp.polys.polytools.Poly('a+b+c')
+                    multipliers , y , names = _merge_sos_results(['a'], y, names, recurrsion(poly, 7))
             else:
                 y = [coeff((4,2,0)) / 3] 
                 names = [f'(a-b)^2*(b-c)^2*(c-a)^2']
@@ -86,6 +113,9 @@ def _sos_struct_sextic(poly, degree, coeff, recurrsion):
                     y, names = None, None 
                 else: # positive
                     multipliers , y , names = _merge_sos_results(multipliers, y, names, recurrsion(poly2, 6))
+
+
+
     elif coeff((5,1,0))==0 and coeff((5,0,1))==0 and coeff((4,2,0))==0 and coeff((4,0,2))==0\
         and coeff((3,2,1))==0 and coeff((3,1,2))==0:
         t = coeff((6,0,0))
