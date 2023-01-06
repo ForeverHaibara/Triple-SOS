@@ -1,7 +1,7 @@
 import sympy as sp
 
 from ...utils.text_process import cycle_expansion
-from ...utils.root_guess import rationalize, square_perturbation
+from ...utils.root_guess import rationalize, rationalize_bound, square_perturbation
 from .peeling import _merge_sos_results
 
 def _sos_struct_quartic(poly, degree, coeff, recurrsion):
@@ -215,8 +215,7 @@ def _sos_struct_quartic_biased(coeff):
             if (not numer_r.is_real) or symmetric(numer_r) < 1e-6:
                 continue
 
-            for rounding in (.5, .2, .1, 1e-2, 1e-3, 1e-4, 1e-6, 1e-8):
-                numer_r2 = sp.Rational(*rationalize(numer_r, rounding=rounding, reliable=False))
+            for numer_r2 in rationalize_bound(numer_r, direction = 0, compulsory = True):
                 symmetric_axis = symmetric(numer_r2)
                 if symmetric_axis >= 0 and new_det(symmetric_axis, numer_r2) <= 0:
                     u_ = numer_r2 
@@ -324,13 +323,13 @@ def _sos_struct_quartic_uncentered(coeff):
 
     s(2a2-3ab)2
     
-    s(2a2-3ab)2+s(ab3-a2bc)
+    s(2a2-3ab)2+s(ab3-a2bc)         (real numbers)
 
-    s(2a2-3ab)2+s(ab3-5/3a2bc)
+    s(2a2-3ab)2+s(ab3-5/3a2bc)      (real numbers)
 
     s(2a2-3ab)2+s(ab3+81/5a2bc)     (real numbers)
 
-    s(4a4-5a3b+7a2b2-9ab3+4a2bc)
+    s(4a4-5a3b+7a2b2-9ab3+4a2bc)    (real numbers)
 
     115911s(a/6)4-s(a3b-32/3a2bc)   (real numbers with equality)
 
@@ -396,8 +395,7 @@ def _sos_struct_quartic_uncentered(coeff):
                 for root, direction in roots:
                     if s <= 9 * (1 - root)**2:
                         # apply small perturbation
-                        for rounding in (.5, .2, .1, 1e-2, 1e-3, 1e-4, 1e-6, 1e-8):
-                            w_ = sp.Rational(*rationalize(root + direction * rounding*3, rounding=rounding, reliable=False))
+                        for w_ in rationalize_bound(root, direction = direction, compulsory = True):
                             if w_ != 1 and s <= 9 * (1 - w_)**2 and eq.subs(w, w_) * (w_ - 1) <= 0:
                                 break
                             w_ = None

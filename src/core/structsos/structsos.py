@@ -38,6 +38,9 @@ def SOS_Special(poly, degree, ext = False):
     """
     coeff, coeffs = _make_coeffs_helper(poly, degree)
     
+    if len(coeffs) == 1 and poly.monoms()[0] == (0,0,0): # zero polynomial
+        return [], [(0,1)], [f'a^{degree}+b^{degree}+c^{degree}']
+
     if len(coeffs) <= 6: # commonly Muirhead or AM-GM or trivial ones
         multipliers, y, names = _sos_handle_branch(
                                     _sos_struct_sparse(poly, degree, coeff, recurrsion = SOS_Special, coeffs = coeffs)

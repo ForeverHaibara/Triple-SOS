@@ -41,7 +41,7 @@ def _merge_sos_results(multipliers, y, names, result, abc = False):
 
     names = names + names2 
 
-    return multipliers , y , names 
+    return multipliers, y, names 
 
 
 def _make_coeffs_helper(poly, degree):    
@@ -51,14 +51,11 @@ def _make_coeffs_helper(poly, degree):
             coeff = sp.Rational(*rationalize(coeff, reliable = True))
             # coeff = coeff.as_numer_denom()
         coeffs[monom] = coeff 
-    
-    if len(coeffs) == 1 and poly.monoms()[0] == (0,0,0): # zero polynomial
-        return [], [(0,1)], [f'a^{degree}+b^{degree}+c^{degree}']
 
     def coeff(x):
         t = coeffs.get(x)
         if t is None:
-            return 0
+            return sp.S(0)
         return t 
 
     return coeff, coeffs
@@ -76,14 +73,15 @@ def _try_perturbations(
         times = 4, 
         **kwargs
     ):
-    substractor = sp.polys.polytools.Poly(cycle_expansion(name))
+    subtractor = sp.polys.polytools.Poly(cycle_expansion(name))
     
     for t in square_perturbation(a, b, times = times):
         y = [t * base]
         names = [name]
-        poly2 = poly - y[0] * substractor 
-        multipliers , y , names = _merge_sos_results(
-            multipliers, y, names, recurrsion(poly2, degree, **kwargs))
+        poly2 = poly - y[0] * subtractor 
+        multipliers, y , names = _merge_sos_results(
+            multipliers, y, names, recurrsion(poly2, degree, **kwargs)
+        )
         if y is not None:
             break 
 
