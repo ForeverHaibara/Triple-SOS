@@ -152,6 +152,38 @@ def rationalize_array(x, tol = 1e-7, reliable = True):
     return y
 
 
+def rationalize_bound(v, direction = 1, roundings = None, compulsory = True):
+    """
+    Yield rational approximation of v.
+
+    Parameters
+    -------
+    direction: 1 or -1
+        If direction = 1, find something > v
+        If direction = -1, find something < v
+    """
+    if isinstance(v, sp.Rational):
+        return v
+    if roundings is None:
+        roundings = (.5, .2, .1, .05, 1e-2, 1e-3, 1e-4, 1e-6, 1e-8)
+
+    previous_v = None
+    for rounding in roundings:
+        v_ = sp.Rational(*rationalize(v + direction * rounding * 3, rounding=rounding, reliable=False))
+        if v_ != previous_v:
+            previous_v = v_
+            yield v_
+    
+    if not compulsory:
+        return
+    
+    for rounding in (1e-2, 1e-4, 1e-6, 1e-8, 1e-10, 1e-12):
+        v_ = sp.nsimplify(v + direction + rounding * 10, rational = True, tolerance = rounding)
+        if v_ != previous_v:
+            previous_v = v_
+            yield v_
+    
+
 def square_perturbation(a, b, times = 4):
     """
     Find t such that (a-t)/(b-t) is square, please be sure a/b is not a square
