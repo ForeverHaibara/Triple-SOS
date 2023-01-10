@@ -14,7 +14,8 @@ from scipy.optimize import OptimizeWarning
 from ..utils.text_process import deg, verify_hom_cyclic, degree_of_zero
 from ..utils.text_process import PreprocessText, prettyprint, text_compresser, text_sorter, text_multiplier
 from ..utils.basis_generator import arraylize, invarraylize, generate_expr, generate_basis, append_basis, reduce_basis
-from ..utils.root_guess import root_findroot, root_tangents
+from ..utils.root_guess import root_findroot
+from ..utils.root_tangents import root_tangents
 from .sum_of_square import exact_coefficient, up_degree, SOS_Special
 
 
@@ -56,23 +57,25 @@ class SOS_Manager():
         self.grid_size = 60
         self.grid_coor = []
         self.grid_precal = []
-        self.grid_val = []
+        self.grid_color = []
+        self.grid_value = []
         self.grid_deglim = 18
         self._grid_init()
 
 
     def _grid_init(self):
-        '''
+        """
         Initialize the grid and preprocess some values.
-        '''
-        # grid_coor[k] = (i,j) stands for the value  f(n-i-j, j, i)
+        """
+        # grid_coor[k] = (i,j) stands for the value  f(n-i-j, i, j)
         self.grid_coor = []
         for i in range(self.grid_size + 1):
             for j in range(self.grid_size + 1 - i):
                 self.grid_coor.append((j,i))
 
         # initialize the colors by white
-        self.grid_val = [(255,255,255,255)] * len(self.grid_coor)
+        self.grid_value = [0] * len(self.grid_coor)
+        self.grid_color = [(255,255,255,255)] * len(self.grid_coor)
 
         # precal stores the powers of integer
         # precal[i][j] = i ** j    where i <= grid_size = 60 ,   j <= deglim = 18
@@ -84,9 +87,9 @@ class SOS_Manager():
 
 
     def _render_grid(self):
-        '''
+        """
         Render the grid by computing the values and setting the grid_val to rgba colors.
-        '''
+        """
         
         # integer arithmetic runs much faster than accuarate floating point arithmetic
         # example: computing 45**18   is around ten times faster than  (1./45)**18 
@@ -113,7 +116,8 @@ class SOS_Manager():
                 # coeff shall be the last to multiply, as it might be float while others int
                 v += pc[a][monom[0]] * pc[b][monom[1]] * pc[c][monom[2]] * coeff
             max_v , min_v = max(v, max_v), min(v, min_v)
-            self.grid_val[k] = v
+            self.grid_value[k] = v
+
 
         # preprocess the levels
         if max_v >= 0:
@@ -122,33 +126,33 @@ class SOS_Manager():
             min_levels = [(i / self.grid_resolution)**2 * min_v for i in range(self.grid_resolution+1)] 
     
         for k in range(len(self.grid_coor)):
-            v = self.grid_val[k]
+            v = self.grid_value[k]
             if v > 0:
                 for i, level in enumerate(max_levels):
                     if v <= level: 
                         v = 255 - (i-1)*255//(self.grid_resolution-1)
-                        self.grid_val[k] = (255, v, 0, 255)
+                        self.grid_color[k] = (255, v, 0, 255)
                         break 
                 else:
-                    self.grid_val[k] = (255, 0, 0, 255)
+                    self.grid_color[k] = (255, 0, 0, 255)
             elif v < 0:
                 for i, level in enumerate(min_levels):
                     if v >= level:
                         v = 255 - (i-1)*255//(self.grid_resolution-1)
-                        self.grid_val[k] = (0, v, 255, 255)
+                        self.grid_color[k] = (0, v, 255, 255)
                         break
                 else:
-                    self.grid_val[k] = (0, 0, 0, 255)
+                    self.grid_color[k] = (0, 0, 0, 255)
             else: # v == 0:
-                self.grid_val[k] = (255, 255, 255, 255)
+                self.grid_color[k] = (255, 255, 255, 255)
         
 
     def setPoly(self, txt, cancel = True, render_grid=True):
-        '''
+        """
         Set the processed polynomial to some text. If render_grid == True, the grid will also be updated.
         
         Warning: The result might not refresh if the input is invalid.
-        '''
+        """
 
         if self.polytxt == txt:
             return True 
@@ -167,7 +171,7 @@ class SOS_Manager():
                 # zero polynomial 
                 self.poly = self.zeropoly
                 self.rootsinfo = ''
-                self.grid_val = [(255,255,255,255)] * len(self.grid_coor)
+                self.grid_color = [(255,255,255,255)] * len(self.grid_coor)
                 n = degree_of_zero(txt)
                 self.deg = self.deg if n <= 0 else n 
                 self.std_monoms = [(0,0,0)] * ((self.deg + 2) * (self.deg + 1) // 2)
@@ -273,10 +277,14 @@ class SOS_Manager():
     def GUI_findRoot(self):
         if self.deg <= 1 or (not self.poly_iscyc) or (self.poly_iszero) or (not self.poly_ishom):
             return 
-        self.roots, self.strict_roots = root_findroot(self.poly, maxiter=self.maxiter, roots=self.roots)
+        
+        self.roots, self.strict_roots = root_findroot(
+            self.poly, most = 5,
+            grid_coor = self.grid_coor, grid_value = self.grid_value
+        )
+
         if len(self.roots) > 0:
             self.rootsinfo = 'Local Minima Approx:'
-            print(self.roots)
             def Formatter(root, precision = self.precision, maxlen = 20):
                 if isinstance(root, PythonNumber):
                     return round(root, precision)
@@ -463,9 +471,9 @@ class SOS_Manager():
                 break
             base = r*(2*n+3-r)//2   # (n+1) + n + ... + (n+2-r)
             for j in range(n+1-r):  # j < n+1-r
-                x[i,j+t,0] = self.grid_val[base+j][0]
-                x[i,j+t,1] = self.grid_val[base+j][1]
-                x[i,j+t,2] = self.grid_val[base+j][2]
+                x[i,j+t,0] = self.grid_color[base+j][0]
+                x[i,j+t,1] = self.grid_color[base+j][1]
+                x[i,j+t,2] = self.grid_color[base+j][2]
     
         plt.imshow(x,interpolation='nearest')
         plt.axis('off')

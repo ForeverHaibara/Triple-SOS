@@ -10,8 +10,9 @@ from scipy.optimize import OptimizeWarning
 from ..utils.basis_generator import arraylize, arraylize_sp, invarraylize, reduce_basis, generate_expr, generate_basis
 from ..utils.text_process import deg, next_permute, reflect_permute, cycle_expansion
 from ..utils.text_process import PreprocessText, PreprocessText_GetDomain, prettyprint
-from ..utils.root_guess import rationalize, rationalize_array, root_findroot, root_tangents
+from ..utils.root_guess import rationalize, rationalize_array, root_findroot
 from ..utils.root_guess import verify
+from ..utils.root_tangents import root_tangents
 from .structsos.structsos import SOS_Special
 
 
@@ -69,16 +70,16 @@ def exact_coefficient(poly, multipliers, y, names, polys, sos_manager):
 
     # verify whether the equation is strict
     equal = verify(y, polys, poly, 0)
-    
     if not equal: 
         # backsubstitude to re-solve the coefficients
         try:
-            dict_monom, inv_monom = sos_manager.InquireMonoms(deg(poly))
+            dict_monom, inv_monom = sos_manager._inquire_monoms(deg(poly))
             b2 = arraylize_sp(poly, dict_monom, inv_monom)
             basis: sp.Matrix = sp.Matrix([arraylize_sp(poly, dict_monom, inv_monom) for poly in polys])
             basis = basis.reshape(len(polys), b2.shape[0]).T
             new_y = basis.LUsolve(b2)
             new_y = rationalize_array(new_y, reliable=True)
+
             for coeff in new_y:
                 if coeff[0] < 0:
                     break 
