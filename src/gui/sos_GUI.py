@@ -71,7 +71,7 @@ def _print_poly_triangle(self):
     
     qp = QtGui.QPainter(self)
     t = 0
-    color = self.SOS_Manager.grid_val
+    color = self.SOS_Manager.grid_color
     for i in range(n+1):
         for j in range(n+1-i):
             QtGui.QPainter.fillRect(qp, 
