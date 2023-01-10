@@ -178,7 +178,7 @@ def rationalize_bound(v, direction = 1, roundings = None, compulsory = True):
         return
     
     for rounding in (1e-2, 1e-4, 1e-6, 1e-8, 1e-10, 1e-12):
-        v_ = sp.nsimplify(v + direction + rounding * 10, rational = True, tolerance = rounding)
+        v_ = sp.nsimplify(v + direction * rounding * 10, rational = True, tolerance = rounding)
         if v_ != previous_v:
             previous_v = v_
             yield v_
@@ -332,7 +332,13 @@ def optimize_determinant(determinant, soft = False):
     return a , b
 
 
-def root_findroot(poly, alpha=2e-1, drawback=1e-3, tol=1e-7, maxiter=5000, roots=None, most=5):
+def root_findroot(
+        poly, 
+        most = 5,
+        grid_coor = None,
+        grid_value = None,
+        method = 'newton'
+    ):
     '''
     Find the possible roots of a cyclic polynomial by gradient descent and guessing. 
     The polynomial is automatically standardlized so no need worry the stability. 
@@ -341,21 +347,9 @@ def root_findroot(poly, alpha=2e-1, drawback=1e-3, tol=1e-7, maxiter=5000, roots
 
     Params
     -------
-    alpha: float
-        Gradient descent step size.
-    
-    drawback: float
-        If in the gradient descent falls back {drawback}, then cut down the alpha to half.
+    gridval:
 
-    tol: float
-        When the gradient is less than tolerance, the gradient process stops.
-
-    maxiter: unsigned int
-        Maximum iteration of the gradient descent.
-
-    roots: list of tuple, e.g. [(1/3,1/3)]
-        A list of initial root guess (a,b)  (where WLOG c = 1 by homogenousity). Good guesses
-        might lead to faster convergence.
+    method: 'nsolve' or 'newton'
 
     Returns
     -------
@@ -366,405 +360,173 @@ def root_findroot(poly, alpha=2e-1, drawback=1e-3, tol=1e-7, maxiter=5000, roots
     strict_roots: list of tuples
         Containing (a,b) where the function is possibly zero at (a,b,1).
     '''
+    extrema = _root_findroot_initial_guess(grid_coor, grid_value)
+    
+    if method == 'nsolve':
+        result_roots = _root_findroot_nsolve(poly, initial_guess = extrema)
+    elif method == 'newton':
+        result_roots = _root_findroot_newton(poly, initial_guess = extrema)
+
+    for i, (roota, rootb) in enumerate(result_roots):
+        if roota > 1:
+            if rootb > roota:
+                roota, rootb = 1 / rootb, roota / rootb
+            else:
+                roota, rootb = rootb / roota, 1 / roota
+        elif rootb > 1: # and roota < 1 < rootb
+            roota, rootb = 1 / rootb, roota / rootb
+        else:
+            continue
+        result_roots[i] = (roota, rootb)
+
+    # compute roots on the border
+    poly_univariate_diff = poly.subs([('b', 0), ('c', 1)]).diff('a')
+    poly_univariate_diff2 = poly_univariate_diff.diff('a')
+    poly_univariate_diff = poly_univariate_diff.factor_list()
+    try:
+        for poly_part in poly_univariate_diff[1]:
+            poly_part = poly_part[0]
+            for r in sp.polys.nroots(poly_part):
+                if r.is_real and r >= 0 and poly_univariate_diff2(r) >= 0:
+                    result_roots.append((r, sp.S(0)))
+    except:
+        pass
+
+    # remove repetitive roots
+    result_roots = dict(((r[0].n(4), r[1].n(4)), r) for r in result_roots)
+    result_roots = result_roots.values()
+
+    vals = [(poly(a, b, 1), (a, b)) for a, b in result_roots]
+    vals = sorted(vals)
+    if len(vals) > most:
+        vals = vals[:most]
+
+    reg = max(abs(i) for i in poly.coeffs()) * deg(poly) * 5e-9
+    
+    result_roots = [r for v, r in vals]
+    strict_roots = [r for v, r in vals if v < reg]
+
+    print('Tolerance =', reg, '\nStrict Roots =', strict_roots,'\nNormal Roots =', 
+            list(set(result_roots) ^ set(strict_roots)))
+    return result_roots, strict_roots
+
+
+def _root_findroot_initial_guess(grid_coor, grid_value):
+    # grid_coor[k] = (i,j) stands for the value  f(n-i-j, i, j)
+    # (grid_size + 1) * (grid_size + 2) // 2 = len(grid_coor)
+    n = round((2 * len(grid_coor) + .25) ** .5 - 1.5)
+    grid_dict = dict(zip(grid_coor, grid_value))
+
+    trunc = (2*n + 3 - n // 3) * (n // 3) // 2
+    
+    extrema = []
+    for (i, j), v in zip(grid_coor[trunc:], grid_value[trunc:]):
+        # without loss of generality we may assume j = max(i,j,n-i-j)
+        # need to be locally convex
+        if i > j or n - i - j > j or i == 0 or v >= grid_dict[(i,j-1)] or v >= grid_dict[(i+1,j-1)]:
+            continue
+        if v >= grid_dict[(i-1,j)] or v >= grid_dict[(i-1,j-1)] or v >= grid_dict[(i-1,j+1)]:
+            continue
+        if i+j < n and (v >= grid_dict[(i+1,j)] or v >= grid_dict[(i,j+1)]):
+            continue
+        if i+j+1 < n and v >= grid_dict[(i+1,j+1)]:
+            continue
+        extrema.append(((n-i-j)/j, i/j))
+    
+    order = (sorted(list(range(len(grid_value))), key = lambda x: grid_value[x]))
+    # print(sorted(grid_value))
+    # print([(j/(i+1e-14) ,(n-i-j)/(i+1e-14)) for i,j in [grid_coor[o] for o in order]])
+    # print([(i, j) for i,j in [grid_coor[o] for o in order]])
+    # print(extrema)
+    return extrema
+
+def _root_findroot_nsolve(
+        poly,
+        initial_guess = []
+    ):
+    """
+    Numerically find roots with sympy nsolve.
+    """
+    result_roots = []
+    
+    poly = poly.subs('c',1).as_expr()
+    poly_diffa = poly.diff('a')
+    poly_diffb = poly.diff('b')
+
+    for e in initial_guess:
+        try:
+            roota, rootb = sp.nsolve(
+                (poly_diffa, poly_diffb),
+                sp.symbols('a b'),
+                e
+            )
+            result_roots.append((roota, rootb))
+        except:
+            pass
+
+    return result_roots
+
+
+
+def _root_findroot_newton(
+        poly,
+        initial_guess = None
+    ):
+    """
+    Numerically find roots with newton's algorithm.
+    """
 
     # replace c = 1
-    _alpha = alpha
     poly = poly.eval('c',1)
-    poly_univariate = poly.eval('b',0)
 
     result_roots = []
     
     # regularize the function to avoid numerical instability
-    reg = 2. / sum([abs(coeff) for coeff in poly.coeffs()]) / deg(poly)
-    poly_reg = poly * reg
+    # reg = 2. / sum([abs(coeff) for coeff in poly.coeffs()]) / deg(poly)
 
-    if False:
-        # gradient descent (first order method)
-        
-        grada = poly.diff('a')
-        gradb = poly.diff('b')
-        # find the best start (minimize the function) for the gradient descent
-        # warning: do not start too near to (1,1) or it will fall to the trivial root (1,1)
+    # Newton's method
+    # we pick up a starting point which is locally convex and follows the Newton's method
+    da = poly.diff('a')
+    db = poly.diff('b')
+    da2 = da.diff('a')
+    dab = da.diff('b')
+    db2 = db.diff('b')
 
-        # some classical starts are considered, for example the Vasile
-        best_start, val2 = findbest(((0.643104,0.198062), (0.198062,0.643104), (2./3,1./3), (1./3,2./3)),
-                                    lambda x: float(poly(*x)))
-                                    
-        if type(roots) != list and type(roots) != tuple:
-            roots = (roots,)
-        best_start, val2 = findbest(roots, lambda x: float(poly(*x)), best_start, val2)
+    # initial_guess = None
+    if initial_guess is None:
+        initial_guess = product(np.linspace(0.1,0.9,num=10), repeat = 2)
 
-        best_start, val2 = findbest(product(np.linspace(0.2,0.5,num=10),repeat=2),
-                                    lambda x: float(poly(*x)), best_start, val2)
-        
-        
-        #print(best_start)
-        a , b = best_start
-
-        for _ in range(maxiter):
-            val1, val2 = val2, float(poly(a,b))
-            if val2 < -1e-1 or val2 > 100: # ill-conditioned
-                break
-            if val1 - val2 < -drawback:
-                alpha *= 0.5
-            u , v = grada(a,b), gradb(a,b)
-            a -= alpha * u
-            b -= alpha * v 
-            if max(abs(u),abs(v)) < tol: # stop when the criterion is met
-                result_roots.append((a,b))
-                break
-        else:
-            # not annihilate
-            if min(abs(a),abs(1-a)) > 0.06 and min(abs(b),abs(1-b)) > 0.06:
-                result_roots.append((a,b))
-
-        
-        # copy a regularized polynomial
-        poly_reg = poly
-    else:
-        # Newton's method
-        # we pick up a starting point which is locally convex and follows the Newton's method
-        da = poly.diff('a')
-        db = poly.diff('b')
-        da2 = da.diff('a')
-        dab = da.diff('b')
-        db2 = db.diff('b')
-        for a , b in product(np.linspace(0.1,0.9,num=10), repeat=2):
-            for iter in range(20): # by experiment, 20 is oftentimes more than enough
-                # x =[a',b'] <- x - inv(nabla)^-1 @ grad 
-                lasta = a
-                lastb = b
-                da_  = da(a,b)
-                db_  = db(a,b)
-                da2_ = da2(a,b)
-                dab_ = dab(a,b)
-                db2_ = db2(a,b)
-                det_ = da2_ * db2_ - dab_ * dab_ 
-                if det_ <= -1e-6: # not locally convex
-                    break 
-                elif det_ == 0: # not invertible
-                    break 
-                else:
-                    a , b = a - (db2_ * da_ - dab_ * db_) / det_ , b - (-dab_ * da_ + da2_ * db_) / det_
-                    if abs(a - lasta) < 1e-9 and abs(b - lastb) < 1e-9:
-                        # stop updating
-                        break 
-
-            if det_ <= -1e-6 or (abs(a-1) < 1e-6 and abs(b-1) < 1e-6) or abs(a) < 1e-6 or abs(b) < 1e-6:
-                # trivial roots
-                pass 
-            else:
-                flg = True 
-                for a2, b2 in result_roots:
-                    if abs(a2-a) < 1e-5 and abs(b2-b) < 1e-5:
-                        # do not append two (nearly) identical roots
-                        flg = False 
-                        break 
-                if not flg:
-                    continue 
-                result_roots.append((a,b))
-                if poly_reg(a,b) < 1e-6:
-                    # having searched one nontrivial root is enough as we cannot handle more
-                    break 
-
-
-    # search the roots on the border
-    # replace b = 0, c = 1
-    if False:
-        # use gradient descent
-        poly = poly.eval('b',0)
-        grada = poly.diff('a')
-        alpha = _alpha
-        
-        val1, val2 = 100, 100
-        a, val2 = findbest((1./4, 3./4, 5./4, 7./4), lambda x: float(poly(x)))
-        a, val2 = findbest(np.linspace(0.2,1.8,num=61), lambda x: float(poly(x)), a, val2)
-
-        # do not use Newton method to avoid nonzero local minima cases
-        # still use gradient descent
-        for _ in range(maxiter):
-            val1, val2 = val2, float(poly(a))
-            if val2 < -1e-1 or val2 > 100: # ill-conditioned
-                break
-            if val1 - val2 < -drawback:
-                alpha *= 0.1
-            u = grada(a)
-            a -= alpha * u
-            if abs(u) < tol:
-                result_roots.append((a,0))
-                break
-        else:
-            if abs(a) > 1e-1:
-                result_roots.append((a,0))
-        # check whether each root is strict
-        strict_roots = [root for root in result_roots if verify_isstrict(lambda x: float(poly_reg(*x)), root)]
-    else:
-        # check whether each root is strict
-        vals = [float(poly_reg(*root)) for root in result_roots]
-        if len(result_roots) > most:
-            index = sorted(range(len(vals)), key = lambda i: vals[i])[:most]
-            result_roots = [result_roots[i] for i in index] 
-            vals = [vals[i] for i in index]
-
-        strict_roots = [root for i, root in enumerate(result_roots) if abs(vals[i]) < 1e-6]
-        # strict_roots = [root for root in result_roots if verify_isstrict(lambda x: float(poly_reg(*x)), root)]
-
-        # use sympy root finding strategy
-        for root in sp.polys.polyroots.roots(poly_univariate.diff('a')):
-            root_numerical = complex(root)
-            # real nonnegative root
-            if abs(root_numerical.imag) < 1e-7 and root_numerical.real > 0:
-                result_roots.append((root, 0))
-                root_numerical = root_numerical.real 
-                if abs(root_numerical * reg) < 1e-10:
-                    strict_roots.append((root_numerical, 0))
+    for a , b in initial_guess:
+        for iter in range(20): # by experiment, 20 is oftentimes more than enough
+            # x =[a',b'] <- x - inv(nabla)^-1 @ grad 
+            lasta = a
+            lastb = b
+            da_  = da(a,b)
+            db_  = db(a,b)
+            da2_ = da2(a,b)
+            dab_ = dab(a,b)
+            db2_ = db2(a,b)
+            det_ = da2_ * db2_ - dab_ * dab_ 
+            if det_ <= 0: # not locally convex / not invertible
                 break 
-            
+            else:
+                a , b = a - (db2_ * da_ - dab_ * db_) / det_ , b - (-dab_ * da_ + da2_ * db_) / det_
+                if abs(a - lasta) < 5e-15 and abs(b - lastb) < 5e-15:
+                    # stop updating
+                    break 
 
-    return result_roots, strict_roots
-
-
-def root_tangents(roots, tol=1e-6, rounding=0.001, mod=(180,252,336)):
-    '''
-    Generate possible tangents according to the roots given. 
-
-    Linear, quadratic and cubic tangents have been implemented. 
-
-    Linear: ka + b - c
-
-    Quadratic: a^2 - b^2 - p (ac - ab) + q (bc - ab)
-
-    Cubic: a^2c - b^2c + u (a^2b - abc) + v (ab^2 - abc)
-
-    Roots and coefficients of the tangents are guessed into possible fraction forms. 
-
-    Params
-    -------
-    roots: list of tuples
-        Containing (a,b) where (a,b,1) is possibly some local minima.
-
-    tol: float
-        
-    rounding: float
-        Rounding used for rationalization. Do not set to too large because 
-        backward errors are inevitable in gradient descent.
-    
-    mod: unsigned int / tuple ...
-        Denominator guess for rationalization. Do not set to too large because 
-        backward errors are inevitable in gradient descent.
-
-    Return
-    -------
-    tangents: list of str
-        a list of str that are tangents generated by the roots.
-    '''
-    if not roots:
-        return []
-
-    #print(roots)
-    tangents = []
-    for root in roots:
-        a , b = root
-        if b == 0:
-            # on the edge (a,0,1) where a might be symbolic
-            if a != 0 and a != 1:
-                if isinstance(a, sp.core.Rational):
-                    # (1/a)*a + (1-1/a)*b - c
-                    tangents.append(f'{a.q}/{a.p}*a+{a.p-a.q}/{a.p}*b-c')
-                    # a = (a.p, a.q)
-                elif a.is_real is not None:
-                    # is_real is a fast way to check whether it is a simple expression
-                    # e.g. cubic roots with imaginary unit returns None when querying is_real
-                    
-                    # e.g. x*x-5*x+1   -> a*a-5*a*c+c*c + b*b-5*b*c + 7*b*a
-                    try:
-                        mini_poly = sp.polys.polytools.Poly(sp.minimal_polynomial(a))
-                        if mini_poly.degree() == 2:
-                            if (1,) not in mini_poly.monoms(): # no degree-1 term:
-                                u , w = mini_poly.coeffs()
-                                v = 0
-                            else:
-                                u , v , w = mini_poly.coeffs()
-                            tangents.append(f'{u}*a*a+{v}*a*c+{w}*c*c')
-                            t = - u - v - w - w*w/u - w*v/u
-                            tangents.append(f'{u}*a*a+{v}*a*c+{w}*c*c+{w*w}/{u}*b*b+{w*v}/{u}*b*c+{t.p}/{t.q}*b*a')
-                            t = - u - v - w - u*u/w - u*v/w
-                            tangents.append(f'{w}*c*c+{v}*a*c+{u}*a*a+{u*u}/{w}*b*b+{u*v}/{w}*b*a+{t.p}/{t.q}*b*c')
-                            # a = (complex(a).real, -1)
-
-                            # Symmetric Forms 
-                            if abs(a) > 1e-3:
-                                v = complex(a + 1 / a).real
-                                v = rationalize(v, rounding=rounding, mod=mod)
-                                if v[1] != -1:
-                                    tangents += [f'a2+b2+c2-{v[0]}/{v[1]}*(ab+bc+ca)']
-                            continue
-                    except: 
-                        # sympy.polys.polyerrors.NotAlgebraic: 
-                        # 0.932752395204472 doesn't seem to be an algebraic element
-                        pass 
-            elif a == 1:
-                tangents.append('a+b-c')
-                continue 
-            # b = (0, 1)
-
-            # to numerical
-            root = (complex(a).real, 0)
+        if det_ <= -1e-6 or abs(a) < 1e-6 or abs(b) < 1e-6:
+            # trivial roots
+            pass
+        # if (abs(a-1) < 1e-6 and abs(b-1) < 1e-6):
+        #     pass
         else:
-            # Great available knowledge on Vasc / Vasile
-            if abs(a - 0.643104) < tol and abs(b - 0.198062) < tol:
-                tangents += ['b2+a2-2ab-bc','2c2+ab-3ac-bc','b2-a2+ab+ac-2bc','s(a3-a2b-2ab2)+6abc',
-                    '2ab2-ca2-a2b-bc2+c2a','3a3+3b3-6c3+3b2c-c2a-2a2b-2bc2+16ca2-14ab2','s(2a2b-3ab2)+3abc',
-                    '16a3-38a2b+a2c+17ab2+15abc-6ac2-6b2c+bc2','a3c+bc3+a2bc+4ab2c-5abc2-2ab3',
-                    'a2b+b2c+c2a-6abc']
-                continue
-            elif abs(a - 0.198062) < tol and abs(b - 0.643104) < tol:
-                tangents += ['b2+c2-2cb-ba', '2a2+cb-3ca-ba', 'b2-c2+cb+ca-2ba', 's(c3-c2b-2cb2)+6cba', 
-                    '2cb2-ac2-c2b-ba2+a2c', '3c3+3b3-6a3+3b2a-a2c-2c2b-2ba2+16ac2-14cb2', 's(2c2b-3cb2)+3cba',
-                    '16c3-38c2b+c2a+17cb2+15cba-6ca2-6b2a+ba2','c3a+ba3+c2ba+4cb2a-5cba2-2cb3',
-                    'ab2+bc2+ca2-6abc']
-                continue
+            result_roots.append((sp.Float(a), sp.Float(b)))
+            # if poly(a,b) * reg < 1e-6:
+            #     # having searched one nontrivial root is enough as we cannot handle more
+            #     break 
 
-            a = rationalize(a, rounding=1e-3, mod=mod)
-            b = rationalize(b, rounding=1e-3, mod=mod)
-            if b[0] == 0 and a[0] != 0 and a[1] != -1:
-                tangents += [f'{a[1]}/{a[0]}*(a-b)+b-c']
-        
-        
-
-        # Quadratic
-        '''
-        Sometimes roots are irrational, but coefficients are not
-        e.g. roots (a,b,1) = (0.307974173856697, 0.198058832471963, 1)
-            By some numerical calculation, 
-            p = 3.0000275840807333 ,  q = 5.000061226507757
-            where (p,q) = (3,5) is a confident guess
-
-        Backup choices have now been deprecated.
-        
-        '''
-
-
-
-        # initialize
-        p , q , p2 , q2 = -1 , -1 , -1 , -1
-        p3 , q3 , r3 = 0 , 0 , 0
-        if False and a[1] != -1 and b[1] != -1: # both rational numbers
-            a , b = sp.Rational(a[0],a[1]) , sp.Rational(b[0],b[1])
-
-            # Solve the equations:
-            # p(ab-a)+q(b-ab)+a2-b2 = 0
-            # p(b-ba)+q(a-b)+b2-1 = 0
-            
-            t = ((a*b-a)*(a-b)-(b*(a-1))**2)
-            if abs(t) > 1e-3: # backup
-                p2 = ((b*b-a*a)*(a-b) - (b-a*b)*(1-b*b))/t
-                q2 = ((a*b-a)*(1-b*b)-(b*b-a*a)*(b-b*a))/t
-
-        a , b = root
-        t = ((a*b-a)*(a-b)-(b*(a-1))**2)
-        if abs(t) > 1e-3:
-            p = ((b*b-a*a)*(a-b) - (b-a*b)*(1-b*b))/t
-            q = ((a*b-a)*(1-b*b)-(b*b-a*a)*(b-b*a))/t
-            
-            p = rationalize(p, rounding=rounding, mod=mod)
-            q = rationalize(q, rounding=rounding, mod=mod)
-            
-            
-            
-            if p[1] != -1 and q[1] != -1:
-                p = sp.Rational(p[0],p[1])
-                q = sp.Rational(q[0],q[1])
-            else:
-                if isinstance(p2,sp.core.Rational): # use the backup choice
-                    p , q = p2 , q2                    
-        
-        if isinstance(p,sp.core.Rational): # nice choice
-            tangents += [f'a2-b2+{p.p}/{p.q}*(ab-ac)+{q.p}/{q.q}*(bc-ab)']
-            # p2 , q2 = p , q   # backup
-        
-        
-        # Cubic        
-        '''
-        Same steps --- first numerical, then backup choices.
-        '''
-        a , b = root
-        t = ((a*b-a)*(a-b)-(b*(a-1))**2)
-        r = 0
-        if abs(t) > 1e-3:
-            if isinstance(p2,sp.core.Rational): # has backup choice
-                a , b = p2 , q2
-                p3 = a*a + b
-                q3 = - b*b - a  
-                r3 = 1 - a*b
-                if abs(r3) > 1e-3: 
-                    p3 /= r3 
-                    q3 /= r3
-                else: # abandon the backup
-                    p3 , q3 , r3 = 0 , 0 , 0
-
-            # non-backup solution (numerically)  
-            a , b = root
-            p = ((b*b-a*a)*(a-b) - (b-a*b)*(1-b*b))/t
-            q = ((a*b-a)*(1-b*b)-(b*b-a*a)*(b-b*a))/t
-            a , b = p , q
-            p = a*a + b
-            q = - b*b - a  
-            r = 1 - a*b
-
-            p = rationalize(p, rounding=rounding, mod=mod)
-            q = rationalize(q, rounding=rounding, mod=mod)
-            r = rationalize(r, rounding=rounding, mod=mod)
-            if p[1] != -1 and q[1] != -1 and r[1] != -1:
-                p = sp.Rational(p[0],p[1])
-                q = sp.Rational(q[0],q[1])
-                r = sp.Rational(r[0],r[1])
-                if abs(r) > 1e-3: # r == 0 is degenerated
-                    p /= r
-                    q /= r 
-                else: # use the backup choice
-                    p , q , r = p3 , q3 , r3
-            else:
-                p , q , r = p[0] / abs(p[1]) , q[0] / abs(q[1]) , r[0] / abs(r[1])
-                if abs(r) > 1e-3:
-                    p /= r
-                    q /= r
-                    p = rationalize(p, rounding=rounding, mod=mod)
-                    q = rationalize(q, rounding=rounding, mod=mod)
-                    if p[1] != -1 and q[1] != -1 :
-                        p = sp.Rational(p[0],p[1])
-                        q = sp.Rational(q[0],q[1])
-                    else: # use the backup choice
-                        p , q , r = p3 , q3 , r3
-            
-        if abs(r) > 1e-3 and isinstance(p,sp.core.Rational):
-            tangents += [f'a2c-b2c+{p.p}/{p.q}*(a2b-abc)+{q.p}/{q.q}*(ab2-abc)']
-
-
-        # Symmetric Forms
-        a , b = root 
-        u = a * b + a + b 
-        if abs(u) > 1e-3:
-            v = ( a*a + b*b + 1 ) / u
-            v = rationalize(v, rounding=rounding, mod=mod)
-            if v[1] != -1 and v[0] > 0 and v != (1, 1):
-                tangents += [f'a2+b2+c2-{v[0]}/{v[1]}*(ab+bc+ca)']
-        
-        a , b = root 
-        if abs(a) > 1e-3 and abs(b) > 1e-3:
-            u = a * b
-            v = ((a*a + b)*b + a) / u
-            v = rationalize(v, rounding=rounding, mod=mod)
-            if v[1] != -1 and v[0] > 0:
-                tangents += [f'a2b+b2c+c2a-{v[0]}/{v[1]}abc']
-                
-            v = ((b*b + a)*a + b) / u
-            v = rationalize(v, rounding=rounding, mod=mod)
-            if v[1] != -1 and v[0] > 0:
-                tangents += [f'ab2+bc2+ca2-{v[0]}/{v[1]}abc']
-
-
-    return tangents
+    return result_roots
 
 
 
