@@ -53,7 +53,7 @@ def preprocess():
     # restore
     monoms.pop()
 
-    return jsonify(n = n, txts = txts, heatmap = app.SOS_Manager.grid_val,
+    return jsonify(n = n, txts = txts, heatmap = app.SOS_Manager.grid_color,
                     cancel = cancel)
 
 
