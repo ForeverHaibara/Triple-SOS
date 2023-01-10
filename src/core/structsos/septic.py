@@ -135,6 +135,8 @@ def _sos_struct_septic_hexagon(coeff, poly, recurrsion):
     (s(a2(a-b)(a2+ab-5bc))s(a)-s(a(a-b)(a-c))2-3s(ac(a2-bc-(c2-bc)-3/2(ab-bc))2))s(a)
 
     s(4a5b2-2a5bc+4a5c2+8a4b3-8a4b2c+a4bc2-10a4c3+2a3b3c+a3b2c2)
+
+    (1/5(18s(a3(13b2+5c2)(13c2+5a2))-p(13a2+5b2)s(a))-585/64s(a(a2c-b2c-8/3(a2b-abc)+7/4(ab2-abc))2))
     """
     
     if any(coeff(i) for i in ((7,0,0), (6,1,0), (6,0,1))):

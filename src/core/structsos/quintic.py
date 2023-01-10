@@ -320,15 +320,22 @@ def _sos_struct_quintic_uncentered(coeff):
 def _sos_struct_quintic_windmill_special(coeff):
     """
     Give the solution to s(ab4-a2b2c) >= wabcs(a2-ab)
-    here optimal w = 3.5814121796 is the root of x^3-8x^2+39x-83
+    here optimal w = 3.581412179607289955451719993913205662648 is the root of x**3-8*x**2+39*x-83
 
     Idea: x, y, z are coeffs to be determined, and apply quartic discriminant on:
     s(ab4-a2b2c-wabc(a2-ab))s(a2+(z*z+2)ab) - s(c(a3-abc-(x)(a2b-abc)+(y)(ab2-abc)-(z)(bc2-abc)+(a2c-abc))2)
 
     Optimal solution:
-    x = 3.72931121531208
-    y = 2.07904149945832
-    z = 1.68232780382802
+    x = 3.729311215312077309477934958844193027565   rootof(x**3-3*x**2+19*x-81)
+    y = 2.079041499458323407339677415370865580968   rootof(x**3+6*x**2+x-37)
+    z = 1.682327803828019327369483739711048256891   rootof(x**3-3*x**2+4*x-3)
+
+    Code:
+    p_ = -w*z**2 - w - x**2 - 2*y + 2*z
+    q_ = -w*z**2 - w + 2*x*z - y**2 - 2*y*z + 2*y + 3*z**2 - 6*z + 5
+    det_ = (-3*w + 6*x + 3*z**2 + 6)*(w*z**2 - w + 2*x*y + 2*y*z + 2*y + 4) - (p_**2 + p_*q_ + q_**2)
+    det_ = det_.subs(w,3.581412179607289955451719993913205662648)
+    print(sp.nsolve((det_.diff(x), det_.diff(y), det_.diff(z)), (x,y,z), (sp.S(2163)/580, sp.S(1736)/835, sp.S(1647)/979), prec = 40))
     """
     t = coeff((1,4,0))
     w =  - coeff((3,1,1)) / t
@@ -347,14 +354,16 @@ def _sos_struct_quintic_windmill_special(coeff):
     def det_(x, y, z):
         p_ = -w*z**2 - w - x**2 - 2*y + 2*z
         q_ = -w*z**2 - w + 2*x*z - y**2 - 2*y*z + 2*y + 3*z**2 - 6*z + 5
-        return p_, q_, (-3*w + 6*x + 3*z**2 + 6)*(w*z**2 - w + 2*x*y + 2*y*z + 2*y + 4) - (p_**2 + p_*q_ + q_**2)
+        det_ = (-3*w + 6*x + 3*z**2 + 6)*(w*z**2 - w + 2*x*y + 2*y*z + 2*y + 4) - (p_**2 + p_*q_ + q_**2)
+        return p_, q_, det_
     
     # candidate selections of (x,y,z) such that det >= 0
     candidates = [
         (sp.S(3), sp.S(2), sp.S(1)),                       # w = 3.5433               > 7/2
         (sp.S(26)/7, sp.S(2), sp.S(12)/7),                 # w = 3.580565...
         (sp.S(26)/7, sp.S(79)/38, sp.S(5)/3),              # w = 3.5813989766...      > 25/43
-        (sp.S(2163)/580, sp.S(1736)/835, sp.S(1647)/979)   # w = 3.58141217960666...
+        (sp.S(2163)/580, sp.S(1736)/835, sp.S(1647)/979),  # w = 3.58141217960666...
+        (sp.S(2520773882)/675935511, sp.S(1053041451)/506503334, sp.S(947713664)/563334721) # > w - 3.5e-37
     ]
 
     for x_, y_, z_ in candidates:

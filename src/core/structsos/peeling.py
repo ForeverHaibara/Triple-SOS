@@ -8,11 +8,19 @@ from scipy.spatial import ConvexHull
 from ...utils.text_process import PreprocessText, next_permute, cycle_expansion, deg
 from ...utils.root_guess import rationalize, square_perturbation
 
-def _merge_sos_results(multipliers, y, names, result, abc = False):
+def _merge_sos_results(multipliers, y, names, result, abc = False, keepdeg = False):
     """
     Merge SOS results in DFS.
+
+    Params
+    -------
+    abc: bool
+        If abc == True, then multiply each term from new result by abc.
+    
+    keepdeg: bool
+        If keepdeg == True, then multiply each term from new result by multipliers.
     """
-    if result is None:
+    if result is None or result[1] is None:
         return None, None, None  
     if y is None:
         y = []
@@ -22,8 +30,7 @@ def _merge_sos_results(multipliers, y, names, result, abc = False):
 
     # (multipliers * f - y * names )  *  m' == y' * names'
     m2 , y2 , names2 = result 
-
-    multipliers += m2 
+ 
     y = y + y2 
 
     # names: e.g.  m2 = ['a','a^2'] -> names = ['(a+b+c)*(a^2+b^2+c^2)'*...]
@@ -33,12 +40,21 @@ def _merge_sos_results(multipliers, y, names, result, abc = False):
                 names[i] = '(' + names[i] + ')'
             for m in m2:
                 names[i] = '('+m+'+'+next_permute(m)+'+'+next_permute(next_permute(m))+')*' + names[i]
+    
+    if keepdeg:
+        for i in range(len(names2)):
+            if names2[i][0] != '(' or names2[i][-1] != ')':
+                names2[i] = '(' + names2[i] + ')'
+            for m in multipliers:
+                names2[i] = '('+m+'+'+next_permute(m)+'+'+next_permute(next_permute(m))+')*' + names2[i]
+
     if abc:
         for i in range(len(names2)):
             if names2[i][0] != '(' or names2[i][-1] != ')':
                 names2[i] = '(' + names2[i] + ')'
             names2[i] = 'a*b*c*' + names2[i]
 
+    multipliers += m2
     names = names + names2 
 
     return multipliers, y, names 
