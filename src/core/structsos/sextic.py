@@ -11,7 +11,7 @@ def _sos_struct_sextic(poly, degree, coeff, recurrsion):
         return multipliers, y, names
 
     if coeff((6,0,0))==0 and coeff((5,1,0))==0 and coeff((5,0,1))==0:
-        multipliers, y, names = _sos_struct_sextic_hexagon(coeff)
+        multipliers, y, names = _sos_struct_sextic_hexagon(coeff, poly, recurrsion)
 
     elif coeff((5,1,0))==0 and coeff((5,0,1))==0 and coeff((4,2,0))==0 and coeff((4,0,2))==0\
         and coeff((3,2,1))==0 and coeff((3,1,2))==0:
@@ -19,58 +19,25 @@ def _sos_struct_sextic(poly, degree, coeff, recurrsion):
 
     elif coeff((6,0,0)) == 0 and coeff((5,1,0)) == coeff((1,5,0)) and coeff((4,2,0)) == coeff((2,4,0)) and\
         coeff((3,2,1)) == coeff((2,3,1)):
-        multipliers, y, names = _sos_struct_sextic_iran96(coeff, poly, recurrsion)
+        multipliers, y, names = _sos_struct_sextic_iran96(coeff)
 
     return multipliers, y, names
 
 
 def _sos_struct_sextic_hexagram(coeff, poly, recurrsion):
     """
-    Solve s(a3b3+a4bc+xa3b2c+ya2b3c+za2b2c2) >= 0
+    Solve s(a3b3+xa4bc+ya3b2c+za2b3c+wa2b2c2) >= 0
 
     Examples
     -------
     s(a3b3+7a4bc-29a3b2c+12a3bc2+9a2b2c2)
 
-    s(a4bc+4a3b3-7a3b2c-7a3bc2+9a2b2c2)
-
     9s(a3b3)+4s(a4bc)-11abcp(a-b)-37s(a3b2c)+72a2b2c2
-
-    s(ab)3+abcs(a)3+64a2b2c2-12abcs(a)s(ab)
-
-    7s(ab)3+8abcs(a)3+392a2b2c2-84abcs(a)s(ab)
-
-    References
-    -------
-    [1] https://tieba.baidu.com/p/8039371307 
     """
     multipliers, y, names = [], None, None
 
-    if coeff((3,2,1)) == coeff((2,3,1)) and coeff((3,3,0)) != 0:
-        # https://tieba.baidu.com/p/8039371307 
-        x_, y_, z_ = coeff((4,1,1)) / coeff((3,3,0)), -coeff((3,2,1)) / coeff((3,3,0)), coeff((2,2,2)) / coeff((3,3,0))
-        z0 = x_**2 + x_*y_ + y_**2/3 - y_ + (y_ + 3)**3/(27*x_)
-        if x_ > 0 and 3 * x_ + y_ + 3 >= 0 and z_ >= z0:
-            ker = 324 * x_ * (27*x_**3 + 27*x_**2*y_ + 81*x_**2 + 9*x_*y_**2 - 189*x_*y_ + 81*x_ + y_**3 + 9*y_**2 + 27*y_ + 27)
-            if ker > 0:
-                w1 = -(9*x_**2 + 6*x_*y_ - 306*x_ + y_**2 + 6*y_ + 9) / ker
-                if w1 > 0:
-                    w2 = 1 / ker
-                    phi2 = (36*x_**2 + 15*x_*y_ - 117*x_ + y_**2 + 6*y_ + 9)
-                    phi1 = (9*x_**2 + 6*x_*y_ - 117*x_ + y_**2 + 15*y_ + 36)
-
-                    multipliers = ['a', 'a*b']
-                    y = [w1, w2, z_ - z0]
-                    y = [_ * coeff((3,3,0)) for _ in y]
-                    names = [f'c*({-9*x_**2-3*x_*y_+18*x_}*a^3*b+{-9*x_**2+9*x_+y_**2-9}*a^2*b^2+{9*x_**2+3*x_*y_-3*y_-9}*a^2*b*c'
-                            +f'+{-18*x_+3*y_+9}*a^2*c^2+{-9*x_**2-3*x_*y_+18*x_}*a*b^3+{9*x_**2+3*x_*y_-3*y_-9}*a*b^2*c'
-                            +f'+{9*x_**2-9*x_-y_**2+9}*a*b*c^2+{-18*x_+3*y_+9}*b^2*c^2)^2',
-
-                                f'c*(+{-3*phi1*x_}*a^3*b+{-3*phi1*x_+phi1*y_+3*phi1-3*phi2}*a^2*b^2+{-3*phi1*x_+phi1*y_+3*phi1+3*phi2*x_+phi2*y_-3*phi2}*a^2*b*c'
-                            +f'+{-3*phi2}*a^2*c^2+{-3*phi1*x_}*a*b^3+{-3*phi1*x_+phi1*y_+3*phi1+3*phi2*x_+phi2*y_-3*phi2}*a*b^2*c'
-                            +f'+{-3*phi1*x_+3*phi2*x_+phi2*y_-3*phi2}*a*b*c^2+{-3*phi2}*b^2*c^2)^2']
-                        
-                    names += [f'a^3*b^3*c^2*(a+b+c)']
+    if coeff((3,2,1)) == coeff((2,3,1)):
+        multipliers, y, names = _sos_struct_sextic_hexagram_symmetric(coeff)
     
     if y is None:
         # hexagram (star)
@@ -151,6 +118,9 @@ def _sos_struct_sextic_hexagon(coeff, poly, recurrsion):
         else:# coeff((4,2,0)) == coeff((4,0,2)):
             if coeff((4,2,0)) == 0:
                 multipliers, y, names = _sos_struct_sextic_hexagram(coeff, poly, recurrsion)
+            elif coeff((3,2,1)) == coeff((2,3,1)):
+                # symmetric
+                multipliers, y, names = _sos_struct_sextic_hexagon_symmetric(coeff)
             else:
                 y = [coeff((4,2,0)) / 3] 
                 names = [f'(a-b)^2*(b-c)^2*(c-a)^2']
@@ -164,6 +134,234 @@ def _sos_struct_sextic_hexagon(coeff, poly, recurrsion):
         
     return multipliers, y, names
 
+
+def _sos_struct_sextic_hexagon_symmetric(coeff, real = True):
+    """
+    Solve symmetric hexagons.
+
+    Examples
+    --------
+    s(3a2b+ab2-4abc)2+s(a2b+3ab2-4abc)2    (real)
+
+    s((b-c)2(a2-3(ab+ac)+2bc)2)/14-8/14abcs(a2b+ab2-2abc)    (real)
+
+    s(a2(b-c)4)-1/2p(a-b)2      (real)
+
+    s(a2(b2-c2)2)-3/8p(a-b)2    (real, root = (-1,-1,1))
+
+    3p(a2+ab+b2)-s(a)2s(ab)2    (real)
+
+    p(a2+ab+b2)-3s(ab)s(a2b2)   (real)
+
+    p(a2+ab+b2)+12a2b2c2-3p(a+b)2/5    (real, uncentered)
+
+    Reference
+    ---------
+    [1] Vasile, Mathematical Inequalities Volume 1 - Symmetric Polynomial Inequalities. p.23
+    """
+    multipliers, y, names = [], None, None
+    
+    if coeff((4,2,0)) <= 0:
+        if coeff((4,2,0)) == 0:
+            return _sos_struct_sextic_hexagram_symmetric(coeff)
+        return [], None, None
+    
+    # although subtracting p(a-b)2 always succeeds,
+    # we can handle cases for real numbers and cases where updegree is not necessary
+    if 3*(coeff((4,2,0))*2 + coeff((3,3,0)) + coeff((4,1,1)) + coeff((3,2,1))*2) + coeff((2,2,2)) == 0:
+        # has root at (1,1,1)
+        x_, y_, z_ = coeff((3,3,0)) / coeff((4,2,0)), coeff((4,1,1)) / coeff((4,2,0)), -coeff((3,2,1)) / coeff((4,2,0))
+        
+        if x_ < -2 or y_ < -2:
+            return [], None, None
+            
+        if x_ == y_ and x_ <= 2:
+            # try us(a2b+ab2-2abc)2 + (1-u)p(a-b)2
+            # where 2u - 2(1-u) = x  =>  u = (x + 2) / 4
+            y = [
+                (x_ + 2) / 12,
+                (2 - x_) / 12,
+                z_ + 10 * (x_ + 2) / 12 - 2 * (2 - x_) / 12
+            ]
+            if y[-1] < 0:
+                y = None
+            else:
+                y = [_ * coeff((4,2,0)) for _ in y]
+                names = [
+                    '(a^2*b+a^2*c+b^2*c+b^2*a+c^2*a+c^2*b-6*a*b*c)^2',
+                    '(a-b)^2*(b-c)^2*(c-a)^2',
+                    'a^2*b*c*(b-c)^2'
+                ]
+                return multipliers, y, names
+                
+
+        if x_ <= 2 and y_ <= 2 and (x_ != -2 or y_ != -2):
+            u_ = sp.sqrt(x_ + 2)
+            v_ = sp.sqrt(y_ + 2)
+            if u_**2 + v_**2 + u_*v_ - 2 == z_:
+                if u_ != 0:
+                    r = v_ / u_
+                    # (x - w) / (1 - w) = (-2*r*r-2*r+1)/(r*r+r+1)
+                    t = (-2*r*r-2*r+1)/(r*r+r+1)
+                    w = (t - x_) / (t + 2)
+                    if 0 <= w <= 1:
+                        x__, y__ = 1-3/(r+2), -(2*r+1)/(r+2)
+                        x__q, y__q = x__.as_numer_denom()[1], y__.as_numer_denom()[1]
+                        rr = x__q * y__q / sp.gcd(x__q, y__q)
+                        y = [
+                            w / 3,
+                            (1 - w) / (x__**2 + y__**2 + 1) / rr**2
+                        ]
+                        y = [_ * coeff((4,2,0)) for _ in y]
+                        names = [
+                            '(a-b)^2*(b-c)^2*(c-a)^2',
+                            f'(b-c)^2*({rr}*a^2-{rr*x__}*a*b-{rr*x__}*a*c+{rr*y__}*b*c)^2',
+                        ]
+                        return multipliers, y, names
+        
+
+    if y is None:
+        def new_coeff(x):
+            t = coeff((4,2,0))
+            coeffs = {
+                (3,3,0): coeff((3,3,0)) + 2 * t,
+                (4,1,1): coeff((4,1,1)) + 2 * t,
+                (3,2,1): coeff((3,2,1)) - 2 * t,
+                (2,3,1): coeff((2,3,1)) - 2 * t,
+                (2,2,2): coeff((2,2,2)) + 6 * t
+            }
+            v = coeffs.get(x)
+            return v if v is not None else 0
+        
+        multipliers = []
+        y = [coeff((4,2,0)) / 3]
+        names = ['(a-b)^2*(b-c)^2*(c-a)^2']
+        result = _sos_struct_sextic_hexagram_symmetric(new_coeff)
+        multipliers, y, names = _merge_sos_results(multipliers, y, names, result)
+
+    return multipliers, y, names
+
+
+def _sos_struct_sextic_hexagram_symmetric(coeff):
+    """
+    Solve s(a3b3+xa4bc+ya3b2c+ya2b3c+wa2b2c2) >= 0
+
+    Examples
+    -------    
+    s(a4bc+4a3b3-7a3b2c-7a3bc2+9a2b2c2)
+    
+    s(a3b3+2a4bc- 44/10(a3b2c+a3bc2-2a2b2c2)-3a2b2c2)
+
+    s(21a4bc+7a3b3-40a3b2c-40a3bc2+52a2b2c2)
+
+    s(ab(a-c)2(b-c)2)+3s(ab(ab-bc)(ab-ca))
+
+    s(ab)3+abcs(a)3+64a2b2c2-12abcs(a)s(ab)
+
+    7s(ab)3+8abcs(a)3+392a2b2c2-84abcs(a)s(ab)
+    
+    References
+    -------
+    [1] https://tieba.baidu.com/p/8039371307 
+    """
+    multipliers, y, names = [], None, None
+    if coeff((3,3,0)) < 0 or coeff((4,1,1)) < 0:
+        return [], None, None
+    
+    # first try trivial cases
+    if True:
+        x_ = min(coeff((3,3,0)), coeff((4,1,1)))
+        y = [
+            x_, 
+            coeff((3,3,0)) - x_, 
+            coeff((4,1,1)) - x_, 
+            coeff((3,2,1)) + x_ + (coeff((3,3,0))) + (coeff((4,1,1))),
+            (coeff((3,3,0)) + coeff((4,1,1)) + coeff((3,2,1)) * 2) + coeff((2,2,2))  / 3
+        ]
+        if any(_ < 0 for _ in y):
+            y = None
+        else:
+            names = [
+                'b*c*(a-b)^2*(a-c)^2',
+                'b^2*c^2*(a-b)*(a-c)',
+                'a^2*b*c*(a-b)*(a-c)',
+                'a^2*b*c*(b-c)^2',
+                'a^2*b^2*c^2'
+            ]
+            return multipliers, y, names
+    
+    if coeff((4,1,1)) != 0:
+        x_ = coeff((3,3,0)) / coeff((4,1,1))
+        y_ = coeff((3,2,1)) / coeff((4,1,1))
+        w_ = coeff((2,2,2)) / coeff((4,1,1))
+        u_ = sp.sqrt(x_) + 1
+        y_schur = sp.S(0)
+        if not isinstance(u_, sp.Rational):
+            # subtract a small perturbation
+            u_ = u_.n(15)
+            if y_ >= -(u_**2 - u_ + 1):
+                for u_ in rationalize_bound(u_, direction = -1, compulsory = True):
+                    y_schur = x_ - (u_ - 1)**2
+                    y2 = y_ + y_schur
+                    if y_schur >= 0 and u_ > 1 and y2 >= -(u_**2 - u_ + 1):
+                        x_ -= y_schur
+                        y_ = y2
+                        break
+                    u_ = None
+
+        # now that u is Rational
+        if isinstance(u_, sp.Rational) and u_ != 1:
+            # abcs((b-c)2(b+c-ua)2)+2s(a(b-c)2((1-u)(ab+ac)+bcu)2)
+            r = u_.as_numer_denom()[1] # cancel the denominator is good
+            y = [
+                sp.S(1) / r / r,
+                sp.S(2) / r / r,
+                y_schur,
+                y_ + (u_**2 - u_ + 1),
+                ((coeff((3,3,0)) + coeff((4,1,1)) + coeff((3,2,1)) * 2) + coeff((2,2,2)) / 3) / coeff((4,1,1)) * 3
+            ]
+            if any(_ < 0 for _ in y):
+                y = None
+            else:
+                multipliers = ['a']
+                y = [_ * coeff((4,1,1)) for _ in y]
+                names = [
+                    f'a*b*c*(b-c)^2*({r}*b+{r}*c-{r*u_}*a)^2',
+                    f'a*(b-c)^2*({r*(1-u_)}*a*b+{r*(1-u_)}*a*c+{r*u_}*b*c)^2',
+                    'b^2*c^2*(a-b)*(a-c)*(a+b+c)',
+                    'a^2*b*c*(b-c)^2*(a+b+c)',
+                    'a^3*b^2*c^2'
+                ]
+                None
+
+
+    if coeff((3,3,0)) != 0:
+        # https://tieba.baidu.com/p/8039371307 
+        x_, y_, z_ = coeff((4,1,1)) / coeff((3,3,0)), -coeff((3,2,1)) / coeff((3,3,0)), coeff((2,2,2)) / coeff((3,3,0))
+        z0 = x_**2 + x_*y_ + y_**2/3 - y_ + (y_ + 3)**3/(27*x_)
+        if x_ > 0 and 3 * x_ + y_ + 3 >= 0 and z_ >= z0:
+            ker = 324 * x_ * (27*x_**3 + 27*x_**2*y_ + 81*x_**2 + 9*x_*y_**2 - 189*x_*y_ + 81*x_ + y_**3 + 9*y_**2 + 27*y_ + 27)
+            if ker > 0:
+                w1 = -(9*x_**2 + 6*x_*y_ - 306*x_ + y_**2 + 6*y_ + 9) / ker
+                if w1 > 0:
+                    w2 = 1 / ker
+                    phi2 = (36*x_**2 + 15*x_*y_ - 117*x_ + y_**2 + 6*y_ + 9)
+                    phi1 = (9*x_**2 + 6*x_*y_ - 117*x_ + y_**2 + 15*y_ + 36)
+
+                    multipliers = ['a', 'a*b']
+                    y = [w1, w2, z_ - z0]
+                    y = [_ * coeff((3,3,0)) for _ in y]
+                    names = [f'c*({-9*x_**2-3*x_*y_+18*x_}*a^3*b+{-9*x_**2+9*x_+y_**2-9}*a^2*b^2+{9*x_**2+3*x_*y_-3*y_-9}*a^2*b*c'
+                            +f'+{-18*x_+3*y_+9}*a^2*c^2+{-9*x_**2-3*x_*y_+18*x_}*a*b^3+{9*x_**2+3*x_*y_-3*y_-9}*a*b^2*c'
+                            +f'+{9*x_**2-9*x_-y_**2+9}*a*b*c^2+{-18*x_+3*y_+9}*b^2*c^2)^2',
+
+                                f'c*(+{-3*phi1*x_}*a^3*b+{-3*phi1*x_+phi1*y_+3*phi1-3*phi2}*a^2*b^2+{-3*phi1*x_+phi1*y_+3*phi1+3*phi2*x_+phi2*y_-3*phi2}*a^2*b*c'
+                            +f'+{-3*phi2}*a^2*c^2+{-3*phi1*x_}*a*b^3+{-3*phi1*x_+phi1*y_+3*phi1+3*phi2*x_+phi2*y_-3*phi2}*a*b^2*c'
+                            +f'+{-3*phi1*x_+3*phi2*x_+phi2*y_-3*phi2}*a*b*c^2+{-3*phi2}*b^2*c^2)^2']
+                        
+                    names += [f'a^3*b^3*c^2*(a+b+c)']
+    
+    return multipliers, y, names
 
 
 def _sos_struct_sextic_tree(coeff):
@@ -223,7 +421,7 @@ def _sos_struct_sextic_tree(coeff):
 
 
 
-def _sos_struct_sextic_iran96(coeff, poly, recurrsion):
+def _sos_struct_sextic_iran96(coeff):
     """
     Give a solution to s(a5b+ab5-x(a4b2+a2b4)+ya3b3-za4bc+w(a3b2c+a2b3c)+..a2b2c2) >= 0
 
@@ -281,7 +479,7 @@ def _sos_struct_sextic_iran96(coeff, poly, recurrsion):
     if m < 0:
         return multipliers, y, names
     elif m == 0:
-        return _sos_struct_sextic_hexagon(coeff, poly, recurrsion)
+        return _sos_struct_sextic_hexagon_symmetric(coeff, real = False)
     
     if w >= 0 and w + z >= 0:
         # Easy case 1, really trivial
@@ -621,12 +819,8 @@ def _sos_struct_sextic_symmetric_ultimate(coeff, poly, recurrsion):
     For Case (B+C), we can multiplicate s(a2+xab)
 
 
-    Example
+    Examples
     --------
-    Case A.
-
-    Case B.
-
     Case C.
     s(38a6-148a5b-148a5c+225a4b2+392a4bc+225a4c2-210a3b3-320a3b2c-320a3bc2+266a2b2c2)
     """
@@ -637,7 +831,7 @@ def _sos_struct_sextic_symmetric_ultimate(coeff, poly, recurrsion):
         return [], None, None
     elif coeff6 == 0:
         # degenerated
-        return _sos_struct_sextic_iran96(coeff, poly, recurrsion)
+        return _sos_struct_sextic_iran96(coeff)
     elif coeff6 < 0:
         return [], None, None
     
@@ -682,7 +876,7 @@ def _sos_struct_sextic_symmetric_ultimate(coeff, poly, recurrsion):
                 roots[1] = sp.oo
             elif eqdiff2(1) == 0:
                 roots[1] = 1
-        if roots[1] is None:
+        if roots[0] is None and roots[1] is None:
             for r in sp.polys.roots(eq, cubics = False, quartics = False):
                 if r.is_real and r < 0:
                     if isinstance(r, sp.Rational) and eqdiff(r) == 0 and eqdiff2(r) >= 0:
@@ -690,8 +884,10 @@ def _sos_struct_sextic_symmetric_ultimate(coeff, poly, recurrsion):
                         break
 
     # Case C.
-
+  
+    print('Roots Info = ', roots)
     sum_of_roots = sum(_ is not None for _ in roots)
+    
     if sum_of_roots == 1:
         return _sos_struct_sextic_symmetric_ultimate_1root(coeff, poly, recurrsion, roots)
     elif sum_of_roots == 2:
@@ -701,10 +897,52 @@ def _sos_struct_sextic_symmetric_ultimate(coeff, poly, recurrsion):
 
 def _sos_struct_sextic_symmetric_ultimate_1root(coeff, poly, recurrsion, roots):
     """
+    Examples
+    -------
+    Case A.
+        s(a2)3-27(abc)2-27p((a-b)2)
+        
+        s(a2/3)3-a2b2c2-p(a-b)2
+
+        s(4a6-a3b3-3a2b2c2)-63p(a-b)2
+
+        4s(a4(a-b)(a-c))+s(a(a-b)(a-c))2
     """
     multipliers, y, names = [], None, None
+    coeff6 = coeff((6,0,0))
+    a, b, c = sp.symbols('a b c')
     if roots[0] is not None:
-        pass
+        # Case A.
+        # subtract some s(a3-abc-x(a2b+ab2-2abc))2
+        x_ = sp.simplify(roots[0] + 1/roots[0]) - 1
+        if not isinstance(x_, sp.Rational):
+            return [], None, None
+
+        # 1. try subtracting all the s(a6)
+        # e.g. s(a2/3)3-a2b2c2-p(a-b)2
+        if coeff((5,1,0)) >= -2 * x_:
+            poly2 = poly - ((a**3+b**3+c**3-3*a*b*c-x_*(a*a*(b+c)+b*b*(c+a)+c*c*(a+b)-6*a*b*c))**2).as_poly(a,b,c) * coeff6
+            coeff2, _ = _make_coeffs_helper(poly2, 6)
+            result = _sos_struct_sextic_iran96(coeff2)
+            if result is not None and result[1] is not None:
+                multipliers = []
+                if x_ == sp.S(3)/2:
+                    y = [coeff6 / 12]
+                    names = ['(a+b-2*c)^2*(b+c-2*a)^2*(c+a-2*b)^2']
+                elif x_ == 1:
+                    y = [coeff6 / 3]
+                    names = [f'(a*(a-b)*(a-c)+b*(b-c)*(b-a)+c*(c-a)*(c-b))^2']
+                else:
+                    y = [coeff6 / 3]
+                    names = [f'(a^3+b^3+c^3-{x_}*a^2*b-{x_}*a^2*c-{x_}*b^2*c-{x_}*b^2*a-{x_}*c^2*a-{x_}*c^2*b+{6*x_-3}*a*b*c)^2']
+                    
+                result = _merge_sos_results(multipliers, y, names, result)
+                return result
+
+        # until the symmetric axis is touched
+        # # the subtractor = (a-1)^4 * (2(x-1)a - 1)^2 on the symmetric axis a == b and c == 1
+        # sym = poly.subs(c,1).subs(b,a).factor() / (a - 1)**4 / (2*(x-1)*a - 1)**2
+
 
     return multipliers, y, names
 
@@ -721,11 +959,15 @@ def _sos_struct_sextic_symmetric_ultimate_2roots(coeff, poly, recurrsion, roots)
     s(4a6-6(a5b+a5c)-12(a4b2+a4c2)+37a4bc+28a3b3-31(a3b2c+a3bc2)+29a2b2c2)
 
     s(a4(a-b)(a-c)) - 5p(a-b)2
+
+
+    Reference
+    -------
+    [1] Vasile, Mathematical Inequalities Volume 1 - Symmetric Polynomial Inequalities. 3.78
     """
     multipliers, y, names = [], None, None
     coeff6 = coeff((6,0,0))
 
-    print('Roots Info = ', roots)
     
     if roots[2] is None:
         # Case (A + B)
@@ -802,7 +1044,7 @@ def _sos_struct_sextic_symmetric_ultimate_2roots(coeff, poly, recurrsion, roots)
         new_poly = poly - coeff6 * diffpoly
         if not new_poly.is_zero:
             new_coeff, _ = _make_coeffs_helper(new_poly, 6)
-            result = _sos_struct_sextic_iran96(new_coeff, new_poly, recurrsion)
+            result = _sos_struct_sextic_iran96(new_coeff)
             result = _merge_sos_results(
                 multipliers = multipliers,
                 y = y,
