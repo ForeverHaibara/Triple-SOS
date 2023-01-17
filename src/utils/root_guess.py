@@ -163,7 +163,8 @@ def rationalize_bound(v, direction = 1, roundings = None, compulsory = True):
         If direction = -1, find something < v
     """
     if isinstance(v, sp.Rational):
-        return v
+        yield v
+        return
     if roundings is None:
         roundings = (.5, .2, .1, .05, 1e-2, 1e-3, 1e-4, 1e-6, 1e-8)
 
