@@ -306,7 +306,7 @@ def _sos_struct_quartic_degenerate(coeff):
 
 
 
-def _sos_struct_quartic_uncentered(coeff):
+def _sos_struct_quartic_uncentered(coeff, recur = False):
     """
     Solve quartic problems which do not have zeros at (1,1,1) but elsewhere.
 
@@ -338,6 +338,10 @@ def _sos_struct_quartic_uncentered(coeff):
     s(a2)2+6s(a2bc)-s(ab3)          (real numbers)
     
     s(a4-3a3b-2ab3+7/2a2b2+5a2bc)
+
+    4s(a4)+11abcs(a)-8s(ab)s(a2-ab)
+
+    s(a4-a3b-2ab3+11/10a2b2)+2abcs(a)
     
     References
     -------
@@ -471,4 +475,110 @@ def _sos_struct_quartic_uncentered(coeff):
             
                 return multipliers, y, names
     
+        if recur:
+            return [], None, None
+
+        # if we reach here, it means that the inequality does not hold for all real numbers
+        # we can subtract as many s(a2bc) as possible
+        if 3*(1 + n) >= p*p + p*q + q*q:
+            # Case 1. 3m(m+n) - (p^2+pq+q^2) >= 0,
+            # then it is directly handled by the core function
+            return _sos_struct_quartic_core(coeff)
+        else:
+            # assume the inequality holds, then on the border it must >= 0
+            if 2*p + q >= 0 or 2*q + p >= 0 or (2*p+q)*(2*q+p) <= 9:
+                # then it falls to the biased case
+                return _sos_struct_quartic_biased(coeff)
+
+            # now that we assume 2p + q < 0 and 2q + p < 0 and (2p+q)(2q+p) > 9
+            # first compute minimum bound for n on the border
+            # n >= -sup(x^2 + 1/x^2 + px + q/x) over x > 0
+            if p == q:
+                if p >= -4:
+                    n_ = -2 - 2*p
+                else:
+                    n_ = p**2 / 4 + 2
+            else:
+                x = sp.symbols('x')
+                eqx = (2*x**4 + p*x**3 - q*x - 2).as_poly(x) # the derivative of n
+                eqn = lambda x: -(x*x + 1/x/x + p*x + q/x)
+                extrema = []
+                for root in sp.polys.roots(eqx, cubics = False, quartics = False):
+                    if root.is_real and root > 0:
+                        if isinstance(root, sp.Rational):
+                            extrema.append((eqn(root), root))
+                        else: # quadratic root
+                            extrema.append((eqn(root.n(16)), root.n(16)))
+                
+                try:
+                    for root in sp.polys.nroots(eqx):
+                        if root.is_real and root > 0:
+                            if any(abs(_[1] - root) < 1e-13 for _ in extrema):
+                                # already found
+                                continue
+                            extrema.append((eqn(root), root))
+                except: pass
+
+                n_, _ = max(extrema)
+
+            # then we compute x such that
+            # s(ma4+pa3b+na2b2+qab3) + xs(a2bc) >= 0 is strict
+
+            x_ = None
+            if p == q:
+                if p >= -4:
+                    x_ = -3*(p + 1)
+                else:
+                    x_ = 9*(p + 2)**2 / 4
+            else:
+                u = sp.symbols('u')
+                det_coeffs = [
+                    1,
+                    -3*(p*q + 14*p + 14*q - 20),
+                    9*(-6*n_**2 + n_*p**2 - n_*p*q + 26*n_*p + n_*q**2 + 26*n_*q - 152*n_ + 12*p**2*q + 57*p**2 + 12*p*q**2 + 63*p*q - 6*p + 57*q**2 - 6*q - 162),
+                    -27*(8*n_**3 - 2*n_**2*p**2 - n_**2*p*q - 22*n_**2*p - 2*n_**2*q**2 - 22*n_**2*q - 212*n_**2 + 10*n_*p**3 + 24*n_*p**2*q + 84*n_*p**2 \
+                        + 24*n_*p*q**2 + 18*n_*p*q - 252*n_*p + 10*n_*q**3 + 84*n_*q**2 - 252*n_*q - 560*n_ + p**4 + 34*p**3*q + 86*p**3 + 39*p**2*q**2 \
+                        + 192*p**2*q + 114*p**2 + 34*p*q**3 + 192*p*q**2 + 51*p*q - 278*p + q**4 + 86*q**3 + 114*q**2 - 278*q - 388),
+                    81*(n_ + 2*p + 2*q + 5)**3*(-3*n_ + p**2 + p*q + q**2 - 3)
+                ]
+                det = sum(det_coeffs[i] * u ** (4 - i) for i in range(5)).as_poly(u)
+
+                if isinstance(n_, sp.Rational):
+                    for root, mul in sp.polys.roots(det, cubics = False, quartics = False).items():
+                        if mul == 2 and root.is_real and root > 0:
+                            if isinstance(root, sp.Rational):
+                                x_ = root
+                            else:
+                                x_ = root.n(16)
+                            break
+                    
+                else:
+                    # do not compute the root here because it is not numerically stable
+                    # instead compute the root of derivative of discriminant
+                    detdiff = det.diff()
+                    roots = [(abs(det(root)), root) for root in sp.polys.nroots(detdiff) if root.is_real and root > 0]
+                    print(roots)
+                    if len(roots) > 0:
+                        x_ = min(roots)[1]
+                    
+            if x_ is not None:
+                x_ = x_ / 3 - 1 - p - q - n_
+                # print('n =', n_, 'x = ', x_)
+            
+                # finally subtract enough s(a2bc) to xs(a2bc) (or near xs(a2bc))
+                for x2 in rationalize_bound(x_, direction = 1, compulsory = True):
+                    if x2 < r:
+                        def new_coeff(x):
+                            coeffs = {(4,0,0): coeff((4,0,0)), (3,1,0): coeff((3,1,0)), 
+                                        (2,2,0): coeff((2,2,0)), (1,3,0): coeff((1,3,0)), (2,1,1): x2 * m}
+                            return coeffs[x]
+                        result = _sos_struct_quartic_uncentered(new_coeff, recur = True)
+                        if result is not None and result[1] is not None:
+                            y = [(r - x2) * m]
+                            names = ['a^2*b*c']
+                            result = _merge_sos_results([], y, names, result)
+                            return result
+
+            return [], None, None
+
     return [], None, None
