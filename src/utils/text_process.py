@@ -1,8 +1,9 @@
 from math import gcd
-import re 
+import re
+from collections import defaultdict
 
 import sympy as sp
-import numpy as np
+# import numpy as np
 
 def next_permute(f: str) -> str:
     '''a^3 * b^2 * c   ->   b^3 * c^2 * a'''
@@ -39,6 +40,71 @@ def deg(f):
     '''return the degree of a polynomial'''
     return sum(f.monoms()[0])
 
+def poly_get_standard_form(poly, formatt = 'short', is_cyc = None):
+    if formatt == 'short':
+        def _title_parser(char, deg):
+            return '' if deg == 0 else (char if deg == 1 else (char + str(deg)))
+        def _formatter(x):
+            if x == 1:
+                return '+'
+            elif x >= 0:
+                return f'+{x}'
+            elif x == -1:
+                return f'-'
+            else:
+                return f'{x}'
+        if is_cyc is not None and is_cyc == True:
+            txt = ''
+            for coeff, monom in zip(poly.coeffs(), poly.monoms()):
+                a , b , c = monom 
+                if a >= b and a >= c:
+                    if a == b and a == c:
+                        txt += _formatter(coeff/3) + _title_parser('a',a) + _title_parser('b',b) + _title_parser('c',c)
+                    elif (a != b and a != c) or a == b:
+                        txt += _formatter(coeff) + _title_parser('a',a) + _title_parser('b',b) + _title_parser('c',c)
+            if txt.startswith('+'):
+                txt = txt[1:]
+            return 's(' + txt + ')'
+
+        else: # not cyclic 
+            txt = ''
+            for coeff, monom in zip(poly.coeffs(), poly.monoms()):
+                a , b , c = monom
+                txt += _formatter(coeff) + _title_parser('a',a) + _title_parser('b',b) + _title_parser('c', c)
+            if txt.startswith('+'):
+                txt = txt[1:]
+            return txt 
+
+def poly_get_factor_form(poly):
+    coeff, parts = poly.factor_list()
+    factors = defaultdict(int)
+    is_cyc = {}
+    origin_polys = {}
+    for part, mul in parts:
+        name = str(part)[5:].split(',')[0].replace(' ','')
+        factors[name] = mul
+        is_cyc[name] = verify_hom_cyclic(part, deg(part))[1]
+        origin_polys[name] = part
+    result = []
+    if factors['a'] > 0 and factors['a'] == factors['b'] and factors['a'] == factors['c']:
+        result.append('p(a)' if factors['a'] == 1 else 'p(a%d)'%factors['a'])
+        del factors['a'], factors['b'], factors['c']
+    if factors['a-b'] > 0 and factors['a-b'] == factors['b-c'] and factors['a-b'] == factors['a-c']:
+        result.append('p(a-b)' if factors['a-b'] == 1 else 'p(a-b)%d'%factors['a-b'])
+        if factors['a-b'] % 2 == 1: coeff *= -1
+        del factors['a-b'], factors['b-c'], factors['a-c']
+    
+    _formatter1 = lambda x: '' if x == 1 else str(x)
+    _formatter2 = lambda x: x if x.startswith('s(')  or len(x) == 1 else '(%s)'%x
+    result += [
+        (_formatter2(poly_get_standard_form(origin_polys[part], is_cyc = is_cyc[part]))
+            + _formatter1(mul)) if mul > 0 else ''
+            for part, mul in factors.items()
+    ]
+
+    if coeff == 1: coeff = ''
+    elif coeff == -1: coeff = '-'
+    return str(coeff) + ''.join(sorted(result, key = lambda x: len(x)))
 
 def PreprocessText_DeLatex(poly):
     '''convert a latex formula to normal representation'''
@@ -134,7 +200,7 @@ def PreprocessText_Completion(poly: str):
     return poly
 
 
-def PreprocessText_Cyclize(poly, tol=1e-10):
+def PreprocessText_Cyclize(poly: str, tol=1e-10):
     '''automatically perform cycle expansion on poly if it is not cyclic'''
     cyc_poly = sp.polys.polytools.Poly(cycle_expansion(poly))
     poly = sp.polys.polytools.Poly(poly)
@@ -393,8 +459,7 @@ def text_compresser(y, names):
             for coeff, _ in val:
                 is_fraction = is_fraction and (isinstance(coeff[0], int) or coeff[0].is_integer)
                 if is_fraction:
-                    p = gcd(p, coeff[0]) 
-                print(q)
+                    p = gcd(p, coeff[0])
                 q = q * coeff[1] // gcd(q, coeff[1])
 
             if not is_fraction:
@@ -459,6 +524,23 @@ def text_sorter(y, names):
     return new_y, new_names, linefeed 
 
 
+def _parse_latex(expr):
+    """
+    Parse a sympy expression to latex for pretty display.
+    """
+    if isinstance(expr, str):
+        expr = sp.sympify(expr)
+
+    if isinstance(expr, sp.Pow):
+        parts = [expr]
+    elif isinstance(expr, sp.Mul):
+        parts = expr.args
+    else:
+        return sp.latex(expr)
+    
+
+    return sp.latex(expr)
+
 def prettyprint(y, names, precision=6, linefeed=2, formatt=0, dectofrac=False):
     '''
     Prettily format a cyclic polynomial sum into a certain formatt
@@ -516,10 +598,7 @@ def prettyprint(y, names, precision=6, linefeed=2, formatt=0, dectofrac=False):
             else: # decimal format
                 result += f'+ {round(coeff[0],precision)}'
             
-            if isinstance(name, str):
-                latex = sp.latex(sp.sympify(name))
-            else:
-                latex = sp.latex(name)
+            latex = _parse_latex(name)
             flg = 0
             if formatt == 0:
                 parenthesis = 0
