@@ -78,6 +78,8 @@ def root_tangents(roots, tol=1e-6, rounding=1e-5, mod=(180,252,336)):
         # Cubic
         tangents += _root_tangents_cubic(a, b, rounding = rounding, uncentered = uncentered)
 
+    tangents = list(set(tangents))
+    
     return tangents
 
 
