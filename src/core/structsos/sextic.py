@@ -13,14 +13,6 @@ def _sos_struct_sextic(poly, degree, coeff, recurrsion):
     if coeff((6,0,0))==0 and coeff((5,1,0))==0 and coeff((5,0,1))==0:
         multipliers, y, names = _sos_struct_sextic_hexagon(coeff, poly, recurrsion)
 
-    elif coeff((5,1,0))==0 and coeff((5,0,1))==0 and coeff((4,2,0))==0 and coeff((4,0,2))==0\
-        and coeff((3,2,1))==0 and coeff((3,1,2))==0:
-        multipliers, y, names = _sos_struct_sextic_tree(coeff)
-
-    elif coeff((6,0,0)) == 0 and coeff((5,1,0)) == coeff((1,5,0)) and coeff((4,2,0)) == coeff((2,4,0)) and\
-        coeff((3,2,1)) == coeff((2,3,1)):
-        multipliers, y, names = _sos_struct_sextic_iran96(coeff)
-
     return multipliers, y, names
 
 
@@ -536,27 +528,29 @@ def _sos_struct_sextic_iran96(coeff):
         # Easy case 2, when we do not need to updegree
 
         # find some u such that
-        # w + 2 * p + 4 * u * m >= 0
-        # (w + 2 * p + 4 * u * m) + (z - 2 * p - (u*u + 2*u) * m) >= 0
+        # w' = w + 2 * p + 4 * u * m >= 0
+        # q' = 2*m + 2*p + q
+        # 2*q'+w' + min(2*q', w') + (z - 2 * p - (u*u + 2*u) * m) >= 0
         # which is equivalent to
         # u >= -(w + 2p) / 4m
         # u^2 - 2u <= (w + z) / m
         u_ = -(w + 2*p)/4/m
-        if u_ >= 1:
-            if u_ * (u_ - 2) > (w + z) / m:
-                u_ = None
-        else:
+        q2 = 2*(m + p) + q
+        if u_ < 1:
             u_ = sp.S(1)
-            if -1 > (w + z) / m:
-                u_ = None
+        w2 = w + 2 * p + 4 * u_ * m
+        
+        if 2*q2 + w2 + min(2*q2, w2) + (z - 2*p - (u_**2 + 2*u_)*m) < 0:
+            u_ = None
 
         if u_ is not None:
             y = [
                 m,
                 p / 3,
-                q + 2 * m + 2 * p,
-                w + 2 * p + 4 * u_ * m,
-                w + z - u_ * (u_ - 2) * m,
+                min(w2, q2),
+                q2 - min(w2, q2),
+                w2 - min(w2, q2),
+                z - u_ * (u_ - 2) * m - 2*p + (w2 + q2 - min(w2, q2)),
                 (coeff((2,2,2)) / 3 + (m + p + z) * 2 + q + w)
             ]
 
@@ -567,6 +561,7 @@ def _sos_struct_sextic_iran96(coeff):
                     f'a*b*(a-b)^2*(a+b-{u_}*c)^2',
                     '(a-b)^2*(b-c)^2*(c-a)^2',
                     'b*c*(a-b)^2*(a-c)^2',
+                    'b^2*c^2*(a-b)*(a-c)',
                     'a^2*b*c*(a-b)*(a-c)',
                     'a^2*b*c*(b-c)^2',
                     'a^2*b^2*c^2'
@@ -821,6 +816,8 @@ def _sos_struct_sextic_symmetric_ultimate(coeff, poly, recurrsion):
 
     Examples
     --------
+    s(a6-a2b2c2)+s(a3b3-a4bc)-12s(a4b2+a4c2-2a2b2c2)+22s(a3b3-a2b2c2)+14s(a2b+ab2-2abc)abc-2p(a-b)2
+    
     Case C.
     s(38a6-148a5b-148a5c+225a4b2+392a4bc+225a4c2-210a3b3-320a3b2c-320a3bc2+266a2b2c2)
     """
@@ -834,6 +831,9 @@ def _sos_struct_sextic_symmetric_ultimate(coeff, poly, recurrsion):
         return _sos_struct_sextic_iran96(coeff)
     elif coeff6 < 0:
         return [], None, None
+
+    if coeff((5,1,0)) == 0 and coeff((4,2,0)) == 0 and coeff((3,2,1)) == 0:
+        return _sos_struct_sextic_tree(coeff)
     
     multipliers, y, names = [], None, None
 
@@ -887,7 +887,7 @@ def _sos_struct_sextic_symmetric_ultimate(coeff, poly, recurrsion):
   
     print('Roots Info = ', roots)
     sum_of_roots = sum(_ is not None for _ in roots)
-    
+
     if sum_of_roots == 1:
         return _sos_struct_sextic_symmetric_ultimate_1root(coeff, poly, recurrsion, roots)
     elif sum_of_roots == 2:
