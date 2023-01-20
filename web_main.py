@@ -23,7 +23,7 @@ def preprocess():
     # if poly is None:
     #     return 
 
-    if app.SOS_Manager.poly_isfrac:
+    if app.SOS_Manager._poly_info['isfrac']:
         cancel = app.SOS_Manager.getStandardForm()
     else:
         cancel = ''
@@ -53,8 +53,14 @@ def preprocess():
     # restore
     monoms.pop()
 
+    factor = ''
+    print(request.get_json()['factor'])
+    if request.get_json()['factor'] == True:
+        factor = app.SOS_Manager.getStandardForm(formatt = 'factor')
+
+
     return jsonify(n = n, txts = txts, heatmap = app.SOS_Manager.grid_color,
-                    cancel = cancel)
+                    cancel = cancel, factor = factor)
 
 
 @app.route('/process/sos', methods=['POST'])

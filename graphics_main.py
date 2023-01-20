@@ -39,7 +39,7 @@ class MyWidget(QtWidgets.QWidget):
 
         self.spinbox_searchstep = QtWidgets.QSpinBox(self)
         self.spinbox_searchstep.setRange(0,200000)
-        self.spinbox_searchstep.setValue(self.SOS_Manager.maxiter)
+        self.spinbox_searchstep.setValue(5000)
 
         self.txt_inputtg  = QtWidgets.QTextEdit(self)
         self.txt_extratg = QtWidgets.QTextEdit(self)
@@ -97,7 +97,7 @@ class MyWidget(QtWidgets.QWidget):
         QtGui.QPainter.drawRect(QtGui.QPainter(self),w//80,h*16//180,w*7//10,h*322//360)
         #QtGui.QPainter.drawRect(QtGui.QPainter(self),w*7//10+w//40,h//60,w*21//80,h*14//40)
         QtGui.QPainter.drawText(QtGui.QPainter(self),w*25//80,h*320//360,w*31//80,h*33//360,
-                                QtGui.Qt.AlignRight|QtGui.Qt.AlignBottom,self.SOS_Manager.rootsinfo)
+                                QtGui.Qt.AlignRight|QtGui.Qt.AlignBottom,self.SOS_Manager._roots_info['rootsinfo'])
         QtGui.QPainter.drawText(QtGui.QPainter(self),w*7//10+w//40,h*20//40,w*7//40,h//40,
                                     QtGui.Qt.AlignLeft,"Local Minima")
         QtGui.QPainter.drawText(QtGui.QPainter(self),w*57//80,h*20//40,w*7//40,h//40,
@@ -138,7 +138,7 @@ class MyWidget(QtWidgets.QWidget):
                     if self.SOS_Manager.stage >= 30:
                         txt += '\nComputing Decomposition...'
                         if self.SOS_Manager.stage == 30:
-                            self.txt_extratg.setText('\n'.join(self.SOS_Manager.tangents))
+                            self.txt_extratg.setText('\n'.join(self.SOS_Manager._roots_info['tangents']))
                         elif self.SOS_Manager.stage < 50:
                             txt += '\n' + '\n'.join([f'Failed with degree {i}...' 
                                     for i in range(self.SOS_Manager.deg,self.SOS_Manager.stage-30+1)])
@@ -192,9 +192,9 @@ class MyWidget(QtWidgets.QWidget):
     @QtCore.Slot()
     def autosos(self):
         self.interface = 1
-        self.SOS_Manager.tangents_default = [tg 
+        self.SOS_Manager._roots_info['tangents_default'] = [tg 
                         for tg in self.txt_inputtg.toPlainText().split('\n') if len(tg)>0]
-        self.SOS_Manager.maxiter = self.spinbox_searchstep.value()
+        # self.SOS_Manager.maxiter = self.spinbox_searchstep.value()
         self.SOS_Manager.GUI_SOS(self.txt_input.text())
 
 

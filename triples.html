@@ -9,12 +9,14 @@
     </style>
     <!-- <script src="https://requirejs.org/docs/release/2.3.6/minified/require.js"></script> -->
     <script async src="https://cdn.bootcdn.net/ajax/libs/axios/0.21.1/axios.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
     <script type="text/javascript" id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
     <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>  -->
 </head>
 <body>
 <div id="frontpage" 
-style="width: 100%;height: 100%;position: absolute; display: flex; background: rgb(240,240,240);">
+style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: absolute; display: flex; background: rgb(240,240,240);">
 <div id="frontpageleft" style="width: 24%; margin-right: 0.5%; height: 100%; position: relative; 
     border-right: 2px solid rgb(220,220,220); background: rgb(255,255,255)">
     <!-- <div id="variables" style="width: 100%; height: 28px; text-align: left; display: inline-block;
@@ -37,15 +39,47 @@ style="width: 100%;height: 100%;position: absolute; display: flex; background: r
 <div id="frontpagemid" style="width: 50%; height: 100%; position: relative">
     <div id="inputs" style="width: 100%; height: 5%; margin-top: 1%">    
         <input type="text" id="input_poly" name="poly" style="border: 1px solid black; border-radius: 8px; 
-        width: 99%; height: 100%; padding-left: 1%;" autocomplete="off"
-        onkeyup="if(event.keyCode==13) {preprocessInput(1);}"></input><br>
+        width: 99%; height: 100%; padding-left: 1%; font-size: small;" autocomplete="off"
+        onkeyup="if(event.keyCode==13) {preprocessInput({findroot: 1});}"></input><br>
         <!-- <input type="submit" value="提交"> -->
     </div>
-    <div id="coeffs" 
-    style="width: 100%; height: 90%;margin-top: 1.5%; border-style: solid;border-color: gray;
+    <div id="centerscreen" style="width: 100%; height: 90%;margin-top: 1.5%; border-style: solid;border-color: gray;
     background: transparent; ">
-    </div>
-    <div id="rootsinfo" style="position: absolute; right: 5px; bottom: 3%; text-align: right; vertical-align: baseline; font-size: 12px">
+        <div id="coeffs" style="width: 100%; height: 100%; position: absolute;">
+        </div>
+        <div id="polytools" style="position: absolute; bottom: 3%; left: 8px;">
+            <div id="polytools_btns" style="margin-bottom: 5%">
+                <button type="button" class="btn btn-outline-secondary" id="polytools_rotate" onclick="PolyTools('rotate');">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-arrow-clockwise" viewBox="0 0 16 16">
+                        <path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/>
+                        <path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/>
+                    </svg>
+                  <span class="visually-hidden">Button</span>
+                </button>
+                <button type="button" class="btn btn-outline-secondary" id="polytools_rotate_reflect" onclick="PolyTools('rotate_reflect');">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-arrow-counterclockwise" viewBox="0 0 16 16">
+                        <path fill-rule="evenodd" d="M8 3a5 5 0 1 1-4.546 2.914.5.5 0 0 0-.908-.417A6 6 0 1 0 8 2v1z"/>
+                        <path d="M8 4.466V.534a.25.25 0 0 0-.41-.192L5.23 2.308a.25.25 0 0 0 0 .384l2.36 1.966A.25.25 0 0 0 8 4.466z"/>
+                    </svg>
+                  <span class="visually-hidden">Button</span>
+                </button>
+                <button type="button" class="btn btn-outline-secondary" id="polytools_reflect" onclick="PolyTools('reflect');">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-arrow-left-right" viewBox="0 0 16 16">
+                        <path fill-rule="evenodd" d="M1 11.5a.5.5 0 0 0 .5.5h11.793l-3.147 3.146a.5.5 0 0 0 .708.708l4-4a.5.5 0 0 0 0-.708l-4-4a.5.5 0 0 0-.708.708L13.293 11H1.5a.5.5 0 0 0-.5.5zm14-7a.5.5 0 0 1-.5.5H2.707l3.147 3.146a.5.5 0 1 1-.708.708l-4-4a.5.5 0 0 1 0-.708l4-4a.5.5 0 1 1 .708.708L2.707 4H14.5a.5.5 0 0 1 .5.5z"/>
+                    </svg>
+                  <span class="visually-hidden">Button</span>
+                </button>
+                <button type="button" class="btn btn-outline-secondary" id="polytools_factor" onclick="PolyTools('factor');">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-wrench-adjustable" viewBox="0 0 16 16">
+                        <path d="M16 4.5a4.492 4.492 0 0 1-1.703 3.526L13 5l2.959-1.11c.027.2.041.403.041.61Z"/>
+                        <path d="M11.5 9c.653 0 1.273-.139 1.833-.39L12 5.5 11 3l3.826-1.53A4.5 4.5 0 0 0 7.29 6.092l-6.116 5.096a2.583 2.583 0 1 0 3.638 3.638L9.908 8.71A4.49 4.49 0 0 0 11.5 9Zm-1.292-4.361-.596.893.809-.27a.25.25 0 0 1 .287.377l-.596.893.809-.27.158.475-1.5.5a.25.25 0 0 1-.287-.376l.596-.893-.809.27a.25.25 0 0 1-.287-.377l.596-.893-.809.27-.158-.475 1.5-.5a.25.25 0 0 1 .287.376ZM3 14a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z"/>
+                    </svg>
+                  <span class="visually-hidden">Button</span>
+                </button>
+            </div>
+        </div>
+        <div id="rootsinfo" style="position: absolute; right: 7px; bottom: 3%; text-align: right; vertical-align: baseline; font-size: 12px">
+        </div>
     </div>
 </div>
 
@@ -55,6 +89,7 @@ style="width: 100%;height: 100%;position: absolute; display: flex; background: r
     </div>
     <button id="sumofsquare" 
     style="width: 90%; height: 5%; margin-left: 5%; margin-top: 2%; position: relative;
+     font-size: small;
      background: linear-gradient(to bottom, rgb(247,247,247),rgb(221,221,221)); 
      border: 1px solid; border-color: rgba(200,200,200); color: rgb(60,60,60)"
      onmouseover="this.style.background = 'linear-gradient(to bottom, rgb(247,247,247),rgb(230,230,230))';
@@ -69,7 +104,7 @@ style="width: 100%;height: 100%;position: absolute; display: flex; background: r
 
     <div id="tangents" style="width: 96%; height: 20%; margin-left: 2%; margin-top: 4%">    
         <textarea id="input_tangents" style="border: 1px solid black; border-radius: 8px; font-family:'Times New Roman', Times, serif;
-        width: 99%; height: 100%; padding-left: 1%; resize: none;" ></textarea>
+        width: 99%; height: 100%; padding-left: 1%; resize: none; font-size: small;" ></textarea>
     </div>
     <div id="outputs" style="width: 96%; height: 25%; margin-left: 2%; margin-top: 6%; ">  
         <div id="output_types" style="width: 99%; height: 20%;">
@@ -88,7 +123,7 @@ style="width: 100%;height: 100%;position: absolute; display: flex; background: r
             onmouseover="ChangeShowTypeHover('formatted',0)" onmouseleave="ChangeShowTypeHover('formatted',1)">formatted</div>
         </div>
         <textarea id="output_result" style="border: 1px solid black; border-radius: 8px; font-family:'Times New Roman', Times, serif;
-        width: 99%; height: 82.5%; padding-left: 1%; margin-top: 3%; resize: none;" readonly="readonly"></textarea>
+        width: 99%; height: 82.5%; padding-left: 1%; margin-top: 3%; resize: none; font-size: small;" readonly="readonly"></textarea>
     </div>
 </div>
 
@@ -147,28 +182,42 @@ style="width: 100%;height: 100%;position: absolute; display: flex; background: r
 
     // functions
 
-    function preprocessInput(findroot=1, sos=null){
+    function preprocessInput(kwargs){
         const input_poly = document.getElementById('input_poly').value.trim();        
+        
+        const parse_undefined = (x, y) => {return typeof(x) === 'undefined'? y: x;}
+        const findroot = parse_undefined(kwargs['findroot'], 1);
+        const sos = parse_undefined(kwargs['sos'], null);
+        const factor = parse_undefined(kwargs['factor'], false);
+
         if (sos_poly === input_poly){
-            if (sos !== null){ 
+            if ((sos !== null) && (typeof(sos) !== 'undefined')){ 
                 //输入没有变化, 但是要求配方
                 sos();
             }
             return;
         }
+        
         sos_poly = input_poly;
-        axios.post('http://127.0.0.1:5000/process/preprocess',{poly: input_poly}
-        ).then(res=>{
+        axios.post('http://127.0.0.1:5000/process/preprocess',
+            {poly: input_poly, factor: factor}
+        ).then(res => {
             // after obtaining the return
             // n: degree of polynomial
             // txts: coefficients texts
             
-            // If the input is fraction, then substitude it with the denominator
             {
-                if (res.data.cancel.length > 0){
+                if (res.data.factor.length > 0){
+                    // If we have called factorization on the polynomial
+                    document.getElementById("input_poly").value = res.data.factor;
+                    sos_poly = res.data.factor.trim();
+                }
+                else if (res.data.cancel.length > 0){
+                    // If the input is fraction, then substitude it with the denominator
                     document.getElementById("input_poly").value = res.data.cancel;
                     sos_poly = res.data.cancel.trim();
                 }
+
             }
 
             // First render the coefficient triangle
@@ -183,14 +232,14 @@ style="width: 100%;height: 100%;position: absolute; display: flex; background: r
                 sos_deg = res.data.n ;
                 let t = 0;
                 const l = 100. / (1 + sos_deg); // length of each samll equilateral triangle 
-                const ulx = (50 - l * sos_deg / 2), uly = (35 - 13 * sos_deg * l / 45);
+                const ulx = (50 - l * sos_deg / 2), uly = (29 - 13 * sos_deg * l / 45);
                 const fontsize = Math.max(11,Math.floor(28-1.5*sos_deg));
                 const lengthscale = .28 * fontsize / 20.;
                 const titleparser = (chr, deg) => { 
-                    return deg<=0? '': (deg==1? chr: chr+deg);
+                    return deg <= 0? '': (deg==1? chr: chr+deg);
                 }
-                for (let i=0;i<=sos_deg;++i){
-                    for (let j=0;j<=i;++j){
+                for (let i = 0; i <= sos_deg; ++i){
+                    for (let j = 0; j <= i; ++j){
                         let coeff = document.createElement('p');
                         coeffs_view.appendChild(coeff);
                         coeff.innerHTML = res.data.txts[t];
@@ -231,7 +280,7 @@ style="width: 100%;height: 100%;position: absolute; display: flex; background: r
             if (findroot == 1){
                 document.getElementById("rootsinfo").innerHTML = '';
                 axios.post('http://127.0.0.1:5000/process/rootangents',{}
-                ).then(res=>{
+                ).then(res => {
                     {
                         let str = res.data.rootsinfo;
                         // /n -> <br>
@@ -254,7 +303,7 @@ style="width: 100%;height: 100%;position: absolute; display: flex; background: r
                         // 同时还要进行配方
                         sos();
                     }
-                }).catch(err=>{
+                }).catch(err => {
                     if (sos !== null){
                         sos_work.num -= 1;
                         if (sos_work.num == 0){
@@ -266,7 +315,7 @@ style="width: 100%;height: 100%;position: absolute; display: flex; background: r
                 });
 
             }
-        }).catch(err=>{
+        }).catch(err => {
             if (sos !== null){
                 sos_work.num -= 1;
                 if (sos_work.num == 0){
@@ -348,7 +397,7 @@ style="width: 100%;height: 100%;position: absolute; display: flex; background: r
                 }
             });
         }
-        preprocessInput(findroot=1, sos=SOS_callback);
+        preprocessInput({findroot: 1, sos: SOS_callback});
     }
 
 
@@ -380,6 +429,39 @@ style="width: 100%;height: 100%;position: absolute; display: flex; background: r
     }
 
 
+    function PolyTools(event){
+        if ((event === 'rotate') || (event === 'rotate_reflect') || (event === 'reflect')){
+            const input_poly_box = document.getElementById('input_poly');
+            let txt = input_poly_box.value;
+            let result = [];
+            if (event === 'rotate'){
+                for (let i = 0, n = txt.length; i < n; ++i){
+                    if (txt[i] === 'a') result.push('b');
+                    else if (txt[i] === 'b') result.push('c');
+                    else if (txt[i] === 'c') result.push('a');
+                    else result.push(txt[i]);
+                }
+            }else if (event === 'rotate_reflect'){
+                for (let i = 0, n = txt.length; i < n; ++i){
+                    if (txt[i] === 'a') result.push('c');
+                    else if (txt[i] === 'b') result.push('a');
+                    else if (txt[i] === 'c') result.push('b');
+                    else result.push(txt[i]);
+                }
+            }else if (event === 'reflect'){
+                for (let i = 0, n = txt.length; i < n; ++i){
+                    if (txt[i] === 'b') result.push('a');
+                    else if (txt[i] === 'a') result.push('b');
+                    else result.push(txt[i]);
+                }
+            }
+            input_poly_box.value = result.join("");
+            preprocessInput({findroot: 1});
+        }else if (event === 'factor'){
+            sos_poly = ''; // reset
+            preprocessInput({findroot: 1, factor: true});
+        }
+    }
 
     document.onkeyup = function(e) {
         // 兼容FF和IE和Opera
