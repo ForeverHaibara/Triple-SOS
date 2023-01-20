@@ -56,7 +56,7 @@ def _print_grid_triangle(self):
 
 def _print_poly_triangle(self):
     '''print the heat map in the Qt canva'''
-    n = self.SOS_Manager.grid_size
+    n = self.SOS_Manager._grid_settings['size']
     w = self.width()
     h = self.height()
 
