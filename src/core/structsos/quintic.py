@@ -310,6 +310,16 @@ def _sos_struct_quintic_uncentered(coeff):
     t = coeff((1,4,0))
     r1, r2, r3, u_, v_ = coeff((2,3,0)) / t, coeff((3,1,1)) / t, coeff((2,2,1)) / t, None, None
     r1_, r2_ = r1, r2
+
+    if r2 + 2 * r1 >= 0:
+        multipliers = []
+        y = [coeff((2,3,0)), coeff((1,4,0)), coeff((3,1,1)) / 2 + coeff((1,4,0)),
+            coeff((2,3,0)) + coeff((1,4,0)) + coeff((3,1,1)) + coeff((2,2,1))]
+        if any(_ < 0 for _ in y):
+            y = None
+        else:
+            names = ['a^2*b*(b-c)^2', 'a*b^2*(b-c)^2', 'a*b*c*(b-c)^2', 'a^2*b^2*c']
+            return multipliers, y, names
     
     if coeff((2,3,0)) + coeff((1,4,0)) + coeff((3,1,1)) + coeff((2,2,1)) == 0:
         if coeff((2,3,0)) == 0:
@@ -529,6 +539,8 @@ def _sos_struct_quintic_hexagon(coeff, poly, recurrsion):
     s(a4b+a4c+6a3b2+a2b3-9a3bc)-10abcs(a2-ab)
 
     s(a4b+a4c+5a3b2+3a2b3-10a2b2c)-20s(a3bc-a2b2c)
+
+    s((23(b-a)+31c)(a2-b2+(ab-ac)+2(bc-ab))2)
     """
     if coeff((5,0,0)) != 0 or coeff((4,1,0)) <= 0 or coeff((1,4,0)) <= 0:
         return [], None, None
