@@ -11,7 +11,7 @@ from scipy.optimize import linprog
 from scipy.optimize import OptimizeWarning
 # from matplotlib import pyplot as plt
 
-from ..utils.text_process import deg, verify_hom_cyclic, degree_of_zero
+from ..utils.text_process import deg, verify_hom_cyclic, degree_of_zero, poly_get_standard_form, poly_get_factor_form
 from ..utils.text_process import PreprocessText, prettyprint, text_compresser, text_sorter, text_multiplier
 from ..utils.basis_generator import arraylize, invarraylize, generate_expr, generate_basis, append_basis, reduce_basis
 from ..utils.root_guess import root_findroot
@@ -30,38 +30,46 @@ class SOS_Manager():
         self.linefeed = 2
         self.sosresults = ['','','']
 
-        self.zeropoly = sp.polys.polytools.Poly('a+b+c') - sp.polys.polytools.Poly('a+b+c')
-        self.polytxt = None 
-        self.poly = self.zeropoly
-        self.poly_ishom = False 
-        self.poly_iscyc = False 
-        self.poly_isfrac = False 
-        self.poly_iszero = False 
+        self._poly_info = {
+            'zeropoly': sp.sympify('0').as_poly(*sp.symbols('a b c')),
+            'polytxt': None,
+            'poly': sp.sympify('0').as_poly(*sp.symbols('a b c')),
+            'ishom': False,
+            'iscyc': False,
+            'isfrac': False,
+            'iszero': False
+        }
+
         self.multiplier = None
         self.deg = 0
         self.updeg = 11
         self.deglim = 18
 
-        self.maxiter = 5000
+        self._roots_info = {
+            'roots': [],
+            'strict_roots': [],
+            'rootsinfo': '',
+            'tangents': [],
+            'tangents_default': []
+        }
         self.precision = 8
-        self.mod = None
-        self.roots = []
-        self.strict_roots = []
-        self.rootsinfo = ''
-        self.tangents_default = []
-        self.tangents = []
         self.stage = 60
 
         self.std_monoms = []
-        self.grid_resolution = 12
-        self.grid_size = 60
+        self._grid_settings = {
+            'resolution': 12,
+            'size': 60,
+            'deglim': 18
+        }
         self.grid_coor = []
         self.grid_precal = []
         self.grid_color = []
         self.grid_value = []
-        self.grid_deglim = 18
         self._grid_init()
 
+    @property
+    def poly(self):
+        return self._poly_info['poly']
 
     def _grid_init(self):
         """
@@ -69,8 +77,8 @@ class SOS_Manager():
         """
         # grid_coor[k] = (i,j) stands for the value  f(n-i-j, i, j)
         self.grid_coor = []
-        for i in range(self.grid_size + 1):
-            for j in range(self.grid_size + 1 - i):
+        for i in range(self._grid_settings['size'] + 1):
+            for j in range(self._grid_settings['size'] + 1 - i):
                 self.grid_coor.append((j,i))
 
         # initialize the colors by white
@@ -80,57 +88,60 @@ class SOS_Manager():
         # precal stores the powers of integer
         # precal[i][j] = i ** j    where i <= grid_size = 60 ,   j <= deglim = 18
         # bound = 60 ** 18 = 60^18 = 1.0156e+032
-        for i in range(self.grid_size + 1):
+        for i in range(self._grid_settings['size'] + 1):
             self.grid_precal.append( [1, i] )
-            for _ in range(self.grid_deglim - 1):
+            for _ in range(self._grid_settings['deglim'] - 1):
                 self.grid_precal[i].append(self.grid_precal[i][-1] * i)
 
 
-    def _render_grid(self):
+    def _render_grid(self, method = 'integer'):
         """
         Render the grid by computing the values and setting the grid_val to rgba colors.
         """
-        
-        # integer arithmetic runs much faster than accuarate floating point arithmetic
-        # example: computing 45**18   is around ten times faster than  (1./45)**18 
-
-        # convert sympy.core.number.Rational / Float / Integer to python int / float
-        if self.deg > self.grid_deglim :
+        if self.deg > self._grid_settings['deglim']:
             return 
-        coeffs = self.poly.coeffs()
-        for i in range(len(coeffs)):
-            if int(coeffs[i]) == coeffs[i]:
-                coeffs[i] = int(coeffs[i])
-            else:
-                coeffs[i] = float(coeffs[i])
-        
-        # pointer, but not deepcopy
-        pc = self.grid_precal
 
-        max_v , min_v = 0 , 0
-        for k in range(len(self.grid_coor)):
-            b , c = self.grid_coor[k]
-            a = self.grid_size - b - c
-            v = 0
-            for coeff, monom in zip(coeffs, self.std_monoms):
-                # coeff shall be the last to multiply, as it might be float while others int
-                v += pc[a][monom[0]] * pc[b][monom[1]] * pc[c][monom[2]] * coeff
-            max_v , min_v = max(v, max_v), min(v, min_v)
-            self.grid_value[k] = v
+        if method == 'integer':
+            # integer arithmetic runs much faster than accuarate floating point arithmetic
+            # example: computing 45**18   is around ten times faster than  (1./45)**18 
+
+            # convert sympy.core.number.Rational / Float / Integer to python int / float
+            coeffs = self.poly.coeffs()
+            for i in range(len(coeffs)):
+                if int(coeffs[i]) == coeffs[i]:
+                    coeffs[i] = int(coeffs[i])
+                else:
+                    coeffs[i] = float(coeffs[i])
+            
+            # pointer, but not deepcopy
+            pc = self.grid_precal
+
+            max_v , min_v = 0 , 0
+            for k in range(len(self.grid_coor)):
+                b , c = self.grid_coor[k]
+                a = self._grid_settings['size'] - b - c
+                v = 0
+                for coeff, monom in zip(coeffs, self.std_monoms):
+                    # coeff shall be the last to multiply, as it might be float while others int
+                    v += pc[a][monom[0]] * pc[b][monom[1]] * pc[c][monom[2]] * coeff
+                max_v , min_v = max(v, max_v), min(v, min_v)
+                self.grid_value[k] = v
 
 
-        # preprocess the levels
-        if max_v >= 0:
-            max_levels = [(i / self.grid_resolution)**2 * max_v for i in range(self.grid_resolution+1)] 
-        if min_v <= 0:
-            min_levels = [(i / self.grid_resolution)**2 * min_v for i in range(self.grid_resolution+1)] 
+            # preprocess the levels
+            if max_v >= 0:
+                max_levels = [(i / self._grid_settings['resolution'])**2 * max_v for i in range(self._grid_settings['resolution']+1)] 
+            if min_v <= 0:
+                min_levels = [(i / self._grid_settings['resolution'])**2 * min_v for i in range(self._grid_settings['resolution']+1)]
+        else:
+            pass
     
         for k in range(len(self.grid_coor)):
             v = self.grid_value[k]
             if v > 0:
                 for i, level in enumerate(max_levels):
                     if v <= level: 
-                        v = 255 - (i-1)*255//(self.grid_resolution-1)
+                        v = 255 - (i-1)*255//(self._grid_settings['resolution']-1)
                         self.grid_color[k] = (255, v, 0, 255)
                         break 
                 else:
@@ -138,7 +149,7 @@ class SOS_Manager():
             elif v < 0:
                 for i, level in enumerate(min_levels):
                     if v >= level:
-                        v = 255 - (i-1)*255//(self.grid_resolution-1)
+                        v = 255 - (i-1)*255//(self._grid_settings['resolution']-1)
                         self.grid_color[k] = (0, v, 255, 255)
                         break
                 else:
@@ -154,7 +165,7 @@ class SOS_Manager():
         Warning: The result might not refresh if the input is invalid.
         """
 
-        if self.polytxt == txt:
+        if self._poly_info['polytxt'] == txt:
             return True 
         
         try:
@@ -162,24 +173,24 @@ class SOS_Manager():
             
             if poly is not None:
                 # add a zero polynomial, to ensure it has variables 'a','b','c'
-                self.poly = self.zeropoly + poly
+                self._poly_info['poly'] = self._poly_info['zeropoly'] + poly
                 self.deg = deg(self.poly)
                 self.multiplier = None
-                self.roots = []
-                self.strict_roots = []
+                self._roots_info['roots'] = []
+                self._roots_info['strict_roots'] = []
             else:
                 # zero polynomial 
-                self.poly = self.zeropoly
-                self.rootsinfo = ''
+                self._poly_info['poly'] = self._poly_info['zeropoly']
+                self._roots_info['rootsinfo'] = ''
                 self.grid_color = [(255,255,255,255)] * len(self.grid_coor)
                 n = degree_of_zero(txt)
                 self.deg = self.deg if n <= 0 else n 
                 self.std_monoms = [(0,0,0)] * ((self.deg + 2) * (self.deg + 1) // 2)
-                self.roots = []
-                self.strict_roots = []
-                self.poly_isfrac = False 
-                self.poly_ishom = True 
-                self.poly_iszero = True 
+                self._roots_info['roots'] = []
+                self._roots_info['strict_roots'] = []
+                self._poly_info['isfrac'] = False 
+                self._poly_info['ishom'] = True 
+                self._poly_info['iszero'] = True 
                 return True
         except: # invalid input
             return False
@@ -213,48 +224,18 @@ class SOS_Manager():
             except:
                 pass
         
-        self.polytxt = txt 
-        self.poly_isfrac = isfrac
-        self.poly_iszero = False
-        self.poly_ishom, self.poly_iscyc = verify_hom_cyclic(self.poly, self.deg)
+        self._poly_info['polytxt'] = txt 
+        self._poly_info['isfrac'] = isfrac
+        self._poly_info['iszero'] = False
+        self._poly_info['ishom'], self._poly_info['iscyc'] = verify_hom_cyclic(self.poly, self.deg)
         return True 
 
 
-    def getStandardForm(self, formatt = 'short'): 
+    def getStandardForm(self, formatt = 'short'):
         if formatt == 'short':
-            def TitleParser(char, deg):
-                return '' if deg == 0 else (char if deg == 1 else (char + str(deg)))
-            def Formatter(x):
-                if x == 1:
-                    return '+'
-                elif x >= 0:
-                    return f'+{x}'
-                elif x == -1:
-                    return f'-'
-                else:
-                    return f'{x}'
-            if self.poly_iscyc:
-                txt = ''
-                for coeff, monom in zip(self.poly.coeffs(), self.poly.monoms()):
-                    a , b , c = monom 
-                    if a >= b and a >= c:
-                        if a == b and a == c:
-                            txt += Formatter(coeff/3) + TitleParser('a',a) + TitleParser('b',b) + TitleParser('c',c)
-                        elif (a != b and a != c) or a == b:
-                            txt += Formatter(coeff) + TitleParser('a',a) + TitleParser('b',b) + TitleParser('c',c)
-                if txt.startswith('+'):
-                    txt = txt[1:]
-                return 's(' + txt + ')'
-
-            else: # not cyclic 
-                txt = ''
-                for coeff, monom in zip(self.poly.coeffs(), self.poly.monoms()):
-                    a , b , c = monom
-                    txt += Formatter(coeff) + TitleParser('a',a) + TitleParser('b',b) + TitleParser('c', c)
-                if txt.startswith('+'):
-                    txt = txt[1:]
-                return txt 
-
+            return poly_get_standard_form(self.poly, formatt = 'short', is_cyc = self._poly_info['iscyc'])
+        elif formatt == 'factor':
+            return poly_get_factor_form(self.poly)
 
     def _inquire_monoms(self, n: int):        
         if not (n in self.dict_monoms.keys()):
@@ -275,16 +256,16 @@ class SOS_Manager():
     
 
     def GUI_findRoot(self):
-        if self.deg <= 1 or (not self.poly_iscyc) or (self.poly_iszero) or (not self.poly_ishom):
+        if self.deg <= 1 or (not self._poly_info['iscyc']) or (self._poly_info['iszero']) or (not self._poly_info['ishom']):
             return 
         
-        self.roots, self.strict_roots = root_findroot(
+        self._roots_info['roots'], self._roots_info['strict_roots'] = root_findroot(
             self.poly, most = 5,
             grid_coor = self.grid_coor, grid_value = self.grid_value
         )
 
-        if len(self.roots) > 0:
-            self.rootsinfo = 'Local Minima Approx:'
+        if len(self._roots_info['roots']) > 0:
+            self._roots_info['rootsinfo'] = 'Local Minima Approx:'
             def Formatter(root, precision = self.precision, maxlen = 20):
                 if isinstance(root, PythonNumber):
                     return round(root, precision)
@@ -292,17 +273,17 @@ class SOS_Manager():
                     return round(complex(root).real, precision)
                 else:
                     return root 
-            for root in self.roots:
-                self.rootsinfo += f'\n({Formatter(root[0])},{Formatter(root[1])},1)'
-                self.rootsinfo += f' = {Formatter(self.poly(complex(root[0]).real, float(root[1]),1))}'
+            for root in self._roots_info['roots']:
+                self._roots_info['rootsinfo'] += f'\n({Formatter(root[0])},{Formatter(root[1])},1)'
+                self._roots_info['rootsinfo'] += f' = {Formatter(self.poly(complex(root[0]).real, float(root[1]),1))}'
         else:
-            self.rootsinfo = ''
-        return self.rootsinfo
+            self._roots_info['rootsinfo'] = ''
+        return self._roots_info['rootsinfo']
                 
 
     def GUI_getTangents(self):
-        self.tangents = sorted(self.tangents_default[:] + root_tangents(self.roots), key = lambda x:len(x))
-        return self.tangents
+        self._roots_info['tangents'] = sorted(self._roots_info['tangents_default'][:] + root_tangents(self._roots_info['roots']), key = lambda x:len(x))
+        return self._roots_info['tangents']
 
 
     def GUI_prettyResult(self, y, names, multipliers = None, equal = True):
@@ -314,7 +295,7 @@ class SOS_Manager():
 
         # 0: LaTeX
         self.sosresults[0] = prettyprint(y, names, 
-                        precision=self.precision, linefeed=linefeed).strip('$')
+                        precision = self.precision, linefeed=linefeed).strip('$')
                         
         # if n - origin_deg >= 2:
         #     self.sosresults[0] = '$$\\left(\\sum a^{%d}\\right)f(a,b,c) = '%(n - self.deg) + self.sosresults[0] + '$$'
@@ -363,22 +344,19 @@ class SOS_Manager():
 
     def GUI_SOS(self, txt, skip_setpoly = False, skip_findroots = False, skip_tangents = False,
                 verbose_updeg = False, use_structural_method = True):
-        self.rootsinfo = ''
+        self._roots_info['rootsinfo'] = ''
         self.stage = 0
         if (not skip_setpoly) and (not self.setPoly(txt)):
             self.stage = 70
             return ''
             
         origin_deg = self.deg
-        if origin_deg <= 1 or origin_deg >= self.deglim or (not self.poly_iscyc) or self.poly is None:
+        if origin_deg <= 1 or origin_deg >= self.deglim or (not self._poly_info['iscyc']) or self.poly is None:
             self.GUI_stateUpdate(70)
             return ''
         self.GUI_stateUpdate(10)
         self.updeg = min(self.updeg, self.deglim)
 
-        if self.maxiter > 0 and not skip_findroots:
-            self.GUI_findRoot()
-            
         self.GUI_stateUpdate(20)
 
         if not skip_tangents:
@@ -388,8 +366,8 @@ class SOS_Manager():
         
         # copy here to avoid troubles in async
         original_poly = self.poly 
-        strict_roots = self.strict_roots.copy()
-        tangents = self.tangents.copy()
+        strict_roots = self._roots_info['strict_roots'].copy()
+        tangents = self._roots_info['tangents'].copy()
 
         # initialization with None
         x , names , polys , basis , multipliers = None , None , None , None , []
@@ -462,7 +440,7 @@ class SOS_Manager():
     
     def save_heatmap(self, path, dpi=None, backgroundcolor=211):
         '''save the heatmap to the path'''
-        n = self.grid_size
+        n = self._grid_settings['size']
         x = np.full((n+1,n+1,3), backgroundcolor, dtype='uint8')
         for i in range(n+1):
             t = i * 15 // 26   # i * 15/26 ~ i / sqrt(3)
