@@ -118,6 +118,75 @@ def _sos_struct_septic_star(coeff, poly, recurrsion):
     return multipliers, y, names
 
 
+def _sos_struct_septic_biased(coeff):
+    """
+    Solve septic hexagons without s(a5b2) and s(a4b3)
+
+
+    Examples
+    -------
+    (s(a(a2c-ab2)(a2c-ab2-3abc))+5s(a3b3c-a3b2c2)-2s(a2b4c-a3b2c2))
+
+    s(a(a2c-ab2)(a2c-ab2-3abc))+s((a2-b2+2(ab-ac)+5(bc-ab))2)abc
+
+    s(a5c2-3a4bc2+a4c3+3a3b3c-2a3b2c2)+15s(a3b3c-a3b2c2)-7s(a2b4c-a3b2c2)
+
+    s(a5c2-16a4bc2+a4c3+54a3b3c-40a3b2c2)
+
+    s(4a5c2-6a4b2c-12a4bc2+8a4c3-11a3b3c+17a3b2c2)
+
+    s(a5c2+a4b2c+a4bc2-7a3b3c+4a3b2c2)
+    """
+    multipliers, y, names = [], None, None
+    if coeff((5,2,0)) or coeff((4,3,0)):        
+        # reflect the polynomial so that coeff((5,2,0)) == 0
+        def new_coeff(c):
+            return coeff((c[0], c[2], c[1]))
+        multipliers, y, names = _sos_struct_septic_biased(new_coeff)
+        if y is not None:
+            multipliers = [_.translate({98: 99, 99: 98}) for _ in multipliers]
+            names = [_.translate({98: 99, 99: 98}) for _ in names]
+        return multipliers, y, names
+
+    if coeff((5,2,0)) or coeff((4,3,0)):
+        return [], None, None
+
+    if coeff((3,4,0)) == coeff((2,5,0)) and coeff((3,4,0)) != 0:
+        coeff34 = coeff((3,4,0))
+        m, p, n, q = coeff((5,1,1)) / coeff34, coeff((4,2,1)) / coeff34 + 2, coeff((3,3,1)) / coeff34, coeff((2,4,1)) / coeff34
+        if m > 0:
+            det = m*(-3*m**2 - 3*m*n - 7*m - 4*n + p**2 + p*q - p + q**2 - 2*q - 3) + p*p
+            if det <= 0:
+                x = -(6*m + p + 2*q + 6)/(3*m + 4)
+                r = x.as_numer_denom()[1] # cancel the denominator is good
+
+                n2 = n - (x**2 + 4*x + 3)
+                q2 = q + (2*x + 3)
+                u_, v_ = -(p + 2*q2) / 3 / m, -(2*p + q2) / 3 / m
+                multipliers = ['a']
+                y = [
+                    1 / r**2,
+                    1 / r**2,
+                    m / 2,
+                    (3*(m + n2) - (p**2 + q2**2 + p*q2) / m) / 6,
+                    m + p + n + q + 2 + coeff((3,2,2)) / coeff34
+                ]
+                y = [_ * coeff34 for _ in y]
+                names = [
+                    f'a*c*({r}*a^2*c-{r}*b*c^2+{r}*a*b*c-{(x+2)*r}*a*b^2+{(x+1)*r}*b^2*c)^2',
+                    f'({r}*a^3*c-{r}*a*b^3+{r}*b^2*c^2-{r}*a^2*b^2-{r}*a*b*c^2-{(x+1)*r}*a^2*b*c+{(x+2)*r}*a*b^2*c)^2',
+                    f'a*b*c*(a+b+c)*(a^2-b^2+{u_-v_}*a*b-{u_}*a*c+{v_}*b*c)^2',
+                    'a^3*b*c*(a+b+c)*(b-c)^2',
+                    'a^3*b^2*c^2*(a+b+c)'
+                ]
+
+        elif m == 0 and p >= -2:
+            if p == -2:
+                x = (-q - 3) / 2
+            0
+
+    return multipliers, y, names
+
 def _sos_struct_septic_hexagon(coeff, poly, recurrsion):
     """
     Solve septic without s(a7), s(a6b), s(a6c).
@@ -137,12 +206,19 @@ def _sos_struct_septic_hexagon(coeff, poly, recurrsion):
     s(4a5b2-2a5bc+4a5c2+8a4b3-8a4b2c+a4bc2-10a4c3+2a3b3c+a3b2c2)
 
     (1/5(18s(a3(13b2+5c2)(13c2+5a2))-p(13a2+5b2)s(a))-585/64s(a(a2c-b2c-8/3(a2b-abc)+7/4(ab2-abc))2))
+
+    s(a5b2-a5bc+a5c2-a4b3-2a4b2c-2a4bc2-a4c3+10a3b3c-5a3b2c2)
     """
     
     if any(coeff(i) for i in ((7,0,0), (6,1,0), (6,0,1))):
         return [], None, None
 
     multipliers, y, names = [], None, None
+
+    if (coeff((5,2,0)) == 0 and coeff((4,3,0)) == 0) or (coeff((3,4,0)) == 0 and coeff((2,5,0)) == 0):
+        multipliers, y, names = _sos_struct_septic_biased(coeff)
+        if y is not None:
+            return multipliers, y, names
 
     if coeff((5,2,0)) == 0:
         a , b = 1 , 0 

@@ -42,6 +42,11 @@ def _sos_struct_sextic_hexagram(coeff, poly, recurrsion):
 def _sos_struct_sextic_hexagon(coeff, poly, recurrsion):
     """
     Solve hexagon s(a4b2+xa2b4+ya3b3+za4bc+wa3b2c+ua2b3c+...a2b2c2)
+
+    Examples
+    -------
+    2s(a3b3+7a4bc-29a3b2c+12a3bc2+9a2b2c2)+s((2ab2-ca2-a2b-bc2+c2a)2)
+    3s(3a4b2-7a4bc+9a4c2-10a3b3+20a3b2c-15a3bc2)-2(s(2a2b-3ab2)+3abc)2
     """
     multipliers, y, names = [], None, None
     # hexagon
@@ -50,6 +55,9 @@ def _sos_struct_sextic_hexagon(coeff, poly, recurrsion):
             # first try whether we can cancel these two corners in one step 
             # CASE 1. 
             if coeff((4,2,0)) == 0 or coeff((4,0,2)) == 0:
+                if coeff((3,3,0)) == 0 and coeff((4,1,1)) == 0:
+                    return _sos_struct_sextic_rotated_tree(coeff)
+
                 if coeff((4,0,2)) == 0:
                     y = [coeff((4,2,0))]
                     names = ['(a*a*b+b*b*c+c*c*a-3*a*b*c)^2']
@@ -126,6 +134,201 @@ def _sos_struct_sextic_hexagon(coeff, poly, recurrsion):
         
     return multipliers, y, names
 
+
+
+def _sos_struct_sextic_hexagon_full(coeff):
+    """
+    Examples
+    -------
+    s(4a5b+9a5c-53a4bc+10a4c2-19a3b3+47a3b2c+52a3bc2-50a2b2c2)
+    """
+    if coeff((6,0,0)) != 0:
+        return [], None, None
+
+    coeff51 = coeff((5,1,0))
+    if coeff51 == 0 and coeff((1,5,0)) != 0:
+        # reflect the polynomial
+        return [], None, None
+
+    m = sp.sqrt(coeff((1,5,0)) / coeff51)
+    if not isinstance(m, sp.Rational):
+        return [], None, None
+
+    p, n, q = coeff((4,2,0)) / coeff51, coeff((3,3,0)) / coeff51, coeff((2,4,0)) / coeff51
+
+    # (q - t) / (p - t) = -2m
+    t = (2*m*p + q)/(2*m + 1)
+    z = (p - t) / (-2)
+    if t < 0 or n + 2 * t < z**2 - 2*m:
+        return [], None, None
+
+    # Case A. solve it directly through a cubic equation
+
+    # Case B. optimize discriminant >= 0
+
+    return [], None, None
+
+
+def _sos_struct_sextic_rotated_tree(coeff):
+    """
+    Solve s(a2b4+xa3b2c-ya3bc2+za2b2c2) >= 0. Note that this structure is a rotated
+    version of symmetric tree.
+
+    Examples
+    -------
+    s(a2b4-6a3bc2+2a3b2c+3a2b2c2)
+
+    s(a4b2-18a3b2c+18a3bc2-1a2b2c2)
+
+    s(20a4b2-26a3b2c-29a3bc2+35a2b2c2)
+
+    s(a2b4+a3b2c-a3bc2-a2b2c2)
+
+    s(a4b2-14a3b2c+14a3bc2-1a2b2c2)
+
+    s(2a2b4-8a3bc2+a3b2c+5a2b2c2)
+    """
+    if coeff((4,2,0)) != 0:
+        # reflect the polynomial so that coeff((4,2,0)) == 0
+        def new_coeff(c):
+            return coeff((c[0], c[2], c[1]))
+        multipliers, y, names = _sos_struct_sextic_rotated_tree(new_coeff)
+        if y is not None:
+            multipliers = [_.translate({98: 99, 99: 98}) for _ in multipliers]
+            names = [_.translate({98: 99, 99: 98}) for _ in names]
+        return multipliers, y, names
+    
+    u = coeff((3,2,1)) / coeff((2,4,0))
+    if coeff((2,4,0)) <= 0 or coeff((4,2,0)) != 0 or u < -2:
+        return [], None, None
+    v = coeff((3,1,2)) / coeff((2,4,0))
+
+    multipliers, y, names = [], None, None
+    if u >= 2 and v >= -6:
+        y = [sp.S(1) / 3, u - 2, v + 6,
+            (coeff((2,4,0)) + coeff((3,1,2)) + coeff((3,2,1))) + coeff((2,2,2)) / 3
+        ]
+        y = [_ * coeff((2,4,0)) for _ in y[:-1]] + [y[-1]]
+        names = [
+            '(a^2*c+b^2*a+c^2*b-3*a*b*c)^2',
+            'a*b*c*(a^2*b-a*b*c)',
+            'a*b*c*(a^2*c-a*b*c)',
+            'a^2*b^2*c^2'
+        ]
+        return multipliers, y, names
+    
+    if u >= 0 and v >= -2:
+        y = [sp.S(1), u, v + 2,
+            (coeff((2,4,0)) + coeff((3,1,2)) + coeff((3,2,1))) + coeff((2,2,2)) / 3
+        ]
+        y = [_ * coeff((2,4,0)) for _ in y[:-1]] + [y[-1]]
+        names = [
+            'a^2*c^2*(a-b)^2',
+            'a*b*c*(a^2*b-a*b*c)',
+            'a*b*c*(a^2*c-a*b*c)',
+            'a^2*b^2*c^2'
+        ]
+        return multipliers, y, names
+
+    if True:
+        # simple case, we only need to multiply s(a)
+        y_ = sp.sqrt(u + 2)
+        if not isinstance(y_, sp.Rational):
+            y_ = y_.n(16)
+
+        x_ = 1 - (y_ + 2)*(-u - v + 4*y_ + 4)/(2*(u + 4*y_ + 6))
+        q1 = v - (x_ - 1)**2 + 2 + 4*y_
+        if q1 >= 0:
+            if not isinstance(y_, sp.Rational):
+                for y_ in rationalize_bound(y_, direction = -1, compulsory = True):
+                    x_ = 1 - (y_ + 2)*(-u - v + 4*y_ + 4)/(2*(u + 4*y_ + 6))
+                    q1 = v - (x_ - 1)**2 + 2 + 4*y_
+                    if q1 >= 0:
+                        p1 = u + 2 - y_**2
+                        n1 = 2 / (y_ + 2) * (x_ - 1) * p1
+                        # after subtracting s(a(a2c-ab2+x(bc2-abc)+y(b2c-abc))2),
+                        # the remaining is abcs(p1*a3b+n1*a2b2+q1*ab3+...a2bc)
+                        if 4*p1*q1 >= n1**2:
+                            # ensure the remainings are positive
+                            # note: when y -> sqrt(u^2+2), we have 4pq - n^2 > 0
+                            break
+                else:
+                    y_ = None
+            else:
+                p1 = u + 2 - y_**2
+                n1 = 2 / (y_ + 2) * (x_ - 1) * p1
+                if not (4*p1*q1 >= n1**2):
+                    y_ = None
+            
+            if y_ is not None:
+                multipliers = ['a']
+                y = [
+                    sp.S(1),
+                    p1,
+                    q1 - n1**2/4/p1 if p1 != 0 else q1,
+                    sp.S(0) if p1 != 0 else n1 / 2,
+                    (coeff((2,4,0)) + coeff((3,1,2)) + coeff((3,2,1))) + coeff((2,2,2)) / 3
+                ]
+                y = [_ * coeff((2,4,0)) for _ in y[:-1]] + [y[-1]]
+                names = [
+                    f'a*(a^2*c-a*b^2+{x_}*b*c^2+{y_}*b^2*c-{x_+y_}*a*b*c)^2',
+                    f'a^2*b^2*c*(a-{-n1/2/p1}*b+{-n1/2/p1-1}*c)^2',
+                    'a^2*b^2*c*(b-c)^2',
+                    'a^3*b*c*(b-c)^2',
+                    'a^3*b^2*c^2'
+                ]
+                return multipliers, y, names
+
+
+    r, x = sp.symbols('r'), None
+    eq = (r**3 - 3*r - u).as_poly(r)
+    for root in sp.polys.roots(eq, cubics = False, quartics = False):
+        if isinstance(root, sp.Rational) and root >= 1:
+            x = root
+            break
+    
+    if x is None:
+        for root in sp.polys.nroots(eq):
+            if root.is_real and root >= 1:
+                for x_ in rationalize_bound(root, direction = -1, compulsory = True):
+                    if x_**3 - 3*x_ <= u and v + 3*x_*(x_ - 1) >= 0:
+                        x = x_
+                        break
+    
+    # print(x, u, v, eq.as_expr().factor())
+    if x is None:
+        return [], None, None
+    
+    z = x * (x + 1) / 3
+    
+    multipliers = [f'a*b*b+{z}*a*b*c', 'a']
+    y = [
+        1,
+        (x + 1) / 2,
+        x + 1,
+        v + 3*x*(x - 1),
+        u - (x**3 - 3*x),
+        (coeff((2,4,0)) + coeff((3,1,2)) + coeff((3,2,1))) + coeff((2,2,2)) / 3
+    ]
+    y = [_ * coeff((2,4,0)) for _ in y[:-1]] + [y[-1]]
+    names = [
+        f'a^2*c*(a+b+c)*(a^2*c-{x}*a*b^2-{x}*b*c^2+{x*x-1}*b^2*c-{x*(x-2)}*a*b*c)^2',
+        f'a^2*b^2*c^2*({x-1}*a-b)^2*(a+{x-1}*b-{x}*c)^2',
+        f'a*b*c^2*({x-1}*a-b)^2*({x}*a*b-a*c-{x-1}*b*c)^2',
+        f'a*b*c*(a+b+c)*(a*b^2+b*c^2+c*a^2+{3*z}*a*b*c)*(a^2*c-a*b*c)',
+        f'a*b*c*(a+b+c)*(a*b^2+b*c^2+c*a^2+{3*z}*a*b*c)*(a^2*b-a*b*c)',
+        f'a^3*b^2*c^2*(a*b^2+b*c^2+c*a^2+{3*z}*a*b*c)'
+    ]
+
+    return multipliers, y, names
+
+
+
+#####################################################################
+#
+#                              Symmetric
+#
+#####################################################################
 
 def _sos_struct_sextic_hexagon_symmetric(coeff, real = True):
     """
@@ -390,9 +593,7 @@ def _sos_struct_sextic_tree(coeff):
             if abs(numer_r.imag) < 1e-12 and numer_r.real >= 1:
                 numer_r = numer_r.real 
                 if not isinstance(r, sp.Rational):
-                    for gap, rounding in ((.5, .1), (.3, .1), (.2, .1), (.1, .1), (.05, .01), (.01, .002),
-                                        (1e-3, 2e-4), (1e-4, 2e-5), (1e-5, 2e-6), (1e-6, 1e-7)):
-                        r = sp.Rational(*rationalize(numer_r-gap, rounding=rounding, reliable = False))
+                    for r in rationalize_bound(numer_r, direction = -1, compulsory = True):
                         if r*r*r-3*r <= u and 3*r*(r-1)+v >= 0:
                             break 
                         rounding *= .1
