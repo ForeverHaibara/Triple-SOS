@@ -282,7 +282,8 @@ class SOS_Manager():
                 
 
     def GUI_getTangents(self):
-        self._roots_info['tangents'] = sorted(self._roots_info['tangents_default'][:] + root_tangents(self._roots_info['roots']), key = lambda x:len(x))
+        tangents = root_tangents(self._roots_info['roots'], strict_roots = self._roots_info['strict_roots'])
+        self._roots_info['tangents'] = sorted(self._roots_info['tangents_default'][:] + tangents, key = lambda x:len(x))
         return self._roots_info['tangents']
 
 
