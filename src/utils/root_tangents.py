@@ -3,7 +3,7 @@ from mpmath import pslq
 
 from .root_guess import rationalize
 
-def root_tangents(roots, tol=1e-6, rounding=1e-5, mod=(180,252,336)):
+def root_tangents(roots, strict_roots = [], tol=1e-6, rounding=1e-5, mod=(180,252,336)):
     '''
     Generate possible tangents according to the roots given. 
 
@@ -71,12 +71,13 @@ def root_tangents(roots, tol=1e-6, rounding=1e-5, mod=(180,252,336)):
             if b[0] == 0 and a[0] != 0 and a[1] != -1:
                 tangents += [f'{a[1]}/{a[0]}*(a-b)+b-c']
         
+        is_strict = root in strict_roots
 
         a , b = root
         tangents += _root_tangents_quadratic(a, b, rounding = rounding, uncentered = uncentered)
         
         # Cubic
-        tangents += _root_tangents_cubic(a, b, rounding = rounding, uncentered = uncentered)
+        tangents += _root_tangents_cubic(a, b, rounding = rounding, strict = is_strict, uncentered = uncentered)
 
     tangents = list(set(tangents))
     
@@ -129,7 +130,7 @@ def _root_tangents_quadratic(a, b, rounding = 1e-3, uncentered = False):
     return tangents
 
 
-def _root_tangents_cubic(a, b, rounding = 1e-3, uncentered = False):
+def _root_tangents_cubic(a, b, rounding = 1e-3, strict = False, uncentered = False):
     """
     Generate cubic root tangents.
     """
@@ -153,6 +154,23 @@ def _root_tangents_cubic(a, b, rounding = 1e-3, uncentered = False):
     p, q = frac(p), frac(q)
     tangents.append(f'a2c-b2c-{p}(a2b-abc)+{q}(ab2-abc)')
 
+
+    if strict and abs(u - v) > 1e-4:
+        formatter = lambda x: ('+' if x == 1 else '+%s'%x) if x >= 0 else ('-' if x == -1 else '%s'%x)
+        # 2. umbrella
+        coeffs = [1 - u*v, u**2*v - u, u**3 - u**2*v - u**2 + u*v + u - v, -u**3 - 1, u**2 + v]
+        coeffs = [formatter(frac(_ / coeffs[0])) for _ in coeffs]
+        tangents.append(f'a2c{coeffs[1]}ab2{coeffs[2]}abc{coeffs[3]}b2c{coeffs[4]}bc2')
+
+        # 3. scythe
+        coeffs = [1 - u*v, u**3 - u**2*v - u**2 + u*v**2 + u*v + u - 2*v, u*v - 1, -u**3 + u**2*v - u*v**2 - u + v - 1, u**2 - u*v + v + 1]
+        coeffs = [formatter(frac(_ / coeffs[0])) for _ in coeffs]
+        tangents.append(f'a2c{coeffs[1]}abc{coeffs[2]}b3{coeffs[3]}b2c{coeffs[4]}bc2')
+
+        # 4. knife
+        coeffs = [1 - u*v, -u**3 + u**2*v - u*v - u, u**3 - u**2 + u*v + u + v**2 - v, u**2 + v, -u**2*v + u*v - v**2 - 1]
+        coeffs = [formatter(frac(_ / coeffs[0])) for _ in coeffs]
+        tangents.append(f'a2c{coeffs[1]}ab2{coeffs[2]}abc{coeffs[3]}b3{coeffs[4]}b2c')
 
     # uncentered
     if not uncentered:
