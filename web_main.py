@@ -66,7 +66,7 @@ def preprocess():
 @app.route('/process/sos', methods=['POST'])
 def SumOfSquare():
     req = request.get_json()
-    app.SOS_Manager.tangents = [tg 
+    app.SOS_Manager._roots_info['tangents'] = [tg 
                         for tg in req['tangents'].split('\n') if len(tg) > 0]
 
     result = app.SOS_Manager.GUI_SOS(req['poly'],
