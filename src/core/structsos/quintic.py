@@ -3,7 +3,7 @@ from math import gcd
 import sympy as sp
 
 from ...utils.text_process import cycle_expansion
-from ...utils.root_guess import rationalize, rationalize_bound
+from ...utils.root_guess import rationalize, rationalize_bound, cancel_denominator
 from .peeling import _merge_sos_results, FastPositiveChecker
 
 def _sos_struct_quintic(poly, degree, coeff, recurrsion):
@@ -68,6 +68,16 @@ def _sos_struct_quintic_windmill(coeff):
     s(ab2(2(a-b)-5(b-c))2)-59abcs(a2-ab)
 
     s(ac2(3(a-b)+5(b-c))2)-25abcs(a2-ab)
+
+    s(6a4c+10a3b2-67a3bc+19a3c2+32a2b2c)
+
+    s(a4c+a3b2-13a3bc+6a3c2+5a2b2c)
+
+    s(29a4c+711a3b2-4100a3bc+3599a3c2-239a2b2c)
+
+    s(8a4c+2a3b2-425a3bc+613a3c2-198a2b2c)
+
+    s(9a4c+a3b2-44a3bc+6a3c2+28a2b2c)
 
     Reference
     -------
@@ -143,6 +153,9 @@ def _sos_struct_quintic_windmill(coeff):
     #         names = ['a*c^2*(b-c)^2', 'a*b^2*(b-c)^2', 'a*b*c*(b-c)^2', 'a^2*b^2*c']
     #         return multipliers, y,  names
 
+    if w__ < 0:
+        return [], None, None
+
     if True:
         # Easy case 2. try another case where we do not need to updegree
         # idea: use s(a*b^2*(a-ub+(u-1)c)^2)
@@ -160,14 +173,10 @@ def _sos_struct_quintic_windmill(coeff):
             names = [f'a*b^2*(a-{u_}*b+{u_-1}*c)^2', 'a*b^2*(b-c)^2', 'a*b*c*(b-c)^2', 'a^2*b^2*c']
             return multipliers, y,  names
 
-    
 
     # now we formally start
     # Case A.
     if coeff((2,3,0)) ** 2 <= 4 * coeff((1,4,0)) * coeff((3,2,0)):
-        if w__ < 0:
-            return [], None, None
-
         eq = (u**5*x_**2 - u**4*x_**2 - 2*u**3*x_ + u**2*(-x_**2 - x_*y_ + x_) + u*(-x_*y_ - 4*x_ - y_ + 1) - x_ - y_ - 2).as_poly(u)
         for root in sp.polys.roots(eq, cubics = False, quartics = False).keys():
             if isinstance(root, sp.Rational) and root > .999:
@@ -256,7 +265,9 @@ def _sos_struct_quintic_windmill(coeff):
                         f'a^2*b^2*c*(a*a+b*b+c*c+{z0_**2 + 2}*(a*b+b*c+c*a))'
                     ]
 
-                return multipliers, y, names
+                    return multipliers, y, names
+
+                u_ = None
 
         if u_ is not None and isinstance(u_, sp.Rational):
             # now both u_, v_ are rational
@@ -284,6 +295,134 @@ def _sos_struct_quintic_windmill(coeff):
 
             y = [_ * coeff((3,2,0)) for _ in y]
 
+            return multipliers, y, names
+
+    # Case B. 
+    if True:
+        eq = (u**5*x_**2 - u**4*x_**2 - 2*u**3*x_ + u**2*(-x_**2 - x_*y_ + x_) + u*(-x_*y_ - 4*x_ - y_ + 1) - x_ - y_ - 2).as_poly(u)
+        for root in sp.polys.roots(eq, cubics = False, quartics = False).keys():
+            if isinstance(root, sp.Rational) and root > .999:
+                u_ = root
+                v_ = (u_**3*x_ - u_**2*x_ + u_*x_ - u_ + x_ + 1) / (u_*x_ + 1)
+                denom = (u_**3 - u_**2 - u_*v_ + u_ + 1)
+                if denom > 0:
+                    z__ = (-2*u_**2*v_ + u_**2 + u_*v_ - v_**2) / denom
+                    if z__ <= z_:
+                        break
+                u_ = None
+        else:
+            u_ = None
+            for root in sp.polys.nroots(eq):
+                if root.is_real and root > .999:
+                    u_ = root
+                    v_ = (u_**3*x_ - u_**2*x_ + u_*x_ - u_ + x_ + 1) / (u_*x_ + 1)
+                    denom = (u_**3 - u_**2 - u_*v_ + u_ + 1)
+                    if denom > 0:
+                        z__ = (-2*u_**2*v_ + u_**2 + u_*v_ - v_**2) / denom
+                        if z__ <= z_:
+                            break
+                    u_ = None
+
+            if u_ is not None:
+                # approximate a rational number
+                direction = (u_**2*x_ - 1)*(3*u_**4*x_**2 + 2*u_**3*x_**2 + 4*u_**3*x_ - 3*u_**2*x_**2 + 3*u_**2*x_ - 6*u_*x_ - x_**2 + x_ - 3)
+                direction = -1 if direction > 0 else 1
+                u_numer = u_
+                for u_ in rationalize_bound(u_numer, direction = direction, compulsory = True):
+                    v_ = (u_**3*x_ - u_**2*x_ + u_*x_ - u_ + x_ + 1) / (u_*x_ + 1)
+                    denom = (u_**3 - u_**2 - u_*v_ + u_ + 1)
+                    if u_ >=1 and denom > 0:
+                        y__ = (u_**5*x_**2 - u_**4*x_**2 - 2*u_**3*x_ - u_**2*x_**2 + u_**2*x_ - 4*u_*x_ + u_ - x_ - 2)/((u_ + 1)*(u_*x_ + 1))
+                        if y__ <= y_:
+                            z__ = (-2*u_**2*v_ + u_**2 + u_*v_ - v_**2) / denom
+                            if z__ <= z_:
+                                break 
+                    u_ = None
+
+        if u_ is not None and isinstance(u_, sp.Rational):
+            # now both u_, v_ are rational
+            u, v = u_, v_
+            denom = (u_**3 - u_**2 - u_*v_ + u_ + 1)
+            
+            # Case B.1
+            if (3*u**2 + 2*u*v - 4*u - v**2 - 8) >= 0:
+                multipliers = ['a*b']
+
+                g = -(u**2 - u*v + 2*u + 2)/(2*u**3 + u**2*v - u*v**2 - u + v + 2)
+
+                if True:
+                    # cancel the denominator is good
+                    from functools import reduce
+                    tmpcoeffs = [-u*v+1, u*u*v-u, u**3-u**2*v-u**2+u*v+u-v, -u**3-1, u**2+v]
+                    rr = 1 / cancel_denominator(tmpcoeffs)
+                    r2 = sp.S(1)
+
+                    if isinstance(g, sp.Rational): # g might be infinite      
+                        tmpcoeffs = [g*u*v-g, g*u**2-g*u-g*v**2+g*v+u-v, -g*u*v+g-u, -g*u**2-g*v-1, g*u+g*v**2+v]
+                        r2 = 1 / cancel_denominator(tmpcoeffs)
+
+                names = [
+                    f'a*({rr*(-u*v+1)}*a^2*c+{rr*(u*u*v-u)}*a*b^2+{rr*(u**3-u**2*v-u**2+u*v+u-v)}*a*b*c+{rr*(-u**3-1)}*b^2*c+{rr*(u**2+v)}*b*c^2)^2',
+                    f'a*({r2}*a^2*c+{r2*(g*u*v-g)}*a*b^2+{r2*(g*u**2-g*u-g*v**2+g*v+u-v)}*a*b*c+{r2*(-g*u*v+g-u)}*a*c^2+{r2*(-g*u**2-g*v-1)}*b^2*c+{r2*(g*u+g*v**2+v)}*b*c^2)^2',
+                    f'a*b*c*(a*a-b*b+{u}*(a*b-a*c)+{v}*(b*c-a*b))^2',
+                    f'({y_ - y__}*a+{(z_ - z__)/2}*c)*a*b*(b-c)^2*(a*b+b*c+c*a)',
+                    f'a^2*b^2*c*(a*b+b*c+c*a)'
+                ]
+
+                y = [
+                    (3*u**2 + 2*u*v - 4*u - v**2 - 8)/(4 * (u + 1)**2 * denom**2 * rr**2),
+                    (2*u**3 + u**2*v - u*v**2 - u + v + 2)**2/(4 * (u + 1)**2 * denom**2 * r2**2),
+                    (u + v - 1) / denom / 2,
+                    sp.S(1) if y_ != y__ or z_ != z__ else sp.S(0),
+                    w__
+                ]
+
+                y = [_ * coeff((3,2,0)) for _ in y]
+
+                return multipliers, y, names
+
+            # Case B.2
+            if u*u - u*v + 2*u + 2 < 0:
+                w = (3*u**5 - u**4*v + 4*u**4 - u**3*v**2 + u**3 - 2*u*v + 2*u + 2)/(u**2*(u**2 - u*v + 2*u + 2))
+                if w >= -1:
+                    multipliers = [f'a*a+{w}*a*b']
+
+                    if True:
+                        # cancel the denominator is good
+                        tmpcoeffs = [u*v-1, u**3-u**2*v-u**2+u*v**2+u*v+u-2*v, -u**3+u**2*v-u*v**2-u+v-1, u**2-u*v+v+1]
+                        r2 = 1 / cancel_denominator(tmpcoeffs)
+                        
+                        tmpcoeffs = [u*v-1, u*u*v-u, u**3-u**2*v-u**2+u*v+u-v, u**3+1, u*u+v]
+                        r3 = 1 / cancel_denominator(tmpcoeffs)
+
+                    names = [
+                        f'a*({u}*a^2*b+{-v-1}*a^2*c+{u-1}*a*b^2+{-2*u+v}*a*b*c+{u+1}*a*c^2-b^3+{-u+v+1}*b^2*c+{1-v}*b*c^2)^2',
+                        f'a*c^2*(a^2-b^2+{u}*(a*b-a*c)+{v}*(b*c-a*b))^2',
+                        f'a*({r2*(-u*v+1)}*a^2*c+{r2*(u**3-u**2*v-u**2+u*v**2+u*v+u-2*v)}*a*b*c+{r2*(u*v-1)}*b^3+{r2*(-u**3+u**2*v-u*v**2-u+v-1)}*b^2*c+{r2*(u**2-u*v+v+1)}*b*c^2)^2',
+                        f'a*({r3*(-u*v+1)}*a^2*c+{r3*(u*u*v-u)}*a*b^2+{r3*(u**3-u**2*v-u**2+u*v+u-v)}*a*b*c+{r3*(-u**3-1)}*b^2*c+{r3*(u**2+v)}*b*c^2)^2',
+                        f'a*b*c*(a*a-b*b+{u}*(a*b-a*c)+{v}*(b*c-a*b))^2',
+                        f'({y_ - y__}*a+{(z_ - z__)/2}*c)*a*b*(b-c)^2*(a*a+b*b+c*c+{w}*a*b+{w}*b*c+{w}*c*a)',
+                        f'a^2*b^2*c*(a*a+b*b+c*c+{w}*a*b+{w}*b*c+{w}*c*a)'
+                    ]
+
+                    y = [
+                        u**(-2), 
+                        (u**5*w - 3*u**5 - u**4*w + u**4 + u**3*v**2 - u**3*v*w + 2*u**3*v + u**3*w - 2*u**3 - u**2*v + u**2*w - 3*u**2 + u*v - u - 1)/(u**4*denom), 
+                        (u + 1)/(u**2*(u*v - 1)*denom * r2**2), 
+                        (3*u**4*v - u**4 - u**3*v**2 + 3*u**3*v - 6*u**3 - u**2*v**3 + u**2*v**2 + 3*u**2*v - 6*u**2 + 2*u*v**2 - u*v - 3*u - v)/(u**3*(u*v - 1)*(u**2 - u*v + 2*u + 2)*denom * r3**2),
+                        (6*u**6 - 2*u**5*v + 11*u**5 - 2*u**4*v**2 - 3*u**4*v + 11*u**4 + u**3*v**2 - 5*u**3*v + 13*u**3 - 2*u**2*v**2 - 12*u**2*v + 18*u**2 - 2*u*v**2 + 20*u + 2*v + 6)/(2*u**2*(u**2 - u*v + 2*u + 2)*denom),
+                        sp.S(1) if y_ != y__ or z_ != z__ else sp.S(0),
+                        w__
+                    ]
+
+                    if any(_ < 0 for _ in y):
+                        multipliers, y, names = [], None, None
+                    else:
+                        y = [_ * coeff((3,2,0)) for _ in y]
+
+                        return multipliers, y, names
+
+
     return multipliers, y, names
 
 
@@ -303,6 +442,11 @@ def _sos_struct_quintic_uncentered(coeff):
     s(2ab4+4a2b3-13a3bc+7a2b2c)
 
     s(a2c(a-b)(a+c-4b))
+
+    Reference
+    -------
+    [1] https://artofproblemsolving.com/community/u426077h2242759p21856167
+
     """
 
     multipliers, y, names = [], None, None
