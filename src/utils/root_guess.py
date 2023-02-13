@@ -168,10 +168,12 @@ def rationalize_bound(v, direction = 1, roundings = None, compulsory = True):
     if roundings is None:
         roundings = (.5, .2, .1, .05, 1e-2, 1e-3, 1e-4, 1e-6, 1e-8)
 
+    compare = lambda a, b: True if ((a > b) ^ (direction == -1)) else False
+
     previous_v = None
     for rounding in roundings:
-        v_ = sp.Rational(*rationalize(v + direction * rounding * 3, rounding=rounding, reliable=False))
-        if v_ != previous_v:
+        v_ = sp.Rational(*rationalize(v + direction * rounding * 3, rounding = rounding, reliable=False))
+        if v_ != previous_v and compare(v_, v):
             previous_v = v_
             yield v_
     
@@ -180,7 +182,7 @@ def rationalize_bound(v, direction = 1, roundings = None, compulsory = True):
     
     for rounding in (1e-2, 1e-4, 1e-6, 1e-8, 1e-10, 1e-12):
         v_ = sp.nsimplify(v + direction * rounding * 10, rational = True, tolerance = rounding)
-        if v_ != previous_v:
+        if v_ != previous_v and compare(v_, v):
             previous_v = v_
             yield v_
     
@@ -530,6 +532,19 @@ def _root_findroot_newton(
     return result_roots
 
 
+def cancel_denominator(nums):
+    """
+    Extract the gcd of numerators and lcm of denominators.
+    """
+    from functools import reduce
+    nums = list(filter(lambda x: isinstance(x, sp.Rational), nums))
+    if len(nums) <= 1:
+        return sp.S(1)
+
+    p = reduce(sp.gcd, [_.as_numer_denom()[0] for _ in nums])
+    q = reduce(sp.lcm, [_.as_numer_denom()[1] for _ in nums])
+
+    return p / q
 
 if __name__ == '__main__':
     from tqdm import tqdm 
