@@ -47,6 +47,12 @@ def _sos_struct_sextic_hexagon(coeff, poly, recurrsion):
     -------
     2s(a3b3+7a4bc-29a3b2c+12a3bc2+9a2b2c2)+s((2ab2-ca2-a2b-bc2+c2a)2)
     3s(3a4b2-7a4bc+9a4c2-10a3b3+20a3b2c-15a3bc2)-2(s(2a2b-3ab2)+3abc)2
+    2s((2ab2-ca2-a2b-bc2+c2a)2)-(s(2a2b-3ab2)+3abc)2
+
+
+    Reference
+    -------
+    [1] https://artofproblemsolving.com/community/u426077h1892902p16370027
     """
     multipliers, y, names = [], None, None
     # hexagon
@@ -573,6 +579,11 @@ def _sos_struct_sextic_tree(coeff):
     where (u - (x^3 - 3*x)) >= 0 and (v + 3*x*(x-1)) >= 0. Actually, x (>= 1)
     can be the root of (x^3 - 3*x - u).
     
+    We can see that the inequality holds for real numbers when -1 <= x <= 2.
+    Further, if (u,v) falls inside the (closed) parametric curve (x^3-3x,-3x(x-1)) where -1<=x<=2, 
+    which is 27*u^2+27*u*v+54*u+v^3+18*v^2+54*v = 0, a strophoid,
+    then the inequality is a linear combination of two positive ones.
+
     Examples
     -------
     s(2a6-36a4bc+36a3b3-2a2b2c2)
@@ -584,31 +595,55 @@ def _sos_struct_sextic_tree(coeff):
     t = coeff((6,0,0))
     # t != 0 by assumption
     u = coeff((3,3,0))/t
-    if u >= -2:
-        v = coeff((4,1,1))/t
-        x = sp.symbols('x')
-        roots = sp.polys.roots(x**3 - 3*x - u).keys()
-        for r in roots:
-            numer_r = complex(r)
-            if abs(numer_r.imag) < 1e-12 and numer_r.real >= 1:
-                numer_r = numer_r.real 
-                if not isinstance(r, sp.Rational):
-                    for r in rationalize_bound(numer_r, direction = -1, compulsory = True):
-                        if r*r*r-3*r <= u and 3*r*(r-1)+v >= 0:
-                            break 
-                        rounding *= .1
-                    else:
-                        break 
-                elif 3*r*(r-1)+v < 0:
-                    break 
-                
-                # now r is rational 
-                y = [t/2, t*(u-(r*r*r-3*r)), t*(v+3*r*(r-1)), 
+    v = coeff((4,1,1))/t
+    if u < -2:
+        return [], None, None
+
+    if v != -6:
+        # try sum of squares with real numbers first
+        # if (u,v) falls inside the parametric curve (x^3-3x,-3x(x-1)) where -1<=x<=2,
+        # then it is a rational linear combination of (t^3-3t, -3t(t-1)) and (2, -6)
+        # with t = -(3u + v) / (v + 6)
+        # note: (2, -6) is the singular node of the strophoid
+        t__ = -(3*u + v) / (v + 6)
+        if -1 <= t__ <= 2:
+            x = t__**3 - 3*t__
+            w1 = (27*u**2 + 27*u*v + 54*u + v**3 + 18*v**2 + 54*v)/(27*(u - 2)*(u + v + 4))
+            w2 = 1 - w1
+            q, p = t__.as_numer_denom()
+            if 0 <= w1 <= 1:
+                multipliers = []
+                y = [w1 * t / 2, w2 * t / p**2,
                     coeff((2,2,2))/3+coeff((6,0,0))+coeff((4,1,1))+coeff((3,3,0))]
-                names = [f'(a^2+b^2+c^2+{r}*(a*b+b*c+c*a))*(a-b)^2*(a+b-{r}*c)^2',
-                        'a^3*b^3-a^2*b^2*c^2',
-                        'a^4*b*c-a^2*b^2*c^2',
-                        'a^2*b^2*c^2']
+                names = [
+                    '(a+b+c)^2*(b-c)^4',
+                    f'({p}*a^2+{p}*b^2+{p}*c^2+{q}*(a*b+b*c+c*a))*(a-b)^2*({p}*a+{p}*b-{q}*c)^2',
+                    'a^2*b^2*c^2',
+                ]
+                return multipliers, y, names
+    
+    x = sp.symbols('x')
+    roots = sp.polys.roots(x**3 - 3*x - u).keys()
+    for r in roots:
+        numer_r = complex(r)
+        if abs(numer_r.imag) < 1e-12 and numer_r.real >= 1:
+            numer_r = numer_r.real 
+            if not isinstance(r, sp.Rational):
+                for r in rationalize_bound(numer_r, direction = -1, compulsory = True):
+                    if r*r*r-3*r <= u and 3*r*(r-1)+v >= 0:
+                        break 
+                else:
+                    break 
+            elif 3*r*(r-1)+v < 0:
+                break 
+            
+            # now r is rational 
+            y = [t/2, t*(u-(r*r*r-3*r)), t*(v+3*r*(r-1)), 
+                coeff((2,2,2))/3+coeff((6,0,0))+coeff((4,1,1))+coeff((3,3,0))]
+            names = [f'(a^2+b^2+c^2+{r}*(a*b+b*c+c*a))*(a-b)^2*(a+b-{r}*c)^2',
+                    'a^3*b^3-a^2*b^2*c^2',
+                    'a^4*b*c-a^2*b^2*c^2',
+                    'a^2*b^2*c^2']
 
     return multipliers, y, names
 
@@ -659,6 +694,8 @@ def _sos_struct_sextic_iran96(coeff):
     s(a(b+c)(b+c-2a)4)
 
     s(a(b+c)(b+c-2a)2(b-c)2)
+
+    s(12a5b+12a5c+72a4b2-212a4bc+72a4c2-167a3b3+200a3b2c+200a3bc2-189a2b2c2)
     """
     if not (coeff((6,0,0)) == 0 and coeff((5,1,0)) == coeff((1,5,0)) and coeff((4,2,0)) == coeff((2,4,0)) and\
         coeff((3,2,1)) == coeff((2,3,1)) and coeff((5,1,0)) >= 0):
@@ -879,7 +916,7 @@ def _sos_struct_sextic_iran96(coeff):
                 y_hex = q - q2
                 w2 = w - dw * y_hex
                 z2 = z - dz * y_hex
-                if q2 >= 0 and y_hex >= 0:
+                if y_hex >= 0:
                     sym = ((2*p + q2 + 2)*a**3 + (4*p + 2*q2 + 2*w2 + 2*z2 + 6)*a**2 + (2*p + w2 + 4)*a + 2).as_poly(a)
                     if sp.polys.count_roots(sym, 0, None) <= 1:
                         q = q2
@@ -924,7 +961,7 @@ def _sos_struct_sextic_iran96(coeff):
                                     break
                                 u_ = None
             
-    # print('W Z R Y U =', w, z, r, y_hex, u_)
+    # print('W Z R Y U T=', w, z, r, y_hex, u_, t)
     if u_ is None:
         return [], None, None
 
@@ -1161,10 +1198,17 @@ def _sos_struct_sextic_symmetric_ultimate_2roots(coeff, poly, recurrsion, roots)
 
     s(a4(a-b)(a-c)) - 5p(a-b)2
 
+    s((b-c)2(7a2-b2-c2)2)-112p(a-b)2
+    
+    s((a-b)(a-c)(a-2b)(a-2c)(a-18b)(a-18c))-53p(a-b)2
 
     Reference
     -------
     [1] Vasile, Mathematical Inequalities Volume 1 - Symmetric Polynomial Inequalities. 3.78
+    
+    [2] https://artofproblemsolving.com/community/c6t243f6h3013463_symmetric_inequality
+
+    [3] https://tieba.baidu.com/p/8261574122
     """
     multipliers, y, names = [], None, None
     coeff6 = coeff((6,0,0))
