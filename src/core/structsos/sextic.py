@@ -2,7 +2,7 @@ import sympy as sp
 from sympy.solvers.diophantine.diophantine import diop_DN
 
 from ...utils.text_process import cycle_expansion
-from ...utils.root_guess import rationalize, rationalize_bound
+from ...utils.root_guess import rationalize, rationalize_bound, cancel_denominator
 from .peeling import _merge_sos_results, _make_coeffs_helper
 
 def _sos_struct_sextic(poly, degree, coeff, recurrsion):
@@ -336,7 +336,7 @@ def _sos_struct_sextic_rotated_tree(coeff):
 #
 #####################################################################
 
-def _sos_struct_sextic_hexagon_symmetric(coeff, real = True):
+def _sos_struct_sextic_hexagon_symmetric(coeff, real = False):
     """
     Solve symmetric hexagons.
 
@@ -353,6 +353,12 @@ def _sos_struct_sextic_hexagon_symmetric(coeff, real = True):
     3p(a2+ab+b2)-s(a)2s(ab)2    (real)
 
     p(a2+ab+b2)-3s(ab)s(a2b2)   (real)
+
+    s(bc(a-b)(a-c)(a-3b)(a-3c))+9/4p(a-b)2
+
+    s(bc(a-b)(a-c)(a-3b)(a-3c)) +1/4s(a2b+ab2-2abc)2+5p(a-b)2+4abcs(a(b-c)2)
+    
+    s(bc(a-b)(a-c)(a-9/8b)(a-9/8c))+81/256p(a-b)2
 
     p(a2+ab+b2)+12a2b2c2-3p(a+b)2/5    (real, uncentered)
 
@@ -420,6 +426,123 @@ def _sos_struct_sextic_hexagon_symmetric(coeff, real = True):
                         ]
                         return multipliers, y, names
         
+    if real and abs(coeff((3,3,0))) <= 2 * (coeff((4,2,0))) and abs(coeff((4,1,1))) <= 2 * (coeff((4,2,0))):
+        # perform sum of squares for real numbers
+        
+        # case 1. we can subtract enough p(a-b)2 till the bound on the border
+        coeff42, u, v = coeff((4,2,0)), coeff((3,3,0)), coeff((4,1,1))
+        if u >= v and (u != coeff42 * (-2) or v != coeff42 * (-2)):
+            # subtracting p(a-b)2 will first lead to s(a4b2+2a3b3+a2b4)
+            # assume coeffp = coefficient of p(a-b)2
+            # (coeff42 - coeffp) * (2) = u + 2 * coeffp
+            coeffp = (coeff42 * 2 - u) / 4
+            coeff42 -= coeffp
+            u, v = sp.S(2), (v + coeffp * 2) / coeff42
+
+            # now we need to ensure (v + 2) is a square, and make a perturbation otherwise
+            # assume coeffsym = coefficient of s(a2b+ab2-2abc)2
+            # (v - 2 * coeffsym / coeff42) / (1 - coeffsym / coeff42) + 2 = x*x <= 4
+            # print(v, v.n(20), coeffp)
+            coeffsym, x = sp.S(0), sp.sqrt(v + 2)
+            if not isinstance(x, sp.Rational):
+                for x_ in rationalize_bound(x.n(20), direction = -1, compulsory = True):
+                    if abs(x_) == 2:
+                        continue
+
+                    coeffsym = ((v + 2 - x_**2) / (4 - x_**2)) * coeff42
+                    coeff321_std = (-x_**2 - 2*x_ - 2)
+                    coeff321 = (coeff((3,2,1)) - 2 * coeffp + 10 * coeffsym) / (coeff42 - coeffsym)
+                    if 0 < x_ <= 1 and 0 <= coeff321 - coeff321_std <= 4 * x_:
+                        x = x_
+                        break
+                    elif 1 < x_ <= 2 and coeff321 == coeff321_std:
+                        x = x_
+                        break
+                else:
+                    x_ = None
+            coeff42 -= coeffsym
+
+            if x is not None and isinstance(x, sp.Rational) and x != 0:
+                x = 2 / x
+                print(x, 'coeffp, sym =', coeffp, coeffsym)
+
+                
+                # weight of linear combination of x and -x
+                w2 = ((coeff((3,2,1)) - 2 * coeffp + 10 * coeffsym) / coeff42 - (-2*(x**2 + 2*x + 2)/x**2)) / (8 / x)
+                w1 = 1 - w2
+                if w1 == 0 or w2 == 0:
+                    # low rank case
+                    if (w1 == 0 and x >= 2) or (w2 == 0 and x >= 1):
+                        if w1 == 0:
+                            x = -x
+                        multipliers = ['a^2-a*b']
+                        tt = sp.sqrt(x*x + x - 2)
+                        if isinstance(tt, sp.Rational):
+                            y = [coeffp / 2, coeffsym / 2]
+                            names = [
+                                '(a-b)^4*(b-c)^2*(c-a)^2',
+                                '(a-b)^2*(a*a*b+b*b*c+c*c*a+a*b*b+b*c*c+c*a*a-6*a*b*c)^2'
+                            ]
+                            if x != 2:
+                                z = 2*(x**2 - x + (x-2)*tt) / (x*x + 4*x - 8)
+                                r2 = 1 / cancel_denominator([x-2, 2*z-x, -3*x*z+2*x-2*z+4, x*(1-z)])
+
+                                y.append((5*x**2 - 4*x + 8 - 4*(x - 4)*tt) / 18 / (x - 2)**2 * coeff42 / r2**2 / x**2)
+                                names.append(
+                                    f'(a-b)^2*({r2*(x-2)}*a^2*b+{r2*(-x+2*z)}*a^2*c+{r2*(x-2)}*a*b^2+{r2*(-3*x*z+2*x-2*z+4)}*a*b*c'
+                                        +f'+{r2*(x*z-x)}*a*c^2+{r2*(-x+2*z)}*b^2*c+{r2*(x*z-x)}*b*c^2+{r2*(x*z-2*z)}*c^3)^2'
+                                )
+                            elif x == 2:
+                                y.append(sp.S(2) * coeff42 / x**2)
+                                names.append('(a-b)^2*(a^2*b+a*b^2-5*a*b*c+a*c^2+b*c^2+c^3)^2')
+                            return multipliers, y, names
+                                
+                        
+
+                if x >= 2:
+                    multipliers = ['a^2-a*b']
+
+                    r1 = 1 / cancel_denominator([2, 2+3*x, x])
+
+                    y = [
+                        coeffp / 2,
+                        coeffsym / 2,
+                        w1 / 8 / r1**2,
+                        (x**2 + 4*x - 8) / 24 * w1,
+                    ]
+
+                    names = [
+                        '(a-b)^4*(b-c)^2*(c-a)^2',
+                        '(a-b)^2*(a*a*b+b*b*c+c*c*a+a*b*b+b*c*c+c*a*a-6*a*b*c)^2',
+                        f'c^2*(a-b)^2*({2*r1}*a^2+{2*r1}*b^2-{2*r1}*c^2-{(2+3*x)*r1}*a*b+{x*r1}*a*c+{x*r1}*b*c+{x*r1}*c^2)^2',
+                        '(a+b+c)^2*(a-b)^2*(b-c)^2*(c-a)^2',
+                    ]
+
+                    if w2 != 0 and y[-1] + (x**2 - 4*x - 8) / 24 * w2 >= 0:
+                        y[-1] += (x**2 - 4*x - 8) / 24 * w2
+                        y.append(w2 / 8 / r1**2)
+                        names.append(
+                            f'c^2*(a-b)^2*({2*r1}*a^2+{2*r1}*b^2-{2*r1}*c^2+{(3*x-2)*r1}*a*b-{x*r1}*a*c-{x*r1}*b*c-{x*r1}*c^2)^2'
+                        )
+
+                    elif w2 != 0: # in this case we must have x**2 - 4*x - 8 <= 0:
+                        r2 = 1 / cancel_denominator([x+2, x-2, 6-5*x, 2*x])
+                        y += [
+                            (x - 2)*(5*x + 6)/(8*(x + 2)*(x + 10)) * w2 / r1**2,
+                            -(x**2 - 4*x - 8)/(8*(x + 2)*(x + 10)) * w2 / r2**2
+                        ]
+                        names += [
+                            f'c^2*(a-b)^2*({2*r1}*a^2+{2*r1}*b^2-{2*r1}*c^2+{(3*x-2)*r1}*a*b-{x*r1}*a*c-{x*r1}*b*c-{x*r1}*c^2)^2',
+                            f'(a-b)^2*(-{r2*(x+2)}*a^2*b+{r2*(x-2)}*a^2*c-{r2*(x+2)}*a*b^2+{r2*(-5*x+6)}*a*b*c'
+                                + f'+{r2*2*x}*a*c^2+{r2*(x-2)}*b^2*c+{r2*2*x}*b*c^2+{r2*(x+2)}*c^3)^2'
+                        ]
+
+                    if all(_ >= 0 for _ in y):
+                        for i in range(2, len(y)):
+                            y[i] *= coeff42 * 4 / x**2
+                        return multipliers, y, names
+                    else:
+                        multipliers, y, names = [], None, None
 
     if y is None:
         def new_coeff(x):
@@ -599,7 +722,7 @@ def _sos_struct_sextic_tree(coeff):
     if u < -2:
         return [], None, None
 
-    if v != -6:
+    if v != -6 and u != 2:
         # try sum of squares with real numbers first
         # if (u,v) falls inside the parametric curve (x^3-3x,-3x(x-1)) where -1<=x<=2,
         # then it is a rational linear combination of (t^3-3t, -3t(t-1)) and (2, -6)
@@ -644,12 +767,14 @@ def _sos_struct_sextic_tree(coeff):
                     'a^3*b^3-a^2*b^2*c^2',
                     'a^4*b*c-a^2*b^2*c^2',
                     'a^2*b^2*c^2']
+            if r == 2:
+                names[0] = '(a-b)^2*(a+b-2*c)^2*(a+b+c)^2'
 
     return multipliers, y, names
 
 
 
-def _sos_struct_sextic_iran96(coeff):
+def _sos_struct_sextic_iran96(coeff, real = False):
     """
     Give a solution to s(a5b+ab5-x(a4b2+a2b4)+ya3b3-za4bc+w(a3b2c+a2b3c)+..a2b2c2) >= 0
 
@@ -709,7 +834,8 @@ def _sos_struct_sextic_iran96(coeff):
     if m < 0:
         return multipliers, y, names
     elif m == 0:
-        return _sos_struct_sextic_hexagon_symmetric(coeff, real = False)
+        # only perform sum of squares for real numbers when explicitly inquired
+        return _sos_struct_sextic_hexagon_symmetric(coeff, real = real)
     
     if w >= 0 and w + z >= 0:
         # Easy case 1, really trivial
@@ -1066,7 +1192,7 @@ def _sos_struct_sextic_symmetric_ultimate(coeff, poly, recurrsion):
         return [], None, None
     elif coeff6 == 0:
         # degenerated
-        return _sos_struct_sextic_iran96(coeff)
+        return _sos_struct_sextic_iran96(coeff, real = True)
     elif coeff6 < 0:
         return [], None, None
 
@@ -1202,6 +1328,10 @@ def _sos_struct_sextic_symmetric_ultimate_2roots(coeff, poly, recurrsion, roots)
     
     s((a-b)(a-c)(a-2b)(a-2c)(a-18b)(a-18c))-53p(a-b)2
 
+    s((b2+c2-5a(b+c))2(b-c)2)-22p(a-b)2 
+
+    s(a6-21a5b-21a5c-525a4b2+1731a4bc-525a4c2+11090a3b3-13710a3b2c-13710a3bc2+15690a2b2c2)
+    
     Reference
     -------
     [1] Vasile, Mathematical Inequalities Volume 1 - Symmetric Polynomial Inequalities. 3.78
