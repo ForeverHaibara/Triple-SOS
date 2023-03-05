@@ -6,7 +6,6 @@ import warnings
 
 import sympy as sp 
 import numpy as np 
-import matplotlib.pyplot as plt
 from scipy.optimize import linprog
 from scipy.optimize import OptimizeWarning
 # from matplotlib import pyplot as plt
@@ -441,6 +440,9 @@ class SOS_Manager():
     
     def save_heatmap(self, path, dpi=None, backgroundcolor=211):
         '''save the heatmap to the path'''
+        
+        import matplotlib.pyplot as plt
+
         n = self._grid_settings['size']
         x = np.full((n+1,n+1,3), backgroundcolor, dtype='uint8')
         for i in range(n+1):
@@ -462,6 +464,9 @@ class SOS_Manager():
 
     def save_coeffs(self, path, dpi=500, fontsize=20):
         '''save the coefficient triangle (as an image) to path'''
+
+        import matplotlib.pyplot as plt
+
         coeffs = self.poly.coeffs()
         monoms = self.std_monoms
         monoms.append((-1,-1,0))  # tail flag
@@ -550,6 +555,8 @@ class SOS_Manager():
 def _render_LaTeX(a, path, usetex=True, show=False, dpi=500, fontsize=20):
     '''render a text in LaTeX and save it to path'''
     
+    import matplotlib.pyplot as plt
+
     acopy = a
     #linenumber = a.count('\\\\') + 1
     #plt.figure(figsize=(12,10 ))
