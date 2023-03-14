@@ -7,7 +7,7 @@ import warnings
 import sympy as sp 
 import numpy as np 
 from scipy.optimize import linprog
-from scipy.optimize import OptimizeWarning
+# from scipy.optimize import OptimizeWarning
 # from matplotlib import pyplot as plt
 
 from ..utils.text_process import deg, verify_hom_cyclic, degree_of_zero, poly_get_standard_form, poly_get_factor_form

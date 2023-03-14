@@ -7,10 +7,10 @@ import numpy as np
 from scipy.optimize import linprog
 from scipy.optimize import OptimizeWarning
 
-from ..utils.basis_generator import arraylize, arraylize_sp, invarraylize, reduce_basis, generate_expr, generate_basis
-from ..utils.text_process import deg, next_permute, reflect_permute, cycle_expansion
+from ..utils.basis_generator import arraylize, arraylize_sp, reduce_basis, generate_expr, generate_basis
+from ..utils.text_process import deg, cycle_expansion
 from ..utils.text_process import PreprocessText, PreprocessText_GetDomain, prettyprint
-from ..utils.root_guess import rationalize, rationalize_array, root_findroot
+from ..utils.root_guess import rationalize_array, root_findroot
 from ..utils.root_guess import verify
 from ..utils.root_tangents import root_tangents
 from .structsos.structsos import SOS_Special
