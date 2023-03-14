@@ -2,7 +2,7 @@ import numpy as np
 import sympy as sp
 
 # from root_guess import verify_isstrict
-from .text_process import PreprocessText, cycle_expansion, next_permute, reflect_permute, deg
+from .text_process import PreprocessText, cycle_expansion, next_permute, deg
 
 
 def arraylize(poly, dict_monom: dict, inv_monom: list):

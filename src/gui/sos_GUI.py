@@ -3,9 +3,9 @@ import sympy as sp
 from ..utils.text_process import deg
 
 try:
-    from PySide6 import QtCore, QtWidgets, QtGui
+    from PySide6 import QtGui
 except:
-    from PySide2 import QtCore, QtWidgets, QtGui
+    from PySide2 import QtGui
 
 def _print_grid_triangle(self):
     '''print the coefficient triangle in the Qt canva'''
