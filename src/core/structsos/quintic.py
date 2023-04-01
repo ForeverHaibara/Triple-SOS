@@ -79,6 +79,8 @@ def _sos_struct_quintic_windmill(coeff):
 
     s(9a4c+a3b2-44a3bc+6a3c2+28a2b2c)
 
+    s(c(a-b)2(2a2+3ab+10ac+2c2))-abcs(a2-ab)
+
     Reference
     -------
     [1] https://tieba.baidu.com/p/6472739202
@@ -157,7 +159,83 @@ def _sos_struct_quintic_windmill(coeff):
         return [], None, None
 
     if True:
-        # Easy case 2. try another case where we do not need to updegree
+        # Easy case 2. in the form of s(c(a-b)2(xa2+yac+zc2+uab+vbc)) + ...s(a2b2c)
+        # such that y^2 <= 4xz where x = coeff((1,4,0)) is fixed
+        multipliers = []
+
+        if coeff((2,3,0)) >= 0:
+            # A. possibly simple and nice
+            t = min(coeff((3,2,0)), coeff((2,3,0)))
+            y = [
+                coeff((1,4,0)), t, 
+                coeff((3,1,1)) / 2 + coeff((1,4,0)) + t,
+                abs(coeff((3,2,0)) - coeff((2,3,0))),
+            ]
+            if any(_ < 0 for _ in y):
+                y = None
+            else:
+                r = 1 / cancel_denominator(y)
+                y = [_ * r for _ in y]
+                character = 'b' if coeff((3,2,0)) >= coeff((2,3,0)) else 'a'
+                names = [
+                    f'c*(a-b)^2*({y[0]}*a^2+{y[1]}*c^2+{y[2]}*a*b+{y[3]}*{character}*c)',
+                    'a^2*b^2*c'
+                ]
+                y = [1 / r, w__ * coeff((3,2,0))]
+                return multipliers, y, names
+        
+        # B. y^2 <= 4xz
+        # x = coeff((1,4,0))
+        # y + z = coeff((2,3,0))
+        # v + z = coeff((3,2,0)) => z <= coeff((3,2,0)) => y >= coeff((2,3,0)) - coeff((3,2,0)
+        # -2(x + z) + 2u = coeff((3,1,1)) => z >= - x - coeff((3,1,1)) / 2
+        #      => y <= coeff((2,3,0)) + x + coeff((3,1,1)) / 2
+        # Problem: whether y >= ... has a solution such that
+        # y^2 <= 4x(coeff((2,3,0)) - y)
+        
+        bound_l = coeff((2,3,0)) - coeff((3,2,0))
+        bound_r = coeff((2,3,0)) + coeff((1,4,0)) + coeff((3,1,1)) / 2
+        if bound_l <= bound_r:
+            bound = -2 * coeff((1,4,0)) # symmetric axis
+            if bound_l <= bound <= bound_r:
+                # symmetric axis inbetween
+                pass
+            elif bound <= bound_l:
+                bound = bound_l
+            else:
+                bound = bound_r
+
+            y = [
+                coeff((1,4,0)),
+                bound,
+                coeff((2,3,0)) - bound,
+                coeff((3,1,1)) / 2 + coeff((1,4,0)) + (coeff((2,3,0)) - bound),
+                coeff((3,2,0)) - (coeff((2,3,0)) - bound)
+            ]
+            
+            if (y[1] < 0 and y[1]**2 > 4 * y[0] * y[2]):
+                y = None
+            else:
+                r1 = 1 / cancel_denominator([sp.S(1), -y[1] / y[0] / 2])
+                
+                tmpcoeffs = [y[2] - y[1]**2 / 4 / y[0], y[3], y[4]]
+                r2 = 1 / cancel_denominator(tmpcoeffs)
+
+                names = [
+                    f'c*(a-b)^2*({r1}*a-{-y[1] / y[0] / 2 * r1}*c)^2',
+                    f'c*(a-b)^2*({r2*tmpcoeffs[0]}*c^2+{r2*y[3]}*a*b+{r2*y[4]}*b*c)',
+                    'a^2*b^2*c'
+                ]
+                y = [y[0] / r1**2, 1 / r2, w__ * coeff((3,2,0))]
+
+                if any(_ < 0 for _ in y):
+                    y, names = None, None
+                else:
+                    return multipliers, y, names
+
+
+    if True:
+        # Easy case 3. try another case where we do not need to updegree
         # idea: use s(a*b^2*(a-ub+(u-1)c)^2)
         u_ = y_ / (-2)
         y = [
@@ -171,7 +249,7 @@ def _sos_struct_quintic_windmill(coeff):
         else:
             y = [_ * coeff((3,2,0)) for _ in y]
             names = [f'a*b^2*(a-{u_}*b+{u_-1}*c)^2', 'a*b^2*(b-c)^2', 'a*b*c*(b-c)^2', 'a^2*b^2*c']
-            return multipliers, y,  names
+            return multipliers, y,  names        
 
 
     # now we formally start
@@ -276,6 +354,8 @@ def _sos_struct_quintic_windmill(coeff):
             # r = 1
             r2 = r ** 2
 
+            r4 = 1 / cancel_denominator([y_ - y__, (z_ - z__) / 2])
+
             multipliers = [f'{r}*a*a+{r*(u+v+1)}*b*c']
             names = [f'a*({r2*(-u*v + u + 2)}*a^2*b+{r2*(-u*v + u - v + 1)}*a*b^2+{r2*(-v-1)}*b^3+{r2*(-2*u + v**2 + 3)}*a^2*c'
                         + f'+{r2*(-4*u**2 + 4*u*v + 2*u - v**2 - 3*v)}*a*b*c+{r2*(2*u**2 - u*v + 3*u + v**2 + 2*v - 3)}*b^2*c'
@@ -283,14 +363,14 @@ def _sos_struct_quintic_windmill(coeff):
 
                     f'a*({r*u}*a^2*b+{r*(u-1)}*a*b^2+{-r}*b^3+{r*(-v-1)}*a^2*c+{r*(-2*u+v)}*a*b*c+{r*(-u+v+1)}*b^2*c+{r*(u+1)}*a*c^2+{r*(1-v)}*b*c^2)^2',
                     f'a*b*c*(a*a-b*b+{u}*(a*b-a*c)+{v}*(b*c-a*b))^2',
-                    f'({y_ - y__}*a+{(z_ - z__)/2}*c)*a*b*(b-c)^2*({r}*(a*a+b*b+c*c)+{r*(u+v+1)}*(a*b+b*c+c*a))',
+                    f'({r4*(y_ - y__)}*a+{r4*(z_ - z__)/2}*c)*a*b*(b-c)^2*({r}*(a*a+b*b+c*c)+{r*(u+v+1)}*(a*b+b*c+c*a))',
                     f'a^2*b^2*c*({r}*(a*a+b*b+c*c)+{r*(u+v+1)}*(a*b+b*c+c*a))']
 
             denom = (u**3 - u**2 - u*v + u + 1)
             y = [1 / denom / 4 / r2 / r,
                 (4*u - v*v + 2*v - 5) / denom / 4 / r,
                 (u + v + 2) * (4*u + v - 4) / denom / 2 * r,
-                sp.S(1) if y_ != y__ or z_ != z__ else sp.S(0),
+                1 / r4 if y_ != y__ or z_ != z__ else sp.S(0),
                 w__]
 
             y = [_ * coeff((3,2,0)) for _ in y]
@@ -361,11 +441,13 @@ def _sos_struct_quintic_windmill(coeff):
                         tmpcoeffs = [g*u*v-g, g*u**2-g*u-g*v**2+g*v+u-v, -g*u*v+g-u, -g*u**2-g*v-1, g*u+g*v**2+v]
                         r2 = 1 / cancel_denominator(tmpcoeffs)
 
+                    r4 = 1 / cancel_denominator([y_ - y__, (z_ - z__) / 2])
+
                 names = [
                     f'a*({rr*(-u*v+1)}*a^2*c+{rr*(u*u*v-u)}*a*b^2+{rr*(u**3-u**2*v-u**2+u*v+u-v)}*a*b*c+{rr*(-u**3-1)}*b^2*c+{rr*(u**2+v)}*b*c^2)^2',
                     f'a*({r2}*a^2*c+{r2*(g*u*v-g)}*a*b^2+{r2*(g*u**2-g*u-g*v**2+g*v+u-v)}*a*b*c+{r2*(-g*u*v+g-u)}*a*c^2+{r2*(-g*u**2-g*v-1)}*b^2*c+{r2*(g*u+g*v**2+v)}*b*c^2)^2',
                     f'a*b*c*(a*a-b*b+{u}*(a*b-a*c)+{v}*(b*c-a*b))^2',
-                    f'({y_ - y__}*a+{(z_ - z__)/2}*c)*a*b*(b-c)^2*(a*b+b*c+c*a)',
+                    f'({r4*(y_ - y__)}*a+{r4*(z_ - z__)/2}*c)*a*b*(b-c)^2*(a*b+b*c+c*a)',
                     f'a^2*b^2*c*(a*b+b*c+c*a)'
                 ]
 
@@ -373,7 +455,7 @@ def _sos_struct_quintic_windmill(coeff):
                     (3*u**2 + 2*u*v - 4*u - v**2 - 8)/(4 * (u + 1)**2 * denom**2 * rr**2),
                     (2*u**3 + u**2*v - u*v**2 - u + v + 2)**2/(4 * (u + 1)**2 * denom**2 * r2**2),
                     (u + v - 1) / denom / 2,
-                    sp.S(1) if y_ != y__ or z_ != z__ else sp.S(0),
+                    1 / r4 if y_ != y__ or z_ != z__ else sp.S(0),
                     w__
                 ]
 
@@ -395,13 +477,15 @@ def _sos_struct_quintic_windmill(coeff):
                         tmpcoeffs = [u*v-1, u*u*v-u, u**3-u**2*v-u**2+u*v+u-v, u**3+1, u*u+v]
                         r3 = 1 / cancel_denominator(tmpcoeffs)
 
+                        r4 = 1 / cancel_denominator([y_ - y__, (z_ - z__) / 2])
+
                     names = [
                         f'a*({u}*a^2*b+{-v-1}*a^2*c+{u-1}*a*b^2+{-2*u+v}*a*b*c+{u+1}*a*c^2-b^3+{-u+v+1}*b^2*c+{1-v}*b*c^2)^2',
                         f'a*c^2*(a^2-b^2+{u}*(a*b-a*c)+{v}*(b*c-a*b))^2',
                         f'a*({r2*(-u*v+1)}*a^2*c+{r2*(u**3-u**2*v-u**2+u*v**2+u*v+u-2*v)}*a*b*c+{r2*(u*v-1)}*b^3+{r2*(-u**3+u**2*v-u*v**2-u+v-1)}*b^2*c+{r2*(u**2-u*v+v+1)}*b*c^2)^2',
                         f'a*({r3*(-u*v+1)}*a^2*c+{r3*(u*u*v-u)}*a*b^2+{r3*(u**3-u**2*v-u**2+u*v+u-v)}*a*b*c+{r3*(-u**3-1)}*b^2*c+{r3*(u**2+v)}*b*c^2)^2',
                         f'a*b*c*(a*a-b*b+{u}*(a*b-a*c)+{v}*(b*c-a*b))^2',
-                        f'({y_ - y__}*a+{(z_ - z__)/2}*c)*a*b*(b-c)^2*(a*a+b*b+c*c+{w}*a*b+{w}*b*c+{w}*c*a)',
+                        f'({r4*(y_ - y__)}*a+{r4*(z_ - z__)/2}*c)*a*b*(b-c)^2*(a*a+b*b+c*c+{w}*a*b+{w}*b*c+{w}*c*a)',
                         f'a^2*b^2*c*(a*a+b*b+c*c+{w}*a*b+{w}*b*c+{w}*c*a)'
                     ]
 
@@ -411,7 +495,7 @@ def _sos_struct_quintic_windmill(coeff):
                         (u + 1)/(u**2*(u*v - 1)*denom * r2**2), 
                         (3*u**4*v - u**4 - u**3*v**2 + 3*u**3*v - 6*u**3 - u**2*v**3 + u**2*v**2 + 3*u**2*v - 6*u**2 + 2*u*v**2 - u*v - 3*u - v)/(u**3*(u*v - 1)*(u**2 - u*v + 2*u + 2)*denom * r3**2),
                         (6*u**6 - 2*u**5*v + 11*u**5 - 2*u**4*v**2 - 3*u**4*v + 11*u**4 + u**3*v**2 - 5*u**3*v + 13*u**3 - 2*u**2*v**2 - 12*u**2*v + 18*u**2 - 2*u*v**2 + 20*u + 2*v + 6)/(2*u**2*(u**2 - u*v + 2*u + 2)*denom),
-                        sp.S(1) if y_ != y__ or z_ != z__ else sp.S(0),
+                        1 / r4 if y_ != y__ or z_ != z__ else sp.S(0),
                         w__
                     ]
 
@@ -685,6 +769,12 @@ def _sos_struct_quintic_hexagon(coeff, poly, recurrsion):
     s(a4b+a4c+5a3b2+3a2b3-10a2b2c)-20s(a3bc-a2b2c)
 
     s((23(b-a)+31c)(a2-b2+(ab-ac)+2(bc-ab))2)
+    
+    s((23a-5b-c)(a-b)2(a+b-3c)2)
+
+    Reference
+    -------
+    [1] https://artofproblemsolving.com/community/u426077h2246130p17263853
     """
     if coeff((5,0,0)) != 0 or coeff((4,1,0)) <= 0 or coeff((1,4,0)) <= 0:
         return [], None, None
