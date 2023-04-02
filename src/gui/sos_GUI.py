@@ -23,7 +23,7 @@ def _print_grid_triangle(self):
     bw = w*7//10
     bh = h-h//18-h//20
     l = min(bw,bh)//(n+1)  # the length of each equilateral triangle
-    #QtGui.QPainter.drawText(QtGui.QPainter(self), ctrx, ctry, "Center")
+    # QtGui.QPainter.drawText(QtGui.QPainter(self), ctrx, ctry, "Center")
     ulx = ctrx - (l*n>>1)
     uly = ctry - 13*n*l//45
 
@@ -65,7 +65,7 @@ def _print_poly_triangle(self):
     bw = w*21//80
     bh = h*60//120
     l = min(bw,bh)//n  # the length of each equilateral triangle
-    #QtGui.QPainter.drawText(QtGui.QPainter(self), ctrx, ctry, "Center")
+    # QtGui.QPainter.drawText(QtGui.QPainter(self), ctrx, ctry, "Center")
     ulx = ctrx - (l*n>>1)
     uly = ctry - 13*n*l//45
     
@@ -85,9 +85,9 @@ if __name__ == '__main__':
     # txt = 's(a10)'
     # sos.setPoly(txt)
     # print(type(round(sp.sympify('1/3*1.0'),4)))
-    #print(sos.grid_val)
-    #sos.GUI_SOS(txt)
-    #print(sos.sosresults)
+    # print(sos.grid_val)
+    # sos.GUI_SOS(txt)
+    # print(sos.sosresults)
     '''
     from time import time as timer
     txt = 's(a9)s(a3)+9p(a4)-6a3b3c3s(a3)'
@@ -101,4 +101,4 @@ if __name__ == '__main__':
     print('Tangents = ',sos.tangents)
     #print(sos.basis[6].shape)
     '''
-    #renderLaTeX(r'c:\ |z-z_0|=1 \\ \frac{1}{2\pi i}\int_c \frac{f(z)}{z-z_0}dz = Res_{z=z_0}f(z)','Formula.png')
+    # renderLaTeX(r'c:\ |z-z_0|=1 \\ \frac{1}{2\pi i}\int_c \frac{f(z)}{z-z_0}dz = Res_{z=z_0}f(z)','Formula.png')

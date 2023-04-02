@@ -429,8 +429,8 @@ class SOS_Manager():
 
         if self.GUI is not None:
             self.GUI_stateUpdate(50)
-            #self.GUI.txt_displayResult.setText(self.sosresults[self.GUI.btn_displaymodeselect])
-            #self.GUI.repaint()
+            # self.GUI.txt_displayResult.setText(self.sosresults[self.GUI.btn_displaymodeselect])
+            # self.GUI.repaint()
 
             _render_LaTeX(self.sosresults[0],'Formula.png')
             self.GUI_stateUpdate(60)
@@ -476,7 +476,7 @@ class SOS_Manager():
             maxlen = max(maxlen,len(f'{round(float(coeff),4)}'))
 
         distance = max(maxlen + maxlen % 2 + 1, 8)
-        #print(maxlen,distance)
+        # print(maxlen,distance)
         n = self.deg
         strings = [((distance + 1) // 2 * i) * ' ' for i in range(n+1)]
 
@@ -558,8 +558,8 @@ def _render_LaTeX(a, path, usetex=True, show=False, dpi=500, fontsize=20):
     import matplotlib.pyplot as plt
 
     acopy = a
-    #linenumber = a.count('\\\\') + 1
-    #plt.figure(figsize=(12,10 ))
+    # linenumber = a.count('\\\\') + 1
+    # plt.figure(figsize=(12,10 ))
     
     # set the figure small enough
     # even though the text cannot be display as a whole in the window
@@ -568,9 +568,9 @@ def _render_LaTeX(a, path, usetex=True, show=False, dpi=500, fontsize=20):
     if usetex:
         try:
             a = '$\\displaystyle ' + a.strip('$') + ' $'
-            #plt.figure(figsize=(12, linenumber*0.5 + linenumber**0.5 * 0.3 ))
-            #plt.text(-0.3,0.75+min(0.35,linenumber/25), a, fontsize=15, usetex=usetex)
-            #fontfamily='Times New Roman')
+            # plt.figure(figsize=(12, linenumber*0.5 + linenumber**0.5 * 0.3 ))
+            # plt.text(-0.3,0.75+min(0.35,linenumber/25), a, fontsize=15, usetex=usetex)
+            # fontfamily='Times New Roman')
             plt.text(-0.3,0.9, a, fontsize=fontsize, usetex=usetex)#
         except:
             usetex = False
@@ -579,7 +579,7 @@ def _render_LaTeX(a, path, usetex=True, show=False, dpi=500, fontsize=20):
         a = acopy
         a = a.strip('$')
         a = '\n'.join([' $ '+_+' $ ' for _ in a.split('\\\\')])
-        plt.text(-0.3,0.9, a, fontsize=fontsize, usetex=usetex)#, fontfamily='Times New Roman')
+        plt.text(-0.3,0.9, a, fontsize=fontsize, usetex=usetex) # , fontfamily='Times New Roman')
         
     plt.ylim(0,1)
     plt.xlim(0,6)
@@ -625,7 +625,7 @@ if __name__ == '__main__':
     if check_undefined_cases:
         # Undefined cases 1, 2
         s = 's(a%?!!!asdquwve'    # invalid inputs
-        #s = 's(a)2-s(a2+2ab)'    # zero polynomial
+        # s = 's(a)2-s(a2+2ab)'   # zero polynomial
         sos.setPoly(s)
         sos.save_heatmap('heatmap2.png')
         x = sos.latex_coeffs()     # empty string

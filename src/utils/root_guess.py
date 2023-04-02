@@ -32,7 +32,7 @@ def rationalize(v, rounding = 1e-2, mod = None, reliable = False) -> tuple:
     if v == 0:
         return 0 , 1
     else:
-        if True: #reliable:
+        if True: # reliable:
             # https://tieba.baidu.com/p/7846250213
             x = sp.Rational(v)
             t = sp.floor(x)
