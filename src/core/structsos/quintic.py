@@ -129,7 +129,7 @@ def _sos_struct_quintic_windmill(coeff):
             ]
         return multipliers, y, names
 
-    if coeff((3,2,0)) == 0: 
+    if coeff((3,2,0)) == 0:
         if coeff((2,3,0)) >= 0:
             multipliers, y, names = _sos_struct_quintic_uncentered(coeff)
         return multipliers, y, names
@@ -167,7 +167,7 @@ def _sos_struct_quintic_windmill(coeff):
             # A. possibly simple and nice
             t = min(coeff((3,2,0)), coeff((2,3,0)))
             y = [
-                coeff((1,4,0)), t, 
+                coeff((1,4,0)), t,
                 coeff((3,1,1)) / 2 + coeff((1,4,0)) + t,
                 abs(coeff((3,2,0)) - coeff((2,3,0))),
             ]
@@ -249,7 +249,7 @@ def _sos_struct_quintic_windmill(coeff):
         else:
             y = [_ * coeff((3,2,0)) for _ in y]
             names = [f'a*b^2*(a-{u_}*b+{u_-1}*c)^2', 'a*b^2*(b-c)^2', 'a*b*c*(b-c)^2', 'a^2*b^2*c']
-            return multipliers, y,  names        
+            return multipliers, y,  names
 
 
     # now we formally start
@@ -287,7 +287,7 @@ def _sos_struct_quintic_windmill(coeff):
                             if y__ <= y_:
                                 z__ = (-2*u_**2*v_ + u_**2 + u_*v_ - v_**2)/(u_**3 - u_**2 - u_*v_ + u_ + 1)
                                 if z__ <= z_:
-                                    break 
+                                    break
                         u_ = None
 
             else:
@@ -377,7 +377,7 @@ def _sos_struct_quintic_windmill(coeff):
 
             return multipliers, y, names
 
-    # Case B. 
+    # Case B.
     if True:
         eq = (u**5*x_**2 - u**4*x_**2 - 2*u**3*x_ + u**2*(-x_**2 - x_*y_ + x_) + u*(-x_*y_ - 4*x_ - y_ + 1) - x_ - y_ - 2).as_poly(u)
         for root in sp.polys.roots(eq, cubics = False, quartics = False).keys():
@@ -416,7 +416,7 @@ def _sos_struct_quintic_windmill(coeff):
                         if y__ <= y_:
                             z__ = (-2*u_**2*v_ + u_**2 + u_*v_ - v_**2) / denom
                             if z__ <= z_:
-                                break 
+                                break
                     u_ = None
 
         if u_ is not None and isinstance(u_, sp.Rational):
@@ -437,7 +437,7 @@ def _sos_struct_quintic_windmill(coeff):
                     rr = 1 / cancel_denominator(tmpcoeffs)
                     r2 = sp.S(1)
 
-                    if isinstance(g, sp.Rational): # g might be infinite      
+                    if isinstance(g, sp.Rational): # g might be infinite
                         tmpcoeffs = [g*u*v-g, g*u**2-g*u-g*v**2+g*v+u-v, -g*u*v+g-u, -g*u**2-g*v-1, g*u+g*v**2+v]
                         r2 = 1 / cancel_denominator(tmpcoeffs)
 
@@ -490,9 +490,9 @@ def _sos_struct_quintic_windmill(coeff):
                     ]
 
                     y = [
-                        u**(-2), 
-                        (u**5*w - 3*u**5 - u**4*w + u**4 + u**3*v**2 - u**3*v*w + 2*u**3*v + u**3*w - 2*u**3 - u**2*v + u**2*w - 3*u**2 + u*v - u - 1)/(u**4*denom), 
-                        (u + 1)/(u**2*(u*v - 1)*denom * r2**2), 
+                        u**(-2),
+                        (u**5*w - 3*u**5 - u**4*w + u**4 + u**3*v**2 - u**3*v*w + 2*u**3*v + u**3*w - 2*u**3 - u**2*v + u**2*w - 3*u**2 + u*v - u - 1)/(u**4*denom),
+                        (u + 1)/(u**2*(u*v - 1)*denom * r2**2),
                         (3*u**4*v - u**4 - u**3*v**2 + 3*u**3*v - 6*u**3 - u**2*v**3 + u**2*v**2 + 3*u**2*v - 6*u**2 + 2*u*v**2 - u*v - 3*u - v)/(u**3*(u*v - 1)*(u**2 - u*v + 2*u + 2)*denom * r3**2),
                         (6*u**6 - 2*u**5*v + 11*u**5 - 2*u**4*v**2 - 3*u**4*v + 11*u**4 + u**3*v**2 - 5*u**3*v + 13*u**3 - 2*u**2*v**2 - 12*u**2*v + 18*u**2 - 2*u*v**2 + 20*u + 2*v + 6)/(2*u**2*(u**2 - u*v + 2*u + 2)*denom),
                         1 / r4 if y_ != y__ or z_ != z__ else sp.S(0),
@@ -575,7 +575,7 @@ def _sos_struct_quintic_uncentered(coeff):
                 u_numer = u_
                 for u_ in rationalize_bound(u_numer, direction = -1, compulsory = True):
                     if u_ > 0:
-                        r1_ = u_*(u_**3 - u_**2 - 1)/(u_ + 1) 
+                        r1_ = u_*(u_**3 - u_**2 - 1)/(u_ + 1)
                         if 0 <= r1_ <= r1:
                             r2_ = -(3*u_**4 - 2*u_**3 + 3*u_ + 1)/(u_*(u_ + 1))# + 2*(r1 - r1_)
                             if r2_ <= r2:
@@ -628,7 +628,7 @@ def _sos_struct_quintic_uncentered(coeff):
                 for tol in (.3, .1, 3e-2, 3e-3, 3e-4, 3e-5, 3e-7, 3e-9):
                     v_ = sp.Rational(*rationalize(v_numer - tol * 3, rounding = tol))
                     if v_ >= 2:
-                        r1_ = u_*(u_**3 - u_**2 - 1)/(u_ + 1) 
+                        r1_ = u_*(u_**3 - u_**2 - 1)/(u_ + 1)
                         if r1_ <= r1:
                             r2_ = -(3*u_**4 - 2*u_**3 + 3*u_ + 1)/(u_*(u_ + 1))# + 2*(r1 - r1_)
                             if r2_ <= r2:
@@ -737,9 +737,9 @@ def _sos_struct_quintic_windmill_special(coeff):
 
         multipliers = [f'a^2+{z_**2+2}*a*b']
 
-        m_ = (-w + 2*x_ + z_**2 + 2) 
+        m_ = (-w + 2*x_ + z_**2 + 2)
         y = [
-            sp.S(1), 
+            sp.S(1),
             m_ / 2,
             det__ / 6 / m_
         ]

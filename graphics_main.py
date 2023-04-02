@@ -1,5 +1,5 @@
-#pyinstaller --clean -Fw -p D:/Qt graphics_main.py 
-#pyinstaller --clean -w -p D:/Qt --hidden-import PySide6  graphics_main.py 
+#pyinstaller --clean -Fw -p D:/Qt graphics_main.py
+#pyinstaller --clean -w -p D:/Qt --hidden-import PySide6  graphics_main.py
 import sys
 
 try:
@@ -29,12 +29,12 @@ class MyWidget(QtWidgets.QWidget):
         self.btn_displaymodeselect = 0
         for i, name in enumerate(('LaTeX','txt','formatted')):
             self.btn_displaymode[i] = QtWidgets.QPushButton(self)
-            self.btn_displaymode[i].setText(name) 
+            self.btn_displaymode[i].setText(name)
             self.btn_displaymode[i].clicked.connect(self.displaymodeselect)
             if self.btn_displaymodeselect == i:
-                self.btn_displaymode[i].setStyleSheet("background-color: white") 
+                self.btn_displaymode[i].setStyleSheet("background-color: white")
             else:
-                self.btn_displaymode[i].setStyleSheet("border: none") 
+                self.btn_displaymode[i].setStyleSheet("border: none")
         self.txt_displayResult = QtWidgets.QTextEdit(self)
 
         self.spinbox_searchstep = QtWidgets.QSpinBox(self)
@@ -91,7 +91,7 @@ class MyWidget(QtWidgets.QWidget):
         return super().resizeEvent(event)
 
     def paintEvent(self, event: QtGui.QPaintEvent) -> None:
-        w = self.width()    
+        w = self.width()
         h = self.height()
 
         QtGui.QPainter.drawRect(QtGui.QPainter(self),w//80,h*16//180,w*7//10,h*322//360)
@@ -127,7 +127,7 @@ class MyWidget(QtWidgets.QWidget):
             pix = QtGui.QPixmap('Formula.png').scaled(28*w//30,28*h//30,
                                     QtCore.Qt.KeepAspectRatio, QtCore.Qt.SmoothTransformation)
             self.display.setPixmap(pix)
-            return 
+            return
         else:
             self.display.hide()
             txt = ''
@@ -140,7 +140,7 @@ class MyWidget(QtWidgets.QWidget):
                         if self.SOS_Manager.stage == 30:
                             self.txt_extratg.setText('\n'.join(self.SOS_Manager._roots_info['tangents']))
                         elif self.SOS_Manager.stage < 50:
-                            txt += '\n' + '\n'.join([f'Failed with degree {i}...' 
+                            txt += '\n' + '\n'.join([f'Failed with degree {i}...'
                                     for i in range(self.SOS_Manager.deg,self.SOS_Manager.stage-30+1)])
                         elif self.SOS_Manager.stage == 50:
                             txt += '\nSuccess\nRendering LaTeX...'
@@ -149,7 +149,7 @@ class MyWidget(QtWidgets.QWidget):
             self.displayProgress.setText(txt)
             self.displayProgress.show()
             self.displayProgress.repaint()
-            return 
+            return
 
     def displaymodeselect(self):
         for i in range(3):
@@ -161,10 +161,10 @@ class MyWidget(QtWidgets.QWidget):
                 else:
                     self.btn_displaymodeselect = i
                     self.txt_displayResult.setText(self.SOS_Manager.sosresults[i])
-                    self.btn_displaymode[i].setStyleSheet("background-color: white") 
+                    self.btn_displaymode[i].setStyleSheet("background-color: white")
                     self.repaint()
             else:
-                self.btn_displaymode[i].setStyleSheet("border: none") 
+                self.btn_displaymode[i].setStyleSheet("border: none")
                 self.repaint()
         
     def backToMain(self):
@@ -192,7 +192,7 @@ class MyWidget(QtWidgets.QWidget):
     @QtCore.Slot()
     def autosos(self):
         self.interface = 1
-        self.SOS_Manager._roots_info['tangents_default'] = [tg 
+        self.SOS_Manager._roots_info['tangents_default'] = [tg
                         for tg in self.txt_inputtg.toPlainText().split('\n') if len(tg)>0]
         # self.SOS_Manager.maxiter = self.spinbox_searchstep.value()
         self.SOS_Manager.GUI_SOS(self.txt_input.text())

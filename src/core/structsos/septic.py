@@ -50,7 +50,7 @@ def _sos_struct_septic_star(coeff, poly, recurrsion):
         return multipliers, y, names
 
     if coeff((4,3,0)) == 0:
-        a , b = 1 , 0 
+        a , b = 1 , 0
     else:
         a , b = (coeff((3,4,0)) / coeff((4,3,0))).as_numer_denom()
         
@@ -58,10 +58,10 @@ def _sos_struct_septic_star(coeff, poly, recurrsion):
         t = coeff((4,3,0))
         
         y = []
-        names = []  
+        names = []
 
         if b == 0 and coeff((3,4,0)) == 0: # abc | poly
-            pass 
+            pass
         elif t < 0:
             return [], None, None
         else:
@@ -69,7 +69,7 @@ def _sos_struct_septic_star(coeff, poly, recurrsion):
                 z = sp.sqrt(a / b)
                 discriminant = '-(3*m*(m+n-(-2*x^2+2*y^2+4*y*z-4*y-2*z^2+4*z-2))-(p-(x^2-2*x*y+2*x+y^2+2*y))^2-(q-(x^2+2*x*y+2*x*z+y^2-2*y*z))^2-(p-(x^2-2*x*y+2*x+y^2+2*y))*(q-(x^2+2*x*y+2*x*z+y^2-2*y*z)))'
                 # discriminant = '-3*m^2-3*m*n+6*m*y^2+p^2+p*q-3*p*y^2-2*p*y+q^2-3*q*y^2+2*q*y+3*x^4+12*x^3-x^2*(6*m+3*p+3*q-10*y^2-12)-x*(-2*p*y+6*p+2*q*y+6*q-4*y^2)+3*y^4+4*y^2'
-                discriminant = sp.polys.polytools.Poly(discriminant).subs('z',z) 
+                discriminant = sp.polys.polytools.Poly(discriminant).subs('z',z)
             else:
                 t = coeff((3,4,0))
                 discriminant = '-(3*m*(m+n-(-2*x^2+2*y^2-4*y-2))-(p-(x^2-2*x*y+y^2))^2-(q-(x^2+2*x*y-2*x+y^2+2*y))^2-(p-(x^2-2*x*y+y^2))*(q-(x^2+2*x*y-2*x+y^2+2*y)))'
@@ -79,14 +79,14 @@ def _sos_struct_septic_star(coeff, poly, recurrsion):
             result = optimize_determinant(discriminant)
             if result is None:
                 return [], None, None
-            a , b = result 
+            a , b = result
             
             # now we have guaranteed v <= 0
             if coeff((4,3,0)) != 0:
                 y = [t]
                 names = [f'b*(a^2*b-a*b*c-{z}*(b*c^2-a*b*c)+{a+b}*(a^2*c-a*b*c)+{b-a}*(a*c^2-a*b*c))^2']
             else: # t = 0
-                y = [t] 
+                y = [t]
                 names = [f'b*((b*c^2-a*b*c)+{a+b}*(a^2*c-a*b*c)+{b-a}*(a*c^2-a*b*c))^2']
 
 
@@ -96,11 +96,11 @@ def _sos_struct_septic_star(coeff, poly, recurrsion):
             poly = sp.cancel(poly / sp.polys.polytools.Poly('a*b*c'))
             poly = sp.polys.polytools.Poly(poly)
             
-            multipliers , y , names = _merge_sos_results(multipliers, y, names, 
+            multipliers , y , names = _merge_sos_results(multipliers, y, names,
                                                     recurrsion(poly, 4), abc = True)
         except:
             # zero polynomial
-            pass 
+            pass
 
     elif a > 0 and b > 0:
         # we shall NOTE that we actually do not require a/b is square
@@ -138,7 +138,7 @@ def _sos_struct_septic_biased(coeff):
     s(a5c2+a4b2c+a4bc2-7a3b3c+4a3b2c2)
     """
     multipliers, y, names = [], None, None
-    if coeff((5,2,0)) or coeff((4,3,0)):        
+    if coeff((5,2,0)) or coeff((4,3,0)):
         # reflect the polynomial so that coeff((5,2,0)) == 0
         def new_coeff(c):
             return coeff((c[0], c[2], c[1]))
@@ -221,9 +221,9 @@ def _sos_struct_septic_hexagon(coeff, poly, recurrsion):
             return multipliers, y, names
 
     if coeff((5,2,0)) == 0:
-        a , b = 1 , 0 
+        a , b = 1 , 0
     else:
-        a , b = (coeff((2,5,0)) / coeff((5,2,0))).as_numer_denom()   
+        a , b = (coeff((2,5,0)) / coeff((5,2,0))).as_numer_denom()
     
     if sp.ntheory.primetest.is_square(a) and sp.ntheory.primetest.is_square(b):
         t = coeff((5,2,0)) / b if b != 0 else coeff((2,5,0))
@@ -253,17 +253,17 @@ def _sos_struct_septic_hexagon(coeff, poly, recurrsion):
 
         for w in sp.polys.polyroots.roots(sp.polys.polytools.Poly(f'(x*x-{n})^2-4*{a}*({m}-2*{u}*x)')):
             if isinstance(w, sp.Rational):
-                z = (w*w - n) / 2 / v 
+                z = (w*w - n) / 2 / v
                 candidates.append((w, z))
                 # print(w, v, z, n)
             elif w.is_real is None or w.is_real == False:
                 continue
             else:
-                w2 = complex(w).real 
+                w2 = complex(w).real
                 w2 -= abs(w2) / 1000 # slight perturbation
                 if m < 2*u*w2:
                     continue
-                z2 = (m - 2*u*w2)**0.5 
+                z2 = (m - 2*u*w2)**0.5
                 z2 -= abs(z2) / 1000 # slight perturbation
                 rounding = 1e-2
                 for i in range(4):
@@ -278,17 +278,17 @@ def _sos_struct_septic_hexagon(coeff, poly, recurrsion):
             m2 = m - abs(m / perturbation)
             n2 = n - abs(n / perturbation)
             for w in sp.polys.polyroots.roots(sp.polys.polytools.Poly(f'(x*x-{n2})^2-4*{a}*({m2}-2*{u}*x)')):
-                if isinstance(w, sp.Rational):      
-                    z = (w*w - n) / 2 / v 
+                if isinstance(w, sp.Rational):
+                    z = (w*w - n) / 2 / v
                     candidates.append((w, z))
                 elif w.is_real is None or w.is_real == False:
-                    continue 
+                    continue
                 else:
                     rounding = 1e-2
-                    w2 = complex(w).real 
+                    w2 = complex(w).real
                     if m + m2 < 4*u*w2:
                         continue
-                    z2 = ((m + m2)/2 - 2*u*w2)**0.5 
+                    z2 = ((m + m2)/2 - 2*u*w2)**0.5
                     for i in range(4):
                         w = sp.Rational(*rationalize(w2, rounding = rounding, reliable = False))
                         z = sp.Rational(*rationalize(z2, rounding = rounding, reliable = False))
@@ -299,7 +299,7 @@ def _sos_struct_septic_hexagon(coeff, poly, recurrsion):
         candidates = list(set(candidates))
         if coeff((2,5,0)) == 0: # reflect back
             u , v = v , u
-            m , n = n , m 
+            m , n = n , m
             a , b = b , a
             candidates = [(-z, -w) for w,z in candidates]
 
@@ -314,7 +314,7 @@ def _sos_struct_septic_hexagon(coeff, poly, recurrsion):
             discriminant += '-(p-(-2*u^2+2*u*v-2*u*w-2*u*x-2*u*y-2*u*z-2*v*w+2*x*z+y^2))^2-(q-(2*u*v+2*u*z-2*v^2+2*v*w+2*v*x+2*v*y+2*v*z+2*w*y+x^2))^2'
             discriminant += '-(p-(-2*u^2+2*u*v-2*u*w-2*u*x-2*u*y-2*u*z-2*v*w+2*x*z+y^2))*(q-(2*u*v+2*u*z-2*v^2+2*v*w+2*v*x+2*v*y+2*v*z+2*w*y+x^2))'
             discriminant = -sp.polys.polytools.Poly(discriminant)
-            discriminant = discriminant.subs((('u', u), ('v', v), ('z', z), ('w', w), 
+            discriminant = discriminant.subs((('u', u), ('v', v), ('z', z), ('w', w),
                                 ('m', coeff((5,1,1))/t), ('n', coeff((3,3,1))/t), ('p', coeff((4,2,1))/t), ('q', coeff((2,4,1))/t)))
             
             result = optimize_determinant(discriminant, soft = True)
@@ -323,12 +323,12 @@ def _sos_struct_septic_hexagon(coeff, poly, recurrsion):
             a , b = result
             # print('w z =', w, z, 'a b =', a, b, discriminant)
             
-            y = [t] 
+            y = [t]
             names = [f'a*({u}*(a^2*b-a*b*c)-{v}*(a^2*c-a*b*c)+{a}*(b*c^2-a*b*c)+{b}*(b^2*c-a*b*c)+{z}*(a*c^2-a*b*c)+{w}*(a*b^2-a*b*c))^2']
             poly2 = poly - t * sp.polys.polytools.Poly(cycle_expansion(names[0]))
             multipliers , y , names = _merge_sos_results(multipliers, y, names, recurrsion(poly2, 7))
             if y is not None:
-                break 
+                break
 
     elif a > 0 and b > 0:
         name = 'a*(a-b)^2*(b-c)^2*(c-a)^2'

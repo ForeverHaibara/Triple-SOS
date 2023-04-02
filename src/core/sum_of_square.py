@@ -22,15 +22,15 @@ def up_degree(poly, n, updeg):
     """
     
     for m in range(n, updeg+1):
-        codeg = m - n 
+        codeg = m - n
         if codeg > 0:
             poly_mul = poly * sp.polys.polytools.Poly(f'a^{codeg}+b^{codeg}+c^{codeg}')
             multiplier = f'a^{codeg}' if codeg > 1 else 'a'
         else:
-            poly_mul = poly 
-            multiplier = None 
+            poly_mul = poly
+            multiplier = None
         
-        yield multiplier, poly_mul, m 
+        yield multiplier, poly_mul, m
 
 
 def exact_coefficient(poly, multipliers, y, names, polys, sos_manager):
@@ -49,15 +49,15 @@ def exact_coefficient(poly, multipliers, y, names, polys, sos_manager):
     
     for multiplier in multipliers:
         if multiplier is None:
-            continue 
+            continue
         poly = poly * sp.polys.polytools.Poly(cycle_expansion(multiplier))
 
     def _filter_zero(y, names, polys):
         index = list(filter(lambda i: y[i][0] != 0 , list(range(len(y)))))
-        y     = [y[i]     for i in index] 
-        names = [names[i] for i in index] if names is not None else names 
-        polys = [polys[i] for i in index] if polys is not None else polys 
-        return y , names , polys 
+        y     = [y[i]     for i in index]
+        names = [names[i] for i in index] if names is not None else names
+        polys = [polys[i] for i in index] if polys is not None else polys
+        return y , names , polys
 
     # Approximates the coefficients to fractions if possible
     y = rationalize_array(y, reliable = True)
@@ -70,7 +70,7 @@ def exact_coefficient(poly, multipliers, y, names, polys, sos_manager):
 
     # verify whether the equation is strict
     equal = verify(y, polys, poly, 0)
-    if not equal: 
+    if not equal:
         # backsubstitude to re-solve the coefficients
         try:
             dict_monom, inv_monom = sos_manager._inquire_monoms(deg(poly))
@@ -82,28 +82,28 @@ def exact_coefficient(poly, multipliers, y, names, polys, sos_manager):
 
             for coeff in new_y:
                 if coeff[0] < 0:
-                    break 
+                    break
             else:
                 if verify(new_y, polys, poly, 0):
-                    equal = True 
+                    equal = True
                     y , names , polys = _filter_zero(new_y, names, polys)
         except:
-            equal = False 
+            equal = False
         
         if not equal:
             try:
                 # print(y)
-                # handle sqrt if any 
+                # handle sqrt if any
                 sqrt_ext = re.findall('\d+\^0.5', sos_manager.polytxt)
                 if sqrt_ext is not None and len(sqrt_ext) > 0:
                     sqrt_ext = sp.sqrt(int(sqrt_ext[0][:-4]))
-                    y = [sp.nsimplify(ip/iq, [sqrt_ext], tolerance = 1e-8).as_numer_denom() 
+                    y = [sp.nsimplify(ip/iq, [sqrt_ext], tolerance = 1e-8).as_numer_denom()
                                 for ip,iq in y]
             except:
-                pass 
+                pass
             
         
-    return y , names, equal 
+    return y , names, equal
 
 
 def SOS(poly, tangents = [], maxiter = 5000, roots = [], tangent_points = [], updeg = 10,
@@ -166,7 +166,7 @@ def SOS(poly, tangents = [], maxiter = 5000, roots = [], tangent_points = [], up
     # get the polynomial from text and obtain the degree
     poly = PreprocessText(poly,cyc=True)
     n = deg(poly)
-    original_n = n 
+    original_n = n
 
     if type(tangents) == str:
         tangents = [tangents]
@@ -243,9 +243,9 @@ def SOS(poly, tangents = [], maxiter = 5000, roots = [], tangent_points = [], up
     polys = [polys[i] for i in index]
 
     # verify whether the equation is strict
-    if not verify(y, polys, poly, 0): 
+    if not verify(y, polys, poly, 0):
         # backsubstitude to re-solve the coefficients
-        equal = False 
+        equal = False
         try:
             b2 = arraylize_sp(poly,dict_monom,inv_monom)
             basis = sp.Matrix([arraylize_sp(poly,dict_monom,inv_monom) for poly in polys])
@@ -255,10 +255,10 @@ def SOS(poly, tangents = [], maxiter = 5000, roots = [], tangent_points = [], up
             new_y = [(r.p, r.q) for r in new_y]
             for coeff in new_y:
                 if coeff[0] < 0:
-                    break 
+                    break
             else:
                 if verify(new_y, polys, poly, 0):
-                    equal = True 
+                    equal = True
                     y = new_y
                 
                     # Filter out zero coefficients
@@ -267,9 +267,9 @@ def SOS(poly, tangents = [], maxiter = 5000, roots = [], tangent_points = [], up
                     names = [names[i] for i in index]
                     polys = [polys[i] for i in index]
         except:
-            pass             
+            pass
     else:
-        equal = True 
+        equal = True
     
     # obtain the LaTeX format
     result = prettyprint(y, names, precision=precision, linefeed=linefeed)
@@ -290,7 +290,7 @@ if __name__ == '__main__':
     s = 'p(a-b)2'
     s = 's((a2c-b2c-2*(a2b-abc)+3*(ab2-abc))2)'
 
-    # Hexagram 
+    # Hexagram
     # s = PreprocessText('s(a3b3+a4bc-0a2b3c-5a2c3b+3a2b2c2)')
     # s = PreprocessText('s(a3b3+7a4bc-29a3b2c+12a3bc2+9a2b2c2)s(a)')
     s = 's(16a5bc+4a4b3-80a4b2c+3a4bc2+7a4c3+64a3b3c-14a3b2c2)'
@@ -311,5 +311,5 @@ if __name__ == '__main__':
     
     
     s = '(s(a2+ab))2-4s(a)s(a2b)'
-    s = PreprocessText(s) if isinstance(s, str) else s 
+    s = PreprocessText(s) if isinstance(s, str) else s
     print(SOS_Special(s, deg(s)))

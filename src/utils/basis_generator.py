@@ -11,10 +11,10 @@ def arraylize(poly, dict_monom: dict, inv_monom: list):
     '''
     coeffs = np.zeros(len(inv_monom))
     for coeff, monom in zip(poly.coeffs(),poly.monoms()):
-        i , j , k = monom 
+        i , j , k = monom
         if i >= j and (i > k or (i == k and i == j)):
             coeffs[dict_monom[(i,j,k)]] = coeff
-    return coeffs 
+    return coeffs
 
 
 def arraylize_sp(poly, dict_monom: dict, inv_monom: list):
@@ -23,10 +23,10 @@ def arraylize_sp(poly, dict_monom: dict, inv_monom: list):
     '''
     coeffs = sp.zeros(len(inv_monom), 1)
     for coeff, monom in zip(poly.coeffs(),poly.monoms()):
-        i , j , k = monom 
+        i , j , k = monom
         if i >= j and (i > k or (i == k and i == j)):
             coeffs[dict_monom[(i,j,k)]] = coeff
-    return coeffs 
+    return coeffs
 
 
 def invarraylize(poly, dict_monom: dict, inv_monom: list):
@@ -111,7 +111,7 @@ def base_tangent(m: int, tangents: list) -> str:
             tangent = next_permute(tangent)
 
 
-def append_basis(n: int, dict_monom: dict, inv_monom: list, 
+def append_basis(n: int, dict_monom: dict, inv_monom: list,
                 names: list, polys: list, basis: np.ndarray, tangents = None):
     '''
     Add basis generated from tangents.
@@ -224,7 +224,7 @@ def reduce_basis(n, dict_monom, inv_monom, names, polys, basis, strict_roots, to
                 vals.append(powera[i]*powerb[j])
         vals = np.array(vals)
 
-        vals = basis @ vals.T 
+        vals = basis @ vals.T
         for i in range(m):
             if abs(vals[i]) > tol: # nonzero
                 mask[i] = 0

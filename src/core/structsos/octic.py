@@ -44,7 +44,7 @@ def _sos_struct_octic(poly, degree, coeff, recurrsion):
                     
                 # star
                 if coeff((5,2,1)) == 0:
-                    a , b = 1 , 0 
+                    a , b = 1 , 0
                 else:
                     a , b = (coeff((5,1,2)) / coeff((5,2,1))).as_numer_denom()
                     
@@ -52,15 +52,15 @@ def _sos_struct_octic(poly, degree, coeff, recurrsion):
                     t = coeff((5,2,1))
                     
                     y = []
-                    names = []  
+                    names = []
 
                     if t < 0:
-                        return 
+                        return
                     if b != 0:
                         z = sp.sqrt(a / b)
                         determinant = '-(3*m*(m+n-(-2*x^2+2*y^2+4*y*z-4*y-2*z^2+4*z-2))-(p-(x^2-2*x*y-2*x*z+y^2-2*y*z))^2-(q-(x^2+2*x*y-2*x+y^2+2*y))^2-(p-(x^2-2*x*y-2*x*z+y^2-2*y*z))*(q-(x^2+2*x*y-2*x+y^2+2*y)))'
                         # determinant = '-3*m^2-3*m*n+6*m*y^2+p^2+p*q-3*p*y^2-2*p*y+q^2-3*q*y^2+2*q*y+3*x^4+12*x^3-x^2*(6*m+3*p+3*q-10*y^2-12)-x*(-2*p*y+6*p+2*q*y+6*q-4*y^2)+3*y^4+4*y^2'
-                        determinant = sp.polys.polytools.Poly(determinant).subs('z',z) 
+                        determinant = sp.polys.polytools.Poly(determinant).subs('z',z)
                     else:
                         t = coeff((5,1,2))
                         determinant = '-(3*m*(m+n-(-2*x^2+2*y^2-4*y-2))-(p-(x^2-2*x*y+2*x+y^2+2*y))^2-(q-(x^2+2*x*y+y^2))^2-(p-(x^2-2*x*y+2*x+y^2+2*y))*(q-(x^2+2*x*y+y^2)))'
@@ -69,7 +69,7 @@ def _sos_struct_octic(poly, degree, coeff, recurrsion):
                     
                     result = optimize_determinant(determinant)
                     if result is None:
-                        return 
+                        return
                     a , b = result
                     
                     # now we have guaranteed v <= 0
@@ -77,7 +77,7 @@ def _sos_struct_octic(poly, degree, coeff, recurrsion):
                         y = [t]
                         names = [f'a*b*c*c*((b^2-a*b)-{z}*(a^2-a*b)+{a+b}*(a*c-a*b)-{a-b}*(b*c-a*b))^2']
                     else: # t = 0
-                        y = [t] 
+                        y = [t]
                         names = [f'a*b*c*c*((a^2-a*b)+{a+b}*(a*c-a*b)-{a-b}*(b*c-a*b))^2']
 
 
@@ -87,14 +87,14 @@ def _sos_struct_octic(poly, degree, coeff, recurrsion):
                 elif a > 0 and b > 0:
                     # Similarly to degree 7, we actually do not require a/b is square
                     # take coefficients like sqrt(a/b) also works -- though it is not pretty
-                    # but we can make a sufficiently small perturbation such that a/b is square 
+                    # but we can make a sufficiently small perturbation such that a/b is square
                         
                     name = 'a*b*c*(a*b+b*c+c*a)*a*(a-b)*(a-c)'
                     multipliers, y, names = _try_perturbations(poly, degree, multipliers, a, b,
                                                             coeff((5,2,1))/b, name, recurrsion = recurrsion)
         
         if result is not None:
-            multipliers, y, names = result 
+            multipliers, y, names = result
             if len(multipliers) == 0:
                 for i in range(len(names)):
                     names[i] = names[i].replace('a', '(1/a)').replace('b', '(1/b)').replace('c', '(1/c)')

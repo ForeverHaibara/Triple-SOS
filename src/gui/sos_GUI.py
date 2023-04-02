@@ -11,14 +11,14 @@ def _print_grid_triangle(self):
     '''print the coefficient triangle in the Qt canva'''
     poly = self.SOS_Manager.poly
     if poly is None:
-        return 
+        return
     n = deg(poly)
     if n == 0:
         return
     w = self.width()
     h = self.height()
 
-    ctrx = int(w*0.36)   # display centerx 
+    ctrx = int(w*0.36)   # display centerx
     ctry = int(h*0.3926) # display centery
     bw = w*7//10
     bh = h-h//18-h//20
@@ -47,7 +47,7 @@ def _print_grid_triangle(self):
                 t += 1
             else:
                 txt = '0'
-            QtGui.QPainter.drawText(qp, 
+            QtGui.QPainter.drawText(qp,
                             ulx + l*(2*i-j)//2 - len(txt)*(fontsize-1)//2, uly + l*j*13//15, txt)
     
     # restore
@@ -60,7 +60,7 @@ def _print_poly_triangle(self):
     w = self.width()
     h = self.height()
 
-    ctrx = int(w*0.856)   # display centerx 
+    ctrx = int(w*0.856)   # display centerx
     ctry = int(h*0.133)   # display center
     bw = w*21//80
     bh = h*60//120
@@ -74,7 +74,7 @@ def _print_poly_triangle(self):
     color = self.SOS_Manager.grid_color
     for i in range(n+1):
         for j in range(n+1-i):
-            QtGui.QPainter.fillRect(qp, 
+            QtGui.QPainter.fillRect(qp,
                             ulx + l*(i+j*2)//2, uly + l*i*13//15, l, l, QtGui.QColor(*color[t]))
             t += 1
 

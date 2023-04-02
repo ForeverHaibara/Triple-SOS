@@ -58,8 +58,8 @@ def _sos_struct_sextic_hexagon(coeff, poly, recurrsion):
     # hexagon
     if coeff((6,0,0))==0 and coeff((5,1,0))==0 and coeff((5,0,1))==0:
         if coeff((4,2,0)) != coeff((4,0,2)):
-            # first try whether we can cancel these two corners in one step 
-            # CASE 1. 
+            # first try whether we can cancel these two corners in one step
+            # CASE 1.
             if coeff((4,2,0)) == 0 or coeff((4,0,2)) == 0:
                 if coeff((3,3,0)) == 0 and coeff((4,1,1)) == 0:
                     return _sos_struct_sextic_rotated_tree(coeff)
@@ -69,26 +69,26 @@ def _sos_struct_sextic_hexagon(coeff, poly, recurrsion):
                     names = ['(a*a*b+b*b*c+c*c*a-3*a*b*c)^2']
                 else:
                     y = [coeff((4,0,2))]
-                    names = ['(a*b*b+b*c*c+c*a*a-3*a*b*c)^2']                 
+                    names = ['(a*b*b+b*c*c+c*a*a-3*a*b*c)^2']
 
                 poly2 = poly - y[0] * sp.sympify(names[0])
                 v = 0 # we do not need to check the positivity, just try
                 if v != 0:
-                    y, names = None, None 
+                    y, names = None, None
                 else: # positive
                     multipliers , y , names = _merge_sos_results(multipliers, y, names, recurrsion(poly2, 6))
 
-            # CASE 2. 
+            # CASE 2.
             else:
                 a , b = (coeff((4,2,0)) / coeff((4,0,2))).as_numer_denom()
                 if sp.ntheory.primetest.is_square(a) and sp.ntheory.primetest.is_square(b):
-                    y = [coeff((4,2,0)) / a / 3] 
+                    y = [coeff((4,2,0)) / a / 3]
                     names = [f'({sp.sqrt(a)}*(a*a*b+b*b*c+c*c*a-3*a*b*c)-{sp.sqrt(b)}*(a*b*b+b*c*c+c*a*a-3*a*b*c))^2']
                 
                     poly2 = poly - 3 * y[0] * sp.sympify(names[0])
                     v = 0 # we do not need to check the positivity, just try
                     if v != 0:
-                        y, names = None, None 
+                        y, names = None, None
                     else: # positive
                         multipliers , y , names = _merge_sos_results(multipliers, y, names, recurrsion(poly2, 6))
 
@@ -97,7 +97,7 @@ def _sos_struct_sextic_hexagon(coeff, poly, recurrsion):
                 # => b^2p^2 + b^2 = ab(q^2 + 1) => (bp)^2 - ab q^2 = b(a-b)
                 #                            or => (aq)^2 - ab p^2 = a(b-a)
                 # here we should require b is squarefree and not too large
-                elif a < 30 and b < 30: # not too large for solving Pell's equation                        
+                elif a < 30 and b < 30: # not too large for solving Pell's equation
                     pairs = []
                     for pair in diop_DN(a*b, b*(a-b)):
                         if pair[0] % b == 0:
@@ -108,11 +108,11 @@ def _sos_struct_sextic_hexagon(coeff, poly, recurrsion):
                     pairs = set(pairs)
                     
                     for p , q in pairs:
-                        p , q = abs(p) , abs(q) 
+                        p , q = abs(p) , abs(q)
                         t = coeff((4,2,0)) / (p*p + 1)
                         if coeff((3,3,0)) + t * 2 * p * q < 0 or coeff((4,1,1)) + t * 2 * (p + q) < 0:
                             # negative vertex, skip it
-                            continue 
+                            continue
                         y = [t]
                         names = [f'(a*a*c-b*b*c-{p}*(a*a*b-a*b*c)+{q}*(a*b*b-a*b*c))^2']
                         poly2 = poly - t * sp.sympify(cycle_expansion(names[0]))
@@ -128,13 +128,13 @@ def _sos_struct_sextic_hexagon(coeff, poly, recurrsion):
                 # symmetric
                 multipliers, y, names = _sos_struct_sextic_hexagon_symmetric(coeff)
             else:
-                y = [coeff((4,2,0)) / 3] 
+                y = [coeff((4,2,0)) / 3]
                 names = [f'(a-b)^2*(b-c)^2*(c-a)^2']
 
                 poly2 = poly - y[0] * 3 * sp.sympify(names[0])
                 v = 0 # we do not need to check the positivity, just try
                 if v != 0:
-                    y, names = None, None 
+                    y, names = None, None
                 else: # positive
                     multipliers , y , names = _merge_sos_results(multipliers, y, names, recurrsion(poly2, 6))
         
@@ -596,9 +596,9 @@ def _sos_struct_sextic_hexagram_symmetric(coeff):
     if True:
         x_ = min(coeff((3,3,0)), coeff((4,1,1)))
         y = [
-            x_, 
-            coeff((3,3,0)) - x_, 
-            coeff((4,1,1)) - x_, 
+            x_,
+            coeff((3,3,0)) - x_,
+            coeff((4,1,1)) - x_,
             coeff((3,2,1)) + x_ + (coeff((3,3,0))) + (coeff((4,1,1))),
             (coeff((3,3,0)) + coeff((4,1,1)) + coeff((3,2,1)) * 2) + coeff((2,2,2))  / 3
         ]
@@ -660,7 +660,7 @@ def _sos_struct_sextic_hexagram_symmetric(coeff):
 
 
     if coeff((3,3,0)) != 0:
-        # https://tieba.baidu.com/p/8039371307 
+        # https://tieba.baidu.com/p/8039371307
         x_, y_, z_ = coeff((4,1,1)) / coeff((3,3,0)), -coeff((3,2,1)) / coeff((3,3,0)), coeff((2,2,2)) / coeff((3,3,0))
         z0 = x_**2 + x_*y_ + y_**2/3 - y_ + (y_ + 3)**3/(27*x_)
         if x_ > 0 and 3 * x_ + y_ + 3 >= 0 and z_ >= z0:
@@ -750,18 +750,18 @@ def _sos_struct_sextic_tree(coeff):
     for r in roots:
         numer_r = complex(r)
         if abs(numer_r.imag) < 1e-12 and numer_r.real >= 1:
-            numer_r = numer_r.real 
+            numer_r = numer_r.real
             if not isinstance(r, sp.Rational):
                 for r in rationalize_bound(numer_r, direction = -1, compulsory = True):
                     if r*r*r-3*r <= u and 3*r*(r-1)+v >= 0:
-                        break 
+                        break
                 else:
-                    break 
+                    break
             elif 3*r*(r-1)+v < 0:
-                break 
+                break
             
-            # now r is rational 
-            y = [t/2, t*(u-(r*r*r-3*r)), t*(v+3*r*(r-1)), 
+            # now r is rational
+            y = [t/2, t*(u-(r*r*r-3*r)), t*(v+3*r*(r-1)),
                 coeff((2,2,2))/3+coeff((6,0,0))+coeff((4,1,1))+coeff((3,3,0))]
             names = [f'(a^2+b^2+c^2+{r}*(a*b+b*c+c*a))*(a-b)^2*(a+b-{r}*c)^2',
                     'a^3*b^3-a^2*b^2*c^2',
@@ -1014,7 +1014,7 @@ def _sos_struct_sextic_iran96(coeff, real = False):
     # this is done by subtracting as much ((a-b)*(b-c)*(c-a))^2 as possible
     # until there are zeros at the border
 
-    # subtract some ((a-b)*(b-c)*(c-a))^2 
+    # subtract some ((a-b)*(b-c)*(c-a))^2
     # p - r == 2*t,   q + 2*r == t*t + 2
     # r = p + 4 + 2 * sqrt(2*p + q + 2)
 
@@ -1030,7 +1030,7 @@ def _sos_struct_sextic_iran96(coeff, real = False):
             dw = 1
             dz = -3
         else:
-            # Case A.B there exists nontrivial roots, then we make a slight perturbation 
+            # Case A.B there exists nontrivial roots, then we make a slight perturbation
             # using the hexagram generated by the root
             dw = 1 / (u_ - 1)**2
             dz = (-u_**2 + u_ - 1) / (u_ - 1)**2
@@ -1362,7 +1362,7 @@ def _sos_struct_sextic_symmetric_ultimate_2roots(coeff, poly, recurrsion, roots)
             # Theorem: when x <= 4
             # f(a,b,c) = s(a6-(x+1)(a5b+a5c)+(4x-5)(a4b2+a4c2)+(x2-4x+11)a4bc
             #               -2(3x-5)a3b3+(-x2+5x-10)(a3b2c+a3bc2)+(x2-6x+10)a2b2c2) >= 0
-            # Proof: when 1 <= x <= 4, 
+            # Proof: when 1 <= x <= 4,
             # we have f(a,b,c)s(a2+(x-2)ab) = (4-x)(x-1)/2s(a2(b-c)2((a-b-c)2-xbc)2)
             #               + s(a2-ab)((2x-x2)abc-p(a+b-c))2
             #        when x < 1,

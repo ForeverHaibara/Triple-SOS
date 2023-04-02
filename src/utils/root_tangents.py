@@ -60,7 +60,7 @@ def root_tangents(roots, strict_roots = [], tol=1e-6, rounding=1e-5, mod=(180,25
                     'a2b+b2c+c2a-6abc']
                 continue
             elif abs(a - 0.198062) < tol and abs(b - 0.643104) < tol:
-                tangents += ['b2+c2-2cb-ba', '2a2+cb-3ca-ba', 'b2-c2+cb+ca-2ba', 's(c3-c2b-2cb2)+6cba', 
+                tangents += ['b2+c2-2cb-ba', '2a2+cb-3ca-ba', 'b2-c2+cb+ca-2ba', 's(c3-c2b-2cb2)+6cba',
                     '2cb2-ac2-c2b-ba2+a2c', '3c3+3b3-6a3+3b2a-a2c-2c2b-2ba2+16ac2-14cb2', 's(2c2b-3cb2)+3cba',
                     '16c3-38c2b+c2a+17cb2+15cba-6ca2-6b2a+ba2','c3a+ba3+c2ba+4cb2a-5cba2-2cb3',
                     'ab2+bc2+ca2-6abc']
@@ -121,7 +121,7 @@ def _root_tangents_quadratic(a, b, rounding = 1e-3, uncentered = False):
     if not uncentered:
         return tangents
     
-    u = a * b + a + b 
+    u = a * b + a + b
     if abs(u) > 1e-3:
         v = frac((a*a + b*b + 1) / u)
         if v != 1 and v > 1e-3:
@@ -250,16 +250,16 @@ def _root_tangents_border(a, b, rounding = 1e-3, uncentered = False):
                         tangents.append(f'{w}c2+{v}ac+{u}a2+{u*u/w}b2+{u*v/w}ba+{t}bc')
                         # a = (complex(a).real, -1)
 
-                        # Symmetric Forms 
+                        # Symmetric Forms
                         if abs(a) > 1e-3:
                             v = complex(a + 1 / a).real
                             v = frac(v)
                             if v > 1e-3 and v != 1:
                                 tangents += [f'a2+b2+c2-{v}*(ab+bc+ca)']
-                except: 
-                    # sympy.polys.polyerrors.NotAlgebraic: 
+                except:
+                    # sympy.polys.polyerrors.NotAlgebraic:
                     # 0.932752395204472 doesn't seem to be an algebraic element
-                    pass 
+                    pass
         elif a == 1:
             tangents.append('a+b-c')
 

@@ -1,11 +1,11 @@
 # author: https://github.com/ForeverHaibara
 from copy import deepcopy
-from numbers import Number as PythonNumber 
+from numbers import Number as PythonNumber
 import re
 import warnings
 
-import sympy as sp 
-import numpy as np 
+import sympy as sp
+import numpy as np
 from scipy.optimize import linprog
 # from scipy.optimize import OptimizeWarning
 # from matplotlib import pyplot as plt
@@ -98,11 +98,11 @@ class SOS_Manager():
         Render the grid by computing the values and setting the grid_val to rgba colors.
         """
         if self.deg > self._grid_settings['deglim']:
-            return 
+            return
 
         if method == 'integer':
             # integer arithmetic runs much faster than accuarate floating point arithmetic
-            # example: computing 45**18   is around ten times faster than  (1./45)**18 
+            # example: computing 45**18   is around ten times faster than  (1./45)**18
 
             # convert sympy.core.number.Rational / Float / Integer to python int / float
             coeffs = self.poly.coeffs()
@@ -129,7 +129,7 @@ class SOS_Manager():
 
             # preprocess the levels
             if max_v >= 0:
-                max_levels = [(i / self._grid_settings['resolution'])**2 * max_v for i in range(self._grid_settings['resolution']+1)] 
+                max_levels = [(i / self._grid_settings['resolution'])**2 * max_v for i in range(self._grid_settings['resolution']+1)]
             if min_v <= 0:
                 min_levels = [(i / self._grid_settings['resolution'])**2 * min_v for i in range(self._grid_settings['resolution']+1)]
         else:
@@ -139,10 +139,10 @@ class SOS_Manager():
             v = self.grid_value[k]
             if v > 0:
                 for i, level in enumerate(max_levels):
-                    if v <= level: 
+                    if v <= level:
                         v = 255 - (i-1)*255//(self._grid_settings['resolution']-1)
                         self.grid_color[k] = (255, v, 0, 255)
-                        break 
+                        break
                 else:
                     self.grid_color[k] = (255, 0, 0, 255)
             elif v < 0:
@@ -165,7 +165,7 @@ class SOS_Manager():
         """
 
         if self._poly_info['polytxt'] == txt:
-            return True 
+            return True
         
         try:
             poly , isfrac = PreprocessText(txt, cancel = cancel)
@@ -178,18 +178,18 @@ class SOS_Manager():
                 self._roots_info['roots'] = []
                 self._roots_info['strict_roots'] = []
             else:
-                # zero polynomial 
+                # zero polynomial
                 self._poly_info['poly'] = self._poly_info['zeropoly']
                 self._roots_info['rootsinfo'] = ''
                 self.grid_color = [(255,255,255,255)] * len(self.grid_coor)
                 n = degree_of_zero(txt)
-                self.deg = self.deg if n <= 0 else n 
+                self.deg = self.deg if n <= 0 else n
                 self.std_monoms = [(0,0,0)] * ((self.deg + 2) * (self.deg + 1) // 2)
                 self._roots_info['roots'] = []
                 self._roots_info['strict_roots'] = []
-                self._poly_info['isfrac'] = False 
-                self._poly_info['ishom'] = True 
-                self._poly_info['iszero'] = True 
+                self._poly_info['isfrac'] = False
+                self._poly_info['ishom'] = True
+                self._poly_info['iszero'] = True
                 return True
         except: # invalid input
             return False
@@ -198,7 +198,7 @@ class SOS_Manager():
         args = self.poly.args
         if len(args) == 4:
             self.std_monoms = self.poly.monoms()
-        elif len(args) == 3: 
+        elif len(args) == 3:
             if args[1].name == 'a':
                 if args[2].name == 'b':
                     self.std_monoms = [(i,j,0) for (i,j) in self.poly.monoms()]
@@ -223,11 +223,11 @@ class SOS_Manager():
             except:
                 pass
         
-        self._poly_info['polytxt'] = txt 
+        self._poly_info['polytxt'] = txt
         self._poly_info['isfrac'] = isfrac
         self._poly_info['iszero'] = False
         self._poly_info['ishom'], self._poly_info['iscyc'] = verify_hom_cyclic(self.poly, self.deg)
-        return True 
+        return True
 
 
     def getStandardForm(self, formatt = 'short'):
@@ -236,13 +236,13 @@ class SOS_Manager():
         elif formatt == 'factor':
             return poly_get_factor_form(self.poly)
 
-    def _inquire_monoms(self, n: int):        
+    def _inquire_monoms(self, n: int):
         if not (n in self.dict_monoms.keys()):
             self.dict_monoms[n] , self.inv_monoms[n] = generate_expr(n)
                 
         dict_monom = self.dict_monoms[n]
-        inv_monom  = self.inv_monoms[n]  
-        return dict_monom, inv_monom 
+        inv_monom  = self.inv_monoms[n]
+        return dict_monom, inv_monom
 
 
     def _inquire_basis(self, n: int):
@@ -251,12 +251,12 @@ class SOS_Manager():
             self.names[n], self.polys[n], self.basis[n] = generate_basis(n, dict_monom, inv_monom, ['a2-bc','a3-bc2','a3-b2c'],[])
 
         names, polys, basis = deepcopy(self.names[n]), deepcopy(self.polys[n]), self.basis[n].copy()
-        return names, polys, basis 
+        return names, polys, basis
     
 
     def GUI_findRoot(self):
         if self.deg <= 1 or (not self._poly_info['iscyc']) or (self._poly_info['iszero']) or (not self._poly_info['ishom']):
-            return 
+            return
         
         self._roots_info['roots'], self._roots_info['strict_roots'] = root_findroot(
             self.poly, most = 5,
@@ -271,7 +271,7 @@ class SOS_Manager():
                 elif len(str(root)) > maxlen:
                     return round(complex(root).real, precision)
                 else:
-                    return root 
+                    return root
             for root in self._roots_info['roots']:
                 self._roots_info['rootsinfo'] += f'\n({Formatter(root[0])},{Formatter(root[1])},1)'
                 self._roots_info['rootsinfo'] += f' = {Formatter(self.poly(complex(root[0]).real, float(root[1]),1))}'
@@ -294,7 +294,7 @@ class SOS_Manager():
         multiplier_txt = text_multiplier(multipliers)
 
         # 0: LaTeX
-        self.sosresults[0] = prettyprint(y, names, 
+        self.sosresults[0] = prettyprint(y, names,
                         precision = self.precision, linefeed=linefeed).strip('$')
                         
         # if n - origin_deg >= 2:
@@ -308,13 +308,13 @@ class SOS_Manager():
         self.sosresults[2] = multiplier_txt[1] + 'f(a,b,c) = '
 
         # 1: txt
-        self.sosresults[1] = self.sosresults[0].strip('$').replace(' ','') 
+        self.sosresults[1] = self.sosresults[0].strip('$').replace(' ','')
         self.sosresults[1] = self.sosresults[1].replace('left','').replace('right','')
         self.sosresults[1] = self.sosresults[1].replace('cdot','')
         self.sosresults[1] = self.sosresults[1].replace('\\','').replace('sum','Σ')
         
         parener = lambda x: '(%s)'%x if '+' in x or '-' in x else x
-        self.sosresults[1] = re.sub('frac\{(.*?)\}\{(.*?)\}', 
+        self.sosresults[1] = re.sub('frac\{(.*?)\}\{(.*?)\}',
                         lambda x: '%s/%s'%(parener(x.group(1)), parener(x.group(2))),
                         self.sosresults[1])
 
@@ -326,18 +326,18 @@ class SOS_Manager():
             self.sosresults[1] = self.sosresults[1].replace('^%d'%(i+2),idx)
 
         # 2: formatted
-        self.sosresults[2] += prettyprint(y, names, 
+        self.sosresults[2] += prettyprint(y, names,
                         precision=self.precision, linefeed=self.linefeed, formatt=2, dectofrac=True)
                         
         if not equal:
-            self.sosresults[0] = self.sosresults[0].replace('=', '\\approx') 
+            self.sosresults[0] = self.sosresults[0].replace('=', '\\approx')
             self.sosresults[1] = self.sosresults[1].replace('=', '≈')
             self.sosresults[2] = self.sosresults[2].replace('=', '≈')
 
 
     def GUI_stateUpdate(self, stage = None):
-        if stage is not None: 
-            self.stage = stage 
+        if stage is not None:
+            self.stage = stage
         if self.GUI is not None:
             self.GUI.displaySOS()
 
@@ -365,7 +365,7 @@ class SOS_Manager():
         self.GUI_stateUpdate(30)
         
         # copy here to avoid troubles in async
-        original_poly = self.poly 
+        original_poly = self.poly
         strict_roots = self._roots_info['strict_roots'].copy()
         tangents = self._roots_info['tangents'].copy()
 
@@ -373,19 +373,19 @@ class SOS_Manager():
         x , names , polys , basis , multipliers = None , None , None , None , []
 
         for multiplier, poly, n in up_degree(self.poly, origin_deg, self.updeg):
-            multipliers = [multiplier] 
+            multipliers = [multiplier]
 
-            # try SOS on special structures 
+            # try SOS on special structures
             if use_structural_method:
-                special_result = SOS_Special(poly, n) 
+                special_result = SOS_Special(poly, n)
                 if special_result is not None:
                     new_multipliers , y , names = special_result
                     multipliers += new_multipliers
-                    polys = None 
-                    break 
+                    polys = None
+                    break
 
             dict_monom, inv_monom = self._inquire_monoms(n)
-            b = arraylize(poly, dict_monom, inv_monom)    
+            b = arraylize(poly, dict_monom, inv_monom)
                 
             # generate basis with degree n
             # make use of already-generated ones
@@ -402,7 +402,7 @@ class SOS_Manager():
                     warnings.simplefilter('once')
                     try:
                         x = linprog(np.ones(basis.shape[0]), A_eq=basis.T, b_eq=b, method='simplex')
-                        y = x.x 
+                        y = x.x
                     #, options={'tol':1e-9})
                     except:
                         pass
@@ -410,13 +410,13 @@ class SOS_Manager():
             if len(names) != 0 and (x is not None) and x.success:
                 self.stage = 50
                 #if self.GUI is not None: self.GUI.repaint()
-                break 
+                break
 
             self.GUI_stateUpdate(30+n)
             if verbose_updeg:
                 print('Failed with degree %d'%n)
                 
-        else: # failed                    
+        else: # failed
             self.GUI_stateUpdate(70)
             return ''
         
@@ -427,7 +427,7 @@ class SOS_Manager():
         self.GUI_prettyResult(y, names, multipliers, equal = equal)
         self.stage = 50
 
-        if self.GUI is not None: 
+        if self.GUI is not None:
             self.GUI_stateUpdate(50)
             #self.GUI.txt_displayResult.setText(self.sosresults[self.GUI.btn_displaymodeselect])
             #self.GUI.repaint()
@@ -472,7 +472,7 @@ class SOS_Manager():
         monoms.append((-1,-1,0))  # tail flag
 
         maxlen = 1
-        for coeff in coeffs: 
+        for coeff in coeffs:
             maxlen = max(maxlen,len(f'{round(float(coeff),4)}'))
 
         distance = max(maxlen + maxlen % 2 + 1, 8)
@@ -497,9 +497,9 @@ class SOS_Manager():
                 strings[j] += ' ' * (max(0, distance - len(txt))) + txt
         monoms.pop()
 
-        for i in range(len(strings[0])): 
+        for i in range(len(strings[0])):
             if strings[0][i] != ' ':
-                break 
+                break
         strings[0] += i * ' '
 
         # set the figure small enough
@@ -598,7 +598,7 @@ if __name__ == '__main__':
 
     # setPoly first, then get heatmap / coefficient triangle
     s = '3a3+3b3-6c3+3b2c-c2a-2a2b-2bc2+16ca2-14ab2'     # input
-    sos.setPoly(s)   # input the text 
+    sos.setPoly(s)   # input the text
     sos.save_heatmap('heatmap.png')  # save the heatmap to 'heatmap.png'
     print(sos.getStandardForm())
     
@@ -613,7 +613,7 @@ if __name__ == '__main__':
     # auto sum of square
     s = 's(a2)2-3s(a3b)'
     s = '4s(ab)s((a+b)^2(a+c)^2)-9p((a+b)^2)'
-    # no need to call setPoly when using GUI_SOS 
+    # no need to call setPoly when using GUI_SOS
     x = sos.GUI_SOS(s).strip('$')
     print(x, end='\n\n')
 
