@@ -821,6 +821,8 @@ def _sos_struct_sextic_iran96(coeff, real = False):
     s(a(b+c)(b+c-2a)2(b-c)2)
 
     s(12a5b+12a5c+72a4b2-212a4bc+72a4c2-167a3b3+200a3b2c+200a3bc2-189a2b2c2)
+
+    729p(a2)+288s(b2c2)s(a)2+21s(a3)s(a)3-14s(a)6-7s(a3-abc-3(a2b+ab2-2abc))2
     """
     if not (coeff((6,0,0)) == 0 and coeff((5,1,0)) == coeff((1,5,0)) and coeff((4,2,0)) == coeff((2,4,0)) and\
         coeff((3,2,1)) == coeff((2,3,1)) and coeff((5,1,0)) >= 0):
@@ -914,7 +916,7 @@ def _sos_struct_sextic_iran96(coeff, real = False):
                 min(w2, q2),
                 q2 - min(w2, q2),
                 w2 - min(w2, q2),
-                z - u_ * (u_ - 2) * m - 2*p + (w2 + q2 - min(w2, q2)),
+                z - u_ * (u_ + 2) * m - 2*p + (w2 + q2 - 2 * min(w2, q2)),
                 (coeff((2,2,2)) / 3 + (m + p + z) * 2 + q + w)
             ]
 
@@ -931,6 +933,7 @@ def _sos_struct_sextic_iran96(coeff, real = False):
                     'a^2*b^2*c^2'
                 ]
                 return multipliers, y, names
+
 
     if True:
         # Easy case 4, when we can extract some s(ab) * quartic
