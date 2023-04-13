@@ -32,8 +32,8 @@ def rationalize(v, rounding = 1e-2, mod = None, reliable = False) -> tuple:
     if v == 0:
         return 0 , 1
     else:
-        if True: #reliable:
-            # https://tieba.baidu.com/p/7846250213 
+        if True: # reliable:
+            # https://tieba.baidu.com/p/7846250213
             x = sp.Rational(v)
             t = sp.floor(x)
             x = x - t
@@ -41,14 +41,14 @@ def rationalize(v, rounding = 1e-2, mod = None, reliable = False) -> tuple:
             i = 0
             j = -1
             while i <= 31:
-                x = 1 / x 
+                x = 1 / x
                 t = sp.floor(x)
                 if (t == 0 or t == sp.nan or t == sp.zoo):
                     # truncate at the largest element
                     if reliable:
                         if len(fracs) > 1:
-                            j = max(range(1, len(fracs)), key = lambda u: fracs[u]) 
-                        else: 
+                            j = max(range(1, len(fracs)), key = lambda u: fracs[u])
+                        else:
                             j = 1
                     break
                 fracs.append(t)
@@ -63,18 +63,18 @@ def rationalize(v, rounding = 1e-2, mod = None, reliable = False) -> tuple:
                 # truncate the fraction list at j
                 for t in fracs[:j][::-1]:
                     x += t
-                    x = 1 / x 
+                    x = 1 / x
 
                 x = 1 / x
                 if abs(v - x) < 1e-6: # close approximation
-                    return x.p , x.q 
+                    return x.p , x.q
                 
-                # by experiment, |v-x| >> eps only happens when x.q = 2^k 
+                # by experiment, |v-x| >> eps only happens when x.q = 2^k
                 # where we should use the full fraction list
                 x = 0
                 for t in fracs[::-1]:
                     x += t
-                    x = 1 / x 
+                    x = 1 / x
 
                 x = 1 / x
                 # if abs(v - x) < 1e-6: # close approximation
@@ -86,25 +86,25 @@ def rationalize(v, rounding = 1e-2, mod = None, reliable = False) -> tuple:
                     x = 0
                     for t in fracs[:length][::-1]:
                         x += t
-                        x = 1 / x 
+                        x = 1 / x
 
                     x = 1 / x
                     if abs(v - x) < rounding: # close approximation
                         if length <= 1 or abs(v - x) < rounding ** 2: # very nice
-                            return x.p , x.q 
+                            return x.p , x.q
                         # cancel this move and use shorter truncation
                         x = 0
                         for t in fracs[:length-1][::-1]:
                             x += t
-                            x = 1 / x 
+                            x = 1 / x
 
                         x = 1 / x
-                        return x.p , x.q 
+                        return x.p , x.q
 
 
 
     ####################################################
-    # backup plan, has been deprecated, do not use it     
+    # backup plan, has been deprecated, do not use it
     ####################################################
     if round(v) != 0 and abs(v - round(v)) < rounding: # close to an integer
         return round(v) , 1
@@ -116,7 +116,7 @@ def rationalize(v, rounding = 1e-2, mod = None, reliable = False) -> tuple:
         mod = (mod,)
         
     for m in mod:
-        val = v * m 
+        val = v * m
         # if the resulting val is close to an integer, then treat it as integer
         if abs(val - round(val)) < rounding:
             val = round(val)
@@ -141,9 +141,9 @@ def rationalize_array(x, tol = 1e-7, reliable = True):
     y = []
     for v in x:
         if isinstance(v, float) or isinstance(v, sp.Float):
-            if abs(v) < tol: 
+            if abs(v) < tol:
                 y.append((0, 1))
-            else:            
+            else:
                 y.append(rationalize(v, reliable = reliable))
         elif isinstance(v, tuple):
             y.append(v)
@@ -198,19 +198,19 @@ def square_perturbation(a, b, times = 4):
     z = sp.Rational(z)  # convert to rational
 
     for i in range(times): # Newton has quadratic convergence, we only try a few times
-        # (a-t)/(b-t) = z^2  =>  t = (a - z^2 b) / (1 - z^2) 
+        # (a-t)/(b-t) = z^2  =>  t = (a - z^2 b) / (1 - z^2)
         if i > 0 or z == 1:
             # easy to see z > sqrt(a/b) (or z > sqrt(b/a))
             z = (z + a/b/z)/2 if a > b else (z + b/a/z)/2
         if a > b:
             t = (a - z*z*b) / (1 - z*z)
             if t < 0 or b < t:
-                continue 
+                continue
         else:
             t = (b - z*z*a) / (1 - z*z)
-            if t < 0 or a < t: 
-                continue 
-        yield t 
+            if t < 0 or a < t:
+                continue
+        yield t
 
 
 def verify(y, polys, poly, tol: float = 1e-10) -> bool:
@@ -224,23 +224,23 @@ def verify(y, polys, poly, tol: float = 1e-10) -> bool:
                 if coeff[1] != -1:
                     if not isinstance(coeff[0], sp.Expr):
                         poly = poly - sp.Rational(coeff[0] , coeff[1]) * f
-                    else: 
+                    else:
                         v = coeff[0] / coeff[1]
                         coeff_dom = PreprocessText_GetDomain(str(v))
                         if coeff_dom != sp.QQ:
                             v = sp.polys.polytools.Poly(str(v)+'+a', domain=coeff_dom)\
                                  - sp.polys.polytools.Poly('a',domain=coeff_dom)
-                        poly = poly - v * f 
+                        poly = poly - v * f
                 else:
                     poly = poly - coeff[0] * f
 
         for coeff in poly.coeffs():
             # some coefficient is larger than tolerance, approximation failed
             if abs(coeff) > tol:
-                return False    
+                return False
         return True
     except:
-        return False 
+        return False
 
 
 def verify_isstrict(func, root, tol=1e-9):
@@ -264,7 +264,7 @@ def findbest(choices, func, init_choice=None, init_val=2147483647):
     for choice in choices:
         val2 = func(choice)
         if val2 < val:
-            val = val2 
+            val = val2
             best_choice = choice
     return best_choice , val
 
@@ -275,7 +275,7 @@ def optimize_determinant(determinant, soft = False):
         v = determinant(a, b)
         if v <= 0:
             best_choice = (v, a, b)
-            break  
+            break
         elif v < best_choice[0]:
             best_choice = (v, a, b)
 
@@ -285,7 +285,7 @@ def optimize_determinant(determinant, soft = False):
             v = determinant(a, b)
             if v <= 0:
                 best_choice = (v, a, b)
-                break  
+                break
             elif v < best_choice[0]:
                 best_choice = (v, a, b)
 
@@ -297,21 +297,21 @@ def optimize_determinant(determinant, soft = False):
         da2 = da.diff('x')
         dab = da.diff('y')
         db2 = db.diff('y')
-        # x =[a',b'] <- x - inv(nabla)^-1 @ grad 
+        # x =[a',b'] <- x - inv(nabla)^-1 @ grad
         for i in range(20):
-            lasta , lastb = a , b 
+            lasta , lastb = a , b
             da_  = da(a,b)
             db_  = db(a,b)
             da2_ = da2(a,b)
             dab_ = dab(a,b)
             db2_ = db2(a,b)
-            det_ = da2_ * db2_ - dab_ * dab_ 
+            det_ = da2_ * db2_ - dab_ * dab_
             if det_ == 0:
-                break 
+                break
             else:
                 a , b = a - (db2_ * da_ - dab_ * db_) / det_ , b - (-dab_ * da_ + da2_ * db_) / det_
                 if abs(lasta - a) < 1e-9 and abs(lastb - b) < 1e-9:
-                    break 
+                    break
         v = determinant(a, b)
         
     if v > 1e-6 and not soft:
@@ -325,10 +325,10 @@ def optimize_determinant(determinant, soft = False):
         b_ = sp.Rational(*rationalize(b, rounding, reliable = False))
         v = determinant(a_, b_)
         if v <= 0:
-            break 
+            break
         rounding *= .1
     else:
-        return (a_, b_) if soft else None 
+        return (a_, b_) if soft else None
 
     a , b = a_ , b_
 
@@ -336,7 +336,7 @@ def optimize_determinant(determinant, soft = False):
 
 
 def root_findroot(
-        poly, 
+        poly,
         most = 5,
         grid_coor = None,
         grid_value = None,
@@ -409,7 +409,7 @@ def root_findroot(
     result_roots = [r for v, r in vals]
     strict_roots = [r for v, r in vals if v < reg]
 
-    print('Tolerance =', reg, '\nStrict Roots =', strict_roots,'\nNormal Roots =', 
+    print('Tolerance =', reg, '\nStrict Roots =', strict_roots,'\nNormal Roots =',
             list(set(result_roots) ^ set(strict_roots)))
     return result_roots, strict_roots
 
@@ -501,7 +501,7 @@ def _root_findroot_newton(
 
     for a , b in initial_guess:
         for iter in range(20): # by experiment, 20 is oftentimes more than enough
-            # x =[a',b'] <- x - inv(nabla)^-1 @ grad 
+            # x =[a',b'] <- x - inv(nabla)^-1 @ grad
             lasta = a
             lastb = b
             da_  = da(a,b)
@@ -509,14 +509,14 @@ def _root_findroot_newton(
             da2_ = da2(a,b)
             dab_ = dab(a,b)
             db2_ = db2(a,b)
-            det_ = da2_ * db2_ - dab_ * dab_ 
+            det_ = da2_ * db2_ - dab_ * dab_
             if det_ <= 0: # not locally convex / not invertible
-                break 
+                break
             else:
                 a , b = a - (db2_ * da_ - dab_ * db_) / det_ , b - (-dab_ * da_ + da2_ * db_) / det_
                 if abs(a - lasta) < 5e-15 and abs(b - lastb) < 5e-15:
                     # stop updating
-                    break 
+                    break
 
         if det_ <= -1e-6 or abs(a) < 1e-6 or abs(b) < 1e-6:
             # trivial roots
@@ -527,7 +527,7 @@ def _root_findroot_newton(
             result_roots.append((sp.Float(a), sp.Float(b)))
             # if poly(a,b) * reg < 1e-6:
             #     # having searched one nontrivial root is enough as we cannot handle more
-            #     break 
+            #     break
 
     return result_roots
 
@@ -547,7 +547,7 @@ def cancel_denominator(nums):
     return p / q
 
 if __name__ == '__main__':
-    from tqdm import tqdm 
+    from tqdm import tqdm
     for i in range(1, 3):
         for j in tqdm(range(1, 65537)):
             if gcd(i,j) == 1:

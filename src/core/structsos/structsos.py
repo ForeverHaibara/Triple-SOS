@@ -79,7 +79,7 @@ def SOS_Special(poly, degree, ext = False):
 
 
     if (y is None) or (names is None) or len(y) == 0:
-        return None 
+        return None
 
     y = [x.as_numer_denom() if not isinstance(x, tuple) else x for x in y]
-    return multipliers, y, names 
+    return multipliers, y, names

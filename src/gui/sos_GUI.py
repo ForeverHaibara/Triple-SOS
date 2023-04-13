@@ -11,19 +11,19 @@ def _print_grid_triangle(self):
     '''print the coefficient triangle in the Qt canva'''
     poly = self.SOS_Manager.poly
     if poly is None:
-        return 
+        return
     n = deg(poly)
     if n == 0:
         return
     w = self.width()
     h = self.height()
 
-    ctrx = int(w*0.36)   # display centerx 
+    ctrx = int(w*0.36)   # display centerx
     ctry = int(h*0.3926) # display centery
     bw = w*7//10
     bh = h-h//18-h//20
     l = min(bw,bh)//(n+1)  # the length of each equilateral triangle
-    #QtGui.QPainter.drawText(QtGui.QPainter(self), ctrx, ctry, "Center")
+    # QtGui.QPainter.drawText(QtGui.QPainter(self), ctrx, ctry, "Center")
     ulx = ctrx - (l*n>>1)
     uly = ctry - 13*n*l//45
 
@@ -47,7 +47,7 @@ def _print_grid_triangle(self):
                 t += 1
             else:
                 txt = '0'
-            QtGui.QPainter.drawText(qp, 
+            QtGui.QPainter.drawText(qp,
                             ulx + l*(2*i-j)//2 - len(txt)*(fontsize-1)//2, uly + l*j*13//15, txt)
     
     # restore
@@ -60,12 +60,12 @@ def _print_poly_triangle(self):
     w = self.width()
     h = self.height()
 
-    ctrx = int(w*0.856)   # display centerx 
+    ctrx = int(w*0.856)   # display centerx
     ctry = int(h*0.133)   # display center
     bw = w*21//80
     bh = h*60//120
     l = min(bw,bh)//n  # the length of each equilateral triangle
-    #QtGui.QPainter.drawText(QtGui.QPainter(self), ctrx, ctry, "Center")
+    # QtGui.QPainter.drawText(QtGui.QPainter(self), ctrx, ctry, "Center")
     ulx = ctrx - (l*n>>1)
     uly = ctry - 13*n*l//45
     
@@ -74,7 +74,7 @@ def _print_poly_triangle(self):
     color = self.SOS_Manager.grid_color
     for i in range(n+1):
         for j in range(n+1-i):
-            QtGui.QPainter.fillRect(qp, 
+            QtGui.QPainter.fillRect(qp,
                             ulx + l*(i+j*2)//2, uly + l*i*13//15, l, l, QtGui.QColor(*color[t]))
             t += 1
 
@@ -85,9 +85,9 @@ if __name__ == '__main__':
     # txt = 's(a10)'
     # sos.setPoly(txt)
     # print(type(round(sp.sympify('1/3*1.0'),4)))
-    #print(sos.grid_val)
-    #sos.GUI_SOS(txt)
-    #print(sos.sosresults)
+    # print(sos.grid_val)
+    # sos.GUI_SOS(txt)
+    # print(sos.sosresults)
     '''
     from time import time as timer
     txt = 's(a9)s(a3)+9p(a4)-6a3b3c3s(a3)'
@@ -101,4 +101,4 @@ if __name__ == '__main__':
     print('Tangents = ',sos.tangents)
     #print(sos.basis[6].shape)
     '''
-    #renderLaTeX(r'c:\ |z-z_0|=1 \\ \frac{1}{2\pi i}\int_c \frac{f(z)}{z-z_0}dz = Res_{z=z_0}f(z)','Formula.png')
+    # renderLaTeX(r'c:\ |z-z_0|=1 \\ \frac{1}{2\pi i}\int_c \frac{f(z)}{z-z_0}dz = Res_{z=z_0}f(z)','Formula.png')

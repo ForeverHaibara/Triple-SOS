@@ -1,11 +1,11 @@
-import sympy as sp 
+import sympy as sp
 from flask import Flask, render_template, request, jsonify
 from flask_cors import CORS
 
 # from sum_of_square import *
 from src.core.sos_manager import SOS_Manager
 
-_debug_ = False 
+_debug_ = False
 
 class SOS_WEB(Flask):
     def __init__(self, name):
@@ -21,7 +21,7 @@ def preprocess():
     poly = app.SOS_Manager.poly
     
     # if poly is None:
-    #     return 
+    #     return
 
     if app.SOS_Manager._poly_info['isfrac']:
         cancel = app.SOS_Manager.getStandardForm()
@@ -34,7 +34,7 @@ def preprocess():
     monoms.append((-1,-1,0))  # tail flag
     
     t = 0
-    txts = [] 
+    txts = []
     for i in range(n+1):
         for j in range(i+1):
             if monoms[t][0] == n - i and monoms[t][1] == i - j:
@@ -66,12 +66,12 @@ def preprocess():
 @app.route('/process/sos', methods=['POST'])
 def SumOfSquare():
     req = request.get_json()
-    app.SOS_Manager._roots_info['tangents'] = [tg 
+    app.SOS_Manager._roots_info['tangents'] = [tg
                         for tg in req['tangents'].split('\n') if len(tg) > 0]
 
     result = app.SOS_Manager.GUI_SOS(req['poly'],
                                      skip_setpoly=True, skip_findroots=True, skip_tangents=True,
-                                     verbose_updeg=True, 
+                                     verbose_updeg=True,
                                      use_structural_method=req['use_structural_method'])
     
     return jsonify(latex = app.SOS_Manager.sosresults[0],
@@ -96,7 +96,7 @@ def hello_world():
 
 
 if __name__ == '__main__':
-    if _debug_: 
+    if _debug_:
         # python "D:\Python Projects\Trials\Inequalities\Triples\web_main.py" dev
         from flask_script import Manager
         manager = Manager(app)
@@ -107,7 +107,7 @@ if __name__ == '__main__':
             live_server.watch(
                 "D:\\Python Projects\\Trials\\Inequalities\\Triples\\*.*"
             )
-            live_server.serve(open_url_delay=True) 
+            live_server.serve(open_url_delay=True)
         manager.run()
     else:
         app.run(port=5000)

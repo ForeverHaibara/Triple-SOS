@@ -56,7 +56,7 @@ def poly_get_standard_form(poly, formatt = 'short', is_cyc = None):
         if is_cyc is not None and is_cyc == True:
             txt = ''
             for coeff, monom in zip(poly.coeffs(), poly.monoms()):
-                a , b , c = monom 
+                a , b , c = monom
                 if a >= b and a >= c:
                     if a == b and a == c:
                         txt += _formatter(coeff/3) + _title_parser('a',a) + _title_parser('b',b) + _title_parser('c',c)
@@ -66,14 +66,14 @@ def poly_get_standard_form(poly, formatt = 'short', is_cyc = None):
                 txt = txt[1:]
             return 's(' + txt + ')'
 
-        else: # not cyclic 
+        else: # not cyclic
             txt = ''
             for coeff, monom in zip(poly.coeffs(), poly.monoms()):
                 a , b , c = monom
                 txt += _formatter(coeff) + _title_parser('a',a) + _title_parser('b',b) + _title_parser('c', c)
             if txt.startswith('+'):
                 txt = txt[1:]
-            return txt 
+            return txt
 
 def poly_get_factor_form(poly):
     coeff, parts = poly.factor_list()
@@ -181,7 +181,7 @@ def PreprocessText_Expansion(poly):
 def PreprocessText_Completion(poly: str):
     '''1/5a3b2c   ->   1/5*a^3*b^2*c'''
     poly = poly.replace(' ','')
-    i = 0 
+    i = 0
     while i < len(poly) - 1:
         if 48 <= ord(poly[i]) <= 57: # '0'~'9'
             if poly[i+1] == '(' or 97 <= ord(poly[i+1]) <= 122: # alphabets
@@ -192,8 +192,8 @@ def PreprocessText_Completion(poly: str):
                 poly = poly[:i+1] + '*' + poly[i+1:]
                 i += 1
             elif 48 <= ord(poly[i+1]) <= 57: # '0'~'9'
-                poly = poly[:i+1] + '^' + poly[i+1:]  
-                i += 1     
+                poly = poly[:i+1] + '^' + poly[i+1:]
+                i += 1
         i += 1
 
     poly = poly.replace('s*q*r*t*','sqrt')
@@ -223,7 +223,7 @@ def verify_hom_cyclic(poly, n):
     for coeff, monom in zip(poly.coeffs(), poly.monoms()):
         if sum(monom) != n:
             return False, False
-        coeffs[(monom[0], monom[1])] = coeff 
+        coeffs[(monom[0], monom[1])] = coeff
         
     for i in range((n-1)//3+1, n+1):
         # 0 <= k = n-i-j <= i
@@ -234,9 +234,9 @@ def verify_hom_cyclic(poly, n):
             if u == v: # Nones are treated the same
                 w = coeffs.get((n-i-j,i))
                 if u == w:
-                    continue 
-            return True, False 
-    return True, True 
+                    continue
+            return True, False
+    return True, True
 
 
 def PreprocessText_GetDomain(poly: str):
@@ -255,7 +255,7 @@ def PreprocessText_GetDomain(poly: str):
                     domain_ext.add(int(t))
 
     if len(domain_ext) == 0:
-        return sp.QQ 
+        return sp.QQ
     
     return sp.QQ.algebraic_field(*tuple(sp.sqrt(i) for i in domain_ext))
 
@@ -291,25 +291,25 @@ def PreprocessText(poly, cyc=False, retText=False, cancel=False, variables = Non
         assert (not cyc), 'Cyclic is not enabled when cancel == True or variabels is not None'
         
         poly = sp.sympify(poly)
-        if variables is not None: 
+        if variables is not None:
             poly = poly.subs(variables)
             # for name, value in variables.items():
             #     try:
             #         poly = poly.subs(name, value)
             #     except:
-            #         pass 
+            #         pass
                 
         if cancel:
             try:
                 frac = sp.fraction(sp.cancel(poly))
                 if not frac[1].is_constant():
                     poly = sp.polys.polytools.Poly(frac[0], domain = dom)
-                    return poly , True 
+                    return poly , True
                 else:
                     poly = sp.polys.polytools.Poly(poly, domain = dom)
-                    return poly , False 
+                    return poly , False
             except:
-                return None, True 
+                return None, True
         
         try:
             poly = sp.polys.polytools.Poly(poly, domain = dom)
@@ -325,7 +325,7 @@ def PreprocessText(poly, cyc=False, retText=False, cancel=False, variables = Non
                 poly = None
                 
     if cancel:
-        return poly , False 
+        return poly , False
     return poly
 
 
@@ -341,21 +341,21 @@ def degree_of_zero(poly):
     length = len(poly)
     bracket = 0
     while i < length:
-        if poly[i] == '+' or poly[i] == '-': 
+        if poly[i] == '+' or poly[i] == '-':
             # run to the end of this bracket (sum does not affect the degree)
             # e.g. a*(a^2+a*b)*c -> a*(a^2)*c
             bracket_cur = bracket
             j = i + 1
-            is_constant = True 
+            is_constant = True
             while j < length:
                 if poly[j] == '(':
                     bracket += 1
                 elif poly[j] == ')':
                     bracket -= 1
                     if bracket < bracket_cur:
-                        break 
+                        break
                 elif poly[j] in 'abc':
-                    is_constant = False 
+                    is_constant = False
                 j += 1
             if is_constant == False:
                 poly = poly[:i] + poly[j:]
@@ -369,7 +369,7 @@ def degree_of_zero(poly):
             while i < length and (poly[i] == '-' or poly[i] == '+'):
                 i += 1
             if i == length:
-                break 
+                break
             
         i += 1
         
@@ -390,24 +390,24 @@ def _get_suffix(name):
     try:
         bracket = 0
         right = 0
-        left = 0 
+        left = 0
         j = len(name) - 1
-        is_square = False 
+        is_square = False
         while j >= 0:
             if name[j] == '^':
                 is_square = True
             elif name[j] == ')':
-                if bracket == 0: # first right bracket 
+                if bracket == 0: # first right bracket
                     if is_square:
                         right = j
                     else: # not square, e.g. a*(a-b)*(a-c)
-                        return None 
+                        return None
                 bracket += 1
             elif name[j] == '(':
                 bracket -= 1
                 if bracket == 0:
                     left = j
-                    break 
+                    break
             j -= 1
         
         # permute the first alphabet to 'b' for alignment,
@@ -415,14 +415,14 @@ def _get_suffix(name):
         for i in range(left, right):
             if name[i] in 'abc':
                 alpha = name[i]
-                break 
+                break
         else:
-            return None 
+            return None
 
         for i in range(left, -1, -1):
             if name[i] == '*':
-                cut = i 
-                break 
+                cut = i
+                break
         
         if alpha == 'a':
             return (next_permute(name), cut, left, right)
@@ -430,7 +430,7 @@ def _get_suffix(name):
             return (next_permute(next_permute(name)), cut, left, right)
         return (name, cut, left, right)
     except:
-        return None 
+        return None
 
 
 def text_compresser(y, names):
@@ -441,9 +441,9 @@ def text_compresser(y, names):
     for coeff, name in zip(y, names):
         result = _get_suffix(name)
         if result is not None:
-            name, cut, left, right = result 
+            name, cut, left, right = result
             analogue = suffixes.get(name[left:])
-            if analogue is not None: 
+            if analogue is not None:
                 analogue.append((coeff, name[:cut]))
             else:
                 suffixes[name[left:]] = [(coeff, name[:cut])]
@@ -453,9 +453,9 @@ def text_compresser(y, names):
 
     for suffix, val in suffixes.items():
         if len(val) > 1: # more than 1
-            merge = 0 
+            merge = 0
             p , q = 0, 1
-            is_fraction = True 
+            is_fraction = True
             for coeff, _ in val:
                 is_fraction = is_fraction and (isinstance(coeff[0], int) or coeff[0].is_integer)
                 if is_fraction:
@@ -474,13 +474,13 @@ def text_compresser(y, names):
         else:
             # only one term
             coeff, prefix = val[0]
-            p , q = coeff 
+            p , q = coeff
             merge = sp.sympify(prefix)
                   
         new_y.append((p,q))
         new_names.append(merge * sp.sympify(suffix))
         
-    return new_y, new_names 
+    return new_y, new_names
 
 
 def text_sorter(y, names):
@@ -488,13 +488,13 @@ def text_sorter(y, names):
     Sort the texts of 'sum of square' in order to balance the length of each line.
     '''
 
-    # first evaluate the length of latex of each name 
+    # first evaluate the length of latex of each name
     lengths = []
     for coeff, name in zip(y, names):
         if isinstance(name, str):
             latex = sp.latex(sp.sympify(name))
         else:
-            latex = sp.latex(name) 
+            latex = sp.latex(name)
         length = max(len(str(coeff[0])), len(str(coeff[1]))) + 4 # assume '+sum' is of length 4
         for i in latex:
             if 48 <= ord(i) <= 57 or 97 <= ord(i) <= 99 or i == '+' or i == '-': # 0123456789 abc +-
@@ -515,13 +515,13 @@ def text_sorter(y, names):
         i = index[j]
         accumulate_length += lengths[i]
         if accumulate_length > linelength: # start a new line
-            linefeed[j] = True 
+            linefeed[j] = True
             accumulate_length = lengths[i]
         
         new_y.append(y[i])
         new_names.append(names[i])
     
-    return new_y, new_names, linefeed 
+    return new_y, new_names, linefeed
 
 
 def _parse_latex(expr):
@@ -585,13 +585,13 @@ def prettyprint(y, names, precision=6, linefeed=2, formatt=0, dectofrac=False):
             # coefficient
             if coeff[1] != -1: # fraction format
                 if coeff[1] != 1:
-                    coeff_str = sp.latex(coeff[0]) if isinstance(coeff[0], sp.Expr) else str(coeff[0]) 
+                    coeff_str = sp.latex(coeff[0]) if isinstance(coeff[0], sp.Expr) else str(coeff[0])
                     result += '+ \\frac{%s}{%d}'%(coeff_str,coeff[1])
                 elif coeff[0] != 1:
-                    coeff_str = sp.latex(coeff[0]) if isinstance(coeff[0], sp.Expr) else str(coeff[0]) 
+                    coeff_str = sp.latex(coeff[0]) if isinstance(coeff[0], sp.Expr) else str(coeff[0])
                         
                     if isinstance(coeff[0], sp.Add):
-                        coeff_str = '\\left(%s\\right)'%coeff_str 
+                        coeff_str = '\\left(%s\\right)'%coeff_str
                     result += f'+ {coeff_str} '
                 else:
                     result += '+ '
@@ -647,7 +647,7 @@ def prettyprint(y, names, precision=6, linefeed=2, formatt=0, dectofrac=False):
 
         # handle fractions
         parener = lambda x: '(%s)'%x if '+' in x or '-' in x else x
-        result = re.sub('frac\{(.*?)\}\{(.*?)\}', 
+        result = re.sub('frac\{(.*?)\}\{(.*?)\}',
                         lambda x: '%s/%s'%(parener(x.group(1)), parener(x.group(2))),
                         result)
 
@@ -668,14 +668,14 @@ def text_multiplier(multipliers):
     """
     
     if multipliers is None or len(multipliers) == 0:
-        return '', '' 
+        return '', ''
     
     merged_multipliers = {}
     for multiplier in multipliers:
         if multiplier is None:
             continue
         multiplier = multiplier.replace(' ','')
-        t = merged_multipliers.get(multiplier) 
+        t = merged_multipliers.get(multiplier)
         if t is not None:
             merged_multipliers[multiplier] = t + 1
         else:

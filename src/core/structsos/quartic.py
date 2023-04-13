@@ -82,8 +82,8 @@ def _sos_struct_quartic_core(coeff):
         return _sos_struct_quartic_degenerate(coeff)
 
     y = [
-        m/2, 
-        det/6/m, 
+        m/2,
+        det/6/m,
         coeff((2,1,1)) + m + p + n + q
     ]
 
@@ -91,7 +91,7 @@ def _sos_struct_quartic_core(coeff):
         return [], None, None
 
     # handle irrational cases
-    # all_rational = all(isinstance(_, sp.Rational) for _ in (m,p,n,q))    
+    # all_rational = all(isinstance(_, sp.Rational) for _ in (m,p,n,q))
     # if not all_rational:
     #     y = [sp.simplify(_) for _ in y]
     # formatter = (lambda x: x) if all_rational else (lambda x: '(%s)'%sp.simplify(x))
@@ -218,10 +218,10 @@ def _sos_struct_quartic_biased(coeff):
             for numer_r2 in rationalize_bound(numer_r, direction = 0, compulsory = True):
                 symmetric_axis = symmetric(numer_r2)
                 if symmetric_axis >= 0 and new_det(symmetric_axis, numer_r2) <= 0:
-                    u_ = numer_r2 
+                    u_ = numer_r2
                     break
     
-    if u_ is not None:                
+    if u_ is not None:
         y = [symmetric(u_) / (2*(u_**2*(u_**2 + 1) + 1)) * m]
         names = [f'a*b*(a-c-({u_})*(b-c))^2']
         
@@ -569,7 +569,7 @@ def _sos_struct_quartic_uncentered(coeff, recur = False):
                 for x2 in rationalize_bound(x_, direction = 1, compulsory = True):
                     if x2 < r:
                         def new_coeff(x):
-                            coeffs = {(4,0,0): coeff((4,0,0)), (3,1,0): coeff((3,1,0)), 
+                            coeffs = {(4,0,0): coeff((4,0,0)), (3,1,0): coeff((3,1,0)),
                                         (2,2,0): coeff((2,2,0)), (1,3,0): coeff((1,3,0)), (2,1,1): x2 * m}
                             return coeffs[x]
                         result = _sos_struct_quartic_uncentered(new_coeff, recur = True)

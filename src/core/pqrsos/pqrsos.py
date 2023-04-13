@@ -13,7 +13,7 @@ def SOS_PQR(poly):
     n = deg(poly)
     # if symmetric
 
-    # 
+    #
     if n > 8:
         return
 

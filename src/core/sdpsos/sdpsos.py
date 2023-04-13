@@ -1,6 +1,6 @@
 from itertools import product
 
-import picos 
+import picos
 import sympy as sp
 import numpy as np
 
@@ -13,7 +13,7 @@ def SDPConvertor(n, dict_monom: dict):
     # e.g. when n=6
     # first find monomials for degree=3: a^3, a^2b, a^2c, ab^2, abc, ac^2, b^3, b^2c, bc^2, c^3
     # then match pairwise and put them into UFS (union-find-set), e.g. a^2b * ac^2 = a^3bc^2 = a^3 * bc^2
-    # for cyclic ones, only 
+    # for cyclic ones, only
 
     conversion = dict((i, []) for i in dict_monom.keys())
     def sum_monoms(x, y):
@@ -22,14 +22,14 @@ def SDPConvertor(n, dict_monom: dict):
     for m1, m2 in product(product(range(n//2+1), repeat = 2), repeat = 2):
         if sum(m1) <= n//2 and sum(m2) <= n//2 and m1 != m2:
             s = conversion.get(sum_monoms(m1, m2))
-            if s is not None: 
-                s.append((m1, m2))           
+            if s is not None:
+                s.append((m1, m2))
      
     for m1 in product(range(n//2+1), repeat=2):
         # cases when m1 = m2
         s = conversion.get(sum_monoms(m1, m1))
-        if s is not None: 
-            s.append((m1, m1))      
+        if s is not None:
+            s.append((m1, m1))
 
     # number of variables
     print(sum([len(i) for i in conversion.values()])-len(conversion.keys()))
@@ -54,7 +54,7 @@ def SDPPerturbation(X, poly, inv_vec, conversion, next_monom):
     def perm_monom(x, times = 1):
         for t in range(times):
             x = next_monom(x)
-        return x 
+        return x
 
     rounding = 1
     for i in range(1):
@@ -66,13 +66,13 @@ def SDPPerturbation(X, poly, inv_vec, conversion, next_monom):
                 for altern in alterns:
                     x , y = inv_vec[perm_monom(altern[0],j)], inv_vec[perm_monom(altern[1],j)]
                     if abs(X[x,y]) < rounding * 1e-3:
-                        S[x,y] = 0 
+                        S[x,y] = 0
                     else:
                         S[x,y] = sp.Rational(*rationalize(X[x,y], rounding, reliable=False))
                     
                     s += S[x,y]
                 
-                altern = alterns[0] 
+                altern = alterns[0]
                 x , y = inv_vec[perm_monom(altern[0],j)], inv_vec[perm_monom(altern[1],j)]
                 if x != y: # then S[x,y], S[y,x] are already registered
                     S[x,y] += (coeff(monom) - s) / 2
@@ -91,7 +91,7 @@ def RationalCongruence(A):
     """
     Given a matrix A, find rational 
     """
-    return A 
+    return A
 
 
 def SOS_SDP(poly, dict_monom: dict):
@@ -140,7 +140,7 @@ def SOS_SDP(poly, dict_monom: dict):
 
     for S in SDPPerturbation(X.value, poly, inv_vec, conversion, next_monom):
         S = RationalCongruence(S)
-    print(np.linalg.eigvalsh(S)) 
+    print(np.linalg.eigvalsh(S))
 
 
 if __name__ == '__main__':

@@ -1,4 +1,4 @@
-from math import ceil as ceiling 
+from math import ceil as ceiling
 from itertools import product
 
 import sympy as sp
@@ -21,17 +21,17 @@ def _merge_sos_results(multipliers, y, names, result, abc = False, keepdeg = Fal
         If keepdeg == True, then multiply each term from new result by multipliers.
     """
     if result is None or result[1] is None:
-        return None, None, None  
+        return None, None, None
     if y is None:
         y = []
-        names = [] 
+        names = []
     if multipliers is None:
-        multipliers = [] 
+        multipliers = []
 
     # (multipliers * f - y * names )  *  m' == y' * names'
-    m2 , y2 , names2 = result 
+    m2 , y2 , names2 = result
  
-    y = y + y2 
+    y = y + y2
 
     # names: e.g.  m2 = ['a','a^2'] -> names = ['(a+b+c)*(a^2+b^2+c^2)'*...]
     if len(m2) > 0:
@@ -55,38 +55,38 @@ def _merge_sos_results(multipliers, y, names, result, abc = False, keepdeg = Fal
             names2[i] = 'a*b*c*' + names2[i]
 
     multipliers += m2
-    names = names + names2 
+    names = names + names2
 
-    return multipliers, y, names 
+    return multipliers, y, names
 
 
-def _make_coeffs_helper(poly, degree):    
+def _make_coeffs_helper(poly, degree):
     coeffs = {}
     for coeff, monom in zip(poly.coeffs(), poly.monoms()):
         if degree > 4 and not isinstance(coeff, sp.Rational): #isinstance(coeff, sp.Float):
             coeff = sp.Rational(*rationalize(coeff, reliable = True))
             # coeff = coeff.as_numer_denom()
-        coeffs[monom] = coeff 
+        coeffs[monom] = coeff
 
     def coeff(x):
         t = coeffs.get(x)
         if t is None:
             return sp.S(0)
-        return t 
+        return t
 
     return coeff, coeffs
 
 
 def _try_perturbations(
-        poly, 
-        degree, 
-        multipliers, 
-        a, 
-        b, 
-        base, 
-        name: str, 
-        recurrsion = None, 
-        times = 4, 
+        poly,
+        degree,
+        multipliers,
+        a,
+        b,
+        base,
+        name: str,
+        recurrsion = None,
+        times = 4,
         **kwargs
     ):
     subtractor = sp.polys.polytools.Poly(cycle_expansion(name))
@@ -94,14 +94,14 @@ def _try_perturbations(
     for t in square_perturbation(a, b, times = times):
         y = [t * base]
         names = [name]
-        poly2 = poly - y[0] * subtractor 
+        poly2 = poly - y[0] * subtractor
         multipliers, y , names = _merge_sos_results(
             multipliers, y, names, recurrsion(poly2, degree, **kwargs)
         )
         if y is not None:
-            break 
+            break
 
-    return multipliers, y, names 
+    return multipliers, y, names
 
 
 class FastPositiveChecker():
@@ -111,7 +111,7 @@ class FastPositiveChecker():
         # (a, ka, 1)   where k = slope, WLOG. a >= ka (and a >= 1), i.e. k <= 1
         self.slopes = (0, 1, sp.Rational(1,2), sp.Rational(1,3), sp.Rational(2,3), sp.Rational(1,5), sp.Rational(4,5))
         self.sloped_poly = []
-        self.args = None 
+        self.args = None
     
     def setPoly(self, poly):
         poly = poly.subs('c', 1)
@@ -119,10 +119,10 @@ class FastPositiveChecker():
         self.sloped_poly = [poly.subs('b', slope) for slope in self.slopes]
     
     def check(self, args = None):
-        self.args = args 
+        self.args = args
         poly_subs = self.poly.subs(args) if args is not None else self.poly
         if poly_subs(sp.Rational(1,3),sp.Rational(1,2)) < 0:
-            return 32 
+            return 32
 
         is_zeroroot = poly_subs(0,0) == 0
         for i in range(len(self.slopes)):
@@ -130,7 +130,7 @@ class FastPositiveChecker():
             count_roots = sp.polys.polytools.count_roots(sloped_poly, 0)
             
             if count_roots > is_zeroroot + 1:
-                return 32 - i 
+                return 32 - i
             elif count_roots == is_zeroroot + 1:
                 is_oneroot = sloped_poly(1) == 0
                 if (not is_oneroot) or sloped_poly(sp.Rational(1,2)) < 0 or sloped_poly(2) < 0:
@@ -148,9 +148,9 @@ class FastPositiveChecker():
         dab = da.diff('b')
         db2 = db.diff('b')
         for a , b in product(np.linspace(0.1,0.9,num=10),repeat=2):
-            outside = False 
+            outside = False
             for iter in range(20): # by experiment, 20 is oftentimes more than enough
-                # x =[a',b'] <- x - inv(nabla)^-1 @ grad 
+                # x =[a',b'] <- x - inv(nabla)^-1 @ grad
                 lasta = a
                 lastb = b
                 da_  = da(a,b)
@@ -158,23 +158,23 @@ class FastPositiveChecker():
                 da2_ = da2(a,b)
                 dab_ = dab(a,b)
                 db2_ = db2(a,b)
-                det_ = da2_ * db2_ - dab_ * dab_ 
+                det_ = da2_ * db2_ - dab_ * dab_
                 if det_ <= -1e-6: # not locally convex
-                    break 
+                    break
                 elif det_ == 0: # not invertible
-                    break 
+                    break
                 else:
                     a , b = a - (db2_ * da_ - dab_ * db_) / det_ , b - (-dab_ * da_ + da2_ * db_) / det_
                     if a < 0 or b < 0:
-                        outside = True 
+                        outside = True
                     if abs(a - lasta) < 1e-9 and abs(b - lastb) < 1e-9:
                         # stop updating
-                        break 
+                        break
 
             if not outside:
                 if poly(a, b) < -1e-6:
                     return False
-        return True 
+        return True
 
     def argnames(self):
         args = []
@@ -182,7 +182,7 @@ class FastPositiveChecker():
             arg_str = str(arg)
             if arg_str != 'a' and arg_str != 'b':
                 args.append(arg_str)
-        return args 
+        return args
 
 
 def search_positive(poly_str: str):
@@ -194,7 +194,7 @@ def search_positive(poly_str: str):
 
     search_range = []
     if len(argnames) is None:
-        return poly_str 
+        return poly_str
     elif len(argnames) == 1:
         search_range = [(i,) for i in range(-6, 7)] + [(sp.Rational(i, 2),) for i in range(-9, 11, 2)]
     elif len(argnames) == 2:
@@ -202,10 +202,10 @@ def search_positive(poly_str: str):
     elif len(argnames) == 3:
         search_range = product(range(-2, 3), repeat = 3) # 125
     else:
-        search_range = product(range(-1, 2), repeat = len(argnames)) # 3^n 
+        search_range = product(range(-1, 2), repeat = len(argnames)) # 3^n
     
     def _grid_search(poly_str, search_range):
-        best_choice = None 
+        best_choice = None
         for args in search_range:
             v = fpc.check(dict(zip(argnames, args)))
             if best_choice is None or best_choice[0] > v:
@@ -213,12 +213,12 @@ def search_positive(poly_str: str):
             if v == 0:
                 for argname, arg in zip(argnames, args):
                     poly_str = poly_str.replace(argname, f'({arg})')
-                return poly_str , best_choice 
-        return None , best_choice 
+                return poly_str , best_choice
+        return None , best_choice
     
     result , best_choice = _grid_search(poly_str, search_range)
     if result is not None:
-        return result 
+        return result
     if best_choice[0] <= 30: # promising
         if len(argnames) == 1:
             search_range = [(0,)] + [(sp.Rational(i, 4),) for i in range(-3, 5, 2)] + [(sp.Rational(i, 8),) for i in range(-7, 9, 2)]
@@ -231,7 +231,7 @@ def search_positive(poly_str: str):
                 search_range = [sp.Rational(i, 2) for i in (-1, 1)]
 
             search_range = [0] + search_range
-            search_range = list(product(search_range, repeat = len(argnames))) 
+            search_range = list(product(search_range, repeat = len(argnames)))
 
         for i in range(len(search_range)):
             biased_args = tuple(a+b for a, b in zip(best_choice[1], search_range[i]))
@@ -250,20 +250,20 @@ def convex_hull_poly(poly):
     
     n = sum(monoms[0])    # degree
     skirt = monoms[0][0]  # when (abc)^n | poly, then skirt = n
-    # print(skirt) 
+    # print(skirt)
 
     convex_hull = [(i, j, n-i-j) for i , j in product(range(n+1), repeat = 2) if i+j <= n]
     convex_hull = dict(zip(convex_hull, [True for i in range((n+1)*(n+2)//2)]))
 
     vertices = [(monoms[0][1]-skirt, monoms[0][0]-skirt)]
     if vertices[0][0] != 0:
-        line = skirt 
-        for monom in monoms: 
-            if monom[0] > line: 
+        line = skirt
+        for monom in monoms:
+            if monom[0] > line:
                 line = monom[0]
                 vertices.append((monom[1]-skirt, monom[0]-skirt)) # (x,y) in Cartesian coordinate
-            if monom[1] == skirt: 
-                break 
+            if monom[1] == skirt:
+                break
 
         # remove the vertices above the line
         k , b = - vertices[-1][1] / vertices[0][0] , vertices[-1][1] # y = kx + b
@@ -271,41 +271,41 @@ def convex_hull_poly(poly):
                 + [vertex for vertex in vertices[1:-1] if vertex[1] < k*vertex[0] + b]\
                 + [vertices[-1]]
 
-        if len(vertices) > 2:    
+        if len(vertices) > 2:
             hull = ConvexHull(vertices, incremental = False)
             vertices = [vertices[i] for i in hull.vertices] # counterclockwise
 
-        # place the y-axis in the front 
+        # place the y-axis in the front
         i = vertices.index((0, b))
         vertices = vertices[i:] + vertices[:i]
         # print(vertices)
 
-        # check each point whether in the convex hull 
+        # check each point whether in the convex hull
         i = -1
         for x in range(vertices[-1][0] + 1):
-            if x > vertices[i+1][0]:    
-                i = i + 1 
+            if x > vertices[i+1][0]:
+                i = i + 1
                 k = (vertices[i][1] - vertices[i+1][1]) / (vertices[i][0] - vertices[i+1][0])
-                b = vertices[i][1] - k * vertices[i][0] 
-            # (x, y) = a^(skirt+y) b^(skirt+x) c^(n-2skirt-x-y)  (y < kx + b) is outside the convex hull 
-            t = skirt + x 
+                b = vertices[i][1] - k * vertices[i][0]
+            # (x, y) = a^(skirt+y) b^(skirt+x) c^(n-2skirt-x-y)  (y < kx + b) is outside the convex hull
+            t = skirt + x
             for y in range(skirt, skirt+ceiling(k * x + b - 1e-10)):
                 convex_hull[(y, t, n-t-y)] = False
                 convex_hull[(t, n-t-y, y)] = False
                 convex_hull[(n-t-y, y, t)] = False
 
-    # outside the skirt is outside the convex hull 
+    # outside the skirt is outside the convex hull
     for k in range(skirt):
         for i in range(k, (n-k)//2 + 1):
             t = n - i - k
-            convex_hull[(i, t, k)] = False 
+            convex_hull[(i, t, k)] = False
             convex_hull[(i, k, t)] = False
-            convex_hull[(k, i, t)] = False 
+            convex_hull[(k, i, t)] = False
             convex_hull[(k, t, i)] = False
             convex_hull[(t, i, k)] = False
-            convex_hull[(t, k, i)] = False 
+            convex_hull[(t, k, i)] = False
     
-    vertices = [(skirt+y, skirt+x, n-2*skirt-x-y) for x, y in vertices] 
+    vertices = [(skirt+y, skirt+x, n-2*skirt-x-y) for x, y in vertices]
     vertices += [(j,k,i) for i,j,k in vertices] + [(k,i,j) for i,j,k in vertices]
     vertices = set(vertices)
     return convex_hull, vertices
@@ -313,7 +313,7 @@ def convex_hull_poly(poly):
 
 
 
-if __name__ == '__main__':    
+if __name__ == '__main__':
     # s = '3*m*(m+n-(-2*x*y))-(p-(-2*x+y^2))^2-(q-(x^2-2*y))^2-(p-(-2*x+y^2))*(q-(x^2-2*y))'
     # a,m,p,n,q = 1,1,-2,-5,-2#25,50,-261,146,1
     # m,p,n,q = [sp.Rational(i,a) for i in (m,p,n,q)]
