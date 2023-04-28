@@ -152,15 +152,17 @@ def rationalize_array(x, tol = 1e-7, reliable = True):
     return y
 
 
+
 def rationalize_bound(v, direction = 1, roundings = None, compulsory = True):
     """
     Yield rational approximation of v.
 
     Parameters
     -------
-    direction: 1 or -1
+    direction: 1 or 0 or -1
         If direction = 1, find something > v
         If direction = -1, find something < v
+        If direction = 0, find anything close to v
     """
     if isinstance(v, sp.Rational):
         yield v
@@ -168,7 +170,10 @@ def rationalize_bound(v, direction = 1, roundings = None, compulsory = True):
     if roundings is None:
         roundings = (.5, .2, .1, .05, 1e-2, 1e-3, 1e-4, 1e-6, 1e-8)
 
-    compare = lambda a, b: True if ((a > b) ^ (direction == -1)) else False
+    if direction == 0:
+        compare = lambda a, b: True
+    else:
+        compare = lambda a, b: True if ((a > b) ^ (direction == -1)) else False
 
     previous_v = None
     for rounding in roundings:
