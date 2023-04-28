@@ -1,6 +1,6 @@
 import sympy as sp
 
-from ..pqrsos.pqrsos import pqr_cyc
+from ..pqrsos.pqr_utils import pqr_cyc
 from ...utils.text_process import PreprocessText as pl
 
 def symprove(poly, only_numer = False):
