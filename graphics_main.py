@@ -46,7 +46,7 @@ class MyWidget(QtWidgets.QWidget):
 
         self.shadow = QtWidgets.QPushButton(self)
         self.shadow.setStyleSheet('background-color: rgba(0,0,0,150)')
-        # self.shadow.clicked.connect(self.displaySOSexit)
+        #self.shadow.clicked.connect(self.displaySOSexit)
         self.display = QtWidgets.QLabel(self)
         self.display.setStyleSheet('border:2px groove gray')
         self.display.setAlignment(QtCore.Qt.AlignCenter)
@@ -95,7 +95,7 @@ class MyWidget(QtWidgets.QWidget):
         h = self.height()
 
         QtGui.QPainter.drawRect(QtGui.QPainter(self),w//80,h*16//180,w*7//10,h*322//360)
-        # QtGui.QPainter.drawRect(QtGui.QPainter(self),w*7//10+w//40,h//60,w*21//80,h*14//40)
+        #QtGui.QPainter.drawRect(QtGui.QPainter(self),w*7//10+w//40,h//60,w*21//80,h*14//40)
         QtGui.QPainter.drawText(QtGui.QPainter(self),w*25//80,h*320//360,w*31//80,h*33//360,
                                 QtGui.Qt.AlignRight|QtGui.Qt.AlignBottom,self.SOS_Manager._roots_info['rootsinfo'])
         QtGui.QPainter.drawText(QtGui.QPainter(self),w*7//10+w//40,h*20//40,w*7//40,h//40,
@@ -107,7 +107,7 @@ class MyWidget(QtWidgets.QWidget):
         QtGui.QPainter.drawText(QtGui.QPainter(self),w*29//40,h*52//80,w*7//40,h//40,
                                     QtGui.Qt.AlignLeft,"Generated Tangents")
         
-        # print('Hi')
+        #print('Hi')
         _print_poly_triangle(self)
         _print_grid_triangle(self)
 
@@ -138,7 +138,7 @@ class MyWidget(QtWidgets.QWidget):
                     if self.SOS_Manager.stage >= 30:
                         txt += '\nComputing Decomposition...'
                         if self.SOS_Manager.stage == 30:
-                            self.txt_extratg.setText('\n'.join(self.SOS_Manager._roots_info['tangents']))
+                            self.txt_extratg.setText('\n'.join(str(_) for _ in self.SOS_Manager._roots_info['tangents']))
                         elif self.SOS_Manager.stage < 50:
                             txt += '\n' + '\n'.join([f'Failed with degree {i}...'
                                     for i in range(self.SOS_Manager.deg,self.SOS_Manager.stage-30+1)])
