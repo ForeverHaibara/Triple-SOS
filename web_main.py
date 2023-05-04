@@ -83,7 +83,7 @@ def SumOfSquare():
 @app.route('/process/rootangents', methods=['POST'])
 def RootsAndTangents():
     rootsinfo = app.SOS_Manager.GUI_findRoot()
-    tangents = app.SOS_Manager.GUI_getTangents()
+    tangents = [str(_) for _ in app.SOS_Manager.GUI_getTangents()]
     return jsonify(rootsinfo = rootsinfo, tangents = tangents)
 
 
