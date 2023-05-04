@@ -1,4 +1,3 @@
-
 import sympy as sp
 
 from ...utils.text_process import deg
