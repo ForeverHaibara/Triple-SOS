@@ -1,5 +1,4 @@
 # author: https://github.com/ForeverHaibara
-from copy import deepcopy
 from numbers import Number as PythonNumber
 import re
 import warnings
@@ -20,11 +19,6 @@ from .sum_of_square import exact_coefficient, up_degree, SOS_Special
 
 class SOS_Manager():
     def __init__(self, GUI=None):
-        self.names = {}
-        self.basis = {}
-        self.polys = {}
-        self.dict_monoms = {}
-        self.inv_monoms  = {}
         self.GUI = GUI
         self.linefeed = 2
         self.sosresults = ['','','']
@@ -236,24 +230,6 @@ class SOS_Manager():
         elif formatt == 'factor':
             return poly_get_factor_form(self.poly)
 
-    def _inquire_monoms(self, n: int):
-        if not (n in self.dict_monoms.keys()):
-            self.dict_monoms[n] , self.inv_monoms[n] = generate_expr(n)
-                
-        dict_monom = self.dict_monoms[n]
-        inv_monom  = self.inv_monoms[n]
-        return dict_monom, inv_monom
-
-
-    def _inquire_basis(self, n: int):
-        if not (n in self.names.keys()):
-            dict_monom, inv_monom = self._inquire_monoms(n)
-            self.names[n], self.polys[n], self.basis[n] = generate_basis(n, dict_monom, inv_monom, ['a2-bc','a3-bc2','a3-b2c'],[])
-
-        names, polys, basis = deepcopy(self.names[n]), deepcopy(self.polys[n]), self.basis[n].copy()
-        return names, polys, basis
-    
-
     def GUI_findRoot(self):
         if self.deg <= 1 or (not self._poly_info['iscyc']) or (self._poly_info['iszero']) or (not self._poly_info['ishom']):
             return
@@ -359,6 +335,8 @@ class SOS_Manager():
 
         self.GUI_stateUpdate(20)
 
+        if not skip_findroots:
+            self.GUI_findRoot()
         if not skip_tangents:
             self.GUI_getTangents()
 
@@ -384,16 +362,15 @@ class SOS_Manager():
                     polys = None
                     break
 
-            dict_monom, inv_monom = self._inquire_monoms(n)
-            b = arraylize(poly, dict_monom, inv_monom)
+            b = arraylize(poly)
                 
             # generate basis with degree n
             # make use of already-generated ones
-            names, polys, basis = self._inquire_basis(n)
-            names, polys, basis = append_basis(n, dict_monom, inv_monom, names, polys, basis, tangents)
+            names, polys, basis = generate_basis(n)
+            names, polys, basis = append_basis(n, tangents, names = names, polys = polys, basis = basis)
         
             # reduce the basis according to the strict roots
-            names, polys, basis = reduce_basis(n, dict_monom, inv_monom, names, polys, basis, strict_roots)
+            names, polys, basis = reduce_basis(n, strict_roots, names = names, polys = polys, basis = basis)
 
             x = None
 
@@ -429,8 +406,8 @@ class SOS_Manager():
 
         if self.GUI is not None:
             self.GUI_stateUpdate(50)
-            # self.GUI.txt_displayResult.setText(self.sosresults[self.GUI.btn_displaymodeselect])
-            # self.GUI.repaint()
+            #self.GUI.txt_displayResult.setText(self.sosresults[self.GUI.btn_displaymodeselect])
+            #self.GUI.repaint()
 
             _render_LaTeX(self.sosresults[0],'Formula.png')
             self.GUI_stateUpdate(60)
@@ -476,7 +453,7 @@ class SOS_Manager():
             maxlen = max(maxlen,len(f'{round(float(coeff),4)}'))
 
         distance = max(maxlen + maxlen % 2 + 1, 8)
-        # print(maxlen,distance)
+        #print(maxlen,distance)
         n = self.deg
         strings = [((distance + 1) // 2 * i) * ' ' for i in range(n+1)]
 
@@ -558,8 +535,8 @@ def _render_LaTeX(a, path, usetex=True, show=False, dpi=500, fontsize=20):
     import matplotlib.pyplot as plt
 
     acopy = a
-    # linenumber = a.count('\\\\') + 1
-    # plt.figure(figsize=(12,10 ))
+    #linenumber = a.count('\\\\') + 1
+    #plt.figure(figsize=(12,10 ))
     
     # set the figure small enough
     # even though the text cannot be display as a whole in the window
@@ -568,9 +545,9 @@ def _render_LaTeX(a, path, usetex=True, show=False, dpi=500, fontsize=20):
     if usetex:
         try:
             a = '$\\displaystyle ' + a.strip('$') + ' $'
-            # plt.figure(figsize=(12, linenumber*0.5 + linenumber**0.5 * 0.3 ))
-            # plt.text(-0.3,0.75+min(0.35,linenumber/25), a, fontsize=15, usetex=usetex)
-            # fontfamily='Times New Roman')
+            #plt.figure(figsize=(12, linenumber*0.5 + linenumber**0.5 * 0.3 ))
+            #plt.text(-0.3,0.75+min(0.35,linenumber/25), a, fontsize=15, usetex=usetex)
+            #fontfamily='Times New Roman')
             plt.text(-0.3,0.9, a, fontsize=fontsize, usetex=usetex)#
         except:
             usetex = False
@@ -579,7 +556,7 @@ def _render_LaTeX(a, path, usetex=True, show=False, dpi=500, fontsize=20):
         a = acopy
         a = a.strip('$')
         a = '\n'.join([' $ '+_+' $ ' for _ in a.split('\\\\')])
-        plt.text(-0.3,0.9, a, fontsize=fontsize, usetex=usetex) # , fontfamily='Times New Roman')
+        plt.text(-0.3,0.9, a, fontsize=fontsize, usetex=usetex)#, fontfamily='Times New Roman')
         
     plt.ylim(0,1)
     plt.xlim(0,6)
@@ -625,7 +602,7 @@ if __name__ == '__main__':
     if check_undefined_cases:
         # Undefined cases 1, 2
         s = 's(a%?!!!asdquwve'    # invalid inputs
-        # s = 's(a)2-s(a2+2ab)'   # zero polynomial
+        #s = 's(a)2-s(a2+2ab)'    # zero polynomial
         sos.setPoly(s)
         sos.save_heatmap('heatmap2.png')
         x = sos.latex_coeffs()     # empty string

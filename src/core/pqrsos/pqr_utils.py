@@ -1,8 +1,7 @@
-
 import sympy as sp
 
 from ...utils.text_process import deg
-from ...utils.basis_generator import arraylize_sp, generate_expr
+from ...utils.basis_generator import arraylize_sp
 
 def _pqr_get_basis(degree):
     a, b, c = sp.symbols('a b c')
@@ -20,16 +19,14 @@ def _pqr_get_basis(degree):
         base = r * base
     return basis
 
-def pqr_coeffs_sym(poly, degree = None, dict_monom = None, inv_monom = None):
+def pqr_coeffs_sym(poly, degree = None):
     degree = degree or deg(poly)
     pqr_basis = _pqr_get_basis(degree)
-
-    if dict_monom is None or inv_monom is None:
-        dict_monom, inv_monom = generate_expr(degree)
     
-    coeffs = sp.Matrix([arraylize_sp(_[1], dict_monom, inv_monom) for _ in pqr_basis])
+    coeffs = sp.Matrix([arraylize_sp(_[1]) for _ in pqr_basis])
     coeffs = coeffs.reshape(len(pqr_basis), coeffs.shape[0] // len(pqr_basis)).T
-    target = sp.Matrix(arraylize_sp(poly, dict_monom, inv_monom)).reshape((len(inv_monom)), 1)
+    array = arraylize_sp(poly)
+    target = sp.Matrix(array).reshape(array.shape[0] * array.shape[1], 1)
     y = coeffs.LUsolve(target)
     return zip(y, pqr_basis)
 
@@ -37,29 +34,27 @@ def pqr_sym(poly, **kwargs):
     p, q, r = sp.symbols('p q r')
     return sum(y * p**i * q**j * r**k for y, ((i, j, k), _) in pqr_coeffs_sym(poly, **kwargs))
 
-def pqr_coeffs_cyc(poly, degree = None, dict_monom = None, inv_monom = None):
+def pqr_coeffs_cyc(poly, degree = None):
     """
     When poly == f(p,q,r) + (a-b)*(b-c)*(c-a) * g(p,q,r)
     return f and g
     """
     degree = degree or deg(poly)
     if degree < 3:
-        return pqr_coeffs_sym(poly, degree, dict_monom, inv_monom), tuple()
+        return pqr_coeffs_sym(poly, degree), tuple()
 
     pqr_basis = _pqr_get_basis(degree)
     pqr_basis2 = _pqr_get_basis(degree - 3)
-
-    if dict_monom is None or inv_monom is None:
-        dict_monom, inv_monom = generate_expr(degree)
     
     a, b, c = sp.symbols('a b c')
     d = ((a-b)*(b-c)*(c-a)).as_poly()
 
     m1, m2 = len(pqr_basis), len(pqr_basis2)
-    coeffs = sp.Matrix([arraylize_sp(_[1], dict_monom, inv_monom) for _ in pqr_basis]
-                    + [arraylize_sp(_[1] * d, dict_monom, inv_monom) for _ in pqr_basis2])
+    coeffs = sp.Matrix([arraylize_sp(_[1]) for _ in pqr_basis]
+                    + [arraylize_sp(_[1] * d) for _ in pqr_basis2])
     coeffs = coeffs.reshape(m1 + m2, coeffs.shape[0] // (m1 + m2)).T
-    target = sp.Matrix(arraylize_sp(poly, dict_monom, inv_monom)).reshape((len(inv_monom)), 1)
+    array = arraylize_sp(poly)
+    target = sp.Matrix(array).reshape(array.shape[0] * array.shape[1], 1)
     y = coeffs.LUsolve(target)
 
     return zip(y[:m1], pqr_basis), zip(y[m1:], pqr_basis2)

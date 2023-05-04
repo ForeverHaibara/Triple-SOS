@@ -4,8 +4,6 @@ import re
 
 import sympy as sp
 import numpy as np
-from scipy.optimize import linprog
-from scipy.optimize import OptimizeWarning
 
 from ..utils.basis_generator import arraylize, arraylize_sp, reduce_basis, generate_expr, generate_basis
 from ..utils.text_process import deg, cycle_expansion
@@ -34,7 +32,7 @@ def up_degree(poly, n, updeg):
 
 
 def exact_coefficient(poly, multipliers, y, names, polys, sos_manager):
-    '''
+    """
     Get the exact coefficients of y that sum up to polynomials 
 
     Returns 
@@ -45,7 +43,7 @@ def exact_coefficient(poly, multipliers, y, names, polys, sos_manager):
 
     equal: bool
         whether it is an exact equation
-    '''
+    """
     
     for multiplier in multipliers:
         if multiplier is None:
@@ -73,9 +71,8 @@ def exact_coefficient(poly, multipliers, y, names, polys, sos_manager):
     if not equal:
         # backsubstitude to re-solve the coefficients
         try:
-            dict_monom, inv_monom = sos_manager._inquire_monoms(deg(poly))
-            b2 = arraylize_sp(poly, dict_monom, inv_monom)
-            basis: sp.Matrix = sp.Matrix([arraylize_sp(poly, dict_monom, inv_monom) for poly in polys])
+            b2 = arraylize_sp(poly)
+            basis: sp.Matrix = sp.Matrix([arraylize_sp(poly) for poly in polys])
             basis = basis.reshape(len(polys), b2.shape[0]).T
             new_y = basis.LUsolve(b2)
             new_y = rationalize_array(new_y, reliable=True)
@@ -112,6 +109,7 @@ def SOS(poly, tangents = [], maxiter = 5000, roots = [], tangent_points = [], up
         precision = 6, linefeed = 2):
     '''
     Represent a cyclic, homogenous, 3-variable (a,b,c) polynomial into Sum of Squares form.
+    Deprecated. Please use sos_manager.
 
     Params
     -------
@@ -158,6 +156,8 @@ def SOS(poly, tangents = [], maxiter = 5000, roots = [], tangent_points = [], up
     result: str
         The result of SOS. If it is an empty string, it means that it has failed.
     '''
+    from scipy.optimize import linprog
+    from scipy.optimize import OptimizeWarning
     warns = []
 
     original_poly = poly
@@ -193,15 +193,13 @@ def SOS(poly, tangents = [], maxiter = 5000, roots = [], tangent_points = [], up
         if type(poly) == str:
             poly = PreprocessText(poly,cyc=True)
             n = deg(poly)
-        
-        dict_monom , inv_monom = generate_expr(n)
 
         # generate basis with degree n
-        names, polys, basis = generate_basis(n,dict_monom,inv_monom,tangents,strict_roots)
-        b = arraylize(poly,dict_monom,inv_monom)
+        names, polys, basis = generate_basis(n, tangents, strict_roots)
+        b = arraylize(poly)
         
         # reduce the basis according to the strict roots
-        names, polys, basis = reduce_basis(n, dict_monom, inv_monom, names, polys, basis, strict_roots)
+        names, polys, basis = reduce_basis(n, strict_roots, names = names, polys = polys, basis = basis)
         x = None
         
         if len(names) > 0:
@@ -247,8 +245,8 @@ def SOS(poly, tangents = [], maxiter = 5000, roots = [], tangent_points = [], up
         # backsubstitude to re-solve the coefficients
         equal = False
         try:
-            b2 = arraylize_sp(poly,dict_monom,inv_monom)
-            basis = sp.Matrix([arraylize_sp(poly,dict_monom,inv_monom) for poly in polys])
+            b2 = arraylize_sp(poly)
+            basis = sp.Matrix([arraylize_sp(poly) for poly in polys])
             basis = basis.reshape(len(polys), b2.shape[0]).T
         
             new_y = basis.LUsolve(b2)
