@@ -551,6 +551,55 @@ def cancel_denominator(nums):
 
     return p / q
 
+
+def _rationalize_quadratic_curve(curve):
+    """Rationalize a quadratic curve."""
+    from sympy.solvers.diophantine.diophantine import diop_DN
+    from sympy.ntheory.factor_ import core
+    x, y = list(curve.free_symbols)
+    curve = curve.as_poly(x)
+    if curve.degree() == 1:
+        x = (-curve.coeffs()[1] / curve.coeffs()[0]).factor()
+        return (x, y)
+    elif curve.degree() > 2:
+        return
+    if curve.all_coeffs()[0] < 0:
+        curve = -curve
+
+    # curve = a*(x-...)^2 + curve_y
+    curve_y = -curve.all_coeffs()[1]**2/4/curve.all_coeffs()[0] + curve.all_coeffs()[2]
+    curve_y = curve_y.as_poly(y)
+
+    # curve = a*(x-...)^2 + b*(y-...)^2 + const = 0
+    const = -curve_y.all_coeffs()[1]**2/4/curve_y.all_coeffs()[0] + curve_y.all_coeffs()[2]
+    
+    # convert to (a*(x-..))^2 + b*(y-...)^2 + c = 0
+    a, b, c = curve.all_coeffs()[0], curve_y.all_coeffs()[0], const
+    a, b, c = a * a.q, b * a.q, c * a.q
+    t = core(a)
+    a, b, c = a * t, b * t, c * t
+    b_, c_ = core(abs(b.p*b.q)) * sp.sign(b), core(abs(c.p*c.q)) * sp.sign(c)
+
+    sol = diop_DN(-b_, -c_)
+    if len(sol) == 0:
+        return
+    
+    # u^2 + b_v^2 + c_ = 0 => (u * sqrt(c/c_))^2 + b * (v * sqrt(c/c_) / sqrt(b/b_))^2 + c = 0
+    u, v = sol[0]
+    tmp = sp.sqrt(c / c_)
+    x_, y_ = u * tmp / sp.sqrt(a), v * tmp / sp.sqrt(b / b_)
+    xaxis = -curve.all_coeffs()[1] / curve.all_coeffs()[0] / 2
+    yaxis = -curve_y.all_coeffs()[1] / curve_y.all_coeffs()[0] / 2
+    x_, y_ = x_ + xaxis, y_ + yaxis
+    
+    # now that (x_, y_) is a rational point on the curve, we can find a rational line
+    t = sp.symbols('t')
+    curve_secant = curve.subs(y, t*(x-x_)+y_).as_poly(x) # x = x_ must be a root
+    x__ = (curve_secant.all_coeffs()[2] / curve_secant.all_coeffs()[0] / x_).factor()
+    y__ = (t*(x__-x_)+y_).factor()
+    return {x: x__, y: y__}
+
+
 if __name__ == '__main__':
     from tqdm import tqdm
     for i in range(1, 3):
