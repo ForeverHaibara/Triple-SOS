@@ -552,7 +552,7 @@ def cancel_denominator(nums):
     return p / q
 
 
-def _rationalize_quadratic_curve(curve):
+def _rationalize_quadratic_curve(curve, one_point = False):
     """Rationalize a quadratic curve."""
     from sympy.solvers.diophantine.diophantine import diop_DN
     from sympy.ntheory.factor_ import core
@@ -572,10 +572,17 @@ def _rationalize_quadratic_curve(curve):
 
     # curve = a*(x-...)^2 + b*(y-...)^2 + const = 0
     const = -curve_y.all_coeffs()[1]**2/4/curve_y.all_coeffs()[0] + curve_y.all_coeffs()[2]
-    
-    # convert to (a*(x-..))^2 + b*(y-...)^2 + c = 0
+    x0 = -curve.all_coeffs()[1]/2/curve.all_coeffs()[0]
+    y0 = -curve_y.all_coeffs()[1]/2/curve_y.all_coeffs()[0]
     a, b, c = curve.all_coeffs()[0], curve_y.all_coeffs()[0], const
-    a, b, c = a * a.q, b * a.q, c * a.q
+    
+    # cancel the denominator
+    r = cancel_denominator((a,b,c))
+    a, b, c = a / r, b / r, c / r
+    if a < 0:
+        a, b, c = -a, -b, -c
+    
+    # convert to (sqrt(a)*(x-..))^2 + b*(y-...)^2 + c = 0
     t = core(a)
     a, b, c = a * t, b * t, c * t
     b_, c_ = core(abs(b.p*b.q)) * sp.sign(b), core(abs(c.p*c.q)) * sp.sign(c)
@@ -588,9 +595,10 @@ def _rationalize_quadratic_curve(curve):
     u, v = sol[0]
     tmp = sp.sqrt(c / c_)
     x_, y_ = u * tmp / sp.sqrt(a), v * tmp / sp.sqrt(b / b_)
-    xaxis = -curve.all_coeffs()[1] / curve.all_coeffs()[0] / 2
-    yaxis = -curve_y.all_coeffs()[1] / curve_y.all_coeffs()[0] / 2
-    x_, y_ = x_ + xaxis, y_ + yaxis
+    y_ = y_ + y0
+    x_ = x_ + x0.subs(y, y_)
+    if one_point:
+        return {x: x_, y: y_}
     
     # now that (x_, y_) is a rational point on the curve, we can find a rational line
     t = sp.symbols('t')

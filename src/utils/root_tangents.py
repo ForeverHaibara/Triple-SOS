@@ -168,11 +168,13 @@ def _root_tangents_quadratic(a, b, rounding = 1e-3, strict = False, uncentered =
         v = frac((a*a + b*b + 1) / u)
         if v != 1 and v > 1e-3:
             tangents.append(
-                f'a2+b2+c2-{v}*(ab+bc+ca)',
-                degree = 2,
-                coor = (a, b),
-                uv = (u_, v_),
-                is_strict = strict
+                RootTangent(
+                        f'a2+b2+c2-{v}*(ab+bc+ca)',
+                        degree = 2,
+                        coor = (a, b),
+                        uv = (u_, v_),
+                        is_strict = strict
+                )
             )
 
     return tangents
