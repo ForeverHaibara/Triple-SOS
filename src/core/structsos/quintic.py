@@ -527,10 +527,13 @@ def _sos_struct_quintic_uncentered(coeff):
 
     s(a2c(a-b)(a+c-4b))
 
+    s(a2c(a-5/2b)2)-abcs(8a2-131/4ab)
+
     Reference
     -------
     [1] https://artofproblemsolving.com/community/u426077h2242759p21856167
 
+    [2] https://artofproblemsolving.com/community/u861323h3019177p27134161
     """
 
     multipliers, y, names = [], None, None

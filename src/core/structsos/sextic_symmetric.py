@@ -548,6 +548,10 @@ def _sos_struct_sextic_iran96(coeff, real = False):
     s(12a5b+12a5c+72a4b2-212a4bc+72a4c2-167a3b3+200a3b2c+200a3bc2-189a2b2c2)
 
     729p(a2)+288s(b2c2)s(a)2+21s(a3)s(a)3-14s(a)6-7s(a3-abc-3(a2b+ab2-2abc))2
+
+    s(21a6-20a5b-20a5c+825a4b2-1667a4bc+825a4c2-1640a3b3+1679a3b2c+1679a3bc2-1682a2b2c2)-21s(a(a-b)(a-c))2
+
+    s(ab(a2+b2-2c2-3(2ab-ac-bc))2)
     """
     if not (coeff((6,0,0)) == 0 and coeff((5,1,0)) == coeff((1,5,0)) and coeff((4,2,0)) == coeff((2,4,0)) and\
         coeff((3,2,1)) == coeff((2,3,1)) and coeff((5,1,0)) >= 0):
@@ -597,7 +601,7 @@ def _sos_struct_sextic_iran96(coeff, real = False):
             (p + 4 * m) / 3,
             q + 2 * (p + m),
             w + 2 * (p + 4 * m) - (q + 2 * (p + m)),
-            z + w + 3 * (q + 2 * (p + m)),
+            4*m + 4*p + 2*q + w + z,
             (coeff((2,2,2)) / 3 + (m + p + z) * 2 + q + w)
         ]
         
@@ -614,7 +618,7 @@ def _sos_struct_sextic_iran96(coeff, real = False):
             ]
             return multipliers, y, names
 
-    
+
     if p >= 0 and q + 2 * m + 2 * p >= 0:
         # Easy case 2, when we do not need to updegree
 
@@ -709,6 +713,7 @@ def _sos_struct_sextic_iran96(coeff, real = False):
                     'a^2*b^2*c^2'
                 ]
                 return multipliers, y, names
+
 
     # real start below
     # process:
