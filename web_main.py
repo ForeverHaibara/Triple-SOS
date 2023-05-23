@@ -17,20 +17,20 @@ CORS(app)
 
 @app.route('/process/preprocess', methods=['POST'])
 def preprocess():
-    app.SOS_Manager.setPoly(request.get_json()['poly'], cancel = True)
+    app.SOS_Manager.set_poly(request.get_json()['poly'], cancel = True)
     poly = app.SOS_Manager.poly
     
     # if poly is None:
     #     return
 
     if app.SOS_Manager._poly_info['isfrac']:
-        cancel = app.SOS_Manager.getStandardForm()
+        cancel = app.SOS_Manager.get_standard_form()
     else:
         cancel = ''
 
     n = app.SOS_Manager.deg
     coeffs = poly.coeffs()
-    monoms = app.SOS_Manager.std_monoms
+    monoms = poly.monoms()
     monoms.append((-1,-1,0))  # tail flag
     
     t = 0
@@ -56,10 +56,10 @@ def preprocess():
     factor = ''
     print(request.get_json()['factor'])
     if request.get_json()['factor'] == True:
-        factor = app.SOS_Manager.getStandardForm(formatt = 'factor')
+        factor = app.SOS_Manager.get_standard_form(formatt = 'factor')
 
 
-    return jsonify(n = n, txts = txts, heatmap = app.SOS_Manager.grid_color,
+    return jsonify(n = n, txts = txts, heatmap = app.SOS_Manager.grid.grid_color,
                     cancel = cancel, factor = factor)
 
 
@@ -82,9 +82,9 @@ def SumOfSquare():
 
 @app.route('/process/rootangents', methods=['POST'])
 def RootsAndTangents():
-    rootsinfo = app.SOS_Manager.GUI_findRoot()
-    tangents = [str(_) for _ in app.SOS_Manager.GUI_getTangents()]
-    return jsonify(rootsinfo = rootsinfo, tangents = tangents)
+    rootsinfo = app.SOS_Manager.findroot()
+    tangents = [str(_) for _ in rootsinfo.tangents]
+    return jsonify(rootsinfo = rootsinfo.gui_description, tangents = tangents)
 
 
 @app.route('/')
