@@ -1,25 +1,27 @@
-from math import gcd
-
 import sympy as sp
 
-from ...utils.text_process import cycle_expansion
-from ...utils.root_guess import rationalize, rationalize_bound, cancel_denominator
+from .utils import CyclicSum, CyclicProduct, _sum_y_exprs
 from .peeling import _merge_sos_results, FastPositiveChecker
+from ...utils.text_process import cycle_expansion
+from ...utils.roots.rationalize import rationalize, rationalize_bound, cancel_denominator
 
-def _sos_struct_quintic(poly, degree, coeff, recurrsion):
-    multipliers, y, names = [], None, None
 
+a, b, c = sp.symbols('a b c')
+
+def _sos_struct_quintic(poly, coeff, recurrsion):
+    solution = None
     if coeff((5,0,0)) == 0:
         if coeff((4,1,0)) == 0 or coeff((1,4,0)) == 0:
-            multipliers, y, names = _sos_struct_quintic_windmill(coeff)
+            solution = _sos_struct_quintic_windmill(coeff)
 
-        if y is not None:
-            return multipliers, y, names
+        if solution is not None:
+            return solution
 
-        multipliers, y, names = _sos_struct_quintic_hexagon(coeff, poly, recurrsion)
+        return _sos_struct_quintic_hexagon(coeff, poly, recurrsion)
 
     else:
         a = coeff((5,0,0))
+        return None
         if a > 0:
             # try Schur to hexagon
             b = coeff((4,1,0))
@@ -31,18 +33,17 @@ def _sos_struct_quintic(poly, degree, coeff, recurrsion):
                 fpc.setPoly(poly2)
                 if fpc.check() == 0:
                     y = [a]
-                    names = [name]
-                    multipliers , y , names = _merge_sos_results(multipliers, y, names, recurrsion(poly2, 5))
+                    exprs = [name]
+                    multipliers , y , exprs = _merge_sos_results(multipliers, y, exprs, recurrsion(poly2, 5))
                 if y is None and b >= -a:
                     name = 'a^3*(a-b)*(a-c)'
                     poly2 = poly - a * sp.sympify(cycle_expansion(name))
                     fpc.setPoly(poly2)
                     if fpc.check() == 0:
                         y = [a]
-                        names = [name]
-                        multipliers , y , names = _merge_sos_results(multipliers, y, names, recurrsion(poly2, 5))
-                    
-    return multipliers, y, names
+                        exprs = [name]
+                        multipliers , y , exprs = _merge_sos_results(multipliers, y, exprs, recurrsion(poly2, 5))
+    return None
 
 
 def _sos_struct_quintic_windmill(coeff):
@@ -85,23 +86,25 @@ def _sos_struct_quintic_windmill(coeff):
     -------
     [1] https://tieba.baidu.com/p/6472739202
     """
-    multipliers, y, names = [], None, None
+    solution = None
     if coeff((5,0,0)) != 0 or (coeff((4,1,0)) != 0 and coeff((1,4,0)) != 0):
-        return [], None, None
-    
+        return None
 
     if coeff((4,1,0)) != 0:
         # reflect the polynomial so that coeff((4,1,0)) == 0
         def new_coeff(c):
             return coeff((c[0], c[2], c[1]))
-        multipliers, y, names = _sos_struct_quintic_windmill(new_coeff)
-        if y is not None:
-            names = [_.translate({98: 99, 99: 98}) for _ in names]
-        return multipliers, y, names
+        solution = _sos_struct_quintic_windmill(new_coeff)
+
+        if solution is None:
+            return None
+
+        solution = solution.xreplace({b:c, c:b})
+        return solution
     
     # now we assume coeff((4,1,0)) == 0
     if coeff((1,4,0)) < 0:
-        return [], None, None
+        return None
     elif coeff((1,4,0)) == 0:
         # coeff((4,1,0)) == coeff((1,4,0)) == 0
         # now if we change variables a -> 1/a, b -> 1/b, c -> 1/c, it will be quartic
@@ -120,21 +123,21 @@ def _sos_struct_quintic_windmill(coeff):
             y = [coeff((3,2,0)), sp.S(0), coeff((2,3,0)) - coeff((3,2,0)) * u_ ** 2, sp.S(0), const_]
         
         if y is not None:
-            names = [
-                f'b*({u_}*a*b-{u_-1}*a*c-b*c)^2' if u_ is not None else 'a^3*b*c',
-                'a^2*c*(b-c)^2',
-                'a^2*b*(b-c)^2',
-                'a*b*c*(b-c)^2',
-                'a^2*b^2*c'
+            exprs = [
+                CyclicSum(b*(u_*a*b-(u_-1)*a*c-b*c)**2 if u_ is not None else a**3*b*c),
+                CyclicSum(a**2*c*(b-c)**2),
+                CyclicSum(a**2*b*(b-c)**2),
+                CyclicSum((b-c)**2) * CyclicProduct(a),
+                CyclicSum(a*b) * CyclicProduct(a)
             ]
-        return multipliers, y, names
+        return _sum_y_exprs(y, exprs)
 
     if coeff((3,2,0)) == 0:
         if coeff((2,3,0)) >= 0:
-            multipliers, y, names = _sos_struct_quintic_uncentered(coeff)
-        return multipliers, y, names
+            solution = _sos_struct_quintic_uncentered(coeff)
+        return solution
     elif coeff((3,2,0)) < 0:
-        return [], None, None
+        return None
 
 
     u, x_, y_, z_, = sp.symbols('u'), coeff((1,4,0)) / coeff((3,2,0)), coeff((2,3,0)) / coeff((3,2,0)), coeff((3,1,1)) / coeff((3,2,0))
@@ -152,16 +155,15 @@ def _sos_struct_quintic_windmill(coeff):
     #         y = None
     #     else:
     #         y = [_ * coeff((3,2,0)) for _ in y]
-    #         names = ['a*c^2*(b-c)^2', 'a*b^2*(b-c)^2', 'a*b*c*(b-c)^2', 'a^2*b^2*c']
-    #         return multipliers, y,  names
+    #         exprs = ['a*c^2*(b-c)^2', 'a*b^2*(b-c)^2', 'a*b*c*(b-c)^2', 'a^2*b^2*c']
+    #         return multipliers, y,  exprs
 
     if w__ < 0:
-        return [], None, None
+        return solution
 
     if True:
         # Easy case 2. in the form of s(c(a-b)2(xa2+yac+zc2+uab+vbc)) + ...s(a2b2c)
         # such that y^2 <= 4xz where x = coeff((1,4,0)) is fixed
-        multipliers = []
 
         if coeff((2,3,0)) >= 0:
             # A. possibly simple and nice
@@ -171,18 +173,16 @@ def _sos_struct_quintic_windmill(coeff):
                 coeff((3,1,1)) / 2 + coeff((1,4,0)) + t,
                 abs(coeff((3,2,0)) - coeff((2,3,0))),
             ]
-            if any(_ < 0 for _ in y):
-                y = None
-            else:
+            if all(_ >= 0 for _ in y):
                 r = 1 / cancel_denominator(y)
                 y = [_ * r for _ in y]
-                character = 'b' if coeff((3,2,0)) >= coeff((2,3,0)) else 'a'
-                names = [
-                    f'c*(a-b)^2*({y[0]}*a^2+{y[1]}*c^2+{y[2]}*a*b+{y[3]}*{character}*c)',
-                    'a^2*b^2*c'
+                character = b if coeff((3,2,0)) >= coeff((2,3,0)) else a
+                exprs = [
+                    CyclicSum(c*(a-b)**2*(y[0]*a**2 + y[1]*c**2 + y[2]*a*b + y[3]*character*c)),
+                    CyclicSum(a*b) * CyclicProduct(a)
                 ]
                 y = [1 / r, w__ * coeff((3,2,0))]
-                return multipliers, y, names
+                return _sum_y_exprs(y, exprs)
         
         # B. y^2 <= 4xz
         # x = coeff((1,4,0))
@@ -213,25 +213,22 @@ def _sos_struct_quintic_windmill(coeff):
                 coeff((3,2,0)) - (coeff((2,3,0)) - bound)
             ]
             
-            if (y[1] < 0 and y[1]**2 > 4 * y[0] * y[2]):
-                y = None
-            else:
+            if not (y[1] < 0 and y[1]**2 > 4 * y[0] * y[2]):
                 r1 = 1 / cancel_denominator([sp.S(1), -y[1] / y[0] / 2])
                 
                 tmpcoeffs = [y[2] - y[1]**2 / 4 / y[0], y[3], y[4]]
                 r2 = 1 / cancel_denominator(tmpcoeffs)
 
-                names = [
-                    f'c*(a-b)^2*({r1}*a-{-y[1] / y[0] / 2 * r1}*c)^2',
-                    f'c*(a-b)^2*({r2*tmpcoeffs[0]}*c^2+{r2*y[3]}*a*b+{r2*y[4]}*b*c)',
-                    'a^2*b^2*c'
+                exprs = [
+                    CyclicSum(c*(a-b)**2*(r1*a-(-y[1]/y[0]/2*r1)*c)**2),
+                    CyclicSum(c*(a-b)**2*(r2*tmpcoeffs[0]*c**2 + r2*y[3]*a*b + r2*y[4]*b*c)),
+                    CyclicSum(a*b) * CyclicProduct(a)
                 ]
                 y = [y[0] / r1**2, 1 / r2, w__ * coeff((3,2,0))]
 
-                if any(_ < 0 for _ in y):
-                    y, names = None, None
-                else:
-                    return multipliers, y, names
+                if all(_ >= 0 for _ in y):
+                    return _sum_y_exprs(y, exprs)
+                    
 
 
     if True:
@@ -244,12 +241,15 @@ def _sos_struct_quintic_windmill(coeff):
             (z_ - (-2 * u_**2 + 2 * u_)) / 2,
             w__
         ]
-        if any(_ < 0 for _ in y):
-            y = None
-        else:
+        if all(_ >= 0 for _ in y):
             y = [_ * coeff((3,2,0)) for _ in y]
-            names = [f'a*b^2*(a-{u_}*b+{u_-1}*c)^2', 'a*b^2*(b-c)^2', 'a*b*c*(b-c)^2', 'a^2*b^2*c']
-            return multipliers, y,  names
+            exprs = [
+                CyclicSum(a*b**2*(a-u_*b+(u_-1)*c)**2),
+                CyclicSum(a*b**2*(b-c)**2),
+                CyclicSum((b-c)**2) * CyclicProduct(a),
+                CyclicSum(a*b) * CyclicProduct(a)
+            ]
+            return _sum_y_exprs(y, exprs)
 
 
     # now we formally start
@@ -326,24 +326,24 @@ def _sos_struct_quintic_windmill(coeff):
                 
                 det_, m_ = -1, -1
                 for rounding in (.5, .2, .1, 1e-2, 1e-3, 1e-5, 1e-8):
-                    z0_, z1_, z2_ = [sp.Rational(*rationalize(_, rounding = rounding, reliable = False)) for _ in (z0, z1, z2)]
+                    z0_, z1_, z2_ = [rationalize(_, rounding = rounding, reliable = False) for _ in (z0, z1, z2)]
                     m_, n_, p_, q_, det_ = compute_discriminant(z0_, z1_, z2_)
                     if det_ >= 0 and m_ > 0:
                         break
 
                 if det_ >= 0 and m_ > 0:
                     u_ = 1 + (v_ - 1)**2/4
-                    multipliers = [f'a*a+{z0_**2 + 2}*b*c']
-                    y = [sp.S(1), m_ / 2, det_ / 6, w__]
+                    multiplier = CyclicSum(a**2 + (z0_**2 + 2)*b*c)
+                    y = [sp.S(1), m_ / 2, det_ / 6 / m_, w__]
                     y = [_ * coeff((3,2,0)) for _ in y]
-                    names = [
-                        f'a*(a^2*b+{1-r}*a*b^2-{r}*b^3+{r*z0_}*a^2*c-{z0_}*a*c^2+{z1_}*b^2*c+{z2_}*b*c^2-{(2-z0_)*(1-r)+z1_+z2_}*a*b*c)^2',
-                        f'a*b*c*(a^2-b^2+{-(p_ + 2*q_)/3/m_}*(a*b-a*c)+{-(q_ + 2*p_)/3/m_}*(b*c-a*b))^2',
-                        f'a^3*b*c*(b-c)^2',
-                        f'a^2*b^2*c*(a*a+b*b+c*c+{z0_**2 + 2}*(a*b+b*c+c*a))'
+                    exprs = [
+                        CyclicSum(a*(a**2*b+(1-r)*a*b**2-r*b**3+(r*z0_)*a**2*c-z0_*a*c**2+z1_*b**2*c+z2_*b*c**2-((2-z0_)*(1-r)+z1_+z2_)*a*b*c)**2),
+                        CyclicProduct(a) * CyclicSum((a**2-b**2-(p_ + 2*q_)/3/m_*(a*b-a*c)-(q_ + 2*p_)/3/m_*(b*c-a*b))**2),
+                        CyclicProduct(a) * CyclicSum(a**2*(b-c)**2),
+                        CyclicProduct(a) * CyclicSum(a*b) * CyclicSum(a**2+(z0_**2 + 2)*a*b)
                     ]
 
-                    return multipliers, y, names
+                    return _sum_y_exprs(y, exprs) / multiplier
 
                 u_ = None
 
@@ -356,15 +356,16 @@ def _sos_struct_quintic_windmill(coeff):
 
             r4 = 1 / cancel_denominator([y_ - y__, (z_ - z__) / 2])
 
-            multipliers = [f'{r}*a*a+{r*(u+v+1)}*b*c']
-            names = [f'a*({r2*(-u*v + u + 2)}*a^2*b+{r2*(-u*v + u - v + 1)}*a*b^2+{r2*(-v-1)}*b^3+{r2*(-2*u + v**2 + 3)}*a^2*c'
-                        + f'+{r2*(-4*u**2 + 4*u*v + 2*u - v**2 - 3*v)}*a*b*c+{r2*(2*u**2 - u*v + 3*u + v**2 + 2*v - 3)}*b^2*c'
-                        + f'+{r2*(2*u**2 + u*v - 3*u - v - 1)}*a*c^2+{r2*(-2*u*v - 2*u - v**2 + 4*v - 1)}*b*c^2)^2',
-
-                    f'a*({r*u}*a^2*b+{r*(u-1)}*a*b^2+{-r}*b^3+{r*(-v-1)}*a^2*c+{r*(-2*u+v)}*a*b*c+{r*(-u+v+1)}*b^2*c+{r*(u+1)}*a*c^2+{r*(1-v)}*b*c^2)^2',
-                    f'a*b*c*(a*a-b*b+{u}*(a*b-a*c)+{v}*(b*c-a*b))^2',
-                    f'({r4*(y_ - y__)}*a+{r4*(z_ - z__)/2}*c)*a*b*(b-c)^2*({r}*(a*a+b*b+c*c)+{r*(u+v+1)}*(a*b+b*c+c*a))',
-                    f'a^2*b^2*c*({r}*(a*a+b*b+c*c)+{r*(u+v+1)}*(a*b+b*c+c*a))']
+            multiplier = CyclicSum(r*a**2+r*(u+v+1)*b*c)
+            exprs = [
+                CyclicSum(a*(r2*(-u*v + u + 2)*a**2*b + r2*(-u*v + u - v + 1)*a*b**2 + r2*(-v-1)*b**3 + r2*(-2*u + v**2 + 3)*a**2*c\
+                            + r2*(-4*u**2 + 4*u*v + 2*u - v**2 - 3*v)*a*b*c + r2*(2*u**2 - u*v + 3*u + v**2 + 2*v - 3)*b**2*c\
+                            + r2*(2*u**2 + u*v - 3*u - v - 1)*a*c**2 + r2*(-2*u*v - 2*u - v**2 + 4*v - 1)*b*c**2)**2),
+                CyclicSum(a*(r*u*a**2*b + r*(u-1)*a*b**2 - r*b**3 + r*(-v-1)*a**2*c + r*(-2*u+v)*a*b*c + r*(-u+v+1)*b**2*c + r*(u+1)*a*c**2 + r*(1-v)*b*c**2)**2),
+                CyclicProduct(a) * CyclicSum((a*a-b*b+u*(a*b-a*c)+v*(b*c-a*b))**2),
+                CyclicSum(((r4*(y_ - y__)) * a + r4*(z_ - z__) / 2 * c) * a*b*(b-c)**2) * multiplier,
+                CyclicProduct(a) * CyclicSum(a*b) * multiplier
+            ]
 
             denom = (u**3 - u**2 - u*v + u + 1)
             y = [1 / denom / 4 / r2 / r,
@@ -375,7 +376,7 @@ def _sos_struct_quintic_windmill(coeff):
 
             y = [_ * coeff((3,2,0)) for _ in y]
 
-            return multipliers, y, names
+            return _sum_y_exprs(y, exprs) / multiplier
 
     # Case B.
     if True:
@@ -426,7 +427,7 @@ def _sos_struct_quintic_windmill(coeff):
             
             # Case B.1
             if (3*u**2 + 2*u*v - 4*u - v**2 - 8) >= 0:
-                multipliers = ['a*b']
+                multiplier = CyclicSum(a*b)
 
                 g = -(u**2 - u*v + 2*u + 2)/(2*u**3 + u**2*v - u*v**2 - u + v + 2)
 
@@ -443,12 +444,12 @@ def _sos_struct_quintic_windmill(coeff):
 
                     r4 = 1 / cancel_denominator([y_ - y__, (z_ - z__) / 2])
 
-                names = [
-                    f'a*({rr*(-u*v+1)}*a^2*c+{rr*(u*u*v-u)}*a*b^2+{rr*(u**3-u**2*v-u**2+u*v+u-v)}*a*b*c+{rr*(-u**3-1)}*b^2*c+{rr*(u**2+v)}*b*c^2)^2',
-                    f'a*({r2}*a^2*c+{r2*(g*u*v-g)}*a*b^2+{r2*(g*u**2-g*u-g*v**2+g*v+u-v)}*a*b*c+{r2*(-g*u*v+g-u)}*a*c^2+{r2*(-g*u**2-g*v-1)}*b^2*c+{r2*(g*u+g*v**2+v)}*b*c^2)^2',
-                    f'a*b*c*(a*a-b*b+{u}*(a*b-a*c)+{v}*(b*c-a*b))^2',
-                    f'({r4*(y_ - y__)}*a+{r4*(z_ - z__)/2}*c)*a*b*(b-c)^2*(a*b+b*c+c*a)',
-                    f'a^2*b^2*c*(a*b+b*c+c*a)'
+                exprs = [
+                    CyclicSum(a*((rr*(1-u*v))*a**2*c + rr*(u**2*v-u)*a*b**2 + rr*(u**3-u**2*v-u**2+u*v+u-v)*a*b*c + rr*(-u**3-1)*b**2*c + rr*(u**2+v)*b*c**2)**2),
+                    CyclicSum(a*((r2)*a**2*c + r2*(g*u*v-g)*a*b**2 + r2*(g*u**2-g*u-g*v**2+g*v+u-v)*a*b*c + r2*(-g*u*v+g-u)*a*c**2 + r2*(-g*u**2-g*v-1)*b**2*c + r2*(g*u+g*v**2+v)*b*c**2)**2),
+                    CyclicProduct(a) * CyclicSum((a*a-b*b+u*(a*b-a*c)+v*(b*c-a*b))**2),
+                    CyclicSum(((r4*(y_ - y__))*a + (r4*(z_ - z__)/2)*c) * a*b*(b-c)**2) * multiplier,
+                    CyclicProduct(a) * CyclicSum(a*b) * multiplier
                 ]
 
                 y = [
@@ -461,13 +462,13 @@ def _sos_struct_quintic_windmill(coeff):
 
                 y = [_ * coeff((3,2,0)) for _ in y]
 
-                return multipliers, y, names
+                return _sum_y_exprs(y, exprs) / multiplier
 
             # Case B.2
             if u*u - u*v + 2*u + 2 < 0:
                 w = (3*u**5 - u**4*v + 4*u**4 - u**3*v**2 + u**3 - 2*u*v + 2*u + 2)/(u**2*(u**2 - u*v + 2*u + 2))
                 if w >= -1:
-                    multipliers = [f'a*a+{w}*a*b']
+                    multiplier = CyclicSum(a*a+w*b*c)
 
                     if True:
                         # cancel the denominator is good
@@ -479,14 +480,14 @@ def _sos_struct_quintic_windmill(coeff):
 
                         r4 = 1 / cancel_denominator([y_ - y__, (z_ - z__) / 2])
 
-                    names = [
-                        f'a*({u}*a^2*b+{-v-1}*a^2*c+{u-1}*a*b^2+{-2*u+v}*a*b*c+{u+1}*a*c^2-b^3+{-u+v+1}*b^2*c+{1-v}*b*c^2)^2',
-                        f'a*c^2*(a^2-b^2+{u}*(a*b-a*c)+{v}*(b*c-a*b))^2',
-                        f'a*({r2*(-u*v+1)}*a^2*c+{r2*(u**3-u**2*v-u**2+u*v**2+u*v+u-2*v)}*a*b*c+{r2*(u*v-1)}*b^3+{r2*(-u**3+u**2*v-u*v**2-u+v-1)}*b^2*c+{r2*(u**2-u*v+v+1)}*b*c^2)^2',
-                        f'a*({r3*(-u*v+1)}*a^2*c+{r3*(u*u*v-u)}*a*b^2+{r3*(u**3-u**2*v-u**2+u*v+u-v)}*a*b*c+{r3*(-u**3-1)}*b^2*c+{r3*(u**2+v)}*b*c^2)^2',
-                        f'a*b*c*(a*a-b*b+{u}*(a*b-a*c)+{v}*(b*c-a*b))^2',
-                        f'({r4*(y_ - y__)}*a+{r4*(z_ - z__)/2}*c)*a*b*(b-c)^2*(a*a+b*b+c*c+{w}*a*b+{w}*b*c+{w}*c*a)',
-                        f'a^2*b^2*c*(a*a+b*b+c*c+{w}*a*b+{w}*b*c+{w}*c*a)'
+                    exprs = [
+                        CyclicSum(a*(u*a**2*b+(-v-1)*a**2*c+(u-1)*a*b**2+(-2*u+v)*a*b*c+(u+1)*a*c**2-b**3+(-u+v+1)*b**2*c+(1-v)*b*c**2)**2),
+                        CyclicSum(a*c**2*(a**2-b**2+(u)*(a*b-a*c)+(v)*(b*c-a*b))**2),
+                        CyclicSum(a*(r2*(-u*v+1)*a**2*c+r2*(u**3-u**2*v-u**2+u*v**2+u*v+u-2*v)*a*b*c+r2*(u*v-1)*b**3+r2*(-u**3+u**2*v-u*v**2-u+v-1)*b**2*c+r2*(u**2-u*v+v+1)*b*c**2)**2),
+                        CyclicSum(a*(r3*(-u*v+1)*a**2*c+r3*(u*u*v-u)*a*b**2+r3*(u**3-u**2*v-u**2+u*v+u-v)*a*b*c+r3*(-u**3-1)*b**2*c+r3*(u**2+v)*b*c**2)**2),
+                        CyclicProduct(a) * CyclicSum((a*a-b*b+(u)*(a*b-a*c)+(v)*(b*c-a*b))**2),
+                        CyclicSum((r4*(y_ - y__)*a+r4*(z_ - z__)/2*c)*a*b*(b-c)**2) * multiplier,
+                        CyclicProduct(a) * CyclicSum(a*b) * multiplier
                     ]
 
                     y = [
@@ -499,15 +500,12 @@ def _sos_struct_quintic_windmill(coeff):
                         w__
                     ]
 
-                    if any(_ < 0 for _ in y):
-                        multipliers, y, names = [], None, None
-                    else:
+                    if all(_ >= 0 for _ in y):
                         y = [_ * coeff((3,2,0)) for _ in y]
 
-                        return multipliers, y, names
+                        return _sum_y_exprs(y, exprs) / multiplier
 
-
-    return multipliers, y, names
+    return None
 
 
 def _sos_struct_quintic_uncentered(coeff):
@@ -536,21 +534,22 @@ def _sos_struct_quintic_uncentered(coeff):
     [2] https://artofproblemsolving.com/community/u861323h3019177p27134161
     """
 
-    multipliers, y, names = [], None, None
     u, v = sp.symbols('u v')
     t = coeff((1,4,0))
     r1, r2, r3, u_, v_ = coeff((2,3,0)) / t, coeff((3,1,1)) / t, coeff((2,2,1)) / t, None, None
     r1_, r2_ = r1, r2
 
     if r2 + 2 * r1 >= 0:
-        multipliers = []
         y = [coeff((2,3,0)), coeff((1,4,0)), coeff((3,1,1)) / 2 + coeff((1,4,0)),
             coeff((2,3,0)) + coeff((1,4,0)) + coeff((3,1,1)) + coeff((2,2,1))]
-        if any(_ < 0 for _ in y):
-            y = None
-        else:
-            names = ['a^2*b*(b-c)^2', 'a*b^2*(b-c)^2', 'a*b*c*(b-c)^2', 'a^2*b^2*c']
-            return multipliers, y, names
+        if all(_ >= 0 for _ in y):
+            exprs = [
+                CyclicSum(a**2*b*(b-c)**2),
+                CyclicSum(a*b**2*(b-c)**2),
+                CyclicSum((b-c)**2) * CyclicProduct(a),
+                CyclicSum(a*b) * CyclicProduct(a)
+            ]
+            return _sum_y_exprs(y, exprs)
     
     if coeff((2,3,0)) + coeff((1,4,0)) + coeff((3,1,1)) + coeff((2,2,1)) == 0:
         if coeff((2,3,0)) == 0:
@@ -629,7 +628,7 @@ def _sos_struct_quintic_uncentered(coeff):
                 # approximate a rational number
                 v_numer = v_
                 for tol in (.3, .1, 3e-2, 3e-3, 3e-4, 3e-5, 3e-7, 3e-9):
-                    v_ = sp.Rational(*rationalize(v_numer - tol * 3, rounding = tol))
+                    v_ = rationalize(v_numer - tol * 3, rounding = tol)
                     if v_ >= 2:
                         r1_ = u_*(u_**3 - u_**2 - 1)/(u_ + 1)
                         if r1_ <= r1:
@@ -653,35 +652,32 @@ def _sos_struct_quintic_uncentered(coeff):
         m1 = z.as_numer_denom()[1]
         m2 = (u.as_numer_denom()[1]**2 - u.as_numer_denom()[1] + 1, v.as_numer_denom()[1])
         m2 = (m2[0] * m2[1]) / sp.gcd(m2[0], m2[1])
-        
-        multipliers = [f'a^2+{phi}*a*b']
+
+        multiplier = CyclicSum(a**2 + phi*b*c)
         
         y = [
             sp.S(1) / m2**2,
             r1_ * factor1**2 / (((u**2 - u + 1) * factor2 * m1)**2),
-            (u + v - 1) * (u**3 - u*u - u*v + u + 1) * (phi + 1) / (u*v - 1) / (u*u - 2*u - v + 2) / 3
+            (u + v - 1) * (u**3 - u*u - u*v + u + 1) * (phi + 1) / (u*v - 1) / (u*u - 2*u - v + 2)
         ]
-        y.append((r2_ + phi + 2*(u**3*w - u + v + w) - 3 * y[-1]) / 2)
+        y.append((r2_ + phi + 2*(u**3*w - u + v + w) - y[-1]) / 2)
         y.append(1 if (r1 != r1_ or r2 != r2_) else 0)
 
         y = [_ * t for _ in y]
 
-        names = [
-            f'a*({m2*(-u*v*w + w)}*a^2*c + {m2*(u*u*v*w - u*w - u)}*a*b^2 + {m2*(u**3*w - u*u*v*w - u*u*w + u*v*w + u*w - v*w + v)}*a*b*c'
-           +f'+ {m2}*b^3 + {m2*(-u**3*w + u - v - w)}*b^2*c + {m2*(u**2*w + v*w - 1)}*b*c^2)^2',
-            
-            f'a*({m1}*a^2*c + {m1*(u*v*z - z)}*a*b^2 + {m1*(u**2*z - u*z + u - v**2*z + v*z - v)}*a*b*c + {m1*(-u*v*z - u + z)}*a*c^2 +'
-           +f'{m1*(-u**2*z - v*z - 1)}*b^2*c + {m1*(u*z + v**2*z + v)}*b*c^2)^2',
-
-            f'a*b*c*(a^2+b^2+c^2-{rho}*a*b-{rho}*b*c-{rho}*c*a)^2',
-
-            f'a*b*c*(a^2-b^2-{u}*a*c+{v}*b*c+{u-v}*a*b)^2',
-
-            f'a*c*(a-b)^2*({r1-r1_}*c+{(r2-r2_)/2}*b)*(a^2+b^2+c^2+{phi}*a*b+{phi}*b*c+{phi}*c*a)',
+        exprs = [
+            CyclicSum(a*(m2*(-u*v*w+w)*a**2*c + m2*(u**2*v*w-u*w-u)*a*b**2 + m2*(u**3*w-u**2*v*w-u**2*w+u*v*w+u*w-v*w+v)*a*b*c\
+                +m2*b**3 + m2*(-u**3*w+u-v-w)*b**2*c + m2*(u**2*w+v*w-1)*b*c**2)**2),
+            CyclicSum(a*(m1*a**2*c + m1*(u*v*z-z)*a*b**2 + m1*(u**2*z-u*z+u-v**2*z+v*z-v)*a*b*c + m1*(-u*v*z-u+z)*a*c**2\
+                +m1*(-u**2*z-v*z-1)*b**2*c + m1*(u*z+v**2*z+v)*b*c**2)**2),
+            CyclicProduct(a) * CyclicSum(a**2 - rho*a*b)**2,
+            CyclicProduct(a) * CyclicSum((a**2 - b**2 - u*a*c + v*b*c + (u-v)*a*b)**2),
+            CyclicProduct(a*c*(a-b)**2*((r1-r1_)*c + (r2-r2_)/2*b)) * multiplier
         ]
 
+        return _sum_y_exprs(y, exprs) / multiplier
 
-    return multipliers, y, names
+    return None
 
 
 def _sos_struct_quintic_windmill_special(coeff):
@@ -707,14 +703,10 @@ def _sos_struct_quintic_windmill_special(coeff):
     t = coeff((1,4,0))
     w =  - coeff((3,1,1)) / t
     if w > 3 and w**3 - 8*w*w + 39*w - 83 > 0:
-        return [], None, None
+        return None
     elif w <= 2:
         # very trivial in this case
-        multipliers = []
-        y = [t, (2 - w) * t / 2]
-        names = ['a^2*c*(a-b)^2', 'a*b*c*(a-b)^2']
-
-        return multipliers, y, names
+        return t * CyclicSum(a**2*c*(a-b)**2) + (2 - w) * t / 2 * CyclicSum((a-b)**2) * CyclicProduct(a)
 
     # compute the quartic discriminant
     def det_(x, y, z):
@@ -738,7 +730,7 @@ def _sos_struct_quintic_windmill_special(coeff):
         if det__ < 0:
             continue
 
-        multipliers = [f'a^2+{z_**2+2}*a*b']
+        multiplier = CyclicSum(a**2 + (z_**2 + 2)*b*c)
 
         m_ = (-w + 2*x_ + z_**2 + 2)
         y = [
@@ -748,15 +740,15 @@ def _sos_struct_quintic_windmill_special(coeff):
         ]
         y = [_ * t for _ in y]
 
-        names = [
-            f'c*(a^3-{x_}*a^2*b+{y_}*a*b^2-{z_}*b*c^2+a^2*c+{x_-y_+z_-2}*a*b*c)^2',
-            f'a*b*c*(a^2-b^2+{-(p_+q_*2)/3/m_}*(a*b-a*c)+{-(2*p_+q_)/3/m_}*(b*c-a*b))^2',
-            f'a^3*b*c*(b-c)^2'
+        exprs = [
+            CyclicSum(c*(a**3 - x_*a**2*b + y_*a*b**2 - z_*b*c**2 + a**2*c + (x_-y_+z_-2)*a*b*c)**2),
+            CyclicProduct(a) * CyclicSum((a**2 - b**2 + (-(p_+q_*2)/3/m_)*(a*b-a*c) + (-(2*p_+q_)/3/m_)*(b*c-a*b))**2),
+            CyclicProduct(a) * CyclicSum(a**2*(b-c)**2)
         ]
 
-        return multipliers, y, names
+        return _sum_y_exprs(y, exprs) / multiplier
     
-    return [], None, None
+    return None
 
 
 def _sos_struct_quintic_hexagon(coeff, poly, recurrsion):
@@ -780,9 +772,8 @@ def _sos_struct_quintic_hexagon(coeff, poly, recurrsion):
     [1] https://artofproblemsolving.com/community/u426077h2246130p17263853
     """
     if coeff((5,0,0)) != 0 or coeff((4,1,0)) <= 0 or coeff((1,4,0)) <= 0:
-        return [], None, None
-    
-    multipliers, y, names = [], None, None
+        return None
+
 
     if coeff((4,1,0)) == coeff((1,4,0)):
         t = coeff((4,1,0))
@@ -822,23 +813,20 @@ def _sos_struct_quintic_hexagon(coeff, poly, recurrsion):
                 (z + 2 * u_ * v_) / 2,
                 2 + p + q + z + w
             ]
-            if any(_ < 0 for _ in y):
-                y = []
-            else:
+            if all(_ >= 0 for _ in y):
                 y = [_ * t for _ in y]
-                names = [
-                    f'c*(a^2-b^2+{u_}*(a*b-a*c)+{v_}*(b*c-a*b))^2',
-                    'a^2*b*(b-c)^2',
-                    'a*b*c*(b-c)^2',
-                    'a^2*b^2*c'
+                exprs = [
+                    CyclicSum(c*(a**2 - b**2 + u_*(a*b-a*c) + v_*(b*c-a*b))**2),
+                    CyclicSum(a**2*b*(b-c)**2),
+                    CyclicProduct(a) * CyclicSum((b-c)**2),
+                    CyclicProduct(a) * CyclicSum(a*b)
                 ]
-                return multipliers, y, names
+                return _sum_y_exprs(y, exprs)
             
+    return None
 
     if y is None:
         # try updegree
         multipliers = ['a*b']
         poly2 = poly * sp.polys.polytools.Poly('a*b+b*c+c*a')
-        multipliers , y , names = _merge_sos_results(multipliers, y, names, recurrsion(poly2, 7))
-
-    return multipliers, y, names
+        multipliers , y , exprs = _merge_sos_results(multipliers, y, exprs, recurrsion(poly2, 7))

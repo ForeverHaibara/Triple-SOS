@@ -5,8 +5,9 @@ import sympy as sp
 import numpy as np
 from scipy.spatial import ConvexHull
 
-from ...utils.text_process import PreprocessText, next_permute, cycle_expansion, deg
-from ...utils.root_guess import rationalize, square_perturbation
+from ...utils.text_process import preprocess_text, next_permute, cycle_expansion
+from ...utils.polytools import deg
+from ...utils.roots.rationalize import rationalize, square_perturbation
 
 def _merge_sos_results(multipliers, y, names, result, abc = False, keepdeg = False):
     """
@@ -60,21 +61,6 @@ def _merge_sos_results(multipliers, y, names, result, abc = False, keepdeg = Fal
     return multipliers, y, names
 
 
-def _make_coeffs_helper(poly, degree):
-    coeffs = {}
-    for coeff, monom in zip(poly.coeffs(), poly.monoms()):
-        if degree > 4 and not isinstance(coeff, sp.Rational): #isinstance(coeff, sp.Float):
-            coeff = sp.Rational(*rationalize(coeff, reliable = True))
-            # coeff = coeff.as_numer_denom()
-        coeffs[monom] = coeff
-
-    def coeff(x):
-        t = coeffs.get(x)
-        if t is None:
-            return sp.S(0)
-        return t
-
-    return coeff, coeffs
 
 
 def _try_perturbations(
@@ -186,7 +172,7 @@ class FastPositiveChecker():
 
 
 def search_positive(poly_str: str):
-    poly = PreprocessText(poly_str)
+    poly = preprocess_text(poly_str)
     
     fpc = FastPositiveChecker()
     fpc.setPoly(poly)
@@ -244,7 +230,7 @@ def search_positive(poly_str: str):
 
 def convex_hull_poly(poly):
     """
-    Compute the convex hull of a polynomial
+    Compute the convex hull of a polynomial.
     """
     monoms = poly.monoms()[::-1]
     

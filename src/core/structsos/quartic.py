@@ -1,10 +1,12 @@
 import sympy as sp
 
-from ...utils.text_process import cycle_expansion
-from ...utils.root_guess import rationalize, rationalize_bound, square_perturbation
-from .peeling import _merge_sos_results
+from .utils import CyclicSum, CyclicProduct, _sum_y_exprs
+from ...utils.roots.rationalize import rationalize_bound, square_perturbation
 
-def _sos_struct_quartic(poly, degree, coeff, recurrsion):
+
+a, b, c = sp.symbols('a b c')
+
+def _sos_struct_quartic(poly, coeff, recurrsion):
     """
     Solve cyclic quartic problems.
 
@@ -26,14 +28,14 @@ def _sos_struct_quartic(poly, degree, coeff, recurrsion):
     -------
     s(a2)2-3s(a3b)
     """
-    multipliers, y, names = [], None, None
+    solution = None
 
     m, p, n, q = coeff((4,0,0)), coeff((3,1,0)), coeff((2,2,0)), coeff((1,3,0))
     if m > 0:
         if m + p + n + q + coeff((2,1,1)) > 0:
-            multipliers, y, names = _sos_struct_quartic_uncentered(coeff)
-            if y is not None:
-                return multipliers, y, names
+            solution = _sos_struct_quartic_uncentered(coeff)
+            if solution is not None:
+                return solution
 
 
         det = 3*m*(m + n) - (p*p + p*q + q*q)
@@ -43,16 +45,16 @@ def _sos_struct_quartic(poly, degree, coeff, recurrsion):
         else:
             if p == -q:
                 # handle some special case in advance
-                multipliers, y, names = _sos_struct_quartic_quadratic_border(coeff)
-                if y is not None:
-                    return multipliers, y, names
+                solution = _sos_struct_quartic_quadratic_border(coeff)
+                if solution is not None:
+                    return solution
 
             return _sos_struct_quartic_biased(coeff)
         
     elif m == 0:
         return _sos_struct_quartic_degenerate(coeff)
 
-    return multipliers, y, names
+    return solution
 
 
 def _sos_struct_quartic_core(coeff):
@@ -77,7 +79,7 @@ def _sos_struct_quartic_core(coeff):
     m, p, n, q = coeff((4,0,0)), coeff((3,1,0)), coeff((2,2,0)), coeff((1,3,0))
     det = 3*m*(m+n) - (p*p + p*q + q*q)
     if m < 0 or det < 0:
-        return [], None, None
+        return None
     elif m == 0: # and det >= 0, so it must be p,q == 0
         return _sos_struct_quartic_degenerate(coeff)
 
@@ -88,23 +90,15 @@ def _sos_struct_quartic_core(coeff):
     ]
 
     if y[-1] < 0:
-        return [], None, None
+        return None
 
-    # handle irrational cases
-    # all_rational = all(isinstance(_, sp.Rational) for _ in (m,p,n,q))
-    # if not all_rational:
-    #     y = [sp.simplify(_) for _ in y]
-    # formatter = (lambda x: x) if all_rational else (lambda x: '(%s)'%sp.simplify(x))
-
-    formatter = lambda x: x
-    
-    names = [
-        f'(a*a-b*b+{formatter((p+2*q)/m/3)}*c*a+{formatter((p-q)/m/3)}*a*b-{formatter((2*p+q)/m/3)}*b*c)^2',
-        f'a^2*(b-c)^2',
-        f'a^2*b*c'
+    exprs = [
+        CyclicSum((a**2 - b**2 + (p+2*q)/m/3*a*c + (p-q)/m/3*a*b - (2*p+q)/m/3*b*c)**2),
+        CyclicSum(a**2*(b-c)**2),
+        CyclicSum(a**2*b*c)
     ]
 
-    return [], y, names
+    return _sum_y_exprs(y, exprs)
 
 
 def _sos_struct_quartic_quadratic_border(coeff):
@@ -129,17 +123,20 @@ def _sos_struct_quartic_quadratic_border(coeff):
     if p == -q and n == (t**2 - 2) * m:
         w = sp.sqrt(t*t + 4)
         if not isinstance(w, sp.Rational):
-            multipliers = ['a']
-            y = [m, (t**2 + 3) / 2 * m, (coeff((2,1,1)) + m + p + n + q) / 3]
+            y = [m, (t**2 + 3) / 2 * m, (coeff((2,1,1)) + m + p + n + q)]
             if y[-1] >= 0:
-                names = [f'a*(b^2+c^2-a^2-b*c+{t}*a*b-{t}*a*c)^2', 'a*b*c*(b-c)^2', 'a*b*c*(a+b+c)^2']
-                return multipliers, y, names
+                exprs = [
+                    CyclicSum(a*(b**2+c**2-a**2-b*c+t*a*b-t*a*c)**2),
+                    CyclicSum((b-c)**2) * CyclicProduct(a),
+                    CyclicSum(a)**2 * CyclicProduct(a)
+                ]
+                return _sum_y_exprs(y, exprs) / CyclicSum(a)
     
         # if it is rational, then fall back to normal mode
         # u = (w + t) / 2
         # r = (2*t*(u**2 - 1) + 6*u) / (2*(u**4 + u**2 + 1))
 
-    return [], None, None
+    return None
 
 
 def _sos_struct_quartic_biased(coeff):
@@ -222,22 +219,18 @@ def _sos_struct_quartic_biased(coeff):
                     break
     
     if u_ is not None:
-        y = [symmetric(u_) / (2*(u_**2*(u_**2 + 1) + 1)) * m]
-        names = [f'a*b*(a-c-({u_})*(b-c))^2']
+        y_ = (symmetric(u_) / (2*(u_**2*(u_**2 + 1) + 1)) * m)
+        solution = y_ * CyclicSum((a*b*(a-u_*b+(u_-1)*c)**2))
         
         def new_coeff(d):
             subs = {(4,0,0): 0, (3,1,0): 1, (2,2,0): -2*u_, (1,3,0): u_**2, (2,1,1): 2*u_-u_**2-1}
-            return coeff(d) - y[0] * subs[d]
-        
-        # the multipliers should be empty
-        multipliers, new_y, new_names = _sos_struct_quartic_core(new_coeff)
-        if new_y is not None:
-            y += new_y
-            names += new_names
-        
-            return multipliers, y, names
+            return coeff(d) - y_ * subs[d]
 
-    return [], None, None
+        new_solution = _sos_struct_quartic_core(new_coeff)
+        if new_solution is not None:
+            return solution + new_solution
+
+    return None
 
 
 def _sos_struct_quartic_degenerate(coeff):
@@ -260,12 +253,18 @@ def _sos_struct_quartic_degenerate(coeff):
     """
     m, p, n, q, r = coeff((4,0,0)), coeff((3,1,0)), coeff((2,2,0)), coeff((1,3,0)), coeff((2,1,1))
 
-    multipliers, y, names = [], None, None
     if m == 0 and p >= 0 and q >= 0 and p + n + q + r >= 0 and (n >= 0 or n*n <= 4*p*q):
         if n >= 0:
             # very trivial in this case and we can only use AM-GM
             y = [p, n / 2, q, p + n + q + r]
-            names = ['a*c*(b-c)^2', 'a^2*(b-c)^2', 'a*b*(b-c)^2', 'a^2*b*c']
+            exprs = [
+                CyclicSum(a*c*(b-c)**2),
+                CyclicSum(a**2*(b-c)**2),
+                CyclicSum(a*b*(b-c)**2),
+                CyclicSum(a**2*b*c)
+            ]
+            return _sum_y_exprs(y, exprs)
+
 
         else:
             # if n < 0, we must have p > 0 and q > 0
@@ -278,32 +277,29 @@ def _sos_struct_quartic_degenerate(coeff):
                     n / 2 + sp.sqrt(p * q),
                     p + n + q + r
                 ]
-                names = [
-                    f'a*b*({tp}*a-{tq}*b+{tq-tp}*c)^2',
-                    'a^2*(b-c)^2',
-                    'a^2*b*c'
+                exprs = [
+                    CyclicSum(a*b*(tp*a-tq*b+(tq-tp)*c)**2),
+                    CyclicSum(a**2*(b-c)**2),
+                    CyclicSum(a**2*b*c)
                 ]
+                return _sum_y_exprs(y, exprs)
             
             else:
                 # case 2. q / p is not a square so we need to find some perturbation
                 # so that (q - dt) / (p - dt) is a square
                 for dt in square_perturbation(p, q):
                     if n * n <= 4 * (p - dt) * (q - dt):
-                        y = [sp.S(dt)]
-                        names = [f'b*c*(b-c)^2']
+                        solution = sp.S(dt) * CyclicSum(b*c*(b-c)**2)
 
                         def new_coeff(d):
                             result = {(4,0,0): sp.S(0), (3,1,0): p - dt, (1,3,0): q - dt, (2,2,0): n + 2*dt, (2,1,1): r}
                             return result[d]
                     
                         # it must succeed
-                        multipliers, new_y, new_names = _sos_struct_quartic_degenerate(new_coeff)
-                        y += new_y
-                        names += new_names
-                        break
+                        solution +=  _sos_struct_quartic_degenerate(new_coeff)
+                        return solution
 
-    return multipliers, y, names
-
+    return None
 
 
 def _sos_struct_quartic_uncentered(coeff, recur = False):
@@ -444,39 +440,32 @@ def _sos_struct_quartic_uncentered(coeff, recur = False):
                     # in this case, we must have
                     # r = 8*n-3*p*p-3*p+6
                     # (n+r) / 6 >= (3*n-p*p-p+2) / 3 >= 0
-                    y = [(3*n-p*p-p+2) / 9 * m]
-                    names = ['(a*b+b*c+c*a)^2']
+                    y_ = (3*n-p*p-p+2) / 3 * m
+                    solution = y_ * CyclicSum(a*b)**2
 
                     def new_coeff(d):
                         subs = {(4,0,0): 0, (3,1,0): 0, (1,3,0): 0, (2,2,0): 1, (2,1,1): 2}
-                        return coeff(d) - 3 * y[0] * subs[d]
+                        return coeff(d) - y_ * subs[d]
                     
-                    multipliers, new_y, new_names = _sos_struct_quartic_core(new_coeff)
-                    if new_y is not None:
-                        y += new_y
-                        names += new_names
-                    
-                        return multipliers, y, names
-
+                    new_solution = _sos_struct_quartic_core(new_coeff)
+                    if new_solution is not None:
+                        return solution + new_solution
 
         if w_ is not None:
-            y = [s / (1 - w_) ** 2 / 27 * m]
-            names = [f'(a*a+b*b+c*c-{w_}*a*b-{w_}*b*c-{w_}*c*a)^2']
+            y_ = s / (1 - w_) ** 2 / 9 * m
+            solution = y_ * CyclicSum(a**2-w_*a*b)**2
 
             def new_coeff(d):
                 subs = {(4,0,0): 1, (3,1,0): -2*w_, (2,2,0): w_**2+2, (1,3,0): -2*w_, (2,1,1): 2*w_*(w_-1)}
-                return coeff(d) - 3 * y[0] * subs[d]
-        
-            # the multipliers should be empty
-            multipliers, new_y, new_names = _sos_struct_quartic_core(new_coeff)
-            if new_y is not None:
-                y += new_y
-                names += new_names
+                return coeff(d) - y_ * subs[d]
+
+            new_solution = _sos_struct_quartic_core(new_coeff)
+            if new_solution is not None:
+                return solution + new_solution
             
-                return multipliers, y, names
     
         if recur:
-            return [], None, None
+            return None
 
         # if we reach here, it means that the inequality does not hold for all real numbers
         # we can subtract as many s(a2bc) as possible
@@ -557,7 +546,7 @@ def _sos_struct_quartic_uncentered(coeff, recur = False):
                     # instead compute the root of derivative of discriminant
                     detdiff = det.diff()
                     roots = [(abs(det(root)), root) for root in sp.polys.nroots(detdiff) if root.is_real and root > 0]
-                    print(roots)
+                    # print(roots)
                     if len(roots) > 0:
                         x_ = min(roots)[1]
                     
@@ -572,13 +561,11 @@ def _sos_struct_quartic_uncentered(coeff, recur = False):
                             coeffs = {(4,0,0): coeff((4,0,0)), (3,1,0): coeff((3,1,0)),
                                         (2,2,0): coeff((2,2,0)), (1,3,0): coeff((1,3,0)), (2,1,1): x2 * m}
                             return coeffs[x]
-                        result = _sos_struct_quartic_uncentered(new_coeff, recur = True)
-                        if result is not None and result[1] is not None:
-                            y = [(r - x2) * m]
-                            names = ['a^2*b*c']
-                            result = _merge_sos_results([], y, names, result)
-                            return result
+                        solution = _sos_struct_quartic_uncentered(new_coeff, recur = True)
+                        if solution is not None:
+                            solution += (r - x2) * m * CyclicSum(a**2*b*c)
+                            return solution
 
-            return [], None, None
+            return None
 
-    return [], None, None
+    return None
