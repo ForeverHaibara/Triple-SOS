@@ -1,24 +1,28 @@
 import sympy as sp
 from sympy.solvers.diophantine.diophantine import diop_DN
 
-from ...utils.text_process import cycle_expansion
-from ...utils.root_guess import rationalize, rationalize_bound, cancel_denominator
-from .peeling import _merge_sos_results, _make_coeffs_helper
 from .sextic_symmetric import (
     _sos_struct_sextic_hexagon_symmetric,
     _sos_struct_sextic_hexagram_symmetric,
     _sos_struct_sextic_symmetric_ultimate
 )
+from .utils import CyclicSum, CyclicProduct, _sum_y_exprs
+from ...utils.text_process import cycle_expansion
+from ...utils.roots.rationalize import rationalize_bound, cancel_denominator
 
-def _sos_struct_sextic(poly, degree, coeff, recurrsion):
-    multipliers, y, names = _sos_struct_sextic_symmetric_ultimate(coeff, poly, recurrsion)
-    if y is not None:
-        return multipliers, y, names
+
+a, b, c = sp.symbols('a b c')
+
+
+def _sos_struct_sextic(poly, coeff, recurrsion):
+    solution = _sos_struct_sextic_symmetric_ultimate(poly, coeff, recurrsion)
+    if solution is not None:
+        return solution
 
     if coeff((6,0,0))==0 and coeff((5,1,0))==0 and coeff((5,0,1))==0:
-        multipliers, y, names = _sos_struct_sextic_hexagon(coeff, poly, recurrsion)
+        return _sos_struct_sextic_hexagon(coeff, poly, recurrsion)
 
-    return multipliers, y, names
+    return None
 
 
 def _sos_struct_sextic_inverse_triangle(coeff, poly):
@@ -27,9 +31,6 @@ def _sos_struct_sextic_inverse_triangle(coeff, poly):
     without updegree.
     """
     pass
-
-
-
 
 
 
@@ -47,16 +48,14 @@ def _sos_struct_sextic_hexagram(coeff, poly, recurrsion):
 
     s(bc(a2-bc+2(ab-ac)+3(bc-ab))2)
     """
-    multipliers, y, names = [], None, None
     if coeff((3,3,0)) < 0 or coeff((4,1,1)) < 0:
-        return [], None, None
+        return None
 
     if coeff((3,2,1)) == coeff((2,3,1)):
         # call symmetric solution in priority
-        multipliers, y, names = _sos_struct_sextic_hexagram_symmetric(coeff)
-    
-    if y is not None:
-        return multipliers, y, names
+        solution = _sos_struct_sextic_hexagram_symmetric(coeff)
+        if solution is not None:
+            return solution
     
     # simple cases where we do not need to updegree
     if coeff((4,1,1)) != 0 and coeff((3,3,0)) != 0:
@@ -104,12 +103,11 @@ def _sos_struct_sextic_hexagram(coeff, poly, recurrsion):
                     (3, -success, 3+success): coeff((3, -success, 3+success)) - (u**2 - 2*u - 2) * m
                 }
             if success == 1:
-                names = [f'b*c*(a-{u}*b)^2*(a-c)^2']
+                exprs = [f'b*c*(a-{u}*b)^2*(a-c)^2']
             elif success == 2:
-                names = [f'b*c*(a-b)^2*(a-{u}*c)^2']
+                exprs = [f'b*c*(a-b)^2*(a-{u}*c)^2']
             
-        
-    multipliers, y, names = [], None, None
+
 
 
     # hexagram (star)
@@ -218,21 +216,21 @@ def _sos_struct_sextic_hexagram(coeff, poly, recurrsion):
                         sum(coeff(i) for i in [(3,3,0),(4,1,1),(3,2,1),(2,3,1)]) * 3 + coeff((2,2,2))
                 ]
                 if all(_ >= 0 for _ in y):
-                    multipliers = ['a']
-                    names = [
-                        f'c*(a^2*c-b^2*c-{w}*(a^2*b-a*b*c)+{z}*(a*b^2-a*b*c))^2',
-                        f'a*b*c*(a^2-b^2+{(p3+2*q3)/3}*(a*c-a*b)-{(2*p3+q3)/3}*(b*c-a*b))^2',
-                        'a^3*b*c*(b-c)^2',
-                        'a^3*b^2*c^2'
+                    multiplier = CyclicSum(a)
+                    exprs = [
+                        CyclicSum(c*(a**2*c-b**2*c-w*a**2*b+z*a*b**2+(w-z)*a*b*c)**2),
+                        CyclicSum((a**2-b**2+(p3+2*q3)/3*(a*c-a*b)-(2*p3+q3)/3*(b*c-a*b))**2) * CyclicProduct(a),
+                        CyclicSum(a**2*(b-c)**2) * CyclicProduct(a),
+                        CyclicSum(a) * CyclicProduct(a**2)
                     ]
-                    return multipliers, y, names
+                    return _sum_y_exprs(y, exprs) / multiplier
 
 
     # Final trial (the code is not expected to reach here)
-    poly = poly * sp.polys.polytools.Poly('a+b+c')
-    multipliers, y, names = _merge_sos_results(['a'], y, names, recurrsion(poly, 7))
+    # poly = poly * sp.polys.polytools.Poly('a+b+c')
+    # multipliers, y, exprs = _merge_sos_results(['a'], y, exprs, recurrsion(poly, 7))
 
-    return multipliers, y, names
+    return None
 
 
 def _sos_struct_sextic_hexagon(coeff, poly, recurrsion):
@@ -250,7 +248,7 @@ def _sos_struct_sextic_hexagon(coeff, poly, recurrsion):
     -------
     [1] https://artofproblemsolving.com/community/u426077h1892902p16370027
     """
-    multipliers, y, names = [], None, None
+    multipliers, y, exprs = [], None, None
     # hexagon
     if coeff((6,0,0))==0 and coeff((5,1,0))==0 and coeff((5,0,1))==0:
         if coeff((4,2,0)) != coeff((4,0,2)):
@@ -261,32 +259,35 @@ def _sos_struct_sextic_hexagon(coeff, poly, recurrsion):
                     return _sos_struct_sextic_rotated_tree(coeff)
 
                 if coeff((4,0,2)) == 0:
-                    y = [coeff((4,2,0))]
-                    names = ['(a*a*b+b*b*c+c*c*a-3*a*b*c)^2']
+                    solution = coeff((4,2,0)) * CyclicSum(a**2*b-a*b*c)**2
                 else:
-                    y = [coeff((4,0,2))]
-                    names = ['(a*b*b+b*c*c+c*a*a-3*a*b*c)^2']
+                    solution = coeff((4,0,2)) * CyclicSum(a*b**2-a*b*c)**2
 
-                poly2 = poly - y[0] * sp.sympify(names[0])
+                poly2 = poly - solution.doit().as_poly(a,b,c)
                 v = 0 # we do not need to check the positivity, just try
                 if v != 0:
-                    y, names = None, None
+                    y, exprs = None, None
                 else: # positive
-                    multipliers , y , names = _merge_sos_results(multipliers, y, names, recurrsion(poly2, 6))
+                    new_solution = recurrsion(poly2)
+                    if new_solution is not None:
+                        return solution + new_solution
 
             # CASE 2.
             else:
+                # Temporarily deprecated.
+                # The current method is not complete.
+                return 
                 a , b = (coeff((4,2,0)) / coeff((4,0,2))).as_numer_denom()
                 if sp.ntheory.primetest.is_square(a) and sp.ntheory.primetest.is_square(b):
                     y = [coeff((4,2,0)) / a / 3]
-                    names = [f'({sp.sqrt(a)}*(a*a*b+b*b*c+c*c*a-3*a*b*c)-{sp.sqrt(b)}*(a*b*b+b*c*c+c*a*a-3*a*b*c))^2']
+                    exprs = [f'({sp.sqrt(a)}*(a*a*b+b*b*c+c*c*a-3*a*b*c)-{sp.sqrt(b)}*(a*b*b+b*c*c+c*a*a-3*a*b*c))^2']
                 
-                    poly2 = poly - 3 * y[0] * sp.sympify(names[0])
+                    poly2 = poly - 3 * y[0] * sp.sympify(exprs[0])
                     v = 0 # we do not need to check the positivity, just try
                     if v != 0:
-                        y, names = None, None
+                        y, exprs = None, None
                     else: # positive
-                        multipliers , y , names = _merge_sos_results(multipliers, y, names, recurrsion(poly2, 6))
+                        multipliers , y , exprs = _merge_sos_results(multipliers, y, exprs, recurrsion(poly2, 6))
 
                 # CASE 3.
                 # a = t(p^2+1) , b = t(q^2+1)
@@ -310,51 +311,53 @@ def _sos_struct_sextic_hexagon(coeff, poly, recurrsion):
                             # negative vertex, skip it
                             continue
                         y = [t]
-                        names = [f'(a*a*c-b*b*c-{p}*(a*a*b-a*b*c)+{q}*(a*b*b-a*b*c))^2']
-                        poly2 = poly - t * sp.sympify(cycle_expansion(names[0]))
-                        multipliers , y , names = _merge_sos_results(multipliers, y, names, recurrsion(poly2, 6))
+                        exprs = [f'(a*a*c-b*b*c-{p}*(a*a*b-a*b*c)+{q}*(a*b*b-a*b*c))^2']
+                        poly2 = poly - t * sp.sympify(cycle_expansion(exprs[0]))
+                        multipliers , y , exprs = _merge_sos_results(multipliers, y, exprs, recurrsion(poly2, 6))
                         if y is not None:
                             break
 
 
         else:# coeff((4,2,0)) == coeff((4,0,2)):
             if coeff((4,2,0)) == 0:
-                multipliers, y, names = _sos_struct_sextic_hexagram(coeff, poly, recurrsion)
+                return _sos_struct_sextic_hexagram(coeff, poly, recurrsion)
             elif coeff((3,2,1)) == coeff((2,3,1)):
                 # symmetric
-                multipliers, y, names = _sos_struct_sextic_hexagon_symmetric(coeff)
+                return _sos_struct_sextic_hexagon_symmetric(coeff)
             else:
-                y = [coeff((4,2,0)) / 3]
-                names = [f'(a-b)^2*(b-c)^2*(c-a)^2']
+                solution = coeff((4,2,0)) * CyclicProduct((a-b)**2)
 
-                poly2 = poly - y[0] * 3 * sp.sympify(names[0])
+                poly2 = poly - solution.doit().as_poly(a,b,c)
                 v = 0 # we do not need to check the positivity, just try
                 if v != 0:
-                    y, names = None, None
+                    y, exprs = None, None
                 else: # positive
-                    multipliers , y , names = _merge_sos_results(multipliers, y, names, recurrsion(poly2, 6))
-        
-    return multipliers, y, names
+                    new_solution = recurrsion(poly2)
+                    if new_solution is not None:
+                        return solution + new_solution
+                
+    return None
 
 
 
 def _sos_struct_sextic_hexagon_full(coeff):
     """
+    Still in development
     Examples
     -------
     s(4a5b+9a5c-53a4bc+10a4c2-19a3b3+47a3b2c+52a3bc2-50a2b2c2)
     """
     if coeff((6,0,0)) != 0:
-        return [], None, None
+        return None
 
     coeff51 = coeff((5,1,0))
     if coeff51 == 0 and coeff((1,5,0)) != 0:
         # reflect the polynomial
-        return [], None, None
+        return None
 
     m = sp.sqrt(coeff((1,5,0)) / coeff51)
     if not isinstance(m, sp.Rational):
-        return [], None, None
+        return None
 
     p, n, q = coeff((4,2,0)) / coeff51, coeff((3,3,0)) / coeff51, coeff((2,4,0)) / coeff51
 
@@ -362,13 +365,13 @@ def _sos_struct_sextic_hexagon_full(coeff):
     t = (2*m*p + q)/(2*m + 1)
     z = (p - t) / (-2)
     if t < 0 or n + 2 * t < z**2 - 2*m:
-        return [], None, None
+        return None
 
     # Case A. solve it directly through a cubic equation
 
     # Case B. optimize discriminant >= 0
 
-    return [], None, None
+    return None
 
 
 def _sos_struct_sextic_rotated_tree(coeff):
@@ -394,43 +397,42 @@ def _sos_struct_sextic_rotated_tree(coeff):
         # reflect the polynomial so that coeff((4,2,0)) == 0
         def new_coeff(c):
             return coeff((c[0], c[2], c[1]))
-        multipliers, y, names = _sos_struct_sextic_rotated_tree(new_coeff)
-        if y is not None:
-            multipliers = [_.translate({98: 99, 99: 98}) for _ in multipliers]
-            names = [_.translate({98: 99, 99: 98}) for _ in names]
-        return multipliers, y, names
+        solution = _sos_struct_sextic_rotated_tree(new_coeff)
+        if solution is not None:
+            solution = solution.xreplace({b:c, c:b})
+        return solution
     
     u = coeff((3,2,1)) / coeff((2,4,0))
     if coeff((2,4,0)) <= 0 or coeff((4,2,0)) != 0 or u < -2:
-        return [], None, None
+        return None
     v = coeff((3,1,2)) / coeff((2,4,0))
 
-    multipliers, y, names = [], None, None
+    multipliers, y, exprs = None
     if u >= 2 and v >= -6:
-        y = [sp.S(1) / 3, u - 2, v + 6,
-            (coeff((2,4,0)) + coeff((3,1,2)) + coeff((3,2,1))) + coeff((2,2,2)) / 3
+        y = [sp.S(1), u - 2, v + 6,
+            (coeff((2,4,0)) + coeff((3,1,2)) + coeff((3,2,1))) * 3 + coeff((2,2,2))
         ]
         y = [_ * coeff((2,4,0)) for _ in y[:-1]] + [y[-1]]
-        names = [
-            '(a^2*c+b^2*a+c^2*b-3*a*b*c)^2',
-            'a*b*c*(a^2*b-a*b*c)',
-            'a*b*c*(a^2*c-a*b*c)',
-            'a^2*b^2*c^2'
+        exprs = [
+            CyclicSum(a**2*c-a*b*c)**2,
+            CyclicProduct(a) * CyclicSum(a**2*b - CyclicProduct(a)),
+            CyclicProduct(a) * CyclicSum(a**2*c - CyclicProduct(a)),
+            CyclicProduct(a**2)
         ]
-        return multipliers, y, names
+        return multipliers, y, exprs
     
     if u >= 0 and v >= -2:
         y = [sp.S(1), u, v + 2,
-            (coeff((2,4,0)) + coeff((3,1,2)) + coeff((3,2,1))) + coeff((2,2,2)) / 3
+            (coeff((2,4,0)) + coeff((3,1,2)) + coeff((3,2,1))) * 3 + coeff((2,2,2))
         ]
         y = [_ * coeff((2,4,0)) for _ in y[:-1]] + [y[-1]]
-        names = [
-            'a^2*c^2*(a-b)^2',
-            'a*b*c*(a^2*b-a*b*c)',
-            'a*b*c*(a^2*c-a*b*c)',
-            'a^2*b^2*c^2'
+        exprs = [
+            CyclicSum(a**2*c**2*(a-b)**2),
+            CyclicProduct(a) * CyclicSum(a**2*b - CyclicProduct(a)),
+            CyclicProduct(a) * CyclicSum(a**2*c - CyclicProduct(a)),
+            CyclicProduct(a**2)
         ]
-        return multipliers, y, names
+        return multipliers, y, exprs
 
     if True:
         # simple case, we only need to multiply s(a)
@@ -463,7 +465,7 @@ def _sos_struct_sextic_rotated_tree(coeff):
                     y_ = None
             
             if y_ is not None:
-                multipliers = ['a']
+                multiplier = CyclicSum(a)
                 y = [
                     sp.S(1),
                     p1,
@@ -472,14 +474,14 @@ def _sos_struct_sextic_rotated_tree(coeff):
                     (coeff((2,4,0)) + coeff((3,1,2)) + coeff((3,2,1))) + coeff((2,2,2)) / 3
                 ]
                 y = [_ * coeff((2,4,0)) for _ in y[:-1]] + [y[-1]]
-                names = [
-                    f'a*(a^2*c-a*b^2+{x_}*b*c^2+{y_}*b^2*c-{x_+y_}*a*b*c)^2',
-                    f'a^2*b^2*c*(a-{-n1/2/p1}*b+{-n1/2/p1-1}*c)^2',
-                    'a^2*b^2*c*(b-c)^2',
-                    'a^3*b*c*(b-c)^2',
-                    'a^3*b^2*c^2'
+                exprs = [
+                    CyclicSum(a*(a**2*c-a*b**2+x_*b*c**2+y_*b**2*c-(x_+y_)*a*b*c))**2,
+                    CyclicProduct(a) * CyclicSum(a*b*(a-(-n1/2/p1)*b+(-n1/2/p1-1)*c)**2),
+                    CyclicProduct(a) * CyclicSum(a*b*(b-c)**2),
+                    CyclicProduct(a) * CyclicSum(a**2*(b-c)**2),
+                    CyclicProduct(a**2) * CyclicSum(a)
                 ]
-                return multipliers, y, names
+                return _sum_y_exprs(y, exprs) / multiplier
 
 
     r, x = sp.symbols('r'), None
@@ -502,8 +504,8 @@ def _sos_struct_sextic_rotated_tree(coeff):
         return [], None, None
     
     z = x * (x + 1) / 3
-    
-    multipliers = [f'a*b*b+{z}*a*b*c', 'a']
+
+    multipliers = CyclicSum(a*b**2 + z*a*b*c) * CyclicSum(a)
     y = [
         1,
         (x + 1) / 2,
@@ -513,13 +515,13 @@ def _sos_struct_sextic_rotated_tree(coeff):
         (coeff((2,4,0)) + coeff((3,1,2)) + coeff((3,2,1))) + coeff((2,2,2)) / 3
     ]
     y = [_ * coeff((2,4,0)) for _ in y[:-1]] + [y[-1]]
-    names = [
-        f'a^2*c*(a+b+c)*(a^2*c-{x}*a*b^2-{x}*b*c^2+{x*x-1}*b^2*c-{x*(x-2)}*a*b*c)^2',
-        f'a^2*b^2*c^2*({x-1}*a-b)^2*(a+{x-1}*b-{x}*c)^2',
-        f'a*b*c^2*({x-1}*a-b)^2*({x}*a*b-a*c-{x-1}*b*c)^2',
-        f'a*b*c*(a+b+c)*(a*b^2+b*c^2+c*a^2+{3*z}*a*b*c)*(a^2*c-a*b*c)',
-        f'a*b*c*(a+b+c)*(a*b^2+b*c^2+c*a^2+{3*z}*a*b*c)*(a^2*b-a*b*c)',
-        f'a^3*b^2*c^2*(a*b^2+b*c^2+c*a^2+{3*z}*a*b*c)'
+    exprs = [
+        CyclicSum(a) * CyclicSum(a**2*c*(a**2*c-x*a*b**2-x*b*c**2+(x*x-1)*b**2*c-x*(x-2)*a*b*c)**2),
+        CyclicProduct(a**2) * CyclicSum(((x-1)*a-b)**2*(a+(x-1)*b-x*c)**2),
+        CyclicProduct(a) * CyclicSum(c*((x-1)*a-b)**2*(x*a*b-a*c-(x-1)*b*c)**2),
+        CyclicProduct(a) * CyclicSum(a) * CyclicSum(a**2*c - CyclicProduct(a)) * CyclicSum(a*b**2 + z*a*b*c),
+        CyclicProduct(a) * CyclicSum(a) * CyclicSum(a**2*b - CyclicProduct(a)) * CyclicSum(a*b**2 + z*a*b*c),
+        CyclicProduct(a**2) * CyclicSum(a) * CyclicSum(a*b**2 + z*a*b*c)
     ]
 
-    return multipliers, y, names
+    return multipliers, y, exprs

@@ -1,21 +1,41 @@
 import sympy as sp
 
+from .utils import CyclicSum, CyclicProduct, _sum_y_exprs
 from ...utils.text_process import cycle_expansion
-from ...utils.root_guess import rationalize, optimize_determinant
-from .peeling import _merge_sos_results, _try_perturbations, FastPositiveChecker
+from ...utils.roots.rationalize import rationalize, square_perturbation
+from ...utils.roots.findroot import optimize_discriminant
 
-def _sos_struct_septic(poly, degree, coeff, recurrsion):
-    multipliers, y, names = [], None, None
 
+a, b, c = sp.symbols('a b c')
+
+def _sos_struct_septic(poly, coeff, recurrsion):
     if coeff((7,0,0))==0 and coeff((6,1,0))==0 and coeff((6,0,1))==0:
         if coeff((5,2,0))==0 and coeff((5,0,2))==0:
             # star
-            multipliers, y, names = _sos_struct_septic_star(coeff, poly, recurrsion)
+            return _sos_struct_septic_star(coeff, poly, recurrsion)
         else:
             # hexagon
-            multipliers, y, names = _sos_struct_septic_hexagon(coeff, poly, recurrsion)
-            
-    return multipliers, y, names
+            return _sos_struct_septic_hexagon(coeff, poly, recurrsion)
+    return None
+
+
+
+def _try_perturbations(
+        poly,
+        p,
+        q,
+        perturbation,
+        recurrsion = None,
+        times = 4,
+        **kwargs
+    ):
+    perturbation_poly = perturbation.doit().as_poly(a,b,c)
+    for t in square_perturbation(p, q, times = times):
+        poly2 = poly - t * perturbation_poly
+        solution = recurrsion(poly2)
+        if solution is not None:
+            return solution + t * perturbation
+    return None
 
 
 def _sos_struct_septic_star(coeff, poly, recurrsion):
@@ -45,77 +65,73 @@ def _sos_struct_septic_star(coeff, poly, recurrsion):
 
     s(72a5bc+24a4b3+156a4b2c-453a4bc2+44a4c3+176a3b3c-19a3b2c2)
     """
-    multipliers, y, names = [], None, None
     if any(coeff(i) for i in ((7,0,0), (6,1,0), (6,0,1), (5,2,0), (5,0,2))):
-        return multipliers, y, names
+        return None
 
     if coeff((4,3,0)) == 0:
-        a , b = 1 , 0
+        p, q = 1 , 0
     else:
-        a , b = (coeff((3,4,0)) / coeff((4,3,0))).as_numer_denom()
+        p, q = (coeff((3,4,0)) / coeff((4,3,0))).as_numer_denom()
         
-    if sp.ntheory.primetest.is_square(a) and sp.ntheory.primetest.is_square(b):
+    if sp.ntheory.primetest.is_square(p) and sp.ntheory.primetest.is_square(q):
         t = coeff((4,3,0))
-        
-        y = []
-        names = []
 
-        if b == 0 and coeff((3,4,0)) == 0: # abc | poly
+        if q == 0 and coeff((3,4,0)) == 0: # abc | poly
             pass
         elif t < 0:
-            return [], None, None
+            return None
         else:
-            if b != 0:
-                z = sp.sqrt(a / b)
+            if q != 0:
+                z = sp.sqrt(p / q)
                 discriminant = '-(3*m*(m+n-(-2*x^2+2*y^2+4*y*z-4*y-2*z^2+4*z-2))-(p-(x^2-2*x*y+2*x+y^2+2*y))^2-(q-(x^2+2*x*y+2*x*z+y^2-2*y*z))^2-(p-(x^2-2*x*y+2*x+y^2+2*y))*(q-(x^2+2*x*y+2*x*z+y^2-2*y*z)))'
                 # discriminant = '-3*m^2-3*m*n+6*m*y^2+p^2+p*q-3*p*y^2-2*p*y+q^2-3*q*y^2+2*q*y+3*x^4+12*x^3-x^2*(6*m+3*p+3*q-10*y^2-12)-x*(-2*p*y+6*p+2*q*y+6*q-4*y^2)+3*y^4+4*y^2'
-                discriminant = sp.polys.polytools.Poly(discriminant).subs('z',z)
+                discriminant = sp.polys.Poly(discriminant).subs('z',z)
             else:
                 t = coeff((3,4,0))
                 discriminant = '-(3*m*(m+n-(-2*x^2+2*y^2-4*y-2))-(p-(x^2-2*x*y+y^2))^2-(q-(x^2+2*x*y-2*x+y^2+2*y))^2-(p-(x^2-2*x*y+y^2))*(q-(x^2+2*x*y-2*x+y^2+2*y)))'
-                discriminant = sp.polys.polytools.Poly(discriminant)
+                discriminant = sp.polys.Poly(discriminant)
             discriminant = discriminant.subs((('m',coeff((5,1,1))/t), ('n',coeff((3,3,1))/t), ('p',coeff((4,2,1))/t), ('q',coeff((2,4,1))/t)))#, simultaneous=True)
             
-            result = optimize_determinant(discriminant)
+            result = optimize_discriminant(discriminant)
             if result is None:
-                return [], None, None
-            a , b = result
+                return None
+
+            x, y = sp.symbols('x y')
+            u, v = result[x], result[y]
             
-            # now we have guaranteed v <= 0
+            # now we have guaranteed discriminant <= 0
             if coeff((4,3,0)) != 0:
-                y = [t]
-                names = [f'b*(a^2*b-a*b*c-{z}*(b*c^2-a*b*c)+{a+b}*(a^2*c-a*b*c)+{b-a}*(a*c^2-a*b*c))^2']
-            else: # t = 0
-                y = [t]
-                names = [f'b*((b*c^2-a*b*c)+{a+b}*(a^2*c-a*b*c)+{b-a}*(a*c^2-a*b*c))^2']
+                solution = t * CyclicSum(b*(a**2*b+(z-1-2*v)*a*b*c-z*b*c**2+(u+v)*a**2*c+(v-u)*(a*c**2))**2)
+            else: # 
+                solution = t * CyclicSum(b*(b*c**2+(-2*v-1)*a*b*c+(u+v)*a**2*c+(v-u)*a*c**2)**2)
 
 
-            poly = poly - t * sp.polys.polytools.Poly(cycle_expansion(names[0]))
-        
-        try:
-            poly = sp.cancel(poly / sp.polys.polytools.Poly('a*b*c'))
-            poly = sp.polys.polytools.Poly(poly)
+            poly = poly - solution.doit().as_poly(a,b,c)
+            # print(result, poly, discriminant.subs(result),'\n',discriminant)
+            poly = sp.cancel(poly / (a*b*c).as_poly(a,b,c)).as_poly(a,b,c)
+
+            new_solution = recurrsion(poly)
+            if new_solution is not None:
+                return solution + new_solution * CyclicProduct(a)
             
-            multipliers , y , names = _merge_sos_results(multipliers, y, names,
-                                                    recurrsion(poly, 4), abc = True)
-        except:
-            # zero polynomial
-            pass
+            return None
 
-    elif a > 0 and b > 0:
+
+    elif p > 0 and q > 0:
         # we shall NOTE that we actually do not require a/b is square
         # take coefficients like sqrt(a/b) also works -- though it is not pretty
         # but we can make a sufficiently small perturbation such that a/b is square
         # e.g. a/b = 7/4 = z^2 + epsilon
         # solve it by Newton's algorithm for squareroot, starting with z = floor(7/4) = 1
         # 1 -> (1 + 7/4)/2 = 11/8 -> (11/8+14/11)/2 = 233/176
-        
-        name = 'c*(a^2*b-a^2*c-a*b^2+b^2*c)^2'
-        
-        multipliers, y, names = _try_perturbations(poly, 7, multipliers, a, b,
-                                                coeff((4,3,0))/b, name, recurrsion = recurrsion)
 
-    return multipliers, y, names
+        perturbation = CyclicSum(c*(a-b)**2*(a*b-a*c-b*c)**2)
+        
+        solution = _try_perturbations(poly, coeff((3,4,0)), coeff((4,3,0)), perturbation, recurrsion = recurrsion)
+        if solution is not None:
+            return solution
+
+    return None
 
 
 def _sos_struct_septic_biased(coeff):
@@ -137,19 +153,18 @@ def _sos_struct_septic_biased(coeff):
 
     s(a5c2+a4b2c+a4bc2-7a3b3c+4a3b2c2)
     """
-    multipliers, y, names = [], None, None
+
     if coeff((5,2,0)) or coeff((4,3,0)):
         # reflect the polynomial so that coeff((5,2,0)) == 0
         def new_coeff(c):
             return coeff((c[0], c[2], c[1]))
-        multipliers, y, names = _sos_struct_septic_biased(new_coeff)
-        if y is not None:
-            multipliers = [_.translate({98: 99, 99: 98}) for _ in multipliers]
-            names = [_.translate({98: 99, 99: 98}) for _ in names]
-        return multipliers, y, names
+        solution = _sos_struct_septic_biased(new_coeff)
+        if solution is not None:
+            solution = solution.xreplace({b: c, c: b})
+        return solution
 
     if coeff((5,2,0)) or coeff((4,3,0)):
-        return [], None, None
+        return None
 
     if coeff((3,4,0)) == coeff((2,5,0)) and coeff((3,4,0)) != 0:
         coeff34 = coeff((3,4,0))
@@ -163,7 +178,8 @@ def _sos_struct_septic_biased(coeff):
                 n2 = n - (x**2 + 4*x + 3)
                 q2 = q + (2*x + 3)
                 u_, v_ = -(p + 2*q2) / 3 / m, -(2*p + q2) / 3 / m
-                multipliers = ['a']
+
+                multiplier = CyclicSum(a)
                 y = [
                     1 / r**2,
                     1 / r**2,
@@ -172,20 +188,22 @@ def _sos_struct_septic_biased(coeff):
                     m + p + n + q + 2 + coeff((3,2,2)) / coeff34
                 ]
                 y = [_ * coeff34 for _ in y]
-                names = [
-                    f'a*c*({r}*a^2*c-{r}*b*c^2+{r}*a*b*c-{(x+2)*r}*a*b^2+{(x+1)*r}*b^2*c)^2',
-                    f'({r}*a^3*c-{r}*a*b^3+{r}*b^2*c^2-{r}*a^2*b^2-{r}*a*b*c^2-{(x+1)*r}*a^2*b*c+{(x+2)*r}*a*b^2*c)^2',
-                    f'a*b*c*(a+b+c)*(a^2-b^2+{u_-v_}*a*b-{u_}*a*c+{v_}*b*c)^2',
-                    'a^3*b*c*(a+b+c)*(b-c)^2',
-                    'a^3*b^2*c^2*(a+b+c)'
+                exprs = [
+                    CyclicSum(a*c*(r*a**2*c-r*b*c**2+r*a*b*c-(x+2)*r*a*b**2+(x+1)*r*b**2*c)**2),
+                    CyclicSum((r*a**3*c-r*a*b**3+r*b**2*c**2-r*a**2*b**2-r*a*b*c**2-(x+1)*r*a**2*b*c+(x+2)*r*a*b**2*c)**2),
+                    CyclicSum((a**2-b**2+(u_-v_)*a*b-u_*a*c+v_*b*c)**2) * CyclicSum(a) * CyclicProduct(a),
+                    CyclicSum(a**2*(b-c)**2) * CyclicSum(a) * CyclicProduct(a),
+                    CyclicSum(a)**2 * CyclicProduct(a**2)
                 ]
+                return _sum_y_exprs(y, exprs) / multiplier
 
         elif m == 0 and p >= -2:
             if p == -2:
                 x = (-q - 3) / 2
             0
 
-    return multipliers, y, names
+    return None
+
 
 def _sos_struct_septic_hexagon(coeff, poly, recurrsion):
     """
@@ -211,28 +229,23 @@ def _sos_struct_septic_hexagon(coeff, poly, recurrsion):
     """
     
     if any(coeff(i) for i in ((7,0,0), (6,1,0), (6,0,1))):
-        return [], None, None
-
-    multipliers, y, names = [], None, None
+        return None
 
     if (coeff((5,2,0)) == 0 and coeff((4,3,0)) == 0) or (coeff((3,4,0)) == 0 and coeff((2,5,0)) == 0):
-        multipliers, y, names = _sos_struct_septic_biased(coeff)
-        if y is not None:
-            return multipliers, y, names
+        solution = _sos_struct_septic_biased(coeff)
+        if solution is not None:
+            return solution
 
     if coeff((5,2,0)) == 0:
-        a , b = 1 , 0
+        p, q = 1 , 0
     else:
-        a , b = (coeff((2,5,0)) / coeff((5,2,0))).as_numer_denom()
+        p, q = (coeff((2,5,0)) / coeff((5,2,0))).as_numer_denom()
     
-    if sp.ntheory.primetest.is_square(a) and sp.ntheory.primetest.is_square(b):
-        t = coeff((5,2,0)) / b if b != 0 else coeff((2,5,0))
-        
-        y = []
-        names = []
+    if sp.ntheory.primetest.is_square(p) and sp.ntheory.primetest.is_square(q):
+        t = coeff((5,2,0)) / q if q != 0 else coeff((2,5,0))
 
         if t < 0:
-            return [], None, None
+            return None
 
         # 's((a(u(a2b-abc)-v(a2c-abc)+x(bc2-abc)+y(b2c-abc)+z(ac2-abc)+w(ab2-abc))2))' (u>0,v>0)
         # z^2 + 2uw = coeff((4,3,0)) = m,   w^2 - 2vz = coeff((3,4,0)) = n
@@ -242,16 +255,18 @@ def _sos_struct_septic_hexagon(coeff, poly, recurrsion):
         m = coeff((4,3,0)) / t
         n = coeff((3,4,0)) / t
 
-        u = sp.sqrt(b)
-        v = sp.sqrt(a)
+        u = sp.sqrt(q)
+        v = sp.sqrt(p)
         candidates = []
         
         if v == 0: # first reflect the problem, then reflect it back
             u , v = v , u
-            a , b = b , a
+            p , q = q , p
             m , n = n , m
 
-        for w in sp.polys.polyroots.roots(sp.polys.polytools.Poly(f'(x*x-{n})^2-4*{a}*({m}-2*{u}*x)')):
+        x = sp.symbols('x')
+        eq = ((x**2 - n)**2 - 4*p*(m - 2*u*x)).as_poly(x)
+        for w in sp.polys.polyroots.roots(eq):
             if isinstance(w, sp.Rational):
                 z = (w*w - n) / 2 / v
                 candidates.append((w, z))
@@ -267,17 +282,17 @@ def _sos_struct_septic_hexagon(coeff, poly, recurrsion):
                 z2 -= abs(z2) / 1000 # slight perturbation
                 rounding = 1e-2
                 for i in range(4):
-                    w = sp.Rational(*rationalize(w2, rounding = rounding, reliable = False))
-                    z = sp.Rational(*rationalize(z2, rounding = rounding, reliable = False))
+                    w = rationalize(w2, rounding = rounding, reliable = False)
+                    z = rationalize(z2, rounding = rounding, reliable = False)
                     rounding *= 0.1
                     if z*z + 2*u*w <= m and w*w - 2*v*z <= n:
                         candidates.append((w, z))
 
-
         for perturbation in (100, 3, 2):
             m2 = m - abs(m / perturbation)
             n2 = n - abs(n / perturbation)
-            for w in sp.polys.polyroots.roots(sp.polys.polytools.Poly(f'(x*x-{n2})^2-4*{a}*({m2}-2*{u}*x)')):
+            eq = ((x**2 - n2)**2 - 4*p*(m2 - 2*u*x)).as_poly(x)
+            for w in sp.polys.roots(eq):
                 if isinstance(w, sp.Rational):
                     z = (w*w - n) / 2 / v
                     candidates.append((w, z))
@@ -290,8 +305,8 @@ def _sos_struct_septic_hexagon(coeff, poly, recurrsion):
                         continue
                     z2 = ((m + m2)/2 - 2*u*w2)**0.5
                     for i in range(4):
-                        w = sp.Rational(*rationalize(w2, rounding = rounding, reliable = False))
-                        z = sp.Rational(*rationalize(z2, rounding = rounding, reliable = False))
+                        w = rationalize(w2, rounding = rounding, reliable = False)
+                        z = rationalize(z2, rounding = rounding, reliable = False)
                         rounding *= 0.1
                         if z*z + 2*u*w <= m and w*w - 2*v*z <= n:
                             candidates.append((w, z))
@@ -300,7 +315,7 @@ def _sos_struct_septic_hexagon(coeff, poly, recurrsion):
         if coeff((2,5,0)) == 0: # reflect back
             u , v = v , u
             m , n = n , m
-            a , b = b , a
+            p , q = q , p
             candidates = [(-z, -w) for w,z in candidates]
 
         # sort according to their weights
@@ -313,26 +328,32 @@ def _sos_struct_septic_hexagon(coeff, poly, recurrsion):
             discriminant = '3*(m-(-2*u*v))*(m-(-2*u*v)+n-(-2*u*w+2*u*y-2*u*z+2*v*w-2*v*x+2*v*z-2*w^2-2*w*x-2*w*y-4*w*z+2*x*y-2*x*z-2*y*z-2*z^2))'
             discriminant += '-(p-(-2*u^2+2*u*v-2*u*w-2*u*x-2*u*y-2*u*z-2*v*w+2*x*z+y^2))^2-(q-(2*u*v+2*u*z-2*v^2+2*v*w+2*v*x+2*v*y+2*v*z+2*w*y+x^2))^2'
             discriminant += '-(p-(-2*u^2+2*u*v-2*u*w-2*u*x-2*u*y-2*u*z-2*v*w+2*x*z+y^2))*(q-(2*u*v+2*u*z-2*v^2+2*v*w+2*v*x+2*v*y+2*v*z+2*w*y+x^2))'
-            discriminant = -sp.polys.polytools.Poly(discriminant)
+            discriminant = -sp.polys.Poly(discriminant)
             discriminant = discriminant.subs((('u', u), ('v', v), ('z', z), ('w', w),
                                 ('m', coeff((5,1,1))/t), ('n', coeff((3,3,1))/t), ('p', coeff((4,2,1))/t), ('q', coeff((2,4,1))/t)))
             
-            result = optimize_determinant(discriminant, soft = True)
+            result = optimize_discriminant(discriminant, soft = True)
             if result is None:
                 continue
-            a , b = result
+
+            x, y = sp.symbols('x y')
+            r, s = result[x], result[y]
             # print('w z =', w, z, 'a b =', a, b, discriminant)
-            
-            y = [t]
-            names = [f'a*({u}*(a^2*b-a*b*c)-{v}*(a^2*c-a*b*c)+{a}*(b*c^2-a*b*c)+{b}*(b^2*c-a*b*c)+{z}*(a*c^2-a*b*c)+{w}*(a*b^2-a*b*c))^2']
-            poly2 = poly - t * sp.polys.polytools.Poly(cycle_expansion(names[0]))
-            multipliers , y , names = _merge_sos_results(multipliers, y, names, recurrsion(poly2, 7))
-            if y is not None:
-                break
 
-    elif a > 0 and b > 0:
-        name = 'a*(a-b)^2*(b-c)^2*(c-a)^2'
-        multipliers, y, names = _try_perturbations(poly, 7, multipliers, a, b,
-                                                coeff((5,2,0))/b, name, recurrsion = recurrsion)
+            expr = (u*(a**2*b-a*b*c)-v*(a**2*c-a*b*c)+r*(b*c**2-a*b*c)+s*(b**2*c-a*b*c)+z*(a*c**2-a*b*c)+w*(a*b**2-a*b*c)).expand()
+            solution = t * CyclicSum(a * expr**2)
+            poly2 = poly - solution.doit().as_poly(a,b,c)
 
-    return multipliers, y, names
+            new_solution = recurrsion(poly2)
+            if new_solution is not None:
+                return solution + new_solution
+            return None
+
+    elif p > 0 and q > 0:
+        perturbation = CyclicSum(a) * CyclicProduct((a-b)**2)
+        solution = _try_perturbations(poly, coeff((2,5,0)), coeff((5,2,0)), perturbation, recurrsion=recurrsion)
+
+        if solution is not None:
+            return solution
+
+    return None

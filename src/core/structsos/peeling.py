@@ -63,32 +63,6 @@ def _merge_sos_results(multipliers, y, names, result, abc = False, keepdeg = Fal
 
 
 
-def _try_perturbations(
-        poly,
-        degree,
-        multipliers,
-        a,
-        b,
-        base,
-        name: str,
-        recurrsion = None,
-        times = 4,
-        **kwargs
-    ):
-    subtractor = sp.polys.polytools.Poly(cycle_expansion(name))
-    
-    for t in square_perturbation(a, b, times = times):
-        y = [t * base]
-        names = [name]
-        poly2 = poly - y[0] * subtractor
-        multipliers, y , names = _merge_sos_results(
-            multipliers, y, names, recurrsion(poly2, degree, **kwargs)
-        )
-        if y is not None:
-            break
-
-    return multipliers, y, names
-
 
 class FastPositiveChecker():
     def __init__(self):
