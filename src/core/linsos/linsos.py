@@ -1,3 +1,4 @@
+from typing import Optional, List, Dict
 import warnings
 
 import numpy as np
@@ -12,18 +13,46 @@ from .basis import (
 )
 from .correction import linear_correction
 from .updegree import higher_degree
+from .solution import SolutionLinear
 from ...utils.polytools import deg
 from ...utils.basis_generator import arraylize
 from ...utils.roots.findroot import findroot
+from ...utils.roots.rootsinfo import RootsInfo
 
-def _prepare_tangents(poly, prepared_tangents = [], rootsinfo = None):    
-    prepared_tangents = rootsinfo.filter_tangents(prepared_tangents)
+def _prepare_tangents(poly, prepared_tangents = [], rootsinfo = None):
+    """
+    Combine appointed tangents and tangents generated from rootsinfo.
+    Roots that do not vanish at strict roots will be filtered out.
+    """
+    if rootsinfo is not None:
+        # filter out tangents that do not vanish at strict roots
+        prepared_tangents = rootsinfo.filter_tangents(prepared_tangents)
     tangents = prepared_tangents + [t.as_expr()**2 for t in rootsinfo.tangents]
-
     return tangents
 
-def _prepare_basis(degree, tangents, rootsinfo = None):
-    basis = []
+def _prepare_basis(degree, tangents, rootsinfo = None, basis = []):
+    """
+    Prepare basis for linear programming.
+
+    Parameters
+    -------
+    degree: int
+        The degree of the polynomial to be optimized.
+    tangents: list
+        Tangents to be added to the basis.
+    rootsinfo: RootsInfo
+        Roots information of the polynomial to be optimized. When it has nontrivial roots,
+        we skip the loading of normal basis like AMGM.
+    basis: list
+        Additional basis to be added to the basis.
+
+    Returns
+    -------
+    basis: list
+        Basis for linear programming.
+    arrays: np.array
+        Array representation of the basis. A matrix.
+    """
     for tangent in tangents:
         basis += LinearBasisSquare.generate(degree, tangent = tangent)
 
@@ -36,13 +65,41 @@ def _prepare_basis(degree, tangents, rootsinfo = None):
     return basis, arrays
 
 def LinearSOS(
-        poly,
-        tangents = [],
-        rootsinfo = None,
-        verbose = False,
-        degree_limit = 12,
-        linprog_options = {},
-    ):
+        poly: sp.polys.Poly,
+        tangents: List = [],
+        rootsinfo: Optional[RootsInfo] = None,
+        verbose: bool = False,
+        degree_limit: int = 12,
+        linprog_options: Dict = {},
+    ) -> Optional[SolutionLinear]:
+    """
+    Main function for linear programming SOS.
+
+    Parameters
+    -------
+    poly: sp.polys.Poly
+        The polynomial to perform SOS on. It should be a homogeneous, cyclic polynomial of a, b, c.
+        There is no check for this.
+    tangents: list
+        Additional tangents to be added to the basis.
+    rootsinfo: RootsInfo
+        Roots information of the polynomial to be optimized. When it is None, it will be automatically
+        generated. If we want to skip the root finding algorithm or the tangent generation algorithm,
+        please pass in a RootsInfo object.
+    verbose: bool
+        Whether to print the information of the linear programming problem. Defaults to False.
+    degree_limit: int
+        The degree limit of the polynomial to be optimized. When the degree exceeds the degree limit, 
+        the SOS is forced to shutdown. Defaults to 12.
+    linprog_options: dict
+        Options for scipy.optimize.linprog. Defaults to {}.
+
+    Returns
+    -------
+    solution: Optional[Solution]
+        The solution of the linear programming SOS. When solution is None, it means that the linear
+        programming SOS fails.
+    """
 
     n = deg(poly)
 
@@ -51,9 +108,10 @@ def LinearSOS(
 
     tangents = _prepare_tangents(poly, tangents, rootsinfo)
 
+    # prepare to higher the degree in an iterative way
     for higher_degree_info in higher_degree(poly, degree_limit = degree_limit):
         n = higher_degree_info['degree']
-        basis, arrays = _prepare_basis(n, tangents, rootsinfo)
+        basis, arrays = _prepare_basis(n, tangents, rootsinfo = rootsinfo, basis = higher_degree_info['basis'])
         if len(basis) <= 0:
             continue
 
@@ -61,6 +119,14 @@ def LinearSOS(
             print('Linear Programming Shape = (%d, %d)'%(arrays.shape[0], arrays.shape[1]))
 
         b = arraylize(higher_degree_info['poly'])
+        optimized = np.ones(arrays.shape[0])
+        # optimized[:len(higher_degree_info['basis'])] = -2 # these are multiplier adjustment
+
+
+        ##############################################
+        # main function: linear programming
+        ##############################################
+
         linear_sos = None
         with warnings.catch_warnings(record=True) as __warns:
             warnings.simplefilter('once')
@@ -69,11 +135,12 @@ def LinearSOS(
                 #     method: 'simplex',
                 #     tol: 1e-9,
                 # }
-                linear_sos = linprog(np.ones(arrays.shape[0]), A_eq=arrays.T, b_eq=b, **linprog_options)
+                linear_sos = linprog(optimized, A_eq=arrays.T, b_eq=b, **linprog_options)
             except:
                 pass
 
         if linear_sos is None or not linear_sos.success:
+            # raise the degree up and retry
             continue
 
         solution = linear_correction(

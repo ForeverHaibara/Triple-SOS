@@ -87,7 +87,7 @@ class LinearBasisSquare(LinearBasisCyclic):
         if tangent is not None:
             self.tangent_ = tangent
             if tangent_is_cyc is None:
-                tangent_is_cyc = verify_hom_cyclic(tangent.as_poly(a,b,c))[1]
+                tangent_is_cyc = verify_hom_cyclic(tangent.doit().as_poly(a,b,c))[1]
         else:
             self.tangent_ = S.One
             tangent_is_cyc = True
@@ -112,7 +112,7 @@ class LinearBasisSquare(LinearBasisCyclic):
     def generate(cls, degree, tangent = None, tangent_is_cyc = None):
         """
         Generate all possible expressions with degree = degree, i.e.
-        2*i + 2*j + 2*k + m + n + p = degree
+        2*i + 2*j + 2*k + m + n + p + deg(tangent) = degree
 
         Also, to reduce cyclic expression, we have i >= k.
         """
@@ -121,7 +121,7 @@ class LinearBasisSquare(LinearBasisCyclic):
         rets = []
 
         if tangent is not None:
-            tangent_poly = tangent.as_poly(a,b,c)
+            tangent_poly = tangent.doit().as_poly(a,b,c)
             if tangent_is_cyc is None:
                 tangent_is_cyc = verify_hom_cyclic(tangent_poly)[1]
 
