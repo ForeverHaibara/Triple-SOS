@@ -4,6 +4,7 @@ import sympy as sp
 from sympy.core.parameters import global_parameters
 from sympy.core.singleton import S
 from sympy.printing.latex import LatexPrinter
+from sympy.printing.str import StrPrinter
 from sympy.printing.precedence import precedence_traditional, PRECEDENCE
 
 def _leading_symbol(expr):
@@ -19,7 +20,7 @@ def _leading_symbol(expr):
 
 def _is_cyclic_expr(expr, symbols):
     if expr.free_symbols.isdisjoint(symbols):
-        return False
+        return True
     if hasattr(expr, '_eval_is_cyclic') and expr._eval_is_cyclic(symbols):
         return True
     if isinstance(expr, (sp.Add, sp.Mul)):
@@ -30,6 +31,8 @@ def _is_cyclic_expr(expr, symbols):
 
 
 class CyclicExpr(sp.Expr):
+    PRINT_WITH_PARENS = False
+    is_commutative = True
     def __new__(cls, expr, *symbols, evaluate = None):
         if evaluate is None:
             evaluate = global_parameters.evaluate
@@ -56,6 +59,8 @@ class CyclicExpr(sp.Expr):
                 cyc_args = list(filter(lambda x: _is_cyclic_expr(x, symbols), expr.args))
                 if cls == CyclicProduct:
                     cyc_args = [arg ** len(symbols) for arg in cyc_args]
+                elif cls == CyclicSum:
+                    cyc_args = [arg for arg in cyc_args]
 
                 if len(cyc_args) > 0:
                     uncyc_args = list(filter(lambda x: not _is_cyclic_expr(x, symbols), expr.args))
@@ -112,11 +117,18 @@ class CyclicSum(CyclicExpr):
         return obj
 
     @classmethod
-    def __latex__(cls, printer, expr):
+    def str_latex(cls, printer, expr):
         s = printer._print(expr.args[0])
         if precedence_traditional(expr.args[0]) < cls.precedence:
             s = printer._add_parens(s)
         return r'\sum_{\mathrm{cyc}} ' + s
+
+    @classmethod
+    def str_str(cls, printer, expr):
+        s = printer._print(expr.args[0])
+        if cls.PRINT_WITH_PARENS or precedence_traditional(expr.args[0]) < cls.precedence:
+            s = '(%s)'%s
+        return 'Σ' + s
 
     @classmethod
     def _eval_degenerate(cls, expr, symbols):
@@ -140,11 +152,18 @@ class CyclicProduct(CyclicExpr):
         return obj
 
     @classmethod
-    def __latex__(cls, printer, expr):
+    def str_latex(cls, printer, expr):
         s = printer._print(expr.args[0])
         if precedence_traditional(expr.args[0]) < cls.precedence:
             s = printer._add_parens(s)
         return r'\prod_{\mathrm{cyc}} ' + s
+
+    @classmethod
+    def str_str(cls, printer, expr):
+        s = printer._print(expr.args[0])
+        if cls.PRINT_WITH_PARENS or precedence_traditional(expr.args[0]) < cls.precedence:
+            s = '(%s)'%s
+        return '∏' + s
 
     @classmethod
     def _eval_degenerate(cls, expr, symbols):
@@ -157,8 +176,11 @@ class CyclicProduct(CyclicExpr):
         return c ** len(self.symbols), CyclicProduct(p, *self.symbols)
 
 
-setattr(LatexPrinter, '_print_CyclicSum', lambda self, expr: CyclicSum.__latex__(self, expr))
-setattr(LatexPrinter, '_print_CyclicProduct', lambda self, expr: CyclicProduct.__latex__(self, expr))
+setattr(LatexPrinter, '_print_CyclicSum', lambda self, expr: CyclicSum.str_latex(self, expr))
+setattr(LatexPrinter, '_print_CyclicProduct', lambda self, expr: CyclicProduct.str_latex(self, expr))
+
+setattr(StrPrinter, '_print_CyclicSum', lambda self, expr: CyclicSum.str_str(self, expr))
+setattr(StrPrinter, '_print_CyclicProduct', lambda self, expr: CyclicProduct.str_str(self, expr))
 
 
 if __name__ == '__main__':
