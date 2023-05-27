@@ -27,14 +27,13 @@ def findbest(choices, func, init_choice = None, init_val = 2147483647):
     return best_choice , val
 
 
-def optimize_discriminant(discriminant, soft = False):
-    x, y = discriminant.free_symbols
+def optimize_discriminant(discriminant, soft = False, verbose = False):
+    x, y = discriminant.gens
     best_choice = (2147483647, 0, 0)
     for a, b in product(range(-5, 7, 2), repeat = 2): # integer
         v = discriminant(a, b)
         if v <= 0:
             best_choice = (v, a, b)
-            break
         elif v < best_choice[0]:
             best_choice = (v, a, b)
 
@@ -47,6 +46,10 @@ def optimize_discriminant(discriminant, soft = False):
                 break
             elif v < best_choice[0]:
                 best_choice = (v, a, b)
+    if verbose:
+        print('Starting Search From', best_choice[1:], ' f = ', best_choice[0])
+    if v <= 0:
+        return {x: a, y: b}
 
     if v > 0:
         a = a * 1.0
@@ -65,6 +68,8 @@ def optimize_discriminant(discriminant, soft = False):
             dab_ = dab(a,b)
             db2_ = db2(a,b)
             det_ = da2_ * db2_ - dab_ * dab_
+            if verbose:
+                print('Step Position %s, f = %s, H = %s'%((a,b), discriminant(a,b).n(20), det_))
             if det_ == 0:
                 break
             else:
@@ -72,12 +77,11 @@ def optimize_discriminant(discriminant, soft = False):
                 if abs(lasta - a) < 1e-9 and abs(lastb - b) < 1e-9:
                     break
         v = discriminant(a, b)
-        
+
     if v > 1e-6 and not soft:
         return None
 
     # iterative deepening
-    a_ , b_ = (a, 1), (b, 1)
     rounding = 0.5
     for i in range(5):
         a_ = rationalize(a, rounding, reliable = False)
@@ -87,11 +91,9 @@ def optimize_discriminant(discriminant, soft = False):
             break
         rounding *= .1
     else:
-        return (a_, b_) if soft else None
+        return {x: a_, y: b_} if soft else None
 
-    a , b = a_ , b_
-
-    return a , b
+    return {x: a_, y: b_}
 
 
 def findroot(

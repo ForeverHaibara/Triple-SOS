@@ -87,9 +87,12 @@ class RootsInfo():
         if len(tangents) == 0:
             return tangents
 
+        nontrivial_roots = self.nontrivial_roots
+        if len(nontrivial_roots) == 0:
+            return tangents
+
         filtered_tangents = []
         TOL = 1e-6
-        nontrivial_roots = self.nontrivial_roots
         a, b, c = self.poly.gens
         for t in tangents:
             if all(abs(t.subs({a: r[0], b: r[1], c: 1})) < TOL for r in nontrivial_roots):

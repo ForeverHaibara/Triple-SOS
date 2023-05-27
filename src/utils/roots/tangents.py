@@ -3,15 +3,18 @@ from mpmath import pslq
 
 from .rationalize import rationalize
 from ...utils.text_process import preprocess_text
+from ...utils.expression.cyclic import CyclicSum
+
+a_, b_, c_ = sp.symbols('a b c')
 
 class RootTangent():
-    def __init__(self, s, degree = None, coor = None, uv = None, is_strict = False):
+    def __init__(self, s, degree = None, coor = None, uv = None, is_strict = False, expr = None):
         self.s = s
         self.degree_ = degree
         self.coor_ = coor
         self.uv_ = uv
         self.is_strict_ = is_strict
-        self.expr_ = None
+        self.expr_ = expr
 
     def __str__(self):
         return self.s
@@ -44,9 +47,16 @@ class RootTangent():
         return self.expr.as_expr()
 
     def subs(self, *args, **kwargs):
-        return self.expr.subs(*args, **kwargs)
+        return self.expr.doit().subs(*args, **kwargs)
+
 
 def uv_from_root(a, b):
+    """
+    Given a, b, return (u,v), t such that
+
+    a^2 - b^2 + u(ab - ac) + v(bc - ab) = 0 for (a,b,c) = (a,b,1) and its cyclic permutation.
+    t is the denominator.
+    """
     t = ((a*b-a)*(a-b)-(b*(a-1))**2)
 
     # basic quadratic form
@@ -192,7 +202,8 @@ def _root_tangents_quadratic(a, b, rounding = 1e-3, strict = False, uncentered =
                         degree = 2,
                         coor = (a, b),
                         uv = (u_, v_),
-                        is_strict = strict
+                        is_strict = strict,
+                        expr = CyclicSum(a_**2 - v * a_ * b_ )
                 )
             )
 
@@ -215,7 +226,8 @@ def _root_tangents_cubic(a, b, rounding = 1e-3, strict = False, uncentered = Fal
     if u * v < 1 + 1e-3:
         return tangents
 
-    tangentfy = lambda s: RootTangent(s, degree = 3, coor = (a, b), uv = (u_, v_), is_strict = strict)
+    def tangentfy(s, expr = None):
+        return RootTangent(s, degree = 3, coor = (a, b), uv = (u_, v_), is_strict = strict, expr = expr)
 
     # 1. companion
     p = (u*u + v) / (u*v - 1)
@@ -250,12 +262,18 @@ def _root_tangents_cubic(a, b, rounding = 1e-3, strict = False, uncentered = Fal
         v = ((a*a + b)*b + a) / u
         v = frac(v)
         if v != 1 and v > 1e-3:
-            tangents.append(tangentfy(f'a2b+b2c+c2a-{v}abc'))
+            tangents.append(tangentfy(
+                f'a2b+b2c+c2a-{v}abc', 
+                expr = CyclicSum(a_**2*b_ - v/3*a_*b_*c_)
+            ))
             
         v = ((b*b + a)*a + b) / u
         v = frac(v)
         if v != 1 and v > 1e-3:
-            tangents.append(tangentfy(f'ab2+bc2+ca2-{v}abc'))
+            tangents.append(tangentfy(
+                f'ab2+bc2+ca2-{v}abc',
+                expr = CyclicSum(a_*b_**2 - v/3*a_*b_*c_)
+            ))
 
     return tangents
 
@@ -275,13 +293,13 @@ def _root_tangents_border(a, b, rounding = 1e-3, uncentered = False):
         elif abs(a - 1) < 1e-3:
             tangents.append(RootTangent('a+b-c', degree = 1, coor = (a, b)))
         else:
-            a_ = frac(a)
-            if a_.q < 100 or abs(a_.p) < 100:
+            a2 = frac(a)
+            if a2.q < 100 or abs(a2.p) < 100:
                 # (1/a)*a + (1-1/a)*b - c
-                if a_ > 1:
-                    tangents.append(RootTangent(f'{1/a_}a+{1-1/a_}b-c', degree = 1, coor = (a, b)))
+                if a2 > 1:
+                    tangents.append(RootTangent(f'{1/a2}a+{1-1/a2}b-c', degree = 1, coor = (a, b)))
                 else:
-                    tangents.append(RootTangent(f'{1/a_}a-{1/a_-1}b-c', degree = 1, coor = (a, b)))
+                    tangents.append(RootTangent(f'{1/a2}a-{1/a2-1}b-c', degree = 1, coor = (a, b)))
 
             pslq_result = pslq([a*a, a, 1])
             if pslq_result is not None:
