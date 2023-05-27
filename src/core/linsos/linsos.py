@@ -19,6 +19,14 @@ from ...utils.basis_generator import arraylize
 from ...utils.roots.findroot import findroot
 from ...utils.roots.rootsinfo import RootsInfo
 
+
+LINPROG_OPTIONS = {
+    'method': 'highs-ds',
+    'options': {
+        'presolve': False,
+    }
+}
+
 def _prepare_tangents(poly, prepared_tangents = [], rootsinfo = None):
     """
     Combine appointed tangents and tangents generated from rootsinfo.
@@ -64,13 +72,14 @@ def _prepare_basis(degree, tangents, rootsinfo = None, basis = []):
     arrays = np.array([x.array for x in basis])
     return basis, arrays
 
+
 def LinearSOS(
         poly: sp.polys.Poly,
         tangents: List = [],
         rootsinfo: Optional[RootsInfo] = None,
-        verbose: bool = False,
+        verbose: bool = 1,#False,
         degree_limit: int = 12,
-        linprog_options: Dict = {},
+        linprog_options: Dict = LINPROG_OPTIONS,
     ) -> Optional[SolutionLinear]:
     """
     Main function for linear programming SOS.
@@ -92,7 +101,13 @@ def LinearSOS(
         The degree limit of the polynomial to be optimized. When the degree exceeds the degree limit, 
         the SOS is forced to shutdown. Defaults to 12.
     linprog_options: dict
-        Options for scipy.optimize.linprog. Defaults to {}.
+        Options for scipy.optimize.linprog. Defaultedly use `{'method': 'highs-ds', 'options': {'presolve': False}}`. 
+        Note that interiorpoint oftentimes does not provide exact rational solution. Both 'highs-ds' or 'simplex' are 
+        recommended, yet the former is slightly faster.
+        
+        Moreover, using `presolve == True` has bug solving s((b2-a2+3c2+ab+7bc-5ca)(a2-b2-ab+2bc-ca)2):
+        Assertion failed: abs_value < pivot_tolerance, file ../../scipy/_lib/highs/src/util/HFactor.cpp, line 1474
+        Thus, for stability, we use `presolve == False` by default. However, setting it to True is slightly faster (0.03 sec).
 
     Returns
     -------
@@ -131,10 +146,6 @@ def LinearSOS(
         with warnings.catch_warnings(record=True) as __warns:
             warnings.simplefilter('once')
             try:
-                # options = {
-                #     method: 'simplex',
-                #     tol: 1e-9,
-                # }
                 linear_sos = linprog(optimized, A_eq=arrays.T, b_eq=b, **linprog_options)
             except:
                 pass
