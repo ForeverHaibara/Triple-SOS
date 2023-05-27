@@ -3,17 +3,29 @@ from math import gcd
 import sympy as sp
 
 from .utils import CyclicSum, CyclicProduct
+from .quartic import sos_struct_quartic
 from ...utils.polytools import deg
 
 
-def _sos_struct_sparse(poly, coeff, recurrsion):
+def sos_struct_sparse(poly, coeff, recurrsion):
     if len(coeff) > 6:
         return None
 
+    degree = deg(poly)
+    if degree < 5:
+        if degree == 0:
+            return sp.S(0)
+        elif degree == 1:
+            return poly.as_expr()
+        elif degree == 2:
+            return sos_struct_quadratic(coeff)
+        elif degree == 4:
+            # quartic should be handled by _sos_struct_quartic
+            # because it presents proof for real numbers
+            return sos_struct_quartic(poly, coeff, recurrsion)
+
     monoms = list(coeff.coeffs.keys())
-
     a, b, c = sp.symbols('a b c')
-
     if len(coeff) == 1:
         # e.g.  abc
         if coeff(monoms[0]) >= 0:
@@ -29,7 +41,6 @@ def _sos_struct_sparse(poly, coeff, recurrsion):
 
     elif len(coeff) == 4:
         # e.g. (a2b + b2c + c2a - 8/3abc)
-        degree = deg(poly)
         n = degree // 3
         if coeff(monoms[0]) >= 0 and coeff(monoms[0])*3 + coeff(n, n, n) >= 0:
             i, j, k = monoms[0]
@@ -62,3 +73,29 @@ def _sos_struct_sparse(poly, coeff, recurrsion):
                 return coeff(large)/det * CyclicSum(am_gm) + (coeff(large) + coeff(small)) * CyclicSum(a**small[0] * b**small[1] * c**small[2])
 
     return None
+
+
+def sos_struct_quadratic(coeff):
+    """
+    Solve quadratic problems. It must be in the form $\sum (a^2 + xab)$ where x >= -1.
+    However, we shall also handle cases for real numbers.
+    """
+
+    y, x = coeff((2,0,0)), coeff((1,1,0))
+    if x + y < 0 or y < 0:
+        return None
+
+    a, b, c = sp.symbols('a b c')
+    if y == 0:
+        return CyclicSum(a*b) * x
+
+    if x > 2 * y:
+        return CyclicSum(y * a**2 + x * a*b)
+
+    # real numbers
+    # should be a linear combination of s(a2-ab) and s(a)2
+    # w1 + w2 = y
+    # -w1 + 2w2 = x
+    w1 = (2*y - x) / 3
+    w2 = y - w1
+    return w1 / 2 * CyclicSum((a-b)**2) + w2 * CyclicSum(a)**2

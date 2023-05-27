@@ -883,7 +883,7 @@ def _sos_struct_sextic_iran96(coeff, real = False):
 
 
 
-def _sos_struct_sextic_symmetric_ultimate(poly, coeff, recurrsion):
+def sos_struct_sextic_symmetric_ultimate(poly, coeff, recurrsion):
     """
     Solve symmetric sextics.
     

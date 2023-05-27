@@ -6,7 +6,7 @@ from ...utils.roots.rationalize import rationalize_bound, square_perturbation
 
 a, b, c = sp.symbols('a b c')
 
-def _sos_struct_quartic(poly, coeff, recurrsion):
+def sos_struct_quartic(poly, coeff, recurrsion):
     """
     Solve cyclic quartic problems.
 
@@ -253,6 +253,13 @@ def _sos_struct_quartic_degenerate(coeff):
     """
     m, p, n, q, r = coeff((4,0,0)), coeff((3,1,0)), coeff((2,2,0)), coeff((1,3,0)), coeff((2,1,1))
 
+    if m == 0 and p == 0 and q == 0 and n >= 0 and n + r >= 0 and r <= 2*n:
+        # in this special case the polynomial is positive for real numbers
+        w1 = (2*n - r) / 3
+        w2 = n - w1
+        return w1 / 2 * CyclicSum(a**2*(b-c)**2) + w2 * CyclicSum(a*b)**2
+
+
     if m == 0 and p >= 0 and q >= 0 and p + n + q + r >= 0 and (n >= 0 or n*n <= 4*p*q):
         if n >= 0:
             # very trivial in this case and we can only use AM-GM
@@ -298,6 +305,7 @@ def _sos_struct_quartic_degenerate(coeff):
                         # it must succeed
                         solution +=  _sos_struct_quartic_degenerate(new_coeff)
                         return solution
+
 
     return None
 

@@ -3,12 +3,13 @@ import sympy as sp
 from .solution import SolutionStructural, SolutionStructuralSimple
 
 from .utils import _make_coeffs
-from .sparse  import _sos_struct_sparse
-from .quartic import _sos_struct_quartic
-from .quintic import _sos_struct_quintic
-from .sextic  import _sos_struct_sextic
-from .septic  import _sos_struct_septic
-# from .octic   import _sos_struct_octic
+from .sparse  import sos_struct_sparse
+from .cubic   import sos_struct_cubic
+from .quartic import sos_struct_quartic
+from .quintic import sos_struct_quintic
+from .sextic  import sos_struct_sextic
+from .septic  import sos_struct_septic
+from .octic   import sos_struct_octic
 
 from ...utils.polytools import deg
 
@@ -26,15 +27,16 @@ def _structural_sos_handler(
     coeff = _make_coeffs(poly)
 
     # first try sparse cases
-    solution = _sos_struct_sparse(poly, coeff, recurrsion = _structural_sos_handler)
+    solution = sos_struct_sparse(poly, coeff, recurrsion = _structural_sos_handler)
 
     if solution is None:
         SOLVERS = {
-            4: _sos_struct_quartic,
-            5: _sos_struct_quintic,
-            6: _sos_struct_sextic,
-            7: _sos_struct_septic,
-            # 8: _sos_struct_octic,
+            3: sos_struct_cubic,
+            4: sos_struct_quartic,
+            5: sos_struct_quintic,
+            6: sos_struct_sextic,
+            7: sos_struct_septic,
+            8: sos_struct_octic,
         }
 
         degree = deg(poly)

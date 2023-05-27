@@ -1,6 +1,6 @@
 import sympy as sp
 
-from ...utils.roots.rationalize import rationalize
+from ...utils.roots.rationalize import rationalize, square_perturbation
 from ...utils.expression.cyclic import CyclicSum, CyclicProduct
 
 class Coeff():
@@ -18,6 +18,9 @@ class Coeff():
 
 
 def _make_coeffs(poly):
+    """
+    Construct a Coeff class from the coeffs of a polynomial.
+    """
     coeffs = {}
 
     for monom, coeff in poly.terms():
@@ -31,3 +34,28 @@ def _make_coeffs(poly):
 
 def _sum_y_exprs(y, exprs) -> sp.Expr:
     return sum(v * expr for v, expr in zip(y, exprs) if v != 0)
+
+
+def _try_perturbations(
+        poly,
+        p,
+        q,
+        perturbation,
+        recurrsion = None,
+        times = 4,
+        **kwargs
+    ):
+    """
+    Try subtracting t * perturbation from poly and perform recurrsive trials.
+    The subtracted t satisfies that (p - t) / (q - t) is a square
+
+    This is possibly helpful for deriving rational sum-of-square solution.
+    """
+    a, b, c = sp.symbols('a b c')
+    perturbation_poly = perturbation.doit().as_poly(a,b,c)
+    for t in square_perturbation(p, q, times = times):
+        poly2 = poly - t * perturbation_poly
+        solution = recurrsion(poly2)
+        if solution is not None:
+            return solution + t * perturbation
+    return None

@@ -1,14 +1,13 @@
 import sympy as sp
 
-from .utils import CyclicSum, CyclicProduct, _sum_y_exprs
-from ...utils.text_process import cycle_expansion
-from ...utils.roots.rationalize import rationalize, square_perturbation
+from .utils import CyclicSum, CyclicProduct, _sum_y_exprs, _try_perturbations
+from ...utils.roots.rationalize import rationalize
 from ...utils.roots.findroot import optimize_discriminant
 
 
 a, b, c = sp.symbols('a b c')
 
-def _sos_struct_septic(poly, coeff, recurrsion):
+def sos_struct_septic(poly, coeff, recurrsion):
     if coeff((7,0,0))==0 and coeff((6,1,0))==0 and coeff((6,0,1))==0:
         if coeff((5,2,0))==0 and coeff((5,0,2))==0:
             # star
@@ -18,24 +17,6 @@ def _sos_struct_septic(poly, coeff, recurrsion):
             return _sos_struct_septic_hexagon(coeff, poly, recurrsion)
     return None
 
-
-
-def _try_perturbations(
-        poly,
-        p,
-        q,
-        perturbation,
-        recurrsion = None,
-        times = 4,
-        **kwargs
-    ):
-    perturbation_poly = perturbation.doit().as_poly(a,b,c)
-    for t in square_perturbation(p, q, times = times):
-        poly2 = poly - t * perturbation_poly
-        solution = recurrsion(poly2)
-        if solution is not None:
-            return solution + t * perturbation
-    return None
 
 
 def _sos_struct_septic_star(coeff, poly, recurrsion):
@@ -93,6 +74,7 @@ def _sos_struct_septic_star(coeff, poly, recurrsion):
             discriminant = discriminant.subs((('m',coeff((5,1,1))/t), ('n',coeff((3,3,1))/t), ('p',coeff((4,2,1))/t), ('q',coeff((2,4,1))/t)))#, simultaneous=True)
             
             result = optimize_discriminant(discriminant)
+            # print(result, print(sp.latex(discriminant)), 'here')
             if result is None:
                 return None
 

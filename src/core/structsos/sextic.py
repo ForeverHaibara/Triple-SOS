@@ -4,7 +4,7 @@ from sympy.solvers.diophantine.diophantine import diop_DN
 from .sextic_symmetric import (
     _sos_struct_sextic_hexagon_symmetric,
     _sos_struct_sextic_hexagram_symmetric,
-    _sos_struct_sextic_symmetric_ultimate
+    sos_struct_sextic_symmetric_ultimate
 )
 from .utils import CyclicSum, CyclicProduct, _sum_y_exprs
 from ...utils.text_process import cycle_expansion
@@ -14,8 +14,8 @@ from ...utils.roots.rationalize import rationalize_bound, cancel_denominator
 a, b, c = sp.symbols('a b c')
 
 
-def _sos_struct_sextic(poly, coeff, recurrsion):
-    solution = _sos_struct_sextic_symmetric_ultimate(poly, coeff, recurrsion)
+def sos_struct_sextic(poly, coeff, recurrsion):
+    solution = sos_struct_sextic_symmetric_ultimate(poly, coeff, recurrsion)
     if solution is not None:
         return solution
 
@@ -212,7 +212,7 @@ def _sos_struct_sextic_hexagram(coeff, poly, recurrsion):
                 y = [
                         r_,
                         m3 / 2,
-                        (3*(1 + n3) - (p3**2 + p3*q3 + q3**2)) / 6,
+                        (3*(1 + n3) - (p3**2 + p3*q3 + q3**2)) / 6 * m3,
                         sum(coeff(i) for i in [(3,3,0),(4,1,1),(3,2,1),(2,3,1)]) * 3 + coeff((2,2,2))
                 ]
                 if all(_ >= 0 for _ in y):
@@ -248,7 +248,6 @@ def _sos_struct_sextic_hexagon(coeff, poly, recurrsion):
     -------
     [1] https://artofproblemsolving.com/community/u426077h1892902p16370027
     """
-    multipliers, y, exprs = [], None, None
     # hexagon
     if coeff((6,0,0))==0 and coeff((5,1,0))==0 and coeff((5,0,1))==0:
         if coeff((4,2,0)) != coeff((4,0,2)):
@@ -407,7 +406,6 @@ def _sos_struct_sextic_rotated_tree(coeff):
         return None
     v = coeff((3,1,2)) / coeff((2,4,0))
 
-    multipliers, y, exprs = None
     if u >= 2 and v >= -6:
         y = [sp.S(1), u - 2, v + 6,
             (coeff((2,4,0)) + coeff((3,1,2)) + coeff((3,2,1))) * 3 + coeff((2,2,2))
@@ -419,7 +417,7 @@ def _sos_struct_sextic_rotated_tree(coeff):
             CyclicProduct(a) * CyclicSum(a**2*c - CyclicProduct(a)),
             CyclicProduct(a**2)
         ]
-        return multipliers, y, exprs
+        return _sum_y_exprs(y, exprs)
     
     if u >= 0 and v >= -2:
         y = [sp.S(1), u, v + 2,
@@ -432,7 +430,7 @@ def _sos_struct_sextic_rotated_tree(coeff):
             CyclicProduct(a) * CyclicSum(a**2*c - CyclicProduct(a)),
             CyclicProduct(a**2)
         ]
-        return multipliers, y, exprs
+        return _sum_y_exprs(y, exprs)
 
     if True:
         # simple case, we only need to multiply s(a)
@@ -501,18 +499,18 @@ def _sos_struct_sextic_rotated_tree(coeff):
     
     # print(x, u, v, eq.as_expr().factor())
     if x is None:
-        return [], None, None
+        return None
     
     z = x * (x + 1) / 3
 
-    multipliers = CyclicSum(a*b**2 + z*a*b*c) * CyclicSum(a)
+    multiplier = CyclicSum(a*b**2 + z*a*b*c) * CyclicSum(a)
     y = [
         1,
         (x + 1) / 2,
         x + 1,
         v + 3*x*(x - 1),
         u - (x**3 - 3*x),
-        (coeff((2,4,0)) + coeff((3,1,2)) + coeff((3,2,1))) + coeff((2,2,2)) / 3
+        (coeff((2,4,0)) + coeff((3,1,2)) + coeff((3,2,1))) * 3 + coeff((2,2,2))
     ]
     y = [_ * coeff((2,4,0)) for _ in y[:-1]] + [y[-1]]
     exprs = [
@@ -524,4 +522,4 @@ def _sos_struct_sextic_rotated_tree(coeff):
         CyclicProduct(a**2) * CyclicSum(a) * CyclicSum(a*b**2 + z*a*b*c)
     ]
 
-    return multipliers, y, exprs
+    return _sum_y_exprs(y, exprs) / multiplier

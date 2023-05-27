@@ -1,14 +1,13 @@
 import sympy as sp
 
 from .utils import CyclicSum, CyclicProduct, _sum_y_exprs
-from .peeling import _merge_sos_results, FastPositiveChecker
 from ...utils.text_process import cycle_expansion
 from ...utils.roots.rationalize import rationalize, rationalize_bound, cancel_denominator
 
 
 a, b, c = sp.symbols('a b c')
 
-def _sos_struct_quintic(poly, coeff, recurrsion):
+def sos_struct_quintic(poly, coeff, recurrsion):
     solution = None
     if coeff((5,0,0)) == 0:
         if coeff((4,1,0)) == 0 or coeff((1,4,0)) == 0:
@@ -672,7 +671,7 @@ def _sos_struct_quintic_uncentered(coeff):
                 +m1*(-u**2*z-v*z-1)*b**2*c + m1*(u*z+v**2*z+v)*b*c**2)**2),
             CyclicProduct(a) * CyclicSum(a**2 - rho*a*b)**2,
             CyclicProduct(a) * CyclicSum((a**2 - b**2 - u*a*c + v*b*c + (u-v)*a*b)**2),
-            CyclicProduct(a*c*(a-b)**2*((r1-r1_)*c + (r2-r2_)/2*b)) * multiplier
+            CyclicSum(a*c*(a-b)**2*((r1-r1_)*c + (r2-r2_)/2*b)) * multiplier
         ]
 
         return _sum_y_exprs(y, exprs) / multiplier
