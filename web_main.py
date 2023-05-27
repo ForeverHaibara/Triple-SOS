@@ -3,7 +3,8 @@ from flask import Flask, render_template, request, jsonify
 from flask_cors import CORS
 
 # from sum_of_square import *
-from src.core.sos_manager import SOS_Manager
+from src.utils.expression.solution import SolutionSimple
+from src.gui.sos_manager import SOS_Manager
 
 _debug_ = False
 
@@ -66,18 +67,22 @@ def preprocess():
 @app.route('/process/sos', methods=['POST'])
 def SumOfSquare():
     req = request.get_json()
-    app.SOS_Manager._roots_info['tangents'] = [tg
-                        for tg in req['tangents'].split('\n') if len(tg) > 0]
+    # app.SOS_Manager._roots_info['tangents'] = [tg
+    #                     for tg in req['tangents'].split('\n') if len(tg) > 0]
 
-    result = app.SOS_Manager.GUI_SOS(req['poly'],
-                                     skip_setpoly=True, skip_findroots=True, skip_tangents=True,
-                                     verbose_updeg=True,
-                                     use_structural_method=req['use_structural_method'])
-    
-    return jsonify(latex = app.SOS_Manager.sosresults[0],
-                    txt  = app.SOS_Manager.sosresults[1],
-                    formatted = app.SOS_Manager.sosresults[2],
-                    success = (len(result) > 0))
+    solution = app.SOS_Manager.sum_of_square()
+                                    #  use_structural_method=req['use_structural_method'])
+    if solution is None:
+        return jsonify(latex = '', txt = '', formatted = '', success = False)
+
+    if isinstance(solution, SolutionSimple):
+        # remove the aligned environment
+        latex_ = '$$%s$$'%solution.str_latex[17:-15].replace('&','')
+
+    return jsonify(latex = latex_,
+                    txt  = solution.str_txt,
+                    formatted = solution.str_formatted,
+                    success = True)
 
 
 @app.route('/process/rootangents', methods=['POST'])
