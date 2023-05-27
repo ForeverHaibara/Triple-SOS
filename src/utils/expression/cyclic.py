@@ -51,22 +51,8 @@ class CyclicExpr(sp.Expr):
                 index = symbols.index(symbol)
                 translation = cls._eval_get_translation(symbols, index)
                 expr = cls._eval_symbol_translation(expr, translation)
-            
-            if isinstance(expr, Number) or expr.free_symbols.isdisjoint(symbols):
-                return cls._eval_degenerate(expr, symbols)
 
-            if isinstance(expr, sp.Mul):
-                cyc_args = list(filter(lambda x: _is_cyclic_expr(x, symbols), expr.args))
-                if cls == CyclicProduct:
-                    cyc_args = [arg ** len(symbols) for arg in cyc_args]
-                elif cls == CyclicSum:
-                    cyc_args = [arg for arg in cyc_args]
-
-                if len(cyc_args) > 0:
-                    uncyc_args = list(filter(lambda x: not _is_cyclic_expr(x, symbols), expr.args))
-                    obj0 = cls(expr.func(*uncyc_args), *symbols)
-                    obj = sp.Mul(obj0, *cyc_args)
-                    return obj
+            return cls._eval_simplify_(expr, symbols)
 
         obj = sp.Expr.__new__(cls, expr, *symbols)
         return obj
@@ -89,7 +75,7 @@ class CyclicExpr(sp.Expr):
     @classmethod
     def _eval_symbol_translation(cls, expr, translation):
         if isinstance(expr, sp.Symbol):
-            return translation[expr]
+            return translation.get(expr, expr)
         if len(expr.args) == 0:
             return expr
         args = []
@@ -105,6 +91,12 @@ class CyclicExpr(sp.Expr):
             translation = self._eval_get_translation(self.symbols, i)
             new_args[i] = self._eval_symbol_translation(self.args[0], translation)
         return self.base_func(*new_args).doit()
+
+    def _xreplace(self, rule):
+        """
+        Xreplace will not replace the symbols.
+        """
+        return self.func(self.args[0].xreplace(rule), *self.symbols), True
 
 
 class CyclicSum(CyclicExpr):
@@ -133,6 +125,41 @@ class CyclicSum(CyclicExpr):
     @classmethod
     def _eval_degenerate(cls, expr, symbols):
         return expr * len(symbols)
+
+    @classmethod
+    def _eval_simplify_(cls, expr, symbols):
+        if isinstance(expr, Number) or expr.free_symbols.isdisjoint(symbols):
+            return cls._eval_degenerate(expr, symbols)
+
+        if isinstance(expr, sp.Mul):
+            cyc_args = []
+            uncyc_args = []
+            symbol_degrees = {}
+
+            for arg in expr.args:
+                if _is_cyclic_expr(arg, symbols):
+                    cyc_args.append(arg)
+
+                # elif isinstance(arg, sp.Symbol) and arg in symbols:
+                #     # e.g. CyclicSum(a**2 * b * c) = CyclicSum(a) * CyclicProduct(a)
+                #     symbol_degrees[arg] = 1
+                # elif isinstance(arg, sp.Pow):
+                #     arg2 = arg.args[0] 
+                #     if isinstance(arg2, sp.Symbol) and arg2 in symbols and arg.args[1].is_constant():
+                #         symbol_degrees[arg2] = arg.args[1]
+                else:
+                    uncyc_args.append(arg)
+            
+            # if len(symbol_degrees) == len(symbols):
+            #     # all symbols appear at least once
+            #     base = min(symbol_degrees.values())
+            #     cyc_args.append(CyclicProduct(symbols[0] ** base, *symbols))
+
+            if len(cyc_args) > 0:
+                obj0 = cls(expr.func(*uncyc_args), *symbols)
+                obj = sp.Mul(obj0, *cyc_args)
+                return obj
+        return sp.Expr.__new__(cls, expr, *symbols)
 
     def as_content_primitive(self, radical=False, clear=True):
         c, p = self.args[0].as_content_primitive(radical=radical, clear=clear)
@@ -168,6 +195,20 @@ class CyclicProduct(CyclicExpr):
     @classmethod
     def _eval_degenerate(cls, expr, symbols):
         return expr ** len(symbols)
+
+    @classmethod
+    def _eval_simplify_(cls, expr, symbols):
+        if isinstance(expr, Number) or expr.free_symbols.isdisjoint(symbols):
+            return cls._eval_degenerate(expr, symbols)
+
+        if isinstance(expr, sp.Mul):
+            cyc_args = list(filter(lambda x: _is_cyclic_expr(x, symbols), expr.args))
+            cyc_args = [arg ** len(symbols) for arg in cyc_args]
+            uncyc_args = list(filter(lambda x: not _is_cyclic_expr(x, symbols), expr.args))
+            obj0 = sp.Mul(*[cls(arg, *symbols) for arg in uncyc_args])
+            obj = sp.Mul(obj0, *cyc_args)
+            return obj
+        return sp.Expr.__new__(cls, expr, *symbols)
 
     def as_content_primitive(self, radical=False, clear=True):
         c, p = self.args[0].as_content_primitive(radical=radical, clear=clear)

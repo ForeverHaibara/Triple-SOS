@@ -153,6 +153,17 @@ class Solution():
         When the expression is a nested fraction, we can simplify it.
         """
         numerator, multiplier = sp.fraction(sp.together(self.solution))
+    
+        if multiplier.is_constant():
+            const, multiplier = const, S.One
+        else:
+            const, multiplier = multiplier.as_coeff_Mul()
+
+        if isinstance(numerator, sp.Add):
+            numerator = sp.Add(*[arg / const for arg in numerator.args])
+        else:
+            numerator = numerator / const
+
         return SolutionSimple(
             problem = self.problem, 
             numerator = numerator,
