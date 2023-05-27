@@ -84,7 +84,7 @@ def _arraylize(poly, coeffs, dict_monom, inv_monom, cyc: bool = True):
         check = lambda i, j, k: i >= j and (i > k or (i == k and i == j))
     else:
         check = lambda i, j, k: True
-    for coeff, monom in zip(poly.coeffs(), poly.monoms()):
+    for monom, coeff in poly.terms():
         i , j , k = monom 
         if check(i, j, k):
             coeffs[dict_monom[(i,j,k)]] = coeff
@@ -92,7 +92,7 @@ def _arraylize(poly, coeffs, dict_monom, inv_monom, cyc: bool = True):
 
 def _arraylize_expand_cyc(poly, coeffs, dict_monom, inv_monom):
     n = sum(poly.monoms()[0])
-    for coeff, monom in zip(poly.coeffs(), poly.monoms()):
+    for monom, coeff in poly.terms():
         i , j , k = monom 
         if i == j or j == k or k == i:
             max_, min_ = max((i,j,k)), min((i,j,k))

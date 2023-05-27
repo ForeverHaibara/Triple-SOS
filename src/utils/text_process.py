@@ -187,6 +187,8 @@ def preprocess_text(
         variables = None
     ):
     """
+    Parse a text to sympy polynomial with respect to a, b, c.
+
     Params
     -------
     cyc: bool  
@@ -323,6 +325,21 @@ def degree_of_zero(poly):
     return degree
 
 
+def swa(x):
+    """
+    Helper function for experiment.
+    """
+    a = str(x).replace(' ','').replace('**','^')
+    print(a)
+    return a
+
+def sdesmos(x):
+    """
+    Helper function for experiment.
+    """
+    a = (sp.latex(x).replace(' ',''))
+    print(a)
+    return a
 
 
 if __name__ == '__main__':

@@ -136,4 +136,8 @@ def verify_hom_cyclic(poly, fast=True):
                 if u == w:
                     continue 
             return True, False 
-    return True, True 
+    return True, True
+
+
+def monom_of(x, m):
+    return x.coeff_monomial(m)
