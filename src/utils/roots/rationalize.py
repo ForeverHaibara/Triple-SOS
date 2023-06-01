@@ -202,7 +202,7 @@ def cancel_denominator(nums):
 
 
 
-def _rationalize_quadratic_curve(curve: sp.Expr, one_point = False):
+def rationalize_quadratic_curve(curve: sp.Expr, one_point = False):
     """
     (EXPERIMENTAL) Rationalize a quadratic curve.
 
