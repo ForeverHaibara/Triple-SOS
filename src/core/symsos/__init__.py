@@ -1,1 +1,1 @@
-
+from .symsos import SymmetricSOS
