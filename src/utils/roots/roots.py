@@ -30,6 +30,16 @@ class Root():
         return root
 
     @property
+    def is_corner(self):
+        if self.root[0] != 0:
+            return self.root[2] == 0 and self.root[1] == 0
+        elif self.root[1] != 0:
+            return self.root[2] == 0 and self.root[0] == 0
+        elif self.root[2] != 0:
+            return self.root[0] == 0 and self.root[1] == 0
+        return True
+
+    @property
     def is_border(self):
         return self.root[0] == 0 or self.root[1] == 0 or self.root[2] == 0
 
@@ -50,6 +60,9 @@ class Root():
         if self.uv_ is None:
             if self.is_centered:
                 self.uv_ = (sp.S(0), sp.S(0))
+                return self.uv_
+            elif self.is_corner:
+                self.uv_ = (sp.oo, sp.oo)
                 return self.uv_
 
             a, b, c = self.root
@@ -153,14 +166,22 @@ class Root():
         poly = x**3 - x**2 + self.cyclic_sum((1,1,0)) * x - self.cyclic_sum((1,1,1)) / 3
         return poly.as_poly(x)
 
-    def as_vec(self, n, cyc = False):
+    def as_vec(self, n, cyc = False, permute = 0, numer = True):
         """
         Construct the vector of all monomials of degree n. For example, for n = 3,
         return f(a,b,c) = [a^3,a^2*b,a^2*c,a*b^2,a*b*c,a*c^2,b^3,b^2*c,b*c^2,c^3].
         """
         monoms = generate_expr(n, cyc)[1]
         a, b, c = self.root
-        return np.array([a**i*b**j*c**k for i, j, k in monoms]).astype(np.float64)
+        if permute == 1:
+            a, b, c = b, c, a
+        elif permute == 2:
+            a, b, c = c, a, b
+
+        vec = np.array([a**i*b**j*c**k for i, j, k in monoms])
+        if numer:
+            vec = vec.astype(np.float64)
+        return vec
 
     def span(self, n):
         """
@@ -177,12 +198,25 @@ class Root():
         if self.is_centered:
             return sp.ones(len(monoms), 1)
 
-        vecs = [None, None, None]
-        for column in range(3):
-            vec = [0] * len(monoms)
-            for ind, (i, j, k) in enumerate(monoms):
-                vec[ind] = self.cyclic_sum((i + column, j, k))
-            vecs[column] = sp.Matrix(vec)
+        u, v = self.uv
+        if u == v:
+            # on the symmetric axis, the three roots are (1,1,u-1)
+            vecs = [None, None, None]
+            a, b, c = (1, 1, u - 1) if u != sp.oo else (0, 0, 1)
+            for column in range(3):
+                a, b, c = c, a, b
+                vec = [0] * len(monoms)
+                for ind, (i, j, k) in enumerate(monoms):
+                    vec[ind] = a**i * b**j * c**k
+                vecs[column] = sp.Matrix(vec)
+            
+        else:
+            vecs = [None, None, None]
+            for column in range(3):
+                vec = [0] * len(monoms)
+                for ind, (i, j, k) in enumerate(monoms):
+                    vec[ind] = self.cyclic_sum((i + column, j, k))
+                vecs[column] = sp.Matrix(vec)
 
         M = sp.Matrix.hstack(*vecs)
 
