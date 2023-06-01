@@ -1,150 +1,90 @@
-from itertools import product
-
-import picos
-import sympy as sp
 import numpy as np
+import sympy as sp
 
-from ...utils.text_process import PreprocessText, deg
-from ...utils.basis_generator import generate_expr
-from ...utils.root_guess import rationalize
-
-
-def SDPConvertor(n, dict_monom: dict):
-    # e.g. when n=6
-    # first find monomials for degree=3: a^3, a^2b, a^2c, ab^2, abc, ac^2, b^3, b^2c, bc^2, c^3
-    # then match pairwise and put them into UFS (union-find-set), e.g. a^2b * ac^2 = a^3bc^2 = a^3 * bc^2
-    # for cyclic ones, only
-
-    conversion = dict((i, []) for i in dict_monom.keys())
-    def sum_monoms(x, y):
-        return (x[0]+y[0], x[1]+y[1], n-x[0]-y[0]-x[1]-y[1])
-
-    for m1, m2 in product(product(range(n//2+1), repeat = 2), repeat = 2):
-        if sum(m1) <= n//2 and sum(m2) <= n//2 and m1 != m2:
-            s = conversion.get(sum_monoms(m1, m2))
-            if s is not None:
-                s.append((m1, m2))
-     
-    for m1 in product(range(n//2+1), repeat=2):
-        # cases when m1 = m2
-        s = conversion.get(sum_monoms(m1, m1))
-        if s is not None:
-            s.append((m1, m1))
-
-    # number of variables
-    print(sum([len(i) for i in conversion.values()])-len(conversion.keys()))
-
-    return conversion
+from .utils import solve_undetermined_linear, split_vector
+from .solver import sdp_solver
+from .manifold import _perp_space, LowRankHermitian
+from ...utils.basis_generator import arraylize, arraylize_sp
+from ...utils.polytools import deg
+from ...utils.roots.roots import Root
+from ...utils.roots.findroot import findroot
 
 
-def SDPPerturbation(X, poly, inv_vec, conversion, next_monom):
-    X = np.array(X)
-    S = sp.zeros(X.shape[0])
-
-    coeffs = {}
-    for coeff, monom in zip(poly.coeffs(), poly.monoms()):
-        if not isinstance(coeff, sp.Rational):
-            coeff = sp.Rational(*rationalize(coeff, reliable = True))
-        coeffs[monom] = coeff
-
-    def coeff(x):
-        t = coeffs.get(x)
-        return t if t is not None else 0
-
-    def perm_monom(x, times = 1):
-        for t in range(times):
-            x = next_monom(x)
-        return x
-
-    rounding = 1
-    for i in range(1):
-        rounding *= 1e-8
-        for monom, alterns in conversion.items():
-            permute = 1 if (monom[0] == monom[1] and monom[1] == monom[2]) else 3
-            for j in range(permute):
-                s = 0
-                for altern in alterns:
-                    x , y = inv_vec[perm_monom(altern[0],j)], inv_vec[perm_monom(altern[1],j)]
-                    if abs(X[x,y]) < rounding * 1e-3:
-                        S[x,y] = 0
-                    else:
-                        S[x,y] = sp.Rational(*rationalize(X[x,y], rounding, reliable=False))
-                    
-                    s += S[x,y]
-                
-                altern = alterns[0]
-                x , y = inv_vec[perm_monom(altern[0],j)], inv_vec[perm_monom(altern[1],j)]
-                if x != y: # then S[x,y], S[y,x] are already registered
-                    S[x,y] += (coeff(monom) - s) / 2
-                    S[y,x] = S[x,y]
+_REDUCE_KWARGS = {
+    (0, 'major'): {'monom_add': (0,0,0), 'cyc': False},
+    (0, 'minor'): {'monom_add': (1,1,0), 'cyc': True},
+    (1, 'major'): {'monom_add': (1,0,0), 'cyc': True},
+    (1, 'minor'): {'monom_add': (1,1,1), 'cyc': False},
+}
 
 
-        # S = np.array(S).astype('float')
-        # print(np.linalg.eigvalsh(S))
-        # print(np.linalg.norm(S - X))
-        for j in range(X.shape[0]):
-            print(sp.Matrix.det(S[:j,:j]),end = ' ')
-        print('\n',S)
+def _discard_zero_rows(A, b, rank_tolerance = 1e-10):
+    A_rowmax = np.abs(A).max(axis = 1)
+    nonvanish =  A_rowmax > rank_tolerance * A_rowmax.max()
+    rows = np.extract(nonvanish, np.arange(len(nonvanish)))
+    return A[rows], b[rows]
 
 
-def RationalCongruence(A):
-    """
-    Given a matrix A, find rational 
-    """
-    return A
 
+def SDPSOS(
+        poly,
+        rootsinfo = None,
+        minor = False,
+    ):
+    degree = deg(poly)
+    if rootsinfo is None:
+        rootsinfo = findroot(poly, with_tangents = False)
 
-def SOS_SDP(poly, dict_monom: dict):
-    n = deg(poly)
-    assert (n & 1) == 0 and n > 0
-    conversion = SDPConvertor(n, dict_monom)
-    sos :picos.Problem = picos.Problem()
+    collection = {}
+    for key in ('Q', 'deg', 'M', 'eq', 'Q_numer'):
+        collection[key] = {'major': None, 'minor': None, 'multiplier': None}
+    
+    collection['deg']['major'] = degree // 2
+    collection['Q']['major'] = _perp_space(rootsinfo, degree // 2, 
+                                           root_filter = _REDUCE_KWARGS[(degree % 2, 'major')]['monom_add'])
 
-    d = (n//2+1)*(n//2+2)//2
-    X = picos.SymmetricVariable('X', (d, d))
+    if minor and degree > 2:
+        collection['deg']['minor'] = degree // 2 - 1
+        collection['Q']['minor'] = _perp_space(rootsinfo, degree // 2 - 1,
+                                           root_filter = _REDUCE_KWARGS[(degree % 2, 'minor')]['monom_add'])
 
-    vec = []
-    for i in range(n//2+1):
-        for j in range(n//2+1-i):
-            vec.append((i,j))
-    inv_vec = dict([(vec[i], i) for i in range(len(vec))])
+    for key in collection['Q'].keys():
+        Q = collection['Q'][key]
+        if Q is not None:
+            M = LowRankHermitian(Q)
+            collection['M'][key] = M
+            collection['Q_numer'][key] = np.array(Q).astype(np.float64)
 
-    coeffs = {}
-    for coeff, monom in zip(poly.coeffs(), poly.monoms()):
-        coeffs[monom] = float(coeff)
-    def coeff(monom):
-        t = coeffs.get(monom)
-        return t if t is not None else 0
-    def next_monom(monom):
-        return (n//2-sum(monom), monom[0])
-    def prev_monom(monom):
-        return (monom[1], n//2-sum(monom))
+            eq = M.reduce(collection['deg'][key], **_REDUCE_KWARGS[(degree%2, key)])
+            collection['eq'][key] = eq
+    print([Root(_).uv for _ in rootsinfo.strict_roots])
 
-    for monom, alterns in conversion.items():
-        # main = inv_vec[alternatives[0]]
-        c = coeff(monom)
-        sos.add_constraint(
-            sum(X[inv_vec[altern[0]], inv_vec[altern[1]]] for altern in alterns) == c
-        )
-        # cyclize
-        if not (monom[0] == monom[1] and monom[1] == monom[2]):
-            sos.add_constraint(
-                sum(X[inv_vec[next_monom(altern[0])], inv_vec[next_monom(altern[1])]] for altern in alterns) == c
-            )
-            sos.add_constraint(
-                sum(X[inv_vec[prev_monom(altern[0])], inv_vec[prev_monom(altern[1])]] for altern in alterns) == c
-            )
-        
-    sos.add_constraint(X >> 0)
-    sos.solve()
+    # perform SDP with numerical operations
 
-    for S in SDPPerturbation(X.value, poly, inv_vec, conversion, next_monom):
-        S = RationalCongruence(S)
-    print(np.linalg.eigvalsh(S))
+    vecM = arraylize_sp(poly, cyc = False)
+    eq = sp.Matrix.hstack(*filter(lambda x: x is not None, collection['eq'].values()))
 
+    # we have eq @ vecS = vecM
+    # so that vecS = x0 + space * y where x0 is a particular solution and y is arbitrary
+    x0, space = solve_undetermined_linear(eq, vecM)
+    # return x0, space
 
-if __name__ == '__main__':
-    txt = 's(a(a-b)(a-c))2+0p(a-b)2'
-    txt = 's(a2)2-3s(a3b)'
-    txt = PreprocessText(txt)
-    SOS_SDP(txt, generate_expr(deg(txt))[0])
+    splits = split_vector(collection['eq'].values())
+    print('Degree of freedom: %d'%space.shape[1])
+    print([(key, value.shape if value is not None else 'None') for key, value in collection['eq'].items()])
+
+    not_none_keys = [key for key, value in collection['Q'].items() if value is not None]
+    sos_result = sdp_solver(x0, space, splits, not_none_keys, verbose = 1)
+    if sos_result is None:
+        return None
+    collection.update(sos_result)
+
+    for key, S in collection['S'].items():
+        if collection['Q'][key] is None:
+            continue
+        M = collection['M'][key].construct_from_vector(S)
+        collection['S'][key] = M.S
+        collection['M'][key] = M.M
+
+    collection.update({'x0': x0, 'space': space})
+    return collection
