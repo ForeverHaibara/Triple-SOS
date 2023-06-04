@@ -276,45 +276,45 @@ def _sos_struct_sextic_hexagon(coeff, poly, recurrsion):
                 # Temporarily deprecated.
                 # The current method is not complete.
                 return 
-                a , b = (coeff((4,2,0)) / coeff((4,0,2))).as_numer_denom()
-                if sp.ntheory.primetest.is_square(a) and sp.ntheory.primetest.is_square(b):
-                    y = [coeff((4,2,0)) / a / 3]
-                    exprs = [f'({sp.sqrt(a)}*(a*a*b+b*b*c+c*c*a-3*a*b*c)-{sp.sqrt(b)}*(a*b*b+b*c*c+c*a*a-3*a*b*c))^2']
+                # a , b = (coeff((4,2,0)) / coeff((4,0,2))).as_numer_denom()
+                # if sp.ntheory.primetest.is_square(a) and sp.ntheory.primetest.is_square(b):
+                #     y = [coeff((4,2,0)) / a / 3]
+                #     exprs = [f'({sp.sqrt(a)}*(a*a*b+b*b*c+c*c*a-3*a*b*c)-{sp.sqrt(b)}*(a*b*b+b*c*c+c*a*a-3*a*b*c))^2']
                 
-                    poly2 = poly - 3 * y[0] * sp.sympify(exprs[0])
-                    v = 0 # we do not need to check the positivity, just try
-                    if v != 0:
-                        y, exprs = None, None
-                    else: # positive
-                        multipliers , y , exprs = _merge_sos_results(multipliers, y, exprs, recurrsion(poly2, 6))
+                #     poly2 = poly - 3 * y[0] * sp.sympify(exprs[0])
+                #     v = 0 # we do not need to check the positivity, just try
+                #     if v != 0:
+                #         y, exprs = None, None
+                #     else: # positive
+                #         multipliers , y , exprs = _merge_sos_results(multipliers, y, exprs, recurrsion(poly2, 6))
 
-                # CASE 3.
-                # a = t(p^2+1) , b = t(q^2+1)
-                # => b^2p^2 + b^2 = ab(q^2 + 1) => (bp)^2 - ab q^2 = b(a-b)
-                #                            or => (aq)^2 - ab p^2 = a(b-a)
-                # here we should require b is squarefree and not too large
-                elif a < 30 and b < 30: # not too large for solving Pell's equation
-                    pairs = []
-                    for pair in diop_DN(a*b, b*(a-b)):
-                        if pair[0] % b == 0:
-                            pairs.append((abs(pair[0] // b), abs(pair[1])))
-                    for pair in diop_DN(a*b, a*(b-a)):
-                        if pair[0] % a == 0:
-                            pairs.append((abs(pair[1]), abs(pair[0] // a)))
-                    pairs = set(pairs)
+                # # CASE 3.
+                # # a = t(p^2+1) , b = t(q^2+1)
+                # # => b^2p^2 + b^2 = ab(q^2 + 1) => (bp)^2 - ab q^2 = b(a-b)
+                # #                            or => (aq)^2 - ab p^2 = a(b-a)
+                # # here we should require b is squarefree and not too large
+                # elif a < 30 and b < 30: # not too large for solving Pell's equation
+                #     pairs = []
+                #     for pair in diop_DN(a*b, b*(a-b)):
+                #         if pair[0] % b == 0:
+                #             pairs.append((abs(pair[0] // b), abs(pair[1])))
+                #     for pair in diop_DN(a*b, a*(b-a)):
+                #         if pair[0] % a == 0:
+                #             pairs.append((abs(pair[1]), abs(pair[0] // a)))
+                #     pairs = set(pairs)
                     
-                    for p , q in pairs:
-                        p , q = abs(p) , abs(q)
-                        t = coeff((4,2,0)) / (p*p + 1)
-                        if coeff((3,3,0)) + t * 2 * p * q < 0 or coeff((4,1,1)) + t * 2 * (p + q) < 0:
-                            # negative vertex, skip it
-                            continue
-                        y = [t]
-                        exprs = [f'(a*a*c-b*b*c-{p}*(a*a*b-a*b*c)+{q}*(a*b*b-a*b*c))^2']
-                        poly2 = poly - t * sp.sympify(cycle_expansion(exprs[0]))
-                        multipliers , y , exprs = _merge_sos_results(multipliers, y, exprs, recurrsion(poly2, 6))
-                        if y is not None:
-                            break
+                #     for p , q in pairs:
+                #         p , q = abs(p) , abs(q)
+                #         t = coeff((4,2,0)) / (p*p + 1)
+                #         if coeff((3,3,0)) + t * 2 * p * q < 0 or coeff((4,1,1)) + t * 2 * (p + q) < 0:
+                #             # negative vertex, skip it
+                #             continue
+                #         y = [t]
+                #         exprs = [f'(a*a*c-b*b*c-{p}*(a*a*b-a*b*c)+{q}*(a*b*b-a*b*c))^2']
+                #         poly2 = poly - t * sp.sympify(cycle_expansion(exprs[0]))
+                #         multipliers , y , exprs = _merge_sos_results(multipliers, y, exprs, recurrsion(poly2, 6))
+                #         if y is not None:
+                #             break
 
 
         else:# coeff((4,2,0)) == coeff((4,0,2)):

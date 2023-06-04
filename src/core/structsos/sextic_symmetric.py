@@ -30,6 +30,8 @@ def _sos_struct_sextic_hexagon_symmetric(coeff, real = False):
 
     p(a2+ab+b2)-3s(ab)s(a2b2)   (real)
 
+    s(a)s(ab)p(a+b)-6s(a(a+b)(a+c))p(a)-3abcs((a+b-c)(a-c)(b-c))   (real)
+
     s(bc(a-b)(a-c)(a-3b)(a-3c))+9/4p(a-b)2
 
     s(bc(a-b)(a-c)(a-3b)(a-3c)) +1/4s(a2b+ab2-2abc)2+5p(a-b)2+4abcs(a(b-c)2)
@@ -37,7 +39,7 @@ def _sos_struct_sextic_hexagon_symmetric(coeff, real = False):
     s(bc(a-b)(a-c)(a-9/8b)(a-9/8c))+81/256p(a-b)2
 
     p(a2+ab+b2)+12a2b2c2-3p(a+b)2/5    (real, uncentered)
-
+    
     Reference
     ---------
     [1] Vasile, Mathematical Inequalities Volume 1 - Symmetric Polynomial Inequalities. p.23
@@ -138,12 +140,12 @@ def _sos_struct_sextic_hexagon_symmetric(coeff, real = False):
 
             if x is not None and isinstance(x, sp.Rational) and x != 0:
                 x = 2 / x
-                print(x, 'coeffp, sym =', coeffp, coeffsym)
 
                 
                 # weight of linear combination of x and -x
                 w2 = ((coeff((3,2,1)) - 2 * coeffp + 10 * coeffsym) / coeff42 - (-2*(x**2 + 2*x + 2)/x**2)) / (8 / x)
                 w1 = 1 - w2
+                print(x, 'coeffp, sym =', coeffp, coeffsym, '(w1, w2) =', (w1, w2))
                 if w1 == 0 or w2 == 0:
                     # low rank case
                     if (w1 == 0 and x >= 2) or (w2 == 0 and x >= 1):
@@ -169,7 +171,7 @@ def _sos_struct_sextic_hexagon_symmetric(coeff, real = False):
                             elif x == 2:
                                 y.append(sp.S(2) * coeff42 / x**2)
                                 exprs.append(
-                                    CyclicSum((a-b)**2*(a**2*b+a**2*c+a*b**2-5*a*b*c+a*c**2+b**2*c+b*c**2+c**3)**2)
+                                    CyclicSum((a-b)**2*(a**2*b+a*b**2-5*a*b*c+a*c**2+b*c**2+c**3)**2)
                                 )
                             return _sum_y_exprs(y, exprs) / multiplier
                                 
