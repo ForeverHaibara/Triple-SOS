@@ -197,7 +197,7 @@ class SolutionSimple(Solution):
     """
     def __init__(self, problem = None, numerator = None, multiplier = None, is_equal = None):
         if multiplier is None:
-            multiplier = 1
+            multiplier = S.One
         self.problem = problem
         self.solution = numerator / multiplier
         self.numerator = numerator
@@ -397,16 +397,18 @@ def congruence(M):
     M = M.copy()
     n = M.shape[0]
     if isinstance(M[0,0], sp.Expr):
-        U, S = sp.Matrix.zeros(n), [0] * n
+        U, S = sp.Matrix.zeros(n), [sp.S.Zero] * n
+        One = sp.S.One
     else:
         U, S = np.zeros((n,n)), np.zeros(n)
+        One = 1
     for i in range(n-1):
         if M[i,i] > 0:
             S[i] = M[i,i]
             U[i,i+1:] = M[i,i+1:] / (S[i])
-            U[i,i] = 1
+            U[i,i] = One
             M[i+1:,i+1:] -= U[i:i+1,i+1:].T @ (U[i:i+1,i+1:] * S[i])
-    U[-1,-1] = 1
+    U[-1,-1] = One
     S[-1] = M[-1,-1]
     return U, S
 
