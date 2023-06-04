@@ -162,8 +162,10 @@ class GridRender():
     grid_coor = _grid_init_coor(size)
     grid_precal = _grid_init_precal(size, degree_limit)
 
+    _zero_grid = None
+
     @classmethod
-    def _render_grid_value(cls, poly, method = 'integer'):
+    def _render_grid_value(cls, poly, value_method = 'integer'):
         """
         Render the grid by computing the values.
         """
@@ -171,7 +173,7 @@ class GridRender():
         if deg(poly) > cls.degree_limit:
             return grid_value
 
-        if method == 'integer':
+        if value_method == 'integer':
             # integer arithmetic runs much faster than accuarate floating point arithmetic
             # example: computing 45**18   is around ten times faster than  (1./45)**18
 
@@ -201,61 +203,115 @@ class GridRender():
 
 
     @classmethod
-    def _render_grid_color(cls, poly, method = 'integer'):
+    def _render_grid_color(cls, poly, value_method = 'integer', color_method = 'numpy', power = 1./3):
         """
         Render the grid by computing the values and setting the grid_val to rgba colors.
+
+        TODO:
+        1. use numpy to accelerate
+        2. continuous color levels?
         """
-        grid_value = cls._render_grid_value(poly, method = method)
-        grid_color = [(255,255,255,255)] * len(cls.grid_coor)
+        grid_value = cls._render_grid_value(poly, value_method = value_method)
 
         if deg(poly) > cls.degree_limit:
+            grid_color = [(255,255,255,255)] * len(cls.grid_coor)
             return grid_value, grid_color
 
-        # preprocess the levels
-        max_v, min_v = max(grid_value), min(grid_value)
-        if max_v >= 0:
-            max_levels = [(i / cls.color_level)**2 * max_v for i in range(cls.color_level+1)]
-        if min_v <= 0:
-            min_levels = [(i / cls.color_level)**2 * min_v for i in range(cls.color_level+1)]
-        for k in range(len(cls.grid_coor)):
-            v = grid_value[k]
-            if v > 0:
-                for i, level in enumerate(max_levels):
-                    if v <= level:
-                        v = 255 - (i-1)*255//(cls.color_level-1)
-                        grid_color[k] = (255, v, 0, 255)
-                        break
-                else:
-                    grid_color[k] = (255, 0, 0, 255)
-            elif v < 0:
-                for i, level in enumerate(min_levels):
-                    if v >= level:
-                        v = 255 - (i-1)*255//(cls.color_level-1)
-                        grid_color[k] = (0, v, 255, 255)
-                        break
-                else:
-                    grid_color[k] = (0, 0, 0, 255)
-            else: # v == 0:
-                grid_color[k] = (255, 255, 255, 255)
-        
-        return grid_value, grid_color
+        if color_method == 'integer':
+            grid_color = [(255,255,255,255)] * len(cls.grid_coor)
+
+            # preprocess the levels
+            max_v, min_v = max(grid_value), min(grid_value)
+            if max_v >= 0:
+                max_levels = [(i / cls.color_level) ** (1 / power) * max_v for i in range(cls.color_level+1)]
+            if min_v <= 0:
+                min_levels = [(i / cls.color_level) ** (1 / power) * min_v for i in range(cls.color_level+1)]
+            for k in range(len(cls.grid_coor)):
+                v = grid_value[k]
+                if v > 0:
+                    for i, level in enumerate(max_levels):
+                        if v <= level:
+                            v = 255 - (i-1)*255//(cls.color_level-1)
+                            grid_color[k] = (255, v, 0, 255)
+                            break
+                    else:
+                        grid_color[k] = (255, 0, 0, 255)
+                elif v < 0:
+                    for i, level in enumerate(min_levels):
+                        if v >= level:
+                            v = 255 - (i-1)*255//(cls.color_level-1)
+                            grid_color[k] = (0, v, 255, 255)
+                            break
+                    else:
+                        grid_color[k] = (0, 0, 0, 255)
+                else: # v == 0:
+                    grid_color[k] = (255, 255, 255, 255)
+            
+            return grid_value, grid_color
+
+        elif color_method == 'numpy':
+            value_numpy = np.array(grid_value)
+            color_numpy = np.full((len(cls.grid_coor), 4), 255, dtype = np.uint8)
+
+            max_v, min_v = value_numpy.max(), value_numpy.min()
+            if max_v > 0:
+                positive = value_numpy > 0
+                color_numpy[:, 2] = np.where(positive, 0, 255)
+                levels = np.clip(value_numpy / max_v, 0, None) ** (power) * 255
+                levels = levels.astype(np.uint8) ^ 255
+                color_numpy[:, 1] = np.where(positive, levels, color_numpy[:, 1])
+
+            if min_v < 0:
+                negative = value_numpy < 0
+                color_numpy[:, 0] = np.where(negative, 0, 255)
+                levels = np.clip(value_numpy / min_v, 0, None) ** (power) * 255
+                levels = levels.astype(np.uint8) ^ 255
+                color_numpy[:, 1] = np.where(negative, levels, color_numpy[:, 1])
+
+            grid_color = color_numpy.tolist()
+            return grid_value, grid_color
+            
 
     @classmethod
-    def render(cls, poly, method = 'integer', with_color = False):
-        """
-        Render the grid by computing the values and setting the grid_val to rgba colors.
-        """
-        if with_color:
-            grid_value, grid_color = cls._render_grid_color(poly, method = method)
-        else:
-            grid_value = cls._render_grid_value(poly, method = method)
-            grid_color = None
+    def render(cls, 
+            poly, 
+            value_method = 'integer',
+            color_method = 'numpy',
+            with_color = False,
+            handle_error = True,
+        ):
+        # """
+        # Render the grid by computing the values and setting the grid_val to rgba colors.
+        # """
+        # try:
+            if with_color:
+                grid_value, grid_color = cls._render_grid_color(poly, value_method = value_method, color_method = color_method)
+            else:
+                grid_value = cls._render_grid_value(poly, value_method = value_method)
+                grid_color = None
 
-        return GridPoly(
-            poly,
-            size = cls.size,
-            grid_coor = cls.grid_coor,
-            grid_value = grid_value,
-            grid_color = grid_color
-        )
-        
+            return GridPoly(
+                poly,
+                size = cls.size,
+                grid_coor = cls.grid_coor,
+                grid_value = grid_value,
+                grid_color = grid_color
+            )
+        # except Exception as e:
+        #     if handle_error:
+        #         return cls.zero_grid()
+        #     else:
+        #         raise e
+
+    @classmethod
+    def zero_grid(cls):
+        if cls._zero_grid is None:
+            a, b, c = sp.symbols('a b c')
+            cls._zero_grid = GridPoly(
+                sp.polys.Poly(0, (a, b, c)),
+                size = cls.size,
+                grid_coor = cls.grid_coor,
+                grid_value = [0] * len(cls.grid_coor),
+                grid_color = [(255,255,255,255)] * len(cls.grid_coor)
+            )
+        return cls._zero_grid

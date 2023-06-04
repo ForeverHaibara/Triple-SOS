@@ -32,6 +32,9 @@ class RootsInfo():
     @property
     def gui_description(self):
         s = 'Local Minima Approx:'
+        if len(self.roots) == 0:
+            return s
+
         def formatter(root):
             if hasattr(root, 'n'):
                 return root.n(self.PRINT_PRECISION)
