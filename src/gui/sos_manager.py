@@ -8,9 +8,12 @@ from ..core.sum_of_square import sum_of_square
 
 
 class SOS_Manager():
-    def __init__(self, GUI=None):
-        self.GUI = GUI
-        self.linefeed = 2
+    """
+    SOS Manager is a class for web GUI.    
+    """
+    _zero_grid = GridRender.zero_grid()
+
+    def __init__(self):
         self.solution = None
 
         self._poly_info = {
@@ -27,8 +30,6 @@ class SOS_Manager():
         self.deglim = 18
 
         self._roots_info = RootsInfo()
-        self.precision = 8
-        self.stage = 60
 
     @property
     def poly(self):
@@ -63,6 +64,8 @@ class SOS_Manager():
                     self._poly_info['deg'] = n
                 self._poly_info['isfrac'] = False
                 self._poly_info['ishom'] = True
+                self._roots_info = RootsInfo()
+                self._poly_info['grid'] = self._zero_grid
                 return True
 
             self._poly_info['deg'] = deg(self.poly)
@@ -80,6 +83,8 @@ class SOS_Manager():
 
 
     def get_standard_form(self, formatt = 'short'):
+        if not self.poly.domain.is_Numerical:
+            return self._poly_info['polytxt']
         if formatt == 'short':
             return poly_get_standard_form(self.poly, formatt = 'short', is_cyc = self._poly_info['iscyc'])
         elif formatt == 'factor':
@@ -87,8 +92,13 @@ class SOS_Manager():
 
     def findroot(self):
         if self.deg <= 1 or (not self._poly_info['iscyc']) or (self.poly.is_zero) or (not self._poly_info['ishom']):
-            return
-        
+            self._roots_info = RootsInfo()
+            return self._roots_info
+
+        if not self.poly.domain.is_Numerical:
+            self._roots_info = RootsInfo()
+            return self._roots_info
+
         self._roots_info = findroot(
             self.poly, 
             most = 5, 
@@ -99,20 +109,18 @@ class SOS_Manager():
         print(self._roots_info)
         return self._roots_info
 
-    def GUI_stateUpdate(self, stage = None):
-        if stage is not None:
-            self.stage = stage
-        if self.GUI is not None:
-            self.GUI.displaySOS()
-
-
-    def sum_of_square(self):
+    def sum_of_square(self, method_order = None, configs = None):
         if self.deg <= 1 or (not self._poly_info['iscyc']) or (self.poly.is_zero) or (not self._poly_info['ishom']):
+            return
+        
+        if not self.poly.domain.is_Numerical:
             return
 
         self.solution = sum_of_square(
             self.poly, 
             rootsinfo = self._roots_info, 
+            method_order = method_order,
+            configs = configs
         )
         return self.solution
 
@@ -134,8 +142,8 @@ def _render_LaTeX(a, path, usetex=True, show=False, dpi=500, fontsize=20):
     import matplotlib.pyplot as plt
 
     acopy = a
-    #linenumber = a.count('\\\\') + 1
-    #plt.figure(figsize=(12,10 ))
+    # linenumber = a.count('\\\\') + 1
+    # plt.figure(figsize=(12,10 ))
     
     # set the figure small enough
     # even though the text cannot be display as a whole in the window
