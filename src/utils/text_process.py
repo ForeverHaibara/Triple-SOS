@@ -14,7 +14,7 @@ def reflect_permute(f: str) -> str:
     return f.translate({97: 99, 98: 97, 99: 98})
 
 def cycle_expansion(f, symbol='s'):
-    '''
+    """
     Parameters
     -------
     f: str
@@ -29,7 +29,7 @@ def cycle_expansion(f, symbol='s'):
     Return
     -------
     a string, the result of cycle expansion
-    '''
+    """
     fb = next_permute(f)
     fc = next_permute(fb)
     if symbol != 'p':
@@ -325,20 +325,42 @@ def degree_of_zero(poly):
     return degree
 
 
-def swa(x):
+def short_constant_parser(x):
     """
-    Helper function for experiment.
+    Parse a sympy constant using limited characters.
+    """
+    if x.is_Number:
+        if isinstance(x, sp.Rational):
+            txt = str(x)
+        elif isinstance(x, sp.Float):
+            txt = '%.4f'%(x)
+        else:
+            v = x.as_numer_denom()
+            txt = f'{v[0]}' + (f'/{v[1]}' if v[1] != 1 else '')
+        if len(txt) > 10 and not isinstance(x, sp.Float):
+            txt = '%.4f'%(x)
+    else:
+        txt = str(x).replace('**','^').replace('*','').replace(' ','')
+    return txt
+
+
+
+def swa(x, verbose = True):
+    """
+    Helper function for experiment. The output can be sent as
+    input of wolframalpha.
     """
     a = str(x).replace(' ','').replace('**','^')
-    print(a)
+    if verbose: print(a)
     return a
 
-def sdesmos(x):
+def sdesmos(x, verbose = True):
     """
-    Helper function for experiment.
+    Helper function for experiment. The output can be sent as
+    input of desmos.
     """
     a = (sp.latex(x).replace(' ',''))
-    print(a)
+    if verbose: print(a)
     return a
 
 
