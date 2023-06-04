@@ -357,17 +357,19 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
                 }else{
                     const text_length = sos_results.latex.length;
                     str = sos_results.latex.slice(2, text_length-2);
-                    if (str.indexOf('\\\\') >= 0){
-                        // 存在换行, 使用 \begin{aligned}
-                        let i = 0;
-                        while (i+1 < str.length){
-                            if (str[i] == '\\' && str[i+1] == '\\'){
-                                str = str.slice(0, i+2) + ' & ' + str.slice(i+2, str.length);
-                                i += 2;        
+                    if (str.indexOf('aligned') < 0){ // no aligned environment
+                        if (str.indexOf('\\\\') >= 0){
+                            // 存在换行, 使用 \begin{aligned}
+                            let i = 0;
+                            while (i+1 < str.length){
+                                if (str[i] == '\\' && str[i+1] == '\\'){
+                                    str = str.slice(0, i+2) + ' & ' + str.slice(i+2, str.length);
+                                    i += 2;        
+                                }
+                                ++i;
                             }
-                            ++i;
+                            str = '\\begin{aligned}  \\  &' + str + '\\end{aligned}';
                         }
-                        str = '\\begin{aligned}  \\  &' + str + '\\end{aligned}';
                     }
                 }
                 
