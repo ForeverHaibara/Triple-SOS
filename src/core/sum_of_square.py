@@ -36,8 +36,13 @@ def sum_of_square(
         configs: Dict = DEFAULT_CONFIGS
     ) -> Solution:
     """
-    
+    Sum of Square.
     """
+    if method_order is None:
+        method_order = METHOD_ORDER
+    if configs is None:
+        configs = DEFAULT_CONFIGS
+
     assert isinstance(poly, sp.polys.Poly) and poly.gens == (a,b,c), 'Poly must be a sympy polynomial with gens (a,b,c).'
     assert deg(poly) > 1, 'Poly must be a polynomial of degree greater than 1.'
     assert verify_hom_cyclic(poly) == (True, True), 'Poly must be homogeneous and cyclic.'
