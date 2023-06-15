@@ -2,6 +2,21 @@ import sympy as sp
 
 from ..pqrsos import pqr_sym
 
+def _verify_is_symmetric(poly):
+    """
+    Check whether a polynomial is symmetric. The polynomial is 
+    assumed to be cyclic.
+    """
+    coeffs = {}
+    for monom, coeff in poly.terms():
+        coeffs[monom] = coeff
+    for monom, coeff in coeffs.items():
+        a, b, c = monom
+        if coeffs.get((b, a, c), 0) != coeff:
+            return False
+    return True
+
+
 def _extract_factor(poly, factor, symbol):
     """
     Given a polynomial and a factor, find degree and remainder such

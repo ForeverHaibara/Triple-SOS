@@ -15,7 +15,7 @@ class SolutionSymmetric(Solution):
         numerator, multiplier = sp.fraction(sp.together(self.solution))
 
         if multiplier.is_constant():
-            const, multiplier = const, S.One
+            const, multiplier = S.One, multiplier
         else:
             const, multiplier = multiplier.as_coeff_Mul()
 

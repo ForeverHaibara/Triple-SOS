@@ -1,6 +1,6 @@
 import sympy as sp
 
-from .representation import sym_representation
+from .representation import sym_representation, _verify_is_symmetric
 from .proof import _prove_numerator
 from .solution import SolutionSymmetric, SolutionSymmetricSimple
 from ...utils.expression.cyclic import CyclicSum, CyclicProduct
@@ -13,7 +13,9 @@ def SymmetricSOS(
     Represent a polynomial to the symmetric form.
     """
 
-    # check symmetricity here
+    # check symmetricity here and (1,1,1) == 0
+    if poly(1,1,1) != 0 or not _verify_is_symmetric(poly):
+        return None
 
     numerator, denominator = sym_representation(poly, positive = True, return_poly = True)
     numerator = _prove_numerator(numerator)

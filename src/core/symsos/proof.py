@@ -3,6 +3,10 @@ import sympy as sp
 def _prove_irreducible_univariate(coeff):
     """
     Prove an irreducible univariate polynomial is non-negative.
+
+    TODO:
+    1. Handle real case and positive case.
+    2. Use complete algorithm.
     """
     if not coeff.is_Add:
         return coeff
@@ -10,12 +14,25 @@ def _prove_irreducible_univariate(coeff):
     gens = tuple(coeff.free_symbols)
     if len(gens) != 2:
         return None
-    poly = coeff.subs(gens[1], 1).as_poly(gens[0])
+    x, y = gens
+    poly = coeff.subs(y, 1).as_poly(x)
 
-    for c in poly.coeffs():
-        if c < 0:
+    all_coeffs = poly.all_coeffs()
+    if all_coeffs[0] < 0 or all_coeffs[-1] < 0:
+        return None
+
+    if len(all_coeffs) == 3:
+        # quadratic polynomial
+        a, b, c = all_coeffs
+        if b*b - 4*a*c > 0:
             return None
-    return coeff
+
+        return a*(x + b/(2*a)*y)**2 + (c - b**2/(4*a)) * y**2
+
+    if all(_ >= 0 for _ in all_coeffs):
+        return coeff
+
+    return None
 
 def _prove_coeff(coeff, factorized = True):
     """
