@@ -126,7 +126,7 @@ def findroot(
         Containing (a,b) where the function is possibly zero at (a,b,1).
     '''
     if grid is None:
-        grid = GridRender.render(poly, method='integer', with_color=False)
+        grid = GridRender.render(poly, with_color=False)
 
     grid_coor, grid_value = grid.grid_coor, grid.grid_value
     extrema = _findroot_initial_guess(grid_coor, grid_value)
@@ -212,7 +212,7 @@ def _findroot_initial_guess(grid_coor, grid_value):
             continue
         extrema.append(((n-i-j)/j, i/j))
     
-    order = (sorted(list(range(len(grid_value))), key = lambda x: grid_value[x]))
+    # order = (sorted(list(range(len(grid_value))), key = lambda x: grid_value[x]))
     # print(sorted(grid_value))
     # print([(j/(i+1e-14) ,(n-i-j)/(i+1e-14)) for i,j in [grid_coor[o] for o in order]])
     # print([(i, j) for i,j in [grid_coor[o] for o in order]])

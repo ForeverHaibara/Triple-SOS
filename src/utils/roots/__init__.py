@@ -1,3 +1,5 @@
+from .roots import Root
+
 from .rootsinfo import RootsInfo
 
 from .grid import GridRender

@@ -1,5 +1,6 @@
 import sympy as sp
 import numpy as np
+from sympy.plotting.experimental_lambdify import vectorized_lambdify
 
 from ..polytools import deg
 
@@ -160,12 +161,13 @@ class GridRender():
 
     # initialize the grid and preprocess some values
     grid_coor = _grid_init_coor(size)
+    grid_coor_np_ = np.hstack([size - np.array(grid_coor), np.array(grid_coor)]).T
     grid_precal = _grid_init_precal(size, degree_limit)
 
     _zero_grid = None
 
     @classmethod
-    def _render_grid_value(cls, poly, value_method = 'integer'):
+    def _render_grid_value(cls, poly, value_method = 'integer_lambdify'):
         """
         Render the grid by computing the values.
         """
@@ -197,13 +199,16 @@ class GridRender():
                     v += pc[a][monom[0]] * pc[b][monom[1]] * pc[c][monom[2]] * coeff
                 grid_value[k] = v
 
-        else:
-            pass
+        elif value_method == 'integer_lambdify':
+            a, b, c = sp.symbols('a b c')
+            f = sp.lambdify((a,b,c), poly.as_expr())
+            grid_value = f(cls.grid_coor_np_[0], cls.grid_coor_np_[1], cls.grid_coor_np_[2])
+
         return grid_value
 
 
     @classmethod
-    def _render_grid_color(cls, poly, value_method = 'integer', color_method = 'numpy', power = 1./3):
+    def _render_grid_color(cls, poly, value_method = 'integer_lambdify', color_method = 'numpy', power = 1./3):
         """
         Render the grid by computing the values and setting the grid_val to rgba colors.
 
@@ -283,7 +288,7 @@ class GridRender():
         # """
         # Render the grid by computing the values and setting the grid_val to rgba colors.
         # """
-        # try:
+        try:
             if with_color:
                 grid_value, grid_color = cls._render_grid_color(poly, value_method = value_method, color_method = color_method)
             else:
@@ -297,11 +302,11 @@ class GridRender():
                 grid_value = grid_value,
                 grid_color = grid_color
             )
-        # except Exception as e:
-        #     if handle_error:
-        #         return cls.zero_grid()
-        #     else:
-        #         raise e
+        except Exception as e:
+            if handle_error:
+                return cls.zero_grid()
+            else:
+                raise e
 
     @classmethod
     def zero_grid(cls):
