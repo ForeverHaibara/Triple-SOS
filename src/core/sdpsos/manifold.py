@@ -4,6 +4,7 @@ import sympy as sp
 from ...utils.basis_generator import generate_expr
 from ...utils.roots.tangents import uv_from_root
 from ...utils.roots.roots import Root
+from ...utils.roots.rootsinfo import RootsInfo
 
 _ROOT_FILTERS = {
     (0,0,0): lambda r: True,
@@ -12,11 +13,12 @@ _ROOT_FILTERS = {
     (1,1,1): lambda r: r[0] != 0 and r[1] != 0 and r[2] != 0,
 }
 
-def _all_roots_space(rootsinfo, n, root_filter = (0,0,0)):
+def _all_roots_space(rootsinfo, n, monom_add = (0,0,0), root_filter = None, convex_hull = None):
     """
     """
-    if not hasattr(root_filter, '__call__'):
-        root_filter = _ROOT_FILTERS[root_filter]
+    # if not hasattr(root_filter, '__call__'):
+    if root_filter is None:
+        root_filter = _ROOT_FILTERS[monom_add]
 
     handled = {}
     spaces = []
@@ -30,26 +32,36 @@ def _all_roots_space(rootsinfo, n, root_filter = (0,0,0)):
         
         handled[uv] = True
         spaces.append(root.span(n))
+
+    spaces += _hull_space(n, convex_hull, monom_add = monom_add)
+
     return sp.Matrix.hstack(*spaces)
 
 
-def _perp_space(rootsinfo, n, root_filter = (0,0,0)):
-    space = _all_roots_space(rootsinfo, n, root_filter = root_filter).T
+def _perp_space(rootsinfo, n, monom_add = (0,0,0), convex_hull = None):
+    if isinstance(rootsinfo, RootsInfo):
+        space = _all_roots_space(rootsinfo, n, monom_add = monom_add, convex_hull = convex_hull).T
+    else:
+        space = rootsinfo.T
 
-    L, U, P = sp.Matrix.LUdecomposition(space)
+    # HAS BUG:
+    # L, U, P = sp.Matrix.LUdecomposition(space)
     
-    for i in range(min(U.shape) - 1, -1, -1):
-        if U[i,i] != 0:
-            break
-    else: i = -1
-    rank = i + 1
-    U = U[:rank, :]
+    # for i in range(min(U.shape) - 1, -1, -1):
+    #     if U[i,i] != 0:
+    #         break
+    # else: i = -1
+    # rank = i + 1
+    # U = U[:rank, :]
 
-    U0, U1 = U[:, :U.shape[0]], U[:, U.shape[0]:]
+    # U0, U1 = U[:, :U.shape[0]], U[:, U.shape[0]:]
 
-    # [U0, U1] @ Q = 0
-    Q = sp.Matrix.vstack(-U0.LUsolve(U1), sp.eye(U1.shape[1]))
+    # # [U0, U1] @ Q = 0
+    # Q = sp.Matrix.vstack(-U0.LUsolve(U1), sp.eye(U1.shape[1]))
 
+    n = space.shape[1]
+    Q = sp.Matrix(space.nullspace())
+    Q = Q.reshape(Q.shape[0] // n, n).T
 
     # normalize to keep numerical stability
     reg = np.max(np.abs(Q), axis = 0)
@@ -59,6 +71,37 @@ def _perp_space(rootsinfo, n, root_filter = (0,0,0)):
 
     return Q
 
+
+def _hull_space(n, convex_hull = None, monom_add = (0,0,0)):
+    """
+    For example, s(ab(a-b)2(a+b-3c)2) does not have a^6,
+    so in the positive semidefinite representation, the entry (a^3,a^3) of M is zero.
+    This requires that Me_i = 0 where i is the index of a^3.
+    """
+    if convex_hull is None:
+        return []
+    inv_monoms = generate_expr(n, cyc = False)[0]
+
+    def onehot(i):
+        v = sp.Matrix.zeros(len(inv_monoms), 1)
+        v[i] = 1
+        return v
+
+    space = []
+    for key, value in convex_hull.items():
+        if value:
+            continue
+        # value == False: not in convex hull
+
+        rest_monom = (key[0] - monom_add[0], key[1] - monom_add[1], key[2] - monom_add[2])
+        if rest_monom[0] % 2 or rest_monom[1] % 2 or rest_monom[2] % 2:
+            continue
+        rest_monom = (rest_monom[0] // 2, rest_monom[1] // 2, rest_monom[2] // 2)
+
+        i = inv_monoms[rest_monom]
+        space.append(onehot(i))
+
+    return space
 
 
 class LowRankHermitian():
@@ -91,21 +134,25 @@ class LowRankHermitian():
         elif isinstance(self.Q, np.ndarray):
             return self.Q @ self.S @ self.Q.T
 
-    def construct_from_vector(self, S):
+    def construct_from_vector(self, S, full = False):
         """
         Construct S from vec(S).
         """
         k = self.Q.shape[1] if hasattr(self.Q, 'shape') else 0
         if S is not None:
             if len(S.shape) == 2:
+                if S.shape[0] == S.shape[1]:
+                    self.S = S
+                    return self
                 size = S.shape[0] * S.shape[1]
                 S = S.reshape(size, 1)
                 if isinstance(S, np.ndarray):
                     S = S.flatten()
                 
             # infer k automatically
-            k = round(S.shape[0] ** 0.5)
-            if k * k != S.shape[0]:
+            if full:
+                k = round(S.shape[0] ** 0.5)
+            else:
                 k = round((2 * S.shape[0] + .25) ** 0.5 - .5)
 
             S_ = sp.zeros(k, k)

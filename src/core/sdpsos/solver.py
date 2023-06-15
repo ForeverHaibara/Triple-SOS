@@ -3,6 +3,7 @@ from typing import List, Optional, Tuple, Callable
 import numpy as np
 import sympy as sp
 
+sp.Matrix.LDLdecomposition
 from .rationalize import (
     rationalize, rationalize_with_mask, rationalize_simutaneously,
     verify_is_pretty, verify_is_positive, congruence
@@ -48,7 +49,7 @@ def _sos_early_stop(sos, verbose = False):
     return None
 
 
-def _add_sdp_eq(sos, x0, space, y, suffix = '_0'):
+def _add_sdp_eq(sos, x0, space, y, reg = 0, suffix = '_0'):
     """
     Add a new variable S to a PICOS.Problem such that S is a symmetric positive
     semidefinite matrix and the upper triangular part of S = x0 + space * y.
@@ -64,6 +65,8 @@ def _add_sdp_eq(sos, x0, space, y, suffix = '_0'):
         The space of S. Stands for the space constraint of S.
     y : picos.RealVariable
         The underlying generator of S.
+    reg : float
+        The regularization term of S. We require S >> reg * I.
     suffix : str
         A string suffix to the name of the variable.
 
@@ -77,7 +80,7 @@ def _add_sdp_eq(sos, x0, space, y, suffix = '_0'):
     # k(k+1)/2 = len(x0)
     k = round(np.sqrt(2 * len(x0) + .25) - .5)
     S = picos.SymmetricVariable('S%s'%suffix, (k,k))
-    sos.add_constraint(S >> 0)
+    sos.add_constraint(S >> reg)
 
     target = space * y + x0.reshape((-1,1))
     pointer = 0
@@ -92,7 +95,8 @@ def _sdp_constructor(
         x0: sp.Matrix, 
         space: sp.Matrix, 
         splits: List[slice], 
-        keys: List[str]
+        keys: List[str],
+        reg: float = 0
     ):
     """
     Construct SDP problem: find feasible y such that
@@ -110,6 +114,8 @@ def _sdp_constructor(
         The splits of the space. Each split is a slice object.
     keys : List[str]
         The keys of the variables.
+    reg : float
+        The regularization term of S. We require S >> reg * I.
 
     Returns
     -------
@@ -127,7 +133,7 @@ def _sdp_constructor(
     sos = picos.Problem()
     y = picos.RealVariable('y', space.shape[1])
     for key, split in zip(keys, splits):
-        S = _add_sdp_eq(sos, x0_numer[split], space_numer[split], y, suffix = '_%s'%key)
+        S = _add_sdp_eq(sos, x0_numer[split], space_numer[split], y, reg = reg, suffix = '_%s'%key)
 
     return sos, y
 
@@ -169,6 +175,8 @@ def _sdp_solver(sos, x0, space, splits, objectives = None, verbose = False):
             ('max', lambda sos: sos.variables[obj_key].tr),
             ('max', lambda sos: sos.variables[obj_key]|1)
         ]
+        x = np.random.randn(*sos.variables[obj_key].shape)
+        objectives.append(('max', lambda sos: sos.variables[obj_key]|x))
 
     # record all numerical solution of y
     # so that we can take the convex combination in the final step
@@ -222,7 +230,7 @@ def _sdp_solver(sos, x0, space, splits, objectives = None, verbose = False):
 
     y = np.array(ys).mean(axis = 0)
 
-    lcm = max(1440, sp.prod(set.union(*[set(sp.primefactors(_.q)) for _ in space])))
+    lcm = max(1260, sp.prod(set.union(*[set(sp.primefactors(_.q)) for _ in space])))
     times = int(10 / np.log10(lcm) + 3)
     for y_rational in rationalize_simutaneously(y, lcm, times = times):
         if verify_is_pretty(y_rational):
@@ -234,6 +242,12 @@ def _sdp_solver(sos, x0, space, splits, objectives = None, verbose = False):
         print('Failed to find a rational solution despite having a mixed solution.\n'
               'Try to specify the lcm parameter for simutaneous rationalization.\n'
               'Currently using lcm = %d, times = %d'%(lcm, times))
+        print('The mixed solution is:\n')
+        for y in ys:
+            y = x0 + space * sp.Matrix(y.flatten().tolist())
+            for split in splits:
+                M = LowRankHermitian(None, sp.Matrix(y[split]).n(20)).S
+                print('Eigenvals =', M.eigenvals(), '\n', M)
 
     return None
 
@@ -243,6 +257,7 @@ def sdp_solver(
         space: sp.Matrix, 
         splits: List[slice],
         keys: List[str],
+        reg: float = 0,
         objectives: Optional[List[Tuple[str, Callable]]] = None,
         verbose: bool = False
     ):
@@ -266,6 +281,10 @@ def sdp_solver(
     keys: List[str]
         Represent the name of each symmetric matrix `S[i]`. Should match
         the length of splits.
+    reg : float
+        We require `S[i]` to be positive semidefinite, but in practice
+        we might want to add a small regularization term to make it
+        positive definite >> reg * I.
     objectives : Optional[List[Tuple[str, Callable]]]
         Although it suffices to find one feasible solution, we might 
         use objective to find particular feasible solution that has 
@@ -284,10 +303,11 @@ def sdp_solver(
         ]
         ```
     """
-    keys = list(keys) # avoid troubles of iterator
+    if not isinstance(keys, list):
+        keys = list(keys) # avoid troubles of iterator
 
     if space.shape[1] > 0:
-        sos, y = _sdp_constructor(x0, space, splits, keys)
+        sos, y = _sdp_constructor(x0, space, splits, keys, reg = reg)
         solution = _sdp_solver(sos, x0, space, splits, objectives = objectives, verbose = verbose)
     else:
         sos = None

@@ -27,7 +27,7 @@ def rationalize_with_mask(y: np.ndarray, zero_tolerance: float = 1e-7):
     """
     y_rational_mask = np.abs(y) > np.abs(y).max() * zero_tolerance
     y_rational = np.where(y_rational_mask, y, 0)
-    y_rational = [rationalize(_, reliable = True) for _ in y_rational]
+    y_rational = [rationalize(v, rounding = abs(v) * 1e-4) for v in y_rational]
     y_rational = sp.Matrix(y_rational)
     return y_rational
 
@@ -119,9 +119,10 @@ def verify_is_positive(
     decompositions = []
     for split in splits:
         S = LowRankHermitian(None, sp.Matrix(vecS[split])).S
-        U, diag = congruence(S)
-        if any(_ < 0 for _ in diag):
+        congruence_decomp = congruence(S)
+        if congruence_decomp is None:
             return None
+        U, diag = congruence_decomp
         decompositions.append((S, U, diag))
     return decompositions
 
