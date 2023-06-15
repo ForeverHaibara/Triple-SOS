@@ -36,3 +36,8 @@ class SolutionStructural(Solution):
 class SolutionStructuralSimple(SolutionSimple, SolutionStructural):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+        # for debug purpose
+        mul = self.multiplier.doit().as_poly(*sp.symbols('a b c'))
+        num = self.numerator.doit().as_poly(*sp.symbols('a b c'))
+        self.is_equal_ = (mul * self.problem - num).is_zero

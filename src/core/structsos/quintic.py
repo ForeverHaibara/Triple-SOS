@@ -1,6 +1,7 @@
 import sympy as sp
 
 from .utils import CyclicSum, CyclicProduct, _sum_y_exprs
+from .quintic_symmetric import sos_struct_quintic_symmetric
 from ...utils.text_process import cycle_expansion
 from ...utils.roots.rationalize import rationalize, rationalize_bound, cancel_denominator
 
@@ -8,7 +9,12 @@ from ...utils.roots.rationalize import rationalize, rationalize_bound, cancel_de
 a, b, c = sp.symbols('a b c')
 
 def sos_struct_quintic(poly, coeff, recurrsion):
-    solution = None
+
+    # first try symmetric solution
+    solution = sos_struct_quintic_symmetric(poly, coeff, recurrsion)
+    if solution is not None:
+        return solution
+
     if coeff((5,0,0)) == 0:
         if coeff((4,1,0)) == 0 or coeff((1,4,0)) == 0:
             solution = _sos_struct_quintic_windmill(coeff)

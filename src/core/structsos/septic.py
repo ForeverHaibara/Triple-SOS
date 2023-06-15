@@ -41,7 +41,7 @@ def _sos_struct_septic_star(coeff, poly, recurrsion):
     (3s(6a4c-31a3bc+6a3c2+19a2b2c)s(a2)-18s(c(a3-abc+(-8/3)(a2b-abc)+(1/3)(ab2-abc)- (bc2-abc))2))
 
     s(16a5bc+4a4b3-80a4b2c+3a4bc2+7a4c3+64a3b3c-14a3b2c2)
-    
+
     s(2a4b3+9a3b4+abc(18a4-66a3b+10a2b2+11ab3+16a2bc))
 
     s(72a5bc+24a4b3+156a4b2c-453a4bc2+44a4c3+176a3b3c-19a3b2c2)

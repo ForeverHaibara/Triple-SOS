@@ -340,7 +340,7 @@ def _sos_struct_quartic_uncentered(coeff, recur = False):
     s(a2)2-2s(a2bc)                 (real numbers)
 
     s(a2)2+6s(a2bc)-s(ab3)          (real numbers)
-    
+
     s(a4-3a3b-2ab3+7/2a2b2+5a2bc)
 
     4s(a4)+11abcs(a)-8s(ab)s(a2-ab)

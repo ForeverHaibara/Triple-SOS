@@ -459,11 +459,11 @@ def _sos_struct_sextic_tree(coeff):
             w2 = 1 - w1
             q, p = t__.as_numer_denom()
             if 0 <= w1 <= 1:
-                y = [w1 * t / 2, w2 * t / p**2,
+                y = [w1 * t / 2, w2 * t / 2 / p**3,
                     (coeff((2,2,2))/3+coeff((6,0,0))+coeff((4,1,1))+coeff((3,3,0))) * 3]
                 exprs = [
                     CyclicSum(a)**2 * CyclicSum((b-c)**4),
-                    CyclicSum(p*a**2 + q*b*c) * CyclicSum((a-b)**2*(p*a+q*b-q*c)**2),
+                    CyclicSum(p*a**2 + q*b*c) * CyclicSum((a-b)**2*(p*a+p*b-q*c)**2),
                     CyclicProduct(a**2),
                 ]
                 return _sum_y_exprs(y, exprs)
