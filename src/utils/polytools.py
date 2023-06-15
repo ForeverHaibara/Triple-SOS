@@ -1,4 +1,8 @@
+from math import ceil as ceiling
+from itertools import product
+
 import sympy as sp
+from scipy.spatial import ConvexHull
 
 def deg(poly: sp.polys.Poly):
     """
@@ -29,7 +33,7 @@ def verify(y, polys, poly, tol: float = 1e-10) -> bool:
             if coeff[0] != 0:
                 if coeff[1] != -1:
                     if not isinstance(coeff[0], sp.Expr):
-                        poly = poly - sp.Rational(coeff[0] , coeff[1]) * f
+                        poly = poly - sp.Rational(coeff[0], coeff[1]) * f
                     else:
                         v = coeff[0] / coeff[1]
                         coeff_dom = preprocessText_getdomain(str(v))
@@ -141,3 +145,72 @@ def verify_hom_cyclic(poly, fast=True):
 
 def monom_of(x, m):
     return x.coeff_monomial(m)
+
+
+def convex_hull_poly(poly):
+    """
+    Compute the convex hull of a polynomial.
+    """
+    monoms = poly.monoms()[::-1]
+    
+    n = sum(monoms[0])    # degree
+    skirt = monoms[0][0]  # when (abc)^n | poly, then skirt = n
+    # print(skirt)
+
+    convex_hull = [(i, j, n-i-j) for i , j in product(range(n+1), repeat = 2) if i+j <= n]
+    convex_hull = dict(zip(convex_hull, [True for i in range((n+1)*(n+2)//2)]))
+
+    vertices = [(monoms[0][1]-skirt, monoms[0][0]-skirt)]
+    if vertices[0][0] != 0:
+        line = skirt
+        for monom in monoms:
+            if monom[0] > line:
+                line = monom[0]
+                vertices.append((monom[1]-skirt, monom[0]-skirt)) # (x,y) in Cartesian coordinate
+            if monom[1] == skirt:
+                break
+
+        # remove the vertices above the line
+        k , b = - vertices[-1][1] / vertices[0][0] , vertices[-1][1] # y = kx + b
+        vertices = [vertices[0]]\
+                + [vertex for vertex in vertices[1:-1] if vertex[1] < k*vertex[0] + b]\
+                + [vertices[-1]]
+
+        if len(vertices) > 2:
+            hull = ConvexHull(vertices, incremental = False)
+            vertices = [vertices[i] for i in hull.vertices] # counterclockwise
+
+        # place the y-axis in the front
+        i = vertices.index((0, b))
+        vertices = vertices[i:] + vertices[:i]
+        # print(vertices)
+
+        # check each point whether in the convex hull
+        i = -1
+        for x in range(vertices[-1][0] + 1):
+            if x > vertices[i+1][0]:
+                i = i + 1
+                k = (vertices[i][1] - vertices[i+1][1]) / (vertices[i][0] - vertices[i+1][0])
+                b = vertices[i][1] - k * vertices[i][0]
+            # (x, y) = a^(skirt+y) b^(skirt+x) c^(n-2skirt-x-y)  (y < kx + b) is outside the convex hull
+            t = skirt + x
+            for y in range(skirt, skirt+ceiling(k * x + b - 1e-10)):
+                convex_hull[(y, t, n-t-y)] = False
+                convex_hull[(t, n-t-y, y)] = False
+                convex_hull[(n-t-y, y, t)] = False
+
+    # outside the skirt is outside the convex hull
+    for k in range(skirt):
+        for i in range(k, (n-k)//2 + 1):
+            t = n - i - k
+            convex_hull[(i, t, k)] = False
+            convex_hull[(i, k, t)] = False
+            convex_hull[(k, i, t)] = False
+            convex_hull[(k, t, i)] = False
+            convex_hull[(t, i, k)] = False
+            convex_hull[(t, k, i)] = False
+    
+    vertices = [(skirt+y, skirt+x, n-2*skirt-x-y) for x, y in vertices]
+    vertices += [(j,k,i) for i,j,k in vertices] + [(k,i,j) for i,j,k in vertices]
+    vertices = set(vertices)
+    return convex_hull, vertices
