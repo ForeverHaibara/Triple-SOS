@@ -66,10 +66,7 @@ def SumOfSquare():
         RootTangent(tg) for tg in req['tangents'].split('\n') if len(tg) > 0
     ]
 
-    if req['use_structural_method']:
-        method_order = ['StructuralSOS', 'LinearSOS']
-    else:
-        method_order = ['LinearSOS']
+    method_order = [key for key, value in req['methods'].items() if value]
 
     solution = app.SOS_Manager.sum_of_square(method_order = method_order)
 
