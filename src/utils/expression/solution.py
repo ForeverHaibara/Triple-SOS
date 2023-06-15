@@ -155,7 +155,7 @@ class Solution():
         numerator, multiplier = sp.fraction(sp.together(self.solution))
     
         if multiplier.is_constant():
-            const, multiplier = const, S.One
+            const, multiplier = S.One, multiplier
         else:
             const, multiplier = multiplier.as_coeff_Mul()
 
@@ -207,7 +207,7 @@ class SolutionSimple(Solution):
     @property
     def is_equal(self):
         if self.is_equal_ is None:
-            symbols = set(self.problem.symbols) # | set(self.numerator.free_symbols) | set(self.multiplier.free_symbols)
+            symbols = set(self.problem.gens) # | set(self.numerator.free_symbols) | set(self.multiplier.free_symbols)
             difference = (self.problem  * self.multiplier - self.numerator)
             difference = difference.doit().as_poly(*symbols)
             self.is_equal_ = difference.is_zero
@@ -382,6 +382,7 @@ class SolutionSimple(Solution):
         return s
 
 
+
 def congruence(M):
     """
     Write a symmetric matrix as a sum of squares.
@@ -393,6 +394,8 @@ def congruence(M):
         Upper triangular matrix.
     S : np.ndarray
         Diagonal vector (1D array).
+
+    Return None if M is not positive semidefinite.
     """
     M = M.copy()
     n = M.shape[0]
@@ -408,9 +411,16 @@ def congruence(M):
             U[i,i+1:] = M[i,i+1:] / (S[i])
             U[i,i] = One
             M[i+1:,i+1:] -= U[i:i+1,i+1:].T @ (U[i:i+1,i+1:] * S[i])
+        elif M[i,i] < 0:
+            return None
+        elif M[i,i] == 0 and any(_ for _ in M[i+1:,i]):
+            return None
     U[-1,-1] = One
     S[-1] = M[-1,-1]
+    if S[-1] < 0:
+        return None
     return U, S
+
 
 
 def congruence_as_sos(M, multiplier = S.One, symbols = 'a b c', cancel = True, cyc = True):
