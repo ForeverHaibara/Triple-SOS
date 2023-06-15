@@ -4,6 +4,7 @@ import sympy as sp
 
 from .linsos import LinearSOS
 from .structsos import StructuralSOS
+from .symsos import SymmetricSOS
 
 from ..utils.polytools import deg, verify_hom_cyclic
 from ..utils.expression.solution import Solution
@@ -11,16 +12,20 @@ from ..utils.roots import RootsInfo, findroot
 
 NAME_TO_METHOD = {
     'LinearSOS': LinearSOS,
-    'StructuralSOS': StructuralSOS
+    'StructuralSOS': StructuralSOS,
+    'SymmetricSOS': SymmetricSOS
 }
 
-METHOD_ORDER = ['StructuralSOS', 'LinearSOS']
+METHOD_ORDER = ['StructuralSOS', 'LinearSOS', 'SymmetricSOS']
 
 DEFAULT_CONFIGS = {
     'LinearSOS': {
 
     },
     'StructuralSOS': {
+
+    },
+    'SymmetricSOS': {
 
     }
 }
@@ -55,7 +60,6 @@ def sum_of_square(
         method = NAME_TO_METHOD[method]
 
         solution = method(poly, rootsinfo=rootsinfo, **config)
-
         if solution is not None:
             return solution
 
