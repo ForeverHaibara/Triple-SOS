@@ -22,7 +22,7 @@ class SOS_Manager():
             'ishom': False,
             'iscyc': False,
             'isfrac': False,
-            'grid': None,
+            'grid': self._zero_grid,
             'deg': 0,
         }
 
