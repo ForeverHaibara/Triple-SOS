@@ -1,9 +1,11 @@
 import numpy as np
 import sympy as sp
 
+from .findroot import findroot_resultant
 from ...utils.basis_generator import generate_expr
+from ...utils.polytools import convex_hull_poly, deg
 from ...utils.roots.tangents import uv_from_root
-from ...utils.roots.roots import Root
+from ...utils.roots.roots import Root, RootRational
 from ...utils.roots.rootsinfo import RootsInfo
 
 _ROOT_FILTERS = {
@@ -13,8 +15,16 @@ _ROOT_FILTERS = {
     (1,1,1): lambda r: r[0] != 0 and r[1] != 0 and r[2] != 0,
 }
 
+_REDUCE_KWARGS = {
+    (0, 'major'): {'monom_add': (0,0,0), 'cyc': False},
+    (0, 'minor'): {'monom_add': (1,1,0), 'cyc': True},
+    (1, 'major'): {'monom_add': (1,0,0), 'cyc': True},
+    (1, 'minor'): {'monom_add': (1,1,1), 'cyc': False},
+}
+
 def _all_roots_space(rootsinfo, n, monom_add = (0,0,0), root_filter = None, convex_hull = None):
     """
+    Drepecated.
     """
     # if not hasattr(root_filter, '__call__'):
     if root_filter is None:
@@ -25,7 +35,7 @@ def _all_roots_space(rootsinfo, n, monom_add = (0,0,0), root_filter = None, conv
     for root in filter(root_filter, rootsinfo.strict_roots):
         if not isinstance(root, Root):
             root = Root(root)
-        uv = root.uv
+        uv = root.uv()
         is_handled = handled.get(uv, False)
         if is_handled:
             continue
@@ -39,6 +49,9 @@ def _all_roots_space(rootsinfo, n, monom_add = (0,0,0), root_filter = None, conv
 
 
 def _perp_space(rootsinfo, n, monom_add = (0,0,0), convex_hull = None):
+    """
+    Deprecated.
+    """
     if isinstance(rootsinfo, RootsInfo):
         space = _all_roots_space(rootsinfo, n, monom_add = monom_add, convex_hull = convex_hull).T
     else:
@@ -103,6 +116,101 @@ def _hull_space(n, convex_hull = None, monom_add = (0,0,0)):
 
     return space
 
+
+class RootSubspace():
+    def __init__(self, poly):
+        self.poly = poly
+        self.n = deg(poly)
+        self.convex_hull = convex_hull_poly(poly)[0]
+        self.roots = findroot_resultant(poly)
+        self.roots = [r for r in self.roots if not r.is_corner]
+        self.subspaces_ = {}
+
+    def subspaces(self, n, positive = False):
+        if not positive:
+            if n not in self.subspaces_:
+                subspaces = []
+                for root in self.roots:
+                    if not root.is_corner:
+                        subspaces.append(root.span(n))
+                self.subspaces_[n] = subspaces
+            return self.subspaces_[n]
+
+        # if positive == True, we filter out the negative roots
+        subspaces = self.subspaces(n, positive = False)
+        subspaces_positive = []
+        for r, subspace in zip(self.roots, subspaces):
+            if r.root[0] >= 0 and r.root[1] >= 0 and r.root[2] >= 0:
+                subspaces_positive.append(subspace)
+        return subspaces_positive
+
+    @property
+    def positive_roots(self):
+        return [r for r in self.roots if r.root[0] >= 0 and r.root[1] >= 0 and r.root[2] >= 0]
+
+    def perp_space(self, minor = 0, positive = True):
+
+        # if we only perform SOS over positive numbers,
+        # we filter out the negative roots
+        subspaces = self.subspaces(self.n // 2 - minor, positive = positive)
+
+        monom_add = _REDUCE_KWARGS[(self.n % 2, 'minor' if minor else 'major')]['monom_add']
+        if sum(monom_add):
+            subspaces_filtered = []
+            # filter roots on border
+            monoms = generate_expr(self.n // 2 - minor, cyc = False)[0]
+            for root, subspace in zip(self.positive_roots, subspaces):
+                if not root.is_border:
+                    subspaces_filtered.append(subspace)
+                    continue
+                if sum(monom_add) == 3:
+                    # filter out all columns
+                    continue
+                reserved_cols = []
+                for i in range(subspace.shape[1]):
+                    # check each column
+                    nonzero_monom = [0, 0, 0]
+                    for monom, j in zip(monoms, range(subspace.shape[0])):
+                        if subspace[j, i] != 0:
+                            for k in range(3):
+                                if monom[k] != 0:
+                                    nonzero_monom[k] = 1
+                    # if nonzero_monom[k] == 0
+                    # it means that (a,b,c)[k] == 0 in this root
+                    for k in range(3):
+                        if monom_add[k] == 1 and nonzero_monom[k] == 0:
+                            # filter out this column
+                            break
+                    else:
+                        reserved_cols.append(i)
+                subspaces_filtered.append(subspace[:, reserved_cols])
+        
+            subspaces = subspaces_filtered
+                    
+
+        subspaces += self.hull_space(minor)
+        space = sp.Matrix.hstack(*subspaces).T
+
+        n = space.shape[1]
+        Q = sp.Matrix(space.nullspace())
+        Q = Q.reshape(Q.shape[0] // n, n).T
+
+        # normalize to keep numerical stability
+        reg = np.max(np.abs(Q), axis = 0)
+        reg = 1 / np.tile(reg, (Q.shape[0], 1))
+        reg = sp.Matrix(reg)
+        Q = Q.multiply_elementwise(reg)
+
+        return Q
+
+    def hull_space(self, minor = 0):
+        monom_add = _REDUCE_KWARGS[(self.n % 2, 'minor' if minor else 'major')]['monom_add']
+        return _hull_space(self.n // 2 - minor, self.convex_hull, monom_add = monom_add)
+
+    def __str__(self):
+        return 'Subspace [\n    roots = %s\n    uv    = %s\n]'%(
+            self.roots, [_.uv() for _ in self.roots]
+        )
 
 class LowRankHermitian():
     """

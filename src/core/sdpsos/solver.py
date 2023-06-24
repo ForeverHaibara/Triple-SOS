@@ -231,7 +231,7 @@ def _sdp_solver(sos, x0, space, splits, objectives = None, verbose = False):
     y = np.array(ys).mean(axis = 0)
 
     lcm = max(1260, sp.prod(set.union(*[set(sp.primefactors(_.q)) for _ in space])))
-    times = int(10 / np.log10(lcm) + 3)
+    times = int(10 / sp.log(lcm, 10).n(15) + 3)
     for y_rational in rationalize_simutaneously(y, lcm, times = times):
         if verify_is_pretty(y_rational):
             decompositions = verify_is_positive(x0 + space * y_rational, splits)
