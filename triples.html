@@ -42,6 +42,10 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
             <input class="form-check-input" type="checkbox" value="" id="setting_method_use_SymmetricSOS" checked>
             <label class="form-check-label" for="setting_method_use_SymmetricSOS">Use Symmetric SOS</label>
         </div>
+        <div class="form-check" style="margin-top: 5px">
+            <input class="form-check-input" type="checkbox" value="" id="setting_method_use_SDPSOS" checked>
+            <label class="form-check-label" for="setting_method_use_SDPSOS">Use SDP SOS</label>
+        </div>
         <!-- <input type="checkbox" id="setting_method_use_StructuralSOS" checked="checked" style="font-size: 14px; margin-top: 10px; width: 80%" >&nbsp; Use Structural SOS</input>
         <input type="checkbox" id="setting_method_use_LinearSOS" checked="checked" style="font-size: 14px; margin-top: 10px; width: 80%" >&nbsp; Use Linear SOS</input>
         <input type="checkbox" id="setting_method_use_SymmetricSOS" checked="checked" style="font-size: 14px; margin-top: 10px; width: 80%" >&nbsp; Use Symmetric SOS</input> -->
@@ -356,6 +360,7 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
                 StructuralSOS: document.getElementById("setting_method_use_StructuralSOS").checked,
                 LinearSOS: document.getElementById("setting_method_use_LinearSOS").checked,
                 SymmetricSOS: document.getElementById("setting_method_use_SymmetricSOS").checked,
+                SDPSOS: document.getElementById("setting_method_use_SDPSOS").checked,
             }
             axios.post('http://127.0.0.1:5000/process/sos',{
                 poly: input_poly, tangents: tangents, methods: methods}
