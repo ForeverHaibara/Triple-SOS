@@ -126,6 +126,28 @@ def SDPSOS(
     """
     Solve a polynomial SOS problem with SDP.
 
+    Although the theory of numerical solution to sum of squares using SDP (semidefinite programming)
+    is well established, there exists certain limitations in practice. One of the most major
+    concerns is that we need accurate, rational solution rather a numerical one. One might argue 
+    that SDP is convex and we could perturb a solution to get a rational, interior one. However,
+    this is not always the case. If the feasible set of SDP is convex but not full-rank, then
+    our solution might be on the boundary of the feasible set. In this case, perturbation does
+    not work.
+
+    To handle the problem, we need to derive the true low-rank subspace of the feasible set in advance
+    and perform SDP on the subspace. Take Vasile's inequality as an example, s(a^2)^2 - 3s(a^3b) >= 0
+    has four equality cases. If it can be written as a positive definite matrix M, then we have
+    x'Mx = 0 at these four points. This leads to Mx = 0 for these four vectors. As a result, the 
+    semidefinite matrix M lies on a subspace perpendicular to these four vectors. We can assume 
+    M = QSQ' where Q is the nullspace of the four vectors x, so that the problem is reduced to find S.
+
+    Hence the key problem is to find the root and construct such Q. Also, in our algorithm, the Q
+    is constructed as a rational matrix, so that a rational solution to S converts back to a rational
+    solution to M. We must note that the equality cases might not be rational as in Vasile's inequality.
+    However, the cyclic sum of its permutations is rational. So we can use the linear combination of 
+    x and its permutations, which would be rational, to construct Q. This requires knowledge of 
+    algebraic numbers and minimal polynomials.
+
     Parameters
     ----------
     poly : sp.Poly
@@ -166,7 +188,8 @@ def SDPSOS(
                 collection = _sdp_sos(
                     poly, manifold, minor = minor_, cyclic_constraint = cyclic_constraint, verbose = verbose
                 )
-                if isinstance(collection['M']['major'], sp.Matrix):
+                if isinstance(collection['M']['major'], sp.Matrix) or\
+                    isinstance(collection['M']['minor'], sp.Matrix):
                     return create_solution_from_M(
                         collection['poly'], 
                         collection['M']
