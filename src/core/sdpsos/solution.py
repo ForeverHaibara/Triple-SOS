@@ -12,8 +12,16 @@ class SolutionSDP(SolutionSimple):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+    @property
+    def is_equal(self):
+        return True
 
-def _matrix_as_expr(M, multiplier, cyc = True, cancel = True):
+def _matrix_as_expr(
+        M: sp.Matrix, 
+        multiplier: sp.Expr, 
+        cyc: bool = True, 
+        cancel: bool = True
+    ) -> sp.Expr:
     """
     Helper function to rewrite a single semipositive definite matrix 
     to sum of squares.
@@ -22,17 +30,19 @@ def _matrix_as_expr(M, multiplier, cyc = True, cancel = True):
     ----------
     M : sp.Matrix
         The matrix to be rewritten.
-
     multiplier : sp.Expr
         The multiplier of the expression. For example, if `M` represents 
         `(a^2-b^2)^2 + (a^2-2ab+c^2)^2` while `multiplier = ab`, 
         then the result should be `ab(a^2-b^2)^2 + ab(a^2-2ab+c^2)^2`.
-
     cyc : bool
         Whether add a cyclic sum to the expression. Defaults to True.
-
     cancel : bool
-        Whether cancel the denominator of the expression. Defaults to True. 
+        Whether cancel the denominator of the expression. Defaults to True.
+
+    Returns
+    -------
+    sp.Expr
+        The expression of matrix as sum of squares.
     """
     degree = round((2*M.shape[0] + .25)**.5 - 1.5)
 
@@ -65,7 +75,7 @@ def create_solution_from_M(
         poly: sp.Expr,
         Ms: Dict[str, sp.Matrix],
         cancel: bool = True
-    ):
+    ) -> SolutionSDP:
     """
     Create SDP solution from symmetric matrices.
 
@@ -73,13 +83,16 @@ def create_solution_from_M(
     ----------
     poly : sp.Expr
         The polynomial to be solved.
-
     Ms : Dict[sp.Matrix]
         The symmetric matrices. `Ms` should have keys 'major', 'minor' and 
         'multiplier'.
-
     cancel : bool, optional
         Whether to cancel the denominator. The default is True.
+
+    Returns
+    -------
+    SolutionSDP
+        The SDP solution.
     """
     degree = deg(poly)
 

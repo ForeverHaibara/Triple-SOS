@@ -174,7 +174,11 @@ def _findroot_resultant(poly):
     # roots on the border might not be local minima
     poly_border = poly.subs(a, 0)
     grad_border = poly_border.diff(b)
-    factors |= set(sp.polys.gcd(poly_border, grad_border).factor_list()[1])
+    factors_border = set(sp.polys.gcd(poly_border, grad_border).factor_list()[1])
+    if len(factors_border):
+        # conjugate factors, b = 0
+        factors_border.add((sp.Poly([1,0], b), len(factors_border)))
+    factors |= factors_border
     factors = list(factors)
 
     pairs = _findroot_resultant_root_pairs(poly, factors)
@@ -272,9 +276,6 @@ def _findroot_resultant(poly):
                 roots.append(RootAlgebraic(u, v, K = sp.QQ.algebraic_field(sp.sqrt(core))))
                 # print(u1, v1, u2, v2)
         elif i != j:
-            # if both linear -> rational
-            # if one linear, one quadratic -> rational
-            # if both quadratic -> pass
             fx, fy = factors[i][0], factors[j][0]
             # reverse fx
             fx = sp.Poly(fx.all_coeffs()[::-1], fy.gens[0])
@@ -339,8 +340,7 @@ def findroot_resultant(poly):
 
     TODO:
     1. Handle the case where the polynomial is cubic.
-    2. Optimize the speed deciding u, v from s(a2b).
-    3. Optimize the speed by removing redundant permuations.
+    2. Optimize the speed by removing redundant permuations.
 
     Parameters
     ----------

@@ -1,4 +1,5 @@
 from typing import List, Optional
+from contextlib import contextmanager
 
 import numpy as np
 import sympy as sp
@@ -34,6 +35,12 @@ def rationalize_matrix(M, mask_func = None, symmetric = True):
                 M_[i,j] = rationalize(M[i,j], reliable = True)
 
     return M_
+
+def _discard_zero_rows(A, b, rank_tolerance = 1e-10):
+    A_rowmax = np.abs(A).max(axis = 1)
+    nonvanish =  A_rowmax > rank_tolerance * A_rowmax.max()
+    rows = np.extract(nonvanish, np.arange(len(nonvanish)))
+    return A[rows], b[rows]
 
 
 def upper_vec_of_symmetric_matrix(S, return_inds = False, check = None):
@@ -167,3 +174,20 @@ def split_vector(constraints: List[sp.Matrix]):
             splits.append(slice(split_start, split_start + constraint.shape[1]))
             split_start += constraint.shape[1]
     return splits
+
+
+@contextmanager
+def indented_print(indent = 4, indent_fill = ' '):
+    """
+    Every print in this context will be indented by some spaces.
+    """
+    import builtins
+    old_print = print
+    indent_str = indent_fill * indent
+    def new_print(*args, **kwargs):
+        old_print(indent_str, end = '')
+        old_print(*args, **kwargs)
+
+    builtins.print = new_print
+    yield
+    builtins.print = old_print

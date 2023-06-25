@@ -204,8 +204,26 @@ class RootSubspace():
         return Q
 
     def hull_space(self, minor = 0):
+        """
+        For example, if s(a4b2+4a4c2+4a3b3-6a3b2c-12a3bc2+9a2b2c2) can be written as
+        sum of squares, then there would not be the term (a^3 + ...)^2.
+
+        This is because a^6 is out of the convex hull of the polynomial. We should 
+        constraint the coefficients of a^3 to be zero.
+        """
         monom_add = _REDUCE_KWARGS[(self.n % 2, 'minor' if minor else 'major')]['monom_add']
         return _hull_space(self.n // 2 - minor, self.convex_hull, monom_add = monom_add)
+
+    def cyclic_space(self, minor = 0):
+        """
+        If monom_add['cyc'] is False, we can impose additional cyclic constraints.
+        """
+        monom_add = _REDUCE_KWARGS[(self.n % 2, 'minor' if minor else 'major')]['monom_add']
+        if monom_add['cyc']:
+            return []
+
+        monoms = generate_expr(self.n // 2 - minor, cyc = False)[0]
+        return []
 
     def __str__(self):
         return 'Subspace [\n    roots = %s\n    uv    = %s\n]'%(

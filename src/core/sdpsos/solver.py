@@ -3,7 +3,6 @@ from typing import List, Optional, Tuple, Callable
 import numpy as np
 import sympy as sp
 
-sp.Matrix.LDLdecomposition
 from .rationalize import (
     rationalize, rationalize_with_mask, rationalize_simutaneously,
     verify_is_pretty, verify_is_positive, congruence
@@ -167,6 +166,13 @@ def _sdp_solver(sos, x0, space, splits, objectives = None, verbose = False):
         of `(S, U, diag)` where `S = U.T * diag(diag) * U` where `U` is upper triangular
         and `diag` is a diagonal matrix.
     """
+    try:
+        import picos
+    except ImportError:
+        if verbose:
+            print('Cannot import picos, please use command "pip install picos" to install it.')
+        return None
+
     if objectives is None:
         # x = np.random.random((6,6))
         # objectives = [('max', lambda sos: sos.variables['S_0']|x)]
@@ -194,7 +200,12 @@ def _sdp_solver(sos, x0, space, splits, objectives = None, verbose = False):
         solution = _sos_early_stop(sos)
 
         if solution is not None:
-            y = solution.primals[sos.variables['y']]
+            try:
+                y = solution.primals[sos.variables['y']]
+            except KeyError:
+                if verbose:
+                    print('Cannot find numerical solution for y.')
+                return None
 
             # NOTE: PICOS uses a different vectorization of symmetric matrices
             #       (off-diagonal elements are divided by sqrt(2))
@@ -239,15 +250,15 @@ def _sdp_solver(sos, x0, space, splits, objectives = None, verbose = False):
                 return y_rational, decompositions
 
     if verbose:
-        print('Failed to find a rational solution despite having a mixed solution.\n'
-              'Try to specify the lcm parameter for simutaneous rationalization.\n'
+        print('Failed to find a rational solution despite having a numerical solution. '
+              'Try other multipliers might be useful. '
               'Currently using lcm = %d, times = %d'%(lcm, times))
-        print('The mixed solution is:\n')
-        for y in ys:
-            y = x0 + space * sp.Matrix(y.flatten().tolist())
-            for split in splits:
-                M = LowRankHermitian(None, sp.Matrix(y[split]).n(20)).S
-                print('Eigenvals =', M.eigenvals(), '\n', M)
+        # print('The mixed solution is:\n')
+        # for y in ys:
+        #     y = x0 + space * sp.Matrix(y.flatten().tolist())
+        #     for split in splits:
+        #         M = LowRankHermitian(None, sp.Matrix(y[split]).n(20)).S
+        #         print('Eigenvals =', M.eigenvals(), '\n', M)
 
     return None
 
@@ -305,6 +316,9 @@ def sdp_solver(
     """
     if not isinstance(keys, list):
         keys = list(keys) # avoid troubles of iterator
+
+    if verbose:
+        print('Degree of freedom: %d'%space.shape[1])
 
     if space.shape[1] > 0:
         sos, y = _sdp_constructor(x0, space, splits, keys, reg = reg)
