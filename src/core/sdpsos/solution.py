@@ -50,9 +50,12 @@ def _matrix_as_expr(
     monoms = generate_expr(degree, cyc = 0)[1]
 
     if not cyc:
-        as_cyc = lambda x: x
+        as_cyc = lambda x: multiplier * x
     else:
-        as_cyc = lambda x: CyclicSum(x)
+        if multiplier == CyclicProduct(a):
+            as_cyc = lambda x: multiplier * CyclicSum(x)
+        else:
+            as_cyc = lambda x: CyclicSum(multiplier * x)
 
     expr = sp.S(0)
     U, S = congruence(M)
@@ -66,7 +69,7 @@ def _matrix_as_expr(
         for j in range(i, len(monoms)):
             monom = monoms[j]
             val += U[i,j] / r * a**monom[0] * b**monom[1] * c**monom[2]
-        expr += (s * r**2) * as_cyc(multiplier * val**2)
+        expr += (s * r**2) * as_cyc(val**2)
 
     return expr
     
