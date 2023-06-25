@@ -1,107 +1,15 @@
-from math import ceil as ceiling
+"""
+Experimemntal File. DO NOT USE.
+"""
+
 from itertools import product
 
 import sympy as sp
 import numpy as np
-from scipy.spatial import ConvexHull
 
-from ...utils.text_process import PreprocessText, next_permute, cycle_expansion, deg
-from ...utils.root_guess import rationalize, square_perturbation
+from ...utils.text_process import preprocess_text, next_permute
+from ...utils.polytools import convex_hull_poly
 
-def _merge_sos_results(multipliers, y, names, result, abc = False, keepdeg = False):
-    """
-    Merge SOS results in DFS.
-
-    Params
-    -------
-    abc: bool
-        If abc == True, then multiply each term from new result by abc.
-    
-    keepdeg: bool
-        If keepdeg == True, then multiply each term from new result by multipliers.
-    """
-    if result is None or result[1] is None:
-        return None, None, None
-    if y is None:
-        y = []
-        names = []
-    if multipliers is None:
-        multipliers = []
-
-    # (multipliers * f - y * names )  *  m' == y' * names'
-    m2 , y2 , names2 = result
- 
-    y = y + y2
-
-    # names: e.g.  m2 = ['a','a^2'] -> names = ['(a+b+c)*(a^2+b^2+c^2)'*...]
-    if len(m2) > 0:
-        for i in range(len(names)):
-            if names[i][0] != '(' or names[i][-1] != ')':
-                names[i] = '(' + names[i] + ')'
-            for m in m2:
-                names[i] = '('+m+'+'+next_permute(m)+'+'+next_permute(next_permute(m))+')*' + names[i]
-    
-    if keepdeg:
-        for i in range(len(names2)):
-            if names2[i][0] != '(' or names2[i][-1] != ')':
-                names2[i] = '(' + names2[i] + ')'
-            for m in multipliers:
-                names2[i] = '('+m+'+'+next_permute(m)+'+'+next_permute(next_permute(m))+')*' + names2[i]
-
-    if abc:
-        for i in range(len(names2)):
-            if names2[i][0] != '(' or names2[i][-1] != ')':
-                names2[i] = '(' + names2[i] + ')'
-            names2[i] = 'a*b*c*' + names2[i]
-
-    multipliers += m2
-    names = names + names2
-
-    return multipliers, y, names
-
-
-def _make_coeffs_helper(poly, degree):
-    coeffs = {}
-    for coeff, monom in zip(poly.coeffs(), poly.monoms()):
-        if degree > 4 and not isinstance(coeff, sp.Rational): #isinstance(coeff, sp.Float):
-            coeff = sp.Rational(*rationalize(coeff, reliable = True))
-            # coeff = coeff.as_numer_denom()
-        coeffs[monom] = coeff
-
-    def coeff(x):
-        t = coeffs.get(x)
-        if t is None:
-            return sp.S(0)
-        return t
-
-    return coeff, coeffs
-
-
-def _try_perturbations(
-        poly,
-        degree,
-        multipliers,
-        a,
-        b,
-        base,
-        name: str,
-        recurrsion = None,
-        times = 4,
-        **kwargs
-    ):
-    subtractor = sp.polys.polytools.Poly(cycle_expansion(name))
-    
-    for t in square_perturbation(a, b, times = times):
-        y = [t * base]
-        names = [name]
-        poly2 = poly - y[0] * subtractor
-        multipliers, y , names = _merge_sos_results(
-            multipliers, y, names, recurrsion(poly2, degree, **kwargs)
-        )
-        if y is not None:
-            break
-
-    return multipliers, y, names
 
 
 class FastPositiveChecker():
@@ -186,7 +94,7 @@ class FastPositiveChecker():
 
 
 def search_positive(poly_str: str):
-    poly = PreprocessText(poly_str)
+    poly = preprocess_text(poly_str)
     
     fpc = FastPositiveChecker()
     fpc.setPoly(poly)
@@ -242,73 +150,7 @@ def search_positive(poly_str: str):
     return result
 
 
-def convex_hull_poly(poly):
-    """
-    Compute the convex hull of a polynomial
-    """
-    monoms = poly.monoms()[::-1]
-    
-    n = sum(monoms[0])    # degree
-    skirt = monoms[0][0]  # when (abc)^n | poly, then skirt = n
-    # print(skirt)
 
-    convex_hull = [(i, j, n-i-j) for i , j in product(range(n+1), repeat = 2) if i+j <= n]
-    convex_hull = dict(zip(convex_hull, [True for i in range((n+1)*(n+2)//2)]))
-
-    vertices = [(monoms[0][1]-skirt, monoms[0][0]-skirt)]
-    if vertices[0][0] != 0:
-        line = skirt
-        for monom in monoms:
-            if monom[0] > line:
-                line = monom[0]
-                vertices.append((monom[1]-skirt, monom[0]-skirt)) # (x,y) in Cartesian coordinate
-            if monom[1] == skirt:
-                break
-
-        # remove the vertices above the line
-        k , b = - vertices[-1][1] / vertices[0][0] , vertices[-1][1] # y = kx + b
-        vertices = [vertices[0]]\
-                + [vertex for vertex in vertices[1:-1] if vertex[1] < k*vertex[0] + b]\
-                + [vertices[-1]]
-
-        if len(vertices) > 2:
-            hull = ConvexHull(vertices, incremental = False)
-            vertices = [vertices[i] for i in hull.vertices] # counterclockwise
-
-        # place the y-axis in the front
-        i = vertices.index((0, b))
-        vertices = vertices[i:] + vertices[:i]
-        # print(vertices)
-
-        # check each point whether in the convex hull
-        i = -1
-        for x in range(vertices[-1][0] + 1):
-            if x > vertices[i+1][0]:
-                i = i + 1
-                k = (vertices[i][1] - vertices[i+1][1]) / (vertices[i][0] - vertices[i+1][0])
-                b = vertices[i][1] - k * vertices[i][0]
-            # (x, y) = a^(skirt+y) b^(skirt+x) c^(n-2skirt-x-y)  (y < kx + b) is outside the convex hull
-            t = skirt + x
-            for y in range(skirt, skirt+ceiling(k * x + b - 1e-10)):
-                convex_hull[(y, t, n-t-y)] = False
-                convex_hull[(t, n-t-y, y)] = False
-                convex_hull[(n-t-y, y, t)] = False
-
-    # outside the skirt is outside the convex hull
-    for k in range(skirt):
-        for i in range(k, (n-k)//2 + 1):
-            t = n - i - k
-            convex_hull[(i, t, k)] = False
-            convex_hull[(i, k, t)] = False
-            convex_hull[(k, i, t)] = False
-            convex_hull[(k, t, i)] = False
-            convex_hull[(t, i, k)] = False
-            convex_hull[(t, k, i)] = False
-    
-    vertices = [(skirt+y, skirt+x, n-2*skirt-x-y) for x, y in vertices]
-    vertices += [(j,k,i) for i,j,k in vertices] + [(k,i,j) for i,j,k in vertices]
-    vertices = set(vertices)
-    return convex_hull, vertices
 
 
 

@@ -1,22 +1,22 @@
-from math import gcd
-
 import sympy as sp
 
+from .utils import CyclicSum, CyclicProduct, _sum_y_exprs, _try_perturbations
 from ...utils.text_process import cycle_expansion
-from ...utils.root_guess import rationalize, optimize_determinant
-from .peeling import _merge_sos_results, _try_perturbations, FastPositiveChecker
+from ...utils.roots.findroot import optimize_discriminant
 
-def _sos_struct_octic(poly, degree, coeff, recurrsion):
-    multipliers, y, names = [], None, None
+
+
+def sos_struct_octic(poly, coeff, recurrsion):
+    a, b, c = sp.symbols('a b c')
 
     if coeff((8,0,0))==0 and coeff((7,1,0))==0 and coeff((7,0,1))==0 and coeff((6,2,0))==0 and\
         coeff((6,1,1))==0 and coeff((6,0,2))==0:
 
         # equivalent to degree-7 hexagon when applying (a,b,c) -> (1/a,1/b,1/c)
-        poly2 = f'{coeff((0,3,5))}*a^5*b^2+{coeff((1,2,5))}*a^4*b^3+{coeff((2,1,5))}*a^3*b^4+{coeff((3,0,5))}*a^2*b^5+{coeff((3,3,2))}*a^2*b^2*c^3'
-        poly2 += f'+{coeff((0,4,4))}*a^5*b*c+{coeff((1,3,4))}*a^4*b^2*c+{coeff((2,2,4))}*a^3*b^3*c+{coeff((3,1,4))}*a^2*b^4*c'
-        poly2 = sp.polys.polytools.Poly(cycle_expansion(poly2))
-        result = recurrsion(poly2, 7)
+        poly2 = coeff((0,3,5))*a**5*b**2 + coeff((1,2,5))*a**4*b**3 + coeff((2,1,5))*a**3*b**4 + coeff((3,0,5))*a**2*b**5\
+                + coeff((3,3,2))*a**2*b**2*c**3+coeff((0,4,4))*a**5*b*c+coeff((1,3,4))*a**4*b**2*c+coeff((2,2,4))*a**3*b**3*c+coeff((3,1,4))*a**2*b**4*c
+        poly2 = CyclicSum(poly2).doit().as_poly(a,b,c)
+        solution = recurrsion(poly2)
         if False:
             if coeff((5,1,2))==0 and coeff((5,2,1))==0:
                 # equivalent to degree-4 polynomial with respect to ab, bc, ca
@@ -92,20 +92,41 @@ def _sos_struct_octic(poly, degree, coeff, recurrsion):
                     name = 'a*b*c*(a*b+b*c+c*a)*a*(a-b)*(a-c)'
                     multipliers, y, names = _try_perturbations(poly, degree, multipliers, a, b,
                                                             coeff((5,2,1))/b, name, recurrsion = recurrsion)
-        
-        if result is not None:
-            multipliers, y, names = result
-            if len(multipliers) == 0:
-                for i in range(len(names)):
-                    names[i] = names[i].replace('a', '(1/a)').replace('b', '(1/b)').replace('c', '(1/c)')
-                    names[i] = '(' + names[i] + ')*a^5*b^5*c^5'
-                    name2 = sp.factor(sp.sympify(names[i]))
-                    name2, denominator = sp.fraction(name2)
-                    names[i] = str(name2).replace('**','^')
-                    if isinstance(y[i], sp.Expr):
-                        y[i] = y[i] / denominator
-                    elif y[i][0] != 0: # y[i] is tuple
-                        d = gcd(denominator, y[i][0])
-                        y[i] = (y[i][0] // d, y[i][1] * (denominator // d))
-        
-    return multipliers, y, names
+
+        if solution is not None:
+            # unrobust method handling fraction
+            solution = sp.together(solution.xreplace({a:b*c,b:c*a,c:a*b}))
+
+            def _try_factor(expr):
+                if isinstance(expr, (sp.Add, sp.Mul, sp.Pow)):
+                    return expr.func(*[_try_factor(arg) for arg in expr.args])
+                elif isinstance(expr, CyclicSum):
+                    # Sum(a**3*b**2*c**2*(...)**2)
+                    if isinstance(expr.args[0], sp.Mul):
+                        args2 = expr.args[0].args
+                        symbol_degrees = {}
+                        other_args = []
+                        for s in args2:
+                            if s in (a,b,c):
+                                symbol_degrees[s] = 1
+                            elif isinstance(s, sp.Pow) and s.base in (a,b,c):
+                                symbol_degrees[s.base] = s.exp
+                            else:
+                                other_args.append(s)
+                        if len(symbol_degrees) == 3:
+                            degree = min(symbol_degrees.values())
+                            da, db, dc = symbol_degrees[a], symbol_degrees[b], symbol_degrees[c]
+                            da, db, dc = da - degree, db - degree, dc - degree
+                            other_args.extend([a**da, b**db, c**dc])
+                            return CyclicSum(sp.Mul(*other_args)) * CyclicProduct(a) ** degree
+                elif isinstance(expr, CyclicProduct):
+                    # Product(a**2) = Product(a) ** 2
+                    if isinstance(expr.args[0], sp.Pow) and expr.args[0].base in (a,b,c):
+                        return CyclicProduct(expr.args[0].base) ** expr.args[0].exp
+                return expr
+            
+            solution = sp.together(_try_factor(solution)) / CyclicProduct(a) ** 2
+            return solution
+
+
+    return None
