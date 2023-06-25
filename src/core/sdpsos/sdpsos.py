@@ -4,7 +4,7 @@ import sympy as sp
 
 from .utils import solve_undetermined_linear, split_vector, indented_print
 from .solver import sdp_solver
-from .manifold import RootSubspace, LowRankHermitian, _REDUCE_KWARGS
+from .manifold import RootSubspace, LowRankHermitian, _REDUCE_KWARGS, add_cyclic_constraints
 from .solution import create_solution_from_M, SolutionSDP
 from ...utils.basis_generator import arraylize, arraylize_sp
 from ...utils.polytools import deg
@@ -14,6 +14,7 @@ def _sdp_sos(
         poly: sp.Poly,
         manifold: RootSubspace = None,
         minor: bool = False,
+        cyclic_constraint = True,
         verbose: bool = True
     ) -> Optional[Dict]:
     """
@@ -35,7 +36,8 @@ def _sdp_sos(
         it might be in the form of \sum (...)^2 + \sum ab(...)^2. Note that we have an
         additional term in the latter, which is called the minor term. If we need to 
         add the minor term, please set minor = True.
-
+    cyclic_constraint : bool
+        Whether to add cyclic constraint the problem. This reduces the degree of freedom.
     verbose : bool
         If True, print the information of the problem.
     """
@@ -72,6 +74,12 @@ def _sdp_sos(
 
 
     vecM = arraylize_sp(poly, cyc = False)
+    collection['vecM'] = vecM
+
+    if cyclic_constraint:
+        collection = add_cyclic_constraints(collection)
+        vecM = collection['vecM']
+
     eq = sp.Matrix.hstack(*filter(lambda x: x is not None, collection['eq'].values()))
     # return collection['Q']
 
@@ -111,6 +119,7 @@ def SDPSOS(
         poly: sp.Poly,
         minor: Union[List[bool], bool] = [False, True],
         degree_limit: int = 12,
+        cyclic_constraint = True,
         verbose: bool = True,
         **kwargs
     ) -> Optional[SolutionSDP]:
@@ -132,6 +141,8 @@ def SDPSOS(
     degree_limit : int
         The maximum degree of the polynomial to be solved. When the degree is too high,
         return None.
+    cyclic_constraint : bool
+        Whether to add cyclic constraint the problem. This reduces the degree of freedom.
     verbose : bool
         If True, print the information of the problem.
     """
@@ -152,7 +163,9 @@ def SDPSOS(
 
         with indented_print():
             try:
-                collection = _sdp_sos(poly, manifold, minor_, verbose)
+                collection = _sdp_sos(
+                    poly, manifold, minor = minor_, cyclic_constraint = cyclic_constraint, verbose = verbose
+                )
                 if isinstance(collection['M']['major'], sp.Matrix):
                     return create_solution_from_M(
                         collection['poly'], 

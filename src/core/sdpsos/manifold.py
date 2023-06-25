@@ -4,8 +4,7 @@ import sympy as sp
 from .findroot import findroot_resultant
 from ...utils.basis_generator import generate_expr
 from ...utils.polytools import convex_hull_poly, deg
-from ...utils.roots.tangents import uv_from_root
-from ...utils.roots.roots import Root, RootRational
+from ...utils.roots.roots import Root
 from ...utils.roots.rootsinfo import RootsInfo
 
 _ROOT_FILTERS = {
@@ -336,7 +335,7 @@ class LowRankHermitian():
                     index = inv_monoms[new_monom]
                     QQ_reduced[index, :] += self.QQ[i * m + j, :]
 
-        # also cancel diagonal entries
+        # also cancel symmetric entries
         QQ_reduced2 = []
         for i in range(k):
             QQ_reduced2.append(QQ_reduced[:, i * k + i])
@@ -345,3 +344,58 @@ class LowRankHermitian():
         QQ_reduced = sp.Matrix.hstack(*QQ_reduced2)
 
         return QQ_reduced
+
+
+def add_cyclic_constraints(collection):
+    """
+    If monom_add['cyc'] is False, we can impose additional cyclic constraints.
+    """
+    degree = deg(collection['poly'])
+
+    for key in ('major', 'minor'):
+        if collection['Q'][key] is None:
+            continue
+        reduced_kwargs = _REDUCE_KWARGS[(degree % 2, key)]
+        if reduced_kwargs['cyc']:
+            continue
+
+        # cyc == False
+        rows = []
+
+        inv_monoms, monoms = generate_expr(degree // 2 - (key == 'minor'), cyc = False)
+        m = len(monoms)
+        M = collection['M'][key]
+        for i1, (m1, n1, p1) in enumerate(monoms):
+            for j1, (m2, n2, p2) in enumerate(monoms[i1:], start = i1):
+                i2 = inv_monoms[(n1, p1, m1)]
+                if i2 <= i1:
+                    continue
+                j2 = inv_monoms[(n2, p2, m2)]
+                row = M.QQ[i1 * m + j1, :] - M.QQ[i2 * m + j2, :]
+                rows.append(row)
+
+        if len(rows):
+            rows = sp.Matrix.vstack(*rows)
+
+            # cancel symmetric entries
+            k = M.Q.shape[1]
+            QQ_reduced, QQ_reduced2 = rows, []
+            for i in range(k):
+                QQ_reduced2.append(QQ_reduced[:, i * k + i])
+                for j in range(i + 1, k):
+                    QQ_reduced2.append(QQ_reduced[:, i * k + j] + QQ_reduced[:, j * k + i])
+            rows = sp.Matrix.hstack(*QQ_reduced2)
+
+            collection['eq'][key] = sp.Matrix.vstack(collection['eq'][key], rows)
+
+            # align other components with zero matrices
+            for other_key in collection['eq'].keys():
+                if other_key == key or collection['eq'][other_key] is None:
+                    continue
+                collection['eq'][other_key] = sp.Matrix.vstack(
+                    collection['eq'][other_key], sp.zeros(rows.shape[0], collection['eq'][other_key].shape[1])
+                )
+            
+            collection['vecM'] = sp.Matrix.vstack(collection['vecM'], sp.zeros(rows.shape[0], 1))
+
+    return collection
