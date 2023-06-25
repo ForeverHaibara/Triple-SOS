@@ -5,6 +5,7 @@ import sympy as sp
 from .linsos import LinearSOS
 from .structsos import StructuralSOS
 from .symsos import SymmetricSOS
+from .sdpsos import SDPSOS
 
 from ..utils.polytools import deg, verify_hom_cyclic
 from ..utils.expression.solution import Solution
@@ -13,10 +14,11 @@ from ..utils.roots import RootsInfo, findroot
 NAME_TO_METHOD = {
     'LinearSOS': LinearSOS,
     'StructuralSOS': StructuralSOS,
-    'SymmetricSOS': SymmetricSOS
+    'SymmetricSOS': SymmetricSOS,
+    'SDPSOS': SDPSOS
 }
 
-METHOD_ORDER = ['StructuralSOS', 'LinearSOS', 'SymmetricSOS']
+METHOD_ORDER = ['StructuralSOS', 'LinearSOS', 'SymmetricSOS', 'SDPSOS']
 
 DEFAULT_CONFIGS = {
     'LinearSOS': {
@@ -26,6 +28,9 @@ DEFAULT_CONFIGS = {
 
     },
     'SymmetricSOS': {
+
+    },
+    'SDPSOS': {
 
     }
 }
