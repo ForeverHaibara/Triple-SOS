@@ -1,42 +1,68 @@
+from typing import Tuple, Union, Optional
+
 import sympy as sp
 
-from .representation import sym_representation, _verify_is_symmetric
-from .proof import _prove_numerator
+from .representation import (
+    sym_representation, _verify_is_symmetric,
+    TRANSLATION_POSITIVE, TRANSLATION_REAL,
+    prove_numerator
+)
 from .solution import SolutionSymmetric, SolutionSymmetricSimple
-from ...utils.expression.cyclic import CyclicSum, CyclicProduct
+from ...utils.polytools import deg
 
 def SymmetricSOS(
-        poly,
-        rootsinfo = None,    
-    ):
+        poly: sp.Poly,
+        positive: Optional[bool] = None,
+        **kwargs
+    ) -> Optional[SolutionSymmetricSimple]:
     """
-    Represent a polynomial to the symmetric form.
+    Represent a symmetric polynomial in SOS using special
+    changes of variables. The algorithm is described in [1].
+
+    Parameters
+    ----------
+    poly : sympy.Poly
+        The polynomial to be represented.
+    positive : optional[bool]
+        Perform SOS on positive real numbers or real numbers.
+        If it is None, it will automatically try both.
+
+    Returns
+    -------
+    SolutionSymmetricSimple
+        The solution of the problem.
+        
+    Reference
+    -------
+    [1] https://zhuanlan.zhihu.com/p/616532245
     """
 
     # check symmetricity here and (1,1,1) == 0
     if poly(1,1,1) != 0 or not _verify_is_symmetric(poly):
         return None
 
-    numerator, denominator = sym_representation(poly, positive = True, return_poly = True)
-    numerator = _prove_numerator(numerator)
-    if numerator is None:
-        return None
-    expr = numerator / denominator
+    if positive is None:
+        positives = [False, True] if deg(poly) % 2 == 0 else [True]
+    else:
+        positives = [positive]
 
-    a, b, c, x, y, z, w, p = sp.symbols('a b c x y z w p')
+    for positive in positives:
+        numerator, denominator = sym_representation(poly, positive = positive, return_poly = True)
+        numerator = prove_numerator(numerator, positive = positive)
+        if numerator is None:
+            continue
+        expr = numerator / denominator
 
-    expr = expr.subs({
-        x: CyclicSum(a*(a-b)*(a-c)),
-        y: CyclicSum(a*(b-c)**2),
-        z: CyclicProduct((a-b)**2) * CyclicSum(a)**3 / CyclicProduct(a),
-        w: CyclicSum(a*(a-b)*(a-c)) * CyclicSum(a*(b-c)**2)**2 / CyclicProduct(a),
-        p: CyclicSum(a)
-    })
+        expr = expr.subs(
+            TRANSLATION_POSITIVE if positive else TRANSLATION_REAL
+        )
 
-    solution = SolutionSymmetric(
-        problem = poly,
-        solution = expr,
-        is_equal = True
-    ).as_simple_solution()
+        solution = SolutionSymmetric(
+            problem = poly,
+            solution = expr,
+            is_equal = True
+        ).as_simple_solution()
 
-    return solution
+        return solution
+
+    return None

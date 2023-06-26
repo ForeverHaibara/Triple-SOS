@@ -33,7 +33,7 @@ def _classify_roots(roots):
     return real_roots, complex_roots
 
 
-def _construct_matrix_from_roots(real_roots, complex_roots, positive = False):
+def _construct_matrix_from_roots(real_roots, complex_roots, leading_coeff = 1, positive = False):
     """
     Assume an irreducible polynomial f(x) is positive over R, then 
     all its roots are complex and paired by conjugate. Write 
@@ -58,6 +58,8 @@ def _construct_matrix_from_roots(real_roots, complex_roots, positive = False):
         Real roots.
     complex_roots : list[(sp.Float, sp.Float)]
         Paired complex roots.
+    leading_coeff: sp.Rational
+        The leading coefficient of the polynomial.
     positive:
         Whether the polynomial is positive over R or R+.
 
@@ -83,34 +85,75 @@ def _construct_matrix_from_roots(real_roots, complex_roots, positive = False):
             M += vec_re * vec_re.T + vec_im * vec_im.T
 
         M = M / 2**len(complex_roots)
+        M *= leading_coeff
         return M
 
     else:
-        0
+        real_part = sp.prod((x - root) for root in real_roots)
+        real_part_coeffs = real_part.as_poly(x).all_coeffs()
 
-def _rationalize_off_diagonal_simultaneously(M, lcm = 144):
+        Ms = []
+        for minor in range(2):
+            # minor == 0 is (f(x) + f(-x)) / 2, where there are only even-degree terms
+            # minor == 1 is (f(x) - f(-x)) / (2x), where there are only odd-degree terms
+            coeffs = []
+            j = (len(real_part_coeffs)) % 2
+            for coeff in real_part_coeffs:
+                j = 1 - j
+                if minor == j:
+                    coeffs.append(coeff)
+                else:
+                    coeffs.append(0)
+            if minor == 1:
+                coeffs.pop()
+            poly = sp.Poly(coeffs, x)
+            roots = sp.polys.roots(poly)
+            _, complex_roots_extra = _classify_roots(roots)
+            M = _construct_matrix_from_roots([], 
+                complex_roots_extra + complex_roots,
+                leading_coeff = leading_coeff * poly.LC(),
+                positive = False
+            )
+            Ms.append(M)
+        return Ms
+
+
+def _rationalize_matrix_simultaneously(M, lcm = 144, off_diagonal = True):
     """
-    Rationalize off-diagonal entries of a symmetric matrix simultaneously.
+    Rationalize entries of a symmetric matrix simultaneously.
     Off-diagonal entries are entries with strip > 1, i.e. not Toeplitz.
 
     Parameters
     ----------
-    M : sp.Matrix
-        The symmetric matrix.
-    lcm : int, optional
+    M : sp.Matrix | List[sp.Matrix]
+        The symmetric matrix. If positive == True, it is a tuple of two matrices.
+    lcm : int
         The least common multiple of denominators. The default is 144.
+    off_diagonal : bool
+        Whether only rationalize off-diagonal entries. The default is True.
+        This would be slightly faster.
 
     Returns
     -------
     M : sp.Matrix
         The rationalized matrix.
     """
-    n = M.shape[0]
-    M = M.copy()
-    for i in range(n):
-        for j in range(i + 2, n):
-            M[i,j] = round(M[i,j] * lcm) / lcm
-            M[j,i] = M[i,j]
+    if isinstance(M, sp.Matrix):
+        n = M.shape[0]
+        M = M.copy()
+        for i in range(n):
+            for j in range((i + 2) if off_diagonal else i, n):
+                M[i,j] = round(M[i,j] * lcm) / lcm
+                M[j,i] = M[i,j]
+    else:
+        Ms = M
+        new_Ms = []
+        for i, M in enumerate(Ms):
+            new_Ms.append(
+                _rationalize_matrix_simultaneously(M, lcm, off_diagonal = i == 0)
+            )
+        M = new_Ms
+            
     return M
 
 
@@ -124,8 +167,8 @@ def _determine_diagonal_entries(M, poly):
 
     Parameters
     ----------
-    M : sp.Matrix
-        The symmetric matrix.
+    M : sp.Matrix | List[sp.Matrix]
+        The symmetric matrix. If positive == True, it is a tuple of two matrices.
     poly : sp.Poly
         The polynomial.
     
@@ -135,20 +178,50 @@ def _determine_diagonal_entries(M, poly):
         The matrix with diagonal entries determined. The operation is 
         done in-place.
     """
-    n = M.shape[0]
-    all_coeffs = poly.all_coeffs()
-    for i in range(len(all_coeffs)):
-        m = i // 2
-        if i % 2 == 0:
-            l = min(m, n - m - 1)
-            s = sum(M[m - j, m + j] for j in range(1, l + 1)) * 2
-            M[m, m] = all_coeffs[i] - s
-        else:
-            l = min(m, n - m - 2)
-            s = sum(M[m - j, m + j + 1] for j in range(1, l + 1))
-            M[m, m + 1] = all_coeffs[i] / 2 - s
-            M[m + 1, m] = M[m, m + 1] 
-        
+    if isinstance(M, sp.Matrix):
+        n = M.shape[0]
+        if isinstance(poly, sp.Poly):
+            all_coeffs = poly.all_coeffs()
+        for i in range(len(all_coeffs)):
+            m = i // 2
+            if i % 2 == 0:
+                l = min(m, n - m - 1)
+                s = sum(M[m - j, m + j] for j in range(1, l + 1)) * 2
+                M[m, m] = all_coeffs[i] - s
+            else:
+                l = min(m, n - m - 2)
+                s = sum(M[m - j, m + j + 1] for j in range(1, l + 1))
+                M[m, m + 1] = all_coeffs[i] / 2 - s
+                M[m + 1, m] = M[m, m + 1] 
+    else:
+        # positive == True
+        Ms = M
+        # first subtract the minor matrix from poly
+        new_Ms = [None, Ms[1]]
+
+        M = M[1]
+        n = M.shape[0]
+        all_coeffs = [0] * (M.shape[1] * 2 - 1)
+        for i in range(len(all_coeffs)):
+            m = i // 2
+            if i % 2 == 0:
+                l = min(m, n - m - 1)
+                s = sum(M[m - j, m + j] for j in range(1, l + 1)) * 2
+                s += M[m, m]
+                all_coeffs[i] = s
+            else:
+                l = min(m, n - m - 2)
+                s = sum(M[m - j, m + j + 1] for j in range(1, l + 1))
+                s += M[m, m + 1]
+                all_coeffs[i] = s * 2
+        all_coeffs.append(0)
+        poly -= sp.Poly(all_coeffs, poly.gens[0])
+
+        # then determine the diagonal entries of the major
+        M = _determine_diagonal_entries(Ms[0], poly)
+        new_Ms[0] = M
+        M = new_Ms
+
     return M
 
 
@@ -172,46 +245,171 @@ def _create_sos_from_US(U, S, x = None):
     return sp.Add(*exprs)
 
 
-def _prove_univariate_irreducible(poly, positive = False):
+def _prove_univariate_irreducible(poly):
     """
-    Prove an irreducible univariate polynomial is positive over the real line.
+    Prove an irreducible univariate polynomial is positive over the real line or 
+    positive over R+. Return None if the algorithm fails.
+
+    Although it seems an SDP problem and requires an SDP solver, the univariate polynomial
+    is degenerated. As guaranteed by Hilbert, a univariate polynomial positive over R
+    is a sum of squares. This is quite easy to prove: if the polynomial has no real roots,
+    then it is product of conjugate pairs of complex roots. Write f(x) = \prod (x - a)(x - conj(a)).
+    As a consequence, f(x) = |\prod (x-a)|^2 = Re^2 + Im^2.
+
+    This is a numerical solution. But we can reconstruct the positive definite matrix
+    to make it rational and accurate.
+
+    For polynomials positive over R+, we can use the same trick. Assume f(x) = g(x)h(x)
+    where all roots of g(x) are negative and all roots of h(x) are complex. Then we see
+    every coefficient of g is positive. So g(x) = g1(x) + x * g2(x) where
+    g1(x) = (g(x) + g(-x))/2 is the even-order-term part while g2(x) = (g(x) - g(-x))/(2x) is the
+    odd-order-term part. Both g1 and g2 are positive over R.
 
     Parameters
     ----------
     poly : sp.Poly
         The polynomial.
+    positive : bool
+        Whether to prove the polynomial is positive over R+ or positive over R. However,
+        it will automatically turn off R+ constraint if no real roots are found.
 
     Returns
     -------
     sos : sp.Expr
         A sum of squares expression.
     """
+    if poly.LC() < 0:
+        return None
+    if poly.degree() <= 2:
+        return _prove_univariate_simple(poly)
+
     roots = sp.polys.nroots(poly)
     real_roots, complex_roots = _classify_roots(roots)
-    if not positive:
-        # real case does not accept any real roots
-        if len(real_roots):
-            return None
-    else:
-        # positive case requires all real roots to be negative
-        if any(_ > 0 for _ in real_roots):
-            return None
 
-        if len(real_roots) == 0:
-            # turn off R+ constraint if no real roots found
-            positive = False
+    # a mark of whether the polynomial is positive only over R+ (True) or over R (False)
+    positive = True
+
+    # we require all real roots to be negative for both cases positive == True / False
+    if any(_ > 0 for _ in real_roots):
+        return None
+
+    if len(real_roots) == 0:
+        # turn off R+ constraint if no real roots found
+        positive = False
+
+    if positive and all(_ >= 0 for _ in poly.all_coeffs()):
+        # very trivial case if all coefficients are positive
+        return poly.as_expr()
 
     # extract roots to construct matrix
-    M = _construct_matrix_from_roots(real_roots, complex_roots, positive = positive)
+    M0 = _construct_matrix_from_roots(real_roots, complex_roots, leading_coeff = poly.LC(), positive = positive)
 
     for lcm in (1, 144, 144**2, 144**6):
         # rationalize off-diagonal entries
         # and restore diagonal entries by subtraction
-        M = _rationalize_off_diagonal_simultaneously(M, lcm = lcm)
+        M = _rationalize_matrix_simultaneously(M0, lcm = lcm)
         M = _determine_diagonal_entries(M, poly)
 
         # verify that the matrix is positive semidefinite
-        U, S = congruence(M)
-        if all(_ >= 0 for _ in S):
-            return _create_sos_from_US(U, S, poly.gens[0])
+        if not positive:
+            res = congruence(M)
+            if res is not None and all(_ >= 0 for _ in res[1]):
+                return _create_sos_from_US(*res, poly.gens[0])
+        else:
+            res2 = congruence(M[1])
+            if res2 is not None and all(_ >= 0 for _ in res2[1]):
+                res = congruence(M[0])
+                if res is not None and all(_ >= 0 for _ in res[1]):
+                    return _create_sos_from_US(*res, poly.gens[0])\
+                        + _create_sos_from_US(*res2, poly.gens[0]) * poly.gens[0]
+
     return
+
+
+def _prove_univariate_simple(poly):
+    """
+    Prove a polynomial with degree <= 2 is positive over the real line or positive over R+.
+
+    Parameters
+    ----------
+    poly : sp.Poly
+        The polynomial.
+    """
+    if poly.degree() == 0:
+        # constant polynomial
+        if poly.LC() >= 0:
+            return poly.LC()
+        return None
+    elif poly.degree() == 1:
+        # linear polynomial
+        if all(_ >= 0 for _ in poly.all_coeffs()):
+            return poly.as_expr()
+        return None
+    else:
+        # quadratic polynomial
+        # first check if positive over R
+        a, b, c = poly.all_coeffs()
+        x = poly.gens[0]
+        if a < 0:
+            return
+        if a > 0 and b**2 - 4 * a * c < 0:
+            return a * (x + b / (2 * a))**2 + (c - b**2 / (4 * a))
+
+        # then check if positive over R+
+        if a > 0 and b >= 0 and c >= 0:
+            # since the minimum of the quadratic polynomial is negative
+            # b must be negative so that the symmetric axis is at the left of y-axis
+            return a * x**2 + b * x + c
+        return None
+
+
+def prove_univariate(poly):
+    """
+    Prove a polynomial is positive over the real line or positive over R+.
+    """
+    if not isinstance(poly, sp.Poly):
+        if isinstance(poly, sp.Expr) and len(poly.free_symbols) == 1:
+            poly = poly.as_poly(list(poly.free_symbols)[0])
+
+    lc, factors = poly.factor_list()
+    if lc < 0:
+        return None
+    mul = [lc]
+    for factor, multiplicity in factors:
+        if multiplicity % 2 == 0:
+            mul.append(factor.as_expr() ** multiplicity)
+        else:
+            ret = _prove_univariate_irreducible(factor)
+            if ret is None:
+                return None
+            mul.append(ret ** multiplicity)
+    return sp.Mul(*mul)
+
+
+def check_univariate(poly, positive = True):
+    """
+    Check whether a univariate polynomial is positive
+    over the real line or positive over R+.
+
+    Parameters
+    ----------
+    poly : sp.Poly
+        The polynomial.
+    positive : bool
+        Whether to prove the polynomial is positive over R+ or positive over R. 
+        When True, it checks over R+. When False, it checks over R.
+    """
+    if poly.LC() < 0:
+        return False
+    for factor, multiplicity in poly.factor_list()[1]:
+        if multiplicity % 2 == 1:
+            if positive:
+                if sp.polys.count_roots(factor, 0, None) != 0:
+                    if factor.degree() == 1 and factor(0) == 0:
+                        # special case when the polynomial is x itself
+                        continue
+                    return False
+            else:
+                if sp.polys.count_roots(factor, None, None) != 0:
+                    return False
+    return True

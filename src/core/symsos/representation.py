@@ -1,6 +1,26 @@
 import sympy as sp
 
+from .univariate import prove_univariate, check_univariate
 from ..pqrsos import pqr_sym
+from ...utils.expression.cyclic import CyclicSum, CyclicProduct
+
+a, b, c, x, y, z, w, p = sp.symbols('a b c x y z w p')
+
+TRANSLATION_POSITIVE = {
+    x: CyclicSum(a*(a-b)*(a-c)),
+    y: CyclicSum(a*(b-c)**2),
+    z: CyclicProduct((a-b)**2) * CyclicSum(a)**3 / CyclicProduct(a),
+    w: CyclicSum(a*(a-b)*(a-c)) * CyclicSum(a*(b-c)**2)**2 / CyclicProduct(a),
+    p: CyclicSum(a)
+}
+
+TRANSLATION_REAL = {
+    x: CyclicSum(a) * CyclicSum((a-b)**2) / 2,
+    y: CyclicProduct(2*a - b - c) / 2,
+    z: sp.S(27)/4 * CyclicProduct((a-b)**2),
+    w: CyclicSum((a-b)**2) / 2,
+    p: CyclicSum(a)
+}
 
 def _verify_is_symmetric(poly):
     """
@@ -201,3 +221,30 @@ def sym_representation(poly, is_pqr = None, positive = True, return_poly = False
         return _sym_representation_positive(poly, return_poly)
     else:
         return _sym_representation_real(poly, return_poly)
+
+
+def prove_numerator(numerator: sp.Poly, positive = True):
+    """
+    """
+    # z = numerator.gens[0]
+    x, y, z = sp.symbols('x y z')
+    args = []
+
+    for ((deg, ), coeff) in numerator.terms():
+        # first scan whether the coefficient is positive
+        coeff = coeff.subs(y, 1).as_poly(x) # de-homogenize
+        if not check_univariate(coeff, positive):
+            return None
+        args.append((coeff, deg))
+
+    for i, (coeff, deg) in enumerate(args):
+        # perform SOS on each coefficient
+        ans = prove_univariate(coeff)
+        if ans is None:
+            return None
+
+        ans = sp.together(sp.together(ans).xreplace({x: x/y}))
+        ans *= y**coeff.degree() * z**deg
+        args[i] = ans
+
+    return sp.Add(*args)

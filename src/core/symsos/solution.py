@@ -34,3 +34,7 @@ class SolutionSymmetric(Solution):
 class SolutionSymmetricSimple(SolutionSimple):#, SolutionSymmetric):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+    @property
+    def is_equal(self):
+        return True
