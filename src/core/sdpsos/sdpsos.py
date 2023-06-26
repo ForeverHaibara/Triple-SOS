@@ -97,6 +97,8 @@ def _sdp_sos(
     collection.update({'x0': x0, 'space': space, 'splits': splits})
 
     not_none_keys = [key for key, value in collection['Q'].items() if value is not None]
+    if verbose:
+        print('Matrix shape: %s'%({key: collection['Q'][key].shape[1] for key in not_none_keys}))
 
     # Main SOS solver
     sos_result = sdp_solver(x0, space, splits, not_none_keys, reg = 0, verbose = verbose)
