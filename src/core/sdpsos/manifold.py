@@ -116,6 +116,20 @@ def _hull_space(n, convex_hull = None, monom_add = (0,0,0)):
     return space
 
 
+def _compute_multiplicity_sym(poly):
+    """
+    Compute the multiplicity of zero (1,1,c) on the symmetric axis when c -> 0.
+    This is equivalent to the number of zeros in the leading row sums of the
+    coefficient triangle.
+
+    Returns zero when the polynomial is a multiple of p(a-b)2.
+    """
+    a, b = sp.symbols('a b')
+    poly = poly.subs({a:1, b:1})
+    return min(poly.monoms())[0]
+
+
+
 class RootSubspace():
     def __init__(self, poly):
         self.poly = poly
@@ -124,6 +138,7 @@ class RootSubspace():
         self.roots = findroot_resultant(poly)
         self.roots = [r for r in self.roots if not r.is_corner]
         self.subspaces_ = {}
+        self.multiplicity_sym_ = _compute_multiplicity_sym(poly)
 
     def subspaces(self, n, positive = False):
         if not positive:
@@ -147,13 +162,29 @@ class RootSubspace():
     def positive_roots(self):
         return [r for r in self.roots if r.root[0] >= 0 and r.root[1] >= 0 and r.root[2] >= 0]
 
+    def reduce_kwargs(self, minor = 0):
+        return _REDUCE_KWARGS[(self.n % 2, 'minor' if minor else 'major')]
+
+    def monom_add(self, minor = 0):
+        return self.reduce_kwargs(minor)['monom_add']
+
     def perp_space(self, minor = 0, positive = True):
+        """
+        The most important idea of sum of squares is to find a subspace
+        constrained by the roots of the polynomial. For example, if (1,2,3) is a root of 
+        a quartic cyclic polynomial. And the quartic can be written as x'Mx where 
+        x = [a^2, b^2, c^2, ab, bc, ca]. Then we must have Mx = 0 when (a,b,c) = (1,2,3)
+        since M >= 0 is a positive semidefinite matrix. This means that the M lies in the
+        orthogonal complement of the subspace spanned by (1,2,3).
+
+        This function returns the orthogonal complement of the subspace spanned by the roots.
+        """
 
         # if we only perform SOS over positive numbers,
         # we filter out the negative roots
         subspaces = self.subspaces(self.n // 2 - minor, positive = positive)
 
-        monom_add = _REDUCE_KWARGS[(self.n % 2, 'minor' if minor else 'major')]['monom_add']
+        monom_add = self.monom_add(minor)
         if sum(monom_add):
             subspaces_filtered = []
             # filter roots on border
@@ -188,6 +219,7 @@ class RootSubspace():
                     
 
         subspaces += self.hull_space(minor)
+        subspaces += self.mult_sym_space(minor)
         space = sp.Matrix.hstack(*subspaces).T
 
         n = space.shape[1]
@@ -210,23 +242,46 @@ class RootSubspace():
         This is because a^6 is out of the convex hull of the polynomial. We should 
         constraint the coefficients of a^3 to be zero.
         """
-        monom_add = _REDUCE_KWARGS[(self.n % 2, 'minor' if minor else 'major')]['monom_add']
+        monom_add = self.monom_add(minor)
         return _hull_space(self.n // 2 - minor, self.convex_hull, monom_add = monom_add)
 
-    def cyclic_space(self, minor = 0):
+    def mult_sym_space(self, minor = 0):
         """
-        If monom_add['cyc'] is False, we can impose additional cyclic constraints.
+        If the first n rows of a coefficient triangle sum to zero, respectively, then it means that
+        the order of zero at (1,1,c) when c -> 0 is n. This implies a multiplicity constraint. For example,
+        if we require f(c) = x'Mx = 0 at (1,1,c) when c -> 0 with order n. If n = 3, we have that
+        the first derivative (order = 2): (dx/dc)'Mx = 0. This implies nothing because Mx = 0 already.
+        However, the second derivative (order = 3): (dx/dc)'M(dx/dc) + ... = 0 => M(dx/dc) = 0.
+        This yields extra constraints.
         """
-        monom_add = _REDUCE_KWARGS[(self.n % 2, 'minor' if minor else 'major')]['monom_add']
-        if monom_add['cyc']:
+        if self.multiplicity_sym_ <= 1:
+            # either no root at (1,1,0) or multiplicity is merely 1
             return []
+        monom_add = self.monom_add(minor)
+        monoms = generate_expr(self.n // 2 - minor, cyc = False)[1]
 
-        monoms = generate_expr(self.n // 2 - minor, cyc = False)[0]
-        return []
+        vecs_all = []
+        for i in range(3): # stands for a, b, c
+            # compute the order, note that the monom_add might cancel one order
+            num = (self.multiplicity_sym_ - 1 - monom_add[i]) // 2
+            vecs = [[0] * len(monoms) for _ in range(num)]
+            for j in range(len(monoms)):
+                monom = monoms[j]
+                if 0 < monom[i] <= num:
+                    # sum of coefficients where monom[i] == constant
+                    # actually it should be the factorial after derivative, (monom[i]!), 
+                    # however it is equivalent to ones
+                    vecs[monom[i] - 1][j] = 1
+            vecs = [sp.Matrix(_) for _ in vecs]
+        
+            vecs_all.extend(vecs)
+        
+        return vecs
+
 
     def __str__(self):
-        return 'Subspace [\n    roots = %s\n    uv    = %s\n]'%(
-            self.roots, [_.uv() for _ in self.roots]
+        return 'Subspace [\n    roots  = %s\n    uv     = %s\n    rowsum = %s\n]'%(
+            self.roots, [_.uv() for _ in self.roots], self.multiplicity_sym_
         )
 
 class LowRankHermitian():

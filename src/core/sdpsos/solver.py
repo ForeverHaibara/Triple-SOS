@@ -253,6 +253,7 @@ def _sdp_solver(sos, x0, space, splits, objectives = None, verbose = False):
         print('Failed to find a rational solution despite having a numerical solution. '
               'Try other multipliers might be useful. '
               'Currently using lcm = %d, times = %d'%(lcm, times))
+        # print(ys)
         # print('The mixed solution is:\n')
         # for y in ys:
         #     y = x0 + space * sp.Matrix(y.flatten().tolist())
