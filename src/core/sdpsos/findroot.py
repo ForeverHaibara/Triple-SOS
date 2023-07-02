@@ -1,7 +1,7 @@
 import sympy as sp
 from sympy.polys.polyclasses import ANP
 
-from ...utils.roots.roots import Root, RootAlgebraic, RootRational
+from ...utils.roots.roots import Root, RootAlgebraic, RootRational, RootAlgebraicBorder
 
 def _sqrt_coeff_and_core(sqrpart):
     """
@@ -75,7 +75,7 @@ def _quadratic_as_ANP(const, sqrpart):
     sqrpart_coeff, core = _sqrt_coeff_and_core(sqrpart)
     return ANP([(sqrpart_coeff), (const)], [1, 0, -int(core)], sp.QQ)
 
-def _find_nearest_root(poly, v):
+def _find_nearest_root(poly, v, method = 'roots'):
     """
     Find the nearest root of a polynomial to a given value.
     This helps select the closed-form root corresponding to a numerical value.
@@ -84,8 +84,12 @@ def _find_nearest_root(poly, v):
         c1, c0 = poly.all_coeffs()
         return sp.Rational(-c0, c1)
     v = v.n(20)
+    if method == 'roots':
+        roots = sp.polys.roots(poly)
+    elif method == 'rootof':
+        roots = poly.all_roots()
     best, best_dist = None, None
-    for r in sp.polys.roots(poly):
+    for r in roots:
         dist = abs(r.n(20) - v)
         if best is None or dist < best_dist:
             best, best_dist = r, dist
@@ -281,6 +285,7 @@ def _findroot_resultant(poly):
             fx = sp.Poly(fx.all_coeffs()[::-1], fy.gens[0])
             if fx.degree() == 0:
                 fx = sp.Poly([1,0], fy.gens[0]) # cancel reverse
+
             if fx.degree() == 1 and fy.degree() == 1:
                 a_ = -fx.all_coeffs()[1]/fx.all_coeffs()[0]
                 b_ = -fy.all_coeffs()[1]/fy.all_coeffs()[0]
@@ -320,6 +325,15 @@ def _findroot_resultant(poly):
                 u = u.rep[0] * sp.sqrt(cores[0]) + u.rep[1]
                 v = v.rep[0] * sp.sqrt(cores[0]) + v.rep[1]
                 roots.append(RootAlgebraic(u, v, K = sp.QQ.algebraic_field(sp.sqrt(cores[0]))))
+
+            elif (fx.degree() == 1 and fx.all_coeffs()[-1] == 0) or \
+                (fy.degree() == 1 and fy.all_coeffs()[-1] == 0):
+                if fx.degree() == 1:
+                    fx, fy = fy, fx
+                    a_, b_ = b_, a_
+                # so that fy has zero root, and fx is nontrivial
+                v = _find_nearest_root(fx, a_, method = 'rootof')
+                roots.append(RootAlgebraicBorder(v, 1/v, K = sp.QQ.algebraic_field(v)))
 
     # print(factors, roots)
     return roots
