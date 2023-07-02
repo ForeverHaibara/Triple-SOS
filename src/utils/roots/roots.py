@@ -17,14 +17,16 @@ def _algebraic_extension(vec):
         return [vec]
     field = vec[0].mod
 
-    if len(field) == 3 and field[0] == 1 and field[1] == 0:
-        f = lambda x: sp.Rational(x.numerator, x.denominator)
-        return [[f(x.rep[0])  if len(x.rep) == 2 else sp.S(0) for x in vec], 
-                [f(x.rep[-1]) if len(x.rep) else sp.S(0) for x in vec]]
+    # if len(field) == 3 and field[0] == 1 and field[1] == 0:
+    #     f = lambda x: sp.Rational(x.numerator, x.denominator)
+    #     return [[f(x.rep[0])  if len(x.rep) == 2 else sp.S(0) for x in vec], 
+    #             [f(x.rep[-1]) if len(x.rep) else sp.S(0) for x in vec]]
 
-    # to be implemented for general case
-    # using operations on poly roots
-    return
+    f = lambda x: sp.Rational(x.numerator, x.denominator)
+    vecs = []
+    for i in range(1, len(field)):
+        vecs.append([f(x.rep[-i]) if len(x.rep) >= i else sp.S(0) for x in vec])
+    return vecs
 
 class Root():
     """
