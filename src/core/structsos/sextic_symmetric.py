@@ -555,6 +555,8 @@ def _sos_struct_sextic_iran96(coeff, real = False):
     s(21a6-20a5b-20a5c+825a4b2-1667a4bc+825a4c2-1640a3b3+1679a3b2c+1679a3bc2-1682a2b2c2)-21s(a(a-b)(a-c))2
 
     s(ab(a2+b2-2c2-3(2ab-ac-bc))2)
+
+    (s(22a6-36a5b-36ab5+657a4b2+657a2b4-28a3b3-540abc(a2b+ab2)-420a4bc+792/3a2b2c2)-22s(a(a-b)(a-c))2)
     """
     if not (coeff((6,0,0)) == 0 and coeff((5,1,0)) == coeff((1,5,0)) and coeff((4,2,0)) == coeff((2,4,0)) and\
         coeff((3,2,1)) == coeff((2,3,1)) and coeff((5,1,0)) >= 0):
@@ -696,7 +698,7 @@ def _sos_struct_sextic_iran96(coeff, real = False):
 
             if all(_ >= 0 for _ in y):
                 exprs = [
-                    CyclicSum(a*b) * CyclicSum((a-b)**2*(a+b-(-p-u_)/m*c)**2),
+                    CyclicSum(a*b) * CyclicSum((a-b)**2*(a+b-(-p+u_)/m*c)**2),
                     CyclicSum(a*b) * CyclicSum(a**2*(b-c)**2),
                     CyclicProduct((a-b)**2),
                     CyclicSum(b*c*(a-b)**2*(a-c)**2),
