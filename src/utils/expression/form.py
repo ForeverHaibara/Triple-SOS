@@ -1,6 +1,9 @@
 from collections import defaultdict
 
-from ..polytools import verify_hom_cyclic
+import sympy as sp
+
+from ..polytools import verify_hom_cyclic, deg
+from ..text_process import pl
 
 def poly_get_standard_form(poly, formatt = 'short', is_cyc = None):
     if formatt == 'short':
@@ -68,3 +71,50 @@ def poly_get_factor_form(poly):
     if coeff == 1: coeff = ''
     elif coeff == -1: coeff = '-'
     return str(coeff) + ''.join(sorted(result, key = lambda x: len(x)))
+
+
+def latex_coeffs(poly, tabular=True, document=True):
+    """
+    Return the LaTeX format of the coefficient triangle.
+    """
+    if poly is None:
+        return ''
+    if isinstance(poly, str):
+        poly_str = poly
+        poly = pl(poly)
+    else:
+        poly_str = 'f(a,b,c)'
+
+    n = deg(poly)
+    emptyline = '\\\\ ' + '\\ &' * (n * 2) + '\\  \\\\ '
+    strings = ['' for i in range(n+1)]
+
+    coeffs = poly.coeffs()
+    monoms = poly.monoms()
+    monoms.append((-1,-1,0))  # tail flag
+    t = 0
+    for i in range(n+1):
+        for j in range(i+1):
+            if monoms[t][0] == n - i and monoms[t][1] == i - j:
+                txt = sp.latex(coeffs[t])
+                t += 1
+            else:
+                txt = '0'
+            strings[j] = strings[j] + '&\\ &' + txt if len(strings[j]) != 0 else txt
+    monoms.pop()
+
+    for i in range(n+1):
+        strings[i] = '\\ &'*i + strings[i] + '\\ &'*i + '\\ '
+    s = emptyline.join(strings)
+    if tabular:
+        s = '\\left[\\begin{matrix}\\begin{tabular}{' + 'c' * (n * 2 + 1) + '} ' + s
+        s += ' \\end{tabular}\\end{matrix}\\right]'
+    else:
+        s = '\\left[\\begin{matrix} ' + s
+        s += ' \\end{matrix}\\right]'
+
+    if document:
+        s = (' \\\\ '.join(s.split('\\\\')[::2]))
+        s = s.replace('&\\','& \\')
+        s = '\\textnormal{'+ poly_str +'  =}\n'+'\\renewcommand*{\\arraystretch}{1.732}\[' + s + '\]'
+    return s
