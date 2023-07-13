@@ -506,17 +506,16 @@ def _sos_struct_sextic_iran96(coeff, real = False):
     """
     Give a solution to s(a5b+ab5-x(a4b2+a2b4)+ya3b3-za4bc+w(a3b2c+a2b3c)+..a2b2c2) >= 0
 
-    Observe that g(a,b,c) = s(ab(a2-b2 + x(bc-ac))^2) >= 4((a-b)*(b-c)*(c-a))^2,
+    Observe that g(a,b,c) = s(bc(b-c)^2(b+c-(u+1)a)^2) >= 4((a-b)*(b-c)*(c-a))^2,
     which is because
-        g(a,b,c)s(a) = s(c(a-b)2((a+b-c)2-(x-1)ab)2) + 2abcs((a2-b2+x(bc-ac))2)
+        g(a,b,c)s(a) = s(c(a-b)2((a+b-c)2-uab)2) + abcs((b-c)2(b+c-(u+1)a)2) >= 0
 
-    Also note that h(a,b,c) = s(a2bc(a2-b2+u(bc-ac))+ac((u-1)c+xb)(a-b)((u-1)(a+b)c-uab)) >= 0
-    where x = (u^2 - u + 1) / (2*u - 1)
+    Also note that h(a,b,c) = s(bc(a-b)(a-c)(a-ub)(a-uc)) >= 0
 
-    In general, we can show that f(a,b,c) = g(a,b,c) + (t-2)^2/(u-1)^2 * h(a,b,c) >= 2*t * ((a-b)*(b-c)*(c-a))^2
+    In general, we can show that f(a,b,c) = g(a,b,c) + (t-2)^2/u^2 * h(a,b,c) >= 2*t * ((a-b)*(b-c)*(c-a))^2
 
-    If we let x = (t*u - u*u + 2*u - 3) / (u - 1), then
-        f(a,b,c)s(a) = s(a(b-c)^2(a^2+b^2+c^2-tab-tac+xbc)^2) + (t-2*u)^2/(2(u-1)^2) * s(abc(a^2-b^2+u(bc-ac))^2)
+    If we let x = (t*(u+1) - u^2 - 2) / u, then
+        f(a,b,c)s(a) = s(a(b-c)^2(a^2+b^2+c^2-tab-tac+xbc)^2) + (t-2*u-2)^2/(2u^2) * s(abc(b-c)^2(b+c-(u+1)a)^2)
 
     The structure is named after Iran-96, but the original Iran-96 as a sextic is very very weak.
 
@@ -819,6 +818,7 @@ def _sos_struct_sextic_iran96(coeff, real = False):
         return None
 
     if u_ != 1:
+        # rather u_ in the introduction, we use u_ + 1 here as u_
         phi = (t * u_ - u_**2 + 2*u_ - 3) / (u_ - 1)
 
         multiplier = CyclicSum(a)
@@ -912,7 +912,11 @@ def sos_struct_sextic_symmetric_ultimate(poly, coeff, recurrsion):
     s(a6-a2b2c2)+s(a3b3-a4bc)-12s(a4b2+a4c2-2a2b2c2)+22s(a3b3-a2b2c2)+14s(a2b+ab2-2abc)abc-2p(a-b)2
     
     Case C.
+    s(409a6-1293a5b-1293a5c+651a4b2+5331a4bc+651a4c2+818a3b3-5190a3b2c-5190a3bc2+5106a2b2c2)
+
     s(38a6-148a5b-148a5c+225a4b2+392a4bc+225a4c2-210a3b3-320a3b2c-320a3bc2+266a2b2c2)
+
+    s(414a6-1470a5b-1470a5c+979a4b2+5864a4bc+979a4c2+644a3b3-5584a3b2c-5584a3bc2+5228a2b2c2)
     """
 
     coeff6 = coeff((6,0,0))
@@ -1051,6 +1055,8 @@ def _sos_struct_sextic_symmetric_ultimate_2roots(coeff, poly, recurrsion, roots)
 
     s((b2+c2-5a(b+c))2(b-c)2)-22p(a-b)2 
 
+    s(a6+6a5b+6a5c-93a4b2+3a4bc-93a4c2+236a3b3+87a3b2c+87a3bc2-240a2b2c2)
+
     s(a6-21a5b-21a5c-525a4b2+1731a4bc-525a4c2+11090a3b3-13710a3b2c-13710a3bc2+15690a2b2c2)
     
     Reference
@@ -1067,8 +1073,12 @@ def _sos_struct_sextic_symmetric_ultimate_2roots(coeff, poly, recurrsion, roots)
     if roots[2] is None:
         # Case (A + B)
         if roots[0] != 1:
-            solution = coeff6 * CyclicSum(a**3 - (1+1/roots[0]/2)*a**2*(b+c) - a*b*c)**2
+            x_ = sp.simplify(roots[0] + 1/roots[0]) - 1
+            if not isinstance(x_, sp.Rational):
+                return None
+            solution = CyclicSum(a**3-x_*a**2*(b+c)+(2*x_-1)*a*b*c)**2
             diffpoly = solution.doit().as_poly(a,b,c)
+            solution *= coeff6
 
         elif roots[0] == 1:
             x = 1 / roots[1]
