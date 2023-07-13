@@ -13,6 +13,7 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
     <script type="text/javascript" id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
     <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>  -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/0.4.1/html2canvas.min.js"></script>
 </head>
 <body>
 <div id="frontpage" 
@@ -105,7 +106,16 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
 
 
 <div id="frontpageright" style="width: 22%; height: 100%; margin-left: 1.5%;"> 
-    <div id="heatmap" style="width: 90%; height: 40%; margin-left: 5%; position:relative;">
+    <div id="heatmap_area" style="width: 90%; height: 40%; margin-left: 5%; position:relative;">
+        <div id="heatmap" style="width: 100%; height: 100%; top: 0; left: 0; position:absolute;">
+        </div>
+        <!-- <button onclick="HeatmapScreenShot()" style="position:a">Take Screenshot</button> -->
+        <button type="button" class="btn btn-outline-primary" id="heatmap_screenshot_button" onclick="HeatmapScreenShot();" style="bottom:0;right:0;position:absolute;">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-save" viewBox="0 0 16 16">
+                <path d="M2 1a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H9.5a1 1 0 0 0-1 1v7.293l2.646-2.647a.5.5 0 0 1 .708.708l-3.5 3.5a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L7.5 9.293V2a2 2 0 0 1 2-2H14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h2.5a.5.5 0 0 1 0 1H2z"/>
+            </svg>
+          <span class="visually-hidden">Button</span>
+        </button>
     </div>
     <button id="sumofsquare" 
     style="width: 90%; height: 5%; margin-left: 5%; margin-top: 2%; position: relative;
@@ -169,18 +179,18 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
     const heatmap_gridsize = 60;
     {
         let heatmap_view = document.getElementById('heatmap');
-        const l = 100. / heatmap_gridsize; // length of each samll equilateral triangle 
+        const l = 98. / heatmap_gridsize; // length of each samll equilateral triangle 
         const ulx = (50 - l * heatmap_gridsize / 2), uly = (35 - 13 * heatmap_gridsize * l / 45);
         for (let i=0;i<=heatmap_gridsize;++i){
             for (let j=0;j<=heatmap_gridsize-i;++j){
                 let heatmap_grid = document.createElement('div')
                 heatmap_view.appendChild(heatmap_grid)
-                let x = ulx + l*(i+j*2)/2, y = uly + l*i*13/15;
+                let x = ulx + l*(i+j*2-1)/2, y = uly + l*i*13/15;
                 heatmap_grid.setAttribute('style', 'position:absolute;left:'+x+'%;top:'+y+'%;'
                             +'height:'+l+'%'+';width:'+l+'%;background:white');
                 heatmap_grids.push(heatmap_grid);
             }
-        }   
+        }
     }
 
 
@@ -489,6 +499,21 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
             preprocessInput({findroot: 1, factor: true});
         }
     }
+
+
+    function HeatmapScreenShot() {
+        console.log('hi');
+        html2canvas(document.getElementById("heatmap"), {
+            onrendered: function (canvas) {
+                console.log('hasda');
+                var link = document.createElement("a");
+                console.log(link);
+                link.download = "screenshot.png";
+                link.href = canvas.toDataURL();
+                link.click();
+            },
+        });
+      }
 
     document.onkeyup = function(e) {
         // 兼容FF和IE和Opera

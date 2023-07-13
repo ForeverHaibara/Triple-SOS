@@ -1,7 +1,7 @@
 # author: https://github.com/ForeverHaibara
 import sympy as sp
 
-from ..utils import deg, verify_hom_cyclic, poly_get_factor_form, poly_get_standard_form
+from ..utils import deg, verify_hom_cyclic, poly_get_factor_form, poly_get_standard_form, latex_coeffs
 from ..utils.text_process import preprocess_text, degree_of_zero
 from ..utils.roots import RootsInfo, GridRender, findroot
 from ..core.sum_of_square import sum_of_square
@@ -132,7 +132,7 @@ class SOS_Manager():
         return self._poly_info['grid'].save_coeffs(*args, **kwargs)
 
     def latex_coeffs(self, *args, **kwargs):
-        return self._poly_info['grid'].latex_coeffs(*args, **kwargs)
+        return latex_coeffs(self.polytxt, *args, **kwargs)
 
 
 

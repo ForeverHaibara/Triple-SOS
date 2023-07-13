@@ -89,45 +89,6 @@ class GridPoly():
         plt.savefig(path, dpi=dpi, bbox_inches='tight')
         plt.close()
 
-    def latex_coeffs(self, tabular=True):
-        """
-        Return the LaTeX format of the coefficient triangle.
-        """
-        n = deg(self.poly)
-        emptyline = '\\\\ ' + '\\ &' * (n * 2) + '\\  \\\\ '
-        strings = ['' for i in range(n+1)]
-        
-        if self.poly is not None:
-            coeffs = self.poly.coeffs()
-            monoms = self.poly.monoms()
-        else:  # all coefficients are treated as zeros
-            coeffs = []
-            monoms = []
-        monoms.append((-1,-1,0))  # tail flag
-        t = 0
-        for i in range(n+1):
-            for j in range(i+1):
-                if monoms[t][0] == n - i and monoms[t][1] == i - j:
-                    txt = sp.latex(coeffs[t])
-                    t += 1
-                else:
-                    txt = '0'
-                strings[j] = strings[j] + '&\\ &' + txt if len(strings[j]) != 0 else txt
-        monoms.pop()
-
-        for i in range(n+1):
-            strings[i] = '\\ &'*i + strings[i] + '\\ &'*i + '\\ '
-        s = emptyline.join(strings)
-        if tabular:
-            s = '\\left[\\begin{matrix}\\begin{tabular}{' + 'c' * (n * 2 + 1) + '} ' + s
-            s += ' \\end{tabular}\\end{matrix}\\right]'
-        else:
-            s = '\\left[\\begin{matrix} ' + s
-            s += ' \\end{matrix}\\right]'
-
-        return s
-
-
 
 def _grid_init_coor(size):
     """
