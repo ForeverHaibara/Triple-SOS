@@ -9,6 +9,7 @@ from .expression import (
     CyclicProduct,
     poly_get_factor_form,
     poly_get_standard_form,
+    latex_coeffs,
     Solution,
     SolutionSimple,
     congruence,
