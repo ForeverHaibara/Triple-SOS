@@ -113,8 +113,9 @@ def latex_coeffs(poly, tabular=True, document=True):
         s = '\\left[\\begin{matrix} ' + s
         s += ' \\end{matrix}\\right]'
 
+    s = (' \\\\ '.join(s.split('\\\\')[::2]))
+    s = s.replace('&\\','& \\')
     if document:
-        s = (' \\\\ '.join(s.split('\\\\')[::2]))
-        s = s.replace('&\\','& \\')
-        s = '\\textnormal{'+ poly_str +'  =}\n'+'\\renewcommand*{\\arraystretch}{1.732}\[' + s + '\]'
+        s = '\\renewcommand*{\\arraystretch}{1.732}$' + s + '$'
+        # s = '\\textnormal{'+ poly_str +'  =}\n' + s
     return s
