@@ -91,6 +91,11 @@ def RootsAndTangents():
     return jsonify(rootsinfo = rootsinfo.gui_description, tangents = tangents)
 
 
+@app.route('/process/latexcoeffs', methods=['POST'])
+def LatexCoeffs():
+    coeffs = app.SOS_Manager.latex_coeffs(tabular = True, document = True)
+    return jsonify(coeffs = coeffs)
+
 @app.route('/')
 def hello_world():
     return render_template('triples.html')
