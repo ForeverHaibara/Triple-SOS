@@ -132,7 +132,7 @@ class SOS_Manager():
         return self._poly_info['grid'].save_coeffs(*args, **kwargs)
 
     def latex_coeffs(self, *args, **kwargs):
-        return latex_coeffs(self.polytxt, *args, **kwargs)
+        return latex_coeffs(self._poly_info['poly'], *args, **kwargs)
 
 
 
