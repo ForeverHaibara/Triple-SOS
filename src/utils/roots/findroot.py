@@ -306,3 +306,32 @@ def _findroot_newton(
             #     break
 
     return result_roots
+
+
+def nroots(poly, method = 'numpy', real = False, nonnegative = False):
+    """
+    Find the numerical roots of a sympy polynomial.
+    Note that sympy nroots is not stable when the polynomial has multiplicative roots.
+
+    Parameters
+    ----------
+    poly : sympy polynomial
+        The polynomial to be solved.
+    method : str, optional
+        The method to be used. 'numpy' uses numpy.roots, 'sympy' uses sympy.nroots.
+    real : bool, optional
+        Whether to only return real roots.
+    nonnegative : bool, optional
+        Whether to only return nonnegative roots.
+    """
+    if method == 'numpy':
+        roots = [sp.S(_) for _ in np.roots(poly.all_coeffs())]
+    elif method == 'sympy':
+        roots = sp.polys.nroots(poly)
+
+    if real:
+        roots = [_ for _ in roots if _.is_real]
+    if nonnegative:
+        roots = [_ for _ in roots if _.is_nonnegative]
+    
+    return roots
