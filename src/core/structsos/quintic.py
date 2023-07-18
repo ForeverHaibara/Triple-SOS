@@ -1,9 +1,12 @@
+from itertools import zip_longest
+
 import sympy as sp
 
 from .utils import CyclicSum, CyclicProduct, _sum_y_exprs
 from .quintic_symmetric import sos_struct_quintic_symmetric
 from ...utils.text_process import cycle_expansion
 from ...utils.roots.rationalize import rationalize, rationalize_bound, cancel_denominator
+from ...utils.roots.findroot import nroots
 
 
 a, b, c = sp.symbols('a b c')
@@ -11,22 +14,21 @@ a, b, c = sp.symbols('a b c')
 def sos_struct_quintic(poly, coeff, recurrsion):
 
     # first try symmetric solution
-    solution = sos_struct_quintic_symmetric(poly, coeff, recurrsion)
-    if solution is not None:
-        return solution
+    if coeff((4,1,0)) == coeff((1,4,0)) and coeff((3,2,0)) == coeff((2,3,0)):
+        return sos_struct_quintic_symmetric(poly, coeff, recurrsion)
 
     if coeff((5,0,0)) == 0:
-        if coeff((4,1,0)) == 0 or coeff((1,4,0)) == 0:
-            solution = _sos_struct_quintic_windmill(coeff)
+        # if coeff((4,1,0)) == 0 or coeff((1,4,0)) == 0:
+        #     solution = _sos_struct_quintic_windmill(coeff)
 
-        if solution is not None:
-            return solution
+        #     if solution is not None:
+        #         return solution
 
-        return _sos_struct_quintic_hexagon(coeff, poly, recurrsion)
+        return _sos_struct_quintic_hexagon(coeff)
 
     else:
-        a = coeff((5,0,0))
-        return None
+        # a = coeff((5,0,0))
+        return _sos_struct_quintic_full(coeff)
         if a > 0:
             # try Schur to hexagon
             b = coeff((4,1,0))
@@ -50,6 +52,120 @@ def sos_struct_quintic(poly, coeff, recurrsion):
                         multipliers , y , exprs = _merge_sos_results(multipliers, y, exprs, recurrsion(poly2, 5))
     return None
 
+
+def _sos_struct_quintic_full(coeff):
+    """
+    Try to solve quintic with nonzero a^5 coefficient by subtracting something.
+
+    Let f(a,b,c) = a^2-b^2 + u(ab-ac) + v(bc-ab) to be the quadratic form. We consider
+    F(a,b,c) = \sum a(f(a,b,c) + xf(b,c,a))^2 + k\sum cf(a,b,c)^2 >= 0.
+    This is tight when uv >= 1 and u,v >= 0 because there exists nontrivial equality cases.
+
+    Expand F, we obtain
+    F(a,b,c) = \sum (a + c(x^2+k))f(a,b,c)^2 + 2x\sum af(a,b,c)f(b,c,a).
+    Now we take y = x^2 + k >= x^2. 
+    We solve u,v,x,y from the coefficient of a^5,a^4b,a^3b^2,a^2b^3,ab^4.
+    """
+
+    if coeff((5,0,0)) <= 0:
+        return None
+
+    def _solve_uvxy(coeff):
+        u, v = sp.symbols('u v')
+        m, p, q, g, h = [coeff(_) for _ in [(5,0,0),(4,1,0),(1,4,0),(3,2,0),(2,3,0)]]
+        p, q, g, h = p/m, q/m, g/m, h/m
+        x1 = -p + q + 4*u - 2*v - 1
+        x2 = 2*(u + v - 1)
+        y1 = (2*u**2 - 4*u*v + 2*u - 2*v - 4)*x1 + 4*u**2*v - 4*u**2 + 2*u*v**2 - 4*u*v + 8*u - 2*v**3 + 6*v**2 - 4 + (g - h)*x2
+        y3 = (u**2 + 2*u - v**2 - 2*v)
+        y2 = y3 * x2
+        eq1 = ((-p + 2*u - 2*v)*y2 - 2*u*x1*y3 + y1)
+        eq2 = (-2*u**2 + 2*u*v + 2*u + 2)*x1*y3 + (u**2 - 2*v)*y1 + (- g + u**2 - 2*u*v + v**2 - 2)*y2
+        eq2_ = eq2
+        # print(sp.latex(eq1.subs({u:sp.symbols('x'), v:sp.symbols('y')})).replace(' ',''))
+        # print(sp.latex(eq2.subs({u:sp.symbols('x'), v:sp.symbols('y')})).replace(' ',''))
+        # print(eq1, '\n', eq2)
+        eq1 = eq1.expand()
+        eq2 = eq2.expand()
+
+        # numerical solver: unstable
+        # try:
+        #     u, v = (sp.nsolve((eq1, eq2), (u, v), (2, 2)))
+        # except:
+        #     return None
+
+        if True:
+            u_, v_ = None, None
+            v_eq = sp.polys.resultant(eq1, eq2, u).as_poly(v)
+            roots = sorted(nroots(v_eq, real = True, nonnegative = True))[::-1]
+            for v_ in roots:
+                u_eq = eq1.subs(v, v_).as_poly(u)
+                roots_u = nroots(u_eq, real = True, nonnegative = True)
+                for u_ in roots_u:
+                    if abs(u_ - v_) > 1e-5 and abs(u_ + v_ - 1) > 1e-5 and abs(eq2_.subs({u:u_, v:v_})) < 1e-3:
+                        u, v = u_, v_
+                        break
+                else:
+                    u_ = None
+                    continue
+                break
+
+        if u_ is None:
+            return None
+
+        x = (-p + q + 4*u - 2*v - 1)/(2*(u + v - 1))
+        y = (g - h + 2*u**2*x - 4*u*v*x + 2*u*v + 2*u*x - 2*u - v**2 - 2*v*x + 2*v - 4*x + 2)/(u**2 + 2*u - v**2 - 2*v)
+        # print('u v x y =', u, v, x, y)
+        if not isinstance(x, (sp.Float, sp.Rational)) or not isinstance(y, (sp.Float, sp.Rational)) or y < x*x - 1e-5:
+            return None
+        # z = 2*u**2*x - 2*u**2 + 2*u*v*x - 2*u*v*y + 2*u*v - 2*v**2*x
+        # print(u, v, x, y, z)
+        # if z < coeff((3,1,1)) / m - 1e-5:
+        #     return None
+        return u, v
+
+
+    sol = _solve_uvxy(coeff)
+    if sol is None:
+        return None
+
+    u_, v_ = sol
+    m, p, q, g, h, z, w = [coeff(_) for _ in [(5,0,0),(4,1,0),(1,4,0),(3,2,0),(2,3,0),(3,1,1),(2,2,1)]]
+    p, q, g, h, z, w = p/m, q/m, g/m, h/m, z/m, w/m
+    lastu, lastv = None, None
+
+    for u, v in zip_longest(
+        rationalize_bound(u_, direction = 0), rationalize_bound(v_, direction = 0), fillvalue = None
+    ):
+        if u is None:
+            u = lastu
+        if v is None:
+            v = lastv
+        lastu, lastv = u, v
+
+        x = (-p + q + 4*u - 2*v - 1)/(2*(u + v - 1))
+        y = x*x
+        if p + 2*(u*x-u+v) >= y:
+            _new_coeffs = {
+                (5,0,0): sp.S(0),
+                (4,1,0): (p - (-2*u*x + 2*u - 2*v + y)) * m,
+                (1,4,0): (p - (-2*u*x + 2*u - 2*v + y)) * m,
+                (3,2,0): (g - (-2*u**2*x + u**2*y + u**2 + 2*u*v*x - 2*u*v + 2*u*x + v**2 - 2*v*y + 2*x - 2)) * m,
+                (2,3,0): (h - (u**2 - 2*u*v*x + 4*u*x - 2*u*y - 2*u + v**2*y - 2*v*x + 2*v - 2*x)) * m,
+                (3,1,1): (z - (2*u**2*x - 2*u**2 + 2*u*v*x - 2*u*v*y + 2*u*v - 2*v**2*x)) * m,
+                (2,2,1): (w - (-u**2*y - 2*u*v*x + 2*u*v*y - 4*u*x + 2*u*y + 2*u + 2*v**2*x - v**2*y - v**2 + 2*v*y + 2*x - 2*y)) * m,
+            }
+            # print(u, v, x, y, _new_coeffs)
+            def new_coeff(x):
+                return _new_coeffs.get(x, sp.S(0))
+            solution = _sos_struct_quintic_hexagon(new_coeff)
+            if solution is not None:
+                solution = m * CyclicSum(
+                    a*(a**2-b**2+(u-v)*a*b-u*a*c+v*b*c + x*b**2-x*c**2 +x*(u-v)*b*c-x*u*b*a+x*v*c*a)**2
+                ) + solution
+                return solution
+
+    return None
 
 def _sos_struct_quintic_windmill(coeff):
     """
@@ -127,7 +243,7 @@ def _sos_struct_quintic_windmill(coeff):
             u_ = coeff((3,1,1)) / (-2 * coeff((3,2,0)))
             y = [coeff((3,2,0)), sp.S(0), coeff((2,3,0)) - coeff((3,2,0)) * u_ ** 2, sp.S(0), const_]
         
-        if y is not None:
+        if y is not None and all(_ >= 0 for _ in y):
             exprs = [
                 CyclicSum(b*(u_*a*b-(u_-1)*a*c-b*c)**2 if u_ is not None else a**3*b*c),
                 CyclicSum(a**2*c*(b-c)**2),
@@ -135,7 +251,8 @@ def _sos_struct_quintic_windmill(coeff):
                 CyclicSum((b-c)**2) * CyclicProduct(a),
                 CyclicSum(a*b) * CyclicProduct(a)
             ]
-        return _sum_y_exprs(y, exprs)
+            return _sum_y_exprs(y, exprs)
+        return None
 
     if coeff((3,2,0)) == 0:
         if coeff((2,3,0)) >= 0:
@@ -255,6 +372,83 @@ def _sos_struct_quintic_windmill(coeff):
                 CyclicSum(a*b) * CyclicProduct(a)
             ]
             return _sum_y_exprs(y, exprs)
+
+    if True:
+        # Easy case 4. use s(c*(a-c)^2*(a-t*b)^2)
+        if x_ >= 1:
+            t = (z_ + 2*(x_ - 1)) / (-4)
+            if t**2 - 2 <= y_:
+                y = [
+                    sp.S(1),
+                    y_ - (t**2 - 2),
+                    x_ - 1,
+                    w__
+                ]
+                if all(_ >= 0 for _ in y):
+                    y = [_ * coeff((3,2,0)) for _ in y]
+                    exprs = [
+                        CyclicSum(c*(a-c)**2*(a-t*b)**2),
+                        CyclicSum(a*c**2*(a-b)**2),
+                        CyclicSum(a**2*c*(a-b)**2),
+                        CyclicSum(a*b) * CyclicProduct(a)
+                    ]
+                    return _sum_y_exprs(y, exprs)
+        elif x_ < 1:
+            # two cases:
+            # 1. x_s(c(a-c)2(a-tb)2) + ?s(a3(b-c)2) + ??s(bc2(a-b)2)
+            # 2. x_s(c(a-c)2(a-tb)2) + ?s(a3(b-c)2) + ??s(a2c(a-b)2)
+            # t = z_ / (-4) / x_
+            # if x_*(t**2 - 2) <= y_:
+            #     y = [
+            #         x_,
+            #         1 - x_,
+            #         y_ - (t**2 - 2) * x_,
+            #         w__
+            #     ]
+            #     if all(_ >= 0 for _ in y):
+            #         y = [_ * coeff((3,2,0)) for _ in y]
+            #         exprs = [
+            #             CyclicSum(c*(a-c)**2*(a-t*b)**2),
+            #             CyclicSum(b*c**2*(a-b)**2),
+            #             CyclicSum(a**2*c*(a-b)**2),
+            #             CyclicSum(a*b) * CyclicProduct(a)
+            #         ]
+            #         return _sum_y_exprs(y, exprs)
+
+            # -z/2 - 2tx >= 0
+            # 1 + 2tx - x + z/2 >= 0
+            # thus, (x - z/2 - 1)/(2x) <= t <= -z/(4x)
+            # in this bound, we should make t as close to 1 as possible
+            # to minimize t^2 - 2t - 2
+            bound_l = (x_ - z_ / 2 - 1) / (2*x_)
+            bound_r = -z_ / (4*x_)
+            if bound_l <= bound_r:
+                if bound_l <= 1 <= bound_r:
+                    t = sp.S(1)
+                elif abs(bound_l - 1) < abs(bound_r - 1):
+                    t = bound_l
+                else:
+                    t = bound_r
+
+                # the sum of following equals to the polynomial
+                y = [
+                    x_,
+                    -z_ / 2 - 2*t*x_,
+                    1 + 2*t*x_ - x_ + z_ / 2,
+                    y_ - (t**2 - 2*t - 2)*x_ + z_ / 2,
+                    w__
+                ]
+                print('(l,r) =', (bound_l, bound_r), '  t =', t,'\ny =', y)
+                if all(_ >= 0 for _ in y):
+                    y = [_ * coeff((3,2,0)) for _ in y]
+                    exprs = [
+                        CyclicSum(c*(a-c)**2*(a-t*b)**2),
+                        CyclicSum(a**3*(b-c)**2),
+                        CyclicSum(b*c**2*(a-b)**2),
+                        CyclicSum(a*c**2*(a-b)**2),
+                        CyclicSum(a*b) * CyclicProduct(a)
+                    ]
+                    return _sum_y_exprs(y, exprs)
 
 
     # now we formally start
@@ -756,7 +950,7 @@ def _sos_struct_quintic_windmill_special(coeff):
     return None
 
 
-def _sos_struct_quintic_hexagon(coeff, poly, recurrsion):
+def _sos_struct_quintic_hexagon(coeff):
     """
     Try solving quintics without s(a5).
 
@@ -776,8 +970,10 @@ def _sos_struct_quintic_hexagon(coeff, poly, recurrsion):
     -------
     [1] https://artofproblemsolving.com/community/u426077h2246130p17263853
     """
-    if coeff((5,0,0)) != 0 or coeff((4,1,0)) <= 0 or coeff((1,4,0)) <= 0:
+    if coeff((5,0,0)) != 0 or coeff((4,1,0)) < 0 or coeff((1,4,0)) < 0:
         return None
+    if coeff((4,1,0)) == 0 or coeff((1,4,0)) == 0:
+        return _sos_struct_quintic_windmill(coeff)
 
 
     if coeff((4,1,0)) == coeff((1,4,0)):
@@ -830,8 +1026,8 @@ def _sos_struct_quintic_hexagon(coeff, poly, recurrsion):
             
     return None
 
-    if y is None:
-        # try updegree
-        multipliers = ['a*b']
-        poly2 = poly * sp.polys.polytools.Poly('a*b+b*c+c*a')
-        multipliers , y , exprs = _merge_sos_results(multipliers, y, exprs, recurrsion(poly2, 7))
+    # if y is None:
+    #     # try updegree
+    #     multipliers = ['a*b']
+    #     poly2 = poly * sp.polys.polytools.Poly('a*b+b*c+c*a')
+    #     multipliers , y , exprs = _merge_sos_results(multipliers, y, exprs, recurrsion(poly2, 7))
