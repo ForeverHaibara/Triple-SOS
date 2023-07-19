@@ -44,34 +44,24 @@ def sos_struct_sparse(poly, coeff, recurrsion):
         n = degree // 3
         if coeff(monoms[0]) >= 0 and coeff(monoms[0])*3 + coeff(n, n, n) >= 0:
             i, j, k = monoms[0]
-            return coeff(monoms[0]) * CyclicSum(a**i * b**j * c**k - CyclicProduct(a**n))\
-                + (coeff(monoms[0]) * 3 + coeff(n, n, n)) * CyclicProduct(a**n)
+            if i % 3 or j % 3 or k % 3:
+                p1 = coeff(monoms[0]) * CyclicSum(a**i * b**j * c**k - CyclicProduct(a**n))
+            else:
+                # special case is i%3==j%3==k%3 == 0, and then we can factor the AM-GM
+                ker1 = a**(i//3)*b**(j//3)*c**(k//3)
+                ker2 = a**(j//3)*b**(k//3)*c**(i//3)
+                p1 = coeff(monoms[0])/2 * CyclicSum(ker1) * CyclicSum((ker1 - ker2)**2)
+
+            return p1 + (coeff(monoms[0]) * 3 + coeff(n, n, n)) * CyclicProduct(a**n)
 
     elif len(coeff) == 6:
+        # AM-GM
         # e.g. s(a5b4 - a4b4c)
         monoms = [i for i in monoms if (i[0]>i[1] and i[0]>i[2]) or (i[0]==i[1] and i[0]>i[2])]
         monoms = sorted(monoms)
-        small , large = monoms[0], monoms[1]
-        if coeff(small) >= 0 and coeff(large) >= 0:
-            return coeff(small) * CyclicSum(a**small[0] * b**small[1] * c**small[2]) \
-                + coeff(large) * CyclicSum(a**large[0] * b**large[1] * c**large[2])
+        small, large = monoms[0], monoms[1]
 
-        elif coeff(large) >= 0 and coeff(large) + coeff(small) >= 0:
-            # AM-GM inequality
-            det = 3*large[0]*large[1]*large[2] - (large[0]**3+large[1]**3+large[2]**3)
-            deta = small[0]*(large[1]*large[2]-large[0]**2)+small[1]*(large[2]*large[0]-large[1]**2)+small[2]*(large[0]*large[1]-large[2]**2)
-            detb = small[0]*(large[2]*large[0]-large[1]**2)+small[1]*(large[0]*large[1]-large[2]**2)+small[2]*(large[1]*large[2]-large[0]**2)
-            detc = small[0]*(large[0]*large[1]-large[2]**2)+small[1]*(large[1]*large[2]-large[0]**2)+small[2]*(large[2]*large[0]-large[1]**2)
-            det, deta, detb, detc = -det, -deta, -detb, -detc
-
-            if det > 0 and deta >= 0 and detb >= 0 and detc >= 0:
-                d = gcd(det, gcd(deta, gcd(detb, detc)))
-                det, deta, detb, detc = det//d, deta//d, detb//d, detc//d
-                
-                am_gm = deta*a**large[0]*b**large[1]*c**large[2] + detb*a**large[1]*b**large[2]*c**large[0] + detc*a**large[2]*b**large[0]*c**large[1] - det*a**small[0]*b**small[1]*c**small[2]
-                
-                return coeff(large)/det * CyclicSum(am_gm) + (coeff(large) + coeff(small)) * CyclicSum(a**small[0] * b**small[1] * c**small[2])
-
+        return _sos_struct_sparse_amgm(coeff, small, large)
     return None
 
 
@@ -99,3 +89,91 @@ def sos_struct_quadratic(coeff):
     w1 = (2*y - x) / 3
     w2 = y - w1
     return w1 / 2 * CyclicSum((a-b)**2) + w2 * CyclicSum(a)**2
+
+
+def _sos_struct_sparse_amgm(coeff, small, large):
+    """
+    Solve 
+    \sum coeff(large) * a^u*b^v*c^w + \sum coeff(small) * a^x*b^y*c^z >= 0
+    where triangle Cyclic(x,y,z) is contained in the triangle Cyclic(u,v,w).
+    Also, |x-y|+|y-z|+|z-x| > 0.
+
+    In general this is only an AM-GM inequality.
+
+    However, we shall handle special cases more carerfully. Because AM-GM
+    is sometimes not so beautiful as sum of squares.
+    For example,
+    s(a6-a4bc) = s(a2)s((a2-b2)2)/4+s(a2(a2-bc)2)/2 >= 0 for all real numbers a,b,c.
+    """
+    if coeff(large) < 0 or coeff(large) + coeff(small) < 0:
+        return None
+    a, b, c = sp.symbols('a b c')
+    
+    if large[0] % 2 == large[1] % 2 and large[1] % 2 == large[2] % 2:
+        # detect special case: small is the midpoint of large
+        # in this case, we can provide sum-of-square for real numbers
+        def _mean(a, b):
+            return ((a[0]+b[0])//2, (a[1]+b[1])//2, (a[2]+b[2])//2)
+        u,v,w = large
+        if small == _mean(large, (v,w,u))\
+            or small == _mean(large, (w,u,v))\
+            or small == _mean((v,w,u),(w,u,v)):
+            # midpoint
+            x, y = coeff(small), coeff(large)
+            if 2*y >= x:
+                prefix = CyclicProduct(a) if u % 2 == 1 else sp.S(1)
+                p1 = a**(u//2) * b**(v//2) * c**(w//2)
+                p2 = a**(v//2) * b**(w//2) * c**(u//2)
+                w1 = (2*y - x) / 3
+                w2 = y - w1
+                return (w1/2) * prefix * CyclicSum((p1 - p2)**2) + w2 * prefix * CyclicSum(p1)**2
+                
+                # if x + y >= 0 but 2*y < x (indicating x, y >= 0 both)
+                # fall to the normal mode below                    
+
+    # we can handle case for real numbers easily without highering the degree
+    if large == (6,0,0):
+        if small == (4,1,1):
+            # s(a6-a4bc) = s(a2)s((a2-b2)2)/4+s(a2(a2-bc)2)/2
+            if coeff(small) <= 0:
+                # it is a linear combination of s(a6-a4bc) and s(a6)
+                w1 = -coeff(small)
+                w2 = coeff(large) + coeff(small)
+                return w1 / 4 * CyclicSum(a**2)*CyclicSum((a**2-b**2)**2) + w1 / 2 * CyclicSum(a**2*(a**2 - b*c)**2)\
+                    + w2 * CyclicSum(a**6)
+        elif small == (4,2,0):
+            # s(a6-a4b2) = 2/3s(a2(a2-b2)2)+1/3s(a2(a2-c2)2)
+            return coeff(large)*2/3 * CyclicSum(a**2*(a**2-b**2)**2) + coeff(large)/3 * CyclicSum(a**2*(a**2-c**2)**2)\
+                    + (coeff(large) + coeff(small)) * CyclicSum(a**4*b**2)
+        elif small == (4,0,2):
+            return coeff(large)*2/3 * CyclicSum(a**2*(a**2-c**2)**2) + coeff(large)/3 * CyclicSum(a**2*(a**2-b**2)**2)\
+                    + (coeff(large) + coeff(small)) * CyclicSum(a**4*c**2)
+
+        # s(a6-a5b)-1/2s(a2(a2-b2)(a2-c2))-1/2s(a4(a-b)2) = s(a4c2-a2b2c2)/2
+        # however s(a4c2-a2b2c2) >= 0 needs higher degree
+
+
+    # now we use general method
+    if coeff(small) >= 0:
+        return coeff(small) * CyclicSum(a**small[0] * b**small[1] * c**small[2]) \
+            + coeff(large) * CyclicSum(a**large[0] * b**large[1] * c**large[2])
+
+    else:
+        # AM-GM inequality
+        x, y, z = small
+        u, v, w = large
+        det = 3*u*v*w - (u**3+v**3+w**3)
+        deta = x*(v*w-u**2)+y*(w*u-v**2)+z*(u*v-w**2)
+        detb = x*(w*u-v**2)+y*(u*v-w**2)+z*(v*w-u**2)
+        detc = x*(u*v-w**2)+y*(v*w-u**2)+z*(w*u-v**2)
+        det, deta, detb, detc = -det, -deta, -detb, -detc
+
+        if det > 0 and deta >= 0 and detb >= 0 and detc >= 0:
+            d = gcd(det, gcd(deta, gcd(detb, detc)))
+            det, deta, detb, detc = det//d, deta//d, detb//d, detc//d
+            
+            am_gm = deta*a**u*b**v*c**w + detb*a**v*b**w*c**u + detc*a**w*b**u*c**v - det*a**x*b**y*c**z
+            
+            return coeff(large)/det * CyclicSum(am_gm) + (coeff(large) + coeff(small)) * CyclicSum(a**x * b**y * c**z)
+
+    return None
