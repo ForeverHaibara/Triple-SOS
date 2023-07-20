@@ -391,6 +391,8 @@ def _sos_struct_sextic_rotated_tree(coeff):
     s(a4b2-14a3b2c+14a3bc2-1a2b2c2)
 
     s(2a2b4-8a3bc2+a3b2c+5a2b2c2)
+
+    s(a4b2-p(a2))-(p(a-b)-s(a(b-c)2))2/8
     """
     if coeff((4,2,0)) != 0:
         # reflect the polynomial so that coeff((4,2,0)) == 0
@@ -473,7 +475,7 @@ def _sos_struct_sextic_rotated_tree(coeff):
                 ]
                 y = [_ * coeff((2,4,0)) for _ in y[:-1]] + [y[-1]]
                 exprs = [
-                    CyclicSum(a*(a**2*c-a*b**2+x_*b*c**2+y_*b**2*c-(x_+y_)*a*b*c))**2,
+                    CyclicSum(a*(a**2*c-a*b**2+x_*b*c**2+y_*b**2*c-(x_+y_)*a*b*c)**2),
                     CyclicProduct(a) * CyclicSum(a*b*(a-(-n1/2/p1)*b+(-n1/2/p1-1)*c)**2),
                     CyclicProduct(a) * CyclicSum(a*b*(b-c)**2),
                     CyclicProduct(a) * CyclicSum(a**2*(b-c)**2),
