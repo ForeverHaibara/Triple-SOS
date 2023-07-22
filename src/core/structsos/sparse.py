@@ -109,11 +109,14 @@ def _sos_struct_sparse_amgm(coeff, small, large):
         return None
     a, b, c = sp.symbols('a b c')
     
+    def _mean(a, b):
+        return ((a[0]+b[0])//2, (a[1]+b[1])//2, (a[2]+b[2])//2)
+    def _multiple(a, b):
+        return (2*b[0]-a[0], 2*b[1]-a[1], 2*b[2]-a[2])
+
     if large[0] % 2 == large[1] % 2 and large[1] % 2 == large[2] % 2:
         # detect special case: small is the midpoint of large
         # in this case, we can provide sum-of-square for real numbers
-        def _mean(a, b):
-            return ((a[0]+b[0])//2, (a[1]+b[1])//2, (a[2]+b[2])//2)
         u,v,w = large
         if small == _mean(large, (v,w,u))\
             or small == _mean(large, (w,u,v))\
@@ -152,6 +155,28 @@ def _sos_struct_sparse_amgm(coeff, small, large):
         # s(a6-a5b)-1/2s(a2(a2-b2)(a2-c2))-1/2s(a4(a-b)2) = s(a4c2-a2b2c2)/2
         # however s(a4c2-a2b2c2) >= 0 needs higher degree
 
+
+    if True:
+        # extend each side of the small triangle by two times to obtain the large
+        # e.g. s(a3b-a2bc) = s(ac(b-c)2)
+        # e.g. s(a5c-a3bc2) = s(ac(a2-bc)2)
+        u,v,w = large
+        twice = _multiple(small, (small[1], small[2], small[0]))
+        if twice in ((u,v,w),(v,w,u),(w,u,v)):
+            prefix = a**(twice[0]%2)*b**(twice[1]%2)*c**(twice[2]%2)
+            p1 = a**(twice[0]//2)*b**(twice[1]//2)*c**(twice[2]//2)
+            p2 = a**(small[0]//2)*b**(small[1]//2)*c**(small[2]//2)
+            return coeff(large) * CyclicSum(prefix * (p1 - p2)**2)\
+                + (coeff(large) + coeff(small)) * CyclicSum(a**small[0]*b**small[1]*c**small[2])
+        twice = _multiple((small[1], small[2], small[0]), small)
+        if twice in ((u,v,w),(v,w,u),(w,u,v)):
+            prefix = a**(twice[0]%2)*b**(twice[1]%2)*c**(twice[2]%2)
+            p1 = a**(twice[0]//2)*b**(twice[1]//2)*c**(twice[2]//2)
+            p2 = a**(small[1]//2)*b**(small[2]//2)*c**(small[0]//2)
+            return coeff(large) * CyclicSum(prefix * (p1 - p2)**2)\
+                + (coeff(large) + coeff(small)) * CyclicSum(a**small[0]*b**small[1]*c**small[2])
+        
+        
 
     # now we use general method
     if coeff(small) >= 0:
