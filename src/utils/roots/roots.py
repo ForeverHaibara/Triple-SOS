@@ -110,7 +110,7 @@ class Root():
             u = ((b*b-a*a)*(a-b) - (b-a*b)*(1-b*b))/t
             v = ((a*b-a)*(1-b*b) - (b*b-a*a)*(b-b*a))/t
 
-            u, v = rationalize(u, reliable = True), rationalize(v, reliable = True)
+            # u, v = rationalize(u, reliable = True), rationalize(v, reliable = True)
 
             self.uv_ = (u, v)
         return self.uv_
@@ -236,7 +236,7 @@ class Root():
 
         TODO:
         1. Prove that the three vectors are linearly independent.
-        2. Handle cases when u, v are not rational. -> See RootAlgebraic
+        2. Handle cases when u, v are not rational. -> See RootUV
         """
         monoms = generate_expr(n, cyc = False)[1]
         if self.is_centered:
@@ -326,13 +326,15 @@ class Root():
 #         return sp.ones(len(monoms), 1)
 
 
-class RootAlgebraic(Root):
+class RootUV(Root):
     """
     When we have exact values for u, v, we can construct the root algebraically
     rather than numerically. This is useful when u, v are algebraic numbers but not rational.
+
+    Deprecated.
     """
     def __new__(cls, u, v, K = None):
-        if cls == RootAlgebraic:
+        if cls == RootUV:
             if K is None:
                 u, v = sp.S(u), sp.S(v)
                 if u == v:
@@ -352,9 +354,9 @@ class RootAlgebraic(Root):
                     return RootRational((a, b, sp.S(1)))
             else:
                 if u == v:
-                    return RootAlgebraicSymmetricAxis(u, v, K = K)
+                    return RootUVSymmetricAxis(u, v, K = K)
                 if abs(u * v - 1) < 1e-12:
-                    return RootAlgebraicBorder(u, v, K = K)
+                    return RootUVBorder(u, v, K = K)
 
         return object.__new__(cls)
 
@@ -559,12 +561,12 @@ class RootRational(Root):
         return sp.Matrix.hstack(*vecs)
 
 
-class RootAlgebraicBorder(RootAlgebraic):
+class RootUVBorder(RootUV):
     """
     When uv = 1, the root is on the border. It can be handled more carefully.
     Because there is much faster algorithm for spanning subspace.
 
-    However, this class is only a special case of RootAlgebraic. If a root on 
+    However, this class is only a special case of RootUV. If a root on 
     the border is completely rational, please use RootRational instead.
     """
     def __init__(self, u, v, K = None):
@@ -607,11 +609,11 @@ class RootAlgebraicBorder(RootAlgebraic):
         return _reg_matrix(M)
 
 
-class RootAlgebraicSymmetricAxis(RootAlgebraic):
+class RootUVSymmetricAxis(RootUV):
     """
     When u = v, the root is on the symmetric axis. It can be handled more carefully.
 
-    However, this class is only a special case of RootAlgebraic. If a root on
+    However, this class is only a special case of RootUV. If a root on
     the symmetric axis is completely rational, please use RootRational instead.
     """
     def __init__(self, u, v, K = None):
@@ -644,6 +646,132 @@ class RootAlgebraicSymmetricAxis(RootAlgebraic):
                 vec[ind] = a**i * b**j * c**k
             vecs[column] = vec.copy()
             a, b, c = c, a, b
+    
+        # return sp.Matrix(vecs).T
+
+        vecs_extended = []
+        for vec in vecs:
+            vecs_extended.extend(_algebraic_extension(vec))            
+        M = sp.Matrix(vecs_extended).T
+
+        return _reg_matrix(M)
+
+
+class RootAlgebraic(Root):
+    """
+    Root of a 3-var homogeneous cyclic polynomial.
+    """
+    def __init__(self, root):
+        if len(root) == 2:
+            root = root + (sp.S(1),)
+        self.root = root
+
+        self.K = None
+        self.root_anp = None
+        for i in range(3):
+            if not isinstance(root[i], sp.Rational):
+                self.K = sp.QQ.algebraic_field(root[i])
+                try:
+                    self.root_anp = [
+                        self.K.from_sympy(r) for r in root
+                    ]
+                except: # Coercion Failed
+                    self.K = None
+                if self.K is not None:
+                    break
+        if self.root_anp is None:
+            self.root_anp = self.root
+
+        if self.is_centered:
+            self.uv_ = (sp.S(2), sp.S(2))
+        elif self.is_corner:
+            self.uv_ = (sp.oo, sp.oo)
+        else:
+            self.uv_ = self._initialize_uv(self.root_anp)
+        u, v = self.uv_
+        self.ker_ = (u**2 - u*v + v**2 + u + v + 1)
+
+        if self.K is not None:
+            self.inv_sum_ = self.K.from_sympy(sp.S(1)) / sum(self.root_anp)
+        else:
+            self.inv_sum_ = (sp.S(1)) / sum(self.root_anp)
+
+        self.power_cache_ = {0: {}, 1: {}, 2: {}, -1: {}}
+
+    @classmethod
+    def _initialize_uv(cls, root):
+        a, b, c = root
+        if c != 1:
+            if c == 0 or (hasattr(c, 'rep') and len(c.rep) == 0):
+                if (isinstance(b, sp.Rational) and b != 0) or (hasattr(b, 'rep') and len(b.rep) > 0):
+                    a, b, c = c, a, b
+                elif (isinstance(a, sp.Rational) and a != 0) or (hasattr(a, 'rep') and len(a.rep) > 0):
+                    a, b, c = b, c, a
+            a, b = a/c, b/c
+        t = ((a*b-a)*(a-b)-(b*(a-1))**2)
+
+        # basic quadratic form
+        u = ((b*b-a*a)*(a-b) - (b-a*b)*(1-b*b))/t
+        v = ((a*b-a)*(1-b*b) - (b*b-a*a)*(b-b*a))/t
+        return u, v
+    
+    def uv(self):
+        if self.K is None:
+            return self.uv_
+        return (self.K.to_sympy(self.uv_[0]), self.K.to_sympy(self.uv_[1]))
+
+    def ker(self):
+        if self.K is None:
+            return self.ker_
+        return self.K.to_sympy(self.ker_)
+
+    def __str__(self):
+        if self.K is None:
+            return str(self.root)
+        return str(tuple(r.n(15) if not isinstance(r, sp.Rational) else r for r in self.root))
+
+    def __repr__(self):
+        if self.K is None:
+            return str(self.root)
+        return str(tuple(r.n(15) if not isinstance(r, sp.Rational) else r for r in self.root))
+
+    def single_power_(self, i, degree):
+        # return self.root_anp[i] ** degree
+        k = self.power_cache_[i].get(degree)
+        if k is None:
+            if i >= 0:
+                self.power_cache_[i][degree] = self.root_anp[i] ** degree
+            elif i == -1:
+                self.power_cache_[i][degree] = self.inv_sum_ ** degree
+            k = self.power_cache_[i][degree]
+        return k
+
+    def cyclic_sum(self, monom, to_sympy = True):
+        """
+        Return CyclicSum(a**i * b**j * c**k) assuming standardlization a + b + c = 1,
+        that is, s(a^i*b^j*c^k) / s(a)^(i+j+k).
+
+        Note: when i == j == k, it will return 3 * p(a^i). Be careful with the coefficient.
+        """
+        s = 0
+        single_power_ = self.single_power_
+        for i in range(3):
+            s = single_power_(0, monom[i%3]) * single_power_(1, monom[(i+1)%3]) * single_power_(2, monom[(i+2)%3]) + s
+        s *= single_power_(-1, sum(monom))
+        if self.K is not None and to_sympy:
+            s = self.K.to_sympy(s)
+        return s
+
+    def span(self, n):
+        monoms = generate_expr(n, cyc = False)[1]
+
+        vecs = [None]
+        single_power_ = self.single_power_
+        for column in range(1):
+            vec = [0] * len(monoms)
+            for ind, (i, j, k) in enumerate(monoms):
+                vec[ind] = single_power_(0, i) * single_power_(1, j) * single_power_(2, k)
+            vecs[column] = vec.copy()
     
         # return sp.Matrix(vecs).T
 
