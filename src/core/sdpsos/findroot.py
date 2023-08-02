@@ -1,7 +1,7 @@
 import sympy as sp
 from sympy.polys.polyclasses import ANP
 
-from ...utils.roots.roots import Root, RootAlgebraic, RootRational, RootAlgebraicBorder
+from ...utils.roots.roots import Root, RootAlgebraic, RootUV, RootRational, RootUVBorder
 
 def _sqrt_coeff_and_core(sqrpart):
     """
@@ -155,8 +155,10 @@ def _findroot_resultant_root_pairs(poly, factors, prec = 20, tolerance = 1e-12):
                 pairs.append(((a_, b_), (i, j)))
     return pairs
 
-def _findroot_resultant(poly):
+def _findroot_resultant_deprecated(poly):
     """
+    DEPRECATED.
+
     Find root of a 2-var polynomial with respect to a, b using the method of 
     resultant. The polynomial should be irreducible.
 
@@ -167,7 +169,7 @@ def _findroot_resultant(poly):
 
     Returns
     -------
-    roots: List[RootAlgebraic]
+    roots: List[RootUV]
         The roots of the polynomial.    
     """
     a, b, c = sp.symbols('a b c')
@@ -215,7 +217,7 @@ def _findroot_resultant(poly):
                     u, v = u1, v1
                 else:
                     u, v = u2, v2
-                roots.append(RootAlgebraic(u, v))
+                roots.append(RootUV(u, v))
             elif fx.degree() == 6:
                 c6, c5, c4, c3, c2, c1, c0 = fx.monic().all_coeffs()
                 # here two (u,v) solutions are conjugate
@@ -277,7 +279,7 @@ def _findroot_resultant(poly):
                 else:
                     u, v = u2, v2
 
-                roots.append(RootAlgebraic(u, v, K = sp.QQ.algebraic_field(sp.sqrt(core))))
+                roots.append(RootUV(u, v, K = sp.QQ.algebraic_field(sp.sqrt(core))))
                 # print(u1, v1, u2, v2)
         elif i != j:
             fx, fy = factors[i][0], factors[j][0]
@@ -324,18 +326,75 @@ def _findroot_resultant(poly):
                 v = (a__**3*b__ - a__**2*b__ - a__*b__**2 - a__*b__ + a__ + b__**3) * inv_denom
                 u = u.rep[0] * sp.sqrt(cores[0]) + u.rep[1]
                 v = v.rep[0] * sp.sqrt(cores[0]) + v.rep[1]
-                roots.append(RootAlgebraic(u, v, K = sp.QQ.algebraic_field(sp.sqrt(cores[0]))))
+                roots.append(RootUV(u, v, K = sp.QQ.algebraic_field(sp.sqrt(cores[0]))))
 
             elif (fx.degree() == 1 and fx.all_coeffs()[-1] == 0) or \
                 (fy.degree() == 1 and fy.all_coeffs()[-1] == 0):
+                # high degree roots on the border
+                # e.g. s(a7-a6b+a6c-a5b2+2a5c2-a4b3)-abcs(a2(11a2-14ab-8ac+12bc))
                 if fx.degree() == 1:
                     fx, fy = fy, fx
                     a_, b_ = b_, a_
                 # so that fy has zero root, and fx is nontrivial
                 v = _find_nearest_root(fx, a_, method = 'rootof')
-                roots.append(RootAlgebraicBorder(v, 1/v, K = sp.QQ.algebraic_field(v)))
+                roots.append(RootUVBorder(v, 1/v, K = sp.QQ.algebraic_field(v)))
 
     # print(factors, roots)
+    return roots
+
+
+def _findroot_resultant(poly):
+    """
+    Find root of a 2-var polynomial with respect to a, b using the method of 
+    resultant. The polynomial should be irreducible.
+
+    Parameters
+    ----------
+    poly : sympy.Poly
+        The polynomial of two variables. It should be irreducible.
+
+    Returns
+    -------
+    roots: List[RootAlgebraic]
+        The roots of the polynomial.    
+    """
+    QQ = sp.QQ
+    a, b, c = sp.symbols('a b c')
+    grad = poly.diff(a)
+    res = sp.resultant(poly, grad)
+    factors = set(sp.polys.gcd(res, res.diff(b)).factor_list()[1])
+
+    # roots on the border might not be local minima
+    poly_border = poly.subs(a, 0)
+    grad_border = poly_border.diff(b)
+    factors_border = set(sp.polys.gcd(poly_border, grad_border).factor_list()[1])
+    if len(factors_border):
+        # conjugate factors, b = 0
+        factors_border.add((sp.Poly([1,0], b), len(factors_border)))
+    factors |= factors_border
+    factors = list(factors)
+
+    pairs = _findroot_resultant_root_pairs(poly, factors)
+    roots = []
+
+    _is_rational = lambda x: isinstance(x, sp.Rational) or (isinstance(x, sp.polys.polyclasses.ANP) and len(x.rep) <= 1)
+
+    for (a_, b_), (i, j) in pairs:
+        fx, fy = factors[i][0], factors[j][0]
+        # reverse fx
+        fx = sp.Poly(fx.all_coeffs()[::-1], fy.gens[0])
+        if fx.degree() == 0:
+            a_ = sp.S(0)
+        else:
+            a_ = _find_nearest_root(fx, a_, method = 'rootof')
+        b_ = _find_nearest_root(fy, b_, method = 'rootof')
+        root = RootAlgebraic((a_, b_))
+        roots.append(root)
+
+        if not ((not _is_rational(a_)) and (not _is_rational(b_)) and _is_rational(root.uv_[0]) and _is_rational(root.uv_[1])):
+            roots.append(RootAlgebraic((sp.S(1), a_, b_)))
+            roots.append(RootAlgebraic((b_, sp.S(1), a_)))
+
     return roots
 
 
@@ -370,6 +429,10 @@ def findroot_resultant(poly):
     poly = poly.subs(c,1) # -a-b).as_poly(a,b)
     parts = poly.factor_list()[1]
     roots = []
+
+    # findroot_func = _findroot_resultant_deprecated
+    findroot_func = _findroot_resultant
+
     for part in parts:
         poly, multiplicity = part
         if poly.degree() == 1:
@@ -379,7 +442,7 @@ def findroot_resultant(poly):
                 roots.append(RootRational((1,1,1)))
             continue
         else:
-            roots.extend(_findroot_resultant(poly))
+            roots.extend(findroot_func(poly))
 
 
     # put the positive roots in front

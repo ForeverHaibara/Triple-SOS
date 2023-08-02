@@ -4,7 +4,7 @@ import sympy as sp
 from .findroot import findroot_resultant
 from ...utils.basis_generator import generate_expr
 from ...utils.polytools import convex_hull_poly, deg
-from ...utils.roots.roots import Root
+from ...utils.roots.roots import Root, RootAlgebraic
 from ...utils.roots.rootsinfo import RootsInfo
 
 _ROOT_FILTERS = {
@@ -34,13 +34,14 @@ def _all_roots_space(rootsinfo, n, monom_add = (0,0,0), root_filter = None, conv
     for root in filter(root_filter, rootsinfo.strict_roots):
         if not isinstance(root, Root):
             root = Root(root)
-        uv = root.uv()
-        is_handled = handled.get(uv, False)
-        if is_handled:
-            continue
+        # uv = root.uv()
+        # is_handled = handled.get(uv, False)
+        # if is_handled:
+        #     continue
         
-        handled[uv] = True
+        # handled[uv] = True
         spaces.append(root.span(n))
+
 
     spaces += _hull_space(n, convex_hull, monom_add = monom_add)
 
@@ -280,8 +281,15 @@ class RootSubspace():
 
 
     def __str__(self):
+        # roots = [abs(root[2]) >= abs(root[1]) and abs(root[2]) >= abs(root[0]) for a,b,c in roots]
+        def _formatter(root):
+            uv = root.uv()
+            if hasattr(root, 'root_anp') and isinstance(root.root_anp[0], sp.polys.polyclasses.ANP):
+                if len(root.root_anp[0].mod) > 4:
+                    uv = (uv[0].n(15), uv[1].n(15))
+            return uv
         return 'Subspace [\n    roots  = %s\n    uv     = %s\n    rowsum = %s\n]'%(
-            self.roots, [_.uv() for _ in self.roots], self.multiplicity_sym_
+            self.roots, [_formatter(_) for _ in self.roots], self.multiplicity_sym_
         )
 
 class LowRankHermitian():
