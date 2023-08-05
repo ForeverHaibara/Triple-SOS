@@ -69,9 +69,29 @@ def _sos_struct_quintic_full(coeff):
     Now we take y = x^2 + k >= x^2. 
     We solve u,v,x,y from the coefficient of a^5,a^4b,a^3b^2,a^2b^3,ab^4.
 
+    For harder cases, k < 0 is sometimes acceptable as we have
+    \sum af(a,b,c)f(b,c,a) = 1/2 * \sum (b-a-c)f(a,b,c)^2 and
+    F(a,b,c) = \sum (a - x(a+c-b) + c(x^2+k))f(a,b,c)^2.
+    When k >= 0, the original method is equivalent to using SOS theorem. However, we can
+    use the fact that \sum (a - b + (2v-1)c)f(a,b,c)^2 >= 0 when v >= (u-1)^2/4 + 1.
+    
     Examples
     -------
+    s(a2(a-b)(a2-3bc))
+
+    s(a2(a-b)(a2+ab-5bc))
+
+    s(a2(a-b)(a2+b2-3ac+3c2))-1/3abcs(a2-ab)
+
     s((23a-5b-c)(a-b)2(a+b-3c)2)
+
+    s(53361a5-354459a4b-107547a4c+678010a3b2+1034825a3bc-254726a3c2-1049464a2b2c)
+
+    s(144400a5-261516a4b-1447320a4c-1613008a3b2+5235581a3bc+3966569a3c2-6024706a2b2c)
+
+    s(34105600a5-71885436a4b-328258080a4c-328208596a3b2+1188005225a3bc+862751801a3c2-1356510514a2b2c)
+
+    s(13660416a5-74323095a4b-26634720a4c+120979510a3b2+194638463a3bc-42269615a3c2-186050959a2b2c)
     """
 
     if coeff((5,0,0)) <= 0:
@@ -104,10 +124,10 @@ def _sos_struct_quintic_full(coeff):
         if True:
             u_, v_ = None, None
             v_eq = sp.polys.resultant(eq1, eq2, u).as_poly(v)
-            roots = sorted(nroots(v_eq, real = True, nonnegative = True))[::-1]
+            roots = sorted(nroots(v_eq, method = 'factor', real = True, nonnegative = True))#[::-1]
             for v_ in roots:
                 u_eq = eq1.subs(v, v_).as_poly(u)
-                roots_u = nroots(u_eq, real = True, nonnegative = True)
+                roots_u = nroots(u_eq, method = 'factor', real = True, nonnegative = True)
                 for u_ in roots_u:
                     if abs(u_ - v_) > 1e-5 and abs(u_ + v_ - 1) > 1e-5 and abs(eq2_.subs({u:u_, v:v_})) < 1e-3:
                         u, v = u_, v_
@@ -220,6 +240,8 @@ def _sos_struct_quintic_windmill(coeff):
 
     s((b-a+3c)(a2-b2+2(ab-ac)+31/9(bc-ab))2)
     
+    s((b-a+207/100c)((a2-b2+307/200(ab-ac)+247/100(bc-ab)))2)
+
     Reference
     -------
     [1] https://tieba.baidu.com/p/6472739202
