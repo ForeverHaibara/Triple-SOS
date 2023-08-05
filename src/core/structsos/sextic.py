@@ -15,9 +15,8 @@ a, b, c = sp.symbols('a b c')
 
 
 def sos_struct_sextic(poly, coeff, recurrsion):
-    solution = sos_struct_sextic_symmetric_ultimate(poly, coeff, recurrsion)
-    if solution is not None:
-        return solution
+    if coeff((5,1,0)) == coeff((1,5,0)) and coeff((4,2,0)) == coeff((2,4,0)) and coeff((3,2,1)) == coeff((3,1,2)):
+        return sos_struct_sextic_symmetric_ultimate(poly, coeff, recurrsion)
 
     if coeff((6,0,0))==0 and coeff((5,1,0))==0 and coeff((5,0,1))==0:
         return _sos_struct_sextic_hexagon(coeff, poly, recurrsion)
@@ -322,6 +321,7 @@ def _sos_struct_sextic_hexagon(coeff, poly, recurrsion):
                 return _sos_struct_sextic_hexagram(coeff, poly, recurrsion)
             elif coeff((3,2,1)) == coeff((2,3,1)):
                 # symmetric
+                # this case must be handled before (?)
                 return _sos_struct_sextic_hexagon_symmetric(coeff)
             else:
                 solution = coeff((4,2,0)) * CyclicProduct((a-b)**2)
