@@ -51,7 +51,10 @@ def _sos_struct_septic_star(coeff, poly, recurrsion):
 
     if coeff((4,3,0)) == 0 and coeff((3,4,0)) == 0:
         # degenerated to quartic
-        return CyclicProduct(a) * recurrsion(poly.div((a*b*c).as_poly(a,b,c))[0])
+        solution = recurrsion(poly.div((a*b*c).as_poly(a,b,c))[0])
+        if solution is not None:
+            return CyclicProduct(a) * solution
+        return None
 
     if coeff((4,3,0)) == 0:
         p, q = 1 , 0
