@@ -225,7 +225,7 @@ def _determine_diagonal_entries(M, poly):
     return M
 
 
-def _create_sos_from_US(U, S, x = None):
+def _create_sos_from_US(U, S, x = None, return_raw = False):
     """
     Create a sum of squares from a congruence decomposition.
 
@@ -237,15 +237,29 @@ def _create_sos_from_US(U, S, x = None):
         The diagonal matrix. Use a list to store the diagonal entries.
     x : sp.Symbol, optional
         The symbol of polynomial. The default is None.
+    return_raw : bool, optional
+        Whether return the raw lists.
+
+    Returns
+    -------
+    Optional
+        sos: sp.Expr
+            When return_raw == False, return the sum of squares in sympy expression.
+        S, polys: list, list[sp.polys.Poly]
+            When return_raw == True, return the coeffcients and the polynomials
+            such that sos = sum(S[i] * polys[i]**2).
     """
     if x is None:
         x = sp.symbols('x')
     polys = [sp.polys.Poly.from_list(U[i,:].tolist()[0], x) for i in range(U.shape[0])]
+    if return_raw:
+        return S, polys
+
     exprs = [Si * poly.as_expr()**2 for Si, poly in zip(S, polys)]
     return sp.Add(*exprs)
 
 
-def _prove_univariate_irreducible(poly):
+def _prove_univariate_irreducible(poly, return_raw = False):
     """
     Prove an irreducible univariate polynomial is positive over the real line or 
     positive over R+. Return None if the algorithm fails.
@@ -272,16 +286,22 @@ def _prove_univariate_irreducible(poly):
     positive : bool
         Whether to prove the polynomial is positive over R+ or positive over R. However,
         it will automatically turn off R+ constraint if no real roots are found.
+    return_raw : bool, optional
+        Whether return the raw lists.
 
     Returns
     -------
-    sos : sp.Expr
-        A sum of squares expression.
+    Optional
+        sos : sp.Expr
+            A sum of squares expression.
+        list[(multiplier, coeffs, polys)] : list
+            A sum of squares expression such that sos = 
+                sum(multiplier[i] * sum(coeffs[i][j] * polys[i][j]))
     """
     if poly.LC() < 0:
         return None
     if poly.degree() <= 2:
-        return _prove_univariate_simple(poly)
+        return _prove_univariate_simple(poly, return_raw = return_raw)
 
     roots = sp.polys.nroots(poly)
     real_roots, complex_roots = _classify_roots(roots)
@@ -314,19 +334,26 @@ def _prove_univariate_irreducible(poly):
         if not positive:
             res = congruence(M)
             if res is not None and all(_ >= 0 for _ in res[1]):
-                return _create_sos_from_US(*res, poly.gens[0])
+                if return_raw:
+                    return [(sp.S(1),) + _create_sos_from_US(*res, poly.gens[0], return_raw = True)]
+                else:
+                    return _create_sos_from_US(*res, poly.gens[0], return_raw = False)
         else:
             res2 = congruence(M[1])
             if res2 is not None and all(_ >= 0 for _ in res2[1]):
                 res = congruence(M[0])
                 if res is not None and all(_ >= 0 for _ in res[1]):
-                    return _create_sos_from_US(*res, poly.gens[0])\
-                        + _create_sos_from_US(*res2, poly.gens[0]) * poly.gens[0]
+                    p1 = _create_sos_from_US(*res, poly.gens[0], return_raw = return_raw)
+                    p2 = _create_sos_from_US(*res2, poly.gens[0], return_raw = return_raw)
+                    if return_raw:
+                        return [(sp.S(1),) + p1, (poly.gens[0],) + p2]
+                    else:
+                        return p1 + p2 * poly.gens[0]
 
     return
 
 
-def _prove_univariate_simple(poly):
+def _prove_univariate_simple(poly, return_raw = False):
     """
     Prove a polynomial with degree <= 2 is positive over the real line or positive over R+.
 
@@ -334,15 +361,32 @@ def _prove_univariate_simple(poly):
     ----------
     poly : sp.Poly
         The polynomial.
+    return_raw : bool, optional
+        Whether return the raw lists.
+
+    Returns
+    -------
+    Optional
+        sos : sp.Expr
+            A sum of squares expression.
+        list[(multiplier, coeffs, polys)] : list
+            A sum of squares expression such that sos =
+                sum(multiplier[i] * sum(coeffs[i][j] * polys[i][j]))
     """
+    const_poly = lambda: sp.S(1).as_poly(poly.gens[0])
     if poly.degree() == 0:
         # constant polynomial
         if poly.LC() >= 0:
+            if return_raw:
+                return [(sp.S(1), [poly.LC()], [const_poly()])]
             return poly.LC()
         return None
     elif poly.degree() == 1:
         # linear polynomial
         if all(_ >= 0 for _ in poly.all_coeffs()):
+            if return_raw:
+                return [(sp.S(1), [poly.all_coeffs()[1]], [const_poly()]),
+                        (poly.gens[0], [poly.all_coeffs()[0]], [const_poly()])]
             return poly.as_expr()
         return None
     else:
@@ -353,19 +397,40 @@ def _prove_univariate_simple(poly):
         if a < 0:
             return
         if a > 0 and b**2 - 4 * a * c < 0:
+            if return_raw:
+                return [(sp.S(1), [a, c - b**2 / (4*a)], [(x +  b / (2*a)).as_poly(x), const_poly()])]
             return a * (x + b / (2 * a))**2 + (c - b**2 / (4 * a))
 
         # then check if positive over R+
         if a > 0 and b >= 0 and c >= 0:
             # since the minimum of the quadratic polynomial is negative
             # b must be negative so that the symmetric axis is at the left of y-axis
+            if return_raw:
+                return [(sp.S(1), [a, c], [x.as_poly(x), const_poly()]),
+                        (x, [b], [const_poly()])]
             return a * x**2 + b * x + c
         return None
 
 
-def prove_univariate(poly):
+def prove_univariate(poly, return_raw = False):
     """
     Prove a polynomial is positive over the real line or positive over R+.
+
+    Parameters
+    ----------
+    poly : sp.Poly
+        The polynomial.
+    return_raw : bool, optional
+        Whether return the raw lists.
+    
+    Returns
+    -------
+    Optional
+        sos : sp.Expr
+            A sum of squares expression.
+        list[(multiplier, coeffs, polys)] : list
+            A sum of squares expression such that sos =
+                sum(multiplier[i] * sum(coeffs[i][j] * polys[i][j]))
     """
     if not isinstance(poly, sp.Poly):
         if isinstance(poly, sp.Expr) and len(poly.free_symbols) == 1:
@@ -374,16 +439,65 @@ def prove_univariate(poly):
     lc, factors = poly.factor_list()
     if lc < 0:
         return None
-    mul = [lc]
+    mul = [(sp.S(1), [lc], [sp.S(1).as_poly(poly.gens[0])])] if return_raw else [lc]
     for factor, multiplicity in factors:
         if multiplicity % 2 == 0:
-            mul.append(factor.as_expr() ** multiplicity)
+            if return_raw:
+                mul.append([(sp.S(1), [sp.S(1)], [factor ** (multiplicity // 2)])])
+            else:
+                mul.append(factor.as_expr() ** multiplicity)
         else:
-            ret = _prove_univariate_irreducible(factor)
+            ret = _prove_univariate_irreducible(factor, return_raw = return_raw)
             if ret is None:
                 return None
-            mul.append(ret ** multiplicity)
-    return sp.Mul(*mul)
+            if return_raw:
+                if multiplicity > 1:
+                    mul.append([(sp.S(1), [sp.S(1)], [factor ** (multiplicity // 2)])])
+                mul.append(ret)
+            else:
+                mul.append(ret ** multiplicity)
+
+    if not return_raw:
+        return sp.Mul(*mul)
+    
+    # merge the raw lists
+    x = poly.gens[0]
+    p1 = [mul[0][1], mul[0][2]]
+    p2 = [[], []]
+
+    def _cross_mul(p1, p2):
+        coeffs1, polys1 = p1
+        coeffs2, polys2 = p2
+        ret = [[], []]
+        for i in range(len(coeffs1)):
+            for j in range(len(coeffs2)):
+                ret[0].append(coeffs1[i] * coeffs2[j])
+                ret[1].append(polys1[i] * polys2[j])
+        return ret
+
+    for m in mul[1:]:
+        p1new = [[], []]
+        p2new = [[], []]
+        for multiplier, coeffs, polys in m:
+            if multiplier == 1:
+                padd = _cross_mul(p1, (coeffs, polys))
+                p1new[0].extend(padd[0])
+                p1new[1].extend(padd[1])
+                padd = _cross_mul(p2, (coeffs, polys))
+                p2new[0].extend(padd[0])
+                p2new[1].extend(padd[1])
+            else:
+                padd = _cross_mul(p1, (coeffs, polys))
+                p2new[0].extend(padd[0])
+                p2new[1].extend(padd[1])
+                padd = _cross_mul(p2, (coeffs, polys))
+                p1new[0].extend(padd[0])
+                p1new[1].extend(padd[1])
+        p1 = p1new
+        p2 = p2new
+
+    return [(sp.S(1), p1[0], p1[1]), (x, p2[0], p2[1])]
+
 
 
 def check_univariate(poly, positive = True):
