@@ -328,6 +328,15 @@ def nroots(poly, method = 'numpy', real = False, nonnegative = False):
         roots = [sp.S(_) for _ in np.roots(poly.all_coeffs())]
     elif method == 'sympy':
         roots = sp.polys.nroots(poly)
+    elif method == 'factor':
+        roots_rational = []
+        roots = []
+        for part, mul in poly.factor_list()[1]:
+            if part.degree() == 1:
+                roots_rational.append(-part.all_coeffs()[1] / part.all_coeffs()[0])
+            else:
+                roots.extend(sp.polys.nroots(part))
+        roots = roots_rational + roots
 
     if real:
         roots = [_ for _ in roots if _.is_real]
