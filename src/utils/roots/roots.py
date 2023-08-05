@@ -62,6 +62,10 @@ class Root():
         x = sp.symbols('x')
         a, b, c = sp.polys.nroots((x**3 - x**2 + sab * x - abc).as_poly(x))
         root = cls((a, b, c))
+        u_, v_ = root.uv()
+        if abs(u_ - u) + abs(v_ - v) > abs(v_ - u) + abs(u_ - v):
+            a, b, c = c, b, a
+            root = cls((a, b, c))
         root.uv_ = (sp.S(u), sp.S(v))
         root.ker_ = ker
         return root

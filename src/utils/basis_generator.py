@@ -139,7 +139,10 @@ def invarraylize(poly, dict_monom: Optional[Dict] = None, inv_monom: Optional[Li
     """
     Turn an array back to cyclic sympy polynomial.
     """
-    n = round((np.prod(poly.shape) * 6) ** .5 - 1.5)
+    if cyc:
+        n = round((np.prod(poly.shape) * 6) ** .5 - 1.5)
+    else:
+        n = round((np.prod(poly.shape) * 2 + .25) ** .5 - 1.5)
     dict_monom, inv_monom = _get_dict_monom_and_inv_monom(n, dict_monom, inv_monom, cyc = cyc)
 
     a, b, c, u, v, w = sp.symbols('a b c u v w')

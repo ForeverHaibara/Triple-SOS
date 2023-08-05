@@ -56,8 +56,7 @@ def _sos_struct_sextic_hexagon_symmetric(coeff, real = False):
     [1] Vasile, Mathematical Inequalities Volume 1 - Symmetric Polynomial Inequalities. p.23
 
     [2] https://artofproblemsolving.com/community/u426077h3036593p28226075
-    """
-    
+    """    
     if coeff((4,2,0)) <= 0:
         if coeff((4,2,0)) == 0:
             return _sos_struct_sextic_hexagram_symmetric(coeff)
@@ -182,7 +181,6 @@ def _sos_struct_sextic_hexagon_symmetric(coeff, real = False):
                     # weight of linear combination of x and -x
                     w2 = ((coeff((3,2,1)) - 2 * coeffp + 10 * coeffsym) / coeff42 - (-2*(x**2 + 2*x + 2)/x**2)) / (8 / x)
                     w1 = 1 - w2
-                    print(x, 'coeffp, sym =', coeffp, coeffsym, '(w1, w2) =', (w1, w2))
                     if w1 == 0 or w2 == 0:
                         # low rank case
                         if (w1 == 0 and x >= 2) or (w2 == 0 and x >= 1):
@@ -362,6 +360,30 @@ def _sos_struct_sextic_hexagon_symmetric(coeff, real = False):
                             y.append(rem)
                             exprs.append(CyclicProduct(a**2) * multiplier)
                             return _sum_y_exprs(y, exprs) / multiplier
+
+    if rem > 0:
+        if coeff((3,3,0)) == coeff((4,1,1)):
+            # try c1p(a-b)2 + c2s(a2b-xabc)2 + c2s(ab2-xabc)2 + c3p(a2)
+            c1 = coeff((3,3,0)) / (-2)
+            c2 = coeff((4,2,0)) - c1
+            x_ = (2 - (coeff((3,2,1)) - 2*c1) / c2) / 6
+            y = [
+                c1,
+                c2,
+                c2,
+                rem - 18*c2*(x_ - 1)**2
+            ]
+            if all(_ >= 0 for _ in y):
+                exprs = [
+                    CyclicProduct((a-b)**2),
+                    (a**2*b + b**2*c + c**2*a - (3*x_)*a*b*c)**2,
+                    (a**2*c + b**2*a + c**2*b - (3*x_)*a*b*c)**2,
+                    CyclicProduct(a**2)
+                ]
+                return _sum_y_exprs(y, exprs)
+
+
+
     if True:
         # subtract p(a-b)2
         def new_coeff(x):
@@ -1069,7 +1091,7 @@ def sos_struct_sextic_symmetric_ultimate(poly, coeff, recurrsion):
     elif coeff6 < 0:
         return None
 
-    if coeff((5,1,0)) == 0 and coeff((4,2,0)) == 0 and coeff((3,2,1)) == 0:
+    if coeff((5,1,0)) == 0 and coeff((4,2,0)) == 0 and coeff((3,2,1)) == 0 and coeff6 != 0:
         return _sos_struct_sextic_tree(coeff)
 
 
@@ -1266,12 +1288,12 @@ def _sos_struct_sextic_symmetric_ultimate_2roots(coeff, poly, recurrsion, roots)
                     diffpoly = get_diffpoly(x)
 
                 multiplier = CyclicSum(a**2*(b-c)**2)
-                y = [coeff6, coeff6, 2*(2 - x)*coeff6, 12*(1 - x)*coeff6]
+                pp = coeff6*CyclicSum((a-b)**2*(a+b-c)**2) + 2*(2 - x)*coeff6*CyclicSum(a*b*(a-b)**2) + 12*(1-x)*coeff6*CyclicSum(a**2*b*c)
+                pp = sp.together(pp).as_coeff_Mul()
+                y = [coeff6, pp[0]]
                 exprs = [
                     CyclicSum(a*(a-b)*(a-c)) * CyclicProduct(a) * CyclicSum((b-c)**2*(b+c-(x+1)*a)**2),
-                    CyclicProduct((a-b)**2) * CyclicSum((a-b)**2*(a+b-c)**2),
-                    CyclicSum(a*b*(a-b)**2) * CyclicProduct((a-b)**2),
-                    CyclicSum(a) * CyclicProduct(a) * CyclicProduct((a-b)**2)
+                    CyclicProduct((a-b)**2) * pp[1]
                 ]
                 solution = _sum_y_exprs(y, exprs) / multiplier
 
@@ -1279,7 +1301,9 @@ def _sos_struct_sextic_symmetric_ultimate_2roots(coeff, poly, recurrsion, roots)
         new_coeff = _make_coeffs(new_poly)
         rest_solution = _sos_struct_sextic_iran96(new_coeff)
         if rest_solution is not None:
-            return solution + rest_solution
+            f1, f2 = sp.fraction(sp.together(solution + rest_solution))
+            f1 = sp.collect(f1, CyclicProduct((a-b)**2))
+            return f1 / f2
 
     elif roots[0] is None:
         # Case (B + C)
