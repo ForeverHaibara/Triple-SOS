@@ -2,6 +2,7 @@ import sympy as sp
 
 from .utils import CyclicSum, CyclicProduct, _sum_y_exprs
 from ...utils.roots.rationalize import rationalize_bound, square_perturbation
+from ...utils.roots.findroot import nroots
 
 
 a, b, c = sp.symbols('a b c')
@@ -346,6 +347,8 @@ def _sos_struct_quartic_uncentered(coeff, recur = False):
     4s(a4)+11abcs(a)-8s(ab)s(a2-ab)
 
     s(a4-a3b-2ab3+11/10a2b2)+2abcs(a)
+
+    s(a)3s(a)-s(a2)s(a)2/3
     
     References
     -------
@@ -384,7 +387,7 @@ def _sos_struct_quartic_uncentered(coeff, recur = False):
 
             if eq_coeffs[0] > 0:
                 # the leading coefficient of the cubic equation is positive
-                roots = list(filter(lambda x: x.is_real, sp.polys.nroots(eq)))
+                roots = nroots(eq, real = True, method = 'factor')
 
                 # since they are the real roots of a cubic
                 # and the cubic has no multiplicative roots (which will be detected as rationals otherwise)
@@ -414,7 +417,7 @@ def _sos_struct_quartic_uncentered(coeff, recur = False):
             elif eq_coeffs[0] < 0:
                 # the leading coefficient of the cubic equation is negative
                 # in this case it is trivial, we can choose any large enough w
-                roots = list(filter(lambda x: x.is_real, sp.polys.nroots(eq)))
+                roots = nroots(eq, real = True, method = 'factor')
                 root = max(roots) # it must be root > 1
                 root = max(1 + sp.sqrt(s) / 3, root)
 
@@ -424,14 +427,14 @@ def _sos_struct_quartic_uncentered(coeff, recur = False):
                 # in this case, 3*(1+n) - (p*p + p*q + q*q) = s / 3 >= 0
                 if eq_coeffs[1] > 0:
                     # select small enough w
-                    roots = list(filter(lambda x: x.is_real, sp.polys.nroots(eq)))
+                    roots = nroots(eq, real = True, method = 'factor')
                     root = min(roots) if len(roots) else 0
                     root = min(1 - sp.sqrt(s) / 3, root)
                     w_ = sp.floor(root - 2)
                 
                 elif eq_coeffs[1] < 0:
                     # select large enough w
-                    roots = list(filter(lambda x: x.is_real, sp.polys.nroots(eq)))
+                    roots = nroots(eq, real = True, method = 'factor')
                     root = max(roots) if len(roots) else 2
                     root = max(1 + sp.sqrt(s) / 3, root)
                     w_ = sp.floor(root + 2)
