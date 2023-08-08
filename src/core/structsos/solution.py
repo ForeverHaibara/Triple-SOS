@@ -16,8 +16,8 @@ class SolutionStructural(Solution):
         if multiplier.is_constant():
             const, multiplier = multiplier, S.One
         else:
-            # const, multiplier = multiplier.as_coeff_Mul()
-            const, multiplier = S.One, multiplier
+            const, multiplier = multiplier.as_coeff_Mul()
+            # const, multiplier = S.One, multiplier
 
         if const is not S.One:
             if isinstance(numerator, sp.Add):
