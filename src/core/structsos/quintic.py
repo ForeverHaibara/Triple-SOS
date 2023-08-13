@@ -1,15 +1,33 @@
-from itertools import zip_longest
+from itertools import zip_longest, product
 
 import sympy as sp
+import numpy as np
 
 from .utils import CyclicSum, CyclicProduct, _sum_y_exprs
 from .quintic_symmetric import sos_struct_quintic_symmetric
-from ...utils.text_process import cycle_expansion
+from ..symsos import prove_univariate
 from ...utils.roots.rationalize import rationalize, rationalize_bound, cancel_denominator
 from ...utils.roots.findroot import nroots
+from ...utils.roots.roots import Root
+from ...utils.basis_generator import invarraylize
 
 
 a, b, c = sp.symbols('a b c')
+
+def _verify_border_nonnegative(border):
+    """Verify whether a polynomial >= 0 over R+."""
+    if border.degree() == 0:
+        return True
+    if border.LC() < 0:
+        return False
+    factor_list = border.factor_list()[1]
+    for factor, multiplicity in factor_list:
+        if multiplicity % 2 == 1:
+            if factor.degree() == 1 and factor.coeff_monomial((0,)) == 0:
+                continue
+            if sp.polys.count_roots(factor, 0, None):
+                return False
+    return True
 
 def sos_struct_quintic(poly, coeff, recurrsion):
     """
@@ -31,32 +49,11 @@ def sos_struct_quintic(poly, coeff, recurrsion):
 
     else:
         # a = coeff((5,0,0))
-        return _sos_struct_quintic_full(coeff)
-        if a > 0:
-            # try Schur to hexagon
-            b = coeff((4,1,0))
-            if b >= -2 * a:
-                fpc = FastPositiveChecker()
-                # name = '(a^2+b^2+c^2-a*b-b*c-c*a)*a*(a-b)*(a-c)'
-                name = 'a*(a-b)^2*(a-c)^2'
-                poly2 = poly - a * sp.sympify(cycle_expansion(name))
-                fpc.setPoly(poly2)
-                if fpc.check() == 0:
-                    y = [a]
-                    exprs = [name]
-                    multipliers , y , exprs = _merge_sos_results(multipliers, y, exprs, recurrsion(poly2, 5))
-                if y is None and b >= -a:
-                    name = 'a^3*(a-b)*(a-c)'
-                    poly2 = poly - a * sp.sympify(cycle_expansion(name))
-                    fpc.setPoly(poly2)
-                    if fpc.check() == 0:
-                        y = [a]
-                        exprs = [name]
-                        multipliers , y , exprs = _merge_sos_results(multipliers, y, exprs, recurrsion(poly2, 5))
+        return _sos_struct_quintic_full(coeff, poly)
     return None
 
 
-def _sos_struct_quintic_full(coeff):
+def _sos_struct_quintic_full(coeff, poly):
     """
     Try to solve quintic with nonzero a^5 coefficient by subtracting something.
 
@@ -68,22 +65,32 @@ def _sos_struct_quintic_full(coeff):
     F(a,b,c) = \sum (a + c(x^2+k))f(a,b,c)^2 + 2x\sum af(a,b,c)f(b,c,a).
     Now we take y = x^2 + k >= x^2. 
     We solve u,v,x,y from the coefficient of a^5,a^4b,a^3b^2,a^2b^3,ab^4.
-
-    For harder cases, k < 0 is sometimes acceptable as we have
-    \sum af(a,b,c)f(b,c,a) = 1/2 * \sum (b-a-c)f(a,b,c)^2 and
-    F(a,b,c) = \sum (a - x(a+c-b) + c(x^2+k))f(a,b,c)^2.
-    When k >= 0, the original method is equivalent to using SOS theorem. However, we can
-    use the fact that \sum (a - b + (2v-1)c)f(a,b,c)^2 >= 0 when v >= (u-1)^2/4 + 1.
     
     Examples
     -------
+    s(a5+a4b-3a3b2-9a3bc+4a3c2+6a2b2c)
+
+    s(a5-3a4b+3a3b2-6a3bc+3a3c2+2a2b2c)
+
+    s(2a5-5a4b+a4c+5a3b2-19a3bc+6a3c2+10a2b2c)
+
+    s(a2(a-b)(a2+2b2-2ac+2c2))-5/4abcs(a2-ab)
+
     s(a2(a-b)(a2-3bc))
+
+    s(10a5-19a4b+4a3b2+5a2b2c)
+
+    s(38a5-73a4b+16a3b2+19a2b2c)
 
     s(a2(a-b)(a2+ab-5bc))
 
     s(a2(a-b)(a2+b2-3ac+3c2))-1/3abcs(a2-ab)
 
+    s(2a5-5a4b-7a4c+5a3b2+14a3bc+6a3c2-15a2b2c)
+
     s((23a-5b-c)(a-b)2(a+b-3c)2)
+
+    s(36a5-39a4b-164a4c-122a3b2+311a3bc+253a3c2-275a2b2c)
 
     s(53361a5-354459a4b-107547a4c+678010a3b2+1034825a3bc-254726a3c2-1049464a2b2c)
 
@@ -97,7 +104,115 @@ def _sos_struct_quintic_full(coeff):
     if coeff((5,0,0)) <= 0:
         return None
 
+    #########################################################
+    #
+    #                     Method 1
+    #
+    #########################################################
+
+    if True:
+        # Method 1: Try subtracting s(a^2-ab)s(a^3 + xa^2b + yab^2 - (x+y+1)abc)
+        # so that the rest falls into the hexagon case with equal coefficients of a^4b and ab^4.
+        # To ensure coeff((4,1,0)) == coeff((1,4,0)), we can assume x = x0 - t, y = y0 - t
+        coeff500 = coeff((5,0,0))
+        x0, y0 = coeff((4,1,0)) / coeff500 + 1, coeff((1,4,0)) / coeff500 + 1
+        # the remaining coefficient of a^3b^2 and a^2b^3 are given by
+        p, q = coeff((3,2,0)) / coeff500 - (1-x0+y0), coeff((2,3,0)) / coeff500 - (1-y0+x0)
+        z0 = coeff((3,1,1)) / coeff500 + (4+4*(x0+y0))
+        print(p, q, z0)
+
+        if p >= 0 and q >= 0 and (4*p*q >= z0**2 or z0 >= 0):
+            t0 = sp.S(0)
+        else:
+            # Plug in the discriminant, the discriminant is linear of t, so we can solve the exact result.
+            denom = (2*p + 2*q + z0)*(4*p**2 - 4*p*q - 2*p*z0 + 4*q**2 - 2*q*z0 + z0**2)
+            if denom <= 0 or 4*p*q - z0**2 == 0:
+                t0 = None
+            else:
+                t0 = (-4*p*q + z0**2)**2/(8*denom)
+
+        if t0 is not None: # and t0 >= 0
+            x_, y_ = x0 - t0, y0 - t0
+            if (x_ >= 0 and y_ >= 0) or -4*x_**3 + x_**2*y_**2 + 18*x_*y_ - 4*y_**3 - 27 <= 0:
+                u_, v_ = 4*(-2*p**2 + q*z0)/(4*p*q - z0**2), 4*(p*z0 - 2*q**2)/(4*p*q - z0**2)
+
+                if x_ >= 0 and y_ >= 0:
+                    y = [sp.Rational(1,2)]
+                    exprs = [CyclicSum((a-b)**2) * CyclicSum(a**3 + x_*a**2*b + y_*a*b**2 - (x_+y_+1)*CyclicProduct(a))]
+                else:
+                    # find t such that ((t**4 - 4*t**3 + 6*t**2 - 2*t - 1)/(t-1)**2, (2*t**3 - 6*t**2 + 6*t - 1)/(t-1)**2) <= (x,y)
+                    t = sp.symbols('t')
+                    eq = ((2*t**3 - 6*t**2 + 6*t - 1) - y_ * (t-1)**2).as_poly(t)
+                    _compute_x = lambda t: (t**4 - 4*t**3 + 6*t**2 - 2*t - 1)/(t-1)**2
+                    _compute_y = lambda t: (2*t**3 - 6*t**2 + 6*t - 1)/(t-1)**2
+                    t_ = None
+                    for t_ in nroots(eq, method = 'factor', real = True):
+                        if t_ < 1 and _compute_x(t_) <= x_:
+                            if not isinstance(t_, sp.Rational):
+                                for t__ in rationalize_bound(t_, direction = -1, compulsory = True):
+                                    if _compute_x(t__) <= x_ and _compute_y(t__) <= y_:
+                                        t_ = t__
+                                        break
+                            break
+                        else:
+                            t_ = None
+                    if t_ is not None:
+                        y = [1 / (t_ - 1)**2, sp.S(1)]
+                        x_, y_ = x_ - _compute_x(t_), y_ - _compute_y(t_)
+                        exprs = [
+                            CyclicSum(a*((1-t_)*c-a+t_*b)**2*((1-t_)*a-b+t_*c)**2),
+                            CyclicSum(a*(b-c)**2*(x_ * (a-c)**2 + y_*(a-b)**2))
+                        ]
+
+                if y is not None:
+                    if p >= 0 and q >= 0 and (4*p*q >= z0**2 or z0 >= 0):
+                        if z0 >= 0:
+                            y.extend([sp.S(1), z0/2])
+                            exprs.extend([
+                                CyclicSum((q*a + p*b)*c**2*(a-b)**2),
+                                CyclicProduct(a) * CyclicSum((a-b)**2)
+                            ])
+                        else:
+                            w = -z0/(2*p) if p != 0 else sp.S(0)
+                            y.extend([
+                                p,
+                                q - p*w**2,
+                            ])
+                            exprs.extend([
+                                CyclicSum(a*(a*b-w*a*c+(w-1)*b*c)**2),
+                                CyclicSum(a*c**2*(a-b)**2),
+                            ])
+                    else:
+                        y.append(t0)
+                        exprs.append(CyclicSum(c*(a**2-b**2+u_*(a*b-a*c)+v_*(b*c-a*b))**2))
+                    if all(_ >= 0 for _ in y):
+                        y = [_ * coeff500 for _ in y]
+                        y.append(poly(1,1,1) / 3)
+                        exprs.append(CyclicSum(a**2*b**2*c))
+                        return _sum_y_exprs(y, exprs)
+
+            # return None
+
+
+
+    #########################################################
+    #
+    #                     Method 2
+    #
+    #########################################################
+
     def _solve_uvxy(coeff):
+        """
+        Given quintic polynomial F(a,b,c), we can enhance it by finding maximum t such that
+        F(a,b,c) - tabcs(a^2-ab) >= 0.
+        At this maximum t, there exists nontrivial equality cases, and we assume
+        that the equality satisfies a^2-b^2+u(ab-ac)+v(bc-ab) = 0 and its cyclic permutations.
+
+        Now we represent F in the form of 
+        F(a,b,c) = \sum (a + cy)f(a,b,c)^2 + 2x\sum af(a,b,c)f(b,c,a).
+
+        Return u, v, x, y.
+        """
         u, v = sp.symbols('u v')
         m, p, q, g, h = [coeff(_) for _ in [(5,0,0),(4,1,0),(1,4,0),(3,2,0),(2,3,0)]]
         p, q, g, h = p/m, q/m, g/m, h/m
@@ -143,56 +258,319 @@ def _sos_struct_quintic_full(coeff):
         x = (-p + q + 4*u - 2*v - 1)/(2*(u + v - 1))
         y = (g - h + 2*u**2*x - 4*u*v*x + 2*u*v + 2*u*x - 2*u - v**2 - 2*v*x + 2*v - 4*x + 2)/(u**2 + 2*u - v**2 - 2*v)
         # print('u v x y =', u, v, x, y)
-        if not isinstance(x, (sp.Float, sp.Rational)) or not isinstance(y, (sp.Float, sp.Rational)) or y < x*x - 1e-5:
+        if not isinstance(x, (sp.Float, sp.Rational)) or not isinstance(y, (sp.Float, sp.Rational)):
+            # this might happen when x = inf or y = inf
             return None
         # z = 2*u**2*x - 2*u**2 + 2*u*v*x - 2*u*v*y + 2*u*v - 2*v**2*x
         # print(u, v, x, y, z)
         # if z < coeff((3,1,1)) / m - 1e-5:
         #     return None
-        return u, v
+        return u, v, x, y
 
 
     sol = _solve_uvxy(coeff)
     if sol is None:
         return None
 
-    u_, v_ = sol
-    m, p, q, g, h, z, w = [coeff(_) for _ in [(5,0,0),(4,1,0),(1,4,0),(3,2,0),(2,3,0),(3,1,1),(2,2,1)]]
-    p, q, g, h, z, w = p/m, q/m, g/m, h/m, z/m, w/m
-    lastu, lastv = None, None
+    u_, v_, x_, y_ = sol
+    if y_ >= x_**2:
+        m, p, q, g, h, z, w = [coeff(_) for _ in [(5,0,0),(4,1,0),(1,4,0),(3,2,0),(2,3,0),(3,1,1),(2,2,1)]]
+        p, q, g, h, z, w = p/m, q/m, g/m, h/m, z/m, w/m
+        lastu, lastv = None, None
 
-    for u, v in zip_longest(
-        rationalize_bound(u_, direction = 0), rationalize_bound(v_, direction = 0), fillvalue = None
-    ):
-        if u is None:
-            u = lastu
-        if v is None:
-            v = lastv
-        lastu, lastv = u, v
+        for u, v in zip_longest(
+            rationalize_bound(u_, direction = 0), rationalize_bound(v_, direction = 0), fillvalue = None
+        ):
+            if u is None:
+                u = lastu
+            if v is None:
+                v = lastv
+            lastu, lastv = u, v
 
-        x = (-p + q + 4*u - 2*v - 1)/(2*(u + v - 1))
-        y = x*x
-        if p + 2*(u*x-u+v) >= y:
-            _new_coeffs = {
-                (5,0,0): sp.S(0),
-                (4,1,0): (p - (-2*u*x + 2*u - 2*v + y)) * m,
-                (1,4,0): (p - (-2*u*x + 2*u - 2*v + y)) * m,
-                (3,2,0): (g - (-2*u**2*x + u**2*y + u**2 + 2*u*v*x - 2*u*v + 2*u*x + v**2 - 2*v*y + 2*x - 2)) * m,
-                (2,3,0): (h - (u**2 - 2*u*v*x + 4*u*x - 2*u*y - 2*u + v**2*y - 2*v*x + 2*v - 2*x)) * m,
-                (3,1,1): (z - (2*u**2*x - 2*u**2 + 2*u*v*x - 2*u*v*y + 2*u*v - 2*v**2*x)) * m,
-                (2,2,1): (w - (-u**2*y - 2*u*v*x + 2*u*v*y - 4*u*x + 2*u*y + 2*u + 2*v**2*x - v**2*y - v**2 + 2*v*y + 2*x - 2*y)) * m,
-            }
-            # print(u, v, x, y, _new_coeffs)
-            def new_coeff(x):
-                return _new_coeffs.get(x, sp.S(0))
-            solution = _sos_struct_quintic_hexagon(new_coeff)
-            if solution is not None:
-                solution = m * CyclicSum(
-                    a*(a**2-b**2+(u-v)*a*b-u*a*c+v*b*c + x*b**2-x*c**2 +x*(u-v)*b*c-x*u*b*a+x*v*c*a)**2
-                ) + solution
-                return solution
+            x = (-p + q + 4*u - 2*v - 1)/(2*(u + v - 1))
+            y = x*x
+            if p + 2*(u*x-u+v) >= y:
+                _new_coeffs = {
+                    (5,0,0): sp.S(0),
+                    (4,1,0): (p - (-2*u*x + 2*u - 2*v + y)) * m,
+                    (1,4,0): (p - (-2*u*x + 2*u - 2*v + y)) * m,
+                    (3,2,0): (g - (-2*u**2*x + u**2*y + u**2 + 2*u*v*x - 2*u*v + 2*u*x + v**2 - 2*v*y + 2*x - 2)) * m,
+                    (2,3,0): (h - (u**2 - 2*u*v*x + 4*u*x - 2*u*y - 2*u + v**2*y - 2*v*x + 2*v - 2*x)) * m,
+                    (3,1,1): (z - (2*u**2*x - 2*u**2 + 2*u*v*x - 2*u*v*y + 2*u*v - 2*v**2*x)) * m,
+                    (2,2,1): (w - (-u**2*y - 2*u*v*x + 2*u*v*y - 4*u*x + 2*u*y + 2*u + 2*v**2*x - v**2*y - v**2 + 2*v*y + 2*x - 2*y)) * m,
+                }
+                # print(u, v, x, y, _new_coeffs)
+                def new_coeff(x):
+                    return _new_coeffs.get(x, sp.S(0))
+                solution = _sos_struct_quintic_hexagon(new_coeff)
+                if solution is not None:
+                    solution = m * CyclicSum(
+                        a*(a**2-b**2+(u-v)*a*b-u*a*c+v*b*c + x*b**2-x*c**2 +x*(u-v)*b*c-x*u*b*a+x*v*c*a)**2
+                    ) + solution
+                    return solution
+        return None
+
+    #########################################################
+    #
+    #                     Method 3
+    #
+    #########################################################
+
+    # now we handle the ultimate case
+    def _prove_quintic_from_border(border):
+        """
+        Let f(a,b,c) be a septic (degree-7) cyclic polynomial without a^7 term.
+        Then B(x) = f(x,1,0) / x is quintic. Assume that B(x) >= 0 (x >= 0).
+        Given such B, we find a sum of square form g(a,b,c), such that 
+        \sum abg(a,b,c) = f(a,b,c) when c = 0. That is, the border of \sum g
+        coincides with the border of f.
+
+        This is used to cancel out the border of a septic polynomial, so that 
+        it remains to prove a quartic * abc.
+        """
+        if border.LC() < 0:
+            return None
+        proof = prove_univariate(border, return_raw = True)
+        if proof is None:
+            return None
+        s_args = []
+        a, b, c = sp.symbols('a b c')
+        for multiplier, coeffs, polys in proof:
+            if multiplier == 1:
+                for coeff, poly in zip(coeffs, polys):
+                    bias = poly(1) # ensure f(1,1,1) = 0
+                    poly = sum(v*a**i*b**(2-i) for (i,), v in poly.terms()) - bias*a*c
+                    s_args.append(coeff * b * poly**2)
+            elif multiplier == border.gen:
+                for coeff, poly in zip(coeffs, polys):
+                    bias = poly(1)
+                    poly = sum(v*a**i*b**(2-i) for (i,), v in poly.terms()) - bias*b*c
+                    s_args.append(coeff * a * poly**2)
+        return s_args # sp.Add(*s_args)
+    
+    def _compute_ker(poly, uv = None):
+        """
+        Given quintic F(a,b,c). We denote B(x) = F(x,1,0) >= 0 be its border.
+        Assume F(a,b,c) * \sum(a^2 + zab) = \sum a*V(a,b,c)^2 + abc\sum R(a,b,c).
+        We can apply the quartic theorem on R(a,b,c). Now we will illustrate how to find V and z.
+
+        Let f(x) = V(x,1,0) and g(x) = V(1,0,x). Take b = 1 and c = 0 in the identity
+        we yield xf(x)^2 + g(x)^2 = B(x)(x^2 + zx + 1).
+
+        Now we take x to be the five roots of B(x), then for each root we must have
+        sqrt(-x) * f(x) \pm g(x) = 0
+        Also we may assume V(1,0,0) = 1 when the leading coeff F is 1. We also require V(1,1,1) = 0
+        to cover the equality at the center. Moreover, when F has tight nontrivial equality case
+        (a0, b0, c0) and its permutations satisfying that \sum (a^2-b^2+u(ab-ac)+v(bc-ab))^2 == 0,
+        we need V(a0,b0,c0) = 0 and its permutations.
+
+        Together, there are 10 equations and 10 unknowns. And we can solve for V by solving a linear system,
+        NUMERICALLY. Lastly, z is given by
+        z = lim(x->0) (xf(x)^2 + g(x)^2 - B(x)) / (xB(x)) = f(0)^2 + 2g'(0) - B'(0)
+
+
+        In most ideal cases, V and z are rational and everything is done. However, when V and z are
+        not rational, we first assume that the R(a,b,c) > 0 is strict when (a,b,c) != (1,1,1). Then
+        we can add a little more:
+        F(a,b,c) * \sum (a^2 + (z+dz)ab) = \sum a* #V(a,b,c)^2 + \sum abU(a,b,c) + abc\sum #R(a,b,c).
+        Here #V is a perturbation of V. We select dz > 0 such that the border is slightly larger than
+        the original. Then U(a,b,c) is small and we use it to handle the remaining part of the border.
+        Lastly we apply quartic theorem on the perturbed #R.
+        """
+        def _extract_quartic(poly):
+            """Given septic polynomial F(a,b,c), return the quartic polynomial with coefficients
+            being the a^5bc, a^4b^2c, a^3b^3c, a^2b^4c, ab^5c coefficients of F."""
+            return sp.Poly([poly.coeff_monomial((5-i,i+1,1)) for i in range(5)], a)
+
+        a, b, c, z = sp.symbols('a b c z')
+        # standardize
+        coeff500 = poly.coeff_monomial((5,0,0))
+        poly = (poly / coeff500).as_poly(a,b,c)
+
+        if uv is None:
+            u_, v_, __, ___ = _solve_uvxy(poly)
+        else:
+            u_, v_ = uv
+
+        border = poly.subs({b:1,c:0}).as_poly(a)
+        border_std = ((a*a+z*a+1).as_poly(a) * border - a**7 - 1).div(a.as_poly(a))[0]
+        border_std_coeff5 = border_std.coeff_monomial((5,))
+        quartic_mul_a2 = _extract_quartic((a*a+b*b).as_poly(a,b,c) * poly)
+        quartic_mul_ab = _extract_quartic((a*b+b*c+c*a).as_poly(a,b,c) * poly)
+
+        def _get_quartic_remain(mul, params, return_mpnq = False):
+            """
+            Params is the coefficient of V, which is a length-10 vector.
+            Compute _extract_quartic(f(a,b,c) * sum(z^2 + zab) - sum a*V(a,b,c)^2).
+            When setting return_mpnq = True, return the coefficient of 
+            a^5bc, a^4b^2c, a^3b^3c, a^2b^4c (denoted by m, p, n, q).
+            """
+            _, x1, x2, x3, x4, x5, x6, x7, x8, x9 = params
+            quartic_sub = (2*x1*x2 + 2*x4 + 2*x6*x7 + 2*x8*x9)*(a**4+1) + (2*x1*x4 + 2*x2*x3 + 2*x4*x9 + 2*x5*x8 + 2*x6*x8 + x7**2 + 2*x7)*a**3 + (2*x1*x7 + 2*x1*x9 + 2*x2*x6 + 2*x2*x8 + 2*x3*x4 + 2*x4*x5 + 2*x6*x9 + 2*x7*x8)*a**2 + (2*x1*x5 + 2*x2*x4 + 2*x3*x7 + 2*x4*x6 + 2*x7*x9 + x8**2 + 2*x8)*a
+            quartic_sub = quartic_sub.as_poly(a)
+            quartic_rem = quartic_mul_a2 + quartic_mul_ab * mul - quartic_sub
+            if return_mpnq:
+                return [quartic_rem.coeff_monomial((4-i,)) for i in range(4)]
+            return quartic_rem
+
+
+        # construct the linear system, which is 10*10
+        eqs = [np.array([1.] + [0] * 9), np.array([1.] * 10)]
+
+        uvroot = Root.from_uv((u_, v_))
+        a0, b0, c0 = uvroot.root
+        as_vec = lambda *x: np.array(Root(x).as_vec(3, numer=False)).astype(np.float64).flatten()
+        eqs.extend([as_vec(a0,b0,c0), as_vec(b0,c0,a0), as_vec(c0,a0,b0)])
+
+        criterion = lambda m,p,n,q: (m>0 and (3*m*(m+n)-p**2-p*q-q**2)>=0) or (m==0 and p>=0 and 4*p*q>=n**2)
+
+        def _solve_flip_sgn_eqs(eqs, border, _get_quartic_remain = _get_quartic_remain, mpnq_criterion = criterion):
+            """
+            Add in the constraints of sqrt(-x) * f(x) \pm g(x) = 0.
+            Note that there are 2 choices of sign for each equation, we need to try
+            both of them.
+
+            Return None if no solution is found. Return params of V and z otherwise.         
+            """
+            eqs = np.array(eqs, dtype = np.float64)
+            target = np.array([1] + [0]*9, dtype=eqs.dtype)
+            borderdiff = border.all_coeffs()[-2]
+            as_vec_float = lambda *x: np.array(Root(x).as_vec(3, numer=False)).astype(np.float64).reshape((1,10))
+            as_vec_complex = lambda *x: np.array(Root(x).as_vec(3, numer=False)).astype(np.complex128).reshape((1,10))
+
+            eqs_choices = []
+            for r in nroots(border):
+                if r.is_real:
+                    if r > 0:
+                        return None
+                    else: # r <= 0
+                        eqs_choices.append(
+                            [(sgn * float(sp.sqrt(-r).n(20)) * as_vec_float(r,1,0) + as_vec_float(1,0,r)) for sgn in (1,-1)]
+                        )
+                elif sp.im(r) > 0:
+                    # conjugate pair must have equal selection of sign and we handle them at the same time
+                    # hint: to ensure the solution is real, we can add in the real and imag part of a complex equation
+                    # to the real equations
+                    tmp = []
+                    for sgn in (1,-1):
+                        eq_complex = sgn * complex(sp.sqrt(-r).n(20)) * as_vec_complex(r,1,0) + as_vec_complex(1,0,r)
+                        eq_real = np.vstack([np.real(eq_complex), np.imag(eq_complex)])
+                        tmp.append(eq_real)
+                    eqs_choices.append(tmp)
+
+            for comb in product(range(2), repeat = len(eqs_choices)):
+                # select the combination of signs
+                eqs_ = np.vstack([eqs] + [eqs_choices[i][comb[i]] for i in range(len(eqs_choices))])
+                params_ = np.linalg.solve(eqs_, target)
+                mul_ = params_[6]**2 + params_[2]*2 - borderdiff
+                if mul_ >= -1:
+                    # we require mul >= -1 and det >= 0 to apply the quartic theorem
+                    m_, p_, n_, q_ = _get_quartic_remain(mul_, params_, return_mpnq = True)
+                    if mpnq_criterion(m_, p_, n_, q_):
+                        print('Expected mpnq =', (m_, p_, n_, q_), '\nExpected det =', (3*m_*(m_+n_) - (p_**2+p_*q_+q_**2)).n(20), '\nExpected mul =', mul_)
+                        return params_, mul_
+            return None
+        
+        solved_params = _solve_flip_sgn_eqs(eqs, border)
+        if solved_params is None:
+            return None
+        params_, mul_ = solved_params
+
+        # print(f's(a2+{mul_}ab)' + poly_get_factor_form(poly))
+        # ker = invarraylize(params_, cyc = False)
+        # print(f's(a({poly_get_factor_form(ker)})2)')
+
+        for rounding in (1, 144, 144**2, 144**3, 144**5):
+            params = [sp.S(round(_ * rounding)) / rounding for _ in params_[:-1]]
+            params.append(-sum(params)) # be sure that the sum is zero
+            _, x1, x2, x3, x4, x5, x6, x7, x8, x9 = params
+            border_sub = (2*x1 + x9**2)*a**5 + (x1**2 + 2*x3 + 2*x5*x9)*a**4 + (2*x1*x3 + 2*x2*x9 + x5**2 + 2*x6)*a**3 + (2*x1*x6 + 2*x2*x5 + x3**2 + 2*x9)*a**2 + (x2**2 + 2*x3*x6 + 2*x5)*a + 2*x2 + x6**2
+            border_sub = border_sub.as_poly(a)
+
+            # compute a rationalization of mul_
+            z_min = sp.solve(border_std_coeff5 - (2*x1+x9**2), z)[0]
+            det_z = sp.polys.discriminant(border_std - border_sub, a).as_poly(z)
+            # print(border_sub, border_std)
+
+            lower_bounds = nroots(det_z, method = 'numpy', real = True)
+            lb = None
+            for lb_ in lower_bounds:
+                if lb_ >= z_min and (lb is None or lb_ < lb):
+                    lb = lb_
+            else:
+                lb = max(mul_, z_min)
+            lb = sp.S(round(lb * rounding + .5)) / rounding
+            border_rem_tmp = border_std.subs(z, lb) - border_sub
+            if _verify_border_nonnegative(border_rem_tmp):
+                border_rem = border_rem_tmp
+                mul = lb
+            else:
+                mul = None
+                # for index, ((left, right), __) in enumerate(det_z.intervals()[::-1]):
+                if True:
+                    (left, right), _ = det_z.intervals()[-1]
+                    left, right = det_z.refine_root(left, right, eps = 1/rounding)#/24)
+                    for val in (left, right):
+                        if val >= z_min:
+                            border_rem_tmp = border_std.subs(z, val) - border_sub
+                            # print('COUNT =', sp.polys.count_roots(border_rem_tmp, 0, None), 'LC =', border_rem_tmp.LC(), '\t', '(l,r) =', (left,right), 'index =', index)#border_rem_tmp.as_expr().n(5))
+                            if _verify_border_nonnegative(border_rem_tmp):
+                                border_rem = border_rem_tmp
+                                mul = val
+                                break
+                    # if left < z_min:
+                    #     break
+                if mul is None:
+                    continue
+
+            quartic_rem = _get_quartic_remain(mul, params, return_mpnq = False)
+            if quartic_rem.LC() < 0:
+                continue
+
+            border_proof = _prove_quintic_from_border(border_rem)
+            if border_proof is None:
+                continue
+            quartic_sub2 = _extract_quartic((a*b).as_poly(a,b,c) * sp.Add(*border_proof).as_poly(a,b,c))
+            quartic_rem -= quartic_sub2
+            m_, p_, n_, q_ = [quartic_rem.coeff_monomial((4-i,)) for i in range(4)]
+
+            # print('Det =', (3*m_*(m_+n_) - (p_**2+p_*q_+q_**2)).n(20), quartic_rem.as_expr().n(10), 'Mul =', mul.n(20), mul_)
+            if criterion(m_, p_, n_, q_) and m_ > 0:
+                # print('Solution Found.')
+                # print(poly_get_factor_form(invarraylize(sp.Matrix(params), cyc = False)), mul)
+                # print(border_proof)
+                multiplier = CyclicSum(a**2 + mul*b*c)
+                sol_main = CyclicSum(a * invarraylize(sp.Matrix(params), cyc = False).as_expr()**2)
+
+                border_proof_split_a, border_proof_split_b = [], []
+                for arg in border_proof: #.args:
+                    if a in arg.args:
+                        border_proof_split_a.append(arg)
+                    else:
+                        border_proof_split_b.append(arg)
+                border_proof_split_a = sp.Add(*border_proof_split_a)
+                border_proof_split_b = sp.Add(*border_proof_split_b)
+                border_proof = CyclicSum(a*b*border_proof_split_a) + CyclicSum(a*b*border_proof_split_b)
+                
+                rest = 0
+                if m_ >= 0:
+                    det = 3*m_*(m_+n_) - (p_**2+p_*q_+q_**2)
+                    rest = m_ / 2 * CyclicProduct(a) * CyclicSum((a**2-b**2+(p_+2*q_)/3/m_*(a*c-a*b)-(q_+2*p_)/3/m_*(b*c-a*b))**2)
+                    rest = rest + det / 6 / m_ * CyclicProduct(a) * CyclicSum(a**2*(b-c)**2)
+                elif m_ == 0:
+                    # rest = 
+                    0
+                rest += poly(1,1,1) * (1 + mul) * CyclicSum(a**3*b**2*c**2)
+                return (coeff500 * sol_main + coeff500 * border_proof + coeff500 * rest) / multiplier
+
+
+
+    if not (isinstance(u_, sp.Rational) and isinstance(v_, sp.Rational)):
+        return _compute_ker(poly, (u_, v_))
 
     return None
+
+
 
 def _sos_struct_quintic_windmill(coeff):
     """
@@ -1217,13 +1595,24 @@ def _sos_struct_quintic_windmill_special(coeff):
 
 def _sos_struct_quintic_hexagon(coeff):
     """
-    Try solving quintics without s(a5).
+    Try solving quintics without s(a^5).
+
+    Theorem 1.
+    When Det = 64*p^3-16*p^2*q^2+8*p*q*z^2+32*p*q*z-256*p*q+64*q^3-z^4-24*z^3-192*z^2-512*z >= 0,
+    we have f(a,b,c) = s(a^4b + pa^3b^2 + qa^2b^3 + ab^4 + za^3bc - (p+q+z+2)a^2b^2c) >= 0.
+
+    Proof: Take w = z + 8, u = 4(2p^2-qw)/(w^2-4pq), v = 4(2q^2-pw)/(w^2-4pq),
+    and t = (4pq-w^2)^2/(8(2p+2q+w)(3(p-q)^2+(w-p-q)^2)),
+    then 1 - t = Det/... >= 0, and we have
+    f(a,b,c) = t\sum c(a^2-b^2+u(ab-ac)+v(bc-ab))^2 + (1 - t)\sum c(a-b)^4 >= 0.
 
     Examples
     -------
     s(c(a-b)2(a+b-3c)2)
 
     s(a4b+a4c+6a3b2+a2b3-9a3bc)-10abcs(a2-ab)
+
+    s(4a4b+4a4c-8a3b2-29a3bc+8a3c2+21a2b2c)
 
     s(a4b+a4c+5a3b2+3a2b3-10a2b2c)-20s(a3bc-a2b2c)
 
@@ -1248,16 +1637,39 @@ def _sos_struct_quintic_hexagon(coeff):
     if coeff((4,1,0)) == 0 or coeff((1,4,0)) == 0:
         return _sos_struct_quintic_windmill(coeff)
 
+    rem = sum(coeff(_) for _ in [(4,1,0),(3,2,0),(2,3,0),(1,4,0),(3,1,1),(2,2,1)])
+    if rem < 0:
+        return None
+
 
     if coeff((4,1,0)) == coeff((1,4,0)):
         # Theorem 1.
         # In this case, there must exist u, v such that
         # f / coeff((4,1,0)) >= s(c(a^2-b^2+u(ab-ac)+v(bc-ab))^2)
-        t = coeff((4,1,0))
+        coeff410 = coeff((4,1,0))
 
-        p, q, z, w = coeff((3,2,0)) / t, coeff((2,3,0)) / t, coeff((3,1,1)) / t, coeff((2,2,1)) / t
+        p, q, z = coeff((3,2,0)) / coeff410, coeff((2,3,0)) / coeff410, coeff((3,1,1)) / coeff410
+
+        det = 64*p**3 - 16*p**2*q**2 + 8*p*q*z**2 + 32*p*q*z - 256*p*q + 64*q**3 - z**4 - 24*z**3 - 192*z**2 - 512*z
+        if det >= 0:
+            if p != q or w != p + q:
+                # Actually the case p == q will be handled in quintic_symmetric, so we ignore it here.
+                w = z + 8
+                denom = 1 / (8*(2*p + 2*q + w)*(3*(p-q)**2 + (w-p-q)**2))
+                y = [denom * coeff410, det * denom * coeff410, rem]
+                exprs = [
+                    CyclicSum(c*((w**2-4*p*q)*(a**2-b**2)+4*(2*p**2-q*w)*(a*b-a*c)+4*(2*q**2-p*w)*(b*c-a*b))**2),
+                    CyclicSum(c*(a-b)**4),
+                    CyclicSum(a**2*b**2*c)
+                ]
+                return _sum_y_exprs(y, exprs)
+
+
+        # backup plan:
         # u^2-2v <= p   --->  v <= (u^2-p)/2
         # v^2-2u <= q   --->  (u^2-p)^2/4 - 2u <= q
+
+
         u = sp.symbols('u')
         eq = ((u*u - p)**2 / 4 - 2*u - q).as_poly(u)
         u_, v_ = None, None
@@ -1288,10 +1700,10 @@ def _sos_struct_quintic_hexagon(coeff):
                 1,
                 q - (v_ **2 - 2 * u_),
                 (z + 2 * u_ * v_) / 2,
-                2 + p + q + z + w
+                rem / coeff410
             ]
             if all(_ >= 0 for _ in y):
-                y = [_ * t for _ in y]
+                y = [_ * coeff410 for _ in y]
                 exprs = [
                     CyclicSum(c*(a**2 - b**2 + u_*(a*b-a*c) + v_*(b*c-a*b))**2),
                     CyclicSum(a**2*b*(b-c)**2),
@@ -1299,6 +1711,10 @@ def _sos_struct_quintic_hexagon(coeff):
                     CyclicProduct(a) * CyclicSum(a*b)
                 ]
                 return _sum_y_exprs(y, exprs)
+
+        # The case must have been solved above.
+        # If not, the problem is false.
+        return None
 
 
     if True:
@@ -1377,7 +1793,7 @@ def _sos_struct_quintic_hexagon(coeff):
                     g - (u_**2*x_ - 2*v_*x_ - v_*y_),
                     h - (v_**2*x_ - 2*u_*x_ + u_*y_),
                     (coeff((3,1,1)) - (-2*u_*v_*x_ - 2*u_*y_ + 2*v_*y_ - 8*(s_ - x_))) / 2,
-                    sum(coeff(_) for _ in [(4,1,0),(3,2,0),(2,3,0),(1,4,0),(3,1,1),(2,2,1)])
+                    rem
                 ]
                 if all(_ >= 0 for _ in y):
                     exprs = [
@@ -1393,10 +1809,3 @@ def _sos_struct_quintic_hexagon(coeff):
             
 
     return None
-
-
-    # if y is None:
-    #     # try updegree
-    #     multipliers = ['a*b']
-    #     poly2 = poly * sp.polys.polytools.Poly('a*b+b*c+c*a')
-    #     multipliers , y , exprs = _merge_sos_results(multipliers, y, exprs, recurrsion(poly2, 7))
