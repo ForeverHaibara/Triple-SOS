@@ -43,11 +43,13 @@ def _sos_struct_sextic_hexagon_symmetric(coeff, real = False):
 
     s(a)s(ab)p(a+b)-6s(a(a+b)(a+c))p(a)-3abcs((a+b-c)(a-c)(b-c))   (real)
 
-    s(bc(a-b)(a-c)(a-3b)(a-3c))+9/4p(a-b)2
+    8s(a2)3-9p(a+b)s(a3)-2s((b-c)2(b+c-1/8a))2    (real)
 
-    s(bc(a-b)(a-c)(a-3b)(a-3c)) +1/4s(a2b+ab2-2abc)2+5p(a-b)2+4abcs(a(b-c)2)
-    
-    s(bc(a-b)(a-c)(a-9/8b)(a-9/8c))+81/256p(a-b)2
+    s(bc(a-b)(a-c)(a-3b)(a-3c)) +1/4s(a2b+ab2-2abc)2+5p(a-b)2+4abcs(a(b-c)2)    (real)
+
+    s(bc(a-b)(a-c)(a-3b)(a-3c))+9/4p(a-b)2    (real)
+
+    s(bc(a-b)(a-c)(a-9/8b)(a-9/8c))+81/256p(a-b)2    (real)
 
     p(a2+ab+b2)+12a2b2c2-3p(a+b)2/5    (real, uncentered)
     
@@ -76,24 +78,43 @@ def _sos_struct_sextic_hexagon_symmetric(coeff, real = False):
         if x_ < -2 or y_ < -2:
             return None
             
-        if x_ == y_ and x_ <= 2:
-            # try us(a2b+ab2-2abc)2 + (1-u)p(a-b)2
+        if abs(x_ - y_) < 2:
+            # Case 1. Try linear combination of s(a(b-c)^2)^2, p(a-b)^2, p(a)s(a(b-c)^2)
+            # and s(a^4(b-c)^2) or s(a^2b^2(a-b)^2)
+            # the last s(a^4(b-c)^2) or s(a^2b^2(a-b)^2) balance the coeffs of a^3b^3 and a^4bc
             # where 2u - 2(1-u) = x  =>  u = (x + 2) / 4
+            reg = 1 - abs(x_ - y_) / 2
+            w_ = max(x_, y_) / reg
             y = [
-                (x_ + 2) / 4,
-                (2 - x_) / 4,
-                -z_ + 10 * (x_ + 2) / 4 - 2 * (2 - x_) / 4
+                1 - reg,
+                (w_ + 2) / 4 * reg,
+                (2 - w_) / 4 * reg,
+                -z_ + (10 * (w_ + 2) / 4 - 2 * (2 - w_) / 4) * reg,
             ]
-            if y[-1] >= 0:
-                y = [_ * coeff((4,2,0)) for _ in y] + [rem]
-                exprs = [
-                    CyclicSum(a*(b-c)**2)**2,
-                    CyclicProduct((a-b)**2),
-                    CyclicProduct(a) * CyclicSum(a*(b-c)**2),
-                    CyclicProduct(a**2)
-                ]
+            if all(_ >= 0 for _ in y):
+                # small tip: note the identity s(a2(b2-c2)2) = (s(a(b-c)2)2+p(a-b)2+8p(a)s(a(b-c)2))/2
+                if min(y[1], y[2]) * 8 >= y[3]:
+                    exchange = y[3] / 8
+                    y[1] -= exchange
+                    y[2] -= exchange
+                    y[3] = 0
+                    y.append(exchange * 2)
+                else:
+                    y = None
+                    # y.append(sp.S(0))
+                
+                if y is not None:
+                    y = [_ * coeff((4,2,0)) for _ in y] + [rem]
+                    exprs = [
+                        CyclicSum(a**4*(b-c)**2) if x_ > y_ else CyclicSum(a**2*b**2*(a-b)**2),
+                        CyclicSum(a*(b-c)**2)**2,
+                        CyclicProduct((a-b)**2),
+                        CyclicProduct(a) * CyclicSum(a*(b-c)**2),
+                        CyclicSum(a**2*(b**2-c**2)**2),
+                        CyclicProduct(a**2)
+                    ]
 
-                return _sum_y_exprs(y, exprs)
+                    return _sum_y_exprs(y, exprs)
                 
 
         if x_ <= 2 and y_ <= 2 and (x_ != -2 or y_ != -2):
@@ -453,7 +474,7 @@ def _sos_struct_sextic_hexagram_symmetric(coeff):
         ]
         if all(_ >= 0 for _ in y):
             exprs = [
-                CyclicSum(b*c*(a-b)**2*(a-c)**2),
+                CyclicSum(a*b*(a-c)**2*(b-c)**2),
                 CyclicSum(b**2*c**2*(a-b)*(a-c)),
                 CyclicSum(a*(a-b)*(a-c)) * CyclicProduct(a),
                 CyclicSum(a*(b-c)**2) * CyclicProduct(a),
@@ -724,8 +745,9 @@ def _sos_struct_sextic_iran96(coeff, real = False):
         return None
 
     m, p, q, w, z = coeff((5,1,0)), coeff((4,2,0)), coeff((3,3,0)), coeff((4,1,1)), coeff((3,2,1))
+    rem = coeff((2,2,2)) + 3*((m + p + z) * 2 + q + w)
 
-    if m < 0:
+    if m < 0 or rem < 0:
         return None
     elif m == 0:
         # only perform sum of squares for real numbers when explicitly inquired
@@ -739,7 +761,7 @@ def _sos_struct_sextic_iran96(coeff, real = False):
             (q - m * 6 + 2 * (p + m * 4)) / 2,
             w,
             z + w,
-            coeff((2,2,2)) + 3 *((m + p + z) * 2 + q + w)
+            rem
         ]
 
         if all(_ >= 0 for _ in y):
@@ -763,14 +785,14 @@ def _sos_struct_sextic_iran96(coeff, real = False):
             q + 2 * (p + m),
             w + 2 * (p + 4 * m) - (q + 2 * (p + m)),
             4*m + 4*p + 2*q + w + z,
-            coeff((2,2,2)) + 3*((m + p + z) * 2 + q + w)
+            rem
         ]
         
         if all(_ >= 0 for _ in y):
             exprs = [
                 CyclicSum(a*b*(a-b)**4),
                 CyclicProduct((a-b)**2),
-                CyclicSum(b*c*(a-b)**2*(a-c)**2),
+                CyclicSum(a*b*(a-c)**2*(b-c)**2),
                 CyclicSum(a*(a-b)*(a-c)) * CyclicProduct(a),
                 CyclicSum(a*(b-c)**2) * CyclicProduct(a),
                 CyclicProduct(a**2)
@@ -779,7 +801,30 @@ def _sos_struct_sextic_iran96(coeff, real = False):
 
 
     if p >= 0 and q + 2 * m + 2 * p >= 0:
-        # Easy case 2, when we do not need to updegree
+        # Easy case 3, subtract s(ab(a-b)2(a+b-xc)2) such that the coeffs of 
+        # a^4bc and a^3b^3 are equal
+        
+        if True:
+            x_ = (q - w) / (4 * m) + sp.Rational(1,2)
+            y = [
+                m,
+                p,
+                q + 2 * m + 2 * p,
+                z - m*x_*(x_+2) - 2*p + 3*(q + 2*m + 2*p),
+                rem
+            ]
+            if all(_ >= 0 for _ in y):
+                exprs = [
+                    CyclicSum(a*b*(a-b)**2*(a+b-x_*c)**2),
+                    CyclicProduct((a-b)**2),
+                    CyclicSum(a*b*(a-c)**2*(b-c)**2),
+                    CyclicSum(a*(b-c)**2) * CyclicProduct(a),
+                    CyclicProduct(a**2)
+                ]
+                return _sum_y_exprs(y, exprs)
+
+
+        # Easy case 4, when we do not need to updegree
 
         # find some u such that
         # w' = w + 2 * p + 4 * u * m >= 0
@@ -805,14 +850,14 @@ def _sos_struct_sextic_iran96(coeff, real = False):
                 q2 - min(w2, q2),
                 w2 - min(w2, q2),
                 z - u_ * (u_ + 2) * m - 2*p + (w2 + q2 - 2 * min(w2, q2)),
-                coeff((2,2,2)) + 3 *((m + p + z) * 2 + q + w)
+                rem
             ]
 
             if all(_ >= 0 for _ in y):
                 exprs = [
                     CyclicSum(a*b*(a-b)**2*(a+b-u_*c)**2),
                     CyclicProduct((a-b)**2),
-                    CyclicSum(b*c*(a-b)**2*(a-c)**2),
+                    CyclicSum(a*b*(a-c)**2*(b-c)**2),
                     CyclicSum(b**2*c**2*(a-b)*(a-c)),
                     CyclicSum(a*(a-b)*(a-c)) * CyclicProduct(a),
                     CyclicSum(a*(b-c)**2) * CyclicProduct(a),
@@ -822,7 +867,7 @@ def _sos_struct_sextic_iran96(coeff, real = False):
 
 
     if True:
-        # Easy case 4, when we can extract some s(ab) * quartic
+        # Easy case 5, when we can extract some s(ab) * quartic
         # e.g. s(ab)s(a4-4a3b-4ab3+7a2bc+15(a2b2-a2bc))
         #      s(ab)s(a2(a-b)(a-c))
 
@@ -854,7 +899,7 @@ def _sos_struct_sextic_iran96(coeff, real = False):
                 v_,
                 -m - 2*p + 4*u_ - v_ + w,
                 -p + u_ + 2*v_ + w + z,
-                coeff((2,2,2)) + 3*((m + p + z) * 2 + q + w)
+                rem
             ]
 
             if all(_ >= 0 for _ in y):
@@ -862,7 +907,7 @@ def _sos_struct_sextic_iran96(coeff, real = False):
                     CyclicSum(a*b) * CyclicSum((a-b)**2*(a+b-(-p+u_)/m*c)**2),
                     CyclicSum(a*b) * CyclicSum(a**2*(b-c)**2),
                     CyclicProduct((a-b)**2),
-                    CyclicSum(b*c*(a-b)**2*(a-c)**2),
+                    CyclicSum(a*b*(a-c)**2*(b-c)**2),
                     CyclicSum(a*(a-b)*(a-c)) * CyclicProduct(a),
                     CyclicSum(a*(b-c)**2) * CyclicProduct(a),
                     CyclicProduct(a**2)
@@ -987,31 +1032,33 @@ def _sos_struct_sextic_iran96(coeff, real = False):
         y = [
             y_hex if root is None else sp.S(0),
             r,
-            (w - (t**2 + 4*t*u_**2 - 8*t*u_ - 4*u_**3 + 8*u_**2 - 4*u_ + 4)/(u_ - 1)**2) / 2,
-            z - coeff_z(u_),
-            (coeff((2,2,2)) / 3 + (coeff((5,1,0)) + coeff((4,2,0)) + coeff((3,2,1))) * 2 \
-                + coeff((3,3,0)) + coeff((4,1,1))) / m * 3,
+            rem / m,
             sp.S(1),
-            (t - 2*u_) ** 2 / 2 / (u_ - 1)**2 + (sp.S(0) if root is None else y_hex / 2 / (u_ - 1)**2),
             sp.S(0) if root is None else 1 / (u_ - 1)**2 * y_hex
         ]
         # print(r, t, u_, phi, y)
 
-        if any(_ < 0 for _ in y):
+        pw1 = (w - (t**2 + 4*t*u_**2 - 8*t*u_ - 4*u_**3 + 8*u_**2 - 4*u_ + 4)/(u_ - 1)**2) / 2
+        pw2 = z - coeff_z(u_)
+        pw3 = (t - 2*u_) ** 2 / 2 / (u_ - 1)**2 + (sp.S(0) if root is None else y_hex / 2 / (u_ - 1)**2)
+
+        if any(_ < 0 for _ in y) or any(_ < 0 for _ in [pw1, pw2, pw3]):
             return None
+
+        p1 = (m*pw1) * CyclicSum(a)**2 * CyclicSum((a-b)**2) +\
+            (m*pw2) * CyclicSum(a) * CyclicSum(a*(b-c)**2) +\
+            (m*pw3) * CyclicSum((b-c)**2*(b+c-u_*a)**2)
+        p1 = p1.as_coeff_Mul()
 
         y = [_ * m for _ in y]
         exprs = [
             CyclicSum(a) * CyclicSum(a*b*(a-c)**2*(b-c)**2),
             CyclicSum(a) * CyclicProduct((a-b)**2),
-            CyclicSum(a)**2 * CyclicSum((a-b)**2) * CyclicProduct(a),
-            CyclicSum(a) * CyclicSum(a*(b-c)**2) * CyclicProduct(a),
             CyclicSum(a) * CyclicProduct(a**2),
             CyclicSum(a*(b-c)**2*(a**2+b**2+c**2-t*a*b-t*a*c+phi*b*c)**2),
-            CyclicSum((b-c)**2*(b+c-u_*a)**2) * CyclicProduct(a),
             CyclicSum(c*(a-b)**2*(u_*a*b-(u_-1)*a*c-(u_-1)*b*c)**2)
         ]
-        return _sum_y_exprs(y, exprs) / multiplier
+        return (_sum_y_exprs(y, exprs) + p1[0] * p1[1] * CyclicProduct(a)) / multiplier
 
     elif u_ == 1:
         # very special case, it must be t == 2
@@ -1022,28 +1069,30 @@ def _sos_struct_sextic_iran96(coeff, real = False):
         y = [
             y_hex if root is None else sp.S(0),
             r,
-            w - 4,
-            z + w + 1,
-            (coeff((2,2,2)) / 3 + (coeff((5,1,0)) + coeff((4,2,0)) + coeff((3,2,1))) * 2 \
-                + coeff((3,3,0)) + coeff((4,1,1))) / m * 3,
+            rem / m,
             sp.S(1),
-            sp.S(2)
         ]
 
-        if any(_ < 0 for _ in y):
+        pw1 = w - 4
+        pw2 = z + w + 1
+        pw3 = sp.S(2)
+
+        if any(_ < 0 for _ in y) or pw1 < 0 or pw2 < 0:
             return None
+
+        p1 = (m*pw1) * CyclicSum(a) * CyclicSum(a*(a-b)*(a-c))\
+            + (m*pw2) * CyclicSum(a) * CyclicSum(a*(b-c)**2)\
+            + (m*pw3) * CyclicSum((b-c)**2*(b+c-a)**2)
+        p1 = p1.as_coeff_Mul()
 
         y = [_ * m for _ in y]
         exprs = [
             CyclicSum(a) * CyclicSum(a*b*(a-c)**2*(b-c)**2),
             CyclicSum(a) * CyclicProduct((a-b)**2),
-            CyclicSum(a) * CyclicSum(a*(a-b)*(a-c)) * CyclicProduct(a),
-            CyclicSum(a) * CyclicSum(a*(b-c)**2) * CyclicProduct(a),
             CyclicSum(a) * CyclicProduct(a**2),
             CyclicSum(a*(b-c)**2*(b+c-a)**4),
-            CyclicSum((b-c)**2*(b+c-a)**2) * CyclicProduct(a)
         ]
-        return _sum_y_exprs(y, exprs) / multiplier
+        return (_sum_y_exprs(y, exprs) + p1[0] * p1[1] * CyclicProduct(a)) / multiplier
 
     return None
 
