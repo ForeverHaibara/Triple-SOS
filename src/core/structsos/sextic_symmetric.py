@@ -1,7 +1,9 @@
 import sympy as sp
 
 from .utils import CyclicSum, CyclicProduct, _sum_y_exprs, _make_coeffs
+from ..symsos import prove_univariate
 from ...utils.roots.rationalize import rationalize_bound, cancel_denominator
+from ...utils.roots.findroot import nroots
 
 
 #####################################################################
@@ -739,6 +741,8 @@ def _sos_struct_sextic_iran96(coeff, real = False):
     s(ab(a2+b2-2c2-3(2ab-ac-bc))2)
 
     (s(22a6-36a5b-36ab5+657a4b2+657a2b4-28a3b3-540abc(a2b+ab2)-420a4bc+792/3a2b2c2)-22s(a(a-b)(a-c))2)
+
+    s((a3+b3-2a2b-2ab2+c2(a+b)-3(c2a+c2b-c(a2+b2)))2)-s((b-c)2(b+c-a))2/2
     """
     if not (coeff((6,0,0)) == 0 and coeff((5,1,0)) == coeff((1,5,0)) and coeff((4,2,0)) == coeff((2,4,0)) and\
         coeff((3,2,1)) == coeff((2,3,1)) and coeff((5,1,0)) >= 0):
@@ -1097,6 +1101,264 @@ def _sos_struct_sextic_iran96(coeff, real = False):
     return None
 
 
+def _sos_struct_sextic_symmetric_quadratic_form(poly):
+    """
+    Theorem:
+    Let F0 = s(a^6+a^5b+a^5c+a^4bc-2a^3b^2c-2a^3bc^2) and f(a,b,c) = s(xa^2 + yab).
+
+    Then we have
+    F(a,b,c) = F0 - 2s(a^4-a^2bc)f(a,b,c) + s(a^2-ab)f(a,b,c)^2 >= 0
+    because
+    F(a,b,c) * s(a^2-ab) = (s(a^2-ab)f(a,b,c) - s(a^4-a^2bc))^2 + s(ab)p(a-b)^2 >= 0.
+
+    So we try to write the original polynomial in such quadratic form. Note that for such F,
+    it has three multiplicative roots on the symmetric axis b=c=1, one of which is the centroid a=b=c=1.
+    The other two roots determine the coefficient x and y.
+
+    For normal polynomial without three multiplicative roots, we first write the symmetric axis in the form
+    of (a-1)^2 * ((a^2+..a+..)^2 + (..a+..)^2 + ...). Now we apply the theorem to each of them, and then
+    merge their f(a,b,c) according.
+
+
+    Moreover, there exists u, v such that u+v = (2-2*y)/(x-1), uv = (2*x+y-2)/(x-1) so that
+    F(a,b,c) = (x-1)^2s((a-b)(a-c)(a-ub)(a-uc)(a-vb)(a-vc)) + (x^2-xy+y^2-y)p(a-b)^2
+
+    Examples
+    --------
+    72p(a+b-2c)2+s(a2-ab)s(11a2-14ab)2
+
+    (s((a-b)(a-c)(a-2b)(a-2c)(a-18b)(a-18c))-53p(a-b)2)
+
+    (s((b-c)2(7a2-b2-c2)2)-112p(a-b)2)
+
+    s((a-b)2(-a2-b2+2c2+2(ab-c2)-3s(ab)+2s(a2))2)
+
+    s(414a6-1470a5b-1470a5c+979a4b2+5864a4bc+979a4c2+644a3b3-5584a3b2c-5584a3bc2+5228a2b2c2)+1830p(a-b)2
+
+    References
+    -------
+    [1] https://artofproblemsolving.com/community/c6t243f6h3013463_symmetric_inequality
+
+    [2] https://tieba.baidu.com/p/8261574122
+    """
+    a, b, c = sp.symbols('a b c')
+    sym = poly.subs({b:1,c:1}).div((a**2-2*a+1).as_poly(a))
+    if not sym[1].is_zero:
+        return None
+
+    # write the symmetric axis in sum-of-squares form
+    sym = prove_univariate(sym[0], return_raw = True)
+    if sym is None or len(sym[1][1]) > 0: # this is not positive over R
+        return None
+    # print(sym)
+
+    def _solve_from_sym(sym):
+        # given symmetric axis with three roots, we determine the exact coefficient f(a,b,c)
+        # (x,y) are the parameters of f(a,b,c). While coeff stands for the scaling factor.
+        w, v, u = [sym.coeff_monomial((i,)) for i in range(3)]
+        x, y = (2*u + v - 2*w)/(4*u + v - 2*w), (4*u - 2*w)/(4*u + v - 2*w)
+        coeff = v/(2*y-2) if y != 1 else w / (2*x + y - 2)
+        return x, y, coeff
+
+    params = []
+    for coeff, sym_part in zip(sym[0][1], sym[0][2]):
+        x_, y_, coeff_ = _solve_from_sym(sym_part)
+        if coeff_ is sp.nan:
+            return None
+        # part_poly = coeff * coeff_**2 * pl(f's(a6+a5b+a5c+a4bc-2a3b2c-2a3bc2)-2s(a4-a2bc)s({x_}a2+{y_}ab)+s(a2-ab)s({x_}a2+{y_}ab)2')
+        # print((x_, y_), coeff * coeff_**2, poly_get_factor_form(part_poly))
+        params.append((coeff * coeff_**2, x_, y_))
+
+    # merge these f(a,b,c) and standardize
+    merged_params = sum([p1 for p1,p2,p3 in params]), sum([p1*p2 for p1,p2,p3 in params]), sum([p1*p3 for p1,p2,p3 in params])
+    x_, y_ = merged_params[1] / merged_params[0], merged_params[2] / merged_params[0]
+
+    # Now we have F(a,b,c) = merged_params[0] * (F0 - 2s(a4-a2bc)f(a,b,c) + s(a2-ab)f(a,b,c)^2) + s(a2-ab)g(a,b,c) + (..)*p(a-b)^2.
+    # where f is the merged quadratic form and the g is the remaining part.
+    # Assume g = s(ma^4 + pa^3b + pab^3 + na^2b^2 + ..a^2bc)
+    # We can represent g = ts(a^2-ab)^2 + (m-t)s(a^2+rab)^2 >= 0
+    m_, p_, n_ = sum([p1*p2**2 for p1,p2,p3 in params]), sum([2*p1*p2*p3 for p1,p2,p3 in params]), sum([p1*p3**2 for p1,p2,p3 in params])
+    m_, p_, n_ = m_ - merged_params[0] * x_**2, p_ - 2 * merged_params[0] * x_ * y_, (n_ + 2*m_) - merged_params[0] * (2*x_**2 + y_**2)
+    if not (m_ == 0 and p_ == 0 and n_ == 0):
+        t_ = (-2*m_**2 + m_*n_ - p_**2/4)/(n_ + p_ - m_)
+        if t_ < 0: # actually this will not happen
+            return None
+        if m_ != t_:
+            # rem_coeff * s(a^2 + rem_ratio * ab)^2
+            rem_ratio = (p_ + 2*t_) / (m_ - t_) / 2
+            rem_poly = (m_ - t_) * CyclicSum(a**2 + rem_ratio*a*b)**2
+        else:
+            # it degenerates to rem_coeff * s(ab)^2
+            if n_ < 3*t_: # this will not happen
+                return None
+            rem_poly = (n_ - 3*t_) * CyclicSum(a*b)**2
+    else:
+        t_, rem_poly = sp.S(0), sp.S(0)
+
+    # ker_coeff is the remaining coefficient of (a-b)^2(b-c)^2(c-a)^2
+    ker_coeff = (poly.coeff_monomial((4,2,0)) - merged_params[0] * (3*x_**2 - 2*x_*y_ - 2*x_ + y_**2) - (n_ - p_ + m_))
+
+    # each t_ exhanges 27/4p(a-b)^2 because s(a^2-ab)^3 = 1/4 * p(2a-b-c)^2 + 27/4 * p(a-b)^2
+    ker_coeff += 27 * t_ / 4
+
+    print('Coeff =', merged_params[0], 'ker =', ker_coeff)
+    print('  (x,y) =', (x_, y_), 'ker_std =', ker_coeff / merged_params[0])
+    print('  (m,p,n,t) = ', (m_, p_, n_, t_))
+
+    if x_ + y_ == sp.S(5)/3 and x_ != 1:
+        # F_{x,y} = (x-1)^2/4 * s((b-c)^2(b+c-za))^2 + 3(x-1)(9x-5)/4 * p(a-b)^2
+        z_ = 2*(3*x_ - 2) / 3 / (x_ - 1)
+        ker_coeff2 = -3*(x_ - 1)*(9*x_ - 5) / 4 * merged_params[0]
+        # p0 = (b-c)**2*(b+c-z_*a)
+        p0 = 2*a**3 - (z_ + 1)*b*c**2 - (z_ + 1)*b**2*c + 2*z_*a*b*c
+        p0 = p0.together().as_coeff_Mul()
+        if ker_coeff >= ker_coeff2:
+            solution = [
+                merged_params[0] * (x_ - 1)**2/4 * p0[0]**2 * CyclicSum(p0[1])**2,
+                t_/4 * CyclicProduct(a+b-2*c)**2,
+                sp.Rational(1,2) * CyclicSum((a-b)**2) * rem_poly,
+                (ker_coeff - ker_coeff2) * CyclicProduct((a-b)**2)
+            ]
+            return sp.Add(*solution)
+
+    if ker_coeff >= merged_params[0] / 3:
+        # Case that we do not need to higher the degree because
+        # F(a,b,c) + p(a-b)^2/3 = s((a-b)^2((3*x-3)*a^2+(3*y-4)*a*b+(3*y-2)*a*c+(3*x-3)*b^2+(3*y-2)*b*c+(3*x-1)*c^2)^2)/18
+        p1 = (3*x_ - 3)*a**2 + (3*y_ - 4)*a*b + (3*y_ - 2)*a*c + (3*x_ - 3)*b**2 + (3*y_ - 2)*b*c + (3*x_ - 1)*c**2
+        if x_ < 1: p1 = -p1
+        solution = [
+            merged_params[0]/18 * CyclicSum((a-b)**2*p1**2),
+            t_/4 * CyclicProduct(a+b-2*c)**2,
+            sp.Rational(1,2) * CyclicSum((a-b)**2) * rem_poly,
+            (ker_coeff - merged_params[0] / 3) * CyclicProduct((a-b)**2)
+        ]
+        return sp.Add(*solution)
+
+    if ker_coeff >= 0:
+        p1 = ker_coeff*2*a**2 + (2*merged_params[0] - ker_coeff*2)*b*c
+        p1 = p1.together().as_coeff_Mul()
+        solution = [
+            merged_params[0]*2 * (CyclicSum(a**2-b*c)*CyclicSum(x_*a**2+y_*a*b) - CyclicSum(a**4-a**2*b*c))**2,
+            t_/4 * CyclicSum((a-b)**2) * CyclicProduct(a+b-2*c)**2,
+            2 * CyclicSum(a**2-a*b)**2 * rem_poly,
+            p1[0] * CyclicSum(p1[1]) * CyclicProduct((a-b)**2)
+        ]
+        return sp.Add(*solution) / CyclicSum((a-b)**2)
+
+
+
+    def _tighter_bound_border(x, y, ker_coeff = 0):
+        """
+        Enhanced version of proving F_{x,y} >= 0. For
+        R(a,b,c) = s((a-b)(a-c)(a-ub)(a-uc)(a-vb)(a-vc)) - wp(a-b)^2.
+        Denote suv = u+v, puv = u*v,
+        D1 = -2*m**3 + (suv+7)*m**2 - 4*(suv+1)*m + puv**2 + 4*(suv-1)
+        D2 = 4*m**3 - (4*suv+7)*m**2 + ((suv+4)**2+2*puv-20)*m + (puv-2)**2-2*suv**2
+        phi = -puv**2 * D2 / (m-2) / (m+puv-2)**2 / (suv-2*m-1) - m
+        final_coeff = D1*D2 / (m-2)**2 / (m+puv-2)**2 / (suv-2*m-1)
+        
+        If w = (m**3 - (suv+1)*m**2 + (suv+puv-3)*m + (puv-1)**2+2*suv+1) / (m - 2),
+        Then we have identity
+        R(a,b,c) * s(a^2 + phi*b*c) = s((a-b)^2g(a,b,c)^2) + (phi - (m-2)*(suv-2*m)/(m+puv-2)) * s(ab(a-b)^2h(a,b,c)^2)
+            + final_coeff * (puv**2 * s(ab)p(a-b)^2 + (2-m)s(bc(a-b)(a-c)(a-ub)(a-uc)(a-vb)(a-vc)))
+
+        References
+        --------
+        [1] https://tieba.baidu.com/p/8261574122
+        """
+        suv, puv = (2-2*y)/(x-1), (2*x+y-2)/(x-1)
+        a, b, c, m = sp.symbols('a b c m')
+        det1 = (-2*m**3 + (suv+7)*m**2 - 4*(suv+1)*m + puv**2+4*(suv-1)).as_poly(m)
+        def _compute_params(suv, puv, m):
+            det1 = -2*m**3 + (suv+7)*m**2 - 4*(suv+1)*m + puv**2 + 4*(suv-1)
+            det2 = 4*m**3 - (4*suv+7)*m**2 + ((suv+4)**2+2*puv-20)*m + (puv-2)**2-2*suv**2
+            denom = (m+puv-2)**2 * (suv-2*m-1)
+            phi = -puv**2 * det2 / (m-2) / denom - m
+            final_coeff = det1 * det2 / (m-2)**2 / denom
+            w = (m**3 - (suv+1)*m**2 + (suv+puv-3)*m + (puv-1)**2+2*suv+1) / (m - 2)
+            ker_coeff = -(w*(x-1)**2 + (x**2-x*y+y**2-y))
+            return suv, puv, m, det1, det2, phi, final_coeff, ker_coeff
+        def _validate_params(params):
+            suv, puv, m, det1, det2, phi, final_coeff, ker_coeff = params
+            return phi >= -1 and phi >= ((m-2)*(suv-2*m)/(m+puv-2))
+        for root in nroots(det1, method = 'factor', real = True):
+            if isinstance(root, sp.Rational) and (root == 2 or m + puv == 2 or suv - 2*m - 1 == 0):
+                return None
+            if not root.is_real:
+                continue
+            params = _compute_params(suv, puv, root)
+            # print(params)
+            if _validate_params(params) and params[-1] <= ker_coeff:
+                break
+        else:
+            return None
+
+
+        def _solve_border(*args, with_tail = True, with_frac = False):
+            if len(args) == 3:
+                args = _compute_params(*args)
+            suv, puv, m, det1, det2, phi, final_coeff, ker_coeff = args
+            l1 = (-m**2+(puv+1)*m-puv*(suv+1)+2)/(m+puv-2)
+            l2 = ((1-2*puv)*m**2+(puv*(suv+1)-1)*m+puv-2)/(m+puv-2)
+            l3 = (2*(puv+suv)*m**2-(puv*(suv-1)+(suv+2)**2-2)*m+(puv-2)**2+2*suv**2)/(m+puv-2)
+            l4 = ((2*puv-1)*m-puv*(suv+1)+2)/(m+puv-2)
+            g = (a**2-m*a*b+b**2)*(a+b)+l1*c*(a**2+b**2)+l2*c**2*(a+b)+l3*a*b*c+l4*c**3
+            h = a**2-m*a*b+b**2+(puv+suv-1-m)*c**2-(suv-m)*c*(a+b)
+            g, h = g.expand(), h.expand()
+            # print('Phi =', phi, 'final_coeff =', final_coeff, 'w =', _compute_w(suv, puv, m))
+            solution = CyclicSum((a-b)**2*g**2) / 2 + (phi - (m-2)*(suv-2*m)/(m+puv-2)) * CyclicSum(a*b*(a-b)**2*h**2)
+            if with_tail:
+                solution += final_coeff * (puv**2 * CyclicSum(a*b)*CyclicProduct((a-b)**2) +
+                    (2-m)* CyclicSum(b*c*(a-b)*(a-c)*(a**2-suv*a*b+puv*b**2)*(a**2-suv*a*c+puv*c**2)))
+            if with_frac:
+                solution = solution / CyclicSum(a**2 + phi*b*c)
+            return solution
+        
+        if isinstance(params[2], sp.Rational):
+            return (x-1)**2 * _solve_border(*params, with_tail = False, with_frac = True) + (ker_coeff - params[-1]) * CyclicProduct((a-b)**2)
+
+        for ((m1, m2), mul) in det1.intervals():
+            if m1 <= params[2] <= m2:
+                break
+
+        # When the exact m is irrational, the inequality is a linear combination of m1,m2
+        for rounding in (None, 1e-1, 1e-2, 1e-3, 1e-4, 1e-8, 1e-12):
+            if rounding is not None:
+                m1, m2 = det1.refine_root(m1, m2, eps = rounding)
+            if m1 <= 2 <= m2:
+                continue
+            params1, params2 = _compute_params(suv, puv, m1), _compute_params(suv, puv, m2)
+            if not _validate_params(params1) or not _validate_params(params2):
+                continue
+            final_coeff1, final_coeff2 = params1[-2], params2[-2]
+            if (final_coeff1 < 0 and final_coeff2 < 0) or (final_coeff1 > 0 and final_coeff2 > 0):
+                continue
+            w1, w2 = final_coeff1 * (2-m1), final_coeff2 * (2-m2)
+            # The weight of linear combination: w1*a + w2*b = 0 => a:b = -w2:w1
+            w1, w2 = (-w2/(w1 - w2), w1/(w1 - w2)) if final_coeff1 != 0 else (1, 0)
+            phiw = params1[-3] * w1 + params2[-3] * w2
+            ker_coeffw1 = params1[-1] * w1 + params2[-1] * w2
+            ker_coeffw2 = params1[-3] * (ker_coeff - params1[-1]) * w1  + params2[-3] * (ker_coeff - params2[-1]) * w2
+            final_coeffw = params1[-2] * w1 + params2[-2] * w2
+            ker_coeff_tmp = ker_coeffw2 + final_coeffw * puv**2 * (x-1)**2
+            if phiw >= -1 and ker_coeff >= ker_coeffw1 and (ker_coeff - ker_coeffw1) + ker_coeff_tmp >= 0:
+                kwargs = {'with_tail': False, 'with_frac': False}
+                p1 = _solve_border(*params1, **kwargs)
+                p2 = _solve_border(*params2, **kwargs)
+                solution = w1*(x-1)**2 * p1 + w2*(x-1)**2 * p2
+                quad_form = ((ker_coeff - ker_coeffw1) * a**2 + ker_coeff_tmp * b*c).together().as_coeff_Mul()
+                solution += quad_form[0] * CyclicSum(quad_form[1]) * CyclicProduct((a-b)**2)
+                solution = solution / CyclicSum(a**2 + phiw*b*c)
+                return solution
+
+    main_solution = None
+    if True:
+        main_solution =  _tighter_bound_border(x_, y_, ker_coeff / merged_params[0])
+
+    if main_solution is not None:
+        return merged_params[0] * main_solution + t_/4 * CyclicProduct(a+b-2*c)**2 + sp.Rational(1,2) * CyclicSum((a-b)**2) * rem_poly
+    
+
 
 def sos_struct_sextic_symmetric_ultimate(poly, coeff, recurrsion):
     """
@@ -1143,7 +1405,36 @@ def sos_struct_sextic_symmetric_ultimate(poly, coeff, recurrsion):
     if coeff((5,1,0)) == 0 and coeff((4,2,0)) == 0 and coeff((3,2,1)) == 0 and coeff6 != 0:
         return _sos_struct_sextic_tree(coeff)
 
+    # try trivial cases
+    if False:
+        # write in the form of 
+        # s(a2-ab)s(m(a^4-a^2bc)+p(a^3b+ab^3-2a^2bc)+n(a^2b^2-a^2bc) + ua^2bc) + vp(a)s(a(b-c)^2) + wp(a-b)^2
+        x0, x1, x2, x3, x4, x5 = [coeff(_) for _ in [(6,0,0),(5,1,0),(4,2,0),(3,3,0),(4,1,1),(3,2,1)]]
+        rem = 3*(x0 + x3 + x4) + 6*(x1 + x2 + x5) + coeff((2,2,2))
+        if rem != 0:
+            # do not try
+            return None
 
+        m = x0
+        p = x0 + x1
+        n = -2*x0 + 2*x2 + x3
+        u = 8*x0 + 6*x1 - x3 + x4
+        v = -6*x0 - 2*x1 + 4*x2 + 3*x3 + x5
+        w = 2*x0 + x1 - x2 - x3
+
+        if 3*u + 2*v < 0:
+            # this implies that the value on the symmetric axis is negative around (1,1,1)
+            return None
+
+
+    # try neat cases
+    solution = _sos_struct_sextic_symmetric_quadratic_form(poly)
+    if solution is not None:
+        return solution
+
+
+
+    # roots detection
     u, v, w, x, z = sp.symbols('u v w x z')
 
     # Detect Roots
