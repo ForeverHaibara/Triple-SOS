@@ -1,6 +1,7 @@
 import sympy as sp
 
 from .utils import CyclicSum, CyclicProduct, _sum_y_exprs, _make_coeffs
+from .quartic import sos_struct_quartic
 from ..symsos import prove_univariate
 from ...utils.roots.rationalize import rationalize_bound, cancel_denominator
 from ...utils.roots.findroot import nroots
@@ -118,6 +119,23 @@ def _sos_struct_sextic_hexagon_symmetric(coeff, real = False):
 
                     return _sum_y_exprs(y, exprs)
                 
+        if True:
+            # Case 2: linear combination of s(a(b-c)^2)^2, s(a^2-ab)s(ab)^2, p(a-b)^2
+            y = [
+                -y_/12 + z_/9 + sp.Rational(1,18),
+                y_/6 - z_/18 + sp.Rational(2,9),
+                sp.Rational(1,2) - y_ / 4
+            ]
+            if all(_ >= 0 for _ in y):
+                y = [_ * coeff((4,2,0)) for _ in y] + [rem]
+                exprs = [
+                    CyclicSum(a*(b-c)**2)**2,
+                    CyclicSum((a-b)**2) * CyclicSum(a*b)**2,
+                    CyclicProduct((a-b)**2),
+                    CyclicProduct(a)**2
+                ]
+
+                return _sum_y_exprs(y, exprs)
 
         if x_ <= 2 and y_ <= 2 and (x_ != -2 or y_ != -2):
             u_ = sp.sqrt(x_ + 2)
@@ -1179,6 +1197,8 @@ def _sos_struct_sextic_symmetric_quadratic_form(poly):
     # We can represent g = ts(a^2-ab)^2 + (m-t)s(a^2+rab)^2 >= 0
     m_, p_, n_ = sum([p1*p2**2 for p1,p2,p3 in params]), sum([2*p1*p2*p3 for p1,p2,p3 in params]), sum([p1*p3**2 for p1,p2,p3 in params])
     m_, p_, n_ = m_ - merged_params[0] * x_**2, p_ - 2 * merged_params[0] * x_ * y_, (n_ + 2*m_) - merged_params[0] * (2*x_**2 + y_**2)
+    # print('Params =', params, '\nMerged Params =', merged_params, '(m,p,n) =', (m_, p_, n_))
+
     if not (m_ == 0 and p_ == 0 and n_ == 0):
         t_ = (-2*m_**2 + m_*n_ - p_**2/4)/(n_ + p_ - m_)
         if t_ < 0: # actually this will not happen
@@ -1382,6 +1402,10 @@ def sos_struct_sextic_symmetric_ultimate(poly, coeff, recurrsion):
 
     Examples
     --------
+    Trivial.
+    s(5a2-ab)s(a)4-72(p(a2+b2)+11/2p(a2))
+
+
     s(a6-a2b2c2)+s(a3b3-a4bc)-12s(a4b2+a4c2-2a2b2c2)+22s(a3b3-a2b2c2)+14s(a2b+ab2-2abc)abc-2p(a-b)2
     
     Case C.
@@ -1406,7 +1430,7 @@ def sos_struct_sextic_symmetric_ultimate(poly, coeff, recurrsion):
         return _sos_struct_sextic_tree(coeff)
 
     # try trivial cases
-    if False:
+    if True:
         # write in the form of 
         # s(a2-ab)s(m(a^4-a^2bc)+p(a^3b+ab^3-2a^2bc)+n(a^2b^2-a^2bc) + ua^2bc) + vp(a)s(a(b-c)^2) + wp(a-b)^2
         x0, x1, x2, x3, x4, x5 = [coeff(_) for _ in [(6,0,0),(5,1,0),(4,2,0),(3,3,0),(4,1,1),(3,2,1)]]
@@ -1426,13 +1450,75 @@ def sos_struct_sextic_symmetric_ultimate(poly, coeff, recurrsion):
             # this implies that the value on the symmetric axis is negative around (1,1,1)
             return None
 
+        if v == 0:
+            if w == 0:
+                # is a multiple of s(a^2-ab) -> degenerates to quartic
+                poly_div_quad = (
+                    m * (a**4 + b**4 + c**4) +
+                    p * (a**3*(b+c) + b**3*(c+a) + c**3*(a+b)) +
+                    n * (a**2*b**2 + b**2*c**2 + c**2*a**2) +
+                    (u - m - 2*p - n) * (a**2*b*c + b**2*c*a + c**2*a*b)
+                ).as_poly(a,b,c) 
+                solution = sos_struct_quartic(poly_div_quad, _make_coeffs(poly_div_quad), recurrsion)
+                if solution is not None:
+                    solution = sp.Rational(1,2) * CyclicSum((a-b)**2) * solution
+                    return solution
+                return None
 
-    # try neat cases
-    solution = _sos_struct_sextic_symmetric_quadratic_form(poly)
-    if solution is not None:
-        return solution
+            if True:
+                # this case will lead to failure in _sos_struct_sextic_symmetric_quadratic_form
+                t_ = p / (-2*m)
+                n_ = n - m * (t_**2 + 2)
+                u_ = u - 3*m*(1 - t_)**2
+                y = [
+                    m / 2,
+                    n_ / 4 - u_ / 12,
+                    u_ / 6,
+                    w + 3 * n_ / 4 - u_ / 4,
+                ]
+                if all(_ >= 0 for _ in y):
+                    exprs = [
+                        CyclicSum((a-b)**2) * CyclicSum(a*(a - t_*b))**2,
+                        CyclicSum(a*(b-c)**2)**2,
+                        CyclicSum((a-b)**2) * CyclicSum(a*b)**2,
+                        CyclicProduct((a-b)**2)
+                    ]
+                    return _sum_y_exprs(y, exprs)
 
 
+        # try neat cases
+        # note that this might also handle cases for real numbers
+        try:
+            solution = _sos_struct_sextic_symmetric_quadratic_form(poly)
+            if solution is not None:
+                return solution
+        except:
+            pass
+
+        if m + p >= 0:
+            # s(a2-ab)s(a2(a-b)(a-c)) = s(a(a-b)(a-c))^2 + 3p(a-b)^2
+            # s(a2-ab)s(ab(a-b)2) = s(ab(a-b)^4) + p(a-b)^2
+            # s(a2-ab)s(a2b2-a2bc) = s(ab(a-c)^2(b-c)^2) + p(a-b)^2
+            if u >= 0 and u + v >= 0:
+                y = [
+                    m,
+                    m + p,
+                    n + 2*(m + p),
+                    1,
+                    3*m + 3*(m + p) + n + w
+                ]
+                if all(_ >= 0 for _ in y):
+                    p1 = u*CyclicSum(a*(a-b)*(a-c)) + (u+v)*CyclicSum(a*(b-c)**2)
+                    p1 = p1.together().as_coeff_Mul()
+                    y[-2] = p1[0]
+                    exprs = [
+                        CyclicSum(a*(a-b)*(a-c))**2,
+                        CyclicSum(a*b*(a-b)**4),
+                        CyclicSum(a*b*(a-c)**2*(b-c)**2),
+                        CyclicProduct(a) * p1[1],
+                        CyclicProduct((a-b)**2)
+                    ]
+                    return _sum_y_exprs(y, exprs)
 
     # roots detection
     u, v, w, x, z = sp.symbols('u v w x z')
