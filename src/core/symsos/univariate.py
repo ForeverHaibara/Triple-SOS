@@ -319,6 +319,15 @@ def _prove_univariate_irreducible(poly, return_raw = False):
 
     if positive and all(_ >= 0 for _ in poly.all_coeffs()):
         # very trivial case if all coefficients are positive
+        if return_raw:
+            x = poly.gens[0]
+            result = [(sp.S(1), [], []), (x, [], [])]
+            for (monom,), coeff in poly.terms():
+                if coeff != 0:
+                    odd = monom % 2
+                    result[odd][1].append(coeff)
+                    result[odd][2].append((x**(monom//2)).as_poly(x))
+            return result
         return poly.as_expr()
 
     # extract roots to construct matrix
@@ -495,6 +504,21 @@ def prove_univariate(poly, return_raw = False):
                 p1new[1].extend(padd[1])
         p1 = p1new
         p2 = p2new
+
+    # remove zeros
+    def _remove_zeros(p):
+        if not any(_ != 0 for _ in p[0]):
+            return p
+        coeffs, polys = p
+        new_coeffs = []
+        new_polys = []
+        for coeff, poly in zip(coeffs, polys):
+            if coeff != 0:
+                new_coeffs.append(coeff)
+                new_polys.append(poly)
+        return new_coeffs, new_polys
+    
+    p1, p2 = _remove_zeros(p1), _remove_zeros(p2)
 
     return [(sp.S(1), p1[0], p1[1]), (x, p2[0], p2[1])]
 
