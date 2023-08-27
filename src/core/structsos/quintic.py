@@ -1311,6 +1311,8 @@ def _sos_struct_quintic_uncentered(coeff):
     [1] https://artofproblemsolving.com/community/u426077h2242759p21856167
 
     [2] https://artofproblemsolving.com/community/u861323h3019177p27134161
+
+    [3] https://tieba.baidu.com/p/7710460926
     """
 
     u, v = sp.symbols('u v')
@@ -1541,6 +1543,10 @@ def _sos_struct_quintic_windmill_special(coeff):
     det_ = (-3*w + 6*x + 3*z**2 + 6)*(w*z**2 - w + 2*x*y + 2*y*z + 2*y + 4) - (p_**2 + p_*q_ + q_**2)
     det_ = det_.subs(w,3.581412179607289955451719993913205662648)
     print(sp.nsolve((det_.diff(x), det_.diff(y), det_.diff(z)), (x,y,z), (sp.S(2163)/580, sp.S(1736)/835, sp.S(1647)/979), prec = 40))
+
+    Reference
+    -------
+    [1] https://tieba.baidu.com/p/7710460926
     """
     t = coeff((1,4,0))
     w =  - coeff((3,1,1)) / t

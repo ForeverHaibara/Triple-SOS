@@ -1,8 +1,10 @@
+from itertools import zip_longest
+
 import sympy as sp
 
 from .utils import CyclicSum, CyclicProduct, _sum_y_exprs, _try_perturbations
-from ...utils.roots.rationalize import rationalize
-from ...utils.roots.findroot import optimize_discriminant
+from ...utils.roots.rationalize import rationalize, rationalize_bound
+from ...utils.roots.findroot import optimize_discriminant, nroots
 
 
 a, b, c = sp.symbols('a b c')
@@ -38,7 +40,7 @@ def _sos_struct_septic_star(coeff, poly, recurrsion):
 
     s(20a5bc+4a4b3-31a4b2c-4a4bc2+4a4c3-46a3b3c+53a3b2c2)
 
-    (3s(6a4c-31a3bc+6a3c2+19a2b2c)s(a2)-18s(c(a3-abc+(-8/3)(a2b-abc)+(1/3)(ab2-abc)- (bc2-abc))2))
+    (3s(6a4c-31a3bc+6a3c2+19a2b2c)s(a2)-18s(c(a3-abc+(-8/3)(a2b-abc)+(1/3)(ab2-abc)-(bc2-abc))2))
 
     s(16a5bc+4a4b3-80a4b2c+3a4bc2+7a4c3+64a3b3c-14a3b2c2)
 
@@ -48,6 +50,11 @@ def _sos_struct_septic_star(coeff, poly, recurrsion):
     """
     if any(coeff(i) for i in ((7,0,0), (6,1,0), (6,0,1), (5,2,0), (5,0,2))):
         return None
+    if coeff((4,3,0)) < 0 or coeff((3,4,0)) < 0 or coeff((5,1,1)) < 0:
+        return None
+    rem = poly(1,1,1)
+    if rem < 0:
+        return None
 
     if coeff((4,3,0)) == 0 and coeff((3,4,0)) == 0:
         # degenerated to quartic
@@ -56,11 +63,80 @@ def _sos_struct_septic_star(coeff, poly, recurrsion):
             return CyclicProduct(a) * solution
         return None
 
+    if coeff((4,3,0)) == coeff((3,4,0)):
+        # standard septic star
+        # Idea: first we compute optimal u,v by virtually subtracting p(a)s(a^2b^2-a^2bc) to reach a nontrivial equality.
+        # Then we subtract s(c(a^2c-b^2c-u(a^2b-abc)+v(ab^2-abc))^2) and then apply the quadratic theorem.
+        u, v = sp.symbols('u v')
+        coeff43 = coeff((4,3,0))
+        m_, p_, n_, q_ = coeff((5,1,1)) / coeff43, coeff((4,2,1)) / coeff43, coeff((3,3,1)) / coeff43, coeff((2,4,1)) / coeff43
+        z_ = m_ / 2
+
+        def _compute_discriminant(u, v):
+            m__, p__, n__, q__ = m_, p_ - (u**2 - 2*v), n_ + 2*u*v, q_ - (v**2 - 2*u)
+            return 3*m__*(m__+n__) - (p__**2 + p__*q__ + q__**2), (m__, p__, n__, q__)
+
+        eq1 = u**3*v + 2*u**2*z_ - u**2 - 2*u*v**2 - 4*u*z_ - 4*v**2*z_ + 2*v*z_ + 2*v - p_ * (u*v - 1)
+        eq2 = -2*u**2*v - 4*u**2*z_ + u*v**3 + 2*u*z_ + 2*u + 2*v**2*z_ - v**2 - 4*v*z_ - q_ * (u*v - 1)
+        eqv = sp.polys.resultant(eq1, eq2, u).as_poly(v)
+
+        # solve the exact optimal (u,v)
+        for v_ in nroots(eqv, method = 'factor', real = True, nonnegative = True):
+            equ = eq1.subs(v, v_).as_poly(u)
+            for u_ in nroots(equ, method = 'factor', real = True, nonnegative = True):
+                if u_ * v_ >= 1 and _compute_discriminant(u_, v_)[0] >= 0:
+                    break
+            else:
+                u_ = None
+
+            if u_ is not None:
+                break
+        else:
+            return None
+
+        u, v = u_, v_
+        print(u, v)
+        
+        # now we have guaranteed discriminant >= 0 in the optimal value
+        # we should make rational approximations
+        lastu, lastv = u, v
+        for u_, v_ in zip_longest(
+            rationalize_bound(u, direction = 0, compulsory = True),
+            rationalize_bound(v, direction = 0, compulsory = True),
+            fillvalue = None
+        ):
+            if u_ is None:
+                u_ = lastu
+            if v_ is None:
+                v_ = lastv
+            lastu, lastv = u_, v_
+
+            det, (m__, p__, n__, q__) = _compute_discriminant(u_, v_)
+            if det >= 0:
+                m_, p_, n_, q_, u, v = m__, p__, n__, q__, u_, v_
+                rest = coeff43 * m_ / 2 * CyclicSum((a**2-b**2+(p_+2*q_)/3/m_*(a*c-a*b)-(q_+2*p_)/3/m_*(b*c-a*b))**2)
+                rest += coeff43 * det / 6 / m_ * CyclicSum(a**2*(b-c)**2)
+                rest += rem / 3 * CyclicSum(a**2*b*c)
+                rest = rest.as_coeff_Mul()
+                y = [
+                    coeff43,
+                    rest[0]
+                ]
+                exprs = [
+                    CyclicSum(c*(a**2*c-b**2*c-u*a**2*b+v*a*b**2+(u-v)*a*b*c)**2),
+                    CyclicProduct(a) * rest[1]
+                ]
+                return _sum_y_exprs(y, exprs)
+
+
+        return None
+
+
     if coeff((4,3,0)) == 0:
         p, q = 1 , 0
     else:
         p, q = (coeff((3,4,0)) / coeff((4,3,0))).as_numer_denom()
-        
+
     if sp.ntheory.primetest.is_square(p) and sp.ntheory.primetest.is_square(q):
         t = coeff((4,3,0))
 
@@ -141,6 +217,8 @@ def _sos_struct_septic_biased(coeff):
     s(4a5c2-6a4b2c-12a4bc2+8a4c3-11a3b3c+17a3b2c2)
 
     s(a5c2+a4b2c+a4bc2-7a3b3c+4a3b2c2)
+
+    s(a3c-a2bc)p(a+b)+9p(a)s(a2b2-a2bc)-6p(a)s(a3b-a2bc)
     """
 
     if coeff((5,2,0)) or coeff((4,3,0)):

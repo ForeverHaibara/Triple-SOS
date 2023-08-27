@@ -10,6 +10,7 @@ from .quintic import sos_struct_quintic
 from .sextic  import sos_struct_sextic
 from .septic  import sos_struct_septic
 from .octic   import sos_struct_octic
+from .nonic   import sos_struct_nonic
 
 from ...utils.polytools import deg
 
@@ -37,6 +38,7 @@ def _structural_sos_handler(
             6: sos_struct_sextic,
             7: sos_struct_septic,
             8: sos_struct_octic,
+            9: sos_struct_nonic,
         }
 
         degree = deg(poly)

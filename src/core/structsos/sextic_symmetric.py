@@ -1153,6 +1153,8 @@ def _sos_struct_sextic_symmetric_quadratic_form(poly):
 
     s(414a6-1470a5b-1470a5c+979a4b2+5864a4bc+979a4c2+644a3b3-5584a3b2c-5584a3bc2+5228a2b2c2)+1830p(a-b)2
 
+    s(a5)s(a/3)+19abc(s(ab)s(a/3)-3s(a/3)3)+3abc(abc-2s(a/3)3)
+
     References
     -------
     [1] https://artofproblemsolving.com/community/c6t243f6h3013463_symmetric_inequality

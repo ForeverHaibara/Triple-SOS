@@ -1,6 +1,6 @@
 import sympy as sp
 
-from .utils import CyclicSum, CyclicProduct, _sum_y_exprs, _try_perturbations
+from .utils import CyclicSum, CyclicProduct, _sum_y_exprs, _try_perturbations, inverse_substitution
 from ...utils.text_process import cycle_expansion
 from ...utils.roots.findroot import optimize_discriminant
 
@@ -109,38 +109,7 @@ def sos_struct_octic(poly, coeff, recurrsion):
 
         if solution is not None:
             # unrobust method handling fraction
-            solution = sp.together(solution.xreplace({a:b*c,b:c*a,c:a*b}))
-
-            def _try_factor(expr):
-                if isinstance(expr, (sp.Add, sp.Mul, sp.Pow)):
-                    return expr.func(*[_try_factor(arg) for arg in expr.args])
-                elif isinstance(expr, CyclicSum):
-                    # Sum(a**3*b**2*c**2*(...)**2)
-                    if isinstance(expr.args[0], sp.Mul):
-                        args2 = expr.args[0].args
-                        symbol_degrees = {}
-                        other_args = []
-                        for s in args2:
-                            if s in (a,b,c):
-                                symbol_degrees[s] = 1
-                            elif isinstance(s, sp.Pow) and s.base in (a,b,c):
-                                symbol_degrees[s.base] = s.exp
-                            else:
-                                other_args.append(s)
-                        if len(symbol_degrees) == 3:
-                            degree = min(symbol_degrees.values())
-                            da, db, dc = symbol_degrees[a], symbol_degrees[b], symbol_degrees[c]
-                            da, db, dc = da - degree, db - degree, dc - degree
-                            other_args.extend([a**da, b**db, c**dc])
-                            return CyclicSum(sp.Mul(*other_args)) * CyclicProduct(a) ** degree
-                elif isinstance(expr, CyclicProduct):
-                    # Product(a**2) = Product(a) ** 2
-                    if isinstance(expr.args[0], sp.Pow) and expr.args[0].base in (a,b,c):
-                        return CyclicProduct(expr.args[0].base) ** expr.args[0].exp
-                return expr
-            
-            solution = sp.together(_try_factor(solution)) / CyclicProduct(a) ** 2
-            return solution
+            return inverse_substitution(solution, factor_degree = 2)
 
 
     return None
