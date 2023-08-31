@@ -1,6 +1,7 @@
 import sympy as sp
 
-from .utils import CyclicSum, CyclicProduct, _sum_y_exprs
+from .utils import CyclicSum, CyclicProduct, _sum_y_exprs, nroots
+from ...utils.roots.rationalize import rationalize_bound
 
 a, b, c = sp.symbols('a b c')
 
@@ -14,12 +15,7 @@ def sos_struct_cubic(poly, coeff, recurrsion):
     if solution is not None:
         return solution
 
-    poly2 = poly * (a + b + c).as_poly(a,b,c)
-    solution = recurrsion(poly2)
-    if solution is not None:
-        return solution / CyclicSum(a)
-
-    return None
+    return _sos_struct_cubic_nontrivial(coeff)
 
 
 def _sos_struct_cubic_symmetric(coeff):
@@ -106,3 +102,79 @@ def _sos_struct_cubic_parabola(coeff):
 
 
     return None
+
+
+def _sos_struct_cubic_nontrivial(coeff):
+    """
+    Solve nontrivial cyclic cubic polynomial by multiplying s(a). We avoid the use of recurrsion.
+
+    See further details in the theorem of quartic.
+
+    Examples
+    -------
+    s(4a3-15a2b+12ab2-abc)
+
+    s(a3+2a2b-3a2c)
+
+    s(a3-26/10a2b+ab2+6/10abc)
+    """
+    coeff3, p, q, z = coeff((3,0,0)), coeff((2,1,0)), coeff((1,2,0)), coeff((1,1,1))
+    if coeff3 <= 0:
+        return None
+    p, q, z = p / coeff3, q / coeff3, z / coeff3
+
+    if not ((p >= 0 and q >= 0) or p**2*q**2 + 18*p*q - 4*p**3 - 4*q**3 - 27 <= 0):
+        return None
+
+    p2, n2, q2 = p + 1, p + q, q + 1
+    u = sp.symbols('u')
+    equ = (2*u**4 + p2*u**3 - q2*u - 2).as_poly(u)
+
+    def _compute_params(u):
+        t = ((2*q2+p2)*u**2 + 6*u + 2*p2+q2) / 2 / (u**4 + u**2 + 1)
+        p_, n_, q_ = p2 - t, n2 + 2*t*u, q2 - t*u**2
+        return t, p_, n_, q_
+    def _check_valid(u):
+        t, p_, n_, q_ = _compute_params(u)
+        if 3*(1 + n_) >= p_**2 + p_*q_ + q_**2:
+            return True
+        return False
+
+    for u_ in nroots(equ, method = 'factor', real = True, nonnegative = True):
+        if _check_valid(u_):
+            u = u_
+            break
+    else:
+        return None
+
+    if not isinstance(u, sp.Rational):
+        for u_ in rationalize_bound(u, direction = 0, compulsory = True):
+            if u_ >= 0 and _check_valid(u_):
+                u = u_
+                break
+        else:
+            return None
+
+    t, p_, n_, q_ = _compute_params(u)
+    # print(u, t, 3*(1+n_)**2 - (p_**2+p_*q_+q_**2))
+    
+    y = [
+        coeff3 / 2,
+        -(p_**2 + p_*q_ + q_**2 - 3*(1 + n_))/6 * coeff3,
+        t * coeff3,
+        (3*(1 + p + q) + z) * coeff3
+    ]
+    if y[-1] < 0:
+        return None
+    exprs = [
+        CyclicSum((a**2-b**2+(p_+2*q_)/3*a*c - (2*p_+q_)/3*b*c + (p_- q_)/3*a*b)**2),
+        CyclicSum(a**2*(b-c)**2),
+        CyclicSum(a*b*(a-c - u*(b-c)).expand()**2),
+        CyclicSum(a**2*b*c)
+    ]
+    return _sum_y_exprs(y, exprs) / CyclicSum(a)
+
+    # poly2 = poly * (a + b + c).as_poly(a,b,c)
+    # solution = recurrsion(poly2)
+    # if solution is not None:
+    #     return solution / CyclicSum(a)

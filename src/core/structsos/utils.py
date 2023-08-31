@@ -1,6 +1,9 @@
+from typing import Union, List
+
 import sympy as sp
 
 from ...utils.roots.rationalize import rationalize, square_perturbation
+from ...utils.roots.findroot import nroots
 from ...utils.expression.cyclic import CyclicSum, CyclicProduct
 
 class Coeff():
@@ -102,3 +105,41 @@ def inverse_substitution(expr: sp.Expr, factor_degree: int = 0) -> sp.Expr:
     if factor_degree != 0:
         expr = expr / CyclicProduct(a) ** factor_degree
     return expr
+
+
+def quadratic_weighting(c1, c2, c3, a = None, b = None, formal = False) -> Union[sp.Expr, List]:
+    """
+    Give solution to c1*a^2 + c2*b^2 + c3*a*b >= 0.
+
+    Parameters
+    -------
+    c1, c2, c3: sp.Expr
+        Coefficients of the quadratic form.
+    a, b: sp.Expr
+        The basis of the quadratic form.
+    formal: bool
+        Whether return a list or a sympy expression.
+    
+    Returns
+    -------
+    If formal == True, return a list [(w1, x1), (w2, x2), ...] so that sum(w_i * x_i**2) equals to the result.
+    If formal == False, return the sympy expression of the result.
+    """
+    if 4*c1*c2 < c3**2:
+        return None
+    if a is None:
+        a = sp.symbols('a')
+    if b is None:
+        b = sp.symbols('b')
+
+    if c1 == 0:
+        result = [(c2, b)]
+    elif c2 == 0:
+        result = [(c1, b)]
+    else:
+        ratio = c3/c1/2
+        result = [(c1, a + ratio*b), (c2 - ratio**2*c1, b)]
+    
+    if formal:
+        return result
+    return sum(wi * xi**2 for wi, xi in result)

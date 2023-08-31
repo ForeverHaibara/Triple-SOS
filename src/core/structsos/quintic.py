@@ -3,11 +3,10 @@ from itertools import zip_longest, product
 import sympy as sp
 import numpy as np
 
-from .utils import CyclicSum, CyclicProduct, _sum_y_exprs
+from .utils import CyclicSum, CyclicProduct, _sum_y_exprs, nroots
 from .quintic_symmetric import sos_struct_quintic_symmetric
 from ..symsos import prove_univariate
 from ...utils.roots.rationalize import rationalize, rationalize_bound, cancel_denominator
-from ...utils.roots.findroot import nroots
 from ...utils.roots.roots import Root
 from ...utils.basis_generator import invarraylize
 

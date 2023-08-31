@@ -1,8 +1,7 @@
 import sympy as sp
 
-from .utils import CyclicSum, CyclicProduct, _sum_y_exprs
+from .utils import CyclicSum, CyclicProduct, _sum_y_exprs, nroots
 from ...utils.roots.rationalize import rationalize_bound, square_perturbation
-from ...utils.roots.findroot import nroots
 
 
 a, b, c = sp.symbols('a b c')

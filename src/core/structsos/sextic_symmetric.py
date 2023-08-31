@@ -1,10 +1,9 @@
 import sympy as sp
 
-from .utils import CyclicSum, CyclicProduct, _sum_y_exprs, _make_coeffs
+from .utils import CyclicSum, CyclicProduct, _sum_y_exprs, _make_coeffs, nroots
 from .quartic import sos_struct_quartic
 from ..symsos import prove_univariate
 from ...utils.roots.rationalize import rationalize_bound, cancel_denominator
-from ...utils.roots.findroot import nroots
 
 
 #####################################################################
@@ -119,7 +118,7 @@ def _sos_struct_sextic_hexagon_symmetric(coeff, real = False):
 
                     return _sum_y_exprs(y, exprs)
                 
-        if True:
+        if x_ == (z_ - 4)/3:
             # Case 2: linear combination of s(a(b-c)^2)^2, s(a^2-ab)s(ab)^2, p(a-b)^2
             y = [
                 -y_/12 + z_/9 + sp.Rational(1,18),
