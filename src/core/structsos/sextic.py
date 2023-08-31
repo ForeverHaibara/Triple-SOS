@@ -1,14 +1,14 @@
 import sympy as sp
 from sympy.solvers.diophantine.diophantine import diop_DN
 
+from .cubic import sos_struct_cubic
 from .sextic_symmetric import (
     _sos_struct_sextic_hexagon_symmetric,
     _sos_struct_sextic_hexagram_symmetric,
     sos_struct_sextic_symmetric_ultimate
 )
-from .utils import CyclicSum, CyclicProduct, _sum_y_exprs
-from ...utils.text_process import cycle_expansion
-from ...utils.roots.rationalize import rationalize_bound, cancel_denominator
+from .utils import CyclicSum, CyclicProduct, _sum_y_exprs, quadratic_weighting, inverse_substitution, nroots
+from ...utils.roots.rationalize import rationalize_bound
 
 
 a, b, c = sp.symbols('a b c')
@@ -33,7 +33,7 @@ def _sos_struct_sextic_inverse_triangle(coeff, poly):
 
 
 
-def _sos_struct_sextic_hexagram(coeff, poly, recurrsion):
+def _sos_struct_sextic_hexagram(coeff):
     """
     Solve s(a3b3+xa4bc+ya3b2c+za2b3c+wa2b2c2) >= 0
 
@@ -46,9 +46,30 @@ def _sos_struct_sextic_hexagram(coeff, poly, recurrsion):
     s(11a4bc+11a3b3+153a3bc2-153a3b2c-22a2b2c2)
 
     s(bc(a2-bc+2(ab-ac)+3(bc-ab))2)
+
+    s(ab(ab-4ac+5bc-2c2)2)
+
+    s(3a4bc+2a3b3+a3bc2-6a2b2c2)
     """
     if coeff((3,3,0)) < 0 or coeff((4,1,1)) < 0:
         return None
+    if coeff((3,3,0)) == 0:
+        # degenerates to cubic
+        new_coeffs_ = {(3,0,0): coeff((4,1,1)), (2,1,0): coeff((3,2,1)), (1,2,0): coeff((2,3,1)), (1,1,1): coeff((2,2,2))}
+        new_coeff = lambda x: new_coeffs_.get(x, sp.S(0))
+        solution = sos_struct_cubic(None, new_coeff, None)
+        if solution is not None:
+            return solution * CyclicProduct(a)
+        return None
+    if coeff((4,1,1)) == 0:
+        # degenerates to inverse cubic
+        new_coeffs_ = {(3,0,0): coeff((3,3,0)), (2,1,0): coeff((2,3,1)), (1,2,0): coeff((3,2,1)), (1,1,1): coeff((2,2,2))}
+        new_coeff = lambda x: new_coeffs_.get(x, sp.S(0))
+        solution = sos_struct_cubic(None, new_coeff, None)
+        if solution is not None:
+            solution = inverse_substitution(solution, factor_degree = 0)
+        return solution
+
 
     if coeff((3,2,1)) == coeff((2,3,1)):
         # call symmetric solution in priority
@@ -56,56 +77,54 @@ def _sos_struct_sextic_hexagram(coeff, poly, recurrsion):
         if solution is not None:
             return solution
     
-    # simple cases where we do not need to updegree
-    if coeff((4,1,1)) != 0 and coeff((3,3,0)) != 0:
-        # try subtracting s(bc(a-ub)^2(a-c)^2)
-        m = coeff((4,1,1))
-        u = (coeff((3,3,0)) / m) ** .5
+    if True:
+        # First try trivial cases.
+        # Idea: Observe s(ab(ab+vc^2-(1+v)/2c(a+b) + xc(a-b))^2) >= 0
+        # Particularly, when x = 0 the inequality is symmetric. We determine x by the asymmetric part.
+        c1, c2 = coeff((3,3,0)), coeff((4,1,1))
+        diff = (coeff((3,2,1)) - coeff((2,3,1))) / c1
+        v = sp.sqrt(c2 / c1)
+        if not isinstance(v, sp.Rational):
+            v = v.n(20)
 
-        def verify(c1, c2, c3):
-            # test whether quadratic function c1*x^2 + c2*x + c3 >= 0
-            # or c1*x^2 + c3*x + c2 >= 0
-            if c2 >= 0 and c3 >= 0:
-                return True
-            if c2 < 0 and c2**2 <= 4*c1*c3:
-                return True
-            if c3 < 0 and c3**2 <= 4*c1*c2:
+        def _compute_x_rest(v):
+            # after normalizing coeff((3,3,0)) == 1, we subtract
+            # s(ab(ab+vc^2-(1+v)/2c(a+b) + xc(a-b))^2) + (c2/c1 - v^2)p(a)s(a(a-b)(a-c))
+            # choose x such that the remaining part coeff((3,2,1)) == coeff((2,3,1)) are equal, denoted by 'rest'
+            x = diff / (6*(v+1))
+            rest = coeff((3,2,1)) / c1 - (x**2 + 3*(v+1)*x - 3*(v+1)**2/4) + (c2/c1 - v**2)
+            return x, rest
+        def _check_valid(v):
+            x, rest = _compute_x_rest(v)
+            if rest >= 0:
                 return True
             return False
-        
-        success = 0
-        if coeff((3,2,1)) - (-2*u**2 - 2*u + 1) * m >= 0 and\
-            coeff((3,1,2)) - (u**2 - 2*u - 2) * m >= 0:
-            # s(bc(a-ub)^2(a-c)^2)
-            success = -1
-        elif coeff((3,1,2)) - (-2*u**2 - 2*u + 1) * m >= 0 and\
-            coeff((3,2,1)) - (u**2 - 2*u - 2) * m >= 0:
-            # symmetric, s(bc(a-b)^2(a-uc)^2)
-            success = -2
-        
-        if success < 0:
-            # find a rational approximation
-            for u_ in rationalize_bound(u, direction = -1):
-                if verify(
-                    coeff((3, 3, 0)) - u_**2 * m,
-                    coeff((3, 3+success, -success)) - (-2*u_**2 - 2*u_ + 1) * m,
-                    coeff((3, -success, 3+success)) - (u_**2 - 2*u_ - 2) * m
-                ):
-                    u = u_
-                    success = -success
-                    break
 
-        if success > 0:
-            y = [m]
-            rem = {(3,3,0): coeff((3,3,0)) - u**2 * m,
-                    (3, 3+success, -success): coeff((3, 3+success, -success)) - (-2*u**2 - 2*u + 1) * m,
-                    (3, -success, 3+success): coeff((3, -success, 3+success)) - (u**2 - 2*u - 2) * m
-                }
-            if success == 1:
-                exprs = [f'b*c*(a-{u}*b)^2*(a-c)^2']
-            elif success == 2:
-                exprs = [f'b*c*(a-b)^2*(a-{u}*c)^2']
+        if _check_valid(v):
+            if not isinstance(v, sp.Rational):
+                for v_ in rationalize_bound(v, direction = -1, compulsory = True):
+                    if v_ >= 0 and c1*v_**2 <= c2 and _check_valid(v_):
+                        v = v_
+                        break
+                else:
+                    v = None
             
+            if v is not None:
+                x, rest = _compute_x_rest(v)
+                p1 = ((c2 - c1*v**2) * CyclicSum(a*(a-b)*(a-c)) + (rest*c1) * CyclicSum(a*(b-c)**2)).together().as_coeff_Mul()
+                y = [
+                    c1,
+                    p1[0],
+                    sum(coeff(i) for i in [(3,3,0),(4,1,1),(3,2,1),(2,3,1)])*3 + coeff((2,2,2))
+                ]
+                if y[-1] < 0:
+                    return None
+                exprs = [
+                    CyclicSum(a*b*(a*b+v*c**2-(1+v)/2*a*c-(1+v)/2*b*c+x*a*c-x*b*c)**2),
+                    CyclicProduct(a) * p1[1],
+                    CyclicProduct(a**2)
+                ]
+                return _sum_y_exprs(y, exprs)
 
 
 
@@ -165,12 +184,11 @@ def _sos_struct_sextic_hexagram(coeff, poly, recurrsion):
             return frac1 / frac2
 
         u_, v_ = None, None
-        for root in sp.polys.nroots(eqv, n = 20):
-            if root.is_real and root > 0:
-                u_ = compute_u(root)
-                if u_ * root > 1:
-                    v_ = root
-                    break
+        for root in nroots(eqv, method = 'factor', real = True, nonnegative = True):
+            u_ = compute_u(root)
+            if u_ * root > 1:
+                v_ = root
+                break
         if v_ is not None:
             # now that we have obtained u and v
             # we are sure that f(a,b,c) * s(a) >= coeff((3,3,0)) * s(c(a2c-b2c-w(a2b-abc)+z(ab2-abc))2)
@@ -201,7 +219,7 @@ def _sos_struct_sextic_hexagram(coeff, poly, recurrsion):
                     rationalize_bound(v_, direction = 0, compulsory = True)
                 ):
                     det_, (m3, p3, n3, q3) = get_discriminant_uv(u, v)
-                    if det_ >= 0:
+                    if isinstance(det_, sp.Rational) and det_ >= 0:
                         break
                     det_ = None
                 
@@ -238,8 +256,12 @@ def _sos_struct_sextic_hexagon(coeff, poly, recurrsion):
 
     Examples
     -------
+    s(2a4b2-5a3b3+4a2b4-a4bc)-8/5s(a(b-c)2)p(a)
+
     2s(a3b3+7a4bc-29a3b2c+12a3bc2+9a2b2c2)+s((2ab2-ca2-a2b-bc2+c2a)2)
+
     3s(3a4b2-7a4bc+9a4c2-10a3b3+20a3b2c-15a3bc2)-2(s(2a2b-3ab2)+3abc)2
+
     2s((2ab2-ca2-a2b-bc2+c2a)2)-(s(2a2b-3ab2)+3abc)2
 
 
@@ -248,92 +270,100 @@ def _sos_struct_sextic_hexagon(coeff, poly, recurrsion):
     [1] https://artofproblemsolving.com/community/u426077h1892902p16370027
     """
     # hexagon
-    if coeff((6,0,0))==0 and coeff((5,1,0))==0 and coeff((5,0,1))==0:
-        if coeff((4,2,0)) != coeff((4,0,2)):
-            # first try whether we can cancel these two corners in one step
-            # CASE 1.
-            if coeff((4,2,0)) == 0 or coeff((4,0,2)) == 0:
-                if coeff((3,3,0)) == 0 and coeff((4,1,1)) == 0:
-                    return _sos_struct_sextic_rotated_tree(coeff)
+    if not (coeff((6,0,0))==0 and coeff((5,1,0))==0 and coeff((5,0,1))==0):
+        return None
 
-                if coeff((4,0,2)) == 0:
-                    solution = coeff((4,2,0)) * CyclicSum(a**2*b-a*b*c)**2
+    if coeff((4,2,0)) == coeff((4,0,2)) and coeff((3,2,1)) == coeff((2,3,1)):
+        # symmetric
+        # this case must be handled before (?)
+        return _sos_struct_sextic_hexagon_symmetric(coeff)
+
+    if coeff((4,2,0)) == 0 or coeff((4,0,2)) == 0:
+        if coeff((4,2,0)) == 0 and coeff((4,0,2)) == 0:
+            return _sos_struct_sextic_hexagram(coeff)
+        if coeff((3,3,0)) == 0 and coeff((4,1,1)) == 0:
+            return _sos_struct_sextic_rotated_tree(coeff)
+
+    if True:
+        # Idea 1: subtract s(c1(a^2b-abc) - c2(ab^2-abc))^2
+        # However, c1 and c2 might be irrational. So we use alternative:
+        # subtract c1s(a^2b-abc)^2 + c2s(ab^2-abc)^2 - c3s(a^2b-abc)(ab^2-abc)
+        # with 4c1c2 >= c3^2 by quadratic constraint.
+
+        c1, c2 = coeff((4,2,0)), coeff((4,0,2))
+        c30, z0, x0, y0, w0 = coeff((3,3,0)), coeff((4,1,1)), coeff((3,2,1)), coeff((2,3,1)), coeff((2,2,2))
+        if c1 < 0 or c2 < 0 or (c30 < 0 and c30**2 > 4*c1*c2) or (z0 < 0 and z0**2 > 4*c1*c2):
+            return None
+        c3 = 2*sp.sqrt(c1*c2)
+        if not isinstance(c3, sp.Rational):
+            c3 = c3.n(20)
+        x0, y0, w0 = x0 + 6*c1 - 2*c2, y0 + 6*c2 - 2*c1, w0 - 9*(c1 + c2)
+
+        def _compute_hexagram_discriminant(z, x, y, coeff33 = 1):
+            z, x, y = z / coeff33, x / coeff33, y / coeff33
+            s1, s2 = x+y, x*y
+            d, e = (s1**2 + 9*s1 - s2 + 27), s1**2 - s2
+            args = [
+                e * d**3,
+                -27 * e * d**2,
+                - e * d * (4*s1**2 - 45*s1 - 4*s2 - 378),
+                (8*s1**5 - 207*s1**4 - 16*s1**3*s2 - 3051*s1**3 + 234*s1**2*s2 - 9963*s1**2 + 8*s1*s2**2 + 2970*s1*s2 - 729*s1 - 27*s2**2 + 9477*s2)/3,
+                (10*s1**4 + 351*s1**3 - 20*s1**2*s2 + 1890*s1**2 - 351*s1*s2 + 486*s1 + 10*s2**2 - 1728*s2)/3,
+                -(16*s1**3 + 207*s1**2 - 16*s1*s2 + 189*s1 - 171*s2)/3,
+                (28*s1**2 + 111*s1 - 12*s2 + 9)/9,
+                -(8*s1 + 3)/9,
+                sp.Rational(1,9)
+            ]
+            u = x + y + 3*z + 3
+            discriminant = sum(u**i*args[i] for i in range(len(args)))
+            return discriminant
+
+        def _compute_subtracted_params(c3, return_func = False):
+            params = z0 + c3, x0 - 3*c3, y0 - 3*c3, c30 + c3, w0 + 12*c3
+            # print('c3 =', c3, 'params =', params)
+            if return_func:
+                coeffs_ = dict(zip([(4,1,1),(3,2,1),(2,3,1),(3,3,0),(2,2,2)], params))
+                coeff = lambda x: coeffs_.get(x, sp.S(0))
+                return coeff
+            return params
+        
+        def _check_valid(c3):
+            params = _compute_subtracted_params(c3)
+            if params[0] < 0 or params[3] < 0:
+                return False
+            if params[1] >= 0 and params[2] >= 0:
+                return True
+            if params[0] == 0 or params[3] == 0:
+                if params[0] == 0 and params[3] == 0:
+                    return False
+            reg = max(params[0], params[3])
+            # degenerates to cubic
+            x, y = params[1] / reg, params[2] / reg
+            if x**2*y**2 + 18*x*y - 4*x**3 - 4*y**3 - 27 <= 0:
+                return True
+            if params[0] == 0 or params[3] == 0:
+                return False
+            det = _compute_hexagram_discriminant(*params[:-1])
+            if det <= 0:
+                return True
+            return False
+        
+        if _check_valid(c3):
+            if not isinstance(c3, sp.Rational):
+                for c3_ in rationalize_bound(c3, direction = -1, compulsory = True):
+                    if c3_ >= 0 and 4*c1*c2 >= c3_**2 and _check_valid(c3_):
+                        c3 = c3_
+                        break
                 else:
-                    solution = coeff((4,0,2)) * CyclicSum(a*b**2-a*b*c)**2
+                    c3 = None
+            
+            if c3 is not None:
+                remain_solution = _sos_struct_sextic_hexagram(_compute_subtracted_params(c3, return_func = True))
+                if remain_solution is not None:
+                    main_solution = quadratic_weighting(c1, c2, -c3, a = a**2*b-a*b*c, b = a*b**2-a*b*c, formal = True)
+                    main_solution = sum(wi * CyclicSum(xi.expand().together())**2 for wi, xi in main_solution)
+                    return main_solution + remain_solution
 
-                poly2 = poly - solution.doit().as_poly(a,b,c)
-                v = 0 # we do not need to check the positivity, just try
-                if v != 0:
-                    y, exprs = None, None
-                else: # positive
-                    new_solution = recurrsion(poly2)
-                    if new_solution is not None:
-                        return solution + new_solution
-
-            # CASE 2.
-            else:
-                # Temporarily deprecated.
-                # The current method is not complete.
-                return 
-                # a , b = (coeff((4,2,0)) / coeff((4,0,2))).as_numer_denom()
-                # if sp.ntheory.primetest.is_square(a) and sp.ntheory.primetest.is_square(b):
-                #     y = [coeff((4,2,0)) / a / 3]
-                #     exprs = [f'({sp.sqrt(a)}*(a*a*b+b*b*c+c*c*a-3*a*b*c)-{sp.sqrt(b)}*(a*b*b+b*c*c+c*a*a-3*a*b*c))^2']
-                
-                #     poly2 = poly - 3 * y[0] * sp.sympify(exprs[0])
-                #     v = 0 # we do not need to check the positivity, just try
-                #     if v != 0:
-                #         y, exprs = None, None
-                #     else: # positive
-                #         multipliers , y , exprs = _merge_sos_results(multipliers, y, exprs, recurrsion(poly2, 6))
-
-                # # CASE 3.
-                # # a = t(p^2+1) , b = t(q^2+1)
-                # # => b^2p^2 + b^2 = ab(q^2 + 1) => (bp)^2 - ab q^2 = b(a-b)
-                # #                            or => (aq)^2 - ab p^2 = a(b-a)
-                # # here we should require b is squarefree and not too large
-                # elif a < 30 and b < 30: # not too large for solving Pell's equation
-                #     pairs = []
-                #     for pair in diop_DN(a*b, b*(a-b)):
-                #         if pair[0] % b == 0:
-                #             pairs.append((abs(pair[0] // b), abs(pair[1])))
-                #     for pair in diop_DN(a*b, a*(b-a)):
-                #         if pair[0] % a == 0:
-                #             pairs.append((abs(pair[1]), abs(pair[0] // a)))
-                #     pairs = set(pairs)
-                    
-                #     for p , q in pairs:
-                #         p , q = abs(p) , abs(q)
-                #         t = coeff((4,2,0)) / (p*p + 1)
-                #         if coeff((3,3,0)) + t * 2 * p * q < 0 or coeff((4,1,1)) + t * 2 * (p + q) < 0:
-                #             # negative vertex, skip it
-                #             continue
-                #         y = [t]
-                #         exprs = [f'(a*a*c-b*b*c-{p}*(a*a*b-a*b*c)+{q}*(a*b*b-a*b*c))^2']
-                #         poly2 = poly - t * sp.sympify(cycle_expansion(exprs[0]))
-                #         multipliers , y , exprs = _merge_sos_results(multipliers, y, exprs, recurrsion(poly2, 6))
-                #         if y is not None:
-                #             break
-
-
-        else:# coeff((4,2,0)) == coeff((4,0,2)):
-            if coeff((4,2,0)) == 0:
-                return _sos_struct_sextic_hexagram(coeff, poly, recurrsion)
-            elif coeff((3,2,1)) == coeff((2,3,1)):
-                # symmetric
-                # this case must be handled before (?)
-                return _sos_struct_sextic_hexagon_symmetric(coeff)
-            else:
-                solution = coeff((4,2,0)) * CyclicProduct((a-b)**2)
-
-                poly2 = poly - solution.doit().as_poly(a,b,c)
-                v = 0 # we do not need to check the positivity, just try
-                if v != 0:
-                    y, exprs = None, None
-                else: # positive
-                    new_solution = recurrsion(poly2)
-                    if new_solution is not None:
-                        return solution + new_solution
                 
     return None
 
