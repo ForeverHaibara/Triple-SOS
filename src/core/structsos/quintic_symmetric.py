@@ -1,6 +1,9 @@
 import sympy as sp
 
-from .utils import CyclicSum, CyclicProduct, _sum_y_exprs, _make_coeffs
+from .utils import (
+    CyclicSum, CyclicProduct, Coeff,
+    sum_y_exprs, radsimp
+)
 
 a, b, c = sp.symbols('a b c')
 
@@ -30,9 +33,11 @@ def sos_struct_quintic_symmetric(poly, coeff, recurrsion):
     if not (coeff((4,1,0)) == coeff((1,4,0)) and coeff((3,2,0)) == coeff((2,3,0))):
         return None
 
+    if not coeff.is_rational:
+        # algorithm down here uses poly.intervals() and does not support irrational coefficients
+        return None
+
     if coeff((5,0,0)) <= 0:
-        # this case is degenerated and shall be handled in the non-symmetric case
-        # TODO: add support for this case to present pretty solution
         return _sos_struct_quintic_symmetric_degenerate(coeff)
 
     # first determine how much abcs(a2-ab) can we subtract from the poly
@@ -80,10 +85,7 @@ def sos_struct_quintic_symmetric(poly, coeff, recurrsion):
                     (3,1,1): m*v2,
                     (2,2,1): coeff((2,2,1)) + m*(4*x_**2 - 4*x_*y_ - 6*y_**2 + 4*y_ - 1)
                 }
-                print(_new_coeffs)
-                def _new_coeffs_func(coeff):
-                    return _new_coeffs.get(coeff, sp.S(0))
-                solution = _sos_struct_quintic_symmetric_degenerate(_new_coeffs_func)
+                solution = _sos_struct_quintic_symmetric_degenerate(Coeff(_new_coeffs))
                 if solution is not None:
                     solution = solution + m * CyclicSum(
                         a*(a**2 - x_*a*b - x_*a*c - y_*b**2 - y_*c**2 + (2*x_ + 2*y_ - 1)*b*c)**2
@@ -114,7 +116,7 @@ def sos_struct_quintic_symmetric(poly, coeff, recurrsion):
                 CyclicProduct(a) * CyclicSum((a-b)**2),
                 CyclicProduct(a) * CyclicSum(a*b)
             ]
-            return _sum_y_exprs(y, exprs)
+            return sum_y_exprs(y, exprs)
 
         if True:
             # very trivial case:
@@ -135,7 +137,7 @@ def sos_struct_quintic_symmetric(poly, coeff, recurrsion):
                     CyclicProduct(a) * CyclicSum((a-b)**2),
                     CyclicProduct(a) * CyclicSum(a*b)
                 ]
-                return _sum_y_exprs(y, exprs)
+                return sum_y_exprs(y, exprs)
 
         # assume s((a+b+(2z-1+2t)c)(a-b)2(a+b-tc)2)/2 <= poly / coeff((5,0,0))
         # this requires (u,v) is above the curve (t^3+(z-2)t^2+(1-2z)t-1, -2t^3+(1-2z)t^2)
@@ -173,7 +175,7 @@ def sos_struct_quintic_symmetric(poly, coeff, recurrsion):
                     CyclicSum((a + b + (2*z - 1 + 2*t2)*c)*(a - b)**2*(a + b - t2*c)**2),
                     CyclicProduct(a) * CyclicSum(a*b)
                 ]
-                return _sum_y_exprs(y, exprs)
+                return sum_y_exprs(y, exprs)
             else:
                 # higher degree
                 # we must have t1 = (1 - 2z) / 3 <= 1
@@ -196,7 +198,7 @@ def sos_struct_quintic_symmetric(poly, coeff, recurrsion):
                         CyclicSum((a-b)**2) * CyclicSum((a + b + (2*z - 1 + 2*t2)*c)*(a - b)**2*(a + b - t2*c)**2),
                         CyclicSum((a-b)**2) * CyclicProduct(a) * CyclicSum(a*b)
                     ]
-                    return _sum_y_exprs(y, exprs) / multiplier
+                    return sum_y_exprs(y, exprs) / multiplier
                 else: # 2z - 1 + 2t_2 < 0, in this case t < 2
                     y = [
                         w1 * m / 2,
@@ -214,7 +216,7 @@ def sos_struct_quintic_symmetric(poly, coeff, recurrsion):
                         CyclicSum((a-b)**2) * CyclicSum(c*(a - b)**2*(a + b - t2*c)**2),
                         CyclicSum((a-b)**2) * CyclicProduct(a) * CyclicSum(a*b)
                     ]
-                    return _sum_y_exprs(y, exprs) / multiplier
+                    return sum_y_exprs(y, exprs) / multiplier
 
 
         
@@ -251,7 +253,7 @@ def sos_struct_quintic_symmetric(poly, coeff, recurrsion):
                     CyclicSum((a-b)**2) * CyclicProduct(a) * CyclicSum(a*b),
                 ]
 
-                return _sum_y_exprs(y, exprs) / multiplier
+                return sum_y_exprs(y, exprs) / multiplier
 
         t1 = -z
         t2 = -(2*u*z - u + v*z + 4*v + 2*z - 1)/(-6*u - 3*v + 4*z**2 - 4*z - 5)
@@ -288,7 +290,7 @@ def sos_struct_quintic_symmetric(poly, coeff, recurrsion):
                 CyclicSum((a-b)**2) * CyclicSum(a**3*(b-c)**2),
                 CyclicProduct(a) * CyclicSum((a-b)**2) * CyclicSum(a*b)
             ]
-            return _sum_y_exprs(y, exprs) / multiplier
+            return sum_y_exprs(y, exprs) / multiplier
         
         return None
 
@@ -343,7 +345,7 @@ def _sos_struct_quintic_symmetric_degenerate(coeff):
                 CyclicProduct(a) * CyclicSum((a-b)**2),
                 CyclicProduct(a) * CyclicSum(a*b)
             ]
-            return _sum_y_exprs(y, exprs)
+            return sum_y_exprs(y, exprs)
 
     if m == 0:
         return None
@@ -363,7 +365,7 @@ def _sos_struct_quintic_symmetric_degenerate(coeff):
             CyclicProduct(a) * CyclicSum((a-b)**2),
             CyclicProduct(a) * CyclicSum(a*b)
         ]
-        return _sum_y_exprs(y, exprs)
+        return sum_y_exprs(y, exprs)
 
 
     if (2*u + v)**2 + 8*v <= 0:
@@ -385,7 +387,7 @@ def _sos_struct_quintic_symmetric_degenerate(coeff):
                 CyclicSum(a*(b-c)**2*(b+c-t2*a)**2),
                 CyclicProduct(a) * CyclicSum(a*b)
             ]
-            return _sum_y_exprs(y, exprs)
+            return sum_y_exprs(y, exprs)
 
     return None
     if (2*u + v)**2 - 8*(36*u - 7*v - 48) <= 0:
@@ -407,7 +409,7 @@ def _sos_struct_quintic_symmetric_degenerate(coeff):
                 CyclicSum(a*(b-c)**2*((7*t2-1)*a**2 + (5*t2+1)*(b**2+c**2-a*b-a*c) + (5*t2-11)*b*c)**2),
                 CyclicProduct(a) * CyclicSum((a-b)**2)**2
             ]
-            return _sum_y_exprs(y, exprs) / multiplier
+            return sum_y_exprs(y, exprs) / multiplier
 
     # idea:
     # if there is no root on symmetric axis, then there is no root at all -> subtract anything

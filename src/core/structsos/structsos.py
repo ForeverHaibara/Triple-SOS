@@ -2,7 +2,7 @@ import sympy as sp
 
 from .solution import SolutionStructural, SolutionStructuralSimple
 
-from .utils import _make_coeffs
+from .utils import Coeff
 from .sparse  import sos_struct_sparse
 from .cubic   import sos_struct_cubic
 from .quartic import sos_struct_quartic
@@ -25,7 +25,7 @@ def _structural_sos_handler(
     to a solution object.
     """
 
-    coeff = _make_coeffs(poly)
+    coeff = Coeff(poly)
 
     # first try sparse cases
     solution = sos_struct_sparse(poly, coeff, recurrsion = _structural_sos_handler)

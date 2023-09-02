@@ -1,67 +1,63 @@
-from typing import Union, List
+from typing import Union, List, Dict, Callable
 
 import sympy as sp
+from sympy.core.singleton import S
 
-from ...utils.roots.rationalize import rationalize, square_perturbation
+from ..symsos import prove_univariate
+from ...utils.roots.rationalize import rationalize, rationalize_bound, square_perturbation, cancel_denominator
 from ...utils.roots.findroot import nroots
 from ...utils.expression.cyclic import CyclicSum, CyclicProduct
 
 class Coeff():
-    def __init__(self, coeffs):
+    """
+    A standard class for representing a polynomial with coefficients.
+    """
+    def __init__(self, coeffs: Union[sp.polys.Poly, Dict], is_rational: bool = True):
+        if isinstance(coeffs, sp.polys.Poly):
+            poly = coeffs
+            coeffs = {}
+            for monom, coeff in poly.terms():
+                if not isinstance(coeff, sp.Rational): #isinstance(coeff, sp.Float): # and degree > 4
+                    if isinstance(coeff, sp.Float):
+                        coeff = rationalize(coeff, reliable = True)
+                    else:
+                        is_rational = False
+                    # coeff = coeff.as_numer_denom()
+                coeffs[monom] = coeff
+            
         self.coeffs = coeffs
+        self.is_rational = is_rational
 
-    def __call__(self, *x):
+    def __call__(self, *x) -> sp.Expr:
+        """
+        Coeff((i,j,k)) -> returns the coefficient of a^i * b^j * c^k.
+        """
         if len(x) == 1:
             # x is ((a,b,c), )
             x = x[0]
         return self.coeffs.get(x, sp.S(0))
 
-    def __len__(self):
+    def __len__(self) -> int:
+        """
+        Number of coefficients. Sometimes the zero coefficients are not included.
+        """
         return len(self.coeffs)
 
+    def reflect(self):
+        """
+        Reflect the coefficients of a, b, c with respect to a,b.
+        Returns a deepcopy.
+        """
+        reflected_coeffs = dict([((j,i,k), v) for (i,j,k), v in self.coeffs.items()])
+        new_coeff = Coeff(reflected_coeffs, is_rational = self.is_rational)
+        return new_coeff
 
-def _make_coeffs(poly):
+
+def sum_y_exprs(y: List[sp.Expr], exprs: List[sp.Expr]) -> sp.Expr:
     """
-    Construct a Coeff class from the coeffs of a polynomial.
+    Return sum(y_i * expr_i).
     """
-    coeffs = {}
-
-    for monom, coeff in poly.terms():
-        if not isinstance(coeff, sp.Rational): #isinstance(coeff, sp.Float): # and degree > 4
-            coeff = rationalize(coeff, reliable = True)
-            # coeff = coeff.as_numer_denom()
-        coeffs[monom] = coeff
-    
-    return Coeff(coeffs)
-
-
-def _sum_y_exprs(y, exprs) -> sp.Expr:
     return sum(v * expr for v, expr in zip(y, exprs) if v != 0)
-
-
-def _try_perturbations(
-        poly,
-        p,
-        q,
-        perturbation,
-        recurrsion = None,
-        times = 4,
-        **kwargs
-    ):
-    """
-    Try subtracting t * perturbation from poly and perform recurrsive trials.
-    The subtracted t satisfies that (p - t) / (q - t) is a square
-
-    This is possibly helpful for deriving rational sum-of-square solution.
-    """
-    a, b, c = sp.symbols('a b c')
-    perturbation_poly = perturbation.doit().as_poly(a,b,c)
-    for t in square_perturbation(p, q, times = times):
-        poly2 = poly - t * perturbation_poly
-        solution = recurrsion(poly2)
-        if solution is not None:
-            return solution + t * perturbation
-    return None
 
 
 def inverse_substitution(expr: sp.Expr, factor_degree: int = 0) -> sp.Expr:
@@ -143,3 +139,45 @@ def quadratic_weighting(c1, c2, c3, a = None, b = None, formal = False) -> Union
     if formal:
         return result
     return sum(wi * xi**2 for wi, xi in result)
+
+
+def radsimp(expr: Union[sp.Expr, List[sp.Expr]]) -> sp.Expr:
+    """
+    Rationalize the denominator by removing square roots. Wrapper of sympy.radsimp.
+    Also refer to sympy.simplify.
+    """
+    if isinstance(expr, (list, tuple)):
+        return [radsimp(e) for e in expr]
+    if not isinstance(expr, sp.Expr):
+        expr = sp.sympify(expr)
+
+    numer, denom = expr.as_numer_denom()
+    n, d = sp.fraction(sp.radsimp(1/denom, symbolic=False, max_terms=1))
+    # if n is not S.One:
+    expr = (numer*n).expand()/d
+    return expr
+
+
+def try_perturbations(
+        poly,
+        p,
+        q,
+        perturbation,
+        recurrsion = None,
+        times = 4,
+        **kwargs
+    ):
+    """
+    Try subtracting t * perturbation from poly and perform recurrsive trials.
+    The subtracted t satisfies that (p - t) / (q - t) is a square
+
+    This is possibly helpful for deriving rational sum-of-square solution.
+    """
+    a, b, c = sp.symbols('a b c')
+    perturbation_poly = perturbation.doit().as_poly(a,b,c)
+    for t in square_perturbation(p, q, times = times):
+        poly2 = poly - t * perturbation_poly
+        solution = recurrsion(poly2)
+        if solution is not None:
+            return solution + t * perturbation
+    return None

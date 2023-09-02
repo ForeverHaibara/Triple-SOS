@@ -17,6 +17,11 @@ class SolutionStructural(Solution):
             const, multiplier = multiplier, S.One
         else:
             const, multiplier = multiplier.as_coeff_Mul()
+            # if isinstance(const, sp.Rational):
+            #     multiplier = multiplier_
+            # else:
+            #     const = S.One
+
             # const, multiplier = S.One, multiplier
 
         if const is not S.One:
@@ -38,6 +43,6 @@ class SolutionStructuralSimple(SolutionSimple, SolutionStructural):
         super().__init__(*args, **kwargs)
 
         # for debug purpose
-        mul = self.multiplier.doit().as_poly(*sp.symbols('a b c'))
-        num = self.numerator.doit().as_poly(*sp.symbols('a b c'))
-        self.is_equal_ = (mul * self.problem - num).is_zero
+        # mul = self.multiplier.doit().as_poly(*sp.symbols('a b c'))
+        # num = self.numerator.doit().as_poly(*sp.symbols('a b c'))
+        # self.is_equal_ = (mul * self.problem - num).is_zero

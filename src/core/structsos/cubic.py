@@ -1,15 +1,26 @@
 import sympy as sp
 
-from .utils import CyclicSum, CyclicProduct, _sum_y_exprs, nroots
-from ...utils.roots.rationalize import rationalize_bound
+from .utils import (
+    CyclicSum, CyclicProduct,
+    sum_y_exprs, nroots, rationalize_bound, radsimp
+)
 
 a, b, c = sp.symbols('a b c')
 
 def sos_struct_cubic(poly, coeff, recurrsion):
+    """
+    Solve cyclic cubic polynomials.
+
+    This function only uses `coeff`. The `poly` and `recurrsion` is not used for minimium dependency.
+    This function supports irrational coefficients.
+    """
     if coeff((2,1,0)) == coeff((1,2,0)):
         return _sos_struct_cubic_symmetric(coeff)
     if coeff((3,0,0)) == 0:
         return _sos_struct_cubic_degenerate(coeff)
+
+    if not coeff.is_rational:
+        return _sos_struct_cubic_nontrivial_irrational(coeff)
 
     solution = _sos_struct_cubic_parabola(coeff)
     if solution is not None:
@@ -24,18 +35,18 @@ def _sos_struct_cubic_symmetric(coeff):
     """
     # if not coeff((2,1,0)) == coeff((1,2,0)):
     #     return None
-    y = [
+    y = radsimp([
         coeff((3,0,0)),
         coeff((3,0,0)) + coeff((2,1,0)),
         3 * (coeff((3,0,0)) + coeff((2,1,0)) * 2) + coeff((1,1,1))
-    ]
+    ])
     if all(_ >= 0 for _ in y):
         exprs = [
             CyclicSum(a*(a-b)*(a-c)),
             CyclicSum(a*(b-c)**2),
             CyclicProduct(a)
         ]
-        return _sum_y_exprs(y, exprs)
+        return sum_y_exprs(y, exprs)
     return None
 
 
@@ -172,9 +183,67 @@ def _sos_struct_cubic_nontrivial(coeff):
         CyclicSum(a*b*(a-c - u*(b-c)).expand()**2),
         CyclicSum(a**2*b*c)
     ]
-    return _sum_y_exprs(y, exprs) / CyclicSum(a)
+    return sum_y_exprs(y, exprs) / CyclicSum(a)
 
     # poly2 = poly * (a + b + c).as_poly(a,b,c)
     # solution = recurrsion(poly2)
     # if solution is not None:
     #     return solution / CyclicSum(a)
+
+
+def _sos_struct_cubic_nontrivial_irrational(coeff):
+    """
+    Use ultimate theorem for cubic to handle general cases, including irrational coefficients.
+
+    Theorem:
+    If and only if p,q >= 0 or p^2q^2 + 18pq - 4p^3 - 4q^3 - 27 <= 0, the inequality
+    f(a,b,c) = s(a^3 + p*a^2*b + q*a*b^2 - (p+q+1)*a*b*c) >= 0 is true for all a,b,c >= 0.
+
+    The former is rather simple. The latter is more complicated. We have that
+    f(a,b,c) * s(ab) = (p + q + 3) p(a)s(a^2-ab) + ts(c(a^2-b^2+u(ab-ac)+v(bc-ab))^2) + (1-t)s(c(a-b)^4) >= 0.
+    where
+    D = -16(p^2q^2 + 18pq - 4p^3 - 4q^3 - 27)
+    u, v = (2*p**2 - 6*q) / (9 - p*q), (2*q**2 - 6*p) / (9 - p*q)
+    t = (9 - p*q)**2 / (p + q + 3) / (3*(p - q)**2 + (6 - p - q)**2)
+
+    Examples
+    -------
+    s(a)3-27abc-2sqrt(3)s((a-b)3)
+
+    s((2a+b)(a-sqrt(2)b)2-2a3+(6sqrt(2)-7)abc)
+    """
+    m, p, q = coeff((3,0,0)), coeff((2,1,0)), coeff((1,2,0))
+    rem = radsimp(3 * (m + p + q) + coeff((1,1,1)))
+    if m < 0 or rem < 0:
+        return None
+    if p >= 0 and q >= 0:
+        y = radsimp([m / 2, p, q, rem])
+        exprs = [
+            CyclicSum(a) * CyclicSum((b-c)**2),
+            CyclicSum(a**2*b - CyclicProduct(a)),
+            CyclicSum(a**2*c - CyclicProduct(a)),
+            CyclicProduct(a)
+        ]
+        return sum_y_exprs(y, exprs)
+
+    p, q = p / m, q / m
+    det = radsimp(-16*(p**2*q**2 + 18*p*q - 4*p**3 - 4*q**3 - 27))
+    if det < 0:
+        return None
+    u, v = (2*p**2 - 6*q) / (9 - p*q), (2*q**2 - 6*p) / (9 - p*q)
+    t = (9 - p*q)**2 / (p + q + 3) / (3*(p - q)**2 + (6 - p - q)**2)
+    u, v, t = radsimp([u, v, t])
+
+    y = radsimp([
+        (p + q + 3) * m / 2,
+        t * m,
+        (1 - t) * m,
+        rem
+    ])
+    exprs = [
+        CyclicProduct(a) * CyclicSum((a-b)**2),
+        CyclicSum(c*(a**2 - b**2 + u*(a*b-a*c) + v*(b*c-a*b))**2),
+        CyclicSum(c*(a-b)**4),
+        CyclicSum(a**3*b*c)
+    ]
+    return sum_y_exprs(y, exprs) / CyclicSum(a*b)

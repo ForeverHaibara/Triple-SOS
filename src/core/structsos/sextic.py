@@ -7,29 +7,24 @@ from .sextic_symmetric import (
     _sos_struct_sextic_hexagram_symmetric,
     sos_struct_sextic_symmetric_ultimate
 )
-from .utils import CyclicSum, CyclicProduct, _sum_y_exprs, quadratic_weighting, inverse_substitution, nroots
-from ...utils.roots.rationalize import rationalize_bound
-
+from .utils import (
+    CyclicSum, CyclicProduct, Coeff,
+    sum_y_exprs, nroots, rationalize_bound,
+    quadratic_weighting, inverse_substitution
+)
 
 a, b, c = sp.symbols('a b c')
-
 
 def sos_struct_sextic(poly, coeff, recurrsion):
     if coeff((5,1,0)) == coeff((1,5,0)) and coeff((4,2,0)) == coeff((2,4,0)) and coeff((3,2,1)) == coeff((3,1,2)):
         return sos_struct_sextic_symmetric_ultimate(poly, coeff, recurrsion)
 
+    if not coeff.is_rational:
+        return None
     if coeff((6,0,0))==0 and coeff((5,1,0))==0 and coeff((5,0,1))==0:
         return _sos_struct_sextic_hexagon(coeff, poly, recurrsion)
 
     return None
-
-
-def _sos_struct_sextic_inverse_triangle(coeff, poly):
-    """
-    Try to solve s(xa3b3 + ya3b2c + za2b3c + wa2b2c2) >= 0
-    without updegree.
-    """
-    pass
 
 
 
@@ -56,16 +51,14 @@ def _sos_struct_sextic_hexagram(coeff):
     if coeff((3,3,0)) == 0:
         # degenerates to cubic
         new_coeffs_ = {(3,0,0): coeff((4,1,1)), (2,1,0): coeff((3,2,1)), (1,2,0): coeff((2,3,1)), (1,1,1): coeff((2,2,2))}
-        new_coeff = lambda x: new_coeffs_.get(x, sp.S(0))
-        solution = sos_struct_cubic(None, new_coeff, None)
+        solution = sos_struct_cubic(None, Coeff(new_coeffs_), None)
         if solution is not None:
             return solution * CyclicProduct(a)
         return None
     if coeff((4,1,1)) == 0:
         # degenerates to inverse cubic
         new_coeffs_ = {(3,0,0): coeff((3,3,0)), (2,1,0): coeff((2,3,1)), (1,2,0): coeff((3,2,1)), (1,1,1): coeff((2,2,2))}
-        new_coeff = lambda x: new_coeffs_.get(x, sp.S(0))
-        solution = sos_struct_cubic(None, new_coeff, None)
+        solution = sos_struct_cubic(None, Coeff(new_coeffs_), None)
         if solution is not None:
             solution = inverse_substitution(solution, factor_degree = 0)
         return solution
@@ -124,7 +117,7 @@ def _sos_struct_sextic_hexagram(coeff):
                     CyclicProduct(a) * p1[1],
                     CyclicProduct(a**2)
                 ]
-                return _sum_y_exprs(y, exprs)
+                return sum_y_exprs(y, exprs)
 
 
 
@@ -240,7 +233,7 @@ def _sos_struct_sextic_hexagram(coeff):
                         CyclicSum(a**2*(b-c)**2) * CyclicProduct(a),
                         CyclicSum(a) * CyclicProduct(a**2)
                     ]
-                    return _sum_y_exprs(y, exprs) / multiplier
+                    return sum_y_exprs(y, exprs) / multiplier
 
 
     # Final trial (the code is not expected to reach here)
@@ -323,8 +316,7 @@ def _sos_struct_sextic_hexagon(coeff, poly, recurrsion):
             # print('c3 =', c3, 'params =', params)
             if return_func:
                 coeffs_ = dict(zip([(4,1,1),(3,2,1),(2,3,1),(3,3,0),(2,2,2)], params))
-                coeff = lambda x: coeffs_.get(x, sp.S(0))
-                return coeff
+                return Coeff(coeffs_)
             return params
         
         def _check_valid(c3):
@@ -449,7 +441,7 @@ def _sos_struct_sextic_rotated_tree(coeff):
             CyclicProduct(a) * CyclicSum(a**2*c - CyclicProduct(a)),
             CyclicProduct(a**2)
         ]
-        return _sum_y_exprs(y, exprs)
+        return sum_y_exprs(y, exprs)
     
     if u >= 0 and v >= -2:
         y = [sp.S(1), u, v + 2,
@@ -462,7 +454,7 @@ def _sos_struct_sextic_rotated_tree(coeff):
             CyclicProduct(a) * CyclicSum(a**2*c - CyclicProduct(a)),
             CyclicProduct(a**2)
         ]
-        return _sum_y_exprs(y, exprs)
+        return sum_y_exprs(y, exprs)
 
     if True:
         # simple case, we only need to multiply s(a)
@@ -511,7 +503,7 @@ def _sos_struct_sextic_rotated_tree(coeff):
                     CyclicProduct(a) * CyclicSum(a**2*(b-c)**2),
                     CyclicProduct(a**2) * CyclicSum(a)
                 ]
-                return _sum_y_exprs(y, exprs) / multiplier
+                return sum_y_exprs(y, exprs) / multiplier
 
 
     r, x = sp.symbols('r'), None
@@ -554,4 +546,4 @@ def _sos_struct_sextic_rotated_tree(coeff):
         CyclicProduct(a**2) * CyclicSum(a) * CyclicSum(a*b**2 + z*a*b*c)
     ]
 
-    return _sum_y_exprs(y, exprs) / multiplier
+    return sum_y_exprs(y, exprs) / multiplier

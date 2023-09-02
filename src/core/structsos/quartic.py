@@ -1,14 +1,17 @@
 import sympy as sp
 
-from .utils import CyclicSum, CyclicProduct, _sum_y_exprs, nroots
-from ...utils.roots.rationalize import rationalize_bound, square_perturbation
-
+from .utils import (
+    CyclicSum, CyclicProduct, Coeff,
+    sum_y_exprs, nroots, rationalize_bound, quadratic_weighting, radsimp
+)
 
 a, b, c = sp.symbols('a b c')
 
 def sos_struct_quartic(poly, coeff, recurrsion):
     """
     Solve cyclic quartic problems.
+
+    The function only uses `coeff`. The `poly` and `recurrsion` is not used for minimium dependency.
 
     Core theorem:
     If f(a,b,c) = s(a4 + pa3b + na2b2 + qab3 - (1+p+n+q)a2bc) >= 0 holds for all a,b,c >= 0, 
@@ -23,7 +26,7 @@ def sos_struct_quartic(poly, coeff, recurrsion):
         and the following polynomial
             g(a,b,c) = f(a,b,c) - t * s(ab(a-c - u(b-c))^2) 
         must satisfy the condition A.
-
+        
     Examples
     -------
     s(a2)2-3s(a3b)
@@ -38,12 +41,12 @@ def sos_struct_quartic(poly, coeff, recurrsion):
                 return solution
 
 
-        det = 3*m*(m + n) - (p*p + p*q + q*q)
-        if det >= 0:
-            return _sos_struct_quartic_core(coeff)
-            
+        solution = _sos_struct_quartic_core(coeff)
+        if solution is not None:
+            return solution
+
         else:
-            if p == -q:
+            if coeff.is_rational and p == -q:
                 # handle some special case in advance
                 solution = _sos_struct_quartic_quadratic_border(coeff)
                 if solution is not None:
@@ -77,28 +80,30 @@ def _sos_struct_quartic_core(coeff):
     s((a2-b2-ac+ab)2)
     """
     m, p, n, q = coeff((4,0,0)), coeff((3,1,0)), coeff((2,2,0)), coeff((1,3,0))
-    det = 3*m*(m+n) - (p*p + p*q + q*q)
+    det = radsimp(3*m*(m+n) - (p*p + p*q + q*q))
     if m < 0 or det < 0:
         return None
     elif m == 0: # and det >= 0, so it must be p,q == 0
         return _sos_struct_quartic_degenerate(coeff)
 
-    y = [
+    y = radsimp([
         m/2,
         det/6/m,
         coeff((2,1,1)) + m + p + n + q
-    ]
+    ])
 
     if y[-1] < 0:
         return None
 
+    c1, c2, c3 = (p+2*q)/m/3, (p-q)/m/3, -(2*p+q)/m/3
+    c1, c2, c3 = radsimp([c1, c2, c3])
     exprs = [
-        CyclicSum((a**2 - b**2 + (p+2*q)/m/3*a*c + (p-q)/m/3*a*b - (2*p+q)/m/3*b*c)**2),
+        CyclicSum((a**2 - b**2 + c1*a*c + c2*a*b + c3*b*c)**2),
         CyclicSum(a**2*(b-c)**2),
         CyclicSum(a**2*b*c)
     ]
 
-    return _sum_y_exprs(y, exprs)
+    return sum_y_exprs(y, exprs)
 
 
 def _sos_struct_quartic_quadratic_border(coeff):
@@ -130,7 +135,7 @@ def _sos_struct_quartic_quadratic_border(coeff):
                     CyclicSum((b-c)**2) * CyclicProduct(a),
                     CyclicSum(a)**2 * CyclicProduct(a)
                 ]
-                return _sum_y_exprs(y, exprs) / CyclicSum(a)
+                return sum_y_exprs(y, exprs) / CyclicSum(a)
     
         # if it is rational, then fall back to normal mode
         # u = (w + t) / 2
@@ -159,12 +164,15 @@ def _sos_struct_quartic_biased(coeff):
     s(a)s(a(a-b)(a-c))
 
     10s(a4-4a3b+2ab3+a2b2)+19s(a2b2-a2bc)
+
+    s((2a+b)(a-sqrt(2)b)2(a+b)-2a4+(12sqrt(2)-16)a2bc)
     """
     m, p, n, q = coeff((4,0,0)), coeff((3,1,0)), coeff((2,2,0)), coeff((1,3,0))
 
     # try subtracting t*s(ab(a-c-u(b-c))2) and use the theorem
     # solve all extrema
-    n , p , q = n / m , p / m , q / m
+    n, p, q = n / m, p / m, q / m
+    n, p, q = radsimp([n, p, q])
     x, u_ = sp.symbols('x'), None
     eq = (2*x**4 + p*x**3 - q*x - 2).as_poly(x)
     
@@ -172,41 +180,30 @@ def _sos_struct_quartic_biased(coeff):
     symmetric = lambda _x: ((2*q+p)*_x + 6)*_x + 2*p+q
     
     # the discriminant after subtraction
+    head = radsimp(p*p+p*q+q*q-3*n-3)
     def new_det(sym, root):
-        return p*p+p*q+q*q-3*n-3 - sym**2/(4*(root**2*(root**2 + 1) + 1))
+        return head - sym**2/(4*(root**2*(root**2 + 1) + 1))
 
-    for root in sp.polys.roots(eq, cubics = False, quartics = False, quintics = False).keys():
-        if root.is_real and root > 0:
-            if isinstance(root, sp.Rational):
-                symmetric_axis = symmetric(root)
-                if symmetric_axis >= 0:
-                    det = (new_det(symmetric_axis, root))
+    if coeff.is_rational:
+        for root in sp.polys.roots(eq, cubics = False, quartics = False, quintics = False).keys():
+            if root.is_real and root > 0:
+                if isinstance(root, sp.Rational):
+                    symmetric_axis = symmetric(root)
+                    if symmetric_axis >= 0:
+                        det = (new_det(symmetric_axis, root))
 
-                    if det <= 0:
-                        u_ = root
-                        break
-            else:
-                # quadratic roots, handled in the special case or degenerate to rational approximation
-                # e.g. (s(a2+ab))2-4s(a)s(a2b)
-                # u = (sqrt(5) + 1) / 2
-
-                # deprecated
-                pass
-                if False:
-                    # deprecated because it is irrational and slow
-                    # we need simplify det here for quadratic roots
-                    det = sp.simplify(det)
-                    if det == 0 or (det < 0 and isinstance(det, sp.Rational)):
-                        if det < 0:
-                            # we consider rational approximations
-                            numer_r = float(root)
-                            for rounding in (.5, .2, .1, 1e-2, 1e-3, 1e-4, 1e-6, 1e-8):
-                                numer_r2 = sp.Rational(*rationalize(numer_r, rounding=rounding, reliable=False))
-                                symmetric_axis = symmetric(numer_r2)
-                                if symmetric_axis >= 0 and new_det(symmetric_axis, numer_r2) <= 0:
-                                    u_ = numer_r2
-                                    break
+                        if det <= 0:
+                            u_ = root
+                            break
     else:
+        # check whether there exists multiplicitive root on the border
+        eq_diff = (x**4 + p*x**3 + n*x**2 + q*x + 1).as_poly(x)
+        eq_gcd = sp.gcd(eq, eq_diff)
+        if eq_gcd.degree() == 1:
+            # TODO: if degree >= 2?
+            u_ = radsimp(-(eq_gcd.all_coeffs()[1] / eq_gcd.LC()))
+
+    if u_ is None:
         # find a rational approximation
         for numer_r in sp.polys.nroots(eq):
             if (not numer_r.is_real) or symmetric(numer_r) < 1e-6:
@@ -219,7 +216,7 @@ def _sos_struct_quartic_biased(coeff):
                     break
     
     if u_ is not None:
-        y_ = (symmetric(u_) / (2*(u_**2*(u_**2 + 1) + 1)) * m)
+        y_ = radsimp((symmetric(u_) / (2*(u_**2*(u_**2 + 1) + 1)) * m))
         solution = y_ * CyclicSum((a*b*(a-u_*b+(u_-1)*c)**2))
         
         def new_coeff(d):
@@ -255,57 +252,24 @@ def _sos_struct_quartic_degenerate(coeff):
 
     if m == 0 and p == 0 and q == 0 and n >= 0 and n + r >= 0 and r <= 2*n:
         # in this special case the polynomial is positive for real numbers
-        w1 = (2*n - r) / 3
-        w2 = n - w1
+        w1 = radsimp(2*n - r) / 3
+        w2 = radsimp(n - w1)
         return w1 / 2 * CyclicSum(a**2*(b-c)**2) + w2 * CyclicSum(a*b)**2
 
 
-    if m == 0 and p >= 0 and q >= 0 and p + n + q + r >= 0 and (n >= 0 or n*n <= 4*p*q):
+    if m == 0 and p >= 0 and q >= 0 and p + n + q + r >= 0 and (n >= 0 or n**2 <= 4*p*q):
+        rem = radsimp(p + n + q + r) * CyclicSum(a**2*b*c)
         if n >= 0:
             # very trivial in this case and we can only use AM-GM
-            y = [p, n / 2, q, p + n + q + r]
-            exprs = [
-                CyclicSum(a*c*(b-c)**2),
-                CyclicSum(a**2*(b-c)**2),
-                CyclicSum(a*b*(b-c)**2),
-                CyclicSum(a**2*b*c)
-            ]
-            return _sum_y_exprs(y, exprs)
-
+            part = ((n/2) * a + q*b + p*c).together().as_coeff_Mul()
+            solution = part[0] * CyclicSum(a*(b-c)**2*part[1])
 
         else:
             # if n < 0, we must have p > 0 and q > 0
-            t = sp.sqrt(q / p)
-            if isinstance(t, sp.Rational):
-                # case 1. q / p is a square so that we can directly apply the method
-                tq, tp = t.as_numer_denom()
-                y = [
-                    q / tq**2,
-                    n / 2 + sp.sqrt(p * q),
-                    p + n + q + r
-                ]
-                exprs = [
-                    CyclicSum(a*b*(tp*a-tq*b+(tq-tp)*c)**2),
-                    CyclicSum(a**2*(b-c)**2),
-                    CyclicSum(a**2*b*c)
-                ]
-                return _sum_y_exprs(y, exprs)
-            
-            else:
-                # case 2. q / p is not a square so we need to find some perturbation
-                # so that (q - dt) / (p - dt) is a square
-                for dt in square_perturbation(p, q):
-                    if n * n <= 4 * (p - dt) * (q - dt):
-                        solution = sp.S(dt) * CyclicSum(b*c*(b-c)**2)
+            solution = quadratic_weighting(p, q, n, a-b, a-c, formal = True)
+            solution = sum(radsimp(wi) * CyclicSum(b*c*xi**2) for wi, xi in solution)
 
-                        def new_coeff(d):
-                            result = {(4,0,0): sp.S(0), (3,1,0): p - dt, (1,3,0): q - dt, (2,2,0): n + 2*dt, (2,1,1): r}
-                            return result[d]
-                    
-                        # it must succeed
-                        solution +=  _sos_struct_quartic_degenerate(new_coeff)
-                        return solution
-
+        return solution + rem
 
     return None
 
@@ -348,21 +312,27 @@ def _sos_struct_quartic_uncentered(coeff, recur = False):
     s(a4-a3b-2ab3+11/10a2b2)+2abcs(a)
 
     s(a)3s(a)-s(a2)s(a)2/3
+
+    (567+45sqrt(105))/32/81s(a)4-s(a3b)
     
     References
     -------
-    https://tieba.baidu.com/p/8069929018
+    [1] https://tieba.baidu.com/p/8069929018
+
+    [2] https://tieba.baidu.com/p/8241977884
     """
     m, p, n, q, r = coeff((4,0,0)), coeff((3,1,0)), coeff((2,2,0)), coeff((1,3,0)), coeff((2,1,1))
     if m > 0 and m + p + n + q + r > 0:
         p, n, q, r = p / m, n / m, q / m, r / m
-        s = 3*(1 + p + n + q + r)
-        eq_coeffs = [
+        p, n, q, r = radsimp([p, n, q, r])
+        s = radsimp(3*(1 + p + n + q + r))
+
+        eq_coeffs = radsimp([
             -27*n + 9*p**2 + 9*p*q + 9*q**2 + 3*s - 27,
             81*n - 27*p**2 - 27*p*q + 6*p*s - 27*q**2 + 6*q*s - 3*s + 81,
             3*n*s - 81*n + 27*p**2 + 27*p*q - 6*p*s + 27*q**2 - 6*q*s + s**2 + 12*s - 81,
             -3*n*s + 27*n - 9*p**2 - 9*p*q - 9*q**2 + s**2 - 12*s + 27
-        ]
+        ])
         
         w, w_ = sp.symbols('w'), None
 
@@ -371,12 +341,20 @@ def _sos_struct_quartic_uncentered(coeff, recur = False):
         # it would be best if we can let eq == 0
         eq = sum(eq_coeffs[i] * w ** (3 - i) for i in range(4)).as_poly(w)
 
-        for root in sp.polys.roots(eq, cubics = False, quartics = False, quintics = False):
-            if root.is_real and isinstance(root, sp.Rational) and root != 1:
-                if root != 1 and s <= 9 * (1 - root)**2:
-                    w_ = root
-                    break
-        else:
+        if coeff.is_rational:
+            for root in sp.polys.roots(eq, cubics = False, quartics = False, quintics = False):
+                if root.is_real and isinstance(root, sp.Rational) and root != 1:
+                    if root != 1 and s <= 9 * (1 - root)**2:
+                        w_ = root
+                        break
+        elif not coeff.is_rational:
+            # check whether there exists multiplicitive root
+            eq_diff = eq.diff(w)
+            eq_gcd = sp.gcd(eq, eq_diff)
+            if eq_gcd.degree() == 1:
+                w_ = radsimp(-(eq_gcd.all_coeffs()[1] / eq_gcd.LC()))
+
+        if w_ is None:
             # find rational approximation of w such that eq * (w - 1) <= 0
             # (eq is the discriminant)
 
@@ -450,7 +428,7 @@ def _sos_struct_quartic_uncentered(coeff, recur = False):
                     # in this case, we must have
                     # r = 8*n-3*p*p-3*p+6
                     # (n+r) / 6 >= (3*n-p*p-p+2) / 3 >= 0
-                    y_ = (3*n-p*p-p+2) / 3 * m
+                    y_ = radsimp((3*n-p*p-p+2) / 3 * m)
                     solution = y_ * CyclicSum(a*b)**2
 
                     def new_coeff(d):
@@ -462,7 +440,7 @@ def _sos_struct_quartic_uncentered(coeff, recur = False):
                         return solution + new_solution
 
         if w_ is not None:
-            y_ = s / (1 - w_) ** 2 / 9 * m
+            y_ = radsimp(s / (1 - w_) ** 2 / 9 * m)
             solution = y_ * CyclicSum(a**2-w_*a*b)**2
 
             def new_coeff(d):
@@ -479,13 +457,13 @@ def _sos_struct_quartic_uncentered(coeff, recur = False):
 
         # if we reach here, it means that the inequality does not hold for all real numbers
         # we can subtract as many s(a2bc) as possible
-        if 3*(1 + n) >= p*p + p*q + q*q:
+        if radsimp(3*(1 + n) - (p*p + p*q + q*q)) >= 0:
             # Case 1. 3m(m+n) - (p^2+pq+q^2) >= 0,
             # then it is directly handled by the core function
             return _sos_struct_quartic_core(coeff)
         else:
             # assume the inequality holds, then on the border it must >= 0
-            if 2*p + q >= 0 or 2*q + p >= 0 or (2*p+q)*(2*q+p) <= 9:
+            if 2*p + q >= 0 or 2*q + p >= 0 or radsimp((2*p+q)*(2*q+p)) <= 9:
                 # then it falls to the biased case
                 return _sos_struct_quartic_biased(coeff)
 
@@ -531,7 +509,7 @@ def _sos_struct_quartic_uncentered(coeff, recur = False):
                     x_ = 9*(p + 2)**2 / 4
             else:
                 u = sp.symbols('u')
-                det_coeffs = [
+                det_coeffs = radsimp([
                     1,
                     -3*(p*q + 14*p + 14*q - 20),
                     9*(-6*n_**2 + n_*p**2 - n_*p*q + 26*n_*p + n_*q**2 + 26*n_*q - 152*n_ + 12*p**2*q + 57*p**2 + 12*p*q**2 + 63*p*q - 6*p + 57*q**2 - 6*q - 162),
@@ -539,7 +517,7 @@ def _sos_struct_quartic_uncentered(coeff, recur = False):
                         + 24*n_*p*q**2 + 18*n_*p*q - 252*n_*p + 10*n_*q**3 + 84*n_*q**2 - 252*n_*q - 560*n_ + p**4 + 34*p**3*q + 86*p**3 + 39*p**2*q**2 \
                         + 192*p**2*q + 114*p**2 + 34*p*q**3 + 192*p*q**2 + 51*p*q - 278*p + q**4 + 86*q**3 + 114*q**2 - 278*q - 388),
                     81*(n_ + 2*p + 2*q + 5)**3*(-3*n_ + p**2 + p*q + q**2 - 3)
-                ]
+                ])
                 det = sum(det_coeffs[i] * u ** (4 - i) for i in range(5)).as_poly(u)
 
                 if isinstance(n_, sp.Rational):
@@ -567,13 +545,11 @@ def _sos_struct_quartic_uncentered(coeff, recur = False):
                 # finally subtract enough s(a2bc) to xs(a2bc) (or near xs(a2bc))
                 for x2 in rationalize_bound(x_, direction = 1, compulsory = True):
                     if x2 < r:
-                        def new_coeff(x):
-                            coeffs = {(4,0,0): coeff((4,0,0)), (3,1,0): coeff((3,1,0)),
-                                        (2,2,0): coeff((2,2,0)), (1,3,0): coeff((1,3,0)), (2,1,1): x2 * m}
-                            return coeffs[x]
-                        solution = _sos_struct_quartic_uncentered(new_coeff, recur = True)
+                        new_coeffs_ = {(4,0,0): coeff((4,0,0)), (3,1,0): coeff((3,1,0)),
+                                    (2,2,0): coeff((2,2,0)), (1,3,0): coeff((1,3,0)), (2,1,1): x2 * m}
+                        solution = _sos_struct_quartic_uncentered(Coeff(new_coeffs_, is_rational = coeff.is_rational), recur = True)
                         if solution is not None:
-                            solution += (r - x2) * m * CyclicSum(a**2*b*c)
+                            solution += radsimp((r - x2) * m) * CyclicSum(a**2*b*c)
                             return solution
 
             return None

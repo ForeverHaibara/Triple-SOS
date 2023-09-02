@@ -1,8 +1,10 @@
 import sympy as sp
 
 from .sextic_symmetric import _sos_struct_sextic_hexagram_symmetric
-from .utils import CyclicSum, CyclicProduct, _sum_y_exprs, _make_coeffs, inverse_substitution
-from ...utils.roots.rationalize import rationalize_bound
+from .utils import (
+    CyclicSum, CyclicProduct, Coeff,
+    sum_y_exprs, rationalize_bound, inverse_substitution, radsimp
+)
 
 a, b, c = sp.symbols('a b c')
 
@@ -120,13 +122,12 @@ def _sos_struct_nonic_hexagram_symmetric(poly, coeff, recurrsion):
         (3,1,2): c6_,
         (2,2,2): c7_,
     }
-    hexgram_coeffs = lambda _: hexgram_coeffs_.get(_, 0)
-    hexagram = _sos_struct_sextic_hexagram_symmetric(hexgram_coeffs)
+    hexagram = _sos_struct_sextic_hexagram_symmetric(Coeff(hexgram_coeffs_))
     if hexagram is None:
         return None
 
-    ratio = z / c2
-    c2_ratio2 = c2 * ratio**2
+    ratio = radsimp(z / c2)
+    c2_ratio2 = radsimp(c2 * ratio**2)
     solution = None
     if w >= 4* c2 * ratio:
         # Note that for simple case,
@@ -161,7 +162,7 @@ def _sos_struct_nonic_hexagram_symmetric(poly, coeff, recurrsion):
             CyclicProduct((a-b)**2) * p2[1],
             hexagram * multiplier * CyclicProduct(a)
         ]
-        solution = _sum_y_exprs(y, exprs) / multiplier
+        solution = sum_y_exprs(y, exprs) / multiplier
     
     return solution
 
@@ -219,10 +220,10 @@ def _sos_struct_nonic_gear(poly, coeff, recurrsion):
         def _compute_params(z):
             # We expect that z^2 = c2 in the ideal case. However, when z is rational,
             # we perturb some s(ab^2c^2(a-b)^4) to make c2_sqrt rational.
-            w = c2 - z**2
+            w = radsimp(c2 - z**2)
             c41_, c32_, c23_ = c41 + 3*w, c32 + 4*w, c23 - 6*w
             v = c24 / 2 - z # coeff of (a^2b-abc)
-            u = 1 - c42 / 2 / z # coeff of (bc-ab)
+            u = radsimp(1 - c42 / 2 / z) # coeff of (bc-ab)
 
             frac0, frac1 = -(-3*u**2 - 2*u*z + 6*u + 3*v**2 + 6*v*z - 2*v - (c32_ - c23_) + 2*z**2 - 2), (6*(u + v + z - 1))
             if frac1 == 0:
@@ -234,11 +235,11 @@ def _sos_struct_nonic_gear(poly, coeff, recurrsion):
                     if not isinstance(x, sp.Rational):
                         x = 1 - v
             else:
-                x = frac0 / frac1
+                x = radsimp(frac0 / frac1)
             c41_ = c41_ - (2*u*z + v**2 + 2*v*z - 2*x*z + z**2)
             c33_ = c33 - (u**2 - 2*u - 2*v - 2*x + 1)
             c32_ = c32_ - (-2*u**2 - 2*u*v + 2*u*x - 2*u*z + 4*u + v**2 + 4*v*x + 2*v*z + x**2 + 4*x*z - 2*x - 2)
-            return (u,v,x), (c41_, c33_, c32_)
+            return (u,v,x), radsimp((c41_, c33_, c32_))
 
         vertex1 = _compute_params(c2_sqrt)
         vertex2 = _compute_params(-c2_sqrt)
@@ -292,13 +293,12 @@ def _sos_struct_nonic_gear(poly, coeff, recurrsion):
                 z = c2_sqrt
 
         if w is not None and z is not None:
-            c41_, c33_, c32_ = [w*vertex1[1][i] + (1-w)*vertex2[1][i] for i in range(3)]
+            c41_, c33_, c32_ = radsimp([w*vertex1[1][i] + (1-w)*vertex2[1][i] for i in range(3)])
             hexagram_coeffs_ = {
                 (4,1,1): c41_, (3,3,0): c33_, (3,2,1): c32_, (2,3,1): c32_,
-                (2,2,2): (-c41_-c33_-c32_*2)*3 + poly(1,1,1)
+                (2,2,2): radsimp((-c41_-c33_-c32_*2)*3 + poly(1,1,1))
             }
-            hexagram_coeffs = lambda _: hexagram_coeffs_.get(_, sp.S(0))
-            hexagram_solution = _sos_struct_sextic_hexagram_symmetric(hexagram_coeffs)
+            hexagram_solution = _sos_struct_sextic_hexagram_symmetric(Coeff(hexagram_coeffs_))
             if hexagram_solution is not None:
                 def _get_ker(z, vertex, as_coeff_Mul = True):
                     u, v, x = vertex[0]
@@ -308,16 +308,16 @@ def _sos_struct_nonic_gear(poly, coeff, recurrsion):
                     return ker
                 ker1 = _get_ker(z, vertex1)
                 ker2 = _get_ker(-z, vertex2)
-                y = [
+                y = radsimp([
                     ker1[0]**2 * w * c1,
                     ker2[0]**2 * (1-w) * c1,
                     (c2 - z**2) * c1,
                     c1
-                ]
+                ])
                 exprs = [
                     CyclicSum(a*c**2*ker1[1]**2),
                     CyclicSum(a*c**2*ker2[1]**2),
                     CyclicSum(a*b**2*c**2*(a-b)**4),
                     hexagram_solution * CyclicProduct(a),
                 ]
-                return _sum_y_exprs(y, exprs)
+                return sum_y_exprs(y, exprs)

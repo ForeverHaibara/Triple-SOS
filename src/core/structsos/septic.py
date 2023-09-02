@@ -2,15 +2,19 @@ from itertools import zip_longest
 
 import sympy as sp
 
-from .utils import CyclicSum, CyclicProduct, _sum_y_exprs, _try_perturbations, nroots
 from .quartic import sos_struct_quartic
-from ...utils.roots.rationalize import rationalize, rationalize_bound
 from ...utils.roots.findroot import optimize_discriminant
-
+from .utils import (
+    CyclicSum, CyclicProduct, Coeff,
+    sum_y_exprs, nroots, rationalize, rationalize_bound, try_perturbations,
+)
 
 a, b, c = sp.symbols('a b c')
 
 def sos_struct_septic(poly, coeff, recurrsion):
+    if not coeff.is_rational:
+        return None
+
     if coeff((7,0,0)) == 0 and coeff((6,1,0)) == 0 and coeff((6,0,1)) == 0:
         if coeff((5,2,0)) == 0 and coeff((5,0,2)) == 0:
             # star
@@ -43,8 +47,7 @@ def _fast_solve_quartic(m, p, n, q, rem = 0, mul_abc = True):
     coeffs_ = {
         (4,0,0): m, (3,1,0): p, (2,2,0): n, (1,3,0): q, (2,1,1): (rem - m - p - n - q)
     }
-    coeffs = lambda x: coeffs_.get(x, sp.S(0))
-    solution = sos_struct_quartic(None, coeffs, None)
+    solution = sos_struct_quartic(None, Coeff(coeffs_), None)
     if mul_abc and solution is not None:
         solution = solution * CyclicProduct(a)
     return solution
@@ -214,7 +217,7 @@ def _sos_struct_septic_star(coeff, poly, recurrsion):
 
         perturbation = CyclicSum(c*(a-b)**2*(a*b-a*c-b*c)**2)
         
-        solution = _try_perturbations(poly, coeff((3,4,0)), coeff((4,3,0)), perturbation, recurrsion = recurrsion)
+        solution = try_perturbations(poly, coeff((3,4,0)), coeff((4,3,0)), perturbation, recurrsion = recurrsion)
         if solution is not None:
             return solution
 
@@ -292,7 +295,7 @@ def _sos_struct_septic_biased(coeff):
                     CyclicSum(a**2*(b-c)**2) * CyclicSum(a) * CyclicProduct(a),
                     CyclicSum(a)**2 * CyclicProduct(a**2)
                 ]
-                return _sum_y_exprs(y, exprs) / multiplier
+                return sum_y_exprs(y, exprs) / multiplier
 
         elif m == 0 and p >= -2:
             if p == -2:
@@ -425,7 +428,7 @@ def _sos_struct_septic_hexagon(coeff, poly, recurrsion):
                 CyclicSum(a*(b-c)**2*(a**2-2*a*b-2*a*c+3*b*c)**2)
             ]
 
-            main_solution = _sum_y_exprs(y, exprs)
+            main_solution = sum_y_exprs(y, exprs)
             remain_solution = _fast_solve_quartic(m1, p1, n1, q1, poly)
             if remain_solution is not None:
                 return main_solution + remain_solution
@@ -547,7 +550,7 @@ def _sos_struct_septic_hexagon(coeff, poly, recurrsion):
 
     elif p > 0 and q > 0:
         perturbation = CyclicSum(a) * CyclicProduct((a-b)**2)
-        solution = _try_perturbations(poly, coeff((2,5,0)), coeff((5,2,0)), perturbation, recurrsion=recurrsion)
+        solution = try_perturbations(poly, coeff((2,5,0)), coeff((5,2,0)), perturbation, recurrsion=recurrsion)
 
         if solution is not None:
             return solution

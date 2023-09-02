@@ -3,13 +3,14 @@ from itertools import zip_longest, product
 import sympy as sp
 import numpy as np
 
-from .utils import CyclicSum, CyclicProduct, _sum_y_exprs, nroots
 from .quintic_symmetric import sos_struct_quintic_symmetric
-from ..symsos import prove_univariate
-from ...utils.roots.rationalize import rationalize, rationalize_bound, cancel_denominator
 from ...utils.roots.roots import Root
 from ...utils.basis_generator import invarraylize
-
+from .utils import (
+    CyclicSum, CyclicProduct, Coeff,
+    sum_y_exprs, nroots, rationalize, rationalize_bound, cancel_denominator, radsimp,
+    prove_univariate
+)
 
 a, b, c = sp.symbols('a b c')
 
@@ -34,20 +35,12 @@ def sos_struct_quintic(poly, coeff, recurrsion):
     """
 
     # first try symmetric solution
-    if coeff((4,1,0)) == coeff((1,4,0)) and coeff((3,2,0)) == coeff((2,3,0)):
+    if coeff.is_rational and coeff((4,1,0)) == coeff((1,4,0)) and coeff((3,2,0)) == coeff((2,3,0)):
         return sos_struct_quintic_symmetric(poly, coeff, recurrsion)
 
     if coeff((5,0,0)) == 0:
-        # if coeff((4,1,0)) == 0 or coeff((1,4,0)) == 0:
-        #     solution = _sos_struct_quintic_windmill(coeff)
-
-        #     if solution is not None:
-        #         return solution
-
         return _sos_struct_quintic_hexagon(coeff)
-
     else:
-        # a = coeff((5,0,0))
         return _sos_struct_quintic_full(coeff, poly)
     return None
 
@@ -118,22 +111,25 @@ def _sos_struct_quintic_full(coeff, poly):
         # the remaining coefficient of a^3b^2 and a^2b^3 are given by
         p, q = coeff((3,2,0)) / coeff500 - (1-x0+y0), coeff((2,3,0)) / coeff500 - (1-y0+x0)
         z0 = coeff((3,1,1)) / coeff500 + (4+4*(x0+y0))
+        x0, y0, p, q, z0 = radsimp([x0, y0, p, q, z0])
         print(p, q, z0)
 
         if p >= 0 and q >= 0 and (4*p*q >= z0**2 or z0 >= 0):
             t0 = sp.S(0)
         else:
             # Plug in the discriminant, the discriminant is linear of t, so we can solve the exact result.
-            denom = (2*p + 2*q + z0)*(4*p**2 - 4*p*q - 2*p*z0 + 4*q**2 - 2*q*z0 + z0**2)
+            denom = radsimp((2*p + 2*q + z0)*(4*p**2 - 4*p*q - 2*p*z0 + 4*q**2 - 2*q*z0 + z0**2))
             if denom <= 0 or 4*p*q - z0**2 == 0:
                 t0 = None
             else:
                 t0 = (-4*p*q + z0**2)**2/(8*denom)
 
         if t0 is not None: # and t0 >= 0
+            t0 = radsimp(t0)
             x_, y_ = x0 - t0, y0 - t0
-            if (x_ >= 0 and y_ >= 0) or -4*x_**3 + x_**2*y_**2 + 18*x_*y_ - 4*y_**3 - 27 <= 0:
+            if (x_ >= 0 and y_ >= 0) or radsimp(-4*x_**3 + x_**2*y_**2 + 18*x_*y_ - 4*y_**3 - 27) <= 0:
                 u_, v_ = 4*(-2*p**2 + q*z0)/(4*p*q - z0**2), 4*(p*z0 - 2*q**2)/(4*p*q - z0**2)
+                u_, v_ = radsimp([u_, v_])
 
                 if x_ >= 0 and y_ >= 0:
                     y = [sp.Rational(1,2)]
@@ -142,24 +138,34 @@ def _sos_struct_quintic_full(coeff, poly):
                     # find t such that ((t**4 - 4*t**3 + 6*t**2 - 2*t - 1)/(t-1)**2, (2*t**3 - 6*t**2 + 6*t - 1)/(t-1)**2) <= (x,y)
                     t = sp.symbols('t')
                     eq = ((2*t**3 - 6*t**2 + 6*t - 1) - y_ * (t-1)**2).as_poly(t)
+                    
+                    t_ = None
+                    if not coeff.is_rational:
+                        # first check whether there exists multiplicative roots
+                        eq_x = (t**4 - 4*t**3 + 6*t**2 - 2*t - 1 - x_ * (t-1)**2).as_poly(t)
+                        eq_gcd = sp.polys.gcd(eq, eq_x)
+                        if eq_gcd.degree() == 1:
+                            t_ = radsimp(- eq_gcd.coeff_monomial((0,)) / eq_gcd.coeff_monomial((1,)))
+
                     _compute_x = lambda t: (t**4 - 4*t**3 + 6*t**2 - 2*t - 1)/(t-1)**2
                     _compute_y = lambda t: (2*t**3 - 6*t**2 + 6*t - 1)/(t-1)**2
-                    t_ = None
-                    for t_ in nroots(eq, method = 'factor', real = True):
-                        if t_ < 1 and _compute_x(t_) <= x_:
-                            if not isinstance(t_, sp.Rational):
-                                for t__ in rationalize_bound(t_, direction = -1, compulsory = True):
-                                    if _compute_x(t__) <= x_ and _compute_y(t__) <= y_:
-                                        t_ = t__
-                                        break
-                            break
-                        else:
-                            t_ = None
+                    if t_ is None:
+                        for t_ in nroots(eq, method = 'factor', real = True):
+                            if t_ < 1 and _compute_x(t_) <= x_:
+                                if not isinstance(t_, sp.Rational):
+                                    for t__ in rationalize_bound(t_, direction = -1, compulsory = True):
+                                        if _compute_x(t__) <= x_ and _compute_y(t__) <= y_:
+                                            t_ = t__
+                                            break
+                                break
+                            else:
+                                t_ = None
                     if t_ is not None:
-                        y = [1 / (t_ - 1)**2, sp.S(1)]
-                        x_, y_ = x_ - _compute_x(t_), y_ - _compute_y(t_)
+                        y = [radsimp((t_ - 1)**(-2)), sp.S(1)]
+                        x_, y_ = radsimp([x_ - _compute_x(t_), y_ - _compute_y(t_)])
+                        one_minus_t_ = radsimp(1 - t_)
                         exprs = [
-                            CyclicSum(a*((1-t_)*c-a+t_*b)**2*((1-t_)*a-b+t_*c)**2),
+                            CyclicSum(a*(one_minus_t_*c-a+t_*b)**2*(one_minus_t_*a-b+t_*c)**2),
                             CyclicSum(a*(b-c)**2*(x_ * (a-c)**2 + y_*(a-b)**2))
                         ]
 
@@ -172,13 +178,13 @@ def _sos_struct_quintic_full(coeff, poly):
                                 CyclicProduct(a) * CyclicSum((a-b)**2)
                             ])
                         else:
-                            w = -z0/(2*p) if p != 0 else sp.S(0)
+                            w = radsimp(-z0/(2*p)) if p != 0 else sp.S(0)
                             y.extend([
                                 p,
-                                q - p*w**2,
+                                radsimp(q - p*w**2),
                             ])
                             exprs.extend([
-                                CyclicSum(a*(a*b-w*a*c+(w-1)*b*c)**2),
+                                CyclicSum(a*(a*b-w*a*c+radsimp(w-1)*b*c)**2),
                                 CyclicSum(a*c**2*(a-b)**2),
                             ])
                     else:
@@ -188,11 +194,12 @@ def _sos_struct_quintic_full(coeff, poly):
                         y = [_ * coeff500 for _ in y]
                         y.append(poly(1,1,1) / 3)
                         exprs.append(CyclicSum(a**2*b**2*c))
-                        return _sum_y_exprs(y, exprs)
+                        return sum_y_exprs(y, exprs)
 
             # return None
 
-
+    if not coeff.is_rational:
+        return None
 
     #########################################################
     #
@@ -220,6 +227,7 @@ def _sos_struct_quintic_full(coeff, poly):
         y1 = (2*u**2 - 4*u*v + 2*u - 2*v - 4)*x1 + 4*u**2*v - 4*u**2 + 2*u*v**2 - 4*u*v + 8*u - 2*v**3 + 6*v**2 - 4 + (g - h)*x2
         y3 = (u**2 + 2*u - v**2 - 2*v)
         y2 = y3 * x2
+
         eq1 = ((-p + 2*u - 2*v)*y2 - 2*u*x1*y3 + y1)
         eq2 = (-2*u**2 + 2*u*v + 2*u + 2)*x1*y3 + (u**2 - 2*v)*y1 + (- g + u**2 - 2*u*v + v**2 - 2)*y2
         eq2_ = eq2
@@ -238,10 +246,11 @@ def _sos_struct_quintic_full(coeff, poly):
         if True:
             u_, v_ = None, None
             v_eq = sp.polys.resultant(eq1, eq2, u).as_poly(v)
-            roots = sorted(nroots(v_eq, method = 'factor', real = True, nonnegative = True))#[::-1]
+            method = 'factor' # if is_rational else 'numpy'
+            roots = sorted(nroots(v_eq, method = method, real = True, nonnegative = True))#[::-1]
             for v_ in roots:
                 u_eq = eq1.subs(v, v_).as_poly(u)
-                roots_u = nroots(u_eq, method = 'factor', real = True, nonnegative = True)
+                roots_u = nroots(u_eq, method = method, real = True, nonnegative = True)
                 for u_ in roots_u:
                     if abs(u_ - v_) > 1e-5 and abs(u_ + v_ - 1) > 1e-5 and abs(eq2_.subs({u:u_, v:v_})) < 1e-3:
                         u, v = u_, v_
@@ -260,6 +269,7 @@ def _sos_struct_quintic_full(coeff, poly):
         if not isinstance(x, (sp.Float, sp.Rational)) or not isinstance(y, (sp.Float, sp.Rational)):
             # this might happen when x = inf or y = inf
             return None
+
         # z = 2*u**2*x - 2*u**2 + 2*u*v*x - 2*u*v*y + 2*u*v - 2*v**2*x
         # print(u, v, x, y, z)
         # if z < coeff((3,1,1)) / m - 1e-5:
@@ -275,6 +285,7 @@ def _sos_struct_quintic_full(coeff, poly):
     if y_ >= x_**2:
         m, p, q, g, h, z, w = [coeff(_) for _ in [(5,0,0),(4,1,0),(1,4,0),(3,2,0),(2,3,0),(3,1,1),(2,2,1)]]
         p, q, g, h, z, w = p/m, q/m, g/m, h/m, z/m, w/m
+
         lastu, lastv = None, None
 
         for u, v in zip_longest(
@@ -287,7 +298,7 @@ def _sos_struct_quintic_full(coeff, poly):
             lastu, lastv = u, v
 
             x = (-p + q + 4*u - 2*v - 1)/(2*(u + v - 1))
-            y = x*x
+            y = x**2
             if p + 2*(u*x-u+v) >= y:
                 _new_coeffs = {
                     (5,0,0): sp.S(0),
@@ -298,16 +309,16 @@ def _sos_struct_quintic_full(coeff, poly):
                     (3,1,1): (z - (2*u**2*x - 2*u**2 + 2*u*v*x - 2*u*v*y + 2*u*v - 2*v**2*x)) * m,
                     (2,2,1): (w - (-u**2*y - 2*u*v*x + 2*u*v*y - 4*u*x + 2*u*y + 2*u + 2*v**2*x - v**2*y - v**2 + 2*v*y + 2*x - 2*y)) * m,
                 }
-                # print(u, v, x, y, _new_coeffs)
-                def new_coeff(x):
-                    return _new_coeffs.get(x, sp.S(0))
-                solution = _sos_struct_quintic_hexagon(new_coeff)
+                solution = _sos_struct_quintic_hexagon(Coeff(_new_coeffs))
                 if solution is not None:
+                    xu, xv = x*u, x*v
                     solution = m * CyclicSum(
-                        a*(a**2-b**2+(u-v)*a*b-u*a*c+v*b*c + x*b**2-x*c**2 +x*(u-v)*b*c-x*u*b*a+x*v*c*a)**2
+                        a*(a**2-b**2+(u-v)*a*b-u*a*c+v*b*c + x*b**2-x*c**2 + (xu-xv)*b*c - xu*b*a + xv*c*a)**2
                     ) + solution
                     return solution
         return None
+
+
 
     #########################################################
     #
@@ -627,16 +638,14 @@ def _sos_struct_quintic_windmill(coeff):
     if coeff((5,0,0)) != 0 or (coeff((4,1,0)) != 0 and coeff((1,4,0)) != 0):
         return None
 
+    if not coeff.is_rational:
+        return None
+
     if coeff((4,1,0)) != 0:
         # reflect the polynomial so that coeff((4,1,0)) == 0
-        def new_coeff(c):
-            return coeff((c[0], c[2], c[1]))
-        solution = _sos_struct_quintic_windmill(new_coeff)
-
-        if solution is None:
-            return None
-
-        solution = solution.xreplace({b:c, c:b})
+        solution = _sos_struct_quintic_windmill(coeff.reflect())
+        if solution is not None:
+            solution = solution.xreplace({b:c, c:b})
         return solution
     
     # now we assume coeff((4,1,0)) == 0
@@ -667,7 +676,7 @@ def _sos_struct_quintic_windmill(coeff):
                 CyclicSum((b-c)**2) * CyclicProduct(a),
                 CyclicSum(a*b) * CyclicProduct(a)
             ]
-            return _sum_y_exprs(y, exprs)
+            return sum_y_exprs(y, exprs)
         return None
 
     if coeff((3,2,0)) == 0:
@@ -722,7 +731,7 @@ def _sos_struct_quintic_windmill(coeff):
                     CyclicSum(a*b) * CyclicProduct(a)
                 ]
                 y = [1 / r, w__ * coeff((3,2,0))]
-                return _sum_y_exprs(y, exprs)
+                return sum_y_exprs(y, exprs)
         
         # B. y^2 <= 4xz
         # x = coeff((1,4,0))
@@ -767,7 +776,7 @@ def _sos_struct_quintic_windmill(coeff):
                 y = [y[0] / r1**2, 1 / r2, w__ * coeff((3,2,0))]
 
                 if all(_ >= 0 for _ in y):
-                    return _sum_y_exprs(y, exprs)
+                    return sum_y_exprs(y, exprs)
                     
 
 
@@ -789,7 +798,7 @@ def _sos_struct_quintic_windmill(coeff):
                 CyclicSum((b-c)**2) * CyclicProduct(a),
                 CyclicSum(a*b) * CyclicProduct(a)
             ]
-            return _sum_y_exprs(y, exprs)
+            return sum_y_exprs(y, exprs)
 
     if True:
         # Easy case 4. use s(c*(a-c)^2*(a-t*b)^2)
@@ -810,7 +819,7 @@ def _sos_struct_quintic_windmill(coeff):
                         CyclicSum(a**2*c*(a-b)**2),
                         CyclicSum(a*b) * CyclicProduct(a)
                     ]
-                    return _sum_y_exprs(y, exprs)
+                    return sum_y_exprs(y, exprs)
         elif x_ < 1:
             # two cases:
             # 1. x_s(c(a-c)2(a-tb)2) + ?s(a3(b-c)2) + ??s(bc2(a-b)2)
@@ -831,7 +840,7 @@ def _sos_struct_quintic_windmill(coeff):
             #             CyclicSum(a**2*c*(a-b)**2),
             #             CyclicSum(a*b) * CyclicProduct(a)
             #         ]
-            #         return _sum_y_exprs(y, exprs)
+            #         return sum_y_exprs(y, exprs)
 
             # -z/2 - 2tx >= 0
             # 1 + 2tx - x + z/2 >= 0
@@ -866,7 +875,7 @@ def _sos_struct_quintic_windmill(coeff):
                         CyclicSum(a*c**2*(a-b)**2),
                         CyclicSum(a*b) * CyclicProduct(a)
                     ]
-                    return _sum_y_exprs(y, exprs)
+                    return sum_y_exprs(y, exprs)
 
 
     if True:
@@ -906,9 +915,7 @@ def _sos_struct_quintic_windmill(coeff):
                     (3,1,1): 2*u_*v_ - 2*u_ + 2*v_ + z_ + 2,
                     (2,2,1): coeff((2,2,1)) / coeff((1,4,0)) + ((u_ - v_)**2 - 2*v_ - 1)
                 }
-                def _new_coeff(x):
-                    return _new_coeffs.get(x, sp.S(0))
-                solution = _sos_struct_quintic_windmill(_new_coeff)
+                solution = _sos_struct_quintic_windmill(Coeff(_new_coeffs))
                 if solution is not None:
                     return solution * coeff((1,4,0)) + coeff((1,4,0)) * CyclicSum(c*(a**2+(u_-v_-1)*a*b-u_*a*c+v_*b*c)**2)
 
@@ -966,7 +973,7 @@ def _sos_struct_quintic_windmill(coeff):
                     CyclicProduct(a) * CyclicSum((a-b)**2)**2,
                     CyclicProduct(a) * CyclicSum(a*b) * multiplier
                 ]
-                return _sum_y_exprs(y, exprs) / multiplier
+                return sum_y_exprs(y, exprs) / multiplier
         
 
         # Case B.
@@ -988,10 +995,8 @@ def _sos_struct_quintic_windmill(coeff):
                 (3,1,1): coeff((3,1,1)) + c1*(3 + 2*w),
                 (2,2,1): coeff((2,2,1)) - c1*(2 - w**2),
             }
-            def _new_coeff(x):
-                return _new_coeffs.get(x, sp.S(0))
 
-            solution = _sos_struct_quintic_windmill(_new_coeff)
+            solution = _sos_struct_quintic_windmill(Coeff(_new_coeffs))
             if solution is not None:
                 return (2*c1*CyclicSum(a*(a-b)**2*(w*a*b-(2+2*w)*b*c+w*c**2+a*c+b**2)**2) + solution * multiplier) / multiplier
 
@@ -1117,7 +1122,7 @@ def _sos_struct_quintic_windmill(coeff):
                     CyclicProduct(a) * CyclicSum(a*b) * CyclicSum(a**2+(z0_**2 + 2)*a*b)
                 ]
 
-                return _sum_y_exprs(y, exprs) / multiplier
+                return sum_y_exprs(y, exprs) / multiplier
 
             u_ = None
 
@@ -1136,10 +1141,8 @@ def _sos_struct_quintic_windmill(coeff):
             (3,1,1): z_ + (2*u**2*v-u**2-u*v+v**2) / denom,
             (2,2,1): coeff((2,2,1)) / coeff((3,2,0)) - (-u**3 + 2*u**2*v + 2*u**2 - u*v**2 + u*v - 4*u + v**2 + 1) / denom
         }
-        def _new_coeff(x):
-            return _new_coeffs.get(x, sp.S(0))
 
-        rest_solution = _sos_struct_quintic_windmill(_new_coeff)
+        rest_solution = _sos_struct_quintic_windmill(Coeff(_new_coeffs))
         if rest_solution is not None:
             ker = coeff((3,2,0)) / 2 / denom
             return (ker * main_solution + coeff((3,2,0)) * multiplier * rest_solution) / multiplier
@@ -1193,7 +1196,7 @@ def _sos_struct_quintic_windmill_uv(u, v):
             CyclicSum(a * p2**2)
         ]
 
-        return multiplier, _sum_y_exprs(y, exprs)
+        return multiplier, sum_y_exprs(y, exprs)
 
 
     if u >= (v - 1)**2/4 + 1:
@@ -1219,7 +1222,7 @@ def _sos_struct_quintic_windmill_uv(u, v):
             (u + v + 2) * (4*u + v - 4)
         ]
 
-        return multiplier, _sum_y_exprs(y, exprs)
+        return multiplier, sum_y_exprs(y, exprs)
     
     
     if (3*u**2 + 2*u*v - 4*u - v**2 - 8) >= 0:
@@ -1247,7 +1250,7 @@ def _sos_struct_quintic_windmill_uv(u, v):
             u + v - 1
         ]
 
-        return multiplier, _sum_y_exprs(y, exprs)
+        return multiplier, sum_y_exprs(y, exprs)
 
     if u*u - u*v + 2*u + 2 < 0:
         # Theorem 2.2 (very ugly)
@@ -1282,7 +1285,7 @@ def _sos_struct_quintic_windmill_uv(u, v):
             ]
 
             if all(_ >= 0 for _ in y):
-                return multiplier, _sum_y_exprs(y, exprs)
+                return multiplier, sum_y_exprs(y, exprs)
 
 
 
@@ -1332,7 +1335,7 @@ def _sos_struct_quintic_uncentered(coeff):
                 CyclicSum((b-c)**2) * CyclicProduct(a),
                 CyclicSum(a*b) * CyclicProduct(a)
             ]
-            return _sum_y_exprs(y, exprs)
+            return sum_y_exprs(y, exprs)
 
     if t <= 0:
         # the case t == 0 should already be handled above
@@ -1361,7 +1364,7 @@ def _sos_struct_quintic_uncentered(coeff):
                 CyclicProduct(a) * CyclicSum((a-b)**2)**2,
                 CyclicSum(a*b) * CyclicProduct(a) * multiplier
             ]
-            return _sum_y_exprs(y, exprs) / multiplier
+            return sum_y_exprs(y, exprs) / multiplier
 
 
     if rem == 0:
@@ -1422,7 +1425,7 @@ def _sos_struct_quintic_uncentered(coeff):
                     CyclicProduct(a) * CyclicSum(a**2*b - 4*a**2*c - 6*a*b*c)**2,
                     CyclicSum(a*b) * CyclicProduct(a) * multiplier
                 ]
-                return _sum_y_exprs(y, exprs) / multiplier
+                return sum_y_exprs(y, exprs) / multiplier
             return None
 
 
@@ -1518,7 +1521,7 @@ def _sos_struct_quintic_uncentered(coeff):
             CyclicSum(a*c*(a-b)**2*((r1-r1_)*c + (r2-r2_)/2*b)) * multiplier
         ]
 
-        return _sum_y_exprs(y, exprs) / multiplier
+        return sum_y_exprs(y, exprs) / multiplier
 
     return None
 
@@ -1593,7 +1596,7 @@ def _sos_struct_quintic_windmill_special(coeff):
             CyclicProduct(a) * CyclicSum(a**2*(b-c)**2)
         ]
 
-        return _sum_y_exprs(y, exprs) / multiplier
+        return sum_y_exprs(y, exprs) / multiplier
     
     return None
 
@@ -1642,7 +1645,7 @@ def _sos_struct_quintic_hexagon(coeff):
     if coeff((4,1,0)) == 0 or coeff((1,4,0)) == 0:
         return _sos_struct_quintic_windmill(coeff)
 
-    rem = sum(coeff(_) for _ in [(4,1,0),(3,2,0),(2,3,0),(1,4,0),(3,1,1),(2,2,1)])
+    rem = radsimp(sum(coeff(_) for _ in [(4,1,0),(3,2,0),(2,3,0),(1,4,0),(3,1,1),(2,2,1)]))
     if rem < 0:
         return None
 
@@ -1654,21 +1657,46 @@ def _sos_struct_quintic_hexagon(coeff):
         coeff410 = coeff((4,1,0))
 
         p, q, z = coeff((3,2,0)) / coeff410, coeff((2,3,0)) / coeff410, coeff((3,1,1)) / coeff410
+        p, q, z = radsimp([p, q, z])
 
-        det = 64*p**3 - 16*p**2*q**2 + 8*p*q*z**2 + 32*p*q*z - 256*p*q + 64*q**3 - z**4 - 24*z**3 - 192*z**2 - 512*z
+        det = radsimp(64*p**3 - 16*p**2*q**2 + 8*p*q*z**2 + 32*p*q*z - 256*p*q + 64*q**3 - z**4 - 24*z**3 - 192*z**2 - 512*z)
         if det >= 0:
             if p != q or w != p + q:
                 # Actually the case p == q will be handled in quintic_symmetric, so we ignore it here.
                 w = z + 8
-                denom = 1 / (8*(2*p + 2*q + w)*(3*(p-q)**2 + (w-p-q)**2))
-                y = [denom * coeff410, det * denom * coeff410, rem]
+                denom = radsimp(1 / (8*(2*p + 2*q + w)*(3*(p-q)**2 + (w-p-q)**2)))
+                y = radsimp([denom * coeff410, det * denom * coeff410, rem])
+                c1, c2, c3 = radsimp([w**2-4*p*q, 4*(2*p**2-q*w), 4*(2*q**2-p*w)])
                 exprs = [
-                    CyclicSum(c*((w**2-4*p*q)*(a**2-b**2)+4*(2*p**2-q*w)*(a*b-a*c)+4*(2*q**2-p*w)*(b*c-a*b))**2),
+                    CyclicSum(c*(c1*(a**2-b**2) + c2*(a*b-a*c) + c3*(b*c-a*b))**2),
                     CyclicSum(c*(a-b)**4),
                     CyclicSum(a**2*b**2*c)
                 ]
-                return _sum_y_exprs(y, exprs)
+                return sum_y_exprs(y, exprs)
 
+        if z >= -2:
+            det = radsimp(-16*(p**2*q**2 + 18*p*q - 4*p**3 - 4*q**3 - 27))
+            if det >= 0 and (p != 3 or q != 3):
+                u, v = (2*p**2 - 6*q) / (9 - p*q), (2*q**2 - 6*p) / (9 - p*q)
+                t = (9 - p*q)**2 / (p + q + 3) / (3*(p - q)**2 + (6 - p - q)**2)
+                u, v, t = radsimp([u, v, t])
+
+                y = radsimp([
+                    (z + 2) * coeff410 / 2,
+                    t * coeff410,
+                    (1 - t) * coeff410,
+                    rem
+                ])
+                exprs = [
+                    CyclicProduct(a) * CyclicSum((a-b)**2),
+                    CyclicSum(c*(a**2 - b**2 + u*(a*b-a*c) + v*(b*c-a*b))**2),
+                    CyclicSum(c*(a-b)**4),
+                    CyclicSum(a**3*b*c)
+                ]
+                return sum_y_exprs(y, exprs)
+
+        if not coeff.is_rational:
+            return None
 
         # backup plan:
         # u^2-2v <= p   --->  v <= (u^2-p)/2
@@ -1715,7 +1743,7 @@ def _sos_struct_quintic_hexagon(coeff):
                     CyclicProduct(a) * CyclicSum((b-c)**2),
                     CyclicProduct(a) * CyclicSum(a*b)
                 ]
-                return _sum_y_exprs(y, exprs)
+                return sum_y_exprs(y, exprs)
 
         # The case must have been solved above.
         # If not, the problem is false.
@@ -1809,7 +1837,7 @@ def _sos_struct_quintic_hexagon(coeff):
                         CyclicProduct(a) * CyclicSum((a-b)**2),
                         CyclicProduct(a) * CyclicSum(a*b)
                     ]
-                    return _sum_y_exprs(y, exprs)
+                    return sum_y_exprs(y, exprs)
 
             
 
