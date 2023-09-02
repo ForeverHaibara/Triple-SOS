@@ -296,17 +296,26 @@ class SolutionSimple(Solution):
         else:
             numerator_args = [self.numerator]
         for x in numerator_args:
-            if isinstance(x, sp.Mul) and len(x.args) >= 2 and x.args[0].is_constant():
-                if len(x.args) == 2:
-                    # extract the rational coefficient and move it to the front
-                    if precedence_traditional(x.args[1]) < PRECEDENCE["Mul"]:
-                        s_args.append(get_str(x.args[0]) + '%s'%add_paren(get_str(x.args[1])))
-                    else:
-                        s_args.append(get_str(x.args[0]) + get_str(x.args[1]))
-                else:
-                    s_args.append(get_str(x.args[0]) + get_str(sp.Mul(*x.args[1:])))
-            else:
+            # if isinstance(x, sp.Mul) and len(x.args) >= 2 and x.args[0].is_constant():
+            #     if len(x.args) == 2:
+            #         # extract the rational coefficient and move it to the front
+            #         if precedence_traditional(x.args[1]) < PRECEDENCE["Mul"]:
+            #             s_args.append(get_str(x.args[0]) + '%s'%add_paren(get_str(x.args[1])))
+            #         else:
+            #             s_args.append(get_str(x.args[0]) + get_str(x.args[1]))
+            #     else:
+            #         s_args.append(get_str(x.args[0]) + get_str(sp.Mul(*x.args[1:])))
+            # else:
+            #     s_args.append(get_str(x))
+
+            x_as_coeff_Mul = x.as_coeff_Mul()
+            if x_as_coeff_Mul[0] is S.One:
                 s_args.append(get_str(x))
+            elif precedence_traditional(x_as_coeff_Mul[1]) < PRECEDENCE["Mul"]:
+                s_args.append(get_str(x_as_coeff_Mul[0]) + '%s'%add_paren(get_str(x_as_coeff_Mul[1])))
+            else:
+                s_args.append(get_str(x_as_coeff_Mul[0]) + get_str(x_as_coeff_Mul[1]))
+
         return s_args
 
     @property
