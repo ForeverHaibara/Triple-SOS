@@ -40,6 +40,8 @@ def SymmetricSOS(
     # check symmetricity here and (1,1,1) == 0
     if poly(1,1,1) != 0 or not _verify_is_symmetric(poly):
         return None
+    if not (poly.domain in (sp.polys.ZZ, sp.polys.QQ)):
+        return None
 
     if positive is None:
         positives = [False, True] if deg(poly) % 2 == 0 else [True]
