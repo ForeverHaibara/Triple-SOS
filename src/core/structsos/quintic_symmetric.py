@@ -29,6 +29,12 @@ def sos_struct_quintic_symmetric(poly, coeff, recurrsion):
     s((a+b-5/4c)(a-b)2(a+b-3/2c)2)+s((a+b-2/3c)(a-b)2(a+b-5/3c)2)
 
     s((a+b-c)(a-b)2(a+b-3/2c)2)+s((a+b-1/2c)(a-b)2(a+b-c)2)
+
+    s(a3)s(a)2+s(ab)p(a+b)*(27+18sqrt(3))/8-(3/8+(27+18sqrt(3))/24)p(a+b)s(a)2
+
+    References
+    ----------
+    [1] https://math.stackexchange.com/questions/3809195/proving-q-fraca3b3c3abbccak-cdot-fracabbccaa
     """
     if not (coeff((4,1,0)) == coeff((1,4,0)) and coeff((3,2,0)) == coeff((2,3,0))):
         return None
@@ -67,30 +73,35 @@ def sos_struct_quintic_symmetric(poly, coeff, recurrsion):
         x = sp.symbols('x')
         det = 16*x**4 - 32*x**3 + (-16*u - 8*v - 32*z)*x**2 + (-16*u + 8*v - 16)*x + 4*u**2 + 4*u*v + 8*u + v**2 + 8*v*z + 4*v + 4
         det = det.as_poly(x) * (-4*u - v + 6*x**2 - 12*x - 8*z - 2).as_poly(x)
-        intervals = sp.polys.polytools.intervals(det)
-        if len(intervals):
-            y_ = None
-            for interval in intervals[:-1]:
-                x_ = interval[0][1]
-                y_ = _criterion(x_)
-                if y_ is not None:
-                    break
-            if y_ is not None:
-                u2 = (u - x_**2 - 2*x_*y_ + 2*y_)
-                v2 = (v - 2*x_**2 + 8*x_*y_ - 4*x_ + 8*y_**2 - 8*y_ + 2)
-                _new_coeffs = {
-                    (5,0,0): sp.S(0),
-                    (4,1,0): m*(2*x_-y_**2+z), (1,4,0): m*(2*x_-y_**2+z), 
-                    (3,2,0): m*u2, (2,3,0): m*u2, 
-                    (3,1,1): m*v2,
-                    (2,2,1): coeff((2,2,1)) + m*(4*x_**2 - 4*x_*y_ - 6*y_**2 + 4*y_ - 1)
-                }
-                solution = _sos_struct_quintic_symmetric_degenerate(Coeff(_new_coeffs))
-                if solution is not None:
-                    solution = solution + m * CyclicSum(
-                        a*(a**2 - x_*a*b - x_*a*c - y_*b**2 - y_*c**2 + (2*x_ + 2*y_ - 1)*b*c)**2
-                    )
-                    return solution
+
+        y_ = None
+        if coeff.is_rational:
+            intervals = sp.polys.polytools.intervals(det)
+            if len(intervals):
+                for interval in intervals[:-1]:
+                    x_ = interval[0][1]
+                    y_ = _criterion(x_)
+                    if y_ is not None:
+                        break
+                else:
+                    y_ = None
+
+        if y_ is not None:
+            u2 = (u - x_**2 - 2*x_*y_ + 2*y_)
+            v2 = (v - 2*x_**2 + 8*x_*y_ - 4*x_ + 8*y_**2 - 8*y_ + 2)
+            _new_coeffs = {
+                (5,0,0): sp.S(0),
+                (4,1,0): m*(2*x_-y_**2+z), (1,4,0): m*(2*x_-y_**2+z), 
+                (3,2,0): m*u2, (2,3,0): m*u2, 
+                (3,1,1): m*v2,
+                (2,2,1): coeff((2,2,1)) + m*(4*x_**2 - 4*x_*y_ - 6*y_**2 + 4*y_ - 1)
+            }
+            solution = _sos_struct_quintic_symmetric_degenerate(Coeff(_new_coeffs))
+            if solution is not None:
+                solution = solution + m * CyclicSum(
+                    a*(a**2 - x_*a*b - x_*a*c - y_*b**2 - y_*c**2 + (2*x_ + 2*y_ - 1)*b*c)**2
+                )
+                return solution
 
 
     if z >= -1:
@@ -319,6 +330,8 @@ def _sos_struct_quintic_symmetric_degenerate(coeff):
     s(2c(a-b)2(a+b-3c)2)
 
     s(c(a-b)2(a+b-3c)2)+s(c(a-b)2(a+b-4c)2)
+
+    s(a(a+b)(a+c))s(ab)-p(a)(12s(ab)+(9+4sqrt(2))s(a2-ab))
     """
     m = coeff((4,1,0))
     if m < 0:

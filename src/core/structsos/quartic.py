@@ -314,7 +314,9 @@ def _sos_struct_quartic_uncentered(coeff, recur = False):
     s(a)3s(a)-s(a2)s(a)2/3
 
     (567+45sqrt(105))/32/81s(a)4-s(a3b)
-    
+
+    s(a2)2-16sqrt(2)/9s(bc(b2-c2))    (real numbers)
+
     References
     -------
     [1] https://tieba.baidu.com/p/8069929018

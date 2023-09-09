@@ -1661,9 +1661,9 @@ def _sos_struct_quintic_hexagon(coeff):
 
         det = radsimp(64*p**3 - 16*p**2*q**2 + 8*p*q*z**2 + 32*p*q*z - 256*p*q + 64*q**3 - z**4 - 24*z**3 - 192*z**2 - 512*z)
         if det >= 0:
+            w = z + 8
             if p != q or w != p + q:
                 # Actually the case p == q will be handled in quintic_symmetric, so we ignore it here.
-                w = z + 8
                 denom = radsimp(1 / (8*(2*p + 2*q + w)*(3*(p-q)**2 + (w-p-q)**2)))
                 y = radsimp([denom * coeff410, det * denom * coeff410, rem])
                 c1, c2, c3 = radsimp([w**2-4*p*q, 4*(2*p**2-q*w), 4*(2*q**2-p*w)])

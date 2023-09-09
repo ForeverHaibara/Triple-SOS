@@ -105,7 +105,7 @@ def _sos_struct_cubic_parabola(coeff):
         w1 = (p - x2) / (1 - x2) * m
         w2 = m - w1
 
-        if not 0 <= w1 <= 1:
+        if not 0 <= w1 <= m:
             return None
 
         t = 2*(p + 2*q + 3)/(p - q - 3)
@@ -211,6 +211,12 @@ def _sos_struct_cubic_nontrivial_irrational(coeff):
     s(a)3-27abc-2sqrt(3)s((a-b)3)
 
     s((2a+b)(a-sqrt(2)b)2-2a3+(6sqrt(2)-7)abc)
+
+    s(a3-a2b)+(sqrt(13+16sqrt(2))-1)/2s(ab2-a2b)
+
+    References
+    -------
+    [1] http://kuing.infinityfreeapp.com/forum.php?mod=viewthread&tid=10631&extra=
     """
     m, p, q = coeff((3,0,0)), coeff((2,1,0)), coeff((1,2,0))
     rem = radsimp(3 * (m + p + q) + coeff((1,1,1)))

@@ -43,6 +43,17 @@ class SolutionStructuralSimple(SolutionSimple, SolutionStructural):
         super().__init__(*args, **kwargs)
 
         # for debug purpose
-        # mul = self.multiplier.doit().as_poly(*sp.symbols('a b c'))
-        # num = self.numerator.doit().as_poly(*sp.symbols('a b c'))
-        # self.is_equal_ = (mul * self.problem - num).is_zero
+        verified = True
+        arguments = [
+            {'extension': True},
+            {'domain': self.problem.domain}
+        ]
+        while (not verified) and len(arguments):
+            try:
+                argument = arguments.pop()
+                mul = self.multiplier.doit().as_poly(*sp.symbols('a b c'), **argument)
+                num = self.numerator.doit().as_poly(*sp.symbols('a b c'), **argument)
+                self.is_equal_ = (mul * self.problem - num).is_zero
+                verified = True
+            except:
+                pass
