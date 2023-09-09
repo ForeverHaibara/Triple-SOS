@@ -255,11 +255,13 @@ def _findroot_newton(
     Numerically find roots with newton's algorithm.
     """
 
+    result_roots = []
+    if not (poly.domain in (sp.polys.ZZ, sp.polys.QQ, sp.polys.RR)):
+        return result_roots
+
     # replace c = 1
     poly = poly.eval('c',1)
 
-    result_roots = []
-    
     # regularize the function to avoid numerical instability
     # reg = 2. / sum([abs(coeff) for coeff in poly.coeffs()]) / deg(poly)
 
