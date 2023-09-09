@@ -175,6 +175,8 @@ def SDPSOS(
     degree = deg(poly)
     if degree > degree_limit or degree < 2:
         return None
+    if not (poly.domain in (sp.polys.ZZ, sp.polys.QQ)):
+        return None
 
     manifold = RootSubspace(poly)
     if verbose:
