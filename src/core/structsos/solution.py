@@ -43,11 +43,13 @@ class SolutionStructuralSimple(SolutionSimple, SolutionStructural):
         super().__init__(*args, **kwargs)
 
         # for debug purpose
-        verified = True
+        verified = False
         arguments = [
             {'extension': True},
             {'domain': self.problem.domain}
         ]
+        if not verified:
+            self.is_equal_ = False
         while (not verified) and len(arguments):
             try:
                 argument = arguments.pop()

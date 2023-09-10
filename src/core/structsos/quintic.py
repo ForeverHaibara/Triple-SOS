@@ -35,7 +35,7 @@ def sos_struct_quintic(poly, coeff, recurrsion):
     """
 
     # first try symmetric solution
-    if coeff.is_rational and coeff((4,1,0)) == coeff((1,4,0)) and coeff((3,2,0)) == coeff((2,3,0)):
+    if coeff((4,1,0)) == coeff((1,4,0)) and coeff((3,2,0)) == coeff((2,3,0)):
         return sos_struct_quintic_symmetric(poly, coeff, recurrsion)
 
     if coeff((5,0,0)) == 0:

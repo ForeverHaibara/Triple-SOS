@@ -121,12 +121,13 @@ def _sos_struct_quartic_quadratic_border(coeff):
 
     s(a4-3a3b+3ab3+1/4a2b2-5/4a2bc)
 
+    s(a4 - 2sqrt(2)(a3b - ab3) - a2bc)
     """
     m, p, n, q = coeff((4,0,0)), coeff((3,1,0)), coeff((2,2,0)), coeff((1,3,0))
 
     t = q / 2 / m
     if p == -q and n == (t**2 - 2) * m:
-        w = sp.sqrt(t*t + 4)
+        w = sp.sqrt(t**2 + 4)
         if not isinstance(w, sp.Rational):
             y = [m, (t**2 + 3) / 2 * m, (coeff((2,1,1)) + m + p + n + q)]
             if y[-1] >= 0:
@@ -200,8 +201,15 @@ def _sos_struct_quartic_biased(coeff):
         eq_diff = (x**4 + p*x**3 + n*x**2 + q*x + 1).as_poly(x)
         eq_gcd = sp.gcd(eq, eq_diff)
         if eq_gcd.degree() == 1:
-            # TODO: if degree >= 2?
             u_ = radsimp(-(eq_gcd.all_coeffs()[1] / eq_gcd.LC()))
+        elif eq_gcd.degree() == 2:
+            c2, c1, c0 = radsimp(eq_gcd.all_coeffs())
+            if c2 < 0:
+                c2, c1, c0 = -c2, -c1, -c0
+            delta = radsimp(c1**2 - 4*c2*c0)
+            if delta >= 0:
+                u_ = radsimp((-c1 + sp.sqrtdenest(sp.sqrt(delta))) / (2*c2))
+
 
     if u_ is None:
         # find a rational approximation
@@ -217,15 +225,16 @@ def _sos_struct_quartic_biased(coeff):
     
     if u_ is not None:
         y_ = radsimp((symmetric(u_) / (2*(u_**2*(u_**2 + 1) + 1)) * m))
-        solution = y_ * CyclicSum((a*b*(a-u_*b+(u_-1)*c)**2))
-        
-        def new_coeff(d):
-            subs = {(4,0,0): 0, (3,1,0): 1, (2,2,0): -2*u_, (1,3,0): u_**2, (2,1,1): 2*u_-u_**2-1}
-            return coeff(d) - y_ * subs[d]
+        if y_ >= 0:
+            solution = y_ * CyclicSum((a*b*(a-u_*b+(u_-1)*c)**2))
+            
+            def new_coeff(d):
+                subs = {(4,0,0): 0, (3,1,0): 1, (2,2,0): -2*u_, (1,3,0): u_**2, (2,1,1): 2*u_-u_**2-1}
+                return coeff(d) - y_ * subs[d]
 
-        new_solution = _sos_struct_quartic_core(new_coeff)
-        if new_solution is not None:
-            return solution + new_solution
+            new_solution = _sos_struct_quartic_core(new_coeff)
+            if new_solution is not None:
+                return solution + new_solution
 
     return None
 

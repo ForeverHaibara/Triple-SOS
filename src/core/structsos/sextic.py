@@ -151,6 +151,7 @@ def _sos_struct_sextic_hexagram(coeff):
         # 4u+v^2 = x => u = (x-v^2)/4
         t, u_, v_ = sp.symbols('t'), None, None
         center0 = radsimp(coeff((2,2,2)) / coeff((3,3,0)))
+        rem0 = radsimp(rem / coeff((3,3,0)))
 
         # let t = u - v, keep coeff((3,2,1)) == coeff((3,1,2)) after subtraction, make eqt <= 0
         eqt = (t**4 + 48*t**2 + 32*t*y_ + (-2*t**2 - 16*t)*(x_ + y_) + (x_ - y_)**2).as_poly(t)
@@ -186,15 +187,15 @@ def _sos_struct_sextic_hexagram(coeff):
                     if t__ != 0 and eqt(t__) <= 0:
                         v__ = radsimp((t__*(4 - t__) - x_ + y_)/(2*t__))
                         u__ = t__ + v__
-                        if 6*u__*v__ + 6 <= center0:
+                        if (u_ + v_ + 2)**2 * 3 <= rem0:
                             t_, u_, v_ = t__, u__, v__
                             break
 
         if v_ is not None:
             y = radsimp([
                 coeff((3,3,0)),
-                - eqt(t_) / 4*t_**2 * coeff((3,3,0)),
-                coeff((3,3,0)) * (center0 - 6*u_*v_ - 6),
+                - eqt(t_) / 4 / t_**2 * coeff((3,3,0)),
+                coeff((3,3,0)) * (rem0 - (u_ + v_ + 2)**2 * 3),
             ])
             exprs = [
                 CyclicSum(a*b*(a*b + c**2 + u_*a*c + v_*b*c)**2),
@@ -217,17 +218,20 @@ def _sos_struct_sextic_hexagram(coeff):
                 r = (81*x_**5 + 2025*x_**4 - 21*x_**3*y3 + 17658*x_**3 - 2406*x_**2*y3 + 62370*x_**2 - 16*x_*y_**6 - 10773*x_*y3 + 79461*x_ + 864*y_**6 - 18468*y3 + 32805)\
                     /(y_*(27*x_**5 + 891*x_**4 - 16*x_**3*y3 + 9558*x_**3 - 1112*x_**2*y3 + 41742*x_**2 - 6336*x_*y3 + 78975*x_ + 384*y_**6 - 10044*y3 + 45927))
                 r = radsimp(r)
-                z = min(sp.S(1), radsimp(r**2*(x_ - 3*y_ + 9)/(4*(r - 1)**4)))
+                z0 = radsimp(r**2*(x_ - 3*y_ + 9)/(4*(r - 1)**4))
+                z = min(sp.S(1), z0)
 
-                solution = radsimp(z / r**2) * CyclicSum(c*((-a + b*r)*(a*(b+c)*r - a*b - b*c))**2)
-                quartic_part = CyclicSum((-a + b*r)**2*(a*r + b - c*(r+1))**2) / 2
+                solution = radsimp(z / r**2) * CyclicSum(c*(-a + b*r)**2*(a*(b+c)*r - a*b - b*c)**2)
+                quartic_part = sp.S(0)
                 if z != 1:
-                    solution += radsimp((1 - z) / r**2) * CyclicSum(c*(a*(b-c)*r + a*b - b*c)**2)
+                    quartic_part = radsimp(1 / r**2 / 2) * CyclicSum((-a + b*r)**2*(a*r + b - c*(r+1))**2)
+                    solution += radsimp((1 - z) / r**2) * CyclicSum(c*(-a + b*r)**2*(a*(b-c)*r + a*b - b*c)**2)
                 else:
-                    uncentered = radsimp(((-12*r**4 + 48*r**3 - 72*r**2 + 48*r - 12)*z + 3*r**2*x_ - 9*r**2*y_ + 27*r**2) / r**2)
+                    uncentered = radsimp(4 * (z0 - z) / 3)
+                    p1 = (r*a**2 - radsimp(r**2-r+1)*b*c).together().as_coeff_Mul()
                     if uncentered <= 1:
-                        quartic_part = (1 - uncentered) * quartic_part \
-                            + uncentered * CyclicProduct(a) * (CyclicSum(a**2)*r - CyclicSum(a*b)*radsimp(r**2-r+1))**2
+                        quartic_part = radsimp((1 - uncentered) / r**2 / 2) * CyclicSum((-a + b*r)**2*(a*r + b - c*(r+1))**2) \
+                            + radsimp(uncentered / r**2 * p1[0]**2) * (CyclicSum(p1[1]))**2
                     else:
                         solution = None
 
