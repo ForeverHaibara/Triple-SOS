@@ -632,7 +632,7 @@ def _sos_struct_quintic_symmetric_hexagon(coeff):
     2. When (u,v) is on the upper-right of parametric parabola 
     (24t(t-1)/(5t+1)^2, -48(t^2+4t+1)/(5t+1)^2),
     which is also (2x+y)^2 = 8(36x-7y-48), then we can use the fact that any point on the parabola
-    is equivalent to s(c(a-b)2((7t-1)a2+(5t+1)(b2+c2-ab-ac)+(5t-11)bc)2).
+    is equivalent to s(a(b-c)2((7t-1)a2+(5t+1)(b2+c2-ab-ac)+(5t-11)bc)2).
 
     Examples
     -------
