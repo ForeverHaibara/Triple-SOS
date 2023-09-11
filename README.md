@@ -17,7 +17,7 @@ pip install flask_cors
 pip install picos
 ```
 
-2. 控制台中运行 `python web_main.py` 启动后端。 Run `python_web_main.py` to launch the backend.
+2. 控制台中运行 `python web_main.py` 启动后端。 Run `python web_main.py` to launch the backend.
 
 3. 浏览器打开 `triples.html` 即可使用。 Open `triples.html` in your browser.
 
