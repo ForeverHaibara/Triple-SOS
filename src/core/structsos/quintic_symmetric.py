@@ -80,49 +80,74 @@ def sos_struct_quintic_symmetric(poly, coeff, recurrsion):
     if rem < 0:
         return None
 
-    if coeff.is_rational:
+    if True:
         # Try subtracting some s(a(a2-xab-xac-yb2-yc2+(2x+2y-1)bc)2) so that
         # the rest is positive. See criterion at _sos_struct_quintic_symmetric_hexagon.
         def _criterion(x):
-            denom = (2*(-4*u - v + 4*x**2 - 8*x - 8*z - 4))
+            denom = radsimp(2*(-4*u - v + 4*x**2 - 8*x - 8*z - 4))
             if denom == 0:
                 return None
-            y = -(x - 1)*(-2*u - v + 4*x**2 - 12*x - 8*z - 2) / denom
-            if 2*x - y**2 + z <= 0:
+            y = radsimp(-(x - 1)*(-2*u - v + 4*x**2 - 12*x - 8*z - 2) / denom)
+            z2 = radsimp(2*x - y**2 + z)
+            if z2 < 0:
                 return None
-            u2 = (u - x**2 - 2*x*y + 2*y)
-            v2 = (v - 2*x**2 + 8*x*y - 4*x + 8*y**2 - 8*y + 2)
-            if (2*u2 + v2)**2 + 8*v2*(2*x - y**2 + z) > 0:
-                return None
-            return y
+            u2 = radsimp(u - x**2 - 2*x*y + 2*y)
+            v2 = radsimp(v - 2*x**2 + 8*x*y - 4*x + 8*y**2 - 8*y + 2)
+            if (z2 > 0 and radsimp((2*u2 + v2)**2 + 8*v2*z2) <= 0) or (z2 == 0 and u2 >= 0 and 2*u2 + v2 >= 0):
+                return y
+            return None
 
         x = sp.symbols('x')
-        det = 16*x**4 - 32*x**3 + (-16*u - 8*v - 32*z)*x**2 + (-16*u + 8*v - 16)*x + 4*u**2 + 4*u*v + 8*u + v**2 + 8*v*z + 4*v + 4
-        det = det.as_poly(x) * (-4*u - v + 6*x**2 - 12*x - 8*z - 2).as_poly(x)
+        # We shall have det1 <= 0
+        det1 = (16*x**4 - 32*x**3 + (-16*u - 8*v - 32*z)*x**2 + (-16*u + 8*v - 16)*x + 4*u**2 + 4*u*v + 8*u + v**2 + 8*v*z + 4*v + 4).as_poly(x)
+        det2 = (-4*u - v + 6*x**2 - 12*x - 8*z - 2).as_poly(x)
 
         y_ = None
-        if coeff.is_rational:
-            intervals = sp.polys.polytools.intervals(det)
-            if len(intervals):
-                for interval in intervals[:-1]:
-                    x_ = interval[0][1]
+        # first check whether there exists common roots
+        det_gcd = sp.gcd(det1, det1.diff())
+        if det_gcd.degree() == 1:
+            x_ = radsimp(-det_gcd.coeff_monomial((0,)) / det_gcd.coeff_monomial((1,)))
+            y_ = _criterion(x_)
+
+        if y_ is None:
+            if coeff.is_rational:
+                # only rational polynomials are supported by intervals()
+                det = det1 * det2
+                intervals = sp.polys.polytools.intervals(det)
+                if len(intervals):
+                    for interval in intervals[:-1]:
+                        x_ = interval[0][1]
+                        y_ = _criterion(x_)
+                        if y_ is not None:
+                            break
+                    else:
+                        y_ = None
+            else: # not coeff.is_rational
+                for x_ in nroots(det1, method = 'sympy', real = True, nonnegative = True):
                     y_ = _criterion(x_)
                     if y_ is not None:
+                        y_ = None
+                        direction = 1 if det1.diff()(x_) <= 0 else -1
+                        for x__ in rationalize_bound(x_, direction = direction, compulsory = True):
+                            y__ = _criterion(x__)
+                            if y__ is not None:
+                                x_, y_ = x__, y__
+                                break
+                    if y_ is not None:
                         break
-                else:
                     y_ = None
 
         if y_ is not None:
-            u2 = (u - x_**2 - 2*x_*y_ + 2*y_)
-            v2 = (v - 2*x_**2 + 8*x_*y_ - 4*x_ + 8*y_**2 - 8*y_ + 2)
+            u2 = radsimp(u - x_**2 - 2*x_*y_ + 2*y_)
+            v2 = radsimp(v - 2*x_**2 + 8*x_*y_ - 4*x_ + 8*y_**2 - 8*y_ + 2)
             _new_coeffs = {
                 (5,0,0): sp.S(0),
-                (4,1,0): m*(2*x_-y_**2+z), (1,4,0): m*(2*x_-y_**2+z), 
-                (3,2,0): m*u2, (2,3,0): m*u2, 
-                (3,1,1): m*v2,
-                (2,2,1): coeff((2,2,1)) + m*(4*x_**2 - 4*x_*y_ - 6*y_**2 + 4*y_ - 1)
+                (4,1,0): radsimp(m*(2*x_-y_**2+z)), (1,4,0): radsimp(m*(2*x_-y_**2+z)),
+                (3,2,0): radsimp(m*u2), (2,3,0): radsimp(m*u2), 
+                (3,1,1): radsimp(m*v2),
+                (2,2,1): radsimp(coeff((2,2,1)) + m*(4*x_**2 - 4*x_*y_ - 6*y_**2 + 4*y_ - 1))
             }
-            solution = _sos_struct_quintic_symmetric_hexagon(Coeff(_new_coeffs))
+            solution = _sos_struct_quintic_symmetric_hexagon(Coeff(_new_coeffs, is_rational = coeff.is_rational))
             if solution is not None:
                 solution = solution + m * CyclicSum(
                     a*(a**2 - x_*a*b - x_*a*c - y_*b**2 - y_*c**2 + (2*x_ + 2*y_ - 1)*b*c)**2
