@@ -37,9 +37,11 @@ def SymmetricSOS(
     [1] https://zhuanlan.zhihu.com/p/616532245
     """
 
-    # check symmetricity here and (1,1,1) == 0
-    if poly(1,1,1) != 0 or not _verify_is_symmetric(poly):
+    # check symmetricity here # and (1,1,1) == 0
+    if (not (poly.domain in (sp.polys.ZZ, sp.polys.QQ))) or (not _verify_is_symmetric(poly)):
         return None
+    # if poly(1,1,1) != 0:
+    #     return None
 
     if positive is None:
         positives = [False, True] if deg(poly) % 2 == 0 else [True]

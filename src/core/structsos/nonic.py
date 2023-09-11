@@ -18,6 +18,8 @@ def sos_struct_nonic(poly, coeff, recurrsion):
 
     s(20a6b2c+20a6bc2+20a5b4+40a5b3c-34a5b2c2-108a5bc3+20a5c4-34a4b4c-43a4b3c2+31a4b2c3+68a3b3c3)
 
+    s(a6b3+7a6c3-29a5b2c2+12a4bc4+9a3b3c3)
+
     Reference
     -------
     [1] https://tieba.baidu.com/p/8457240407

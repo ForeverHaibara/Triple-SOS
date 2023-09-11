@@ -232,19 +232,20 @@ def prove_numerator(numerator: sp.Poly, positive = True):
 
     for ((deg, ), coeff) in numerator.terms():
         # first scan whether the coefficient is positive
+        y_degree = coeff.as_poly(y).degree()
         coeff = coeff.subs(y, 1).as_poly(x) # de-homogenize
         if not check_univariate(coeff, positive):
             return None
-        args.append((coeff, deg))
+        args.append((coeff, deg, y_degree))
 
-    for i, (coeff, deg) in enumerate(args):
+    for i, (coeff, deg, y_degree) in enumerate(args):
         # perform SOS on each coefficient
         ans = prove_univariate(coeff)
         if ans is None:
             return None
 
         ans = sp.together(sp.together(ans).xreplace({x: x/y}))
-        ans *= y**coeff.degree() * z**deg
+        ans *= y**y_degree * z**deg
         args[i] = ans
 
     return sp.Add(*args)

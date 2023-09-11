@@ -3,6 +3,7 @@ from itertools import zip_longest, product
 import sympy as sp
 import numpy as np
 
+from .quartic import sos_struct_quartic
 from .quintic_symmetric import sos_struct_quintic_symmetric
 from ...utils.roots.roots import Root
 from ...utils.basis_generator import invarraylize
@@ -35,7 +36,7 @@ def sos_struct_quintic(poly, coeff, recurrsion):
     """
 
     # first try symmetric solution
-    if coeff.is_rational and coeff((4,1,0)) == coeff((1,4,0)) and coeff((3,2,0)) == coeff((2,3,0)):
+    if coeff((4,1,0)) == coeff((1,4,0)) and coeff((3,2,0)) == coeff((2,3,0)):
         return sos_struct_quintic_symmetric(poly, coeff, recurrsion)
 
     if coeff((5,0,0)) == 0:
@@ -112,7 +113,7 @@ def _sos_struct_quintic_full(coeff, poly):
         p, q = coeff((3,2,0)) / coeff500 - (1-x0+y0), coeff((2,3,0)) / coeff500 - (1-y0+x0)
         z0 = coeff((3,1,1)) / coeff500 + (4+4*(x0+y0))
         x0, y0, p, q, z0 = radsimp([x0, y0, p, q, z0])
-        print(p, q, z0)
+        # print(p, q, z0)
 
         if p >= 0 and q >= 0 and (4*p*q >= z0**2 or z0 >= 0):
             t0 = sp.S(0)
@@ -545,7 +546,7 @@ def _sos_struct_quintic_full(coeff, poly):
             m_, p_, n_, q_ = [quartic_rem.coeff_monomial((4-i,)) for i in range(4)]
 
             # print('Det =', (3*m_*(m_+n_) - (p_**2+p_*q_+q_**2)).n(20), quartic_rem.as_expr().n(10), 'Mul =', mul.n(20), mul_)
-            if criterion(m_, p_, n_, q_) and m_ > 0:
+            if criterion(m_, p_, n_, q_): # and m_ > 0:
                 # print('Solution Found.')
                 # print(poly_get_factor_form(invarraylize(sp.Matrix(params), cyc = False)), mul)
                 # print(border_proof)
@@ -561,17 +562,14 @@ def _sos_struct_quintic_full(coeff, poly):
                 border_proof_split_a = sp.Add(*border_proof_split_a)
                 border_proof_split_b = sp.Add(*border_proof_split_b)
                 border_proof = CyclicSum(a*b*border_proof_split_a) + CyclicSum(a*b*border_proof_split_b)
-                
-                rest = 0
-                if m_ >= 0:
-                    det = 3*m_*(m_+n_) - (p_**2+p_*q_+q_**2)
-                    rest = m_ / 2 * CyclicProduct(a) * CyclicSum((a**2-b**2+(p_+2*q_)/3/m_*(a*c-a*b)-(q_+2*p_)/3/m_*(b*c-a*b))**2)
-                    rest = rest + det / 6 / m_ * CyclicProduct(a) * CyclicSum(a**2*(b-c)**2)
-                elif m_ == 0:
-                    # rest = 
-                    0
-                rest += poly(1,1,1) * (1 + mul) * CyclicSum(a**3*b**2*c**2)
-                return (coeff500 * sol_main + coeff500 * border_proof + coeff500 * rest) / multiplier
+
+                quartic_coeffs = {
+                    (4,0,0): m_, (3,1,0): p_, (2,2,0): n_, (1,3,0): q_, (2,1,1): -(m_+p_+n_+q_)
+                }
+                rest = sos_struct_quartic(None, Coeff(quartic_coeffs), None)
+                rest += poly(1,1,1) * (1 + mul) * CyclicSum(a**2*b*c)
+                rest = coeff500 * CyclicProduct(a) * rest
+                return (coeff500 * sol_main + coeff500 * border_proof + rest) / multiplier
 
 
 
@@ -908,7 +906,7 @@ def _sos_struct_quintic_windmill(coeff):
                     u_ = None
             if u_ is not None:
                 v_ = (2*u_**2 - u_*z_ - z_ - 2)/(2*(2*u_ + x_ + 1))
-                print(u_, v_, sym1, eq1)
+                # print(u_, v_, sym1, eq1)
                 _new_coeffs = {
                     (3,2,0): x_ - u_**2,
                     (2,3,0): y_ + 2*u_ - v_**2,
@@ -1661,9 +1659,9 @@ def _sos_struct_quintic_hexagon(coeff):
 
         det = radsimp(64*p**3 - 16*p**2*q**2 + 8*p*q*z**2 + 32*p*q*z - 256*p*q + 64*q**3 - z**4 - 24*z**3 - 192*z**2 - 512*z)
         if det >= 0:
+            w = z + 8
             if p != q or w != p + q:
                 # Actually the case p == q will be handled in quintic_symmetric, so we ignore it here.
-                w = z + 8
                 denom = radsimp(1 / (8*(2*p + 2*q + w)*(3*(p-q)**2 + (w-p-q)**2)))
                 y = radsimp([denom * coeff410, det * denom * coeff410, rem])
                 c1, c2, c3 = radsimp([w**2-4*p*q, 4*(2*p**2-q*w), 4*(2*q**2-p*w)])

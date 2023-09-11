@@ -121,12 +121,13 @@ def _sos_struct_quartic_quadratic_border(coeff):
 
     s(a4-3a3b+3ab3+1/4a2b2-5/4a2bc)
 
+    s(a4 - 2sqrt(2)(a3b - ab3) - a2bc)
     """
     m, p, n, q = coeff((4,0,0)), coeff((3,1,0)), coeff((2,2,0)), coeff((1,3,0))
 
     t = q / 2 / m
     if p == -q and n == (t**2 - 2) * m:
-        w = sp.sqrt(t*t + 4)
+        w = sp.sqrt(t**2 + 4)
         if not isinstance(w, sp.Rational):
             y = [m, (t**2 + 3) / 2 * m, (coeff((2,1,1)) + m + p + n + q)]
             if y[-1] >= 0:
@@ -200,8 +201,15 @@ def _sos_struct_quartic_biased(coeff):
         eq_diff = (x**4 + p*x**3 + n*x**2 + q*x + 1).as_poly(x)
         eq_gcd = sp.gcd(eq, eq_diff)
         if eq_gcd.degree() == 1:
-            # TODO: if degree >= 2?
             u_ = radsimp(-(eq_gcd.all_coeffs()[1] / eq_gcd.LC()))
+        elif eq_gcd.degree() == 2:
+            c2, c1, c0 = radsimp(eq_gcd.all_coeffs())
+            if c2 < 0:
+                c2, c1, c0 = -c2, -c1, -c0
+            delta = radsimp(c1**2 - 4*c2*c0)
+            if delta >= 0:
+                u_ = radsimp((-c1 + sp.sqrtdenest(sp.sqrt(delta))) / (2*c2))
+
 
     if u_ is None:
         # find a rational approximation
@@ -217,15 +225,16 @@ def _sos_struct_quartic_biased(coeff):
     
     if u_ is not None:
         y_ = radsimp((symmetric(u_) / (2*(u_**2*(u_**2 + 1) + 1)) * m))
-        solution = y_ * CyclicSum((a*b*(a-u_*b+(u_-1)*c)**2))
-        
-        def new_coeff(d):
-            subs = {(4,0,0): 0, (3,1,0): 1, (2,2,0): -2*u_, (1,3,0): u_**2, (2,1,1): 2*u_-u_**2-1}
-            return coeff(d) - y_ * subs[d]
+        if y_ >= 0:
+            solution = y_ * CyclicSum((a*b*(a-u_*b+(u_-1)*c)**2))
+            
+            def new_coeff(d):
+                subs = {(4,0,0): 0, (3,1,0): 1, (2,2,0): -2*u_, (1,3,0): u_**2, (2,1,1): 2*u_-u_**2-1}
+                return coeff(d) - y_ * subs[d]
 
-        new_solution = _sos_struct_quartic_core(new_coeff)
-        if new_solution is not None:
-            return solution + new_solution
+            new_solution = _sos_struct_quartic_core(new_coeff)
+            if new_solution is not None:
+                return solution + new_solution
 
     return None
 
@@ -314,7 +323,9 @@ def _sos_struct_quartic_uncentered(coeff, recur = False):
     s(a)3s(a)-s(a2)s(a)2/3
 
     (567+45sqrt(105))/32/81s(a)4-s(a3b)
-    
+
+    s(a2)2-16sqrt(2)/9s(bc(b2-c2))    (real numbers)
+
     References
     -------
     [1] https://tieba.baidu.com/p/8069929018
@@ -506,7 +517,7 @@ def _sos_struct_quartic_uncentered(coeff, recur = False):
                 if p >= -4:
                     x_ = -3*(p + 1)
                 else:
-                    x_ = 9*(p + 2)**2 / 4
+                    x_ = radsimp(9*(p + 2)**2 / 4)
             else:
                 u = sp.symbols('u')
                 det_coeffs = radsimp([
@@ -541,16 +552,26 @@ def _sos_struct_quartic_uncentered(coeff, recur = False):
             if x_ is not None:
                 x_ = x_ / 3 - 1 - p - q - n_
                 # print('n =', n_, 'x = ', x_)
-            
+
+                def _try_solve(x_):
+                    new_coeffs_ = {(4,0,0): coeff((4,0,0)), (3,1,0): coeff((3,1,0)),
+                                (2,2,0): coeff((2,2,0)), (1,3,0): coeff((1,3,0)), (2,1,1): x_ * m}
+                    solution = _sos_struct_quartic_uncentered(Coeff(new_coeffs_, is_rational = coeff.is_rational), recur = True)
+                    if solution is not None:
+                        solution += radsimp((r - x_) * m) * CyclicSum(a**2*b*c)
+                        return solution
+                    return None
+
+
                 # finally subtract enough s(a2bc) to xs(a2bc) (or near xs(a2bc))
-                for x2 in rationalize_bound(x_, direction = 1, compulsory = True):
-                    if x2 < r:
-                        new_coeffs_ = {(4,0,0): coeff((4,0,0)), (3,1,0): coeff((3,1,0)),
-                                    (2,2,0): coeff((2,2,0)), (1,3,0): coeff((1,3,0)), (2,1,1): x2 * m}
-                        solution = _sos_struct_quartic_uncentered(Coeff(new_coeffs_, is_rational = coeff.is_rational), recur = True)
-                        if solution is not None:
-                            solution += radsimp((r - x2) * m) * CyclicSum(a**2*b*c)
-                            return solution
+                if isinstance(x_, sp.Float):
+                    for x2 in rationalize_bound(x_, direction = 1, compulsory = True):
+                        if x2 < r:
+                            solution = _try_solve(x2)
+                            if solution is not None:
+                                return solution
+                else:
+                    return _try_solve(x_)
 
             return None
 
