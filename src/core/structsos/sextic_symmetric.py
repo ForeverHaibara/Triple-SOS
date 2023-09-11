@@ -1748,14 +1748,21 @@ def _sos_struct_sextic_symmetric_ultimate_1root(coeff, poly, recurrsion, roots, 
         # s((a-c)(b-c)(a-b)^2(a+b-xc)^2) = (x+1)^2 * p(a-b)^2
         # print('(z0, z1, z2, z3) =', (z0, z1, z2, z3))
         p1 = None
-        if 2*z0 + z1 >= 0 and z2 >= 0 and z3 >= 0:
-            p1 = z0*(a-b)**2 + (2*z0+z1)*a*b + z2*c*(a+b) + z3*c**2
-        elif z3 > 0 and z2 < 0:
-            ratio = radsimp(-z2 / (2*z3))
-            r1 = radsimp(z0 - z2**2/4/z3)
-            r2 = z1 + 2*r1 - 2*(z0 - r1)
+        if z3 > 0 or (z2 == 0 and z3 == 0):
+            if z3 > 0:
+                ratio = radsimp(-z2 / (2*z3))
+                r1 = radsimp(z0 - z2**2/4/z3)
+                r2 = z1 + 2*r1 - 2*(z0 - r1)
+            else:
+                r1, r2 = z0, z1 + 2*z0
             if r1 >= 0 and r2 >= 0:
-                p1 = r1*(a-b)**2 + r2*a*b + z3*(c-ratio*a-ratio*b)**2
+                p1 = z3*(c-ratio*a-ratio*b)**2 if z3 > 0 else sp.S(0)
+                if r2 > 4*r1:
+                    p1 += r1*(a-b)**2 + r2*a*b
+                else:
+                    p1 += (r1 - r2/4) * (a-b)**2 + r2/4 * (a+b)**2
+        elif 2*z0 + z1 >= 0 and z2 >= 0 and z3 >= 0:
+            p1 = z0*(a-b)**2 + (2*z0+z1)*a*b + z2*c*(a+b) + z3*c**2
 
         if p1 is not None:
             p1 = p1.together().as_coeff_Mul()

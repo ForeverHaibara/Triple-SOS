@@ -249,7 +249,7 @@ def _sos_struct_octic_symmetric_hexagram(coeff):
         # take g(a,b,c) = 1 in the lemma
         degrade_a2b2 = v_
         degrade_a2bc = x_ * (-r1**2 + 2*r1*r2 + r2**2 + 1) + c2 * (-h**2 - 2*h + 1) + c4
-        print(degrade_a2b2, degrade_a2bc, (2*x_)*(a**2 + r1*a*b + r1*a*c + r2*b*c)**2 + c2*2*(b*c - h*a*b - h*a*c)**2 + c3*2*a**2*b*c + c4*a*b*c*(b+c))
+        # print(degrade_a2b2, degrade_a2bc, (2*x_)*(a**2 + r1*a*b + r1*a*c + r2*b*c)**2 + c2*2*(b*c - h*a*b - h*a*c)**2 + c3*2*a**2*b*c + c4*a*b*c*(b+c))
 
         if degrade_a2b2 + degrade_a2bc >= 0:
             multiplier = CyclicSum((a-b)**2)
