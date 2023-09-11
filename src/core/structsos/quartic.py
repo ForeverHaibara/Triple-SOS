@@ -517,7 +517,7 @@ def _sos_struct_quartic_uncentered(coeff, recur = False):
                 if p >= -4:
                     x_ = -3*(p + 1)
                 else:
-                    x_ = 9*(p + 2)**2 / 4
+                    x_ = radsimp(9*(p + 2)**2 / 4)
             else:
                 u = sp.symbols('u')
                 det_coeffs = radsimp([
@@ -552,16 +552,26 @@ def _sos_struct_quartic_uncentered(coeff, recur = False):
             if x_ is not None:
                 x_ = x_ / 3 - 1 - p - q - n_
                 # print('n =', n_, 'x = ', x_)
-            
+
+                def _try_solve(x_):
+                    new_coeffs_ = {(4,0,0): coeff((4,0,0)), (3,1,0): coeff((3,1,0)),
+                                (2,2,0): coeff((2,2,0)), (1,3,0): coeff((1,3,0)), (2,1,1): x_ * m}
+                    solution = _sos_struct_quartic_uncentered(Coeff(new_coeffs_, is_rational = coeff.is_rational), recur = True)
+                    if solution is not None:
+                        solution += radsimp((r - x_) * m) * CyclicSum(a**2*b*c)
+                        return solution
+                    return None
+
+
                 # finally subtract enough s(a2bc) to xs(a2bc) (or near xs(a2bc))
-                for x2 in rationalize_bound(x_, direction = 1, compulsory = True):
-                    if x2 < r:
-                        new_coeffs_ = {(4,0,0): coeff((4,0,0)), (3,1,0): coeff((3,1,0)),
-                                    (2,2,0): coeff((2,2,0)), (1,3,0): coeff((1,3,0)), (2,1,1): x2 * m}
-                        solution = _sos_struct_quartic_uncentered(Coeff(new_coeffs_, is_rational = coeff.is_rational), recur = True)
-                        if solution is not None:
-                            solution += radsimp((r - x2) * m) * CyclicSum(a**2*b*c)
-                            return solution
+                if isinstance(x_, sp.Float):
+                    for x2 in rationalize_bound(x_, direction = 1, compulsory = True):
+                        if x2 < r:
+                            solution = _try_solve(x2)
+                            if solution is not None:
+                                return solution
+                else:
+                    return _try_solve(x_)
 
             return None
 
