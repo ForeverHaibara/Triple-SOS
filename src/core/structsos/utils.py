@@ -131,7 +131,7 @@ def quadratic_weighting(c1, c2, c3, a = None, b = None, formal = False) -> Union
     if c1 == 0:
         result = [(c2, b)]
     elif c2 == 0:
-        result = [(c1, b)]
+        result = [(c1, a)]
     else:
         ratio = c3/c1/2
         result = [(c1, a + ratio*b), (c2 - ratio**2*c1, b)]
