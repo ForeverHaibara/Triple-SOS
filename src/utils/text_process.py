@@ -127,10 +127,10 @@ def _preprocess_text_completion(poly: str):
     i = 0 
     while i < len(poly) - 1:
         if 48 <= ord(poly[i]) <= 57: # '0'~'9'
-            if poly[i+1] == '(' or 97 <= ord(poly[i+1]) <= 122: # alphabets
+            if poly[i+1] == '(' or (97 <= ord(poly[i+1]) <= 122 and poly[i+1] != 'e'): # alphabets
                 poly = poly[:i+1] + '*' + poly[i+1:]
                 i += 1
-        elif poly[i] == ')' or 97 <= ord(poly[i]) <= 122: # alphabets
+        elif poly[i] == ')' or (97 <= ord(poly[i]) <= 122 and poly[i] != 'e'): # alphabets
             if poly[i+1] == '(' or 97 <= ord(poly[i+1]) <= 122:
                 poly = poly[:i+1] + '*' + poly[i+1:]
                 i += 1
