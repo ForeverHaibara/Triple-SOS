@@ -68,7 +68,7 @@ def SumOfSquare():
 
     method_order = [key for key, value in req['methods'].items() if value]
 
-    solution = app.SOS_Manager.sum_of_square(method_order = method_order)
+    solution = app.SOS_Manager.sum_of_square(method_order = method_order, configs = req['configs'])
 
     if solution is None:
         return jsonify(latex = '', txt = '', formatted = '', success = False)
