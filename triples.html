@@ -6,6 +6,13 @@
     <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0">
     <title>Sum of Square</title>
     <style>
+    .collapse {
+        transition-duration: 0;
+    }
+    .subcheckbox:not(:checked) {
+        background-color: rgba(170, 160, 160, 0.464);
+        border-color: rgba(170, 160, 160, 0.464);
+    }
     </style>
     <!-- <script src="https://requirejs.org/docs/release/2.3.6/minified/require.js"></script> -->
     <script async src="https://cdn.bootcdn.net/ajax/libs/axios/0.21.1/axios.min.js"></script>
@@ -25,32 +32,56 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
     color: black; vertical-align: middle; border-bottom: 1px solid rgb(216,216,216); font-size: 19px;">
     &nbsp  ·&nbsp Variables</div> -->
     <div id="settings" style="width:100%; height: 30%;">
-    <div id="settings_head" style="width: 100%; height: 28px; text-align: left; display: inline-block;
-    background: -webkit-linear-gradient(top, rgb(247,247,247),rgb(234,234,234));
-    color: black; vertical-align: middle; border-bottom: 1px solid rgb(216,216,216); font-size: 19px;">
-    &nbsp  ·&nbsp Settings
-    </div>
-    <div id="setting_methods" style="margin-left: 10px; width:100%; height:200px;">
-        <div class="form-check" style="margin-top: 5px">
-            <input class="form-check-input" type="checkbox" value="" id="setting_method_use_StructuralSOS" checked>
-            <label class="form-check-label" for="setting_method_use_StructuralSOS">Use Structural SOS</label>
+        <div id="settings_head" style="width: 100%; height: 28px; text-align: left; display: inline-block;
+        background: -webkit-linear-gradient(top, rgb(247,247,247),rgb(234,234,234));
+        color: black; vertical-align: middle; border-bottom: 1px solid rgb(216,216,216); font-size: 19px;">
+        &nbsp  ·&nbsp Settings
         </div>
-        <div class="form-check" style="margin-top: 5px">
-            <input class="form-check-input" type="checkbox" value="" id="setting_method_use_LinearSOS" checked>
-            <label class="form-check-label" for="setting_method_use_LinearSOS">Use Linear SOS</label>
+        <div id="setting_methods" style="margin-left: 10px; width:100%; height:200px;">
+            <div class="form-check" style="margin-top: 5px">
+                <input class="form-check-input" type="checkbox" value="" id="setting_method_use_StructuralSOS" checked>
+                <label class="form-check-label" for="setting_method_use_StructuralSOS">Use Structural SOS</label>
+                <input type="checkbox" class="collapse-toggle visually-hidden" id="setting_method_StructuralSOS_switch" data-bs-toggle="collapse" data-bs-target="#setting_method_StructuralSOS_menu" width="0">
+                <label for="setting_method_StructuralSOS_switch" class="collapse-label">
+                    <span class="me-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-right" viewBox="0 0 16 16">
+                        <path fill-rule="evenodd" d="M5.646 4.646a.5.5 0 0 1 .708 0L10 8.293l3.646-3.647a.5.5 0 1 1 .708.708l-4 4a.5.5 0 0 1-.708 0l-4-4a.5.5 0 0 1 0-.708z"/>
+                    </svg>
+                    </span>
+                </label>
+                <div class="collapse" id="setting_method_StructuralSOS_menu" style="margin-left: 10px; margin-top: 3px; font-size: 15px;">
+                    <input class="form-check-input subcheckbox" type="checkbox" value="" id="setting_method_StructuralSOS_real" checked>
+                    <label class="form-check-label" for="setting_method_StructuralSOS_real">Real Numbers</label>
+                </div>
+            </div>
+            <div class="form-check" style="margin-top: 5px">
+                <input class="form-check-input" type="checkbox" value="" id="setting_method_use_LinearSOS" checked>
+                <label class="form-check-label" for="setting_method_use_LinearSOS">Use Linear SOS</label>
+            </div>
+            <div class="form-check" style="margin-top: 5px">
+                <input class="form-check-input" type="checkbox" value="" id="setting_method_use_SymmetricSOS" checked>
+                <label class="form-check-label" for="setting_method_use_SymmetricSOS">Use Symmetric SOS</label>
+            </div>
+            <div class="form-check" style="margin-top: 5px">
+                <input class="form-check-input" type="checkbox" value="" id="setting_method_use_SDPSOS" checked>
+                <label class="form-check-label" for="setting_method_use_SDPSOS">Use SDP SOS</label>
+                <input type="checkbox" class="collapse-toggle visually-hidden" id="setting_method_SDPSOS_switch" data-bs-toggle="collapse" data-bs-target="#setting_method_SDPSOS_menu" width="0">
+                <label for="setting_method_SDPSOS_switch" class="collapse-label">
+                    <span class="me-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-right" viewBox="0 0 16 16">
+                        <path fill-rule="evenodd" d="M5.646 4.646a.5.5 0 0 1 .708 0L10 8.293l3.646-3.647a.5.5 0 1 1 .708.708l-4 4a.5.5 0 0 1-.708 0l-4-4a.5.5 0 0 1 0-.708z"/>
+                    </svg>
+                    </span>
+                </label>
+                <div class="collapse" id="setting_method_SDPSOS_menu" style="margin-left: 10px; margin-top: 3px; font-size: 15px;">
+                    <input class="form-check-input subcheckbox" type="checkbox" value="" id="setting_method_SDPSOS_allow_numer">
+                    <label class="form-check-label" for="setting_method_SDPSOS_allow_numer">Accept Numerical Solution</label>
+                </div>
+            </div>
+            <!-- <input type="checkbox" id="setting_method_use_StructuralSOS" checked="checked" style="font-size: 14px; margin-top: 10px; width: 80%" >&nbsp; Use Structural SOS</input>
+            <input type="checkbox" id="setting_method_use_LinearSOS" checked="checked" style="font-size: 14px; margin-top: 10px; width: 80%" >&nbsp; Use Linear SOS</input>
+            <input type="checkbox" id="setting_method_use_SymmetricSOS" checked="checked" style="font-size: 14px; margin-top: 10px; width: 80%" >&nbsp; Use Symmetric SOS</input> -->
         </div>
-        <div class="form-check" style="margin-top: 5px">
-            <input class="form-check-input" type="checkbox" value="" id="setting_method_use_SymmetricSOS" checked>
-            <label class="form-check-label" for="setting_method_use_SymmetricSOS">Use Symmetric SOS</label>
-        </div>
-        <div class="form-check" style="margin-top: 5px">
-            <input class="form-check-input" type="checkbox" value="" id="setting_method_use_SDPSOS" checked>
-            <label class="form-check-label" for="setting_method_use_SDPSOS">Use SDP SOS</label>
-        </div>
-        <!-- <input type="checkbox" id="setting_method_use_StructuralSOS" checked="checked" style="font-size: 14px; margin-top: 10px; width: 80%" >&nbsp; Use Structural SOS</input>
-        <input type="checkbox" id="setting_method_use_LinearSOS" checked="checked" style="font-size: 14px; margin-top: 10px; width: 80%" >&nbsp; Use Linear SOS</input>
-        <input type="checkbox" id="setting_method_use_SymmetricSOS" checked="checked" style="font-size: 14px; margin-top: 10px; width: 80%" >&nbsp; Use Symmetric SOS</input> -->
-    </div>
     </div>
     <div id="advertisement" style="position: absolute; left: 5px; bottom: 2%; text-align: left; vertical-align: baseline; font-size: 12px">
     <!-- <a href = "https://github.com/ForeverHaibara/Triple-SOS">GitHub</a> &nbsp; QQ 875413273 -->
@@ -397,8 +428,16 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
                 SymmetricSOS: document.getElementById("setting_method_use_SymmetricSOS").checked,
                 SDPSOS: document.getElementById("setting_method_use_SDPSOS").checked,
             }
+            const configs = {
+                StructuralSOS:{
+                    real: document.getElementById("setting_method_StructuralSOS_real").checked,
+                },
+                SDPSOS: {
+                    allow_numer: document.getElementById("setting_method_SDPSOS_allow_numer").checked,
+                }
+            }
             axios.post('http://127.0.0.1:5000/process/sos',{
-                poly: input_poly, tangents: tangents, methods: methods}
+                poly: input_poly, tangents: tangents, methods: methods, configs: configs}
             ).then(res=>{
                 sos_results.latex = res.data.latex; 
                 sos_results.txt   = res.data.txt;
@@ -461,7 +500,6 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
         }
         preprocessInput({findroot: 1, sos: SOS_callback});
     }
-
 
     function ChangeShowType(x){
         if (sos_results.show != x){
