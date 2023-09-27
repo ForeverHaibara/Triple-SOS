@@ -18,6 +18,7 @@ from ...utils.polytools import deg
 
 def _structural_sos_handler(
         poly,
+        real = True,
     ) -> sp.Expr:
     """
     Perform structural sos and returns an sympy expression. This function could be called 
@@ -28,7 +29,7 @@ def _structural_sos_handler(
     coeff = Coeff(poly)
 
     # first try sparse cases
-    solution = sos_struct_sparse(poly, coeff, recurrsion = _structural_sos_handler)
+    solution = sos_struct_sparse(poly, coeff, recurrsion = _structural_sos_handler, real = real)
 
     if solution is None:
         SOLVERS = {
@@ -44,7 +45,7 @@ def _structural_sos_handler(
         degree = deg(poly)
         solver = SOLVERS.get(degree, None)
         if solver is not None:
-            solution = SOLVERS[degree](poly, coeff, recurrsion = _structural_sos_handler)
+            solution = SOLVERS[degree](poly, coeff, recurrsion = _structural_sos_handler, real = real)
 
     if solution is None:
         return None
@@ -56,6 +57,7 @@ def _structural_sos_handler(
 def StructuralSOS(
         poly,
         rootsinfo = None,
+        real = True,
     ):
     """
     Main function of structural SOS. For a given polynomial, if it is in a well-known form,
@@ -66,13 +68,16 @@ def StructuralSOS(
     -------
     poly: sp.polys.polytools.Poly
         The target polynomial.
+    real: bool
+        Whether solve inequality on real numbers rather on nonnegative reals. This may
+        requires lifting the degree.
 
     Returns
     -------
     solution: SolutionStructuralSimple
 
     """
-    solution = _structural_sos_handler(poly)
+    solution = _structural_sos_handler(poly, real = real)
     if solution is None:
         return None
 

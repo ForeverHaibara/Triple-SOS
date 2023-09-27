@@ -11,7 +11,7 @@ from .utils import (
 
 a, b, c = sp.symbols('a b c')
 
-def sos_struct_septic(poly, coeff, recurrsion):
+def sos_struct_septic(poly, coeff, recurrsion, real = True):
     if coeff((7,0,0)) == 0 and coeff((6,1,0)) == 0 and coeff((6,0,1)) == 0:
         if coeff((5,2,0)) == 0 and coeff((5,0,2)) == 0:
             # star

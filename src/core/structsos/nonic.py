@@ -8,7 +8,7 @@ from .utils import (
 
 a, b, c = sp.symbols('a b c')
 
-def sos_struct_nonic(poly, coeff, recurrsion):
+def sos_struct_nonic(poly, coeff, recurrsion, real = True):
     """
     Nonic is polynomial of degree 9.
 
