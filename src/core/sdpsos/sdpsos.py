@@ -14,7 +14,8 @@ def _sdp_sos(
         poly: sp.Poly,
         manifold: RootSubspace = None,
         minor: bool = False,
-        cyclic_constraint = True,
+        cyclic_constraint: bool = True,
+        allow_numer: bool = False,
         verbose: bool = True
     ) -> Optional[Dict]:
     """
@@ -38,6 +39,9 @@ def _sdp_sos(
         add the minor term, please set minor = True.
     cyclic_constraint : bool
         Whether to add cyclic constraint the problem. This reduces the degree of freedom.
+    allow_numer : bool
+        Whether to allow numerical solution. If True, then the function will return numerical solution
+        if the rational solution does not exist.
     verbose : bool
         If True, print the information of the problem.
     """
@@ -103,7 +107,7 @@ def _sdp_sos(
             ).replace("'", '')))
 
     # Main SOS solver
-    sos_result = sdp_solver(x0, space, splits, not_none_keys, reg = 0, verbose = verbose)
+    sos_result = sdp_solver(x0, space, splits, not_none_keys, reg = 0, allow_numer = allow_numer, verbose = verbose)
     if sos_result is None:
         return collection
 
@@ -124,6 +128,8 @@ def SDPSOS(
         minor: Union[List[bool], bool] = [False, True],
         degree_limit: int = 12,
         cyclic_constraint = True,
+        allow_numer: bool = False,
+        decompose_method: str = 'raw',
         verbose: bool = True,
         **kwargs
     ) -> Optional[SolutionSDP]:
@@ -169,6 +175,11 @@ def SDPSOS(
         return None.
     cyclic_constraint : bool
         Whether to add cyclic constraint the problem. This reduces the degree of freedom.
+    allow_numer : bool
+        Whether to allow numerical solution. If True, then the function will return numerical solution
+        if the rational solution does not exist.
+    decompose_method : str
+        One of 'raw' or 'reduce'. The default is 'raw'.
     verbose : bool
         If True, print the information of the problem.
     """
@@ -192,13 +203,23 @@ def SDPSOS(
         with indented_print():
             try:
                 collection = _sdp_sos(
-                    poly, manifold, minor = minor_, cyclic_constraint = cyclic_constraint, verbose = verbose
+                    poly,
+                    manifold,
+                    minor = minor_,
+                    cyclic_constraint = cyclic_constraint,
+                    allow_numer = allow_numer,
+                    verbose = verbose
                 )
                 if isinstance(collection['M']['major'], sp.Matrix) or\
                     isinstance(collection['M']['minor'], sp.Matrix):
+
+                    # We can also pass in **M
                     return create_solution_from_M(
                         collection['poly'], 
-                        collection['M']
+                        M = collection['M'],
+                        Q = collection['Q'],
+                        decompositions = collection['decompositions'],
+                        method = decompose_method,
                     )
                     if verbose:
                         print('Success.')

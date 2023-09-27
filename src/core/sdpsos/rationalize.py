@@ -4,8 +4,8 @@ import numpy as np
 import sympy as sp
 
 from .manifold import LowRankHermitian
+from .utils import congruence_with_perturbation
 from ...utils.roots.rationalize import rationalize
-from ...utils import congruence
 
 
 def rationalize_with_mask(y: np.ndarray, zero_tolerance: float = 1e-7):
@@ -96,7 +96,8 @@ def verify_is_pretty(
 
 def verify_is_positive(
         vecS: sp.Matrix,
-        splits: List[slice]
+        splits: List[slice],
+        allow_numer: bool = False
     ):
     """
     Recover symmetric matrices from `x0 + space * y` and check whether they are
@@ -108,6 +109,8 @@ def verify_is_positive(
         The vectorized symmetric matrices.
     splits : List[slice]
         The splits of the space. Each split is a slice object.
+    allow_numer : bool
+        If allow_numer == True, it must return the result in spite of floating point errors.
 
     Returns
     -------
@@ -119,11 +122,11 @@ def verify_is_positive(
     decompositions = []
     for split in splits:
         S = LowRankHermitian(None, sp.Matrix(vecS[split])).S
-        congruence_decomp = congruence(S)
+
+        congruence_decomp = congruence_with_perturbation(S, allow_numer = allow_numer)
         if congruence_decomp is None:
             return None
+
         U, diag = congruence_decomp
         decompositions.append((S, U, diag))
     return decompositions
-
-

@@ -5,6 +5,7 @@ import numpy as np
 import sympy as sp
 
 from ...utils.roots.rationalize import rationalize
+from ...utils import congruence
 
 def _rationalize_matrix_mask(M, tolerance = 1e-10):
     M_abs = np.abs(M)
@@ -35,6 +36,34 @@ def rationalize_matrix(M, mask_func = None, symmetric = True):
                 M_[i,j] = rationalize(M[i,j], reliable = True)
 
     return M_
+
+def congruence_with_perturbation(M, allow_numer = False):
+    """
+    Perform congruence decomposition on M. 
+    If allow_numer == True, make a slight perturbation
+    so that M is positive semidefinite.
+    """
+    if not allow_numer:
+        return congruence(M)
+    else:
+        min_eig = min([v.n(20) if not isinstance(v, sp.Float) else v for v in M.eigenvals()])
+        if min_eig < 0:
+            perturbation = -min_eig + 1e-15
+            return congruence(M + perturbation * sp.eye(M.shape[0]))
+        return congruence(M)
+    return None
+
+
+def is_numer_matrix(M):
+    """
+    Check whether a matrix contains sp.Float.
+    """
+    for i in range(M.shape[0]):
+        for j in range(M.shape[1]):
+            if isinstance(M[i,j], sp.Float):
+                return True
+    return False
+
 
 def _discard_zero_rows(A, b, rank_tolerance = 1e-10):
     A_rowmax = np.abs(A).max(axis = 1)

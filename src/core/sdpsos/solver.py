@@ -4,10 +4,9 @@ import numpy as np
 import sympy as sp
 
 from .rationalize import (
-    rationalize, rationalize_with_mask, rationalize_simutaneously,
-    verify_is_pretty, verify_is_positive, congruence
+    rationalize_with_mask, rationalize_simutaneously,
+    verify_is_pretty, verify_is_positive
 )
-from .manifold import LowRankHermitian
 
 def _sos_early_stop(sos, verbose = False):
     """
@@ -137,7 +136,7 @@ def _sdp_constructor(
     return sos, y
 
 
-def _sdp_solver(sos, x0, space, splits, objectives = None, verbose = False):
+def _sdp_solver(sos, x0, space, splits, objectives = None, allow_numer = False, verbose = False):
     """
     Solve the SDP problem. See details at `sdp_solver` function.
 
@@ -154,6 +153,9 @@ def _sdp_solver(sos, x0, space, splits, objectives = None, verbose = False):
         The splits of the symmetric matrices. Each split is a slice object.
     objectives : List[Tuple[str, Callable]]
         The objectives of the SOS problem.
+    allow_numer : bool
+        Whether to allow numerical solution. If True, then the function will return numerical solution
+        if the rational solution does not exist.
     verbose : bool
         If True, print the details.
 
@@ -227,10 +229,7 @@ def _sdp_solver(sos, x0, space, splits, objectives = None, verbose = False):
             decompositions = verify_is_positive(x0 + space * y_rational, splits)
             if decompositions is not None:
                 return y_rational, decompositions
-    
-    if len(ys) <= 1:
-        # we cannot perform convex combination
-        return None
+
 
     # Final try: convex combination
     # Although SDP often presents low-rank solution and perturbation of low-rank solution
@@ -239,17 +238,24 @@ def _sdp_solver(sos, x0, space, splits, objectives = None, verbose = False):
     # in the feasible set.
     # An interior point must have rational approximant.
 
-    y = np.array(ys).mean(axis = 0)
+    if len(ys) > 1 and not allow_numer:
+        y = np.array(ys).mean(axis = 0)
 
-    lcm = max(1260, sp.prod(set.union(*[set(sp.primefactors(_.q)) for _ in space])))
-    times = int(10 / sp.log(lcm, 10).n(15) + 3)
-    for y_rational in rationalize_simutaneously(y, lcm, times = times):
-        if verify_is_pretty(y_rational):
-            decompositions = verify_is_positive(x0 + space * y_rational, splits)
-            if decompositions is not None:
-                return y_rational, decompositions
+        lcm = max(1260, sp.prod(set.union(*[set(sp.primefactors(_.q)) for _ in space])))
+        times = int(10 / sp.log(lcm, 10).n(15) + 3)
+        for y_rational in rationalize_simutaneously(y, lcm, times = times):
+            if verify_is_pretty(y_rational):
+                decompositions = verify_is_positive(x0 + space * y_rational, splits)
+                if decompositions is not None:
+                    return y_rational, decompositions
 
-    if verbose:
+    if len(ys) > 0 and allow_numer:
+        y = sp.Matrix(ys[0])
+        decompositions = verify_is_positive(x0 + space * y, splits, allow_numer = allow_numer)
+        if decompositions is not None:
+            return y, decompositions
+
+    if len(ys) > 0 and (not allow_numer) and verbose:
         print('Failed to find a rational solution despite having a numerical solution. '
               'Try other multipliers might be useful. '
               'Currently using lcm = %d, times = %d'%(lcm, times))
@@ -271,6 +277,7 @@ def sdp_solver(
         keys: List[str],
         reg: float = 0,
         objectives: Optional[List[Tuple[str, Callable]]] = None,
+        allow_numer: bool = False,
         verbose: bool = False
     ):
     """
@@ -313,7 +320,10 @@ def sdp_solver(
             ('max', lambda sos: sos.variables['S_major'].tr),
             ('max', lambda sos: sos.variables['S_major']|1)
         ]
-        ```
+        ```        
+    allow_numer : bool
+        Whether to allow numerical solution. If True, then the function will return numerical solution
+        if the rational solution does not exist.
     """
     if not isinstance(keys, list):
         keys = list(keys) # avoid troubles of iterator
@@ -323,7 +333,7 @@ def sdp_solver(
 
     if space.shape[1] > 0:
         sos, y = _sdp_constructor(x0, space, splits, keys, reg = reg)
-        solution = _sdp_solver(sos, x0, space, splits, objectives = objectives, verbose = verbose)
+        solution = _sdp_solver(sos, x0, space, splits, objectives = objectives, allow_numer = allow_numer, verbose = verbose)
     else:
         sos = None
         solution = _degenerated_solver(x0, space, splits, verbose = verbose)
@@ -343,7 +353,7 @@ def _degenerated_solver(
         x0: sp.Matrix,
         space: sp.Matrix,
         splits: List[slice],
-        verbose: bool = True    
+        verbose: bool = True
     ):
     """
     When there is zero degree of freedom, the space degenerates to matrix with shape[1] == 0.
