@@ -5,7 +5,8 @@ import sympy as sp
 from .utils import congruence_with_perturbation, is_numer_matrix
 from ...utils.polytools import deg
 from ...utils.basis_generator import generate_expr
-from ...utils.expression.cyclic import CyclicSum, CyclicProduct
+from ...utils.expression.form import poly_get_factor_form
+from ...utils.expression.cyclic import CyclicSum, CyclicProduct, _is_cyclic_expr
 from ...utils.expression.solution import SolutionSimple
 
 class SolutionSDP(SolutionSimple):
@@ -21,6 +22,7 @@ def _matrix_as_expr(
         multiplier: sp.Expr, 
         cyc: bool = True,
         degree: int = 0,
+        factor_result: bool = True,
         cancel: bool = True
     ) -> sp.Expr:
     """
@@ -40,6 +42,8 @@ def _matrix_as_expr(
     degree: int
         The (halved) degree of the polynomial. Defaults to 0 for auto inference.
         It should be appointed if M is cut off.
+    factor_result : bool
+        Whether factorize the result. Defaults to True.
     cancel : bool
         Whether cancel the denominator of the expression. Defaults to True.
 
@@ -48,23 +52,45 @@ def _matrix_as_expr(
     sp.Expr
         The expression of matrix as sum of squares.
     """
+    is_numer = is_numer_matrix(M if isinstance(M, sp.Matrix) else sp.Matrix(M[1]))
+    factor_result = factor_result and (not is_numer)
+
     if not isinstance(M, sp.Matrix) and len(M) == 2:
         degree = degree or round((2*M[0].shape[0] + .25)**.5 - 1.5)
         U, S = M
     else:
         degree = degree or round((2*M.shape[0] + .25)**.5 - 1.5)
-        U, S = congruence_with_perturbation(M, allow_numer = is_numer_matrix(M))
+        U, S = congruence_with_perturbation(M, allow_numer = is_numer)
 
     a, b, c = sp.symbols('a b c')
     monoms = generate_expr(degree, cyc = 0)[1]
 
+    factorizer = (lambda x: poly_get_factor_form(x.as_poly(a,b,c), return_type = 'expr')) if factor_result else (lambda x: x)
     if not cyc:
         as_cyc = lambda x: multiplier * x
     else:
-        if multiplier == CyclicProduct(a):
-            as_cyc = lambda x: multiplier * CyclicSum(x)
-        else:
-            as_cyc = lambda x: CyclicSum(multiplier * x)
+        def as_cyc(x):
+            if x.is_Pow:
+                # Example: (p(a-b))^2 == p((a-b)^2)
+                if isinstance(x.base, CyclicProduct) and x.exp > 1:
+                    x = CyclicProduct(x.base.args[0] ** x.exp)
+            elif x.is_Mul:
+                args = list(x.args)
+                flg = False
+                for i in range(len(args)):
+                    if args[i].is_Pow and isinstance(args[i].base, CyclicProduct):
+                        args[i] = CyclicProduct(args[i].base.args[0] ** args[i].exp)
+                        flg = True
+                if flg: # has been updated
+                    x = sp.Mul(*args)
+
+            if _is_cyclic_expr(x, (a,b,c)):
+                if multiplier == 1 or multiplier == CyclicProduct(a):
+                    return 3 * multiplier * x
+                return CyclicSum(multiplier) * x
+            elif multiplier == CyclicProduct(a):
+                return multiplier * CyclicSum(x)
+            return CyclicSum(multiplier * x)
 
     expr = sp.S(0)
     for i, s in enumerate(S):
@@ -80,6 +106,7 @@ def _matrix_as_expr(
             r, val = val[0], val[1]
         else:
             r = 1
+        val = factorizer(val)
         expr += (s * r**2) * as_cyc(val**2)
 
     return expr
@@ -91,6 +118,7 @@ def create_solution_from_M(
         Q: Dict[str, sp.Matrix] = {},
         decompositions: Dict[str, Tuple[sp.Matrix, sp.Matrix]] = {},
         method: str = 'raw',
+        factor_result: bool = True,
         cancel: bool = True,
         **kwargs
     ) -> SolutionSDP:
@@ -112,6 +140,8 @@ def create_solution_from_M(
         One of 'raw' or 'reduce'. The default is 'raw'. 'raw' first computes Q.T @ S @ Q and then
         performs congruence. While 'reduce' performs congruence on S first and then multiply Q.T.
         'reduce' is useful in numerical case, which helps remove improper components.
+    factor_result : bool
+        Whether to factorize the result. The default is True.
     cancel : bool, optional
         Whether to cancel the denominator. The default is True.
 

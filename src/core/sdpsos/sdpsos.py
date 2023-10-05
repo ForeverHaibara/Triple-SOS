@@ -130,6 +130,7 @@ def SDPSOS(
         cyclic_constraint = True,
         allow_numer: bool = False,
         decompose_method: str = 'raw',
+        factor_result: bool = True,
         verbose: bool = True,
         **kwargs
     ) -> Optional[SolutionSDP]:
@@ -180,6 +181,8 @@ def SDPSOS(
         if the rational solution does not exist.
     decompose_method : str
         One of 'raw' or 'reduce'. The default is 'raw'.
+    factor_result : bool
+        Whether to factorize the result. The default is True.
     verbose : bool
         If True, print the information of the problem.
     """
@@ -220,6 +223,7 @@ def SDPSOS(
                         Q = collection['Q'],
                         decompositions = collection['decompositions'],
                         method = decompose_method,
+                        factor_result = factor_result,
                     )
                     if verbose:
                         print('Success.')
