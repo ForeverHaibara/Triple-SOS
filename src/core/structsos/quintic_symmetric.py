@@ -8,7 +8,7 @@ from .utils import (
 
 a, b, c = sp.symbols('a b c')
 
-def sos_struct_quintic_symmetric(poly, coeff, recurrsion):
+def sos_struct_quintic_symmetric(poly, coeff, recurrsion, real = True):
     """
     The function solves symmetric quintic problems with s(a^5) term in an
     incomplete attempt.

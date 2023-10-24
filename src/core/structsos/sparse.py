@@ -7,7 +7,7 @@ from .quartic import sos_struct_quartic
 from ...utils.polytools import deg
 
 
-def sos_struct_sparse(poly, coeff, recurrsion):
+def sos_struct_sparse(poly, coeff, recurrsion, real = True):
     if len(coeff) > 6:
         return None
 

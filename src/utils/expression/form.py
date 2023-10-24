@@ -2,6 +2,7 @@ from collections import defaultdict
 
 import sympy as sp
 
+from .cyclic import CyclicSum, CyclicProduct
 from ..polytools import verify_hom_cyclic, deg
 from ..text_process import pl
 
@@ -41,7 +42,18 @@ def poly_get_standard_form(poly, formatt = 'short', is_cyc = None):
             return txt 
 
 
-def poly_get_factor_form(poly):
+def poly_get_factor_form(poly, return_type='text'):
+    """
+    Get the factorized form of a polynomial.
+
+    Parameters
+    ----------
+    poly : Poly
+        The polynomial to be factorized.
+    return_type : str
+        The type of the return value. Can be 'text' or 'expr'.
+    """
+    a, b, c = sp.symbols('a b c')
     coeff, parts = poly.factor_list()
     factors = defaultdict(int)
     is_cyc = {}
@@ -52,25 +64,49 @@ def poly_get_factor_form(poly):
         is_cyc[name] = verify_hom_cyclic(part)[1]
         origin_polys[name] = part
     result = []
+
     if factors['a'] > 0 and factors['a'] == factors['b'] and factors['a'] == factors['c']:
-        result.append('p(a)' if factors['a'] == 1 else 'p(a%d)'%factors['a'])
+        if return_type == 'expr':
+            result.append(CyclicProduct(a ** factors['a']))
+        elif return_type == 'text':
+            result.append('p(a)' if factors['a'] == 1 else 'p(a%d)'%factors['a'])
         del factors['a'], factors['b'], factors['c']
+
     if factors['a-b'] > 0 and factors['a-b'] == factors['b-c'] and factors['a-b'] == factors['a-c']:
-        result.append('p(a-b)' if factors['a-b'] == 1 else 'p(a-b)%d'%factors['a-b'])
+        if return_type == 'expr':
+            result.append(CyclicProduct((a-b) ** factors['a-b']))
+        elif return_type == 'text':
+            result.append('p(a-b)' if factors['a-b'] == 1 else 'p(a-b)%d'%factors['a-b'])
+
         if factors['a-b'] % 2 == 1: coeff *= -1
         del factors['a-b'], factors['b-c'], factors['a-c']
-    
-    _formatter1 = lambda x: '' if x == 1 else str(x)
-    _formatter2 = lambda x: x if x.startswith('s(')  or len(x) == 1 else '(%s)'%x
-    result += [
-        (_formatter2(poly_get_standard_form(origin_polys[part], is_cyc = is_cyc[part]))
-            + _formatter1(mul)) if mul > 0 else ''
-            for part, mul in factors.items()
-    ]
 
-    if coeff == 1: coeff = ''
-    elif coeff == -1: coeff = '-'
-    return str(coeff) + ''.join(sorted(result, key = lambda x: len(x)))
+    if return_type == 'text':
+        _formatter1 = lambda x: '' if x == 1 else str(x)
+        _formatter2 = lambda x: x if x.startswith('s(')  or len(x) == 1 else '(%s)'%x
+        result += [
+            (_formatter2(poly_get_standard_form(origin_polys[part], is_cyc = is_cyc[part]))
+                + _formatter1(mul)) if mul > 0 else ''
+                for part, mul in factors.items()
+        ]
+
+        if coeff == 1: coeff = ''
+        elif coeff == -1: coeff = '-'
+        return str(coeff) + ''.join(sorted(result, key = lambda x: len(x)))
+
+    elif return_type == 'expr':
+        def _formatted2(part):
+            x = origin_polys[part]
+            x2 = poly_get_standard_form(x, is_cyc = is_cyc[part])
+            if x2.startswith('s('):
+                return CyclicSum(pl(x2[2:-1]).as_expr())
+            else:
+                return x.as_expr()
+        result += [
+            (_formatted2(part) ** mul if mul > 0 else sp.S(1))
+                for part, mul in factors.items()
+        ]
+        return coeff * sp.Mul(*result)
 
 
 def latex_coeffs(poly, tabular=True, document=True):

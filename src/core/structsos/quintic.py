@@ -30,7 +30,7 @@ def _verify_border_nonnegative(border):
                 return False
     return True
 
-def sos_struct_quintic(poly, coeff, recurrsion):
+def sos_struct_quintic(poly, coeff, recurrsion, real = True):
     """
     Solve quintic inequalities.
     """

@@ -63,7 +63,7 @@ def _sos_struct_sextic_hexagon_symmetric(coeff, real = False):
     [1] Vasile, Mathematical Inequalities Volume 1 - Symmetric Polynomial Inequalities. p.23
 
     [2] https://artofproblemsolving.com/community/u426077h3036593p28226075
-    """    
+    """
     if coeff((4,2,0)) <= 0:
         if coeff((4,2,0)) == 0:
             return _sos_struct_sextic_hexagram_symmetric(coeff)
@@ -1461,7 +1461,7 @@ def _sos_struct_sextic_symmetric_quadratic_form(poly, coeff):
     
 
 
-def sos_struct_sextic_symmetric_ultimate(poly, coeff, recurrsion):
+def sos_struct_sextic_symmetric_ultimate(poly, coeff, recurrsion, real = True):
     """
     Solve symmetric sextics.
     
@@ -1503,7 +1503,7 @@ def sos_struct_sextic_symmetric_ultimate(poly, coeff, recurrsion):
         return None
     elif coeff6 == 0:
         # degenerated
-        return _sos_struct_sextic_iran96(coeff, real = True)
+        return _sos_struct_sextic_iran96(coeff, real = real)
     elif coeff6 < 0:
         return None
 
@@ -1645,7 +1645,7 @@ def sos_struct_sextic_symmetric_ultimate(poly, coeff, recurrsion):
     sum_of_roots = sum((len(_) > 0) for _ in roots)
 
     if sum_of_roots == 1:
-        return _sos_struct_sextic_symmetric_ultimate_1root(coeff, poly, recurrsion, roots)
+        return _sos_struct_sextic_symmetric_ultimate_1root(coeff, poly, recurrsion, roots, real = real)
     elif sum_of_roots == 2:
         return _sos_struct_sextic_symmetric_ultimate_2roots(coeff, poly, recurrsion, roots)
 
@@ -1690,7 +1690,7 @@ def _sos_struct_sextic_symmetric_ultimate_1root(coeff, poly, recurrsion, roots, 
             # e.g. s(a2/3)3-a2b2c2-p(a-b)2
             if coeff((5,1,0)) >= -2 * x_:
                 poly2 = poly - ((a**3+b**3+c**3-3*a*b*c-x_*(a*a*(b+c)+b*b*(c+a)+c*c*(a+b)-6*a*b*c))**2).as_poly(a,b,c, domain = poly.domain) * coeff6
-                solution = _sos_struct_sextic_iran96(Coeff(poly2, is_rational = coeff.is_rational))
+                solution = _sos_struct_sextic_iran96(Coeff(poly2, is_rational = coeff.is_rational), real = real)
                 if solution is not None:
                     if x_ == sp.Rational(3,2):
                         solution += coeff6 / 4 * CyclicProduct((a+b-2*c)**2)

@@ -6,7 +6,7 @@ from .utils import (
 )
 
 
-def sos_struct_octic(poly, coeff, recurrsion):
+def sos_struct_octic(poly, coeff, recurrsion, real = True):
     a, b, c = sp.symbols('a b c')
     if any((coeff((8,0,0)), coeff((7,1,0)), coeff((7,0,1)))):
         return None
