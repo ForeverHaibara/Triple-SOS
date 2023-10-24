@@ -74,8 +74,19 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
                     </span>
                 </label>
                 <div class="collapse" id="setting_method_SDPSOS_menu" style="margin-left: 10px; margin-top: 3px; font-size: 15px;">
-                    <input class="form-check-input subcheckbox" type="checkbox" value="" id="setting_method_SDPSOS_allow_numer">
                     <label class="form-check-label" for="setting_method_SDPSOS_allow_numer">Accept Numerical Solution</label>
+                    <input class="form-check-input subcheckbox" type="checkbox" value="" id="setting_method_SDPSOS_allow_numer">
+
+                    <label class="form-check-label" for="setting_method_SDPSOS_reduced_decompose">Use Reduced Decomposition</label>
+                    <input class="form-check-input subcheckbox" type="checkbox" value="" id="setting_method_SDPSOS_reduced_decompose">
+
+                    <!-- <div class="btn-group" role="group" aria-label="Basic radio toggle button group">
+                        <input type="radio" class="btn-check" name="btnradio" id="btnradio1" autocomplete="off" checked>
+                        <label class="btn btn-outline-primary" for="btnradio1">Reduce</label>
+                      
+                        <input type="radio" class="btn-check" name="btnradio" id="btnradio2" autocomplete="off">
+                        <label class="btn btn-outline-primary" for="btnradio2">Full</label>
+                    </div> -->
                 </div>
             </div>
             <!-- <input type="checkbox" id="setting_method_use_StructuralSOS" checked="checked" style="font-size: 14px; margin-top: 10px; width: 80%" >&nbsp; Use Structural SOS</input>
@@ -434,6 +445,7 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
                 },
                 SDPSOS: {
                     allow_numer: document.getElementById("setting_method_SDPSOS_allow_numer").checked,
+                    decompose_method: document.getElementById("setting_method_SDPSOS_reduced_decompose").checked?'reduce':'raw',
                 }
             }
             axios.post('http://127.0.0.1:5000/process/sos',{
