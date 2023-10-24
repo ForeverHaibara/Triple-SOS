@@ -160,7 +160,12 @@ def create_solution_from_M(
     if method == 'raw':
         items = Ms.items()
     elif method == 'reduce':
-        items = [(key, (M * Q.T, v)) for (key, Q), (key_, (M, v)) in zip(Q.items(), decompositions.items())]
+        items = []
+        for key, Q in Q.items():
+            if Q is None:
+                continue
+            M, v = decompositions[key]
+            items.append((key, (M * Q.T, v)))
 
     for key, M in items:
         if M is None:
