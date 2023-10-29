@@ -433,15 +433,21 @@ def findroot_resultant(poly):
     # findroot_func = _findroot_resultant_deprecated
     findroot_func = _findroot_resultant
 
+    # when the multiplicity at origin > 1, we require hessian == 0
+    mult_at_origin = 0
+
     for part in parts:
         poly, multiplicity = part
         if poly.degree() == 1:
             continue
         elif poly.degree() == 2:
             if poly(1,1) == 0:
+                mult_at_origin += 1
                 roots.append(RootRational((1,1,1)))
             continue
         else:
+            if len(parts) > 1 and poly(1,1) == 0:
+                mult_at_origin += 1
             roots.extend(findroot_func(poly))
 
 
@@ -459,5 +465,7 @@ def findroot_resultant(poly):
     for root in roots:
         if any(r.root == root.root for r in roots_clear):
             continue
+        if mult_at_origin > 1 and root.root[0] == 1 and root.root[1] == 1 and root.root[2] == 1:
+            root.multiplicity = mult_at_origin
         roots_clear.append(root)
     return roots_clear
