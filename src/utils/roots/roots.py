@@ -49,6 +49,7 @@ class Root():
         self.uv_ = None
         self.ker_ = None
         self.cyclic_sum_cache_ = {}
+        self.multiplicity = 1
 
     def __getitem__(self, i):
         return self.root[i]
@@ -515,6 +516,7 @@ class RootUV(Root):
 class RootRational(Root):
     def __new__(cls, root):
         return Root.__new__(cls)
+
     def __init__(self, root):
         root = tuple(sp.S(r) for r in root)
         if len(root) == 2:
