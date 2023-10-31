@@ -6,7 +6,7 @@ from .utils import (
 )
 
 
-def sos_struct_octic(poly, coeff, recurrsion, real = True):
+def sos_struct_octic(coeff, recurrsion, real = True):
     a, b, c = sp.symbols('a b c')
     if any((coeff((8,0,0)), coeff((7,1,0)), coeff((7,0,1)))):
         return None
@@ -22,7 +22,7 @@ def sos_struct_octic(poly, coeff, recurrsion, real = True):
 
     if coeff((6,2,0)) == coeff((2,6,0)) and coeff((5,3,0)) == coeff((3,5,0))\
          and coeff((5,2,1)) == coeff((2,5,1)) and coeff((4,3,1)) == coeff((3,4,1)):
-        solution = _sos_struct_octic_symmetric_hexagon(coeff, poly, recurrsion)
+        solution = _sos_struct_octic_symmetric_hexagon(coeff, recurrsion)
         if solution is not None:
             return solution
 
@@ -42,7 +42,7 @@ def sos_struct_octic(poly, coeff, recurrsion, real = True):
     return None
 
 
-def _sos_struct_octic_symmetric_hexagon(coeff, poly, recurrsion):
+def _sos_struct_octic_symmetric_hexagon(coeff, recurrsion):
     """
     Try to solve symmetric octic hexagon, without terms a^8, a^7b and a^7c.
 

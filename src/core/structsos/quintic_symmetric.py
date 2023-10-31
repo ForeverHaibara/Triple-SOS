@@ -8,12 +8,10 @@ from .utils import (
 
 a, b, c = sp.symbols('a b c')
 
-def sos_struct_quintic_symmetric(poly, coeff, recurrsion, real = True):
+def sos_struct_quintic_symmetric(coeff, recurrsion, real = True):
     """
     The function solves symmetric quintic problems with s(a^5) term in an
     incomplete attempt.
-
-    The function only uses `coeff`. The `poly` and `recurrsion` is not used for minimium dependency.
 
     Theorem: For t <= 3, we have
     F(a,b,c) = s((a+b-c)(a-b)^2(a+b-tc)^2) >= 0.
@@ -444,7 +442,7 @@ def sos_struct_quintic_symmetric(poly, coeff, recurrsion, real = True):
                 quartic = {
                     (4,0,0): m_, (3,1,0): p_, (2,2,0): n_, (1,3,0): p_, (2,1,1): -m_-p_*2-n_
                 }
-                quartic_solution = sos_struct_quartic(None, Coeff(quartic), None)
+                quartic_solution = sos_struct_quartic(Coeff(quartic), None)
                 solution = main_solution + (quartic_solution + rem * CyclicSum(a*b) * multiplier) * CyclicProduct(a)
                 return solution / multiplier
 

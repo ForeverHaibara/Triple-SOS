@@ -1,9 +1,11 @@
+from typing import Union, Dict
+
 import sympy as sp
 
 from .solution import SolutionStructural, SolutionStructuralSimple
 
 from .utils import Coeff
-from .sparse  import sos_struct_sparse
+from .sparse  import sos_struct_sparse, sos_struct_heuristic
 from .cubic   import sos_struct_cubic
 from .quartic import sos_struct_quartic
 from .quintic import sos_struct_quintic
@@ -12,12 +14,19 @@ from .septic  import sos_struct_septic
 from .octic   import sos_struct_octic
 from .nonic   import sos_struct_nonic
 
-from ...utils.polytools import deg
 
-
+SOLVERS = {
+    3: sos_struct_cubic,
+    4: sos_struct_quartic,
+    5: sos_struct_quintic,
+    6: sos_struct_sextic,
+    7: sos_struct_septic,
+    8: sos_struct_octic,
+    9: sos_struct_nonic,
+}
 
 def _structural_sos_handler(
-        poly,
+        coeff: Union[sp.polys.Poly, Coeff, Dict],
         real = True,
     ) -> sp.Expr:
     """
@@ -26,29 +35,21 @@ def _structural_sos_handler(
     to a solution object.
     """
 
-    coeff = Coeff(poly)
+    if not isinstance(coeff, Coeff):
+        coeff = Coeff(coeff)
+
+    degree = coeff.degree()
 
     # first try sparse cases
-    solution = sos_struct_sparse(poly, coeff, recurrsion = _structural_sos_handler, real = real)
+    solution = sos_struct_sparse(coeff, recurrsion = _structural_sos_handler, real = real)
 
     if solution is None:
-        SOLVERS = {
-            3: sos_struct_cubic,
-            4: sos_struct_quartic,
-            5: sos_struct_quintic,
-            6: sos_struct_sextic,
-            7: sos_struct_septic,
-            8: sos_struct_octic,
-            9: sos_struct_nonic,
-        }
-
-        degree = deg(poly)
         solver = SOLVERS.get(degree, None)
         if solver is not None:
-            solution = SOLVERS[degree](poly, coeff, recurrsion = _structural_sos_handler, real = real)
+            solution = SOLVERS[degree](coeff, recurrsion = _structural_sos_handler, real = real)
 
-    if solution is None:
-        return None
+    if solution is None and degree > 6:
+        solution = sos_struct_heuristic(coeff, recurrsion = _structural_sos_handler)
 
     return solution
 
@@ -77,7 +78,7 @@ def StructuralSOS(
     solution: SolutionStructuralSimple
 
     """
-    solution = _structural_sos_handler(poly, real = real)
+    solution = _structural_sos_handler(Coeff(poly), real = real)
     if solution is None:
         return None
 

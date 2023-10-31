@@ -15,12 +15,12 @@ from .utils import (
 
 a, b, c = sp.symbols('a b c')
 
-def sos_struct_sextic(poly, coeff, recurrsion, real = True):
+def sos_struct_sextic(coeff, recurrsion, real = True):
     if coeff((5,1,0)) == coeff((1,5,0)) and coeff((4,2,0)) == coeff((2,4,0)) and coeff((3,2,1)) == coeff((3,1,2)):
-        return sos_struct_sextic_symmetric_ultimate(poly, coeff, recurrsion, real = real)
+        return sos_struct_sextic_symmetric_ultimate(coeff, recurrsion, real = real)
 
     if coeff((6,0,0))==0 and coeff((5,1,0))==0 and coeff((5,0,1))==0:
-        return _sos_struct_sextic_hexagon(coeff, poly, recurrsion, real = real)
+        return _sos_struct_sextic_hexagon(coeff, recurrsion, real = real)
 
     return None
 
@@ -369,7 +369,7 @@ def _sos_struct_sextic_hexagram(coeff):
     return None
 
 
-def _sos_struct_sextic_hexagon(coeff, poly, recurrsion, real = True):
+def _sos_struct_sextic_hexagon(coeff, recurrsion, real = True):
     """
     Solve hexagon s(a4b2+xa2b4+ya3b3+za4bc+wa3b2c+ua2b3c+...a2b2c2)
 
