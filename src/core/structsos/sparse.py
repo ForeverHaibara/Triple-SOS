@@ -2,27 +2,64 @@ from math import gcd
 
 import sympy as sp
 
-from .utils import CyclicSum, CyclicProduct
+from .utils import CyclicSum, CyclicProduct, Coeff, prove_univariate
 from .quartic import sos_struct_quartic
-from ...utils.polytools import deg
 
 
-def sos_struct_sparse(poly, coeff, recurrsion, real = True):
+def _cancel_common_d(coeff: Coeff, d: int) -> Coeff:
+    """
+    Get coeff2 = coeff / (a^d*b^d*c^d).
+    """
+    if d == 0:
+        return coeff
+    new_coeff = Coeff({(i-d, j-d, k-d): v for (i,j,k), v in coeff.coeffs.items() if v != 0})
+    new_coeff.is_rational = coeff.is_rational
+    return new_coeff
+
+def sos_struct_sparse(coeff, recurrsion, real = True):
     if len(coeff) > 6:
+        all_monoms = list(coeff.coeffs.keys())
+        common_d = 0
+        for monom in all_monoms[::-1]:
+            if coeff(monom) != 0:
+                common_d = monom[0]
+                break
+        if common_d > 0:
+            a, b, c = sp.symbols('a b c')
+            new_coeff = _cancel_common_d(coeff, common_d)
+            solution = recurrsion(new_coeff, real = real)
+            if solution is not None:
+                solution = CyclicProduct(a**common_d) * solution
+            return solution
+
+        gcd_ = 0
+        for monom in all_monoms:
+            gcd_ = sp.gcd(gcd_, monom[0])
+            if gcd_ == 1:
+                break
+        else:
+            a, b, c = sp.symbols('a b c')
+            new_coeff = Coeff({(i//gcd_, j//gcd_, k//gcd_): v for (i,j,k), v in coeff.coeffs.items() if v != 0})
+            new_coeff.is_rational = coeff.is_rational
+            solution = recurrsion(new_coeff, real = False if gcd_ % 2 == 0 else real)
+            if solution is not None:
+                solution = solution.xreplace({a: a**gcd_, b: b**gcd_, c: c**gcd_})
+            return solution
+
         return None
 
-    degree = deg(poly)
+    degree = coeff.degree()
     if degree < 5:
         if degree == 0:
             return sp.S(0)
         elif degree == 1:
-            return poly.as_expr()
+            return coeff.as_poly().as_expr()
         elif degree == 2:
             return sos_struct_quadratic(coeff)
         elif degree == 4:
             # quartic should be handled by _sos_struct_quartic
             # because it presents proof for real numbers
-            return sos_struct_quartic(poly, coeff, recurrsion)
+            return sos_struct_quartic(coeff, recurrsion)
 
     monoms = list(coeff.coeffs.keys())
     a, b, c = sp.symbols('a b c')
@@ -200,5 +237,66 @@ def _sos_struct_sparse_amgm(coeff, small, large):
             am_gm = deta*a**u*b**v*c**w + detb*a**v*b**w*c**u + detc*a**w*b**u*c**v - det*a**x*b**y*c**z
             
             return coeff(large)/det * CyclicSum(am_gm) + (coeff(large) + coeff(small)) * CyclicSum(a**x * b**y * c**z)
+
+    return None
+
+
+def sos_struct_heuristic(coeff, recurrsion):
+    """
+    Solve high-degree but sparse inequalities by heuristic method.
+
+    WARNING: Only call this function when degree > 6. And make sure that
+    coeff.clear_zero() to remove zero terms on the border.
+    
+    Examples
+    -------
+    s(ab(a-b)2(a4-3a3b+2a2b2+3b4))
+
+    s(c8(a-b)2(a4-3a3b+2a2b2+3b4))
+    """
+    degree = coeff.degree()
+    assert degree > 6, "Degree must be greater than 6 in heuristic method."
+
+    if coeff((degree, 0, 0)):
+        return None
+
+    monoms = list(coeff.coeffs.items())
+    border1, border2 = [], []
+    for (i,j,k), v in monoms[::-1]:
+        if i != 0:
+            break
+        if v != 0:
+            border1.append((j, v))
+    i0 = monoms[0][0][0]
+    for (i,j,k), v in monoms:
+        if i != i0:
+            break
+        if v != 0:
+            border2.append((j, v))
+
+    for border in (border1, border2):
+        if len(border) * 3 == len(coeff):
+            # all coefficients are on the border
+            x = sp.Symbol('x')
+            a, b, c = sp.symbols('a b c')
+            border_poly = sp.polys.Poly.from_dict(dict(border), gens = (x,))
+            border_proof = prove_univariate(border_poly)
+            if border_proof is not None:
+                if border is border1:
+                    border_proof = border_proof.subs(x, a / b).together() * b**degree
+                else:
+                    border_proof = border_proof.subs(x, b / c).together() * a**i0 * c**(degree - i0)
+                border_proof = CyclicSum(border_proof)
+            return border_proof
+
+    c0 = border1[0][1]
+    c0_ = border1[-1][1]
+    if c0 < 0 or c0_ < 0:
+        return None
+    if border1[0][0] + border1[-1][0] == degree and c0 == c0_:
+        if len(border1) <= 4 and len(border2) <= 4:
+            # symmetric hexagon
+            gap1 = border
+
 
     return None
