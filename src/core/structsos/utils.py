@@ -83,7 +83,43 @@ class Coeff():
         return len(self.coeffs) == 0
 
     def poly111(self) -> sp.Expr:
+        """
+        Evalutate the polynomial at (a,b,c) = (1,1,1).
+        """
         return sum(self.coeffs.values())
+
+    def items(self):
+        return self.coeffs.items()
+
+    def __operator__(self, other, operator) -> 'Coeff':
+        new_coeffs = self.coeffs.copy()
+        for k, v2 in other.items():
+            v1 = self(k)
+            v3 = operator(v1, v2)
+            if v3 == 0 and v1 != 0:
+                del new_coeffs[k]
+            elif v3 != 0:
+                new_coeffs[k] = v3
+        new_coeffs = dict(sorted(new_coeffs.items(), reverse=True))
+        other_rational = (not isinstance(other, Coeff)) or other.is_rational
+        is_rational = self.is_rational and other_rational
+        return Coeff(new_coeffs, is_rational = is_rational)
+
+    def __add__(self, other) -> 'Coeff':
+        return self.__operator__(other, lambda x, y: x + y)
+
+    def __sub__(self, other) -> 'Coeff':
+        return self.__operator__(other, lambda x, y: x - y)
+
+    # def __mul__(self, other) -> 'Coeff':
+    #     return self.__operator__(other, lambda x, y: x * y)
+
+    # def __truediv__(self, other) -> 'Coeff':
+    #     return self.__operator__(other, lambda x, y: x / y)
+
+    def __pow__(self, other) -> 'Coeff':
+        return self.__operator__(other, lambda x, y: x ** y)
+
 
 
 def sum_y_exprs(y: List[sp.Expr], exprs: List[sp.Expr]) -> sp.Expr:
