@@ -566,12 +566,12 @@ def sos_struct_heuristic(coeff, recurrsion):
                 gap21 = 0
                 gap22 = 0
 
-            print('Symmetric Hexagon Gap =', (gap11, gap12, gap21, gap22))
+            # print('Symmetric Hexagon Gap =', (gap11, gap12, gap21, gap22))
             if gap11 != -1 and gap21 != -1:
                 if gap11 != 0 and gap21 != 0:
                     r_, s_ = gap21, gap22
                     for n_, m_ in ((r_ + gap11, s_ + gap12), (r_ + gap12, s_ + gap11)):
-                        print('>> s(a%d(b%d-c%d))s(a%d(b%d-c%d))' % (n_, r_, r_, m_, s_, s_))
+                        # print('>> s(a%d(b%d-c%d))s(a%d(b%d-c%d))' % (n_, r_, r_, m_, s_, s_))
 
                         solution = recurrsion(coeff - Pnrms.coeff(n_, r_, m_, s_, c0), real = False)
                         if solution is not None:
@@ -581,14 +581,14 @@ def sos_struct_heuristic(coeff, recurrsion):
                         n_ = border1[0][0] - 2*r_
                         m_ = degree - border1[0][0]
                         if n_ >= 0 and m_ >= 0 and m_ <= n_ + r_:
-                            print('>> s(a%d(b%d+c%d)(a%d-b%d)(a%d-c%d))' % (n_, m_, m_, r_, r_, r_, r_))
+                            # print('>> s(a%d(b%d+c%d)(a%d-b%d)(a%d-c%d))' % (n_, m_, m_, r_, r_, r_, r_))
 
                             solution = recurrsion(coeff - Hnmr.coeff(n_, m_, r_, c0 if m_ else c0/2), real = False)
                             if solution is not None:
                                 return solution + Hnmr.as_expr(n_, m_, r_, c0 if m_ else c0/2)
 
                         if m_ > r_ and n_ + r_ > m_:
-                            print('>> s(a%d(b%d-c%d))s(a%d(b%d-c%d))' % (2*r_, r_, r_, n_, m_-r_, m_-r_))
+                            # print('>> s(a%d(b%d-c%d))s(a%d(b%d-c%d))' % (2*r_, r_, r_, n_, m_-r_, m_-r_))
 
                             solution = recurrsion(coeff - Pnrms.coeff(2*r_, r_, n_, m_-r_, c0), real = False)
                             if solution is not None:
@@ -599,7 +599,7 @@ def sos_struct_heuristic(coeff, recurrsion):
                         n_ = degree - border1[0][0] - r_
                         m_ = 2 * border1[0][0] - degree
                         if n_ >= 0 and m_ >= 0:
-                            print('>> s(b%dc%d(b%d+c%d)(a%d-b%d)(a%d-c%d))' % (n_, n_, m_, m_, r_, r_, r_, r_))
+                            # print('>> s(b%dc%d(b%d+c%d)(a%d-b%d)(a%d-c%d))' % (n_, n_, m_, m_, r_, r_, r_, r_))
 
                             solution = recurrsion(coeff - Hnmr.coeff(-n_, m_, r_, c0 if m_ else c0/2), real = False)
                             if solution is not None:

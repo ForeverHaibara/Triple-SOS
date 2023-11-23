@@ -1299,9 +1299,9 @@ def _sos_struct_sextic_symmetric_quadratic_form(poly, coeff):
     # each t_ exhanges 27/4p(a-b)^2 because s(a^2-ab)^3 = 1/4 * p(2a-b-c)^2 + 27/4 * p(a-b)^2
     ker_coeff += 27 * t_ / 4
 
-    print('Coeff =', merged_params[0], 'ker =', ker_coeff)
-    print('  (x,y) =', (x_, y_), 'ker_std =', ker_coeff / merged_params[0])
-    print('  (m,p,n,t) = ', (m_, p_, n_, t_))
+    # print('Coeff =', merged_params[0], 'ker =', ker_coeff)
+    # print('  (x,y) =', (x_, y_), 'ker_std =', ker_coeff / merged_params[0])
+    # print('  (m,p,n,t) = ', (m_, p_, n_, t_))
 
     if x_ + y_ == sp.S(5)/3 and x_ != 1:
         # F_{x,y} = (x-1)^2/4 * s((b-c)^2(b+c-za))^2 + 3(x-1)(9x-5)/4 * p(a-b)^2
@@ -1653,7 +1653,7 @@ def sos_struct_sextic_symmetric_ultimate(coeff, recurrsion, real = True):
     # Case C.
     # TO BE IMPLEMENTED
   
-    print('Roots Info = ', roots)
+    # print('Roots Info = ', roots)
     sum_of_roots = sum((len(_) > 0) for _ in roots)
 
     if sum_of_roots == 1:
