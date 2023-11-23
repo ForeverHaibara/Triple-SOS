@@ -2,6 +2,7 @@ from itertools import product
 
 import numpy as np
 import sympy as sp
+from sympy.plotting.experimental_lambdify import vectorized_lambdify
 
 from .rationalize import rationalize
 from .rootsinfo import RootsInfo
@@ -47,7 +48,7 @@ def optimize_discriminant(discriminant, soft = False, verbose = False):
             elif v < best_choice[0]:
                 best_choice = (v, a, b)
     if verbose:
-        print('Starting Search From', best_choice[1:], ' f = ', best_choice[0])
+        print('Starting Search From', best_choice[1:], ' f =', best_choice[0])
     if v <= 0:
         return {x: a, y: b}
 
@@ -59,6 +60,11 @@ def optimize_discriminant(discriminant, soft = False, verbose = False):
         da2 = da.diff(x)
         dab = da.diff(y)
         db2 = db.diff(y)
+        da = vectorized_lambdify((x, y), da.as_expr())
+        db = vectorized_lambdify((x, y), db.as_expr())
+        da2 = vectorized_lambdify((x, y), da2.as_expr())
+        dab = vectorized_lambdify((x, y), dab.as_expr())
+        db2 = vectorized_lambdify((x, y), db2.as_expr())
         # x =[a',b'] <- x - inv(nabla)^-1 @ grad
         for i in range(20):
             lasta , lastb = a , b

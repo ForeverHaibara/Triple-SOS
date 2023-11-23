@@ -7,7 +7,7 @@ from .utils import (
 
 a, b, c = sp.symbols('a b c')
 
-def sos_struct_quartic(poly, coeff, recurrsion, real = True):
+def sos_struct_quartic(coeff, recurrsion, real = True):
     """
     Solve cyclic quartic problems.
 

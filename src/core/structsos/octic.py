@@ -6,13 +6,13 @@ from .utils import (
 )
 
 
-def sos_struct_octic(poly, coeff, recurrsion, real = True):
+def sos_struct_octic(coeff, recurrsion, real = True):
     a, b, c = sp.symbols('a b c')
     if any((coeff((8,0,0)), coeff((7,1,0)), coeff((7,0,1)))):
         return None
 
     if not any((coeff((6,2,0)), coeff((2,6,0)), coeff((5,3,0)), coeff((3,5,0)), coeff((4,4,0)))):
-        solution = recurrsion(poly.div((a*b*c).as_poly(a,b,c))[0])
+        solution = recurrsion(coeff.as_poly().div((a*b*c).as_poly(a,b,c))[0])
         if solution is not None:
             return CyclicProduct(a) * solution
         return None
@@ -22,7 +22,7 @@ def sos_struct_octic(poly, coeff, recurrsion, real = True):
 
     if coeff((6,2,0)) == coeff((2,6,0)) and coeff((5,3,0)) == coeff((3,5,0))\
          and coeff((5,2,1)) == coeff((2,5,1)) and coeff((4,3,1)) == coeff((3,4,1)):
-        solution = _sos_struct_octic_symmetric_hexagon(coeff, poly, recurrsion)
+        solution = _sos_struct_octic_symmetric_hexagon(coeff, recurrsion)
         if solution is not None:
             return solution
 
@@ -42,7 +42,7 @@ def sos_struct_octic(poly, coeff, recurrsion, real = True):
     return None
 
 
-def _sos_struct_octic_symmetric_hexagon(coeff, poly, recurrsion):
+def _sos_struct_octic_symmetric_hexagon(coeff, recurrsion):
     """
     Try to solve symmetric octic hexagon, without terms a^8, a^7b and a^7c.
 
@@ -179,6 +179,8 @@ def _sos_struct_octic_symmetric_hexagram(coeff):
     s(bc(a-b)(a-c)(a-2b)(a-2c)(a-3b)(a-3c))
 
     s(bc(a-b)(a-c)(a2-2a(b+c)+5bc)(a-2b)(a-2c))
+
+    s(a4)s(a4)-3abcs(a5)-s((a2-bc)4)
     """
     a, b, c = sp.symbols('a b c')
     x_ = coeff((6,1,1))
@@ -254,7 +256,7 @@ def _sos_struct_octic_symmetric_hexagram(coeff):
         if degrade_a2b2 + degrade_a2bc >= 0:
             multiplier = CyclicSum((a-b)**2)
             # p1 == f(a,b,c)
-            p1 = sp.together((2*x_)*(a**2 + r1*a*b + r1*a*c + r2*b*c)**2 + c2*2*(b*c - h*a*b - h*a*c)**2 + c3*2*a**2*b*c + c4*a*b*c*(b+c)).as_coeff_Mul()
+            p1 = sp.together((2*x_)*(a**2 + r1*a*b + r1*a*c + r2*b*c)**2 + c2*2*(b*c - h*a*b - h*a*c)**2 + c3*2*a**2*b*c + c4*2*a*b*c*(b+c)).as_coeff_Mul()
             p2 = sp.together(degrade_a2b2 * CyclicSum(a**2*(b-c)**2) + 2*(degrade_a2bc + degrade_a2b2) * CyclicSum(a**2*b*c)).as_coeff_Mul()
             
             y = [

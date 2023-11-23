@@ -30,23 +30,23 @@ def _verify_border_nonnegative(border):
                 return False
     return True
 
-def sos_struct_quintic(poly, coeff, recurrsion, real = True):
+def sos_struct_quintic(coeff, recurrsion, real = True):
     """
     Solve quintic inequalities.
     """
 
     # first try symmetric solution
     if coeff((4,1,0)) == coeff((1,4,0)) and coeff((3,2,0)) == coeff((2,3,0)):
-        return sos_struct_quintic_symmetric(poly, coeff, recurrsion)
+        return sos_struct_quintic_symmetric(coeff, recurrsion)
 
     if coeff((5,0,0)) == 0:
         return _sos_struct_quintic_hexagon(coeff)
     else:
-        return _sos_struct_quintic_full(coeff, poly)
+        return _sos_struct_quintic_full(coeff)
     return None
 
 
-def _sos_struct_quintic_full(coeff, poly):
+def _sos_struct_quintic_full(coeff):
     """
     Try to solve quintic with nonzero a^5 coefficient by subtracting something.
 
@@ -193,7 +193,7 @@ def _sos_struct_quintic_full(coeff, poly):
                         exprs.append(CyclicSum(c*(a**2-b**2+u_*(a*b-a*c)+v_*(b*c-a*b))**2))
                     if all(_ >= 0 for _ in y):
                         y = [_ * coeff500 for _ in y]
-                        y.append(poly(1,1,1) / 3)
+                        y.append(coeff.poly111() / 3)
                         exprs.append(CyclicSum(a**2*b**2*c))
                         return sum_y_exprs(y, exprs)
 
@@ -566,7 +566,7 @@ def _sos_struct_quintic_full(coeff, poly):
                 quartic_coeffs = {
                     (4,0,0): m_, (3,1,0): p_, (2,2,0): n_, (1,3,0): q_, (2,1,1): -(m_+p_+n_+q_)
                 }
-                rest = sos_struct_quartic(None, Coeff(quartic_coeffs), None)
+                rest = sos_struct_quartic(Coeff(quartic_coeffs), None)
                 rest += poly(1,1,1) * (1 + mul) * CyclicSum(a**2*b*c)
                 rest = coeff500 * CyclicProduct(a) * rest
                 return (coeff500 * sol_main + coeff500 * border_proof + rest) / multiplier
@@ -574,7 +574,7 @@ def _sos_struct_quintic_full(coeff, poly):
 
 
     if not (isinstance(u_, sp.Rational) and isinstance(v_, sp.Rational)):
-        return _compute_ker(poly, (u_, v_))
+        return _compute_ker(coeff.as_poly(), (u_, v_))
 
     return None
 

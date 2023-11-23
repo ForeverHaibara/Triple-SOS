@@ -7,11 +7,11 @@ from .utils import (
 
 a, b, c = sp.symbols('a b c')
 
-def sos_struct_cubic(poly, coeff, recurrsion, real = True):
+def sos_struct_cubic(coeff, recurrsion, real = True):
     """
     Solve cyclic cubic polynomials.
 
-    This function only uses `coeff`. The `poly` and `recurrsion` is not used for minimium dependency.
+    This function only uses `coeff`.
     This function supports irrational coefficients.
     """
     if coeff((2,1,0)) == coeff((1,2,0)):

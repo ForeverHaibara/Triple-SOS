@@ -10,16 +10,20 @@ from .utils import (
 )
 
 a, b, c = sp.symbols('a b c')
+_VERBOSE_OPTIMIZE_DISCRIMINANT = False
 
-def sos_struct_septic(poly, coeff, recurrsion, real = True):
+def sos_struct_septic(coeff, recurrsion, real = True):
     if coeff((7,0,0)) == 0 and coeff((6,1,0)) == 0 and coeff((6,0,1)) == 0:
         if coeff((5,2,0)) == 0 and coeff((5,0,2)) == 0:
             # star
-            return _sos_struct_septic_star(coeff, poly, recurrsion)
+            return _sos_struct_septic_star(coeff, recurrsion)
         else:
             # hexagon
-            return _sos_struct_septic_hexagon(coeff, poly, recurrsion)
+            return _sos_struct_septic_hexagon(coeff, recurrsion)
     return None
+
+def _quartic_det(m, p, n, q):
+    return 3*m*(m+n) - (p**2+p*q+q**2)
 
 
 def _fast_solve_quartic(m, p, n, q, rem = 0, mul_abc = True):
@@ -29,11 +33,13 @@ def _fast_solve_quartic(m, p, n, q, rem = 0, mul_abc = True):
     m, p, n, q = radsimp([m, p, n, q])
     if isinstance(rem, sp.polys.Poly):
         rem = rem(1,1,1) / 3
+    elif isinstance(rem, Coeff):
+        rem = rem.poly111() / 3
     rem = radsimp(rem)
     if rem < 0:
         return None
     if m > 0:
-        det = radsimp(3*m*(m+n) - (p**2+p*q+q**2))
+        det = radsimp(_quartic_det(m, p, n, q))
         if det >= 0:
             # most common case, use inplace computation
             solution = sp.Add(*[
@@ -47,13 +53,13 @@ def _fast_solve_quartic(m, p, n, q, rem = 0, mul_abc = True):
         (4,0,0): m, (3,1,0): p, (2,2,0): n, (1,3,0): q, (2,1,1): (rem - m - p - n - q)
     }
     is_rational = all(isinstance(coeff, sp.Rational) for coeff in coeffs_.values())
-    solution = sos_struct_quartic(None, Coeff(coeffs_, is_rational=is_rational), None)
+    solution = sos_struct_quartic(Coeff(coeffs_, is_rational=is_rational), None)
     if mul_abc and solution is not None:
         solution = solution * CyclicProduct(a)
     return solution
 
 
-def _sos_struct_septic_star(coeff, poly, recurrsion):
+def _sos_struct_septic_star(coeff, recurrsion):
     """
     Solve s(ua4b3 + va3b4) + abcf(a,b,c) >= 0 where f is degree 4.
 
@@ -84,7 +90,7 @@ def _sos_struct_septic_star(coeff, poly, recurrsion):
         return None
     if coeff((4,3,0)) < 0 or coeff((3,4,0)) < 0 or coeff((5,1,1)) < 0:
         return None
-    rem = poly(1,1,1)
+    rem = coeff.poly111()
     if rem < 0:
         return None
 
@@ -95,7 +101,7 @@ def _sos_struct_septic_star(coeff, poly, recurrsion):
             coeff((4,2,1)),
             coeff((3,3,1)),
             coeff((2,4,1)),
-            rem = poly
+            rem = rem / 3
         )
 
     if not coeff.is_rational:
@@ -165,6 +171,7 @@ def _sos_struct_septic_star(coeff, poly, recurrsion):
     else:
         p, q = (coeff((3,4,0)) / coeff((4,3,0))).as_numer_denom()
 
+    x, y = sp.symbols('x y')
     if sp.ntheory.primetest.is_square(p) and sp.ntheory.primetest.is_square(q):
         t = coeff((4,3,0))
 
@@ -173,23 +180,31 @@ def _sos_struct_septic_star(coeff, poly, recurrsion):
         elif t < 0:
             return None
         else:
-            if q != 0:
-                z = sp.sqrt(p / q)
-                discriminant = '-(3*m*(m+n-(-2*x^2+2*y^2+4*y*z-4*y-2*z^2+4*z-2))-(p-(x^2-2*x*y+2*x+y^2+2*y))^2-(q-(x^2+2*x*y+2*x*z+y^2-2*y*z))^2-(p-(x^2-2*x*y+2*x+y^2+2*y))*(q-(x^2+2*x*y+2*x*z+y^2-2*y*z)))'
-                # discriminant = '-3*m^2-3*m*n+6*m*y^2+p^2+p*q-3*p*y^2-2*p*y+q^2-3*q*y^2+2*q*y+3*x^4+12*x^3-x^2*(6*m+3*p+3*q-10*y^2-12)-x*(-2*p*y+6*p+2*q*y+6*q-4*y^2)+3*y^4+4*y^2'
-                discriminant = sp.polys.Poly(discriminant).subs('z',z)
-            else:
+            z = 0
+            if q == 0:
                 t = coeff((3,4,0))
-                discriminant = '-(3*m*(m+n-(-2*x^2+2*y^2-4*y-2))-(p-(x^2-2*x*y+y^2))^2-(q-(x^2+2*x*y-2*x+y^2+2*y))^2-(p-(x^2-2*x*y+y^2))*(q-(x^2+2*x*y-2*x+y^2+2*y)))'
-                discriminant = sp.polys.Poly(discriminant)
-            discriminant = discriminant.subs((('m',coeff((5,1,1))/t), ('n',coeff((3,3,1))/t), ('p',coeff((4,2,1))/t), ('q',coeff((2,4,1))/t)))#, simultaneous=True)
+            else:
+                z = sp.sqrt(p / q)
+
+            m, n, p, q = coeff((5,1,1)) / t, coeff((3,3,1)) / t, coeff((4,2,1)) / t, coeff((2,4,1)) / t
+
+            if q != 0:
+                n2 = n + 2*x**2 - 2*y**2 - 4*y*z + 4*y + 2*z**2 - 4*z + 2
+                p2 = p - x**2 + 2*x*y - 2*x - y**2 - 2*y
+                q2 = q - x**2 - 2*x*y - 2*x*z - y**2 + 2*y*z
+            else:
+                n2 = n + 2*x**2 - 2*y**2 + 4*y + 2
+                p2 = p - x**2 + 2*x*y - y**2
+                q2 = q - x**2 - 2*x*y + 2*x - y**2 - 2*y
+
+            discriminant = -_quartic_det(m, p2, n2, q2).as_poly(x, y)
             
-            result = optimize_discriminant(discriminant)
+            # print('Place 1', m, p2, n2, q2, '(P,Q) =', (p, q))
+            result = optimize_discriminant(discriminant, verbose = _VERBOSE_OPTIMIZE_DISCRIMINANT)
             # print(result, print(sp.latex(discriminant)), 'here')
             if result is None:
                 return None
 
-            x, y = sp.symbols('x y')
             u, v = result[x], result[y]
             
             # now we have guaranteed discriminant <= 0
@@ -199,9 +214,9 @@ def _sos_struct_septic_star(coeff, poly, recurrsion):
                 solution = t * CyclicSum(b*(b*c**2+(-2*v-1)*a*b*c+(u+v)*a**2*c+(v-u)*a*c**2)**2)
 
 
-            poly = poly - solution.doit().as_poly(a,b,c)
+            poly = coeff.as_poly() - solution.doit().as_poly(a,b,c)
             # print(result, poly, discriminant.subs(result),'\n',discriminant)
-            poly = sp.cancel(poly / (a*b*c).as_poly(a,b,c)).as_poly(a,b,c)
+            poly = sp.div(poly, (a*b*c).as_poly(a,b,c))[0]
 
             new_solution = recurrsion(poly)
             if new_solution is not None:
@@ -220,7 +235,7 @@ def _sos_struct_septic_star(coeff, poly, recurrsion):
 
         perturbation = CyclicSum(c*(a-b)**2*(a*b-a*c-b*c)**2)
         
-        solution = try_perturbations(poly, coeff((3,4,0)), coeff((4,3,0)), perturbation, recurrsion = recurrsion)
+        solution = try_perturbations(coeff.as_poly(), coeff((3,4,0)), coeff((4,3,0)), perturbation, recurrsion = recurrsion)
         if solution is not None:
             return solution
 
@@ -311,7 +326,7 @@ def _sos_struct_septic_biased(coeff):
     return None
 
 
-def _sos_struct_septic_hexagon(coeff, poly, recurrsion):
+def _sos_struct_septic_hexagon(coeff, recurrsion):
     """
     Solve septic without s(a7), s(a6b), s(a6c).
 
@@ -347,7 +362,7 @@ def _sos_struct_septic_hexagon(coeff, poly, recurrsion):
 
     if coeff((5,2,0)) == coeff((2,5,0)):
         if coeff((5,2,0)) == 0 and coeff((2,5,0)) == 0:
-            return _sos_struct_septic_star(coeff, poly, recurrsion)
+            return _sos_struct_septic_star(coeff, recurrsion)
 
         # Try some quintic polynomial * s(ab):
         # s(ab)s(c(a^2-b^2+u(ab-ac)+v(bc-ab))^2) to eliminate the border
@@ -450,7 +465,7 @@ def _sos_struct_septic_hexagon(coeff, poly, recurrsion):
             ]
 
             main_solution = sum_y_exprs(y, exprs)
-            remain_solution = _fast_solve_quartic(m1, p1, n1, q1, poly)
+            remain_solution = _fast_solve_quartic(m1, p1, n1, q1, coeff)
             if remain_solution is not None:
                 return main_solution + remain_solution
 
@@ -548,24 +563,25 @@ def _sos_struct_septic_hexagon(coeff, poly, recurrsion):
         # print(candidates, u, v, m, n)
 
         for w, z in candidates:
-            discriminant = '3*(m-(-2*u*v))*(m-(-2*u*v)+n-(-2*u*w+2*u*y-2*u*z+2*v*w-2*v*x+2*v*z-2*w^2-2*w*x-2*w*y-4*w*z+2*x*y-2*x*z-2*y*z-2*z^2))'
-            discriminant += '-(p-(-2*u^2+2*u*v-2*u*w-2*u*x-2*u*y-2*u*z-2*v*w+2*x*z+y^2))^2-(q-(2*u*v+2*u*z-2*v^2+2*v*w+2*v*x+2*v*y+2*v*z+2*w*y+x^2))^2'
-            discriminant += '-(p-(-2*u^2+2*u*v-2*u*w-2*u*x-2*u*y-2*u*z-2*v*w+2*x*z+y^2))*(q-(2*u*v+2*u*z-2*v^2+2*v*w+2*v*x+2*v*y+2*v*z+2*w*y+x^2))'
-            discriminant = -sp.polys.Poly(discriminant)
-            discriminant = discriminant.subs((('u', u), ('v', v), ('z', z), ('w', w),
-                                ('m', coeff((5,1,1))/t), ('n', coeff((3,3,1))/t), ('p', coeff((4,2,1))/t), ('q', coeff((2,4,1))/t)))
-            
-            result = optimize_discriminant(discriminant, soft = True)
+            x, y = sp.symbols('x y')
+            m, n, p, q = coeff((5,1,1)) / t, coeff((3,3,1)) / t, coeff((4,2,1)) / t, coeff((2,4,1)) / t
+            m2 = m + 2*u*v
+            n2 = n + 2*u*w - 2*u*y + 2*u*z - 2*v*w + 2*v*x - 2*v*z + 2*w**2 + 2*w*x + 2*w*y + 4*w*z - 2*x*y + 2*x*z + 2*y*z + 2*z**2
+            p2 = p + 2*u**2 - 2*u*v + 2*u*w + 2*u*x + 2*u*y + 2*u*z + 2*v*w - 2*x*z - y**2
+            q2 = q - 2*u*v - 2*u*z + 2*v**2 - 2*v*w - 2*v*x - 2*v*y - 2*v*z - 2*w*y - x**2
+
+            discriminant = -_quartic_det(m2, p2, n2, q2).as_poly(x, y)
+            # print('Place 2', m2, p2, n2, q2)
+            result = optimize_discriminant(discriminant, soft = True, verbose = _VERBOSE_OPTIMIZE_DISCRIMINANT)
             if result is None:
                 continue
 
-            x, y = sp.symbols('x y')
             r, s = result[x], result[y]
             # print('w z =', w, z, 'a b =', a, b, discriminant)
 
             expr = (u*(a**2*b-a*b*c)-v*(a**2*c-a*b*c)+r*(b*c**2-a*b*c)+s*(b**2*c-a*b*c)+z*(a*c**2-a*b*c)+w*(a*b**2-a*b*c)).expand()
             solution = t * CyclicSum(a * expr**2)
-            poly2 = poly - solution.doit().as_poly(a,b,c)
+            poly2 = coeff.as_poly() - solution.doit().as_poly(a,b,c)
 
             new_solution = recurrsion(poly2)
             if new_solution is not None:
@@ -574,7 +590,7 @@ def _sos_struct_septic_hexagon(coeff, poly, recurrsion):
 
     elif p > 0 and q > 0:
         perturbation = CyclicSum(a) * CyclicProduct((a-b)**2)
-        solution = try_perturbations(poly, coeff((2,5,0)), coeff((5,2,0)), perturbation, recurrsion=recurrsion)
+        solution = try_perturbations(coeff.as_poly(), coeff((2,5,0)), coeff((5,2,0)), perturbation, recurrsion=recurrsion)
 
         if solution is not None:
             return solution

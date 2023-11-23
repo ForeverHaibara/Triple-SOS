@@ -1,14 +1,14 @@
 import sympy as sp
 
-from .sextic_symmetric import _sos_struct_sextic_hexagram_symmetric
+from .sextic_symmetric import _sos_struct_sextic_hexagram_symmetric, _sos_struct_sextic_tree
 from .utils import (
     CyclicSum, CyclicProduct, Coeff,
-    sum_y_exprs, rationalize_bound, inverse_substitution, radsimp
+    sum_y_exprs, rationalize_bound, inverse_substitution, radsimp, nroots
 )
 
 a, b, c = sp.symbols('a b c')
 
-def sos_struct_nonic(poly, coeff, recurrsion, real = True):
+def sos_struct_nonic(coeff, recurrsion, real = True):
     """
     Nonic is polynomial of degree 9.
 
@@ -26,18 +26,223 @@ def sos_struct_nonic(poly, coeff, recurrsion, real = True):
 
     [2] https://tieba.baidu.com/p/7303219331
     """
-    if not any(
-        coeff(_) for _ in ((9,0,0),(8,1,0),(7,2,0),(6,3,0),(3,6,0),(2,7,0),(1,8,0),(7,1,1))
+    if not any(coeff(_) for _ in ((9,0,0),(8,1,0),(7,2,0),(2,7,0),(7,1,1))):
+        if not any(coeff(_) for _ in ((6,3,0),(3,6,0),(1,8,0))):
+            if all(coeff((i,j,k)) == coeff((j,i,k)) for (i,j,k) in ((5,4,0),(6,2,1),(5,3,1),(4,3,2))):
+                return _sos_struct_nonic_hexagram_symmetric(coeff, recurrsion)
+            if (coeff((5,4,0)) == 0 and coeff((6,1,2)) == 0) or (coeff((4,5,0)) == 0 and coeff((6,2,1)) == 0):
+                return _sos_struct_nonic_gear(coeff, recurrsion)
+
+        if not any(coeff(_) for _ in ((6,2,1),(2,6,1),(5,4,0),(4,5,0))):
+            if all(coeff((i,j,k)) == coeff((j,i,k)) for (i,j,k) in ((6,0,3),(5,3,1),(4,3,2))):
+                return _sos_struct_nonic_hexagon_symmetric(coeff, recurrsion)
+
+    if not any(coeff(_) for _ in 
+        ((8,1,0),(7,2,0),(5,4,0),(5,0,4),(8,0,1),(7,0,2),
+         (6,2,1),(6,1,2),(5,3,1),(5,1,3),(4,3,2),(4,2,3))
     ):
-        if all(coeff((i,j,k)) == coeff((j,i,k)) for (i,j,k) in ((5,4,0),(6,2,1),(5,3,1))):
-            return _sos_struct_nonic_hexagram_symmetric(poly, coeff, recurrsion)
-        if (coeff((5,4,0)) == 0 and coeff((6,1,2)) == 0) or (coeff((4,5,0)) == 0 and coeff((6,2,1)) == 0):
-            return _sos_struct_nonic_gear(poly, coeff, recurrsion)
+        if coeff((9,0,0)) > 0 and all(coeff((i,j,k)) == coeff((j,i,k)) for (i,j,k) in ((9,0,0),(6,3,0))):
+            return _sos_struct_nonic_symmetric_tree(coeff)
 
     return None
 
 
-def _sos_struct_nonic_hexagram_symmetric(poly, coeff, recurrsion):
+def _sos_struct_nonic_symmetric_tree(coeff):
+    """
+    Solve problems with similar structure as s(a3-abc)s(a2+xab)s((a-b)2(a+b-xc)2).
+    See details at _sos_struct_sextic_tree.
+
+    The idea is to subtract (x >= 1):
+    G(x) = s(a3-abc)/2s(a2+xab)s((a-b)2(a+b-xc)2)+(w-x3+3x-1)s(a(ab-c2)2(ac-b2)2)
+    to remove the outer edge so that the rest is a multiple of a^2b^2c^2. Here the coefficient of a^9
+    and a^6b^3 of G(x) are 1 and w respectively.
+
+    Note that G'(x) = -3(2x-1)p(a)s(a)2s(a2-ab)2 <= 0. Hence x should be as large as possible, which
+    would be the root of -x^3+3x-1+w == 0.
+
+    Examples
+    -------
+    s(a9+3a3b3(a3+b3)-5a7bc-4a4b4c+2p(a3))
+
+    s(4a9-25a7bc+14a6b3+14a6c3-16a4b4c+9a3b3c3)
+
+    4/3s(a3-2/3abc)/2s(a2+3ab)s((a-b)2(a+b-3c)2)+p(a)s(a3b3-a2b2c2)+ s(a3(b3-c3)2)
+    """
+    c0 = coeff((9,0,0))
+    if c0 <= 0:
+        return None
+
+    w, c6, c33, c411 = coeff((6,3,0)), coeff((7,1,1)), coeff((4,4,1)), coeff((5,2,2))
+    w, c6, c33, c411 = radsimp([w / c0, c6 / c0, c33 / c0, c411 / c0])
+    if w < -1:
+        return None
+
+    def _compute_tree_coeffs(x):
+        c6_ = radsimp(c6 - (-3*x**2 + 3*x - 3))
+        c33_ = radsimp(c33 - (-3*w - 6*x**2 + 6*x + 3))
+        c411_ = radsimp(c411 - (-3*w + 18*x**2 - 18*x))
+        return c6_, c33_, c411_
+
+    def _check_valid_x(x):
+        c6_, c33_, c411_ = _compute_tree_coeffs(x)
+        if c6_ < 0:
+            return False
+        if c6_ == 0 and c33_ >= 0 and c411_ >= 0:
+            return True
+        if c6_ > 0:
+            u, v = c33_ / c6_, c411_ / c6_
+            if u >= 2 and v >= -6:
+                return True
+            if u >= -1:
+                det = 27*u**2 + 27*u*v + 54*u + v**3 + 18*v**2 + 54*v
+                if (v >= -6 and det <= 0) or (v < -6 and det >= 0):
+                    return True
+        return False
+
+    x = sp.Symbol('x')
+    eq = (-x**3 + 3*x - 1 + w).as_poly(x)
+    if not coeff.is_rational:
+        return None
+
+    for x_ in nroots(eq, real = True, nonnegative = True, method = 'factor'):
+        if x_ >= 1 and _check_valid_x(x_):
+            if not isinstance(x_, sp.Rational):
+                for x__ in rationalize_bound(x_, direction = -1, compulsory = True):
+                    if x__ >= 1 and eq(x__) >= 0 and _check_valid_x(x__):
+                        x = x__
+                        break
+            else:
+                x = x_
+            if isinstance(x, sp.Rational):
+                break
+
+    if not isinstance(x, sp.Symbol):
+        c6_, c33_, c411_ = _compute_tree_coeffs(x)
+        def _get_func_x(x):
+            # return pretty form of s(a2+xab)s((a-b)2(a+b-xc)2)
+            if x == 2:
+                return 2 * CyclicSum(a)**2 * CyclicSum(a**2-b*c)**2
+            p, q = x.as_numer_denom()
+            return radsimp(1/q) * CyclicSum(q*a**2 + p*b*c) * CyclicSum((a-b)**2 * (a+b-x*c)**2)
+
+        solution = sp.Add(
+            c0/4 * CyclicSum(a) * CyclicSum((a-b)**2) * _get_func_x(x),
+            radsimp(c0 * eq(x)) * CyclicSum(a*(a*b - c**2)**2 * (a*c - b**2)**2)
+        )
+        poly111 = radsimp(3 * c0 * (1 + 2*w + c6 + c33 + c411) + coeff((3,3,3)))
+        if poly111 < 0:
+            return None
+        c6_, c33_, c411_ = radsimp([c6_ * c0, c33_ * c0, c411_ * c0])
+        tree_coeffs = {
+            (6,0,0): c6_, (3,3,0): c33_, (4,1,1): c411_,
+            (2,2,2): radsimp((-c6_-c33_-c411_)*3 + poly111)
+        }
+        tree_solution = _sos_struct_sextic_tree(Coeff(tree_coeffs))
+        if tree_solution is not None:
+            return solution + tree_solution * CyclicProduct(a)
+
+    return None
+
+
+def _sos_struct_nonic_hexagon_symmetric(coeff, recurrsion):
+    """
+    Solve problems like s(a6b3+a3b6) + p(a)(...).
+
+    Examples
+    -------
+    s(4a6b3+4a6c3-59a5b3c+30a5b2c2-59a5bc3+74a4b4c+90a4b3c2+90a4b2c3-174a3b3c3)
+
+    s(a3)s(a3b3)+27p(a3)-6p(a2)s(ab(a+b))
+    """
+    c0 = coeff((6,3,0))
+    if c0 <= 0:
+        # this should be handled elsewhere
+        return None
+
+    c42, c33, c411, c321 = coeff((5,3,1)), coeff((4,4,1)), coeff((5,2,2)), coeff((4,3,2))
+    c42, c33, c411, c321 = radsimp([c42 / c0, c33 / c0, c411 / c0, c321 / c0])
+
+    if c42 >= 0:
+        # first try simple case, use s(a(ab-c2)2(ac-b2)2)
+        c33_ = c33 + 3 + 2 * c42
+        c411_ = c411 + 3 + 2 * c42
+        c321_ = c321 - 2 * c42
+        if c33_ >= 0 and c411_ >= 0:
+            if c33_ + c411_ + c321_ >= 0 or radsimp(c33_ * c411_ - (c33_ + c411_ + c321_)**2) >= 0:
+                solution = c0 * CyclicSum(a*(a*b - c**2)**2 * (a*c - b**2)**2) + radsimp(c0 * c42) * CyclicProduct(a) * CyclicProduct((a-b)**2)
+                c33_, c411_, c321_ = radsimp([c33_ * c0, c411_ * c0, c321_ * c0])
+                hexagram_coeffs_ = {
+                    (4,1,1): c411_, (3,3,0): c33_, (3,2,1): c321_, (2,3,1): c321_,
+                    (2,2,2): radsimp((-c411_-c33_-c321_*2)*3 + coeff.poly111())
+                }
+                hexagram_solution = _sos_struct_sextic_hexagram_symmetric(Coeff(hexagram_coeffs_))
+                if hexagram_solution is not None:
+                    return solution + CyclicProduct(a) * hexagram_solution
+
+    # Assuming c0 = 1
+    # compute the coeffs after subtracting s(ab2-rabc)2s(ab2-abc)+s(ac2-rabc)2s(ac2-abc)+({c42}+(6r+3))p(a-b)2p(a)
+    def _compute_hexagon_coeffs(r):
+        diff = -12*r - 2*c42
+        c33_ = c33 - diff
+        c411_ = c411 - diff
+        c321_ = c321 - (9*r**2 + 18*r + 2*c42)
+        if not isinstance(r, sp.Symbol):
+            c321_ = radsimp(c321_)
+        return c33_, c411_, c321_
+
+    def _check_valid_r(r):
+        if c42 + 6*r + 3 < 0:
+            return False
+        c33_, c411_, c321_ = _compute_hexagon_coeffs(r)
+        if c33_ < 0 or c411_ < 0:
+            return False
+        tolerance = 0 if isinstance(r, sp.Rational) else 1e-12
+        if c33_ + c411_ + c321_ >= 0 or c33_ * c411_ - (c33_ + c411_ + c321_)**2 >= -tolerance:
+            return True
+        return False
+
+    r = sp.Symbol('r')
+    c33_, c411_, c321_ = _compute_hexagon_coeffs(r)
+    det = (c33_ * c411_ - (c33_ + c411_ + c321_)**2).as_poly(r)
+
+    # print(sp.latex(det.subs(r,'x')), det(2))
+    if coeff.is_rational:
+        for r_ in nroots(det, real = True, nonnegative = True, method = 'factor'):
+            if _check_valid_r(r_):
+                if not isinstance(r_, sp.Rational):
+                    direction = 1 if det.diff()(r_) >= 0 else -1
+                    for r__ in rationalize_bound(r_, direction = direction, compulsory = True):
+                        if _check_valid_r(r__):
+                            r = r__
+                            break
+                else:
+                    r = r_
+            
+            if isinstance(r, sp.Rational):
+                # print(r, _compute_hexagon_coeffs(r))
+                break
+
+    else:
+        return None
+
+    if not isinstance(r, sp.Symbol):
+        solution = sp.Add(
+            c0 * CyclicSum(a*b*(b-r*c))**2 * (CyclicSum(a*b**2 - CyclicProduct(a))),
+            c0 * CyclicSum(a*c*(c-r*b))**2 * (CyclicSum(a*c**2 - CyclicProduct(a))),
+            radsimp(c0 * (c42 + 6*r + 3)) * CyclicProduct(a) * CyclicProduct((a-b)**2)
+        )
+
+        rest_poly = coeff.as_poly() - solution.doit().as_poly(a,b,c)
+        if rest_poly.is_zero:
+            return solution
+
+        rest_solution = recurrsion(rest_poly, real = False)
+        if rest_solution is None:
+            return None
+        return solution + rest_solution
+
+
+def _sos_struct_nonic_hexagram_symmetric(coeff, recurrsion):
     """
     Observe that
     f(a,b,c) = s(c5(a-b)4) + x^2s(a2b2c(a-b)4) - 2xp(a)s(3a4b2-4a4bc+3a4c2-4a3b3+2a2b2c2) >= 0
@@ -56,10 +261,11 @@ def _sos_struct_nonic_hexagram_symmetric(poly, coeff, recurrsion):
     if c1 < 0 or c2 < 0:
         return None
     if c1 == 0:
-        solution = recurrsion(poly.div((a*b*c).as_poly(a,b,c))[0])
+        solution = recurrsion(coeff.as_poly().div((a*b*c).as_poly(a,b,c))[0])
         if solution is None:
             return None
         return CyclicProduct(a) * solution
+
     if c2 == 0:
         poly2 = CyclicSum(
             coeff((5,4,0)) * a**5*(b+c) + coeff((5,3,1)) * a**4*(b**2+c**2) + coeff((5,2,2)) * a**3*b**3\
@@ -169,7 +375,7 @@ def _sos_struct_nonic_hexagram_symmetric(poly, coeff, recurrsion):
     return solution
 
 
-def _sos_struct_nonic_gear(poly, coeff, recurrsion):
+def _sos_struct_nonic_gear(coeff, recurrsion):
     """
     Solve problems like
     s(ac^2(a-b)^4(b-c)^2)-5p(a-b)^2p(a) >= 0
@@ -191,7 +397,7 @@ def _sos_struct_nonic_gear(poly, coeff, recurrsion):
     if not (coeff((5,4,0)) == 0 and coeff((6,1,2)) == 0):
         # reflect the polynomial
         reflect_coeffs = lambda _: coeff((_[0], _[2], _[1]))
-        solution = _sos_struct_nonic_gear(poly, reflect_coeffs, recurrsion)
+        solution = _sos_struct_nonic_gear(reflect_coeffs, recurrsion)
         if solution is not None:
             solution = solution.xreplace({b:c, c:b})
         return solution
@@ -279,7 +485,7 @@ def _sos_struct_nonic_gear(poly, coeff, recurrsion):
                 return sym_axis
 
         w = _search_valid_weight(vertex1, vertex2)
-        print('w =', w, 'z =', c2_sqrt, '\nVertex1 =', vertex1, '\nVertex2 =', vertex2)
+        # print('w =', w, 'z =', c2_sqrt, '\nVertex1 =', vertex1, '\nVertex2 =', vertex2)
         if w is not None:
             if not isinstance(c2_sqrt, sp.Rational):
                 for z in rationalize_bound(c2_sqrt, direction = -1, compulsory = True):
@@ -298,7 +504,7 @@ def _sos_struct_nonic_gear(poly, coeff, recurrsion):
             c41_, c33_, c32_ = radsimp([w*vertex1[1][i] + (1-w)*vertex2[1][i] for i in range(3)])
             hexagram_coeffs_ = {
                 (4,1,1): c41_, (3,3,0): c33_, (3,2,1): c32_, (2,3,1): c32_,
-                (2,2,2): radsimp((-c41_-c33_-c32_*2)*3 + poly(1,1,1))
+                (2,2,2): radsimp((-c41_-c33_-c32_*2)*3 + coeff.poly111())
             }
             hexagram_solution = _sos_struct_sextic_hexagram_symmetric(Coeff(hexagram_coeffs_))
             if hexagram_solution is not None:

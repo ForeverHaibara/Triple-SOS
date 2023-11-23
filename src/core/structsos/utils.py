@@ -43,7 +43,7 @@ class Coeff():
         """
         return len(self.coeffs)
 
-    def reflect(self):
+    def reflect(self) -> 'Coeff':
         """
         Reflect the coefficients of a, b, c with respect to a,b.
         Returns a deepcopy.
@@ -51,6 +51,75 @@ class Coeff():
         reflected_coeffs = dict([((j,i,k), v) for (i,j,k), v in self.coeffs.items()])
         new_coeff = Coeff(reflected_coeffs, is_rational = self.is_rational)
         return new_coeff
+
+    def clear_zero(self) -> None:
+        """
+        Clear the coefficients that are zero.
+        """
+        self.coeffs = {k:v for k,v in self.coeffs.items() if v != 0}
+
+    def as_poly(self, *args) -> sp.Poly:
+        """
+        Return the polynomial of a, b, c.
+        """
+        if len(args) == 0:
+            args = sp.symbols('a b c')
+        return sp.polys.Poly.from_dict(self.coeffs, gens = args)
+
+    def degree(self) -> int:
+        """
+        Return the degree of the polynomial.
+        """
+        if len(self.coeffs) == 0:
+            return 0
+        for k in self.coeffs:
+            return sum(k)
+
+    @property
+    def is_zero(self) -> bool:
+        """
+        Whether the polynomial is zero.
+        """
+        return len(self.coeffs) == 0
+
+    def poly111(self) -> sp.Expr:
+        """
+        Evalutate the polynomial at (a,b,c) = (1,1,1).
+        """
+        return sum(self.coeffs.values())
+
+    def items(self):
+        return self.coeffs.items()
+
+    def __operator__(self, other, operator) -> 'Coeff':
+        new_coeffs = self.coeffs.copy()
+        for k, v2 in other.items():
+            v1 = self(k)
+            v3 = operator(v1, v2)
+            if v3 == 0 and v1 != 0:
+                del new_coeffs[k]
+            elif v3 != 0:
+                new_coeffs[k] = v3
+        new_coeffs = dict(sorted(new_coeffs.items(), reverse=True))
+        other_rational = (not isinstance(other, Coeff)) or other.is_rational
+        is_rational = self.is_rational and other_rational
+        return Coeff(new_coeffs, is_rational = is_rational)
+
+    def __add__(self, other) -> 'Coeff':
+        return self.__operator__(other, lambda x, y: x + y)
+
+    def __sub__(self, other) -> 'Coeff':
+        return self.__operator__(other, lambda x, y: x - y)
+
+    # def __mul__(self, other) -> 'Coeff':
+    #     return self.__operator__(other, lambda x, y: x * y)
+
+    # def __truediv__(self, other) -> 'Coeff':
+    #     return self.__operator__(other, lambda x, y: x / y)
+
+    def __pow__(self, other) -> 'Coeff':
+        return self.__operator__(other, lambda x, y: x ** y)
+
 
 
 def sum_y_exprs(y: List[sp.Expr], exprs: List[sp.Expr]) -> sp.Expr:
@@ -177,7 +246,7 @@ def try_perturbations(
     perturbation_poly = perturbation.doit().as_poly(a,b,c)
     for t in square_perturbation(p, q, times = times):
         poly2 = poly - t * perturbation_poly
-        solution = recurrsion(poly2)
+        solution = recurrsion(Coeff(poly2))
         if solution is not None:
             return solution + t * perturbation
     return None

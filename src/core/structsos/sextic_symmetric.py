@@ -628,10 +628,21 @@ def _sos_struct_sextic_tree(coeff):
     """
 
     t = coeff((6,0,0))
+    rem = radsimp(coeff((2,2,2)) + (coeff((6,0,0))+coeff((4,1,1))+coeff((3,3,0))) * 3)
+    if rem < 0 or t < 0:
+        return None
+    if t == 0 and coeff((3,3,0)) >= 0 and coeff((4,1,1)) >= 0:
+        return sp.Add(
+            coeff((3,3,0))/2 * CyclicSum(a*b) * CyclicSum(a**2*(b-c)**2),
+            coeff((4,1,1))/2 * CyclicProduct(a) * CyclicSum((a-b)**2) * CyclicSum(a),
+            rem * CyclicProduct(a**2)
+        )
+
     # t != 0 by assumption
     u, v = radsimp(coeff((3,3,0))/t), radsimp(coeff((4,1,1))/t)
     if u < -2:
         return None
+
 
     if v != -6 and u != 2:
         # try sum of squares with real numbers first
@@ -646,8 +657,7 @@ def _sos_struct_sextic_tree(coeff):
             w2 = 1 - w1
             q, p = t__.as_numer_denom()
             if 0 <= w1 <= 1:
-                y = radsimp([w1 * t / 2, w2 * t / 2 / p**3,
-                    (coeff((2,2,2))/3+coeff((6,0,0))+coeff((4,1,1))+coeff((3,3,0))) * 3])
+                y = radsimp([w1 * t / 2, w2 * t / 2 / p**3, rem])
                 exprs = [
                     CyclicSum(a)**2 * CyclicSum((b-c)**4),
                     CyclicSum(p*a**2 + q*b*c) * CyclicSum((a-b)**2*(p*a+p*b-q*c)**2),
@@ -682,8 +692,7 @@ def _sos_struct_sextic_tree(coeff):
     
     if r is not None:            
         # now r is rational
-        y = radsimp([t/2, t*(u-(r**3-3*r))/2, t*(v+3*r*(r-1))/2,
-            (coeff((2,2,2))/3+coeff((6,0,0))+coeff((4,1,1))+coeff((3,3,0))) * 3])
+        y = radsimp([t/2, t*(u-(r**3-3*r))/2, t*(v+3*r*(r-1))/2, rem])
         exprs = [
             CyclicSum(a**2 + r*b*c) * CyclicSum((a-b)**2*(a+b-r*c)**2),
             CyclicSum(a*b) * CyclicSum(a**2*(b-c)**2),
@@ -1290,9 +1299,9 @@ def _sos_struct_sextic_symmetric_quadratic_form(poly, coeff):
     # each t_ exhanges 27/4p(a-b)^2 because s(a^2-ab)^3 = 1/4 * p(2a-b-c)^2 + 27/4 * p(a-b)^2
     ker_coeff += 27 * t_ / 4
 
-    print('Coeff =', merged_params[0], 'ker =', ker_coeff)
-    print('  (x,y) =', (x_, y_), 'ker_std =', ker_coeff / merged_params[0])
-    print('  (m,p,n,t) = ', (m_, p_, n_, t_))
+    # print('Coeff =', merged_params[0], 'ker =', ker_coeff)
+    # print('  (x,y) =', (x_, y_), 'ker_std =', ker_coeff / merged_params[0])
+    # print('  (m,p,n,t) = ', (m_, p_, n_, t_))
 
     if x_ + y_ == sp.S(5)/3 and x_ != 1:
         # F_{x,y} = (x-1)^2/4 * s((b-c)^2(b+c-za))^2 + 3(x-1)(9x-5)/4 * p(a-b)^2
@@ -1304,7 +1313,7 @@ def _sos_struct_sextic_symmetric_quadratic_form(poly, coeff):
         if ker_coeff >= ker_coeff2:
             solution = [
                 merged_params[0] * (x_ - 1)**2/4 * p0[0]**2 * CyclicSum(p0[1])**2,
-                t_/4 * CyclicProduct(a+b-2*c)**2,
+                t_/4 * CyclicProduct((a+b-2*c)**2),
                 sp.Rational(1,2) * CyclicSum((a-b)**2) * rem_poly,
                 (ker_coeff - ker_coeff2) * CyclicProduct((a-b)**2)
             ]
@@ -1317,7 +1326,7 @@ def _sos_struct_sextic_symmetric_quadratic_form(poly, coeff):
         if x_ < 1: p1 = -p1
         solution = [
             merged_params[0]/18 * CyclicSum((a-b)**2*p1**2),
-            t_/4 * CyclicProduct(a+b-2*c)**2,
+            t_/4 * CyclicProduct((a+b-2*c)**2),
             sp.Rational(1,2) * CyclicSum((a-b)**2) * rem_poly,
             (ker_coeff - merged_params[0] / 3) * CyclicProduct((a-b)**2)
         ]
@@ -1329,7 +1338,7 @@ def _sos_struct_sextic_symmetric_quadratic_form(poly, coeff):
     sym_gcd = sp.gcd(sym0[0], sym_diff)
     if sym_gcd.degree() == 1:
         root = radsimp(-sym_gcd.coeff_monomial((0,)) / sym_gcd.coeff_monomial((1,)))
-        solution = _sos_struct_sextic_symmetric_ultimate_1root(coeff, poly, None [[], [root], []])
+        solution = _sos_struct_sextic_symmetric_ultimate_1root(coeff, poly, None, [[], [root], []])
         if solution is not None:
             return solution
 
@@ -1340,7 +1349,7 @@ def _sos_struct_sextic_symmetric_quadratic_form(poly, coeff):
         p1 = p1.together().as_coeff_Mul()
         solution = [
             merged_params[0]*2 * (CyclicSum(a**2-b*c)*CyclicSum(x_*a**2+y_*a*b) - CyclicSum(a**4-a**2*b*c))**2,
-            t_/4 * CyclicSum((a-b)**2) * CyclicProduct(a+b-2*c)**2,
+            t_/4 * CyclicSum((a-b)**2) * CyclicProduct((a+b-2*c)**2),
             2 * CyclicSum(a**2-a*b)**2 * rem_poly,
             p1[0] * CyclicSum(p1[1]) * CyclicProduct((a-b)**2)
         ]
@@ -1457,11 +1466,11 @@ def _sos_struct_sextic_symmetric_quadratic_form(poly, coeff):
         main_solution =  _tighter_bound_border(x_, y_, ker_coeff / merged_params[0])
 
     if main_solution is not None:
-        return merged_params[0] * main_solution + t_/4 * CyclicProduct(a+b-2*c)**2 + sp.Rational(1,2) * CyclicSum((a-b)**2) * rem_poly
+        return merged_params[0] * main_solution + t_/4 * CyclicProduct((a+b-2*c)**2) + sp.Rational(1,2) * CyclicSum((a-b)**2) * rem_poly
     
 
 
-def sos_struct_sextic_symmetric_ultimate(poly, coeff, recurrsion, real = True):
+def sos_struct_sextic_symmetric_ultimate(coeff, recurrsion, real = True):
     """
     Solve symmetric sextics.
     
@@ -1512,7 +1521,9 @@ def sos_struct_sextic_symmetric_ultimate(poly, coeff, recurrsion, real = True):
 
     x0, x1, x2, x3, x4, x5 = radsimp([coeff(_) for _ in [(6,0,0),(5,1,0),(4,2,0),(3,3,0),(4,1,1),(3,2,1)]])
     rem = radsimp(3*(x0 + x3 + x4) + 6*(x1 + x2 + x5) + coeff((2,2,2)))
-    
+
+    poly = None
+
     # try trivial cases
     if True:
         # write in the form of 
@@ -1541,7 +1552,7 @@ def sos_struct_sextic_symmetric_ultimate(poly, coeff, recurrsion, real = True):
                     n * (a**2*b**2 + b**2*c**2 + c**2*a**2) +
                     (u - m - 2*p - n) * (a**2*b*c + b**2*c*a + c**2*a*b)
                 ).as_poly(a,b,c) 
-                solution = sos_struct_quartic(poly_div_quad, Coeff(poly_div_quad), recurrsion)
+                solution = sos_struct_quartic(Coeff(poly_div_quad), recurrsion)
                 if solution is not None:
                     solution = sp.Rational(1,2) * CyclicSum((a-b)**2) * solution
                     return solution
@@ -1570,6 +1581,7 @@ def sos_struct_sextic_symmetric_ultimate(poly, coeff, recurrsion, real = True):
 
         # try neat cases
         # note that this might also handle cases for real numbers
+        poly = coeff.as_poly()
         if coeff.is_rational:
             try:
                 solution = _sos_struct_sextic_symmetric_quadratic_form(poly, coeff)
@@ -1641,7 +1653,7 @@ def sos_struct_sextic_symmetric_ultimate(poly, coeff, recurrsion, real = True):
     # Case C.
     # TO BE IMPLEMENTED
   
-    print('Roots Info = ', roots)
+    # print('Roots Info = ', roots)
     sum_of_roots = sum((len(_) > 0) for _ in roots)
 
     if sum_of_roots == 1:
@@ -1689,7 +1701,7 @@ def _sos_struct_sextic_symmetric_ultimate_1root(coeff, poly, recurrsion, roots, 
             # 1. try subtracting all the s(a6)
             # e.g. s(a2/3)3-a2b2c2-p(a-b)2
             if coeff((5,1,0)) >= -2 * x_:
-                poly2 = poly - ((a**3+b**3+c**3-3*a*b*c-x_*(a*a*(b+c)+b*b*(c+a)+c*c*(a+b)-6*a*b*c))**2).as_poly(a,b,c, domain = poly.domain) * coeff6
+                poly2 = poly - ((a**3+b**3+c**3-3*a*b*c-x_*(a*a*(b+c)+b*b*(c+a)+c*c*(a+b)-6*a*b*c))**2).as_poly(a,b,c) * coeff6
                 solution = _sos_struct_sextic_iran96(Coeff(poly2, is_rational = coeff.is_rational), real = real)
                 if solution is not None:
                     if x_ == sp.Rational(3,2):
@@ -1779,7 +1791,7 @@ def _sos_struct_sextic_symmetric_ultimate_1root(coeff, poly, recurrsion, roots, 
             ]
             is_rational = all(isinstance(_[1], sp.Rational) for _ in quartic)
 
-            quartic_solution = sos_struct_quartic(None, Coeff(dict(quartic), is_rational = is_rational), None)
+            quartic_solution = sos_struct_quartic(Coeff(dict(quartic), is_rational = is_rational), None)
             if quartic_solution is not None:
                 p0 = (2*(2*z0 + z3)*a**2 + 2*(z1 + 2*z2)*b*c).together().as_coeff_Mul()
                 multiplier = p0[0] * CyclicSum(p0[1])

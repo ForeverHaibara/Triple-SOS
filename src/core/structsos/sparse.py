@@ -1,31 +1,71 @@
+from typing import List, Tuple, Dict, Callable, Optional
 from math import gcd
 
 import sympy as sp
 
-from .utils import CyclicSum, CyclicProduct
+from .utils import CyclicSum, CyclicProduct, Coeff, prove_univariate
 from .quartic import sos_struct_quartic
-from ...utils.polytools import deg
 
 
-def sos_struct_sparse(poly, coeff, recurrsion, real = True):
+def _cancel_common_d(coeff: Coeff, d: int) -> Coeff:
+    """
+    Get coeff2 = coeff / (a^d*b^d*c^d).
+    """
+    if d == 0:
+        return coeff
+    new_coeff = Coeff({(i-d, j-d, k-d): v for (i,j,k), v in coeff.coeffs.items() if v != 0})
+    new_coeff.is_rational = coeff.is_rational
+    return new_coeff
+
+def sos_struct_sparse(coeff, recurrsion, real = True):
     if len(coeff) > 6:
+        all_monoms = list(coeff.coeffs.keys())
+        common_d = 0
+        for monom in all_monoms[::-1]:
+            if coeff(monom) != 0:
+                common_d = monom[0]
+                break
+        if common_d > 0:
+            a, b, c = sp.symbols('a b c')
+            new_coeff = _cancel_common_d(coeff, common_d)
+            solution = recurrsion(new_coeff, real = real and common_d % 2 == 0)
+            if solution is not None:
+                solution = CyclicProduct(a**common_d) * solution
+            return solution
+
+        gcd_ = 0
+        for monom in all_monoms:
+            gcd_ = sp.gcd(gcd_, monom[0])
+            if gcd_ == 1:
+                break
+        else:
+            a, b, c = sp.symbols('a b c')
+            new_coeff = Coeff({(i//gcd_, j//gcd_, k//gcd_): v for (i,j,k), v in coeff.coeffs.items() if v != 0})
+            new_coeff.is_rational = coeff.is_rational
+            solution = recurrsion(new_coeff, real = False if gcd_ % 2 == 0 else real)
+            if solution is not None:
+                solution = solution.xreplace({a: a**gcd_, b: b**gcd_, c: c**gcd_})
+            return solution
+
         return None
 
-    degree = deg(poly)
+    a, b, c = sp.symbols('a b c')
+    degree = coeff.degree()
     if degree < 5:
         if degree == 0:
-            return sp.S(0)
+            v = coeff((0,0,0))
+            return v if v >= 0 else None
         elif degree == 1:
-            return poly.as_expr()
+            v = coeff((1,0,0))
+            return v * CyclicSum(a) if v >= 0 else None
         elif degree == 2:
             return sos_struct_quadratic(coeff)
         elif degree == 4:
             # quartic should be handled by _sos_struct_quartic
             # because it presents proof for real numbers
-            return sos_struct_quartic(poly, coeff, recurrsion)
+            return sos_struct_quartic(coeff, recurrsion)
 
     monoms = list(coeff.coeffs.keys())
-    a, b, c = sp.symbols('a b c')
     if len(coeff) == 1:
         # e.g.  abc
         if coeff(monoms[0]) >= 0:
@@ -200,5 +240,377 @@ def _sos_struct_sparse_amgm(coeff, small, large):
             am_gm = deta*a**u*b**v*c**w + detb*a**v*b**w*c**u + detc*a**w*b**u*c**v - det*a**x*b**y*c**z
             
             return coeff(large)/det * CyclicSum(am_gm) + (coeff(large) + coeff(small)) * CyclicSum(a**x * b**y * c**z)
+
+    return None
+
+
+
+#####################################################################
+#
+#                          Heuristic method
+#
+#####################################################################
+
+def _acc_dict(items: List[Tuple]) -> Dict:
+    """
+    Accumulate the coefficients in a dictionary.
+    """
+    d = {}
+    for k, v in items:
+        if k in d:
+            d[k] += v
+        else:
+            d[k] = v
+    d = {k: v for k,v in d.items() if v != 0}
+    return d
+
+def _separate_product(recurrsion: Callable) -> Callable:
+    """
+    A wrapper of recurrsion function to avoid nested CyclicProduct(a).
+    For instance, if we have CyclicProduct(a) * (CyclicProduct(a)*F(a,b,c) + G(a,b,c)),
+    we had better expand it to CyclicProduct(a**2) * F(a,b,c) + CyclicProduct(a) * G(a,b,c).
+    """
+    a = sp.symbols('a')
+    def _extract_cyclic_prod(x: sp.Expr) -> Tuple[int, sp.Expr]:
+        """
+        Given x, return (d, r) such that x = r * CyclicProduct(a**d).
+        """
+        if not (isinstance(x, sp.Expr) or x.is_Mul or x.is_Pow or isinstance(x, CyclicProduct)):
+            return 0, x
+        if isinstance(x, CyclicProduct):
+            if x.args[0] == a:
+                return 1, sp.S(1)
+            elif x.args[0].is_Pow and x.args[0].base == a:
+                return x.args[0].exp, sp.S(1)
+        elif x.is_Pow:
+            d, r = _extract_cyclic_prod(x.base)
+            return d * x.exp, r**x.exp
+        elif x.is_Mul:
+            rs = []
+            d = 0
+            for arg in x.args:
+                dd, r = _extract_cyclic_prod(arg)
+                d += dd
+                rs.append(r)
+            return d, sp.Mul(*rs)
+        return 0, x
+
+    def _new_recurrsion(x: Coeff, **kwargs) -> Optional[sp.Expr]:
+        x = recurrsion(x, **kwargs)
+        if x is None:
+            return x
+        d, r = _extract_cyclic_prod(x)
+        if r.is_Add:
+            new_args = []
+            for arg in r.args:
+                d2, r2 = _extract_cyclic_prod(arg)
+                new_args.append(CyclicProduct(a**(d + d2)) * r2)
+            return sp.Add(*new_args)
+        return x
+
+    return _new_recurrsion
+
+class Pnrms:
+    """
+    Represent s(a^n(b^r-c^r)) * s(a^m(b^s-c^s)).
+    """
+    @classmethod
+    def coeff(cls, n, r, m, s, v = 1) -> Coeff:
+        v = sp.S(v)
+        return Coeff(_acc_dict([
+            ((r + s, m + n, 0), v), ((r + s, 0, m + n), v), ((m + n, r + s, 0), v), ((m + n, 0, r + s), v),
+            ((0, r + s, m + n), v), ((0, m + n, r + s), v), ((m + r, n + s, 0), -v), ((m + r, 0, n + s), -v),
+            ((n + s, m + r, 0), -v), ((n + s, 0, m + r), -v), ((0, m + r, n + s), -v), ((0, n + s, m + r), -v),
+            ((r, m, n + s), v), ((r, n + s, m), v), ((s, n, m + r), v), ((s, m + r, n), v),
+            ((m, r, n + s), v), ((m, n + s, r), v), ((n, s, m + r), v), ((n, m + r, s), v),
+            ((m + r, s, n), v), ((m + r, n, s), v), ((n + s, r, m), v), ((n + s, m, r), v),
+            ((r, s, m + n), -v), ((r, m + n, s), -v), ((s, r, m + n), -v), ((s, m + n, r), -v),
+            ((m, n, r + s), -v), ((m, r + s, n), -v), ((n, m, r + s), -v), ((n, r + s, m), -v),
+            ((r + s, m, n), -v), ((r + s, n, m), -v), ((m + n, r, s), -v), ((m + n, s, r), -v),
+        ]), is_rational = True if isinstance(v, sp.Rational) else False)
+
+    @classmethod
+    def as_expr(cls, n, r, m, s, v = 1) -> sp.Expr:
+        a, b, c = sp.symbols('a b c')
+        if n == r or m == s or r == 0 or s == 0:
+            return sp.S(0)
+        sol = None
+        if n == m and r == s:
+            sol = CyclicSum(a**n * (b**r - c**r))**2
+        f1, f2 = cls._half_side(n, r), cls._half_side(m, s)
+        if f1 is not None and f2 is not None:
+            sol = CyclicProduct((a-b)**2) * f1 * f2
+        else:
+            sol = CyclicSum(a**n * (b**r - c**r)) * CyclicSum(a**m * (b**s - c**s))
+        return v * sol
+
+    @classmethod
+    def _half_side(cls, n, r) -> sp.Expr:
+        """
+        Return s(a^n(b^r-c^r)) / [(b-a)(c-b)(a-c)]
+        """
+        a, b, c = sp.symbols('a b c')
+        if n + r <= 12:
+            RESULT = {
+                (2, 1): sp.S(1),
+                (3, 1): CyclicSum(a),
+                (4, 1): CyclicSum(a**2+b*c),
+                (5, 1): CyclicProduct(a) + CyclicSum(a) * CyclicSum(a**2),
+                (6, 1): CyclicSum(a**2*(a+b)*(a+c)) + CyclicSum(a**2*b**2),
+                (7, 1): CyclicSum(a**3*(a+b)*(a+c)) + CyclicSum(a) * CyclicSum(a**2*b**2),
+                (8, 1): CyclicSum(a**2*(2*a**2+b**2+c**2)*(a+b)*(a+c))/2 + CyclicProduct(a**2+b**2)/2, # s(a2(2a2+b2+c2)(a+b)(a+c))/2+1/2(b2+c2)(a2+b2)(a2+c2)
+                (9, 1): CyclicSum(a**3*(2*a**2+b**2+c**2)*(a+b)*(a+c))/2 + CyclicSum(a) * CyclicProduct(a**2+b**2)/2, # s(a3(2a2+b2+c2)(a+b)(a+c))/2+1/2s(a)(b2+c2)(a2+b2)(a2+c2)
+                (3, 2): CyclicSum(a*b),
+                (4, 2): CyclicProduct(a+b),
+                (5, 2): CyclicSum(a*b) * CyclicSum(a**2) + CyclicSum(a**2*(b+c)**2) / 2,
+                (6, 2): CyclicProduct(a+b) * CyclicSum(a**2),
+                (7, 2): CyclicProduct(a+b) * (CyclicProduct(a) + CyclicSum(a**3)) + CyclicSum(a**3*b**3),
+                (8, 2): CyclicProduct(a+b) * CyclicSum(a**4 + b**2*c**2),
+                (4, 3): CyclicSum(a**2*(b+c)**2) / 2,
+                (5, 3): CyclicSum(a) * CyclicSum(a**2*b**2) + CyclicSum((a+b)**2) * CyclicProduct(a) / 2,
+                (6, 3): CyclicProduct(a**2+a*b+b**2),
+                (7, 3): CyclicSum(a**3*(b**2+b*c+c**2)*(a+b)*(a+c)) + 2 * CyclicSum(a) * CyclicProduct(a**2),
+                (8, 3): CyclicSum(a**4*(b**2+c**2)*(a+b)*(a+c)) + CyclicSum(a**2*b*(a+c)) * CyclicSum(a**2*c*(a+b)),
+                (5, 4): CyclicSum(a**2*b**2) * CyclicSum(a*b) + CyclicProduct(a**2),
+                (6, 4): CyclicProduct(a+b) * CyclicSum(a**2*b**2),
+                (7, 4): 2*CyclicProduct(a**2)*CyclicSum(a**2) + CyclicSum(a*b)*(CyclicSum(a**3*b**3) + CyclicSum(a**2)*CyclicSum(a**2*b**2)), # 2p(a2)s(a2)+s(ab)(s(a3b3)+s(a2)s(a2b2)),
+                (8, 4): CyclicProduct(a+b) * CyclicProduct(a**2+b**2),
+                (6, 5): CyclicSum(b**3*c**3*(a+b)*(a+c)) + CyclicSum(a**2) * CyclicProduct(a**2)
+            }
+            return RESULT.get((n, r), None)
+
+
+class Hnmr:
+    """
+    Represent s(a^n*(b^m+c^m)*(a^r-b^r)*(a^r-c^r)) when n >= 0,
+    and s(b^(-n)*c^(-n)*(b^m+c^m))*(a^r-b^r)*(a^r-c^r)) when n < 0.
+
+    We require m >= 0 and r >= 0 always.
+
+    We have recurrsion identity:
+    H(n,m,r) = P(2r,r,n,m-r) + (a^r*b^r*c^r) * H(n-r,m-2r,r)
+
+    Also, we have inverse substituion (n,m,r) -> (m-n-r,m,r).
+    When n <= 0 or n + r >= m, we have H(n,m,r) >= 0.
+    """
+    @classmethod
+    def coeff(cls, n, m, r, v = 1) -> Coeff:
+        v = sp.S(v)
+        if n >= 0:
+            coeffs = [
+                ((m, n + 2*r, 0), v), ((m, 0, n + 2*r), v), ((n + 2*r, m, 0), v), ((n + 2*r, 0, m), v),
+                ((0, m, n + 2*r), v), ((0, n + 2*r, m), v), ((m + r, n + r, 0), -v), ((m + r, 0, n + r), -v),
+                ((n + r, m + r, 0), -v), ((n + r, 0, m + r), -v), ((0, m + r, n + r), -v), ((0, n + r, m + r), -v),
+                ((r, n, m + r), v), ((r, m + r, n), v), ((n, r, m + r), v), ((n, m + r, r), v),
+                ((m + r, r, n), v), ((m + r, n, r), v), ((r, m, n + r), -v), ((r, n + r, m), -v),
+                ((m, r, n + r), -v), ((m, n + r, r), -v), ((n + r, r, m), -v), ((n + r, m, r), -v)
+            ]
+        else:
+            n = -n
+            coeffs = [
+                ((n + r, m + n + r, 0), v), ((n + r, 0, m + n + r), v), ((m + n + r, n + r, 0), v), ((m + n + r, 0, n + r), v),
+                ((0, n + r, m + n + r), v), ((0, m + n + r, n + r), v), ((n, 2*r, m + n), v), ((n, m + n, 2*r), v),
+                ((2*r, n, m + n), v), ((2*r, m + n, n), v), ((m + n, n, 2*r), v), ((m + n, 2*r, n), v),
+                ((r, n, m + n + r), -v), ((r, n + r, m + n), -v), ((r, m + n, n + r), -v), ((r, m + n + r, n), -v),
+                ((n, r, m + n + r), -v), ((n, m + n + r, r), -v), ((n + r, r, m + n), -v), ((n + r, m + n, r), -v),
+                ((m + n, r, n + r), -v), ((m + n, n + r, r), -v), ((m + n + r, r, n), -v), ((m + n + r, n, r), -v)
+            ]
+        return Coeff(_acc_dict(coeffs), is_rational = True if isinstance(v, sp.Rational) else False)
+
+    @classmethod
+    def as_expr(cls, n, m, r, v = 1) -> sp.Expr:
+        a, b, c = sp.symbols('a b c')
+        if r == 0:
+            return sp.S(0)
+        sol = None
+        if n >= 0:
+            if n == m:
+                sol = CyclicSum(a**n*b**n*(a**r-b**r)**2)
+            elif n == m - r:
+                if n >= r:
+                    sol = CyclicSum(a**(n-r)*b**(n-r)*(a**r-b**r)**2) * CyclicProduct(a**r)
+                else: # if n < r:
+                    sol = CyclicSum(c**(r-n)*(a**r-b**r)**2) * CyclicProduct(a**n)
+            elif m == 2*r and n >= r:
+                sol = Pnrms.as_expr(2*r, r, n, m - r) + CyclicProduct(a**r) * cls.as_expr(n - r, m - 2*r, r)
+            elif m == r:
+                if n % r == 0 and (n // r) <= 8:
+                    RESULT = {
+                        2: CyclicSum(a*(b-c)**2*(b+c-a)**2),
+                        4: CyclicSum(a*(b-c)**2*(b+c-a)**4) + 2 * CyclicSum(a) * CyclicProduct((a-b)**2),
+                        5: CyclicSum(a*b*(a-b)**2*(a**2+b**2-c**2)**2) + CyclicProduct((a-b)**2) * CyclicSum((a-b)**2) / 2,
+                        6: CyclicSum(a*(b-c)**2*(b+c-a)**2*(b**2+c**2-a**2)**2) + CyclicProduct((a-b)**2) * (3*CyclicSum(a*(b-c)**2) + 22*CyclicProduct(a)),
+                        7: CyclicSum(a*b*(a-b)**2*(a**3 + 2*a*b*c - 2*a*c**2 + b**3 - 2*b*c**2 + c**3)**2) + CyclicProduct((a-b)**2) * (CyclicSum(a*b)*CyclicSum(a**2) + CyclicSum((a**2-b**2)**2)/2),
+                        8: CyclicSum(a*(b-c)**2*(b+c-a)**2*(b**3+c**3-a**3)**2) + CyclicProduct((a-b)**2) * (CyclicSum(a*b*(a+b))*CyclicSum(a)**2 + CyclicSum((a-b)**2) * CyclicProduct(a))
+                    }
+                    sol = RESULT.get(n // r, None)
+                    if sol is not None:
+                        sol = sol.xreplace({a:a**r, b:b**r, c:c**r})
+                elif n == 1 and r >= 2:
+                    sol = Pnrms.as_expr(r+1, 1, r, r-1) + CyclicProduct(a) * CyclicSum(c**(r-2)*(a**r-b**r)**2)
+                else:
+                    d = sp.gcd(n, r)
+                    RESULT = {
+                        (1, 2): CyclicSum(a) * CyclicProduct((a-b)**2) + CyclicProduct(a) * CyclicSum((a-b)**2),
+                        (3, 2): CyclicProduct((a-b)**2) * (CyclicSum(a)*CyclicSum(a**2) + CyclicProduct(a+b)) + CyclicProduct(a) * CyclicSum((a**2-b**2)**2*(a+b-c)**2), # (s(a)s(a2)+p(a+b))p(a-b)2+p(a)s((a2-b2)2(a+b-c)2)
+                        (5, 2): CyclicProduct((a-b)**2) * (CyclicSum(a)**2*CyclicSum(a**3) + CyclicSum(a*b)*CyclicProduct(a+b)) + CyclicProduct(a) * CyclicSum((a**2-b**2)**2*(a**2+b**2-c**2)**2), # p(a-b)2(s(a3)s(a)2+p(a+b)s(ab))+s((a2-b2)2(a2+b2-c2)2)p(a)
+                    }
+                    sol = RESULT.get((n // d, r // d), None)
+                    if sol is not None:
+                        sol = sol.xreplace({a:a**d, b:b**d, c:c**d})
+                if sol is None:
+                    if n >= m + r:
+                        numerator = CyclicSum(a**n*(b**m+c**m)*(a**r-b**r)**2*(a**r-c**r)**2) + Pnrms.as_expr(2*r, r, n, m + r)
+                        denominator = CyclicSum((a**r - b**r)**2) / 2
+                        sol = numerator / denominator
+                    else:
+                        if n >= r:
+                            numerator = CyclicSum(a**(n-r)*(b**m+c**m)*(a**r-b**r)**2*(a**r-c**r)**2) * CyclicProduct(a**r)
+                        else:
+                            numerator = CyclicSum(b**(r-n)*c**(r-n)*(b**m+c**m)*(a**r-b**r)**2*(a**r-c**r)**2) * CyclicProduct(a**n)
+                        numerator += Pnrms.as_expr(2*r, r, n + m + r, m + r)
+                        denominator = CyclicSum(a**(2*r)*(b**r - c**r)**2) / 2
+                        sol = numerator / denominator
+            if sol is None:
+                sol = CyclicSum(a**n*(b**m+c**m)*(a**r-b**r)*(a**r-c**r))
+        else:
+            n = -n
+            if n == r:
+                sol = CyclicSum(c**(m+2*r)*(a**r-b**r)**2)
+            if sol is None:
+                sol = CyclicSum(b**n*c**n*(b**m+c**m)*(a**r-b**r)*(a**r-c**r))
+        return v * sol
+
+
+def sos_struct_heuristic(coeff, recurrsion):
+    """
+    Solve high-degree but sparse inequalities by heuristic method.
+
+    WARNING: Only call this function when degree > 6. And make sure that
+    coeff.clear_zero() to remove zero terms on the border.
+    
+    Examples
+    -------
+    s(ab(a-b)2(a4-3a3b+2a2b2+3b4))
+
+    s(c8(a-b)2(a4-3a3b+2a2b2+3b4))
+    """
+    degree = coeff.degree()
+    assert degree > 6, "Degree must be greater than 6 in heuristic method."
+
+    recurrsion = _separate_product(recurrsion)
+
+    if coeff((degree, 0, 0)):
+        # not implemented
+        return None
+
+    monoms = list(coeff.coeffs.items())
+    if monoms[0][1] < 0 or monoms[-1][1] < 0 or monoms[-1][0][0] != 0:
+        return None
+
+    border1, border2 = [], []
+    for (i,j,k), v in monoms[::-1]:
+        if i != 0:
+            break
+        if v != 0:
+            border1.append((j, v))
+    border1 = border1[::-1]
+    i0 = monoms[0][0][0]
+    for (i,j,k), v in monoms:
+        if i != i0:
+            break
+        if v != 0:
+            border2.append((j, v))
+
+    if len(border1) == 1 and border1[0][0] * 2 == degree:
+        return None
+
+    # print('Coeff =' , coeff.as_poly())
+    # print('Border1 =', border1)
+    # print('Border2 =', border2)
+
+    for border in (border1, border2):
+        if len(border) * 3 == len(coeff):
+            # all coefficients are on the border
+            x = sp.Symbol('x')
+            a, b, c = sp.symbols('a b c')
+            border_poly = sp.polys.Poly.from_dict(dict(border), gens = (x,))
+            border_proof = prove_univariate(border_poly)
+            if border_proof is not None:
+                if border is border1:
+                    border_proof = border_proof.subs(x, a / b).together() * b**degree
+                else:
+                    border_proof = border_proof.subs(x, b / c).together() * a**i0 * c**(degree - i0)
+                border_proof = CyclicSum(border_proof)
+            return border_proof
+
+    c0 = border1[0][1]
+    c0_ = border1[-1][1]
+    if c0 < 0 or c0_ < 0:
+        return None
+    if border1[0][0] + border1[-1][0] == degree and c0 == c0_ and i0 == border1[0][0]:
+        if len(border1) <= 4 and len(border2) <= 4:
+            # symmetric hexagon
+            gap11, gap12, gap21, gap22 = -1, -1, -1, -1
+            if len(border1) >= 3 and border1[1][0] + border1[-2][0] == degree:
+                gap11 = border1[0][0] - border1[1][0]
+                gap12 = border1[0][0] - border1[-2][0]
+            elif len(border1) <= 2:
+                gap11 = 0
+                gap12 = 0
+
+            if len(border2) >= 3 and border2[1][0] + border2[-2][0] == degree - i0:
+                gap21 = border2[0][0] - border2[1][0]
+                gap22 = border2[0][0] - border2[-2][0]
+            elif len(border2) <= 2:
+                gap21 = 0
+                gap22 = 0
+
+            # print('Symmetric Hexagon Gap =', (gap11, gap12, gap21, gap22))
+            if gap11 != -1 and gap21 != -1:
+                if gap11 != 0 and gap21 != 0:
+                    r_, s_ = gap21, gap22
+                    for n_, m_ in ((r_ + gap11, s_ + gap12), (r_ + gap12, s_ + gap11)):
+                        # print('>> s(a%d(b%d-c%d))s(a%d(b%d-c%d))' % (n_, r_, r_, m_, s_, s_))
+
+                        solution = recurrsion(coeff - Pnrms.coeff(n_, r_, m_, s_, c0), real = False)
+                        if solution is not None:
+                            return solution + Pnrms.as_expr(n_, r_, m_, s_, c0)
+                elif gap11 != 0 and gap21 == 0:
+                    for r_ in (gap11, gap12):
+                        n_ = border1[0][0] - 2*r_
+                        m_ = degree - border1[0][0]
+                        if n_ >= 0 and m_ >= 0 and m_ <= n_ + r_:
+                            # print('>> s(a%d(b%d+c%d)(a%d-b%d)(a%d-c%d))' % (n_, m_, m_, r_, r_, r_, r_))
+
+                            solution = recurrsion(coeff - Hnmr.coeff(n_, m_, r_, c0 if m_ else c0/2), real = False)
+                            if solution is not None:
+                                return solution + Hnmr.as_expr(n_, m_, r_, c0 if m_ else c0/2)
+
+                        if m_ > r_ and n_ + r_ > m_:
+                            # print('>> s(a%d(b%d-c%d))s(a%d(b%d-c%d))' % (2*r_, r_, r_, n_, m_-r_, m_-r_))
+
+                            solution = recurrsion(coeff - Pnrms.coeff(2*r_, r_, n_, m_-r_, c0), real = False)
+                            if solution is not None:
+                                return solution + Pnrms.as_expr(2*r_, r_, n_, m_-r_, c0)
+
+                elif gap11 == 0 and gap21 != 0:
+                    for r_ in (gap21, gap22):
+                        n_ = degree - border1[0][0] - r_
+                        m_ = 2 * border1[0][0] - degree
+                        if n_ >= 0 and m_ >= 0:
+                            # print('>> s(b%dc%d(b%d+c%d)(a%d-b%d)(a%d-c%d))' % (n_, n_, m_, m_, r_, r_, r_, r_))
+
+                            solution = recurrsion(coeff - Hnmr.coeff(-n_, m_, r_, c0 if m_ else c0/2), real = False)
+                            if solution is not None:
+                                return solution + Hnmr.as_expr(-n_, m_, r_, c0 if m_ else c0/2)
+
+                        # if m_ >= r_:
+                        #     print('>> s(a%d(b%d-c%d))s(a%d(b%d-c%d))' % (2*r_, r_, r_, n_, m_-r_, m_-r_))
+
+                        #     solution = recurrsion(coeff - Pnrms.coeff(2*r_, r_, n_, m_-r_, c0), real = False)
+                        #     if solution is not None:
+                        #         return solution + Pnrms.coeff(2*r_, r_, n_, m_-r_, c0)
+
 
     return None
