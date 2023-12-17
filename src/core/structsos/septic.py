@@ -273,9 +273,7 @@ def _sos_struct_septic_biased(coeff):
 
     if coeff((5,2,0)) or coeff((4,3,0)):
         # reflect the polynomial so that coeff((5,2,0)) == 0
-        def new_coeff(c):
-            return coeff((c[0], c[2], c[1]))
-        solution = _sos_struct_septic_biased(new_coeff)
+        solution = _sos_struct_septic_biased(coeff.reflect())
         if solution is not None:
             solution = solution.xreplace({b: c, c: b})
         return solution
