@@ -4,8 +4,16 @@ Triple-SOS 是由 forever豪3 开发的开源且**具备图形化界面**的自�
 
 Triple-SOS is an open-source sum-of-square solver with GUI for three-variable cyclic homogeneous polynomials, developed by ForeverHaibara.
 
+在线体验 Online Server:
+https://aistudio.baidu.com/application/detail/13542 
 
 ## 快速开始 Quick Start
+
+本程序有两种启动方式。一种是 Flask，另一种是 Gradio。
+
+Two versions of backend are supported. One is Flask and the other is Gradio.
+
+### Flask 启动
 
 1. 安装依赖: Install Dependencies
 ```
@@ -20,6 +28,25 @@ pip install picos
 2. 控制台中运行 `python web_main.py` 启动后端。 Run `python web_main.py` to launch the backend.
 
 3. 浏览器打开 `triples.html` 即可使用。 Open `triples.html` in your browser.
+
+### Gradio 启动
+
+1. 安装依赖: Install Dependencies
+   
+   注意：目前 gradio==3.44.4 是已知唯一正常支持 LaTeX 的版本。Warning: currently gradio==3.44.4 is the only known version that supports LaTeX display.
+```
+pip install sympy
+pip install numpy
+pip install scipy
+pip install gradio==3.44.4
+pip install pillow
+pip install picos
+```
+
+2.  控制台中运行 `python main.gradio.py` 启动后端。 Run `python main.gradio.py` to launch the backend.
+
+3.  浏览器打开控制台中显示的地址。 Open the link displayed in the console using the browser.
+
 
 输入关于 a,b,c 的齐次轮换式。注: 幂符号 ^ 可以省略，函数 s 与 p 分别表示轮换和与轮换积，例如 s(a2) 表示 a^2+b^2+c^2。
 

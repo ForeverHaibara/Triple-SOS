@@ -12,11 +12,11 @@ class GridPoly():
         self.grid_value = grid_value
         self.grid_color = grid_color
 
-    def save_heatmap(self, path, dpi=None, backgroundcolor=211):
+    def save_heatmap(self, path=None, dpi=None, backgroundcolor=211):
         """
-        Save a heatmap to the given path.
+        Save a heatmap to the given path. And
+        return the numpy array of the heatmap.
         """
-        import matplotlib.pyplot as plt
 
         n = self.size
         x = np.full((n+1,n+1,3), backgroundcolor, dtype='uint8')
@@ -30,11 +30,15 @@ class GridPoly():
                 x[i,j+t,0] = self.grid_color[base+j][0]
                 x[i,j+t,1] = self.grid_color[base+j][1]
                 x[i,j+t,2] = self.grid_color[base+j][2]
-    
-        plt.imshow(x,interpolation='nearest')
-        plt.axis('off')
-        plt.savefig(path, dpi=dpi, bbox_inches ='tight')
-        plt.close()
+
+        if path is not None:
+            import matplotlib.pyplot as plt
+            plt.imshow(x,interpolation='nearest')
+            plt.axis('off')
+            plt.savefig(path, dpi=dpi, bbox_inches ='tight')
+            plt.close()
+
+        return x
 
     def save_coeffs(self, path, dpi=500, fontsize=20):
         """

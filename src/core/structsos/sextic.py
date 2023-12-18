@@ -73,14 +73,14 @@ def _sos_struct_sextic_hexagram(coeff):
     if coeff((3,3,0)) == 0:
         # degenerates to cubic
         new_coeffs_ = {(3,0,0): coeff((4,1,1)), (2,1,0): coeff((3,2,1)), (1,2,0): coeff((2,3,1)), (1,1,1): coeff((2,2,2))}
-        solution = sos_struct_cubic(None, Coeff(new_coeffs_), None)
+        solution = sos_struct_cubic(Coeff(new_coeffs_), None, None)
         if solution is not None:
             return solution * CyclicProduct(a)
         return None
     if coeff((4,1,1)) == 0:
         # degenerates to inverse cubic
         new_coeffs_ = {(3,0,0): coeff((3,3,0)), (2,1,0): coeff((2,3,1)), (1,2,0): coeff((3,2,1)), (1,1,1): coeff((2,2,2))}
-        solution = sos_struct_cubic(None, Coeff(new_coeffs_), None)
+        solution = sos_struct_cubic(Coeff(new_coeffs_), None, None)
         if solution is not None:
             solution = inverse_substitution(solution, factor_degree = 0)
         return solution
