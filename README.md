@@ -32,6 +32,8 @@ pip install picos
 ### Gradio 启动
 
 1. 安装依赖: Install Dependencies
+   
+   注意：目前 gradio==3.44.4 是已知唯一正常支持 LaTeX 的版本。Warning: currently gradio==3.44.4 is the only known version that supports LaTeX display.
 ```
 pip install sympy
 pip install numpy
