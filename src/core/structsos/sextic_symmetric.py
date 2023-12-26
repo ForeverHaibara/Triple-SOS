@@ -1203,9 +1203,9 @@ def _sos_struct_sextic_symmetric_quadratic_form(poly, coeff):
     it has three multiplicative roots on the symmetric axis b=c=1, one of which is the centroid a=b=c=1.
     The other two roots determine the coefficient x and y.
 
-    For normal polynomial without three multiplicative roots, we first write the symmetric axis in the form
+    For normal polynomials without three multiplicative roots, we first write the symmetric axis in the form
     of (a-1)^2 * ((a^2+..a+..)^2 + (..a+..)^2 + ...). Now we apply the theorem to each of them, and then
-    merge their f(a,b,c) according.
+    merge their f(a,b,c) accordingly.
 
 
     Moreover, there exists u, v such that u+v = (2-2*y)/(x-1), uv = (2*x+y-2)/(x-1) so that
@@ -1215,8 +1215,6 @@ def _sos_struct_sextic_symmetric_quadratic_form(poly, coeff):
     --------
     72p(a+b-2c)2+s(a2-ab)s(11a2-14ab)2
 
-    (s((a-b)(a-c)(a-2b)(a-2c)(a-18b)(a-18c))-53p(a-b)2)
-
     (s((b-c)2(7a2-b2-c2)2)-112p(a-b)2)
 
     s((a-b)2(-a2-b2+2c2+2(ab-c2)-3s(ab)+2s(a2))2)
@@ -1225,12 +1223,16 @@ def _sos_struct_sextic_symmetric_quadratic_form(poly, coeff):
 
     s((a-b)(a-c)(a-2b)(a-2c)(a-18b)(a-18c))-53p(a-b)2
 
+    s((a-b)(a-c)(a-7b)(a-7c)(a-3b)(a-3c))-73p(a-b)2
+
     s((b2+c2-5a(b+c))2(b-c)2)-22p(a-b)2 
 
     s(a6+6a5b+6a5c-93a4b2+3a4bc-93a4c2+236a3b3+87a3b2c+87a3bc2-240a2b2c2)
 
     s(a6-21a5b-21a5c-525a4b2+1731a4bc-525a4c2+11090a3b3-13710a3b2c-13710a3bc2+15690a2b2c2)
 
+    s(a2(a-b)(a-c)(3a-2b)(3a-2c))+15p(a-b)2        (real)
+    
     References
     -------
     [1] https://artofproblemsolving.com/community/c6t243f6h3013463_symmetric_inequality
@@ -1296,7 +1298,7 @@ def _sos_struct_sextic_symmetric_quadratic_form(poly, coeff):
     # ker_coeff is the remaining coefficient of (a-b)^2(b-c)^2(c-a)^2
     ker_coeff = (poly.coeff_monomial((4,2,0)) - merged_params[0] * (3*x_**2 - 2*x_*y_ - 2*x_ + y_**2) - (n_ - p_ + m_))
 
-    # each t_ exhanges 27/4p(a-b)^2 because s(a^2-ab)^3 = 1/4 * p(2a-b-c)^2 + 27/4 * p(a-b)^2
+    # each t_ exchanges for 27/4p(a-b)^2 because s(a^2-ab)^3 = 1/4 * p(2a-b-c)^2 + 27/4 * p(a-b)^2
     ker_coeff += 27 * t_ / 4
 
     # print('Coeff =', merged_params[0], 'ker =', ker_coeff)
@@ -1342,10 +1344,55 @@ def _sos_struct_sextic_symmetric_quadratic_form(poly, coeff):
         if solution is not None:
             return solution
 
+    if not (ker_coeff >= 0 and 3*ker_coeff >= merged_params[0]):
+        # In this case, the regular method below could not handle cases for real numbers.
+        # But this alternative method might work, so we try it first.
+        # F(a,b,c) * 2s(a2-ab) = 1/3 * s(h(a,b,c)^2) + p(a-b)^2 * s(c1*a^2 + c2*a*b)
+        # where h(a,b,c), c1, c2 are defined as below.
+        # c12 = [
+        #     ((72*x_**2 - 18*x_*y_ - 96*x_ - 9*y_**2 + 30*y_ + 20)/6, (36*x_**2 + 72*x_*y_ - 120*x_ - 45*y_**2 + 24*y_ + 40)/6),
+        #     (3*(x_ - 1)*(9*x_ - 5)/2, (27*x_**2 + 54*x_*y_ - 90*x_ - 42*y_ + 55)/2),
+        # ]
+        def _compute_h_c1_c2(z):
+            """
+            The following h, c1, c2 satisfy that
+            F(a,b,c) * 2s(a2-ab) = 1/3 * s(h(a,b,c)^2) + p(a-b)^2 * s(c1*a^2 + c2*a*b)
+            for arbitrary z. 
+            Therefore, we can choose z such that c1 >= 0 and c1 + c2 >= 0.
+            This is often done by selecting the symmetric axis of the parabola.
+            """
+            h = -a**4 - a**3*b*z + a**3*c*z + 2*a**2*b**2*z + 6*a**2*b**2 - a**2*b*c*z - 2*a**2*b*c - a**2*c**2*z - 3*a**2*c**2 - a*b**3*z - a*b**2*c*z - 2*a*b**2*c + 2*a*b*c**2*z + 4*a*b*c**2 - b**4 + b**3*c*z - b**2*c**2*z - 3*b**2*c**2 + 2*c**4\
+                + x_*(a**4 + a**3*b*z - a**3*c*z - 2*a**3*c - 2*a**2*b**2*z - 6*a**2*b**2 + a**2*b*c*z + 6*a**2*b*c + a**2*c**2*z + 3*a**2*c**2 + a*b**3*z + a*b**2*c*z + 6*a*b**2*c - 2*a*b*c**2*z - 12*a*b*c**2 + 2*a*c**3 + b**4 - b**3*c*z - 2*b**3*c + b**2*c**2*z + 3*b**2*c**2 + 2*b*c**3 - 2*c**4)\
+                + y_*(2*a**3*c - 2*a**2*b**2 - 2*a**2*b*c + a**2*c**2 - 2*a*b**2*c + 4*a*b*c**2 - 2*a*c**3 + 2*b**3*c + b**2*c**2 - 2*b*c**3)
+            c1 = 20*x_**2 - x_*y_ - 30*x_ - y_**2 + 3*y_ + z**2*(-x_**2 + 2*x_ - 1) + z*(x_**2 + 2*x_*y_ - 4*x_ - 2*y_ + 3) + 9
+            c2 = 16*x_**2 + 28*x_*y_ - 48*x_ - 8*y_**2 - 6*y_ + z**2*(x_**2 - 2*x_ + 1) + z*(8*x_**2 + 7*x_*y_ - 20*x_ - 7*y_ + 12) + 21
+            c1 = 2 * c1 / 3
+            c2 = 2 * c2 / 3
+            return h, c1, c2
+
+        zs = [-(2*x_ + y_ - 2)/(2*(x_ - 1)), (x_ + 2*y_ - 3)/(2*(x_ - 1))]
+
+        for z_ in zs:
+            # add in the extra p(a-b)^2:
+            func_h, c1, c2 = _compute_h_c1_c2(z_)
+            c1 = merged_params[0] * c1 + 2 * ker_coeff
+            c2 = merged_params[0] * c2 - 2 * ker_coeff
+
+            if c1 >= 0 and c1 + c2 >= 0:
+                p1 = c1*a**2 + c2*b*c
+                p1 = p1.together().as_coeff_Mul()
+                solution = [
+                    merged_params[0]/3 * CyclicSum(func_h**2),
+                    t_/4 * CyclicSum((a-b)**2) * CyclicProduct((a+b-2*c)**2),
+                    2 * CyclicSum(a**2-a*b)**2 * rem_poly,
+                    p1[0] * CyclicSum(p1[1]) * CyclicProduct((a-b)**2)
+                ]
+                return sp.Add(*solution) / CyclicSum((a-b)**2)
+
 
     if ker_coeff >= 0:
         # Regular case
-        p1 = ker_coeff*2*a**2 + (2*merged_params[0] - ker_coeff*2)*b*c
+        p1 = 2*ker_coeff*a**2 + 2*(merged_params[0] - ker_coeff)*b*c
         p1 = p1.together().as_coeff_Mul()
         solution = [
             merged_params[0]*2 * (CyclicSum(a**2-b*c)*CyclicSum(x_*a**2+y_*a*b) - CyclicSum(a**4-a**2*b*c))**2,
