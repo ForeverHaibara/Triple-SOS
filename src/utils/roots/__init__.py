@@ -4,7 +4,7 @@ from .rootsinfo import RootsInfo
 
 from .grid import GridRender
 
-from .findroot import findroot
+from .findroot import findroot, nroots
 
 from .tangents import root_tangents, RootTangent
 
