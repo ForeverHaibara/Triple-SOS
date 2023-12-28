@@ -1,12 +1,11 @@
-from itertools import zip_longest
-
 import sympy as sp
 
 from .quartic import sos_struct_quartic
 from ...utils.roots.findroot import optimize_discriminant
 from .utils import (
     CyclicSum, CyclicProduct, Coeff,
-    sum_y_exprs, nroots, rationalize, rationalize_bound, try_perturbations, radsimp
+    sum_y_exprs, nroots, rationalize, rationalize_bound, try_perturbations, radsimp,
+    zip_longest
 )
 
 a, b, c = sp.symbols('a b c')
@@ -143,17 +142,10 @@ def _sos_struct_septic_star(coeff, recurrsion):
         
         # now we have guaranteed discriminant >= 0 in the optimal value
         # we should make rational approximations
-        lastu, lastv = u, v
         for u_, v_ in zip_longest(
             rationalize_bound(u, direction = 0, compulsory = True),
             rationalize_bound(v, direction = 0, compulsory = True),
-            fillvalue = None
         ):
-            if u_ is None:
-                u_ = lastu
-            if v_ is None:
-                v_ = lastv
-            lastu, lastv = u_, v_
 
             det, (m__, p__, n__, q__) = _compute_discriminant(u_, v_)
             if det >= 0:

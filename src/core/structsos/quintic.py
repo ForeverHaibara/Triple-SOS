@@ -1,4 +1,4 @@
-from itertools import zip_longest, product
+from itertools import product
 
 import sympy as sp
 import numpy as np
@@ -10,7 +10,8 @@ from ...utils.basis_generator import invarraylize
 from .utils import (
     CyclicSum, CyclicProduct, Coeff,
     sum_y_exprs, nroots, rationalize, rationalize_bound, cancel_denominator, radsimp,
-    prove_univariate
+    prove_univariate,
+    zip_longest
 )
 
 a, b, c = sp.symbols('a b c')
@@ -84,6 +85,8 @@ def _sos_struct_quintic_full(coeff):
     s((23a-5b-c)(a-b)2(a+b-3c)2)
 
     s(36a5-39a4b-164a4c-122a3b2+311a3bc+253a3c2-275a2b2c)
+
+    s((a-2b)2(2a2-2ab+b2)(2a+b)-4a5+a3bc+25abc(a2-ab))
 
     s(53361a5-354459a4b-107547a4c+678010a3b2+1034825a3bc-254726a3c2-1049464a2b2c)
 
@@ -287,17 +290,10 @@ def _sos_struct_quintic_full(coeff):
         m, p, q, g, h, z, w = [coeff(_) for _ in [(5,0,0),(4,1,0),(1,4,0),(3,2,0),(2,3,0),(3,1,1),(2,2,1)]]
         p, q, g, h, z, w = p/m, q/m, g/m, h/m, z/m, w/m
 
-        lastu, lastv = None, None
 
         for u, v in zip_longest(
-            rationalize_bound(u_, direction = 0), rationalize_bound(v_, direction = 0), fillvalue = None
+            rationalize_bound(u_, direction = 0), rationalize_bound(v_, direction = 0)
         ):
-            if u is None:
-                u = lastu
-            if v is None:
-                v = lastv
-            lastu, lastv = u, v
-
             x = (-p + q + 4*u - 2*v - 1)/(2*(u + v - 1))
             y = x**2
             if p + 2*(u*x-u+v) >= y:

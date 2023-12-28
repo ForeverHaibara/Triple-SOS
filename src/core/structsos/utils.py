@@ -6,7 +6,7 @@ from sympy.core.singleton import S
 from ..symsos import prove_univariate
 from ...utils.roots.rationalize import rationalize, rationalize_bound, square_perturbation, cancel_denominator
 from ...utils.roots.findroot import nroots
-from ...utils.expression.cyclic import CyclicSum, CyclicProduct
+from ...utils import congruence, CyclicSum, CyclicProduct
 
 class Coeff():
     """
@@ -225,6 +225,27 @@ def radsimp(expr: Union[sp.Expr, List[sp.Expr]]) -> sp.Expr:
     # if n is not S.One:
     expr = (numer*n).expand()/d
     return expr
+
+
+def zip_longest(*args):
+    """
+    Zip longest generators and pad the length with the final element.
+    """
+    if len(args) == 0: return
+    args = [iter(arg) for arg in args]
+    lasts = [None] * len(args)
+    stops = [False] * len(args)
+    while True:
+        for i, gen in enumerate(args):
+            if stops[i]:
+                continue
+            try:
+                lasts[i] = next(gen)
+            except StopIteration:
+                stops[i] = True
+                if all(stops):
+                    return
+        yield tuple(lasts)
 
 
 def try_perturbations(
