@@ -723,6 +723,17 @@ def _sos_struct_sextic_full(coeff, recurrsion, real = True):
     #     [c51/2, c42-c15, c33/2-c60],
     #     [c15/2, c33/2-c60, c24-c51]
     # ]
+    
+    def _compute_quad_form_sol(quad_form):
+        q, ss = congruence(quad_form)
+        quad_form_sol = [
+            (q[0,0]*(a**3-a*b*c)+q[0,1]*(a**2*b-a*b*c)+q[0,2]*(a*b**2-a*b*c)),
+            (q[1,1]*(a**2*b-a*b*c)+q[1,2]*(a*b**2-a*b*c)),
+            (q[2,2]*(a*b**2-a*b*c))
+        ]
+        quad_form_sol = map(lambda x: CyclicSum(x.expand().together())**2, quad_form_sol)
+        return sum_y_exprs(ss, quad_form_sol)
+
     # rest form is what the original polynomial subtracts the quadratic form,
     # corresponding to the coefficients of a^4bc, a^3b^2c, a^2b^3c
     rest_form = [
@@ -731,15 +742,26 @@ def _sos_struct_sextic_full(coeff, recurrsion, real = True):
         c231 + 4*c15 + 6*c24 + 3*c33 - 2*c42 - 6*c51 - 6*c60
     ]
     if rest_form[0] == 0:
+        if all(_ == 0 for _ in rest_form):
+            quad_form = sp.Matrix([
+                [c60, c51/2, c15/2],
+                [c51/2, c42-c15, c33/2-c60],
+                [c15/2, c33/2-c60, c24-c51]
+            ])
+            quad_form_sol = _compute_quad_form_sol(quad_form)
+            return quad_form_sol
+
         # not implemented
         return None
+
     r1, r2 = rest_form[1] / rest_form[0], rest_form[2] / rest_form[0]
     denom = ((r1 + 2*r2 + sp.Rational(9,2))**2 + sp.Rational(27,4))
 
-    # We shall subtract r * \sum f(a,b,c)^2 from the original polynomial to make rest_form == 0
+    # We shall subtract r/z * \sum f(a,b,c)^2 from the original polynomial to make rest_form == 0
+    # where z = x^2 + x(y-3) + y^2 + 3 is a variable
     r = rest_form[0] / (54*(r1 + r2 + 3)/denom)
 
-    # the coefficient u,v in f can be written as function of x, y
+    # the coefficients u,v in f can be written as functions of x, y
     x, y = sp.symbols('x y')
     u = (2*r1**2 + 5*r1*r2 + 9*r1 + 2*r2**2 + 9*r2)*x + (2*r1**2 + 5*r1*r2 + 18*r1 + 2*r2**2 + 18*r2 + 27)*y + (- 4*r1**2 - 13*r1*r2 - 18*r1 - 10*r2**2 - 36*r2 - 27)
     v = (9*r1 + 9*r2 + 27)*x + (-2*r1**2 - 5*r1*r2 - 9*r1 - 2*r2**2 - 9*r2)*y + (- r1**2 - r1*r2 - 18*r1 + 2*r2**2 - 9*r2 - 27)
@@ -792,21 +814,13 @@ def _sos_struct_sextic_full(coeff, recurrsion, real = True):
             if all(quad_form_det(x__, y__, i) >= 0 for i in range(1,4)):
                 x_, y_ = x__, y__
                 break
+        else:
+            return None
 
     # symmetrize as Hermitian matrix
     quad_form = quad_form.subs({x:x_, y:y_})
     z_ = z.subs({x:x_, y:y_})
     quad_form = ((quad_form + quad_form.T) - sp.diag(*quad_form.diagonal())) / z_
-
-    def _compute_quad_form_sol(quad_form):
-        q, ss = congruence(quad_form)
-        quad_form_sol = [
-            (q[0,0]*(a**3-a*b*c)+q[0,1]*(a**2*b-a*b*c)+q[0,2]*(a*b**2-a*b*c)),
-            (q[1,1]*(a**2*b-a*b*c)+q[1,2]*(a*b**2-a*b*c)),
-            (q[2,2]*(a*b**2-a*b*c))
-        ]
-        quad_form_sol = map(lambda x: CyclicSum(x.expand().together())**2, quad_form_sol)
-        return sum_y_exprs(ss, quad_form_sol)
 
     quad_form_sol = _compute_quad_form_sol(quad_form)
 
