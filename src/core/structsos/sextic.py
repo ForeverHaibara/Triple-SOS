@@ -29,7 +29,6 @@ def sos_struct_sextic(coeff, recurrsion, real = True):
     return None
 
 
-
 def _sos_struct_sextic_hexagram(coeff):
     """
     Solve s(a3b3+xa4bc+ya3b2c+za2b3c+wa2b2c2) >= 0. The structure is known as hexagram.
@@ -245,9 +244,6 @@ def _sos_struct_sextic_hexagram(coeff):
                     if reflect:
                         solution = solution.xreplace({b: c, c: b})
                     return coeff33 * solution
-
-
-
 
 
 
@@ -492,11 +488,8 @@ def _sos_struct_sextic_hexagon(coeff, recurrsion, real = True):
                 main_solution = quadratic_weighting(c1, c2, -c3, a = a**2*b-a*b*c, b = a*b**2-a*b*c, formal = True)
                 main_solution = sum(wi * CyclicSum(xi.expand().together())**2 for wi, xi in main_solution)
                 return main_solution + remain_solution
-
                 
     return None
-
-
 
 
 def _sos_struct_sextic_rotated_tree(coeff):
