@@ -10,7 +10,8 @@ from .sextic_symmetric import (
 from .utils import (
     CyclicSum, CyclicProduct, Coeff,
     sum_y_exprs, nroots, rationalize_bound, radsimp,
-    quadratic_weighting, inverse_substitution
+    quadratic_weighting, inverse_substitution, congruence,
+    zip_longest
 )
 
 a, b, c = sp.symbols('a b c')
@@ -19,8 +20,11 @@ def sos_struct_sextic(coeff, recurrsion, real = True):
     if coeff((5,1,0)) == coeff((1,5,0)) and coeff((4,2,0)) == coeff((2,4,0)) and coeff((3,2,1)) == coeff((3,1,2)):
         return sos_struct_sextic_symmetric_ultimate(coeff, recurrsion, real = real)
 
-    if coeff((6,0,0))==0 and coeff((5,1,0))==0 and coeff((5,0,1))==0:
+    if coeff((6,0,0)) == 0 and coeff((5,1,0)) == 0 and coeff((5,0,1)) == 0:
         return _sos_struct_sextic_hexagon(coeff, recurrsion, real = real)
+
+    if coeff((6,0,0)) != 0:
+        return _sos_struct_sextic_full(coeff, recurrsion, real = real)
 
     return None
 
@@ -409,7 +413,7 @@ def _sos_struct_sextic_hexagon(coeff, recurrsion, real = True):
     if True:
         # Idea 1: subtract s(c1(a^2b-abc) - c2(ab^2-abc))^2
         # However, c1 and c2 might be irrational. So we use alternative:
-        # subtract c1s(a^2b-abc)^2 + c2s(ab^2-abc)^2 - c3s(a^2b-abc)(ab^2-abc)
+        # subtract c1s(a^2b-abc)^2 + c2s(ab^2-abc)^2 - c3s((a^2b-abc)(ab^2-abc))
         # with 4c1c2 >= c3^2 by quadratic constraint.
 
         c1, c2 = coeff((4,2,0)), coeff((4,0,2))
@@ -469,7 +473,11 @@ def _sos_struct_sextic_hexagon(coeff, recurrsion, real = True):
                 return True
             return False
         
-        if _check_valid(c3):
+
+        if x0 == -3*c30 and y0 == -3*c30:
+            # Degenerates to c1*s(a2b-abc)^2 + c2*s(ab2-abc)^2 + c3s(a2b-abc)s(ab2-abc) + 0
+            c3 = -c30
+        elif _check_valid(c3):
             if not isinstance(c3, sp.Rational):
                 for c3_ in rationalize_bound(c3, direction = -1, compulsory = True):
                     if c3_ >= 0 and 4*c1*c2 >= c3_**2 and _check_valid(c3_):
@@ -478,50 +486,17 @@ def _sos_struct_sextic_hexagon(coeff, recurrsion, real = True):
                 else:
                     c3 = None
             
-            if c3 is not None:
-                remain_solution = _sos_struct_sextic_hexagram(_compute_subtracted_params(c3, return_func = True))
-                if remain_solution is not None:
-                    main_solution = quadratic_weighting(c1, c2, -c3, a = a**2*b-a*b*c, b = a*b**2-a*b*c, formal = True)
-                    main_solution = sum(wi * CyclicSum(xi.expand().together())**2 for wi, xi in main_solution)
-                    return main_solution + remain_solution
+        if c3 is not None:
+            remain_solution = _sos_struct_sextic_hexagram(_compute_subtracted_params(c3, return_func = True))
+            if remain_solution is not None:
+                main_solution = quadratic_weighting(c1, c2, -c3, a = a**2*b-a*b*c, b = a*b**2-a*b*c, formal = True)
+                main_solution = sum(wi * CyclicSum(xi.expand().together())**2 for wi, xi in main_solution)
+                return main_solution + remain_solution
 
                 
     return None
 
 
-
-def _sos_struct_sextic_hexagon_full(coeff):
-    """
-    Still in development
-    Examples
-    -------
-    s(4a5b+9a5c-53a4bc+10a4c2-19a3b3+47a3b2c+52a3bc2-50a2b2c2)
-    """
-    if coeff((6,0,0)) != 0:
-        return None
-
-    coeff51 = coeff((5,1,0))
-    if coeff51 == 0 and coeff((1,5,0)) != 0:
-        # reflect the polynomial
-        return None
-
-    m = sp.sqrt(coeff((1,5,0)) / coeff51)
-    if not isinstance(m, sp.Rational):
-        return None
-
-    p, n, q = coeff((4,2,0)) / coeff51, coeff((3,3,0)) / coeff51, coeff((2,4,0)) / coeff51
-
-    # (q - t) / (p - t) = -2m
-    t = (2*m*p + q)/(2*m + 1)
-    z = (p - t) / (-2)
-    if t < 0 or n + 2 * t < z**2 - 2*m:
-        return None
-
-    # Case A. solve it directly through a cubic equation
-
-    # Case B. optimize discriminant >= 0
-
-    return None
 
 
 def _sos_struct_sextic_rotated_tree(coeff):
@@ -676,3 +651,172 @@ def _sos_struct_sextic_rotated_tree(coeff):
     ]
 
     return sum_y_exprs(y, exprs) / multiplier
+
+
+def _sos_struct_sextic_hexagon_full(coeff):
+    """
+    Still in development
+
+    Examples
+    -------
+    s(4a5b+9a5c-53a4bc+10a4c2-19a3b3+47a3b2c+52a3bc2-50a2b2c2)
+    """
+    if coeff((6,0,0)) != 0:
+        return None
+
+    coeff51 = coeff((5,1,0))
+    if coeff51 == 0 and coeff((1,5,0)) != 0:
+        # reflect the polynomial
+        return None
+
+    m = sp.sqrt(coeff((1,5,0)) / coeff51)
+    if not isinstance(m, sp.Rational):
+        return None
+
+    p, n, q = coeff((4,2,0)) / coeff51, coeff((3,3,0)) / coeff51, coeff((2,4,0)) / coeff51
+
+    # (q - t) / (p - t) = -2m
+    t = (2*m*p + q)/(2*m + 1)
+    z = (p - t) / (-2)
+    if t < 0 or n + 2 * t < z**2 - 2*m:
+        return None
+
+    # Case A. solve it directly through a cubic equation
+
+    # Case B. optimize discriminant >= 0
+
+    return None
+
+
+def _sos_struct_sextic_full(coeff, recurrsion, real = True):
+    """
+    Heuristically solve full sextics with the method of unknown coefficients.
+    Idea: Let f(a,b,c) = a^3-b^3+ua^2b+vb^2c-(u+v)ac^2+xab^2+ya^2c-(x+y)bc^2.
+    Then we note that \sum f(a,b,c) == 0.
+    We subtract some \sum f(a,b,c)^2 from the original polynomial to ensure that
+    the rest part is a quadratic form with respect to s(a^3-abc), s(a^2b-abc), s(ab^2-abc).
+
+
+    Examples
+    ----------
+    s(2a6+a4bc-3a5b)
+
+    16s(a2)3-9s((a3+3b2c)2)
+
+    s((a3+3b2c)2)-16abcs(a3)
+
+    s((a2-bc)/(4a2+4b2+c2))
+
+    243s(a(a+b)5)-32s(a)6
+    
+    References
+    ----------
+    [1] https://artofproblemsolving.com/community/c6t243f6h2747973_inequality
+
+    [2] https://artofproblemsolving.com/community/u426077h3222992p29498828
+
+    [3] https://artofproblemsolving.com/community/q1h101901p575510
+    """
+    c60, c51, c42, c33, c24, c15 = [coeff((6-i,i,0)) for i in range(6)]
+    c411, c321, c231 = [coeff((4-i,i+1,1)) for i in range(3)]
+
+    if c60 < 0 or coeff.poly111() != 0 or not coeff.is_rational:
+        return None
+
+    # compute the coefficients of the quadratic form
+    # with respect to s(a^3-abc), s(a^2b-abc), s(ab^2-abc)
+    # quad_form = [
+    #     [c60, c51/2, c15/2],
+    #     [c51/2, c42-c15, c33/2-c60],
+    #     [c15/2, c33/2-c60, c24-c51]
+    # ]
+    # rest form is what the original polynomial subtracts the quadratic form,
+    # corresponding to the coefficients of a^4bc, a^3b^2c, a^2b^3c
+    rest_form = [
+        c411 + 3*c15 - c33 + 3*c51 + 8*c60, 
+        c321 + -6*c15 - 2*c24 + 3*c33 + 6*c42 + 4*c51 - 6*c60, 
+        c231 + 4*c15 + 6*c24 + 3*c33 - 2*c42 - 6*c51 - 6*c60
+    ]
+    if rest_form[0] == 0:
+        # not implemented
+        return None
+    r1, r2 = rest_form[1] / rest_form[0], rest_form[2] / rest_form[0]
+    denom = ((r1 + 2*r2 + sp.Rational(9,2))**2 + sp.Rational(27,4))
+
+    # We shall subtract r * \sum f(a,b,c)^2 from the original polynomial to make rest_form == 0
+    r = rest_form[0] / (54*(r1 + r2 + 3)/denom)
+
+    # the coefficient u,v in f can be written as function of x, y
+    x, y = sp.symbols('x y')
+    u = (2*r1**2 + 5*r1*r2 + 9*r1 + 2*r2**2 + 9*r2)*x + (2*r1**2 + 5*r1*r2 + 18*r1 + 2*r2**2 + 18*r2 + 27)*y + (- 4*r1**2 - 13*r1*r2 - 18*r1 - 10*r2**2 - 36*r2 - 27)
+    v = (9*r1 + 9*r2 + 27)*x + (-2*r1**2 - 5*r1*r2 - 9*r1 - 2*r2**2 - 9*r2)*y + (- r1**2 - r1*r2 - 18*r1 + 2*r2**2 - 9*r2 - 27)
+    u, v = u / denom, v / denom
+    z = x**2 + x*(y - 3) + y**2 + 3
+
+    # find x, y such that the following quad_form is positive semidefinite
+    # (the upper triangular part is omitted)
+    quad_form = sp.Matrix([
+        [c60*z - 2*r, 0, 0],
+        [c51/2*z - r*(u-v), (c42-c15)*z - r*(2*u**2+2*u*v+2*v**2+6*x), 0],
+        [c15/2*z - r*(y-x), (c33/2-c60)*z - r*(2*u*x - 2*u*y - 2*v*x - 4*v*y - 6)/2, (c24-c51)*z - r*(-6*u + 2*x**2 + 2*x*y + 2*y**2)]
+    ]).expand()
+
+    def quad_form_det(x0, y0, n = 3):
+        q = quad_form[:n,:n].subs({x:x0, y:y0})
+        if n == 3:
+            # it is a six-degree polynomial with respect to x0, y0
+            return q[0,0]*q[1,1]*q[2,2] + 2*q[1,0]*q[2,1]*q[2,0] - q[0,0]*q[2,1]**2 - q[2,2]*q[1,0]**2 - q[1,1]*q[2,0]**2
+        elif n == 2:
+            return q[0,0]*q[1,1]-q[1,0]**2
+        elif n == 1:
+            return q[0,0]
+
+    # optimize the determinant of the quad_form by taking partial derivatives
+    success = False
+    for n_ in (3,):
+        det = quad_form_det(x,y,n_)
+        res = sp.resultant(det.diff(x), det.diff(y), x)
+        for y_ in nroots(res.as_poly(y), method='factor', real=True):
+            det2 = det.subs(y,y_).as_poly(x)
+            for x_ in nroots(det2.diff(x), method='factor', real=True):
+                if det2(x_) >= 0 and quad_form_det(x_,y_,1) >= 0 and quad_form_det(x_,y_,2) >= 0:
+                    # print((x_, y_))
+                    success = True
+                    break
+            if success:
+                break
+
+    if not success:
+        return None            
+
+    if not isinstance(x_, sp.Rational) or not isinstance(y_, sp.Rational):
+        # make a perturbation so that the quad_form is positive semidefinite
+        x_, y_ = x_.n(15), y_.n(15)
+        for x__, y__ in zip_longest(
+            rationalize_bound(x_, direction = 0, compulsory = True),
+            rationalize_bound(y_, direction = 0, compulsory = True),
+        ):
+            if all(quad_form_det(x__, y__, i) >= 0 for i in range(1,4)):
+                x_, y_ = x__, y__
+                break
+
+    # symmetrize as Hermitian matrix
+    quad_form = quad_form.subs({x:x_, y:y_})
+    z_ = z.subs({x:x_, y:y_})
+    quad_form = ((quad_form + quad_form.T) - sp.diag(*quad_form.diagonal())) / z_
+
+    def _compute_quad_form_sol(quad_form):
+        q, ss = congruence(quad_form)
+        quad_form_sol = [
+            (q[0,0]*(a**3-a*b*c)+q[0,1]*(a**2*b-a*b*c)+q[0,2]*(a*b**2-a*b*c)),
+            (q[1,1]*(a**2*b-a*b*c)+q[1,2]*(a*b**2-a*b*c)),
+            (q[2,2]*(a*b**2-a*b*c))
+        ]
+        quad_form_sol = map(lambda x: CyclicSum(x.expand().together())**2, quad_form_sol)
+        return sum_y_exprs(ss, quad_form_sol)
+
+    quad_form_sol = _compute_quad_form_sol(quad_form)
+
+    u_, v_ = u.subs({x:x_, y:y_}), v.subs({x:x_, y:y_})
+    main_sol = CyclicSum((a**3 + a**2*b*u_ + a**2*c*y_ + a*b**2*x_ + a*c**2*(-u_ - v_) - b**3 + b**2*c*v_ + b*c**2*(-x_ - y_)).together()**2)
+    return quad_form_sol + r/z_ * main_sol
