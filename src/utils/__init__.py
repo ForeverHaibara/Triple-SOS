@@ -2,7 +2,7 @@ from .basis_generator import generate_expr, arraylize, arraylize_sp
 
 from .text_process import preprocess_text, pl
 
-from .polytools import deg, verify_hom_cyclic
+from .polytools import deg, verify_hom_cyclic, verify_is_symmetric
 
 from .expression import (
     CyclicSum,

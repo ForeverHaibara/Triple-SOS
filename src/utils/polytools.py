@@ -143,6 +143,21 @@ def verify_hom_cyclic(poly, fast=True):
     return True, True
 
 
+def verify_is_symmetric(poly):
+    """
+    Check whether a polynomial is symmetric. The polynomial is 
+    assumed to be cyclic.
+    """
+    coeffs = {}
+    for monom, coeff in poly.terms():
+        coeffs[monom] = coeff
+    for monom, coeff in coeffs.items():
+        a, b, c = monom
+        if coeffs.get((b, a, c), 0) != coeff:
+            return False
+    return True
+
+
 def monom_of(x, m):
     return x.coeff_monomial(m)
 
