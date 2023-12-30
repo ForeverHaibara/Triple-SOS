@@ -1,41 +1,10 @@
-from typing import List, Optional
-from contextlib import contextmanager
+from typing import List, Optional, Tuple
+from contextlib import contextmanager, nullcontext
 
-import numpy as np
 import sympy as sp
 
-from ...utils.roots.rationalize import rationalize
 from ...utils import congruence
 
-def _rationalize_matrix_mask(M, tolerance = 1e-10):
-    M_abs = np.abs(M)
-    mask_tolerance = M_abs.mean() * tolerance
-    mask = M_abs > mask_tolerance
-    return mask
-
-def rationalize_matrix(M, mask_func = None, symmetric = True):
-    """
-    Rationalize a matrix with continued fraction.
-    """
-    if mask_func is None:
-        mask_func = _rationalize_matrix_mask
-    if not hasattr(mask_func, '__call__'):
-        mask_copy = mask_func
-        mask_func = lambda x: np.abs(x) > mask_copy
-    mask = mask_func(M)
-
-    M = np.where(mask, M, 0)
-    M_ = sp.Matrix.zeros(M.shape[0], M.shape[1])
-    if symmetric:
-        for i in range(M.shape[0]):
-            for j in range(i, M.shape[1]):
-                M_[j,i] = M_[i,j] = rationalize(M[i,j], reliable = True)
-    else:
-        for i in range(M.shape[0]):
-            for j in range(M.shape[1]):
-                M_[i,j] = rationalize(M[i,j], reliable = True)
-
-    return M_
 
 def congruence_with_perturbation(M, allow_numer = False):
     """
@@ -54,7 +23,7 @@ def congruence_with_perturbation(M, allow_numer = False):
     return None
 
 
-def is_numer_matrix(M):
+def is_numer_matrix(M: sp.Matrix) -> bool:
     """
     Check whether a matrix contains sp.Float.
     """
@@ -65,14 +34,7 @@ def is_numer_matrix(M):
     return False
 
 
-def _discard_zero_rows(A, b, rank_tolerance = 1e-10):
-    A_rowmax = np.abs(A).max(axis = 1)
-    nonvanish =  A_rowmax > rank_tolerance * A_rowmax.max()
-    rows = np.extract(nonvanish, np.arange(len(nonvanish)))
-    return A[rows], b[rows]
-
-
-def upper_vec_of_symmetric_matrix(S, return_inds = False, check = None):
+def upper_vec_of_symmetric_matrix(S: sp.Matrix, return_inds = False, check = None):
     """
     Gather the upper part of a symmetric matrix by rows as a vector.
 
@@ -84,6 +46,11 @@ def upper_vec_of_symmetric_matrix(S, return_inds = False, check = None):
         If True, return (i,j) instead of S[i,j].
     check : function
         Function to filter rows and columns.
+
+    Yields
+    ------
+    S[i,j] :
+        Upper part of S.
     """
     k = S.shape[0] if hasattr(S, 'shape') else S
 
@@ -102,33 +69,7 @@ def upper_vec_of_symmetric_matrix(S, return_inds = False, check = None):
                 yield ret(i,j)
 
 
-# def solve_undetermined_linear(A, b, rank_tolerance = 1e-10):
-#     """
-#     Solve an undetermined linear system Ax = b with SVD.
-
-#     The solution is in the form x = x0 + V[rank:].T @ y
-#     where x0 is the least square solution and y is an arbitrary vector.
-
-#     Returns
-#     -------
-#     solution : dict
-#     """
-#     U, D, V = np.linalg.svd(A, full_matrices = False)
-#     rank_tolerance = 1e-11
-#     rank = np.sum(D > rank_tolerance)
-#     x0 = V.T @ np.linalg.lstsq(U * D.reshape((1, -1)), b, rcond = None)[0]
-
-#     solution = {
-#         'U': U,
-#         'D': D,
-#         'V': V,
-#         'rank': rank,
-#         'x0': x0
-#     }
-#     return solution
-
-
-def solve_undetermined_linear(M: sp.Matrix, B: sp.Matrix):
+def solve_undetermined_linear(M: sp.Matrix, B: sp.Matrix) -> Tuple[sp.Matrix, sp.Matrix]:
     """
     Solve an undetermined linear system Mx = B with LU decomposition.
     See details at sympy.Matrix.gauss_jordan_solve.
@@ -177,7 +118,7 @@ def solve_undetermined_linear(M: sp.Matrix, B: sp.Matrix):
     return vt2, V2
 
 
-def split_vector(constraints: List[sp.Matrix]):
+def split_vector(constraints: List[sp.Matrix]) -> List[slice]:
     """
     It is common for a single array to store information of multiple
     matrices. And we need to extract each matrix from the array by 
@@ -206,10 +147,14 @@ def split_vector(constraints: List[sp.Matrix]):
 
 
 @contextmanager
-def indented_print(indent = 4, indent_fill = ' '):
+def indented_print(indent = 4, indent_fill = ' ', verbose = True):
     """
     Every print in this context will be indented by some spaces.
     """
+    if not verbose:
+        yield
+        return
+
     import builtins
     old_print = print
     indent_str = indent_fill * indent

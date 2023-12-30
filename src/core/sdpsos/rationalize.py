@@ -1,4 +1,4 @@
-from typing import List, Union, Optional, Callable
+from typing import List, Union, Optional, Callable, Tuple
 
 import numpy as np
 import sympy as sp
@@ -8,7 +8,7 @@ from .utils import congruence_with_perturbation
 from ...utils.roots.rationalize import rationalize
 
 
-def rationalize_with_mask(y: np.ndarray, zero_tolerance: float = 1e-7):
+def rationalize_with_mask(y: np.ndarray, zero_tolerance: float = 1e-7) -> sp.Matrix:
     """
     Rationalize a numpy vector. First set small entries to zero.
 
@@ -32,7 +32,7 @@ def rationalize_with_mask(y: np.ndarray, zero_tolerance: float = 1e-7):
     return y_rational
 
 
-def rationalize_simutaneously(y: np.ndarray, lcm: int, times = 3):
+def rationalize_simutaneously(y: np.ndarray, lcm: int, times = 3) -> sp.Matrix:
     """
     Rationalize a vector `y` with the same denominator `lcm ^ power` 
     where `power = 0, 1, ..., times - 1`. This keeps the denominators of
@@ -46,6 +46,11 @@ def rationalize_simutaneously(y: np.ndarray, lcm: int, times = 3):
         The denominator of `y`.
     times : int
         The number of times to perform retries.
+
+    Yields
+    ------
+    y_rational : sp.Matrix
+        The rationalized vector.
     """
     lcm_ = sp.S(1)
     for power in range(times):
@@ -59,7 +64,7 @@ def rationalize_simutaneously(y: np.ndarray, lcm: int, times = 3):
 def verify_is_pretty(
         y: Union[List, sp.Matrix], 
         threshold: Optional[Callable] = None
-    ):
+    ) -> bool:
     """
     Check whether the rationalization of `y` is pretty. Idea: in normal cases, 
     the denominators of `y` should be aligned. For example, 
@@ -98,7 +103,7 @@ def verify_is_positive(
         vecS: sp.Matrix,
         splits: List[slice],
         allow_numer: bool = False
-    ):
+    ) -> Optional[List[Tuple[sp.Matrix, sp.Matrix, List[sp.Rational]]]]:
     """
     Recover symmetric matrices from `x0 + space * y` and check whether they are
     positive semidefinite. See more details in `solver.py`.
@@ -114,7 +119,7 @@ def verify_is_positive(
 
     Returns
     -------
-    decompositions : Optional[List[Tuple[sp.Matrix, sp.Matrix List[sp.Rational]]]]
+    decompositions : Optional[List[Tuple[sp.Matrix, sp.Matrix, List[sp.Rational]]]]
         If the matrices are positive semidefinite, return the congruence decompositions `(S, U, diag)`
         So that each `S = U.T * diag(diag) * U` where `U` is upper triangular.
         Otherwise, return None.

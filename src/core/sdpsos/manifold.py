@@ -130,8 +130,13 @@ def _compute_multiplicity_sym(poly):
     return min(poly.monoms())[0]
 
 
-
 class RootSubspace():
+    """
+    If an inequality has nontrivial equality cases, known as roots, then
+    the sum-of-squares representation should be zero at these roots. This implies
+    the result lies on a subspace perpendicular to the roots. This class
+    investigates the roots and generates the subspace.
+    """
     def __init__(self, poly):
         self.poly = poly
         self.n = deg(poly)
@@ -292,6 +297,7 @@ class RootSubspace():
             self.roots, [_formatter(_) for _ in self.roots], self.multiplicity_sym_
         )
 
+
 class LowRankHermitian():
     """
     A Hermitian matrix M such that M is in rowspace of Q.
@@ -363,8 +369,8 @@ class LowRankHermitian():
 
     def reduce(self, n, monom_add = (0,0,0), cyc = False):
         """
-        For example, Vasile inequality 2s(a2)2 - 6s(a3b) has a
-        (nonpositive) 6*6 matrix representation v' * M * v where
+        For example, the Vasile inequality 2s(a2)2 - 6s(a3b) has a 
+        (nonnegative) 6*6 matrix representation v' * M * v where
         v = [a^2,b^2,c^2,ab,bc,ca]' and M = 
         [[ 2, 1, 1,-3, 0, 0],
          [ 1, 2, 1, 0,-3, 0],
@@ -373,8 +379,15 @@ class LowRankHermitian():
          [ 0,-3, 0, 0, 2, 0],
          [ 0, 0,-3, 0, 0, 2]]
         The a^2b^2 coefficient is (1 + 1 + 2) = 4. We note that each coefficient
-        may be the sum of several entries. We should reduce the entry number to 
-        coefficient number. As a result, the shape of kron(Q,Q) gets reduced.
+        may be the sum of several entries. We learn that the final equation is A @ vec(M) = p
+        where p is the vector of coefficients of the original polynomial.
+
+        Hence, we have A @ kron(Q,Q) @ vec(S) = p.
+        And we reduce kron(Q,Q) to such A @ kron(Q,Q) = QQ_reduced.
+
+        Futhermore, S is symmetric, so we only need the upper triangular part to
+        form the vec(S). So we can further reduce the size of matrix, so that
+        QQ_reduced @ vec(S)_reduced = p.
         """
         monoms = generate_expr(n, cyc = False)[1]
         m, k = self.Q.shape # m = len(monoms)
@@ -409,14 +422,15 @@ class LowRankHermitian():
         return QQ_reduced
 
 
-def add_cyclic_constraints(collection):
+
+def add_cyclic_constraints(sdp_problem):
     """
     If monom_add['cyc'] is False, we can impose additional cyclic constraints.
     """
-    degree = deg(collection['poly'])
+    degree = sdp_problem.poly_degree
 
     for key in ('major', 'minor'):
-        if collection['Q'][key] is None:
+        if sdp_problem.Q[key] is None:
             continue
         reduced_kwargs = _REDUCE_KWARGS[(degree % 2, key)]
         if reduced_kwargs['cyc']:
@@ -427,7 +441,7 @@ def add_cyclic_constraints(collection):
 
         inv_monoms, monoms = generate_expr(degree // 2 - (key == 'minor'), cyc = False)
         m = len(monoms)
-        M = collection['M'][key]
+        M = sdp_problem.low_rank[key]
         for i1, (m1, n1, p1) in enumerate(monoms):
             for j1, (m2, n2, p2) in enumerate(monoms[i1:], start = i1):
                 i2 = inv_monoms[(n1, p1, m1)]
@@ -449,16 +463,16 @@ def add_cyclic_constraints(collection):
                     QQ_reduced2.append(QQ_reduced[:, i * k + j] + QQ_reduced[:, j * k + i])
             rows = sp.Matrix.hstack(*QQ_reduced2)
 
-            collection['eq'][key] = sp.Matrix.vstack(collection['eq'][key], rows)
+            sdp_problem.eq[key] = sp.Matrix.vstack(sdp_problem.eq[key], rows)
 
             # align other components with zero matrices
-            for other_key in collection['eq'].keys():
-                if other_key == key or collection['eq'][other_key] is None:
+            for other_key in sdp_problem.eq.keys():
+                if other_key == key or sdp_problem.eq[other_key] is None:
                     continue
-                collection['eq'][other_key] = sp.Matrix.vstack(
-                    collection['eq'][other_key], sp.zeros(rows.shape[0], collection['eq'][other_key].shape[1])
+                sdp_problem.eq[other_key] = sp.Matrix.vstack(
+                    sdp_problem.eq[other_key], sp.zeros(rows.shape[0], sdp_problem.eq[other_key].shape[1])
                 )
             
-            collection['vecM'] = sp.Matrix.vstack(collection['vecM'], sp.zeros(rows.shape[0], 1))
-
-    return collection
+            sdp_problem.vecM = sp.Matrix.vstack(sdp_problem.vecM, sp.zeros(rows.shape[0], 1))
+    
+    return sdp_problem

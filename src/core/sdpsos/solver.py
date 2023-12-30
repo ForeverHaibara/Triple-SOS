@@ -324,6 +324,19 @@ def sdp_solver(
     allow_numer : bool
         Whether to allow numerical solution. If True, then the function will return numerical solution
         if the rational solution does not exist.
+
+    Returns
+    -------
+    Returns a dict if the problem is solved, otherwise return None.
+    The dict contains the following keys:
+        sos : picos.Problem
+            The SOS problem.
+        y : sp.Matrix
+            The rational solution of y.
+        S : Dict[str, sp.Matrix]
+            The solution of each symmetric matrix S.
+        decompositions : Dict[str, Tuple[sp.Matrix, List[sp.Rational]]]
+            The congruence decomposition of each symmetric matrix S. Each item is a tuple.
     """
     if not isinstance(keys, list):
         keys = list(keys) # avoid troubles of iterator
