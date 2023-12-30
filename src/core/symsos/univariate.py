@@ -2,7 +2,6 @@ from itertools import product
 
 import sympy as sp
 
-# from ...utils.roots.rationalize import rationalize
 from ...utils import congruence
 
 def _classify_roots(roots):
@@ -33,7 +32,7 @@ def _classify_roots(roots):
     return real_roots, complex_roots
 
 
-def _construct_matrix_from_roots(real_roots, complex_roots, leading_coeff = 1, positive = False):
+def _construct_matrix_from_roots(real_roots, complex_roots, leading_coeff = 1, positive = False, early_stop = -1):
     """
     Assume an irreducible polynomial f(x) is positive over R, then 
     all its roots are complex and paired by conjugate. Write 
@@ -62,6 +61,11 @@ def _construct_matrix_from_roots(real_roots, complex_roots, leading_coeff = 1, p
         The leading coefficient of the polynomial.
     positive:
         Whether the polynomial is positive over R or R+.
+    early_stop: int
+        We compute the interior matrix of by summing up multiple matrices.
+        However, the time complexity is O(2^n). If early_stop == True,
+        we only compute the first `early_stop` matrices.
+        When `early_stop == -1`, we use 2*n + 2 matrices.
 
     Returns
     -------
@@ -75,6 +79,11 @@ def _construct_matrix_from_roots(real_roots, complex_roots, leading_coeff = 1, p
     x = sp.symbols('x')
     if not positive:
         M = sp.zeros(len(complex_roots) + 1)
+        cnt = 0
+
+        if early_stop == -1:
+            early_stop = 2 * len(complex_roots) + 2
+
         for comb in product(range(2), repeat=len(complex_roots)):
             vec = sp.prod((x - root[i]) for i, root in zip(comb, complex_roots))
             vec = vec.as_poly(x).all_coeffs()
@@ -83,8 +92,11 @@ def _construct_matrix_from_roots(real_roots, complex_roots, leading_coeff = 1, p
             vec_im = sp.Matrix(list(map(sp.im, vec)))
             
             M += vec_re * vec_re.T + vec_im * vec_im.T
+            cnt += 1
+            if cnt >= early_stop:
+                break
 
-        M = M / 2**len(complex_roots)
+        M = M / cnt
         M *= leading_coeff
         return M
 
@@ -112,7 +124,8 @@ def _construct_matrix_from_roots(real_roots, complex_roots, leading_coeff = 1, p
             M = _construct_matrix_from_roots([], 
                 complex_roots_extra + complex_roots,
                 leading_coeff = leading_coeff * poly.LC(),
-                positive = False
+                positive = False,
+                early_stop = early_stop
             )
             Ms.append(M)
         return Ms
@@ -259,7 +272,7 @@ def _create_sos_from_US(U, S, x = None, return_raw = False):
     return sp.Add(*exprs)
 
 
-def _prove_univariate_irreducible(poly, return_raw = False):
+def _prove_univariate_irreducible(poly, return_raw = False, early_stop = -1, n = 15):
     """
     Prove an irreducible univariate polynomial is positive over the real line or 
     positive over R+. Return None if the algorithm fails.
@@ -283,11 +296,15 @@ def _prove_univariate_irreducible(poly, return_raw = False):
     ----------
     poly : sp.Poly
         The polynomial.
-    positive : bool
-        Whether to prove the polynomial is positive over R+ or positive over R. However,
-        it will automatically turn off R+ constraint if no real roots are found.
     return_raw : bool, optional
         Whether return the raw lists.
+    early_stop: int
+        We compute the interior matrix of by summing up multiple matrices.
+        However, the time complexity is O(2^n). If early_stop == True,
+        we only compute the first `early_stop` matrices.
+        When `early_stop == -1`, we use 2*n + 2 matrices.
+    n: int
+        Working precision. The default is 15.
 
     Returns
     -------
@@ -303,7 +320,7 @@ def _prove_univariate_irreducible(poly, return_raw = False):
     if poly.degree() <= 2:
         return _prove_univariate_simple(poly, return_raw = return_raw)
 
-    roots = sp.polys.nroots(poly)
+    roots = sp.polys.nroots(poly, n = n)
     real_roots, complex_roots = _classify_roots(roots)
 
     # a mark of whether the polynomial is positive only over R+ (True) or over R (False)
@@ -331,9 +348,10 @@ def _prove_univariate_irreducible(poly, return_raw = False):
         return poly.as_expr()
 
     # extract roots to construct matrix
-    M0 = _construct_matrix_from_roots(real_roots, complex_roots, leading_coeff = poly.LC(), positive = positive)
+    M0 = _construct_matrix_from_roots(real_roots, complex_roots, leading_coeff = poly.LC(), positive = positive, early_stop = early_stop)
 
-    for lcm in (1, 144, 144**2, 144**6):
+    lcm = 1
+    while True:
         # rationalize off-diagonal entries
         # and restore diagonal entries by subtraction
         M = _rationalize_matrix_simultaneously(M0, lcm = lcm)
@@ -358,7 +376,9 @@ def _prove_univariate_irreducible(poly, return_raw = False):
                         return [(sp.S(1),) + p1, (poly.gens[0],) + p2]
                     else:
                         return p1 + p2 * poly.gens[0]
-
+        lcm *= 144
+        if len(str(lcm)) > n:
+            break
     return
 
 
@@ -421,7 +441,7 @@ def _prove_univariate_simple(poly, return_raw = False):
         return None
 
 
-def prove_univariate(poly, return_raw = False):
+def prove_univariate(poly, return_raw = False, early_stop = -1, n = 15):
     """
     Prove a polynomial is positive over the real line or positive over R+.
 
@@ -431,7 +451,14 @@ def prove_univariate(poly, return_raw = False):
         The polynomial.
     return_raw : bool, optional
         Whether return the raw lists.
-    
+    early_stop: int
+        We compute the interior matrix of by summing up multiple matrices.
+        However, the time complexity is O(2^n). If early_stop == True,
+        we only compute the first `early_stop` matrices.
+        When `early_stop == -1`, we use 2*n + 2 matrices.
+    n: int
+        Working precision. The default is 15.
+
     Returns
     -------
     Optional
@@ -456,7 +483,7 @@ def prove_univariate(poly, return_raw = False):
             else:
                 mul.append(factor.as_expr() ** multiplicity)
         else:
-            ret = _prove_univariate_irreducible(factor, return_raw = return_raw)
+            ret = _prove_univariate_irreducible(factor, return_raw = return_raw, early_stop = early_stop, n = n)
             if ret is None:
                 return None
             if return_raw:
