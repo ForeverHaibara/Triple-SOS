@@ -12,6 +12,9 @@ from ...utils.polytools import deg
 
 
 class SDPProblem():
+    """
+    Helper class for SDPSOS. See details at SDPProblem.solve.
+    """
     def __init__(self, 
             poly,
             manifold = None,

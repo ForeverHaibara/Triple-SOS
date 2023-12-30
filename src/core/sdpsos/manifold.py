@@ -2,10 +2,9 @@ import numpy as np
 import sympy as sp
 
 from .findroot import findroot_resultant
-from ...utils.basis_generator import generate_expr
-from ...utils.polytools import convex_hull_poly, deg
-from ...utils.roots.roots import Root, RootAlgebraic
-from ...utils.roots.rootsinfo import RootsInfo
+from ...utils import deg, generate_expr, verify_is_symmetric
+from ...utils.polytools import convex_hull_poly
+from ...utils.roots import Root, RootsInfo
 
 _ROOT_FILTERS = {
     (0,0,0): lambda r: True,
@@ -429,6 +428,13 @@ def add_cyclic_constraints(sdp_problem):
     """
     degree = sdp_problem.poly_degree
 
+    transforms = [
+        lambda x,y,z: (y,z,x),
+        lambda x,y,z: (x,z,y)
+    ]
+    if not verify_is_symmetric(sdp_problem.poly):
+        transforms = transforms[:1]
+
     for key in ('major', 'minor'):
         if sdp_problem.Q[key] is None:
             continue
@@ -442,14 +448,17 @@ def add_cyclic_constraints(sdp_problem):
         inv_monoms, monoms = generate_expr(degree // 2 - (key == 'minor'), cyc = False)
         m = len(monoms)
         M = sdp_problem.low_rank[key]
-        for i1, (m1, n1, p1) in enumerate(monoms):
-            for j1, (m2, n2, p2) in enumerate(monoms[i1:], start = i1):
-                i2 = inv_monoms[(n1, p1, m1)]
-                if i2 <= i1:
-                    continue
-                j2 = inv_monoms[(n2, p2, m2)]
-                row = M.QQ[i1 * m + j1, :] - M.QQ[i2 * m + j2, :]
-                rows.append(row)
+        for i1, m1 in enumerate(monoms):
+            for j1, m2 in enumerate(monoms[i1:], start = i1):
+                for transform in transforms:
+                    i2 = inv_monoms[transform(*m1)]
+                    if i2 <= i1:
+                        continue
+                    j2 = inv_monoms[transform(*m2)]
+
+                    # equivalent entries must be equal
+                    row = M.QQ[i1 * m + j1, :] - M.QQ[i2 * m + j2, :]
+                    rows.append(row)
 
         if len(rows):
             rows = sp.Matrix.vstack(*rows)
