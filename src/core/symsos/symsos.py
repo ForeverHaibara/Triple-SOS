@@ -3,12 +3,12 @@ from typing import Tuple, Union, Optional
 import sympy as sp
 
 from .representation import (
-    sym_representation, _verify_is_symmetric,
+    sym_representation,
     TRANSLATION_POSITIVE, TRANSLATION_REAL,
     prove_numerator
 )
 from .solution import SolutionSymmetric, SolutionSymmetricSimple
-from ...utils.polytools import deg
+from ...utils import deg, verify_is_symmetric
 
 def SymmetricSOS(
         poly: sp.Poly,
@@ -38,7 +38,7 @@ def SymmetricSOS(
     """
 
     # check symmetricity here # and (1,1,1) == 0
-    if (not (poly.domain in (sp.polys.ZZ, sp.polys.QQ))) or (not _verify_is_symmetric(poly)):
+    if (not (poly.domain in (sp.polys.ZZ, sp.polys.QQ))) or (not verify_is_symmetric(poly)):
         return None
     # if poly(1,1,1) != 0:
     #     return None
