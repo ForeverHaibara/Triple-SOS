@@ -129,6 +129,27 @@ def _compute_multiplicity_sym(poly):
     return min(poly.monoms())[0]
 
 
+def _compute_multiplicity_hessian(poly):
+    """
+    Compute the multiplicity of zero at (1,1,1) by Hessian.
+    For now, when poly(1,1,1) != 0, return 0. When poly(1,1,1) == 0 and Hessian != 0, return 1.
+    When poly(1,1,1) == 0 and Hessian == 0, return 2.
+    """
+    a, b, c = sp.symbols('a b c')
+    part_poly = poly.subs({c:1})
+    if part_poly.subs({a:1,b:1}) != 0:
+        return 0
+    da = part_poly.diff(a)
+    db = part_poly.diff(b)
+    da2 = da.diff(a)
+    dab = da.diff(b)
+    db2 = db.diff(b)
+    params = {a: 1, b: 1}
+    if da2.subs(params) == 0 and dab.subs(params) == 0 and db2.subs(params) == 0:
+        return 2
+    return 1
+
+
 class RootSubspace():
     """
     If an inequality has nontrivial equality cases, known as roots, then
@@ -144,6 +165,7 @@ class RootSubspace():
         self.roots = [r for r in self.roots if not r.is_corner]
         self.subspaces_ = {}
         self.multiplicity_sym_ = _compute_multiplicity_sym(poly)
+        self.multiplicity_hes_ = _compute_multiplicity_hessian(poly)
 
     def subspaces(self, n, positive = False):
         if not positive:
@@ -225,6 +247,7 @@ class RootSubspace():
 
         subspaces += self.hull_space(minor)
         subspaces += self.mult_sym_space(minor)
+        subspaces += self.mult_hes_space(minor)
         space = sp.Matrix.hstack(*subspaces).T
 
         n = space.shape[1]
@@ -266,22 +289,45 @@ class RootSubspace():
         monoms = generate_expr(self.n // 2 - minor, cyc = False)[1]
 
         vecs_all = []
+
         for i in range(3): # stands for a, b, c
-            # compute the order, note that the monom_add might cancel one order
-            num = (self.multiplicity_sym_ - 1 - monom_add[i]) // 2
+            # compute the order, note that monom_add might cancel one order
+            dm = monom_add[i]
+            num = (self.multiplicity_sym_ - 1 + dm) // 2
+            # num = self.multiplicity_sym_ - 1 - dm
+
             vecs = [[0] * len(monoms) for _ in range(num)]
             for j in range(len(monoms)):
                 monom = monoms[j]
-                if 0 < monom[i] <= num:
+                if -dm < monom[i] <= num - dm:
                     # sum of coefficients where monom[i] == constant
                     # actually it should be the factorial after derivative, (monom[i]!), 
                     # however it is equivalent to ones
-                    vecs[monom[i] - 1][j] = 1
+                    vecs[monom[i] - 1 + dm][j] = 1
             vecs = [sp.Matrix(_) for _ in vecs]
         
             vecs_all.extend(vecs)
         
-        return vecs
+        return vecs_all
+
+    def mult_hes_space(self, minor = 0):
+        """
+        If the Hessian of the polynomial at (1,1,1) is zero, then we have extra constraints.
+        M * (dv/da) == 0, M * (dv/db) == 0, M * (dv/dc) == 0 at (1,1,1).
+        """
+        if self.multiplicity_hes_ <= 1:
+            # either no root at (1,1,1) or multiplicity is merely 1
+            return []
+        monoms = generate_expr(self.n // 2 - minor, cyc = False)[1]
+
+        vecs_all = []
+        for i in range(3): # stands for a, b, c
+            vec = [0] * len(monoms)
+            for j in range(len(monoms)):
+                vec[j] = monoms[j][i]
+            vecs_all.append(sp.Matrix(vec))
+
+        return vecs_all
 
 
     def __str__(self):
@@ -292,8 +338,8 @@ class RootSubspace():
                 if len(root.root_anp[0].mod) > 4:
                     uv = (uv[0].n(15), uv[1].n(15))
             return uv
-        return 'Subspace [\n    roots  = %s\n    uv     = %s\n    rowsum = %s\n]'%(
-            self.roots, [_formatter(_) for _ in self.roots], self.multiplicity_sym_
+        return 'Subspace [\n    roots  = %s\n    uv     = %s\n    rowsum = %s\n    hessian = %s\n]'%(
+            self.roots, [_formatter(_) for _ in self.roots], self.multiplicity_sym_, self.multiplicity_hes_
         )
 
 

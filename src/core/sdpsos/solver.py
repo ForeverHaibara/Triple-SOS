@@ -181,6 +181,7 @@ def _sdp_solver(sos, x0, space, splits, objectives = None, allow_numer = False, 
         obj_key = 'S_minor' if 'S_minor' in sos.variables else 'S_major'
         objectives = [
             ('max', lambda sos: sos.variables[obj_key].tr),
+            ('min', lambda sos: sos.variables[obj_key].tr),
             ('max', lambda sos: sos.variables[obj_key]|1)
         ]
         x = np.random.randn(*sos.variables[obj_key].shape)
