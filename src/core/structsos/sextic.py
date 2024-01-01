@@ -704,11 +704,13 @@ def _sos_struct_sextic_full(coeff, recurrsion, real = True):
     
     References
     ----------
-    [1] https://artofproblemsolving.com/community/c6t243f6h2747973_inequality
+    [1] https://artofproblemsolving.com/community/u585449h2736959p29529763
 
-    [2] https://artofproblemsolving.com/community/u426077h3222992p29498828
+    [2] https://artofproblemsolving.com/community/c6t243f6h2747973_inequality
 
-    [3] https://artofproblemsolving.com/community/q1h101901p575510
+    [3] https://artofproblemsolving.com/community/u426077h3222992p29498828
+
+    [4] https://artofproblemsolving.com/community/q1h101901p575510
     """
     c60, c51, c42, c33, c24, c15 = [coeff((6-i,i,0)) for i in range(6)]
     c411, c321, c231 = [coeff((4-i,i+1,1)) for i in range(3)]

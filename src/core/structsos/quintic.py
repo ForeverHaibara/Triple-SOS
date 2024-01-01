@@ -80,6 +80,8 @@ def _sos_struct_quintic_full(coeff):
 
     s(a2(a-b)(a2+b2-3ac+3c2))-1/3abcs(a2-ab)
 
+    s((a+b-c*4/5)(a2-b2+0(ab-ac)+(bc-ab))2)
+
     s(2a5-5a4b-7a4c+5a3b2+14a3bc+6a3c2-15a2b2c)
 
     s((23a-5b-c)(a-b)2(a+b-3c)2)
