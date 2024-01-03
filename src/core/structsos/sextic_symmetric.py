@@ -1236,7 +1236,11 @@ def _sos_struct_sextic_symmetric_quadratic_form(poly, coeff):
     s(56a6-41a5b-56a4b2+82a3b3-56a2b4-83a3b2c-83a2b3c-41ab5+98a2b2c2+124a4bc)      (real)
 
     p(a2+s(a/6)2)-125/8p(a)s(a/6)3                 (real)
-    
+
+    s(36a6-84a5b-84a5c+87a4b2+130a4bc+87a4c2-77a3b3-55a3b2c-55a3bc2+15a2b2c2)       (real)
+
+    (s(a2(a-b)(a-c)(a-3b)(a-3c))+p(a-b)2)+s(a2-2ab)2s(a2-ab)/4+s((a-b)(a-c)(a-2b)(a-2c)(a-4b)(a-4c))-6p(a-b)2   (real)
+
     References
     -------
     [1] https://artofproblemsolving.com/community/c6t243f6h3013463_symmetric_inequality
@@ -1259,7 +1263,7 @@ def _sos_struct_sextic_symmetric_quadratic_form(poly, coeff):
         # (x,y) are the parameters of f(a,b,c). While coeff stands for the scaling factor.
         w, v, u = [sym.coeff_monomial((i,)) for i in range(3)]
         x, y = (2*u + v - 2*w)/(4*u + v - 2*w), (4*u - 2*w)/(4*u + v - 2*w)
-        coeff = v/(2*y-2) if y != 1 else w / (2*x + y - 2)
+        coeff = v / (2*y - 2) if y != 1 else (w / (2*x + y - 2) if x != sp.Rational(1,2) else 2*u)
         return x, y, coeff
 
     params = []
@@ -1283,7 +1287,7 @@ def _sos_struct_sextic_symmetric_quadratic_form(poly, coeff):
     m_, p_, n_ = m_ - merged_params[0] * x_**2, p_ - 2 * merged_params[0] * x_ * y_, (n_ + 2*m_) - merged_params[0] * (2*x_**2 + y_**2)
     # print('Params =', params, '\nMerged Params =', merged_params, '(m,p,n) =', (m_, p_, n_))
 
-    if not (m_ == 0 and p_ == 0 and n_ == 0):
+    if not (n_ == 3*m_ and p_ == -2*m_):
         t_ = (-2*m_**2 + m_*n_ - p_**2/4)/(n_ + p_ - m_)
         if t_ < 0: # actually this will not happen
             return None
@@ -1298,7 +1302,7 @@ def _sos_struct_sextic_symmetric_quadratic_form(poly, coeff):
                 return None
             rem_poly = rem_coeff * CyclicSum(a*b)**2
     else:
-        rem_coeff, rem_ratio, t_, rem_poly = sp.S(0), sp.S(0), sp.S(0), sp.S(0)
+        rem_coeff, rem_ratio, t_, rem_poly = sp.S(0), sp.S(0), m_, sp.S(0)
 
     # ker_coeff is the remaining coefficient of (a-b)^2(b-c)^2(c-a)^2
     ker_coeff = (poly.coeff_monomial((4,2,0)) - merged_params[0] * (3*x_**2 - 2*x_*y_ - 2*x_ + y_**2) - (n_ - p_ + m_))
@@ -1376,9 +1380,13 @@ def _sos_struct_sextic_symmetric_quadratic_form(poly, coeff):
 
         # First we solve F, and write it in the form of F(x,y) * 2s(a^2-ab) = p1 + s(c1*a^2 + c2*a*b) * p(a-b)^2
         def F_regular(x, y):
+            """
+            Return p1, c1, c2, multiplier such that
+            F(x,y) * s(mutiplier[0]*a^2 + multiplier[1]*a*b) = p1 + s(c1*a^2 + c2*a*b) * p(a-b)^2
+            """
             p1 = 2 * (CyclicSum(a**2 - b*c)*CyclicSum(x*a**2 + y*a*b) - CyclicSum(a**4 - a**2*b*c))**2
             c1, c2 = sp.S(0), sp.S(2)
-            return p1, c1, c2
+            return p1, c1, c2, (2, -2)
 
         def F_sos(x, y, z_type = 0):
             """
@@ -1413,20 +1421,82 @@ def _sos_struct_sextic_symmetric_quadratic_form(poly, coeff):
                 return h, c1, c2
             func_h, c1, c2 = _compute_h_c1_c2(z)
             p1 = sp.Rational(1,9) * CyclicSum(func_h**2)
-            return p1, c1, c2
+            return p1, c1, c2, (2, -2)
+
+
+        ker_std = ker_coeff / merged_params[0]
+        def F_alternative_find_z(x, y, supplement = (ker_std * (x + y - 1)**2, ker_std * (2*x + 2*y - 4)*(x + y - 1))):
+            z = sp.symbols('z')
+            c1 = (-3*x - 3*y + 5)*z**2 + (-6*x**2 + 4*x + 6*y**2 - 16*y + 10)*z + 6*x**2*y - 7*x**2 + 3*x*y**2 - 14*x*y + 10*x - 3*y**3 + 11*y**2 - 12*y + 5 + supplement[0]
+            c2 = (-6*x*y - 6*y**2 + 10*y)*z - 2*x**2 + 6*x*y**2 - 8*x*y + 2*x + 6*y**3 - 19*y**2 + 14*y + supplement[1]
+            # find z such that 2*c1 >= c2 and c1 + c2 >= 0
+            c1, c2 = c1.as_poly(z), c2.as_poly(z)
+            f1, f2 = 2*c1 - c2, c1 + c2
+            f_gcd = sp.gcd(f1, f2)
+            if f_gcd.degree() == 1:
+                return -f_gcd.coeff_monomial((0,)) / f_gcd.coeff_monomial((1,))
+            for (z1, z2), _ in sp.polys.intervals(f1 * f2):
+                for z_ in (z1, z2):
+                    if f1(z_) >= 0 and f2(z_) >= 0:
+                        return z_
+            return -x + 3*y/2 - 1
+
+        def F_alternative(x, y, z_type = 0):
+            """
+            F(a,b,c) * s(a^2 + (2*x + 2*y - 4)/(x + y - 1)*a*b)
+                = 1/(x + y - 1)^2/9 * s(a^2-ab) * s(a*(3*a^2*(x-1)*(x+y-1)+3*a*(b+c)*(x^2+2*x*y-4*x+y^2-3*y+3)+b*c*(3*x*y+3*y^2-9*y+4)))^2
+                + (3x + 3y - 5)/(x + y - 1)^2 * s(a^2(b-c)^2(a^2*(x-y+1)+a*(b+c)*(2*y-2)+(b^2+c^2)*(x-1)+z(a-c)(a-b))^2)
+                + s(c1*a^2 + c2*a*b) * p(a-b)^2
+            where c1 = (-3*x-3*y+5)*z^2+(-6*x^2+4*x+6*y^2-16*y+10)*z+6*x^2*y-7*x^2+3*x*y^2-14*x*y+10*x-3*y^3+11*y^2-12*y+5
+                  c2 = (-6*x*y-6*y^2+10*y)*z-2*x^2+6*x*y^2-8*x*y+2*x+6*y^3-19*y^2+14*y
+            """
+            w = x + y - 1
+            if w < sp.S(2)/3: # 3x + 3y - 5 < 0
+                return None
+
+            z = [F_alternative_find_z(x, y), -x - 1][z_type]
+            def _compute_h_c1_c2(z):
+                h1 = 3*a**2*(x - 1)*w + 3*a*(b + c)*(x**2 + 2*x*y - 4*x + y**2 - 3*y + 3) + b*c*(3*x*y + 3*y**2 - 9*y + 4)
+                h2 = a**2*(x - y + 1) + a*(b + c)*(2*y - 2) + z*(a - b)*(a - c) + (b**2 + c**2)*(x - 1)
+                h1 = h1.expand().together()
+                h2 = h2.expand().together()
+                c1 = (-3*x - 3*y + 5)*z**2 + (-6*x**2 + 4*x + 6*y**2 - 16*y + 10)*z + 6*x**2*y - 7*x**2 + 3*x*y**2 - 14*x*y + 10*x - 3*y**3 + 11*y**2 - 12*y + 5
+                c2 = (-6*x*y - 6*y**2 + 10*y)*z - 2*x**2 + 6*x*y**2 - 8*x*y + 2*x + 6*y**3 - 19*y**2 + 14*y
+                c1, c2 = c1 / w**2, c2 / w**2
+                return h1, h2, c1, c2
+            func_h1, func_h2, c1, c2 = _compute_h_c1_c2(z)
+            p1 = 1/w**2/18 * CyclicSum((a-b)**2) * CyclicSum(a * func_h1)**2\
+                + (3*x + 3*y - 5)/w**2 * CyclicSum(a**2 * (b-c)**2 * func_h2**2)
+            return p1, c1, c2, (1, (2*x + 2*y - 4)/w)
+
 
         F_solvers = [
-            F_regular, lambda x, y: F_sos(x, y, 0), lambda x, y: F_sos(x, y, 1)
+            F_regular, 
+            lambda x, y: F_sos(x, y, 0), lambda x, y: F_sos(x, y, 1),
+            lambda x, y: F_alternative(x, y, 0), lambda x, y: F_alternative(x, y, 1)
         ]
 
+        def _wrap_c1_c2(c1, c2):
+            """Return CyclicSum(c1*a^2 + c2*b*c) while clearing the denominators."""
+            if c1 == 2 and c2 == -2:
+                return CyclicSum((a-b)**2)
+            if c2 == 2*c1:
+                return c1 * CyclicSum(a)**2
+            p = c1*a**2 + c2*b*c
+            p = p.together().as_coeff_Mul()
+            return p[0] * CyclicSum(p[1])
 
         # Next we write t/4 * s((a-b)^2)p(a+b-2c)^2 + 2 * s(a^2-ab)^2 * rem_poly in the form of + p2 + s(c1*a^2 + c2*a*b) * p(a-b)^2
-        def rem_regular():
+        def rem_regular(multiplier):
             rem_poly = rem_coeff * (CyclicSum(a**2 + rem_ratio*a*b)**2 if not rem_ratio is sp.oo else CyclicSum(a*b)**2)
-            p2 = t_/4 * CyclicSum((a-b)**2) * CyclicProduct((a+b-2*c)**2) + 2 * CyclicSum(a**2-a*b)**2 * rem_poly
+            if multiplier == (2, -2):
+                p2 = t_/4 * CyclicSum((a-b)**2) * CyclicProduct((a+b-2*c)**2) + 2 * CyclicSum(a**2-a*b)**2 * rem_poly
+            else:
+                p0 = _wrap_c1_c2(multiplier[0], multiplier[1])
+                p2 = t_/4 * p0 * CyclicProduct((a+b-2*c)**2) + CyclicSum((a-b)**2)/2 * p0 * rem_poly
             return p2, sp.S(0), sp.S(0)
 
-        def rem_sos():
+        def rem_sos(multiplier):
             """
             Solve t/4 * s((a-b)^2)p(a+b-2c)^2 + 2 * s(a^2-ab)^2 * rem_poly >= 0.
             The inequality is tried to solve on R in advance.
@@ -1436,6 +1506,8 @@ def _sos_struct_sextic_symmetric_quadratic_form(poly, coeff):
             Proof:
             G(a,b,c) = 1/(8u^2) * s((a-b)2(a+b-2c)2(2u2(a2-ab+ac+b2+bc)+uv(3ab+ac+bc+c2))2)
             """
+            if multiplier != (2, -2):
+                return None
             if rem_ratio is sp.oo:
                 u2, uv, v2 = sp.S(0), sp.S(0), rem_coeff * 2
             else:
@@ -1449,13 +1521,14 @@ def _sos_struct_sextic_symmetric_quadratic_form(poly, coeff):
             return p2, c1, c2
 
         rem_sols = [
-            rem_regular(), rem_sos()
+            rem_regular, rem_sos
         ]
 
 
-        def _merge_remainder_terms(p1, c11, c12, p2, c21, c22, ker_coeff):
+        def _merge_remainder_terms(p1, c11, c12, p2, c21, c22, ker_coeff, multiplier = (2,-2)):
             """
-            Merge p1 + s(c11*a^2 + c12*a*b) * p(a-b)^2 and p2 + s(c21*a^2 + c22*a*b) * p(a-b)^2 and ker_coeff * s((a-b)^2) * p(a-b)^2.
+            Merge p1 + s(c11*a^2 + c12*a*b) * p(a-b)^2 and p2 + s(c21*a^2 + c22*a*b) * p(a-b)^2
+            and ker_coeff * s(multiplier[0]*a^2 + multiplier[1]*a*b) * p(a-b)^2.
 
             Consider the quadratic form s(xa^2 + yab). It is positive on R when {x+y>=0, 2x>=y}, on R+ when {x+y>=0}.
             Both two regions are convex. Thus we only need to check whether the vertices of the segment fall
@@ -1468,29 +1541,34 @@ def _sos_struct_sextic_symmetric_quadratic_form(poly, coeff):
             flg: int
                 When flg == 0, it is solved on R. When flg == 1, it is solved on R+. When flg == 2, it is not solved.
             """
-            c1 = c11 + c21 + 2*ker_coeff
-            c2 = c12 + c22 - 2*ker_coeff
-            def _wrap_c1_c2(c1, c2):
-                if c2 == 2*c1:
-                    return c1 * CyclicSum(a)**2
-                p = c1*a**2 + c2*b*c
-                p = p.together().as_coeff_Mul()
-                return p[0] * CyclicSum(p[1])
+            if multiplier[0] + multiplier[1] < 0:
+                return None, 2
+
+            c1 = c11 + c21 + multiplier[0]*ker_coeff
+            c2 = c12 + c22 + multiplier[1]*ker_coeff
+
+            multiplier_func = _wrap_c1_c2(multiplier[0], multiplier[1])
 
             if c1 >= 0 and c1 + c2 >= 0:
                 sol = p1 + p2 + _wrap_c1_c2(c1, c2) * CyclicProduct((a-b)**2)
-                flg = 0 if 2*c1 >= c2 else 1
-                return sol, flg
+                flg = 0 if 2*c1 >= c2 and 2*multiplier[0] >= multiplier[1] else 1
+                return sol / multiplier_func, flg
 
             return None, 2
 
         m0 = merged_params[0]
         for F_solver in F_solvers:
-            p1, c1, c2 = F_solver(x, y)
+            f_sol = F_solver(x, y)
+            if f_sol is None:
+                continue
+            p1, c1, c2, multiplier = f_sol
             p1, c1, c2 = p1 * m0, c1 * m0, c2 * m0
             for rem_sol in rem_sols:
+                rem_sol = rem_sol(multiplier)
+                if rem_sol is None:
+                    continue
                 p2, c21, c22 = rem_sol
-                sol, flg = _merge_remainder_terms(p1, c1, c2, p2, c21, c22, ker_coeff)
+                sol, flg = _merge_remainder_terms(p1, c1, c2, p2, c21, c22, ker_coeff, multiplier)
                 if flg == 0:
                     return sol
                 elif flg == 1:
@@ -1501,7 +1579,7 @@ def _sos_struct_sextic_symmetric_quadratic_form(poly, coeff):
 
     main_solution = _solve_real_in_advance(merged_params, t_, ker_coeff, rem_coeff, rem_ratio)
     if main_solution is not None:
-        return main_solution / CyclicSum((a-b)**2)
+        return main_solution
 
 
     #################################################
@@ -1522,9 +1600,14 @@ def _sos_struct_sextic_symmetric_quadratic_form(poly, coeff):
         
         If w = (m**3 - (suv+1)*m**2 + (suv+puv-3)*m + (puv-1)**2+2*suv+1) / (m - 2),
         Then we have identity
-        R(a,b,c) * s(a^2 + phi*b*c) = s((a-b)^2g(a,b,c)^2) + (phi - (m-2)*(suv-2*m)/(m+puv-2)) * s(ab(a-b)^2h(a,b,c)^2)
+        R(a,b,c) * s(a^2 + phi*b*c) = s((a-b)^2g(a,b,c)^2)/2 + (phi - (m-2)*(suv-2*m)/(m+puv-2)) * s(ab(a-b)^2h(a,b,c)^2)
             + final_coeff * (puv**2 * s(ab)p(a-b)^2 + (2-m)s(bc(a-b)(a-c)(a-ub)(a-uc)(a-vb)(a-vc)))
 
+        Explicit forms of function g and h are omitted here. Please refer to the code.
+            
+        In particular, if puv == 0, WLOG v = 0, suv = u. Let m -> 2, w = 5 - 3*u, when u <= 4
+        R(a,b,c) * s(a^2-u/4*ab) = s(a(a-b)(a-c)(2a-ub-uc))^2/4 + (1-u/4)s(ab(a-b)^2((a-b)^2+(2-u)(a+b)c-(3-u)c^2)^2)
+            + (1-u/4)/2 * s((a(b-c)((b+c-a)(b+c-(u+1)a)-u(a-c)(a-b)))^2)
         References
         --------
         [1] https://tieba.baidu.com/p/8261574122
@@ -1544,6 +1627,24 @@ def _sos_struct_sextic_symmetric_quadratic_form(poly, coeff):
         def _validate_params(params):
             suv, puv, m, det1, det2, phi, final_coeff, ker_coeff = params
             return phi >= -1 and phi >= ((m-2)*(suv-2*m)/(m+puv-2))
+
+        if puv == 0 and suv <= 4:
+            # degenerated case
+            def _solve_degen(x, y, u, ker_coeff):
+                extra = x**2-x*y+y**2-y - (x-1)**2*(3*u-5) + ker_coeff
+                if extra < 0:
+                    return None
+                func_g = ((a-b)**2 + (2-u)*(a+b)*c - (3-u)*c**2).expand().together()
+                func_h = ((b+c-a)*(b+c-(u+1)*a) - u*(a-c)*(a-b)).expand().together()
+                r = (x-1)**2
+                solution = r/4 * CyclicSum(a*(a-b)*(a-c)*(2*a-u*b-u*c).together())**2 \
+                    + r*(1-u/4) * CyclicSum(a*b*(a-b)**2*func_g**2) + r*(1-u/4)/2 * CyclicSum(a**2*(b-c)**2*func_h**2)
+                p1 = (a**2 - u/4*b*c).together().as_coeff_Mul()
+                solution = solution / (p1[0] * CyclicSum(p1[1])) + extra * CyclicProduct((a-b)**2)
+                return solution
+            return _solve_degen(x, y, suv, ker_coeff)
+
+
         for root in nroots(det1, method = 'factor', real = True):
             if isinstance(root, sp.Rational) and (root == 2 or m + puv == 2 or suv - 2*m - 1 == 0):
                 return None
