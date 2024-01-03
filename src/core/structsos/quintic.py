@@ -258,7 +258,7 @@ def _sos_struct_quintic_full(coeff):
                 u_eq = eq1.subs(v, v_).as_poly(u)
                 roots_u = nroots(u_eq, method = method, real = True, nonnegative = True)
                 for u_ in roots_u:
-                    if abs(u_ - v_) > 1e-5 and abs(u_ + v_ - 1) > 1e-5 and abs(eq2_.subs({u:u_, v:v_})) < 1e-3:
+                    if abs(u_ - v_) > 1e-5 and abs(u_ + v_ - 1) > 1e-5 and abs(eq2_.subs({u:u_, v:v_})) < 1e-3 and u_ * v_ >= 1:
                         u, v = u_, v_
                         break
                 else:
@@ -292,11 +292,14 @@ def _sos_struct_quintic_full(coeff):
         m, p, q, g, h, z, w = [coeff(_) for _ in [(5,0,0),(4,1,0),(1,4,0),(3,2,0),(2,3,0),(3,1,1),(2,2,1)]]
         p, q, g, h, z, w = p/m, q/m, g/m, h/m, z/m, w/m
 
-
         for u, v in zip_longest(
             rationalize_bound(u_, direction = 0), rationalize_bound(v_, direction = 0)
         ):
             x = (-p + q + 4*u - 2*v - 1)/(2*(u + v - 1))
+            if 2*(u + v - 1) == 0:
+                continue
+                # if -p + q + 4*u - 2*v - 1 == 0:
+                #     x = sp.S(0)
             y = x**2
             if p + 2*(u*x-u+v) >= y:
                 _new_coeffs = {
