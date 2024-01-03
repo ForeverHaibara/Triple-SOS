@@ -61,10 +61,9 @@ class SDPProblem():
         return getattr(self, key)
 
 
-    def _compute_equation(self, minor = 0, cyclic_constraint = True) -> Tuple[sp.Matrix, sp.Matrix]:
+    def _compute_perp_space(self, minor = 0) -> Dict[str, sp.Matrix]:
         """
-        Construct the problem eq @ vec(S) = vec(M) where S is what we solved for.
-        Return eq, vecM.
+        Construct the perpendicular space of the problem.
         """
         # positive indicates whether we solve the problem on R+ or R
         degree = self.poly_degree
@@ -76,7 +75,15 @@ class SDPProblem():
         if minor and degree > 2:
             self.deg['minor'] = degree // 2 - 1
             self.Q['minor'] = manifold.perp_space(minor = 1, positive = positive)
+        return self.Q
 
+
+    def _compute_equation(self, cyclic_constraint = True) -> Tuple[sp.Matrix, sp.Matrix]:
+        """
+        Construct the problem eq @ vec(S) = vec(M) where S is what we solved for.
+        Return eq, vecM.
+        """
+        degree = self.poly_degree
         for key in self.Q.keys():
             Q = self.Q[key]
             if Q is not None and Q.shape[1] > 0:
@@ -109,7 +116,7 @@ class SDPProblem():
 
         self.x0 = x0
         self.space = space
-        self.splits = splits     
+        self.splits = splits
         return x0, space, splits
 
  
@@ -117,7 +124,8 @@ class SDPProblem():
         """
         Construct the symbolic representation of the problem.
         """
-        eq, vecM = self._compute_equation(minor = minor, cyclic_constraint = cyclic_constraint)
+        Q = self._compute_perp_space(minor = minor)
+        eq, vecM = self._compute_equation(cyclic_constraint = cyclic_constraint)
         subspace = self._compute_subspace(eq, vecM, minor = minor, verbose = verbose)
         return subspace
 
@@ -126,6 +134,7 @@ class SDPProblem():
             minor: bool = False,
             cyclic_constraint: bool = True,
             allow_numer: bool = False,
+            reg: float = 0,
             verbose: bool = True
         ) -> bool:
         """
@@ -144,6 +153,10 @@ class SDPProblem():
         allow_numer : bool
             Whether to allow numerical solution. If True, then the function will return numerical solution
             if the rational solution does not exist.
+        reg : float
+            We require `S[i]` to be positive semidefinite, but in practice
+            we might want to add a small regularization term to make it
+            positive definite >> reg * I.
         verbose : bool
             If True, print the information of the solving process.
 
@@ -173,7 +186,7 @@ class SDPProblem():
         sos_result = sdp_solver(
             *subspace,
             self._not_none_keys(), 
-            reg = 0, 
+            reg = reg, 
             allow_numer = allow_numer, 
             verbose = verbose
         )
@@ -195,7 +208,8 @@ class SDPProblem():
         This function does not register the result to self.S.
         """
         if y is None:
-            y = sp.Matrix([sp.symbols('y_{%d}'%_) for _ in range(self.space.shape[1])])
+            m = self.space.shape[1]
+            y = sp.Matrix([sp.symbols('y_{%d}'%_) for _ in range(m)]).reshape(m, 1)
         elif not isinstance(y, sp.Matrix) or y.shape != (self.space.shape[1], 1):
             raise ValueError('y must be a sympy Matrix of shape (%d, 1).'%self.space.shape[1])
 
