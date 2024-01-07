@@ -479,7 +479,7 @@ def _sos_struct_quintic_full(coeff):
                     # we require mul >= -1 and det >= 0 to apply the quartic theorem
                     m_, p_, n_, q_ = _get_quartic_remain(mul_, params_, return_mpnq = True)
                     if mpnq_criterion(m_, p_, n_, q_):
-                        print('Expected mpnq =', (m_, p_, n_, q_), '\nExpected det =', (3*m_*(m_+n_) - (p_**2+p_*q_+q_**2)).n(20), '\nExpected mul =', mul_)
+                        # print('Expected mpnq =', (m_, p_, n_, q_), '\nExpected det =', (3*m_*(m_+n_) - (p_**2+p_*q_+q_**2)).n(20), '\nExpected mul =', mul_)
                         return params_, mul_
             return None
         

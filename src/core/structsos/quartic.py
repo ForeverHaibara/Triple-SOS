@@ -178,8 +178,8 @@ def _sos_struct_quartic_biased(coeff):
     eq = (2*x**4 + p*x**3 - q*x - 2).as_poly(x)
     
     # must satisfy that symmetric >= 0
-    symmetric = lambda _x: ((2*q+p)*_x + 6)*_x + 2*p+q
-    
+    symmetric = lambda _x: radsimp(((2*q+p)*_x + 6)*_x + 2*p+q)
+ 
     # the discriminant after subtraction
     head = radsimp(p*p+p*q+q*q-3*n-3)
     def new_det(sym, root):
@@ -213,8 +213,8 @@ def _sos_struct_quartic_biased(coeff):
 
     if u_ is None:
         # find a rational approximation
-        for numer_r in sp.polys.nroots(eq):
-            if (not numer_r.is_real) or symmetric(numer_r) < 1e-6:
+        for numer_r in nroots(eq, real = True, method = 'factor'):
+            if symmetric(numer_r) < 1e-6:
                 continue
 
             for numer_r2 in rationalize_bound(numer_r, direction = 0, compulsory = True):

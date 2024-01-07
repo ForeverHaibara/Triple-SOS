@@ -245,10 +245,11 @@ def _sos_struct_sextic_hexagon_symmetric(coeff, real = False):
                             multiplier = CyclicSum((a-b)**2)
                             tt = sp.sqrt(x*x + x - 2)
                             if isinstance(tt, sp.Rational):
-                                y = [coeffp, coeffsym]
+                                y = [coeffp, coeffsym, rem]
                                 exprs = [
                                     CyclicProduct((a-b)**2) * CyclicSum((a-b)**2),
-                                    CyclicSum(a*(b-c)**2)**2 * CyclicSum((a-b)**2)
+                                    CyclicSum(a*(b-c)**2)**2 * CyclicSum((a-b)**2),
+                                    CyclicProduct(a**2) * multiplier
                                 ]
                                 if x != 2:
                                     z = radsimp(2*(x**2 - x + (x-2)*tt) / (x*x + 4*x - 8))
@@ -2045,6 +2046,7 @@ def _sos_struct_sextic_symmetric_ultimate_1root(coeff, poly, recurrsion, roots, 
                 ((2, 2, 0), 3*z0**2 + 2*z0*z3 + 2*z1*z2 + z2**2 + z3**2),
                 ((2, 1, 1), 2*z0*z1 + 2*z0*z2 + z1**2 + 2*z1*z2 + 3*z2**2 + 2*z2*z3)
             ]
+            quartic = [(_[0], radsimp(_[1])) for _ in quartic]
             is_rational = all(isinstance(_[1], sp.Rational) for _ in quartic)
 
             quartic_solution = sos_struct_quartic(Coeff(dict(quartic), is_rational = is_rational), None)

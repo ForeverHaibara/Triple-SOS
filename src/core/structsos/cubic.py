@@ -250,6 +250,6 @@ def _sos_struct_cubic_nontrivial_irrational(coeff):
         CyclicProduct(a) * CyclicSum((a-b)**2),
         CyclicSum(c*(a**2 - b**2 + u*(a*b-a*c) + v*(b*c-a*b))**2),
         CyclicSum(c*(a-b)**4),
-        CyclicSum(a**3*b*c)
+        CyclicSum(a**2*b**2*c)
     ]
     return sum_y_exprs(y, exprs) / CyclicSum(a*b)

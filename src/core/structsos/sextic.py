@@ -24,7 +24,7 @@ def sos_struct_sextic(coeff, recurrsion, real = True):
         return _sos_struct_sextic_hexagon(coeff, recurrsion, real = real)
 
     if coeff((6,0,0)) != 0:
-        return _sos_struct_sextic_full(coeff, recurrsion, real = real)
+        return _sos_struct_sextic_full_sdp(coeff)
 
     return None
 
@@ -407,6 +407,11 @@ def _sos_struct_sextic_hexagon(coeff, recurrsion, real = True):
         return None
 
     if True:
+        solution = _sos_struct_sextic_hexagon_sdp(coeff)
+        if solution is not None:
+            return solution
+
+    if True:
         # Idea 1: subtract s(c1(a^2b-abc) - c2(ab^2-abc))^2
         # However, c1 and c2 might be irrational. So we use alternative:
         # subtract c1s(a^2b-abc)^2 + c2s(ab^2-abc)^2 - c3s((a^2b-abc)(ab^2-abc))
@@ -590,7 +595,7 @@ def _sos_struct_sextic_rotated_tree(coeff):
                     p1,
                     q1 - n1**2/4/p1 if p1 != 0 else q1,
                     sp.S(0) if p1 != 0 else n1 / 2,
-                    (coeff((2,4,0)) + coeff((3,1,2)) + coeff((3,2,1))) + coeff((2,2,2)) / 3
+                    3 * (coeff((2,4,0)) + coeff((3,1,2)) + coeff((3,2,1))) + coeff((2,2,2))
                 ]
                 y = [_ * coeff((2,4,0)) for _ in y[:-1]] + [y[-1]]
                 exprs = [
@@ -681,7 +686,56 @@ def _sos_struct_sextic_hexagon_full(coeff):
     return None
 
 
-def _sos_struct_sextic_full(coeff, recurrsion, real = True):
+
+def _sos_struct_sextic_hexagon_sdp(coeff):
+    """
+    This function is a special case of _sos_struct_sextic_full_sdp
+    when coefficients of s(a^6), s(a^5b), s(a^5c) are zero.
+
+    We subtract some s((a2b-ac2-x(a2b-b2c)+y(a2c-ab2))^2) so that
+    the rest of the polynomial is a quadratic form with respect to
+    s(a^2b-abc) and s(ab^2-abc). See further details at _sos_struct_sextic_full.
+
+    The case is degenerated and actually there is no degree of freedom.
+
+    Examples
+    ----------
+    s(15a4b2-17a4bc+7a4c2-16a3b3-7a3b2c+21a3bc2-3a2b2c2)
+    """
+    c42, c33, c24 = [coeff((4-i,i+2,0)) for i in range(3)]
+    c411, c321, c231 = [coeff((4-i,i+1,1)) for i in range(3)]
+
+    poly111 = coeff.poly111()
+    if (not coeff.is_rational) or c42 < 0 or c24 < 0 or poly111 < 0:
+        return None
+
+    p1 = 2*c231**2 + 14*c231*c24 + 5*c231*c321 + 18*c231*c33 + 9*c231*c411 + 22*c231*c42 + 20*c24**2 + 22*c24*c321 + 72*c24*c33 + 36*c24*c411 + 104*c24*c42 + 2*c321**2 + 18*c321*c33 + 9*c321*c411 + 14*c321*c42 + 27*c33**2 + 54*c33*c411 + 72*c33*c42 + 36*c411*c42 + 20*c42**2
+    p3 = (c231 + 4*c24 + c321 + 3*c33 + 3*c411 + 4*c42)
+    p2 = 3*p3*(2*c231 + 10*c24 + c321 + 6*c33 + 3*c411 + 2*c42) - p1
+
+    if p1 == 0 or p2 == 0 or p3 == 0:
+        return None
+
+    r = p1**2/p2/54/p3
+    x = -9*(c33 - c411)*p3/p1 + 1
+    y = -p2/p1
+
+    quad_form = [
+        c42 - 2*r*(x**2 - x + 1),
+        c24 - 2*r*y**2,
+        c33 - 2*r*y*(x-2)
+    ]
+
+    if quad_form[0] >= 0 and quad_form[0] * quad_form[1] * 4 >= quad_form[2]**2:
+        quad_form_sol = quadratic_weighting(*quad_form, a = a**2*b-a*b*c, b = a*b**2-a*b*c, formal = True)
+        quad_form_sol = sum(wi * CyclicSum(xi.expand().together())**2 for wi, xi in quad_form_sol)
+
+        # rs((a2b-ac2-x(a2b-b2c)+y(a2c-ab2))^2)
+        solution = r * CyclicSum((a**2*b-a*c**2-x*(a**2*b-b**2*c)+y*(a**2*c-a*b**2)).expand().together()**2)
+        return quad_form_sol + solution + poly111 * CyclicProduct(a**2)
+
+
+def _sos_struct_sextic_full_sdp(coeff):
     """
     Heuristically solve full sextics with the method of unknown coefficients.
     Idea: Let f(a,b,c) = a^3-b^3+ua^2b+vb^2c-(u+v)ac^2+xab^2+ya^2c-(x+y)bc^2.
@@ -698,7 +752,7 @@ def _sos_struct_sextic_full(coeff, recurrsion, real = True):
 
     s((a3+3b2c)2)-16abcs(a3)
 
-    s((a2-bc)/(4a2+4b2+c2))
+    s((a2-bc)(4b2+4c2+a2)(4c2+4a2+b2))
 
     243s(a(a+b)5)-32s(a)6
     
@@ -715,7 +769,7 @@ def _sos_struct_sextic_full(coeff, recurrsion, real = True):
     c60, c51, c42, c33, c24, c15 = [coeff((6-i,i,0)) for i in range(6)]
     c411, c321, c231 = [coeff((4-i,i+1,1)) for i in range(3)]
 
-    if c60 < 0 or coeff.poly111() != 0 or not coeff.is_rational:
+    if (not coeff.is_rational) or c60 < 0 or coeff.poly111() != 0: 
         return None
 
     # compute the coefficients of the quadratic form
