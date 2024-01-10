@@ -356,134 +356,75 @@ class RootSubspace():
         )
 
 
-class LowRankHermitian():
+def coefficient_matrix(Q, n, monom_add = (0,0,0), cyc = False):
     """
-    A Hermitian matrix M such that M is in rowspace of Q.
-    That is, M = Q @ S @ Q.T for some low rank S.
-    Note that by inertia theorem, if M is positive definite, then so is S.
+    For example, the Vasile inequality 2s(a2)2 - 6s(a3b) has a 
+    (nonnegative) 6*6 matrix representation v' * M * v where
+    v = [a^2,b^2,c^2,ab,bc,ca]' and M = 
+    [[ 2, 1, 1,-3, 0, 0],
+    [ 1, 2, 1, 0,-3, 0],
+    [ 1, 1, 2, 0, 0,-3],
+    [-3, 0, 0, 2, 0, 0],
+    [ 0,-3, 0, 0, 2, 0],
+    [ 0, 0,-3, 0, 0, 2]]
+    The a^2b^2 coefficient is (1 + 1 + 2) = 4. We note that each coefficient
+    may be the sum of several entries. We learn that the final equation is A @ vec(M) = p
+    where p is the vector of coefficients of the original polynomial.
 
-    Knowledge of kronecker product tells us that vec(M) = kron(Q,Q) @ vec(S).
+    Hence, we have A @ kron(Q,Q) @ vec(S) = p.
+    And we reduce kron(Q,Q) to such A @ kron(Q,Q) = QQ_reduced.
+
+    Futhermore, S is symmetric, so we only need the upper triangular part to
+    form the vec(S). So we can further reduce the size of matrix, so that
+    QQ_reduced @ vec(S)_reduced = p.
     """
-    def __init__(self, Q: sp.Matrix = None, S = None):
-        self.Q = Q
-        self.QQ = None
+    monoms = generate_expr(n, cyc = False)[1]
+    m, k = Q.shape # m = len(monoms)
+    QQ = sp.kronecker_product(Q, Q)
 
-        if Q is not None:
-            if isinstance(Q, sp.Matrix):
-                self.QQ = sp.kronecker_product(Q, Q)
-            elif isinstance(Q, np.ndarray):
-                self.QQ = np.kron(Q, Q)
+    m0, n0, p0 = monom_add
+    inv_monoms = generate_expr(2*n + sum(monom_add), cyc = False)[0]
+    QQ_reduced = sp.zeros(len(inv_monoms), k ** 2)
 
-        self.S = None
-        self.construct_from_vector(S)
+    if cyc:
+        permute = lambda a,b,c: [(a,b,c), (b,c,a), (c,a,b)]
+    else:
+        permute = lambda a,b,c: [(a,b,c)]
 
-    @property
-    def M(self):
-        if self.S is None or self.Q is None:
-            return None
-        if isinstance(self.Q, sp.Matrix):
-            return self.Q * self.S * self.Q.T
-        elif isinstance(self.Q, np.ndarray):
-            return self.Q @ self.S @ self.Q.T
+    for i in range(m):
+        m1, n1, p1 = monoms[i]
+        m1, n1, p1 = m1 + m0, n1 + n0, p1 + p0
+        for j in range(m):
+            m2, n2, p2 = monoms[j]
+            new_monom_ = (m1 + m2, n1 + n2, p1 + p2)
+            for new_monom in permute(*new_monom_):
+                index = inv_monoms[new_monom]
+                QQ_reduced[index, :] += QQ[i * m + j, :]
 
-    def construct_from_vector(self, S, full = False):
-        """
-        Construct S from vec(S).
-        """
-        k = self.Q.shape[1] if hasattr(self.Q, 'shape') else 0
-        if S is not None:
-            if len(S.shape) == 2:
-                if S.shape[0] == S.shape[1]:
-                    self.S = S
-                    return self
-                size = S.shape[0] * S.shape[1]
-                S = S.reshape(size, 1)
-                if isinstance(S, np.ndarray):
-                    S = S.flatten()
-                
-            # infer k automatically
-            if full:
-                k = round(S.shape[0] ** 0.5)
-            else:
-                k = round((2 * S.shape[0] + .25) ** 0.5 - .5)
+    # also cancel symmetric entries
+    QQ_reduced2 = []
+    for i in range(k):
+        QQ_reduced2.append(QQ_reduced[:, i * k + i])
+        for j in range(i + 1, k):
+            QQ_reduced2.append(QQ_reduced[:, i * k + j] + QQ_reduced[:, j * k + i])
+    QQ_reduced = sp.Matrix.hstack(*QQ_reduced2)
 
-            S_ = sp.zeros(k, k)
-            pointer = 0
-            if size != k ** 2:
-                # S is only the upper triangular part
-                for i in range(k):
-                    for j in range(i, k):
-                        S_[i,j] = S_[j,i] = S[pointer]
-                        pointer += 1
-            else:
-                for i in range(k):
-                    for j in range(k):
-                        S_[i,j] = S[pointer]
-                        pointer += 1
-            S = S_
-
-        self.S = S
-        return self
-
-    def reduce(self, n, monom_add = (0,0,0), cyc = False):
-        """
-        For example, the Vasile inequality 2s(a2)2 - 6s(a3b) has a 
-        (nonnegative) 6*6 matrix representation v' * M * v where
-        v = [a^2,b^2,c^2,ab,bc,ca]' and M = 
-        [[ 2, 1, 1,-3, 0, 0],
-         [ 1, 2, 1, 0,-3, 0],
-         [ 1, 1, 2, 0, 0,-3],
-         [-3, 0, 0, 2, 0, 0],
-         [ 0,-3, 0, 0, 2, 0],
-         [ 0, 0,-3, 0, 0, 2]]
-        The a^2b^2 coefficient is (1 + 1 + 2) = 4. We note that each coefficient
-        may be the sum of several entries. We learn that the final equation is A @ vec(M) = p
-        where p is the vector of coefficients of the original polynomial.
-
-        Hence, we have A @ kron(Q,Q) @ vec(S) = p.
-        And we reduce kron(Q,Q) to such A @ kron(Q,Q) = QQ_reduced.
-
-        Futhermore, S is symmetric, so we only need the upper triangular part to
-        form the vec(S). So we can further reduce the size of matrix, so that
-        QQ_reduced @ vec(S)_reduced = p.
-        """
-        monoms = generate_expr(n, cyc = False)[1]
-        m, k = self.Q.shape # m = len(monoms)
-
-        m0, n0, p0 = monom_add
-        inv_monoms = generate_expr(2*n + sum(monom_add), cyc = False)[0]
-        QQ_reduced = sp.zeros(len(inv_monoms), k ** 2)
-
-        if cyc:
-            permute = lambda a,b,c: [(a,b,c), (b,c,a), (c,a,b)]
-        else:
-            permute = lambda a,b,c: [(a,b,c)]
-
-        for i in range(m):
-            m1, n1, p1 = monoms[i]
-            m1, n1, p1 = m1 + m0, n1 + n0, p1 + p0
-            for j in range(m):
-                m2, n2, p2 = monoms[j]
-                new_monom_ = (m1 + m2, n1 + n2, p1 + p2)
-                for new_monom in permute(*new_monom_):
-                    index = inv_monoms[new_monom]
-                    QQ_reduced[index, :] += self.QQ[i * m + j, :]
-
-        # also cancel symmetric entries
-        QQ_reduced2 = []
-        for i in range(k):
-            QQ_reduced2.append(QQ_reduced[:, i * k + i])
-            for j in range(i + 1, k):
-                QQ_reduced2.append(QQ_reduced[:, i * k + j] + QQ_reduced[:, j * k + i])
-        QQ_reduced = sp.Matrix.hstack(*QQ_reduced2)
-
-        return QQ_reduced
-
+    return QQ_reduced
 
 
 def add_cyclic_constraints(sdp_problem):
     """
     If monom_add['cyc'] is False, we can impose additional cyclic constraints.
+
+    Parameters
+    ----------
+    sdp_problem : SDPProblem
+        SDP problem.
+
+    Returns
+    ----------
+    sdp_problem : SDPProblem
+        SDP problem. The function modifies the input sdp_problem inplace.
     """
     degree = sdp_problem.poly_degree
 
@@ -506,7 +447,8 @@ def add_cyclic_constraints(sdp_problem):
 
         inv_monoms, monoms = generate_expr(degree // 2 - (key == 'minor'), cyc = False)
         m = len(monoms)
-        M = sdp_problem.low_rank[key]
+        Q = sdp_problem.Q[key]
+        QQ = sp.kronecker_product(Q, Q)
         for i1, m1 in enumerate(monoms):
             for j1, m2 in enumerate(monoms[i1:], start = i1):
                 for transform in transforms:
@@ -516,14 +458,14 @@ def add_cyclic_constraints(sdp_problem):
                     j2 = inv_monoms[transform(*m2)]
 
                     # equivalent entries must be equal
-                    row = M.QQ[i1 * m + j1, :] - M.QQ[i2 * m + j2, :]
+                    row = QQ[i1 * m + j1, :] - QQ[i2 * m + j2, :]
                     rows.append(row)
 
         if len(rows):
             rows = sp.Matrix.vstack(*rows)
 
             # cancel symmetric entries
-            k = M.Q.shape[1]
+            k = Q.shape[1]
             QQ_reduced, QQ_reduced2 = rows, []
             for i in range(k):
                 QQ_reduced2.append(QQ_reduced[:, i * k + i])
@@ -531,16 +473,17 @@ def add_cyclic_constraints(sdp_problem):
                     QQ_reduced2.append(QQ_reduced[:, i * k + j] + QQ_reduced[:, j * k + i])
             rows = sp.Matrix.hstack(*QQ_reduced2)
 
-            sdp_problem.eq[key] = sp.Matrix.vstack(sdp_problem.eq[key], rows)
+            eq = sdp_problem.eq
+            eq[key] = sp.Matrix.vstack(eq[key], rows)
 
             # align other components with zero matrices
-            for other_key in sdp_problem.eq.keys():
-                if other_key == key or sdp_problem.eq[other_key] is None:
+            for other_key in eq.keys():
+                if other_key == key or eq[other_key] is None:
                     continue
-                sdp_problem.eq[other_key] = sp.Matrix.vstack(
-                    sdp_problem.eq[other_key], sp.zeros(rows.shape[0], sdp_problem.eq[other_key].shape[1])
+                eq[other_key] = sp.Matrix.vstack(
+                    eq[other_key], sp.zeros(rows.shape[0], eq[other_key].shape[1])
                 )
             
-            sdp_problem.vecM = sp.Matrix.vstack(sdp_problem.vecM, sp.zeros(rows.shape[0], 1))
+            sdp_problem.vecP = sp.Matrix.vstack(sdp_problem.vecP, sp.zeros(rows.shape[0], 1))
     
     return sdp_problem

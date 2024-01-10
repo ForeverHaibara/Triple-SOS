@@ -60,7 +60,7 @@ def _matrix_as_expr(
         U, S = M
     else:
         degree = degree or round((2*M.shape[0] + .25)**.5 - 1.5)
-        U, S = congruence_with_perturbation(M, allow_numer = is_numer)
+        U, S = congruence_with_perturbation(M, perturb = is_numer)
 
     a, b, c = sp.symbols('a b c')
     monoms = generate_expr(degree, cyc = 0)[1]
