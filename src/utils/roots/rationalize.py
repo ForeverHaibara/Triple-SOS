@@ -85,7 +85,8 @@ def rationalize(v, rounding = 1e-2, reliable = False) -> sp.Rational:
                             x = 1 / x
 
                         x = 1 / x
-                        return x
+                        if abs(v - x) < rounding:
+                            return x
 
                 # if not found, use the full fraction list
     
