@@ -3,17 +3,12 @@ from functools import lru_cache
 import numpy as np
 import sympy as sp
 
-from .findroot import findroot_resultant
-from ...utils import deg, generate_expr, verify_is_symmetric
-from ...utils.polytools import convex_hull_poly
-from ...utils.roots import Root, RootsInfo
+from ...utils import (
+    deg, generate_expr, verify_is_symmetric,
+    convex_hull_poly,
+    findroot_resultant
+)
 
-_ROOT_FILTERS = {
-    (0,0,0): lambda r: True,
-    (1,0,0): lambda r: r[0] != 0,
-    (1,1,0): lambda r: r[0] != 0 and r[1] != 0,
-    (1,1,1): lambda r: r[0] != 0 and r[1] != 0 and r[2] != 0,
-}
 
 _REDUCE_KWARGS = {
     (0, 'major'): {'monom_add': (0,0,0), 'cyc': False},
@@ -21,69 +16,6 @@ _REDUCE_KWARGS = {
     (1, 'major'): {'monom_add': (1,0,0), 'cyc': True},
     (1, 'minor'): {'monom_add': (1,1,1), 'cyc': False},
 }
-
-def _all_roots_space(rootsinfo, n, monom_add = (0,0,0), root_filter = None, convex_hull = None):
-    """
-    Drepecated.
-    """
-    # if not hasattr(root_filter, '__call__'):
-    if root_filter is None:
-        root_filter = _ROOT_FILTERS[monom_add]
-
-    handled = {}
-    spaces = []
-    for root in filter(root_filter, rootsinfo.strict_roots):
-        if not isinstance(root, Root):
-            root = Root(root)
-        # uv = root.uv()
-        # is_handled = handled.get(uv, False)
-        # if is_handled:
-        #     continue
-        
-        # handled[uv] = True
-        spaces.append(root.span(n))
-
-
-    spaces += _hull_space(n, convex_hull, monom_add = monom_add)
-
-    return sp.Matrix.hstack(*spaces)
-
-
-def _perp_space(rootsinfo, n, monom_add = (0,0,0), convex_hull = None):
-    """
-    Deprecated.
-    """
-    if isinstance(rootsinfo, RootsInfo):
-        space = _all_roots_space(rootsinfo, n, monom_add = monom_add, convex_hull = convex_hull).T
-    else:
-        space = rootsinfo.T
-
-    # HAS BUG:
-    # L, U, P = sp.Matrix.LUdecomposition(space)
-    
-    # for i in range(min(U.shape) - 1, -1, -1):
-    #     if U[i,i] != 0:
-    #         break
-    # else: i = -1
-    # rank = i + 1
-    # U = U[:rank, :]
-
-    # U0, U1 = U[:, :U.shape[0]], U[:, U.shape[0]:]
-
-    # # [U0, U1] @ Q = 0
-    # Q = sp.Matrix.vstack(-U0.LUsolve(U1), sp.eye(U1.shape[1]))
-
-    n = space.shape[1]
-    Q = sp.Matrix(space.nullspace())
-    Q = Q.reshape(Q.shape[0] // n, n).T
-
-    # normalize to keep numerical stability
-    reg = np.max(np.abs(Q), axis = 0)
-    reg = 1 / np.tile(reg, (Q.shape[0], 1))
-    reg = sp.Matrix(reg)
-    Q = Q.multiply_elementwise(reg)
-
-    return Q
 
 
 def _hull_space(n, convex_hull = None, monom_add = (0,0,0)):

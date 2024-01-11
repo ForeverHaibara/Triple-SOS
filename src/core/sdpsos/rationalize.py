@@ -1,5 +1,5 @@
 from itertools import chain
-from typing import List, Union, Optional, Callable, Tuple
+from typing import List, Union, Optional, Callable
 
 import numpy as np
 import sympy as sp

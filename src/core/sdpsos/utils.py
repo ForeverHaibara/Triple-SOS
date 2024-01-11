@@ -1,5 +1,5 @@
 from typing import List, Optional, Tuple, Union
-from contextlib import contextmanager, nullcontext
+from contextlib import contextmanager
 
 import numpy as np
 import sympy as sp
