@@ -1,24 +1,43 @@
-from typing import List, Optional, Tuple
-from contextlib import contextmanager, nullcontext
+from typing import List, Optional, Tuple, Union
+from contextlib import contextmanager
 
+import numpy as np
 import sympy as sp
 
 from ...utils import congruence
 
 
-def congruence_with_perturbation(M, allow_numer = False):
+def congruence_with_perturbation(M: sp.Matrix, perturb: bool = False):
     """
-    Perform congruence decomposition on M. 
-    If allow_numer == True, make a slight perturbation
-    so that M is positive semidefinite.
+    Perform congruence decomposition on M. This is a wrapper of congruence.
+    Write it as M = U.T @ S @ U where U is upper triangular and S is a diagonal matrix.
+
+    Parameters
+    ----------
+    M : sp.Matrix
+        Symmetric matrix to be decomposed.
+    perturb : bool
+        If perturb == True, make a slight perturbation to force M to be positive semidefinite.
+        This is useful when there exists numerical errors in the matrix.
+
+    Returns
+    ---------
+    U : sp.Matrix
+        Upper triangular matrix.
+    S : sp.Matrix
+        Diagonal vector (1D array).
     """
-    if not allow_numer:
+    if not perturb:
         return congruence(M)
     else:
-        min_eig = min([v.n(20) if not isinstance(v, sp.Float) else v for v in M.eigenvals()])
+        min_eig = min([sp.re(v) for v in M.n(20).eigenvals()])
         if min_eig < 0:
-            perturbation = -min_eig + 1e-15
-            return congruence(M + perturbation * sp.eye(M.shape[0]))
+            eps = 1e-15
+            for i in range(10):
+                cong = congruence(M + (-min_eig + eps) * sp.eye(M.shape[0]))
+                if cong is not None:
+                    return cong
+                eps *= 10
         return congruence(M)
     return None
 
@@ -27,21 +46,20 @@ def is_numer_matrix(M: sp.Matrix) -> bool:
     """
     Check whether a matrix contains sp.Float.
     """
-    for i in range(M.shape[0]):
-        for j in range(M.shape[1]):
-            if isinstance(M[i,j], sp.Float):
-                return True
+    for v in M:
+        if not isinstance(v, sp.Rational):
+            return True
     return False
 
 
-def upper_vec_of_symmetric_matrix(S: sp.Matrix, return_inds = False, check = None):
+def upper_vec_of_symmetric_matrix(S: Union[sp.Matrix, np.ndarray, int], return_inds = False, check = None):
     """
     Gather the upper part of a symmetric matrix by rows as a vector.
 
     Parameters
     ----------
-    S : np.ndarray | int
-        Symmetric matrix.
+    S : np.ndarray | sp.Matrix | int
+        Symmetric matrix or the shape[0] of the matrix.
     return_inds : bool
         If True, return (i,j) instead of S[i,j].
     check : function
@@ -67,6 +85,36 @@ def upper_vec_of_symmetric_matrix(S: sp.Matrix, return_inds = False, check = Non
         for i in range(k):
             for j in range(i, k):
                 yield ret(i,j)
+
+
+def symmetric_matrix_from_upper_vec(upper_vec: Union[sp.Matrix, np.ndarray]) -> sp.Matrix:
+    """
+    Construct a symmetric matrix from its upper part.
+    When upper_vec is a sympy matrix, it is assumed to be in the shape of a vector.
+    When upper_vec is a numpy matrix, it can be 1D or 2D. If it is 1D as a vector,
+    the function has the same behavior as the sympy version. If it is 2D, it returns
+    a 3D tensor with the last dimension being the last dimension of upper_vec.
+
+    Parameters
+    ----------
+    upper_vec : sp.Matrix | np.ndarray
+        Upper part of a symmetric matrix.
+
+    Returns
+    -------
+    S : sp.Matrix | np.ndarray
+        Symmetric matrix.
+    """
+    n = round((2 * upper_vec.shape[0] + .25) ** 0.5 - .5)
+    if isinstance(upper_vec, sp.Matrix):
+        S = sp.zeros(n)
+    elif isinstance(upper_vec, np.ndarray):
+        S = np.zeros((n,n,upper_vec.shape[1])) if upper_vec.ndim == 2 else np.zeros((n,n))
+
+    for (i,j), v in zip(upper_vec_of_symmetric_matrix(n, return_inds = True), upper_vec):
+        S[i,j] = v
+        S[j,i] = v
+    return S
 
 
 def solve_undetermined_linear(M: sp.Matrix, B: sp.Matrix) -> Tuple[sp.Matrix, sp.Matrix]:
@@ -118,19 +166,19 @@ def solve_undetermined_linear(M: sp.Matrix, B: sp.Matrix) -> Tuple[sp.Matrix, sp
     return vt2, V2
 
 
-def split_vector(constraints: List[sp.Matrix]) -> List[slice]:
+def split_vector(chunks: List[Union[int, List, sp.Matrix]]) -> List[slice]:
     """
     It is common for a single array to store information of multiple
     matrices. And we need to extract each matrix from the array by 
     chunks of indices.
 
-    This function takes in a list of matrices, and returns a list of
+    This function takes in a list of ints / lists / matrices, and returns a list of
     slices with lengths equal to shape[1] of each matrix.
 
     Parameters
     ----------
-    constraints : List[sp.Matrix]
-        List of matrices.
+    chunks : List[int | List | sp.Matrix]
+        List of ints / lists / matrices.
     
     Returns
     ----------
@@ -139,11 +187,39 @@ def split_vector(constraints: List[sp.Matrix]) -> List[slice]:
     """
     splits = []
     split_start = 0
-    for constraint in constraints:
-        if constraint is not None:
-            splits.append(slice(split_start, split_start + constraint.shape[1]))
-            split_start += constraint.shape[1]
+
+    def length(c):
+        if c is None:
+            return 0
+        elif isinstance(c, sp.Matrix):
+            return c.shape[1]
+        elif isinstance(c, int):
+            return c
+        elif isinstance(c, list):
+            return len(c)
+
+    for chunk in chunks:
+        l = length(chunk)
+        if l > 0:
+            l = l * (l + 1) // 2
+            splits.append(slice(split_start, split_start + l))
+            split_start += l
     return splits
+
+
+def S_from_y(y: sp.Matrix, x0: sp.Matrix, space: sp.Matrix, splits: List[slice]) -> List[sp.Matrix]:
+    """
+    Return the symmetric matrices S from the vector y.
+    """
+    if not isinstance(y, sp.Matrix):
+        y = sp.Matrix(y)
+
+    vecS = x0 + space * y
+    Ss = []
+    for split in splits:
+        S = symmetric_matrix_from_upper_vec(sp.Matrix(vecS[split]))
+        Ss.append(S)
+    return Ss
 
 
 @contextmanager

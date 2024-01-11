@@ -1,10 +1,17 @@
-from .roots import Root
+from .roots import (
+    Root,
+    RootAlgebraic,
+    RootRational,
+    RootUV
+)
 
 from .rootsinfo import RootsInfo
 
 from .grid import GridRender
 
-from .findroot import findroot, nroots
+from .findroot import (
+    findroot, find_nearest_root, findroot_resultant, nroots
+)
 
 from .tangents import root_tangents, RootTangent
 

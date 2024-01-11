@@ -1,11 +1,27 @@
-from typing import List, Union, Optional, Callable, Tuple
+from itertools import chain
+from typing import List, Union, Optional, Callable
 
 import numpy as np
 import sympy as sp
 
-from .manifold import LowRankHermitian
-from .utils import congruence_with_perturbation
-from ...utils.roots.rationalize import rationalize
+from .utils import congruence_with_perturbation, S_from_y
+
+
+def rationalize(x, rounding = 1e-2, **kwargs):
+    """
+    Although there is a rationalize function in triples.src.roots,
+    we implement a new one here to reduce the dependency. The
+    function is a wrapper of sympy.nsimplify.
+
+    Parameters
+    ----------
+    x : sp.Rational | sp.Float
+        The number to be rationalized.
+    rounding : float
+        The rounding threshold.
+    """
+    rounding = max(rounding, 1e-15)
+    return sp.nsimplify(x, tolerance = rounding, rational = True)
 
 
 def rationalize_with_mask(y: np.ndarray, zero_tolerance: float = 1e-7) -> sp.Matrix:
@@ -32,7 +48,7 @@ def rationalize_with_mask(y: np.ndarray, zero_tolerance: float = 1e-7) -> sp.Mat
     return y_rational
 
 
-def rationalize_simutaneously(y: np.ndarray, lcm: int, times = 3) -> sp.Matrix:
+def rationalize_simultaneously(y: np.ndarray, lcm: int = 1260, times: int = 3) -> sp.Matrix:
     """
     Rationalize a vector `y` with the same denominator `lcm ^ power` 
     where `power = 0, 1, ..., times - 1`. This keeps the denominators of
@@ -99,39 +115,81 @@ def verify_is_pretty(
     return True
 
 
-def verify_is_positive(
-        vecS: sp.Matrix,
+def rationalize_and_decompose(
+        y: Union[np.ndarray, sp.Matrix],
+        x0: sp.Matrix,
+        space: sp.Matrix,
         splits: List[slice],
-        allow_numer: bool = False
-    ) -> Optional[List[Tuple[sp.Matrix, sp.Matrix, List[sp.Rational]]]]:
+        try_rationalize_with_mask: bool = True,
+        lcm: int = 1260,
+        times: int = 3,
+        reg: float = 0,
+        perturb: bool = False,
+        check_pretty: bool = True,
+    ):
     """
     Recover symmetric matrices from `x0 + space * y` and check whether they are
-    positive semidefinite. See more details in `solver.py`.
+    positive semidefinite.
 
     Parameters
     ----------
-    vecS:
-        The vectorized symmetric matrices.
+    y : np.ndarray
+        The vector to be rationalized.
+    x0 : sp.Matrix
+        The constant part of the equation. Stands for a particular solution
+        of the space of S.
+    space : sp.Matrix
+        The space of S. Stands for the space constraint of S.
     splits : List[slice]
-        The splits of the space. Each split is a slice object.
-    allow_numer : bool
-        If allow_numer == True, it must return the result in spite of floating point errors.
+        The splits of the symmetric matrices. Each split is a slice object.
+    try_rationalize_with_mask: bool
+        If True, function `rationalize_with_mask` will be called first.
+    lcm: int
+        The denominator used to rationalize `y`. Defaults to 1260.
+    times : int
+        The number of times to perform retries. Defaults to 3.
+    reg : float
+        We require `S[i]` to be positive semidefinite, but in practice
+        we might want to add a small regularization term to make it
+        positive definite >> reg * I.
+    perturb : bool
+        If perturb == True, it must return the result by adding a small
+        perturbation * identity to the matrices.
+    check_pretty : bool
+        If True, we check whether the rationalization of `y` is pretty.
+        See `verify_is_pretty` for more details.
 
     Returns
     -------
-    decompositions : Optional[List[Tuple[sp.Matrix, sp.Matrix, List[sp.Rational]]]]
-        If the matrices are positive semidefinite, return the congruence decompositions `(S, U, diag)`
+    y, decompositions : Optional[Tuple[sp.Matrix, List[Tuple[sp.Matrix, sp.Matrix, List[sp.Rational]]]]]
+        If the matrices are positive semidefinite, return the congruence decompositions `y, [(S, U, diag)]`
         So that each `S = U.T * diag(diag) * U` where `U` is upper triangular.
         Otherwise, return None.
     """
-    decompositions = []
-    for split in splits:
-        S = LowRankHermitian(None, sp.Matrix(vecS[split])).S
+    if isinstance(y, np.ndarray):
+        ys = rationalize_simultaneously(y, lcm = lcm, times = times)
+        if try_rationalize_with_mask:
+            ys = chain([rationalize_with_mask(y)], ys)
 
-        congruence_decomp = congruence_with_perturbation(S, allow_numer = allow_numer)
-        if congruence_decomp is None:
-            return None
+    elif isinstance(y, sp.Matrix):
+        ys = [y]
 
-        U, diag = congruence_decomp
-        decompositions.append((S, U, diag))
-    return decompositions
+
+    for y_rational in ys:
+        if check_pretty and not verify_is_pretty(y_rational):
+            continue
+
+        Ss = S_from_y(y_rational, x0, space, splits)
+        decompositions = []
+        for S in Ss:
+            if reg != 0:
+                S = S + reg * sp.eye(S.shape[0])
+
+            congruence_decomp = congruence_with_perturbation(S, perturb = perturb)
+            if congruence_decomp is None:
+                break
+
+            U, diag = congruence_decomp
+            decompositions.append((S, U, diag))
+        else:
+            return y_rational, decompositions

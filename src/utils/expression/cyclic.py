@@ -18,15 +18,15 @@ def _leading_symbol(expr):
             return result
     return None
 
-def _is_cyclic_expr(expr, symbols):
+def is_cyclic_expr(expr, symbols):
     if expr.free_symbols.isdisjoint(symbols):
         return True
     if hasattr(expr, '_eval_is_cyclic') and expr._eval_is_cyclic(symbols):
         return True
     if isinstance(expr, (sp.Add, sp.Mul)):
-        return all(_is_cyclic_expr(arg, symbols) for arg in expr.args)
+        return all(is_cyclic_expr(arg, symbols) for arg in expr.args)
     if isinstance(expr, sp.Pow) and expr.args[1].is_constant():
-        return _is_cyclic_expr(expr.args[0], symbols)
+        return is_cyclic_expr(expr.args[0], symbols)
     return False
 
 
@@ -137,7 +137,7 @@ class CyclicSum(CyclicExpr):
             symbol_degrees = {}
 
             for arg in expr.args:
-                if _is_cyclic_expr(arg, symbols):
+                if is_cyclic_expr(arg, symbols):
                     cyc_args.append(arg)
 
                 # elif isinstance(arg, sp.Symbol) and arg in symbols:
@@ -202,9 +202,9 @@ class CyclicProduct(CyclicExpr):
             return cls._eval_degenerate(expr, symbols)
 
         if isinstance(expr, sp.Mul):
-            cyc_args = list(filter(lambda x: _is_cyclic_expr(x, symbols), expr.args))
+            cyc_args = list(filter(lambda x: is_cyclic_expr(x, symbols), expr.args))
             cyc_args = [arg ** len(symbols) for arg in cyc_args]
-            uncyc_args = list(filter(lambda x: not _is_cyclic_expr(x, symbols), expr.args))
+            uncyc_args = list(filter(lambda x: not is_cyclic_expr(x, symbols), expr.args))
             obj0 = sp.Mul(*[cls(arg, *symbols) for arg in uncyc_args])
             obj = sp.Mul(obj0, *cyc_args)
             return obj

@@ -1,1 +1,1 @@
-from .sdpsos import SDPSOS
+from .sdpsos import SDPSOS, SDPProblem
