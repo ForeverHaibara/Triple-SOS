@@ -225,6 +225,7 @@ def _findroot_initial_guess(grid_coor, grid_value):
     # print(extrema)
     return extrema
 
+
 def _findroot_nsolve(
         poly,
         initial_guess = []
@@ -250,7 +251,6 @@ def _findroot_nsolve(
             pass
 
     return result_roots
-
 
 
 def _findroot_newton(

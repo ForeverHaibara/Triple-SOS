@@ -1,25 +1,55 @@
-from numbers import Number
+from typing import Callable, List, Union
 
 import sympy as sp
 
-from .tangents import root_tangents
+from .roots import Root
+from .tangents import root_tangents, RootTangent
 
 class RootsInfo():
+    """
+    A class to record the rootsinfo of a polynomial.
+    """
     PRINT_PRECISION = 8
     PRINT_MAXLEN = 20
-    def __init__(self, poly = None, roots = [], strict_roots = [], tangents = [], reg = 1e-7, with_tangents = False):
+    def __init__(self,
+            poly: sp.Poly = None,
+            roots: List[Root] = [],
+            strict_roots: List[Root] = [],
+            tangents: List[RootTangent] = [],
+            reg: float = 1e-7,
+            with_tangents: Union[bool, Callable] = False
+        ):
+        """
+        Parameters
+        ----------
+        poly: sympy.Poly
+            The polynomial.
+        roots: list of Root
+            The roots of the polynomial. Local minima are also included.
+        strict_roots: list of Root
+            The strict roots of the polynomial. Local minima are not included.
+        tangents: list of RootTangent
+            The tangents of the polynomial.
+        reg: float
+            The tolerance for strict roots.
+        with_tangents: bool | Callable
+            If True, generate tangents for each root and store them in self.tangents.
+        """
         self.poly = poly
         self.roots = roots
         self.strict_roots = strict_roots
         self.tangents = tangents
         self.reg = reg
         self.is_centered_ = None
-        if with_tangents:
-            self.generate_tangents()
+        if with_tangents is not False:
+            self.generate_tangents(with_tangents if isinstance(with_tangents, Callable) else root_tangents)
         self.filter_tangents()
 
     @property
     def normal_roots(self):
+        """
+        Return local minima but not strict roots.
+        """
         return list(set(self.roots) ^ set(self.strict_roots))
 
     def __str__(self):
@@ -64,7 +94,7 @@ class RootsInfo():
     @property
     def nonborder_roots(self):
         """
-        Return roots that a, b, c are nonzero
+        Return roots that a, b, c are nonzero.
         """
         return [r for r in self.strict_roots if r[0] != 0 and r[1] != 0]
 
@@ -84,7 +114,23 @@ class RootsInfo():
     def has_nontrivial_roots(self):
         return len(self.nontrivial_roots) > 0
 
-    def filter_tangents(self, tangents = None):
+    def filter_tangents(self, tangents = None, tolerance = 1e-6):
+        """
+        Remove tangents that are not zero at nontrivial roots.
+
+        Parameters
+        ----------
+        tangents: list of RootTangent
+            If None, use self.tangents.
+        tolerance: float
+            If abs(tangent(root)) < tolerance, then the tangent is removed.
+
+        Returns
+        ----------
+        filtered_tangents: list of RootTangent
+            The filtered tangents. When tangents = None, the function uses
+            self.tangents and also modifies self.tangents inplace.
+        """
         if tangents is None:
             tangents = self.tangents
         if len(tangents) == 0:
@@ -95,22 +141,33 @@ class RootsInfo():
             return tangents
 
         filtered_tangents = []
-        TOL = 1e-6
         a, b, c = self.poly.gens
         for t in tangents:
-            if all(abs(t.subs({a: r[0], b: r[1], c: 1})) < TOL for r in nontrivial_roots):
+            if all(abs(t.subs({a: r[0], b: r[1], c: 1})) < tolerance for r in nontrivial_roots):
                 filtered_tangents.append(t)
 
-        if tangents == self.tangents: # pointer
+        if tangents is self.tangents: # pointer
             self.tangents = filtered_tangents
 
         return filtered_tangents
 
-    def generate_tangents(self):
-        self.tangents = root_tangents(self)
+    def generate_tangents(self, func: Callable = root_tangents):
+        """
+        Generate tangents for each root and store them in self.tangents.
+
+        Parameters
+        ----------
+        func: Callable
+            The function to generate tangents. The function should take a
+            RootsInfo object as input and return a list of RootTangent objects.
+        """
+        self.tangents = func(self)
         return self.tangents
 
     def sort_tangents(self):
+        """
+        Sort the tangents by length of strings.
+        """
         tangents = sorted(self.tangents, key = lambda t: len(t))
         self.tangents = tangents
         return tangents
