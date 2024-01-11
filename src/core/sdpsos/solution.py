@@ -3,11 +3,13 @@ from typing import Dict, Union, Tuple
 import sympy as sp
 
 from .utils import congruence_with_perturbation, is_numer_matrix
-from ...utils.polytools import deg
-from ...utils.basis_generator import generate_expr
-from ...utils.expression.form import poly_get_factor_form
-from ...utils.expression.cyclic import CyclicSum, CyclicProduct, _is_cyclic_expr
-from ...utils.expression.solution import SolutionSimple
+from ...utils import (
+    deg, generate_expr, 
+    poly_get_factor_form,
+    CyclicSum, CyclicProduct, is_cyclic_expr,
+    SolutionSimple
+)
+
 
 class SolutionSDP(SolutionSimple):
     def __init__(self, *args, **kwargs):
@@ -17,11 +19,49 @@ class SolutionSDP(SolutionSimple):
     # def is_equal(self):
     #     return True
 
+
+# For example, if f(a,b,c) = sum(a*g(a,b,c)^2 + a*h(a,b,c)^2 + ...),
+# then here multiplier == a for functions g and h.
+_MULTIPLIERS = {
+    (0, 0): 1,
+    (0, 1): sp.Symbol('a') * sp.Symbol('b'),
+    (1, 0): sp.Symbol('a'),
+    (1, 1): CyclicProduct(sp.Symbol('a'))
+}
+
+
+def _as_cyc(multiplier, x):
+    """
+    Beautifully convert CyclicSum(multiplier * x).
+    """
+    a, b, c = sp.symbols('a b c')
+    if x.is_Pow:
+        # Example: (p(a-b))^2 == p((a-b)^2)
+        if isinstance(x.base, CyclicProduct) and x.exp > 1:
+            x = CyclicProduct(x.base.args[0] ** x.exp)
+    elif x.is_Mul:
+        args = list(x.args)
+        flg = False
+        for i in range(len(args)):
+            if args[i].is_Pow and isinstance(args[i].base, CyclicProduct):
+                args[i] = CyclicProduct(args[i].base.args[0] ** args[i].exp)
+                flg = True
+        if flg: # has been updated
+            x = sp.Mul(*args)
+
+    if is_cyclic_expr(x, (a,b,c)):
+        if multiplier == 1 or multiplier == CyclicProduct(a):
+            return 3 * multiplier * x
+        return CyclicSum(multiplier) * x
+    elif multiplier == CyclicProduct(a):
+        return multiplier * CyclicSum(x)
+    return CyclicSum(multiplier * x)
+
+
 def _matrix_as_expr(
         M: Union[sp.Matrix, Tuple[sp.Matrix, sp.Matrix]],
         multiplier: sp.Expr, 
         cyc: bool = True,
-        degree: int = 0,
         factor_result: bool = True,
         cancel: bool = True
     ) -> sp.Expr:
@@ -31,17 +71,16 @@ def _matrix_as_expr(
 
     Parameters
     ----------
-    M : sp.Matrix or Tuple[sp.Matrix, sp.Matrix]
+    M : sp.Matrix | Tuple[sp.Matrix, sp.Matrix]
         The matrix to be rewritten or the decomposition of the matrix.
+        If given a tuple, it should be (U, S) where U is upper triangular
+        and S is a diagonal vector so that M = U.T @ diag(S) @ U.
     multiplier : sp.Expr
         The multiplier of the expression. For example, if `M` represents 
         `(a^2-b^2)^2 + (a^2-2ab+c^2)^2` while `multiplier = ab`, 
         then the result should be `ab(a^2-b^2)^2 + ab(a^2-2ab+c^2)^2`.
     cyc : bool
         Whether add a cyclic sum to the expression. Defaults to True.
-    degree: int
-        The (halved) degree of the polynomial. Defaults to 0 for auto inference.
-        It should be appointed if M is cut off.
     factor_result : bool
         Whether factorize the result. Defaults to True.
     cancel : bool
@@ -52,45 +91,25 @@ def _matrix_as_expr(
     sp.Expr
         The expression of matrix as sum of squares.
     """
-    is_numer = is_numer_matrix(M if isinstance(M, sp.Matrix) else sp.Matrix(M[1]))
+    is_numer = is_numer_matrix(M if isinstance(M, sp.Matrix) else M[1])
     factor_result = factor_result and (not is_numer)
 
-    if not isinstance(M, sp.Matrix) and len(M) == 2:
-        degree = degree or round((2*M[0].shape[0] + .25)**.5 - 1.5)
-        U, S = M
-    else:
-        degree = degree or round((2*M.shape[0] + .25)**.5 - 1.5)
+    if isinstance(M, sp.Matrix):
         U, S = congruence_with_perturbation(M, perturb = is_numer)
+        degree = round((2*M.shape[0] + .25)**.5 - 1.5)
+    elif not isinstance(M, sp.Matrix) and len(M) == 2:
+        U, S = M
+        degree = round((2*U.shape[1] + .25)**.5 - 1.5)
+    else:
+        raise ValueError('The input should be a matrix M or a tuple (U, S) such that M = U.T @ diag(S) @ U.')
+
 
     a, b, c = sp.symbols('a b c')
     monoms = generate_expr(degree, cyc = 0)[1]
 
-    factorizer = (lambda x: poly_get_factor_form(x.as_poly(a,b,c), return_type = 'expr')) if factor_result else (lambda x: x)
-    if not cyc:
-        as_cyc = lambda x: multiplier * x
-    else:
-        def as_cyc(x):
-            if x.is_Pow:
-                # Example: (p(a-b))^2 == p((a-b)^2)
-                if isinstance(x.base, CyclicProduct) and x.exp > 1:
-                    x = CyclicProduct(x.base.args[0] ** x.exp)
-            elif x.is_Mul:
-                args = list(x.args)
-                flg = False
-                for i in range(len(args)):
-                    if args[i].is_Pow and isinstance(args[i].base, CyclicProduct):
-                        args[i] = CyclicProduct(args[i].base.args[0] ** args[i].exp)
-                        flg = True
-                if flg: # has been updated
-                    x = sp.Mul(*args)
-
-            if _is_cyclic_expr(x, (a,b,c)):
-                if multiplier == 1 or multiplier == CyclicProduct(a):
-                    return 3 * multiplier * x
-                return CyclicSum(multiplier) * x
-            elif multiplier == CyclicProduct(a):
-                return multiplier * CyclicSum(x)
-            return CyclicSum(multiplier * x)
+    factorizer = (lambda x: poly_get_factor_form(x.as_poly(a,b,c), return_type = 'expr'))\
+                        if factor_result else (lambda x: x)
+    as_cyc = (lambda m, x: m * x) if not cyc else _as_cyc
 
     expr = sp.S(0)
     for i, s in enumerate(S):
@@ -102,25 +121,67 @@ def _matrix_as_expr(
             val += U[i,j] * a**monom[0] * b**monom[1] * c**monom[2]
 
         if cancel:
-            val = val.together().as_coeff_Mul()
-            r, val = val[0], val[1]
+            r, val = val.together().as_coeff_Mul()
         else:
             r = 1
         val = factorizer(val)
-        expr += (s * r**2) * as_cyc(val**2)
+        expr += (s * r**2) * as_cyc(multiplier, val**2)
 
     return expr
-    
+
+
+def _complete_M(S: Dict[str, sp.Matrix], Q: Dict[str, sp.Matrix], M: Dict[str, sp.Matrix]) -> Dict[str, sp.Matrix]:
+    """
+    Complete the missing matrices in dictionary M by multiplying Q @ S @ Q.T.
+
+    Parameters
+    ----------
+    S : Dict[(str, sp.Matrix)]
+        The symmetric matrices.
+    Q : Dict[(str, sp.Matrix)]
+        The low-rank transformations to the subspaces.
+    M : Dict[(str, sp.Matrix)]
+        The symmetric matrices to be completed.
+
+    Returns
+    -------
+    M : Dict[(str, sp.Matrix)]
+        The completed symmetric matrices. Each M = Q @ S @ Q.T.
+    """
+    if M is None: M = {}
+    for key, Q in Q.items():
+        if Q is None:
+            continue
+        if key not in M:
+            M[key] = Q @ S[key] @ Q.T
+    return M
+
+
+def _is_numer_solution(
+        S: Dict[str, sp.Matrix] = {},
+        Q: Dict[str, sp.Matrix] = {},
+        M: Dict[str, sp.Matrix] = {},
+        decompose_method: str = 'raw',
+    ) -> bool:
+    """
+    Check whether a solution is numerical. When it is, the solution must be inaccurate.
+    """
+    # Ms = _complete_M(S, Q, M)
+    if decompose_method == 'raw':
+        return any(is_numer_matrix(x) for x in M.values() if x is not None)
+    elif decompose_method == 'reduce':
+        return any(is_numer_matrix(x) for x in S.values() if x is not None)
+
 
 def create_solution_from_M(
         poly: sp.Expr,
-        M: Dict[str, Union[sp.Matrix, Tuple[sp.Matrix, sp.Matrix]]] = {},
+        S: Dict[str, sp.Matrix] = {},
         Q: Dict[str, sp.Matrix] = {},
-        decompositions: Dict[str, Tuple[sp.Matrix, sp.Matrix]] = {},
-        method: str = 'raw',
+        M: Dict[str, sp.Matrix] = {},
+        decompose_method: str = 'raw',
+        cyc: bool = True,
         factor_result: bool = True,
         cancel: bool = True,
-        **kwargs
     ) -> SolutionSDP:
     """
     Create SDP solution from symmetric matrices.
@@ -129,17 +190,18 @@ def create_solution_from_M(
     ----------
     poly : sp.Expr
         The polynomial to be solved.
-    M : Dict[sp.Matrix] or Dict[(sp.Matrix, sp.Matrix)]
-        If using method == 'raw'. It should be the symmetric matrices or their decompositions. 
-        `Ms` should have keys 'major', 'minor' and 'multiplier'.
-    Q : Dict[sp.Matrix]
-        If using method == 'reduce'. It should be the low-rank transformations to the subspaces.
-    decompositions : Dict[sp.Matrix] or Dict[(sp.Matrix, sp.Matrix)]
-        If using method == 'reduce'. It should be the decompositions of the subspace matrices.
-    method : str
+    S : Dict[(str, sp.Matrix)]
+        The low-rank symmetric matrices. M = Q @ S @ Q.T.
+    Q : Dict[(str, sp.Matrix)]
+        If using decompose_method == 'reduce'. It should be the low-rank transformations to the subspaces.
+    M : Dict[(str, sp.Matrix)]
+        M = Q @ S @ Q.T. If given, the computation will be skipped.
+    decompose_method : str
         One of 'raw' or 'reduce'. The default is 'raw'. 'raw' first computes Q.T @ S @ Q and then
         performs congruence. While 'reduce' performs congruence on S first and then multiply Q.T.
         'reduce' is useful in numerical case, which helps remove improper components.
+    cyc : bool
+        Whether to convert the solution to a cyclic sum.
     factor_result : bool
         Whether to factorize the result. The default is True.
     cancel : bool, optional
@@ -150,57 +212,48 @@ def create_solution_from_M(
     SolutionSDP
         The SDP solution.
     """
-    Ms = M
+    M = _complete_M(S, Q, M)
     degree = deg(poly)
-
-    a, b, c = sp.symbols('a b c')
     expr = sp.S(0)
-    is_equal = True
+    is_numer = _is_numer_solution(S, Q, M, decompose_method)
 
-    if method == 'raw':
-        items = Ms.items()
-    elif method == 'reduce':
-        items = []
-        for key, Q in Q.items():
-            if Q is None:
-                continue
-            M, v = decompositions[key]
-            items.append((key, (M * Q.T, v)))
-
-    for key, M in items:
-        if M is None:
+    items = []
+    for key in M.keys():
+        if M[key] is None:
             continue
-        minor = key == 'minor'
-        # after it gets cyclic, it will be three times
-        # so we require it to be divided by 3 in advance
-        if not ((degree % 2) ^ minor):
-            if isinstance(M, sp.Matrix):
-                M = M / 3
-            else:
-                M = (M[0], [_ / 3 for _ in M[1]] if isinstance(M[1], list) else M[1] / 3)
+        try:
+            if decompose_method == 'raw':
+                U, v = congruence_with_perturbation(M[key], perturb = is_numer)
+                items.append((key, (U, v)))
+            elif decompose_method == 'reduce':
+                # S = U.T @ diag(v) @ U => M = QU.T @ diag(v) @ UQ.T
+                U, v = congruence_with_perturbation(S[key], perturb = is_numer)
+                items.append((key, (U * Q[key].T, v)))
+        except TypeError:
+            # TypeError: cannot unpack non-iterable NoneType object
+            raise ValueError(f'Matrix M["{key}"] is not positive semidefinite.')
 
-        # e.g. if f(a,b,c) = sum(a*g(a,b,c)^2 + a*h(a,b,c)^2 + ...)
-        # then here multiplier = a
-        multiplier = {
-            (0, 0): 1,
-            (0, 1): a * b,
-            (1, 0): a,
-            (1, 1): CyclicProduct(a)
-        }[(degree % 2, minor)]
+    for key, (U, v) in items:
+        minor = key == 'minor'
+
+        # After it gets cyclic, it will be three times as large as the original one,
+        # so we require it to be divided by 3 in advance.
+        originally_need_cyc = ((degree % 2) ^ minor)
+        if cyc and not originally_need_cyc:
+            # It is not originally a cyclic sum, but we force it to.
+            # So we need to divide it by 3.
+            v = v / 3
 
         expr += _matrix_as_expr(
-            M,
-            multiplier,
-            cyc = True,
-            degree = degree // 2 - minor,
+            M = (U, v),
+            multiplier = _MULTIPLIERS[(degree % 2, minor)],
+            cyc = cyc or originally_need_cyc,
+            factor_result = factor_result,
             cancel = cancel
         )
-
-        if is_equal and is_numer_matrix(M if isinstance(M, sp.Matrix) else sp.Matrix(M[1])):
-            is_equal = False
 
     return SolutionSDP(
         problem = poly,
         numerator = expr,
-        is_equal = is_equal
+        is_equal = not is_numer,
     )
