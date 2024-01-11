@@ -7,16 +7,30 @@ import sympy as sp
 from ...utils import congruence
 
 
-def congruence_with_perturbation(M, perturb = False):
+def congruence_with_perturbation(M: sp.Matrix, perturb: bool = False):
     """
-    Perform congruence decomposition on M. 
-    If perturb == True, make a slight perturbation so that M is positive semidefinite.
-    This is useful when there exists numerical errors in the matrix.
+    Perform congruence decomposition on M. This is a wrapper of congruence.
+    Write it as M = U.T @ S @ U where U is upper triangular and S is a diagonal matrix.
+
+    Parameters
+    ----------
+    M : sp.Matrix
+        Symmetric matrix to be decomposed.
+    perturb : bool
+        If perturb == True, make a slight perturbation to force M to be positive semidefinite.
+        This is useful when there exists numerical errors in the matrix.
+
+    Returns
+    ---------
+    U : sp.Matrix
+        Upper triangular matrix.
+    S : sp.Matrix
+        Diagonal vector (1D array).
     """
     if not perturb:
         return congruence(M)
     else:
-        min_eig = min([v.n(20) if not isinstance(v, sp.Float) else v for v in M.eigenvals()])
+        min_eig = min([sp.re(v) for v in M.n(20).eigenvals()])
         if min_eig < 0:
             eps = 1e-15
             for i in range(10):
@@ -32,10 +46,9 @@ def is_numer_matrix(M: sp.Matrix) -> bool:
     """
     Check whether a matrix contains sp.Float.
     """
-    for i in range(M.shape[0]):
-        for j in range(M.shape[1]):
-            if isinstance(M[i,j], sp.Float):
-                return True
+    for v in M:
+        if not isinstance(v, sp.Rational):
+            return True
     return False
 
 

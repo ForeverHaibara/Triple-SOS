@@ -46,7 +46,8 @@ class SDPProblem():
         self.eq = deepcopy(info)
         self.vecP = None
 
-        # unmasked x0, space, splits
+        # unmasked S, x0, space, splits
+        self.S_ = deepcopy(info)
         self.x0_ = None
         self.space_ = None
         self.splits_ = None
@@ -356,7 +357,7 @@ class SDPProblem():
         if not sos_result.success:
             return False
 
-        self.register_S(sos_result.S, with_M = True)
+        self.M = self.compute_M(self.S)
 
         return True
 
@@ -382,30 +383,56 @@ class SDPProblem():
         return ret
 
 
-    def register_S(self, S: Dict[str, sp.Matrix], with_M = True) -> Dict[str, sp.Matrix]:
+    def compute_M(self, S: Dict[str, sp.Matrix]) -> Dict[str, sp.Matrix]:
         """
         Restore M = Q @ S @ Q.T from S.
         """
+        M = {}
+        self.S_ = {}
         for key in self._not_none_keys():
-            self.S[key] = S[key]
-            if with_M:
-                self.M[key] = self.Q[key] * self.pad_masked_rows(S, key) * self.Q[key].T
-        return self.S
+            self.S_[key] = self.pad_masked_rows(S, key)
+            M[key] = self.Q[key] * self.S_[key] * self.Q[key].T
+        return M
 
 
-    def as_solution(self, decompose_method = 'raw', factor_result = True):
+    def as_solution(self, 
+            y: Optional[sp.Matrix] = None,
+            decompose_method: str = 'raw',
+            cyc: bool = True,
+            factor_result: bool = True
+        ):
         """
         Wrap the matrix form solution to a SolutionSDP object.
         Note that the decomposition of a quadratic form is not unique.
+
+        Parameters
+        ----------
+        y : Optional[sp.Matrix]
+            The y vector. If None, then we use the solution of the SDP problem.
+        decompose_method : str
+            One of 'raw' or 'reduce'. The default is 'raw'.
+        cyc : bool
+            Whether to convert the solution to a cyclic sum.
+        factor_result : bool
+            Whether to factorize the result. The default is True.
         """
-        if not self.success:
-            return None
+
+        if y is None:
+            S = self.S_
+            M = self.M
+            if (not S) or not any(S.values()):
+                raise ValueError('The problem is not solved yet.')
+        else:
+            S = self.S_from_y(y)
+            M = self.compute_M(S)
+
         return create_solution_from_M(
-            poly = self.poly, 
-            M = self.M,
+            poly = self.poly,
+            S = S,
             Q = self.Q,
-            decompositions = self.decompositions,
-            method = decompose_method,
+            M = M,
+            decompose_method = decompose_method,
+            cyc = cyc,
             factor_result = factor_result,
         )
 
@@ -472,9 +499,9 @@ def SDPSOS(
         return None.
     cyclic_constraint : bool
         Whether to add cyclic constraint the problem. This reduces the degree of freedom.
-    method: str
+    method : str
         The method to solve the SDP problem. Currently supports:
-        'partial deflation' and 'trivial'.
+        'partial deflation' and 'relax' and 'trivial'.
     allow_numer : bool
         Whether to allow numerical solution. If True, then the function will return numerical solution
         if the rational solution does not exist.
