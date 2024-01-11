@@ -1,4 +1,4 @@
-from typing import Optional, List
+from typing import Optional, List, Union
 import re
 
 import numpy as np
@@ -6,7 +6,7 @@ import sympy as sp
 from sympy.core.singleton import S
 from sympy.printing.precedence import precedence_traditional, PRECEDENCE
 
-from ..expression.cyclic import _is_cyclic_expr, CyclicSum, CyclicProduct, CyclicExpr
+from ..expression.cyclic import is_cyclic_expr, CyclicSum, CyclicProduct, CyclicExpr
 from ..basis_generator import generate_expr
 from ..roots.rationalize import cancel_denominator
 
@@ -251,7 +251,7 @@ class SolutionSimple(Solution):
 
         for arg in self.numerator.args:
             core = None
-            if _is_cyclic_expr(arg, self.problem.symbols):
+            if is_cyclic_expr(arg, self.problem.symbols):
                 if isinstance(arg, CyclicSum):
                     core = _arg_sqr_core(arg.args[0])
                 else:
@@ -392,16 +392,16 @@ class SolutionSimple(Solution):
 
 
 
-def congruence(M):
+def congruence(M: Union[sp.Matrix, np.ndarray]) -> Union[None, tuple]:
     """
     Write a symmetric matrix as a sum of squares.
     M = U.T @ S @ U where U is upper triangular and S is diagonal.
 
     Returns
     -------
-    U : np.ndarray
+    U : sp.Matrix | np.ndarray
         Upper triangular matrix.
-    S : np.ndarray
+    S : sp.Matrix | np.ndarray
         Diagonal vector (1D array).
 
     Return None if M is not positive semidefinite.
@@ -409,7 +409,7 @@ def congruence(M):
     M = M.copy()
     n = M.shape[0]
     if isinstance(M[0,0], sp.Expr):
-        U, S = sp.Matrix.zeros(n), [sp.S.Zero] * n
+        U, S = sp.Matrix.zeros(n), sp.Matrix.zeros(n, 1)
         One = sp.S.One
     else:
         U, S = np.zeros((n,n)), np.zeros(n)

@@ -1,6 +1,7 @@
 from .cyclic import (
     CyclicSum,
-    CyclicProduct
+    CyclicProduct,
+    is_cyclic_expr
 )
 
 from .form import (
