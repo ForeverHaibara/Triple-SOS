@@ -7,7 +7,7 @@ from sympy.core.singleton import S
 from .basis import LinearBasis, LinearBasisSquare, a, b, c
 from .updegree import LinearBasisMultiplier
 from ...utils.polytools import deg
-from ...utils.expression.cyclic import CyclicSum, _is_cyclic_expr
+from ...utils.expression.cyclic import CyclicSum, is_cyclic_expr
 from ...utils.expression.solution import SolutionSimple, congruence_as_sos
 from ...utils.basis_generator import arraylize_sp, generate_expr
 from ...utils.roots.rationalize import cancel_denominator
@@ -113,7 +113,7 @@ class SolutionLinear(SolutionSimple):
 
             tangent = base.tangent
             info = base.info_
-            if _is_cyclic_expr(tangent, (a,b,c)):
+            if is_cyclic_expr(tangent, (a,b,c)):
                 # we shall rotate the expression so that j is maximum
                 i, j, k, m, n, p = info
                 if i != j and i != k and j != k:
