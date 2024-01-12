@@ -2,7 +2,10 @@ from .basis_generator import generate_expr, arraylize, arraylize_sp
 
 from .text_process import preprocess_text, pl
 
-from .polytools import deg, verify_hom_cyclic, verify_is_symmetric, convex_hull_poly
+from .polytools import (
+    deg, verify_hom_cyclic, verify_is_symmetric, 
+    monom_of, convex_hull_poly
+)
 
 from .expression import (
     CyclicSum, CyclicProduct, is_cyclic_expr,
@@ -13,10 +16,10 @@ from .expression import (
 )
 
 from .roots import (
-    RootsInfo, Root, RootAlgebraic, RootRational, RootUV,
+    RootsInfo, Root, RootAlgebraic, RootRational,
     GridRender,
     findroot, find_nearest_root, findroot_resultant, nroots,
-    root_tangents,
+    RootTangent, root_tangents,
     rationalize, rationalize_array, rationalize_bound,
     rationalize_quadratic_curve,
     square_perturbation,
