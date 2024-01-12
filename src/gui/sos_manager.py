@@ -5,6 +5,7 @@ from ..utils import deg, verify_hom_cyclic, poly_get_factor_form, poly_get_stand
 from ..utils.text_process import preprocess_text, degree_of_zero
 from ..utils.roots import RootsInfo, GridRender, findroot
 from ..core.sum_of_square import sum_of_square
+from ..core.linsos import root_tangents
 
 
 class SOS_Manager():
@@ -103,7 +104,7 @@ class SOS_Manager():
             self.poly, 
             most = 5, 
             grid = self._poly_info['grid'], 
-            with_tangents = True
+            with_tangents = root_tangents
         )
         self._roots_info.sort_tangents()
         print(self._roots_info)
