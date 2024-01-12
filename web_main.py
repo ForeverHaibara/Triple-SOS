@@ -4,7 +4,7 @@ from flask_cors import CORS
 
 # from sum_of_square import *
 from src.utils.roots import RootTangent
-from src.utils.text_process import short_constant_parser
+from src.utils.text_process import short_constant_parser, pl
 from src.utils.expression.solution import SolutionSimple
 from src.gui.sos_manager import SOS_Manager
 
@@ -63,7 +63,7 @@ def SumOfSquare():
     # app.SOS_Manager._roots_info['tangents'] = [tg
     #                     for tg in req['tangents'].split('\n') if len(tg) > 0]
     app.SOS_Manager._roots_info.tangents = [
-        RootTangent(tg) for tg in req['tangents'].split('\n') if len(tg) > 0
+        RootTangent(pl(tg).as_expr()) for tg in req['tangents'].split('\n') if len(tg) > 0
     ]
 
     method_order = [key for key, value in req['methods'].items() if value]
@@ -87,7 +87,7 @@ def SumOfSquare():
 @app.route('/process/rootangents', methods=['POST'])
 def RootsAndTangents():
     rootsinfo = app.SOS_Manager.findroot()
-    tangents = [str(_) for _ in rootsinfo.tangents]
+    tangents = [_.as_factor_form(remove_minus_sign=True) for _ in rootsinfo.tangents]
     return jsonify(rootsinfo = rootsinfo.gui_description, tangents = tangents)
 
 
@@ -106,7 +106,7 @@ def hello_world():
 
 if __name__ == '__main__':
     if _debug_:
-        # python "D:\Python Projects\Trials\Inequalities\Triples\web_main.py" dev
+        # python "D:\PythonProjects\Trials\Inequalities\Triples\web_main.py" dev
         from flask_script import Manager
         manager = Manager(app)
         @manager.command
@@ -114,7 +114,7 @@ if __name__ == '__main__':
             from livereload import Server
             live_server = Server(app.wsgi_app)
             live_server.watch(
-                "D:\\Python Projects\\Trials\\Inequalities\\Triples\\*.*"
+                "D:\\PythonProjects\\Trials\\Inequalities\\Triples\\*.*"
             )
             live_server.serve(open_url_delay=True)
         manager.run()
