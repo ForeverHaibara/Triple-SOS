@@ -10,6 +10,7 @@ a, b, c = sp.symbols('a b c')
 
 class LinearBasis():
     is_cyc = False
+    __slots__ = ('expr_', 'array_', 'array_sp_')
     def __init__(self, expr_ = None) -> None:
         self.expr_ = expr_
         self.array_ = None
@@ -56,6 +57,7 @@ class LinearBasis():
 
 class LinearBasisCyclic(LinearBasis):
     is_cyc = True
+    __slots__ = LinearBasis.__slots__
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
 
@@ -79,6 +81,7 @@ class LinearBasisSquare(LinearBasisCyclic):
     """
 
     _cached_poly_square = {}
+    __slots__ = LinearBasis.__slots__ + ('info_', 'tangent_', 'tangent_is_cyc_')
 
     def __init__(self, i, j, k, m, n, p, tangent = None, tangent_is_cyc = None) -> None:
         super().__init__()
@@ -183,6 +186,7 @@ class LinearBasisAMGM(LinearBasisCyclic):
     \sum_{cyc} a^(i+1)*b^(j)*c^(k-1) + a^(i)*b^(j+1)*c^(k-1) + a^(i-1)*b^(j-1)*c^(k+2) - 3*a^(i)*b^(j)*c^(k)
     """
     _cached_basis = {}
+    __slots__ = LinearBasis.__slots__ + ('info_',)
 
     def __init__(self, i, j, k):
         super().__init__()
