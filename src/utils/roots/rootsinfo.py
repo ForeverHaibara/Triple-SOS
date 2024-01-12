@@ -17,32 +17,42 @@ class RootsInfo():
             strict_roots: List[Root] = [],
             tangents: List[RootTangent] = [],
             reg: float = 1e-7,
-            with_tangents: Union[bool, Callable] = False
+            approximate_roots: bool = True,
+            with_tangents: Union[bool, Callable] = False,
         ):
         """
         Parameters
         ----------
         poly: sympy.Poly
             The polynomial.
-        roots: list of Root
+        roots: List[Root]
             The roots of the polynomial. Local minima are also included.
-        strict_roots: list of Root
+        strict_roots: List[Root]
             The strict roots of the polynomial. Local minima are not included.
-        tangents: list of RootTangent
+        tangents: List[RootTangent]
             The tangents of the polynomial.
         reg: float
             The tolerance for strict roots.
+        approximate_roots: bool
+            If True, approximate the roots if detected.
         with_tangents: bool | Callable
             If True, generate tangents for each root and store them in self.tangents.
         """
         self.poly = poly
+
+        roots = [Root(r) if not isinstance(r, Root) else r for r in roots]
+        strict_roots = [Root(r) if not isinstance(r, Root) else r for r in strict_roots]
+
+        if approximate_roots:
+            roots = [r.approximate() for r in roots]
+            strict_roots = [r.approximate() for r in strict_roots]
+
         self.roots = roots
         self.strict_roots = strict_roots
         self.tangents = tangents
         self.reg = reg
         self.is_centered_ = None
-        if with_tangents is not False:
-            self.generate_tangents(with_tangents if isinstance(with_tangents, Callable) else root_tangents)
+        self.tangents = self.generate_tangents(with_tangents)
         self.filter_tangents()
 
     @property
@@ -72,14 +82,9 @@ class RootsInfo():
                 return round(root, self.PRINT_PRECISION)
             return root
 
-        c = self.poly.gens[2]
-        poly_reduced = self.poly.subs(c, 1)
         for root in self.roots:
-            # NOTE: we use rational to evaluate for two reasons:
-            # 1. to avoid numerical error
-            # 2. rational is always faster than float by experiment
-            a, b = root[0], root[1]
-            value = poly_reduced(sp.Rational(a), sp.Rational(b))
+            a, b = root[0] / root[2], root[1] / root[2]
+            value = float(root.eval(self.poly, rational = True))
             if abs(value) < sp.S(10)**(-15):
                 value = sp.S(0)
             s += f'\n({formatter(a)},{formatter(b)},1) = {formatter(value)}'
@@ -91,28 +96,20 @@ class RootsInfo():
             self.is_centered_ = self.poly(1,1,1) == 0
         return self.is_centered_
 
-    @property
     def nonborder_roots(self):
         """
         Return roots that a, b, c are nonzero.
         """
-        return [r for r in self.strict_roots if r[0] != 0 and r[1] != 0]
+        return [r for r in self.strict_roots if not r.is_border]
 
-    @property
-    def nontrivial_roots(self):
+    def nontrivial_roots(self, tolerance = 1e-5):
         """
         Return roots that a, b, c are distinct and also nonzero.
         """
-        roots = self.nonborder_roots
-        TOL = 1e-5
-        def check(r):
-            # r[2] == 1
-            return abs(r[0] - r[1]) > TOL and abs(r[1] - 1) > TOL and abs(r[0] - 1) > TOL
-        return [r for r in roots if check(r)]
+        return [r for r in self.strict_roots if r.is_nontrivial]
 
-    @property
     def has_nontrivial_roots(self):
-        return len(self.nontrivial_roots) > 0
+        return len(self.nontrivial_roots()) > 0
 
     def filter_tangents(self, tangents = None, tolerance = 1e-6):
         """
@@ -136,14 +133,17 @@ class RootsInfo():
         if len(tangents) == 0:
             return tangents
 
-        nontrivial_roots = self.nontrivial_roots
+        nontrivial_roots = self.nontrivial_roots()
         if len(nontrivial_roots) == 0:
             return tangents
 
         filtered_tangents = []
         a, b, c = self.poly.gens
         for t in tangents:
-            if all(abs(t.subs({a: r[0], b: r[1], c: 1})) < tolerance for r in nontrivial_roots):
+            for r in nontrivial_roots:
+                s = sum(r)/3
+                u, v, w = r[0]/s, r[1]/s, r[2]/s
+            if all(abs(t(u,v,w)) < tolerance for r in nontrivial_roots):
                 filtered_tangents.append(t)
 
         if tangents is self.tangents: # pointer
@@ -151,18 +151,22 @@ class RootsInfo():
 
         return filtered_tangents
 
-    def generate_tangents(self, func: Callable = root_tangents):
+    def generate_tangents(self, with_tangents: Union[bool, Callable] = True):
         """
-        Generate tangents for each root and store them in self.tangents.
+        Generate tangents for each root.
 
         Parameters
         ----------
-        func: Callable
+        with_tangents: bool | Callable
             The function to generate tangents. The function should take a
             RootsInfo object as input and return a list of RootTangent objects.
         """
-        self.tangents = func(self)
-        return self.tangents
+        if with_tangents is None or with_tangents is False:
+            return []
+        if with_tangents is True:
+            with_tangents = root_tangents
+        
+        return with_tangents(self)
 
     def sort_tangents(self):
         """

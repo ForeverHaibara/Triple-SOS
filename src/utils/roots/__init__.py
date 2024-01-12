@@ -2,7 +2,6 @@ from .roots import (
     Root,
     RootAlgebraic,
     RootRational,
-    RootUV
 )
 
 from .rootsinfo import RootsInfo

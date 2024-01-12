@@ -1,10 +1,17 @@
+from typing import List, Tuple
+
 import sympy as sp
 import numpy as np
 from sympy.plotting.experimental_lambdify import vectorized_lambdify
 
 from ..polytools import deg
+from ..roots import Root, RootRational
 
 class GridPoly():
+    """
+    A grid to store value information of a polynomial. The GridPoly class should be
+    created by function `GridRender.render`.
+    """
     def __init__(self, poly = None, size = 60, grid_coor = None, grid_value = None, grid_color = None):
         self.poly = poly
         self.size = size
@@ -14,10 +21,17 @@ class GridPoly():
 
     def save_heatmap(self, path=None, dpi=None, backgroundcolor=211):
         """
-        Save a heatmap to the given path. And
-        return the numpy array of the heatmap.
-        """
+        Save a heatmap to the given path. And return the numpy array of the heatmap.
 
+        Parameters
+        ----------
+        path : str
+            The path to save the heatmap.
+        dpi : int
+            The dpi of the saved image.
+        backgroundcolor : int
+            The background color of the heatmap.
+        """
         n = self.size
         x = np.full((n+1,n+1,3), backgroundcolor, dtype='uint8')
         for i in range(n+1):
@@ -43,6 +57,15 @@ class GridPoly():
     def save_coeffs(self, path, dpi=500, fontsize=20):
         """
         Save the coefficient triangle (as an image) to path.
+
+        Parameters
+        ----------
+        path : str
+            The path to save the coefficient triangle.
+        dpi : int
+            The dpi of the saved image.
+        fontsize : int
+            The fontsize of the saved image.
         """
 
         import matplotlib.pyplot as plt
@@ -81,20 +104,62 @@ class GridPoly():
             if strings[0][i] != ' ':
                 break
         strings[0] += i * ' '
+        string = '\n\n'.join(strings)
 
         # set the figure small enough
         # even though the text cannot be display as a whole in the window
         # it will be saved correctly by setting bbox_inches = 'tight'
         plt.figure(figsize=(0.3,0.3))
-        plt.text(-0.3,0.9,'\n\n'.join(strings), fontsize=fontsize, fontfamily='Times New Roman')
+        plt.text(-0.3,0.9,string, fontsize=fontsize, fontfamily='Times New Roman')
         plt.xlim(0,6)
         plt.ylim(0,1)
         plt.axis('off')
         plt.savefig(path, dpi=dpi, bbox_inches='tight')
         plt.close()
 
+        return string
 
-def _grid_init_coor(size):
+
+    def local_minima(self, filter_nontrivial = True) -> List[Root]:
+        """
+        Search for local minima. Currently only cyclic polynomials are supported.
+
+        Parameters
+        ----------
+        filter_nontrivial : bool
+            Whether to remove the trivial extrema.
+
+        Returns
+        ----------
+        extrema : List[Root]
+            A list of local minima.
+        """
+        grid_coor, grid_value = self.grid_coor, self.grid_value
+        # grid_coor[k] = (i,j) stands for the value  f(n-i-j, i, j)
+        # (grid_size + 1) * (grid_size + 2) // 2 = len(grid_coor)
+        n = round((2 * len(grid_coor) + .25) ** .5 - 1.5)
+        grid_dict = dict(zip(grid_coor, grid_value))
+
+        trunc = (2*n + 3 - n // 3) * (n // 3) // 2
+
+        extrema = []
+
+        for (i, j), v in zip(grid_coor[trunc:], grid_value[trunc:]):
+            # without loss of generality we may assume j = max(i,j,n-i-j)
+            # need to be locally convex
+            if i > j or n - i - j > j or i == 0 or v >= grid_dict[(i,j-1)] or v >= grid_dict[(i+1,j-1)]:
+                continue
+            if v >= grid_dict[(i-1,j)] or v >= grid_dict[(i-1,j+1)]:
+                continue
+            if i+j < n and (v >= grid_dict[(i+1,j)] or v >= grid_dict[(i,j+1)]):
+                continue
+            extrema.append(RootRational((n-i-j, i, j)))
+
+        if filter_nontrivial:
+            extrema = [r for r in extrema if r.is_nontrivial]
+        return extrema
+
+def _grid_init_coor(size: int) -> List[Tuple[int, int]]:
     """
     Initialize the grid and preprocess some values.
     """
@@ -105,7 +170,7 @@ def _grid_init_coor(size):
             grid_coor.append((j,i))
     return grid_coor
 
-def _grid_init_precal(size, degree_limit):
+def _grid_init_precal(size: int, degree_limit: int) -> List[List[int]]:
     """
     Pre-calculate stores the powers of integer
     precal[i][j] = i ** j    where i <= grid_size = 60 ,   j <= deglim = 18
@@ -120,6 +185,9 @@ def _grid_init_precal(size, degree_limit):
     
 
 class GridRender():
+    """
+    Class to generate the grid of a polynomial. See details in `GridRender.render`.
+    """
     color_level = 12
     size = 60
     degree_limit = 18
@@ -132,7 +200,7 @@ class GridRender():
     _zero_grid = None
 
     @classmethod
-    def _render_grid_value(cls, poly, value_method = 'integer_lambdify'):
+    def _render_grid_value(cls, poly: sp.Poly, value_method: str = 'integer_lambdify') -> List[float]:
         """
         Render the grid by computing the values.
         """
@@ -173,13 +241,34 @@ class GridRender():
 
 
     @classmethod
-    def _render_grid_color(cls, poly, value_method = 'integer_lambdify', color_method = 'numpy', power = 1./3):
+    def _render_grid_color(cls, 
+            poly: sp.Poly,
+            value_method: str = 'integer_lambdify',
+            color_method: str = 'numpy',
+            power: float = 1./3
+        ) -> Tuple[List[float], List[Tuple[int, int, int, int]]]:
         """
         Render the grid by computing the values and setting the grid_val to rgba colors.
 
-        TODO:
-        1. use numpy to accelerate
-        2. continuous color levels?
+        Parameters
+        ----------
+        poly : sp.Poly
+            The polynomial to be rendered.
+        value_method : str
+            See `_render_grid_value`.
+        color_method : str
+            'numpy' or 'integer'
+            If 'numpy', use numpy to compute the colors.
+            If 'integer', use integer arithmetic to compute the colors.
+        power : float
+            Map function values to colors by raising to this power.
+
+        Returns
+        ----------
+        grid_value : List[float]
+            A list of function values.
+        grid_color : List[Tuple[int, int, int, int]]
+            A list of rgba colors.
         """
         grid_value = cls._render_grid_value(poly, value_method = value_method)
 
@@ -243,16 +332,40 @@ class GridRender():
             
 
     @classmethod
-    def render(cls, 
-            poly, 
-            value_method = 'integer',
-            color_method = 'numpy',
-            with_color = False,
-            handle_error = True,
-        ):
-        # """
-        # Render the grid by computing the values and setting the grid_val to rgba colors.
-        # """
+    def render(cls,
+            poly: sp.Poly,
+            value_method: str = 'integer',
+            color_method: str = 'numpy',
+            with_color: bool = False,
+            handle_error: bool = True,
+        ) -> GridPoly:
+        """
+        Render the grid by computing the values and setting the grid_val to rgba colors.
+
+        Parameters
+        ----------
+        poly : sp.Poly
+            The polynomial to be rendered.
+        value_method : str
+            'integer' or 'integer_lambdify'
+            If 'integer', use integer arithmetic to compute the values.
+            If 'integer_lambdify', use integer arithmetic to compute the values, but use lambdify to speed up.
+        color_method : str
+            'numpy' or 'integer'
+            If 'numpy', use numpy to compute the colors.
+            If 'integer', use integer arithmetic to compute the colors.
+        with_color : bool
+            If True, return both grid_value and grid_color.
+            If False, return only grid_value.
+        handle_error : bool
+            If True, return a zero grid when error occurs.
+            If False, raise the error.
+
+        Returns
+        ----------
+        grid : GridPoly
+            A GridPoly object.
+        """
         try:
             if with_color:
                 grid_value, grid_color = cls._render_grid_color(poly, value_method = value_method, color_method = color_method)
