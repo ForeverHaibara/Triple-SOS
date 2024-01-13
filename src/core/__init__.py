@@ -1,5 +1,5 @@
 from .sum_of_square import (
-    sum_of_square, sum_of_square_multiple, PolyReader,
+    sum_of_square, sum_of_square_multiple,
     METHOD_ORDER, DEFAULT_CONFIGS
 )
 

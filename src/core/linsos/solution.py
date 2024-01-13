@@ -17,6 +17,7 @@ class SolutionLinear(SolutionSimple):
     Solution of Linear SOS. It takes the form of 
     f(a,b,c) * multiplier = sum(y_i * basis_i)
     """
+    method = 'LinearSOS'
     def __init__(self, 
             problem = None,
             y: List[sp.Rational] = [],

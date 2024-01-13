@@ -92,6 +92,7 @@ class Solution():
         'MULTILINE_ENVIRON': 'aligned',
         'MULTILINE_ALLOW_SORT': True
     }
+    method = ''
     def __init__(self, problem = None, solution = None, is_equal = None):
         self.problem = problem
         self.solution = solution

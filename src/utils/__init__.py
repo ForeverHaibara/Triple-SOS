@@ -1,6 +1,6 @@
 from .basis_generator import generate_expr, arraylize, arraylize_sp
 
-from .text_process import preprocess_text, pl
+from .text_process import preprocess_text, pl, PolyReader
 
 from .polytools import (
     deg, verify_hom_cyclic, verify_is_symmetric, 
@@ -29,7 +29,7 @@ from .roots import (
 
 __all__ = [
     'generate_expr', 'arraylize', 'arraylize_sp',
-    'preprocess_text', 'pl',
+    'preprocess_text', 'pl', 'PolyReader',
     'deg', 'verify_hom_cyclic', 'verify_is_symmetric', 
     'monom_of', 'convex_hull_poly',
     'CyclicSum', 'CyclicProduct', 'is_cyclic_expr',

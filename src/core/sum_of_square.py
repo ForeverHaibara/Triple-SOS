@@ -9,7 +9,7 @@ from .symsos import SymmetricSOS
 from .sdpsos import SDPSOS
 
 from ..utils import (
-    deg, verify_hom_cyclic, preprocess_text,
+    deg, verify_hom_cyclic, PolyReader,
     Solution,
     RootsInfo, findroot
 )
@@ -143,25 +143,28 @@ def sum_of_square_multiple(
         raise ImportError('Please install pandas to use this function.')
 
     configs = deepcopy(configs)
-    for key in configs.keys():
+    for key in DEFAULT_CONFIGS:
+        if key not in configs:
+            configs[key] = {}
         if key != 'StructuralSOS':
             configs[key]['verbose'] = verbose_sos
 
 
     read_polys = PolyReader(polys, ignore_errors=True)
+    read_polys_zip = zip(read_polys.polys, read_polys)
     if verbose_progress:
         try:
             from tqdm import tqdm
-            read_polys = tqdm(read_polys)
+            read_polys_zip = tqdm(read_polys_zip, total = len(read_polys))
         except ImportError:
             raise ImportError('Please install tqdm to use this function with verbose_progress=True.')
 
     records = []
-    for poly in read_polys:
-        if isinstance(poly, str):
+    for poly_str, poly in read_polys_zip:
+        if poly is None:
             record = {
-                'problem': poly,
-                'deg': np.nan,
+                'problem': poly_str,
+                'deg': 0,
                 'method': None,
                 'solution': None,
                 'time': np.nan,
@@ -170,7 +173,7 @@ def sum_of_square_multiple(
             records.append(record)
             continue
 
-        record = {'problem': poly, 'deg': deg(poly)}
+        record = {'problem': poly_str, 'deg': deg(poly)}
         try:
             t0 = time()
             solution = sum_of_square(poly, method_order=method_order, configs=configs)
@@ -185,7 +188,7 @@ def sum_of_square_multiple(
                 else:
                     record['status'] = 'success'
                 record['solution'] = solution
-                record['method'] = solution.__class__.__name__
+                record['method'] = solution.method
         except Exception as e:
             used_time = time() - t0
             record['status'] = 'error'
@@ -196,73 +199,6 @@ def sum_of_square_multiple(
         records.append(record)
 
     return _process_records(records, save_result, save_solution_method, polys)
-
-
-class PolyReader:
-    """
-    A class for reading polynomials from a file or a list of strings.
-    """
-    def __init__(self,
-        polys: Union[List[Union[sp.Poly, str]], str],
-        ignore_errors: bool = False
-    ):
-        """
-        Read polynomials from a file or a list of strings.
-        This is a generator function.
-
-        Parameters
-        ----------
-        polys : Union[List[Union[sp.Poly, str]], str]
-            The polynomials to read. If it is a string, it will be treated as a file name.
-            If it is a list of strings, each string will be treated as a polynomial.
-            Empty lines will be ignored.
-        ignore_errors : bool    
-            Whether to ignore errors. If True, invalid polynomials will be skipped by
-            yielding the original string. If False, invalid polynomials will raise a ValueError.
-
-        Yields
-        ----------
-        sp.Poly
-            The read polynomials.
-        """
-        self.source = None
-        if isinstance(polys, str):
-            self.source = polys
-            with open(polys, 'r') as f:
-                polys = f.readlines()
-
-        polys = map(
-            lambda x: x.strip() if isinstance(x, str) else x,
-            polys
-        )
-
-        polys = list(filter(
-            lambda x: (isinstance(x, str) and len(x)) or isinstance(x, sp.Poly),
-            polys
-        ))
-
-        self.polys = polys
-        self.index = 0
-        self.ignore_errors = ignore_errors
-
-    def __iter__(self):
-        return self
-
-    def __next__(self):
-        if self.index >= len(self.polys):
-            raise StopIteration
-        poly = self.polys[self.index]
-        if isinstance(poly, str):
-            try:
-                poly = preprocess_text(poly)
-            except:
-                if not self.ignore_errors:
-                    raise ValueError(f'Invalid polynomial at index {self.index}: {poly}')
-        self.index += 1
-        return poly
-
-    def __len__(self):
-        return len(self.polys)
 
 
 def _process_records(
