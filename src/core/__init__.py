@@ -1,4 +1,7 @@
-from .sum_of_square import sum_of_square
+from .sum_of_square import (
+    sum_of_square, sum_of_square_multiple, PolyReader,
+    METHOD_ORDER, DEFAULT_CONFIGS
+)
 
 from .linsos import (
     LinearSOS,
@@ -28,7 +31,8 @@ from .sdpsos import (
 )
 
 __all__ = [
-    'sum_of_square',
+    'sum_of_square', 'sum_of_square_multiple',
+    'METHOD_ORDER', 'DEFAULT_CONFIGS',
     'LinearSOS',
     'root_tangents',
     'LinearBasis', 'LinearBasisCyclic', 'LinearBasisTangent', 'LinearBasisAMGM',

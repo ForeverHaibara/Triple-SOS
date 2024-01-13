@@ -1,15 +1,18 @@
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Union, Callable, Any
 
+import numpy as np
 import sympy as sp
 
-from .linsos import LinearSOS
+from .linsos import LinearSOS, root_tangents
 from .structsos import StructuralSOS
 from .symsos import SymmetricSOS
 from .sdpsos import SDPSOS
 
-from ..utils.polytools import deg, verify_hom_cyclic
-from ..utils.expression.solution import Solution
-from ..utils.roots import RootsInfo, findroot
+from ..utils import (
+    deg, verify_hom_cyclic, preprocess_text,
+    Solution,
+    RootsInfo, findroot
+)
 
 NAME_TO_METHOD = {
     'LinearSOS': LinearSOS,
@@ -40,13 +43,31 @@ a, b, c = sp.symbols('a b c')
 
 
 def sum_of_square(
-        poly: sp.polys.Poly,
+        poly: sp.Poly,
         rootsinfo: Optional[RootsInfo] = None,
-        method_order: List = METHOD_ORDER,
-        configs: Dict = DEFAULT_CONFIGS
-    ) -> Solution:
+        method_order: List[str] = METHOD_ORDER,
+        configs: Dict[str, Dict] = DEFAULT_CONFIGS
+    ) -> Optional[Solution]:
     """
-    Sum of Square.
+    Main function for sum of square decomposition.
+
+    Parameters
+    ----------
+    poly : sp.Poly
+        The polynomial to solve
+    rootsinfo : Optional[RootsInfo]
+        The roots information of the polynomial. If None, it will be automatically computed.
+        Pass in an empty RootsInfo object to skip the computation.
+    method_order : List[str]
+        The order of methods to try. Defaults to METHOD_ORDER.
+    configs : Dict[str, Dict]
+        The configurations for each method. Defaults to DEFAULT_CONFIGS.
+        It should be a dictionary containing the method names as keys and the kwargs as values.
+
+    Returns
+    ----------
+    Optional[Solution]
+        The solution. If no solution is found, None is returned.
     """
     if method_order is None:
         method_order = METHOD_ORDER
@@ -58,7 +79,7 @@ def sum_of_square(
     assert verify_hom_cyclic(poly) == (True, True), 'Poly must be homogeneous and cyclic.'
 
     if rootsinfo is None:
-        rootsinfo = findroot(poly, with_tangents=True)
+        rootsinfo = findroot(poly, with_tangents=root_tangents)
 
     for method in method_order:
         config = configs.get(method, {})
@@ -69,3 +90,236 @@ def sum_of_square(
             return solution
 
     return None
+
+
+def sum_of_square_multiple(
+        polys: Union[List[Union[sp.Poly, str]], str],
+        method_order: List[str] = METHOD_ORDER,
+        configs: Dict[str, Dict] = DEFAULT_CONFIGS,
+        save_result: Union[bool, str] = True,
+        save_solution_method: Union[str, Callable] = 'str_formatted',
+        verbose_sos: bool = False,
+        verbose_progress: bool = True
+    ):
+    """
+    Decompose multiple polynomials into sum of squares and return the results
+    as a pandas DataFrame.
+
+    Parameters
+    ----------
+    polys : Union[List[Union[sp.Poly, str]], str]
+        The polynomials to solve. If it is a string, it will be treated as a file name.
+        If it is a list of strings, each string will be treated as a polynomial.
+        Empty lines will be ignored.
+    method_order : List[str]
+        The order of methods to try. Defaults to METHOD_ORDER.
+    configs : Dict[str, Dict]
+        The configurations for each method. Defaults to DEFAULT_CONFIGS.
+        It should be a dictionary containing the method names as keys and the kwargs as values.
+    save_result : Union[bool, str]
+        Whether to save the results. If True, it will be saved to a csv file in the same directory
+        as the input file. If False, it will not be saved. If it is a string, it will be treated
+        as the file name to save the results.
+    save_solution_method : Union[str, Callable]
+        The method to save the solution. If it is a string, it will be treated as the attribute
+        name of the solution to save. If it is a callable, it will be called on the solution to
+        save the result. It should handle None as well.
+    verbose_sos : bool
+        Whether to send verbose=True to the sum_of_square function.
+    verbose_progress : bool
+        Whether to show the progress bar. Requires tqdm to be installed.
+
+    Returns
+    ----------
+    pd.DataFrame
+        The results as a pandas DataFrame.
+    """
+    from time import time
+    from copy import deepcopy
+
+    try:
+        import pandas as pd
+    except ImportError:
+        raise ImportError('Please install pandas to use this function.')
+
+    configs = deepcopy(configs)
+    for key in configs.keys():
+        if key != 'StructuralSOS':
+            configs[key]['verbose'] = verbose_sos
+
+
+    read_polys = PolyReader(polys, ignore_errors=True)
+    if verbose_progress:
+        try:
+            from tqdm import tqdm
+            read_polys = tqdm(read_polys)
+        except ImportError:
+            raise ImportError('Please install tqdm to use this function with verbose_progress=True.')
+
+    records = []
+    for poly in read_polys:
+        if isinstance(poly, str):
+            record = {
+                'problem': poly,
+                'deg': np.nan,
+                'method': None,
+                'solution': None,
+                'time': np.nan,
+                'status': 'invalid',
+            }
+            records.append(record)
+            continue
+
+        record = {'problem': poly, 'deg': deg(poly)}
+        try:
+            t0 = time()
+            solution = sum_of_square(poly, method_order=method_order, configs=configs)
+            used_time = time() - t0
+            if solution is None:
+                record['status'] = 'fail'
+                record['solution'] = None
+                record['method'] = None
+            else:
+                if not solution.is_equal:
+                    record['status'] = 'inaccurate'
+                else:
+                    record['status'] = 'success'
+                record['solution'] = solution
+                record['method'] = solution.__class__.__name__
+        except Exception as e:
+            used_time = time() - t0
+            record['status'] = 'error'
+            record['solution'] = None
+            record['method'] = None
+
+        record['time'] = used_time
+        records.append(record)
+
+    return _process_records(records, save_result, save_solution_method, polys)
+
+
+class PolyReader:
+    """
+    A class for reading polynomials from a file or a list of strings.
+    """
+    def __init__(self,
+        polys: Union[List[Union[sp.Poly, str]], str],
+        ignore_errors: bool = False
+    ):
+        """
+        Read polynomials from a file or a list of strings.
+        This is a generator function.
+
+        Parameters
+        ----------
+        polys : Union[List[Union[sp.Poly, str]], str]
+            The polynomials to read. If it is a string, it will be treated as a file name.
+            If it is a list of strings, each string will be treated as a polynomial.
+            Empty lines will be ignored.
+        ignore_errors : bool    
+            Whether to ignore errors. If True, invalid polynomials will be skipped by
+            yielding the original string. If False, invalid polynomials will raise a ValueError.
+
+        Yields
+        ----------
+        sp.Poly
+            The read polynomials.
+        """
+        self.source = None
+        if isinstance(polys, str):
+            self.source = polys
+            with open(polys, 'r') as f:
+                polys = f.readlines()
+
+        polys = map(
+            lambda x: x.strip() if isinstance(x, str) else x,
+            polys
+        )
+
+        polys = list(filter(
+            lambda x: (isinstance(x, str) and len(x)) or isinstance(x, sp.Poly),
+            polys
+        ))
+
+        self.polys = polys
+        self.index = 0
+        self.ignore_errors = ignore_errors
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        if self.index >= len(self.polys):
+            raise StopIteration
+        poly = self.polys[self.index]
+        if isinstance(poly, str):
+            try:
+                poly = preprocess_text(poly)
+            except:
+                if not self.ignore_errors:
+                    raise ValueError(f'Invalid polynomial at index {self.index}: {poly}')
+        self.index += 1
+        return poly
+
+    def __len__(self):
+        return len(self.polys)
+
+
+def _process_records(
+        records: List[Dict],
+        save_result: Union[bool, str] = True,
+        save_solution_method: Union[str, Callable] = 'str_formatted',
+        source: Optional[str] = None
+    ) -> Any:
+    """
+    Process the records returned by sum_of_square_multiple and return a pandas DataFrame.
+
+    Parameters
+    ----------
+    records : List[Dict]
+        The records returned by sum_of_square_multiple.
+    save_result : Union[bool, str]
+        Whether to save the results. If True, it will be saved to a csv file in the same directory
+        as the input file. If False, it will not be saved. If it is a string, it will be treated
+        as the file name to save the results.
+    save_solution_method : Union[str, Callable]
+        The method to save the solution. If it is a string, it will be treated as the attribute
+        name of the solution to save. If it is a callable, it will be called on the solution to
+        save the result.
+    source : Optional[str]
+        The file name of the input file. If None, it will not be used.
+    """
+    from time import strftime
+    import os
+    if isinstance(save_solution_method, str):
+        attr = save_solution_method
+        save_solution_method = lambda x: getattr(x, attr) if x is not None else None
+
+    import pandas as pd
+    records_pd = pd.DataFrame(records, index = range(1, len(records)+1))
+    if save_result:
+        records_save = records_pd.copy()
+        records_save['solution'] = records_save['solution'].apply(save_solution_method)
+
+        if save_result is True or os.path.isdir(save_result):
+            if isinstance(source, str):
+                filename = os.path.basename(source) + '_'
+            else:
+                filename = 'sos_'
+            filename += strftime('%Y%m%d_%H-%M-%S') + '.csv'
+            if save_result is True:
+                if isinstance(source, str):
+                    dirname = os.path.dirname(source)
+                else:
+                    dirname = os.getcwd()
+            else:
+                dirname = save_result
+            filename = os.path.join(dirname, filename)
+        elif save_result.endswith('.csv'):
+            filename = save_result
+        else:
+            raise ValueError('save_result must be a directory / csv file name / True.')
+        os.makedirs(os.path.dirname(filename), exist_ok=True)
+        records_save.to_csv(filename)
+
+    return records_pd

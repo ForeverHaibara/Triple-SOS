@@ -184,6 +184,7 @@ class LinearBasisTangent(LinearBasisCyclic):
             def _mul_poly(poly, m, n, p):
                 return poly * a**m * b**n * c**p * tangent_poly
         else:
+            tangent_is_cyc = True
             def _mul_poly(poly, m, n, p):
                 return poly * a**m * b**n * c**p
         
