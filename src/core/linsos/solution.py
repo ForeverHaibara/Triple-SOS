@@ -4,7 +4,7 @@ import numpy as np
 import sympy as sp
 from sympy.core.singleton import S
 
-from .basis import LinearBasis, LinearBasisSquare, a, b, c
+from .basis import LinearBasis, LinearBasisTangent, a, b, c
 from .updegree import LinearBasisMultiplier
 from ...utils.polytools import deg
 from ...utils.expression.cyclic import CyclicSum, is_cyclic_expr
@@ -107,7 +107,7 @@ class SolutionLinear(SolutionSimple):
         basis_by_tangents = {}
         exprs = []
         for v, base in zip(self.y, self.basis):
-            if not isinstance(base, LinearBasisSquare):
+            if not isinstance(base, LinearBasisTangent):
                 exprs.append(v * base.expr)
                 continue
 
@@ -187,7 +187,7 @@ class SolutionLinear(SolutionSimple):
         unsqr_basis = []
 
         for y, base in zip(self.y, self.basis):
-            if not isinstance(base, LinearBasisSquare):
+            if not isinstance(base, LinearBasisTangent):
                 unsqr_basis.append((y, base))
                 continue
 

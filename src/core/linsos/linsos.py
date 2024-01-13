@@ -6,8 +6,8 @@ import sympy as sp
 from scipy.optimize import linprog
 
 from .basis import (
-    LinearBasisSquare, 
-    CachedCommonLinearBasisSquare, 
+    LinearBasisTangent, 
+    CachedCommonLinearBasisTangent, 
     LinearBasisAMGM, 
     CachedCommonLinearBasisSpecial
 )
@@ -60,10 +60,10 @@ def _prepare_basis(degree, tangents, rootsinfo = None, basis = []):
         Array representation of the basis. A matrix.
     """
     for tangent in tangents:
-        basis += LinearBasisSquare.generate(degree, tangent = tangent)
+        basis += LinearBasisTangent.generate(degree, tangent = tangent)
 
     if not rootsinfo.has_nontrivial_roots():
-        basis += CachedCommonLinearBasisSquare.generate(degree)
+        basis += CachedCommonLinearBasisTangent.generate(degree)
         basis += LinearBasisAMGM.generate(degree)
         basis += CachedCommonLinearBasisSpecial.generate(degree)
 
