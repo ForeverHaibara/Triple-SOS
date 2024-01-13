@@ -211,7 +211,7 @@ def findroot(
         method: str = 'nsolve',
         standardize_method: str = 'partial',
         verbose: bool = False,
-        with_tangents: Union[bool, Callable] = True,
+        with_tangents: Union[bool, Callable] = False,
     ):
     """
     Find the possible local minima of a cyclic polynomial by gradient descent and guessing. 
@@ -421,7 +421,7 @@ class _findroot_helper():
         try:
             for r in nroots(poly_diff, method = 'factor', real = True, nonnegative = True):
                 if poly_diff2(r) >= 0:
-                    roots.append(Root((r, 0, 1)))
+                    roots.append(Root((r, 1, 0)))
         except:
             pass
         return roots

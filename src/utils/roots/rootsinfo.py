@@ -83,7 +83,11 @@ class RootsInfo():
             return root
 
         for root in self.roots:
-            a, b = root[0] / root[2], root[1] / root[2]
+            a, b, c = root
+            for i in range(3):
+                if c == 0:
+                    a, b, c = b, c, a
+            a, b = a/c, b/c
             value = float(root.eval(self.poly, rational = True))
             if abs(value) < sp.S(10)**(-15):
                 value = sp.S(0)

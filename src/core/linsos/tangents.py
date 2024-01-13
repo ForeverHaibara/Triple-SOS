@@ -94,6 +94,7 @@ def root_tangents(
         if len(tangents) > 0:
             break
 
+    tangents = [_.normalize() for _ in tangents]
     return tangents
 
 
@@ -172,7 +173,7 @@ class _tangents_helper_cyclic():
     @classmethod
     def _tangents_border(cls, root, is_centered = True):
         x = _standard_border_root(root)
-        if x is sp.oo or x is sp.nan or x == 0:
+        if (not x.is_real) or x == 0:
             return []
         if x == 1:
             return [a + b - c]
@@ -196,7 +197,7 @@ class _tangents_helper_symmetric(_tangents_helper):
     @classmethod
     def _tangents_border(cls, root, is_centered = True):
         x = _standard_border_root(root)
-        if x is sp.oo or x is sp.nan or x == 0:
+        if (not x.is_real) or x == 0:
             return []
         if x == 1:
             return [a + b - c]
@@ -212,7 +213,7 @@ class _tangents_helper_symmetric(_tangents_helper):
     @classmethod
     def _tangents_symmetric(cls, root, is_centered = True):
         x = _standard_symmetric_root(root)
-        if x is sp.oo or x is sp.nan:
+        if not x.is_real:
             return []
         if x == 0:
             # this should not happen, because it is handled in _tangents_border

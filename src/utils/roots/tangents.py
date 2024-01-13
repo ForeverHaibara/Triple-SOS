@@ -46,6 +46,21 @@ class RootTangent():
             s = s[1:]
         return s
 
+    def norm(self):
+        """Return max(self.coeffs())."""
+        return max(abs(c) for c in self.poly.coeffs())
+
+    def normalize(self, inplace = False):
+        """Normalize the coefficients."""
+        norm = self.norm()
+        expr = self.expr / norm
+        if inplace:
+            self.expr = expr
+            self.poly = self.poly / norm
+            return self
+        return RootTangent(expr)
+
+
 def root_tangents(rootsinfo):
     """
     Deprecated function for finding tangents.

@@ -120,6 +120,8 @@ class Root():
                 return self.uv_
 
             a, b, c = self.root
+            if c == 0:
+                a, b, c = b, c, a
             if c != 1:
                 a, b = a/c, b/c
             t = ((a*b-a)*(a-b)-(b*(a-1))**2)
@@ -536,6 +538,8 @@ class RootRational(RootAlgebraic):
             self.uv_ = (sp.oo, sp.oo)
         else:
             a, b, c = root
+            if c == 0:
+                a, b, c = b, c, a
             if c != 1:
                 a, b = a / c, b / c
             t = ((a*b-a)*(a-b)-(b*(a-1))**2)
