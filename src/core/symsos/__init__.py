@@ -1,2 +1,5 @@
-from .symsos import SymmetricSOS, sym_representation, TRANSLATION_POSITIVE, TRANSLATION_REAL
+from .symsos import (
+    SymmetricSOS, sym_representation, TRANSLATION_POSITIVE, TRANSLATION_REAL
+)
 from .univariate import prove_univariate
+from .solution import SolutionSymmetric, SolutionSymmetricSimple
