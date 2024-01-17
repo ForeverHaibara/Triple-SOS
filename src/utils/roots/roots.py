@@ -73,20 +73,32 @@ class Root():
         return self.root[i]
 
     @classmethod
-    def from_uv(cls, uv):
+    def from_uv(cls, uv: Tuple[sp.Expr, sp.Expr]) -> 'Root':
+        """
+        Construct a root from u, v.
+        """
         u, v = uv
+        u, v = sp.S(u), sp.S(v)
         ker = (u*u - u*v + v*v + u + v + 1)
         sab = (u + v - 1) / ker
         abc = (u*v - 1) / ker**2
         x = sp.symbols('x')
-        a, b, c = sp.polys.nroots((x**3 - x**2 + sab * x - abc).as_poly(x))
+        poly = (x**3 - x**2 + sab * x - abc).as_poly(x)
+        if cls is RootAlgebraic:
+            if poly.domain is sp.QQ or poly.domain is sp.ZZ:
+                a, b, c = poly.all_roots()
+            else:
+                raise ValueError('RootAlgebraic.from_uv currently does not support irrational generating polynomials.')
+        else:
+            a, b, c = sp.polys.nroots(poly)
         root = cls((a, b, c))
         u_, v_ = root.uv()
         if abs(u_ - u) + abs(v_ - v) > abs(v_ - u) + abs(u_ - v):
             a, b, c = c, b, a
             root = cls((a, b, c))
-        root._uv = (sp.S(u), sp.S(v))
-        root._ker = ker
+        if not root.__class__ is RootAlgebraic:
+            root._uv = (u, v)
+            root._ker = ker
         return root
 
     @property
