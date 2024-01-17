@@ -181,7 +181,7 @@ class SDPProblem():
         """
         # restore masked values to unmaksed values
         self.x0, self.space, self.splits = self.x0_, self.space_, self.splits_
-        self.masked_rows = masks
+        self.masked_rows = {}
 
         if len(masks) == 0 or not any(_ for _ in masks.values()):
             return True
@@ -214,6 +214,7 @@ class SDPProblem():
         not_lines = list(set(range(self.space.shape[0])) - set(lines))
         self.x0 = self.x0[not_lines, :]
         self.space = self.space[not_lines, :]
+        self.masked_rows = deepcopy(masks)
         self.splits = split_vector(list(self._masked_dims().values()))
 
         return masks
@@ -372,7 +373,7 @@ class SDPProblem():
         if y is None:
             m = self.space.shape[1]
             y = sp.Matrix([sp.symbols('y_{%d}'%_) for _ in range(m)]).reshape(m, 1)
-        elif not isinstance(y, sp.Matrix) or y.shape != (self.space.shape[1], 1):
+        elif not isinstance(y, sp.MatrixBase) or y.shape != (self.space.shape[1], 1):
             raise ValueError('y must be a sympy Matrix of shape (%d, 1).'%self.space.shape[1])
 
         Ss = S_from_y(y, self.x0, self.space, self.splits)

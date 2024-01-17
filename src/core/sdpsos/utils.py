@@ -106,7 +106,7 @@ def symmetric_matrix_from_upper_vec(upper_vec: Union[sp.Matrix, np.ndarray]) -> 
         Symmetric matrix.
     """
     n = round((2 * upper_vec.shape[0] + .25) ** 0.5 - .5)
-    if isinstance(upper_vec, sp.Matrix):
+    if isinstance(upper_vec, sp.MatrixBase):
         S = sp.zeros(n)
     elif isinstance(upper_vec, np.ndarray):
         S = np.zeros((n,n,upper_vec.shape[1])) if upper_vec.ndim == 2 else np.zeros((n,n))
@@ -191,7 +191,7 @@ def split_vector(chunks: List[Union[int, List, sp.Matrix]]) -> List[slice]:
     def length(c):
         if c is None:
             return 0
-        elif isinstance(c, sp.Matrix):
+        elif isinstance(c, sp.MatrixBase):
             return c.shape[1]
         elif isinstance(c, int):
             return c
@@ -211,7 +211,7 @@ def S_from_y(y: sp.Matrix, x0: sp.Matrix, space: sp.Matrix, splits: List[slice])
     """
     Return the symmetric matrices S from the vector y.
     """
-    if not isinstance(y, sp.Matrix):
+    if not isinstance(y, sp.MatrixBase):
         y = sp.Matrix(y)
 
     vecS = x0 + space * y
