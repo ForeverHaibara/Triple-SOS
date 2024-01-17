@@ -699,8 +699,9 @@ class _findroot_helper_resultant():
             root = RootAlgebraic((a_, b_))
             roots.append(root)
 
-            if not ((not _is_rational(a_)) and (not _is_rational(b_)) and _is_rational(root.uv_[0]) and _is_rational(root.uv_[1])):
-                roots.append(RootAlgebraic((sp.S(1), a_, b_)))
-                roots.append(RootAlgebraic((b_, sp.S(1), a_)))
+            # if not ((not _is_rational(a_)) and (not _is_rational(b_)) and\
+            #         _is_rational(root.uv(to_sympy=False)[0]) and _is_rational(root.uv(to_sympy=False)[1])):
+            #     roots.append(RootAlgebraic((sp.S(1), a_, b_)))
+            #     roots.append(RootAlgebraic((b_, sp.S(1), a_)))
 
         return roots

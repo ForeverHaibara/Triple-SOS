@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Union, Tuple
 
 import numpy as np
 import sympy as sp
@@ -30,7 +30,12 @@ def _algebraic_extension(vec):
         vecs.append([f(x.rep[-i]) if len(x.rep) >= i else sp.S(0) for x in vec])
     return vecs
 
-
+def _derv(n, i):
+    # compute n*(n-1)*..*(n-i+1)
+    if i == 1: return n
+    if n < i:
+        return 0
+    return sp.prod((n - j) for j in range(i))
 
 class Root():
     """
@@ -46,7 +51,7 @@ class Root():
     Then b/c is a root of t^3 + xt^2 + yt - 1 = 0.
     And a/c is determined by a/c = ((b/c)^2 + (b/c)(u - v) - 1)/((b/c)u - v).
     """
-    __slots__ = ('root', 'uv_', 'ker_', 'cyclic_sum_cache_')
+    __slots__ = ('root', '_uv', '_ker', '_cyclic_sum_cache')
 
     def __new__(cls, root):
         """
@@ -60,9 +65,9 @@ class Root():
         if len(root) == 2:
             root = root + (1,)
         self.root = root
-        self.uv_ = None
-        self.ker_ = None
-        self.cyclic_sum_cache_ = {}
+        self._uv = None
+        self._ker = None
+        self._cyclic_sum_cache = {}
 
     def __getitem__(self, i):
         return self.root[i]
@@ -80,8 +85,8 @@ class Root():
         if abs(u_ - u) + abs(v_ - v) > abs(v_ - u) + abs(u_ - v):
             a, b, c = c, b, a
             root = cls((a, b, c))
-        root.uv_ = (sp.S(u), sp.S(v))
-        root.ker_ = ker
+        root._uv = (sp.S(u), sp.S(v))
+        root._ker = ker
         return root
 
     @property
@@ -111,13 +116,13 @@ class Root():
         return not self.is_border and not self.is_symmetric
 
     def uv(self):
-        if self.uv_ is None:
+        if self._uv is None:
             if self.is_centered:
-                self.uv_ = (sp.S(2), sp.S(2))
-                return self.uv_
+                self._uv = (sp.S(2), sp.S(2))
+                return self._uv
             elif self.is_corner:
-                self.uv_ = (sp.oo, sp.oo)
-                return self.uv_
+                self._uv = (sp.oo, sp.oo)
+                return self._uv
 
             a, b, c = self.root
             if c == 0:
@@ -132,8 +137,8 @@ class Root():
 
             # u, v = rationalize(u, reliable = True), rationalize(v, reliable = True)
 
-            self.uv_ = (u, v)
-        return self.uv_
+            self._uv = (u, v)
+        return self._uv
 
     def __str__(self):
         return str(self.root)
@@ -204,9 +209,11 @@ class Root():
             return self
         return Root(root)
 
-    def eval(self, poly, rational = False):
+    def eval(self, poly, rational = False) -> sp.Expr:
         """
-        Evaluate poly(*root).
+        Evaluate poly(*root). The function only accepts sympy
+        polynomials as input. For more complicated usage,
+        please use subs().
 
         Parameters
         ----------
@@ -222,12 +229,15 @@ class Root():
         return poly(*root)
 
     def ker(self):
-        if self.ker_ is None:
+        """
+        Return u^2 - uv + v^2 + u + v + 1.
+        """
+        if self._ker is None:
             u, v = self.uv()
-            self.ker_ = (u*u - u*v + v*v + u + v + 1)
-        return self.ker_
+            self._ker = (u*u - u*v + v*v + u + v + 1)
+        return self._ker
 
-    def cyclic_sum(self, monom):
+    def cyclic_sum(self, monom: Tuple[int, int, int]) -> sp.Expr:
         """
         Return CyclicSum(a**i * b**j * c**k) assuming standardlization a + b + c = 1,
         that is, s(a^i*b^j*c^k) / s(a)^(i+j+k).
@@ -249,7 +259,7 @@ class Root():
         if i == 0:
             i, j = j, i
 
-        s = self.cyclic_sum_cache_.get((i,j,k), None)
+        s = self._cyclic_sum_cache.get((i,j,k), None)
         if s is not None:
             return s
 
@@ -264,7 +274,7 @@ class Root():
             for term1 in poly_a.terms():
                 for term2 in poly_b.terms():
                     s += term1[1] * term2[1] * self.cyclic_sum((term1[0][0], term2[0][0], 0))
-            self.cyclic_sum_cache_[(i,j,k)] = s
+            self._cyclic_sum_cache[(i,j,k)] = s
             return s
 
 
@@ -289,7 +299,7 @@ class Root():
                 s = ((u - v) * (u*v + u + v - 2) + v**3 + 1) / self.ker()**2
             elif j == 2:
                 s = (u**2 + v**2 - 2*(u+v) + 3) / self.ker()**2
-        self.cyclic_sum_cache_[(i,j,k)] = s
+        self._cyclic_sum_cache[(i,j,k)] = s
         return s
 
     def poly(self, x = None):
@@ -301,31 +311,57 @@ class Root():
         poly = x**3 - x**2 + self.cyclic_sum((1,1,0)) * x - self.cyclic_sum((1,1,1)) / 3
         return poly.as_poly(x)
 
-    def as_vec(self, n, cyc = False, permute = 0, numer = True):
+    def as_vec(self, 
+            n: int,
+            diff: Optional[Tuple[int,int,int]] = None,
+            cyc: bool = False,
+            permute: bool = 0,
+            numer: bool = False
+        ) -> Union[sp.Matrix, np.ndarray]:
         """
         Construct the vector of all monomials of degree n. For example, for n = 3,
         return f(a,b,c) = [a^3,a^2*b,a^2*c,a*b^2,a*b*c,a*c^2,b^3,b^2*c,b*c^2,c^3].
+
+        Parameters
+        ----------
+        n : int
+            The degree of the monomials.
+        diff : Tuple[int,int,int]
+            If diff is not None, take partial derivative of the monomials of
+            certain degrees.
+        cyc : bool
+            If cyc, only reserve one of the cyclic permutations of the monomials.
+        permute : int
+            If permute, permute the root first by permute times. For example, if
+            permute = 1, then return f(b,c,a).
+        numer : bool
+            If numer, return a numpy array instead of sympy Matrix.
         """
         monoms = generate_expr(n, cyc)[1]
         a, b, c = self._permuted_root(permute)
 
-        vec = ([a**i*b**j*c**k for i, j, k in monoms])
+        if diff is None:
+            vec = ([a**i*b**j*c**k for i, j, k in monoms])
+        else:
+            u, v, w = diff
+            vec = [0] * len(monoms)
+            for ind, (i, j, k) in enumerate(monoms):
+                if i < u or j < v or k < w:
+                    continue
+                vec[ind] = _derv(i,u)*_derv(j,v)*_derv(k,w)*a**(i-u)*b**(j-v)*c**(k-w)
+
         if numer:
             vec = np.array(vec).astype(np.float64)
         else:
             vec = sp.Matrix(vec)
         return vec
 
-    def span(self, n):
+    def span(self, n: int) -> sp.Matrix:
         """
         Construct the space spanned by the root and its cyclic permutaton of degree n.
         In general, it is a matrix with 3 columns.
         For example, for n = 3, f(a,b,c) = [a^3,a^2*b,a^2*c,a*b^2,a*b*c,a*c^2,b^3,b^2*c,b*c^2,c^3],
         then sum(f(a,b,c)), sum(a*f(a,b,c)) and sum(a^2*f(a,b,c)) are the three columns.
-
-        TODO:
-        1. Prove that the three vectors are linearly independent.
-        2. Handle cases when u, v are not rational. -> See RootUV
         """
         monoms = generate_expr(n, cyc = False)[1]
         if self.is_centered:
@@ -354,6 +390,13 @@ class Root():
         M = sp.Matrix.hstack(*vecs)
 
         return _reg_matrix(M)
+
+    def subs(self, expr: Union[sp.Expr, sp.Matrix]) -> Union[sp.Expr, sp.Matrix]:
+        """
+        Substitute the root into an expression or a matrix of expressions.
+        """
+        a, b, c = sp.symbols('a b c')
+        return expr.subs({a: self.root[0], b: self.root[1], c: self.root[2]})
 
     def approximate(self, tolerance = 1e-3, approximate_tolerance = 1e-6):
         """
@@ -396,7 +439,7 @@ class RootAlgebraic(Root):
     """
     Root of a 3-var homogeneous cyclic polynomial.
     """
-    __slots__ = ('root', 'uv_', 'ker_', 'cyclic_sum_cache_', 'K', 'root_anp', 'inv_sum_', 'power_cache_')
+    __slots__ = ('root', '_uv', '_ker', 'K', '_cyclic_sum_cache', 'root_anp', '_inv_sum', '_power_cache')
     def __new__(cls, root):
         return super().__new__(cls, root)
 
@@ -423,20 +466,20 @@ class RootAlgebraic(Root):
             self.root_anp = self.root
 
         if self.is_centered:
-            self.uv_ = (sp.S(2), sp.S(2))
+            self._uv = (sp.S(2), sp.S(2))
         elif self.is_corner:
-            self.uv_ = (sp.oo, sp.oo)
+            self._uv = (sp.oo, sp.oo)
         else:
-            self.uv_ = self._initialize_uv(self.root_anp)
-        u, v = self.uv_
-        self.ker_ = (u**2 - u*v + v**2 + u + v + 1)
+            self._uv = self._initialize_uv(self.root_anp)
+        u, v = self._uv
+        self._ker = (u**2 - u*v + v**2 + u + v + 1)
 
         if self.K is not None:
-            self.inv_sum_ = self.K.from_sympy(sp.S(1)) / sum(self.root_anp)
+            self._inv_sum = self.K.from_sympy(sp.S(1)) / sum(self.root_anp)
         else:
-            self.inv_sum_ = (sp.S(1)) / sum(self.root_anp)
+            self._inv_sum = (sp.S(1)) / sum(self.root_anp)
 
-        self.power_cache_ = {0: {}, 1: {}, 2: {}, -1: {}}
+        self._power_cache = {0: {}, 1: {}, 2: {}, -1: {}}
 
     @classmethod
     def _initialize_uv(cls, root):
@@ -455,15 +498,21 @@ class RootAlgebraic(Root):
         v = ((a*b-a)*(1-b*b) - (b*b-a*a)*(b-b*a))/t
         return u, v
     
-    def uv(self):
-        if self.K is None:
-            return self.uv_
-        return (self.K.to_sympy(self.uv_[0]), self.K.to_sympy(self.uv_[1]))
+    def uv(self, to_sympy = True):
+        if self.K is None or not to_sympy:
+            return self._uv
+        return (self.K.to_sympy(self._uv[0]), self.K.to_sympy(self._uv[1]))
 
     def ker(self):
         if self.K is None:
-            return self.ker_
-        return self.K.to_sympy(self.ker_)
+            return self._ker
+        return self.K.to_sympy(self._ker)
+
+    def to_sympy(self, *args, **kwargs):
+        return self.K.to_sympy(*args, **kwargs)
+
+    def from_sympy(self, *args, **kwargs):
+        return self.K.from_sympy(*args, **kwargs)
 
     def __str__(self):
         if self.K is None:
@@ -475,18 +524,20 @@ class RootAlgebraic(Root):
             return str(self.root)
         return str(tuple(r.n(15) if not isinstance(r, sp.Rational) else r for r in self.root))
 
-    def single_power_(self, i, degree):
-        # return self.root_anp[i] ** degree
-        k = self.power_cache_[i].get(degree)
+    def _single_power(self, i: int, degree: int) -> sp.polys.polyclasses.ANP:
+        """
+        Return self.root_anp[i] ** degree.
+        """
+        k = self._power_cache[i].get(degree)
         if k is None:
             if i >= 0:
-                self.power_cache_[i][degree] = self.root_anp[i] ** degree
+                self._power_cache[i][degree] = self.root_anp[i] ** degree
             elif i == -1:
-                self.power_cache_[i][degree] = self.inv_sum_ ** degree
-            k = self.power_cache_[i][degree]
+                self._power_cache[i][degree] = self._inv_sum ** degree
+            k = self._power_cache[i][degree]
         return k
 
-    def cyclic_sum(self, monom, to_sympy = True):
+    def cyclic_sum(self, monom: Tuple[int, int, int], to_sympy = True) -> Union[sp.Expr, sp.polys.polyclasses.ANP]:
         """
         Return CyclicSum(a**i * b**j * c**k) assuming standardlization a + b + c = 1,
         that is, s(a^i*b^j*c^k) / s(a)^(i+j+k).
@@ -494,23 +545,23 @@ class RootAlgebraic(Root):
         Note: when i == j == k, it will return 3 * p(a^i). Be careful with the coefficient.
         """
         s = 0
-        single_power_ = self.single_power_
+        _single_power = self._single_power
         for i in range(3):
-            s = single_power_(0, monom[i%3]) * single_power_(1, monom[(i+1)%3]) * single_power_(2, monom[(i+2)%3]) + s
-        s *= single_power_(-1, sum(monom))
+            s = _single_power(0, monom[i%3]) * _single_power(1, monom[(i+1)%3]) * _single_power(2, monom[(i+2)%3]) + s
+        s *= _single_power(-1, sum(monom))
         if self.K is not None and to_sympy:
             s = self.K.to_sympy(s)
         return s
 
-    def span(self, n):
+    def span(self, n: int) -> sp.Matrix:
         monoms = generate_expr(n, cyc = False)[1]
 
         vecs = [None]
-        single_power_ = self.single_power_
+        _single_power = self._single_power
         for column in range(1):
             vec = [0] * len(monoms)
             for ind, (i, j, k) in enumerate(monoms):
-                vec[ind] = single_power_(0, i) * single_power_(1, j) * single_power_(2, k)
+                vec[ind] = _single_power(0, i) * _single_power(1, j) * _single_power(2, k)
             vecs[column] = vec.copy()
     
         # return sp.Matrix(vecs).T
@@ -522,9 +573,51 @@ class RootAlgebraic(Root):
 
         return _reg_matrix(M)
 
+    def _subs_poly(self, poly: sp.Poly) -> sp.polys.polyclasses.ANP:
+        """
+        Substitute the root into a polynomial. This returns an ANP object,
+        which is different from the general method self.eval(poly). This
+        function is only available for RootAlgebraic class.
+        """
+        s = 0
+        for (i,j,k), coeff in poly.terms():
+            s += self._single_power(0, i) * self._single_power(1, j) * self._single_power(2, k) * coeff
+        return s
+        
+
+    def subs(self, expr: Union[sp.Expr, sp.Matrix], to_sympy = True) -> Union[sp.Expr, sp.Matrix]:
+        """
+        Substitute the root into an expression or a matrix of expressions.
+        """
+        is_single_expr = not isinstance(expr, sp.MatrixBase)
+        if is_single_expr:
+            expr = [expr]
+
+        a, b, c = sp.symbols('a b c')
+        results = []
+        for expr0 in expr:
+            try:
+                if isinstance(expr0, sp.Poly):
+                    s = self._subs_poly(expr0)
+                else:
+                    frac0, frac1 = sp.fraction(expr0.together())
+                    frac0, frac1 = frac0.as_poly(a,b,c), frac1.as_poly(a,b,c)
+                    s = self._subs_poly(frac0) / self._subs_poly(frac1)
+            except:
+                s = expr0.subs({a: self.root[0], b: self.root[1], c: self.root[2]})
+            results.append(s)
+
+        if to_sympy:
+            results = [self.K.to_sympy(r) for r in results]
+        if is_single_expr:
+            return results[0]
+        if not to_sympy:
+            return results # ANP objects cannot be converted to sympy Matrix
+        return sp.Matrix(results).reshape(*expr.shape)
+
 
 class RootRational(RootAlgebraic):
-    __slots__ = ('root', 'uv_', 'ker_', 's__')
+    __slots__ = ('root', '_uv', '_ker', '_sum')
 
     def __init__(self, root):
         root = tuple(sp.S(r) for r in root)
@@ -533,9 +626,9 @@ class RootRational(RootAlgebraic):
         self.root = root
 
         if self.is_centered:
-            self.uv_ = (sp.S(2), sp.S(2))
+            self._uv = (sp.S(2), sp.S(2))
         elif self.is_corner:
-            self.uv_ = (sp.oo, sp.oo)
+            self._uv = (sp.oo, sp.oo)
         else:
             a, b, c = root
             if c == 0:
@@ -545,11 +638,11 @@ class RootRational(RootAlgebraic):
             t = ((a*b-a)*(a-b)-(b*(a-1))**2)
             u = ((b*b-a*a)*(a-b) - (b-a*b)*(1-b*b))/t
             v = ((a*b-a)*(1-b*b) - (b*b-a*a)*(b-b*a))/t
-            self.uv_ = (u, v)
+            self._uv = (u, v)
 
-        u, v = self.uv_
-        self.ker_ = (u**2 - u*v + v**2 + u + v + 1)
-        self.s__ = sum(root)
+        u, v = self._uv
+        self._ker = (u**2 - u*v + v**2 + u + v + 1)
+        self._sum = sum(root)
 
     def __str__(self):
         return super(RootAlgebraic, self).__str__()
@@ -557,18 +650,18 @@ class RootRational(RootAlgebraic):
     def __repr__(self):
         return super(RootAlgebraic, self).__repr__()
 
-    def uv(self):
-        return self.uv_
+    def uv(self, to_sympy = True):
+        return self._uv
 
     def ker(self):
-        return self.ker_
+        return self._ker
 
     def cyclic_sum(self, monom, to_sympy=True):
         i, j, k = monom
         a, b, c = self.root
-        return (a**i * b**j * c**k + a**k * b**i * c**j + a**j * b**k * c**i) / self.s__**(i+j+k)
+        return (a**i * b**j * c**k + a**k * b**i * c**j + a**j * b**k * c**i) / self._sum**(i+j+k)
 
-    def span(self, n):
+    def span(self, n: int) -> sp.Matrix:
         monoms = generate_expr(n, cyc = False)[1]
         if self.is_centered:
             return sp.ones(len(monoms), 1)
@@ -582,3 +675,10 @@ class RootRational(RootAlgebraic):
             vecs[column] = sp.Matrix(vec)
             a, b, c = c, a, b
         return sp.Matrix.hstack(*vecs)
+
+    def subs(self, expr: Union[sp.Expr, sp.Matrix], to_sympy = True) -> Union[sp.Expr, sp.Matrix]:
+        """
+        Substitute the root into an expression or a matrix of expressions.
+        """
+        a, b, c = sp.symbols('a b c')
+        return expr.subs({a: self.root[0], b: self.root[1], c: self.root[2]})
