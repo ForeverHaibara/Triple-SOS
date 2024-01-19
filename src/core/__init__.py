@@ -22,7 +22,8 @@ from .pqrsos import (
 )
 
 from .symsos import (
-    SymmetricSOS, sym_representation, prove_univariate, TRANSLATION_POSITIVE, TRANSLATION_REAL,
+    SymmetricSOS, sym_representation, TRANSLATION_POSITIVE, TRANSLATION_REAL,
+    prove_univariate, prove_univariate_interval, check_univariate,
     SolutionSymmetric, SolutionSymmetricSimple
 )
 
@@ -42,7 +43,8 @@ __all__ = [
     'Coeff',
     'SolutionStructural', 'SolutionStructuralSimple',
     'pqr_sym', 'pqr_cyc', 'pqr_ker',
-    'SymmetricSOS', 'sym_representation', 'prove_univariate', 'TRANSLATION_POSITIVE', 'TRANSLATION_REAL',
+    'SymmetricSOS', 'sym_representation', 'TRANSLATION_POSITIVE', 'TRANSLATION_REAL',
+    'prove_univariate', 'prove_univariate_interval', 'check_univariate',
     'SolutionSymmetric', 'SolutionSymmetricSimple',
     'SDPSOS', 'SDPProblem', 'RootSubspace'
 ]
