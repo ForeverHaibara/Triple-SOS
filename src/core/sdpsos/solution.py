@@ -12,6 +12,7 @@ from ...utils import (
 
 
 class SolutionSDP(SolutionSimple):
+    method = 'SDPSOS'
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -152,7 +153,7 @@ def _complete_M(S: Dict[str, sp.Matrix], Q: Dict[str, sp.Matrix], M: Dict[str, s
     for key, Q in Q.items():
         if Q is None:
             continue
-        if key not in M:
+        if (key not in M) and (key in S):
             M[key] = Q @ S[key] @ Q.T
     return M
 

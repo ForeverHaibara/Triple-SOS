@@ -4,6 +4,7 @@ from sympy.core.singleton import S
 from ...utils.expression.solution import Solution, SolutionSimple
 
 class SolutionStructural(Solution):
+    method = 'StructuralSOS'
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -39,6 +40,7 @@ class SolutionStructural(Solution):
 
 
 class SolutionStructuralSimple(SolutionSimple, SolutionStructural):
+    method = 'StructuralSOS'
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 

@@ -1,22 +1,36 @@
-from math import gcd
+from typing import Optional
 
 import sympy as sp
 
 
-def rationalize(v, rounding = 1e-2, reliable = False) -> sp.Rational:
+def rationalize(
+        v: float,
+        rounding: float = 1e-2,
+        reliable: bool = False, 
+        truncate: Optional[int] = 32
+    ) -> sp.Rational:
     """
     Approximates a floating number to a reasonable fraction.
 
-    Params
-    -------
-    v: float|sp.Float
+    Parameters
+    -----------
+    v : float
+        The floating number to be approximated.
+    rounding : float
+        The tolerance for approximation, it is used only if reliable == False.
+    reliable : bool
+        If True, use complete continued fraction to approximate.
+        If False, approximate a continued fraction when abs(p/q - v) < rounding.
+    truncate : int
+        Truncate the continued fraction at the given length. It is used only if reliable == True.
 
     Return
-    -------
-    a/b: sp.Rational
+    ----------
+    p/q : sp.Rational
+        The approximation of v.
     """
-    if v == 0:
-        return sp.S(0)
+    if isinstance(v, (sp.Rational, int)):
+        return sp.S(v)
     else:
         if True: # reliable:
             # https://tieba.baidu.com/p/7846250213
@@ -26,7 +40,7 @@ def rationalize(v, rounding = 1e-2, reliable = False) -> sp.Rational:
             fracs = [t]
             i = 0
             j = -1
-            while i <= 31:
+            while i < truncate:
                 x = 1 / x
                 t = sp.floor(x)
                 if (t == 0 or t == sp.nan or t == sp.zoo):
@@ -66,6 +80,9 @@ def rationalize(v, rounding = 1e-2, reliable = False) -> sp.Rational:
                 # if abs(v - x) < 1e-6: # close approximation
                 return x
             else: # not reliable
+                return sp.nsimplify(v, rational = True, tolerance = rounding)
+
+                # deprecated
                 # if not reliable, we accept the result only when p,q is not too large
                 # theorem: |x - p/q| < 1/(2q²) only if p/q is continued fraction of x
                 for length in range(1, len(fracs)):
@@ -89,7 +106,9 @@ def rationalize(v, rounding = 1e-2, reliable = False) -> sp.Rational:
                             return x
 
                 # if not found, use the full fraction list
-    
+                # else:
+                #     return x
+
     return sp.nsimplify(v, rational = True, tolerance = rounding)
     
 

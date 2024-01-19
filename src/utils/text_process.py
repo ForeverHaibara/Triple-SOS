@@ -1,4 +1,5 @@
-from math import gcd
+from typing import Union, List
+
 import re
 
 import sympy as sp
@@ -265,7 +266,6 @@ def pl(*args, **kwargs):
     return preprocess_text(*args, **kwargs)
 
 
-
 def degree_of_zero(poly):
     """
     Compute the degree of a homogeneous zero polynomial
@@ -364,6 +364,71 @@ def sdesmos(x, verbose = True):
     return a
 
 
-if __name__ == '__main__':
-    # print(prettyprint([(1,2)], ['a(a-0.5*b)^2'],dectofrac=True))
-    print(preprocess_text('s((a2-b2-(sqrt(5)-1)/2(ac-ab)+(sqrt(5)+1)/2(bc-ab))2)/2+(sqrt(5)-1)/2s(ab((a-c)-(sqrt(5)+1)/2(b-c))2)'))
+
+class PolyReader:
+    """
+    A class for reading polynomials from a file or a list of strings.
+    This is an iterator class.
+    """
+    def __init__(self,
+        polys: Union[List[Union[sp.Poly, str]], str],
+        ignore_errors: bool = False
+    ):
+        """
+        Read polynomials from a file or a list of strings.
+        This is a generator function.
+
+        Parameters
+        ----------
+        polys : Union[List[Union[sp.Poly, str]], str]
+            The polynomials to read. If it is a string, it will be treated as a file name.
+            If it is a list of strings, each string will be treated as a polynomial.
+            Empty lines will be ignored.
+        ignore_errors : bool    
+            Whether to ignore errors. If True, invalid polynomials will be skipped by
+            yielding None. If False, invalid polynomials will raise a ValueError.
+
+        Yields
+        ----------
+        sp.Poly
+            The read polynomials.
+        """
+        self.source = None
+        if isinstance(polys, str):
+            self.source = polys
+            with open(polys, 'r') as f:
+                polys = f.readlines()
+
+        polys = map(
+            lambda x: x.strip() if isinstance(x, str) else x,
+            polys
+        )
+
+        polys = list(filter(
+            lambda x: (isinstance(x, str) and len(x)) or isinstance(x, sp.Poly),
+            polys
+        ))
+
+        self.polys = polys
+        self.index = 0
+        self.ignore_errors = ignore_errors
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        if self.index >= len(self.polys):
+            raise StopIteration
+        poly = self.polys[self.index]
+        if isinstance(poly, str):
+            try:
+                poly = preprocess_text(poly)
+            except:
+                if not self.ignore_errors:
+                    raise ValueError(f'Invalid polynomial at index {self.index}: {poly}')
+                poly = None
+        self.index += 1
+        return poly
+
+    def __len__(self):
+        return len(self.polys)

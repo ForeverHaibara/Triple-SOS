@@ -1,9 +1,22 @@
+from typing import Tuple, List, Optional
+
 import sympy as sp
 
-from ...utils.text_process import deg
-from ...utils.basis_generator import arraylize_sp
+from ...utils import deg, arraylize_sp
 
-def _pqr_get_basis(degree):
+def _get_pqr(new_gens: Optional[List[sp.Symbol]] = None) -> Tuple[sp.Symbol, sp.Symbol, sp.Symbol]:
+    """Return p,q,r from new_gens. If None, create new symbols."""
+    if new_gens is not None:
+        p, q, r = new_gens
+    else:
+        p, q, r = sp.symbols('p q r')
+    return p, q, r
+
+
+def _pqr_get_basis(degree: int) -> List[Tuple[Tuple[int, int, int], sp.Poly]]:
+    """
+    Return a list of ((i, j, k), p**i * q**j * r**k) for i+j+k == degree.
+    """
     a, b, c = sp.symbols('a b c')
     p, q, r = [a+b+c, a*b+b*c+c*a, a*b*c]
     p, q, r = [_.as_poly() for _ in (p, q, r)]
@@ -19,8 +32,13 @@ def _pqr_get_basis(degree):
         base = r * base
     return basis
 
-def pqr_coeffs_sym(poly, degree = None):
-    degree = degree or deg(poly)
+def pqr_coeffs_sym(poly: sp.Poly) -> List[Tuple[sp.Expr, Tuple[Tuple[int, int, int], sp.Poly]]]:
+    """
+    Helper function for pqr_cyc.
+    When poly == f(p,q,r) + (a-b)*(b-c)*(c-a) * g(p,q,r)
+    return the coefficients of f and g.
+    """
+    degree = deg(poly)
     pqr_basis = _pqr_get_basis(degree)
     
     coeffs = sp.Matrix([arraylize_sp(_[1]) for _ in pqr_basis])
@@ -30,16 +48,37 @@ def pqr_coeffs_sym(poly, degree = None):
     y = coeffs.LUsolve(target)
     return zip(y, pqr_basis)
 
-def pqr_sym(poly, **kwargs):
-    p, q, r = sp.symbols('p q r')
-    return sum(y * p**i * q**j * r**k for y, ((i, j, k), _) in pqr_coeffs_sym(poly, **kwargs))
+def pqr_sym(poly: sp.Poly, new_gens: Optional[List[sp.Symbol]] = None) -> sp.Expr:
+    """
+    Express a 3-variable symmetric polynomial P in p,q,r form,
+    such that P(p,q,r) = f(p,q,r) + (a-b)*(b-c)*(c-a) * g(p,q,r)
+    where p = a+b+c, q = ab+bc+ca, r = abc.
 
-def pqr_coeffs_cyc(poly, degree = None):
+    Parameters
+    ----------
+    poly : sp.Poly
+        A 3-variable cyclic polynomial.
+    new_gens : Optional[List[sp.Symbol]]
+        If None, use p,q,r to stand for the new vars.
+        Otherwise, use the given list of symbols.
+
+    Returns
+    ----------
+    part_sym : sp.Expr
+        The f(p,q,r) part.
+    part_cyc : sp.Expr
+        The g(p,q,r) part.
     """
+    p, q, r = _get_pqr(new_gens)
+    return sum(y * p**i * q**j * r**k for y, ((i, j, k), _) in pqr_coeffs_sym(poly))
+
+def pqr_coeffs_cyc(poly: sp.Poly) -> Tuple[sp.Expr, sp.Expr]:
+    """
+    Helper function for pqr_cyc.
     When poly == f(p,q,r) + (a-b)*(b-c)*(c-a) * g(p,q,r)
-    return f and g
+    return the coefficients of f and g.
     """
-    degree = degree or deg(poly)
+    degree = deg(poly)
     if degree < 3:
         return pqr_coeffs_sym(poly, degree), tuple()
 
@@ -59,24 +98,46 @@ def pqr_coeffs_cyc(poly, degree = None):
 
     return zip(y[:m1], pqr_basis), zip(y[m1:], pqr_basis2)
 
-def pqr_cyc(poly, **kwargs):
-    p, q, r = sp.symbols('p q r')
-    result = pqr_coeffs_cyc(poly, **kwargs)
+def pqr_cyc(poly: sp.Poly, new_gens: Optional[List[sp.Symbol]] = None) -> Tuple[sp.Expr, sp.Expr]:
+    """
+    Express a 3-variable cyclic polynomial P in p,q,r form,
+    such that P(p,q,r) = f(p,q,r) + (a-b)*(b-c)*(c-a) * g(p,q,r)
+    where p = a+b+c, q = ab+bc+ca, r = abc.
+
+    Parameters
+    ----------
+    poly : sp.Poly
+        A 3-variable cyclic polynomial.
+    new_gens : Optional[List[sp.Symbol]]
+        If None, use p,q,r to stand for the new vars.
+        Otherwise, use the given list of symbols.
+
+    Returns
+    ----------
+    part_sym : sp.Expr
+        The f(p,q,r) part.
+    part_cyc : sp.Expr
+        The g(p,q,r) part.
+    """
+    p, q, r = _get_pqr(new_gens)
+    result = pqr_coeffs_cyc(poly)
     part_sym = sum(y * p**i * q**j * r**k for y, ((i, j, k), _) in result[0])
     part_cyc = sum(y * p**i * q**j * r**k for y, ((i, j, k), _) in result[1])
     return part_sym, part_cyc
 
-def pqr_ker():
+def pqr_ker(new_gens: Optional[List[sp.Symbol]] = None) -> sp.Expr:
     """
-    Return the pqr representation of ((a-b)*(b-c)*(c-a))^2
+    Return the pqr representation of ((a-b)*(b-c)*(c-a))^2.
+
+    It should be -4*p**3*r + p**2*q**2 + 18*p*q*r - 4*q**3 - 27*r**2.
     """
-    p, q, r = sp.symbols('p q r')
+    p, q, r = _get_pqr(new_gens)
     return -4*p**3*r + p**2*q**2 + 18*p*q*r - 4*q**3 - 27*r**2
 
-def pqr_pqrt(a, b, c = sp.S(1)):
+def pqr_pqrt(a, b, c = sp.S(1)) -> Tuple[sp.Expr, sp.Expr, sp.Expr, sp.Expr]:
     """
     Compute the p,q,r,t with p = 1 given a, b, c.
     """
     w = c + a + b
     q = (a*c+a*b+b*c) / w / w
-    return 1, q, c*a*b/w/w/w, sp.sqrt(1-3*q)
+    return sp.S(1), q, c*a*b/w/w/w, sp.sqrt(1-3*q)

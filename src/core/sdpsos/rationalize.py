@@ -171,7 +171,7 @@ def rationalize_and_decompose(
         if try_rationalize_with_mask:
             ys = chain([rationalize_with_mask(y)], ys)
 
-    elif isinstance(y, sp.Matrix):
+    elif isinstance(y, sp.MatrixBase):
         ys = [y]
 
 

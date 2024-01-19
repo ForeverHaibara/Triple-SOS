@@ -1,4 +1,4 @@
-from typing import List, Optional, Tuple, Union
+from typing import List, Optional, Tuple, Union, Callable
 from contextlib import contextmanager
 
 import numpy as np
@@ -52,7 +52,12 @@ def is_numer_matrix(M: sp.Matrix) -> bool:
     return False
 
 
-def upper_vec_of_symmetric_matrix(S: Union[sp.Matrix, np.ndarray, int], return_inds = False, check = None):
+def upper_vec_of_symmetric_matrix(
+        S: Union[sp.Matrix, np.ndarray, int], 
+        return_inds: bool = False,
+        mul2: bool = False,
+        check: Callable = None,
+    ) -> List[Union[sp.Expr, Tuple[int, int]]]:
     """
     Gather the upper part of a symmetric matrix by rows as a vector.
 
@@ -62,6 +67,8 @@ def upper_vec_of_symmetric_matrix(S: Union[sp.Matrix, np.ndarray, int], return_i
         Symmetric matrix or the shape[0] of the matrix.
     return_inds : bool
         If True, return (i,j) instead of S[i,j].
+    mul2 : bool
+        If True, multiply off-diagonal elements by 2.
     check : function
         Function to filter rows and columns.
 
@@ -74,6 +81,8 @@ def upper_vec_of_symmetric_matrix(S: Union[sp.Matrix, np.ndarray, int], return_i
 
     if return_inds:
         ret = lambda i, j: (i,j)
+    elif mul2:
+        ret = lambda i, j: 2 * S[i,j] if i != j else S[i,j]
     else:
         ret = lambda i, j: S[i,j]
 
@@ -106,7 +115,7 @@ def symmetric_matrix_from_upper_vec(upper_vec: Union[sp.Matrix, np.ndarray]) -> 
         Symmetric matrix.
     """
     n = round((2 * upper_vec.shape[0] + .25) ** 0.5 - .5)
-    if isinstance(upper_vec, sp.Matrix):
+    if isinstance(upper_vec, sp.MatrixBase):
         S = sp.zeros(n)
     elif isinstance(upper_vec, np.ndarray):
         S = np.zeros((n,n,upper_vec.shape[1])) if upper_vec.ndim == 2 else np.zeros((n,n))
@@ -191,7 +200,7 @@ def split_vector(chunks: List[Union[int, List, sp.Matrix]]) -> List[slice]:
     def length(c):
         if c is None:
             return 0
-        elif isinstance(c, sp.Matrix):
+        elif isinstance(c, sp.MatrixBase):
             return c.shape[1]
         elif isinstance(c, int):
             return c
@@ -211,7 +220,7 @@ def S_from_y(y: sp.Matrix, x0: sp.Matrix, space: sp.Matrix, splits: List[slice])
     """
     Return the symmetric matrices S from the vector y.
     """
-    if not isinstance(y, sp.Matrix):
+    if not isinstance(y, sp.MatrixBase):
         y = sp.Matrix(y)
 
     vecS = x0 + space * y

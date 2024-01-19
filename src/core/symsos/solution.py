@@ -5,6 +5,7 @@ from ...utils.expression.solution import Solution, SolutionSimple
 
 
 class SolutionSymmetric(Solution):
+    method = 'SymmetricSOS'
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -32,6 +33,7 @@ class SolutionSymmetric(Solution):
         )
 
 class SolutionSymmetricSimple(SolutionSimple):#, SolutionSymmetric):
+    method = 'SymmetricSOS'
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 

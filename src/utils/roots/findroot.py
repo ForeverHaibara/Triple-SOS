@@ -4,6 +4,7 @@ from typing import Union, Callable, List, Optional, Tuple
 import numpy as np
 import sympy as sp
 from sympy.plotting.experimental_lambdify import vectorized_lambdify
+from scipy.optimize import minimize
 
 from .grid import GridRender, GridPoly
 from .rationalize import rationalize
@@ -169,7 +170,7 @@ def optimize_discriminant(discriminant, soft = False, verbose = False):
     if v > 0:
         a = a * 1.0
         b = b * 1.0
-        dervs = _compute_hessian(discriminant, (x, y))
+        dervs = _compute_hessian(discriminant, (x, y), vectorized=False)
         # x =[a',b'] <- x - inv(nabla)^-1 @ grad
         for i in range(20):
             lasta , lastb = a , b
@@ -207,9 +208,10 @@ def findroot(
         poly: sp.Poly,
         most: int = 5,
         grid: GridPoly = None,
-        method: str = 'newton',
+        method: str = 'nsolve',
+        standardize_method: str = 'partial',
         verbose: bool = False,
-        with_tangents: Union[bool, Callable] = True,
+        with_tangents: Union[bool, Callable] = False,
     ):
     """
     Find the possible local minima of a cyclic polynomial by gradient descent and guessing. 
@@ -226,7 +228,9 @@ def findroot(
     grid : GridPoly
         The grid to be used. If None, a new grid will be generated.
     method : str
-        The method to be used. 'nsolve' uses sympy.nsolve, 'newton' uses newton's method.
+        The method to be used. See _findroot_helper.available_methods() for available methods.
+    standardize_method : str
+        The method to be used to de-homogenize the polynomial. 'simplex' sets a+b+c=3, 'partial' sets c=1.
     verbose : bool
         Whether to print the process.
     with_tangents : bool | callable
@@ -243,23 +247,27 @@ def findroot(
     if not (poly.domain in (sp.polys.ZZ, sp.polys.QQ, sp.polys.RR)):
         roots = []
     else:
-        roots = _findroot_helper.findroot(poly, grid, method)
+        roots = _findroot_helper.findroot(poly, grid, method, standardize_method = standardize_method)
+        roots = [r.approximate() for r in roots]
+        roots = [r for r in roots if r.is_nontrivial]
+        roots = _findroot_helper._remove_duplicative_roots(roots)
 
         # compute roots on the border
         roots += _findroot_helper._findroot_border(poly)
 
-        # remove repetitive roots
-        roots = _findroot_helper._remove_repetitive_roots(roots)
+        # compute roots on the symmetric axis
+        roots += _findroot_helper._findroot_symmetric(poly, skip_border = True)
 
-    vals = [(poly(a, b, 1), (a, b)) for a, b in roots]
+
+    vals = [(root.eval(poly), i) for i, root in enumerate(roots)]
     vals = sorted(vals)
     if len(vals) > most:
         vals = vals[:most]
 
     reg = max(abs(i) for i in poly.coeffs()) * deg(poly) * 5e-9
-    
-    roots = [r for v, r in vals]
-    strict_roots = [r for v, r in vals if v < reg]
+
+    strict_roots = [roots[i] for v, i in vals if v < reg]
+    roots = [roots[i] for v, i in vals]
 
     if verbose:
         print('Tolerance =', reg, '\nStrict Roots =', strict_roots,'\nNormal Roots =',
@@ -284,8 +292,9 @@ class _findroot_helper():
     def findroot(cls, 
             poly: sp.Poly,
             grid: GridPoly, 
-            method: str = 'newton'
-        ) -> List[Tuple[float, float]]:
+            method: str = 'nsolve',
+            standardize_method: str = 'simplex',
+        ) -> List[Root]:
         """
         Find roots of a polynomial.
 
@@ -296,116 +305,161 @@ class _findroot_helper():
         grid : GridPoly
             The grid to be used. If None, a new grid will be generated.
         method : str
-            The method to be used. 'nsolve' uses sympy.nsolve, 'newton' uses newton's method.
+            The method to be used. 'nsolve' uses sympy.nsolve.
+        standardize_method : str
+            The method to be used to de-homogenize the polynomial. 'simplex' sets a+b+c=3, 'partial' sets c=1.
 
         Returns
         ----------
         roots : list of tuple
             The roots of the polynomial, each in the form (a, b), indicating (a, b, 1).
         """
-        grid_coor, grid_value = grid.grid_coor, grid.grid_value
-
-        extrema = cls._initial_guess(grid_coor, grid_value)
+        extrema = cls._initial_guess(grid)
         roots = cls.get_method(method)(poly, initial_guess = extrema)
-        roots = cls._standardize_roots(roots)
 
         return roots
 
     @classmethod
     def available_methods(cls):
-        return ['nsolve', 'newton']
+        return ['nsolve', 'bfgs', 'l-bfgs-b', 'cg', 'trust-constr']
 
     @classmethod
     def get_method(cls, name: str) -> Callable:
         if name not in cls.available_methods():
             raise ValueError(f'Unknown method {name}. Please use f{__class__}.available_methods() to check.')
-        return getattr(cls, '_findroot_' + name)
+        return getattr(cls, '_findroot_' + name.replace('-', '_'))
 
     @classmethod
-    def _standardize_roots(cls, roots: List[Tuple[float, float]]) -> List[Tuple[float, float]]:
-        for i, (a, b) in enumerate(roots):
-            if a > 1:
-                if b > a:
-                    a, b = 1 / b, a / b
-                else:
-                    a, b = b / a, 1 / a
-            elif b > 1: # and a < 1 < b
-                a, b = 1 / b, a / b
-            else:
-                continue
-            roots[i] = (a, b)
+    def _standardize_poly(cls, poly: sp.Poly, standardize_method: str = 'simplex') -> sp.Expr:
+        """
+        De-homogenize the polynomial. 
+        """
+        a, b, c = sp.symbols('a b c')
+        if standardize_method == 'simplex':
+            poly = poly.as_expr().subs(c, 3 - a - b).expand()
+        elif standardize_method == 'partial':
+            poly = poly.subs(c, 1).as_expr()
+        else:
+            raise ValueError(f'Unknown standardize method {standardize_method}.')
+        return poly
+
+    @classmethod
+    def _as_xy(cls, root: Union[Root, List[Root]], standardize_method: str = 'simplex') -> Tuple[float, float]:
+        """
+        Given a Root object, convert it to (x, y) according to the standardization method
+        to de-homogenize.
+        """
+        only_one = isinstance(root, Root)
+        if only_one:
+            roots = [root]
+        else:
+            roots = root
+
+        xys = []
+        for root in roots:
+            if standardize_method == 'simplex':
+                a, b, c = root
+                s = (a + b + c) / 3
+                xy = (a/s, b/s)
+            elif standardize_method == 'partial':
+                xy = root[0], root[1]
+            xy = (float(xy[0]), float(xy[1]))
+            xys.append(xy)
+        if only_one:
+            xys = xys[0]
+        return xys
+
+    @classmethod
+    def _as_root(cls, xy: Tuple[float, float], standardize_method: str = 'simplex') -> Root:
+        """
+        Given (x, y), restore it to a Root object according to the standardization method.
+        """
+        only_one = len(xy) == 2 and not hasattr(xy[0], '__iter__')
+        if only_one:
+            xys = [xy]
+        else:
+            xys = xy
+
+        roots = []
+        for x, y in xys:
+            if standardize_method == 'simplex':
+                roots.append(Root((x, y, 3 - x - y)))
+            elif standardize_method == 'partial':
+                roots.append(Root((x, y, 1)))
         return roots
 
     @classmethod
-    def _remove_repetitive_roots(cls, roots: List[Tuple[float, float]], prec: int = 4) -> List[Tuple[float, float]]:
+    def _remove_duplicative_roots(cls, roots: List[Root], prec: int = 4) -> List[Root]:
         """
-        Remove repetitive roots if they are close enough < 10^(-prec).
+        Remove duplicative roots if they are close enough < 10^(-prec).
         """
-        roots = dict(((r[0].n(prec), r[1].n(prec)), r) for r in roots).values()
+        roots = [r.standardize(cyc = True, inplace = True) for r in roots]
+        inds = dict(((r[0].n(prec), r[1].n(prec)), i) for i, r in enumerate(roots)).values()
+        return [roots[i] for i in inds]        
         return roots
 
     @classmethod
-    def _initial_guess(cls, grid_coor, grid_value):
+    def _initial_guess(cls, grid: GridPoly) -> List[Root]:
         """
         Given grid coordinate and grid value, search for local minima.    
         """
-        # grid_coor[k] = (i,j) stands for the value  f(n-i-j, i, j)
-        # (grid_size + 1) * (grid_size + 2) // 2 = len(grid_coor)
-        n = round((2 * len(grid_coor) + .25) ** .5 - 1.5)
-        grid_dict = dict(zip(grid_coor, grid_value))
+        extrema = grid.local_minima(filter_nontrivial=True)
 
-        trunc = (2*n + 3 - n // 3) * (n // 3) // 2
-        
-        extrema = []
-        for (i, j), v in zip(grid_coor[trunc:], grid_value[trunc:]):
-            # without loss of generality we may assume j = max(i,j,n-i-j)
-            # need to be locally convex
-            if i > j or n - i - j > j or i == 0 or v >= grid_dict[(i,j-1)] or v >= grid_dict[(i+1,j-1)]:
-                continue
-            if v >= grid_dict[(i-1,j)] or v >= grid_dict[(i-1,j-1)] or v >= grid_dict[(i-1,j+1)]:
-                continue
-            if i+j < n and (v >= grid_dict[(i+1,j)] or v >= grid_dict[(i,j+1)]):
-                continue
-            if i+j+1 < n and v >= grid_dict[(i+1,j+1)]:
-                continue
-            extrema.append(((n-i-j)/j, i/j))
-        
-        # order = (sorted(list(range(len(grid_value))), key = lambda x: grid_value[x]))
-        # print(sorted(grid_value))
-        # print([(j/(i+1e-14) ,(n-i-j)/(i+1e-14)) for i,j in [grid_coor[o] for o in order]])
-        # print([(i, j) for i,j in [grid_coor[o] for o in order]])
-        # print(extrema)
         return extrema
 
     @classmethod
-    def _findroot_border(cls, poly: sp.Poly) -> List[Tuple[float, float]]:
+    def _findroot_border(cls, poly: sp.Poly) -> List[Root]:
         """
         Return roots on the border of a polynomial.
         """
         roots = []
-        a, b, c = sp.symbols('a b c')
-        poly_diff = poly.subs({b: 0, c: 1}).as_poly(a).diff(a)
+        a = sp.Symbol('a')
+        rep = [_[0] if len(_) else 0 for _ in poly.rep.rep[-1]]
+        poly = sp.Poly.from_list(rep, a)
+        poly_diff = poly.diff(a)
         poly_diff2 = poly_diff.diff(a)
         try:
             for r in nroots(poly_diff, method = 'factor', real = True, nonnegative = True):
                 if poly_diff2(r) >= 0:
-                    roots.append((r, sp.S(0)))
+                    roots.append(Root((r, 1, 0)))
         except:
             pass
         return roots
 
     @classmethod
-    def _findroot_nsolve(cls, poly, initial_guess = []):
+    def _findroot_symmetric(cls, poly: sp.Poly, skip_border: bool = False) -> List[Root]:
+        """
+        Return roots on the symmetric axis of a polynomial.
+        If skip_border is True, the root (0,1,1) is not included.
+        """
+        roots = []
+        a = sp.Symbol('a')
+        rep = [sum(sum(__) for __ in _) for _ in poly.rep.rep]
+        poly = sp.Poly.from_list(rep, a)
+        poly_diff = poly.diff(a)
+        poly_diff2 = poly_diff.diff(a)
+        try:
+            for r in nroots(poly_diff, method = 'factor', real = True, nonnegative = True):
+                if r == 0 and skip_border:
+                    continue
+                if poly_diff2(r) >= 0:
+                    roots.append(Root((r, 1, 1)))
+        except:
+            pass
+        return roots
+
+    @classmethod
+    def _findroot_nsolve(cls, poly, initial_guess = [], standardize_method = 'simplex'):
         """
         Numerically find roots with sympy nsolve.
         """
         roots = []
 
-        poly = poly.subs('c',1).as_expr()
+        poly = cls._standardize_poly(poly, standardize_method = standardize_method)
         poly_diffa = poly.diff('a')
         poly_diffb = poly.diff('b')
 
-        for e in initial_guess:
+        for e in cls._as_xy(initial_guess, standardize_method = standardize_method):
             try:
                 roota, rootb = sp.nsolve(
                     (poly_diffa, poly_diffb),
@@ -416,58 +470,51 @@ class _findroot_helper():
             except:
                 pass
 
-        return roots
+        return cls._as_root(roots, standardize_method = standardize_method)
 
     @classmethod
-    def _findroot_newton(cls, poly, initial_guess = []):
-        """
-        Numerically find roots with newton's algorithm.
-        """
+    def _findroot_bfgs(cls, poly, initial_guess = [], standardize_method = 'simplex'):
+        return cls._findroot_scipy(poly, method = 'bfgs', initial_guess = initial_guess, standardize_method = standardize_method)
+
+    @classmethod
+    def _findroot_l_bfgs_b(cls, poly, initial_guess = [], standardize_method = 'simplex'):
+        return cls._findroot_scipy(poly, method = 'l-bfgs-b', initial_guess = initial_guess, standardize_method = standardize_method)
+
+    @classmethod
+    def _findroot_cg(cls, poly, initial_guess = [], standardize_method = 'simplex'):
+        return cls._findroot_scipy(poly, method = 'cg', initial_guess = initial_guess, standardize_method = standardize_method)
+
+    @classmethod
+    def _findroot_trust_constr(cls, poly, initial_guess = [], standardize_method = 'simplex'):
+        return cls._findroot_scipy(poly, method = 'trust-constr', initial_guess = initial_guess, standardize_method = standardize_method)
+
+    @classmethod
+    def _findroot_scipy(cls, poly, method = 'bfgs', initial_guess = [], standardize_method = 'simplex'):
+        if standardize_method == 'simplex':
+            f = lambda x: poly(x[0]/3, x[1]/3, (3 - x[0] - x[1])/3)
+            def early_stop(x):
+                if x[0] < -3 or x[1] < -3 or x[0] + x[1] > 6:
+                    raise ValueError
+
+        elif standardize_method == 'partial':
+            f = lambda x: poly(x[0], x[1], 1)
+            def early_stop(x):
+                if x[0] < 0 or x[1] < 0:
+                    raise ValueError
+
         roots = []
-
-        # replace c = 1
-        poly = poly.subs('c', 1).as_expr()
-
-        # regularize the function to avoid numerical instability
-        # reg = 2. / sum([abs(coeff) for coeff in poly.coeffs()]) / deg(poly)
-
-        # Newton's method
-        # we pick up a starting point which is locally convex and follows the Newton's method
-        dervs = _compute_hessian(poly, sp.symbols('a b'))
-
-        if initial_guess is None:
-            initial_guess = product(np.linspace(0.1,0.9,num=10), repeat = 2)
-
-        for a , b in initial_guess:
-            for times in range(20): # by experiment, 20 is oftentimes more than enough
-                # x =[a',b'] <- x - inv(nabla)^-1 @ grad
-                lasta = a
-                lastb = b
-                da_, db_, da2_, dab_, db2_ = [f(a,b) for f in dervs]
-                det_ = da2_ * db2_ - dab_ * dab_
-                if det_ <= 0: # not locally convex / not invertible
-                    break
-                else:
-                    a , b = a - (db2_ * da_ - dab_ * db_) / det_ , b - (-dab_ * da_ + da2_ * db_) / det_
-                    if abs(a - lasta) < 5e-15 and abs(b - lastb) < 5e-15:
-                        # stop updating
-                        break
-
-            if det_ <= -1e-6 or abs(a) < 1e-6 or abs(b) < 1e-6:
-                # trivial roots
+        for a, b in cls._as_xy(initial_guess, standardize_method = standardize_method):
+            try:
+                res = minimize(f, (a, b), method = method, tol=1e-6, callback = early_stop)
+                if res.success:
+                    roots.append((res.x[0], res.x[1]))
+            except:
                 pass
-            # if (abs(a-1) < 1e-6 and abs(b-1) < 1e-6):
-            #     pass
-            else:
-                roots.append((sp.Float(a), sp.Float(b)))
-                # if poly(a,b) * reg < 1e-6:
-                #     # having searched one nontrivial root is enough as we cannot handle more
-                #     break
 
-        return roots
+        return cls._as_root(roots, standardize_method = standardize_method)
 
 
-def findroot_resultant(poly: sp.Poly):
+def findroot_resultant(poly: sp.Poly) -> List[Root]:
     """
     Find the roots of a polynomial using the resultant method. This is
     essential in SDP SOS, because we need to construct exact subspace
@@ -543,8 +590,8 @@ class _findroot_helper_resultant():
         for root in roots:
             if any(r.root == root.root for r in roots_clear):
                 continue
-            if mult_at_origin > 1 and root.root[0] == 1 and root.root[1] == 1 and root.root[2] == 1:
-                root.multiplicity = mult_at_origin
+            # if mult_at_origin > 1 and root.root[0] == 1 and root.root[1] == 1 and root.root[2] == 1:
+            #     root.multiplicity = mult_at_origin
             roots_clear.append(root)
         return roots_clear
 
@@ -652,8 +699,9 @@ class _findroot_helper_resultant():
             root = RootAlgebraic((a_, b_))
             roots.append(root)
 
-            if not ((not _is_rational(a_)) and (not _is_rational(b_)) and _is_rational(root.uv_[0]) and _is_rational(root.uv_[1])):
-                roots.append(RootAlgebraic((sp.S(1), a_, b_)))
-                roots.append(RootAlgebraic((b_, sp.S(1), a_)))
+            # if not ((not _is_rational(a_)) and (not _is_rational(b_)) and\
+            #         _is_rational(root.uv(to_sympy=False)[0]) and _is_rational(root.uv(to_sympy=False)[1])):
+            #     roots.append(RootAlgebraic((sp.S(1), a_, b_)))
+            #     roots.append(RootAlgebraic((b_, sp.S(1), a_)))
 
         return roots
