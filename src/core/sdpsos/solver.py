@@ -705,8 +705,10 @@ class SDPProblem():
             verbose: bool = False
         ) -> Optional[Tuple[sp.Matrix, Decomp]]:
         """
-        Solve SDP by fixing some of the entry of the variable
-        until a rational solution is found.
+        We use the following idea to generate a rational solution:
+        1. Solve SDP with objectives = max(y[-1]) and min(y[-1]).
+        2. Set y[-1] = (max + min) / 2 as a new constraint and solve SDP again.
+        3. Repeat step 2 until the solution is rational.
         """
         @contextmanager
         def restore_constraints(sos):
