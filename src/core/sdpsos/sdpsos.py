@@ -14,9 +14,9 @@ from ...utils.basis_generator import arraylize, arraylize_sp
 from ...utils.polytools import deg
 
 
-class SDPProblem():
+class SOSProblem():
     """
-    Helper class for SDPSOS. See details at SDPProblem.solve.
+    Helper class for SDPSOS. See details at SOSProblem.solve.
 
     Assume that a polynomial can be written in the form v^T @ M @ v.
     Sometimes there are implicit constraints that M = Q @ S @ Q.T where Q is a rational matrix.
@@ -81,7 +81,6 @@ class SDPProblem():
                 continue
             dims[key] = v
         return dims
-
 
     def _not_none_keys(self):
         return list(self._masked_dims(filter_zero = True))
@@ -478,7 +477,7 @@ def SDPSOS(
 
     For more flexible usage, please use
     ```
-        sdp_problem = SDPProblem(poly)
+        sdp_problem = SOSProblem(poly)
         sdp_problem.solve(**kwargs)
         solution = sdp_problem.as_solution()
     ```
@@ -519,7 +518,7 @@ def SDPSOS(
     if not (poly.domain in (sp.polys.ZZ, sp.polys.QQ)):
         return None
 
-    sdp_problem = SDPProblem(poly, verbose_manifold=verbose)
+    sdp_problem = SOSProblem(poly, verbose_manifold=verbose)
 
     if isinstance(minor, (bool, int)):
         minor = [minor]
