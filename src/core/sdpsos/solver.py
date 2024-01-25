@@ -61,7 +61,7 @@ class SDPProblem():
     Main class to solve rational SDP problems.
     """
     _has_picos = _check_picos(verbose = True)
-    def __init__(self, x0, space, splits, keys = []):
+    def __init__(self, x0, space, splits, keys = None, free_symbols = None):
         # unmasked x0, space, splits
         self._x0 = x0
         self._space = space
@@ -75,13 +75,19 @@ class SDPProblem():
 
         self.y = None
         self.S = None
-
         if keys is not None:
             if len(keys) != len(splits):
                 raise ValueError("Length of keys and splits should be the same. But got %d and %d."%(len(keys), len(splits)))
             self.keys = keys
         else:
             self.keys = ['S_%d'%i for i in range(len(splits))]
+
+        if free_symbols is not None:
+            if len(free_symbols) != self.space.shape[1]:
+                raise ValueError("Length of free_symbols and space should be the same. But got %d and %d."%(len(free_symbols), self.space.shape[1]))
+            self.free_symbols = list(free_symbols)
+        else:
+            self.free_symbols = list(sp.Symbol('y_{%d}'%i) for i in range(self.space.shape[1]))
 
         self.sos = self._construct_sos() if self._has_picos else None
 
@@ -107,6 +113,47 @@ class SDPProblem():
     def from_equations(cls, eq, vecP, splits, **kwargs) -> 'SDPProblem':
         x0, space = solve_undetermined_linear(eq, vecP)
         return SDPProblem(x0, space, splits, **kwargs)
+
+    @classmethod
+    def from_matrix(cls, S, **kwargs) -> 'SDPProblem':
+        invalid_kwargs = ['splits', 'free_symbols']
+        for name in invalid_kwargs:
+            if name in kwargs:
+                raise ValueError(f"Cannot specify {name} when constructing SDPProblem from matrix.")
+
+        if isinstance(S, dict):
+            kwargs['keys'] = list(S.keys())
+            S = list(S.values())
+
+        if isinstance(S, sp.Matrix):
+            S = [S]
+
+        free_symbols = set()
+        for s in S:
+            if not isinstance(s, sp.Matrix):
+                raise ValueError("S must be a list of sp.Matrix or dict of sp.Matrix.")
+            free_symbols |= set(s.free_symbols)
+        splits = split_vector(S)
+
+        free_symbols = list(free_symbols)
+        params = {k: 0 for k in free_symbols}
+
+        def to_vec(params):
+            mats = [s.subs(params) for s in S]
+            upper_vecs = [sp.Matrix(list(upper_vec_of_symmetric_matrix(_))) for _ in mats]
+            return sp.Matrix.vstack(*upper_vecs)
+
+        x0 = to_vec(params)
+        space = sp.Matrix.zeros(x0.shape[0], len(free_symbols))
+        for i in range(len(free_symbols)):
+            params[free_symbols[i]] = 1
+            xi = to_vec(params)
+            xi = xi - x0
+            space[:, i] = xi
+            params[free_symbols[i]] = 0
+
+        return SDPProblem(x0, space, splits, free_symbols = free_symbols, **kwargs)
+
 
     def _masked_dims(self, filter_zero: bool = False) -> Dict[str, int]:
         """
@@ -244,7 +291,7 @@ class SDPProblem():
 
 
     def S_from_y(self, 
-            y: Optional[Union[sp.Matrix, np.ndarray]] = None
+            y: Optional[Union[sp.Matrix, np.ndarray, Dict]] = None
         ) -> Dict[str, sp.Matrix]:
         """
         Given y, compute the symmetric matrices. This is useful when we want to see the
@@ -264,7 +311,7 @@ class SDPProblem():
         """
         m = self.dof
         if y is None:
-            y = sp.Matrix([sp.symbols('y_{%d}'%_) for _ in range(m)]).reshape(m, 1)
+            y = sp.Matrix(self.free_symbols).reshape(m, 1)
         elif isinstance(y, sp.MatrixBase):
             if y.shape != (m, 1):
                 raise ValueError('y must be a matrix of shape (%d, 1).'%m)
@@ -272,6 +319,8 @@ class SDPProblem():
             if y.size != m:
                 raise ValueError('y must be a matrix of shape (%d, 1).'%m)
             y = sp.Matrix(y.flatten())
+        elif isinstance(y, dict):
+            y = sp.Matrix([y.get(v, v) for v in self.free_symbols]).reshape(m, 1)
 
         Ss = S_from_y(y, *self.args)
 
@@ -280,7 +329,11 @@ class SDPProblem():
             ret[key] = S
         return ret
 
-
+    def as_params(self) -> Dict[sp.Symbol, sp.Rational]:
+        """
+        Return the free symbols and their values.
+        """
+        return dict(zip(self.free_symbols, self.y))
 
 
     def _construct_sos(self,
@@ -314,27 +367,31 @@ class SDPProblem():
         if self.dof == 0:
             return None
 
-        import picos
 
-        # SDP should use numerical algorithm
-        x0, space, splits = self.args
-        x0_numer = np.array(x0).astype(np.float64).flatten()
-        space_numer = np.array(space).astype(np.float64)
+        try:
+            import picos
 
-        sdp = picos.Problem()
-        y = picos.RealVariable('y', self.dof)
-        for key, split in zip(self._not_none_keys(), splits):
-            x0_ = x0_numer[split]
-            k = round(np.sqrt(2 * len(x0_) + .25) - .5)
-            S = picos.SymmetricVariable(key, (k,k))
-            sdp.add_constraint(S >> reg)
+            # SDP should use numerical algorithm
+            x0, space, splits = self.args
+            x0_numer = np.array(x0).astype(np.float64).flatten()
+            space_numer = np.array(space).astype(np.float64)
 
-            self._add_sdp_eq(sdp, S, x0_, space_numer[split], y)
+            sdp = picos.Problem()
+            y = picos.RealVariable('y', self.dof)
+            for key, split in zip(self._not_none_keys(), splits):
+                x0_ = x0_numer[split]
+                k = round(np.sqrt(2 * len(x0_) + .25) - .5)
+                S = picos.SymmetricVariable(key, (k,k))
+                sdp.add_constraint(S >> reg)
 
-        for constraint in constraints or []:
-            if isinstance(constraint, Callable):
-                constraint = constraint(sdp)
-            sdp.add_constraint(constraint)
+                self._add_sdp_eq(sdp, S, x0_, space_numer[split], y)
+
+            for constraint in constraints or []:
+                if isinstance(constraint, Callable):
+                    constraint = constraint(sdp)
+                sdp.add_constraint(constraint)
+        except:
+            return None
 
         return sdp
 
