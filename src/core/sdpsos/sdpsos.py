@@ -374,14 +374,14 @@ def SDPSOS(
 
         with indented_print(verbose = verbose):
             try:
-                sdp_problem.solve(
+                success = sdp_problem.solve(
                     minor = minor_,
                     cyclic_constraint = cyclic_constraint,
                     method = method,
                     allow_numer = allow_numer,
                     verbose = verbose
                 )
-                if sdp_problem.success:
+                if success:
                     # We can also pass in **M
                     return sdp_problem.as_solution(
                         decompose_method = decompose_method, 
