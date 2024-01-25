@@ -100,7 +100,7 @@ class SDPProblem():
             key = self.keys[i]
             split = self.splits[i]
             mask = self.masked_rows.get(key, [])
-            k = round(np.sqrt(2 * (split.end - split.start) + .25) - .5)
+            k = round(np.sqrt(2 * (split.stop - split.start) + .25) - .5)
             v = k - len(mask)
             if filter_zero and v == 0:
                 continue
@@ -212,7 +212,11 @@ class SDPProblem():
 
 
 
-    def _construct_sos(self, reg = 0, constraints = None):        
+    def _construct_sos(self, reg = 0, constraints = None):
+
+        if self.dof == 0:
+            return None
+
         import picos
 
         # SDP should use numerical algorithm
@@ -222,7 +226,7 @@ class SDPProblem():
 
         sos = picos.Problem()
         y = picos.RealVariable('y', self.dof)
-        for key, split in zip(self.keys, splits):
+        for key, split in zip(self._not_none_keys(), splits):
             x0_ = x0_numer[split]
             k = round(np.sqrt(2 * len(x0_) + .25) - .5)
             S = picos.SymmetricVariable(key, (k,k))
@@ -233,7 +237,7 @@ class SDPProblem():
         for constraint in constraints or []:
             sos.add_constraint(constraint(sos))
 
-        return sos, y
+        return sos
 
     def _add_sdp_eq(self, sos, S, x0, space, y):
         k = round(np.sqrt(2 * len(x0) + .25) - .5)
@@ -288,7 +292,6 @@ class SDPProblem():
             if isinstance(e, ZeroDivisionError):
                 if max_iters // 2 >= min_iters and max_iters > 1:
                     return self._nsolve_with_early_stop(
-                                sos, 
                                 max_iters = max_iters // 2, 
                                 min_iters = min_iters, 
                                 verbose = verbose
@@ -299,7 +302,7 @@ class SDPProblem():
 
     def _get_defaulted_objectives(self):
         """Get the default objectives of the SDP problem."""
-        obj_key = 'S_minor' if 'S_minor' in self.sos.variables else 'S_major'
+        obj_key = self._not_none_keys()[0]
         objectives = [
             ('max', self.sos.variables[obj_key].tr),
             ('min', self.sos.variables[obj_key].tr),
@@ -420,7 +423,7 @@ class SDPProblem():
             if all(_.is_positive_definite for _ in S_numer):
                 lcm, times = 1260, 5
             else:
-                lcm = max(1260, sp.prod(set.union(*[set(sp.primefactors(_.q)) for _ in space])))
+                lcm = max(1260, sp.prod(set.union(*[set(sp.primefactors(_.q)) for _ in self.space])))
                 times = int(10 / sp.log(lcm, 10).n(15) + 3)
 
             if verbose:
@@ -444,7 +447,7 @@ class SDPProblem():
         from picos.constraints.con_lmi import LMIConstraint
 
         sos = self.sos
-        obj_key = 'S_minor' if not 'S_major' in sos.variables else 'S_major'
+        obj_key = self._not_none_keys()[0]
         lamb = picos.RealVariable('lamb', 1)
         obj = sos.variables[obj_key]
 
@@ -493,7 +496,7 @@ class SDPProblem():
                     ('min', lambda sos: sos.variables['y'][i])
                 ]
                 cnt_ys = len(self._ys)
-                ra = self._nsolve_with_rationalization(objectives, verbose = verbose)
+                ra = self._nsolve_with_rationalization(objectives)
                 cnt_sol = len(self._ys) - cnt_ys
 
                 if cnt_sol == 0 or isinstance(ra, tuple):
@@ -501,6 +504,10 @@ class SDPProblem():
                 elif cnt_sol < 2:
                     # not enough solutions
                     return None
+
+                ra = self.rationalize_combine(verbose = verbose)
+                if ra is not None:
+                    return ra
 
                 bounds = [self._ys[-2][i], self._ys[-1][i]]
 
@@ -591,3 +598,8 @@ class SDPProblem():
             self.y = solution['y']
             self.S = solution['S']
         return SDPResult(self.sos, solution)
+
+
+class SDPProblemEmpty(SDPProblem):
+    def __init__(self, *args, **kwargs):
+        self.masked_rows = {}
