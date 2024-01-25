@@ -15,6 +15,8 @@ from .utils import (
 )
 
 
+Decomp = List[Tuple[sp.Matrix, sp.Matrix, List[sp.Rational]]]
+
 def _check_picos(verbose = False):
     """
     Check whether PICOS is installed.
@@ -58,7 +60,7 @@ class SDPProblem():
     """
     Main class to solve rational SDP problems.
     """
-    _has_picos = _check_picos()
+    _has_picos = _check_picos(verbose = True)
     def __init__(self, x0, space, splits, keys = []):
         # unmasked x0, space, splits
         self._x0 = x0
@@ -88,13 +90,38 @@ class SDPProblem():
 
     @property
     def args(self):
+        """
+        Return the construction args for the object: (x0, space, splits).
+        """
         return self.x0, self.space, self.splits
 
     @property
     def dof(self):
+        """
+        The degree of freedom of the SDP problem.
+        """
         return self.space.shape[1]
 
-    def _masked_dims(self, filter_zero = False):
+
+    @classmethod
+    def from_equations(cls, eq, vecP, splits, **kwargs) -> 'SDPProblem':
+        x0, space = solve_undetermined_linear(eq, vecP)
+        return SDPProblem(x0, space, splits, **kwargs)
+
+    def _masked_dims(self, filter_zero: bool = False) -> Dict[str, int]:
+        """
+        Compute the dimensions of each symmetric matrix after row-masking.
+
+        Parameters
+        ----------
+        filter_zero : bool
+            If filter_zero == True, then keys of dimension zero will be ignored.
+
+        Returns
+        ----------
+        dims : Dict[str, int]
+            Dimensions of the symmetric matrices after row-masking.
+        """
         dims = {}
         for i in range(len(self.keys)):
             key = self.keys[i]
@@ -107,11 +134,21 @@ class SDPProblem():
             dims[key] = v
         return dims
 
-    def _not_none_keys(self):
+    def _not_none_keys(self) -> List[str]:
+        """
+        Return keys that dim[key] > 0 after row-masking.
+
+        Returns
+        ----------
+        keys : List[str]
+            Keys that dim[key] > 0.
+        """
         return list(self._masked_dims(filter_zero = True))
 
 
-    def set_masked_rows(self, masks: Dict[str, List[int]] = {}) -> Dict[str, sp.Matrix]:
+    def set_masked_rows(self,
+            masks: Dict[str, List[int]] = {}
+        ) -> Dict[str, sp.Matrix]:
         """
         Sometimes the diagonal entries of S are zero. Or we set them to zero to
         reduce the degree of freedom. This function masks the corresponding rows.
@@ -120,6 +157,11 @@ class SDPProblem():
         ----------
         masks : List[int]
             Indicates the indices of the rows to be masked.
+
+        Returns
+        ----------
+        masks : List[int]
+            The input.
         """
         # restore masked values to unmaksed values
         self.x0, self.space, self.splits = self._x0, self._space, self._splits
@@ -162,14 +204,25 @@ class SDPProblem():
         return masks
 
 
-    def pad_masked_rows(self, S: Union[Dict, sp.Matrix], key: str) -> sp.Matrix:
+    def pad_masked_rows(self, 
+            S: Union[Dict, sp.Matrix],
+            key: str
+        ) -> sp.Matrix:
         """
-        Pad the masked rows of S[key] with zeros.
+        Pad the masked rows of S[key] with zeros. This is an "inversed" 
+        operation of the row-masking.
+
+        Parameters
+        ----------
+        S : sp.Matrix
+            Solved symmetric matrices after row-masking.
+        key : str
+            The key of the matrix. It is used to obtain the mask.
 
         Returns
         ----------
         S : sp.Matrix
-            The padded S.
+            The restored S before row_masking.
         """
         if isinstance(S, dict):
             S = S[key]
@@ -190,18 +243,35 @@ class SDPProblem():
         return Z
 
 
-    def S_from_y(self, y: Optional[sp.Matrix] = None) -> Dict[str, sp.Matrix]:
+    def S_from_y(self, 
+            y: Optional[Union[sp.Matrix, np.ndarray]] = None
+        ) -> Dict[str, sp.Matrix]:
         """
         Given y, compute the symmetric matrices. This is useful when we want to see the
         symbolic representation of the SDP problem.
 
         This function does not register the result to self.S.
+
+        Parameters
+        ----------
+        y : Optional[Union[sp.Matrix, np.ndarray]]
+            The generating vector. If None, it uses a symbolic vector.
+
+        Returns
+        ----------
+        S : Dict[str, sp.Matrix]
+            The symmetric matrices that SDP requires to be positive semidefinite.
         """
         m = self.dof
         if y is None:
             y = sp.Matrix([sp.symbols('y_{%d}'%_) for _ in range(m)]).reshape(m, 1)
-        elif not isinstance(y, sp.MatrixBase) or y.shape != (m, 1):
-            raise ValueError('y must be a sympy Matrix of shape (%d, 1).'%m)
+        elif isinstance(y, sp.MatrixBase):
+            if y.shape != (m, 1):
+                raise ValueError('y must be a matrix of shape (%d, 1).'%m)
+        elif isinstance(y, np.ndarray):
+            if y.size != m:
+                raise ValueError('y must be a matrix of shape (%d, 1).'%m)
+            y = sp.Matrix(y.flatten())
 
         Ss = S_from_y(y, *self.args)
 
@@ -212,8 +282,35 @@ class SDPProblem():
 
 
 
-    def _construct_sos(self, reg = 0, constraints = None):
 
+    def _construct_sos(self,
+            reg: float = 0,
+            constraints: List[Union[Any, Callable]] = []
+        ):
+        """
+        Construct picos.Problem from self. The function
+        is automatically called when __init__.
+
+        Parameters
+        ----------
+        reg : float
+            For symmetric matrix S, we require S >> reg * I.
+        constraints : List[Union[Any, Callable]]:
+            Additional constraints.
+
+            Example:
+            ```
+                constraints = [
+                    lambda sos: sos.variables['y'][0] == 1
+                ]
+            ```
+
+        Returns
+        ---------
+        sdp : picos.Problem
+            Picos problem created. If there is no degree of freedom,
+            return None.
+        """
         if self.dof == 0:
             return None
 
@@ -224,26 +321,32 @@ class SDPProblem():
         x0_numer = np.array(x0).astype(np.float64).flatten()
         space_numer = np.array(space).astype(np.float64)
 
-        sos = picos.Problem()
+        sdp = picos.Problem()
         y = picos.RealVariable('y', self.dof)
         for key, split in zip(self._not_none_keys(), splits):
             x0_ = x0_numer[split]
             k = round(np.sqrt(2 * len(x0_) + .25) - .5)
             S = picos.SymmetricVariable(key, (k,k))
-            sos.add_constraint(S >> reg)
+            sdp.add_constraint(S >> reg)
 
-            self._add_sdp_eq(sos, S, x0_, space_numer[split], y)
+            self._add_sdp_eq(sdp, S, x0_, space_numer[split], y)
 
         for constraint in constraints or []:
-            sos.add_constraint(constraint(sos))
+            if isinstance(constraint, Callable):
+                constraint = constraint(sdp)
+            sdp.add_constraint(constraint)
 
-        return sos
+        return sdp
 
-    def _add_sdp_eq(self, sos, S, x0, space, y):
+    def _add_sdp_eq(self, sdp, S, x0, space, y):
+        """
+        Helper function that add the constraint
+        S.vec == x0 + space * y to the sdp.
+        """
         k = round(np.sqrt(2 * len(x0) + .25) - .5)
         x0_sym = symmetric_matrix_from_upper_vec(x0)
         space_sym = symmetric_matrix_from_upper_vec(space).reshape(k**2, -1)
-        sos.add_constraint(S.vec == x0_sym + space_sym * y)
+        sdp.add_constraint(S.vec == x0_sym + space_sym * y)
 
 
     def _nsolve_with_early_stop(
@@ -301,7 +404,9 @@ class SDPProblem():
 
 
     def _get_defaulted_objectives(self):
-        """Get the default objectives of the SDP problem."""
+        """
+        Get the default objectives of the SDP problem.
+        """
         obj_key = self._not_none_keys()[0]
         objectives = [
             ('max', self.sos.variables[obj_key].tr),
@@ -341,11 +446,13 @@ class SDPProblem():
                 ('max', lambda sos: sos.variables['S_major']|1)
             ]
             ```
+        context : Optional[AbstractContextManager]
+            Context that the SDP is solved in.
 
         Yields
         ---------
         y: Optional[np.ndarray]
-            Numerical solution y. Return None if y unfounded.
+            Numerical solution y. Return None if y unfound.
         """
         from picos.modeling.strategy import Strategy
         sos = self.sos
@@ -387,7 +494,26 @@ class SDPProblem():
             objectives: List[Tuple[str, Union[Any, Callable]]],
             context: Optional[AbstractContextManager] = None,
             **kwargs
-        ):
+        ) -> Optional[Tuple[sp.Matrix, Decomp]]:
+        """
+        Solve the SDP problem and returns the rational solution if any.
+
+        Parameters
+        ----------
+        objectives : List[Tuple[str, Union[Any, Callable]]]
+            See details in self._nsolve_with_obj.
+        context : Optional[AbstractContextManager]
+            See details in self._nsolve_with_obj.
+        kwargs : Any
+            Keyword arguments that passed into self.rationalize.
+
+        Returns
+        ----------
+        y, decompositions : Optional[Tuple[sp.Matrix, Decomp]]
+            If the problem is solved, return the congruence decompositions `y, [(S, U, diag)]`
+            So that each `S = U.T * diag(diag) * U` where `U` is upper triangular.
+            Otherwise, return None.
+        """
         for y in self._nsolve_with_obj(objectives, context):
             if y is not None:
                 ra = self.rationalize(y, **kwargs)
@@ -400,7 +526,24 @@ class SDPProblem():
             try_rationalize_with_mask: bool = True,
             times: int = 0,
             check_pretty: bool = True
-        ) ->  Optional[Tuple[sp.Matrix, List[Tuple[sp.Matrix, sp.Matrix, List[sp.Rational]]]]]:
+        ) -> Optional[Tuple[sp.Matrix, Decomp]]:
+        """
+        Rationalize a numerical vector y so that it produces a rational solution to SDP.
+
+        Parameters
+        ----------
+        y : np.ndarray
+            Numerical solution y.
+        kwargs : Any
+            Arguments that passed into rationalize_and_decompose.
+
+        Returns
+        ----------
+        y, decompositions : Optional[Tuple[sp.Matrix, Decomp]]
+            If the problem is solved, return the congruence decompositions `y, [(S, U, diag)]`
+            So that each `S = U.T * diag(diag) * U` where `U` is upper triangular.
+            Otherwise, return None.
+        """
         decomp = rationalize_and_decompose(y, *self.args,
             try_rationalize_with_mask=try_rationalize_with_mask, times=times, check_pretty=check_pretty
         )
@@ -410,39 +553,67 @@ class SDPProblem():
             self,
             ys: List[np.ndarray] = None,
             verbose: bool = False,
-        ) ->  Optional[Tuple[sp.Matrix, List[Tuple[sp.Matrix, sp.Matrix, List[sp.Rational]]]]]:
-            if ys is None:
-                ys = self._ys
+        ) ->  Optional[Tuple[sp.Matrix, Decomp]]:
+        """
+        Linearly combine all numerical solutions [y] to produce a rational solution.
 
-            if len(ys) == 0:
-                return None
+        Parameters
+        ----------
+        y : np.ndarray
+            Numerical solution y.
+        verbose : bool
+            Whether to print out the eigenvalues of the combined matrix. Defaults
+            to False.
 
-            y = np.array(ys).mean(axis = 0)
+        Returns
+        ----------
+        y, decompositions : Optional[Tuple[sp.Matrix, Decomp]]
+            If the problem is solved, return the congruence decompositions `y, [(S, U, diag)]`
+            So that each `S = U.T * diag(diag) * U` where `U` is upper triangular.
+            Otherwise, return None.
+        """
+        if ys is None:
+            ys = self._ys
 
-            S_numer = S_from_y(y, *self.args)
-            if all(_.is_positive_definite for _ in S_numer):
-                lcm, times = 1260, 5
-            else:
-                lcm = max(1260, sp.prod(set.union(*[set(sp.primefactors(_.q)) for _ in self.space])))
-                times = int(10 / sp.log(lcm, 10).n(15) + 3)
+        if len(ys) == 0:
+            return None
 
-            if verbose:
-                print('Minimum Eigenvals = %s'%[min(map(lambda x:sp.re(x), _.eigenvals())) for _ in S_numer])
+        y = np.array(ys).mean(axis = 0)
 
-            decomp = rationalize_and_decompose(y, *self.args,
-                try_rationalize_with_mask = False, lcm = 1260, times = times
-            )
-            return decomp
+        S_numer = S_from_y(y, *self.args)
+        if all(_.is_positive_definite for _ in S_numer):
+            lcm, times = 1260, 5
+        else:
+            lcm = max(1260, sp.prod(set.union(*[set(sp.primefactors(_.q)) for _ in self.space])))
+            times = int(10 / sp.log(lcm, 10).n(15) + 3)
+
+        if verbose:
+            print('Minimum Eigenvals = %s'%[min(map(lambda x:sp.re(x), _.eigenvals())) for _ in S_numer])
+
+        decomp = rationalize_and_decompose(y, *self.args,
+            try_rationalize_with_mask = False, lcm = 1260, times = times
+        )
+        return decomp
 
 
     def _solve_trivial(
             self,
             objectives: Optional[List[Tuple[str, Callable]]] = None
-        ):
+        ) -> Optional[Tuple[sp.Matrix, Decomp]]:
+        """
+        Solve SDP numerically with given objectives.
+        """
         return self._nsolve_with_rationalization(objectives)
 
 
-    def _solve_relax(self):
+    def _solve_relax(
+            self
+        ) -> Optional[Tuple[sp.Matrix, Decomp]]:
+        """
+        Solve SDP with such objective:
+            S - l * I >= 0.
+            max(l)
+        """
         import picos
         from picos.constraints.con_lmi import LMIConstraint
 
@@ -475,7 +646,11 @@ class SDPProblem():
             self,
             deflation_sequence: Optional[List[int]] = None,
             verbose: bool = False
-        ):
+        ) -> Optional[Tuple[sp.Matrix, Decomp]]:
+        """
+        Solve SDP by fixing some of the entry of the variable
+        until a rational solution is found.
+        """
         @contextmanager
         def restore_constraints(sos):
             constraints_num = len(sos.constraints)
@@ -528,7 +703,13 @@ class SDPProblem():
                 sos.add_constraint(sos.variables['y'][i] == float(fix))
 
 
-    def _solve_degenerated(self):
+    def _solve_degenerated(
+            self
+        ) -> Optional[Tuple[sp.Matrix, Decomp]]:
+        """
+        Solve the SDP if degree of freedom is zero.
+        In this case it does not rely on any optimization package.
+        """
         if self.dof == 0:
             decomp = rationalize_and_decompose(
                 sp.Matrix([]).reshape(0,1), *self.args,
@@ -543,7 +724,30 @@ class SDPProblem():
         allow_numer: bool = False,
         verbose: bool = False,
         **kwargs
-    ):
+    ) -> Optional[Tuple[sp.Matrix, Decomp]]:
+        """
+        Solve SDP with given method. Moreover, we try to make a convex combinations
+        of all numerical solution to test whether it produces a rational solution.
+        Finally, if allow_numer == True, return one of the numerical solution.
+
+        Parameters
+        ----------
+        method : str
+            The method to solve the SDP problem. Currently supports:
+            'partial deflation' and 'relax' and 'trivial'.
+        allow_numer : bool
+            Whether to allow numerical solution. If True, then the function will return numerical solution
+            if the rational solution does not exist.
+        verbose : bool
+            If True, print the information of the solving process.
+
+        Returns
+        ----------
+        y, decompositions : Optional[Tuple[sp.Matrix, Decomp]]
+            If the problem is solved, return the congruence decompositions `y, [(S, U, diag)]`
+            So that each `S = U.T * diag(diag) * U` where `U` is upper triangular.
+            Otherwise, return None.
+        """
         method = method.lower()
         if method == 'trivial':
             ra = self._solve_trivial(**kwargs)
@@ -583,6 +787,24 @@ class SDPProblem():
             verbose: bool = False,
             **kwargs
         ) -> SDPResult:
+        """
+        Interface for solving the SDP problem.
+
+        Parameters
+        ----------
+        method : str
+            The method to solve the SDP problem. Currently supports:
+            'partial deflation' and 'relax' and 'trivial'.
+        allow_numer : bool
+            Whether to allow numerical solution. If True, then the function will return numerical solution
+            if the rational solution does not exist.
+        verbose : bool
+            If True, print the information of the solving process.
+
+        Returns
+        ----------
+        SDPResult : SDPResult
+        """
 
         if self.dof == 0:
             solution = self._solve_degenerated()

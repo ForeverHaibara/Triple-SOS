@@ -1,10 +1,12 @@
 from itertools import chain
-from typing import List, Union, Optional, Callable
+from typing import Tuple, List, Union, Optional, Callable
 
 import numpy as np
 import sympy as sp
 
 from .utils import congruence_with_perturbation, S_from_y
+
+Decomp = List[Tuple[sp.Matrix, sp.Matrix, List[sp.Rational]]]
 
 
 def rationalize(x, rounding = 1e-2, **kwargs):
@@ -126,7 +128,7 @@ def rationalize_and_decompose(
         reg: float = 0,
         perturb: bool = False,
         check_pretty: bool = True,
-    ):
+    ) -> Optional[Tuple[sp.Matrix, Decomp]]:
     """
     Recover symmetric matrices from `x0 + space * y` and check whether they are
     positive semidefinite.

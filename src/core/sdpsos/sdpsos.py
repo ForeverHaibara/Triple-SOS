@@ -1,5 +1,5 @@
 from copy import deepcopy
-from typing import List, Optional, Union, Tuple, Dict, Callable
+from typing import List, Optional, Union, Tuple, Dict
 
 import sympy as sp
 
@@ -240,7 +240,7 @@ class SOSProblem():
             decompose_method: str = 'raw',
             cyc: bool = True,
             factor_result: bool = True
-        ):
+        ) -> SolutionSDP:
         """
         Wrap the matrix form solution to a SolutionSDP object.
         Note that the decomposition of a quadratic form is not unique.
@@ -255,6 +255,11 @@ class SOSProblem():
             Whether to convert the solution to a cyclic sum.
         factor_result : bool
             Whether to factorize the result. The default is True.
+
+        Returns
+        ----------
+        solution : SolutionSDP
+            SDP solution.
         """
 
         if y is None:
