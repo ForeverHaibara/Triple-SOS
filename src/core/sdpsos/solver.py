@@ -524,7 +524,7 @@ class SDPProblem():
             self,
             y: np.ndarray,
             try_rationalize_with_mask: bool = True,
-            times: int = 0,
+            times: int = 1,
             check_pretty: bool = True
         ) -> Optional[Tuple[sp.Matrix, Decomp]]:
         """
