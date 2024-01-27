@@ -399,7 +399,7 @@ def _reduce_sos(
     ret = _create_sos_from_US(*congruence(M), x = x, return_raw = True)
 
     def _remove_zeros(p):
-        if not any(_ != 0 for _ in p[0]):
+        if not any(_ == 0 for _ in p[0]):
             return p
         coeffs, polys = p
         new_coeffs = []

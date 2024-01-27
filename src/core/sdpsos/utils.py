@@ -7,7 +7,10 @@ import sympy as sp
 from ...utils import congruence
 
 
-def congruence_with_perturbation(M: sp.Matrix, perturb: bool = False):
+def congruence_with_perturbation(
+        M: sp.Matrix,
+        perturb: bool = False
+    ) -> Optional[Tuple[sp.Matrix, sp.Matrix]]:
     """
     Perform congruence decomposition on M. This is a wrapper of congruence.
     Write it as M = U.T @ S @ U where U is upper triangular and S is a diagonal matrix.
