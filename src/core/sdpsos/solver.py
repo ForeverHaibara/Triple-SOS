@@ -85,11 +85,12 @@ class SDPProblem():
         if free_symbols is not None:
             if len(free_symbols) != self.space.shape[1]:
                 raise ValueError("Length of free_symbols and space should be the same. But got %d and %d."%(len(free_symbols), self.space.shape[1]))
-            self.free_symbols = list(free_symbols)
+            self.free_symbols_ = list(free_symbols)
         else:
-            self.free_symbols = list(sp.Symbol('y_{%d}'%i) for i in range(self.space.shape[1]))
+            self.free_symbols_ = list(sp.Symbol('y_{%d}'%i) for i in range(self.space.shape[1]))
+        self.free_symbols = self.free_symbols_
 
-        self.sos = self._construct_sos() if self._has_picos else None
+        self.sos = None
 
         # record the numerical solutions
         self._ys = []
@@ -172,7 +173,7 @@ class SDPProblem():
         dims = {}
         for i in range(len(self.keys)):
             key = self.keys[i]
-            split = self.splits[i]
+            split = self._splits[i]
             mask = self.masked_rows.get(key, [])
             k = round(np.sqrt(2 * (split.stop - split.start) + .25) - .5)
             v = k - len(mask)
@@ -212,6 +213,8 @@ class SDPProblem():
         """
         # restore masked values to unmaksed values
         self.x0, self.space, self.splits = self._x0, self._space, self._splits
+        self.free_symbols = self.free_symbols_
+        self._ys = []
         self.masked_rows = {}
 
         if len(masks) == 0 or not any(_ for _ in masks.values()):
@@ -227,7 +230,7 @@ class SDPProblem():
             mask = masks.get(key, [])
             if not mask:
                 continue
-            n = self.Q[key].shape[1]
+            n = round(np.sqrt(2 * (split.stop - split.start) + .25) - .5)
             for v, (i,j) in enumerate(upper_vec_of_symmetric_matrix(n, return_inds = True)):
                 if i in mask or j in mask:
                     lines.append(v + split.start)
@@ -248,6 +251,7 @@ class SDPProblem():
         self.masked_rows = deepcopy(masks)
         self.splits = split_vector(list(self._masked_dims().values()))
 
+        self.free_symbols = list(sp.Symbol('y_{%d}'%i) for i in range(self.space.shape[1]))
         return masks
 
 
@@ -393,6 +397,7 @@ class SDPProblem():
         except:
             return None
 
+        self.sos = sdp
         return sdp
 
     def _add_sdp_eq(self, sdp, S, x0, space, y):
@@ -868,6 +873,7 @@ class SDPProblem():
         if self.dof == 0:
             solution = self._solve_degenerated()
         elif self._has_picos:
+            self._construct_sos()
             solution = self._solve_wrapped(method = method, allow_numer = allow_numer, verbose = verbose, **kwargs)
 
         if solution is not None:
