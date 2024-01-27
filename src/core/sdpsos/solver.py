@@ -875,6 +875,8 @@ class SDPProblem():
         elif self._has_picos:
             self._construct_sos()
             solution = self._solve_wrapped(method = method, allow_numer = allow_numer, verbose = verbose, **kwargs)
+        else:
+            solution = None
 
         if solution is not None:
             solution = {
