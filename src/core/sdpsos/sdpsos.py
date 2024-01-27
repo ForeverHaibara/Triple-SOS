@@ -208,6 +208,7 @@ class SOSProblem():
                     {k: '{}/{}'.format(v, self.Q[k].shape[0])
                         for k, v in self._masked_dims(filter_zero = True).items()}
                 ).replace("'", '')))
+            print('Degree of freedom: %d'%(self.sdp.dof))
 
         # Main SOS solver
         sos_result = self.sdp.solve(
