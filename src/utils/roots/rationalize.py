@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Tuple, Dict, Union
 
 import sympy as sp
 
@@ -222,67 +222,93 @@ def cancel_denominator(nums):
 
 
 
-def rationalize_quadratic_curve(curve: sp.Expr, one_point = False):
+def rationalize_quadratic_curve(
+        curve: sp.Expr,
+        gen: sp.Symbol = sp.Symbol('t'),
+        point: Union[Dict[sp.Symbol, sp.Rational], Tuple[sp.Rational, sp.Rational]] = None,
+        one_point: bool = False
+    ) -> Dict[sp.Symbol, sp.Rational]:
     """
-    (EXPERIMENTAL) Rationalize a quadratic curve.
+    (EXPERIMENTAL) Rationalize a quadratic curve using the secant method.
 
     Parameters
     ----------
-    curve: sympy expression
+    curve : sympy expression
         A quadratic curve expression.
 
-    one_point: bool
+    gen : sympy symbol
+        The parametrized parameter.
+
+    point : Dict[sp.Symbol, sp.Rational] or Tuple[sp.Rational, sp.Rational]
+        One of the rational point on the curve for secant method.
+        If not given, it is searched automatically.
+
+    one_point : bool
         If True, only one rational point is returned.
+
+    Returns
+    ----------
+    dict :
+        The substituion parametrization. If one_point is False,
+        both variables are parametrized by symbol `gen`. If one_point
+        is True, it returns a rational point on the curve.
     """
     from sympy.solvers.diophantine.diophantine import diop_DN
     from sympy.ntheory.factor_ import core
     x, y = list(curve.free_symbols)
-    curve = curve.as_poly(x)
-    if curve.degree() == 1:
-        x = (-curve.coeffs()[1] / curve.coeffs()[0]).factor()
-        return (x, y)
-    elif curve.degree() > 2:
-        return
-    if curve.all_coeffs()[0] < 0:
-        curve = -curve
+    if point is not None:
+        if not isinstance(point, dict):
+            point = {x: point[0], y: point[1]}
+        x_, y_ = point[x], point[y]
+        if curve.subs({x: x_, y: y_}) != 0:
+            raise ValueError(f"Given point does not {point} lie on the curve.")
+    else:
+        curve = curve.as_poly(x)
+        if curve.degree() == 1:
+            x = (-curve.coeffs()[1] / curve.coeffs()[0]).factor()
+            return (x, y)
+        elif curve.degree() > 2:
+            return
+        if curve.all_coeffs()[0] < 0:
+            curve = -curve
 
-    # curve = a*(x-...)^2 + curve_y
-    curve_y = -curve.all_coeffs()[1]**2/4/curve.all_coeffs()[0] + curve.all_coeffs()[2]
-    curve_y = curve_y.as_poly(y)
+        # curve = a*(x-...)^2 + curve_y
+        curve_y = -curve.all_coeffs()[1]**2/4/curve.all_coeffs()[0] + curve.all_coeffs()[2]
+        curve_y = curve_y.as_poly(y)
 
-    # curve = a*(x-...)^2 + b*(y-...)^2 + const = 0
-    const = -curve_y.all_coeffs()[1]**2/4/curve_y.all_coeffs()[0] + curve_y.all_coeffs()[2]
-    x0 = -curve.all_coeffs()[1]/2/curve.all_coeffs()[0]
-    y0 = -curve_y.all_coeffs()[1]/2/curve_y.all_coeffs()[0]
-    a, b, c = curve.all_coeffs()[0], curve_y.all_coeffs()[0], const
-    
-    # cancel the denominator
-    r = cancel_denominator((a,b,c))
-    a, b, c = a / r, b / r, c / r
-    if a < 0:
-        a, b, c = -a, -b, -c
-    
-    # convert to (sqrt(a)*(x-..))^2 + b*(y-...)^2 + c = 0
-    t = core(a)
-    a, b, c = a * t, b * t, c * t
-    b_, c_ = core(abs(b.p*b.q)) * sp.sign(b), core(abs(c.p*c.q)) * sp.sign(c)
+        # curve = a*(x-...)^2 + b*(y-...)^2 + const = 0
+        const = -curve_y.all_coeffs()[1]**2/4/curve_y.all_coeffs()[0] + curve_y.all_coeffs()[2]
+        x0 = -curve.all_coeffs()[1]/2/curve.all_coeffs()[0]
+        y0 = -curve_y.all_coeffs()[1]/2/curve_y.all_coeffs()[0]
+        a, b, c = curve.all_coeffs()[0], curve_y.all_coeffs()[0], const
+        
+        # cancel the denominator
+        r = cancel_denominator((a,b,c))
+        a, b, c = a / r, b / r, c / r
+        if a < 0:
+            a, b, c = -a, -b, -c
+        
+        # convert to (sqrt(a)*(x-..))^2 + b*(y-...)^2 + c = 0
+        t = core(a)
+        a, b, c = a * t, b * t, c * t
+        b_, c_ = core(abs(b.p*b.q)) * sp.sign(b), core(abs(c.p*c.q)) * sp.sign(c)
 
-    sol = diop_DN(-b_, -c_)
-    if len(sol) == 0:
-        return
-    
-    # u^2 + b_v^2 + c_ = 0 => (u * sqrt(c/c_))^2 + b * (v * sqrt(c/c_) / sqrt(b/b_))^2 + c = 0
-    u, v = sol[0]
-    tmp = sp.sqrt(c / c_)
-    x_, y_ = u * tmp / sp.sqrt(a), v * tmp / sp.sqrt(b / b_)
-    y_ = y_ + y0
-    x_ = x_ + x0.subs(y, y_)
+        sol = diop_DN(-b_, -c_)
+        if len(sol) == 0:
+            return
+        
+        # u^2 + b_v^2 + c_ = 0 => (u * sqrt(c/c_))^2 + b * (v * sqrt(c/c_) / sqrt(b/b_))^2 + c = 0
+        u, v = sol[0]
+        tmp = sp.sqrt(c / c_)
+        x_, y_ = u * tmp / sp.sqrt(a), v * tmp / sp.sqrt(b / b_)
+        y_ = y_ + y0
+        x_ = x_ + x0.subs(y, y_)
     if one_point:
         return {x: x_, y: y_}
     
     # now that (x_, y_) is a rational point on the curve, we can find a rational line
-    t = sp.symbols('t')
+    t = gen
     curve_secant = curve.subs(y, t*(x-x_)+y_).as_poly(x) # x = x_ must be a root
-    x__ = (curve_secant.all_coeffs()[2] / curve_secant.all_coeffs()[0] / x_).factor()
+    x__ = (-curve_secant.all_coeffs()[1] / curve_secant.all_coeffs()[0] - x_).factor()
     y__ = (t*(x__-x_)+y_).factor()
     return {x: x__, y: y__}
