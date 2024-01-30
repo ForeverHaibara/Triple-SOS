@@ -1,4 +1,4 @@
-from typing import Union, List, Dict, Callable
+from typing import Union, List, Dict, Callable, Optional
 
 import sympy as sp
 from sympy.core.singleton import S
@@ -121,12 +121,46 @@ class Coeff():
         return self.__operator__(other, lambda x, y: x ** y)
 
 
-
 def sum_y_exprs(y: List[sp.Expr], exprs: List[sp.Expr]) -> sp.Expr:
     """
     Return sum(y_i * expr_i).
     """
     return sum(v * expr for v, expr in zip(y, exprs) if v != 0)
+
+
+def rationalize_func(
+        poly: sp.Poly,
+        validation: Callable[[sp.Rational], bool]
+    ) -> Optional[sp.Rational]:
+    """
+    Find a rational number near the roots of poly that satisfies certain conditions.
+
+    Parameters
+    ----------
+    poly : sp.Poly
+        Initial value are near to the roots of the polynomial.
+    validation : Callable
+        Return True if validation(..) >= 0.
+
+    Returns
+    ----------
+    t : sp.Rational
+        Proper rational number that satisfies the validation conditions.
+        Return None if no such t is found.
+    """
+    for t_ in nroots(poly, method = 'factor', real = True):
+        if validation(t_):
+            break
+    else:
+        return None
+
+    if isinstance(t_, sp.Rational):
+        return t_
+    else:
+        # make a perturbation
+        for t__ in rationalize_bound(t_, direction = 0, compulsory = True):
+            if validation(t__):
+                return t__
 
 
 def inverse_substitution(expr: sp.Expr, factor_degree: int = 0) -> sp.Expr:

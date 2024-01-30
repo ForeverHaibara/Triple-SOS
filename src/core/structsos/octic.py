@@ -2,7 +2,8 @@ import sympy as sp
 
 from .utils import (
     CyclicSum, CyclicProduct,
-    nroots, rationalize_bound, congruence, quadratic_weighting,
+    nroots, rationalize_bound, rationalize_func,
+    congruence, quadratic_weighting,
     sum_y_exprs, inverse_substitution
 )
 
@@ -50,6 +51,16 @@ def _sos_struct_octic_symmetric_hexagon_sdp(coeff):
     so that the remaining part is a quadratic form with respect to 
     s(a^3b-a^2bc), s(a^3c-a^2bc) and s(a^2b^2-a^2bc).
 
+    In particular, since the polynomial is symmetric, we assume s(a^3b-a^2bc) and s(a^3c-a^2bc) are
+    equivalent and the 3*3 matrix should have the following form:
+    [[M00, M01, M02]
+     [M01, M00, M02]
+     [M02, M02, M22]]
+    Matrix being positive semidefinite requires all principal submatrix determinants >= 0.
+    We require M00 >= 0, M22 >= 0, M00^2 - M01^2 >= 0, M22*(M00+M01) - 2*M02^2 >= 0.
+    The first and the third can be reduced to M00 - M01 >= 0 and M00 + M01 >= 0.
+    The second automatically holds as long as M00 + M01 > 0 STRICTLY with the fourth.
+
     See similar methods in _sos_struct_sextic_full_sdp.
 
     Examples
@@ -72,11 +83,14 @@ def _sos_struct_octic_symmetric_hexagon_sdp(coeff):
         # w4 = 1/2 * (df^2)/(da^2) at a = b = c = 1
         return None
 
-    def polylize(_M):
-        n = len(_M) - 1
-        return lambda t: sum(_M[i] * t**(n-i) for i in range(n+1))
+    def polylize(_M, gen = t):
+        # n = len(_M) - 1
+        # return lambda t: sum(_M[i] * t**(n-i) for i in range(n+1))
+        return sp.Poly.from_list(_M, gen)
 
     if w4 > 0:
+        # Non-degenerated case. In this case, the polynomial "ker" has
+        # only one degree of freedom, and can be parametrized by t.
         _M00 = [
             81*c620*w1**2*w2**2*w4 - w1**4*w4**2 - 15*w1**3*w2**2*w4 + w1**3*w2*w4**2 - 117*w1**2*w2**4 - 9*w1**2*w2**3*w4 - 63*w1*w2**5 + 18*w1*w2**4*w4 + w1*w2**3*w4**2 - 9*w2**6 + 6*w2**5*w4 - w2**4*w4**2,
             -w1*(-162*c620*w1*w2**2*w4 + 4*w1**3*w4**2 + 36*w1**2*w2**2*w4 - 3*w1**2*w2*w4**2 + 45*w1*w2**4 + 9*w1*w2**3*w4 + 9*w2**5 - w2**3*w4**2),
@@ -110,30 +124,17 @@ def _sos_struct_octic_symmetric_hexagon_sdp(coeff):
         ]
 
 
-        M00, M01, M02, M22 = [polylize(_) for _ in (_M00, _M01, _M02, _M22)]
-        det = (M22(t) * (M00(t) + M01(t)) - 2*M02(t)**2).as_poly(t).div((t*(t+1)).as_poly(t))[0]
-        M00t = M00(t).as_poly(t)
-        M01t = M01(t).as_poly(t)
+        M00t, M01t, M02t, M22t = [polylize(_) for _ in (_M00, _M01, _M02, _M22)]
+        det = (M22t * (M00t + M01t) - 2*M02t**2).div((t*(t+1)).as_poly(t))[0]
+
 
         def _is_valid(t):
             return sp.sign(det(t)) * sp.sign(t) * sp.sign(t+1) >= 0 and M00t(t) >= abs(M01t(t))
 
         # det is a 6-degree polynomial with respect to t
-        for t_ in nroots(det.diff(), method = 'factor', real=True):
-            if _is_valid(t_):
-                break
-        else:
+        t = rationalize_func(det.diff(), _is_valid)
+        if t is None:
             return None
-
-        t = t_
-        if not isinstance(t_, sp.Rational):
-            # make a perturbation
-            for t__ in rationalize_bound(t_, direction = 0, compulsory = True):
-                if _is_valid(t__):
-                    t = t__
-                    break
-            else:
-                return None
 
         # now we have a valid t
         if t != -1:
@@ -141,10 +142,11 @@ def _sos_struct_octic_symmetric_hexagon_sdp(coeff):
             x_ = -w2/w1/(t+1)*(p4 + 9*t*w1*w2)/p4
             r = p4**2/(162*t**2*w2**2*w4)
             reg = (81*t**2*w1**2*w2**2*(t + 1)**2*w4)
-            M00t, M01t, M02t, M22t = [f(t)/reg for f in (M00, M01, M02, M22)]
+            M00t, M01t, M02t, M22t = [f(t)/reg for f in (M00t, M01t, M02t, M22t)]
             u111 =  -(5*t**2*w1**2*w4 - 12*t**2*w1*w2**2 + 3*t**2*w1*w2*w4 - 3*t**2*w2**3 + t**2*w2**2*w4 + 10*t*w1**2*w4 - 3*t*w1*w2**2 + 3*t*w1*w2*w4 + 5*w1**2*w4)/(w1*(t + 1)*(t*w1*w4 + 3*t*w2**2 - t*w2*w4 + w1*w4))
 
         else:
+            # take limit t -> -1
             x_ = -(3*w1 + w2)/(3*w1)
             r = w1**2/(6*(3*w1 + w2))
             M00t = -(-81*c620*w1 - 27*c620*w2 + 9*w1**2 + 3*w1*w2 + w2**2)/(27*(3*w1 + w2))
@@ -158,71 +160,127 @@ def _sos_struct_octic_symmetric_hexagon_sdp(coeff):
 
 
     elif w4 == 0 and w2 == 0:
-        _eq1 = [
-            -3*(3*c440*c611**2 - 12*c440*c620**2 - 3*c530**2*c611 + 6*c530**2*c620 - 4*c530*c611*w1 + 8*c530*c620*w1 - 3*c611**3 - 2*c611**2*w1 + 12*c611*c620**2 + c611*w1**2 + 8*c620**2*w1 + 6*c620*w1**2),
-            6*w1*(-c530*c611 + 2*c530*c620 + c611**2 + c611*w1 - 4*c620**2 + 6*c620*w1),
-            -6*w1**2*(c611 + 2*c620)
-        ]
-        _eq2 = [
-            9*c440*c611 + 18*c440*c620 - 9*c530**2 - 12*c530*w1 - 9*c611**2 - 18*c611*c620 - 6*c611*w1 - 12*c620*w1 - 5*w1**2,
-            2*w1*(3*c530 - 3*c611 - 6*c620 + w1),
-            -2*w1**2
-        ]
-        eq1, eq2 = polylize(_eq1)(t).as_poly(t), polylize(_eq2)(t).as_poly(t)
+        """
+        The degenerated case is often attained when poly = sextic * s(a^2-ab).
+        In this case, we have two degrees of freedom on "ker": u102 and u201.
+        We require that
+        eq1 := M00 - M01 >= 0
+        eq2 := M00 + M01 >= 0
+        det := M22 * (M00 + M01) - 2*M02**2 >= 0
+        M22 >= 0
 
-        _m22c = -(-c440*c611 - 2*c440*c620 + c530**2 + 2*c530*w1 + c611**2 + 2*c611*c620 + 2*c611*w1 + 4*c620*w1 + w1**2)
-        if _m22c == 0:
-            # degenerates
-            _M22 = [
-                -(-9*c440**2*c611**2 - 36*c440**2*c611*c620 - 36*c440**2*c620**2 + 18*c440*c611**3 + 72*c440*c611**2*c620 + 12*c440*c611**2*w1 + 72*c440*c611*c620**2 + 48*c440*c611*c620*w1 + 48*c440*c620**2*w1 + 9*c530**4 + 24*c530**3*w1 + 22*c530**2*w1**2 + 8*c530*w1**3 - 9*c611**4 - 36*c611**3*c620 - 12*c611**3*w1 - 36*c611**2*c620**2 - 48*c611**2*c620*w1 + 12*c611**2*w1**2 - 48*c611*c620**2*w1 + 48*c611*c620*w1**2 + 48*c620**2*w1**2 + w1**4)/4,
-                w1*(-3*c440*c611**2 - 12*c440*c611*c620 - 12*c440*c620**2 + 3*c530**3 + 7*c530**2*w1 + 5*c530*w1**2 + 3*c611**3 + 12*c611**2*c620 + 6*c611**2*w1 + 12*c611*c620**2 + 24*c611*c620*w1 + 24*c620**2*w1 + w1**3),
-                -w1**2*(c530 + w1)**2
+        In addition, we require
+        w1 / (u201*(u102 + u201 + 1)) = -6r <= 0, where r is the coefficient of Cyclic(ker^2).
+
+        After factorization, det is the following form:
+        (>0) * w1^2 * QuadraticFunction(u102, u201).
+        To make it positive, an idea is to let u102 be the symmetric axis of the quadratic func,
+        and we re-parametrize the whole SDP problem with respect to a single variable t = u201.
+        """
+        if True:
+            # Case 1.
+            _M00 = [
+                -(-9*c440*c611*c620 - 18*c440*c620**2 + 9*c530**2*c620 + 12*c530*c620*w1 + 9*c611**2*c620 + 18*c611*c620**2 + 6*c611*c620*w1 + 2*c611*w1**2 + 12*c620**2*w1 + 7*c620*w1**2)/(2*(c611 + 2*c620)),
+                w1*(3*c530*c620 - 3*c611*c620 + c611*w1 - 6*c620**2 + 5*c620*w1)/(c611 + 2*c620),
+                -w1**2
             ]
 
-            M22t = polylize(_M22)(t).as_poly(t)
-            target = eq1 * eq2
-
-            def _is_valid(t):
-                return M22t(t) >= 0 and eq1(t) >= 0 and eq2(t) >= 0
-            
-        else:
-            _M22 = [
-                (-9*c440*c611 - 18*c440*c620 + 9*c530**2 + 6*c530*w1 + 9*c611**2 + 18*c611*c620 - 6*c611*w1 - 12*c620*w1 + w1**2)*(-3*c440*c611 - 6*c440*c620 + 3*c530**2 + 4*c530*w1 + 3*c611**2 + 6*c611*c620 + 2*c611*w1 + 4*c620*w1 + w1**2),
-                -6*w1*(-9*c440*c530*c611 - 18*c440*c530*c620 + 9*c440*c611**2 + 36*c440*c611*c620 - 5*c440*c611*w1 + 36*c440*c620**2 - 10*c440*c620*w1 + 9*c530**3 - 9*c530**2*c611 - 18*c530**2*c620 + 15*c530**2*w1 + 9*c530*c611**2 + 18*c530*c611*c620 - 8*c530*c611*w1 - 16*c530*c620*w1 + 7*c530*w1**2 - 9*c611**3 - 36*c611**2*c620 + 3*c611**2*w1 - 36*c611*c620**2 + 2*c611*c620*w1 - 3*c611*w1**2 - 8*c620**2*w1 - 6*c620*w1**2 + w1**3),
-                12*w1**2*(-c440*c611 - 2*c440*c620 + 3*c530**2 - 4*c530*c611 - 8*c530*c620 + 4*c530*w1 + 3*c611**2 + 10*c611*c620 - 2*c611*w1 + 8*c620**2 - 4*c620*w1 + w1**2),
-                -8*w1**3*(c530 - c611 - 2*c620 + w1)
+            _M01 = [
+                -(-9*c440*c611**2 - 18*c440*c611*c620 + 9*c530**2*c611 + 12*c530*c611*w1 + 9*c611**3 + 18*c611**2*c620 + 6*c611**2*w1 + 12*c611*c620*w1 + c611*w1**2 - 4*c620*w1**2)/(4*(c611 + 2*c620)),
+                -w1*(-3*c530*c611 + 3*c611**2 + 6*c611*c620 + c611*w1 + 8*c620*w1)/(2*(c611 + 2*c620)),
+                w1**2/2
             ]
-            _m22c = sp.sign(_m22c)
 
-            M22t = polylize(_M22)(t).as_poly(t)
-            target = M22t
+            _M02 = [
+                -(-9*c440*c530*c611 - 18*c440*c530*c620 - 6*c440*c611*w1 - 12*c440*c620*w1 + 9*c530**3 + 18*c530**2*w1 + 9*c530*c611**2 + 18*c530*c611*c620 + 6*c530*c611*w1 + 12*c530*c620*w1 + 11*c530*w1**2 + 6*c611**2*w1 + 12*c611*c620*w1 + 2*w1**3)/(4*(c611 + 2*c620)),
+                w1*(-3*c440*c611 - 6*c440*c620 + 9*c530**2 - 6*c530*c611 - 12*c530*c620 + 14*c530*w1 + 3*c611**2 + 6*c611*c620 + 5*w1**2)/(4*(c611 + 2*c620)),
+                -w1**2*(c530 + w1)/(2*(c611 + 2*c620))
+            ]
 
-            def _is_valid(t):
-                return _m22c * sp.sign(t) * sp.sign(M22t(t)) >= 0 and eq1(t) >= 0 and eq2(t) >= 0
+            _M22 = [
+                -(-9*c440**2*c611**2 - 36*c440**2*c611*c620 - 36*c440**2*c620**2 + 18*c440*c611**3 + 72*c440*c611**2*c620 + 12*c440*c611**2*w1 + 72*c440*c611*c620**2 + 48*c440*c611*c620*w1 + 48*c440*c620**2*w1 + 9*c530**4 + 24*c530**3*w1 + 22*c530**2*w1**2 + 8*c530*w1**3 - 9*c611**4 - 36*c611**3*c620 - 12*c611**3*w1 - 36*c611**2*c620**2 - 48*c611**2*c620*w1 + 12*c611**2*w1**2 - 48*c611*c620**2*w1 + 48*c611*c620*w1**2 + 48*c620**2*w1**2 + w1**4)/(4*(c611 + 2*c620)**2),
+                w1*(-3*c440*c611**2 - 12*c440*c611*c620 - 12*c440*c620**2 + 3*c530**3 + 7*c530**2*w1 + 5*c530*w1**2 + 3*c611**3 + 12*c611**2*c620 + 6*c611**2*w1 + 12*c611*c620**2 + 24*c611*c620*w1 + 24*c620**2*w1 + w1**3)/(c611 + 2*c620)**2,
+                -w1**2*(c530 + w1)**2/(c611 + 2*c620)**2
+            ]
 
-        
-        # find t == u201 such that eq1 >= 0 and eq2 >= 0
-        for t_ in nroots(target.diff(t), method='factor', real=True):
-            if _is_valid(t_):
-                break
-        else:
-            return None
+            M00t, M01t, M02t, M22t = [polylize(_) for _ in (_M00, _M01, _M02, _M22)]
+            eq1, eq2 = M00t - M01t, M00t + M01t
 
-        t = t_
-        if not isinstance(t_, sp.Rational):
-            # make a perturbation
-            for t__ in rationalize_bound(t_, direction = 0, compulsory = True):
-                if _is_valid(t__):
-                    t = t__
-                    break
+            _m22c = (-c440*c611 - 2*c440*c620 + c530**2 + 2*c530*w1 + c611**2 + 2*c611*c620 + 2*c611*w1 + 4*c620*w1 + w1**2)
+
+            # Actually, det(..) = (>0) * _m22c * f(t), so we need to consider the case when _m22c == 0
+            if _m22c == 0:
+                det = lambda t: sp.S(0)
+                target = eq1 * eq2
             else:
+                _det1 = [
+                    -3*c440*c611 - 6*c440*c620 + 3*c530**2 + 4*c530*w1 + 3*c611**2 + 6*c611*c620 + 2*c611*w1 + 4*c620*w1 + w1**2,
+                     -2*w1*(c530 - c611 - 2*c620 + w1)
+                ]
+                _det2 = [
+                    -9*c440*c611 - 18*c440*c620 + 9*c530**2 + 6*c530*w1 + 9*c611**2 + 18*c611*c620 - 6*c611*w1 - 12*c620*w1 + w1**2,
+                    -4*w1*(3*c530 - 3*c611 - 6*c620 + w1),
+                    4*w1**2
+                ]
+                det = polylize(_det1) * polylize(_det2) * sp.sign(_m22c)
+                target = det
+
+            def _is_valid(t):
+                return eq1(t) >= 0 and eq2(t) >= 0 and M22t(t) >= 0 and det(t) >= 0
+
+            t_ = rationalize_func(target.diff(), _is_valid)
+            if t_ is not None:
+                t = t_
+                u201 = t
+                u102 = (-3*c440*c611*t - 6*c440*c620*t + 3*c530**2*t + 4*c530*t*w1 - 2*c530*w1 + 3*c611**2*t + 6*c611*c620*t + t*w1**2 - 2*w1**2)/(2*w1*(c611 + 2*c620))
+
+        if isinstance(t, sp.Symbol):
+            # No proper t is found in Case 1.
+            """
+            Case 2.
+            We impose additional constraint M00 = M01 and we require
+            M00 >= 0
+            det := M00 * M22 - M02**2 >= 0
+            M22 >= 0
+            """
+            # NOTE that _M00, _M22 is a multiple of the real entry value,
+            # You can only use it to compute the sign!
+            _M00 = [
+                c611 + c620,
+                c611 + 4*c620,
+                c611 + c620
+            ]
+
+            _M22 = [
+                -3*c440*c611 + 6*c440*c620 - c611**2 + 10*c611*c620 + 2*c611*w1 - 16*c620**2 - 4*c620*w1 - w1**2,
+                2*(3*c440*c611 - 6*c440*c620 - c611**2 - 2*c611*c620 - c611*w1 + 8*c620**2 + 2*c620*w1 + 2*w1**2),
+                -3*c440*c611 + 6*c440*c620 + 2*c611**2 - 2*c611*c620 - 2*c611*w1 - 4*c620**2 + 4*c620*w1 - 6*w1**2,
+                2*w1*(c611 - 2*c620 + 2*w1),
+                -w1**2
+            ]
+
+            _det = [
+                4*c440*c611**2 - 4*c440*c611*c620 - 8*c440*c620**2 - 3*c530**2*c611 + 6*c530**2*c620 + 4*c530*c611**2 - 16*c530*c611*c620 - 4*c530*c611*w1 + 16*c530*c620**2 + 8*c530*c620*w1 - 4*c611**2*c620 - 8*c611*c620**2 - 8*c611*c620*w1 + 32*c620**3 + 16*c620**2*w1 + 4*c620*w1**2,
+                -2*(2*c440*c611**2 + 4*c440*c611*c620 - 16*c440*c620**2 - 3*c530**2*c611 + 6*c530**2*c620 - c530*c611**2 + 4*c530*c611*c620 - 5*c530*c611*w1 - 4*c530*c620**2 + 10*c530*c620*w1 - 8*c611**2*c620 + 8*c611*c620**2 - 4*c611*c620*w1 + 16*c620**3 + 8*c620**2*w1 + 8*c620*w1**2),
+                4*c440*c611**2 - 4*c440*c611*c620 - 8*c440*c620**2 - 3*c530**2*c611 + 6*c530**2*c620 - 2*c530*c611**2 + 8*c530*c611*c620 - 8*c530*c611*w1 - 8*c530*c620**2 + 16*c530*c620*w1 - 3*c611**3 + 2*c611**2*c620 - 2*c611**2*w1 + 4*c611*c620**2 + 16*c611*c620*w1 + c611*w1**2 + 8*c620**3 - 24*c620**2*w1 + 22*c620*w1**2,
+                -2*w1*(-c530*c611 + 2*c530*c620 + c611**2 + c611*w1 - 4*c620**2 + 6*c620*w1),
+                w1**2*(c611 + 2*c620)
+            ]
+            M00t, M22t, det = [polylize(_) for _ in (_M00, _M22, _det)]
+
+            def _is_valid(t):
+                return M00t(t) >= 0 and M22t(t) >= 0 and det(t) >= 0
+
+            t = rationalize_func(det.diff(), _is_valid)
+            if t is None:
                 return None
 
-        u201 = t
-        u102 = (-3*c440*c611*t - 6*c440*c620*t + 3*c530**2*t + 4*c530*t*w1 - 2*c530*w1 + 3*c611**2*t + 6*c611*c620*t + t*w1**2 - 2*w1**2)/(2*w1*(c611 + 2*c620))
+            u201 = t
+            u102 = (-c611*u201**2 - c611*u201 + 2*c620*u201**2 + 2*c620*u201 + u201**2*w1 - 2*u201*w1 + w1)/(u201*(c611 - 2*c620))
+
         u111 = -2*u102 - 3*u201 - 1
-        r = -w1/(6*u201*(u102 + u201 + 1))
         reg = (3*u201*(u102 + u201 + 1))
+        r = -w1/(2*reg)
 
         M00t = (3*c620*u102*u201 + 3*c620*u201**2 + 3*c620*u201 + u201**2*w1 - u201*w1 + w1)/reg
         M01t = (3*c611*u102*u201/2 + 3*c611*u201**2/2 + 3*c611*u201/2 - u201**2*w1/2 + 2*u201*w1 - w1/2)/reg
@@ -236,9 +294,16 @@ def _sos_struct_octic_symmetric_hexagon_sdp(coeff):
         [M02t, M02t, M22t]
     ])
 
-    ker = (a-b)*(u102*c**2*(b+a)+(a*b*(a+b)-c**3)+u201*c*(a**2+b**2+c**2)+u111*a*b*c).expand().together()
+    ker = (a-b)*(u102*c**2*(b+a) + (a*b*(a+b)-c**3) + u201*c*(a**2+b**2+c**2) + u111*a*b*c).expand().together()
 
     def _compute_quad_form_sol(quad_form):
+        """
+        Solve v' * M * v where v = [s(a^3b-a^2bc), s(a^3c-a^2bc), s(a^2b^2-a^2bc)]
+        while M is in the following form.
+        [[M00, M01, M02]
+        [M01, M00, M02]
+        [M02, M02, M22]]
+        """
         s1 = (quad_form[0,0] - quad_form[0,1])/2 * CyclicSum(a)**2 * CyclicProduct((a-b)**2)
         s2 = quadratic_weighting(
             (quad_form[0,0] + quad_form[0,1])/2,

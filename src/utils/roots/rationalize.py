@@ -140,7 +140,6 @@ def rationalize_array(x, tol = 1e-7, reliable = True):
     return y
 
 
-
 def rationalize_bound(v, direction = 1, roundings = None, compulsory = True):
     """
     Yield rational approximation of v.
