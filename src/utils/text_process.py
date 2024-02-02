@@ -363,6 +363,21 @@ def sdesmos(x, verbose = True):
     if verbose: print(a)
     return a
 
+def wrap_desmos(x: List[sp.Expr]) -> str:
+    """
+    Wrap everything in desmos calculator javascript.
+    """
+    html_str = r"""
+    <script src="https://www.desmos.com/api/v1.8/calculator.js?apiKey=dcb31709b452b1cf9dc26972add0fda6"></script>
+    <div id="calculator" style="width: 1000px; height: 600px;"></div>
+    <script>
+    var elt = document.getElementById('calculator');
+    var calculator = Desmos.GraphingCalculator(elt);
+    """
+    for i, content in enumerate(x):        
+        html_str += "\ncalculator.setExpression({id: '%d', latex: '%s'});"%(i, sp.latex(content).replace('\\','\\\\'))
+    html_str += "\n</script>"
+    return html_str
 
 
 class PolyReader:

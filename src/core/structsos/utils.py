@@ -130,7 +130,8 @@ def sum_y_exprs(y: List[sp.Expr], exprs: List[sp.Expr]) -> sp.Expr:
 
 def rationalize_func(
         poly: sp.Poly,
-        validation: Callable[[sp.Rational], bool]
+        validation: Callable[[sp.Rational], bool],
+        direction: int = 0,
     ) -> Optional[sp.Rational]:
     """
     Find a rational number near the roots of poly that satisfies certain conditions.
@@ -141,6 +142,9 @@ def rationalize_func(
         Initial value are near to the roots of the polynomial.
     validation : Callable
         Return True if validation(..) >= 0.
+    direction : int
+        When direction = 1, requires poly(..) >= 0. When direction = -1, requires
+        poly(..) <= 0. When direction = 0 (defaulted), no addition requirement is imposed.
 
     Returns
     ----------
@@ -158,8 +162,15 @@ def rationalize_func(
         return t_
     else:
         # make a perturbation
-        for t__ in rationalize_bound(t_, direction = 0, compulsory = True):
-            if validation(t__):
+        if direction != 0:
+            direction_t = direction if poly.diff()(t_) >= 0 else -direction
+            validation_ = lambda t: sp.sign(poly(t)) * direction >= 0 and validation(t)
+        else:
+            direction_t = 0
+            validation_ = validation
+
+        for t__ in rationalize_bound(t_, direction = direction_t, compulsory = True):
+            if validation_(t__):
                 return t__
 
 
