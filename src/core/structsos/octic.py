@@ -612,7 +612,7 @@ def _sos_struct_octic_symmetric_hexagram(coeff):
 
     
     Examples
-    -------
+    ---------
     s(bc(a2+1/2a(b+c)-bc)2(a-b)(a-c))
 
     s((a-b)2(a+b-3c)2)s(a2b2)+2s(a2(b-c)2(ab+ac-3/2bc)2)-p(a-b)2s(2a2-2ab)

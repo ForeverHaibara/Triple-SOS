@@ -213,6 +213,7 @@ class _tangents_helper_symmetric(_tangents_helper):
             return cls._tangents_border(root, is_centered = is_centered)
         elif root.is_symmetric:
             return cls._tangents_symmetric(root, is_centered = is_centered)
+        return tangents
 
     @classmethod
     def _tangents_border(cls, root, is_centered = True):

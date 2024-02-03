@@ -78,8 +78,8 @@ def sum_of_square(
     assert deg(poly) > 1, 'Poly must be a polynomial of degree greater than 1.'
     assert verify_hom_cyclic(poly) == (True, True), 'Poly must be homogeneous and cyclic.'
 
-    if rootsinfo is None:
-        rootsinfo = findroot(poly, with_tangents=root_tangents)
+    # if rootsinfo is None:
+    #     rootsinfo = findroot(poly, with_tangents=root_tangents)
 
     for method in method_order:
         config = configs.get(method, {})
