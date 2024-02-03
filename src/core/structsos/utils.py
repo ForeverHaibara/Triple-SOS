@@ -217,9 +217,16 @@ def inverse_substitution(expr: sp.Expr, factor_degree: int = 0) -> sp.Expr:
     return expr
 
 
-def quadratic_weighting(c1, c2, c3, a = None, b = None, formal = False) -> Union[sp.Expr, List]:
+def quadratic_weighting(
+        c1: sp.Rational,
+        c2: sp.Rational,
+        c3: sp.Rational,
+        a: Optional[sp.Expr] = None,
+        b: Optional[sp.Expr] = None,
+        formal = False
+    ) -> Union[sp.Expr, List]:
     """
-    Give solution to c1*a^2 + c2*b^2 + c3*a*b >= 0.
+    Give solution to c1*a^2 + c2*a*b + c3*b^2 >= 0.
 
     Parameters
     -------
@@ -235,7 +242,7 @@ def quadratic_weighting(c1, c2, c3, a = None, b = None, formal = False) -> Union
     If formal == True, return a list [(w1, x1), (w2, x2), ...] so that sum(w_i * x_i**2) equals to the result.
     If formal == False, return the sympy expression of the result.
     """
-    if 4*c1*c2 < c3**2:
+    if 4*c1*c3 < c2**2:
         return None
     if a is None:
         a = sp.symbols('a')
@@ -243,13 +250,15 @@ def quadratic_weighting(c1, c2, c3, a = None, b = None, formal = False) -> Union
         b = sp.symbols('b')
 
     if c1 == 0:
-        result = [(c2, b)]
-    elif c2 == 0:
+        result = [(c3, b)]
+    elif c3 == 0:
         result = [(c1, a)]
     else:
-        ratio = c3/c1/2
-        result = [(c1, a + ratio*b), (c2 - ratio**2*c1, b)]
-    
+        # ratio = c2/c3/2
+        # result = [(c3, b + ratio*a), (c1 - ratio**2*c3, a)]
+        ratio = c2/c1/2
+        result = [(c1, a + ratio*b), (c3 - ratio**2*c1, b)]
+
     if formal:
         return result
     return sum(wi * xi**2 for wi, xi in result)

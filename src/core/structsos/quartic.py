@@ -275,7 +275,7 @@ def _sos_struct_quartic_degenerate(coeff):
 
         else:
             # if n < 0, we must have p > 0 and q > 0
-            solution = quadratic_weighting(p, q, n, a-b, a-c, formal = True)
+            solution = quadratic_weighting(p, n, q, a-b, a-c, formal = True)
             solution = sum(radsimp(wi) * CyclicSum(b*c*xi**2) for wi, xi in solution)
 
         return solution + rem
