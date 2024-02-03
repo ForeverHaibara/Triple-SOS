@@ -254,7 +254,7 @@ def _sos_struct_quartic_degenerate(coeff):
     s(2a3b+a3c-a2b2-2a2bc)
 
     s(a3b-14/5a2b2+2ab3-1/5a2bc)
-    
+
     s(a2b2+3ab3-4a2bc)
     """
     m, p, n, q, r = coeff((4,0,0)), coeff((3,1,0)), coeff((2,2,0)), coeff((1,3,0)), coeff((2,1,1))
@@ -275,8 +275,8 @@ def _sos_struct_quartic_degenerate(coeff):
 
         else:
             # if n < 0, we must have p > 0 and q > 0
-            solution = quadratic_weighting(p, n, q, a-b, a-c, formal = True)
-            solution = sum(radsimp(wi) * CyclicSum(b*c*xi**2) for wi, xi in solution)
+            mapping = lambda x, y: CyclicSum(b*c*(x*(a-b) + y*(a-c))**2)
+            solution = quadratic_weighting(p, n, q, mapping = mapping)
 
         return solution + rem
 

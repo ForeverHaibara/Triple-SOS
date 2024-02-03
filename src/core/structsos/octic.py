@@ -3,7 +3,7 @@ import sympy as sp
 from .utils import (
     CyclicSum, CyclicProduct,
     nroots, rationalize_bound, rationalize_func,
-    congruence, quadratic_weighting,
+    quadratic_weighting,
     sum_y_exprs, inverse_substitution
 )
 
@@ -73,7 +73,6 @@ def _sos_struct_octic_symmetric_hexagon_sdp(coeff):
 
     (85/336p(a-b)2+s(bc(a-b)(a-c)(a+b)(a+c))-16/15s(a2bc(b-c)2))s(a2-ab)
     """
-    a, b, c, t = sp.symbols('a b c t')
     c620, c530, c440, c611, c521, c431, c422 = [coeff(_) for _ in ((6,2,0),(5,3,0),(4,4,0),(6,1,1),(5,2,1),(4,3,1),(4,2,2))]
     if c620 < 0 or coeff.poly111() != 0:
         return None
@@ -81,11 +80,11 @@ def _sos_struct_octic_symmetric_hexagon_sdp(coeff):
     w1 = c521 + c611 + 2*c620
     w2 = c431 + 2*c440 + 3*c530 - c611
     w4 = c422 + 4*c431 + 5*c440 + 8*c521 + 12*c530 + 8*c611 + 18*c620
-    if w4 < 0 or w1 == 0:
+    if w4 < 0:
         # w4 = 1/2 * (df^2)/(da^2) at a = b = c = 1
         return None
 
-    def polylize(_M, gen = t):
+    def polylize(_M, gen = sp.Symbol('t')):
         # n = len(_M) - 1
         # return lambda t: sum(_M[i] * t**(n-i) for i in range(n+1))
         return sp.Poly.from_list(_M, gen)
@@ -105,17 +104,29 @@ def _sos_struct_octic_symmetric_hexagon_sdp(coeff):
         [M01, M00, M02]
         [M02, M02, M22]]
         """
+        a, b, c = sp.symbols('a b c')
         s1 = (quad_form[0,0] - quad_form[0,1])/2 * CyclicSum(a)**2 * CyclicProduct((a-b)**2)
+
+        def mapping(x, y):
+            # return s(x(a3b+ab3-2a2bc)+y(a2b2-a2bc))^2
+            if x == 1 and y == 2:
+                return CyclicSum(a)**2 * CyclicSum(a*(b-c)**2)**2
+            elif x == 1 and y == -2:
+                return CyclicSum(a*b*(a-b)**2)**2
+            elif x == 0 and y == 1:
+                return CyclicSum(a**2*(b-c)**2)**2 / 4
+            p1 = a**3*b + a*b**3 - a**2*b*c - a*b**2*c
+            p2 = a**2*b**2 - a*b*c**2
+            return CyclicSum((x*p1 + y*p2).expand().together())**2
+
         s2 = quadratic_weighting(
             (quad_form[0,0] + quad_form[0,1])/2,
-            quad_form[2,2],
             quad_form[0,2] * 2,
-            a = a**3*b+a*b**3-a**2*b*c-a*b**2*c,
-            b = a**2*b**2 - a**2*b*c,
-            formal = True
+            quad_form[2,2],
+            mapping = mapping
         )
         if s2 is None: return None
-        s2 = sum(wi * CyclicSum(xi.expand().together())**2 for wi, xi in s2)
+
         return s1 + s2
 
     def _sol_to_result(sol):
@@ -124,6 +135,7 @@ def _sos_struct_octic_symmetric_hexagon_sdp(coeff):
         u102, u201, u111, r, quad_form = sol
         quad_form_sol = _compute_quad_form_sol(quad_form)
         if r >= 0 or quad_form_sol is not None:
+            a, b, c = sp.symbols('a b c')
             ker = (a-b)*(u102*c**2*(b+a) + (a*b*(a+b)-c**3) + u201*c*(a**2+b**2+c**2) + u111*a*b*c).expand().together()
             return r * CyclicSum(ker**2) + quad_form_sol
 
@@ -169,7 +181,7 @@ def _sos_struct_octic_symmetric_hexagon_sdp(coeff):
             -4*w1**4*w4**2
         ]
 
-        M00t, M01t, M02t, M22t = [polylize(_) for _ in (_M00, _M01, _M02, _M22)]
+        M00t, M01t, M02t, M22t = [polylize(_, t) for _ in (_M00, _M01, _M02, _M22)]
         det = (M22t * (M00t + M01t) - 2*M02t**2).div((t*(t+1)).as_poly(t))[0]
 
 
@@ -204,6 +216,69 @@ def _sos_struct_octic_symmetric_hexagon_sdp(coeff):
         u102 = 2 + w2/w1 + x_
         quad_form = stack_quad_form(M00t, M01t, M02t, M22t)
         return u102, u201, u111, r, quad_form
+
+
+    def _nondegenerated_hessian_degen_w1():
+        """
+        Special case when w1 == 0. In this case, we can parametrize the problem by:
+        u201 = t
+        u102 = -(t + 1)*(3*t*w2 - t*w4 + 2*w4)/(3*t*w2 - t*w4 - w4)
+        u111 = -(3*t**2*w2 - t**2*w4 - 3*t*w2 + 3*t*w4 - 5*w4)/(3*t*w2 - t*w4 - w4)
+        r = (3*t*w2 - t*w4 - w4)**2 / (162*t**2*w4)
+        """
+        t = sp.Symbol('t')
+        _M00 = [
+            -2*(3*w2 - w4)**2,
+            2*(3*w2 - w4)*(3*w2 + w4),
+            -18*(-9*c620*w4 + w2**2),
+            2*w4*(6*w2 - w4),
+            -2*w4**2
+        ]
+
+        _M01 = [
+            (3*w2 - w4)**2,
+            -2*(3*w2 - w4)*(6*w2 - w4),
+            3*(27*c611*w4 + 3*w2**2 + 6*w2*w4 - 2*w4**2),
+            -2*w4*(3*w2 + w4),
+            w4**2
+        ]
+
+        _M02 = [
+            2*(3*w2 - w4)**2,
+            (3*w2 - w4)*(3*w2 + w4),
+            -3*(-27*c530*w4 + 3*w2**2 - 3*w2*w4 + 2*w4**2),
+            -w4*(3*w2 + w4),
+            2*w4**2
+        ]
+
+        _M22 = [
+            -8*(3*w2 - w4)**2,
+            4*(3*w2 - w4)*(6*w2 - w4),
+            -6*(-27*c440*w4 + 27*c611*w4 + 3*w2**2 + 18*w2*w4 - 4*w4**2),
+            -4*w4*(6*w2 - w4),
+            -8*w4**2
+        ]
+
+        M00t, M01t, M02t, M22t = [polylize(_, t) for _ in (_M00, _M01, _M02, _M22)]
+        det = (M22t * (M00t + M01t) - 2*M02t**2).div((t).as_poly(t))[0]
+
+
+        def _is_valid(t):
+            return t != 0 and sp.sign(det(t)) * sp.sign(t) >= 0 and M00t(t) >= abs(M01t(t))
+
+        t = rationalize_func(det.diff(), _is_valid)
+        if t is None:
+            return None
+
+        u201 = t
+        u102 = -(t + 1)*(3*t*w2 - t*w4 + 2*w4)/(3*t*w2 - t*w4 - w4)
+        u111 = -(3*t**2*w2 - t**2*w4 - 3*t*w2 + 3*t*w4 - 5*w4)/(3*t*w2 - t*w4 - w4)
+        reg = 162*t**2*w4
+        r = (3*t*w2 - t*w4 - w4)**2 / reg
+        M00t, M01t, M02t, M22t = [f(t)/reg for f in (M00t, M01t, M02t, M22t)]
+        quad_form = stack_quad_form(M00t, M01t, M02t, M22t)
+        return u102, u201, u111, r, quad_form
+
 
 
     def _degenerated_hessian():
@@ -269,8 +344,8 @@ def _sos_struct_octic_symmetric_hexagon_sdp(coeff):
             func_z_det = polylize(_func_z_det, y)
             _func_z_det_det = _func_z_det[1]**2 - 4*_func_z_det[0]*_func_z_det[2]
 
-            print('RHS =', sp.latex((func_z_sym.as_expr() + sp.sqrt(func_z_det.as_expr())).subs(y,sp.Symbol('x'))))
-            print('LHS =', sp.latex((w1**2 / (2*c620 - c611) * (y-1)**2).subs(y,sp.Symbol('x'))))
+            # print('RHS =', sp.latex((func_z_sym.as_expr() + sp.sqrt(func_z_det.as_expr())).subs(y,sp.Symbol('x'))))
+            # print('LHS =', sp.latex((w1**2 / (2*c620 - c611) * (y-1)**2).subs(y,sp.Symbol('x'))))
 
             # Require F(y) = func_z_sym_lb + sqrt(det) >= 0
             # Also, det >= 0 is a necessary condition
@@ -357,12 +432,57 @@ def _sos_struct_octic_symmetric_hexagon_sdp(coeff):
             sol = _degenerated_M00_M01()
         return sol
 
+
+    def _degenerated_hessian_degen_w1():
+        """
+        Special case when w1 == w2 == w4 == 0.
+        In this case, we use u111 = -2*u102 - 1, u201 = 0, and there are two degrees of freedom: r and u102.
+
+        Note that w5 = c440*c611 + 2*c440*c620 - c530**2 - c611**2 - 2*c611*c620 >= 0,
+        because w5 = -discriminant(poly(a,1,1) / (a-1)^4) / 4.
+        """
+        w5 = c440*c611 + 2*c440*c620 - c530**2 - c611**2 - 2*c611*c620
+        if w5 < 0:
+            return None
+
+        if c611 + 2*c620 == 0:
+            # r = 0 is a must by the constraint M00 + M01 >= 0 and r >= 0.
+            r = sp.S(0)
+            u111, u102, u201 = sp.S(0), sp.S(0), sp.S(0)
+            M00t = c620
+            M01t = -c620
+            M02t = c530/2
+            M22t = c440 + 2*c620
+        elif c611 + c620 >= 0:
+            r = (2*c620 - c611)/6
+            M00t = (c611 + c620)/3
+            M01t = (c611 + c620)/3
+            M02t = 2*c530*(c611 + c620)/(3*(c611 + 2*c620))
+            M22t = (4*c530**2*(c611 + c620) + 3*w5*(c611 + 2*c620))/(3*(c611 + 2*c620)**2)
+        else:
+            r = (2*c620 + c611)/2
+            M00t = -(c611 + c620)
+            M01t = -M00t
+            M02t = sp.S(0)
+            M22t = w5 / (c611 + 2*c620)
+
+        u102 = -c530/(c611 + 2*c620)
+        u201 = sp.S(0)
+        u111 = -2*u102 - 1
+        quad_form = stack_quad_form(M00t, M01t, M02t, M22t)
+        return u102, u201, u111, r, quad_form
+
+
     if w4 > 0:
-        return _sol_to_result(_nondegenerated_hessian())
-
+        if w1 != 0:
+            return _sol_to_result(_nondegenerated_hessian())
+        else:
+            return _sol_to_result(_nondegenerated_hessian_degen_w1())
     elif w4 == 0 and w2 == 0:
-        return _sol_to_result(_degenerated_hessian())
-
+        if w1 != 0:
+            return _sol_to_result(_degenerated_hessian())
+        else:
+            return _sol_to_result(_degenerated_hessian_degen_w1())
 
 
 

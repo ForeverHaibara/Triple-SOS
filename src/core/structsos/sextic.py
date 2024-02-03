@@ -490,8 +490,8 @@ def _sos_struct_sextic_hexagon(coeff, recurrsion, real = True):
         if c3 is not None:
             remain_solution = _sos_struct_sextic_hexagram(_compute_subtracted_params(c3, return_func = True))
             if remain_solution is not None:
-                main_solution = quadratic_weighting(c1, -c3, c2, a = a**2*b-a*b*c, b = a*b**2-a*b*c, formal = True)
-                main_solution = sum(wi * CyclicSum(xi.expand().together())**2 for wi, xi in main_solution)
+                mapping = lambda x, y: CyclicSum((x*a**2*b + y*a*b**2 - (x+y)*a*b*c).together())**2
+                main_solution = quadratic_weighting(c1, -c3, c2, mapping = mapping)
                 return main_solution + remain_solution
                 
     return None
@@ -727,12 +727,8 @@ def _sos_struct_sextic_hexagon_sdp(coeff):
     ]
 
     if quad_form[0] >= 0 and quad_form[0] * quad_form[1] * 4 >= quad_form[2]**2:
-        quad_form_sol = quadratic_weighting(
-            quad_form[0], quad_form[2], quad_form[1],
-            a = a**2*b-a*b*c, b = a*b**2-a*b*c,
-            formal = True
-        )
-        quad_form_sol = sum(wi * CyclicSum(xi.expand().together())**2 for wi, xi in quad_form_sol)
+        mapping = lambda x, y: CyclicSum((x*a**2*b + y*a*b**2 - (x+y)*a*b*c).together())**2
+        quad_form_sol = quadratic_weighting(quad_form[0], quad_form[2], quad_form[1], mapping = mapping)
 
         # rs((a2b-ac2-x(a2b-b2c)+y(a2c-ab2))^2)
         solution = r * CyclicSum((a**2*b-a*c**2-x*(a**2*b-b**2*c)+y*(a**2*c-a*b**2)).expand().together()**2)

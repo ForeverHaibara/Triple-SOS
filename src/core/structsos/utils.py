@@ -121,6 +121,26 @@ class Coeff():
         return self.__operator__(other, lambda x, y: x ** y)
 
 
+
+def radsimp(expr: Union[sp.Expr, List[sp.Expr]]) -> sp.Expr:
+    """
+    Rationalize the denominator by removing square roots. Wrapper of sympy.radsimp.
+    Also refer to sympy.simplify.
+    """
+    if isinstance(expr, (list, tuple)):
+        return [radsimp(e) for e in expr]
+    if not isinstance(expr, sp.Expr):
+        expr = sp.sympify(expr)
+    if isinstance(expr, sp.Rational):
+        return expr
+
+    numer, denom = expr.as_numer_denom()
+    n, d = sp.fraction(sp.radsimp(1/denom, symbolic=False, max_terms=1))
+    # if n is not S.One:
+    expr = (numer*n).expand()/d
+    return expr
+
+
 def sum_y_exprs(y: List[sp.Expr], exprs: List[sp.Expr]) -> sp.Expr:
     """
     Return sum(y_i * expr_i).
@@ -223,62 +243,56 @@ def quadratic_weighting(
         c3: sp.Rational,
         a: Optional[sp.Expr] = None,
         b: Optional[sp.Expr] = None,
-        formal = False
+        mapping: Optional[Callable[[sp.Rational, sp.Rational], sp.Expr]] = None,
+        formal: bool = False
     ) -> Union[sp.Expr, List]:
     """
-    Give solution to c1*a^2 + c2*a*b + c3*b^2 >= 0.
+    Give solution to c1*a^2 + c2*a*b + c3*b^2 >= 0 where a,b in R.
 
     Parameters
-    -------
-    c1, c2, c3: sp.Expr
+    ----------
+    c1, c2, c3 : sp.Expr
         Coefficients of the quadratic form.
-    a, b: sp.Expr
+    a, b : sp.Expr
         The basis of the quadratic form.
-    formal: bool
-        Whether return a list or a sympy expression.
+    mapping : Callable
+        A function that receives two inputs, x, y, and
+        outputs the desired (x*a + y*b)**2. Default is
+        mapping = lambda x, y: (x*a + y*b)**2.
+        If mapping is not None, it overrides the parameters a, b.
+    formal : bool
+        If True, return a list [(w1, (x1,y1))] so that sum(w_i * (x_i*a + y_i*b)**2) equals to the result.
+        If False, return the sympy expression of the result.
+        If formal == True, it overrides the mapping parameter.
     
     Returns
-    -------
-    If formal == True, return a list [(w1, x1), (w2, x2), ...] so that sum(w_i * x_i**2) equals to the result.
-    If formal == False, return the sympy expression of the result.
+    ----------
+    result : Union[sp.Expr, List]
+        If formal = False, return the sympy expression of the result.
+        If formal = True, return a list [(w1, (x1,y1))] so that sum(w_i * (x_i*a + y_i*b)**2) equals to the result.
     """
-    if 4*c1*c3 < c2**2:
+    if 4*c1*c3 < c2**2 or c1 < 0 or c3 < 0:
         return None
-    if a is None:
-        a = sp.symbols('a')
-    if b is None:
-        b = sp.symbols('b')
+    c1, c2, c3 = radsimp(c1), radsimp(c2), radsimp(c3)
+
+    a = a or sp.Symbol('a')
+    b = b or sp.Symbol('b')
+    mapping = mapping or (lambda x, y: (x*a + y*b)**2)
 
     if c1 == 0:
-        result = [(c3, b)]
+        result = [(c3, (sp.S(0), sp.S(1)))]
     elif c3 == 0:
-        result = [(c1, a)]
+        result = [(c1, (sp.S(1), sp.S(0)))]
     else:
         # ratio = c2/c3/2
         # result = [(c3, b + ratio*a), (c1 - ratio**2*c3, a)]
-        ratio = c2/c1/2
-        result = [(c1, a + ratio*b), (c3 - ratio**2*c1, b)]
+        ratio = radsimp(sp.S(c2)/c1/2)
+        result = [(c1, (sp.S(1), ratio)), (c3 - ratio**2*c1, (sp.S(0), sp.S(1)))]
 
     if formal:
         return result
-    return sum(wi * xi**2 for wi, xi in result)
 
-
-def radsimp(expr: Union[sp.Expr, List[sp.Expr]]) -> sp.Expr:
-    """
-    Rationalize the denominator by removing square roots. Wrapper of sympy.radsimp.
-    Also refer to sympy.simplify.
-    """
-    if isinstance(expr, (list, tuple)):
-        return [radsimp(e) for e in expr]
-    if not isinstance(expr, sp.Expr):
-        expr = sp.sympify(expr)
-
-    numer, denom = expr.as_numer_denom()
-    n, d = sp.fraction(sp.radsimp(1/denom, symbolic=False, max_terms=1))
-    # if n is not S.One:
-    expr = (numer*n).expand()/d
-    return expr
+    return sum(radsimp(wi) * mapping(*xi) for wi, xi in result)
 
 
 def zip_longest(*args):
