@@ -149,8 +149,9 @@ def sum_y_exprs(y: List[sp.Expr], exprs: List[sp.Expr]) -> sp.Expr:
 
 
 def rationalize_func(
-        poly: sp.Poly,
+        poly: Union[sp.Poly, sp.Rational],
         validation: Callable[[sp.Rational], bool],
+        validation_initial: Optional[Callable[[sp.Rational], bool]] = None,
         direction: int = 0,
     ) -> Optional[sp.Rational]:
     """
@@ -158,10 +159,15 @@ def rationalize_func(
 
     Parameters
     ----------
-    poly : sp.Poly
-        Initial value are near to the roots of the polynomial.
+    poly : Union[sp.Poly, sp.Rational]
+        Initial values are near to the roots of the polynomial.
     validation : Callable
         Return True if validation(..) >= 0.
+    validation_initial : Optional[Callable]
+        The function first uses numerical roots of the poly, and it
+        might not satiesfiy the validation function because of the numerical error.
+        Configure this function to roughly test whether a root is proper.
+        When None, it uses the validation function as default.
     direction : int
         When direction = 1, requires poly(..) >= 0. When direction = -1, requires
         poly(..) <= 0. When direction = 0 (defaulted), no addition requirement is imposed.
@@ -172,26 +178,35 @@ def rationalize_func(
         Proper rational number that satisfies the validation conditions.
         Return None if no such t is found.
     """
-    for t_ in nroots(poly, method = 'factor', real = True):
-        if validation(t_):
-            break
-    else:
-        return None
+    validation_initial = validation_initial or validation
 
-    if isinstance(t_, sp.Rational):
-        return t_
-    else:
-        # make a perturbation
+    if isinstance(poly, sp.Poly):
+        candidates = nroots(poly, method = 'factor', real = True)
+        poly_diff = poly.diff()
         if direction != 0:
-            direction_t = direction if poly.diff()(t_) >= 0 else -direction
-            validation_ = lambda t: sp.sign(poly(t)) * direction >= 0 and validation(t)
+            def direction_t(t):
+                return direction if poly_diff(t) >= 0 else -direction
+            def validation_t(t):
+                return sp.sign(poly(t)) * direction >= 0 and validation(t)
         else:
-            direction_t = 0
-            validation_ = validation
+            direction_t = lambda t: 0
+            validation_t = lambda t: validation(t)
 
-        for t__ in rationalize_bound(t_, direction = direction_t, compulsory = True):
-            if validation_(t__):
-                return t__
+    elif isinstance(poly, (int, float, sp.Rational)):
+        candidates = [poly]
+        direction_t = lambda t: direction
+        validation_t = lambda t: validation(t)
+
+
+    for t in candidates:
+        if isinstance(t, sp.Rational):
+            if validation(t):
+                return t    
+        elif validation_initial(t):
+            # make a perturbation
+            for t_ in rationalize_bound(t, direction = direction_t(t), compulsory = True):
+                if validation_t(t_):
+                    return t_
 
 
 def inverse_substitution(expr: sp.Expr, factor_degree: int = 0) -> sp.Expr:

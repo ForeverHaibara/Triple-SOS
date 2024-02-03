@@ -9,7 +9,7 @@ from ...utils.roots.roots import Root
 from ...utils.basis_generator import invarraylize
 from .utils import (
     CyclicSum, CyclicProduct, Coeff,
-    sum_y_exprs, nroots, rationalize, rationalize_bound, cancel_denominator, radsimp,
+    sum_y_exprs, nroots, rationalize, rationalize_bound, rationalize_func, cancel_denominator, radsimp,
     prove_univariate,
     zip_longest
 )
@@ -156,16 +156,9 @@ def _sos_struct_quintic_full(coeff):
                     _compute_x = lambda t: (t**4 - 4*t**3 + 6*t**2 - 2*t - 1)/(t-1)**2
                     _compute_y = lambda t: (2*t**3 - 6*t**2 + 6*t - 1)/(t-1)**2
                     if t_ is None:
-                        for t_ in nroots(eq, method = 'factor', real = True):
-                            if t_ < 1 and _compute_x(t_) <= x_:
-                                if not isinstance(t_, sp.Rational):
-                                    for t__ in rationalize_bound(t_, direction = -1, compulsory = True):
-                                        if _compute_x(t__) <= x_ and _compute_y(t__) <= y_:
-                                            t_ = t__
-                                            break
-                                break
-                            else:
-                                t_ = None
+                        def _is_valid(t):
+                            return t < 1 and _compute_x(t) <= x_ and _compute_y(t) <= y_
+                        t_ = rationalize_func(eq, _is_valid, direction = -1)
                     if t_ is not None:
                         y = [radsimp((t_ - 1)**(-2)), sp.S(1)]
                         x_, y_ = radsimp([x_ - _compute_x(t_), y_ - _compute_y(t_)])
@@ -999,74 +992,72 @@ def _sos_struct_quintic_windmill(coeff):
             if solution is not None:
                 return (2*c1*CyclicSum(a*(a-b)**2*(w*a*b-(2+2*w)*b*c+w*c**2+a*c+b**2)**2) + solution * multiplier) / multiplier
 
-
-
-    # now we formally start
-    # Case A.
-    # u >= (v - 1)^2 / 4 + 1
     
-    def _compute_yz(u_, v_):
-        denom = u_**3 - u_**2 - u_*v_ + u_ + 1
-        y__ = (-2*u_**2 + u_*v_**2 - u_*v_ + 2*u_ - v_ - 1)/denom
-        z__ = (-2*u_**2*v_ + u_**2 + u_*v_ - v_**2)/denom
-        return y__, z__
+    def _compute_coeffs(u, v):
+        """
+        Compute the coefficients ab^4, a^2b^3, a^3bc of the regularized polynomial
+        s((b-a+(2u-1)c)(a^2-b^2+u(ab-ac)+v(bc-ab))^2) / (2*u**3-2*u**2-2*u*v+2*u+2).
+        Note that the regularized polynomial has coefficient a^3b^2 == 1.
+        """
+        denom = u**3 - u**2 - u*v + u + 1
+        x__ = (u + v - 1)/denom
+        y__ = (-2*u**2 + u*v**2 - u*v + 2*u - v - 1)/denom
+        z__ = (-2*u**2*v + u**2 + u*v - v**2)/denom
+        return x__, y__, z__
 
 
+    # Now we formally start.
+    # Define g(a,b,c) = f(a,b,c) - s((b-a+(2u-1)c)(a^2-b^2+u(ab-ac)+v(bc-ab))^2) / (2*u**3-2*u**2-2*u*v+2*u+2)
+    # Then the a^3b^2 coefficient of g is zero.
+    # The following v (a function of u) ensures that the ab^4 coefficient of g is also zero.
+    # and we only need to solve for u so that the a^2b^3 coefficient of g approximates to 0.
+    # The `eq` here is (-coeff(g, a^2b^3) * (u+1) * (ux+1)), we need it <= 0.
+    _compute_v = lambda u: (u**3*x_ - u**2*x_ + u*x_ - u + x_ + 1) / (u*x_ + 1)
     eq = (u**5*x_**2 - u**4*x_**2 - 2*u**3*x_ + u**2*(-x_**2 - x_*y_ + x_) + u*(-x_*y_ - 4*x_ - y_ + 1) - x_ - y_ - 2).as_poly(u)
-    criterion = lambda u, v: u >= (v-1)**2/4+1 or (2*u**2-u*v**2+u*v-2*u+v+1 <= 0 and u**3-u**2-u*v+u+1 >= 0)
+
+    def _is_valid_uv(u, v):
+        """
+        Make sure that
+        f(a,b,c) - s((b-a+(2u-1)c)(a^2-b^2+u(ab-ac)+v(bc-ab))^2) / (2*u**3-2*u**2-2*u*v+2*u+2) >= 0,
+        by ensuring the coefficients of ab^4 >= 0, a^2b^3 >= 0,
+        and a^3bc >= 0 after subtracting (x_ - x__) * s(a^2c(a-b)^2).
+        """
+        if not ((v-1)**2/4+1 or (2*u**2-u*v**2+u*v-2*u+v+1 <= 0 and u**3-u**2-u*v+u+1 >= 0)):
+            return False
+        x__, y__, z__ = _compute_coeffs(u, v)
+        return x__ <= x_ and y__ <= y_ and (z_ - z__) / 2 + x_ - x__ >= 0
+
+    def _is_valid_u(u):
+        if u < 1: return False
+        return _is_valid_uv(u, _compute_v(u))
+
 
     for root in sp.polys.roots(eq, cubics = False, quartics = False).keys():
-        # first try rational u, v
-        if isinstance(root, sp.Rational) and root > .999:
+        # first try rational u, v if exists
+        if isinstance(root, sp.Rational) and _is_valid_u(root):
             u_ = root
-            v_ = (u_**3*x_ - u_**2*x_ + u_*x_ - u_ + x_ + 1) / (u_*x_ + 1)
-            if criterion(u_, v_):
-                y__, z__ = _compute_yz(u_, v_)
-                break
-            u_ = None
+            v_ = _compute_v(u_)
+            break
     else:
         # Normal case: add a small perturbation so that we can obtain rational u and v
         if not ((y_ < 0) and (y_ ** 2 == 4 * x_)):
-            for root in sp.polys.nroots(eq):
-                if root.is_real and root > .999:
-                    u_ = root
-                    v_ = (u_**3*x_ - u_**2*x_ + u_*x_ - u_ + x_ + 1) / (u_*x_ + 1)
-                    if criterion(u_, v_):
-                        break
-                    u_ = None
-
-            if u_ is not None:
-                # approximate a rational number
-                direction = (u_**2*x_ - 1)*(3*u_**4*x_**2 + 2*u_**3*x_**2 + 4*u_**3*x_ - 3*u_**2*x_**2 + 3*u_**2*x_ - 6*u_*x_ - x_**2 + x_ - 3)
-                direction = -1 if direction > 0 else 1
-                u_numer = u_
-                for u_ in rationalize_bound(u_numer, direction = direction, compulsory = True):                
-                    # despite (v = the following formula) cancels out a^3b^2 and ab^4 terms perfectly
-                    # the v is oftentimes too complicated
-                    v_ = (u_**3*x_ - u_**2*x_ + u_*x_ - u_ + x_ + 1) / (u_*x_ + 1)
-                    if criterion(u_, v_):
-                        y__, z__ = _compute_yz(u_, v_)
-                        if y__ <= y_ and z__ <= z_:
-                            # re-rationalize v such that v is simpler
-                            for v__ in rationalize_bound(u_.q * v_.n(20), direction = -1, compulsory = True):
-                                # trick: keep the denominator of v and u aligned
-                                v__ /= u_.q
-                                # print(u_, v_.n(20), v__.n(20), v__)
-
-                                if v__ <= v_ and criterion(u_, v__):
-                                    y__, z__ = _compute_yz(u_, v__)
-                                    x__ = (u_ + v__ - 1) / (u_**3 - u_**2 - u_*v__ + u_ + 1)
-                                    if y__ <= y_ and (z_ - z__) / 2 + x_ - x__ >= 0:
-                                        # use the simpler solution
-                                        v_ = v__
-                                        break
-                            else:
-                                # restore the complicated solution
-                                # it is not expected to reach here
-                                y__, z__ = _compute_yz(u_, v_)              
-
-                            break
-                    u_ = None
+            u_ = rationalize_func(eq, _is_valid_u, validation_initial = lambda u: u >= 1, direction = -1)
+            if u_ is None:
+                return None
+     
+            # Despite (u,v) cancels out a^3b^2 and ab^4 terms perfectly,
+            # the v is oftentimes too complicated.
+            # We can find a nicer v sometimes. 
+            v_ = _compute_v(u_)
+            for v__ in rationalize_bound(u_.q * v_.n(20), direction = -1, compulsory = True):
+                # trick: keep the denominator of v and u aligned
+                v__ /= u_.q
+                if _is_valid_uv(u_, v__):
+                    v_ = v__
+                    break
+            else:
+                # restore the complicated solution
+                v_ = _compute_v(u_)
 
         else:
             # Case Special. when y_ < 0 and y_^2 = 4x_, then there is a root on the border
@@ -1080,10 +1071,7 @@ def _sos_struct_quintic_windmill(coeff):
             r = -y_ / 2
             eq = ((v**3 - 3*v**2 + 7*v - 13) + 4*(v+1) / r).as_poly(v)
             # we can see that eq is strictly increasing and has a real root > -1
-            for root in sp.polys.nroots(eq):
-                if root.is_real:
-                    v_ = root
-                    break
+            v_ = nroots(eq, method='factor', real=True)[0]
             
             # the true g is given by
             # g = b*(a*a + (1-r)*a*b - r*b*b + 2*(r-1)*a*c) + z0*a*c*(r*a - c - (r-1)*b) + b*c*(z1*b+z2*c-(z1+z2)*a)
@@ -1136,7 +1124,7 @@ def _sos_struct_quintic_windmill(coeff):
         u, v = u_, v_
         _new_coeffs = {
             (2,3,0): y_ + (2*u**2-u*v**2+u*v-2*u+v+1) / denom,
-            (1,4,0): x_ - (u_ + v_ - 1) / denom,
+            (1,4,0): x_ - (u+v-1) / denom,
             (3,1,1): z_ + (2*u**2*v-u**2-u*v+v**2) / denom,
             (2,2,1): coeff((2,2,1)) / coeff((3,2,0)) - (-u**3 + 2*u**2*v + 2*u**2 - u*v**2 + u*v - 4*u + v**2 + 1) / denom
         }
@@ -1373,34 +1361,24 @@ def _sos_struct_quintic_uncentered(coeff):
         # v = (u^3 - u^2 + u + 1) / u
         eq = (u**4 - u**3 - (1 + r1) * u - r1).as_poly(u)
 
-        for root in sp.polys.roots(eq, cubics = False, quartics = False).keys():
-            if isinstance(root, sp.Rational) and root > 0:
-                u_ = root
-                if u_ ** 3 - u_ ** 2 - 1 >= 0:
-                    v_ = (u_**3 - u_**2 + u_ + 1) / u_
-                    r1_ = r1
-                    r2_ = -(3*u_**4 - 2*u_**3 + 3*u_ + 1)/(u_*(u_ + 1))
-                    break
-                u_ = None
-        else:
-            for root in sp.polys.nroots(eq):
-                if root.is_real and root > 1:
-                    u_ = root
-                    break
-            if u_ is not None:
-                # approximate a rational number
-                u_numer = u_
-                for u_ in rationalize_bound(u_numer, direction = -1, compulsory = True):
-                    if u_ > 0:
-                        r1_ = u_*(u_**3 - u_**2 - 1)/(u_ + 1)
-                        if 0 <= r1_ <= r1:
-                            r2_ = -(3*u_**4 - 2*u_**3 + 3*u_ + 1)/(u_*(u_ + 1))# + 2*(r1 - r1_)
-                            if r2_ <= r2:
-                                v_ = (u_**3 - u_**2 + u_ + 1) / u_
-                                break
+        def _compute_v_r1_r2(u):
+            v = (u**3 - u**2 + u + 1)/u
+            r1 = u*(u**3 - u**2 - 1)/(u + 1)
+            r2 = -(3*u**4 - 2*u**3 + 3*u + 1)/(u*(u + 1))
+            return v, r1, r2
 
+        def _is_valid(u):
+            if u > 0:
+                v, r1_, r2_ = _compute_v_r1_r2(u)
+                return 0 <= r1_ <= r1 and r2_ <= r2
+            return False
 
-    elif rem >= 0:
+        u_ = rationalize_func(eq, _is_valid, validation_initial = lambda u: u > 0, direction = -1)
+        if u_ is None:
+            return
+        v_, r1_, r2_ = _compute_v_r1_r2(u_)
+
+    elif rem > 0:
 
         if r1 == 0 and r2 == -13:
             # The only exception where u, v are irrational but coefficients are rational
@@ -1775,21 +1753,13 @@ def _sos_struct_quintic_hexagon(coeff):
             u = sp.symbols('u')
             u_, v_ = None, None
             eq = (x_**3*u**4 - 2*g*x_**2*u**2 + (-8*x_**3 - 4*x_**2*y_ + 2*x_*y_**2 + y_**3)*u + g**2*x_ - 4*h*x_**2 - 4*h*x_*y_ - h*y_**2).as_poly(u)
-
-            if isinstance(x_, sp.Rational):
-                roots = sp.polys.roots(eq, cubics = False, quartics = False)
-                for root in roots:
-                    if isinstance(root, sp.Rational):
-                        u_, v_, coef = _compute_uvcoef(root, x_, y_, s_, g)
-                        if coef <= coeff((3,1,1)):
-                            return u_, v_, coef
             
-            roots = nroots(eq, real = True, nonnegative = True)
+            roots = nroots(eq, method='factor', real = True, nonnegative = True)
             for root in roots:
                 u_, v_, coef = _compute_uvcoef(root, x_, y_, s_, g)
                 if coef <= coeff((3,1,1)):
                     return u_, v_, coef
-            return None
+
 
         params = _solve_uvcoef(x_, y_, g, h, s_)
         if params is not None and not isinstance(x_, sp.Rational):

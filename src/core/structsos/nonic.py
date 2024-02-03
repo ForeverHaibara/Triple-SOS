@@ -3,7 +3,7 @@ import sympy as sp
 from .sextic_symmetric import _sos_struct_sextic_hexagram_symmetric, _sos_struct_sextic_tree
 from .utils import (
     CyclicSum, CyclicProduct, Coeff,
-    sum_y_exprs, rationalize_bound, inverse_substitution, radsimp, nroots
+    sum_y_exprs, rationalize_bound, rationalize_func, inverse_substitution, radsimp, nroots
 )
 
 a, b, c = sp.symbols('a b c')
@@ -104,19 +104,9 @@ def _sos_struct_nonic_symmetric_tree(coeff):
     if not coeff.is_rational:
         return None
 
-    for x_ in nroots(eq, real = True, nonnegative = True, method = 'factor'):
-        if x_ >= 1 and _check_valid_x(x_):
-            if not isinstance(x_, sp.Rational):
-                for x__ in rationalize_bound(x_, direction = -1, compulsory = True):
-                    if x__ >= 1 and eq(x__) >= 0 and _check_valid_x(x__):
-                        x = x__
-                        break
-            else:
-                x = x_
-            if isinstance(x, sp.Rational):
-                break
+    x = rationalize_func(eq, _check_valid_x, validation_initial = lambda x: x >= 1, direction = 1)
 
-    if not isinstance(x, sp.Symbol):
+    if x is not None:
         c6_, c33_, c411_ = _compute_tree_coeffs(x)
         def _get_func_x(x):
             # return pretty form of s(a2+xab)s((a-b)2(a+b-xc)2)
@@ -207,25 +197,11 @@ def _sos_struct_nonic_hexagon_symmetric(coeff, recurrsion):
 
     # print(sp.latex(det.subs(r,'x')), det(2))
     if coeff.is_rational:
-        for r_ in nroots(det, real = True, nonnegative = True, method = 'factor'):
-            if _check_valid_r(r_):
-                if not isinstance(r_, sp.Rational):
-                    direction = 1 if det.diff()(r_) >= 0 else -1
-                    for r__ in rationalize_bound(r_, direction = direction, compulsory = True):
-                        if _check_valid_r(r__):
-                            r = r__
-                            break
-                else:
-                    r = r_
-            
-            if isinstance(r, sp.Rational):
-                # print(r, _compute_hexagon_coeffs(r))
-                break
-
+        r = rationalize_func(det, _check_valid_r, validation_initial = lambda r: r >= 0, direction = 1)
     else:
-        return None
+        r = None
 
-    if not isinstance(r, sp.Symbol):
+    if r is not None:
         solution = sp.Add(
             c0 * CyclicSum(a*b*(b-r*c))**2 * (CyclicSum(a*b**2 - CyclicProduct(a))),
             c0 * CyclicSum(a*c*(c-r*b))**2 * (CyclicSum(a*c**2 - CyclicProduct(a))),
@@ -305,20 +281,11 @@ def _sos_struct_nonic_hexagram_symmetric(coeff, recurrsion):
             return True
         return False
 
-    z = sp.sqrt(c1*c2)
-    if not isinstance(z, sp.Rational):
-        z = z.n(20)
-    if not _compute_hexagram_discriminant(z):
-        return None
-    if not isinstance(z, sp.Rational):
-        for z_ in rationalize_bound(z, direction = -1, compulsory = True):
-            if z_ < 0 or z_**2 > c1*c2:
-                continue
-            if _compute_hexagram_discriminant(z_):
-                z = z_
-                break
-        else:
-            return None
+
+    def _is_valid_z(z):
+        return z >= 0 and z**2 <= c1*c2 and _compute_hexagram_discriminant(z)
+    eq_z = sp.Poly.from_list([1, 0, -c1*c2], sp.Symbol('z'))
+    z = rationalize_func(eq_z, _is_valid_z, validation_initial = lambda z: z >= 0, direction = -1)
 
     # Now we have z >= 0 such that the hexagram is positive
     w, c4_, c5_, c6_ = _compute_hexagram_coeffs(z)
@@ -422,9 +389,7 @@ def _sos_struct_nonic_gear(coeff, recurrsion):
         c41, c32, c23 = c41 / c1, c32 / c1, c23 / c1
         if c1 < 0 or c2 < 0:
             return None
-        c2_sqrt = sp.sqrt(c2)
-        if not isinstance(c2_sqrt, sp.Rational):
-            c2_sqrt = c2_sqrt.n(20)
+
         def _compute_params(z):
             # We expect that z^2 = c2 in the ideal case. However, when z is rational,
             # we perturb some s(ab^2c^2(a-b)^4) to make c2_sqrt rational.
@@ -449,8 +414,6 @@ def _sos_struct_nonic_gear(coeff, recurrsion):
             c32_ = c32_ - (-2*u**2 - 2*u*v + 2*u*x - 2*u*z + 4*u + v**2 + 4*v*x + 2*v*z + x**2 + 4*x*z - 2*x - 2)
             return (u,v,x), radsimp((c41_, c33_, c32_))
 
-        vertex1 = _compute_params(c2_sqrt)
-        vertex2 = _compute_params(-c2_sqrt)
         # linear combination of vertex 1 and 2
 
         def _check_valid_weight(vertex1, vertex2, w):
@@ -484,23 +447,21 @@ def _sos_struct_nonic_gear(coeff, recurrsion):
             if _check_valid_weight(vertex1, vertex2, sym_axis):
                 return sym_axis
 
-        w = _search_valid_weight(vertex1, vertex2)
-        # print('w =', w, 'z =', c2_sqrt, '\nVertex1 =', vertex1, '\nVertex2 =', vertex2)
-        if w is not None:
-            if not isinstance(c2_sqrt, sp.Rational):
-                for z in rationalize_bound(c2_sqrt, direction = -1, compulsory = True):
-                    if z >= 0 and z**2 <= c2:
-                        vertex1 = _compute_params(z)
-                        vertex2 = _compute_params(-z)
-                        w = _search_valid_weight(vertex1, vertex2)
-                        if w is not None:
-                            break
-                else:
-                    z = None
-            else:
-                z = c2_sqrt
+        def _is_valid_z(z):
+            if not (z >= 0 and z**2 <= c2):
+                return False
+            vertex1 = _compute_params(z)
+            vertex2 = _compute_params(-z)
+            w = _search_valid_weight(vertex1, vertex2)
+            return (w is not None)
 
-        if w is not None and z is not None:
+        eq_z = sp.Poly.from_list([1, 0, -c2], sp.Symbol('z'))
+        z = rationalize_func(eq_z, _is_valid_z, validation_initial = lambda z: z >= 0, direction = -1)
+
+        if z is not None:
+            vertex1 = _compute_params(z)
+            vertex2 = _compute_params(-z)
+            w = _search_valid_weight(vertex1, vertex2)
             c41_, c33_, c32_ = radsimp([w*vertex1[1][i] + (1-w)*vertex2[1][i] for i in range(3)])
             hexagram_coeffs_ = {
                 (4,1,1): c41_, (3,3,0): c33_, (3,2,1): c32_, (2,3,1): c32_,

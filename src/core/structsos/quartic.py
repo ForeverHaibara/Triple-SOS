@@ -2,7 +2,7 @@ import sympy as sp
 
 from .utils import (
     CyclicSum, CyclicProduct, Coeff,
-    sum_y_exprs, nroots, rationalize_bound, quadratic_weighting, radsimp
+    sum_y_exprs, nroots, rationalize_bound, rationalize_func, quadratic_weighting, radsimp
 )
 
 a, b, c = sp.symbols('a b c')
@@ -185,19 +185,9 @@ def _sos_struct_quartic_biased(coeff):
     def new_det(sym, root):
         return head - sym**2/(4*(root**2*(root**2 + 1) + 1))
 
-    if coeff.is_rational:
-        for root in sp.polys.roots(eq, cubics = False, quartics = False, quintics = False).keys():
-            if root.is_real and root > 0:
-                if isinstance(root, sp.Rational):
-                    symmetric_axis = symmetric(root)
-                    if symmetric_axis >= 0:
-                        det = (new_det(symmetric_axis, root))
 
-                        if det <= 0:
-                            u_ = root
-                            break
-    else:
-        # check whether there exists multiplicitive root on the border
+    if True:
+        # check whether there exists multiplicative roots on the border
         eq_diff = (x**4 + p*x**3 + n*x**2 + q*x + 1).as_poly(x)
         eq_gcd = sp.gcd(eq, eq_diff)
         if eq_gcd.degree() == 1:
@@ -212,17 +202,11 @@ def _sos_struct_quartic_biased(coeff):
 
 
     if u_ is None:
-        # find a rational approximation
-        for numer_r in nroots(eq, real = True, method = 'factor'):
-            if symmetric(numer_r) < 1e-6:
-                continue
+        def _is_valid(u):
+            sym_axis = symmetric(u)
+            return sym_axis >= 0 and new_det(sym_axis, u) <= 0
+        u_ = rationalize_func(eq, _is_valid)
 
-            for numer_r2 in rationalize_bound(numer_r, direction = 0, compulsory = True):
-                symmetric_axis = symmetric(numer_r2)
-                if symmetric_axis >= 0 and new_det(symmetric_axis, numer_r2) <= 0:
-                    u_ = numer_r2
-                    break
-    
     if u_ is not None:
         y_ = radsimp((symmetric(u_) / (2*(u_**2*(u_**2 + 1) + 1)) * m))
         if y_ >= 0:

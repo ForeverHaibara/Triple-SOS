@@ -3,7 +3,7 @@ import sympy as sp
 from .quartic import sos_struct_quartic
 from .utils import (
     CyclicSum, CyclicProduct, Coeff, 
-    sum_y_exprs, nroots, rationalize_bound, cancel_denominator, radsimp,
+    sum_y_exprs, nroots, rationalize_bound, rationalize_func, cancel_denominator, radsimp,
     prove_univariate
 )
 
@@ -679,18 +679,10 @@ def _sos_struct_sextic_tree(coeff):
                 r = None
 
     if r is None:
-        for r in nroots(equ, method = 'factor', real = True, nonnegative = True):
-            if 3*r*(r-1) + v > 1e-14:
-                if not isinstance(r, sp.Rational):
-                    numer_r = r
-                    for r in rationalize_bound(numer_r, direction = -1, compulsory = True):
-                        if r**3-3*r <= u and 3*r*(r-1)+v >= 0:
-                            break
-            if 3*r*(r-1) + v >= 0:
-                break
-        else:
-            r = None
-    
+        def _is_valid(r):
+            return r >= 0 and 3*r*(r-1) + v >= 0
+        r = rationalize_func(equ, _is_valid, direction = -1)
+
     if r is not None:            
         # now r is rational
         y = radsimp([t/2, t*(u-(r**3-3*r))/2, t*(v+3*r*(r-1))/2, rem])

@@ -2,7 +2,7 @@ import sympy as sp
 
 from .utils import (
     CyclicSum, CyclicProduct,
-    sum_y_exprs, nroots, rationalize_bound, radsimp
+    sum_y_exprs, radsimp, rationalize_func
 )
 
 a, b, c = sp.symbols('a b c')
@@ -146,25 +146,14 @@ def _sos_struct_cubic_nontrivial(coeff):
         p_, n_, q_ = p2 - t, n2 + 2*t*u, q2 - t*u**2
         return t, p_, n_, q_
     def _check_valid(u):
+        if u < 0:
+            return False
         t, p_, n_, q_ = _compute_params(u)
         if 3*(1 + n_) >= p_**2 + p_*q_ + q_**2:
             return True
         return False
 
-    for u_ in nroots(equ, method = 'factor', real = True, nonnegative = True):
-        if _check_valid(u_):
-            u = u_
-            break
-    else:
-        return None
-
-    if not isinstance(u, sp.Rational):
-        for u_ in rationalize_bound(u, direction = 0, compulsory = True):
-            if u_ >= 0 and _check_valid(u_):
-                u = u_
-                break
-        else:
-            return None
+    u = rationalize_func(equ, _check_valid)
 
     t, p_, n_, q_ = _compute_params(u)
     # print(u, t, 3*(1+n_)**2 - (p_**2+p_*q_+q_**2))

@@ -1,5 +1,4 @@
 import sympy as sp
-from sympy.solvers.diophantine.diophantine import diop_DN
 
 from .cubic import sos_struct_cubic
 from .sextic_symmetric import (
@@ -9,7 +8,7 @@ from .sextic_symmetric import (
 )
 from .utils import (
     CyclicSum, CyclicProduct, Coeff,
-    sum_y_exprs, nroots, rationalize_bound, radsimp,
+    sum_y_exprs, nroots, rationalize_bound, rationalize_func, radsimp,
     quadratic_weighting, inverse_substitution, congruence,
     zip_longest
 )
@@ -101,9 +100,6 @@ def _sos_struct_sextic_hexagram(coeff):
         # Particularly, when x = 0 the inequality is symmetric. We determine x by the asymmetric part.
         c1, c2 = coeff((3,3,0)), coeff((4,1,1))
         diff = (coeff((3,2,1)) - coeff((2,3,1))) / c1
-        v = sp.sqrt(c2 / c1)
-        if not isinstance(v, sp.Rational):
-            v = v.n(20)
 
         def _compute_x_rest(v):
             # after normalizing coeff((3,3,0)) == 1, we subtract
@@ -113,36 +109,32 @@ def _sos_struct_sextic_hexagram(coeff):
             rest = coeff((3,2,1)) / c1 - (x**2 + 3*(v+1)*x - 3*(v+1)**2/4) + (c2/c1 - v**2)
             return x, rest
         def _check_valid(v):
+            if not (v >= 0 and c1*v**2 <= c2):
+                return False
             x, rest = _compute_x_rest(v)
             if rest >= 0:
                 return True
             return False
 
-        if _check_valid(v):
-            if not isinstance(v, sp.Rational):
-                for v_ in rationalize_bound(v, direction = -1, compulsory = True):
-                    if v_ >= 0 and c1*v_**2 <= c2 and _check_valid(v_):
-                        v = v_
-                        break
-                else:
-                    v = None
+        eq = sp.Poly.from_list([c1, 0, -c2], sp.Symbol('u'))
+        v = rationalize_func(eq, _check_valid, validation_initial = lambda x: x >= 0, direction = -1)
             
-            if v is not None:
-                x, rest = _compute_x_rest(v)
-                p1 = ((c2 - c1*v**2) * CyclicSum(a*(a-b)*(a-c)) + (rest*c1) * CyclicSum(a*(b-c)**2)).together().as_coeff_Mul()
-                y = [
-                    c1,
-                    p1[0],
-                    sum(coeff(i) for i in [(3,3,0),(4,1,1),(3,2,1),(2,3,1)])*3 + coeff((2,2,2))
-                ]
-                if y[-1] < 0:
-                    return None
-                exprs = [
-                    CyclicSum(a*b*(a*b+v*c**2-(1+v)/2*a*c-(1+v)/2*b*c+x*a*c-x*b*c)**2),
-                    CyclicProduct(a) * p1[1],
-                    CyclicProduct(a**2)
-                ]
-                return sum_y_exprs(y, exprs)
+        if v is not None:
+            x, rest = _compute_x_rest(v)
+            p1 = ((c2 - c1*v**2) * CyclicSum(a*(a-b)*(a-c)) + (rest*c1) * CyclicSum(a*(b-c)**2)).together().as_coeff_Mul()
+            y = [
+                c1,
+                p1[0],
+                sum(coeff(i) for i in [(3,3,0),(4,1,1),(3,2,1),(2,3,1)])*3 + coeff((2,2,2))
+            ]
+            if y[-1] < 0:
+                return None
+            exprs = [
+                CyclicSum(a*b*(a*b+v*c**2-(1+v)/2*a*c-(1+v)/2*b*c+x*a*c-x*b*c)**2),
+                CyclicProduct(a) * p1[1],
+                CyclicProduct(a**2)
+            ]
+            return sum_y_exprs(y, exprs)
 
 
     rem = sum(coeff(i) for i in [(3,3,0),(4,1,1),(3,2,1),(2,3,1)]) * 3 + coeff((2,2,2))
@@ -177,22 +169,17 @@ def _sos_struct_sextic_hexagram(coeff):
                 t_ = radsimp(u_ - v_)
 
         if v_ is None:
-            for t_ in nroots(eqt, real = True):
-                v_ = radsimp((t_*(4 - t_) - x_ + y_)/(2*t_))
-                u_ = t_ + v_
-                if 6*u_*v_ + 6 <= center0:
-                    break
-            else:
-                v_ = None
-            if v_ is not None and not isinstance(v_, sp.Rational):
-                direction = 1 if eqt.diff()(t_) <= 0 else -1
-                for t__ in rationalize_bound(t_, direction = direction, compulsory = True):
-                    if t__ != 0 and eqt(t__) <= 0:
-                        v__ = radsimp((t__*(4 - t__) - x_ + y_)/(2*t__))
-                        u__ = t__ + v__
-                        if (u_ + v_ + 2)**2 * 3 <= rem0:
-                            t_, u_, v_ = t__, u__, v__
-                            break
+            def _compute_uv(t):
+                v_ = radsimp((t*(4 - t) - x_ + y_)/(2*t))
+                return t + v_, v_
+
+            def _is_valid_t(t):
+                u, v = _compute_uv(t)
+                return (u + v + 2)**2 * 3 <= rem0
+
+            t_ = rationalize_func(eqt, _is_valid_t, direction = -1)
+            if t_ is not None:
+                u_, v_ = _compute_uv(t_)
 
         if v_ is not None:
             y = radsimp([
@@ -421,9 +408,6 @@ def _sos_struct_sextic_hexagon(coeff, recurrsion, real = True):
         c30, z0, x0, y0, w0 = coeff((3,3,0)), coeff((4,1,1)), coeff((3,2,1)), coeff((2,3,1)), coeff((2,2,2))
         if c1 < 0 or c2 < 0 or (c30 < 0 and c30**2 > 4*c1*c2) or (z0 < 0 and z0**2 > 4*c1*c2):
             return None
-        c3 = 2*sp.sqrt(c1*c2)
-        if not isinstance(c3, sp.Rational):
-            c3 = c3.n(20)
         x0, y0, w0 = x0 + 6*c1 - 2*c2, y0 + 6*c2 - 2*c1, w0 - 9*(c1 + c2)
 
         def _compute_hexagram_discriminant(z, x, y, coeff33 = 1):
@@ -450,10 +434,13 @@ def _sos_struct_sextic_hexagon(coeff, recurrsion, real = True):
             # print('c3 =', c3, 'params =', params)
             if return_func:
                 coeffs_ = dict(zip([(4,1,1),(3,2,1),(2,3,1),(3,3,0),(2,2,2)], params))
+                coeffs_[(3,1,2)] = coeffs_[(2,3,1)]
                 return Coeff(coeffs_)
             return params
         
         def _check_valid(c3):
+            if not (c3 >= 0 and 4*c1*c2 >= c3**2):
+                return False
             params = _compute_subtracted_params(c3)
             if params[0] < 0 or params[3] < 0:
                 return False
@@ -473,19 +460,14 @@ def _sos_struct_sextic_hexagon(coeff, recurrsion, real = True):
             if det <= 0:
                 return True
             return False
-        
+
 
         if x0 == -3*c30 and y0 == -3*c30:
             # Degenerates to c1*s(a2b-abc)^2 + c2*s(ab2-abc)^2 + c3s(a2b-abc)s(ab2-abc) + 0
             c3 = -c30
-        elif _check_valid(c3):
-            if not isinstance(c3, sp.Rational):
-                for c3_ in rationalize_bound(c3, direction = -1, compulsory = True):
-                    if c3_ >= 0 and 4*c1*c2 >= c3_**2 and _check_valid(c3_):
-                        c3 = c3_
-                        break
-                else:
-                    c3 = None
+        else:
+            eq = sp.Poly.from_list([1, 0, -4*c1*c2], sp.Symbol('u'))
+            c3 = rationalize_func(eq, _check_valid, validation_initial = lambda x: x >= 0, direction = -1)
             
         if c3 is not None:
             remain_solution = _sos_struct_sextic_hexagram(_compute_subtracted_params(c3, return_func = True))
@@ -610,19 +592,11 @@ def _sos_struct_sextic_rotated_tree(coeff):
 
     r, x = sp.symbols('r'), None
     eq = (r**3 - 3*r - u).as_poly(r)
-    for root in sp.polys.roots(eq, cubics = False, quartics = False):
-        if isinstance(root, sp.Rational) and root >= 1:
-            x = root
-            break
-    
-    if x is None:
-        for root in sp.polys.nroots(eq):
-            if root.is_real and root >= 1:
-                for x_ in rationalize_bound(root, direction = -1, compulsory = True):
-                    if x_**3 - 3*x_ <= u and v + 3*x_*(x_ - 1) >= 0:
-                        x = x_
-                        break
-    
+
+    def _is_valid_x(x):
+        return x >= 1 and v + 3*x*(x - 1) >= 0
+    x = rationalize_func(eq, _is_valid_x, direction = -1)
+
     # print(x, u, v, eq.as_expr().factor())
     if x is None:
         return None
