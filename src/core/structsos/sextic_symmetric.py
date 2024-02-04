@@ -3,7 +3,7 @@ import sympy as sp
 from .quartic import sos_struct_quartic
 from .utils import (
     CyclicSum, CyclicProduct, Coeff, 
-    sum_y_exprs, nroots, rationalize_bound, rationalize_func, cancel_denominator, radsimp,
+    sum_y_exprs, nroots, rationalize_bound, rationalize_func, quadratic_weighting, radsimp,
     prove_univariate
 )
 
@@ -15,23 +15,134 @@ from .utils import (
 
 a, b, c = sp.symbols('a b c')
 
+
+def _sos_struct_sextic_hexagon_symmetric_sdp(coeff):
+    """
+    Solve symmetric hexagons on real numbers without raising the degree.
+    The idea is to subtract some CyclicSum(f(a,b,c)**2) so that the remainder
+    term is a quadratic combination of s(a^2b-abc), s(a^2c-abc), (abc).
+
+    See similar methods at _sos_struct_sextic_hexagon_sdp.
+    """
+    c420, c411, c330, c321, c222 = [coeff(_) for _ in [(4,2,0), (4,1,1), (3,3,0), (3,2,1), (2,2,2)]]
+    if c420 <= 0:
+        if all(_ == 0 for _ in (c420, c411, c330, c321)) and c222 >= 0:
+            return c222 * CyclicProduct(a)**2
+        return None
+
+    # l22 = poly(1,1,1)
+    l22 = c222 + 6*c321 + 3*c330 + 3*c411 + 6*c420
+
+    if not (l22 >= 0 and abs(c411) <= 2*c420 and abs(c330) <= 2*c420):
+        return None
+
+    w1 = (c411 + c330)/2
+    w2 = (c411 - c330)/2
+
+    def _compute_quad_form(u):
+        M00 = radsimp(-(-3*c420*u**2 - 6*c420*u + 2*u**2*w2 + 6*u*w2 + 6*w2)/(3*u*(u + 2)))
+        M01 = radsimp((3*u**2*w1 - u**2*w2 + 6*u*w1 - 6*u*w2 - 6*w2)/(6*u*(u + 2)))
+        M02 = radsimp((c321*u + 4*c420*u + 3*u*w1 - 3*u*w2 - 6*w2)/(2*u))
+        return M00, M01, M02
+
+    def _is_valid(u):
+        if u == 0 or u == -2:
+            return False
+        M00, M01, M02 = _compute_quad_form(u)
+        return M00 >= abs(M01) and l22*(M00 + M01) - 2*M02**2 >= 0 and -(c330 - c411)*(u*(u + 2)) > 0
+
+    def _compute_quad_form_sol(M00, M01, M02):
+        """
+        Solve v' * M * v where v = [s(a^2b-abc), s(a^2c-abc), abc]
+        while M is in the following form.
+        [[M00, M01, M02]
+        [M01, M00, M02]
+        [M02, M02, l22]]
+        """
+        if M00 < M01: return
+        s1 = (M00 - M01)/2 * CyclicProduct((a-b)**2)
+
+        def mapping(x, y):
+            # return s(x(a2b+a2c-2abc)+y/3(abc))^2
+            if x == 1 and y == 0:
+                return CyclicSum(a*(b-c)**2)**2
+            elif x == 0 and y == 1:
+                return CyclicProduct(a**2)
+            p = x*(a**2*b + a**2*c - 2*a*b*c) + y/3*a*b*c
+            p = p.expand().together() if coeff.is_rational else p
+            return CyclicSum(p)**2
+
+        s2 = quadratic_weighting(
+            (M00 + M01)/2,
+            M02 * 2,
+            l22,
+            mapping = mapping
+        )
+        if s2 is None: return None
+
+        return s1 + s2
+
+    def _compute_sol(u):
+        if u is None or u == 0 or u == -2:
+            return
+        quad_form_sol = _compute_quad_form_sol(*_compute_quad_form(u))
+        r = radsimp(-(c330 - c411)/(6*u*(u + 2)))
+        if r >= 0 and quad_form_sol is not None:
+            # rs(((a-b)(c2+(u+2)s(ab)-ab))2) + quad_form_sol
+            p = (c**2 + (u + 2)*(a*b+b*c+c*a) - a*b)
+            p = p.expand().together() if coeff.is_rational else p
+            return r * CyclicSum((a-b)**2 * p**2) + quad_form_sol
+
+    u = None
+    if c411 == c330:
+        # there is no degree of freedom
+        u = sp.S(1)
+
+    else:
+        denom = c321 + 4*c420 + 3*w1 - 3*w2
+        if denom != 0:
+            # when l22 == 0, there is no degree of freedom
+            u = radsimp(6*w2/denom)
+
+        if l22 > 0 and not _is_valid(u):
+            eq_u = sp.Poly.from_list(
+                [-2*c321 + 10*c420 + 3*w1 - 9*w2, -9*c321 + 36*c420 + 9*w1 - 45*w2, -9*c321 + 36*c420 + 9*w1 - 81*w2, -54*w2],
+                sp.Symbol('u')
+            )
+            u = rationalize_func(eq_u, _is_valid)
+
+    return _compute_sol(u)
+
+
 def _sos_struct_sextic_hexagon_symmetric(coeff, real = False):
     """
-    Solve symmetric hexagons.
+    Solve symmetric hexagons without a^6, a^5b terms.
+    Although we can subtract p(a-b)^2 to make the polynomial a positive hexagram on R+,
+    we sometimes want to solve the hexagon on R.
 
+    Consider the following hexagon:
+    F(a,b,c) = s(a^2b^2(a+b)^2 + xa^4bc + ya^3bc(b+c) - ...a^2b^2c^2)
+    It has root (1,-1,0) over R.
+    
     Theorem 1:
-    When x not in (-2,1), the following inequality holds for all real numbers a, b, c:
-    f(a,b,c) = x^2/4 * p(a-b)^2 + s(bc(a-b)(a-c)(a-xb)(a-xc)) >= 0
+    When t not in (-2,1), the following inequality holds for all real numbers a, b, c:
+    f(a,b,c) = t^2/4 * p(a-b)^2 + s(bc(a-b)(a-c)(a-tb)(a-tc)) >= 0
 
     Proof: let
-    lambda = (x**2 + 4*x - 8)**2/(4*(x - 2)**2*(5*x**2 - 4*x + 8 + (4*x - 16)*sqrt(x**2 + x - 2)))
-    z = (2*x**2 - 2*x + 2*(x - 2)*sqrt(x**2 + x - 2))/(x**2 + 4*x - 8)
+    lambda = (t**2 + 4*t - 8)**2/(4*(t - 2)**2*(5*t**2 - 4*t + 8 + (4*t - 16)*sqrt(t**2 + t - 2)))
+    z = (2*t**2 - 2*t + 2*(t - 2)*sqrt(t**2 + t - 2))/(t**2 + 4*t - 8)
     Then we have,
-    f(a,b,c) * s((a-b)^2) = lambda * s((a-b)^2*((x-2)ab(a+b) - (x-2z)c(a^2+b^2-c^2) - x(1-z)c^2(a+b+c) + (2x+4-3xz-2z)abc)^2)
+    f(a,b,c) * s((a-b)^2) = lambda * s((a-b)^2*((t-2)ab(a+b) - (t-2z)c(a^2+b^2-c^2) - t(1-z)c^2(a+b+c) + (2t+4-3tz-2z)abc)^2)
+
+    With the theorem, we can see that
+    F_{x,y}(a,b,c) >= 0 holds for a,b,c in R if (x,y) = (4/t^2 - 2, -4/t^2 - 4/t - 2) and t not in (-2,1).
+    It forms a parametric curve (parabola) (x + y + 2)^2 + 4y + 4 = 0 with constraint y <= -3x - 4.
+    Here t = -4/(x + y + 4).
+    As a result, any point (x, y) lies in this region is positive and is a linear combination of (2,-10) and (x2,y2).
 
 
     Examples
-    --------
+    ----------
     s(3a2b+ab2-4abc)2+s(a2b+3ab2-4abc)2    (real)
 
     s((b-c)2(a2-3(ab+ac)+2bc)2)/14-8/14abcs(a2b+ab2-2abc)    (real)
@@ -56,10 +167,12 @@ def _sos_struct_sextic_hexagon_symmetric(coeff, real = False):
 
     s(4a4b2-7a4bc+4a4c2+8a3b3-12a3b2c-12a3bc2+15a2b2c2)   (real)
 
+    s(bc(b+c)2(a-b)(a-c))+s(bc(a-b)(a-c)(a-2b)(a-2c))+2s(a4(b-c)2)  (real)
+
     p(a2+ab+b2)+12a2b2c2-3p(a+b)2/5    (real, uncentered)
     
-    Reference
-    ---------
+    References
+    ----------
     [1] Vasile, Mathematical Inequalities Volume 1 - Symmetric Polynomial Inequalities. p.23
 
     [2] https://artofproblemsolving.com/community/u426077h3036593p28226075
@@ -74,380 +187,119 @@ def _sos_struct_sextic_hexagon_symmetric(coeff, real = False):
         return None
     
     # although subtracting p(a-b)2 always succeeds,
-    # we can handle cases for real numbers and cases where highering the degree is not necessary
-    if True:
-        # if 3*(coeff((4,2,0))*2 + coeff((3,3,0)) + coeff((4,1,1)) + coeff((3,2,1))*2) + coeff((2,2,2)) == 0:
-        # has root at (1,1,1)
-        x_, y_, z_ = coeff((3,3,0)) / coeff((4,2,0)), coeff((4,1,1)) / coeff((4,2,0)), -coeff((3,2,1)) / coeff((4,2,0))
-        
-        if x_ < -2 or y_ < -2:
-            return None
-            
-        if abs(x_ - y_) < 2:
-            # Case 1. Try linear combination of s(a(b-c)^2)^2, p(a-b)^2, p(a)s(a(b-c)^2)
-            # and s(a^4(b-c)^2) or s(a^2b^2(a-b)^2)
-            # the last s(a^4(b-c)^2) or s(a^2b^2(a-b)^2) balance the coeffs of a^3b^3 and a^4bc
-            # where 2u - 2(1-u) = x  =>  u = (x + 2) / 4
-            reg = radsimp(1 - abs(x_ - y_) / 2)
-            w_ = radsimp(max(x_, y_) / reg)
-            y = radsimp([
-                1 - reg,
-                (w_ + 2) / 4 * reg,
-                (2 - w_) / 4 * reg,
-                -z_ + (10 * (w_ + 2) / 4 - 2 * (2 - w_) / 4) * reg,
-            ])
-            if all(_ >= 0 for _ in y):
-                # small tip: note the identity s(a2(b2-c2)2) = (s(a(b-c)2)2+p(a-b)2+8p(a)s(a(b-c)2))/2
-                if min(y[1], y[2]) * 8 >= y[3]:
-                    exchange = y[3] / 8
-                    y[1] -= exchange
-                    y[2] -= exchange
-                    y[3] = 0
-                    y.append(exchange * 2)
-                else:
-                    y = None
-                    # y.append(sp.S(0))
-                
-                if y is not None:
-                    y = [radsimp(_ * coeff((4,2,0))) for _ in y] + [rem]
-                    exprs = [
-                        CyclicSum(a**4*(b-c)**2) if x_ > y_ else CyclicSum(a**2*b**2*(a-b)**2),
-                        CyclicSum(a*(b-c)**2)**2,
-                        CyclicProduct((a-b)**2),
-                        CyclicProduct(a) * CyclicSum(a*(b-c)**2),
-                        CyclicSum(a**2*(b**2-c**2)**2),
-                        CyclicProduct(a**2)
-                    ]
-
-                    return sum_y_exprs(y, exprs)
-                
-        if x_ == (z_ - 4)/3:
-            # Case 2: linear combination of s(a(b-c)^2)^2, s(a^2-ab)s(ab)^2, p(a-b)^2
-            y = radsimp([
-                -y_/12 + z_/9 + sp.Rational(1,18),
-                y_/6 - z_/18 + sp.Rational(2,9),
-                sp.Rational(1,2) - y_ / 4
-            ])
-            if all(_ >= 0 for _ in y):
-                y = [radsimp(_ * coeff((4,2,0))) for _ in y] + [rem]
-                exprs = [
-                    CyclicSum(a*(b-c)**2)**2,
-                    CyclicSum((a-b)**2) * CyclicSum(a*b)**2,
-                    CyclicProduct((a-b)**2),
-                    CyclicProduct(a)**2
-                ]
-
-                return sum_y_exprs(y, exprs)
-
-        if x_ <= 2 and y_ <= 2 and (x_ != -2 or y_ != -2):
-            u_ = sp.sqrt(x_ + 2)
-            v_ = sp.sqrt(y_ + 2)
-            if u_**2 + v_**2 + u_*v_ - 2 == z_:
-                if u_ != 0:
-                    r = radsimp(v_ / u_)
-                    # (x - w) / (1 - w) = (-2*r*r-2*r+1)/(r*r+r+1)
-                    t = radsimp((-2*r*r-2*r+1)/(r*r+r+1))
-                    w = radsimp((t - x_) / (t + 2))
-                    if 0 <= w <= 1:
-                        x__, y__ = radsimp(1-3/(r+2)), radsimp(-(2*r+1)/(r+2))
-                        x__q, y__q = x__.as_numer_denom()[1], y__.as_numer_denom()[1]
-                        rr = radsimp(x__q * y__q / sp.gcd(x__q, y__q))
-                        y = [
-                            w,
-                            (1 - w) / (x__**2 + y__**2 + 1) / rr**2
-                        ]
-                        y = [radsimp(_ * coeff((4,2,0))) for _ in y] + [rem]
-                        rrx, rry = radsimp(rr * x__), radsimp(rr * y__)
-                        exprs = [
-                            CyclicProduct((a-b)**2),
-                            CyclicSum((b-c)**2*(rr*a**2-rrx*a*b-rrx*a*c+rry*b*c)**2),
-                            CyclicProduct(a**2)
-                        ]
-                        return sum_y_exprs(y, exprs)
-        
-    if real and abs(coeff((3,3,0))) <= 2 * (coeff((4,2,0))) and abs(coeff((4,1,1))) <= 2 * (coeff((4,2,0))):
-        # perform sum of squares for real numbers
-        
-        # case 1. we can subtract enough p(a-b)2 till the bound on the border
-        # and use Theorem 1.
-        coeff42, u, v = coeff((4,2,0)), coeff((3,3,0)), coeff((4,1,1))
-        if u >= v and (u != coeff42 * (-2) or v != coeff42 * (-2)):
-            # subtracting p(a-b)2 will first lead to s(a4b2+2a3b3+a2b4)
-            # assume coeffp = coefficient of p(a-b)2
-            # (coeff42 - coeffp) * (2) = u + 2 * coeffp
-            coeffp = radsimp((coeff42 * 2 - u) / 4)
-            coeff42 = radsimp(coeff42 - coeffp)
-            u, v = sp.S(2), radsimp((v + coeffp * 2) / coeff42)
-
-            # now we need to ensure (v + 2) is a square, and make a perturbation otherwise
-            # assume coeffsym = coefficient of s(a2b+ab2-2abc)2
-            # (v - 2 * coeffsym / coeff42) / (1 - coeffsym / coeff42) + 2 = x*x <= 4
-            # print(v, v.n(20), coeffp)
-            coeffsym, x = sp.S(0), sp.sqrt(v + 2)
-            need_rationalize = True if not isinstance(x, sp.Rational) else False
-
-            if not coeff.is_rational:
-                # first check whether there is exact solution
-                coeff321_std = radsimp(-x**2 - 2*x - 2)
-                coeff321 = radsimp((coeff((3,2,1)) - 2 * coeffp) / (coeff42))
-                diff = radsimp(coeff321 - coeff321_std)
-                if 0 < x <= 1 and (diff == 0 or diff == 4 * x):
-                    need_rationalize = False
-                elif 1 < x <= 2 and coeff321 == coeff321_std:
-                    need_rationalize = False
-
-            if need_rationalize:
-                for x_ in rationalize_bound(x.n(20), direction = -1, compulsory = True):
-                    if abs(x_) == 2:
-                        continue
-
-                    coeffsym = radsimp(((v + 2 - x_**2) / (4 - x_**2)) * coeff42)
-                    coeff321_std = radsimp(-x_**2 - 2*x_ - 2)
-                    coeff321 = radsimp((coeff((3,2,1)) - 2 * coeffp + 10 * coeffsym) / (coeff42 - coeffsym))
-                    if 0 < x_ <= 1 and 0 <= coeff321 - coeff321_std <= 4 * x_:
-                        x = x_
-                        break
-                    elif 1 < x_ <= 2 and coeff321 == coeff321_std:
-                        x = x_
-                        break
-                else:
-                    x , x_ = None, None
-            coeff42 -= coeffsym
-
-            if x is not None:
-                if x == 0:
-                    # must be the case s(bc(b+c)2(a-b)(a-c))
-                    # Solution1: s((a-b)2(a2b-a2c+ab2-10abc+3ac2-b2c+3bc2+4c3)2)
-                    # Solution2: s((a-b)2(a2b-a2c+ab2+2abc-ac2-b2c-bc2)2)
-                    if radsimp(coeff((3,2,1)) - 2 * coeffp + 10 * coeffsym) == -2 * coeff42:
-                        y = radsimp([coeffp, coeffsym, coeff42, rem])
-                        multiplier = CyclicSum((a-b)**2)
-                        exprs = [
-                            CyclicProduct((a-b)**2) * CyclicSum((a-b)**2),
-                            CyclicSum(a*(b-c)**2)**2 * CyclicSum((a-b)**2),
-                            CyclicSum((a-b)**2 * (a**2*b - a**2*c + a*b**2 + 2*a*b*c - a*c**2 - b**2*c - b*c**2)**2),
-                            CyclicProduct(a**2) * multiplier
-                        ]
-                        if all(_ >= 0 for _ in y):
-                            return sum_y_exprs(y, exprs) / multiplier
-                
-                else:
-                    x = 2 / x
-
-                    # weight of linear combination of x and -x
-                    w2 = radsimp(((coeff((3,2,1)) - 2 * coeffp + 10 * coeffsym) / coeff42 - (-2*(x**2 + 2*x + 2)/x**2)) / (8 / x))
-                    w1 = 1 - w2
-                    if w1 == 0 or w2 == 0:
-                        # low rank case
-                        if (w1 == 0 and x >= 2) or (w2 == 0 and x >= 1):
-                            if w1 == 0:
-                                x = -x
-                            multiplier = CyclicSum((a-b)**2)
-                            tt = sp.sqrt(x*x + x - 2)
-                            if isinstance(tt, sp.Rational):
-                                y = [coeffp, coeffsym, rem]
-                                exprs = [
-                                    CyclicProduct((a-b)**2) * CyclicSum((a-b)**2),
-                                    CyclicSum(a*(b-c)**2)**2 * CyclicSum((a-b)**2),
-                                    CyclicProduct(a**2) * multiplier
-                                ]
-                                if x != 2:
-                                    z = radsimp(2*(x**2 - x + (x-2)*tt) / (x*x + 4*x - 8))
-                                    r2 = radsimp(1 / cancel_denominator(radsimp([x-2, 2*z-x, -3*x*z+2*x-2*z+4, x*(1-z)])))
-
-                                    y.append((5*x**2 - 4*x + 8 - 4*(x - 4)*tt) / 9 / (x - 2)**2 * coeff42 / r2**2 / x**2)
-                                    exprs.append(
-                                        CyclicSum((a-b)**2*(r2*(x-2)*a**2*b+r2*(-x+2*z)*a**2*c+r2*(x-2)*a*b**2+r2*(-3*x*z+2*x-2*z+4)*a*b*c
-                                            +r2*(x*z-x)*a*c**2+r2*(-x+2*z)*b**2*c+r2*(x*z-x)*b*c**2+r2*(x*z-2*z)*c**3)**2)
-                                    )
-                                elif x == 2:
-                                    y.append(sp.S(4) * coeff42 / x**2)
-                                    exprs.append(
-                                        CyclicSum((a-b)**2*(a**2*b+a*b**2-5*a*b*c+a*c**2+b*c**2+c**3)**2)
-                                    )
-                                return sum_y_exprs(radsimp(y), exprs) / multiplier
+    # we can handle cases for real numbers and cases where raising the degree is not necessary
+    solution = _sos_struct_sextic_hexagon_symmetric_sdp(coeff)
+    if solution is not None:
+        return solution
 
 
-                    if x >= 2:
-                        multiplier = CyclicSum((a-b)**2)
-
-                        r1 = radsimp(1 / cancel_denominator(radsimp([2, 2+3*x, x])))
-
-                        y = [
-                            coeffp,
-                            coeffsym,
-                            w1 / 4 / r1**2,
-                            (x**2 + 4*x - 8) / 4 * w1,
-                        ]
-
-                        xr1 = radsimp(x * r1)
-                        exprs = [
-                            CyclicProduct((a-b)**2) * CyclicSum((a-b)**2),
-                            CyclicSum(a*(b-c)**2)**2 * CyclicSum((a-b)**2),
-                            CyclicSum(c**2*(a-b)**2*(2*r1*a**2+2*r1*b**2-2*r1*c**2-radsimp((2+3*x)*r1)*a*b+xr1*a*c+xr1*b*c+xr1*c**2)**2),
-                            CyclicSum(a)**2 * CyclicProduct((a-b)**2),
-                        ]
-                        extra = radsimp((x**2 - 4*x - 8) / 8 * w2)
-                        if w2 != 0 and y[-1] + extra >= 0:
-                            y[-1] += extra * 2
-                            y.append(radsimp(w2 / 4 / r1**2))
-                            exprs.append(
-                                CyclicSum(c**2*(a-b)**2*(2*r1*a**2+2*r1*b**2-2*r1*c**2+radsimp((3*x-2)*r1)*a*b-xr1*a*c-xr1*b*c-xr1*c**2)**2)
-                            )
-
-                        elif w2 != 0: # in this case we must have x**2 - 4*x - 8 <= 0:
-                            r2 = radsimp(1 / cancel_denominator(radsimp([x+2, x-2, 6-5*x, 2*x])))
-                            y += [
-                                (x - 2)*(5*x + 6)/(4*(x + 2)*(x + 10)) * w2 / r1**2,
-                                -(x**2 - 4*x - 8)/(4*(x + 2)*(x + 10)) * w2 / r2**2
-                            ]
-                            xr1 = radsimp(x * r1)
-                            r2p2, r2m2, r2d2 = radsimp(r2*(x+2)), radsimp(r2*(x-2)), radsimp(r2*2*x)
-                            exprs += [
-                                CyclicSum(c**2*(a-b)**2*(2*r1*a**2 + 2*r1*b**2 - 2*r1*c**2 + radsimp((3*x-2)*r1)*a*b
-                                    - xr1*a*c - xr1*b*c - xr1*c**2)**2),
-                                CyclicSum((a-b)**2*(-r2p2*a**2*b + r2m2*a**2*c - r2p2*a*b**2 + radsimp(r2*(-5*x+6))*a*b*c
-                                    + r2d2*a*c**2 + r2m2*b**2*c + r2d2*b*c**2 + r2p2*c**3)**2)
-                            ]
+    c420, c330, c411, c321 = [coeff(_) for _ in [(4,2,0), (3,3,0), (4,1,1), (3,2,1)]]
+    if real and abs(c330) <= 2*c420 and abs(c411) <= 2*c420:
+        # Perform sum of squares for real numbers.
+        # First we subtract coeffp * p(a-b)^2, so that the polynomial has root at (1,-1,0) or (1,-1,oo).
+        if c330 >= c411:
+            # will have root at (1,-1,0)
+            type = 0
+            coeffp = radsimp((c420 * 2 - c330) / 4)
+            new_c420 = radsimp(c420 - coeffp)
+            new_c411 = radsimp((c411 + coeffp * 2) / new_c420)
+        else:
+            # will have root at (1,-1,oo)
+            type = 1
+            coeffp = radsimp((c420 * 2 - c411) / 4)
+            new_c420 = radsimp(c420 - coeffp)
+            new_c411 = radsimp((c330 + coeffp * 2) / new_c420) # we borrow c411 to store c330
+        new_c321 = radsimp((c321 - 2 * coeffp) / new_c420)
 
 
-                        if all(_ >= 0 for _ in y):
-                            mul = radsimp(coeff42 * 4 / x**2)
-                            for i in range(2, len(y)):
-                                y[i] *= mul
-                            y.append(rem)
-                            exprs.append(CyclicProduct(a**2) * multiplier)
-                            return sum_y_exprs(radsimp(y), exprs) / multiplier
+        def _linear_comb(x, y):
+            """
+            Any point (x, y) lies in the region (x + y + 2)^2 + 4y + 4 <= 0 and y <= -3x - 4
+            can be expressed as a linear combination of (2,-10) and (x2,y2).
+            Returns w, t so that t = -4/(x2 + y2 + 4) while (x, y) = w * (2,-10) + (1-w) * (x2, y2).
+            """
+            if not ((x + y + 2)**2 + 4*y + 4 <= 0 and y <= -3*x - 4):
+                return None
+            if x == 2 and y == 10:
+                return sp.S(1), sp.S(1)
 
+            r = radsimp(4*(x - 2)*(3*x + 2*y + 14)/(x + y + 8)**2)
+            x2 = radsimp(r + 2)
+            y2 = radsimp(-10 + (y + 10)/(x - 2)*r)
+            t = radsimp(-4 / (x2 + y2 + 4)) if x2 + y2 + 4 != 0 else sp.oo
 
-        elif u < v:
-            # subtracting p(a-b)2 will first lead to s(a4b2+2a4bc+a4c2)
-            # assume coeffp = coefficient of p(a-b)2
-            # (coeff42 - coeffp) * (2) = v + 2 * coeffp
-            coeffp = radsimp((coeff42 * 2 - v) / 4)
-            coeff42 = radsimp(coeff42 - coeffp)
-            u, v = radsimp((u + coeffp * 2) / coeff42), sp.S(2)
-            
-            
-            # now we need to ensure (u + 2) is a square, and make a perturbation otherwise
-            # assume coeffsym = coefficient of s(a2b+ab2-2abc)2
-            # (u - 2 * coeffsym / coeff42) / (1 - coeffsym / coeff42) + 2 = x*x <= 4
-            # print(v, v.n(20), coeffp)
-            coeffsym, x = sp.S(0), sp.sqrt(u + 2)
-            if not isinstance(x, sp.Rational):
-                for x_ in rationalize_bound(x.n(20), direction = -1, compulsory = True):
-                    if abs(x_) == 2:
-                        continue
+            w = radsimp((x2 - x) / (x2 - 2) if x2 != -1 else (y2 - y) / (y2 + 10))
+            return w, t
 
-                    coeffsym = radsimp(((u + 2 - x_**2) / (4 - x_**2)) * coeff42)
-                    coeff321_std = radsimp(-x_**2 - 2*x_ - 2)
-                    coeff321 = radsimp((coeff((3,2,1)) - 2 * coeffp + 10 * coeffsym) / (coeff42 - coeffsym))
-                    if 0 < x_ <= 1 and 0 <= coeff321 - coeff321_std <= 4 * x_:
-                        x = x_
-                        break
-                    elif 1 < x_ <= 2 and coeff321 == coeff321_std:
-                        x = x_
-                        break
-                else:
-                    x_ = None
+        _comb = _linear_comb(new_c411, new_c321)
+        if _comb is not None:
+            w, t = _comb
+            if type == 1:
+                t = 1/t
 
-            coeff42 -= coeffsym
+            def _get_solution(t):
+                """
+                When t <= -2 or t >= 1, solve
+                s((a-b)^2) * (s(bc(a-b)(a-c)(a-tb)(a-tc)) + t^2/4p(a-b)^2) * (4/t^2) >= 0.
+                When -1/2 <= t < 1, solve
+                s((a-b)^2) * (s(bc(a-b)(a-c)(a-tb)(a-tc)) + 1/4p(a-b)^2) * 4 >= 0.
+                """
+                # print('t =', t)
+                if t == 1:
+                    return CyclicSum(a*(b-c)**2)**2 * CyclicSum((a-b)**2)
+                elif t is sp.oo:
+                    # s((a-b)2(a2b-a2c+ab2+2abc-ac2-b2c-bc2)2)
+                    return CyclicSum((a-b)**2*(a**2*b-a**2*c+a*b**2+2*a*b*c-a*c**2-b**2*c-b*c**2)**2)
+                elif t == 2:
+                    # s((a-b)2(a2b+ab2-5abc+ac2+bc2+c3)2)
+                    return CyclicSum((a-b)**2*(a**2*b+a*b**2-5*a*b*c+a*c**2+b*c**2+c**3)**2)
+                elif t == 0:
+                    # s((a-b)4(ab+ac+bc-c2)2)
+                    return CyclicSum((a-b)**4*(a*b+a*c+b*c-c**2)**2)
+                elif t == -2:
+                    # s(a)2s(a2b2-a2bc) * 2s(a2-ab)
+                    return CyclicSum(a)**2 * CyclicSum(a**2*(b-c)**2) * CyclicSum((a-b)**2)/2
+                elif t == -sp.S(1)/2:
+                    # s(ab)2s(a2-ab) * 2s(a2-ab)
+                    return CyclicSum(a*b)**2 * CyclicSum((a-b)**2)**2/2
 
-            if x is not None and isinstance(x, sp.Rational):
-                x = x / 2
-                # Theorem 1.5:
-                # When x \in [-1/2, 1],
-                # f(a,b,c) = s(bc(a-b)(a-c)(a-xb)(a-xc)) + 1/4p(a-b)^2 >= 0 for all real numbers a,b,c
-                # because
-                # 4f(a,b,c)s((a-b)(a-c)) = (1-2x)/2 * s((a-b)(a-c)(2xbc-ab-ac))^2 + (1+2x)/2 * s((a-b)^2(a-c)^2(2xbc-ab-ac)^2)
-                #                       >= (2-2x)/3 * s((a-b)(a-c)(2xbc-ab-ac))^2 >= 0
-                # The second line is due to the fact u^2+v^2+w^2 >= (u+v+w)^2 / 3.
-                if x == 0:
-                    # must be the case s(bc(4a2+(b-c)2)(a-b)(a-c))
-                    # Solution:
-                    # s(bc(4a2+(b-c)2)(a-b)(a-c))s((a-b)^2) = s((a-b)4(ab+ac+bc-c2)2)
-                    
-                    if radsimp(coeff((3,2,1)) - 2 * coeffp + 10 * coeffsym) == -2 * coeff42:
-                        y = radsimp([coeffp, coeffsym, coeff42, rem])
-                        multiplier = CyclicSum((a-b)**2)
-                        exprs = [
-                            CyclicProduct((a-b)**2) * CyclicSum((a-b)**2),
-                            CyclicSum(a*(b-c)**2)**2 * CyclicSum((a-b)**2),
-                            CyclicSum((a-b)**4 * (a*b+a*c+b*c-c**2)**2),
-                            CyclicProduct(a**2) * multiplier
-                        ]
-                        if all(_ >= 0 for _ in y):
-                            return sum_y_exprs(y, exprs) / multiplier
+                _expand = (lambda p: p.expand().together()) if coeff.is_rational else (lambda p: p)
+                if t <= -2 or t >= 1:
+                    ker = sp.sqrt(t**2 + t - 2)
+                    w = radsimp(t**2 + 4*t - 8)
+                    if w != 0 and isinstance(ker, sp.Rational):
+                        l = radsimp(w**2/(4*(t - 2)**2*(5*t**2 - 4*t + ker*(4*t - 16) + 8)))
+                        z = radsimp((2*t**2 - 2*t + ker*(2*t - 4))/w)
+                        p = (a*b*c*(-3*t*z + 2*t - 2*z + 4) + a*b*(a + b)*(t - 2) - c**2*t*(1 - z)*(a + b + c) - c*(t - 2*z)*(a**2 + b**2 - c**2)).expand().together()
+                        return radsimp(l * 4 / t**2) * CyclicSum((a-b)**2*p**2)
 
-                else:
-                    # linear combination of x and -x
-                    w2 = radsimp(((coeff((3,2,1)) - 2 * coeffp + 10 * coeffsym) / coeff42 - (-4*x**2-4*x-2)) / (8*x))
-                    w1 = 1 - w2
-                    if -sp.S(1)/2 <= x <= 1 and 0 <= w1 <= 1:
-                        multiplier = CyclicSum((a-b)**2)
-                        y = [
-                            coeffp,
-                            coeffsym
-                        ]
-                        exprs = [
-                            CyclicProduct((a-b)**2) * CyclicSum((a-b)**2),
-                            CyclicSum(a*(b-c)**2)**2 * CyclicSum((a-b)**2)
-                        ]
-                        def _extend_solution(y, exprs, weight, x):
-                            if x <= sp.S(1)/2:
-                                y.extend([
-                                    weight * (1 - 2*x) / 2,
-                                    weight * (1 + 2*x) / 2
-                                ])
-                                exprs.extend([
-                                    CyclicSum((2*x*b*c-a*b-a*c)*(a-b)*(a-c))**2,
-                                    CyclicSum((2*x*b*c-a*b-a*c)**2*(a-b)**2*(a-c)**2),
-                                ])
-                            elif x <= 1:
-                                y.extend([
-                                    weight * (2 - 2*x) / 3,
-                                    weight * (1 + 2*x) / 6
-                                ])
-                                exprs.extend([
-                                    CyclicSum((2*x*b*c-a*b-a*c)*(a-b)*(a-c))**2,
-                                    CyclicSum((a-b)**2 * (a**2*b + a**2*c + a*b**2 + (-4*x - 2)*a*b*c + (2*x - 1)*a*c**2 + b**2*c + (2*x - 1)*b*c**2)**2),
-                                ])
-                        
-                        _extend_solution(y, exprs, w1, x)
-                        _extend_solution(y, exprs, w2, -x)
+                    if w >= 0:
+                        w1, w2 = radsimp(1/t**2), radsimp(w/t**2)
+                        p1 = _expand(2*(a**2+b**2-c**2) - (2+3*t)*a*b + t*c*(a+b+c))
+                        return w1 * CyclicSum(c**2 * (a-b)**2 * p1**2) + w2 * CyclicSum(a)**2 * CyclicProduct((a-b)**2)
+                    else:
+                        w1, w2 = radsimp(1/t**2/9), radsimp(4*(t-1)*(t+2)/3/t**2)
+                        # p0 = (t(a+b-2c)s(a(b-c)2)+(2-2t)c(a3-2a2b-2ab2+4abc-ac2+b3-bc2))
+                        # p0 = _expand(t*(a + b - 2*c)*CyclicSum(a*(b-c)**2) + (2 - 2*t)*c*(a**3 - 2*a**2*b - 2*a*b**2 + 4*a*b*c - a*c**2 + b**3 - b*c**2))
+                        p1 = _expand(((t - 4)*a**2*b + (-t - 2)*a**2*c + (t - 4)*a*b**2 + (8*t + 10)*a*b*c - 3*t*a*c**2 + (-t - 2)*b**2*c - 3*t*b*c**2 + (2 - 2*t)*c**3))
+                        return w1 * CyclicSum((a-b)**2 * p1**2) + w2 * CyclicSum(a)**2 * CyclicProduct((a-b)**2)
 
-                        if all(_ >= 0 for _ in y):
-                            for i in range(2, len(y)):
-                                y[i] *= coeff42 * 2
-                            y.append(rem)
-                            exprs.append(CyclicProduct(a**2) * multiplier)
-                            return sum_y_exprs(radsimp(y), exprs) / multiplier
+                elif -1 <= 2*t <= 2:
+                    p1 = CyclicSum((a-b)*(a-c)*(2*t*b*c-a*b-a*c))**2
+                    if 2*t <= 1:
+                        return (1 - 2*t) * p1 + (1 + 2*t) * CyclicSum((a-b)**2*(a-c)**2*(2*t*b*c-a*b-a*c)**2)
+                    else:
+                        w1, w2 = radsimp(4*(1-t)/3), radsimp((2*t+1)/3)
+                        p2 =  _expand(-a**2*b - a**2*c - a*b**2 + 2*a*b*c + a*c**2 - b**2*c + b*c**2 + t*(4*a*b*c - 2*a*c**2 - 2*b*c**2))
+                        return w1 * p1 + w2 * CyclicSum((a-b)**2 * p2**2)
 
-    if rem > 0:
-        if coeff((3,3,0)) == coeff((4,1,1)):
-            # try c1p(a-b)2 + c2s(a2b-xabc)2 + c2s(ab2-xabc)2 + c3p(a2)
-            c1 = coeff((3,3,0)) / (-2)
-            c2 = coeff((4,2,0)) - c1
-            x_ = radsimp((2 - (coeff((3,2,1)) - 2*c1) / c2) / 6)
-            y = [
-                c1,
-                c2,
-                c2,
-                radsimp(rem - 18*c2*(x_ - 1)**2)
-            ]
-            if all(_ >= 0 for _ in y):
-                exprs = [
-                    CyclicProduct((a-b)**2),
-                    (a**2*b + b**2*c + c**2*a - (3*x_)*a*b*c)**2,
-                    (a**2*c + b**2*a + c**2*b - (3*x_)*a*b*c)**2,
-                    CyclicProduct(a**2)
-                ]
-                return sum_y_exprs(y, exprs)
-
+            main_solution = radsimp(w*new_c420) * _get_solution(1) + radsimp((1 - w)*new_c420) * _get_solution(t)
+            rem_solution = coeffp * CyclicProduct((a-b)**2) + rem * CyclicProduct(a**2)
+            return main_solution / CyclicSum((a-b)**2) + rem_solution
 
 
     if True:
-        # subtract p(a-b)2
+        # subtract p(a-b)^2
         t = coeff((4,2,0))
         new_coeffs_ = {
             (3,3,0): coeff((3,3,0)) + 2 * t,
@@ -457,7 +309,7 @@ def _sos_struct_sextic_hexagon_symmetric(coeff, real = False):
             (2,2,2): coeff((2,2,2)) + 6 * t
         }
 
-        solution = _sos_struct_sextic_hexagram_symmetric(Coeff(new_coeffs_))
+        solution = _sos_struct_sextic_hexagram_symmetric(Coeff(new_coeffs_, is_rational=coeff.is_rational))
         if solution is not None:
             return solution + coeff((4,2,0)) * CyclicProduct((a-b)**2)
 
