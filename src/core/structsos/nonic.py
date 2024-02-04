@@ -3,7 +3,7 @@ import sympy as sp
 from .sextic_symmetric import _sos_struct_sextic_hexagram_symmetric, _sos_struct_sextic_tree
 from .utils import (
     CyclicSum, CyclicProduct, Coeff,
-    sum_y_exprs, rationalize_bound, rationalize_func, inverse_substitution, radsimp, nroots
+    sum_y_exprs, rationalize_func, inverse_substitution, radsimp, nroots
 )
 
 a, b, c = sp.symbols('a b c')
@@ -464,7 +464,7 @@ def _sos_struct_nonic_gear(coeff, recurrsion):
             w = _search_valid_weight(vertex1, vertex2)
             c41_, c33_, c32_ = radsimp([w*vertex1[1][i] + (1-w)*vertex2[1][i] for i in range(3)])
             hexagram_coeffs_ = {
-                (4,1,1): c41_, (3,3,0): c33_, (3,2,1): c32_, (2,3,1): c32_,
+                (4,1,1): c41_, (3,3,0): c33_, (3,2,1): c32_, (2,3,1): c32_, (3,1,2): c32_,
                 (2,2,2): radsimp((-c41_-c33_-c32_*2)*3 + coeff.poly111())
             }
             hexagram_solution = _sos_struct_sextic_hexagram_symmetric(Coeff(hexagram_coeffs_))
