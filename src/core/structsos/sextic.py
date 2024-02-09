@@ -390,93 +390,31 @@ def _sos_struct_sextic_hexagon(coeff, recurrsion, real = True):
         if coeff((3,3,0)) == 0 and coeff((4,1,1)) == 0:
             return _sos_struct_sextic_rotated_tree(coeff)
 
-    if not coeff.is_rational:
-        return None
+    c420, c240, c330, c411 = [coeff(_) for _ in ((4,2,0),(2,4,0),(3,3,0),(4,1,1))]
+    # The hexagon might be positive over a,b,c in R.
+    can_be_real = c420 > 0 and c240 > 0 and 4 * c420 * c240 >= max(c330**2, c411**2)
 
-    if True:
-        solution = _sos_struct_sextic_hexagon_sdp(coeff)
+    solvers = []
+    if can_be_real:
+        if real:
+            solvers = [
+                _sos_struct_sextic_hexagon_sdp,
+                _sos_struct_sextic_hexagon_sdp2,
+                _sos_struct_sextic_hexagon_to_hexagram
+            ]
+        else:
+            solvers = [
+                _sos_struct_sextic_hexagon_sdp,
+                _sos_struct_sextic_hexagon_to_hexagram,
+                _sos_struct_sextic_hexagon_sdp2,
+            ]
+    else:
+        solvers = [_sos_struct_sextic_hexagon_to_hexagram]
+
+    for solver in solvers:
+        solution = solver(coeff)
         if solution is not None:
             return solution
-
-    if True:
-        # Idea 1: subtract s(c1(a^2b-abc) - c2(ab^2-abc))^2
-        # However, c1 and c2 might be irrational. So we use alternative:
-        # subtract c1s(a^2b-abc)^2 + c2s(ab^2-abc)^2 - c3s((a^2b-abc)(ab^2-abc))
-        # with 4c1c2 >= c3^2 by quadratic constraint.
-
-        c1, c2 = coeff((4,2,0)), coeff((4,0,2))
-        c30, z0, x0, y0, w0 = coeff((3,3,0)), coeff((4,1,1)), coeff((3,2,1)), coeff((2,3,1)), coeff((2,2,2))
-        if c1 < 0 or c2 < 0 or (c30 < 0 and c30**2 > 4*c1*c2) or (z0 < 0 and z0**2 > 4*c1*c2):
-            return None
-        x0, y0, w0 = x0 + 6*c1 - 2*c2, y0 + 6*c2 - 2*c1, w0 - 9*(c1 + c2)
-
-        def _compute_hexagram_discriminant(z, x, y, coeff33 = 1):
-            z, x, y = z / coeff33, x / coeff33, y / coeff33
-            s1, s2 = x+y, x*y
-            d, e = (s1**2 + 9*s1 - s2 + 27), s1**2 - s2
-            args = [
-                e * d**3,
-                -27 * e * d**2,
-                - e * d * (4*s1**2 - 45*s1 - 4*s2 - 378),
-                (8*s1**5 - 207*s1**4 - 16*s1**3*s2 - 3051*s1**3 + 234*s1**2*s2 - 9963*s1**2 + 8*s1*s2**2 + 2970*s1*s2 - 729*s1 - 27*s2**2 + 9477*s2)/3,
-                (10*s1**4 + 351*s1**3 - 20*s1**2*s2 + 1890*s1**2 - 351*s1*s2 + 486*s1 + 10*s2**2 - 1728*s2)/3,
-                -(16*s1**3 + 207*s1**2 - 16*s1*s2 + 189*s1 - 171*s2)/3,
-                (28*s1**2 + 111*s1 - 12*s2 + 9)/9,
-                -(8*s1 + 3)/9,
-                sp.Rational(1,9)
-            ]
-            u = x + y + 3*z + 3
-            discriminant = sum(u**i*args[i] for i in range(len(args)))
-            return discriminant
-
-        def _compute_subtracted_params(c3, return_func = False):
-            params = z0 + c3, x0 - 3*c3, y0 - 3*c3, c30 + c3, w0 + 12*c3
-            # print('c3 =', c3, 'params =', params)
-            if return_func:
-                coeffs_ = dict(zip([(4,1,1),(3,2,1),(2,3,1),(3,3,0),(2,2,2)], params))
-                coeffs_[(3,1,2)] = coeffs_[(2,3,1)]
-                return Coeff(coeffs_)
-            return params
-        
-        def _check_valid(c3):
-            if not (c3 >= 0 and 4*c1*c2 >= c3**2):
-                return False
-            params = _compute_subtracted_params(c3)
-            if params[0] < 0 or params[3] < 0:
-                return False
-            if params[1] >= 0 and params[2] >= 0:
-                return True
-            if params[0] == 0 or params[3] == 0:
-                if params[0] == 0 and params[3] == 0:
-                    return False
-            reg = max(params[0], params[3])
-            # degenerates to cubic
-            x, y = params[1] / reg, params[2] / reg
-            if x**2*y**2 + 18*x*y - 4*x**3 - 4*y**3 - 27 <= 0:
-                return True
-            if params[0] == 0 or params[3] == 0:
-                return False
-            det = _compute_hexagram_discriminant(*params[:-1])
-            if det <= 0:
-                return True
-            return False
-
-
-        if x0 == -3*c30 and y0 == -3*c30:
-            # Degenerates to c1*s(a2b-abc)^2 + c2*s(ab2-abc)^2 + c3s(a2b-abc)s(ab2-abc) + 0
-            c3 = -c30
-        else:
-            eq = sp.Poly.from_list([1, 0, -4*c1*c2], sp.Symbol('u'))
-            c3 = rationalize_func(eq, _check_valid, validation_initial = lambda x: x >= 0, direction = -1)
-            
-        if c3 is not None:
-            remain_solution = _sos_struct_sextic_hexagram(_compute_subtracted_params(c3, return_func = True))
-            if remain_solution is not None:
-                mapping = lambda x, y: CyclicSum((x*a**2*b + y*a*b**2 - (x+y)*a*b*c).together())**2
-                main_solution = quadratic_weighting(c1, -c3, c2, mapping = mapping)
-                return main_solution + remain_solution
-                
-    return None
 
 
 def _sos_struct_sextic_rotated_tree(coeff):
@@ -680,7 +618,7 @@ def _sos_struct_sextic_hexagon_sdp(coeff):
     c411, c321, c231 = [coeff((4-i,i+1,1)) for i in range(3)]
 
     poly111 = coeff.poly111()
-    if (not coeff.is_rational) or c42 < 0 or c24 < 0 or poly111 < 0:
+    if (not coeff.is_rational) or poly111 < 0:
         return None
 
     p1 = 2*c231**2 + 14*c231*c24 + 5*c231*c321 + 18*c231*c33 + 9*c231*c411 + 22*c231*c42 + 20*c24**2 + 22*c24*c321 + 72*c24*c33 + 36*c24*c411 + 104*c24*c42 + 2*c321**2 + 18*c321*c33 + 9*c321*c411 + 14*c321*c42 + 27*c33**2 + 54*c33*c411 + 72*c33*c42 + 36*c411*c42 + 20*c42**2
@@ -707,6 +645,155 @@ def _sos_struct_sextic_hexagon_sdp(coeff):
         # rs((a2b-ac2-x(a2b-b2c)+y(a2c-ab2))^2)
         solution = r * CyclicSum((a**2*b-a*c**2-x*(a**2*b-b**2*c)+y*(a**2*c-a*b**2)).expand().together()**2)
         return quad_form_sol + solution + poly111 * CyclicProduct(a**2)
+
+
+def _sos_struct_sextic_hexagon_sdp2(coeff):
+    """
+    This function is a generalization of _sos_struct_sextic_hexagon_sdp
+    that performs sum-of-square on the octic f_2(a,b,c) = f(a,b,c) * s(a^2-ab).
+
+    """
+    c420, c330, c240, c411, c321, c312 = [coeff(_) for _ in ((4,2,0),(3,3,0),(2,4,0),(4,1,1),(3,2,1),(3,1,2))]
+    if (not coeff.is_rational) or coeff.poly111() != 0:
+        return None
+
+    x, y, z = sp.symbols('x y z')
+
+    w1 = c240 + 2*c312 + c321 + 2*c420
+    w2 = -c240 + c312 - c321 + c420
+    w3 = 2*c240 - 2*c312 - c321 - 3*c330 - 3*c411 + c420
+    w5 = c240**2 + c240*c312 + 2*c240*c321 + c240*c420 + c312**2 + c312*c321 + 2*c312*c420 + c321**2 + c321*c420 + c420**2
+    
+    def stack_quad_form(x, y, z, only_lower = True, div3x = True):
+        M = sp.Matrix.zeros(3)
+        w0 = y**2 + y + 1
+        M[0,0] = (3*c420*x - z*w0)
+        M[1,0] = (3*c411*x + z*(-x*y + x + w0))/2
+        M[1,1] = (3*c240*x + z*(-x**2 + 2*x*y + x - w0))
+        M[2,0] = (w1 - w2 + x*(3*c330 - 3*c420) + y*(w1) + z*(2*x*y + x - w0))/2
+        M[2,1] = (w2 + x*(w2 + 3*c321 + 3*c330) + y*(w2 - w1) + z*(x**2 - w0))/2
+        M[2,2] = (-w5 + z**2*(-x**2 + x*y - x - w0) + z*(w1 + x*w3 + y*w2))/z
+
+        if not only_lower:
+            M[0,1] = M[1,0]
+            M[0,2] = M[2,0]
+            M[1,2] = M[2,1]
+        if div3x:
+            M /= 3*x
+        return M
+
+    def _get_detur3():
+        x, y, z = sp.symbols('x y z')
+        M = stack_quad_form(x, y, z, div3x = False)
+        eq1z = ((M[0,0]*M[1,1]-M[1,0]**2)*(M[2,2]*z)).as_poly(z)
+        eq2z = (2*M[1,0]*M[2,0]*M[2,1] - M[1,1]*M[2,0]**2 - M[0,0]*M[2,1]**2).as_poly(z)
+        # return eq1z + z * eq2z
+        return sp.Poly.from_list([
+            eq1z.coeff_monomial((3,)) + eq2z.coeff_monomial((2,)),
+            eq1z.coeff_monomial((2,)) + eq2z.coeff_monomial((1,)),
+            eq1z.coeff_monomial((1,)) + eq2z.coeff_monomial((0,)),
+            eq1z.coeff_monomial((0,))
+        ], z)
+
+    # detur3 = det(M) * 27x^3 * z >= 0
+    # To make the quad-form PSD, we let detur3, a cubic poly of z with params (x,y), positive.
+    # This is done by optimize the discriminant.
+    detur3 = _get_detur3()
+
+    if False:
+        # too slow
+        from time import time
+        time0 = time()
+        discriminant = sp.polys.discriminant(detur3)
+        discriminant_diffx = sp.diff(discriminant, x)
+        discriminant_diffy = sp.diff(discriminant, y)
+        discriminant_gcd = sp.gcd(discriminant, discriminant_diffx).factor()
+        time1 = time()
+        print('Time:', time1 - time0)
+        print('GCD =', discriminant_gcd)
+
+
+def _sos_struct_sextic_hexagon_to_hexagram(coeff):
+    """
+    Solve hexagons by subtracting some s(c1(a^2b-abc) - c2(ab^2-abc))^2
+    so that the remaing part is a hexagram.
+
+    Sometimes the c1, c2 might be irrational, so we use alternative:
+    subtracting c1s(a^2b-abc)^2 + c2s(ab^2-abc)^2 - c3s((a^2b-abc)(ab^2-abc))
+    with 4c1c2 >= c3^2 by the quadratic constraint.
+    """
+
+    c1, c2 = coeff((4,2,0)), coeff((4,0,2))
+    c30, z0, x0, y0, w0 = coeff((3,3,0)), coeff((4,1,1)), coeff((3,2,1)), coeff((2,3,1)), coeff((2,2,2))
+    if c1 < 0 or c2 < 0 or (c30 < 0 and c30**2 > 4*c1*c2) or (z0 < 0 and z0**2 > 4*c1*c2):
+        return None
+    x0, y0, w0 = x0 + 6*c1 - 2*c2, y0 + 6*c2 - 2*c1, w0 - 9*(c1 + c2)
+
+    def _compute_hexagram_discriminant(z, x, y, coeff33 = 1):
+        z, x, y = z / coeff33, x / coeff33, y / coeff33
+        s1, s2 = x + y, x * y
+        d, e = (s1**2 + 9*s1 - s2 + 27), s1**2 - s2
+        args = [
+            e * d**3,
+            -27 * e * d**2,
+            - e * d * (4*s1**2 - 45*s1 - 4*s2 - 378),
+            (8*s1**5 - 207*s1**4 - 16*s1**3*s2 - 3051*s1**3 + 234*s1**2*s2 - 9963*s1**2 + 8*s1*s2**2 + 2970*s1*s2 - 729*s1 - 27*s2**2 + 9477*s2)/3,
+            (10*s1**4 + 351*s1**3 - 20*s1**2*s2 + 1890*s1**2 - 351*s1*s2 + 486*s1 + 10*s2**2 - 1728*s2)/3,
+            -(16*s1**3 + 207*s1**2 - 16*s1*s2 + 189*s1 - 171*s2)/3,
+            (28*s1**2 + 111*s1 - 12*s2 + 9)/9,
+            -(8*s1 + 3)/9,
+            sp.Rational(1,9)
+        ]
+        u = x + y + 3*z + 3
+        discriminant = sum(u**i*args[i] for i in range(len(args)))
+        return discriminant
+
+    def _compute_subtracted_params(c3, return_func = False):
+        params = z0 + c3, x0 - 3*c3, y0 - 3*c3, c30 + c3, w0 + 12*c3
+        # print('c3 =', c3, 'params =', params)
+        if return_func:
+            coeffs_ = dict(zip([(4,1,1),(3,2,1),(2,3,1),(3,3,0),(2,2,2)], params))
+            coeffs_[(3,1,2)] = coeffs_[(2,3,1)]
+            return Coeff(coeffs_)
+        return params
+    
+    def _check_valid(c3):
+        if not (c3 >= 0 and 4*c1*c2 >= c3**2):
+            return False
+        params = _compute_subtracted_params(c3)
+        if params[0] < 0 or params[3] < 0:
+            return False
+        if params[1] >= 0 and params[2] >= 0:
+            return True
+        if params[0] == 0 or params[3] == 0:
+            if params[0] == 0 and params[3] == 0:
+                return False
+        reg = max(params[0], params[3])
+        # degenerates to cubic
+        x, y = params[1] / reg, params[2] / reg
+        if x**2*y**2 + 18*x*y - 4*x**3 - 4*y**3 - 27 <= 0:
+            return True
+        if params[0] == 0 or params[3] == 0:
+            return False
+        det = _compute_hexagram_discriminant(*params[:-1])
+        if det <= 0:
+            return True
+        return False
+
+
+    if x0 == -3*c30 and y0 == -3*c30:
+        # Degenerates to c1*s(a2b-abc)^2 + c2*s(ab2-abc)^2 + c3s(a2b-abc)s(ab2-abc) + 0
+        c3 = -c30
+    else:
+        eq = sp.Poly.from_list([1, 0, -4*c1*c2], sp.Symbol('u'))
+        c3 = rationalize_func(eq, _check_valid, validation_initial = lambda x: x >= 0, direction = -1)
+        
+    if c3 is not None:
+        remain_solution = _sos_struct_sextic_hexagram(_compute_subtracted_params(c3, return_func = True))
+        if remain_solution is not None:
+            mapping = lambda x, y: CyclicSum((x*a**2*b + y*a*b**2 - (x+y)*a*b*c).together())**2
+            main_solution = quadratic_weighting(c1, -c3, c2, mapping = mapping)
+            return main_solution + remain_solution
 
 
 def _sos_struct_sextic_full_sdp(coeff):
