@@ -2,8 +2,7 @@ import sympy as sp
 
 from .utils import (
     CyclicSum, CyclicProduct,
-    nroots, rationalize_bound, rationalize_func,
-    quadratic_weighting,
+    rationalize_func, quadratic_weighting,
     sum_y_exprs, inverse_substitution
 )
 
@@ -74,7 +73,7 @@ def _sos_struct_octic_symmetric_hexagon_sdp(coeff):
     (85/336p(a-b)2+s(bc(a-b)(a-c)(a+b)(a+c))-16/15s(a2bc(b-c)2))s(a2-ab)
     """
     c620, c530, c440, c611, c521, c431, c422 = [coeff(_) for _ in ((6,2,0),(5,3,0),(4,4,0),(6,1,1),(5,2,1),(4,3,1),(4,2,2))]
-    if c620 < 0 or coeff.poly111() != 0:
+    if c620 <= 0 or coeff.poly111() != 0:
         return None
 
     w1 = c521 + c611 + 2*c620
