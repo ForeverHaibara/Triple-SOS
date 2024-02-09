@@ -22,7 +22,21 @@ def _sos_struct_sextic_hexagon_symmetric_sdp(coeff):
     The idea is to subtract some CyclicSum(f(a,b,c)**2) so that the remainder
     term is a quadratic combination of s(a^2b-abc), s(a^2c-abc), (abc).
 
-    See similar methods at _sos_struct_sextic_hexagon_sdp.
+    In particular, we can WLOG assume that f is in the form of
+    f(a,b,c) = (a-b) * (c^2-ab + (u+2)(ab+bc+ca))
+    where u is a parameter to be determined.
+
+    When the original polynomial has root at (1,1,1), or the coefficient of a^4bc equals to a^3b^3,
+    then there is no degree of freedom and we can solve the parameter u directly.
+
+    When poly(1,1,1) > 0. The quadratic form can be represented as
+    [[M00, M01, M02]
+     [M01, M00, M02]
+     [M02, M02, l22]]
+    where l22 = poly(1,1,1) > 0. To ensure det >= 0, we find u that maximizes the Schur complement:
+    u = argmax {l22 - [M02, M02] * [M00, M01; M01, M00]^-1 * [M02, M02]}
+
+    See similar methods at _sos_struct_sextic_hexagon_sdp and _sos_struct_octic_symmetric_hexagon_sdp.
     """
     c420, c411, c330, c321, c222 = [coeff(_) for _ in [(4,2,0), (4,1,1), (3,3,0), (3,2,1), (2,2,2)]]
     if c420 <= 0:
@@ -555,7 +569,7 @@ def _sos_struct_sextic_tree(coeff):
 
 def _sos_struct_sextic_iran96(coeff, real = False):
     """
-    Give a solution to s(a5b+ab5-x(a4b2+a2b4)+ya3b3-za4bc+w(a3b2c+a2b3c)+..a2b2c2) >= 0
+    Solve s(a5b+ab5-x(a4b2+a2b4)+ya3b3-za4bc+w(a3b2c+a2b3c)+..a2b2c2) >= 0
 
     Observe that g(a,b,c) = s(bc(b-c)^2(b+c-(u+1)a)^2) >= 4((a-b)*(b-c)*(c-a))^2,
     which is because
