@@ -138,7 +138,7 @@ class _tangents_helper_cyclic():
             u, v = rl(u0,1), rl(v0,1)
         tangents = [
             a**2 - b**2 + u*(a*b - a*c) + v*(b*c - a*b),
-            a**2 + (-u - v)*a*b + (-u + 2*v)*a*c + b**2 + (2*u - v)*b*c - 2*c**2
+            # a**2 + (-u - v)*a*b + (-u + 2*v)*a*c + b**2 + (2*u - v)*b*c - 2*c**2
         ]
         if not is_centered:
             tangents.append(
@@ -154,9 +154,12 @@ class _tangents_helper_cyclic():
             p = (u0*u0 + v0) / (u0*v0 - 1)
             q = (v0*v0 + u0) / (u0*v0 - 1)
             p, q = rl(p, 1), rl(q, 1)
+            u, v = rl(u0,1), rl(v0,1)
             
             inverse_quad = a**2*c - b**2*c - p*(a**2*b - a*b*c) + q*(a*b**2 - a*b*c)
-            return [inverse_quad]
+            trapezoid = a**3 + a**2*b*(u - v - 1) - a**2*c*u + a*b**2*(v - 1) + a*c**2*v + b**2*c*(1 - u) + b*c**2*(u - v + 1) - c**3
+
+            return [inverse_quad, trapezoid]
 
         if u*v == 1: # or u <= 0 or v <= 0:
             return []
@@ -180,7 +183,9 @@ class _tangents_helper_cyclic():
             [a**2*c, a*b**2, a*b*c, b**3, b**2*c]
         )
 
-        tangents = [inverse_quad, umbrella, scythe, knife]
+        trapezoid = a**3 + a**2*b*(u - v - 1) - a**2*c*u + a*b**2*(v - 1) + a*c**2*v + b**2*c*(1 - u) + b*c**2*(u - v + 1) - c**3
+
+        tangents = [inverse_quad, umbrella, scythe, knife, trapezoid]
 
         if not is_centered:
             tangents += [
