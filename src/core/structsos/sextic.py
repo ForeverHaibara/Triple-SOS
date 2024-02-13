@@ -697,11 +697,11 @@ def _sos_struct_sextic_hexagon_sdp2(coeff):
 
     # detur3 = det(M) * 27x^3 * z >= 0
     # To make the quad-form PSD, we let detur3, a cubic poly of z with params (x,y), positive.
-    # This is done by optimize the discriminant.
+    # This is done by optimizing the discriminant.
     detur3 = _get_detur3()
 
     if False:
-        # too slow
+        # too slow by computing the exact extrema from the resultant
         from time import time
         time0 = time()
         discriminant = sp.polys.discriminant(detur3)
@@ -712,6 +712,10 @@ def _sos_struct_sextic_hexagon_sdp2(coeff):
         print('Time:', time1 - time0)
         print('GCD =', discriminant_gcd)
 
+    # Alternative: 
+    if True:
+        # first detect whether
+        0
 
 def _sos_struct_sextic_hexagon_to_hexagram(coeff):
     """
@@ -816,6 +820,8 @@ def _sos_struct_sextic_full_sdp(coeff):
     s((a2-bc)(4b2+4c2+a2)(4c2+4a2+b2))
 
     243s(a(a+b)5)-32s(a)6
+
+    s((a-b)2(a2-2ab-ac+b2)2)
     
     References
     ----------
@@ -832,6 +838,8 @@ def _sos_struct_sextic_full_sdp(coeff):
 
     if (not coeff.is_rational) or c60 < 0 or coeff.poly111() != 0: 
         return None
+
+    x, y = sp.symbols('x y')
 
     # compute the coefficients of the quadratic form
     # with respect to s(a^3-abc), s(a^2b-abc), s(ab^2-abc)
@@ -858,31 +866,43 @@ def _sos_struct_sextic_full_sdp(coeff):
         c321 + -6*c15 - 2*c24 + 3*c33 + 6*c42 + 4*c51 - 6*c60, 
         c231 + 4*c15 + 6*c24 + 3*c33 - 2*c42 - 6*c51 - 6*c60
     ]
-    if rest_form[0] == 0:
-        if all(_ == 0 for _ in rest_form):
-            quad_form = sp.Matrix([
-                [c60, c51/2, c15/2],
-                [c51/2, c42-c15, c33/2-c60],
-                [c15/2, c33/2-c60, c24-c51]
-            ])
-            quad_form_sol = _compute_quad_form_sol(quad_form)
-            return quad_form_sol
 
+    if all(_ == 0 for _ in rest_form):
+        quad_form = sp.Matrix([
+            [c60, c51/2, c15/2],
+            [c51/2, c42-c15, c33/2-c60],
+            [c15/2, c33/2-c60, c24-c51]
+        ])
+        quad_form_sol = _compute_quad_form_sol(quad_form)
+        return quad_form_sol
+
+
+    if rest_form[0] != 0:
+        r1, r2 = rest_form[1] / rest_form[0], rest_form[2] / rest_form[0]
+        denom = ((r1 + 2*r2 + sp.Rational(9,2))**2 + sp.Rational(27,4))
+
+        # We shall subtract r/z * \sum f(a,b,c)^2 from the original polynomial to make rest_form == 0
+        # where z = x^2 + x(y-3) + y^2 + 3 is a variable
+        r = rest_form[0] / (54*(r1 + r2 + 3)/denom)
+
+        # the coefficients u,v in f can be written as functions of x, y
+        u = (2*r1**2 + 5*r1*r2 + 9*r1 + 2*r2**2 + 9*r2)*x + (2*r1**2 + 5*r1*r2 + 18*r1 + 2*r2**2 + 18*r2 + 27)*y + (- 4*r1**2 - 13*r1*r2 - 18*r1 - 10*r2**2 - 36*r2 - 27)
+        v = (9*r1 + 9*r2 + 27)*x + (-2*r1**2 - 5*r1*r2 - 9*r1 - 2*r2**2 - 9*r2)*y + (- r1**2 - r1*r2 - 18*r1 + 2*r2**2 - 9*r2 - 27)
+        u, v = u / denom, v / denom
+
+    elif rest_form[1] != 0:
+        r1 = rest_form[2] / rest_form[1]
+        denom = 2*r1 + 1
+
+        r = rest_form[1] * denom**2/(54*(r1 + 1))
+        u = (r1 + 2)*x + (r1 + 2)*y + (-5*r1 - 4)
+        v = (-r1 - 2)*y + (r1 - 1)
+        u, v = u / denom, v / denom
+
+    else:
         # not implemented
         return None
 
-    r1, r2 = rest_form[1] / rest_form[0], rest_form[2] / rest_form[0]
-    denom = ((r1 + 2*r2 + sp.Rational(9,2))**2 + sp.Rational(27,4))
-
-    # We shall subtract r/z * \sum f(a,b,c)^2 from the original polynomial to make rest_form == 0
-    # where z = x^2 + x(y-3) + y^2 + 3 is a variable
-    r = rest_form[0] / (54*(r1 + r2 + 3)/denom)
-
-    # the coefficients u,v in f can be written as functions of x, y
-    x, y = sp.symbols('x y')
-    u = (2*r1**2 + 5*r1*r2 + 9*r1 + 2*r2**2 + 9*r2)*x + (2*r1**2 + 5*r1*r2 + 18*r1 + 2*r2**2 + 18*r2 + 27)*y + (- 4*r1**2 - 13*r1*r2 - 18*r1 - 10*r2**2 - 36*r2 - 27)
-    v = (9*r1 + 9*r2 + 27)*x + (-2*r1**2 - 5*r1*r2 - 9*r1 - 2*r2**2 - 9*r2)*y + (- r1**2 - r1*r2 - 18*r1 + 2*r2**2 - 9*r2 - 27)
-    u, v = u / denom, v / denom
     z = x**2 + x*(y - 3) + y**2 + 3
 
     # find x, y such that the following quad_form is positive semidefinite
