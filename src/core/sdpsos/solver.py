@@ -1,4 +1,4 @@
-from typing import List, Optional, Tuple, Callable, Dict, Any, Union
+from typing import List, Optional, Tuple, Callable, Dict, Any, Union, Generator
 from contextlib import contextmanager, nullcontext, AbstractContextManager
 from copy import deepcopy
 
@@ -16,6 +16,7 @@ from .utils import (
 
 
 Decomp = List[Tuple[sp.Matrix, sp.Matrix, List[sp.Rational]]]
+PicosExpression = Any
 
 def _check_picos(verbose = False):
     """
@@ -342,7 +343,7 @@ class SDPProblem():
 
     def _construct_sos(self,
             reg: float = 0,
-            constraints: List[Union[Any, Callable]] = []
+            constraints: List[Union[PicosExpression, sp.Expr, Callable]] = []
         ):
         """
         Construct picos.Problem from self. The function
@@ -352,7 +353,7 @@ class SDPProblem():
         ----------
         reg : float
             For symmetric matrix S, we require S >> reg * I.
-        constraints : List[Union[Any, Callable]]:
+        constraints : List[Union[PicosExpression, sp.Expr, Callable]]:
             Additional constraints.
 
             Example:
@@ -391,8 +392,7 @@ class SDPProblem():
                 self._add_sdp_eq(sdp, S, x0_, space_numer[split], y)
 
             for constraint in constraints or []:
-                if isinstance(constraint, Callable):
-                    constraint = constraint(sdp)
+                constraint = self._align_constraint(constraint)
                 sdp.add_constraint(constraint)
         except:
             return None
@@ -479,12 +479,50 @@ class SDPProblem():
         # objectives.append(('max', lambda sos: sos.variables[obj_key]|x))
         return objectives
 
+    def _align_objective(
+            self,
+            objective: Tuple[str, Union[PicosExpression, sp.Expr, Callable]]
+        ) -> Tuple[str, PicosExpression]:
+        """
+        Align the objective to an expression of sos.variables.
+        """
+        indicator, x = objective
+        if isinstance(x, Callable):
+            x = x(self.sos)
+        elif isinstance(x, sp.Expr):
+            f = sp.lambdify(self.free_symbols, x)
+            x = f(*self.sos.variables['y'])
+        return indicator, x
+
+    def _align_constraint(
+        self,
+        constraint: Union[PicosExpression, sp.Expr, Callable]
+    ) -> PicosExpression:
+        """
+        Align the constraint to an expression of sos.variables.
+        """
+        x = constraint
+        if isinstance(x, Callable):
+            x = x(self.sos)
+        elif isinstance(x, sp.core.relational.Relational):
+            lhs = sp.lambdify(self.free_symbols, x.lhs)(*self.sos.variables['y'])
+            rhs = sp.lambdify(self.free_symbols, x.rhs)(*self.sos.variables['y'])
+            sym = {
+                sp.GreaterThan: '__ge__',
+                sp.StrictGreaterThan: '__ge__',
+                sp.LessThan: '__le__',
+                sp.StrictLessThan: '__le__',
+                sp.Equality: '__eq__'
+            }[x.__class__]
+            x = getattr(lhs, sym)(rhs)
+        return x
+
 
     def _nsolve_with_obj(
             self,
-            objectives: List[Tuple[str, Union[Any, Callable]]],
+            objectives: List[Tuple[str, Union[PicosExpression, sp.Expr, Callable]]],
             context: Optional[AbstractContextManager] = None
-        ) -> Optional[np.ndarray]:
+        ) -> Generator[Optional[np.ndarray], None, None]:
         """
         Numerically solve a SDP problem with multiple objectives.
         This returns a generator of ndarray.
@@ -527,10 +565,7 @@ class SDPProblem():
         with context:
             for objective in objectives:
                 # try each of the objectives
-                max_or_min, obj = objective
-                if isinstance(obj, Callable):
-                    obj = obj(sos)
-                sos.set_objective(max_or_min, obj)
+                sos.set_objective(*self._align_objective(objective))
 
                 sos._strategy = Strategy.from_problem(sos)
                 solution = self._nsolve_with_early_stop(max_iters = 50)
@@ -553,7 +588,7 @@ class SDPProblem():
 
     def _nsolve_with_rationalization(
             self,
-            objectives: List[Tuple[str, Union[Any, Callable]]],
+            objectives: List[Tuple[str, Union[PicosExpression, sp.Expr, Callable]]],
             context: Optional[AbstractContextManager] = None,
             **kwargs
         ) -> Optional[Tuple[sp.Matrix, Decomp]]:
@@ -562,7 +597,7 @@ class SDPProblem():
 
         Parameters
         ----------
-        objectives : List[Tuple[str, Union[Any, Callable]]]
+        objectives : List[Tuple[str, Union[PicosExpression, sp.Expr, Callable]]]
             See details in self._nsolve_with_obj.
         context : Optional[AbstractContextManager]
             See details in self._nsolve_with_obj.
@@ -646,7 +681,7 @@ class SDPProblem():
         if all(_.is_positive_definite for _ in S_numer):
             lcm, times = 1260, 5
         else:
-            lcm = max(1260, sp.prod(set.union(*[set(sp.primefactors(_.q)) for _ in self.space])))
+            lcm = max(1260, sp.prod(set.union(*[set(sp.primefactors(_.q)) for _ in self.space if isinstance(_, sp.Rational)])))
             times = int(10 / sp.log(lcm, 10).n(15) + 3)
 
         if verbose:
@@ -660,12 +695,27 @@ class SDPProblem():
 
     def _solve_trivial(
             self,
-            objectives: Optional[List[Tuple[str, Callable]]] = None
+            objectives: Optional[List[Tuple[str, Union[PicosExpression, sp.Expr, Callable]]]] = None,
+            constraints: List[Union[PicosExpression, sp.Expr, Callable]] = []
         ) -> Optional[Tuple[sp.Matrix, Decomp]]:
         """
-        Solve SDP numerically with given objectives.
+        Solve SDP numerically with given objectives and constraints.
         """
-        return self._nsolve_with_rationalization(objectives)
+        # a context that imposes additional constraints
+        if len(constraints):
+            @contextmanager
+            def restore_constraints(sos, constraints):
+                constraints_num = len(sos.constraints)
+                for constraint in constraints:
+                    constraint = self._align_constraint(constraint)
+                    sos.add_constraint(constraint)
+                yield
+                for i in range(len(sos.constraints) - 1, constraints_num - 1, -1):
+                    sos.remove_constraint(i)
+            context = restore_constraints(self.sos, constraints)
+        else:
+            context = nullcontext()
+        return self._nsolve_with_rationalization(objectives, context)
 
 
     def _solve_relax(
@@ -685,7 +735,7 @@ class SDPProblem():
         obj = sos.variables[obj_key]
 
         @contextmanager
-        def restore_constraints(sos, obj, lamb):    
+        def restore_constraints(sos, obj, lamb):
             for i, constraint in enumerate(sos.constraints):
                 if isinstance(constraint, LMIConstraint) and obj in constraint.variables:
                     # remove obj >> 0
