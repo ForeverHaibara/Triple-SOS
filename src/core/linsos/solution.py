@@ -156,7 +156,7 @@ class SolutionLinear(SolutionSimple):
             i, j, k, m, n, p = common_base
             common_base = (a-b)**(2*i) * (b-c)**(2*j) * (c-a)**(2*k) * a**m * b**n * c**p
 
-            collected = gcd * CyclicSum(common_base * extracted * tangent)
+            collected = gcd * CyclicSum(common_base * extracted * tangent.together())
             exprs.append(collected)
 
         self.numerator = sp.Add(*exprs)
