@@ -72,7 +72,7 @@ def higher_degree(
         1: [],
         2: [CyclicSum(a*b)],
         3: [CyclicSum(a**2*b), CyclicSum(a*b**2), CyclicSum(a*b*c)],
-        4: [CyclicSum(a**2*b*c), CyclicSum(a*b*(a-b)**2)],
+        4: [CyclicSum(a**3*b), CyclicSum(a*b**3), CyclicSum(a**2*b*c), CyclicSum(a*b*(a-b)**2)],
     }
 
     while n + n_plus <= degree_limit and n_plus <= 4:
