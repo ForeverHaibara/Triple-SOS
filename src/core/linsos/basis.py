@@ -155,8 +155,7 @@ class LinearBasisTangent(LinearBasisCyclic):
         ) -> List['LinearBasisTangent']:
         """
         Generate all possible expressions of LinearBasisTangent with degree = degree, i.e.
-        2*i + 2*j + 2*k + m + n + p + deg(tangent) = degree
-        Also, to reduce cyclic expression, we have i >= k.
+        2*i + 2*j + 2*k + m + n + p + deg(tangent) = degree.
 
         Parameters
         ----------
@@ -177,7 +176,6 @@ class LinearBasisTangent(LinearBasisCyclic):
         if tangent is not None:
             tangent_poly = tangent.doit().as_poly(a,b,c)
             tangent_is_cyc = verify_hom_cyclic(tangent_poly)[1]
-                
 
             degree -= deg(tangent_poly)
 
@@ -201,7 +199,7 @@ class LinearBasisTangent(LinearBasisCyclic):
                     poly_ijk = ((a-b)**(2*i) * (b-c)**(2*j) * (c-a)**(2*k)).as_poly(a,b,c)
                     _cached_poly_square[(i,j,k)] = poly_ijk
 
-                for m, n, p in generate_expr(p2, cyc = not (i == j and j == k))[1]:
+                for m, n, p in generate_expr(p2, cyc = tangent_is_cyc)[1]:
                     rets.append(cls(i, j, k, m, n, p, tangent, tangent_is_cyc))
                     rets[-1].array_ = arraylize(_mul_poly(poly_ijk, m, n, p), expand_cyc = True, cyc = True)
 
