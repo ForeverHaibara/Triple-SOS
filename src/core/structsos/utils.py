@@ -1,4 +1,4 @@
-from typing import Union, List, Dict, Callable, Optional
+from typing import Tuple, Union, List, Dict, Callable, Optional
 
 import sympy as sp
 from sympy.core.singleton import S
@@ -120,6 +120,49 @@ class Coeff():
     def __pow__(self, other) -> 'Coeff':
         return self.__operator__(other, lambda x, y: x ** y)
 
+    def cancel_abc(self) -> Tuple[Tuple[int, int, int], 'Coeff']:
+        """
+        Assume poly = a^i*b^j*c^k * poly2.
+        Return ((i,j,k), Coeff(poly2)).
+        """
+        if self.is_zero:
+            return ((0, 0, 0), self)
+        all_monoms = list(self.coeffs.keys())
+        d = self.degree() + 1
+        i, j, k = d, d, d
+        for u, v, w in all_monoms:
+            i = min(i, u)
+            j = min(j, v)
+            k = min(k, w)
+            if i == 0 and j == 0 and w == 0:
+                return ((0, 0, 0), self)
+
+        new_coeff = Coeff({(u-i,v-j,w-k): _ for (u,v,w), _ in self.coeffs.items() if _ != 0})
+        new_coeff.is_rational = self.is_rational
+        return (i, j, k), new_coeff
+
+
+    def cancel_k(self) -> Tuple[int, 'Coeff']:
+        """
+        Assume poly = Sum_{uvw}(x_{uvw} * a^{d*u} * b^{d*v} * c^{d*w}).
+        Write poly2 = Sum_{uvw}(x_{uvw} * a^{u} * b^{v} * c^{w}).
+        Return (d, Coeff(poly2))
+        """
+        if self.is_zero:
+            return (1, self)
+        all_monoms = list(self.coeffs.keys())
+        d = 0
+        for u, v, w in all_monoms:
+            d = sp.gcd(d, u)
+            d = sp.gcd(d, v)
+            d = sp.gcd(d, w)
+            if d == 1:
+                return (1, self)
+
+        d = int(d)
+        new_coeff = Coeff({(u//d,v//d,w//d): _ for (u,v,w), _ in self.coeffs.items() if _ != 0})
+        new_coeff.is_rational = self.is_rational
+        return d, new_coeff
 
 
 def radsimp(expr: Union[sp.Expr, List[sp.Expr]]) -> sp.Expr:
@@ -141,11 +184,35 @@ def radsimp(expr: Union[sp.Expr, List[sp.Expr]]) -> sp.Expr:
     return expr
 
 
+# def radsimp_together(x: sp.Expr) -> sp.Expr:
+#     """
+#     Wrapper of sympy.together and radsimp.
+
+#     >>> sp.together((x + y)/(1+sp.sqrt(3)))
+#     (x + y)/(1 + sqrt(3))
+
+#     >>> radsimp_together(((x + y)/(1+sp.sqrt(3))))
+#     (-1 + sqrt(3))*(x + y)/2
+#     """
+#     f1, f2 = x.together().as_numer_denom()
+#     x1, y1 = f1.as_coeff_Mul()
+#     if f2.is_constant():
+#         x1, f2 = radsimp(x1/f2).as_numer_denom()
+#         return x1 * y1 / f2
+
+#     x2, y2 = f2.as_coeff_Mul()
+#     return radsimp(x1/x2) * y1/y2
+
+
 def sum_y_exprs(y: List[sp.Expr], exprs: List[sp.Expr]) -> sp.Expr:
     """
     Return sum(y_i * expr_i).
     """
-    return sum(v * expr for v, expr in zip(y, exprs) if v != 0)
+    def _mul(v, expr):
+        if v == 0: return 0
+        x, f = (v * expr).radsimp(symbolic=False).together().as_coeff_Mul()
+        return radsimp(x) * f
+    return sum(_mul(*args) for args in zip(y, exprs))
 
 
 def rationalize_func(

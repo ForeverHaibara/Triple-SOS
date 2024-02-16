@@ -7,49 +7,23 @@ from .utils import CyclicSum, CyclicProduct, Coeff, prove_univariate
 from .quartic import sos_struct_quartic
 
 
-def _cancel_common_d(coeff: Coeff, d: int) -> Coeff:
-    """
-    Get coeff2 = coeff / (a^d*b^d*c^d).
-    """
-    if d == 0:
-        return coeff
-    new_coeff = Coeff({(i-d, j-d, k-d): v for (i,j,k), v in coeff.coeffs.items() if v != 0})
-    new_coeff.is_rational = coeff.is_rational
-    return new_coeff
-
 def sos_struct_sparse(coeff, recurrsion, real = True):
+    a, b, c = sp.symbols('a b c')
     if len(coeff) > 6:
-        all_monoms = list(coeff.coeffs.keys())
-        common_d = 0
-        for monom in all_monoms[::-1]:
-            if coeff(monom) != 0:
-                common_d = monom[0]
-                break
-        if common_d > 0:
-            a, b, c = sp.symbols('a b c')
-            new_coeff = _cancel_common_d(coeff, common_d)
-            solution = recurrsion(new_coeff, real = real and common_d % 2 == 0)
+        (i, j, k), new_coeff = coeff.cancel_abc()
+        if i > 0:
+            solution = recurrsion(new_coeff, real = real and i % 2 == 0)
             if solution is not None:
-                solution = CyclicProduct(a**common_d) * solution
-            return solution
+                return CyclicProduct(a**i) * solution
 
-        gcd_ = 0
-        for monom in all_monoms:
-            gcd_ = sp.gcd(gcd_, monom[0])
-            if gcd_ == 1:
-                break
-        else:
-            a, b, c = sp.symbols('a b c')
-            new_coeff = Coeff({(i//gcd_, j//gcd_, k//gcd_): v for (i,j,k), v in coeff.coeffs.items() if v != 0})
-            new_coeff.is_rational = coeff.is_rational
-            solution = recurrsion(new_coeff, real = False if gcd_ % 2 == 0 else real)
+        i, new_coeff = coeff.cancel_k()
+        if i > 1:
+            solution = recurrsion(new_coeff, real = False if i % 2 == 0 else real)
             if solution is not None:
-                solution = solution.xreplace({a: a**gcd_, b: b**gcd_, c: c**gcd_})
-            return solution
+                return solution.xreplace({a: a**i, b: b**i, c: c**i})
 
         return None
 
-    a, b, c = sp.symbols('a b c')
     degree = coeff.degree()
     if degree < 5:
         if degree == 0:
