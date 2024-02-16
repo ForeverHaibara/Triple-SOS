@@ -1,4 +1,4 @@
-from typing import Union, Dict
+from typing import Union, Dict, Optional, Any
 
 import sympy as sp
 
@@ -13,6 +13,7 @@ from .sextic  import sos_struct_sextic
 from .septic  import sos_struct_septic
 from .octic   import sos_struct_octic
 from .nonic   import sos_struct_nonic
+from .acyclic import sos_struct_acyclic
 
 from ...utils import verify_hom_cyclic
 
@@ -58,10 +59,10 @@ def _structural_sos_handler(
 
 
 def StructuralSOS(
-        poly,
-        rootsinfo = None,
-        real = True,
-    ):
+        poly: sp.Poly,
+        rootsinfo: Optional[Any] = None,
+        real: bool = True,
+    ) -> SolutionStructuralSimple:
     """
     Main function of structural SOS. For a given polynomial, if it is in a well-known form,
     then we can solve it directly. For example, quartic 3-var cyclic polynomials have a complete
@@ -80,12 +81,18 @@ def StructuralSOS(
     solution: SolutionStructuralSimple
 
     """
-    if not all(verify_hom_cyclic(poly)):
+    is_hom, is_cyc = verify_hom_cyclic(poly)
+    if not is_hom:
         return None
 
-    solution = _structural_sos_handler(Coeff(poly), real = real)
+    if is_cyc:
+        solution = _structural_sos_handler(Coeff(poly), real = real)
+    else:
+        solution = sos_struct_acyclic(Coeff(poly), real = real)
+
     if solution is None:
         return None
+
 
     solution = SolutionStructural(problem = poly, solution = solution, is_equal = True)
     solution = solution.as_simple_solution()
