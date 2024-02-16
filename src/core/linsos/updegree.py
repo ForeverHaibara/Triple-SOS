@@ -34,7 +34,7 @@ class LinearBasisMultiplierCyclic(LinearBasisCyclic, LinearBasisMultiplier):
     """
     is_cyc = True
     def __init__(self, *args, **kwargs):
-        super(LinearBasisMultiplier).__init__(*args, **kwargs)
+        super(LinearBasisMultiplierCyclic, self).__init__(*args, **kwargs)
 
 
 def higher_degree(
