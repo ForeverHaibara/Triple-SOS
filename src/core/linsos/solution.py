@@ -4,7 +4,7 @@ import numpy as np
 import sympy as sp
 from sympy.core.singleton import S
 
-from .basis import LinearBasis, LinearBasisTangent, a, b, c
+from .basis import LinearBasis, LinearBasisTangentCyclic, a, b, c
 from .updegree import LinearBasisMultiplier
 from ...utils.polytools import deg
 from ...utils.expression.cyclic import CyclicSum, is_cyclic_expr
@@ -63,7 +63,7 @@ class SolutionLinear(SolutionSimple):
     def collect_multipliers(self):
         r"""
         Collect multipliers. For example, if we have 
-        $\sum (a^2-ab) * f(a,b,c) = g(a,b,c) + \sum (-ab) * f(a,b,c)$, then we should combine them.
+        \sum (a^2-ab) * f(a,b,c) = g(a,b,c) + \sum (-ab) * f(a,b,c), then we should combine them.
         """
         multipliers = [self.multiplier]
         non_mul_y = []
@@ -103,12 +103,12 @@ class SolutionLinear(SolutionSimple):
     def collect(self):
         r"""
         Collect terms with same tangents. For example, if we have
-        $a*b*(a^2-b^2-ab-ac+2bc)^2 + a*c*(a^2-b^2-ab-ac+2bc)^2$, then we should combine them.
+        a*b*(a^2-b^2-ab-ac+2bc)^2 + a*c*(a^2-b^2-ab-ac+2bc)^2, then we should combine them.
         """
         basis_by_tangents = {}
         exprs = []
         for v, base in zip(self.y, self.basis):
-            if not isinstance(base, LinearBasisTangent):
+            if not isinstance(base, LinearBasisTangentCyclic):
                 exprs.append(v * base.expr)
                 continue
 
@@ -188,7 +188,7 @@ class SolutionLinear(SolutionSimple):
         unsqr_basis = []
 
         for y, base in zip(self.y, self.basis):
-            if not isinstance(base, LinearBasisTangent):
+            if not isinstance(base, LinearBasisTangentCyclic):
                 unsqr_basis.append((y, base))
                 continue
 

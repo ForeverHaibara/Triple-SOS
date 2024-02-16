@@ -105,11 +105,11 @@ class LinearBasisCyclic(LinearBasis):
 
 
 
-class LinearBasisTangent(LinearBasisCyclic):
-    r"""
+class LinearBasisTangentCyclic(LinearBasisCyclic):
+    """
     CyclicSum((a-b)^(2i) * (b-c)^(2j) * (c-a)^(2k) * a^m * b^n * c^p * (tangent))
 
-    See LinearBasisTangent.generate for more details.
+    See LinearBasisTangentCyclic.generate for more details.
     """
 
     _cached_poly_square = {}
@@ -152,22 +152,22 @@ class LinearBasisTangent(LinearBasisCyclic):
     def generate(cls, 
             degree: int,
             tangent: Union[sp.Expr, RootTangent]
-        ) -> List['LinearBasisTangent']:
+        ) -> List['LinearBasisTangentCyclic']:
         """
-        Generate all possible expressions of LinearBasisTangent with degree = degree, i.e.
+        Generate all possible expressions of LinearBasisTangentCyclic with degree = degree, i.e.
         2*i + 2*j + 2*k + m + n + p + deg(tangent) = degree.
 
         Parameters
         ----------
         degree: int
-            The degree of the LinearBasisTangent to be generated.
+            The degree of the LinearBasisTangentCyclic to be generated.
         tangent: Union[sp.Expr, RootTangent]
-            The tangent to be multiplied to the LinearBasisTangent.
+            The tangent to be multiplied to the LinearBasisTangentCyclic.
 
         Returns
         ----------
-        rets: List[LinearBasisTangent]
-            A list of LinearBasisTangent with degree = degree.
+        rets: List[LinearBasisTangentCyclic]
+            A list of LinearBasisTangentCyclic with degree = degree.
         """
         _cached_poly_square = cls._cached_poly_square
 
@@ -206,8 +206,8 @@ class LinearBasisTangent(LinearBasisCyclic):
         return rets
 
 
-class LinearBasisAMGM(LinearBasisCyclic):
-    r"""
+class LinearBasisAMGMCyclic(LinearBasisCyclic):
+    """
     CyclicSum(a^(i+1)*b^(j)*c^(k-1) + a^(i)*b^(j+1)*c^(k-1) + a^(i-1)*b^(j-1)*c^(k+2) - 3*a^(i)*b^(j)*c^(k))
     """
     _cached_basis = {}
@@ -251,7 +251,7 @@ class LinearBasisAMGM(LinearBasisCyclic):
         return self.array_sp_
 
     @classmethod
-    def generate(cls, degree: int) -> List['LinearBasisAMGM']:
+    def generate(cls, degree: int) -> List['LinearBasisAMGMCyclic']:
         """
         Generate all AM-GM linear basis with degree = degree.
 
@@ -262,7 +262,7 @@ class LinearBasisAMGM(LinearBasisCyclic):
 
         Returns
         ----------
-        rets: List[LinearBasisAMGM]
+        rets: List[LinearBasisAMGMCyclic]
             A list of LinearBasisAMGM with degree = degree.
         """
         if degree in cls._cached_basis:
@@ -279,11 +279,11 @@ class LinearBasisAMGM(LinearBasisCyclic):
 
 
 
-class CachedCommonLinearBasisTangent():
+class CachedCommonLinearBasisTangentCyclic():
     """
-    Common tangents for LinearBasisTangent.
+    Common tangents for LinearBasisTangentCyclic.
     This is not a LinearBasis class, but a class that generates basis.
-    See CachedCommonLinearBasisTangent.generate for more details.
+    See CachedCommonLinearBasisTangentCyclic.generate for more details.
     """
     common_tangents = [
         None,
@@ -297,25 +297,25 @@ class CachedCommonLinearBasisTangent():
     @classmethod
     def generate(cls, degree: int):
         """
-        Generate all possible expressions of LinearBasisTangent with degree = degree for
-        tangent in CachedCommonLinearBasisTangent.common_tangents.
+        Generate all possible expressions of LinearBasisTangentCyclic with degree = degree for
+        tangent in CachedCommonLinearBasisTangentCyclic.common_tangents.
         """
         if degree in cls._cached_common_linear_basis:
             return cls._cached_common_linear_basis[degree]
 
         rets = []
         for tangent in cls.common_tangents:
-            rets += LinearBasisTangent.generate(degree, tangent = tangent)
+            rets += LinearBasisTangentCyclic.generate(degree, tangent = tangent)
 
         cls._cached_common_linear_basis[degree] = rets
         return rets
 
 
-class CachedCommonLinearBasisSpecial():
+class CachedCommonLinearBasisSpecialCyclic():
     """
     Common special linear basis.
     This is not a LinearBasis class, but a class that generates basis.
-    See CachedCommonLinearBasisSpecial.generate for more details.
+    See CachedCommonLinearBasisSpecialCyclic.generate for more details.
     """
     _cached_basis = {
         3: [
@@ -372,3 +372,150 @@ class CachedCommonLinearBasisSpecial():
             cls._cached_basis[degree] = [LinearBasisCyclic(x) for x in basis]
 
         return cls._cached_basis[degree]
+
+
+class LinearBasisTangent(LinearBasis):
+    """
+    ((a-b)^(2i) * (b-c)^(2j) * (c-a)^(2k) * a^m * b^n * c^p * (tangent))
+
+    See LinearBasisTangentCyclic.generate for more details.
+    """
+    __slots__ = LinearBasis.__slots__ + ('info_', 'tangent_')
+    def __init__(self, i, j, k, m, n, p, tangent = None) -> None:
+        super().__init__()
+        self.info_ = (i, j, k, m, n, p)
+        if tangent is None:
+            self.tangent_ = S.One
+        else:
+            self.tangent_ = tangent
+
+    @property
+    def tangent(self) -> sp.Expr:
+        return self.tangent_
+
+    @property
+    def _expr_(self) -> sp.Expr:
+        i, j, k, m, n, p = self.info_
+        expr = (a-b)**(2*i) * (b-c)**(2*j) * (c-a)**(2*k) * a**m * b**n * c**p * self.tangent_
+        # self.expr_ = expr
+        return expr
+
+    @classmethod
+    def generate(cls, 
+            degree: int, 
+            tangent: Union[sp.Expr, RootTangent]
+        ) -> List['LinearBasisTangent']:
+        """
+        Generate all possible expressions of LinearBasisTangent with degree = degree.
+
+        Parameters
+        ----------
+        degree: int
+            The degree of the LinearBasisTangent to be generated.
+        tangent: Union[sp.Expr, RootTangent]
+            The tangent to be multiplied to the LinearBasisTangent.
+
+        Returns
+        ----------
+        rets: List[LinearBasisTangent]
+            A list of LinearBasisTangent with degree = degree.
+        """
+        rets = []
+
+        if tangent is not None:
+            tangent_poly = tangent.doit().as_poly(a,b,c)
+            degree -= deg(tangent_poly)
+
+            def _mul_poly(poly, m, n, p):
+                return poly * a**m * b**n * c**p * tangent_poly
+        else:
+            def _mul_poly(poly, m, n, p):
+                return poly * a**m * b**n * c**p
+        
+        if degree < 0:
+            return rets
+
+        for p1 in range(degree // 2 + 1):
+            p2 = degree - p1 * 2
+            # p1 = i + j + k, p2 = m + n + p
+
+            for i, j, k in generate_expr(p1, cyc = False)[1]:
+                poly_ijk = ((a-b)**(2*i) * (b-c)**(2*j) * (c-a)**(2*k)).as_poly(a,b,c)
+                for m, n, p in generate_expr(p2, cyc = False)[1]:
+                    rets.append(cls(i, j, k, m, n, p, tangent))
+                    rets[-1].array_ = arraylize(_mul_poly(poly_ijk, m, n, p), expand_cyc = False, cyc = False)
+
+        return rets
+
+
+class LinearBasisAMGM(LinearBasis):
+    """
+    a^(i+1)*b^(j)*c^(k-1) + a^(i)*b^(j+1)*c^(k-1) + a^(i-1)*b^(j-1)*c^(k+2) - 3*a^(i)*b^(j)*c^(k)
+    """
+    __slots__ = LinearBasis.__slots__ + ('info_',)
+
+    def __init__(self, i, j, k):
+        super().__init__()
+        self.info_ = (i, j, k)
+    
+    @property
+    def _expr_(self) -> sp.Expr:
+        i, j, k = self.info_
+        expr = a**(i+1)*b**j*c**(k-1) + a**i*b**(j+1)*c**(k-1) + a**(i-1)*b**(j-1)*c**(k+2) - 3*a**i*b**j*c**k
+        # self.expr_ = expr
+        return expr
+
+    @classmethod
+    def generate(cls, degree: int) -> List[LinearBasis]:
+        """
+        Generate all AM-GM linear basis with degree = degree.
+
+        Parameters
+        ----------
+        degree: int
+            The degree of the AM-GM linear basis to be generated.
+
+        Returns
+        ----------
+        rets: List[LinearBasis]
+            A list of LinearBasis with degree = degree.
+        """
+        raise NotImplementedError
+
+
+class CachedCommonLinearBasisTangent():
+    """
+    Common tangents for LinearBasisTangent.
+    This is not a LinearBasis class, but a class that generates basis.
+    See CachedCommonLinearBasisTangent.generate for more details.
+    """
+    common_tangents = [
+        None,
+        (a**2 - b*c)**2,
+        (b**2 - a*c)**2,
+        (c**2 - a*b)**2,
+        (a**3 - b*c**2)**2,
+        (a**3 - b**2*c)**2,
+        (b**3 - a*c**2)**2,
+        (b**3 - a**2*c)**2,
+        (c**3 - a*b**2)**2,
+        (c**3 - a**2*b)**2,
+    ]
+
+    _cached_common_linear_basis = {}
+
+    @classmethod
+    def generate(cls, degree: int):
+        """
+        Generate all possible expressions of LinearBasisTangent with degree = degree for
+        tangent in CachedCommonLinearBasisTangent.common_tangents.
+        """
+        if degree in cls._cached_common_linear_basis:
+            return cls._cached_common_linear_basis[degree]
+
+        rets = []
+        for tangent in cls.common_tangents:
+            rets += LinearBasisTangent.generate(degree, tangent = tangent)
+
+        cls._cached_common_linear_basis[degree] = rets
+        return rets
