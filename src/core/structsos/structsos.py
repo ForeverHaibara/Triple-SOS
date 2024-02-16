@@ -14,6 +14,8 @@ from .septic  import sos_struct_septic
 from .octic   import sos_struct_octic
 from .nonic   import sos_struct_nonic
 
+from ...utils import verify_hom_cyclic
+
 
 SOLVERS = {
     3: sos_struct_cubic,
@@ -78,6 +80,9 @@ def StructuralSOS(
     solution: SolutionStructuralSimple
 
     """
+    if not all(verify_hom_cyclic(poly)):
+        return None
+
     solution = _structural_sos_handler(Coeff(poly), real = real)
     if solution is None:
         return None

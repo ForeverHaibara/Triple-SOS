@@ -8,7 +8,7 @@ from .representation import (
     prove_numerator
 )
 from .solution import SolutionSymmetric, SolutionSymmetricSimple
-from ...utils import deg, verify_is_symmetric
+from ...utils import deg, verify_hom_cyclic, verify_is_symmetric
 
 def SymmetricSOS(
         poly: sp.Poly,
@@ -38,7 +38,9 @@ def SymmetricSOS(
     """
 
     # check symmetricity here # and (1,1,1) == 0
-    if (not (poly.domain in (sp.polys.ZZ, sp.polys.QQ))) or (not verify_is_symmetric(poly)):
+    if (not (poly.domain in (sp.polys.ZZ, sp.polys.QQ))):
+        return None
+    if (not all(verify_hom_cyclic(poly))) or (not verify_is_symmetric(poly)):
         return None
     # if poly(1,1,1) != 0:
     #     return None

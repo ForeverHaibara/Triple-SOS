@@ -111,7 +111,7 @@ class SOS_Manager():
         return self._roots_info
 
     def sum_of_square(self, method_order = None, configs = None):
-        if self.deg <= 1 or (not self._poly_info['iscyc']) or (self.poly.is_zero) or (not self._poly_info['ishom']):
+        if self.deg <= 1 or (self.poly.is_zero) or (not self._poly_info['ishom']):
             return
         
         if not self.poly.domain.is_Numerical:

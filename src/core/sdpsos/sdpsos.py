@@ -11,7 +11,7 @@ from .solver import SDPProblem, SDPProblemEmpty
 from .manifold import RootSubspace, _REDUCE_KWARGS, coefficient_matrix, add_cyclic_constraints
 from .solution import create_solution_from_M, SolutionSDP
 from ...utils.basis_generator import arraylize, arraylize_sp
-from ...utils.polytools import deg
+from ...utils.polytools import deg, verify_hom_cyclic
 
 
 class SOSProblem():
@@ -362,6 +362,8 @@ def SDPSOS(
     if degree > degree_limit or degree < 2:
         return None
     if not (poly.domain in (sp.polys.ZZ, sp.polys.QQ)):
+        return None
+    if not all(verify_hom_cyclic(poly)):
         return None
 
     sdp_problem = SOSProblem(poly, verbose_manifold=verbose)

@@ -76,7 +76,7 @@ def sum_of_square(
 
     assert isinstance(poly, sp.polys.Poly) and poly.gens == (a,b,c), 'Poly must be a sympy polynomial with gens (a,b,c).'
     assert deg(poly) > 1, 'Poly must be a polynomial of degree greater than 1.'
-    assert verify_hom_cyclic(poly) == (True, True), 'Poly must be homogeneous and cyclic.'
+    # assert verify_hom_cyclic(poly) == (True, True), 'Poly must be homogeneous and cyclic.'
 
     # if rootsinfo is None:
     #     rootsinfo = findroot(poly, with_tangents=root_tangents)
