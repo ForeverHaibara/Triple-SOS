@@ -3,25 +3,59 @@ from math import gcd
 
 import sympy as sp
 
-from .utils import CyclicSum, CyclicProduct, Coeff, prove_univariate
+from .utils import (
+    CyclicSum, CyclicProduct, Coeff, prove_univariate,
+    PolynomialUnsolvableError
+)
+from .quadratic import sos_struct_quadratic
 from .quartic import sos_struct_quartic
 
 
-def sos_struct_sparse(coeff, recurrsion, real = True):
+def sos_struct_extract_factors(coeff, recurrsion, real = True):
+    """
+    Try solving the inequality by extracting factors and changing of variables.
+    It handles cyclic and acyclic inequalities both.
+
+    For instance,
+    CyclicSum(a**2bc*(a-b)*(a-c)) is converted to CyclicSum(a*(a-b)*(a-c))
+    by extracting CyclicProduct(a).
+    CyclicSum(a**2*(a**2-b**2)*(a**2-c**2)) is converted to proving
+    Cyclic(a*(a-b)*(a-c)) by making substitution a^2,b^2,c^2 -> a,b,c.
+    """
+    a, b, c = sp.symbols("a b c")
+    (i, j, k), new_coeff = coeff.cancel_abc()
+    if i > 0 or j > 0 or k > 0:
+        solution = recurrsion(new_coeff, real = real and i % 2 == 0 and j % 2 == 0 and k % 2 == 0)
+        print((i,j,k), new_coeff)
+        print(solution)
+        if solution is not None:
+            if i == j and j == k:
+                multiplier = CyclicProduct(a**i)
+            else:
+                multiplier = a**i * b**j * c**k
+            return multiplier * solution
+        raise PolynomialUnsolvableError
+
+    i, new_coeff = coeff.cancel_k()
+    if i > 1:
+        solution = recurrsion(new_coeff, real = False if (i % 2 == 0) else real)
+        if solution is not None:
+            return solution.xreplace({a: a**i, b: b**i, c: c**i})
+        raise PolynomialUnsolvableError
+
+
+def sos_struct_sparse(coeff, recurrsion = None, real = True):
+    """
+    Solver to very sparse inequalities like AM-GM.
+
+    The function does not use `recurrsion` for minimal dependency.
+
+    This method does not present solution for a,b,c in R in prior, but in R+.
+    Inequalities of degree 2 and 4 are skipped because they might be
+    handled in R.
+    """
     a, b, c = sp.symbols('a b c')
     if len(coeff) > 6:
-        (i, j, k), new_coeff = coeff.cancel_abc()
-        if i > 0:
-            solution = recurrsion(new_coeff, real = real and i % 2 == 0)
-            if solution is not None:
-                return CyclicProduct(a**i) * solution
-
-        i, new_coeff = coeff.cancel_k()
-        if i > 1:
-            solution = recurrsion(new_coeff, real = False if i % 2 == 0 else real)
-            if solution is not None:
-                return solution.xreplace({a: a**i, b: b**i, c: c**i})
-
         return None
 
     degree = coeff.degree()
@@ -37,7 +71,7 @@ def sos_struct_sparse(coeff, recurrsion, real = True):
         elif degree == 4:
             # quartic should be handled by _sos_struct_quartic
             # because it presents proof for real numbers
-            return sos_struct_quartic(coeff, recurrsion)
+            return sos_struct_quartic(coeff, None)
 
     monoms = list(coeff.coeffs.keys())
     if len(coeff) == 1:
@@ -77,32 +111,6 @@ def sos_struct_sparse(coeff, recurrsion, real = True):
 
         return _sos_struct_sparse_amgm(coeff, small, large)
     return None
-
-
-def sos_struct_quadratic(coeff):
-    """
-    Solve quadratic problems. It must be in the form $\sum (a^2 + xab)$ where x >= -1.
-    However, we shall also handle cases for real numbers.
-    """
-
-    y, x = coeff((2,0,0)), coeff((1,1,0))
-    if x + y < 0 or y < 0:
-        return None
-
-    a, b, c = sp.symbols('a b c')
-    if y == 0:
-        return CyclicSum(a*b) * x
-
-    if x > 2 * y:
-        return CyclicSum(y * a**2 + x * a*b)
-
-    # real numbers
-    # should be a linear combination of s(a2-ab) and s(a)2
-    # w1 + w2 = y
-    # -w1 + 2w2 = x
-    w1 = (2*y - x) / 3
-    w2 = y - w1
-    return w1 / 2 * CyclicSum((a-b)**2) + w2 * CyclicSum(a)**2
 
 
 def _sos_struct_sparse_amgm(coeff, small, large):
@@ -459,6 +467,8 @@ class Hnmr:
 def sos_struct_heuristic(coeff, recurrsion):
     """
     Solve high-degree but sparse inequalities by heuristic method.
+    It subtracts some structures from the inequality and calls
+    the recurrsion function to solve the problem.
 
     WARNING: Only call this function when degree > 6. And make sure that
     coeff.clear_zero() to remove zero terms on the border.
