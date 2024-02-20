@@ -26,8 +26,6 @@ def sos_struct_extract_factors(coeff, recurrsion, real = True):
     (i, j, k), new_coeff = coeff.cancel_abc()
     if i > 0 or j > 0 or k > 0:
         solution = recurrsion(new_coeff, real = real and i % 2 == 0 and j % 2 == 0 and k % 2 == 0)
-        print((i,j,k), new_coeff)
-        print(solution)
         if solution is not None:
             if i == j and j == k:
                 multiplier = CyclicProduct(a**i)

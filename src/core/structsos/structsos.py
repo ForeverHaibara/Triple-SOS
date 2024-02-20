@@ -8,7 +8,7 @@ from .solution import SolutionStructural, SolutionStructuralSimple
 from .utils import Coeff, PolynomialNonpositiveError, PolynomialUnsolvableError
 from .sparse  import sos_struct_sparse, sos_struct_heuristic, sos_struct_extract_factors
 from .quadratic import sos_struct_quadratic, sos_struct_acyclic_quadratic
-from .cubic   import sos_struct_cubic
+from .cubic   import sos_struct_cubic, sos_struct_acyclic_cubic
 from .quartic import sos_struct_quartic
 from .quintic import sos_struct_quintic
 from .sextic  import sos_struct_sextic
@@ -33,6 +33,7 @@ SOLVERS = {
 
 SOLVERS_ACYCLIC = {
     2: sos_struct_acyclic_quadratic,
+    3: sos_struct_acyclic_cubic,
 }
 
 def _structural_sos_handler(
@@ -61,10 +62,10 @@ def _structural_sos_handler(
         solvers = SOLVERS_ACYCLIC
         heuristic_solver = lambda *args, **kwargs: None
 
+    solution = None
+    degree = coeff.degree()
     try:
         solution = sos_struct_extract_factors(coeff, recurrsion = partial_recur, real = real)
-
-        degree = coeff.degree()
 
         # first try sparse cases
         if solution is None:
@@ -75,9 +76,16 @@ def _structural_sos_handler(
             if solver is not None:
                 solution = solver(coeff, recurrsion = partial_recur, real = real)
 
+    except PolynomialUnsolvableError as e:
+        # When we are sure that the polynomial is nonpositive,
+        # we can return None directly.
+        if isinstance(e, PolynomialNonpositiveError):
+            return None
+
+    # If the polynomial is not solved yet, we can try heuristic solver.
+    try:
         if solution is None and degree > 6:
             solution = heuristic_solver(coeff, recurrsion = partial_recur)
-
     except PolynomialUnsolvableError:
         return None
 
