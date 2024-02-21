@@ -120,8 +120,21 @@ def _sos_struct_cubic_nontrivial(coeff):
 
     See further details in the theorem of quartic.
 
+    Theorem:
+    If and only if p,q >= 0 or p^2q^2 + 18pq - 4p^3 - 4q^3 - 27 <= 0, the inequality
+    f(a,b,c) = s(a^3 + p*a^2*b + q*a*b^2 - (p+q+1)*a*b*c) >= 0 is true for all a,b,c >= 0.
+
+    The curve -4*x**3 + x**2*y**2 + 18*x*y - 4*y**3 - 27 = 0 can be parametrized by
+    x = -(2*t**3 - 1)/t**2
+    y = (t**3 - 2)/t
+    Using the parametrization, f_t(t,1,0) = 0. And we have the solution that
+    s(a^2-ab)*f_t(a,b,c) = 1/t^2 * s(a(ta-(t-1)b-c)^2(tb-(t-1)c-a)^2) >= 0
+
+    However, cubic polynomials can be solved by lifting at most 1 degree. So we will
+    not use the solution above in prior. We convert it to a quartic instead.
+
     Examples
-    -------
+    ---------
     s(4a3-15a2b+12ab2-abc)
 
     s(a3+2a2b-3a2c)
