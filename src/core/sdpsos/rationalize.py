@@ -1,5 +1,5 @@
 from itertools import chain
-from typing import Tuple, List, Dict, Union, Optional, Callable
+from typing import Union, Optional, Tuple, List, Dict, Callable, Generator
 
 import numpy as np
 import sympy as sp
@@ -50,7 +50,11 @@ def rationalize_with_mask(y: np.ndarray, zero_tolerance: float = 1e-7) -> sp.Mat
     return y_rational
 
 
-def rationalize_simultaneously(y: np.ndarray, lcm: int = 1260, times: int = 3) -> sp.Matrix:
+def rationalize_simultaneously(
+        y: np.ndarray,
+        lcm: int = 1260,
+        times: int = 3
+    ) -> Generator[sp.Matrix, None, None]:
     """
     Rationalize a vector `y` with the same denominator `lcm ^ power` 
     where `power = 0, 1, ..., times - 1`. This keeps the denominators of

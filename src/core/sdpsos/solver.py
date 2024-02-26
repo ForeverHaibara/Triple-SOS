@@ -1,6 +1,6 @@
-from typing import List, Optional, Tuple, Callable, Dict, Any, Union, Generator
 from contextlib import contextmanager, nullcontext, AbstractContextManager
 from copy import deepcopy
+from typing import Union, Optional, Any, Tuple, List, Dict, Callable, Generator
 
 import numpy as np
 import sympy as sp

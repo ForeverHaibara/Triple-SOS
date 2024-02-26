@@ -323,7 +323,7 @@ class Root():
         poly = x**3 - x**2 + self.cyclic_sum((1,1,0)) * x - self.cyclic_sum((1,1,1)) / 3
         return poly.as_poly(x)
 
-    def as_vec(self, 
+    def as_vec(self,
             n: int,
             diff: Optional[Tuple[int,int,int]] = None,
             cyc: bool = False,

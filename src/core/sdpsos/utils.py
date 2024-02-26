@@ -1,5 +1,5 @@
-from typing import List, Dict, Optional, Tuple, Union, Callable, Generator
 from contextlib import contextmanager
+from typing import Union, Optional, Tuple, List, Dict, Callable, Generator
 
 import numpy as np
 import sympy as sp
@@ -203,7 +203,7 @@ class Mat2Vec:
         S : sp.Matrix | np.ndarray
             Symmetric matrix.
         """
-        n = cls.length_of_mat(upper_vec.shape[0], mode = mode)
+        n = cls.length_of_mat(upper_vec.shape[0], mode = cls.UPPER)
         if isinstance(upper_vec, sp.MatrixBase):
             S = sp.zeros(n)
         elif isinstance(upper_vec, np.ndarray):
