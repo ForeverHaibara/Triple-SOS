@@ -1,4 +1,4 @@
-from typing import List, Optional, Tuple, Union, Callable, Generator
+from typing import List, Dict, Optional, Tuple, Union, Callable, Generator
 from contextlib import contextmanager
 
 import numpy as np
@@ -223,6 +223,8 @@ class Mat2Vec:
         matrices. And we need to extract each matrix from the array by 
         chunks of indices.
 
+        The method is now deprecated.
+
         This function takes in a list of ints / lists / matrices, and returns a list of
         slices with lengths equal to shape[1] of each matrix.
 
@@ -311,11 +313,9 @@ def solve_undetermined_linear(M: sp.Matrix, B: sp.Matrix) -> Tuple[sp.Matrix, sp
 
 def S_from_y(
         y: sp.Matrix,
-        x0: sp.Matrix,
-        space: sp.Matrix,
-        splits: List[slice],
+        x0_and_space: Dict[str, Tuple[sp.Matrix, sp.Matrix]],
         mode: int = Mat2Vec.DEFAULT,
-    ) -> List[sp.Matrix]:
+    ) -> Dict[str, sp.Matrix]:
     """
     Return the symmetric matrices S from the vector y.
 
@@ -323,25 +323,27 @@ def S_from_y(
     ----------
     y : sp.Matrix
         The vector to be checked.
-    x0 : sp.Matrix
-        The constant part of the equation. Stands for a particular solution
-        of the space of S.
-    space : sp.Matrix
-        The space of S. Stands for the space constraint of S.
+    x0_and_space : Dict[str, Tuple[sp.Matrix, sp.Matrix]]
+        vec(S[key]) = x0[key] + space[key] @ y.
     splits : List[slice]
         The splits of the symmetric matrices. Each split is a slice object.
     mode : int
         Mode of conversion. 0: direct, 1: upper part, 2: isometric.
+
+    Returns
+    ----------
+    S_dict : sp.Matrix
+        Each S[key] satisfies that vec(S[key]) = x0[key] + space[key] @ y.
     """
     if not isinstance(y, sp.MatrixBase):
         y = sp.Matrix(y)
 
-    vecS = x0 + space * y
-    Ss = []
-    for split in splits:
-        S = Mat2Vec.vec2mat(sp.Matrix(vecS[split]), mode=mode)
-        Ss.append(S)
-    return Ss
+    S_dict = {}
+    for key, (x0, space) in x0_and_space.items():
+        vecS = x0 + space * y
+        S = Mat2Vec.vec2mat(vecS, mode=mode)
+        S_dict[key] = S
+    return S_dict
 
 
 @contextmanager

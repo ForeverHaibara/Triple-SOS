@@ -1,12 +1,12 @@
 from itertools import chain
-from typing import Tuple, List, Union, Optional, Callable
+from typing import Tuple, List, Dict, Union, Optional, Callable
 
 import numpy as np
 import sympy as sp
 
 from .utils import congruence_with_perturbation, S_from_y
 
-Decomp = List[Tuple[sp.Matrix, sp.Matrix, List[sp.Rational]]]
+Decomp = Dict[str, Tuple[sp.Matrix, sp.Matrix, List[sp.Rational]]]
 
 
 def rationalize(x, rounding = 1e-2, **kwargs):
@@ -119,9 +119,7 @@ def verify_is_pretty(
 
 def rationalize_and_decompose(
         y: Union[np.ndarray, sp.Matrix],
-        x0: sp.Matrix,
-        space: sp.Matrix,
-        splits: List[slice],
+        x0_and_space: Dict[str, Tuple[sp.Matrix, sp.Matrix]],
         try_rationalize_with_mask: bool = True,
         lcm: int = 1260,
         times: int = 3,
@@ -137,13 +135,8 @@ def rationalize_and_decompose(
     ----------
     y : np.ndarray
         The vector to be rationalized.
-    x0 : sp.Matrix
-        The constant part of the equation. Stands for a particular solution
-        of the space of S.
-    space : sp.Matrix
-        The space of S. Stands for the space constraint of S.
-    splits : List[slice]
-        The splits of the symmetric matrices. Each split is a slice object.
+    x0_and_space : Dict[str, Tuple[sp.Matrix, sp.Matrix]]
+        vec(S[key]) = x0[key] + space[key] @ y.
     try_rationalize_with_mask: bool
         If True, function `rationalize_with_mask` will be called first.
     lcm: int
@@ -163,7 +156,7 @@ def rationalize_and_decompose(
 
     Returns
     -------
-    y, decompositions : Optional[Tuple[sp.Matrix, List[Tuple[sp.Matrix, sp.Matrix, List[sp.Rational]]]]]
+    y, decompositions : Optional[Tuple[sp.Matrix, Dict[str, Tuple[sp.Matrix, sp.Matrix, List[sp.Rational]]]]]
         If the matrices are positive semidefinite, return the congruence decompositions `y, [(S, U, diag)]`
         So that each `S = U.T * diag(diag) * U` where `U` is upper triangular.
         Otherwise, return None.
@@ -181,9 +174,9 @@ def rationalize_and_decompose(
         if check_pretty and not verify_is_pretty(y_rational):
             continue
 
-        Ss = S_from_y(y_rational, x0, space, splits)
-        decompositions = []
-        for S in Ss:
+        S_dict = S_from_y(y_rational, x0_and_space)
+        decompositions = {}
+        for key, S in S_dict.items():
             if reg != 0:
                 S = S + reg * sp.eye(S.shape[0])
 
@@ -192,6 +185,6 @@ def rationalize_and_decompose(
                 break
 
             U, diag = congruence_decomp
-            decompositions.append((S, U, diag))
+            decompositions[key] = (S, U, diag)
         else:
             return y_rational, decompositions
