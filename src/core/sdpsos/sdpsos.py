@@ -4,8 +4,7 @@ from typing import List, Optional, Union, Tuple, Dict
 import sympy as sp
 
 from .utils import (
-    solve_undetermined_linear, split_vector,
-    indented_print
+    solve_undetermined_linear, indented_print
 )
 from .solver import SDPProblem, SDPProblemEmpty
 from .manifold import RootSubspace, _REDUCE_KWARGS, coefficient_matrix, add_cyclic_constraints

@@ -10,8 +10,7 @@ from .ipm import (
     SDPConvergenceError, SDPNumericalError, SDPInfeasibleError, SDPRationalizeError
 )
 from .utils import (
-    symmetric_matrix_from_upper_vec, upper_vec_of_symmetric_matrix,
-    split_vector, solve_undetermined_linear, S_from_y
+    solve_undetermined_linear, S_from_y, Mat2Vec
 )
 
 
@@ -31,35 +30,69 @@ def _check_picos(verbose = False):
     return True
 
 
-class SDPResult():
-    def __init__(self, sos, solution: Dict = None):
-        self.sos = sos
-        self.y = None
-        self.S = None
-        self.decompositions = None
-        self.success = False
-        if solution is not None:
-            self.y = solution['y']
-            self.S = solution['S']
-            self.decompositions = solution['decompositions']
-            self.success = True
+def _decompose_matrix(
+        M: sp.Matrix,
+        variables: Optional[List[sp.Symbol]] = None
+    ) -> Tuple[sp.Matrix, sp.Matrix, sp.Matrix]:
+    """
+    Decomposes a symbolic matrix into the form vec(M) = x + A @ v
+    where x is a constant vector, A is a constant matrix, and v is a vector of variables.
 
-    def __getitem__(self, key):
-        return getattr(self, key)
+    Parameters
+    ----------
+    M : sp.Matrix
+        The matrix to be decomposed.
+    variables : List[sp.Symbol]
+        The variables to be used in the decomposition. If None, it uses M.free_symbols.
 
-    def as_dict(self):
-        return {
-            'sos': self.sos,
-            'y': self.y,
-            'S': self.S,
-            'decompositions': self.decompositions,
-            'success': self.success
-        }
+    Returns
+    ----------
+    x : sp.Matrix
+        The constant vector.
+    A : sp.Matrix
+        The constant matrix.
+    v : sp.Matrix
+        The vector of variables.
+    """
+    rows, cols = M.shape
+    variables = list(M.free_symbols) if variables is None else variables
+    variable_index = {var: idx for idx, var in enumerate(variables)}
+
+    v = sp.Matrix(variables)
+    x = sp.zeros(rows * cols, 1)
+
+    A = sp.zeros(rows * cols, len(variables))
+
+    for i in range(rows):
+        for j in range(cols):
+            expr = M[i, j]
+            terms = sp.collect(expr, variables, evaluate=False)
+
+            constant_term = terms.pop(sp.S.One, 0)  # Extract and remove constant term for x
+
+            x[i * cols + j] = constant_term
+
+            for term, coeff in terms.items():
+                A[i * cols + j, variable_index[term]] = coeff  # Extract coefficients for A
+
+    return x, A, v
 
 
 class SDPProblem():
     """
-    Main class to solve rational SDP problems.
+    Class to solve rational SDP feasible problems, which is in the form of
+
+        S_i = C_i + y_1 * A_i1 + y_2 * A_i2 + ... + y_n * A_in >> 0.
+    
+    where C, A_ij ... are known symmetric matrices, and y_i are free variables.
+
+    It can be rewritten in the form of
+
+        vec(S_i) = x_i + space_i @ y >> 0.
+
+    And together they are vec([S_1, S_2, ...]) = [x_1, x_2, ...] + [space_1, space_2, ...] @ y
+    where x_i and space_i are known. The problem is to find a rational solution y such that S_i >> 0.
+    This is the standard form of our rational SDP feasible problem.
     """
     _has_picos = _check_picos(verbose = True)
     def __init__(self, x0, space, splits, keys = None, free_symbols = None):
@@ -76,6 +109,8 @@ class SDPProblem():
 
         self.y = None
         self.S = None
+        self.decompositions = None
+
         if keys is not None:
             if len(keys) != len(splits):
                 raise ValueError("Length of keys and splits should be the same. But got %d and %d."%(len(keys), len(splits)))
@@ -91,7 +126,7 @@ class SDPProblem():
             self.free_symbols_ = list(sp.Symbol('y_{%d}'%i) for i in range(self.space.shape[1]))
         self.free_symbols = self.free_symbols_
 
-        self.sos = None
+        self.sdp = None
 
         # record the numerical solutions
         self._ys = []
@@ -135,24 +170,36 @@ class SDPProblem():
             if not isinstance(s, sp.Matrix):
                 raise ValueError("S must be a list of sp.Matrix or dict of sp.Matrix.")
             free_symbols |= set(s.free_symbols)
-        splits = split_vector(S)
+        splits = Mat2Vec.split_vector(S)
 
         free_symbols = list(free_symbols)
-        params = {k: 0 for k in free_symbols}
 
-        def to_vec(params):
-            mats = [s.subs(params) for s in S]
-            upper_vecs = [sp.Matrix(list(upper_vec_of_symmetric_matrix(_))) for _ in mats]
-            return sp.Matrix.vstack(*upper_vecs)
 
-        x0 = to_vec(params)
-        space = sp.Matrix.zeros(x0.shape[0], len(free_symbols))
-        for i in range(len(free_symbols)):
-            params[free_symbols[i]] = 1
-            xi = to_vec(params)
-            xi = xi - x0
-            space[:, i] = xi
-            params[free_symbols[i]] = 0
+        #############   TOO SLOW BELOW   ################
+        # params = {k: 0 for k in free_symbols}
+        # def to_vec(params):
+        #     mats = [s.subs(params) for s in S]
+        #     upper_vecs = [sp.Matrix(list(upper_vec_of_symmetric_matrix(_))) for _ in mats]
+        #     return sp.Matrix.vstack(*upper_vecs)
+
+        # x0 = to_vec(params)
+        # space = sp.Matrix.zeros(x0.shape[0], len(free_symbols))
+        # for i in range(len(free_symbols)):
+        #     params[free_symbols[i]] = 1
+        #     xi = to_vec(params)
+        #     xi = xi - x0
+        #     space[:, i] = xi
+        #     params[free_symbols[i]] = 0
+        #############   TOO SLOW ABOVE   ################
+
+        # alternative: use _decopose_matrix
+        x0_list, space_list = [], []
+        for s in S:
+            x0, space, _ = _decompose_matrix(s, free_symbols)
+            x0_list.append(x0)
+            space_list.append(space)
+        x0 = sp.Matrix.vstack(*x0_list)
+        space = sp.Matrix.hstack(*space_list)
 
         return SDPProblem(x0, space, splits, free_symbols = free_symbols, **kwargs)
 
@@ -250,7 +297,7 @@ class SDPProblem():
         self.x0 = self.x0[not_lines, :]
         self.space = self.space[not_lines, :]
         self.masked_rows = deepcopy(masks)
-        self.splits = split_vector(list(self._masked_dims().values()))
+        self.splits = Mat2Vec.split_vector(list(self._masked_dims().values()))
 
         self.free_symbols = list(sp.Symbol('y_{%d}'%i) for i in range(self.space.shape[1]))
         return masks
@@ -341,7 +388,7 @@ class SDPProblem():
         return dict(zip(self.free_symbols, self.y))
 
 
-    def _construct_sos(self,
+    def _construct_sdp(self,
             reg: float = 0,
             constraints: List[Union[PicosExpression, sp.Expr, Callable]] = []
         ):
@@ -359,7 +406,7 @@ class SDPProblem():
             Example:
             ```
                 constraints = [
-                    lambda sos: sos.variables['y'][0] == 1
+                    lambda sdp: sdp.variables['y'][0] == 1
                 ]
             ```
 
@@ -385,7 +432,7 @@ class SDPProblem():
             y = picos.RealVariable('y', self.dof)
             for key, split in zip(self._not_none_keys(), splits):
                 x0_ = x0_numer[split]
-                k = round(np.sqrt(2 * len(x0_) + .25) - .5)
+                k = Mat2Vec.length_of_mat(x0_.shape[0])
                 S = picos.SymmetricVariable(key, (k,k))
                 sdp.add_constraint(S >> reg)
 
@@ -394,10 +441,11 @@ class SDPProblem():
             for constraint in constraints or []:
                 constraint = self._align_constraint(constraint)
                 sdp.add_constraint(constraint)
-        except:
+        except Exception as e:
+            raise e
             return None
 
-        self.sos = sdp
+        self.sdp = sdp
         return sdp
 
     def _add_sdp_eq(self, sdp, S, x0, space, y):
@@ -405,10 +453,7 @@ class SDPProblem():
         Helper function that add the constraint
         S.vec == x0 + space * y to the sdp.
         """
-        k = round(np.sqrt(2 * len(x0) + .25) - .5)
-        x0_sym = symmetric_matrix_from_upper_vec(x0)
-        space_sym = symmetric_matrix_from_upper_vec(space).reshape(k**2, -1)
-        sdp.add_constraint(S.vec == x0_sym + space_sym * y)
+        sdp.add_constraint(S.vec == x0 + space * y)
 
 
     def _nsolve_with_early_stop(
@@ -443,16 +488,16 @@ class SDPProblem():
             The solution of the SDP problem. If the problem is not solved,
             return None.
         """
-        sos = self.sos
+        sdp = self.sdp
         # verbose = self.verbose
 
-        sos.options.max_iterations = max_iters
+        sdp.options.max_iterations = max_iters
         if verbose:
-            print('Retry Early Stop SOS Max Iters = %d' % sos.options.max_iterations)
+            print('Retry Early Stop sdp Max Iters = %d' % sdp.options.max_iterations)
 
         try:
-            solution = sos._strategy.execute()
-            return solution # .primals[sos.variables['y']]
+            solution = sdp._strategy.execute()
+            return solution # .primals[sdp.variables['y']]
         except Exception as e:
             if isinstance(e, ZeroDivisionError):
                 if max_iters // 2 >= min_iters and max_iters > 1:
@@ -471,12 +516,12 @@ class SDPProblem():
         """
         obj_key = self._not_none_keys()[0]
         objectives = [
-            ('max', self.sos.variables[obj_key].tr),
-            ('min', self.sos.variables[obj_key].tr),
-            ('max', self.sos.variables[obj_key]|1)
+            ('max', self.sdp.variables[obj_key].tr),
+            ('min', self.sdp.variables[obj_key].tr),
+            ('max', self.sdp.variables[obj_key]|1)
         ]
-        # x = np.random.randn(*sos.variables[obj_key].shape)
-        # objectives.append(('max', lambda sos: sos.variables[obj_key]|x))
+        # x = np.random.randn(*sdp.variables[obj_key].shape)
+        # objectives.append(('max', lambda sdp: sdp.variables[obj_key]|x))
         return objectives
 
     def _align_objective(
@@ -484,14 +529,14 @@ class SDPProblem():
             objective: Tuple[str, Union[PicosExpression, sp.Expr, Callable]]
         ) -> Tuple[str, PicosExpression]:
         """
-        Align the objective to an expression of sos.variables.
+        Align the objective to an expression of sdp.variables.
         """
         indicator, x = objective
         if isinstance(x, Callable):
-            x = x(self.sos)
+            x = x(self.sdp)
         elif isinstance(x, sp.Expr):
             f = sp.lambdify(self.free_symbols, x)
-            x = f(*self.sos.variables['y'])
+            x = f(*self.sdp.variables['y'])
         return indicator, x
 
     def _align_constraint(
@@ -499,14 +544,14 @@ class SDPProblem():
         constraint: Union[PicosExpression, sp.Expr, Callable]
     ) -> PicosExpression:
         """
-        Align the constraint to an expression of sos.variables.
+        Align the constraint to an expression of sdp.variables.
         """
         x = constraint
         if isinstance(x, Callable):
-            x = x(self.sos)
+            x = x(self.sdp)
         elif isinstance(x, sp.core.relational.Relational):
-            lhs = sp.lambdify(self.free_symbols, x.lhs)(*self.sos.variables['y'])
-            rhs = sp.lambdify(self.free_symbols, x.rhs)(*self.sos.variables['y'])
+            lhs = sp.lambdify(self.free_symbols, x.lhs)(*self.sdp.variables['y'])
+            rhs = sp.lambdify(self.free_symbols, x.rhs)(*self.sdp.variables['y'])
             sym = {
                 sp.GreaterThan: '__ge__',
                 sp.StrictGreaterThan: '__ge__',
@@ -535,15 +580,15 @@ class SDPProblem():
             good rational approximant. This parameter takes in multiple objectives, 
             and the solver will try each of the objective. If still no 
             approximant is found, the final solution will average this 
-            SOS solution and perform rationalization. Note that SDP problem is 
+            sdp solution and perform rationalization. Note that SDP problem is 
             convex so the convex combination is always feasible and not on the
             boundary.
 
             Example: 
             ```
             objectives = [
-                ('max', lambda sos: sos.variables['S_major'].tr),
-                ('max', lambda sos: sos.variables['S_major']|1)
+                ('max', lambda sdp: sdp.variables['S_major'].tr),
+                ('max', lambda sdp: sdp.variables['S_major']|1)
             ]
             ```
         context : Optional[AbstractContextManager]
@@ -555,7 +600,7 @@ class SDPProblem():
             Numerical solution y. Return None if y unfound.
         """
         from picos.modeling.strategy import Strategy
-        sos = self.sos
+        sdp = self.sdp
 
         if context is None:
             context = nullcontext()
@@ -565,14 +610,14 @@ class SDPProblem():
         with context:
             for objective in objectives:
                 # try each of the objectives
-                sos.set_objective(*self._align_objective(objective))
+                sdp.set_objective(*self._align_objective(objective))
 
-                sos._strategy = Strategy.from_problem(sos)
+                sdp._strategy = Strategy.from_problem(sdp)
                 solution = self._nsolve_with_early_stop(max_iters = 50)
 
                 if solution is not None:
                     try:
-                        y = np.array(solution.primals[sos.variables['y']])
+                        y = np.array(solution.primals[sdp.variables['y']])
                     except KeyError:
                         raise SDPInfeasibleError("SDP problem numerically infeasible.")
 
@@ -622,7 +667,7 @@ class SDPProblem():
             y: np.ndarray,
             try_rationalize_with_mask: bool = True,
             times: int = 1,
-            check_pretty: bool = True
+            check_pretty: bool = True,
         ) -> Optional[Tuple[sp.Matrix, Decomp]]:
         """
         Rationalize a numerical vector y so that it produces a rational solution to SDP.
@@ -704,15 +749,15 @@ class SDPProblem():
         # a context that imposes additional constraints
         if len(constraints):
             @contextmanager
-            def restore_constraints(sos, constraints):
-                constraints_num = len(sos.constraints)
+            def restore_constraints(sdp, constraints):
+                constraints_num = len(sdp.constraints)
                 for constraint in constraints:
                     constraint = self._align_constraint(constraint)
-                    sos.add_constraint(constraint)
+                    sdp.add_constraint(constraint)
                 yield
-                for i in range(len(sos.constraints) - 1, constraints_num - 1, -1):
-                    sos.remove_constraint(i)
-            context = restore_constraints(self.sos, constraints)
+                for i in range(len(sdp.constraints) - 1, constraints_num - 1, -1):
+                    sdp.remove_constraint(i)
+            context = restore_constraints(self.sdp, constraints)
         else:
             context = nullcontext()
         return self._nsolve_with_rationalization(objectives, context)
@@ -729,28 +774,28 @@ class SDPProblem():
         import picos
         from picos.constraints.con_lmi import LMIConstraint
 
-        sos = self.sos
+        sdp = self.sdp
         obj_key = self._not_none_keys()[0]
         lamb = picos.RealVariable('lamb', 1)
-        obj = sos.variables[obj_key]
+        obj = sdp.variables[obj_key]
 
         @contextmanager
-        def restore_constraints(sos, obj, lamb):
-            for i, constraint in enumerate(sos.constraints):
+        def restore_constraints(sdp, obj, lamb):
+            for i, constraint in enumerate(sdp.constraints):
                 if isinstance(constraint, LMIConstraint) and obj in constraint.variables:
                     # remove obj >> 0
-                    sos.remove_constraint(i)
+                    sdp.remove_constraint(i)
                     break
-            sos.add_constraint((obj - lamb * picos.I(obj.shape[0])) >> 0)
-            sos.add_constraint(lamb >= 0)
+            sdp.add_constraint((obj - lamb * picos.I(obj.shape[0])) >> 0)
+            sdp.add_constraint(lamb >= 0)
 
             yield
-            sos.remove_constraint(-1)
-            sos.remove_constraint(-1)
-            sos.set_objective('max', obj.tr)
+            sdp.remove_constraint(-1)
+            sdp.remove_constraint(-1)
+            sdp.set_objective('max', obj.tr)
 
-        objectives = [('max', lambda sos: sos.variables['lamb'])]
-        context = restore_constraints(sos, obj, lamb)
+        objectives = [('max', lambda sdp: sdp.variables['lamb'])]
+        context = restore_constraints(sdp, obj, lamb)
         return self._nsolve_with_rationalization(objectives, context)
 
 
@@ -766,23 +811,23 @@ class SDPProblem():
         3. Repeat step 2 until the solution is rational.
         """
         @contextmanager
-        def restore_constraints(sos):
-            constraints_num = len(sos.constraints)
+        def restore_constraints(sdp):
+            constraints_num = len(sdp.constraints)
             yield
-            for i in range(len(sos.constraints) - 1, constraints_num - 1, -1):
-                sos.remove_constraint(i)
+            for i in range(len(sdp.constraints) - 1, constraints_num - 1, -1):
+                sdp.remove_constraint(i)
 
         n = self.dof
-        sos = self.sos
+        sdp = self.sdp
         if deflation_sequence is None:
             deflation_sequence = range(n)
 
-        with restore_constraints(sos):
+        with restore_constraints(sdp):
             for i in deflation_sequence:
                 bounds = []
                 objectives = [
-                    ('max', lambda sos: sos.variables['y'][i]),
-                    ('min', lambda sos: sos.variables['y'][i])
+                    ('max', lambda sdp: sdp.variables['y'][i]),
+                    ('min', lambda sdp: sdp.variables['y'][i])
                 ]
                 cnt_ys = len(self._ys)
                 ra = self._nsolve_with_rationalization(objectives)
@@ -814,7 +859,7 @@ class SDPProblem():
                 if verbose:
                     print('Deflate y[%d] = %s Bounds = %s'%(i, fix, bounds))
 
-                sos.add_constraint(sos.variables['y'][i] == float(fix))
+                sdp.add_constraint(sdp.variables['y'][i] == float(fix))
 
 
     def _solve_degenerated(
@@ -834,24 +879,27 @@ class SDPProblem():
 
     def _solve_wrapped(
         self,
-        method: str = 'partial deflation',
-        allow_numer: bool = False,
+        method: str = 'trivial',
+        allow_numer: int = 0,
         verbose: bool = False,
         **kwargs
     ) -> Optional[Tuple[sp.Matrix, Decomp]]:
         """
         Solve SDP with given method. Moreover, we try to make a convex combinations
         of all numerical solution to test whether it produces a rational solution.
-        Finally, if allow_numer == True, return one of the numerical solution.
+        Finally, if allow_numer == 1, return one of the numerical solution if rationalization fails.
+        If allow_numer == 2, force to return the first numerical solution.
 
         Parameters
         ----------
         method : str
             The method to solve the SDP problem. Currently supports:
             'partial deflation' and 'relax' and 'trivial'.
-        allow_numer : bool
-            Whether to allow numerical solution. If True, then the function will return numerical solution
-            if the rational solution does not exist.
+        allow_numer : int
+            Whether to allow numerical solution. If 0, then the function will return None if
+            the rational feasible solution does not exist. If 1, then the function will return a numerical solution
+            if the rational feasible solution does not exist. If 2, then the function will return the first
+            numerical solution  without any rationalization.
         verbose : bool
             If True, print the information of the solving process.
 
@@ -863,6 +911,9 @@ class SDPProblem():
             Otherwise, return None.
         """
         method = method.lower()
+
+        num_sol = len(self._ys)
+
         if method == 'trivial':
             ra = self._solve_trivial(**kwargs)
         elif method == 'relax':
@@ -872,15 +923,15 @@ class SDPProblem():
         else:
             raise ValueError("Method %s is not supported."%method)
 
-        if ra is not None:
-            return ra
+        if allow_numer < 2:
+            if ra is not None:
+                return ra
 
+            ra = self.rationalize_combine(verbose = verbose)
+            if ra is not None:
+                return ra
 
-        ra = self.rationalize_combine(verbose = verbose)
-        if ra is not None:
-            return ra
-
-        if len(self._ys) > 0:
+        if len(self._ys) > num_sol:
             if allow_numer:
                 y = sp.Matrix(self._ys[-1])
                 decomp = rationalize_and_decompose(y, *self.args,
@@ -896,11 +947,11 @@ class SDPProblem():
 
     def solve(
             self,
-            method: str = 'partial deflation',
-            allow_numer: bool = False,
+            method: str = 'trivial',
+            allow_numer: int = 0,
             verbose: bool = False,
             **kwargs
-        ) -> SDPResult:
+        ) -> bool:
         """
         Interface for solving the SDP problem.
 
@@ -909,34 +960,34 @@ class SDPProblem():
         method : str
             The method to solve the SDP problem. Currently supports:
             'partial deflation' and 'relax' and 'trivial'.
-        allow_numer : bool
-            Whether to allow numerical solution. If True, then the function will return numerical solution
-            if the rational solution does not exist.
+        allow_numer : int
+            Whether to allow numerical solution. If 0, then the function will return None if
+            the rational feasible solution does not exist. If 1, then the function will return a numerical solution
+            if the rational feasible solution does not exist. If 2, then the function will return the first
+            numerical solution without any rationalization.
         verbose : bool
             If True, print the information of the solving process.
 
         Returns
         ----------
-        SDPResult : SDPResult
+        bool
+            Whether the problem is solved. If True, the result can be accessed by
+            SDPProblem.y and SDPProblem.S and SDPProblem.decompositions.
         """
 
         if self.dof == 0:
             solution = self._solve_degenerated()
         elif self._has_picos:
-            self._construct_sos()
+            self._construct_sdp()
             solution = self._solve_wrapped(method = method, allow_numer = allow_numer, verbose = verbose, **kwargs)
         else:
             solution = None
 
         if solution is not None:
-            solution = {
-                'y': solution[0],
-                'S': dict((key, S[0]) for key, S in zip(self.keys, solution[1])),
-                'decompositions': dict((key, S[1:]) for key, S in zip(self.keys, solution[1]))
-            }
-            self.y = solution['y']
-            self.S = solution['S']
-        return SDPResult(self.sos, solution)
+            self.y = solution[0]
+            self.S = dict((key, S[0]) for key, S in zip(self.keys, solution[1]))
+            self.decompositions = dict((key, S[1:]) for key, S in zip(self.keys, solution[1]))
+        return (solution is not None)
 
 
 class SDPProblemEmpty(SDPProblem):
