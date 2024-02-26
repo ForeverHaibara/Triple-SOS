@@ -10,8 +10,7 @@ from ...utils.basis_generator import invarraylize
 from .utils import (
     CyclicSum, CyclicProduct, Coeff,
     sum_y_exprs, nroots, rationalize, rationalize_bound, rationalize_func, cancel_denominator, radsimp,
-    prove_univariate,
-    zip_longest
+    prove_univariate, zip_longest
 )
 
 a, b, c = sp.symbols('a b c')
@@ -67,7 +66,7 @@ def _solve_sa2minusab_mul_cubic(x, y, mul = sp.S(1)):
         return sp.Rational(1,2) * mul * CyclicSum((a-b)**2) * CyclicSum(a**3 + x*a**2*b + y*a*b**2 - (x+y+1)*CyclicProduct(a))
 
     def _solve_t(t):
-        return 1/t**2 * CyclicSum(a*(t*a - (t-1)*b - c)**2*(t*b - (t-1)*c - a)**2)
+        return radsimp(1/t**2) * CyclicSum(a*(t*a - (t-1)*b - c)**2*(t*b - (t-1)*c - a)**2)
 
     # find t such that (x,y) >= (-(2*t**3 - 1)/t**2, (t**3 - 2)/t)  (t > 0)
     t = sp.Symbol('t')
@@ -88,7 +87,7 @@ def _solve_sa2minusab_mul_cubic(x, y, mul = sp.S(1)):
     p1 = mul * _solve_t(t)
     x1 = radsimp(x + (2*t**3 - 1)/t**2)
     y1 = radsimp(y - (t**3 - 2)/t)
-    p2 = mul*x1 * (a - c)**2 + mul*y1 * (a - b)**2
+    p2 = radsimp(mul*x1) * (a - c)**2 + radsimp(mul*y1) * (a - b)**2
     return p1 + CyclicSum(a * p2 * (b - c)**2)
 
 
@@ -201,7 +200,6 @@ def _sos_struct_quintic_full(coeff):
             if p1 is None:
                 return None
 
-            print(t0, p, q, z0)
             hexagon_coeffs = {
                 (4,1,0): t0,
                 (3,2,0): p,

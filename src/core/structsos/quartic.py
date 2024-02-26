@@ -1,3 +1,5 @@
+from typing import Tuple, List
+
 import sympy as sp
 
 from .utils import (
@@ -560,3 +562,294 @@ def _sos_struct_quartic_uncentered(coeff, recur = False):
             return None
 
     return None
+
+
+
+
+#####################################################################
+#
+#                              Acyclic
+#
+#####################################################################
+
+def sos_struct_acyclic_quartic(coeff, recurrsion = None, real = True):
+    """
+    Solve acyclic quartic problems.
+    """
+    return _sos_struct_acyclic_quartic_real(coeff)
+
+
+class _quadratic_minimization():
+    """
+    A helper class to solve quadratic minimization problems. Assume
+    f(x,y) = a(y) * x^2 + b(y) * x + c(y) is a quadratic function with
+    respect to x, and a, b, c are all functions of y. We want to minimize
+    f(x,y).
+    """
+    def __init__(self, a, b, c, *args):
+        self.a = a.as_poly(*args)
+        self.b = b.as_poly(*args)
+        self.c = c.as_poly(*args)
+    def symmetric_axis(self, *args):
+        a, b = self.a(*args), self.b(*args)
+        return - b / (2*a)
+    def extrema(self, *args):
+        a, b, c = [i(*args) for i in (self.a, self.b, self.c)]
+        return c - b**2 / (4*a)
+    def _diff_of_extrema(self, *args):
+        a, b, c = self.a, self.b, self.c
+        return 4*c.diff(*args)*a**2 - 2*b*b.diff(*args)*a + b**2*a.diff(*args)
+    def extrema_2d(self, *args):
+        roots = nroots(self._diff_of_extrema(*args), method='factor', real = True)
+        candidates = []
+        for root in roots:
+            v = self.extrema(root)
+            if v is not sp.zoo:
+                candidates.append((root, v))
+        if len(candidates) == 0:
+            return []
+        minimum = min(_[1] for _ in candidates)
+        roots = [((self.symmetric_axis(r), r), v) for r, v in candidates if v == minimum]
+        return roots
+
+def _sos_struct_acyclic_quartic_real(coeff):
+    """
+    Solve acyclic quartic problems over a,b,c in R.
+
+    Hilbert's 17th problem, solved by Artin, answers the question that
+    a 3-variable polynomial of degree 4 is nonnegative over R must be sum of squares.
+    The SOS decomposition can be attained by solving SDP. 
+    This function is an alternative algorithm to solve the SDP manually.
+
+    We follow the following steps:
+    1. Subtract enough c^4 so that the polynomial is nonnegative and has a root over R.
+    2. Subtract enough c^2*(a - ?c)^2 so that the polynomial is nonnegative and has two roots.
+    3. Subtract enough (...)^2 so that the polynomial is nonnegative and has three roots.
+
+    When the polynomial has three roots over R and is still nonnegative, its sum of squares
+    decomposition matrix (the SDP matrix) is defined uniquely by its coefficients. Then we
+    can recover the SOS decomposition to the original polynomial. Actually, we can make a
+    linear transformation that f(a,b,c) = g(x,y,z) such that g(1,0,0)=g(0,1,0)=g(0,0,1) are
+    the three roots, and g is then a quadratic form of xy, yz and zx.
+    """
+    poly = coeff.as_poly()
+    roots = _sos_struct_acyclic_quartic_reaL_findroots(coeff, poly)
+    if roots is None:
+        return None
+
+    poly2 = poly
+    for root, subtraction in roots:
+        poly2 = poly2 - subtraction
+
+    def get_base_mat(poly):
+        u400, u310, u301, u220, u211, u202, u130, u121, u112, u103, u040, u031, u022, u013, u004 = [poly.coeff_monomial(_) for _ in
+            ((4,0,0),(3,1,0),(3,0,1),(2,2,0),(2,1,1),(2,0,2),(1,3,0),(1,2,1),(1,1,2),(1,0,3),(0,4,0),(0,3,1),(0,2,2),(0,1,3),(0,0,4))
+        ]
+        M = [
+            [u400, u220/2, u202/2, u310/2, u211/2, u301/2],
+            [u220/2, u040, u022/2, u130/2, u031/2, u121/2],
+            [u202/2, u022/2, u004, u112/2, u013/2, u103/2],
+            [u310/2, u130/2, u112/2, 0, 0, 0],
+            [u211/2, u031/2, u013/2, 0, 0, 0],
+            [u301/2, u121/2, u103/2, 0, 0, 0]
+        ]
+        return sp.Matrix(M)
+
+    def get_constraints(base_mat, root):
+        a0, b0, c0 = root[0]
+        vec = sp.Matrix([a0**2, b0**2, c0**2, a0*b0, b0*c0, c0*a0])
+        target = -base_mat * vec
+        A = [
+            [1, 0, 0, 0, 0, 0],
+            [a0**2/b0**2, 1, 0, 0, 0, 0],
+            [0, b0**2/c0**2, 1, 0, 0, 0],
+            [-2*a0/b0, 0, c0**2/(a0*b0), 1, 0, 0],
+            [0, -2*b0/c0, -c0/b0, 0, 1, 0],
+            [0, 0, -c0/a0, 0, 0, 1]
+        ]
+
+    def _as_abc2_vec(expr):
+        expr = expr.as_poly(a,b,c)
+        v = lambda d0,d1,d2: expr.coeff_monomial((d0,d1,d2))
+        return sp.Matrix([v(2,0,0),v(0,2,0),v(0,0,2),v(1,1,0),v(0,1,1),v(1,0,1)])
+
+    def solve_numer_params_from_roots(poly, roots):
+        # first apply transform
+        x, y = sp.symbols('x y')
+        Rmat = sp.Matrix([list(r) for r, _, __ in roots]).T
+        Rinv = Rmat.inv()
+        trans = lambda x, y, z: list(Rmat * sp.Matrix([x, y, z]))
+        invtrans = lambda a, b, c: list(Rinv * sp.Matrix([a, b, c]))
+        poly2 = poly - sum([v*sub**2 for _, v, sub in roots])
+        poly2 = poly2(*trans(x, y, 1)).as_poly(x, y)
+        # write poly2 in sum-of-squares
+        v = lambda d0, d1: poly2.coeff_monomial((d0, d1))
+        Mxyz = sp.Matrix([
+            [v(2,2), v(1,2)/2, v(2,1)/2],
+            [v(1,2)/2, v(0,2), v(1,1)/2],
+            [v(2,1)/2, v(1,1)/2, v(2,0)]
+        ])
+        # print(((poly2 - (sp.Matrix([x*y,y,x]).T * M * sp.Matrix([x*y,y,x]))[0,0])).coeffs())
+        if not Mxyz.is_positive_semidefinite:
+            return
+        x0, y0, z0 = invtrans(a, b, c)
+        Mtrans = sp.Matrix.vstack(*[_as_abc2_vec(_).T for _ in (x0*y0, y0*z0, z0*x0)])
+        Mtrans_right = Mtrans[:,3:]
+        Mabc_lower_right = Mtrans_right.T * Mxyz * Mtrans_right
+        for root, value, sub in roots:
+            subvec_right = _as_abc2_vec(sub)[3:,:]
+            Mabc_lower_right += subvec_right * subvec_right.T * value
+        params = []
+        for i, j in ((0,0),(1,1),(2,2),(1,0),(0,2),(1,2)):
+            params.append(Mabc_lower_right[i,j])
+        return params
+
+    def construct_mat_from_params(base_mat, params):
+        l33, l44, l55, l34, l45, l35 = params
+        addition = sp.Matrix([
+            [0, -l33/2, -l55/2, 0, -l35, 0],
+            [-l33/2, 0, -l44/2, 0, 0, -l34],
+            [-l55/2, -l44/2, 0, -l45, 0, 0],
+            [0, 0, -l45, l33, l34, l35],
+            [-l35, 0, 0, l34, l44, l45],
+            [0, -l34, 0, l35, l45, l55]
+        ])
+        return base_mat + addition
+
+def _sos_struct_acyclic_quartic_reaL_findroots(
+        coeff, poly = None
+    ) -> List[Tuple[Tuple[sp.Float, sp.Float, sp.Float], sp.Float, sp.Expr]]:
+    """
+    Subtract some polynomials from the original polynomial so that the remaining polynomial
+    has at least three roots over R.
+
+    Returns
+    ---------
+    List of (root, value, subtraction) where root is the root,
+    so that the original poly - sum(value[j]*subtraction[j]**2 for j in range(i+1)) vanishes at root[i].
+
+    If the polynomial detects to be not nonnegative, or there are at most two roots found,
+    then it returns None.
+    """
+    if poly is None:
+        poly = coeff.as_poly()
+    
+    def find_trivial_root(coeff) -> List:
+        if coeff((4,0,0)) == 0:
+            if coeff((3,1,0)) == 0 and coeff((3,0,1)) == 0:
+                return [((1,0,0), 0, sp.S(0))]
+            return None # not positive on R
+        elif coeff((0,4,0)) == 0:
+            if coeff((1,3,0)) == 0 and coeff((0,3,1)) == 0:
+                return [((0,1,0), 0, sp.S(0))]
+            return None
+        elif coeff((0,0,4)) == 0:
+            if coeff((1,0,3)) == 0 and coeff((0,1,3)) == 0:
+                return [((0,0,1), 0, sp.S(0))]
+            return None
+        return []
+
+    def find_first_root(poly) -> List:
+        """
+        Solve maximum x such that poly >= x*c^4.
+        By homogeneous property, we can assume c = 1 and solve for the extrema.
+        """
+        poly2 = poly.subs(c, 1)
+        diff1 = poly2.diff(a)
+        diff2 = poly2.diff(b)
+        res = sp.polys.resultant(diff1, diff2, a)
+        broots = nroots(res.as_poly(b), real = True, method = 'factor')
+        candidates = []
+        for b_ in broots:
+            for a_ in nroots(diff1.subs(b,b_).as_poly(a), real=True, method='factor'):
+                candidates.append(((a_, b_), poly2(a_,b_)))
+        if len(candidates) == 0:
+            return []
+        minimum = min(_[1] for _ in candidates)
+        if minimum < 0:
+            return []
+        roots = [((x[0][0], x[0][1], sp.S(1)), minimum, c**2) for x in candidates if x[1] == minimum]
+        return roots
+
+    def find_second_root(poly, root) -> List:
+        """
+        Solve maximum w such that poly - poly(root)*c^4 >= w * c^2*(root[2]*a - root[0]*c)^2
+        We make the transformation that
+        a = x + root[0]
+        b = x*y + root[1]
+        c = root[2]
+        Then we w = sup{g(x,y)/x^2/root[2]^2}. However, we can show that g(x,y)/x^2 is a
+        quadratic polynomial with respect to x.
+        """
+        x, y = sp.symbols('x y')
+        root, value, sub1 = root
+        trans = lambda x, y, z: (x + root[0], x*y + root[1], root[2])
+        poly2 = poly - value * sub1**2
+        poly2 = poly2(*trans(x, y, 1)).as_poly(x)
+
+        # poly2 does not have x^0 and x^1 terms
+        quad = _quadratic_minimization(
+            poly2.coeff_monomial((4,)),
+            poly2.coeff_monomial((3,)),
+            poly2.coeff_monomial((2,)),
+            y
+        )
+        roots = quad.extrema_2d(y)
+        # transform back to a,b,c
+        if len(roots) == 0:
+            return []
+        minimum = roots[0][1] / root[2]**2
+        subtraction = c * (root[2]*a - root[0]*c)
+        return [(trans(x, y, 1), minimum, subtraction) for (x, y), v in roots]
+
+    
+    def find_third_root(poly, root1, root2) -> List:
+        """
+        Define f = poly - ...*c^4 - - ...*c^2*(...*a -...*c)^2 >= 0
+        with roots at root1 and root2. We can make a linear transformation that
+        a = x + root2[0]*y + root1[0]*z
+        b =     root2[1]*y + root1[1]*z
+        c =     root2[2]*y + root1[2]*z
+        Then g(0,0,1) = g(0,1,0) = 0. Also, if we let z = 1, then g is quadratic
+        with respect to y. We can solve the maximum w such that g(x,y)/(y^2z^2) >= w.
+        We can let u = 1/y, then g(x,y)/y^2 = h(x,u) is quadratic of u.
+
+        The inverse transformation is that
+        y = (b*root1[2] - c*root1[1]) / (root2[1]*root1[2] - root2[2]*root1[1])
+        z = (c*root2[1] - b*root2[2]) / (root2[1]*root1[2] - root2[2]*root1[1])
+        """
+        root1, value1, sub1 = root1
+        root2, value2, sub2 = root2
+        x, y = sp.symbols('x y')
+        poly2 = poly - value1*sub1**2 - value2*sub2**2
+        trans = lambda x, y, z: (x + root2[0]*y + root1[0]*z, root2[1]*y + root1[1]*z, root2[2]*y + root1[2]*z)
+        poly2 = poly2(*trans(x, y, 1)).as_poly(y)
+        # note: implicitly change the variable to u = 1/y
+        quad = _quadratic_minimization(
+            poly2.coeff_monomial((0,)),
+            poly2.coeff_monomial((1,)),
+            poly2.coeff_monomial((2,)),
+            x
+        )
+        roots = quad.extrema_2d(x)
+        if len(roots) == 0:
+            return []
+
+        # transform back to a,b,c
+        minimum = roots[0][1] / (root2[1]*root1[2] - root2[2]*root1[1])**4
+        y_ = (b*root1[2] - c*root1[1])
+        z_ = (c*root2[1] - b*root2[2])
+        subtraction = y_ * z_
+
+        roots = [(trans(x, 1/u, 1), minimum, subtraction) for (u, x), v in roots]
+        return roots
+
+
+    roots = find_trivial_root(coeff)
+    if roots is None:
+        return None
+    for i, func in enumerate([find_first_root, find_second_root, find_third_root]):
+        if len(roots) == i:
+            roots += func(poly, *roots)
+    if len(roots) < 3:
+        return None
