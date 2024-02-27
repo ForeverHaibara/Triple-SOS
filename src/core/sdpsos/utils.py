@@ -49,10 +49,7 @@ def is_numer_matrix(M: sp.Matrix) -> bool:
     """
     Check whether a matrix contains sp.Float.
     """
-    for v in M:
-        if not isinstance(v, sp.Rational):
-            return True
-    return False
+    return any(not isinstance(v, sp.Rational) for v in M)
 
 
 class Mat2Vec:
@@ -344,6 +341,15 @@ def S_from_y(
         S = Mat2Vec.vec2mat(vecS, mode=mode)
         S_dict[key] = S
     return S_dict
+
+
+def degree_of_monomial(monomial: sp.Expr) -> int:
+    """
+    Return the degree of a monomial.
+    TODO: do not convert to poly.
+    """
+    if len(monomial.free_symbols) == 0: return 0
+    return sum(monomial.as_poly().degree_list())
 
 
 @contextmanager

@@ -51,17 +51,6 @@ class SOSProblem():
         if verbose_manifold:
             print(manifold)
 
-
-    def _masked_dims(self, filter_zero = False):
-        return self.sdp._masked_dims(filter_zero=filter_zero)
-
-    def _not_none_keys(self):
-        return self.sdp._not_none_keys()
-
-    @property
-    def masked_rows(self):
-        return self.sdp.masked_rows
-
     @property
     def S(self):
         return self.sdp.S
@@ -72,13 +61,6 @@ class SOSProblem():
 
     def S_from_y(self, *args, **kwargs):
         return self.sdp.S_from_y(*args, **kwargs)
-
-    def set_masked_rows(self, *args, **kwargs):
-        return self.sdp.set_masked_rows(*args, **kwargs)
-
-    def pad_masked_rows(self, *args, **kwargs):
-        return self.sdp.pad_masked_rows(*args, **kwargs)
-
 
     def __getitem__(self, key):
         return getattr(self, key)

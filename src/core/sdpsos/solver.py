@@ -1,5 +1,4 @@
 from contextlib import contextmanager, nullcontext, AbstractContextManager
-from copy import deepcopy
 from typing import Union, Optional, Any, Tuple, List, Dict, Callable, Generator
 
 import numpy as np
@@ -16,6 +15,14 @@ from .utils import (
 
 Decomp = Dict[str, Tuple[sp.Matrix, sp.Matrix, List[sp.Rational]]]
 PicosExpression = Any
+
+_RELATIONAL_TO_FUNC = {
+    sp.GreaterThan: '__ge__',
+    sp.StrictGreaterThan: '__ge__',
+    sp.LessThan: '__le__',
+    sp.StrictLessThan: '__le__',
+    sp.Equality: '__eq__'
+}
 
 
 def _check_picos(verbose = False):
@@ -38,6 +45,8 @@ def _decompose_matrix(
     """
     Decomposes a symbolic matrix into the form vec(M) = x + A @ v
     where x is a constant vector, A is a constant matrix, and v is a vector of variables.
+
+    See also in `sympy.solvers.solveset.linear_eq_to_matrix`.
 
     Parameters
     ----------
@@ -84,44 +93,111 @@ class SDPTransformation():
     def __init__(self, parent_node, *args, **kwargs):
         self.parent_node = parent_node
         self.child_node = self._init_child_node(*args, **kwargs)
-    def _init_child_node(self, *args, **kwargs):
+        self.parent_node._transforms.append(self)
+        self.child_node._transforms.append(self)
+    def _init_child_node(self, *args, **kwargs) -> 'SDPProblem':
         return
     def is_parent(self, sdp):
         return sdp is self.parent_node
     def is_child(self, sdp):
         return sdp is self.child_node
-    def propagate_to_parent(self, sdp):
-        return self.parent_node
-    def propagate_to_child(self, sdp):
-        return self.child_node
+    def propagate_to_parent(self, recurrsive: bool = True):
+        raise NotImplementedError
+    def propagate_to_child(self, recurrsive: bool = True):
+        raise NotImplementedError
 
 class SDPMatrixTransform(SDPTransformation):
     """
     Assume the original problem to be S1 >= 0, ... Sn >= 0.
     We assume that Si = Qi * Mi * Qi.T given matrices Q1, ... Qn.
     The new problem is to solve for M1 >= 0, ... Mn >= 0.
+
+    In more detail, if
+    [vec(S1); ...; vec(Sn)] = [x1; ...; xn] + [space1; ...; spacen] @ y,
+    together we write the right hand side as x0 + space @ y.
+
+    Now we know that vec(Si) = vec(Qi * Mi * Qi.T) = (Qi x Qi) vec(Mi).
+    => x0 + space @ y = [(Q1xQ1)vec(M1); ...; (QnxQn)vec(Mn)] = Q vec(M)
+    where Q = diag[Q1xQ1, ..., QnxQn].
+
+    This implies, in the form of augmented matrix,
+    x0 = [-space, Q] @ [y; vec(M)]
+    which we can solve for [y; vec(M)] = x' + space' @ y'.
     """
     def __init__(self, parent_node, Qdict):
-        super().__init__()
+        self._x1 = None
+        self._space1 = None
+        super().__init__(parent_node, Qdict)
         self.parent_node = parent_node
         self._qdict = Qdict
 
     def _init_child_node(self, Qdict):
+        parent_node = self.parent_node
         if parent_node is None:
             return
-        x0_list = []
-        space_list = []
-        for split in splits:
-            QtimesQ = Qdict
-            
+
+        aug_x0 = []
+        aug_space = []
+        aug_kronQ = []
+        for key, (x0, space) in parent_node._x0_and_space.items():
+            aug_x0.append(x0)
+            aug_space.append(space)
+            aug_kronQ.append(sp.kronecker_product(Qdict[key], Qdict[key]))
+        aug_x0 = sp.Matrix.vstack(*aug_x0)
+        aug_space = sp.Matrix.vstack(*aug_space)
+        aug_kronQ = sp.Matrix.diag(*aug_kronQ)
+
+        # vec(x0 + space @ y) = (QxQ) vec(M)
+        # => [-space, (QxQ)] @ [y, vec(M)] = x0
+        # => [y, vec(M)] = x1 + space1 @ y1
+        aug_mat = sp.Matrix.hstack(-aug_space, aug_kronQ)
+        x1, space1 = solve_undetermined_linear(aug_mat, aug_x0)
+        self._x1, self._space1 = x1, space1
+
+        # split x2, space2
+        x2, space2 = x1[parent_node.dof:,:], space1[parent_node.dof:,:]
+        x2_list, space2_list = [], []
+        start = 0
+        for key, (x0, space) in parent_node._x0_and_space.items():
+            n = Qdict[key].shape[1]
+            x2_list.append(x2[start:start+n**2,:])
+            space2_list.append(space2[start:start+n**2,:])
+            start += n**2
+
+        x0_and_space_dict = dict(zip(parent_node.keys(), zip(x2_list, space2_list)))
+        return SDPProblem(x0_and_space_dict)
 
     # @classmethod
     # def from_equations(self, *args, **kwargs):
     #     transform = SDPMatrixTransform(None, None)
 
-    def propagate_to_parent(self, sdp):
-        0
+    def propagate_to_parent(self, recurrsive: bool = True):
+        parent_node, child_node = self.parent_node, self.child_node
+        if child_node.y is None:
+            return parent_node
+        y_and_vecM = self._x1 + self._space1 @ child_node.y
+        parent_node.y = y_and_vecM[:parent_node.dof,:]
 
+        vecM = y_and_vecM[parent_node.dof:,:]
+        start = 0
+        S_dict = {}
+        decomp_dict = {}
+        for key in parent_node._x0_and_space.keys():
+            Q = self._qdict[key]
+            n = Q.shape[1]
+            M = Mat2Vec.vec2mat(vecM[start:start+n**2,:])
+            S = Q @ M @ Q.T
+            S_dict[key] = S
+            U, D = child_node.decompositions[key]
+            decomp_dict[key] = (U * Q.T, D)
+            start += n**2
+        parent_node.S = S_dict
+        parent_node.decompositions = decomp_dict
+
+        if recurrsive:
+            parent_node.propagate_to_parent(recurrsive = recurrsive)
+
+        return parent_node
 
 class SDPProblem():
     """
@@ -141,9 +217,9 @@ class SDPProblem():
     """
     _has_picos = _check_picos(verbose = True)
     def __init__(
-            self,
-            x0_and_space: Union[Dict[str, Tuple[sp.Matrix, sp.Matrix]], List[Tuple[sp.Matrix, sp.Matrix]]],
-            free_symbols = None
+        self,
+        x0_and_space: Union[Dict[str, Tuple[sp.Matrix, sp.Matrix]], List[Tuple[sp.Matrix, sp.Matrix]]],
+        free_symbols = None
     ):
         """
         Initializing a SDPProblem object.
@@ -182,6 +258,9 @@ class SDPProblem():
         # record the numerical solutions
         self._ys = []
 
+        # record the transformation dependencies
+        self._transforms = []
+
     @property
     def dof(self):
         """
@@ -196,16 +275,74 @@ class SDPProblem():
         return "<SDPProblem dof=%d keys=%s>"%(self.dof, self.keys())
 
     @classmethod
-    def from_equations(cls, eq, vecP, splits, **kwargs) -> 'SDPProblem':
-        x0, space = solve_undetermined_linear(eq, vecP)
-        return SDPProblem(x0, space, **kwargs)
+    def from_equations(
+        cls,
+        eq: sp.Matrix,
+        rhs: sp.Matrix,
+        splits: Union[Dict[str, int], List[int]]
+    ) -> 'SDPProblem':
+        """
+        Assume the SDP problem can be rewritten in the form of
+
+            eq * [vec(S1); vec(S2); ...] = rhs
+        
+        where Si.shape[0] = splits[i].
+        The function formulates the SDP problem from the given equations.
+
+        Parameters
+        ----------
+        eq : sp.Matrix
+            The matrix eq.
+        rhs : sp.Matrix
+            The matrix rhs.
+        splits : Union[Dict[str, int], List[int]]
+            The splits of the size of each symmetric matrix.
+
+        Returns
+        ----------
+        sdp : SDPProblem
+            The SDP problem constructed.    
+        """
+        x0, space = solve_undetermined_linear(eq, rhs)
+        keys = None
+        if isinstance(splits, dict):
+            keys = list(splits.keys())
+            splits = list(splits.values())
+
+        x0_and_space = []
+        start = 0
+        for n in splits:
+            x0_ = x0[start:start+n**2,:]
+            space_ = space[start:start+n**2,:]
+            x0_and_space.append((x0_, space_))
+            start += n**2
+
+        if keys is not None:
+            x0_and_space = dict(zip(keys, x0_and_space))
+        return SDPProblem(x0_and_space)
 
     @classmethod
-    def from_matrix(cls, S) -> 'SDPProblem':
-        # invalid_kwargs = ['free_symbols']
-        # for name in invalid_kwargs:
-        #     if name in kwargs:
-        #         raise ValueError(f"Cannot specify {name} when constructing SDPProblem from matrix.")
+    def from_matrix(
+        cls,
+        S: Union[sp.Matrix, List[sp.Matrix], Dict[str, sp.Matrix]],
+    ) -> 'SDPProblem':
+        """
+        Construct a `SDPProblem` from symbolic symmetric matrices.
+        The problem is to solve a parameter set such that all given
+        symmetric matrices are positive semidefinite. The result can
+        be obtained by `SDPProblem.as_params()`.
+
+        Parameters
+        ----------
+        S : Union[sp.Matrix, List[sp.Matrix], Dict[str, sp.Matrix]]
+            The symmetric matrices that SDP requires to be positive semidefinite.
+            Each entry of the matrix should be linear in the free symbols.
+
+        Returns
+        ----------
+        sdp : SDPProblem
+            The SDP problem constructed.
+        """
 
         keys = None
         if isinstance(S, dict):
@@ -232,145 +369,6 @@ class SDPProblem():
             x0_and_space = dict(zip(keys, x0_and_space))
 
         return SDPProblem(x0_and_space, free_symbols = free_symbols)
-
-
-    # def _masked_dims(self, filter_zero: bool = False) -> Dict[str, int]:
-    #     """
-    #     Compute the dimensions of each symmetric matrix after row-masking.
-
-    #     Parameters
-    #     ----------
-    #     filter_zero : bool
-    #         If filter_zero == True, then keys of dimension zero will be ignored.
-
-    #     Returns
-    #     ----------
-    #     dims : Dict[str, int]
-    #         Dimensions of the symmetric matrices after row-masking.
-    #     """
-    #     dims = {}
-    #     for i in range(len(self.keys)):
-    #         key = self.keys[i]
-    #         split = self._splits[i]
-    #         mask = self.masked_rows.get(key, [])
-    #         k = round(np.sqrt(2 * (split.stop - split.start) + .25) - .5)
-    #         v = k - len(mask)
-    #         if filter_zero and v == 0:
-    #             continue
-    #         dims[key] = v
-    #     return dims
-
-    # def _not_none_keys(self) -> List[str]:
-    #     """
-    #     Return keys that dim[key] > 0 after row-masking.
-
-    #     Returns
-    #     ----------
-    #     keys : List[str]
-    #         Keys that dim[key] > 0.
-    #     """
-    #     return list(self._masked_dims(filter_zero = True))
-
-
-    # def set_masked_rows(self,
-    #         masks: Dict[str, List[int]] = {}
-    #     ) -> Dict[str, sp.Matrix]:
-    #     """
-    #     Sometimes the diagonal entries of S are zero. Or we set them to zero to
-    #     reduce the degree of freedom. This function masks the corresponding rows.
-
-    #     Parameters
-    #     ----------
-    #     masks : List[int]
-    #         Indicates the indices of the rows to be masked.
-
-    #     Returns
-    #     ----------
-    #     masks : List[int]
-    #         The input.
-    #     """
-    #     # restore masked values to unmaksed values
-    #     self.x0, self.space, self.splits = self._x0, self._space, self._splits
-    #     self.free_symbols = self.free_symbols_
-    #     self._ys = []
-    #     self.masked_rows = {}
-
-    #     if len(masks) == 0 or not any(_ for _ in masks.values()):
-    #         return True
-
-    #     # first compute y = x1 + space1 @ y1
-    #     # => S = x0 + space @ x1 + space @ space1 @ y1
-    #     perp_space = []
-    #     tar_space = []
-    #     lines = []
-
-    #     for key, split in zip(self.keys(), self.splits):
-    #         mask = masks.get(key, [])
-    #         if not mask:
-    #             continue
-    #         n = round(np.sqrt(2 * (split.stop - split.start) + .25) - .5)
-    #         for v, (i,j) in enumerate(upper_vec_of_symmetric_matrix(n, return_inds = True)):
-    #             if i in mask or j in mask:
-    #                 lines.append(v + split.start)
-
-    #     tar_space = - self.x0[lines, :]
-    #     perp_space = self.space[lines, :]
-
-    #     # this might not have solution and raise an Error
-    #     x1, space1 = solve_undetermined_linear(perp_space, tar_space)
-
-    #     self.x0 += self.space @ x1
-    #     self.space = self.space @ space1
-
-    #     # remove masked rows
-    #     not_lines = list(set(range(self.space.shape[0])) - set(lines))
-    #     self.x0 = self.x0[not_lines, :]
-    #     self.space = self.space[not_lines, :]
-    #     self.masked_rows = deepcopy(masks)
-    #     self.splits = Mat2Vec.split_vector(list(self._masked_dims().values()))
-
-    #     self.free_symbols = list(sp.Symbol('y_{%d}'%i) for i in range(self.space.shape[1]))
-    #     return masks
-
-
-    # def pad_masked_rows(self, 
-    #         S: Union[Dict, sp.Matrix],
-    #         key: str
-    #     ) -> sp.Matrix:
-    #     """
-    #     Pad the masked rows of S[key] with zeros. This is an "inversed" 
-    #     operation of the row-masking.
-
-    #     Parameters
-    #     ----------
-    #     S : sp.Matrix
-    #         Solved symmetric matrices after row-masking.
-    #     key : str
-    #         The key of the matrix. It is used to obtain the mask.
-
-    #     Returns
-    #     ----------
-    #     S : sp.Matrix
-    #         The restored S before row_masking.
-    #     """
-    #     if isinstance(S, dict):
-    #         S = S[key]
-
-    #     mask = self.masked_rows.get(key, [])
-    #     if not mask:
-    #         return S
-
-    #     n = S.shape[0]
-    #     m = n + len(mask)
-    #     Z = sp.Matrix.zeros(m)
-    #     # Z[:n, :n] = S
-    #     not_masked = list(set(range(m)) - set(mask))
-
-    #     for v1, r1 in enumerate(not_masked):
-    #         for v2, r2 in enumerate(not_masked):
-    #             Z[r1, r2] = S[v1, v2]
-    #     return Z
-
 
     def S_from_y(self, 
             y: Optional[Union[sp.Matrix, np.ndarray, Dict]] = None
@@ -574,13 +572,7 @@ class SDPProblem():
         elif isinstance(x, sp.core.relational.Relational):
             lhs = sp.lambdify(self.free_symbols, x.lhs)(*self.sdp.variables['y'])
             rhs = sp.lambdify(self.free_symbols, x.rhs)(*self.sdp.variables['y'])
-            sym = {
-                sp.GreaterThan: '__ge__',
-                sp.StrictGreaterThan: '__ge__',
-                sp.LessThan: '__le__',
-                sp.StrictLessThan: '__le__',
-                sp.Equality: '__eq__'
-            }[x.__class__]
+            sym = _RELATIONAL_TO_FUNC[x.__class__]
             x = getattr(lhs, sym)(rhs)
         return x
 
@@ -973,6 +965,8 @@ class SDPProblem():
             method: str = 'trivial',
             allow_numer: int = 0,
             verbose: bool = False,
+            solve_child: bool = True,
+            propagate_to_parent: bool = True,
             **kwargs
         ) -> bool:
         """
@@ -990,6 +984,12 @@ class SDPProblem():
             numerical solution without any rationalization.
         verbose : bool
             If True, print the information of the solving process.
+        solve_child : bool
+            Whether to solve the problem from the child node. Defaults to True. If True,
+            it only uses the newest child node to solve the problem. If no child node is found,
+            it defaults to solve the problem by itself.
+        propagate_to_parent : bool
+            Whether to propagate the result to the parent node. Defaults to True.
 
         Returns
         ----------
@@ -997,6 +997,17 @@ class SDPProblem():
             Whether the problem is solved. If True, the result can be accessed by
             SDPProblem.y and SDPProblem.S and SDPProblem.decompositions.
         """
+        if solve_child:
+            children = self.children
+            if len(children):
+                return children[-1].solve(
+                    method = method,
+                    allow_numer = allow_numer,
+                    verbose = verbose,
+                    solve_child = solve_child,
+                    propagate_to_parent = propagate_to_parent,
+                    **kwargs
+                )
 
         if self.dof == 0:
             solution = self._solve_degenerated()
@@ -1010,8 +1021,86 @@ class SDPProblem():
             self.y = solution[0]
             self.S = dict((key, S[0]) for key, S in solution[1].items())
             self.decompositions = dict((key, S[1:]) for key, S in solution[1].items())
+
+        if propagate_to_parent:
+            self.propagate_to_parent()
+
         return (solution is not None)
 
+    @property
+    def parents(self) -> List['SDPProblem']:
+        """
+        Return the parent nodes.
+        """
+        return [transform.parent_node for transform in self._transforms if transform.is_child(self)]
+
+    @property
+    def children(self) -> List['SDPProblem']:
+        """
+        Return the child nodes.
+        """
+        return [transform.child_node for transform in self._transforms if transform.is_parent(self)]
+
+    def propagate_to_parent(self, recurrsive: bool = True):
+        """
+        Propagate the result to the parent node.
+        """
+        for transform in self._transforms:
+            if transform.is_child(self):
+                transform.propagate_to_parent(recurrsive = recurrsive)
+
+    def constrain_subspace(self, subspaces: Dict[str, sp.Matrix]) -> 'SDPProblem':
+        """
+        Assume Si = Qi * Mi * Qi.T where Qi are given.
+        Then the problem becomes to find Mi >> 0.
+
+        Parameters
+        ----------
+        subspaces : Dict[str, sp.Matrix]
+            The matrices that represent the subspace. The keys of dictionary
+            should match the keys of self.keys().
+
+        Returns
+        ----------
+        SDPProblem
+            The new SDP problem.
+
+        Raises
+        ----------
+        ValueError
+            If there is no solution to the linear system Si = Qi * Mi * Qi.T,
+            then it raises an error.
+        """
+        transform = SDPMatrixTransform(self, subspaces)
+        return transform.child_node
+
+    def constrain_nullspace(self, nullspaces: Dict[str, sp.Matrix]) -> 'SDPProblem':
+        """
+        Assume Si * Ni = 0 where Ni are given, which means that there exists Qi
+        such that Si = Qi * Mi * Qi.T where Qi are nullspaces of Ni.
+        Then the problem becomes to find Mi >> 0.
+
+        Parameters
+        ----------
+        nullspaces : Dict[str, sp.Matrix]
+            The matrices that represent the nullspace. The keys of dictionary
+            should match the keys of self.keys().
+
+        Returns
+        ----------
+        SDPProblem
+            The new SDP problem.
+
+        Raises
+        ----------
+        ValueError
+            If there is no solution to the linear system Si = Qi * Mi * Qi.T,
+            then it raises an error.
+        """
+        nl = lambda x: sp.Matrix.hstack(*x.T.nullspace())
+        subspaces = dict((key, nl(nullspace)) for key, nullspace in nullspaces.items())
+        transform = SDPMatrixTransform(self, subspaces)
+        return transform.child_node
 
 class SDPProblemEmpty(SDPProblem):
     def __init__(self, *args, **kwargs):

@@ -30,7 +30,9 @@ from .symsos import (
 )
 
 from .sdpsos import (
-    SDPSOS, SDPProblem, SOSProblem, RootSubspace
+    SDPSOS, SDPProblem, SOSProblem, RootSubspace,
+    SDPTransformation, SDPMatrixTransform,
+    SolutionSDP
 )
 
 __all__ = [
@@ -50,5 +52,7 @@ __all__ = [
     'SymmetricSOS', 'sym_representation', 'TRANSLATION_POSITIVE', 'TRANSLATION_REAL',
     'prove_univariate', 'prove_univariate_interval', 'check_univariate',
     'SolutionSymmetric', 'SolutionSymmetricSimple',
-    'SDPSOS', 'SDPProblem', 'SOSProblem', 'RootSubspace'
+    'SDPSOS', 'SDPProblem', 'SOSProblem', 'RootSubspace',
+    'SDPTransformation', 'SDPMatrixTransform',
+    'SolutionSDP'
 ]
