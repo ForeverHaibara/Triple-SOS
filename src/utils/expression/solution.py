@@ -7,8 +7,6 @@ from sympy.core.singleton import S
 from sympy.printing.precedence import precedence_traditional, PRECEDENCE
 
 from ..expression.cyclic import is_cyclic_expr, CyclicSum, CyclicProduct, CyclicExpr
-from ..basis_generator import generate_expr
-from ..roots.rationalize import cancel_denominator
 
 def _solution_latex_to_txt(s: str) -> str:
     """
@@ -430,40 +428,4 @@ def congruence(M: Union[sp.Matrix, np.ndarray]) -> Union[None, tuple]:
     if S[-1] < 0:
         return None
     return U, S
-
-
-
-def congruence_as_sos(M, multiplier = S.One, symbols = 'a b c', cancel = True, cyc = True):
-    # (n+1)(n+2)/2 = M.shape[0]
-    n = round((M.shape[0] * 2 + .25)**.5 - 1.5)
-    U, S = congruence(M)
-
-    if isinstance(symbols, str):
-        symbols = sp.symbols(symbols)
-    a, b, c = symbols
-
-    exprs = []
-    coeffs = []
-
-    monoms = generate_expr(n, cyc = 0)[1]
-    for i, s in enumerate(S):
-        if s == 0:
-            continue
-        val = sp.S(0)
-        if cancel:
-            r = cancel_denominator(U[i,i:])
-        for j in range(i, len(monoms)):
-            monom = monoms[j]
-            val += U[i,j] / r * a**monom[0] * b**monom[1] * c**monom[2]
-        exprs.append(val**2)
-        coeffs.append(s * r**2)
-
-    exprs = [multiplier * expr for expr in exprs]
-    if cyc:
-        exprs = [CyclicSum(expr, symbols) for expr in exprs]
-
-    exprs = [coeff * expr for coeff, expr in zip(coeffs, exprs)]
-    expr = sp.Add(*exprs)
-
-    return expr
 

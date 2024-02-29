@@ -5,8 +5,7 @@ import sympy as sp
 from sympy.core.singleton import S
 
 from ...utils import (
-    verify_hom_cyclic, deg,
-    generate_expr, arraylize, arraylize_sp,
+    verify_hom_cyclic, deg, generate_expr, arraylize, arraylize_sp,
     CyclicSum, CyclicProduct,
     RootTangent
 )
@@ -193,13 +192,13 @@ class LinearBasisTangentCyclic(LinearBasisCyclic):
             p2 = degree - p1 * 2
             # p1 = i + j + k, p2 = m + n + p
 
-            for i, j, k in generate_expr(p1, cyc = tangent_is_cyc)[1]:
+            for i, j, k in generate_expr(3, p1, cyc = tangent_is_cyc)[1]:
                 poly_ijk = _cached_poly_square.get((i,j,k))
                 if poly_ijk is None:
                     poly_ijk = ((a-b)**(2*i) * (b-c)**(2*j) * (c-a)**(2*k)).as_poly(a,b,c)
                     _cached_poly_square[(i,j,k)] = poly_ijk
 
-                for m, n, p in generate_expr(p2, cyc = tangent_is_cyc)[1]:
+                for m, n, p in generate_expr(3, p2, cyc = tangent_is_cyc)[1]:
                     rets.append(cls(i, j, k, m, n, p, tangent, tangent_is_cyc))
                     rets[-1].array_ = arraylize(_mul_poly(poly_ijk, m, n, p), expand_cyc = True, cyc = True)
 
@@ -229,7 +228,7 @@ class LinearBasisAMGMCyclic(LinearBasisCyclic):
     @property
     def _array_sp_(self) -> sp.Matrix:
         i, j, k = self.info_
-        inv_monoms = generate_expr(i + j + k, cyc = True)[0]
+        inv_monoms = generate_expr(3, i + j + k, cyc = True)[0]
         self.array_sp_ = np.zeros(len(inv_monoms))
         for coeff, monom in zip((1,1,1,-3), ((i+1,j,k-1), (i,j+1,k-1), (i-1,j-1,k+2), (i,j,k))):
             for monom_perm in ((monom), (monom[1], monom[2], monom[0]), (monom[2], monom[0], monom[1])):
@@ -241,7 +240,7 @@ class LinearBasisAMGMCyclic(LinearBasisCyclic):
     @property
     def _array_sp_(self) -> sp.Matrix:
         i, j, k = self.info_
-        inv_monoms = generate_expr(i + j + k, cyc = True)[0]
+        inv_monoms = generate_expr(3, i + j + k, cyc = True)[0]
         self.array_sp_ = sp.zeros(len(inv_monoms), 1)
         for coeff, monom in zip((1,1,1,-3), ((i+1,j,k-1), (i,j+1,k-1), (i-1,j-1,k+2), (i,j,k))):
             for monom_perm in ((monom), (monom[1], monom[2], monom[0]), (monom[2], monom[0], monom[1])):
@@ -439,9 +438,9 @@ class LinearBasisTangent(LinearBasis):
             p2 = degree - p1 * 2
             # p1 = i + j + k, p2 = m + n + p
 
-            for i, j, k in generate_expr(p1, cyc = False)[1]:
+            for i, j, k in generate_expr(3, p1, cyc = False)[1]:
                 poly_ijk = ((a-b)**(2*i) * (b-c)**(2*j) * (c-a)**(2*k)).as_poly(a,b,c)
-                for m, n, p in generate_expr(p2, cyc = False)[1]:
+                for m, n, p in generate_expr(3, p2, cyc = False)[1]:
                     rets.append(cls(i, j, k, m, n, p, tangent))
                     rets[-1].array_ = arraylize(_mul_poly(poly_ijk, m, n, p), expand_cyc = False, cyc = False)
 

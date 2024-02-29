@@ -6,10 +6,8 @@ from sympy.core.singleton import S
 
 from .basis import LinearBasis, LinearBasisTangentCyclic, a, b, c
 from .updegree import LinearBasisMultiplier
-from ...utils.polytools import deg
 from ...utils.expression.cyclic import CyclicSum, is_cyclic_expr
-from ...utils.expression.solution import SolutionSimple, congruence_as_sos
-from ...utils.basis_generator import arraylize_sp, generate_expr
+from ...utils.expression.solution import SolutionSimple
 from ...utils.roots.rationalize import cancel_denominator
 
 class SolutionLinear(SolutionSimple):
@@ -161,78 +159,4 @@ class SolutionLinear(SolutionSimple):
 
         self.numerator = sp.Add(*exprs)
         self.solution = self.numerator / self.multiplier
-        return self
-
-    def as_congruence(self):
-        r"""
-        Note that (part of) g(a,b,c) can be represented sum of squares. For example, polynomial of degree 4 
-        has form [a^2,b^2,c^2,ab,bc,ca] * M * [a^2,b^2,c^2,ab,bc,ca]' where M is positive semidefinite matrix.
-
-        We can first reconstruct and M and then find its congruence decomposition, 
-        this reduces the number of terms.
-
-        NOTE: By experiment, in most cases rewriting the solution as congruence decomposition does not
-        reduce any simplicity. Hence please do not use it.
-
-        TODO: The function is too slow. Maybe we should cache (a-b)^i * (b-c)^j * (c-a)^k.
-        """
-        degree = deg(self.problem) + deg(self.multiplier.doit().as_poly(a,b,c))
-
-        sqr_args = {}
-        for i in (degree % 2, degree % 2 + 2):
-            half_degree = (degree - i) // 2
-            if half_degree > 0:
-                n = len(generate_expr(half_degree, cyc = False)[1])
-                sqr_args[i] = sp.zeros(n)
-
-        unsqr_basis = []
-
-        for y, base in zip(self.y, self.basis):
-            if not isinstance(base, LinearBasisTangentCyclic):
-                unsqr_basis.append((y, base))
-                continue
-
-            core = None
-            i, j, k, m, n, p = base.info_
-            if base.tangent.is_constant():
-                core = base.tangent
-            elif base.tangent.is_Pow:
-                core = base.tangent.base ** (base.tangent.exp // 2)
-            if core is None:
-                unsqr_basis.append((y, base))
-                continue
-            core *= (a-b)**i * (b-c)**j * (c-a)**k * a**(m//2) * b**(n//2) * c**(p//2)
-            core = core.as_poly(a,b,c)
-
-            m, n, p = m % 2, n % 2, p % 2
-            new_gen = None
-            if m != n or n != p: # not m + n + p == 0 or 3
-                if n >= p >= m:
-                    new_gen = (b, c, a)
-                elif p >= m >= n:
-                    new_gen = (c, a, b)
-            if new_gen is not None:
-                core = sp.polys.Poly.from_poly(core, new_gen)
-
-            core = arraylize_sp(core, cyc=False)
-            mat = sqr_args.get(m + n + p)
-            if mat is None:
-                unsqr_basis.append((y, base))
-                continue
-
-            for i in range(mat.shape[0]):
-                mat[:, i] += core * (core[i] * y)
-
-        new_numerator = sum(v * b.expr for v, b in unsqr_basis)
-
-        for key, multiplier in enumerate((S.One, a, a*b, a*b*c)):
-            mat = sqr_args.get(key)
-            if mat is None:
-                continue
-
-            new_numerator += congruence_as_sos(mat, multiplier = multiplier, cyc = True, cancel = True)
-        # return sqr_args
-        self.numerator = new_numerator
-        self.solution = self.numerator / self.multiplier
-
         return self

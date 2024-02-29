@@ -349,7 +349,7 @@ class Root():
         numer : bool
             If numer, return a numpy array instead of sympy Matrix.
         """
-        monoms = generate_expr(n, cyc)[1]
+        monoms = generate_expr(3, n, cyc = cyc)[1]
         a, b, c = self._permuted_root(permute)
 
         if diff is None:
@@ -375,7 +375,7 @@ class Root():
         For example, for n = 3, f(a,b,c) = [a^3,a^2*b,a^2*c,a*b^2,a*b*c,a*c^2,b^3,b^2*c,b*c^2,c^3],
         then sum(f(a,b,c)), sum(a*f(a,b,c)) and sum(a^2*f(a,b,c)) are the three columns.
         """
-        monoms = generate_expr(n, cyc = False)[1]
+        monoms = generate_expr(3, n, cyc = False)[1]
         if self.is_centered:
             return sp.ones(len(monoms), 1)
 
@@ -566,7 +566,7 @@ class RootAlgebraic(Root):
         return s
 
     def span(self, n: int) -> sp.Matrix:
-        monoms = generate_expr(n, cyc = False)[1]
+        monoms = generate_expr(3, n, cyc = False)[1]
 
         vecs = [None]
         _single_power = self._single_power
@@ -674,7 +674,7 @@ class RootRational(RootAlgebraic):
         return (a**i * b**j * c**k + a**k * b**i * c**j + a**j * b**k * c**i) / self._sum**(i+j+k)
 
     def span(self, n: int) -> sp.Matrix:
-        monoms = generate_expr(n, cyc = False)[1]
+        monoms = generate_expr(3, n, cyc = False)[1]
         if self.is_centered:
             return sp.ones(len(monoms), 1)
 

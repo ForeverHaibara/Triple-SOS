@@ -199,6 +199,43 @@ class SDPMatrixTransform(SDPTransformation):
 
         return parent_node
 
+class SDPVectorTransform(SDPTransformation):
+    """
+    Assume the original problem to be S1 >= 0, ... Sn >= 0
+    where Si = xi + spacei @ y.
+    Now we make the transformation y = A @ z + b.
+    The new problem is to solve for z such that S1 >= 0, ... Sn >= 0.
+    """
+    def __init__(self, parent_node, A, b):
+        self._A = A
+        self._b = b
+        super().__init__(parent_node, A, b)
+    def _init_child_node(self, A, b):
+        parent_node = self.parent_node
+        if parent_node is None:
+            return
+        x0_and_space = {}
+        for key, (x0, space) in parent_node._x0_and_space.items():
+            x0_ = x0 + space @ b
+            space_ = space @ A
+            x0_and_space[key] = (x0_, space_)
+        return SDPProblem(x0_and_space)
+
+    def propagate_to_parent(self, recurrsive: bool = True):
+        parent_node, child_node = self.parent_node, self.child_node
+        if child_node.y is None:
+            return parent_node
+        parent_node.y = self._A @ child_node.y + self._b
+        parent_node.S = child_node.S
+        parent_node.decompositions = child_node.decompositions
+        if recurrsive:
+            parent_node.propagate_to_parent(recurrsive = recurrsive)
+        return parent_node
+    
+
+
+
+
 class SDPProblem():
     """
     Class to solve rational SDP feasible problems, which is in the form of
@@ -740,9 +777,10 @@ class SDPProblem():
         if all(_.is_positive_definite for _ in S_numer.values()):
             lcm, times = 1260, 5
         else:
-            spaces = [space for x0, space in self._x0_and_space.values()]
-            lcm = max(1260, sp.prod(set.union(*[set(sp.primefactors(_.q)) for _ in spaces if isinstance(_, sp.Rational)])))
-            times = int(10 / sp.log(lcm, 10).n(15) + 3)
+            # spaces = [space for x0, space in self._x0_and_space.values()]
+            # lcm = max(1260, sp.prod(set.union(*[set(sp.primefactors(_.q)) for _ in spaces if isinstance(_, sp.Rational)])))
+            # times = int(10 / sp.log(lcm, 10).n(15) + 3)
+            times = 5
 
         if verbose:
             print('Minimum Eigenvals = %s'%[min(map(lambda x:sp.re(x), _.eigenvals())) for _ in S_numer.values()])
@@ -1100,6 +1138,26 @@ class SDPProblem():
         nl = lambda x: sp.Matrix.hstack(*x.T.nullspace())
         subspaces = dict((key, nl(nullspace)) for key, nullspace in nullspaces.items())
         transform = SDPMatrixTransform(self, subspaces)
+        return transform.child_node
+
+    def constrain_symmetricity(self) -> 'SDPProblem':
+        """
+        Constrain the solution to be symmetric. This is useful to reduce
+        the degree of freedom when the given symbolic matrix is not symmetric.
+        """
+        # first solve for the nullspace the y should lie in
+        eqs = []
+        rhs = []
+        for key, (x0, space) in self._x0_and_space.items():
+            n = Mat2Vec.length_of_mat(x0.shape[0])
+            for i in range(1, n):
+                for j in range(i):
+                    eqs.append(space[i*n+j, :] - space[j*n+i, :])
+                    rhs.append(x0[j*n+i] - x0[i*n+j])
+        eqs = sp.Matrix.vstack(*eqs)
+        rhs = sp.Matrix(rhs)
+        b, A = solve_undetermined_linear(eqs, rhs)
+        transform = SDPVectorTransform(self, A, b)
         return transform.child_node
 
 class SDPProblemEmpty(SDPProblem):
