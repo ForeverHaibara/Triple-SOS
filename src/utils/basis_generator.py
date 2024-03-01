@@ -47,8 +47,12 @@ class MonomialReduction():
         return super().__new__(cls)
 
     @classmethod
-    def from_poly(self, poly: sp.Poly) -> 'MonomialReduction':
+    def from_poly(cls, poly: sp.Poly) -> 'MonomialReduction':
         raise NotImplementedError
+
+    @classmethod
+    def from_options(cls, **options) -> 'MonomialReduction':
+        return _parse_options(**options)
 
     def _register_monoms(self, nvars: int, degree: int) -> None:
         if nvars < 0 or degree < 0:
@@ -280,7 +284,7 @@ class MonomialCyclic(MonomialHomogeneous):
 def _parse_options(**options) -> MonomialReduction:
     option = options.get('option', None)
     if option is not None:
-        if issubclass(option, MonomialReduction):
+        if isinstance(option, type) and issubclass(option, MonomialReduction):
             return option()
         elif isinstance(option, MonomialReduction):
             return option

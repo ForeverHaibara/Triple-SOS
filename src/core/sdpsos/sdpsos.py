@@ -1,16 +1,50 @@
-from copy import deepcopy
-from typing import List, Optional, Union, Tuple, Dict
+from time import time
+from typing import Union, Optional, List, Tuple, Dict, Callable
 
 import sympy as sp
+import numpy as np
 
-from .utils import (
-    solve_undetermined_linear, indented_print
-)
-from .solver import SDPProblem, SDPProblemEmpty
-from .manifold import RootSubspace, _REDUCE_KWARGS, coefficient_matrix, add_cyclic_constraints
-from .solution import create_solution_from_M, SolutionSDP
-from ...utils.basis_generator import arraylize, arraylize_sp
-from ...utils.polytools import deg, verify_hom_cyclic
+from .manifold import RootSubspace
+from .solver import SDPProblem
+from .solution import SolutionSDP
+from ...utils.basis_generator import generate_expr, MonomialReduction
+from ...utils import deg, arraylize_sp, verify_hom_cyclic
+
+
+def _define_mapping(nvars: int, degree: int, monomials: List[Tuple[int, ...]], **options) -> Callable[[int, int], Tuple[int, int]]:
+    m = sum(monomials)
+    option = MonomialReduction.from_options(**options)
+    vec = generate_expr(nvars, (degree - m)//2)[1]
+    dict_monoms = generate_expr(nvars, degree, option=option)[0]
+
+    def mapping(i: int, j: int) -> Tuple[int, int]:
+        monom = tuple(map(sum, zip(monomials, vec[i], vec[j])))
+        std_ind = None
+        v = 0
+        for p in option.permute(monom):
+            ind = dict_monoms.get(p)
+            if ind is not None:
+                std_ind = ind
+                v += 1
+        return std_ind, v
+    return mapping
+
+
+def _get_monomial_list(nvars: int, d: int, **options) -> List[Tuple[int, ...]]:
+    """
+    Get all tuples (a1, ..., an) such that a1 + ... + an = d and every ai is 0 or 1.
+    """
+    def _get_monomial_list_recur(nvars: int, d: int) -> List[Tuple[int, ...]]:
+        if d > nvars:
+            return []
+        elif nvars == 1:
+            return [(d,)]
+        else:
+            return [(i,) + t for i in range(2) for t in _get_monomial_list_recur(nvars - 1, d - i) if d - i >= 0]
+    ls = _get_monomial_list_recur(nvars, d)
+    option = MonomialReduction.from_options(**options)
+    ls = list(filter(lambda x: option.is_standard_monom(x), ls))
+    return ls
 
 
 class SOSProblem():
@@ -24,258 +58,215 @@ class SOSProblem():
     To summarize, it is about solving for S >> 0 such that
     eq @ vec(S) = vec(P) where P is determined by the target polynomial.
     """
-    def __init__(self, 
-            poly,
-            manifold = None,
-            verbose_manifold = True
-        ):
-        self.poly = poly
-        self.poly_degree = deg(poly)
-
-        info = {'major': None, 'minor': None, 'multiplier': None}
-        self.Q = deepcopy(info)
-        self.deg = deepcopy(info)
-        self.M = deepcopy(info)
-
-        self.eq = deepcopy(info)
-        self.vecP = None
-
-        self.S_ = deepcopy(info)
-        self.sdp = SDPProblemEmpty()
-
-
-        if manifold is None:
-            manifold = RootSubspace(poly)
-        self.manifold = manifold
-
-        if verbose_manifold:
-            print(manifold)
-
-    @property
-    def S(self):
-        return self.sdp.S
-
-    @property
-    def y(self):
-        return self.sdp.y
-
-    def S_from_y(self, *args, **kwargs):
-        return self.sdp.S_from_y(*args, **kwargs)
-
-    def __getitem__(self, key):
-        return getattr(self, key)
-
-
-    def _compute_perp_space(self, minor = 0) -> Dict[str, sp.Matrix]:
+    def __init__(
+        self,
+        poly: sp.Poly,
+        **options
+    ):
         """
-        Construct the perpendicular space of the problem.
-        """
-        self.Q = {'major': None, 'minor': None, 'multiplier': None}
-
-        # positive indicates whether we solve the problem on R+ or R
-        degree = self.poly_degree
-        positive = not (degree % 2 == 0 and minor == 0)
-        manifold = self.manifold
-        self.deg['major'] = degree // 2
-        self.Q['major'] = manifold.perp_space(minor = 0, positive = positive)
-
-        if minor and degree > 2:
-            self.deg['minor'] = degree // 2 - 1
-            self.Q['minor'] = manifold.perp_space(minor = 1, positive = positive)
-
-        return self.Q
-
-
-    def _compute_equation(self, cyclic_constraint = True) -> Tuple[sp.Matrix, sp.Matrix]:
-        """
-        Construct the problem eq @ vec(S) = vec(M) where S is what we solved for.
-        Return eq, vecM.
-        """
-        degree = self.poly_degree
-        for key in self.Q.keys():
-            Q = self.Q[key]
-            if Q is not None and Q.shape[1] > 0:
-                eq = coefficient_matrix(Q, self.deg[key], **_REDUCE_KWARGS[(degree%2, key)])
-                self.eq[key] = eq
-            else:
-                self.Q[key] = None
-
-        self.vecP = arraylize_sp(self.poly, cyc = False)
         
-        if cyclic_constraint:
-            add_cyclic_constraints(self)
-
-        eq = sp.Matrix.hstack(*filter(lambda x: x is not None, self.eq.values()))
-        return eq, self.vecP
-
-
-    def _compute_subspace(self, eq, vecM) -> SDPProblem:
         """
-        Given eq @ vec(S) = vec(M), if we want to solve S, then we can
-        see that S = x0 + space * y where x0 is a particular solution and y is arbitrary.
-        """
-        # we have eq @ vecS = vecM
-        # so that vecS = x0 + space * y where x0 is a particular solution and y is arbitrary
-        x0, space = solve_undetermined_linear(eq, vecM)
-        keys = [k for k, v in self.Q.items() if v is not None]
-        splits = split_vector([self.Q[k].shape[1] for k in keys])
+        self.poly = poly
+        self._nvars = len(poly.gens)
+        self._degree = poly.total_degree()
 
-        self.sdp = SDPProblem(x0, space, splits, keys=keys)
-        return self.sdp
+        self.manifold = RootSubspace(poly)
+        self._sdp: SDPProblem = None
+        self._option: MonomialReduction = MonomialReduction.from_options(**options)
 
- 
-    def construct_problem(self, minor = 0, cyclic_constraint = True, verbose = True) -> Tuple[sp.Matrix, sp.Matrix, List[slice]]:
+    @property
+    def sdp(self) -> SDPProblem:
         """
-        Construct the symbolic representation of the problem.
+        Return the SDP problem after rank reduction.
         """
-        Q = self._compute_perp_space(minor = minor)
-        eq, vecP = self._compute_equation(cyclic_constraint = cyclic_constraint)
-        sdp = self._compute_subspace(eq, vecP)
+        return self._sdp.get_last_child() if self._sdp is not None else None
+
+    @property
+    def dof(self) -> int:
+        """
+        Return the degree of freedom of the SDP problem after rank reduction.
+        """
+        return self.sdp.dof if self.sdp is not None else None
+
+    @property
+    def S(self) -> sp.Matrix:
+        return self.sdp.S if self.sdp is not None else None
+
+    @property
+    def y(self) -> sp.Matrix:
+        return self.sdp.y if self.sdp is not None else None
+
+
+    def S_from_y(self, y: Optional[Union[sp.Matrix, np.ndarray, Dict]] = None) -> sp.Matrix:
+        """
+        Restore the solution to the original polynomial.
+        """
+        return self.sdp.S_from_y(y)
+
+    def _construct_sdp(
+        self,
+        monomials: List[Tuple[int, ...]],
+        nullspaces: Optional[List[sp.Matrix]] = None,
+        verbose: bool = False,
+        **options
+    ) -> SDPProblem:
+        """
+        Translate the current SOS problem to SDP problem.
+        The problem is to find M1, M2, ..., Mn such that
+
+            Poly = p1*(v1'M1v1) + p2*(v2'M2v2) + ...
+
+        where vi are vectors of monomials like [a^2, b^2, c^2, ab, bc, ca]
+        while pi are extra monomials like 1, a, ab or abc.
+        M1, M2, ... are symmetric matrices and we want them to be positive semidefinite.
+
+        Parameters
+        ----------
+        monomials : List[Tuple[int, ...]]
+            A list of monomials. Each monomial is a tuple of integers.
+            For example, (2, 0, 0) represents a^2 for a three-variable polynomial.
+        nullspaces : Optional[List[sp.Matrix]]
+            The nullspace for each matrix. If nullspace is None, it is skipped.
+        options : Dict
+            Additional options for monomial reduction.
+
+        Returns
+        ----------
+        SDPProblem
+            The SDP problem to solve.
+        """
+        degree = self._degree
+        eq_list, splits = [], {}
+        option = MonomialReduction.from_options(**options)
+
+        matrix_size = len(generate_expr(self._nvars, degree, option=option)[0])
+
+        time0 = time()
+
+        for monomial in monomials:
+            m = sum(monomial)
+            if (degree - m) % 2 != 0:
+                raise ValueError(f"Degree {degree} minus the degree of monomial {monomial} is not even.")
+
+            # monomial vectors
+            dict_monoms_half, inv_monoms_half = generate_expr(self._nvars, (degree - m)//2)
+            vector_size = len(inv_monoms_half)
+            splits[str(monomial)] = vector_size
+
+            mapping = _define_mapping(self._nvars, degree, monomial, option=option)
+
+            # form the equation by coefficients
+            eq = sp.zeros(matrix_size, vector_size**2)
+            cnt = 0
+            for i in range(vector_size):
+                for j in range(vector_size):
+                    std_ind, v = mapping(i, j)
+                    eq[std_ind, cnt] = v
+                    cnt += 1
+            eq_list.append(eq)
+
+
+        eq_mat = sp.Matrix.hstack(*eq_list)
+        rhs = arraylize_sp(self.poly, option=option)
+        if verbose:
+            print(f"Time for constructing coeff equations   : {time() - time0:.6f} seconds.")
+            time0 = time()
+
+
+        sdp = SDPProblem.from_equations(eq_mat, rhs, splits)
+        if verbose:
+            print(f"Time for solving coefficient equations  : {time() - time0:.6f} seconds. Dof = {sdp.dof}")
+            time0 = time()
+
+
+        # constrain symmetricity
+        sdp.get_last_child().constrain_symmetricity()
+        if verbose:
+            print(f"Time for constraining symmetricity      : {time() - time0:.6f} seconds. Dof = {sdp.get_last_child().dof}")
+            time0 = time()
+
+
+        # constrain cyclic constraints by monomial reduction
+        equal_entries_dict = {}
+        for monomial in monomials:
+            # first check whether the monomial itself is cyclic
+            key = str(monomial)
+            permutes = option.permute(monomial)
+            if len(permutes) == 1 or any(p != monomial for p in permutes):
+                continue
+
+            dict_monoms_half, inv_monoms_half = generate_expr(self._nvars, (degree - sum(monomial))//2)
+            vector_size = len(inv_monoms_half)
+
+            equal_entries = []
+            for i in range(vector_size):
+                for j in range(vector_size):
+                    m1, m2 = inv_monoms_half[i], inv_monoms_half[j]
+                    for p1, p2 in zip(option.permute(m1), option.permute(m2)):
+                        i2, j2 = dict_monoms_half.get(p1), dict_monoms_half.get(p2)
+                        # if i2 is not None and j2 is not None
+                        equal_entries.append(((i, j), (i2, j2)))
+            equal_entries_dict[key] = equal_entries
+        sdp.get_last_child().constrain_equal_entries(equal_entries_dict)
+        if verbose:
+            print(f"Time for constraining cyclic constraints: {time() - time0:.6f} seconds. Dof = {sdp.get_last_child().dof}")
+            # print("Equal entries:", equal_entries_dict)
+            time0 = time()
+
+
+        # constrain nullspace
+        if isinstance(nullspaces, RootSubspace):
+            is_real = all(all(_ % 2 == 0 for _ in monomial) for monomial in monomials)
+            nullspaces = [nullspaces.nullspace(m, real = is_real) for m in monomials]
+        if isinstance(nullspaces, list):
+            nullspaces = {str(m): n for m, n in zip(monomials, nullspaces)}
+        if nullspaces is not None:
+           sdp.get_last_child().constrain_nullspace(nullspaces)
+        if verbose:
+            print(f"Time for constraining nullspace         : {time() - time0:.6f} seconds. Dof = {sdp.get_last_child().dof}")
+            time0 = time()
+
         return sdp
 
+    def _construct_sdp_by_default(
+        self,
+        monomials: List[Tuple[int, ...]],
+        verbose: bool = False,
+    ) -> SDPProblem:
+        sdp = self._construct_sdp(monomials, verbose=verbose, nullspaces=self.manifold, option=self._option)
+        self._sdp = sdp
+        return sdp
 
-    def solve(self,
-            minor: bool = False,
-            cyclic_constraint: bool = True,
-            skip_construct_subspace: bool = False,
-            method: str = 'trivial',
-            allow_numer: bool = False,
-            verbose: bool = False
-        ) -> bool:
+    def solve(self, **kwargs) -> bool:
         """
-        Solve a polynomial SOS problem with SDP.
-
-        Parameters
-        ----------
-        minor : bool
-            For a problem of even degree, if it holds for all real numbers, it might be in the 
-            form of sum of squares. However, if it only holds for positive real numbers, then
-            it might be in the form of \sum (...)^2 + \sum ab(...)^2. Note that we have an
-            additional term in the latter, which is called the minor term. If we need to 
-            add the minor term, please set `minor = True`.
-        cyclic_constraint : bool
-            Whether to add cyclic constraint the problem. This reduces the degree of freedom.
-        method : str
-            The method to solve the SDP problem. Currently supports:
-            'partial deflation' and 'relax' and 'trivial'.
-        skip_construct_subspace : bool
-            Whether to skip the computation of the subspace. This is useful when we have
-            already computed the subspace and want to solve the problem with different
-            sdp configurations.
-        allow_numer : bool
-            Whether to allow numerical solution. If True, then the function will return numerical solution
-            if the rational solution does not exist.
-        verbose : bool
-            If True, print the information of the solving process.
-
-        Returns
-        -------
-        bool
-            Whether the problem is solved successfully. It can also be accessed by `sdp_problem.success`.
+        Solve the SOS problem. Keyword arguments are passed to SDPProblem.solve.
         """
-        if not skip_construct_subspace:
-            try:
-                self.construct_problem(minor = minor, cyclic_constraint = cyclic_constraint, verbose = verbose)
-            except:
-                if verbose:
-                    print('Linear system no solution. Please higher the degree by multiplying something %s.'%(
-                        'or use the minor term' if not minor else ''
-                    ))
-                return False
+        return self._sdp.solve(**kwargs)
 
-
-        if verbose:
-            print('Matrix shape: %s'%(str(
-                    {k: '{}/{}'.format(v, self.Q[k].shape[0])
-                        for k, v in self._masked_dims(filter_zero = True).items()}
-                ).replace("'", '')))
-            print('Degree of freedom: %d'%(self.sdp.dof))
-
-        # Main SOS solver
-        sos_result = self.sdp.solve(
-            method = method,
-            allow_numer = allow_numer,
-            verbose = verbose
-        )
-
-        if not sos_result.success:
-            return False
-        self.M = self.compute_M(self.S)
-
-        return True
-
-
-    def compute_M(self, S: Dict[str, sp.Matrix]) -> Dict[str, sp.Matrix]:
+    def as_solution(
+        self,
+        y: Optional[Union[sp.Matrix, np.ndarray, Dict]] = None,
+        **options
+    ) -> SolutionSDP:
         """
-        Restore M = Q @ S @ Q.T from S.
+        Restore the solution to the original polynomial.
         """
-        M = {}
-        self.S_ = {}
-        for key in self._not_none_keys():
-            self.S_[key] = self.pad_masked_rows(S, key)
-            M[key] = self.Q[key] * self.S_[key] * self.Q[key].T
-        return M
-
-
-    def as_solution(self, 
-            y: Optional[sp.Matrix] = None,
-            decompose_method: str = 'raw',
-            cyc: bool = True,
-            factor_result: bool = True
-        ) -> SolutionSDP:
-        """
-        Wrap the matrix form solution to a SolutionSDP object.
-        Note that the decomposition of a quadratic form is not unique.
-
-        Parameters
-        ----------
-        y : Optional[sp.Matrix]
-            The y vector. If None, then we use the solution of the SDP problem.
-        decompose_method : str
-            One of 'raw' or 'reduce'. The default is 'raw'.
-        cyc : bool
-            Whether to convert the solution to a cyclic sum.
-        factor_result : bool
-            Whether to factorize the result. The default is True.
-
-        Returns
-        ----------
-        solution : SolutionSDP
-            SDP solution.
-        """
-
-        if y is None:
-            S = self.S_
-            M = self.M
-            if (not S) or not any(S.values()):
-                raise ValueError('The problem is not solved yet.')
-        else:
-            S = self.S_from_y(y)
-            M = self.compute_M(S)
-
-        return create_solution_from_M(
-            poly = self.poly,
-            S = S,
-            Q = self.Q,
-            M = M,
-            decompose_method = decompose_method,
-            cyc = cyc,
-            factor_result = factor_result,
-        )
-
+        if y is not None:
+            self.sdp.register_y(y)
+        decomp = self._sdp.decompositions
+        if decomp is None:
+            return None
+        if len(options) == 0:
+            options = {"option": self._option}
+        return SolutionSDP.from_decompositions(self.poly, decomp, **options)
 
 
 def SDPSOS(
         poly: sp.Poly,
-        minor: Union[List[bool], bool] = [False, True],
-        degree_limit: int = 12,
-        cyclic_constraint = True,
-        method: str = 'trivial',
-        allow_numer: bool = False,
-        decompose_method: str = 'raw',
-        factor_result: bool = True,
-        verbose: bool = True,
-        **kwargs
+        monomials_lists: Optional[List[List[Tuple[int, ...]]]] = None,
+        degree_limit: int = 10,
+        verbose: bool = False,
+        allow_numer: int = 0,
     ) -> Optional[SolutionSDP]:
     """
     Solve a polynomial SOS problem with SDP.
@@ -304,7 +295,7 @@ def SDPSOS(
 
     For more flexible usage, please use
     ```
-        sdp_problem = SOSProblem(poly)
+        sdp_problem = SDPProblem(poly)
         sdp_problem.solve(**kwargs)
         solution = sdp_problem.as_solution()
     ```
@@ -313,70 +304,44 @@ def SDPSOS(
     ----------
     poly : sp.Poly
         Polynomial to be solved.
-    minor : Union[List[bool], bool]
-        For a problem of even degree, if it holds for all real numbers, it might be in the
-        form of sum of squares. However, if it only holds for positive real numbers, then
-        it might be in the form of \sum (...)^2 + \sum ab(...)^2. Note that we have an
-        additional term in the latter, which is called the minor term. If we need to
-        add the minor term, please set minor = True.
-        The function also supports multiple trials. The default is [False, True], which
-        first tries to solve the problem without the minor term.
-    degree_limit : int
-        The maximum degree of the polynomial to be solved. When the degree is too high,
-        return None.
-    cyclic_constraint : bool
-        Whether to add cyclic constraint the problem. This reduces the degree of freedom.
-    method : str
-        The method to solve the SDP problem. Currently supports:
-        'partial deflation' and 'relax' and 'trivial'.
-    allow_numer : bool
-        Whether to allow numerical solution. If True, then the function will return numerical solution
-        if the rational solution does not exist.
-    decompose_method : str
-        One of 'raw' or 'reduce'. The default is 'raw'.
-    factor_result : bool
-        Whether to factorize the result. The default is True.
-    verbose : bool
-        If True, print the information of the problem.
+    monomials_lists : Optional[List[List[Tuple[int, ...]]]
+        A list of lists. Each list contain monomials that are treated as nonnegative.
+        Leave it None to use the default monomials.
     """
-    degree = deg(poly)
-    if degree > degree_limit or degree < 2:
+    nvars = len(poly.gens)
+    degree = poly.total_degree()
+    if degree > degree_limit or degree < 2 or nvars < 1:
         return None
     if not (poly.domain in (sp.polys.ZZ, sp.polys.QQ)):
         return None
-    if not all(verify_hom_cyclic(poly)):
+    if not poly.is_homogeneous:
         return None
 
-    sdp_problem = SOSProblem(poly, verbose_manifold=verbose)
+    options = {}
+    if nvars == 3 and verify_hom_cyclic(poly)[1]:
+        options["cyc"] = True
 
-    if isinstance(minor, (bool, int)):
-        minor = [minor]
+    sos_problem = SOSProblem(poly, **options)
 
-    for minor_ in minor:
-        if verbose:
-            print('SDP Minor = %d:'%minor_)
+    if monomials_lists is None:
+        monomials_lists_separated = [
+            _get_monomial_list(nvars, d, **options) for d in range(degree % 2, min(nvars, degree) + 1, 2)
+        ]
+        monomials_lists = []
+        accumulated_monomials = []        
+        for monomials in monomials_lists_separated:
+            accumulated_monomials.extend(monomials)
+            monomials_lists.append(accumulated_monomials.copy())
 
-        with indented_print(verbose = verbose):
-            try:
-                success = sdp_problem.solve(
-                    minor = minor_,
-                    cyclic_constraint = cyclic_constraint,
-                    method = method,
-                    allow_numer = allow_numer,
-                    verbose = verbose
-                )
-                if success:
-                    # We can also pass in **M
-                    return sdp_problem.as_solution(
-                        decompose_method = decompose_method, 
-                        factor_result = factor_result
-                    )
-                    if verbose:
-                        print('Success.')
-            except Exception as e:
-                if verbose:
-                    print(e)
-            if verbose:
-                print('Failed.')
+    for monomials in monomials_lists:
+        try:
+            sdp = sos_problem._construct_sdp_by_default(monomials, verbose = verbose)
+            if sos_problem.solve(allow_numer = allow_numer, verbose = verbose):
+                return sos_problem.as_solution()
+        except Exception as e:
+            print(e)
+            continue
+
+            
 
     return None

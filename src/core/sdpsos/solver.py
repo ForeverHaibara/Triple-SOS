@@ -9,7 +9,7 @@ from .ipm import (
     SDPConvergenceError, SDPNumericalError, SDPInfeasibleError, SDPRationalizeError
 )
 from .utils import (
-    solve_undetermined_linear, S_from_y, Mat2Vec
+    solve_undetermined_linear, S_from_y, Mat2Vec, congruence_with_perturbation
 )
 
 
@@ -101,10 +101,26 @@ class SDPTransformation():
         return sdp is self.parent_node
     def is_child(self, sdp):
         return sdp is self.child_node
-    def propagate_to_parent(self, recurrsive: bool = True):
+    def propagate_to_parent(self, recursive: bool = True):
         raise NotImplementedError
-    def propagate_to_child(self, recurrsive: bool = True):
+    def propagate_to_child(self, recursive: bool = True):
         raise NotImplementedError
+
+class SDPIdentityTransform(SDPTransformation):
+    """
+    Identity transformation. It is used as an empty transformation.
+    """
+    def __init__(self, parent_node, *args, **kwargs):
+        self.parent_node = None
+        self.child_node = None
+    def is_parent(self, sdp):
+        return False
+    def is_child(self, sdp):
+        return False
+    def propagate_to_parent(self, recursive: bool = True):
+        return
+    def propagate_to_child(self, recursive: bool = True):
+        return
 
 class SDPMatrixTransform(SDPTransformation):
     """
@@ -125,6 +141,11 @@ class SDPMatrixTransform(SDPTransformation):
     which we can solve for [y; vec(M)] = x' + space' @ y'.
     """
     def __init__(self, parent_node, Qdict):
+        for key, (x0, space) in parent_node._x0_and_space.items():
+            if key not in Qdict:
+                n = Mat2Vec.length_of_mat(x0.shape[0])
+                Qdict[key] = sp.eye(n)
+
         self._x1 = None
         self._space1 = None
         super().__init__(parent_node, Qdict)
@@ -171,7 +192,7 @@ class SDPMatrixTransform(SDPTransformation):
     # def from_equations(self, *args, **kwargs):
     #     transform = SDPMatrixTransform(None, None)
 
-    def propagate_to_parent(self, recurrsive: bool = True):
+    def propagate_to_parent(self, recursive: bool = True):
         parent_node, child_node = self.parent_node, self.child_node
         if child_node.y is None:
             return parent_node
@@ -194,8 +215,8 @@ class SDPMatrixTransform(SDPTransformation):
         parent_node.S = S_dict
         parent_node.decompositions = decomp_dict
 
-        if recurrsive:
-            parent_node.propagate_to_parent(recurrsive = recurrsive)
+        if recursive:
+            parent_node.propagate_to_parent(recursive = recursive)
 
         return parent_node
 
@@ -210,6 +231,12 @@ class SDPVectorTransform(SDPTransformation):
         self._A = A
         self._b = b
         super().__init__(parent_node, A, b)
+
+    @classmethod
+    def from_equations(cls, parent, eqs, rhs):
+        b, A = solve_undetermined_linear(eqs, rhs)
+        return SDPVectorTransform(parent, A, b)
+
     def _init_child_node(self, A, b):
         parent_node = self.parent_node
         if parent_node is None:
@@ -221,15 +248,15 @@ class SDPVectorTransform(SDPTransformation):
             x0_and_space[key] = (x0_, space_)
         return SDPProblem(x0_and_space)
 
-    def propagate_to_parent(self, recurrsive: bool = True):
+    def propagate_to_parent(self, recursive: bool = True):
         parent_node, child_node = self.parent_node, self.child_node
         if child_node.y is None:
             return parent_node
         parent_node.y = self._A @ child_node.y + self._b
         parent_node.S = child_node.S
         parent_node.decompositions = child_node.decompositions
-        if recurrsive:
-            parent_node.propagate_to_parent(recurrsive = recurrsive)
+        if recursive:
+            parent_node.propagate_to_parent(recursive = recursive)
         return parent_node
     
 
@@ -296,7 +323,7 @@ class SDPProblem():
         self._ys = []
 
         # record the transformation dependencies
-        self._transforms = []
+        self._transforms: List[SDPTransformation] = []
 
     @property
     def dof(self):
@@ -440,6 +467,38 @@ class SDPProblem():
             y = sp.Matrix([y.get(v, v) for v in self.free_symbols]).reshape(m, 1)
 
         return S_from_y(y, self._x0_and_space)
+
+    def register_y(self,
+            y: Union[sp.Matrix, np.ndarray, Dict],
+            perturb: bool = False,
+            propagate_to_parent: bool = True
+        ) -> None:
+        """
+        Manually register a solution y to the SDP problem.
+
+        Parameters
+        ----------
+        y : Union[sp.Matrix, np.ndarray, Dict]
+            The solution to the SDP problem.
+        perturb : bool
+            If perturb == True, it must return the result by adding a small perturbation * identity to the matrices.
+            This is useful when the given y is numerical.
+        propagate_to_parent : bool
+            If True, propagate the solution to the parent SDP problem.
+        """
+        S = self.S_from_y(y)
+        decomps = {}
+        for key, s in S.items():
+            decomp = congruence_with_perturbation(s, perturb = perturb)
+            if decomp is None:
+                raise ValueError(f"Matrix {key} is not positive semidefinite given y.")
+            decomps[key] = decomp
+        self.y = y
+        self.S = S
+        self.decompositions = decomps
+        if propagate_to_parent:
+            self.propagate_to_parent(recursive = True)
+
 
     def as_params(self) -> Dict[sp.Symbol, sp.Rational]:
         """
@@ -1036,9 +1095,9 @@ class SDPProblem():
             SDPProblem.y and SDPProblem.S and SDPProblem.decompositions.
         """
         if solve_child:
-            children = self.children
-            if len(children):
-                return children[-1].solve(
+            child = self.get_last_child()
+            if child is not self:
+                return child.solve(
                     method = method,
                     allow_numer = allow_numer,
                     verbose = verbose,
@@ -1079,13 +1138,22 @@ class SDPProblem():
         """
         return [transform.child_node for transform in self._transforms if transform.is_parent(self)]
 
-    def propagate_to_parent(self, recurrsive: bool = True):
+    def get_last_child(self) -> 'SDPProblem':
+        """
+        Get the last child node of the current node recursively.
+        """
+        children = self.children
+        if len(children):
+            return children[-1].get_last_child()
+        return self
+
+    def propagate_to_parent(self, recursive: bool = True):
         """
         Propagate the result to the parent node.
         """
         for transform in self._transforms:
             if transform.is_child(self):
-                transform.propagate_to_parent(recurrsive = recurrsive)
+                transform.propagate_to_parent(recursive = recursive)
 
     def constrain_subspace(self, subspaces: Dict[str, sp.Matrix]) -> 'SDPProblem':
         """
@@ -1135,8 +1203,14 @@ class SDPProblem():
             If there is no solution to the linear system Si = Qi * Mi * Qi.T,
             then it raises an error.
         """
-        nl = lambda x: sp.Matrix.hstack(*x.T.nullspace())
-        subspaces = dict((key, nl(nullspace)) for key, nullspace in nullspaces.items())
+        subspaces = {}
+        for key, nullspace in nullspaces.items():
+            if nullspace.shape[0] * nullspace.shape[1] != 0:
+                subspaces[key] = sp.Matrix.hstack(*nullspace.T.nullspace())
+
+        if len(subspaces) == 0:
+            return self
+
         transform = SDPMatrixTransform(self, subspaces)
         return transform.child_node
 
@@ -1154,11 +1228,42 @@ class SDPProblem():
                 for j in range(i):
                     eqs.append(space[i*n+j, :] - space[j*n+i, :])
                     rhs.append(x0[j*n+i] - x0[i*n+j])
+        if len(eqs) == 0:
+            return self
         eqs = sp.Matrix.vstack(*eqs)
         rhs = sp.Matrix(rhs)
-        b, A = solve_undetermined_linear(eqs, rhs)
-        transform = SDPVectorTransform(self, A, b)
+        transform = SDPVectorTransform.from_equations(self, eqs, rhs)
         return transform.child_node
+
+    def constrain_equal_entries(self, entry_tuples: Dict[str, List[Tuple[Tuple[int, int], Tuple[int, int]]]]) -> 'SDPProblem':
+        """
+        Constrain some of the entries to be equal. This is a generalization of
+        `constrain_symmetricity`.
+
+        Parameters
+        ----------
+        entry_tuples : Dict[str, List[Tuple[Tuple[int, int], Tuple[int, int]]]]
+            The keys of the dictionary should match the keys of self.keys().
+            The value of the dictionary should be a list of tuples. Each tuple
+            contains two pairs of indices.
+        """
+        eqs = []
+        rhs = []
+        for key, (x0, space) in self._x0_and_space.items():
+            n = Mat2Vec.length_of_mat(x0.shape[0])
+            for (i, j), (k, l) in entry_tuples.get(key, []):
+                if i == k and j == l:
+                    continue
+                eq = space[i*n+j, :] - space[k*n+l, :]
+                eqs.append(eq)
+                rhs.append(x0[k*n+l] - x0[i*n+j])
+        if len(eqs) == 0:
+            return self
+        eqs = sp.Matrix.vstack(*eqs)
+        rhs = sp.Matrix(rhs)
+        transform = SDPVectorTransform.from_equations(self, eqs, rhs)
+        return transform.child_node
+
 
 class SDPProblemEmpty(SDPProblem):
     def __init__(self, *args, **kwargs):
