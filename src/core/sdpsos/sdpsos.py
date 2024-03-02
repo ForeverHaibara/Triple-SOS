@@ -47,6 +47,63 @@ def _get_monomial_list(nvars: int, d: int, **options) -> List[Tuple[int, ...]]:
     return ls
 
 
+def _constrain_nullspace(
+    sdp: SDPProblem,
+    monomials: List[Tuple[int, ...]],
+    nullspaces: Optional[List[sp.Matrix]],
+    verbose: bool = False
+) -> SDPProblem:
+    # constrain nullspace
+    time0 = time()
+    if isinstance(nullspaces, RootSubspace):
+        is_real = all(all(_ % 2 == 0 for _ in monomial) for monomial in monomials)
+        nullspaces = [nullspaces.nullspace(m, real = is_real) for m in monomials]
+    if isinstance(nullspaces, list):
+        nullspaces = {str(m): n for m, n in zip(monomials, nullspaces)}
+    if nullspaces is not None:
+        sdp.get_last_child().constrain_nullspace(nullspaces)
+    if verbose:
+        print(f"Time for constraining nullspace         : {time() - time0:.6f} seconds. Dof = {sdp.get_last_child().dof}")
+        time0 = time()
+    return sdp
+
+def _constrain_cyclic(
+    sdp: SDPProblem,
+    monomials: List[Tuple[int, ...]],
+    nvars: int,
+    degree: int,
+    option: MonomialReduction,
+    verbose: bool = False
+) -> SDPProblem:
+    time0 = time()
+    # constrain cyclic constraints by monomial reduction
+    equal_entries_dict = {}
+    for monomial in monomials:
+        # first check whether the monomial itself is cyclic
+        key = str(monomial)
+        permutes = option.permute(monomial)
+        if len(permutes) == 1 or any(p != monomial for p in permutes):
+            continue
+
+        dict_monoms_half, inv_monoms_half = generate_expr(nvars, (degree - sum(monomial))//2)
+        vector_size = len(inv_monoms_half)
+
+        equal_entries = []
+        for i in range(vector_size):
+            for j in range(vector_size):
+                m1, m2 = inv_monoms_half[i], inv_monoms_half[j]
+                for p1, p2 in zip(option.permute(m1), option.permute(m2)):
+                    i2, j2 = dict_monoms_half.get(p1), dict_monoms_half.get(p2)
+                    # if i2 is not None and j2 is not None
+                    equal_entries.append(((i, j), (i2, j2)))
+        equal_entries_dict[key] = equal_entries
+    sdp.get_last_child().constrain_equal_entries(equal_entries_dict)
+    if verbose:
+        print(f"Time for constraining cyclic constraints: {time() - time0:.6f} seconds. Dof = {sdp.get_last_child().dof}")
+        # print("Equal entries:", equal_entries_dict)
+        time0 = time()
+    return sdp
+
 class SOSProblem():
     """
     Helper class for SDPSOS. See details at SOSProblem.solve.
@@ -170,63 +227,26 @@ class SOSProblem():
         rhs = arraylize_sp(self.poly, option=option)
         if verbose:
             print(f"Time for constructing coeff equations   : {time() - time0:.6f} seconds.")
-            time0 = time()
 
-
+        time0 = time()
         sdp = SDPProblem.from_equations(eq_mat, rhs, splits)
         if verbose:
             print(f"Time for solving coefficient equations  : {time() - time0:.6f} seconds. Dof = {sdp.dof}")
-            time0 = time()
-
 
         # constrain symmetricity
+        time0 = time()
         sdp.get_last_child().constrain_symmetricity()
         if verbose:
             print(f"Time for constraining symmetricity      : {time() - time0:.6f} seconds. Dof = {sdp.get_last_child().dof}")
-            time0 = time()
-
 
         # constrain cyclic constraints by monomial reduction
-        equal_entries_dict = {}
-        for monomial in monomials:
-            # first check whether the monomial itself is cyclic
-            key = str(monomial)
-            permutes = option.permute(monomial)
-            if len(permutes) == 1 or any(p != monomial for p in permutes):
-                continue
-
-            dict_monoms_half, inv_monoms_half = generate_expr(self._nvars, (degree - sum(monomial))//2)
-            vector_size = len(inv_monoms_half)
-
-            equal_entries = []
-            for i in range(vector_size):
-                for j in range(vector_size):
-                    m1, m2 = inv_monoms_half[i], inv_monoms_half[j]
-                    for p1, p2 in zip(option.permute(m1), option.permute(m2)):
-                        i2, j2 = dict_monoms_half.get(p1), dict_monoms_half.get(p2)
-                        # if i2 is not None and j2 is not None
-                        equal_entries.append(((i, j), (i2, j2)))
-            equal_entries_dict[key] = equal_entries
-        sdp.get_last_child().constrain_equal_entries(equal_entries_dict)
-        if verbose:
-            print(f"Time for constraining cyclic constraints: {time() - time0:.6f} seconds. Dof = {sdp.get_last_child().dof}")
-            # print("Equal entries:", equal_entries_dict)
-            time0 = time()
-
+        _constrain_cyclic(sdp, monomials, self._nvars, degree, option, verbose=verbose)
 
         # constrain nullspace
-        if isinstance(nullspaces, RootSubspace):
-            is_real = all(all(_ % 2 == 0 for _ in monomial) for monomial in monomials)
-            nullspaces = [nullspaces.nullspace(m, real = is_real) for m in monomials]
-        if isinstance(nullspaces, list):
-            nullspaces = {str(m): n for m, n in zip(monomials, nullspaces)}
-        if nullspaces is not None:
-           sdp.get_last_child().constrain_nullspace(nullspaces)
-        if verbose:
-            print(f"Time for constraining nullspace         : {time() - time0:.6f} seconds. Dof = {sdp.get_last_child().dof}")
-            time0 = time()
+        _constrain_nullspace(sdp, monomials, nullspaces, verbose=verbose)
 
         return sdp
+
 
     def _construct_sdp_by_default(
         self,
@@ -267,6 +287,7 @@ def SDPSOS(
         degree_limit: int = 10,
         verbose: bool = False,
         allow_numer: int = 0,
+        **kwargs
     ) -> Optional[SolutionSDP]:
     """
     Solve a polynomial SOS problem with SDP.
@@ -339,7 +360,6 @@ def SDPSOS(
             if sos_problem.solve(allow_numer = allow_numer, verbose = verbose):
                 return sos_problem.as_solution()
         except Exception as e:
-            print(e)
             continue
 
             

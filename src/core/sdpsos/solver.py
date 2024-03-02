@@ -133,11 +133,11 @@ class SDPMatrixTransform(SDPTransformation):
     together we write the right hand side as x0 + space @ y.
 
     Now we know that vec(Si) = vec(Qi * Mi * Qi.T) = (Qi x Qi) vec(Mi).
-    => x0 + space @ y = [(Q1xQ1)vec(M1); ...; (QnxQn)vec(Mn)] = Q vec(M)
-    where Q = diag[Q1xQ1, ..., QnxQn].
+    => x0 + space @ y = [(Q1xQ1)vec(M1); ...; (QnxQn)vec(Mn)] = QxQ vec(M)
+    where QxQ = diag[Q1xQ1, ..., QnxQn].
 
     This implies, in the form of augmented matrix,
-    x0 = [-space, Q] @ [y; vec(M)]
+    x0 = [-space, QxQ] @ [y; vec(M)]
     which we can solve for [y; vec(M)] = x' + space' @ y'.
     """
     def __init__(self, parent_node, Qdict):
@@ -163,7 +163,12 @@ class SDPMatrixTransform(SDPTransformation):
         for key, (x0, space) in parent_node._x0_and_space.items():
             aug_x0.append(x0)
             aug_space.append(space)
-            aug_kronQ.append(sp.kronecker_product(Qdict[key], Qdict[key]))
+            if Qdict[key].shape[1] != 0:
+                aug_kronQ.append(sp.kronecker_product(Qdict[key], Qdict[key]))
+            else:
+                # x + space @ y must be zero and matM has 0 dof.
+                n = Mat2Vec.length_of_mat(x0.shape[0])
+                aug_kronQ.append(sp.zeros(n**2, 0))
         aug_x0 = sp.Matrix.vstack(*aug_x0)
         aug_space = sp.Matrix.vstack(*aug_space)
         aug_kronQ = sp.Matrix.diag(*aug_kronQ)
@@ -332,8 +337,12 @@ class SDPProblem():
         """
         return len(self.free_symbols)
 
-    def keys(self):
-        return list(self._x0_and_space.keys())
+    def keys(self, filter_none: bool = False) -> List[str]:
+        keys = list(self._x0_and_space.keys())
+        if filter_none:
+            _size = lambda key: self._x0_and_space[key][1].shape[1] * self._x0_and_space[key][1].shape[0]
+            keys = [key for key in keys if _size(key) != 0]
+        return keys
 
     def __repr__(self):
         return "<SDPProblem dof=%d keys=%s>"%(self.dof, self.keys())
@@ -546,9 +555,11 @@ class SDPProblem():
             sdp = picos.Problem()
             y = picos.RealVariable('y', self.dof)
             for key, (x0, space) in self._x0_and_space.items():
+                k = Mat2Vec.length_of_mat(x0.shape[0])
+                if k == 0:
+                    continue
                 x0_ = np.array(x0).astype(np.float64).flatten()
                 space_ = np.array(space).astype(np.float64)
-                k = Mat2Vec.length_of_mat(x0_.shape[0])
                 S = picos.SymmetricVariable(key, (k,k))
                 sdp.add_constraint(S >> reg)
 
@@ -630,7 +641,7 @@ class SDPProblem():
         """
         Get the default objectives of the SDP problem.
         """
-        obj_key = self.keys()[0]
+        obj_key = self.keys(filter_none = True)[0]
         objectives = [
             ('max', self.sdp.variables[obj_key].tr),
             ('min', self.sdp.variables[obj_key].tr),
