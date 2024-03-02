@@ -348,6 +348,31 @@ class SDPProblem():
         return "<SDPProblem dof=%d keys=%s>"%(self.dof, self.keys())
 
     @classmethod
+    def from_full_x0_and_space(
+        cls,
+        x0: sp.Matrix,
+        space: sp.Matrix,
+        splits: Union[Dict[str, int], List[int]]
+    ) -> 'SDPProblem':
+        keys = None
+        if isinstance(splits, dict):
+            keys = list(splits.keys())
+            splits = list(splits.values())
+
+        x0_and_space = []
+        start = 0
+        for n in splits:
+            x0_ = x0[start:start+n**2,:]
+            space_ = space[start:start+n**2,:]
+            x0_and_space.append((x0_, space_))
+            start += n**2
+
+        if keys is not None:
+            x0_and_space = dict(zip(keys, x0_and_space))
+        return SDPProblem(x0_and_space)
+        
+
+    @classmethod
     def from_equations(
         cls,
         eq: sp.Matrix,
@@ -377,22 +402,7 @@ class SDPProblem():
             The SDP problem constructed.    
         """
         x0, space = solve_undetermined_linear(eq, rhs)
-        keys = None
-        if isinstance(splits, dict):
-            keys = list(splits.keys())
-            splits = list(splits.values())
-
-        x0_and_space = []
-        start = 0
-        for n in splits:
-            x0_ = x0[start:start+n**2,:]
-            space_ = space[start:start+n**2,:]
-            x0_and_space.append((x0_, space_))
-            start += n**2
-
-        if keys is not None:
-            x0_and_space = dict(zip(keys, x0_and_space))
-        return SDPProblem(x0_and_space)
+        return cls.from_full_x0_and_space(x0, space, splits)
 
     @classmethod
     def from_matrix(

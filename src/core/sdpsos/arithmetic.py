@@ -10,7 +10,7 @@
 
 from fractions import Fraction
 from time import time
-from typing import Tuple
+from typing import List, Tuple
 
 import sympy as sp
 from sympy import Rational
@@ -145,13 +145,12 @@ def solve_undetermined_linear(M: sp.Matrix, B: sp.Matrix) -> Tuple[sp.Matrix, sp
     B_cols   = B.cols
     row, col = aug[:, :-B_cols].shape
 
-    time0 = time()
 
     # solve by reduced row echelon form
     A, pivots = _rref(aug, normalize_last = False)
 
-    print("Time for rref: ", time() - time0, 'Shape =', M.shape)
-    time0 = time()
+    # print("Time for rref: ", time() - time0, 'Shape =', M.shape)
+    # time0 = time()
 
     A, v      = A[:, :-B_cols], A[:, -B_cols:]
     pivots    = list(filter(lambda p: p < col, pivots))
@@ -182,6 +181,93 @@ def solve_undetermined_linear(M: sp.Matrix, B: sp.Matrix) -> Tuple[sp.Matrix, sp
         V2[permutation[k], :] = V[k, :]
         vt2[permutation[k]] = vt[k]
 
-    print("Time for solving: ", time() - time0)
+    # print("Time for solving: ", time() - time0)
 
     return vt2, V2
+
+
+def solve_column_separated_linear(A: List[List[Tuple[int, Rational]]], b: sp.Matrix, x0_equal_indices: List[List[int]] = [], _cols: int = -1):
+    """
+    This is a function that solves a special linear system Ax = b => x = x_0 + C * y
+    where each column of A has at most 1 nonzero element.
+
+    Further, we could require some of entries of x to be equal.
+
+    Parameters
+    ----------
+    A: List[List[Tuple[int, Rational]]]
+        Sparse representation of A. If A[i][..] = (j, v), then A[i, j] = v.
+        Also, it must guarantee that A[i', j] == 0 for all i' != i.
+        Also, be sure that v != 0.
+    b: sp.Matrix
+        Right-hand side
+    x0_equal_indices: List[List[int]]
+        Each sublist contains indices of equal elements.
+    _cols: int
+        Number of columns of A. If not specified, it will be inferred from A.
+
+    Returns
+    ---------
+    x0: Matrix
+        One solution of Ax = b.
+    space: Matrix
+        All solution x is in the form of x0 + space @ y.
+    """
+    # count the number of columns of A
+    cols = _cols if _cols != -1 else max(max(k[0] for k in row) for row in A) + 1
+
+    # form the equal indices as a UFS
+    ufs = list(range(cols))
+    groups = {}
+    for group in x0_equal_indices:
+        for i in group:
+            ufs[i] = group[0]
+        groups[group[0]] = group
+    for i in range(cols):
+        if ufs[i] == i:
+            group = groups.get(i)
+            if group is None:
+                groups[i] = [i]
+
+    x0 = [0] * cols
+    spaces = []
+    for i, row in enumerate(A):
+        if len(row):
+            pivot = row[0]
+            head = ufs[pivot[0]]
+            group = groups[head]
+            w = len(group) * pivot[1]
+            v = b[i] / w
+            for k in group:
+                x0[k] = v
+
+            for j in range(1, len(row)):
+                pivot2 = row[j]
+                head2 = ufs[pivot2[0]]
+                if pivot2[0] != head2 or head2 == head:
+                    continue
+                # only handle the case that pivot is the head of the group
+                group2 = groups[head2]
+                w2 = len(group2) * pivot2[1]
+
+                space = [0] * cols
+                for k in group:
+                    space[k] = w2
+                for k in group2:
+                    space[k] = -w
+                spaces.append(space)
+
+        else:
+            if b[i] != 0:
+                raise ValueError("Linear system has no solution")
+
+            for j in range(len(row)):
+                if ufs[row[j][0]] == row[j][0]:
+                    group = groups[row[j][0]]
+
+                    space = [0] * cols
+                    for k in group:
+                        space[k] = 1
+                    spaces.append(space)
+
+    return sp.Matrix(x0), sp.Matrix(spaces).T

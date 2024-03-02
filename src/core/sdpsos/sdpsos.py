@@ -4,6 +4,7 @@ from typing import Union, Optional, List, Tuple, Dict, Callable
 import sympy as sp
 import numpy as np
 
+from .arithmetic import solve_column_separated_linear
 from .manifold import RootSubspace
 from .solver import SDPProblem
 from .solution import SolutionSDP
@@ -47,12 +48,44 @@ def _get_monomial_list(nvars: int, d: int, **options) -> List[Tuple[int, ...]]:
     return ls
 
 
-def _constrain_nullspace(
-    sdp: SDPProblem,
-    monomials: List[Tuple[int, ...]],
-    nullspaces: Optional[List[sp.Matrix]],
-    verbose: bool = False
-) -> SDPProblem:
+def _form_sdp(monomials: List[Tuple[int, ...]], nvars: int, degree: int,
+                rhs: sp.Matrix, option: MonomialReduction, verbose: bool = False) -> SDPProblem:
+    time0 = time()
+    matrix_size = len(generate_expr(nvars, degree, option=option)[0])
+    splits = {}
+
+    eq_list = [[] for _ in range(matrix_size)]
+    cnt = 0
+    for monomial in monomials:
+        # monomial vectors
+        dict_monoms_half, inv_monoms_half = generate_expr(nvars, (degree - sum(monomial))//2)
+        vector_size = len(inv_monoms_half)
+        splits[str(monomial)] = vector_size
+
+        mapping = _define_mapping(nvars, degree, monomial, option=option)
+
+        # form the equation by coefficients
+        for i in range(vector_size):
+            for j in range(vector_size):
+                # The following is equivalent to: eqmat[std_ind, cnt] = v
+                std_ind, v = mapping(i, j)
+                eq_list[std_ind].append((cnt, v))
+                cnt += 1
+
+    x0_equal_indices = _get_equal_entries(monomials, nvars, degree, option)
+    if verbose:
+        print(f"Time for constructing coeff equations   : {time() - time0:.6f} seconds.")
+
+    time0 = time()
+    x0, space = solve_column_separated_linear(eq_list, rhs, x0_equal_indices, _cols = cnt)
+    sdp = SDPProblem.from_full_x0_and_space(x0, space, splits)
+    if verbose:
+        print(f"Time for solving coefficient equations  : {time() - time0:.6f} seconds. Dof = {sdp.dof}")
+
+    return sdp
+
+def _constrain_nullspace(sdp: SDPProblem, monomials: List[Tuple[int, ...]], nullspaces: Optional[List[sp.Matrix]],
+                            verbose: bool = False) -> SDPProblem:
     # constrain nullspace
     time0 = time()
     if isinstance(nullspaces, RootSubspace):
@@ -67,42 +100,38 @@ def _constrain_nullspace(
         time0 = time()
     return sdp
 
-def _constrain_cyclic(
-    sdp: SDPProblem,
-    monomials: List[Tuple[int, ...]],
-    nvars: int,
-    degree: int,
-    option: MonomialReduction,
-    verbose: bool = False
-) -> SDPProblem:
-    time0 = time()
-    # constrain cyclic constraints by monomial reduction
-    equal_entries_dict = {}
+def _get_equal_entries(monomials: List[Tuple[int, ...]], nvars: int, degree: int, option: MonomialReduction) -> List[List[int]]:
+    bias = 0
+    equal_entries = []
     for monomial in monomials:
-        # first check whether the monomial itself is cyclic
-        key = str(monomial)
+        dict_monoms_half, inv_monoms_half = generate_expr(nvars, (degree - sum(monomial))//2)
+        n = len(inv_monoms_half)
+
         permutes = option.permute(monomial)
         if len(permutes) == 1 or any(p != monomial for p in permutes):
-            continue
+            for i in range(n):
+                for j in range(i+1, n):
+                    equal_entries.append([i*n+j+bias, j*n+i+bias])
+        else:
 
-        dict_monoms_half, inv_monoms_half = generate_expr(nvars, (degree - sum(monomial))//2)
-        vector_size = len(inv_monoms_half)
+            for i in range(n):
+                m1 = inv_monoms_half[i]
+                if not option.is_standard_monom(m1):
+                    continue
+                for j in range(i, n):
+                    m2 = inv_monoms_half[j]
+                    s = set((i*n+j+bias, j*n+i+bias))
+                    for p1, p2 in zip(option.permute(m1), option.permute(m2)):
+                        i2, j2 = dict_monoms_half.get(p1), dict_monoms_half.get(p2)
+                        # if i2 is not None and j2 is not None
+                        s.add(i2*n+j2+bias)
+                        s.add(j2*n+i2+bias)
+                    equal_entries.append(list(s))
+        bias += n**2
+    return equal_entries
 
-        equal_entries = []
-        for i in range(vector_size):
-            for j in range(vector_size):
-                m1, m2 = inv_monoms_half[i], inv_monoms_half[j]
-                for p1, p2 in zip(option.permute(m1), option.permute(m2)):
-                    i2, j2 = dict_monoms_half.get(p1), dict_monoms_half.get(p2)
-                    # if i2 is not None and j2 is not None
-                    equal_entries.append(((i, j), (i2, j2)))
-        equal_entries_dict[key] = equal_entries
-    sdp.get_last_child().constrain_equal_entries(equal_entries_dict)
-    if verbose:
-        print(f"Time for constraining cyclic constraints: {time() - time0:.6f} seconds. Dof = {sdp.get_last_child().dof}")
-        # print("Equal entries:", equal_entries_dict)
-        time0 = time()
-    return sdp
+
+
 
 class SOSProblem():
     """
@@ -193,54 +222,10 @@ class SOSProblem():
             The SDP problem to solve.
         """
         degree = self._degree
-        eq_list, splits = [], {}
         option = MonomialReduction.from_options(**options)
 
-        matrix_size = len(generate_expr(self._nvars, degree, option=option)[0])
-
-        time0 = time()
-
-        for monomial in monomials:
-            m = sum(monomial)
-            if (degree - m) % 2 != 0:
-                raise ValueError(f"Degree {degree} minus the degree of monomial {monomial} is not even.")
-
-            # monomial vectors
-            dict_monoms_half, inv_monoms_half = generate_expr(self._nvars, (degree - m)//2)
-            vector_size = len(inv_monoms_half)
-            splits[str(monomial)] = vector_size
-
-            mapping = _define_mapping(self._nvars, degree, monomial, option=option)
-
-            # form the equation by coefficients
-            eq = sp.zeros(matrix_size, vector_size**2)
-            cnt = 0
-            for i in range(vector_size):
-                for j in range(vector_size):
-                    std_ind, v = mapping(i, j)
-                    eq[std_ind, cnt] = v
-                    cnt += 1
-            eq_list.append(eq)
-
-
-        eq_mat = sp.Matrix.hstack(*eq_list)
         rhs = arraylize_sp(self.poly, option=option)
-        if verbose:
-            print(f"Time for constructing coeff equations   : {time() - time0:.6f} seconds.")
-
-        time0 = time()
-        sdp = SDPProblem.from_equations(eq_mat, rhs, splits)
-        if verbose:
-            print(f"Time for solving coefficient equations  : {time() - time0:.6f} seconds. Dof = {sdp.dof}")
-
-        # constrain symmetricity
-        time0 = time()
-        sdp.get_last_child().constrain_symmetricity()
-        if verbose:
-            print(f"Time for constraining symmetricity      : {time() - time0:.6f} seconds. Dof = {sdp.get_last_child().dof}")
-
-        # constrain cyclic constraints by monomial reduction
-        _constrain_cyclic(sdp, monomials, self._nvars, degree, option, verbose=verbose)
+        sdp = _form_sdp(monomials, self._nvars, degree, rhs, option, verbose=verbose)
 
         # constrain nullspace
         _constrain_nullspace(sdp, monomials, nullspaces, verbose=verbose)
