@@ -222,6 +222,12 @@ class SOSProblem():
             The SDP problem to solve.
         """
         degree = self._degree
+
+        for m in monomials:
+            if (degree - sum(m)) % 2 != 0:
+                raise ValueError(f"Degree of poly ({degree}) minus the degree of monomial {m} is not even.")
+
+
         option = MonomialReduction.from_options(**options)
 
         rhs = arraylize_sp(self.poly, option=option)

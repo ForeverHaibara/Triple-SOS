@@ -145,6 +145,7 @@ def solve_undetermined_linear(M: sp.Matrix, B: sp.Matrix) -> Tuple[sp.Matrix, sp
     B_cols   = B.cols
     row, col = aug[:, :-B_cols].shape
 
+    # time0 = time()
 
     # solve by reduced row echelon form
     A, pivots = _rref(aug, normalize_last = False)

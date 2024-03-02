@@ -48,6 +48,10 @@ def congruence_with_perturbation(
     return None
 
 
+def is_empty_matrix(M: sp.Matrix) -> bool:
+    return M.shape[0] == 0 or M.shape[1] == 0
+
+
 def is_numer_matrix(M: sp.Matrix) -> bool:
     """
     Check whether a matrix contains sp.Float.
@@ -103,7 +107,7 @@ class Mat2Vec:
         """
         if mode == cls.DIRECT:
             if isinstance(S, sp.MatrixBase):
-                return S.reshape(round(S.shape[0] ** .5), 1)
+                return S.reshape(S.shape[0] * S.shape[1], 1)
             elif isinstance(S, np.ndarray):
                 return S.flatten()
         elif mode == cls.UPPER:

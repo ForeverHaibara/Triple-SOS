@@ -9,7 +9,8 @@ from .ipm import (
     SDPConvergenceError, SDPNumericalError, SDPInfeasibleError, SDPRationalizeError
 )
 from .utils import (
-    solve_undetermined_linear, S_from_y, Mat2Vec, congruence_with_perturbation
+    solve_undetermined_linear, S_from_y, Mat2Vec, congruence_with_perturbation,
+    is_empty_matrix
 )
 
 
@@ -91,8 +92,8 @@ class SDPTransformation():
     Class that represents transformation between SDPProblems.
     """
     def __init__(self, parent_node, *args, **kwargs):
-        self.parent_node = parent_node
-        self.child_node = self._init_child_node(*args, **kwargs)
+        self.parent_node: SDPProblem = parent_node
+        self.child_node: SDPProblem = self._init_child_node(*args, **kwargs)
         self.parent_node._transforms.append(self)
         self.child_node._transforms.append(self)
     def _init_child_node(self, *args, **kwargs) -> 'SDPProblem':
@@ -110,9 +111,8 @@ class SDPIdentityTransform(SDPTransformation):
     """
     Identity transformation. It is used as an empty transformation.
     """
-    def __init__(self, parent_node, *args, **kwargs):
-        self.parent_node = None
-        self.child_node = None
+    parent_node = None
+    child_node = None
     def is_parent(self, sdp):
         return False
     def is_child(self, sdp):
@@ -122,108 +122,128 @@ class SDPIdentityTransform(SDPTransformation):
     def propagate_to_child(self, recursive: bool = True):
         return
 
+
 class SDPMatrixTransform(SDPTransformation):
     """
     Assume the original problem to be S1 >= 0, ... Sn >= 0.
-    We assume that Si = Qi * Mi * Qi.T given matrices Q1, ... Qn.
-    The new problem is to solve for M1 >= 0, ... Mn >= 0.
+    We assume that Si = Ui * Mi * Ui' given matrices U1, ... Un.
+    An equivalence form is Si * Vi = 0 given matrices Vi, ... Vn.
+    Here we have orthogonal relation Ui' * Vi = 0.
 
-    In more detail, if
-    [vec(S1); ...; vec(Sn)] = [x1; ...; xn] + [space1; ...; spacen] @ y,
-    together we write the right hand side as x0 + space @ y.
+    This constrains the rowspace / nullspace of Si and we can perform
+    rank reduction. The problem becomes to solve for M1 >= 0, ... Mn >= 0.
 
-    Now we know that vec(Si) = vec(Qi * Mi * Qi.T) = (Qi x Qi) vec(Mi).
-    => x0 + space @ y = [(Q1xQ1)vec(M1); ...; (QnxQn)vec(Mn)] = QxQ vec(M)
-    where QxQ = diag[Q1xQ1, ..., QnxQn].
+    In more detail, recall our SDP problem is in the form of
 
-    This implies, in the form of augmented matrix,
-    x0 = [-space, QxQ] @ [y; vec(M)]
-    which we can solve for [y; vec(M)] = x' + space' @ y'.
+        Si = A_i0 + y_1 * A_i1 + ... + y_n * A_in >> 0.
+
+    For each A_ij, we can always decompose that
+
+        A_ij = Ui * X_ij * Ui' + Vi * Y_ij * Vi' + (Ui * Z_ij * Vi' + Vi * Z_ij' * Ui')
+
+    where X_ij = (Ui'Ui)^{-1} * Ui'A_ijUi * (Ui'Ui)^{-1}.
+
+    So the problem is equivalent to:
+
+        (Ui'A_i0Ui) + y_1 * (Ui'A_i1Ui) + ... + y_n * (Ui'A_inUi) >> 0.
+
+    with constraints that
+
+        (A_i0Vi) + y_1 * (A_i1Vi) + ... + y_n * (A_inVi) = 0.
     """
-    def __init__(self, parent_node, Qdict):
-        for key, (x0, space) in parent_node._x0_and_space.items():
-            if key not in Qdict:
-                n = Mat2Vec.length_of_mat(x0.shape[0])
-                Qdict[key] = sp.eye(n)
+    def __new__(cls, parent_node, rowspace = None, nullspace = None):
+        if rowspace is None and nullspace is None:
+            raise ValueError("rowspace and nullspace cannot be both None.")
 
-        self._x1 = None
-        self._space1 = None
-        super().__init__(parent_node, Qdict)
-        self.parent_node = parent_node
-        self._qdict = Qdict
 
-    def _init_child_node(self, Qdict):
+        if nullspace is None:
+            if all(is_empty_matrix(mat) for mat in rowspace.values()):
+                return super().__new__(SDPIdentityTransform)
+        elif rowspace is None:
+            if all(is_empty_matrix(mat) for mat in nullspace.values()):
+                return super().__new__(SDPIdentityTransform)
+
+        return super().__new__(cls)
+
+
+    def __init__(self, parent_node, rowspace = None, nullspace = None):
+        def _perp(X):
+            return sp.Matrix.hstack(*X.T.nullspace())
+
+        if nullspace is None:
+            nullspace = {key: _perp(rowspace[key]) for key in rowspace}
+        elif rowspace is None:
+            rowspace = {key: _perp(nullspace[key]) for key in nullspace}
+
+        self._rowspace = rowspace
+        self._nullspace = nullspace
+        self._trans_x0 = None
+        self._trans_space = None
+        super().__init__(parent_node, rowspace, nullspace)
+
+    def _init_child_node(self, rowspace, nullspace):
         parent_node = self.parent_node
         if parent_node is None:
             return
 
-        aug_x0 = []
-        aug_space = []
-        aug_kronQ = []
+        # form the constraints of y by computing Sum(y_i * A_ij * Vi) = -A_i0 * Vi
+        # TODO: faster fraction arithmetic
+        eq_list = []
+        x0_list = []
         for key, (x0, space) in parent_node._x0_and_space.items():
-            aug_x0.append(x0)
-            aug_space.append(space)
-            if Qdict[key].shape[1] != 0:
-                aug_kronQ.append(sp.kronecker_product(Qdict[key], Qdict[key]))
-            else:
-                # x + space @ y must be zero and matM has 0 dof.
-                n = Mat2Vec.length_of_mat(x0.shape[0])
-                aug_kronQ.append(sp.zeros(n**2, 0))
-        aug_x0 = sp.Matrix.vstack(*aug_x0)
-        aug_space = sp.Matrix.vstack(*aug_space)
-        aug_kronQ = sp.Matrix.diag(*aug_kronQ)
+            V = self._nullspace[key]
+            if is_empty_matrix(V):
+                continue
+            eq_mat = []
+            for i in range(space.shape[1]):
+                Aij = Mat2Vec.vec2mat(space[:,i])
+                eq = list(Aij * V)
+                eq_mat.append(eq)
 
-        # vec(x0 + space @ y) = (QxQ) vec(M)
-        # => [-space, (QxQ)] @ [y, vec(M)] = x0
-        # => [y, vec(M)] = x1 + space1 @ y1
-        aug_mat = sp.Matrix.hstack(-aug_space, aug_kronQ)
-        x1, space1 = solve_undetermined_linear(aug_mat, aug_x0)
-        self._x1, self._space1 = x1, space1
+            eq_mat = sp.Matrix(eq_mat).T
+            eq_list.append(eq_mat)
 
-        # split x2, space2
-        x2, space2 = x1[parent_node.dof:,:], space1[parent_node.dof:,:]
-        x2_list, space2_list = [], []
-        start = 0
+            Ai0 = Mat2Vec.vec2mat(x0)
+            new_x0 = list(Ai0 * V)
+            x0_list.extend(new_x0)
+
+
+        # eq * y + x0 = 0 => y = trans_x0 + trans_space * z
+        eq_list = sp.Matrix.vstack(*eq_list)
+        x0_list = sp.Matrix(x0_list)
+        trans_x0, trans_space = solve_undetermined_linear(eq_list, -x0_list)
+        self._trans_x0, self._trans_space = trans_x0, trans_space
+
+        # Sum(Ui' * Aij * Ui * (trans_x0 + trans_space * z)[j]) >> 0
+        new_x0_and_space = {}
         for key, (x0, space) in parent_node._x0_and_space.items():
-            n = Qdict[key].shape[1]
-            x2_list.append(x2[start:start+n**2,:])
-            space2_list.append(space2[start:start+n**2,:])
-            start += n**2
+            U = self._rowspace[key]
+            if is_empty_matrix(U):
+                continue
+            eq_mat = []
+            for i in range(space.shape[1]):
+                Aij = Mat2Vec.vec2mat(space[:,i])
+                eq = U.T * Aij * U
+                eq_mat.append(list(eq))
 
-        x0_and_space_dict = dict(zip(parent_node.keys(), zip(x2_list, space2_list)))
-        return SDPProblem(x0_and_space_dict)
+            eq_mat = sp.Matrix(eq_mat).T
+            new_space = eq_mat * trans_space
 
-    # @classmethod
-    # def from_equations(self, *args, **kwargs):
-    #     transform = SDPMatrixTransform(None, None)
+            Ai0 = Mat2Vec.vec2mat(x0)
+            new_x0 = Mat2Vec.mat2vec(U.T * Ai0 * U) + eq_mat * trans_x0
+
+            new_x0_and_space[key] = (new_x0, new_space)
+
+        return SDPProblem(new_x0_and_space)
 
     def propagate_to_parent(self, recursive: bool = True):
         parent_node, child_node = self.parent_node, self.child_node
         if child_node.y is None:
             return parent_node
-        y_and_vecM = self._x1 + self._space1 @ child_node.y
-        parent_node.y = y_and_vecM[:parent_node.dof,:]
-
-        vecM = y_and_vecM[parent_node.dof:,:]
-        start = 0
-        S_dict = {}
-        decomp_dict = {}
-        for key in parent_node._x0_and_space.keys():
-            Q = self._qdict[key]
-            n = Q.shape[1]
-            M = Mat2Vec.vec2mat(vecM[start:start+n**2,:])
-            S = Q @ M @ Q.T
-            S_dict[key] = S
-            U, D = child_node.decompositions[key]
-            decomp_dict[key] = (U * Q.T, D)
-            start += n**2
-        parent_node.S = S_dict
-        parent_node.decompositions = decomp_dict
-
-        if recursive:
-            parent_node.propagate_to_parent(recursive = recursive)
-
+        y = self._trans_space * child_node.y + self._trans_x0
+        parent_node.register_y(y, propagate_to_parent = recursive)
         return parent_node
+
 
 class SDPVectorTransform(SDPTransformation):
     """
@@ -1176,14 +1196,14 @@ class SDPProblem():
             if transform.is_child(self):
                 transform.propagate_to_parent(recursive = recursive)
 
-    def constrain_subspace(self, subspaces: Dict[str, sp.Matrix]) -> 'SDPProblem':
+    def constrain_subspace(self, rowspaces: Dict[str, sp.Matrix]) -> 'SDPProblem':
         """
         Assume Si = Qi * Mi * Qi.T where Qi are given.
         Then the problem becomes to find Mi >> 0.
 
         Parameters
         ----------
-        subspaces : Dict[str, sp.Matrix]
+        rowspaces : Dict[str, sp.Matrix]
             The matrices that represent the subspace. The keys of dictionary
             should match the keys of self.keys().
 
@@ -1198,7 +1218,7 @@ class SDPProblem():
             If there is no solution to the linear system Si = Qi * Mi * Qi.T,
             then it raises an error.
         """
-        transform = SDPMatrixTransform(self, subspaces)
+        transform = SDPMatrixTransform(self, rowspace=rowspaces)
         return transform.child_node
 
     def constrain_nullspace(self, nullspaces: Dict[str, sp.Matrix]) -> 'SDPProblem':
@@ -1224,15 +1244,15 @@ class SDPProblem():
             If there is no solution to the linear system Si = Qi * Mi * Qi.T,
             then it raises an error.
         """
-        subspaces = {}
-        for key, nullspace in nullspaces.items():
-            if nullspace.shape[0] * nullspace.shape[1] != 0:
-                subspaces[key] = sp.Matrix.hstack(*nullspace.T.nullspace())
+        # subspaces = {}
+        # for key, nullspace in nullspaces.items():
+        #     if nullspace.shape[0] * nullspace.shape[1] != 0:
+        #         subspaces[key] = sp.Matrix.hstack(*nullspace.T.nullspace())
 
-        if len(subspaces) == 0:
-            return self
+        # if len(subspaces) == 0:
+        #     return self
 
-        transform = SDPMatrixTransform(self, subspaces)
+        transform = SDPMatrixTransform(self, nullspace=nullspaces)
         return transform.child_node
 
     def constrain_symmetricity(self) -> 'SDPProblem':
