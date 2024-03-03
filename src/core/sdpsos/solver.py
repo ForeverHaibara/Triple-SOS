@@ -130,7 +130,7 @@ class SDPMatrixTransform(SDPTransformation):
     An equivalence form is Si * Vi = 0 given matrices Vi, ... Vn.
     Here we have orthogonal relation Ui' * Vi = 0.
 
-    This constrains the rowspace / nullspace of Si and we can perform
+    This constrains the columnspace / nullspace of Si and we can perform
     rank reduction. The problem becomes to solve for M1 >= 0, ... Mn >= 0.
 
     In more detail, recall our SDP problem is in the form of
@@ -151,37 +151,41 @@ class SDPMatrixTransform(SDPTransformation):
 
         (A_i0Vi) + y_1 * (A_i1Vi) + ... + y_n * (A_inVi) = 0.
     """
-    def __new__(cls, parent_node, rowspace = None, nullspace = None):
-        if rowspace is None and nullspace is None:
-            raise ValueError("rowspace and nullspace cannot be both None.")
+    def __new__(cls, parent_node, columnspace = None, nullspace = None):
+        if columnspace is None and nullspace is None:
+            raise ValueError("columnspace and nullspace cannot be both None.")
 
 
         if nullspace is None:
-            if all(is_empty_matrix(mat) for mat in rowspace.values()):
+            if all(is_empty_matrix(mat) for mat in columnspace.values()):
                 return super().__new__(SDPIdentityTransform)
-        elif rowspace is None:
+        elif columnspace is None:
             if all(is_empty_matrix(mat) for mat in nullspace.values()):
                 return super().__new__(SDPIdentityTransform)
 
         return super().__new__(cls)
 
 
-    def __init__(self, parent_node, rowspace = None, nullspace = None):
+    def __init__(self, parent_node, columnspace = None, nullspace = None):
+        def _reg(X):
+            return sp.Matrix.hstack(*X.columnspace())
         def _perp(X):
             return sp.Matrix.hstack(*X.T.nullspace())
 
         if nullspace is None:
-            nullspace = {key: _perp(rowspace[key]) for key in rowspace}
-        elif rowspace is None:
-            rowspace = {key: _perp(nullspace[key]) for key in nullspace}
+            columnspace = {key: _reg(columnspace[key]) for key in columnspace}
+            nullspace = {key: _perp(columnspace[key]) for key in columnspace}
+        elif columnspace is None:
+            nullspace = {key: _reg(nullspace[key]) for key in nullspace}
+            columnspace = {key: _perp(nullspace[key]) for key in nullspace}
 
-        self._rowspace = rowspace
+        self._columnspace = columnspace
         self._nullspace = nullspace
         self._trans_x0 = None
         self._trans_space = None
-        super().__init__(parent_node, rowspace, nullspace)
+        super().__init__(parent_node, columnspace, nullspace)
 
-    def _init_child_node(self, rowspace, nullspace):
+    def _init_child_node(self, columnspace, nullspace):
         parent_node = self.parent_node
         if parent_node is None:
             return
@@ -217,7 +221,7 @@ class SDPMatrixTransform(SDPTransformation):
         # Sum(Ui' * Aij * Ui * (trans_x0 + trans_space * z)[j]) >> 0
         new_x0_and_space = {}
         for key, (x0, space) in parent_node._x0_and_space.items():
-            U = self._rowspace[key]
+            U = self._columnspace[key]
             if is_empty_matrix(U):
                 continue
             eq_mat = []
@@ -1196,14 +1200,14 @@ class SDPProblem():
             if transform.is_child(self):
                 transform.propagate_to_parent(recursive = recursive)
 
-    def constrain_subspace(self, rowspaces: Dict[str, sp.Matrix]) -> 'SDPProblem':
+    def constrain_subspace(self, columnspaces: Dict[str, sp.Matrix]) -> 'SDPProblem':
         """
         Assume Si = Qi * Mi * Qi.T where Qi are given.
         Then the problem becomes to find Mi >> 0.
 
         Parameters
         ----------
-        rowspaces : Dict[str, sp.Matrix]
+        columnspaces : Dict[str, sp.Matrix]
             The matrices that represent the subspace. The keys of dictionary
             should match the keys of self.keys().
 
@@ -1218,7 +1222,7 @@ class SDPProblem():
             If there is no solution to the linear system Si = Qi * Mi * Qi.T,
             then it raises an error.
         """
-        transform = SDPMatrixTransform(self, rowspace=rowspaces)
+        transform = SDPMatrixTransform(self, columnspace=columnspaces)
         return transform.child_node
 
     def constrain_nullspace(self, nullspaces: Dict[str, sp.Matrix]) -> 'SDPProblem':
@@ -1304,8 +1308,3 @@ class SDPProblem():
         rhs = sp.Matrix(rhs)
         transform = SDPVectorTransform.from_equations(self, eqs, rhs)
         return transform.child_node
-
-
-class SDPProblemEmpty(SDPProblem):
-    def __init__(self, *args, **kwargs):
-        self.masked_rows = {}

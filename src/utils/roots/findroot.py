@@ -551,7 +551,7 @@ class _findroot_helper_resultant():
     @classmethod    
     def _findroot_resultant(cls, poly):
         """See findroot_resultant."""
-        a, b, c = sp.symbols('a b c')
+        a, b, c = poly.gens
         poly = poly.subs(c,1) # -a-b).as_poly(a,b)
         parts = poly.factor_list()[1]
         roots = []
@@ -667,7 +667,7 @@ class _findroot_helper_resultant():
         roots: List[RootAlgebraic]
             The roots of the polynomial.    
         """
-        a, b, c = sp.symbols('a b c')
+        a, b = poly.gens
         grad = poly.diff(a)
         res = sp.resultant(poly, grad)
         factors = set(sp.polys.gcd(res, res.diff(b)).factor_list()[1])
@@ -696,7 +696,7 @@ class _findroot_helper_resultant():
             else:
                 a_ = find_nearest_root(fx, a_, method = 'rootof')
             b_ = find_nearest_root(fy, b_, method = 'rootof')
-            root = RootAlgebraic((a_, b_))
+            root = RootAlgebraic((a_, b_, 1))
             roots.append(root)
 
             # if not ((not _is_rational(a_)) and (not _is_rational(b_)) and\

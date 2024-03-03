@@ -2,13 +2,17 @@ from typing import Optional, Dict, List, Tuple
 
 import sympy as sp
 
-from ...utils import convex_hull_poly, findroot_resultant, generate_expr
+from ...utils import (
+    convex_hull_poly, findroot_resultant, Root,
+    MonomialReduction, generate_expr
+)
 
 def _hull_space(
         nvars: int,
         degree: int,
         convex_hull: Dict[Tuple[int, ...], bool],
-        monomial: Tuple[int, ...]
+        monomial: Tuple[int, ...],
+        option: MonomialReduction
     ) -> Optional[sp.Matrix]:
     """
     For example, s(ab(a-b)2(a+b-3c)2) does not have a^6,
@@ -19,7 +23,7 @@ def _hull_space(
         return None
 
     half_degree = (degree - sum(monomial)) // 2
-    dict_monoms = generate_expr(nvars, half_degree)[0]
+    dict_monoms = generate_expr(nvars, half_degree, option=option.base())[0]
 
     def onehot(i: int) -> List[int]:
         v = [0] * len(dict_monoms)
@@ -42,6 +46,27 @@ def _hull_space(
     return sp.Matrix(space).T
 
 
+def _root_space(manifold: 'RootSubspace', root: Root, monomial: Tuple[int, ...], option: MonomialReduction) -> sp.Matrix:
+    d = (manifold._degree - sum(monomial)) // 2
+    span = root.span(d) #, option=option.base())
+    nvars = len(monomial)
+    nonzeros = [1 if _ != 0 else 0 for _ in root.root]
+
+    if all(nonzeros):
+        vanish = lambda _nonzeros: False
+    else:
+        def vanish(_nonzeros):
+            return all(i > 0 for i, j in zip(monomial, _nonzeros) if j == 0)
+
+    spans = []
+    for i in range(span.shape[1]):
+        span2 = option.permute_vec(nvars, span[:,i])
+        for j, perm in zip(range(span2.shape[1]), option.permute(nonzeros)):
+            if not vanish(perm):
+                spans.append(span2[:,j])
+    return sp.Matrix.hstack(*spans)
+
+
 class RootSubspace():
     def __init__(self, poly: sp.Expr) -> None:
         self.poly = poly
@@ -52,8 +77,29 @@ class RootSubspace():
         self.convex_hull = convex_hull_poly(poly)[0] if self._nvars == 3 else None
         self.roots = findroot_resultant(poly) if self._nvars == 3 else []
         self.roots = [r for r in self.roots if not r.is_corner]
+        self._additional_nullspace = {}
 
-    def nullspace(self, monomial, real: bool = False) -> sp.Matrix:
+    @property
+    def additional_nullspace(self) -> Dict[Tuple[int, ...], sp.Matrix]:
+        return self._additional_nullspace
+
+    def set_nullspace(self, monomial: Tuple[int, ...], nullspace: sp.Matrix) -> None:
+        """
+        Set extra nullspace for given monomial.
+        """
+        self._additional_nullspace[monomial] = nullspace
+
+    def append_nullspace(self, monomial: Tuple[int, ...], nullspace: sp.Matrix) -> None:
+        """
+        Append extra nullspace for given monomial.
+        """
+        ns = self._additional_nullspace
+        if monomial in ns:
+            ns[monomial] = sp.Matrix.hstack(ns[monomial], nullspace)
+        else:
+            ns[monomial] = nullspace
+
+    def nullspace(self, monomial, real: bool = False, **options) -> sp.Matrix:
         """
         Compute the nullspace of the polynomial.
 
@@ -71,11 +117,16 @@ class RootSubspace():
 
         funcs = [
             self._nullspace_hull,
-            lambda x: self._nullspace_roots(x, real = real)
+            lambda *args, **kwargs: self._nullspace_roots(*args, **kwargs, real = real),
+            self._nullspace_hessian,
+            self._nullspace_extra,
         ]
+
+        option = MonomialReduction.from_options(**options)
+
         nullspaces = []
         for func in funcs:
-            n_ = func(monomial)
+            n_ = func(monomial, option=option)
             if isinstance(n_, list) and len(n_) and isinstance(n_[0], sp.MatrixBase):
                 nullspaces.extend(n_)
             elif isinstance(n_, sp.MatrixBase) and n_.shape[0] * n_.shape[1] > 0:
@@ -84,18 +135,37 @@ class RootSubspace():
         nullspaces = list(filter(lambda x: x.shape[0] * x.shape[1] > 0, nullspaces))
         return sp.Matrix.hstack(*nullspaces)
 
-    def _nullspace_hull(self, monomial):
-        return _hull_space(self._nvars, self._degree, self.convex_hull, monomial)
 
+    def _nullspace_hull(self, monomial, option):
+        return _hull_space(self._nvars, self._degree, self.convex_hull, monomial, option)
 
-    def _nullspace_roots(self, monomial, real: bool = False):
-        d = (self._degree - sum(monomial)) // 2
+    def _nullspace_roots(self, monomial, option, real: bool = False):
         nullspaces = []
         for root in self.roots:
             if not real and any(_ < 0 for _ in root.root):
                 continue
-            nullspaces.append(root.span(d))
+
+            span = _root_space(self, root, monomial, option)
+
+            if span.shape[1] > 0:
+                span = sp.Matrix.hstack(*span.columnspace())
+
+            nullspaces.append(span)
+
         return nullspaces
+
+    def _nullspace_hessian(self, monomial, option, only_center: bool = True):
+        if not only_center:
+            roots = self.roots
+        else:
+            roots = [[1] * self._nvars]
+
+        for root in roots:
+            0
+
+    def _nullspace_extra(self, monomial, option):
+        return self._additional_nullspace.get(monomial, None)
+
 
     def __str__(self) -> str:
         return f"RootSubspace(poly={self.poly})"

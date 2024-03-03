@@ -19,7 +19,7 @@ from .expression import (
 )
 
 from .roots import (
-    RootsInfo, Root, RootAlgebraic, RootRational,
+    RootsInfo, Root, RootAlgebraic, RootRational, RootTernary, RootAlgebraicTernary, RootRationalTernary,
     GridRender,
     findroot, find_nearest_root, findroot_resultant, nroots,
     RootTangent,
@@ -41,7 +41,7 @@ __all__ = [
     'latex_coeffs',
     'Solution', 'SolutionSimple',
     'congruence',
-    'RootsInfo', 'Root', 'RootAlgebraic', 'RootRational',
+    'RootsInfo', 'Root', 'RootAlgebraic', 'RootRational', 'RootTernary', 'RootAlgebraicTernary', 'RootRationalTernary',
     'GridRender',
     'findroot', 'find_nearest_root', 'findroot_resultant', 'nroots',
     'RootTangent',

@@ -15,7 +15,7 @@ from ...utils import deg, arraylize_sp, verify_hom_cyclic
 def _define_mapping(nvars: int, degree: int, monomials: List[Tuple[int, ...]], **options) -> Callable[[int, int], Tuple[int, int]]:
     m = sum(monomials)
     option = MonomialReduction.from_options(**options)
-    vec = generate_expr(nvars, (degree - m)//2)[1]
+    vec = generate_expr(nvars, (degree - m)//2, option=option.base())[1]
     dict_monoms = generate_expr(nvars, degree, option=option)[0]
 
     def mapping(i: int, j: int) -> Tuple[int, int]:
@@ -58,7 +58,7 @@ def _form_sdp(monomials: List[Tuple[int, ...]], nvars: int, degree: int,
     cnt = 0
     for monomial in monomials:
         # monomial vectors
-        dict_monoms_half, inv_monoms_half = generate_expr(nvars, (degree - sum(monomial))//2)
+        dict_monoms_half, inv_monoms_half = generate_expr(nvars, (degree - sum(monomial))//2, option=option.base())
         vector_size = len(inv_monoms_half)
         splits[str(monomial)] = vector_size
 
@@ -85,16 +85,18 @@ def _form_sdp(monomials: List[Tuple[int, ...]], nvars: int, degree: int,
     return sdp
 
 def _constrain_nullspace(sdp: SDPProblem, monomials: List[Tuple[int, ...]], nullspaces: Optional[List[sp.Matrix]],
-                            verbose: bool = False) -> SDPProblem:
+                            option: MonomialReduction, verbose: bool = False) -> SDPProblem:
     # constrain nullspace
     time0 = time()
     if isinstance(nullspaces, RootSubspace):
         is_real = all(all(_ % 2 == 0 for _ in monomial) for monomial in monomials)
-        nullspaces = [nullspaces.nullspace(m, real = is_real) for m in monomials]
+        nullspaces = [nullspaces.nullspace(m, real = is_real, option=option) for m in monomials]
     if isinstance(nullspaces, list):
         nullspaces = {str(m): n for m, n in zip(monomials, nullspaces)}
+
     if nullspaces is not None:
         sdp.get_last_child().constrain_nullspace(nullspaces)
+
     if verbose:
         print(f"Time for constraining nullspace         : {time() - time0:.6f} seconds. Dof = {sdp.get_last_child().dof}")
         time0 = time()
@@ -104,7 +106,7 @@ def _get_equal_entries(monomials: List[Tuple[int, ...]], nvars: int, degree: int
     bias = 0
     equal_entries = []
     for monomial in monomials:
-        dict_monoms_half, inv_monoms_half = generate_expr(nvars, (degree - sum(monomial))//2)
+        dict_monoms_half, inv_monoms_half = generate_expr(nvars, (degree - sum(monomial))//2, option=option.base())
         n = len(inv_monoms_half)
 
         permutes = option.permute(monomial)
@@ -234,7 +236,7 @@ class SOSProblem():
         sdp = _form_sdp(monomials, self._nvars, degree, rhs, option, verbose=verbose)
 
         # constrain nullspace
-        _constrain_nullspace(sdp, monomials, nullspaces, verbose=verbose)
+        _constrain_nullspace(sdp, monomials, nullspaces, option=option, verbose=verbose)
 
         return sdp
 
@@ -351,8 +353,9 @@ def SDPSOS(
             if sos_problem.solve(allow_numer = allow_numer, verbose = verbose):
                 return sos_problem.as_solution()
         except Exception as e:
+            if verbose:
+                print(e)
             continue
 
-            
 
     return None
