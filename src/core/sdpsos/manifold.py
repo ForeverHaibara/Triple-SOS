@@ -251,8 +251,9 @@ class RootSubspace():
         self.convex_hull = None
         self.roots = []
 
-        if self._nvars == 3 and self._option.is_cyc:
-            self.convex_hull = convex_hull_poly(poly)[0]
+        if self._nvars == 3: # and self._option.is_cyc:
+            if self._option.is_cyc:
+                self.convex_hull = convex_hull_poly(poly)[0]
             self.roots = findroot_resultant(poly)
 
         self.roots = [r for r in self.roots if not r.is_corner]
@@ -297,7 +298,6 @@ class RootSubspace():
         funcs = [
             self._nullspace_hull,
             lambda *args, **kwargs: self._nullspace_roots(*args, **kwargs, real = real),
-            self._nullspace_hessian,
             self._nullspace_extra,
         ]
 
@@ -331,15 +331,6 @@ class RootSubspace():
             nullspaces.append(span)
 
         return nullspaces
-
-    def _nullspace_hessian(self, monomial, only_center: bool = True):
-        if not only_center:
-            roots = self.roots
-        else:
-            roots = [[1] * self._nvars]
-
-        for root in roots:
-            0
 
     def _nullspace_extra(self, monomial):
         return self._additional_nullspace.get(monomial, None)

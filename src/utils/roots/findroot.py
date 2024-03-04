@@ -10,7 +10,7 @@ from .grid import GridRender, GridPoly
 from .rationalize import rationalize
 from .roots import Root, RootAlgebraic, RootRational
 from .rootsinfo import RootsInfo
-from ..polytools import deg
+from ..polytools import deg, verify_hom_cyclic
 
 
 def find_best(
@@ -540,7 +540,9 @@ def findroot_resultant(poly: sp.Poly) -> List[Root]:
     roots : List[RootAlgebraic]
         A list of roots of the polynomial.
     """
-    return _findroot_helper_resultant._findroot_resultant(poly)
+    if len(poly.gens) != 3 or not poly.is_homogeneous:
+        return []
+    return _findroot_helper_resultant._findroot_resultant_ternary(poly)
 
 
 
@@ -549,31 +551,28 @@ class _findroot_helper_resultant():
     Helper class for findroot using resultant method.
     """
     @classmethod    
-    def _findroot_resultant(cls, poly):
+    def _findroot_resultant_ternary(cls, poly):
         """See findroot_resultant."""
         a, b, c = poly.gens
+        is_cyc = verify_hom_cyclic(poly)[1]
         poly = poly.subs(c,1) # -a-b).as_poly(a,b)
         parts = poly.factor_list()[1]
         roots = []
 
-        findroot_func = cls._findroot_resultant_irreducible
-
-        # when the multiplicity at origin > 1, we require hessian == 0
-        mult_at_origin = 0
+        findroot_func = cls._findroot_resultant_ternary_irreducible
 
         for part in parts:
             poly, multiplicity = part
-            if poly.degree() == 1:
+            if poly.total_degree() == 1:
                 continue
-            elif poly.degree() == 2:
+            # elif multiplicity % 2 == 0:
+            #     continue
+            elif poly.total_degree() == 2 and is_cyc:
                 if poly(1,1) == 0:
-                    mult_at_origin += 1
                     roots.append(RootRational((1,1,1)))
                 continue
             else:
-                if len(parts) > 1 and poly(1,1) == 0:
-                    mult_at_origin += 1
-                roots.extend(findroot_func(poly))
+                roots.extend(findroot_func(poly, is_cyc = is_cyc))
 
 
         # put the positive roots in front
@@ -596,7 +595,7 @@ class _findroot_helper_resultant():
         return roots_clear
 
     @classmethod
-    def _findroot_resultant_root_pairs(cls, poly, factors, prec = 20, tolerance = 1e-12):
+    def _ternary_cyclic_root_pairs(cls, poly, factors, prec = 20, tolerance = 1e-12):
         """
         Find the numerical root pairs of a polynomial using the resultant method.
         The polynomial should be of two variables. Factors are the minimal polynomial
@@ -615,12 +614,14 @@ class _findroot_helper_resultant():
         ----------
         poly : sympy.Poly
             The polynomial of two variables.
-        factors: List[Tuple[sympy.Poly, int]]
+        factors : List[Tuple[sympy.Poly, int]]
             The minimal polynomials of the second variable. It is resultant.factor_list()[1].
-        prec: int
+        prec : int
             The precision of solving roots of each factor numerically.
-        tolerance: float
+        tolerance : float
             The tolerance of a pair (a,b) is recognized as a root pair.
+        is_cyc : bool
+            Whether the polynomial is cyclic.
 
         Returns
         ----------
@@ -628,6 +629,7 @@ class _findroot_helper_resultant():
             The root pairs of the polynomial. Each pair is in the form ((a, b), (i, j)),
             where (a, b) is the root pair and (i, j) is the index of the corresponding factors.
         """
+        pairs = []
         all_roots = []
         all_roots_inv = []
         for i, factor_ in enumerate(factors):
@@ -639,7 +641,6 @@ class _findroot_helper_resultant():
                     else:
                         all_roots_inv.append((0, i))
 
-        pairs = []
         for b_, j in all_roots:
             for a_, i in all_roots_inv:
                 if abs(a_) > 1 or abs(b_) > 1:
@@ -652,7 +653,67 @@ class _findroot_helper_resultant():
         return pairs
 
     @classmethod
-    def _findroot_resultant_irreducible(cls, poly):
+    def _ternary_acyclic_root_pairs(cls, poly, factors1, factors2, prec = 20, tolerance = 1e-12):
+        """
+        Find the numerical root pairs of a polynomial using the resultant method.
+        The polynomial should be of two variables.
+
+        Parameters
+        ----------
+        poly : sympy.Poly
+            The polynomial of two variables.
+        factors1 : List[Tuple[sympy.Poly, int]]
+            The minimal polynomials of the first variable. It is resultant.factor_list()[1].
+        factors2 : List[Tuple[sympy.Poly, int]]
+            The minimal polynomials of the second variable. It is resultant.factor_list()[1].
+        prec : int
+            The precision of solving roots of each factor numerically.
+        tolerance : float
+            The tolerance of a pair (a,b) is recognized as a root pair.
+
+        Returns
+        ----------
+        pairs : List[Tuple[Tuple[float, float], Tuple[int, int]]]
+            The root pairs of the polynomial. Each pair is in the form ((a, b), (i, j)),
+            where (a, b) is the root pair and (i, j) is the index of the corresponding factors.
+        """
+        pairs = []
+        all_roots1 = []
+        all_roots2 = []
+        for i, factor_ in enumerate(factors1):
+            for r in sp.polys.nroots(factor_[0], n = prec):
+                if r.is_real:
+                    all_roots1.append((r, i))
+        for i, factor_ in enumerate(factors2):
+            for r in sp.polys.nroots(factor_[0], n = prec):
+                if r.is_real:
+                    all_roots2.append((r, i))
+
+        for a_, i in all_roots1:
+            for b_, j in all_roots2:
+                v = poly(a_, b_)
+                if abs(v) < tolerance:
+                    pairs.append(((a_, b_), (i, j)))
+        return pairs
+
+    @classmethod
+    def _from_pairs_to_roots(cls, pairs, factors1, factors2, is_cyc = True):
+        roots = []
+        for (a_, b_), (i, j) in pairs:
+            fx, fy = factors1[i][0], factors2[j][0]
+            # reverse fx
+            fx = sp.Poly(fx.all_coeffs()[::-1], fy.gens[0]) if is_cyc else fx
+            if fx.degree() == 0:
+                a_ = sp.S(0)
+            else:
+                a_ = find_nearest_root(fx, a_, method = 'rootof')
+            b_ = find_nearest_root(fy, b_, method = 'rootof')
+            root = RootAlgebraic((a_, b_, 1))
+            roots.append(root)
+        return roots
+
+    @classmethod
+    def _findroot_resultant_ternary_irreducible(cls, poly, is_cyc = True):
         """
         Find root of a 2-var polynomial with respect to a, b using the method of 
         resultant. The polynomial should be irreducible.
@@ -661,6 +722,8 @@ class _findroot_helper_resultant():
         ----------
         poly : sympy.Poly
             The polynomial of two variables. It should be irreducible.
+        is_cyc : bool
+            Whether the polynomial is cyclic.
 
         Returns
         -------
@@ -669,39 +732,32 @@ class _findroot_helper_resultant():
         """
         a, b = poly.gens
         grad = poly.diff(a)
-        res = sp.resultant(poly, grad)
-        factors = set(sp.polys.gcd(res, res.diff(b)).factor_list()[1])
 
-        # roots on the border might not be local minima
-        poly_border = poly.subs(a, 0)
-        grad_border = poly_border.diff(b)
-        factors_border = set(sp.polys.gcd(poly_border, grad_border).factor_list()[1])
-        if len(factors_border):
-            # conjugate factors, b = 0
-            factors_border.add((sp.Poly([1,0], b), len(factors_border)))
-        factors |= factors_border
-        factors = list(factors)
+        if is_cyc:
+            res = sp.resultant(poly, grad, a).as_poly(b)
+            factors = set(sp.polys.gcd(res, res.diff(b)).factor_list()[1])
 
-        pairs = cls._findroot_resultant_root_pairs(poly, factors)
-        roots = []
+            # roots on the border might not be local minima
+            poly_border = poly.subs(a, 0)
+            grad_border = poly_border.diff(b)
+            factors_border = set(sp.polys.gcd(poly_border, grad_border).factor_list()[1])
+            if len(factors_border):
+                # conjugate factors, b = 0
+                factors_border.add((sp.Poly([1,0], b), len(factors_border)))
+            factors |= factors_border
+            factors = list(factors)
 
-        _is_rational = lambda x: isinstance(x, sp.Rational) or (isinstance(x, sp.polys.polyclasses.ANP) and len(x.rep) <= 1)
+            pairs = cls._ternary_cyclic_root_pairs(poly, factors)
+            roots = cls._from_pairs_to_roots(pairs, factors, factors, is_cyc = is_cyc)
 
-        for (a_, b_), (i, j) in pairs:
-            fx, fy = factors[i][0], factors[j][0]
-            # reverse fx
-            fx = sp.Poly(fx.all_coeffs()[::-1], fy.gens[0])
-            if fx.degree() == 0:
-                a_ = sp.S(0)
-            else:
-                a_ = find_nearest_root(fx, a_, method = 'rootof')
-            b_ = find_nearest_root(fy, b_, method = 'rootof')
-            root = RootAlgebraic((a_, b_, 1))
-            roots.append(root)
+        else:
+            resb, resa = sp.resultant(poly, grad, a).as_poly(b), sp.resultant(poly, grad, b).as_poly(a)
+            factors1 = set(sp.polys.gcd(resa, resa.diff(a)).factor_list()[1])
+            factors2 = set(sp.polys.gcd(resb, resb.diff(b)).factor_list()[1])
+            factors1 = list(factors1)
+            factors2 = list(factors2)
 
-            # if not ((not _is_rational(a_)) and (not _is_rational(b_)) and\
-            #         _is_rational(root.uv(to_sympy=False)[0]) and _is_rational(root.uv(to_sympy=False)[1])):
-            #     roots.append(RootAlgebraic((sp.S(1), a_, b_)))
-            #     roots.append(RootAlgebraic((b_, sp.S(1), a_)))
+            pairs = cls._ternary_acyclic_root_pairs(poly, factors1, factors2)
+            roots = cls._from_pairs_to_roots(pairs, factors1, factors2, is_cyc = is_cyc)
 
         return roots
