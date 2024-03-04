@@ -93,6 +93,9 @@ def _constrain_nullspace(sdp: SDPProblem, monomials: List[Tuple[int, ...]], null
         nullspaces = [nullspaces.nullspace(m, real = is_real) for m in monomials]
     if isinstance(nullspaces, list):
         nullspaces = {str(m): n for m, n in zip(monomials, nullspaces)}
+    if verbose:
+        print(f"Time for computing nullspace            : {time() - time0:.6f} seconds.")
+        time0 = time()
 
     if nullspaces is not None:
         sdp.get_last_child().constrain_nullspace(nullspaces)

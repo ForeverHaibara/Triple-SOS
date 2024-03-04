@@ -248,19 +248,21 @@ class RootAlgebraic(Root):
         """
         monoms = generate_expr(self.nvars, n, **options)[1]
 
-        vec = [0] * len(monoms)
+        vec = [None] * len(monoms)
         _single_power = self._single_power_monomial
 
         if diff is None:
             for ind, monom in enumerate(monoms):
                 vec[ind] = _single_power(monom)
         else:
+            zero = self.K.zero
             for ind, monom in enumerate(monoms):
                 if any(order_m < order_diff for order_m, order_diff in zip(monom, diff)):
-                    continue
-                dervs = [_derv(order_m, order_diff) for order_m, order_diff in zip(monom, diff)]
-                powers = [order_m - order_diff for order_m, order_diff in zip(monom, diff)]
-                vec[ind] = sp.prod(dervs) * _single_power(powers)
+                    vec[ind] = zero
+                else:
+                    dervs = [_derv(order_m, order_diff) for order_m, order_diff in zip(monom, diff)]
+                    powers = [order_m - order_diff for order_m, order_diff in zip(monom, diff)]
+                    vec[ind] = sp.prod(dervs) * _single_power(powers)
 
         # return sp.Matrix(vec)
 

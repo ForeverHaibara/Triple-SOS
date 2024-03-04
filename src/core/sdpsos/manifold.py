@@ -1,11 +1,73 @@
+from collections import defaultdict, deque
 from typing import Optional, Dict, List, Tuple
 
 import sympy as sp
 
 from ...utils import (
-    convex_hull_poly, findroot_resultant, Root,
+    convex_hull_poly, findroot_resultant, Root, RootAlgebraic, RootRational,
     MonomialReduction, generate_expr
 )
+
+
+class _bilinear():
+    """
+    Represent Sum(m * u' * M * v) where M >> 0 and m is a monomial,
+    represented by a tuple of orders. u and v are also tuples,
+    recording the differential orders of the variables.
+
+    For example, for 3-var poly, a * v' * M * v is
+
+        _bilinear({(1, 0, 0): {(0, 0, 0), (0, 0, 0)}})
+
+    Taking the differential with respect to the first variable, we get
+    the new poly v' * M * v + 2a * v' * M * (dv/da). It has two different terms
+    and is represented by
+
+        _bilinear({(0, 0, 0): {(0, 0, 0), (0, 0, 0)}, (1, 0, 0): {(0, 0, 0), (1, 0, 0)}})
+
+    Identical terms are merged, coefficients are not stored.
+    """
+    @classmethod
+    def _reg(cls, u, v):
+        return (u, v) if u < v else (v, u)
+
+    def __init__(self, terms: Dict[Tuple[int, ...], set]):
+        self.terms = terms
+        for m in terms:
+            terms[m] = set(map(lambda uv: self._reg(*uv), terms[m]))
+
+    def diff(self, i: int) -> '_bilinear':
+        def increase_tuple(t, i, v):
+            return t[:i] + (t[i]+v,) + t[i+1:]
+        _reg = self._reg
+        new_terms = defaultdict(set)
+        for m, uvs in self.terms.items():
+            if m[i]:
+                m2 = increase_tuple(m, i, -1)
+                new_terms[m2] |= uvs
+            for u, v in uvs:
+                u2 = increase_tuple(u, i, 1)
+                v2 = increase_tuple(v, i, 1)
+                new_terms[m].add(_reg(u2, v))
+                new_terms[m].add(_reg(u, v2))
+        return _bilinear(new_terms)
+
+    def diff_monoimal(self, m: Tuple[int, ...]) -> '_bilinear':
+        b = self
+        for i in range(len(m)):
+            for times in range(m[i]):
+                b = b.diff(i)
+        return b
+
+    def __str__(self) -> str:
+        return f'_bilinear({str(self.terms)})'
+    def __repr__(self) -> str:
+        return self.__str__()
+
+
+def _is_binary_root(root: Root) -> bool:
+    return isinstance(root, RootRational) and len(set(root.root)) <= 2
+
 
 def _hull_space(
         nvars: int,
@@ -46,9 +108,107 @@ def _hull_space(
     return sp.Matrix(space).T
 
 
-def _root_space(manifold: 'RootSubspace', root: Root, monomial: Tuple[int, ...]) -> sp.Matrix:
+def _compute_diff_orders(poly: sp.Poly, root: Root, mixed=False, only_binary_roots=True) -> List[Tuple[int, ...]]:
+    """
+    Compute tuples (a1, ..., an) such that d^a1/dx1^a1 ... d^an/dxn^an f = 0 at the root.
+
+    Parameters
+    ----------
+    poly : sp.Poly
+        The polynomial to compute the differential orders for.
+    root : Root
+        The root to compute the differential orders for.
+    mixed : bool
+        If False, only differentiate with respect to one variable at a time.
+        If True, differentiate with respect to all variables at the same time. However,
+        it is not correct to use mixed=True.
+    only_binary_roots : bool
+        If True, only "binary" roots are computed. This is incomplete but
+        is sufficient for most cases.
+    """
+    gens = poly.gens
+    nvars = len(gens)
+    if only_binary_roots and not _is_binary_root(root):
+        return [(0,) * nvars]
+
+    if mixed:
+        def dfs(poly: sp.Poly, order: Tuple[int, ...]) -> List[Tuple[int, ...]]:
+            orders = [order]
+            for i in range(nvars):
+                # take one more derivative
+                poly2 = poly.diff(gens[i])
+                if poly2.total_degree() and root.subs(poly2, gens) == 0:
+                    new_order = order[:i] + (order[i] + 1,) + order[i+1:]
+                    orders.extend(dfs(poly2, new_order))
+            return orders
+        return dfs(poly, (0,) * nvars)
+
+    else:
+        orders = [(0,) * nvars]
+        for i in range(nvars):
+            poly2 = poly.diff(gens[i])
+            j = 1
+            while poly2.total_degree() and root.subs(poly2, gens) == 0:
+                orders.append((0,) * i + (j,) + (0,) * (nvars - i - 1))
+                poly2 = poly2.diff(gens[i])
+                j += 1
+        return orders
+
+
+def _compute_nonvanishing_diff_orders(poly: sp.Poly, root: Root, monomial: Tuple[int, ...],
+                                        only_binary_roots=True) -> List[Tuple[int, ...]]:
+    orders = _compute_diff_orders(poly, root, only_binary_roots=only_binary_roots)
+    # if len(orders) <= 0 or (len(orders) == 1 and not any(orders[0])):
+    #     return orders
+    nvars = len(poly.gens)
+    b0 = _bilinear({monomial: [((0,)*nvars, (0,)*nvars)]})
+
+    def _make_vanish_checker(root):
+        nonzeros = [1 if _ != 0 else 0 for _ in root.root]
+        if all(nonzeros):
+            nonvanish = lambda _nonzeros: True
+        else:
+            def nonvanish(monomial):
+                return all(i != 0 for i, j in zip(nonzeros, monomial) if j != 0)
+        return nonvanish
+    nonvanish = _make_vanish_checker(root)
+
+    sets = []
+    for m in orders:
+        b = b0.diff_monoimal(m)
+        for key in filter(nonvanish, b.terms):
+            sets.append(b.terms[key])
+
+    zeros = deque([(-1,) * nvars]) # starting sentinel
+    handled_zeros = set()
+    while len(zeros):
+        zero = zeros.popleft()
+        if zero in handled_zeros:
+            continue
+        for set_ in sets:
+            for i, j in list(set_):
+                if i == zero or j == zero:
+                    set_.remove((i, j))
+            if len(set_) == 1:
+                p = set_.pop()
+                if p[0] == p[1]:
+                    zeros.append(p[0])
+        if zero[0] != -1:
+            handled_zeros.add(zero)
+    return handled_zeros
+
+
+def _root_space(manifold: 'RootSubspace', root: RootAlgebraic, monomial: Tuple[int, ...]) -> sp.Matrix:
+    """
+    Compute the constraint nullspace spaned by a given root.
+
+    For normal case, it is simply the span of the root. However, things become
+    nontrivial if the derivative is also zero. Imagine
+    f = a * (x'Mx) and f|_r = 0, (df/da)|_r = 0 where r = (a,b,c) and x = [a^3,a^2b,...].
+    When M >> 0 and a == 0, we still require Mx = 0 because
+    (df/da) = (x'Mx) + a * ((dx/da)'Mx + x'M(dx/da)) = x'Mx.
+    """
     d = (manifold._degree - sum(monomial)) // 2
-    span = root.span(d) #, option=option.base())
     nvars = len(monomial)
     nonzeros = [1 if _ != 0 else 0 for _ in root.root]
 
@@ -60,11 +220,24 @@ def _root_space(manifold: 'RootSubspace', root: Root, monomial: Tuple[int, ...])
 
     option = manifold._option
     spans = []
-    for i in range(span.shape[1]):
-        span2 = option.permute_vec(nvars, span[:,i])
-        for j, perm in zip(range(span2.shape[1]), option.permute(nonzeros)):
-            if not vanish(perm):
-                spans.append(span2[:,j])
+
+    # this is an incomplete (but fast) implementation
+    if isinstance(root, RootRational):
+        base_option = option.base()
+        for r_ in option.permute(root.root):
+            new_r = RootRational(r_)
+            orders = _compute_nonvanishing_diff_orders(manifold.poly, new_r, monomial)
+            for order in orders:
+                spans.append(new_r.span(d, order, option=base_option))
+
+    else:
+        span = root.span(d, option=option.base())
+        for i in range(span.shape[1]):
+            span2 = option.permute_vec(nvars, span[:,i])
+            for j, perm in zip(range(span2.shape[1]), option.permute(nonzeros)):
+                if not vanish(perm):
+                    spans.append(span2[:,j])
+
     return sp.Matrix.hstack(*spans)
 
 
