@@ -85,12 +85,12 @@ def _form_sdp(monomials: List[Tuple[int, ...]], nvars: int, degree: int,
     return sdp
 
 def _constrain_nullspace(sdp: SDPProblem, monomials: List[Tuple[int, ...]], nullspaces: Optional[List[sp.Matrix]],
-                            option: MonomialReduction, verbose: bool = False) -> SDPProblem:
+                         verbose: bool = False) -> SDPProblem:
     # constrain nullspace
     time0 = time()
     if isinstance(nullspaces, RootSubspace):
         is_real = all(all(_ % 2 == 0 for _ in monomial) for monomial in monomials)
-        nullspaces = [nullspaces.nullspace(m, real = is_real, option=option) for m in monomials]
+        nullspaces = [nullspaces.nullspace(m, real = is_real) for m in monomials]
     if isinstance(nullspaces, list):
         nullspaces = {str(m): n for m, n in zip(monomials, nullspaces)}
 
@@ -158,9 +158,9 @@ class SOSProblem():
         self._nvars = len(poly.gens)
         self._degree = poly.total_degree()
 
-        self.manifold = RootSubspace(poly)
-        self._sdp: SDPProblem = None
         self._option: MonomialReduction = MonomialReduction.from_options(**options)
+        self.manifold = RootSubspace(poly, option=self._option) 
+        self._sdp: SDPProblem = None
 
     @property
     def sdp(self) -> SDPProblem:
@@ -236,7 +236,7 @@ class SOSProblem():
         sdp = _form_sdp(monomials, self._nvars, degree, rhs, option, verbose=verbose)
 
         # constrain nullspace
-        _constrain_nullspace(sdp, monomials, nullspaces, option=option, verbose=verbose)
+        _constrain_nullspace(sdp, monomials, nullspaces, verbose=verbose)
 
         return sdp
 

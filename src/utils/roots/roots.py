@@ -52,10 +52,10 @@ class Root():
         """
         Return RootRational if each entry of root is rational.
         """
+        if len(root) == 3:
+            return RootTernary.__new__(RootTernary, root)
         if all(isinstance(r, (sp.Rational, int)) for r in root):
             return object.__new__(RootRational)
-        if len(root) == 3:
-            return object.__new__(RootTernary)
         return object.__new__(cls)
 
     def __init__(self, root):
@@ -179,10 +179,10 @@ class RootAlgebraic(Root):
     """
     __slots__ = ('root', 'K', 'root_anp', '_inv_sum', '_power_cache')
     def __new__(cls, root):
+        if len(root) == 3:
+            return RootAlgebraicTernary.__new__(RootAlgebraicTernary, root)
         if all(isinstance(r, (sp.Rational, int)) for r in root):
             return object.__new__(RootRational)
-        if len(root) == 3:
-            return object.__new__(RootAlgebraicTernary)
         return object.__new__(cls)
 
     def __init__(self, root):
@@ -312,6 +312,11 @@ class RootAlgebraic(Root):
 
 class RootRational(RootAlgebraic):
     __slots__ = ('root',)
+    def __new__(cls, root):
+        if len(root) == 3:
+            return RootRationalTernary.__new__(RootRationalTernary, root)
+        return object.__new__(cls)
+
     def __init__(self, root):
         Root.__init__(self, root)
 
@@ -357,6 +362,7 @@ class TernaryMixin():
             v = (sa3b - sa2bc) * inv_sa2b2_sa2bc
             self._uv = (u, v)
 
+        u, v = self._uv
         self._ker = u**2 - u*v + v**2 + u + v + 1
 
 
@@ -522,7 +528,7 @@ class TernaryMixin():
         if inplace:
             self.root = root
             return self
-        return Root(root)
+        return RootTernary(root)
 
 
     def approximate(self, tolerance = 1e-3, approximate_tolerance = 1e-6):
@@ -576,7 +582,10 @@ class RootTernary(Root, TernaryMixin):
     Then b/c is a root of t^3 + xt^2 + yt - 1 = 0.
     And a/c is determined by a/c = ((b/c)^2 + (b/c)(u - v) - 1)/((b/c)u - v).
     """
-    __slots__ = ('root', '_uv', '_ker', '_cyclic_sum_cache')
+    def __new__(cls, root):
+        if all(isinstance(r, (sp.Rational, int)) for r in root):
+            return object.__new__(RootRationalTernary)
+        return object.__new__(cls)
 
     def __init__(self, root):
         Root.__init__(self, root)
@@ -584,14 +593,10 @@ class RootTernary(Root, TernaryMixin):
         self._cyclic_sum_cache = {}
 
 
-
-
-class RootAlgebraicTernary(RootAlgebraic, TernaryMixin):
+class RootAlgebraicTernary(RootAlgebraic, RootTernary):
     """
     Algebraic root of a 3-var homogeneous cyclic polynomial.
     """
-    __slots__ = ('root', '_uv', '_ker', 'K', 'root_anp', '_inv_sum', '_power_cache')
-
     def __new__(cls, root):
         if all(isinstance(r, (sp.Rational, int)) for r in root):
             return object.__new__(RootRationalTernary)
@@ -618,8 +623,9 @@ class RootAlgebraicTernary(RootAlgebraic, TernaryMixin):
         return s
 
 
-class RootRationalTernary(RootRational, TernaryMixin):
-    __slots__ = ('root', '_uv', '_ker')
+class RootRationalTernary(RootRational, RootAlgebraicTernary):
+    def __new__(cls, root):
+        return object.__new__(cls)
 
     def __init__(self, root):
         RootRational.__init__(self, root)

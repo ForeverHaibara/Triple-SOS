@@ -50,6 +50,8 @@ class MonomialReduction():
     The class handles such permutation groups and reduce the number of
     degrees of freedom in the polynomial.
     """
+    is_hom = False
+    is_cyc = False
     _monoms = {} # map monoms to indices & map indices to monoms
     def __new__(cls, *args, **kwargs):
         if cls is MonomialReduction:
@@ -187,6 +189,8 @@ class MonomialReduction():
 
 
 class MonomialHomogeneous(MonomialReduction):
+    is_hom = True
+    is_cyc = False
     _monoms = {} # map monoms to indices & map indices to monoms
     def __new__(cls, *args, **kwargs):
         if cls is MonomialHomogeneous:
@@ -286,6 +290,7 @@ class MonomialHomogeneousFull(MonomialHomogeneous, MonomialFull):
 
 
 class MonomialCyclic(MonomialHomogeneous):
+    is_cyc = True
     _monoms = {}
 
     def base(self) -> MonomialHomogeneousFull:
