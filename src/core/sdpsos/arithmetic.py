@@ -8,12 +8,13 @@
 # with version > 1.12 (exclusive)
 # TODO: compare the performance of the two implementations
 
-from fractions import Fraction
+# from fractions import Fraction
 from time import time
 from typing import List, Tuple
 
 import sympy as sp
 from sympy import Rational
+from sympy.external.gmpy import MPQ
 
 def _find_reasonable_pivot_naive(col):
     """
@@ -31,7 +32,7 @@ def _row_reduce_list(mat, rows, cols, normalize_last=True, normalize=True, zero_
     """
     See also in sympy.matrices.reductions._row_reduce_list
     """
-    one = Fraction(1, 1)
+    one = MPQ.__new__(MPQ, 1, 1)
 
     def get_col(i):
         return mat[i::cols]
@@ -104,9 +105,9 @@ def _row_reduce(M, normalize_last=True,
                 normalize=True, zero_above=True):
     """
     See also in sympy.matrices.reductions._row_reduce
-    It converts sympy Rational matrix to Fraction without checking.
+    It converts sympy Rational matrix to MPQ without checking.
     """
-    M_frac_list = [Fraction(x.p, x.q, _normalize=False) for x in M]
+    M_frac_list = [MPQ.__new__(MPQ, x.p, x.q) for x in M]
 
     mat, pivot_cols, swaps = _row_reduce_list(M_frac_list, M.rows, M.cols,
             normalize_last=normalize_last, normalize=normalize, zero_above=zero_above)
