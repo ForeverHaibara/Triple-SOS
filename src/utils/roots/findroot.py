@@ -555,6 +555,7 @@ class _findroot_helper_resultant():
         """See findroot_resultant."""
         a, b, c = poly.gens
         is_cyc = verify_hom_cyclic(poly)[1]
+        poly0 = poly
         poly = poly.subs(c,1) # -a-b).as_poly(a,b)
         parts = poly.factor_list()[1]
         roots = []
@@ -583,6 +584,9 @@ class _findroot_helper_resultant():
         #     else:
         #         roots_negative.append(root)
         # roots = roots_positive + roots_negative
+
+        if not is_cyc:
+            roots += cls._ternary_acyclic_border_roots(poly0)
 
         # remove duplicate roots
         roots_clear = []
@@ -695,6 +699,24 @@ class _findroot_helper_resultant():
                 if abs(v) < tolerance:
                     pairs.append(((a_, b_), (i, j)))
         return pairs
+
+    @classmethod
+    def _ternary_acyclic_border_roots(cls, poly):
+        a, b, c = poly.gens
+        subs = [{b: 1, c: 0}, {c: 1, a: 0}, {a: 1, b: 0}]
+        all_roots = []
+        for i, sub in enumerate(subs):
+            poly0 = poly.subs(sub)
+            poly0diff = poly0.diff(poly.gens[i])
+            roots = sp.polys.gcd(poly0, poly0diff).all_roots()
+            for root in roots:
+                if root.is_real:
+                    r = [0, 0, 0]
+                    r[i] = root
+                    r[(i+1)%3] = 1
+                    r[(i+2)%3] = 0
+                    all_roots.append(RootAlgebraic(tuple(r)))
+        return all_roots
 
     @classmethod
     def _from_pairs_to_roots(cls, pairs, factors1, factors2, is_cyc = True):

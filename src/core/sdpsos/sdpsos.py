@@ -88,6 +88,12 @@ def _constrain_nullspace(sdp: SDPProblem, monomials: List[Tuple[int, ...]], null
                          verbose: bool = False) -> SDPProblem:
     # constrain nullspace
     time0 = time()
+    sdp_tmp = sdp.get_last_child()
+    sdp_tmp.constrain_zero_diagonals()
+    if verbose:
+        print(f"Time for constraining zero diagonals    : {time() - time0:.6f} seconds. Dof = {sdp.get_last_child().dof}")
+
+    time0 = time()
     if isinstance(nullspaces, RootSubspace):
         is_real = all(all(_ % 2 == 0 for _ in monomial) for monomial in monomials)
         nullspaces = [nullspaces.nullspace(m, real = is_real) for m in monomials]
@@ -98,11 +104,12 @@ def _constrain_nullspace(sdp: SDPProblem, monomials: List[Tuple[int, ...]], null
         time0 = time()
 
     if nullspaces is not None:
-        sdp.get_last_child().constrain_nullspace(nullspaces)
+        sdp_tmp.constrain_nullspace(nullspaces, to_child=True)
 
     if verbose:
         print(f"Time for constraining nullspace         : {time() - time0:.6f} seconds. Dof = {sdp.get_last_child().dof}")
         time0 = time()
+        sdp.print_graph()
     return sdp
 
 def _get_equal_entries(monomials: List[Tuple[int, ...]], nvars: int, degree: int, option: MonomialReduction) -> List[List[int]]:
@@ -198,6 +205,7 @@ class SOSProblem():
         self,
         monomials: List[Tuple[int, ...]],
         nullspaces: Optional[List[sp.Matrix]] = None,
+        register: bool = True,
         verbose: bool = False,
         **options
     ) -> SDPProblem:
@@ -218,6 +226,10 @@ class SOSProblem():
             For example, (2, 0, 0) represents a^2 for a three-variable polynomial.
         nullspaces : Optional[List[sp.Matrix]]
             The nullspace for each matrix. If nullspace is None, it is skipped.
+        register : bool
+            Whether to register the SDP problem to the SOS problem. Default is True.
+        verbose : bool
+            Whether to print the progress. Default is False.
         options : Dict
             Additional options for monomial reduction.
 
@@ -237,6 +249,9 @@ class SOSProblem():
 
         rhs = arraylize_sp(self.poly, option=option)
         sdp = _form_sdp(monomials, self._nvars, degree, rhs, option, verbose=verbose)
+
+        if register:
+            self._sdp = sdp
 
         # constrain nullspace
         _constrain_nullspace(sdp, monomials, nullspaces, verbose=verbose)

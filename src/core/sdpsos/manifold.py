@@ -252,8 +252,8 @@ class RootSubspace():
         self.roots = []
 
         if self._nvars == 3: # and self._option.is_cyc:
-            if self._option.is_cyc:
-                self.convex_hull = convex_hull_poly(poly)[0]
+            # if self._option.is_cyc:
+            #     self.convex_hull = convex_hull_poly(poly)[0]
             self.roots = findroot_resultant(poly)
 
         self.roots = [r for r in self.roots if not r.is_corner]

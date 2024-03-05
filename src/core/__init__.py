@@ -31,7 +31,7 @@ from .symsos import (
 
 from .sdpsos import (
     SDPSOS, SDPProblem, SOSProblem, RootSubspace,
-    SDPTransformation, SDPMatrixTransform,
+    SDPTransformation, SDPMatrixTransform, SDPRowMasking, SDPVectorTransform,
     SolutionSDP
 )
 
@@ -53,6 +53,6 @@ __all__ = [
     'prove_univariate', 'prove_univariate_interval', 'check_univariate',
     'SolutionSymmetric', 'SolutionSymmetricSimple',
     'SDPSOS', 'SDPProblem', 'SOSProblem', 'RootSubspace',
-    'SDPTransformation', 'SDPMatrixTransform',
+    'SDPTransformation', 'SDPMatrixTransform', 'SDPRowMasking', 'SDPVectorTransform',
     'SolutionSDP'
 ]
