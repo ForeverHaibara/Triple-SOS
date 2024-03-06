@@ -65,6 +65,9 @@ class Root():
     def __getitem__(self, i):
         return self.root[i]
 
+    def __len__(self):
+        return len(self.root)
+
     @property
     def nvars(self):
         return len(self.root)
@@ -535,8 +538,8 @@ class TernaryMixin():
 
     def approximate(self, tolerance = 1e-3, approximate_tolerance = 1e-6):
         """
-        For roots on border / symmetric axis, we can approximate the root.
-        Only supports constant roots.
+        Approximate the root of a ternary equation, especially it is on the border or symmetric axis.
+        Currently only supports constant roots.
         """
         def n(a, b, tol = tolerance):
             # whether a, b are close enough

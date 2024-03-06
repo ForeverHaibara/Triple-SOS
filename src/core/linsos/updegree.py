@@ -1,3 +1,5 @@
+from typing import Generator, Dict
+
 import sympy as sp
 from sympy.core.singleton import S
 
@@ -41,7 +43,7 @@ def higher_degree(
         poly: sp.polys.Poly,
         degree_limit: int = 12,
         is_cyc: bool = True
-    ):
+    ) -> Generator[Dict, None, None]:
     """
     Hilbert's problem has shown that not every positive polynomial can be written as a sum of squares.
     However, we can write it as sum of rational functions. As a result, we can write

@@ -212,9 +212,9 @@ def findroot(
         standardize_method: str = 'partial',
         verbose: bool = False,
         with_tangents: Union[bool, Callable] = False,
-    ):
+    ) -> RootsInfo:
     """
-    Find the possible local minima of a cyclic polynomial by gradient descent and guessing. 
+    Find the possible local minima of a 3-var cyclic polynomial by gradient descent and guessing. 
     The polynomial is automatically standardlized so no need worry the stability. 
 
     Both the interior points and the borders are searched.
@@ -247,10 +247,11 @@ def findroot(
     if not (poly.domain in (sp.polys.ZZ, sp.polys.QQ, sp.polys.RR)):
         roots = []
     else:
+        is_cyc = verify_hom_cyclic(poly)[1]
         roots = _findroot_helper.findroot(poly, grid, method, standardize_method = standardize_method)
-        roots = [r.approximate() for r in roots]
+        roots = [r.approximate() if hasattr(r, 'approximate') else r for r in roots]
         roots = [r for r in roots if r.is_nontrivial]
-        roots = _findroot_helper._remove_duplicative_roots(roots)
+        roots = _findroot_helper._remove_duplicative_roots(roots, cyc = is_cyc)
 
         # compute roots on the border
         roots += _findroot_helper._findroot_border(poly)
@@ -330,24 +331,25 @@ class _findroot_helper():
         return getattr(cls, '_findroot_' + name.replace('-', '_'))
 
     @classmethod
-    def _standardize_poly(cls, poly: sp.Poly, standardize_method: str = 'simplex') -> sp.Expr:
+    def _destd_poly(cls, poly: sp.Poly, standardize_method: str = 'simplex') -> Tuple[sp.Expr, List[sp.Symbol]]:
         """
-        De-homogenize the polynomial. 
+        De-homogenize the polynomial and convert it to a sympy expression.
         """
-        a, b, c = sp.symbols('a b c')
+        gens = poly.gens
+        nvars = len(gens)
         if standardize_method == 'simplex':
-            poly = poly.as_expr().subs(c, 3 - a - b).expand()
+            gensub = nvars - sp.Add(*gens[:-1])
+            poly = poly.as_expr().subs(gens[-1], gensub).expand()
         elif standardize_method == 'partial':
-            poly = poly.subs(c, 1).as_expr()
+            poly = poly.subs(gens[-1], 1).as_expr()
         else:
             raise ValueError(f'Unknown standardize method {standardize_method}.')
-        return poly
+        return poly, gens[:-1]
 
     @classmethod
-    def _as_xy(cls, root: Union[Root, List[Root]], standardize_method: str = 'simplex') -> Tuple[float, float]:
+    def _destd_root(cls, root: Union[Root, List[Root]], standardize_method: str = 'simplex') -> Tuple[float, float]:
         """
-        Given a Root object, convert it to (x, y) according to the standardization method
-        to de-homogenize.
+        Dehomogenize a root or multiple roots.
         """
         only_one = isinstance(root, Root)
         if only_one:
@@ -355,47 +357,49 @@ class _findroot_helper():
         else:
             roots = root
 
-        xys = []
+        nonstd_roots = []
         for root in roots:
             if standardize_method == 'simplex':
-                a, b, c = root
-                s = (a + b + c) / 3
-                xy = (a/s, b/s)
+                s = sum(root) / len(root)
+                nonstd_root = tuple(i/s for i in root[:-1])
             elif standardize_method == 'partial':
-                xy = root[0], root[1]
-            xy = (float(xy[0]), float(xy[1]))
-            xys.append(xy)
+                nonstd_root = tuple(root[:-1])
+            nonstd_root = tuple(float(i) for i in nonstd_root)
+            nonstd_roots.append(nonstd_root)
         if only_one:
-            xys = xys[0]
-        return xys
+            nonstd_roots = nonstd_roots[0]
+        return nonstd_roots
 
     @classmethod
-    def _as_root(cls, xy: Tuple[float, float], standardize_method: str = 'simplex') -> Root:
+    def _std_root(cls, nonstd_root: Union[Tuple[float, ...], List[Tuple[float, ...]]], standardize_method: str = 'simplex') -> Root:
         """
-        Given (x, y), restore it to a Root object according to the standardization method.
+        Homogenize a dehomogenized root or multiple roots.
         """
-        only_one = len(xy) == 2 and not hasattr(xy[0], '__iter__')
+        only_one = len(nonstd_root) and not hasattr(nonstd_root[0], '__iter__')
         if only_one:
-            xys = [xy]
+            nonstd_roots = [nonstd_root]
         else:
-            xys = xy
+            nonstd_roots = nonstd_root
 
         roots = []
-        for x, y in xys:
+        for r in nonstd_roots:
             if standardize_method == 'simplex':
-                roots.append(Root((x, y, 3 - x - y)))
+                nvars = len(r) + 1
+                roots.append(Root(r + (nvars - sum(r),)))
             elif standardize_method == 'partial':
-                roots.append(Root((x, y, 1)))
+                roots.append(Root(r + (1,)))
+        if only_one:
+            roots = roots[0]
         return roots
 
     @classmethod
-    def _remove_duplicative_roots(cls, roots: List[Root], prec: int = 4) -> List[Root]:
+    def _remove_duplicative_roots(cls, roots: List[Root], prec: int = 4, cyc: bool = True) -> List[Root]:
         """
         Remove duplicative roots if they are close enough < 10^(-prec).
         """
-        roots = [r.standardize(cyc = True, inplace = True) for r in roots]
-        inds = dict(((r[0].n(prec), r[1].n(prec)), i) for i, r in enumerate(roots)).values()
-        return [roots[i] for i in inds]        
+        roots = [r.standardize(cyc = cyc, inplace = True) for r in roots]
+        inds = dict((tuple(j.n(prec) for j in r), i) for i, r in enumerate(roots)).values()
+        return [roots[i] for i in inds]
         return roots
 
     @classmethod
@@ -403,17 +407,17 @@ class _findroot_helper():
         """
         Given grid coordinate and grid value, search for local minima.    
         """
-        extrema = grid.local_minima(filter_nontrivial=True)
+        extrema = grid.local_minima(filter_nontrivial=True, cyc=verify_hom_cyclic(grid.poly)[1])
 
         return extrema
 
     @classmethod
     def _findroot_border(cls, poly: sp.Poly) -> List[Root]:
         """
-        Return roots on the border of a polynomial.
+        Return roots on the border of a 3-var polynomial.
         """
         roots = []
-        a = sp.Symbol('a')
+        a = poly.gens[0]
         rep = [_[0] if len(_) else 0 for _ in poly.rep.rep[-1]]
         poly = sp.Poly.from_list(rep, a)
         poly_diff = poly.diff(a)
@@ -429,11 +433,11 @@ class _findroot_helper():
     @classmethod
     def _findroot_symmetric(cls, poly: sp.Poly, skip_border: bool = False) -> List[Root]:
         """
-        Return roots on the symmetric axis of a polynomial.
+        Return roots on the symmetric axis of a 3-var polynomial.
         If skip_border is True, the root (0,1,1) is not included.
         """
         roots = []
-        a = sp.Symbol('a')
+        a = poly.gens[0]
         rep = [sum(sum(__) for __ in _) for _ in poly.rep.rep]
         poly = sp.Poly.from_list(rep, a)
         poly_diff = poly.diff(a)
@@ -455,22 +459,17 @@ class _findroot_helper():
         """
         roots = []
 
-        poly = cls._standardize_poly(poly, standardize_method = standardize_method)
-        poly_diffa = poly.diff('a')
-        poly_diffb = poly.diff('b')
+        poly, gens = cls._destd_poly(poly, standardize_method = standardize_method)
+        poly_diffs = [poly.diff(gen) for gen in gens]
 
-        for e in cls._as_xy(initial_guess, standardize_method = standardize_method):
+        for e in cls._destd_root(initial_guess, standardize_method = standardize_method):
             try:
-                roota, rootb = sp.nsolve(
-                    (poly_diffa, poly_diffb),
-                    sp.symbols('a b'),
-                    e
-                )
-                roots.append((roota, rootb))
+                extrema = sp.nsolve(poly_diffs, gens, e)
+                roots.append(tuple(list(extrema)))
             except:
                 pass
 
-        return cls._as_root(roots, standardize_method = standardize_method)
+        return cls._std_root(roots, standardize_method = standardize_method)
 
     @classmethod
     def _findroot_bfgs(cls, poly, initial_guess = [], standardize_method = 'simplex'):
@@ -490,34 +489,40 @@ class _findroot_helper():
 
     @classmethod
     def _findroot_scipy(cls, poly, method = 'bfgs', initial_guess = [], standardize_method = 'simplex'):
-        if standardize_method == 'simplex':
-            f = lambda x: poly(x[0]/3, x[1]/3, (3 - x[0] - x[1])/3)
-            def early_stop(x):
-                if x[0] < -3 or x[1] < -3 or x[0] + x[1] > 6:
-                    raise ValueError
-
-        elif standardize_method == 'partial':
-            f = lambda x: poly(x[0], x[1], 1)
-            def early_stop(x):
-                if x[0] < 0 or x[1] < 0:
-                    raise ValueError
+        nvars = len(poly.gens)
+        def _get_f_and_early_stop(standardize_method: str):
+            if standardize_method == 'simplex':
+                def f(x):
+                    x = [i/nvars for i in x]
+                    return poly(*x, 1 - sum(x))
+                def early_stop(x):
+                    if any(i < -nvars for i in x) or 1 - sum(x) < -nvars:
+                        raise ValueError
+            elif standardize_method == 'partial':
+                def f(x):
+                    return poly(*x, 1)
+                def early_stop(x):
+                    if any(i < 0 for i in x):
+                        raise ValueError
+            return f, early_stop
+        f, early_stop = _get_f_and_early_stop(standardize_method)
 
         roots = []
-        for a, b in cls._as_xy(initial_guess, standardize_method = standardize_method):
+        for root in cls._destd_root(initial_guess, standardize_method = standardize_method):
             try:
-                res = minimize(f, (a, b), method = method, tol=1e-6, callback = early_stop)
+                res = minimize(f, root, method = method, tol=1e-6, callback = early_stop)
                 if res.success:
-                    roots.append((res.x[0], res.x[1]))
+                    roots.append(tuple(res.x))
             except:
                 pass
 
-        return cls._as_root(roots, standardize_method = standardize_method)
+        return cls._std_root(roots, standardize_method = standardize_method)
 
 
 def findroot_resultant(poly: sp.Poly) -> List[Root]:
     """
-    Find the roots of a polynomial using the resultant method. This is
-    essential in SDP SOS, because we need to construct exact subspace
+    Find the roots of a 3-var homogeneous polynomial using the resultant method. 
+    This is essential in SDP SOS, because we need to construct exact subspace
     constrainted by roots of the polynomial to perform SDP on a full-rank manifold.
 
     The method does not guarantee to find all roots, but find at least one in 
@@ -526,9 +531,6 @@ def findroot_resultant(poly: sp.Poly) -> List[Root]:
     Then it is possible for us to return (1,1,-sqrt(2)), although it is not
     positive. This seems to miss some roots, but it is not a problem in SDP SOS,
     because the spanned subspace algorithm includes the permutation of roots.
-
-    TODO:
-    1. Optimize the speed by removing redundant permuations.
 
     Parameters
     ----------

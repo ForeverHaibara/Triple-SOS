@@ -9,7 +9,7 @@ from ..roots import Root, RootRational
 
 class GridPoly():
     """
-    A grid to store value information of a polynomial. The GridPoly class should be
+    A grid to store value information of a 3-var polynomial. The GridPoly class should be
     created by function `GridRender.render`.
     """
     def __init__(self, poly = None, size = 60, grid_coor = None, grid_value = None, grid_color = None):
@@ -120,7 +120,7 @@ class GridPoly():
         return string
 
 
-    def local_minima(self, filter_nontrivial = True) -> List[Root]:
+    def local_minima(self, filter_nontrivial: bool = True, cyc: bool = True) -> List[Root]:
         """
         Search for local minima. Currently only cyclic polynomials are supported.
 
@@ -128,6 +128,8 @@ class GridPoly():
         ----------
         filter_nontrivial : bool
             Whether to remove the trivial extrema.
+        cyc : bool
+            Whether reduce the roots by the cyclic symmetry.
 
         Returns
         ----------
@@ -140,20 +142,32 @@ class GridPoly():
         n = round((2 * len(grid_coor) + .25) ** .5 - 1.5)
         grid_dict = dict(zip(grid_coor, grid_value))
 
-        trunc = (2*n + 3 - n // 3) * (n // 3) // 2
-
         extrema = []
 
+        trunc = (2*n + 3 - n // 3) * (n // 3) // 2 if cyc else 0
+
+        def _get_local_checker(cyc = True):
+            def _basic_checker(i, j, v):
+                if i == 0 or j == 0 or i + j == n:
+                    return False
+                for coor in ((i,j-1),(i+1,j-1),(i-1,j),(i-1,j+1),(i+1,j),(i,j+1)):
+                    if v >= grid_dict[coor]:
+                        return False
+                return True
+            if cyc:
+                def _cyc_checker(i, j, v):
+                    # without loss of generality we may assume j = max(i,j,n-i-j)
+                    # need to be locally convex
+                    if i > j or n - i - j > j:
+                        return False
+                    return _basic_checker(i, j, v)
+                return _cyc_checker
+            return _basic_checker
+
+        checker = _get_local_checker(cyc)
         for (i, j), v in zip(grid_coor[trunc:], grid_value[trunc:]):
-            # without loss of generality we may assume j = max(i,j,n-i-j)
-            # need to be locally convex
-            if i > j or n - i - j > j or i == 0 or v >= grid_dict[(i,j-1)] or v >= grid_dict[(i+1,j-1)]:
-                continue
-            if v >= grid_dict[(i-1,j)] or v >= grid_dict[(i-1,j+1)]:
-                continue
-            if i+j < n and (v >= grid_dict[(i+1,j)] or v >= grid_dict[(i,j+1)]):
-                continue
-            extrema.append(RootRational((n-i-j, i, j)))
+            if checker(i, j, v):
+                extrema.append(RootRational((n-i-j, i, j)))
 
         if filter_nontrivial:
             extrema = [r for r in extrema if r.is_nontrivial]
@@ -186,7 +200,7 @@ def _grid_init_precal(size: int, degree_limit: int) -> List[List[int]]:
 
 class GridRender():
     """
-    Class to generate the grid of a polynomial. See details in `GridRender.render`.
+    Class to generate the grid of a 3-var polynomial. See details in `GridRender.render`.
     """
     color_level = 12
     size = 60
@@ -233,8 +247,7 @@ class GridRender():
                 grid_value[k] = v
 
         elif value_method == 'integer_lambdify':
-            a, b, c = sp.symbols('a b c')
-            f = sp.lambdify((a,b,c), poly.as_expr())
+            f = sp.lambdify(poly.gens, poly.as_expr())
             grid_value = f(cls.grid_coor_np_[0], cls.grid_coor_np_[1], cls.grid_coor_np_[2])
 
         return grid_value
@@ -389,9 +402,8 @@ class GridRender():
     @classmethod
     def zero_grid(cls):
         if cls._zero_grid is None:
-            a, b, c = sp.symbols('a b c')
             cls._zero_grid = GridPoly(
-                sp.polys.Poly(0, (a, b, c)),
+                sp.polys.Poly(0, sp.symbols('a b c')),
                 size = cls.size,
                 grid_coor = cls.grid_coor,
                 grid_value = [0] * len(cls.grid_coor),

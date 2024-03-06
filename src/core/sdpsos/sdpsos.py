@@ -9,7 +9,7 @@ from .manifold import RootSubspace
 from .solver import SDPProblem
 from .solution import SolutionSDP
 from ...utils.basis_generator import generate_expr, MonomialReduction
-from ...utils import deg, arraylize_sp, verify_hom_cyclic
+from ...utils import arraylize_sp, verify_hom_cyclic
 
 
 def _define_mapping(nvars: int, degree: int, monomials: List[Tuple[int, ...]], **options) -> Callable[[int, int], Tuple[int, int]]:
@@ -88,8 +88,8 @@ def _constrain_nullspace(sdp: SDPProblem, monomials: List[Tuple[int, ...]], null
                          verbose: bool = False) -> SDPProblem:
     # constrain nullspace
     time0 = time()
-    sdp_tmp = sdp.get_last_child()
-    sdp_tmp.constrain_zero_diagonals()
+    sdp = sdp.get_last_child()
+    sdp.constrain_zero_diagonals()
     if verbose:
         print(f"Time for constraining zero diagonals    : {time() - time0:.6f} seconds. Dof = {sdp.get_last_child().dof}")
 
@@ -104,12 +104,11 @@ def _constrain_nullspace(sdp: SDPProblem, monomials: List[Tuple[int, ...]], null
         time0 = time()
 
     if nullspaces is not None:
-        sdp_tmp.constrain_nullspace(nullspaces, to_child=True)
+        sdp.constrain_nullspace(nullspaces, to_child=True)
 
     if verbose:
         print(f"Time for constraining nullspace         : {time() - time0:.6f} seconds. Dof = {sdp.get_last_child().dof}")
         time0 = time()
-        sdp.print_graph()
     return sdp
 
 def _get_equal_entries(monomials: List[Tuple[int, ...]], nvars: int, degree: int, option: MonomialReduction) -> List[List[int]]:
@@ -256,6 +255,9 @@ class SOSProblem():
         # constrain nullspace
         _constrain_nullspace(sdp, monomials, nullspaces, verbose=verbose)
 
+        if verbose:
+            sdp.print_graph()
+
         return sdp
 
 
@@ -327,9 +329,10 @@ def SDPSOS(
 
     For more flexible usage, please use
     ```
-        sdp_problem = SDPProblem(poly)
-        sdp_problem.solve(**kwargs)
-        solution = sdp_problem.as_solution()
+        sos_problem = SOSProblem(poly)
+        sos_problem._construct_sdp_by_default(monomial)
+        sos_problem.solve(**kwargs)
+        solution = sos_problem.as_solution()
     ```
 
     Parameters
@@ -353,6 +356,9 @@ def SDPSOS(
     if nvars == 3 and verify_hom_cyclic(poly)[1]:
         options["cyc"] = True
 
+    if verbose:
+        print(f'SDPSOS nvars = {nvars} degree = {degree}')
+
     sos_problem = SOSProblem(poly, **options)
 
     if monomials_lists is None:
@@ -366,12 +372,18 @@ def SDPSOS(
             monomials_lists.append(accumulated_monomials.copy())
 
     for monomials in monomials_lists:
+        if verbose:
+            print(f"Monomials = {monomials}")
+        time0 = time()
         try:
             sdp = sos_problem._construct_sdp_by_default(monomials, verbose = verbose)
             if sos_problem.solve(allow_numer = allow_numer, verbose = verbose):
+                if verbose:
+                    print(f"Time for solving SDP{' ':20s}: {time() - time0:.6f} seconds. \033[32mSuccess\033[0m.")
                 return sos_problem.as_solution()
         except Exception as e:
             if verbose:
+                print(f"Time for solving SDP{' ':20s}: {time() - time0:.6f} seconds. \033[31mFailed with exceptions\033[0m.")
                 print(e)
             continue
 

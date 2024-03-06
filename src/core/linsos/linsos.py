@@ -17,7 +17,7 @@ from .tangents import root_tangents
 from .correction import linear_correction
 from .updegree import higher_degree
 from .solution import SolutionLinear
-from ...utils import deg, arraylize, findroot, RootsInfo, verify_hom_cyclic
+from ...utils import arraylize, findroot, RootsInfo, verify_hom_cyclic
 
 
 LINPROG_OPTIONS = {
@@ -123,8 +123,11 @@ def LinearSOS(
         The solution of the linear programming SOS. When solution is None, it means that the linear
         programming SOS fails.
     """
+    nvars = len(poly.gens)
+    degree = poly.total_degree()
+    if nvars != 3:
+        return None
 
-    n = deg(poly)
     is_hom, is_cyc = verify_hom_cyclic(poly)
     if not is_hom:
         return None
@@ -136,8 +139,8 @@ def LinearSOS(
 
     # prepare to higher the degree in an iterative way
     for higher_degree_info in higher_degree(poly, degree_limit = degree_limit, is_cyc = is_cyc):
-        n = higher_degree_info['degree']
-        basis, arrays = _prepare_basis(n, tangents, rootsinfo = rootsinfo, basis = higher_degree_info['basis'], is_cyc=is_cyc)
+        degree = higher_degree_info['degree']
+        basis, arrays = _prepare_basis(degree, tangents, rootsinfo = rootsinfo, basis = higher_degree_info['basis'], is_cyc=is_cyc)
         if len(basis) <= 0:
             continue
 

@@ -1442,7 +1442,7 @@ class SDPProblem():
         transform = SDPMatrixTransform(sdp, nullspace=nullspaces)
         return transform.child_node
 
-    def constrain_symmetricity(self) -> 'SDPProblem':
+    def constrain_symmetry(self) -> 'SDPProblem':
         """
         Constrain the solution to be symmetric. This is useful to reduce
         the degree of freedom when the given symbolic matrix is not symmetric.
@@ -1466,7 +1466,7 @@ class SDPProblem():
     def constrain_equal_entries(self, entry_tuples: Dict[str, List[Tuple[Tuple[int, int], Tuple[int, int]]]]) -> 'SDPProblem':
         """
         Constrain some of the entries to be equal. This is a generalization of
-        `constrain_symmetricity`.
+        `constrain_symmetry`.
 
         Parameters
         ----------

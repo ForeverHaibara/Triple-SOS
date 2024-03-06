@@ -1,4 +1,4 @@
-from typing import Callable, List, Union
+from typing import Optional, Callable, List, Union
 
 import sympy as sp
 
@@ -44,8 +44,8 @@ class RootsInfo():
         strict_roots = [Root(r) if not isinstance(r, Root) else r for r in strict_roots]
 
         if approximate_roots:
-            roots = [r.approximate() for r in roots]
-            strict_roots = [r.approximate() for r in strict_roots]
+            roots = [r.approximate() if hasattr(r, 'approximate') else r for r in roots]
+            strict_roots = [r.approximate() if hasattr(r, 'approximate') else r for r in strict_roots]
 
         self.roots = roots
         self.strict_roots = strict_roots
@@ -95,27 +95,31 @@ class RootsInfo():
         return s
 
     @property
-    def is_centered(self):
+    def nvars(self) -> int:
+        return len(self.poly.gens)
+
+    @property
+    def is_centered(self) -> bool:
         if self.is_centered_ is None:
-            self.is_centered_ = self.poly(1,1,1) == 0
+            self.is_centered_ = self.poly(*([1] * self.nvars)) == 0
         return self.is_centered_
 
-    def nonborder_roots(self):
+    def nonborder_roots(self) -> List[Root]:
         """
         Return roots that a, b, c are nonzero.
         """
         return [r for r in self.strict_roots if not r.is_border]
 
-    def nontrivial_roots(self, tolerance = 1e-5):
+    def nontrivial_roots(self, tolerance: float = 1e-5) -> List[Root]:
         """
         Return roots that a, b, c are distinct and also nonzero.
         """
         return [r for r in self.strict_roots if r.is_nontrivial]
 
-    def has_nontrivial_roots(self):
+    def has_nontrivial_roots(self) -> bool:
         return len(self.nontrivial_roots()) > 0
 
-    def filter_tangents(self, tangents = None, tolerance = 1e-6):
+    def filter_tangents(self, tangents: Optional[List[RootTangent]] = None, tolerance: float = 1e-6) -> List[RootTangent]:
         """
         Remove tangents that are not zero at nontrivial roots.
 
@@ -155,7 +159,7 @@ class RootsInfo():
 
         return filtered_tangents
 
-    def generate_tangents(self, with_tangents: Union[bool, Callable] = True):
+    def generate_tangents(self, with_tangents: Union[bool, Callable] = True) -> List[RootTangent]:
         """
         Generate tangents for each root.
 
@@ -172,9 +176,9 @@ class RootsInfo():
         
         return with_tangents(self)
 
-    def sort_tangents(self):
+    def sort_tangents(self) -> List[RootTangent]:
         """
-        Sort the tangents by length of strings.
+        Sort the tangents of self by length of strings.
         """
         tangents = sorted(self.tangents, key = lambda t: len(t))
         self.tangents = tangents

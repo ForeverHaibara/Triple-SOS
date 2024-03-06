@@ -4,7 +4,7 @@ import numpy as np
 import sympy as sp
 from sympy.core.singleton import S
 
-from .basis import LinearBasis, LinearBasisTangentCyclic, a, b, c
+from .basis import LinearBasis, LinearBasisTangentCyclic, LinearBasisTangent, a, b, c
 from .updegree import LinearBasisMultiplier
 from ...utils.expression.cyclic import CyclicSum, is_cyclic_expr
 from ...utils.expression.solution import SolutionSimple
@@ -99,14 +99,14 @@ class SolutionLinear(SolutionSimple):
         self.basis = nom_mul_basis
 
     def collect(self):
-        r"""
+        """
         Collect terms with same tangents. For example, if we have
         a*b*(a^2-b^2-ab-ac+2bc)^2 + a*c*(a^2-b^2-ab-ac+2bc)^2, then we should combine them.
         """
         basis_by_tangents = {}
         exprs = []
         for v, base in zip(self.y, self.basis):
-            if not isinstance(base, LinearBasisTangentCyclic):
+            if not isinstance(base, (LinearBasisTangentCyclic,)):# LinearBasisTangent)):
                 exprs.append(v * base.expr)
                 continue
 
@@ -154,6 +154,7 @@ class SolutionLinear(SolutionSimple):
             i, j, k, m, n, p = common_base
             common_base = (a-b)**(2*i) * (b-c)**(2*j) * (c-a)**(2*k) * a**m * b**n * c**p
 
+            collected = common_base * extracted * tangent.together()
             collected = gcd * CyclicSum(common_base * extracted * tangent.together())
             exprs.append(collected)
 

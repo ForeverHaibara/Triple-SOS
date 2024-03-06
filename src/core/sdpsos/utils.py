@@ -265,55 +265,6 @@ class Mat2Vec:
                 split_start += l
         return splits
 
-# def solve_undetermined_linear(M: sp.Matrix, B: sp.Matrix) -> Tuple[sp.Matrix, sp.Matrix]:
-#     """
-#     Solve an undetermined linear system Mx = B with LU decomposition.
-#     See details at sympy.Matrix.gauss_jordan_solve.
-
-#     Returns
-#     -------
-#     x0: array
-#         One solution of Mx = B.
-#     space: Matrix
-#         All solution x is in the form of x0 + space @ y.
-#     """
-#     aug      = M.hstack(M.copy(), B.copy())
-#     B_cols   = B.cols
-#     row, col = aug[:, :-B_cols].shape
-
-#     # solve by reduced row echelon form
-#     A, pivots = aug.rref(normalize_last = False, simplify = False)
-#     A, v      = A[:, :-B_cols], A[:, -B_cols:]
-#     pivots    = list(filter(lambda p: p < col, pivots))
-#     rank      = len(pivots)
-
-#     # Get index of free symbols (free parameters)
-#     # non-pivots columns are free variables
-#     free_var_index = [c for c in range(A.cols) if c not in pivots]
-
-#     # Bring to block form
-#     permutation = sp.Matrix(pivots + free_var_index).T
-
-#     # check for existence of solutions
-#     # rank of aug Matrix should be equal to rank of coefficient matrix
-#     if not v[rank:, :].is_zero_matrix:
-#         raise ValueError("Linear system has no solution")
-
-#     # Full parametric solution
-#     V        = A[:rank, free_var_index]
-#     V        = V.col_join(-sp.eye(V.cols))
-#     vt       = v[:rank, :]
-#     vt       = vt.col_join(sp.zeros(V.cols, vt.cols))
-
-#     # Undo permutation
-#     V2       = sp.zeros(*V.shape)
-#     vt2      = sp.zeros(*vt.shape)
-#     for k in range(col):
-#         V2[permutation[k], :] = V[k, :]
-#         vt2[permutation[k]] = vt[k]
-#     return vt2, V2
-
-
 
 def S_from_y(
         y: sp.Matrix,
@@ -348,15 +299,6 @@ def S_from_y(
         S = Mat2Vec.vec2mat(vecS, mode=mode)
         S_dict[key] = S
     return S_dict
-
-
-def degree_of_monomial(monomial: sp.Expr) -> int:
-    """
-    Return the degree of a monomial.
-    TODO: do not convert to poly.
-    """
-    if len(monomial.free_symbols) == 0: return 0
-    return sum(monomial.as_poly().degree_list())
 
 
 @contextmanager

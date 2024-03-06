@@ -1,15 +1,33 @@
+from typing import List
+
+from mpmath import pslq
 import sympy as sp
 from sympy.simplify.sqrtdenest import _sqrt_match
-from mpmath import pslq
 
 from ...utils import (
     RootsInfo, Root, RootRational, RootTangent,
     rationalize, find_nearest_root,
-    verify_is_symmetric, CyclicSum, CyclicProduct
+    verify_hom_cyclic, verify_is_symmetric,
+    CyclicSum, CyclicProduct
 )
 
-
 a, b, c = sp.symbols('a b c')
+
+class _option():
+    """
+    Helper class for storing options for generating tangents.
+    """
+    _key_words_default = {
+        'cyc': True,
+        'sym': False,
+        'centered': True,
+        'strict': True
+    }
+    __slots__ = _key_words_default.keys()
+    def __init__(self, *args, **kwargs):
+        for key, value in self._key_words_default.items():
+            setattr(self, key, kwargs.get(key, value))
+
 
 def near(a, b, tol = 1e-4):
     """Check whether a and b are close enough."""
@@ -76,22 +94,32 @@ def _standard_symmetric_root(root):
 
 def root_tangents(
         rootsinfo: RootsInfo,
-    ):
+    ) -> List[RootTangent]:
     """
     Generate tangents for linear programming.
     """
+    nvars = len(rootsinfo.poly.gens)
+    if nvars != 3:
+        return []
+
+    is_hom, is_cyc = verify_hom_cyclic(rootsinfo.poly)
+    if not is_hom:
+        return []
+    is_sym = is_cyc and verify_is_symmetric(rootsinfo.poly)
     is_centered = rootsinfo.is_centered
-    is_sym = verify_is_symmetric(rootsinfo.poly)
     strict_roots = rootsinfo.strict_roots
     normal_roots = rootsinfo.normal_roots
 
     tangents = []
     for is_strict, roots in [(True, strict_roots), (False, normal_roots)]:
-        tangents += _tangents_helper.root_tangents(
+        tangents += _tangents_helper_ternary.root_tangents(
             roots,
-            is_sym = is_sym,
-            is_centered = is_centered,
-            is_strict = is_strict
+            _option(
+                cyc = is_cyc,
+                sym = is_sym,
+                centered = is_centered,
+                strict = is_strict
+            )
         )
         if len(tangents) > 0:
             break
@@ -100,26 +128,28 @@ def root_tangents(
     return tangents
 
 
-class _tangents_helper():
+class _tangents_helper_ternary():
     """Helper class for generating tangents."""
     @classmethod
-    def root_tangents(cls, roots, is_sym = False, is_centered = True, is_strict = True):
-        if is_sym:
-            helper = _tangents_helper_symmetric
+    def root_tangents(cls, roots: List[Root], option: _option) -> List[RootTangent]:
+        if not option.cyc:
+            helper = _tangents_helper_ternary_acyclic
+        elif option.sym:
+            helper = _tangents_helper_ternary_symmetric
         else:
-            helper = _tangents_helper_cyclic
+            helper = _tangents_helper_ternary_cyclic
 
         tangents = []
 
-        if is_strict and len(roots) > 1: # and any(_.is_nontrivial for _ in roots):
+        if option.strict and len(roots) > 1: # and any(_.is_nontrivial for _ in roots):
             # We should handle multiple roots at the same time.
-            tangents = _tangents_helper_mixed.root_tangents(roots, is_sym = is_sym, is_centered = is_centered)
+            tangents = _tangents_helper_ternary_mixed.root_tangents(roots, option)
 
         if len(tangents) == 0:
             for root in roots:
                 if root.is_centered:
                     continue
-                tangents += helper.root_tangents(root, is_centered = is_centered, is_strict = is_strict)
+                tangents += helper.root_tangents(root, option)
 
         tangents = [_ for _ in tangents if _ is not None]
         tangents = [_.together().as_coeff_Mul()[1] for _ in tangents]
@@ -127,32 +157,32 @@ class _tangents_helper():
         return tangents
 
 
-class _tangents_helper_cyclic():
+class _tangents_helper_ternary_cyclic():
     """Helper class for generating tangents for cyclic polynomials."""
     @classmethod
-    def root_tangents(cls, root, is_centered = True, is_strict = True):
+    def root_tangents(cls, root: Root, option: _option) -> List[sp.Expr]:
         tangents = []
         if root.is_border:
-            return cls._tangents_border(root, is_centered = is_centered, is_strict = is_strict)
+            return cls._tangents_border(root, option)
         else:
-            tangents += cls._tangents_quadratic(root, is_centered = is_centered, is_strict = is_strict)
-            tangents += cls._tangents_cubic(root, is_centered = is_centered, is_strict = is_strict)
+            tangents += cls._tangents_quadratic(root, option)
+            tangents += cls._tangents_cubic(root, option)
         return tangents
 
     @classmethod
-    def _tangents_quadratic(cls, root, is_centered = True, is_strict = True):
+    def _tangents_quadratic(cls, root: Root, option: _option) -> List[sp.Expr]:
         u0, v0 = root.uv()
         u, v = rl(u0), rl(v0)
         if not (near2(u, u0) and near2(v, v0)):
-            if is_strict:
-                return cls._tangents_irrational_uv(root, is_centered = is_centered)
+            if option.strict:
+                return cls._tangents_irrational_uv(root, option)
             u, v = rl(u0,1), rl(v0,1)
 
         tangents = [
             a**2 - b**2 + u*(a*b - a*c) + v*(b*c - a*b),
             # a**2 + (-u - v)*a*b + (-u + 2*v)*a*c + b**2 + (2*u - v)*b*c - 2*c**2
         ]
-        if (not is_centered) and is_strict:
+        if (not option.centered) and option.strict:
             diamond = lambda a, b, c: (u + v - 1)*a**2 + (-v**2 + v - 1)*a*b + (-u**2 + u - 1)*a*c + (u*v - 1)*b*c
             tangents += [
                 diamond(a, b, c),
@@ -162,11 +192,11 @@ class _tangents_helper_cyclic():
         return tangents
 
     @classmethod
-    def _tangents_cubic(cls, root, is_centered = True, is_strict = True):
+    def _tangents_cubic(cls, root: Root, option: _option) -> List[sp.Expr]:
         u0, v0 = root.uv()
         u, v = rl(u0), rl(v0)
         if not (near2(u, u0) and near2(v, v0)):
-            if is_strict:
+            if option.strict:
                 return []
             p = (u0*u0 + v0) / (u0*v0 - 1)
             q = (v0*v0 + u0) / (u0*v0 - 1)
@@ -197,7 +227,7 @@ class _tangents_helper_cyclic():
 
         tangents = [inverse_quad, umbrella, scythe]
 
-        if is_centered:
+        if option.centered:
             knife = _inner_product(
                 [1 - u*v, -u**3 + u**2*v - u*v - u, u**3 - u**2 + u*v + u + v**2 - v, u**2 + v, -u**2*v + u*v - v**2 - 1],
                 [a**2*c, a*b**2, a*b*c, b**3, b**2*c]
@@ -215,7 +245,7 @@ class _tangents_helper_cyclic():
         return tangents
 
     @classmethod
-    def _tangents_irrational_uv(cls, root, is_centered = True):
+    def _tangents_irrational_uv(cls, root: Root, option: _option) -> List[sp.Expr]:
         """
         Example: root of 24abcs(a)3+s(a2b)s(a)3-243abcs(a2b) near (1.48962108725722, 1.05209446747076, 0.458284445272021)
         has u = 3sqrt(3) - 4 and v = 2.
@@ -268,7 +298,7 @@ class _tangents_helper_cyclic():
 
 
     @classmethod
-    def _tangents_border(cls, root, is_centered = True, is_strict = True):
+    def _tangents_border(cls, root: Root, option: _option) -> List[sp.Expr]:
         x = _standard_border_root(root)
         if (not x.is_real) or x == 0:
             return []
@@ -288,19 +318,19 @@ class _tangents_helper_cyclic():
         return []
 
 
-class _tangents_helper_symmetric(_tangents_helper):
+class _tangents_helper_ternary_symmetric(_tangents_helper_ternary):
     """Helper class for generating tangents for symmetric polynomials."""
     @classmethod
-    def root_tangents(cls, root, is_centered = True, is_strict = True):
+    def root_tangents(cls, root: Root, option: _option) -> List[sp.Expr]:
         tangents = []
         if root.is_border:
-            return cls._tangents_border(root, is_centered = is_centered, is_strict = is_strict)
+            return cls._tangents_border(root, option)
         elif root.is_symmetric:
-            return cls._tangents_symmetric(root, is_centered = is_centered, is_strict = is_strict)
+            return cls._tangents_symmetric(root, option)
         return tangents
 
     @classmethod
-    def _tangents_border(cls, root, is_centered = True, is_strict = True):
+    def _tangents_border(cls, root: Root, option: _option) -> List[sp.Expr]:
         x = _standard_border_root(root)
         if (not x.is_real) or x == 0:
             return []
@@ -311,7 +341,7 @@ class _tangents_helper_symmetric(_tangents_helper):
             return []
         v0 = x + 1/x
         v = rl(v0)
-        if near(v, v0):
+        if near(v, v0) and option.strict:
             tangents = [
                 a**2 + b**2 + c**2 - v*a*c - v*b*c + (2*v - 3)*a*b,
                 a**2 - v*a*b + b**2
@@ -319,7 +349,7 @@ class _tangents_helper_symmetric(_tangents_helper):
         return tangents
 
     @classmethod
-    def _tangents_symmetric(cls, root, is_centered = True, is_strict = True):
+    def _tangents_symmetric(cls, root: Root, option: _option) -> List[sp.Expr]:
         x = _standard_symmetric_root(root)
         if not x.is_real:
             return []
@@ -335,7 +365,7 @@ class _tangents_helper_symmetric(_tangents_helper):
                 a**2 + a*b*(-2*x - 2) + a*c*(x + 1) + b**2 + b*c*(x + 1) - 2*c**2
             ]
 
-        if len(tangents) == 0 and is_strict:
+        if len(tangents) == 0 and option.strict:
             res = pslq([x**2, x, 1])
             if res:
                 u, v, w = res
@@ -347,10 +377,10 @@ class _tangents_helper_symmetric(_tangents_helper):
 
 
 
-class _tangents_helper_mixed(_tangents_helper):
+class _tangents_helper_ternary_mixed(_tangents_helper_ternary):
     """Helper class for generating tangents over multiple roots."""
     @classmethod
-    def root_tangents(cls, roots, is_sym = False, is_centered = True):
+    def root_tangents(cls, roots: List[Root], option: _option) -> List[sp.Expr]:
         roots = [root for root in roots if not (root.is_centered or root.is_corner)]
         nontrivial_roots = [root for root in roots if root.is_nontrivial]
         symmetric_roots = [root for root in roots if (root.is_symmetric and not root.is_border)]
@@ -358,14 +388,14 @@ class _tangents_helper_mixed(_tangents_helper):
 
         tangents = []
         if nontrivial_roots and border_roots and (not symmetric_roots):
-            tangents = cls._tangents_nontrivial_border(nontrivial_roots, border_roots, is_sym = is_sym)
+            tangents = cls._tangents_nontrivial_border(nontrivial_roots, border_roots, option)
         elif symmetric_roots and border_roots and (not nontrivial_roots):
-            tangents = cls._tangents_symmetric_border(symmetric_roots, border_roots, is_sym = is_sym)
+            tangents = cls._tangents_symmetric_border(symmetric_roots, border_roots, option)
 
         return tangents
 
     @classmethod
-    def _tangents_nontrivial_border(cls, nontrivial_roots, border_roots, is_sym = False):
+    def _tangents_nontrivial_border(cls, nontrivial_roots: List[Root], border_roots: List[Root], option: _option) -> List[sp.Expr]:
         if len(nontrivial_roots) == 1:
             u0, v0 = nontrivial_roots[0].uv()
             u, v = rl(u0), rl(v0)
@@ -386,7 +416,7 @@ class _tangents_helper_mixed(_tangents_helper):
 
 
     @classmethod
-    def _tangents_nontrivial_1_border_1(cls, u, v, border_roots):
+    def _tangents_nontrivial_1_border_1(cls, u: sp.Rational, v: sp.Rational, border_roots: List[Root]) -> List[sp.Expr]:
         x = _standard_border_root(border_roots[0])
         if x == 0 or not x.is_real:
             return []
@@ -431,7 +461,7 @@ class _tangents_helper_mixed(_tangents_helper):
         return tangents
 
     @classmethod
-    def _tangents_nontrivial_1_border_2(cls, u, v, border_roots):
+    def _tangents_nontrivial_1_border_2(cls, u: sp.Rational, v: sp.Rational, border_roots: List[Root]) -> List[sp.Expr]:
         """
         Examples
         ---------
@@ -492,8 +522,8 @@ class _tangents_helper_mixed(_tangents_helper):
         return tangents
 
     @classmethod
-    def _tangents_symmetric_border(cls, symmetric_roots, border_roots, is_sym = True):
-        if not is_sym:
+    def _tangents_symmetric_border(cls, symmetric_roots: List[Root], border_roots: List[Root], option: _option) -> List[sp.Expr]:
+        if not option.is_sym:
             return []
         if len(border_roots) == 1:
             # For symmetric poly with only 1 root on the border, it must be (1,1,0)
@@ -527,3 +557,34 @@ class _tangents_helper_mixed(_tangents_helper):
                 ]
 
         return []
+
+
+class _tangents_helper_ternary_acyclic(_tangents_helper_ternary):
+    """Helper class for generating tangents for acyclic polynomials."""
+    @classmethod
+    def root_tangents(cls, root: Root, option: _option) -> List[sp.Expr]:
+        tangents = []
+        if root.is_border:
+            return cls._tangents_border(root, option)
+        elif isinstance(root, RootRational):
+            tangents += cls._tangents_rational(root, option)
+        return tangents
+
+    @classmethod
+    def _tangents_border(cls, root: Root, option: _option) -> List[sp.Expr]:
+        return []
+    
+    @classmethod
+    def _tangents_rational(cls, root: Root, option: _option) -> List[sp.Expr]:
+        x, y, z = root.root
+        # line passing through (1,1,1) and its perpendicular line
+        line = (y - z)*a + (z - x)*b + (x - y)*c
+        perp_line = (x*y + x*z - y**2 - z**2)*a + (-x**2 + x*y + y*z - z**2)*b + (-x**2 + x*z - y**2 + y*z)*c
+
+        # conic passing through vertices and (1,1,1)
+        conic1 = x*(y - z)*b*c + y*(z - x)*c*a + z*(x - y)*a*b
+
+        # conic passing through midpoints and (1,1,1)
+        conic2 = (-x*y + x*z + y**2 - z**2)*a**2 + (x**2 - x*z - y**2 + y*z)*a*b + (-x**2 + x*y - y*z + z**2)*a*c + (-x**2 + x*y - y*z + z**2)*b**2 + (-x*y + x*z + y**2 - z**2)*b*c + (x**2 - x*z - y**2 + y*z)*c**2
+
+        return [line, perp_line, conic1, conic2]

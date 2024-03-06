@@ -77,8 +77,8 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
                     <label class="form-check-label" for="setting_method_SDPSOS_allow_numer">Accept Numerical Solution</label>
                     <input class="form-check-input subcheckbox" type="checkbox" value="" id="setting_method_SDPSOS_allow_numer">
 
-                    <label class="form-check-label" for="setting_method_SDPSOS_reduced_decompose">Use Reduced Decomposition</label>
-                    <input class="form-check-input subcheckbox" type="checkbox" value="" id="setting_method_SDPSOS_reduced_decompose">
+                    <!-- <label class="form-check-label" for="setting_method_SDPSOS_reduced_decompose">Use Reduced Decomposition</label>
+                    <input class="form-check-input subcheckbox" type="checkbox" value="" id="setting_method_SDPSOS_reduced_decompose"> -->
 
                     <!-- <div class="btn-group" role="group" aria-label="Basic radio toggle button group">
                         <input type="radio" class="btn-check" name="btnradio" id="btnradio1" autocomplete="off" checked>
@@ -445,7 +445,7 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
                 },
                 SDPSOS: {
                     allow_numer: document.getElementById("setting_method_SDPSOS_allow_numer").checked,
-                    decompose_method: document.getElementById("setting_method_SDPSOS_reduced_decompose").checked?'reduce':'raw',
+                    // decompose_method: document.getElementById("setting_method_SDPSOS_reduced_decompose").checked?'reduce':'raw',
                 }
             }
             axios.post('http://127.0.0.1:5000/process/sos',{
