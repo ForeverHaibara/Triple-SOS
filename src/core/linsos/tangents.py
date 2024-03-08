@@ -526,7 +526,7 @@ class _tangents_helper_ternary_mixed(_tangents_helper_ternary):
 
     @classmethod
     def _tangents_symmetric_border(cls, symmetric_roots: List[Root], border_roots: List[Root], option: _option) -> List[sp.Expr]:
-        if not option.is_sym:
+        if not option.sym:
             return []
         if len(border_roots) == 1:
             # For symmetric poly with only 1 root on the border, it must be (1,1,0)

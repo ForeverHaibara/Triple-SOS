@@ -297,7 +297,7 @@ class SOSProblem():
 def SDPSOS(
         poly: sp.Poly,
         monomials_lists: Optional[List[List[Tuple[int, ...]]]] = None,
-        degree_limit: int = 10,
+        degree_limit: int = 12,
         verbose: bool = False,
         method: str = "trivial",
         allow_numer: int = 0,
