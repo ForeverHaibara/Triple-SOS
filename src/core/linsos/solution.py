@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Tuple
 
 import numpy as np
 import sympy as sp
@@ -9,6 +9,30 @@ from .updegree import LinearBasisMultiplier
 from ...utils.expression.cyclic import CyclicSum, is_cyclic_expr
 from ...utils.expression.solution import SolutionSimple
 from ...utils.roots.rationalize import cancel_denominator
+
+
+def _get_common_base_and_extraction(tangent: sp.Expr, y: List[sp.Expr], base_info: List[Tuple]) -> Tuple[sp.Expr, sp.Expr, sp.Expr]:
+    """
+    Get the common base and the extraction of the expression.
+    """
+    base_info = np.array(base_info, dtype = 'int32')
+    common_base = base_info.min(axis = 0)
+    base_info -= common_base
+
+    gcd = cancel_denominator(y)
+
+    extracted = []
+    for v, (i, j, k, m, n, p) in zip(y, base_info):
+        extracted.append(
+            (v / gcd) * (a-b)**(2*i) * (b-c)**(2*j) * (c-a)**(2*k) * a**m * b**n * c**p
+        )
+    extracted = sp.Add(*extracted)
+
+    i, j, k, m, n, p = common_base
+    common_base = (a-b)**(2*i) * (b-c)**(2*j) * (c-a)**(2*k) * a**m * b**n * c**p
+
+    return gcd, common_base, extracted
+
 
 class SolutionLinear(SolutionSimple):
     """
@@ -93,7 +117,8 @@ class SolutionLinear(SolutionSimple):
             r, self.multiplier = self.multiplier.as_content_primitive()
         else:
             self.multiplier = sp.Add(*multipliers)
-            r = S.One
+            r, self.multiplier = self.multiplier.as_content_primitive()
+            # r = S.One
 
         self.y = [v / r for v in non_mul_y]
         self.basis = nom_mul_basis
@@ -106,13 +131,15 @@ class SolutionLinear(SolutionSimple):
         basis_by_tangents = {}
         exprs = []
         for v, base in zip(self.y, self.basis):
-            if not isinstance(base, (LinearBasisTangentCyclic,)):# LinearBasisTangent)):
-                exprs.append(v * base.expr)
+            cls = base.__class__
+            if cls not in (LinearBasisTangentCyclic, LinearBasisTangent):
+                expr = v * base.expr
+                exprs.append(expr)
                 continue
 
             tangent = base.tangent
             info = base.info_
-            if is_cyclic_expr(tangent, (a,b,c)):
+            if cls is LinearBasisTangentCyclic and is_cyclic_expr(tangent, (a,b,c)):
                 # we shall rotate the expression so that j is maximum
                 i, j, k, m, n, p = info
                 if i != j and i != k and j != k:
@@ -130,32 +157,18 @@ class SolutionLinear(SolutionSimple):
                 i, j, k, m, n, p = info
                 info = j, k, i, n, p, m
 
-            collection = basis_by_tangents.get(tangent)
+            collection = basis_by_tangents.get((cls, tangent))
             if collection is None:
-                basis_by_tangents[tangent] = ([v], [info])
+                basis_by_tangents[(cls, tangent)] = ([v], [info])
             else:
                 collection[0].append(v)
                 collection[1].append(info)
 
-        for tangent, (y, base_info) in basis_by_tangents.items():
-            base_info = np.array(base_info, dtype = 'int32')
-            common_base = base_info.min(axis = 0)
-            base_info -= common_base
+        for (cls, tangent), (y, base_info) in basis_by_tangents.items():
+            gcd, common_base, extracted = _get_common_base_and_extraction(tangent, y, base_info)
 
-            gcd = cancel_denominator(y)
-
-            extracted = []
-            for v, (i, j, k, m, n, p) in zip(y, base_info):
-                extracted.append(
-                    (v / gcd) * (a-b)**(2*i) * (b-c)**(2*j) * (c-a)**(2*k) * a**m * b**n * c**p
-                )
-            extracted = sp.Add(*extracted)
-
-            i, j, k, m, n, p = common_base
-            common_base = (a-b)**(2*i) * (b-c)**(2*j) * (c-a)**(2*k) * a**m * b**n * c**p
-
-            collected = common_base * extracted * tangent.together()
-            collected = gcd * CyclicSum(common_base * extracted * tangent.together())
+            f = (lambda x: CyclicSum(x)) if cls is LinearBasisTangentCyclic else (lambda x: x)
+            collected = gcd * f(common_base * extracted * tangent.together())
             exprs.append(collected)
 
         self.numerator = sp.Add(*exprs)

@@ -92,7 +92,7 @@ class SOS_Manager():
             return poly_get_factor_form(self.poly)
 
     def findroot(self):
-        if self.deg <= 1 or (not self._poly_info['iscyc']) or (self.poly.is_zero) or (not self._poly_info['ishom']):
+        if self.deg <= 1 or (self.poly.is_zero) or (not self._poly_info['ishom']):
             self._roots_info = RootsInfo()
             return self._roots_info
 

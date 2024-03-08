@@ -576,6 +576,7 @@ def sos_struct_acyclic_quartic(coeff, recurrsion = None, real = True):
     """
     Solve acyclic quartic problems.
     """
+    return None
     return _sos_struct_acyclic_quartic_real(coeff)
 
 

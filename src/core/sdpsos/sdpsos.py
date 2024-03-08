@@ -299,6 +299,7 @@ def SDPSOS(
         monomials_lists: Optional[List[List[Tuple[int, ...]]]] = None,
         degree_limit: int = 10,
         verbose: bool = False,
+        method: str = "trivial",
         allow_numer: int = 0,
         **kwargs
     ) -> Optional[SolutionSDP]:
@@ -377,7 +378,7 @@ def SDPSOS(
         time0 = time()
         try:
             sdp = sos_problem._construct_sdp_by_default(monomials, verbose = verbose)
-            if sos_problem.solve(allow_numer = allow_numer, verbose = verbose):
+            if sos_problem.solve(allow_numer = allow_numer, verbose = verbose, method = method):
                 if verbose:
                     print(f"Time for solving SDP{' ':20s}: {time() - time0:.6f} seconds. \033[32mSuccess\033[0m.")
                 return sos_problem.as_solution()

@@ -4,7 +4,8 @@ import sympy as sp
 
 from .utils import is_numer_matrix
 from ...utils import (
-    MonomialReduction, CyclicSum, CyclicProduct, is_cyclic_expr,
+    MonomialReduction, MonomialCyclic,
+    CyclicSum, CyclicProduct, is_cyclic_expr,
     SolutionSimple
 )
 
@@ -53,7 +54,7 @@ def _decomp_as_sos(
     """
     exprs = []
     option = MonomialReduction.from_options(**options)
-    option_half = MonomialReduction.from_options(cyc = False)
+    option_half = option.base()
     for key, (U, S) in decompositions.items():
         monomial = eval(key)
         monomial_expr = monomial_to_expr(monomial, gens)

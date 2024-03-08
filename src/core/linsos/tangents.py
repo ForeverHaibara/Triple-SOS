@@ -143,7 +143,10 @@ class _tangents_helper_ternary():
 
         if option.strict and len(roots) > 1: # and any(_.is_nontrivial for _ in roots):
             # We should handle multiple roots at the same time.
-            tangents = _tangents_helper_ternary_mixed.root_tangents(roots, option)
+            if option.cyc:
+                tangents = _tangents_helper_ternary_mixed.root_tangents(roots, option)
+            else:
+                tangents = _tangents_helper_ternary_acyclic_mixed.root_tangents(roots, option)
 
         if len(tangents) == 0:
             for root in roots:
@@ -342,11 +345,11 @@ class _tangents_helper_ternary_symmetric(_tangents_helper_ternary):
         v0 = x + 1/x
         v = rl(v0)
         if near(v, v0) and option.strict:
-            tangents = [
+            return [
                 a**2 + b**2 + c**2 - v*a*c - v*b*c + (2*v - 3)*a*b,
                 a**2 - v*a*b + b**2
             ]
-        return tangents
+        return []
 
     @classmethod
     def _tangents_symmetric(cls, root: Root, option: _option) -> List[sp.Expr]:
@@ -566,17 +569,32 @@ class _tangents_helper_ternary_acyclic(_tangents_helper_ternary):
         tangents = []
         if root.is_border:
             return cls._tangents_border(root, option)
-        elif isinstance(root, RootRational):
-            tangents += cls._tangents_rational(root, option)
+        else:
+            tangents += cls._tangents_nontrivial(root, option)
         return tangents
 
     @classmethod
     def _tangents_border(cls, root: Root, option: _option) -> List[sp.Expr]:
-        return []
-    
-    @classmethod
-    def _tangents_rational(cls, root: Root, option: _option) -> List[sp.Expr]:
+        if (not isinstance(root, RootRational)) or root.is_symmetric:
+            return []
         x, y, z = root.root
+        # line passing through (1,1,1) and its perpendicular line
+        line = (y - z)*a + (z - x)*b + (x - y)*c
+        perp_line = (x*y + x*z - y**2 - z**2)*a + (-x**2 + x*y + y*z - z**2)*b + (-x**2 + x*z - y**2 + y*z)*c
+
+        return [line, perp_line]
+
+    @classmethod
+    def _tangents_nontrivial(cls, root: Root, option: _option) -> List[sp.Expr]:
+        if not option.strict:
+            return []
+        xyz = [rl(_) for _ in root.root]
+        if all(near2(xyz[i], root.root[i]) for i in range(len(root))):
+            return cls._tangents_rational(*xyz, option)
+        return []
+
+    @classmethod
+    def _tangents_rational(cls, x, y, z, option: _option) -> List[sp.Expr]:
         # line passing through (1,1,1) and its perpendicular line
         line = (y - z)*a + (z - x)*b + (x - y)*c
         perp_line = (x*y + x*z - y**2 - z**2)*a + (-x**2 + x*y + y*z - z**2)*b + (-x**2 + x*z - y**2 + y*z)*c
@@ -587,4 +605,50 @@ class _tangents_helper_ternary_acyclic(_tangents_helper_ternary):
         # conic passing through midpoints and (1,1,1)
         conic2 = (-x*y + x*z + y**2 - z**2)*a**2 + (x**2 - x*z - y**2 + y*z)*a*b + (-x**2 + x*y - y*z + z**2)*a*c + (-x**2 + x*y - y*z + z**2)*b**2 + (-x*y + x*z + y**2 - z**2)*b*c + (x**2 - x*z - y**2 + y*z)*c**2
 
+        if x == y or y == z or z == x:
+            return [perp_line]
         return [line, perp_line, conic1, conic2]
+
+
+class _tangents_helper_ternary_acyclic_mixed(_tangents_helper_ternary):
+    """Helper class for generating tangents over multiple roots."""
+    @classmethod
+    def root_tangents(cls, roots: List[Root], option: _option) -> List[sp.Expr]:
+        roots = [root for root in roots if not (root.is_centered or root.is_corner)]
+        nontrivial_roots = [root for root in roots if root.is_nontrivial]
+        symmetric_roots = [root for root in roots if (root.is_symmetric and not root.is_border)]
+        border_roots = [root for root in roots if (root.is_border and not root.is_symmetric)]
+
+        tangents = []
+        # if nontrivial_roots and border_roots and (not symmetric_roots):
+        #     tangents = cls._tangents_nontrivial_border(nontrivial_roots, border_roots, option)
+        # elif symmetric_roots and border_roots and (not nontrivial_roots):
+        #     tangents = cls._tangents_symmetric_border(symmetric_roots, border_roots, option)
+        if len(border_roots) > 1:
+            return cls._tangents_multiple_border(border_roots, option)
+
+        return tangents
+
+    @classmethod
+    def _tangents_nontrivial_border(nontrivial_roots, border_roots, option):
+        return []
+
+    @classmethod
+    def _tangents_multiple_border(cls, border_roots: List[Root], option: _option) -> List[sp.Expr]:
+        if len(border_roots) < 2 or len(border_roots) > 3:
+            return []
+        sides = [r.root.index(0) for r in border_roots]
+        if len(sides) != len(set(sides)):
+            return [] # not implemented
+
+        tangents = []
+
+        for i in range(len(border_roots)):
+            x1, y1, z1 = border_roots[i].root
+            line = (y1 - z1)*a + (z1 - x1)*b + (x1 - y1)*c
+            tangents.append(line)
+            for j in range(i+1, len(border_roots)):
+                x2, y2, z2 = border_roots[j].root
+                tangents.append((y1*z2 - y2*z1)*a + (-x1*z2 + x2*z1)*b + (x1*y2 - x2*y1)*c)
+
+        return tangents

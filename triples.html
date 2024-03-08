@@ -66,16 +66,16 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
                 <input class="form-check-input" type="checkbox" value="" id="setting_method_use_SDPSOS" checked>
                 <label class="form-check-label" for="setting_method_use_SDPSOS">Use SDP SOS</label>
                 <input type="checkbox" class="collapse-toggle visually-hidden" id="setting_method_SDPSOS_switch" data-bs-toggle="collapse" data-bs-target="#setting_method_SDPSOS_menu" width="0">
-                <label for="setting_method_SDPSOS_switch" class="collapse-label">
+                <!-- <label for="setting_method_SDPSOS_switch" class="collapse-label">
                     <span class="me-2">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-right" viewBox="0 0 16 16">
                         <path fill-rule="evenodd" d="M5.646 4.646a.5.5 0 0 1 .708 0L10 8.293l3.646-3.647a.5.5 0 1 1 .708.708l-4 4a.5.5 0 0 1-.708 0l-4-4a.5.5 0 0 1 0-.708z"/>
                     </svg>
                     </span>
-                </label>
-                <div class="collapse" id="setting_method_SDPSOS_menu" style="margin-left: 10px; margin-top: 3px; font-size: 15px;">
-                    <label class="form-check-label" for="setting_method_SDPSOS_allow_numer">Accept Numerical Solution</label>
-                    <input class="form-check-input subcheckbox" type="checkbox" value="" id="setting_method_SDPSOS_allow_numer">
+                </label> -->
+                <!-- <div class="collapse" id="setting_method_SDPSOS_menu" style="margin-left: 10px; margin-top: 3px; font-size: 15px;"> -->
+                    <!-- <label class="form-check-label" for="setting_method_SDPSOS_allow_numer">Accept Numerical Solution</label>
+                    <input class="form-check-input subcheckbox" type="checkbox" value="" id="setting_method_SDPSOS_allow_numer"> -->
 
                     <!-- <label class="form-check-label" for="setting_method_SDPSOS_reduced_decompose">Use Reduced Decomposition</label>
                     <input class="form-check-input subcheckbox" type="checkbox" value="" id="setting_method_SDPSOS_reduced_decompose"> -->
@@ -87,7 +87,7 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
                         <input type="radio" class="btn-check" name="btnradio" id="btnradio2" autocomplete="off">
                         <label class="btn btn-outline-primary" for="btnradio2">Full</label>
                     </div> -->
-                </div>
+                <!-- </div> -->
             </div>
             <!-- <input type="checkbox" id="setting_method_use_StructuralSOS" checked="checked" style="font-size: 14px; margin-top: 10px; width: 80%" >&nbsp; Use Structural SOS</input>
             <input type="checkbox" id="setting_method_use_LinearSOS" checked="checked" style="font-size: 14px; margin-top: 10px; width: 80%" >&nbsp; Use Linear SOS</input>
@@ -444,7 +444,8 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
                     real: document.getElementById("setting_method_StructuralSOS_real").checked,
                 },
                 SDPSOS: {
-                    allow_numer: document.getElementById("setting_method_SDPSOS_allow_numer").checked,
+                    // allow_numer: document.getElementById("setting_method_SDPSOS_allow_numer").checked,
+                    verbose: true,
                     // decompose_method: document.getElementById("setting_method_SDPSOS_reduced_decompose").checked?'reduce':'raw',
                 }
             }

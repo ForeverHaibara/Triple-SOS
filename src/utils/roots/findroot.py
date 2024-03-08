@@ -1,3 +1,4 @@
+from collections import deque
 from itertools import product
 from typing import Union, Callable, List, Optional, Tuple
 
@@ -254,7 +255,7 @@ def findroot(
         roots = _findroot_helper._remove_duplicative_roots(roots, cyc = is_cyc)
 
         # compute roots on the border
-        roots += _findroot_helper._findroot_border(poly)
+        roots += _findroot_helper._findroot_border(poly, cyc = is_cyc)
 
         # compute roots on the symmetric axis
         roots += _findroot_helper._findroot_symmetric(poly, skip_border = True)
@@ -412,22 +413,43 @@ class _findroot_helper():
         return extrema
 
     @classmethod
-    def _findroot_border(cls, poly: sp.Poly) -> List[Root]:
+    def _findroot_border(cls, poly: sp.Poly, cyc: bool = True) -> List[Root]:
         """
         Return roots on the border of a 3-var polynomial.
         """
         roots = []
-        a = poly.gens[0]
-        rep = [_[0] if len(_) else 0 for _ in poly.rep.rep[-1]]
-        poly = sp.Poly.from_list(rep, a)
-        poly_diff = poly.diff(a)
-        poly_diff2 = poly_diff.diff(a)
-        try:
-            for r in nroots(poly_diff, method = 'factor', real = True, nonnegative = True):
-                if poly_diff2(r) >= 0:
-                    roots.append(Root((r, 1, 0)))
-        except:
-            pass
+        if cyc:
+            a = poly.gens[0]
+            rep = [_[0] if len(_) else 0 for _ in poly.rep.rep[-1]]
+            poly = sp.Poly.from_list(rep, a)
+            poly_diff = poly.diff(a)
+            poly_diff2 = poly_diff.diff(a)
+            try:
+                for r in nroots(poly_diff, method = 'factor', real = True, nonnegative = True):
+                    if poly_diff2(r) >= 0:
+                        roots.append(Root((r, 1, 0)))
+            except:
+                pass
+        else:
+            gens = poly.gens
+            nvars = len(gens)
+            subs = [1] + [0] * (nvars - 2)
+            gens2 = deque(gens)
+            for i in range(nvars):
+                a = gens2.popleft()
+                poly0 = poly.subs(dict(zip(gens2, subs))).as_poly(a)
+                poly_diff = poly0.diff(a)
+                poly_diff2 = poly_diff.diff(a)
+                try:
+                    for r in nroots(poly_diff, method = 'factor', real = True, nonnegative = True):
+                        if poly_diff2(r) >= 0:
+                            root = [0] * nvars
+                            root[i] = r
+                            root[(i+1)%nvars] = 1
+                            roots.append(Root(root))
+                except Exception as e:
+                    pass
+                gens2.append(a)
         return roots
 
     @classmethod

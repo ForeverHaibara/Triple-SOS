@@ -80,22 +80,33 @@ def higher_degree(
     """
     n = deg(poly)
     n_plus = 0
-    
-    multipliers = {
-        1: CyclicSum(a),
-        2: CyclicSum(a**2 - a*b),
-        3: CyclicSum(a*(a-b)*(a-c)),
-        4: CyclicSum(a**2*(a-b)*(a-c)),
-    }
 
-    adjustment_multipliers = {
-        1: [],
-        2: [CyclicSum(a*b)],
-        3: [CyclicSum(a**2*b), CyclicSum(a*b**2), CyclicSum(a*b*c)],
-        4: [CyclicSum(a**3*b), CyclicSum(a*b**3), CyclicSum(a**2*b*c), CyclicSum(a*b*(a-b)**2)],
-    }
+    if is_cyc:
+        multipliers = {
+            1: CyclicSum(a),
+            2: CyclicSum(a**2 - a*b),
+            3: CyclicSum(a*(a-b)*(a-c)),
+            4: CyclicSum(a**2*(a-b)*(a-c)),
+        }
 
-    while n + n_plus <= degree_limit and n_plus <= 4:
+        adjustment_multipliers = {
+            1: [],
+            2: [CyclicSum(a*b)],
+            3: [CyclicSum(a**2*b), CyclicSum(a*b**2), CyclicSum(a*b*c)],
+            4: [CyclicSum(a**3*b), CyclicSum(a*b**3), CyclicSum(a**2*b*c), CyclicSum(a*b*(a-b)**2)],
+        }
+    else:
+        multipliers = {
+            1: c,
+            2: (a-b)**2
+        }
+
+        adjustment_multipliers = {
+            1: [a, b],
+            2: [(b-c)**2, (a-c)**2, a*b, a*c, b*c]
+        }
+
+    while n + n_plus <= degree_limit and n_plus <= max(multipliers.keys()):
         if n_plus == 0:
             yield {
                 'poly': poly,
