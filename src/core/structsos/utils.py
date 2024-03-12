@@ -160,6 +160,8 @@ class Coeff():
                 return (1, self)
 
         d = int(d)
+        if d == 0:
+            return 0, self
         new_coeff = Coeff({(u//d,v//d,w//d): _ for (u,v,w), _ in self.coeffs.items() if _ != 0})
         new_coeff.is_rational = self.is_rational
         return d, new_coeff
