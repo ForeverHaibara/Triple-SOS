@@ -2,16 +2,16 @@ import sympy as sp
 
 from .utils import (
     CyclicSum, CyclicProduct,
-    sum_y_exprs, radsimp, rationalize_func
+    sum_y_exprs, radsimp, rationalize_func, quadratic_weighting
 )
 
 a, b, c = sp.symbols('a b c')
 
-def sos_struct_cubic(coeff, recurrsion, real = True):
+def sos_struct_cubic(coeff, recurrsion = None, real = True):
     """
     Solve cyclic cubic polynomials.
 
-    This function only uses `coeff`.
+    This function does not use `recurrsion` to solve the problem.
     This function supports irrational coefficients.
     """
     if coeff((2,1,0)) == coeff((1,2,0)):
@@ -111,7 +111,6 @@ def _sos_struct_cubic_parabola(coeff):
         t = 2*(p + 2*q + 3)/(p - q - 3)
         return w1 * CyclicSum(a*(a-c)**2) + w2 * CyclicSum(a*(a+t*b-(t+1)*c)**2) + rem * CyclicProduct(a)
 
-
     return None
 
 
@@ -121,8 +120,21 @@ def _sos_struct_cubic_nontrivial(coeff):
 
     See further details in the theorem of quartic.
 
+    Theorem:
+    If and only if p,q >= 0 or p^2q^2 + 18pq - 4p^3 - 4q^3 - 27 <= 0, the inequality
+    f(a,b,c) = s(a^3 + p*a^2*b + q*a*b^2 - (p+q+1)*a*b*c) >= 0 is true for all a,b,c >= 0.
+
+    The curve -4*x**3 + x**2*y**2 + 18*x*y - 4*y**3 - 27 = 0 can be parametrized by
+    x = -(2*t**3 - 1)/t**2
+    y = (t**3 - 2)/t
+    Using the parametrization, f_t(t,1,0) = 0. And we have the solution that
+    s(a^2-ab)*f_t(a,b,c) = 1/t^2 * s(a(ta-(t-1)b-c)^2(tb-(t-1)c-a)^2) >= 0
+
+    However, cubic polynomials can be solved by lifting at most 1 degree. So we will
+    not use the solution above in prior. We convert it to a quartic instead.
+
     Examples
-    -------
+    ---------
     s(4a3-15a2b+12ab2-abc)
 
     s(a3+2a2b-3a2c)
@@ -242,3 +254,264 @@ def _sos_struct_cubic_nontrivial_irrational(coeff):
         CyclicSum(a**2*b**2*c)
     ]
     return sum_y_exprs(y, exprs) / CyclicSum(a*b)
+
+
+def sos_struct_acyclic_cubic(coeff, recurrsion = None, real = True):
+    """
+    Solve acyclic cubic polynomials.
+
+    This function does not use `recurrsion` to solve the problem.
+
+    Nonnegative cubic polynomials will have at most one interior zero. If there are
+    two, we can consider the set 0 <= f(a,b,c) < eps where eps is a sufficiently small
+    positive number. Then the set has two connected components, and a line intersecting
+    the two gives four intersections, a contradiction to degree 3. Tightest cubic
+    polynomials can have one zero in the interior and three zeros on the borders.
+    """
+    solution = _sos_struct_acyclic_cubic_symmetric(coeff)
+    if solution is not None:
+        return solution
+
+    solution = _sos_struct_acyclic_cubic_hexagon(coeff)
+    if solution is not None:
+        return solution
+
+
+
+def _sos_struct_acyclic_cubic_hexagon(coeff):
+    """
+    Solve acyclic cubics in the form of
+    ?a^2b+?ab^2+?ac^2+?bc^2+?a^2c+?b^2c >= ??abc.
+
+    Examples
+    ---------
+    (25a2b+14a2c+20ab2-82abc+5ac2+19b2c+10bc2-2abc)
+
+    (5a2b+a2c+5ab2-10abc+ac2+b2c+bc2)
+    """
+    if any(coeff(_) != 0 for _ in ((3,0,0), (0,3,0), (0,0,3))):
+        return None
+    corners = [coeff(_) for _ in ((1,2,0),(1,0,2),(0,1,2),(2,1,0),(2,0,1),(0,2,1))]
+    if any(_ < 0 for _ in corners):
+        return None
+
+    corners = [(corners[2*i], corners[2*i+1]) for i in range(3)]
+    center = coeff((1,1,1))
+
+    gap = center/2 + sum(sp.sqrt(x * y) for x, y in corners)
+    if gap >= 0:
+        # very easy case
+        zs = [None, None, None]
+
+        def _get_check_valid_func(z0):
+            def _check_valid(z):
+                return z0 <= z <= 0 and z - z0 <= gap / 3
+            return _check_valid
+
+        for i, (x, y) in enumerate(corners):
+            z0 = -2 * sp.sqrt(x * y)
+            if isinstance(z0, sp.Rational):
+                zs[i] = z0
+            else:
+                _check_valid_func = _get_check_valid_func(z0)
+                eqz = sp.Poly([1, 0, -4*x*y], sp.Symbol('z'))
+                zs[i] = rationalize_func(eqz, _check_valid_func, validation_initial = lambda z: z <= 0, direction = -1)
+            if zs[i] is None:
+                return None
+
+        combs = [(a,b,c), (b,c,a), (c,a,b)]
+        exprs = [quadratic_weighting(x, z, y, a=b0, b=c0)*a0 for (x,y), z, (a0, b0, c0) in zip(corners, zs, combs)]
+        return sum(exprs) + (center - sum(zs))*(a*b*c)
+
+
+def _sos_struct_acyclic_cubic_symmetric(coeff):
+    """
+    Solve acyclic cubic polynomials that are symmetric with respect to two variables.
+
+    WLOG we assume it is symmetric with respect to a and b.
+    Note that cubic polys have at most one interior zero, and in this case it should lies
+    on the symmetric axis. Then we can always subtract some c*(a-b)^2 so that the poly
+    has two roots on the two borders a = 0 or b = 0.
+    Also, we can always subtract some a*b*c so that the poly has one interior root. To
+    conclude, it suffices to consider polys with two roots on the border and one interior root
+    on the symmetric axis.
+
+    Theorem: let z >= 0 and (-8*t*w+4*w*z-9)/w >= 0. Define
+    w0 = 2*(5*t**2 - 2*t*z + 2*z**2)/3
+    y0 = 4*(-2*t + z)**3/27
+    y1 = -3*(-2*t*w + w*z - 3)**2/w**3
+    sym_c = (-2*t*w + w*z - 9)/(3*w)
+    F(a,b,c) = ((t*a-c)**2*(z*a+c)+(t*b-c)**2*(z*b+c)-c**3+(-t**2*z+y0+y1)*a*b*(a+b)+(w0+w*y1)*a*b*c)
+    Then F(a,b,c) >= 0.
+
+    Equality cases at (1,0,t),(0,1,t) and (1,1,sym_c).
+    Moreover, if -8*t*w+4*w*z-9 = 0, then there exists an extra equality case at (1,1,0).
+
+    Proof:
+    (a+b)*F(a,b,c) = z*(t*a+t*b-c)**2*(a-b)**2 + (-8*t*w+4*w*z-9)*4/(3*w)*a*b*(sym_c/2 *(a+b) - c)**2
+                    + c*(a*(t*a+(sym_c-t)*b-c)**2 + b*(t*b+(sym_c-t)*a-c)**2) >= 0.
+
+    TODO: Solve the inequality without lifting the degree if possible.
+
+    Examples
+    ---------
+    9s(a3)-3s(a)s(ab)-5s(a)(a-c)2
+
+    a(a-b)(a-c)+4/27(b+c)(b-c)2
+
+    (2a3+2a2b-8a2c+2ab2+21abc+4ac2+2b3-8b2c+4bc2+9c3)
+
+    (sqrt(2)b-c)2(b+c)+(sqrt(2)a-c)2(a+c)-c3+4abc
+
+    (a+b+2c)((a+b-(sqrt(3)+1)/2c)2) + 4(a-b)2c
+    """
+    a, b, c = None, None, None
+    if all(coeff((i,j,k)) == coeff((j,i,k)) for (i,j,k) in ((3,0,0),(2,1,0),(2,0,1),(1,0,2))):
+        a, b, c = sp.symbols("a b c")
+        x0, x1, x2, x3, x4, x5 = [coeff(_) for _ in ((0,0,3),(1,0,2),(2,0,1),(3,0,0),(2,1,0),(1,1,1))]
+    if all(coeff((i,j,k)) == coeff((i,k,j)) for (i,j,k) in ((0,3,0),(0,2,1),(1,2,0),(2,1,0))):
+        a, b, c = sp.symbols("b c a")
+        x0, x1, x2, x3, x4, x5 = [coeff(_) for _ in ((3,0,0),(2,1,0),(1,2,0),(0,3,0),(0,2,1),(1,1,1))]
+    if all(coeff((i,j,k)) == coeff((k,j,i)) for (i,j,k) in ((0,0,3),(1,0,2),(0,1,2),(0,2,1))):
+        a, b, c = sp.symbols("c a b")
+        x0, x1, x2, x3, x4, x5 = [coeff(_) for _ in ((0,3,0),(0,2,1),(0,1,2),(0,0,3),(1,0,2),(1,1,1))]
+
+
+    if a is None:
+        # it is not symmetric
+        return
+    if x0 < 0:
+        return None
+
+    if x0 == 0:
+        # This is a degeneated case, the symmetric axis and the border are now quadratic.
+        if x1 < 0 or x3 < 0:
+            return None
+        if x3 == 0:
+            if not (x4 >= 0 and x2 >= 0 and 4*sp.sqrt(x4*x1) + 2*x2 + x5 >= 0):
+                return None
+            p1 = x2 * c*(a-b)**2
+            p2 = quadratic_weighting(x4, x5/2 + x2, x1, a=a, b=c) * b
+            p3 = quadratic_weighting(x4, x5/2 + x2, x1, a=b, b=c) * a
+            return p1 + p2 + p3
+        if x2 < 0 and 4*x1*x3 < x2**2:
+            return None
+        # The following x40 makes the symmetric axis have a multiplicity root (a,b,c) = (1,1,sym_c)
+        # so either we require x4 >= x40, or the symmetric axis degree 1 term >= 0.
+        x40 = radsimp(-(16*x1*x3 - 4*x2**2 - 4*x2*x5 - x5**2)/(16*x1))
+        r = radsimp(x2/x3/2) if 4*x1*x3 >= x2**2 else sp.S(0)
+        ker = radsimp(x1 - x3*r**2)
+        if x1 > 0 and x4 >= x40:
+            sym_c = radsimp((-2*x2 - x5)/(4*x1))
+            w = radsimp(1 + r*sym_c)
+            p1 = x3*a*(a + r*c - w*b)**2 + x3*b*(b + r*c - w*a)**2
+            p2 = (x4 - x40)*a*b*(a+b) + (x2 - 2*r*x3)*c*(a-b)**2
+            p3 = ker*a*(-sym_c*b + c)**2 + ker*b*(-sym_c*a + c)**2
+            return p1 + p2 + p3
+        elif 2*x2 + x5 >= 0 and x3 + x4 >= 0:
+            p1 = x3*a*(a - b + r*c)**2 + x3*b*(b - a + r*c)**2 + (x3 + x4)*a*b*(a+b)
+            p2 = (x2 - 2*r*x3)*c*(a-b)**2 + (2*x2 + x5)*a*b*c
+            p3 = ker*c**2*(a + b)
+            return p1 + p2 + p3
+        return None
+
+
+
+    def _determine_tz(x0, x1, x2, x3):
+        """
+        Compute t,z such that
+        x0*(ta-c)^2(za+c) = x0*c^3 + x1*c^2*a + x2'*c*a^2 + x3'*a^3
+        with x2' <= x2 and x3' <= x3. Also, z = x1/x0 + 2*t.
+        """
+        t = sp.Symbol('t')
+        eqt1 = sp.Poly([3*x0, 2*x1, x2], t)
+        eqt2 = sp.Poly([-2*x0, -x1, 0, x3], t)
+        def _check_valid(t):
+            return x1/x0 + 2*t >= 0 and eqt2(t) >= 0
+
+        t_ = None
+        if x2 >= 0 and _check_valid(0):
+            t_ = sp.S(0)
+        elif eqt1(-x1/x0/2) >= 0 and eqt2(-x1/x0/2) >= 0:
+            t_ = radsimp(-x1/x0/2)
+        else:
+            # sometimes it is tight for irrational coefficients, we detect it first
+            eqgcd = sp.gcd(eqt1, eqt2)
+            if eqgcd.degree() == 1:
+                t_ = radsimp(-eqgcd.coeff_monomial((0,)) / eqgcd.coeff_monomial((1,)))
+                if x1/x0 + 2*t_ < 0:
+                    t_ = None
+
+        if t_ is None:
+            t_ = rationalize_func(eqt1, _check_valid, direction = 1)
+        if t_ is not None:
+            return radsimp([t_, x1/x0 + 2*t_])
+
+    def _determine_w(x0, x4, x5, t, z):
+        """
+        Determine w such that
+        w0 = 2*(5*t**2 - 2*t*z + 2*z**2)/3
+        y0 = 4*(-2*t + z)**3/27
+        y1 = -3*(-2*t*w + w*z - 3)**2/w**3
+        (-t**2*z+y0+y1) <= x4/x0 and (w0+w*y1) <= x5/x0.
+        """
+        w = sp.Symbol('w')
+        w0 = radsimp(2*(5*t**2 - 2*t*z + 2*z**2)/3)
+        y0 = radsimp(4*(-2*t + z)**3/27)
+        eqw1 = (radsimp(x5/x0 - w0)*w**2 + 3*(-2*t*w + w*z - 3)**2).as_poly(w)
+        eqw2 = (radsimp(x4/x0 + t**2*z - y0)*w**3 + 3*(-2*t*w + w*z - 3)**2).as_poly(w)
+        eqw3 = ((-8*t*w + 4*w*z - 9)).as_poly(w)
+        def _check_valid(w):
+            return w != 0 and eqw3(w) * w >= 0 and eqw2(w) * w >= 0
+        if z != 2*t:
+            w_ = radsimp(9 / (z - 2*t) / 4)
+            if eqw1(w_) >= 0 and _check_valid(w_):
+                return w_
+        if True:
+            eqgcd = sp.gcd(eqw1, eqw2)
+            if eqgcd.degree() == 1:
+                w_ = radsimp(-eqgcd.coeff_monomial((0,)) / eqgcd.coeff_monomial((1,)))
+                if _check_valid(w_):
+                    return w_
+
+        return rationalize_func(eqw1, _check_valid, direction = 1)
+
+    def _solve_tzw(t, z, w):
+        sym_c = radsimp((-2*t*w + w*z - 9)/(3*w))
+        p1 = z*(t*a+t*b-c)**2*(a-b)**2 + radsimp((-8*t*w+4*w*z-9)*4/(3*w))*a*b*(sym_c/2 *(a+b) - c)**2
+        p2 = c*(a*(t*a+(sym_c-t)*b-c)**2 + b*(t*b+(sym_c-t)*a-c)**2)
+        return (p1 + p2)/(a + b)
+
+    tz = _determine_tz(x0, x1, x2, x3)
+    # print('tz =' , tz)
+    if tz is None:
+        return None
+
+    t, z = tz
+    y = radsimp([
+        x3 - x0*t**2*z,
+        x2 - x0*(t**2 - 2*t*z),
+    ])
+    x42 = x4 + y[0]
+    x52 = x5 + 2*y[1]
+
+    w = _determine_w(x0, x42, x52, t, z)
+    # print('w =', w)
+    if w is None:
+        return None
+
+
+    w0 = radsimp(2*(5*t**2 - 2*t*z + 2*z**2)/3)
+    y0 = radsimp(4*(-2*t + z)**3/27)
+    y1 = radsimp(-3*(-2*t*w + w*z - 3)**2/w**3)
+    y += radsimp([
+        x42 - x0*(-t**2*z + y0 + y1),
+        x52 - x0*(w0 + w * y1)
+    ])
+    if all(_ >= 0 for _ in y):
+        p1 = (y[0]*(a+b) + y[1]*c).together() * (a-b)**2
+        p2 = (y[2]*(a+b) + y[3]*c).together() * a*b
+        p3 = x0 * _solve_tzw(t, z, w)
+        return p1 + p2 + p3
+
+    return None

@@ -10,8 +10,7 @@ from ...utils.basis_generator import invarraylize
 from .utils import (
     CyclicSum, CyclicProduct, Coeff,
     sum_y_exprs, nroots, rationalize, rationalize_bound, rationalize_func, cancel_denominator, radsimp,
-    prove_univariate,
-    zip_longest
+    prove_univariate, zip_longest
 )
 
 a, b, c = sp.symbols('a b c')
@@ -47,6 +46,51 @@ def sos_struct_quintic(coeff, recurrsion, real = True):
     return None
 
 
+def _solve_sa2minusab_mul_cubic(x, y, mul = sp.S(1)):
+    """
+    Solve mul * s(a^2-ab)s(a^3 + xa^2b + yab^2 - (x+y+1)abc) >= 0.
+
+    Theorem:
+    If and only if p,q >= 0 or p^2q^2 + 18pq - 4p^3 - 4q^3 - 27 <= 0, the inequality
+    f(a,b,c) = s(a^3 + p*a^2*b + q*a*b^2 - (p+q+1)*a*b*c) >= 0 is true for all a,b,c >= 0.
+
+    The curve -4*x**3 + x**2*y**2 + 18*x*y - 4*y**3 - 27 = 0 can be parametrized by
+    x = -(2*t**3 - 1)/t**2
+    y = (t**3 - 2)/t
+    Using the parametrization, f_t(t,1,0) = 0. And we have the solution that
+    s(a^2-ab)*f_t(a,b,c) = 1/t^2 * s(a(ta-(t-1)b-c)^2(tb-(t-1)c-a)^2) >= 0
+
+    When (x, y) is not on the curve, it would be a linear combination of two points on the curve.
+    """
+    if x >= 0 and y >= 0:
+        return sp.Rational(1,2) * mul * CyclicSum((a-b)**2) * CyclicSum(a**3 + x*a**2*b + y*a*b**2 - (x+y+1)*CyclicProduct(a))
+
+    def _solve_t(t):
+        return radsimp(1/t**2) * CyclicSum(a*(t*a - (t-1)*b - c)**2*(t*b - (t-1)*c - a)**2)
+
+    # find t such that (x,y) >= (-(2*t**3 - 1)/t**2, (t**3 - 2)/t)  (t > 0)
+    t = sp.Symbol('t')
+    eq1t = sp.Poly([2, x, 0, -1], t)
+    eq2t = sp.Poly([-1, 0, y, 2], t)
+    # first check whether there exists multiplicative roots
+    eqgcd = sp.gcd(eq1t, eq2t)
+    if eqgcd.degree() == 1 and eqgcd.coeff_monomial((0,)) != 0:
+        t_ = radsimp(- eqgcd.coeff_monomial((0,)) / eqgcd.coeff_monomial((1,)))
+        return mul * _solve_t(t_)
+
+    def _check_valid(t):
+        return t > 0 and eq2t(t) >= 0
+
+    t = rationalize_func(eq1t, _check_valid, direction = 1)
+    if t is None:
+        return None
+    p1 = mul * _solve_t(t)
+    x1 = radsimp(x + (2*t**3 - 1)/t**2)
+    y1 = radsimp(y - (t**3 - 2)/t)
+    p2 = radsimp(mul*x1) * (a - c)**2 + radsimp(mul*y1) * (a - b)**2
+    return p1 + CyclicSum(a * p2 * (b - c)**2)
+
+
 def _sos_struct_quintic_full(coeff):
     """
     Try to solve quintic with nonzero a^5 coefficient by subtracting something.
@@ -69,6 +113,8 @@ def _sos_struct_quintic_full(coeff):
     s(2a5-5a4b+a4c+5a3b2-19a3bc+6a3c2+10a2b2c)
 
     s(a2(a-b)(a2+2b2-2ac+2c2))-5/4abcs(a2-ab)
+
+    s(31a5-58a4b-8a4c+35a3c2)
 
     s(a2(a-b)(a2-3bc))
 
@@ -108,14 +154,28 @@ def _sos_struct_quintic_full(coeff):
     #
     #########################################################
 
-    if True:
-        # Method 1: Try subtracting s(a^2-ab)s(a^3 + xa^2b + yab^2 - (x+y+1)abc)
-        # so that the rest falls into the hexagon case with equal coefficients of a^4b and ab^4.
-        # To ensure coeff((4,1,0)) == coeff((1,4,0)), we can assume x = x0 - t, y = y0 - t
+    def _solve_trivial(coeff):
+        """
+        Method 1: Try subtracting s(a^2-ab)s(a^3 + xa^2b + yab^2 - (x+y+1)abc)
+        where x, y are to be determined, so that the remaining polynomial
+        falls into the hexagon case with equal coefficients of a^4b and ab^4.
+
+        To ensure coeff((4,1,0)) == coeff((1,4,0)) = t for the remaining poly,
+        we can assume x = x0 - t, y = y0 - t.
+        Then the remaining coefficients of coeff((3,2,0)) and coeff((2,3,0)) do not
+        depend on the choice of t.
+
+        In most ideal case, the remaining poly should have discriminant == 0,
+        and we can solve for the exact minimum t that ensures the remaining polynomial
+        nonnegative.
+        See more details at _sos_struct_quintic_hexagon.
+        """
         coeff500 = coeff((5,0,0))
         x0, y0 = coeff((4,1,0)) / coeff500 + 1, coeff((1,4,0)) / coeff500 + 1
-        # the remaining coefficient of a^3b^2 and a^2b^3 are given by
+
+        # the remaining coefficient of a^3b^2 and a^2b^3 are given by ... (not depend on t)
         p, q = coeff((3,2,0)) / coeff500 - (1-x0+y0), coeff((2,3,0)) / coeff500 - (1-y0+x0)
+
         z0 = coeff((3,1,1)) / coeff500 + (4+4*(x0+y0))
         x0, y0, p, q, z0 = radsimp([x0, y0, p, q, z0])
         # print(p, q, z0)
@@ -123,79 +183,40 @@ def _sos_struct_quintic_full(coeff):
         if p >= 0 and q >= 0 and (4*p*q >= z0**2 or z0 >= 0):
             t0 = sp.S(0)
         else:
-            # Plug in the discriminant, the discriminant is linear of t, so we can solve the exact result.
+            # Plug in the discriminant, the discriminant is linear of t,
+            # so we can solve the exact minimum t that makes the remaining poly nonnegative.
             denom = radsimp((2*p + 2*q + z0)*(4*p**2 - 4*p*q - 2*p*z0 + 4*q**2 - 2*q*z0 + z0**2))
             if denom <= 0 or 4*p*q - z0**2 == 0:
                 t0 = None
             else:
-                t0 = (-4*p*q + z0**2)**2/(8*denom)
+                t0 = radsimp((-4*p*q + z0**2)**2/(8*denom))
 
-        if t0 is not None: # and t0 >= 0
-            t0 = radsimp(t0)
-            x_, y_ = x0 - t0, y0 - t0
-            if (x_ >= 0 and y_ >= 0) or radsimp(-4*x_**3 + x_**2*y_**2 + 18*x_*y_ - 4*y_**3 - 27) <= 0:
-                u_, v_ = 4*(-2*p**2 + q*z0)/(4*p*q - z0**2), 4*(p*z0 - 2*q**2)/(4*p*q - z0**2)
-                u_, v_ = radsimp([u_, v_])
+        if t0 is None: # or t0 < 0:
+            return
 
-                if x_ >= 0 and y_ >= 0:
-                    y = [sp.Rational(1,2)]
-                    exprs = [CyclicSum((a-b)**2) * CyclicSum(a**3 + x_*a**2*b + y_*a*b**2 - (x_+y_+1)*CyclicProduct(a))]
-                else:
-                    # find t such that ((t**4 - 4*t**3 + 6*t**2 - 2*t - 1)/(t-1)**2, (2*t**3 - 6*t**2 + 6*t - 1)/(t-1)**2) <= (x,y)
-                    t = sp.symbols('t')
-                    eq = ((2*t**3 - 6*t**2 + 6*t - 1) - y_ * (t-1)**2).as_poly(t)
-                    
-                    t_ = None
-                    if not coeff.is_rational:
-                        # first check whether there exists multiplicative roots
-                        eq_x = (t**4 - 4*t**3 + 6*t**2 - 2*t - 1 - x_ * (t-1)**2).as_poly(t)
-                        eq_gcd = sp.polys.gcd(eq, eq_x)
-                        if eq_gcd.degree() == 1:
-                            t_ = radsimp(- eq_gcd.coeff_monomial((0,)) / eq_gcd.coeff_monomial((1,)))
+        x_, y_ = x0 - t0, y0 - t0
+        if (x_ >= 0 and y_ >= 0) or radsimp(-4*x_**3 + x_**2*y_**2 + 18*x_*y_ - 4*y_**3 - 27) <= 0:
+            p1 = _solve_sa2minusab_mul_cubic(x_, y_, mul = coeff500)
+            if p1 is None:
+                return None
 
-                    _compute_x = lambda t: (t**4 - 4*t**3 + 6*t**2 - 2*t - 1)/(t-1)**2
-                    _compute_y = lambda t: (2*t**3 - 6*t**2 + 6*t - 1)/(t-1)**2
-                    if t_ is None:
-                        def _is_valid(t):
-                            return t < 1 and _compute_x(t) <= x_ and _compute_y(t) <= y_
-                        t_ = rationalize_func(eq, _is_valid, direction = -1)
-                    if t_ is not None:
-                        y = [radsimp((t_ - 1)**(-2)), sp.S(1)]
-                        x_, y_ = radsimp([x_ - _compute_x(t_), y_ - _compute_y(t_)])
-                        one_minus_t_ = radsimp(1 - t_)
-                        exprs = [
-                            CyclicSum(a*(one_minus_t_*c-a+t_*b)**2*(one_minus_t_*a-b+t_*c)**2),
-                            CyclicSum(a*(b-c)**2*(x_ * (a-c)**2 + y_*(a-b)**2))
-                        ]
+            hexagon_coeffs = {
+                (4,1,0): t0,
+                (3,2,0): p,
+                (2,3,0): q,
+                (1,4,0): t0,
+                (3,1,1): z0 - 8*t0,
+                (2,2,1): radsimp(-(-6*t0+p+q+z0) + coeff.poly111() / 3 / coeff500)
+            }
+            p2 = _sos_struct_quintic_hexagon(Coeff(hexagon_coeffs, is_rational = coeff.is_rational))
 
-                if y is not None:
-                    if p >= 0 and q >= 0 and (4*p*q >= z0**2 or z0 >= 0):
-                        if z0 >= 0:
-                            y.extend([sp.S(1), z0/2])
-                            exprs.extend([
-                                CyclicSum((q*a + p*b)*c**2*(a-b)**2),
-                                CyclicProduct(a) * CyclicSum((a-b)**2)
-                            ])
-                        else:
-                            w = radsimp(-z0/(2*p)) if p != 0 else sp.S(0)
-                            y.extend([
-                                p,
-                                radsimp(q - p*w**2),
-                            ])
-                            exprs.extend([
-                                CyclicSum(a*(a*b-w*a*c+radsimp(w-1)*b*c)**2),
-                                CyclicSum(a*c**2*(a-b)**2),
-                            ])
-                    else:
-                        y.append(t0)
-                        exprs.append(CyclicSum(c*(a**2-b**2+u_*(a*b-a*c)+v_*(b*c-a*b))**2))
-                    if all(_ >= 0 for _ in y):
-                        y = [_ * coeff500 for _ in y]
-                        y.append(coeff.poly111() / 3)
-                        exprs.append(CyclicSum(a**2*b**2*c))
-                        return sum_y_exprs(y, exprs)
+            if p2 is not None:
+                return p1 + coeff500 * p2
 
-            # return None
+
+    solution = _solve_trivial(coeff)
+    if solution is not None:
+        return solution
 
     if not coeff.is_rational:
         return None
@@ -545,7 +566,7 @@ def _sos_struct_quintic_full(coeff):
                 # print(poly_get_factor_form(invarraylize(sp.Matrix(params), cyc = False)), mul)
                 # print(border_proof)
                 multiplier = CyclicSum(a**2 + mul*b*c)
-                sol_main = CyclicSum(a * invarraylize(sp.Matrix(params), cyc = False).as_expr()**2)
+                sol_main = CyclicSum(a * invarraylize(sp.Matrix(params), (a, b, c), cyc = False).as_expr()**2)
 
                 border_proof_split_a, border_proof_split_b = [], []
                 for arg in border_proof: #.args:
@@ -622,15 +643,14 @@ def _sos_struct_quintic_windmill(coeff):
     
     s((b-a+207/100c)((a2-b2+307/200(ab-ac)+247/100(bc-ab)))2)
 
+    s(a4c+a3b2-a3bc-a2b2c)-3*2^(2/3)s(a2-ab)p(a)
+
     Reference
     -------
     [1] https://tieba.baidu.com/p/6472739202
     """
     solution = None
     if coeff((5,0,0)) != 0 or (coeff((4,1,0)) != 0 and coeff((1,4,0)) != 0):
-        return None
-
-    if not coeff.is_rational:
         return None
 
     if coeff((4,1,0)) != 0:
@@ -669,6 +689,9 @@ def _sos_struct_quintic_windmill(coeff):
                 CyclicSum(a*b) * CyclicProduct(a)
             ]
             return sum_y_exprs(y, exprs)
+        return None
+
+    if not coeff.is_rational:
         return None
 
     if coeff((3,2,0)) == 0:
@@ -1578,6 +1601,49 @@ def _sos_struct_quintic_windmill_special(coeff):
     return None
 
 
+def _solve_quintic_hexagon_pqz(p, q, z, mul = sp.S(1)):
+    """
+    When Det = 64*p^3-16*p^2*q^2+8*p*q*z^2+32*p*q*z-256*p*q+64*q^3-z^4-24*z^3-192*z^2-512*z >= 0,
+    we have f(a,b,c) = s(a^4b + pa^3b^2 + qa^2b^3 + ab^4 + za^3bc - (p+q+z+2)a^2b^2c) >= 0.
+
+    Proof: Take w = z + 8, u = 4(2p^2-qw)/(w^2-4pq), v = 4(2q^2-pw)/(w^2-4pq),
+    and t = (4pq-w^2)^2/(8(2p+2q+w)(3(p-q)^2+(w-p-q)^2)),
+    then 1 - t = Det/... >= 0, and we have
+    f(a,b,c) = t\sum c(a^2-b^2+u(ab-ac)+v(bc-ab))^2 + (1 - t)\sum c(a-b)^4 >= 0.
+
+    The function solves for mul * s(a^4b + pa^3b^2 + qa^2b^3 + ab^4 + za^3bc - (p+q+z+2)a^2b^2c)
+    """
+    p, q, z = radsimp([p, q, z])
+    det = radsimp(64*p**3 - 16*p**2*q**2 + 8*p*q*z**2 + 32*p*q*z - 256*p*q + 64*q**3 - z**4 - 24*z**3 - 192*z**2 - 512*z)
+    if det >= 0:
+        w = z + 8
+        if p != q or w != p + q:
+            # Actually the case p == q will be handled in quintic_symmetric, so we ignore it here.
+            denom = radsimp(1 / (8*(2*p + 2*q + w)*(3*(p-q)**2 + (w-p-q)**2)))
+            y = radsimp([denom * mul, det * denom * mul])
+            c1, c2, c3 = radsimp([w**2-4*p*q, 4*(2*p**2-q*w), 4*(2*q**2-p*w)])
+            exprs = [
+                CyclicSum(c*(c1*(a**2-b**2) + c2*(a*b-a*c) + c3*(b*c-a*b))**2),
+                CyclicSum(c*(a-b)**4)
+            ]
+            return sum_y_exprs(y, exprs)
+
+    if z >= -2:
+        det = radsimp(-16*(p**2*q**2 + 18*p*q - 4*p**3 - 4*q**3 - 27))
+        if det >= 0 and (p != 3 or q != 3):
+            u, v = (2*p**2 - 6*q) / (9 - p*q), (2*q**2 - 6*p) / (9 - p*q)
+            t = (9 - p*q)**2 / (p + q + 3) / (3*(p - q)**2 + (6 - p - q)**2)
+            u, v, t = radsimp([u, v, t])
+
+            y = radsimp([(z + 2) * mul / 2, t * mul, (1 - t) * mul])
+            exprs = [
+                CyclicProduct(a) * CyclicSum((a-b)**2),
+                CyclicSum(c*(a**2 - b**2 + u*(a*b-a*c) + v*(b*c-a*b))**2),
+                CyclicSum(c*(a-b)**4),
+            ]
+            return sum_y_exprs(y, exprs)
+
+
 def _sos_struct_quintic_hexagon(coeff):
     """
     Try solving quintics without s(a^5).
@@ -1634,43 +1700,9 @@ def _sos_struct_quintic_hexagon(coeff):
         coeff410 = coeff((4,1,0))
 
         p, q, z = coeff((3,2,0)) / coeff410, coeff((2,3,0)) / coeff410, coeff((3,1,1)) / coeff410
-        p, q, z = radsimp([p, q, z])
-
-        det = radsimp(64*p**3 - 16*p**2*q**2 + 8*p*q*z**2 + 32*p*q*z - 256*p*q + 64*q**3 - z**4 - 24*z**3 - 192*z**2 - 512*z)
-        if det >= 0:
-            w = z + 8
-            if p != q or w != p + q:
-                # Actually the case p == q will be handled in quintic_symmetric, so we ignore it here.
-                denom = radsimp(1 / (8*(2*p + 2*q + w)*(3*(p-q)**2 + (w-p-q)**2)))
-                y = radsimp([denom * coeff410, det * denom * coeff410, rem])
-                c1, c2, c3 = radsimp([w**2-4*p*q, 4*(2*p**2-q*w), 4*(2*q**2-p*w)])
-                exprs = [
-                    CyclicSum(c*(c1*(a**2-b**2) + c2*(a*b-a*c) + c3*(b*c-a*b))**2),
-                    CyclicSum(c*(a-b)**4),
-                    CyclicSum(a**2*b**2*c)
-                ]
-                return sum_y_exprs(y, exprs)
-
-        if z >= -2:
-            det = radsimp(-16*(p**2*q**2 + 18*p*q - 4*p**3 - 4*q**3 - 27))
-            if det >= 0 and (p != 3 or q != 3):
-                u, v = (2*p**2 - 6*q) / (9 - p*q), (2*q**2 - 6*p) / (9 - p*q)
-                t = (9 - p*q)**2 / (p + q + 3) / (3*(p - q)**2 + (6 - p - q)**2)
-                u, v, t = radsimp([u, v, t])
-
-                y = radsimp([
-                    (z + 2) * coeff410 / 2,
-                    t * coeff410,
-                    (1 - t) * coeff410,
-                    rem
-                ])
-                exprs = [
-                    CyclicProduct(a) * CyclicSum((a-b)**2),
-                    CyclicSum(c*(a**2 - b**2 + u*(a*b-a*c) + v*(b*c-a*b))**2),
-                    CyclicSum(c*(a-b)**4),
-                    CyclicSum(a**3*b*c)
-                ]
-                return sum_y_exprs(y, exprs)
+        solution = _solve_quintic_hexagon_pqz(p, q, z, mul = coeff410)
+        if solution is not None:
+            return solution + rem * CyclicSum(a**2*b**2*c)
 
         if not coeff.is_rational:
             return None

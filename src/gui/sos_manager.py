@@ -91,8 +91,8 @@ class SOS_Manager():
         elif formatt == 'factor':
             return poly_get_factor_form(self.poly)
 
-    def findroot(self):
-        if self.deg <= 1 or (not self._poly_info['iscyc']) or (self.poly.is_zero) or (not self._poly_info['ishom']):
+    def findroot(self, verbose = True):
+        if self.deg <= 1 or (self.poly.is_zero) or (not self._poly_info['ishom']):
             self._roots_info = RootsInfo()
             return self._roots_info
 
@@ -107,11 +107,12 @@ class SOS_Manager():
             with_tangents = root_tangents
         )
         self._roots_info.sort_tangents()
-        print(self._roots_info)
+        if verbose:
+            print(self._roots_info)
         return self._roots_info
 
     def sum_of_square(self, method_order = None, configs = None):
-        if self.deg <= 1 or (not self._poly_info['iscyc']) or (self.poly.is_zero) or (not self._poly_info['ishom']):
+        if self.deg <= 1 or (self.poly.is_zero) or (not self._poly_info['ishom']):
             return
         
         if not self.poly.domain.is_Numerical:

@@ -25,7 +25,22 @@ def _convert_to_gradio_latex(content):
     content = re.sub('\$(.*?)\$', '$\\\displaystyle \\1$', content, flags=re.DOTALL)
     return content
 
+DEPLOY_CONFIGS = {
+    'LinearSOS': {
+        'verbose': False,
+    },
+    'StructuralSOS': {
+    },
+    'SymmetricSOS': {
 
+    },
+    'SDPSOS': {
+        'verbose': False,
+        'degree_limit': 12,
+    }
+}
+
+# DEPLOY_CONFIGS = {}
 
 class GradioInterface():
     def __init__(self):
@@ -39,8 +54,9 @@ class GradioInterface():
                     self.coefficient_triangle = gr.HTML('<div id="coeffs" style="width: 100%; height: 600px; position: absolute;"></div>', elem_id="coefficient_triangle")
 
                 with gr.Column(scale=1):#, variant='compact'):
-                    # an image display block
+                    # an image display block (note: gr.Image makes low resolution images, use gr.HTML for better quality)
                     self.image = gr.Image(show_label = False, height=280, width=280)
+                    # self.image = gr.HTML('<div id="heatmap" style="width=300; height=300; position:absolute;"></div>', elem_id="heatmap")
                     self.compute_btn = gr.Button("Compute", scale=1, variant="primary")
 
                     self.methods_btn = gr.CheckboxGroup(
@@ -72,19 +88,29 @@ class GradioInterface():
 
     def set_poly(self, input_text):
         self.SOS_Manager.set_poly(input_text, cancel = True)
-        image = self.SOS_Manager.save_heatmap(backgroundcolor=255)
-        image = np.vstack([np.full((8, image.shape[1], 3), 255, np.uint8), image])
-        side_white = np.full((image.shape[0], 4, 3), 255, np.uint8)
-        image = np.hstack([side_white, image, side_white])
-        image = Image.fromarray(image).resize((300,300), Image.LANCZOS)
+        if self.poly is None:
+            return {self.image: None, self.coefficient_triangle: None}
+
+        def _render_heatmap():
+            image = self.SOS_Manager.save_heatmap(backgroundcolor=255)
+            image = np.vstack([np.full((8, image.shape[1], 3), 255, np.uint8), image])
+            side_white = np.full((image.shape[0], 4, 3), 255, np.uint8)
+            image = np.hstack([side_white, image, side_white])
+            image = Image.fromarray(image).resize((300,300), Image.LANCZOS)
+            return image
+
+        # def _render_heatmap():
+        #     # html = '<div id="heatmap" style="width: 100%; height: 100%; top: 0; left: 0; position:absolute;"></div>'
+        #     return html
+
 
         # render coefficient triangle
         def _render_coefficient_triangle():
             html = '<div id="coeffs" style="width: 100%; height: 600px; position: absolute;">'
 
             n = self.SOS_Manager.deg
-            coeffs = self.SOS_Manager.poly.coeffs()
-            monoms = self.SOS_Manager.poly.monoms()
+            coeffs = self.poly.coeffs()
+            monoms = self.poly.monoms()
             monoms.append((-1,-1,0))  # tail flag
             
             l = 100. / (1 + n)
@@ -111,6 +137,8 @@ class GradioInterface():
                     txts.append(txt)
             html = html + '\n'.join(txts) + '</div>'
             return html
+
+        image = _render_heatmap()
         html = _render_coefficient_triangle()
 
         return {self.image: image, self.coefficient_triangle: html}
@@ -119,11 +147,14 @@ class GradioInterface():
     def solve(self, input_text, methods):
         # self.SOS_Manager.set_poly(input_text, cancel = True)
         res0 = self.set_poly(input_text)
-        if 'Linear' in methods:
-            rootsinfo = self.SOS_Manager.findroot()
-        solution = self.SOS_Manager.sum_of_square(
-            method_order = ['%sSOS'%method for method in methods],
-        )
+        solution = None
+        if self.poly is not None:
+            if 'Linear' in methods:
+                rootsinfo = self.SOS_Manager.findroot(verbose = False)
+            solution = self.SOS_Manager.sum_of_square(
+                method_order = ['%sSOS'%method for method in methods],
+                configs = DEPLOY_CONFIGS
+            )
 
         if solution is not None:
             gradio_latex = _convert_to_gradio_latex(solution.str_latex)
@@ -142,10 +173,16 @@ class GradioInterface():
                 self.output_box_txt: 'No solution found.',
                 self.output_box_formatted: 'No solution found.',
             }
+            if self.poly is not None and self.poly.domain.is_Numerical\
+                   and (not self.poly.is_zero) and self.SOS_Manager._poly_info['ishom'] and len(methods) == 4:
+                print(input_text)
         res.update(res0)
         return res
 
+    @property
+    def poly(self):
+        return self.SOS_Manager.poly
 
 if __name__ == '__main__':
     interface = GradioInterface()
-    interface.demo.launch()
+    interface.demo.launch(show_error=True) #, debug=True)

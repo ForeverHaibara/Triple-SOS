@@ -6,8 +6,10 @@ from .sum_of_square import (
 from .linsos import (
     LinearSOS,
     root_tangents,
-    LinearBasis, LinearBasisCyclic, LinearBasisTangent, LinearBasisAMGM,
-    CachedCommonLinearBasisSpecial, CachedCommonLinearBasisTangent,
+    LinearBasis, LinearBasisCyclic, LinearBasisTangentCyclic, LinearBasisAMGMCyclic,
+    CachedCommonLinearBasisSpecialCyclic, CachedCommonLinearBasisTangentCyclic,
+    LinearBasisTangent,
+    CachedCommonLinearBasisTangent,
     SolutionLinear
 )
 
@@ -28,7 +30,9 @@ from .symsos import (
 )
 
 from .sdpsos import (
-    SDPSOS, SDPProblem, SOSProblem, RootSubspace
+    SDPSOS, SDPProblem, SOSProblem, RootSubspace,
+    SDPTransformation, SDPMatrixTransform, SDPRowMasking, SDPVectorTransform,
+    SolutionSDP
 )
 
 __all__ = [
@@ -36,8 +40,10 @@ __all__ = [
     'METHOD_ORDER', 'DEFAULT_CONFIGS',
     'LinearSOS',
     'root_tangents',
-    'LinearBasis', 'LinearBasisCyclic', 'LinearBasisTangent', 'LinearBasisAMGM',
-    'CachedCommonLinearBasisSpecial', 'CachedCommonLinearBasisTangent',
+    'LinearBasis', 'LinearBasisCyclic', 'LinearBasisTangentCyclic', 'LinearBasisAMGMCyclic',
+    'CachedCommonLinearBasisSpecialCyclic', 'CachedCommonLinearBasisTangentCyclic',
+    'LinearBasisTangent',
+    'CachedCommonLinearBasisTangent',
     'SolutionLinear',
     'StructuralSOS',
     'Coeff',
@@ -46,5 +52,7 @@ __all__ = [
     'SymmetricSOS', 'sym_representation', 'TRANSLATION_POSITIVE', 'TRANSLATION_REAL',
     'prove_univariate', 'prove_univariate_interval', 'check_univariate',
     'SolutionSymmetric', 'SolutionSymmetricSimple',
-    'SDPSOS', 'SDPProblem', 'SOSProblem', 'RootSubspace'
+    'SDPSOS', 'SDPProblem', 'SOSProblem', 'RootSubspace',
+    'SDPTransformation', 'SDPMatrixTransform', 'SDPRowMasking', 'SDPVectorTransform',
+    'SolutionSDP'
 ]

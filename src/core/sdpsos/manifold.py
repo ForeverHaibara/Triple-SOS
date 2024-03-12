@@ -1,35 +1,94 @@
-from functools import lru_cache
+from collections import defaultdict, deque
+from typing import Optional, Dict, List, Tuple
 
-import numpy as np
 import sympy as sp
 
 from ...utils import (
-    deg, generate_expr, verify_is_symmetric,
-    convex_hull_poly,
-    findroot_resultant
+    convex_hull_poly, findroot_resultant, Root, RootAlgebraic, RootRational,
+    MonomialReduction, generate_expr
 )
 
 
-_REDUCE_KWARGS = {
-    (0, 'major'): {'monom_add': (0,0,0), 'cyc': False},
-    (0, 'minor'): {'monom_add': (1,1,0), 'cyc': True},
-    (1, 'major'): {'monom_add': (1,0,0), 'cyc': True},
-    (1, 'minor'): {'monom_add': (1,1,1), 'cyc': False},
-}
+class _bilinear():
+    """
+    Represent Sum(m * u' * M * v) where M >> 0 and m is a monomial,
+    represented by a tuple of orders. u and v are also tuples,
+    recording the differential orders of the variables.
+
+    For example, for 3-var poly, a * v' * M * v is
+
+        _bilinear({(1, 0, 0): {(0, 0, 0), (0, 0, 0)}})
+
+    Taking the differential with respect to the first variable, we get
+    the new poly v' * M * v + 2a * v' * M * (dv/da). It has two different terms
+    and is represented by
+
+        _bilinear({(0, 0, 0): {(0, 0, 0), (0, 0, 0)}, (1, 0, 0): {(0, 0, 0), (1, 0, 0)}})
+
+    Identical terms are merged, coefficients are not stored.
+    """
+    @classmethod
+    def _reg(cls, u, v):
+        return (u, v) if u < v else (v, u)
+
+    def __init__(self, terms: Dict[Tuple[int, ...], set]):
+        self.terms = terms
+        for m in terms:
+            terms[m] = set(map(lambda uv: self._reg(*uv), terms[m]))
+
+    def diff(self, i: int) -> '_bilinear':
+        def increase_tuple(t, i, v):
+            return t[:i] + (t[i]+v,) + t[i+1:]
+        _reg = self._reg
+        new_terms = defaultdict(set)
+        for m, uvs in self.terms.items():
+            if m[i]:
+                m2 = increase_tuple(m, i, -1)
+                new_terms[m2] |= uvs
+            for u, v in uvs:
+                u2 = increase_tuple(u, i, 1)
+                v2 = increase_tuple(v, i, 1)
+                new_terms[m].add(_reg(u2, v))
+                new_terms[m].add(_reg(u, v2))
+        return _bilinear(new_terms)
+
+    def diff_monoimal(self, m: Tuple[int, ...]) -> '_bilinear':
+        b = self
+        for i in range(len(m)):
+            for times in range(m[i]):
+                b = b.diff(i)
+        return b
+
+    def __str__(self) -> str:
+        return f'_bilinear({str(self.terms)})'
+    def __repr__(self) -> str:
+        return self.__str__()
 
 
-def _hull_space(n, convex_hull = None, monom_add = (0,0,0)):
+def _is_binary_root(root: Root) -> bool:
+    return isinstance(root, RootRational) and len(set(root.root)) <= 2
+
+
+def _hull_space(
+        nvars: int,
+        degree: int,
+        convex_hull: Dict[Tuple[int, ...], bool],
+        monomial: Tuple[int, ...],
+        option: MonomialReduction
+    ) -> Optional[sp.Matrix]:
     """
     For example, s(ab(a-b)2(a+b-3c)2) does not have a^6,
     so in the positive semidefinite representation, the entry (a^3,a^3) of M is zero.
     This requires that Me_i = 0 where i is the index of a^3.
     """
     if convex_hull is None:
-        return []
-    inv_monoms = generate_expr(n, cyc = False)[0]
+        return None
 
-    def onehot(i):
-        v = sp.Matrix.zeros(len(inv_monoms), 1)
+    half_degree = (degree - sum(monomial)) // 2
+    dict_monoms = generate_expr(nvars, half_degree, option=option.base())[0]
+
+    def onehot(i: int) -> List[int]:
+        v = [0] * len(dict_monoms)
         v[i] = 1
         return v
 
@@ -37,385 +96,248 @@ def _hull_space(n, convex_hull = None, monom_add = (0,0,0)):
     for key, value in convex_hull.items():
         if value:
             continue
+
         # value == False: not in convex hull
-
-        rest_monom = (key[0] - monom_add[0], key[1] - monom_add[1], key[2] - monom_add[2])
-        if rest_monom[0] % 2 or rest_monom[1] % 2 or rest_monom[2] % 2:
+        rest_monom = tuple(key[i] - monomial[i] for i in range(nvars))
+        if any(r % 2 for r in rest_monom):
             continue
-        rest_monom = (rest_monom[0] // 2, rest_monom[1] // 2, rest_monom[2] // 2)
+        rest_monom = tuple(r // 2 for r in rest_monom)
 
-        i = inv_monoms[rest_monom]
-        space.append(onehot(i))
+        space.append(onehot(dict_monoms[rest_monom]))
 
-    return space
+    return sp.Matrix(space).T
 
 
-def _compute_multiplicity_sym(poly):
+def _compute_diff_orders(poly: sp.Poly, root: Root, mixed=False, only_binary_roots=True) -> List[Tuple[int, ...]]:
     """
-    Compute the multiplicity of zero (1,1,c) on the symmetric axis when c -> 0.
-    This is equivalent to the number of zeros in the leading row sums of the
-    coefficient triangle.
-
-    Returns zero when the polynomial is a multiple of p(a-b)2.
-    """
-    a, b = sp.symbols('a b')
-    poly = poly.subs({a:1, b:1})
-    return min(poly.monoms())[0]
-
-
-def _compute_multiplicity_hessian(poly):
-    """
-    Compute the multiplicity of zero at (1,1,1) by Hessian.
-    For now, when poly(1,1,1) != 0, return 0. Otherwise,
-    return maximum n that any partial derivatives of order 2(n-1) is zero.
-    Similar definition of multivariate multiplicity can be referred to Slusky's theorem.
-    """
-    a, b, c = sp.symbols('a b c')
-    part_poly = poly.subs({c:1})
-    if part_poly.subs({a:1,b:1}) != 0:
-        return 0
-    part_poly = part_poly.as_poly(a).shift(1)
-    part_poly = part_poly.as_poly(b).shift(1).as_poly(a,b)
-    monoms = map(lambda x: x[0] + x[1], part_poly.monoms())
-    n = min(monoms) - 1
-
-    # now that part_poly is centered at (0,0)
-    return n // 2 + 1
-
-
-class RootSubspace():
-    """
-    If an inequality has nontrivial equality cases, known as roots, then
-    the sum-of-squares representation should be zero at these roots. This implies
-    the result lies on a subspace perpendicular to the roots. This class
-    investigates the roots and generates the subspace.
-    """
-    def __init__(self, poly):
-        self.poly = poly
-        self.n = deg(poly)
-        self.convex_hull = convex_hull_poly(poly)[0]
-        self.roots = findroot_resultant(poly)
-        self.roots = [r for r in self.roots if not r.is_corner]
-        self.subspaces_ = {}
-        self.multiplicity_sym_ = _compute_multiplicity_sym(poly)
-        self.multiplicity_hes_ = _compute_multiplicity_hessian(poly)
-
-    def subspaces(self, n, positive = False):
-        if not positive:
-            if n not in self.subspaces_:
-                subspaces = []
-                for root in self.roots:
-                    if not root.is_corner:
-                        subspaces.append(root.span(n))
-                self.subspaces_[n] = subspaces
-            return self.subspaces_[n]
-
-        # if positive == True, we filter out the negative roots
-        subspaces = self.subspaces(n, positive = False)
-        subspaces_positive = []
-        for r, subspace in zip(self.roots, subspaces):
-            if r.root[0] >= 0 and r.root[1] >= 0 and r.root[2] >= 0:
-                subspaces_positive.append(subspace)
-        return subspaces_positive
-
-    @property
-    def positive_roots(self):
-        return [r for r in self.roots if r.root[0] >= 0 and r.root[1] >= 0 and r.root[2] >= 0]
-
-    def reduce_kwargs(self, minor = 0):
-        return _REDUCE_KWARGS[(self.n % 2, 'minor' if minor else 'major')]
-
-    def monom_add(self, minor = 0):
-        return self.reduce_kwargs(minor)['monom_add']
-
-    def perp_space(self, minor = 0, positive = True):
-        """
-        The most important idea of sum of squares is to find a subspace
-        constrained by the roots of the polynomial. For example, if (1,2,3) is a root of 
-        a quartic cyclic polynomial. And the quartic can be written as x'Mx where 
-        x = [a^2, b^2, c^2, ab, bc, ca]. Then we must have Mx = 0 when (a,b,c) = (1,2,3)
-        since M >= 0 is a positive semidefinite matrix. This means that the M lies in the
-        orthogonal complement of the subspace spanned by (1,2,3).
-
-        This function returns the orthogonal complement of the subspace spanned by the roots.
-        """
-
-        # if we only perform SOS over positive numbers,
-        # we filter out the negative roots
-        subspaces = self.subspaces(self.n // 2 - minor, positive = positive)
-
-        monom_add = self.monom_add(minor)
-        if sum(monom_add):
-            subspaces_filtered = []
-            # filter roots on border
-            monoms = generate_expr(self.n // 2 - minor, cyc = False)[0]
-            for root, subspace in zip(self.positive_roots, subspaces):
-                if not root.is_border:
-                    subspaces_filtered.append(subspace)
-                    continue
-                if sum(monom_add) == 3:
-                    # filter out all columns
-                    continue
-                reserved_cols = []
-                for i in range(subspace.shape[1]):
-                    # check each column
-                    nonzero_monom = [0, 0, 0]
-                    for monom, j in zip(monoms, range(subspace.shape[0])):
-                        if subspace[j, i] != 0:
-                            for k in range(3):
-                                if monom[k] != 0:
-                                    nonzero_monom[k] = 1
-                    # if nonzero_monom[k] == 0
-                    # it means that (a,b,c)[k] == 0 in this root
-                    for k in range(3):
-                        if monom_add[k] == 1 and nonzero_monom[k] == 0:
-                            # filter out this column
-                            break
-                    else:
-                        reserved_cols.append(i)
-                subspaces_filtered.append(subspace[:, reserved_cols])
-        
-            subspaces = subspaces_filtered
-                    
-
-        subspaces += self.hull_space(minor)
-        subspaces += self.mult_sym_space(minor)
-        subspaces += self.mult_hes_space(minor)
-        space = sp.Matrix.hstack(*subspaces).T
-
-        n = space.shape[1]
-        Q = sp.Matrix(space.nullspace())
-        Q = Q.reshape(Q.shape[0] // n, n).T
-
-        # normalize to keep numerical stability
-        reg = np.max(np.abs(Q), axis = 0)
-        reg = 1 / np.tile(reg, (Q.shape[0], 1))
-        reg = sp.Matrix(reg)
-        Q = Q.multiply_elementwise(reg)
-
-        return Q
-
-    def hull_space(self, minor = 0):
-        """
-        For example, if s(a4b2+4a4c2+4a3b3-6a3b2c-12a3bc2+9a2b2c2) can be written as
-        sum of squares, then there would not be the term (a^3 + ...)^2.
-
-        This is because a^6 is out of the convex hull of the polynomial. We should 
-        constraint the coefficients of a^3 to be zero.
-        """
-        monom_add = self.monom_add(minor)
-        return _hull_space(self.n // 2 - minor, self.convex_hull, monom_add = monom_add)
-
-    def mult_sym_space(self, minor = 0):
-        """
-        If the first n rows of a coefficient triangle sum to zero, respectively, then it means that
-        the order of zero at (1,1,c) when c -> 0 is n. This implies a multiplicity constraint. For example,
-        if we require f(c) = x'Mx = 0 at (1,1,c) when c -> 0 with order n. If n = 3, we have that
-        the first derivative (order = 2): (dx/dc)'Mx = 0. This implies nothing because Mx = 0 already.
-        However, the second derivative (order = 3): (dx/dc)'M(dx/dc) + ... = 0 => M(dx/dc) = 0.
-        This yields extra constraints.
-        """
-        if self.multiplicity_sym_ <= 1:
-            # either no root at (1,1,0) or multiplicity is merely 1
-            return []
-        monom_add = self.monom_add(minor)
-        monoms = generate_expr(self.n // 2 - minor, cyc = False)[1]
-
-        vecs_all = []
-
-        for i in range(3): # stands for a, b, c
-            # compute the order, note that monom_add might cancel one order
-            dm = monom_add[i]
-            num = (self.multiplicity_sym_ - 1 + dm) // 2
-            # num = self.multiplicity_sym_ - 1 - dm
-
-            vecs = [[0] * len(monoms) for _ in range(num)]
-            for j in range(len(monoms)):
-                monom = monoms[j]
-                if -dm < monom[i] <= num - dm:
-                    # sum of coefficients where monom[i] == constant
-                    # actually it should be the factorial after derivative, (monom[i]!), 
-                    # however it is equivalent to ones
-                    vecs[monom[i] - 1 + dm][j] = 1
-            vecs = [sp.Matrix(_) for _ in vecs]
-        
-            vecs_all.extend(vecs)
-        
-        return vecs_all
-
-    def mult_hes_space(self, minor = 0):
-        """
-        If the Hessian of the polynomial at (1,1,1) is zero, then we have extra constraints.
-        M * (dv/da) == 0, M * (dv/db) == 0, M * (dv/dc) == 0 at (1,1,1).
-        """
-        if self.multiplicity_hes_ <= 1:
-            # either no root at (1,1,1) or multiplicity is merely 1
-            return []
-        monoms = generate_expr(self.n // 2 - minor, cyc = False)[1]
-
-        # @lru_cache()
-        def derv(n, i):
-            # compute n*(n-1)*..*(n-i+1)
-            if i == 1: return n
-            if n < i:
-                return 0
-            return sp.prod((n - j) for j in range(i))
-
-        vecs_all = []
-        for i in range(3): # stands for a, b, c
-            vecs = [[0] * len(monoms) for _ in range(self.multiplicity_hes_ - 1)]
-            for d in range(1, self.multiplicity_hes_):
-                vec = vecs[d - 1]
-                for j in range(len(monoms)):
-                    vec[j] = derv(monoms[j][i], d)
-            vecs = [sp.Matrix(_) for _ in vecs]
-        
-            vecs_all.extend(vecs)
-
-        return vecs_all
-
-
-    def __str__(self):
-        # roots = [abs(root[2]) >= abs(root[1]) and abs(root[2]) >= abs(root[0]) for a,b,c in roots]
-        def _formatter(root):
-            uv = root.uv()
-            if hasattr(root, 'root_anp') and isinstance(root.root_anp[0], sp.polys.polyclasses.ANP):
-                if len(root.root_anp[0].mod) > 4:
-                    uv = (uv[0].n(15), uv[1].n(15))
-            return uv
-        return 'Subspace [\n    roots  = %s\n    uv     = %s\n    rowsum = %s\n    hessian = %s\n]'%(
-            self.roots, [_formatter(_) for _ in self.roots], self.multiplicity_sym_, self.multiplicity_hes_
-        )
-
-
-def coefficient_matrix(Q, n, monom_add = (0,0,0), cyc = False):
-    """
-    For example, the Vasile inequality 2s(a2)2 - 6s(a3b) has a 
-    (nonnegative) 6*6 matrix representation v' * M * v where
-    v = [a^2,b^2,c^2,ab,bc,ca]' and M = 
-    [[ 2, 1, 1,-3, 0, 0],
-    [ 1, 2, 1, 0,-3, 0],
-    [ 1, 1, 2, 0, 0,-3],
-    [-3, 0, 0, 2, 0, 0],
-    [ 0,-3, 0, 0, 2, 0],
-    [ 0, 0,-3, 0, 0, 2]]
-    The a^2b^2 coefficient is (1 + 1 + 2) = 4. We note that each coefficient
-    may be the sum of several entries. We learn that the final equation is A @ vec(M) = p
-    where p is the vector of coefficients of the original polynomial.
-
-    Hence, we have A @ kron(Q,Q) @ vec(S) = p.
-    And we reduce kron(Q,Q) to such A @ kron(Q,Q) = QQ_reduced.
-
-    Futhermore, S is symmetric, so we only need the upper triangular part to
-    form the vec(S). So we can further reduce the size of matrix, so that
-    QQ_reduced @ vec(S)_reduced = p.
-    """
-    monoms = generate_expr(n, cyc = False)[1]
-    m, k = Q.shape # m = len(monoms)
-    QQ = sp.kronecker_product(Q, Q)
-
-    m0, n0, p0 = monom_add
-    inv_monoms = generate_expr(2*n + sum(monom_add), cyc = False)[0]
-    QQ_reduced = sp.zeros(len(inv_monoms), k ** 2)
-
-    if cyc:
-        permute = lambda a,b,c: [(a,b,c), (b,c,a), (c,a,b)]
-    else:
-        permute = lambda a,b,c: [(a,b,c)]
-
-    for i in range(m):
-        m1, n1, p1 = monoms[i]
-        m1, n1, p1 = m1 + m0, n1 + n0, p1 + p0
-        for j in range(m):
-            m2, n2, p2 = monoms[j]
-            new_monom_ = (m1 + m2, n1 + n2, p1 + p2)
-            for new_monom in permute(*new_monom_):
-                index = inv_monoms[new_monom]
-                QQ_reduced[index, :] += QQ[i * m + j, :]
-
-    # also cancel symmetric entries
-    QQ_reduced2 = []
-    for i in range(k):
-        QQ_reduced2.append(QQ_reduced[:, i * k + i])
-        for j in range(i + 1, k):
-            QQ_reduced2.append(QQ_reduced[:, i * k + j] + QQ_reduced[:, j * k + i])
-    QQ_reduced = sp.Matrix.hstack(*QQ_reduced2)
-
-    return QQ_reduced
-
-
-def add_cyclic_constraints(sdp_problem):
-    """
-    If monom_add['cyc'] is False, we can impose additional cyclic constraints.
+    Compute tuples (a1, ..., an) such that d^a1/dx1^a1 ... d^an/dxn^an f = 0 at the root.
 
     Parameters
     ----------
-    sdp_problem : SDPProblem
-        SDP problem.
-
-    Returns
-    ----------
-    sdp_problem : SDPProblem
-        SDP problem. The function modifies the input sdp_problem inplace.
+    poly : sp.Poly
+        The polynomial to compute the differential orders for.
+    root : Root
+        The root to compute the differential orders for.
+    mixed : bool
+        If False, only differentiate with respect to one variable at a time.
+        If True, differentiate with respect to all variables at the same time. However,
+        it is not correct to use mixed=True.
+    only_binary_roots : bool
+        If True, only "binary" roots are computed. This is incomplete but
+        is sufficient for most cases.
     """
-    degree = sdp_problem.poly_degree
+    gens = poly.gens
+    nvars = len(gens)
+    if only_binary_roots and not _is_binary_root(root):
+        return [(0,) * nvars]
 
-    transforms = [
-        lambda x,y,z: (y,z,x),
-        lambda x,y,z: (x,z,y)
-    ]
-    if not verify_is_symmetric(sdp_problem.poly):
-        transforms = transforms[:1]
+    if mixed:
+        def dfs(poly: sp.Poly, order: Tuple[int, ...]) -> List[Tuple[int, ...]]:
+            orders = [order]
+            for i in range(nvars):
+                # take one more derivative
+                poly2 = poly.diff(gens[i])
+                if poly2.total_degree() and root.subs(poly2, gens) == 0:
+                    new_order = order[:i] + (order[i] + 1,) + order[i+1:]
+                    orders.extend(dfs(poly2, new_order))
+            return orders
+        return dfs(poly, (0,) * nvars)
 
-    for key in ('major', 'minor'):
-        if sdp_problem.Q[key] is None:
+    else:
+        orders = [(0,) * nvars]
+        for i in range(nvars):
+            poly2 = poly.diff(gens[i])
+            j = 1
+            while poly2.total_degree() and root.subs(poly2, gens) == 0:
+                orders.append((0,) * i + (j,) + (0,) * (nvars - i - 1))
+                poly2 = poly2.diff(gens[i])
+                j += 1
+        return orders
+
+
+def _compute_nonvanishing_diff_orders(poly: sp.Poly, root: Root, monomial: Tuple[int, ...],
+                                        only_binary_roots=True) -> List[Tuple[int, ...]]:
+    orders = _compute_diff_orders(poly, root, only_binary_roots=only_binary_roots)
+    # if len(orders) <= 0 or (len(orders) == 1 and not any(orders[0])):
+    #     return orders
+    nvars = len(poly.gens)
+    b0 = _bilinear({monomial: [((0,)*nvars, (0,)*nvars)]})
+
+    def _make_vanish_checker(root):
+        nonzeros = [1 if _ != 0 else 0 for _ in root.root]
+        if all(nonzeros):
+            nonvanish = lambda _nonzeros: True
+        else:
+            def nonvanish(monomial):
+                return all(i != 0 for i, j in zip(nonzeros, monomial) if j != 0)
+        return nonvanish
+    nonvanish = _make_vanish_checker(root)
+
+    sets = []
+    for m in orders:
+        b = b0.diff_monoimal(m)
+        for key in filter(nonvanish, b.terms):
+            sets.append(b.terms[key])
+
+    zeros = deque([(-1,) * nvars]) # starting sentinel
+    handled_zeros = set()
+    while len(zeros):
+        zero = zeros.popleft()
+        if zero in handled_zeros:
             continue
-        reduced_kwargs = _REDUCE_KWARGS[(degree % 2, key)]
-        if reduced_kwargs['cyc']:
-            continue
+        for set_ in sets:
+            for i, j in list(set_):
+                if i == zero or j == zero:
+                    set_.remove((i, j))
+            if len(set_) == 1:
+                p = set_.pop()
+                if p[0] == p[1]:
+                    zeros.append(p[0])
+        if zero[0] != -1:
+            handled_zeros.add(zero)
+    return handled_zeros
 
-        # cyc == False
-        rows = []
 
-        inv_monoms, monoms = generate_expr(degree // 2 - (key == 'minor'), cyc = False)
-        m = len(monoms)
-        Q = sdp_problem.Q[key]
-        QQ = sp.kronecker_product(Q, Q)
-        for i1, m1 in enumerate(monoms):
-            for j1, m2 in enumerate(monoms[i1:], start = i1):
-                for transform in transforms:
-                    i2 = inv_monoms[transform(*m1)]
-                    if i2 <= i1:
-                        continue
-                    j2 = inv_monoms[transform(*m2)]
+def _root_space(manifold: 'RootSubspace', root: RootAlgebraic, monomial: Tuple[int, ...]) -> sp.Matrix:
+    """
+    Compute the constraint nullspace spaned by a given root.
 
-                    # equivalent entries must be equal
-                    row = QQ[i1 * m + j1, :] - QQ[i2 * m + j2, :]
-                    rows.append(row)
+    For normal case, it is simply the span of the root. However, things become
+    nontrivial if the derivative is also zero. Imagine
+    f = a * (x'Mx) and f|_r = 0, (df/da)|_r = 0 where r = (a,b,c) and x = [a^3,a^2b,...].
+    When M >> 0 and a == 0, we still require Mx = 0 because
+    (df/da) = (x'Mx) + a * ((dx/da)'Mx + x'M(dx/da)) = x'Mx.
+    """
+    d = (manifold._degree - sum(monomial)) // 2
+    nvars = len(monomial)
+    nonzeros = [1 if _ != 0 else 0 for _ in root.root]
 
-        if len(rows):
-            rows = sp.Matrix.vstack(*rows)
+    if all(nonzeros):
+        vanish = lambda _nonzeros: False
+    else:
+        def vanish(_nonzeros):
+            return all(i > 0 for i, j in zip(monomial, _nonzeros) if j == 0)
 
-            # cancel symmetric entries
-            k = Q.shape[1]
-            QQ_reduced, QQ_reduced2 = rows, []
-            for i in range(k):
-                QQ_reduced2.append(QQ_reduced[:, i * k + i])
-                for j in range(i + 1, k):
-                    QQ_reduced2.append(QQ_reduced[:, i * k + j] + QQ_reduced[:, j * k + i])
-            rows = sp.Matrix.hstack(*QQ_reduced2)
+    option = manifold._option
+    spans = []
 
-            eq = sdp_problem.eq
-            eq[key] = sp.Matrix.vstack(eq[key], rows)
+    # this is an incomplete (but fast) implementation
+    if isinstance(root, RootRational):
+        base_option = option.base()
+        for r_ in option.permute(root.root):
+            new_r = RootRational(r_)
+            orders = _compute_nonvanishing_diff_orders(manifold.poly, new_r, monomial)
+            for order in orders:
+                spans.append(new_r.span(d, order, option=base_option))
 
-            # align other components with zero matrices
-            for other_key in eq.keys():
-                if other_key == key or eq[other_key] is None:
-                    continue
-                eq[other_key] = sp.Matrix.vstack(
-                    eq[other_key], sp.zeros(rows.shape[0], eq[other_key].shape[1])
-                )
-            
-            sdp_problem.vecP = sp.Matrix.vstack(sdp_problem.vecP, sp.zeros(rows.shape[0], 1))
-    
-    return sdp_problem
+    else:
+        span = root.span(d, option=option.base())
+        for i in range(span.shape[1]):
+            span2 = option.permute_vec(nvars, span[:,i])
+            for j, perm in zip(range(span2.shape[1]), option.permute(nonzeros)):
+                if not vanish(perm):
+                    spans.append(span2[:,j])
+
+    return sp.Matrix.hstack(*spans)
+
+
+class RootSubspace():
+    def __init__(self, poly: sp.Expr, option: MonomialReduction) -> None:
+        self.poly = poly
+        self._degree: int = poly.total_degree()
+        self._nvars : int = len(poly.gens)
+        self._option: MonomialReduction = option
+
+        self.convex_hull = None
+        self.roots = []
+
+        if self._nvars == 3: # and self._option.is_cyc:
+            # if self._option.is_cyc:
+            #     self.convex_hull = convex_hull_poly(poly)[0]
+            self.roots = findroot_resultant(poly)
+
+        self.roots = [r for r in self.roots if not r.is_corner]
+        self._additional_nullspace = {}
+
+    @property
+    def additional_nullspace(self) -> Dict[Tuple[int, ...], sp.Matrix]:
+        return self._additional_nullspace
+
+    def set_nullspace(self, monomial: Tuple[int, ...], nullspace: sp.Matrix) -> None:
+        """
+        Set extra nullspace for given monomial.
+        """
+        self._additional_nullspace[monomial] = nullspace
+
+    def append_nullspace(self, monomial: Tuple[int, ...], nullspace: sp.Matrix) -> None:
+        """
+        Append extra nullspace for given monomial.
+        """
+        ns = self._additional_nullspace
+        if monomial in ns:
+            ns[monomial] = sp.Matrix.hstack(ns[monomial], nullspace)
+        else:
+            ns[monomial] = nullspace
+
+    def nullspace(self, monomial, real: bool = False) -> sp.Matrix:
+        """
+        Compute the nullspace of the polynomial.
+
+        Parameters
+        ----------
+        monomial : Tuple[int, ...]
+            The monomial to compute the nullspace for.
+
+        real : bool
+            Whether prove the inequality on R^n or R+^n. If R+^n, it ignores nonpositive roots.
+        """
+        half_degree = (self._degree - sum(monomial))
+        if half_degree % 2 != 0:
+            raise ValueError(f"Degree of the polynomial ({self._degree}) minus the degree of the monomial {monomial} must be even.")
+
+        funcs = [
+            self._nullspace_hull,
+            lambda *args, **kwargs: self._nullspace_roots(*args, **kwargs, real = real),
+            self._nullspace_extra,
+        ]
+
+        nullspaces = []
+        for func in funcs:
+            n_ = func(monomial)
+            if isinstance(n_, list) and len(n_) and isinstance(n_[0], sp.MatrixBase):
+                nullspaces.extend(n_)
+            elif isinstance(n_, sp.MatrixBase) and n_.shape[0] * n_.shape[1] > 0:
+                nullspaces.append(n_)
+
+        nullspaces = list(filter(lambda x: x.shape[0] * x.shape[1] > 0, nullspaces))
+        return sp.Matrix.hstack(*nullspaces)
+
+
+    def _nullspace_hull(self, monomial):
+        option = self._option
+        return _hull_space(self._nvars, self._degree, self.convex_hull, monomial, option)
+
+    def _nullspace_roots(self, monomial, real: bool = False):
+        nullspaces = []
+        for root in self.roots:
+            if not real and any(_ < 0 for _ in root.root):
+                continue
+
+            span = _root_space(self, root, monomial)
+
+            if span.shape[1] > 0:
+                span = sp.Matrix.hstack(*span.columnspace())
+
+            nullspaces.append(span)
+
+        return nullspaces
+
+    def _nullspace_extra(self, monomial):
+        return self._additional_nullspace.get(monomial, None)
+
+
+    def __str__(self) -> str:
+        return f"RootSubspace(poly={self.poly})"
+
+    def __repr__(self) -> str:
+        return f"<RootSubspace nvars={self._nvars} degree={self._degree} roots={self.roots}>"

@@ -286,6 +286,8 @@ def _sos_struct_nonic_hexagram_symmetric(coeff, recurrsion):
         return z >= 0 and z**2 <= c1*c2 and _compute_hexagram_discriminant(z)
     eq_z = sp.Poly.from_list([1, 0, -c1*c2], sp.Symbol('z'))
     z = rationalize_func(eq_z, _is_valid_z, validation_initial = lambda z: z >= 0, direction = -1)
+    if z is None:
+        return None
 
     # Now we have z >= 0 such that the hexagram is positive
     w, c4_, c5_, c6_ = _compute_hexagram_coeffs(z)

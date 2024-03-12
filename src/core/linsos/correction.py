@@ -34,7 +34,7 @@ def linear_correction(
         y: List[float] = [],
         basis: List[LinearBasis] = [],
         multiplier: sp.Expr = S.One,
-        cyc: bool = True,
+        is_cyc: bool = True,
     ) -> SolutionLinear:
     """
     Linear programming is a numerical way to solve the SOS problem. However, we require
@@ -54,8 +54,8 @@ def linear_correction(
         The collection of basis.
     multiplier: sp.Expr
         The multiplier such that poly * multiplier = sum(y_i * basis_i).
-    cyc: bool
-        Whether the problem is cyclic. Now we only support cyclic problems.
+    is_cyc: bool
+        Whether the problem is cyclic.
     """
 
     # first use the continued fraction to approximate the coefficients
@@ -65,7 +65,7 @@ def linear_correction(
 
     reduced_arrays = _basis_as_matrix(basis)
 
-    target = arraylize_sp(poly * multiplier.doit(), cyc = cyc)
+    target = arraylize_sp(poly * multiplier.doit(), cyc = is_cyc)
     obtained = reduced_arrays * sp.Matrix(y)
 
     is_equal = False

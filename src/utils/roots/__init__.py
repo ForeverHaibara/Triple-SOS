@@ -1,5 +1,6 @@
 from .roots import (
     Root, RootAlgebraic, RootRational,
+    RootTernary, RootAlgebraicTernary, RootRationalTernary
 )
 
 from .rootsinfo import RootsInfo
@@ -20,6 +21,7 @@ from .rationalize import (
 
 __all__ = [
     'Root', 'RootAlgebraic', 'RootRational',
+    'RootTernary', 'RootAlgebraicTernary', 'RootRationalTernary',
     'RootsInfo',
     'GridRender',
     'findroot', 'find_nearest_root', 'findroot_resultant', 'nroots',

@@ -1,4 +1,7 @@
-from .basis_generator import generate_expr, arraylize, arraylize_sp
+from .basis_generator import (
+    MonomialReduction, MonomialFull, MonomialHomogeneous, MonomialHomogeneousFull, MonomialCyclic,
+    generate_expr, arraylize, arraylize_sp, invarraylize
+)
 
 from .text_process import preprocess_text, pl, PolyReader
 
@@ -16,7 +19,7 @@ from .expression import (
 )
 
 from .roots import (
-    RootsInfo, Root, RootAlgebraic, RootRational,
+    RootsInfo, Root, RootAlgebraic, RootRational, RootTernary, RootAlgebraicTernary, RootRationalTernary,
     GridRender,
     findroot, find_nearest_root, findroot_resultant, nroots,
     RootTangent,
@@ -28,7 +31,8 @@ from .roots import (
 
 
 __all__ = [
-    'generate_expr', 'arraylize', 'arraylize_sp',
+    'MonomialReduction', 'MonomialFull', 'MonomialHomogeneous', 'MonomialHomogeneousFull', 'MonomialCyclic',
+    'generate_expr', 'arraylize', 'arraylize_sp', 'invarraylize',
     'preprocess_text', 'pl', 'PolyReader',
     'deg', 'verify_hom_cyclic', 'verify_is_symmetric', 
     'monom_of', 'convex_hull_poly',
@@ -37,7 +41,7 @@ __all__ = [
     'latex_coeffs',
     'Solution', 'SolutionSimple',
     'congruence',
-    'RootsInfo', 'Root', 'RootAlgebraic', 'RootRational',
+    'RootsInfo', 'Root', 'RootAlgebraic', 'RootRational', 'RootTernary', 'RootAlgebraicTernary', 'RootRationalTernary',
     'GridRender',
     'findroot', 'find_nearest_root', 'findroot_resultant', 'nroots',
     'RootTangent',

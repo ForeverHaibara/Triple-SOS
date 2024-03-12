@@ -1,3 +1,5 @@
+from typing import List
+
 from numbers import Number
 
 import sympy as sp
@@ -6,6 +8,8 @@ from sympy.core.singleton import S
 from sympy.printing.latex import LatexPrinter
 from sympy.printing.str import StrPrinter
 from sympy.printing.precedence import precedence_traditional, PRECEDENCE
+
+from ..basis_generator import MonomialCyclic
 
 def _leading_symbol(expr):
     if isinstance(expr, sp.Symbol):
@@ -223,9 +227,10 @@ setattr(LatexPrinter, '_print_CyclicProduct', lambda self, expr: CyclicProduct.s
 setattr(StrPrinter, '_print_CyclicSum', lambda self, expr: CyclicSum.str_str(self, expr))
 setattr(StrPrinter, '_print_CyclicProduct', lambda self, expr: CyclicProduct.str_str(self, expr))
 
+setattr(MonomialCyclic, 'cyclic_sum', lambda self, expr, gens: CyclicSum(expr, *gens))
+
 
 if __name__ == '__main__':
-    sp.Add
     a,b,c,d = sp.symbols('a b c d')
     print(CyclicProduct(sp.S(4)*d))
     x = CyclicSum(sp.S(4)/7*b*c*(a*a-b*b+sp.S(23)/11*(a*b-a*c)+(b*c-a*b))**2) + CyclicProduct((a-b)**2)

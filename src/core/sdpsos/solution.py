@@ -1,15 +1,13 @@
-from typing import Dict, Union, Tuple
+from typing import List, Tuple, Dict
 
 import sympy as sp
 
-from .utils import congruence_with_perturbation, is_numer_matrix
+from .utils import is_numer_matrix
 from ...utils import (
-    deg, generate_expr, 
-    poly_get_factor_form,
+    MonomialReduction, MonomialCyclic,
     CyclicSum, CyclicProduct, is_cyclic_expr,
     SolutionSimple
 )
-
 
 class SolutionSDP(SolutionSimple):
     method = 'SDPSOS'
@@ -20,15 +18,53 @@ class SolutionSDP(SolutionSimple):
     # def is_equal(self):
     #     return True
 
+    @classmethod
+    def from_decompositions(self,
+        poly: sp.Poly,
+        decompositions: Dict[str, Tuple[sp.Matrix, sp.Matrix]],
+        **options
+    ) -> 'SolutionSDP':
+        """
+        Create SDP solution from decompositions.
+        """
+        sos_expr = _decomp_as_sos(decompositions, poly.gens, **options)
+        return SolutionSDP(
+            problem = poly,
+            numerator = sos_expr,
+            is_equal = not _is_numer_solution(decompositions)
+        )
 
-# For example, if f(a,b,c) = sum(a*g(a,b,c)^2 + a*h(a,b,c)^2 + ...),
-# then here multiplier == a for functions g and h.
-_MULTIPLIERS = {
-    (0, 0): 1,
-    (0, 1): sp.Symbol('a') * sp.Symbol('b'),
-    (1, 0): sp.Symbol('a'),
-    (1, 1): CyclicProduct(sp.Symbol('a'))
-}
+
+def monomial_to_expr(monom: Tuple[int, ...], gens: List[sp.Symbol]) -> sp.Expr:
+    """
+    Convert a monomial to an expression.
+    See also in sp.polys.monomials.Monomial.as_expr.
+    """
+    return sp.Mul(*[gen**exp for gen, exp in zip(gens, monom)])
+
+
+def _decomp_as_sos(
+        decompositions: Dict[str, Tuple[sp.Matrix, sp.Matrix]],
+        gens: List[sp.Symbol],
+        factor: bool = True,
+        **options
+    ) -> sp.Expr:
+    """
+    Convert a {key: (U, S)} dictionary to sum of squares.
+    """
+    exprs = []
+    option = MonomialReduction.from_options(**options)
+    option_half = option.base()
+    for key, (U, S) in decompositions.items():
+        monomial = eval(key)
+        monomial_expr = monomial_to_expr(monomial, gens)
+        vecs = [option_half.invarraylize(U[i,:], gens).as_expr() for i in range(U.shape[0])]
+        if factor:
+            vecs = [_.factor() for _ in vecs]
+        vecs = [option.cyclic_sum(S[i] * monomial_expr * vecs[i]**2, gens) for i in range(U.shape[0])]
+
+        exprs.extend(vecs)
+    return sp.Add(*exprs)
 
 
 def _as_cyc(multiplier, x):
@@ -59,202 +95,21 @@ def _as_cyc(multiplier, x):
     return CyclicSum(multiplier * x)
 
 
-def _matrix_as_expr(
-        M: Union[sp.Matrix, Tuple[sp.Matrix, sp.Matrix]],
-        multiplier: sp.Expr, 
-        cyc: bool = True,
-        factor_result: bool = True,
-        cancel: bool = True
-    ) -> sp.Expr:
+def _is_numer_solution(decompositions: Dict[str, Tuple[sp.Matrix, sp.Matrix]]) -> bool:
     """
-    Helper function to rewrite a single semipositive definite matrix 
-    to sum of squares.
+    Check whether the solution is a numerical solution.
 
     Parameters
     ----------
-    M : sp.Matrix | Tuple[sp.Matrix, sp.Matrix]
-        The matrix to be rewritten or the decomposition of the matrix.
-        If given a tuple, it should be (U, S) where U is upper triangular
-        and S is a diagonal vector so that M = U.T @ diag(S) @ U.
-    multiplier : sp.Expr
-        The multiplier of the expression. For example, if `M` represents 
-        `(a^2-b^2)^2 + (a^2-2ab+c^2)^2` while `multiplier = ab`, 
-        then the result should be `ab(a^2-b^2)^2 + ab(a^2-2ab+c^2)^2`.
-    cyc : bool
-        Whether add a cyclic sum to the expression. Defaults to True.
-    factor_result : bool
-        Whether factorize the result. Defaults to True.
-    cancel : bool
-        Whether cancel the denominator of the expression. Defaults to True.
+    decompositions : Dict[(str, Tuple[sp.Matrix, sp.Matrix])]
+        The decompositions of the symmetric matrices.
 
     Returns
     -------
-    sp.Expr
-        The expression of matrix as sum of squares.
+    bool
+        Whether the solution is a numerical solution.
     """
-    is_numer = is_numer_matrix(M if isinstance(M, sp.Matrix) else M[1])
-    factor_result = factor_result and (not is_numer)
-
-    if isinstance(M, sp.Matrix):
-        U, S = congruence_with_perturbation(M, perturb = is_numer)
-        degree = round((2*M.shape[0] + .25)**.5 - 1.5)
-    elif not isinstance(M, sp.Matrix) and len(M) == 2:
-        U, S = M
-        degree = round((2*U.shape[1] + .25)**.5 - 1.5)
-    else:
-        raise ValueError('The input should be a matrix M or a tuple (U, S) such that M = U.T @ diag(S) @ U.')
-
-
-    a, b, c = sp.symbols('a b c')
-    monoms = generate_expr(degree, cyc = 0)[1]
-
-    factorizer = (lambda x: poly_get_factor_form(x.as_poly(a,b,c), return_type = 'expr'))\
-                        if factor_result else (lambda x: x)
-    as_cyc = (lambda m, x: m * x) if not cyc else _as_cyc
-
-    expr = sp.S(0)
-    for i, s in enumerate(S):
-        if s == 0:
-            continue
-        val = sp.S(0)
-        for j in range(min(U.shape[1], len(monoms))):
-            monom = monoms[j]
-            val += U[i,j] * a**monom[0] * b**monom[1] * c**monom[2]
-
-        if cancel:
-            r, val = val.together().as_coeff_Mul()
-        else:
-            r = 1
-        val = factorizer(val)
-        expr += (s * r**2) * as_cyc(multiplier, val**2)
-
-    return expr
-
-
-def _complete_M(S: Dict[str, sp.Matrix], Q: Dict[str, sp.Matrix], M: Dict[str, sp.Matrix]) -> Dict[str, sp.Matrix]:
-    """
-    Complete the missing matrices in dictionary M by multiplying Q @ S @ Q.T.
-
-    Parameters
-    ----------
-    S : Dict[(str, sp.Matrix)]
-        The symmetric matrices.
-    Q : Dict[(str, sp.Matrix)]
-        The low-rank transformations to the subspaces.
-    M : Dict[(str, sp.Matrix)]
-        The symmetric matrices to be completed.
-
-    Returns
-    -------
-    M : Dict[(str, sp.Matrix)]
-        The completed symmetric matrices. Each M = Q @ S @ Q.T.
-    """
-    if M is None: M = {}
-    for key, Q in Q.items():
-        if Q is None:
-            continue
-        if (key not in M) and (key in S):
-            M[key] = Q @ S[key] @ Q.T
-    return M
-
-
-def _is_numer_solution(
-        S: Dict[str, sp.Matrix] = {},
-        Q: Dict[str, sp.Matrix] = {},
-        M: Dict[str, sp.Matrix] = {},
-        decompose_method: str = 'raw',
-    ) -> bool:
-    """
-    Check whether a solution is numerical. When it is, the solution must be inaccurate.
-    """
-    # Ms = _complete_M(S, Q, M)
-    if decompose_method == 'raw':
-        return any(is_numer_matrix(x) for x in M.values() if x is not None)
-    elif decompose_method == 'reduce':
-        return any(is_numer_matrix(x) for x in S.values() if x is not None)
-
-
-def create_solution_from_M(
-        poly: sp.Expr,
-        S: Dict[str, sp.Matrix] = {},
-        Q: Dict[str, sp.Matrix] = {},
-        M: Dict[str, sp.Matrix] = {},
-        decompose_method: str = 'raw',
-        cyc: bool = True,
-        factor_result: bool = True,
-        cancel: bool = True,
-    ) -> SolutionSDP:
-    """
-    Create SDP solution from symmetric matrices.
-
-    Parameters
-    ----------
-    poly : sp.Expr
-        The polynomial to be solved.
-    S : Dict[(str, sp.Matrix)]
-        The low-rank symmetric matrices. M = Q @ S @ Q.T.
-    Q : Dict[(str, sp.Matrix)]
-        If using decompose_method == 'reduce'. It should be the low-rank transformations to the subspaces.
-    M : Dict[(str, sp.Matrix)]
-        M = Q @ S @ Q.T. If given, the computation will be skipped.
-    decompose_method : str
-        One of 'raw' or 'reduce'. The default is 'raw'. 'raw' first computes Q.T @ S @ Q and then
-        performs congruence. While 'reduce' performs congruence on S first and then multiply Q.T.
-        'reduce' is useful in numerical case, which helps remove improper components.
-    cyc : bool
-        Whether to convert the solution to a cyclic sum.
-    factor_result : bool
-        Whether to factorize the result. The default is True.
-    cancel : bool, optional
-        Whether to cancel the denominator. The default is True.
-
-    Returns
-    -------
-    SolutionSDP
-        The SDP solution.
-    """
-    M = _complete_M(S, Q, M)
-    degree = deg(poly)
-    expr = sp.S(0)
-    is_numer = _is_numer_solution(S, Q, M, decompose_method)
-
-    items = []
-    for key in M.keys():
-        if M[key] is None:
-            continue
-        try:
-            if decompose_method == 'raw':
-                U, v = congruence_with_perturbation(M[key], perturb = is_numer)
-                items.append((key, (U, v)))
-            elif decompose_method == 'reduce':
-                # S = U.T @ diag(v) @ U => M = QU.T @ diag(v) @ UQ.T
-                U, v = congruence_with_perturbation(S[key], perturb = is_numer)
-                items.append((key, (U * Q[key].T, v)))
-        except TypeError:
-            # TypeError: cannot unpack non-iterable NoneType object
-            raise ValueError(f'Matrix M["{key}"] is not positive semidefinite.')
-
-    for key, (U, v) in items:
-        minor = key == 'minor'
-
-        # After it gets cyclic, it will be three times as large as the original one,
-        # so we require it to be divided by 3 in advance.
-        originally_need_cyc = ((degree % 2) ^ minor)
-        if cyc and not originally_need_cyc:
-            # It is not originally a cyclic sum, but we force it to.
-            # So we need to divide it by 3.
-            v = v / 3
-
-        expr += _matrix_as_expr(
-            M = (U, v),
-            multiplier = _MULTIPLIERS[(degree % 2, minor)],
-            cyc = cyc or originally_need_cyc,
-            factor_result = factor_result,
-            cancel = cancel
-        )
-
-    return SolutionSDP(
-        problem = poly,
-        numerator = expr,
-        is_equal = not is_numer,
-    )
+    for _, (U, S) in decompositions.items():
+        if is_numer_matrix(U) or is_numer_matrix(S):
+            return True
+    return False
