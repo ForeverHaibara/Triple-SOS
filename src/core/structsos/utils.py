@@ -362,6 +362,7 @@ def quadratic_weighting(
     result : Union[sp.Expr, List]
         If formal = False, return the sympy expression of the result.
         If formal = True, return a list [(w1, (x1,y1))] so that sum(w_i * (x_i*a + y_i*b)**2) equals to the result.
+        If 4*c1*c3 < c2**2 or c1 < 0 or c3 < 0, return None.
     """
     if 4*c1*c3 < c2**2 or c1 < 0 or c3 < 0:
         return None

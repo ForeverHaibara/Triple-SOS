@@ -10,7 +10,7 @@ from ...utils.basis_generator import invarraylize
 from .utils import (
     CyclicSum, CyclicProduct, Coeff,
     sum_y_exprs, nroots, rationalize, rationalize_bound, rationalize_func, cancel_denominator, radsimp,
-    prove_univariate, zip_longest
+    prove_univariate, zip_longest, quadratic_weighting
 )
 
 a, b, c = sp.symbols('a b c')
@@ -640,7 +640,7 @@ def _sos_struct_quintic_windmill(coeff):
     s(c(a-b)2(2a2+3ab+10ac+2c2))-abcs(a2-ab)
 
     s((b-a+3c)(a2-b2+2(ab-ac)+31/9(bc-ab))2)
-    
+
     s((b-a+207/100c)((a2-b2+307/200(ab-ac)+247/100(bc-ab)))2)
 
     s(a4c+a3b2-a3bc-a2b2c)-3*2^(2/3)s(a2-ab)p(a)
@@ -653,13 +653,16 @@ def _sos_struct_quintic_windmill(coeff):
     if coeff((5,0,0)) != 0 or (coeff((4,1,0)) != 0 and coeff((1,4,0)) != 0):
         return None
 
+    if coeff.poly111() < 0:
+        return None
+
     if coeff((4,1,0)) != 0:
         # reflect the polynomial so that coeff((4,1,0)) == 0
         solution = _sos_struct_quintic_windmill(coeff.reflect())
         if solution is not None:
             solution = solution.xreplace({b:c, c:b})
         return solution
-    
+
     # now we assume coeff((4,1,0)) == 0
     if coeff((1,4,0)) < 0:
         return None
@@ -691,9 +694,6 @@ def _sos_struct_quintic_windmill(coeff):
             return sum_y_exprs(y, exprs)
         return None
 
-    if not coeff.is_rational:
-        return None
-
     if coeff((3,2,0)) == 0:
         if coeff((2,3,0)) >= 0:
             solution = _sos_struct_quintic_uncentered(coeff)
@@ -702,209 +702,145 @@ def _sos_struct_quintic_windmill(coeff):
         return None
 
 
-    u, x_, y_, z_, = sp.symbols('u'), coeff((1,4,0)) / coeff((3,2,0)), coeff((2,3,0)) / coeff((3,2,0)), coeff((3,1,1)) / coeff((3,2,0))
-    u_, y__, z__, w__ = None, y_, z_, coeff((2,2,1)) / coeff((3,2,0)) + (x_ + y_ + z_ + 1)
-    
-    if w__ < 0:
-        return solution
+    def _sos_struct_quintic_windmill_trivial(coeff):
+        """
+        Solve very simple cases without lifting the degree using several ideas.
+        """
+        rem = radsimp(coeff.poly111() / 3) * CyclicSum(a*b) * CyclicProduct(a)
+        if True:
+            # Easy case 2. in the form of s(c(a-b)2(xa2+yac+zc2+uab+vbc)) + ...s(a2b2c)
+            # such that y^2 <= 4xz where x = coeff((1,4,0)) is fixed
 
-    # if coeff((2,3,0)) >= 0 and 1 + x_ + z_ >= 0:
-    #     # Easy case 1. try very trivial case
-    #     y = [
-    #         sp.S(1),
-    #         x_ - u_ ** 2,
-    #         z_ - (-2 * u_**2 + 2 * u_),
-    #         w__
-    #     ]
-    #     if any(_ < 0 for _ in y):
-    #         y = None
-    #     else:
-    #         y = [_ * coeff((3,2,0)) for _ in y]
-    #         exprs = ['a*c^2*(b-c)^2', 'a*b^2*(b-c)^2', 'a*b*c*(b-c)^2', 'a^2*b^2*c']
-    #         return multipliers, y,  exprs
-
-
-
-    if True:
-        # Easy case 2. in the form of s(c(a-b)2(xa2+yac+zc2+uab+vbc)) + ...s(a2b2c)
-        # such that y^2 <= 4xz where x = coeff((1,4,0)) is fixed
-
-        if coeff((2,3,0)) >= 0:
-            # A. possibly simple and nice
-            t = min(coeff((3,2,0)), coeff((2,3,0)))
-            y = [
-                coeff((1,4,0)), t,
-                coeff((3,1,1)) / 2 + coeff((1,4,0)) + t,
-                abs(coeff((3,2,0)) - coeff((2,3,0))),
-            ]
-            if all(_ >= 0 for _ in y):
-                r = 1 / cancel_denominator(y)
-                y = [_ * r for _ in y]
-                character = b if coeff((3,2,0)) >= coeff((2,3,0)) else a
-                exprs = [
-                    CyclicSum(c*(a-b)**2*(y[0]*a**2 + y[1]*c**2 + y[2]*a*b + y[3]*character*c)),
-                    CyclicSum(a*b) * CyclicProduct(a)
+            if coeff((2,3,0)) >= 0:
+                # A. possibly simple and nice
+                t = min(coeff((3,2,0)), coeff((2,3,0)))
+                y = [
+                    coeff((1,4,0)), t,
+                    coeff((3,1,1)) / 2 + coeff((1,4,0)) + t,
+                    abs(coeff((3,2,0)) - coeff((2,3,0))),
                 ]
-                y = [1 / r, w__ * coeff((3,2,0))]
-                return sum_y_exprs(y, exprs)
-        
-        # B. y^2 <= 4xz
-        # x = coeff((1,4,0))
-        # y + z = coeff((2,3,0))
-        # v + z = coeff((3,2,0)) => z <= coeff((3,2,0)) => y >= coeff((2,3,0)) - coeff((3,2,0)
-        # -2(x + z) + 2u = coeff((3,1,1)) => z >= - x - coeff((3,1,1)) / 2
-        #      => y <= coeff((2,3,0)) + x + coeff((3,1,1)) / 2
-        # Problem: whether y >= ... has a solution such that
-        # y^2 <= 4x(coeff((2,3,0)) - y)
-        
-        bound_l = coeff((2,3,0)) - coeff((3,2,0))
-        bound_r = coeff((2,3,0)) + coeff((1,4,0)) + coeff((3,1,1)) / 2
-        if bound_l <= bound_r:
-            bound = -2 * coeff((1,4,0)) # symmetric axis
-            if bound_l <= bound <= bound_r:
-                # symmetric axis inbetween
-                pass
-            elif bound <= bound_l:
-                bound = bound_l
-            else:
-                bound = bound_r
-
-            y = [
-                coeff((1,4,0)),
-                bound,
-                coeff((2,3,0)) - bound,
-                coeff((3,1,1)) / 2 + coeff((1,4,0)) + (coeff((2,3,0)) - bound),
-                coeff((3,2,0)) - (coeff((2,3,0)) - bound)
-            ]
+                if all(_ >= 0 for _ in y):
+                    character = b if coeff((3,2,0)) >= coeff((2,3,0)) else a
+                    p1 = (y[0]*a**2 + y[1]*c**2 + y[2]*a*b + y[3]*character*c).together()
+                    return CyclicSum(c*(a-b)**2*p1) + rem
             
-            if not (y[1] < 0 and y[1]**2 > 4 * y[0] * y[2]):
-                r1 = 1 / cancel_denominator([sp.S(1), -y[1] / y[0] / 2])
-                
-                tmpcoeffs = [y[2] - y[1]**2 / 4 / y[0], y[3], y[4]]
-                r2 = 1 / cancel_denominator(tmpcoeffs)
-
-                exprs = [
-                    CyclicSum(c*(a-b)**2*(r1*a-(-y[1]/y[0]/2*r1)*c)**2),
-                    CyclicSum(c*(a-b)**2*(r2*tmpcoeffs[0]*c**2 + r2*y[3]*a*b + r2*y[4]*b*c)),
-                    CyclicSum(a*b) * CyclicProduct(a)
-                ]
-                y = [y[0] / r1**2, 1 / r2, w__ * coeff((3,2,0))]
-
-                if all(_ >= 0 for _ in y):
-                    return sum_y_exprs(y, exprs)
-                    
-
-
-    if True:
-        # Easy case 3. try another case where we do not need to updegree
-        # idea: use s(a*b^2*(a-ub+(u-1)c)^2)
-        u_ = y_ / (-2)
-        y = [
-            sp.S(1),
-            x_ - u_ ** 2,
-            (z_ - (-2 * u_**2 + 2 * u_)) / 2 + (x_ - u_ ** 2),
-            w__
-        ]
-        if all(_ >= 0 for _ in y):
-            y = [_ * coeff((3,2,0)) for _ in y]
-            exprs = [
-                CyclicSum(a*b**2*(a-u_*b+(u_-1)*c)**2),
-                CyclicSum(a*b**2*(b-c)**2),
-                CyclicSum((b-c)**2) * CyclicProduct(a),
-                CyclicSum(a*b) * CyclicProduct(a)
-            ]
-            return sum_y_exprs(y, exprs)
-
-    if True:
-        # Easy case 4. use s(c*(a-c)^2*(a-t*b)^2)
-        if x_ >= 1:
-            t = (z_ + 2*(x_ - 1)) / (-4)
-            if t**2 - 2 <= y_:
-                y = [
-                    sp.S(1),
-                    y_ - (t**2 - 2),
-                    x_ - 1,
-                    w__
-                ]
-                if all(_ >= 0 for _ in y):
-                    y = [_ * coeff((3,2,0)) for _ in y]
-                    exprs = [
-                        CyclicSum(c*(a-c)**2*(a-t*b)**2),
-                        CyclicSum(a*c**2*(a-b)**2),
-                        CyclicSum(a**2*c*(a-b)**2),
-                        CyclicSum(a*b) * CyclicProduct(a)
-                    ]
-                    return sum_y_exprs(y, exprs)
-        elif x_ < 1:
-            # two cases:
-            # 1. x_s(c(a-c)2(a-tb)2) + ?s(a3(b-c)2) + ??s(bc2(a-b)2)
-            # 2. x_s(c(a-c)2(a-tb)2) + ?s(a3(b-c)2) + ??s(a2c(a-b)2)
-            # t = z_ / (-4) / x_
-            # if x_*(t**2 - 2) <= y_:
-            #     y = [
-            #         x_,
-            #         1 - x_,
-            #         y_ - (t**2 - 2) * x_,
-            #         w__
-            #     ]
-            #     if all(_ >= 0 for _ in y):
-            #         y = [_ * coeff((3,2,0)) for _ in y]
-            #         exprs = [
-            #             CyclicSum(c*(a-c)**2*(a-t*b)**2),
-            #             CyclicSum(b*c**2*(a-b)**2),
-            #             CyclicSum(a**2*c*(a-b)**2),
-            #             CyclicSum(a*b) * CyclicProduct(a)
-            #         ]
-            #         return sum_y_exprs(y, exprs)
-
-            # -z/2 - 2tx >= 0
-            # 1 + 2tx - x + z/2 >= 0
-            # thus, (x - z/2 - 1)/(2x) <= t <= -z/(4x)
-            # in this bound, we should make t as close to 1 as possible
-            # to minimize t^2 - 2t - 2
-            bound_l = (x_ - z_ / 2 - 1) / (2*x_)
-            bound_r = -z_ / (4*x_)
+            # B. y^2 <= 4xz
+            # x = coeff((1,4,0))
+            # y + z = coeff((2,3,0))
+            # v + z = coeff((3,2,0)) => z <= coeff((3,2,0)) => y >= coeff((2,3,0)) - coeff((3,2,0)
+            # -2(x + z) + 2u = coeff((3,1,1)) => z >= - x - coeff((3,1,1)) / 2
+            #      => y <= coeff((2,3,0)) + x + coeff((3,1,1)) / 2
+            # Problem: whether y >= ... has a solution such that
+            # y^2 <= 4x(coeff((2,3,0)) - y)
+            
+            bound_l = coeff((2,3,0)) - coeff((3,2,0))
+            bound_r = coeff((2,3,0)) + coeff((1,4,0)) + coeff((3,1,1)) / 2
             if bound_l <= bound_r:
-                if bound_l <= 1 <= bound_r:
-                    t = sp.S(1)
-                elif abs(bound_l - 1) < abs(bound_r - 1):
-                    t = bound_l
+                bound = -2 * coeff((1,4,0)) # symmetric axis
+                if bound_l <= bound <= bound_r:
+                    # symmetric axis inbetween
+                    pass
+                elif bound <= bound_l:
+                    bound = bound_l
                 else:
-                    t = bound_r
+                    bound = bound_r
+                bound = radsimp(bound)
 
-                # the sum of following equals to the polynomial
-                y = [
-                    x_,
-                    -z_ / 2 - 2*t*x_,
-                    1 + 2*t*x_ - x_ + z_ / 2,
-                    y_ - (t**2 - 2*t - 2)*x_ + z_ / 2,
-                    w__
+                y = radsimp([
+                    coeff((1,4,0)),
+                    bound,
+                    coeff((2,3,0)) - bound,
+                    (coeff((3,1,1)) / 2 + coeff((1,4,0)) + (coeff((2,3,0)) - bound)),
+                    coeff((3,2,0)) - (coeff((2,3,0)) - bound)
+                ])
+                
+                if (y[0] >= 0 and y[2] >= 0 and 4*y[0]*y[2] >= y[1]**2):
+                    p1 = (quadratic_weighting(y[0], y[1], y[2], a, c) + y[3]*a*b + y[4]*b*c).together()
+                    return CyclicSum(c*(a-b)**2*p1) + rem
+
+        x_, y_, z_ = radsimp([coeff((1,4,0)) / coeff((3,2,0)), coeff((2,3,0)) / coeff((3,2,0)), coeff((3,1,1)) / coeff((3,2,0))])
+        if True:
+            # Easy case 3. try another case where we do not need to updegree
+            # idea: use s(a*b^2*(a-ub+(u-1)c)^2)
+            u_ = radsimp(y_ / (-2))
+            y = radsimp([
+                sp.S(1),
+                x_ - u_ ** 2,
+                (z_ - (-2 * u_**2 + 2 * u_)) / 2 + (x_ - u_ ** 2)
+            ])
+            if all(_ >= 0 for _ in y):
+                y = radsimp([_ * coeff((3,2,0)) for _ in y])
+                exprs = [
+                    CyclicSum(a*b**2*(a-u_*b+(u_-1)*c)**2),
+                    CyclicSum(a*b**2*(b-c)**2),
+                    CyclicSum((b-c)**2) * CyclicProduct(a)
                 ]
-                # print('(l,r) =', (bound_l, bound_r), '  t =', t,'\ny =', y)
-                if all(_ >= 0 for _ in y):
-                    y = [_ * coeff((3,2,0)) for _ in y]
-                    exprs = [
-                        CyclicSum(c*(a-c)**2*(a-t*b)**2),
-                        CyclicSum(a**3*(b-c)**2),
-                        CyclicSum(b*c**2*(a-b)**2),
-                        CyclicSum(a*c**2*(a-b)**2),
-                        CyclicSum(a*b) * CyclicProduct(a)
-                    ]
-                    return sum_y_exprs(y, exprs)
+                return sum_y_exprs(y, exprs) + rem
+
+        if True:
+            # Easy case 4. use s(c*(a-c)^2*(a-t*b)^2)
+            if x_ >= 1:
+                t = radsimp((z_ + 2*(x_ - 1)) / (-4))
+                y1 = radsimp(coeff((2,3,0)) - (t**2 - 2) * coeff((3,2,0)))
+                if y1 >= 0:
+                    y2 = coeff((1,4,0)) - coeff((3,2,0))
+                    p1 = coeff((3,2,0)) * CyclicSum(c*(a-c)**2*(a-t*b)**2)
+                    p2 = CyclicSum(a*c*(a-b)**2*(y1*c + y2*a).together())
+                    return p1 + p2 + rem
+            elif x_ < 1:
+                # two cases:
+                # 1. x_s(c(a-c)2(a-tb)2) + ?s(a3(b-c)2) + ??s(bc2(a-b)2)
+                # 2. x_s(c(a-c)2(a-tb)2) + ?s(a3(b-c)2) + ??s(a2c(a-b)2)
+                # -z/2 - 2tx >= 0
+                # 1 + 2tx - x + z/2 >= 0
+                # thus, (x - z/2 - 1)/(2x) <= t <= -z/(4x)
+                # in this bound, we should make t as close to 1 as possible
+                # to minimize t^2 - 2t - 2
+                bound_l = radsimp((x_ - z_ / 2 - 1) / (2*x_))
+                bound_r = radsimp(-z_ / (4*x_))
+                if bound_l <= bound_r:
+                    if bound_l <= 1 <= bound_r:
+                        t = sp.S(1)
+                    elif abs(bound_l - 1) < abs(bound_r - 1):
+                        t = bound_l
+                    else:
+                        t = bound_r
+
+                    # the sum of following equals to the polynomial
+                    y = radsimp([
+                        x_,
+                        -z_ / 2 - 2*t*x_,
+                        1 + 2*t*x_ - x_ + z_ / 2,
+                        y_ - (t**2 - 2*t - 2)*x_ + z_ / 2
+                    ])
+                    # print('(l,r) =', (bound_l, bound_r), '  t =', t,'\ny =', y)
+                    if all(_ >= 0 for _ in y):
+                        y = radsimp([_ * coeff((3,2,0)) for _ in y])
+                        exprs = [
+                            CyclicSum(c*(a-c)**2*(a-t*b)**2),
+                            CyclicSum(a**3*(b-c)**2),
+                            CyclicSum(b*c**2*(a-b)**2),
+                            CyclicSum(a*c**2*(a-b)**2)
+                        ]
+                        return sum_y_exprs(y, exprs) + rem
 
 
-    if True:
-        # Try subtracting s(c(a2-ab-u(ac-ab)+v(bc-ab))2)
-        # and the rest does not have s(ab^4) term.
-        # In this case, we must have coeff((2,3,0))*coeff((3,2,0))*4 >= coeff((3,1,1))**2,
-        # which is equivalent to det <= 0 where det =
-        # 8*u^3-8*u^2*v+(4*y+4)*u^2+8*u*v^2+4*z*u*v+(-8*x-4*z-8)*u+(4*x+4)*v^2+(4*z+8)*v-4*x*y+z^2+4*z+4
+    def _sos_struct_quintic_windmill_trivial2(coeff):
+        """
+        Try subtracting s(c(a2-ab-u(ac-ab)+v(bc-ab))2)
+        and the rest does not have s(ab^4) term.
+        In this case, we must have coeff((2,3,0))*coeff((3,2,0))*4 >= coeff((3,1,1))**2,
+        which is equivalent to det <= 0 where det =
+        8*u^3-8*u^2*v+(4*y+4)*u^2+8*u*v^2+4*z*u*v+(-8*x-4*z-8)*u+(4*x+4)*v^2+(4*z+8)*v-4*x*y+z^2+4*z+4
 
-        # It is a quadratic function of v, so WLOG v = symmetric axis = (2*u**2 - u*z - z - 2)/(2*(2*u + x + 1))
-        # substitute back, the discriminant is factorizable and we require
-        # det_u = 12*u**2 + (8*x + 8*y + 4*z + 16)*u + 4*x*y + 4*y - z**2 - 4*z - 4 >= 0
+        It is a quadratic function of v, so WLOG v = symmetric axis = (2*u**2 - u*z - z - 2)/(2*(2*u + x + 1))
+        substitute back, the discriminant is factorizable and we require
+        det_u = 12*u**2 + (8*x + 8*y + 4*z + 16)*u + 4*x*y + 4*y - z**2 - 4*z - 4 >= 0
 
-        # meanwhile coeff((3,2,0)) >= 0 requires u^2 <= x
+        meanwhile coeff((3,2,0)) >= 0 requires u^2 <= x
+        """
+        if not coeff.is_rational:
+            return None
         x_, y_, z_ = coeff((3,2,0)) / coeff((1,4,0)), coeff((2,3,0)) / coeff((1,4,0)), coeff((3,1,1)) / coeff((1,4,0))
 
         eq1 = 12*x_ + 4*x_*y_ + 4*y_ - (z_ + 2)**2
@@ -935,21 +871,17 @@ def _sos_struct_quintic_windmill(coeff):
                     return solution * coeff((1,4,0)) + coeff((1,4,0)) * CyclicSum(c*(a**2+(u_-v_-1)*a*b-u_*a*c+v_*b*c)**2)
 
 
-
-
-    u, x_, y_, z_, = sp.symbols('u'), coeff((1,4,0)) / coeff((3,2,0)), coeff((2,3,0)) / coeff((3,2,0)), coeff((3,1,1)) / coeff((3,2,0))
-    u_, y__, z__, w__ = None, y_, z_, coeff((2,2,1)) / coeff((3,2,0)) + (x_ + y_ + z_ + 1)
-
-
-    # now we have to higher the degree
-    if True:
-        # first try whether we can handle neat cases
-        # Theorem 1.1:
-        # f(a,b,c) = s(a(ac+b^2-2bc)^2(a-b)^2) = s(a^2-ab)s(a^4c-3a^3bc+2a^2b^2c) >= 0
-        # g(a,b,c) = s(a(ab-2bc+c^2)^2(a-b)^2) = s(a^2-ab)s(a^3b^2-a^2b^2c) >= 0
-        # h(a,b,c) = s(a(ac+b^2-2bc)(ab-2bc+c^2)(a-b)^2) = -s(a^2-ab)s(a^3bc-a^3c^2)
-        # Then,
-        # c1f(a,b,c) + c2h(a,b,c) + c3g(a,b,c) >= 0 holds when c2^2 <= 4c1c3
+    # now we have to lift the degree
+    def _sos_struct_quintic_windmill_quadratic(coeff):
+        """
+        First try whether we can handle neat cases.
+        Theorem 1.1:
+        f(a,b,c) = s(a(ac+b^2-2bc)^2(a-b)^2) = s(a^2-ab)s(a^4c-3a^3bc+2a^2b^2c) >= 0
+        g(a,b,c) = s(a(ab-2bc+c^2)^2(a-b)^2) = s(a^2-ab)s(a^3b^2-a^2b^2c) >= 0
+        h(a,b,c) = s(a(ac+b^2-2bc)(ab-2bc+c^2)(a-b)^2) = -s(a^2-ab)s(a^3bc-a^3c^2)
+        Then,
+        c1f(a,b,c) + c2h(a,b,c) + c3g(a,b,c) >= 0 holds when c2^2 <= 4c1c3
+        """
 
         # Case A.
         c1, c2, c3, c4 = coeff((1,4,0)), None, coeff((3,2,0)), sp.S(0)
@@ -971,25 +903,25 @@ def _sos_struct_quintic_windmill(coeff):
                 c2 = sp.S(0)
 
         if c2 is not None and c2**2 <= 4*c1*c3:
-            pp = (c3 - c2**2/(4*c1)) * b + (coeff((2,3,0)) - c2) * a
+            pp = radsimp(c3 - c2**2/(4*c1)) * b + (coeff((2,3,0)) - c2) * a
             pp = sp.together(pp).as_coeff_Mul()
             y = [
                 2 * c1,
                 pp[0],
                 (coeff((3,1,1)) + 3*c1 + c2) / 2,
-                w__ * coeff((3,2,0))
             ]
             if all(_ >= 0 for _ in y):
                 multiplier = CyclicSum((a-b)**2)
-                w = c2/(2*c1)
+                w = radsimp(c2/(2*c1))
                 exprs = [
                     CyclicSum(a*(a-b)**2*(w*a*b-(2+2*w)*b*c+w*c**2+a*c+b**2)**2),
                     CyclicSum(c**2*(a-b)**2*pp[1]) * multiplier,
-                    CyclicProduct(a) * CyclicSum((a-b)**2)**2,
-                    CyclicProduct(a) * CyclicSum(a*b) * multiplier
+                    CyclicProduct(a) * CyclicSum((a-b)**2)**2
                 ]
-                return sum_y_exprs(y, exprs) / multiplier
-        
+                return sum_y_exprs(y, exprs) / multiplier + radsimp(coeff.poly111()/3) * CyclicSum(a*b) * CyclicProduct(a)
+
+        if not coeff.is_rational:
+            return None
 
         # Case B.
         # Assume we subtract c1(f(a,b,c) + wg(a,b,c))^2, then the remaining does not contain s(ab^4) term.
@@ -1015,7 +947,20 @@ def _sos_struct_quintic_windmill(coeff):
             if solution is not None:
                 return (2*c1*CyclicSum(a*(a-b)**2*(w*a*b-(2+2*w)*b*c+w*c**2+a*c+b**2)**2) + solution * multiplier) / multiplier
 
-    
+
+    _solvers = [_sos_struct_quintic_windmill_trivial, _sos_struct_quintic_windmill_trivial2, _sos_struct_quintic_windmill_quadratic]
+    for _solver in _solvers:
+        solution = _solver(coeff)
+        if solution is not None:
+            return solution
+
+    if not coeff.is_rational:
+        return None
+
+
+    u, x_, y_, z_, = sp.symbols('u'), coeff((1,4,0)) / coeff((3,2,0)), coeff((2,3,0)) / coeff((3,2,0)), coeff((3,1,1)) / coeff((3,2,0))
+    u_, y__, z__, w__ = None, y_, z_, coeff((2,2,1)) / coeff((3,2,0)) + (x_ + y_ + z_ + 1)
+
     def _compute_coeffs(u, v):
         """
         Compute the coefficients ab^4, a^2b^3, a^3bc of the regularized polynomial
@@ -1326,6 +1271,9 @@ def _sos_struct_quintic_uncentered(coeff):
 
     [3] https://tieba.baidu.com/p/7710460926
     """
+
+    if not coeff.is_rational:
+        return None
 
     u, v = sp.symbols('u v')
     t = coeff((1,4,0))
