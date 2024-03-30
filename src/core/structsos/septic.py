@@ -1,6 +1,7 @@
 import sympy as sp
 
 from .quartic import sos_struct_quartic
+from .septic_symmetric import sos_struct_septic_symmetric
 from ...utils.roots.findroot import optimize_discriminant
 from .utils import (
     CyclicSum, CyclicProduct, Coeff,
@@ -19,6 +20,10 @@ def sos_struct_septic(coeff, recurrsion, real = True):
         else:
             # hexagon
             return _sos_struct_septic_hexagon(coeff, recurrsion)
+
+    if all(coeff((i,j,k)) == coeff((j,i,k)) for (i,j,k) in ((6,1,0),(5,2,0),(4,3,0),(4,2,1))):
+        return sos_struct_septic_symmetric(coeff, recurrsion, real = real)
+
     return None
 
 def _quartic_det(m, p, n, q):
