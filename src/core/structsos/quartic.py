@@ -32,6 +32,8 @@ def sos_struct_quartic(coeff, recurrsion = None, real = True):
     Examples
     -------
     s(a2)2-3s(a3b)
+
+    4s(a)s(2a3-a2b-a2c)
     """
     solution = None
 
@@ -194,6 +196,8 @@ def _sos_struct_quartic_biased(coeff):
         eq_gcd = sp.gcd(eq, eq_diff)
         if eq_gcd.degree() == 1:
             u_ = radsimp(-(eq_gcd.all_coeffs()[1] / eq_gcd.LC()))
+            if u_ < 0:
+                u_ = None
         elif eq_gcd.degree() == 2:
             c2, c1, c0 = radsimp(eq_gcd.all_coeffs())
             if c2 < 0:
@@ -201,7 +205,6 @@ def _sos_struct_quartic_biased(coeff):
             delta = radsimp(c1**2 - 4*c2*c0)
             if delta >= 0:
                 u_ = radsimp((-c1 + sp.sqrtdenest(sp.sqrt(delta))) / (2*c2))
-
 
     if u_ is None:
         def _is_valid(u):
