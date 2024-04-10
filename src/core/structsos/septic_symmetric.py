@@ -97,6 +97,9 @@ def _sos_struct_septic_symmetric_quadratic_form(poly, coeff):
     print(g_coeff, gx, gy, gm, gp, gn, gt_coeff, g_rem_coeff, g_rem_ratio)
     print('Ker_coeff =', ker_coeff)
 
+    if fx is sp.nan or fy is sp.nan or gx is sp.nan or gy is sp.nan:
+        return None
+
     f_g_solution = _septic_sym_axis.solve(f_coeff, fx, fy, g_coeff, gx, gy, ker_coeff)
     if f_g_solution is None:
         return None

@@ -365,7 +365,7 @@ def _sos_struct_nonic_gear(coeff, recurrsion):
     """
     if not (coeff((5,4,0)) == 0 and coeff((6,1,2)) == 0):
         # reflect the polynomial
-        reflect_coeffs = lambda _: coeff((_[0], _[2], _[1]))
+        reflect_coeffs = coeff.reflect()
         solution = _sos_struct_nonic_gear(reflect_coeffs, recurrsion)
         if solution is not None:
             solution = solution.xreplace({b:c, c:b})
