@@ -421,7 +421,11 @@ def _sos_struct_sextic_hexagram_symmetric(coeff):
     s(ab)3+abcs(a)3+64a2b2c2-12abcs(a)s(ab)
 
     7s(ab)3+8abcs(a)3+392a2b2c2-84abcs(a)s(ab)
-    
+
+    s(12a4bc+36a3b3-70a3b2c-70a3bc2+277/3a2b2c2)
+
+    s(a/3)2s(a2b2)+(11*sqrt(33)+81)/24p(a2)-3s(b2c2a)s(a/3)-1/9p(a-b)2
+
     References
     -------
     [1] https://tieba.baidu.com/p/8039371307 
@@ -558,76 +562,75 @@ def _sos_struct_sextic_tree(coeff):
     s(2a6-36a4bc+36a3b3-2a2b2c2)
 
     s(a6+4a3b3-7a4bc+2a2b2c2)
+
+    4s(a6-a4bc+a3b3-a2b2c2)/3
     """
 
-    t = coeff((6,0,0))
+    coeff6 = coeff((6,0,0))
     rem = radsimp(coeff((2,2,2)) + (coeff((6,0,0))+coeff((4,1,1))+coeff((3,3,0))) * 3)
-    if rem < 0 or t < 0:
+    if rem < 0 or coeff6 < 0:
         return None
-    if t == 0 and coeff((3,3,0)) >= 0 and coeff((4,1,1)) >= 0:
+    if coeff6 == 0 and coeff((3,3,0)) >= 0 and coeff((4,1,1)) >= 0:
         return sp.Add(
             coeff((3,3,0))/2 * CyclicSum(a*b) * CyclicSum(a**2*(b-c)**2),
             coeff((4,1,1))/2 * CyclicProduct(a) * CyclicSum((a-b)**2) * CyclicSum(a),
             rem * CyclicProduct(a**2)
         )
 
-    # t != 0 by assumption
-    u, v = radsimp(coeff((3,3,0))/t), radsimp(coeff((4,1,1))/t)
+    # coeff6 != 0 by assumption
+    u, v = radsimp(coeff((3,3,0))/coeff6), radsimp(coeff((4,1,1))/coeff6)
     if u < -2:
         return None
 
+    def _solve_point(t):
+        # t >= -1
+        if t == 2 or t == -1:
+            return sp.Rational(1,2) * CyclicSum(a)**2 * CyclicSum((b-c)**4)
+        q, p = t.as_numer_denom()
+        return radsimp(1/(2*p**3)) * CyclicSum(p*a**2 + q*b*c) * CyclicSum((a-b)**2*(p*a+p*b-q*c)**2)
 
+    def _solve_regular(t):
+        # Proof given by the theorem.
+        s1, s2 = radsimp(u - (t**3 - 3*t)), radsimp(v + 3*t*(t - 1))
+        if t >= -1 and s1 >= 0 and s2 >= 0:
+            y = radsimp([coeff6, coeff6*s1/2, coeff6*s2/2, rem])
+            exprs = [
+                _solve_point(t),
+                CyclicSum(a*b) * CyclicSum(a**2*(b-c)**2),
+                CyclicSum(a) * CyclicSum((a-b)**2) * CyclicProduct(a),
+                CyclicProduct(a**2)
+            ]
+            return sum_y_exprs(y, exprs)
+
+    candidates_t = [sp.S(2), sp.S(1)]
     if v != -6 and u != 2:
-        # try sum of squares with real numbers first
+        # Try sum of squares with real numbers first
         # if (u,v) falls inside the parametric curve (x^3-3x,-3x(x-1)) where -1<=x<=2,
         # then it is a rational linear combination of (t^3-3t, -3t(t-1)) and (2, -6)
         # with t = -(3u + v) / (v + 6)
         # note: (2, -6) is the singular node of the strophoid
-        t__ = radsimp(-(3*u + v) / (v + 6))
-        if -1 <= t__ <= 2:
-            x = t__**3 - 3*t__
+        t = radsimp(-(3*u + v) / (v + 6))
+        if -1 <= t:
+            # x = t**3 - 3*t
             w1 = radsimp((27*u**2 + 27*u*v + 54*u + v**3 + 18*v**2 + 54*v)/(27*(u - 2)*(u + v + 4)))
             w2 = 1 - w1
-            q, p = t__.as_numer_denom()
+            # w2 = -(v + 6)**3/(27*(u - 2)*(u + v + 4))
             if 0 <= w1 <= 1:
-                y = radsimp([w1 * t / 2, w2 * t / 2 / p**3, rem])
-                exprs = [
-                    CyclicSum(a)**2 * CyclicSum((b-c)**4),
-                    CyclicSum(p*a**2 + q*b*c) * CyclicSum((a-b)**2*(p*a+p*b-q*c)**2),
-                    CyclicProduct(a**2),
-                ]
-                return sum_y_exprs(y, exprs)
-    
-    x = sp.symbols('x')
-    equ = (x**3 - 3*x - u).as_poly(x)
-    r = None
-    if not coeff.is_rational:
-        # first check whether there is exact solution
-        eqv = (3*x**2 - 3*x + v).as_poly(x)
-        eq_gcd = sp.gcd(equ, eqv)
-        if eq_gcd.degree() == 1:
-            r = radsimp(-eq_gcd.coeff_monomial((0,)) / eq_gcd.coeff_monomial((1,)))
-            if r < -1:
-                r = None
+                return sp.Add(
+                    radsimp(coeff6 * w1) * _solve_point(sp.S(2)),
+                    radsimp(coeff6 * w2) * _solve_point(t),
+                    rem * CyclicProduct(a**2)
+                )
 
-    if r is None:
-        def _is_valid(r):
-            return r >= 0 and 3*r*(r-1) + v >= 0
-        r = rationalize_func(equ, _is_valid, direction = -1)
+        if t <= 2:
+            # Observation:
+            # (t^3-3t, -3t(t-1)) and ((1-t)^3-3(1-t), -3(1-t)(1-t-1)) have equal y coordinates
+            candidates_t.append(1 - t)
 
-    if r is not None:            
-        # now r is rational
-        y = radsimp([t/2, t*(u-(r**3-3*r))/2, t*(v+3*r*(r-1))/2, rem])
-        exprs = [
-            CyclicSum(a**2 + r*b*c) * CyclicSum((a-b)**2*(a+b-r*c)**2),
-            CyclicSum(a*b) * CyclicSum(a**2*(b-c)**2),
-            CyclicSum(a) * CyclicSum((a-b)**2) * CyclicProduct(a),
-            CyclicProduct(a**2),
-        ]
-        if r == 2:
-            exprs[0] = CyclicSum(a)**2 * CyclicSum((a-b)**2*(a+b-2*c)**2)
-
-        return sum_y_exprs(y, exprs)
+    for t in candidates_t:
+        solution = _solve_regular(t)
+        if solution is not None:
+            return solution
 
     return None
 
@@ -1213,9 +1216,9 @@ def _sos_struct_sextic_symmetric_quadratic_form(poly, coeff):
     # each t_ exchanges for 27/4p(a-b)^2 because s(a^2-ab)^3 = 1/4 * p(2a-b-c)^2 + 27/4 * p(a-b)^2
     ker_coeff += 27 * t_coeff / 4
 
-    # print('Coeff =', coeff0, 'ker =', ker_coeff)
-    # print('  (x,y) =', (x, y), 'ker_std =', ker_coeff / coeff0)
-    # print('  (m,p,n,t) = ', (m, p, n, t_coeff))
+    print('Coeff =', coeff0, 'ker =', ker_coeff)
+    print('  (x,y) =', (x, y), 'ker_std =', ker_coeff / coeff0)
+    print('  (m,p,n,t) = ', (m, p, n, t_coeff))
 
     return _sextic_sym_axis.solve(
         coeff0, x, y, ker_coeff, t_coeff, rem_coeff, rem_ratio
