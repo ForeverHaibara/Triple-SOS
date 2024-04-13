@@ -27,59 +27,64 @@ def _wrap_c1_c2(c1, c2):
     p = p.together().as_coeff_Mul()
     return p[0] * CyclicSum(p[1])
 
-def _merge_quadratic_params(params):
+
+def _restructure_quartic_polynomial(poly):
     """
-    If F = sum(pi * s(xi*a^2 + yi*a*b) for i in range(1,n+1)),
-    then it can be represented as a whole:
-    F = p0 * s(x0*a^2 + y0*a*b).
+    Write a nonnegative quartic polynomoial in the form of
+    f(a) = t*(a - 1)**4 + coeff * ((x - 1)*a**2 - (2 - 2*y)*a + (2*x + y - 2))**2 + rem * (a**2 + 2*r*a + r + 2)**2 >= 0.
 
-    Parameters
-    -----------
-    params : list
-        A list of (pi, xi, yi) for i in range(1,n+1).
-    
-    Returns
-    ---------
-    p0, x0, y0, m, p, n, t, rem_coeff, rem_ratio:
-        p0, x0, y0 are the coefficients of the merged quadratic form.
+    This is useful when performing sum-of-square targetting the symmetric axis. Say,
+    we define a mapping, from 3-var symmetric nonnegative polynomials with zeros at (1,1,1), to its symmetric axis:
+    Mapping M: F(a,b,c) |-> F(a,1,1) / (a-1)^2.
 
-        m, p, n satisfy that
-            sum(pi * s(xi*a^2 + yi*a*b)**2 for i in range(1,n+1)) - p0 * s(x0*a^2 + y0*a*b)**2
-            = s(ma^4 + pa^3b + pab^3 + na^2b^2 - (m+2p+n)a^2bc)
+    If we want to solve the SOS problem for the 3-var polynomial, then we have to prove the symmetric axis nonnegative as well.
+    Conversely, we might consider whether solving the symmetric axis implies the proof to the original 3-var poly.
 
-        t, rem_coeff, rem_ratio satisfy that
-            s(ma^4 + pa^3b + pab^3 + na^2b^2 - (m+2p+n)a^2bc) = t*s(a^2-ab)^2 + rem_coeff * s(a^2+rem_ratio*ab)^2
+    Three special cases are:
+    * M(s(a^2-ab)^3) = M(p(2a-b-c)^2/4) = (a - 1)**4 
+    * M(s(a^6+a^5b+a^5c+a^4bc-2a^3b^2c-2a^3bc^2) - 2s(a^4-a^2bc)s(xa^2+yab) + s(a^2-ab)s(xa^2+yab)^2)
+        = ((x - 1)*a**2 - (2 - 2*y)*a + (2*x + y - 2))**2
+    * M(s(a^2+rab)^2) = (a**2 + 2*r*a + r + 2)**2
     """
-    if len(params) == 0:
-        return tuple([0] * 9)
+    if poly.is_zero:
+        return tuple([0] * 6)
 
-    # merge these f(a,b,c) and standardize
-    merged_params = sum([p1 for p1,p2,p3 in params]), sum([p1*p2 for p1,p2,p3 in params]), sum([p1*p3 for p1,p2,p3 in params])
-    x_, y_ = merged_params[1] / merged_params[0], merged_params[2] / merged_params[0]
+    proof = prove_univariate(poly, return_raw = True)
+    if proof is None or len(proof[1][1]):
+        return None
 
-    # Now we have F(a,b,c) = merged_params[0] * (F0 - 2s(a4-a2bc)f(a,b,c) + s(a2-ab)f(a,b,c)^2) + s(a2-ab)g(a,b,c) + (..)*p(a-b)^2.
-    # where f is the merged quadratic form and the g is the remaining part.
-    # Assume g = s(ma^4 + pa^3b + pab^3 + na^2b^2 + ..a^2bc)
-    # We can represent g = ts(a^2-ab)^2 + (m-t)s(a^2+rab)^2 >= 0
-    m_, p_, n_ = sum([p1*p2**2 for p1,p2,p3 in params]), sum([2*p1*p2*p3 for p1,p2,p3 in params]), sum([p1*p3**2 for p1,p2,p3 in params])
-    m_, p_, n_ = m_ - merged_params[0] * x_**2, p_ - 2 * merged_params[0] * x_ * y_, (n_ + 2*m_) - merged_params[0] * (2*x_**2 + y_**2)
-    # print('Params =', params, '\nMerged Params =', merged_params, '(m,p,n) =', (m_, p_, n_))
+    s, x, y, m, p, n = 0, 0, 0, 0, 0, 0
+    for coeff, part in zip(proof[0][1], proof[0][2]):
+        w, v, u = [part.coeff_monomial((i,)) for i in range(3)]
+        k1, k2, k3 = (4*u + v - 2*w)/2, (2*u + v - 2*w)/2, 2*u - w
+        s += coeff * k1**2
+        x += coeff * k1*k2
+        y += coeff * k1*k3
+        m += coeff * k2**2
+        p += coeff * 2*k2*k3
+        n += coeff * k3**2
 
-    if not (n_ == 3*m_ and p_ == -2*m_):
-        t_ = (-2*m_**2 + m_*n_ - p_**2/4)/(n_ + p_ - m_)
-        if t_ < 0: # actually this will not happen
+    m, p, n = m - x**2/s, p - 2*x*y/s, 2*m + n - (2*x**2+y**2)/s
+
+    if not (n == 3*m and p == -2*m):
+        t = (-2*m**2 + m*n - p**2/4)/(n + p - m)
+        if t < 0: # actually this will not happen
             return None
-        if m_ != t_:
-            # rem_coeff * s(a^2 + rem_ratio * ab)^2
-            rem_coeff, rem_ratio = m_ - t_, (p_ + 2*t_) / (m_ - t_) / 2
+        if m != t:
+            # rem * s(a^2 + r * ab)^2
+            rem, r = m - t, (p + 2*t) / (m - t) / 2
         else:
-            # it degenerates to rem_coeff * s(ab)^2
-            rem_coeff = n_ - 3*t_
-            if rem_coeff < 0: # this will not happen
+            # it degenerates to rem * s(ab)^2
+            rem, r = n - 3*t, sp.oo
+            if rem < 0: # this will not happen
                 return None
     else:
-        rem_coeff, rem_ratio, t_ = sp.S(0), sp.S(0), m_
-    return merged_params[0], x_, y_, m_, p_, n_, t_, rem_coeff, rem_ratio
+        rem, r, t = sp.S(0), sp.S(0), m
+
+    x, y, z = x/s, y/s, poly.gen
+    # print(t*(z - 1)**4 + s*((x - 1)*z**2 - (2 - 2*y)*z + (2*x + y - 2))**2 + rem * (z**2 + 2*r*z + r + 2)**2 - poly)
+    # print('t s x y rem r =', (t, s, x, y, rem, r))
+    return t, s, x, y, rem, r
 
 
 def _sos_struct_sextic_hexagon_symmetric_sdp(coeff):
@@ -1117,6 +1122,129 @@ def _sos_struct_sextic_iran96(coeff, real = False):
     return None
 
 
+def _sos_struct_sextic_symmetric_full_sdp(coeff):
+    """
+    Assume f(1,1,1) = 1, we try to represent f(a,b,c) =
+    z * s((a-b)^2(a^2+b^2+(x+1)c^2+yab+(x+y)c(a+b))^2) + w*p((a-b)^2)
+    + l00 * s(a^3-abc)^2 + 2*l01 * s(a^3-abc)s(a(b-c)^2) + l11 * s(a(b-c)^2)^2 >= 0
+    where l00 * 111 >= l01^2.
+
+    Apply the transformation f(m+1,1,1) = m^2 * (a4 * m^4 + a3 * m^3 + a2 * m^2 + a1 * m + a0),
+    and x = (4*a0 - 3*a1)/u,
+    then we shall have constrains:
+    y = -(2*a0 - 3*a1 + u)/u
+    l00 = -(-36*a0*a4 + u**2)/(36*a0)
+    l01 = (6*a0*a3 - 36*a0*a4 - a1*u + u**2)/(24*a0)
+    l11 = -(-12*a0*a2 + 36*a0*a3 - 108*a0*a4 + 4*a0*u + 3*a1**2 - 6*a1*u + 3*u**2)/(48*a0)
+    w = -(16*a0**2 - 24*a0*a1 + 12*a0*a2 - 12*a0*a3 - 36*a0*a4 - 48*a0*c420 + 12*a0*u + 9*a1**2 - 18*a1*u + 9*u**2)/(48*a0)
+    z = u**2/(72*a0)
+
+    det(u) = l00*l11 - l01**2 = u**3 - 3*a2*u**2 + (-36*a0*a4 + 9*a1*a3)*u + 108*a0*a2*a4 - 27*a0*a3**2 - 27*a1**2*a4.
+
+    We should find u such that det >= 0 and l11 >= 0 and w >= 0. Notice that l11 and w are two quadratic functions
+    with the same symmetric axis: u = -2*a0/3 + a1, so we try to find u such that det(u) >= 0 and is as close to -2*a0/3 + a1
+    as possible.
+
+    Note that det(u) has the same discriminant as the quartic (a4 * m^4 + a3 * m^3 + a2 * m^2 + a1 * m + a0), so we must
+    require dist(det(u)) >= 0 to ensure the poly is nonnegative on the real axis. In this case, det(u) has three real roots,
+    say u1, u2 and u3. Also, we see that when l11 == 0, det(u) = -l01**2 <= 0. To ensure the existence of the solution,
+    two roots of l11 == 0 must lie in (-oo, u1) and (u2, u3), respectively. It then suffices to concern about u1 <= u <= u2.
+
+    Examples
+    ----------
+    s((2*a4-3*a2bc+a((b+c)/2)3+5b2c2)(a-b)(a-c))       (real)
+
+    s((2*a4-3*a2bc+2a((b+c)/2)3+5b2c2)(a-b)(a-c))-p(a-b)2/2        (real)
+
+    72p(a+b-2c)2+s(a2-ab)s(11a2-14ab)2        (real)
+
+    729p(4a2+3s(a)2)-31^3s(a)6       (real)
+
+    s(a2-ab)3+p(a-b)2+4p(a+b-2c)2      (real)
+
+    Reference
+    ----------
+    [1] https://github.com/duong-db/paramSOS
+    """
+    rem = coeff.poly111()
+    if rem < 0:
+        return
+    c600, c510, c420, c330, c411, c321 = [coeff(_) for _ in [(6,0,0),(5,1,0),(4,2,0),(3,3,0),(4,1,1),(3,2,1)]]
+    a4 = c600
+    a3 = 2*c510 + 6*c600
+    a2 = c411 + 2*c420 + 10*c510 + 15*c600
+    a1 = 2*c321 + 2*c330 + 4*c411 + 8*c420 + 20*c510 + 20*c600
+    a0 = 2*c321 + 3*c330 + 3*c411 + 8*c420 + 14*c510 + 12*c600
+    if a4 <= 0 or a0 < 0:
+        return
+
+    def _get_quad_sol(l00, l01, l11):
+        def mapping(x, y):
+            if x == 0:
+                return y**2 * CyclicSum(a*(b - c)**2)**2
+            elif y == -3*x/2:
+                return x**2/4 * CyclicProduct((a + b - 2*c)**2)
+            return CyclicSum(x*a**3 + y*a*b**2 + y*a*c**2 - (x + 2*y)*a*b*c)**2
+        return quadratic_weighting(l00, 2*l01, l11, mapping = mapping)
+
+    if a0 == 0:
+        if a1 != 0:
+            return
+        # degenerated case, z = 0
+        l00, l01, l11 = a4, a3/4 - 3*a4/2, a2/4 - 3*a3/4 + 9*a4/4
+        w = -a2/4 + a3/4 + 3*a4/4 + c420
+        quad_sol = _get_quad_sol(l00, l01, l11)
+        if quad_sol is None or w < 0:
+            return
+        return quad_sol + w * CyclicProduct((a-b)**2) + rem * CyclicProduct(a**2)
+        
+
+    u = sp.Symbol('u')
+    detu = sp.Poly(radsimp([1, -3*a2, -36*a0*a4 + 9*a1*a3, 108*a0*a2*a4 - 27*a0*a3**2 - 27*a1**2*a4]), u)
+    func_l11 = lambda u: radsimp(-(-12*a0*a2 + 36*a0*a3 - 108*a0*a4 + 4*a0*u + 3*a1**2 - 6*a1*u + 3*u**2)/(48*a0))
+
+    _eq_w = sp.Poly(radsimp([9, 12*a0 - 18*a1, 16*a0**2 - 24*a0*a1 + 12*a0*a2 - 12*a0*a3 - 36*a0*a4 - 48*a0*c420 + 9*a1**2]), u)
+    func_w = lambda u: radsimp(-_eq_w(u)/(48*a0)) # eqw <= 0
+
+    u0 = -2*a0/3 + a1
+    if func_l11(u0) < 0 or func_w(u0) < 0:
+        # impossible to make l11(u) >= 0 and w(u) >= 0
+        return
+
+    if detu.discriminant() < 0:
+        return
+
+    def _get_solution(u):
+        w = func_w(u)
+        l00 = radsimp(-(-36*a0*a4 + u**2)/(36*a0))
+        l01 = radsimp((6*a0*a3 - 36*a0*a4 - a1*u + u**2)/(24*a0))
+        l11 = func_l11(u)
+        quad_sol = _get_quad_sol(l00, l01, l11)
+        if quad_sol is None or w < 0:
+            return None
+        p1 = u*(a**2 + b**2) + (4*a0 - 3*a1 + u)*c**2 - (2*a0 - 3*a1 + u)*a*b + (2*a0 - u)*(a*c + b*c)
+        return sp.Add(
+            radsimp(1/(72*a0)) * CyclicSum((a-b)**2*p1**2),
+            w * CyclicProduct((a-b)**2),
+            quad_sol,
+            rem * CyclicProduct(a**2)
+        )
+
+    # print(sp.latex(detu.subs(u, sp.Symbol('x'))), 'u0', u0, 'det(u0) =', detu(u0))
+    # print(sp.latex(-_eq_w.subs(u, sp.Symbol('x'))))
+
+    if detu(u0) >= 0:
+        return _get_solution(u0)
+
+    def _validation(u):
+        if func_w(u) >= 0 and func_l11(u) >= 0:
+            return True
+
+    u0 = rationalize_func(detu, _validation, direction = 1)
+    if u0 is not None:
+        return _get_solution(u0)
+
+
 def _sos_struct_sextic_symmetric_quadratic_form(poly, coeff):
     """
     Theorem:
@@ -1131,18 +1259,20 @@ def _sos_struct_sextic_symmetric_quadratic_form(poly, coeff):
     it has three multiplicative roots on the symmetric axis b=c=1, one of which is the centroid a=b=c=1.
     The other two roots determine the coefficient x and y.
 
-    For normal polynomials without three multiplicative roots, we first write the symmetric axis in the form
-    of (a-1)^2 * ((a^2+..a+..)^2 + (..a+..)^2 + ...). Now we apply the theorem to each of them, and then
-    merge their f(a,b,c) accordingly.
+    For general polynomials which do not have three multiplicative roots on the symmetric axis, we can
+    always write it in the form of
+    F(a,b,c) = ?*p(2a-b-c)^2 + ?*F_{x,y} + ?*s(a^2-ab)*s(a^2+rab)^2 + ?*p(a-b)^2 >= 0.
 
+    To determine the parameters, we apply the function `_restructure_quartic_polynomial` on the symmetric axis.
 
     Moreover, there exists u, v such that u+v = (2-2*y)/(x-1), uv = (2*x+y-2)/(x-1) so that
-    F(a,b,c) = (x-1)^2s((a-b)(a-c)(a-ub)(a-uc)(a-vb)(a-vc)) + (x^2-xy+y^2-y)p(a-b)^2
+    F_{x,y}(a,b,c) = (x-1)^2s((a-b)(a-c)(a-ub)(a-uc)(a-vb)(a-vc)) + (x^2-xy+y^2-y)p(a-b)^2.
+
+    This implies
+    F_{x,y}(a,1,1) = (a - 1)**2 * ((x - 1)*a**2 - (2 - 2*y)*a + (2*x + y - 2))**2.
 
     Examples
     --------
-    72p(a+b-2c)2+s(a2-ab)s(11a2-14ab)2
-
     (s((b-c)2(7a2-b2-c2)2)-112p(a-b)2)
 
     s((a-b)2(-a2-b2+2c2+2(ab-c2)-3s(ab)+2s(a2))2)
@@ -1165,63 +1295,42 @@ def _sos_struct_sextic_symmetric_quadratic_form(poly, coeff):
 
     s(56a6-41a5b-56a4b2+82a3b3-56a2b4-83a3b2c-83a2b3c-41ab5+98a2b2c2+124a4bc)      (real)
 
-    p(a2+s(a/6)2)-125/8p(a)s(a/6)3                 (real)
+    p(a2+s(a/6)2)-125/8p(a)s(a/6)3         (real)
 
     s(36a6-84a5b-84a5c+87a4b2+130a4bc+87a4c2-77a3b3-55a3b2c-55a3bc2+15a2b2c2)       (real)
 
     (s(a2(a-b)(a-c)(a-3b)(a-3c))+p(a-b)2)+s(a2-2ab)2s(a2-ab)/4+s((a-b)(a-c)(a-2b)(a-2c)(a-4b)(a-4c))-6p(a-b)2   (real)
-    
+
     References
-    -------
+    ----------
     [1] https://artofproblemsolving.com/community/c6t243f6h3013463_symmetric_inequality
 
     [2] https://tieba.baidu.com/p/8261574122
-
-    TODO:
-    1. Remove the use of prove_univariate to support irrational coeffs also.
     """
     a, b, c = sp.symbols('a b c')
-    sym0 = poly.subs({b:1,c:1}).div((a**2-2*a+1).as_poly(a))
-    if not sym0[1].is_zero:
+    sym = poly.subs({b:1,c:1}).div(sp.Poly([1,-2,1], a))
+    if not sym[1].is_zero:
         return None
 
-    # write the symmetric axis in sum-of-squares form
-    sym = prove_univariate(sym0[0], return_raw = True)
-    if sym is None or len(sym[1][1]) > 0: # this is not positive over R
+    sym_axis = _restructure_quartic_polynomial(sym[0])
+    if sym_axis is None:
         return None
-    # print(sym)
-
-    def _solve_from_sym(sym):
-        # given symmetric axis with three roots, we determine the exact coefficient f(a,b,c)
-        # (x,y) are the parameters of f(a,b,c). While coeff stands for the scaling factor.
-        w, v, u = [sym.coeff_monomial((i,)) for i in range(3)]
-        x, y = (2*u + v - 2*w)/(4*u + v - 2*w), (4*u - 2*w)/(4*u + v - 2*w)
-        coeff = v / (2*y - 2) if y != 1 else (w / (2*x + y - 2) if x != sp.Rational(1,2) else 2*u)
-        return x, y, coeff
-
-    params = []
-    for coeff0, sym_part in zip(sym[0][1], sym[0][2]):
-        x_, y_, coeff1 = _solve_from_sym(sym_part)
-        if coeff1 is sp.nan:
-            return None
-        # part_poly = coeff0 * coeff1**2 * pl(f's(a6+a5b+a5c+a4bc-2a3b2c-2a3bc2)-2s(a4-a2bc)s({x_}a2+{y_}ab)+s(a2-ab)s({x_}a2+{y_}ab)2')
-        # print((x_, y_), coeff0 * coeff1**2, poly_get_factor_form(part_poly))
-        params.append((coeff0 * coeff1**2, x_, y_))
-
-    coeff0, x, y, m, p, n, t_coeff, rem_coeff, rem_ratio = _merge_quadratic_params(params)
+    t, coeff0, x, y, rem_coeff, rem_ratio = sym_axis
 
     # ker_coeff is the remaining coefficient of (a-b)^2(b-c)^2(c-a)^2
-    ker_coeff = (poly.coeff_monomial((4,2,0)) - coeff0 * (3*x**2 - 2*x*y - 2*x + y**2) - (n - p + m))
-
-    # each t_ exchanges for 27/4p(a-b)^2 because s(a^2-ab)^3 = 1/4 * p(2a-b-c)^2 + 27/4 * p(a-b)^2
-    ker_coeff += 27 * t_coeff / 4
+    # of Poly - (t*p(2a-b-c)^2/4 + coeff0 * F(x,y) + rem * s(a^2-ab)s(a^2+rab)^2)
+    ker_coeff = poly.coeff_monomial((4,2,0)) - (-sp.Rational(3,4)*t + coeff0 * (3*x**2 - 2*x*y - 2*x + y**2))
+    if rem_ratio is sp.oo:
+        # degenerates to s(a^2-ab)s(ab)^2
+        ker_coeff -= rem_coeff
+    else:
+        ker_coeff -= rem_coeff*(rem_ratio**2 - 2*rem_ratio + 3)
 
     print('Coeff =', coeff0, 'ker =', ker_coeff)
     print('  (x,y) =', (x, y), 'ker_std =', ker_coeff / coeff0)
-    print('  (m,p,n,t) = ', (m, p, n, t_coeff))
 
     return _sextic_sym_axis.solve(
-        coeff0, x, y, ker_coeff, t_coeff, rem_coeff, rem_ratio
+        coeff0, x, y, ker_coeff, t, rem_coeff, rem_ratio
     )
 
 
@@ -1789,6 +1898,10 @@ def sos_struct_sextic_symmetric_ultimate(coeff, recurrsion, real = True):
                     ]
                     return sum_y_exprs(y, exprs)
 
+        # try full sdp
+        solution = _sos_struct_sextic_symmetric_full_sdp(coeff)
+        if solution is not None:
+            return solution
 
         # try neat cases
         # note that this might also handle cases for real numbers

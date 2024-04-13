@@ -6,7 +6,7 @@ from .utils import (
     CyclicSum, CyclicProduct,
     prove_univariate, quadratic_weighting
 )
-from .sextic_symmetric import _merge_quadratic_params
+from .sextic_symmetric import _restructure_quartic_polynomial
 
 a, b, c = sp.symbols('a b c')
 
@@ -53,48 +53,46 @@ def _sos_struct_septic_symmetric_quadratic_form(poly, coeff):
     """
     
     a, b, c = sp.symbols('a b c')
-    sym0 = poly.subs({b:1,c:1}).div((a**2-2*a+1).as_poly(a))
-    if not sym0[1].is_zero:
+    sym = poly.subs({b:1,c:1}).div(sp.Poly([1,-2,1], a))
+    if not sym[1].is_zero:
         return None
 
     # write the symmetric axis in sum-of-squares form
-    sym = prove_univariate(sym0[0], return_raw = True)
+    sym = prove_univariate(sym[0], return_raw = True)
     if sym is None:
         return None
     # print(sym)
 
-    def _solve_from_sym(sym):
-        # given symmetric axis with three roots, we determine the exact coefficient f(a,b,c)
-        # (x,y) are the parameters of f(a,b,c). While coeff stands for the scaling factor.
-        w, v, u = [sym.coeff_monomial((i,)) for i in range(3)]
-        x, y = (2*u + v - 2*w)/(4*u + v - 2*w), (4*u - 2*w)/(4*u + v - 2*w)
-        coeff = v / (2*y - 2) if y != 1 else (w / (2*x + y - 2) if x != sp.Rational(1,2) else 2*u)
-        return x, y, coeff
+    def as_poly(f):
+        if isinstance(f, sp.Poly):
+            return f
+        elif isinstance(f, sp.Expr):
+            return f.as_poly(a)
+        elif isinstance(f, int):
+            return sp.Poly([f], a)
 
-    params = [[], []]
-    for i, (head, coeffs, sym_parts) in enumerate(sym):
-        for coeff0, sym_part in zip(coeffs, sym_parts):
-            x_, y_, coeff1 = _solve_from_sym(sym_part)
-            if coeff1 is sp.nan:
-                return None
-            if i == 0:
-                coeff0 = coeff0 / 2
-            params[i].append((coeff0 * coeff1**2, x_, y_))
+    sym_f = as_poly(sum(i*j**2 for i, j in zip(sym[1][1], sym[1][2])))
+    sym_g = as_poly(sum(i*j**2 for i, j in zip(sym[0][1], sym[0][2])) * sp.Rational(1,2))
 
-    f_coeff, fx, fy, fm, fp, fn, ft_coeff, f_rem_coeff, f_rem_ratio = _merge_quadratic_params(params[1])
-    g_coeff, gx, gy, gm, gp, gn, gt_coeff, g_rem_coeff, g_rem_ratio = _merge_quadratic_params(params[0])
+    ft_coeff, f_coeff, fx, fy, f_rem_coeff, f_rem_ratio = _restructure_quartic_polynomial(sym_f)
+    gt_coeff, g_coeff, gx, gy, g_rem_coeff, g_rem_ratio = _restructure_quartic_polynomial(sym_g)
 
-    # coeff of p(a-b)^2 * s(a)
-    ker_coeff = coeff((5,2,0)) - f_coeff*(fx - fy)**2 - g_coeff*(gx**2 + 2*gx*gy - 2*gx - 2*gy + 1)
-    ker_coeff -= (fn - fm - fp) + (gm + gp)
-
+    # Compute the remaining coeff of p(a-b)^2 * s(a)
     # Theorem:
     # s(a^2-ab)^2 * s(a(a-b)(a-c)) = 1/4*s(a(a-b)^2(a-c)^2(2a-b-c)^2) + 3/4*p(a-b)^2*s(a)
     # s(a^2-ab)^2 * s(a(b-c)^2)    = s(a(b-c)^4(2a-b-c)^2) + 3*p(a-b)^2*s(a)
-    ker_coeff += sp.Rational(3,4) * ft_coeff + 3 * gt_coeff
+    ker_coeff = coeff((5,2,0)) - f_coeff*(fx - fy)**2 - g_coeff*(gx**2 + 2*gx*gy - 2*gx - 2*gy + 1)
+    ker_coeff -= sp.Rational(13,4) * ft_coeff - 4 * gt_coeff
 
-    print(f_coeff, fx, fy, fm, fp, fn, ft_coeff, f_rem_coeff, f_rem_ratio)
-    print(g_coeff, gx, gy, gm, gp, gn, gt_coeff, g_rem_coeff, g_rem_ratio)
+    if f_rem_ratio is sp.oo:
+        ker_coeff -= f_rem_coeff
+    else:
+        ker_coeff -= f_rem_coeff*(f_rem_ratio - 1)**2
+    if g_rem_ratio is not sp.oo:
+        ker_coeff -= g_rem_coeff*(2*g_rem_ratio + 1)
+
+    print(f_coeff, fx, fy, ft_coeff, f_rem_coeff, f_rem_ratio)
+    print(g_coeff, gx, gy, gt_coeff, g_rem_coeff, g_rem_ratio)
     print('Ker_coeff =', ker_coeff)
 
     if fx is sp.nan or fy is sp.nan or gx is sp.nan or gy is sp.nan:
