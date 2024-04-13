@@ -47,6 +47,8 @@ def _sos_struct_septic_symmetric_quadratic_form(poly, coeff):
 
     s(9a7-33a6b-33a6c+45a5b2+103a5bc+45a5c2-21a4b3-123a4b2c-123a4bc2-21a4c3+122a3b3c+30a3b2c2)
 
+    s(a)(s(a2(a-b)(a-c)(a-4b)(a-4c))+0s(a2(a-b)(a-c)(a-3b)(a-3c))+11p(a-b)2)    
+
     1/361s(11664a7-33696a6b-33696a6c+31104a5b2+99720a5bc+31104a5c2-9072a4b3-94476a4b2c-94476a4bc2-9072a4c3+65929a3b3c+34967a3b2c2)
 
     s(a7+39a6b+39a6c-123a5b2+1531a5bc-123a5c2+83a4b3-4607a4b2c-4607a4bc2+83a4c3+12158a3b3c-4474a3b2c2)
@@ -161,7 +163,7 @@ class _septic_sym_axis():
             + (6*x - 3*y)*a*c**2 + (3*x - 3)*b**3 + (-4*x + 3*y)*b**2*c + (6*x - 3*y)*b*c**2 + (3 - 5*x)*c**3
 
         z = [2 - y, -x**2/(6*(x - 1))][z_type]
-        if z is sp.oo or z is sp.nan:
+        if z is sp.oo or z is sp.nan or z is sp.zoo:
             return None, sp.oo
         
         c1, c2 = -x**2/3 - 2*x*z + 2*z, -2*x**2/3 + 2*x*z - 2*y*z - z**2 + 2*z

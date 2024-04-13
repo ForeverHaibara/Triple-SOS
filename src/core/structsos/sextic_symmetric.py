@@ -1326,8 +1326,8 @@ def _sos_struct_sextic_symmetric_quadratic_form(poly, coeff):
     else:
         ker_coeff -= rem_coeff*(rem_ratio**2 - 2*rem_ratio + 3)
 
-    print('Coeff =', coeff0, 'ker =', ker_coeff)
-    print('  (x,y) =', (x, y), 'ker_std =', ker_coeff / coeff0)
+    # print('Coeff =', coeff0, 'ker =', ker_coeff)
+    # print('  (x,y) =', (x, y), 'ker_std =', ker_coeff / coeff0)
 
     return _sextic_sym_axis.solve(
         coeff0, x, y, ker_coeff, t, rem_coeff, rem_ratio
