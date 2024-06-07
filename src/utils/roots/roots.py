@@ -210,7 +210,11 @@ class RootAlgebraic(Root):
         if self.K is None:
             self._inv_sum = sp.S(1) / sum(self.root_anp)
         else:
-            self._inv_sum = self.K.from_sympy(sp.S(1)) / sum(self.root_anp)
+            _sum = sum(self.root_anp)
+            if _sum != self.K.zero:            
+                self._inv_sum = self.K.from_sympy(sp.S(1)) / sum(self.root_anp)
+            else:
+                self._inv_sum = sp.oo
         self._power_cache = dict((key, {}) for key in range(-1, len(self.root)))
 
     def __str__(self):
