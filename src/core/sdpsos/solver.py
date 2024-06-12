@@ -181,7 +181,7 @@ class SDPMatrixTransform(SDPTransformation):
 
     def __init__(self, parent_node: 'SDPProblem', columnspace: Dict[str, sp.Matrix] = None, nullspace: Dict[str, sp.Matrix] = None):
         def _reg(X, key):
-            return sp.Matrix.hstack(*X.columnspace())
+            return sp.Matrix.hstack(*X.columnspace()) if X.shape[1] > 0 else X
         def _perp(X, key):
             return sp.Matrix.hstack(*X.T.nullspace())
 
