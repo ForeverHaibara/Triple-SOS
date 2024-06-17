@@ -5,7 +5,7 @@ from .septic_symmetric import sos_struct_septic_symmetric
 from ...utils.roots.findroot import optimize_discriminant
 from .utils import (
     CyclicSum, CyclicProduct, Coeff,
-    sum_y_exprs, nroots, rationalize, rationalize_bound, try_perturbations, radsimp,
+    sum_y_exprs, nroots, rationalize, rationalize_bound, reflect_expression, try_perturbations, radsimp,
     zip_longest
 )
 
@@ -272,7 +272,7 @@ def _sos_struct_septic_biased(coeff):
         # reflect the polynomial so that coeff((5,2,0)) == 0
         solution = _sos_struct_septic_biased(coeff.reflect())
         if solution is not None:
-            solution = solution.xreplace({b: c, c: b})
+            solution = reflect_expression(solution)
         return solution
 
     if coeff((5,2,0)) or coeff((4,3,0)):

@@ -55,8 +55,8 @@ class SolutionStructuralSimple(SolutionSimple, SolutionStructural):
         while (not verified) and len(arguments):
             try:
                 argument = arguments.pop()
-                mul = self.multiplier.doit().as_poly(*sp.symbols('a b c'), **argument)
-                num = self.numerator.doit().as_poly(*sp.symbols('a b c'), **argument)
+                mul = self.multiplier.doit().as_poly(*self.gens, **argument)
+                num = self.numerator.doit().as_poly(*self.gens, **argument)
                 self.is_equal_ = (mul * self.problem - num).is_zero
                 verified = True
             except:

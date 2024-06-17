@@ -116,6 +116,9 @@ def StructuralSOS(
     solution: SolutionStructuralSimple
 
     """
+    if len(poly.gens) != 3:
+        return None
+
     is_hom, is_cyc = verify_hom_cyclic(poly)
     if not is_hom:
         return None
@@ -128,6 +131,7 @@ def StructuralSOS(
     if solution is None:
         return None
 
+    solution = solution.xreplace(dict(zip(sp.symbols("a b c"), poly.gens)))
 
     solution = SolutionStructural(problem = poly, solution = solution, is_equal = True)
     solution = solution.as_simple_solution()

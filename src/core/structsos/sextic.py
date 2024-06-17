@@ -9,7 +9,7 @@ from .sextic_symmetric import (
 from .utils import (
     CyclicSum, CyclicProduct, Coeff,
     sum_y_exprs, nroots, rationalize_bound, rationalize_func, radsimp,
-    quadratic_weighting, inverse_substitution, congruence,
+    quadratic_weighting, reflect_expression, inverse_substitution, congruence,
     zip_longest
 )
 
@@ -229,7 +229,7 @@ def _sos_struct_sextic_hexagram(coeff):
                     quartic_part += (y_ - y_copy) * CyclicSum(a*b**2) * CyclicSum(a)
                     solution = (solution + CyclicProduct(a) * quartic_part) / CyclicSum(a)
                     if reflect:
-                        solution = solution.xreplace({b: c, c: b})
+                        solution = reflect_expression(solution)
                     return coeff33 * solution
 
 
@@ -444,7 +444,7 @@ def _sos_struct_sextic_rotated_tree(coeff):
             return coeff((c[0], c[2], c[1]))
         solution = _sos_struct_sextic_rotated_tree(new_coeff)
         if solution is not None:
-            solution = solution.xreplace({b:c, c:b})
+            solution = reflect_expression(solution)
         return solution
     
     u = coeff((3,2,1)) / coeff((2,4,0))

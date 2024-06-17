@@ -11,7 +11,7 @@ from .polytools import (
 )
 
 from .expression import (
-    CyclicSum, CyclicProduct, is_cyclic_expr,
+    CyclicExpr, CyclicSum, CyclicProduct, SymmetricSum, SymmetricProduct, is_cyclic_expr,
     poly_get_factor_form, poly_get_standard_form,
     latex_coeffs,
     Solution, SolutionSimple,
@@ -36,7 +36,7 @@ __all__ = [
     'preprocess_text', 'pl', 'PolyReader',
     'deg', 'verify_hom_cyclic', 'verify_is_symmetric', 
     'monom_of', 'convex_hull_poly',
-    'CyclicSum', 'CyclicProduct', 'is_cyclic_expr',
+    'CyclicExpr', 'CyclicSum', 'CyclicProduct', 'SymmetricSum', 'SymmetricProduct', 'is_cyclic_expr',
     'poly_get_factor_form', 'poly_get_standard_form',
     'latex_coeffs',
     'Solution', 'SolutionSimple',

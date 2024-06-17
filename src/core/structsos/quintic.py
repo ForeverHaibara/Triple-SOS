@@ -10,7 +10,7 @@ from ...utils.basis_generator import invarraylize
 from .utils import (
     CyclicSum, CyclicProduct, Coeff,
     sum_y_exprs, nroots, rationalize, rationalize_bound, rationalize_func, cancel_denominator, radsimp,
-    prove_univariate, zip_longest, quadratic_weighting
+    reflect_expression, prove_univariate, zip_longest, quadratic_weighting
 )
 
 a, b, c = sp.symbols('a b c')
@@ -660,7 +660,7 @@ def _sos_struct_quintic_windmill(coeff):
         # reflect the polynomial so that coeff((4,1,0)) == 0
         solution = _sos_struct_quintic_windmill(coeff.reflect())
         if solution is not None:
-            solution = solution.xreplace({b:c, c:b})
+            solution = reflect_expression(solution)
         return solution
 
     # now we assume coeff((4,1,0)) == 0

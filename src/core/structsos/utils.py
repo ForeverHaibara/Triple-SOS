@@ -6,7 +6,7 @@ from sympy.core.singleton import S
 from ..symsos import prove_univariate
 from ...utils.roots.rationalize import rationalize, rationalize_bound, square_perturbation, cancel_denominator
 from ...utils.roots.findroot import nroots
-from ...utils import congruence, CyclicSum, CyclicProduct
+from ...utils import congruence, CyclicExpr, CyclicSum, CyclicProduct
 
 class Coeff():
     """
@@ -285,6 +285,24 @@ def rationalize_func(
                 if validation_t(t_):
                     return t_
 
+
+def reflect_expression(expr: sp.Expr) -> sp.Expr:
+    """
+    Exchange b and c in a three-var cyclic expression.
+
+    Examples
+    ----------
+    >>> CyclicExpr.PRINT_FULL = True
+    >>> reflect_expression(CyclicSum(a**2*b**3*c**4))
+    CyclicSum(a**2*b**4*c**3, (a, b, c), PermutationGroup([
+        (0 1 2)]))
+    """
+    if isinstance(expr, CyclicExpr):
+        return expr.func(reflect_expression(expr.args[0]), *expr.args[1:])
+    if not expr.has(CyclicExpr):
+        b, c = sp.symbols('b c')
+        return expr.xreplace({b:c, c:b})
+    return expr.func(*[reflect_expression(a) for a in expr.args])
 
 def inverse_substitution(expr: sp.Expr, factor_degree: int = 0) -> sp.Expr:
     """

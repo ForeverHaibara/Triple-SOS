@@ -91,9 +91,9 @@ class Solution():
         'MULTILINE_ALLOW_SORT': True
     }
     method = ''
-    def __init__(self, problem = None, solution = None, is_equal = None):
-        self.problem = problem
-        self.solution = solution
+    def __init__(self, problem: Optional[sp.Poly] = None, solution: Optional[sp.Expr] = None, is_equal: bool = None):
+        self.problem: sp.Poly = problem
+        self.solution: sp.Expr = solution
         self.is_equal_ = is_equal
 
     def __str__(self) -> str:
@@ -103,19 +103,26 @@ class Solution():
         return self.__str__()
 
     @property
-    def is_equal(self):
-        return self.is_equal_
+    def gens(self) -> List[sp.Symbol]:
+        return self.problem.gens
 
     @property
-    def str_latex(self):
+    def is_equal(self) -> bool:
+        return self.is_equal_
+
+    def _str_f(self) -> str:
+        return "f(%s)"%(','.join(str(_) for _ in self.gens))
+
+    @property
+    def str_latex(self) -> str:
         s = sp.latex(self.solution)
         equal_sign = '=' if self.is_equal else '\\approx'
         if not self.PRINT_CONFIGS['WITH_CYC']:
             s = s.replace('_{\\mathrm{cyc}}', '')
-        return "$$f(a,b,c) %s %s$$"%(equal_sign, s)
+        return "$$%s %s %s$$"%(self._str_f(), equal_sign, s)
 
     @property
-    def str_txt(self):
+    def str_txt(self) -> str:
         CyclicExpr.PRINT_WITH_PARENS = False
         # s = _solution_latex_to_txt(self.str_latex)
         s = str(self.solution)
@@ -127,7 +134,7 @@ class Solution():
         ])
         for old, new in replacements.items():
             s = s.replace(old, new)
-        s = 'f(a,b,c) %s %s'%(equal_sign, s)
+        s = '%s %s %s'%(self._str_f(), equal_sign, s)
         return s
 
     @property
@@ -144,7 +151,7 @@ class Solution():
         ])
         for old, new in replacements.items():
             s = s.replace(old, new)
-        s = 'f(a,b,c) %s %s'%(equal_sign, s)
+        s = '%s %s %s'%(self._str_f(), equal_sign, s)
         return s
 
     def as_simple_solution(self):
@@ -206,7 +213,7 @@ class SolutionSimple(Solution):
     @property
     def is_equal(self):
         if self.is_equal_ is None:
-            symbols = set(self.problem.gens) # | set(self.numerator.free_symbols) | set(self.multiplier.free_symbols)
+            symbols = self.gens # | set(self.numerator.free_symbols) | set(self.multiplier.free_symbols)
             difference = (self.problem  * self.multiplier - self.numerator)
             difference = difference.doit().as_poly(*symbols)
             self.is_equal_ = difference.is_zero
@@ -273,15 +280,15 @@ class SolutionSimple(Solution):
         """
         if isinstance(self.multiplier, (int, sp.Integer)):
             if self.multiplier == 1:
-                s_multiplier = "f(a,b,c)"
+                s_multiplier = self._str_f()
             else:
-                s_multiplier = "%s f(a,b,c)"%self.multiplier
+                s_multiplier = "%s %s"%(self.multiplier, self._str_f())
         else:
             s_multiplier = get_str(self.multiplier)
             if s_multiplier[-1] != ')':
-                s_multiplier = "%s f(a,b,c)"%add_paren(s_multiplier)
+                s_multiplier = "%s %s"%(add_paren(s_multiplier), self._str_f())
             else:
-                s_multiplier = "%s f(a,b,c)"%s_multiplier
+                s_multiplier = "%s %s"%(s_multiplier, self._str_f())
         return s_multiplier
 
     def _str_extract_constant_afront(self, add_paren = None, get_str = None):
