@@ -315,7 +315,7 @@ class SolutionSimple(Solution):
             #     s_args.append(get_str(x))
 
             x_as_coeff_Mul = x.as_coeff_Mul()
-            if x_as_coeff_Mul[0] is S.One:
+            if x_as_coeff_Mul[0] is S.One or x_as_coeff_Mul[1] is S.One:
                 s_args.append(get_str(x))
             elif precedence_traditional(x_as_coeff_Mul[1]) < PRECEDENCE["Mul"]:
                 s_args.append(get_str(x_as_coeff_Mul[0]) + '%s'%add_paren(get_str(x_as_coeff_Mul[1])))

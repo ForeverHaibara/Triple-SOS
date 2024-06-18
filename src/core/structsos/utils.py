@@ -1,19 +1,18 @@
 from typing import Tuple, Union, List, Dict, Callable, Optional
 
 import sympy as sp
-from sympy.core.singleton import S
+from sympy.utilities.iterables import iterable
 
-from ..symsos import prove_univariate
-from ...utils.roots.rationalize import rationalize, rationalize_bound, square_perturbation, cancel_denominator
+from ...utils.roots.rationalize import rationalize, rationalize_bound
 from ...utils.roots.findroot import nroots
-from ...utils import congruence, CyclicExpr, CyclicSum, CyclicProduct
 
 class Coeff():
     """
     A standard class for representing a polynomial with coefficients.
     """
     def __init__(self, coeffs: Union[sp.polys.Poly, Dict], is_rational: bool = True):
-        if isinstance(coeffs, sp.polys.Poly):
+        if isinstance(coeffs, sp.Poly):
+            self._nvars = len(coeffs.gens)
             poly = coeffs
             coeffs = {}
             for monom, coeff in poly.terms():
@@ -24,15 +23,21 @@ class Coeff():
                         is_rational = False
                     # coeff = coeff.as_numer_denom()
                 coeffs[monom] = coeff
+        else:
+            self._nvars = len(next(iter(coeffs.keys()))) if len(coeffs) > 0 else 0
             
         self.coeffs = coeffs
         self.is_rational = is_rational
+
+    @property
+    def nvars(self) -> int:
+        return self._nvars
 
     def __call__(self, *x) -> sp.Expr:
         """
         Coeff((i,j,k)) -> returns the coefficient of a^i * b^j * c^k.
         """
-        if len(x) == 1:
+        if len(x) == 1 and iterable(x[0]):
             # x is ((a,b,c), )
             x = x[0]
         return self.coeffs.get(x, sp.S(0))
@@ -48,6 +53,11 @@ class Coeff():
         Reflect the coefficients of a, b, c with respect to a,b.
         Returns a deepcopy.
         """
+        if self.is_zero:
+            return Coeff({}, is_rational = True)
+
+        assert self.nvars == 3, "The number of variables must be 3."
+
         reflected_coeffs = dict([((j,i,k), v) for (i,j,k), v in self.coeffs.items()])
         new_coeff = Coeff(reflected_coeffs, is_rational = self.is_rational)
         return new_coeff
@@ -60,10 +70,13 @@ class Coeff():
 
     def as_poly(self, *args) -> sp.Poly:
         """
-        Return the polynomial of a, b, c.
+        Return the polynomial of given variables. If args is not given, it uses.
         """
         if len(args) == 0:
-            args = sp.symbols('a b c')
+            if self.is_zero:
+                args = sp.symbols('a')
+            else:
+                args = sp.symbols(f'a:{chr(96+self.nvars)}')
         return sp.polys.Poly.from_dict(self.coeffs, gens = args)
 
     def degree(self) -> int:
@@ -84,7 +97,7 @@ class Coeff():
 
     def poly111(self) -> sp.Expr:
         """
-        Evalutate the polynomial at (a,b,c) = (1,1,1).
+        Evalutate the polynomial at (1,1,...,1).
         """
         return sum(self.coeffs.values())
 
@@ -120,26 +133,25 @@ class Coeff():
     def __pow__(self, other) -> 'Coeff':
         return self.__operator__(other, lambda x, y: x ** y)
 
-    def cancel_abc(self) -> Tuple[Tuple[int, int, int], 'Coeff']:
+    def cancel_abc(self) -> Tuple[List[int], 'Coeff']:
         """
         Assume poly = a^i*b^j*c^k * poly2.
         Return ((i,j,k), Coeff(poly2)).
         """
         if self.is_zero:
-            return ((0, 0, 0), self)
+            return ((0,) * self.nvars, self)
         all_monoms = list(self.coeffs.keys())
         d = self.degree() + 1
-        i, j, k = d, d, d
-        for u, v, w in all_monoms:
-            i = min(i, u)
-            j = min(j, v)
-            k = min(k, w)
-            if i == 0 and j == 0 and w == 0:
-                return ((0, 0, 0), self)
+        common = [d] * self.nvars
+        for monom in all_monoms:
+            common = [min(i, j) for i, j in zip(common, monom)]
+            if all(_ == 0 for _ in common):
+                return ((0,) * self.nvars, self)
 
-        new_coeff = Coeff({(u-i,v-j,w-k): _ for (u,v,w), _ in self.coeffs.items() if _ != 0})
+        common = tuple(common)
+        new_coeff = Coeff({tuple([i - j for i, j in zip(monom, common)]): _ for monom, _ in self.coeffs.items() if _ != 0})
         new_coeff.is_rational = self.is_rational
-        return (i, j, k), new_coeff
+        return common, new_coeff
 
 
     def cancel_k(self) -> Tuple[int, 'Coeff']:
@@ -152,17 +164,17 @@ class Coeff():
             return (1, self)
         all_monoms = list(self.coeffs.keys())
         d = 0
-        for u, v, w in all_monoms:
-            d = sp.gcd(d, u)
-            d = sp.gcd(d, v)
-            d = sp.gcd(d, w)
-            if d == 1:
-                return (1, self)
+        for monom in all_monoms:
+            for u in monom:
+                d = sp.gcd(d, u)
+                if d == 1:
+                    return (1, self)
 
         d = int(d)
         if d == 0:
             return 0, self
-        new_coeff = Coeff({(u//d,v//d,w//d): _ for (u,v,w), _ in self.coeffs.items() if _ != 0})
+
+        new_coeff = Coeff({tuple([i//d for i in monom]): _ for monom, _ in self.coeffs.items() if _ != 0})
         new_coeff.is_rational = self.is_rational
         return d, new_coeff
 
@@ -286,67 +298,6 @@ def rationalize_func(
                     return t_
 
 
-def reflect_expression(expr: sp.Expr) -> sp.Expr:
-    """
-    Exchange b and c in a three-var cyclic expression.
-
-    Examples
-    ----------
-    >>> CyclicExpr.PRINT_FULL = True
-    >>> reflect_expression(CyclicSum(a**2*b**3*c**4))
-    CyclicSum(a**2*b**4*c**3, (a, b, c), PermutationGroup([
-        (0 1 2)]))
-    """
-    if isinstance(expr, CyclicExpr):
-        return expr.func(reflect_expression(expr.args[0]), *expr.args[1:])
-    if not expr.has(CyclicExpr):
-        b, c = sp.symbols('b c')
-        return expr.xreplace({b:c, c:b})
-    return expr.func(*[reflect_expression(a) for a in expr.args])
-
-def inverse_substitution(expr: sp.Expr, factor_degree: int = 0) -> sp.Expr:
-    """
-    Substitute a <- b * c, b <- c * a, c <- a * b into expr.
-    Then the function extract the common factor of the expression, usually (abc)^k.
-    Finally the expression is divided by (abc)^(factor_degree).
-    """
-    a, b, c = sp.symbols('a b c')
-    expr = sp.together(expr.xreplace({a:b*c,b:c*a,c:a*b}))
-
-    def _try_factor(expr):
-        if isinstance(expr, (sp.Add, sp.Mul, sp.Pow)):
-            return expr.func(*[_try_factor(arg) for arg in expr.args])
-        elif isinstance(expr, CyclicSum):
-            # Sum(a**3*b**2*c**2*(...)**2)
-            if isinstance(expr.args[0], sp.Mul):
-                args2 = expr.args[0].args
-                symbol_degrees = {}
-                other_args = []
-                for s in args2:
-                    if s in (a,b,c):
-                        symbol_degrees[s] = 1
-                    elif isinstance(s, sp.Pow) and s.base in (a,b,c):
-                        symbol_degrees[s.base] = s.exp
-                    else:
-                        other_args.append(s)
-                if len(symbol_degrees) == 3:
-                    degree = min(symbol_degrees.values())
-                    da, db, dc = symbol_degrees[a], symbol_degrees[b], symbol_degrees[c]
-                    da, db, dc = da - degree, db - degree, dc - degree
-                    other_args.extend([a**da, b**db, c**dc])
-                    return CyclicSum(sp.Mul(*other_args)) * CyclicProduct(a) ** degree
-        elif isinstance(expr, CyclicProduct):
-            # Product(a**2) = Product(a) ** 2
-            if isinstance(expr.args[0], sp.Pow) and expr.args[0].base in (a,b,c):
-                return CyclicProduct(expr.args[0].base) ** expr.args[0].exp
-        return expr
-    
-    expr = sp.together(_try_factor(expr))
-    if factor_degree != 0:
-        expr = expr / CyclicProduct(a) ** factor_degree
-    return expr
-
-
 def quadratic_weighting(
         c1: sp.Rational,
         c2: sp.Rational,
@@ -425,28 +376,3 @@ def zip_longest(*args):
                 if all(stops):
                     return
         yield tuple(lasts)
-
-
-def try_perturbations(
-        poly,
-        p,
-        q,
-        perturbation,
-        recurrsion = None,
-        times = 4,
-        **kwargs
-    ):
-    """
-    Try subtracting t * perturbation from poly and perform recurrsive trials.
-    The subtracted t satisfies that (p - t) / (q - t) is a square
-
-    This is possibly helpful for deriving rational sum-of-square solution.
-    """
-    a, b, c = sp.symbols('a b c')
-    perturbation_poly = perturbation.doit().as_poly(a,b,c)
-    for t in square_perturbation(p, q, times = times):
-        poly2 = poly - t * perturbation_poly
-        solution = recurrsion(Coeff(poly2))
-        if solution is not None:
-            return solution + t * perturbation
-    return None
