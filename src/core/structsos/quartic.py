@@ -579,8 +579,31 @@ def sos_struct_acyclic_quartic(coeff, recurrsion = None, real = True):
     """
     Solve acyclic quartic problems.
     """
-    return None
+    return _sos_struct_acyclic_quartic_symmetric(coeff)
     return _sos_struct_acyclic_quartic_real(coeff)
+
+
+def _sos_struct_acyclic_quartic_symmetric(coeff, recurrsion = None, real = True):
+    """
+    Solve acyclic quartic polynomials that are symmetric with respect to two variables.
+    If it is nonnegative over R, it must be sum of squares by Hilbert's 17th problem, we can write it in
+    the form of: (assume f(a,b,c) = f(b,a,c) by symmetriciy)
+    f(a,b,c) = p1' * M1 * p1 + (a-b)^2 * p2' * M2 * p2 + k*(a-b)^4
+    where p1 = [(a+b)**2, a*b, c*(a+b), c**2]' and p2 = [a+b, c]'.
+
+    If we denote Q = [[4, 0, 0, 1], [1, 0, 0, -4], [0, 1, 0, 0], [0, 0, 1, 0]], then
+    Q' * M1 * Q = [
+        [c220 + 2*c310 + 2*c400, c211/2 + c301/2, c202 - 2*l22,          -4*c220 + c310/2 + 26*c400 - 34*r00],
+        [                   ...,             l22,       c103/2,                 -2*c211 + 13*c301/2 - 17*r01],
+        [                   ...,             ...,         c004,                  9*c202/2 - l22/2 - 17*r11/2],
+        [                   ...,             ...,          ..., 16*c220 - 36*c310 + 49*c400 - 289*k - 17*r00]
+    ]
+    and M2 = [[r0, r1], [r1, r2]]. WLOG k = 0.
+    """
+    if not all(coeff((i,j,4-i-j)) == coeff((j,i,4-i-j)) for i,j in ((4,0),(3,1),(3,0),(2,1),(2,0))):
+        return
+    
+
 
 
 class _quadratic_minimization():
