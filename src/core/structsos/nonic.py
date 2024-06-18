@@ -3,7 +3,7 @@ import sympy as sp
 from .sextic_symmetric import _sos_struct_sextic_hexagram_symmetric, _sos_struct_sextic_tree
 from .utils import (
     CyclicSum, CyclicProduct, Coeff,
-    sum_y_exprs, rationalize_func, inverse_substitution, radsimp, nroots
+    sum_y_exprs, rationalize_func, reflect_expression, inverse_substitution, radsimp, nroots
 )
 
 a, b, c = sp.symbols('a b c')
@@ -368,7 +368,7 @@ def _sos_struct_nonic_gear(coeff, recurrsion):
         reflect_coeffs = coeff.reflect()
         solution = _sos_struct_nonic_gear(reflect_coeffs, recurrsion)
         if solution is not None:
-            solution = solution.xreplace({b:c, c:b})
+            solution = reflect_expression(solution)
         return solution
     if coeff((4,5,0)) == 0 or coeff((6,2,1)) == 0:
         return None

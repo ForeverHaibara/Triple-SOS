@@ -13,6 +13,14 @@ def sos_struct_quintic_symmetric(coeff, recurrsion, real = True):
     The function solves symmetric quintic problems with s(a^5) term in an
     incomplete attempt.
 
+    For symmetric quintics with equality at (1,1,1), they are determined by their
+    symmetric axis, F(a,1,1). Without loss of generality we assume
+    F(a,1,1) = a^3 + xa^2 + ya + z
+    and F(a,b,c) = s((a^3 + xa^2(b+c)/2 + yabc + zbc(b+c)/2)(a-b)(a-c)).
+
+    The border of F is equivalent to F(a,1,0)/a^2 = 2*u**2 + (x - 4)*u + (z - 2*x) where u = a + 1/a.
+    F(a,1,0) >= 0 on R+ iff D = (x+4)**2 - 8*z <= 0 or (x >= -4 and z >= 0).
+
     Theorem: For t <= 3, we have
     F(a,b,c) = s((a+b-c)(a-b)^2(a+b-tc)^2) >= 0.
     Proof: F(a,b,c)s((a-b)^2) = s(c(2c^3-2abc+(t-1)(a^2c+b^2c-a^2b-ab^2)-(t+1)(ac^2+bc^2-2abc))^2)
@@ -50,11 +58,15 @@ def sos_struct_quintic_symmetric(coeff, recurrsion, real = True):
 
     s((a+b-31/32c)(a-b)2(a+b-59/16c)2)
 
+    s(625a5-2725a4b-2725a4c+2389a3b2+11132a3bc+2389a3c2-11085a2b2c)
+
     s((a+b-7/8c)(a-b)2(a+b-5c)2)     (HINT: s(c(a+b-2c)2(a2-10ab+5ac+b2+5bc-2c2)2))
 
     s(a3)s(a)2+s(ab)p(a+b)*(27+18sqrt(3))/8-(3/8+(27+18sqrt(3))/24)p(a+b)s(a)2
 
     s((a+b-(1+sqrt(15))/5c)(a-b)2(a+b-(4sqrt(15)/5+1/2)c)2)
+
+    s(a(b-c)2(b+c-a)2)+s(a3(a-b-c)2)
 
     References
     ----------
@@ -223,7 +235,7 @@ def sos_struct_quintic_symmetric(coeff, recurrsion, real = True):
         w1 = radsimp((v - y2) / (y1 - y2))
         w2 = 1 - w1
         # print('(w1, w2) =', (w1, w2), '\n(y1, y2) =', (y1, y2), '\n(t1, t2) =', (t1, t2))
-        if 0 <= w1 <= 1:
+        if y1 != y2 and 0 <= w1 <= 1:
             if (w1 == 0 and y2 <= 0) or (y1 <= 0 and y2 <= 0):
                 y = radsimp([
                     w1 * m / 2,
@@ -696,7 +708,7 @@ def _sos_struct_quintic_symmetric_hexagon(coeff):
 
         w2 = radsimp(u / x2) # (u - 0) / (x2 - 0)
         w1 = 1 - w2
-        if 0 <= w1 <= 1:
+        if x2 != 0 and 0 <= w1 <= 1:
             y = radsimp([
                 w1 * m,
                 w2 * m,

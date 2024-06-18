@@ -1184,6 +1184,8 @@ def _sos_struct_sextic_symmetric_full_sdp(coeff):
                 return y**2 * CyclicSum(a*(b - c)**2)**2
             elif y == -3*x/2:
                 return x**2/4 * CyclicProduct((a + b - 2*c)**2)
+            elif y == -x:
+                return x**2 * CyclicSum(a*(a-b)*(a-c))**2
             return CyclicSum(x*a**3 + y*a*b**2 + y*a*c**2 - (x + 2*y)*a*b*c)**2
         return quadratic_weighting(l00, 2*l01, l11, mapping = mapping)
 
