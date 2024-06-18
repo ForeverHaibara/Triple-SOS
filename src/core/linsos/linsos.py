@@ -132,7 +132,7 @@ def LinearSOS(
     if not is_hom:
         return None
 
-    if is_cyc and rootsinfo is None:
+    if rootsinfo is None:
         rootsinfo = findroot(poly, with_tangents = root_tangents)
 
     tangents = _prepare_tangents(poly, tangents, rootsinfo, is_cyc = is_cyc)
