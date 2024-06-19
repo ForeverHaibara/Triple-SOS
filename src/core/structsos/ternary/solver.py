@@ -6,7 +6,7 @@ import sympy as sp
 from .sparse  import sos_struct_sparse, sos_struct_heuristic, sos_struct_extract_factors
 from .quadratic import sos_struct_quadratic, sos_struct_acyclic_quadratic
 from .cubic   import sos_struct_cubic, sos_struct_acyclic_cubic
-from .quartic import sos_struct_quartic
+from .quartic import sos_struct_quartic, sos_struct_acyclic_quartic
 from .quintic import sos_struct_quintic
 from .sextic  import sos_struct_sextic
 from .septic  import sos_struct_septic
@@ -31,6 +31,7 @@ SOLVERS = {
 SOLVERS_ACYCLIC = {
     2: sos_struct_acyclic_quadratic,
     3: sos_struct_acyclic_cubic,
+    4: sos_struct_acyclic_quartic
 }
 
 

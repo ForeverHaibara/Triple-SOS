@@ -4,7 +4,8 @@ import sympy as sp
 
 from .utils import (
     CyclicSum, CyclicProduct, Coeff,
-    sum_y_exprs, nroots, rationalize_bound, rationalize_func, quadratic_weighting, radsimp
+    congruence, sum_y_exprs,
+    nroots, rationalize, rationalize_bound, rationalize_func, quadratic_weighting, radsimp
 )
 
 a, b, c = sp.symbols('a b c')
@@ -582,29 +583,238 @@ def sos_struct_acyclic_quartic(coeff, recurrsion = None, real = True):
     return _sos_struct_acyclic_quartic_symmetric(coeff)
     return _sos_struct_acyclic_quartic_real(coeff)
 
+def _common_region_of_conics(f1, f2, _tol = 1e-10):
+    """
+    Find (x, y) such that f1(x, y) >= 0 and f2(x, y) >= 0
+    where f1 and f2 are rational conics.    
+    """
+    from ....utils.roots.rationalize import rationalize, rationalize_quadratic_curve
+    assert f1.gens == f2.gens and len(f1.gens) == 2, "The conics must have the same variables and be 2D."
+    x, y = f1.gens
+
+    # if the conics are degenerated and have common factors
+    gcd = sp.gcd(f1, f2).as_poly(x, y)
+    if gcd.total_degree() == 2:
+        # f1 is a multiple of f2
+        return rationalize_quadratic_curve(f1, one_point=True)
+    elif gcd.total_degree() == 1:
+        a, b, c = [gcd.coeff_monomial(_) for _ in [(1,0),(0,1),(0,0)]]
+        # ax + by + c = 0
+        if b != 0:
+            return (sp.S(0), -c/b)
+        if a != 0:
+            return (-c/a, sp.S(0))
+        return None
+
+    # try centers, which are easy to compute
+    def _center(f):
+        sol = sp.solve([f.diff(x), f.diff(y)], [x,y], dict = True)
+        def _get_default(k, v):
+            r = k.get(v, sp.S(0))
+            r = r.subs(dict(zip(r.free_symbols, [0]*len(r.free_symbols))))
+            return r
+        if len(sol) == 1:
+            return _get_default(sol[0], x), _get_default(sol[0], y)
+        return (sp.nan, sp.nan)
+    def _is_finite(sol):
+        return all(i.is_finite for i in sol)
+    w1, w2 = _center(f1), _center(f2)
+    if _is_finite(w1) and f1(*w1) >= 0 and f2(*w1) >= 0:
+        return w1
+    if _is_finite(w2) and f1(*w2) >= 0 and f2(*w2) >= 0:
+        return w2
+
+
+    # sometimes f1, f2 intersect at the infinity line, e.g. xy = 1 and xy = 4.
+    # we can try out x = 0 and y = 0 and y = x three lines to cut the conics
+    def _univar_interval(f):
+        pre = sp.nan
+        for ij in sp.intervals(f):
+            for v in ij[0]:
+                if pre != v:
+                    pre = v
+                    yield v
+    if True:
+        for y_ in _univar_interval(f1.subs(x, 0) * f2.subs(x, 0)):
+            if f1(0, y_) >= 0 and f2(0, y_) >= 0:
+                return sp.S(0), y_
+        for x_ in _univar_interval(f1.subs(y, 0) * f2.subs(y, 0)):
+            if f1(x_, 0) >= 0 and f2(x_, 0) >= 0:
+                return x_, sp.S(0)
+        for x_ in _univar_interval((f1.subs(y, x) * f2.subs(y, x)).as_poly(x)):
+            if f1(x_, x_) >= 0 and f2(x_, x_) >= 0:
+                return x_, x_
+
+    def _grad(f, x_, y_):
+        return f.diff(x)(x_, y_), f.diff(y)(x_, y_)
+    def _norm(v):
+        m = (v[0]**2 + v[1]**2)**.5
+        return v[0]/m, v[1]/m
+    def _reg(f):
+        return (f / sum(abs(_) for _ in f.coeffs())).as_poly(x, y)
+    f1, f2 = _reg(f1), _reg(f2)
+
+    # find the intersection of the two conics
+    res = sp.polys.resultant(f1, f2, y).as_poly(x)
+    for x_ in nroots(res, method='factor', real=True):
+        for y_ in nroots(f1.subs(x, x_).as_poly(y), method='factor', real=True):
+            if abs(f1(x_, y_)) < _tol and abs(f2(x_, y_)) < _tol:
+                if (not isinstance(x_, sp.Rational)) or (not isinstance(y_, sp.Rational)):
+                    grad1 = _norm(_grad(f1, x_, y_))
+                    grad2 = _norm(_grad(f2, x_, y_))
+                    grad_merged = (grad1[0] + grad2[0], grad1[1] + grad2[1])
+                    for h in [1, .5, .1, .05, .01, 1e-5, 1e-8, 1e-12, 1e-15]:
+                        x2 = rationalize(x_ + h*grad_merged[0], rounding = h*.01)
+                        y2 = rationalize(y_ + h*grad_merged[1], rounding = h*.01)
+                        # print('h =', h, 'f =', f1(x2, y2), f2(x2, y2))
+                        if f1(x2, y2) >= 0 and f2(x2, y2) >= 0:
+                            return x2, y2
+                elif f1(x_, y_) >= 0 and f2(x_, y_) >= 0:
+                    return x_, y_
+
 
 def _sos_struct_acyclic_quartic_symmetric(coeff, recurrsion = None, real = True):
     """
     Solve acyclic quartic polynomials that are symmetric with respect to two variables.
     If it is nonnegative over R, it must be sum of squares by Hilbert's 17th problem, we can write it in
     the form of: (assume f(a,b,c) = f(b,a,c) by symmetriciy)
-    f(a,b,c) = p1' * M1 * p1 + (a-b)^2 * p2' * M2 * p2 + k*(a-b)^4
-    where p1 = [(a+b)**2, a*b, c*(a+b), c**2]' and p2 = [a+b, c]'.
+    f(a,b,c) = p1' * M1 * p1 + (a-b)^2 * p2' * M2 * p2
+    where p1 = [c**2, c*(a+b), a*b, (a-b)**2]', p2 = [a+b, c]
 
-    If we denote Q = [[4, 0, 0, 1], [1, 0, 0, -4], [0, 1, 0, 0], [0, 0, 1, 0]], then
-    Q' * M1 * Q = [
-        [c220 + 2*c310 + 2*c400, c211/2 + c301/2, c202 - 2*l22,          -4*c220 + c310/2 + 26*c400 - 34*r00],
-        [                   ...,             l22,       c103/2,                 -2*c211 + 13*c301/2 - 17*r01],
-        [                   ...,             ...,         c004,                  9*c202/2 - l22/2 - 17*r11/2],
-        [                   ...,             ...,          ..., 16*c220 - 36*c310 + 49*c400 - 289*k - 17*r00]
-    ]
-    and M2 = [[r0, r1], [r1, r2]]. WLOG k = 0.
+    and M1 = sp.Matrix([
+        [c004, c103/2, c112/2 + c202 - 2*l, c202/2 - l/2 - r11/2],
+        [c103/2, l, c211/2 + c301/2, c301/2 - r01],
+        [c112/2 + c202 - 2*l, c211/2 + c301/2, c220 + 2*c310 + 2*c400, c310/2 + 2*c400 - 2*r00],
+        [c202/2 - l/2 - r11/2, c301/2 - r01, c310/2 + 2*c400 - 2*r00, c400 - r00]
+    ])
+    and M2 = sp.Matrix([[r00, r01], [r01, r11]]).
+    Here l, r00, r01, r11 are four variables. Select them properly so that M1 and M2 are PSD.
+
+    Denote f(1,1,c) = w4*c**4 + w3*c**3 + w2*c**2 + w1*c + w0,
+    then M1[:-1,:-1].det() * (-4) == leading_det = ... (please refer to the code).
+
+    Choose l such that leading_det == 0 or slightly negative, assume
+    vec = [(a-b*w3/w4)/4, b, 1/4].T and M[:,-1] = M[:-1,:-1] * vec.
+    Here a and b are new parameters, they determine the values of r00, r01, r11.
+    To make sure that M1 >= 0, we require det1 = M[-1,-1] - vec.T * M[:-1,:-1] * vec >= 0.
+    Also, det2 = r00*r11 - r01**2 >= 0.
+    The constraints det1 >= 0 and det2 >= 0 are both quadratic with respect to a and b.
+
+    Examples
+    ----------
+    (b-c)2(b+c-3a)2+(a-c)2(a+c-3b)2+1/4(a+b-3/2c)2(a+b-3c)2
+
+    2(c-a)2(c+a-4b)2+7/2(c-a)2(c+a-b)2+s(c2-5ca)2
+
+    (3c4-2c3a-4c3b-c2a2+4c2ab-2ca3+4ca2b-2cab2+3a4-4a3b+b4)
+
+    s(2a2-5ab)2+(a-b)2(a+b-3c)2
     """
-    if not all(coeff((i,j,4-i-j)) == coeff((j,i,4-i-j)) for i,j in ((4,0),(3,1),(3,0),(2,1),(2,0))):
+    if not coeff.is_rational:
         return
-    
+
+    monoms = [(4,0),(3,1),(2,2),(3,0),(2,1),(2,0),(1,0),(1,1),(0,0)]
+    mappings = [(lambda i, j: (i,j,4-i-j)), (lambda i, j: (i,4-i-j,j)), (lambda i, j: (4-i-j,i,j))]
+    symbol_orders = [sp.symbols("a b c"), sp.symbols("a c b"), sp.symbols("b c a")]
+    for symbol_order, mapping in zip(symbol_orders, mappings):
+        if all(coeff(mapping(i,j)) == coeff(mapping(j,i)) for i,j in ((4,0),(3,1),(3,0),(2,1),(2,0))):
+            break
+    else:
+        return None
+
+    c400, c310, c220, c301, c211, c202, c103, c112, c004 = [coeff(mapping(i, j)) for i, j in monoms]
+    w4 = c004
+    w3 = 2*c103
+    w2 = c112 + 2*c202
+    w1 = 2*c211 + 2*c301
+    w0 = c220 + 2*c310 + 2*c400
+    if w4 <= 0:
+        return # not implemented
+
+    a, b, l = sp.symbols('a b l') # l == l11
+    # find (a, b, l) such that leading_det == -4*M1[:-1,:-1].det() <= 0
+    leading_det = sp.Poly([16, -8*w2, -4*w0*w4 + w1*w3 + w2**2, (w0*w3**2 + w1**2*w4 - w1*w2*w3)/4], l)
+
+    # find (a, b, l) such that det1 >= 0
+    det1 = dict([
+        ((2, 0, 0), -w4**2),
+        ((0, 2, 1), -16*w4),
+        ((0, 2, 0), w3**2),
+        ((0, 0, 0), w4*(-4*c310 + w0))
+    ])
+    det1 = sp.Poly.from_dict(det1, (a, b, l))
+
+    # find (a, b, l) such that det2 >= 0
+    det2 = dict([
+        ((2, 0, 1), -32*w4**3),
+        ((2, 0, 0), w4**2*(8*w2*w4 - w3**2)),
+        ((1, 1, 0), 2*w4*(8*w1*w4**2 - 4*w2*w3*w4 + w3**3)),
+        ((1, 0, 1), -16*w4**2*(-4*c202 + w2)),
+        ((1, 0, 0), 2*w4**2*(-8*c202*w2 + 8*c301*w3 - 16*c310*w4 - 64*c400*w4 + 8*w0*w4 - w1*w3 + 2*w2**2)),
+        ((0, 2, 2), -256*w4**2),
+        ((0, 2, 1), 32*w3**2*w4),
+        ((0, 2, 0), -w3**4),
+        ((0, 1, 1), -16*w4*(4*c202*w3 - 16*c301*w4 + 2*w1*w4 - w2*w3)),
+        ((0, 1, 0), 2*w4*(-16*c202*w1*w4 + 8*c202*w2*w3 - 8*c301*w3**2 + 4*w1*w2*w4 + w1*w3**2 - 2*w2**2*w3)),
+        ((0, 0, 0), w4**2*(64*c202*c310 + 256*c202*c400 - 32*c202*w0 - 64*c301**2 + 16*c301*w1 - 16*c310*w2 - 64*c400*w2 + 8*w0*w2 - w1**2))
+    ])
+    det2 = sp.Poly.from_dict(det2, (a, b, l))
 
 
+    def _get_solution(r00, r01, r11, l):
+        M1 = sp.Matrix([
+            [c004, c103/2, c112/2 + c202 - 2*l, c202/2 - l/2 - r11/2],
+            [c103/2, l, c211/2 + c301/2, c301/2 - r01],
+            [c112/2 + c202 - 2*l, c211/2 + c301/2, c220 + 2*c310 + 2*c400, c310/2 + 2*c400 - 2*r00],
+            [c202/2 - l/2 - r11/2, c301/2 - r01, c310/2 + 2*c400 - 2*r00, c400 - r00]
+        ])
+        M2 = sp.Matrix([[r00, r01], [r01, r11]])
+        US1 = congruence(M1)
+        US2 = congruence(M2)
+        if US1 is None or US2 is None:
+            return None
+        a, b, c = symbol_order
+
+        def _US_vec(US, vec):
+            U, S = US
+            return sp.Add(*[s*v.together()**2 for s, v in zip(S, U*vec)])
+        solution = sp.Add(
+            _US_vec(US1, sp.Matrix([c**2, c*a+c*b, a*b, a**2-2*a*b+b**2])),
+            (a-b)**2 * _US_vec(US2, sp.Matrix([a+b, c]))
+        )
+        solution = solution.subs({
+            (a**2 + 2*a*b + b**2)**2: (a + b)**4,
+            (a**2 - 2*a*b + b**2)**2: (a - b)**4
+        })
+        return solution
+
+    def _get_solution_from_ab(a, b, l):
+        r11 = (-2*a*c004*w4 + 2*b*c004*w3 - 4*b*c103*w4 - c112*w4 + 2*c202*w4)/(4*w4)
+        r01 = (-a*c103*w4 + b*c103*w3 - 8*b*l*w4 - c211*w4 + 3*c301*w4)/(8*w4)
+        r00 = (-a*c112*w4 - 2*a*c202*w4 + 4*a*l*w4 + b*c112*w3 + 2*b*c202*w3 - 4*b*c211*w4 - 4*b*c301*w4 - 4*b*l*w3 - 2*c220*w4 + 12*c400*w4)/(16*w4)
+        return _get_solution(r00, r01, r11, l)
+
+
+    for l0 in nroots(leading_det, method='factor', real=True, nonnegative=True):
+        if c004*l0 - c103**2/4 < 0: # M1[:2,:2].det()
+            continue
+        l1 = l0 if isinstance(l0, sp.Rational) else rationalize(l0, rounding=1e-15)
+        # we need l11 to be rational to trigger _common_region_of_conics
+        f1, f2 = det1.subs(l, l1), det2.subs(l, l1)
+        point = _common_region_of_conics(f1, f2)
+        if point is not None:
+            if isinstance(l0, sp.Rational):
+                return _get_solution_from_ab(*point, l0)
+
+            grad = leading_det.diff(l)(l0)
+            for l1 in rationalize_bound(l0, direction=1 if grad < 0 else -1, compulsory=True):
+                if leading_det(l1) <= 0:
+                    f1, f2 = det1.subs(l, l1), det2.subs(l, l1)
+                    point = _common_region_of_conics(f1, f2)
+                    if point is not None:
+                        return _get_solution_from_ab(*point, l1)
+
+ 
 
 class _quadratic_minimization():
     """

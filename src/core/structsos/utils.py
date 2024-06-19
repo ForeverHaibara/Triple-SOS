@@ -254,7 +254,7 @@ def rationalize_func(
         Return True if validation(..) >= 0.
     validation_initial : Optional[Callable]
         The function first uses numerical roots of the poly, and it
-        might not satiesfiy the validation function because of the numerical error.
+        might not satisfy the validation function because of the numerical error.
         Configure this function to roughly test whether a root is proper.
         When None, it uses the validation function as default.
     direction : int
