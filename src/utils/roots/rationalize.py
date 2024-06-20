@@ -1,6 +1,7 @@
 from typing import Optional, Tuple, List, Dict, Union, Generator
 
 import sympy as sp
+from numpy import roots as nproots
 
 def nroots(poly, method = 'numpy', real = False, nonnegative = False):
     """
@@ -20,7 +21,7 @@ def nroots(poly, method = 'numpy', real = False, nonnegative = False):
         Whether to only return nonnegative roots.
     """
     if method == 'numpy':
-        roots = [sp.S(_) for _ in np.roots(poly.all_coeffs())]
+        roots = [sp.S(_) for _ in nproots(poly.all_coeffs())]
     elif method == 'sympy':
         roots = sp.polys.nroots(poly)
     elif method == 'factor':

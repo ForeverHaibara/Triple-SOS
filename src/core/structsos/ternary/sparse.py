@@ -4,43 +4,10 @@ from math import gcd
 import sympy as sp
 
 from .utils import (
-    CyclicSum, CyclicProduct, Coeff, prove_univariate,
-    PolynomialUnsolvableError
+    CyclicSum, CyclicProduct, Coeff, prove_univariate
 )
 from .quadratic import sos_struct_quadratic
 from .quartic import sos_struct_quartic
-
-
-def sos_struct_extract_factors(coeff, recurrsion, real = True):
-    """
-    Try solving the inequality by extracting factors and changing of variables.
-    It handles cyclic and acyclic inequalities both.
-
-    For instance,
-    CyclicSum(a**2bc*(a-b)*(a-c)) is converted to CyclicSum(a*(a-b)*(a-c))
-    by extracting CyclicProduct(a).
-    CyclicSum(a**2*(a**2-b**2)*(a**2-c**2)) is converted to proving
-    Cyclic(a*(a-b)*(a-c)) by making substitution a^2,b^2,c^2 -> a,b,c.
-    """
-    a, b, c = sp.symbols("a b c")
-    (i, j, k), new_coeff = coeff.cancel_abc()
-    if i > 0 or j > 0 or k > 0:
-        solution = recurrsion(new_coeff, real = real and i % 2 == 0 and j % 2 == 0 and k % 2 == 0)
-        if solution is not None:
-            if i == j and j == k:
-                multiplier = CyclicProduct(a**i)
-            else:
-                multiplier = a**i * b**j * c**k
-            return multiplier * solution
-        raise PolynomialUnsolvableError
-
-    i, new_coeff = coeff.cancel_k()
-    if i > 1:
-        solution = recurrsion(new_coeff, real = False if (i % 2 == 0) else real)
-        if solution is not None:
-            return solution.xreplace({a: a**i, b: b**i, c: c**i})
-        raise PolynomialUnsolvableError
-
 
 def sos_struct_sparse(coeff, recurrsion = None, real = True):
     """

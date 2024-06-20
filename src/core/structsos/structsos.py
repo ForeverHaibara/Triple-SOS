@@ -5,6 +5,7 @@ from sympy.core.symbol import uniquely_named_symbol
 
 from .solution import SolutionStructural, SolutionStructuralSimple
 from .ternary import structural_sos_3vars
+from .quarternary import structural_sos_4vars
 from ..symsos import prove_univariate
 
 
@@ -53,6 +54,8 @@ def StructuralSOS(
         solution = prove_univariate(original_poly.subs(b, 1)).xreplace({a: a/b}).together() * b**d
     elif nvars == 3:
         solution = structural_sos_3vars(poly, real = real)
+    elif nvars == 4:
+        solution = structural_sos_4vars(poly, real = real)
 
     if solution is None:
         return None

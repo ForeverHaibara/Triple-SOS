@@ -3,40 +3,13 @@ from functools import partial
 
 import sympy as sp
 
-from .sparse  import sos_struct_sparse, sos_struct_heuristic
-from .quadratic import sos_struct_quadratic, sos_struct_acyclic_quadratic
-from .cubic   import sos_struct_cubic, sos_struct_acyclic_cubic
-from .quartic import sos_struct_quartic, sos_struct_acyclic_quartic
-from .quintic import sos_struct_quintic
-from .sextic  import sos_struct_sextic
-from .septic  import sos_struct_septic
-from .octic   import sos_struct_octic
-from .nonic   import sos_struct_nonic
-from .acyclic import sos_struct_acyclic_sparse
-
 from ..utils import Coeff, PolynomialNonpositiveError, PolynomialUnsolvableError
 from ..sparse import sos_struct_extract_factors
-from ....utils import verify_hom_cyclic
 
-SOLVERS = {
-    2: sos_struct_quadratic,
-    3: sos_struct_cubic,
-    4: sos_struct_quartic,
-    5: sos_struct_quintic,
-    6: sos_struct_sextic,
-    7: sos_struct_septic,
-    8: sos_struct_octic,
-    9: sos_struct_nonic,
-}
+def _null_solver(*args, **kwargs):
+    return None
 
-SOLVERS_ACYCLIC = {
-    2: sos_struct_acyclic_quadratic,
-    3: sos_struct_acyclic_cubic,
-    4: sos_struct_acyclic_quartic
-}
-
-
-def _structural_sos_3vars(
+def _structural_sos_4vars(
         coeff: Union[sp.Poly, Coeff, Dict],
         real: bool = True,
         is_cyc: bool = True
@@ -49,16 +22,16 @@ def _structural_sos_3vars(
     if not isinstance(coeff, Coeff):
         coeff = Coeff(coeff)
 
-    partial_recur = partial(_structural_sos_3vars, is_cyc = is_cyc)
+    partial_recur = partial(_structural_sos_4vars, is_cyc = is_cyc)
 
     if is_cyc:
-        prior_solver = sos_struct_sparse
-        solvers = SOLVERS
-        heuristic_solver = sos_struct_heuristic
+        prior_solver = _null_solver
+        solvers = _null_solver
+        heuristic_solver = _null_solver
     else:
-        prior_solver = sos_struct_acyclic_sparse
-        solvers = SOLVERS_ACYCLIC
-        heuristic_solver = lambda *args, **kwargs: None
+        prior_solver = _null_solver
+        solvers = _null_solver
+        heuristic_solver = _null_solver
 
     solution = None
     degree = coeff.degree()
@@ -90,7 +63,7 @@ def _structural_sos_3vars(
     return solution
 
 
-def structural_sos_3vars(
+def structural_sos_4vars(
         poly: sp.Poly,
         real: bool = True,
     ) -> sp.Expr:
@@ -101,17 +74,17 @@ def structural_sos_3vars(
     if len(poly.gens) != 3:
         raise ValueError("structural_sos_3vars only supports 3-var polynomials.")
 
-    is_hom, is_cyc = verify_hom_cyclic(poly)
-    if not is_hom:
-        return None
+    coeff = Coeff(poly)
+    is_sym = coeff.is_symmetric()
+    is_cyc = is_sym or coeff.is_cyclic() 
 
     try:
-        solution = _structural_sos_3vars(Coeff(poly), real = real, is_cyc = is_cyc)
+        solution = _structural_sos_4vars(Coeff(poly), real = real, is_cyc = is_cyc)
     except (PolynomialNonpositiveError, PolynomialUnsolvableError):
         return None
 
     if solution is None:
         return None
 
-    solution = solution.xreplace(dict(zip(sp.symbols("a b c"), poly.gens)))
+    solution = solution.xreplace(dict(zip(sp.symbols("a b c d"), poly.gens)))
     return solution
