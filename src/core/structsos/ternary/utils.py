@@ -7,8 +7,10 @@ from ..utils import (
 )
 
 from ...symsos import prove_univariate
-from ....utils.roots.findroot import nroots
-from ....utils.roots.rationalize import rationalize, rationalize_bound, square_perturbation, cancel_denominator
+from ....utils.roots.rationalize import (
+    nroots, rationalize, rationalize_bound, univariate_intervals,
+    square_perturbation, cancel_denominator, common_region_of_conics
+)
 from ....utils.expression import congruence, CyclicExpr, CyclicSum, CyclicProduct
 
 

@@ -21,11 +21,10 @@ from .expression import (
 from .roots import (
     RootsInfo, Root, RootAlgebraic, RootRational, RootTernary, RootAlgebraicTernary, RootRationalTernary,
     GridRender,
-    findroot, find_nearest_root, findroot_resultant, nroots,
+    findroot, find_nearest_root, findroot_resultant,
     RootTangent,
-    rationalize, rationalize_array, rationalize_bound,
-    rationalize_quadratic_curve,
-    square_perturbation,
+    nroots, univariate_intervals, rationalize, rationalize_array, rationalize_bound,
+    rationalize_quadratic_curve, common_region_of_conics, square_perturbation,
     cancel_denominator,
 )
 
@@ -43,10 +42,9 @@ __all__ = [
     'congruence',
     'RootsInfo', 'Root', 'RootAlgebraic', 'RootRational', 'RootTernary', 'RootAlgebraicTernary', 'RootRationalTernary',
     'GridRender',
-    'findroot', 'find_nearest_root', 'findroot_resultant', 'nroots',
+    'findroot', 'find_nearest_root', 'findroot_resultant',
     'RootTangent',
-    'rationalize', 'rationalize_array', 'rationalize_bound',
-    'rationalize_quadratic_curve',
-    'square_perturbation',
+    'nroots', 'univariate_intervals', 'rationalize', 'rationalize_array', 'rationalize_bound',
+    'rationalize_quadratic_curve', 'common_region_of_conics', 'square_perturbation',
     'cancel_denominator',
 ]

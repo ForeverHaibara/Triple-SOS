@@ -3,8 +3,7 @@ from typing import Tuple, Union, List, Dict, Callable, Optional
 import sympy as sp
 from sympy.utilities.iterables import iterable
 
-from ...utils.roots.rationalize import rationalize, rationalize_bound
-from ...utils.roots.findroot import nroots
+from ...utils.roots.rationalize import nroots, rationalize, rationalize_bound
 
 class Coeff():
     """

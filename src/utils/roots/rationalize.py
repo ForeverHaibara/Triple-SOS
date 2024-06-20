@@ -1,6 +1,66 @@
-from typing import Optional, Tuple, Dict, Union
+from typing import Optional, Tuple, List, Dict, Union, Generator
 
 import sympy as sp
+
+def nroots(poly, method = 'numpy', real = False, nonnegative = False):
+    """
+    Wrapper function to find the numerical roots of a sympy polynomial.
+    Note that sympy nroots is not stable when the polynomial has multiplicative roots,
+    so we need to factorize the polynomial sometimes.
+
+    Parameters
+    ----------
+    poly : sympy.Poly
+        The polynomial to be solved.
+    method : str, optional
+        The method to be used. 'numpy' uses numpy.roots, 'sympy' uses sympy.nroots.
+    real : bool, optional
+        Whether to only return real roots.
+    nonnegative : bool, optional
+        Whether to only return nonnegative roots.
+    """
+    if method == 'numpy':
+        roots = [sp.S(_) for _ in np.roots(poly.all_coeffs())]
+    elif method == 'sympy':
+        roots = sp.polys.nroots(poly)
+    elif method == 'factor':
+        roots_rational = []
+        roots = []
+        for part, mul in poly.factor_list()[1]:
+            if part.degree() == 1:
+                roots_rational.append(-part.all_coeffs()[1] / part.all_coeffs()[0])
+            else:
+                roots.extend(sp.polys.nroots(part))
+        roots = roots_rational + roots
+
+    if real:
+        roots = [_ for _ in roots if _.is_real]
+    if nonnegative:
+        roots = [_ for _ in roots if _.is_nonnegative]
+    
+    return roots
+
+
+def univariate_intervals(polys: Union[sp.Poly, List[sp.Poly]]) -> Generator[sp.Rational, None, None]:
+    """
+    Compute rational points where polys have sign changes.
+
+    Parameters
+    ----------
+    polys: sympy.Poly or list of sympy.Poly
+        Univariate polynomials to compute intervals for.
+
+    Yields
+    ----------
+    v: sympy.Rational
+        Rational points where the signs of polynomials get changed.
+    """
+    pre = sp.nan
+    for ij in sp.intervals(polys):
+        for v in ij[0]:
+            if pre != v:
+                pre = v
+                yield v
 
 
 def rationalize(
@@ -254,7 +314,7 @@ def rationalize_quadratic_curve(
     """
     from sympy.solvers.diophantine.diophantine import diop_DN
     from sympy.ntheory.factor_ import core
-    x, y = list(curve.free_symbols)
+    x, y = curve.gens if isinstance(curve, sp.Poly) else list(curve.free_symbols)
     if point is not None:
         if not isinstance(point, dict):
             point = {x: point[0], y: point[1]}
@@ -311,3 +371,86 @@ def rationalize_quadratic_curve(
     x__ = (-curve_secant.all_coeffs()[1] / curve_secant.all_coeffs()[0] - x_).factor()
     y__ = (t*(x__-x_)+y_).factor()
     return {x: x__, y: y__}
+
+
+def common_region_of_conics(f1, f2, _tol = 1e-10):
+    """
+    Find (x, y) such that f1(x, y) >= 0 and f2(x, y) >= 0
+    where f1 and f2 are rational conics.    
+    """
+    assert f1.gens == f2.gens and len(f1.gens) == 2, "The conics must have the same variables and be 2D."
+    x, y = f1.gens
+
+    # try centers, which are easy to compute
+    def _center(f):
+        if f.total_degree() == 0:
+            return (sp.S(0), sp.S(0))
+        sol = sp.solve([f.diff(x), f.diff(y)], [x,y], dict = True)
+        def _get_default(k, v):
+            r = k.get(v, sp.S(0))
+            r = r.subs(dict(zip(r.free_symbols, [0]*len(r.free_symbols))))
+            return r
+        if len(sol) == 1:
+            return _get_default(sol[0], x), _get_default(sol[0], y)
+        return (sp.nan, sp.nan)
+    def _is_finite(sol):
+        return all(i.is_finite for i in sol)
+    w1, w2 = _center(f1), _center(f2)
+    if _is_finite(w1) and f1(*w1) >= 0 and f2(*w1) >= 0:
+        return w1
+    if _is_finite(w2) and f1(*w2) >= 0 and f2(*w2) >= 0:
+        return w2
+
+    # if the conics are degenerated and have common factors
+    gcd = sp.gcd(f1, f2).as_poly(x, y)
+    if gcd.total_degree() == 2:
+        # f1 is a multiple of f2
+        return rationalize_quadratic_curve(f1, one_point=True)
+    elif gcd.total_degree() == 1:
+        a, b, c = [gcd.coeff_monomial(_) for _ in [(1,0),(0,1),(0,0)]]
+        # ax + by + c = 0
+        if b != 0:
+            return (sp.S(0), -c/b)
+        if a != 0:
+            return (-c/a, sp.S(0))
+        return None
+
+    # sometimes f1, f2 intersect at the infinity line, e.g. xy = 1 and xy = 4.
+    # we can try out x = 0 and y = 0 and y = x three lines to cut the conics
+    if True:
+        for y_ in univariate_intervals([f1.subs(x, 0), f2.subs(x, 0)]):
+            if f1(0, y_) >= 0 and f2(0, y_) >= 0:
+                return sp.S(0), y_
+        for x_ in univariate_intervals([f1.subs(y, 0), f2.subs(y, 0)]):
+            if f1(x_, 0) >= 0 and f2(x_, 0) >= 0:
+                return x_, sp.S(0)
+        for x_ in univariate_intervals([f1.subs(y, x).as_poly(x), f2.subs(y, x).as_poly(x)]):
+            if f1(x_, x_) >= 0 and f2(x_, x_) >= 0:
+                return x_, x_
+
+    def _grad(f, x_, y_):
+        return f.diff(x)(x_, y_), f.diff(y)(x_, y_)
+    def _norm(v):
+        m = (v[0]**2 + v[1]**2)**.5
+        return v[0]/m, v[1]/m
+    def _reg(f):
+        return (f / sum(abs(_) for _ in f.coeffs())).as_poly(x, y)
+    f1, f2 = _reg(f1), _reg(f2)
+
+    # find the intersection of the two conics
+    res = sp.polys.resultant(f1, f2, y).as_poly(x)
+    for x_ in nroots(res, method='factor', real=True):
+        for y_ in nroots(f1.subs(x, x_).as_poly(y), method='factor', real=True):
+            if abs(f1(x_, y_)) < _tol and abs(f2(x_, y_)) < _tol:
+                if (not isinstance(x_, sp.Rational)) or (not isinstance(y_, sp.Rational)):
+                    grad1 = _norm(_grad(f1, x_, y_))
+                    grad2 = _norm(_grad(f2, x_, y_))
+                    grad_merged = (grad1[0] + grad2[0], grad1[1] + grad2[1])
+                    for h in [1, .5, .1, .05, .01, 1e-5, 1e-8, 1e-12, 1e-15]:
+                        x2 = rationalize(x_ + h*grad_merged[0], rounding = h*.01)
+                        y2 = rationalize(y_ + h*grad_merged[1], rounding = h*.01)
+                        # print('h =', h, 'f =', f1(x2, y2), f2(x2, y2))
+                        if f1(x2, y2) >= 0 and f2(x2, y2) >= 0:
+                            return x2, y2
+                elif f1(x_, y_) >= 0 and f2(x_, y_) >= 0:
+                    return x_, y_
