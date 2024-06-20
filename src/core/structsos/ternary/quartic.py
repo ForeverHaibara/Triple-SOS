@@ -627,6 +627,8 @@ def _sos_struct_acyclic_quartic_symmetric(coeff, recurrsion = None, real = True)
     (a-b)4 + c2(a-b)2
 
     (b2-2ba+c2-2ca)2 +(b2+c2-5a2)2 +2(bc-a2)2
+
+    (ab+c2)(a+b-3c)2+s(a2-3ab)2/4
     """
     if not coeff.is_rational:
         return
@@ -696,12 +698,12 @@ def _sos_struct_acyclic_quartic_symmetric(coeff, recurrsion = None, real = True)
                     - 2*c202**2*c220 + 4*c202**2*c400 - c202*c211**2 + 4*c202*c211*c301 - 3*c202*c301**2)/8,
                 _get_quad_forms(sp.S(0), sp.S(0), sp.S(0), sp.S(0))[0].det()
             ], l)
-            for l1 in univariate_intervals([sp.Poly([], l), leading_det, det1]):
-                if leading_det(l1) <= 0 and det1(l1) >= 0:
+            for l1 in univariate_intervals([sp.Poly([1, 0], l), leading_det, det1]):
+                if l1 >= 0 and leading_det(l1) <= 0 and det1(l1) >= 0:
                     solution = _get_solution(sp.S(0), sp.S(0), sp.S(0), l1)
                     if solution is not None:
                         return solution
-
+            # TODO: consider r00 == r01 == 0 or r01 == r11 == 0 separately
 
         # find (a, b, l) such that det1 >= 0
         det1 = dict([
@@ -728,7 +730,6 @@ def _sos_struct_acyclic_quartic_symmetric(coeff, recurrsion = None, real = True)
         ])
         det2 = sp.Poly.from_dict(det2, (a, b, l))
 
-
         def _get_solution_from_ab(a, b, l):
             r11 = (-2*a*c004*w4 + 2*b*c004*w3 - 4*b*c103*w4 - c112*w4 + 2*c202*w4)/(4*w4)
             r01 = (-a*c103*w4 + b*c103*w3 - 8*b*l*w4 - c211*w4 + 3*c301*w4)/(8*w4)
@@ -742,8 +743,14 @@ def _sos_struct_acyclic_quartic_symmetric(coeff, recurrsion = None, real = True)
             l1 = l0 if isinstance(l0, sp.Rational) else rationalize(l0, rounding=1e-15)
             # we need l11 to be rational to trigger common_region_of_conics
             f1, f2 = det1.subs(l, l1), det2.subs(l, l1)
-            point = common_region_of_conics(f1, f2)
+            point = common_region_of_conics([f1, f2])
+            # print(sp.latex(sp.GreaterThan(f1.subs({a:sp.Symbol('x'), b:sp.Symbol('y')}).as_expr(), 0)))
+            # print(sp.latex(sp.GreaterThan(f2.subs({a:sp.Symbol('x'), b:sp.Symbol('y')}).as_expr(), 0)))
+            # print(sp.latex(sp.GreaterThan(((-2*a*c004*w4 + 2*b*c004*w3 - 4*b*c103*w4 - c112*w4 + 2*c202*w4)/(4*w4)).subs({a:sp.Symbol('x'), b:sp.Symbol('y')}).as_expr(), 0)))
+            # print(leading_det(l1))
+            # print('\n')
             if point is not None:
+                print(_get_solution_from_ab(*point, l1))
                 if isinstance(l0, sp.Rational):
                     solution = _get_solution_from_ab(*point, l0)
                     if solution is not None:
@@ -753,7 +760,7 @@ def _sos_struct_acyclic_quartic_symmetric(coeff, recurrsion = None, real = True)
                 for l1 in rationalize_bound(l0, direction=1 if grad < 0 else -1, compulsory=True):
                     if leading_det(l1) <= 0:
                         f1, f2 = det1.subs(l, l1), det2.subs(l, l1)
-                        point = common_region_of_conics(f1, f2)
+                        point = common_region_of_conics([f1, f2])
                         if point is not None:
                             solution = _get_solution_from_ab(*point, l1)
                             if solution is not None:
@@ -784,7 +791,7 @@ def _sos_struct_acyclic_quartic_symmetric(coeff, recurrsion = None, real = True)
     
             det2 = (r11*a - b**2).as_poly(a, b)
 
-            point = common_region_of_conics(det1, det2)
+            point = common_region_of_conics([det1, det2])
             if point is not None:
                 return _get_solution(*point, r11, l1)
         else: # leading_det == 0:
@@ -794,7 +801,7 @@ def _sos_struct_acyclic_quartic_symmetric(coeff, recurrsion = None, real = True)
                 c112*c211 + 5*c112*c301 - 2*c202*c211 + 6*c202*c301,
                 -c112*c310 - 4*c112*c400 + 2*c202*c310 + 8*c202*c400 - 4*c301**2
             ], a).as_poly(a, b)
-            point = common_region_of_conics(det1, det2)
+            point = common_region_of_conics([det1, det2])
             if point is not None:
                 def _get_solution_from_a(a):
                     r00 = -(a*c211 + a*c301 - c310 - 4*c400)/4
