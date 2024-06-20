@@ -97,9 +97,9 @@ def _sos_struct_septic_symmetric_quadratic_form(poly, coeff):
     if g_rem_ratio is not sp.oo:
         ker_coeff -= g_rem_coeff*(2*g_rem_ratio + 1)
 
-    print(f_coeff, fx, fy, ft_coeff, f_rem_coeff, f_rem_ratio)
-    print(g_coeff, gx, gy, gt_coeff, g_rem_coeff, g_rem_ratio)
-    print('Ker_coeff =', ker_coeff)
+    # print(f_coeff, fx, fy, ft_coeff, f_rem_coeff, f_rem_ratio)
+    # print(g_coeff, gx, gy, gt_coeff, g_rem_coeff, g_rem_ratio)
+    # print('Ker_coeff =', ker_coeff)
 
     if fx is sp.nan or fy is sp.nan or gx is sp.nan or gy is sp.nan:
         return None
