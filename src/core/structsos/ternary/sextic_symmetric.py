@@ -303,7 +303,7 @@ def _sos_struct_sextic_hexagon_symmetric(coeff, real = False):
             can be expressed as a linear combination of (2,-10) and (x2,y2).
             Returns w, t so that t = -4/(x2 + y2 + 4) while (x, y) = w * (2,-10) + (1-w) * (x2, y2).
             """
-            if not ((x + y + 2)**2 + 4*y + 4 <= 0 and y <= -3*x - 4):
+            if not (x.is_finite and y.is_finite and ((x + y + 2)**2 + 4*y + 4 <= 0 and y <= -3*x - 4)):
                 return None
             if x == 2 and y == 10:
                 return sp.S(1), sp.S(1)
