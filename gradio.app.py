@@ -7,7 +7,14 @@ from PIL import Image
 from src.utils.text_process import short_constant_parser
 from src.gui.sos_manager import SOS_Manager
 
+def gradio_markdown() -> gr.Markdown:
+    version = gr.__version__
+    if version >= '4.0':
+        return gr.Markdown(latex_delimiters=[{"left": "$", "right": "$", "display": False}])
+    return gr.Markdown()
+
 def _convert_to_gradio_latex(content):
+    version = gr.__version__
     replacement = {
         '\n': ' \n\n ',
         '$$': '$',
@@ -18,11 +25,16 @@ def _convert_to_gradio_latex(content):
         '\\left\\{': '',
         '\\right.': '',
     }
+    if version >= '4.0':
+        replacement['\\frac'] = '\\dfrac'
 
     for k,v in replacement.items():
         content = content.replace(k,v)
 
-    content = re.sub('\$(.*?)\$', '$\\\displaystyle \\1$', content, flags=re.DOTALL)
+    if version >= '4.0':
+        content = re.sub('\$(.*?)\$', '$\\ \\1$', content, flags=re.DOTALL)
+    else:
+        content = re.sub('\$(.*?)\$', '$\\\displaystyle \\1$', content, flags=re.DOTALL)
     return content
 
 DEPLOY_CONFIGS = {
@@ -67,7 +79,7 @@ class GradioInterface():
 
                     with gr.Tabs():
                         with gr.Tab("Display"):
-                            self.output_box = gr.Markdown()
+                            self.output_box = gradio_markdown()
                         with gr.Tab("LaTeX"):
                             self.output_box_latex = gr.TextArea(label="Result", show_copy_button=True)
                         with gr.Tab("txt"):
@@ -75,7 +87,7 @@ class GradioInterface():
                         with gr.Tab("formatted"):
                             self.output_box_formatted = gr.TextArea(label="Result", show_copy_button=True)
 
-            self.output_box2 = gr.Markdown()
+            self.output_box2 = gradio_markdown()
             # add a link to the github repo
             self.external_link = gr.HTML('<a href="https://github.com/ForeverHaibara/Triple-SOS">GitHub Link</a>')
 
@@ -148,7 +160,9 @@ class GradioInterface():
         # self.SOS_Manager.set_poly(input_text, cancel = True)
         res0 = self.set_poly(input_text)
         solution = None
-        if self.poly is not None:
+        poly = self.poly
+        is_hom = self.SOS_Manager._poly_info['ishom']
+        if poly is not None:
             if 'Linear' in methods:
                 rootsinfo = self.SOS_Manager.findroot(verbose = False)
             solution = self.SOS_Manager.sum_of_square(
@@ -173,8 +187,8 @@ class GradioInterface():
                 self.output_box_txt: 'No solution found.',
                 self.output_box_formatted: 'No solution found.',
             }
-            if self.poly is not None and self.poly.domain.is_Numerical\
-                   and (not self.poly.is_zero) and self.SOS_Manager._poly_info['ishom'] and len(methods) == 4:
+            if poly is not None and poly.domain.is_Numerical\
+                   and (not poly.is_zero) and is_hom and len(methods) == 4:
                 print(input_text)
         res.update(res0)
         return res
