@@ -349,7 +349,7 @@ class CachedCommonLinearBasisSpecialCyclic():
         rets: List[LinearBasisCyclic]
             A list of LinearBasisCyclic with degree = degree.
         """
-        if degree in cls._cached_basis:
+        if degree >= 3 and degree in cls._cached_basis:
             if not isinstance(cls._cached_basis[degree][0], LinearBasis):
                 cls._cached_basis[degree] = [LinearBasisCyclic(x) for x in cls._cached_basis[degree]]
 

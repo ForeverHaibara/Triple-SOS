@@ -3,6 +3,7 @@ from typing import List, Tuple
 import numpy as np
 import sympy as sp
 from sympy.core.singleton import S
+from sympy.combinatorics import CyclicGroup
 
 from .basis import LinearBasis, LinearBasisTangentCyclic, LinearBasisTangent, a, b, c
 from .updegree import LinearBasisMultiplier
@@ -139,7 +140,7 @@ class SolutionLinear(SolutionSimple):
 
             tangent = base.tangent
             info = base.info_
-            if cls is LinearBasisTangentCyclic and is_cyclic_expr(tangent, (a,b,c)):
+            if cls is LinearBasisTangentCyclic and is_cyclic_expr(tangent, (a,b,c), CyclicGroup(3)):
                 # we shall rotate the expression so that j is maximum
                 i, j, k, m, n, p = info
                 if i != j and i != k and j != k:

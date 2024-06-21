@@ -1,0 +1,7 @@
+sympy
+numpy
+scipy
+picos==2.3.12
+pillow
+gradio==3.44.4
+gmpy2

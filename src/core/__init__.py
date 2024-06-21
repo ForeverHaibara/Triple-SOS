@@ -14,9 +14,7 @@ from .linsos import (
 )
 
 from .structsos import (
-    StructuralSOS,
-    Coeff,
-    SolutionStructural, SolutionStructuralSimple
+    StructuralSOS, SolutionStructural, SolutionStructuralSimple
 )
 
 from .pqrsos import (
@@ -45,9 +43,7 @@ __all__ = [
     'LinearBasisTangent',
     'CachedCommonLinearBasisTangent',
     'SolutionLinear',
-    'StructuralSOS',
-    'Coeff',
-    'SolutionStructural', 'SolutionStructuralSimple',
+    'StructuralSOS', 'SolutionStructural', 'SolutionStructuralSimple',
     'pqr_sym', 'pqr_cyc', 'pqr_ker',
     'SymmetricSOS', 'sym_representation', 'TRANSLATION_POSITIVE', 'TRANSLATION_REAL',
     'prove_univariate', 'prove_univariate_interval', 'check_univariate',
