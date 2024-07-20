@@ -132,6 +132,4 @@ def gevent_launch(app):
 
 
 if __name__ == '__main__':
-    DEPLOY = True #False
-    # if not DEPLOY:
     socketio.run(app, port=5000)

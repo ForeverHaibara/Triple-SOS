@@ -7,7 +7,7 @@ Triple-SOS is an open-source sum-of-square solver with GUI for three-variable cy
 在线体验 Online Server:
 
 * **Hugging Face**      [https://huggingface.co/spaces/ForeverHaibara/Ternary-Inequality-Prover](https://huggingface.co/spaces/ForeverHaibara/Ternary-Inequality-Prover)
-* **AIStudio**               [https://aistudio.baidu.com/app/highcode/37245/app](https://aistudio.baidu.com/app/highcode/37245/app)
+* **AIStudio**               [https://aistudio.baidu.com/application/detail/37245](https://aistudio.baidu.com/application/detail/37245)
 * **AIStudio Backup** [https://aistudio.baidu.com/application/detail/13542](https://aistudio.baidu.com/application/detail/13542)
 
 ## 快速开始 Quick Start
@@ -26,6 +26,7 @@ pip install numpy
 pip install scipy
 pip install flask
 pip install flask_cors
+pip install flask_socketio
 pip install picos
 ```
 
