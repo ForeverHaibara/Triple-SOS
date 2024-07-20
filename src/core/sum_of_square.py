@@ -45,8 +45,8 @@ a, b, c = sp.symbols('a b c')
 def sum_of_square(
         poly: sp.Poly,
         rootsinfo: Optional[RootsInfo] = None,
-        method_order: List[str] = METHOD_ORDER,
-        configs: Dict[str, Dict] = DEFAULT_CONFIGS
+        method_order: Optional[List[str]] = METHOD_ORDER,
+        configs: Optional[Dict[str, Dict]] = DEFAULT_CONFIGS
     ) -> Optional[Solution]:
     """
     Main function for sum of square decomposition.

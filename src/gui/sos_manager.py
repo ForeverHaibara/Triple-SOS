@@ -2,7 +2,7 @@
 import sympy as sp
 
 from ..utils import deg, verify_hom_cyclic, poly_get_factor_form, poly_get_standard_form, latex_coeffs
-from ..utils.text_process import preprocess_text, degree_of_zero
+from ..utils.text_process import preprocess_text, degree_of_zero, coefficient_triangle
 from ..utils.roots import RootsInfo, GridRender, findroot
 from ..core.sum_of_square import sum_of_square
 from ..core.linsos import root_tangents
@@ -10,121 +10,142 @@ from ..core.linsos import root_tangents
 
 class SOS_Manager():
     """
-    SOS Manager is a class for web GUI.    
+    SOS Manager is a class for web GUI.
     """
-    _zero_grid = GridRender.zero_grid()
 
-    def __init__(self):
-        self.solution = None
+    # self._poly_info = {
+    #     'polytxt': None,
+    #     'poly': sp.S(0).as_poly(*sp.symbols('a b c')),
+    #     'ishom': False,
+    #     'iscyc': False,
+    #     'isfrac': False,
+    #     'grid': self._zero_grid,
+    #     'deg': 0,
+    # }
 
-        self._poly_info = {
-            'polytxt': None,
-            'poly': sp.S(0).as_poly(*sp.symbols('a b c')),
-            'ishom': False,
-            'iscyc': False,
-            'isfrac': False,
-            'grid': self._zero_grid,
-            'deg': 0,
-        }
-
-        self.updeg = 11
-        self.deglim = 18
-
-        self._roots_info = RootsInfo()
-
-    @property
-    def poly(self):
-        return self._poly_info['poly']
-
-    @property
-    def deg(self):
-        return self._poly_info['deg']
-
-    @property
-    def grid(self):
-        return self._poly_info['grid']
-
-    def set_poly(self, txt, cancel=True, render_grid=True):
+    @classmethod
+    def set_poly(cls, 
+            txt,
+            render_triangle = True,
+            render_grid = True,
+            factor = False,
+        ):
         """
-        Set the processed polynomial to some text. If render_grid == True, the grid will also be updated.
-        
-        Warning: The result might not refresh if the input is invalid.
+        0
         """
-
-        if self._poly_info['polytxt'] == txt:
-            return True
-        
         try:
-            poly, isfrac = preprocess_text(txt, cancel = cancel)
-            self._poly_info['poly'] = poly
-            self._roots_info = RootsInfo()
+            poly, denom = preprocess_text(txt, cancel = True)
 
             if poly.is_zero:
                 n = degree_of_zero(txt)
-                if n > 0:
-                    self._poly_info['deg'] = n
-                self._poly_info['isfrac'] = False
-                self._poly_info['ishom'] = True
-                self._roots_info = RootsInfo()
-                self._poly_info['grid'] = self._zero_grid
-                return True
+            else:
+                n = deg(poly)
+        except:
+            return None
 
-            self._poly_info['deg'] = deg(self.poly)
-        except: # invalid input
-            return False
+        if poly is None:
+            return None
 
+        try:
+            if factor:
+                txt2 = poly_get_factor_form(poly)
+            elif not denom.degree() == 0:
+                txt2 = poly_get_standard_form(poly)
+            if isinstance(txt2, str):
+                txt = txt2
+        except:
+            pass
+
+
+        return_dict = {'poly': poly, 'degree': n, 'txt': txt}
+        if render_triangle:
+            return_dict['triangle'] = coefficient_triangle(poly)
 
         if render_grid:
-            self._poly_info['grid'] = GridRender.render(self.poly, with_color=True)
+            if cls.check_poly(poly):
+                grid = GridRender.render(poly, with_color=True)
+            else:
+                grid = GridRender.zero_grid()
+            return_dict['grid'] = grid
+        return return_dict
+        # if self._poly_info['polytxt'] == txt:
+        #     return True
         
-        self._poly_info['polytxt'] = txt
-        self._poly_info['isfrac'] = isfrac
-        self._poly_info['ishom'], self._poly_info['iscyc'] = verify_hom_cyclic(self.poly)
+        # try:
+        #     poly, isfrac = preprocess_text(txt, cancel = cancel)
+        #     self._poly_info['poly'] = poly
+        #     self._roots_info = RootsInfo()
+
+        #     if poly.is_zero:
+        #         n = degree_of_zero(txt)
+        #         if n > 0:
+        #             self._poly_info['deg'] = n
+        #         self._poly_info['isfrac'] = False
+        #         self._poly_info['ishom'] = True
+        #         self._roots_info = RootsInfo()
+        #         self._poly_info['grid'] = self._zero_grid
+        #         return True
+
+        #     self._poly_info['deg'] = deg(self.poly)
+        # except: # invalid input
+        #     return False
+
+
+        # if render_grid:
+        #     self._poly_info['grid'] = GridRender.render(self.poly, with_color=True)
+        
+        # self._poly_info['polytxt'] = txt
+        # self._poly_info['isfrac'] = isfrac
+        # self._poly_info['ishom'], self._poly_info['iscyc'] = verify_hom_cyclic(self.poly)
+        # return True
+
+    @classmethod
+    def check_poly(cls, poly):
+        if poly is None or (not isinstance(poly, sp.Poly)):
+            return False
+        if len(poly.gens) != 3 or (poly.is_zero) or (not poly.is_homogeneous) or deg(poly) < 1:
+            return False
+        if not poly.domain.is_Numerical:
+            return False
         return True
 
-
-    def get_standard_form(self, formatt = 'short'):
-        if not self.poly.domain.is_Numerical:
-            return self._poly_info['polytxt']
+    @classmethod
+    def get_standard_form(cls, poly, formatt = 'short'):
+        if (not cls.check_poly(poly)) or not (poly.domain in (sp.ZZ, sp.QQ, sp.RR)):
+            return None
         if formatt == 'short':
-            return poly_get_standard_form(self.poly, formatt = 'short', is_cyc = self._poly_info['iscyc'])
+            return poly_get_standard_form(poly, formatt = 'short') #, is_cyc = self._poly_info['iscyc'])
         elif formatt == 'factor':
-            return poly_get_factor_form(self.poly)
+            return poly_get_factor_form(poly)
 
-    def findroot(self, verbose = True):
-        if self.deg <= 1 or (self.poly.is_zero) or (not self._poly_info['ishom']):
-            self._roots_info = RootsInfo()
-            return self._roots_info
+    @classmethod
+    def findroot(cls, poly, grid = None, verbose = True):
+        if not cls.check_poly(poly):
+            return RootsInfo()
 
-        if not self.poly.domain.is_Numerical:
-            self._roots_info = RootsInfo()
-            return self._roots_info
-
-        self._roots_info = findroot(
-            self.poly, 
+        roots_info = findroot(
+            poly, 
             most = 5, 
-            grid = self._poly_info['grid'], 
+            grid = grid, 
             with_tangents = root_tangents
         )
-        self._roots_info.sort_tangents()
+        roots_info.sort_tangents()
         if verbose:
-            print(self._roots_info)
-        return self._roots_info
+            print(roots_info)
+        return roots_info
 
-    def sum_of_square(self, method_order = None, configs = None):
-        if self.deg <= 1 or (self.poly.is_zero) or (not self._poly_info['ishom']):
-            return
-        
-        if not self.poly.domain.is_Numerical:
-            return
+    @classmethod
+    def sum_of_square(cls, poly, rootsinfo = None, method_order = None, configs = None):
+        if not cls.check_poly(poly):
+            return None
 
-        self.solution = sum_of_square(
-            self.poly, 
-            rootsinfo = self._roots_info, 
+        solution = sum_of_square(
+            poly,
+            rootsinfo = rootsinfo, 
             method_order = method_order,
             configs = configs
         )
-        return self.solution
+        return solution
 
     
     def save_heatmap(self, *args, **kwargs):

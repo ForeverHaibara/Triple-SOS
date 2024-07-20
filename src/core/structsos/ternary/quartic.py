@@ -629,6 +629,8 @@ def _sos_struct_acyclic_quartic_symmetric(coeff, recurrsion = None, real = True)
     (b2-2ba+c2-2ca)2 +(b2+c2-5a2)2 +2(bc-a2)2
 
     (ab+c2)(a+b-3c)2+s(a2-3ab)2/4
+
+    (3339a4-5949a3b-2469a3c+9288a2b2-243a2bc+1159a2c2-5949ab3-243ab2c+278abc2-262ac3+3339b4-2469b3c+1159b2c2-262bc3+38c4)
     """
     if not coeff.is_rational:
         return
@@ -863,6 +865,10 @@ def _sos_struct_acyclic_quartic_real(coeff):
     can recover the SOS decomposition to the original polynomial. Actually, we can make a
     linear transformation that f(a,b,c) = g(x,y,z) such that g(1,0,0)=g(0,1,0)=g(0,0,1) are
     the three roots, and g is then a quadratic form of xy, yz and zx.
+
+    Examples
+    ----------
+    (20a4-94a3b-12a3c+171a2b2+28a2bc+4a2c2-151ab3-11ab2c-8abc2+77b4-21b3c+7b2c2)
     """
     poly = coeff.as_poly()
     roots = _sos_struct_acyclic_quartic_reaL_findroots(coeff, poly)

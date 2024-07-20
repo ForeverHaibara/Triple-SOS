@@ -1,122 +1,137 @@
-import sympy as sp
+from logging import getLogger
+
 from flask import Flask, render_template, request, jsonify
+from flask_socketio import SocketIO, emit, join_room, leave_room
 from flask_cors import CORS
 
-# from sum_of_square import *
-from src.utils.roots import RootTangent
-from src.utils.text_process import short_constant_parser, pl
+from src.utils.roots import RootTangent, RootsInfo
+from src.utils.text_process import pl
 from src.utils.expression.solution import SolutionSimple
 from src.gui.sos_manager import SOS_Manager
 
-_debug_ = False
 
 class SOS_WEB(Flask):
-    def __init__(self, name):
-        super().__init__(name)
-        self.SOS_Manager : SOS_Manager = SOS_Manager()
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
-app = SOS_WEB(__name__)
+app = SOS_WEB(__name__, template_folder = './')
 CORS(app)
+socketio = SocketIO(app, cors_allowed_origins="*")
+
+# getLogger('socketio').disabled = True
+
+@socketio.on('connect')
+def on_connect():
+    sid = request.sid
+    join_room(sid)
+    print('Joined', sid)
+
+@socketio.on('disconnect')
+def on_disconnect():
+    sid = request.sid
+    leave_room(sid)
+    print('Left', sid)
 
 @app.route('/process/preprocess', methods=['POST'])
 def preprocess():
-    app.SOS_Manager.set_poly(request.get_json()['poly'], cancel = True)
-    poly = app.SOS_Manager.poly
-    
-    # if poly is None:
-    #     return
-
-    if app.SOS_Manager._poly_info['isfrac']:
-        cancel = app.SOS_Manager.get_standard_form()
-    else:
-        cancel = ''
-
-    n = app.SOS_Manager.deg
-    coeffs = poly.coeffs()
-    monoms = poly.monoms()
-    monoms.append((-1,-1,0))  # tail flag
-    
-    t = 0
-    txts = []
-    for i in range(n+1):
-        for j in range(i+1):
-            if monoms[t][0] == n - i and monoms[t][1] == i - j:
-                txt = short_constant_parser(coeffs[t])                
-                t += 1
-            else:
-                txt = '0'
-            txts.append(txt)
-
-    factor = ''
-    print(request.get_json()['factor'])
-    if request.get_json()['factor'] == True:
-        factor = app.SOS_Manager.get_standard_form(formatt = 'factor')
-
-
-    return jsonify(n = n, txts = txts, heatmap = app.SOS_Manager.grid.grid_color,
-                    cancel = cancel, factor = factor)
-
-
-@app.route('/process/sos', methods=['POST'])
-def SumOfSquare():
     req = request.get_json()
-    # app.SOS_Manager._roots_info['tangents'] = [tg
-    #                     for tg in req['tangents'].split('\n') if len(tg) > 0]
-    app.SOS_Manager._roots_info.tangents = [
-        RootTangent(pl(tg).as_expr()) for tg in req['tangents'].split('\n') if len(tg) > 0
-    ]
 
-    method_order = [key for key, value in req['methods'].items() if value]
+    result = SOS_Manager.set_poly(
+        req['poly'],
+        render_triangle = True,
+        render_grid = True,
+        factor = req.get('factor', False)
+    )
+    if result is None:
+        return jsonify()
 
-    solution = app.SOS_Manager.sum_of_square(method_order = method_order, configs = req['configs'])
+    n = result['degree']
+    txt = result['txt']
+    triangle = result['triangle']
+    grid = result['grid']
+ 
+    sid = req.pop('sid')
+    req.update(result)
+    socketio.start_background_task(findroot, sid, **req)
 
-    if solution is None:
-        return jsonify(latex = '', txt = '', formatted = '', success = False)
+    return jsonify(n = n, txt = txt, triangle = triangle, heatmap = grid.grid_color)
+
+def findroot(sid, **kwargs):
+    if 'findroot' in kwargs['actions']:
+        poly = kwargs['poly']
+        grid = kwargs['grid']
+        rootsinfo = SOS_Manager.findroot(poly, grid, verbose=False)
+        tangents = kwargs.get('tangents')
+        if tangents is None:
+            tangents = [_.as_factor_form(remove_minus_sign=True) for _ in rootsinfo.tangents]
+        socketio.emit(
+            'rootangents',
+            {'rootsinfo': rootsinfo.gui_description, 'tangents': tangents}, to=sid
+        )
+    if 'sos' in kwargs['actions']:
+        kwargs['rootsinfo'] = rootsinfo
+        sum_of_square(sid, **kwargs)
+
+
+def sum_of_square(sid, **kwargs):
+    """
+    Perform the sum of square decomposition, and emit the result to the client.
+    Always emit the result to the client, even if the solution is None or an error occurs.
+    """
+    rootsinfo = kwargs['rootsinfo'] or RootsInfo()
+    try:
+        rootsinfo.tangents = [
+            RootTangent(pl(tg).as_expr()) for tg in kwargs['tangents'].split('\n') if len(tg) > 0
+        ]
+
+        method_order = [key for key, value in kwargs['methods'].items() if value]
+
+        solution = SOS_Manager.sum_of_square(
+            kwargs['poly'],
+            rootsinfo = rootsinfo,
+            method_order = method_order,
+            configs = kwargs['configs']
+        )
+
+        assert solution is not None, 'No solution found.'
+    except:
+        return socketio.emit(
+            'sos', {'latex': '', 'txt': '', 'formatted': '', 'success': False}, to=sid
+        )
 
     if isinstance(solution, SolutionSimple):
         # # remove the aligned environment
         # latex_ = '$$%s$$'%solution.str_latex[17:-15].replace('&','')
         latex_ = solution.str_latex#.replace('aligned', 'align*')
 
-    return jsonify(latex = latex_,
-                    txt  = solution.str_txt,
-                    formatted = solution.str_formatted,
-                    success = True)
-
-
-@app.route('/process/rootangents', methods=['POST'])
-def RootsAndTangents():
-    rootsinfo = app.SOS_Manager.findroot()
-    tangents = [_.as_factor_form(remove_minus_sign=True) for _ in rootsinfo.tangents]
-    return jsonify(rootsinfo = rootsinfo.gui_description, tangents = tangents)
+    return socketio.emit(
+        'sos',
+        {'latex': latex_, 'txt': solution.str_txt, 'formatted': solution.str_formatted, 'success': True},
+        to=sid
+    )
 
 
 @app.route('/process/latexcoeffs', methods=['POST'])
-def LatexCoeffs():
-    coeffs = app.SOS_Manager.latex_coeffs(tabular = True, document = True)
+def get_latex_coeffs():
+    coeffs = SOS_Manager.latex_coeffs(tabular = True, document = True)
     return jsonify(coeffs = coeffs)
 
 @app.route('/')
-def hello_world():
-    return render_template('triples.html')
+def index():
+    # user_id = str(uuid4())
+    return render_template('triples.html') #, user_id = user_id)
 
 
-
+def gevent_launch(app):
+    # https://flask-socketio.readthedocs.io/en/latest/deployment.html
+    from gevent import monkey
+    from flask_socketio import SocketIO
+    monkey.patch_all()
+    socketio = SocketIO(app)
+    socketio.run(app, host='0.0.0.0', port=5000, debug=True)
 
 
 if __name__ == '__main__':
-    if _debug_:
-        # python "D:\PythonProjects\Trials\Inequalities\Triples\web_main.py" dev
-        from flask_script import Manager
-        manager = Manager(app)
-        @manager.command
-        def dev():
-            from livereload import Server
-            live_server = Server(app.wsgi_app)
-            live_server.watch(
-                "D:\\PythonProjects\\Trials\\Inequalities\\Triples\\*.*"
-            )
-            live_server.serve(open_url_delay=True)
-        manager.run()
-    else:
-        app.run(port=5000)
+    DEPLOY = True #False
+    # if not DEPLOY:
+    socketio.run(app, port=5000)

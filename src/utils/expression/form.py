@@ -6,7 +6,20 @@ from .cyclic import CyclicSum, CyclicProduct
 from ..polytools import verify_hom_cyclic, deg
 from ..text_process import pl
 
+def _verify_poly(poly):
+    if all((
+        isinstance(poly, sp.Poly),
+        len(poly.gens) == 3,
+        poly.is_homogeneous,
+        poly.domain in (sp.ZZ, sp.QQ, sp.RR)
+    )):
+        return True
+    return False
+
 def poly_get_standard_form(poly, formatt = 'short', is_cyc = None):
+    if (not _verify_poly(poly)) or (poly.domain is sp.RR):
+        return
+    names = [_.name for _ in poly.gens]
     if formatt == 'short':
         def _title_parser(char, deg):
             return '' if deg == 0 else (char if deg == 1 else (char + str(deg)))
@@ -22,12 +35,13 @@ def poly_get_standard_form(poly, formatt = 'short', is_cyc = None):
         if is_cyc is not None and is_cyc == True:
             txt = ''
             for coeff, monom in zip(poly.coeffs(), poly.monoms()):
-                a , b , c = monom 
+                a, b, c = monom 
                 if a >= b and a >= c:
+                    suffix =  _title_parser(names[0],a) + _title_parser(names[1],b) + _title_parser(names[2],c)
                     if a == b and a == c:
-                        txt += _formatter(coeff/3) + _title_parser('a',a) + _title_parser('b',b) + _title_parser('c',c)
+                        txt += _formatter(coeff/3) + suffix
                     elif (a != b and a != c) or a == b:
-                        txt += _formatter(coeff) + _title_parser('a',a) + _title_parser('b',b) + _title_parser('c',c)
+                        txt += _formatter(coeff) + suffix
             if txt.startswith('+'):
                 txt = txt[1:]
             return 's(' + txt + ')'
@@ -53,7 +67,9 @@ def poly_get_factor_form(poly, return_type='text'):
     return_type : str
         The type of the return value. Can be 'text' or 'expr'.
     """
-    a, b, c = sp.symbols('a b c')
+    if not _verify_poly(poly):
+        return
+    a, b, c = poly.gens
     coeff, parts = poly.factor_list()
     factors = defaultdict(int)
     is_cyc = {}
