@@ -80,7 +80,7 @@ def pqr_coeffs_cyc(poly: sp.Poly) -> Tuple[sp.Expr, sp.Expr]:
     """
     degree = deg(poly)
     if degree < 3:
-        return pqr_coeffs_sym(poly, degree), tuple()
+        return pqr_coeffs_sym(poly), tuple()
 
     pqr_basis = _pqr_get_basis(degree)
     pqr_basis2 = _pqr_get_basis(degree - 3)

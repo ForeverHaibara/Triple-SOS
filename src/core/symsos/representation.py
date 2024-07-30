@@ -167,7 +167,7 @@ def _sym_representation_real(poly_pqr, return_poly = False):
     return numerator / denominator
 
 
-def sym_representation(poly, is_pqr = None, positive = True, return_poly = False):
+def sym_representation(poly, is_pqr = False, positive = True, return_poly = False):
     """
     Represent a polynoimal to the symmetric form.
 
@@ -192,13 +192,6 @@ def sym_representation(poly, is_pqr = None, positive = True, return_poly = False
     """
     if poly.is_zero:
         return poly
-
-    if is_pqr is None:
-        a = sp.symbols('a')
-        if a in poly.free_symbols:
-            is_pqr = False
-        else:
-            is_pqr = True
 
     if not is_pqr:
         poly = pqr_sym(poly)
