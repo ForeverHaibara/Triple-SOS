@@ -1,4 +1,5 @@
 # author: https://github.com/ForeverHaibara
+from typing import List, Dict, Any, Union
 import sympy as sp
 
 from ..utils import deg, verify_hom_cyclic, poly_get_factor_form, poly_get_standard_form, latex_coeffs
@@ -10,28 +11,37 @@ from ..core.linsos import root_tangents
 
 class SOS_Manager():
     """
-    SOS Manager is a class for web GUI.
-    """
+    A convenient class to manage the sum of square decomposition of a polynomial,
+    providing commonly used functions and properties.
 
-    # self._poly_info = {
-    #     'polytxt': None,
-    #     'poly': sp.S(0).as_poly(*sp.symbols('a b c')),
-    #     'ishom': False,
-    #     'iscyc': False,
-    #     'isfrac': False,
-    #     'grid': self._zero_grid,
-    #     'deg': 0,
-    # }
+    It adds more sanity checks and error handling to the core functions.
+    """
 
     @classmethod
     def set_poly(cls, 
-            txt,
-            render_triangle = True,
-            render_grid = True,
-            factor = False,
-        ):
+            txt: str,
+            render_triangle: bool = True,
+            render_grid: bool = True,
+            factor: bool = False,
+        ) -> Dict[str, Any]:
         """
-        0
+        Convert a text to a polynomial, and render the coefficient triangle and grid heatmap.
+
+        Parameters
+        ----------
+        txt : str
+            The text of the polynomial.
+        render_triangle : bool, optional
+            Whether to render the coefficient triangle, by default True.
+        render_grid : bool, optional
+            Whether to render the grid heatmap, by default True.
+        factor : bool, optional
+            Whether to factor the polynomial and return the factor form, by default False.
+
+        Returns
+        -------
+        dict
+            A dictionary containing the polynomial, degree, text, coefficient triangle, and grid heatmap.
         """
         try:
             poly, denom = preprocess_text(txt, cancel = True)
@@ -68,39 +78,13 @@ class SOS_Manager():
                 grid = GridRender.zero_grid()
             return_dict['grid'] = grid
         return return_dict
-        # if self._poly_info['polytxt'] == txt:
-        #     return True
-        
-        # try:
-        #     poly, isfrac = preprocess_text(txt, cancel = cancel)
-        #     self._poly_info['poly'] = poly
-        #     self._roots_info = RootsInfo()
-
-        #     if poly.is_zero:
-        #         n = degree_of_zero(txt)
-        #         if n > 0:
-        #             self._poly_info['deg'] = n
-        #         self._poly_info['isfrac'] = False
-        #         self._poly_info['ishom'] = True
-        #         self._roots_info = RootsInfo()
-        #         self._poly_info['grid'] = self._zero_grid
-        #         return True
-
-        #     self._poly_info['deg'] = deg(self.poly)
-        # except: # invalid input
-        #     return False
-
-
-        # if render_grid:
-        #     self._poly_info['grid'] = GridRender.render(self.poly, with_color=True)
-        
-        # self._poly_info['polytxt'] = txt
-        # self._poly_info['isfrac'] = isfrac
-        # self._poly_info['ishom'], self._poly_info['iscyc'] = verify_hom_cyclic(self.poly)
-        # return True
 
     @classmethod
-    def check_poly(cls, poly):
+    def check_poly(cls, poly: sp.Poly) -> bool:
+        """
+        Check whether a polynomial is a valid polynomial:
+        3-var, non-zero, homogeneous, and numerical domain.
+        """
         if poly is None or (not isinstance(poly, sp.Poly)):
             return False
         if len(poly.gens) != 3 or (poly.is_zero) or (not poly.is_homogeneous) or deg(poly) < 1:
@@ -110,7 +94,10 @@ class SOS_Manager():
         return True
 
     @classmethod
-    def get_standard_form(cls, poly, formatt = 'short'):
+    def get_standard_form(cls, poly: sp.Poly, formatt: str = 'short') -> Union[str, None]:
+        """
+        Rewrite a polynomial in the standard form.
+        """
         if (not cls.check_poly(poly)) or not (poly.domain in (sp.ZZ, sp.QQ, sp.RR)):
             return None
         if formatt == 'short':
@@ -120,6 +107,9 @@ class SOS_Manager():
 
     @classmethod
     def findroot(cls, poly, grid = None, verbose = True):
+        """
+        Find the roots / local minima of a polynomial.
+        """
         if not cls.check_poly(poly):
             return RootsInfo()
 
@@ -136,6 +126,10 @@ class SOS_Manager():
 
     @classmethod
     def sum_of_square(cls, poly, rootsinfo = None, method_order = None, configs = None):
+        """
+        Perform the sum of square decomposition of a polynomial.
+        The keyword arguments are passed to the function sum_of_square.
+        """
         if not cls.check_poly(poly):
             return None
 
@@ -147,15 +141,19 @@ class SOS_Manager():
         )
         return solution
 
-    
-    def save_heatmap(self, *args, **kwargs):
-        return self._poly_info['grid'].save_heatmap(*args, **kwargs)
+    # def save_heatmap(self, poly, *args, **kwargs):
+    #     return self._poly_info['grid'].save_heatmap(*args, **kwargs)
 
-    def save_coeffs(self, *args, **kwargs):
-        return self._poly_info['grid'].save_coeffs(*args, **kwargs)
+    # def save_coeffs(self, poly, *args, **kwargs):
+    #     return self._poly_info['grid'].save_coeffs(*args, **kwargs)
 
-    def latex_coeffs(self, *args, **kwargs):
-        return latex_coeffs(self._poly_info['poly'], *args, **kwargs)
+    @classmethod
+    def latex_coeffs(cls, txt, *args, **kwargs):
+        try:
+            poly, denom = preprocess_text(txt, cancel = True)
+        except:
+            return ''
+        return latex_coeffs(poly, *args, **kwargs)
 
 
 

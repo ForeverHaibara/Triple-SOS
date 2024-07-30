@@ -1,7 +1,5 @@
-from logging import getLogger
-
 from flask import Flask, render_template, request, jsonify
-from flask_socketio import SocketIO, emit, join_room, leave_room
+from flask_socketio import SocketIO, join_room, leave_room
 from flask_cors import CORS
 
 from src.utils.roots import RootTangent, RootsInfo
@@ -18,8 +16,6 @@ app = SOS_WEB(__name__, template_folder = './')
 CORS(app)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
-# getLogger('socketio').disabled = True
-
 @socketio.on('connect')
 def on_connect():
     sid = request.sid
@@ -34,6 +30,32 @@ def on_disconnect():
 
 @app.route('/process/preprocess', methods=['POST'])
 def preprocess():
+    """
+    Process the input polynomial and emit the result to the client.
+    The parameters are passed as a JSON object in the request body.
+
+    Parameters
+    ----------
+    sid : str
+        The session ID.
+    poly : str
+        The input polynomial.
+    factor : bool
+        Whether to factor the polynomial. If True, the factor form is returned as the text.
+    actions : list[str]
+        Additional actions to perform.
+
+    Returns
+    ----------
+    n : int
+        The degree of the polynomial.
+    txt : str
+        The formatted polynomial.
+    triangle : str
+        The coefficients formatted as a triangle.
+    heatmap : list[tuple[int, int, int, int]]
+        The heatmap of the polynomial coefficients in RGBA format.
+    """
     req = request.get_json()
 
     result = SOS_Manager.set_poly(
@@ -57,6 +79,30 @@ def preprocess():
     return jsonify(n = n, txt = txt, triangle = triangle, heatmap = grid.grid_color)
 
 def findroot(sid, **kwargs):
+    """
+    Find the root information of the polynomial and emit the result to the client.
+
+    Parameters
+    ----------
+    sid : str
+        The session ID.
+    poly : str
+        The input polynomial.
+    grid : Grid
+        The grid of the polynomial coefficients. This is passed in
+        internally by the `preprocess` function.
+    tangents : list[str]
+        The tangents to the roots. If provided, the tangents are not recalculated.
+    actions : list[str]
+        Additional actions to perform.
+
+    Returns
+    ----------
+    rootsinfo : str
+        The string representation of the roots information.
+    tangents : list[str]
+        The tangents to the roots.    
+    """
     if 'findroot' in kwargs['actions']:
         poly = kwargs['poly']
         grid = kwargs['grid']
@@ -64,10 +110,14 @@ def findroot(sid, **kwargs):
         tangents = kwargs.get('tangents')
         if tangents is None:
             tangents = [_.as_factor_form(remove_minus_sign=True) for _ in rootsinfo.tangents]
-        socketio.emit(
-            'rootangents',
-            {'rootsinfo': rootsinfo.gui_description, 'tangents': tangents}, to=sid
-        )
+            socketio.emit(
+                'rootangents',
+                {'rootsinfo': rootsinfo.gui_description, 'tangents': tangents}, to=sid
+            )
+        elif 'sos' in kwargs['actions']:
+            rootsinfo.tangents = [
+                RootTangent(pl(tg).as_expr()) for tg in kwargs['tangents'].split('\n') if len(tg) > 0
+            ]
     if 'sos' in kwargs['actions']:
         kwargs['rootsinfo'] = rootsinfo
         sum_of_square(sid, **kwargs)
@@ -77,13 +127,33 @@ def sum_of_square(sid, **kwargs):
     """
     Perform the sum of square decomposition, and emit the result to the client.
     Always emit the result to the client, even if the solution is None or an error occurs.
+
+    Parameters
+    ----------
+    sid : str
+        The session ID.
+    poly : str
+        The input polynomial.
+    methods : dict[str, bool]
+        The methods to use.
+    configs : dict[str, dict]
+        The configurations for each method.
+    rootsinfo : RootsInfo
+        The roots information. This is passed in internally by the `findroot` function.
+
+    Returns
+    ----------
+    latex : str
+        The LaTeX representation of the solution.
+    txt : str
+        The text representation of the solution.
+    formatted : str
+        The formatted representation of the solution.
+    success : bool
+        Whether the solution was found.
     """
     rootsinfo = kwargs['rootsinfo'] or RootsInfo()
     try:
-        rootsinfo.tangents = [
-            RootTangent(pl(tg).as_expr()) for tg in kwargs['tangents'].split('\n') if len(tg) > 0
-        ]
-
         method_order = [key for key, value in kwargs['methods'].items() if value]
 
         solution = SOS_Manager.sum_of_square(
@@ -110,16 +180,29 @@ def sum_of_square(sid, **kwargs):
         to=sid
     )
 
-
 @app.route('/process/latexcoeffs', methods=['POST'])
 def get_latex_coeffs():
-    coeffs = SOS_Manager.latex_coeffs(tabular = True, document = True)
+    """
+    Get the LaTeX representation of the coefficient triangle.
+
+    Parameters
+    ----------
+    poly : str
+        The input polynomial.    
+
+    Returns
+    ----------
+    coeffs : str
+        The LaTeX representation of the coefficients
+    """
+    poly = request.get_json()['poly']
+    coeffs = SOS_Manager.latex_coeffs(poly, tabular = True, document = True, zeros='\\textcolor{lightgray}')
     return jsonify(coeffs = coeffs)
+
 
 @app.route('/')
 def index():
-    # user_id = str(uuid4())
-    return render_template('triples.html') #, user_id = user_id)
+    return render_template('triples.html')
 
 
 def gevent_launch(app):

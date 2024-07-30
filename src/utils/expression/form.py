@@ -125,9 +125,20 @@ def poly_get_factor_form(poly, return_type='text'):
         return coeff * sp.Mul(*result)
 
 
-def latex_coeffs(poly, tabular=True, document=True):
+def latex_coeffs(poly, tabular: bool = True, document: bool = True, zeros: str ='\\textcolor{lightgray}') -> str:
     """
     Return the LaTeX format of the coefficient triangle.
+
+    Parameters
+    ----------
+    poly : Poly
+        The polynomial to be factorized.
+    tabular : bool
+        Whether to use the tabular environment.
+    document : bool
+        If True, it will be wrapped by an additional arraystretch command.
+    zeros : str
+        The color of the zeros.
     """
     if poly is None:
         return ''
@@ -136,6 +147,10 @@ def latex_coeffs(poly, tabular=True, document=True):
         poly = pl(poly)
     else:
         poly_str = 'f(a,b,c)'
+
+    zero_wrapper = lambda x: x
+    if zeros is not None and len(zeros):
+        zero_wrapper = lambda x: '%s{%s}'%(zeros, x)
 
     n = deg(poly)
     emptyline = '\\\\ ' + '\\ &' * (n * 2) + '\\  \\\\ '
@@ -151,7 +166,7 @@ def latex_coeffs(poly, tabular=True, document=True):
                 txt = sp.latex(coeffs[t])
                 t += 1
             else:
-                txt = '0'
+                txt = zero_wrapper('0')
             strings[j] = strings[j] + '&\\ &' + txt if len(strings[j]) != 0 else txt
     monoms.pop()
 

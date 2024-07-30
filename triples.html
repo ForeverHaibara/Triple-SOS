@@ -313,6 +313,7 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
         });
         socket.on('disconnect', function(){
             socket = null;
+            sos_poly = '';
             changeNumOfSOS(0);
         });
 
@@ -402,13 +403,6 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
                 return changeNumOfSOS(0);
             }
             kwargs.sid = socket.id;
-            // if (sos_poly === input_poly){
-            //     if ((sos !== null) && (typeof(sos) !== 'undefined')){ 
-            //         //输入没有变化, 但是要求配方
-            //         sos();
-            //     }
-            //     return;
-            // }
             
             sos_poly = input_poly;
             axios.post(host + '/process/preprocess', kwargs
@@ -420,7 +414,7 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
                 // n: degree of polynomial
 
                 document.getElementById("input_poly").value = res.data.txt;
-                document.getElementById("rootsinfo").innerHTML = '';
+                // document.getElementById("rootsinfo").innerHTML = '';
                 sos_poly = res.data.txt;
 
                 // First render the coefficient triangle
@@ -511,8 +505,14 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
                 // decompose_method: document.getElementById("setting_method_SDPSOS_reduced_decompose").checked?'reduce':'raw',
             }
         }
+        let kwargs = {methods: methods, configs: configs, actions: ['findroot', 'sos']};
+        
+        if (sos_poly === input_poly){
+            kwargs.tangents = tangents;
+        }
+        console.log(kwargs);
 
-        preprocessInput({tangents: tangents, methods: methods, configs: configs, actions: ['findroot', 'sos']});
+        preprocessInput(kwargs);
     }
 
     function ChangeShowType(x){
@@ -576,7 +576,7 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
             preprocessInput({factor: true});
         }else if (event === 'latex_coeffs'){
             axios.post(host + '/process/latexcoeffs',
-            {}
+            {'poly': sos_poly}
             ).then(res=>{
                     const str = res.data.coeffs;
                     // copy coeffs to clipboard
@@ -611,17 +611,16 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
             },
         });
       }
-    
-    var disre = 0;
 
     document.addEventListener('click', function(event) {
-    // 检查点击事件是否发生在弹出框之外
-    if (sos_results.displaying == 1 && !event.target.closest('#shadow_box')) {
-        // 如果点击在弹出框之外，则关闭弹出框
-        sos_results.displaying = 0; 
-        // document.getElementById("shadow_box").hidden = "hidden";
-        document.getElementById("shadow").hidden = "hidden";
-    }
+        // 检查点击事件是否发生在弹出框之外
+        if (sos_results.displaying == 1 && !event.target.closest('#shadow_box') && 
+                !event.target.closest('#output_showlatex')){
+            // 如果点击在弹出框之外，则关闭弹出框
+            sos_results.displaying = 0; 
+            // document.getElementById("shadow_box").hidden = "hidden";
+            document.getElementById("shadow").hidden = "hidden";
+        }
     });
 
     document.onkeyup = function(e) {
