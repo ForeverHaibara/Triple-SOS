@@ -13,6 +13,7 @@ from .septic  import sos_struct_septic
 from .octic   import sos_struct_octic
 from .nonic   import sos_struct_nonic
 from .acyclic import sos_struct_acyclic_sparse
+from .nonhomogeneous import sos_struct_nonhomogeneous
 
 from ..utils import Coeff, PolynomialNonpositiveError, PolynomialUnsolvableError
 from ..sparse import sos_struct_extract_factors
@@ -95,7 +96,7 @@ def structural_sos_3vars(
         real: bool = True,
     ) -> sp.Expr:
     """
-    Main function of structural SOS for 3-var polynomials. It first assumes the polynomial
+    Main function of structural SOS for 3-var homogeneous polynomials. It first assumes the polynomial
     has variables (a,b,c) and latter substitutes the variables with the original ones.
     """
     if len(poly.gens) != 3:
@@ -103,10 +104,36 @@ def structural_sos_3vars(
 
     is_hom, is_cyc = verify_hom_cyclic(poly)
     if not is_hom:
-        return None
+        raise ValueError("structural_sos_3vars only supports homogeneous polynomials.")
 
     try:
         solution = _structural_sos_3vars(Coeff(poly), real = real, is_cyc = is_cyc)
+    except (PolynomialNonpositiveError, PolynomialUnsolvableError):
+        return None
+
+    if solution is None:
+        return None
+
+    solution = solution.xreplace(dict(zip(sp.symbols("a b c"), poly.gens)))
+    return solution
+
+
+def structural_sos_3vars_nonhomogeneous(
+        poly: sp.Poly,
+        real: bool = True,
+    ) -> sp.Expr:
+    """
+    Main function of structural SOS for 3-var nonhomogeneous polynomials. It first assumes the polynomial
+    has variables (a,b,c) and latter substitutes the variables with the original ones.
+
+    The function is designed to exploit the symmetry of the polynomial. It will return
+    cyclic solutions if possible.
+    """
+    if len(poly.gens) != 3:
+        raise ValueError("structural_sos_3vars only supports 3-var polynomials.")
+
+    try:
+        solution = sos_struct_nonhomogeneous(Coeff(poly))
     except (PolynomialNonpositiveError, PolynomialUnsolvableError):
         return None
 

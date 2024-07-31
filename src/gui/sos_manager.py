@@ -5,7 +5,7 @@ import sympy as sp
 from ..utils import deg, verify_hom_cyclic, poly_get_factor_form, poly_get_standard_form, latex_coeffs
 from ..utils.text_process import preprocess_text, degree_of_zero, coefficient_triangle
 from ..utils.roots import RootsInfo, GridRender, findroot
-from ..core.sum_of_square import sum_of_square
+from ..core.sum_of_square import sum_of_square, DEFAULT_CONFIGS
 from ..core.linsos import root_tangents
 
 
@@ -16,6 +16,7 @@ class SOS_Manager():
 
     It adds more sanity checks and error handling to the core functions.
     """
+    verbose = True
 
     @classmethod
     def set_poly(cls, 
@@ -125,13 +126,19 @@ class SOS_Manager():
         return roots_info
 
     @classmethod
-    def sum_of_square(cls, poly, rootsinfo = None, method_order = None, configs = None):
+    def sum_of_square(cls, poly, rootsinfo = None, method_order = None, configs = DEFAULT_CONFIGS):
         """
         Perform the sum of square decomposition of a polynomial.
         The keyword arguments are passed to the function sum_of_square.
         """
-        if not cls.check_poly(poly):
+        if poly is None or (not isinstance(poly, sp.Poly)):
             return None
+
+        if cls.verbose is False:
+            for method in ('LinearSOS', 'SDPSOS'):
+                if configs.get(method) is None:
+                    configs[method] = {}
+                configs[method]['verbose'] = False
 
         solution = sum_of_square(
             poly,

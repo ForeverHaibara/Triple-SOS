@@ -40,7 +40,7 @@ def _solve_combinatorial_equation(n: int, v: int) -> int:
 
 class MonomialReduction():
     """
-    Reduction rules for monomials in polynomials according to the equivalence of symbols.
+    Reduction rules for monomials in polynomials according to the symmetry of symbols.
 
     For example,
     f(a,b,c) = (a^2 + b^2 + c^2)^2 - 3 * (a^3b + b^3c + c^3a)

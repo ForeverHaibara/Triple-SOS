@@ -348,7 +348,7 @@ def SDPSOS(
     degree = poly.total_degree()
     if degree > degree_limit or degree < 2 or nvars < 1:
         return None
-    if not (poly.domain in (sp.polys.ZZ, sp.polys.QQ)):
+    if not (poly.domain in (sp.ZZ, sp.QQ)):
         return None
     if not poly.is_homogeneous:
         return None

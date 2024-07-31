@@ -127,6 +127,15 @@ class Coeff():
             args = args[0]
         return Poly.from_dict(self.coeffs, gens = args)
 
+    def is_homogeneous(self) -> bool:
+        """
+        Whether the polynomial is homogeneous.
+        """
+        if self.is_zero:
+            return True
+        degree = self.degree()
+        return all(sum(k) == degree for k in self.coeffs)
+
     def degree(self) -> int:
         """
         Return the degree of the polynomial.

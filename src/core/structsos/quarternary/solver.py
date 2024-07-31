@@ -36,7 +36,7 @@ def _structural_sos_4vars(
         heuristic_solver = _null_solver
     else:
         prior_solver = _null_solver
-        solvers = _null_solver
+        solvers = dict()
         heuristic_solver = _null_solver
 
     solution = None
@@ -73,11 +73,13 @@ def structural_sos_4vars(
         real: bool = True,
     ) -> sp.Expr:
     """
-    Main function of structural SOS for 3-var polynomials. It first assumes the polynomial
+    Main function of structural SOS for 4-var homogeneous polynomials. It first assumes the polynomial
     has variables (a,b,c) and latter substitutes the variables with the original ones.
     """
     if len(poly.gens) != 4:
-        raise ValueError("structural_sos_3vars only supports 3-var polynomials.")
+        raise ValueError("structural_sos_3vars only supports 4-var polynomials.")
+    if not poly.is_homogeneous:
+        raise ValueError("structural_sos_3vars only supports homogeneous polynomials.")
 
     coeff = Coeff(poly)
     is_cyc = 4 if coeff.is_symmetric() else 0

@@ -4,6 +4,7 @@ import sympy as sp
 from sympy.core.symbol import uniquely_named_symbol
 
 from .solution import SolutionStructural, SolutionStructuralSimple
+from .sparse import sos_struct_linear, sos_struct_quadratic
 from .ternary import structural_sos_3vars
 from .quarternary import structural_sos_4vars
 from ..symsos import prove_univariate
@@ -32,30 +33,41 @@ def StructuralSOS(
     solution: SolutionStructuralSimple
 
     """
-    is_hom = poly.is_homogeneous
-    homogenizer = None
+    if not poly.domain.is_Numerical:
+        return None
+
+    d = poly.total_degree()
     original_poly = poly
-    if not is_hom:
-        # create a symbol for homogenization
-        homogenizer = uniquely_named_symbol('t', sp.Tuple(*original_poly.free_symbols))
-        poly = original_poly.homogenize(homogenizer)
-        
     nvars = len(poly.gens)
-    solution = None
+    solution = sos_struct_linear(poly)
+    is_hom = True
+
+    if solution is None:
+        is_hom = poly.is_homogeneous
+        homogenizer = None
+        if not is_hom:
+            # create a symbol for homogenization
+            homogenizer = uniquely_named_symbol('t', sp.Tuple(*original_poly.free_symbols))
+            poly = original_poly.homogenize(homogenizer)
+            d = poly.total_degree()
+            nvars += 1
 
 
     ########################################
     #              main solver
     ########################################
-    if nvars == 2:
-        # two cases: homogeneous bivariate or univariate before homogenization
-        a, b = poly.gens
-        d = poly.total_degree()
-        solution = prove_univariate(original_poly.subs(b, 1)).xreplace({a: a/b}).together() * b**d
-    elif nvars == 3:
-        solution = structural_sos_3vars(poly, real = real)
-    elif nvars == 4:
-        solution = structural_sos_4vars(poly, real = real)
+    if solution is None:
+        if nvars == 2:
+            # two cases: homogeneous bivariate or univariate before homogenization
+            a, b = poly.gens
+            solution = prove_univariate(original_poly.subs(b, 1)).xreplace({a: a/b}).together() * b**d
+        elif nvars == 3:
+            solution = structural_sos_3vars(poly, real = real)
+        elif nvars == 4:
+            solution = structural_sos_4vars(poly, real = real)
+
+    if solution is None and d == 2:
+        solution = sos_struct_quadratic(poly)
 
     if solution is None:
         return None

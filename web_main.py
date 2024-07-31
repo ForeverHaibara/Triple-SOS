@@ -2,6 +2,8 @@ from flask import Flask, render_template, request, jsonify
 from flask_socketio import SocketIO, join_room, leave_room
 from flask_cors import CORS
 
+import sympy as sp
+
 from src.utils.roots import RootTangent, RootsInfo
 from src.utils.text_process import pl
 from src.utils.expression.solution import SolutionSimple
@@ -13,20 +15,20 @@ class SOS_WEB(Flask):
         super().__init__(*args, **kwargs)
 
 app = SOS_WEB(__name__, template_folder = './')
-CORS(app)
+CORS(app, supports_credentials=True)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
 @socketio.on('connect')
 def on_connect():
     sid = request.sid
     join_room(sid)
-    print('Joined', sid)
+    print('Joined Room', sid)
 
 @socketio.on('disconnect')
 def on_disconnect():
     sid = request.sid
     leave_room(sid)
-    print('Left', sid)
+    print('Left Room', sid)
 
 @app.route('/process/preprocess', methods=['POST'])
 def preprocess():
@@ -115,9 +117,16 @@ def findroot(sid, **kwargs):
                 {'rootsinfo': rootsinfo.gui_description, 'tangents': tangents}, to=sid
             )
         elif 'sos' in kwargs['actions']:
-            rootsinfo.tangents = [
-                RootTangent(pl(tg).as_expr()) for tg in kwargs['tangents'].split('\n') if len(tg) > 0
-            ]
+            tangents = []
+            for tg in kwargs['tangents'].split('\n'):
+                if len(tg) > 0:
+                    try:
+                        tg = pl(tg)
+                        if tg is not None and (tg.domain in (sp.ZZ, sp.QQ)):
+                            tg = tg.as_expr()
+                            tangents.append(RootTangent(tg))
+                    except:
+                        pass
     if 'sos' in kwargs['actions']:
         kwargs['rootsinfo'] = rootsinfo
         sum_of_square(sid, **kwargs)
@@ -205,14 +214,17 @@ def index():
     return render_template('triples.html')
 
 
-def gevent_launch(app):
-    # https://flask-socketio.readthedocs.io/en/latest/deployment.html
-    from gevent import monkey
-    from flask_socketio import SocketIO
-    monkey.patch_all()
-    socketio = SocketIO(app)
-    socketio.run(app, host='0.0.0.0', port=5000, debug=True)
-
-
 if __name__ == '__main__':
-    socketio.run(app, port=5000)
+    # For deployment, please also configure the "host" variable in triples.html!!!
+    DEPLOY = False
+
+    HOST = '127.0.0.1'
+    PORT = 5000
+    if DEPLOY:
+        HOST = '0.0.0.0'
+        SOS_Manager.verbose = False
+
+    print('=' * 50)
+    print('Running the server at http://%s:%d'%(HOST, PORT))    
+    print('=' * 50)
+    socketio.run(app, host=HOST, port=PORT, debug=False)
