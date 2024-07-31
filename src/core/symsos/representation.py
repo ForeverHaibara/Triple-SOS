@@ -211,7 +211,7 @@ def prove_numerator(numerator: sp.Poly, positive = True):
 
     for ((deg, ), coeff) in numerator.terms():
         # first scan whether the coefficient is positive
-        y_degree = coeff.as_poly(y).degree()
+        y_degree = coeff.as_poly(x, y).total_degree()
         coeff = coeff.subs(y, 1).as_poly(x) # de-homogenize
         if not check_univariate(coeff, positive):
             return None

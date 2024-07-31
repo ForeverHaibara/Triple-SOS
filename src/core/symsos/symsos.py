@@ -38,7 +38,7 @@ def SymmetricSOS(
     """
 
     # check symmetricity here # and (1,1,1) == 0
-    if (len(poly.gens) != 3 or not (poly.domain in (sp.polys.ZZ, sp.polys.QQ))):
+    if (len(poly.gens) != 3 or not (poly.domain in (sp.ZZ, sp.QQ))):
         return None
     if (not all(verify_hom_cyclic(poly))) or (not verify_is_symmetric(poly)):
         return None
