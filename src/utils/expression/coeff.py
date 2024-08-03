@@ -116,7 +116,7 @@ class Coeff():
 
     def as_poly(self, *args) -> Poly:
         """
-        Return the polynomial of given variables. If args is not given, it uses.
+        Return the polynomial of given variables. If args is not given, it uses a-z.
         """
         if len(args) == 0:
             if self.is_zero:
@@ -138,12 +138,19 @@ class Coeff():
 
     def degree(self) -> int:
         """
-        Return the degree of the polynomial.
+        Return the degree of the polynomial. Only works for homogeneous polynomials.
+        Please use `total_degree()` for non-homogeneous polynomials.
         """
         if len(self.coeffs) == 0:
             return 0
         for k in self.coeffs:
             return sum(k)
+
+    def total_degree(self) -> int:
+        """
+        Return the total degree of the polynomial.
+        """
+        return max(sum(k) for k in self.coeffs)
 
     @property
     def is_zero(self) -> bool:

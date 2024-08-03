@@ -7,11 +7,10 @@ from .utils import (
 
 a, b, c = sp.symbols('a b c')
 
-def sos_struct_cubic(coeff, recurrsion = None, real = True):
+def sos_struct_cubic(coeff, real = True):
     """
     Solve cyclic cubic polynomials.
 
-    This function does not use `recurrsion` to solve the problem.
     This function supports irrational coefficients.
     """
     if coeff((2,1,0)) == coeff((1,2,0)):
@@ -116,7 +115,7 @@ def _sos_struct_cubic_parabola(coeff):
 
 def _sos_struct_cubic_nontrivial(coeff):
     """
-    Solve nontrivial cyclic cubic polynomial by multiplying s(a). We avoid the use of recurrsion.
+    Solve nontrivial cyclic cubic polynomial by multiplying s(a).
 
     See further details in the theorem of quartic.
 
@@ -187,7 +186,7 @@ def _sos_struct_cubic_nontrivial(coeff):
     return sum_y_exprs(y, exprs) / CyclicSum(a)
 
     # poly2 = poly * (a + b + c).as_poly(a,b,c)
-    # solution = recurrsion(poly2)
+    # solution = recursion(poly2)
     # if solution is not None:
     #     return solution / CyclicSum(a)
 
@@ -256,11 +255,9 @@ def _sos_struct_cubic_nontrivial_irrational(coeff):
     return sum_y_exprs(y, exprs) / CyclicSum(a*b)
 
 
-def sos_struct_acyclic_cubic(coeff, recurrsion = None, real = True):
+def sos_struct_acyclic_cubic(coeff, real = True):
     """
     Solve acyclic cubic polynomials.
-
-    This function does not use `recurrsion` to solve the problem.
 
     Nonnegative cubic polynomials will have at most one interior zero. If there are
     two, we can consider the set 0 <= f(a,b,c) < eps where eps is a sufficiently small

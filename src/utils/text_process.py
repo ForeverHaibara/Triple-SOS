@@ -343,9 +343,19 @@ def short_constant_parser(x):
     return txt
 
 
-def coefficient_triangle(poly, degree = None):
+def coefficient_triangle(poly: sp.Poly, degree: int = None) -> str:
     """
     Convert the coefficients of a polynomial to a list.
+
+    The degree should be specified when the polynomial is zero to
+    indicate the degree of the zero polynomial.
+
+    Parameters
+    ----------
+    poly : sp.Poly
+        The polynomial to convert.
+    degree : int
+        The degree of the polynomial. If None, it will be computed.
     """
     if degree is None:
         degree = deg(poly)

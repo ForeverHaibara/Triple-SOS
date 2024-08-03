@@ -4,12 +4,12 @@ from .utils import (
     CyclicSum, congruence, radsimp, sum_y_exprs
 )
 
-def sos_struct_quadratic(coeff, recurrsion = None, real = True):
+def sos_struct_quadratic(coeff, real = True):
     """
     Solve cyclic quadratic problems. 
     It must be in the form CyclicSum(a**2 + x*a*b) where x >= -1.
 
-    The function does not use `recurrsion` and `real` arguments.
+    The function does not use the `real` argument.
 
     More detailedly, we shall also handle cases for real numbers.
     When -1 <= x <= 2, it is a linear combination of s(a2-ab) and s(a)2,
@@ -36,11 +36,11 @@ def sos_struct_quadratic(coeff, recurrsion = None, real = True):
     return w1 / 2 * CyclicSum((a-b)**2) + w2 * CyclicSum(a)**2
 
 
-def sos_struct_acyclic_quadratic(coeff, recurrsion = None, real = True):
+def sos_struct_acyclic_quadratic(coeff, real = True):
     """
     Solve quadratic acyclic 3-var polynomial inequalities.
 
-    The function does not use `recurrsion` and `real` arguments.
+    The function does not use the `real` argument.
 
     If the inequality is positive over a,b,c in R. Then it can is a semidefinite
     positive quadratic form. We can decompose it into a sum of squares.

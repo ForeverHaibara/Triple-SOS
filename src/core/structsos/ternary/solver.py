@@ -16,7 +16,7 @@ from .acyclic import sos_struct_acyclic_sparse
 from .nonhomogeneous import sos_struct_nonhomogeneous
 
 from ..utils import Coeff, PolynomialNonpositiveError, PolynomialUnsolvableError
-from ..sparse import sos_struct_extract_factors
+from ..sparse import sos_struct_common, sos_struct_degree_specified_solver
 from ....utils import verify_hom_cyclic
 
 SOLVERS = {
@@ -37,58 +37,44 @@ SOLVERS_ACYCLIC = {
 }
 
 
-def _structural_sos_3vars(
-        coeff: Union[sp.Poly, Coeff, Dict],
-        real: bool = True,
-        is_cyc: bool = True
-    ) -> sp.Expr:
-    """
-    Perform structural sos on a 3-var polynomial and returns an sympy expression.
-    This function could be called for recurrsive purpose.
-    """
 
+def _structural_sos_3vars_cyclic(
+        coeff: Union[sp.Poly, Coeff, Dict],
+        real: bool = True
+    ):
+    """
+    Internal function to solve a 3-var homogeneous cyclic polynomial using structural SOS.
+    The function assumes the polynomial is wrt. (a, b, c).
+    It does not check the homogeneous / cyclic property of the polynomial to save time.
+    """
+    if not isinstance(coeff, Coeff):
+        coeff = Coeff(coeff)
+    
+    return sos_struct_common(coeff,
+        sos_struct_sparse,
+        sos_struct_degree_specified_solver(SOLVERS, homogeneous=True),
+        sos_struct_heuristic,
+        real=real
+    )
+
+def _structural_sos_3vars_acyclic(
+        coeff: Union[sp.Poly, Coeff, Dict],
+        real: bool = True
+    ):
+    """
+    Internal function to solve a 3-var homogeneous acyclic polynomial using structural SOS.
+    The function assumes the polynomial is wrt. (a, b, c).
+    It does not check the homogeneous / cyclic property of the polynomial to save time.
+    """
     if not isinstance(coeff, Coeff):
         coeff = Coeff(coeff)
 
-    partial_recur = partial(_structural_sos_3vars, is_cyc = is_cyc)
+    return sos_struct_common(coeff,
+        sos_struct_acyclic_sparse,
+        sos_struct_degree_specified_solver(SOLVERS_ACYCLIC, homogeneous=True),
+        real=real
+    )
 
-    if is_cyc:
-        prior_solver = sos_struct_sparse
-        solvers = SOLVERS
-        heuristic_solver = sos_struct_heuristic
-    else:
-        prior_solver = sos_struct_acyclic_sparse
-        solvers = SOLVERS_ACYCLIC
-        heuristic_solver = lambda *args, **kwargs: None
-
-    solution = None
-    degree = coeff.degree()
-    try:
-        solution = sos_struct_extract_factors(coeff, recurrsion = partial_recur, real = real)
-
-        # first try sparse cases
-        if solution is None:
-            solution = prior_solver(coeff, recurrsion = partial_recur, real = real)
-
-        if solution is None:
-            solver = solvers.get(degree, None)
-            if solver is not None:
-                solution = solver(coeff, recurrsion = partial_recur, real = real)
-
-    except PolynomialUnsolvableError as e:
-        # When we are sure that the polynomial is nonpositive,
-        # we can return None directly.
-        if isinstance(e, PolynomialNonpositiveError):
-            return None
-
-    # If the polynomial is not solved yet, we can try heuristic solver.
-    try:
-        if solution is None and degree > 6:
-            solution = heuristic_solver(coeff, recurrsion = partial_recur)
-    except PolynomialUnsolvableError:
-        return None
-
-    return solution
 
 
 def structural_sos_3vars(
@@ -96,8 +82,9 @@ def structural_sos_3vars(
         real: bool = True,
     ) -> sp.Expr:
     """
-    Main function of structural SOS for 3-var homogeneous polynomials. It first assumes the polynomial
-    has variables (a,b,c) and latter substitutes the variables with the original ones.
+    Main function of structural SOS for 3-var homogeneous polynomials. 
+    It first assumes the polynomial has variables (a,b,c) and
+    latter substitutes the variables with the original ones.
     """
     if len(poly.gens) != 3:
         raise ValueError("structural_sos_3vars only supports 3-var polynomials.")
@@ -106,15 +93,21 @@ def structural_sos_3vars(
     if not is_hom:
         raise ValueError("structural_sos_3vars only supports homogeneous polynomials.")
 
+    if is_cyc:
+        func = _structural_sos_3vars_cyclic
+    else:
+        func = _structural_sos_3vars_acyclic
+
     try:
-        solution = _structural_sos_3vars(Coeff(poly), real = real, is_cyc = is_cyc)
+        solution = func(Coeff(poly), real = real)
     except (PolynomialNonpositiveError, PolynomialUnsolvableError):
         return None
 
     if solution is None:
         return None
 
-    solution = solution.xreplace(dict(zip(sp.symbols("a b c"), poly.gens)))
+    if poly.gens != (sp.symbols("a b c")):
+        solution = solution.xreplace(dict(zip(sp.symbols("a b c"), poly.gens)))
     return solution
 
 

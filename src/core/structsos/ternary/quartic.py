@@ -11,11 +11,9 @@ from .utils import (
 
 a, b, c = sp.symbols('a b c')
 
-def sos_struct_quartic(coeff, recurrsion = None, real = True):
+def sos_struct_quartic(coeff, real = True):
     """
     Solve cyclic quartic problems.
-
-    The function only uses `coeff`. The `poly` and `recurrsion` is not used for minimium dependency.
 
     Core theorem:
     If f(a,b,c) = s(a4 + pa3b + na2b2 + qab3 - (1+p+n+q)a2bc) >= 0 holds for all a,b,c >= 0, 
@@ -577,7 +575,7 @@ def _sos_struct_quartic_uncentered(coeff, recur = False):
 #
 #####################################################################
 
-def sos_struct_acyclic_quartic(coeff, recurrsion = None, real = True):
+def sos_struct_acyclic_quartic(coeff, real = True):
     """
     Solve acyclic quartic problems.
     """
@@ -585,7 +583,7 @@ def sos_struct_acyclic_quartic(coeff, recurrsion = None, real = True):
     return _sos_struct_acyclic_quartic_real(coeff)
 
 
-def _sos_struct_acyclic_quartic_symmetric(coeff, recurrsion = None, real = True):
+def _sos_struct_acyclic_quartic_symmetric(coeff, real = True):
     """
     Solve acyclic quartic polynomials that are symmetric with respect to two variables.
     If it is nonnegative over R, it must be sum of squares by Hilbert's 17th problem, we can write it in

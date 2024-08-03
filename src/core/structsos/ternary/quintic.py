@@ -30,14 +30,14 @@ def _verify_border_nonnegative(border):
                 return False
     return True
 
-def sos_struct_quintic(coeff, recurrsion, real = True):
+def sos_struct_quintic(coeff, real = True):
     """
     Solve quintic inequalities.
     """
 
     # first try symmetric solution
     if coeff((4,1,0)) == coeff((1,4,0)) and coeff((3,2,0)) == coeff((2,3,0)):
-        return sos_struct_quintic_symmetric(coeff, recurrsion)
+        return sos_struct_quintic_symmetric(coeff)
 
     if coeff((5,0,0)) == 0:
         return _sos_struct_quintic_hexagon(coeff)

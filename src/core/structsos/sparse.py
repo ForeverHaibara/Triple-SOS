@@ -1,42 +1,55 @@
-from typing import Callable, List, Optional, Union
+from typing import Callable, List, Optional, Union, Dict
 
 import sympy as sp
 
-from .utils import Coeff, PolynomialUnsolvableError
+from .utils import Coeff, PolynomialUnsolvableError, PolynomialNonpositiveError
 from ...utils import CyclicSum, CyclicProduct, congruence
 
-def sos_struct_extract_factors(coeff: Coeff, recurrsion: Callable, symbols: Optional[List[sp.Symbol]] = None, real: bool = True, **kwargs):
-    """
-    Try solving the inequality by extracting factors and changing of variables.
-    It handles cyclic and acyclic inequalities both.
+def _null_solver(*args, **kwargs):
+    return None
 
-    For instance,
-    CyclicSum(a**2bc*(a-b)*(a-c)) is converted to CyclicSum(a*(a-b)*(a-c))
-    by extracting CyclicProduct(a).
-    CyclicSum(a**2*(a**2-b**2)*(a**2-c**2)) is converted to proving
-    Cyclic(a*(a-b)*(a-c)) by making substitution a^2,b^2,c^2 -> a,b,c.
+def sos_struct_extract_factors(poly: Union[sp.Poly, Coeff], solver: Callable, real: bool = True, **kwargs):
     """
-    if symbols is None:
+    Wrap a solver to handle factorizable polynomials in advance.
+
+    Cases.
+    + If the polynomial is a*b*c * f(a,b,c), it first solves f(a,b,c) and then multiplies the result by a*b*c.
+    + If the polynomial is f(a^k, b^k, c^k), it first solves f(a,b,c) and then replaces a,b,c with a^k,b^k,c^k.
+    """
+    coeff = poly if isinstance(poly, Coeff) else Coeff(poly)
+    if isinstance(poly, sp.Poly):
+        symbols = poly.gens
+    else:
         symbols = sp.symbols(f"a:{chr(96 + coeff.nvars)}")
+
+    def coeff_to_poly(new_coeff):
+        if isinstance(poly, sp.Poly):
+            return new_coeff.as_poly(*symbols)
+        return new_coeff
 
     monoms, new_coeff = coeff.cancel_abc()
     if any(i > 0 for i in monoms):
-        solution = recurrsion(new_coeff, real = real and all(i % 2 == 0 for i in monoms), **kwargs)
+        new_coeff = coeff_to_poly(new_coeff)
+        solution = solver(new_coeff, real = real and all(i % 2 == 0 for i in monoms), **kwargs)
         if solution is not None:
             if coeff.nvars == 3 and all(i == monoms[0] for i in monoms):
-                multiplier = CyclicProduct(symbols[0]**monoms[0])
+                multiplier = CyclicProduct(symbols[0]**monoms[0], symbols)
             else:
                 multiplier = sp.Mul(*[s**i for s, i in zip(symbols, monoms)])
             return multiplier * solution
-        raise PolynomialUnsolvableError
+        return None
 
     i, new_coeff = coeff.cancel_k()
     if i > 1:
-        solution = recurrsion(new_coeff, real = False if (i % 2 == 0) else real, **kwargs)
+        new_coeff = coeff_to_poly(new_coeff)
+        solution = solver(new_coeff, real = False if (i % 2 == 0) else real, **kwargs)
         if solution is not None:
-            return solution.xreplace(dict((s, s**i) for s in symbols))
-        raise PolynomialUnsolvableError
-    
+            solution = solution.xreplace(dict((s, s**i) for s in symbols))
+            return solution
+        return None
+
+    return solver(poly, **kwargs)
+
 
 def sos_struct_linear(poly: sp.Poly):
     """
@@ -103,3 +116,53 @@ def sos_struct_quadratic(poly: sp.Poly):
     U, S = res
     genvec = sp.Matrix(list(poly.gens) + [1])
     return sum(S[i] * (U[i, :] * genvec)[0,0]**2 for i in range(nvars + 1))
+
+
+def sos_struct_common(poly: Union[sp.Poly, Coeff], *solvers, **kwargs):
+    """
+    A method wrapper for multiple solvers.
+    """
+    def _wrapped_solver(poly, **kwargs):
+        solution = None
+        for solver in solvers:
+            if solver is None:
+                continue
+            try:
+                solution = solver(poly, **kwargs)
+                if solution is not None:
+                    break
+            
+            except PolynomialUnsolvableError as e:
+                # When we are sure that the polynomial is nonpositive,
+                # we can return None directly.
+                if isinstance(e, PolynomialNonpositiveError):
+                    return None
+        return solution
+    
+    # cancel abc
+    
+    return sos_struct_extract_factors(poly, _wrapped_solver, **kwargs)
+    
+
+
+def sos_struct_degree_specified_solver(solvers: Dict[int, Callable], homogeneous: bool = False) -> Callable:
+    """
+    A method wrapper for structural SOS with degree specified solvers.
+
+    When the degree <= 2 and the solver is not provided, it uses the default solvers.
+    """
+    def _sos_struct_degree_specified_solver(poly: Union[sp.Poly, Coeff], *args, **kwargs):
+        if homogeneous and isinstance(poly, Coeff):
+            degree = poly.degree()
+        else:
+            degree = poly.total_degree()
+        solver = solvers.get(degree, None)
+        if solver is None:
+            if degree == 1:
+                solver = sos_struct_linear
+            elif degree == 2:
+                solver = sos_struct_quadratic
+            else:
+                solver = _null_solver
+        return solver(poly, *args, **kwargs)
+    return _sos_struct_degree_specified_solver

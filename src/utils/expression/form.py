@@ -19,6 +19,8 @@ def _verify_poly(poly):
 def poly_get_standard_form(poly, formatt = 'short', is_cyc = None):
     if (not _verify_poly(poly)) or (poly.domain is sp.RR):
         return
+    if is_cyc is None:
+        is_cyc = verify_hom_cyclic(poly)[1]
     names = [_.name for _ in poly.gens]
     if formatt == 'short':
         def _title_parser(char, deg):

@@ -7,6 +7,7 @@ from ..utils import (
 )
 
 from ...symsos import prove_univariate
+from ...solver import SS
 from ....utils.roots.rationalize import (
     nroots, rationalize, rationalize_bound, univariate_intervals,
     square_perturbation, cancel_denominator, common_region_of_conics
@@ -77,13 +78,7 @@ def inverse_substitution(expr: sp.Expr, factor_degree: int = 0) -> sp.Expr:
 
 
 def try_perturbations(
-        poly,
-        p,
-        q,
-        perturbation,
-        recurrsion = None,
-        times = 4,
-        **kwargs
+        poly, p, q, perturbation, times = 4, **kwargs
     ):
     """
     Try subtracting t * perturbation from poly and perform recurrsive trials.
@@ -95,7 +90,7 @@ def try_perturbations(
     perturbation_poly = perturbation.doit().as_poly(a,b,c)
     for t in square_perturbation(p, q, times = times):
         poly2 = poly - t * perturbation_poly
-        solution = recurrsion(Coeff(poly2))
+        solution = SS.structsos.ternary._structural_sos_3vars_cyclic(Coeff(poly2))
         if solution is not None:
             return solution + t * perturbation
     return None

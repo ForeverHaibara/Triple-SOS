@@ -10,7 +10,7 @@ from .sextic_symmetric import _restructure_quartic_polynomial
 
 a, b, c = sp.symbols('a b c')
 
-def sos_struct_septic_symmetric(coeff, recurrsion, real=False):
+def sos_struct_septic_symmetric(coeff, real=False):
     if not all(coeff((i,j,k)) == coeff((j,i,k)) for (i,j,k) in ((6,1,0),(5,2,0),(4,3,0),(4,2,1))):
         return
 

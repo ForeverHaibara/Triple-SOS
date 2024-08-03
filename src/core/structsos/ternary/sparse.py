@@ -4,16 +4,16 @@ from math import gcd
 import sympy as sp
 
 from .utils import (
-    CyclicSum, CyclicProduct, Coeff, prove_univariate
+    CyclicSum, CyclicProduct, Coeff, SS, prove_univariate
 )
 from .quadratic import sos_struct_quadratic
 from .quartic import sos_struct_quartic
 
-def sos_struct_sparse(coeff, recurrsion = None, real = True):
+def sos_struct_sparse(coeff, real = True):
     """
     Solver to very sparse inequalities like AM-GM.
 
-    The function does not use `recurrsion` for minimal dependency.
+    The function does not use `recursion` for minimal dependency.
 
     This method does not present solution for a,b,c in R in prior, but in R+.
     Inequalities of degree 2 and 4 are skipped because they might be
@@ -211,9 +211,9 @@ def _acc_dict(items: List[Tuple]) -> Dict:
     d = {k: v for k,v in d.items() if v != 0}
     return d
 
-def _separate_product(recurrsion: Callable) -> Callable:
+def _separate_product(recursion: Callable) -> Callable:
     """
-    A wrapper of recurrsion function to avoid nested CyclicProduct(a).
+    A wrapper of recursion function to avoid nested CyclicProduct(a).
     For instance, if we have CyclicProduct(a) * (CyclicProduct(a)*F(a,b,c) + G(a,b,c)),
     we had better expand it to CyclicProduct(a**2) * F(a,b,c) + CyclicProduct(a) * G(a,b,c).
     """
@@ -242,8 +242,8 @@ def _separate_product(recurrsion: Callable) -> Callable:
             return d, sp.Mul(*rs)
         return 0, x
 
-    def _new_recurrsion(x: Coeff, **kwargs) -> Optional[sp.Expr]:
-        x = recurrsion(x, **kwargs)
+    def _new_recursion(x: Coeff, **kwargs) -> Optional[sp.Expr]:
+        x = recursion(x, **kwargs)
         if x is None:
             return x
         d, r = _extract_cyclic_prod(x)
@@ -255,7 +255,7 @@ def _separate_product(recurrsion: Callable) -> Callable:
             return sp.Add(*new_args)
         return x
 
-    return _new_recurrsion
+    return _new_recursion
 
 class Pnrms:
     """
@@ -334,7 +334,7 @@ class Hnmr:
 
     We require m >= 0 and r >= 0 always.
 
-    We have recurrsion identity:
+    We have recursion identity:
     H(n,m,r) = P(2r,r,n,m-r) + (a^r*b^r*c^r) * H(n-r,m-2r,r)
 
     Also, we have inverse substituion (n,m,r) -> (m-n-r,m,r).
@@ -429,11 +429,11 @@ class Hnmr:
         return v * sol
 
 
-def sos_struct_heuristic(coeff, recurrsion):
+def sos_struct_heuristic(coeff, real=True):
     """
     Solve high-degree but sparse inequalities by heuristic method.
     It subtracts some structures from the inequality and calls
-    the recurrsion function to solve the problem.
+    the recursion function to solve the problem.
 
     WARNING: Only call this function when degree > 6. And make sure that
     coeff.clear_zero() to remove zero terms on the border.
@@ -445,9 +445,11 @@ def sos_struct_heuristic(coeff, recurrsion):
     s(c8(a-b)2(a4-3a3b+2a2b2+3b4))
     """
     degree = coeff.degree()
-    assert degree > 6, "Degree must be greater than 6 in heuristic method."
-
-    recurrsion = _separate_product(recurrsion)
+    # assert degree > 6, "Degree must be greater than 6 in heuristic method."
+    if degree <= 6:
+        return None
+    recursion = SS.structsos.ternary._structural_sos_3vars_cyclic
+    recursion = _separate_product(recursion)
 
     if coeff((degree, 0, 0)):
         # not implemented
@@ -483,7 +485,7 @@ def sos_struct_heuristic(coeff, recurrsion):
             # all coefficients are on the border
             x = sp.Symbol('x')
             a, b, c = sp.symbols('a b c')
-            border_poly = sp.polys.Poly.from_dict(dict(border), gens = (x,))
+            border_poly = sp.Poly.from_dict(dict(border), gens = (x,))
             border_proof = prove_univariate(border_poly)
             if border_proof is not None:
                 if border is border1:
@@ -522,7 +524,7 @@ def sos_struct_heuristic(coeff, recurrsion):
                     for n_, m_ in ((r_ + gap11, s_ + gap12), (r_ + gap12, s_ + gap11)):
                         # print('>> s(a%d(b%d-c%d))s(a%d(b%d-c%d))' % (n_, r_, r_, m_, s_, s_))
 
-                        solution = recurrsion(coeff - Pnrms.coeff(n_, r_, m_, s_, c0), real = False)
+                        solution = recursion(coeff - Pnrms.coeff(n_, r_, m_, s_, c0), real = False)
                         if solution is not None:
                             return solution + Pnrms.as_expr(n_, r_, m_, s_, c0)
                 elif gap11 != 0 and gap21 == 0:
@@ -532,14 +534,14 @@ def sos_struct_heuristic(coeff, recurrsion):
                         if n_ >= 0 and m_ >= 0 and m_ <= n_ + r_:
                             # print('>> s(a%d(b%d+c%d)(a%d-b%d)(a%d-c%d))' % (n_, m_, m_, r_, r_, r_, r_))
 
-                            solution = recurrsion(coeff - Hnmr.coeff(n_, m_, r_, c0 if m_ else c0/2), real = False)
+                            solution = recursion(coeff - Hnmr.coeff(n_, m_, r_, c0 if m_ else c0/2), real = False)
                             if solution is not None:
                                 return solution + Hnmr.as_expr(n_, m_, r_, c0 if m_ else c0/2)
 
                         if m_ > r_ and n_ + r_ > m_:
                             # print('>> s(a%d(b%d-c%d))s(a%d(b%d-c%d))' % (2*r_, r_, r_, n_, m_-r_, m_-r_))
 
-                            solution = recurrsion(coeff - Pnrms.coeff(2*r_, r_, n_, m_-r_, c0), real = False)
+                            solution = recursion(coeff - Pnrms.coeff(2*r_, r_, n_, m_-r_, c0), real = False)
                             if solution is not None:
                                 return solution + Pnrms.as_expr(2*r_, r_, n_, m_-r_, c0)
 
@@ -550,14 +552,14 @@ def sos_struct_heuristic(coeff, recurrsion):
                         if n_ >= 0 and m_ >= 0:
                             # print('>> s(b%dc%d(b%d+c%d)(a%d-b%d)(a%d-c%d))' % (n_, n_, m_, m_, r_, r_, r_, r_))
 
-                            solution = recurrsion(coeff - Hnmr.coeff(-n_, m_, r_, c0 if m_ else c0/2), real = False)
+                            solution = recursion(coeff - Hnmr.coeff(-n_, m_, r_, c0 if m_ else c0/2), real = False)
                             if solution is not None:
                                 return solution + Hnmr.as_expr(-n_, m_, r_, c0 if m_ else c0/2)
 
                         # if m_ >= r_:
                         #     print('>> s(a%d(b%d-c%d))s(a%d(b%d-c%d))' % (2*r_, r_, r_, n_, m_-r_, m_-r_))
 
-                        #     solution = recurrsion(coeff - Pnrms.coeff(2*r_, r_, n_, m_-r_, c0), real = False)
+                        #     solution = recursion(coeff - Pnrms.coeff(2*r_, r_, n_, m_-r_, c0), real = False)
                         #     if solution is not None:
                         #         return solution + Pnrms.coeff(2*r_, r_, n_, m_-r_, c0)
 

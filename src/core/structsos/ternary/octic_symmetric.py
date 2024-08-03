@@ -49,7 +49,7 @@ def _solve_inverse_quartic(m, p, n, r):
             return sum_y_exprs(y, exprs)
 
 
-def sos_struct_octic_symmetric(coeff, recurrsion, real=True):
+def sos_struct_octic_symmetric(coeff, real=True):
     if not all(coeff((i,j,k)) == coeff((j,i,k)) for (i,j,k) in ((7,1,0),(6,2,0),(5,3,0),(5,2,1),(4,3,1))):
         return
 

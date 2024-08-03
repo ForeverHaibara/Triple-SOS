@@ -70,7 +70,8 @@ class SOS_Manager():
 
         return_dict = {'poly': poly, 'degree': n, 'txt': txt}
         if render_triangle:
-            return_dict['triangle'] = coefficient_triangle(poly)
+            return_dict['triangle'] = coefficient_triangle(poly, n)
+
 
         if render_grid:
             if cls.check_poly(poly):
