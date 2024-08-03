@@ -8,6 +8,11 @@ from ...utils import CyclicSum, CyclicProduct, congruence
 def _null_solver(*args, **kwargs):
     return None
 
+def _get_defaulted_gens(poly: Union[sp.Poly,Coeff]):
+    if isinstance(poly, sp.Poly):
+        return poly.gens
+    return sp.symbols(f"a:{chr(96 + poly.nvars)}") if len(poly.coeffs) > 0 else []
+
 def sos_struct_extract_factors(poly: Union[sp.Poly, Coeff], solver: Callable, real: bool = True, **kwargs):
     """
     Wrap a solver to handle factorizable polynomials in advance.
@@ -17,10 +22,7 @@ def sos_struct_extract_factors(poly: Union[sp.Poly, Coeff], solver: Callable, re
     + If the polynomial is f(a^k, b^k, c^k), it first solves f(a,b,c) and then replaces a,b,c with a^k,b^k,c^k.
     """
     coeff = poly if isinstance(poly, Coeff) else Coeff(poly)
-    if isinstance(poly, sp.Poly):
-        symbols = poly.gens
-    else:
-        symbols = sp.symbols(f"a:{chr(96 + coeff.nvars)}")
+    symbols = _get_defaulted_gens(poly)
 
     def coeff_to_poly(new_coeff):
         if isinstance(poly, sp.Poly):
@@ -114,7 +116,8 @@ def sos_struct_quadratic(poly: sp.Poly):
     if res is None:
         return None
     U, S = res
-    genvec = sp.Matrix(list(poly.gens) + [1])
+    gens = _get_defaulted_gens(poly)
+    genvec = sp.Matrix(list(gens) + [1])
     return sum(S[i] * (U[i, :] * genvec)[0,0]**2 for i in range(nvars + 1))
 
 

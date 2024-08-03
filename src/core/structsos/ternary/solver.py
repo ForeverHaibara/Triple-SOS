@@ -1,5 +1,4 @@
 from typing import Union, Dict, Optional, Any
-from functools import partial
 
 import sympy as sp
 

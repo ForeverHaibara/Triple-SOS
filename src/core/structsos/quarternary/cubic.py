@@ -4,7 +4,7 @@ from .utils import SymSum
 
 a, b, c, d = sp.symbols("a b c d")
 
-def quarternary_cubic_symmetric(coeff, recurrsion = None, real = True):
+def quarternary_cubic_symmetric(coeff, real = True):
     """
     Solve quarternary symmetric cubic polynomials. Symmetricity is not checked here.
 

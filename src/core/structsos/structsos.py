@@ -55,9 +55,7 @@ def _structural_sos(
     if d == 1:
         return sos_struct_linear(poly)
     elif d == 2:
-        solution = sos_struct_quadratic(poly)
-        if solution is not None:
-            return solution
+        pass
 
     nvars = len(poly.gens)
     if nvars == 1:
@@ -80,13 +78,18 @@ def _structural_sos(
 
     coeff = Coeff(poly)
     if is_hom:
-        return _structural_sos_hom(poly, real=real)
+        solution = _structural_sos_hom(poly, real=real)
     else:
         is_sym = coeff.is_symmetric()
         if is_sym:
-            return _structural_sos_nonhom_symmetric(poly, real=real)
+            solution = _structural_sos_nonhom_symmetric(poly, real=real)
         else:
-            return _structural_sos_nonhom_asymmetric(poly, real=real)
+            solution = _structural_sos_nonhom_asymmetric(poly, real=real)
+
+    if solution is None:
+        if d == 2:        
+           solution = sos_struct_quadratic(poly)
+    return solution
     # original_poly = poly
     # d = poly.total_degree()
     # nvars = len(poly.gens)

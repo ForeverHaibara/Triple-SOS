@@ -10,7 +10,18 @@ class Coeff():
     """
     A standard class for representing a polynomial with coefficients.
     """
+    def __new__(cls, *args, **kwargs):
+        # if it is already a Coeff object, return it.
+        if len(args) == 1 and isinstance(args[0], cls):
+            return args[0]
+        return super().__new__(cls)
+
     def __init__(self, coeffs: Union[Poly, Dict], is_rational: bool = True):
+        if hasattr(self, 'coeffs'):
+            # if the object is already initialized,
+            # (this is the case when called from __new__ by Coeff(Coeff(...)) )
+            # then return without reinitializing.
+            return
         if isinstance(coeffs, Poly):
             self._nvars = len(coeffs.gens)
             poly = coeffs
