@@ -4,7 +4,6 @@ from typing import Union, Optional, Tuple, List, Dict, Callable, Generator
 import numpy as np
 import sympy as sp
 
-from .arithmetic import solve_undetermined_linear
 from ...utils import congruence
 
 
@@ -133,7 +132,7 @@ class Mat2Vec:
             Symmetric matrix.
         """
         if mode == cls.DIRECT:
-            n = round(v.shape[0] ** .5)
+            n = round((v.shape[0] * v.shape[1]) ** .5)
             return v.reshape(n, n)
         elif mode == cls.UPPER:
             return cls.symmetric_matrix_from_upper_vec(v)

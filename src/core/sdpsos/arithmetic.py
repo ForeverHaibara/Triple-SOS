@@ -7,14 +7,26 @@
 # NOTE: sympy has supported DomainMatrix on ZZ/QQ to compute rref faster
 # with version > 1.12 (exclusive)
 # TODO: compare the performance of the two implementations
+# TODO: use numpy for matrix computation
 
 # from fractions import Fraction
+from math import gcd
 from time import time
-from typing import List, Tuple
+from typing import List, Tuple, Union, Optional
 
+import numpy as np
 import sympy as sp
 from sympy import Rational
 from sympy.external.gmpy import MPQ
+
+from .utils import Mat2Vec
+
+def _lcm(x, y):
+    """
+    LCM func for python internal integers. DO NOT USE SYMPY BECAUSE IT IS SLOW
+    WHEN CONVERTING TO SYMPY INTEGERS.
+    """
+    return x * y // gcd(x, y)
 
 def _find_reasonable_pivot_naive(col):
     """
@@ -273,3 +285,175 @@ def solve_column_separated_linear(A: List[List[Tuple[int, Rational]]], b: sp.Mat
                     spaces.append(space)
 
     return sp.Matrix(x0), sp.Matrix(spaces).T
+
+
+def _common_denoms(A: Union[List, sp.Matrix], bound: int = 4096) -> Optional[int]:
+    q = 1
+    for v in A:
+        if not v.is_Rational:
+            return None
+        q = _lcm(q, v.q)
+        if q > bound:
+            return None
+    return int(q)
+
+
+def matmul(A: sp.Matrix, B: sp.Matrix, q1: Optional[int] = None, q2: Optional[int] = None) -> sp.Matrix:
+    """
+    Fast, low-level implementation of symbolic matrix multiplication.
+    When A and B are both rational matrices, it calls NumPy to compute the result.
+    Otherwise, it falls back to the default method.
+
+    Parameters
+    ----------
+    A: Matrix
+        Matrix A
+    B: Matrix
+        Matrix B
+    q1: int
+        Common denominator of A. If not specified, it will be inferred.
+    q2: int
+        Common denominator of B. If not specified, it will be inferred.
+    """
+    if q1 is None:
+        q1 = _common_denoms(A)
+    if q1 is not None and q2 is None:
+        q2 = _common_denoms(B)
+    if q1 is None or q2 is None:
+        return A * B
+
+    A = np.round(np.array(A).astype('float') * q1).astype('int')
+    B = np.round(np.array(B).astype('float') * q2).astype('int')
+    C = A @ B
+    C = sp.Matrix(C.tolist()) / (q1 * q2)
+    return C
+
+def matmul_multiple(A: sp.Matrix, B: sp.Matrix, q1: Optional[int] = None, q2: Optional[int] = None) -> sp.Matrix:
+    """
+    Perform multiple matrix multiplications. This can be regarded as a 3-dim tensor multiplication.
+    Assume A has shape N x (n^2) and B has shape n x m, then the result has shape N x (n*m).
+
+    Parameters
+    ----------
+    A: Matrix
+        Matrix A
+    B: Matrix
+        Matrix B
+    q1: int
+        Common denominator of A. If not specified, it will be inferred.
+    q2: int
+        Common denominator of B. If not specified, it will be inferred.
+    """
+
+    if q1 is None:
+        q1 = _common_denoms(A)
+    if q1 is not None and q2 is None:
+        q2 = _common_denoms(B)
+    if q1 is None or q2 is None:
+        # fallback to defaulted method
+        eq_mat = []
+        print(A.shape, B.shape)
+        for i in range(A.shape[0]):
+            Aij = Mat2Vec.vec2mat(A[i,:])
+            eq = list(matmul(Aij, B))
+            eq_mat.append(eq)
+
+        eq_mat = sp.Matrix(eq_mat)
+        return eq_mat
+
+    n, m = B.shape
+    A = np.round(np.array(A).astype('float') * q1).astype('int')
+    A = A.reshape((-1, n, n))
+    B = np.round(np.array(B).astype('float') * q2).astype('int')
+    C = (A @ B)
+    C = sp.Matrix(C.reshape((-1, n*m)).tolist()) / (q1 * q2)
+    return C
+
+
+def symmetric_bilinear(U: sp.Matrix, A: sp.Matrix, is_A_vec: bool = False, return_vec: bool = False):
+    """
+    Compute U.T * A * U efficiently.
+    Assume U.T is m x n and A is n x n. Then Kronecker product is O(m^2n^2),
+    and using direct matmul is O(mn(n+m)).
+
+    When A is sparse with k nonzeros, the complexity is O(2m^2k).
+
+    Parameters
+    ----------
+    U: Matrix
+        Matrix U
+    A: Matrix
+        Matrix A
+    is_A_vec: bool
+        Whether A is stored as a vector. If True, it first converts A to a matrix.
+    return_vec: bool
+        Whether to return the result as a vector list.
+    """
+    nonzeros = []
+    for i, val in enumerate(A):
+        if val != 0:
+            nonzeros.append((i, val))
+
+    n, m = U.shape
+    if len(nonzeros) * 2 >= n**2:
+    # if True:
+        if is_A_vec:
+            A = Mat2Vec.vec2mat(A)
+        M = matmul(U.T, matmul(A, U))
+        # M = U.T * A * U
+
+        if return_vec:
+            return list(M)
+        return M
+    else:
+        # A is sparse
+        M = [sp.S.Zero] * (m * m)
+        for l, val in nonzeros:
+            p = 0
+            l1, l2 = divmod(l, n)
+            for i in range(m):
+                for j in range(m):
+                    M[p] += U[l1, i] * U[l2, j] * val
+                    p += 1
+
+    if return_vec:
+        return M
+
+    return sp.Matrix(m, m, M)
+
+
+def symmetric_bilinear_multiple(U: sp.Matrix, A: sp.Matrix) -> sp.Matrix:
+    """
+    Perform multiple symmetric bilinear products.
+    Assume U has shape n x m and A has shape N x (n^2), then the result has shape N x m^2.
+
+    Parameters
+    ----------
+    U: Matrix
+        Matrix U
+    A: Matrix
+        Matrix A
+    """
+    q1, q2 = None, None
+    if q1 is None:
+        q1 = _common_denoms(A)
+    if q1 is not None and q2 is None:
+        q2 = _common_denoms(U)
+    if q1 is None or q2 is None:
+        # fallback to defaulted method
+        eq_mat = []
+        for i in range(A.shape[0]):
+            # Aij = Mat2Vec.vec2mat(space[i,:])
+            # eq = U.T * Aij * U
+            eq = symmetric_bilinear(U, A[i,:], is_A_vec = True, return_vec = True)
+            eq_mat.append(eq)
+        eq_mat = sp.Matrix(eq_mat)
+        return eq_mat
+
+    n, m = U.shape
+    A = np.round(np.array(A).astype('float') * q1).astype('int')
+    A = A.reshape((-1, n, n))
+    U = np.round(np.array(U).astype('float') * q2).astype('int')
+    C = (U.T @ A @ U)
+    C = sp.Matrix(C.reshape((-1, m*m)).tolist()) / (q1 * q2**2)
+    return C
