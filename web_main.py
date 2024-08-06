@@ -127,6 +127,7 @@ def findroot(sid, **kwargs):
                             tangents.append(RootTangent(tg))
                     except:
                         pass
+            rootsinfo.tangents = tangents
     if 'sos' in kwargs['actions']:
         kwargs['rootsinfo'] = rootsinfo
         sum_of_square(sid, **kwargs)

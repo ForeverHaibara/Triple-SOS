@@ -352,7 +352,6 @@ def matmul_multiple(A: sp.Matrix, B: sp.Matrix, q1: Optional[int] = None, q2: Op
     if q1 is None or q2 is None:
         # fallback to defaulted method
         eq_mat = []
-        print(A.shape, B.shape)
         for i in range(A.shape[0]):
             Aij = Mat2Vec.vec2mat(A[i,:])
             eq = list(matmul(Aij, B))
@@ -439,6 +438,7 @@ def symmetric_bilinear_multiple(U: sp.Matrix, A: sp.Matrix) -> sp.Matrix:
         q1 = _common_denoms(A)
     if q1 is not None and q2 is None:
         q2 = _common_denoms(U)
+    # print('q1 q2 =', q1, q2, 'A U shape =', A.shape, U.shape)
     if q1 is None or q2 is None:
         # fallback to defaulted method
         eq_mat = []
