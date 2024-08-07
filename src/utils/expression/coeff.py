@@ -80,7 +80,8 @@ class Coeff():
         elif (not self.is_zero) and perm_group.degree != self.nvars:
             return False
 
-        for perm in perm_group.args:
+        for perm in perm_group.generators:
+            # checking the generators is enough
             for k, v in self.coeffs.items():
                 if self(perm(k)) != v:
                     return False

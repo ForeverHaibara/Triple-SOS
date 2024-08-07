@@ -1,3 +1,8 @@
+from typing import Tuple, Optional
+
+import sympy as sp
+from sympy.core.symbol import uniquely_named_symbol
+
 class PropertyDict(dict):
     def __getattr__(self, key):
         return self.get(key)
@@ -27,3 +32,33 @@ class _sos_solver_class():
         return self._dict.get(key)
 
 SS = _sos_solver_class()
+
+
+def homogenize(poly: sp.Poly, t: Optional[sp.Symbol] = None) -> Tuple[sp.Poly, sp.Symbol]:
+    """
+    Automatically homogenize a polynomial if it is not homogeneous.
+
+    Parameters
+    ----------
+    poly : sp.Poly
+        The polynomial to homogenize.
+    t : Optional[sp.Symbol]
+        The symbol to use for homogenization. If None, a new symbol will be created.
+
+    Returns
+    ----------
+    Tuple[sp.Poly, sp.Symbol]
+        The homogenized polynomial and the homogenizer. If the polynomial is already homogeneous,
+        the homogenizer will be None.
+    """
+    is_hom = poly.is_homogeneous
+    if is_hom:
+        return poly, None
+
+    original_poly = poly
+    # create a symbol for homogenization
+    homogenizer = t
+    if homogenizer is None:
+        homogenizer = uniquely_named_symbol('t', sp.Tuple(*original_poly.free_symbols))
+    poly = original_poly.homogenize(homogenizer)
+    return poly, homogenizer

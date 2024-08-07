@@ -14,7 +14,7 @@ from sympy.printing.latex import LatexPrinter
 from sympy.printing.str import StrPrinter
 from sympy.printing.precedence import precedence_traditional, PRECEDENCE
 
-from ..basis_generator import MonomialCyclic
+from ..basis_generator import MonomialCyclic, MonomialPerm
 
 def _leading_symbol(expr):
     if isinstance(expr, sp.Symbol):
@@ -49,6 +49,21 @@ def _std_seq(symbols, perm):
     # return tuple(sorted_symbols[i] for i in p)
     return tuple(symbols[ind[i]] for i in p)
 
+def _func_perm(func, expr, symbols, perm):
+    new_args = [None] *  perm.order()
+    symbols = symbols
+    for i, translation in enumerate(CyclicExpr._generate_all_translations(symbols, perm)):
+        new_args[i] = expr.xreplace(translation)
+    expr = func(*new_args)
+    return expr
+    
+def _is_same_dict(d1, d2):
+    if len(d1) != len(d2):
+        return False
+    for k, v in d1.items():
+        if k not in d2 or sympify(d2[k] - v).cancel() != 0:
+            return False
+    return True
 
 class CyclicExpr(sp.Expr):
     """
@@ -56,6 +71,10 @@ class CyclicExpr(sp.Expr):
     can be configured by global variable CyclicExpr.PRINT_WITH_PARENS and CyclicExpr.PRINT_FULL.
 
     Every cyclic expression is defaultedly assumed to be cyclic with respect to (a, b, c).
+
+    Examples
+    ========
+    >>> CyclicSum(a*(b-c)**2, (a, b, c), PermutationGroup(Permutation([1,2,0])))
     """
     PRINT_WITH_PARENS = False
     PRINT_FULL = False
@@ -86,8 +105,10 @@ class CyclicExpr(sp.Expr):
         # perm.is_Atom = True
 
         if evaluate:
+            expr = sympify(expr)
             expr0 = expr
-            for translation in cls._generate_all_translations(symbols, perm):
+            for translation in cls._generate_all_translations(symbols, perm, full=True):
+                # find the simplest form up to permutation
                 expr2 = expr0.xreplace(translation)
                 if expr.compare(expr2) > 0:
                     expr = expr2
@@ -106,25 +127,34 @@ class CyclicExpr(sp.Expr):
         return self.args[1]
 
     @property
-    def perm(self):
+    def perm(self) -> PermutationGroup:
         return self.args[2]
 
     def _eval_is_cyclic(self, symbols, perm):
         return self.symbols == symbols and self.perm == perm
 
     @classmethod
-    def _generate_all_translations(cls, symbols, perm):
-        for p in perm._elements:
+    def _generate_all_translations(cls, symbols, perm, full=True):
+        """
+        Generate all possible translations of the symbols according to the permutation group.
+
+        Parameters
+        ==========
+        symbols : tuple
+            The symbols to be translated.
+        perm : PermutationGroup
+            The permutation group.
+        full : bool
+            If True, generate all possible translations. If False, generate only the generators.
+        """
+        for p in (perm.elements if full else perm.generators):
             yield dict(zip(symbols, p(symbols)))
 
     def doit(self, **hints):
-        # expand the cyclic expression
-        perm = self.args[2]
-        new_args = [None] *  perm.order()
-        symbols = self.symbols
-        for i, translation in enumerate(self._generate_all_translations(symbols, perm)):
-            new_args[i] = self.args[0].xreplace(translation)
-        expr = self.base_func(*new_args)
+        """
+        Expand the cyclic expression.
+        """
+        expr = _func_perm(self.base_func, self.args[0], self.symbols, self.perm)
         if hints.get("deep", True):
             return expr.doit(**hints)
         return expr
@@ -180,6 +210,9 @@ class CyclicExpr(sp.Expr):
         CyclicSum(x**2*(y + CyclicSum(x, (x, y, z), PermutationGroup([
             (0 1 2)]))), (x, y, z), PermutationGroup([
             (0 1 2)]))
+        >>> CyclicSum(a*x,(a,b,c,x,y,z),PermutationGroup(Permutation([(0,1,2),(3,4,5)]))).xreplace({x:u,y:v,z:w})
+        CyclicSum(a*u, (a, b, c, u, v, w), PermutationGroup([
+            (0 1 2)(3 4 5)]))
 
         When the replacements are not symbols, yet not cyclic with respect to its permutation group,
         an error will be raised. Use subs() to expand the cyclic expression and perform substitutions instead.
@@ -189,17 +222,55 @@ class CyclicExpr(sp.Expr):
         return super().xreplace(*args, **kwargs)
 
     def _xreplace(self, rule):
-        arg0 = self.args[0]._xreplace(rule)
-        if isinstance(rule, (dict, Dict)) and set(rule) == set(self.symbols):
-            x = self.symbols[0]
-            for translation in self._generate_all_translations(self.symbols, self.perm):
-                y = translation[x]
-                if rule[y] != rule[x].subs(translation, simultaneous=True):
+        # first substitute the expression
+        arg0, changed0 = self.args[0]._xreplace(rule)
+
+        # if we are replacing symbols to f(symbols)...
+        # we check whether the symmetry of the replacement rule agrees with the permutation group
+        rule_vars = set(rule.keys())
+        self_vars = set(self.symbols)
+        if isinstance(rule, (dict, Dict)) and rule_vars == self_vars:
+            for perm_dict in self._generate_all_translations(self.symbols, self.perm, full=False):
+                 # checking only generators is sufficient
+                perm_symbols = list(perm_dict.values())
+                permed_rule = [sp.S(expr).subs(perm_dict, simultaneous=True) for expr in rule.values()]
+                permed_rule = dict(zip(perm_symbols, permed_rule))
+                if not _is_same_dict(permed_rule, rule):
                     break
             else:
-                return self.func(arg0[0], *self.args[1:]), arg0[1]
-        arg1 = self.args[1]._xreplace(rule)
-        return self.func(arg0[0], arg1[0], self.args[2]), arg0[1] or arg1[1]
+                return self.func(arg0, self.args[1], self.args[2]), changed0
+
+        # fall back to the default implementation
+        # changed_vars = rule_vars.intersection(self_vars)
+        # if len(changed_vars) >= self_vars - 1:
+        #     # every symbol is changed, so we can't preserve the cyclic property
+        #     ...
+        # elif len(changed_vars) == 0:
+        #     # no symbol is changed, so we can preserve the cyclic property
+        #     return self.func(arg0, self.args[1], self.args[2]), changed0
+        # else:
+        #     # partial change, compute the stabilized subgroup
+        #     stab = self.perm.pointwise_stabilizer(changed_vars)
+        #     unchanged_vars = self_vars - changed_vars
+        #     if len(unchanged_vars) < 2:
+        #         ...
+        #     return self.func()
+
+        arg1, changed1 = self.args[1]._xreplace(rule)
+        return self.func(arg0, arg1, self.args[2]), changed0 or changed1
+
+
+    @property
+    def is_cyclic_group(self):
+        return self.perm.is_cyclic and self.perm.order() == self.perm.degree
+
+    @property
+    def is_symmetric_group(self):
+        return self.perm.is_symmetric
+
+    @property
+    def is_alternating_group(self):
+        return self.perm.is_alternating
 
 
 class CyclicSum(CyclicExpr):
@@ -216,7 +287,15 @@ class CyclicSum(CyclicExpr):
         s = printer._print(expr.args[0])
         if precedence_traditional(expr.args[0]) < cls.precedence:
             s = printer._add_parens(s)
-        return r'\sum_{\mathrm{cyc}} ' + s
+        cyc = r'\sum '
+        if expr.is_cyclic_group:
+            cyc = r'\sum_{\mathrm{cyc}} '
+        elif expr.is_symmetric_group:
+            cyc = r'\sum_{\mathrm{sym}} '
+        elif expr.is_alternating_group:
+            cyc = r'\sum_{\mathrm{alt}} '
+
+        return cyc + s
 
     @classmethod
     def str_str(cls, printer, expr):
@@ -228,13 +307,13 @@ class CyclicSum(CyclicExpr):
         return 'Σ' + s
 
     @classmethod
-    def _eval_degenerate(cls, expr, symbols):
-        return expr * len(symbols)
+    def _eval_degenerate(cls, expr, perm):
+        return expr * perm.order()
 
     @classmethod
     def _eval_simplify_(cls, expr, symbols, perm):
         if isinstance(expr, Number) or expr.free_symbols.isdisjoint(symbols):
-            return cls._eval_degenerate(expr, symbols)
+            return cls._eval_degenerate(expr, perm)
 
         if isinstance(expr, Mul):
             cyc_args = []
@@ -288,7 +367,15 @@ class CyclicProduct(CyclicExpr):
         s = printer._print(expr.args[0])
         if precedence_traditional(expr.args[0]) < cls.precedence:
             s = printer._add_parens(s)
-        return r'\prod_{\mathrm{cyc}} ' + s
+
+        cyc = r'\prod '
+        if expr.is_cyclic_group:
+            cyc = r'\prod_{\mathrm{cyc}} '
+        elif expr.is_symmetric_group:
+            cyc = r'\prod_{\mathrm{sym}} '
+        elif expr.is_alternating_group:
+            cyc = r'\prod_{\mathrm{alt}} '
+        return cyc + s
 
     @classmethod
     def str_str(cls, printer, expr):
@@ -301,13 +388,13 @@ class CyclicProduct(CyclicExpr):
         return '∏' + s
 
     @classmethod
-    def _eval_degenerate(cls, expr, symbols):
-        return expr ** len(symbols)
+    def _eval_degenerate(cls, expr, perm):
+        return expr ** perm.order()
 
     @classmethod
     def _eval_simplify_(cls, expr, symbols, perm):
         if isinstance(expr, Number) or expr.free_symbols.isdisjoint(symbols):
-            return cls._eval_degenerate(expr, symbols)
+            return cls._eval_degenerate(expr, perm)
 
         if isinstance(expr, Mul):
             cyc_args = list(filter(lambda x: is_cyclic_expr(x, symbols, perm), expr.args))
@@ -554,7 +641,7 @@ setattr(import_module(".simplify", "sympy"), 'radsimp', radsimp)
 setattr(sp, 'radsimp', radsimp)
 
 setattr(MonomialCyclic, 'cyclic_sum', lambda self, *args, **kwargs: CyclicSum(*args, **kwargs))
-
+setattr(MonomialPerm, 'cyclic_sum', lambda self, expr, gens=None: CyclicSum(expr, gens, self.perm_group))
 
 if __name__ == '__main__':
     a,b,c,d = sp.symbols('a b c d')

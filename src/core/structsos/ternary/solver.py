@@ -4,7 +4,7 @@ import sympy as sp
 
 from .sparse  import sos_struct_sparse, sos_struct_heuristic
 from .quadratic import sos_struct_quadratic, sos_struct_acyclic_quadratic
-from .cubic   import sos_struct_cubic, sos_struct_acyclic_cubic
+from .cubic   import sos_struct_cubic, sos_struct_acyclic_cubic, _sos_struct_nonhom_cubic_symmetric
 from .quartic import sos_struct_quartic, sos_struct_acyclic_quartic
 from .quintic import sos_struct_quintic
 from .sextic  import sos_struct_sextic
@@ -12,7 +12,6 @@ from .septic  import sos_struct_septic
 from .octic   import sos_struct_octic
 from .nonic   import sos_struct_nonic
 from .acyclic import sos_struct_acyclic_sparse
-from .nonhomogeneous import sos_struct_nonhomogeneous
 
 from ..utils import Coeff, PolynomialNonpositiveError, PolynomialUnsolvableError
 from ..sparse import sos_struct_common, sos_struct_degree_specified_solver
@@ -35,6 +34,9 @@ SOLVERS_ACYCLIC = {
     4: sos_struct_acyclic_quartic
 }
 
+SOLVERS_NONHOM = {
+    3: _sos_struct_nonhom_cubic_symmetric
+}
 
 
 def _structural_sos_3vars_cyclic(
@@ -74,6 +76,22 @@ def _structural_sos_3vars_acyclic(
         real=real
     )
 
+def _structural_sos_3vars_nonhom(
+        coeff: Union[sp.Poly, Coeff, Dict],
+        real: bool = True
+    ):
+    """
+    Internal function to solve a 3-var nonhomogeneous polynomial using structural SOS.
+    The function assumes the polynomial is wrt. (a, b, c).
+    It does not check the homogeneous / cyclic property of the polynomial to save time.
+    """
+    if not isinstance(coeff, Coeff):
+        coeff = Coeff(coeff)
+
+    return sos_struct_common(coeff,
+        sos_struct_degree_specified_solver(SOLVERS_NONHOM, homogeneous=False),
+        real=real
+    )
 
 
 def structural_sos_3vars(
@@ -110,7 +128,7 @@ def structural_sos_3vars(
     return solution
 
 
-def structural_sos_3vars_nonhomogeneous(
+def structural_sos_3vars_nonhom(
         poly: sp.Poly,
         real: bool = True,
     ) -> sp.Expr:
@@ -124,8 +142,14 @@ def structural_sos_3vars_nonhomogeneous(
     if len(poly.gens) != 3:
         raise ValueError("structural_sos_3vars only supports 3-var polynomials.")
 
+    coeff = Coeff(poly)
+    is_sym = coeff.is_symmetric()
+    if not is_sym:
+        # give up
+        return None
+
     try:
-        solution = sos_struct_nonhomogeneous(Coeff(poly))
+        solution = _structural_sos_3vars_nonhom(coeff, real = real)
     except (PolynomialNonpositiveError, PolynomialUnsolvableError):
         return None
 

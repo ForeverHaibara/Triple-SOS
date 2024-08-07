@@ -255,6 +255,12 @@ def _sos_struct_cubic_nontrivial_irrational(coeff):
     return sum_y_exprs(y, exprs) / CyclicSum(a*b)
 
 
+#####################################################################
+#
+#                              Acyclic
+#
+#####################################################################
+
 def sos_struct_acyclic_cubic(coeff, real = True):
     """
     Solve acyclic cubic polynomials.
@@ -512,3 +518,94 @@ def _sos_struct_acyclic_cubic_symmetric(coeff):
         return p1 + p2 + p3
 
     return None
+
+
+
+#####################################################################
+#
+#                          Nonhomogeneous
+#
+#####################################################################
+
+def _sos_struct_nonhom_cubic_symmetric(coeff, real = False):
+    """
+    Solve nonhomogeneous 3-var symmetric cubic polynomials in
+    the form of
+    x*(a+b+c) + u*(a^2+b^2+c^2) + (v-u)*(a*b+b*c+c*a) + y*(a*b*c) + z >= 0.
+
+    We can always do homogenization: 1 = t*(a+b+c) to convert it to a homogeneous
+    symbolic cubic polynomial f(a,b,c). We require f(1,0,0), f(1,1,0), f(1,1,1) >= 0
+    hold for all t >= 0.
+
+    This is given by (the necessary and sufficient conditions):
+    1. z >= 0 and y >= 0
+    2. -Discrimiant of f(1,1,1) = (4*v**3*z - 3*v**2*x**2 - 6*v*x*y*z + 4*x**3*y + y**2*z**2) >= 0
+    3. If x >= 0 then u >= max(0, -v); if x <= 0 then u >= max(x^2/z - v, x^2/(4z))
+
+    Examples
+    ---------
+    4abc+9s(a2)-14s(ab)+4s(a)+4
+
+    29/3s(a2)+13/3s(a)-58/3s(bc)+1+15abc
+
+    1+2abc+s(a2-2ab)
+
+    s(2a2-4ab)+3abc+s(a)
+    """
+    if coeff((3,0,0)) or coeff((2,1,0)):
+        return None
+    x, u, v, y, z = [coeff(_) for _ in [(1,0,0), (2,0,0), (1,1,0), (1,1,1), (0,0,0)]]
+    v = u + v
+
+    det = (4*v**3*z - 3*v**2*x**2 - 6*v*x*y*z + 4*x**3*y + y**2*z**2)
+    if z <= 0 or y < 0 or det < 0 or u < 0 or u + v < 0:
+        return None
+    if v >= 0:
+        return sp.Add(
+            x * CyclicSum(a),
+            u/2 * CyclicSum((a-b)**2),
+            v * CyclicSum(a*b),
+            y * CyclicProduct(a),
+            z
+        )
+
+    r = sp.Symbol('r')
+    detr1 = sp.Poly(radsimp([-y**2, 0, 6*x*y, 8*y*z, 12*v*z - 9*x**2]), r)
+    detr2 = sp.Poly([-y/4, 0, x], r)
+    def verify(r):
+        return detr1(r) >= 0 and detr2(r) >= 0
+
+    # find r such that detr1(r) >= 0 and detr2(r) >= 0
+    r_ = None
+    detr1diff = detr1.diff(r)
+    detr1gcd = sp.gcd(detr1, detr1diff)
+    if detr1gcd.degree() == 1:
+        r_ = -detr1gcd(0) / detr1gcd.LC()
+        if not verify(r_):
+            r_ = None
+    
+    if r_ is None and coeff.is_rational:
+        pre = None
+        for interval in sp.intervals([detr1, detr2], r):
+            for r_ in interval[0]:
+                if pre != r_ and verify(r_):
+                    break
+                else:
+                    pre = r_
+                    r_ = None
+            if r_ is not None:
+                break
+
+    def _get_sol(r):
+        if r is None:
+            return None
+        return sp.Add(
+            y * CyclicSum(a*(b*c-r/2*b-r/2*c)**2),
+            radsimp(x - r**2*y/4) * CyclicSum(a*(b-c)**2),
+            (-v) * CyclicSum(a*b*(a-b)**2),
+            (u + v)/2*CyclicSum(a*b)*CyclicSum((a-b)**2),
+            z * CyclicSum(a*b*((r**2*y-3*x)/(2*z)*c - 1)**2),
+            detr1(r) / (4*z) * CyclicSum(a**2*b*c)
+        ) / CyclicSum(a*b)
+
+    return _get_sol(r_)

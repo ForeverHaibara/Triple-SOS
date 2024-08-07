@@ -13,6 +13,13 @@ def quarternary_cubic_symmetric(coeff, real = True):
     [1] https://tieba.baidu.com/p/9033429329
     """
     c3000, c2100, c1110 = coeff((3,0,0,0)), coeff((2,1,0,0)), coeff((1,1,1,0))
+    x, y, z = c3000, c2100/2 + c1110/6, c3000 + c2100
+    if x >= 0 and y >= 0 and z >= 0:
+        f1 = x * SymSum(a*(b-c)**2*(b+c-a)**2) + 4*x * a*b*c*d * SymSum(a)
+        f2 = y * SymSum(a*b*c)
+        f3 = z/4 * SymSum(a*(b-c)**2)
+        return f1/SymSum(a*b) + f2 + f3
+
     x, y, z = c1110 + 3*c2100 + c3000, -c1110 - 3*c2100, c1110/3 + 2*c2100 + c3000
     if x >= 0 and y >= 0 and z >= 0:
         f1 = x * SymSum(a*(b-c)**2*(b+c-a)**2) + 4*x * a*b*c*d * SymSum(a)

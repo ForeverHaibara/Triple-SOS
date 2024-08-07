@@ -6,7 +6,7 @@ from sympy.core.symbol import uniquely_named_symbol
 from .utils import Coeff
 from .solution import SolutionStructural, SolutionStructuralSimple
 from .sparse import sos_struct_linear, sos_struct_quadratic
-from .ternary import structural_sos_3vars
+from .ternary import structural_sos_3vars, structural_sos_3vars_nonhom
 from .quarternary import structural_sos_4vars
 from ..symsos import prove_univariate
 
@@ -74,7 +74,7 @@ def _structural_sos(
         if nvars == 2:
             # two cases: homogeneous bivariate or univariate before homogenization
             a, b = poly.gens
-            solution = prove_univariate(poly.subs(b, 1)).xreplace({a: a/b}).together() * b**d
+            return prove_univariate(poly.subs(b, 1)).xreplace({a: a/b}).together() * b**d
 
     coeff = Coeff(poly)
     if is_hom:
@@ -154,7 +154,7 @@ def _structural_sos_nonhom_symmetric(poly, **kwargs):
     solution = None
     nvars = len(poly.gens)
     if nvars == 3:
-        solution = 0
+        solution = structural_sos_3vars_nonhom(poly, **kwargs)
     if solution is not None:
         return solution
 
