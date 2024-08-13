@@ -173,20 +173,26 @@ class SDPMatrixTransform(SDPTransformation):
 
 
         if nullspace is None:
-            if all(is_empty_matrix(mat) for mat in columnspace.values()):
+            if all(is_empty_matrix(mat, check_all_zeros=True) for mat in columnspace.values()):
                 return SDPIdentityTransform.__new__(SDPIdentityTransform, parent_node)
         elif columnspace is None:
-            if all(is_empty_matrix(mat) for mat in nullspace.values()):
+            if all(is_empty_matrix(mat, check_all_zeros=True) for mat in nullspace.values()):
                 return SDPIdentityTransform.__new__(SDPIdentityTransform, parent_node)
 
         return super().__new__(cls)
 
 
-    def __init__(self, parent_node: 'SDPProblem', columnspace: Dict[str, sp.Matrix] = None, nullspace: Dict[str, sp.Matrix] = None):
+    def __init__(self, parent_node: 'SDPProblem', columnspace: Optional[Dict[str, sp.Matrix]] = None, nullspace: Optional[Dict[str, sp.Matrix]] = None):
         def _reg(X, key):
-            return sp.Matrix.hstack(*X.columnspace()) if X.shape[1] > 0 else X
+            m = sp.Matrix.hstack(*X.columnspace())
+            if is_empty_matrix(m):
+                return sp.zeros(X.shape[0], 0)
+            return m
         def _perp(X, key):
-            return sp.Matrix.hstack(*X.T.nullspace())
+            m = sp.Matrix.hstack(*X.T.nullspace())
+            if is_empty_matrix(m):
+                return sp.zeros(X.shape[0], 0)
+            return m
 
         if nullspace is None:
             columnspace = {key: _reg(columnspace[key], key) for key in columnspace}
@@ -226,8 +232,6 @@ class SDPMatrixTransform(SDPTransformation):
             # new_x0 = list(Ai0 * V)
             new_x0 = list(matmul(Ai0, V))
             x0_list.extend(new_x0)
-        # print('Used time', time() - time0)
-        # time0 = time()
 
 
         # eq * y + x0 = 0 => y = trans_x0 + trans_space * z

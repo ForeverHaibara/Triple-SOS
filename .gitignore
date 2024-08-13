@@ -2,3 +2,4 @@ __pycache__/
 *.ipynb
 *.csv
 *.zip
+test_cyclic.py

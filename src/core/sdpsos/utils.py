@@ -47,8 +47,16 @@ def congruence_with_perturbation(
     return None
 
 
-def is_empty_matrix(M: sp.Matrix) -> bool:
-    return M.shape[0] == 0 or M.shape[1] == 0
+def is_empty_matrix(M: sp.Matrix, check_all_zeros: bool = False) -> bool:
+    """
+    Check whether a matrix is zero size. Set check_all_zeros == True to
+    check whether all entries are zero.
+    """
+    if M.shape[0] == 0 or M.shape[1] == 0:
+        return True
+    if check_all_zeros and not any(M):
+        return True
+    return False
 
 
 def is_numer_matrix(M: sp.Matrix) -> bool:

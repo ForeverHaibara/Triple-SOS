@@ -39,20 +39,20 @@ def is_cyclic_expr(expr, symbols, perm):
         return is_cyclic_expr(expr.args[0], symbols, perm)
     return False
 
-def _std_seq(symbols, perm):
+def _std_seq(symbols, perm_group):
     ind = sorted(list(range(len(symbols))), key = lambda i: symbols[i].name)
     inv_ind = [0] * len(symbols)
     for i, j in enumerate(ind):
         inv_ind[j] = i
-    p = min(map(lambda x: x(inv_ind), perm.generate()))
+    p = min(map(lambda x: x(inv_ind), perm_group.generate()))
     # sorted_symbols = [symbols[i] for i in ind]
     # return tuple(sorted_symbols[i] for i in p)
     return tuple(symbols[ind[i]] for i in p)
 
-def _func_perm(func, expr, symbols, perm):
-    new_args = [None] *  perm.order()
+def _func_perm(func, expr, symbols, perm_group):
+    new_args = [None] *  perm_group.order()
     symbols = symbols
-    for i, translation in enumerate(CyclicExpr._generate_all_translations(symbols, perm)):
+    for i, translation in enumerate(CyclicExpr._generate_all_translations(symbols, perm_group)):
         new_args[i] = expr.xreplace(translation)
     expr = func(*new_args)
     return expr
@@ -65,16 +65,39 @@ def _is_same_dict(d1, d2):
             return False
     return True
 
+def _project_perm_group(perm_group, inds):
+    """
+    Project the permutation group (especially stabilizers) to given indices,
+    to reduce the degree of the permutation group.
+
+    Examples
+    ========
+    >>> _project_perm_group(SymmetricGroup(5).stabilizer(3), [0,1,2,4])
+    PermutationGroup([
+        (3)(0 1),
+        (0 3),
+        (0 3 2 1),
+        (0 1 2 3),
+        (3)(1 2)])
+    """
+    projs = []
+    mapping = dict(zip(inds, range(len(inds))))
+    for p in perm_group.generators:
+        q = []
+        for i in p.array_form:
+            v = mapping.get(i)
+            if v is not None:
+                q.append(v)
+        projs.append(Permutation(q))
+    return PermutationGroup(projs)
+
+
 class CyclicExpr(sp.Expr):
     """
     Represent cyclic expressions. The printing style for __str__ and __repr__
     can be configured by global variable CyclicExpr.PRINT_WITH_PARENS and CyclicExpr.PRINT_FULL.
 
-    Every cyclic expression is defaultedly assumed to be cyclic with respect to (a, b, c).
-
-    Examples
-    ========
-    >>> CyclicSum(a*(b-c)**2, (a, b, c), PermutationGroup(Permutation([1,2,0])))
+    This is a base class for CyclicSum and CyclicProduct, and should not be used directly.
     """
     PRINT_WITH_PARENS = False
     PRINT_FULL = False
@@ -96,6 +119,9 @@ class CyclicExpr(sp.Expr):
 
         if perm is None:
             perm = CyclicGroup(len(symbols))
+        if perm.degree < 2 or perm.is_trivial:
+            return expr
+
         if evaluate:
             symbols = _std_seq(symbols, perm)
         symbols = sympify(tuple(symbols))
@@ -238,23 +264,51 @@ class CyclicExpr(sp.Expr):
                 if not _is_same_dict(permed_rule, rule):
                     break
             else:
-                return self.func(arg0, self.args[1], self.args[2]), changed0
+                return _func_perm(self.base_func, self.args[0], self.symbols, self.perm)._xreplace(rule)
 
-        # fall back to the default implementation
-        # changed_vars = rule_vars.intersection(self_vars)
-        # if len(changed_vars) >= self_vars - 1:
-        #     # every symbol is changed, so we can't preserve the cyclic property
-        #     ...
-        # elif len(changed_vars) == 0:
-        #     # no symbol is changed, so we can preserve the cyclic property
-        #     return self.func(arg0, self.args[1], self.args[2]), changed0
-        # else:
-        #     # partial change, compute the stabilized subgroup
-        #     stab = self.perm.pointwise_stabilizer(changed_vars)
-        #     unchanged_vars = self_vars - changed_vars
-        #     if len(unchanged_vars) < 2:
-        #         ...
-        #     return self.func()
+        # # fall back to the default implementation
+        changed_vars = rule_vars.intersection(self_vars)
+        if len(changed_vars) >= len(self_vars) - 1:
+            # every symbol is changed, so we can't preserve the cyclic property
+            return _func_perm(self.base_func, self.args[0], self.symbols, self.perm)._xreplace(rule)
+        elif len(changed_vars) == 0:
+            # no symbol is changed, so we can preserve the cyclic property
+            return self.func(arg0, self.args[1], self.args[2]), changed0
+        else:
+            # partial change, compute the stabilized subgroup
+            changed_inds = tuple(i for i, s in enumerate(self.symbols) if s in changed_vars)
+            unchanged_inds = tuple(i for i, s in enumerate(self.symbols) if s not in changed_vars)
+
+            if len(unchanged_inds) < 2:
+                return _func_perm(self.base_func, self.args[0], self.symbols, self.perm)._xreplace(rule)
+
+            stab = self.perm.pointwise_stabilizer(list(changed_inds))
+            stab_proj = _project_perm_group(stab, unchanged_inds)
+            if stab_proj.is_trivial:
+                return _func_perm(self.base_func, self.args[0], self.symbols, self.perm)._xreplace(rule)
+
+
+            changed_vars = tuple(self.symbols[i] for i in changed_inds)
+            unchanged_vars = tuple(self.symbols[i] for i in unchanged_inds)
+
+            orbits = {changed_inds}
+            moving_perms = [self.perm.identity]
+            for p in self.perm.elements:
+                # get where the changed variables are permuted to
+                q = tuple(p.array_form[i] for i in changed_inds)
+                if not (q in orbits):
+                    moving_perms.append(p)
+                    orbits.add(q)
+
+            # sum up with respect to moving perms
+            other_vars = tuple(s for s in rule.keys() if s not in self.symbols)
+            other_dict = dict((s, rule.get(s, s)) for s in other_vars)
+            new_args = []
+            for p in moving_perms:
+                trans = dict((self.symbols[i], rule.get(s, s)) for (s, i) in zip(self.symbols, p.array_form))
+                trans.update(other_dict)
+                new_args.append(self.func(self.args[0]._xreplace(trans)[0], unchanged_vars, stab_proj))
+            return self.base_func(*new_args), True
 
         arg1, changed1 = self.args[1]._xreplace(rule)
         return self.func(arg0, arg1, self.args[2]), changed0 or changed1
@@ -274,6 +328,46 @@ class CyclicExpr(sp.Expr):
 
 
 class CyclicSum(CyclicExpr):
+    """
+    Represent cyclic sums.
+
+    Examples
+    ========    
+    >>> CyclicSum.PRINT_FULL = True
+
+    Every CyclicSum object is defined by an expression, a tuple of symbols, and a permutation group.
+    >>> expr = CyclicSum(a*(b-c)**2, (a, b, c), PermutationGroup(Permutation([1,2,0]))); expr
+    CyclicSum(a*(b - c)**2, (a, b, c), PermutationGroup([
+        (0 1 2)]))
+
+    Sums are simplified by choosing the lexicographically smallest representation of the summand
+    and checking nested symmetries.
+    >>> CyclicSum(z*y**2, (x, y, z), SymmetricGroup(3))
+    CyclicSum(x*y**2, (x, y, z), PermutationGroup([
+        (0 1 2),
+        (2)(0 1)]))
+    >>> CyclicSum(a*b*CyclicSum(a, (a, b, c), SymmetricGroup(3)), (a, b, c), SymmetricGroup(3))
+    (CyclicSum(a, (a, b, c), PermutationGroup([
+        (0 1 2),
+        (2)(0 1)])))*(CyclicSum(a*b, (a, b, c), PermutationGroup([
+        (0 1 2),
+        (2)(0 1)])))
+    >>> CyclicSum(1, (a, b, c, d), SymmetricGroup(4))
+    24
+
+    SymPy expressions containing cyclic sums can be expanded by calling doit().
+    >>> expr.doit()
+    a*(b - c)**2 + b*(-a + c)**2 + c*(a - b)**2
+
+    When the permutation group is not specified, it is assumed to be the cyclic group.
+    >>> CyclicSum(a*(b-c+d)**2, (a, b, c, d)).doit()
+    a*(b - c + d)**2 + b*(a + c - d)**2 + c*(-a + b + d)**2 + d*(a - b + c)**2
+
+    When neither the symbols nor the permutation group is specified, it assumes
+    the cyclic sum is with respect to (a, b, c) and the cyclic group.
+    >>> CyclicSum(a**3*b**2*c).doit()
+    a**3*b**2*c + a**2*b*c**3 + a*b**3*c**2
+    """
 
     precedence = PRECEDENCE['Mul']
     base_func = Add
@@ -354,6 +448,46 @@ class CyclicSum(CyclicExpr):
 
 
 class CyclicProduct(CyclicExpr):
+    """
+    Represent cyclic products.
+
+    Examples
+    ========
+    >>> CyclicProduct.PRINT_FULL = True
+
+    Every CyclicProduct object is defined by an expression, a tuple of symbols, and a permutation group.
+    >>> expr = CyclicProduct((a + b - c), (a, b, c), PermutationGroup(Permutation([1,2,0]))); expr
+    CyclicProduct(a + b - c, (a, b, c), PermutationGroup([
+        (0 1 2)]))
+
+    Products are simplified by choosing the lexicographically smallest representation of the expression
+    and checking nested symmetries.
+    >>> CyclicProduct((y**2 + z), (x, y, z), SymmetricGroup(3))
+    CyclicProduct(x + y**2, (x, y, z), PermutationGroup([
+        (0 1 2),
+        (2)(0 1)]))
+    >>> CyclicProduct(a*(b - c)**2, (a, b, c), SymmetricGroup(3))
+    (CyclicProduct(a, (a, b, c), PermutationGroup([
+        (0 1 2),
+        (2)(0 1)])))*(CyclicProduct((a - b)**2, (a, b, c), PermutationGroup([
+        (0 1 2),
+        (2)(0 1)])))
+    >>> CyclicProduct(2, (a, b, c, d), SymmetricGroup(4))
+    16777216
+
+    SymPy expressions containing cyclic products can be expanded by calling doit().
+    >>> expr.doit()
+    (-a + b + c)*(a - b + c)*(a + b - c)
+
+    When the permutation group is not specified, it is assumed to be the cyclic group.
+    >>> CyclicProduct(a*(b-c+d)**2, (a, b, c, d)).doit()
+    a*b*c*d*(-a + b + d)**2*(a - b + c)**2*(a + c - d)**2*(b - c + d)**2
+
+    When neither the symbols nor the permutation group is specified, it assumes
+    the cyclic product is with respect to (a, b, c) and the cyclic group.
+    >>> CyclicProduct(a**3 + b**2 + c).doit()
+    (a + b**3 + c**2)*(a**2 + b + c**3)*(a**3 + b**2 + c)
+    """
 
     precedence = PRECEDENCE['Mul']
     base_func = Mul

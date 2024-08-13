@@ -256,6 +256,9 @@ def _findroot_binary(poly: sp.Poly, symmetry: MonomialReduction = None) -> List[
             # roots.append(RootRational(root))
             roots.add(symmetry._standard_monom(root))
     roots = set(roots)
+    all_zero = tuple([0] * len(poly.gens))
+    if all_zero in roots:
+        roots.remove(all_zero)
     roots = [RootRational(root) for root in roots]
     return roots
 
