@@ -1,12 +1,31 @@
 # author: https://github.com/ForeverHaibara
-from typing import List, Dict, Any, Union
-import sympy as sp
+from typing import List, Dict, Any, Union, Callable
 
-from ..utils import deg, verify_hom_cyclic, poly_get_factor_form, poly_get_standard_form, latex_coeffs
+import sympy as sp
+from sympy.simplify import signsimp
+from sympy.combinatorics import CyclicGroup
+
+from ..utils import Solution, SolutionSimple, CyclicExpr, deg, poly_get_factor_form, poly_get_standard_form, latex_coeffs
 from ..utils.text_process import preprocess_text, degree_of_zero, coefficient_triangle
 from ..utils.roots import RootsInfo, GridRender, findroot
 from ..core.sum_of_square import sum_of_square, DEFAULT_CONFIGS
 from ..core.linsos import root_tangents
+
+
+def _default_polynomial_check(poly: sp.Poly, method_order: List[str]) -> List[str]:
+    """
+    Check the degree and nvars of a polynomial to decide
+    whether a method is applicabls. For too high degree polynomials,
+    methods like SDPSOS are removed to avoid long computation time.
+    """
+    is_hom = int(poly.is_homogeneous)
+    nvars = len(poly.gens) + (1 - is_hom)
+    degree = poly.total_degree()
+    upper_bounds = [30, 30, 30, 12, 10, 8, 6, 4, 4, 4, 4]
+    if degree > upper_bounds[nvars]:
+        # remove LinearSOS and SDPSOS
+        method_order = [method for method in method_order if method not in ('LinearSOS', 'SDPSOS')]
+    return method_order
 
 
 class SOS_Manager():
@@ -17,6 +36,9 @@ class SOS_Manager():
     It adds more sanity checks and error handling to the core functions.
     """
     verbose = True
+
+    CONFIG_METHOD_CHECK = _default_polynomial_check
+    CONFIG_STANDARDIZE_CYCLICEXPR = True
 
     @classmethod
     def set_poly(cls, 
@@ -140,6 +162,7 @@ class SOS_Manager():
                 if configs.get(method) is None:
                     configs[method] = {}
                 configs[method]['verbose'] = False
+        method_order = _default_polynomial_check(poly, method_order)
 
         solution = sum_of_square(
             poly,
@@ -147,6 +170,8 @@ class SOS_Manager():
             method_order = method_order,
             configs = configs
         )
+        if cls.CONFIG_STANDARDIZE_CYCLICEXPR:
+            solution = _standardize_cyclic_expr(solution)
         return solution
 
     # def save_heatmap(self, poly, *args, **kwargs):
@@ -162,6 +187,7 @@ class SOS_Manager():
         except:
             return ''
         return latex_coeffs(poly, *args, **kwargs)
+
 
 
 
@@ -202,3 +228,39 @@ def _render_LaTeX(a, path, usetex=True, show=False, dpi=500, fontsize=20):
         plt.show()
     else:
         plt.close()
+
+
+
+def _standardize_cyclic_expr_default_replacement(x: sp.Expr):
+    if not isinstance(x, CyclicExpr):
+        return x
+    if x.args[1] == sp.symbols("a b c"):
+        if x.is_cyclic_group:
+            return x
+        elif x.is_symmetric_group:
+            a, b, c = sp.symbols("a b c")
+            x_degen = x.func(signsimp(x.args[0]), x.args[1], CyclicGroup(3))
+            x_reflect = x.func(signsimp(x.args[0].xreplace({a:b,b:a})), x.args[1], CyclicGroup(3))
+            return x_degen + x_reflect
+
+    return x.doit(deep=False)
+    
+    
+
+
+def _standardize_cyclic_expr(solution, replacement=_standardize_cyclic_expr_default_replacement):
+    """
+    For display purpose, we require cyclic expressions to be with respect to
+    """
+    if solution is None:
+        return None
+    if isinstance(solution, Solution):
+        if isinstance(solution, SolutionSimple):
+            solution.numerator = _standardize_cyclic_expr(solution.numerator, replacement)
+            solution.multiplier = _standardize_cyclic_expr(solution.multiplier, replacement)
+            solution.solution = solution.numerator / solution.multiplier
+        else:
+            solution.solution = _standardize_cyclic_expr(solution.solution, replacement)
+        return solution
+    solution = solution.replace(lambda x: isinstance(x, CyclicExpr), replacement)
+    return solution

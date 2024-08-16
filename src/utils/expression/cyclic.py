@@ -13,6 +13,7 @@ from sympy.combinatorics import Permutation, PermutationGroup, CyclicGroup, Symm
 from sympy.printing.latex import LatexPrinter
 from sympy.printing.str import StrPrinter
 from sympy.printing.precedence import precedence_traditional, PRECEDENCE
+from sympy.simplify import signsimp
 
 from ..basis_generator import MonomialCyclic, MonomialPerm
 
@@ -56,7 +57,7 @@ def _func_perm(func, expr, symbols, perm_group):
         new_args[i] = expr.xreplace(translation)
     expr = func(*new_args)
     return expr
-    
+
 def _is_same_dict(d1, d2):
     if len(d1) != len(d2):
         return False
@@ -135,7 +136,7 @@ class CyclicExpr(sp.Expr):
             expr0 = expr
             for translation in cls._generate_all_translations(symbols, perm, full=True):
                 # find the simplest form up to permutation
-                expr2 = expr0.xreplace(translation)
+                expr2 = signsimp(expr0.xreplace(translation))
                 if expr.compare(expr2) > 0:
                     expr = expr2
 
@@ -248,6 +249,9 @@ class CyclicExpr(sp.Expr):
         return super().xreplace(*args, **kwargs)
 
     def _xreplace(self, rule):
+        if not isinstance(rule, (dict, Dict)):
+            # might be a sympy Transform object
+            return _func_perm(self.base_func, self.args[0], self.symbols, self.perm)._xreplace(rule)
         # first substitute the expression
         arg0, changed0 = self.args[0]._xreplace(rule)
 
@@ -258,13 +262,14 @@ class CyclicExpr(sp.Expr):
         if isinstance(rule, (dict, Dict)) and rule_vars == self_vars:
             for perm_dict in self._generate_all_translations(self.symbols, self.perm, full=False):
                  # checking only generators is sufficient
-                perm_symbols = list(perm_dict.values())
-                permed_rule = [sp.S(expr).subs(perm_dict, simultaneous=True) for expr in rule.values()]
+                perm_symbols = tuple(perm_dict[s] for s in self.symbols)
+                permed_rule = [sympify(rule[s]).subs(perm_dict, simultaneous=True) for s in self.symbols]
                 permed_rule = dict(zip(perm_symbols, permed_rule))
                 if not _is_same_dict(permed_rule, rule):
                     break
             else:
-                return _func_perm(self.base_func, self.args[0], self.symbols, self.perm)._xreplace(rule)
+                return self.func(arg0, self.symbols, self.perm), changed0
+                # return _func_perm(self.base_func, self.args[0], self.symbols, self.perm)._xreplace(rule)
 
         # # fall back to the default implementation
         changed_vars = rule_vars.intersection(self_vars)
