@@ -15,14 +15,14 @@ def deg(poly: sp.Poly) -> int:
     Since the polynomial is homogeneous, we can simply return the sum of the exponents of the first monomial.
     This avoids calling `monoms` and significantly improves the speed.
     """
-    rep = poly.rep.rep
-    n = len(rep) + len(rep[0]) + len(rep[0][0]) - 3
-    # only exception is poly == 0 (n = -1)
-    return max(n, 0)
+    # rep = poly.rep.rep
+    # n = len(rep) + len(rep[0]) + len(rep[0][0]) - 3
+    # # only exception is poly == 0 (n = -1)
+    # return max(n, 0)
 
     # too slow:
     # return sum(poly.monoms()[0])
-
+    return poly.total_degree()
 
 
 def verify(y, polys, poly, tol: float = 1e-10) -> bool:
@@ -88,7 +88,7 @@ def verify_hom_cyclic(poly: sp.Poly, fast=True) -> Tuple[bool, bool]:
         Whether the polynomial is 3-var-cyclic.
     """
     if fast:
-        rep = poly.rep.rep
+        rep = poly.rep.to_list()
         len0, len1, len2 = len(rep), len(rep[0]), len(rep[0][0])
         n = len0 + len1 + len2 - 3
         if n < 1:

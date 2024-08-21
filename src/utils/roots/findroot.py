@@ -383,7 +383,7 @@ class _findroot_helper():
         roots = []
         if cyc:
             a = poly.gens[0]
-            rep = [_[0] if len(_) else 0 for _ in poly.rep.rep[-1]]
+            rep = [_[0] if len(_) else 0 for _ in poly.rep.to_list()[-1]]
             poly = sp.Poly.from_list(rep, a)
             poly_diff = poly.diff(a)
             poly_diff2 = poly_diff.diff(a)
@@ -423,7 +423,7 @@ class _findroot_helper():
         """
         roots = []
         a = poly.gens[0]
-        rep = [sum(sum(__) for __ in _) for _ in poly.rep.rep]
+        rep = [sum(sum(__) for __ in _) for _ in poly.rep.to_list()]
         poly = sp.Poly.from_list(rep, a)
         poly_diff = poly.diff(a)
         poly_diff2 = poly_diff.diff(a)
