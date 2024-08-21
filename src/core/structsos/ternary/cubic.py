@@ -4,6 +4,7 @@ from .utils import (
     CyclicSum, CyclicProduct,
     sum_y_exprs, radsimp, rationalize_func, quadratic_weighting
 )
+from ..sparse import sos_struct_quadratic
 
 a, b, c = sp.symbols('a b c')
 
@@ -531,16 +532,18 @@ def _sos_struct_nonhom_cubic_symmetric(coeff, real = False):
     """
     Solve nonhomogeneous 3-var symmetric cubic polynomials in
     the form of
-    x*(a+b+c) + u*(a^2+b^2+c^2) + (v-u)*(a*b+b*c+c*a) + y*(a*b*c) + z >= 0.
+    c100*(a+b+c) + c000 + c1*(a^2+b^2+c^2-a*b-b*c-c*a) + c2*(a^2+b^2+c^2-2*(a*b+b*c+c*a)) + a*b*c >= 0.
 
-    We can always do homogenization: 1 = t*(a+b+c) to convert it to a homogeneous
-    symbolic cubic polynomial f(a,b,c). We require f(1,0,0), f(1,1,0), f(1,1,1) >= 0
-    hold for all t >= 0.
+    Theorem:
+    s(a)2(s(a)+3abc+2s(a2-2ab))
+    = s((b-c)2(b+c-a)2)+2s(ab(a-b)2)+3s(a)s(ab(c-1)2)+s(a)s((a-b)2)/2
 
-    This is given by (the necessary and sufficient conditions):
-    1. z >= 0 and y >= 0
-    2. -Discrimiant of f(1,1,1) = (4*v**3*z - 3*v**2*x**2 - 6*v*x*y*z + 4*x**3*y + y**2*z**2) >= 0
-    3. If x >= 0 then u >= max(0, -v); if x <= 0 then u >= max(x^2/z - v, x^2/(4z))
+    s(a)2(1+2abc+s(a2-2ab))
+    = s((b-c)2(b+c-a)2)/2+s((a-b)2)/2+s(ab(a-b)2)+3s(ab(c-1)2)+2p(a)s(a-1)2
+
+    We always represent the polynomial as 
+          t * (3*v**2/4*(a+b+c) + v*(a**2+b**2+c**2-2*(a*b+b*c+c*a)) + a*b*c)
+    + (1-t) * (4*v**3 + v*(a**2+b**2+c**2-2*(a*b+b*c+c*a)) + a*b*c) >= 0
 
     Examples
     ---------
@@ -554,58 +557,88 @@ def _sos_struct_nonhom_cubic_symmetric(coeff, real = False):
     """
     if coeff((3,0,0)) or coeff((2,1,0)):
         return None
-    x, u, v, y, z = [coeff(_) for _ in [(1,0,0), (2,0,0), (1,1,0), (1,1,1), (0,0,0)]]
-    v = u + v
 
-    det = (4*v**3*z - 3*v**2*x**2 - 6*v*x*y*z + 4*x**3*y + y**2*z**2)
-    if z <= 0 or y < 0 or det < 0 or u < 0 or u + v < 0:
+    c100, c000, c200, c110, c111 = [coeff(_) for _ in [(1,0,0), (0,0,0), (2,0,0), (1,1,0), (1,1,1)]]
+    if c111 == 0:
+        return sos_struct_quadratic(coeff)
+    elif c111 < 0 or c000 < 0:
         return None
-    if v >= 0:
-        return sp.Add(
-            x * CyclicSum(a),
-            u/2 * CyclicSum((a-b)**2),
-            v * CyclicSum(a*b),
-            y * CyclicProduct(a),
-            z
-        )
+    # normalize
+    c100, c000, c200, c110 = radsimp([_/c111 for _ in [c100, c000, c200, c110]])
 
-    r = sp.Symbol('r')
-    detr1 = sp.Poly(radsimp([-y**2, 0, 6*x*y, 8*y*z, 12*v*z - 9*x**2]), r)
-    detr2 = sp.Poly([-y/4, 0, x], r)
-    def verify(r):
-        return detr1(r) >= 0 and detr2(r) >= 0
+    c1 = 2*c200 + c110
+    c2 = -c200 - c110
+    if c1 < 0 or c2 < 0:
+        return None
 
-    # find r such that detr1(r) >= 0 and detr2(r) >= 0
-    r_ = None
-    detr1diff = detr1.diff(r)
-    detr1gcd = sp.gcd(detr1, detr1diff)
-    if detr1gcd.degree() == 1:
-        r_ = -detr1gcd(0) / detr1gcd.LC()
-        if not verify(r_):
-            r_ = None
+    def get_sol1(v):
+        # solve 3*v**2/4*(a+b+c) + v*(a**2+b**2+c**2-2*(a*b+b*c+c*a)) + a*b*c >= 0
+        # (8*a*b*v*(a - b)**2 + 2*a*b*(2*c - 3*v)**2*(a + b + c) + 3*v**2*(a - b)**2*(a + b + c) + 4*v*(b - c)**2*(-a + b + c)**2)
+        return sp.Add(*[
+            radsimp(4*v) * CyclicSum((b-c)**2*(b+c-a)**2),
+            radsimp(3*v**2) * CyclicSum(a) * CyclicSum((a-b)**2),
+            2 * CyclicSum(a) * CyclicSum(a*b*(2*c-3*v)**2),
+            radsimp(8*v) * CyclicSum(a*b*(a-b)**2),
+        ]) / (8 * CyclicSum(a)**2)
+
+
+    def get_sol2(v):
+        # solve 4*v**3 + v*(a**2+b**2+c**2-2*(a*b+b*c+c*a)) + a*b*c >= 0
+        return sp.Add(*[
+            v * CyclicSum((b-c)**2*(b+c-a)**2),
+            radsimp(4*v**3) * CyclicSum((a-b)**2),
+            radsimp(6*v) * CyclicSum(a*b*(c-2*v)**2),
+            radsimp(2*v) * CyclicSum(a*b*(a-b)**2),
+            2 * CyclicProduct(a) * CyclicSum(a-2*v)**2
+        ]) / (2 * CyclicSum(a)**2)
+
     
-    if r_ is None and coeff.is_rational:
-        pre = None
-        for interval in sp.intervals([detr1, detr2], r):
-            for r_ in interval[0]:
-                if pre != r_ and verify(r_):
-                    break
-                else:
-                    pre = r_
-                    r_ = None
-            if r_ is not None:
-                break
+    # find x, y, t such that
+    # normalized poly >= get_sol1(x) * t + get_sol2(y) * (1-t)
+    # 3*x**2/4 * t <= c100, 4*y**3 * (1-t) <= c000, x*t + y*(1-t) = c2
+    # Cancelling y, t by x, we require x such that 4*x*(3*c2*x - 4*c100)**3/3/(3*x**2 - 4*c100)**2 <= c000
+    # and 3x^2/4 >= c100 (so that t <= 1).
 
-    def _get_sol(r):
-        if r is None:
+    def get_const(x):
+        if x == 0: return c000 - 4*c2**3 # t = 0, y = c2
+        if x == c2: return c000 # t = 1, y = 0
+        return radsimp(c000 - 4*x*(3*c2*x - 4*c100)**3/3/(3*x**2 - 4*c100)**2)
+    
+    def check_x(x):
+        if x == 0: return get_const(x) >= 0 # t = 0, y = c2
+        if x is None or (not x.is_finite) or (not 3*x**2/4 >= c100):
+            return False
+        r = get_const(x)
+        return r.is_finite and r >= 0
+
+    for x in [0, radsimp(4*c100/3/c2), None]:
+        if check_x(x):
+            break
+    if x is None:
+        det = radsimp(c000**2 + 6*c000*c100*c2 - 4*c000*c2**3 + 4*c100**3 - 3*c100**2*c2**2)
+        if det < 0:
             return None
-        return sp.Add(
-            y * CyclicSum(a*(b*c-r/2*b-r/2*c)**2),
-            radsimp(x - r**2*y/4) * CyclicSum(a*(b-c)**2),
-            (-v) * CyclicSum(a*b*(a-b)**2),
-            (u + v)/2*CyclicSum(a*b)*CyclicSum((a-b)**2),
-            z * CyclicSum(a*b*((r**2*y-3*x)/(2*z)*c - 1)**2),
-            detr1(r) / (4*z) * CyclicSum(a**2*b*c)
-        ) / CyclicSum(a*b)
+        # find x near 2*(c2 + sqrt(c2**2 - c100))/3
+        if c2**2 - c100 < 0:
+            return None
 
-    return _get_sol(r_)
+        x = rationalize_func(sp.Poly([9, -12*c2, 4*c100], sp.Symbol('x')), validation=check_x,
+                            validation_initial=lambda x: x >= 2*c2/3, direction = 1)
+    print(x, get_const(x), 't=',radsimp(c100 / (3*x**2/4)))
+    if x is None:
+        return None
+    res = get_const(x)
+    if res < 0:
+        return None
+    t1 = radsimp(c100 / (3*x**2/4)) if x != 0 else 0
+    t2 = 1 - t1
+    if t1 < 0 or t2 < 0:
+        return None
+    y = (c2 - x*t1)/t2 if t2 != 0 else 0
+    
+    return sp.Add(
+        radsimp(c111 * t1) * get_sol1(x),
+        radsimp(c111 * t2) * get_sol2(y),
+        radsimp(c111 * res),
+        radsimp(c111 * c1/2) * CyclicSum((a-b)**2)
+    )

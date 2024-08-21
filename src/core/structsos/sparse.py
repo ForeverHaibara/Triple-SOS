@@ -53,7 +53,7 @@ def sos_struct_extract_factors(poly: Union[sp.Poly, Coeff], solver: Callable, re
     return solver(poly, **kwargs)
 
 
-def sos_struct_linear(poly: sp.Poly):
+def sos_struct_linear(poly: sp.Poly, **kwargs):
     """
     Solve a linear inequality. Supports non-homogeneous polynomials also.
     """
@@ -84,7 +84,7 @@ def sos_struct_linear(poly: sp.Poly):
     return poly.as_expr()
 
 
-def sos_struct_quadratic(poly: sp.Poly):
+def sos_struct_quadratic(poly: sp.Poly, **kwargs):
     """
     Solve a quadratic inequality on real numbers.
     """
