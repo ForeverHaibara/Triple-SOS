@@ -4,12 +4,15 @@ from typing import Union, Optional, Any, Tuple, List, Dict, Callable, Generator
 import numpy as np
 import sympy as sp
 
+from .arithmetic import (
+    matmul, matmul_multiple, symmetric_bilinear, symmetric_bilinear_multiple, solve_undetermined_linear
+)
 from .rationalize import rationalize, rationalize_and_decompose
 from .ipm import (
     SDPConvergenceError, SDPNumericalError, SDPInfeasibleError, SDPRationalizeError
 )
 from .utils import (
-    solve_undetermined_linear, S_from_y, Mat2Vec, congruence_with_perturbation,
+    S_from_y, Mat2Vec, congruence_with_perturbation,
     is_empty_matrix
 )
 
@@ -170,20 +173,26 @@ class SDPMatrixTransform(SDPTransformation):
 
 
         if nullspace is None:
-            if all(is_empty_matrix(mat) for mat in columnspace.values()):
+            if all(is_empty_matrix(mat, check_all_zeros=True) for mat in columnspace.values()):
                 return SDPIdentityTransform.__new__(SDPIdentityTransform, parent_node)
         elif columnspace is None:
-            if all(is_empty_matrix(mat) for mat in nullspace.values()):
+            if all(is_empty_matrix(mat, check_all_zeros=True) for mat in nullspace.values()):
                 return SDPIdentityTransform.__new__(SDPIdentityTransform, parent_node)
 
         return super().__new__(cls)
 
 
-    def __init__(self, parent_node: 'SDPProblem', columnspace: Dict[str, sp.Matrix] = None, nullspace: Dict[str, sp.Matrix] = None):
+    def __init__(self, parent_node: 'SDPProblem', columnspace: Optional[Dict[str, sp.Matrix]] = None, nullspace: Optional[Dict[str, sp.Matrix]] = None):
         def _reg(X, key):
-            return sp.Matrix.hstack(*X.columnspace()) if X.shape[1] > 0 else X
+            m = sp.Matrix.hstack(*X.columnspace())
+            if is_empty_matrix(m):
+                return sp.zeros(X.shape[0], 0)
+            return m
         def _perp(X, key):
-            return sp.Matrix.hstack(*X.T.nullspace())
+            m = sp.Matrix.hstack(*X.T.nullspace())
+            if is_empty_matrix(m):
+                return sp.zeros(X.shape[0], 0)
+            return m
 
         if nullspace is None:
             columnspace = {key: _reg(columnspace[key], key) for key in columnspace}
@@ -210,21 +219,18 @@ class SDPMatrixTransform(SDPTransformation):
         # TODO: faster fraction arithmetic
         eq_list = []
         x0_list = []
+        # from time import time
+        # time0 = time()
         for key, (x0, space) in parent_node._x0_and_space.items():
             V = self._nullspace[key]
             if is_empty_matrix(V):
                 continue
-            eq_mat = []
-            for i in range(space.shape[1]):
-                Aij = Mat2Vec.vec2mat(space[:,i])
-                eq = list(Aij * V)
-                eq_mat.append(eq)
-
-            eq_mat = sp.Matrix(eq_mat).T
+            eq_mat = matmul_multiple(space.T, V).T
             eq_list.append(eq_mat)
 
             Ai0 = Mat2Vec.vec2mat(x0)
-            new_x0 = list(Ai0 * V)
+            # new_x0 = list(Ai0 * V)
+            new_x0 = list(matmul(Ai0, V))
             x0_list.extend(new_x0)
 
 
@@ -240,20 +246,19 @@ class SDPMatrixTransform(SDPTransformation):
             U = self._columnspace[key]
             if is_empty_matrix(U):
                 continue
-            eq_mat = []
-            for i in range(space.shape[1]):
-                Aij = Mat2Vec.vec2mat(space[:,i])
-                eq = U.T * Aij * U
-                eq_mat.append(list(eq))
-
-            eq_mat = sp.Matrix(eq_mat).T
+            eq_mat = symmetric_bilinear_multiple(U, space.T).T
             new_space = eq_mat * trans_space
+            # new_space = matmul(eq_mat, trans_space)
 
-            Ai0 = Mat2Vec.vec2mat(x0)
-            new_x0 = Mat2Vec.mat2vec(U.T * Ai0 * U) + eq_mat * trans_x0
+            # Ai0 = Mat2Vec.vec2mat(x0)
+            # new_x0 = Mat2Vec.mat2vec(U.T * Ai0 * U) + eq_mat * trans_x0
+            new_x0 = sp.Matrix(symmetric_bilinear(U, x0, is_A_vec = True, return_vec = True))
+            new_x0 += eq_mat * trans_x0
+            # new_x0 += matmul(eq_mat, trans_x0)
 
             new_x0_and_space[key] = (new_x0, new_space)
 
+        # print('Used time', time() - time0)
         return SDPProblem(new_x0_and_space)
 
     def propagate_to_parent(self, recursive: bool = True):
@@ -505,7 +510,6 @@ class SDPProblem():
         Standardize the matrix dictionary.
         """
         if not set(mat_dict.keys()) == set(self.keys()):
-            print(mat_dict.keys(), self.keys())
             raise ValueError("The keys of the matrix dictionary should be the same as the keys of the SDP problem.")
         for key, X in mat_dict.items():
             if not isinstance(X, sp.MatrixBase):

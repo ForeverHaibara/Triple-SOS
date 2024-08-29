@@ -4,6 +4,7 @@ import numpy as np
 import gradio as gr
 from PIL import Image
 
+from src.utils import RootsInfo
 from src.utils.text_process import short_constant_parser
 from src.gui.sos_manager import SOS_Manager
 
@@ -56,7 +57,6 @@ DEPLOY_CONFIGS = {
 
 class GradioInterface():
     def __init__(self):
-        self.SOS_Manager = SOS_Manager()
 
         with gr.Blocks(css="#coefficient_triangle{height: 600px;margin-top:-5px}") as self.demo:
             # input and output blocks
@@ -98,13 +98,13 @@ class GradioInterface():
                                             self.image, self.coefficient_triangle,
                                             self.output_box2])
 
-    def set_poly(self, input_text):
-        self.SOS_Manager.set_poly(input_text, cancel = True)
-        if self.poly is None:
+    def set_poly(self, input_text, with_poly = False):
+        res = SOS_Manager.set_poly(input_text)
+        if res is None or res.get('poly') is None:
             return {self.image: None, self.coefficient_triangle: None}
 
-        def _render_heatmap():
-            image = self.SOS_Manager.save_heatmap(backgroundcolor=255)
+        def _render_heatmap(res):
+            image = res['grid'].save_heatmap(backgroundcolor=255)
             image = np.vstack([np.full((8, image.shape[1], 3), 255, np.uint8), image])
             side_white = np.full((image.shape[0], 4, 3), 255, np.uint8)
             image = np.hstack([side_white, image, side_white])
@@ -117,12 +117,12 @@ class GradioInterface():
 
 
         # render coefficient triangle
-        def _render_coefficient_triangle():
+        def _render_coefficient_triangle(res):
             html = '<div id="coeffs" style="width: 100%; height: 600px; position: absolute;">'
 
-            n = self.SOS_Manager.deg
-            coeffs = self.poly.coeffs()
-            monoms = self.poly.monoms()
+            n = res['degree']
+            coeffs = res['poly'].coeffs()
+            monoms = res['poly'].monoms()
             monoms.append((-1,-1,0))  # tail flag
             
             l = 100. / (1 + n)
@@ -150,25 +150,36 @@ class GradioInterface():
             html = html + '\n'.join(txts) + '</div>'
             return html
 
-        image = _render_heatmap()
-        html = _render_coefficient_triangle()
+        image = _render_heatmap(res)
+        html = _render_coefficient_triangle(res)
 
-        return {self.image: image, self.coefficient_triangle: html}
+        res2 = {self.image: image, self.coefficient_triangle: html}
+        if with_poly:
+            res2['poly'] = res['poly']
+            res2['grid'] = res['grid']
+        return res2
 
 
     def solve(self, input_text, methods):
         # self.SOS_Manager.set_poly(input_text, cancel = True)
-        res0 = self.set_poly(input_text)
+        res0 = self.set_poly(input_text, with_poly = True)
         solution = None
-        poly = self.poly
-        is_hom = self.SOS_Manager._poly_info['ishom']
+        poly = res0.pop('poly', None)
+        grid = res0.pop('grid', None)
         if poly is not None:
             if 'Linear' in methods:
-                rootsinfo = self.SOS_Manager.findroot(verbose = False)
-            solution = self.SOS_Manager.sum_of_square(
-                method_order = ['%sSOS'%method for method in methods],
-                configs = DEPLOY_CONFIGS
-            )
+                rootsinfo = SOS_Manager.findroot(poly, grid, verbose = False)
+            else:
+                rootsinfo = RootsInfo()
+            try:
+                solution = SOS_Manager.sum_of_square(
+                    poly,
+                    rootsinfo = rootsinfo,
+                    method_order = ['%sSOS'%method for method in methods],
+                    configs = DEPLOY_CONFIGS
+                )
+            except Exception as e:
+                pass
 
         if solution is not None:
             gradio_latex = _convert_to_gradio_latex(solution.str_latex)
@@ -188,14 +199,11 @@ class GradioInterface():
                 self.output_box_formatted: 'No solution found.',
             }
             if poly is not None and poly.domain.is_Numerical\
-                   and (not poly.is_zero) and is_hom and len(methods) == 4:
+                   and (not poly.is_zero) and poly.is_homogeneous and len(methods) == 4:
                 print(input_text)
         res.update(res0)
         return res
 
-    @property
-    def poly(self):
-        return self.SOS_Manager.poly
 
 if __name__ == '__main__':
     interface = GradioInterface()

@@ -400,7 +400,7 @@ class LinearBasisTangent(LinearBasis):
         return expr
 
     @classmethod
-    def generate(cls, 
+    def generate(cls,
             degree: int, 
             tangent: Union[sp.Expr, RootTangent]
         ) -> List['LinearBasisTangent']:

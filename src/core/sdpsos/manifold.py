@@ -1,7 +1,9 @@
 from collections import defaultdict, deque
+from itertools import product
 from typing import Optional, Dict, List, Tuple
 
 import sympy as sp
+from sympy.combinatorics import PermutationGroup
 
 from ...utils import (
     convex_hull_poly, findroot_resultant, Root, RootAlgebraic, RootRational,
@@ -74,7 +76,7 @@ def _hull_space(
         degree: int,
         convex_hull: Dict[Tuple[int, ...], bool],
         monomial: Tuple[int, ...],
-        option: MonomialReduction
+        symmetry: MonomialReduction
     ) -> Optional[sp.Matrix]:
     """
     For example, s(ab(a-b)2(a+b-3c)2) does not have a^6,
@@ -85,7 +87,7 @@ def _hull_space(
         return None
 
     half_degree = (degree - sum(monomial)) // 2
-    dict_monoms = generate_expr(nvars, half_degree, option=option.base())[0]
+    dict_monoms = generate_expr(nvars, half_degree, symmetry=symmetry.base())[0]
 
     def onehot(i: int) -> List[int]:
         v = [0] * len(dict_monoms)
@@ -218,45 +220,66 @@ def _root_space(manifold: 'RootSubspace', root: RootAlgebraic, monomial: Tuple[i
         def vanish(_nonzeros):
             return all(i > 0 for i, j in zip(monomial, _nonzeros) if j == 0)
 
-    option = manifold._option
+    symmetry = manifold._symmetry
     spans = []
 
     # this is an incomplete (but fast) implementation
     if isinstance(root, RootRational):
-        base_option = option.base()
-        for r_ in option.permute(root.root):
+        base_symmetry = symmetry.base()
+        for r_ in symmetry.permute(root.root):
             new_r = RootRational(r_)
             orders = _compute_nonvanishing_diff_orders(manifold.poly, new_r, monomial)
             for order in orders:
-                spans.append(new_r.span(d, order, option=base_option))
+                spans.append(new_r.span(d, order, symmetry=base_symmetry))
 
     else:
-        span = root.span(d, option=option.base())
+        span = root.span(d, symmetry=symmetry.base())
         for i in range(span.shape[1]):
-            span2 = option.permute_vec(nvars, span[:,i])
-            for j, perm in zip(range(span2.shape[1]), option.permute(nonzeros)):
+            span2 = symmetry.permute_vec(nvars, span[:,i])
+            for j, perm in zip(range(span2.shape[1]), symmetry.permute(nonzeros)):
                 if not vanish(perm):
                     spans.append(span2[:,j])
 
     return sp.Matrix.hstack(*spans)
 
 
+def _findroot_binary(poly: sp.Poly, symmetry: MonomialReduction = None) -> List[Root]:
+    """
+    Find binary roots of the polynomial.
+    """
+    roots = set()
+    for root in product([0, 1], repeat=len(poly.gens)):
+        # root = RootRational(root)
+        # if root.subs(poly, poly.gens) == 0:
+        #     roots.append(root)
+        if poly(*root) == 0:
+            # roots.append(RootRational(root))
+            roots.add(symmetry._standard_monom(root))
+    roots = set(roots)
+    all_zero = tuple([0] * len(poly.gens))
+    if all_zero in roots:
+        roots.remove(all_zero)
+    roots = [RootRational(root) for root in roots]
+    return roots
+
 class RootSubspace():
-    def __init__(self, poly: sp.Expr, option: MonomialReduction) -> None:
+    def __init__(self, poly: sp.Poly, symmetry: MonomialReduction) -> None:
         self.poly = poly
         self._degree: int = poly.total_degree()
         self._nvars : int = len(poly.gens)
-        self._option: MonomialReduction = option
+        self._symmetry: MonomialReduction = symmetry
 
         self.convex_hull = None
         self.roots = []
 
-        if self._nvars == 3: # and self._option.is_cyc:
-            # if self._option.is_cyc:
+        if self._nvars == 3: # and self._symmetry.is_cyc:
+            # if self._symmetry.is_cyc:
             #     self.convex_hull = convex_hull_poly(poly)[0]
             self.roots = findroot_resultant(poly)
+        elif self._nvars <= 10:
+            self.roots = _findroot_binary(poly, symmetry)
 
-        self.roots = [r for r in self.roots if not r.is_corner]
+        # self.roots = [r for r in self.roots if not r.is_corner]
         self._additional_nullspace = {}
 
     @property
@@ -314,8 +337,8 @@ class RootSubspace():
 
 
     def _nullspace_hull(self, monomial):
-        option = self._option
-        return _hull_space(self._nvars, self._degree, self.convex_hull, monomial, option)
+        symmetry = self._symmetry
+        return _hull_space(self._nvars, self._degree, self.convex_hull, monomial, symmetry)
 
     def _nullspace_roots(self, monomial, real: bool = False):
         nullspaces = []

@@ -401,6 +401,9 @@ class GridRender():
 
     @classmethod
     def zero_grid(cls):
+        """
+        Returns a zero grid.
+        """
         if cls._zero_grid is None:
             cls._zero_grid = GridPoly(
                 sp.polys.Poly(0, sp.symbols('a b c')),

@@ -38,7 +38,7 @@ def SymmetricSOS(
     """
 
     # check symmetricity here # and (1,1,1) == 0
-    if (not (poly.domain in (sp.polys.ZZ, sp.polys.QQ))):
+    if (len(poly.gens) != 3 or not (poly.domain in (sp.ZZ, sp.QQ))):
         return None
     if (not all(verify_hom_cyclic(poly))) or (not verify_is_symmetric(poly)):
         return None
@@ -51,15 +51,16 @@ def SymmetricSOS(
         positives = [positive]
 
     for positive in positives:
-        numerator, denominator = sym_representation(poly, positive = positive, return_poly = True)
+        numerator, denominator = sym_representation(poly, is_pqr = False, positive = positive, return_poly = True)
         numerator = prove_numerator(numerator, positive = positive)
         if numerator is None:
             continue
         expr = numerator / denominator
 
         expr = expr.subs(
-            TRANSLATION_POSITIVE if positive else TRANSLATION_REAL
+            TRANSLATION_POSITIVE if positive else TRANSLATION_REAL, simultaneous=True
         )
+        expr = expr.xreplace(dict(zip(sp.symbols("a b c"), poly.gens)))
 
         solution = SolutionSymmetric(
             problem = poly,

@@ -15,12 +15,20 @@
     }
     </style>
     <!-- <script src="https://requirejs.org/docs/release/2.3.6/minified/require.js"></script> -->
-    <script async src="https://cdn.bootcdn.net/ajax/libs/axios/0.21.1/axios.min.js"></script>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
-    <script type="text/javascript" id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
+    <!-- <script async src="https://cdn.bootcdn.net/ajax/libs/axios/0.21.1/axios.min.js"></script> -->
+    <!-- <script async src="https://cdn.socket.io/4.0.0/socket.io.min.js"></script> -->
+    <!-- <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet"> -->
+    <!-- <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script> -->
+    <!-- <script type="text/javascript" id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script> -->
     <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>  -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/0.4.1/html2canvas.min.js"></script>
+    <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/0.4.1/html2canvas.min.js"></script> -->
+    <!-- load from static -->
+    <script src="static/js/axios.min.js"></script>
+    <script src="static/js/socket.io.min.js"></script>
+    <script src="static/js/bootstrap.bundle.min.js"></script>
+    <script src="static/js/tex-svg.js"></script>
+    <script src="static/js/html2canvas.min.js"></script>
+    <link href="static/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body>
 <div id="frontpage" 
@@ -121,7 +129,7 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
     <div id="inputs" style="width: 100%; height: 5%; margin-top: 1%">    
         <input type="text" id="input_poly" name="poly" style="border: 1px solid black; border-radius: 8px; 
         width: 99%; height: 100%; padding-left: 1%; font-size: small;" autocomplete="off"
-        onkeyup="if(event.keyCode==13) {preprocessInput({findroot: 1});}"></input><br>
+        onkeyup="if(event.keyCode==13) {preprocessInput();}"></input><br>
         <!-- <input type="submit" value="提交"> -->
     </div>
     <div id="centerscreen" style="width: 100%; height: 90%;margin-top: 1.5%; border-style: solid;border-color: gray;
@@ -233,6 +241,12 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
 
 <script>
     // initialization
+    const host = 'http://127.0.0.1:5000'; 
+    // const host = 'https://sos.bailili.top';
+
+    let socket = null;
+    let socket_connecting = false;
+
     var sos_poly = '';
     var sos_coeffs = [];
     var sos_deg = 0;
@@ -277,241 +291,236 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
     }
     CreateVariables();
 
+    function changeNumOfSOS(num){
+        sos_work.num = Math.max(0, num);
+        if (sos_work.num == 0){
+            document.getElementById("sumofsquare").innerHTML = "Sum of Square";
+        }else{
+            document.getElementById("sumofsquare").innerHTML = "Sum of Square (" + sos_work.num + ")";
+        }
+    }
+
     // functions
+    function connectSocket(callback){
+        if (socket !== null){
+            if (typeof callback === 'function') {
+                callback();
+            }
+            return;
+        }
+        socket = io(host, {reconnectionAttempts: 3});
+        // socket.connect(host);
+        socket.on('connect_error', function(){
+            socket = null;
+            changeNumOfSOS(0);
+        });
+        socket.on('connect', ()=>{
+            if (typeof callback === 'function') {
+                callback();
+            }
+        });
+        socket.on('disconnect', function(){
+            socket = null;
+            sos_poly = '';
+            changeNumOfSOS(0);
+        });
+
+        socket.on('preprocess', function(data){
+        });
+
+        socket.on('rootangents', function(data){
+            let str = data.rootsinfo;
+            // /n -> <br>
+            let i = 0;
+            while (i < str.length){
+                if (str[i] == '\n'){
+                    str = str.slice(0, i) + ' <br> ' + str.slice(i+1, str.length);
+                    i += 5;
+                }
+                ++i;
+            }
+            document.getElementById("rootsinfo").innerHTML = str;
+            
+            str = data.tangents;
+            if (Array.isArray(str)){
+                str = str.join('\n');
+            }
+            document.getElementById("input_tangents").value = str;
+        });
+
+        socket.on('sos', function(data){
+            sos_results.latex = data.latex; 
+            sos_results.txt   = data.txt;
+            sos_results.formatted = data.formatted;
+            document.getElementById('output_result').innerHTML = data[sos_results.show]
+
+            const shadow_box = document.getElementById("shadow_box");
+            let past;
+            if ((past = shadow_box.firstChild)){
+                past.remove();
+            }
+            
+            let str;
+            if (!data.success){
+                str = '\\quad\\quad\\quad{\\rm Failed}\\quad\\quad\\quad';
+            }else{
+                const text_length = sos_results.latex.length;
+                str = sos_results.latex.slice(2, text_length-2);
+                if (str.indexOf('aligned') < 0){ // no aligned environment
+                    if (str.indexOf('\\\\') >= 0){
+                        // 存在换行, 使用 \begin{aligned}
+                        let i = 0;
+                        while (i+1 < str.length){
+                            if (str[i] == '\\' && str[i+1] == '\\'){
+                                str = str.slice(0, i+2) + ' & ' + str.slice(i+2, str.length);
+                                i += 2;        
+                            }
+                            ++i;
+                        }
+                        str = '\\begin{aligned}  \\  &' + str + '\\end{aligned}';
+                    }
+                }
+            }
+
+            changeNumOfSOS(sos_work.num - 1);
+
+            let svg = window.MathJax.tex2svg(str).children[0];
+            // shadow_box.style.height = '80%';
+            shadow_box.appendChild(svg);
+            svg.setAttribute('style', 'width: 95%; height: 90%; margin-top: 2%'); 
+            shadow_box.hidden = "";
+            document.getElementById("shadow").hidden = "";
+            document.getElementById("input_poly").blur();
+            document.getElementById("input_tangents").blur();
+            sos_results.displaying = 1;
+        });
+    }
 
     function preprocessInput(kwargs){
         const input_poly = document.getElementById('input_poly').value.trim();        
         
         const parse_undefined = (x, y) => {return typeof(x) === 'undefined'? y: x;}
-        const findroot = parse_undefined(kwargs['findroot'], 1);
-        const sos = parse_undefined(kwargs['sos'], null);
-        const factor = parse_undefined(kwargs['factor'], false);
+        kwargs = parse_undefined(kwargs, {})
+        let actions = parse_undefined(kwargs.actions, ['findroot']);
+        kwargs.actions = actions
+        kwargs.factor  = parse_undefined(kwargs.factor, false);
+        kwargs.poly = input_poly;
 
-        if (sos_poly === input_poly){
-            if ((sos !== null) && (typeof(sos) !== 'undefined')){ 
-                //输入没有变化, 但是要求配方
-                sos();
+        connectSocket(() => {
+            if (socket === null){
+                return changeNumOfSOS(0);
             }
-            return;
-        }
-        
-        sos_poly = input_poly;
-        axios.post('http://127.0.0.1:5000/process/preprocess',
-            {poly: input_poly, factor: factor}
-        ).then(res => {
-            // after obtaining the return
-            // n: degree of polynomial
-            // txts: coefficients texts
+            kwargs.sid = socket.id;
             
-            {
-                if (res.data.factor.length > 0){
-                    // If we have called factorization on the polynomial
-                    document.getElementById("input_poly").value = res.data.factor;
-                    sos_poly = res.data.factor.trim();
+            sos_poly = input_poly;
+            axios.post(host + '/process/preprocess', kwargs
+            ).then(res => {
+                if (Object.keys(res.data).length === 0){
+                    return;
                 }
-                else if (res.data.cancel.length > 0){
-                    // If the input is fraction, then substitude it with the denominator
-                    document.getElementById("input_poly").value = res.data.cancel;
-                    sos_poly = res.data.cancel.trim();
-                }
+                // after obtaining the return
+                // n: degree of polynomial
 
-            }
+                document.getElementById("input_poly").value = res.data.txt;
+                // document.getElementById("rootsinfo").innerHTML = '';
+                sos_poly = res.data.txt;
 
-            // First render the coefficient triangle
-            {
-                let coeffs_view = document.getElementById('coeffs')
-                // if (sos_deg != res.data.n){
-                for (let i=sos_coeffs.length-1;i>=0;--i){
-                    coeffs_view.removeChild(sos_coeffs.pop());
-                }
-                // }
-
-                sos_deg = res.data.n ;
-                let t = 0;
-                const l = 100. / (1 + sos_deg); // length of each samll equilateral triangle 
-                const ulx = (50 - l * sos_deg / 2), uly = (29 - 13 * sos_deg * l / 45);
-                const fontsize = Math.max(11,Math.floor(28-1.5*sos_deg));
-                const lengthscale = .28 * fontsize / 20.;
-                const titleparser = (chr, deg) => { 
-                    return deg <= 0? '': (deg==1? chr: chr+deg);
-                }
-                for (let i = 0; i <= sos_deg; ++i){
-                    for (let j = 0; j <= i; ++j){
-                        let coeff = document.createElement('p');
-                        coeffs_view.appendChild(coeff);
-                        coeff.innerHTML = res.data.txts[t];
-                        let x =  (ulx + l*(2*i-j)/2 - res.data.txts[t].length * lengthscale - 2*Math.floor(res.data.txts[t].length/4)), 
-                            y =  (uly + l*j*13/15);
-                        coeff.setAttribute('style','position:absolute;left:'+x+'%;top:'+y+'%;font-size:'
-                                        +fontsize+'px');
-                        // when mouse hover on a monom, it shows hint like 'a5c' for a^5 * c
-                        coeff.title = titleparser('a',sos_deg-i) + titleparser('b',i-j) + titleparser('c',j); 
-                        coeff.onmouseover = () => {coeff.style.color = 'blue';}
-                        if (res.data.txts[t] === '0'){
-                            coeff.style.color = 'rgb(180,180,180)';
-                            coeff.onmouseout  = () => {coeff.style.color = 'rgb(180,180,180)';}
-                        }else{
-                            coeff.style.color = 'black';
-                            coeff.onmouseout  = () => {coeff.style.color = 'black';}
-                        }
-                        sos_coeffs.push(coeff)
-                        ++t;
+                // First render the coefficient triangle
+                {
+                    let coeffs_view = document.getElementById('coeffs')
+                    // if (sos_deg != res.data.n){
+                    for (let i=sos_coeffs.length-1;i>=0;--i){
+                        coeffs_view.removeChild(sos_coeffs.pop());
                     }
-                }
-            }
-            
-            // Next render the heatmap triangle
-            {
-                let t = 0;
-                const color = res.data.heatmap;
-                for (let i=0;i<=heatmap_gridsize;++i){
-                    for (let j=0;j<=heatmap_gridsize-i;++j){
-                        heatmap_grids[t].style.background = 'rgb('
-                            +color[t][0]+','+color[t][1]+','+color[t][2]+')';
-                        t += 1;
-                    }
-                }
-            }
+                    // }
 
-            // Next update the rootsinfo
-            if (findroot == 1){
-                document.getElementById("rootsinfo").innerHTML = '';
-                axios.post('http://127.0.0.1:5000/process/rootangents',{}
-                ).then(res => {
-                    {
-                        let str = res.data.rootsinfo;
-                        // /n -> <br>
-                        let i = 0;
-                        while (i < str.length){
-                            if (str[i] == '\n'){
-                                str = str.slice(0, i) + ' <br> ' + str.slice(i+1, str.length);
-                                i += 5;
+                    sos_deg = res.data.n;
+                    let t = 0;
+                    const l = 100. / (1 + sos_deg); // length of each samll equilateral triangle 
+                    const ulx = (50 - l * sos_deg / 2), uly = (29 - 13 * sos_deg * l / 45);
+                    const fontsize = Math.max(11,Math.floor(28-1.5*sos_deg));
+                    const lengthscale = .28 * fontsize / 20.;
+                    const titleparser = (chr, deg) => { 
+                        return deg <= 0? '': (deg==1? chr: chr+deg);
+                    }
+                    var triangle_vals = res.data.triangle;
+                    for (let i = 0; i <= sos_deg; ++i){
+                        for (let j = 0; j <= i; ++j){
+                            let coeff = document.createElement('p');
+                            coeffs_view.appendChild(coeff);
+                            coeff.innerHTML = triangle_vals[t];
+                            let x =  (ulx + l*(2*i-j)/2 - triangle_vals[t].length * lengthscale - 2*Math.floor(triangle_vals[t].length/4)), 
+                                y =  (uly + l*j*13/15);
+                            coeff.setAttribute('style','position:absolute;left:'+x+'%;top:'+y+'%;font-size:'
+                                            +fontsize+'px');
+                            // when mouse hover on a monom, it shows hint like 'a5c' for a^5 * c
+                            coeff.title = titleparser('a',sos_deg-i) + titleparser('b',i-j) + titleparser('c',j); 
+                            coeff.onmouseover = () => {coeff.style.color = 'blue';}
+                            if (triangle_vals[t] === '0'){
+                                coeff.style.color = 'rgb(180,180,180)';
+                                coeff.onmouseout  = () => {coeff.style.color = 'rgb(180,180,180)';}
+                            }else{
+                                coeff.style.color = 'black';
+                                coeff.onmouseout  = () => {coeff.style.color = 'black';}
                             }
-                            ++i;
-                        }
-                        document.getElementById("rootsinfo").innerHTML = str;
-                    }
-                    {
-                        let str = res.data.tangents;
-                        document.getElementById("input_tangents").value = str.join('\n');
-                    }
-
-                    if (sos !== null){
-                        // 同时还要进行配方
-                        sos();
-                    }
-                }).catch(err => {
-                    if (sos !== null){
-                        sos_work.num -= 1;
-                        if (sos_work.num == 0){
-                            document.getElementById("sumofsquare").innerHTML = "Sum of Square";
-                        }else{
-                            document.getElementById("sumofsquare").innerHTML = "Sum of Square (" + sos_work.num + ")";
+                            sos_coeffs.push(coeff)
+                            ++t;
                         }
                     }
-                });
-
-            }
-        }).catch(err => {
-            if (sos !== null){
-                sos_work.num -= 1;
-                if (sos_work.num == 0){
-                    document.getElementById("sumofsquare").innerHTML = "Sum of Square";
-                }else{
-                    document.getElementById("sumofsquare").innerHTML = "Sum of Square (" + sos_work.num + ")";
                 }
-            }
-        }) ;
+                
+                // Next render the heatmap triangle
+                {
+                    let t = 0;
+                    const color = res.data.heatmap;
+                    for (let i=0;i<=heatmap_gridsize;++i){
+                        for (let j=0;j<=heatmap_gridsize-i;++j){
+                            heatmap_grids[t].style.background = 'rgb('
+                                +color[t][0]+','+color[t][1]+','+color[t][2]+')';
+                            t += 1;
+                        }
+                    }
+                }
+            }).catch(error => {
+                // console.log(axios.isAxiosError(error), error.message);
+                if (axios.isAxiosError(error) && (error.message === 'Network Error')) {
+                    changeNumOfSOS(0);
+                }
+            });
+        });
     };
 
     
     function SumOfSquare(){
         document.getElementById("sumofsquare").blur();
-        sos_work.num += 1;
-        document.getElementById("sumofsquare").innerHTML = "Sum of Square (" + sos_work.num + ")";
-        
-        function SOS_callback(){
-            const input_poly = document.getElementById('input_poly').value;
-            const tangents = document.getElementById('input_tangents').value;
-            const methods = {
-                StructuralSOS: document.getElementById("setting_method_use_StructuralSOS").checked,
-                LinearSOS: document.getElementById("setting_method_use_LinearSOS").checked,
-                SymmetricSOS: document.getElementById("setting_method_use_SymmetricSOS").checked,
-                SDPSOS: document.getElementById("setting_method_use_SDPSOS").checked,
-            }
-            const configs = {
-                StructuralSOS:{
-                    real: document.getElementById("setting_method_StructuralSOS_real").checked,
-                },
-                SDPSOS: {
-                    // allow_numer: document.getElementById("setting_method_SDPSOS_allow_numer").checked,
-                    verbose: true,
-                    // decompose_method: document.getElementById("setting_method_SDPSOS_reduced_decompose").checked?'reduce':'raw',
-                }
-            }
-            axios.post('http://127.0.0.1:5000/process/sos',{
-                poly: input_poly, tangents: tangents, methods: methods, configs: configs}
-            ).then(res=>{
-                sos_results.latex = res.data.latex; 
-                sos_results.txt   = res.data.txt;
-                sos_results.formatted = res.data.formatted;
-                document.getElementById('output_result').innerHTML = res.data[sos_results.show]
+        changeNumOfSOS(sos_work.num + 1);
 
-                const shadow_box = document.getElementById("shadow_box");
-                let past;
-                if ((past = shadow_box.firstChild)){
-                    past.remove();
-                }
-                
-                let str;
-                if (!res.data.success){
-                    str = '\\quad\\quad\\quad{\\rm Failed}\\quad\\quad\\quad';
-                }else{
-                    const text_length = sos_results.latex.length;
-                    str = sos_results.latex.slice(2, text_length-2);
-                    if (str.indexOf('aligned') < 0){ // no aligned environment
-                        if (str.indexOf('\\\\') >= 0){
-                            // 存在换行, 使用 \begin{aligned}
-                            let i = 0;
-                            while (i+1 < str.length){
-                                if (str[i] == '\\' && str[i+1] == '\\'){
-                                    str = str.slice(0, i+2) + ' & ' + str.slice(i+2, str.length);
-                                    i += 2;        
-                                }
-                                ++i;
-                            }
-                            str = '\\begin{aligned}  \\  &' + str + '\\end{aligned}';
-                        }
-                    }
-                }
-                
-                sos_work.num -= 1;
-                if (sos_work.num == 0){
-                    document.getElementById("sumofsquare").innerHTML = "Sum of Square";
-                }else{
-                    document.getElementById("sumofsquare").innerHTML = "Sum of Square (" + sos_work.num + ")";
-                }
-
-                let svg = window.MathJax.tex2svg(str).children[0];
-                // shadow_box.style.height = '80%';
-                shadow_box.appendChild(svg);
-                svg.setAttribute('style', 'width: 95%; height: 90%; margin-top: 2%'); 
-                shadow_box.hidden = "";
-                document.getElementById("shadow").hidden = "";
-                document.getElementById("input_poly").blur();
-                document.getElementById("input_tangents").blur();
-                sos_results.displaying = 1;
-            }
-            ).catch(err=>{
-                sos_work.num -= 1;
-                if (sos_work.num == 0){
-                    document.getElementById("sumofsquare").innerHTML = "Sum of Square";
-                }else{
-                    document.getElementById("sumofsquare").innerHTML = "Sum of Square (" + sos_work.num + ")";
-                }
-            });
+        const input_poly = document.getElementById('input_poly').value;
+        const tangents = document.getElementById('input_tangents').value;
+        const methods = {
+            StructuralSOS: document.getElementById("setting_method_use_StructuralSOS").checked,
+            LinearSOS: document.getElementById("setting_method_use_LinearSOS").checked,
+            SymmetricSOS: document.getElementById("setting_method_use_SymmetricSOS").checked,
+            SDPSOS: document.getElementById("setting_method_use_SDPSOS").checked,
         }
-        preprocessInput({findroot: 1, sos: SOS_callback});
+        const configs = {
+            StructuralSOS:{
+                real: document.getElementById("setting_method_StructuralSOS_real").checked,
+            },
+            SDPSOS: {
+                // allow_numer: document.getElementById("setting_method_SDPSOS_allow_numer").checked,
+                verbose: true,
+                // decompose_method: document.getElementById("setting_method_SDPSOS_reduced_decompose").checked?'reduce':'raw',
+            }
+        }
+        let kwargs = {methods: methods, configs: configs, actions: ['findroot', 'sos']};
+        
+        if (sos_poly === input_poly){
+            kwargs.tangents = tangents;
+        }
+        console.log(kwargs);
+
+        preprocessInput(kwargs);
     }
 
     function ChangeShowType(x){
@@ -569,13 +578,13 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
                 }
             }
             input_poly_box.value = result.join("");
-            preprocessInput({findroot: 1});
+            preprocessInput();
         }else if (event === 'factor'){
             sos_poly = ''; // reset
-            preprocessInput({findroot: 1, factor: true});
+            preprocessInput({factor: true});
         }else if (event === 'latex_coeffs'){
-            axios.post('http://127.0.0.1:5000/process/latexcoeffs',
-            {}
+            axios.post(host + '/process/latexcoeffs',
+            {'poly': sos_poly}
             ).then(res=>{
                     const str = res.data.coeffs;
                     // copy coeffs to clipboard
@@ -601,12 +610,9 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
 
 
     function HeatmapScreenShot() {
-        console.log('hi');
         html2canvas(document.getElementById("heatmap"), {
             onrendered: function (canvas) {
-                console.log('hasda');
                 var link = document.createElement("a");
-                console.log(link);
                 link.download = "screenshot.png";
                 link.href = canvas.toDataURL();
                 link.click();
@@ -614,11 +620,22 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
         });
       }
 
+    document.addEventListener('click', function(event) {
+        // 检查点击事件是否发生在弹出框之外
+        if (sos_results.displaying == 1 && !event.target.closest('#shadow_box') && 
+                !event.target.closest('#output_showlatex')){
+            // 如果点击在弹出框之外，则关闭弹出框
+            sos_results.displaying = 0; 
+            // document.getElementById("shadow_box").hidden = "hidden";
+            document.getElementById("shadow").hidden = "hidden";
+        }
+    });
+
     document.onkeyup = function(e) {
         // 兼容FF和IE和Opera
         var event = e || window.event;
         var key = event.which || event.keyCode || event.charCode;
-        if ((key == 13 || key == 27) & sos_results.displaying == 1){
+        if ((key == 13 || key == 27) && sos_results.displaying == 1){
             // is displaying
             sos_results.displaying = 0; 
             // document.getElementById("shadow_box").hidden = "hidden";

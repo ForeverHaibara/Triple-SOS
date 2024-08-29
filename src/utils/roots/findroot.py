@@ -169,7 +169,7 @@ def optimize_discriminant(discriminant, soft = False, verbose = False):
 def findroot(
         poly: sp.Poly,
         most: int = 5,
-        grid: GridPoly = None,
+        grid: Optional[GridPoly] = None,
         method: str = 'nsolve',
         standardize_method: str = 'partial',
         verbose: bool = False,
@@ -203,12 +203,14 @@ def findroot(
     rootsinfo : RootsInfo
         The roots information.
     """
+    if not isinstance(poly, sp.Poly):
+        return RootsInfo()
+
     if grid is None:
         grid = GridRender.render(poly, with_color=False)
 
-    if not (poly.domain in (sp.polys.ZZ, sp.polys.QQ, sp.polys.RR)):
-        roots = []
-    else:
+    roots = []
+    if len(poly.gens) == 3 and (poly.domain in (sp.polys.ZZ, sp.polys.QQ, sp.polys.RR)):
         is_cyc = verify_hom_cyclic(poly)[1]
         roots = _findroot_helper.findroot(poly, grid, method, standardize_method = standardize_method)
         roots = [r.approximate() if hasattr(r, 'approximate') else r for r in roots]
@@ -381,7 +383,7 @@ class _findroot_helper():
         roots = []
         if cyc:
             a = poly.gens[0]
-            rep = [_[0] if len(_) else 0 for _ in poly.rep.rep[-1]]
+            rep = [_[0] if len(_) else 0 for _ in poly.rep.to_list()[-1]]
             poly = sp.Poly.from_list(rep, a)
             poly_diff = poly.diff(a)
             poly_diff2 = poly_diff.diff(a)
@@ -421,7 +423,7 @@ class _findroot_helper():
         """
         roots = []
         a = poly.gens[0]
-        rep = [sum(sum(__) for __ in _) for _ in poly.rep.rep]
+        rep = [sum(sum(__) for __ in _) for _ in poly.rep.to_list()]
         poly = sp.Poly.from_list(rep, a)
         poly_diff = poly.diff(a)
         poly_diff2 = poly_diff.diff(a)

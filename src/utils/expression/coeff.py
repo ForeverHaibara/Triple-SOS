@@ -10,7 +10,18 @@ class Coeff():
     """
     A standard class for representing a polynomial with coefficients.
     """
+    def __new__(cls, *args, **kwargs):
+        # if it is already a Coeff object, return it.
+        if len(args) == 1 and isinstance(args[0], cls):
+            return args[0]
+        return super().__new__(cls)
+
     def __init__(self, coeffs: Union[Poly, Dict], is_rational: bool = True):
+        if hasattr(self, 'coeffs'):
+            # if the object is already initialized,
+            # (this is the case when called from __new__ by Coeff(Coeff(...)) )
+            # then return without reinitializing.
+            return
         if isinstance(coeffs, Poly):
             self._nvars = len(coeffs.gens)
             poly = coeffs
@@ -69,7 +80,8 @@ class Coeff():
         elif (not self.is_zero) and perm_group.degree != self.nvars:
             return False
 
-        for perm in perm_group.args:
+        for perm in perm_group.generators:
+            # checking the generators is enough
             for k, v in self.coeffs.items():
                 if self(perm(k)) != v:
                     return False
@@ -116,7 +128,7 @@ class Coeff():
 
     def as_poly(self, *args) -> Poly:
         """
-        Return the polynomial of given variables. If args is not given, it uses.
+        Return the polynomial of given variables. If args is not given, it uses a-z.
         """
         if len(args) == 0:
             if self.is_zero:
@@ -127,14 +139,30 @@ class Coeff():
             args = args[0]
         return Poly.from_dict(self.coeffs, gens = args)
 
+    def is_homogeneous(self) -> bool:
+        """
+        Whether the polynomial is homogeneous.
+        """
+        if self.is_zero:
+            return True
+        degree = self.degree()
+        return all(sum(k) == degree for k in self.coeffs)
+
     def degree(self) -> int:
         """
-        Return the degree of the polynomial.
+        Return the degree of the polynomial. Only works for homogeneous polynomials.
+        Please use `total_degree()` for non-homogeneous polynomials.
         """
         if len(self.coeffs) == 0:
             return 0
         for k in self.coeffs:
             return sum(k)
+
+    def total_degree(self) -> int:
+        """
+        Return the total degree of the polynomial.
+        """
+        return max(sum(k) for k in self.coeffs)
 
     @property
     def is_zero(self) -> bool:

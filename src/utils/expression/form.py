@@ -6,7 +6,22 @@ from .cyclic import CyclicSum, CyclicProduct
 from ..polytools import verify_hom_cyclic, deg
 from ..text_process import pl
 
+def _verify_poly(poly):
+    if all((
+        isinstance(poly, sp.Poly),
+        len(poly.gens) == 3,
+        poly.is_homogeneous,
+        poly.domain in (sp.ZZ, sp.QQ, sp.RR)
+    )):
+        return True
+    return False
+
 def poly_get_standard_form(poly, formatt = 'short', is_cyc = None):
+    if (not _verify_poly(poly)) or (poly.domain is sp.RR):
+        return
+    if is_cyc is None:
+        is_cyc = verify_hom_cyclic(poly)[1]
+    names = [_.name for _ in poly.gens]
     if formatt == 'short':
         def _title_parser(char, deg):
             return '' if deg == 0 else (char if deg == 1 else (char + str(deg)))
@@ -22,12 +37,13 @@ def poly_get_standard_form(poly, formatt = 'short', is_cyc = None):
         if is_cyc is not None and is_cyc == True:
             txt = ''
             for coeff, monom in zip(poly.coeffs(), poly.monoms()):
-                a , b , c = monom 
+                a, b, c = monom 
                 if a >= b and a >= c:
+                    suffix =  _title_parser(names[0],a) + _title_parser(names[1],b) + _title_parser(names[2],c)
                     if a == b and a == c:
-                        txt += _formatter(coeff/3) + _title_parser('a',a) + _title_parser('b',b) + _title_parser('c',c)
+                        txt += _formatter(coeff/3) + suffix
                     elif (a != b and a != c) or a == b:
-                        txt += _formatter(coeff) + _title_parser('a',a) + _title_parser('b',b) + _title_parser('c',c)
+                        txt += _formatter(coeff) + suffix
             if txt.startswith('+'):
                 txt = txt[1:]
             return 's(' + txt + ')'
@@ -53,7 +69,9 @@ def poly_get_factor_form(poly, return_type='text'):
     return_type : str
         The type of the return value. Can be 'text' or 'expr'.
     """
-    a, b, c = sp.symbols('a b c')
+    if not _verify_poly(poly):
+        return
+    a, b, c = poly.gens
     coeff, parts = poly.factor_list()
     factors = defaultdict(int)
     is_cyc = {}
@@ -109,9 +127,20 @@ def poly_get_factor_form(poly, return_type='text'):
         return coeff * sp.Mul(*result)
 
 
-def latex_coeffs(poly, tabular=True, document=True):
+def latex_coeffs(poly, tabular: bool = True, document: bool = True, zeros: str ='\\textcolor{lightgray}') -> str:
     """
     Return the LaTeX format of the coefficient triangle.
+
+    Parameters
+    ----------
+    poly : Poly
+        The polynomial to be factorized.
+    tabular : bool
+        Whether to use the tabular environment.
+    document : bool
+        If True, it will be wrapped by an additional arraystretch command.
+    zeros : str
+        The color of the zeros.
     """
     if poly is None:
         return ''
@@ -120,6 +149,10 @@ def latex_coeffs(poly, tabular=True, document=True):
         poly = pl(poly)
     else:
         poly_str = 'f(a,b,c)'
+
+    zero_wrapper = lambda x: x
+    if zeros is not None and len(zeros):
+        zero_wrapper = lambda x: '%s{%s}'%(zeros, x)
 
     n = deg(poly)
     emptyline = '\\\\ ' + '\\ &' * (n * 2) + '\\  \\\\ '
@@ -135,7 +168,7 @@ def latex_coeffs(poly, tabular=True, document=True):
                 txt = sp.latex(coeffs[t])
                 t += 1
             else:
-                txt = '0'
+                txt = zero_wrapper('0')
             strings[j] = strings[j] + '&\\ &' + txt if len(strings[j]) != 0 else txt
     monoms.pop()
 

@@ -3,12 +3,12 @@ import sympy as sp
 from .octic_symmetric import sos_struct_octic_symmetric
 
 from .utils import (
-    CyclicSum, CyclicProduct, inverse_substitution
+    SS, CyclicSum, CyclicProduct, inverse_substitution
 )
 
-def sos_struct_octic(coeff, recurrsion, real = True):
+def sos_struct_octic(coeff, real = True):
     # first try symmetric case
-    solution = sos_struct_octic_symmetric(coeff, recurrsion, real=real)
+    solution = sos_struct_octic_symmetric(coeff, real=real)
     if solution is not None:
         return solution
 
@@ -24,7 +24,7 @@ def sos_struct_octic(coeff, recurrsion, real = True):
         poly2 = coeff((0,3,5))*a**5*b**2 + coeff((1,2,5))*a**4*b**3 + coeff((2,1,5))*a**3*b**4 + coeff((3,0,5))*a**2*b**5\
                 + coeff((3,3,2))*a**2*b**2*c**3+coeff((0,4,4))*a**5*b*c+coeff((1,3,4))*a**4*b**2*c+coeff((2,2,4))*a**3*b**3*c+coeff((3,1,4))*a**2*b**4*c
         poly2 = CyclicSum(poly2).doit().as_poly(a,b,c)
-        solution = recurrsion(poly2)
+        solution = SS.structsos.ternary._structural_sos_3vars_cyclic(poly2)
 
         if solution is not None:
             # unrobust method handling fraction

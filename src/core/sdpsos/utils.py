@@ -4,7 +4,6 @@ from typing import Union, Optional, Tuple, List, Dict, Callable, Generator
 import numpy as np
 import sympy as sp
 
-from .arithmetic import solve_undetermined_linear
 from ...utils import congruence
 
 
@@ -48,8 +47,16 @@ def congruence_with_perturbation(
     return None
 
 
-def is_empty_matrix(M: sp.Matrix) -> bool:
-    return M.shape[0] == 0 or M.shape[1] == 0
+def is_empty_matrix(M: sp.Matrix, check_all_zeros: bool = False) -> bool:
+    """
+    Check whether a matrix is zero size. Set check_all_zeros == True to
+    check whether all entries are zero.
+    """
+    if M.shape[0] == 0 or M.shape[1] == 0:
+        return True
+    if check_all_zeros and not any(M):
+        return True
+    return False
 
 
 def is_numer_matrix(M: sp.Matrix) -> bool:
@@ -133,7 +140,7 @@ class Mat2Vec:
             Symmetric matrix.
         """
         if mode == cls.DIRECT:
-            n = round(v.shape[0] ** .5)
+            n = round((v.shape[0] * v.shape[1]) ** .5)
             return v.reshape(n, n)
         elif mode == cls.UPPER:
             return cls.symmetric_matrix_from_upper_vec(v)

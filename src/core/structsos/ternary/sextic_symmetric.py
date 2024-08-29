@@ -1792,7 +1792,7 @@ class _sextic_sym_axis:
             return solutions[0]
 
 
-def sos_struct_sextic_symmetric_ultimate(coeff, recurrsion, real = True):
+def sos_struct_sextic_symmetric_ultimate(coeff, real = True):
     """
     Solve symmetric sextics.
     
@@ -1874,7 +1874,7 @@ def sos_struct_sextic_symmetric_ultimate(coeff, recurrsion, real = True):
                     n * (a**2*b**2 + b**2*c**2 + c**2*a**2) +
                     (u - m - 2*p - n) * (a**2*b*c + b**2*c*a + c**2*a*b)
                 ).as_poly(a,b,c) 
-                solution = sos_struct_quartic(Coeff(poly_div_quad), recurrsion)
+                solution = sos_struct_quartic(Coeff(poly_div_quad))
                 if solution is not None:
                     solution = sp.Rational(1,2) * CyclicSum((a-b)**2) * solution
                     return solution
@@ -1983,13 +1983,13 @@ def sos_struct_sextic_symmetric_ultimate(coeff, recurrsion, real = True):
     sum_of_roots = sum((len(_) > 0) for _ in roots)
 
     if sum_of_roots == 1:
-        return _sos_struct_sextic_symmetric_ultimate_1root(coeff, poly, recurrsion, roots, real = real)
+        return _sos_struct_sextic_symmetric_ultimate_1root(coeff, poly, roots, real = real)
     elif sum_of_roots == 2:
-        return _sos_struct_sextic_symmetric_ultimate_2roots(coeff, poly, recurrsion, roots)
+        return _sos_struct_sextic_symmetric_ultimate_2roots(coeff, poly, roots)
 
     return None
 
-def _sos_struct_sextic_symmetric_ultimate_1root(coeff, poly, recurrsion, roots, real = True):
+def _sos_struct_sextic_symmetric_ultimate_1root(coeff, poly, roots, real = True):
     """
     Examples
     -------
@@ -2133,7 +2133,7 @@ def _sos_struct_sextic_symmetric_ultimate_1root(coeff, poly, recurrsion, roots, 
     return None
 
 
-def _sos_struct_sextic_symmetric_ultimate_2roots(coeff, poly, recurrsion, roots):
+def _sos_struct_sextic_symmetric_ultimate_2roots(coeff, poly, roots):
     """
 
     Examples

@@ -1,8 +1,8 @@
-from typing import Union, List
-
+from typing import Union, List, Tuple
 import re
 
 import sympy as sp
+from sympy.polys import Poly
 
 from .polytools import deg
 
@@ -148,8 +148,8 @@ def _preprocess_text_cyclize(poly: str):
     """
     Automatically perform cycle expansion on poly if it is not cyclic.
     """
-    cyc_poly = sp.polys.Poly(cycle_expansion(poly), sp.symbols('a b c'), extension = True)
-    poly = sp.polys.Poly(poly)
+    cyc_poly = Poly(cycle_expansion(poly), sp.symbols('a b c'), extension = True)
+    poly = Poly(poly)
     for coeff in (cyc_poly - 3*poly).coeffs():
         # some coefficient is larger than tolerance, not cyclic
         if coeff != 0:
@@ -186,12 +186,12 @@ def preprocess_text(
         retText = False, 
         cancel = False, 
         variables = None
-    ):
+    ) -> Union[Poly, Tuple[Poly, Poly]]:
     """
     Parse a text to sympy polynomial with respect to a, b, c.
 
-    Params
-    -------
+    Parameters
+    ----------
     cyc: bool  
         check whether the polynomial is cyclic, if not then cyclize it
     retText: bool
@@ -201,11 +201,12 @@ def preprocess_text(
 
     Returns
     -------
-    poly: sympy polynomial
-        The parsed polynomial.
-
-    has_cancel: bool
-        When cancel == True, return whether cancel is performed.
+    If cancel == False:
+        return a sympy polynomial.
+        If it fails to parse the polynomial, return None.
+    If cancel == True:
+        return a tuple of sympy polynomials (numerator, denominator).
+        If it fails to parse the polynomial, return (None, None).
     """
     poly = poly.lower()
     poly = _preprocess_text_delatex(poly)
@@ -235,17 +236,14 @@ def preprocess_text(
         if cancel:
             try:
                 frac = sp.fraction(sp.cancel(poly))
-                if not frac[1].is_constant():
-                    poly = sp.polys.Poly(frac[0], symbols, extension = True)
-                    return poly, True 
-                else:
-                    poly = sp.polys.Poly(poly, symbols, extension = True)
-                    return poly, False 
+                poly0 = Poly(frac[0], symbols, extension = True)
+                poly1 = Poly(frac[1], symbols, extension = True)
+                return poly0, poly1
             except:
-                return None, True 
+                return None, None
         
         try:
-            poly = sp.polys.Poly(poly, symbols, extension = True)
+            poly = Poly(poly, symbols, extension = True)
         except:
             return None
     else:
@@ -253,16 +251,17 @@ def preprocess_text(
             poly = _preprocess_text_cyclize(poly)
         else:
             try:
-                poly = sp.polys.Poly(poly, symbols, extension = True)
+                poly = Poly(poly, symbols, extension = True)
             except:
                 poly = None
-                
-    if cancel:
-        return poly, False 
+
     return poly
 
 
 def pl(*args, **kwargs):
+    """
+    Abbreviation for preprocess_text.
+    """
     return preprocess_text(*args, **kwargs)
 
 
@@ -313,12 +312,12 @@ def degree_of_zero(poly):
         i += 1
         
     try:
-    #     degree = deg(sp.polys.Poly(poly))
+    #     degree = deg(Poly(poly))
         poly = sp.fraction(sp.sympify(poly))
         if poly[1].is_constant():
-            degree = deg(sp.polys.Poly(poly[0]))
+            degree = deg(Poly(poly[0]))
         else:
-            degree = deg(sp.polys.Poly(poly[0])) - deg(sp.polys.Poly(poly[1]))
+            degree = deg(Poly(poly[0])) - deg(Poly(poly[1]))
     except:
         degree = 0
         
@@ -343,6 +342,38 @@ def short_constant_parser(x):
         txt = str(x).replace('**','^').replace('*','').replace(' ','')
     return txt
 
+
+def coefficient_triangle(poly: sp.Poly, degree: int = None) -> str:
+    """
+    Convert the coefficients of a polynomial to a list.
+
+    The degree should be specified when the polynomial is zero to
+    indicate the degree of the zero polynomial.
+
+    Parameters
+    ----------
+    poly : sp.Poly
+        The polynomial to convert.
+    degree : int
+        The degree of the polynomial. If None, it will be computed.
+    """
+    if degree is None:
+        degree = deg(poly)
+    coeffs = poly.coeffs()
+    monoms = poly.monoms()
+    monoms.append((-1,-1,0))  # tail flag
+    
+    t = 0
+    triangle = []
+    for i in range(degree+1):
+        for j in range(i+1):
+            if monoms[t][0] == degree - i and monoms[t][1] == i - j:
+                txt = short_constant_parser(coeffs[t])
+                t += 1
+            else:
+                txt = '0'
+            triangle.append(txt)
+    return triangle
 
 
 def swa(x, verbose = True):

@@ -43,7 +43,8 @@ def rationalize_with_mask(y: np.ndarray, zero_tolerance: float = 1e-7) -> sp.Mat
     y_rational : sp.Matrix
         The rationalized vector.
     """
-    y_rational_mask = np.abs(y) > np.abs(y).max() * zero_tolerance
+    tol = max(1, np.abs(y).max()) * zero_tolerance
+    y_rational_mask = np.abs(y) > tol
     y_rational = np.where(y_rational_mask, y, 0)
     y_rational = [rationalize(v, rounding = abs(v) * 1e-4) for v in y_rational]
     y_rational = sp.Matrix(y_rational)

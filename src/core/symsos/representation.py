@@ -167,7 +167,7 @@ def _sym_representation_real(poly_pqr, return_poly = False):
     return numerator / denominator
 
 
-def sym_representation(poly, is_pqr = None, positive = True, return_poly = False):
+def sym_representation(poly, is_pqr = False, positive = True, return_poly = False):
     """
     Represent a polynoimal to the symmetric form.
 
@@ -193,13 +193,6 @@ def sym_representation(poly, is_pqr = None, positive = True, return_poly = False
     if poly.is_zero:
         return poly
 
-    if is_pqr is None:
-        a = sp.symbols('a')
-        if a in poly.free_symbols:
-            is_pqr = False
-        else:
-            is_pqr = True
-
     if not is_pqr:
         poly = pqr_sym(poly)
 
@@ -218,7 +211,7 @@ def prove_numerator(numerator: sp.Poly, positive = True):
 
     for ((deg, ), coeff) in numerator.terms():
         # first scan whether the coefficient is positive
-        y_degree = coeff.as_poly(y).degree()
+        y_degree = coeff.as_poly(x, y).total_degree()
         coeff = coeff.subs(y, 1).as_poly(x) # de-homogenize
         if not check_univariate(coeff, positive):
             return None

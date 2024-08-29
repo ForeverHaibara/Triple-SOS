@@ -2,13 +2,13 @@ import sympy as sp
 
 from .sextic_symmetric import _sos_struct_sextic_hexagram_symmetric, _sos_struct_sextic_tree
 from .utils import (
-    CyclicSum, CyclicProduct, Coeff,
+    CyclicSum, CyclicProduct, Coeff, SS,
     sum_y_exprs, rationalize_func, reflect_expression, inverse_substitution, radsimp, nroots
 )
 
 a, b, c = sp.symbols('a b c')
 
-def sos_struct_nonic(coeff, recurrsion, real = True):
+def sos_struct_nonic(coeff, real = True):
     """
     Nonic is polynomial of degree 9.
 
@@ -29,13 +29,13 @@ def sos_struct_nonic(coeff, recurrsion, real = True):
     if not any(coeff(_) for _ in ((9,0,0),(8,1,0),(7,2,0),(2,7,0),(7,1,1))):
         if not any(coeff(_) for _ in ((6,3,0),(3,6,0),(1,8,0))):
             if all(coeff((i,j,k)) == coeff((j,i,k)) for (i,j,k) in ((5,4,0),(6,2,1),(5,3,1),(4,3,2))):
-                return _sos_struct_nonic_hexagram_symmetric(coeff, recurrsion)
+                return _sos_struct_nonic_hexagram_symmetric(coeff)
             if (coeff((5,4,0)) == 0 and coeff((6,1,2)) == 0) or (coeff((4,5,0)) == 0 and coeff((6,2,1)) == 0):
-                return _sos_struct_nonic_gear(coeff, recurrsion)
+                return _sos_struct_nonic_gear(coeff)
 
         if not any(coeff(_) for _ in ((6,2,1),(2,6,1),(5,4,0),(4,5,0))):
             if all(coeff((i,j,k)) == coeff((j,i,k)) for (i,j,k) in ((6,0,3),(5,3,1),(4,3,2))):
-                return _sos_struct_nonic_hexagon_symmetric(coeff, recurrsion)
+                return _sos_struct_nonic_hexagon_symmetric(coeff)
 
     if not any(coeff(_) for _ in 
         ((8,1,0),(7,2,0),(5,4,0),(5,0,4),(8,0,1),(7,0,2),
@@ -134,7 +134,7 @@ def _sos_struct_nonic_symmetric_tree(coeff):
     return None
 
 
-def _sos_struct_nonic_hexagon_symmetric(coeff, recurrsion):
+def _sos_struct_nonic_hexagon_symmetric(coeff):
     """
     Solve problems like s(a6b3+a3b6) + p(a)(...).
 
@@ -212,13 +212,13 @@ def _sos_struct_nonic_hexagon_symmetric(coeff, recurrsion):
         if rest_poly.is_zero:
             return solution
 
-        rest_solution = recurrsion(rest_poly, real = False)
+        rest_solution = SS.structsos.ternary._structural_sos_3vars_cyclic(rest_poly, real = False)
         if rest_solution is None:
             return None
         return solution + rest_solution
 
 
-def _sos_struct_nonic_hexagram_symmetric(coeff, recurrsion):
+def _sos_struct_nonic_hexagram_symmetric(coeff):
     """
     Observe that
     f(a,b,c) = s(c5(a-b)4) + x^2s(a2b2c(a-b)4) - 2xp(a)s(3a4b2-4a4bc+3a4c2-4a3b3+2a2b2c2) >= 0
@@ -237,7 +237,7 @@ def _sos_struct_nonic_hexagram_symmetric(coeff, recurrsion):
     if c1 < 0 or c2 < 0:
         return None
     if c1 == 0:
-        solution = recurrsion(coeff.as_poly().div((a*b*c).as_poly(a,b,c))[0])
+        solution = SS.structsos.ternary._structural_sos_3vars_cyclic(coeff.as_poly().div((a*b*c).as_poly(a,b,c))[0])
         if solution is None:
             return None
         return CyclicProduct(a) * solution
@@ -247,7 +247,7 @@ def _sos_struct_nonic_hexagram_symmetric(coeff, recurrsion):
             coeff((5,4,0)) * a**5*(b+c) + coeff((5,3,1)) * a**4*(b**2+c**2) + coeff((5,2,2)) * a**3*b**3\
             + coeff((4,4,1)) * a**4*b*c + coeff((4,3,2)) * a**3*b*c*(b+c)
         ).doit().as_poly(a,b,c) + (coeff((3,3,3)) * a**2*b**2*c**2).as_poly(a,b,c)
-        solution = recurrsion(poly2)
+        solution = SS.structsos.ternary._structural_sos_3vars_cyclic(poly2)
         if solution is None:
             return None
         return inverse_substitution(solution, factor_degree = 1)
@@ -344,7 +344,7 @@ def _sos_struct_nonic_hexagram_symmetric(coeff, recurrsion):
     return solution
 
 
-def _sos_struct_nonic_gear(coeff, recurrsion):
+def _sos_struct_nonic_gear(coeff):
     """
     Solve problems like
     s(ac^2(a-b)^4(b-c)^2)-5p(a-b)^2p(a) >= 0
@@ -366,7 +366,7 @@ def _sos_struct_nonic_gear(coeff, recurrsion):
     if not (coeff((5,4,0)) == 0 and coeff((6,1,2)) == 0):
         # reflect the polynomial
         reflect_coeffs = coeff.reflect()
-        solution = _sos_struct_nonic_gear(reflect_coeffs, recurrsion)
+        solution = _sos_struct_nonic_gear(reflect_coeffs)
         if solution is not None:
             solution = reflect_expression(solution)
         return solution

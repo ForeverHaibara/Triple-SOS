@@ -22,12 +22,12 @@ class SolutionSDP(SolutionSimple):
     def from_decompositions(self,
         poly: sp.Poly,
         decompositions: Dict[str, Tuple[sp.Matrix, sp.Matrix]],
-        **options
+        symmetry: MonomialReduction
     ) -> 'SolutionSDP':
         """
         Create SDP solution from decompositions.
         """
-        sos_expr = _decomp_as_sos(decompositions, poly.gens, **options)
+        sos_expr = _decomp_as_sos(decompositions, poly.gens, symmetry=symmetry)
         return SolutionSDP(
             problem = poly,
             numerator = sos_expr,
@@ -46,22 +46,21 @@ def monomial_to_expr(monom: Tuple[int, ...], gens: List[sp.Symbol]) -> sp.Expr:
 def _decomp_as_sos(
         decompositions: Dict[str, Tuple[sp.Matrix, sp.Matrix]],
         gens: List[sp.Symbol],
+        symmetry: MonomialReduction,
         factor: bool = True,
-        **options
     ) -> sp.Expr:
     """
     Convert a {key: (U, S)} dictionary to sum of squares.
     """
     exprs = []
-    option = MonomialReduction.from_options(**options)
-    option_half = option.base()
+    symmetry_half = symmetry.base()
     for key, (U, S) in decompositions.items():
         monomial = eval(key)
         monomial_expr = monomial_to_expr(monomial, gens)
-        vecs = [option_half.invarraylize(U[i,:], gens).as_expr() for i in range(U.shape[0])]
+        vecs = [symmetry_half.invarraylize(U[i,:], gens).as_expr() for i in range(U.shape[0])]
         if factor:
             vecs = [_.factor() for _ in vecs]
-        vecs = [option.cyclic_sum(S[i] * monomial_expr * vecs[i]**2, gens) for i in range(U.shape[0])]
+        vecs = [symmetry.cyclic_sum(S[i] * monomial_expr * vecs[i]**2, gens) for i in range(U.shape[0])]
 
         exprs.extend(vecs)
     return sp.Add(*exprs)

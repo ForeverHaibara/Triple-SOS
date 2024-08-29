@@ -2,7 +2,7 @@ import sympy as sp
 
 from .quadratic import sos_struct_acyclic_quadratic
 
-def sos_struct_acyclic_sparse(coeff, recurrsion, real = True):
+def sos_struct_acyclic_sparse(coeff, real = True):
     """
     Solve acyclic 3-var polynomial inequalities.
     """

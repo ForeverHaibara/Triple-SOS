@@ -4,7 +4,7 @@ from .quartic import sos_struct_quartic
 from .septic_symmetric import sos_struct_septic_symmetric
 from ....utils.roots.findroot import optimize_discriminant
 from .utils import (
-    CyclicSum, CyclicProduct, Coeff,
+    CyclicSum, CyclicProduct, Coeff, SS,
     sum_y_exprs, nroots, rationalize, rationalize_bound, reflect_expression, try_perturbations, radsimp,
     zip_longest
 )
@@ -12,17 +12,17 @@ from .utils import (
 a, b, c = sp.symbols('a b c')
 _VERBOSE_OPTIMIZE_DISCRIMINANT = False
 
-def sos_struct_septic(coeff, recurrsion, real = True):
+def sos_struct_septic(coeff, real = True):
     if coeff((7,0,0)) == 0 and coeff((6,1,0)) == 0 and coeff((6,0,1)) == 0:
         if coeff((5,2,0)) == 0 and coeff((5,0,2)) == 0:
             # star
-            return _sos_struct_septic_star(coeff, recurrsion)
+            return _sos_struct_septic_star(coeff)
         else:
             # hexagon
-            return _sos_struct_septic_hexagon(coeff, recurrsion)
+            return _sos_struct_septic_hexagon(coeff)
 
     if all(coeff((i,j,k)) == coeff((j,i,k)) for (i,j,k) in ((6,1,0),(5,2,0),(4,3,0),(4,2,1))):
-        return sos_struct_septic_symmetric(coeff, recurrsion, real = real)
+        return sos_struct_septic_symmetric(coeff, real = real)
 
     return None
 
@@ -63,7 +63,7 @@ def _fast_solve_quartic(m, p, n, q, rem = 0, mul_abc = True):
     return solution
 
 
-def _sos_struct_septic_star(coeff, recurrsion):
+def _sos_struct_septic_star(coeff):
     """
     Solve s(ua4b3 + va3b4) + abcf(a,b,c) >= 0 where f is degree 4.
 
@@ -215,7 +215,7 @@ def _sos_struct_septic_star(coeff, recurrsion):
             # print(result, poly, discriminant.subs(result),'\n',discriminant)
             poly = sp.div(poly, (a*b*c).as_poly(a,b,c))[0]
 
-            new_solution = recurrsion(poly)
+            new_solution = SS.structsos.ternary._structural_sos_3vars_cyclic(poly)
             if new_solution is not None:
                 return solution + new_solution * CyclicProduct(a)
             
@@ -232,7 +232,7 @@ def _sos_struct_septic_star(coeff, recurrsion):
 
         perturbation = CyclicSum(c*(a-b)**2*(a*b-a*c-b*c)**2)
         
-        solution = try_perturbations(coeff.as_poly(), coeff((3,4,0)), coeff((4,3,0)), perturbation, recurrsion = recurrsion)
+        solution = try_perturbations(coeff.as_poly(), coeff((3,4,0)), coeff((4,3,0)), perturbation)
         if solution is not None:
             return solution
 
@@ -321,7 +321,7 @@ def _sos_struct_septic_biased(coeff):
     return None
 
 
-def _sos_struct_septic_hexagon(coeff, recurrsion):
+def _sos_struct_septic_hexagon(coeff):
     """
     Solve septic without s(a7), s(a6b), s(a6c).
 
@@ -357,7 +357,7 @@ def _sos_struct_septic_hexagon(coeff, recurrsion):
 
     if coeff((5,2,0)) == coeff((2,5,0)):
         if coeff((5,2,0)) == 0 and coeff((2,5,0)) == 0:
-            return _sos_struct_septic_star(coeff, recurrsion)
+            return _sos_struct_septic_star(coeff)
 
         # Try some quintic polynomial * s(ab):
         # s(ab)s(c(a^2-b^2+u(ab-ac)+v(bc-ab))^2) to eliminate the border
@@ -578,14 +578,14 @@ def _sos_struct_septic_hexagon(coeff, recurrsion):
             solution = t * CyclicSum(a * expr**2)
             poly2 = coeff.as_poly() - solution.doit().as_poly(a,b,c)
 
-            new_solution = recurrsion(poly2)
+            new_solution = SS.structsos.ternary._structural_sos_3vars_cyclic(poly2)
             if new_solution is not None:
                 return solution + new_solution
             return None
 
     elif p > 0 and q > 0:
         perturbation = CyclicSum(a) * CyclicProduct((a-b)**2)
-        solution = try_perturbations(coeff.as_poly(), coeff((2,5,0)), coeff((5,2,0)), perturbation, recurrsion=recurrsion)
+        solution = try_perturbations(coeff.as_poly(), coeff((2,5,0)), coeff((5,2,0)), perturbation)
 
         if solution is not None:
             return solution
