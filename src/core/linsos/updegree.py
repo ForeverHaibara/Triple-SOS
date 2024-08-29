@@ -1,10 +1,11 @@
-from typing import Generator, Dict
+from typing import Generator, Dict, Tuple
 
 import sympy as sp
 from sympy.core.singleton import S
-from sympy.combinatorics import PermutationGroup
+from sympy.combinatorics import PermutationGroup, CyclicGroup
 
 from .basis import LinearBasis
+from ...utils import MonomialPerm, MonomialCyclic, MonomialReduction, generate_expr
 
 
 class LinearBasisMultiplier(LinearBasis):
@@ -19,6 +20,8 @@ class LinearBasisMultiplier(LinearBasis):
     def __init__(self, poly, multiplier):
         self.poly = poly
         self.multiplier = multiplier
+    def nvars(self) -> int:
+        return len(self.poly.gens)
     def as_poly(self, symbols) -> sp.Poly:
         poly = (self.poly * (-self.multiplier.doit().as_poly(self.poly.gens)))
         return poly.xreplace(dict(zip(self.poly.gens, symbols)))
@@ -28,8 +31,9 @@ class LinearBasisMultiplier(LinearBasis):
 
 def lift_degree(
         poly: sp.Poly,
-        degree_limit: int = 12,
         symmetry: PermutationGroup = PermutationGroup(),
+        degree_limit: int = 12,
+        lift_degree_limit: int = 4
     ) -> Generator[Dict, None, None]:
     """
     Hilbert's problem has shown that not every positive polynomial can be written as a sum of squares.
@@ -66,58 +70,58 @@ def lift_degree(
             The degree of h(a,b,c).
     """
     n = poly.total_degree()
+    nvars = len(poly.gens)
+    symbols = poly.gens
     n_plus = 0
 
-    # if is_cyc:
-    #     multipliers = {
-    #         1: CyclicSum(a),
-    #         2: CyclicSum(a**2 - a*b),
-    #         3: CyclicSum(a*(a-b)*(a-c)),
-    #         4: CyclicSum(a**2*(a-b)*(a-c)),
-    #     }
-
-    #     adjustment_multipliers = {
-    #         1: [],
-    #         2: [CyclicSum(a*b)],
-    #         3: [CyclicSum(a**2*b), CyclicSum(a*b**2), CyclicSum(a*b*c)],
-    #         4: [CyclicSum(a**3*b), CyclicSum(a*b**3), CyclicSum(a**2*b*c), CyclicSum(a*b*(a-b)**2)],
-    #     }
-    # else:
-    #     multipliers = {
-    #         1: c,
-    #         2: (a-b)**2
-    #     }
-
-    #     adjustment_multipliers = {
-    #         1: [a, b],
-    #         2: [(b-c)**2, (a-c)**2, a*b, a*c, b*c]
-    #     }
-    multipliers = {}
-    adjustment_multipliers = {}
-
-    while n + n_plus <= degree_limit and n_plus <= max([0] + list(multipliers.keys())):
-        if n_plus == 0:
-            yield {
-                'poly': poly,
-                'multiplier': S.One,
-                'basis': [],
-                'degree': n,
-                'add_degree': 0
-            }
-            n_plus += 1
-            continue
-
-        new_poly = poly * multipliers[n_plus].doit().as_poly(poly.gens)
-        adjustment_basis = [
-            LinearBasisMultiplier(poly, multiplier) for multiplier in adjustment_multipliers[n_plus]
-        ]
+    while n + n_plus <= degree_limit and n_plus <= lift_degree_limit:
+        multipliers = [sp.Mul(*(s**i for s, i in zip(symbols, power))) 
+                            for power in generate_expr(nvars, n_plus, symmetry=symmetry)[1]]
+        basis = [LinearBasisMultiplier(poly, multiplier) for multiplier in multipliers]
 
         yield {
-            'poly': new_poly,
-            'multiplier': multipliers[n_plus],
-            'basis': adjustment_basis,
+            'basis': basis,
             'degree': n + n_plus,
             'add_degree': n_plus
         }
 
         n_plus += 1
+
+
+
+# def _get_multipliers(symbols: Tuple[sp.Symbol, ...], symmetry: PermutationGroup) -> Tuple[Dict[int, sp.Expr], Dict[int, sp.Expr]]:
+#     nvars = len(symbols)
+#     if isinstance(symmetry, MonomialPerm):
+#         symmetry = symmetry.perm_group
+#     elif isinstance(symmetry, MonomialCyclic):
+#         symmetry = CyclicGroup(nvars)
+#     elif isinstance(symmetry, MonomialReduction):
+#         symmetry = PermutationGroup()
+
+#     multipliers, adjustment_multipliers = {}, {}
+#     if nvars == 3:
+#         a, b, c = symbols
+#         if (symmetry.is_cyclic and symmetry.order() == 3) or symmetry.is_symmetric:
+#             multipliers = {
+#                 1: a,
+#                 2: (a - b)**2,
+#                 3: a*(a-b)*(a-c),
+#                 4: (b-c)**2*(b+c-a)**2
+#             }
+#             adjustment_multipliers = {
+#                 1: [],
+#                 2: [a*b],
+#                 3: [a**2*b, a*b**2, a*b*c],
+#                 4: [a**3*b, a*b**3, a**2*b*c, b*c*(b-c)**2]
+#             }
+    
+
+#     if len(multipliers) == 0 and nvars > 1:
+#         multipliers = {
+#             1: symbols[0],
+#             2: (symbols[0] - symbols[1])**2
+#         }
+#         # adjustment_multipliers = {
+#         #     1: symbols[1:]
+#         #     2: [(symbols[1] - symbols[2])**2, (symbols[0] - symbols[2])**2, symbols[0]*symbols[1], symbols[0]*symbols[2], symbols[1]*symbols[2]]
+#         # }

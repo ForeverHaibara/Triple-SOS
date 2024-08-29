@@ -30,7 +30,6 @@ class SolutionLinear(SolutionSimple):
             problem = None,
             y: List[sp.Rational] = [],
             basis: List[LinearBasis] = [],
-            multiplier: sp.Expr = S.One,
             symmetry: Union[PermutationGroup, MonomialPerm] = PermutationGroup(),
             is_equal: bool = True,
             collect: bool = True,
@@ -44,8 +43,6 @@ class SolutionLinear(SolutionSimple):
             The coefficients of the basis.
         basis: List[LinearBasis]
             The collection of basis.
-        multiplier: sp.Expr
-            The multiplier such that poly * multiplier = sum(y_i * basis_i).
         symbols: Tuple[sp.Symbol, ...]
             The symbols of the polynomial with the homogenizer included.
         symmetry: PermutationGroup
@@ -62,7 +59,6 @@ class SolutionLinear(SolutionSimple):
         self.problem = problem
         self.y = y
         self.basis = basis
-        self.multiplier = multiplier
 
         if isinstance(symmetry, PermutationGroup):
             symmetry = MonomialPerm(symmetry)
@@ -70,7 +66,7 @@ class SolutionLinear(SolutionSimple):
         self._symmetry = symmetry
         self.is_equal_ = is_equal
 
-        self._collect_multipliers(y, basis, multiplier, problem.gens, symmetry)
+        self._collect_multipliers(y, basis, problem.gens, symmetry)
 
         if collect:
             self._collect_common_tangents(problem.gens, symmetry)
@@ -81,14 +77,14 @@ class SolutionLinear(SolutionSimple):
 
 
     def _collect_multipliers(self, 
-            y: List[sp.Rational], basis: List[LinearBasis], multiplier: sp.Expr,
+            y: List[sp.Rational], basis: List[LinearBasis],
             symbols: Tuple[sp.Symbol, ...], symmetry: MonomialReduction
         ) -> None:
         r"""
         Collect multipliers. For example, if we have 
         \sum (a^2-ab) * f(a,b,c) = g(a,b,c) + \sum (-ab) * f(a,b,c), then we should combine them.
         """
-        multipliers = [multiplier]
+        multipliers = []
         non_mul_y = []
         nom_mul_basis = []
         for v, base in zip(y, basis):
@@ -135,18 +131,5 @@ class SolutionLinear(SolutionSimple):
             exprs.append(common_base)
 
         self.numerator = sp.Add(*(symmetry.cyclic_sum(expr, symbols) for expr in exprs))
-        self.solution = self.numerator / self.multiplier
-        return self
-
-    def dehomogenize(self, homogenizer: Optional[sp.Symbol] = None):
-        """
-        Dehomogenize the solution.
-        """
-        if homogenizer is None:
-            return self
-
-        self.problem = self.problem.subs(homogenizer, 1)
-        self.numerator = self.numerator.xreplace({homogenizer: 1})
-        self.multiplier = self.multiplier.xreplace({homogenizer: 1})
         self.solution = self.numerator / self.multiplier
         return self

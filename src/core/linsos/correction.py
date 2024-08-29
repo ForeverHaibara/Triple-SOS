@@ -22,7 +22,7 @@ def _filter_zero_y(y, basis):
 
     return reduced_y, reduced_basis
 
-def _basis_as_matrix(basis: List[LinearBasis], symmetry: PermutationGroup = PermutationGroup()) -> sp.Matrix:
+def _basis_as_matrix(basis: List[LinearBasis], symmetry: PermutationGroup) -> sp.Matrix:
     """
     Extract the array representations of each basis and stack them into a matrix.
     """
@@ -30,11 +30,19 @@ def _basis_as_matrix(basis: List[LinearBasis], symmetry: PermutationGroup = Perm
     mat = sp.Matrix(mat).reshape(len(mat), mat[0].shape[0]).T
     return mat
 
+def _add_regularizer(mat: sp.Matrix, num_multipliers: int) -> sp.Matrix:
+    """
+    Add a regularizer row to the matrix.
+    """    
+    regularizer = sp.Matrix([[0] * (mat.shape[1] - num_multipliers) + [1] * num_multipliers])
+    mat = sp.Matrix.vstack(mat, regularizer)
+    return mat
+
 def linear_correction(
         poly: sp.Poly,
         y: List[float] = [],
         basis: List[LinearBasis] = [],
-        multiplier: sp.Expr = S.One,
+        num_multipliers: int = 1,
         symmetry: PermutationGroup = PermutationGroup(),
         zero_tol: float = 1e-6,
     ) -> SolutionLinear:
@@ -54,8 +62,8 @@ def linear_correction(
         The coefficients of the basis.
     basis: List[LinearBasis]
         The collection of basis.
-    multiplier: sp.Expr
-        The multiplier such that poly * multiplier = sum(y_i * basis_i).
+    num_multipliers: int
+        The number of multipliers.
     symmetry: PermutationGroup
         Every term will be wrapped by a cyclic sum of symmetryutation group.
     homogenizer: Optional[sp.Symbol]
@@ -67,9 +75,15 @@ def linear_correction(
     y = rationalize_array(y, y_mask, reliable = True)
     y, basis = _filter_zero_y(y, basis)
 
-    reduced_arrays = _basis_as_matrix(basis)
+    reduced_arrays = _basis_as_matrix(basis, symmetry=symmetry)
 
-    target = arraylize_sp(poly * multiplier.doit(), symmetry=symmetry, expand_cyc=True)
+    # add a regularizer row
+    # regularizer = sp.Matrix([[0] * (reduced_arrays.shape[1] - num_multipliers) + [1] * num_multipliers])
+    # reduced_arrays = sp.Matrix.vstack(reduced_arrays, regularizer)
+    reduced_arrays = _add_regularizer(reduced_arrays, num_multipliers)
+
+    target = sp.zeros(reduced_arrays.shape[0], 1)
+    target[-1, 0] = 1 # sum of coefficients of the multipliers should be 1
     obtained = reduced_arrays * sp.Matrix(y)
 
     is_equal = False
@@ -83,20 +97,20 @@ def linear_correction(
 
             if all(_ >= 0 for _ in reduced_y):
                 reduced_y, reduced_basis = _filter_zero_y(reduced_y, reduced_basis)
-                reduced_arrays = _basis_as_matrix(reduced_basis)
+                reduced_arrays = _basis_as_matrix(reduced_basis, symmetry=symmetry)
+                reduced_arrays = _add_regularizer(reduced_arrays, num_multipliers)
                 obtained = reduced_arrays * sp.Matrix(reduced_y)
                 if target == obtained:
                     is_equal = True
                     y, basis = reduced_y, reduced_basis
         except Exception as e:
-            # print(e)
+            raise e
             is_equal = False
 
     solution = SolutionLinear(
         problem = poly,
         y = y,
         basis = basis,
-        multiplier = multiplier,
         symmetry = symmetry,
         is_equal = is_equal,
     )

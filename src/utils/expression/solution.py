@@ -396,7 +396,18 @@ class SolutionSimple(Solution):
             s = s.replace(old, new)
         return s
 
+    def dehomogenize(self, homogenizer: Optional[sp.Symbol] = None):
+        """
+        Dehomogenize the solution.
+        """
+        if homogenizer is None:
+            return self
 
+        self.problem = self.problem.subs(homogenizer, 1)
+        self.numerator = self.numerator.xreplace({homogenizer: 1})
+        self.multiplier = self.multiplier.xreplace({homogenizer: 1})
+        self.solution = self.numerator / self.multiplier
+        return self
 
 def congruence(M: Union[sp.Matrix, np.ndarray]) -> Union[None, tuple]:
     """
