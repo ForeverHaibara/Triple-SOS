@@ -1,8 +1,9 @@
-from typing import List
+from typing import List, Optional, Tuple
 
 import numpy as np
 import sympy as sp
 from sympy.core.singleton import S
+from sympy.combinatorics import PermutationGroup
 
 from .basis import LinearBasis
 from .solution import SolutionLinear
@@ -21,20 +22,21 @@ def _filter_zero_y(y, basis):
 
     return reduced_y, reduced_basis
 
-def _basis_as_matrix(basis):
+def _basis_as_matrix(basis: List[LinearBasis], symmetry: PermutationGroup = PermutationGroup()) -> sp.Matrix:
     """
     Extract the array representations of each basis and stack them into a matrix.
     """
-    mat = [b.array_sp for b in basis]
+    mat = [b.as_array_sp(expand_cyc=True, symmetry=symmetry) for b in basis]
     mat = sp.Matrix(mat).reshape(len(mat), mat[0].shape[0]).T
     return mat
 
 def linear_correction(
-        poly: sp.polys.Poly,
+        poly: sp.Poly,
         y: List[float] = [],
         basis: List[LinearBasis] = [],
         multiplier: sp.Expr = S.One,
-        is_cyc: bool = True,
+        symmetry: PermutationGroup = PermutationGroup(),
+        zero_tol: float = 1e-6,
     ) -> SolutionLinear:
     """
     Linear programming is a numerical way to solve the SOS problem. However, we require
@@ -54,18 +56,20 @@ def linear_correction(
         The collection of basis.
     multiplier: sp.Expr
         The multiplier such that poly * multiplier = sum(y_i * basis_i).
-    is_cyc: bool
-        Whether the problem is cyclic.
+    symmetry: PermutationGroup
+        Every term will be wrapped by a cyclic sum of symmetryutation group.
+    homogenizer: Optional[sp.Symbol]
+        The homogenizer of the polynomial.
     """
 
     # first use the continued fraction to approximate the coefficients
-    y_mask = np.abs(y).max() * 1e-6
+    y_mask = np.abs(y).max() * zero_tol
     y = rationalize_array(y, y_mask, reliable = True)
     y, basis = _filter_zero_y(y, basis)
 
     reduced_arrays = _basis_as_matrix(basis)
 
-    target = arraylize_sp(poly * multiplier.doit(), cyc = is_cyc)
+    target = arraylize_sp(poly * multiplier.doit(), symmetry=symmetry, expand_cyc=True)
     obtained = reduced_arrays * sp.Matrix(y)
 
     is_equal = False
@@ -93,6 +97,7 @@ def linear_correction(
         y = y,
         basis = basis,
         multiplier = multiplier,
+        symmetry = symmetry,
         is_equal = is_equal,
     )
     return solution

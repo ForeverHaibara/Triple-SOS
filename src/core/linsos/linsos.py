@@ -1,23 +1,20 @@
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Union
 import warnings
 
 import numpy as np
 import sympy as sp
+from sympy.combinatorics import PermutationGroup
 from scipy.optimize import linprog
 
 from .basis import (
-    LinearBasisTangentCyclic,
-    CachedCommonLinearBasisTangentCyclic,
-    LinearBasisAMGMCyclic,
-    CachedCommonLinearBasisSpecialCyclic,
-    LinearBasisTangent,
-    CachedCommonLinearBasisTangent
+    LinearBasis, LinearBasisTangent,
+    cross_exprs, diff_tangents
 )
 from .tangents import root_tangents
 from .correction import linear_correction
-from .updegree import higher_degree
+from .updegree import lift_degree
 from .solution import SolutionLinear
-from ...utils import arraylize, findroot, RootsInfo, verify_hom_cyclic
+from ...utils import arraylize, findroot, RootsInfo, identify_symmetry, MonomialPerm, MonomialReduction
 
 
 LINPROG_OPTIONS = {
@@ -27,7 +24,7 @@ LINPROG_OPTIONS = {
     }
 }
 
-def _prepare_tangents(poly, prepared_tangents = [], rootsinfo = None, is_cyc = True):
+def _prepare_tangents(poly, prepared_tangents = [], rootsinfo = None):
     """
     Combine appointed tangents and tangents generated from rootsinfo.
     Roots that do not vanish at strict roots will be filtered out.
@@ -39,14 +36,20 @@ def _prepare_tangents(poly, prepared_tangents = [], rootsinfo = None, is_cyc = T
         return tangents
     return prepared_tangents
 
-def _prepare_basis(degree, tangents, rootsinfo = None, basis = [], is_cyc = True):
+def _prepare_basis(
+        poly,
+        tangents,
+        rootsinfo = None,
+        basis: Optional[List[LinearBasis]] = None,
+        symmetry: PermutationGroup = PermutationGroup()
+    ):
     """
     Prepare basis for linear programming.
 
     Parameters
     -------
-    degree: int
-        The degree of the polynomial to be optimized.
+    poly: sp.Poly
+        The polynomial to be optimized.
     tangents: list
         Tangents to be added to the basis.
     rootsinfo: RootsInfo
@@ -54,8 +57,6 @@ def _prepare_basis(degree, tangents, rootsinfo = None, basis = [], is_cyc = True
         we skip the loading of normal basis like AMGM.
     basis: list
         Additional basis to be added to the basis.
-    is_cyc: bool
-        Whether the polynomial is cyclic or not.
 
     Returns
     -------
@@ -64,20 +65,33 @@ def _prepare_basis(degree, tangents, rootsinfo = None, basis = [], is_cyc = True
     arrays: np.array
         Array representation of the basis. A matrix.
     """
-    if is_cyc:
-        for tangent in tangents:
-            basis += LinearBasisTangentCyclic.generate(degree, tangent = tangent)
+    if basis is None:
+        basis = []
+    _diff_tangents = diff_tangents(poly.gens)
+    degree = poly.total_degree()
+    if sp.S(1) not in tangents:
+        tangents.append(sp.S(1))
+    for tangent in tangents:
+        d = tangent.as_poly(poly.gens).total_degree()
+        if degree >= d:
+            cross_tangents = cross_exprs(_diff_tangents, poly.gens, degree - d)
+            for t in cross_tangents:
+                basis += LinearBasisTangent.generate(t * tangent, poly.gens, degree)
 
-        if not rootsinfo.has_nontrivial_roots():
-            basis += CachedCommonLinearBasisTangentCyclic.generate(degree)
-            basis += LinearBasisAMGMCyclic.generate(degree)
-            basis += CachedCommonLinearBasisSpecialCyclic.generate(degree)
-    else:
-        for tangent in tangents:
-            basis += LinearBasisTangent.generate(degree, tangent = tangent)
-        basis += CachedCommonLinearBasisTangent.generate(degree)
+    # if is_cyc:
+    #     for tangent in tangents:
+    #         basis += LinearBasisTangentCyclic.generate(degree, tangent = tangent)
 
-    arrays = np.array([x.array for x in basis])
+    #     if not rootsinfo.has_nontrivial_roots():
+    #         basis += CachedCommonLinearBasisTangentCyclic.generate(degree)
+    #         basis += LinearBasisAMGMCyclic.generate(degree)
+    #         basis += CachedCommonLinearBasisSpecialCyclic.generate(degree)
+    # else:
+    #     for tangent in tangents:
+    #         basis += LinearBasisTangent.generate(degree, tangent = tangent)
+    #     basis += CachedCommonLinearBasisTangent.generate(degree)
+
+    arrays = np.array([x.as_array_np(expand_cyc=True, symmetry=symmetry) for x in basis])
     return basis, arrays
 
 
@@ -85,6 +99,7 @@ def LinearSOS(
         poly: sp.polys.Poly,
         tangents: List = [],
         rootsinfo: Optional[RootsInfo] = None,
+        symmetry: Optional[Union[PermutationGroup, MonomialReduction]] = None,
         verbose: bool = 1,#False,
         degree_limit: int = 12,
         linprog_options: Dict = LINPROG_OPTIONS,
@@ -123,33 +138,32 @@ def LinearSOS(
         The solution of the linear programming SOS. When solution is None, it means that the linear
         programming SOS fails.
     """
-    nvars = len(poly.gens)
-    degree = poly.total_degree()
-    if nvars != 3:
-        return None
-
-    is_hom, is_cyc = verify_hom_cyclic(poly)
-    if not is_hom:
+    if not poly.is_homogeneous:
         return None
 
     if rootsinfo is None:
         rootsinfo = findroot(poly, with_tangents = root_tangents)
 
-    tangents = _prepare_tangents(poly, tangents, rootsinfo, is_cyc = is_cyc)
+    tangents = _prepare_tangents(poly, tangents, rootsinfo)
 
-    # prepare to higher the degree in an iterative way
-    for higher_degree_info in higher_degree(poly, degree_limit = degree_limit, is_cyc = is_cyc):
-        degree = higher_degree_info['degree']
-        basis, arrays = _prepare_basis(degree, tangents, rootsinfo = rootsinfo, basis = higher_degree_info['basis'], is_cyc=is_cyc)
+    if symmetry is None:
+        symmetry = identify_symmetry(poly)
+    if isinstance(symmetry, PermutationGroup):
+        symmetry = MonomialPerm(symmetry)
+
+    # prepare to lift the degree in an iterative way
+    for lift_degree_info in lift_degree(poly, degree_limit = degree_limit, symmetry=symmetry):
+        lifted_poly = lift_degree_info['poly']
+        basis, arrays = _prepare_basis(lifted_poly, tangents, rootsinfo = rootsinfo, basis = lift_degree_info['basis'], symmetry=symmetry)
         if len(basis) <= 0:
             continue
 
         if verbose:
             print('Linear Programming Shape = (%d, %d)'%(arrays.shape[0], arrays.shape[1]))
 
-        b = arraylize(higher_degree_info['poly'], cyc=is_cyc)
+        b = arraylize(lift_degree_info['poly'], expand_cyc=True, symmetry=symmetry)
         optimized = np.ones(arrays.shape[0])
-        # optimized[:len(higher_degree_info['basis'])] = -2 # these are multiplier adjustment
+        # optimized[:len(lift_degree_info['basis'])] = -2 # these are multiplier adjustment
 
 
         ##############################################
@@ -163,7 +177,6 @@ def LinearSOS(
                 linear_sos = linprog(optimized, A_eq=arrays.T, b_eq=b, **linprog_options)
             except:
                 pass
-
         if linear_sos is None or not linear_sos.success:
             # raise the degree up and retry
             continue
@@ -171,8 +184,8 @@ def LinearSOS(
         solution = linear_correction(
             poly, 
             linear_sos.x, 
-            basis, 
-            multiplier = higher_degree_info['multiplier'],
-            is_cyc = is_cyc
+            basis,
+            multiplier = lift_degree_info['multiplier'],
+            symmetry = symmetry
         )
         return solution

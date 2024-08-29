@@ -502,6 +502,8 @@ def _parse_options(**options) -> MonomialReduction:
             return value()
         elif isinstance(value, MonomialReduction):
             return value
+        elif isinstance(value, PermutationGroup):
+            return MonomialPerm(value)
 
     hom = options.get('hom', True)
     cyc = options.get('cyc', False)
@@ -529,3 +531,5 @@ def invarraylize(array: Union[List, np.ndarray, sp.Matrix], gens: List[sp.Symbol
 def generate_expr(nvars: int, degree: int, **options) -> Tuple[Dict[Tuple[int, ...], int], List[Tuple[int, ...]]]:
     option = _parse_options(**options)
     return option._register_monoms(nvars, degree)
+
+
