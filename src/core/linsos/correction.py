@@ -10,7 +10,7 @@ from .solution import SolutionLinear
 from ...utils.basis_generator import arraylize_sp
 from ...utils.roots.rationalize import rationalize_array
 
-def _filter_zero_y(y, basis):
+def _filter_zero_y(y: List[float], basis: List[LinearBasis], num_multipliers: int) -> Tuple[List[float], List[LinearBasis], int]:
     """
     Filter out the zero coefficients.
     """
@@ -19,8 +19,9 @@ def _filter_zero_y(y, basis):
         if v != 0:
             reduced_y.append(v)
             reduced_basis.append(b)
+    reduced_num = sum(v != 0 for v in y[-num_multipliers:])
 
-    return reduced_y, reduced_basis
+    return reduced_y, reduced_basis, reduced_num
 
 def _basis_as_matrix(basis: List[LinearBasis], symmetry: PermutationGroup) -> sp.Matrix:
     """
@@ -33,7 +34,7 @@ def _basis_as_matrix(basis: List[LinearBasis], symmetry: PermutationGroup) -> sp
 def _add_regularizer(mat: sp.Matrix, num_multipliers: int) -> sp.Matrix:
     """
     Add a regularizer row to the matrix.
-    """    
+    """
     regularizer = sp.Matrix([[0] * (mat.shape[1] - num_multipliers) + [1] * num_multipliers])
     mat = sp.Matrix.vstack(mat, regularizer)
     return mat
@@ -73,8 +74,7 @@ def linear_correction(
     # first use the continued fraction to approximate the coefficients
     y_mask = np.abs(y).max() * zero_tol
     y = rationalize_array(y, y_mask, reliable = True)
-    y, basis = _filter_zero_y(y, basis)
-
+    y, basis, num_multipliers = _filter_zero_y(y, basis, num_multipliers)
     reduced_arrays = _basis_as_matrix(basis, symmetry=symmetry)
 
     # add a regularizer row
@@ -96,7 +96,7 @@ def linear_correction(
             reduced_y = reduced_arrays.LUsolve(target)
 
             if all(_ >= 0 for _ in reduced_y):
-                reduced_y, reduced_basis = _filter_zero_y(reduced_y, reduced_basis)
+                reduced_y, reduced_basis, num_multipliers = _filter_zero_y(reduced_y, reduced_basis, num_multipliers)
                 reduced_arrays = _basis_as_matrix(reduced_basis, symmetry=symmetry)
                 reduced_arrays = _add_regularizer(reduced_arrays, num_multipliers)
                 obtained = reduced_arrays * sp.Matrix(reduced_y)
@@ -104,7 +104,7 @@ def linear_correction(
                     is_equal = True
                     y, basis = reduced_y, reduced_basis
         except Exception as e:
-            raise e
+            # raise e
             is_equal = False
 
     solution = SolutionLinear(

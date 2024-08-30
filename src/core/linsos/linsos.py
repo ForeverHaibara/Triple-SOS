@@ -1,21 +1,24 @@
-from typing import Optional, List, Dict, Union
+from typing import Optional, Tuple, List, Dict, Union
+from time import time
 import warnings
 
 import numpy as np
 import sympy as sp
+from sympy.core.singleton import S
 from sympy.combinatorics import PermutationGroup
 from scipy.optimize import linprog
 
 from .basis import (
     LinearBasis, LinearBasisTangent,
-    cross_exprs, diff_tangents
+    cross_exprs, quadratic_difference, multiple_basis_to_matrix
 )
 from .tangents import root_tangents
 from .correction import linear_correction
 from .updegree import lift_degree
 from .solution import SolutionLinear
 from ..solver import homogenize
-from ...utils import arraylize, findroot, RootsInfo, identify_symmetry, MonomialPerm, MonomialReduction
+from ...utils import arraylize, findroot, RootsInfo, identify_symmetry
+from ...utils.basis_generator import MonomialPerm, MonomialReduction, MonomialHomogeneousFull
 
 
 LINPROG_OPTIONS = {
@@ -25,7 +28,7 @@ LINPROG_OPTIONS = {
     }
 }
 
-def _prepare_tangents(poly, prepared_tangents = [], rootsinfo = None):
+def _prepare_tangents(symbols, prepared_tangents = [], rootsinfo = None):
     """
     Combine appointed tangents and tangents generated from rootsinfo.
     Roots that do not vanish at strict roots will be filtered out.
@@ -34,8 +37,40 @@ def _prepare_tangents(poly, prepared_tangents = [], rootsinfo = None):
         # filter out tangents that do not vanish at strict roots
         prepared_tangents = rootsinfo.filter_tangents(prepared_tangents)
         tangents = prepared_tangents + [t.as_expr()**2 for t in rootsinfo.tangents]
+    else:
+        tangents = prepared_tangents.copy()
+        
+    if rootsinfo is None or not rootsinfo.has_nontrivial_roots():
+        if S.One not in tangents:
+            tangents.append(S.One)
+
+        if len(symbols) == 3:
+            a, b, c = symbols
+            tangents += [
+                (a**2 - b*c)**2, (b**2 - a*c)**2, (c**2 - a*b)**2,
+                (a**3 - b*c**2)**2, (a**3 - b**2*c)**2, (b**3 - a*c**2)**2,
+                (b**3 - a**2*c)**2, (c**3 - a*b**2)**2, (c**3 - a**2*b)**2,
+            ]
+
+    return tangents
+
+def _remove_duplicate_tangents(tangents: List[sp.Expr], symbols: Tuple[sp.Symbol, ...], symmetry: MonomialReduction) -> List[sp.Expr]:
+    """
+    Remove duplicate tangents by symmetry.
+    """
+    if isinstance(symmetry, MonomialHomogeneousFull):
         return tangents
-    return prepared_tangents
+
+    def _get_representation(t: sp.Expr):
+        """Get the standard representation of the tangent given symmetry."""
+        vec = symmetry.base().arraylize_sp(t.as_poly(symbols))
+        mat = symmetry.permute_vec(len(symbols), vec)
+        cols = [tuple(mat[:, i]) for i in range(mat.shape[1])]
+        return max(cols)
+ 
+    representation = dict(((_get_representation(t), t) for i, t in enumerate(tangents)))
+    return list(representation.values())
+
 
 def _prepare_basis(
         symbols: List[sp.Symbol],
@@ -43,7 +78,7 @@ def _prepare_basis(
         tangents: List[sp.Expr],
         rootsinfo = None,
         basis: Optional[List[LinearBasis]] = None,
-        symmetry: PermutationGroup = PermutationGroup()
+        symmetry: Union[MonomialReduction, PermutationGroup] = PermutationGroup()
     ):
     """
     Prepare basis for linear programming.
@@ -67,17 +102,28 @@ def _prepare_basis(
     arrays: np.array
         Array representation of the basis. A matrix.
     """
-    if basis is None:
-        basis = []
-    _diff_tangents = diff_tangents(symbols)
-    if sp.S(1) not in tangents:
-        tangents.append(sp.S(1))
+    # time0 = time()
+    all_basis = []
+    all_arrays = []
+
+    def append_basis(all_basis, all_arrays, basis, symmetry = symmetry):
+        all_basis += basis
+        all_arrays += np.vstack([x.as_array_np(expand_cyc=True, symmetry=symmetry) for x in basis])
+
+    if basis is not None:
+        append_basis(all_basis, all_arrays, basis, symmetry = symmetry)
+
+    _diff_tangents = quadratic_difference(symbols)
+
     for tangent in tangents:
+        basis = []
         d = tangent.as_poly(symbols).total_degree()
         if degree >= d:
             cross_tangents = cross_exprs(_diff_tangents, symbols, degree - d)
             for t in cross_tangents:
                 basis += LinearBasisTangent.generate(t * tangent, symbols, degree)
+        all_basis += basis
+        all_arrays.append(multiple_basis_to_matrix(tangent, symbols, degree, basis, symmetry))
 
     # if is_cyc:
     #     for tangent in tangents:
@@ -92,8 +138,9 @@ def _prepare_basis(
     #         basis += LinearBasisTangent.generate(degree, tangent = tangent)
     #     basis += CachedCommonLinearBasisTangent.generate(degree)
 
-    arrays = np.array([x.as_array_np(expand_cyc=True, symmetry=symmetry) for x in basis])
-    return basis, arrays
+    all_arrays = np.vstack(all_arrays)
+    # print('Time for converting basis to arrays:', time() - time0)
+    return all_basis, all_arrays
 
 
 def LinearSOS(
@@ -154,12 +201,17 @@ def LinearSOS(
     if rootsinfo is None:
         rootsinfo = findroot(poly, with_tangents = root_tangents)
 
-    tangents = _prepare_tangents(poly, tangents, rootsinfo)
+    tangents = _prepare_tangents(poly.gens, tangents, rootsinfo)
 
     if symmetry is None:
         symmetry = identify_symmetry(poly, homogenizer)
     if isinstance(symmetry, PermutationGroup):
         symmetry = MonomialPerm(symmetry)
+        
+    # remove duplicate tangents by symmetry
+    # print('Tangents before removing duplicates:', tangents)
+    tangents = _remove_duplicate_tangents(tangents, poly.gens, symmetry)
+    # print('Tangents after  removing duplicates:', tangents)
 
     # prepare to lift the degree in an iterative way
     for lift_degree_info in lift_degree(poly, symmetry=symmetry, degree_limit = degree_limit):

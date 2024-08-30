@@ -117,7 +117,7 @@ class SolutionLinear(SolutionSimple):
                 continue
 
             # base: LinearBasisTangent 
-            tangent = base.tangent
+            tangent = base.tangent(symbols)
 
             collection = basis_by_tangents.get((cls, tangent))
             if collection is None:
