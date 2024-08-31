@@ -121,27 +121,29 @@ def _sos_struct_sparse_amgm(coeff, small, large):
                 # if x + y >= 0 but 2*y < x (indicating x, y >= 0 both)
                 # fall to the normal mode below                    
 
-    # we can handle case for real numbers easily without highering the degree
-    if large == (6,0,0):
-        if small == (4,1,1):
-            # s(a6-a4bc) = s(a2)s((a2-b2)2)/4+s(a2(a2-bc)2)/2
-            if coeff(small) <= 0:
-                # it is a linear combination of s(a6-a4bc) and s(a6)
-                w1 = -coeff(small)
-                w2 = coeff(large) + coeff(small)
-                return w1 / 4 * CyclicSum(a**2)*CyclicSum((a**2-b**2)**2) + w1 / 2 * CyclicSum(a**2*(a**2 - b*c)**2)\
-                    + w2 * CyclicSum(a**6)
-        elif small == (4,2,0):
-            # s(a6-a4b2) = 2/3s(a2(a2-b2)2)+1/3s(a2(a2-c2)2)
-            return coeff(large)*2/3 * CyclicSum(a**2*(a**2-b**2)**2) + coeff(large)/3 * CyclicSum(a**2*(a**2-c**2)**2)\
-                    + (coeff(large) + coeff(small)) * CyclicSum(a**4*b**2)
-        elif small == (4,0,2):
-            return coeff(large)*2/3 * CyclicSum(a**2*(a**2-c**2)**2) + coeff(large)/3 * CyclicSum(a**2*(a**2-b**2)**2)\
-                    + (coeff(large) + coeff(small)) * CyclicSum(a**4*c**2)
 
-        # s(a6-a5b)-1/2s(a2(a2-b2)(a2-c2))-1/2s(a4(a-b)2) = s(a4c2-a2b2c2)/2
-        # however s(a4c2-a2b2c2) >= 0 needs higher degree
-
+    SPECIAL_AMGMS = {
+        ((6,0,0),(4,1,1)): CyclicSum(a**2)*CyclicSum((a**2-b**2)**2)/4 + CyclicSum(a**2*(a**2-b*c)**2)/2,
+        ((6,0,0),(4,2,0)): CyclicSum((a**2-b**2)**2*(2*a**2+b**2))/3,
+        ((6,0,0),(4,0,2)): CyclicSum((a**2-c**2)**2*(2*a**2+c**2))/3,
+        ((6,0,0),(5,1,0)): CyclicSum((a**2-b**2)**2*(2*a**2+b**2))/6 + CyclicSum(a**4*(a-b)**2)/2,
+        ((6,0,0),(5,0,1)): CyclicSum((a**2-c**2)**2*(2*a**2+c**2))/6 + CyclicSum(a**4*(a-c)**2)/2,
+        ((6,0,0),(3,2,1)): CyclicSum((a**2-b**2)**2*(2*a**2+b**2))/6 + CyclicSum((a**3-b**2*c)**2)/2,
+        ((6,0,0),(3,1,2)): CyclicSum((a**2-c**2)**2*(2*a**2+c**2))/6 + CyclicSum((a**3-b*c**2)**2)/2,
+        ((8,0,0),(7,1,0)): CyclicSum((a**4-b**4)**2)/8 + CyclicSum(a**4*(a**2-b**2)**2)/4 + CyclicSum(a**6*(a-b)**2)/2,
+        ((8,0,0),(7,0,1)): CyclicSum((a**4-b**4)**2)/8 + CyclicSum(a**4*(a**2-c**2)**2)/4 + CyclicSum(a**6*(a-c)**2)/2,
+        ((8,0,0),(5,0,3)): CyclicSum((a**4-b**4)**2)/8 + CyclicSum(a**4*(a**2-b**2)**2)/4 + CyclicSum(b**2*(a**3-b**3)**2)/2,
+        ((8,0,0),(5,3,0)): CyclicSum((a**4-b**4)**2)/8 + CyclicSum(a**4*(a**2-c**2)**2)/4 + CyclicSum(c**2*(a**3-c**3)**2)/2,
+        ((8,0,0),(6,1,1)): CyclicSum((a**4-a**2*b*c)**2)/2 + CyclicSum((a**4-b**4)**2)/4 + CyclicSum(a**4*(b**2-c**2)**2)/4,
+        ((8,0,0),(5,2,1)): CyclicSum((a**4-b**4)**2)/4 + CyclicSum(a**4*(b**2-c**2)**2)/4 + CyclicSum(a**2*(a**3-b**2*c)**2)/2,
+        ((8,0,0),(5,1,2)): CyclicSum((a**4-b**4)**2)/4 + CyclicSum(a**4*(b**2-c**2)**2)/4 + CyclicSum(a**2*(a**3-b*c**2)**2)/2,
+        ((8,0,0),(4,3,1)): CyclicSum((a**4-b**4)**2)/8 + CyclicSum(a**4*(a**2-b**2)**2)/4 + CyclicSum((a**4-b**3*c)**2)/2,
+        ((8,0,0),(4,1,3)): CyclicSum((a**4-b**4)**2)/8 + CyclicSum(a**4*(a**2-c**2)**2)/4 + CyclicSum((a**4-b*c**3)**2)/2,
+        ((8,0,0),(3,3,2)): CyclicSum((a**4-b**4)**2)/2 + CyclicSum(a**4*(b**2-c**2)**2)/2 + CyclicProduct(a**2)*CyclicSum((a-b)**2)/2,
+    }
+    _amgm = SPECIAL_AMGMS.get((large, small))
+    if _amgm is not None:
+        return coeff(large) * _amgm + (coeff(large) + coeff(small)) * CyclicSum(a**small[0]*b**small[1]*c**small[2])
 
     if True:
         # extend each side of the small triangle by two times to obtain the large

@@ -10,7 +10,7 @@ from scipy.optimize import linprog
 
 from .basis import (
     LinearBasis, LinearBasisTangent,
-    cross_exprs, quadratic_difference, multiple_basis_to_matrix
+    cross_exprs, quadratic_difference
 )
 from .tangents import root_tangents
 from .correction import linear_correction
@@ -113,17 +113,10 @@ def _prepare_basis(
     if basis is not None:
         append_basis(all_basis, all_arrays, basis, symmetry = symmetry)
 
-    _diff_tangents = quadratic_difference(symbols)
-
     for tangent in tangents:
-        basis = []
-        d = tangent.as_poly(symbols).total_degree()
-        if degree >= d:
-            cross_tangents = cross_exprs(_diff_tangents, symbols, degree - d)
-            for t in cross_tangents:
-                basis += LinearBasisTangent.generate(t * tangent, symbols, degree)
+        basis, mat = LinearBasisTangent.generate_quad_diff(tangent, symbols, degree, symmetry = symmetry)
         all_basis += basis
-        all_arrays.append(multiple_basis_to_matrix(tangent, symbols, degree, basis, symmetry))
+        all_arrays.append(mat)
 
     # if is_cyc:
     #     for tangent in tangents:
@@ -138,7 +131,7 @@ def _prepare_basis(
     #         basis += LinearBasisTangent.generate(degree, tangent = tangent)
     #     basis += CachedCommonLinearBasisTangent.generate(degree)
 
-    all_arrays = np.vstack(all_arrays)
+    all_arrays = np.vstack([non_zero_array for non_zero_array in all_arrays if len(non_zero_array) > 0])
     # print('Time for converting basis to arrays:', time() - time0)
     return all_basis, all_arrays
 
@@ -197,6 +190,10 @@ def LinearSOS(
         tangents = [t.subs(translation).together() for t in tangents]
         tangent_d = [sp.fraction(t)[1].as_poly(homogenizer).degree() for t in tangents]
         tangents = [t * homogenizer**d for t, d in zip(tangents, tangent_d)]
+    else:
+        # homogeneous polynomial does not accept non-homogeneous tangents
+        tagents_poly = [t.as_poly(poly.gens) for t in tangents]
+        tangents = [t for t, p in zip(tangents, tagents_poly) if p.is_homogeneous]
 
     if rootsinfo is None:
         rootsinfo = findroot(poly, with_tangents = root_tangents)

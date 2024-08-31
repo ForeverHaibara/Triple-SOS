@@ -1,11 +1,11 @@
-from typing import Union, Tuple, List, Callable
+from typing import Union, Tuple, List, Dict, Callable, Optional
 
 import sympy as sp
 import numpy as np
 from sympy.combinatorics import PermutationGroup, Permutation
 from sympy.core.singleton import S
 
-from ...utils import arraylize, arraylize_sp, MonomialReduction
+from ...utils import arraylize, arraylize_sp, MonomialReduction, MonomialPerm
 
 class CallableExpr():
     """
@@ -101,6 +101,67 @@ class LinearBasisTangent(LinearBasis):
         return [LinearBasisTangent.from_callable_expr(p, tangent) for p in \
                 _degree_combinations([1 for _ in symbols], degree, require_equal=require_equal)]
 
+    @classmethod
+    def generate_quad_diff(self, 
+            tangent: sp.Expr, symbols: Tuple[int, ...], degree: int, symmetry: PermutationGroup
+        ) -> Tuple[List['LinearBasisTangent'], np.ndarray]:
+        """
+        Generate all possible linear bases of the form x1^a1 * x2^a2 * ... * xn^an * (x1-x2)^(2b_12) * ... * (xi-xj)^(2b_ij) * tangent
+        with total degree == degree.
+        Also, return the matrix representation of the bases.
+        """
+        basis, mat, perm_group = None, None, None
+        cache = _get_tangent_cache_key(tangent, symbols)
+        if cache is not None:
+            perm_group = symmetry.to_perm_group(len(symbols)) if isinstance(symmetry, MonomialReduction) else symmetry
+            basis = cache.get((degree, len(symbols)))
+            if basis is not None:
+                mat = cache.get((degree, perm_group))
+                if mat is not None:
+                    return basis, mat
+
+        p = tangent.as_poly(symbols)
+        d = p.total_degree()
+        if p.is_zero or (not p.domain.is_Numerical) or d > degree:
+            return [], np.array([], dtype='float')
+
+        quad_diff = quadratic_difference(symbols)
+        cross_tangents = cross_exprs(quad_diff, symbols, degree - d)
+        if basis is None:
+            # no cache, generate the bases first
+            basis = []
+            for t in cross_tangents:
+                basis += LinearBasisTangent.generate(t * tangent, symbols, degree, require_equal=True)
+
+        if mat is None:
+            # convert the bases to matrix
+            # mat = np.array([x.as_array_np(expand_cyc=True, symmetry=symmetry) for x in basis]) # too slow
+            mat = [0] * len(basis)
+            def tuple_sum(t1: Tuple[int, ...], t2: Tuple[int, ...]) -> Tuple[int, ...]:
+                return tuple(x + y for x, y in zip(t1, t2))
+
+            mat_ind = 0
+            if not isinstance(symmetry, MonomialReduction):
+                symmetry = MonomialPerm(symmetry)
+            poly_from_dict = sp.Poly.from_dict
+            for t in cross_tangents:
+                p2 = t.as_poly(symbols) * p
+                p2dict = p2.as_dict()
+                for power in  _degree_combinations([1 for _ in symbols], degree - p2.homogeneous_order(), require_equal=True):
+                    new_p_dict = dict((tuple_sum(power, k), v) for k, v in p2dict.items())
+                    new_p = poly_from_dict(new_p_dict, symbols)
+                    mat[mat_ind] = symmetry.arraylize(new_p, expand_cyc=True)
+                    mat_ind += 1
+            
+            mat = np.vstack(mat)
+
+        if cache is not None:
+            # cache the result
+            cache[(degree, len(symbols))] = basis
+            cache[(degree, perm_group)] = mat
+
+        return basis, mat
+
 
 def _degree_combinations(d_list: List[int], degree: int, require_equal = False) -> List[Tuple[int, ...]]:
     """
@@ -177,7 +238,7 @@ def quadratic_difference(symbols: Tuple[sp.Symbol, ...]) -> List[sp.Expr]:
 
 
 def _define_common_tangents() -> List[sp.Expr]:
-    # define keys of basis that should be cached
+    # define keys of bases that should be cached
     a, b, c, d = sp.symbols('x:4')
     return [
         S.One,
@@ -186,52 +247,12 @@ def _define_common_tangents() -> List[sp.Expr]:
         (b**3 - a**2*c)**2, (c**3 - a*b**2)**2, (c**3 - a**2*b)**2,
     ]
 
-_CACHED_BASIS_TO_MATRIX = dict((k, {}) for k in _define_common_tangents())
+_CACHED_TANGENT_BASIS = dict((k, {}) for k in _define_common_tangents())
 
-def multiple_basis_to_matrix(
-        tangent: sp.Expr, symbols: Tuple[int, ...], degree: int,
-        basis: List[LinearBasisTangent], symmetry: Union[MonomialReduction, PermutationGroup]
-    ) -> np.ndarray:
+def _get_tangent_cache_key(tangent: sp.Expr, symbols: Tuple[int, ...]) -> Optional[Dict]:
     """
-    Convert multiple tangents to a matrix. It uses cache to store the intermediate results.
-    This is an optimized implementation of the following code:
-
-    ```python
-        def func(tangent, symbols, degree, symmetry):
-            basis, _diff_tangents = [], quadratic_difference(symbols)
-            d = tangent.as_poly(symbols).total_degree()
-            cross_tangents = cross_exprs(_diff_tangents, symbols, degree - d)
-            for t in cross_tangents:
-                basis += LinearBasisTangent.generate(t * tangent, symbols, degree)
-            mat = np.array([x.as_array_np(expand_cyc=True, symmetry=symmetry) for x in basis])
-            return mat
-    ```
+    Given a tangent and symbols, return the cache key if it is in the cache.
     """
-    def _get_default():
-        return np.array([x.as_array_np(expand_cyc=True, symmetry=symmetry) for x in basis])
-
-    if isinstance(symmetry, MonomialReduction):
-        perm_group = symmetry.to_perm_group(len(symbols))
-    elif isinstance(symmetry, PermutationGroup):
-        perm_group = symmetry
-        if symmetry.is_trivial and symmetry.degree != len(symbols):
-            perm_group = PermutationGroup(Permutation(list(range(len(symbols)))))
-
     callable_tangent = CallableExpr.from_expr(tangent, symbols)
     std_tangent = callable_tangent.default(len(symbols))
-
-    # check whether (std_tangent, degree, perm_group) is in the key of cache
-    cache = _CACHED_BASIS_TO_MATRIX.get(std_tangent)
-    if cache is None:
-        # do not cache the result, fallback to the original code
-        return _get_default()
-
-    v = cache.get((degree, perm_group))
-    if v is not None:
-        return v
-    else:
-        cache[(degree, perm_group)] = _get_default()
-        return cache[(degree, perm_group)]
-
-    # fallback to the original code
-    return _get_default()
+    return _CACHED_TANGENT_BASIS.get(std_tangent)

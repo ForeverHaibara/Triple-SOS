@@ -294,4 +294,4 @@ def identify_symmetry(poly: sp.Poly, homogenizer: Optional[sp.Symbol] = None) ->
         if coeff.is_symmetric(G):
             return G
 
-    return PermutationGroup()
+    return PermutationGroup(Permutation(list(range(nvars))))
