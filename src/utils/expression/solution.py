@@ -285,7 +285,8 @@ class SolutionSimple(Solution):
                 s_multiplier = "%s %s"%(self.multiplier, self._str_f())
         else:
             s_multiplier = get_str(self.multiplier)
-            if s_multiplier[-1] != ')':
+            if isinstance(self.multiplier, sp.Add):
+            # if s_multiplier[-1] != ')':
                 s_multiplier = "%s %s"%(add_paren(s_multiplier), self._str_f())
             else:
                 s_multiplier = "%s %s"%(s_multiplier, self._str_f())
@@ -344,7 +345,7 @@ class SolutionSimple(Solution):
             allow_sort = self.PRINT_CONFIGS['MULTILINE_ALLOW_SORT']
         )
     
-        s = s.replace('\\left(- a + c\\right)^{2}', '\\left(a - c\\right)^{2}')
+        # s = s.replace('\\left(- a + c\\right)^{2}', '\\left(a - c\\right)^{2}')
 
         s = '$$%s$$'%s
 
@@ -406,6 +407,26 @@ class SolutionSimple(Solution):
         self.problem = self.problem.subs(homogenizer, 1)
         self.numerator = self.numerator.xreplace({homogenizer: 1})
         self.multiplier = self.multiplier.xreplace({homogenizer: 1})
+        self.solution = self.numerator / self.multiplier
+        return self
+
+    def as_content_primitive(self):
+        """
+        Move the constant of the multiplier to the numerator.
+        """
+        # return self.multiplier.as_content_primitive()
+        v, m = self.multiplier.as_content_primitive()
+        self.multiplier = m
+        self.numerator = S.One/v * self.numerator
+        self.solution = self.numerator / self.multiplier
+        return self
+
+    def signsimp(self):
+        """
+        Simplify the signs.
+        """
+        self.numerator = sp.signsimp(self.numerator)
+        self.multiplier = sp.signsimp(self.multiplier)
         self.solution = self.numerator / self.multiplier
         return self
 

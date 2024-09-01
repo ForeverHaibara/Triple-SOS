@@ -8,10 +8,7 @@ from sympy.core.singleton import S
 from sympy.combinatorics import PermutationGroup
 from scipy.optimize import linprog
 
-from .basis import (
-    LinearBasis, LinearBasisTangent,
-    cross_exprs, quadratic_difference
-)
+from .basis import LinearBasis, LinearBasisTangent
 from .tangents import root_tangents
 from .correction import linear_correction
 from .updegree import lift_degree
@@ -137,8 +134,8 @@ def _prepare_basis(
 
 
 def LinearSOS(
-        poly: sp.polys.Poly,
-        tangents: List = [],
+        poly: sp.Poly,
+        tangents: List[sp.Expr] = [],
         rootsinfo: Optional[RootsInfo] = None,
         symmetry: Optional[Union[PermutationGroup, MonomialReduction]] = None,
         verbose: bool = 1,#False,
@@ -150,11 +147,14 @@ def LinearSOS(
 
     Parameters
     -------
-    poly: sp.polys.Poly
+    poly: sp.Poly
         The polynomial to perform SOS on. It should be a homogeneous, cyclic polynomial of a, b, c.
         There is no check for this.
     tangents: list
         Additional tangents to be added to the basis.
+    symmetry: MonomialReduction or PermutationGroup
+        The symmetry of the polynomial. When it is None, it will be automatically generated. 
+        If we want to skip the symmetry generation algorithm, please pass in a MonomialReduction object.
     rootsinfo: RootsInfo
         Roots information of the polynomial to be optimized. When it is None, it will be automatically
         generated. If we want to skip the root finding algorithm or the tangent generation algorithm,
@@ -179,7 +179,7 @@ def LinearSOS(
         The solution of the linear programming SOS. When solution is None, it means that the linear
         programming SOS fails.
     """
-    if not poly.domain.is_Numerical:
+    if len(poly.free_symbols_in_domain) > 0:
         return
     poly, homogenizer = homogenize(poly)
 

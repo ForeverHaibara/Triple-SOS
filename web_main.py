@@ -197,9 +197,17 @@ def findroot(sid, **kwargs):
                 if len(tg) > 0:
                     try:
                         tg = pl(tg)
-                        if tg is not None and (tg.domain in (sp.ZZ, sp.QQ)):
+                        if tg is not None:
+                            # and (tg.domain in (sp.ZZ, sp.QQ)):
                             tg = tg.as_expr()
-                            tangents.append(RootTangent(tg))
+                            # tangents.append(RootTangent(tg))
+                            if 'configs' not in kwargs:
+                                kwargs['configs'] = {'LinearSOS': {'tangents': []}}
+                            elif 'LinearSOS' not in kwargs['configs']:
+                                kwargs['configs']['LinearSOS'] = {'tangents': []}
+                            elif 'tangents' not in kwargs['configs']['LinearSOS']:
+                                kwargs['configs']['LinearSOS']['tangents'] = []
+                            kwargs['configs']['LinearSOS']['tangents'].append(tg**2)
                     except:
                         pass
             rootsinfo.tangents = tangents

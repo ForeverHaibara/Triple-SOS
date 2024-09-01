@@ -38,6 +38,7 @@ class SOS_Manager():
     verbose = True
 
     CONFIG_METHOD_CHECK = _default_polynomial_check
+    CONFIG_ALLOW_NONSTANDARD_GENS = True
     CONFIG_STANDARDIZE_CYCLICEXPR = True
 
     @classmethod
@@ -157,12 +158,21 @@ class SOS_Manager():
         if poly is None or (not isinstance(poly, sp.Poly)):
             return None
 
+        if cls.CONFIG_ALLOW_NONSTANDARD_GENS:
+            if len(poly.free_symbols_in_domain) > 0:
+                poly = poly.as_poly(*sorted(list(poly.gens) + list(poly.free_symbols_in_domain), key=lambda x:x.name))
+                degree_of_each_gen = [poly.degree(_) for _ in poly.gens]
+                if any(_ == 0 for _ in degree_of_each_gen):
+                    # remove the gen
+                    nonzero_gens = [gen for gen, d in zip(poly.gens, degree_of_each_gen) if d > 0]
+                    poly = poly.as_poly(*nonzero_gens)
+
         if cls.verbose is False:
             for method in ('LinearSOS', 'SDPSOS'):
                 if configs.get(method) is None:
                     configs[method] = {}
                 configs[method]['verbose'] = False
-        method_order = _default_polynomial_check(poly, method_order)
+        method_order = cls.CONFIG_METHOD_CHECK(poly, method_order)
 
         solution = sum_of_square(
             poly,
@@ -232,20 +242,24 @@ def _render_LaTeX(a, path, usetex=True, show=False, dpi=500, fontsize=20):
 
 
 def _standardize_cyclic_expr_default_replacement(x: sp.Expr):
-    if not isinstance(x, CyclicExpr):
+    if not x.has(CyclicExpr):
         return x
+    if not isinstance(x, CyclicExpr):
+        return x.func(*[_standardize_cyclic_expr_default_replacement(_) for _ in x.args])
     if x.args[1] == sp.symbols("a b c"):
         if x.is_cyclic_group:
             return x
         elif x.is_symmetric_group:
             a, b, c = sp.symbols("a b c")
-            x_degen = x.func(signsimp(x.args[0]), x.args[1], CyclicGroup(3))
-            x_reflect = x.func(signsimp(x.args[0].xreplace({a:b,b:a})), x.args[1], CyclicGroup(3))
-            return x_degen + x_reflect
+            # x_degen = x.func(signsimp(x.args[0]), x.args[1], CyclicGroup(3))
+            # x_reflect = x.func(signsimp(x.args[0].xreplace({a:b,b:a})), x.args[1], CyclicGroup(3))
+            # return x_degen + x_reflect
+            v = (signsimp(x.args[0]) + signsimp(x.args[0].xreplace({a:b,b:a}))).together()
+            v = _standardize_cyclic_expr_default_replacement(v)
+            return x.func(v, x.args[1], CyclicGroup(3))
 
     return x.doit(deep=False)
-    
-    
+
 
 
 def _standardize_cyclic_expr(solution, replacement=_standardize_cyclic_expr_default_replacement):
@@ -259,6 +273,8 @@ def _standardize_cyclic_expr(solution, replacement=_standardize_cyclic_expr_defa
             solution.numerator = _standardize_cyclic_expr(solution.numerator, replacement)
             solution.multiplier = _standardize_cyclic_expr(solution.multiplier, replacement)
             solution.solution = solution.numerator / solution.multiplier
+            solution.as_content_primitive()
+            solution.signsimp()
         else:
             solution.solution = _standardize_cyclic_expr(solution.solution, replacement)
         return solution
