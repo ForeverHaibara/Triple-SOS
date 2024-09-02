@@ -148,7 +148,7 @@ def latex_coeffs(poly, tabular: bool = True, document: bool = True, zeros: str =
         poly_str = poly
         poly = pl(poly)
     else:
-        poly_str = 'f(a,b,c)'
+        poly_str = 'f(%s)'%','.join([str(_) for _ in poly.gens])
 
     zero_wrapper = lambda x: x
     if zeros is not None and len(zeros):

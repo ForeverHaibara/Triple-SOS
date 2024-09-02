@@ -34,12 +34,13 @@
 <div id="frontpage" 
 style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: absolute; display: flex; background: rgb(240,240,240);">
 <div id="frontpageleft" style="width: 24%; margin-right: 0.5%; height: 100%; position: relative; 
+    font-size: 14px;
     border-right: 2px solid rgb(220,220,220); background: rgb(255,255,255)">
     <!-- <div id="variables" style="width: 100%; height: 28px; text-align: left; display: inline-block;
     background: -webkit-linear-gradient(top, rgb(247,247,247),rgb(234,234,234));
     color: black; vertical-align: middle; border-bottom: 1px solid rgb(216,216,216); font-size: 19px;">
     &nbsp  ·&nbsp Variables</div> -->
-    <div id="settings" style="width:100%; height: 30%;">
+    <div id="settings" style="width:100%; height: 37%;">
         <div id="settings_head" style="width: 100%; height: 28px; text-align: left; display: inline-block;
         background: -webkit-linear-gradient(top, rgb(247,247,247),rgb(234,234,234));
         color: black; vertical-align: middle; border-bottom: 1px solid rgb(216,216,216); font-size: 19px;">
@@ -57,20 +58,20 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
                     </svg>
                     </span>
                 </label>
-                <div class="collapse" id="setting_method_StructuralSOS_menu" style="margin-left: 10px; margin-top: 3px; font-size: 15px;">
+                <div class="collapse" id="setting_method_StructuralSOS_menu" style="margin-left: 10px; margin-top: 3px; font-size: 13px;">
                     <input class="form-check-input subcheckbox" type="checkbox" value="" id="setting_method_StructuralSOS_real" checked>
                     <label class="form-check-label" for="setting_method_StructuralSOS_real">Real Numbers</label>
                 </div>
             </div>
-            <div class="form-check" style="margin-top: 5px">
+            <div class="form-check" style="margin-top: 4px">
                 <input class="form-check-input" type="checkbox" value="" id="setting_method_use_LinearSOS" checked>
                 <label class="form-check-label" for="setting_method_use_LinearSOS">Use Linear SOS</label>
             </div>
-            <div class="form-check" style="margin-top: 5px">
+            <div class="form-check" style="margin-top: 4px">
                 <input class="form-check-input" type="checkbox" value="" id="setting_method_use_SymmetricSOS" checked>
                 <label class="form-check-label" for="setting_method_use_SymmetricSOS">Use Symmetric SOS</label>
             </div>
-            <div class="form-check" style="margin-top: 5px">
+            <div class="form-check" style="margin-top: 4px">
                 <input class="form-check-input" type="checkbox" value="" id="setting_method_use_SDPSOS" checked>
                 <label class="form-check-label" for="setting_method_use_SDPSOS">Use SDP SOS</label>
                 <input type="checkbox" class="collapse-toggle visually-hidden" id="setting_method_SDPSOS_switch" data-bs-toggle="collapse" data-bs-target="#setting_method_SDPSOS_menu" width="0">
@@ -100,6 +101,44 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
             <!-- <input type="checkbox" id="setting_method_use_StructuralSOS" checked="checked" style="font-size: 14px; margin-top: 10px; width: 80%" >&nbsp; Use Structural SOS</input>
             <input type="checkbox" id="setting_method_use_LinearSOS" checked="checked" style="font-size: 14px; margin-top: 10px; width: 80%" >&nbsp; Use Linear SOS</input>
             <input type="checkbox" id="setting_method_use_SymmetricSOS" checked="checked" style="font-size: 14px; margin-top: 10px; width: 80%" >&nbsp; Use Symmetric SOS</input> -->
+        </div>
+    </div>
+    <div id="history" style="width:100%; height: 40%; margin-left:10px;">
+        <!-- THIS IS HISTORY -->
+    </div>
+    <div id="settings_gens_perms" style="width:100%; height: 23%; margin-left:10px; font-size: 12px;">
+        <div class="row align-items-center" style="font-size: 12px;">
+            <div class="col-3">
+              <label for="generatorsInput">Generators</label>
+            </div>
+            <div class="col-6">
+              <input type="text" class="form-control" id="setting_gens_input" placeholder="abc" value="abc" style="height:23px;font-size:12px;">
+            </div>
+        </div>
+        <div class="row" style="font-size: 12px; margin-top: 6px;">
+            <div class="col-3">
+              <label for="setting_perm">Permutation</label>
+            </div>
+            <div class="col-9">
+                <div class="form-check form-check-inline">
+                  <input class="form-check-input" type="radio" name="setting_perm" id="setting_perm_cyc" value="cyc" onclick="setPermChange()" checked>
+                  <label class="form-check-label" for="cyclicRadio">Cyc</label>
+                </div>
+                <div class="form-check form-check-inline">
+                  <input class="form-check-input" type="radio" name="setting_perm" id="setting_perm_sym" value="sym" onclick="setPermChange()">
+                  <label class="form-check-label" for="symmetricRadio">Sym</label>
+                </div>
+                <div class="form-check form-check-inline">
+                  <input class="form-check-input" type="radio" name="setting_perm" id="setting_perm_custom" value="custom" onclick="setPermChange()">
+                  <label class="form-check-label" for="customRadio">Custom</label>
+                </div>
+            </div>
+        </div>
+        <div class="row" style="font-size: 12px;">
+            <div class="col-3"></div>
+            <div class="col-8">
+              <input type="text" class="form-control" id="setting_perm_input" placeholder="[[1,2,0]]" style="height:23px;font-size: 12px;" disabled>
+            </div>
         </div>
     </div>
     <div id="advertisement" style="position: absolute; left: 5px; bottom: 2%; text-align: left; vertical-align: baseline; font-size: 12px">
@@ -396,6 +435,48 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
         });
     }
 
+    function setPermChange(){
+        const x = document.querySelector('input[name="setting_perm"]:checked').value;
+        const p = document.getElementById('setting_perm_input');
+        const nvars = document.getElementById('setting_gens_input').value.length;
+        if (x === 'cyc'){
+            p.disabled = true;
+            p.value = `[[${Array.from({length: nvars}, (_, i) => (i+1) % nvars)}]]`;
+        }else if (x === 'sym'){
+            p.disabled = true;
+            let array1 = Array.from({length: nvars}, (_, i) => (i+1) % nvars);
+            if (nvars <= 2){ p.value = `[[${array1}]]`; return; }
+            let array2 = Array.from({length: nvars}, (_, i) => i % nvars);
+            array2[0] = 1;
+            array2[1] = 0;
+            p.value = `[[${array1}],[${array2}]]`;
+        }else if (x === 'custom'){
+            p.disabled = false;
+        }
+    }
+
+    
+    function setGeneratorsChange(event) {
+        const input = event.target;
+        const currentValue = input.value;
+
+        let validString = '';
+        function isValidChar(char) {
+            const regex = /^[a-z]$/;
+            return regex.test(char) && !['s', 'p'].includes(char) && !validString.includes(char);
+        }
+        for (let i = 0; i < currentValue.length; i++) {
+            const char = currentValue[i];
+            if (isValidChar(char)){
+                validString += char;
+            }
+        }
+        input.value = validString;
+        setPermChange();
+    }
+    document.getElementById('setting_gens_input').addEventListener('input', setGeneratorsChange);
+
+
     function preprocessInput(kwargs){
         const input_poly = document.getElementById('input_poly').value.trim();        
         
@@ -405,6 +486,8 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
         kwargs.actions = actions
         kwargs.factor  = parse_undefined(kwargs.factor, false);
         kwargs.poly = input_poly;
+        kwargs.gens = document.getElementById('setting_gens_input').value;
+        kwargs.perm = document.getElementById('setting_perm_input').value;
 
         connectSocket(() => {
             if (socket === null){

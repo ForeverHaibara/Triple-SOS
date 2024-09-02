@@ -1,9 +1,10 @@
 # author: https://github.com/ForeverHaibara
-from typing import List, Dict, Any, Union, Callable
+from ast import literal_eval
+from typing import Tuple, List, Dict, Any, Union, Callable
 
 import sympy as sp
 from sympy.simplify import signsimp
-from sympy.combinatorics import CyclicGroup
+from sympy.combinatorics import Permutation, PermutationGroup, CyclicGroup
 
 from ..utils import Solution, SolutionSimple, CyclicExpr, deg, poly_get_factor_form, poly_get_standard_form, latex_coeffs
 from ..utils.text_process import preprocess_text, degree_of_zero, coefficient_triangle
@@ -37,6 +38,8 @@ class SOS_Manager():
     """
     verbose = True
 
+    CONFIG_DEFAULT_GENS = sp.symbols("a b c")
+    CONFIG_DEFAULT_PERM = CyclicGroup(3)
     CONFIG_METHOD_CHECK = _default_polynomial_check
     CONFIG_ALLOW_NONSTANDARD_GENS = True
     CONFIG_STANDARDIZE_CYCLICEXPR = True
@@ -44,6 +47,8 @@ class SOS_Manager():
     @classmethod
     def set_poly(cls, 
             txt: str,
+            gens: Tuple[sp.Symbol] = CONFIG_DEFAULT_GENS,
+            perm: PermutationGroup = CONFIG_DEFAULT_PERM,
             render_triangle: bool = True,
             render_grid: bool = True,
             factor: bool = False,
@@ -68,10 +73,10 @@ class SOS_Manager():
             A dictionary containing the polynomial, degree, text, coefficient triangle, and grid heatmap.
         """
         try:
-            poly, denom = preprocess_text(txt, cancel = True)
+            poly, denom = preprocess_text(txt, gens=gens, perm=perm, return_type='frac')
 
             if poly.is_zero:
-                n = degree_of_zero(txt)
+                n = degree_of_zero(txt, gens=gens, perm=perm)
             else:
                 n = deg(poly)
         except:
@@ -161,11 +166,11 @@ class SOS_Manager():
         if cls.CONFIG_ALLOW_NONSTANDARD_GENS:
             if len(poly.free_symbols_in_domain) > 0:
                 poly = poly.as_poly(*sorted(list(poly.gens) + list(poly.free_symbols_in_domain), key=lambda x:x.name))
-                degree_of_each_gen = [poly.degree(_) for _ in poly.gens]
-                if any(_ == 0 for _ in degree_of_each_gen):
-                    # remove the gen
-                    nonzero_gens = [gen for gen, d in zip(poly.gens, degree_of_each_gen) if d > 0]
-                    poly = poly.as_poly(*nonzero_gens)
+            degree_of_each_gen = [poly.degree(_) for _ in poly.gens]
+            if any(_ == 0 for _ in degree_of_each_gen):
+                # remove the gen
+                nonzero_gens = [gen for gen, d in zip(poly.gens, degree_of_each_gen) if d > 0]
+                poly = poly.as_poly(*nonzero_gens)
 
         if cls.verbose is False:
             for method in ('LinearSOS', 'SDPSOS'):
@@ -198,7 +203,18 @@ class SOS_Manager():
             return ''
         return latex_coeffs(poly, *args, **kwargs)
 
-
+    @classmethod
+    def _parse_perm_group(cls, txt: Union[str, List[List[int]]]) -> PermutationGroup:
+        """
+        Parse a text or a list to a permutation group.
+        """
+        if isinstance(txt, str):
+            txt = literal_eval(txt)
+        if isinstance(txt, list):
+            txt = PermutationGroup(*(Permutation(_) for _ in txt))
+        if isinstance(txt, PermutationGroup):
+            return txt
+        return
 
 
 def _render_LaTeX(a, path, usetex=True, show=False, dpi=500, fontsize=20):
@@ -264,7 +280,7 @@ def _standardize_cyclic_expr_default_replacement(x: sp.Expr):
 
 def _standardize_cyclic_expr(solution, replacement=_standardize_cyclic_expr_default_replacement):
     """
-    For display purpose, we require cyclic expressions to be with respect to
+    For display purpose, we require cyclic expressions to be with respect to default cyclic group.
     """
     if solution is None:
         return None

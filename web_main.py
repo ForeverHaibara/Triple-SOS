@@ -130,8 +130,14 @@ def preprocess():
     """
     req = request.get_json()
 
+    gens = req.get('gens', 'abc')
+    gens = tuple(sp.Symbol(_) for _ in gens)
+    perm = SOS_Manager._parse_perm_group(req.get('perm'))
+
     result = SOS_Manager.set_poly(
         req['poly'],
+        gens = gens,
+        perm = perm,
         render_triangle = True,
         render_grid = True,
         factor = req.get('factor', False)
