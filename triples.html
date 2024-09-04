@@ -13,6 +13,20 @@
         background-color: rgba(170, 160, 160, 0.464);
         border-color: rgba(170, 160, 160, 0.464);
     }
+    #history_panel{
+        scrollbar-width: thin;
+        scrollbar-color: #54c3e8 transparent;
+    }
+    #history_panel::-webkit-scrollbar {
+        width: 5px;
+    }
+    #history_panel::-webkit-scrollbar-track {
+        background: transparent;
+    }
+    #history_panel::-webkit-scrollbar-thumb {
+        background-color: #54c3e8;
+        border-radius: 4px;
+    }
     </style>
     <!-- <script src="https://requirejs.org/docs/release/2.3.6/minified/require.js"></script> -->
     <!-- <script async src="https://cdn.bootcdn.net/ajax/libs/axios/0.21.1/axios.min.js"></script> -->
@@ -28,6 +42,7 @@
     <script src="static/js/bootstrap.bundle.min.js"></script>
     <script src="static/js/tex-svg.js"></script>
     <script src="static/js/html2canvas.min.js"></script>
+    <script src="static/js/history.js"></script>
     <link href="static/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body>
@@ -103,16 +118,21 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
             <input type="checkbox" id="setting_method_use_SymmetricSOS" checked="checked" style="font-size: 14px; margin-top: 10px; width: 80%" >&nbsp; Use Symmetric SOS</input> -->
         </div>
     </div>
-    <div id="history" style="width:100%; height: 40%; margin-left:10px;">
-        <!-- THIS IS HISTORY -->
+    <hr style="width: 90%; margin-left: 10px; margin-top: 10px; margin-bottom: 10px;">
+    <div id="history_area" style="width:100%; height: 40%; margin-left:10px;">
+        <div id="history_hint" style="font-size: 17px;">History</div>
+        <div id="history_panel" style="width: 90%; height: 85%; overflow-y: auto;">
+            <!-- THIS IS HISTORY -->
+        </div>
     </div>
+    <hr style="width: 90%; margin-left: 10px; margin-top: 10px; margin-bottom: 10px;">
     <div id="settings_gens_perms" style="width:100%; height: 23%; margin-left:10px; font-size: 12px;">
         <div class="row align-items-center" style="font-size: 12px;">
             <div class="col-3">
               <label for="generatorsInput">Generators</label>
             </div>
             <div class="col-6">
-              <input type="text" class="form-control" id="setting_gens_input" placeholder="abc" value="abc" style="height:23px;font-size:12px;">
+              <input type="text" class="form-control" id="setting_gens_input" value="abc" style="height:23px;font-size:12px;">
             </div>
         </div>
         <div class="row" style="font-size: 12px; margin-top: 6px;">
@@ -137,7 +157,7 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
         <div class="row" style="font-size: 12px;">
             <div class="col-3"></div>
             <div class="col-8">
-              <input type="text" class="form-control" id="setting_perm_input" placeholder="[[1,2,0]]" style="height:23px;font-size: 12px;" disabled>
+              <input type="text" class="form-control" id="setting_perm_input" value="[[1,2,0]]" style="height:23px;font-size: 12px;" disabled>
             </div>
         </div>
     </div>
@@ -257,14 +277,14 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
             <button id="output_showformatted" style="width:31%;height:100%">formatted</button> -->
             <div id="output_showlatex"  style="width:30%;height:99%;margin-left:3%;display:inline-block;text-align:center;padding-top: 2%;
             color:rgb(41,50,225);border-bottom: 2px solid blue;"
-            onclick = "ChangeShowType('latex')" 
-            onmouseover="ChangeShowTypeHover('latex',0)" onmouseleave="ChangeShowTypeHover('latex',1)">LaTeX</div>
+            onclick = "changeShowType('latex')" 
+            onmouseover="changeShowTypeHover('latex',0)" onmouseleave="changeShowTypeHover('latex',1)">LaTeX</div>
             <div id="output_showtxt"  style="width:30%;height:99%;display:inline-block;text-align:center;padding-top: 2%;" 
-            onclick = "ChangeShowType('txt')" 
-            onmouseover="ChangeShowTypeHover('txt',0)" onmouseleave="ChangeShowTypeHover('txt',1)">txt</div>
+            onclick = "changeShowType('txt')" 
+            onmouseover="changeShowTypeHover('txt',0)" onmouseleave="changeShowTypeHover('txt',1)">txt</div>
             <div id="output_showformatted"  style="width:33%;height:99%;display:inline-block;text-align:center;padding-top: 2%;" 
-            onclick = "ChangeShowType('formatted')"
-            onmouseover="ChangeShowTypeHover('formatted',0)" onmouseleave="ChangeShowTypeHover('formatted',1)">formatted</div>
+            onclick = "changeShowType('formatted')"
+            onmouseover="changeShowTypeHover('formatted',0)" onmouseleave="changeShowTypeHover('formatted',1)">formatted</div>
         </div>
         <textarea id="output_result" style="border: 1px solid black; border-radius: 8px; font-family:'Times New Roman', Times, serif;
         width: 99%; height: 82.5%; padding-left: 1%; margin-top: 3%; resize: none; font-size: small;" readonly="readonly"></textarea>
@@ -283,16 +303,12 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
     const host = 'http://127.0.0.1:5000'; 
     // const host = 'https://sos.bailili.top';
 
-    let socket = null;
-    let socket_connecting = false;
 
     var sos_poly = '';
     var sos_coeffs = [];
     var sos_deg = 0;
     var sos_results = {latex: '', txt: '', formatted: '', show: 'latex', displaying: 0};
-    var sos_work = {num: 0};
     var sos_variables = {names: [], range: [[-5,0,5],[-5,0,5],[-5,0,5]]};
-
 
     // heatmap triangle
     var heatmap_grids = [];
@@ -329,157 +345,27 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
         }
     }
     CreateVariables();
-
-    function changeNumOfSOS(num){
-        sos_work.num = Math.max(0, num);
-        if (sos_work.num == 0){
-            document.getElementById("sumofsquare").innerHTML = "Sum of Square";
-        }else{
-            document.getElementById("sumofsquare").innerHTML = "Sum of Square (" + sos_work.num + ")";
-        }
-    }
-
-    // functions
-    function connectSocket(callback){
-        if (socket !== null){
-            if (typeof callback === 'function') {
-                callback();
-            }
-            return;
-        }
-        socket = io(host, {reconnectionAttempts: 3});
-        // socket.connect(host);
-        socket.on('connect_error', function(){
-            socket = null;
-            changeNumOfSOS(0);
-        });
-        socket.on('connect', ()=>{
-            if (typeof callback === 'function') {
-                callback();
-            }
-        });
-        socket.on('disconnect', function(){
-            socket = null;
-            sos_poly = '';
-            changeNumOfSOS(0);
-        });
-
-        socket.on('preprocess', function(data){
-        });
-
-        socket.on('rootangents', function(data){
-            let str = data.rootsinfo;
-            // /n -> <br>
-            let i = 0;
-            while (i < str.length){
-                if (str[i] == '\n'){
-                    str = str.slice(0, i) + ' <br> ' + str.slice(i+1, str.length);
-                    i += 5;
-                }
-                ++i;
-            }
-            document.getElementById("rootsinfo").innerHTML = str;
-            
-            str = data.tangents;
-            if (Array.isArray(str)){
-                str = str.join('\n');
-            }
-            document.getElementById("input_tangents").value = str;
-        });
-
-        socket.on('sos', function(data){
-            sos_results.latex = data.latex; 
-            sos_results.txt   = data.txt;
-            sos_results.formatted = data.formatted;
-            document.getElementById('output_result').innerHTML = data[sos_results.show]
-
-            const shadow_box = document.getElementById("shadow_box");
-            let past;
-            if ((past = shadow_box.firstChild)){
-                past.remove();
-            }
-            
-            let str;
-            if (!data.success){
-                str = '\\quad\\quad\\quad{\\rm Failed}\\quad\\quad\\quad';
-            }else{
-                const text_length = sos_results.latex.length;
-                str = sos_results.latex.slice(2, text_length-2);
-                if (str.indexOf('aligned') < 0){ // no aligned environment
-                    if (str.indexOf('\\\\') >= 0){
-                        // 存在换行, 使用 \begin{aligned}
-                        let i = 0;
-                        while (i+1 < str.length){
-                            if (str[i] == '\\' && str[i+1] == '\\'){
-                                str = str.slice(0, i+2) + ' & ' + str.slice(i+2, str.length);
-                                i += 2;        
-                            }
-                            ++i;
-                        }
-                        str = '\\begin{aligned}  \\  &' + str + '\\end{aligned}';
-                    }
-                }
-            }
-
-            changeNumOfSOS(sos_work.num - 1);
-
-            let svg = window.MathJax.tex2svg(str).children[0];
-            // shadow_box.style.height = '80%';
-            shadow_box.appendChild(svg);
-            svg.setAttribute('style', 'width: 95%; height: 90%; margin-top: 2%'); 
-            shadow_box.hidden = "";
-            document.getElementById("shadow").hidden = "";
-            document.getElementById("input_poly").blur();
-            document.getElementById("input_tangents").blur();
-            sos_results.displaying = 1;
-        });
-    }
-
-    function setPermChange(){
-        const x = document.querySelector('input[name="setting_perm"]:checked').value;
-        const p = document.getElementById('setting_perm_input');
-        const nvars = document.getElementById('setting_gens_input').value.length;
-        if (x === 'cyc'){
-            p.disabled = true;
-            p.value = `[[${Array.from({length: nvars}, (_, i) => (i+1) % nvars)}]]`;
-        }else if (x === 'sym'){
-            p.disabled = true;
-            let array1 = Array.from({length: nvars}, (_, i) => (i+1) % nvars);
-            if (nvars <= 2){ p.value = `[[${array1}]]`; return; }
-            let array2 = Array.from({length: nvars}, (_, i) => i % nvars);
-            array2[0] = 1;
-            array2[1] = 0;
-            p.value = `[[${array1}],[${array2}]]`;
-        }else if (x === 'custom'){
-            p.disabled = false;
-        }
-    }
-
-    
-    function setGeneratorsChange(event) {
-        const input = event.target;
-        const currentValue = input.value;
-
-        let validString = '';
-        function isValidChar(char) {
-            const regex = /^[a-z]$/;
-            return regex.test(char) && !['s', 'p'].includes(char) && !validString.includes(char);
-        }
-        for (let i = 0; i < currentValue.length; i++) {
-            const char = currentValue[i];
-            if (isValidChar(char)){
-                validString += char;
-            }
-        }
-        input.value = validString;
-        setPermChange();
-    }
-    document.getElementById('setting_gens_input').addEventListener('input', setGeneratorsChange);
-
-
+</script>
+<script src="static/js/on_change.js"></script>
+<script src="static/js/socket.js"></script>
+<script>
     function preprocessInput(kwargs){
-        const input_poly = document.getElementById('input_poly').value.trim();        
-        
+        const input_poly = document.getElementById('input_poly').value.trim();
+        const cur_data = {
+            poly: input_poly,
+            gens: document.getElementById('setting_gens_input').value,
+            perm_choice: document.querySelector('input[name="setting_perm"]:checked').value,
+            perm: document.getElementById('setting_perm_input').value,
+        };
+        if ((history_data.length === 0) || (JSON.stringify(history_data[0]) !== JSON.stringify(cur_data))){
+            // push to front
+            history_data.unshift(cur_data);
+            if (history_data.length > 100){
+                history_data.pop();
+            }
+            updateHistoryData();
+        }
+
         const parse_undefined = (x, y) => {return typeof(x) === 'undefined'? y: x;}
         kwargs = parse_undefined(kwargs, {})
         let actions = parse_undefined(kwargs.actions, ['findroot']);
@@ -606,57 +492,43 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
         preprocessInput(kwargs);
     }
 
-    function ChangeShowType(x){
-        if (sos_results.show != x){
-            document.getElementById('output_show' + sos_results.show).style.color = 'black';
-            document.getElementById('output_show' + sos_results.show).style.border = 'none';
-            sos_results.show = x;
-            document.getElementById('output_show' + x).style.color = 'rgb(41,50,225)';
-            document.getElementById('output_show' + x).style.borderBottom = '2px solid blue';
-            document.getElementById('output_result').innerHTML = sos_results[x];
-        }else if (x == 'latex'){ // == sos_results.show
-            document.getElementById("shadow_box").hidden = "";
-            document.getElementById("shadow").hidden = "";
-            sos_results.displaying = 1;
-        }
-    }
-
-
-    function ChangeShowTypeHover(x, event){
-        // event == 0: mouseenter    event == 1: mouseleave
-        if (sos_results.show != x){
-            if (event == 0){
-                document.getElementById('output_show' + x).style.color = 'rgb(19,135,245)';
-            }else{
-                document.getElementById('output_show' + x).style.color = 'black';
-            }
-        }
-    }
-
-
     function PolyTools(event){
         if ((event === 'rotate') || (event === 'rotate_reflect') || (event === 'reflect')){
             const input_poly_box = document.getElementById('input_poly');
+            const gens = document.getElementById('setting_gens_input').value;
+            if (gens.length <= 1){
+                return;
+            }
             let txt = input_poly_box.value;
             let result = [];
             if (event === 'rotate'){
                 for (let i = 0, n = txt.length; i < n; ++i){
-                    if (txt[i] === 'a') result.push('b');
-                    else if (txt[i] === 'b') result.push('c');
-                    else if (txt[i] === 'c') result.push('a');
-                    else result.push(txt[i]);
+                    for (let j = 0, m = gens.length; j < m; ++j){
+                        if (txt[i] === gens[j]){
+                            result.push(gens[(j+1)%m]);
+                            break;
+                        }
+                    }
+                    if (j === m){
+                        result.push(txt[i]);
+                    }
                 }
             }else if (event === 'rotate_reflect'){
                 for (let i = 0, n = txt.length; i < n; ++i){
-                    if (txt[i] === 'a') result.push('c');
-                    else if (txt[i] === 'b') result.push('a');
-                    else if (txt[i] === 'c') result.push('b');
-                    else result.push(txt[i]);
+                    for (let j = 0, m = gens.length; j < m; ++j){
+                        if (txt[i] === gens[j]){
+                            result.push(gens[(j-1)%m]);
+                            break;
+                        }
+                    }
+                    if (j === m){
+                        result.push(txt[i]);
+                    }
                 }
             }else if (event === 'reflect'){
                 for (let i = 0, n = txt.length; i < n; ++i){
-                    if (txt[i] === 'b') result.push('a');
-                    else if (txt[i] === 'a') result.push('b');
+                    if (txt[i] ===  gens[1]) result.push(gens[0]);
+                    else if (txt[i] === gens[0]) result.push(gens[1]);
                     else result.push(txt[i]);
                 }
             }
@@ -703,27 +575,5 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
         });
       }
 
-    document.addEventListener('click', function(event) {
-        // 检查点击事件是否发生在弹出框之外
-        if (sos_results.displaying == 1 && !event.target.closest('#shadow_box') && 
-                !event.target.closest('#output_showlatex')){
-            // 如果点击在弹出框之外，则关闭弹出框
-            sos_results.displaying = 0; 
-            // document.getElementById("shadow_box").hidden = "hidden";
-            document.getElementById("shadow").hidden = "hidden";
-        }
-    });
-
-    document.onkeyup = function(e) {
-        // 兼容FF和IE和Opera
-        var event = e || window.event;
-        var key = event.which || event.keyCode || event.charCode;
-        if ((key == 13 || key == 27) && sos_results.displaying == 1){
-            // is displaying
-            sos_results.displaying = 0; 
-            // document.getElementById("shadow_box").hidden = "hidden";
-            document.getElementById("shadow").hidden = "hidden";
-        }
-    };
 </script>
 </html>

@@ -1,6 +1,7 @@
 from typing import List, Tuple, Dict
 
 import sympy as sp
+from sympy.simplify import signsimp
 
 from .utils import is_numer_matrix
 from ...utils import (
@@ -60,7 +61,7 @@ def _decomp_as_sos(
         vecs = [symmetry_half.invarraylize(U[i,:], gens).as_expr() for i in range(U.shape[0])]
         if factor:
             vecs = [_.factor() for _ in vecs]
-        vecs = [symmetry.cyclic_sum(S[i] * monomial_expr * vecs[i]**2, gens) for i in range(U.shape[0])]
+        vecs = [symmetry.cyclic_sum(signsimp(S[i] * monomial_expr * vecs[i]**2), gens) for i in range(U.shape[0])]
 
         exprs.extend(vecs)
     return sp.Add(*exprs)

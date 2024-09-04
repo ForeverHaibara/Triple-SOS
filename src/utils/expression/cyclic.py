@@ -3,12 +3,10 @@ from numbers import Number
 from typing import List
 
 import sympy as sp
-from sympy.core import sympify, S, Mul
-from sympy.core.add import Add
+from sympy.core import sympify, S, Mul, Add, Symbol
 from sympy.core.containers import Dict
 from sympy.core.numbers import zoo, nan
 from sympy.core.parameters import global_parameters
-from sympy.core.sympify import sympify
 from sympy.combinatorics import Permutation, PermutationGroup, CyclicGroup, SymmetricGroup
 from sympy.printing.latex import LatexPrinter
 from sympy.printing.str import StrPrinter
@@ -136,7 +134,8 @@ class CyclicExpr(sp.Expr):
             expr0 = expr
             for translation in cls._generate_all_translations(symbols, perm, full=True):
                 # find the simplest form up to permutation
-                expr2 = signsimp(expr0.xreplace(translation))
+                # expr2 = signsimp(expr0.xreplace(translation)) # signsimp is unstable
+                expr2 = expr0.xreplace(translation)
                 if expr.compare(expr2) > 0:
                     expr = expr2
 
@@ -242,9 +241,10 @@ class CyclicExpr(sp.Expr):
             (0 1 2)(3 4 5)]))
 
         When the replacements are not symbols, yet not cyclic with respect to its permutation group,
-        an error will be raised. Use subs() to expand the cyclic expression and perform substitutions instead.
+        the expression will be expanded.
 
-        >>> SymmetricSum(a**2, (a, b, c)).xreplace({a:a*b, b:b*c, c:c*a}) # doctest: +Raises(ValueError)
+        >>> SymmetricSum(a**2, (a, b, c)).xreplace({a:a*b, b:b*c, c:c*a})
+        2*a**2*b**2 + 2*a**2*c**2 + 2*b**2*c**2
         """
         return super().xreplace(*args, **kwargs)
 
@@ -255,10 +255,20 @@ class CyclicExpr(sp.Expr):
         # first substitute the expression
         arg0, changed0 = self.args[0]._xreplace(rule)
 
-        # if we are replacing symbols to f(symbols)...
-        # we check whether the symmetry of the replacement rule agrees with the permutation group
+        # Case A. if we are replacing symbols to symbols
         rule_vars = set(rule.keys())
         self_vars = set(self.symbols)
+        changed_vars = rule_vars.intersection(self_vars)
+        for var in changed_vars:
+            if not (isinstance(rule[var], Symbol) and (rule[var] not in self_vars)):
+                # the replacement is not cyclic with respect to the permutation group
+                break
+        else:
+            new_symbols = tuple(rule.get(s, s) for s in self.symbols)
+            return self.func(arg0, new_symbols, self.perm), changed0
+
+        # Case B. if we are replacing symbols to f(symbols)...
+        # we check whether the symmetry of the replacement rule agrees with the permutation group
         if isinstance(rule, (dict, Dict)) and rule_vars == self_vars:
             for perm_dict in self._generate_all_translations(self.symbols, self.perm, full=False):
                  # checking only generators is sufficient
@@ -272,7 +282,6 @@ class CyclicExpr(sp.Expr):
                 # return _func_perm(self.base_func, self.args[0], self.symbols, self.perm)._xreplace(rule)
 
         # # fall back to the default implementation
-        changed_vars = rule_vars.intersection(self_vars)
         if len(changed_vars) >= len(self_vars) - 1:
             # every symbol is changed, so we can't preserve the cyclic property
             return _func_perm(self.base_func, self.args[0], self.symbols, self.perm)._xreplace(rule)

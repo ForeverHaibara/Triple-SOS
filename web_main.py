@@ -133,6 +133,8 @@ def preprocess():
     gens = req.get('gens', 'abc')
     gens = tuple(sp.Symbol(_) for _ in gens)
     perm = SOS_Manager._parse_perm_group(req.get('perm'))
+    req['gens'] = gens
+    req['perm'] = perm
 
     result = SOS_Manager.set_poly(
         req['poly'],
@@ -257,13 +259,16 @@ def sum_of_square(sid, **kwargs):
 
         solution = SOS_Manager.sum_of_square(
             kwargs['poly'],
+            gens = kwargs['gens'],
+            perm = kwargs['perm'],
             rootsinfo = rootsinfo,
             method_order = method_order,
             configs = kwargs['configs']
         )
 
         assert solution is not None, 'No solution found.'
-    except:
+    except Exception as e:
+        # raise e
         return socketio.emit(
             'sos', {'latex': '', 'txt': '', 'formatted': '', 'success': False}, to=sid
         )

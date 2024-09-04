@@ -1,19 +1,23 @@
 # author: https://github.com/ForeverHaibara
 from ast import literal_eval
-from typing import Tuple, List, Dict, Any, Union, Callable
+from typing import Tuple, List, Dict, Optional, Any, Union, Callable
 
 import sympy as sp
+from sympy import Expr, Poly, Symbol
 from sympy.simplify import signsimp
 from sympy.combinatorics import Permutation, PermutationGroup, CyclicGroup
 
-from ..utils import Solution, SolutionSimple, CyclicExpr, deg, poly_get_factor_form, poly_get_standard_form, latex_coeffs
+from ..utils import (
+    Solution, SolutionSimple, CyclicExpr, CyclicSum, CyclicProduct,
+    deg, poly_get_factor_form, poly_get_standard_form, latex_coeffs
+)
 from ..utils.text_process import preprocess_text, degree_of_zero, coefficient_triangle
 from ..utils.roots import RootsInfo, GridRender, findroot
 from ..core.sum_of_square import sum_of_square, DEFAULT_CONFIGS
 from ..core.linsos import root_tangents
 
 
-def _default_polynomial_check(poly: sp.Poly, method_order: List[str]) -> List[str]:
+def _default_polynomial_check(poly: Poly, method_order: List[str]) -> List[str]:
     """
     Check the degree and nvars of a polynomial to decide
     whether a method is applicabls. For too high degree polynomials,
@@ -22,7 +26,7 @@ def _default_polynomial_check(poly: sp.Poly, method_order: List[str]) -> List[st
     is_hom = int(poly.is_homogeneous)
     nvars = len(poly.gens) + (1 - is_hom)
     degree = poly.total_degree()
-    upper_bounds = [30, 30, 30, 12, 10, 8, 6, 4, 4, 4, 4]
+    upper_bounds = [30, 30, 30, 12, 11, 8, 6, 4, 4, 4, 4]
     if degree > upper_bounds[nvars]:
         # remove LinearSOS and SDPSOS
         method_order = [method for method in method_order if method not in ('LinearSOS', 'SDPSOS')]
@@ -47,7 +51,7 @@ class SOS_Manager():
     @classmethod
     def set_poly(cls, 
             txt: str,
-            gens: Tuple[sp.Symbol] = CONFIG_DEFAULT_GENS,
+            gens: Tuple[Symbol] = CONFIG_DEFAULT_GENS,
             perm: PermutationGroup = CONFIG_DEFAULT_PERM,
             render_triangle: bool = True,
             render_grid: bool = True,
@@ -110,12 +114,12 @@ class SOS_Manager():
         return return_dict
 
     @classmethod
-    def check_poly(cls, poly: sp.Poly) -> bool:
+    def check_poly(cls, poly: Poly) -> bool:
         """
         Check whether a polynomial is a valid polynomial:
         3-var, non-zero, homogeneous, and numerical domain.
         """
-        if poly is None or (not isinstance(poly, sp.Poly)):
+        if poly is None or (not isinstance(poly, Poly)):
             return False
         if len(poly.gens) != 3 or (poly.is_zero) or (not poly.is_homogeneous) or deg(poly) < 1:
             return False
@@ -124,7 +128,7 @@ class SOS_Manager():
         return True
 
     @classmethod
-    def get_standard_form(cls, poly: sp.Poly, formatt: str = 'short') -> Union[str, None]:
+    def get_standard_form(cls, poly: Poly, formatt: str = 'short') -> Union[str, None]:
         """
         Rewrite a polynomial in the standard form.
         """
@@ -155,12 +159,19 @@ class SOS_Manager():
         return roots_info
 
     @classmethod
-    def sum_of_square(cls, poly, rootsinfo = None, method_order = None, configs = DEFAULT_CONFIGS):
+    def sum_of_square(cls,
+            poly,
+            gens = CONFIG_DEFAULT_GENS,
+            perm = CONFIG_DEFAULT_PERM,
+            rootsinfo = None,
+            method_order = None,
+            configs = DEFAULT_CONFIGS
+        ):
         """
         Perform the sum of square decomposition of a polynomial.
         The keyword arguments are passed to the function sum_of_square.
         """
-        if poly is None or (not isinstance(poly, sp.Poly)):
+        if poly is None or (not isinstance(poly, Poly)):
             return None
 
         if cls.CONFIG_ALLOW_NONSTANDARD_GENS:
@@ -186,7 +197,8 @@ class SOS_Manager():
             configs = configs
         )
         if cls.CONFIG_STANDARDIZE_CYCLICEXPR:
-            solution = _standardize_cyclic_expr(solution)
+            replacement = _get_standardized_replacement(gens, perm)
+            solution = _standardize_solution_perm(solution, replacement)
         return solution
 
     # def save_heatmap(self, poly, *args, **kwargs):
@@ -257,28 +269,71 @@ def _render_LaTeX(a, path, usetex=True, show=False, dpi=500, fontsize=20):
 
 
 
-def _standardize_cyclic_expr_default_replacement(x: sp.Expr):
-    if not x.has(CyclicExpr):
-        return x
-    if not isinstance(x, CyclicExpr):
-        return x.func(*[_standardize_cyclic_expr_default_replacement(_) for _ in x.args])
-    if x.args[1] == sp.symbols("a b c"):
-        if x.is_cyclic_group:
+def _get_standardized_replacement(
+        gens: Tuple[Symbol] = sp.symbols("a b c"),
+        perm: PermutationGroup = CyclicGroup(3)
+    ) -> Callable[[Expr], Expr]:
+    """
+    Get a replacement function to standardize the cyclic expressions in a polynomial.
+    """
+    # if perm.is_trivial:
+    #     return lambda x: x.doit()
+    def replacement(x: Expr) -> Expr:
+        if not x.has(CyclicExpr):
             return x
-        elif x.is_symmetric_group:
-            a, b, c = sp.symbols("a b c")
-            # x_degen = x.func(signsimp(x.args[0]), x.args[1], CyclicGroup(3))
-            # x_reflect = x.func(signsimp(x.args[0].xreplace({a:b,b:a})), x.args[1], CyclicGroup(3))
-            # return x_degen + x_reflect
-            v = (signsimp(x.args[0]) + signsimp(x.args[0].xreplace({a:b,b:a}))).together()
-            v = _standardize_cyclic_expr_default_replacement(v)
-            return x.func(v, x.args[1], CyclicGroup(3))
+        if not isinstance(x, CyclicExpr):
+            # we do not need to call recursion because sympy.Expr.replace will do it
+            return x # .func(*[replacement(_) for _ in x.args])
+        if x.args[1] == gens:
+            # if x.is_cyclic_group:
+            #     return x
+            # elif x.is_symmetric_group:
+            #     a, b, c = gens
+            #     v = (signsimp(x.args[0]) + signsimp(x.args[0].xreplace({a:b,b:a}))).together()
+            #     v = replacement(v)
+            #     return x.func(v, x.args[1], perm)
 
-    return x.doit(deep=False)
+            if x.args[2] == perm:
+                # 1. if the expression is already with respect to the default cyclic group
+                return x
+            elif x.args[2].is_subgroup(perm):
+                # 2. check whether the expression is symmetric with respect to the given permutation group
+                # e.g. CyclicSum(a*(b-c)**2, (a,b,c), CyclicGroup(3)) is also symmetric with respect to SymmetricGroup(3)
+                expr = x.doit(deep=False)
+                expr2 = x.func(x.args[0], x.args[1], perm).doit(deep=False)
+                mul = perm.order() // x.args[2].order()
+                if isinstance(x, CyclicSum):
+                    if signsimp(mul * expr - expr2) == 0:
+                        # we only check signsimp rather than mul * expr == expr2
+                        return x.func(x.args[0], x.args[1], perm) / mul
+                # elif isinstance(x, CyclicProduct):
+                #     if signsimp(expr**mul - expr2) == 0:
+                #         return x.func(x.args[0], x.args[1], perm) ** (1/mul)
+            elif perm.is_subgroup(x.args[2]):
+                # 3. check whether the given permutation group is a subgroup of the expression's permutation group
+                transversals = x.args[2].coset_transversal(perm)
+                translations = [dict(zip(x.args[1], p(x.args[1]))) for p in transversals]
+                trans_perm = [dict(zip(x.args[1], p(x.args[1]))) for p in perm.elements]
+                exprs = [x.args[0].xreplace(t) for t in translations]
+                for i, expr in enumerate(exprs):
+                    for t in trans_perm:
+                        # find the simplest form up to permutation
+                        expr2 = (expr.xreplace(t))
+                        if expr.compare(expr2) > 0:
+                            expr = expr2
+                    exprs[i] = expr
+                merged_expr = x.base_func(*(expr for expr in exprs)).together()
+                merged_expr = x.func(merged_expr, x.args[1], perm)
+                return merged_expr
+
+        return x.doit(deep=False)
+    return replacement
 
 
-
-def _standardize_cyclic_expr(solution, replacement=_standardize_cyclic_expr_default_replacement):
+def _standardize_solution_perm(
+        solution: Optional[Union[Solution, Expr]],
+        replacement: Callable[[Expr], Expr]
+    ) -> Optional[Union[Solution, Expr]]:
     """
     For display purpose, we require cyclic expressions to be with respect to default cyclic group.
     """
@@ -286,13 +341,14 @@ def _standardize_cyclic_expr(solution, replacement=_standardize_cyclic_expr_defa
         return None
     if isinstance(solution, Solution):
         if isinstance(solution, SolutionSimple):
-            solution.numerator = _standardize_cyclic_expr(solution.numerator, replacement)
-            solution.multiplier = _standardize_cyclic_expr(solution.multiplier, replacement)
+            solution.numerator = _standardize_solution_perm(solution.numerator, replacement).together()
+            solution.multiplier = _standardize_solution_perm(solution.multiplier, replacement).together()
             solution.solution = solution.numerator / solution.multiplier
             solution.as_content_primitive()
             solution.signsimp()
         else:
-            solution.solution = _standardize_cyclic_expr(solution.solution, replacement)
+            solution.solution = _standardize_solution_perm(solution.solution, replacement)
         return solution
+
     solution = solution.replace(lambda x: isinstance(x, CyclicExpr), replacement)
     return solution

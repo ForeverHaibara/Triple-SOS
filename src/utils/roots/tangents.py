@@ -7,9 +7,9 @@ from ...utils.polytools import deg
 class RootTangent():
     __slots__ = ('expr', 'poly', 'degree', '_length')
 
-    def __init__(self, expr):
+    def __init__(self, expr, symbols = sp.symbols('a b c')):
         self.expr = expr
-        self.poly = expr.doit().as_poly(*sp.symbols('a b c'))
+        self.poly = expr.doit().as_poly(symbols)
         self.degree = deg(self.poly)
         self._length = len(self.poly.coeffs())
 

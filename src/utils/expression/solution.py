@@ -285,7 +285,7 @@ class SolutionSimple(Solution):
                 s_multiplier = "%s %s"%(self.multiplier, self._str_f())
         else:
             s_multiplier = get_str(self.multiplier)
-            if isinstance(self.multiplier, sp.Add):
+            if isinstance(self.multiplier, sp.Add) or isinstance(self.multiplier, CyclicSum):
             # if s_multiplier[-1] != ')':
                 s_multiplier = "%s %s"%(add_paren(s_multiplier), self._str_f())
             else:

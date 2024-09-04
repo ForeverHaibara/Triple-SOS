@@ -7,14 +7,14 @@ from sympy.core.singleton import S
 
 from ...utils import arraylize, arraylize_sp, MonomialReduction, MonomialPerm
 
-class CallableExpr():
+class _callable_expr():
     """
     Callable expression is a wrapper of sympy expression that can be called with symbols,
     it is more like a function.
 
     Example
     ========
-    >>> CallableExpr.from_expr(a**3*b**2, (a,b))((x,y))
+    >>> _callable_expr.from_expr(a**3*b**2, (a,b))((x,y))
     x**3*y**2
     """
     __slots__ = ['_func']
@@ -24,7 +24,7 @@ class CallableExpr():
         return self._func(symbols)
 
     @classmethod
-    def from_expr(cls, expr: sp.Expr, symbols: Tuple[sp.Symbol, ...]) -> 'CallableExpr':
+    def from_expr(cls, expr: sp.Expr, symbols: Tuple[sp.Symbol, ...]) -> '_callable_expr':
         return cls(lambda s: expr.xreplace(dict(zip(symbols, s))))
 
     def default(self, nvars: int) -> sp.Expr:
@@ -65,12 +65,12 @@ class LinearBasisTangent(LinearBasis):
     __slots__ = ['_powers', '_tangent']
     def __init__(self, powers: Tuple[int, ...], tangent: sp.Expr, symbols: Tuple[sp.Symbol, ...]):
         self._powers = powers
-        self._tangent = CallableExpr.from_expr(tangent, symbols)
+        self._tangent = _callable_expr.from_expr(tangent, symbols)
     @property
     def powers(self) -> Tuple[int, ...]:
         return self._powers
     @property
-    def tangent(self) -> CallableExpr:
+    def tangent(self) -> _callable_expr:
         return self._tangent
     def nvars(self) -> int:
         return len(self._powers)
@@ -78,7 +78,7 @@ class LinearBasisTangent(LinearBasis):
         return sp.Mul(*(x**i for x, i in zip(symbols, self._powers))) * self._tangent(symbols)
 
     @classmethod
-    def from_callable_expr(cls, powers: Tuple[int, ...], tangent: CallableExpr) -> 'LinearBasisTangent':
+    def from_callable_expr(cls, powers: Tuple[int, ...], tangent: _callable_expr) -> 'LinearBasisTangent':
         """
         Create a LinearBasisTangent from powers and a callable expression. This is intended for
         internal use only.
@@ -97,7 +97,7 @@ class LinearBasisTangent(LinearBasis):
         degree = degree - tangent.as_poly(symbols).total_degree()
         if degree < 0:
             return []
-        tangent = CallableExpr.from_expr(tangent, symbols)
+        tangent = _callable_expr.from_expr(tangent, symbols)
         return [LinearBasisTangent.from_callable_expr(p, tangent) for p in \
                 _degree_combinations([1 for _ in symbols], degree, require_equal=require_equal)]
 
@@ -253,6 +253,6 @@ def _get_tangent_cache_key(tangent: sp.Expr, symbols: Tuple[int, ...]) -> Option
     """
     Given a tangent and symbols, return the cache key if it is in the cache.
     """
-    callable_tangent = CallableExpr.from_expr(tangent, symbols)
+    callable_tangent = _callable_expr.from_expr(tangent, symbols)
     std_tangent = callable_tangent.default(len(symbols))
     return _CACHED_TANGENT_BASIS.get(std_tangent)

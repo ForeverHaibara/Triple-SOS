@@ -14,7 +14,7 @@ from .correction import linear_correction
 from .updegree import lift_degree
 from .solution import SolutionLinear
 from ..solver import homogenize
-from ...utils import arraylize, findroot, RootsInfo, identify_symmetry
+from ...utils import arraylize, findroot, RootsInfo, RootTangent, identify_symmetry
 from ...utils.basis_generator import MonomialPerm, MonomialReduction, MonomialHomogeneousFull
 
 
@@ -25,15 +25,17 @@ LINPROG_OPTIONS = {
     }
 }
 
-def _prepare_tangents(symbols, prepared_tangents = [], rootsinfo = None):
+def _prepare_tangents(symbols, prepared_tangents = [], rootsinfo: RootsInfo = None):
     """
     Combine appointed tangents and tangents generated from rootsinfo.
     Roots that do not vanish at strict roots will be filtered out.
     """
     if rootsinfo is not None:
         # filter out tangents that do not vanish at strict roots
-        prepared_tangents = rootsinfo.filter_tangents(prepared_tangents)
-        tangents = prepared_tangents + [t.as_expr()**2 for t in rootsinfo.tangents]
+        prepared_tangents = rootsinfo.filter_tangents([
+            RootTangent(expr, symbols) if isinstance(expr, sp.Expr) else expr for expr in prepared_tangents
+        ])
+        tangents = [t.as_expr() for t in prepared_tangents] + [t.as_expr()**2 for t in rootsinfo.tangents]
     else:
         tangents = prepared_tangents.copy()
         
@@ -76,7 +78,7 @@ def _prepare_basis(
         rootsinfo = None,
         basis: Optional[List[LinearBasis]] = None,
         symmetry: Union[MonomialReduction, PermutationGroup] = PermutationGroup()
-    ):
+    ) -> Tuple[List[LinearBasis], np.ndarray]:
     """
     Prepare basis for linear programming.
 
@@ -128,7 +130,10 @@ def _prepare_basis(
     #         basis += LinearBasisTangent.generate(degree, tangent = tangent)
     #     basis += CachedCommonLinearBasisTangent.generate(degree)
 
-    all_arrays = np.vstack([non_zero_array for non_zero_array in all_arrays if len(non_zero_array) > 0])
+    all_arrays = [non_zero_array for non_zero_array in all_arrays if non_zero_array.size > 0]
+    if len(all_arrays) <= 0:
+        return [], np.array([])
+    all_arrays = np.vstack(all_arrays)
     # print('Time for converting basis to arrays:', time() - time0)
     return all_basis, all_arrays
 
