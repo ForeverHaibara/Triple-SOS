@@ -83,10 +83,12 @@ class RootsInfo():
             return root
 
         for root in self.roots:
+            if len(root) != 3:
+                continue
             a, b, c = root
-            for i in range(3):
-                if c == 0:
-                    a, b, c = b, c, a
+            # FIXME
+            if c == 0:
+                a, b, c = b, c, a
             a, b = a/c, b/c
             value = float(root.eval(self.poly, rational = True))
             if abs(value) < sp.S(10)**(-15):
@@ -146,12 +148,11 @@ class RootsInfo():
             return tangents
 
         filtered_tangents = []
-        a, b, c = self.poly.gens
         for t in tangents:
-            for r in nontrivial_roots:
-                s = sum(r)/3
-                u, v, w = r[0]/s, r[1]/s, r[2]/s
-            if all(abs(t(u,v,w)) < tolerance for r in nontrivial_roots):
+            def norm_r(r):
+                s = sum(abs(ri) for ri in r)/len(r)
+                return [ri / s for ri in r]
+            if all(abs(t(*norm_r(r))) < tolerance for r in nontrivial_roots):
                 filtered_tangents.append(t)
 
         if tangents is self.tangents: # pointer

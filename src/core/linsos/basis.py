@@ -122,7 +122,7 @@ class LinearBasisTangent(LinearBasis):
 
         p = tangent.as_poly(symbols)
         d = p.total_degree()
-        if p.is_zero or (not p.domain.is_Numerical) or d > degree:
+        if p.is_zero or len(p.free_symbols_in_domain) or d > degree:
             return [], np.array([], dtype='float')
 
         quad_diff = quadratic_difference(symbols)

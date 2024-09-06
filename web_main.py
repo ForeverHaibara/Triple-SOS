@@ -197,7 +197,12 @@ def findroot(sid, **kwargs):
             tangents = [_.as_factor_form(remove_minus_sign=True) for _ in rootsinfo.tangents]
             socketio.emit(
                 'rootangents',
-                {'rootsinfo': rootsinfo.gui_description, 'tangents': tangents}, to=sid
+                {
+                    'rootsinfo': rootsinfo.gui_description,
+                    'tangents': tangents,
+                    'timestamp': kwargs.get('timestamp', 0)
+                },
+                to=sid
             )
         elif 'sos' in kwargs['actions']:
             tangents = []
@@ -270,7 +275,10 @@ def sum_of_square(sid, **kwargs):
     except Exception as e:
         # raise e
         return socketio.emit(
-            'sos', {'latex': '', 'txt': '', 'formatted': '', 'success': False}, to=sid
+            'sos',
+            {'latex': '', 'txt': '', 'formatted': '', 'success': False,
+                'timestamp': kwargs.get('timestamp', 0)},
+            to=sid
         )
 
     if isinstance(solution, SolutionSimple):
@@ -280,7 +288,8 @@ def sum_of_square(sid, **kwargs):
 
     return socketio.emit(
         'sos',
-        {'latex': latex_, 'txt': solution.str_txt, 'formatted': solution.str_formatted, 'success': True},
+        {'latex': latex_, 'txt': solution.str_txt, 'formatted': solution.str_formatted, 'success': True,
+            'timestamp': kwargs.get('timestamp', 0)},
         to=sid
     )
 
@@ -292,15 +301,23 @@ def get_latex_coeffs():
     Parameters
     ----------
     poly : str
-        The input polynomial.    
+        The input polynomial.
+    gens : str
+        The generator variables.
+    perm : str
+        The permutation group.
 
     Returns
     ----------
     coeffs : str
         The LaTeX representation of the coefficients
     """
-    poly = request.get_json()['poly']
-    coeffs = SOS_Manager.latex_coeffs(poly, tabular = True, document = True, zeros='\\textcolor{lightgray}')
+    req = request.get_json()
+    poly = req['poly']
+    gens = tuple(sp.Symbol(_) for _ in req.get('gens', 'abc'))
+    perm = SOS_Manager._parse_perm_group(req.get('perm'))
+    coeffs = SOS_Manager.latex_coeffs(poly, gens, perm,
+                tabular = True, document = True, zeros='\\textcolor{lightgray}')
     return jsonify(coeffs = coeffs)
 
 

@@ -58,7 +58,7 @@ class RootTangent():
             self.expr = expr
             self.poly = self.poly / norm
             return self
-        return RootTangent(expr)
+        return RootTangent(expr, self.poly.gens)
 
 
 def root_tangents(rootsinfo):

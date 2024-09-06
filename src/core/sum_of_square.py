@@ -94,6 +94,7 @@ def sum_of_square_multiple(
         polys: Union[List[Union[sp.Poly, str]], str],
         method_order: List[str] = METHOD_ORDER,
         configs: Dict[str, Dict] = DEFAULT_CONFIGS,
+        poly_reader_configs: Dict[str, Any] = {},
         save_result: Union[bool, str] = True,
         save_solution_method: Union[str, Callable] = 'str_formatted',
         verbose_sos: bool = False,
@@ -114,6 +115,8 @@ def sum_of_square_multiple(
     configs : Dict[str, Dict]
         The configurations for each method. Defaults to DEFAULT_CONFIGS.
         It should be a dictionary containing the method names as keys and the kwargs as values.
+    poly_reader_configs : Dict[str, Any]
+        The configurations for the PolyReader. It should be a dictionary containing the kwargs.
     save_result : Union[bool, str]
         Whether to save the results. If True, it will be saved to a csv file in the same directory
         as the input file. If False, it will not be saved. If it is a string, it will be treated
@@ -147,8 +150,9 @@ def sum_of_square_multiple(
         if key != 'StructuralSOS':
             configs[key]['verbose'] = verbose_sos
 
-
-    read_polys = PolyReader(polys, ignore_errors=True)
+    if 'ignore_errors' not in poly_reader_configs:
+        poly_reader_configs['ignore_errors'] = True
+    read_polys = PolyReader(polys, **poly_reader_configs)
     read_polys_zip = zip(read_polys.polys, read_polys)
     if verbose_progress:
         try:

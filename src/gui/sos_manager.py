@@ -208,9 +208,9 @@ class SOS_Manager():
     #     return self._poly_info['grid'].save_coeffs(*args, **kwargs)
 
     @classmethod
-    def latex_coeffs(cls, txt, *args, **kwargs):
+    def latex_coeffs(cls, txt, gens=CONFIG_DEFAULT_GENS, perm=CONFIG_DEFAULT_PERM, *args, **kwargs):
         try:
-            poly, denom = preprocess_text(txt, cancel = True)
+            poly, denom = preprocess_text(txt, gens=gens, perm=perm, return_type='frac')
         except:
             return ''
         return latex_coeffs(poly, *args, **kwargs)

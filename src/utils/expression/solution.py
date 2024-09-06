@@ -416,8 +416,18 @@ class SolutionSimple(Solution):
         """
         # return self.multiplier.as_content_primitive()
         v, m = self.multiplier.as_content_primitive()
+        if v < 0:
+            v, m = -v, -m
         self.multiplier = m
-        self.numerator = S.One/v * self.numerator
+
+        inv_v = S.One/v
+        self.numerator = inv_v * self.numerator
+        v, m = self.numerator.as_content_primitive()
+        if v < 0:
+            v, m = -v, -m
+        if isinstance(m, sp.Add):
+            self.numerator = sp.Add(*[v * arg for arg in m.args])
+
         self.solution = self.numerator / self.multiplier
         return self
 

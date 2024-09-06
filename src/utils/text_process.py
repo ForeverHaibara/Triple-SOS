@@ -436,7 +436,10 @@ class PolyReader:
     """
     def __init__(self,
         polys: Union[List[Union[sp.Poly, str]], str],
-        ignore_errors: bool = False
+        gens: Tuple[Symbol] = sp.symbols('a b c'),
+        perm: Optional[PermutationGroup] = None,
+        ignore_errors: bool = False,
+        **kwargs
     ):
         """
         Read polynomials from a file or a list of strings.
@@ -448,9 +451,15 @@ class PolyReader:
             The polynomials to read. If it is a string, it will be treated as a file name.
             If it is a list of strings, each string will be treated as a polynomial.
             Empty lines will be ignored.
+        gens : Tuple[Symbol]
+            The generators of the polynomial.
+        perm : Optional[PermutationGroup]
+            The permutation group of the expression. If None, it will be cyclic group.
         ignore_errors : bool    
             Whether to ignore errors. If True, invalid polynomials will be skipped by
             yielding None. If False, invalid polynomials will raise a ValueError.
+        kwargs:
+            Other arguments for preprocess_text.
 
         Yields
         ----------
@@ -474,6 +483,13 @@ class PolyReader:
         ))
 
         self.polys = polys
+
+        self.kwargs = kwargs
+        if 'gens' not in self.kwargs:
+            self.kwargs['gens'] = gens
+        if 'perm' not in self.kwargs:
+            self.kwargs['perm'] = perm
+
         self.index = 0
         self.ignore_errors = ignore_errors
 
@@ -486,7 +502,7 @@ class PolyReader:
         poly = self.polys[self.index]
         if isinstance(poly, str):
             try:
-                poly = preprocess_text(poly)
+                poly = preprocess_text(poly, **self.kwargs)
             except:
                 if not self.ignore_errors:
                     raise ValueError(f'Invalid polynomial at index {self.index}: {poly}')
