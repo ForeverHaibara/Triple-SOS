@@ -40,8 +40,8 @@ class RootTangent():
     def subs(self, *args, **kwargs):
         return self.expr.doit().subs(*args, **kwargs)
 
-    def as_factor_form(self, remove_minus_sign = False):
-        s = poly_get_factor_form(self.poly)
+    def as_factor_form(self, remove_minus_sign = False, **kwargs):
+        s = poly_get_factor_form(self.poly, **kwargs)
         if remove_minus_sign and s.startswith('-'):
             s = s[1:]
         return s

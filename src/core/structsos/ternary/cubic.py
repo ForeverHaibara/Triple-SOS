@@ -554,6 +554,8 @@ def _sos_struct_nonhom_cubic_symmetric(coeff, real = False):
     1+2abc+s(a2-2ab)
 
     s(2a2-4ab)+3abc+s(a)
+
+    s(a2-ab)-2s(a)+4+2abc
     """
     if coeff((3,0,0)) or coeff((2,1,0)):
         return None

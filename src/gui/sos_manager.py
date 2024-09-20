@@ -44,6 +44,7 @@ class SOS_Manager():
 
     CONFIG_DEFAULT_GENS = sp.symbols("a b c")
     CONFIG_DEFAULT_PERM = CyclicGroup(3)
+    CONFIG_RESTRICT_INPUT_CHARS = True
     CONFIG_METHOD_CHECK = _default_polynomial_check
     CONFIG_ALLOW_NONSTANDARD_GENS = True
     CONFIG_STANDARDIZE_CYCLICEXPR = True
@@ -76,6 +77,11 @@ class SOS_Manager():
         dict
             A dictionary containing the polynomial, degree, text, coefficient triangle, and grid heatmap.
         """
+        if cls.CONFIG_RESTRICT_INPUT_CHARS:
+            # forbid non-ascii characters to avoid potential security risks
+            if not all(ord(_) < 128 for _ in txt):
+                return None
+
         try:
             poly, denom = preprocess_text(txt, gens=gens, perm=perm, return_type='frac')
 
@@ -91,9 +97,9 @@ class SOS_Manager():
 
         try:
             if factor:
-                txt2 = poly_get_factor_form(poly)
+                txt2 = poly_get_factor_form(poly, perm)
             elif not denom.degree() == 0:
-                txt2 = poly_get_standard_form(poly)
+                txt2 = poly_get_standard_form(poly, perm)
             if isinstance(txt2, str):
                 txt = txt2
         except:
@@ -128,16 +134,18 @@ class SOS_Manager():
         return True
 
     @classmethod
-    def get_standard_form(cls, poly: Poly, formatt: str = 'short') -> Union[str, None]:
+    def get_standard_form(cls, poly: Poly, perm: PermutationGroup = CONFIG_DEFAULT_PERM, **kwargs) -> str:
         """
         Rewrite a polynomial in the standard form.
         """
-        if (not cls.check_poly(poly)) or not (poly.domain in (sp.ZZ, sp.QQ, sp.RR)):
-            return None
-        if formatt == 'short':
-            return poly_get_standard_form(poly, formatt = 'short') #, is_cyc = self._poly_info['iscyc'])
-        elif formatt == 'factor':
-            return poly_get_factor_form(poly)
+        return poly_get_standard_form(poly, perm, **kwargs)
+
+    @classmethod
+    def get_factor_form(cls, poly: Poly, perm: PermutationGroup = CONFIG_DEFAULT_PERM, **kwargs) -> str:
+        """
+        Rewrite a polynomial in the factor form.
+        """
+        return poly_get_factor_form(poly, perm, **kwargs)
 
     @classmethod
     def findroot(cls, poly, grid = None, verbose = True):

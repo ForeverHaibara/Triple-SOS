@@ -194,7 +194,7 @@ def findroot(sid, **kwargs):
         rootsinfo = SOS_Manager.findroot(poly, grid, verbose=False)
         tangents = kwargs.get('tangents')
         if tangents is None:
-            tangents = [_.as_factor_form(remove_minus_sign=True) for _ in rootsinfo.tangents]
+            tangents = [_.as_factor_form(remove_minus_sign=True, perm=kwargs['perm']) for _ in rootsinfo.tangents]
             socketio.emit(
                 'rootangents',
                 {
@@ -209,7 +209,7 @@ def findroot(sid, **kwargs):
             for tg in kwargs['tangents'].split('\n'):
                 if len(tg) > 0:
                     try:
-                        tg = pl(tg)
+                        tg = pl(tg, gens=kwargs['gens'], perm=kwargs['perm'])
                         if tg is not None:
                             # and (tg.domain in (sp.ZZ, sp.QQ)):
                             tg = tg.as_expr()

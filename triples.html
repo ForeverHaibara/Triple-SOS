@@ -360,9 +360,10 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
 <script>
     function preprocessInput(kwargs){
         const input_poly = document.getElementById('input_poly').value.trim();
-        if (input_poly.length === 0){
+        if ((input_poly.length === 0)||(!/^[\x00-\x7F]*$/.test(input_poly))){
             return;
         }
+
         const cur_data = {
             poly: input_poly,
             gens: document.getElementById('setting_gens_input').value,
