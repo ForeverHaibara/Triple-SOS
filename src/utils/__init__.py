@@ -11,7 +11,7 @@ from .polytools import (
 )
 
 from .expression import (
-    Coeff, CyclicExpr, CyclicSum, CyclicProduct, SymmetricSum, SymmetricProduct, is_cyclic_expr,
+    Coeff, CyclicExpr, CyclicSum, CyclicProduct, SymmetricSum, SymmetricProduct, is_cyclic_expr, identify_symmetry,
     poly_get_factor_form, poly_get_standard_form, latex_coeffs,
     Solution, SolutionSimple, congruence,
 )
@@ -33,7 +33,7 @@ __all__ = [
     'preprocess_text', 'pl', 'PolyReader',
     'deg', 'verify_hom_cyclic', 'verify_is_symmetric', 
     'monom_of', 'convex_hull_poly',
-    'Coeff', 'CyclicExpr', 'CyclicSum', 'CyclicProduct', 'SymmetricSum', 'SymmetricProduct', 'is_cyclic_expr',
+    'Coeff', 'CyclicExpr', 'CyclicSum', 'CyclicProduct', 'SymmetricSum', 'SymmetricProduct', 'is_cyclic_expr', 'identify_symmetry',
     'poly_get_factor_form', 'poly_get_standard_form', 'latex_coeffs',
     'Solution', 'SolutionSimple', 'congruence',
     'RootsInfo', 'Root', 'RootAlgebraic', 'RootRational', 'RootTernary', 'RootAlgebraicTernary', 'RootRationalTernary',

@@ -7,9 +7,9 @@ from ...utils.polytools import deg
 class RootTangent():
     __slots__ = ('expr', 'poly', 'degree', '_length')
 
-    def __init__(self, expr):
+    def __init__(self, expr, symbols = sp.symbols('a b c')):
         self.expr = expr
-        self.poly = expr.doit().as_poly(*sp.symbols('a b c'))
+        self.poly = expr.doit().as_poly(symbols)
         self.degree = deg(self.poly)
         self._length = len(self.poly.coeffs())
 
@@ -40,8 +40,8 @@ class RootTangent():
     def subs(self, *args, **kwargs):
         return self.expr.doit().subs(*args, **kwargs)
 
-    def as_factor_form(self, remove_minus_sign = False):
-        s = poly_get_factor_form(self.poly)
+    def as_factor_form(self, remove_minus_sign = False, **kwargs):
+        s = poly_get_factor_form(self.poly, **kwargs)
         if remove_minus_sign and s.startswith('-'):
             s = s[1:]
         return s
@@ -58,7 +58,7 @@ class RootTangent():
             self.expr = expr
             self.poly = self.poly / norm
             return self
-        return RootTangent(expr)
+        return RootTangent(expr, self.poly.gens)
 
 
 def root_tangents(rootsinfo):

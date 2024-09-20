@@ -554,6 +554,8 @@ def _sos_struct_nonhom_cubic_symmetric(coeff, real = False):
     1+2abc+s(a2-2ab)
 
     s(2a2-4ab)+3abc+s(a)
+
+    s(a2-ab)-2s(a)+4+2abc
     """
     if coeff((3,0,0)) or coeff((2,1,0)):
         return None
@@ -624,7 +626,7 @@ def _sos_struct_nonhom_cubic_symmetric(coeff, real = False):
 
         x = rationalize_func(sp.Poly([9, -12*c2, 4*c100], sp.Symbol('x')), validation=check_x,
                             validation_initial=lambda x: x >= 2*c2/3, direction = 1)
-    print(x, get_const(x), 't=',radsimp(c100 / (3*x**2/4)))
+    # print(x, get_const(x), 't =', radsimp(c100 / (3*x**2/4)))
     if x is None:
         return None
     res = get_const(x)

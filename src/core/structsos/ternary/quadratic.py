@@ -71,6 +71,8 @@ def sos_struct_acyclic_quadratic(coeff, real = True):
 
     a2+2b2+5c2+2ac+5ab-6bc
 
+    ab+(sqrt(2)a-b-c)2
+
     References
     -----------
     [1] P. H. Diananda, On non-negative forms in real variables some or all of which are non-negative

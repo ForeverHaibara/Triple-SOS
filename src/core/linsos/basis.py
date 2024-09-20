@@ -1,520 +1,258 @@
-from typing import Union, List
+from typing import Union, Tuple, List, Dict, Callable, Optional
 
-import numpy as np
 import sympy as sp
+import numpy as np
+from sympy.combinatorics import PermutationGroup, Permutation
 from sympy.core.singleton import S
 
-from ...utils import (
-    verify_hom_cyclic, deg, generate_expr, arraylize, arraylize_sp,
-    CyclicSum, CyclicProduct,
-    RootTangent
-)
+from ...utils import arraylize, arraylize_sp, MonomialReduction, MonomialPerm
 
-a, b, c = sp.symbols('a b c')
+class _callable_expr():
+    """
+    Callable expression is a wrapper of sympy expression that can be called with symbols,
+    it is more like a function.
+
+    Example
+    ========
+    >>> _callable_expr.from_expr(a**3*b**2, (a,b))((x,y))
+    x**3*y**2
+    """
+    __slots__ = ['_func']
+    def __init__(self, func: Callable[[Tuple[sp.Symbol, ...]], sp.Expr]):
+        self._func = func
+    def __call__(self, symbols: Tuple[sp.Symbol, ...]) -> sp.Expr:
+        return self._func(symbols)
+
+    @classmethod
+    def from_expr(cls, expr: sp.Expr, symbols: Tuple[sp.Symbol, ...]) -> '_callable_expr':
+        return cls(lambda s: expr.xreplace(dict(zip(symbols, s))))
+
+    def default(self, nvars: int) -> sp.Expr:
+        """
+        Get the defaulted value of the expression given nvars.
+        """
+        symbols = sp.symbols(f'x:{nvars}')
+        return self._func(symbols)
+
 
 class LinearBasis():
-    """
-    Base class for linear basis.
-    """
-    is_cyc = False
-    __slots__ = ('expr_', 'array_', 'array_sp_')
-    def __init__(self, expr_: sp.Expr = None) -> None:
-        self.expr_ = expr_
-        self.array_ = None
-        self.array_sp_ = None
+    def nvars(self) -> int:
+        raise NotImplementedError
+    def _get_default_symbols(self) -> Tuple[sp.Symbol, ...]:
+        return tuple(sp.symbols(f'x:{self.nvars()}'))
+    def as_expr(self, symbols) -> sp.Expr:
+        raise NotImplementedError
+    def as_poly(self, symbols) -> sp.Poly:
+        return self.as_expr(symbols).as_poly(symbols)
+    def degree(self) -> int:
+        return self.as_poly(self._get_default_symbols()).total_degree()
+    def as_array_np(self, **kwargs) -> np.ndarray:
+        return arraylize(self.as_poly(self._get_default_symbols()), **kwargs)
+    def as_array_sp(self, **kwargs) -> sp.Matrix:
+        return arraylize_sp(self.as_poly(self._get_default_symbols()), **kwargs)
 
-    @property
-    def _expr_(self) -> sp.Expr:
-        """
-        Return a sympy expression object if self.expr_ is None.
-        Generated expressions can be cached in self.expr_ for future use.
-        This function (property) can be overrided by subclasses.
-        """
-        return self.expr_
-
-    @property
-    def expr(self) -> sp.Expr:
-        """Sympy expression representation of the basis."""
-        if self.expr_ is not None:
-            return self.expr_
-        return self._expr_
-
-    @property
-    def _array_(self) -> np.ndarray:
-        """Initialize array_ from expr_."""
-        self.array_ = arraylize(self.as_poly(), cyc = self.is_cyc)
-        return self.array_
-
-    @property
-    def array(self) -> np.ndarray:
-        """Numpy array representation of the basis."""
-        if self.array_ is not None:
-            return self.array_
-        return self._array_
-
-    @property
-    def _array_sp_(self) -> sp.Matrix:
-        """Initialize array_sp_ from expr_."""
-        self.array_sp_ = arraylize_sp(self.as_poly(), cyc = self.is_cyc)
-        return self.array_sp_
-
-    @property
-    def array_sp(self) -> sp.Matrix:
-        """Sympy array representation of the basis."""
-        if self.array_sp_ is not None:
-            return self.array_sp_
-        return self._array_sp_
-
-    def __str__(self) -> str:
-        return str(self.expr)
-
-    def __repr__(self) -> str:
-        return str(self.expr)
-
-    def doit(self) -> sp.Expr:
-        return self.expr.doit()
-
-    def as_poly(self) -> sp.Poly:
-        return self.expr.doit().as_poly(a,b,c)
-
-    def as_expr(self) -> sp.Expr:
-        return self.expr
-
-
-class LinearBasisCyclic(LinearBasis):
-    """
-    Base class for cyclic linear basis.
-    """
-    is_cyc = True
-    __slots__ = LinearBasis.__slots__
-    def __init__(self, *args, **kwargs) -> None:
-        super().__init__(*args, **kwargs)
-
-    # @property
-    # def _array_(self):
-    #     # assert isinstance(self.expr, CyclicSum)
-    #     self.array_ = arraylize(self.expr.args[0], cyc = True)
-    #     return self.array_
-
-    # @property
-    # def _array_sp_(self):
-    #     # assert isinstance(self.expr, CyclicSum)
-    #     self.array_sp_ = arraylize_sp(self.expr.args[0], cyc = True)
-    #     return self.array_sp_
-
-
-
-class LinearBasisTangentCyclic(LinearBasisCyclic):
-    """
-    CyclicSum((a-b)^(2i) * (b-c)^(2j) * (c-a)^(2k) * a^m * b^n * c^p * (tangent))
-
-    See LinearBasisTangentCyclic.generate for more details.
-    """
-
-    _cached_poly_square = {}
-    __slots__ = LinearBasis.__slots__ + ('info_', 'tangent_', 'tangent_is_cyc_')
-
-    def __init__(self, i, j, k, m, n, p, tangent = None, tangent_is_cyc = None) -> None:
-        super().__init__()
-        self.info_ = (i, j, k, m, n, p)
-
-        if tangent is not None:
-            self.tangent_ = tangent
-            if tangent_is_cyc is None:
-                tangent_is_cyc = verify_hom_cyclic(tangent.doit().as_poly(a,b,c))[1]
-        else:
-            self.tangent_ = S.One
-            tangent_is_cyc = True
-        self.tangent_is_cyc_ = tangent_is_cyc
-
-    @property
-    def tangent(self) -> sp.Expr:
-        return self.tangent_
-
-    @property
-    def _expr_(self) -> sp.Expr:
-        i, j, k, m, n, p = self.info_
-        if i == j and j == k:
-            if self.tangent_is_cyc_:
-                expr = CyclicProduct((a-b)**(2*i)) * CyclicSum(a**m * b**n * c**p) * self.tangent_
-            else:
-                expr = CyclicProduct((a-b)**(2*i)) * CyclicSum(a**m * b**n * c**p * self.tangent_, evaluate = False)
-        else:
-            if self.tangent_is_cyc_:
-                expr = CyclicSum((a-b)**(2*i) * (b-c)**(2*j) * (c-a)**(2*k) * a**m * b**n * c**p) * self.tangent_
-            else:
-                expr = CyclicSum((a-b)**(2*i) * (b-c)**(2*j) * (c-a)**(2*k) * a**m * b**n * c**p * self.tangent_, evaluate = False)
-        # self.expr_ = expr
-        return expr
-
-    @classmethod
-    def generate(cls, 
-            degree: int,
-            tangent: Union[sp.Expr, RootTangent]
-        ) -> List['LinearBasisTangentCyclic']:
-        """
-        Generate all possible expressions of LinearBasisTangentCyclic with degree = degree, i.e.
-        2*i + 2*j + 2*k + m + n + p + deg(tangent) = degree.
-
-        Parameters
-        ----------
-        degree: int
-            The degree of the LinearBasisTangentCyclic to be generated.
-        tangent: Union[sp.Expr, RootTangent]
-            The tangent to be multiplied to the LinearBasisTangentCyclic.
-
-        Returns
-        ----------
-        rets: List[LinearBasisTangentCyclic]
-            A list of LinearBasisTangentCyclic with degree = degree.
-        """
-        _cached_poly_square = cls._cached_poly_square
-
-        rets = []
-
-        if tangent is not None:
-            tangent_poly = tangent.doit().as_poly(a,b,c)
-            tangent_is_cyc = verify_hom_cyclic(tangent_poly)[1]
-
-            degree -= deg(tangent_poly)
-
-            def _mul_poly(poly, m, n, p):
-                return poly * a**m * b**n * c**p * tangent_poly
-        else:
-            tangent_is_cyc = None
-            def _mul_poly(poly, m, n, p):
-                return poly * a**m * b**n * c**p
-        
-        if degree < 0:
-            return rets
-
-        for p1 in range(degree // 2 + 1):
-            p2 = degree - p1 * 2
-            # p1 = i + j + k, p2 = m + n + p
-
-            for i, j, k in generate_expr(3, p1, cyc = tangent_is_cyc)[1]:
-                poly_ijk = _cached_poly_square.get((i,j,k))
-                if poly_ijk is None:
-                    poly_ijk = ((a-b)**(2*i) * (b-c)**(2*j) * (c-a)**(2*k)).as_poly(a,b,c)
-                    _cached_poly_square[(i,j,k)] = poly_ijk
-
-                for m, n, p in generate_expr(3, p2, cyc = tangent_is_cyc)[1]:
-                    rets.append(cls(i, j, k, m, n, p, tangent, tangent_is_cyc))
-                    rets[-1].array_ = arraylize(_mul_poly(poly_ijk, m, n, p), expand_cyc = True, cyc = True)
-
-        return rets
-
-
-class LinearBasisAMGMCyclic(LinearBasisCyclic):
-    """
-    CyclicSum(a^(i+1)*b^(j)*c^(k-1) + a^(i)*b^(j+1)*c^(k-1) + a^(i-1)*b^(j-1)*c^(k+2) - 3*a^(i)*b^(j)*c^(k))
-    """
-    _cached_basis = {}
-    __slots__ = LinearBasis.__slots__ + ('info_',)
-
-    def __init__(self, i, j, k):
-        super().__init__()
-        self.info_ = (i, j, k)
-    
-    @property
-    def _expr_(self) -> sp.Expr:
-        i, j, k = self.info_
-        expr = CyclicSum(
-            a**(i+1)*b**j*c**(k-1) + a**i*b**(j+1)*c**(k-1) + a**(i-1)*b**(j-1)*c**(k+2) - 3*a**i*b**j*c**k
-        )
-        # self.expr_ = expr
-        return expr
-    
-    @property
-    def _array_sp_(self) -> sp.Matrix:
-        i, j, k = self.info_
-        inv_monoms = generate_expr(3, i + j + k, cyc = True)[0]
-        self.array_sp_ = np.zeros(len(inv_monoms))
-        for coeff, monom in zip((1,1,1,-3), ((i+1,j,k-1), (i,j+1,k-1), (i-1,j-1,k+2), (i,j,k))):
-            for monom_perm in ((monom), (monom[1], monom[2], monom[0]), (monom[2], monom[0], monom[1])):
-                t = inv_monoms.get(monom_perm)
-                if t is not None:
-                    self.array_sp_[t] += coeff
-        return self.array_sp_
-
-    @property
-    def _array_sp_(self) -> sp.Matrix:
-        i, j, k = self.info_
-        inv_monoms = generate_expr(3, i + j + k, cyc = True)[0]
-        self.array_sp_ = sp.zeros(len(inv_monoms), 1)
-        for coeff, monom in zip((1,1,1,-3), ((i+1,j,k-1), (i,j+1,k-1), (i-1,j-1,k+2), (i,j,k))):
-            for monom_perm in ((monom), (monom[1], monom[2], monom[0]), (monom[2], monom[0], monom[1])):
-                t = inv_monoms.get(monom_perm)
-                if t is not None:
-                    self.array_sp_[t] += coeff
-        return self.array_sp_
-
-    @classmethod
-    def generate(cls, degree: int) -> List['LinearBasisAMGMCyclic']:
-        """
-        Generate all AM-GM linear basis with degree = degree.
-
-        Parameters
-        ----------
-        degree: int
-            The degree of the AM-GM linear basis to be generated.
-
-        Returns
-        ----------
-        rets: List[LinearBasisAMGMCyclic]
-            A list of LinearBasisAMGM with degree = degree.
-        """
-        if degree in cls._cached_basis:
-            return cls._cached_basis[degree]
-
-        rets = []
-        for i in range(1, degree - 1):
-            for j in range(1, degree - i):
-                k = degree - i - j
-                rets.append(cls(i, j, k))
-
-        cls._cached_basis[degree] = rets
-        return rets
-
-
-
-class CachedCommonLinearBasisTangentCyclic():
-    """
-    Common tangents for LinearBasisTangentCyclic.
-    This is not a LinearBasis class, but a class that generates basis.
-    See CachedCommonLinearBasisTangentCyclic.generate for more details.
-    """
-    common_tangents = [
-        None,
-        (a**2 - b*c)**2,
-        (a**3 - b*c**2)**2,
-        (a**3 - b**2*c)**2,
-    ]
-
-    _cached_common_linear_basis = {}
-
-    @classmethod
-    def generate(cls, degree: int):
-        """
-        Generate all possible expressions of LinearBasisTangentCyclic with degree = degree for
-        tangent in CachedCommonLinearBasisTangentCyclic.common_tangents.
-        """
-        if degree in cls._cached_common_linear_basis:
-            return cls._cached_common_linear_basis[degree]
-
-        rets = []
-        for tangent in cls.common_tangents:
-            rets += LinearBasisTangentCyclic.generate(degree, tangent = tangent)
-
-        cls._cached_common_linear_basis[degree] = rets
-        return rets
-
-
-class CachedCommonLinearBasisSpecialCyclic():
-    """
-    Common special linear basis.
-    This is not a LinearBasis class, but a class that generates basis.
-    See CachedCommonLinearBasisSpecialCyclic.generate for more details.
-    """
-    _cached_basis = {
-        3: [
-            CyclicSum(a*(a-b)*(a-c)),
-            CyclicSum(a**2*b-a*b*c),
-            CyclicSum(a**2*c-a*b*c),
-        ],
-        6: [
-            CyclicProduct(a) * CyclicSum(a*(a-b)*(a-c)),
-            CyclicProduct(a) * CyclicSum(a**2*b-a*b*c),
-            CyclicProduct(a) * CyclicSum(a**2*c-a*b*c),
-            CyclicSum(a**2*(a**2-b**2)*(a**2-c**2)),
-            CyclicSum(a*b*(a*b-a*c)*(a*b-b*c)), 
-            CyclicSum(a*(a-b)*(a-c)) ** 2,
-            CyclicSum(a**4*(a-b)*(a-c))
-        ]
-    }
-
-    @classmethod
-    def generate(cls, degree: int) -> List[LinearBasisCyclic]:
-        """
-        Generate some special linear basis with degree = degree.
-        Typically these include Schur inequalities.
-
-        Parameters
-        ----------
-        degree: int
-            The degree of the AM-GM linear basis to be generated.
-
-        Returns
-        ----------
-        rets: List[LinearBasisCyclic]
-            A list of LinearBasisCyclic with degree = degree.
-        """
-        if degree >= 3 and degree in cls._cached_basis:
-            if not isinstance(cls._cached_basis[degree][0], LinearBasis):
-                cls._cached_basis[degree] = [LinearBasisCyclic(x) for x in cls._cached_basis[degree]]
-
-        else:
-            # register new basis
-            basis = []
-            if degree >= 3:
-                # Schur
-                basis.append(CyclicSum(a**(degree - 2)*(a-b)*(a-c)))
-
-                if degree >= 7:
-                    if degree % 2 == 1:
-                        basis.append(CyclicSum(
-                            a**(degree//2-2)*(a-b)*(a-c)) * CyclicSum(a**(degree//2-1)*(a-b)*(a-c))
-                        )
-                    else:
-                        basis.append(CyclicSum(a**(degree//2-2)*(a-b)*(a-c)) ** 2)
-
-            cls._cached_basis[degree] = [LinearBasisCyclic(x) for x in basis]
-
-        return cls._cached_basis[degree]
-
+class LinearBasisExpr(LinearBasis):
+    __slots__ = ['_expr', '_symbols']
+    def __init__(self, expr: sp.Expr, symbols: Tuple[int, ...]):
+        self._expr = expr.as_expr()
+        self._symbols = symbols
+    def nvars(self) -> int:
+        return len(self._symbols)
+    def as_expr(self, symbols) -> sp.Expr:
+        return self._expr.xreplace(dict(zip(self._symbols, symbols)))
 
 class LinearBasisTangent(LinearBasis):
-    """
-    ((a-b)^(2i) * (b-c)^(2j) * (c-a)^(2k) * a^m * b^n * c^p * (tangent))
-
-    See LinearBasisTangentCyclic.generate for more details.
-    """
-    __slots__ = LinearBasis.__slots__ + ('info_', 'tangent_')
-    def __init__(self, i, j, k, m, n, p, tangent = None) -> None:
-        super().__init__()
-        self.info_ = (i, j, k, m, n, p)
-        if tangent is None:
-            self.tangent_ = S.One
-        else:
-            self.tangent_ = tangent
-
+    __slots__ = ['_powers', '_tangent']
+    def __init__(self, powers: Tuple[int, ...], tangent: sp.Expr, symbols: Tuple[sp.Symbol, ...]):
+        self._powers = powers
+        self._tangent = _callable_expr.from_expr(tangent, symbols)
     @property
-    def tangent(self) -> sp.Expr:
-        return self.tangent_
-
+    def powers(self) -> Tuple[int, ...]:
+        return self._powers
     @property
-    def _expr_(self) -> sp.Expr:
-        i, j, k, m, n, p = self.info_
-        expr = (a-b)**(2*i) * (b-c)**(2*j) * (c-a)**(2*k) * a**m * b**n * c**p * self.tangent_
-        # self.expr_ = expr
-        return expr
+    def tangent(self) -> _callable_expr:
+        return self._tangent
+    def nvars(self) -> int:
+        return len(self._powers)
+    def as_expr(self, symbols) -> sp.Expr:
+        return sp.Mul(*(x**i for x, i in zip(symbols, self._powers))) * self._tangent(symbols)
 
     @classmethod
-    def generate(cls,
-            degree: int, 
-            tangent: Union[sp.Expr, RootTangent]
-        ) -> List['LinearBasisTangent']:
+    def from_callable_expr(cls, powers: Tuple[int, ...], tangent: _callable_expr) -> 'LinearBasisTangent':
         """
-        Generate all possible expressions of LinearBasisTangent with degree = degree.
-
-        Parameters
-        ----------
-        degree: int
-            The degree of the LinearBasisTangent to be generated.
-        tangent: Union[sp.Expr, RootTangent]
-            The tangent to be multiplied to the LinearBasisTangent.
-
-        Returns
-        ----------
-        rets: List[LinearBasisTangent]
-            A list of LinearBasisTangent with degree = degree.
+        Create a LinearBasisTangent from powers and a callable expression. This is intended for
+        internal use only.
         """
-        rets = []
+        obj = cls.__new__(cls)
+        obj._powers = powers
+        obj._tangent = tangent
+        return obj
 
-        if tangent is not None:
-            tangent_poly = tangent.doit().as_poly(a,b,c)
-            degree -= deg(tangent_poly)
-
-            def _mul_poly(poly, m, n, p):
-                return poly * a**m * b**n * c**p * tangent_poly
-        else:
-            def _mul_poly(poly, m, n, p):
-                return poly * a**m * b**n * c**p
-        
+    @classmethod
+    def generate(self, tangent: sp.Expr, symbols: Tuple[int, ...], degree: int, require_equal: bool = True) -> List['LinearBasisTangent']:
+        """
+        Generate all possible linear bases of the form x1^a1 * x2^a2 * ... * xn^an * tangent
+        with total degree == degree or total degree <= degree.        
+        """
+        degree = degree - tangent.as_poly(symbols).total_degree()
         if degree < 0:
-            return rets
-
-        for p1 in range(degree // 2 + 1):
-            p2 = degree - p1 * 2
-            # p1 = i + j + k, p2 = m + n + p
-
-            for i, j, k in generate_expr(3, p1, cyc = False)[1]:
-                poly_ijk = ((a-b)**(2*i) * (b-c)**(2*j) * (c-a)**(2*k)).as_poly(a,b,c)
-                for m, n, p in generate_expr(3, p2, cyc = False)[1]:
-                    rets.append(cls(i, j, k, m, n, p, tangent))
-                    rets[-1].array_ = arraylize(_mul_poly(poly_ijk, m, n, p), expand_cyc = False, cyc = False)
-
-        return rets
-
-
-class LinearBasisAMGM(LinearBasis):
-    """
-    a^(i+1)*b^(j)*c^(k-1) + a^(i)*b^(j+1)*c^(k-1) + a^(i-1)*b^(j-1)*c^(k+2) - 3*a^(i)*b^(j)*c^(k)
-    """
-    __slots__ = LinearBasis.__slots__ + ('info_',)
-
-    def __init__(self, i, j, k):
-        super().__init__()
-        self.info_ = (i, j, k)
-    
-    @property
-    def _expr_(self) -> sp.Expr:
-        i, j, k = self.info_
-        expr = a**(i+1)*b**j*c**(k-1) + a**i*b**(j+1)*c**(k-1) + a**(i-1)*b**(j-1)*c**(k+2) - 3*a**i*b**j*c**k
-        # self.expr_ = expr
-        return expr
+            return []
+        tangent = _callable_expr.from_expr(tangent, symbols)
+        return [LinearBasisTangent.from_callable_expr(p, tangent) for p in \
+                _degree_combinations([1 for _ in symbols], degree, require_equal=require_equal)]
 
     @classmethod
-    def generate(cls, degree: int) -> List[LinearBasis]:
+    def generate_quad_diff(self, 
+            tangent: sp.Expr, symbols: Tuple[int, ...], degree: int, symmetry: PermutationGroup
+        ) -> Tuple[List['LinearBasisTangent'], np.ndarray]:
         """
-        Generate all AM-GM linear basis with degree = degree.
-
-        Parameters
-        ----------
-        degree: int
-            The degree of the AM-GM linear basis to be generated.
-
-        Returns
-        ----------
-        rets: List[LinearBasis]
-            A list of LinearBasis with degree = degree.
+        Generate all possible linear bases of the form x1^a1 * x2^a2 * ... * xn^an * (x1-x2)^(2b_12) * ... * (xi-xj)^(2b_ij) * tangent
+        with total degree == degree.
+        Also, return the matrix representation of the bases.
         """
-        raise NotImplementedError
+        basis, mat, perm_group = None, None, None
+        cache = _get_tangent_cache_key(tangent, symbols)
+        if cache is not None:
+            perm_group = symmetry.to_perm_group(len(symbols)) if isinstance(symmetry, MonomialReduction) else symmetry
+            basis = cache.get((degree, len(symbols)))
+            if basis is not None:
+                mat = cache.get((degree, perm_group))
+                if mat is not None:
+                    return basis, mat
+
+        p = tangent.as_poly(symbols)
+        d = p.total_degree()
+        if p.is_zero or len(p.free_symbols_in_domain) or d > degree:
+            return [], np.array([], dtype='float')
+
+        quad_diff = quadratic_difference(symbols)
+        cross_tangents = cross_exprs(quad_diff, symbols, degree - d)
+        if basis is None:
+            # no cache, generate the bases first
+            basis = []
+            for t in cross_tangents:
+                basis += LinearBasisTangent.generate(t * tangent, symbols, degree, require_equal=True)
+
+        if mat is None:
+            # convert the bases to matrix
+            # mat = np.array([x.as_array_np(expand_cyc=True, symmetry=symmetry) for x in basis]) # too slow
+            mat = [0] * len(basis)
+            def tuple_sum(t1: Tuple[int, ...], t2: Tuple[int, ...]) -> Tuple[int, ...]:
+                return tuple(x + y for x, y in zip(t1, t2))
+
+            mat_ind = 0
+            if not isinstance(symmetry, MonomialReduction):
+                symmetry = MonomialPerm(symmetry)
+            poly_from_dict = sp.Poly.from_dict
+            for t in cross_tangents:
+                p2 = t.as_poly(symbols) * p
+                p2dict = p2.as_dict()
+                for power in  _degree_combinations([1 for _ in symbols], degree - p2.homogeneous_order(), require_equal=True):
+                    new_p_dict = dict((tuple_sum(power, k), v) for k, v in p2dict.items())
+                    new_p = poly_from_dict(new_p_dict, symbols)
+                    mat[mat_ind] = symmetry.arraylize(new_p, expand_cyc=True)
+                    mat_ind += 1
+            
+            mat = np.vstack(mat)
+
+        if cache is not None:
+            # cache the result
+            cache[(degree, len(symbols))] = basis
+            cache[(degree, perm_group)] = mat
+
+        return basis, mat
 
 
-class CachedCommonLinearBasisTangent():
+def _degree_combinations(d_list: List[int], degree: int, require_equal = False) -> List[Tuple[int, ...]]:
     """
-    Common tangents for LinearBasisTangent.
-    This is not a LinearBasis class, but a class that generates basis.
-    See CachedCommonLinearBasisTangent.generate for more details.
+    Find a1, a2, ..., an such that a1*d1 + a2*d2 + ... + an*dn <= degree.
     """
-    common_tangents = [
-        None,
-        (a**2 - b*c)**2,
-        (b**2 - a*c)**2,
-        (c**2 - a*b)**2,
-        (a**3 - b*c**2)**2,
-        (a**3 - b**2*c)**2,
-        (b**3 - a*c**2)**2,
-        (b**3 - a**2*c)**2,
-        (c**3 - a*b**2)**2,
-        (c**3 - a**2*b)**2,
+    n = len(d_list)
+    if n == 0:
+        return []
+
+    powers = []
+    i = 0
+    current_degree = 0
+    current_powers = [0 for _ in range(n)]
+    while True:
+        if i == n - 1:
+            if degree >= current_degree:
+                if not require_equal:
+                    for j in range(1 + (degree - current_degree)//d_list[i]):
+                        current_powers[i] = j
+                        powers.append(tuple(current_powers))
+                elif (degree - current_degree) % d_list[i] == 0:
+                    current_powers[i] = (degree - current_degree) // d_list[i]
+                    powers.append(tuple(current_powers))
+            i -= 1
+            current_powers[i] += 1
+            current_degree += d_list[i]
+        else:
+            if current_degree > degree:
+                # reset the current power
+                current_degree -= d_list[i] * current_powers[i]
+                current_powers[i] = 0
+                i -= 1
+                if i < 0:
+                    break
+                current_powers[i] += 1
+                current_degree += d_list[i]
+            else:
+                i += 1
+    return powers
+
+def cross_exprs(exprs: List[sp.Expr], symbols: Tuple[sp.Symbol, ...], degree: int) -> List[sp.Expr]:
+    """
+    Generate cross products of exprs within given degree.
+    """
+    polys = [_.as_poly(symbols) for _ in exprs]
+    poly_degrees = [_.total_degree() for _ in polys]
+
+    # remove zero-degree polynomials
+    polys = [p for p, d in zip(polys, poly_degrees) if d > 0]
+    poly_degrees = [d for d in poly_degrees if d > 0]
+    if len(polys) == 0:
+        return []
+
+    # find all a1*d1 + a2*d2 + ... + an*dn <= degree
+    powers = _degree_combinations(poly_degrees, degree)
+    # map the powers to expressions
+    return [sp.Mul(*(x**i for x, i in zip(exprs, p))) for p in powers]
+
+def quadratic_difference(symbols: Tuple[sp.Symbol, ...]) -> List[sp.Expr]:
+    """
+    Generate all expressions of the form (ai - aj)^2
+
+    Example
+    ========
+    >>> quadratic_difference((a, b, c))
+    [(a - b)**2, (a - c)**2, (b - c)**2]
+    """
+    exprs = []
+    for i in range(len(symbols)):
+        for j in range(i + 1, len(symbols)):
+            exprs.append((symbols[i] - symbols[j])**2)
+    return exprs
+
+
+
+def _define_common_tangents() -> List[sp.Expr]:
+    # define keys of bases that should be cached
+    a, b, c, d = sp.symbols('x:4')
+    return [
+        S.One,
+        (a**2 - b*c)**2, (b**2 - a*c)**2, (c**2 - a*b)**2,
+        (a**3 - b*c**2)**2, (a**3 - b**2*c)**2, (b**3 - a*c**2)**2,
+        (b**3 - a**2*c)**2, (c**3 - a*b**2)**2, (c**3 - a**2*b)**2,
     ]
 
-    _cached_common_linear_basis = {}
+_CACHED_TANGENT_BASIS = dict((k, {}) for k in _define_common_tangents())
 
-    @classmethod
-    def generate(cls, degree: int):
-        """
-        Generate all possible expressions of LinearBasisTangent with degree = degree for
-        tangent in CachedCommonLinearBasisTangent.common_tangents.
-        """
-        if degree in cls._cached_common_linear_basis:
-            return cls._cached_common_linear_basis[degree]
-
-        rets = []
-        for tangent in cls.common_tangents:
-            rets += LinearBasisTangent.generate(degree, tangent = tangent)
-
-        cls._cached_common_linear_basis[degree] = rets
-        return rets
+def _get_tangent_cache_key(tangent: sp.Expr, symbols: Tuple[int, ...]) -> Optional[Dict]:
+    """
+    Given a tangent and symbols, return the cache key if it is in the cache.
+    """
+    callable_tangent = _callable_expr.from_expr(tangent, symbols)
+    std_tangent = callable_tangent.default(len(symbols))
+    return _CACHED_TANGENT_BASIS.get(std_tangent)

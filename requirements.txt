@@ -5,3 +5,6 @@ picos==2.3.12
 pillow
 gradio==3.44.4
 gmpy2
+
+# For enhanced performance, consider installing python-flint (compatible with CPython 3.9-3.12):
+# pip install python-flint

@@ -2,7 +2,7 @@ from typing import Union, Optional, Dict, List, Tuple, Callable
 
 import numpy as np
 import sympy as sp
-from sympy.combinatorics import Permutation, PermutationGroup
+from sympy.combinatorics import Permutation, PermutationGroup, CyclicGroup
 
 def _integer_bisection(f: Callable[[int], int], left: int, right: int, v: int = 0) -> int:
     """
@@ -73,6 +73,12 @@ class MonomialReduction():
         Return the order of the permutation group.
         """
         return len(self.permute((0,) * nvars))
+
+    def to_perm_group(self, nvars: int) -> PermutationGroup:
+        """
+        Return the permutation group of the reduction rule.
+        """
+        raise NotImplementedError
 
     @classmethod
     def from_poly(cls, poly: sp.Poly) -> 'MonomialReduction':
@@ -184,6 +190,9 @@ class MonomialReduction():
         """
         Permute the vector representation of a polynomial according to the permutation group.
         When full is True, the function returns a matrix with all permutations of the monoms.
+
+        Note that the vector representation is on the base of MonomialReduction class, which does
+        not reduce any monomials by symmetry.
         """
         if vec.shape[1] != 1:
             raise ValueError("Input vec should be a column vector.")
@@ -332,6 +341,9 @@ class MonomialPerm(MonomialHomogeneous):
     def base(self) -> 'MonomialHomogeneousFull':
         return MonomialHomogeneousFull()
 
+    def to_perm_group(self, nvars: Optional[int] = None) -> PermutationGroup:
+        return self._perm_group
+
     def permute(self, monom: Tuple[int, ...]) -> List[Tuple[int, ...]]:
         return [tuple(perm(monom)) for perm in self._all_perms]
 
@@ -387,6 +399,11 @@ class MonomialHomogeneousFull(MonomialHomogeneous, MonomialFull):
     def order(self, nvars: int = 0) -> int:
         return 1
 
+    def to_perm_group(self, nvars: Optional[int] = None) -> PermutationGroup:
+        if nvars is None:
+            return PermutationGroup()
+        return PermutationGroup(Permutation(list(range(nvars))))
+
     def is_standard_monom(self, monom: Tuple[int]) -> bool:
         return True
 
@@ -418,6 +435,9 @@ class MonomialCyclic(MonomialHomogeneous):
     
     def order(self, nvars: int) -> int:
         return nvars
+
+    def to_perm_group(self, nvars: int) -> PermutationGroup:
+        return CyclicGroup(nvars)
 
     def _standard_monom(self, monom: Tuple[int, ...]) -> Tuple[int, ...]:
         # first find the largest in the monom
@@ -502,6 +522,8 @@ def _parse_options(**options) -> MonomialReduction:
             return value()
         elif isinstance(value, MonomialReduction):
             return value
+        elif isinstance(value, PermutationGroup):
+            return MonomialPerm(value)
 
     hom = options.get('hom', True)
     cyc = options.get('cyc', False)
@@ -529,3 +551,5 @@ def invarraylize(array: Union[List, np.ndarray, sp.Matrix], gens: List[sp.Symbol
 def generate_expr(nvars: int, degree: int, **options) -> Tuple[Dict[Tuple[int, ...], int], List[Tuple[int, ...]]]:
     option = _parse_options(**options)
     return option._register_monoms(nvars, degree)
+
+

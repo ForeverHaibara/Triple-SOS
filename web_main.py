@@ -130,8 +130,16 @@ def preprocess():
     """
     req = request.get_json()
 
+    gens = req.get('gens', 'abc')
+    gens = tuple(sp.Symbol(_) for _ in gens)
+    perm = SOS_Manager._parse_perm_group(req.get('perm'))
+    req['gens'] = gens
+    req['perm'] = perm
+
     result = SOS_Manager.set_poly(
         req['poly'],
+        gens = gens,
+        perm = perm,
         render_triangle = True,
         render_grid = True,
         factor = req.get('factor', False)
@@ -186,20 +194,33 @@ def findroot(sid, **kwargs):
         rootsinfo = SOS_Manager.findroot(poly, grid, verbose=False)
         tangents = kwargs.get('tangents')
         if tangents is None:
-            tangents = [_.as_factor_form(remove_minus_sign=True) for _ in rootsinfo.tangents]
+            tangents = [_.as_factor_form(remove_minus_sign=True, perm=kwargs['perm']) for _ in rootsinfo.tangents]
             socketio.emit(
                 'rootangents',
-                {'rootsinfo': rootsinfo.gui_description, 'tangents': tangents}, to=sid
+                {
+                    'rootsinfo': rootsinfo.gui_description,
+                    'tangents': tangents,
+                    'timestamp': kwargs.get('timestamp', 0)
+                },
+                to=sid
             )
         elif 'sos' in kwargs['actions']:
             tangents = []
             for tg in kwargs['tangents'].split('\n'):
                 if len(tg) > 0:
                     try:
-                        tg = pl(tg)
-                        if tg is not None and (tg.domain in (sp.ZZ, sp.QQ)):
+                        tg = pl(tg, gens=kwargs['gens'], perm=kwargs['perm'])
+                        if tg is not None:
+                            # and (tg.domain in (sp.ZZ, sp.QQ)):
                             tg = tg.as_expr()
-                            tangents.append(RootTangent(tg))
+                            # tangents.append(RootTangent(tg))
+                            if 'configs' not in kwargs:
+                                kwargs['configs'] = {'LinearSOS': {'tangents': []}}
+                            elif 'LinearSOS' not in kwargs['configs']:
+                                kwargs['configs']['LinearSOS'] = {'tangents': []}
+                            elif 'tangents' not in kwargs['configs']['LinearSOS']:
+                                kwargs['configs']['LinearSOS']['tangents'] = []
+                            kwargs['configs']['LinearSOS']['tangents'].append(tg**2)
                     except:
                         pass
             rootsinfo.tangents = tangents
@@ -243,15 +264,21 @@ def sum_of_square(sid, **kwargs):
 
         solution = SOS_Manager.sum_of_square(
             kwargs['poly'],
+            gens = kwargs['gens'],
+            perm = kwargs['perm'],
             rootsinfo = rootsinfo,
             method_order = method_order,
             configs = kwargs['configs']
         )
 
         assert solution is not None, 'No solution found.'
-    except:
+    except Exception as e:
+        # raise e
         return socketio.emit(
-            'sos', {'latex': '', 'txt': '', 'formatted': '', 'success': False}, to=sid
+            'sos',
+            {'latex': '', 'txt': '', 'formatted': '', 'success': False,
+                'timestamp': kwargs.get('timestamp', 0)},
+            to=sid
         )
 
     if isinstance(solution, SolutionSimple):
@@ -261,7 +288,8 @@ def sum_of_square(sid, **kwargs):
 
     return socketio.emit(
         'sos',
-        {'latex': latex_, 'txt': solution.str_txt, 'formatted': solution.str_formatted, 'success': True},
+        {'latex': latex_, 'txt': solution.str_txt, 'formatted': solution.str_formatted, 'success': True,
+            'timestamp': kwargs.get('timestamp', 0)},
         to=sid
     )
 
@@ -273,15 +301,23 @@ def get_latex_coeffs():
     Parameters
     ----------
     poly : str
-        The input polynomial.    
+        The input polynomial.
+    gens : str
+        The generator variables.
+    perm : str
+        The permutation group.
 
     Returns
     ----------
     coeffs : str
         The LaTeX representation of the coefficients
     """
-    poly = request.get_json()['poly']
-    coeffs = SOS_Manager.latex_coeffs(poly, tabular = True, document = True, zeros='\\textcolor{lightgray}')
+    req = request.get_json()
+    poly = req['poly']
+    gens = tuple(sp.Symbol(_) for _ in req.get('gens', 'abc'))
+    perm = SOS_Manager._parse_perm_group(req.get('perm'))
+    coeffs = SOS_Manager.latex_coeffs(poly, gens, perm,
+                tabular = True, document = True, zeros='\\textcolor{lightgray}')
     return jsonify(coeffs = coeffs)
 
 

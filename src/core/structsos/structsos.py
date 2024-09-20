@@ -5,6 +5,7 @@ from sympy.core.symbol import uniquely_named_symbol
 
 from .utils import Coeff
 from .solution import SolutionStructural, SolutionStructuralSimple
+from .nvars import sos_struct_nvars_quartic_symmetric
 from .sparse import sos_struct_linear, sos_struct_quadratic
 from .ternary import structural_sos_3vars, structural_sos_3vars_nonhom
 from .quarternary import structural_sos_4vars
@@ -141,6 +142,10 @@ def _structural_sos_hom(poly, **kwargs):
         solution = structural_sos_3vars(poly, **kwargs)
     elif nvars == 4:
         solution = structural_sos_4vars(poly, **kwargs)
+
+    if solution is None:
+        solution = sos_struct_nvars_quartic_symmetric(poly)
+
     return solution
 
 

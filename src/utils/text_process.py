@@ -1,42 +1,48 @@
-from typing import Union, List, Tuple
-import re
+from typing import Union, List, Tuple, Optional
+from functools import partial
+# import re
 
-import sympy as sp
-from sympy.polys import Poly
+from sympy import Expr, Poly, Rational, Float, Symbol, sympify, fraction, cancel, latex
+from sympy import symbols as sp_symbols
+from sympy.combinatorics import Permutation, PermutationGroup, CyclicGroup
 
 from .polytools import deg
 
-def next_permute(f: str) -> str:
-    """a^3 * b^2 * c   ->   b^3 * c^2 * a"""
-    return f.translate({97: 98, 98: 99, 99: 97})
-
-def reflect_permute(f: str) -> str:
-    """a^3 * b^2 * c   ->   c^3 * b^2 * a"""
-    return f.translate({97: 99, 98: 97, 99: 98})
-
-def cycle_expansion(f, symbol='s'):
+def cycle_expansion(
+        f: str,
+        symbol: str = 's',
+        gens: Tuple[Symbol] = sp_symbols("a b c"),
+        perm: Optional[PermutationGroup] = None
+    ) -> str:
     """
     Parameters
     -------
     f: str
-        the string of the polynomial with variables a , b , c
+        The string of the polynomial with given gens.
     symbol: char, 's' or 'p'
-        when symbol == 's':
+        When symbol == 's':
             a^3 * b^2 * c   ->   a^3 * b^2 * c + b^3 * c^2 * a + c^3 * a^2 * b
-        when symbol == 'p':
+        When symbol == 'p':
             a^3 * b^2 * c   ->   a^3 * b^2 * c * b^3 * c^2 * a * c^3 * a^2 * b
-        Warning : Please add parenthesis yourself before expansion if necessary
+        Warning : Please add parenthesis yourself before expansion if necessary.
+    gens: Tuple[Symbol]
+        The generators of the polynomial.
+    perm: Optional[PermutationGroup]
+        The permutation group of the expression. If None, it will be cyclic group.
 
     Return
     -------
     a string, the result of cycle expansion
     """
-    fb = next_permute(f)
-    fc = next_permute(fb)
-    if symbol != 'p':
-        return ' + '.join([f, fb, fc])
-    return ' * '.join([f, fb, fc])
+    if perm is None:
+        perm = CyclicGroup(len(gens))
 
+    original_names = [ord(_.name) for _ in gens]
+    translations = [
+        dict(zip(original_names, p(original_names))) for p in perm.elements
+    ]
+    symbol = ' * ' if symbol == 'p' else ' + '
+    return symbol.join(f.translate(t) for t in translations)
 
 ##########################################################################
 #
@@ -44,9 +50,9 @@ def cycle_expansion(f, symbol='s'):
 #
 ##########################################################################
 
-def _preprocess_text_delatex(poly: str):
+def _preprocess_text_delatex(poly: str) -> str:
     """
-    Convert a latex formula to normal representation.
+    Convert a latex formula to standard representation.
     """
 
     # \frac{..}{...} -> (..)/(...)
@@ -88,7 +94,7 @@ def _preprocess_text_delatex(poly: str):
     return poly
 
 
-def _preprocess_text_expansion(poly: str):
+def _preprocess_text_expansion(poly: str, gens: Tuple[Symbol], perm: PermutationGroup) -> str:
     """
     Expand the polynomial with cycle expansion.
 
@@ -99,6 +105,7 @@ def _preprocess_text_expansion(poly: str):
     parenthesis = 0
     paren_depth = [-1]
     cycle_begin = []
+    _cyc_expand = partial(cycle_expansion, gens=gens, perm=perm)
 
     i = 0
     while i < len(poly):
@@ -110,7 +117,7 @@ def _preprocess_text_expansion(poly: str):
         elif poly[i] == ')':
             parenthesis -= 1
             if paren_depth[-1] == parenthesis:
-                tmp = '(' + cycle_expansion(poly[cycle_begin[-1]+1:i+1], symbol=poly[cycle_begin[-1]]) + ')'
+                tmp = '(' + _cyc_expand(poly[cycle_begin[-1]+1:i+1], symbol=poly[cycle_begin[-1]]) + ')'
                 poly = poly[:cycle_begin[-1]] + tmp + poly[i+1:]
                 i = cycle_begin[-1] + len(tmp) - 1
                 paren_depth.pop()
@@ -119,162 +126,160 @@ def _preprocess_text_expansion(poly: str):
     return poly
 
 
-def _preprocess_text_completion(poly: str):
+def _preprocess_text_completion(
+        poly: str,
+        scientific_notation: bool = False,
+        preserve_sqrt: bool = True,
+        preserve_cbrt: bool = False
+    ) -> str:
     """
     Complete the polynomial with * and ^. E.g. 
     1/5a3b2c   ->   1/5*a^3*b^2*c
+
+    Parameters
+    ----------
+    poly: str
+        The polynomial to complete.
+    scientific_notation: bool
+        Whether to parse the scientific notation. If True, 1e2 will be parsed as 100.
+        If False, 1e2 will be parsed as e^2 where e is a free variable.
     """
+    SCI = 'e' if scientific_notation else ''
+    CHECK_SQRT = (lambda poly, i: len(poly) >= i + 5 and poly[i:i+5] == 'sqrt(') if preserve_sqrt else (lambda poly, i: False)
+    CHECK_CBRT = (lambda poly, i: len(poly) >= i + 5 and poly[i:i+5] == 'cbrt(') if preserve_cbrt else (lambda poly, i: False)
     poly = poly.replace(' ','')
     i = 0 
     while i < len(poly) - 1:
         if 48 <= ord(poly[i]) <= 57: # '0'~'9'
-            if poly[i+1] == '(' or (97 <= ord(poly[i+1]) <= 122 and poly[i+1] != 'e'): # alphabets
+            if poly[i+1] == '(' or (97 <= ord(poly[i+1]) <= 122 and poly[i+1] != SCI): # alphabets
                 poly = poly[:i+1] + '*' + poly[i+1:]
                 i += 1
-        elif poly[i] == ')' or (97 <= ord(poly[i]) <= 122 and poly[i] != 'e'): # alphabets
-            if poly[i+1] == '(' or 97 <= ord(poly[i+1]) <= 122:
+        elif poly[i] == ')' or (97 <= ord(poly[i]) <= 122 and poly[i] != SCI): # alphabets
+            if CHECK_SQRT(poly, i) or CHECK_CBRT(poly, i):
+                i += 4
+            elif poly[i+1] == '(' or 97 <= ord(poly[i+1]) <= 122:
                 poly = poly[:i+1] + '*' + poly[i+1:]
                 i += 1
             elif 48 <= ord(poly[i+1]) <= 57: # '0'~'9'
                 poly = poly[:i+1] + '^' + poly[i+1:]  
-                i += 1     
+                i += 1
         i += 1
 
-    poly = poly.replace('s*q*r*t*','sqrt')
     return poly
-
-
-def _preprocess_text_cyclize(poly: str):
-    """
-    Automatically perform cycle expansion on poly if it is not cyclic.
-    """
-    cyc_poly = Poly(cycle_expansion(poly), sp.symbols('a b c'), extension = True)
-    poly = Poly(poly)
-    for coeff in (cyc_poly - 3*poly).coeffs():
-        # some coefficient is larger than tolerance, not cyclic
-        if coeff != 0:
-            return cyc_poly
-    return poly
-
-
-def _preprocess_text_get_domain(poly: str):
-    """
-    Get the domain of a polynomial, e.g.
-    (5^0.5 + 1)/2 a -> QQ(sqrt(5))
-
-    Deprecated. DO NOT USE.
-    """
-    extensions = re.findall('sqrt\((.*?)\)', poly)
-    domain_ext = set()
-    if len(extensions) > 0:
-        for ext in extensions:
-            t = sp.sympify(ext)
-            if isinstance(t, sp.Rational):
-                t_ = abs(sp.ntheory.factor_.core(t.p) * sp.ntheory.factor_.core(t.q))
-                if t_ != 1 and t_ != 0:
-                    domain_ext.add(int(t))
-
-    if len(domain_ext) == 0:
-        return sp.QQ 
-    
-    return sp.QQ.algebraic_field(*tuple(sp.sqrt(i) for i in domain_ext))
 
 
 def preprocess_text(
-        poly,
-        cyc = False, 
-        retText = False, 
-        cancel = False, 
-        variables = None
-    ) -> Union[Poly, Tuple[Poly, Poly]]:
+        poly: str,
+        gens: Tuple[Symbol] = sp_symbols("a b c"),
+        perm: Optional[PermutationGroup] = None,
+        return_type: str = "poly",
+        scientific_notation: bool = False,
+        preserve_sqrt: bool = True,
+        preserve_cbrt: bool = False
+    ) -> Union[str, Expr, Poly, Tuple[Poly, Poly]]:
     """
-    Parse a text to sympy polynomial with respect to a, b, c.
+    Parse a text to sympy polynomial with respect to the given generators conveniently.
+    The function assumes each variable to be a single character.
+    For more general cases, please do not rely on this function.
 
     Parameters
     ----------
-    cyc: bool  
-        check whether the polynomial is cyclic, if not then cyclize it
-    retText: bool
-        whether return the preprocessed text rather than a sympy polynomial
-    cancel: bool
-        whether cancel the denominator when encountering fractions 
+    return_type: str
+        One of ['text', 'expr', 'poly', 'frac'].
+        If 'text', return the text of the polynomial.
+        If 'expr', return the sympy expression of the polynomial.
+        If 'poly', return the sympy polynomial of the polynomial.
+        If 'frac', return a tuple of sympy polynomials (numerator, denominator). If
+            it fails to cancel the polynomial, return (None, None).
+    gens: Tuple[Symbol]
+        The generators of the polynomial.
+    perm: Optional[PermutationGroup]
+        The permutation group of the expression. If None, it will be cyclic group.
+    scientific_notation: bool
+        Whether to parse the scientific notation. If True, 1e2 will be parsed as 100.
+        If False, 1e2 will be parsed as e^2 where e is a free variable.
+    preserve_sqrt: bool
+        Whether to preserve the sqrt function. If True, sqrt will be inferred as square root
+        rather than s*q*r*t.
+    preserve_cbrt: bool
+        Whether to preserve the cbrt function. If True, cbrt will be inferred as cubic root
+        rather than c*b*r*t.
 
     Returns
     -------
-    If cancel == False:
-        return a sympy polynomial.
-        If it fails to parse the polynomial, return None.
-    If cancel == True:
-        return a tuple of sympy polynomials (numerator, denominator).
-        If it fails to parse the polynomial, return (None, None).
+    See return_type.    
     """
     poly = poly.lower()
+
+    if perm is None:
+        perm = CyclicGroup(len(gens))
+
     poly = _preprocess_text_delatex(poly)
-    # dom = preprocess_text_GetDomain(poly)
-    poly = _preprocess_text_expansion(poly)
-    poly = _preprocess_text_completion(poly)
+    poly = _preprocess_text_expansion(poly, gens, perm)
+    poly = _preprocess_text_completion(poly,
+        scientific_notation=scientific_notation,
+        preserve_sqrt=preserve_sqrt,
+        preserve_cbrt=preserve_cbrt
+    )
     
-    if retText:
-        if cyc: return cycle_expansion(poly)
-        else:   return poly
+    if return_type == 'text':
+        return poly
 
-    # if symbols is None:
-    symbols = sp.symbols('a b c')
+    if return_type == 'expr':
+        return sympify(poly)
+    elif return_type == 'frac': 
+        poly = sympify(poly)
 
-    if cancel or (variables is not None):
-        assert (not cyc), 'Cyclic is not enabled when cancel == True or variabels is not None'
-        
-        poly = sp.sympify(poly)
-        if variables is not None: 
-            poly = poly.subs(variables)
-            # for name, value in variables.items():
-            #     try:
-            #         poly = poly.subs(name, value)
-            #     except:
-            #         pass 
-                
-        if cancel:
-            try:
-                frac = sp.fraction(sp.cancel(poly))
-                poly0 = Poly(frac[0], symbols, extension = True)
-                poly1 = Poly(frac[1], symbols, extension = True)
-                return poly0, poly1
-            except:
-                return None, None
-        
         try:
-            poly = Poly(poly, symbols, extension = True)
+            frac = fraction(cancel(poly))
+            poly0 = Poly(frac[0], gens, extension = True)
+            poly1 = Poly(frac[1], gens, extension = True)
+            return poly0, poly1
         except:
-            return None
+            return None, None
     else:
-        if cyc:
-            poly = _preprocess_text_cyclize(poly)
-        else:
-            try:
-                poly = Poly(poly, symbols, extension = True)
-            except:
-                poly = None
+        try:
+            poly = Poly(poly, gens, extension = True)
+        except:
+            poly = None
 
     return poly
 
 
 def pl(*args, **kwargs):
     """
-    Abbreviation for preprocess_text.
+    Parse a text to sympy polynomial with respect to the given generators conveniently.
+    This is a shortcut for preprocess_text.
     """
     return preprocess_text(*args, **kwargs)
+pl = preprocess_text
 
-
-def degree_of_zero(poly):
+def degree_of_zero(
+        poly: str,
+        gens: Tuple[Symbol] = sp_symbols("a b c"),
+        perm: Optional[PermutationGroup] = None,
+        scientific_notation: bool = False,
+        preserve_sqrt: bool = True,
+        preserve_cbrt: bool = False
+    ) -> int:
     """
-    Compute the degree of a homogeneous zero polynomial
+    Infer the degree of a homogeneous zero polynomial
     Idea: delete the additions and substractions, which do not affect the degree.
     """
     poly = poly.lower()
+
+    if perm is None:
+        perm = CyclicGroup(len(gens))
+
     poly = _preprocess_text_delatex(poly)
-    poly = _preprocess_text_expansion(poly)
-    poly = _preprocess_text_completion(poly)
-    
+    poly = _preprocess_text_expansion(poly, gens, perm)
+    poly = _preprocess_text_completion(poly,
+        scientific_notation=scientific_notation,
+        preserve_sqrt=preserve_sqrt,
+        preserve_cbrt=preserve_cbrt
+    )
+    gen_names = [_.name for _ in gens]
+
     i = 0
     length = len(poly)
     bracket = 0
@@ -292,7 +297,7 @@ def degree_of_zero(poly):
                     bracket -= 1
                     if bracket < bracket_cur:
                         break 
-                elif poly[j] in 'abc':
+                elif poly[j] in gen_names:
                     is_constant = False 
                 j += 1
             if is_constant == False:
@@ -313,7 +318,7 @@ def degree_of_zero(poly):
         
     try:
     #     degree = deg(Poly(poly))
-        poly = sp.fraction(sp.sympify(poly))
+        poly = fraction(sympify(poly))
         if poly[1].is_constant():
             degree = deg(Poly(poly[0]))
         else:
@@ -329,21 +334,21 @@ def short_constant_parser(x):
     Parse a sympy constant using limited characters.
     """
     if x.is_Number:
-        if isinstance(x, sp.Rational):
+        if isinstance(x, Rational):
             txt = str(x)
-        elif isinstance(x, sp.Float):
+        elif isinstance(x, Float):
             txt = '%.4f'%(x)
         else:
             v = x.as_numer_denom()
             txt = f'{v[0]}' + (f'/{v[1]}' if v[1] != 1 else '')
-        if len(txt) > 10 and not isinstance(x, sp.Float):
+        if len(txt) > 10 and not isinstance(x, Float):
             txt = '%.4f'%(x)
     else:
         txt = str(x).replace('**','^').replace('*','').replace(' ','')
     return txt
 
 
-def coefficient_triangle(poly: sp.Poly, degree: int = None) -> str:
+def coefficient_triangle(poly: Poly, degree: int = None) -> str:
     """
     Convert the coefficients of a polynomial to a list.
 
@@ -352,7 +357,7 @@ def coefficient_triangle(poly: sp.Poly, degree: int = None) -> str:
 
     Parameters
     ----------
-    poly : sp.Poly
+    poly : Poly
         The polynomial to convert.
     degree : int
         The degree of the polynomial. If None, it will be computed.
@@ -390,11 +395,11 @@ def sdesmos(x, verbose = True):
     Helper function for experiment. The output can be sent as
     input of desmos.
     """
-    a = (sp.latex(x).replace(' ',''))
+    a = (latex(x).replace(' ',''))
     if verbose: print(a)
     return a
 
-def wrap_desmos(x: List[sp.Expr]) -> str:
+def wrap_desmos(x: List[Expr]) -> str:
     """
     Wrap everything in desmos calculator javascript.
     """
@@ -406,7 +411,7 @@ def wrap_desmos(x: List[sp.Expr]) -> str:
     var calculator = Desmos.GraphingCalculator(elt);
     """
     for i, content in enumerate(x):        
-        html_str += "\ncalculator.setExpression({id: '%d', latex: '%s'});"%(i, sp.latex(content).replace('\\','\\\\'))
+        html_str += "\ncalculator.setExpression({id: '%d', latex: '%s'});"%(i, latex(content).replace('\\','\\\\'))
     html_str += "\n</script>"
     return html_str
 
@@ -417,8 +422,11 @@ class PolyReader:
     This is an iterator class.
     """
     def __init__(self,
-        polys: Union[List[Union[sp.Poly, str]], str],
-        ignore_errors: bool = False
+        polys: Union[List[Union[Poly, str]], str],
+        gens: Tuple[Symbol] = sp_symbols("a b c"),
+        perm: Optional[PermutationGroup] = None,
+        ignore_errors: bool = False,
+        **kwargs
     ):
         """
         Read polynomials from a file or a list of strings.
@@ -426,17 +434,23 @@ class PolyReader:
 
         Parameters
         ----------
-        polys : Union[List[Union[sp.Poly, str]], str]
+        polys : Union[List[Union[Poly, str]], str]
             The polynomials to read. If it is a string, it will be treated as a file name.
             If it is a list of strings, each string will be treated as a polynomial.
             Empty lines will be ignored.
+        gens : Tuple[Symbol]
+            The generators of the polynomial.
+        perm : Optional[PermutationGroup]
+            The permutation group of the expression. If None, it will be cyclic group.
         ignore_errors : bool    
             Whether to ignore errors. If True, invalid polynomials will be skipped by
             yielding None. If False, invalid polynomials will raise a ValueError.
+        kwargs:
+            Other arguments for preprocess_text.
 
         Yields
         ----------
-        sp.Poly
+        Poly
             The read polynomials.
         """
         self.source = None
@@ -451,11 +465,18 @@ class PolyReader:
         )
 
         polys = list(filter(
-            lambda x: (isinstance(x, str) and len(x)) or isinstance(x, sp.Poly),
+            lambda x: (isinstance(x, str) and len(x)) or isinstance(x, Poly),
             polys
         ))
 
         self.polys = polys
+
+        self.kwargs = kwargs
+        if 'gens' not in self.kwargs:
+            self.kwargs['gens'] = gens
+        if 'perm' not in self.kwargs:
+            self.kwargs['perm'] = perm
+
         self.index = 0
         self.ignore_errors = ignore_errors
 
@@ -468,7 +489,7 @@ class PolyReader:
         poly = self.polys[self.index]
         if isinstance(poly, str):
             try:
-                poly = preprocess_text(poly)
+                poly = preprocess_text(poly, **self.kwargs)
             except:
                 if not self.ignore_errors:
                     raise ValueError(f'Invalid polynomial at index {self.index}: {poly}')

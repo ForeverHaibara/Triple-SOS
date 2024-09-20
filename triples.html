@@ -13,6 +13,21 @@
         background-color: rgba(170, 160, 160, 0.464);
         border-color: rgba(170, 160, 160, 0.464);
     }
+    .customized_scrollbar{
+        overflow-y: auto;
+        scrollbar-width: thin;
+        scrollbar-color: #54c3e8 transparent;
+    }
+    .customized_scrollbar::-webkit-scrollbar {
+        width: 5px;
+    }
+    .customized_scrollbar::-webkit-scrollbar-track {
+        background: transparent;
+    }
+    .customized_scrollbar::-webkit-scrollbar-thumb {
+        background-color: #54c3e8;
+        border-radius: 4px;
+    }
     </style>
     <!-- <script src="https://requirejs.org/docs/release/2.3.6/minified/require.js"></script> -->
     <!-- <script async src="https://cdn.bootcdn.net/ajax/libs/axios/0.21.1/axios.min.js"></script> -->
@@ -34,18 +49,21 @@
 <div id="frontpage" 
 style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: absolute; display: flex; background: rgb(240,240,240);">
 <div id="frontpageleft" style="width: 24%; margin-right: 0.5%; height: 100%; position: relative; 
+    font-size: 14px;
     border-right: 2px solid rgb(220,220,220); background: rgb(255,255,255)">
     <!-- <div id="variables" style="width: 100%; height: 28px; text-align: left; display: inline-block;
     background: -webkit-linear-gradient(top, rgb(247,247,247),rgb(234,234,234));
     color: black; vertical-align: middle; border-bottom: 1px solid rgb(216,216,216); font-size: 19px;">
     &nbsp  ·&nbsp Variables</div> -->
-    <div id="settings" style="width:100%; height: 30%;">
-        <div id="settings_head" style="width: 100%; height: 28px; text-align: left; display: inline-block;
+    <div id="settings" style="width:100%; height: 37%;">
+        <!-- <div id="settings_head" style="width: 100%; height: 28px; text-align: left; display: inline-block;
         background: -webkit-linear-gradient(top, rgb(247,247,247),rgb(234,234,234));
         color: black; vertical-align: middle; border-bottom: 1px solid rgb(216,216,216); font-size: 19px;">
         &nbsp  ·&nbsp Settings
-        </div>
-        <div id="setting_methods" style="margin-left: 10px; width:100%; height:200px;">
+        </div> -->
+        <hr style="width: 90%; margin-left: 10px; margin-top: 10px; margin-bottom: 5px;">
+        <div id="setting_history" style="font-size: 17px;">&nbsp  ·&nbsp Settings</div>
+        <div id="setting_methods" class="customized_scrollbar" style="margin-left: 10px; width:90%; height:80%;">
             <div class="form-check" style="margin-top: 5px">
                 <input class="form-check-input" type="checkbox" value="" id="setting_method_use_StructuralSOS" checked>
                 <label class="form-check-label" for="setting_method_use_StructuralSOS">Use Structural SOS</label>
@@ -57,20 +75,20 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
                     </svg>
                     </span>
                 </label>
-                <div class="collapse" id="setting_method_StructuralSOS_menu" style="margin-left: 10px; margin-top: 3px; font-size: 15px;">
+                <div class="collapse" id="setting_method_StructuralSOS_menu" style="margin-left: 10px; margin-top: 3px; font-size: 13px;">
                     <input class="form-check-input subcheckbox" type="checkbox" value="" id="setting_method_StructuralSOS_real" checked>
                     <label class="form-check-label" for="setting_method_StructuralSOS_real">Real Numbers</label>
                 </div>
             </div>
-            <div class="form-check" style="margin-top: 5px">
+            <div class="form-check" style="margin-top: 4px;">
                 <input class="form-check-input" type="checkbox" value="" id="setting_method_use_LinearSOS" checked>
                 <label class="form-check-label" for="setting_method_use_LinearSOS">Use Linear SOS</label>
             </div>
-            <div class="form-check" style="margin-top: 5px">
+            <div class="form-check" style="margin-top: 4px">
                 <input class="form-check-input" type="checkbox" value="" id="setting_method_use_SymmetricSOS" checked>
                 <label class="form-check-label" for="setting_method_use_SymmetricSOS">Use Symmetric SOS</label>
             </div>
-            <div class="form-check" style="margin-top: 5px">
+            <div class="form-check" style="margin-top: 4px">
                 <input class="form-check-input" type="checkbox" value="" id="setting_method_use_SDPSOS" checked>
                 <label class="form-check-label" for="setting_method_use_SDPSOS">Use SDP SOS</label>
                 <input type="checkbox" class="collapse-toggle visually-hidden" id="setting_method_SDPSOS_switch" data-bs-toggle="collapse" data-bs-target="#setting_method_SDPSOS_menu" width="0">
@@ -100,6 +118,54 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
             <!-- <input type="checkbox" id="setting_method_use_StructuralSOS" checked="checked" style="font-size: 14px; margin-top: 10px; width: 80%" >&nbsp; Use Structural SOS</input>
             <input type="checkbox" id="setting_method_use_LinearSOS" checked="checked" style="font-size: 14px; margin-top: 10px; width: 80%" >&nbsp; Use Linear SOS</input>
             <input type="checkbox" id="setting_method_use_SymmetricSOS" checked="checked" style="font-size: 14px; margin-top: 10px; width: 80%" >&nbsp; Use Symmetric SOS</input> -->
+        </div>
+    </div>
+    <hr style="width: 90%; margin-left: 10px; margin-top: 10px; margin-bottom: 5px;">
+    <div id="history_area" style="width:100%; height: 40%;">
+        <div id="history_hint" style="font-size: 17px;">&nbsp  ·&nbsp History</div>
+        <div id="history_panel" class="customized_scrollbar" style="    width: 90%; height: 85%; margin-left:10px; margin-top: 4px;">
+            <!-- THIS IS HISTORY -->
+        </div>
+    </div>
+    <hr style="width: 90%; margin-left: 10px; margin-top: 10px; margin-bottom: 10px;">
+    <div id="settings_gens_perms" style="height: 23%; margin-left:10px; font-size: 12px;">
+        <div class="row align-items-center" style="font-size: 12px;">
+            <div class="col-4">
+              <label for="generatorsInput">Generators</label>
+            </div>
+            <div class="col-6">
+              <input type="text" class="form-control" id="setting_gens_input" value="abc" style="height:23px;font-size:12px;">
+            </div>
+        </div>
+        <div class="row" style="font-size: 12px; margin-top: 6px;">
+            <div class="col-4">
+              <label for="setting_perm">Permutation</label>
+            </div>
+            <!-- <div class="col-1"></div> -->
+            <div class="col-2">
+                <div class="form-check form-check-inline">
+                  <input class="form-check-input" type="radio" name="setting_perm" id="setting_perm_cyc" value="cyc" onclick="setPermChange()" checked>
+                  <label class="form-check-label" for="cyclicRadio">Cyc</label>
+                </div>
+            </div>
+            <div class="col-2">
+                <div class="form-check form-check-inline">
+                  <input class="form-check-input" type="radio" name="setting_perm" id="setting_perm_sym" value="sym" onclick="setPermChange()">
+                  <label class="form-check-label" for="symmetricRadio">Sym</label>
+                </div>
+            </div>
+            <div class="col-2">
+                <div class="form-check form-check-inline">
+                  <input class="form-check-input" type="radio" name="setting_perm" id="setting_perm_custom" value="custom" onclick="setPermChange()">
+                  <label class="form-check-label" for="customRadio">Custom</label>
+                </div>
+            </div>
+        </div>
+        <div class="row" style="font-size: 12px;">
+            <div class="col-4"></div>
+            <div class="col-6">
+              <input type="text" class="form-control" id="setting_perm_input" value="[[1,2,0]]" style="height:23px;font-size: 12px;" disabled>
+            </div>
         </div>
     </div>
     <div id="advertisement" style="position: absolute; left: 5px; bottom: 2%; text-align: left; vertical-align: baseline; font-size: 12px">
@@ -218,14 +284,14 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
             <button id="output_showformatted" style="width:31%;height:100%">formatted</button> -->
             <div id="output_showlatex"  style="width:30%;height:99%;margin-left:3%;display:inline-block;text-align:center;padding-top: 2%;
             color:rgb(41,50,225);border-bottom: 2px solid blue;"
-            onclick = "ChangeShowType('latex')" 
-            onmouseover="ChangeShowTypeHover('latex',0)" onmouseleave="ChangeShowTypeHover('latex',1)">LaTeX</div>
+            onclick = "changeShowType('latex')" 
+            onmouseover="changeShowTypeHover('latex',0)" onmouseleave="changeShowTypeHover('latex',1)">LaTeX</div>
             <div id="output_showtxt"  style="width:30%;height:99%;display:inline-block;text-align:center;padding-top: 2%;" 
-            onclick = "ChangeShowType('txt')" 
-            onmouseover="ChangeShowTypeHover('txt',0)" onmouseleave="ChangeShowTypeHover('txt',1)">txt</div>
+            onclick = "changeShowType('txt')" 
+            onmouseover="changeShowTypeHover('txt',0)" onmouseleave="changeShowTypeHover('txt',1)">txt</div>
             <div id="output_showformatted"  style="width:33%;height:99%;display:inline-block;text-align:center;padding-top: 2%;" 
-            onclick = "ChangeShowType('formatted')"
-            onmouseover="ChangeShowTypeHover('formatted',0)" onmouseleave="ChangeShowTypeHover('formatted',1)">formatted</div>
+            onclick = "changeShowType('formatted')"
+            onmouseover="changeShowTypeHover('formatted',0)" onmouseleave="changeShowTypeHover('formatted',1)">formatted</div>
         </div>
         <textarea id="output_result" style="border: 1px solid black; border-radius: 8px; font-family:'Times New Roman', Times, serif;
         width: 99%; height: 82.5%; padding-left: 1%; margin-top: 3%; resize: none; font-size: small;" readonly="readonly"></textarea>
@@ -244,16 +310,12 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
     const host = 'http://127.0.0.1:5000'; 
     // const host = 'https://sos.bailili.top';
 
-    let socket = null;
-    let socket_connecting = false;
 
     var sos_poly = '';
     var sos_coeffs = [];
     var sos_deg = 0;
     var sos_results = {latex: '', txt: '', formatted: '', show: 'latex', displaying: 0};
-    var sos_work = {num: 0};
     var sos_variables = {names: [], range: [[-5,0,5],[-5,0,5],[-5,0,5]]};
-
 
     // heatmap triangle
     var heatmap_grids = [];
@@ -290,121 +352,46 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
         }
     }
     CreateVariables();
-
-    function changeNumOfSOS(num){
-        sos_work.num = Math.max(0, num);
-        if (sos_work.num == 0){
-            document.getElementById("sumofsquare").innerHTML = "Sum of Square";
-        }else{
-            document.getElementById("sumofsquare").innerHTML = "Sum of Square (" + sos_work.num + ")";
-        }
-    }
-
-    // functions
-    function connectSocket(callback){
-        if (socket !== null){
-            if (typeof callback === 'function') {
-                callback();
-            }
+</script>
+<script src="static/js/visualization.js"></script>
+<script src="static/js/history.js"></script>
+<script src="static/js/on_change.js"></script>
+<script src="static/js/socket.js"></script>
+<script>
+    function preprocessInput(kwargs){
+        const input_poly = document.getElementById('input_poly').value.trim();
+        if ((input_poly.length === 0)||(!/^[\x00-\x7F]*$/.test(input_poly))){
             return;
         }
-        socket = io(host, {reconnectionAttempts: 3});
-        // socket.connect(host);
-        socket.on('connect_error', function(){
-            socket = null;
-            changeNumOfSOS(0);
-        });
-        socket.on('connect', ()=>{
-            if (typeof callback === 'function') {
-                callback();
+
+        const cur_data = {
+            poly: input_poly,
+            gens: document.getElementById('setting_gens_input').value,
+            perm_choice: document.querySelector('input[name="setting_perm"]:checked').value,
+            perm: document.getElementById('setting_perm_input').value,
+            // timestamp: timestamp
+        };
+        if (!isSameHistoryRecord(cur_data)){
+            cur_data.timestamp = Date.now();
+            // push to front
+            history_data.unshift(cur_data);
+            if (history_data.length > 100){
+                history_data.pop();
             }
-        });
-        socket.on('disconnect', function(){
-            socket = null;
-            sos_poly = '';
-            changeNumOfSOS(0);
-        });
+            updateHistoryData();
+        }else{
+            cur_data.timestamp = history_data[0].timestamp;
+        }
 
-        socket.on('preprocess', function(data){
-        });
-
-        socket.on('rootangents', function(data){
-            let str = data.rootsinfo;
-            // /n -> <br>
-            let i = 0;
-            while (i < str.length){
-                if (str[i] == '\n'){
-                    str = str.slice(0, i) + ' <br> ' + str.slice(i+1, str.length);
-                    i += 5;
-                }
-                ++i;
-            }
-            document.getElementById("rootsinfo").innerHTML = str;
-            
-            str = data.tangents;
-            if (Array.isArray(str)){
-                str = str.join('\n');
-            }
-            document.getElementById("input_tangents").value = str;
-        });
-
-        socket.on('sos', function(data){
-            sos_results.latex = data.latex; 
-            sos_results.txt   = data.txt;
-            sos_results.formatted = data.formatted;
-            document.getElementById('output_result').innerHTML = data[sos_results.show]
-
-            const shadow_box = document.getElementById("shadow_box");
-            let past;
-            if ((past = shadow_box.firstChild)){
-                past.remove();
-            }
-            
-            let str;
-            if (!data.success){
-                str = '\\quad\\quad\\quad{\\rm Failed}\\quad\\quad\\quad';
-            }else{
-                const text_length = sos_results.latex.length;
-                str = sos_results.latex.slice(2, text_length-2);
-                if (str.indexOf('aligned') < 0){ // no aligned environment
-                    if (str.indexOf('\\\\') >= 0){
-                        // 存在换行, 使用 \begin{aligned}
-                        let i = 0;
-                        while (i+1 < str.length){
-                            if (str[i] == '\\' && str[i+1] == '\\'){
-                                str = str.slice(0, i+2) + ' & ' + str.slice(i+2, str.length);
-                                i += 2;        
-                            }
-                            ++i;
-                        }
-                        str = '\\begin{aligned}  \\  &' + str + '\\end{aligned}';
-                    }
-                }
-            }
-
-            changeNumOfSOS(sos_work.num - 1);
-
-            let svg = window.MathJax.tex2svg(str).children[0];
-            // shadow_box.style.height = '80%';
-            shadow_box.appendChild(svg);
-            svg.setAttribute('style', 'width: 95%; height: 90%; margin-top: 2%'); 
-            shadow_box.hidden = "";
-            document.getElementById("shadow").hidden = "";
-            document.getElementById("input_poly").blur();
-            document.getElementById("input_tangents").blur();
-            sos_results.displaying = 1;
-        });
-    }
-
-    function preprocessInput(kwargs){
-        const input_poly = document.getElementById('input_poly').value.trim();        
-        
         const parse_undefined = (x, y) => {return typeof(x) === 'undefined'? y: x;}
         kwargs = parse_undefined(kwargs, {})
         let actions = parse_undefined(kwargs.actions, ['findroot']);
         kwargs.actions = actions
         kwargs.factor  = parse_undefined(kwargs.factor, false);
-        kwargs.poly = input_poly;
+        
+        // update the cur_data to kwargs
+        Object.entries(cur_data).forEach(([key, value]) => { kwargs[key] = value; });
+
 
         connectSocket(() => {
             if (socket === null){
@@ -418,69 +405,10 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
                 if (Object.keys(res.data).length === 0){
                     return;
                 }
-                // after obtaining the return
-                // n: degree of polynomial
-
-                document.getElementById("input_poly").value = res.data.txt;
-                // document.getElementById("rootsinfo").innerHTML = '';
-                sos_poly = res.data.txt;
-
-                // First render the coefficient triangle
-                {
-                    let coeffs_view = document.getElementById('coeffs')
-                    // if (sos_deg != res.data.n){
-                    for (let i=sos_coeffs.length-1;i>=0;--i){
-                        coeffs_view.removeChild(sos_coeffs.pop());
-                    }
-                    // }
-
-                    sos_deg = res.data.n;
-                    let t = 0;
-                    const l = 100. / (1 + sos_deg); // length of each samll equilateral triangle 
-                    const ulx = (50 - l * sos_deg / 2), uly = (29 - 13 * sos_deg * l / 45);
-                    const fontsize = Math.max(11,Math.floor(28-1.5*sos_deg));
-                    const lengthscale = .28 * fontsize / 20.;
-                    const titleparser = (chr, deg) => { 
-                        return deg <= 0? '': (deg==1? chr: chr+deg);
-                    }
-                    var triangle_vals = res.data.triangle;
-                    for (let i = 0; i <= sos_deg; ++i){
-                        for (let j = 0; j <= i; ++j){
-                            let coeff = document.createElement('p');
-                            coeffs_view.appendChild(coeff);
-                            coeff.innerHTML = triangle_vals[t];
-                            let x =  (ulx + l*(2*i-j)/2 - triangle_vals[t].length * lengthscale - 2*Math.floor(triangle_vals[t].length/4)), 
-                                y =  (uly + l*j*13/15);
-                            coeff.setAttribute('style','position:absolute;left:'+x+'%;top:'+y+'%;font-size:'
-                                            +fontsize+'px');
-                            // when mouse hover on a monom, it shows hint like 'a5c' for a^5 * c
-                            coeff.title = titleparser('a',sos_deg-i) + titleparser('b',i-j) + titleparser('c',j); 
-                            coeff.onmouseover = () => {coeff.style.color = 'blue';}
-                            if (triangle_vals[t] === '0'){
-                                coeff.style.color = 'rgb(180,180,180)';
-                                coeff.onmouseout  = () => {coeff.style.color = 'rgb(180,180,180)';}
-                            }else{
-                                coeff.style.color = 'black';
-                                coeff.onmouseout  = () => {coeff.style.color = 'black';}
-                            }
-                            sos_coeffs.push(coeff)
-                            ++t;
-                        }
-                    }
-                }
-                
-                // Next render the heatmap triangle
-                {
-                    let t = 0;
-                    const color = res.data.heatmap;
-                    for (let i=0;i<=heatmap_gridsize;++i){
-                        for (let j=0;j<=heatmap_gridsize-i;++j){
-                            heatmap_grids[t].style.background = 'rgb('
-                                +color[t][0]+','+color[t][1]+','+color[t][2]+')';
-                            t += 1;
-                        }
-                    }
-                }
+                res.data.gens = kwargs.gens;
+                renderVisualization(res.data);
+                // write to the record
+                setHistoryByTimestamp(cur_data.timestamp, 'vis', res.data);
             }).catch(error => {
                 // console.log(axios.isAxiosError(error), error.message);
                 if (axios.isAxiosError(error) && (error.message === 'Network Error')) {
@@ -523,57 +451,46 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
         preprocessInput(kwargs);
     }
 
-    function ChangeShowType(x){
-        if (sos_results.show != x){
-            document.getElementById('output_show' + sos_results.show).style.color = 'black';
-            document.getElementById('output_show' + sos_results.show).style.border = 'none';
-            sos_results.show = x;
-            document.getElementById('output_show' + x).style.color = 'rgb(41,50,225)';
-            document.getElementById('output_show' + x).style.borderBottom = '2px solid blue';
-            document.getElementById('output_result').innerHTML = sos_results[x];
-        }else if (x == 'latex'){ // == sos_results.show
-            document.getElementById("shadow_box").hidden = "";
-            document.getElementById("shadow").hidden = "";
-            sos_results.displaying = 1;
-        }
-    }
-
-
-    function ChangeShowTypeHover(x, event){
-        // event == 0: mouseenter    event == 1: mouseleave
-        if (sos_results.show != x){
-            if (event == 0){
-                document.getElementById('output_show' + x).style.color = 'rgb(19,135,245)';
-            }else{
-                document.getElementById('output_show' + x).style.color = 'black';
-            }
-        }
-    }
-
-
     function PolyTools(event){
         if ((event === 'rotate') || (event === 'rotate_reflect') || (event === 'reflect')){
             const input_poly_box = document.getElementById('input_poly');
+            const gens = document.getElementById('setting_gens_input').value;
+            const m = gens.length;
+            if (m <= 1){
+                return;
+            }
             let txt = input_poly_box.value;
             let result = [];
             if (event === 'rotate'){
                 for (let i = 0, n = txt.length; i < n; ++i){
-                    if (txt[i] === 'a') result.push('b');
-                    else if (txt[i] === 'b') result.push('c');
-                    else if (txt[i] === 'c') result.push('a');
-                    else result.push(txt[i]);
+                    let j = 0;
+                    for (;j < m; ++j){
+                        if (txt[i] === gens[j]){
+                            result.push(gens[(j+1)%m]);
+                            break;
+                        }
+                    }
+                    if (j === m){
+                        result.push(txt[i]);
+                    }
                 }
             }else if (event === 'rotate_reflect'){
                 for (let i = 0, n = txt.length; i < n; ++i){
-                    if (txt[i] === 'a') result.push('c');
-                    else if (txt[i] === 'b') result.push('a');
-                    else if (txt[i] === 'c') result.push('b');
-                    else result.push(txt[i]);
+                    let j = 0;
+                    for (;j < m; ++j){
+                        if (txt[i] === gens[j]){
+                            result.push(gens[(j+m-1)%m]);
+                            break;
+                        }
+                    }
+                    if (j === m){
+                        result.push(txt[i]);
+                    }
                 }
             }else if (event === 'reflect'){
                 for (let i = 0, n = txt.length; i < n; ++i){
-                    if (txt[i] === 'b') result.push('a');
-                    else if (txt[i] === 'a') result.push('b');
+                    if (txt[i] ===  gens[1]) result.push(gens[0]);
+                    else if (txt[i] === gens[0]) result.push(gens[1]);
                     else result.push(txt[i]);
                 }
             }
@@ -584,7 +501,11 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
             preprocessInput({factor: true});
         }else if (event === 'latex_coeffs'){
             axios.post(host + '/process/latexcoeffs',
-            {'poly': sos_poly}
+            {
+                'poly': sos_poly,
+                'gens': document.getElementById('setting_gens_input').value,
+                'perm': document.getElementById('setting_perm_input').value,
+            }
             ).then(res=>{
                     const str = res.data.coeffs;
                     // copy coeffs to clipboard
@@ -620,27 +541,5 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
         });
       }
 
-    document.addEventListener('click', function(event) {
-        // 检查点击事件是否发生在弹出框之外
-        if (sos_results.displaying == 1 && !event.target.closest('#shadow_box') && 
-                !event.target.closest('#output_showlatex')){
-            // 如果点击在弹出框之外，则关闭弹出框
-            sos_results.displaying = 0; 
-            // document.getElementById("shadow_box").hidden = "hidden";
-            document.getElementById("shadow").hidden = "hidden";
-        }
-    });
-
-    document.onkeyup = function(e) {
-        // 兼容FF和IE和Opera
-        var event = e || window.event;
-        var key = event.which || event.keyCode || event.charCode;
-        if ((key == 13 || key == 27) && sos_results.displaying == 1){
-            // is displaying
-            sos_results.displaying = 0; 
-            // document.getElementById("shadow_box").hidden = "hidden";
-            document.getElementById("shadow").hidden = "hidden";
-        }
-    };
 </script>
 </html>

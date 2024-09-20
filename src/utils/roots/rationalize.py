@@ -374,15 +374,28 @@ def rationalize_quadratic_curve(
     return {x: x__, y: y__}
 
 
-def common_region_of_conics(polys: List[sp.Poly], _tol = 1e-10):
+def common_region_of_conics(polys: List[sp.Poly], _tol = 1e-10) -> Optional[Tuple[sp.Rational, sp.Rational]]:
     """
     Find (x, y) such that polys[i](x, y) >= 0 for all i.
     where polys are rational conics of two variables.  
     """
-    assert len(polys) > 0, "At least one conic is required."
+    # assert len(polys) > 0, "At least one conic is required."
+
+    # remove constant conics
+    non_const_conics = []
+    for p in polys:
+        if p.total_degree() > 0:
+            non_const_conics.append(p)
+        elif p.coeff_monomial(sp.S(1)) < 0:
+            return None
+    polys = non_const_conics
+
+    if len(polys) == 0:
+        return (sp.S(0), sp.S(0))
     assert len(polys[0].gens) == 2, "The conics must be 2D."
     assert all(p.gens == polys[0].gens for p in polys), "The conics must have the same variables."
     x, y = polys[0].gens
+
 
     if len(polys) == 1:
         polys.append(sp.Poly.from_dict({}, (x, y)))
@@ -437,6 +450,7 @@ def common_region_of_conics(polys: List[sp.Poly], _tol = 1e-10):
         def _grad(f, x_, y_):
             return f.diff(x)(x_, y_), f.diff(y)(x_, y_)
         def _norm(v):
+            if v[0] == 0 and v[1] == 0: return 0, 0
             m = (v[0]**2 + v[1]**2)**.5
             return v[0]/m, v[1]/m
 

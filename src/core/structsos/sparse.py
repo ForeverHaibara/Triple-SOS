@@ -1,6 +1,7 @@
 from typing import Callable, List, Optional, Union, Dict
 
 import sympy as sp
+from sympy import Poly
 
 from .utils import Coeff, PolynomialUnsolvableError, PolynomialNonpositiveError
 from ...utils import CyclicSum, CyclicProduct, congruence
@@ -8,12 +9,12 @@ from ...utils import CyclicSum, CyclicProduct, congruence
 def _null_solver(*args, **kwargs):
     return None
 
-def _get_defaulted_gens(poly: Union[sp.Poly,Coeff]):
-    if isinstance(poly, sp.Poly):
+def _get_defaulted_gens(poly: Union[Poly, Coeff]):
+    if isinstance(poly, Poly):
         return poly.gens
     return sp.symbols(f"a:{chr(96 + poly.nvars)}") if len(poly.coeffs) > 0 else []
 
-def sos_struct_extract_factors(poly: Union[sp.Poly, Coeff], solver: Callable, real: bool = True, **kwargs):
+def sos_struct_extract_factors(poly: Union[Poly, Coeff], solver: Callable, real: bool = True, **kwargs):
     """
     Wrap a solver to handle factorizable polynomials in advance.
 
@@ -25,7 +26,7 @@ def sos_struct_extract_factors(poly: Union[sp.Poly, Coeff], solver: Callable, re
     symbols = _get_defaulted_gens(poly)
 
     def coeff_to_poly(new_coeff):
-        if isinstance(poly, sp.Poly):
+        if isinstance(poly, Poly):
             return new_coeff.as_poly(*symbols)
         return new_coeff
 
@@ -53,10 +54,12 @@ def sos_struct_extract_factors(poly: Union[sp.Poly, Coeff], solver: Callable, re
     return solver(poly, **kwargs)
 
 
-def sos_struct_linear(poly: sp.Poly, **kwargs):
+def sos_struct_linear(poly: Union[Poly, Coeff], **kwargs):
     """
     Solve a linear inequality. Supports non-homogeneous polynomials also.
     """
+    if isinstance(poly, Coeff):
+        poly = poly.as_poly(*_get_defaulted_gens(poly))
     d = poly.total_degree()
     if d > 1 or not poly.domain.is_Numerical:
         return None
@@ -84,7 +87,7 @@ def sos_struct_linear(poly: sp.Poly, **kwargs):
     return poly.as_expr()
 
 
-def sos_struct_quadratic(poly: sp.Poly, **kwargs):
+def sos_struct_quadratic(poly: Poly, **kwargs):
     """
     Solve a quadratic inequality on real numbers.
     """
@@ -121,7 +124,7 @@ def sos_struct_quadratic(poly: sp.Poly, **kwargs):
     return sum(S[i] * (U[i, :] * genvec)[0,0]**2 for i in range(nvars + 1))
 
 
-def sos_struct_common(poly: Union[sp.Poly, Coeff], *solvers, **kwargs):
+def sos_struct_common(poly: Union[Poly, Coeff], *solvers, **kwargs):
     """
     A method wrapper for multiple solvers.
     """
@@ -154,7 +157,7 @@ def sos_struct_degree_specified_solver(solvers: Dict[int, Callable], homogeneous
 
     When the degree <= 2 and the solver is not provided, it uses the default solvers.
     """
-    def _sos_struct_degree_specified_solver(poly: Union[sp.Poly, Coeff], *args, **kwargs):
+    def _sos_struct_degree_specified_solver(poly: Union[Poly, Coeff], *args, **kwargs):
         if homogeneous and isinstance(poly, Coeff):
             degree = poly.degree()
         else:

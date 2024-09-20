@@ -1,38 +1,23 @@
-from typing import List, Tuple
+from typing import List, Tuple, Optional, Union
 
-import numpy as np
 import sympy as sp
 from sympy.core.singleton import S
-from sympy.combinatorics import CyclicGroup
+from sympy.combinatorics import PermutationGroup
 
-from .basis import LinearBasis, LinearBasisTangentCyclic, LinearBasisTangent, a, b, c
+from .basis import LinearBasis, LinearBasisTangent
 from .updegree import LinearBasisMultiplier
-from ...utils.expression.cyclic import CyclicSum, is_cyclic_expr
+from ...utils.expression.cyclic import CyclicSum
 from ...utils.expression.solution import SolutionSimple
-from ...utils.roots.rationalize import cancel_denominator
+from ...utils import MonomialPerm, MonomialReduction
 
-
-def _get_common_base_and_extraction(tangent: sp.Expr, y: List[sp.Expr], base_info: List[Tuple]) -> Tuple[sp.Expr, sp.Expr, sp.Expr]:
+def _merge_common_basis(
+        y: List[sp.Expr], powers: List[Tuple], symbols: Tuple[sp.Symbol, ...]
+    ) -> sp.Expr:
     """
     Get the common base and the extraction of the expression.
     """
-    base_info = np.array(base_info, dtype = 'int32')
-    common_base = base_info.min(axis = 0)
-    base_info -= common_base
-
-    gcd = cancel_denominator(y)
-
-    extracted = []
-    for v, (i, j, k, m, n, p) in zip(y, base_info):
-        extracted.append(
-            (v / gcd) * (a-b)**(2*i) * (b-c)**(2*j) * (c-a)**(2*k) * a**m * b**n * c**p
-        )
-    extracted = sp.Add(*extracted)
-
-    i, j, k, m, n, p = common_base
-    common_base = (a-b)**(2*i) * (b-c)**(2*j) * (c-a)**(2*k) * a**m * b**n * c**p
-
-    return gcd, common_base, extracted
+    basis = sp.Add(*(yi*sp.Mul(*[s**p for s, p in zip(symbols, power)]) for yi, power in zip(y, powers))).together()
+    return basis
 
 
 class SolutionLinear(SolutionSimple):
@@ -45,21 +30,23 @@ class SolutionLinear(SolutionSimple):
             problem = None,
             y: List[sp.Rational] = [],
             basis: List[LinearBasis] = [],
-            multiplier: sp.Expr = S.One,
+            symmetry: Union[PermutationGroup, MonomialPerm] = PermutationGroup(),
             is_equal: bool = True,
             collect: bool = True,
         ):
         """
         Parameters
         ----------
-        problem: sp.polys.Poly
+        problem: sp.Poly
             The target polynomial.
         y: List[sp.Rational]
             The coefficients of the basis.
         basis: List[LinearBasis]
             The collection of basis.
-        multiplier: sp.Expr
-            The multiplier such that poly * multiplier = sum(y_i * basis_i).
+        symbols: Tuple[sp.Symbol, ...]
+            The symbols of the polynomial with the homogenizer included.
+        symmetry: PermutationGroup
+            Every term will be wrapped by a cyclic sum of symmetryutation group.
         is_equal: bool
             Whether the problem is an equality.
             For linear sos, this should be checked in function
@@ -72,106 +59,77 @@ class SolutionLinear(SolutionSimple):
         self.problem = problem
         self.y = y
         self.basis = basis
-        self.multiplier = multiplier
+
+        if isinstance(symmetry, PermutationGroup):
+            symmetry = MonomialPerm(symmetry)
+
+        self._symmetry = symmetry
         self.is_equal_ = is_equal
 
-        self.collect_multipliers()
+        self._collect_multipliers(y, basis, problem.gens, symmetry)
 
         if collect:
-            self.collect()
+            self._collect_common_tangents(problem.gens, symmetry)
         else:
+            raise NotImplementedError
             self.numerator = sum(v * b.expr for v, b in zip(self.y, self.basis) if v != 0)
             self.solution = self.numerator / self.multiplier
 
-    def collect_multipliers(self):
+
+    def _collect_multipliers(self, 
+            y: List[sp.Rational], basis: List[LinearBasis],
+            symbols: Tuple[sp.Symbol, ...], symmetry: MonomialReduction
+        ) -> None:
         r"""
         Collect multipliers. For example, if we have 
         \sum (a^2-ab) * f(a,b,c) = g(a,b,c) + \sum (-ab) * f(a,b,c), then we should combine them.
         """
-        multipliers = [self.multiplier]
+        multipliers = []
         non_mul_y = []
         nom_mul_basis = []
-        for v, base in zip(self.y, self.basis):
+        for v, base in zip(y, basis):
             if isinstance(base, LinearBasisMultiplier):
                 multipliers.append(v * base.multiplier)
             else:
                 non_mul_y.append(v)
                 nom_mul_basis.append(base)
 
-        def _is_cyclic_sum(m):
-            if isinstance(m, CyclicSum):
-                return True
-            if isinstance(m, sp.Mul) and len(m.args) == 2 and m.args[0].is_constant() and isinstance(m.args[1], CyclicSum):
-                return True
-            return False
+        r, multiplier = sp.Add(*multipliers).as_content_primitive()
+        # r = S.One
 
-        def _get_cyclic_sum_core(m):
-            if isinstance(m, CyclicSum):
-                return m.args[0]
-            if isinstance(m, sp.Mul) and len(m.args) == 2 and m.args[0].is_constant() and isinstance(m.args[1], CyclicSum):
-                return m.args[1].args[0] * m.args[0]
-            return None
-
-        if all(_is_cyclic_sum(m) for m in multipliers):
-            multipliers = [_get_cyclic_sum_core(m) for m in multipliers]
-            self.multiplier = CyclicSum(sp.Add(*multipliers), (a, b, c))
-            r, self.multiplier = self.multiplier.as_content_primitive()
-        else:
-            self.multiplier = sp.Add(*multipliers)
-            r, self.multiplier = self.multiplier.as_content_primitive()
-            # r = S.One
-
+        self.multiplier = symmetry.cyclic_sum(multiplier, symbols)
         self.y = [v / r for v in non_mul_y]
         self.basis = nom_mul_basis
 
-    def collect(self):
+    def _collect_common_tangents(self, symbols: Tuple[sp.Symbol, ...], symmetry: MonomialReduction):
         """
         Collect terms with same tangents. For example, if we have
         a*b*(a^2-b^2-ab-ac+2bc)^2 + a*c*(a^2-b^2-ab-ac+2bc)^2, then we should combine them.
+        Every term will be wrapped by a cyclic sum of symmetryutation group.
         """
         basis_by_tangents = {}
         exprs = []
         for v, base in zip(self.y, self.basis):
             cls = base.__class__
-            if cls not in (LinearBasisTangentCyclic, LinearBasisTangent):
-                expr = v * base.expr
+            if cls not in (LinearBasisTangent,):
+                expr = v * base.as_expr(symbols)
                 exprs.append(expr)
                 continue
 
-            tangent = base.tangent
-            info = base.info_
-            if cls is LinearBasisTangentCyclic and is_cyclic_expr(tangent, (a,b,c), CyclicGroup(3)):
-                # we shall rotate the expression so that j is maximum
-                i, j, k, m, n, p = info
-                if i != j and i != k and j != k:
-                    if i > j and i > k:
-                        info = j, k, i, n, p, m
-                    elif j > i and j > k:
-                        info = k, i, j, p, m, n
-                elif i > k:
-                    if i == j: # i == j > k
-                        info = k, i, j, p, m, n
-                    else: # i > j == k
-                        info = j, k, i, n, p, m
-                elif j > k: # j > k == i
-                    info = k, i, j, p, m, n
-                i, j, k, m, n, p = info
-                info = j, k, i, n, p, m
+            # base: LinearBasisTangent 
+            tangent = base.tangent(symbols)
 
             collection = basis_by_tangents.get((cls, tangent))
             if collection is None:
-                basis_by_tangents[(cls, tangent)] = ([v], [info])
+                basis_by_tangents[(cls, tangent)] = ([v], [base.powers])
             else:
                 collection[0].append(v)
-                collection[1].append(info)
+                collection[1].append(base.powers)
 
-        for (cls, tangent), (y, base_info) in basis_by_tangents.items():
-            gcd, common_base, extracted = _get_common_base_and_extraction(tangent, y, base_info)
+        for (cls, tangent), (y, base_powers) in basis_by_tangents.items():
+            common_base = _merge_common_basis(y, base_powers, symbols) * tangent.together()
+            exprs.append(common_base)
 
-            f = (lambda x: CyclicSum(x)) if cls is LinearBasisTangentCyclic else (lambda x: x)
-            collected = gcd * f(common_base * extracted * tangent.together())
-            exprs.append(collected)
-
-        self.numerator = sp.Add(*exprs)
+        self.numerator = sp.Add(*(symmetry.cyclic_sum(expr, symbols) for expr in exprs))
         self.solution = self.numerator / self.multiplier
         return self

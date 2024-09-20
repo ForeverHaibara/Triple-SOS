@@ -7,11 +7,6 @@ from itertools import product
 import sympy as sp
 import numpy as np
 
-from ...utils.text_process import preprocess_text, next_permute
-from ...utils.polytools import convex_hull_poly
-
-
-
 class FastPositiveChecker():
     def __init__(self):
         self.poly = None

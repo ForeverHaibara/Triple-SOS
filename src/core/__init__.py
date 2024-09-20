@@ -6,10 +6,7 @@ from .sum_of_square import (
 from .linsos import (
     LinearSOS,
     root_tangents,
-    LinearBasis, LinearBasisCyclic, LinearBasisTangentCyclic, LinearBasisAMGMCyclic,
-    CachedCommonLinearBasisSpecialCyclic, CachedCommonLinearBasisTangentCyclic,
-    LinearBasisTangent,
-    CachedCommonLinearBasisTangent,
+    LinearBasis, LinearBasisTangent,
     SolutionLinear
 )
 
@@ -36,12 +33,7 @@ from .sdpsos import (
 __all__ = [
     'sum_of_square', 'sum_of_square_multiple',
     'METHOD_ORDER', 'DEFAULT_CONFIGS',
-    'LinearSOS',
-    'root_tangents',
-    'LinearBasis', 'LinearBasisCyclic', 'LinearBasisTangentCyclic', 'LinearBasisAMGMCyclic',
-    'CachedCommonLinearBasisSpecialCyclic', 'CachedCommonLinearBasisTangentCyclic',
-    'LinearBasisTangent',
-    'CachedCommonLinearBasisTangent',
+    'LinearSOS', 'root_tangents', 'LinearBasis', 'LinearBasisTangent',
     'SolutionLinear',
     'StructuralSOS', 'SolutionStructural', 'SolutionStructuralSimple',
     'pqr_sym', 'pqr_cyc', 'pqr_ker',

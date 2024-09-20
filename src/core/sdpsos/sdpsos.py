@@ -3,7 +3,7 @@ from typing import Union, Optional, List, Tuple, Dict, Callable
 
 import numpy as np
 import sympy as sp
-from sympy.combinatorics import Permutation, PermutationGroup, CyclicGroup, SymmetricGroup, AlternatingGroup
+from sympy.combinatorics import PermutationGroup
 
 from .arithmetic import solve_column_separated_linear
 from .manifold import RootSubspace
@@ -11,7 +11,7 @@ from .solver import SDPProblem
 from .solution import SolutionSDP
 from ..solver import homogenize
 from ...utils.basis_generator import generate_expr, MonomialReduction, MonomialPerm, MonomialCyclic
-from ...utils import arraylize_sp, Coeff, CyclicExpr
+from ...utils import arraylize_sp, Coeff, CyclicExpr, identify_symmetry
 
 
 def _define_mapping(nvars: int, degree: int, monomials: List[Tuple[int, ...]], symmetry: MonomialReduction) -> Callable[[int, int], Tuple[int, int]]:
@@ -142,48 +142,6 @@ def _get_equal_entries(monomials: List[Tuple[int, ...]], nvars: int, degree: int
     return equal_entries
 
 
-
-def _identify_symmetry(poly: sp.Poly, homogenizer: Optional[sp.Symbol] = None) -> PermutationGroup:
-    """
-    Identify the symmetry group of the polynomial heuristically.
-    It only identifies very simple groups like complete symmetric and cyclic groups.
-    TODO: Implement an algorithm to identify all symmetric groups.
-
-    Reference
-    ----------
-    [1] https://cs.stackexchange.com/questions/64335/how-to-find-the-symmetry-group-of-a-polynomial
-    """
-    coeff = Coeff(poly)
-    nvars = len(poly.gens)
-    if coeff.is_symmetric():
-        return SymmetricGroup(nvars)
-    if coeff.is_cyclic():
-        return CyclicGroup(nvars)
-    if nvars > 3:
-        alt = AlternatingGroup(nvars)
-        if coeff.is_symmetric(alt):
-            return alt
-
-    if homogenizer is not None and nvars > 2:
-        # check the symmetry of the polynomial before homogenization
-        a = list(range(1, nvars - 1))
-        a.append(0)
-        a.append(nvars - 1)
-        gen1 = Permutation(a)
-        a = list(range(nvars))
-        a[0], a[1] = a[1], a[0]
-        gen2 = Permutation(a)
-        G = PermutationGroup([gen1, gen2])
-        if coeff.is_symmetric(G):
-            return G
-
-        G = PermutationGroup([gen1])
-        if coeff.is_symmetric(G):
-            return G
-
-    return PermutationGroup()
-
-
 class SOSProblem():
     """
     Helper class for SDPSOS. See details at SOSProblem.solve.
@@ -205,7 +163,7 @@ class SOSProblem():
         self._degree = poly.total_degree()
 
         if symmetry is None:
-            symmetry = _identify_symmetry(poly)
+            symmetry = identify_symmetry(poly)
         if not isinstance(symmetry, MonomialReduction):
             symmetry = MonomialPerm(symmetry)
         
@@ -392,7 +350,7 @@ def SDPSOS(
     poly, homogenizer = homogenize(poly)
     nvars = len(poly.gens)
 
-    symmetry = MonomialPerm(_identify_symmetry(poly, homogenizer))
+    symmetry = MonomialPerm(identify_symmetry(poly, homogenizer))
 
     if verbose:
         print(f'SDPSOS nvars = {nvars} degree = {degree}')

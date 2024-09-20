@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Tuple
 
 from mpmath import pslq
 import sympy as sp
@@ -114,6 +114,7 @@ def root_tangents(
     for is_strict, roots in [(True, strict_roots), (False, normal_roots)]:
         tangents += _tangents_helper_ternary.root_tangents(
             roots,
+            rootsinfo.poly.gens,
             _option(
                 cyc = is_cyc,
                 sym = is_sym,
@@ -131,7 +132,7 @@ def root_tangents(
 class _tangents_helper_ternary():
     """Helper class for generating tangents."""
     @classmethod
-    def root_tangents(cls, roots: List[Root], option: _option) -> List[RootTangent]:
+    def root_tangents(cls, roots: List[Root], gens: Tuple[sp.Symbol], option: _option) -> List[RootTangent]:
         if not option.cyc:
             helper = _tangents_helper_ternary_acyclic
         elif option.sym:
@@ -156,7 +157,8 @@ class _tangents_helper_ternary():
 
         tangents = [_ for _ in tangents if _ is not None]
         tangents = [_.together().as_coeff_Mul()[1] for _ in tangents]
-        tangents = [RootTangent(_) for _ in tangents]
+        tangents = [_.xreplace(dict(zip((a,b,c), gens))) for _ in tangents]
+        tangents = [RootTangent(_, gens) for _ in tangents]
         return tangents
 
 

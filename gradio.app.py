@@ -28,6 +28,9 @@ def _convert_to_gradio_latex(content):
     }
     if version >= '4.0':
         replacement['\\frac'] = '\\dfrac'
+    else:
+        replacement['\\begin{aligned}'] = ''
+        replacement['\\end{aligned}'] = '',
 
     for k,v in replacement.items():
         content = content.replace(k,v)
