@@ -14,7 +14,7 @@ from .correction import linear_correction
 from .updegree import lift_degree
 from .solution import SolutionLinear
 from ..solver import homogenize
-from ...utils import arraylize, findroot, RootsInfo, RootTangent, identify_symmetry
+from ...utils import findroot, RootsInfo, RootTangent, identify_symmetry
 from ...utils.basis_generator import MonomialPerm, MonomialReduction, MonomialHomogeneousFull
 
 

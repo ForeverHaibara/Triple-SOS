@@ -39,9 +39,6 @@ DEFAULT_CONFIGS = {
 }
 
 
-a, b, c = sp.symbols('a b c')
-
-
 def sum_of_square(
         poly: sp.Poly,
         rootsinfo: Optional[RootsInfo] = None,

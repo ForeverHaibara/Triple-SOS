@@ -7,7 +7,6 @@ from sympy.combinatorics import PermutationGroup
 
 from .basis import LinearBasis
 from .solution import SolutionLinear
-from ...utils.basis_generator import arraylize_sp
 from ...utils.roots.rationalize import rationalize_array
 
 def _filter_zero_y(y: List[float], basis: List[LinearBasis], num_multipliers: int) -> Tuple[List[float], List[LinearBasis], int]:
