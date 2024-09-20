@@ -30,7 +30,7 @@ def _convert_to_gradio_latex(content):
         replacement['\\frac'] = '\\dfrac'
     else:
         replacement['\\begin{aligned}'] = ''
-        replacement['\\end{aligned}'] = '',
+        replacement['\\end{aligned}'] = ''
 
     for k,v in replacement.items():
         content = content.replace(k,v)
@@ -201,8 +201,9 @@ class GradioInterface():
                 self.output_box_txt: 'No solution found.',
                 self.output_box_formatted: 'No solution found.',
             }
-            if poly is not None and poly.domain.is_Numerical\
-                   and (not poly.is_zero) and poly.is_homogeneous and len(methods) == 4:
+            # if poly is not None and poly.domain.is_Numerical\
+            #        and (not poly.is_zero) and poly.is_homogeneous and len(methods) == 4:
+            if poly is not None and len(methods) == 4 and poly.total_degree() > 2:
                 print(input_text)
         res.update(res0)
         return res
