@@ -4,7 +4,8 @@ import sympy as sp
 from sympy import Poly
 
 from .utils import Coeff, PolynomialUnsolvableError, PolynomialNonpositiveError
-from ...utils import CyclicSum, CyclicProduct, congruence
+from ...sdp import congruence
+from ...utils import CyclicSum, CyclicProduct
 
 def _null_solver(*args, **kwargs):
     return None

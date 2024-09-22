@@ -13,7 +13,7 @@ from .polytools import (
 from .expression import (
     Coeff, CyclicExpr, CyclicSum, CyclicProduct, SymmetricSum, SymmetricProduct, is_cyclic_expr, identify_symmetry,
     poly_get_factor_form, poly_get_standard_form, latex_coeffs,
-    Solution, SolutionSimple, congruence,
+    Solution, SolutionSimple
 )
 
 from .roots import (
@@ -35,7 +35,7 @@ __all__ = [
     'monom_of', 'convex_hull_poly',
     'Coeff', 'CyclicExpr', 'CyclicSum', 'CyclicProduct', 'SymmetricSum', 'SymmetricProduct', 'is_cyclic_expr', 'identify_symmetry',
     'poly_get_factor_form', 'poly_get_standard_form', 'latex_coeffs',
-    'Solution', 'SolutionSimple', 'congruence',
+    'Solution', 'SolutionSimple',
     'RootsInfo', 'Root', 'RootAlgebraic', 'RootRational', 'RootTernary', 'RootAlgebraicTernary', 'RootRationalTernary',
     'GridRender',
     'findroot', 'find_nearest_root', 'findroot_resultant',

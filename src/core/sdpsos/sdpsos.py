@@ -5,11 +5,10 @@ import numpy as np
 import sympy as sp
 from sympy.combinatorics import PermutationGroup
 
-from .arithmetic import solve_column_separated_linear
 from .manifold import RootSubspace
-from .solver import SDPProblem
 from .solution import SolutionSDP
 from ..solver import homogenize
+from ...sdp import solve_column_separated_linear, SDPProblem
 from ...utils.basis_generator import generate_expr, MonomialReduction, MonomialPerm, MonomialCyclic
 from ...utils import arraylize_sp, Coeff, CyclicExpr, identify_symmetry
 

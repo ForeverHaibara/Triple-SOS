@@ -14,7 +14,8 @@ from math import gcd
 from time import time
 from typing import List, Tuple, Union, Optional
 
-import numpy as np
+from numpy import array as np_array
+from numpy import around as np_round
 import sympy as sp
 from sympy import Rational
 from sympy.external.gmpy import MPQ
@@ -322,8 +323,8 @@ def matmul(A: sp.Matrix, B: sp.Matrix, q1: Optional[int] = None, q2: Optional[in
     if q1 is None or q2 is None:
         return A * B
 
-    A = np.round(np.array(A).astype('float') * q1).astype('int')
-    B = np.round(np.array(B).astype('float') * q2).astype('int')
+    A = np_round(np_array(A).astype('float') * q1).astype('int')
+    B = np_round(np_array(B).astype('float') * q2).astype('int')
     C = A @ B
     C = sp.Matrix(C.tolist()) / (q1 * q2)
     return C
@@ -361,9 +362,9 @@ def matmul_multiple(A: sp.Matrix, B: sp.Matrix, q1: Optional[int] = None, q2: Op
         return eq_mat
 
     n, m = B.shape
-    A = np.round(np.array(A).astype('float') * q1).astype('int')
+    A = np_round(np_array(A).astype('float') * q1).astype('int')
     A = A.reshape((-1, n, n))
-    B = np.round(np.array(B).astype('float') * q2).astype('int')
+    B = np_round(np_array(B).astype('float') * q2).astype('int')
     C = (A @ B)
     C = sp.Matrix(C.reshape((-1, n*m)).tolist()) / (q1 * q2)
     return C
@@ -451,9 +452,9 @@ def symmetric_bilinear_multiple(U: sp.Matrix, A: sp.Matrix) -> sp.Matrix:
         return eq_mat
 
     n, m = U.shape
-    A = np.round(np.array(A).astype('float') * q1).astype('int')
+    A = np_round(np_array(A).astype('float') * q1).astype('int')
     A = A.reshape((-1, n, n))
-    U = np.round(np.array(U).astype('float') * q2).astype('int')
+    U = np_round(np_array(U).astype('float') * q2).astype('int')
     C = (U.T @ A @ U)
     C = sp.Matrix(C.reshape((-1, m*m)).tolist()) / (q1 * q2**2)
     return C
