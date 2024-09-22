@@ -8,7 +8,8 @@ from sympy.combinatorics import PermutationGroup
 from .manifold import RootSubspace
 from .solution import SolutionSDP
 from ..solver import homogenize
-from ...sdp import solve_column_separated_linear, SDPProblem
+from ...sdp import SDPProblem
+from ...sdp.arithmetic import solve_column_separated_linear
 from ...utils.basis_generator import generate_expr, MonomialReduction, MonomialPerm, MonomialCyclic
 from ...utils import arraylize_sp, Coeff, CyclicExpr, identify_symmetry
 
