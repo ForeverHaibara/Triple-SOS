@@ -43,6 +43,7 @@ def rationalize_with_mask(y: np.ndarray, zero_tolerance: float = 1e-7) -> sp.Mat
     y_rational : sp.Matrix
         The rationalized vector.
     """
+    if len(y) == 0: return sp.Matrix(0, 1, [])
     tol = max(1, np.abs(y).max()) * zero_tolerance
     y_rational_mask = np.abs(y) > tol
     y_rational = np.where(y_rational_mask, y, 0)
@@ -110,6 +111,7 @@ def verify_is_pretty(
     bool
         Whether the rationalization of `y` is pretty.
     """
+    if len(y) == 0: return True
     lcm = 1
     if threshold is None:
         s = max(36, max(v.q for v in y)) ** 2

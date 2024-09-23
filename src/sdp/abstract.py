@@ -9,7 +9,8 @@ class AbstractSDPProblem(ABC):
     """
     Abstract class for SDP problems, containing the signature of some basic methods.
     """
-    _x0_and_space: Dict[str, Tuple[Matrix, Matrix]] = None
+    def __init__(self, *args, **kwargs):
+        self._x0_and_space: Dict[str, Tuple[Matrix, Matrix]] = None
 
     @abstractmethod
     def _standardize_mat_dict(self, mat_dict: Dict[str, Matrix]) -> Dict[str, Matrix]: ...

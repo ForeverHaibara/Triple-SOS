@@ -342,8 +342,9 @@ class SDPVectorTransform(SDPTransformation):
         return parent_node
 
 class SDPTransformMixin(AbstractSDPProblem):
-    # record the transformation dependencies
-    _transforms: List[SDPTransformation] = []
+    def __init__(self, *args, **kwargs):
+        # record the transformation dependencies
+        self._transforms: List[SDPTransformation] = []
 
     @property
     def parents(self) -> List['SDPTransformMixin']:

@@ -1,4 +1,5 @@
 from contextlib import contextmanager
+from math import sqrt
 from typing import Union, Optional, Tuple, List, Dict, Callable, Generator
 
 from numpy import zeros as np_zeros
@@ -124,8 +125,8 @@ class Mat2Vec:
         Infer the length of output matrix given the length of the vector.
         """
         if mode == cls.DIRECT:
-            return round(m ** 0.5)
-        return round((2 * m + .25) ** 0.5 - .5)
+            return round(sqrt(m))
+        return round(sqrt(2 * m + .25) - .5)
 
 
     @classmethod
