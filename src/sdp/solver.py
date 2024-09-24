@@ -1,4 +1,3 @@
-from contextlib import contextmanager, nullcontext, AbstractContextManager
 from typing import Union, Optional, Any, Tuple, List, Dict, Callable, Generator
 
 import numpy as np
@@ -9,7 +8,7 @@ from sympy.core.relational import Relational
 
 from .arithmetic import solve_undetermined_linear
 from .backend import (
-    SDPBackend, RelaxationVariable, solve_numerical_dual_sdp,
+    SDPBackend, solve_numerical_dual_sdp,
     max_relax_var_objective, min_trace_objective, max_inner_objective
 )
 from .rationalize import rationalize, rationalize_and_decompose
@@ -26,7 +25,7 @@ from .utils import (
 Decomp = Dict[str, Tuple[Matrix, Matrix, List[Rational]]]
 Objective = Tuple[str, Union[Expr, Callable[[SDPBackend], Any]]]
 Constraint = Callable[[SDPBackend], Any]
-MinEigen = Union[float, RelaxationVariable, Dict[str, Union[float, RelaxationVariable]]]
+MinEigen = Union[float, int, tuple, Dict[str, Union[float, int, tuple]]]
 PicosExpression = Any
 
 _RELATIONAL_TO_OPERATOR = {
@@ -36,18 +35,6 @@ _RELATIONAL_TO_OPERATOR = {
     sp.StrictLessThan: (-1, '__ge__'),
     sp.Equality: (1, '__eq__')
 }
-
-def _check_picos(verbose = False):
-    """
-    Check whether PICOS is installed.
-    """
-    try:
-        import picos
-    except ImportError:
-        if verbose:
-            print('Cannot import picos, please use command "pip install picos" to install it.')
-        return False
-    return True
 
 
 def _decompose_matrix(
@@ -227,7 +214,6 @@ class SDPProblem(SDPTransformMixin):
     where x_i and space_i are known. The problem is to find a rational solution y such that S_i >> 0.
     This is the standard form of our rational SDP feasible problem.
     """
-    _has_picos = _check_picos(verbose = True)
     def __init__(
         self,
         x0_and_space: Union[Dict[str, Tuple[Matrix, Matrix]], List[Tuple[Matrix, Matrix]]],
@@ -490,7 +476,7 @@ class SDPProblem(SDPTransformMixin):
                 (min_trace, 0),
                 (-min_trace, 0),
                 (max_inner_objective(self._x0_and_space[obj_key][1], 1.), 0),
-                (max_relax_var_objective(self.dof), RelaxationVariable(1, 0)),
+                (max_relax_var_objective(self.dof), (1, 0)),
             ]
 
         objectives = [_[0] for _ in objective_and_min_eigens]
@@ -584,11 +570,11 @@ class SDPProblem(SDPTransformMixin):
             list_of_objective: List[Objective] = [],
             list_of_constraints: List[List[Constraint]] = [],
             list_of_min_eigen: List[MinEigen] = [],
-            solver: str = 'picos',
+            solver: Optional[str] = None,
             allow_numer: int = 0,
             rationalize_configs = {},
             verbose: bool = False,
-            **kwargs
+            solver_options: Dict[str, Any] = {}
         ):
 
         num_sol = len(self._ys)
@@ -607,7 +593,7 @@ class SDPProblem(SDPTransformMixin):
                 constraints=con,
                 min_eigen=eig,
                 solver=solver,
-                **kwargs
+                solver_options=solver_options
             )
             if y is not None:
                 self._ys.append(y)
@@ -650,13 +636,13 @@ class SDPProblem(SDPTransformMixin):
             objectives: Union[Objective, List[Objective]] = [],
             constraints: Union[List[Constraint], List[List[Constraint]]] = [],
             min_eigen: Union[MinEigen, List[MinEigen]] = [],
-            solver: str = 'picos',
+            solver: Optional[str] = None,
             use_default_configs: bool = True,
             allow_numer: int = 0,
             verbose: bool = False,
             solve_child: bool = True,
             propagate_to_parent: bool = True,
-            **kwargs
+            solver_options: Dict[str, Any] = {}
         ) -> bool:
         """
         Interface for solving the SDP problem.
@@ -681,6 +667,8 @@ class SDPProblem(SDPTransformMixin):
             it defaults to solve the problem by itself.
         propagate_to_parent : bool
             Whether to propagate the result to the parent node. Defaults to True.
+        solver_options : Dict[str, Any]
+            The options passed to the SDP backend solver.
 
         Returns
         ----------
@@ -700,12 +688,12 @@ class SDPProblem(SDPTransformMixin):
                     verbose = verbose,
                     solve_child = solve_child,
                     propagate_to_parent = propagate_to_parent,
-                    **kwargs
+                    solver_options = solver_options
                 )
 
         configs = _align_iters(
             [objectives, constraints, min_eigen],
-            [tuple, list, (float, int, RelaxationVariable, dict)]
+            [tuple, list, (float, int, tuple, dict)]
         )
         if use_default_configs:
             default_configs = self._get_defaulted_configs()
@@ -721,7 +709,7 @@ class SDPProblem(SDPTransformMixin):
         #            Solve the SDP problem
         #################################################
         solution = self._solve_from_multiple_configs(
-            *configs, solver=solver, allow_numer = allow_numer, verbose = verbose, **kwargs
+            *configs, solver=solver, allow_numer = allow_numer, verbose = verbose, solver_options = solver_options
         )
 
         if solution is not None:

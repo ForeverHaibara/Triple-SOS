@@ -1,5 +1,5 @@
 from time import time
-from typing import Union, Optional, List, Tuple, Dict, Callable
+from typing import Union, Optional, List, Tuple, Dict, Callable, Any
 
 import numpy as np
 import sympy as sp
@@ -267,18 +267,18 @@ class SOSProblem():
         self._sdp = sdp
         return sdp
 
-    def solve(self, **kwargs) -> bool:
+    def solve(self, *args, **kwargs) -> bool:
         """
         Solve the SOS problem. Keyword arguments are passed to SDPProblem.solve.
         """
-        return self._sdp.solve(**kwargs)
+        return self._sdp.solve(*args, **kwargs)
 
     def as_solution(
         self,
         y: Optional[Union[sp.Matrix, np.ndarray, Dict]] = None,
     ) -> SolutionSDP:
         """
-        Restore the solution to the original polynomial.
+        Retrieve the solution to the original polynomial.
         """
         if y is not None:
             self.sdp.register_y(y)
@@ -294,7 +294,8 @@ def SDPSOS(
         monomials_lists: Optional[List[List[Tuple[int, ...]]]] = None,
         degree_limit: int = 12,
         verbose: bool = False,
-        method: str = "trivial",
+        solver: Optional[str] = None,
+        solver_options: Dict[str, Any] = {},
         allow_numer: int = 0,
         **kwargs
     ) -> Optional[SolutionSDP]:
@@ -392,7 +393,7 @@ def SDPSOS(
         time0 = time()
         try:
             sdp = sos_problem._construct_sdp_by_default(monomials, verbose = verbose)
-            if sos_problem.solve(allow_numer = allow_numer, verbose = verbose, method = method):
+            if sos_problem.solve(allow_numer=allow_numer, verbose=verbose, solver=solver, solver_options=solver_options, **kwargs):
                 if verbose:
                     print(f"Time for solving SDP{' ':20s}: {time() - time0:.6f} seconds. \033[32mSuccess\033[0m.")
                 solution = sos_problem.as_solution()

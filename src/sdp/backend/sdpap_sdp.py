@@ -26,9 +26,6 @@ class SDPBackendSDPAP(SDPBackend):
         self._J = []
         self.solution = None
 
-    def _add_vector_variable(self, name: str, shape: int) -> Any:
-        ...
-
     def _add_linear_matrix_inequality(self, name: str, x0: np.ndarray, extended_space: np.ndarray) -> np.ndarray:
         self._As.append(extended_space)
         self._bs.append(-x0)
@@ -84,9 +81,10 @@ class SDPBackendSDPAP(SDPBackend):
                 y2.append(0)
         return np.array(y2)
 
-    def solve(self) -> np.ndarray:
+    def solve(self, solver_options={}) -> np.ndarray:
         import sdpap
         option = {'print': 'no'}
+        option.update(solver_options)
         sol = sdpap.solve(*self._get_ABCKJ(), option=option)
         self.solution = sol
 

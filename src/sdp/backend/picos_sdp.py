@@ -20,12 +20,9 @@ class SDPBackendPICOS(SDPBackend):
     """
     def __init__(self, dof) -> None:
         super().__init__(dof)
-        from picos import Problem
+        from picos import Problem, RealVariable
         self.problem = Problem()
-
-    def _add_vector_variable(self, name: str, shape: int) -> Any:
-        from picos import RealVariable
-        return RealVariable(name, shape)
+        self.y = RealVariable(name = '_%s_y'%id(self.problem), shape = dof + 1)
 
     def _add_linear_matrix_inequality(self, name: str, x0: np.ndarray, extended_space: np.ndarray) -> np.ndarray:
         from picos import SymmetricVariable
@@ -48,8 +45,8 @@ class SDPBackendPICOS(SDPBackend):
     def _set_objective(self, objective: np.ndarray) -> None:
         self.problem.set_objective('min', objective * self.y)
 
-    def solve(self) -> np.ndarray:
-        self.problem.solve()
+    def solve(self, solver_options = {}) -> np.ndarray:
+        self.problem.solve(**solver_options)
         value = self.y.value
         if isinstance(value, float):
             value = [value]

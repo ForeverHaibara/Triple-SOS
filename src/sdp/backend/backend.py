@@ -1,20 +1,7 @@
 from abc import ABC, abstractmethod
-from typing import Any, Tuple, Callable, Union
+from typing import Any, Tuple, Union
 
 import numpy as np
-
-class RelaxationVariable():
-    """
-    A relaxation variable k*x + b.
-    """
-    __slots__ = ['k', 'b']
-    def __init__(self, k: float = 1, b: float = 0) -> None:
-        self.k = k
-        self.b = b
-    def __repr__(self) -> str:
-        return f"RelaxationVariable(k={self.k}, b={self.b})"
-    def __str__(self) -> str:
-        return self.__repr__()
 
 def np_array(vec, flatten=False):
     vec = np.array(vec).astype(np.float64)
@@ -37,9 +24,10 @@ _STANDARDIZED_OPERATORS = {
 
 
 class SDPBackend(ABC):
-    def __init__(self, dof, name_y: str='_y') -> None:
+    def __init__(self, dof) -> None:
         self.dof = dof
-        self.y = self.add_vector_variable(name_y, dof + 1)
+        self.y = None
+
     def __new__(cls, dof, *args, **kwargs):
         if dof == 0 and cls is not DegeneratedBackend:
             return DegeneratedBackend(dof)
@@ -48,15 +36,6 @@ class SDPBackend(ABC):
         return f"{self.__class__.__name__}(dof={self.dof}+1)"
     def __str__(self) -> str:
         return self.__repr__()
-
-    @abstractmethod
-    def _add_vector_variable(self, name: str, shape: int) -> Any: ...
-
-    def add_vector_variable(self, name: str, shape: int) -> Any:
-        """
-        Add a vector variable.
-        """
-        return self._add_vector_variable(name, shape)
 
     @abstractmethod
     def _add_linear_matrix_inequality(self, name: str, x0: np.ndarray, extended_space: np.ndarray) -> np.ndarray: ...
@@ -117,9 +96,9 @@ class SDPBackend(ABC):
     def solve(self, *args, **kwargs) -> Any: ...
 
     @classmethod
-    def extend_space(self, x0: np.ndarray, space: np.ndarray, min_eigen: Union[float, RelaxationVariable] = 0) -> Tuple[np.ndarray, np.ndarray]:
-        if isinstance(min_eigen, RelaxationVariable):
-            k, b = min_eigen.k, min_eigen.b
+    def extend_space(self, x0: np.ndarray, space: np.ndarray, min_eigen: Union[float, tuple] = 0) -> Tuple[np.ndarray, np.ndarray]:
+        if isinstance(min_eigen, tuple):
+            k, b = min_eigen
         else:
             k, b = 0, min_eigen
         x = x0.copy()
@@ -143,11 +122,13 @@ class DegeneratedBackend(SDPBackend):
     """
     Return array([]) if there is no optimization variable.
     """
-    def add_vector_variable(self, name: str, shape: int) -> Any: ...
-    def add_psd_variable(self, name: str, shape: int, min_eigen: float = 0) -> Any: ...
-    def add_linear_matrix_inequality(self, name: str, x0: np.ndarray, extended_space: np.ndarray) -> np.ndarray: ...
-    def add_constraint(self, constraint: str) -> None: ...
-    def set_objective(self, objective: str) -> None: ...
+    def _add_linear_matrix_inequality(self, name: str, x0: np.ndarray, extended_space: np.ndarray) -> np.ndarray: ...
+    def _add_constraint(self, constraint: np.ndarray, rhs: float = 0, operator='__ge__') -> None: ...
+    def _set_objective(self, objective: np.ndarray) -> None: ...
+
+    @classmethod
+    def is_available(cls) -> bool:
+        return True
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(dof=0)"

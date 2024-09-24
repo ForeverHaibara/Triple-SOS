@@ -29,10 +29,6 @@ class SDPBackendCVXOPT(SDPBackend):
         # self._b = []  # Equality constraint rhs (if needed)
         self.solution = None
 
-    def _add_vector_variable(self, name: str, shape: int) -> Any:
-        # In CVXOPT, variables are implicitly handled in the optimization problem definition
-        ...
-
     def _add_linear_matrix_inequality(self, name: str, x0: np.ndarray, extended_space: np.ndarray) -> np.ndarray:
         from cvxopt import matrix
         self._Gs.append(matrix(-extended_space))
@@ -55,7 +51,7 @@ class SDPBackendCVXOPT(SDPBackend):
         except ImportError:
             return False
 
-    def solve(self) -> np.ndarray:
+    def solve(self, solver_options = {}) -> np.ndarray:
         from cvxopt import solvers
 
         solvers.options['show_progress'] = False
@@ -63,6 +59,7 @@ class SDPBackendCVXOPT(SDPBackend):
         # configure kktsolver to handle ValueError: Rank(A) < p or Rank([P; A; G]) < n
         # https://ask.csdn.net/questions/1102440
         solvers.options['kktreg'] = 1e-9
+        solvers.options.update(solver_options)
         sol = solvers.sdp(self._c, Gs=self._Gs, hs=self._hs, kktsolver='ldl')
         self.y = sol['x']
         self.solution = sol
