@@ -5,7 +5,7 @@ from typing import Union, Optional, Tuple, List, Dict, Callable, Generator
 from numpy import zeros as np_zeros
 from numpy import ndarray
 from sympy import zeros as sp_zeros
-from sympy import Matrix, MatrixBase, Expr, re
+from sympy import Matrix, MatrixBase, Expr, re, eye
 from sympy.core.singleton import S as singleton
 
 def congruence(M: Union[Matrix, ndarray]) -> Union[None, Tuple[Matrix, Matrix]]:
@@ -79,7 +79,7 @@ def congruence_with_perturbation(
         if min_eig < 0:
             eps = 1e-15
             for i in range(10):
-                cong = congruence(M + (-min_eig + eps) * sp.eye(M.shape[0]))
+                cong = congruence(M + (-min_eig + eps) * eye(M.shape[0]))
                 if cong is not None:
                     return cong
                 eps *= 10

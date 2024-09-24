@@ -3,20 +3,25 @@ from typing import List, Tuple, Dict, Union, Callable, Optional
 import numpy as np
 from sympy import MutableDenseMatrix as Matrix
 
-from .backend import SDPBackend, DegeneratedBackend, RelaxationVariable
-from .picos_sdp import SDPBackendPicos
+from .backend import SDPBackend, DegeneratedBackend, RelaxationVariable, np_array
+from .picos_sdp import SDPBackendPICOS
+from .cvxopt_sdp import SDPBackendCVXOPT
+from .sdpap_sdp import SDPBackendSDPAP
 from ..utils import Mat2Vec
 
 
 _BACKENDS = {
-    'picos': SDPBackendPicos
+    'picos': SDPBackendPICOS,
+    'cvxopt': SDPBackendCVXOPT,
+    'sdpa': SDPBackendSDPAP,
+    'sdpap': SDPBackendSDPAP,
 }
 
 
 def _create_numerical_dual_sdp(
         x0_and_space: Dict[str, Tuple[Matrix, Matrix]],
-        objective: Tuple[str, Callable],
-        constraints: List[Callable] = [],
+        objective: np.ndarray,
+        constraints: List[Tuple[np.ndarray, float, str]] = [],
         min_eigen: Union[float, RelaxationVariable, Dict[str, Union[float, RelaxationVariable]]] = 0,
         solver='picos',
     ) -> SDPBackend:
@@ -28,7 +33,7 @@ def _create_numerical_dual_sdp(
         # nothing to optimize
         return DegeneratedBackend(dof)
 
-    backend = _BACKENDS[solver](dof)
+    backend: SDPBackend = _BACKENDS[solver](dof)
 
     if isinstance(min_eigen, (float, int, RelaxationVariable)):
         min_eigen = {key: min_eigen for key in x0_and_space.keys()}
@@ -37,23 +42,25 @@ def _create_numerical_dual_sdp(
         k = Mat2Vec.length_of_mat(x0.shape[0])
         if k == 0:
             continue
-        x0_ = np.array(x0).astype(np.float64).flatten()
-        space_ = np.array(space).astype(np.float64)
 
-        S = backend.add_psd_variable(key, k, min_eigen=min_eigen.get(key, 0))
-        backend.add_linear_matrix_inequality(S, x0_, space_, backend.y)
+        x0_ = np_array(x0, flatten=True)
+        space_ = np_array(space)
 
-    backend.set_objective(objective[0], objective[1](backend))
-    for constraint in constraints:
-        backend.add_constraint(constraint(backend))
+        x0_, space_ = SDPBackend.extend_space(x0_, space_, min_eigen.get(key, 0))
+
+        backend.add_linear_matrix_inequality(key, x0_, space_)
+
+    backend.set_objective(objective)
+    for constraint, rhs, op in constraints:
+        backend.add_constraint(constraint, rhs, op)
 
     return backend
 
 
 def solve_numerical_dual_sdp(
         x0_and_space: Dict[str, Tuple[Matrix, Matrix]],
-        objective: Tuple[str, Callable],
-        constraints: List[Callable] = [],
+        objective: np.ndarray,
+        constraints: List[Tuple[np.ndarray, float, str]] = [],
         min_eigen: Union[float, RelaxationVariable, Dict[str, Union[float, RelaxationVariable]]] = 0,
         solver='picos',
         **kwargs
@@ -66,6 +73,7 @@ def solve_numerical_dual_sdp(
     try:
         y = backend.solve()
     except Exception as e:
+        # raise e
         return None
     # y = backend.solve()
     return y

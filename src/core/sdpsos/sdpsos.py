@@ -371,7 +371,22 @@ def SDPSOS(
             accumulated_monomials.extend(monomials)
             monomials_lists.append(accumulated_monomials.copy())
 
+    odd_degree_vars = [i for i in range(nvars) if poly.degree(i) % 2 == 1]
     for monomials in monomials_lists:
+        # if the poly has odd degree on some var, but all monomials are even up to permutation,
+        # then the poly is not SOS
+        unhandled_odd = len(odd_degree_vars) > 0 # init to True if there is any odd degree var
+        for i in odd_degree_vars:
+            for i2 in symmetry.to_perm_group(nvars).orbit(i):
+                if any(m[i2] % 2 == 1 for m in monomials):
+                    unhandled_odd = False
+                    break
+            if unhandled_odd:
+                break
+        if unhandled_odd:
+            continue
+
+        # now we solve the problem
         if verbose:
             print(f"Monomials = {monomials}")
         time0 = time()

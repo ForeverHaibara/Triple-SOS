@@ -8,7 +8,10 @@ from sympy import MutableDenseMatrix as Matrix
 from sympy.core.relational import Relational
 
 from .arithmetic import solve_undetermined_linear
-from .backend import max_relax_var_objective, SDPBackend, RelaxationVariable, solve_numerical_dual_sdp
+from .backend import (
+    SDPBackend, RelaxationVariable, solve_numerical_dual_sdp,
+    max_relax_var_objective, min_trace_objective, max_inner_objective
+)
 from .rationalize import rationalize, rationalize_and_decompose
 from .transform import SDPTransformMixin
 from .ipm import (
@@ -26,21 +29,13 @@ Constraint = Callable[[SDPBackend], Any]
 MinEigen = Union[float, RelaxationVariable, Dict[str, Union[float, RelaxationVariable]]]
 PicosExpression = Any
 
-_RELATIONAL_TO_FUNC = {
-    sp.GreaterThan: '__ge__',
-    sp.StrictGreaterThan: '__ge__',
-    sp.LessThan: '__le__',
-    sp.StrictLessThan: '__le__',
-    sp.Equality: '__eq__'
+_RELATIONAL_TO_OPERATOR = {
+    sp.GreaterThan: (1, '__ge__'),
+    sp.StrictGreaterThan: (1, '__ge__'),
+    sp.LessThan: (-1, '__ge__'),
+    sp.StrictLessThan: (-1, '__ge__'),
+    sp.Equality: (1, '__eq__')
 }
-_RELATIONAL_TO_FUNC_INV = {
-    sp.GreaterThan: '__le__',
-    sp.StrictGreaterThan: '__le__',
-    sp.LessThan: '__ge__',
-    sp.StrictLessThan: '__ge__',
-    sp.Equality: '__eq__'
-}
-
 
 def _check_picos(verbose = False):
     """
@@ -82,7 +77,9 @@ def _decompose_matrix(
         The vector of variables.
     """
     rows, cols = M.shape
-    variables = list(M.free_symbols) if variables is None else variables
+    if variables is None:
+        variables = list(M.free_symbols)
+        variables = sorted(variables, key = lambda x: x.name)
     variable_index = {var: idx for idx, var in enumerate(variables)}
 
     v = Matrix(variables)
@@ -128,28 +125,66 @@ def _infer_free_symbols(x0_and_space: Dict[str, Tuple[Matrix, Matrix]], free_sym
             return list(Symbol('y_{%d}'%i) for i in range(dof))
     return []
 
-def _expr_to_callable(symbols: List[Symbol], expr: Expr) -> Callable[[SDPBackend], Any]:
+def _exprs_to_arrays(locals: Dict[str, Any], symbols: List[Symbol],
+        exprs: List[Union[Callable, Expr, Relational, Union[Tuple[Matrix, Rational], Tuple[Matrix, Rational, str]]]]
+    ) -> List[Union[Tuple[Matrix, Rational], Tuple[Matrix, Rational, str]]]:
     """
-    Convert an expression to a callable function on SDP problem.
+    Convert expressions to arrays with respect to the free symbols.
+
+    Parameters
+    ----------
+    locals : Dict[str, Any]
+        The local variables.
+    symbols : List[Symbol]
+        The free symbols.
+    exprs : List[Union[Callable, Expr, Relational, Matrix]]
+        For each expression, it can be a Callable, Expr, Relational, or matrix.
+        If it is a Callable, it should be a function that calls on the locals and returns Expr/Relational/Matrix.
+        If it is a Expr, it should be with respect to the free symbols.
+        If it is a Relational, it should be with respect to the free symbols.
+
+    Returns
+    ----------
+    Matrix, Rational, [, operator] : Union[Tuple[Matrix, Rational], Tuple[Matrix, Rational, str]]
+        The coefficient vector with respect to the free symbols and the Rational of RHS (constant).
+        If it is a Relational, it returns the operator also.
     """
-    if isinstance(expr, Callable):
-        return expr
-    if isinstance(expr, Relational):
-        lhs = sp.lambdify(symbols, expr.lhs)
-        rhs = sp.lambdify(symbols, expr.rhs)
-        sym = _RELATIONAL_TO_FUNC[expr.__class__]
-        sym_inv = _RELATIONAL_TO_FUNC_INV[expr.__class__]
-        def func(vars: SDPBackend) -> Any:
-            y = vars.y
-            try:
-                return getattr(lhs(y), sym)(rhs(y))
-            except Exception as e:
-                return getattr(rhs(y), sym_inv)(lhs(y))
-        return func
-    if isinstance(expr, Expr):
-        func = sp.lambdify(symbols, expr)
-        return lambda vars: func(vars.y)
-    return expr
+    op_list = []
+    vec_list = []
+    index_list = []
+    result = [None for _ in range(len(exprs))]
+    for i, expr in enumerate(exprs):
+        c, op = 0, None
+        if callable(expr):
+            expr = expr(locals)
+        if isinstance(expr, tuple):
+            if len(expr) == 3:
+                expr, c, op = expr
+            else:
+                expr, c = expr
+        if isinstance(expr, Relational):
+            sign, op = _RELATIONAL_TO_OPERATOR[expr.__class__]
+            expr = expr.lhs - expr.rhs if sign == 1 else expr.rhs - expr.lhs
+            c = -c if sign == -1 else c
+        if isinstance(expr, (Expr, int, float)):
+            vec_list.append(expr)
+            op_list.append(op)
+            index_list.append(i)
+        else:
+            if op is not None:
+                result[i] = (expr, c, op)
+            else:
+                result[i] = (expr, c)
+
+    const, A, _ = _decompose_matrix(sp.Matrix(vec_list), symbols)
+
+    for j in range(len(index_list)):
+        i = index_list[j]
+        if op_list[j] is not None:
+            result[i] = (A[j,:], -const[j], op_list[j])
+        else:
+            result[i] = (A[j,:], -const[j])
+    return result
 
 def _align_iters(
         iters: List[Union[Any, List[Any]]],
@@ -357,6 +392,7 @@ class SDPProblem(SDPTransformMixin):
             free_symbols |= set(s.free_symbols)
 
         free_symbols = list(free_symbols)
+        free_symbols = sorted(free_symbols, key = lambda x: x.name)
 
         x0_and_space = []
         for s in S:
@@ -446,19 +482,22 @@ class SDPProblem(SDPTransformMixin):
         Get the default configurations of the SDP problem.
         """
         if self.dof == 0:
-            objectives = [('min', 0)]
+            objective_and_min_eigens = [(0, 0)]
         else:
             obj_key = self.keys(filter_none = True)[0]
-            objectives = [
-                ('max', lambda x: x.trace(obj_key)),
-                ('min', lambda x: x.trace(obj_key)),
-                ('max', lambda x: x.inner(obj_key, 1)),
-                max_relax_var_objective()
+            min_trace = min_trace_objective(self._x0_and_space[obj_key][1])
+            objective_and_min_eigens = [
+                (min_trace, 0),
+                (-min_trace, 0),
+                (max_inner_objective(self._x0_and_space[obj_key][1], 1.), 0),
+                (max_relax_var_objective(self.dof), RelaxationVariable(1, 0)),
             ]
+
+        objectives = [_[0] for _ in objective_and_min_eigens]
+        min_eigens = [_[1] for _ in objective_and_min_eigens]
         # x = np.random.randn(*sdp.variables[obj_key].shape)
         # objectives.append(('max', lambda sdp: sdp.variables[obj_key]|x))
         constraints = [[] for _ in range(len(objectives))]
-        min_eigens = [0] * (len(objectives) - 1) + [RelaxationVariable(1, 0)]
         return [objectives, constraints, min_eigens]
 
     def rationalize(
@@ -545,6 +584,7 @@ class SDPProblem(SDPTransformMixin):
             list_of_objective: List[Objective] = [],
             list_of_constraints: List[List[Constraint]] = [],
             list_of_min_eigen: List[MinEigen] = [],
+            solver: str = 'picos',
             allow_numer: int = 0,
             rationalize_configs = {},
             verbose: bool = False,
@@ -552,31 +592,42 @@ class SDPProblem(SDPTransformMixin):
         ):
 
         num_sol = len(self._ys)
+        _locals = None
+
+        if any(callable(_) for _ in list_of_objective) or any(any(callable(_) for _ in _) for _ in list_of_constraints):
+            _locals = self.S_from_y()
+            _locals['y'] = self.y
 
         for obj, con, eig in zip(list_of_objective, list_of_constraints, list_of_min_eigen):
             # iterate through the configurations
-            con = [_expr_to_callable(self.free_symbols, c) for c in con]
-
+            con = _exprs_to_arrays(_locals, self.free_symbols, con)
             y = solve_numerical_dual_sdp(
                 self._x0_and_space,
-                (obj[0], _expr_to_callable(self.free_symbols, obj[1])),
+                _exprs_to_arrays(_locals, self.free_symbols, [obj])[0][0],
                 constraints=con,
                 min_eigen=eig,
+                solver=solver,
                 **kwargs
             )
             if y is not None:
+                self._ys.append(y)
+
+                def _force_return(self: SDPProblem, y):
+                    self.register_y(y, perturb = True, propagate_to_parent = False)
+                    _decomp = dict((key, (s, d)) for (key, s), d in zip(self.S.items(), self.decompositions.values()))
+                    return y, _decomp
+
+                if allow_numer >= 3:
+                    # force to return the numerical solution
+                    return _force_return(self, y)
+
                 decomp = rationalize_and_decompose(y, self._x0_and_space, **rationalize_configs)
                 if decomp is not None:
                     return decomp
-                self._ys.append(y)
-                
-            if allow_numer >= 2:
-                # force to return the first numerical solution
-                if y is None:
-                    return None
-                else:
-                    return rationalize_and_decompose(y, self._x0_and_space,
-                            try_rationalize_with_mask = False, times = 0, perturb = True, check_pretty = False)
+
+                if allow_numer == 2:
+                    # force to return the numerical solution if rationalization fails
+                    return _force_return(self, y)
 
         if len(self._ys) > num_sol:
             # new numerical solution found
@@ -599,6 +650,7 @@ class SDPProblem(SDPTransformMixin):
             objectives: Union[Objective, List[Objective]] = [],
             constraints: Union[List[Constraint], List[List[Constraint]]] = [],
             min_eigen: Union[MinEigen, List[MinEigen]] = [],
+            solver: str = 'picos',
             use_default_configs: bool = True,
             allow_numer: int = 0,
             verbose: bool = False,
@@ -616,10 +668,11 @@ class SDPProblem(SDPTransformMixin):
             If True, it appends the default configurations of SDP to the given configurations.
             If False, it only uses the given configurations.
         allow_numer : int
-            Whether to accept numerical solution. If 0, then the function will return None if
-            the rational feasible solution does not exist. If 1, then the function will return a numerical solution
-            if the rational feasible solution does not exist. If 2, then the function will return the first
-            numerical solution without any rationalization.
+            Whether to accept numerical solution. 
+            If 0, then it claims failure if the rational feasible solution does not exist.
+            If 1, then it accepts a numerical solution if the rational feasible solution does not exist.
+            If 2, then it accepts the first numerical solution if rationalization fails.
+            If 3, then it accepts the first numerical solution directly. Defaults to 0.
         verbose : bool
             If True, print the information of the solving process.
         solve_child : bool
@@ -642,6 +695,7 @@ class SDPProblem(SDPTransformMixin):
                     objectives = objectives,
                     constraints = constraints,
                     min_eigen = min_eigen,
+                    solver = solver,
                     allow_numer = allow_numer,
                     verbose = verbose,
                     solve_child = solve_child,
@@ -667,7 +721,7 @@ class SDPProblem(SDPTransformMixin):
         #            Solve the SDP problem
         #################################################
         solution = self._solve_from_multiple_configs(
-            *configs, allow_numer = allow_numer, verbose = verbose, **kwargs
+            *configs, solver=solver, allow_numer = allow_numer, verbose = verbose, **kwargs
         )
 
         if solution is not None:
