@@ -4,7 +4,7 @@ from typing import Union, Optional, Tuple, List, Dict, Callable, Generator
 import numpy as np
 import sympy as sp
 
-from .utils import congruence_with_perturbation, S_from_y
+from .utils import congruence_with_perturbation
 
 Decomp = Dict[str, Tuple[sp.Matrix, sp.Matrix, List[sp.Rational]]]
 
@@ -126,7 +126,7 @@ def verify_is_pretty(
 
 def rationalize_and_decompose(
         y: Union[np.ndarray, sp.Matrix],
-        x0_and_space: Dict[str, Tuple[sp.Matrix, sp.Matrix]],
+        mat_func: Callable[[sp.Matrix], Dict[str, sp.Matrix]],
         try_rationalize_with_mask: bool = True,
         lcm: int = 1260,
         times: int = 3,
@@ -142,8 +142,9 @@ def rationalize_and_decompose(
     ----------
     y : np.ndarray
         The vector to be rationalized.
-    x0_and_space : Dict[str, Tuple[sp.Matrix, sp.Matrix]]
-        vec(S[key]) = x0[key] + space[key] @ y.
+    mat_func : Callable[[sp.Matrix], Dict[str, sp.Matrix]]
+        Given a rationalized vector `y`, return a dictionary of matrices
+        that needs to be PSD.
     try_rationalize_with_mask: bool
         If True, function `rationalize_with_mask` will be called first.
     lcm: int
@@ -181,7 +182,7 @@ def rationalize_and_decompose(
         if check_pretty and not verify_is_pretty(y_rational):
             continue
 
-        S_dict = S_from_y(y_rational, x0_and_space)
+        S_dict = mat_func(y_rational)
         decompositions = {}
         for key, S in S_dict.items():
             if reg != 0:

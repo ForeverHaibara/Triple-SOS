@@ -6,7 +6,7 @@ from .arithmetic import (
     solve_undetermined_linear,
     matmul, matmul_multiple, symmetric_bilinear, symmetric_bilinear_multiple
 )
-from .abstract import AbstractSDPProblem
+from .abstract import SDPProblemBase
 from .utils import is_empty_matrix, Mat2Vec
 
 class SDPTransformation():
@@ -20,7 +20,7 @@ class SDPTransformation():
         self.child_node = self._init_child_node(*args, **kwargs)
         self.parent_node._transforms.append(self)
         self.child_node._transforms.append(self)
-    def _init_child_node(self, *args, **kwargs) -> AbstractSDPProblem:
+    def _init_child_node(self, *args, **kwargs) -> SDPProblemBase:
         return
     def is_parent(self, sdp):
         return sdp is self.parent_node
@@ -31,9 +31,9 @@ class SDPTransformation():
     def propagate_to_child(self, recursive: bool = True):
         raise NotImplementedError
     @classmethod
-    def _create_sdpproblem(cls, *args, **kwargs) -> AbstractSDPProblem:
+    def _create_sdpproblem(cls, *args, **kwargs) -> SDPProblemBase:
         # Avoid circular import
-        from .solver import SDPProblem
+        from .dual import SDPProblem
         return SDPProblem(*args, **kwargs)
 
 class SDPIdentityTransform(SDPTransformation):
@@ -107,7 +107,7 @@ class SDPMatrixTransform(SDPTransformation):
         return super().__new__(cls)
 
 
-    def __init__(self, parent_node: AbstractSDPProblem, columnspace: Optional[Dict[str, sp.Matrix]] = None, nullspace: Optional[Dict[str, sp.Matrix]] = None):
+    def __init__(self, parent_node: SDPProblemBase, columnspace: Optional[Dict[str, sp.Matrix]] = None, nullspace: Optional[Dict[str, sp.Matrix]] = None):
         def _reg(X, key):
             m = sp.Matrix.hstack(*X.columnspace())
             if is_empty_matrix(m):
@@ -341,10 +341,11 @@ class SDPVectorTransform(SDPTransformation):
             parent_node.propagate_to_parent(recursive = recursive)
         return parent_node
 
-class SDPTransformMixin(AbstractSDPProblem):
+class SDPTransformMixin(SDPProblemBase):
     def __init__(self, *args, **kwargs):
         # record the transformation dependencies
         self._transforms: List[SDPTransformation] = []
+        super().__init__(*args, **kwargs)
 
     @property
     def parents(self) -> List['SDPTransformMixin']:
@@ -369,7 +370,7 @@ class SDPTransformMixin(AbstractSDPProblem):
             return children[-1].get_last_child()
         return self
 
-    def common_transform(self, other: AbstractSDPProblem) -> SDPTransformation:
+    def common_transform(self, other: SDPProblemBase) -> SDPTransformation:
         """
         Return the common transformation between two SDP problems.
         """
@@ -411,7 +412,7 @@ class SDPTransformMixin(AbstractSDPProblem):
     def _get_zero_diagonals(self) -> Dict[str, List[int]]:
         return SDPRowMasking._get_zero_diagonals(self._x0_and_space)
 
-    def constrain_subspace(self, columnspaces: Dict[str, sp.Matrix], to_child: bool = False) -> AbstractSDPProblem:
+    def constrain_subspace(self, columnspaces: Dict[str, sp.Matrix], to_child: bool = False) -> SDPProblemBase:
         """
         Assume Si = Qi * Mi * Qi.T where Qi are given.
         Then the problem becomes to find Mi >> 0.
@@ -441,7 +442,7 @@ class SDPTransformMixin(AbstractSDPProblem):
         transform = SDPMatrixTransform(self, columnspace=columnspaces)
         return transform.child_node
 
-    def constrain_nullspace(self, nullspaces: Dict[str, sp.Matrix], to_child: bool = False) -> AbstractSDPProblem:
+    def constrain_nullspace(self, nullspaces: Dict[str, sp.Matrix], to_child: bool = False) -> SDPProblemBase:
         """
         Assume Si * Ni = 0 where Ni are given, which means that there exists Qi
         such that Si = Qi * Mi * Qi.T where Qi are nullspaces of Ni.
@@ -478,7 +479,7 @@ class SDPTransformMixin(AbstractSDPProblem):
         transform = SDPMatrixTransform(sdp, nullspace=nullspaces)
         return transform.child_node
 
-    def constrain_symmetry(self) -> AbstractSDPProblem:
+    def constrain_symmetry(self) -> SDPProblemBase:
         """
         Constrain the solution to be symmetric. This is useful to reduce
         the degree of freedom when the given symbolic matrix is not symmetric.
@@ -499,7 +500,7 @@ class SDPTransformMixin(AbstractSDPProblem):
         transform = SDPVectorTransform.from_equations(self, eqs, rhs)
         return transform.child_node
 
-    def constrain_equal_entries(self, entry_tuples: Dict[str, List[Tuple[Tuple[int, int], Tuple[int, int]]]]) -> AbstractSDPProblem:
+    def constrain_equal_entries(self, entry_tuples: Dict[str, List[Tuple[Tuple[int, int], Tuple[int, int]]]]) -> SDPProblemBase:
         """
         Constrain some of the entries to be equal. This is a generalization of
         `constrain_symmetry`.
@@ -528,7 +529,7 @@ class SDPTransformMixin(AbstractSDPProblem):
         transform = SDPVectorTransform.from_equations(self, eqs, rhs)
         return transform.child_node
 
-    def constrain_zero_diagonals(self, recursive: bool = True) -> AbstractSDPProblem:
+    def constrain_zero_diagonals(self, recursive: bool = True) -> SDPProblemBase:
         """
         If a diagonal of the positive semidefinite matrix is zero,
         then the corresponding row must be all zeros. This function

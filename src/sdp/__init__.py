@@ -7,7 +7,7 @@
 #     matmul, matmul_multiple, symmetric_bilinear, symmetric_bilinear_multiple
 # )
 
-from .solver import SDPProblem
+from .dual import SDPProblem
 
 from .utils import congruence
 
