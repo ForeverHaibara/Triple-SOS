@@ -1,3 +1,4 @@
+from abc import ABC, abstractmethod
 from typing import Optional, Dict, Tuple, List
 
 import sympy as sp
@@ -63,8 +64,38 @@ class SDPIdentityTransform(SDPTransformation):
     def propagate_to_child(self, recursive: bool = True):
         return
 
+class SDPCopyTransform(SDPTransformation):
+    """
+    This is a transformation that copies the SDPProblem.    
+    """
+    def propagate_to_child(self, recursive: bool = True):
+        parent, child = self.parent_node, self.child_node
+        child.y = parent.y
+        child.S = parent.S
+        child.decompositions = parent.decompositions
+        return child.propagate_to_child(recursive)
+
+    def propagate_to_parent(self, recursive: bool = True):
+        parent, child = self.parent_node, self.child_node
+        parent.y = child.y
+        parent.S = child.S
+        parent.decompositions = child.decompositions
+        return parent.propagate_to_parent(recursive)
 
 class SDPMatrixTransform(SDPTransformation):
+    def __new__(cls, parent_node, columnspace = None, nullspace = None):
+        if parent_node.is_dual:
+            return DualMatrixTransform(parent_node, columnspace, nullspace)
+        if parent_node.is_primal:
+            return PrimalMatrixTransform(parent_node, columnspace, nullspace)
+
+        raise ValueError("The parent node should be either primal or dual.")
+        # return super().__new__(cls)
+
+    def __init__(self, parent_node, *args, **kwargs):
+        super().__init__(parent_node, *args, **kwargs)
+
+class DualMatrixTransform(SDPMatrixTransform):
     """
     Assume the original problem to be S1 >= 0, ... Sn >= 0.
     We assume that Si = Ui * Mi * Ui' given matrices U1, ... Un.
@@ -96,15 +127,13 @@ class SDPMatrixTransform(SDPTransformation):
         if columnspace is None and nullspace is None:
             raise ValueError("Columnspace and nullspace cannot both be None.")
 
-
         if nullspace is None:
             if all(is_empty_matrix(mat, check_all_zeros=True) for mat in columnspace.values()):
                 return SDPIdentityTransform.__new__(SDPIdentityTransform, parent_node)
         elif columnspace is None:
             if all(is_empty_matrix(mat, check_all_zeros=True) for mat in nullspace.values()):
                 return SDPIdentityTransform.__new__(SDPIdentityTransform, parent_node)
-
-        return super().__new__(cls)
+        return object.__new__(cls)
 
 
     def __init__(self, parent_node: SDPProblemBase, columnspace: Optional[Dict[str, sp.Matrix]] = None, nullspace: Optional[Dict[str, sp.Matrix]] = None):
@@ -195,7 +224,7 @@ class SDPMatrixTransform(SDPTransformation):
         return parent_node
 
 
-class SDPRowMasking(SDPMatrixTransform):
+class SDPRowMasking(DualMatrixTransform):
     """
     Mask several rows and cols of the matrix so that they are assumed
     to be zero. This is useful when we want to reduce the rank of the
@@ -307,6 +336,8 @@ class SDPVectorTransform(SDPTransformation):
     The new problem is to solve for z such that S1 >= 0, ... Sn >= 0.
     """
     def __init__(self, parent_node, A: sp.Matrix, b: sp.Matrix):
+        if not parent_node.is_dual:
+            raise ValueError("The parent node should be a dual problem for vector transformation.")
         self._A = A
         self._b = b
         super().__init__(parent_node, A, b)
@@ -340,6 +371,62 @@ class SDPVectorTransform(SDPTransformation):
         if recursive:
             parent_node.propagate_to_parent(recursive = recursive)
         return parent_node
+
+
+class PrimalMatrixTransform(SDPMatrixTransform, SDPCopyTransform):
+    """
+    Assume the original problem to be S1 >= 0, ... Sn >= 0 where they satisfy certain constraints.
+    The class imposes additional constraints on the matrices given columnspace / nullspace of Si.
+    """
+    
+    def __new__(cls, parent_node, columnspace = None, nullspace = None):
+        if columnspace is None and nullspace is None:
+            raise ValueError("Columnspace and nullspace cannot both be None.")
+
+        if nullspace is None:
+            if all(is_empty_matrix(mat, check_all_zeros=True) for mat in columnspace.values()):
+                return SDPIdentityTransform.__new__(SDPIdentityTransform, parent_node)
+        elif columnspace is None:
+            if all(is_empty_matrix(mat, check_all_zeros=True) for mat in nullspace.values()):
+                return SDPIdentityTransform.__new__(SDPIdentityTransform, parent_node)
+        return object.__new__(cls)
+
+
+    def _init_child_node(self, columnspace: Optional[Dict[str, sp.Matrix]] = None, nullspace: Optional[Dict[str, sp.Matrix]] = None):
+        parent_node = self.parent_node
+        if columnspace is not None:
+            raise NotImplementedError
+
+        space = {k: v.copy() for k, v in parent_node._space.items()}
+        eq_num = 0
+        for key, mat in nullspace.items():
+            eqs = []
+            m = mat.shape[0]
+            for i in range(mat.shape[1]):
+                # consider every column of the nullspace
+                if not any(mat[:, i]):
+                    continue
+                # each row inner product with the column should be zero
+                for j in range(m):
+                    eq = sp.zeros(1, m**2)
+                    for k in range(m):
+                        eq[j*m+k] += mat[k, i]
+                        eq[k*m+j] += mat[k, i] # keep the matrix constraint symmetric
+                    eqs.append(eq)
+            if len(eqs):
+                eqs = sp.Matrix.vstack(*eqs)
+                eq_num += eqs.shape[0]
+                space[key] = sp.Matrix.vstack(space[key], eqs)
+                for other_key, other_mat in space.items():
+                    if other_key == key:
+                        continue
+                    # align eqs with other_mat
+                    space[other_key] = sp.Matrix.hstack(other_mat, sp.zeros(eqs.shape[0], other_mat.shape[1]))
+
+        x0 = sp.Matrix.vstack(parent_node._x0, sp.zeros(eq_num, 1))
+        return parent_node.__class__(space, x0)
+
+
 
 class SDPTransformMixin(SDPProblemBase):
     def __init__(self, *args, **kwargs):
@@ -409,11 +496,16 @@ class SDPTransformMixin(SDPProblemBase):
             if transform.is_child(self):
                 transform.propagate_to_parent(recursive = recursive)
 
+    def propagate_to_child(self, recursive: bool = True):
+        """
+        Propagate the result to the child node.
+        """
+        for transform in self._transforms:
+            if transform.is_parent(self):
+                transform.propagate_to_child(recursive = recursive)
 
-class DualTransformMixin(SDPTransformMixin):
-    def _get_zero_diagonals(self) -> Dict[str, List[int]]:
-        return SDPRowMasking._get_zero_diagonals(self._x0_and_space)
-
+    
+    @abstractmethod
     def constrain_subspace(self, columnspaces: Dict[str, sp.Matrix], to_child: bool = False) -> SDPProblemBase:
         """
         Assume Si = Qi * Mi * Qi.T where Qi are given.
@@ -439,11 +531,8 @@ class DualTransformMixin(SDPTransformMixin):
             If there is no solution to the linear system Si = Qi * Mi * Qi.T,
             then it raises an error.
         """
-        if to_child:
-            raise NotImplementedError("Constraining to child node is not implemented yet.")
-        transform = SDPMatrixTransform(self, columnspace=columnspaces)
-        return transform.child_node
 
+    @abstractmethod
     def constrain_nullspace(self, nullspaces: Dict[str, sp.Matrix], to_child: bool = False) -> SDPProblemBase:
         """
         Assume Si * Ni = 0 where Ni are given, which means that there exists Qi
@@ -457,11 +546,12 @@ class DualTransformMixin(SDPTransformMixin):
             should match the keys of self.keys().
         to_child : bool
             If True, apply the constrain to the child node. Otherwise, apply
-            the constrain to the current node. Defaults to False.
+            the constrain to the current node. Defaults to False. This is only
+            supported when the child is the result of a chain of matrix transformations.
 
         Returns
         ----------
-        SDPProblem
+        SDPProblemBase
             The new SDP problem.
 
         Raises
@@ -470,22 +560,40 @@ class DualTransformMixin(SDPTransformMixin):
             If there is no solution to the linear system Si = Qi * Mi * Qi.T,
             then it raises an error.
         """
+
+    @abstractmethod
+    def constrain_symmetry(self) -> SDPProblemBase:
+        """
+        Constrain the solution to be symmetric. This is useful to reduce
+        the degree of freedom when the given symbolic matrix is not symmetric.
+        """
+
+
+class DualTransformMixin(SDPTransformMixin):
+    def _get_zero_diagonals(self) -> Dict[str, List[int]]:
+        return SDPRowMasking._get_zero_diagonals(self._x0_and_space)
+
+    def constrain_subspace(self, columnspaces: Dict[str, sp.Matrix], to_child: bool = False) -> SDPProblemBase:
+        if to_child:
+            raise NotImplementedError("Constraining to child node is not implemented yet.")
+        transform = SDPMatrixTransform(self, columnspace=columnspaces)
+        return transform.child_node
+
+    def constrain_nullspace(self, nullspaces: Dict[str, sp.Matrix], to_child: bool = False) -> SDPProblemBase:
         sdp = self
         nullspaces = self._standardize_mat_dict(nullspaces)
         if to_child:
             while len(sdp.children):
                 sdp2 = sdp.children[-1]
                 transform = sdp.common_transform(sdp2)
+                if not isinstance(transform, DualMatrixTransform):
+                    raise ValueError("Transformations should be a chain of DualMatrixTransform when to_child is True.")
                 nullspaces = {key: transform.columnspace[key].T * nullspaces[key] for key in sdp2.keys()}
                 sdp = sdp2
         transform = SDPMatrixTransform(sdp, nullspace=nullspaces)
         return transform.child_node
 
     def constrain_symmetry(self) -> SDPProblemBase:
-        """
-        Constrain the solution to be symmetric. This is useful to reduce
-        the degree of freedom when the given symbolic matrix is not symmetric.
-        """
         # first solve for the nullspace the y should lie in
         eqs = []
         rhs = []
@@ -540,4 +648,22 @@ class DualTransformMixin(SDPTransformMixin):
         return SDPRowMasking.constrain_zero_diagonals(self, recursive = recursive).child_node
 
 
-class PrimalTransformMixin(SDPTransformMixin): ...
+class PrimalTransformMixin(SDPTransformMixin):
+    def constrain_subspace(self, columnspaces: Dict[str, sp.Matrix], to_child: bool = False) -> SDPProblemBase:
+        raise NotImplementedError("Constraint to subspace is not implemented for primal problems.")
+
+    def constrain_nullspace(self, nullspaces: Dict[str, sp.Matrix], to_child: bool = False) -> SDPProblemBase:
+        sdp = self
+        # nullspaces = self._standardize_mat_dict(nullspaces)
+        if to_child:
+            while len(sdp.children):
+                sdp2 = sdp.children[-1]
+                transform = sdp.common_transform(sdp2)
+                if not isinstance(transform, PrimalMatrixTransform):
+                    raise ValueError("Transformations should be a chain of PrimalMatrixTransform when to_child is True.")
+                sdp = sdp2
+        transform = SDPMatrixTransform(sdp, nullspace=nullspaces)
+        return transform.child_node
+
+    def constrain_symmetry(self) -> SDPProblemBase:
+        raise NotImplementedError("Symmetry constraint needs not to be applied to primal problems.")

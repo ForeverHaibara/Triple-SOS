@@ -46,6 +46,8 @@ class SDPProblemBase(ABC):
     """
     Common class for SDP problems in both primal and dual forms.
     """
+    is_dual = False
+    is_primal = False
     def __init__(self, *args, **kwargs) -> None:
         # associated with the PSD matrices
         self.y = None
@@ -196,7 +198,7 @@ class SDPProblemBase(ABC):
         y = np.array(ys).mean(axis = 0)
 
         S_numer = mat_func(Matrix(y))
-        if all(_.is_positive_definite for _ in S_numer.values()):
+        if all(_.is_positive_semidefinite for _ in S_numer.values()):
             lcm, times = 1260, 5
         else:
             # spaces = [space for x0, space in self._x0_and_space.values()]

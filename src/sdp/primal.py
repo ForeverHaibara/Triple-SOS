@@ -22,6 +22,8 @@ class SDPPrimal(PrimalTransformMixin):
     reformulating the problem to the dual form.
 
     """
+    is_dual = False
+    is_primal = True
     def __init__(self,
         space: Dict[str, Matrix],
         x0: Matrix
@@ -62,10 +64,6 @@ class SDPPrimal(PrimalTransformMixin):
     def get_size(self, key: str) -> int:
         return Mat2Vec.length_of_mat(self._space[key].shape[1])
 
-    @property
-    def _transforms(self) -> None:
-        raise NotImplementedError("The transforms are not implemented for the primal form.")
-
     def S_from_y(self, y: Optional[Union[Matrix, ndarray]] = None) -> Dict[str, Matrix]:
         if y is None:
             y = []
@@ -76,10 +74,10 @@ class SDPPrimal(PrimalTransformMixin):
             m = sum(space.shape[1] for space in self._space.values())
             if isinstance(y, MatrixBase):
                 if y.shape != (m, 1):
-                    raise ValueError(f"Vector y must be a matrix of shape ({m}, 1).")
+                    raise ValueError(f"Vector y must be a matrix of shape ({m}, 1), but got {y.shape}.")
             elif isinstance(y, ndarray):
                 if y.size != m:
-                    raise ValueError(f"Vector y must be an array of shape ({m},) or ({m}, 1).")
+                    raise ValueError(f"Vector y must be an array of shape ({m},) or ({m}, 1), but got {y.shape}.")
                 y = Matrix(y.flatten())
 
         S = {}

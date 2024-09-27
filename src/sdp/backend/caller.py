@@ -1,6 +1,6 @@
 from typing import List, Tuple, Dict, Union, Optional, Any
 
-import numpy as np
+from numpy import ndarray
 from sympy import MutableDenseMatrix as Matrix
 
 from .backend import DualBackend, PrimalBackend, DegeneratedDualBackend
@@ -39,8 +39,8 @@ def get_default_sdp_backend(dual = True) -> str:
 
 def _create_numerical_dual_sdp(
         x0_and_space: Dict[str, Tuple[Matrix, Matrix]],
-        objective: np.ndarray,
-        constraints: List[Tuple[np.ndarray, float, str]] = [],
+        objective: ndarray,
+        constraints: List[Tuple[ndarray, float, str]] = [],
         min_eigen: Union[float, tuple, Dict[str, Union[float, tuple]]] = 0,
         solver: Optional[str] = None,
     ) -> DualBackend:
@@ -76,25 +76,25 @@ def _create_numerical_dual_sdp(
 
 
 def solve_numerical_dual_sdp(
-        x0_and_space: Dict[str, Tuple[np.ndarray, np.ndarray]],
-        objective: np.ndarray,
-        constraints: List[Tuple[np.ndarray, float, str]] = [],
+        x0_and_space: Dict[str, Tuple[ndarray, ndarray]],
+        objective: ndarray,
+        constraints: List[Tuple[ndarray, float, str]] = [],
         min_eigen: Union[float, tuple, Dict[str, Union[float, tuple]]] = 0,
         solver: Optional[str] = None,
         solver_options: Dict[str, Any] = {},
         raise_exception: bool = False,
-    ) -> Optional[np.ndarray]:
+    ) -> Optional[ndarray]:
     """
     Solve for y such that all(Mat(x0 + space @ y) >> 0 for x0, space in x0_and_space.values()).
     This is the dual form of SDP problem.
 
     Parameters
     ----------
-    x0_and_space : Dict[str, Tuple[np.ndarray, np.ndarray]]
+    x0_and_space : Dict[str, Tuple[ndarray, ndarray]]
         A dictionary of x0 and space matrices.
-    objective : np.ndarray
+    objective : ndarray
         The objective function, which is a vector.
-    constraints : List[Tuple[np.ndarray, float, str]]
+    constraints : List[Tuple[ndarray, float, str]]
         A list of constraints, each represented as a tuple of (constraint, rhs, operator).
     min_eigen : Union[float, tuple, Dict[str, Union[float, tuple]]]
         The minimum eigenvalue of each PSD matrices, defaults to 0. But perturbation is allowed.
@@ -119,10 +119,10 @@ def solve_numerical_dual_sdp(
 
 
 def _create_numerical_primal_sdp(
-        space: Dict[str, np.ndarray],
-        x0: np.ndarray,
-        objective: np.ndarray,
-        constraints: List[Tuple[np.ndarray, float, str]] = [],
+        space: Dict[str, ndarray],
+        x0: ndarray,
+        objective: ndarray,
+        constraints: List[Tuple[ndarray, float, str]] = [],
         min_eigen: Union[float, tuple, Dict[str, Union[float, tuple]]] = 0,
         solver: Optional[str] = None,
     ) -> PrimalBackend:
@@ -148,15 +148,15 @@ def _create_numerical_primal_sdp(
 
 
 def solve_numerical_primal_sdp(
-        space: Dict[str, np.ndarray],
-        x0: np.ndarray,
-        objective: np.ndarray,
-        constraints: List[Tuple[np.ndarray, float, str]] = [],
+        space: Dict[str, ndarray],
+        x0: ndarray,
+        objective: ndarray,
+        constraints: List[Tuple[ndarray, float, str]] = [],
         min_eigen: Union[float, tuple, Dict[str, Union[float, tuple]]] = 0,
         solver: Optional[str] = None,
         solver_options: Dict[str, Any] = {},
         raise_exception: bool = False,
-    ) -> PrimalBackend:
+    ) -> Optional[ndarray]:
     """
     Solve for x such that Sum(space_i @ Si) = x0.
     This is the primal form of SDP problem.

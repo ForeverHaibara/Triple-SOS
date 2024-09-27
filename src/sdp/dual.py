@@ -179,6 +179,8 @@ class SDPProblem(DualTransformMixin):
     where x_i and space_i are known. The problem is to find a rational solution y such that S_i >> 0.
     This is the standard form of our rational SDP feasible problem.
     """
+    is_dual = True
+    is_primal = False
     def __init__(
         self,
         x0_and_space: Union[Dict[str, Tuple[Matrix, Matrix]], List[Tuple[Matrix, Matrix]]],
@@ -322,11 +324,15 @@ class SDPProblem(DualTransformMixin):
         if y is None:
             y = Matrix(self.free_symbols).reshape(m, 1)
         elif isinstance(y, MatrixBase):
-            if y.shape != (m, 1):
-                raise ValueError(f"Vector y must be a matrix of shape ({m}, 1).")
+            if m == 0 and y.shape[0] * y.shape[1] == 0:
+                y = Matrix.zeros(0, 1)
+            elif y.shape == (1, m):
+                y = y.T
+            elif y.shape != (m, 1):
+                raise ValueError(f"Vector y must be a matrix of shape ({m}, 1), but got {y.shape}.")
         elif isinstance(y, np.ndarray):
             if y.size != m:
-                raise ValueError(f"Vector y must be an array of shape ({m},) or ({m}, 1).")
+                raise ValueError(f"Vector y must be an array of shape ({m},) or ({m}, 1), but got {y.shape}.")
             y = Matrix(y.flatten())
         elif isinstance(y, dict):
             y = Matrix([y.get(v, v) for v in self.free_symbols]).reshape(m, 1)
