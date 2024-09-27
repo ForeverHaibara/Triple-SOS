@@ -409,6 +409,8 @@ class SDPTransformMixin(SDPProblemBase):
             if transform.is_child(self):
                 transform.propagate_to_parent(recursive = recursive)
 
+
+class DualTransformMixin(SDPTransformMixin):
     def _get_zero_diagonals(self) -> Dict[str, List[int]]:
         return SDPRowMasking._get_zero_diagonals(self._x0_and_space)
 
@@ -536,3 +538,6 @@ class SDPTransformMixin(SDPProblemBase):
         constrains the solution to satisfy this condition.
         """
         return SDPRowMasking.constrain_zero_diagonals(self, recursive = recursive).child_node
+
+
+class PrimalTransformMixin(SDPTransformMixin): ...

@@ -2,9 +2,9 @@ from typing import Any, Tuple
 
 import numpy as np
 
-from .backend import SDPBackend
+from .backend import DualBackend
 
-class SDPBackendSDPAP(SDPBackend):
+class DualBackendSDPAP(DualBackend):
     """
     SDPA (for Python) backend for SDP problems.
 
@@ -18,6 +18,7 @@ class SDPBackendSDPAP(SDPBackend):
     [1] https://sdpa.sourceforge.net/index.html
     [2] https://sdpa-python.github.io/docs/installation/
     """
+    _dependencies = ('sdpap',)
     def __init__(self, dof) -> None:
         super().__init__(dof)
         self._As = []
@@ -26,7 +27,7 @@ class SDPBackendSDPAP(SDPBackend):
         self._J = []
         self.solution = None
 
-    def _add_linear_matrix_inequality(self, name: str, x0: np.ndarray, extended_space: np.ndarray) -> np.ndarray:
+    def _add_linear_matrix_inequality(self, x0: np.ndarray, extended_space: np.ndarray) -> np.ndarray:
         self._As.append(extended_space)
         self._bs.append(-x0)
         self._J.append(int(round(np.sqrt(extended_space.shape[0]))))
@@ -37,14 +38,6 @@ class SDPBackendSDPAP(SDPBackend):
 
     def _set_objective(self, objective: np.ndarray) -> None:
         self._c = objective
-
-    @classmethod
-    def is_available(cls) -> bool:
-        try:
-            import sdpap
-            return True
-        except ImportError:
-            return False
 
     def _get_ABCKJ(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray, Any, Any]:
         """

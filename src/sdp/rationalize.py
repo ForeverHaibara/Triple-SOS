@@ -127,6 +127,7 @@ def verify_is_pretty(
 def rationalize_and_decompose(
         y: Union[np.ndarray, sp.Matrix],
         mat_func: Callable[[sp.Matrix], Dict[str, sp.Matrix]],
+        projection: Optional[Callable[[sp.Matrix], sp.Matrix]] = None,
         try_rationalize_with_mask: bool = True,
         lcm: int = 1260,
         times: int = 3,
@@ -145,6 +146,9 @@ def rationalize_and_decompose(
     mat_func : Callable[[sp.Matrix], Dict[str, sp.Matrix]]
         Given a rationalized vector `y`, return a dictionary of matrices
         that needs to be PSD.
+    projection : Optional[Callable[[sp.Matrix], sp.Matrix]]
+        The projection function. If not None, we project `y` to the feasible
+        region before checking the PSD property.
     try_rationalize_with_mask: bool
         If True, function `rationalize_with_mask` will be called first.
     lcm: int
@@ -181,6 +185,8 @@ def rationalize_and_decompose(
     for y_rational in ys:
         if check_pretty and not verify_is_pretty(y_rational):
             continue
+        if projection is not None:
+            y_rational = projection(y_rational)
 
         S_dict = mat_func(y_rational)
         decompositions = {}

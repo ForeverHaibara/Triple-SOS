@@ -13,7 +13,7 @@ from .backend import (
     max_relax_var_objective, min_trace_objective, max_inner_objective
 )
 from .rationalize import rationalize, rationalize_and_decompose
-from .transform import SDPTransformMixin
+from .transform import DualTransformMixin
 from .ipm import SDPRationalizeError
 
 from .utils import S_from_y
@@ -163,7 +163,7 @@ def _exprs_to_arrays(locals: Dict[str, Any], symbols: List[Symbol],
     return result
 
 
-class SDPProblem(SDPTransformMixin):
+class SDPProblem(DualTransformMixin):
     """
     Class to solve rational dual SDP feasible problems, which is in the form of
 
@@ -391,57 +391,6 @@ class SDPProblem(SDPTransformMixin):
         )
         return decomp
 
-    def rationalize_combine(
-            self,
-            ys: List[np.ndarray] = None,
-            verbose: bool = False,
-        ) ->  Optional[Tuple[Matrix, Decomp]]:
-        """
-        Linearly combine all numerical solutions [y] to produce a rational solution.
-
-        Parameters
-        ----------
-        y : np.ndarray
-            Numerical solution y.
-        verbose : bool
-            Whether to print out the eigenvalues of the combined matrix. Defaults
-            to False.
-
-        Returns
-        ----------
-        y, decompositions : Optional[Tuple[Matrix, Decomp]]
-            If the problem is solved, return the congruence decompositions `y, [(S, U, diag)]`
-            So that each `S = U.T * diag(diag) * U` where `U` is upper triangular.
-            Otherwise, return None.
-        """
-        if ys is None:
-            ys = self._ys
-
-        if len(ys) == 0:
-            return None
-
-        y = np.array(ys).mean(axis = 0)
-
-        S_numer = S_from_y(y, self._x0_and_space)
-        if all(_.is_positive_definite for _ in S_numer.values()):
-            lcm, times = 1260, 5
-        else:
-            # spaces = [space for x0, space in self._x0_and_space.values()]
-            # lcm = max(1260, sp.prod(set.union(*[set(sp.primefactors(_.q)) for _ in spaces if isinstance(_, Rational)])))
-            # times = int(10 / sp.log(lcm, 10).n(15) + 3)
-            times = 5
-
-        if verbose:
-            Svalues = [np.array(_).astype(np.float64) for _ in S_numer.values()]
-            mineigs = [min(np.linalg.eigvalsh(S)) for S in Svalues if S.size > 0]
-            print('Minimum Eigenvals = %s'%mineigs)
-
-        decomp = rationalize_and_decompose(y, self.S_from_y,
-            try_rationalize_with_mask = False, lcm = 1260, times = times
-        )
-        return decomp
-
-
     def _solve_from_multiple_configs(self,
             list_of_objective: List[Objective] = [],
             list_of_constraints: List[List[Constraint]] = [],
@@ -450,7 +399,8 @@ class SDPProblem(SDPTransformMixin):
             allow_numer: int = 0,
             rationalize_configs = {},
             verbose: bool = False,
-            solver_options: Dict[str, Any] = {}
+            solver_options: Dict[str, Any] = {},
+            raise_exception: bool = False
         ):
 
         num_sol = len(self._ys)
@@ -468,8 +418,7 @@ class SDPProblem(SDPTransformMixin):
                 _exprs_to_arrays(_locals, self.free_symbols, [obj])[0][0],
                 constraints=con,
                 min_eigen=eig,
-                solver=solver,
-                solver_options=solver_options
+                solver=solver, solver_options=solver_options, raise_exception=raise_exception
             )
             if y is not None:
                 self._ys.append(y)
@@ -493,7 +442,7 @@ class SDPProblem(SDPTransformMixin):
 
         if len(self._ys) > num_sol:
             # new numerical solution found
-            decomp = self.rationalize_combine(verbose = verbose)
+            decomp = self.rationalize_combine(self._ys, self.S_from_y, verbose = verbose)
             if decomp is not None:
                 return decomp
 

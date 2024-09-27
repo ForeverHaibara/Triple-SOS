@@ -2,7 +2,7 @@ from typing import Any
 
 import numpy as np
 
-from .backend import SDPBackend
+from .backend import DualBackend
 
 def to_square(x):
     if not hasattr(x, 'size'): # float
@@ -10,7 +10,7 @@ def to_square(x):
     n = round(np.sqrt(x.size))
     return x.reshape((n, n))
 
-class SDPBackendCVXOPT(SDPBackend):
+class DualBackendCVXOPT(DualBackend):
     """
     CVXOPT backend for SDP problems.
 
@@ -20,6 +20,7 @@ class SDPBackendCVXOPT(SDPBackend):
     Reference:
     [1] https://cvxopt.org/userguide/coneprog.html#semidefinite-programming
     """
+    _dependencies = ('cvxopt',)
     def __init__(self, dof) -> None:
         super().__init__(dof)
         self._c = None  # Objective function
@@ -29,11 +30,10 @@ class SDPBackendCVXOPT(SDPBackend):
         # self._b = []  # Equality constraint rhs (if needed)
         self.solution = None
 
-    def _add_linear_matrix_inequality(self, name: str, x0: np.ndarray, extended_space: np.ndarray) -> np.ndarray:
+    def _add_linear_matrix_inequality(self, x0: np.ndarray, extended_space: np.ndarray) -> np.ndarray:
         from cvxopt import matrix
         self._Gs.append(matrix(-extended_space))
         self._hs.append(matrix(to_square(x0)))
-        # self._variables[name] = self._Gs[-1]
         return self._Gs[-1]
 
     def _add_constraint(self, constraint: np.ndarray, rhs: float = 0, operator='__ge__') -> np.ndarray:
@@ -42,14 +42,6 @@ class SDPBackendCVXOPT(SDPBackend):
     def _set_objective(self, objective: np.ndarray) -> None:
         from cvxopt import matrix
         self._c = matrix(objective)
-
-    @classmethod
-    def is_available(cls) -> bool:
-        try:
-            import cvxopt
-            return True
-        except ImportError:
-            return False
 
     def solve(self, solver_options = {}) -> np.ndarray:
         from cvxopt import solvers

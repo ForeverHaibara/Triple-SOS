@@ -2,12 +2,14 @@ from abc import ABC, abstractmethod
 from typing import Dict, Tuple, List, Union, Callable, Optional, Any
 
 from numpy import ndarray
+import numpy as np
 from sympy import MutableDenseMatrix as Matrix
 from sympy import MatrixBase, Expr, Rational
 import sympy as sp
 
-from .utils import is_empty_matrix, Mat2Vec, congruence_with_perturbation
 from .backend import SDPBackend
+from .rationalize import rationalize_and_decompose
+from .utils import is_empty_matrix, Mat2Vec, congruence_with_perturbation
 
 Decomp = Dict[str, Tuple[Matrix, Matrix, List[Rational]]]
 Objective = Tuple[str, Union[Expr, Callable[[SDPBackend], Any]]]
@@ -112,7 +114,7 @@ class SDPProblemBase(ABC):
 
         Parameters
         ----------
-        y : Optional[Union[Matrix, np.ndarray]]
+        y : Optional[Union[Matrix, ndarray]]
             The generating vector. If None, it uses a symbolic vector.
 
         Returns
@@ -134,7 +136,7 @@ class SDPProblemBase(ABC):
 
         Parameters
         ----------
-        y : Union[Matrix, np.ndarray, Dict]
+        y : Union[Matrix, ndarray, Dict]
             The solution to the SDP problem.
         perturb : bool
             If perturb == True, it must return the result by adding a small perturbation * identity to the matrices.
@@ -154,6 +156,63 @@ class SDPProblemBase(ABC):
         self.decompositions = decomps
         if propagate_to_parent:
             self.propagate_to_parent(recursive = True)
+    
+    def rationalize_combine(
+            self,
+            ys: List[ndarray],
+            mat_func: Callable[[Matrix], Dict[str, Matrix]],
+            projection: Optional[Callable[[Matrix], Matrix]] = None,
+            verbose: bool = False,
+        ) ->  Optional[Tuple[Matrix, Decomp]]:
+        """
+        Linearly combine all numerical solutions [y] to produce a rational solution.
+
+        Parameters
+        ----------
+        y : ndarray
+            Numerical solution y.
+        mat_func : Callable[[Matrix], Dict[str, Matrix]]
+            Given a rationalized vector `y`, return a dictionary of matrices
+            that needs to be PSD.
+        projection : Optional[Callable[[Matrix], Matrix]]
+            The projection function. If not None, we project `y` to the feasible
+            region before checking the PSD property.
+        verbose : bool
+            Whether to print out the eigenvalues of the combined matrix. Defaults
+            to False.
+
+        Returns
+        ----------
+        y, decompositions : Optional[Tuple[Matrix, Decomp]]
+            If the problem is solved, return the congruence decompositions `y, [(S, U, diag)]`
+            So that each `S = U.T * diag(diag) * U` where `U` is upper triangular.
+            Otherwise, return None.
+        """
+        if ys is None:
+            ys = self._ys
+        if len(ys) == 0:
+            return None
+
+        y = np.array(ys).mean(axis = 0)
+
+        S_numer = mat_func(Matrix(y))
+        if all(_.is_positive_definite for _ in S_numer.values()):
+            lcm, times = 1260, 5
+        else:
+            # spaces = [space for x0, space in self._x0_and_space.values()]
+            # lcm = max(1260, sp.prod(set.union(*[set(sp.primefactors(_.q)) for _ in spaces if isinstance(_, Rational)])))
+            # times = int(10 / sp.log(lcm, 10).n(15) + 3)
+            times = 5
+
+        if verbose:
+            Svalues = [np.array(_).astype(np.float64) for _ in S_numer.values()]
+            mineigs = [min(np.linalg.eigvalsh(S)) for S in Svalues if S.size > 0]
+            print('Minimum Eigenvals = %s'%mineigs)
+
+        decomp = rationalize_and_decompose(y, mat_func=mat_func, projection=projection,
+            try_rationalize_with_mask = False, lcm = 1260, times = times
+        )
+        return decomp
 
     def propagate_to_parent(self, *args, **kwargs) -> None:
         # this method should be implemented in the TransformMixin
@@ -179,7 +238,8 @@ class SDPProblemBase(ABC):
             allow_numer: int = 0,
             rationalize_configs = {},
             verbose: bool = False,
-            solver_options: Dict[str, Any] = {}
+            solver_options: Dict[str, Any] = {},
+            raise_exception: bool = False
         ) -> Optional[Tuple[Matrix, Decomp]]:
         """
         Attempt multiple numerical SDP trials given multiple solver configurations.
@@ -206,6 +266,8 @@ class SDPProblemBase(ABC):
             If True, print the information of the solving process.
         solver_options : Dict[str, Any]
             The options passed to the SDP backend solver.
+        raise_exception : bool
+            If True, raise an exception if an error occurs.
         """
         ...
 
@@ -219,7 +281,8 @@ class SDPProblemBase(ABC):
             verbose: bool = False,
             solve_child: bool = True,
             propagate_to_parent: bool = True,
-            solver_options: Dict[str, Any] = {}
+            solver_options: Dict[str, Any] = {},
+            raise_exception: bool = False
         ) -> bool:
         """
         Interface for solving the SDP problem.
@@ -246,6 +309,8 @@ class SDPProblemBase(ABC):
             Whether to propagate the result to the parent node. Defaults to True.
         solver_options : Dict[str, Any]
             The options passed to the SDP backend solver.
+        raise_exception : bool
+            If True, raise an exception if an error occurs.
 
         Returns
         ----------
@@ -266,7 +331,8 @@ class SDPProblemBase(ABC):
                     verbose = verbose,
                     solve_child = solve_child,
                     propagate_to_parent = propagate_to_parent,
-                    solver_options = solver_options
+                    solver_options = solver_options,
+                    raise_exception = raise_exception
                 )
 
         configs = _align_iters(
@@ -287,7 +353,8 @@ class SDPProblemBase(ABC):
         #            Solve the SDP problem
         #################################################
         solution = self._solve_from_multiple_configs(
-            *configs, solver=solver, allow_numer = allow_numer, verbose = verbose, solver_options = solver_options
+            *configs, solver=solver, allow_numer = allow_numer, verbose = verbose,
+            solver_options = solver_options, raise_exception = raise_exception
         )
 
         if solution is not None:
