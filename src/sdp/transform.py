@@ -10,7 +10,7 @@ from .arithmetic import (
 from .abstract import SDPProblemBase
 from .utils import is_empty_matrix, Mat2Vec
 
-class SDPTransformation():
+class SDPTransformation(ABC):
     """
     Class that represents transformation between SDPProblems.
     """
@@ -27,10 +27,10 @@ class SDPTransformation():
         return sdp is self.parent_node
     def is_child(self, sdp):
         return sdp is self.child_node
-    def propagate_to_parent(self, recursive: bool = True):
-        raise NotImplementedError
-    def propagate_to_child(self, recursive: bool = True):
-        raise NotImplementedError
+    # @abstractmethod
+    def propagate_to_parent(self, recursive: bool = True): ...
+    # @abstractmethod
+    def propagate_to_child(self, recursive: bool = True): ...
     @classmethod
     def _create_sdpproblem(cls, *args, **kwargs) -> SDPProblemBase:
         # Avoid circular import
@@ -224,155 +224,6 @@ class DualMatrixTransform(SDPMatrixTransform):
         return parent_node
 
 
-class SDPRowMasking(DualMatrixTransform):
-    """
-    Mask several rows and cols of the matrix so that they are assumed
-    to be zero. This is useful when we want to reduce the rank of the
-    matrix or when there are zero diagonal entries.    
-    """
-    def __new__(cls, parent_node, masks: Dict[str, List[int]]):
-        if all(len(mask) == 0 for mask in masks.values()):
-            return SDPIdentityTransform.__new__(SDPIdentityTransform, parent_node)
-        return object.__new__(cls)
-
-    def __init__(self, parent_node: 'SDPTransformMixin', masks: Dict[str, List[int]]):
-        self.masks = masks
-        self.unmasks = {}
-        for key, n in parent_node.size.items():
-            mask = set(masks[key])
-            self.unmasks[key] = [i for i in range(n) if i not in mask]
-
-        def onehot(n, i):
-            return sp.Matrix([1 if j == i else 0 for j in range(n)])
-
-        def onehot_dict(masks):
-            mats = {}
-            for key, n in parent_node.size.items():
-                mat = [onehot(n, i) for i in masks[key]]
-                if len(mat) == 0:
-                    mats[key] = sp.zeros(n, 0)
-                else:
-                    mats[key] = sp.Matrix.hstack(*mat)
-            return mats
-        self.nullspace = onehot_dict(masks)
-        self.columnspace = onehot_dict(self.unmasks)
-
-        self._trans_x0 = None
-        self._trans_space = None
-        SDPTransformation.__init__(self, parent_node)
-
-    def _init_child_node(self):
-        masks, unmasks = self.masks, self.unmasks
-        parent_node = self.parent_node
-        eqs = []
-        rhs = []
-        nonzero_inds = {}
-        for key, (x0, space) in parent_node._x0_and_space.items():
-            mask = set(masks[key])
-            n = Mat2Vec.length_of_mat(x0.shape[0])
-            for i in mask:
-                for j in range(n):
-                    eqs.append(space[i*n+j,:])
-                    rhs.append(x0[i*n+j])
-
-            unmask = unmasks[key]
-            nonzero_inds_ = []
-            for i in unmask:
-                for j in unmask:
-                    nonzero_inds_.append(i*n+j)
-            nonzero_inds[key] = nonzero_inds_
-
-        eqs = sp.Matrix.vstack(*eqs)
-        rhs = sp.Matrix(rhs)
-        trans_x0, trans_space = solve_undetermined_linear(eqs, -rhs)
-        self._trans_x0, self._trans_space = trans_x0, trans_space
-
-        new_x0_and_space = {}
-        for key, (x0, space) in parent_node._x0_and_space.items():
-            space2 = space[nonzero_inds[key],:]
-            new_x0 = x0[nonzero_inds[key],:] + space2 * trans_x0
-            new_space = space2 * trans_space
-            new_x0_and_space[key] = (new_x0, new_space)
-
-        return self._create_sdpproblem(new_x0_and_space)
-
-    @classmethod
-    def _get_zero_diagonals(cls, x0_and_space: Dict[str, Tuple[sp.Matrix, sp.Matrix]]) -> Dict[str, List[int]]:
-        """
-        Return a dict indicating the indices of diagonal entries
-        that are sure to be zero.
-        """
-        zero_diagonals = {}
-        for key, (x0, space) in x0_and_space.items():
-            n = Mat2Vec.length_of_mat(x0.shape[0])
-            zero_diagonals[key] = []
-            for i in range(n):
-                if x0[i*n+i] == 0 and not any(space[i*n+i,:]):
-                    zero_diagonals[key].append(i)
-        return zero_diagonals
-
-    @classmethod
-    def constrain_zero_diagonals(cls, parent_node: 'SDPTransformMixin', recursive: bool = True) -> 'SDPRowMasking':
-        """
-        If a diagonal of the positive semidefinite matrix is zero,
-        then the corresponding row must be all zeros. This function
-        constrains the solution to satisfy this condition.
-        """
-        zero_diagonals = parent_node._get_zero_diagonals()
-        sdp = parent_node
-        while any(zero_diagonals.values()):
-            sdp = SDPRowMasking(sdp, zero_diagonals).child_node
-            if not recursive:
-                break
-            zero_diagonals = sdp._get_zero_diagonals()
-        return sdp._transforms[-1] if sdp._transforms else SDPIdentityTransform(parent_node)
-
-
-class SDPVectorTransform(SDPTransformation):
-    """
-    Assume the original problem to be S1 >= 0, ... Sn >= 0
-    where Si = xi + spacei @ y.
-    Now we make the transformation y = A @ z + b.
-    The new problem is to solve for z such that S1 >= 0, ... Sn >= 0.
-    """
-    def __init__(self, parent_node, A: sp.Matrix, b: sp.Matrix):
-        if not parent_node.is_dual:
-            raise ValueError("The parent node should be a dual problem for vector transformation.")
-        self._A = A
-        self._b = b
-        super().__init__(parent_node, A, b)
-
-    @classmethod
-    def from_equations(cls, parent, eqs: sp.Matrix, rhs: sp.Matrix):
-        """
-        Set constraints that eqs * y = rhs => y = A * z + b.
-        """
-        b, A = solve_undetermined_linear(eqs, rhs)
-        return SDPVectorTransform(parent, A, b)
-
-    def _init_child_node(self, A, b):
-        parent_node = self.parent_node
-        if parent_node is None:
-            return
-        x0_and_space = {}
-        for key, (x0, space) in parent_node._x0_and_space.items():
-            x0_ = x0 + space @ b
-            space_ = space @ A
-            x0_and_space[key] = (x0_, space_)
-        return self._create_sdpproblem(x0_and_space)
-
-    def propagate_to_parent(self, recursive: bool = True):
-        parent_node, child_node = self.parent_node, self.child_node
-        if child_node.y is None:
-            return parent_node
-        parent_node.y = self._A @ child_node.y + self._b
-        parent_node.S = child_node.S
-        parent_node.decompositions = child_node.decompositions
-        if recursive:
-            parent_node.propagate_to_parent(recursive = recursive)
-        return parent_node
-
-
 class PrimalMatrixTransform(SDPMatrixTransform, SDPCopyTransform):
     """
     Assume the original problem to be S1 >= 0, ... Sn >= 0 where they satisfy certain constraints.
@@ -425,6 +276,213 @@ class PrimalMatrixTransform(SDPMatrixTransform, SDPCopyTransform):
 
         x0 = sp.Matrix.vstack(parent_node._x0, sp.zeros(eq_num, 1))
         return parent_node.__class__(space, x0)
+
+
+
+
+class SDPRowMasking(SDPMatrixTransform):
+    """
+    Mask several rows and cols of the matrix so that they are assumed
+    to be zero. This is useful when we want to reduce the rank of the
+    matrix or when there are zero diagonal entries.    
+    """
+    def __new__(cls, parent_node, masks: Dict[str, List[int]]):
+        if parent_node.is_dual:
+            return DualRowMasking(parent_node, masks)
+        if parent_node.is_primal:
+            return PrimalRowMasking(parent_node, masks)
+        raise ValueError("The parent node should be either primal or dual.")
+
+    def __init__(self, parent_node: 'SDPTransformMixin', masks: Dict[str, List[int]]):
+        self.masks = masks
+        self.unmasks = {}
+        for key, n in parent_node.size.items():
+            mask = set(masks.get(key, tuple()))
+            self.unmasks[key] = [i for i in range(n) if i not in mask]
+
+        def onehot(n, i):
+            return sp.Matrix([1 if j == i else 0 for j in range(n)])
+
+        def onehot_dict(masks):
+            mats = {}
+            for key, n in parent_node.size.items():
+                mat = [onehot(n, i) for i in masks[key]]
+                if len(mat) == 0:
+                    mats[key] = sp.zeros(n, 0)
+                else:
+                    mats[key] = sp.Matrix.hstack(*mat)
+            return mats
+        self.nullspace = onehot_dict(masks)
+        self.columnspace = onehot_dict(self.unmasks)
+
+        self._trans_x0 = None
+        self._trans_space = None
+        SDPTransformation.__init__(self, parent_node)
+
+    @classmethod
+    def constrain_zero_diagonals(cls, parent_node: 'SDPTransformMixin', recursive: bool = True) -> 'SDPRowMasking':
+        """
+        If a diagonal of the positive semidefinite matrix is zero,
+        then the corresponding row must be all zeros. This function
+        constrains the solution to satisfy this condition.
+        """
+        zero_diagonals = parent_node._get_zero_diagonals()
+        sdp = parent_node
+        while any(zero_diagonals.values()):
+            sdp = SDPRowMasking(sdp, zero_diagonals).child_node
+            if not recursive:
+                break
+            zero_diagonals = sdp._get_zero_diagonals()
+        return sdp._transforms[-1] if sdp._transforms else SDPIdentityTransform(parent_node)
+
+
+class DualRowMasking(SDPRowMasking, DualMatrixTransform):
+    def __new__(cls, parent_node, masks: Dict[str, List[int]]):
+        if all(len(mask) == 0 for mask in masks.values()):
+            return SDPIdentityTransform.__new__(SDPIdentityTransform, parent_node)
+        return object.__new__(cls)
+
+    def _init_child_node(self):
+        masks, unmasks = self.masks, self.unmasks
+        parent_node = self.parent_node
+        eqs = []
+        rhs = []
+        nonzero_inds = {}
+        for key, (x0, space) in parent_node._x0_and_space.items():
+            mask = set(masks[key])
+            n = Mat2Vec.length_of_mat(x0.shape[0])
+            for i in mask:
+                for j in range(n):
+                    eqs.append(space[i*n+j,:])
+                    rhs.append(x0[i*n+j])
+
+            unmask = unmasks[key]
+            nonzero_inds_ = []
+            for i in unmask:
+                for j in unmask:
+                    nonzero_inds_.append(i*n+j)
+            nonzero_inds[key] = nonzero_inds_
+
+        eqs = sp.Matrix.vstack(*eqs)
+        rhs = sp.Matrix(rhs)
+        trans_x0, trans_space = solve_undetermined_linear(eqs, -rhs)
+        self._trans_x0, self._trans_space = trans_x0, trans_space
+
+        new_x0_and_space = {}
+        for key, (x0, space) in parent_node._x0_and_space.items():
+            space2 = space[nonzero_inds[key],:]
+            new_x0 = x0[nonzero_inds[key],:] + space2 * trans_x0
+            new_space = space2 * trans_space
+            new_x0_and_space[key] = (new_x0, new_space)
+
+        return self._create_sdpproblem(new_x0_and_space)
+
+
+class PrimalRowMasking(SDPRowMasking):
+    """
+    Primal row masking should not be a subclass of PrimalMatrixTransform,
+    as it reduces the matrix size.
+    """
+    def __new__(cls, parent_node, masks: Dict[str, List[int]]):
+        if all(len(mask) == 0 for mask in masks.values()):
+            return SDPIdentityTransform.__new__(SDPIdentityTransform, parent_node)
+        return object.__new__(cls)
+
+    def _init_child_node(self):
+        masks, unmasks = self.masks, self.unmasks
+        parent_node = self.parent_node
+        new_spaces = {}
+        x0 = parent_node._x0
+        for key, m in parent_node.size.items():
+            unmask = unmasks[key]
+            r = len(unmask)
+
+            new_space = sp.zeros(x0.shape[0], r**2)
+            space = parent_node._space[key]
+            for i, i1 in enumerate(unmask):
+                for j, j1 in enumerate(unmask):
+                    k, k1 = i*r+j, i1*m+j1
+                    for row in range(x0.shape[0]):
+                        new_space[row, k] = space[row, k1]
+            new_spaces[key] = new_space
+        child = parent_node.__class__(new_spaces, x0)
+        return child
+
+    def propagate_to_parent(self, recursive: bool = True):
+        parent_node, child_node = self.parent_node, self.child_node
+        mats = {key: sp.zeros(m, m) for key, m in parent_node.size.items()}
+        y = sp.zeros(parent_node.dof, 1)
+        y_offset = 0
+        decomps = {key: None for key in parent_node.size.keys()}
+        for key, m in parent_node.size.items():
+            unmask = self.unmasks[key]
+
+            S = child_node.S[key]
+            mat = mats[key]
+            for i, i1 in enumerate(unmask):
+                for j, j1 in enumerate(unmask):
+                    mat[i1,j1] = S[i,j]
+            y[y_offset:y_offset+m**2, :] = mat.reshape(m**2, 1)
+
+            U, S = child_node.decompositions[key]
+            U1 = sp.zeros(U.shape[0], m)
+            for i, i1 in enumerate(unmask):
+                U1[:,i1] = U[:,i]
+            decomps[key] = (U1, S)
+            y_offset += m**2
+        parent_node.y = y
+        parent_node.S = mats
+        parent_node.decompositions = decomps
+        if recursive:
+            parent_node.propagate_to_parent(recursive = recursive)
+        return parent_node
+
+class SDPVectorTransform(SDPTransformation):
+    """
+    Assume the original problem to be S1 >= 0, ... Sn >= 0
+    where Si = xi + spacei @ y.
+    Now we make the transformation y = A @ z + b.
+    The new problem is to solve for z such that S1 >= 0, ... Sn >= 0.
+    """
+    def __init__(self, parent_node, A: sp.Matrix, b: sp.Matrix):
+        if not parent_node.is_dual:
+            raise ValueError("The parent node should be a dual problem for vector transformation.")
+        self._A = A
+        self._b = b
+        super().__init__(parent_node, A, b)
+
+    @classmethod
+    def from_equations(cls, parent, eqs: sp.Matrix, rhs: sp.Matrix):
+        """
+        Set constraints that eqs * y = rhs => y = A * z + b.
+        """
+        b, A = solve_undetermined_linear(eqs, rhs)
+        return SDPVectorTransform(parent, A, b)
+
+    def _init_child_node(self, A, b):
+        parent_node = self.parent_node
+        if parent_node is None:
+            return
+        x0_and_space = {}
+        for key, (x0, space) in parent_node._x0_and_space.items():
+            x0_ = x0 + space @ b
+            space_ = space @ A
+            x0_and_space[key] = (x0_, space_)
+        return self._create_sdpproblem(x0_and_space)
+
+    def propagate_to_parent(self, recursive: bool = True):
+        parent_node, child_node = self.parent_node, self.child_node
+        if child_node.y is None:
+            return parent_node
+        parent_node.y = self._A @ child_node.y + self._b
+        parent_node.S = child_node.S
+        parent_node.decompositions = child_node.decompositions
+        if recursive:
+            parent_node.propagate_to_parent(recursive = recursive)
+        return parent_node
+
+
+
 
 
 
@@ -504,7 +562,7 @@ class SDPTransformMixin(SDPProblemBase):
             if transform.is_parent(self):
                 transform.propagate_to_child(recursive = recursive)
 
-    
+
     @abstractmethod
     def constrain_subspace(self, columnspaces: Dict[str, sp.Matrix], to_child: bool = False) -> SDPProblemBase:
         """
@@ -568,11 +626,23 @@ class SDPTransformMixin(SDPProblemBase):
         the degree of freedom when the given symbolic matrix is not symmetric.
         """
 
+    @abstractmethod    
+    def _get_zero_diagonals(self) -> Dict[str, List[int]]:
+        """
+        Return a dict indicating the indices of diagonal entries
+        that are sure to be zero.
+        """
+
+    @abstractmethod
+    def constrain_zero_diagonals(self, recursive: bool = True) -> SDPProblemBase:
+        """
+        If a diagonal of the positive semidefinite matrix is zero,
+        then the corresponding row must be all zeros. This function
+        constrains the solution to satisfy this condition.
+        """
+
 
 class DualTransformMixin(SDPTransformMixin):
-    def _get_zero_diagonals(self) -> Dict[str, List[int]]:
-        return SDPRowMasking._get_zero_diagonals(self._x0_and_space)
-
     def constrain_subspace(self, columnspaces: Dict[str, sp.Matrix], to_child: bool = False) -> SDPProblemBase:
         if to_child:
             raise NotImplementedError("Constraining to child node is not implemented yet.")
@@ -639,12 +709,17 @@ class DualTransformMixin(SDPTransformMixin):
         transform = SDPVectorTransform.from_equations(self, eqs, rhs)
         return transform.child_node
 
+    def _get_zero_diagonals(self) -> Dict[str, List[int]]:
+        zero_diagonals = {}
+        for key, (x0, space) in self._x0_and_space.items():
+            n = Mat2Vec.length_of_mat(x0.shape[0])
+            zero_diagonals[key] = []
+            for i in range(n):
+                if x0[i*n+i] == 0 and not any(space[i*n+i,:]):
+                    zero_diagonals[key].append(i)
+        return zero_diagonals
+
     def constrain_zero_diagonals(self, recursive: bool = True) -> SDPProblemBase:
-        """
-        If a diagonal of the positive semidefinite matrix is zero,
-        then the corresponding row must be all zeros. This function
-        constrains the solution to satisfy this condition.
-        """
         return SDPRowMasking.constrain_zero_diagonals(self, recursive = recursive).child_node
 
 
@@ -666,4 +741,68 @@ class PrimalTransformMixin(SDPTransformMixin):
         return transform.child_node
 
     def constrain_symmetry(self) -> SDPProblemBase:
-        raise NotImplementedError("Symmetry constraint needs not to be applied to primal problems.")
+        for key, m in self.size.items():
+            space = self._space[key]
+            n = space.shape[0]
+            for i in range(m):
+                for j in range(i):
+                    k1, k2 = i*m+j, j*m+i
+                    for row in range(n):
+                        if space[row, k1] != space[row, k2]:
+                            mid = (space[row, k1] + space[row, k2]) / 2
+                            space[row, k1] = mid
+                            space[row, k2] = mid
+        return self
+    
+    def _get_zero_diagonals(self) -> Dict[str, List[int]]:
+        zero_diagonals = {key: set() for key in self.keys()}
+        zero_eqs = set([i for i in range(self._x0.shape[0]) if self._x0[i] == 0])
+        new_zero_found = True
+        while new_zero_found:
+            new_zero_found = False
+            for eq in zero_eqs:
+                # chances are that sum(diag entries) == 0
+                eq_fail = False
+                for key, m in self.size.items():
+                    zeros = zero_diagonals[key] # rows/cols that are zeros
+                    space = self._space[key]
+                    for i in range(m):
+                        if i in zeros:
+                            continue
+                        for j in range(i):
+                            if j in zeros:
+                                continue
+                            if space[eq, i*m+j] != 0: # nonzero off-diagonal constraint
+                                eq_fail = True
+                                break
+                        if eq_fail:
+                            break
+                    if eq_fail:
+                        break
+                else:
+                    eq_fail = False
+                    new_zeros = {key: set() for key in self.keys()}
+                    for key, m in self.size.items():
+                        zeros = zero_diagonals[key]
+                        space = self._space[key]
+                        for i in range(m):
+                            if i in zeros:
+                                continue
+                            if space[eq, i*m+i] < 0: # nonzero diagonal constraint
+                                eq_fail = True
+                                break
+                            if space[eq, i*m+i] != 0:
+                                new_zero_found = True
+                                new_zeros[key].add(i)
+                        if eq_fail:
+                            new_zero_found = False
+                            break
+                    if (not eq_fail) and new_zero_found:
+                        for key in self.keys():
+                            zero_diagonals[key] |= new_zeros[key]
+                        zero_eqs.remove(eq) # has been processed
+                        break
+        return {key: list(zero_diagonals[key]) for key in self.keys()}
+
+    def constrain_zero_diagonals(self, recursive: bool = True) -> SDPProblemBase:
+        return SDPRowMasking.constrain_zero_diagonals(self, recursive = recursive).child_node

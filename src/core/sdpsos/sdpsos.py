@@ -112,7 +112,7 @@ def _constrain_nullspace(sdp: SDPProblem, monomials: List[Tuple[int, ...]], null
     return sdp
 
 def _get_equal_entries(monomials: List[Tuple[int, ...]], nvars: int, degree: int, symmetry: MonomialReduction) -> List[List[int]]:
-    bias = 0
+    offset = 0
     equal_entries = []
     for monomial in monomials:
         dict_monoms_half, inv_monoms_half = generate_expr(nvars, (degree - sum(monomial))//2, symmetry=symmetry.base())
@@ -122,7 +122,7 @@ def _get_equal_entries(monomials: List[Tuple[int, ...]], nvars: int, degree: int
         if len(permutes) == 1 or any(p != monomial for p in permutes):
             for i in range(n):
                 for j in range(i+1, n):
-                    equal_entries.append([i*n+j+bias, j*n+i+bias])
+                    equal_entries.append([i*n+j+offset, j*n+i+offset])
         else:
 
             for i in range(n):
@@ -131,14 +131,14 @@ def _get_equal_entries(monomials: List[Tuple[int, ...]], nvars: int, degree: int
                     continue
                 for j in range(i, n):
                     m2 = inv_monoms_half[j]
-                    s = set((i*n+j+bias, j*n+i+bias))
+                    s = set((i*n+j+offset, j*n+i+offset))
                     for p1, p2 in zip(symmetry.permute(m1), symmetry.permute(m2)):
                         i2, j2 = dict_monoms_half.get(p1), dict_monoms_half.get(p2)
                         # if i2 is not None and j2 is not None
-                        s.add(i2*n+j2+bias)
-                        s.add(j2*n+i2+bias)
+                        s.add(i2*n+j2+offset)
+                        s.add(j2*n+i2+offset)
                     equal_entries.append(list(s))
-        bias += n**2
+        offset += n**2
     return equal_entries
 
 
