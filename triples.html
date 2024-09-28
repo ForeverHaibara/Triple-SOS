@@ -28,6 +28,9 @@
         background-color: #54c3e8;
         border-radius: 4px;
     }
+    .coeff-label3d {
+        transition: opacity 0.2s; /* Smooth transition for opacity changes */
+    }
     </style>
     <!-- <script src="https://requirejs.org/docs/release/2.3.6/minified/require.js"></script> -->
     <!-- <script async src="https://cdn.bootcdn.net/ajax/libs/axios/0.21.1/axios.min.js"></script> -->
@@ -43,6 +46,8 @@
     <script src="static/js/bootstrap.bundle.min.js"></script>
     <script src="static/js/tex-svg.js"></script>
     <script src="static/js/html2canvas.min.js"></script>
+    <script src="static/js/three.min.js"></script>
+    <script src="static/js/three.OrbitControls.js"></script>
     <link href="static/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body>
@@ -198,9 +203,9 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
         onkeyup="if(event.keyCode==13) {preprocessInput();}"></input><br>
         <!-- <input type="submit" value="提交"> -->
     </div>
-    <div id="centerscreen" style="width: 100%; height: 90%;margin-top: 1.5%; border-style: solid;border-color: gray;
+    <div id="centerscreen" style="width: 100%; height: 90%; margin-top: 1.5%; border-style: solid;border-color: gray;
     background: transparent; ">
-        <div id="coeffs" style="width: 100%; height: 100%; position: absolute;">
+        <div id="coeffs" style="width: 100%; height: 100%; position: relative;">
         </div>
         <div id="polytools" style="position: absolute; bottom: 3%; left: 8px;">
             <div id="polytools_btns" style="margin-bottom: 5%">
@@ -243,6 +248,7 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
         <div id="rootsinfo" style="position: absolute; right: 7px; bottom: 3%; text-align: right; vertical-align: baseline; font-size: 12px">
         </div>
     </div>
+    
 </div>
 
 

@@ -368,21 +368,26 @@ def coefficient_triangle(poly: Poly, degree: int = None) -> str:
         The degree of the polynomial. If None, it will be computed.
     """
     if degree is None:
-        degree = deg(poly)
-    coeffs = poly.coeffs()
-    monoms = poly.monoms()
-    monoms.append((-1,-1,0))  # tail flag
-    
-    t = 0
-    triangle = []
-    for i in range(degree+1):
-        for j in range(i+1):
-            if monoms[t][0] == degree - i and monoms[t][1] == i - j:
-                txt = short_constant_parser(coeffs[t])
-                t += 1
-            else:
-                txt = '0'
-            triangle.append(txt)
+        degree = poly.total_degree()
+    if poly.is_homogeneous and len(poly.gens) == 4:
+        from .basis_generator import arraylize_sp
+        vec = arraylize_sp(poly)
+        return [short_constant_parser(_) for _ in vec]
+    else:
+        coeffs = poly.coeffs()
+        monoms = poly.monoms()
+        monoms.append((-1,-1,0))  # tail flag
+        
+        t = 0
+        triangle = []
+        for i in range(degree+1):
+            for j in range(i+1):
+                if monoms[t][0] == degree - i and monoms[t][1] == i - j:
+                    txt = short_constant_parser(coeffs[t])
+                    t += 1
+                else:
+                    txt = '0'
+                triangle.append(txt)
     return triangle
 
 
