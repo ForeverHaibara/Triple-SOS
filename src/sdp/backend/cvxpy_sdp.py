@@ -28,10 +28,12 @@ class DualBackendCVXPY(DualBackend):
         self.problem = None
 
     def _add_linear_matrix_inequality(self, x0: np.ndarray, extended_space: np.ndarray) -> np.ndarray:
-        from cvxpy import Variable
+        from cvxpy import Variable, reshape
+        # TIP: cvxpy instances do not support .reshape method in earlier versions (e.g. <= 1.3)
+        # thus we need to call cvxpy.reshape instead of (...).reshape
         k = int(round(sqrt(x0.shape[0])))
         S = Variable((k, k), PSD=True)
-        self._constraints.append(S == (x0 + extended_space @ self.y).reshape((k, k)))
+        self._constraints.append(S == reshape(x0 + extended_space @ self.y, (k, k)))
         return S
 
     def _add_constraint(self, constraint: np.ndarray, rhs: float = 0, operator = '__ge__') -> None:
@@ -63,7 +65,9 @@ class PrimalBackendCVXPY(PrimalBackend):
         raise NotImplementedError
 
     def _create_problem(self) -> Any:
-        from cvxpy import Problem, Minimize, Variable
+        from cvxpy import Problem, Minimize, Variable, reshape
+        # TIP: cvxpy instances do not support .reshape method in earlier versions (e.g. <= 1.3)
+        # thus we need to call cvxpy.reshape instead of (...).reshape
         variables = []
         mat_size = self._mat_size + [1]
         for m in mat_size:
@@ -71,11 +75,11 @@ class PrimalBackendCVXPY(PrimalBackend):
 
         sumobj = 0
         for v, obj in zip(variables, self.split_vector(self._objective)):
-            sumobj = sumobj + obj.reshape((obj.size,)) @ v.reshape((v.size,))
+            sumobj = sumobj + reshape(obj, (obj.size,)) @ reshape(v, (v.size,))
 
         eq_constraint = -self.x0
         for v, space in zip(variables, self._spaces + [self._min_eigen_space]):
-            eq_constraint = eq_constraint + space @ v.reshape((v.size,))
+            eq_constraint = eq_constraint + space @ reshape(v, (v.size,))
 
         constraints = [eq_constraint == 0]
         problem = Problem(Minimize(sumobj), constraints)
