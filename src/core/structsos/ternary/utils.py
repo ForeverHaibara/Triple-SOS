@@ -12,7 +12,8 @@ from ....utils.roots.rationalize import (
     nroots, rationalize, rationalize_bound, univariate_intervals,
     square_perturbation, cancel_denominator, common_region_of_conics
 )
-from ....utils.expression import congruence, CyclicExpr, CyclicSum, CyclicProduct
+from ....sdp import congruence
+from ....utils import CyclicExpr, CyclicSum, CyclicProduct
 
 
 def reflect_expression(expr: sp.Expr) -> sp.Expr:

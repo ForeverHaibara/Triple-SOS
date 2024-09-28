@@ -1,7 +1,6 @@
 from typing import Optional, List, Union
 import re
 
-import numpy as np
 import sympy as sp
 from sympy.core.singleton import S
 from sympy.printing.precedence import precedence_traditional, PRECEDENCE
@@ -439,42 +438,3 @@ class SolutionSimple(Solution):
         self.multiplier = sp.signsimp(self.multiplier)
         self.solution = self.numerator / self.multiplier
         return self
-
-def congruence(M: Union[sp.Matrix, np.ndarray]) -> Union[None, tuple]:
-    """
-    Write a symmetric matrix as a sum of squares.
-    M = U.T @ S @ U where U is upper triangular and S is diagonal.
-
-    Returns
-    -------
-    U : sp.Matrix | np.ndarray
-        Upper triangular matrix.
-    S : sp.Matrix | np.ndarray
-        Diagonal vector (1D array).
-
-    Return None if M is not positive semidefinite.
-    """
-    M = M.copy()
-    n = M.shape[0]
-    if isinstance(M[0,0], sp.Expr):
-        U, S = sp.Matrix.zeros(n), sp.Matrix.zeros(n, 1)
-        One = sp.S.One
-    else:
-        U, S = np.zeros((n,n)), np.zeros(n)
-        One = 1
-    for i in range(n-1):
-        if M[i,i] > 0:
-            S[i] = M[i,i]
-            U[i,i+1:] = M[i,i+1:] / (S[i])
-            U[i,i] = One
-            M[i+1:,i+1:] -= U[i:i+1,i+1:].T @ (U[i:i+1,i+1:] * S[i])
-        elif M[i,i] < 0:
-            return None
-        elif M[i,i] == 0 and any(_ for _ in M[i+1:,i]):
-            return None
-    U[-1,-1] = One
-    S[-1] = M[-1,-1]
-    if S[-1] < 0:
-        return None
-    return U, S
-

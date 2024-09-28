@@ -4,7 +4,6 @@ from math import ceil as ceiling
 from typing import List, Tuple, Dict
 
 import sympy as sp
-from scipy.spatial import ConvexHull
 
 from .basis_generator import generate_expr
 
@@ -183,6 +182,7 @@ def convex_hull_poly(poly: sp.Poly) -> Tuple[Dict[Tuple[int, ...], bool], List[T
     vertices : List[Tuple[int, ...]]
         The vertices of the convex hull.
     """
+    from scipy.spatial import ConvexHull
     nvars = len(poly.gens)
     monoms = poly.monoms()
     n = sum(monoms[0])    # degree

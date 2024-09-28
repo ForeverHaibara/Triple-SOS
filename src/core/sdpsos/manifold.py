@@ -29,6 +29,7 @@ class _bilinear():
 
     Identical terms are merged, coefficients are not stored.
     """
+    __slots__ = ('terms',)
     @classmethod
     def _reg(cls, u, v):
         return (u, v) if u < v else (v, u)

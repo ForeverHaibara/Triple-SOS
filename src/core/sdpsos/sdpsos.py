@@ -1,15 +1,15 @@
 from time import time
-from typing import Union, Optional, List, Tuple, Dict, Callable
+from typing import Union, Optional, List, Tuple, Dict, Callable, Any
 
 import numpy as np
 import sympy as sp
 from sympy.combinatorics import PermutationGroup
 
-from .arithmetic import solve_column_separated_linear
 from .manifold import RootSubspace
-from .solver import SDPProblem
 from .solution import SolutionSDP
 from ..solver import homogenize
+from ...sdp import SDPProblem
+from ...sdp.arithmetic import solve_column_separated_linear
 from ...utils.basis_generator import generate_expr, MonomialReduction, MonomialPerm, MonomialCyclic
 from ...utils import arraylize_sp, Coeff, CyclicExpr, identify_symmetry
 
@@ -112,7 +112,7 @@ def _constrain_nullspace(sdp: SDPProblem, monomials: List[Tuple[int, ...]], null
     return sdp
 
 def _get_equal_entries(monomials: List[Tuple[int, ...]], nvars: int, degree: int, symmetry: MonomialReduction) -> List[List[int]]:
-    bias = 0
+    offset = 0
     equal_entries = []
     for monomial in monomials:
         dict_monoms_half, inv_monoms_half = generate_expr(nvars, (degree - sum(monomial))//2, symmetry=symmetry.base())
@@ -122,7 +122,7 @@ def _get_equal_entries(monomials: List[Tuple[int, ...]], nvars: int, degree: int
         if len(permutes) == 1 or any(p != monomial for p in permutes):
             for i in range(n):
                 for j in range(i+1, n):
-                    equal_entries.append([i*n+j+bias, j*n+i+bias])
+                    equal_entries.append([i*n+j+offset, j*n+i+offset])
         else:
 
             for i in range(n):
@@ -131,14 +131,14 @@ def _get_equal_entries(monomials: List[Tuple[int, ...]], nvars: int, degree: int
                     continue
                 for j in range(i, n):
                     m2 = inv_monoms_half[j]
-                    s = set((i*n+j+bias, j*n+i+bias))
+                    s = set((i*n+j+offset, j*n+i+offset))
                     for p1, p2 in zip(symmetry.permute(m1), symmetry.permute(m2)):
                         i2, j2 = dict_monoms_half.get(p1), dict_monoms_half.get(p2)
                         # if i2 is not None and j2 is not None
-                        s.add(i2*n+j2+bias)
-                        s.add(j2*n+i2+bias)
+                        s.add(i2*n+j2+offset)
+                        s.add(j2*n+i2+offset)
                     equal_entries.append(list(s))
-        bias += n**2
+        offset += n**2
     return equal_entries
 
 
@@ -267,18 +267,18 @@ class SOSProblem():
         self._sdp = sdp
         return sdp
 
-    def solve(self, **kwargs) -> bool:
+    def solve(self, *args, **kwargs) -> bool:
         """
         Solve the SOS problem. Keyword arguments are passed to SDPProblem.solve.
         """
-        return self._sdp.solve(**kwargs)
+        return self._sdp.solve(*args, **kwargs)
 
     def as_solution(
         self,
         y: Optional[Union[sp.Matrix, np.ndarray, Dict]] = None,
     ) -> SolutionSDP:
         """
-        Restore the solution to the original polynomial.
+        Retrieve the solution to the original polynomial.
         """
         if y is not None:
             self.sdp.register_y(y)
@@ -294,7 +294,8 @@ def SDPSOS(
         monomials_lists: Optional[List[List[Tuple[int, ...]]]] = None,
         degree_limit: int = 12,
         verbose: bool = False,
-        method: str = "trivial",
+        solver: Optional[str] = None,
+        solver_options: Dict[str, Any] = {},
         allow_numer: int = 0,
         **kwargs
     ) -> Optional[SolutionSDP]:
@@ -371,13 +372,28 @@ def SDPSOS(
             accumulated_monomials.extend(monomials)
             monomials_lists.append(accumulated_monomials.copy())
 
+    odd_degree_vars = [i for i in range(nvars) if poly.degree(i) % 2 == 1]
     for monomials in monomials_lists:
+        # if the poly has odd degree on some var, but all monomials are even up to permutation,
+        # then the poly is not SOS
+        unhandled_odd = len(odd_degree_vars) > 0 # init to True if there is any odd degree var
+        for i in odd_degree_vars:
+            for i2 in symmetry.to_perm_group(nvars).orbit(i):
+                if any(m[i2] % 2 == 1 for m in monomials):
+                    unhandled_odd = False
+                    break
+            if unhandled_odd:
+                break
+        if unhandled_odd:
+            continue
+
+        # now we solve the problem
         if verbose:
             print(f"Monomials = {monomials}")
         time0 = time()
         try:
             sdp = sos_problem._construct_sdp_by_default(monomials, verbose = verbose)
-            if sos_problem.solve(allow_numer = allow_numer, verbose = verbose, method = method):
+            if sos_problem.solve(allow_numer=allow_numer, verbose=verbose, solver=solver, solver_options=solver_options, **kwargs):
                 if verbose:
                     print(f"Time for solving SDP{' ':20s}: {time() - time0:.6f} seconds. \033[32mSuccess\033[0m.")
                 solution = sos_problem.as_solution()

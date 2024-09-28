@@ -3,12 +3,7 @@ from typing import List, Tuple, Dict
 import sympy as sp
 from sympy.simplify import signsimp
 
-from .utils import is_numer_matrix
-from ...utils import (
-    MonomialReduction, MonomialCyclic,
-    CyclicSum, CyclicProduct, is_cyclic_expr,
-    SolutionSimple
-)
+from ...utils import MonomialReduction, SolutionSimple
 
 class SolutionSDP(SolutionSimple):
     method = 'SDPSOS'
@@ -67,34 +62,6 @@ def _decomp_as_sos(
     return sp.Add(*exprs)
 
 
-def _as_cyc(multiplier, x):
-    """
-    Beautifully convert CyclicSum(multiplier * x).
-    """
-    a, b, c = sp.symbols('a b c')
-    if x.is_Pow:
-        # Example: (p(a-b))^2 == p((a-b)^2)
-        if isinstance(x.base, CyclicProduct) and x.exp > 1:
-            x = CyclicProduct(x.base.args[0] ** x.exp)
-    elif x.is_Mul:
-        args = list(x.args)
-        flg = False
-        for i in range(len(args)):
-            if args[i].is_Pow and isinstance(args[i].base, CyclicProduct):
-                args[i] = CyclicProduct(args[i].base.args[0] ** args[i].exp)
-                flg = True
-        if flg: # has been updated
-            x = sp.Mul(*args)
-
-    if is_cyclic_expr(x, (a,b,c)):
-        if multiplier == 1 or multiplier == CyclicProduct(a):
-            return 3 * multiplier * x
-        return CyclicSum(multiplier) * x
-    elif multiplier == CyclicProduct(a):
-        return multiplier * CyclicSum(x)
-    return CyclicSum(multiplier * x)
-
-
 def _is_numer_solution(decompositions: Dict[str, Tuple[sp.Matrix, sp.Matrix]]) -> bool:
     """
     Check whether the solution is a numerical solution.
@@ -109,6 +76,13 @@ def _is_numer_solution(decompositions: Dict[str, Tuple[sp.Matrix, sp.Matrix]]) -
     bool
         Whether the solution is a numerical solution.
     """
+
+    def is_numer_matrix(M: sp.Matrix) -> bool:
+        """
+        Check whether a matrix contains sp.Float.
+        """
+        return any(not isinstance(v, sp.Rational) for v in M)
+
     for _, (U, S) in decompositions.items():
         if is_numer_matrix(U) or is_numer_matrix(S):
             return True

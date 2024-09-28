@@ -3,8 +3,7 @@ from itertools import product
 
 import sympy as sp
 
-from ...utils import congruence
-
+from ...sdp import congruence
 
 
 def check_univariate(poly: sp.Poly, positive: bool = True) -> bool:

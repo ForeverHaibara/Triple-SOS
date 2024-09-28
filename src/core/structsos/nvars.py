@@ -1,7 +1,8 @@
 import sympy as sp
 
 from .utils import Coeff, quadratic_weighting
-from ...utils import SymmetricSum, congruence
+from ...sdp import congruence
+from ...utils import SymmetricSum
 from ...utils.roots import common_region_of_conics
 
 def sos_struct_nvars_quartic_symmetric(poly, real=True):

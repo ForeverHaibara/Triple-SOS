@@ -78,9 +78,11 @@ def sum_of_square(
 
     for method in method_order:
         config = configs.get(method, {})
-        method = NAME_TO_METHOD[method]
+        if method == 'LinearSOS':
+            config['rootsinfo'] = rootsinfo
 
-        solution = method(poly, rootsinfo=rootsinfo, **config)
+        method = NAME_TO_METHOD[method]
+        solution = method(poly, **config)
         if solution is not None:
             return solution
 
