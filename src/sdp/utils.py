@@ -1,11 +1,11 @@
 from contextlib import contextmanager
 from math import sqrt
-from typing import Union, Optional, Tuple, List, Dict, Callable, Generator
+from typing import Union, Optional, Tuple, List, Dict, Callable, Generator, Any
 
 from numpy import zeros as np_zeros
 from numpy import ndarray
-from sympy import zeros as sp_zeros
-from sympy import Matrix, MatrixBase, Expr, re, eye
+from sympy import Matrix, MatrixBase, Expr, Rational, Symbol, re, eye, collect
+from sympy.core.relational import GreaterThan, StrictGreaterThan, LessThan, StrictLessThan, Equality, Relational
 from sympy.core.singleton import S as singleton
 
 def congruence(M: Union[Matrix, ndarray]) -> Union[None, Tuple[Matrix, Matrix]]:
@@ -250,7 +250,7 @@ class Mat2Vec:
         """
         n = cls.length_of_mat(upper_vec.shape[0], mode = cls.UPPER)
         if isinstance(upper_vec, MatrixBase):
-            S = sp_zeros(n)
+            S = Matrix.zeros(n)
         elif isinstance(upper_vec, ndarray):
             S = np_zeros((n,n,upper_vec.shape[1])) if upper_vec.ndim == 2 else np_zeros((n,n))
 
@@ -340,6 +340,128 @@ def S_from_y(
         S = Mat2Vec.vec2mat(vecS, mode=mode)
         S_dict[key] = S
     return S_dict
+
+
+
+_RELATIONAL_TO_OPERATOR = {
+    GreaterThan: (1, '__ge__'),
+    StrictGreaterThan: (1, '__ge__'),
+    LessThan: (-1, '__ge__'),
+    StrictLessThan: (-1, '__ge__'),
+    Equality: (1, '__eq__')
+}
+
+
+def decompose_matrix(
+        M: Matrix,
+        variables: Optional[List[Symbol]] = None
+    ) -> Tuple[Matrix, Matrix, Matrix]:
+    """
+    Decomposes a symbolic matrix into the form vec(M) = x + A @ v
+    where x is a constant vector, A is a constant matrix, and v is a vector of variables.
+
+    See also in `sympy.solvers.solveset.linear_eq_to_matrix`.
+
+    Parameters
+    ----------
+    M : Matrix
+        The matrix to be decomposed.
+    variables : List[Symbol]
+        The variables to be used in the decomposition. If None, it uses M.free_symbols.
+
+    Returns
+    ----------
+    x : Matrix
+        The constant vector.
+    A : Matrix
+        The constant matrix.
+    v : Matrix
+        The vector of variables.
+    """
+    rows, cols = M.shape
+    if variables is None:
+        variables = list(M.free_symbols)
+        variables = sorted(variables, key = lambda x: x.name)
+    variable_index = {var: idx for idx, var in enumerate(variables)}
+
+    v = Matrix(variables)
+    x = Matrix.zeros(rows * cols, 1)
+    A = Matrix.zeros(rows * cols, len(variables))
+
+    for i in range(rows):
+        for j in range(cols):
+            expr = M[i, j]
+            terms = collect(expr, variables, evaluate=False)
+
+            constant_term = terms.pop(singleton.One, 0)  # Extract and remove constant term for x
+            x[i * cols + j] = constant_term
+
+            for term, coeff in terms.items():
+                A[i * cols + j, variable_index[term]] = coeff  # Extract coefficients for A
+
+    return x, A, v
+
+
+def exprs_to_arrays(locals: Dict[str, Any], symbols: List[Symbol],
+        exprs: List[Union[Callable, Expr, Relational, Union[Tuple[Matrix, Rational], Tuple[Matrix, Rational, str]]]]
+    ) -> List[Union[Tuple[Matrix, Rational], Tuple[Matrix, Rational, str]]]:
+    """
+    Convert expressions to arrays with respect to the free symbols.
+
+    Parameters
+    ----------
+    locals : Dict[str, Any]
+        The local variables.
+    symbols : List[Symbol]
+        The free symbols.
+    exprs : List[Union[Callable, Expr, Relational, Matrix]]
+        For each expression, it can be a Callable, Expr, Relational, or matrix.
+        If it is a Callable, it should be a function that calls on the locals and returns Expr/Relational/Matrix.
+        If it is a Expr, it should be with respect to the free symbols.
+        If it is a Relational, it should be with respect to the free symbols.
+
+    Returns
+    ----------
+    Matrix, Rational, [, operator] : Union[Tuple[Matrix, Rational], Tuple[Matrix, Rational, str]]
+        The coefficient vector with respect to the free symbols and the Rational of RHS (constant).
+        If it is a Relational, it returns the operator also.
+    """
+    op_list = []
+    vec_list = []
+    index_list = []
+    result = [None for _ in range(len(exprs))]
+    for i, expr in enumerate(exprs):
+        c, op = 0, None
+        if callable(expr):
+            expr = expr(locals)
+        if isinstance(expr, tuple):
+            if len(expr) == 3:
+                expr, c, op = expr
+            else:
+                expr, c = expr
+        if isinstance(expr, Relational):
+            sign, op = _RELATIONAL_TO_OPERATOR[expr.__class__]
+            expr = expr.lhs - expr.rhs if sign == 1 else expr.rhs - expr.lhs
+            c = -c if sign == -1 else c
+        if isinstance(expr, (Expr, int, float)):
+            vec_list.append(expr)
+            op_list.append(op)
+            index_list.append(i)
+        else:
+            if op is not None:
+                result[i] = (expr, c, op)
+            else:
+                result[i] = (expr, c)
+
+    const, A, _ = decompose_matrix(Matrix(vec_list), symbols)
+
+    for j in range(len(index_list)):
+        i = index_list[j]
+        if op_list[j] is not None:
+            result[i] = (A[j,:], -const[j], op_list[j])
+        else:
+            result[i] = (A[j,:], -const[j])
+    return result
 
 
 @contextmanager

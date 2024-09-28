@@ -173,13 +173,20 @@ class DualBackend(SDPBackend, ABC):
         k, b = float(k), float(b)
 
         x = x0.copy()
-        space2 = np.hstack([space, np.full((space.shape[0], 1), -k)])
-        m = space.shape[0]
+        m = int(round(np.sqrt(space.shape[0])))
+        # subtract the relaxation variable on the diagonal
+        space2 = np.hstack([space, np.eye(m).reshape((m**2, 1)) * (-k)])
         for i in range(m):
-            if i**2 >= m:
-                break
             x[i**2] -= b # the diagonal elements
         return x, space2
+
+    def add_relax_var_nonnegative_inequality(self, rhs: float = 0, operator='__ge__') -> None:
+        """
+        Add a constraint r >= 0.
+        """
+        vec = np.zeros(self.dof + 1)
+        vec[-1] = 1
+        return self.add_constraint(vec, rhs, operator=operator)
 
 
 class DegeneratedDualBackend(DualBackend):

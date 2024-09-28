@@ -1,10 +1,8 @@
-from typing import Union, Optional, Any, Tuple, List, Dict, Callable
+from typing import Union, Optional, Any, Tuple, List, Dict
 
 import numpy as np
-import sympy as sp
 from sympy import Expr, Symbol, Rational, MatrixBase
 from sympy import MutableDenseMatrix as Matrix
-from sympy.core.relational import Relational
 
 from .abstract import Decomp, Objective, Constraint, MinEigen
 from .arithmetic import solve_undetermined_linear
@@ -12,68 +10,11 @@ from .backend import (
     SDPBackend, solve_numerical_dual_sdp,
     max_relax_var_objective, min_trace_objective, max_inner_objective
 )
-from .rationalize import rationalize, rationalize_and_decompose
 from .transform import DualTransformMixin
-from .ipm import SDPRationalizeError
 
-from .utils import S_from_y
+from .utils import S_from_y, decompose_matrix, exprs_to_arrays
 
-_RELATIONAL_TO_OPERATOR = {
-    sp.GreaterThan: (1, '__ge__'),
-    sp.StrictGreaterThan: (1, '__ge__'),
-    sp.LessThan: (-1, '__ge__'),
-    sp.StrictLessThan: (-1, '__ge__'),
-    sp.Equality: (1, '__eq__')
-}
 
-def _decompose_matrix(
-        M: Matrix,
-        variables: Optional[List[Symbol]] = None
-    ) -> Tuple[Matrix, Matrix, Matrix]:
-    """
-    Decomposes a symbolic matrix into the form vec(M) = x + A @ v
-    where x is a constant vector, A is a constant matrix, and v is a vector of variables.
-
-    See also in `sympy.solvers.solveset.linear_eq_to_matrix`.
-
-    Parameters
-    ----------
-    M : Matrix
-        The matrix to be decomposed.
-    variables : List[Symbol]
-        The variables to be used in the decomposition. If None, it uses M.free_symbols.
-
-    Returns
-    ----------
-    x : Matrix
-        The constant vector.
-    A : Matrix
-        The constant matrix.
-    v : Matrix
-        The vector of variables.
-    """
-    rows, cols = M.shape
-    if variables is None:
-        variables = list(M.free_symbols)
-        variables = sorted(variables, key = lambda x: x.name)
-    variable_index = {var: idx for idx, var in enumerate(variables)}
-
-    v = Matrix(variables)
-    x = sp.zeros(rows * cols, 1)
-    A = sp.zeros(rows * cols, len(variables))
-
-    for i in range(rows):
-        for j in range(cols):
-            expr = M[i, j]
-            terms = sp.collect(expr, variables, evaluate=False)
-
-            constant_term = terms.pop(sp.S.One, 0)  # Extract and remove constant term for x
-            x[i * cols + j] = constant_term
-
-            for term, coeff in terms.items():
-                A[i * cols + j, variable_index[term]] = coeff  # Extract coefficients for A
-
-    return x, A, v
 
 def _infer_free_symbols(x0_and_space: Dict[str, Tuple[Matrix, Matrix]], free_symbols: List[Symbol]) -> List[Symbol]:
     """
@@ -100,67 +41,6 @@ def _infer_free_symbols(x0_and_space: Dict[str, Tuple[Matrix, Matrix]], free_sym
         else:
             return list(Symbol('y_{%d}'%i) for i in range(dof))
     return []
-
-def _exprs_to_arrays(locals: Dict[str, Any], symbols: List[Symbol],
-        exprs: List[Union[Callable, Expr, Relational, Union[Tuple[Matrix, Rational], Tuple[Matrix, Rational, str]]]]
-    ) -> List[Union[Tuple[Matrix, Rational], Tuple[Matrix, Rational, str]]]:
-    """
-    Convert expressions to arrays with respect to the free symbols.
-
-    Parameters
-    ----------
-    locals : Dict[str, Any]
-        The local variables.
-    symbols : List[Symbol]
-        The free symbols.
-    exprs : List[Union[Callable, Expr, Relational, Matrix]]
-        For each expression, it can be a Callable, Expr, Relational, or matrix.
-        If it is a Callable, it should be a function that calls on the locals and returns Expr/Relational/Matrix.
-        If it is a Expr, it should be with respect to the free symbols.
-        If it is a Relational, it should be with respect to the free symbols.
-
-    Returns
-    ----------
-    Matrix, Rational, [, operator] : Union[Tuple[Matrix, Rational], Tuple[Matrix, Rational, str]]
-        The coefficient vector with respect to the free symbols and the Rational of RHS (constant).
-        If it is a Relational, it returns the operator also.
-    """
-    op_list = []
-    vec_list = []
-    index_list = []
-    result = [None for _ in range(len(exprs))]
-    for i, expr in enumerate(exprs):
-        c, op = 0, None
-        if callable(expr):
-            expr = expr(locals)
-        if isinstance(expr, tuple):
-            if len(expr) == 3:
-                expr, c, op = expr
-            else:
-                expr, c = expr
-        if isinstance(expr, Relational):
-            sign, op = _RELATIONAL_TO_OPERATOR[expr.__class__]
-            expr = expr.lhs - expr.rhs if sign == 1 else expr.rhs - expr.lhs
-            c = -c if sign == -1 else c
-        if isinstance(expr, (Expr, int, float)):
-            vec_list.append(expr)
-            op_list.append(op)
-            index_list.append(i)
-        else:
-            if op is not None:
-                result[i] = (expr, c, op)
-            else:
-                result[i] = (expr, c)
-
-    const, A, _ = _decompose_matrix(sp.Matrix(vec_list), symbols)
-
-    for j in range(len(index_list)):
-        i = index_list[j]
-        if op_list[j] is not None:
-            result[i] = (A[j,:], -const[j], op_list[j])
-        else:
-            result[i] = (A[j,:], -const[j])
-    return result
 
 
 class SDPProblem(DualTransformMixin):
@@ -311,7 +191,7 @@ class SDPProblem(DualTransformMixin):
 
         x0_and_space = []
         for s in S:
-            x0, space, _ = _decompose_matrix(s, free_symbols)
+            x0, space, _ = decompose_matrix(s, free_symbols)
             x0_and_space.append((x0, space))
 
         if keys is not None:
@@ -356,8 +236,8 @@ class SDPProblem(DualTransformMixin):
             min_trace = min_trace_objective(self._x0_and_space[obj_key][1])
             objective_and_min_eigens = [
                 (min_trace, 0),
-                (-min_trace, 0),
-                (max_inner_objective(self._x0_and_space[obj_key][1], 1.), 0),
+                # (-min_trace, 0),
+                # (max_inner_objective(self._x0_and_space[obj_key][1], 1.), 0),
                 (max_relax_var_objective(self.dof), (1, 0)),
             ]
 
@@ -368,97 +248,24 @@ class SDPProblem(DualTransformMixin):
         constraints = [[] for _ in range(len(objectives))]
         return [objectives, constraints, min_eigens]
 
-    def rationalize(
-            self,
-            y: np.ndarray,
-            try_rationalize_with_mask: bool = True,
-            times: int = 1,
-            check_pretty: bool = True,
-        ) -> Optional[Tuple[Matrix, Decomp]]:
-        """
-        Rationalize a numerical vector y so that it produces a rational solution to SDP.
-
-        Parameters
-        ----------
-        y : np.ndarray
-            Numerical solution y.
-        kwargs : Any
-            Arguments that passed into rationalize_and_decompose.
-
-        Returns
-        ----------
-        y, decompositions : Optional[Tuple[Matrix, Decomp]]
-            If the problem is solved, return the congruence decompositions `y, [(S, U, diag)]`
-            So that each `S = U.T * diag(diag) * U` where `U` is upper triangular.
-            Otherwise, return None.
-        """
-        decomp = rationalize_and_decompose(y, self.S_from_y,
-            try_rationalize_with_mask=try_rationalize_with_mask, times=times, check_pretty=check_pretty
-        )
-        return decomp
-
-    def _solve_from_multiple_configs(self,
-            list_of_objective: List[Objective] = [],
-            list_of_constraints: List[List[Constraint]] = [],
-            list_of_min_eigen: List[MinEigen] = [],
+    def _solve_numerical_sdp(self,
+            objective: Objective,
+            constraints: List[Constraint] = [],
+            min_eigen: MinEigen = 0,
             solver: Optional[str] = None,
-            allow_numer: int = 0,
-            rationalize_configs = {},
             verbose: bool = False,
             solver_options: Dict[str, Any] = {},
             raise_exception: bool = False
         ):
-
-        num_sol = len(self._ys)
         _locals = None
 
-        if any(callable(_) for _ in list_of_objective) or any(any(callable(_) for _ in _) for _ in list_of_constraints):
+        if callable(objective) or any(callable(_) for _  in constraints):
             _locals = self.S_from_y()
             _locals['y'] = self.y
 
-        for obj, con, eig in zip(list_of_objective, list_of_constraints, list_of_min_eigen):
-            # iterate through the configurations
-            con = _exprs_to_arrays(_locals, self.free_symbols, con)
-            y = solve_numerical_dual_sdp(
-                self._x0_and_space,
-                _exprs_to_arrays(_locals, self.free_symbols, [obj])[0][0],
-                constraints=con,
-                min_eigen=eig,
+        con = exprs_to_arrays(_locals, self.free_symbols, constraints)
+        obj = exprs_to_arrays(_locals, self.free_symbols, [objective])[0][0]
+        return solve_numerical_dual_sdp(
+                self._x0_and_space, objective=obj, constraints=con, min_eigen=min_eigen,
                 solver=solver, solver_options=solver_options, raise_exception=raise_exception
             )
-            if y is not None:
-                self._ys.append(y)
-
-                def _force_return(self: SDPProblem, y):
-                    self.register_y(y, perturb = True, propagate_to_parent = False)
-                    _decomp = dict((key, (s, d)) for (key, s), d in zip(self.S.items(), self.decompositions.values()))
-                    return y, _decomp
-
-                if allow_numer >= 3:
-                    # force to return the numerical solution
-                    return _force_return(self, y)
-
-                decomp = rationalize_and_decompose(y, self.S_from_y, **rationalize_configs)
-                if decomp is not None:
-                    return decomp
-
-                if allow_numer == 2:
-                    # force to return the numerical solution if rationalization fails
-                    return _force_return(self, y)
-
-        if len(self._ys) > num_sol:
-            # new numerical solution found
-            decomp = self.rationalize_combine(self._ys, self.S_from_y, verbose = verbose)
-            if decomp is not None:
-                return decomp
-
-            if allow_numer == 1:
-                y = self._ys[-1]
-                return rationalize_and_decompose(y, self.S_from_y,
-                            try_rationalize_with_mask = False, times = 0, perturb = True, check_pretty = False)
-            else:
-                raise SDPRationalizeError(
-                    "Failed to find a rational solution despite having a numerical solution."
-                )
-
-        return None

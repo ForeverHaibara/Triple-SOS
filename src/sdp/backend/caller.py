@@ -43,6 +43,7 @@ def _create_numerical_dual_sdp(
         constraints: List[Tuple[ndarray, float, str]] = [],
         min_eigen: Union[float, tuple, Dict[str, Union[float, tuple]]] = 0,
         solver: Optional[str] = None,
+        add_relax_var_nonnegative_inequality: bool = True,
     ) -> DualBackend:
     """
     Create a numerical dual SDP problem.
@@ -71,6 +72,9 @@ def _create_numerical_dual_sdp(
     backend.set_objective(objective)
     for constraint, rhs, op in constraints:
         backend.add_constraint(constraint, rhs, op)
+
+    if add_relax_var_nonnegative_inequality:
+        backend.add_relax_var_nonnegative_inequality()
 
     return backend
 
@@ -110,6 +114,11 @@ def solve_numerical_dual_sdp(
 
     try:
         y = backend.solve(solver_options)
+        if y.size != backend.dof:
+            if y.size == 0: # no solution is found
+                y = None
+            else:
+                raise ValueError(f"Solution y has wrong size {y.size}, expected {backend.dof}.")
     except Exception as e:
         if raise_exception:
             raise e
@@ -165,6 +174,11 @@ def solve_numerical_primal_sdp(
 
     try:
         y = backend.solve(solver_options)
+        if y.size != backend.dof:
+            if y.size == 0: # no solution is found
+                y = None
+            else:
+                raise ValueError(f"Solution y has wrong size {y.size}, expected {backend.dof}.")
     except Exception as e:
         if raise_exception:
             raise e

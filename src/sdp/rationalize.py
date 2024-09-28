@@ -1,3 +1,4 @@
+from abc import ABC, abstractmethod
 from itertools import chain
 from typing import Union, Optional, Tuple, List, Dict, Callable, Generator
 
@@ -26,63 +27,61 @@ def rationalize(x, rounding = 1e-2, **kwargs):
     return sp.nsimplify(x, tolerance = rounding, rational = True)
 
 
-def rationalize_with_mask(y: np.ndarray, zero_tolerance: float = 1e-7) -> sp.Matrix:
+class Rationalizer(ABC):
+    @abstractmethod
+    def __call__(self, y: np.ndarray) -> Generator[sp.Matrix, None, None]:
+        raise NotImplementedError
+    def __repr__(self) -> str:
+        return f"<{self.__class__.__name__}>"
+
+class IdentityRationalizer(Rationalizer):
+    def __call__(self, y: np.ndarray) -> Generator[sp.Matrix, None, None]:
+        return (sp.Matrix(y),)
+
+class EmptyRationalizer(Rationalizer):
+    def __call__(self, y: np.ndarray) -> Generator[sp.Matrix, None, None]:
+        return (sp.zeros(0, 1),)
+
+class RationalizeWithMask(Rationalizer):
     """
-    Rationalize a numpy vector. First set small entries to zero.
+    Rationalize a numpy vector by first setting entries with small values to zero.
 
     Parameters
     ----------
-    y : np.ndarray
-        The vector to be rationalized.
     zero_tolerance : float
         Assume the largest (abs) entry is `v`. Then entries with value
         smaller than `zero_tolerance * v` will be set to zero.
-
-    Returns
-    -------
-    y_rational : sp.Matrix
-        The rationalized vector.
     """
-    if len(y) == 0: return sp.Matrix(0, 1, [])
-    tol = max(1, np.abs(y).max()) * zero_tolerance
-    y_rational_mask = np.abs(y) > tol
-    y_rational = np.where(y_rational_mask, y, 0)
-    y_rational = [rationalize(v, rounding = abs(v) * 1e-4) for v in y_rational]
-    y_rational = sp.Matrix(y_rational)
-    return y_rational
+    def __init__(self, zero_tolerance: float = 1e-7):
+        self.zero_tolerance = zero_tolerance
+
+    def __call__(self, y: np.ndarray) -> Generator[sp.Matrix, None, None]:
+        tol = max(1, np.abs(y).max()) * self.zero_tolerance
+        y_rational_mask = np.abs(y) > tol
+        y_rational = np.where(y_rational_mask, y, 0)
+        y_rational = [rationalize(v, rounding = abs(v) * 1e-4) for v in y_rational]
+        y_rational = sp.Matrix(y_rational)
+        return (y_rational,)
 
 
-def rationalize_simultaneously(
-        y: np.ndarray,
-        lcm: int = 1260,
-        times: int = 3
-    ) -> Generator[sp.Matrix, None, None]:
+class RationalizeSimultaneously(Rationalizer):
     """
-    Rationalize a vector `y` with the same denominator `lcm ^ power` 
-    where `power = 0, 1, ..., times - 1`. This keeps the denominators of
-    `y` aligned.
+    Rationalize a vector `y` with the same denominator `lcm`.
 
     Parameters
     ----------
-    y : np.ndarray
-        The vector to be rationalized.
-    lcm : int
-        The denominator of `y`.
-    times : int
-        The number of times to perform retries.
-
-    Yields
-    ------
-    y_rational : sp.Matrix
-        The rationalized vector.
+    lcms : List[int]
+        The list of denominators.
     """
-    lcm_ = sp.S(1)
-    for power in range(times):
-        y_rational = [round(v * lcm_) / lcm_ for v in y]
-        y_rational = sp.Matrix(y_rational)
-        yield y_rational
+    def __init__(self, lcms: List[int] = (1, 1260, 1260**2, 1260**3)):
+        self.lcms = lcms
 
-        lcm_ *= lcm
+    def __call__(self, y: np.ndarray) -> Generator[sp.Matrix, None, None]:
+        for lcm in self.lcms:
+            lcm = sp.Integer(lcm)
+            y_rational = [round(v * lcm) / lcm for v in y]
+            y_rational = sp.Matrix(y_rational)
+            yield y_rational
 
 
 def verify_is_pretty(
@@ -90,8 +89,8 @@ def verify_is_pretty(
         threshold: Optional[Callable] = None
     ) -> bool:
     """
-    Check whether the rationalization of `y` is pretty. Idea: in normal cases, 
-    the denominators of `y` should be aligned. For example, 
+    A heuristic method to check whether the rationalization of `y` is pretty.
+    Idea: in normal cases, the denominators of `y` should be aligned. For example, 
     `[2/11, 56/33, 18/11, 2/3]` seems to be reasonable and great. However,
     `[2/3, 3/5, 4/7, 5/11]` is nonsense because the denominators are not aligned.
 
@@ -128,9 +127,7 @@ def rationalize_and_decompose(
         y: Union[np.ndarray, sp.Matrix],
         mat_func: Callable[[sp.Matrix], Dict[str, sp.Matrix]],
         projection: Optional[Callable[[sp.Matrix], sp.Matrix]] = None,
-        try_rationalize_with_mask: bool = True,
-        lcm: int = 1260,
-        times: int = 3,
+        rationalizers: List[Rationalizer] = [],
         reg: float = 0,
         perturb: bool = False,
         check_pretty: bool = True,
@@ -149,15 +146,12 @@ def rationalize_and_decompose(
     projection : Optional[Callable[[sp.Matrix], sp.Matrix]]
         The projection function. If not None, we project `y` to the feasible
         region before checking the PSD property.
-    try_rationalize_with_mask: bool
-        If True, function `rationalize_with_mask` will be called first.
-    lcm: int
-        The denominator used to rationalize `y`. Defaults to 1260.
-    times : int
-        The number of times to perform retries. Defaults to 3.
+    rationalizers : List[Rationalizer]
+        The list of rationalizers. We will try to rationalize `y` with each
+        rationalizer in the list.
     reg : float
         We require `S[i]` to be positive semidefinite, but in practice
-        we might want to add a small regularization term to make it
+        we might allow a small regularization term to make it
         positive definite >> reg * I.
     perturb : bool
         If perturb == True, it must return the result by adding a small
@@ -173,32 +167,30 @@ def rationalize_and_decompose(
         So that each `S = U.T * diag(diag) * U` where `U` is upper triangular.
         Otherwise, return None.
     """
-    if isinstance(y, np.ndarray):
-        ys = rationalize_simultaneously(y, lcm = lcm, times = times)
-        if try_rationalize_with_mask:
-            ys = chain([rationalize_with_mask(y)], ys)
+    if isinstance(y, sp.MatrixBase):
+        rationalizers = [IdentityRationalizer()]
+    if len(y) == 0:
+        rationalizers = [EmptyRationalizer()]
 
-    elif isinstance(y, sp.MatrixBase):
-        ys = [y]
+    for rationalizer in rationalizers:
+        # print(rationalizer, rationalizer(y))
+        for y_rational in rationalizer(y):
+            if check_pretty and not verify_is_pretty(y_rational):
+                continue
+            if projection is not None:
+                y_rational = projection(y_rational)
 
+            S_dict = mat_func(y_rational)
+            decompositions = {}
+            for key, S in S_dict.items():
+                if reg != 0:
+                    S = S + reg * sp.eye(S.shape[0])
 
-    for y_rational in ys:
-        if check_pretty and not verify_is_pretty(y_rational):
-            continue
-        if projection is not None:
-            y_rational = projection(y_rational)
+                congruence_decomp = congruence_with_perturbation(S, perturb = perturb)
+                if congruence_decomp is None:
+                    break
 
-        S_dict = mat_func(y_rational)
-        decompositions = {}
-        for key, S in S_dict.items():
-            if reg != 0:
-                S = S + reg * sp.eye(S.shape[0])
-
-            congruence_decomp = congruence_with_perturbation(S, perturb = perturb)
-            if congruence_decomp is None:
-                break
-
-            U, diag = congruence_decomp
-            decompositions[key] = (S, U, diag)
-        else:
-            return y_rational, decompositions
+                U, diag = congruence_decomp
+                decompositions[key] = (S, U, diag)
+            else:
+                return y_rational, decompositions

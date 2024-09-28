@@ -7,8 +7,6 @@ from sympy import MatrixBase, Symbol, Float
 
 from .abstract import Decomp, Objective, Constraint, MinEigen
 from .backend import solve_numerical_primal_sdp
-from .ipm import SDPRationalizeError
-from .rationalize import rationalize_and_decompose
 from .transform import PrimalTransformMixin
 from .utils import Mat2Vec
 
@@ -128,13 +126,6 @@ class SDPPrimal(PrimalTransformMixin):
         else:
             dy = A.pinv_solve(r, arbitrary_matrix=Matrix.zeros(A.cols, 1))
         return y + dy
-    
-    def register_y(self, y: Union[Matrix, ndarray], project: bool = False, perturb: bool = False, propagate_to_parent: bool = True) -> None:
-        y2 = self.project(y)
-        if (not (y2 is y)) and not project:
-            # FIXME for numpy array
-            raise ValueError("The vector y is not feasible by the equality constraints. Use project=True to project to the feasible region.")
-        return super().register_y(y2, perturb=perturb, propagate_to_parent=propagate_to_parent)
 
     def _get_defaulted_configs(self) -> List[List[Any]]:
         sum_trace = np.concatenate([np.eye(m).flatten() for m in self.size.values()])
@@ -147,84 +138,19 @@ class SDPPrimal(PrimalTransformMixin):
         constraints = [[] for _ in objectives_and_min_eigens]
         return objectives, constraints, min_eigens
 
-    def _solve_from_multiple_configs(self,
-            list_of_objective: List[Objective] = [],
-            list_of_constraints: List[List[Constraint]] = [],
-            list_of_min_eigen: List[MinEigen] = [],
+    def _solve_numerical_sdp(self,
+            objective: Objective,
+            constraints: List[Constraint] = [],
+            min_eigen: MinEigen = 0,
             solver: Optional[str] = None,
-            allow_numer: int = 0,
-            rationalize_configs = {},
             verbose: bool = False,
             solver_options: Dict[str, Any] = {},
             raise_exception: bool = False
-        ) -> Optional[Tuple[Matrix, Decomp]]:
+        ):
 
-        num_sol = len(self._ys)
-
-        for obj, con, eig in zip(list_of_objective, list_of_constraints, list_of_min_eigen):
-            if len(con):
-                raise NotImplementedError("The primal form does not support constraints.")
-
-            y = solve_numerical_primal_sdp(
-                self._space, self._x0,
-                obj, constraints=con, min_eigen=eig,
+        if len(constraints):
+            raise NotImplementedError("The primal form does not support constraints.")
+        return solve_numerical_primal_sdp(
+                self._space, self._x0, objective=objective, constraints=constraints, min_eigen=min_eigen,
                 solver=solver, solver_options=solver_options, raise_exception=raise_exception
             )
-            if y is not None:
-                self._ys.append(y)
-
-                def _force_return(self: SDPPrimal, y):
-                    self.register_y(y, project=True, perturb = True, propagate_to_parent = False)
-                    _decomp = dict((key, (s, d)) for (key, s), d in zip(self.S.items(), self.decompositions.values()))
-                    return y, _decomp
-
-                if allow_numer >= 3:
-                    # force to return the numerical solution
-                    return _force_return(self, y)
-
-                decomp = rationalize_and_decompose(y, self.S_from_y, projection=self.project, **rationalize_configs)
-                if decomp is not None:
-                    return decomp
-
-                if allow_numer == 2:
-                    # force to return the numerical solution if rationalization fails
-                    return _force_return(self, y)
-
-        if len(self._ys) > num_sol:
-            # new numerical solution found
-            decomp = self.rationalize_combine(self._ys, self.S_from_y, projection=self.project, verbose = verbose)
-            if decomp is not None:
-                return decomp
-
-            if allow_numer == 1:
-                y = self._ys[-1]
-                return rationalize_and_decompose(y, self.S_from_y, projection=self.project,
-                            try_rationalize_with_mask = False, times = 0, perturb = True, check_pretty = False)
-            else:
-                raise SDPRationalizeError(
-                    "Failed to find a rational solution despite having a numerical solution."
-                )
-
-        return None
-
-            # temporary usage
-            # from cvxpy import Problem, Minimize, trace, Variable
-            # constraints = []
-            # s_list = []
-            # eq = -np.array(self._x0).astype(np.float64).flatten()
-            # obj_expr = 0.0
-            # for key, m in self.size.items():
-            #     space = np.array(self._space[key]).astype(np.float64)
-            #     S = Variable((m, m), PSD=True)
-            #     s_list.append(S)
-            #     eq = eq + space @ S.reshape((m**2,))
-            #     obj_expr = obj_expr + obj[key].flatten() @ S.reshape((m**2,))
-            # constraints.append(eq == 0.)
-            # obj = Minimize(obj_expr)
-            # prob = Problem(obj, constraints)
-            # sol = prob.solve(verbose=verbose, **solver_options)
-            # y = np.concatenate([np.array(s.value).flatten() for s in s_list])
-
-            # ra = rationalize_and_decompose(y, self.S_from_y, **rationalize_configs)
-            # if ra is not None:
-            #     return ra
