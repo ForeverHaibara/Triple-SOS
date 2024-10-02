@@ -434,6 +434,8 @@ def symmetric_bilinear_multiple(U: sp.Matrix, A: sp.Matrix) -> sp.Matrix:
     A: Matrix
         Matrix A
     """
+    if A.shape[0] == 0:
+        return sp.Matrix.zeros(0, U.shape[1]**2)
     q1, q2 = None, None
     if q1 is None:
         q1 = _common_denoms(A)

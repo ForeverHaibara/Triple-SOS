@@ -1,7 +1,7 @@
 import sympy as sp
 from ..utils import (
     Coeff, 
-    radsimp, sum_y_exprs, rationalize_func, quadratic_weighting, zip_longest,
+    radsimp, sum_y_exprs, rationalize_func, quadratic_weighting, zip_longest, intervals,
     StructuralSOSError, PolynomialNonpositiveError, PolynomialUnsolvableError
 )
 
