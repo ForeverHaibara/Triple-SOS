@@ -89,7 +89,8 @@ class SOS_Manager():
                 n = degree_of_zero(txt, gens=gens, perm=perm)
             else:
                 n = poly.total_degree()
-        except:
+        except Exception as e:
+            # raise e
             return None
 
         if poly is None:
