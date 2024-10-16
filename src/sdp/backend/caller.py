@@ -42,6 +42,7 @@ def _create_numerical_dual_sdp(
         objective: ndarray,
         constraints: List[Tuple[ndarray, float, str]] = [],
         min_eigen: Union[float, tuple, Dict[str, Union[float, tuple]]] = 0,
+        lower_bound: Optional[float] = None,
         solver: Optional[str] = None,
         add_relax_var_nonnegative_inequality: bool = True,
     ) -> DualBackend:
@@ -76,6 +77,9 @@ def _create_numerical_dual_sdp(
     if add_relax_var_nonnegative_inequality:
         backend.add_relax_var_nonnegative_inequality()
 
+    if lower_bound is not None:
+        backend.add_constraint(objective, lower_bound, '__ge__')
+
     return backend
 
 
@@ -84,6 +88,7 @@ def solve_numerical_dual_sdp(
         objective: ndarray,
         constraints: List[Tuple[ndarray, float, str]] = [],
         min_eigen: Union[float, tuple, Dict[str, Union[float, tuple]]] = 0,
+        lower_bound: Optional[float] = None,
         solver: Optional[str] = None,
         solver_options: Dict[str, Any] = {},
         raise_exception: bool = False,
@@ -102,6 +107,9 @@ def solve_numerical_dual_sdp(
         A list of constraints, each represented as a tuple of (constraint, rhs, operator).
     min_eigen : Union[float, tuple, Dict[str, Union[float, tuple]]]
         The minimum eigenvalue of each PSD matrices, defaults to 0. But perturbation is allowed.
+    lower_bound : Optional[float]
+        If not None, add a lower bound constraint to the objective function to
+        avoid unbounded error.
     solver : str
         The solver to use, defaults to None (auto selected). Refer to _DUAL_BACKEND for all solvers,
         but users should install the corresponding packages.
@@ -110,7 +118,7 @@ def solve_numerical_dual_sdp(
     raise_exception : bool
         Whether to raise exception when the solver fails.
     """
-    backend = _create_numerical_dual_sdp(x0_and_space, objective, constraints, min_eigen, solver)
+    backend = _create_numerical_dual_sdp(x0_and_space, objective, constraints, min_eigen, lower_bound=lower_bound, solver=solver)
 
     try:
         y = backend.solve(solver_options)
@@ -162,6 +170,7 @@ def solve_numerical_primal_sdp(
         objective: ndarray,
         constraints: List[Tuple[ndarray, float, str]] = [],
         min_eigen: Union[float, tuple, Dict[str, Union[float, tuple]]] = 0,
+        # lower_bound: Optional[float] = None,
         solver: Optional[str] = None,
         solver_options: Dict[str, Any] = {},
         raise_exception: bool = False,

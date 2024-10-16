@@ -58,7 +58,7 @@ class SDPBackend(ABC):
         operator = _STANDARDIZED_OPERATORS.get(operator, None)
         if operator is None:
             raise ValueError(f"Operator {operator} is not supported.")
-        constraint = np_array(constraint, flatten=True)
+        constraint = self.extend_vector(constraint)
         return self._add_constraint(constraint, float(rhs), operator)
 
     def extend_vector(self, vector: np.ndarray) -> np.ndarray:
