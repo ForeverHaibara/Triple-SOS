@@ -5,6 +5,7 @@ from ...utils.expression.solution import Solution, SolutionSimple
 
 class SolutionStructural(Solution):
     method = 'StructuralSOS'
+    _verified = False # set to False for debug purpose
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -45,7 +46,7 @@ class SolutionStructuralSimple(SolutionSimple, SolutionStructural):
         super().__init__(*args, **kwargs)
 
         # for debug purpose
-        verified = False
+        verified = self._verified
         arguments = [
             {'extension': True},
             {'domain': self.problem.domain}

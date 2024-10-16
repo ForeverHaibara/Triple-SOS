@@ -91,6 +91,10 @@ def _sos_struct_octic_symmetric_hexagon_sdp(coeff):
     s(4a4b2-7a4bc+4a4c2+8a3b3-12a3b2c-12a3bc2+15a2b2c2+a4(b-c)2)s(a2-ab)
 
     (85/336p(a-b)2+s(bc(a-b)(a-c)(a+b)(a+c))-16/15s(a2bc(b-c)2))s(a2-ab)
+
+    s(a3(bc(a+b+c)((a-2b)(a-2c)-bc)+a(a-b-c)(a-3b-3c)(b-c)2))
+
+    s(a2(a-(b+c))2((b-c)2+bc)(a-b)(a-c))
     """
     c620, c530, c440, c611, c521, c431, c422 = [coeff(_) for _ in ((6,2,0),(5,3,0),(4,4,0),(6,1,1),(5,2,1),(4,3,1),(4,2,2))]
     if (not coeff.is_rational) or c620 <= 0 or coeff.poly111() != 0:
@@ -151,11 +155,11 @@ def _sos_struct_octic_symmetric_hexagon_sdp(coeff):
     def _sol_to_result(sol):
         if sol is None:
             return None
-        u102, u201, u111, r, quad_form = sol
+        u210, u102, u201, u111, r, quad_form = sol
         quad_form_sol = _compute_quad_form_sol(quad_form)
         if r >= 0 or quad_form_sol is not None:
             a, b, c = sp.symbols('a b c')
-            ker = (a-b)*(u102*c**2*(b+a) + (a*b*(a+b)-c**3) + u201*c*(a**2+b**2+c**2) + u111*a*b*c).expand().together()
+            ker = (a-b)*(u102*c**2*(b+a) + u210*(a*b*(a+b)-c**3) + u201*c*(a**2+b**2+c**2) + u111*a*b*c).expand().together()
             return r * CyclicSum(ker**2) + quad_form_sol
 
 
@@ -215,12 +219,24 @@ def _sos_struct_octic_symmetric_hexagon_sdp(coeff):
         # now we have a valid t
         if t != -1:
             p4 = (w1*w4 + 3*w2**2 - w2*w4)*t + w1*w4
-            x_ = -w2/w1/(t+1)*(p4 + 9*t*w1*w2)/p4
-            r = p4**2/(162*t**2*w2**2*w4)
             reg = (81*t**2*w1**2*w2**2*(t + 1)**2*w4)
             M00t, M01t, M02t, M22t = [f(t)/reg for f in (M00t, M01t, M02t, M22t)]
-            u111 =  -(5*t**2*w1**2*w4 - 12*t**2*w1*w2**2 + 3*t**2*w1*w2*w4 - 3*t**2*w2**3 + t**2*w2**2*w4 + 10*t*w1**2*w4 - 3*t*w1*w2**2 + 3*t*w1*w2*w4 + 5*w1**2*w4)/(w1*(t + 1)*(t*w1*w4 + 3*t*w2**2 - t*w2*w4 + w1*w4))
+            u111_ = -(5*t**2*w1**2*w4 - 12*t**2*w1*w2**2 + 3*t**2*w1*w2*w4 - 3*t**2*w2**3 + t**2*w2**2*w4 + 10*t*w1**2*w4 - 3*t*w1*w2**2 + 3*t*w1*w2*w4 + 5*w1**2*w4)
 
+            if p4 != 0:
+                x_ = -w2/w1/(t+1)*(p4 + 9*t*w1*w2)/p4
+                r = p4**2/(162*t**2*w2**2*w4)
+                u210 = sp.S(1)
+                u201 = x_ * t
+                u102 = 2 + w2/w1 + x_
+                u111 = u111_/(w1*(t + 1)*p4)
+            else:
+                x_ = -w2/w1/(t+1)*(p4 + 9*t*w1*w2)
+                r = x_**2/(162*t**2*w2**2*w4)
+                u210 = sp.S(0)
+                u201 = t
+                u102 = sp.S(1)
+                u111 = u111_/(-w2*(p4 + 9*t*w1*w2))
         else:
             # take limit t -> -1
             x_ = -(3*w1 + w2)/(3*w1)
@@ -231,10 +247,13 @@ def _sos_struct_octic_symmetric_hexagon_sdp(coeff):
             M22t = (81*c440*w1 + 27*c440*w2 - 81*c611*w1 - 27*c611*w2 + 18*w1**2 - 12*w1*w2 - 7*w2**2)/(27*(3*w1 + w2))
             u111 = -(-9*w1*w2 - 2*w2**2)/(3*w1*w2)
 
-        u201 = x_ * t
-        u102 = 2 + w2/w1 + x_
+            u210 = sp.S(1)
+            u201 = x_ * t
+            u102 = 2 + w2/w1 + x_
+
         quad_form = stack_quad_form(M00t, M01t, M02t, M22t)
-        return u102, u201, u111, r, quad_form
+        # print('PARAMS =', t, u102, u201, u111, r, quad_form)
+        return u210, u102, u201, u111, r, quad_form
 
 
     def _nondegenerated_hessian_degen_w1():
@@ -289,6 +308,7 @@ def _sos_struct_octic_symmetric_hexagon_sdp(coeff):
         if t is None:
             return None
 
+        u210 = sp.S(1)
         u201 = t
         u102 = -(t + 1)*(3*t*w2 - t*w4 + 2*w4)/(3*t*w2 - t*w4 - w4)
         u111 = -(3*t**2*w2 - t**2*w4 - 3*t*w2 + 3*t*w4 - 5*w4)/(3*t*w2 - t*w4 - w4)
@@ -296,7 +316,7 @@ def _sos_struct_octic_symmetric_hexagon_sdp(coeff):
         r = (3*t*w2 - t*w4 - w4)**2 / reg
         M00t, M01t, M02t, M22t = [f(t)/reg for f in (M00t, M01t, M02t, M22t)]
         quad_form = stack_quad_form(M00t, M01t, M02t, M22t)
-        return u102, u201, u111, r, quad_form
+        return u210, u102, u201, u111, r, quad_form
 
 
 
@@ -320,6 +340,7 @@ def _sos_struct_octic_symmetric_hexagon_sdp(coeff):
         The constraints then converts to.
         """
         def _compute_params(x, y):
+            u210 = sp.S(1)
             u201 = y
             u102 = x / (-w1) - y - 1
 
@@ -333,7 +354,7 @@ def _sos_struct_octic_symmetric_hexagon_sdp(coeff):
             M22t = (3*c440*u102*u201 + 3*c440*u201**2 + 3*c440*u201 - 3*c611*u102*u201 - 3*c611*u201**2 - 3*c611*u201 + u102**2*w1 + 3*u201**2*w1 - 6*u201*w1)/reg
             quad_form = stack_quad_form(M00t, M01t, M02t, M22t)
             if quad_form.is_positive_semidefinite:
-                return u102, u201, u111, r, quad_form
+                return u210, u102, u201, u111, r, quad_form
 
         y = sp.Symbol('y')
 
@@ -485,11 +506,12 @@ def _sos_struct_octic_symmetric_hexagon_sdp(coeff):
             M02t = sp.S(0)
             M22t = w5 / (c611 + 2*c620)
 
+        u210 = sp.S(1)
         u102 = -c530/(c611 + 2*c620)
         u201 = sp.S(0)
         u111 = -2*u102 - 1
         quad_form = stack_quad_form(M00t, M01t, M02t, M22t)
-        return u102, u201, u111, r, quad_form
+        return u210, u102, u201, u111, r, quad_form
 
 
     if w4 > 0:

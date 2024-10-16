@@ -4,8 +4,9 @@ from math import gcd
 import sympy as sp
 
 from .utils import (
-    CyclicSum, CyclicProduct, Coeff, SS, prove_univariate
+    CyclicSum, CyclicProduct, Coeff, SS, prove_univariate, radsimp
 )
+from .dense_symmetric import sos_struct_dense_symmetric
 from .quadratic import sos_struct_quadratic
 from .quartic import sos_struct_quartic
 
@@ -213,7 +214,7 @@ def _acc_dict(items: List[Tuple]) -> Dict:
     d = {k: v for k,v in d.items() if v != 0}
     return d
 
-def _separate_product(recursion: Callable) -> Callable:
+def _separate_product_wrapper(recursion: Callable) -> Callable:
     """
     A wrapper of recursion function to avoid nested CyclicProduct(a).
     For instance, if we have CyclicProduct(a) * (CyclicProduct(a)*F(a,b,c) + G(a,b,c)),
@@ -431,6 +432,7 @@ class Hnmr:
         return v * sol
 
 
+
 def sos_struct_heuristic(coeff, real=True):
     """
     Solve high-degree but sparse inequalities by heuristic method.
@@ -450,8 +452,12 @@ def sos_struct_heuristic(coeff, real=True):
     # assert degree > 6, "Degree must be greater than 6 in heuristic method."
     if degree <= 6:
         return None
+    if True:
+        solution = sos_struct_dense_symmetric(coeff, real = real)
+        if solution is not None:
+            return solution
     recursion = SS.structsos.ternary._structural_sos_3vars_cyclic
-    recursion = _separate_product(recursion)
+    recursion = _separate_product_wrapper(recursion)
 
     if coeff((degree, 0, 0)):
         # not implemented
