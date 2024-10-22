@@ -19,14 +19,12 @@ class DualBackendMOSEK(DualBackend):
     _dependencies = ('mosek',)
     @classmethod
     def is_available(cls) -> bool:
-        for dep in cls._dependencies:
-            try:
-                __import__(dep)
-            except ImportError:
-                return False
-        from mosek.fusion import Model
-        with Model("SDP") as M:
-            _try_solve = M.solve() # checks if the license is available
+        try:
+            from mosek.fusion import Model
+            with Model("SDP") as M:
+                _try_solve = M.solve() # checks if the license is available
+        except:
+            return False
         return True
 
     def __init__(self, dof) -> None:
