@@ -4,16 +4,20 @@ from numpy import ndarray
 from sympy import MutableDenseMatrix as Matrix
 
 from .backend import DualBackend, PrimalBackend, DegeneratedDualBackend
+from .clarabel_sdp import DualBackendCLARABEL
 from .cvxopt_sdp import DualBackendCVXOPT
 from .cvxpy_sdp import DualBackendCVXPY, PrimalBackendCVXPY
+from .mosek_sdp import DualBackendMOSEK
 from .picos_sdp import DualBackendPICOS, PrimalBackendPICOS
 from .sdpap_sdp import DualBackendSDPAP
 from ..utils import Mat2Vec
 
 
 _DUAL_BACKENDS: Dict[str, DualBackend] = {
+    'clarabel': DualBackendCLARABEL,
     'cvxopt': DualBackendCVXOPT,
     'cvxpy': DualBackendCVXPY,
+    'mosek': DualBackendMOSEK,
     'picos': DualBackendPICOS,
     'sdpa': DualBackendSDPAP,
     'sdpap': DualBackendSDPAP,
@@ -25,7 +29,7 @@ _PRIMAL_BACKENDS: Dict[str, PrimalBackend] = {
 }
 
 _RECOMMENDED_BACKENDS = [
-    'cvxpy', 'picos', 'cvxopt', 'sdpa'
+    'mosek', 'clarabel', 'cvxopt', 'sdpa', 'picos', 'cvxpy',
 ]
 
 def get_default_sdp_backend(dual = True) -> str:

@@ -121,14 +121,14 @@ def sos_struct_handle_uncentered(solver: Callable) -> Callable:
         dd3, dm3 = divmod(d,3)
         i, j, k = dd3, dd3+(1 if dm3>=2 else 0), dd3+(1 if dm3 else 0)
         coeff = poly.coeffs.copy()
-        if (i,j,k) in coeff:
-            coeff[(i,j,k)] -= bias/3
-            coeff[(j,k,i)] -= bias/3
-            coeff[(k,i,j)] -= bias/3
-        else:
-            coeff[(i,j,k)] = -bias/3
-            coeff[(j,k,i)] = -bias/3
-            coeff[(k,i,j)] = -bias/3
+        if not ((i,j,k) in coeff):
+            coeff[(i,j,k)] = 0
+            coeff[(j,k,i)] = 0
+            coeff[(k,i,j)] = 0
+        coeff[(i,j,k)] -= bias/3
+        coeff[(j,k,i)] -= bias/3
+        coeff[(k,i,j)] -= bias/3
+
         new_poly = Coeff(coeff)
         solution = solver(new_poly, *args, **kwargs)
         if solution is not None:

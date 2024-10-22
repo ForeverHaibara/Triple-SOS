@@ -16,11 +16,16 @@ from typing import List, Tuple, Union, Optional
 
 from numpy import array as np_array
 from numpy import around as np_round
+from numpy import iinfo as np_iinfo
+from numpy import isnan, inf, unique
 import sympy as sp
 from sympy import Rational
 from sympy.external.gmpy import MPQ
 
-from .utils import Mat2Vec
+from .utils import Mat2Vec, is_empty_matrix
+
+_INT32_MAX = np_iinfo('int32').max # 2147483647
+_INT64_MAX = np_iinfo('int64').max # 9223372036854775807
 
 def _lcm(x, y):
     """
@@ -57,6 +62,8 @@ def _row_reduce_list(mat, rows, cols, normalize_last=True, normalize=True, zero_
     def cross_cancel(a, i, b, j):
         """Does the row op row[i] = a*row[i] - b*row[j]"""
         q = (j - i)*cols
+        gcdab = MPQ(gcd(a.numerator, b.numerator), gcd(a.denominator, b.denominator))
+        a, b = a / gcdab, b / gcdab
         for p in range(i*cols, (i + 1)*cols):
             mat[p] = (a*mat[p] - b*mat[p + q])
 
@@ -200,6 +207,22 @@ def solve_undetermined_linear(M: sp.Matrix, B: sp.Matrix) -> Tuple[sp.Matrix, sp
 
     return vt2, V2
 
+def solve_nullspace(A: sp.Matrix) -> sp.Matrix:
+    """
+    Compute the null space of a matrix A.
+    If A is full-rank and has shape m x n (m > n), then the null space has shape m x (m-n).
+    """
+    # try:
+    #     x0, space = solve_undetermined_linear(A.T, sp.zeros(A.cols, 1))
+    # except ValueError:
+    #     return sp.Matrix.zeros(A.rows, 0)
+    # return space
+    m = sp.Matrix.hstack(*A.T.nullspace())
+    if is_empty_matrix(m):
+        return sp.zeros(A.shape[0], 0)
+    return m
+
+
 
 def solve_column_separated_linear(A: List[List[Tuple[int, Rational]]], b: sp.Matrix, x0_equal_indices: List[List[int]] = [], _cols: int = -1):
     """
@@ -289,6 +312,10 @@ def solve_column_separated_linear(A: List[List[Tuple[int, Rational]]], b: sp.Mat
 
 
 def _common_denoms(A: Union[List, sp.Matrix], bound: int = 4096) -> Optional[int]:
+    """
+    Compute the common denominator of a list of rational numbers.
+    This might be slow when the list is large. (e.g. 30000 entries -> 0.2 sec)
+    """
     q = 1
     for v in A:
         if not v.is_Rational:
@@ -297,6 +324,19 @@ def _common_denoms(A: Union[List, sp.Matrix], bound: int = 4096) -> Optional[int
         if q > bound:
             return None
     return int(q)
+    # try:
+    #     vec = unique(np_array([_.q for _ in A]).astype('int'))
+    #     if len(vec) > 20 or abs(vec).max() > bound:
+    #         return None
+
+    #     q = 1
+    #     for v in vec:
+    #         q = _lcm(q, v)
+    #         if q > bound:
+    #             return None
+    #     return int(q)
+    # except:
+    #     return None # not all elements are Rational
 
 
 def matmul(A: sp.Matrix, B: sp.Matrix, q1: Optional[int] = None, q2: Optional[int] = None) -> sp.Matrix:
@@ -316,6 +356,9 @@ def matmul(A: sp.Matrix, B: sp.Matrix, q1: Optional[int] = None, q2: Optional[in
     q2: int
         Common denominator of B. If not specified, it will be inferred.
     """
+    if A.shape[0] == 0 or B.shape[0] == 0 or B.shape[1] == 0:
+        return sp.zeros(A.shape[0], B.shape[1])
+    A0, B0 = A, B
     if q1 is None:
         q1 = _common_denoms(A)
     if q1 is not None and q2 is None:
@@ -323,8 +366,20 @@ def matmul(A: sp.Matrix, B: sp.Matrix, q1: Optional[int] = None, q2: Optional[in
     if q1 is None or q2 is None:
         return A * B
 
-    A = np_round(np_array(A).astype('float') * q1).astype('int')
-    B = np_round(np_array(B).astype('float') * q2).astype('int')
+    A = np_array(A).astype('float') * q1
+    _MAXA = abs(A).max()
+    if isnan(_MAXA) or _MAXA == inf or _MAXA > _INT64_MAX:
+        return A0 * B0
+
+    B = np_array(B).astype('float') * q2
+    _MAXB = abs(B).max()
+    if isnan(_MAXB) or _MAXB == inf or _MAXB > _INT64_MAX or int(_MAXA) * int(_MAXB) * B.shape[0] > _INT64_MAX:
+        return A0 * B0
+
+    CAST_TYPE = 'int' if int(_MAXA) * int(_MAXB) * B.shape[0] <= _INT32_MAX else 'int64'
+    A = np_round(A).astype(CAST_TYPE)
+    B = np_round(B).astype(CAST_TYPE)
+
     C = A @ B
     C = sp.Matrix(C.tolist()) / (q1 * q2)
     return C
@@ -345,28 +400,49 @@ def matmul_multiple(A: sp.Matrix, B: sp.Matrix, q1: Optional[int] = None, q2: Op
     q2: int
         Common denominator of B. If not specified, it will be inferred.
     """
+    if A.shape[0] == 0 or B.shape[0] == 0 or B.shape[1] == 0:
+        return sp.zeros(A.shape[0], B.shape[0]*B.shape[1])
 
-    if q1 is None:
-        q1 = _common_denoms(A)
-    if q1 is not None and q2 is None:
-        q2 = _common_denoms(B)
-    if q1 is None or q2 is None:
-        # fallback to defaulted method
+    A0, B0 = A, B
+    def default(A, B):
         eq_mat = []
         for i in range(A.shape[0]):
             Aij = Mat2Vec.vec2mat(A[i,:])
             eq = list(matmul(Aij, B))
             eq_mat.append(eq)
-
         eq_mat = sp.Matrix(eq_mat)
         return eq_mat
 
+    if q1 is None:
+        q1 = _common_denoms(A)
+    if q1 is not None and q2 is None:
+        q2 = _common_denoms(B)
+
+    if q1 is None or q2 is None:
+        # fallback to defaulted method
+        return default(A0, B0)
+
+    N = A.shape[0]
     n, m = B.shape
-    A = np_round(np_array(A).astype('float') * q1).astype('int')
-    A = A.reshape((-1, n, n))
-    B = np_round(np_array(B).astype('float') * q2).astype('int')
-    C = (A @ B)
-    C = sp.Matrix(C.reshape((-1, n*m)).tolist()) / (q1 * q2)
+
+    A = np_array(A).astype('float') * q1
+    _MAXA = abs(A).max()
+    if isnan(_MAXA) or _MAXA == inf or _MAXA > _INT64_MAX:
+        return default(A0, B0)
+
+    B = np_array(B).astype('float') * q2
+    _MAXB = abs(B).max()
+    if isnan(_MAXB) or _MAXB == inf or _MAXB > _INT64_MAX or int(_MAXA) * int(_MAXB) * n > _INT64_MAX:
+        return default(A0, B0)
+
+    CAST_TYPE = 'int' if int(_MAXA) * int(_MAXB) * n**2 <= _INT32_MAX else 'int64'
+    A = np_round(A).astype(CAST_TYPE).reshape((N, n, n))
+    B = np_round(B).astype(CAST_TYPE)
+
+    C = (A @ B).flatten().tolist()
+    q1q2 = q1 * q2
+    C = [MPQ(i, q1q2) for i in C]
+    C = sp.Matrix(N, n*m, [Rational(i.numerator, i.denominator, gcd = 1) for i in C])
     return C
 
 
@@ -434,16 +510,8 @@ def symmetric_bilinear_multiple(U: sp.Matrix, A: sp.Matrix) -> sp.Matrix:
     A: Matrix
         Matrix A
     """
-    if A.shape[0] == 0:
-        return sp.Matrix.zeros(0, U.shape[1]**2)
-    q1, q2 = None, None
-    if q1 is None:
-        q1 = _common_denoms(A)
-    if q1 is not None and q2 is None:
-        q2 = _common_denoms(U)
-    # print('q1 q2 =', q1, q2, 'A U shape =', A.shape, U.shape)
-    if q1 is None or q2 is None:
-        # fallback to defaulted method
+    A0, U0 = A, U
+    def default(A, U):
         eq_mat = []
         for i in range(A.shape[0]):
             # Aij = Mat2Vec.vec2mat(space[i,:])
@@ -453,10 +521,38 @@ def symmetric_bilinear_multiple(U: sp.Matrix, A: sp.Matrix) -> sp.Matrix:
         eq_mat = sp.Matrix(eq_mat)
         return eq_mat
 
+    N = A.shape[0]
+    if N == 0:
+        return sp.Matrix.zeros(0, U.shape[1]**2)
+    q1, q2 = None, None
+    if q1 is None:
+        q1 = _common_denoms(A)
+    if q1 is not None and q2 is None:
+        q2 = _common_denoms(U)
+    # print('q1 q2 =', q1, q2, 'A U shape =', A.shape, U.shape)
+    if q1 is None or q2 is None:
+        # fallback to defaulted method
+        return default(A0, U0)
+
     n, m = U.shape
-    A = np_round(np_array(A).astype('float') * q1).astype('int')
-    A = A.reshape((-1, n, n))
-    U = np_round(np_array(U).astype('float') * q2).astype('int')
-    C = (U.T @ A @ U)
-    C = sp.Matrix(C.reshape((-1, m*m)).tolist()) / (q1 * q2**2)
+
+    A = np_array(A).astype('float') * q1
+    _MAXA = abs(A).max()
+    if isnan(_MAXA) or _MAXA == inf or _MAXA > _INT64_MAX:
+        return default(A0, U0)
+
+    U = np_array(U).astype('float') * q2
+    _MAXU = abs(U).max()
+    if isnan(_MAXU) or _MAXU == inf or _MAXU > _INT64_MAX or int(_MAXA) * int(_MAXU) * n**2 > _INT64_MAX:
+        return default(A0, U0)
+
+    CAST_TYPE = 'int' if int(_MAXA) * int(_MAXU) * n**2 <= _INT32_MAX else 'int64'
+    A = np_round(A).astype(CAST_TYPE).reshape((N, n, n))
+    U = np_round(U).astype(CAST_TYPE)
+
+    C = (U.T @ A @ U).flatten().tolist()
+    q1q22 = q1 * q2**2
+    C = [MPQ(i, q1q22) for i in C]
+    C = sp.Matrix(N, m**2, [Rational(i.numerator, i.denominator, gcd = 1) for i in C])
+    # C = sp.Matrix(C.reshape((-1, m*m)).tolist()) / (q1 * q2**2)
     return C

@@ -11,6 +11,9 @@ class DualBackendCVXPY(DualBackend):
     CVXPY backend for SDP problems.
     CVXPY is a Python-embedded modeling language for convex optimization problems.
 
+    Warning: It seems that CVXPY cannot recognize dual SDP problems properly,
+    which would lead to very slow performance.
+
     Installation:
     pip install cvxpy
 
