@@ -91,11 +91,19 @@ class DualBackendMOSEK(DualBackend):
         return x
 
     def solve(self, solve_options: dict = {}) -> np.ndarray:
-        from mosek.fusion import Model
+        from mosek.fusion import Model, SolutionStatus, AccSolutionStatus
         with Model("SDP") as M:
             self.model = M
             x = self._add_variables_to_model(M)
+
+            M.acceptedSolutionStatus(AccSolutionStatus.Anything)
+            # M.setSolverParam("intpntScaling", "free")
+            for key, value in solve_options.items():
+                M.setSolverParam(key, value)
+
             M.solve()
+            # if M.getPrimalSolutionStatus() != SolutionStatus.Optimal:
+            #     return
             self.solution = x.level()
         return np.array(self.solution).flatten()[:-1]
 
@@ -208,11 +216,19 @@ class PrimalBackendMOSEK(PrimalBackend):
         return variables
 
     def solve(self, solve_options: dict = {}) -> np.ndarray:
-        from mosek.fusion import Model
+        from mosek.fusion import Model, SolutionStatus, AccSolutionStatus
         with Model("SDP") as M:
             self.model = M
             variables = self._add_variables_to_model(M)
+
+            M.acceptedSolutionStatus(AccSolutionStatus.Anything)
+            # M.setSolverParam("intpntScaling", "free")
+            for key, value in solve_options.items():
+                M.setSolverParam(key, value)
+
             M.solve()
+            # if M.getPrimalSolutionStatus() != SolutionStatus.Optimal:
+            #     return
             self.solution = [np.array(x.level()) for x in variables]
         solution = [self._convert_vec_to_matrix(sol).flatten() for sol in self.solution]
         solution = np.concatenate(solution)

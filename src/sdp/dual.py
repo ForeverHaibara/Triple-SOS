@@ -258,6 +258,7 @@ class SDPProblem(DualTransformMixin):
             objective: Objective,
             constraints: List[Constraint] = [],
             min_eigen: MinEigen = 0,
+            scaling: float = 6.,
             solver: Optional[str] = None,
             verbose: bool = False,
             solver_options: Dict[str, Any] = {},
@@ -272,6 +273,6 @@ class SDPProblem(DualTransformMixin):
         con = exprs_to_arrays(_locals, self.free_symbols, constraints)
         obj = exprs_to_arrays(_locals, self.free_symbols, [objective])[0][0]
         return solve_numerical_dual_sdp(
-                self._x0_and_space, objective=obj, constraints=con, min_eigen=min_eigen,
+                self._x0_and_space, objective=obj, constraints=con, min_eigen=min_eigen, scaling=scaling,
                 solver=solver, solver_options=solver_options, raise_exception=raise_exception
             )

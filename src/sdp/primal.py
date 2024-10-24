@@ -177,6 +177,7 @@ class SDPPrimal(PrimalTransformMixin):
             objective: Objective,
             constraints: List[Constraint] = [],
             min_eigen: MinEigen = 0,
+            scaling: float = 6.,
             solver: Optional[str] = None,
             verbose: bool = False,
             solver_options: Dict[str, Any] = {},
@@ -186,6 +187,6 @@ class SDPPrimal(PrimalTransformMixin):
         # if len(constraints):
         #     raise NotImplementedError("The primal form does not support constraints.")
         return solve_numerical_primal_sdp(
-                self._space, self._x0, objective=objective, constraints=constraints, min_eigen=min_eigen,
+                self._space, self._x0, objective=objective, constraints=constraints, min_eigen=min_eigen, scaling=scaling,
                 solver=solver, solver_options=solver_options, raise_exception=raise_exception
             )
