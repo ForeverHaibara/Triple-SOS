@@ -48,36 +48,58 @@ class DualBackendPICOS(DualBackend):
 
 class PrimalBackendPICOS(PrimalBackend):
     _dependencies = ('picos',)
-    def __init__(self, size) -> None:
-        super().__init__(size)
+    def __init__(self, x0) -> None:
+        super().__init__(x0)
+
+        self._eqs = []
+        self._eq_bs = []
+        self._leqs = []
+        self._leq_bs = []
 
     def _add_constraint(self, constraint: np.ndarray, rhs: float = 0, operator = '__eq__') -> None:
-        raise NotImplementedError
+        if operator == '__eq__':
+            self._eqs.append(constraint)
+            self._eq_bs.append(rhs)
+        elif operator == '__le__':
+            self._leqs.append(constraint)
+            self._leq_bs.append(rhs)
+        elif operator == '__ge__':
+            self._leqs.append(-constraint)
+            self._leq_bs.append(-rhs)
 
     def _create_problem(self) -> Any:
-        from picos import Problem, SymmetricVariable
+        from picos import Problem, SymmetricVariable, RealVariable, sum
         problem = Problem()
-        mat_size = self._mat_size + [1]
         variables = []
-        for m in mat_size:
+        for m in self._mat_size:
             S = SymmetricVariable(random_name(), (m, m))
             variables.append(S)
             problem.add_constraint(S >> 0)
+        variables.append(RealVariable(random_name(), 1))
 
-        sumobj = 0
-        for v, obj in zip(variables, self.split_vector(self._objective)):
-            sumobj = sumobj + obj.reshape((obj.size,)) * v.vec
+        eq_constraint = sum([space * v.vec for v, space in zip(variables, self._spaces + [self._min_eigen_space])])
+        problem.add_constraint(eq_constraint == self.x0)
 
-        eq_constraint = -self.x0
-        for v, space in zip(variables, self._spaces + [self._min_eigen_space]):
-            eq_constraint = eq_constraint + space * v.vec
+        dof = self.dof + 1
+        if len(self._eqs):
+            eqs = np.vstack([eq.reshape((-1, dof)) for eq in self._eqs])
+            eqs = self.split_vector(eqs)
+            eq_b = np.concatenate([np.array(_).flatten() for _ in self._eq_bs])
+            problem.add_constraint(sum([eq * v.vec for v, eq in zip(variables, eqs)]) == eq_b)
 
-        problem.add_constraint(eq_constraint == 0)
+        if len(self._leqs):
+            leqs = np.vstack([leq.reshape((-1, dof)) for leq in self._leqs])
+            leqs = self.split_vector(leqs)
+            leq_b = np.concatenate([np.array(_).flatten() for _ in self._leq_bs])
+            problem.add_constraint(sum([leq * v.vec for v, leq in zip(variables, leqs)]) <= leq_b)
+
+        sumobj = sum([obj.flatten() * v.vec for v, obj in zip(variables, self.split_vector(self._objective))])
         problem.set_objective('min', sumobj)
+
         return problem, variables
 
     def solve(self, solver_options = {}) -> np.ndarray:
         problem, variables = self._create_problem()
         self.solution = problem.solve(**solver_options)
         value = [np.array(v.value).flatten() for v in variables]
-        return np.concatenate(value)[:-1]
+        return self.restore_eigen(value)

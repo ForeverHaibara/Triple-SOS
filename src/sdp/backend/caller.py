@@ -4,10 +4,10 @@ from numpy import ndarray
 from sympy import MutableDenseMatrix as Matrix
 
 from .backend import DualBackend, PrimalBackend, DegeneratedDualBackend
-from .clarabel_sdp import DualBackendCLARABEL
+from .clarabel_sdp import DualBackendCLARABEL, PrimalBackendCLARABEL
 from .cvxopt_sdp import DualBackendCVXOPT
 from .cvxpy_sdp import DualBackendCVXPY, PrimalBackendCVXPY
-from .mosek_sdp import DualBackendMOSEK
+from .mosek_sdp import DualBackendMOSEK, PrimalBackendMOSEK
 from .picos_sdp import DualBackendPICOS, PrimalBackendPICOS
 from .sdpap_sdp import DualBackendSDPAP
 from ..utils import Mat2Vec
@@ -24,7 +24,9 @@ _DUAL_BACKENDS: Dict[str, DualBackend] = {
 }
 
 _PRIMAL_BACKENDS: Dict[str, PrimalBackend] = {
+    'clarabel': PrimalBackendCLARABEL,
     'cvxpy': PrimalBackendCVXPY,
+    'mosek': PrimalBackendMOSEK,
     'picos': PrimalBackendPICOS,
 }
 
@@ -146,6 +148,7 @@ def _create_numerical_primal_sdp(
         constraints: List[Tuple[ndarray, float, str]] = [],
         min_eigen: Union[float, tuple, Dict[str, Union[float, tuple]]] = 0,
         solver: Optional[str] = None,
+        add_relax_var_nonnegative_inequality: bool = True,
     ) -> PrimalBackend:
     """
     Create a numerical primal SDP problem.
@@ -160,7 +163,10 @@ def _create_numerical_primal_sdp(
         min_eigen = {key: min_eigen for key in space.keys()}
     for key, space_mat in space.items():
         backend.add_linear_matrix_equality(space_mat, min_eigen.get(key, 0))
-    
+
+    if add_relax_var_nonnegative_inequality:
+        backend.add_relax_var_nonnegative_inequality()
+
     backend.set_objective(objective)
     for constraint, rhs, op in constraints:
         backend.add_constraint(constraint, rhs, op)

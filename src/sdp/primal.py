@@ -166,7 +166,7 @@ class SDPPrimal(PrimalTransformMixin):
         sum_trace = np.concatenate([np.eye(m).flatten() for m in self.size.values()])
         objectives_and_min_eigens = [
             (sum_trace, 0),
-            (np.array([0] * sum_trace.size + [1]), (1, 0))
+            (np.array([0] * sum_trace.size + [-1]), (1, 0))
         ]
         objectives = [_[0] for _ in objectives_and_min_eigens]
         min_eigens = [_[1] for _ in objectives_and_min_eigens]
@@ -183,8 +183,8 @@ class SDPPrimal(PrimalTransformMixin):
             raise_exception: bool = False
         ):
 
-        if len(constraints):
-            raise NotImplementedError("The primal form does not support constraints.")
+        # if len(constraints):
+        #     raise NotImplementedError("The primal form does not support constraints.")
         return solve_numerical_primal_sdp(
                 self._space, self._x0, objective=objective, constraints=constraints, min_eigen=min_eigen,
                 solver=solver, solver_options=solver_options, raise_exception=raise_exception

@@ -29,7 +29,9 @@ _STANDARDIZED_OPERATORS = {
     '__lt__': '__le__',
     '__ge__': '__ge__',
     '__le__': '__le__',
-    '__eq__': '__eq__'
+    '__eq__': '__eq__',
+    '__leq__': '__le__',
+    '__geq__': '__ge__',
 }
 
 
@@ -55,20 +57,31 @@ class SDPBackend(ABC):
         Add a constraint constraint @ y (operator) rhs.
         It is defaulted to be converted to 1d PSD matrix inequality.
         """
-        operator = _STANDARDIZED_OPERATORS.get(operator, None)
-        if operator is None:
+        op = _STANDARDIZED_OPERATORS.get(operator, None)
+        if op is None:
             raise ValueError(f"Operator {operator} is not supported.")
-        constraint = self.extend_vector(constraint)
-        return self._add_constraint(constraint, float(rhs), operator)
+        constraint = self.extend_vector(constraint).flatten()
+        return self._add_constraint(constraint, float(rhs), op)
 
     def extend_vector(self, vector: np.ndarray) -> np.ndarray:
         """
         Extend the vector to match the size of the optimization variable (with a relaxation variable).
+        If the vector has ndim > 1, then the operation is performed on the final axis.
         """
-        vector = np_array(vector, flatten=True)
-        if vector.size == self.dof:
-            return np.concatenate([vector, [0]])
+        vector = np_array(vector) #, flatten=True)
+        # if vector.size == self.dof:
+        #     return np.concatenate([vector, [0]])
+        if vector.shape[-1] == self.dof:
+            return np.concatenate([vector, np.zeros(vector.shape[:-1] + (1,))], axis=-1)
         return vector
+
+    def add_relax_var_nonnegative_inequality(self, rhs: float = 0, operator='__ge__') -> None:
+        """
+        Add a constraint r >= 0.
+        """
+        vec = np.zeros(self.dof + 1)
+        vec[-1] = 1
+        return self.add_constraint(vec, rhs, operator=operator)
 
     @abstractmethod
     def _set_objective(self, objective: np.ndarray) -> None: ...
@@ -77,12 +90,11 @@ class SDPBackend(ABC):
         """
         Set the objective function.
         """
-        objective = self.extend_vector(objective)
+        objective = self.extend_vector(objective).flatten()
         return self._set_objective(objective)
 
     @abstractmethod
     def solve(self, *args, **kwargs) -> Any: ...
-
 
 class DualBackend(SDPBackend, ABC):
     """
@@ -180,14 +192,6 @@ class DualBackend(SDPBackend, ABC):
             x[i**2] -= b # the diagonal elements
         return x, space2
 
-    def add_relax_var_nonnegative_inequality(self, rhs: float = 0, operator='__ge__') -> None:
-        """
-        Add a constraint r >= 0.
-        """
-        vec = np.zeros(self.dof + 1)
-        vec[-1] = 1
-        return self.add_constraint(vec, rhs, operator=operator)
-
 
 class DegeneratedDualBackend(DualBackend):
     """
@@ -236,6 +240,7 @@ class PrimalBackend(SDPBackend, ABC):
         self.x0 = np_array(x0, flatten=True)
         self.dof = 0
         self._min_eigen_space = np.zeros((self.x0.shape[0], 1)) # the equality constraints on the relaxation variable
+        self._eigen_relaxations = []
         self._mat_size = []
         self._spaces: List[np.ndarray] = []
 
@@ -279,6 +284,7 @@ class PrimalBackend(SDPBackend, ABC):
 
         self.dof += space.shape[1]
         self._mat_size.append(m)
+        self._eigen_relaxations.append((k, b))
         return self._add_linear_matrix_equality(space)
 
     def _set_objective(self, objective: np.ndarray) -> None:
@@ -292,10 +298,25 @@ class PrimalBackend(SDPBackend, ABC):
     def split_vector(self, vec: np.ndarray) -> List[np.ndarray]:
         """
         Split the vector into a list of vectors by the size of the matrices.
+        If the vector has ndim > 1, then the operation is performed on the final axis.
         """
         vec = self.extend_vector(vec)
-        return np.split(vec, np.cumsum(np.array(self._mat_size + [1])**2)[:-1])
+        return np.split(vec, np.cumsum(np.array(self._mat_size + [1])**2)[:-1], axis=-1)
 
+    def restore_eigen(self, vec: np.ndarray) -> np.ndarray:
+        """
+        Restore the eigenvalue relaxation variable to the original space.
+        """
+        if not isinstance(vec, list):
+            mats = self.split_vector(vec)
+        else:
+            mats = vec
+        eigen = mats[-1].flatten()[0]
+        for i in range(len(mats) - 1):
+            m = self._mat_size[i]
+            k, b = self._eigen_relaxations[i]
+            mats[i][np.arange(0,m**2,m+1)] += k * eigen + b
+        return np.concatenate(mats[:-1])
 
 def max_relax_var_objective(dof: int) -> np.ndarray:
     """

@@ -61,30 +61,51 @@ class PrimalBackendCVXPY(PrimalBackend):
     _dependencies = ('cvxpy',)
     def __init__(self, x0: np.ndarray) -> None:
         super().__init__(x0)
+
+        self._eqs = []
+        self._eq_bs = []
+        self._leqs = []
+        self._leq_bs = []
         self.solution = None
 
-    def _add_constraint(self, constraint: np.ndarray, rhs: float = 0, operator = '__ge__') -> None:
-        # self._constraints.append(getattr(constraint @ self.x, operator)(rhs))
-        raise NotImplementedError
+    def _add_constraint(self, constraint: np.ndarray, rhs: float = 0, operator = '__eq__') -> None:
+        if operator == '__eq__':
+            self._eqs.append(constraint)
+            self._eq_bs.append(rhs)
+        elif operator == '__le__':
+            self._leqs.append(constraint)
+            self._leq_bs.append(rhs)
+        elif operator == '__ge__':
+            self._leqs.append(-constraint)
+            self._leq_bs.append(-rhs)
 
     def _create_problem(self) -> Any:
-        from cvxpy import Problem, Minimize, Variable, reshape
+        from cvxpy import Problem, Minimize, Variable, reshape, sum
         # TIP: cvxpy instances do not support .reshape method in earlier versions (e.g. <= 1.3)
         # thus we need to call cvxpy.reshape instead of (...).reshape
         variables = []
-        mat_size = self._mat_size + [1]
-        for m in mat_size:
+        for m in self._mat_size:
             variables.append(Variable((m, m), PSD=True))
+        variables.append(Variable((1, 1), symmetric=True))
 
-        sumobj = 0
-        for v, obj in zip(variables, self.split_vector(self._objective)):
-            sumobj = sumobj + reshape(obj, (obj.size,)) @ reshape(v, (v.size,))
+        sumobj = sum([obj.flatten() @ reshape(v, (v.size,)) for v, obj in zip(variables, self.split_vector(self._objective))])
 
-        eq_constraint = -self.x0
-        for v, space in zip(variables, self._spaces + [self._min_eigen_space]):
-            eq_constraint = eq_constraint + space @ reshape(v, (v.size,))
+        eq_constraint = sum([space @ reshape(v, (v.size,)) for v, space in zip(variables, self._spaces + [self._min_eigen_space])])
+        constraints = [eq_constraint == self.x0]
 
-        constraints = [eq_constraint == 0]
+        dof = self.dof + 1
+        if len(self._eqs):
+            eqs = np.vstack([eq.reshape((-1, dof)) for eq in self._eqs])
+            eqs = self.split_vector(eqs)
+            eq_b = np.concatenate([np.array(_).flatten() for _ in self._eq_bs])
+            constraints.append(sum([eq @ reshape(v, (v.size,)) for v, eq in zip(variables, eqs)]) == eq_b)
+
+        if len(self._leqs):
+            leqs = np.vstack([leq.reshape((-1, dof)) for leq in self._leqs])
+            leqs = self.split_vector(leqs)
+            leq_b = np.concatenate([np.array(_).flatten() for _ in self._leq_bs])
+            constraints.append(sum([leq @ reshape(v, (v.size,)) for v, leq in zip(variables, leqs)]) <= leq_b)
+
         problem = Problem(Minimize(sumobj), constraints)
         return problem, variables
 
@@ -92,5 +113,5 @@ class PrimalBackendCVXPY(PrimalBackend):
         problem, variables = self._create_problem()
         self.solution = problem.solve(**solver_options)
         value = [v.value.flatten() for v in variables]
-        return np.concatenate(value)[:-1]
+        return self.restore_eigen(value)
         
