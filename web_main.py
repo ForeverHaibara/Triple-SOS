@@ -150,7 +150,8 @@ def preprocess():
     n = result['degree']
     txt = result['txt']
     triangle = result['triangle']
-    grid = result['grid']
+    grid = result.get('grid', None)
+    grid_color = grid.grid_color if grid is not None else None
  
     sid = req.pop('sid')
     req.update(result)
@@ -161,7 +162,7 @@ def preprocess():
     # socketio.sleep(3)
     # thread.raise_exc(SystemExit)
 
-    return jsonify(n = n, txt = txt, triangle = triangle, heatmap = grid.grid_color)
+    return jsonify(n = n, txt = txt, triangle = triangle, heatmap = grid_color)
 
 def findroot(sid, **kwargs):
     """

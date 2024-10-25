@@ -87,13 +87,15 @@ class RootsInfo():
                 continue
             a, b, c = root
             # FIXME
-            if c == 0:
-                a, b, c = b, c, a
-            a, b = a/c, b/c
+            # if c == 0:
+            #     a, b, c = b, c, a
+            if c != 0:
+                a, b, c = a/c, b/c, 1
+                root = Root((a,b,c))
             value = float(root.eval(self.poly, rational = True))
             if abs(value) < sp.S(10)**(-15):
                 value = sp.S(0)
-            s += f'\n({formatter(a)},{formatter(b)},1) = {formatter(value)}'
+            s += f'\n({formatter(a)},{formatter(b)},{formatter(c)}) = {formatter(value)}'
         return s
 
     @property

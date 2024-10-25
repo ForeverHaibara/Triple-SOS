@@ -1,3 +1,4 @@
+from math import prod
 from typing import List, Tuple
 
 import sympy as sp
@@ -6,6 +7,7 @@ from sympy.plotting.experimental_lambdify import vectorized_lambdify
 
 from ..polytools import deg
 from ..roots import Root, RootRational
+from ..basis_generator import generate_expr
 
 class GridPoly():
     """
@@ -122,7 +124,7 @@ class GridPoly():
 
     def local_minima(self, filter_nontrivial: bool = True, cyc: bool = True) -> List[Root]:
         """
-        Search for local minima. Currently only cyclic polynomials are supported.
+        Search for local minima. Currently only 3-var polynomials are supported.
 
         Parameters
         ----------
@@ -136,6 +138,10 @@ class GridPoly():
         extrema : List[Root]
             A list of local minima.
         """
+        if len(self.poly.gens) != 3:
+            # raise NotImplementedError('Only 3-var polynomials are supported.')
+            return [RootRational((1,)*len(self.poly.gens))] if not filter_nontrivial else []
+
         grid_coor, grid_value = self.grid_coor, self.grid_value
         # grid_coor[k] = (i,j) stands for the value  f(n-i-j, i, j)
         # (grid_size + 1) * (grid_size + 2) // 2 = len(grid_coor)
@@ -144,45 +150,39 @@ class GridPoly():
 
         extrema = []
 
-        trunc = (2*n + 3 - n // 3) * (n // 3) // 2 if cyc else 0
+        if not cyc:
+            iterator = zip(grid_coor, grid_value)
+        else:
+            # trunc = (2*n + 3 - n // 3) * (n // 3) // 2
+            trunc = (2*n//3) * (2*n//3 + 1) // 2
+            iterator = zip(grid_coor[:trunc], grid_value[:trunc])
 
         def _get_local_checker(cyc = True):
-            def _basic_checker(i, j, v):
-                if i == 0 or j == 0 or i + j == n:
+            def _basic_checker(i, j, k, v):
+                if i == 0 or j == 0 or k == 0:
                     return False
-                for coor in ((i,j-1),(i+1,j-1),(i-1,j),(i-1,j+1),(i+1,j),(i,j+1)):
+                for coor in ((i,j-1,k+1),(i+1,j-1,k),(i-1,j,k+1),(i-1,j+1,k),(i+1,j,k-1),(i,j+1,k-1)):
                     if v >= grid_dict[coor]:
                         return False
                 return True
             if cyc:
-                def _cyc_checker(i, j, v):
-                    # without loss of generality we may assume j = max(i,j,n-i-j)
+                def _cyc_checker(i, j, k, v):
+                    # without loss of generality we may assume i = max(i,j,k)
                     # need to be locally convex
-                    if i > j or n - i - j > j:
+                    if i < j or i < k:
                         return False
-                    return _basic_checker(i, j, v)
+                    return _basic_checker(i, j, k, v)
                 return _cyc_checker
             return _basic_checker
 
         checker = _get_local_checker(cyc)
-        for (i, j), v in zip(grid_coor[trunc:], grid_value[trunc:]):
-            if checker(i, j, v):
-                extrema.append(RootRational((n-i-j, i, j)))
+        for (i, j, k), v in iterator:
+            if checker(i, j, k, v):
+                extrema.append(RootRational((i,j,k)))
 
         if filter_nontrivial:
             extrema = [r for r in extrema if r.is_nontrivial]
         return extrema
-
-def _grid_init_coor(size: int) -> List[Tuple[int, int]]:
-    """
-    Initialize the grid and preprocess some values.
-    """
-    # grid_coor[k] = (i,j) stands for the value  f(n-i-j, i, j)
-    grid_coor = []
-    for i in range(size + 1):
-        for j in range(size + 1 - i):
-            grid_coor.append((j,i))
-    return grid_coor
 
 def _grid_init_precal(size: int, degree_limit: int) -> List[List[int]]:
     """
@@ -200,55 +200,55 @@ def _grid_init_precal(size: int, degree_limit: int) -> List[List[int]]:
 
 class GridRender():
     """
-    Class to generate the grid of a 3-var polynomial. See details in `GridRender.render`.
+    Class to generate the grid of a homogeneous polynomial. See details in `GridRender.render`.
     """
     color_level = 12
-    size = 60
+    size_limit = 60
     degree_limit = 18
 
     # initialize the grid and preprocess some values
-    grid_coor = _grid_init_coor(size)
-    grid_coor_np_ = np.hstack([size - np.array(grid_coor), np.array(grid_coor)]).T
-    grid_precal = _grid_init_precal(size, degree_limit)
-
-    _zero_grid = None
+    # grid_coor_np_ = np.hstack([size - np.array(grid_coor), np.array(grid_coor)]).T
+    grid_precal = _grid_init_precal(size_limit, degree_limit)
 
     @classmethod
-    def _render_grid_value(cls, poly: sp.Poly, value_method: str = 'integer_lambdify') -> List[float]:
+    def grid_coor(cls, nvars: int = 3, size: int = 60) -> List[Tuple[int, int]]:
+        return generate_expr(nvars, size)[1]
+
+    @classmethod
+    def _render_grid_value(cls, poly: sp.Poly, size: int = 60, value_method: str = 'integer_lambdify') -> List[float]:
         """
         Render the grid by computing the values.
         """
-        grid_value = [0] * len(cls.grid_coor)
-        if deg(poly) > cls.degree_limit:
+        nvars = len(poly.gens)
+        grid_coor = cls.grid_coor(nvars, size)
+        grid_value = [0] * len(grid_coor)
+        if size > cls.size_limit or deg(poly) > cls.degree_limit:
             return grid_value
+        
 
         if value_method == 'integer':
             # integer arithmetic runs much faster than accuarate floating point arithmetic
             # example: computing 45**18   is around ten times faster than  (1./45)**18
 
             # convert sympy.core.number.Rational / Float / Integer to python int / float
-            coeffs = poly.coeffs()
+            coeffs, monoms = poly.coeffs(), poly.monoms()
             for i in range(len(coeffs)):
-                if int(coeffs[i]) == coeffs[i]:
+                if coeffs[i].is_Integer:
                     coeffs[i] = int(coeffs[i])
                 else:
                     coeffs[i] = float(coeffs[i])
-            
+
             # pointer, but not deepcopy
             pc = cls.grid_precal
 
-            for k in range(len(cls.grid_coor)):
-                b , c = cls.grid_coor[k]
-                a = cls.size - b - c
-                v = 0
-                for coeff, monom in zip(coeffs, poly.monoms()):
-                    # coeff shall be the last to multiply, as it might be float while others int
-                    v += pc[a][monom[0]] * pc[b][monom[1]] * pc[c][monom[2]] * coeff
-                grid_value[k] = v
+            for k in range(len(grid_coor)):
+                base = [prod(pc[i][d] for i, d in zip(grid_coor[k], monom)) for monom in monoms]
+                grid_value[k] = sum(coeff * b for coeff, b in zip(coeffs, base))
 
         elif value_method == 'integer_lambdify':
             f = sp.lambdify(poly.gens, poly.as_expr())
-            grid_value = f(cls.grid_coor_np_[0], cls.grid_coor_np_[1], cls.grid_coor_np_[2])
+            grid_coor_np = np.array(grid_coor) / cls.degree_limit # normalize
+            grid_value = f(*grid_coor_np.T)
 
         return grid_value
 
@@ -256,10 +256,11 @@ class GridRender():
     @classmethod
     def _render_grid_color(cls, 
             poly: sp.Poly,
+            size: int = 60,
             value_method: str = 'integer_lambdify',
             color_method: str = 'numpy',
             power: float = 1./3
-        ) -> Tuple[List[float], List[Tuple[int, int, int, int]]]:
+        ) -> Tuple[List[float], List[Tuple[int, int, int]]]:
         """
         Render the grid by computing the values and setting the grid_val to rgba colors.
 
@@ -267,6 +268,8 @@ class GridRender():
         ----------
         poly : sp.Poly
             The polynomial to be rendered.
+        size : int
+            The size of the grid. It is the number of sampling point in each axis.
         value_method : str
             See `_render_grid_value`.
         color_method : str
@@ -280,17 +283,20 @@ class GridRender():
         ----------
         grid_value : List[float]
             A list of function values.
-        grid_color : List[Tuple[int, int, int, int]]
-            A list of rgba colors.
+        grid_color : List[Tuple[int, int, int]]
+            A list of RGB colors.
         """
-        grid_value = cls._render_grid_value(poly, value_method = value_method)
+        WHITE = (255,255,255)
+        nvars = len(poly.gens)
+        grid_coor = cls.grid_coor(nvars, size)
+        grid_value = cls._render_grid_value(poly, size=size, value_method=value_method)
 
         if deg(poly) > cls.degree_limit:
-            grid_color = [(255,255,255,255)] * len(cls.grid_coor)
+            grid_color = [WHITE] * len(grid_coor)
             return grid_value, grid_color
 
         if color_method == 'integer':
-            grid_color = [(255,255,255,255)] * len(cls.grid_coor)
+            grid_color = [WHITE] * len(grid_coor)
 
             # preprocess the levels
             max_v, min_v = max(grid_value), min(grid_value)
@@ -298,32 +304,32 @@ class GridRender():
                 max_levels = [(i / cls.color_level) ** (1 / power) * max_v for i in range(cls.color_level+1)]
             if min_v <= 0:
                 min_levels = [(i / cls.color_level) ** (1 / power) * min_v for i in range(cls.color_level+1)]
-            for k in range(len(cls.grid_coor)):
+            for k in range(len(grid_coor)):
                 v = grid_value[k]
                 if v > 0:
                     for i, level in enumerate(max_levels):
                         if v <= level:
                             v = 255 - (i-1)*255//(cls.color_level-1)
-                            grid_color[k] = (255, v, 0, 255)
+                            grid_color[k] = (255, v, 0)
                             break
                     else:
-                        grid_color[k] = (255, 0, 0, 255)
+                        grid_color[k] = (255, 0, 0)
                 elif v < 0:
                     for i, level in enumerate(min_levels):
                         if v >= level:
                             v = 255 - (i-1)*255//(cls.color_level-1)
-                            grid_color[k] = (0, v, 255, 255)
+                            grid_color[k] = (0, v, 255)
                             break
                     else:
-                        grid_color[k] = (0, 0, 0, 255)
+                        grid_color[k] = (0, 0, 0)
                 else: # v == 0:
-                    grid_color[k] = (255, 255, 255, 255)
-            
+                    grid_color[k] = WHITE
+
             return grid_value, grid_color
 
         elif color_method == 'numpy':
             value_numpy = np.array(grid_value)
-            color_numpy = np.full((len(cls.grid_coor), 4), 255, dtype = np.uint8)
+            color_numpy = np.full((len(grid_coor), 3), 255, dtype = np.uint8)
 
             max_v, min_v = value_numpy.max(), value_numpy.min()
             if max_v > 0:
@@ -347,6 +353,7 @@ class GridRender():
     @classmethod
     def render(cls,
             poly: sp.Poly,
+            size: int = 60,
             value_method: str = 'integer',
             color_method: str = 'numpy',
             with_color: bool = False,
@@ -359,6 +366,8 @@ class GridRender():
         ----------
         poly : sp.Poly
             The polynomial to be rendered.
+        size : int
+            The size of the grid. It is the number of sampling point in each axis.
         value_method : str
             'integer' or 'integer_lambdify'
             If 'integer', use integer arithmetic to compute the values.
@@ -381,15 +390,15 @@ class GridRender():
         """
         try:
             if with_color:
-                grid_value, grid_color = cls._render_grid_color(poly, value_method = value_method, color_method = color_method)
+                grid_value, grid_color = cls._render_grid_color(poly, size=size, value_method=value_method, color_method=color_method)
             else:
-                grid_value = cls._render_grid_value(poly, value_method = value_method)
+                grid_value = cls._render_grid_value(poly, size=size, value_method = value_method)
                 grid_color = None
 
             return GridPoly(
                 poly,
-                size = cls.size,
-                grid_coor = cls.grid_coor,
+                size = size,
+                grid_coor = cls.grid_coor(len(poly.gens), size),
                 grid_value = grid_value,
                 grid_color = grid_color
             )
@@ -400,16 +409,15 @@ class GridRender():
                 raise e
 
     @classmethod
-    def zero_grid(cls):
+    def zero_grid(cls, nvars: int = 3, size: int = 60) -> GridPoly:
         """
         Returns a zero grid.
         """
-        if cls._zero_grid is None:
-            cls._zero_grid = GridPoly(
-                sp.polys.Poly(0, sp.symbols('a b c')),
-                size = cls.size,
-                grid_coor = cls.grid_coor,
-                grid_value = [0] * len(cls.grid_coor),
-                grid_color = [(255,255,255,255)] * len(cls.grid_coor)
+        grid_coor = cls.grid_coor(nvars, size)
+        return GridPoly(
+                sp.Poly(0, sp.symbols(f'x:{nvars}')),
+                size = size,
+                grid_coor = grid_coor,
+                grid_value = [0] * len(grid_coor),
+                grid_color = [(255,255,255,255)] * len(grid_coor)
             )
-        return cls._zero_grid

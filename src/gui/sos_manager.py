@@ -113,11 +113,11 @@ class SOS_Manager():
 
 
         if render_grid:
-            if cls.check_poly(poly):
-                grid = GridRender.render(poly, with_color=True)
-            else:
-                grid = GridRender.zero_grid()
-            return_dict['grid'] = grid
+            if poly is not None and (not poly.is_zero) and 3 <= len(poly.gens) <= 4\
+                    and poly.domain.is_Numerical and poly.is_homogeneous:
+                size = 60 if len(poly.gens) == 3 else 18
+                grid = GridRender.render(poly, size=size, with_color=True)
+                return_dict['grid'] = grid
         return return_dict
 
     @classmethod

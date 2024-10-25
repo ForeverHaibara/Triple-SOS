@@ -330,12 +330,15 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
         let heatmap_view = document.getElementById('heatmap');
         const l = 98. / heatmap_gridsize; // length of each samll equilateral triangle 
         const ulx = (50 - l * heatmap_gridsize / 2), uly = (35 - 13 * heatmap_gridsize * l / 45);
+        const coor_map = (i, j) => { // coordinate of the j-th entry of row i
+            return 'left:' + (ulx + l*(i+j*2-1)/2) + '%;top:' + (uly + l*i*13/15) + '%;';
+        }
         for (let i=0;i<=heatmap_gridsize;++i){
-            for (let j=0;j<=heatmap_gridsize-i;++j){
+            for (let j=0;j<=i;++j){
                 let heatmap_grid = document.createElement('div')
                 heatmap_view.appendChild(heatmap_grid)
-                let x = ulx + l*(i+j*2-1)/2, y = uly + l*i*13/15;
-                heatmap_grid.setAttribute('style', 'position:absolute;left:'+x+'%;top:'+y+'%;'
+                let coor = coor_map(j,i-j);
+                heatmap_grid.setAttribute('style', 'position:absolute;' + coor
                             +'height:'+l+'%'+';width:'+l+'%;background:white');
                 heatmap_grids.push(heatmap_grid);
             }

@@ -2,7 +2,7 @@
 This file contains the functions for rendering the visualization of the polynomial.
 */
 
-let _3d_vis = {'in3d': false};
+let _3d_vis = {'in3d': false, 'heatmap_size_3d': 18};
 // const VIEW3DPARENT = document.getElementById('centerscreen');
 const VIEW3DPARENT = document.getElementById('coeffs');
 const VIEW2DPARENT = document.getElementById('coeffs');
@@ -39,9 +39,13 @@ function renderVisualization(data){
     if (_3d_vis.in3d){
         // VIEW2DPARENT.hidden = true;
         _3d_vis.tetrahedron.visible = true;
+        _3d_vis.pointCloud.visible = true;
+        renderHeatmap3D(data.heatmap);
     }else{
         // VIEW2DPARENT.hidden = false;
         _3d_vis.tetrahedron.visible = false;
+        _3d_vis.pointCloud.visible = false;
+        renderHeatmap(data.heatmap);
     }
     // _3d_vis.controls.enableDamping = _3d_vis.in3d;
     _3d_vis.controls.enableZoom = _3d_vis.in3d;
@@ -50,7 +54,6 @@ function renderVisualization(data){
     // _3d_vis.controls.update();
 
     // Next render the heatmap triangle
-    renderHeatmap(data.heatmap);
 }
 
 function _get_first_three_gens(all_gens = 'abc'){
@@ -109,6 +112,16 @@ function renderCoeffs(degree, triangle_vals, all_gens = 'abc'){
 
 function renderHeatmap(heatmap){
     let t = 0;
+    if ((heatmap === undefined)||(heatmap === null)){
+        const WHITE = 'rgb(255,255,255)';
+        for (let i=0;i<=heatmap_gridsize;++i){
+            for (let j=0;j<=heatmap_gridsize-i;++j){
+                heatmap_grids[t].style.background = WHITE;
+                t += 1;
+            }
+        }
+        return;
+    }
     for (let i=0;i<=heatmap_gridsize;++i){
         for (let j=0;j<=heatmap_gridsize-i;++j){
             heatmap_grids[t].style.background = 'rgb('
@@ -184,6 +197,25 @@ Below contains 3d visualization for 4var polynomials
 */
 const LABELMARGIN = 20;
 const COLLIDE_SCALE = 1.01;
+
+function _generateMonoms(nvars, degree) {
+    /* Generate all monomials of degree `degree` in `nvars` variables. Sorted in decreasing order. */
+    function generateTuples(currentTuple, currentSum, remainingVars) {
+        if (remainingVars === 1) {
+            return [[...currentTuple, degree - currentSum]];
+        } else {
+            const tuples = [];
+            for (let i = degree - currentSum; i >= 0; i--) {
+                tuples.push(...generateTuples([...currentTuple, i], currentSum + i, remainingVars - 1));
+            }
+            return tuples;
+        }
+    }
+
+    return generateTuples([], 0, nvars);
+}
+
+
 function init3DVisualization(){// Get the div element
     const coeffs_view = VIEW3DPARENT;
     
@@ -219,16 +251,24 @@ function init3DVisualization(){// Get the div element
     geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
     geometry.setIndex(new THREE.BufferAttribute(indices, 1));
     
+    // const material = new THREE.MeshBasicMaterial({
+    //     color: 0x0077ff, 
+    //     wireframe: true, 
+    //     opacity: 1, 
+    //     side: THREE.DoubleSide
+    // });
     const material = new THREE.MeshBasicMaterial({
-        color: 0x0077ff, 
+        color: 0x000000,     //
+        transparent: true,   // Allow translucency
         wireframe: true, 
-        opacity: 1, 
-        side: THREE.DoubleSide
+        opacity: 0.2,        // Set opacity for a light, translucent effect
+        shininess: 10,       // Add slight shininess to give it a glowing effect
+        side: THREE.DoubleSide // Make it visible from both sides
     });
     const tetrahedron = new THREE.Mesh(geometry, material);
     tetrahedron.visible = false;
     scene.add(tetrahedron);
-    
+
     _3d_vis.scene = scene;
     _3d_vis.camera = camera;
     _3d_vis.renderer = renderer;
@@ -245,6 +285,8 @@ function init3DVisualization(){// Get the div element
         [1, -1, -1]
     ];
 
+    _init3DHeatmap();
+
     // Animation loop
     function animate() {
         requestAnimationFrame(animate);
@@ -256,7 +298,60 @@ function init3DVisualization(){// Get the div element
     animate();
     
 }
+function _init3DHeatmap(){
+    
+    // Particle geometry for Gaussian splatting
+    const particles = new THREE.BufferGeometry();
+    const degree = _3d_vis.heatmap_size_3d;
+    const inv_degree = 1./degree;
+    const tetrav = _3d_vis.tetrav;
+    const particle_positions = [];
+    const particle_colors = [];
+    _generateMonoms(4, degree).forEach((monom, i) => {
+        const pos = new THREE.Vector3(
+            (monom[0]*tetrav[0][0] + monom[1]*tetrav[1][0] + monom[2]*tetrav[2][0] + monom[3]*tetrav[3][0])*inv_degree,
+            (monom[0]*tetrav[0][1] + monom[1]*tetrav[1][1] + monom[2]*tetrav[2][1] + monom[3]*tetrav[3][1])*inv_degree,
+            (monom[0]*tetrav[0][2] + monom[1]*tetrav[1][2] + monom[2]*tetrav[2][2] + monom[3]*tetrav[3][2])*inv_degree
+        )
+        particle_positions.push(pos.x, pos.y, pos.z);
+        particle_colors.push(255,255,255);
+    });
+
+    particles.setAttribute('position', new THREE.Float32BufferAttribute(particle_positions, 3));
+    particles.setAttribute('color', new THREE.Float32BufferAttribute(particle_colors, 3));
+
+
+    // const particleCount = 1000;
+    // const positions = [];
+    // const colors = [];
+    // for (let i = 0; i < particleCount; i++) {
+    //     // Randomize positions within tetrahedron bounds
+    //     const pos = new THREE.Vector3(Math.random(),Math.random(),Math.random()); // Function to ensure particles inside the volume
+    //     positions.push(pos.x, pos.y, pos.z);
+
+    //     // Assign color based on "heat" value or density at position
+    //     const heatValue = Math.random() / 3; // Function that returns heatmap value for color
+    //     const color = new THREE.Color().setHSL(0.7 - heatValue * 0.7, 1.0, 0.5); // Adjust HSL for heat color
+    //     colors.push(color.r, color.g, color.b);
+    // }
+    const particleMaterial = new THREE.PointsMaterial({
+        size: 0.05, //3./_3d_vis.heatmap_size_3d, // Adjust size for splatting
+        vertexColors: true,
+        opacity: 0.3,
+        transparent: true,
+    });
+
+    const pointCloud = new THREE.Points(particles, particleMaterial);
+    pointCloud.visible = false;
+    _3d_vis.scene.add(pointCloud);
+    _3d_vis.pointCloud = pointCloud;
+
+}
+
 init3DVisualization();
+
+
+
 
 
 function updateTextPositions() {
@@ -285,8 +380,8 @@ function updateTextPositions() {
 
         // Project 3D point to 2D screen
         const vector = new THREE.Vector3(pos.x,pos.y,pos.z).project(camera);
-        const x = (vector.x * widthHalf + widthHalf);
-        const y = (-(vector.y * heightHalf) + heightHalf);
+        const x = (vector.x * widthHalf + widthHalf - 6);
+        const y = (-(vector.y * heightHalf) + heightHalf - 10);
         textElement.style.left = x + 'px';
         textElement.style.top = y + 'px';
         if (x < LABELMARGIN || x > coeffs_view.clientWidth-LABELMARGIN || y < LABELMARGIN || y > coeffs_view.clientHeight-LABELMARGIN){
@@ -303,23 +398,6 @@ function updateTextPositions() {
             textElement.style.opacity = isInside ? 0.2 : 1; // Fully opaque if inside, semi-transparent if not
         }
     });
-}
-
-function _generateMonoms(nvars, degree) {
-    /* Generate all monomials of degree `degree` in `nvars` variables. Sorted in decreasing order. */
-    function generateTuples(currentTuple, currentSum, remainingVars) {
-        if (remainingVars === 1) {
-            return [[...currentTuple, degree - currentSum]];
-        } else {
-            const tuples = [];
-            for (let i = degree - currentSum; i >= 0; i--) {
-                tuples.push(...generateTuples([...currentTuple, i], currentSum + i, remainingVars - 1));
-            }
-            return tuples;
-        }
-    }
-
-    return generateTuples([], 0, nvars);
 }
 
 function renderCoeffs3D(degree, triangle_vals, all_gens = 'abcd'){
@@ -365,4 +443,29 @@ function renderCoeffs3D(degree, triangle_vals, all_gens = 'abcd'){
         sos_coeffs.push(coeff);
     });
     _3d_vis.in3d = true;
+}
+
+function renderHeatmap3D(heatmap){
+    renderHeatmap(null);
+    const pointCloud = _3d_vis.pointCloud;
+    const color = pointCloud.geometry.attributes.color;
+    if ((heatmap === undefined)||(heatmap === null)){
+        const degree = _3d_vis.heatmap_size_3d;
+        const num = (degree+1)*(degree+2)*(degree+3)/6;
+        for (let i=0;i<num;++i){
+            color.setXYZ(i, 255, 255, 255);
+        }
+        color.needsUpdate = true;
+        return;
+    }
+    // _generateMonoms(4, _3d_vis.heatmap_size_3d).forEach((monom, i) => {
+    //     const heatValue = heatmap[i];
+    //     const color = new THREE.Color().setRGB(heatValue[0]/255, heatValue[1]/255, heatValue[2]/255);
+    //     _3d_vis.pointCloud.geometry.attributes.color.setXYZ(i, color.r, color.g, color.b);
+    // });
+    // console.log(heatmap.length, color.count);
+    heatmap.forEach((heatValue, i) => {
+        color.setXYZ(i, heatValue[0]/255, heatValue[1]/255, heatValue[2]/255);
+    });
+    color.needsUpdate = true;
 }
