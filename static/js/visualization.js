@@ -346,6 +346,18 @@ function _init3DHeatmap(){
     _3d_vis.scene.add(pointCloud);
     _3d_vis.pointCloud = pointCloud;
 
+
+    // event listeners for configuration
+    const config_3D_PointSize = document.getElementById('config_3D_PointSize');
+    config_3D_PointSize.oninput = function() {
+        pointCloud.material.size = (this.value/1000.0);
+        pointCloud.material.needsUpdate = true;
+    }
+    const config_3D_HeatmapOpacity = document.getElementById('config_3D_HeatmapOpacity');
+    config_3D_HeatmapOpacity.oninput = function() {
+        pointCloud.material.opacity = (this.value/100.0);
+        pointCloud.material.needsUpdate = true;
+    }
 }
 
 init3DVisualization();
@@ -450,12 +462,13 @@ function renderHeatmap3D(heatmap){
     const pointCloud = _3d_vis.pointCloud;
     const color = pointCloud.geometry.attributes.color;
     if ((heatmap === undefined)||(heatmap === null)){
-        const degree = _3d_vis.heatmap_size_3d;
-        const num = (degree+1)*(degree+2)*(degree+3)/6;
-        for (let i=0;i<num;++i){
-            color.setXYZ(i, 255, 255, 255);
-        }
-        color.needsUpdate = true;
+        // const degree = _3d_vis.heatmap_size_3d;
+        // const num = (degree+1)*(degree+2)*(degree+3)/6;
+        // for (let i=0;i<num;++i){
+        //     color.setXYZ(i, 255, 255, 255);
+        // }
+        // color.needsUpdate = true;
+        pointCloud.visible = false;
         return;
     }
     // _generateMonoms(4, _3d_vis.heatmap_size_3d).forEach((monom, i) => {

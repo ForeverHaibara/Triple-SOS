@@ -191,7 +191,7 @@ def findroot(sid, **kwargs):
     """
     if 'findroot' in kwargs['actions']:
         poly = kwargs['poly']
-        grid = kwargs['grid']
+        grid = kwargs.get('grid', None)
         rootsinfo = SOS_Manager.findroot(poly, grid, verbose=False)
         tangents = kwargs.get('tangents')
         if tangents is None:

@@ -110,3 +110,33 @@ function changeShowTypeHover(x, event){
         }
     }
 }
+
+function initDropDownMenu(){
+    const configButton = document.getElementById("polytools_config");
+    const configMenu = document.querySelector(".config-menu");
+
+    let menuToggled = false;
+
+    // Toggle menu on button click
+    configButton.addEventListener("click", (event) => {
+        event.stopPropagation();
+        menuToggled = !menuToggled;
+        configMenu.style.display = menuToggled ? "block" : "none";
+    });
+
+    // Keep menu visible on hover if menuToggled is true
+    configMenu.addEventListener("mouseenter", () => {
+        if (menuToggled) {
+            configMenu.style.display = "block";
+        }
+    });
+
+    // Close menu if clicking outside
+    document.addEventListener("click", (event) => {
+        if (menuToggled && !configButton.contains(event.target) && !configMenu.contains(event.target)) {
+            menuToggled = false;
+            configMenu.style.display = "none";
+        }
+    });
+}
+initDropDownMenu();
