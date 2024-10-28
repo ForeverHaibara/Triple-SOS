@@ -262,7 +262,7 @@ function init3DVisualization(){// Get the div element
         transparent: true,   // Allow translucency
         wireframe: true, 
         opacity: 0.2,        // Set opacity for a light, translucent effect
-        shininess: 10,       // Add slight shininess to give it a glowing effect
+        // shininess: 10,       // Add slight shininess to give it a glowing effect
         side: THREE.DoubleSide // Make it visible from both sides
     });
     const tetrahedron = new THREE.Mesh(geometry, material);
@@ -277,6 +277,7 @@ function init3DVisualization(){// Get the div element
     _3d_vis.tetrahedron = tetrahedron;
     _3d_vis.positions = [];
     // _3d_vis.frustum = frustum;
+    _3d_vis.dashlines = null;
     _3d_vis.cameraViewProjectionMatrix = cameraViewProjectionMatrix;
     _3d_vis.tetrav = [
         [1, 1, 1],
@@ -285,6 +286,7 @@ function init3DVisualization(){// Get the div element
         [1, -1, -1]
     ];
 
+    // _initDashlinesPlugin(); // enable/disable dashed lines
     _init3DHeatmap();
 
     // Animation loop
@@ -292,12 +294,72 @@ function init3DVisualization(){// Get the div element
         requestAnimationFrame(animate);
         if (_3d_vis.in3d){
             updateTextPositions();
-        }
+
+            if (_3d_vis.dashlines !== null){
+                const tetrav = _3d_vis.tetrav;
+                _3d_vis.dashlines.forEach((line, i) => {
+                    const v = new THREE.Vector3(tetrav[i][0], tetrav[i][1], tetrav[i][2]);
+                    //i%1==0?new THREE.Vector3(1,1,1):new THREE.Vector3(-1,-1,1);
+                    const vision_vector = v.sub(_3d_vis.camera.position).normalize();
+                    const normal = _3d_vis.tetrav[3-i]; // this is not Vector3 class, so do not use .dot method
+                    line.visible = true;
+                    if (vision_vector.x * normal[0] + vision_vector.y * normal[1] + vision_vector.z * normal[2] > 0){
+                        line.material = _3d_vis.dashlinesSolidMaterial;
+                    }else{
+                        line.material = _3d_vis.dashlinesDashedMaterial;
+                        line.computeLineDistances(); // dashed lines need distances to be computed
+                    }
+                });
+            }
+        }        
         renderer.render(scene, camera);
     }
     animate();
     
 }
+
+function _initDashlinesPlugin(){
+    // contributed by 故宫的落日
+    // TODO: use 6 solid/dashed lines rather than 4 solid/dashed surfaces
+    
+    const tetrav = _3d_vis.tetrav;
+    const scene = _3d_vis.scene;
+    
+    const xs_dashed_material = new THREE.LineDashedMaterial({
+        color: 0x000000,
+        linewidth: 1,
+        scale: 1,
+        dashSize: 0.1,
+        gapSize: 0.1,
+        transparent: true,
+        opacity: 0.2,
+    });
+
+    const xs_solid_material = new THREE.LineBasicMaterial({
+        color: 0x333333,
+        linewidth: 1,
+        transparent: true,
+        opacity: 0.2,
+    });
+
+    scene.remove(_3d_vis.tetrahedron);
+    // _3d_vis.tetrahedron = {visible: false}; // abstract tetrahedron
+
+    const xs_line_fs = [[0,2,1,0],[1,3,0,1],[0,3,2,0],[1,2,3,1]].map(face => {
+        return new THREE.Line(new THREE.BufferGeometry().setFromPoints(
+            face.map(j => new THREE.Vector3(tetrav[j][0], tetrav[j][1], tetrav[j][2]))
+        ), xs_solid_material);
+    });
+    xs_line_fs.forEach((line, i) => {
+        scene.add(line);
+        line.visible = false;
+    });
+    _3d_vis.dashlines = xs_line_fs;
+    _3d_vis.dashlinesDashedMaterial = xs_dashed_material;
+    _3d_vis.dashlinesSolidMaterial = xs_solid_material;
+}
+
+
 function _init3DHeatmap(){
     
     // Particle geometry for Gaussian splatting
@@ -334,11 +396,14 @@ function _init3DHeatmap(){
     //     const color = new THREE.Color().setHSL(0.7 - heatValue * 0.7, 1.0, 0.5); // Adjust HSL for heat color
     //     colors.push(color.r, color.g, color.b);
     // }
+    const defaultParticleSize = document.getElementById('config_3D_PointSize').value / 10.0;
+    const defaultHeatmapOpacity = document.getElementById('config_3D_HeatmapOpacity').value / 100.0;
     const particleMaterial = new THREE.PointsMaterial({
-        size: 0.05, //3./_3d_vis.heatmap_size_3d, // Adjust size for splatting
+        size: defaultParticleSize,
         vertexColors: true,
-        opacity: 0.3,
+        opacity: defaultHeatmapOpacity,
         transparent: true,
+        sizeAttenuation: false
     });
 
     const pointCloud = new THREE.Points(particles, particleMaterial);
@@ -350,7 +415,7 @@ function _init3DHeatmap(){
     // event listeners for configuration
     const config_3D_PointSize = document.getElementById('config_3D_PointSize');
     config_3D_PointSize.oninput = function() {
-        pointCloud.material.size = (this.value/1000.0);
+        pointCloud.material.size = (this.value/10.0);
         pointCloud.material.needsUpdate = true;
     }
     const config_3D_HeatmapOpacity = document.getElementById('config_3D_HeatmapOpacity');
