@@ -155,7 +155,7 @@ def poly_get_standard_form(
         if not any(monom): # constant
             if coeff == 1: return '+1'
             if coeff == -1: return '-1'
-            return _get_coeff_str(coeff, MUL)
+            return _get_coeff_str(coeff, '')
         coeff_str = _get_coeff_str(coeff, MUL)
         return _concat(coeff_str, _get_monom_str(monom))
 
@@ -167,7 +167,7 @@ def poly_get_standard_form(
     s = ''.join(strings)
     if s.startswith('+'):
         s = s[1:]
-    if _is_cyc:
+    if _is_cyc and not perm.is_trivial:
         s = 's(%s)'%s
     else:
         s = '(%s)'%s

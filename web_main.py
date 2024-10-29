@@ -112,8 +112,9 @@ def preprocess():
         The session ID.
     poly : str
         The input polynomial.
-    factor : bool
-        Whether to factor the polynomial. If True, the factor form is returned as the text.
+    standardize_text : str
+        The standardization of the text. If None, the text is not standardized.
+        See `SOS_Manager.set_poly` for more information.
     actions : list[str]
         Additional actions to perform.
 
@@ -142,7 +143,11 @@ def preprocess():
         perm = perm,
         render_triangle = True,
         render_grid = True,
-        factor = req.get('factor', False)
+        homogenize = req.get('homogenize', False),
+        dehomogenize = req.get('dehomogenize', None),
+        standardize_text = req.get('standardize_text', None),
+        omit_mul = req.get('omit_mul', True),
+        omit_pow = req.get('omit_pow', True),
     )
     if result is None:
         return jsonify()

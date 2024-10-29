@@ -100,43 +100,63 @@ function changeShowType(x){
     }
 }
 
-function changeShowTypeHover(x, event){
-    // event == 0: mouseenter    event == 1: mouseleave
-    if (sos_results.show != x){
-        if (event == 0){
-            document.getElementById('output_show' + x).style.color = 'rgb(19,135,245)';
-        }else{
-            document.getElementById('output_show' + x).style.color = 'black';
-        }
-    }
-}
+// function changeShowTypeHover(x, event){
+//     // event == 0: mouseenter    event == 1: mouseleave
+//     if (sos_results.show != x){
+//         if (event == 0){
+//             document.getElementById('output_show' + x).style.color = 'rgb(19,135,245)';
+//         }else{
+//             document.getElementById('output_show' + x).style.color = 'black';
+//         }
+//     }
+// }
 
 function initDropDownMenu(){
-    const configButton = document.getElementById("polytools_config");
-    const configMenu = document.querySelector(".config-menu");
+    const dropdown_items = document.querySelectorAll(".dropdown_item");
+    let dropdown_display = [];
+    dropdown_items.forEach((item, i) => {
+        const submenu = item.querySelector(".submenu");
+        dropdown_display.push("none");
+        // item.addEventListener("click", (event) => {
+        //     event.stopPropagation();
+        //     if (!submenu.contains(event.target)){
+        //         // click on the button, not the submenu
+        //         dropdown_display[i] = dropdown_display[i] == "block" ? "none" : "block";
+        //         submenu.style.display = dropdown_display[i];
 
-    let menuToggled = false;
-
-    // Toggle menu on button click
-    configButton.addEventListener("click", (event) => {
-        event.stopPropagation();
-        menuToggled = !menuToggled;
-        configMenu.style.display = menuToggled ? "block" : "none";
+        //         // also close other dropdown menus
+        //         dropdown_items.forEach((item, j) => {
+        //             if (j != i && dropdown_display[j] == "block") {
+        //                 dropdown_display[j] = "none";
+        //                 item.querySelector(".submenu").style.display = "none";
+        //             }
+        //         });
+        //     }
+        // });
+        item.addEventListener("mouseenter", () => {
+            if (dropdown_display[i] == "none") {
+                dropdown_display[i] = "block";
+                submenu.style.display = "block";
+            }
+        });
+        item.addEventListener("mouseleave", () => {
+            // settimeout check: if the mouse is still in the submenu, do not close the submenu
+            setTimeout(() => {
+                if (dropdown_display[i] == "block" && !submenu.matches(":hover")) {
+                    dropdown_display[i] = "none";
+                    submenu.style.display = "none";
+                }
+            }, 100);
+        });
     });
-
-    // Keep menu visible on hover if menuToggled is true
-    configMenu.addEventListener("mouseenter", () => {
-        if (menuToggled) {
-            configMenu.style.display = "block";
-        }
-    });
-
-    // Close menu if clicking outside
-    document.addEventListener("click", (event) => {
-        if (menuToggled && !configButton.contains(event.target) && !configMenu.contains(event.target)) {
-            menuToggled = false;
-            configMenu.style.display = "none";
-        }
-    });
+    // clicking elsewhere will close all dropdown menus (note that cases of clicking on submenus are blocked by stopPropagation)
+    // document.addEventListener("click", () => {
+    //     dropdown_items.forEach((item, i) => {
+    //         if (dropdown_display[i] == "block") {
+    //             dropdown_display[i] = "none";
+    //             item.querySelector(".submenu").style.display = "none";
+    //         }
+    //     });
+    // });
 }
 initDropDownMenu();

@@ -56,7 +56,11 @@ class SOS_Manager():
             perm: PermutationGroup = CONFIG_DEFAULT_PERM,
             render_triangle: bool = True,
             render_grid: bool = True,
-            factor: bool = False,
+            homogenize: bool = False,
+            dehomogenize: Optional[Expr] = None,
+            standardize_text: Optional[str] = None,
+            omit_mul: bool = True,
+            omit_pow: bool = True,
         ) -> Dict[str, Any]:
         """
         Convert a text to a polynomial, and render the coefficient triangle and grid heatmap.
@@ -65,12 +69,21 @@ class SOS_Manager():
         ----------
         txt : str
             The text of the polynomial.
-        render_triangle : bool, optional
+        render_triangle : bool
             Whether to render the coefficient triangle, by default True.
-        render_grid : bool, optional
+        render_grid : bool
             Whether to render the grid heatmap, by default True.
-        factor : bool, optional
-            Whether to factor the polynomial and return the factor form, by default False.
+        homogenize : bool
+            If True, homogenize the polynomial if it any variable is missing, by default False.
+        dehomogenize : bool
+            If True, set the last variable to the given value, by default None.
+        standardize_text : str, optional
+            If not None, it should be one of ['factor', 'sort', 'expand']. This will rewrite the polynomial
+            in the corresponding form. By default None.
+        omit_mul : bool
+            Whether to omit the multiplication sign when rewriting the polynomial, by default True.
+        omit_pow : bool
+            Whether to omit the power sign when rewriting the polynomial, by default True.
 
         Returns
         -------
@@ -96,9 +109,35 @@ class SOS_Manager():
         if poly is None:
             return None
 
+        if homogenize and not poly.is_homogeneous and len(poly.gens) and poly.degree(-1) == 0:
+            gen = poly.gens[-1]
+            poly = poly.eval(gen, 0).homogenize(gen)
+            if not standardize_text:
+                standardize_text = 'sort'
+
+        if dehomogenize is not None and dehomogenize is not False:
+            try:
+                dehomogenize = sp.S(dehomogenize)
+                if len(dehomogenize.free_symbols) == 0: # dehomogenize is a number
+                    for i in range(len(poly.gens)-1, -1, -1):
+                        if poly.degree(i) != 0:
+                            poly = poly.eval(poly.gens[i], dehomogenize)
+                            poly = poly.as_poly(*poly.gens, domain=poly.domain)
+                            if not standardize_text:
+                                standardize_text = 'sort'
+                            break
+            except:
+                pass
+
         try:
-            if factor:
-                txt2 = poly_get_factor_form(poly, perm)
+            if standardize_text:
+                if standardize_text == 'factor':
+                    txt2 = poly_get_factor_form(poly, perm, omit_mul=omit_mul, omit_pow=omit_pow)
+                elif standardize_text == 'sort':
+                    txt2 = poly_get_standard_form(poly, perm, omit_mul=omit_mul, omit_pow=omit_pow)
+                elif standardize_text == 'expand':
+                    triv_group = PermutationGroup([Permutation(list(range(len(poly.gens))))])
+                    txt2 = poly_get_standard_form(poly, triv_group, omit_mul=omit_mul, omit_pow=omit_pow)
             elif not denom.degree() == 0:
                 txt2 = poly_get_standard_form(poly, perm)
             if isinstance(txt2, str):

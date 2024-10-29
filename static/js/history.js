@@ -4,6 +4,14 @@ const displayHistoryMaxChars = 600;
 const COLOR_GRAY = 'rgb(230,230,230)';
 const COLOR_SOS_SUCCESS = '#1d6300';
 
+function _historyDisplayPoly(poly) {
+    if (poly.length <= displayHistoryMaxChars) {
+        return poly;
+    }
+    return poly.slice(0, displayHistoryMaxChars/2-1) + ' ··· ' + poly.slice(1-displayHistoryMaxChars/2);
+    // return poly.slice(0, displayHistoryMaxChars - 2) + ' ...';
+}
+
 function setHistoryByTimestamp(timestamp, key, value){
     /*
     Set the history data by timestamp.
@@ -11,6 +19,10 @@ function setHistoryByTimestamp(timestamp, key, value){
     const ind = _history_timestamp_to_ind[timestamp];
     if (ind !== undefined){
         history_data[ind][key] = value;
+    }
+    if (key === 'vis' && value.txt !== undefined){
+        history_data[ind].poly = value.txt
+        history_data[ind].div.innerHTML = _historyDisplayPoly(value.txt);
     }
     return ind;
 }
@@ -25,7 +37,7 @@ function isSameHistoryRecord(data){
     }
     const keys = ['poly', 'gens', 'perm', 'perm_choice'];
     for (let key of keys){
-        if (history_data[0][key] !== data[key]){
+        if (history_data[0][key].trim() !== data[key].trim()){
             return false;
         }
     }
@@ -81,14 +93,7 @@ function updateHistoryData() {
         const record = document.createElement('div');
         history_data[index].div = record;
         _history_timestamp_to_ind[item.timestamp] = index;
-        function displayPoly(poly) {
-            if (poly.length <= displayHistoryMaxChars) {
-                return poly;
-            }
-            return poly.slice(0, displayHistoryMaxChars/2-1) + ' ··· ' + poly.slice(1-displayHistoryMaxChars/2);
-            // return poly.slice(0, displayHistoryMaxChars - 2) + ' ...';
-        }
-        record.innerHTML = `${displayPoly(item.poly)}`;
+        record.innerHTML = `${_historyDisplayPoly(item.poly)}`;
 
         _setRecordProperties(record, index);
 
