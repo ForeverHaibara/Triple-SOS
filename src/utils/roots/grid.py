@@ -1,9 +1,15 @@
-from math import prod
+# from math import prod
+try:
+    from math import prod # python 3.8
+except ImportError:
+    from functools import reduce
+    prod = lambda lst: reduce(lambda x, y: x * y, lst, 1)
+
 from typing import List, Tuple
 
 import sympy as sp
 import numpy as np
-from sympy.plotting.experimental_lambdify import vectorized_lambdify
+# from sympy.plotting.experimental_lambdify import vectorized_lambdify
 
 from ..polytools import deg
 from ..roots import Root, RootRational
