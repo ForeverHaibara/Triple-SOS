@@ -439,8 +439,7 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
         };
 
         const parse_undefined = (x, y) => {return typeof(x) === 'undefined'? y: x;}
-        kwargs = parse_undefined(kwargs, {})
-        console.log(kwargs, kwargs.homogenize, kwargs.dehomogenize)
+        kwargs = parse_undefined(kwargs, {});
         if ((!isSameHistoryRecord(cur_data))||(kwargs.homogenize===true)||(kwargs.dehomogenize!==undefined)){
             // when there is homogenization / dehomogenization, the poly might change and we make a copy
             cur_data.timestamp = Date.now();
