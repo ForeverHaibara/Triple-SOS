@@ -437,7 +437,12 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
             perm: document.getElementById('setting_perm_input').value,
             // timestamp: timestamp
         };
-        if (!isSameHistoryRecord(cur_data)){
+
+        const parse_undefined = (x, y) => {return typeof(x) === 'undefined'? y: x;}
+        kwargs = parse_undefined(kwargs, {})
+        console.log(kwargs, kwargs.homogenize, kwargs.dehomogenize)
+        if ((!isSameHistoryRecord(cur_data))||(kwargs.homogenize===true)||(kwargs.dehomogenize!==undefined)){
+            // when there is homogenization / dehomogenization, the poly might change and we make a copy
             cur_data.timestamp = Date.now();
             // push to front
             history_data.unshift(cur_data);
@@ -449,8 +454,6 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
             cur_data.timestamp = history_data[0].timestamp;
         }
 
-        const parse_undefined = (x, y) => {return typeof(x) === 'undefined'? y: x;}
-        kwargs = parse_undefined(kwargs, {})
         let actions = parse_undefined(kwargs.actions, ['findroot']);
         kwargs.actions = actions
         kwargs.standardize_text  = parse_undefined(kwargs.standardize_text, false);

@@ -122,7 +122,8 @@ class SOS_Manager():
                     for i in range(len(poly.gens)-1, -1, -1):
                         if poly.degree(i) != 0:
                             poly = poly.eval(poly.gens[i], dehomogenize)
-                            poly = poly.as_poly(*poly.gens, domain=poly.domain)
+                            poly = poly.as_poly(*gens, domain=poly.domain)
+                            n = poly.total_degree()
                             if not standardize_text:
                                 standardize_text = 'sort'
                             break

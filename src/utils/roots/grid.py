@@ -178,7 +178,10 @@ class GridPoly():
         checker = _get_local_checker(cyc)
         for (i, j, k), v in iterator:
             if checker(i, j, k, v):
-                extrema.append(RootRational((i,j,k)))
+                if cyc:
+                    extrema.append(RootRational((j,k,i)))
+                else:
+                    extrema.append(RootRational((i,j,k)))
 
         if filter_nontrivial:
             extrema = [r for r in extrema if r.is_nontrivial]
