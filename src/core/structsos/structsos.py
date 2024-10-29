@@ -42,6 +42,8 @@ def StructuralSOS(
         return None
     solution = SolutionStructural(problem = poly, solution = solution, is_equal = True)
     solution = solution.as_simple_solution()
+    if solution.is_ill:
+        return None
     return solution
 
 

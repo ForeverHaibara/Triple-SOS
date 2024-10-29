@@ -107,7 +107,25 @@ class Solution():
 
     @property
     def is_equal(self) -> bool:
+        """
+        Verify whether the solution is strictly equal to the problem.
+        When the problem is numerical (rather algebraic), it returns False.
+
+        See also: is_ill.
+        """
         return self.is_equal_
+
+    @property
+    def is_ill(self) -> bool:
+        """
+        Whether the solution is ill-defined, e.g. +oo, -oo, NaN, etc.
+        This avoids bugs when encountering 0/0, etc.
+        """
+        if self.solution in (None, S.NaN, S.Infinity, S.NegativeInfinity, S.ComplexInfinity):
+            return True
+        if self.solution is S.Zero and not self.problem.is_zero:
+            return True
+        return False
 
     def _str_f(self) -> str:
         return "f(%s)"%(','.join(str(_) for _ in self.gens))

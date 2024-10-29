@@ -222,6 +222,7 @@ class SDPProblemBase(ABC):
             objective: Objective,
             constraints: List[Constraint] = [],
             min_eigen: MinEigen = 0,
+            scaling: float = 6.,
             solver: Optional[str] = None,
             verbose: bool = False,
             solver_options: Dict[str, Any] = {},
@@ -235,6 +236,7 @@ class SDPProblemBase(ABC):
             list_of_objective: List[Objective] = [],
             list_of_constraints: List[List[Constraint]] = [],
             list_of_min_eigen: List[MinEigen] = [],
+            scaling: float = 6.,
             solver: Optional[str] = None,
             allow_numer: int = 0,
             verbose: bool = False,
@@ -271,7 +273,7 @@ class SDPProblemBase(ABC):
 
         for obj, con, eig in zip(list_of_objective, list_of_constraints, list_of_min_eigen):
             # iterate through the configurations
-            y = self._solve_numerical_sdp(objective=obj, constraints=con, min_eigen=eig,
+            y = self._solve_numerical_sdp(objective=obj, constraints=con, min_eigen=eig, scaling=scaling,
                 solver=solver, solver_options=solver_options, raise_exception=raise_exception
             )
             if y is not None:
@@ -317,6 +319,7 @@ class SDPProblemBase(ABC):
             objectives: Union[Objective, List[Objective]] = [],
             constraints: Union[List[Constraint], List[List[Constraint]]] = [],
             min_eigen: Union[MinEigen, List[MinEigen]] = [],
+            scaling: float = 6.,
             solver: Optional[str] = None,
             use_default_configs: bool = True,
             allow_numer: int = 0,
@@ -368,6 +371,7 @@ class SDPProblemBase(ABC):
                     objectives = objectives,
                     constraints = constraints,
                     min_eigen = min_eigen,
+                    scaling = scaling,
                     solver = solver,
                     allow_numer = allow_numer,
                     verbose = verbose,
@@ -395,7 +399,7 @@ class SDPProblemBase(ABC):
         #            Solve the SDP problem
         #################################################
         solution = self._solve_from_multiple_configs(
-            *configs, solver=solver, allow_numer = allow_numer, verbose = verbose,
+            *configs, scaling=scaling, solver=solver, allow_numer = allow_numer, verbose = verbose,
             solver_options = solver_options, raise_exception = raise_exception
         )
 

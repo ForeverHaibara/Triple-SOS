@@ -23,13 +23,13 @@ class SDPPrimal(PrimalTransformMixin):
     is_dual = False
     is_primal = True
     def __init__(self,
+        x0: Matrix,
         space: Dict[str, Matrix],
-        x0: Matrix
     ) -> None:
         super().__init__()
 
-        self._space: Dict[str, Matrix] = None
         self._x0 = x0
+        self._space: Dict[str, Matrix] = None
         self._init_space(space, '_space')
 
         # check every space has same number of rows as x0
@@ -41,6 +41,41 @@ class SDPPrimal(PrimalTransformMixin):
         # for i, space in enumerate(self._space.values()):
         #     m = Mat2Vec.length_of_mat(space.shape[1])
         #     self.free_symbols += [Symbol('x_{%d,%d,%d}'%(i, j, k)) for j in range(m) for k in range(j, m)]
+
+    @classmethod
+    def from_full_x0_and_space(
+        cls,
+        x0: Matrix,
+        space: Matrix,
+        splits: Union[Dict[str, int], List[int]]
+    ) -> 'SDPPrimal':
+        """
+        Create a SDPPrimal object from the full x0 and space matrices.
+
+        Parameters
+        ----------
+        x0 : Matrix
+            The full x0 matrix.
+        space : Matrix
+            The full space matrix.
+        splits : Dict[str, int] or List[int]
+            The splits of the space matrix. If it is a dict, it should be a mapping from key to the number of columns.
+        """
+        keys = None
+        if isinstance(splits, dict):
+            keys = list(splits.keys())
+            splits = list(splits.values())
+        
+        space_list = []
+        start = 0
+        for n in splits:
+            space_ = space[:,start:start+n**2]
+            space_list.append(space_)
+            start += n**2
+        if keys is not None:
+            space_list = dict(zip(keys, space_list))
+        return SDPPrimal(x0, space_list)
+
 
     def keys(self, filter_none: bool = False) -> List[str]:
         space = self._space
@@ -131,7 +166,7 @@ class SDPPrimal(PrimalTransformMixin):
         sum_trace = np.concatenate([np.eye(m).flatten() for m in self.size.values()])
         objectives_and_min_eigens = [
             (sum_trace, 0),
-            (np.array([0] * sum_trace.size + [1]), (1, 0))
+            (np.array([0] * sum_trace.size + [-1]), (1, 0))
         ]
         objectives = [_[0] for _ in objectives_and_min_eigens]
         min_eigens = [_[1] for _ in objectives_and_min_eigens]
@@ -142,15 +177,16 @@ class SDPPrimal(PrimalTransformMixin):
             objective: Objective,
             constraints: List[Constraint] = [],
             min_eigen: MinEigen = 0,
+            scaling: float = 6.,
             solver: Optional[str] = None,
             verbose: bool = False,
             solver_options: Dict[str, Any] = {},
             raise_exception: bool = False
         ):
 
-        if len(constraints):
-            raise NotImplementedError("The primal form does not support constraints.")
+        # if len(constraints):
+        #     raise NotImplementedError("The primal form does not support constraints.")
         return solve_numerical_primal_sdp(
-                self._space, self._x0, objective=objective, constraints=constraints, min_eigen=min_eigen,
+                self._space, self._x0, objective=objective, constraints=constraints, min_eigen=min_eigen, scaling=scaling,
                 solver=solver, solver_options=solver_options, raise_exception=raise_exception
             )

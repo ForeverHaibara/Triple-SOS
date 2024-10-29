@@ -559,7 +559,7 @@ def _sos_struct_quartic_uncentered(coeff, recur = False):
                             solution = _try_solve(x2)
                             if solution is not None:
                                 return solution
-                else:
+                elif x_ < r:
                     return _try_solve(x_)
 
             return None

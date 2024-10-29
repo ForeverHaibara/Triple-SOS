@@ -14,13 +14,19 @@ from ...utils.basis_generator import generate_expr, MonomialReduction, MonomialP
 from ...utils import arraylize_sp, Coeff, CyclicExpr, identify_symmetry
 
 
-def _define_mapping(nvars: int, degree: int, monomials: List[Tuple[int, ...]], symmetry: MonomialReduction) -> Callable[[int, int], Tuple[int, int]]:
-    m = sum(monomials)
+def _define_mapping(nvars: int, degree: int, monomial: Tuple[int, ...], symmetry: MonomialReduction) -> Callable[[int, int], Tuple[int, int]]:
+    """
+    Given a gram matrix of standard monomials and a permutation group, we want
+    to know how the entry a_{ij} contributes to the monomial of the product of two monomials.
+    The function returns a mapping from (i, j) to (std_ind, v) where std_ind is the index of the monomial
+    and v is the multiplicity of the monomial in the permutation group.
+    """
+    m = sum(monomial)
     vec = generate_expr(nvars, (degree - m)//2, symmetry=symmetry.base())[1]
     dict_monoms = generate_expr(nvars, degree, symmetry=symmetry)[0]
 
     def mapping(i: int, j: int) -> Tuple[int, int]:
-        monom = tuple(map(sum, zip(monomials, vec[i], vec[j])))
+        monom = tuple(map(sum, zip(monomial, vec[i], vec[j])))
         std_ind = None
         v = 0
         for p in symmetry.permute(monom):

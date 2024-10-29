@@ -96,7 +96,8 @@ class SDPProblem(DualTransformMixin):
         cls,
         x0: Matrix,
         space: Matrix,
-        splits: Union[Dict[str, int], List[int]]
+        splits: Union[Dict[str, int], List[int]],
+        constrain_symmetry: bool = True
     ) -> 'SDPProblem':
         keys = None
         if isinstance(splits, dict):
@@ -113,8 +114,12 @@ class SDPProblem(DualTransformMixin):
 
         if keys is not None:
             x0_and_space = dict(zip(keys, x0_and_space))
-        return SDPProblem(x0_and_space)
-        
+        sdp = SDPProblem(x0_and_space)
+
+        if constrain_symmetry:
+            sdp = sdp.constrain_symmetry()
+            sdp._transforms.clear()
+        return sdp
 
     @classmethod
     def from_equations(
@@ -236,6 +241,7 @@ class SDPProblem(DualTransformMixin):
             min_trace = min_trace_objective(self._x0_and_space[obj_key][1])
             objective_and_min_eigens = [
                 (min_trace, 0),
+                (np.zeros(self.dof), 0), # feasible solution
                 # (-min_trace, 0),
                 # (max_inner_objective(self._x0_and_space[obj_key][1], 1.), 0),
                 (max_relax_var_objective(self.dof), (1, 0)),
@@ -252,6 +258,7 @@ class SDPProblem(DualTransformMixin):
             objective: Objective,
             constraints: List[Constraint] = [],
             min_eigen: MinEigen = 0,
+            scaling: float = 6.,
             solver: Optional[str] = None,
             verbose: bool = False,
             solver_options: Dict[str, Any] = {},
@@ -266,6 +273,6 @@ class SDPProblem(DualTransformMixin):
         con = exprs_to_arrays(_locals, self.free_symbols, constraints)
         obj = exprs_to_arrays(_locals, self.free_symbols, [objective])[0][0]
         return solve_numerical_dual_sdp(
-                self._x0_and_space, objective=obj, constraints=con, min_eigen=min_eigen,
+                self._x0_and_space, objective=obj, constraints=con, min_eigen=min_eigen, scaling=scaling,
                 solver=solver, solver_options=solver_options, raise_exception=raise_exception
             )

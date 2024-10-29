@@ -1,7 +1,8 @@
-from typing import Callable, List, Optional, Union, Dict
+from typing import Callable, Tuple, List, Optional, Union, Dict
 
 import sympy as sp
-from sympy import Poly
+from sympy import Poly, Symbol
+from sympy.combinatorics import PermutationGroup, CyclicGroup
 
 from .utils import Coeff, PolynomialUnsolvableError, PolynomialNonpositiveError
 from ...sdp import congruence

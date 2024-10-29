@@ -31,6 +31,29 @@ def radsimp(expr: Union[sp.Expr, List[sp.Expr]]) -> sp.Expr:
     expr = (numer*n).expand()/d
     return expr
 
+def intervals(polys: List[sp.Poly]) -> List[sp.Expr]:
+    """
+    Return points where the polynomials change their signs.
+    When one of the polynomials is not in QQ or ZZ, return [].
+    If no signs are changed, return [0].
+    """
+    if len(polys) == 0:
+        return [sp.S(0)]
+    if any(_.domain not in [sp.QQ,sp.ZZ] for _ in polys):
+        return []
+    ret = []
+    pre = None
+    for (l,r), mul in sp.intervals(polys):
+        if l != pre:
+            ret.append(l)
+            pre = l
+        if r != pre:
+            ret.append(r)
+            pre = r
+    if len(ret):
+        return ret
+    return [sp.S(0)]
+
 
 # def radsimp_together(x: sp.Expr) -> sp.Expr:
 #     """

@@ -7,6 +7,7 @@ import sympy as sp
 from sympy.core.singleton import S
 from sympy.combinatorics import PermutationGroup
 from scipy.optimize import linprog
+from scipy import __version__ as SCIPY_VERSION
 
 from .basis import LinearBasis, LinearBasisTangent
 from .tangents import root_tangents
@@ -17,9 +18,8 @@ from ..solver import homogenize
 from ...utils import findroot, RootsInfo, RootTangent, identify_symmetry
 from ...utils.basis_generator import MonomialPerm, MonomialReduction, MonomialHomogeneousFull
 
-
 LINPROG_OPTIONS = {
-    'method': 'highs-ds',
+    'method': 'highs-ds' if SCIPY_VERSION >= '1.6.0' else 'simplex',
     'options': {
         'presolve': False,
     }

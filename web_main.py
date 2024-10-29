@@ -112,8 +112,9 @@ def preprocess():
         The session ID.
     poly : str
         The input polynomial.
-    factor : bool
-        Whether to factor the polynomial. If True, the factor form is returned as the text.
+    standardize_text : str
+        The standardization of the text. If None, the text is not standardized.
+        See `SOS_Manager.set_poly` for more information.
     actions : list[str]
         Additional actions to perform.
 
@@ -142,7 +143,11 @@ def preprocess():
         perm = perm,
         render_triangle = True,
         render_grid = True,
-        factor = req.get('factor', False)
+        homogenize = req.get('homogenize', False),
+        dehomogenize = req.get('dehomogenize', None),
+        standardize_text = req.get('standardize_text', None),
+        omit_mul = req.get('omit_mul', True),
+        omit_pow = req.get('omit_pow', True),
     )
     if result is None:
         return jsonify()
@@ -150,7 +155,8 @@ def preprocess():
     n = result['degree']
     txt = result['txt']
     triangle = result['triangle']
-    grid = result['grid']
+    grid = result.get('grid', None)
+    grid_color = grid.grid_color if grid is not None else None
  
     sid = req.pop('sid')
     req.update(result)
@@ -161,7 +167,7 @@ def preprocess():
     # socketio.sleep(3)
     # thread.raise_exc(SystemExit)
 
-    return jsonify(n = n, txt = txt, triangle = triangle, heatmap = grid.grid_color)
+    return jsonify(n = n, txt = txt, triangle = triangle, heatmap = grid_color)
 
 def findroot(sid, **kwargs):
     """
@@ -190,7 +196,7 @@ def findroot(sid, **kwargs):
     """
     if 'findroot' in kwargs['actions']:
         poly = kwargs['poly']
-        grid = kwargs['grid']
+        grid = kwargs.get('grid', None)
         rootsinfo = SOS_Manager.findroot(poly, grid, verbose=False)
         tangents = kwargs.get('tangents')
         if tangents is None:

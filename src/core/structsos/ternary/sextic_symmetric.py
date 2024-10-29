@@ -4,7 +4,7 @@ import sympy as sp
 
 from .quartic import sos_struct_quartic
 from .utils import (
-    CyclicSum, CyclicProduct, Coeff, 
+    CyclicSum, CyclicProduct, Coeff, sos_struct_handle_uncentered,
     sum_y_exprs, nroots, rationalize_bound, rationalize_func, quadratic_weighting, radsimp,
     prove_univariate
 )
@@ -16,6 +16,26 @@ from .utils import (
 #####################################################################
 
 a, b, c = sp.symbols('a b c')
+
+def sos_struct_sextic_symmetric_ultimate(coeff, real = True):
+    """
+    Solve symmetric sextics.
+    """
+    coeff6 = coeff((6,0,0))
+    if not (coeff((5,1,0)) == coeff((1,5,0)) and coeff((4,2,0)) == coeff((2,4,0)) and coeff((3,2,1)) == coeff((2,3,1))):
+        # asymmetric
+        return None
+    elif coeff6 == 0:
+        # degenerated
+        return _sos_struct_sextic_iran96(coeff, real = real)
+    elif coeff6 < 0:
+        return None
+
+    if coeff((5,1,0)) == 0 and coeff((4,2,0)) == 0 and coeff((3,2,1)) == 0 and coeff6 != 0:
+        return _sos_struct_sextic_tree(coeff)
+
+    return _sos_struct_sextic_symmetric_ultimate(coeff, real = real)
+
 
 def _wrap_c1_c2(c1, c2):
     """Return CyclicSum(c1*a^2 + c2*b*c) while clearing the denominators."""
@@ -1124,7 +1144,7 @@ def _sos_struct_sextic_iran96(coeff, real = False):
 
 def _sos_struct_sextic_symmetric_full_sdp(coeff):
     """
-    Assume f(1,1,1) = 1, we try to represent f(a,b,c) =
+    Assume f(1,1,1) = 0, we try to represent f(a,b,c) =
     z * s((a-b)^2(a^2+b^2+(x+1)c^2+yab+(x+y)c(a+b))^2) + w*p((a-b)^2)
     + l00 * s(a^3-abc)^2 + 2*l01 * s(a^3-abc)s(a(b-c)^2) + l11 * s(a(b-c)^2)^2 >= 0
     where l00 * 111 >= l01^2.
@@ -1792,9 +1812,10 @@ class _sextic_sym_axis:
             return solutions[0]
 
 
-def sos_struct_sextic_symmetric_ultimate(coeff, real = True):
+@sos_struct_handle_uncentered
+def _sos_struct_sextic_symmetric_ultimate(coeff, real = True):
     """
-    Solve symmetric sextics.
+    Handle nondegenerated symmetric sextic polynomial inequalities.
     
     1. First we assume there exist nontrivial roots. Three cases:
         A. On the border, e.g. (.618, 0, 1), (1.618, 0, 1)
@@ -1827,20 +1848,7 @@ def sos_struct_sextic_symmetric_ultimate(coeff, real = True):
 
     s(414a6-1470a5b-1470a5c+979a4b2+5864a4bc+979a4c2+644a3b3-5584a3b2c-5584a3bc2+5228a2b2c2)
     """
-
     coeff6 = coeff((6,0,0))
-    if not (coeff((5,1,0)) == coeff((1,5,0)) and coeff((4,2,0)) == coeff((2,4,0)) and coeff((3,2,1)) == coeff((2,3,1))):
-        # asymmetric
-        return None
-    elif coeff6 == 0:
-        # degenerated
-        return _sos_struct_sextic_iran96(coeff, real = real)
-    elif coeff6 < 0:
-        return None
-
-    if coeff((5,1,0)) == 0 and coeff((4,2,0)) == 0 and coeff((3,2,1)) == 0 and coeff6 != 0:
-        return _sos_struct_sextic_tree(coeff)
-
     x0, x1, x2, x3, x4, x5 = radsimp([coeff(_) for _ in [(6,0,0),(5,1,0),(4,2,0),(3,3,0),(4,1,1),(3,2,1)]])
     rem = radsimp(3*(x0 + x3 + x4) + 6*(x1 + x2 + x5) + coeff((2,2,2)))
 

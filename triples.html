@@ -28,6 +28,40 @@
         background-color: #54c3e8;
         border-radius: 4px;
     }
+    .coeff-label3d {
+        transition: opacity 0.2s; /* Smooth transition for opacity changes */
+    }
+    .hover_text {
+        color: black;
+    }
+    .hover_text:hover {
+        color: rgb(19,135,245);
+        cursor: pointer;
+    }
+
+    /* Define relative position for the button */
+    .config-dropdown {
+        position: relative;
+        display: inline-block;
+    }
+    .dropdown_item {
+        position: relative;
+        display: inline-block;
+    }
+
+    /* Position the menu and hide it initially */
+    .submenu {
+        position: absolute;
+        bottom: 100%; /* Moves menu above the button */
+        left: 0;
+        display: none;
+        min-width: 200px;
+        background: #ffffff;
+        border: 1px solid #ddd;
+        box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.1);
+        margin-bottom: 8px; /* Optional space between button and menu */
+    }
+
     </style>
     <!-- <script src="https://requirejs.org/docs/release/2.3.6/minified/require.js"></script> -->
     <!-- <script async src="https://cdn.bootcdn.net/ajax/libs/axios/0.21.1/axios.min.js"></script> -->
@@ -43,6 +77,8 @@
     <script src="static/js/bootstrap.bundle.min.js"></script>
     <script src="static/js/tex-svg.js"></script>
     <script src="static/js/html2canvas.min.js"></script>
+    <script src="static/js/three.min.js"></script>
+    <script src="static/js/three.OrbitControls.js"></script>
     <link href="static/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body>
@@ -198,51 +234,81 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
         onkeyup="if(event.keyCode==13) {preprocessInput();}"></input><br>
         <!-- <input type="submit" value="提交"> -->
     </div>
-    <div id="centerscreen" style="width: 100%; height: 90%;margin-top: 1.5%; border-style: solid;border-color: gray;
-    background: transparent; ">
-        <div id="coeffs" style="width: 100%; height: 100%; position: absolute;">
+    <div id="centerscreen" style="width: 100%; height: 90%; margin-top: 1.5%; border-style: solid;border-color: gray;
+    background: transparent; ">    
+        <div id="coeffs" style="width: 100%; height: 100%; position: relative;">
         </div>
-        <div id="polytools" style="position: absolute; bottom: 3%; left: 8px;">
+        <div id="polytools" style="position: absolute; bottom: 2%; left: 8px;">
             <div id="polytools_btns" style="margin-bottom: 5%">
                 <button type="button" class="btn btn-outline-secondary" id="polytools_rotate" onclick="PolyTools('rotate');">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-arrow-clockwise" viewBox="0 0 16 16">
                         <path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/>
                         <path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/>
                     </svg>
-                  <span class="visually-hidden">Rotate</span>
+                  <!-- <span class="visually-hidden">Rotate</span> -->
                 </button>
                 <button type="button" class="btn btn-outline-secondary" id="polytools_rotate_reflect" onclick="PolyTools('rotate_reflect');">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-arrow-counterclockwise" viewBox="0 0 16 16">
                         <path fill-rule="evenodd" d="M8 3a5 5 0 1 1-4.546 2.914.5.5 0 0 0-.908-.417A6 6 0 1 0 8 2v1z"/>
                         <path d="M8 4.466V.534a.25.25 0 0 0-.41-.192L5.23 2.308a.25.25 0 0 0 0 .384l2.36 1.966A.25.25 0 0 0 8 4.466z"/>
                     </svg>
-                  <span class="visually-hidden">IRotate</span>
+                  <!-- <span class="visually-hidden">IRotate</span> -->
                 </button>
                 <button type="button" class="btn btn-outline-secondary" id="polytools_reflect" onclick="PolyTools('reflect');">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-arrow-left-right" viewBox="0 0 16 16">
                         <path fill-rule="evenodd" d="M1 11.5a.5.5 0 0 0 .5.5h11.793l-3.147 3.146a.5.5 0 0 0 .708.708l4-4a.5.5 0 0 0 0-.708l-4-4a.5.5 0 0 0-.708.708L13.293 11H1.5a.5.5 0 0 0-.5.5zm14-7a.5.5 0 0 1-.5.5H2.707l3.147 3.146a.5.5 0 1 1-.708.708l-4-4a.5.5 0 0 1 0-.708l4-4a.5.5 0 1 1 .708.708L2.707 4H14.5a.5.5 0 0 1 .5.5z"/>
                     </svg>
-                  <span class="visually-hidden">Reflect</span>
+                  <!-- <span class="visually-hidden">Reflect</span> -->
                 </button>
-                <button type="button" class="btn btn-outline-secondary" id="polytools_factor" onclick="PolyTools('factor');">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-wrench-adjustable" viewBox="0 0 16 16">
-                        <path d="M16 4.5a4.492 4.492 0 0 1-1.703 3.526L13 5l2.959-1.11c.027.2.041.403.041.61Z"/>
-                        <path d="M11.5 9c.653 0 1.273-.139 1.833-.39L12 5.5 11 3l3.826-1.53A4.5 4.5 0 0 0 7.29 6.092l-6.116 5.096a2.583 2.583 0 1 0 3.638 3.638L9.908 8.71A4.49 4.49 0 0 0 11.5 9Zm-1.292-4.361-.596.893.809-.27a.25.25 0 0 1 .287.377l-.596.893.809-.27.158.475-1.5.5a.25.25 0 0 1-.287-.376l.596-.893-.809.27a.25.25 0 0 1-.287-.377l.596-.893-.809.27-.158-.475 1.5-.5a.25.25 0 0 1 .287.376ZM3 14a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z"/>
-                    </svg>
-                  <span class="visually-hidden">Sort</span>
-                </button>
+                <div class="dropdown_item">
+                    <button type="button" class="btn btn-outline-secondary" id="polytools_factor" onclick="PolyTools('factor');">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-wrench-adjustable" viewBox="0 0 16 16">
+                            <path d="M16 4.5a4.492 4.492 0 0 1-1.703 3.526L13 5l2.959-1.11c.027.2.041.403.041.61Z"/>
+                            <path d="M11.5 9c.653 0 1.273-.139 1.833-.39L12 5.5 11 3l3.826-1.53A4.5 4.5 0 0 0 7.29 6.092l-6.116 5.096a2.583 2.583 0 1 0 3.638 3.638L9.908 8.71A4.49 4.49 0 0 0 11.5 9Zm-1.292-4.361-.596.893.809-.27a.25.25 0 0 1 .287.377l-.596.893.809-.27.158.475-1.5.5a.25.25 0 0 1-.287-.376l.596-.893-.809.27a.25.25 0 0 1-.287-.377l.596-.893-.809.27-.158-.475 1.5-.5a.25.25 0 0 1 .287.376ZM3 14a1 1 0 1 1 0-2 1 1 0 0 1 0 2Z"/>
+                        </svg>
+                    </button>
+                        <!-- <span class="visually-hidden">Sort</span> -->
+                    
+                    <div class="submenu" style="color:black; font-size: 14px; border-radius: 5px; text-align: left; min-width: 160px;">
+                        <hr style="margin:7px;">
+                        <div class="hover_text" style="padding-left: 20px;" onclick="PolyTools('abcd2xyzw')">ABCD ↔ XYZW</div><hr style="margin:7px;">
+                        <div class="hover_text" style="padding-left: 20px;" onclick="PolyTools('homogenize')">Homogenize</div><hr style="margin:7px;">
+                        <div class="hover_text" style="padding-left: 20px;" onclick="PolyTools('dehomogenize0')">Dehomogenize 0</div><hr style="margin:7px;">
+                        <div class="hover_text" style="padding-left: 20px;" onclick="PolyTools('dehomogenize1')">Dehomogenize 1</div><hr style="margin:7px;">
+                        <div class="hover_text" style="padding-left: 20px;" onclick="PolyTools('factor')">Factor</div><hr style="margin:7px;">
+                        <div class="hover_text" style="padding-left: 20px;" onclick="PolyTools('expand')">Expand</div><hr style="margin:7px;">
+                        <div class="hover_text" style="padding-left: 20px;" onclick="PolyTools('expand full')">Expand Full</div><hr style="margin:7px;">
+                    </div>
+                </div>
                 <button type="button" class="btn btn-outline-secondary" id="polytools_latex_coeffs" onclick="PolyTools('latex_coeffs');">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clipboard" viewBox="0 0 16 16">
                         <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/>
                         <path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/>
                     </svg>
-                  <span class="visually-hidden">Copy</span>
+                  <!-- <span class="visually-hidden">Copy</span> -->
                 </button>
+                <div class="dropdown_item">
+                    <button id="polytools_config" class="btn btn-outline-secondary">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-gear" viewBox="0 0 16 16">
+                            <path d="M8 4.754a3.246 3.246 0 1 0 0 6.492 3.246 3.246 0 0 0 0-6.492M5.754 8a2.246 2.246 0 1 1 4.492 0 2.246 2.246 0 0 1-4.492 0"/>
+                            <path d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 0l-.094.319a.873.873 0 0 1-1.255.52l-.292-.16c-1.64-.892-3.433.902-2.54 2.541l.159.292a.873.873 0 0 1-.52 1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a.873.873 0 0 1 .52 1.255l-.16.292c-.892 1.64.901 3.434 2.541 2.54l.292-.159a.873.873 0 0 1 1.255.52l.094.319c.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 0 1 1.255-.52l.292.16c1.64.893 3.434-.902 2.54-2.541l-.159-.292a.873.873 0 0 1 .52-1.255l.319-.094c1.79-.527 1.79-3.065 0-3.592l-.319-.094a.873.873 0 0 1-.52-1.255l.16-.292c.893-1.64-.902-3.433-2.541-2.54l-.292.159a.873.873 0 0 1-1.255-.52zm-2.633.283c.246-.835 1.428-.835 1.674 0l.094.319a1.873 1.873 0 0 0 2.693 1.115l.291-.16c.764-.415 1.6.42 1.184 1.185l-.159.292a1.873 1.873 0 0 0 1.116 2.692l.318.094c.835.246.835 1.428 0 1.674l-.319.094a1.873 1.873 0 0 0-1.115 2.693l.16.291c.415.764-.42 1.6-1.185 1.184l-.291-.159a1.873 1.873 0 0 0-2.693 1.116l-.094.318c-.246.835-1.428.835-1.674 0l-.094-.319a1.873 1.873 0 0 0-2.692-1.115l-.292.16c-.764.415-1.6-.42-1.184-1.185l.159-.291A1.873 1.873 0 0 0 1.945 8.93l-.319-.094c-.835-.246-.835-1.428 0-1.674l.319-.094A1.873 1.873 0 0 0 3.06 4.377l-.16-.292c-.415-.764.42-1.6 1.185-1.184l.292.159a1.873 1.873 0 0 0 2.692-1.115z"/>
+                        </svg>
+                    </button>
+                    <div class="submenu p-3" style="color:black; font-size: 14px; border-radius: 5px;" id="submenu_config">
+                        <!-- Sliders or other controls go here -->
+                        <label for="config_3D_PointSize">3D Point Size</label>
+                        <input type="range" id="config_3D_PointSize" min="1" max="300" value="50"> <!-- Multiplied by 1000 -->
+            
+                        <label for="config_3D_HeatmapOpacity" class="mt-2">3D Heatmap Opacity</label>
+                        <input type="range" id="config_3D_HeatmapOpacity" min="0" max="100" value="25">
+                    </div>
+                </div>
             </div>
         </div>
         <div id="rootsinfo" style="position: absolute; right: 7px; bottom: 3%; text-align: right; vertical-align: baseline; font-size: 12px">
         </div>
     </div>
+    
 </div>
 
 
@@ -282,16 +348,13 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
             <!-- <button id="output_showlatex" style="width:31%;height:100%;margin-left:2%;">LaTeX</button>
             <button id="output_showtxt" style="width:31%;height:100%">txt</button>
             <button id="output_showformatted" style="width:31%;height:100%">formatted</button> -->
-            <div id="output_showlatex"  style="width:30%;height:99%;margin-left:3%;display:inline-block;text-align:center;padding-top: 2%;
+            <div class="hover_text" id="output_showlatex"  style="width:30%;height:99%;margin-left:3%;display:inline-block;text-align:center;padding-top: 2%;
             color:rgb(41,50,225);border-bottom: 2px solid blue;"
-            onclick = "changeShowType('latex')" 
-            onmouseover="changeShowTypeHover('latex',0)" onmouseleave="changeShowTypeHover('latex',1)">LaTeX</div>
-            <div id="output_showtxt"  style="width:30%;height:99%;display:inline-block;text-align:center;padding-top: 2%;" 
-            onclick = "changeShowType('txt')" 
-            onmouseover="changeShowTypeHover('txt',0)" onmouseleave="changeShowTypeHover('txt',1)">txt</div>
-            <div id="output_showformatted"  style="width:33%;height:99%;display:inline-block;text-align:center;padding-top: 2%;" 
-            onclick = "changeShowType('formatted')"
-            onmouseover="changeShowTypeHover('formatted',0)" onmouseleave="changeShowTypeHover('formatted',1)">formatted</div>
+            onclick = "changeShowType('latex')">LaTeX</div>
+            <div class="hover_text" id="output_showtxt"  style="width:30%;height:99%;display:inline-block;text-align:center;padding-top: 2%;" 
+            onclick = "changeShowType('txt')">txt</div>
+            <div class="hover_text" id="output_showformatted"  style="width:33%;height:99%;display:inline-block;text-align:center;padding-top: 2%;" 
+            onclick = "changeShowType('formatted')">formatted</div>
         </div>
         <textarea id="output_result" style="border: 1px solid black; border-radius: 8px; font-family:'Times New Roman', Times, serif;
         width: 99%; height: 82.5%; padding-left: 1%; margin-top: 3%; resize: none; font-size: small;" readonly="readonly"></textarea>
@@ -324,12 +387,15 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
         let heatmap_view = document.getElementById('heatmap');
         const l = 98. / heatmap_gridsize; // length of each samll equilateral triangle 
         const ulx = (50 - l * heatmap_gridsize / 2), uly = (35 - 13 * heatmap_gridsize * l / 45);
+        const coor_map = (i, j) => { // coordinate of the j-th entry of row i
+            return 'left:' + (ulx + l*(i+j*2-1)/2) + '%;top:' + (uly + l*i*13/15) + '%;';
+        }
         for (let i=0;i<=heatmap_gridsize;++i){
-            for (let j=0;j<=heatmap_gridsize-i;++j){
+            for (let j=0;j<=i;++j){
                 let heatmap_grid = document.createElement('div')
                 heatmap_view.appendChild(heatmap_grid)
-                let x = ulx + l*(i+j*2-1)/2, y = uly + l*i*13/15;
-                heatmap_grid.setAttribute('style', 'position:absolute;left:'+x+'%;top:'+y+'%;'
+                let coor = coor_map(j,i-j);
+                heatmap_grid.setAttribute('style', 'position:absolute;' + coor
                             +'height:'+l+'%'+';width:'+l+'%;background:white');
                 heatmap_grids.push(heatmap_grid);
             }
@@ -371,7 +437,11 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
             perm: document.getElementById('setting_perm_input').value,
             // timestamp: timestamp
         };
-        if (!isSameHistoryRecord(cur_data)){
+
+        const parse_undefined = (x, y) => {return typeof(x) === 'undefined'? y: x;}
+        kwargs = parse_undefined(kwargs, {});
+        if ((!isSameHistoryRecord(cur_data))||(kwargs.homogenize===true)||(kwargs.dehomogenize!==undefined)){
+            // when there is homogenization / dehomogenization, the poly might change and we make a copy
             cur_data.timestamp = Date.now();
             // push to front
             history_data.unshift(cur_data);
@@ -383,11 +453,9 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
             cur_data.timestamp = history_data[0].timestamp;
         }
 
-        const parse_undefined = (x, y) => {return typeof(x) === 'undefined'? y: x;}
-        kwargs = parse_undefined(kwargs, {})
         let actions = parse_undefined(kwargs.actions, ['findroot']);
         kwargs.actions = actions
-        kwargs.factor  = parse_undefined(kwargs.factor, false);
+        kwargs.standardize_text  = parse_undefined(kwargs.standardize_text, false);
         
         // update the cur_data to kwargs
         Object.entries(cur_data).forEach(([key, value]) => { kwargs[key] = value; });
@@ -498,7 +566,36 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
             preprocessInput();
         }else if (event === 'factor'){
             sos_poly = ''; // reset
-            preprocessInput({factor: true});
+            preprocessInput({standardize_text: 'factor'});
+        }else if (event === 'expand'){
+            sos_poly = ''; // reset
+            preprocessInput({standardize_text: 'expand'});
+        }else if (event === 'expand full'){
+            sos_poly = ''; // reset
+            preprocessInput({standardize_text: 'expand', omit_pow: false, omit_mul: false});
+        }else if (event === 'abcd2xyzw'){
+            const exchanger = (s) => Array.from(s).map(x => {
+                const c = x.charCodeAt(0);
+                if (c >= 65 && c <= 68) return String.fromCharCode(87+(c-64)%4);
+                if (c >= 97 && c <= 100) return String.fromCharCode(119+(c-96)%4);
+                if (c >= 87 && c <= 90) return String.fromCharCode((c-84)%4+65);
+                if (c >= 119 && c <= 122) return String.fromCharCode((c-116)%4+97);
+                return x;
+            }).join('');
+            gens = document.getElementById('setting_gens_input').value;
+            document.getElementById('setting_gens_input').value = exchanger(gens);
+            sos_poly = exchanger(sos_poly);
+            document.getElementById('input_poly').value = exchanger(document.getElementById('input_poly').value);
+            document.getElementById('input_tangents').value = exchanger(document.getElementById('input_tangents').value);
+        }else if (event === 'homogenize'){
+            sos_poly = ''; // reset
+            preprocessInput({homogenize: true});
+        }else if (event === 'dehomogenize0'){
+            sos_poly = ''; // reset
+            preprocessInput({dehomogenize: 0});
+        }else if (event === 'dehomogenize1'){
+            sos_poly = ''; // reset
+            preprocessInput({dehomogenize: 1});
         }else if (event === 'latex_coeffs'){
             axios.post(host + '/process/latexcoeffs',
             {

@@ -1,3 +1,5 @@
+from typing import Callable, Union
+
 import sympy as sp
 
 from ..utils import (
@@ -6,7 +8,7 @@ from ..utils import (
     StructuralSOSError, PolynomialNonpositiveError, PolynomialUnsolvableError
 )
 
-from ...symsos import prove_univariate
+from ...symsos import prove_univariate, prove_univariate_interval
 from ...solver import SS
 from ....utils.roots.rationalize import (
     nroots, rationalize, rationalize_bound, univariate_intervals,
@@ -95,3 +97,45 @@ def try_perturbations(
         if solution is not None:
             return solution + t * perturbation
     return None
+
+
+def sos_struct_handle_uncentered(solver: Callable) -> Callable:
+    """
+    A decorator for structural SOS with uncentered polynomial handling.
+    It only supports cyclic polynomials.
+    """
+    def _wrapped_solver(poly: Union[sp.Poly, Coeff], *args, **kwargs):
+        bias = 0
+        if isinstance(poly, Coeff):
+            bias = poly.poly111()
+        elif isinstance(poly, sp.Poly):
+            bias = poly(1,1,1)
+            poly = Coeff(poly)
+        else:
+            raise ValueError("Unsupported polynomial type. Expected Coeff or Poly, but received %s." % type(poly))
+        if bias < 0:
+            # raise PolynomialNonpositiveError#("The polynomial is nonpositive.")
+            return None
+
+        d = poly.total_degree()
+        dd3, dm3 = divmod(d,3)
+        i, j, k = dd3, dd3+(1 if dm3>=2 else 0), dd3+(1 if dm3 else 0)
+        coeff = poly.coeffs.copy()
+        if not ((i,j,k) in coeff):
+            coeff[(i,j,k)] = 0
+            coeff[(j,k,i)] = 0
+            coeff[(k,i,j)] = 0
+        coeff[(i,j,k)] -= bias/3
+        coeff[(j,k,i)] -= bias/3
+        coeff[(k,i,j)] -= bias/3
+
+        new_poly = Coeff(coeff)
+        solution = solver(new_poly, *args, **kwargs)
+        if solution is not None:
+            a, b, c = sp.symbols('a b c')
+            if dm3 == 0:
+                solution += bias * CyclicProduct(a**i)
+            else:
+                solution += bias/3 * CyclicSum(a**i*b**j*c**k)
+        return solution
+    return _wrapped_solver

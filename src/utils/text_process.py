@@ -268,8 +268,36 @@ def degree_of_zero(
         preserve_cbrt: bool = False
     ) -> int:
     """
-    Infer the degree of a homogeneous zero polynomial
-    Idea: delete the additions and substractions, which do not affect the degree.
+    Infer the degree of a homogeneous zero polynomial.
+    Idea: delete the additions and subtractions, which do not affect the degree.
+
+    Parameters
+    ----------
+    poly: str
+        The polynomial of which to infer the degree.
+    gens: Tuple[Symbol]
+        The generators of the polynomial.
+    perm: Optional[PermutationGroup]
+        The permutation group of the expression. If None, it will be cyclic group.
+    scientific_notation: bool
+        Whether to parse the scientific notation. If True, 1e2 will be parsed as 100.
+        If False, 1e2 will be parsed as e^2 where e is a free variable.
+    preserve_sqrt: bool
+        Whether to preserve the sqrt function. If True, sqrt will be inferred as square root
+        rather than s*q*r*t.
+    preserve_cbrt: bool
+        Whether to preserve the cbrt function. If True, cbrt will be inferred as cubic root
+        rather than c*b*r*t.
+
+    Returns
+    -------
+    int
+        The degree of the (homogeneous) polynomial.
+
+    Examples
+    --------
+    >>> degree_of_zero('p(a)(s(a2)2-s(a4+2a2b2))')
+    7
     """
     poly = poly.lower()
 
@@ -283,7 +311,7 @@ def degree_of_zero(
         preserve_sqrt=preserve_sqrt,
         preserve_cbrt=preserve_cbrt
     )
-    gen_names = [_.name for _ in gens]
+    gen_names = set([_.name for _ in gens])
 
     i = 0
     length = len(poly)
@@ -368,21 +396,29 @@ def coefficient_triangle(poly: Poly, degree: int = None) -> str:
         The degree of the polynomial. If None, it will be computed.
     """
     if degree is None:
-        degree = deg(poly)
-    coeffs = poly.coeffs()
-    monoms = poly.monoms()
-    monoms.append((-1,-1,0))  # tail flag
-    
-    t = 0
-    triangle = []
-    for i in range(degree+1):
-        for j in range(i+1):
-            if monoms[t][0] == degree - i and monoms[t][1] == i - j:
-                txt = short_constant_parser(coeffs[t])
-                t += 1
-            else:
-                txt = '0'
-            triangle.append(txt)
+        degree = poly.total_degree()
+    if poly.is_homogeneous and len(poly.gens) == 4:
+        if not poly.is_zero:
+            from .basis_generator import arraylize_sp
+            vec = arraylize_sp(poly)
+            return [short_constant_parser(_) for _ in vec]
+        else:
+            return ['0'] * ((degree+1)*(degree+2)*(degree+3)//6)
+    else:
+        coeffs = poly.coeffs()
+        monoms = poly.monoms()
+        monoms.append((-1,-1,0))  # tail flag
+        
+        t = 0
+        triangle = []
+        for i in range(degree+1):
+            for j in range(i+1):
+                if monoms[t][0] == degree - i and monoms[t][1] == i - j:
+                    txt = short_constant_parser(coeffs[t])
+                    t += 1
+                else:
+                    txt = '0'
+                triangle.append(txt)
     return triangle
 
 

@@ -2,9 +2,10 @@ from abc import ABC, abstractmethod
 from typing import Optional, Dict, Tuple, List
 
 import sympy as sp
+from sympy.matrices import Matrix
 
 from .arithmetic import (
-    solve_undetermined_linear,
+    solve_undetermined_linear, solve_nullspace,
     matmul, matmul_multiple, symmetric_bilinear, symmetric_bilinear_multiple
 )
 from .abstract import SDPProblemBase
@@ -31,8 +32,12 @@ class SDPTransformation(ABC):
     def propagate_to_parent(self, recursive: bool = True): ...
     # @abstractmethod
     def propagate_to_child(self, recursive: bool = True): ...
+
+    # def propagate_nullspace_to_child(self, nullspace: Dict[str, sp.Matrix]):
+    #     raise NotImplementedError(f"Transform {self.__class__.__name__} does not support propagate_nullspace_to_child.")
+
     @classmethod
-    def _create_sdpproblem(cls, *args, **kwargs) -> SDPProblemBase:
+    def _create_dual_problem(cls, *args, **kwargs) -> SDPProblemBase:
         # Avoid circular import
         from .dual import SDPProblem
         return SDPProblem(*args, **kwargs)
@@ -143,10 +148,7 @@ class DualMatrixTransform(SDPMatrixTransform):
                 return sp.zeros(X.shape[0], 0)
             return m
         def _perp(X, key):
-            m = sp.Matrix.hstack(*X.T.nullspace())
-            if is_empty_matrix(m):
-                return sp.zeros(X.shape[0], 0)
-            return m
+            return solve_nullspace(X)
 
         if nullspace is None:
             columnspace = {key: _reg(columnspace[key], key) for key in columnspace}
@@ -171,6 +173,10 @@ class DualMatrixTransform(SDPMatrixTransform):
 
         # form the constraints of y by computing Sum(y_i * A_ij * Vi) = -A_i0 * Vi
         # TODO: faster fraction arithmetic
+        # NOTE: the major bottleneck lies in:
+        # 1. solve_undetermined_linear
+        # 2. matmul_multiple
+
         eq_list = []
         x0_list = []
         # from time import time
@@ -179,6 +185,7 @@ class DualMatrixTransform(SDPMatrixTransform):
             V = self._nullspace[key]
             if is_empty_matrix(V):
                 continue
+
             eq_mat = matmul_multiple(space.T, V).T
             eq_list.append(eq_mat)
 
@@ -213,7 +220,7 @@ class DualMatrixTransform(SDPMatrixTransform):
             new_x0_and_space[key] = (new_x0, new_space)
 
         # print('Used time', time() - time0)
-        return self._create_sdpproblem(new_x0_and_space)
+        return self._create_dual_problem(new_x0_and_space)
 
     def propagate_to_parent(self, recursive: bool = True):
         parent_node, child_node = self.parent_node, self.child_node
@@ -223,6 +230,9 @@ class DualMatrixTransform(SDPMatrixTransform):
         parent_node.register_y(y, propagate_to_parent = recursive)
         return parent_node
 
+    def propagate_nullspace_to_child(self, nullspace: Dict[str, sp.Matrix]):
+        nullspace = {key: matmul(self._columnspace[key].T, nullspace[key]) for key in self.child_node.keys()}
+        return nullspace
 
 class PrimalMatrixTransform(SDPMatrixTransform, SDPCopyTransform):
     """
@@ -272,12 +282,13 @@ class PrimalMatrixTransform(SDPMatrixTransform, SDPCopyTransform):
                     if other_key == key:
                         continue
                     # align eqs with other_mat
-                    space[other_key] = sp.Matrix.hstack(other_mat, sp.zeros(eqs.shape[0], other_mat.shape[1]))
+                    space[other_key] = sp.Matrix.vstack(other_mat, sp.zeros(eqs.shape[0], other_mat.shape[1]))
 
         x0 = sp.Matrix.vstack(parent_node._x0, sp.zeros(eq_num, 1))
-        return parent_node.__class__(space, x0)
+        return parent_node.__class__(x0, space)
 
-
+    def propagate_nullspace_to_child(self, nullspace: Dict[str, sp.Matrix]):
+        return nullspace
 
 
 class SDPRowMasking(SDPMatrixTransform):
@@ -312,8 +323,8 @@ class SDPRowMasking(SDPMatrixTransform):
                 else:
                     mats[key] = sp.Matrix.hstack(*mat)
             return mats
-        self.nullspace = onehot_dict(masks)
-        self.columnspace = onehot_dict(self.unmasks)
+        self._nullspace = onehot_dict(masks)
+        self._columnspace = onehot_dict(self.unmasks)
 
         self._trans_x0 = None
         self._trans_space = None
@@ -335,6 +346,13 @@ class SDPRowMasking(SDPMatrixTransform):
             zero_diagonals = sdp._get_zero_diagonals()
         return sdp._transforms[-1] if sdp._transforms else SDPIdentityTransform(parent_node)
 
+    def propagate_nullspace_to_child(self, nullspace: Dict[str, Matrix]):
+        # extract the unmasked rows of the nullspace
+        def extract(mat, unmask):
+            if len(unmask) == 0: return sp.zeros(0, mat.shape[1])
+            return mat.extract(unmask, list(range(mat.shape[1])))
+        return {key: extract(nullspace[key], self.unmasks[key]) for key in self.child_node.keys()}
+
 
 class DualRowMasking(SDPRowMasking, DualMatrixTransform):
     def __new__(cls, parent_node, masks: Dict[str, List[int]]):
@@ -351,10 +369,11 @@ class DualRowMasking(SDPRowMasking, DualMatrixTransform):
         for key, (x0, space) in parent_node._x0_and_space.items():
             mask = set(masks[key])
             n = Mat2Vec.length_of_mat(x0.shape[0])
+            rows = []
             for i in mask:
-                for j in range(n):
-                    eqs.append(space[i*n+j,:])
-                    rhs.append(x0[i*n+j])
+                rows.extend(list(range(i*n, (i+1)*n)))
+            eqs.append(space.extract(rows, list(range(space.shape[1]))))
+            rhs.append(x0.extract(rows, [0]))
 
             unmask = unmasks[key]
             nonzero_inds_ = []
@@ -364,7 +383,7 @@ class DualRowMasking(SDPRowMasking, DualMatrixTransform):
             nonzero_inds[key] = nonzero_inds_
 
         eqs = sp.Matrix.vstack(*eqs)
-        rhs = sp.Matrix(rhs)
+        rhs = sp.Matrix.vstack(*rhs)
         trans_x0, trans_space = solve_undetermined_linear(eqs, -rhs)
         self._trans_x0, self._trans_space = trans_x0, trans_space
 
@@ -375,7 +394,8 @@ class DualRowMasking(SDPRowMasking, DualMatrixTransform):
             new_space = space2 * trans_space
             new_x0_and_space[key] = (new_x0, new_space)
 
-        return self._create_sdpproblem(new_x0_and_space)
+        return self._create_dual_problem(new_x0_and_space)
+
 
 
 class PrimalRowMasking(SDPRowMasking):
@@ -405,7 +425,7 @@ class PrimalRowMasking(SDPRowMasking):
                     for row in range(x0.shape[0]):
                         new_space[row, k] = space[row, k1]
             new_spaces[key] = new_space
-        child = parent_node.__class__(new_spaces, x0)
+        child = parent_node.__class__(x0, new_spaces)
         return child
 
     def propagate_to_parent(self, recursive: bool = True):
@@ -436,6 +456,7 @@ class PrimalRowMasking(SDPRowMasking):
         if recursive:
             parent_node.propagate_to_parent(recursive = recursive)
         return parent_node
+
 
 class SDPVectorTransform(SDPTransformation):
     """
@@ -468,7 +489,7 @@ class SDPVectorTransform(SDPTransformation):
             x0_ = x0 + space @ b
             space_ = space @ A
             x0_and_space[key] = (x0_, space_)
-        return self._create_sdpproblem(x0_and_space)
+        return self._create_dual_problem(x0_and_space)
 
     def propagate_to_parent(self, recursive: bool = True):
         parent_node, child_node = self.parent_node, self.child_node
@@ -482,9 +503,38 @@ class SDPVectorTransform(SDPTransformation):
         return parent_node
 
 
+class SDPPrimaltoDual(SDPTransformation):
+    """
+    Convert a primal problem to a dual problem.
+    """
+    def __init__(self, parent_node):
+        if not parent_node.is_primal:
+            raise ValueError("The parent node should be a primal problem.")
+        super().__init__(parent_node)
 
+    def _init_child_node(self):
+        parent_node = self.parent_node
+        space = parent_node.full_space
+        x0 = parent_node._x0
+        splits = dict(zip(parent_node.keys(), list(parent_node.size.values())))
+        from .dual import SDPProblem
+        return SDPProblem.from_equations(space, x0, splits)
 
+    def propagate_to_parent(self, recursive: bool = True):
+        parent_node, child_node = self.parent_node, self.child_node
+        if child_node.y is None:
+            return parent_node
+        parent_node.S = child_node.S
+        parent_node.decompositions = child_node.decompositions
+        parent_node.y = sp.Matrix.vstack(*[Mat2Vec.mat2vec(S) for S in child_node.S.values()])
+        if len(parent_node.y) == 0:
+            parent_node.y = sp.Matrix.zeros(0, 1)
+        if recursive:
+            parent_node.propagate_to_parent(recursive = recursive)
+        return parent_node
 
+    def propagate_nullspace_to_child(self, nullspace: Dict[str, sp.Matrix]):
+        return nullspace
 
 class SDPTransformMixin(SDPProblemBase):
     def __init__(self, *args, **kwargs):
@@ -656,9 +706,10 @@ class DualTransformMixin(SDPTransformMixin):
             while len(sdp.children):
                 sdp2 = sdp.children[-1]
                 transform = sdp.common_transform(sdp2)
-                if not isinstance(transform, DualMatrixTransform):
-                    raise ValueError("Transformations should be a chain of DualMatrixTransform when to_child is True.")
-                nullspaces = {key: transform.columnspace[key].T * nullspaces[key] for key in sdp2.keys()}
+                # if not isinstance(transform, DualMatrixTransform):
+                #     raise ValueError("Transformations should be a chain of DualMatrixTransform when to_child is True.")
+                # nullspaces = {key: matmul(transform.columnspace[key].T, nullspaces[key]) for key in sdp2.keys()}
+                nullspaces = transform.propagate_nullspace_to_child(nullspaces)
                 sdp = sdp2
         transform = SDPMatrixTransform(sdp, nullspace=nullspaces)
         return transform.child_node
@@ -734,8 +785,9 @@ class PrimalTransformMixin(SDPTransformMixin):
             while len(sdp.children):
                 sdp2 = sdp.children[-1]
                 transform = sdp.common_transform(sdp2)
-                if not isinstance(transform, PrimalMatrixTransform):
-                    raise ValueError("Transformations should be a chain of PrimalMatrixTransform when to_child is True.")
+                nullspaces = transform.propagate_nullspace_to_child(nullspaces)
+                # if not isinstance(transform, PrimalMatrixTransform):
+                #     raise ValueError("Transformations should be a chain of PrimalMatrixTransform when to_child is True.")
                 sdp = sdp2
         transform = SDPMatrixTransform(sdp, nullspace=nullspaces)
         return transform.child_node
@@ -806,3 +858,6 @@ class PrimalTransformMixin(SDPTransformMixin):
 
     def constrain_zero_diagonals(self, recursive: bool = True) -> SDPProblemBase:
         return SDPRowMasking.constrain_zero_diagonals(self, recursive = recursive).child_node
+
+    def to_dual(self) -> SDPProblemBase:
+        return SDPPrimaltoDual(self).child_node
