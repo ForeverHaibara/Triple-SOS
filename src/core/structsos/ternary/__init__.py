@@ -10,7 +10,7 @@ from .nonic   import sos_struct_nonic
 from .acyclic import sos_struct_acyclic_sparse
 
 from .solver import structural_sos_3vars, _structural_sos_3vars_cyclic, _structural_sos_3vars_acyclic, structural_sos_3vars_nonhom
-from ...solver import SS
+from ...shared import SS
 
 __all__ = [
     'structural_sos_3vars', 'structural_sos_3vars_nonhom',

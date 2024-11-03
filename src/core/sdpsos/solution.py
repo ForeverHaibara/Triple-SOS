@@ -18,26 +18,39 @@ class SolutionSDP(SolutionSimple):
     def from_decompositions(self,
         poly: sp.Poly,
         decompositions: Dict[str, Tuple[sp.Matrix, sp.Matrix]],
+        eqvec: Dict[str, sp.Matrix],
         symmetry: MonomialReduction
     ) -> 'SolutionSDP':
         """
         Create SDP solution from decompositions.
         """
-        sos_expr = _decomp_as_sos(decompositions, poly.gens, symmetry=symmetry)
+        qmodule_expr = _decomp_as_sos(decompositions, poly.gens, symmetry=symmetry)
+
+        ideal_exprs = []
+        for key, vec in eqvec.items():
+            key = _poly_to_unevaluated(key)
+            vec = symmetry.base().invarraylize(vec, poly.gens).as_expr()
+            ideal_exprs.append(symmetry.cyclic_sum(vec * key, poly.gens).together())
+        ideal_expr = sp.Add(*ideal_exprs)
+
         return SolutionSDP(
             problem = poly,
-            numerator = sos_expr,
+            numerator = qmodule_expr + ideal_expr,
             is_equal = not _is_numer_solution(decompositions)
         )
 
-
-def monomial_to_expr(monom: Tuple[int, ...], gens: List[sp.Symbol]) -> sp.Expr:
-    """
-    Convert a monomial to an expression.
-    See also in sp.polys.monomials.Monomial.as_expr.
-    """
-    return sp.Mul(*[gen**exp for gen, exp in zip(gens, monom)])
-
+def _poly_to_unevaluated(poly: sp.Poly) -> sp.Expr:
+    return poly.as_expr() # if poly.is_monomial else sp.UnevaluatedExpr(poly.as_expr())
+    const, fact = poly.factor_list()
+    sgn = 1 if const >= 0 else -1
+    monomials = [const if sgn > 0 else -const]
+    non_monomials = [sgn]
+    for p, d in fact:
+        if p.is_monomial:
+            monomials.append(p.as_expr()**d)
+        else:
+            non_monomials.append(p.as_expr()**d)
+    return sp.Mul(*monomials) * sp.UnevaluatedExpr(sp.Mul(*non_monomials))
 
 def _decomp_as_sos(
         decompositions: Dict[str, Tuple[sp.Matrix, sp.Matrix]],
@@ -48,15 +61,19 @@ def _decomp_as_sos(
     """
     Convert a {key: (U, S)} dictionary to sum of squares.
     """
+    def compute_cyc_sum(expr: sp.Expr) -> sp.Expr:
+        # if isinstance(expr, sp.Add):
+        #     expr = sp.UnevaluatedExpr(expr)
+        return symmetry.cyclic_sum(expr, gens).together()
+
     exprs = []
     symmetry_half = symmetry.base()
     for key, (U, S) in decompositions.items():
-        monomial = eval(key)
-        monomial_expr = monomial_to_expr(monomial, gens)
+        key = _poly_to_unevaluated(key)
         vecs = [symmetry_half.invarraylize(U[i,:], gens).as_expr() for i in range(U.shape[0])]
         if factor:
             vecs = [_.factor() for _ in vecs]
-        vecs = [symmetry.cyclic_sum(signsimp(S[i] * monomial_expr * vecs[i]**2), gens) for i in range(U.shape[0])]
+        vecs = [compute_cyc_sum(S[i] * key * vecs[i]**2) for i in range(U.shape[0])]
 
         exprs.extend(vecs)
     return sp.Add(*exprs)

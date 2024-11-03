@@ -206,6 +206,10 @@ def findroot(
     if not isinstance(poly, sp.Poly):
         return RootsInfo()
 
+    if len(poly.gens) != 3:
+        # not implemented
+        return RootsInfo(poly=poly)
+
     if grid is None:
         grid = GridRender.render(poly, with_color=False)
 

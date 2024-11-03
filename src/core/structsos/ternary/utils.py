@@ -9,7 +9,7 @@ from ..utils import (
 )
 
 from ...symsos import prove_univariate, prove_univariate_interval
-from ...solver import SS
+from ...shared import SS
 from ....utils.roots.rationalize import (
     nroots, rationalize, rationalize_bound, univariate_intervals,
     square_perturbation, cancel_denominator, common_region_of_conics

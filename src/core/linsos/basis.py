@@ -43,7 +43,7 @@ class LinearBasis():
     def as_expr(self, symbols) -> sp.Expr:
         raise NotImplementedError
     def as_poly(self, symbols) -> sp.Poly:
-        return self.as_expr(symbols).as_poly(symbols)
+        return self.as_expr(symbols).doit().as_poly(symbols)
     def degree(self) -> int:
         return self.as_poly(self._get_default_symbols()).total_degree()
     def as_array_np(self, **kwargs) -> np.ndarray:
@@ -62,6 +62,7 @@ class LinearBasisExpr(LinearBasis):
         return self._expr.xreplace(dict(zip(self._symbols, symbols)))
 
 class LinearBasisTangent(LinearBasis):
+    _degree_step = 1
     __slots__ = ['_powers', '_tangent']
     def __init__(self, powers: Tuple[int, ...], tangent: sp.Expr, symbols: Tuple[sp.Symbol, ...]):
         self._powers = powers
@@ -75,7 +76,9 @@ class LinearBasisTangent(LinearBasis):
     def nvars(self) -> int:
         return len(self._powers)
     def as_expr(self, symbols) -> sp.Expr:
-        return sp.Mul(*(x**i for x, i in zip(symbols, self._powers))) * self._tangent(symbols)
+        return sp.Mul(*(x**i for x, i in zip(symbols, self._powers))) * self._tangent(symbols).as_expr()
+    def __neg__(self) -> 'LinearBasisTangent':
+        return self.__class__.from_callable_expr(self._powers, lambda s: -self._tangent(s).as_expr())
 
     @classmethod
     def from_callable_expr(cls, powers: Tuple[int, ...], tangent: _callable_expr) -> 'LinearBasisTangent':
@@ -89,21 +92,22 @@ class LinearBasisTangent(LinearBasis):
         return obj
 
     @classmethod
-    def generate(self, tangent: sp.Expr, symbols: Tuple[int, ...], degree: int, require_equal: bool = True) -> List['LinearBasisTangent']:
+    def generate(cls, tangent: sp.Expr, symbols: Tuple[int, ...], degree: int, require_equal: bool = True) -> List['LinearBasisTangent']:
         """
         Generate all possible linear bases of the form x1^a1 * x2^a2 * ... * xn^an * tangent
         with total degree == degree or total degree <= degree.        
         """
         degree = degree - tangent.as_poly(symbols).total_degree()
-        if degree < 0:
+        step = cls._degree_step
+        if degree < 0 or degree % step != 0:
             return []
         tangent = _callable_expr.from_expr(tangent, symbols)
-        return [LinearBasisTangent.from_callable_expr(p, tangent) for p in \
-                _degree_combinations([1 for _ in symbols], degree, require_equal=require_equal)]
+        return [LinearBasisTangent.from_callable_expr(tuple(i*step for i in p), tangent) for p in \
+                _degree_combinations([cls._degree_step] * len(symbols), degree, require_equal=require_equal)]
 
     @classmethod
-    def generate_quad_diff(self, 
-            tangent: sp.Expr, symbols: Tuple[int, ...], degree: int, symmetry: PermutationGroup
+    def generate_quad_diff(cls, 
+            tangent: sp.Expr, symbols: Tuple[int, ...], degree: int, symmetry: PermutationGroup, quad_diff: bool = True
         ) -> Tuple[List['LinearBasisTangent'], np.ndarray]:
         """
         Generate all possible linear bases of the form x1^a1 * x2^a2 * ... * xn^an * (x1-x2)^(2b_12) * ... * (xi-xj)^(2b_ij) * tangent
@@ -111,7 +115,7 @@ class LinearBasisTangent(LinearBasis):
         Also, return the matrix representation of the bases.
         """
         basis, mat, perm_group = None, None, None
-        cache = _get_tangent_cache_key(tangent, symbols)
+        cache = _get_tangent_cache_key(cls, tangent, symbols) if quad_diff else None
         if cache is not None:
             perm_group = symmetry.to_perm_group(len(symbols)) if isinstance(symmetry, MonomialReduction) else symmetry
             basis = cache.get((degree, len(symbols)))
@@ -120,23 +124,31 @@ class LinearBasisTangent(LinearBasis):
                 if mat is not None:
                     return basis, mat
 
-        p = tangent.as_poly(symbols)
+        if not isinstance(tangent, sp.Poly):
+            p = tangent.as_poly(symbols)
+        else:
+            p, tangent = tangent, tangent.as_expr()
         d = p.total_degree()
         if p.is_zero or len(p.free_symbols_in_domain) or d > degree:
             return [], np.array([], dtype='float')
 
-        quad_diff = quadratic_difference(symbols)
-        cross_tangents = cross_exprs(quad_diff, symbols, degree - d)
+        if quad_diff:
+            quad_diff = quadratic_difference(symbols)
+            cross_tangents = cross_exprs(quad_diff, symbols, degree - d)
+        else:
+            cross_tangents = [S.One]
+
         if basis is None:
             # no cache, generate the bases first
             basis = []
             for t in cross_tangents:
-                basis += LinearBasisTangent.generate(t * tangent, symbols, degree, require_equal=True)
+                basis += cls.generate(t * tangent, symbols, degree, require_equal=True)
 
         if mat is None:
             # convert the bases to matrix
             # mat = np.array([x.as_array_np(expand_cyc=True, symmetry=symmetry) for x in basis]) # too slow
             mat = [0] * len(basis)
+            step = cls._degree_step
             def tuple_sum(t1: Tuple[int, ...], t2: Tuple[int, ...]) -> Tuple[int, ...]:
                 return tuple(x + y for x, y in zip(t1, t2))
 
@@ -145,15 +157,16 @@ class LinearBasisTangent(LinearBasis):
                 symmetry = MonomialPerm(symmetry)
             poly_from_dict = sp.Poly.from_dict
             for t in cross_tangents:
-                p2 = t.as_poly(symbols) * p
+                p2 = t.doit().as_poly(symbols) * p
                 p2dict = p2.as_dict()
-                for power in  _degree_combinations([1 for _ in symbols], degree - p2.homogeneous_order(), require_equal=True):
+                for power in  _degree_combinations([cls._degree_step] * len(symbols), degree - p2.homogeneous_order(), require_equal=True):
+                    power = tuple(i*step for i in power)
                     new_p_dict = dict((tuple_sum(power, k), v) for k, v in p2dict.items())
                     new_p = poly_from_dict(new_p_dict, symbols)
                     mat[mat_ind] = symmetry.arraylize(new_p, expand_cyc=True)
                     mat_ind += 1
-            
-            mat = np.vstack(mat)
+
+            mat = np.vstack(mat) if len(mat) > 0 else np.array([], dtype='float')
 
         if cache is not None:
             # cache the result
@@ -161,6 +174,13 @@ class LinearBasisTangent(LinearBasis):
             cache[(degree, perm_group)] = mat
 
         return basis, mat
+
+
+class LinearBasisTangentEven(LinearBasisTangent):
+    """
+    Ensure the degree of each monomial is even.
+    """
+    _degree_step = 2
 
 
 def _degree_combinations(d_list: List[int], degree: int, require_equal = False) -> List[Tuple[int, ...]]:
@@ -238,7 +258,7 @@ def quadratic_difference(symbols: Tuple[sp.Symbol, ...]) -> List[sp.Expr]:
 
 
 def _define_common_tangents() -> List[sp.Expr]:
-    # define keys of bases that should be cached
+    # define keys of quad_diff bases that should be cached
     a, b, c, d = sp.symbols('x:4')
     return [
         S.One,
@@ -248,11 +268,13 @@ def _define_common_tangents() -> List[sp.Expr]:
     ]
 
 _CACHED_TANGENT_BASIS = dict((k, {}) for k in _define_common_tangents())
+_CACHED_TANGENT_BASIS_EVEN = dict((k, {}) for k in _define_common_tangents())
 
-def _get_tangent_cache_key(tangent: sp.Expr, symbols: Tuple[int, ...]) -> Optional[Dict]:
+def _get_tangent_cache_key(cls, tangent: sp.Expr, symbols: Tuple[int, ...]) -> Optional[Dict]:
     """
     Given a tangent and symbols, return the cache key if it is in the cache.
     """
     callable_tangent = _callable_expr.from_expr(tangent, symbols)
     std_tangent = callable_tangent.default(len(symbols))
-    return _CACHED_TANGENT_BASIS.get(std_tangent)
+    cache = _CACHED_TANGENT_BASIS if cls is LinearBasisTangent else _CACHED_TANGENT_BASIS_EVEN
+    return cache.get(std_tangent)

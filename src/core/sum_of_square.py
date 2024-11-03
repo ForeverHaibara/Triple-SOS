@@ -3,16 +3,13 @@ from typing import Optional, Dict, List, Union, Callable, Any
 import numpy as np
 import sympy as sp
 
-from .linsos import LinearSOS, root_tangents
+from .linsos import LinearSOS
 from .structsos import StructuralSOS
 from .symsos import SymmetricSOS
 from .sdpsos import SDPSOS
+from .shared import sanitize_input
 
-from ..utils import (
-    deg, verify_hom_cyclic, PolyReader,
-    Solution,
-    RootsInfo
-)
+from ..utils import deg, PolyReader, Solution, RootsInfo
 
 NAME_TO_METHOD = {
     'LinearSOS': LinearSOS,
@@ -21,7 +18,7 @@ NAME_TO_METHOD = {
     'SDPSOS': SDPSOS
 }
 
-METHOD_ORDER = ['StructuralSOS', 'LinearSOS', 'SymmetricSOS', 'SDPSOS']
+METHOD_ORDER = ['StructuralSOS', 'LinearSOS', 'SDPSOS', 'SymmetricSOS']
 
 DEFAULT_CONFIGS = {
     'LinearSOS': {
@@ -39,9 +36,11 @@ DEFAULT_CONFIGS = {
 }
 
 
+# @sanitize_input(homogenize=True)
 def sum_of_square(
         poly: sp.Poly,
-        rootsinfo: Optional[RootsInfo] = None,
+        ineq_constraints: Optional[List[sp.Expr]] = None,
+        eq_constraints: Optional[List[sp.Expr]] = None,
         method_order: Optional[List[str]] = METHOD_ORDER,
         configs: Optional[Dict[str, Dict]] = DEFAULT_CONFIGS
     ) -> Optional[Solution]:
@@ -78,11 +77,9 @@ def sum_of_square(
 
     for method in method_order:
         config = configs.get(method, {})
-        if method == 'LinearSOS':
-            config['rootsinfo'] = rootsinfo
 
         method = NAME_TO_METHOD[method]
-        solution = method(poly, **config)
+        solution = method(poly, ineq_constraints, eq_constraints, **config)
         if solution is not None:
             return solution
 
@@ -91,6 +88,8 @@ def sum_of_square(
 
 def sum_of_square_multiple(
         polys: Union[List[Union[sp.Poly, str]], str],
+        ineq_constraints: List[sp.Poly] = [],
+        eq_constraints: List[sp.Poly] = [],
         method_order: List[str] = METHOD_ORDER,
         configs: Dict[str, Dict] = DEFAULT_CONFIGS,
         poly_reader_configs: Dict[str, Any] = {},
@@ -177,7 +176,9 @@ def sum_of_square_multiple(
         record = {'problem': poly_str, 'deg': deg(poly)}
         try:
             t0 = time()
-            solution = sum_of_square(poly, method_order=method_order, configs=configs)
+            solution = sum_of_square(poly, ineq_constraints, eq_constraints,
+                method_order=method_order, configs=configs
+            )
             used_time = time() - t0
             if solution is None:
                 record['status'] = 'fail'

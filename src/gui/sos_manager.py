@@ -210,9 +210,10 @@ class SOS_Manager():
     @classmethod
     def sum_of_square(cls,
             poly,
+            ineq_constraints: List[Poly] = [],
+            eq_constraints: List[Poly] = [],
             gens = CONFIG_DEFAULT_GENS,
             perm = CONFIG_DEFAULT_PERM,
-            rootsinfo = None,
             method_order = None,
             configs = DEFAULT_CONFIGS
         ):
@@ -241,7 +242,8 @@ class SOS_Manager():
 
         solution = sum_of_square(
             poly,
-            rootsinfo = rootsinfo, 
+            ineq_constraints = ineq_constraints,
+            eq_constraints = eq_constraints,
             method_order = method_order,
             configs = configs
         )

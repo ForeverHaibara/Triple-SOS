@@ -1,3 +1,4 @@
+from itertools import combinations
 from typing import Optional, Tuple, List, Dict, Union
 from time import time
 import warnings
@@ -9,14 +10,14 @@ from sympy.combinatorics import PermutationGroup
 from scipy.optimize import linprog
 from scipy import __version__ as SCIPY_VERSION
 
-from .basis import LinearBasis, LinearBasisTangent
+from .basis import LinearBasis, LinearBasisTangent, LinearBasisTangentEven
 from .tangents import root_tangents
 from .correction import linear_correction
 from .updegree import lift_degree
 from .solution import SolutionLinear
-from ..solver import homogenize
-from ...utils import findroot, RootsInfo, RootTangent, identify_symmetry
-from ...utils.basis_generator import MonomialPerm, MonomialReduction, MonomialHomogeneousFull
+from ..shared import homogenize_expr_list, identify_symmetry_from_lists, clear_polys_by_symmetry, sanitize_input
+from ...utils import findroot, RootsInfo, RootTangent
+from ...utils.basis_generator import MonomialPerm, MonomialReduction
 
 LINPROG_OPTIONS = {
     'method': 'highs-ds' if SCIPY_VERSION >= '1.6.0' else 'simplex',
@@ -53,28 +54,14 @@ def _prepare_tangents(symbols, prepared_tangents = [], rootsinfo: RootsInfo = No
 
     return tangents
 
-def _remove_duplicate_tangents(tangents: List[sp.Expr], symbols: Tuple[sp.Symbol, ...], symmetry: MonomialReduction) -> List[sp.Expr]:
-    """
-    Remove duplicate tangents by symmetry.
-    """
-    if isinstance(symmetry, MonomialHomogeneousFull):
-        return tangents
-
-    def _get_representation(t: sp.Expr):
-        """Get the standard representation of the tangent given symmetry."""
-        vec = symmetry.base().arraylize_sp(t.as_poly(symbols))
-        mat = symmetry.permute_vec(len(symbols), vec)
-        cols = [tuple(mat[:, i]) for i in range(mat.shape[1])]
-        return max(cols)
- 
-    representation = dict(((_get_representation(t), t) for i, t in enumerate(tangents)))
-    return list(representation.values())
 
 
 def _prepare_basis(
         symbols: List[sp.Symbol],
+        all_nonnegative: bool,
         degree: int,
         tangents: List[sp.Expr],
+        eq_constraints: List[sp.Expr] = [],
         rootsinfo = None,
         basis: Optional[List[LinearBasis]] = None,
         symmetry: Union[MonomialReduction, PermutationGroup] = PermutationGroup()
@@ -86,6 +73,10 @@ def _prepare_basis(
     -------
     poly: sp.Poly
         The polynomial to be optimized.
+    all_nonnegative: bool
+        Whether all variables are nonnegative.
+    degree: int
+        The degree of the polynomial to be optimized.
     tangents: list
         Tangents to be added to the basis.
     rootsinfo: RootsInfo
@@ -112,10 +103,29 @@ def _prepare_basis(
     if basis is not None:
         append_basis(all_basis, all_arrays, basis, symmetry = symmetry)
 
+    if all_nonnegative:
+        cls = LinearBasisTangent
+    else:
+        cls = LinearBasisTangentEven
+        # nonneg_vars = [s for s, nonneg in zip(symbols, nonnegativity) if nonneg]
+        # if len(nonneg_vars):
+        #     tangents2 = tangents.copy()
+        #     for s in nonneg_vars:
+        #         tangents2.extend([t * s for t in tangents])
+        #     tangents = tangents2
+
     for tangent in tangents:
-        basis, mat = LinearBasisTangent.generate_quad_diff(tangent, symbols, degree, symmetry = symmetry)
+        basis, mat = cls.generate_quad_diff(tangent, symbols, degree, symmetry = symmetry)
         all_basis += basis
         all_arrays.append(mat)
+
+    for eq in eq_constraints:
+        basis, mat = LinearBasisTangent.generate_quad_diff(eq, symbols, degree, symmetry = symmetry, quad_diff = False)
+        all_basis += basis
+        all_arrays.append(mat)
+        basis = [b.__neg__() for b in basis]
+        all_basis += basis
+        all_arrays.append(-mat)
 
     # if is_cyc:
     #     for tangent in tangents:
@@ -138,14 +148,75 @@ def _prepare_basis(
     return all_basis, all_arrays
 
 
+def _get_signs_of_vars(ineq_constraints: List[sp.Poly], symbols: Tuple[sp.Symbol, ...]) -> Dict[sp.Symbol, int]:
+    """
+    Infer the signs of each variable from the inequality constraints.
+    """
+    signs = dict.fromkeys(symbols, 0)
+    for ineq in ineq_constraints:
+        if ineq.is_monomial and ineq.total_degree() == 1:
+            sgn = 1 if ineq.LC() > 0 else (-1 if ineq.LC() < 0 else 0)
+            signs[ineq.free_symbols.pop()] = sgn
+    return signs
+
+
+def _get_qmodule_list(poly: sp.Poly, ineq_constraints: List[sp.Poly], all_nonnegative: bool = False, preordering: str = 'linear') -> List[sp.Poly]:
+    _ACCEPTED_PREORDERINGS = ['none', 'linear']
+    if not preordering in _ACCEPTED_PREORDERINGS:
+        raise ValueError("Invalid preordering method, expected one of %s, received %s." % (str(_ACCEPTED_PREORDERINGS), preordering))
+
+    degree = poly.homogeneous_order()
+    poly_one = sp.Poly(1, *poly.gens)
+
+    if preordering == 'none':
+        return ineq_constraints
+
+    monomials = []
+    linear_ineqs = []
+    nonlin_ineqs = [poly_one]
+    for ineq in ineq_constraints:
+        if ineq.is_monomial and len(ineq.free_symbols) == 1 and ineq.total_degree() == 1 and ineq.LC() >= 0:
+            monomials.append(ineq)
+        elif ineq.is_linear:
+            linear_ineqs.append(ineq)
+        else:
+            nonlin_ineqs.append(ineq)
+
+    if all_nonnegative:
+        # in this case we generate basis by LinaerBasisTangent rather than LinearBasisTangentEven
+        # we discard all monomials
+        pass
+    else:
+        linear_ineqs = monomials + linear_ineqs
+
+    qmodule = nonlin_ineqs.copy()
+    for n in range(1, len(linear_ineqs) + 1):
+        for comb in combinations(linear_ineqs, n):
+            mul = poly_one
+            for c in comb:
+                mul = mul * c
+            d = mul.homogeneous_order()
+            for ineq in nonlin_ineqs:
+                new_d = d + ineq.homogeneous_order()
+                if new_d <= degree:
+                    qmodule.append(mul * ineq)
+
+    return qmodule
+
+
+@sanitize_input(homogenize=True, infer_symmetry=True)
 def LinearSOS(
         poly: sp.Poly,
-        tangents: List[sp.Expr] = [],
-        rootsinfo: Optional[RootsInfo] = None,
+        ineq_constraints: List[sp.Poly] = [],
+        eq_constraints: List[sp.Poly] = [],
         symmetry: Optional[Union[PermutationGroup, MonomialReduction]] = None,
-        verbose: bool = 1,#False,
+        tangents: List[sp.Poly] = [],
+        rootsinfo: Optional[RootsInfo] = None,
+        preordering: str = 'linear',
+        verbose: bool = False,
         degree_limit: int = 12,
         linprog_options: Dict = LINPROG_OPTIONS,
+        _homogenizer: Optional[sp.Symbol] = None
     ) -> Optional[SolutionLinear]:
     """
     Main function for linear programming SOS.
@@ -177,6 +248,9 @@ def LinearSOS(
         Moreover, using `presolve == True` has bug solving s((b2-a2+3c2+ab+7bc-5ca)(a2-b2-ab+2bc-ca)2):
         Assertion failed: abs_value < pivot_tolerance, file ../../scipy/_lib/highs/src/util/HFactor.cpp, line 1474
         Thus, for stability, we use `presolve == False` by default. However, setting it to True is slightly faster (0.03 sec).
+    _homogenizer: Optional[sp.Symbol]
+        Indicates which symbol to be used as the homogenizer. The symbol will be used to homogenize the tangents.
+        This is expected to autogenerated by the function decorator and should not be used by the user.
 
     Returns
     -------
@@ -184,42 +258,43 @@ def LinearSOS(
         The solution of the linear programming SOS. When solution is None, it means that the linear
         programming SOS fails.
     """
-    if len(poly.free_symbols_in_domain) > 0:
-        return
-    poly, homogenizer = homogenize(poly)
-
-    if homogenizer is not None: 
+    if _homogenizer is not None: 
         # homogenize the tangents
-        symbols = poly.gens[:-1]
-        translation = dict(zip(symbols, (i / homogenizer for i in symbols)))
-        tangents = [t.subs(translation).together() for t in tangents]
-        tangent_d = [sp.fraction(t)[1].as_poly(homogenizer).degree() for t in tangents]
-        tangents = [t * homogenizer**d for t, d in zip(tangents, tangent_d)]
+        tangents = homogenize_expr_list(tangents, _homogenizer)
     else:
         # homogeneous polynomial does not accept non-homogeneous tangents
         tagents_poly = [t.as_poly(poly.gens) for t in tangents]
-        tangents = [t for t, p in zip(tangents, tagents_poly) if p.is_homogeneous]
+        tangents = [t for t, p in zip(tangents, tagents_poly) if p.domain.is_Numerical and p.is_homogeneous]
 
     if rootsinfo is None:
         rootsinfo = findroot(poly, with_tangents = root_tangents)
 
-    tangents = _prepare_tangents(poly.gens, tangents, rootsinfo)
+    signs = _get_signs_of_vars(ineq_constraints, poly.gens)
+    all_nonnegative = all(s > 0 for s in signs.values())
+    var_signs = [signs[s] for s in poly.gens]
 
-    if symmetry is None:
-        symmetry = identify_symmetry(poly, homogenizer)
-    if isinstance(symmetry, PermutationGroup):
-        symmetry = MonomialPerm(symmetry)
-        
+    tangents = _prepare_tangents(poly.gens, tangents, rootsinfo)
+    tangents = [sp.Poly(t, *poly.gens) for t in tangents] + ineq_constraints
+    tangents = _get_qmodule_list(poly, tangents, all_nonnegative=all_nonnegative, preordering = preordering)
+
     # remove duplicate tangents by symmetry
     # print('Tangents before removing duplicates:', tangents)
-    tangents = _remove_duplicate_tangents(tangents, poly.gens, symmetry)
+    tangents = clear_polys_by_symmetry(tangents, poly.gens, symmetry)
+    eq_constraints = clear_polys_by_symmetry(eq_constraints, poly.gens, symmetry)
     # print('Tangents after  removing duplicates:', tangents)
 
+    # following lines are equvialent to: [t.as_expr().factor() for t in ...]
+    _prod_factors = lambda s: sp.Mul(s[0], *(i.as_expr()**d for i, d in s[1]))
+    tangents = list(map(_prod_factors, map(lambda t: t.factor_list(), tangents)))
+    eq_constraints = list(map(_prod_factors, map(lambda t: t.factor_list(), eq_constraints)))
+
+
     # prepare to lift the degree in an iterative way
-    for lift_degree_info in lift_degree(poly, symmetry=symmetry, degree_limit = degree_limit):
+    for lift_degree_info in lift_degree(poly, var_signs, symmetry=symmetry, degree_limit = degree_limit):
         # RHS
         degree = lift_degree_info['degree']
-        basis, arrays = _prepare_basis(poly.gens, degree, tangents, rootsinfo = rootsinfo, symmetry=symmetry)
+        basis, arrays = _prepare_basis(poly.gens, all_nonnegative, degree, tangents,
+                                        eq_constraints=eq_constraints, rootsinfo=rootsinfo, symmetry=symmetry)
         if len(basis) <= 0:
             continue
 
@@ -243,7 +318,6 @@ def LinearSOS(
         ##############################################
         # main function: linear programming
         ##############################################
-
         linear_sos = None
         with warnings.catch_warnings(record=True) as __warns:
             warnings.simplefilter('once')
@@ -262,6 +336,4 @@ def LinearSOS(
             num_multipliers = len(lift_degree_info['basis']),
             symmetry = symmetry
         )
-        if solution is not None:
-            solution = solution.dehomogenize(homogenizer)
         return solution

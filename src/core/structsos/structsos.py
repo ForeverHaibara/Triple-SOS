@@ -1,4 +1,4 @@
-from typing import Union, Dict, Optional, Any
+from typing import Union, List, Dict, Optional, Any
 
 import sympy as sp
 from sympy.core.symbol import uniquely_named_symbol
@@ -14,7 +14,8 @@ from ..symsos import prove_univariate
 
 def StructuralSOS(
         poly: sp.Poly,
-        rootsinfo: Optional[Any] = None,
+        ineq_constraints: List[sp.Poly] = [],
+        eq_constraints: List[sp.Poly] = [],
         real: bool = True,
     ) -> SolutionStructuralSimple:
     """

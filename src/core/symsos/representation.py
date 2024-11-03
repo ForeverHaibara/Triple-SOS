@@ -6,11 +6,14 @@ from ...utils import CyclicSum, CyclicProduct
 
 a, b, c, x, y, z, w, p = sp.symbols('a b c x y z w p')
 
+_SCHUR = CyclicSum(a*(a-b)*(a-c))
+_SCHUR = (CyclicSum((b-c)**2*(b+c-a)**2) + 2*CyclicSum(b*c*(b-c)**2))/2/CyclicSum(a)
+
 TRANSLATION_POSITIVE = {
-    x: CyclicSum(a*(a-b)*(a-c)),
+    x: _SCHUR,
     y: CyclicSum(a*(b-c)**2),
     z: CyclicProduct((a-b)**2) * CyclicSum(a)**3 / CyclicProduct(a),
-    w: CyclicSum(a*(a-b)*(a-c)) * CyclicSum(a*(b-c)**2)**2 / CyclicProduct(a),
+    w: _SCHUR * CyclicSum(a*(b-c)**2)**2 / CyclicProduct(a),
     p: CyclicSum(a)
 }
 

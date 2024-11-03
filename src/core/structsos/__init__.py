@@ -1,7 +1,7 @@
 from .structsos import StructuralSOS, _structural_sos
 from .utils import radsimp, quadratic_weighting, zip_longest
 from .solution import SolutionStructural, SolutionStructuralSimple
-from ..solver import SS
+from ..shared import SS
 
 __all__ = [
     'StructuralSOS', 'radsimp', 'quadratic_weighting', 'zip_longest',

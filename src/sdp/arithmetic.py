@@ -227,14 +227,13 @@ def solve_nullspace(A: sp.Matrix) -> sp.Matrix:
 def solve_column_separated_linear(A: List[List[Tuple[int, Rational]]], b: sp.Matrix, x0_equal_indices: List[List[int]] = [], _cols: int = -1):
     """
     This is a function that solves a special linear system Ax = b => x = x_0 + C * y
-    where each column of A has at most 1 nonzero element.
-
+    where each column of A has at most 1 nonzero element. For more general cases, use solve_csr_linear.
     Further, we could require some of entries of x to be equal.
 
     Parameters
     ----------
     A: List[List[Tuple[int, Rational]]]
-        Sparse representation of A. If A[i][..] = (j, v), then A[i, j] = v.
+        Sparse row representation of A. If A[i][..] = (j, v), then A[i, j] = v.
         Also, it must guarantee that A[i', j] == 0 for all i' != i.
         Also, be sure that v != 0.
     b: sp.Matrix
@@ -252,7 +251,7 @@ def solve_column_separated_linear(A: List[List[Tuple[int, Rational]]], b: sp.Mat
         All solution x is in the form of x0 + space @ y.
     """
     # count the number of columns of A
-    cols = _cols if _cols != -1 else max(max(k[0] for k in row) for row in A) + 1
+    cols = _cols if _cols != -1 else (max(max(k[0] for k in row) for row in A) + 1)
 
     # form the equal indices as a UFS
     ufs = list(range(cols))
@@ -309,6 +308,85 @@ def solve_column_separated_linear(A: List[List[Tuple[int, Rational]]], b: sp.Mat
                     spaces.append(space)
 
     return sp.Matrix(x0), sp.Matrix(spaces).T
+
+
+def solve_csr_linear(A: List[List[Tuple[int, Rational]]], b: sp.Matrix, x0_equal_indices: List[List[int]] = [], _cols: int = -1):
+    """
+    Solve a linear system Ax = b where A is stored in CSR format.
+    Further, we could require some of entries of x to be equal.
+
+    Parameters
+    ----------
+    A: List[List[Tuple[int, Rational]]]
+        Sparse row representation of A. If A[i][..] = (j, v), then A[i, j] = v.
+        Also, it must guarantee that A[i', j] == 0 for all i' != i.
+        Also, be sure that v != 0.
+    b: sp.Matrix
+        Right-hand side
+    x0_equal_indices: List[List[int]]
+        Each sublist contains indices of equal elements.
+    _cols: int
+        Number of columns of A. If not specified, it will be inferred from A.
+
+    Returns
+    ---------
+    x0: Matrix
+        One solution of Ax = b.
+    space: Matrix
+        All solution x is in the form of x0 + space @ y.
+    """
+    cols = _cols if _cols != -1 else (max(max(k[0] for k in row) for row in A) + 1)
+
+    # check whether there is at most one nonzero element in each column
+    _column_separated = True
+    seen_cols = set()
+    for row in A:
+        for col, _ in row:
+            if col in seen_cols:
+                _column_separated = False
+                break
+            seen_cols.add(col)
+        if not _column_separated:
+            break
+
+    if _column_separated:
+        return solve_column_separated_linear(A, b, x0_equal_indices, _cols=cols)
+
+    # convert to dense matrix
+
+    # form the equal indices as a UFS
+    ufs = list(range(cols))
+    groups = {}
+    for group in x0_equal_indices:
+        for i in group:
+            ufs[i] = group[0]
+        groups[group[0]] = group
+    for i in range(cols):
+        if ufs[i] == i:
+            group = groups.get(i)
+            if group is None:
+                groups[i] = [i]
+    group_keys = list(groups.keys())
+    group_inds = {k: i for i, k in enumerate(group_keys)}
+
+    # compress the columns
+    cols2 = len(groups)
+    A2 = [[0] * cols2 for _ in range(len(A))]
+    for i, row in enumerate(A):
+        for j, v in row:
+            A2[i][group_inds[ufs[j]]] += v
+
+    A2 = sp.Matrix(A2)
+    x0_compressed, space_compressed = solve_undetermined_linear(A2, b)
+    space_compressed = space_compressed.tolist()
+    x0, space = [0] * cols, [None for _ in range(cols)]
+
+    # restore the solution
+    for i in range(cols):
+        x0[i] = x0_compressed[group_inds[ufs[i]]]
+        space[i] = space_compressed[group_inds[ufs[i]]]
+    x0, space = sp.Matrix(x0), sp.Matrix(space)
+    return x0, space
 
 
 def _common_denoms(A: Union[List, sp.Matrix], bound: int = 4096) -> Optional[int]:

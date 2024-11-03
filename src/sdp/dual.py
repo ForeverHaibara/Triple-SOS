@@ -97,7 +97,7 @@ class SDPProblem(DualTransformMixin):
         x0: Matrix,
         space: Matrix,
         splits: Union[Dict[str, int], List[int]],
-        constrain_symmetry: bool = True
+        constrain_symmetry: bool = False
     ) -> 'SDPProblem':
         keys = None
         if isinstance(splits, dict):
@@ -152,7 +152,7 @@ class SDPProblem(DualTransformMixin):
             The SDP problem constructed.    
         """
         x0, space = solve_undetermined_linear(eq, rhs)
-        return cls.from_full_x0_and_space(x0, space, splits)
+        return cls.from_full_x0_and_space(x0, space, splits, constrain_symmetry = True)
 
     @classmethod
     def from_matrix(

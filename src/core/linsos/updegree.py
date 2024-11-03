@@ -1,4 +1,5 @@
-from typing import Generator, Dict, Tuple
+from functools import reduce
+from typing import Generator, Dict, Tuple, List
 
 import sympy as sp
 from sympy.core.singleton import S
@@ -35,7 +36,9 @@ class LinearBasisMultiplier(LinearBasis):
 
 def lift_degree(
         poly: sp.Poly,
-        symmetry: PermutationGroup = PermutationGroup(),
+        var_signs: List[int],
+        # ineq_constraints: List[sp.Expr],
+        symmetry: MonomialReduction,
         degree_limit: int = 12,
         lift_degree_limit: int = 4
     ) -> Generator[Dict, None, None]:
@@ -52,11 +55,15 @@ def lift_degree(
     ----------
     poly: sp.polys.Poly
         The target polynomial.
+    var_signs: List[int]
+        Signs of each variable. 1 for nonnegative, -1 for nonpositive, 0 for unrestricted.
+    symmetry: MonomialReduction
+        The symmetry of the polynomial.
     degree_limit: int
         When the degree of f(a,b,c) * h(a,b,c) is larger than this limit, 
         we stop to save computation resources.
-    is_cyc: bool
-        Whether the polynomial is cyclic or not.
+    lift_degree_limit: int
+        The degree of h(a,b,c) is at most this limit.
 
     Yields
     ----------
@@ -79,32 +86,33 @@ def lift_degree(
     n_plus = 0
 
     while n + n_plus <= degree_limit and n_plus <= lift_degree_limit:
-        multipliers = _get_multipliers(symbols, n_plus, symmetry=symmetry)
+        multipliers = _get_multipliers(symbols, var_signs, n_plus, symmetry=symmetry)
         basis = [LinearBasisMultiplier(poly, multiplier) for multiplier in multipliers]
 
-        yield {
-            'basis': basis,
-            'degree': n + n_plus,
-            'add_degree': n_plus
-        }
+        if len(basis) > 0:
+            yield {
+                'basis': basis,
+                'degree': n + n_plus,
+                'add_degree': n_plus
+            }
 
         n_plus += 1
 
 
 
-def _get_multipliers(symbols: Tuple[sp.Symbol, ...], n_plus: int, symmetry: PermutationGroup) -> Tuple[Dict[int, sp.Expr], Dict[int, sp.Expr]]:
+def _get_multipliers(symbols: Tuple[sp.Symbol, ...], var_signs: List[int], n_plus: int,
+                        symmetry: MonomialReduction) -> Tuple[Dict[int, sp.Expr], Dict[int, sp.Expr]]:
     nvars = len(symbols)
-    if isinstance(symmetry, MonomialReduction):
-        perm_group = symmetry.to_perm_group(len(symbols))
-    elif isinstance(symmetry, PermutationGroup):
-        perm_group = symmetry
 
     multipliers = None
     if n_plus == 2:
         multipliers = quadratic_difference(symbols)
-        for i in range(nvars):
-            for j in range(i+1, nvars):
-                multipliers.append(symbols[i] * symbols[j])
+        psd_vars = [s for s, sign in zip(symbols, var_signs) if sign == 1]
+        neg_vars = [s for s, sign in zip(symbols, var_signs) if sign == -1]
+        def cross_mul(x):
+            return [x[i] * x[j] for i in range(len(x)) for j in range(i+1, len(x))]
+        multipliers.extend(cross_mul(psd_vars))
+        multipliers.extend(cross_mul(neg_vars))
 
     if nvars == 3:
         ...
@@ -113,7 +121,10 @@ def _get_multipliers(symbols: Tuple[sp.Symbol, ...], n_plus: int, symmetry: Perm
         #                     for power in generate_expr(nvars, n_plus, symmetry=symmetry)[1]]
     if multipliers is None:
         # default case
+        def get_sign(power):
+            return reduce(lambda x, y: x*y, [v**i for v, i in zip(var_signs, power)])
         multipliers = [sp.Mul(*(s**i for s, i in zip(symbols, power))) 
-                            for power in generate_expr(nvars, n_plus, symmetry=symmetry)[1]]
+                            for power in generate_expr(nvars, n_plus, symmetry=symmetry)[1]
+                            if get_sign(power) > 0]
 
     return multipliers

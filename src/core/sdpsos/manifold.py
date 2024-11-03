@@ -3,11 +3,11 @@ from itertools import product
 from typing import Optional, Dict, List, Tuple
 
 import sympy as sp
-from sympy.combinatorics import PermutationGroup
+from sympy import Poly
 
 from ...utils import (
     convex_hull_poly, findroot_resultant, Root, RootAlgebraic, RootRational,
-    MonomialReduction, generate_expr
+    MonomialReduction, generate_expr, arraylize_sp
 )
 
 
@@ -83,6 +83,8 @@ def _hull_space(
     For example, s(ab(a-b)2(a+b-3c)2) does not have a^6,
     so in the positive semidefinite representation, the entry (a^3,a^3) of M is zero.
     This requires that Me_i = 0 where i is the index of a^3.
+
+    Deprecated: This is not used anymore. Use SDPProblem.constrain_zero_diagonals() instead.
     """
     if convex_hull is None:
         return None
@@ -111,13 +113,14 @@ def _hull_space(
     return sp.Matrix(space).T
 
 
-def _compute_diff_orders(poly: sp.Poly, root: Root, mixed=False, only_binary_roots=True) -> List[Tuple[int, ...]]:
+def _compute_diff_orders(poly: Poly, root: Root, mixed=False, only_binary_roots=True) -> List[Tuple[int, ...]]:
     """
     Compute tuples (a1, ..., an) such that d^a1/dx1^a1 ... d^an/dxn^an f = 0 at the root.
+    The root object is assumed to be indeed a root of the polynomial, which will not be checked.
 
     Parameters
     ----------
-    poly : sp.Poly
+    poly : Poly
         The polynomial to compute the differential orders for.
     root : Root
         The root to compute the differential orders for.
@@ -127,7 +130,15 @@ def _compute_diff_orders(poly: sp.Poly, root: Root, mixed=False, only_binary_roo
         it is not correct to use mixed=True.
     only_binary_roots : bool
         If True, only "binary" roots are computed. This is incomplete but
-        is sufficient for most cases.
+        is fast and sufficient for most cases.
+
+    Examples
+    --------
+    >>> _compute_diff_orders((a**3*(a-b)*(a-c)+b**3*(b-c)*(b-a)+c**3*(c-a)*(c-b)).as_poly(a,b,c), Root((1,1,0)))
+    [(0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1), (0, 0, 2)]
+
+    >>>  _compute_diff_orders(pl('16p(2a-b-c)2-27p(a)s((a-b)2(13a-5b-17c))'), Root((1,2,0)), only_binary_roots=False)
+    [(0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1)]
     """
     gens = poly.gens
     nvars = len(gens)
@@ -135,7 +146,7 @@ def _compute_diff_orders(poly: sp.Poly, root: Root, mixed=False, only_binary_roo
         return [(0,) * nvars]
 
     if mixed:
-        def dfs(poly: sp.Poly, order: Tuple[int, ...]) -> List[Tuple[int, ...]]:
+        def dfs(poly: Poly, order: Tuple[int, ...]) -> List[Tuple[int, ...]]:
             orders = [order]
             for i in range(nvars):
                 # take one more derivative
@@ -158,8 +169,12 @@ def _compute_diff_orders(poly: sp.Poly, root: Root, mixed=False, only_binary_roo
         return orders
 
 
-def _compute_nonvanishing_diff_orders(poly: sp.Poly, root: Root, monomial: Tuple[int, ...],
+def _compute_nonvanishing_diff_orders(poly: Poly, root: Root, monomial: Tuple[int, ...],
                                         only_binary_roots=True) -> List[Tuple[int, ...]]:
+    """
+    Compute the differential orders that the root do not vanish at
+    the given quadratic module (monomial).    
+    """
     orders = _compute_diff_orders(poly, root, only_binary_roots=only_binary_roots)
     # if len(orders) <= 0 or (len(orders) == 1 and not any(orders[0])):
     #     return orders
@@ -191,17 +206,21 @@ def _compute_nonvanishing_diff_orders(poly: sp.Poly, root: Root, monomial: Tuple
         for set_ in sets:
             for i, j in list(set_):
                 if i == zero or j == zero:
+                    # one of the vectors of the bilinear form is proven to vanish
+                    # and we no longer needs to consider this term
                     set_.remove((i, j))
             if len(set_) == 1:
                 p = set_.pop()
                 if p[0] == p[1]:
+                    # in this case the bilinear form is PSD and it vanishes at this derivative
+                    # this imposes a nullspace constraint on the PSD matrix
                     zeros.append(p[0])
         if zero[0] != -1:
             handled_zeros.add(zero)
     return handled_zeros
 
 
-def _root_space(manifold: 'RootSubspace', root: RootAlgebraic, monomial: Tuple[int, ...]) -> sp.Matrix:
+def _root_space(manifold: 'RootSubspace', root: RootAlgebraic, constraint: Poly) -> sp.Matrix:
     """
     Compute the constraint nullspace spaned by a given root.
 
@@ -211,22 +230,14 @@ def _root_space(manifold: 'RootSubspace', root: RootAlgebraic, monomial: Tuple[i
     When M >> 0 and a == 0, we still require Mx = 0 because
     (df/da) = (x'Mx) + a * ((dx/da)'Mx + x'M(dx/da)) = x'Mx.
     """
-    d = (manifold._degree - sum(monomial)) // 2
-    nvars = len(monomial)
-    nonzeros = [1 if _ != 0 else 0 for _ in root.root]
-
-    if all(nonzeros):
-        vanish = lambda _nonzeros: False
-    else:
-        def vanish(_nonzeros):
-            return all(i > 0 for i, j in zip(monomial, _nonzeros) if j == 0)
+    d = (manifold._degree - constraint.homogeneous_order()) // 2
+    nvars = len(constraint.gens)
 
     symmetry = manifold._symmetry
+    base_symmetry = symmetry.base()
     spans = []
-
-    # this is an incomplete (but fast) implementation
-    if isinstance(root, RootRational):
-        base_symmetry = symmetry.base()
+    if isinstance(root, RootRational) and constraint.is_monomial:
+        monomial = tuple(constraint.monoms()[0])
         for r_ in symmetry.permute(root.root):
             new_r = RootRational(r_)
             orders = _compute_nonvanishing_diff_orders(manifold.poly, new_r, monomial)
@@ -234,19 +245,32 @@ def _root_space(manifold: 'RootSubspace', root: RootAlgebraic, monomial: Tuple[i
                 spans.append(new_r.span(d, order, symmetry=base_symmetry))
 
     else:
-        span = root.span(d, symmetry=symmetry.base())
-        for i in range(span.shape[1]):
-            span2 = symmetry.permute_vec(nvars, span[:,i])
-            for j, perm in zip(range(span2.shape[1]), symmetry.permute(nonzeros)):
-                if not vanish(perm):
-                    spans.append(span2[:,j])
+        if constraint.is_monomial and not constraint.is_zero and all(_ != 0 for _ in root.root):
+            vanish = lambda _: False
+        else:
+            vanish = lambda r: r.subs(constraint, constraint.gens) == 0
+
+        # this is an incomplete (but fast) implementation
+        # we do not consider higher order derivatives
+        # TODO: consider higher order nonvanishing derivatives for irrational roots
+        span = root.span(d, symmetry=base_symmetry)
+        for j, permed_root in enumerate(symmetry.permute(root.root)):
+            if not vanish(Root(permed_root)):
+                for i in range(span.shape[1]):
+                    span2 = symmetry.permute_vec(nvars, span[:,i])[:,j]
+                    spans.append(span2)        
+        # for i in range(span.shape[1]):
+        #     span2 = symmetry.permute_vec(nvars, span[:,i])
+        #     for j, perm in zip(range(span2.shape[1]), symmetry.permute(root.root)):
+        #         if not vanish(Root(perm)):
+        #             spans.append(span2[:,j])
 
     return sp.Matrix.hstack(*spans)
 
 
-def _findroot_binary(poly: sp.Poly, symmetry: MonomialReduction = None) -> List[Root]:
+def _findroot_binary(poly: Poly, symmetry: MonomialReduction = None) -> List[Root]:
     """
-    Find binary roots of the polynomial.
+    Very easy implementation to find binary roots of the polynomial.
     """
     roots = set()
     for root in product([0, 1], repeat=len(poly.gens)):
@@ -263,19 +287,18 @@ def _findroot_binary(poly: sp.Poly, symmetry: MonomialReduction = None) -> List[
     roots = [RootRational(root) for root in roots]
     return roots
 
+
 class RootSubspace():
-    def __init__(self, poly: sp.Poly, symmetry: MonomialReduction) -> None:
+    def __init__(self, poly: Poly, symmetry: MonomialReduction) -> None:
         self.poly = poly
         self._degree: int = poly.total_degree()
         self._nvars : int = len(poly.gens)
         self._symmetry: MonomialReduction = symmetry
 
-        self.convex_hull = None
+        self.convex_hull = None # deprecated
         self.roots = []
 
-        if self._nvars == 3: # and self._symmetry.is_cyc:
-            # if self._symmetry.is_cyc:
-            #     self.convex_hull = convex_hull_poly(poly)[0]
+        if self._nvars == 3 and poly.domain.is_Numerical:
             self.roots = findroot_resultant(poly)
         elif self._nvars <= 10:
             self.roots = _findroot_binary(poly, symmetry)
@@ -287,47 +310,50 @@ class RootSubspace():
     def additional_nullspace(self) -> Dict[Tuple[int, ...], sp.Matrix]:
         return self._additional_nullspace
 
-    def set_nullspace(self, monomial: Tuple[int, ...], nullspace: sp.Matrix) -> None:
+    def set_nullspace(self, constraint: Poly, nullspace: sp.Matrix) -> None:
         """
-        Set extra nullspace for given monomial.
-        """
-        self._additional_nullspace[monomial] = nullspace
-
-    def append_nullspace(self, monomial: Tuple[int, ...], nullspace: sp.Matrix) -> None:
-        """
-        Append extra nullspace for given monomial.
+        Set extra nullspace for given constraint.
         """
         ns = self._additional_nullspace
-        if monomial in ns:
-            ns[monomial] = sp.Matrix.hstack(ns[monomial], nullspace)
-        else:
-            ns[monomial] = nullspace
+        ns[constraint] = nullspace
 
-    def nullspace(self, monomial, real: bool = False) -> sp.Matrix:
+    def append_nullspace(self, constraint: Poly, nullspace: sp.Matrix) -> None:
         """
-        Compute the nullspace of the polynomial.
+        Append extra nullspace for given constraint.
+        """
+        ns = self._additional_nullspace
+        if constraint in ns:
+            ns[constraint] = sp.Matrix.hstack(ns[constraint], nullspace)
+        else:
+            ns[constraint] = nullspace
+
+    def nullspace(self, constraint: Poly, ineq_constraints: List[Poly] = [], eq_constraints: List[Poly] = []) -> sp.Matrix:
+        """
+        Compute the nullspace for SDP of the polynomial.
 
         Parameters
         ----------
-        monomial : Tuple[int, ...]
-            The monomial to compute the nullspace for.
-
-        real : bool
-            Whether prove the inequality on R^n or R+^n. If R+^n, it ignores nonpositive roots.
+        constraint : Poly
+            The specific constraint, a generator of the quadratic module. Should be homogeneous.
+        ineq_constraints : List[Poly]
+            List of all inequality constraints, used to test whether a root is in the feasible region.
+        eq_constraints : List[Poly]
+            List of all equality constraints, used to test whether a root is in the feasible region.
         """
-        half_degree = (self._degree - sum(monomial))
+        half_degree = (self._degree - constraint.homogeneous_order()) # // 2
         if half_degree % 2 != 0:
-            raise ValueError(f"Degree of the polynomial ({self._degree}) minus the degree of the monomial {monomial} must be even.")
+            raise ValueError(f"Degree of the polynomial ({self._degree}) minus the degree of the constraint {constraint} must be even.")
+        half_degree //= 2
 
         funcs = [
             self._nullspace_hull,
-            lambda *args, **kwargs: self._nullspace_roots(*args, **kwargs, real = real),
+            lambda *args, **kwargs: self._nullspace_from_roots(*args, **kwargs),
             self._nullspace_extra,
         ]
 
         nullspaces = []
         for func in funcs:
-            n_ = func(monomial)
+            n_ = func(constraint, ineq_constraints, eq_constraints)
             if isinstance(n_, list) and len(n_) and isinstance(n_[0], sp.MatrixBase):
                 nullspaces.extend(n_)
             elif isinstance(n_, sp.MatrixBase) and n_.shape[0] * n_.shape[1] > 0:
@@ -336,18 +362,28 @@ class RootSubspace():
         nullspaces = list(filter(lambda x: x.shape[0] * x.shape[1] > 0, nullspaces))
         return sp.Matrix.hstack(*nullspaces)
 
+    def _nullspace_hull(self, constraint: Poly, ineq_constraints: List[Poly] = [], eq_constraints: List[Poly] = []) -> sp.Matrix:
+        # This is deprecated, use SDPProblem.constrain_zero_diagonals() instead.
+        # We do not need to compute the convex hull (Newton polytope) of the polynomial now.
+        return None
+        # return _hull_space(self._nvars, self._degree, self.convex_hull, constraint, self._symmetry)
 
-    def _nullspace_hull(self, monomial):
-        symmetry = self._symmetry
-        return _hull_space(self._nvars, self._degree, self.convex_hull, monomial, symmetry)
-
-    def _nullspace_roots(self, monomial, real: bool = False):
+    def _nullspace_from_roots(self, constraint: Poly, ineq_constraints: List[Poly] = [], eq_constraints: List[Poly] = [], roots: List[RootAlgebraic] = None) -> List[sp.Matrix]:
         nullspaces = []
-        for root in self.roots:
-            if not real and any(_ < 0 for _ in root.root):
+        if roots is None: roots = self.roots
+        for root in roots:
+            is_feasible = True
+            for permed_root in self._symmetry.permute(root.root):
+                permed_root = Root(permed_root)
+                if any(permed_root.subs(ineq, self.poly.gens) < 0 for ineq in ineq_constraints) or\
+                        any(permed_root.subs(eq, self.poly.gens) != 0 for eq in eq_constraints):
+                    is_feasible = False
+                    break
+            # print('root =', permed_root, 'is_feasible =', is_feasible)
+            if not is_feasible:
                 continue
 
-            span = _root_space(self, root, monomial)
+            span = _root_space(self, root, constraint)
 
             if span.shape[1] > 0:
                 span = sp.Matrix.hstack(*span.columnspace())
@@ -356,8 +392,9 @@ class RootSubspace():
 
         return nullspaces
 
-    def _nullspace_extra(self, monomial):
-        return self._additional_nullspace.get(monomial, None)
+    def _nullspace_extra(self, constraint: Poly, ineq_constraints: List[Poly] = [], eq_constraints: List[Poly] = []):
+        ns = self._additional_nullspace
+        return ns.get(constraint, None)
 
 
     def __str__(self) -> str:

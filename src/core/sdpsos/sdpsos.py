@@ -1,5 +1,7 @@
+from collections import defaultdict
+from itertools import combinations
 from time import time
-from typing import Union, Optional, List, Tuple, Dict, Callable, Any
+from typing import Union, Optional, List, Tuple, Dict, Callable, Generator, Any
 
 import numpy as np
 import sympy as sp
@@ -7,14 +9,14 @@ from sympy.combinatorics import PermutationGroup
 
 from .manifold import RootSubspace
 from .solution import SolutionSDP
-from ..solver import homogenize
+from ..shared import sanitize_input, identify_symmetry_from_lists, clear_polys_by_symmetry
 from ...sdp import SDPProblem
-from ...sdp.arithmetic import solve_column_separated_linear
+from ...sdp.arithmetic import solve_csr_linear
 from ...utils.basis_generator import generate_expr, MonomialReduction, MonomialPerm, MonomialCyclic
-from ...utils import arraylize_sp, Coeff, CyclicExpr, identify_symmetry
+from ...utils import arraylize_sp, Coeff, CyclicExpr
 
 
-def _define_mapping(nvars: int, degree: int, monomial: Tuple[int, ...], symmetry: MonomialReduction) -> Callable[[int, int], Tuple[int, int]]:
+def _define_mapping(nvars: int, degree: int, monomial: Tuple[int, ...], symmetry: MonomialReduction, half: bool = True) -> Callable[[int, int], Tuple[int, int]]:
     """
     Given a gram matrix of standard monomials and a permutation group, we want
     to know how the entry a_{ij} contributes to the monomial of the product of two monomials.
@@ -22,19 +24,32 @@ def _define_mapping(nvars: int, degree: int, monomial: Tuple[int, ...], symmetry
     and v is the multiplicity of the monomial in the permutation group.
     """
     m = sum(monomial)
-    vec = generate_expr(nvars, (degree - m)//2, symmetry=symmetry.base())[1]
+    codegree = (degree - m)//2 if half else degree - m
+    vec = generate_expr(nvars, codegree, symmetry=symmetry.base())[1]
     dict_monoms = generate_expr(nvars, degree, symmetry=symmetry)[0]
 
-    def mapping(i: int, j: int) -> Tuple[int, int]:
-        monom = tuple(map(sum, zip(monomial, vec[i], vec[j])))
-        std_ind = None
-        v = 0
-        for p in symmetry.permute(monom):
-            ind = dict_monoms.get(p)
-            if ind is not None:
-                std_ind = ind
-                v += 1
-        return std_ind, v
+    if half:
+        def mapping(i: int, j: int) -> Tuple[int, int]:
+            monom = tuple(map(sum, zip(monomial, vec[i], vec[j])))
+            std_ind = None
+            v = 0
+            for p in symmetry.permute(monom):
+                ind = dict_monoms.get(p)
+                if ind is not None:
+                    std_ind = ind
+                    v += 1
+            return std_ind, v
+    else:
+        def mapping(i: int) -> Tuple[int, int]:
+            monom = tuple(ui + vi for ui, vi in zip(monomial, vec[i]))
+            std_ind = None
+            v = 0
+            for p in symmetry.permute(monom):
+                ind = dict_monoms.get(p)
+                if ind is not None:
+                    std_ind = ind
+                    v += 1
+            return std_ind, v
     return mapping
 
 
@@ -54,78 +69,101 @@ def _get_monomial_list(nvars: int, d: int, symmetry: MonomialReduction) -> List[
     return ls
 
 
-def _form_sdp(monomials: List[Tuple[int, ...]], nvars: int, degree: int,
+def _form_sdp(ineq_constraints: List[sp.Poly], eq_constraints: List[sp.Poly], nvars: int, degree: int,
                 rhs: sp.Matrix, symmetry: MonomialReduction, verbose: bool = False) -> SDPProblem:
     time0 = time()
     matrix_size = len(generate_expr(nvars, degree, symmetry=symmetry)[0])
-    splits = {}
+    get_inv_half = lambda d: generate_expr(nvars, d, symmetry=symmetry.base())[1]
+    splits_ineq = {}
+    splits_eq = {}
 
+    # CSR format, each column is the contribution of an entry to the poly
     eq_list = [[] for _ in range(matrix_size)]
     cnt = 0
-    for monomial in monomials:
-        # monomial vectors
-        dict_monoms_half, inv_monoms_half = generate_expr(nvars, (degree - sum(monomial))//2, symmetry=symmetry.base())
-        vector_size = len(inv_monoms_half)
-        splits[str(monomial)] = vector_size
+    for ineq in ineq_constraints:
+        d = ineq.homogeneous_order()
+        if d > degree or (degree - d) % 2 != 0:
+            raise ValueError("The degree of the inequality constraint is invalid, received %d while the total degree is %d." % (d, degree))
 
-        mapping = _define_mapping(nvars, degree, monomial, symmetry=symmetry)
+        cur_cnt = cnt
+        contribution = defaultdict(int)
+        for monomial, const in ineq.terms():
+            cnt = cur_cnt
+            inv_monoms_half = get_inv_half((degree - d)//2)
+            vector_size = len(inv_monoms_half)
+            splits_ineq[ineq] = vector_size
 
-        # form the equation by coefficients
-        for i in range(vector_size):
-            for j in range(vector_size):
-                # The following is equivalent to: eqmat[std_ind, cnt] = v
-                std_ind, v = mapping(i, j)
-                eq_list[std_ind].append((cnt, v))
+            mapping = _define_mapping(nvars, degree, monomial, symmetry)
+
+            # form the equation by coefficients
+            for i in range(vector_size):
+                for j in range(vector_size):
+                    # The following is equivalent to: eqmat[std_ind, cnt] += v*const
+                    std_ind, v = mapping(i, j)
+                    contribution[(std_ind, cnt)] += v*const
+                    cnt += 1
+        for (row, col), v in contribution.items():
+            eq_list[row].append((col, v))
+
+    ############################################
+    #  Construct the equality constraints
+    ############################################
+    # For equality constraints we do not need PSD vars, but simply a vector of unbounded vars
+    for eq in eq_constraints:
+        d = eq.homogeneous_order()
+        if d > degree:
+            continue
+        inv_monoms_nonhalf = generate_expr(nvars, degree - d, symmetry=symmetry.base())[1]
+        vector_size = len(inv_monoms_nonhalf)
+        splits_eq[eq] = vector_size
+
+        cur_cnt = cnt
+        contribution = defaultdict(int)
+        for monomial, const in eq.terms():
+            cnt = cur_cnt
+            mapping = _define_mapping(nvars, degree, monomial, symmetry, half=False)
+
+            # form the equation by coefficients
+            for i in range(vector_size):
+                # The following is equivalent to: eqmat[std_ind, cnt] += v*const
+                std_ind, v = mapping(i)
+                contribution[(std_ind, cnt)] += v*const
                 cnt += 1
+        for (row, col), v in contribution.items():
+            eq_list[row].append((col, v))
 
-    x0_equal_indices = _get_equal_entries(monomials, nvars, degree, symmetry)
+
+    x0_equal_indices = _get_equal_entries(ineq_constraints, eq_constraints, nvars, degree, symmetry)
     if verbose:
         print(f"Time for constructing coeff equations   : {time() - time0:.6f} seconds.")
-
-    time0 = time()
-    x0, space = solve_column_separated_linear(eq_list, rhs, x0_equal_indices, _cols = cnt)
-    sdp = SDPProblem.from_full_x0_and_space(x0, space, splits)
+    
+    x0, space = solve_csr_linear(eq_list, rhs, x0_equal_indices, _cols=cnt)
+    sdp = SDPProblem.from_full_x0_and_space(x0, space, splits_ineq, constrain_symmetry=False)
     if verbose:
         print(f"Time for solving coefficient equations  : {time() - time0:.6f} seconds. Dof = {sdp.dof}")
 
-    return sdp
+    eq_vec = {}
+    cnt = sum(n**2 for n in splits_ineq.values())
+    for eq in eq_constraints:
+        s = splits_eq[eq]
+        eq_vec[eq] = (x0[cnt:cnt+s, :], space[cnt:cnt+s, :])
+        cnt += s
+    return sdp, eq_vec
 
-def _constrain_nullspace(sdp: SDPProblem, monomials: List[Tuple[int, ...]], nullspaces: Optional[Union[List[sp.Matrix], RootSubspace]],
-                         verbose: bool = False) -> SDPProblem:
-    # constrain nullspace
-    time0 = time()
-    sdp = sdp.get_last_child()
-    sdp.constrain_zero_diagonals()
-    if verbose:
-        print(f"Time for constraining zero diagonals    : {time() - time0:.6f} seconds. Dof = {sdp.get_last_child().dof}")
-
-    time0 = time()
-    if isinstance(nullspaces, RootSubspace):
-        is_real = all(all(_ % 2 == 0 for _ in monomial) for monomial in monomials)
-        nullspaces = [nullspaces.nullspace(m, real = is_real) for m in monomials]
-    if isinstance(nullspaces, list):
-        nullspaces = {str(m): n for m, n in zip(monomials, nullspaces)}
-    if verbose:
-        print(f"Time for computing nullspace            : {time() - time0:.6f} seconds.")
-        time0 = time()
-
-    if nullspaces is not None:
-        sdp.constrain_nullspace(nullspaces, to_child=True)
-
-    if verbose:
-        print(f"Time for constraining nullspace         : {time() - time0:.6f} seconds. Dof = {sdp.get_last_child().dof}")
-        time0 = time()
-    return sdp
-
-def _get_equal_entries(monomials: List[Tuple[int, ...]], nvars: int, degree: int, symmetry: MonomialReduction) -> List[List[int]]:
+def _get_equal_entries(ineq_constraints: List[sp.Poly], eq_constraints: List[sp.Poly],
+        nvars: int, degree: int, symmetry: MonomialReduction) -> List[List[int]]:
     offset = 0
     equal_entries = []
-    for monomial in monomials:
-        dict_monoms_half, inv_monoms_half = generate_expr(nvars, (degree - sum(monomial))//2, symmetry=symmetry.base())
+    perm_group = symmetry.to_perm_group(nvars)
+    for ineq in ineq_constraints:
+        d = ineq.homogeneous_order()
+        if d > degree or (degree - d) % 2 != 0:
+            continue
+
+        dict_monoms_half, inv_monoms_half = generate_expr(nvars, (degree - d)//2, symmetry=symmetry.base())
         n = len(inv_monoms_half)
 
-        permutes = symmetry.permute(monomial)
-        if len(permutes) == 1 or any(p != monomial for p in permutes):
+        if not Coeff(ineq).is_symmetric(perm_group):
             for i in range(n):
                 for j in range(i+1, n):
                     equal_entries.append([i*n+j+offset, j*n+i+offset])
@@ -145,7 +183,54 @@ def _get_equal_entries(monomials: List[Tuple[int, ...]], nvars: int, degree: int
                         s.add(j2*n+i2+offset)
                     equal_entries.append(list(s))
         offset += n**2
+
+    for eq in eq_constraints:
+        d = eq.homogeneous_order()
+        if d > degree:
+            continue
+
+        dict_monoms_nonhalf, inv_monoms_nonhalf = generate_expr(nvars, degree - d, symmetry=symmetry.base())
+        n = len(inv_monoms_nonhalf)
+
+        if Coeff(eq).is_symmetric(perm_group):
+            for i in range(n):
+                m1 = inv_monoms_nonhalf[i]
+                if not symmetry.is_standard_monom(m1):
+                    continue
+                s = set((i+offset,))
+                for p1 in symmetry.permute(m1):
+                    i2 = dict_monoms_nonhalf.get(p1)
+                    s.add(i2+offset)
+                equal_entries.append(list(s))
+        offset += n
+
     return equal_entries
+
+def _constrain_nullspace(sdp: SDPProblem, ineq_constraints: List[sp.Poly], eq_constraints: List[sp.Poly],
+        nullspaces: Optional[Union[List[sp.Matrix], RootSubspace]], verbose: bool = False) -> SDPProblem:
+    # constrain nullspace
+    time0 = time()
+    sdp = sdp.get_last_child()
+    sdp.constrain_zero_diagonals()
+    if verbose:
+        print(f"Time for constraining zero diagonals    : {time() - time0:.6f} seconds. Dof = {sdp.get_last_child().dof}")
+
+    time0 = time()
+    if isinstance(nullspaces, RootSubspace):
+        nullspaces = [nullspaces.nullspace(ineq, ineq_constraints, eq_constraints) for ineq in ineq_constraints]
+    if isinstance(nullspaces, list):
+        nullspaces = {ineq: n for ineq, n in zip(ineq_constraints, nullspaces)}
+    if verbose:
+        print(f"Time for computing nullspace            : {time() - time0:.6f} seconds.")
+        time0 = time()
+
+    if nullspaces is not None:
+        sdp.constrain_nullspace(nullspaces, to_child=True)
+
+    if verbose:
+        print(f"Time for constraining nullspace         : {time() - time0:.6f} seconds. Dof = {sdp.get_last_child().dof}")
+        time0 = time()
+    return sdp
 
 
 class SOSProblem():
@@ -163,19 +248,28 @@ class SOSProblem():
         self,
         poly: sp.Poly,
         symmetry: Optional[Union[MonomialReduction, PermutationGroup]] = None,
+        _check_homogeneous: bool = True,
+        _check_symmetry: bool = True,
     ):
         self.poly = poly
         self._nvars = len(poly.gens)
         self._degree = poly.total_degree()
 
         if symmetry is None:
-            symmetry = identify_symmetry(poly)
+            symmetry = identify_symmetry_from_lists([[poly]])
         if not isinstance(symmetry, MonomialReduction):
             symmetry = MonomialPerm(symmetry)
-        
+
+        if _check_homogeneous and not poly.is_homogeneous:
+            # TODO: shall we support non-homogeneous polynomials?
+            raise ValueError("The polynomial is not homogeneous.")
+        if _check_symmetry and not Coeff(poly).is_symmetric(symmetry.to_perm_group(self._nvars)):
+            raise ValueError("The polynomial is not symmetric with respect to the symmetry group.")
+
         self._symmetry: MonomialReduction = MonomialPerm(symmetry) if not isinstance(symmetry, MonomialReduction) else symmetry
         self.manifold = RootSubspace(poly, symmetry=self._symmetry)
         self._sdp: SDPProblem = None
+        self._eqvec: Dict[sp.Poly, Tuple[sp.Matrix, sp.Matrix]] = {}
 
     @property
     def sdp(self) -> SDPProblem:
@@ -206,32 +300,21 @@ class SOSProblem():
         """
         return self.sdp.S_from_y(y)
 
-    def _construct_sdp(
+    def construct(
         self,
-        monomials: List[Tuple[int, ...]],
-        nullspaces: Optional[Union[List[sp.Matrix], RootSubspace]] = None,
-        register: bool = True,
+        ineq_constraints: List[sp.Poly] = [],
+        eq_constraints: List[sp.Poly] = [],
         verbose: bool = False,
     ) -> SDPProblem:
         """
-        Translate the current SOS problem to SDP problem.
-        The problem is to find M1, M2, ..., Mn such that
-
-            Poly = p1*(v1'M1v1) + p2*(v2'M2v2) + ...
-
-        where vi are vectors of monomials like [a^2, b^2, c^2, ab, bc, ca]
-        while pi are extra monomials like 1, a, ab or abc.
-        M1, M2, ... are symmetric matrices and we want them to be positive semidefinite.
+        Construct the SDP problem with additional constraints.
 
         Parameters
         ----------
-        monomials : List[Tuple[int, ...]]
-            A list of monomials. Each monomial is a tuple of integers.
-            For example, (2, 0, 0) represents a^2 for a three-variable polynomial.
-        nullspaces : Optional[List[sp.Matrix]]
-            The nullspace for each matrix. If nullspace is None, it is skipped.
-        register : bool
-            Whether to register the SDP problem to the SOS problem. Default is True.
+        ineq_constraints : List[sp.Poly]
+            Inequality constraints.
+        eq_constraints : List[sp.Poly]
+            Equality constraints.
         verbose : bool
             Whether to print the progress. Default is False.
 
@@ -240,38 +323,25 @@ class SOSProblem():
         SDPProblem
             The SDP problem to solve.
         """
+        gens = self.poly.gens
+        ineq_constraints = [ineq.as_poly(*gens) for ineq in ineq_constraints]
+        eq_constraints = [eq.as_poly(*gens) for eq in eq_constraints]
+
         degree = self._degree
-
-        for m in monomials:
-            if (degree - sum(m)) % 2 != 0:
-                raise ValueError(f"Degree of poly ({degree}) minus the degree of monomial {m} is not even.")
-
-
         symmetry = self._symmetry
-
         rhs = arraylize_sp(self.poly, symmetry=symmetry)
-        sdp = _form_sdp(monomials, self._nvars, degree, rhs, symmetry, verbose=verbose)
 
-        if register:
-            self._sdp = sdp
+        sdp, eqvec = _form_sdp(ineq_constraints, eq_constraints, self._nvars, degree, rhs, symmetry, verbose=verbose)
+        self._sdp = sdp
+        self._eqvec = eqvec
 
-        # constrain nullspace
-        _constrain_nullspace(sdp, monomials, nullspaces, verbose=verbose)
+        _constrain_nullspace(sdp, ineq_constraints, eq_constraints, self.manifold, verbose=verbose)
 
         if verbose:
             sdp.print_graph()
 
         return sdp
 
-
-    def _construct_sdp_by_default(
-        self,
-        monomials: List[Tuple[int, ...]],
-        verbose: bool = False,
-    ) -> SDPProblem:
-        sdp = self._construct_sdp(monomials, nullspaces=self.manifold, verbose=verbose)
-        self._sdp = sdp
-        return sdp
 
     def solve(self, *args, **kwargs) -> bool:
         """
@@ -288,21 +358,80 @@ class SOSProblem():
         """
         if y is not None:
             self.sdp.register_y(y)
+        y = self.sdp.y
         decomp = self._sdp.decompositions
         if decomp is None:
             return None
-        return SolutionSDP.from_decompositions(self.poly, decomp, self._symmetry)
+        eqvec = {eq: x + space * y for eq, (x, space) in self._eqvec.items()}
+        return SolutionSDP.from_decompositions(self.poly, decomp, eqvec, self._symmetry)
 
 
+def _get_qmodule_list(poly: sp.Poly, ineq_constraints: List[sp.Poly],
+        ineq_constraints_with_trivial: bool = True, preordering: str = 'linear-progressive') -> Generator[List[sp.Poly], None, None]:
+    _ACCEPTED_PREORDERINGS = ['none', 'linear', 'linear-progressive']
+    if not preordering in _ACCEPTED_PREORDERINGS:
+        raise ValueError("Invalid preordering method, expected one of %s, received %s." % (str(_ACCEPTED_PREORDERINGS), preordering))
 
+    degree = poly.homogeneous_order()
+    poly_one = sp.Poly(1, *poly.gens)
+
+    def degree_filter(polys):
+        return [_ for _ in polys if _.homogeneous_order() <= degree \
+                    and (degree - _.homogeneous_order()) % 2 == 0]
+
+    if preordering == 'none':
+        if ineq_constraints_with_trivial:
+            ineq_constraints = [poly_one] + ineq_constraints
+        ineq_constraints = degree_filter(ineq_constraints)
+        yield ineq_constraints
+        return
+
+    linear_ineqs = []
+    nonlin_ineqs = [poly_one]
+    for ineq in ineq_constraints:
+        if ineq.is_linear:
+            linear_ineqs.append(ineq)
+        else:
+            nonlin_ineqs.append(ineq)
+
+    qmodule = nonlin_ineqs if ineq_constraints_with_trivial else nonlin_ineqs[1:]
+    qmodule = degree_filter(qmodule)
+    if 'progressive' in preordering:
+        yield qmodule.copy()
+    for n in range(1, len(linear_ineqs) + 1):
+        has_additional = False
+        for comb in combinations(linear_ineqs, n):
+            mul = poly_one
+            for c in comb:
+                mul = mul * c
+            d = mul.homogeneous_order()
+            for ineq in nonlin_ineqs:
+                new_d = d + ineq.homogeneous_order()
+                if new_d <= degree and (degree - new_d) % 2 == 0:
+                    qmodule.append(mul * ineq)
+                    has_additional = True
+
+        if has_additional and 'progressive' in preordering:
+            yield qmodule.copy()
+    if 'progressive' not in preordering:
+        # yield them all at once
+        yield qmodule
+
+
+@sanitize_input(homogenize=True, infer_symmetry=True)
 def SDPSOS(
         poly: sp.Poly,
-        monomials_lists: Optional[List[List[Tuple[int, ...]]]] = None,
+        ineq_constraints: List[sp.Poly] = [],
+        eq_constraints: List[sp.Poly] = [],
+        symmetry: Optional[Union[MonomialReduction, PermutationGroup]] = None,
+        ineq_constraints_with_trivial: bool = True,
+        preordering: str = 'linear-progressive',
         degree_limit: int = 12,
         verbose: bool = False,
         solver: Optional[str] = None,
         solver_options: Dict[str, Any] = {},
         allow_numer: int = 0,
+        _homogenizer: Optional[sp.Symbol] = None,
         **kwargs
     ) -> Optional[SolutionSDP]:
     """
@@ -347,17 +476,11 @@ def SDPSOS(
         Leave it None to use the default monomials.
     """
     nvars = len(poly.gens)
-    degree = poly.total_degree()
+    degree = poly.homogeneous_order()
     if degree > degree_limit or degree < 2 or nvars < 1:
         return None
     if not (poly.domain in (sp.ZZ, sp.QQ)):
         return None
-
-    original_poly = poly
-    poly, homogenizer = homogenize(poly)
-    nvars = len(poly.gens)
-
-    symmetry = MonomialPerm(identify_symmetry(poly, homogenizer))
 
     if verbose:
         print(f'SDPSOS nvars = {nvars} degree = {degree}')
@@ -366,49 +489,40 @@ def SDPSOS(
         elif isinstance(symmetry, MonomialPerm):
             print('Identified Symmetry = %s' % str(symmetry.perm_group))
 
-    sos_problem = SOSProblem(poly, symmetry=symmetry)
+    sos_problem = SOSProblem(poly, symmetry=symmetry, _check_homogeneous=False, _check_symmetry=False)
 
-    if monomials_lists is None:
-        monomials_lists_separated = [
-            _get_monomial_list(nvars, d, symmetry) for d in range(degree % 2, min(nvars, degree) + 1, 2)
-        ]
-        monomials_lists = []
-        accumulated_monomials = []        
-        for monomials in monomials_lists_separated:
-            accumulated_monomials.extend(monomials)
-            monomials_lists.append(accumulated_monomials.copy())
+    qmodule_list = _get_qmodule_list(poly, ineq_constraints,
+                        ineq_constraints_with_trivial=ineq_constraints_with_trivial, preordering=preordering)
 
-    odd_degree_vars = [i for i in range(nvars) if poly.degree(i) % 2 == 1]
-    for monomials in monomials_lists:
+    # odd_degree_vars = [i for i in range(nvars) if poly.degree(i) % 2 == 1]
+    for qmodule in qmodule_list:
+        qmodule = clear_polys_by_symmetry(qmodule, poly.gens, symmetry)
+
+        if len(qmodule) == 0 and len(eq_constraints) == 0:
+            continue
         # if the poly has odd degree on some var, but all monomials are even up to permutation,
         # then the poly is not SOS
-        unhandled_odd = len(odd_degree_vars) > 0 # init to True if there is any odd degree var
-        for i in odd_degree_vars:
-            for i2 in symmetry.to_perm_group(nvars).orbit(i):
-                if any(m[i2] % 2 == 1 for m in monomials):
-                    unhandled_odd = False
-                    break
-            if unhandled_odd:
-                break
-        if unhandled_odd:
-            continue
+        # unhandled_odd = len(odd_degree_vars) > 0 # init to True if there is any odd degree var
+        # for i in odd_degree_vars:
+        #     for i2 in symmetry.to_perm_group(nvars).orbit(i):
+        #         if any(m[i2] % 2 == 1 for m in qmodule):
+        #             unhandled_odd = False
+        #             break
+        #     if unhandled_odd:
+        #         break
+        # if unhandled_odd:
+        #     continue
 
         # now we solve the problem
         if verbose:
-            print(f"Monomials = {monomials}")
+            print(f"Qmodule = {qmodule}\nIdeal   = {eq_constraints}")
         time0 = time()
         try:
-            sdp = sos_problem._construct_sdp_by_default(monomials, verbose = verbose)
+            sdp = sos_problem.construct(qmodule, eq_constraints, verbose=verbose)
             if sos_problem.solve(allow_numer=allow_numer, verbose=verbose, solver=solver, solver_options=solver_options, **kwargs):
                 if verbose:
                     print(f"Time for solving SDP{' ':20s}: {time() - time0:.6f} seconds. \033[32mSuccess\033[0m.")
                 solution = sos_problem.as_solution()
-                if homogenizer is not None:
-                    solution = SolutionSDP(
-                        problem = original_poly,
-                        numerator = solution.solution.xreplace({homogenizer: 1}),
-                        is_equal = solution.is_equal
-                    )
                 return solution
         except Exception as e:
             if verbose:

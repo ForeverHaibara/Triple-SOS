@@ -1,4 +1,4 @@
-from typing import Tuple, Union, Optional
+from typing import Tuple, List, Optional
 
 import sympy as sp
 
@@ -8,12 +8,25 @@ from .representation import (
     prove_numerator
 )
 from .solution import SolutionSymmetric, SolutionSymmetricSimple
-from ...utils import deg, verify_hom_cyclic, verify_is_symmetric
+from ..shared import sanitize_input
+from ...utils import Coeff
 
+
+def nonnegative_vars(ineq_constraints: List[sp.Poly], symbols: Tuple[sp.Symbol, ...]) -> List[bool]:
+    """
+    Infer the nonnegativity of each variable from the inequality constraints.
+    """
+    nonnegative = set()
+    for ineq in ineq_constraints:
+        if ineq.is_monomial and ineq.total_degree() == 1 and ineq.LC() >= 0:
+            nonnegative.update(ineq.free_symbols)
+    return [1 if s in nonnegative else 0 for s in symbols]
+
+@sanitize_input(homogenize=True)
 def SymmetricSOS(
         poly: sp.Poly,
-        positive: Optional[bool] = None,
-        **kwargs
+        ineq_constraints: List[sp.Poly] = [],
+        eq_constraints: List[sp.Poly] = [],
     ) -> Optional[SolutionSymmetricSimple]:
     """
     Represent a symmetric polynomial in SOS using special
@@ -23,9 +36,6 @@ def SymmetricSOS(
     ----------
     poly : sympy.Poly
         The polynomial to be represented.
-    positive : optional[bool]
-        Perform SOS on positive real numbers or real numbers.
-        If it is None, it will automatically try both.
 
     Returns
     -------
@@ -40,17 +50,20 @@ def SymmetricSOS(
     # check symmetricity here # and (1,1,1) == 0
     if (len(poly.gens) != 3 or not (poly.domain in (sp.ZZ, sp.QQ))):
         return None
-    if (not all(verify_hom_cyclic(poly))) or (not verify_is_symmetric(poly)):
+    if not poly.is_homogeneous or not Coeff(poly).is_symmetric():
         return None
     # if poly(1,1,1) != 0:
     #     return None
 
-    if positive is None:
-        positives = [False, True] if deg(poly) % 2 == 0 else [True]
-    else:
-        positives = [positive]
+    positives = [False]
+    if all(nonnegative_vars(ineq_constraints, poly.gens)):
+        positives.append(True)
 
     for positive in positives:
+        if poly.homogeneous_order() % 2 != 0 and not positive:
+            # cannot be positive on the whole plane R^3
+            continue
+
         numerator, denominator = sym_representation(poly, is_pqr = False, positive = positive, return_poly = True)
         numerator = prove_numerator(numerator, positive = positive)
         if numerator is None:
