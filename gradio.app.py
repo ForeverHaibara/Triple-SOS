@@ -107,6 +107,8 @@ class GradioInterface():
             return {self.image: None, self.coefficient_triangle: None}
 
         def _render_heatmap(res):
+            if res.get('grid') is None:
+                return None
             image = res['grid'].save_heatmap(backgroundcolor=255)
             image = np.vstack([np.full((8, image.shape[1], 3), 255, np.uint8), image])
             side_white = np.full((image.shape[0], 4, 3), 255, np.uint8)
@@ -159,7 +161,7 @@ class GradioInterface():
         res2 = {self.image: image, self.coefficient_triangle: html}
         if with_poly:
             res2['poly'] = res['poly']
-            res2['grid'] = res['grid']
+            res2['grid'] = res.get('grid', None)
         return res2
 
 
