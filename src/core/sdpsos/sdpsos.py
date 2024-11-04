@@ -431,7 +431,6 @@ def SDPSOS(
         solver: Optional[str] = None,
         solver_options: Dict[str, Any] = {},
         allow_numer: int = 0,
-        _homogenizer: Optional[sp.Symbol] = None,
         **kwargs
     ) -> Optional[SolutionSDP]:
     """
@@ -469,11 +468,33 @@ def SDPSOS(
 
     Parameters
     ----------
-    poly : sp.Poly
-        Polynomial to be solved.
-    monomials_lists : Optional[List[List[Tuple[int, ...]]]
-        A list of lists. Each list contain monomials that are treated as nonnegative.
-        Leave it None to use the default monomials.
+    poly: sp.Poly
+        The polynomial to perform SOS on.
+    ineq_constraints: List[sp.Poly]
+        Inequality constraints to the problem. This assumes g_1(x) >= 0, g_2(x) >= 0, ...
+        This is used to generate the quadratic module.
+    eq_constraints: List[sp.Poly]
+        Equality constraints to the problem. This assumes h_1(x) = 0, h_2(x) = 0, ...
+        This is used to generate the ideal (quotient ring).
+    symmetry: PermutationGroup or MonomialReduction
+        The symmetry of the polynomial. When it is None, it will be automatically generated. 
+        If we want to skip the symmetry generation algorithm, please pass in a MonomialReduction object.
+    ineq_constraints_with_trivial: bool
+        Whether to add the trivial inequality constraint 1 >= 0. This is used to generate the
+        quadratic module. Default is True.
+    preordering: str
+        The preordering method for extending the generators of the quadratic module. It can be
+        'none', 'linear', 'linear-progressive'. Default is 'linear-progressive'.
+    degree_limit: int
+        The maximum degree of the polynomial to be considered. Default is 12.
+    verbose: bool
+        Whether to print the progress. Default is False.
+    solver: str
+        The numerical SDP solver to use. When set to None, it is automatically selected. Default is None.
+    solver_options: Dict[str, Any]
+        Additional options to pass to the SDP solver.
+    allow_numer: int
+        Whether to allow numerical solution (still under development).
     """
     nvars = len(poly.gens)
     degree = poly.homogeneous_order()

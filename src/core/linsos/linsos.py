@@ -15,9 +15,9 @@ from .tangents import root_tangents
 from .correction import linear_correction
 from .updegree import lift_degree
 from .solution import SolutionLinear
-from ..shared import homogenize_expr_list, identify_symmetry_from_lists, clear_polys_by_symmetry, sanitize_input
+from ..shared import homogenize_expr_list, clear_polys_by_symmetry, sanitize_input
 from ...utils import findroot, RootsInfo, RootTangent
-from ...utils.basis_generator import MonomialPerm, MonomialReduction
+from ...utils.basis_generator import MonomialReduction
 
 LINPROG_OPTIONS = {
     'method': 'highs-ds' if SCIPY_VERSION >= '1.6.0' else 'simplex',
@@ -224,17 +224,22 @@ def LinearSOS(
     Parameters
     -------
     poly: sp.Poly
-        The polynomial to perform SOS on. It should be a homogeneous, cyclic polynomial of a, b, c.
-        There is no check for this.
-    tangents: list
-        Additional tangents to be added to the basis.
-    symmetry: MonomialReduction or PermutationGroup
+        The polynomial to perform SOS on.
+    ineq_constraints: List[sp.Poly]
+        Inequality constraints to the problem. This assumes g_1(x) >= 0, g_2(x) >= 0, ...
+    eq_constraints: List[sp.Poly]
+        Equality constraints to the problem. This assumes h_1(x) = 0, h_2(x) = 0, ...
+    symmetry: PermutationGroup or MonomialReduction
         The symmetry of the polynomial. When it is None, it will be automatically generated. 
         If we want to skip the symmetry generation algorithm, please pass in a MonomialReduction object.
+    tangents: list
+        Additional tangents to be added to the basis.
     rootsinfo: RootsInfo
         Roots information of the polynomial to be optimized. When it is None, it will be automatically
         generated. If we want to skip the root finding algorithm or the tangent generation algorithm,
         please pass in a RootsInfo object.
+    preordering: str
+        The preordering method for extending the basis. It can be 'none' or 'linear'. Defaults to 'linear'.
     verbose: bool
         Whether to print the information of the linear programming problem. Defaults to False.
     degree_limit: int

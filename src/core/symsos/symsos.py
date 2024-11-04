@@ -29,13 +29,17 @@ def SymmetricSOS(
         eq_constraints: List[sp.Poly] = [],
     ) -> Optional[SolutionSymmetricSimple]:
     """
-    Represent a symmetric polynomial in SOS using special
+    Represent a 3-var symmetric polynomial in SOS using special
     changes of variables. The algorithm is described in [1].
 
     Parameters
     ----------
-    poly : sympy.Poly
-        The polynomial to be represented.
+    poly: sp.Poly
+        The polynomial to perform SOS on.
+    ineq_constraints: List[sp.Poly]
+        Inequality constraints to the problem. This assumes g_1(x) >= 0, g_2(x) >= 0, ...
+    eq_constraints: List[sp.Poly]
+        Equality constraints to the problem. This assumes h_1(x) = 0, h_2(x) = 0, ...
 
     Returns
     -------

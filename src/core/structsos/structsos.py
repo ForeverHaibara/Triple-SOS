@@ -25,11 +25,18 @@ def StructuralSOS(
 
     Params
     -------
-    poly: sp.polys.polytools.Poly
-        The target polynomial.
+    poly: sp.Poly
+        The polynomial to perform SOS on.
+    ineq_constraints: List[sp.Poly]
+        Inequality constraints to the problem. This assume g_1(x) >= 0, g_2(x) >= 0, ...
+        **IT IS UNDER DEVELOPMENT, DO NOT TRUST IT**
+    eq_constraints: List[sp.Poly]
+        Equality constraints to the problem. This assume h_1(x) = 0, h_2(x) = 0, ...
+        **IT IS UNDER DEVELOPMENT, DO NOT TRUST IT**
     real: bool
         Whether solve inequality on real numbers rather on nonnegative reals. This may
         requires lifting the degree.
+        **TO BE DEPRECATED**
 
     Returns
     -------

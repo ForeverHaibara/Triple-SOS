@@ -49,8 +49,12 @@ def sum_of_square(
 
     Parameters
     ----------
-    poly : sp.Poly
-        The polynomial to solve
+    poly: sp.Poly
+        The polynomial to perform SOS on.
+    ineq_constraints: List[sp.Poly]
+        Inequality constraints to the problem. This assumes g_1(x) >= 0, g_2(x) >= 0, ...
+    eq_constraints: List[sp.Poly]
+        Equality constraints to the problem. This assumes h_1(x) = 0, h_2(x) = 0, ...
     rootsinfo : Optional[RootsInfo]
         The roots information of the polynomial. If None, it will be automatically computed.
         Pass in an empty RootsInfo object to skip the computation.
@@ -108,6 +112,10 @@ def sum_of_square_multiple(
         The polynomials to solve. If it is a string, it will be treated as a file name.
         If it is a list of strings, each string will be treated as a polynomial.
         Empty lines will be ignored.
+    ineq_constraints: List[sp.Poly]
+        Inequality constraints to all problems. This assumes g_1(x) >= 0, g_2(x) >= 0, ...
+    eq_constraints: List[sp.Poly]
+        Equality constraints to all problems. This assumes h_1(x) = 0, h_2(x) = 0, ...
     method_order : List[str]
         The order of methods to try. Defaults to METHOD_ORDER.
     configs : Dict[str, Dict]
