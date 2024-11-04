@@ -30,6 +30,7 @@ class GridPoly():
     def save_heatmap(self, path=None, dpi=None, backgroundcolor=211):
         """
         Save a heatmap to the given path. And return the numpy array of the heatmap.
+        Only supports 3-var polynomials.
 
         Parameters
         ----------
@@ -42,16 +43,20 @@ class GridPoly():
         """
         n = self.size
         x = np.full((n+1,n+1,3), backgroundcolor, dtype='uint8')
+        grid_color = self.grid_color
+        # get_color = lambda r,j: grid_color[r*(2*n+3-r)//2+j]
+        get_color = lambda r,j: grid_color[(r+j+2)*(r+j+1)//2-j-1]
         for i in range(n+1):
             t = i * 15 // 26   # i * 15/26 ~ i / sqrt(3)
             r = t * 2         # row of grid triangle = i / (sqrt(3)/2)
             if r > n:          # n+1-r <= 0
                 break
-            base = r*(2*n+3-r)//2   # (n+1) + n + ... + (n+2-r)
             for j in range(n+1-r):  # j < n+1-r
-                x[i,j+t,0] = self.grid_color[base+j][0]
-                x[i,j+t,1] = self.grid_color[base+j][1]
-                x[i,j+t,2] = self.grid_color[base+j][2]
+                # row r, entry j: a^(n-r-j)*b^j*c^r
+                color = get_color(r,j)
+                x[i,j+t,0] = color[0]
+                x[i,j+t,1] = color[1]
+                x[i,j+t,2] = color[2]
 
         if path is not None:
             import matplotlib.pyplot as plt
