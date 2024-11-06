@@ -153,7 +153,7 @@ def _prepare_basis(
     return all_basis, all_arrays
 
 
-def _get_signs_of_vars(ineq_constraints: List[Poly], symbols: Tuple[Symbol, ...]) -> Dict[Symbol, int]:
+def _get_signs_of_vars(ineq_constraints: Dict[Poly, Expr], symbols: Tuple[Symbol, ...]) -> Dict[Symbol, int]:
     """
     Infer the signs of each variable from the inequality constraints.
     """
@@ -163,6 +163,21 @@ def _get_signs_of_vars(ineq_constraints: List[Poly], symbols: Tuple[Symbol, ...]
             sgn = 1 if ineq.LC() > 0 else (-1 if ineq.LC() < 0 else 0)
             signs[ineq.free_symbols.pop()] = sgn
     return signs
+
+def _odd_basis_to_even(basis: List[LinearBasis], symbols: Tuple[Symbol, ...], ineq_constraints: Dict[Poly, Expr]) -> List[LinearBasis]:
+    mapping = dict((s, s) for s in symbols)
+    for ineq, e in ineq_constraints.items():
+        if ineq.is_monomial and ineq.total_degree() == 1 and ineq.LC() > 0:
+            mapping[ineq.free_symbols.pop()] = e / ineq.LC()
+    mapping = [mapping[s] for s in symbols]
+
+    new_basis = []
+    for b in basis:
+        if isinstance(b, LinearBasisTangentEven) or not isinstance(b, LinearBasisTangent):
+            new_basis.append(b)
+        else:
+            new_basis.append(b.to_even(mapping))
+    return new_basis
 
 
 def _get_qmodule_list(poly: Poly, ineq_constraints: Dict[Poly, Expr],
@@ -316,11 +331,6 @@ def _LinearSOS(
     eq_constraints = clear_polys_by_symmetry(eq_constraints.items(), poly.gens, symmetry)
     # print('Tangents after  removing duplicates:', tangents)
 
-    # following lines are equvialent to: [t.as_expr().factor() for t in ...]
-    # _prod_factors = lambda s: sp.Mul(s[0], *(i.as_expr()**d for i, d in s[1]))
-    # tangents = list(map(_prod_factors, map(lambda t: t.factor_list(), tangents)))
-    # eq_constraints = list(map(_prod_factors, map(lambda t: t.factor_list(), eq_constraints)))
-
     # prepare to lift the degree in an iterative way
     for lift_degree_info in lift_degree(poly, var_signs, symmetry=symmetry, degree_limit=degree_limit):
         # RHS
@@ -361,11 +371,19 @@ def _LinearSOS(
             # lift the degree up and retry
             continue
 
-        solution = linear_correction(
-            poly, 
+        y, basis, is_equal = linear_correction(
             linear_sos.x,
             basis,
             num_multipliers = len(lift_degree_info['basis']),
             symmetry = symmetry
         )
-        return solution
+        if True: # is_equal:
+            basis = _odd_basis_to_even(basis, poly.gens, ineq_constraints)
+            solution = SolutionLinear(
+                problem = poly,
+                y = y,
+                basis = basis,
+                symmetry = symmetry,
+                is_equal = is_equal,
+            )
+            return solution

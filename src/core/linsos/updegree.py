@@ -2,7 +2,6 @@ from functools import reduce
 from typing import Generator, Dict, Tuple, List
 
 import sympy as sp
-from sympy.core.singleton import S
 from sympy.combinatorics import PermutationGroup, CyclicGroup
 
 from .basis import LinearBasis, quadratic_difference

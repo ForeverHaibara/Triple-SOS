@@ -99,6 +99,18 @@ class LinearBasisTangent(LinearBasis):
     def __neg__(self) -> 'LinearBasisTangent':
         return self.__class__.from_callable_expr(self._powers, lambda *args, **kwargs: -self._tangent(*args, **kwargs).as_expr())
 
+    def to_even(self, symbols: List[sp.Expr]) -> 'LinearBasisTangentEven':
+        """
+        Convert the linear basis to an even basis.
+        """
+        rem_powers = tuple(d % 2 for d in self._powers)
+        even_powers = tuple(d - r for d, r in zip(self._powers, rem_powers))
+        def _new_tangent(s, poly=False):
+            if poly: return self._tangent(s, poly=True)
+            monom = sp.Mul(*(symbols[i] for i, d in enumerate(rem_powers) if d))
+            return self._tangent(s, poly=False).as_expr() * monom
+        return LinearBasisTangentEven.from_callable_expr(even_powers, _callable_expr(_new_tangent))
+
     @classmethod
     def from_callable_expr(cls, powers: Tuple[int, ...], tangent: _callable_expr) -> 'LinearBasisTangent':
         """

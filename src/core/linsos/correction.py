@@ -2,7 +2,6 @@ from typing import List, Optional, Tuple
 
 import numpy as np
 import sympy as sp
-from sympy.core.singleton import S
 from sympy.combinatorics import PermutationGroup
 
 from .basis import LinearBasis
@@ -39,13 +38,12 @@ def _add_regularizer(mat: sp.Matrix, num_multipliers: int) -> sp.Matrix:
     return mat
 
 def linear_correction(
-        poly: sp.Poly,
         y: List[float] = [],
         basis: List[LinearBasis] = [],
         num_multipliers: int = 1,
         symmetry: PermutationGroup = PermutationGroup(),
         zero_tol: float = 1e-6,
-    ) -> SolutionLinear:
+    ) -> Tuple[sp.Matrix, sp.Matrix, bool]:
     """
     Linear programming is a numerical way to solve the SOS problem. However, we require
     the solution to be exact. This function is used to correct the numerical error. 
@@ -55,9 +53,7 @@ def linear_correction(
     linear system to find the exact solution.
 
     Parameters
-    -------
-    poly: sp.polys.Poly
-        The target polynomial.
+    -----------
     y: List[float]
         The coefficients of the basis.
     basis: List[LinearBasis]
@@ -106,11 +102,4 @@ def linear_correction(
             # raise e
             is_equal = False
 
-    solution = SolutionLinear(
-        problem = poly,
-        y = y,
-        basis = basis,
-        symmetry = symmetry,
-        is_equal = is_equal,
-    )
-    return solution
+    return y, basis, is_equal
