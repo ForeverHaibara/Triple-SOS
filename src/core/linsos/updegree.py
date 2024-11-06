@@ -1,10 +1,10 @@
-from functools import reduce
-from typing import Generator, Dict, Tuple, List
+from typing import Generator, Dict, Tuple, List, Optional
 
 import sympy as sp
 from sympy.combinatorics import PermutationGroup, CyclicGroup
 
-from .basis import LinearBasis, quadratic_difference
+from .basis import LinearBasis, quadratic_difference, _callable_expr
+from ..shared import clear_polys_by_symmetry
 from ...utils import MonomialReduction, generate_expr
 
 
@@ -21,22 +21,27 @@ class LinearBasisMultiplier(LinearBasis):
     This converts the problem to a usual linear programming by adding the basis
     CyclicSum(-a**2)*f and CyclicSum(-a*b)*f to the linear programming.
     """
-    def __init__(self, poly, multiplier):
+    def __init__(self, poly: sp.Poly, multiplier: _callable_expr):
         self.poly = poly
-        self.multiplier = multiplier
+        self._tangent = multiplier
+    @property
+    def multiplier(self) -> sp.Expr:
+        return self._tangent(self.poly.gens)
     def nvars(self) -> int:
         return len(self.poly.gens)
     def as_poly(self, symbols) -> sp.Poly:
-        poly = (self.poly * (-self.multiplier.doit().as_poly(self.poly.gens)))
+        poly = (self.poly * (-self._tangent(self.poly.gens, poly=True)))
         return poly.xreplace(dict(zip(self.poly.gens, symbols)))
     def as_expr(self, symbols) -> sp.Expr:
-        return self.as_poly(symbols).as_expr()
+        return (self.poly.as_expr() * self.multiplier).xreplace(dict(zip(self.poly.gens, symbols)))
 
+    @classmethod
+    def from_expr(cls, poly: sp.Poly, expr: sp.Expr, p: Optional[sp.Poly] = None) -> 'LinearBasisMultiplier':
+        return cls(poly, _callable_expr.from_expr(expr, poly.gens, p))
 
 def lift_degree(
         poly: sp.Poly,
-        var_signs: List[int],
-        # ineq_constraints: List[sp.Expr],
+        ineq_constraints: Dict[sp.Poly, sp.Expr],
         symmetry: MonomialReduction,
         degree_limit: int = 12,
         lift_degree_limit: int = 4
@@ -54,8 +59,8 @@ def lift_degree(
     ----------
     poly: sp.polys.Poly
         The target polynomial.
-    var_signs: List[int]
-        Signs of each variable. 1 for nonnegative, -1 for nonpositive, 0 for unrestricted.
+    ineq_constraints: Dict[sp.Poly, sp.Expr]
+        Inequality constraints added to the problem.
     symmetry: MonomialReduction
         The symmetry of the polynomial.
     degree_limit: int
@@ -85,8 +90,8 @@ def lift_degree(
     n_plus = 0
 
     while n + n_plus <= degree_limit and n_plus <= lift_degree_limit:
-        multipliers = _get_multipliers(symbols, var_signs, n_plus, symmetry=symmetry)
-        basis = [LinearBasisMultiplier(poly, multiplier) for multiplier in multipliers]
+        multipliers = _get_multipliers(ineq_constraints, symbols, n_plus, symmetry=symmetry)
+        basis = [LinearBasisMultiplier.from_expr(poly, e, p) for p, e in multipliers]
 
         if len(basis) > 0:
             yield {
@@ -99,31 +104,35 @@ def lift_degree(
 
 
 
-def _get_multipliers(symbols: Tuple[sp.Symbol, ...], var_signs: List[int], n_plus: int,
-                        symmetry: MonomialReduction) -> Tuple[Dict[int, sp.Expr], Dict[int, sp.Expr]]:
-    nvars = len(symbols)
+def _get_multipliers(ineq_constraints: Dict[sp.Poly, sp.Expr], symbols: Tuple[sp.Symbol, ...], n_plus: int,
+                        symmetry: MonomialReduction, preordering: str ='linear') -> Dict[sp.Poly, sp.Expr]:
+    if preordering == 'linear':
+        ineq_constraints = [(k, v) for k, v in ineq_constraints.items() if k.is_linear]
+    else:
+        raise ValueError(f"Preordering {preordering} is not supported.")
+        ineq_constraints = ineq_constraints.items()
 
     multipliers = None
     if n_plus == 2:
         multipliers = quadratic_difference(symbols)
-        psd_vars = [s for s, sign in zip(symbols, var_signs) if sign == 1]
-        neg_vars = [s for s, sign in zip(symbols, var_signs) if sign == -1]
+        multipliers = [(sp.Poly(e, *symbols), e) for e in multipliers]
         def cross_mul(x):
-            return [x[i] * x[j] for i in range(len(x)) for j in range(i+1, len(x))]
-        multipliers.extend(cross_mul(psd_vars))
-        multipliers.extend(cross_mul(neg_vars))
+            return [(x[i][0] * x[j][0], x[i][1] * x[j][1]) for i in range(len(x)) for j in range(i+1, len(x))]
+        multipliers.extend(cross_mul(ineq_constraints))
 
-    if nvars == 3:
-        ...
-        # if (perm_group.is_alternating or perm_group.is_symmetric):
-        #     multipliers = [sp.Mul(*(s**i for s, i in zip(symbols, power))) 
-        #                     for power in generate_expr(nvars, n_plus, symmetry=symmetry)[1]]
     if multipliers is None:
         # default case
-        def get_sign(power):
-            return reduce(lambda x, y: x*y, [v**i for v, i in zip(var_signs, power)])
-        multipliers = [sp.Mul(*(s**i for s, i in zip(symbols, power))) 
-                            for power in generate_expr(nvars, n_plus, symmetry=symmetry)[1]
-                            if get_sign(power) > 0]
+        multipliers = []
+        poly_one = sp.Poly(1, *symbols)
+        n_constraints = len(ineq_constraints)
+        for power in generate_expr(len(ineq_constraints), n_plus)[1]:
+            mul_poly = poly_one
+            for i in range(n_constraints):
+                if power[i] > 0:
+                    mul_poly *= ineq_constraints[i][0]**power[i]
+            mul_expr = sp.Mul(*(ineq_constraints[i][1]**power[i] for i in range(n_constraints)))
+            multipliers.append((mul_poly, mul_expr))
+
+    multipliers = clear_polys_by_symmetry(multipliers, symbols, symmetry)
 
     return multipliers
