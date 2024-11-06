@@ -1,4 +1,4 @@
-from typing import Union, Tuple, List, Dict, Callable, Optional
+from typing import Any, Union, Tuple, List, Dict, Callable, Optional
 
 import sympy as sp
 import numpy as np
@@ -10,22 +10,39 @@ from ...utils import arraylize, arraylize_sp, MonomialReduction, MonomialPerm
 class _callable_expr():
     """
     Callable expression is a wrapper of sympy expression that can be called with symbols,
-    it is more like a function.
+    it is more like a function. It accepts an addition kwarg poly=True/False.
 
     Example
     ========
     >>> _callable_expr.from_expr(a**3*b**2, (a,b))((x,y))
     x**3*y**2
+
+    >>> e = _callable_expr.from_expr(sp.Function("F")(a,b,c), (a,b,c), (a**3+b**3+c**3).as_poly(a,b,c))
+    >>> e((a,b,c))
+    F(a,b,c)
+    >>> e((a,b,c), poly=True)
+    Poly(a**3 + b**3 + c**3, a, b, c, domain='ZZ')
+    
     """
     __slots__ = ['_func']
-    def __init__(self, func: Callable[[Tuple[sp.Symbol, ...]], sp.Expr]):
+    def __init__(self, func: Callable[[Tuple[sp.Symbol, ...], Any], sp.Expr]):
         self._func = func
-    def __call__(self, symbols: Tuple[sp.Symbol, ...]) -> sp.Expr:
-        return self._func(symbols)
+    def __call__(self, symbols: Tuple[sp.Symbol, ...], *args, **kwargs) -> sp.Expr:
+        return self._func(symbols, *args, **kwargs)
 
     @classmethod
-    def from_expr(cls, expr: sp.Expr, symbols: Tuple[sp.Symbol, ...]) -> '_callable_expr':
-        return cls(lambda s: expr.xreplace(dict(zip(symbols, s))))
+    def from_expr(cls, expr: sp.Expr, symbols: Tuple[sp.Symbol, ...], p: Optional[sp.Poly] = None) -> '_callable_expr':
+        if p is None:
+            def func(s, poly=False):
+                e = expr.xreplace(dict(zip(symbols, s)))
+                if poly: e = e.as_poly(s)
+                return e
+        else:
+            def func(s, poly=False):
+                if not poly:
+                    return expr.xreplace(dict(zip(symbols, s)))
+                return p.as_expr().xreplace(dict(zip(symbols, s))).as_poly(s)
+        return cls(func)
 
     def default(self, nvars: int) -> sp.Expr:
         """
@@ -77,8 +94,10 @@ class LinearBasisTangent(LinearBasis):
         return len(self._powers)
     def as_expr(self, symbols) -> sp.Expr:
         return sp.Mul(*(x**i for x, i in zip(symbols, self._powers))) * self._tangent(symbols).as_expr()
+    def as_poly(self, symbols) -> sp.Poly:
+        return sp.Poly.from_dict({self._powers: 1}, symbols) * self._tangent(symbols, poly=True)
     def __neg__(self) -> 'LinearBasisTangent':
-        return self.__class__.from_callable_expr(self._powers, lambda s: -self._tangent(s).as_expr())
+        return self.__class__.from_callable_expr(self._powers, lambda *args, **kwargs: -self._tangent(*args, **kwargs).as_expr())
 
     @classmethod
     def from_callable_expr(cls, powers: Tuple[int, ...], tangent: _callable_expr) -> 'LinearBasisTangent':
@@ -92,22 +111,27 @@ class LinearBasisTangent(LinearBasis):
         return obj
 
     @classmethod
-    def generate(cls, tangent: sp.Expr, symbols: Tuple[int, ...], degree: int, require_equal: bool = True) -> List['LinearBasisTangent']:
+    def generate(cls, tangent: sp.Expr, symbols: Tuple[int, ...], degree: int, tangent_p: Optional[sp.Poly] = None, require_equal: bool = True) -> List['LinearBasisTangent']:
         """
         Generate all possible linear bases of the form x1^a1 * x2^a2 * ... * xn^an * tangent
-        with total degree == degree or total degree <= degree.        
+        with total degree == degree or total degree <= degree.
         """
-        degree = degree - tangent.as_poly(symbols).total_degree()
+        if tangent_p is None:
+            tangent_degree = tangent.as_poly(symbols).total_degree()
+        else:
+            tangent_degree = tangent_p.total_degree()
+        degree = degree - tangent_degree
         step = cls._degree_step
         if degree < 0 or degree % step != 0:
             return []
-        tangent = _callable_expr.from_expr(tangent, symbols)
-        return [LinearBasisTangent.from_callable_expr(tuple(i*step for i in p), tangent) for p in \
+        tangent = _callable_expr.from_expr(tangent, symbols, p=tangent_p)
+        return [LinearBasisTangent.from_callable_expr(tuple(i*step for i in comb), tangent) for comb in \
                 _degree_combinations([cls._degree_step] * len(symbols), degree, require_equal=require_equal)]
 
     @classmethod
     def generate_quad_diff(cls, 
-            tangent: sp.Expr, symbols: Tuple[int, ...], degree: int, symmetry: PermutationGroup, quad_diff: bool = True
+            tangent: sp.Expr, symbols: Tuple[int, ...], degree: int, symmetry: PermutationGroup,
+            tangent_p: Optional[sp.Poly] = None, quad_diff: bool = True
         ) -> Tuple[List['LinearBasisTangent'], np.ndarray]:
         """
         Generate all possible linear bases of the form x1^a1 * x2^a2 * ... * xn^an * (x1-x2)^(2b_12) * ... * (xi-xj)^(2b_ij) * tangent
@@ -124,10 +148,10 @@ class LinearBasisTangent(LinearBasis):
                 if mat is not None:
                     return basis, mat
 
-        if not isinstance(tangent, sp.Poly):
+        if not isinstance(tangent_p, sp.Poly):
             p = tangent.as_poly(symbols)
         else:
-            p, tangent = tangent, tangent.as_expr()
+            p = tangent_p
         d = p.total_degree()
         if p.is_zero or len(p.free_symbols_in_domain) or d > degree:
             return [], np.array([], dtype='float')
@@ -142,7 +166,8 @@ class LinearBasisTangent(LinearBasis):
             # no cache, generate the bases first
             basis = []
             for t in cross_tangents:
-                basis += cls.generate(t * tangent, symbols, degree, require_equal=True)
+                p2 = t.as_poly(symbols) * p
+                basis += cls.generate(t * tangent, symbols, degree, tangent_p=p2, require_equal=True)
 
         if mat is None:
             # convert the bases to matrix

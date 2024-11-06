@@ -244,12 +244,13 @@ class MonomialReduction():
         return -1
 
 
-    def invarraylize(self, array: Union[List, np.ndarray, sp.Matrix], gens: List[sp.Symbol]) -> sp.Poly:
+    def invarraylize(self, array: Union[List, np.ndarray, sp.Matrix], gens: List[sp.Symbol], degree: int = -1) -> sp.Poly:
         """
         Reverse the arraylize function to get the polynomial from its vector representation.
         """
         nvars = len(gens)
-        degree = self._infer_degree(nvars, len(array))
+        if degree == -1:
+            degree = self._infer_degree(nvars, len(array))
         if degree == -1:
             raise ValueError(f"Array cannot be of length {len(array)} with {nvars} gens.")
         inv_monoms = self.inv_monoms(nvars, degree)
@@ -375,10 +376,11 @@ class MonomialFull(MonomialReduction):
     def _infer_degree(self, nvars: int, length: int) -> int:
         return _solve_combinatorial_equation(nvars, length)
 
-    def invarraylize(self, array: Union[List, np.ndarray, sp.Matrix], gens: List[sp.Symbol]) -> sp.Poly:
+    def invarraylize(self, array: Union[List, np.ndarray, sp.Matrix], gens: List[sp.Symbol], degree: int = -1) -> sp.Poly:
         # automatic infer the nvars and degrees: (n + d)! / n! / d! = len(array)
         nvars = len(gens)
-        degree = self._infer_degree(nvars, len(array))
+        if degree == -1: # this is not safe, for safe usage you should pass the degree explicitly
+            degree = self._infer_degree(nvars, len(array))
         inv_monoms = self.inv_monoms(nvars, degree)
         terms_dict = dict(zip(inv_monoms, array))
         return sp.Poly(terms_dict, gens)
@@ -417,8 +419,8 @@ class MonomialHomogeneousFull(MonomialHomogeneous, MonomialFull):
         # automatic infer the nvars and degrees: ((n - 1) + d)! / (n - 1)! / d! = len(array)
         return _solve_combinatorial_equation(nvars - 1, length)
 
-    def invarraylize(self, array: Union[List, np.ndarray, sp.Matrix], gens: List[sp.Symbol]) -> sp.Poly:
-        return MonomialHomogeneous.invarraylize(self, array, gens)
+    def invarraylize(self, array: Union[List, np.ndarray, sp.Matrix], gens: List[sp.Symbol], degree: int = -1) -> sp.Poly:
+        return MonomialHomogeneous.invarraylize(self, array, gens, degree=degree)
 
 
 class MonomialCyclic(MonomialHomogeneous):
@@ -544,9 +546,9 @@ def arraylize_sp(poly: sp.Poly, expand_cyc: bool = False, **options) -> sp.Matri
     option = _parse_options(**options)
     return option.arraylize_sp(poly, expand_cyc = expand_cyc)
 
-def invarraylize(array: Union[List, np.ndarray, sp.Matrix], gens: List[sp.Symbol], **options) -> sp.Poly:
+def invarraylize(array: Union[List, np.ndarray, sp.Matrix], gens: List[sp.Symbol], degree: int = -1, **options) -> sp.Poly:
     option = _parse_options(**options)
-    return option.invarraylize(array, gens)
+    return option.invarraylize(array, gens, degree=degree)
 
 def generate_expr(nvars: int, degree: int, **options) -> Tuple[Dict[Tuple[int, ...], int], List[Tuple[int, ...]]]:
     option = _parse_options(**options)

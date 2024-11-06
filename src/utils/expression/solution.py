@@ -194,6 +194,17 @@ class Solution():
             is_equal = self.is_equal_
         )
 
+    def xreplace(self, *args, **kwargs) -> 'Solution':
+        self.solution = self.solution.xreplace(*args, **kwargs)
+        return self
+
+    def doit(self, *args, **kwargs) -> sp.Expr:
+        return self.solution.doit(*args, **kwargs)
+
+    def as_expr(self, *args, **kwargs) -> sp.Expr:
+        return self.solution#.doit(*args, **kwargs)
+
+
 # class SolutionNull(Solution):
 #     def __init__(self, problem = None, solution = None):
 #         super().__init__(problem = problem, solution = None)
@@ -448,11 +459,20 @@ class SolutionSimple(Solution):
         self.solution = self.numerator / self.multiplier
         return self
 
-    def signsimp(self):
+    def signsimp(self) -> 'SolutionSimple':
         """
-        Simplify the signs.
+        Apply signsimp on the solution of self.
         """
         self.numerator = sp.signsimp(self.numerator)
         self.multiplier = sp.signsimp(self.multiplier)
+        self.solution = self.numerator / self.multiplier
+        return self
+
+    def xreplace(self, *args, **kwargs) -> 'SolutionSimple':
+        """
+        Apply xreplace on the solution of self.        
+        """
+        self.numerator = self.numerator.xreplace(*args, **kwargs)
+        self.multiplier = self.multiplier.xreplace(*args, **kwargs)
         self.solution = self.numerator / self.multiplier
         return self

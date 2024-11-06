@@ -18,6 +18,8 @@ from ....sdp import congruence
 from ....utils import CyclicExpr, CyclicSum, CyclicProduct
 
 
+
+
 def reflect_expression(expr: sp.Expr) -> sp.Expr:
     """
     Exchange b and c in a three-var cyclic expression.

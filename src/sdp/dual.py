@@ -29,7 +29,15 @@ def _infer_free_symbols(x0_and_space: Dict[str, Tuple[Matrix, Matrix]], free_sym
     """
     keys = list(x0_and_space.keys())
     if len(keys):
-        dof = x0_and_space[keys[0]][1].shape[1]
+        dof = 0
+        for x0, space in x0_and_space.values():
+            if space.shape[1] != 0:
+                dof = space.shape[1]
+                break
+        for key, (x0, space) in x0_and_space.items():
+            if space.shape[0] * space.shape[1] == 0:
+                x0_and_space[key] = (x0, Matrix.zeros(x0.shape[0], dof))
+
         for x0, space in x0_and_space.values():
             if space.shape[1] != dof:
                 raise ValueError("The number of columns of spaces should be the same.")

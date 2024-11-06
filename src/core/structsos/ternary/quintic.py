@@ -566,7 +566,7 @@ def _sos_struct_quintic_full(coeff):
                 # print(poly_get_factor_form(invarraylize(sp.Matrix(params), cyc = False)), mul)
                 # print(border_proof)
                 multiplier = CyclicSum(a**2 + mul*b*c)
-                sol_main = CyclicSum(a * invarraylize(sp.Matrix(params), (a, b, c), cyc = False).as_expr()**2)
+                sol_main = CyclicSum(a * invarraylize(sp.Matrix(params), (a, b, c), degree=3).as_expr()**2)
 
                 border_proof_split_a, border_proof_split_b = [], []
                 for arg in border_proof: #.args:

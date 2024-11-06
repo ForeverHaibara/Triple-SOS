@@ -2,6 +2,7 @@ from typing import Optional, Dict, List, Union, Callable, Any
 
 import numpy as np
 import sympy as sp
+from sympy import Expr
 
 from .linsos import LinearSOS
 from .structsos import StructuralSOS
@@ -39,8 +40,8 @@ DEFAULT_CONFIGS = {
 # @sanitize_input(homogenize=True)
 def sum_of_square(
         poly: sp.Poly,
-        ineq_constraints: Optional[List[sp.Expr]] = None,
-        eq_constraints: Optional[List[sp.Expr]] = None,
+        ineq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
+        eq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
         method_order: Optional[List[str]] = METHOD_ORDER,
         configs: Optional[Dict[str, Dict]] = DEFAULT_CONFIGS
     ) -> Optional[Solution]:
@@ -51,9 +52,9 @@ def sum_of_square(
     ----------
     poly: sp.Poly
         The polynomial to perform SOS on.
-    ineq_constraints: List[sp.Poly]
+    ineq_constraints: Union[List[Expr], Dict[Expr, Expr]]
         Inequality constraints to the problem. This assumes g_1(x) >= 0, g_2(x) >= 0, ...
-    eq_constraints: List[sp.Poly]
+    eq_constraints: Union[List[Expr], Dict[Expr, Expr]]
         Equality constraints to the problem. This assumes h_1(x) = 0, h_2(x) = 0, ...
     rootsinfo : Optional[RootsInfo]
         The roots information of the polynomial. If None, it will be automatically computed.
@@ -92,8 +93,8 @@ def sum_of_square(
 
 def sum_of_square_multiple(
         polys: Union[List[Union[sp.Poly, str]], str],
-        ineq_constraints: List[sp.Poly] = [],
-        eq_constraints: List[sp.Poly] = [],
+        ineq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
+        eq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
         method_order: List[str] = METHOD_ORDER,
         configs: Dict[str, Dict] = DEFAULT_CONFIGS,
         poly_reader_configs: Dict[str, Any] = {},
@@ -112,9 +113,9 @@ def sum_of_square_multiple(
         The polynomials to solve. If it is a string, it will be treated as a file name.
         If it is a list of strings, each string will be treated as a polynomial.
         Empty lines will be ignored.
-    ineq_constraints: List[sp.Poly]
+    ineq_constraints: Union[List[Expr], Dict[Expr, Expr]]
         Inequality constraints to all problems. This assumes g_1(x) >= 0, g_2(x) >= 0, ...
-    eq_constraints: List[sp.Poly]
+    eq_constraints: Union[List[Expr], Dict[Expr, Expr]]
         Equality constraints to all problems. This assumes h_1(x) = 0, h_2(x) = 0, ...
     method_order : List[str]
         The order of methods to try. Defaults to METHOD_ORDER.

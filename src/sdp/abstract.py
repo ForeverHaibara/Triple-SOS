@@ -82,7 +82,7 @@ class SDPProblemBase(ABC):
     def dof(self) -> int: ...
 
     def get_size(self, key: str) -> int:
-        return Mat2Vec.length_of_mat(self._x0_and_space[key][1].shape[0])
+        return Mat2Vec.length_of_mat(self._x0_and_space[key][0].shape[0])
 
     @property
     def size(self) -> Dict[str, int]:
@@ -212,7 +212,7 @@ class SDPProblemBase(ABC):
         if verbose:
             S = self.S_from_y(y)
             S_numer = [np.array(mat).astype('float64') for mat in S.values()]
-            S_eigen = [np.min(np.linalg.eigvalsh(mat)) for mat in S_numer]
+            S_eigen = [np.min(np.linalg.eigvalsh(mat)) if mat.size else 0 for mat in S_numer]
             print(f'Minimum Eigenvalues = {S_eigen}')
         return rationalize_and_decompose(y, mat_func=self.S_from_y, projection=self.project, **kwargs)
 

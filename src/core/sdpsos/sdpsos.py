@@ -5,6 +5,7 @@ from typing import Union, Optional, List, Tuple, Dict, Callable, Generator, Any
 
 import numpy as np
 import sympy as sp
+from sympy import Poly, Expr
 from sympy.combinatorics import PermutationGroup
 
 from .manifold import RootSubspace
@@ -69,7 +70,7 @@ def _get_monomial_list(nvars: int, d: int, symmetry: MonomialReduction) -> List[
     return ls
 
 
-def _form_sdp(ineq_constraints: List[sp.Poly], eq_constraints: List[sp.Poly], nvars: int, degree: int,
+def _form_sdp(ineq_constraints: List[Poly], eq_constraints: List[Poly], nvars: int, degree: int,
                 rhs: sp.Matrix, symmetry: MonomialReduction, verbose: bool = False) -> SDPProblem:
     time0 = time()
     matrix_size = len(generate_expr(nvars, degree, symmetry=symmetry)[0])
@@ -150,7 +151,7 @@ def _form_sdp(ineq_constraints: List[sp.Poly], eq_constraints: List[sp.Poly], nv
         cnt += s
     return sdp, eq_vec
 
-def _get_equal_entries(ineq_constraints: List[sp.Poly], eq_constraints: List[sp.Poly],
+def _get_equal_entries(ineq_constraints: List[Poly], eq_constraints: List[Poly],
         nvars: int, degree: int, symmetry: MonomialReduction) -> List[List[int]]:
     offset = 0
     equal_entries = []
@@ -206,7 +207,7 @@ def _get_equal_entries(ineq_constraints: List[sp.Poly], eq_constraints: List[sp.
 
     return equal_entries
 
-def _constrain_nullspace(sdp: SDPProblem, ineq_constraints: List[sp.Poly], eq_constraints: List[sp.Poly],
+def _constrain_nullspace(sdp: SDPProblem, ineq_constraints: List[Poly], eq_constraints: List[Poly],
         nullspaces: Optional[Union[List[sp.Matrix], RootSubspace]], verbose: bool = False) -> SDPProblem:
     # constrain nullspace
     time0 = time()
@@ -246,7 +247,7 @@ class SOSProblem():
     """
     def __init__(
         self,
-        poly: sp.Poly,
+        poly: Poly,
         symmetry: Optional[Union[MonomialReduction, PermutationGroup]] = None,
         _check_homogeneous: bool = True,
         _check_symmetry: bool = True,
@@ -269,7 +270,7 @@ class SOSProblem():
         self._symmetry: MonomialReduction = MonomialPerm(symmetry) if not isinstance(symmetry, MonomialReduction) else symmetry
         self.manifold = RootSubspace(poly, symmetry=self._symmetry)
         self._sdp: SDPProblem = None
-        self._eqvec: Dict[sp.Poly, Tuple[sp.Matrix, sp.Matrix]] = {}
+        self._eqvec: Dict[Poly, Tuple[sp.Matrix, sp.Matrix]] = {}
 
     @property
     def sdp(self) -> SDPProblem:
@@ -302,8 +303,8 @@ class SOSProblem():
 
     def construct(
         self,
-        ineq_constraints: List[sp.Poly] = [],
-        eq_constraints: List[sp.Poly] = [],
+        ineq_constraints: List[Union[Poly, Expr]] = [],
+        eq_constraints: List[Union[Poly, Expr]] = [],
         verbose: bool = False,
     ) -> SDPProblem:
         """
@@ -311,9 +312,9 @@ class SOSProblem():
 
         Parameters
         ----------
-        ineq_constraints : List[sp.Poly]
+        ineq_constraints : List[Union[Poly, Expr]]
             Inequality constraints.
-        eq_constraints : List[sp.Poly]
+        eq_constraints : List[Union[Poly, Expr]]
             Equality constraints.
         verbose : bool
             Whether to print the progress. Default is False.
@@ -324,8 +325,8 @@ class SOSProblem():
             The SDP problem to solve.
         """
         gens = self.poly.gens
-        ineq_constraints = [ineq.as_poly(*gens) for ineq in ineq_constraints]
-        eq_constraints = [eq.as_poly(*gens) for eq in eq_constraints]
+        ineq_constraints = [Poly(ineq, *gens) for ineq in ineq_constraints]
+        eq_constraints = [Poly(eq, *gens) for eq in eq_constraints]
 
         degree = self._degree
         symmetry = self._symmetry
@@ -352,9 +353,21 @@ class SOSProblem():
     def as_solution(
         self,
         y: Optional[Union[sp.Matrix, np.ndarray, Dict]] = None,
+        ineq_constraints: Optional[Dict[Poly, Expr]] = None,
+        eq_constraints: Optional[Dict[Poly, Expr]] = None
     ) -> SolutionSDP:
         """
         Retrieve the solution to the original polynomial.
+
+        Parameters
+        ----------
+        y: Optional[Union[sp.Matrix, np.ndarray, Dict]]
+            The solution to the dual problem. Defaultedly it uses the solution from its own SDP problem.
+            When specified, it will use the given solution.
+        ineq_constraints: Optional[Dict[Poly, Expr]]
+            Conversion of polynomial inequality constraints to sympy expression forms.
+        eq_constraints: Optional[Dict[Poly, Expr]]
+            Conversion of polynomial equality constraints to sympy expression forms.
         """
         if y is not None:
             self.sdp.register_y(y)
@@ -363,36 +376,37 @@ class SOSProblem():
         if decomp is None:
             return None
         eqvec = {eq: x + space * y for eq, (x, space) in self._eqvec.items()}
-        return SolutionSDP.from_decompositions(self.poly, decomp, eqvec, self._symmetry)
+        return SolutionSDP.from_decompositions(self.poly, decomp, eqvec, self._symmetry,
+                                ineq_constraints=ineq_constraints, eq_constraints=eq_constraints)
 
 
-def _get_qmodule_list(poly: sp.Poly, ineq_constraints: List[sp.Poly],
-        ineq_constraints_with_trivial: bool = True, preordering: str = 'linear-progressive') -> Generator[List[sp.Poly], None, None]:
+def _get_qmodule_list(poly: Poly, ineq_constraints: List[Tuple[Poly, Expr]],
+        ineq_constraints_with_trivial: bool = True, preordering: str = 'linear-progressive') -> Generator[List[Tuple[Poly, Expr]], None, None]:
     _ACCEPTED_PREORDERINGS = ['none', 'linear', 'linear-progressive']
     if not preordering in _ACCEPTED_PREORDERINGS:
         raise ValueError("Invalid preordering method, expected one of %s, received %s." % (str(_ACCEPTED_PREORDERINGS), preordering))
 
     degree = poly.homogeneous_order()
-    poly_one = sp.Poly(1, *poly.gens)
+    poly_one = Poly(1, *poly.gens)
 
-    def degree_filter(polys):
-        return [_ for _ in polys if _.homogeneous_order() <= degree \
-                    and (degree - _.homogeneous_order()) % 2 == 0]
+    def degree_filter(polys_and_exprs):
+        return [pe for pe in polys_and_exprs if pe[0].homogeneous_order() <= degree \
+                    and (degree - pe[0].homogeneous_order()) % 2 == 0]
 
     if preordering == 'none':
         if ineq_constraints_with_trivial:
-            ineq_constraints = [poly_one] + ineq_constraints
+            ineq_constraints = [(poly_one, sp.S.One)] + ineq_constraints
         ineq_constraints = degree_filter(ineq_constraints)
         yield ineq_constraints
         return
 
     linear_ineqs = []
-    nonlin_ineqs = [poly_one]
-    for ineq in ineq_constraints:
+    nonlin_ineqs = [(poly_one, sp.S.One)]
+    for ineq, e in ineq_constraints:
         if ineq.is_linear:
-            linear_ineqs.append(ineq)
+            linear_ineqs.append((ineq, e))
         else:
-            nonlin_ineqs.append(ineq)
+            nonlin_ineqs.append((ineq, e))
 
     qmodule = nonlin_ineqs if ineq_constraints_with_trivial else nonlin_ineqs[1:]
     qmodule = degree_filter(qmodule)
@@ -403,12 +417,15 @@ def _get_qmodule_list(poly: sp.Poly, ineq_constraints: List[sp.Poly],
         for comb in combinations(linear_ineqs, n):
             mul = poly_one
             for c in comb:
-                mul = mul * c
+                mul = mul * c[0]
             d = mul.homogeneous_order()
-            for ineq in nonlin_ineqs:
+            if d > degree:
+                continue
+            mul_expr = sp.Mul(*(c[1] for c in comb))
+            for ineq, e in nonlin_ineqs:
                 new_d = d + ineq.homogeneous_order()
                 if new_d <= degree and (degree - new_d) % 2 == 0:
-                    qmodule.append(mul * ineq)
+                    qmodule.append((mul * ineq, mul_expr * e))
                     has_additional = True
 
         if has_additional and 'progressive' in preordering:
@@ -420,9 +437,9 @@ def _get_qmodule_list(poly: sp.Poly, ineq_constraints: List[sp.Poly],
 
 @sanitize_input(homogenize=True, infer_symmetry=True)
 def SDPSOS(
-        poly: sp.Poly,
-        ineq_constraints: List[sp.Poly] = [],
-        eq_constraints: List[sp.Poly] = [],
+        poly: Poly,
+        ineq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
+        eq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
         symmetry: Optional[Union[MonomialReduction, PermutationGroup]] = None,
         ineq_constraints_with_trivial: bool = True,
         preordering: str = 'linear-progressive',
@@ -461,19 +478,19 @@ def SDPSOS(
     For more flexible usage, please use
     ```
         sos_problem = SOSProblem(poly)
-        sos_problem._construct_sdp_by_default(monomial)
+        sos_problem.construct()
         sos_problem.solve(**kwargs)
         solution = sos_problem.as_solution()
     ```
 
     Parameters
     ----------
-    poly: sp.Poly
+    poly: Poly
         The polynomial to perform SOS on.
-    ineq_constraints: List[sp.Poly]
+    ineq_constraints: List[Poly]
         Inequality constraints to the problem. This assumes g_1(x) >= 0, g_2(x) >= 0, ...
         This is used to generate the quadratic module.
-    eq_constraints: List[sp.Poly]
+    eq_constraints: List[Poly]
         Equality constraints to the problem. This assumes h_1(x) = 0, h_2(x) = 0, ...
         This is used to generate the ideal (quotient ring).
     symmetry: PermutationGroup or MonomialReduction
@@ -496,9 +513,29 @@ def SDPSOS(
     allow_numer: int
         Whether to allow numerical solution (still under development).
     """
+    return _SDPSOS(poly, ineq_constraints=ineq_constraints, eq_constraints=eq_constraints,
+                symmetry=symmetry, ineq_constraints_with_trivial=ineq_constraints_with_trivial,
+                preordering=preordering, degree_limit=degree_limit, verbose=verbose,
+                solver=solver, solver_options=solver_options, allow_numer=allow_numer, **kwargs)
+
+
+def _SDPSOS(
+        poly: Poly,
+        ineq_constraints: Dict[Poly, Expr] = {},
+        eq_constraints: Dict[Poly, Expr] = {},
+        symmetry: MonomialReduction = None,
+        ineq_constraints_with_trivial: bool = True,
+        preordering: str = 'linear-progressive',
+        degree_limit: int = 12,
+        verbose: bool = False,
+        solver: Optional[str] = None,
+        solver_options: Dict[str, Any] = {},
+        allow_numer: int = 0,
+        **kwargs
+    ) -> Optional[SolutionSDP]:
     nvars = len(poly.gens)
     degree = poly.homogeneous_order()
-    if degree > degree_limit or degree < 2 or nvars < 1:
+    if degree > degree_limit or degree < 1 or nvars < 1:
         return None
     if not (poly.domain in (sp.ZZ, sp.QQ)):
         return None
@@ -512,7 +549,7 @@ def SDPSOS(
 
     sos_problem = SOSProblem(poly, symmetry=symmetry, _check_homogeneous=False, _check_symmetry=False)
 
-    qmodule_list = _get_qmodule_list(poly, ineq_constraints,
+    qmodule_list = _get_qmodule_list(poly, ineq_constraints.items(),
                         ineq_constraints_with_trivial=ineq_constraints_with_trivial, preordering=preordering)
 
     # odd_degree_vars = [i for i in range(nvars) if poly.degree(i) % 2 == 1]
@@ -534,16 +571,16 @@ def SDPSOS(
         # if unhandled_odd:
         #     continue
 
-        # now we solve the problem
         if verbose:
-            print(f"Qmodule = {qmodule}\nIdeal   = {eq_constraints}")
+            print(f"Qmodule = {[e[0] for e in qmodule]}\nIdeal   = {list(eq_constraints.keys())}")
         time0 = time()
+        # now we solve the problem
         try:
-            sdp = sos_problem.construct(qmodule, eq_constraints, verbose=verbose)
+            sdp = sos_problem.construct([e[0] for e in qmodule], list(eq_constraints.keys()), verbose=verbose)
             if sos_problem.solve(allow_numer=allow_numer, verbose=verbose, solver=solver, solver_options=solver_options, **kwargs):
                 if verbose:
                     print(f"Time for solving SDP{' ':20s}: {time() - time0:.6f} seconds. \033[32mSuccess\033[0m.")
-                solution = sos_problem.as_solution()
+                solution = sos_problem.as_solution(ineq_constraints=dict(qmodule), eq_constraints=eq_constraints)
                 return solution
         except Exception as e:
             if verbose:

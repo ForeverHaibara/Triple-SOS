@@ -8,6 +8,7 @@ from sympy.core.containers import Dict
 from sympy.core.numbers import zoo, nan
 from sympy.core.parameters import global_parameters
 from sympy.combinatorics import Permutation, PermutationGroup, CyclicGroup, SymmetricGroup
+from sympy.polys import cancel
 from sympy.printing.latex import LatexPrinter
 from sympy.printing.str import StrPrinter
 from sympy.printing.precedence import precedence_traditional, PRECEDENCE
@@ -59,8 +60,10 @@ def _func_perm(func, expr, symbols, perm_group):
 def _is_same_dict(d1, d2):
     if len(d1) != len(d2):
         return False
+    d1 = dict((cancel(k), cancel(v)) for k, v in d1.items())
+    d2 = dict((cancel(k), cancel(v)) for k, v in d2.items())
     for k, v in d1.items():
-        if k not in d2 or sympify(d2[k] - v).cancel() != 0:
+        if k not in d2 or cancel(d2[k] - v) != 0:
             return False
     return True
 
@@ -255,25 +258,37 @@ class CyclicExpr(sp.Expr):
         # first substitute the expression
         arg0, changed0 = self.args[0]._xreplace(rule)
 
-        # Case A. if we are replacing symbols to symbols
-        rule_vars = set(rule.keys())
+        def fs(x):
+            if hasattr(x, 'free_symbols'): return x.free_symbols
+            return set()
+
+        rule_vars = set.union(set(), *(fs(_) for _ in rule.keys()), *(fs(_) for _ in rule.values()))
         self_vars = set(self.symbols)
         changed_vars = rule_vars.intersection(self_vars)
+        if len(changed_vars) == 0:
+            # no symbol is changed, so we can preserve the cyclic property
+            return self.func(arg0, self.args[1], self.args[2]), changed0
+
+        # Case A. if we are replacing symbols to symbols
         for var in changed_vars:
-            if not (isinstance(rule[var], Symbol) and (rule[var] not in self_vars)):
+            if not (var in rule and isinstance(rule[var], Symbol) and (rule[var] not in self_vars)):
                 # the replacement is not cyclic with respect to the permutation group
                 break
         else:
-            new_symbols = tuple(rule.get(s, s) for s in self.symbols)
-            return self.func(arg0, new_symbols, self.perm), changed0
+            # check other rule are not related to these symbols
+            other_rule = [fs(k) | fs(v) for k, v in rule.items() if not k in changed_vars]
+            if not any(_.intersection(self_vars) for _ in other_rule):
+                new_symbols = tuple(rule.get(s, s) for s in self.symbols)
+                return self.func(arg0, new_symbols, self.perm), changed0
 
         # Case B. if we are replacing symbols to f(symbols)...
         # we check whether the symmetry of the replacement rule agrees with the permutation group
-        if isinstance(rule, (dict, Dict)) and rule_vars == self_vars:
+        if True: # and rule_vars == self_vars:
             for perm_dict in self._generate_all_translations(self.symbols, self.perm, full=False):
                  # checking only generators is sufficient
-                perm_symbols = tuple(perm_dict[s] for s in self.symbols)
-                permed_rule = [sympify(rule[s]).subs(perm_dict, simultaneous=True) for s in self.symbols]
+                # perm_symbols = tuple(perm_dict[s] for s in rule.keys())
+                perm_symbols = [sympify(s).subs(perm_dict, simultaneous=True) for s in rule.keys()]
+                permed_rule = [sympify(rule[s]).subs(perm_dict, simultaneous=True) for s in rule.keys()]
                 permed_rule = dict(zip(perm_symbols, permed_rule))
                 if not _is_same_dict(permed_rule, rule):
                     break
@@ -285,9 +300,6 @@ class CyclicExpr(sp.Expr):
         if len(changed_vars) >= len(self_vars) - 1:
             # every symbol is changed, so we can't preserve the cyclic property
             return _func_perm(self.base_func, self.args[0], self.symbols, self.perm)._xreplace(rule)
-        elif len(changed_vars) == 0:
-            # no symbol is changed, so we can preserve the cyclic property
-            return self.func(arg0, self.args[1], self.args[2]), changed0
         else:
             # partial change, compute the stabilized subgroup
             changed_inds = tuple(i for i, s in enumerate(self.symbols) if s in changed_vars)

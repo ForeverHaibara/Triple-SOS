@@ -1,12 +1,13 @@
 from inspect import signature
-from typing import Tuple, Optional, List, Union
+from typing import Tuple, Dict, List, Union, Optional
 
 import sympy as sp
+from sympy import sympify, Function
 from sympy.core.symbol import uniquely_named_symbol
 from sympy.combinatorics import Permutation, PermutationGroup, SymmetricGroup, AlternatingGroup, CyclicGroup
 
 from ..utils.expression.form import _reduce_factor_list
-from ..utils.expression.solution import SolutionSimple
+from ..utils.expression import SolutionSimple, CyclicExpr
 from ..utils.basis_generator import MonomialReduction, MonomialFull, MonomialPerm
 
 class PropertyDict(dict):
@@ -157,16 +158,17 @@ def identify_symmetry_from_lists(lst_of_lsts: List[List[sp.Poly]], has_homogeniz
     return PermutationGroup(Permutation(list(range(nvars))))
 
 
-def clear_polys_by_symmetry(polys: List[sp.Expr], symbols: Tuple[sp.Symbol, ...], symmetry: MonomialReduction) -> List[sp.Expr]:
+def clear_polys_by_symmetry(polys: List[Union[sp.Expr, Tuple[sp.Expr, ...]]],
+        symbols: Tuple[sp.Symbol, ...], symmetry: MonomialReduction) -> List[Union[sp.Expr, Tuple[sp.Expr, ...]]]:
     """
     Remove duplicate polys by symmetry.
     """
     if isinstance(symmetry, MonomialFull):
-        return polys
+        return polys if isinstance(polys, list) else list(polys)
 
     def _get_representation(t: sp.Expr):
         """Get the standard representation of the poly given symmetry."""
-        t = t.as_poly(symbols)
+        t = sp.Poly(t, symbols) if not isinstance(t, tuple) else sp.Poly(t[0], symbols)
         # if t.is_monomial and len(t.free_symbols) == 1:
         #     return None
         vec = symmetry.base().arraylize_sp(t)
@@ -181,17 +183,30 @@ def clear_polys_by_symmetry(polys: List[sp.Expr], symbols: Tuple[sp.Symbol, ...]
 
 
 
-def _sqf_part(p: sp.Poly, discard_square: bool = True) -> sp.Poly:
-    """Get the square-free part of a polynomial. Keep the sign."""
-    if p.is_zero: return p
+def _std_ineq_constraints(p: sp.Poly, e: sp.Expr) -> Tuple[sp.Poly, sp.Expr]:
+    if p.is_zero: return p, e
     c, lst = p.sqf_list()
     ret = sp.S(1 if c > 0 else -1).as_poly(*p.gens, domain=p.domain)
+    e = e / (c if c > 0 else -c)
     for q, d in lst:
-        if (not discard_square) or d % 2 == 1:
+        if d % 2 == 1:
             ret *= q
-    return ret
+        e = e / q.as_expr()**(d - d%2)
+    return ret, e
 
-
+def _std_eq_constraints(p: sp.Poly, e: sp.Expr) -> Tuple[sp.Poly, sp.Expr]:
+    if p.is_zero: return p, e
+    c, lst = p.sqf_list()
+    ret = sp.S(1 if c > 0 else -1).as_poly(*p.gens, domain=p.domain)
+    e = e / c
+    max_d = sp.Integer(max(1, *(d for q, d in lst)))
+    for q, d in lst:
+        ret *= q
+        e = e * q.as_expr()**(max_d - d)
+    e = sp.Pow(e, 1/max_d, evaluate=False)
+    if c < 0:
+        e = e.__neg__()
+    return ret, e
 
 def sanitize_input(
         homogenize: bool = False,
@@ -200,14 +215,33 @@ def sanitize_input(
         infer_symmetry: bool = False
     ):
     """
-    Decorator for sum of square functions. It sanitizes the input
-    so that each input is a polynomial.
+    Decorator for sum of square functions. It sanitizes the input type before calling the solver function.
+
+    For inequality and equality constraints, squared parts are extracted and the rest is
+    standardized. For example, -3(x+y)²z >= 0 will be converted to -z >= 0, while
+    5(x+y)²z == 0 will be converted to (x+y)z == 0.
+
+    Symmetric groups will be inferred if infer_symmetry is True. This will be called by
+    LinearSOS and SDPSOS. It checks the symmetry of the input polynomials and constraints
+    and parse constraints dictionary to a form that is compatible with the symmetry.
     """
     def decorator(func):
-        def wrapper(poly: sp.Expr, ineq_constraints: List[sp.Expr] = [], eq_constraints: List[sp.Expr] = [], *args, **kwargs):
+        def wrapper(poly: sp.Expr,
+                ineq_constraints: Union[List[sp.Expr], Dict[sp.Expr, sp.Expr]] = {},
+                eq_constraints: Union[List[sp.Expr], Dict[sp.Expr, sp.Expr]] = {}, *args, **kwargs):
+            if not isinstance(ineq_constraints, dict):
+                ineq_constraints = {e: e for e in ineq_constraints}
+            if not isinstance(eq_constraints, dict):
+                eq_constraints = {e: e for e in eq_constraints}
+            ineq_constraints = dict((sympify(e), sympify(e2).as_expr()) for e, e2 in ineq_constraints.items())
+            eq_constraints = dict((sympify(e), sympify(e2).as_expr()) for e, e2 in eq_constraints.items())
 
             original_symbols = [] if not isinstance(poly, sp.Poly) else poly.gens
-            symbols = set.union(set(poly.free_symbols), *[set(e.free_symbols) for e in ineq_constraints + eq_constraints])
+            symbols = set.union(
+                set(poly.free_symbols), 
+                *[set(e.free_symbols) for e in ineq_constraints.keys()],
+                *[set(e.free_symbols) for e in eq_constraints.keys()]
+            )
             if len(symbols) == 0:
                 symbols = {sp.Symbol('x')}
                 # raise ValueError('No symbols found in the input.')
@@ -216,44 +250,90 @@ def sanitize_input(
             symbols = tuple(original_symbols) + symbols
 
             poly = sp.Poly(poly, *symbols)
-            ineq_constraints = [sp.Poly(e, *symbols) for e in ineq_constraints]
-            eq_constraints = [sp.Poly(e, *symbols) for e in eq_constraints]
+            ineq_constraints = dict((sp.Poly(e, *symbols), e2) for e, e2 in ineq_constraints.items())
+            eq_constraints = dict((sp.Poly(e, *symbols), e2) for e, e2 in eq_constraints.items())
 
             homogenizer = None
             is_hom = poly.is_homogeneous
             is_hom = is_hom and all(e.is_homogeneous for e in ineq_constraints) and all(e.is_homogeneous for e in eq_constraints)
             if (not is_hom) and homogenize:
-                homogenizer = uniquely_named_symbol('t', symbols)
+                homogenizer = uniquely_named_symbol('t', 
+                    tuple(set.union(set(symbols), *(e.free_symbols for e in ineq_constraints.values()), *(e.free_symbols for e in eq_constraints.values()))))
                 poly = poly.homogenize(homogenizer)
-                ineq_constraints = [e.homogenize(homogenizer) for e in ineq_constraints]
-                ineq_constraints.append(homogenizer.as_poly(*poly.gens))
-                eq_constraints = [e.homogenize(homogenizer) for e in eq_constraints]
+                ineq_constraints = dict((e.homogenize(homogenizer), e2) for e, e2 in ineq_constraints.items())
+                ineq_constraints[homogenizer.as_poly(*poly.gens)] = homogenizer
+                eq_constraints = dict((e.homogenize(homogenizer), e2) for e, e2 in eq_constraints.items())
                 if '_homogenizer' in signature(func).parameters.keys():
                     kwargs['_homogenizer'] = homogenizer
 
             if ineq_constraint_sqf:
-                ineq_constraints = [_sqf_part(e) for e in ineq_constraints]
-            ineq_constraints = [e for e in ineq_constraints if e.total_degree() > 0]
+                ineq_constraints = dict(_std_ineq_constraints(*item) for item in ineq_constraints.items())
+            ineq_constraints = dict((e, e2) for e, e2 in ineq_constraints.items() if e.total_degree() > 0)
 
             if eq_constraint_sqf:
-                eq_constraints = [_sqf_part(e, discard_square = False) for e in eq_constraints]
-            eq_constraints = [e for e in eq_constraints if e.total_degree() > 0]
+                eq_constraints = dict(_std_eq_constraints(*item) for item in eq_constraints.items())
+            eq_constraints = dict((e, e2) for e, e2 in eq_constraints.items() if e.total_degree() > 0)
+            # print('Ineq =', ineq_constraints, '\nEq =', eq_constraints)
 
+
+            symmetry = kwargs.get('symmetry')
+            if homogenizer is not None and symmetry is not None:
+                # the generators might increase after homogenization
+                if isinstance(symmetry, MonomialPerm):
+                    symmetry = symmetry.perm_group
+                nvars = len(poly.gens)
+                if symmetry.degree != nvars:
+                    symmetry = PermutationGroup(*[Permutation(_.array_form + [nvars-1]) for _ in symmetry.args])
+
+            constraints_wrapper = None
             if infer_symmetry and signature(func).parameters.get('symmetry') is not None:
-                symmetry = kwargs.get('symmetry')
                 if symmetry is None:
-                    symmetry = identify_symmetry_from_lists([[poly], ineq_constraints, eq_constraints], has_homogenized=homogenizer is not None)
+                    symmetry = identify_symmetry_from_lists(
+                        [[poly], list(ineq_constraints.keys()), list(eq_constraints.keys())], has_homogenized=homogenizer is not None)
                 if not isinstance(symmetry, MonomialReduction):
                     symmetry = MonomialPerm(symmetry)
                 kwargs['symmetry'] = symmetry
 
-            # Call the solver function
+                # wrap ineq/eq constraints to be sympy function class wrt. generators rather irrelevent symbols
+                constraints_wrapper = _get_constraints_wrapper(poly.gens, ineq_constraints, eq_constraints, symmetry.to_perm_group(len(poly.gens)))
+                ineq_constraints, eq_constraints = constraints_wrapper[0], constraints_wrapper[1]
+
+            ########################################################
+            #               Call the solver function
+            ########################################################
             sol: SolutionSimple = func(poly, ineq_constraints, eq_constraints, *args, **kwargs)
             if sol is None:
                 return None
 
-            if (not is_hom) and homogenize:
+            if constraints_wrapper is not None:
+                # note: first restore the constraints (with homogenizer), and then dehomogenize
+                sol = sol.xreplace(constraints_wrapper[2])
+                sol = sol.xreplace(constraints_wrapper[3])
+                ...
+            if homogenizer is not None:
                 sol = sol.dehomogenize(homogenizer)
             return sol
         return wrapper
     return decorator
+
+
+def _get_constraints_wrapper(symbols: Tuple[int, ...], ineq_constraints: Dict[sp.Poly, sp.Expr], eq_constraints: Dict[sp.Poly, sp.Expr], perm_group: PermutationGroup):
+    i2g = {ineq: Function("G%d"%i)(*symbols) for i, ineq in enumerate(ineq_constraints.keys())}
+    e2h = {eq: Function("H%d"%i)(*symbols) for i, eq in enumerate(eq_constraints.keys())}
+
+    def _get_inverse(constraints, name='G'):
+        inv = dict()
+        rep_dict = dict((p.rep, v) for p, v in constraints.items())
+        for p in perm_group.elements:
+            reorder = p(symbols)
+            invorder = p.__invert__()(symbols)
+            for i, base in enumerate(constraints.keys()):
+                permed_base = base.reorder(*invorder).rep
+                permed_poly = rep_dict.get(permed_base)
+                if permed_poly is None:
+                    raise ValueError("Given constraints are not symmetric with respect to the permutation group.")
+                inv[Function(name + str(i))(*reorder)] = permed_poly
+        return inv
+    g2i = _get_inverse(ineq_constraints, name='G')
+    h2e = _get_inverse(eq_constraints, name='H')
+    return i2g, e2h, g2i, h2e
