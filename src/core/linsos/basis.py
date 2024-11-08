@@ -287,6 +287,7 @@ def quadratic_difference(symbols: Tuple[sp.Symbol, ...]) -> List[sp.Expr]:
     [(a - b)**2, (a - c)**2, (b - c)**2]
     """
     exprs = []
+    symbols = sorted(list(symbols), key=lambda x: x.name)
     for i in range(len(symbols)):
         for j in range(i + 1, len(symbols)):
             exprs.append((symbols[i] - symbols[j])**2)

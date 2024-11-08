@@ -2,7 +2,7 @@ import sympy as sp
 
 from .quartic import sos_struct_quartic
 from .utils import (
-    CyclicSum, CyclicProduct, Coeff,
+    CyclicSum, CyclicProduct, Coeff, CommonExpr,
     sum_y_exprs, nroots, radsimp, rationalize, rationalize_bound
 )
 
@@ -182,7 +182,7 @@ def sos_struct_quintic_symmetric(coeff, real = True):
             ])
             exprs = [
                 CyclicSum((a+b+(2*z+1)*c)*(a-b)**2*(a+b-c)**2),
-                CyclicSum(a**3*(a-b)*(a-c)),
+                CommonExpr.schur(5),
                 CyclicSum(c*(a-b)**2*(a+b-c)**2),
                 CyclicSum(a**3*(b-c)**2),
                 CyclicProduct(a) * CyclicSum((a-b)**2),
@@ -251,7 +251,7 @@ def sos_struct_quintic_symmetric(coeff, real = True):
             else:
                 # higher degree
                 # we must have t1 = (1 - 2z) / 3 <= 1
-                multiplier = CyclicSum(a**2 - b*c)
+                multiplier = CyclicSum((a - b)**2)/2
                 if y2 <= 0: # 2z - 1 + 2t_2 >= 0
                     # note that:
                     # s((a+b-c)(a-b)2(a+b-tc)2)s(a2-ab) 
@@ -316,7 +316,7 @@ def sos_struct_quintic_symmetric(coeff, real = True):
                 rem / 2
             ])
             if all(_ >= 0 for _ in y):
-                multiplier = CyclicSum(a**2 - b*c)
+                multiplier = CyclicSum((a - b)**2)/2
                 exprs = [
                     CyclicSum(c*(a-c)**2*(b-c)**2*((z+1)*(a+b) + 2*c)**2),
                     CyclicSum(a) * CyclicProduct((a-b)**2),
@@ -353,7 +353,7 @@ def sos_struct_quintic_symmetric(coeff, real = True):
             rem / 2
         ])
         if all(_ >= 0 for _ in y):
-            multiplier = CyclicSum(a**2 - b*c)
+            multiplier = CyclicSum((a - b)**2)/2
             exprs = [
                 CyclicSum(c*(a-c)**2*(b-c)**2*((1-t1)*(a+b) + 2*c)**2),
                 CyclicSum(c*(a-c)**2*(b-c)**2*((1-t2)*(a+b) + 2*c)**2),
@@ -381,7 +381,7 @@ def sos_struct_quintic_symmetric(coeff, real = True):
                 rem / 2
             ]
             if y[-2] >= 0:
-                multiplier = CyclicSum(a**2 - b*c)
+                multiplier = CyclicSum((a - b)**2)/2
                 exprs = [
                     CyclicSum(c*(a**2*c+b**2*c+c**3-(1-z)/2*a*c**2-(1-z)/2*b*c**2-(2*z+3)*a*b*c+(z+1)/2*a**2*b+(z+1)/2*a*b**2)**2),
                     CyclicSum(c**3*(a-b)**2) * CyclicSum((a-b)**2),
@@ -444,7 +444,7 @@ def sos_struct_quintic_symmetric(coeff, real = True):
                             x0, y0 = x_, y_
                             break
 
-                multiplier = CyclicSum(a**2 + (y0**2 + 2*y0 - 1)*b*c)
+                multiplier = CommonExpr.quadratic(1, y0**2 + 2*y0 - 1)
                 func_g = (c**2 - r*b*c + b**2 - (2-r)*a*b)*(c+y0*b) + (c**2 - r*a*c + a**2 - (2-r)*a*b)*(c+y0*a) - c**3 + a*b*c + x0*(a**2*b + a*b**2 - 2*a*b*c)
                 func_g = func_g.expand()
                 main_solution = m * CyclicSum(c * func_g**2)
@@ -537,7 +537,8 @@ def sos_struct_quintic_symmetric(coeff, real = True):
                             break
 
                 c1, c2, c3, ind = _compute_coeffs(x0, y0, w)
-                multiplier = CyclicSum(a**2 + c1*b*c)
+                # multiplier = CyclicSum(a**2 + c1*b*c)
+                multiplier = CommonExpr.quadratic(1, c1)
                 func_g = x0*((b+c-t*a)*(c-b)**2+(c+a-t*b)*(a-c)**2) + (sp.Rational(1,2)-x0)*(b+c-t*a)*(c+a-t*b)*(2*c-a-b) + y0*(a+b-t*c)*(a-b)**2
                 func_g = func_g.expand()
 
@@ -598,7 +599,8 @@ def sos_struct_quintic_symmetric(coeff, real = True):
             elif extra >= 0:
                 w0, w1 = radsimp([(3-u_)/(4*u_), 9*(u_-1)**2*(u_+1)*(u_+3)/(32*u_**3)])
                 func_g = ((w0*(a+b) - c)*(a**2+b**2+c**2 - (w_+1)/2*c*(a+b) + (w_-2)*a*b) - w1*a*b*(2*c-a-b)).expand()
-                multiplier = CyclicSum(a**2 - radsimp((7*u_**2+30*u_-9)/(16*u_**2))*b*c)
+                # multiplier = CyclicSum(a**2 - radsimp((7*u_**2+30*u_-9)/(16*u_**2))*b*c)
+                multiplier = CommonExpr.quadratic(1, -radsimp((7*u_**2+30*u_-9)/(16*u_**2)))
                 m_inv_u = -m / (64*u_**3)
 
                 pw1, pw2 = radsimp(m_inv_u * eqt1(u_)), radsimp(m_inv_u * eqt2(u_))
@@ -730,7 +732,7 @@ def _sos_struct_quintic_symmetric_hexagon(coeff):
         w2 = u / x2 # (u - 0) / (x2 - 0)
         w1 = 1 - w2
         if 0 <= w1 <= 1:
-            multiplier = CyclicSum(a*a - b*c)
+            multiplier = CyclicSum((a - b)**2)/2
             y = [
                 w1 * m / 2,
                 w2 * m,

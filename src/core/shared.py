@@ -8,7 +8,7 @@ from sympy.combinatorics import Permutation, PermutationGroup, SymmetricGroup, A
 
 from ..utils.expression.form import _reduce_factor_list
 from ..utils.expression import SolutionSimple, CyclicExpr
-from ..utils.basis_generator import MonomialReduction, MonomialFull, MonomialPerm
+from ..utils.basis_generator import MonomialReduction, MonomialFull, MonomialPerm, MonomialHomogeneousFull
 
 class PropertyDict(dict):
     def __getattr__(self, key):
@@ -212,7 +212,8 @@ def sanitize_input(
         homogenize: bool = False,
         ineq_constraint_sqf: bool = True,
         eq_constraint_sqf: bool = True,
-        infer_symmetry: bool = False
+        infer_symmetry: bool = False,
+        wrap_constraints: bool = False
     ):
     """
     Decorator for sum of square functions. It sanitizes the input type before calling the solver function.
@@ -285,15 +286,20 @@ def sanitize_input(
                 if symmetry.degree != nvars:
                     symmetry = PermutationGroup(*[Permutation(_.array_form + [nvars-1]) for _ in symmetry.args])
 
-            constraints_wrapper = None
-            if infer_symmetry and signature(func).parameters.get('symmetry') is not None:
-                if symmetry is None:
-                    symmetry = identify_symmetry_from_lists(
-                        [[poly], list(ineq_constraints.keys()), list(eq_constraints.keys())], has_homogenized=homogenizer is not None)
-                if not isinstance(symmetry, MonomialReduction):
-                    symmetry = MonomialPerm(symmetry)
+            if infer_symmetry and symmetry is None:
+                symmetry = identify_symmetry_from_lists(
+                    [[poly], list(ineq_constraints.keys()), list(eq_constraints.keys())], has_homogenized=homogenizer is not None)
+            if symmetry is not None and not isinstance(symmetry, MonomialReduction):
+                symmetry = MonomialPerm(symmetry)
+            elif symmetry is None:
+                symmetry = MonomialHomogeneousFull()
+
+            _has_symmetry_kwarg = signature(func).parameters.get('symmetry') is not None
+            if _has_symmetry_kwarg:
                 kwargs['symmetry'] = symmetry
 
+            constraints_wrapper = None
+            if wrap_constraints:
                 # wrap ineq/eq constraints to be sympy function class wrt. generators rather irrelevent symbols
                 constraints_wrapper = _get_constraints_wrapper(poly.gens, ineq_constraints, eq_constraints, symmetry.to_perm_group(len(poly.gens)))
                 ineq_constraints, eq_constraints = constraints_wrapper[0], constraints_wrapper[1]
@@ -309,7 +315,6 @@ def sanitize_input(
                 # note: first restore the constraints (with homogenizer), and then dehomogenize
                 sol = sol.xreplace(constraints_wrapper[2])
                 sol = sol.xreplace(constraints_wrapper[3])
-                ...
             if homogenizer is not None:
                 sol = sol.dehomogenize(homogenizer)
             return sol

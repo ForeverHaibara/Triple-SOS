@@ -4,7 +4,7 @@ import sympy as sp
 
 from .quartic import sos_struct_quartic
 from .utils import (
-    CyclicSum, CyclicProduct, Coeff, sos_struct_handle_uncentered,
+    CyclicSum, CyclicProduct, Coeff, CommonExpr, sos_struct_handle_uncentered,
     sum_y_exprs, nroots, rationalize_bound, rationalize_func, quadratic_weighting, radsimp,
     prove_univariate
 )
@@ -35,17 +35,6 @@ def sos_struct_sextic_symmetric_ultimate(coeff, real = True):
         return _sos_struct_sextic_tree(coeff)
 
     return _sos_struct_sextic_symmetric_ultimate(coeff, real = real)
-
-
-def _wrap_c1_c2(c1, c2):
-    """Return CyclicSum(c1*a^2 + c2*b*c) while clearing the denominators."""
-    if c1 == 2 and c2 == -2:
-        return CyclicSum((a-b)**2)
-    if c2 == 2*c1:
-        return c1 * CyclicSum(a)**2
-    p = c1*a**2 + c2*b*c
-    p = p.together().as_coeff_Mul()
-    return p[0] * CyclicSum(p[1])
 
 
 def _restructure_quartic_polynomial(poly):
@@ -474,8 +463,8 @@ def _sos_struct_sextic_hexagram_symmetric(coeff):
         if all(_ >= 0 for _ in y):
             exprs = [
                 CyclicSum(a*b*(a-c)**2*(b-c)**2),
-                CyclicSum(b**2*c**2*(a-b)*(a-c)),
-                CyclicSum(a*(a-b)*(a-c)) * CyclicProduct(a),
+                CommonExpr.schurinv(6),
+                CommonExpr.schur(3) * CyclicProduct(a),
                 CyclicSum(a*(b-c)**2) * CyclicProduct(a),
                 CyclicProduct(a**2)
             ]
@@ -612,7 +601,7 @@ def _sos_struct_sextic_tree(coeff):
         if t == 2 or t == -1:
             return sp.Rational(1,2) * CyclicSum(a)**2 * CyclicSum((b-c)**4)
         q, p = t.as_numer_denom()
-        return radsimp(1/(2*p**3)) * CyclicSum(p*a**2 + q*b*c) * CyclicSum((a-b)**2*(p*a+p*b-q*c)**2)
+        return radsimp(1/(2*p**3)) * CommonExpr.quadratic(p, q) * CyclicSum((a-b)**2*(p*a+p*b-q*c)**2)
 
     def _solve_regular(t):
         # Proof given by the theorem.
@@ -757,7 +746,7 @@ def _sos_struct_sextic_iran96(coeff, real = False):
                 CyclicSum(a*b*(a-b)**4),
                 CyclicSum(a**2*b**2*(a-b)**2),
                 CyclicSum(a*b) * CyclicSum(a**2*(b-c)**2),
-                CyclicSum(a*(a-b)*(a-c)) * CyclicProduct(a),
+                CommonExpr.schur(3) * CyclicProduct(a),
                 CyclicSum(a*(b-c)**2) * CyclicProduct(a),
                 CyclicProduct(a**2)
             ]
@@ -781,7 +770,7 @@ def _sos_struct_sextic_iran96(coeff, real = False):
                 CyclicSum(a*b*(a-b)**4),
                 CyclicProduct((a-b)**2),
                 CyclicSum(a*b*(a-c)**2*(b-c)**2),
-                CyclicSum(a*(a-b)*(a-c)) * CyclicProduct(a),
+                CommonExpr.schur(3) * CyclicProduct(a),
                 CyclicSum(a*(b-c)**2) * CyclicProduct(a),
                 CyclicProduct(a**2)
             ]
@@ -846,8 +835,8 @@ def _sos_struct_sextic_iran96(coeff, real = False):
                     CyclicSum(a*b*(a-b)**2*(a+b-u_*c)**2),
                     CyclicProduct((a-b)**2),
                     CyclicSum(a*b*(a-c)**2*(b-c)**2),
-                    CyclicSum(b**2*c**2*(a-b)*(a-c)),
-                    CyclicSum(a*(a-b)*(a-c)) * CyclicProduct(a),
+                    CommonExpr.schurinv(6),
+                    CommonExpr.schur(3) * CyclicProduct(a),
                     CyclicSum(a*(b-c)**2) * CyclicProduct(a),
                     CyclicProduct(a**2)
                 ]
@@ -870,7 +859,7 @@ def _sos_struct_sextic_iran96(coeff, real = False):
                 exprs = [
                     CyclicSum(a*b*(a**2+b**2-2*c**2+2*x_*a*b-x_*a*c-x_*b*c)**2),
                     CyclicSum(a*b*(a-c)**2*(b-c)**2),
-                    CyclicSum(a*(a-b)*(a-c)) * CyclicProduct(a),
+                    CommonExpr.schur(3) * CyclicProduct(a),
                     CyclicSum(a*(b-c)**2) * CyclicProduct(a),
                     CyclicProduct(a**2)
                 ]
@@ -919,7 +908,7 @@ def _sos_struct_sextic_iran96(coeff, real = False):
                     CyclicSum(a*b) * CyclicSum(a**2*(b-c)**2),
                     CyclicProduct((a-b)**2),
                     CyclicSum(a*b*(a-c)**2*(b-c)**2),
-                    CyclicSum(a*(a-b)*(a-c)) * CyclicProduct(a),
+                    CommonExpr.schur(3) * CyclicProduct(a),
                     CyclicSum(a*(b-c)**2) * CyclicProduct(a),
                     CyclicProduct(a**2)
                 ]
@@ -1125,7 +1114,7 @@ def _sos_struct_sextic_iran96(coeff, real = False):
             return None
 
         pw1, pw2, pw3 = radsimp([m * pw1, m * pw2, m * pw3])
-        p1 = pw1  * CyclicSum(a) * CyclicSum(a*(a-b)*(a-c))\
+        p1 = pw1  * CyclicSum(a) * CommonExpr.schur(3)\
             + pw2 * CyclicSum(a) * CyclicSum(a*(b-c)**2)\
             + pw3 * CyclicSum((b-c)**2*(b+c-a)**2)
         p1 = p1.as_coeff_Mul()
@@ -1532,7 +1521,7 @@ class _sextic_sym_axis:
         if multiplier == (2, -2):
             p2 = t_coeff/4 * CyclicSum((a-b)**2) * CyclicProduct((a+b-2*c)**2) + 2 * CyclicSum(a**2-a*b)**2 * rem_poly
         else:
-            p0 = _wrap_c1_c2(multiplier[0], multiplier[1])
+            p0 = CommonExpr.quadratic(multiplier[0], multiplier[1])
             p2 = t_coeff/4 * p0 * CyclicProduct((a+b-2*c)**2) + CyclicSum((a-b)**2)/2 * p0 * rem_poly
         return p2, sp.S(0), sp.S(0)
 
@@ -1584,10 +1573,10 @@ class _sextic_sym_axis:
         c1 = c11 + c21 + multiplier[0]*ker_coeff
         c2 = c12 + c22 + multiplier[1]*ker_coeff
 
-        multiplier_func = _wrap_c1_c2(multiplier[0], multiplier[1])
+        multiplier_func = CommonExpr.quadratic(multiplier[0], multiplier[1])
 
         if c1 >= 0 and c1 + c2 >= 0:
-            sol = p1 + p2 + _wrap_c1_c2(c1, c2) * CyclicProduct((a-b)**2)
+            sol = p1 + p2 + CommonExpr.quadratic(c1, c2) * CyclicProduct((a-b)**2)
             flg = 0 if 2*c1 >= c2 and 2*multiplier[0] >= multiplier[1] else 1
             return sol / multiplier_func, flg
 
@@ -1690,8 +1679,8 @@ class _sextic_sym_axis:
                 r = (x-1)**2
                 solution = r/4 * CyclicSum(a*(a-b)*(a-c)*(2*a-u*b-u*c).together())**2 \
                     + r*(1-u/4) * CyclicSum(a*b*(a-b)**2*func_g**2) + r*(1-u/4)/2 * CyclicSum(a**2*(b-c)**2*func_h**2)
-                p1 = (a**2 - u/4*b*c).together().as_coeff_Mul()
-                solution = solution / (p1[0] * CyclicSum(p1[1])) + extra * CyclicProduct((a-b)**2)
+                # p1 = (a**2 - u/4*b*c).together().as_coeff_Mul()
+                solution = solution / CommonExpr.quadratic(1, -u/4) + extra * CyclicProduct((a-b)**2)
                 return solution, 1
             return _solve_degen(x, y, suv, ker_coeff)
 
@@ -1726,7 +1715,7 @@ class _sextic_sym_axis:
                 solution += final_coeff * (puv**2 * CyclicSum(a*b)*CyclicProduct((a-b)**2) +
                     (2-m)* CyclicSum(b*c*(a-b)*(a-c)*(a**2-suv*a*b+puv*b**2)*(a**2-suv*a*c+puv*c**2)))
             if with_frac:
-                solution = solution / CyclicSum(a**2 + phi*b*c)
+                solution = solution / CommonExpr.quadratic(1, phi)
             return solution
         
         if isinstance(params[2], sp.Rational):
@@ -1765,9 +1754,10 @@ class _sextic_sym_axis:
                 p1 = _solve_border(*params1, **kwargs)
                 p2 = _solve_border(*params2, **kwargs)
                 solution = w1*(x-1)**2 * p1 + w2*(x-1)**2 * p2
-                quad_form = ((ker_coeff - ker_coeffw1) * a**2 + ker_coeff_tmp * b*c).together().as_coeff_Mul()
-                solution += quad_form[0] * CyclicSum(quad_form[1]) * CyclicProduct((a-b)**2)
-                solution = solution / CyclicSum(a**2 + phiw*b*c)
+                # quad_form = ((ker_coeff - ker_coeffw1) * a**2 + ker_coeff_tmp * b*c).together().as_coeff_Mul()
+                quad_form = CommonExpr.quadratic(ker_coeff - ker_coeffw1, ker_coeff_tmp)
+                solution += quad_form * CyclicProduct((a-b)**2)
+                solution = solution / CommonExpr.quadratic(1, phiw)
                 return solution, 1
         return None, 2
 
@@ -1937,7 +1927,7 @@ def _sos_struct_sextic_symmetric_ultimate(coeff, real = True):
                     3*m + 3*(m + p) + n + w
                 ])
                 if all(_ >= 0 for _ in y):
-                    p1 = u*CyclicSum(a*(a-b)*(a-c)) + (u+v)*CyclicSum(a*(b-c)**2)
+                    p1 = u*CommonExpr.schur(3) + (u+v)*CyclicSum(a*(b-c)**2)
                     p1 = p1.together().as_coeff_Mul()
                     y[-2] = p1[0]
                     exprs = [
@@ -2131,7 +2121,8 @@ def _sos_struct_sextic_symmetric_ultimate_1root(coeff, poly, roots, real = True)
             quartic_solution = sos_struct_quartic(Coeff(dict(quartic), is_rational = is_rational), None)
             if quartic_solution is not None:
                 p0 = (2*(2*z0 + z3)*a**2 + 2*(z1 + 2*z2)*b*c).together().as_coeff_Mul()
-                multiplier = p0[0] * CyclicSum(p0[1])
+                # multiplier = p0[0] * CyclicSum(p0[1])
+                multiplier = CommonExpr.quadratic(2*(2*z0 + z3), 2*(z1 + 2*z2))
                 p1 = quartic_solution * CyclicSum((a-b)**2*(a+b-x_*c)**2)
                 func = lambda a,b,c: (z0*(a**2+b**2) + z1*a*b + z2*c*(a+b) + z3*c**2)*(a-b)*(a+b-x_*c)
                 p2 = CyclicSum((func(b,c,a) - func(c,a,b)).expand()**2)
@@ -2214,7 +2205,8 @@ def _sos_struct_sextic_symmetric_ultimate_2roots(coeff, poly, roots):
                 diffpoly = solution.doit().as_poly(a,b,c)
             elif x > 1:
                 diffpoly = get_diffpoly(x)
-                multiplier = CyclicSum(a**2 + (x-2)*b*c)
+                # multiplier = CyclicSum(a**2 + (x-2)*b*c)
+                multiplier = CommonExpr.quadratic(1, x - 2)
                 solution = (4-x)*(x-1) / 2 * coeff6 * CyclicSum(a**2*(b-c)**2*(a**2+b**2+c**2-2*a*b-2*a*c+(2-x)*b*c)**2) \
                     + coeff6 / 2 * CyclicSum((b-c)**2) * (((2*x-x**2)*a*b*c-CyclicProduct(a+b-c)))**2
                 solution = solution / multiplier
@@ -2233,7 +2225,7 @@ def _sos_struct_sextic_symmetric_ultimate_2roots(coeff, poly, roots):
                 pp = sp.together(pp).as_coeff_Mul()
                 y = [coeff6, pp[0]]
                 exprs = [
-                    CyclicSum(a*(a-b)*(a-c)) * CyclicProduct(a) * CyclicSum((b-c)**2*(b+c-(x+1)*a)**2),
+                    CommonExpr.schur(3) * CyclicProduct(a) * CyclicSum((b-c)**2*(b+c-(x+1)*a)**2),
                     CyclicProduct((a-b)**2) * pp[1]
                 ]
                 solution = sum_y_exprs(y, exprs) / multiplier

@@ -3,6 +3,7 @@ from itertools import product
 import sympy as sp
 import numpy as np
 
+from .cubic import sos_struct_cubic
 from .quartic import sos_struct_quartic
 from .quintic_symmetric import sos_struct_quintic_symmetric
 from ....utils.roots.roots import RootTernary
@@ -63,7 +64,8 @@ def _solve_sa2minusab_mul_cubic(x, y, mul = sp.S(1)):
     When (x, y) is not on the curve, it would be a linear combination of two points on the curve.
     """
     if x >= 0 and y >= 0:
-        return sp.Rational(1,2) * mul * CyclicSum((a-b)**2) * CyclicSum(a**3 + x*a**2*b + y*a*b**2 - (x+y+1)*CyclicProduct(a))
+        cubic_poly = Coeff({(3,0,0): 1, (2,1,0): x, (1,2,0): y, (1,1,1): -3*(x+y+1)})
+        return sp.Rational(1,2) * mul * CyclicSum((a-b)**2) * sos_struct_cubic(cubic_poly)
 
     def _solve_t(t):
         return radsimp(1/t**2) * CyclicSum(a*(t*a - (t-1)*b - c)**2*(t*b - (t-1)*c - a)**2)

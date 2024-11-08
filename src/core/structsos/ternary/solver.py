@@ -15,6 +15,7 @@ from .acyclic import sos_struct_acyclic_sparse
 
 from ..utils import Coeff, PolynomialNonpositiveError, PolynomialUnsolvableError
 from ..sparse import sos_struct_common, sos_struct_degree_specified_solver
+from ..solution import SolutionStructural
 from ....utils import verify_hom_cyclic
 
 SOLVERS = {
@@ -76,38 +77,35 @@ def _structural_sos_3vars_acyclic(
         real=real
     )
 
-def _structural_sos_3vars_nonhom(
-        coeff: Union[sp.Poly, Coeff, Dict],
-        real: bool = True
-    ):
-    """
-    Internal function to solve a 3-var nonhomogeneous polynomial using structural SOS.
-    The function assumes the polynomial is wrt. (a, b, c).
-    It does not check the homogeneous / cyclic property of the polynomial to save time.
-    """
-    if not isinstance(coeff, Coeff):
-        coeff = Coeff(coeff)
+# def _structural_sos_3vars_nonhom(
+#         coeff: Union[sp.Poly, Coeff, Dict],
+#         real: bool = True
+#     ):
+#     """
+#     Internal function to solve a 3-var nonhomogeneous polynomial using structural SOS.
+#     The function assumes the polynomial is wrt. (a, b, c).
+#     It does not check the homogeneous / cyclic property of the polynomial to save time.
+#     """
+#     if not isinstance(coeff, Coeff):
+#         coeff = Coeff(coeff)
 
-    return sos_struct_common(coeff,
-        sos_struct_degree_specified_solver(SOLVERS_NONHOM, homogeneous=False),
-        real=real
-    )
+#     return sos_struct_common(coeff,
+#         sos_struct_degree_specified_solver(SOLVERS_NONHOM, homogeneous=False),
+#         real=real
+#     )
 
 
-def structural_sos_3vars(
-        poly: sp.Poly,
-        real: bool = True,
-    ) -> sp.Expr:
+def structural_sos_3vars(poly, ineq_constraints: Dict[sp.Poly, sp.Expr] = {}, eq_constraints: Dict[sp.Poly, sp.Expr] = {}) -> Optional[sp.Expr]:
     """
     Main function of structural SOS for 3-var homogeneous polynomials. 
     It first assumes the polynomial has variables (a,b,c) and
     latter substitutes the variables with the original ones.
     """
-    if len(poly.gens) != 3:
+    if len(poly.gens) != 3: # should not happen
         raise ValueError("structural_sos_3vars only supports 3-var polynomials.")
 
     is_hom, is_cyc = verify_hom_cyclic(poly)
-    if not is_hom:
+    if not is_hom: # should not happen
         raise ValueError("structural_sos_3vars only supports homogeneous polynomials.")
 
     if is_cyc:
@@ -116,7 +114,7 @@ def structural_sos_3vars(
         func = _structural_sos_3vars_acyclic
 
     try:
-        solution = func(Coeff(poly), real = real)
+        solution = func(Coeff(poly), real = 1)
     except (PolynomialNonpositiveError, PolynomialUnsolvableError):
         return None
 
@@ -125,36 +123,37 @@ def structural_sos_3vars(
 
     if poly.gens != (sp.symbols("a b c")):
         solution = solution.xreplace(dict(zip(sp.symbols("a b c"), poly.gens)))
+    solution = SolutionStructural._rewrite_symbols_to_constraints(solution, ineq_constraints)
     return solution
 
 
-def structural_sos_3vars_nonhom(
-        poly: sp.Poly,
-        real: bool = True,
-    ) -> sp.Expr:
-    """
-    Main function of structural SOS for 3-var nonhomogeneous polynomials. It first assumes the polynomial
-    has variables (a,b,c) and latter substitutes the variables with the original ones.
+# def structural_sos_3vars_nonhom(
+#         poly: sp.Poly,
+#         real: bool = True,
+#     ) -> sp.Expr:
+#     """
+#     Main function of structural SOS for 3-var nonhomogeneous polynomials. It first assumes the polynomial
+#     has variables (a,b,c) and latter substitutes the variables with the original ones.
 
-    The function is designed to exploit the symmetry of the polynomial. It will return
-    cyclic solutions if possible.
-    """
-    if len(poly.gens) != 3:
-        raise ValueError("structural_sos_3vars only supports 3-var polynomials.")
+#     The function is designed to exploit the symmetry of the polynomial. It will return
+#     cyclic solutions if possible.
+#     """
+#     if len(poly.gens) != 3:
+#         raise ValueError("structural_sos_3vars only supports 3-var polynomials.")
 
-    coeff = Coeff(poly)
-    is_sym = coeff.is_symmetric()
-    if not is_sym:
-        # give up
-        return None
+#     coeff = Coeff(poly)
+#     is_sym = coeff.is_symmetric()
+#     if not is_sym:
+#         # give up
+#         return None
 
-    try:
-        solution = _structural_sos_3vars_nonhom(coeff, real = real)
-    except (PolynomialNonpositiveError, PolynomialUnsolvableError):
-        return None
+#     try:
+#         solution = _structural_sos_3vars_nonhom(coeff, real = real)
+#     except (PolynomialNonpositiveError, PolynomialUnsolvableError):
+#         return None
 
-    if solution is None:
-        return None
+#     if solution is None:
+#         return None
 
-    solution = solution.xreplace(dict(zip(sp.symbols("a b c"), poly.gens)))
-    return solution
+#     solution = solution.xreplace(dict(zip(sp.symbols("a b c"), poly.gens)))
+#     return solution

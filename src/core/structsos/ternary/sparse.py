@@ -8,6 +8,7 @@ from .utils import (
 )
 from .dense_symmetric import sos_struct_dense_symmetric
 from .quadratic import sos_struct_quadratic
+from .cubic import sos_struct_cubic
 from .quartic import sos_struct_quartic
 
 def sos_struct_sparse(coeff, real = True):
@@ -34,6 +35,8 @@ def sos_struct_sparse(coeff, real = True):
             return v * CyclicSum(a) if v >= 0 else None
         elif degree == 2:
             return sos_struct_quadratic(coeff)
+        elif degree == 3:
+            return sos_struct_cubic(coeff)
         elif degree == 4:
             # quartic should be handled by _sos_struct_quartic
             # because it presents proof for real numbers

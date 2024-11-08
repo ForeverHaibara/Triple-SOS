@@ -1,7 +1,7 @@
 import sympy as sp
 
 from .utils import (
-    CyclicSum, CyclicProduct,
+    CyclicSum, CyclicProduct, CommonExpr,
     sum_y_exprs, radsimp, rationalize_func, quadratic_weighting
 )
 from ..sparse import sos_struct_quadratic
@@ -42,7 +42,8 @@ def _sos_struct_cubic_symmetric(coeff):
     ])
     if all(_ >= 0 for _ in y):
         exprs = [
-            CyclicSum(a*(a-b)*(a-c)),
+            # CyclicSum(a*(a-b)*(a-c)),
+            CommonExpr.schur(3),
             CyclicSum(a*(b-c)**2),
             CyclicProduct(a)
         ]
@@ -62,7 +63,7 @@ def _sos_struct_cubic_degenerate(coeff):
     if p == q:
         return CyclicSum(a*(b-c)**2) * p + rem * CyclicProduct(a)
 
-    return p * CyclicSum(a**2*b - CyclicProduct(a)) + q * CyclicSum(a**2*c - CyclicProduct(a))\
+    return p * CommonExpr.amgm((2,1,0),(1,1,1)) + q * CommonExpr.amgm((2,0,1),(1,1,1))\
              + rem * CyclicProduct(a)
 
 

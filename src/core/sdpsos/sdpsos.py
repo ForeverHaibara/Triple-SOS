@@ -435,7 +435,7 @@ def _get_qmodule_list(poly: Poly, ineq_constraints: List[Tuple[Poly, Expr]],
         yield qmodule
 
 
-@sanitize_input(homogenize=True, infer_symmetry=True)
+@sanitize_input(homogenize=True, infer_symmetry=True, wrap_constraints=True)
 def SDPSOS(
         poly: Poly,
         ineq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},

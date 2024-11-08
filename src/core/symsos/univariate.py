@@ -609,7 +609,7 @@ def prove_univariate(
 
     Parameters
     ----------
-    poly : sp.Poly
+    poly: sp.Poly
         The polynomial.
     return_raw : bool, optional
         Whether return the raw lists.
@@ -624,9 +624,10 @@ def prove_univariate(
     Returns
     ----------
     Optional
-        sos : sp.Expr
+        sos: sp.Expr
             A sum of squares expression.
-        List[(multiplier, coeffs, polys)] : List
+
+        List[(multiplier, coeffs, polys)]: List
             A sum of squares expression such that sos =
                 sum(multiplier[i] * sum(coeffs[i][j] * polys[i][j]**2))
             It is guaranteed that the returned result is a length-2 list.

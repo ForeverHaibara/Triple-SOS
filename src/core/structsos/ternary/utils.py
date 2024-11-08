@@ -141,3 +141,85 @@ def sos_struct_handle_uncentered(solver: Callable) -> Callable:
                 solution += bias/3 * CyclicSum(a**i*b**j*c**k)
         return solution
     return _wrapped_solver
+
+
+class CommonExpr:
+    """
+    Store commonly used expressions for structural SOS.    
+    """
+    abc = sp.symbols("a b c")
+    a, b, c = abc
+    @classmethod
+    def schur(cls, n):
+        """
+        Solve s(a^(n-2)*(a-b)*(a-c)) when n > 0
+        """
+        if n < 2:
+            return
+        a, b, c = cls.abc
+        if n == 2:
+            return CyclicSum((a - b)**2)/2
+        elif n == 3:
+            return (CyclicSum((a-b)**2*(a+b-c)**2) + 2*CyclicSum(a*b*(a-b)**2))/(2*CyclicSum(a))
+        elif n == 5:
+            return 2*(CyclicSum(a**3*(a-b)**2*(a-c)**2)+CyclicSum(a)*CyclicProduct((a-b)**2))/CyclicSum((a-b)**2)
+
+    @classmethod
+    def schurinv(cls, n):
+        """
+        Solve s(b^((n-2)/2)*c^((n-2)/2)*(a-b)*(a-c)) when n > 0
+        """
+        a, b, c = cls.abc
+        if n == 2:
+            return CyclicSum((a-b)**2)
+        elif n == 4:
+            return CyclicSum(a**2*(b-c)**2/2)
+        elif n == 6:
+            return (CyclicSum(c*(a-b)**2*(a*c+b*c-a*b)**2)*2 + CyclicProduct(a)*CyclicSum(a**2*(b-c)**2))/\
+                (2*CyclicSum(a))
+
+    @classmethod
+    def quadratic(cls, x, y):
+        """
+        Solve s(x*a**2 + y*a*b)
+        """
+        if x < 0 or x + y < 0:
+            return
+        x, y = sp.S(x), sp.S(y)
+        a, b, c = cls.abc
+        if x == 0:
+            return y * CyclicSum(a*b)
+        if y > 2 * x:
+            return CyclicSum(x * a**2 + y * b*c)
+        w1 = (2*x - y) / 3
+        w2 = x - w1
+        return w1 / 2 * CyclicSum((a-b)**2) + w2 * CyclicSum(a)**2
+
+
+    
+    _SPECIAL_AMGMS = {
+        ((2,0,1),(1,1,1)): CyclicSum(c*(2*a+c)*(a-b)**2)/(2*CyclicSum(a)),
+        ((2,1,0),(1,1,1)): CyclicSum(b*(2*a+b)*(a-c)**2)/(2*CyclicSum(a)),
+        ((6,0,0),(4,1,1)): CyclicSum(a**2)*CyclicSum((a**2-b**2)**2)/4 + CyclicSum(a**2*(a**2-b*c)**2)/2,
+        ((6,0,0),(4,2,0)): CyclicSum((a**2-b**2)**2*(2*a**2+b**2))/3,
+        ((6,0,0),(4,0,2)): CyclicSum((a**2-c**2)**2*(2*a**2+c**2))/3,
+        ((6,0,0),(5,1,0)): CyclicSum((a**2-b**2)**2*(2*a**2+b**2))/6 + CyclicSum(a**4*(a-b)**2)/2,
+        ((6,0,0),(5,0,1)): CyclicSum((a**2-c**2)**2*(2*a**2+c**2))/6 + CyclicSum(a**4*(a-c)**2)/2,
+        ((6,0,0),(3,2,1)): CyclicSum((a**2-b**2)**2*(2*a**2+b**2))/6 + CyclicSum((a**3-b**2*c)**2)/2,
+        ((6,0,0),(3,1,2)): CyclicSum((a**2-c**2)**2*(2*a**2+c**2))/6 + CyclicSum((a**3-b*c**2)**2)/2,
+        ((8,0,0),(7,1,0)): CyclicSum((a**4-b**4)**2)/8 + CyclicSum(a**4*(a**2-b**2)**2)/4 + CyclicSum(a**6*(a-b)**2)/2,
+        ((8,0,0),(7,0,1)): CyclicSum((a**4-b**4)**2)/8 + CyclicSum(a**4*(a**2-c**2)**2)/4 + CyclicSum(a**6*(a-c)**2)/2,
+        ((8,0,0),(5,0,3)): CyclicSum((a**4-b**4)**2)/8 + CyclicSum(a**4*(a**2-b**2)**2)/4 + CyclicSum(b**2*(a**3-b**3)**2)/2,
+        ((8,0,0),(5,3,0)): CyclicSum((a**4-b**4)**2)/8 + CyclicSum(a**4*(a**2-c**2)**2)/4 + CyclicSum(c**2*(a**3-c**3)**2)/2,
+        ((8,0,0),(6,1,1)): CyclicSum((a**4-a**2*b*c)**2)/2 + CyclicSum((a**4-b**4)**2)/4 + CyclicSum(a**4*(b**2-c**2)**2)/4,
+        ((8,0,0),(5,2,1)): CyclicSum((a**4-b**4)**2)/4 + CyclicSum(a**4*(b**2-c**2)**2)/4 + CyclicSum(a**2*(a**3-b**2*c)**2)/2,
+        ((8,0,0),(5,1,2)): CyclicSum((a**4-b**4)**2)/4 + CyclicSum(a**4*(b**2-c**2)**2)/4 + CyclicSum(a**2*(a**3-b*c**2)**2)/2,
+        ((8,0,0),(4,3,1)): CyclicSum((a**4-b**4)**2)/8 + CyclicSum(a**4*(a**2-b**2)**2)/4 + CyclicSum((a**4-b**3*c)**2)/2,
+        ((8,0,0),(4,1,3)): CyclicSum((a**4-b**4)**2)/8 + CyclicSum(a**4*(a**2-c**2)**2)/4 + CyclicSum((a**4-b*c**3)**2)/2,
+        ((8,0,0),(3,3,2)): CyclicSum((a**4-b**4)**2)/2 + CyclicSum(a**4*(b**2-c**2)**2)/2 + CyclicProduct(a**2)*CyclicSum((a-b)**2)/2,
+    }
+    @classmethod
+    def amgm(cls, d1, d2):
+        def _std(d):
+            return max((d, (d[1],d[2],d[0]), (d[2],d[0],d[1])))
+        return cls._SPECIAL_AMGMS.get((_std(d1), _std(d2)))

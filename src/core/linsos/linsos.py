@@ -189,9 +189,6 @@ def _get_qmodule_list(poly: Poly, ineq_constraints: Dict[Poly, Expr],
     degree = poly.homogeneous_order()
     poly_one = Poly(1, *poly.gens)
 
-    if preordering == 'none':
-        return ineq_constraints
-
     monomials = []
     linear_ineqs = []
     nonlin_ineqs = [(poly_one, S.One)]
@@ -209,6 +206,9 @@ def _get_qmodule_list(poly: Poly, ineq_constraints: Dict[Poly, Expr],
         pass
     else:
         linear_ineqs = monomials + linear_ineqs
+
+    if preordering == 'none':
+        return linear_ineqs + nonlin_ineqs
 
     qmodule = nonlin_ineqs.copy()
     for n in range(1, len(linear_ineqs) + 1):
@@ -228,7 +228,7 @@ def _get_qmodule_list(poly: Poly, ineq_constraints: Dict[Poly, Expr],
     return (qmodule)
 
 
-@sanitize_input(homogenize=True, infer_symmetry=True)
+@sanitize_input(homogenize=True, infer_symmetry=True, wrap_constraints=True)
 def LinearSOS(
         poly: Poly,
         ineq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},

@@ -391,6 +391,11 @@ def _standardize_solution_perm(
     if solution is None:
         return None
     if isinstance(solution, Solution):
+        if not isinstance(solution, SolutionSimple):
+            try:
+                solution = solution.as_simple_solution()
+            except:
+                pass
         if isinstance(solution, SolutionSimple):
             solution.numerator = _standardize_solution_perm(solution.numerator, replacement).together()
             solution.multiplier = _standardize_solution_perm(solution.multiplier, replacement).together()

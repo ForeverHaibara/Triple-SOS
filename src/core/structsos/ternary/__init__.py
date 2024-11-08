@@ -9,7 +9,7 @@ from .octic   import sos_struct_octic
 from .nonic   import sos_struct_nonic
 from .acyclic import sos_struct_acyclic_sparse
 
-from .solver import structural_sos_3vars, _structural_sos_3vars_cyclic, _structural_sos_3vars_acyclic, structural_sos_3vars_nonhom
+from .solver import structural_sos_3vars, _structural_sos_3vars_cyclic, _structural_sos_3vars_acyclic
 from ...shared import SS
 
 __all__ = [
@@ -27,6 +27,6 @@ _registry = [
     sos_struct_octic,
     sos_struct_nonic,
     sos_struct_acyclic_sparse,
-    _structural_sos_3vars_cyclic, _structural_sos_3vars_acyclic, structural_sos_3vars, structural_sos_3vars_nonhom
+    _structural_sos_3vars_cyclic, _structural_sos_3vars_acyclic, structural_sos_3vars
 ]
 SS._register_solver('structsos', 'ternary', _registry)

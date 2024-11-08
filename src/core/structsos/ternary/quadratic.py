@@ -1,7 +1,7 @@
 import sympy as sp
 
 from .utils import (
-    CyclicSum, congruence, radsimp, sum_y_exprs
+    CyclicSum, CommonExpr, congruence, radsimp, sum_y_exprs
 )
 
 def sos_struct_quadratic(coeff, real = True):
@@ -16,24 +16,7 @@ def sos_struct_quadratic(coeff, real = True):
     and the inequality holds for all real numbers.
     When x > 2, it only holds for positive real numbers.
     """
-    a, b, c = sp.symbols("a b c")
-    y, x = coeff((2,0,0)), coeff((1,1,0))
-    if x + y < 0 or y < 0:
-        return None
-
-    if y == 0:
-        return CyclicSum(a*b) * x
-
-    if x > 2 * y:
-        return CyclicSum(y * a**2 + x * a*b)
-
-    # real numbers
-    # should be a linear combination of s(a2-ab) and s(a)2
-    # w1 + w2 = y
-    # -w1 + 2w2 = x
-    w1 = (2*y - x) / 3
-    w2 = y - w1
-    return w1 / 2 * CyclicSum((a-b)**2) + w2 * CyclicSum(a)**2
+    return CommonExpr.quadratic(coeff((2,0,0)), coeff((1,1,0)))
 
 
 def sos_struct_acyclic_quadratic(coeff, real = True):

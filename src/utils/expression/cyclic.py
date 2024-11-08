@@ -63,7 +63,7 @@ def _is_same_dict(d1, d2):
     d1 = dict((cancel(k), cancel(v)) for k, v in d1.items())
     d2 = dict((cancel(k), cancel(v)) for k, v in d2.items())
     for k, v in d1.items():
-        if k not in d2 or cancel(d2[k] - v) != 0:
+        if k not in d2 or (not cancel(d2[k] - v) is S.Zero):
             return False
     return True
 
@@ -257,6 +257,10 @@ class CyclicExpr(sp.Expr):
             return _func_perm(self.base_func, self.args[0], self.symbols, self.perm)._xreplace(rule)
         # first substitute the expression
         arg0, changed0 = self.args[0]._xreplace(rule)
+
+        if all(cancel(k - v) is S.Zero for k, v in rule.items()):
+            # identical replacement, e.g. signsimp
+            return self.func(arg0, self.symbols, self.perm), changed0
 
         def fs(x):
             if hasattr(x, 'free_symbols'): return x.free_symbols

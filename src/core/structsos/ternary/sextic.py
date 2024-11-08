@@ -7,7 +7,7 @@ from .sextic_symmetric import (
     sos_struct_sextic_symmetric_ultimate
 )
 from .utils import (
-    CyclicSum, CyclicProduct, Coeff,
+    CyclicSum, CyclicProduct, Coeff, CommonExpr,
     sum_y_exprs, nroots, rationalize_bound, rationalize_func, radsimp,
     quadratic_weighting, reflect_expression, inverse_substitution, congruence,
     zip_longest
@@ -121,7 +121,7 @@ def _sos_struct_sextic_hexagram(coeff):
             
         if v is not None:
             x, rest = _compute_x_rest(v)
-            p1 = ((c2 - c1*v**2) * CyclicSum(a*(a-b)*(a-c)) + (rest*c1) * CyclicSum(a*(b-c)**2)).together().as_coeff_Mul()
+            p1 = ((c2 - c1*v**2) * CommonExpr.schur(3) + (rest*c1) * CyclicSum(a*(b-c)**2)).together().as_coeff_Mul()
             y = [
                 c1,
                 p1[0],
@@ -459,8 +459,8 @@ def _sos_struct_sextic_rotated_tree(coeff):
         y = [_ * coeff((2,4,0)) for _ in y[:-1]] + [y[-1]]
         exprs = [
             CyclicSum(a**2*c-a*b*c)**2,
-            CyclicProduct(a) * CyclicSum(a**2*b - CyclicProduct(a)),
-            CyclicProduct(a) * CyclicSum(a**2*c - CyclicProduct(a)),
+            CyclicProduct(a) * CommonExpr.amgm((2,1,0),(1,1,1)),
+            CyclicProduct(a) * CommonExpr.amgm((2,0,1),(1,1,1)),
             CyclicProduct(a**2)
         ]
         return sum_y_exprs(y, exprs)
@@ -472,8 +472,8 @@ def _sos_struct_sextic_rotated_tree(coeff):
         y = [_ * coeff((2,4,0)) for _ in y[:-1]] + [y[-1]]
         exprs = [
             CyclicSum(a**2*c**2*(a-b)**2),
-            CyclicProduct(a) * CyclicSum(a**2*b - CyclicProduct(a)),
-            CyclicProduct(a) * CyclicSum(a**2*c - CyclicProduct(a)),
+            CyclicProduct(a) * CommonExpr.amgm((2,1,0),(1,1,1)),
+            CyclicProduct(a) * CommonExpr.amgm((2,0,1),(1,1,1)),
             CyclicProduct(a**2)
         ]
         return sum_y_exprs(y, exprs)

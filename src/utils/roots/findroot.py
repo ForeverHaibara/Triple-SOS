@@ -106,6 +106,7 @@ def _compute_hessian(f: sp.Expr, vars: Tuple[sp.Symbol, sp.Symbol] = None, vecto
 
 
 def optimize_discriminant(discriminant, soft = False, verbose = False):
+    # TODO: DEPRECATE IT?
     x, y = discriminant.gens
     best_choice = (2147483647, 0, 0)
     for a, b in product(range(-5, 7, 2), repeat = 2): # integer

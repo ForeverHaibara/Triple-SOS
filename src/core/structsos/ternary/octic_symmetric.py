@@ -3,7 +3,7 @@ import sympy as sp
 from .sextic_symmetric import _restructure_quartic_polynomial
 
 from .utils import (
-    CyclicSum, CyclicProduct,
+    CyclicSum, CyclicProduct, CommonExpr,
     prove_univariate, quadratic_weighting, radsimp, sum_y_exprs, rationalize_func
 )
 
@@ -722,7 +722,7 @@ def _sos_struct_octic_symmetric_hexagram(coeff):
 
             p1 = (a**2 + r1*a*b + r1*a*c + r2*b*c).as_coeff_Mul()
             p2 = (b*c-h*a*b-h*a*c).as_coeff_Mul()
-            p_fin = sp.together(degrade_a3 * CyclicSum(a*(a-b)*(a-c)) 
+            p_fin = sp.together(degrade_a3 * CommonExpr.schur(3)
                                 + (degrade_a2b + degrade_a3) * CyclicSum(a*(b-c)**2) 
                                 + (degrade_a3*3 + degrade_a2b*6 + degrade_abc) * CyclicProduct(a)).as_coeff_Mul()
             

@@ -2,7 +2,7 @@ import sympy as sp
 
 from .sextic_symmetric import _sos_struct_sextic_hexagram_symmetric, _sos_struct_sextic_tree
 from .utils import (
-    CyclicSum, CyclicProduct, Coeff, SS,
+    CyclicSum, CyclicProduct, Coeff, CommonExpr, SS,
     sum_y_exprs, rationalize_func, reflect_expression, inverse_substitution, radsimp, nroots
 )
 
@@ -203,12 +203,12 @@ def _sos_struct_nonic_hexagon_symmetric(coeff):
 
     if r is not None:
         solution = sp.Add(
-            c0 * CyclicSum(a*b*(b-r*c))**2 * (CyclicSum(a*b**2 - CyclicProduct(a))),
-            c0 * CyclicSum(a*c*(c-r*b))**2 * (CyclicSum(a*c**2 - CyclicProduct(a))),
+            c0 * CyclicSum(a*b*(b-r*c))**2 * CommonExpr.amgm((2,0,1),(1,1,1)),
+            c0 * CyclicSum(a*c*(c-r*b))**2 * CommonExpr.amgm((2,1,0),(1,1,1)),
             radsimp(c0 * (c42 + 6*r + 3)) * CyclicProduct(a) * CyclicProduct((a-b)**2)
         )
 
-        rest_poly = coeff.as_poly() - solution.doit().as_poly(a,b,c)
+        rest_poly = coeff.as_poly() - solution.doit().cancel().as_poly(a,b,c)
         if rest_poly.is_zero:
             return solution
 
