@@ -1,8 +1,10 @@
 from typing import Union, Dict, Optional, Any
 
 import sympy as sp
+from sympy.core.symbol import uniquely_named_symbol
+from sympy.combinatorics import PermutationGroup, Permutation
 
-from .cubic import quarternary_cubic_symmetric
+from .cubic import quarternary_cubic_symmetric, _quarternary_cubic_partial_symmetric
 from .quartic import quarternary_quartic
 
 from ..utils import Coeff, PolynomialNonpositiveError, PolynomialUnsolvableError
@@ -19,9 +21,13 @@ SOLVERS_SYMMETRIC = {
     4: quarternary_quartic,
 }
 
+SOLVERS_SYMMETRIC_NONHOM = {
+    3: _quarternary_cubic_partial_symmetric,
+}
+
 def _structural_sos_4vars_symmetric(
         coeff: Union[sp.Poly, Coeff, Dict],
-        real: bool = True
+        real: int = 1
     ):
     """
     Internal function to solve a 4-var homogeneous symmetric polynomial using structural SOS.
@@ -38,7 +44,7 @@ def _structural_sos_4vars_symmetric(
 
 def _structural_sos_4vars_cyclic(
         coeff: Union[sp.Poly, Coeff, Dict],
-        real: bool = True
+        real: int = 1
     ):
     """
     Internal function to solve a 4-var homogeneous symmetric polynomial using structural SOS.
@@ -50,6 +56,24 @@ def _structural_sos_4vars_cyclic(
     
     return sos_struct_common(coeff,
         sos_struct_degree_specified_solver(SOLVERS_CYCLIC, homogeneous=True),
+        real=real
+    )
+
+def _structural_sos_4vars_partial_symmetric(
+        coeff: Union[sp.Poly, Coeff, Dict],
+        real: int = 1
+    ) -> Optional[sp.Expr]:
+    """
+    Internal function to solve a 4-var homogeneous partial symmetric polynomial using structural SOS.
+    The function assumes the polynomial is wrt. (a, b, c, d). The permutation group is
+    PermutationGroup(Permutation([1,2,0,3]))
+    It is also symmetric with respect to a, b, c if we set d = 1.
+    It does not check the homogeneous / cyclic property of the polynomial to save time.
+    """
+    if not isinstance(coeff, Coeff):
+        coeff = Coeff(coeff)
+    return sos_struct_common(coeff,
+        sos_struct_degree_specified_solver(SOLVERS_SYMMETRIC_NONHOM, homogeneous=True),
         real=real
     )
 
@@ -66,19 +90,19 @@ def structural_sos_4vars(poly: sp.Poly, ineq_constraints: Dict[sp.Poly, sp.Expr]
         raise ValueError("structural_sos_3vars only supports homogeneous polynomials.")
 
     coeff = Coeff(poly)
-    is_cyc = 0
     solution = None
-    # is_cyc = is_cyc or (3 if coeff.is_cyclic() else 0)
+    func = None
     if coeff.is_symmetric():
-        is_cyc = 4
+        func = _structural_sos_4vars_symmetric
     elif coeff.is_cyclic():
-        is_cyc = 3
+        func = _structural_sos_4vars_cyclic
+    else:
+        if coeff.is_cyclic(PermutationGroup(Permutation([1,2,0,3]))):
+            func = _structural_sos_4vars_partial_symmetric
 
     try:
-        if is_cyc == 4:
-            solution = _structural_sos_4vars_symmetric(coeff, real = 1)
-        elif is_cyc == 3:
-            solution = _structural_sos_4vars_cyclic(coeff, real = 1)
+        if func is not None:
+            solution = func(coeff, real = 1)
     except (PolynomialNonpositiveError, PolynomialUnsolvableError):
         return None
 
@@ -87,5 +111,22 @@ def structural_sos_4vars(poly: sp.Poly, ineq_constraints: Dict[sp.Poly, sp.Expr]
 
     if poly.gens != (sp.symbols("a b c d")):
         solution = solution.xreplace(dict(zip(sp.symbols("a b c d"), poly.gens)))
-    solution = SolutionStructural._rewrite_symbols_to_constraints(solution, ineq_constraints)
+    
+    # replace assumed-nonnegative symbols with inequality constraints
+    func_name = uniquely_named_symbol('G', poly.gens + tuple(ineq_constraints.values()))
+    func = sp.Function(func_name)
+    solution = SolutionStructural._extract_nonnegative_symbols(solution, func_name=func_name)
+    if solution is None:
+        return None
+
+    replacement = {}
+    for k, v in ineq_constraints.items():
+        if len(k.free_symbols) == 1 and k.is_monomial and k.LC() >= 0:
+            replacement[func(k.free_symbols.pop())] = v/k.LC()
+    solution = solution.xreplace(replacement)
+
+    if solution.has(func):
+        # unhandled nonnegative symbols -> not a valid solution
+        return None
+
     return solution

@@ -3,6 +3,7 @@ from numbers import Number
 from typing import List
 
 import sympy as sp
+from sympy.core.cache import cacheit
 from sympy.core import sympify, S, Mul, Add, Symbol
 from sympy.core.containers import Dict
 from sympy.core.numbers import zoo, nan
@@ -64,6 +65,21 @@ def _is_same_dict(d1, d2):
     d2 = dict((cancel(k), cancel(v)) for k, v in d2.items())
     for k, v in d1.items():
         if k not in d2 or (not cancel(d2[k] - v) is S.Zero):
+            return False
+    return True
+
+@cacheit
+def _is_perm_invariant_dict(symbols, perm_group, d):
+    """
+    Check whether the dictionary is invariant under the permutation group.
+    """
+    for perm_dict in CyclicExpr._generate_all_translations(symbols, perm_group, full=False):
+        # checking only generators is sufficient
+        # perm_symbols = tuple(perm_dict[s] for s in rule.keys())
+        perm_symbols = [sympify(s).subs(perm_dict, simultaneous=True) for s in d.keys()]
+        permed_rule = [sympify(d[s]).subs(perm_dict, simultaneous=True) for s in d.keys()]
+        permed_rule = dict(zip(perm_symbols, permed_rule))
+        if not _is_same_dict(permed_rule, d):
             return False
     return True
 
@@ -275,7 +291,7 @@ class CyclicExpr(sp.Expr):
 
         # Case A. if we are replacing symbols to symbols
         for var in changed_vars:
-            if not (var in rule and isinstance(rule[var], Symbol) and (rule[var] not in self_vars)):
+            if not (var in rule and isinstance(rule[var], Symbol)):# and ((rule[var] not in self_vars) or rule[var] is var)):
                 # the replacement is not cyclic with respect to the permutation group
                 break
         else:
@@ -283,22 +299,13 @@ class CyclicExpr(sp.Expr):
             other_rule = [fs(k) | fs(v) for k, v in rule.items() if not k in changed_vars]
             if not any(_.intersection(self_vars) for _ in other_rule):
                 new_symbols = tuple(rule.get(s, s) for s in self.symbols)
-                return self.func(arg0, new_symbols, self.perm), changed0
+                if len(set(new_symbols)) == len(new_symbols): # distinct
+                    return self.func(arg0, new_symbols, self.perm), changed0
 
         # Case B. if we are replacing symbols to f(symbols)...
         # we check whether the symmetry of the replacement rule agrees with the permutation group
-        if True: # and rule_vars == self_vars:
-            for perm_dict in self._generate_all_translations(self.symbols, self.perm, full=False):
-                # checking only generators is sufficient
-                # perm_symbols = tuple(perm_dict[s] for s in rule.keys())
-                perm_symbols = [sympify(s).subs(perm_dict, simultaneous=True) for s in rule.keys()]
-                permed_rule = [sympify(rule[s]).subs(perm_dict, simultaneous=True) for s in rule.keys()]
-                permed_rule = dict(zip(perm_symbols, permed_rule))
-                if not _is_same_dict(permed_rule, rule):
-                    break
-            else:
-                return self.func(arg0, self.symbols, self.perm), changed0
-                # return _func_perm(self.base_func, self.args[0], self.symbols, self.perm)._xreplace(rule)
+        if _is_perm_invariant_dict(self.symbols, self.perm, rule):
+            return self.func(arg0, self.symbols, self.perm), changed0
 
         # # fall back to the default implementation
         if len(changed_vars) >= len(self_vars) - 1:

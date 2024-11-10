@@ -10,10 +10,9 @@ from .sparse import sos_struct_linear, sos_struct_quadratic
 from .ternary import structural_sos_3vars
 from .quarternary import structural_sos_4vars
 from .univariate import structural_sos_2vars
-from ..symsos import prove_univariate
 from ..shared import sanitize_input
 
-@sanitize_input(homogenize=True, infer_symmetry=True, wrap_constraints=True)
+@sanitize_input(homogenize=True, infer_symmetry=True, wrap_constraints=False)
 def StructuralSOS(
         poly: sp.Poly,
         ineq_constraints: Union[List[sp.Poly], Dict[sp.Poly, sp.Expr]] = {},

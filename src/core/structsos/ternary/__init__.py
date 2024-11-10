@@ -13,7 +13,7 @@ from .solver import structural_sos_3vars, _structural_sos_3vars_cyclic, _structu
 from ...shared import SS
 
 __all__ = [
-    'structural_sos_3vars', 'structural_sos_3vars_nonhom',
+    'structural_sos_3vars'
 ]
 
 _registry = [

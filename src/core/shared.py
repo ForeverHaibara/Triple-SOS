@@ -323,10 +323,10 @@ def sanitize_input(
 
 
 def _get_constraints_wrapper(symbols: Tuple[int, ...], ineq_constraints: Dict[sp.Poly, sp.Expr], eq_constraints: Dict[sp.Poly, sp.Expr], perm_group: PermutationGroup):
-    i2g = {ineq: Function("G%d"%i)(*symbols) for i, ineq in enumerate(ineq_constraints.keys())}
-    e2h = {eq: Function("H%d"%i)(*symbols) for i, eq in enumerate(eq_constraints.keys())}
+    i2g = {ineq: Function("_G%d"%i)(*symbols) for i, ineq in enumerate(ineq_constraints.keys())}
+    e2h = {eq: Function("_H%d"%i)(*symbols) for i, eq in enumerate(eq_constraints.keys())}
 
-    def _get_inverse(constraints, name='G'):
+    def _get_inverse(constraints, name='_G'):
         inv = dict()
         rep_dict = dict((p.rep, v) for p, v in constraints.items())
         for p in perm_group.elements:
@@ -339,6 +339,6 @@ def _get_constraints_wrapper(symbols: Tuple[int, ...], ineq_constraints: Dict[sp
                     raise ValueError("Given constraints are not symmetric with respect to the permutation group.")
                 inv[Function(name + str(i))(*reorder)] = permed_poly
         return inv
-    g2i = _get_inverse(ineq_constraints, name='G')
-    h2e = _get_inverse(eq_constraints, name='H')
+    g2i = _get_inverse(ineq_constraints, name='_G')
+    h2e = _get_inverse(eq_constraints, name='_H')
     return i2g, e2h, g2i, h2e

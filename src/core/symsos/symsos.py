@@ -1,6 +1,7 @@
 from typing import Tuple, List, Optional
 
 import sympy as sp
+from sympy.core.symbol import uniquely_named_symbol
 
 from .representation import (
     sym_representation,
@@ -77,11 +78,30 @@ def SymmetricSOS(
         expr = expr.subs(
             TRANSLATION_POSITIVE if positive else TRANSLATION_REAL, simultaneous=True
         )
-        expr = expr.xreplace(dict(zip(sp.symbols("a b c"), poly.gens)))
+        solution = expr.xreplace(dict(zip(sp.symbols("a b c"), poly.gens)))
+
+
+        # replace assumed-nonnegative symbols with inequality constraints
+        func_name = uniquely_named_symbol('G', poly.gens + tuple(ineq_constraints.values()))
+        func = sp.Function(func_name)
+        solution = SolutionSymmetric._extract_nonnegative_symbols(solution, func_name=func_name)
+        if solution is None:
+            continue
+
+        replacement = {}
+        for k, v in ineq_constraints.items():
+            if len(k.free_symbols) == 1 and k.is_monomial and k.LC() >= 0:
+                replacement[func(k.free_symbols.pop())] = v/k.LC()
+        solution = solution.xreplace(replacement)
+
+        if solution.has(func):
+            # unhandled nonnegative symbols -> not a valid solution
+            continue
+
 
         solution = SolutionSymmetric(
             problem = poly,
-            solution = expr,
+            solution = solution,
             is_equal = True
         ).as_simple_solution()
 

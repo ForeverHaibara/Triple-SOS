@@ -46,18 +46,19 @@ class SolutionStructural(Solution):
         )
 
     @classmethod
-    def _rewrite_symbols_to_constraints(cls, expr: sp.Expr, ineq_constraints: Dict[sp.Poly, sp.Expr] = {}):
+    def _extract_nonnegative_symbols(cls, expr: sp.Expr, func_name: str = "_G"):
         """
         Raw output of StructuralSOS might assume nonnegativity of some symbols,
-        we must check whether it is true or not given the constraints.
-        If True, a new solution is returned with these symbols replaced by the constraints.
-        This function is for internal use only.        
+        we extract these symbols and replace them with _F(x) for further processing.
+        This is not intended to be used by end users.
         """
         # extract symbol constraints from dict
-        mapping = dict((s.as_expr(), v) for s, v in ineq_constraints.items() if s.is_monomial and len(s.free_symbols) == 1 and s.LC() > 0)
+        # mapping = dict((s.as_expr(), v) for s, v in ineq_constraints.items() if \
+        #             isinstance(s, sp.Symbol) or (isinstance(s, sp.Poly) and s.is_monomial and len(s.free_symbols) == 1 and s.LC() > 0))
         # mapping.update(dict((s.as_expr(), v) for s, v in eq_constraints.items() if s.is_monomial and len(s.free_symbols) == 1 and s.LC() > 0))
 
-        # TODO: Handle symbols that represent zero
+        # TODO: Handle symbols that represent zero?
+        func = sp.Function(func_name)
         def dfs(arg):
             if isinstance(arg, sp.Expr):
                 if len(arg.free_symbols) == 0:
@@ -66,10 +67,11 @@ class SolutionStructural(Solution):
                     if arg < 0:
                         raise _rewriting_exception
                 elif isinstance(arg, sp.Symbol):
-                    v = mapping.get(arg)
-                    if v is not None:
-                        return v
-                    raise _rewriting_exception
+                    return func(arg)
+                    # v = mapping.get(arg)
+                    # if v is not None:
+                    #     return v
+                    # raise _rewriting_exception
                 elif isinstance(arg, (sp.Add, sp.Mul)):
                     return arg.func(*(dfs(_) for _ in arg.args))
                 elif isinstance(arg, sp.Pow):

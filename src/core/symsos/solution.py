@@ -15,7 +15,7 @@ class SolutionSymmetric(Solution):
         """
         numerator, multiplier = sp.fraction(sp.together(self.solution))
 
-        if multiplier.is_constant():
+        if len(multiplier.free_symbols) == 0:
             const, multiplier = S.One, multiplier
         else:
             const, multiplier = multiplier.as_coeff_Mul()
@@ -31,6 +31,19 @@ class SolutionSymmetric(Solution):
             multiplier = multiplier,
             is_equal = self.is_equal_
         )
+
+    @classmethod
+    def _extract_nonnegative_symbols(cls, expr: sp.Expr, func_name: str = "_G"):
+        """
+        Raw output of SymmetricSOS might assume nonnegativity of some symbols,
+        we extract these symbols and replace them with _F(x) for further processing.
+        This is not intended to be used by end users.
+
+        TODO: Move this to SolutionSimple???
+        """
+        from ..structsos.solution import SolutionStructuralSimple
+        return SolutionStructuralSimple._extract_nonnegative_symbols(expr, func_name)
+
 
 class SolutionSymmetricSimple(SolutionSimple):#, SolutionSymmetric):
     method = 'SymmetricSOS'
