@@ -177,7 +177,7 @@ class Solution():
         """
         numerator, multiplier = sp.fraction(sp.together(self.solution))
     
-        if multiplier.is_constant():
+        if len(multiplier.free_symbols) == 0:
             const, multiplier = S.One, multiplier
         else:
             const, multiplier = multiplier.as_coeff_Mul()

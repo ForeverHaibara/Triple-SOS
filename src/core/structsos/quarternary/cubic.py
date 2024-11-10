@@ -6,7 +6,7 @@ a, b, c, d = sp.symbols("a b c d")
 
 def quarternary_cubic_symmetric(coeff, real = True):
     """
-    Solve quarternary symmetric cubic polynomials. Symmetricity is not checked here.
+    Solve quarternary symmetric cubic polynomials. Symmetry is not checked here.
 
     References
     -----------

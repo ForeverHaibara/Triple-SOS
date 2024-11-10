@@ -289,7 +289,7 @@ class CyclicExpr(sp.Expr):
         # we check whether the symmetry of the replacement rule agrees with the permutation group
         if True: # and rule_vars == self_vars:
             for perm_dict in self._generate_all_translations(self.symbols, self.perm, full=False):
-                 # checking only generators is sufficient
+                # checking only generators is sufficient
                 # perm_symbols = tuple(perm_dict[s] for s in rule.keys())
                 perm_symbols = [sympify(s).subs(perm_dict, simultaneous=True) for s in rule.keys()]
                 permed_rule = [sympify(rule[s]).subs(perm_dict, simultaneous=True) for s in rule.keys()]

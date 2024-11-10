@@ -537,7 +537,6 @@ def sos_struct_quintic_symmetric(coeff, real = True):
                             break
 
                 c1, c2, c3, ind = _compute_coeffs(x0, y0, w)
-                # multiplier = CyclicSum(a**2 + c1*b*c)
                 multiplier = CommonExpr.quadratic(1, c1)
                 func_g = x0*((b+c-t*a)*(c-b)**2+(c+a-t*b)*(a-c)**2) + (sp.Rational(1,2)-x0)*(b+c-t*a)*(c+a-t*b)*(2*c-a-b) + y0*(a+b-t*c)*(a-b)**2
                 func_g = func_g.expand()
@@ -599,7 +598,6 @@ def sos_struct_quintic_symmetric(coeff, real = True):
             elif extra >= 0:
                 w0, w1 = radsimp([(3-u_)/(4*u_), 9*(u_-1)**2*(u_+1)*(u_+3)/(32*u_**3)])
                 func_g = ((w0*(a+b) - c)*(a**2+b**2+c**2 - (w_+1)/2*c*(a+b) + (w_-2)*a*b) - w1*a*b*(2*c-a-b)).expand()
-                # multiplier = CyclicSum(a**2 - radsimp((7*u_**2+30*u_-9)/(16*u_**2))*b*c)
                 multiplier = CommonExpr.quadratic(1, -radsimp((7*u_**2+30*u_-9)/(16*u_**2)))
                 m_inv_u = -m / (64*u_**3)
 

@@ -21,7 +21,7 @@ class SolutionStructural(Solution):
         """
         numerator, multiplier = sp.fraction(sp.together(self.solution))
 
-        if multiplier.is_constant():
+        if len(multiplier.free_symbols) == 0:
             const, multiplier = multiplier, S.One
         else:
             const, multiplier = multiplier.as_coeff_Mul()
@@ -90,8 +90,13 @@ class SolutionStructural(Solution):
                 elif isinstance(arg, (CyclicSum, CyclicProduct)):
                     base = arg.args[0]
                     def is_pow2(x):
-                        if isinstance(x, sp.Pow) and isinstance(x.exp, sp.Rational) and x.exp.p % 2 == 0:
-                            return True
+                        if isinstance(x, sp.Pow):
+                            if isinstance(x.exp, sp.Rational) and x.exp.p % 2 == 0:
+                                return True
+                        #     elif isinstance(x.base, sp.Symbol) and mapping.get(x.base) is not None:
+                        #         return True
+                        # elif isinstance(x, sp.Symbol) and mapping.get(x) is not None:
+                        #     return True
                         elif len(x.free_symbols) == 0 and x >= 0:
                             return True
                         return False

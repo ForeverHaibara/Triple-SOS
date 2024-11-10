@@ -2120,8 +2120,6 @@ def _sos_struct_sextic_symmetric_ultimate_1root(coeff, poly, roots, real = True)
 
             quartic_solution = sos_struct_quartic(Coeff(dict(quartic), is_rational = is_rational), None)
             if quartic_solution is not None:
-                p0 = (2*(2*z0 + z3)*a**2 + 2*(z1 + 2*z2)*b*c).together().as_coeff_Mul()
-                # multiplier = p0[0] * CyclicSum(p0[1])
                 multiplier = CommonExpr.quadratic(2*(2*z0 + z3), 2*(z1 + 2*z2))
                 p1 = quartic_solution * CyclicSum((a-b)**2*(a+b-x_*c)**2)
                 func = lambda a,b,c: (z0*(a**2+b**2) + z1*a*b + z2*c*(a+b) + z3*c**2)*(a-b)*(a+b-x_*c)
@@ -2205,7 +2203,6 @@ def _sos_struct_sextic_symmetric_ultimate_2roots(coeff, poly, roots):
                 diffpoly = solution.doit().as_poly(a,b,c)
             elif x > 1:
                 diffpoly = get_diffpoly(x)
-                # multiplier = CyclicSum(a**2 + (x-2)*b*c)
                 multiplier = CommonExpr.quadratic(1, x - 2)
                 solution = (4-x)*(x-1) / 2 * coeff6 * CyclicSum(a**2*(b-c)**2*(a**2+b**2+c**2-2*a*b-2*a*c+(2-x)*b*c)**2) \
                     + coeff6 / 2 * CyclicSum((b-c)**2) * (((2*x-x**2)*a*b*c-CyclicProduct(a+b-c)))**2
