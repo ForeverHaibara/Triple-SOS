@@ -750,7 +750,7 @@ def _sos_struct_acyclic_quartic_symmetric(coeff, real = True):
             # print(leading_det(l1))
             # print('\n')
             if point is not None:
-                print(_get_solution_from_ab(*point, l1))
+                # print(_get_solution_from_ab(*point, l1))
                 if isinstance(l0, sp.Rational):
                     solution = _get_solution_from_ab(*point, l0)
                     if solution is not None:

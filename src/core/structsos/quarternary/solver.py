@@ -112,10 +112,12 @@ def structural_sos_4vars(poly: sp.Poly, ineq_constraints: Dict[sp.Poly, sp.Expr]
     if poly.gens != (sp.symbols("a b c d")):
         solution = solution.xreplace(dict(zip(sp.symbols("a b c d"), poly.gens)))
     
+    ####################################################################
     # replace assumed-nonnegative symbols with inequality constraints
+    ####################################################################
     func_name = uniquely_named_symbol('G', poly.gens + tuple(ineq_constraints.values()))
     func = sp.Function(func_name)
-    solution = SolutionStructural._extract_nonnegative_symbols(solution, func_name=func_name)
+    solution = SolutionStructural._extract_nonnegative_exprs(solution, func_name=func_name)
     if solution is None:
         return None
 

@@ -43,7 +43,7 @@ def lift_degree(
         poly: sp.Poly,
         ineq_constraints: Dict[sp.Poly, sp.Expr],
         symmetry: MonomialReduction,
-        degree_limit: int = 12,
+        degree_limit: int = 1000,
         lift_degree_limit: int = 4
     ) -> Generator[Dict, None, None]:
     """

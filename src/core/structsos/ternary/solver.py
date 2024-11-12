@@ -77,7 +77,7 @@ def _structural_sos_3vars_acyclic(
 def structural_sos_3vars(poly, ineq_constraints: Dict[sp.Poly, sp.Expr] = {}, eq_constraints: Dict[sp.Poly, sp.Expr] = {}) -> Optional[sp.Expr]:
     """
     Main function of structural SOS for 3-var homogeneous polynomials. 
-    It first assumes the polynomial has variables (a,b,c) and
+    It first assumes the polynomial has variables (a,b,c), where a,b,c >= 0 and
     latter substitutes the variables with the original ones.
     """
     if len(poly.gens) != 3: # should not happen
@@ -104,10 +104,12 @@ def structural_sos_3vars(poly, ineq_constraints: Dict[sp.Poly, sp.Expr] = {}, eq
         solution = solution.xreplace(dict(zip(sp.symbols("a b c"), poly.gens)))
 
 
+    ####################################################################
     # replace assumed-nonnegative symbols with inequality constraints
+    ####################################################################
     func_name = uniquely_named_symbol('G', poly.gens + tuple(ineq_constraints.values()))
     func = sp.Function(func_name)
-    solution = SolutionStructural._extract_nonnegative_symbols(solution, func_name=func_name)
+    solution = SolutionStructural._extract_nonnegative_exprs(solution, func_name=func_name)
     if solution is None:
         return None
 

@@ -182,10 +182,16 @@ def clear_polys_by_symmetry(polys: List[Union[sp.Expr, Tuple[sp.Expr, ...]]],
     return list(representation.values())
 
 
+# fix the bug in sqf_list before 1.13.0
+# https://github.com/sympy/sympy/pull/26182
+if sp.__version__ >= '1.13.0':
+    _sqf_list = lambda p: p.sqf_list()
+else:
+    _sqf_list = lambda p: p.factor_list() # it would be slower, but correct
 
 def _std_ineq_constraints(p: sp.Poly, e: sp.Expr) -> Tuple[sp.Poly, sp.Expr]:
     if p.is_zero: return p, e
-    c, lst = p.sqf_list()
+    c, lst = _sqf_list(p)
     ret = sp.S(1 if c > 0 else -1).as_poly(*p.gens, domain=p.domain)
     e = e / (c if c > 0 else -c)
     for q, d in lst:
@@ -196,7 +202,7 @@ def _std_ineq_constraints(p: sp.Poly, e: sp.Expr) -> Tuple[sp.Poly, sp.Expr]:
 
 def _std_eq_constraints(p: sp.Poly, e: sp.Expr) -> Tuple[sp.Poly, sp.Expr]:
     if p.is_zero: return p, e
-    c, lst = p.sqf_list()
+    c, lst = _sqf_list(p)
     ret = sp.S(1 if c > 0 else -1).as_poly(*p.gens, domain=p.domain)
     e = e / c
     max_d = sp.Integer(max(1, *(d for q, d in lst)))

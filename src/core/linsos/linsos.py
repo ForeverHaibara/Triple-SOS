@@ -27,6 +27,8 @@ LINPROG_OPTIONS = {
     }
 }
 
+class _basis_limit_exceeded(Exception): ...
+
 def _prepare_tangents(symbols, prepared_tangents = [], rootsinfo: RootsInfo = None) -> Dict[Poly, Expr]:
     """
     Combine appointed tangents and tangents generated from rootsinfo.
@@ -56,6 +58,9 @@ def _prepare_tangents(symbols, prepared_tangents = [], rootsinfo: RootsInfo = No
     return dict((Poly(t, symbols), t) for t in tangents)
 
 
+def _check_basis_limit(basis: List, limit: int = 15000) -> None:
+    if len(basis) > limit:
+        raise _basis_limit_exceeded
 
 def _prepare_basis(
         symbols: List[Symbol],
@@ -65,7 +70,8 @@ def _prepare_basis(
         eq_constraints: List[Tuple[Poly, Expr]] = {},
         rootsinfo = None,
         basis: Optional[List[LinearBasis]] = None,
-        symmetry: Union[MonomialReduction, PermutationGroup] = PermutationGroup()
+        symmetry: Union[MonomialReduction, PermutationGroup] = PermutationGroup(),
+        basis_limit: int = 15000,
     ) -> Tuple[List[LinearBasis], np.ndarray]:
     """
     Prepare basis for linear programming.
@@ -89,6 +95,8 @@ def _prepare_basis(
         we skip the loading of normal basis like AMGM.
     basis: list
         Additional basis to be added to the basis.
+    basis_limit: int
+        Limit of the basis. When the basis exceeds the limit, raise an error to kill the solver.
 
     Returns
     -------
@@ -104,6 +112,7 @@ def _prepare_basis(
     def append_basis(all_basis, all_arrays, basis, symmetry = symmetry):
         all_basis += basis
         all_arrays += np.vstack([x.as_array_np(expand_cyc=True, symmetry=symmetry) for x in basis])
+        _check_basis_limit(all_basis, basis_limit)
 
     if basis is not None:
         append_basis(all_basis, all_arrays, basis, symmetry = symmetry)
@@ -112,16 +121,11 @@ def _prepare_basis(
         cls = LinearBasisTangent
     else:
         cls = LinearBasisTangentEven
-        # nonneg_vars = [s for s, nonneg in zip(symbols, nonnegativity) if nonneg]
-        # if len(nonneg_vars):
-        #     tangents2 = tangents.copy()
-        #     for s in nonneg_vars:
-        #         tangents2.extend([t * s for t in tangents])
-        #     tangents = tangents2
 
     for tangent_p, tangent in tangents: # .items():
         basis, mat = cls.generate_quad_diff(tangent, symbols, degree, symmetry=symmetry, tangent_p=tangent_p)
         all_basis += basis
+        _check_basis_limit(all_basis, basis_limit)
         all_arrays.append(mat)
 
     for eq_p, eq in eq_constraints: # .items():
@@ -130,20 +134,8 @@ def _prepare_basis(
         all_arrays.append(mat)
         basis = [b.__neg__() for b in basis]
         all_basis += basis
+        _check_basis_limit(all_basis, basis_limit)
         all_arrays.append(-mat)
-
-    # if is_cyc:
-    #     for tangent in tangents:
-    #         basis += LinearBasisTangentCyclic.generate(degree, tangent = tangent)
-
-    #     if not rootsinfo.has_nontrivial_roots():
-    #         basis += CachedCommonLinearBasisTangentCyclic.generate(degree)
-    #         basis += LinearBasisAMGMCyclic.generate(degree)
-    #         basis += CachedCommonLinearBasisSpecialCyclic.generate(degree)
-    # else:
-    #     for tangent in tangents:
-    #         basis += LinearBasisTangent.generate(degree, tangent = tangent)
-    #     basis += CachedCommonLinearBasisTangent.generate(degree)
 
     all_arrays = [non_zero_array for non_zero_array in all_arrays if non_zero_array.size > 0]
     if len(all_arrays) <= 0:
@@ -238,7 +230,8 @@ def LinearSOS(
         rootsinfo: Optional[RootsInfo] = None,
         preordering: str = 'linear',
         verbose: bool = False,
-        degree_limit: int = 12,
+        basis_limit: int = 15000,
+        lift_degree_limit: int = 4,
         linprog_options: Dict = LINPROG_OPTIONS,
         allow_numer: int = 0,
         _homogenizer: Optional[Symbol] = None
@@ -262,14 +255,16 @@ def LinearSOS(
     rootsinfo: RootsInfo
         Roots information of the polynomial to be optimized. When it is None, it will be automatically
         generated. If we want to skip the root finding algorithm or the tangent generation algorithm,
-        please pass in a RootsInfo object.
+        please pass in a RootsInfo object. TODO: Shall we deprecate it?
     preordering: str
         The preordering method for extending the basis. It can be 'none' or 'linear'. Defaults to 'linear'.
     verbose: bool
         Whether to print the information of the linear programming problem. Defaults to False.
-    degree_limit: int
-        The degree limit of the polynomial to be optimized. When the degree exceeds the degree limit, 
-        the SOS is forced to shutdown. Defaults to 12.
+    basis_limit: int
+        The limit of the basis. When the basis exceeds the limit, the solver stops and returns None.
+        Defaults to 15000.
+    lift_degree_limit: int
+        The maximum degree to lift the polynomial. Defaults to 4.
     linprog_options: dict
         Options for scipy.optimize.linprog. Defaultedly use `{'method': 'highs-ds', 'options': {'presolve': False}}`. 
         Note that interiorpoint oftentimes does not provide exact rational solution. Both 'highs-ds' or 'simplex' are 
@@ -277,10 +272,10 @@ def LinearSOS(
         
         Moreover, using `presolve == True` has bug solving s((b2-a2+3c2+ab+7bc-5ca)(a2-b2-ab+2bc-ca)2):
         Assertion failed: abs_value < pivot_tolerance, file ../../scipy/_lib/highs/src/util/HFactor.cpp, line 1474
-        Thus, for stability, we use `presolve == False` by default. However, setting it to True is slightly faster (0.03 sec).
+        Thus, for stability, we use `presolve == False` by default. However, setting it to True could be slightly faster.
     allow_numer: int
         Whether to allow numerical solution. When it is 0, the solution must be exact. When > 0, the solution can be numerical,
-        this might be useful for large scale problems or irrational problems.
+        this might be useful for large scale problems or irrational problems. TODO: Allow tolerance?
     _homogenizer: Optional[Symbol]
         Indicates which symbol to be used as the homogenizer. The symbol will be used to homogenize the tangents.
         This is expected to autogenerated by the function decorator and should not be used by the user.
@@ -293,7 +288,8 @@ def LinearSOS(
     """
     return _LinearSOS(poly, ineq_constraints=ineq_constraints, eq_constraints=eq_constraints,
                 symmetry=symmetry,tangents=tangents,rootsinfo=rootsinfo,preordering=preordering,
-                verbose=verbose,degree_limit=degree_limit,linprog_options=linprog_options,allow_numer=allow_numer,_homogenizer=_homogenizer)
+                verbose=verbose,basis_limit=basis_limit,lift_degree_limit=lift_degree_limit,
+                linprog_options=linprog_options,allow_numer=allow_numer,_homogenizer=_homogenizer)
 
 
 def _LinearSOS(
@@ -305,7 +301,8 @@ def _LinearSOS(
         rootsinfo: Optional[RootsInfo] = None,
         preordering: str = 'linear',
         verbose: bool = False,
-        degree_limit: int = 12,
+        basis_limit: int = 15000,
+        lift_degree_limit: int = 4,
         linprog_options: Dict = LINPROG_OPTIONS,
         allow_numer: int = 0,
         _homogenizer: Optional[Symbol] = None
@@ -317,7 +314,7 @@ def _LinearSOS(
     else:
         # homogeneous polynomial does not accept non-homogeneous tangents
         tagents_poly = [t.as_poly(poly.gens) for t in tangents]
-        tangents = [t for t, p in zip(tangents, tagents_poly) if p.domain.is_Numerical and p.is_homogeneous]
+        tangents = [t for t, p in zip(tangents, tagents_poly) if len(p.free_symbols_in_domain)==0 and p.is_homogeneous]
 
     if rootsinfo is None:
         rootsinfo = findroot(poly, with_tangents = root_tangents)
@@ -335,59 +332,64 @@ def _LinearSOS(
     eq_constraints = clear_polys_by_symmetry(eq_constraints.items(), poly.gens, symmetry)
     # print('Tangents after  removing duplicates:', tangents)
 
-    # prepare to lift the degree in an iterative way
-    for lift_degree_info in lift_degree(poly, ineq_constraints=ineq_constraints, symmetry=symmetry, degree_limit=degree_limit):
-        # RHS
-        degree = lift_degree_info['degree']
-        basis, arrays = _prepare_basis(poly.gens, all_nonnegative=all_nonnegative, degree=degree, tangents=tangents,
-                                        eq_constraints=eq_constraints, rootsinfo=rootsinfo, symmetry=symmetry)
-        if len(basis) <= 0:
-            continue
+    try:
+        # prepare to lift the degree in an iterative way
+        for lift_degree_info in lift_degree(poly, ineq_constraints=ineq_constraints, symmetry=symmetry, lift_degree_limit=lift_degree_limit):
+            # RHS
+            degree = lift_degree_info['degree']
+            basis, arrays = _prepare_basis(poly.gens, all_nonnegative=all_nonnegative, degree=degree, tangents=tangents,
+                                            eq_constraints=eq_constraints, rootsinfo=rootsinfo, symmetry=symmetry, basis_limit=basis_limit)
+            if len(basis) <= 0:
+                continue
 
-        # LHS (from multipliers * poly)
-        basis += lift_degree_info['basis']
-        arrays = np.vstack([arrays, np.array([x.as_array_np(expand_cyc=True, symmetry=symmetry) for x in lift_degree_info['basis']])])
+            # LHS (from multipliers * poly)
+            basis += lift_degree_info['basis']
+            arrays = np.vstack([arrays, np.array([x.as_array_np(expand_cyc=True, symmetry=symmetry) for x in lift_degree_info['basis']])])
 
-        # sum of coefficients of the multipliers should be 1
-        regularizer = np.zeros(arrays.shape[0])
-        regularizer[-len(lift_degree_info['basis']):] = 1
-        arrays = np.hstack([arrays, regularizer[:, None]])
+            # sum of coefficients of the multipliers should be 1
+            regularizer = np.zeros(arrays.shape[0])
+            regularizer[-len(lift_degree_info['basis']):] = 1
+            arrays = np.hstack([arrays, regularizer[:, None]])
 
-        if verbose:
-            print('Linear Programming Shape = (%d, %d)'%(arrays.shape[0], arrays.shape[1]))
+            if verbose:
+                print('Linear Programming Shape = (%d, %d)'%(arrays.shape[0], arrays.shape[1]))
 
-        b = np.zeros(arrays.shape[1])
-        b[-1] = 1
-        optimized = np.ones(arrays.shape[0])
+            b = np.zeros(arrays.shape[1])
+            b[-1] = 1
+            optimized = np.ones(arrays.shape[0])
 
 
-        ##############################################
-        # main function: linear programming
-        ##############################################
-        linear_sos = None
-        with warnings.catch_warnings(record=True) as __warns:
-            warnings.simplefilter('once')
-            try:
-                linear_sos = linprog(optimized, A_eq=arrays.T, b_eq=b, **linprog_options)
-            except:
-                pass
-        if linear_sos is None or not linear_sos.success:
-            # lift the degree up and retry
-            continue
+            ##############################################
+            # main function: linear programming
+            ##############################################
+            linear_sos = None
+            with warnings.catch_warnings(record=True) as __warns:
+                warnings.simplefilter('once')
+                try:
+                    linear_sos = linprog(optimized, A_eq=arrays.T, b_eq=b, **linprog_options)
+                except:
+                    pass
+            if linear_sos is None or not linear_sos.success:
+                # lift the degree up and retry
+                continue
 
-        y, basis, is_equal = linear_correction(
-            linear_sos.x,
-            basis,
-            num_multipliers = len(lift_degree_info['basis']),
-            symmetry = symmetry
-        )
-        if is_equal or allow_numer > 0:
-            basis = _odd_basis_to_even(basis, poly.gens, ineq_constraints)
-            solution = SolutionLinear(
-                problem = poly,
-                y = y,
-                basis = basis,
-                symmetry = symmetry,
-                is_equal = is_equal,
+            y, basis, is_equal = linear_correction(
+                linear_sos.x,
+                basis,
+                num_multipliers = len(lift_degree_info['basis']),
+                symmetry = symmetry
             )
-            return solution
+            if is_equal or allow_numer > 0:
+                basis = _odd_basis_to_even(basis, poly.gens, ineq_constraints)
+                solution = SolutionLinear(
+                    problem = poly,
+                    y = y,
+                    basis = basis,
+                    symmetry = symmetry,
+                    is_equal = is_equal,
+                )
+                return solution
+    except _basis_limit_exceeded:
+        if verbose:
+            print(f'Basis limit {basis_limit} exceeded. LinearSOS aborted.')
+    return None

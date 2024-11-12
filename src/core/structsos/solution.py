@@ -46,7 +46,7 @@ class SolutionStructural(Solution):
         )
 
     @classmethod
-    def _extract_nonnegative_symbols(cls, expr: sp.Expr, func_name: str = "_G"):
+    def _extract_nonnegative_exprs(cls, expr: sp.Expr, func_name: str = "_G", allow_exprs = {}):
         """
         Raw output of StructuralSOS might assume nonnegativity of some symbols,
         we extract these symbols and replace them with _F(x) for further processing.

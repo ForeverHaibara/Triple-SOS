@@ -10,7 +10,7 @@ from .symsos import SymmetricSOS
 from .sdpsos import SDPSOS
 from .shared import sanitize_input
 
-from ..utils import deg, PolyReader, Solution, RootsInfo
+from ..utils import deg, PolyReader, Solution
 
 NAME_TO_METHOD = {
     'LinearSOS': LinearSOS,
@@ -39,7 +39,7 @@ DEFAULT_CONFIGS = {
 
 # @sanitize_input(homogenize=True)
 def sum_of_square(
-        poly: sp.Poly,
+        poly: Union[sp.Poly, sp.Expr],
         ineq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
         eq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
         method_order: Optional[List[str]] = METHOD_ORDER,
@@ -48,20 +48,63 @@ def sum_of_square(
     """
     Main function for sum of square decomposition.
 
+    Examples    
+    ----------
+    The function relies on SymPy for symbolic computation. We first import some items:
+
+        >>> from sympy.abc import x, y, a, b, c
+        >>> from sympy import Expr, Function
+
+    Call the function by passing in a SymPy polynomial or polynomial-like expression:
+
+        >>> result = sum_of_square(a**2+b**2+c**2-a*b-b*c-c*a)
+
+    The result will be None if the function fails. However, when the function fails
+    it does not mean the polynomial is non positive semidefinite or non sum-of-squares. It only
+    means the function could not find a solution.
+    If result is not None, it will be a solution class. To access the expression, use .solution:
+
+        >>> print(isinstance(result.solution, Expr), result.solution)
+        True (Σ(a - b)**2)/2
+
+    The solution expression might involve CyclicSum and CyclicProduct classes, which are not native
+    to SymPy, but defined in this package. The permutation groups are not displayed by default and
+    might be sometimes misleading. To avoid ambiguity and to expand them, use .doit() on SymPy expressions:
+
+        >>> result.solution.doit()
+        (-a + c)**2/2 + (a - b)**2/2 + (b - c)**2/2
+
+    If we want to add constraints for the domain of the variables, we can pass in a list of inequality
+    or equality constraints. This should be the second and the third argument respectively. Here is
+    an example for the constraints a,b,c >= 0:
+
+        >>> sum_of_square(a*(a-b)*(a-c)+b*(b-c)*(b-a)+c*(c-a)*(c-b), [a,b,c]).solution
+        ((Σ(a - b)**2*(a + b - c)**2)/2 + Σa*b*(a - b)**2)/(Σa)
+
+    If we want to track the constraints, we can also pass in a dictionary to imply the "name" of the
+    constraints:
+
+        >>> sum_of_square(((a+2)*(b+2)*(c+2)*(a**2/(2+a)+b**2/(2+b)+c**2/(2+c)-1)).cancel(), [a,b,c], {a*b*c-1:x}).solution
+        x*(Σa)/3 + 13*x + Σa*(b - c)**2 + (Σa*b*(c - 1)**2)/6 + 5*(Σ(a - 1)**2)/6 + 7*(Σ(a - b)**2)/12
+
+        >>> sum_of_square(x+y+z-(x*y+y*z+z*x), {x:x, y:y, z:z, 4-(x*y+y*z+z*x+x*y*z):a}).solution
+        (6*a*(Σx) + 3*a*(Σx**2) + 3*(Σx*y*(x - y)**2) + 3*(Σx*y*z*(x - y)**2)/2)/(Σ(x*y*z + 6*x*y + 12*x + 8))
+
+        >>> G = Function("G")
+        >>> sum_of_square(x*(y-z)**2+y*(z-x)**2+z*(x-y)**2, {x:G(x),y:G(y),z:G(z)}).solution
+        Σ(x - y)**2*G(z)
+
     Parameters
     ----------
-    poly: sp.Poly
+    poly: Union[sp.Poly, sp.Expr]
         The polynomial to perform SOS on.
     ineq_constraints: Union[List[Expr], Dict[Expr, Expr]]
         Inequality constraints to the problem. This assumes g_1(x) >= 0, g_2(x) >= 0, ...
     eq_constraints: Union[List[Expr], Dict[Expr, Expr]]
         Equality constraints to the problem. This assumes h_1(x) = 0, h_2(x) = 0, ...
-    rootsinfo : Optional[RootsInfo]
-        The roots information of the polynomial. If None, it will be automatically computed.
-        Pass in an empty RootsInfo object to skip the computation.
-    method_order : List[str]
+    method_order: List[str]
         The order of methods to try. Defaults to METHOD_ORDER.
-    configs : Dict[str, Dict]
+    configs: Dict[str, Dict]
         The configurations for each method. Defaults to DEFAULT_CONFIGS.
         It should be a dictionary containing the method names as keys and the kwargs as values.
 
@@ -74,11 +117,6 @@ def sum_of_square(
         method_order = METHOD_ORDER
     if configs is None:
         configs = DEFAULT_CONFIGS
-
-    assert isinstance(poly, sp.Poly), 'Poly must be a sympy polynomial.'
-
-    # if rootsinfo is None:
-    #     rootsinfo = findroot(poly, with_tangents=root_tangents)
 
     for method in method_order:
         config = configs.get(method, {})
@@ -154,7 +192,7 @@ def sum_of_square_multiple(
     for key in DEFAULT_CONFIGS:
         if key not in configs:
             configs[key] = {}
-        if key != 'StructuralSOS':
+        if key in ('LinearSOS', 'SDPSOS'):
             configs[key]['verbose'] = verbose_sos
 
     if 'ignore_errors' not in poly_reader_configs:

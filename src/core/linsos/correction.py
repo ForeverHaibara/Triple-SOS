@@ -3,9 +3,9 @@ from typing import List, Optional, Tuple
 import numpy as np
 import sympy as sp
 from sympy.combinatorics import PermutationGroup
+from sympy.polys.matrices import DomainMatrix
 
 from .basis import LinearBasis
-from .solution import SolutionLinear
 from ...utils.roots.rationalize import rationalize_array
 
 def _filter_zero_y(y: List[float], basis: List[LinearBasis], num_multipliers: int) -> Tuple[List[float], List[LinearBasis], int]:
@@ -88,14 +88,14 @@ def linear_correction(
         # second try to solve the linear system
         try:
             reduced_basis = basis
-            reduced_y = reduced_arrays.LUsolve(target)
+            reduced_y = LUsolve(reduced_arrays, target)
 
             if all(_ >= 0 for _ in reduced_y):
                 reduced_y, reduced_basis, num_multipliers = _filter_zero_y(reduced_y, reduced_basis, num_multipliers)
                 reduced_arrays = _basis_as_matrix(reduced_basis, symmetry=symmetry)
                 reduced_arrays = _add_regularizer(reduced_arrays, num_multipliers)
-                obtained = reduced_arrays * sp.Matrix(reduced_y)
-                if target == obtained:
+                reduced_y = sp.Matrix(reduced_y)
+                if _is_Ax_equal_to_b(reduced_arrays, reduced_y, target):
                     is_equal = True
                     y, basis = reduced_y, reduced_basis
         except Exception as e:
@@ -103,3 +103,57 @@ def linear_correction(
             is_equal = False
 
     return y, basis, is_equal
+
+def LUsolve(A: sp.Matrix, b: sp.Matrix) -> sp.Matrix:
+    """
+    Solve the linear system Ax = b. Handle irrational cases cleverly.
+    When the matrix contains algebraic numbers like sqrt(2)+1,
+    regular routines like A.LUsolve(b) will lead to nested fractions,
+    which will be extremely slow. We need to convert them to DomainMatrix
+    and solve the linear system in the extension field.
+    """
+    # if all(isinstance(_, sp.Rational) for _ in A) and all(isinstance(_, sp.Rational) for _ in b):
+    #     return A.LUsolve(b)
+
+    A2 = None
+    try:
+        A2 = DomainMatrix.from_Matrix(A, extension=True)
+        b2 = DomainMatrix.from_Matrix(b, extension=True)
+
+        new_domain = A2.domain.unify(b2.domain).get_field()
+        A2 = A2.convert_to(new_domain)
+        b2 = b2.convert_to(new_domain)
+    except Exception as e:
+        A2 = None
+    if A2 is None: # fallback to default
+        return A.LUsolve(b)
+
+    x = A2.lu_solve(b2)
+    x = x.to_Matrix()
+    return x
+
+def _is_Ax_equal_to_b(A: sp.Matrix, x: sp.Matrix, b: sp.Matrix) -> bool:
+    """
+    Check if Ax = b. For rational cases, using A * x == b is enough. However,
+    for irrational cases, we need to handle more carefully. For example,
+    we need to check equations between algebraic numbers: 1/(sqrt(2)+1) == sqrt(2)-1.
+    This will not be True if we use A * x == b directly, so we convert them to DomainMatrix
+    given an extension field.
+    """
+    # return A * x == b
+    try:
+        A2 = DomainMatrix.from_Matrix(A, extension=True)
+        x2 = DomainMatrix.from_Matrix(x, extension=True)
+        b2 = DomainMatrix.from_Matrix(b, extension=True)
+
+        new_domain = A2.domain.unify(x2.domain).unify(b2.domain)#.get_field()
+        A2 = A2.convert_to(new_domain)
+        x2 = x2.convert_to(new_domain)
+        b2 = b2.convert_to(new_domain)
+    except Exception as e:
+        A2 = None
+
+    if A2 is None: # fallback to default
+        return A * x == b
+
+    return A2 * x2 == b2

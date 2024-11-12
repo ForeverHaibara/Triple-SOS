@@ -478,7 +478,7 @@ def SDPSOS(
     For more flexible usage, please use
     ```
         sos_problem = SOSProblem(poly)
-        sos_problem.construct()
+        sos_problem.construct(*args)
         sos_problem.solve(**kwargs)
         solution = sos_problem.as_solution()
     ```

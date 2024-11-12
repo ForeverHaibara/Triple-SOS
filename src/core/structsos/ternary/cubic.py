@@ -32,14 +32,28 @@ def _sos_struct_cubic_symmetric(coeff):
     """
     Cubic symmetric inequality can be handled with Schur.
     """
-    # if not coeff((2,1,0)) == coeff((1,2,0)):
-    #     return None
+    rem = radsimp(3 * (coeff((3,0,0)) + coeff((2,1,0)) * 2) + coeff((1,1,1)))
+    y = radsimp([
+        coeff((3,0,0)) / 4,
+        coeff((2,1,0)) + 3*coeff((3,0,0))/4,
+        rem
+    ])
+    if all(_ >= 0 for _ in y):
+        # we do not need to lift the degree in this case
+        exprs = [
+            CyclicSum(a*(b+c-2*a)**2),
+            CyclicSum(a*(b-c)**2),
+            CyclicProduct(a)
+        ]
+        return sum_y_exprs(y, exprs)
+
     y = radsimp([
         coeff((3,0,0)),
         coeff((3,0,0)) + coeff((2,1,0)),
-        3 * (coeff((3,0,0)) + coeff((2,1,0)) * 2) + coeff((1,1,1))
+        rem
     ])
     if all(_ >= 0 for _ in y):
+        # use Schur
         exprs = [
             # CyclicSum(a*(a-b)*(a-c)),
             CommonExpr.schur(3),

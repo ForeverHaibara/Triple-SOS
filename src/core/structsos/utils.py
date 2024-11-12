@@ -12,7 +12,6 @@ class PolynomialUnsolvableError(StructuralSOSError): ...
 class PolynomialNonpositiveError(PolynomialUnsolvableError): ...
 
 
-
 def radsimp(expr: Union[sp.Expr, List[sp.Expr]]) -> sp.Expr:
     """
     Rationalize the denominator by removing square roots. Wrapper of sympy.radsimp.

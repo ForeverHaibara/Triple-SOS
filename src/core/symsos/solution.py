@@ -33,7 +33,7 @@ class SolutionSymmetric(Solution):
         )
 
     @classmethod
-    def _extract_nonnegative_symbols(cls, expr: sp.Expr, func_name: str = "_G"):
+    def _extract_nonnegative_exprs(cls, expr: sp.Expr, func_name: str = "_G"):
         """
         Raw output of SymmetricSOS might assume nonnegativity of some symbols,
         we extract these symbols and replace them with _F(x) for further processing.
@@ -42,7 +42,7 @@ class SolutionSymmetric(Solution):
         TODO: Move this to SolutionSimple???
         """
         from ..structsos.solution import SolutionStructuralSimple
-        return SolutionStructuralSimple._extract_nonnegative_symbols(expr, func_name)
+        return SolutionStructuralSimple._extract_nonnegative_exprs(expr, func_name)
 
 
 class SolutionSymmetricSimple(SolutionSimple):#, SolutionSymmetric):

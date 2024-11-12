@@ -43,7 +43,7 @@ def SymmetricSOS(
         Equality constraints to the problem. This assumes h_1(x) = 0, h_2(x) = 0, ...
 
     Returns
-    -------
+    -----------
     SolutionSymmetricSimple
         The solution of the problem.
         
@@ -56,6 +56,8 @@ def SymmetricSOS(
     if (len(poly.gens) != 3 or not (poly.domain in (sp.ZZ, sp.QQ))):
         return None
     if not poly.is_homogeneous or not Coeff(poly).is_symmetric():
+        return None
+    if poly.total_degree() <= 1:
         return None
     # if poly(1,1,1) != 0:
     #     return None
@@ -80,11 +82,12 @@ def SymmetricSOS(
         )
         solution = expr.xreplace(dict(zip(sp.symbols("a b c"), poly.gens)))
 
-
+        ####################################################################
         # replace assumed-nonnegative symbols with inequality constraints
+        ####################################################################
         func_name = uniquely_named_symbol('G', poly.gens + tuple(ineq_constraints.values()))
         func = sp.Function(func_name)
-        solution = SolutionSymmetric._extract_nonnegative_symbols(solution, func_name=func_name)
+        solution = SolutionSymmetric._extract_nonnegative_exprs(solution, func_name=func_name)
         if solution is None:
             continue
 
