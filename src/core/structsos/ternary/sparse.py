@@ -1,3 +1,4 @@
+from itertools import permutations, combinations
 from typing import List, Tuple, Dict, Callable, Optional
 from math import gcd
 
@@ -42,47 +43,313 @@ def sos_struct_sparse(coeff, real = True):
             # because it presents proof for real numbers
             return sos_struct_quartic(coeff, None)
 
-    monoms = list(coeff.coeffs.keys())
-    if len(coeff) == 1:
-        # e.g.  abc
-        if coeff(monoms[0]) >= 0:
-            # we must have i == j == k as the polynomial is cyclic
-            i, j, k = monoms[0]
-            return coeff(monoms[0]) * CyclicProduct(a**i)
+    if len(coeff) <= 6:
+        return _sos_struct_sparse_amgm(coeff)
 
-    elif len(coeff) == 3:
-        # e.g. (a2b + b2c + c2a)
-        if coeff(monoms[0]) >= 0:
-            i, j, k = monoms[0]
-            return coeff(monoms[0]) * CyclicSum(a**i * b**j * c**k)
 
-    elif len(coeff) == 4:
-        # e.g. (a2b + b2c + c2a - 8/3abc)
-        n = degree // 3
-        if coeff(monoms[0]) >= 0 and coeff(monoms[0])*3 + coeff(n, n, n) >= 0:
-            i, j, k = monoms[0]
-            if i % 3 or j % 3 or k % 3:
-                p1 = coeff(monoms[0]) * CyclicSum(a**i * b**j * c**k - CyclicProduct(a**n))
+
+#####################################################################
+#
+#                          AMGM solver
+#
+#####################################################################
+
+class CoeffMonom:
+    """Closely related to CyclicSum(a**i*b**j*c**k) and the 3var coefficient triangle."""
+    __slots__ = ['monom']
+    def __init__(self, *monom):
+        self.monom = monom
+    def __repr__(self) -> str:
+        return f"CoeffMonom({', '.join(str(i) for i in self.monom)})"
+    def __str__(self) -> str:
+        return self.__repr__()
+    def degree(self) -> int:
+        return sum(self.monom)
+    def norm(self) -> int:
+        return sum(abs(i) for i in self.monom)
+    def total_degree(self) -> int:
+        return sum(self.monom)
+    def __eq__(self, other) -> bool:
+        return self.monom == other.monom
+    def __ne__(self, other) -> bool:
+        return self.monom != other.monom
+    def __sub__(self, other) -> 'CoeffMonom':
+        return CoeffMonom(*[self[i]-other[i] for i in range(3)])
+    def __add__(self, other) -> 'CoeffMonom':
+        return CoeffMonom(*[self[i]+other[i] for i in range(3)])
+    def __mul__(self, other) -> 'CoeffMonom':
+        return CoeffMonom(*[self[i]*other for i in range(3)])
+    def __rmul__(self, other) -> 'CoeffMonom':
+        return CoeffMonom(*[other*self[i] for i in range(3)])
+    def __floordiv__(self, other) -> 'CoeffMonom':
+        if hasattr(other, '__iter__'): return CoeffMonom(*[self[i]//other[i] for i in range(3)])
+        return CoeffMonom(*[self[i]//other for i in range(3)])
+    def __abs__(self) -> 'CoeffMonom':
+        return CoeffMonom(*[abs(self[i]) for i in range(3)])
+    def __hash__(self) -> int:
+        return hash(self.monom)
+    def __getitem__(self, i) -> int:
+        return self.monom[i]
+    def __iter__(self):
+        return iter(self.monom)
+    def std(self) -> 'CoeffMonom':
+        x, y, z = self.monom
+        return CoeffMonom(*max((x,y,z), (y,z,x), (z,x,y)))
+    def dot(self, other) -> int:
+        return sum(self[i]*other[i] for i in range(3))
+    def gcd(self) -> int:
+        x, y, z = self.monom
+        return gcd(x, gcd(y,z))
+    def factor_list(self) -> Tuple[int, 'CoeffMonom']:
+        g = self.gcd()
+        return g, CoeffMonom(*[i//g for i in self.monom])
+    def area(self) -> int:
+        x, y, z = self.monom
+        return x**2+y**2+z**2-x*y-y*z-z*x
+    def as_monom(self, a, b, c) -> sp.Expr:
+        return a**self[0]*b**self[1]*c**self[2]
+    def cycle(self) -> Tuple['CoeffMonom']:
+        x, y, z = self.monom
+        return (self, CoeffMonom(y,z,x), CoeffMonom(z,x,y))
+    def next(self) -> 'CoeffMonom':
+        x, y, z = self.monom
+        return CoeffMonom(y,z,x)
+    @property
+    def is_center(self) -> bool:
+        return self.monom[0] == self.monom[1] and self.monom[1] == self.monom[2]
+    @classmethod
+    def is_collinear(cls, p1, p2, p3) -> bool:
+        # cls.assert_equal_degrees(p1, p2, p3)
+        return p1[0]*(p2[1]-p3[1]) + p2[0]*(p3[1]-p1[1]) + p3[0]*(p1[1]-p2[1]) == 0
+    @classmethod
+    def integer_intersection(cls, p1, p2, p3, p4) -> Optional['CoeffMonom']:
+        # cls.assert_equal_degrees(p1, p2, p3, p4)
+        (p10, p11, p12), (p20, p21, p22), (p30, p31, p32), (p40, p41, p42) = p1, p2, p3, p4
+        det = p10*p31 - p10*p41 - p11*p30 + p11*p40 - p20*p31 + p20*p41 + p21*p30 - p21*p40
+        p50 = p10*p21*p30 - p10*p21*p40 - p10*p30*p41 + p10*p31*p40 - p11*p20*p30 + p11*p20*p40 + p20*p30*p41 - p20*p31*p40
+        p51 = p10*p21*p31 - p10*p21*p41 - p11*p20*p31 + p11*p20*p41 - p11*p30*p41 + p11*p31*p40 + p21*p30*p41 - p21*p31*p40
+        if det == 0 or p50 % det != 0 or p51 % det != 0: return None
+        return CoeffMonom(p50//det, p51//det, sum(p1) - p50//det - p51//det)
+    def is_equal_degree(self, other) -> bool:
+        return sum(other) == self.degree()
+    @classmethod
+    def assert_equal_degree(cls, *args) -> bool:
+        d = sum(args[0]) if cls is CoeffMonom else sum(cls)
+        if not all(sum(i) == d for i in args): raise ValueError("Monomials must have the same degree.")
+        return True
+    def weight(self, point) -> Dict['CoeffMonom', sp.Rational]:
+        self.assert_equal_degree(point)
+        x, y, z = point
+        u, v, w = self.monom
+        if u==v and v==w and x==y and y==z: return {(u,v,w): sp.Integer(1)}
+        det = sp.Integer(3*u*v*w - (u**3+v**3+w**3))
+        deta = sp.Integer(x*(v*w-u**2)+y*(w*u-v**2)+z*(u*v-w**2))
+        detb = sp.Integer(x*(w*u-v**2)+y*(u*v-w**2)+z*(v*w-u**2))
+        detc = sp.Integer(x*(u*v-w**2)+y*(v*w-u**2)+z*(w*u-v**2))
+        return {(u,v,w): deta/det, (v,w,u): detb/det, (w,u,v): detc/det}
+    def is_circumscribing(self, other) -> Optional['CoeffMonom']:
+        if not self.is_equal_degree(other): raise ValueError("Monomials must have the same degree.")
+        other = CoeffMonom(*other) if not isinstance(other, CoeffMonom) else other
+        nex = self.next()
+        for p in other.cycle():
+            if CoeffMonom.is_collinear(self, p, nex):
+                return p
+        return None
+    def __rshift__(self, other) -> bool:
+        """Test whether two coefficient triangles are inclusive."""
+        if not isinstance(other, CoeffMonom): other = CoeffMonom(*other)
+        if self.is_center and self.assert_equal_degree(other): return other.is_center
+        return all(_ >= 0 for _ in self.weight(other.monom).values())
+    def __lshift__(self, other) -> bool:
+        """Test whether two coefficient triangles are inclusive."""
+        if not isinstance(other, CoeffMonom): other = CoeffMonom(*other)
+        if self.is_center and self.assert_equal_degree(other): return True
+        return all(_ >= 0 for _ in other.weight(self.monom).values())
+
+
+class AMGM3:
+    abc = sp.symbols('a b c')
+    @classmethod
+    def solve(cls, c1, m1, c2, m2):
+        """Solve c1*CyclicSum(a**m1[0]*b**m1[1]*c**m1[2]) + c2*CyclicSum(a**m2[0]*b**m2[1]*c**m2[2]) >= 0."""
+        a, b, c = cls.abc
+        if c1 >= 0 and c2 >= 0: # TODO: handle real numbers??
+            return c1*CyclicSum(a**m1[0]*b**m1[1]*c**m1[2]) + c2*CyclicSum(a**m2[0]*b**m2[1]*c**m2[2])
+        if c1 < 0 and c2 < 0:
+            return None
+        m1 = CoeffMonom(*m1)
+        m2 = CoeffMonom(*m2)
+        if c1 + c2 >= 0:
+            if c2 >= 0 and m2 >> m1:
+                c1, m1, c2, m2 = c2, m2, c1, m1
+            elif not (c1 >= 0 and m1 >> m2):
+                return None
+            sol = cls._solve(m1, m2)
+            if sol is None: return None
+            return c1*sol + (c1 + c2)*CyclicSum(m2.as_monom(a,b,c))
+    @classmethod
+    def _solve(cls, m1: CoeffMonom, m2: CoeffMonom):
+        funcs = [cls._solve_center, cls._solve_circumscribing, cls._solve_spiral, cls._solve_spiral2] #, cls._solve_amgm]
+        for func in funcs:
+            sol = func(m1, m2)
+            if sol is not None: return sol
+        return None
+
+    @classmethod
+    def _solve_amgm(cls, m1: CoeffMonom, m2: CoeffMonom):
+        a, b, c = cls.abc
+        weight = m1.weight(m2)
+        m2expr = a**m2[0]*b**m2[1]*c**m2[2]
+        return CyclicSum((sum(w*a**i*b**j*c**k for (i,j,k), w in weight.items()) - m2expr).together())
+
+    @classmethod
+    def local_ineq(cls, m1, p, m2) -> Optional[Tuple[sp.Expr, int, int]]:
+        """
+        Solve CyclicSum(..*m1.as_monom(a,b,c) + ..*p.as_monom(a,b,c) + ..*m2.as_monom(a,b,c)) >= 0
+        Return expr, x, y such that
+        expr = CyclicSum(x*m1.as_monom(a,b,c) - (x+y)*p.as_monom(a,b,c) + y*m2.as_monom(a,b,c)) >= 0
+        """
+        a, b, c = cls.abc
+        v1, v2 = p - m1, m2 - p
+        if v1.dot(v2) > 0:
+            d1, d2 = v1.norm(), v2.norm()
+            dgcd = abs(gcd(d1, d2))
+            d1, d2 = d1//dgcd, d2//dgcd
+            x = sp.Symbol('x')
+            f1 = sp.Poly({(d1+d2,): d1, (d1,): -(d1+d2), (0,):d2}, x)
+            dm = divmod(f1, sp.Poly([1,-2,1], x))
+            if not dm[1].is_zero: return None # should not happen
+            x2 = (v2//d2).as_monom(a,b,c)
+            sol = m1.as_monom(a,b,c) * dm[0].as_expr().subs(x, x2) * (x2 - 1)**2
+            return CyclicSum(sol.together()), d2, d1
+            
+    @classmethod
+    def _solve_circumscribing(cls, m1: CoeffMonom, m2: CoeffMonom):
+        p = m1.is_circumscribing(m2)
+        if p is not None:
+            # e.g. s(a6-a4c2)
+            sol = cls.local_ineq(m1, p, m1.next())
+            if sol is not None: return sol[0] / (sol[1] + sol[2])
+
+        p = m2.is_circumscribing(m1)
+        if p is not None:
+            # e.g. s(a7b2-a5b3c)
+            sol = cls.local_ineq(p, m2, m2.next())
+            if sol is not None: return sol[0] / sol[1]
+            sol = cls.local_ineq(p, m2.next(), m2)
+            if sol is not None: return sol[0] / sol[1]
+
+    @classmethod
+    def _solve_center(cls, m1: CoeffMonom, m2: CoeffMonom):
+        if not m2.is_center:
+            return None
+        a, b, c = cls.abc
+        d = m2[0]
+        m1 = m1.std()
+        if m1[1] < d and m1[2] < d:
+            # in a parallelogram region
+            if m1[1] <= m1[2]:
+                r = m1[2]
+                v = CoeffMonom(3*d-2*r, r, r)
+                v2 = CoeffMonom(r, 3*d-2*r, r)
             else:
-                # special case is i%3==j%3==k%3 == 0, and then we can factor the AM-GM
-                ker1 = a**(i//3)*b**(j//3)*c**(k//3)
-                ker2 = a**(j//3)*b**(k//3)*c**(i//3)
-                p1 = coeff(monoms[0])/2 * CyclicSum(ker1) * CyclicSum((ker1 - ker2)**2)
+                r = m1[1]
+                v = CoeffMonom(3*d-2*r, r, r)
+                v2 = CoeffMonom(r, r, 3*d-2*r)
+            if m1 == v:
+                sol1 = (sp.S(0), sp.S(1), sp.S(1))
+            else:
+                sol1 = cls.local_ineq(m1, v, v2)
+            if sol1 is None:
+                return None
+            sol2 = CyclicProduct(a**r)*CyclicSum(a**(d-r))*CyclicSum((a**(d-r)-b**(d-r))**2)/2
+            return sol1[0]/sol1[1] + sol2
+        elif m1[1] == d:
+            r = m1[2] # (2d-r, d, r)
+            s = d - r
+            return CyclicProduct(a**r) * CyclicSum(a**s*(a**s+2*c**s)*(b**s-c**s)**2)/(2*CyclicSum(a**s))
+        elif m1[2] == d:
+            r = m1[1]
+            s = d - r
+            return CyclicProduct(a**r) * CyclicSum(a**s*(a**s+2*b**s)*(b**s-c**s)**2)/(2*CyclicSum(a**s))
+        else: # m1[1] > d or m1[2] > d
+            # e.g. s(a6b5c-a4b4c4) = s(a6b5c-a5b5c2) + s(a5b5c2-a4b4c4)
+            if m1[1] > d:
+                r = m1[1]
+                v = CoeffMonom(r, r, 3*d-2*r)
+                v2 = CoeffMonom(3*d-2*r, r, r)
+            else:
+                r = m1[2]
+                v = CoeffMonom(r, r, 3*d-2*r)
+                v2 = CoeffMonom(r, 3*d-2*r, r)
+            if m1 == v:
+                sol1 = (sp.S(0), sp.S(1), sp.S(1))
+            else:
+                sol1 = cls.local_ineq(m1, v, v2)
+            if sol1 is None:
+                return None
+            s = r - d
+            sol2 = CyclicProduct(a**(3*d-2*r))*CyclicSum(a**s*b**s)*CyclicSum(a**(2*s)*(b**s-c**s)**2)/2
+            return sol1[0]/sol1[1] + sol2
 
-            return p1 + (coeff(monoms[0]) * 3 + coeff(n, n, n)) * CyclicProduct(a**n)
+    @classmethod
+    def _solve_spiral(cls, m1: CoeffMonom, m2: CoeffMonom):
+        # e.g. s(a8b3-a6b3c2)
+        nex = m1.next()
+        for p1, p2 in permutations(m2.cycle(), 2):
+            p = CoeffMonom.integer_intersection(m1, p1, nex, p2)
+            if p is not None:
+                if (m1 - p1).dot(p1 - p) > 0:
+                    sol1 = cls.local_ineq(m1, p1, p)
+                    if p.is_center:
+                        sol2 = cls._solve_center(p1, p)
+                        if sol2 is not None:
+                            return sol1[0]/sol1[1] + sol2*sol1[2]/sol1[1]
+                        return None
+                    sol2 = cls._solve_circumscribing(m1, p)
+                    if sol1 is not None and sol2 is not None:
+                        # TODO: Simplify AMGM3.solve(1,(9,0,4),-1,(8,1,4))
+                        def merge_cyc_sums(e1, e2):
+                            e = e1 + e2
+                            (v1, e1), (v2, e2) = e1.as_coeff_Mul(), e2.as_coeff_Mul()
+                            if not isinstance(e1, CyclicSum) or not isinstance(e2, CyclicSum): return e
+                            if not isinstance(e1.args[0], sp.Mul) or not isinstance(e2.args[0], sp.Mul): return e
+                            if e1.args[1] != e2.args[1] or e1.args[2] != e2.args[2]: return e
+                            return CyclicSum((v1*e1.args[0] + v2*e2.args[0]).together(), e1.args[1], e1.args[2])
+                        return merge_cyc_sums(sol1[0], sol2*sol1[2])/(sol1[1]+sol1[2])
+                else:
+                    sol1 = cls._solve_circumscribing(m1, p)
+                    sol2 = cls._solve_circumscribing(p, p1)
+                    if sol1 is not None and sol2 is not None:
+                        return sol1 + sol2
+                # return None
 
-    elif len(coeff) == 6:
-        # AM-GM
-        # e.g. s(a5b4 - a4b4c)
-        monoms = [i for i in monoms if (i[0]>i[1] and i[0]>i[2]) or (i[0]==i[1] and i[0]>i[2])]
-        monoms = sorted(monoms)
-        small, large = monoms[0], monoms[1]
+        for p1, p2 in combinations(m2.cycle(), 2):
+            # e.g. s(a4b4-a3b3c2) = s(a4b4-a3bc4) + s(a3bc4-a3b3c2)
+            p = CoeffMonom.integer_intersection(m1, nex, p1, p2)
+            if p is not None:
+                if (m1 - p).dot(p - nex) > 0:
+                    sol1 = cls.local_ineq(m1, p, nex)
+                    sol2 = cls._solve_circumscribing(p, p1)
+                    if sol1 is not None and sol2 is not None:
+                        return sol1[0] / (sol1[1] + sol1[2]) + sol2
+                # return None
 
-        return _sos_struct_sparse_amgm(coeff, small, large)
-    return None
+    @classmethod
+    def _solve_spiral2(cls, m1: CoeffMonom, m2: CoeffMonom):
+        m1 = m1.std()
+        d = min(m2)
+        if m1[1] > m1[2]:
+            v = CoeffMonom(m1[0]+m1[2]-d, m1[1], d)
+        else:
+            v = CoeffMonom(m1[0]+m1[1]-d, d, m1[2])
+        if v[0] >= 0 and v != m2 and m1 >> v and v >> m2:
+            sol1 = cls._solve(m1, v)
+            sol2 = cls._solve(v, m2)
+            if sol1 is not None and sol2 is not None:
+                return sol1 + sol2
 
-
-def _sos_struct_sparse_amgm(coeff, small, large):
+def _sos_struct_sparse_amgm(coeff):
     """
     Solve 
     \sum coeff(large) * a^u*b^v*c^w + \sum coeff(small) * a^x*b^y*c^z >= 0
@@ -96,106 +363,19 @@ def _sos_struct_sparse_amgm(coeff, small, large):
     For example,
     s(a6-a4bc) = s(a2)s((a2-b2)2)/4+s(a2(a2-bc)2)/2 >= 0 for all real numbers a,b,c.
     """
-    if coeff(large) < 0 or coeff(large) + coeff(small) < 0:
+    if not len(coeff) <= 6:
         return None
-    a, b, c = sp.symbols('a b c')
-    
-    def _mean(a, b):
-        return ((a[0]+b[0])//2, (a[1]+b[1])//2, (a[2]+b[2])//2)
-    def _multiple(a, b):
-        return (2*b[0]-a[0], 2*b[1]-a[1], 2*b[2]-a[2])
+    monoms = set(CoeffMonom(*m).std() for m in coeff.coeffs.keys())
+    monoms = list(monoms)
+    if len(monoms) == 1:
+        degree = coeff.degree()
+        monoms.append(CoeffMonom(degree, 0, 0))
 
-    if large[0] % 2 == large[1] % 2 and large[1] % 2 == large[2] % 2:
-        # detect special case: small is the midpoint of large
-        # in this case, we can provide sum-of-square for real numbers
-        u,v,w = large
-        if small == _mean(large, (v,w,u))\
-            or small == _mean(large, (w,u,v))\
-            or small == _mean((v,w,u),(w,u,v)):
-            # midpoint
-            x, y = coeff(small), coeff(large)
-            if 2*y >= x:
-                prefix = CyclicProduct(a) if u % 2 == 1 else sp.S(1)
-                p1 = a**(u//2) * b**(v//2) * c**(w//2)
-                p2 = a**(v//2) * b**(w//2) * c**(u//2)
-                w1 = (2*y - x) / 3
-                w2 = y - w1
-                return (w1/2) * prefix * CyclicSum((p1 - p2)**2) + w2 * prefix * CyclicSum(p1)**2
-                
-                # if x + y >= 0 but 2*y < x (indicating x, y >= 0 both)
-                # fall to the normal mode below                    
-
-
-    SPECIAL_AMGMS = {
-        ((6,0,0),(4,1,1)): CyclicSum(a**2)*CyclicSum((a**2-b**2)**2)/4 + CyclicSum(a**2*(a**2-b*c)**2)/2,
-        ((6,0,0),(4,2,0)): CyclicSum((a**2-b**2)**2*(2*a**2+b**2))/3,
-        ((6,0,0),(4,0,2)): CyclicSum((a**2-c**2)**2*(2*a**2+c**2))/3,
-        ((6,0,0),(5,1,0)): CyclicSum((a**2-b**2)**2*(2*a**2+b**2))/6 + CyclicSum(a**4*(a-b)**2)/2,
-        ((6,0,0),(5,0,1)): CyclicSum((a**2-c**2)**2*(2*a**2+c**2))/6 + CyclicSum(a**4*(a-c)**2)/2,
-        ((6,0,0),(3,2,1)): CyclicSum((a**2-b**2)**2*(2*a**2+b**2))/6 + CyclicSum((a**3-b**2*c)**2)/2,
-        ((6,0,0),(3,1,2)): CyclicSum((a**2-c**2)**2*(2*a**2+c**2))/6 + CyclicSum((a**3-b*c**2)**2)/2,
-        ((8,0,0),(7,1,0)): CyclicSum((a**4-b**4)**2)/8 + CyclicSum(a**4*(a**2-b**2)**2)/4 + CyclicSum(a**6*(a-b)**2)/2,
-        ((8,0,0),(7,0,1)): CyclicSum((a**4-b**4)**2)/8 + CyclicSum(a**4*(a**2-c**2)**2)/4 + CyclicSum(a**6*(a-c)**2)/2,
-        ((8,0,0),(5,0,3)): CyclicSum((a**4-b**4)**2)/8 + CyclicSum(a**4*(a**2-b**2)**2)/4 + CyclicSum(b**2*(a**3-b**3)**2)/2,
-        ((8,0,0),(5,3,0)): CyclicSum((a**4-b**4)**2)/8 + CyclicSum(a**4*(a**2-c**2)**2)/4 + CyclicSum(c**2*(a**3-c**3)**2)/2,
-        ((8,0,0),(6,1,1)): CyclicSum((a**4-a**2*b*c)**2)/2 + CyclicSum((a**4-b**4)**2)/4 + CyclicSum(a**4*(b**2-c**2)**2)/4,
-        ((8,0,0),(5,2,1)): CyclicSum((a**4-b**4)**2)/4 + CyclicSum(a**4*(b**2-c**2)**2)/4 + CyclicSum(a**2*(a**3-b**2*c)**2)/2,
-        ((8,0,0),(5,1,2)): CyclicSum((a**4-b**4)**2)/4 + CyclicSum(a**4*(b**2-c**2)**2)/4 + CyclicSum(a**2*(a**3-b*c**2)**2)/2,
-        ((8,0,0),(4,3,1)): CyclicSum((a**4-b**4)**2)/8 + CyclicSum(a**4*(a**2-b**2)**2)/4 + CyclicSum((a**4-b**3*c)**2)/2,
-        ((8,0,0),(4,1,3)): CyclicSum((a**4-b**4)**2)/8 + CyclicSum(a**4*(a**2-c**2)**2)/4 + CyclicSum((a**4-b*c**3)**2)/2,
-        ((8,0,0),(3,3,2)): CyclicSum((a**4-b**4)**2)/2 + CyclicSum(a**4*(b**2-c**2)**2)/2 + CyclicProduct(a**2)*CyclicSum((a-b)**2)/2,
-    }
-    _amgm = SPECIAL_AMGMS.get((large, small))
-    if _amgm is not None:
-        return coeff(large) * _amgm + (coeff(large) + coeff(small)) * CyclicSum(a**small[0]*b**small[1]*c**small[2])
-
-    if True:
-        # extend each side of the small triangle by two times to obtain the large
-        # e.g. s(a3b-a2bc) = s(ac(b-c)2)
-        # e.g. s(a5c-a3bc2) = s(ac(a2-bc)2)
-        u,v,w = large
-        twice = _multiple(small, (small[1], small[2], small[0]))
-        if twice in ((u,v,w),(v,w,u),(w,u,v)):
-            prefix = a**(twice[0]%2)*b**(twice[1]%2)*c**(twice[2]%2)
-            p1 = a**(twice[0]//2)*b**(twice[1]//2)*c**(twice[2]//2)
-            p2 = a**(small[0]//2)*b**(small[1]//2)*c**(small[2]//2)
-            return coeff(large) * CyclicSum(prefix * (p1 - p2)**2)\
-                + (coeff(large) + coeff(small)) * CyclicSum(a**small[0]*b**small[1]*c**small[2])
-        twice = _multiple((small[1], small[2], small[0]), small)
-        if twice in ((u,v,w),(v,w,u),(w,u,v)):
-            prefix = a**(twice[0]%2)*b**(twice[1]%2)*c**(twice[2]%2)
-            p1 = a**(twice[0]//2)*b**(twice[1]//2)*c**(twice[2]//2)
-            p2 = a**(small[1]//2)*b**(small[2]//2)*c**(small[0]//2)
-            return coeff(large) * CyclicSum(prefix * (p1 - p2)**2)\
-                + (coeff(large) + coeff(small)) * CyclicSum(a**small[0]*b**small[1]*c**small[2])
-        
-        
-
-    # now we use general method
-    if coeff(small) >= 0:
-        return coeff(small) * CyclicSum(a**small[0] * b**small[1] * c**small[2]) \
-            + coeff(large) * CyclicSum(a**large[0] * b**large[1] * c**large[2])
-
-    else:
-        # AM-GM inequality
-        x, y, z = small
-        u, v, w = large
-        det = 3*u*v*w - (u**3+v**3+w**3)
-        deta = x*(v*w-u**2)+y*(w*u-v**2)+z*(u*v-w**2)
-        detb = x*(w*u-v**2)+y*(u*v-w**2)+z*(v*w-u**2)
-        detc = x*(u*v-w**2)+y*(v*w-u**2)+z*(w*u-v**2)
-        det, deta, detb, detc = -det, -deta, -detb, -detc
-
-        if det > 0 and deta >= 0 and detb >= 0 and detc >= 0:
-            d = gcd(det, gcd(deta, gcd(detb, detc)))
-            det, deta, detb, detc = det//d, deta//d, detb//d, detc//d
-            
-            am_gm = deta*a**u*b**v*c**w + detb*a**v*b**w*c**u + detc*a**w*b**u*c**v - det*a**x*b**y*c**z
-            
-            return coeff(large)/det * CyclicSum(am_gm) + (coeff(large) + coeff(small)) * CyclicSum(a**x * b**y * c**z)
-
-    return None
-
+    def getv(m):
+        v = coeff(m)
+        return v if not m.is_center else v/3
+    if len(monoms) == 2:
+        return AMGM3.solve(getv(monoms[0]), monoms[0], getv(monoms[1]), monoms[1])
 
 
 #####################################################################

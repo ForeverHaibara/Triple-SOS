@@ -375,7 +375,7 @@ class SOSProblem():
         decomp = self._sdp.decompositions
         if decomp is None:
             return None
-        eqvec = {eq: x + space * y for eq, (x, space) in self._eqvec.items()}
+        eqvec = {eq: x + space * self._sdp.y for eq, (x, space) in self._eqvec.items()}
         return SolutionSDP.from_decompositions(self.poly, decomp, eqvec, self._symmetry,
                                 ineq_constraints=ineq_constraints, eq_constraints=eq_constraints)
 

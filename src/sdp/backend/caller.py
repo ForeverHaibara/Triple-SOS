@@ -75,7 +75,7 @@ def _create_numerical_dual_sdp(
 
 
     if scaling > 0:
-        _max_entry = max(max(abs(x0).max(), abs(space).max()) for x0, space in x0_and_space.values())
+        _max_entry = max(max(abs(x0).max(), abs(space).max()) if space.size > 0 else 0 for x0, space in x0_and_space.values())
         scaling = scaling / _max_entry if _max_entry > 0 else 0
         if scaling > 0:
             for key, (x0, space) in x0_and_space.items():
@@ -183,7 +183,7 @@ def _create_numerical_primal_sdp(
     x0 = np_array(x0, flatten=True)
     space = {key: np_array(space_mat) for key, space_mat in space.items()}
     if scaling > 0:
-        _max_entry = max(max(abs(space_mat).max() for space_mat in space.values()), abs(x0).max())
+        _max_entry = max(max(abs(space_mat).max() if space_mat.size > 0 else 0 for space_mat in space.values()), abs(x0).max())
         scaling = scaling / _max_entry if _max_entry > 0 else 0
         if scaling > 0:
             for key, space_mat in space.items():

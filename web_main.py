@@ -141,7 +141,7 @@ def preprocess():
         req['poly'],
         gens = gens,
         perm = perm,
-        render_triangle = True,
+        render_triangle = True if 3 <= len(gens) <= 4 else False,
         render_grid = True,
         homogenize = req.get('homogenize', False),
         dehomogenize = req.get('dehomogenize', None),
@@ -154,7 +154,7 @@ def preprocess():
 
     n = result['degree']
     txt = result['txt']
-    triangle = result['triangle']
+    triangle = result.get('triangle', None)
     grid = result.get('grid', None)
     grid_color = grid.grid_color if grid is not None else None
  
