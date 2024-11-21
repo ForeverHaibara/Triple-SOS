@@ -249,7 +249,7 @@ def sanitize_input(
                 *[set(e.free_symbols) for e in ineq_constraints.keys()],
                 *[set(e.free_symbols) for e in eq_constraints.keys()]
             )
-            if len(symbols) == 0:
+            if len(symbols) == 0 and len(original_symbols) == 0:
                 symbols = {sp.Symbol('x')}
                 # raise ValueError('No symbols found in the input.')
             symbols = symbols - set(original_symbols)

@@ -1,5 +1,5 @@
 from functools import reduce
-from typing import Dict
+from typing import Dict, Optional, Callable
 
 import sympy as sp
 from sympy.core.singleton import S
@@ -46,7 +46,7 @@ class SolutionStructural(Solution):
         )
 
     @classmethod
-    def _extract_nonnegative_exprs(cls, expr: sp.Expr, func_name: str = "_G", allow_exprs = {}):
+    def _extract_nonnegative_exprs(cls, expr: sp.Expr, func_name: str = "_G", extra_checker: Optional[Callable] = None):
         """
         Raw output of StructuralSOS might assume nonnegativity of some symbols,
         we extract these symbols and replace them with _F(x) for further processing.
@@ -59,7 +59,12 @@ class SolutionStructural(Solution):
 
         # TODO: Handle symbols that represent zero?
         func = sp.Function(func_name)
+        if extra_checker is None:
+            extra_checker = lambda x: None
         def dfs(arg):
+            checked = extra_checker(arg)
+            if checked is not None:
+                return checked
             if isinstance(arg, sp.Expr):
                 if len(arg.free_symbols) == 0:
                     # constants might be sp.Add, etc., e.g. 1+sqrt(2)

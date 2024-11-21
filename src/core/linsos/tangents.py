@@ -483,6 +483,8 @@ class _tangents_helper_ternary_mixed(_tangents_helper_ternary):
                 return []
         if res is None:
             res = pslq([x**2, x, 1])
+        if res is None:
+            return []
         c2, c1, c0 = res
 
         # tangent must be a linear combination of vertex1 and vertex2

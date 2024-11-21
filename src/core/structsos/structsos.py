@@ -3,9 +3,10 @@ from typing import Union, List, Dict, Optional, Any
 import sympy as sp
 from sympy.core.symbol import uniquely_named_symbol
 
-from .utils import Coeff
+from .utils import Coeff, has_gen, clear_free_symbols
 from .solution import SolutionStructural, SolutionStructuralSimple
 from .nvars import sos_struct_nvars_quartic_symmetric
+from .constrained import structural_sos_constrained
 from .sparse import sos_struct_linear, sos_struct_quadratic
 from .ternary import structural_sos_3vars
 from .quarternary import structural_sos_4vars
@@ -54,11 +55,15 @@ def _structural_sos(poly: sp.Poly, ineq_constraints: Dict[sp.Poly, sp.Expr] = {}
     """
     d = poly.total_degree()
     nvars = len(poly.gens)
-    if nvars == 1 or d == 0:
-        # since the poly is homogeneous, it must be a monomial
-        if poly.is_monomial and poly.LC() >= 0:
+    if poly.is_monomial:
+        if poly.LC() >= 0:
+            # since the poly is homogeneous, it must be a monomial
             return poly.as_expr()
         return None
+
+    poly, ineq_constraints, eq_constraints = clear_free_symbols(poly, ineq_constraints, eq_constraints)
+    d = poly.total_degree()
+    nvars = len(poly.gens)
 
     solution = None
     if nvars == 2:
@@ -73,4 +78,8 @@ def _structural_sos(poly: sp.Poly, ineq_constraints: Dict[sp.Poly, sp.Expr] = {}
         solution = sos_struct_nvars_quartic_symmetric(poly)
     if solution is None and nvars > 3 and d == 2:
         solution = sos_struct_quadratic(poly)
+
+    if solution is None:
+        solution = structural_sos_constrained(poly, ineq_constraints, eq_constraints)
+
     return solution

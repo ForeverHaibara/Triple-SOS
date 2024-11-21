@@ -1,8 +1,9 @@
-from typing import Union, List, Callable, Optional
+from typing import Union, Tuple, List, Dict, Callable, Optional
 
 import sympy as sp
 
-from ...utils.expression import Coeff
+from ..shared import uniquely_named_symbol
+from ...utils.expression import Coeff, CyclicSum, CyclicProduct
 from ...utils.roots.rationalize import nroots, rationalize_bound
 
 class StructuralSOSError(Exception): ...
@@ -224,3 +225,56 @@ def zip_longest(*args):
                 if all(stops):
                     return
         yield tuple(lasts)
+
+def has_gen(gen: sp.Symbol, *args):
+    """
+    Test whether a symbol is involved in a (list of) polynomial(s).
+    """
+    to_iter = lambda x: (x,) if isinstance(x, sp.Poly) else x
+    return any(any(gen in p.free_symbols for p in arg) for arg in map(to_iter, args))
+
+
+def clear_free_symbols(poly: sp.Poly, ineq_constraints: Dict[sp.Poly, sp.Expr] = {}, eq_constraints: Dict[sp.Poly, sp.Expr] = {}) -> Tuple[sp.Poly, Dict[sp.Poly, sp.Expr], Dict[sp.Poly, sp.Expr]]:
+    """
+    Clear nuisance free symbols from the polynomial and constraints.
+    For example, if we want to solve x>=4 with constraints x>=y, x*y>=4, y>=0, a>=0. Then
+    we can remove the symbol "a" from the constraints. But we cannot remove the symbol "y"
+    even though it is not in the polynomial, as it is correlated with "x".
+
+    TODO: to be moved to shared.py?
+    """
+    # Construct the "correlation" graph of the free symbols: symbols that are path-connected to free
+    # vars in the polynomial are considered as active symbols.
+    gens = poly.gens
+    ufs = dict((gen, gen) for i, gen in enumerate(gens))
+    def ufsfind(x):
+        if ufs[x] == x:
+            return x
+        ufs[x] = ufsfind(ufs[x])
+        return ufs[x]
+    def ufsunion(p):
+        v = p.free_symbols
+        if len(v):
+            x0 = v.pop()
+            y0 = ufsfind(x0)
+            for x in v:
+                ufs[ufsfind(x)] = y0
+    ufsunion(poly)
+    for p in ineq_constraints:
+        ufsunion(p)
+    for p in eq_constraints:
+        ufsunion(p)
+
+    # Using .free_symbols is not the same as .gens. Because free_symbols exclude 0-degree gens.
+    active_gens = set(ufsfind(gen) for gen in poly.free_symbols)
+    active_gens = [x for x in gens if ufsfind(x) in active_gens]
+    if len(active_gens) == 0:
+        active_gens = (gens[0],) # the polynomial is a constant, but we need a gen to create a poly
+
+    def is_active(p):
+        return len(p.free_symbols.intersection(active_gens))
+
+    poly = poly.as_poly(active_gens)
+    ineq_constraints = {p.as_poly(active_gens): e for p, e in ineq_constraints.items() if is_active(p)}
+    eq_constraints = {p.as_poly(active_gens): e for p, e in eq_constraints.items() if is_active(p)}
+    return poly, ineq_constraints, eq_constraints
