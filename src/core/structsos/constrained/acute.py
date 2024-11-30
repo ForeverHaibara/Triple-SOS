@@ -2,10 +2,13 @@ import sympy as sp
 
 from ..solution import SolutionStructuralSimple
 from ..ternary.utils import CommonExpr
-from ..ternary import sos_struct_cubic, sos_struct_sextic
+from ..ternary import (
+    sos_struct_acyclic_quadratic, sos_struct_quartic,
+    sos_struct_cubic, sos_struct_sextic
+)
 from ..utils import (
     Coeff, CyclicSum, CyclicProduct,
-    uniquely_named_symbol, radsimp, rationalize_func
+    uniquely_named_symbol, radsimp, rationalize_func, congruence
 )
 
 a, b, c = sp.symbols("a b c")
@@ -37,6 +40,7 @@ def constrained_acute(poly, ineq_constraints, eq_constraints):
     SOLVERS = {
         2: _constrained_acute_quadratic,
         3: _constrained_acute_cubic,
+        4: _constrained_acute_quartic
     }
     solver = SOLVERS.get(degree)
     if solver is not None:
@@ -100,7 +104,11 @@ def _constrained_acute_cubic(coeff, F):
     """
     c300, c210, c120, c111 = coeff((3,0,0)), coeff((2,1,0)), coeff((1,2,0)), coeff((1,1,1))
     if c210 != c120:
-        return None
+        # lift to quartic and try (this is not complete)
+        new_coeff = Coeff(coeff.as_poly(a,b,c) * (a+b+c).as_poly(a,b,c))
+        sol = _constrained_acute_quartic(new_coeff, F)
+        return None if sol is None else sol / CyclicSum(a)
+
     if c300 >= 0:
         return sos_struct_cubic(coeff)
     x, y = radsimp(c210/-c300), radsimp(c111/-c300)
@@ -127,7 +135,7 @@ def _constrained_acute_cubic(coeff, F):
     def _solve_bottom(t):
         """
         Solve s(-a3+x(a2b+ab2))+yabc >= 0 for acute triangles with
-        x = t and y = 3 - 6*t.
+        x = t and y = 3 - 6*t and t >= 1 + sqrt(2)/2.
         """
         if t >= 2:
             # 9/2s((a2+b2-c2)(a2+c2-b2)(b-c)2) + 8s(a3-abc-a(b-c)2/2)2
@@ -140,7 +148,7 @@ def _constrained_acute_cubic(coeff, F):
         ker = CyclicSum(F(b)*F(c)*(b-c)**2) + 1/(t - 1)**2/4*CyclicSum((b+c-(2*t-2)*a)*(a-b)*(a-c))**2
         ker2 = CyclicSum((a**2+b**2-c**2)*(c**2+a**2-b**2)*(b-c)**2) + 1/(t - 1)**2/4*CyclicSum((b+c-(2*t-2)*a)*(a-b)*(a-c))**2
         rem = (original * multiplier - ker2).doit().as_poly(a,b,c)
-        print(t, rem)
+        # print(t, rem)
         rem_sol = sos_struct_sextic(Coeff(rem))
         if rem_sol is not None:
             return (rem_sol + ker)/multiplier
@@ -230,5 +238,66 @@ def _constrained_acute_cubic(coeff, F):
     
 def _constrained_acute_quartic(coeff, F):
     """
+    It is not easy to solve quartic inequalities for acute triangles completely.
+    We only handle some simple cases here.
+
+    Note: s((b2+c2-a2)(a-b)(a-c))*s((2a+b+c)(a-b)(a-c)) = s((2a+b+c)(b2+c2-a2)(a-b)2(a-c)2)
     """
-    pass
+    # 1. Write it in the form of s((b^2+c^2-a^2)*quadratic)
+    c400, c310, c220, c301, c211 = [coeff(_) for _ in [(4,0,0), (3,1,0), (2,2,0), (3,0,1), (2,1,1)]]
+    if c400 + c310 + c220 + c301 + c211 < 0:
+        return None
+    if c220 >= 0:
+        va2 = c220/2
+        vac = (c310 + c211)/2
+        vab = (c301 + c211)/2
+        vbc = (c310 + c301)/2
+        # vb2 + vc2 = va2 + c400
+
+        def _solve_quad(vb2, vc2):
+            quad = Coeff({
+                (2,0,0): va2, (1,1,0): vab, (1,0,1): vac, (0,2,0): vb2, (0,1,1): vbc, (0,0,2): vc2
+            }, is_rational=coeff.is_rational)
+            sol = sos_struct_acyclic_quadratic(quad)
+            if sol is not None:
+                return CyclicSum(F(a)*sol)
+
+        sol, s1, s2 = None, 0, 0
+        if va2 > 0:
+            # maximize (vb2 - vab^2/(4va2))(vc2 - vac^2/(4va2))
+            s1, s2 = radsimp(vab**2/(4*va2)), radsimp(vac**2/(4*va2))
+            vb2 = radsimp((va2 + c400 + s1 - s2)/2)
+            vc2 = radsimp((va2 + c400 - s1 + s2)/2)
+
+            sol = _solve_quad(vb2, vc2)
+        if sol is None: # consider copositive quadratic forms
+            if vab >= 0 and vac >= 0:
+                vb2, vc2 = (va2 + c400)/2, (va2 + c400)/2
+                sol = _solve_quad(vb2, vc2)
+            elif vbc >= 0:
+                if vac >= 0:
+                    vb2, vc2 = va2 + c400, sp.S(0)
+                else:
+                    vb2, vc2 = sp.S(0), va2 + c400
+                sol = _solve_quad(vb2, vc2)
+            elif va2 != 0: # and vbc < 0
+                if vac >= 0:
+                    vb2 = radsimp((va2 + c400 - s2)/2)
+                    vc2 = radsimp((va2 + c400 + s2)/2)
+                else:
+                    vb2 = radsimp((va2 + c400 + s1)/2)
+                    vc2 = radsimp((va2 + c400 - s1)/2)
+                sol = _solve_quad(vb2, vc2)
+        if sol is not None:
+            return sol
+
+    # 2. Try subtracting s((b2+c2-a2)(a-b)(a-c)) so that
+    # the rest falls in the real case for quartics.
+    x = (c220 + c310 + c301)/4
+    if x >= 0:
+        new_coeff = Coeff(
+            coeff.as_poly(a,b,c) - x*CyclicSum((b**2+c**2-a**2)*(a-b)*(a-c)).as_poly(a,b,c)
+        )
+        sol = sos_struct_quartic(new_coeff)
+        if sol is not None:
+            return sol + 2*x*CyclicSum(F(a)*(2*a+b+c)*(a-b)**2*(a-c)**2)/(CyclicSum(a*(b+c-2*a)**2)+CyclicSum(a*(b-c)**2))

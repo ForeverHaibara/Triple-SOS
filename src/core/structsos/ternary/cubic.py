@@ -382,6 +382,10 @@ def _sos_struct_acyclic_cubic_symmetric(coeff):
     (sqrt(2)b-c)2(b+c)+(sqrt(2)a-c)2(a+c)-c3+4abc
 
     (a+b+2c)((a+b-(sqrt(3)+1)/2c)2) + 4(a-b)2c
+
+    8(a(a-b-c)2+b(b-a-c)2)+4c(c-a-b)2-16abc
+
+    (81a3-77a2b-135a2c-77ab2+225abc+27ac2+81b3-135b2c+27bc2+27c3)
     """
     a, b, c = None, None, None
     if all(coeff((i,j,k)) == coeff((j,i,k)) for (i,j,k) in ((3,0,0),(2,1,0),(2,0,1),(1,0,2))):
@@ -476,6 +480,8 @@ def _sos_struct_acyclic_cubic_symmetric(coeff):
         w = sp.Symbol('w')
         w0 = radsimp(2*(5*t**2 - 2*t*z + 2*z**2)/3)
         y0 = radsimp(4*(-2*t + z)**3/27)
+        if z >= 2*t and y0 - t**2*z <= x4/x0 and w0 - 3*(z - 2*t)**2 <= x5/x0:
+            return sp.oo
         eqw1 = (radsimp(x5/x0 - w0)*w**2 + 3*(-2*t*w + w*z - 3)**2).as_poly(w)
         eqw2 = (radsimp(x4/x0 + t**2*z - y0)*w**3 + 3*(-2*t*w + w*z - 3)**2).as_poly(w)
         eqw3 = ((-8*t*w + 4*w*z - 9)).as_poly(w)
@@ -485,6 +491,8 @@ def _sos_struct_acyclic_cubic_symmetric(coeff):
             w_ = radsimp(9 / (z - 2*t) / 4)
             if eqw1(w_) >= 0 and _check_valid(w_):
                 return w_
+        if eqw1(1) >= 0 and _check_valid(1):
+            return sp.S(1)
         if True:
             eqgcd = sp.gcd(eqw1, eqw2)
             if eqgcd.degree() == 1:
@@ -495,8 +503,12 @@ def _sos_struct_acyclic_cubic_symmetric(coeff):
         return rationalize_func(eqw1, _check_valid, direction = 1)
 
     def _solve_tzw(t, z, w):
-        sym_c = radsimp((-2*t*w + w*z - 9)/(3*w))
-        p1 = z*(t*a+t*b-c)**2*(a-b)**2 + radsimp((-8*t*w+4*w*z-9)*4/(3*w))*a*b*(sym_c/2 *(a+b) - c)**2
+        if w is sp.oo:
+            sym_c = radsimp((z - 2*t)/3)
+            p1 = z*(t*a+t*b-c)**2*(a-b)**2 + radsimp((16*z-32*t)/3)*a*b*(sym_c/2 *(a+b) - c)**2
+        else:
+            sym_c = radsimp((-2*t*w + w*z - 9)/(3*w))
+            p1 = z*(t*a+t*b-c)**2*(a-b)**2 + radsimp((-8*t*w+4*w*z-9)*4/(3*w))*a*b*(sym_c/2 *(a+b) - c)**2
         p2 = c*(a*(t*a+(sym_c-t)*b-c)**2 + b*(t*b+(sym_c-t)*a-c)**2)
         return (p1 + p2)/(a + b)
 
@@ -518,14 +530,19 @@ def _sos_struct_acyclic_cubic_symmetric(coeff):
     if w is None:
         return None
 
-
     w0 = radsimp(2*(5*t**2 - 2*t*z + 2*z**2)/3)
     y0 = radsimp(4*(-2*t + z)**3/27)
-    y1 = radsimp(-3*(-2*t*w + w*z - 3)**2/w**3)
-    y += radsimp([
-        x42 - x0*(-t**2*z + y0 + y1),
-        x52 - x0*(w0 + w * y1)
-    ])
+    if w is sp.oo:
+        y += radsimp([
+            x42 - x0*(-t**2*z + y0),
+            x52 - x0*(w0 - 3*(z - 2*t)**2)
+        ])
+    else:
+        y1 = radsimp(-3*(-2*t*w + w*z - 3)**2/w**3)
+        y += radsimp([
+            x42 - x0*(-t**2*z + y0 + y1),
+            x52 - x0*(w0 + w * y1)
+        ])
     if all(_ >= 0 for _ in y):
         p1 = (y[0]*(a+b) + y[1]*c).together() * (a-b)**2
         p2 = (y[2]*(a+b) + y[3]*c).together() * a*b

@@ -3,9 +3,10 @@ from functools import partial
 import sympy as sp
 
 from .utils import (
-    CyclicSum, CyclicProduct,
+    CyclicSum, CyclicProduct, CommonExpr, Coeff,
     prove_univariate, quadratic_weighting
 )
+from .cubic import _sos_struct_cubic_symmetric
 from .sextic_symmetric import _restructure_quartic_polynomial
 
 a, b, c = sp.symbols('a b c')
@@ -113,7 +114,7 @@ def _sos_struct_septic_symmetric_quadratic_form(poly, coeff):
     solution = sp.Add(
         f_g_solution,
         p1[0] * CyclicSum(a * (2*a-b-c)**2 * p1[1]),
-        _septic_sym_axis.rem_poly(f_rem_coeff, f_rem_ratio) * CyclicSum(a*(a-b)*(a-c)),
+        _septic_sym_axis.rem_poly(f_rem_coeff, f_rem_ratio) * CommonExpr.schur(3),
         _septic_sym_axis.rem_poly(g_rem_coeff, g_rem_ratio) * CyclicSum(a*(b-c)**2)
     )
     return solution
@@ -152,7 +153,7 @@ class _septic_sym_axis():
         f1 = (x - 1)*a**5 + (y - x)*a**4*(b+c) + (1 - y)*a**3*(b**2+c**2) \
             + (3*x - y - 1)*a**3*b*c + (y - 2*x)*a**2*b**2*c
         p1 = CyclicSum(f1.expand())**2 + CyclicProduct(a) * CyclicSum(a) * CyclicProduct((a-b)**2)
-        return p1 / CyclicSum(a*(a-b)*(a-c)), 0
+        return p1 / CommonExpr.schur(3), 0
 
     @staticmethod
     def _F_sos(x, y, z_type = 0):
@@ -225,8 +226,9 @@ class _septic_sym_axis():
             qw = quadratic_weighting(u, u, sp.S(1), mapping = _mapping)
             if qw is not None and det >= 0: # actually this is always true in this case
                 sol = qw + det * CyclicProduct(a) * CyclicProduct((a-b)**2)
-                p2 = (a**2 + (2*u - 1)*b*c).together().as_coeff_Mul()
-                return sol / (p2[0] * CyclicSum(p2[1])), ker_coeff
+                # p2 = (a**2 + (2*u - 1)*b*c).together().as_coeff_Mul()
+                p2 = CommonExpr.quadratic(sp.S(1), 2*u-1)
+                return sol / p2, ker_coeff
 
         det = 6*x**2 + 9*x*y - 20*x + 3*y**2 - 15*y + 17
         det2 = (6*x + 3*y - 8) * det / (x - 1)
@@ -240,7 +242,9 @@ class _septic_sym_axis():
                     (1 - u) * CyclicSum(a*(a - b)*(a - c)*((x - 1)*a**2 + (y - 1)*(a*b + a*c) + (2*x + y - 2)*b*c))**2,
                     det2 * CyclicProduct((a-b)**2) * CyclicSum(a) * CyclicProduct(a)
                 )
-                return sol / CyclicSum(a*(a-b)*(a-c) + u*a*(b-c)**2), ker_coeff
+                # multiplier = CyclicSum(a*(a-b)*(a-c) + u*a*(b-c)**2)
+                multiplier = _sos_struct_cubic_symmetric(Coeff({(3,0,0):sp.S(1), (2,1,0): u-1, (1,2,0): u-1, (1,1,1):3-6*u}))
+                return sol / multiplier, ker_coeff
         return None, sp.oo
 
 
