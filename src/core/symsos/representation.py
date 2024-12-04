@@ -1,6 +1,6 @@
 import sympy as sp
 
-from .univariate import prove_univariate, check_univariate
+from ..structsos.pivoting.univariate import prove_univariate, prove_univariate_interval, check_univariate
 from ..pqrsos import pqr_sym
 from ...utils import CyclicSum, CyclicProduct
 

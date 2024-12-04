@@ -10,7 +10,7 @@ from .constrained import structural_sos_constrained
 from .sparse import sos_struct_linear, sos_struct_quadratic
 from .ternary import structural_sos_3vars
 from .quarternary import structural_sos_4vars
-from .univariate import structural_sos_2vars
+from .pivoting import structural_sos_2vars
 from ..shared import sanitize_input
 
 @sanitize_input(homogenize=True, infer_symmetry=False, wrap_constraints=False)

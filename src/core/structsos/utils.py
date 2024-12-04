@@ -19,7 +19,7 @@ def radsimp(expr: Union[sp.Expr, List[sp.Expr]]) -> sp.Expr:
     Rationalize the denominator by removing square roots. Wrapper of sympy.radsimp.
     Also refer to sympy.simplify.
     """
-    if isinstance(expr, (list, tuple)):
+    if isinstance(expr, (list, tuple, sp.MatrixBase)):
         return [radsimp(e) for e in expr]
     if not isinstance(expr, sp.Expr):
         expr = sp.sympify(expr)

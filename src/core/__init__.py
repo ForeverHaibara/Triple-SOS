@@ -11,7 +11,8 @@ from .linsos import (
 )
 
 from .structsos import (
-    StructuralSOS, SolutionStructural, SolutionStructuralSimple
+    StructuralSOS, SolutionStructural, SolutionStructuralSimple,
+    prove_univariate, prove_univariate_interval
 )
 
 from .pqrsos import (
@@ -20,7 +21,6 @@ from .pqrsos import (
 
 from .symsos import (
     SymmetricSOS, sym_representation, TRANSLATION_POSITIVE, TRANSLATION_REAL,
-    prove_univariate, prove_univariate_interval, check_univariate,
     SolutionSymmetric, SolutionSymmetricSimple
 )
 
@@ -34,9 +34,9 @@ __all__ = [
     'LinearSOS', 'root_tangents', 'LinearBasis', 'LinearBasisTangent',
     'SolutionLinear',
     'StructuralSOS', 'SolutionStructural', 'SolutionStructuralSimple',
+    'prove_univariate', 'prove_univariate_interval',
     'pqr_sym', 'pqr_cyc', 'pqr_ker',
     'SymmetricSOS', 'sym_representation', 'TRANSLATION_POSITIVE', 'TRANSLATION_REAL',
-    'prove_univariate', 'prove_univariate_interval', 'check_univariate',
     'SolutionSymmetric', 'SolutionSymmetricSimple',
     'SDPSOS', 'SDPProblem', 'SOSProblem', 'RootSubspace', 'SolutionSDP'
 ]

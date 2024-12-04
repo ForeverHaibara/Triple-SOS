@@ -8,7 +8,7 @@ from ..utils import (
     StructuralSOSError, PolynomialNonpositiveError, PolynomialUnsolvableError
 )
 
-from ...symsos import prove_univariate, prove_univariate_interval
+from ..pivoting import prove_univariate, prove_univariate_interval
 from ...shared import SS
 from ....utils.roots.rationalize import (
     nroots, rationalize, rationalize_bound, univariate_intervals,

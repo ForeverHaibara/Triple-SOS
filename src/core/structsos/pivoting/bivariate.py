@@ -1,7 +1,7 @@
 import sympy as sp
 from sympy.core.symbol import uniquely_named_symbol
 
-from ..symsos.univariate import prove_univariate_interval
+from .univariate import prove_univariate_interval
 
 def structural_sos_2vars(poly, ineq_constraints, eq_constraints):
     """
