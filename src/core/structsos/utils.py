@@ -2,7 +2,7 @@ from typing import Union, Tuple, List, Dict, Callable, Optional
 
 import sympy as sp
 
-from ..shared import uniquely_named_symbol
+from ..shared import uniquely_named_symbol, SS
 from ...sdp import congruence
 from ...utils.expression import Coeff, CyclicSum, CyclicProduct
 from ...utils.roots.rationalize import nroots, rationalize_bound

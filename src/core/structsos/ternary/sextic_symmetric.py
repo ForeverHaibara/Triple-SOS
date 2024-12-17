@@ -649,6 +649,46 @@ def _sos_struct_sextic_tree(coeff):
     return None
 
 
+def _sos_struct_sextic_symmetric_schur_split(coeff, real = False):
+    """
+    Try solving sextics by rewriting them as a sum of squares of Schur polynomials.
+
+    The function does not check the symmetry of the polynomial.
+    """
+    c600, c510, c420, c411, c330, c321, c222 = [coeff(_) for _ in [(6,0,0), (5,1,0), (4,2,0), (4,1,1), (3,3,0), (3,2,1), (2,2,2)]]
+    y = radsimp([
+        -2*c321 - 3*c330 - 3*c411 - 7*c420 - 12*c510 - 9*c600,
+        c321 + 2*c330 + c411 + 4*c420 + 5*c510 + 4*c600,
+        c330 + 2*c420 + 2*c510 + 2*c600,
+        c600,
+        4*c321 + 7*c330 + 5*c411 + 16*c420 + 22*c510 + 16*c600,
+        -c321 - 2*c330 - c411 - 4*c420 - 4*c510 - 2*c600,
+        c222 + 6*c321 + 3*c330 + 3*c411 + 6*c420 + 6*c510 + 3*c600
+    ])
+    if all(_ >= 0 for _ in y[1:]):
+        if y[0] >= 0:
+            exprs = [
+                y[0] * CyclicProduct((a-b)**2),
+                CyclicSum((y[3]*a**2 + y[1]*a*b + y[1]*a*c + y[2]*b*c)*(a-b)**2*(a-c)**2).together(),
+                y[4]/2 * CyclicSum(a**2*(b-c)**2*(b+c-a)**2),
+                y[5] * CyclicSum(b*c*(b-c)**2*(b+c-a)**2),
+                y[6] * CyclicProduct(a**2)
+            ]
+            return sp.Add(*exprs)
+
+        y[0] = radsimp(8*c321/3 + 17*c330/3 + 7*c411/3 + 35*c420/3 + 38*c510/3 + 35*c600/3)
+        if y[0] >= 0:
+            exprs = [
+                CyclicProduct((a-b)**2),
+                CyclicSum(a*b*(a-b)**4),
+                CyclicSum(b*c*(a-b)**2*(a-c)**2),
+                CyclicSum(a*(a-b)*(a-c))**2,
+                CyclicSum(a**2*(a*b+a*c-b**2-c**2)**2)/6,
+                CyclicSum(a*b*(a-b)**2*(a+b-c)**2),
+                CyclicProduct(a**2)
+            ]
+            return sum_y_exprs(y, exprs)
+
 
 def _sos_struct_sextic_iran96(coeff, real = False):
     """
@@ -729,56 +769,14 @@ def _sos_struct_sextic_iran96(coeff, real = False):
     elif m == 0:
         # only perform sum of squares for real numbers when explicitly inquired
         return _sos_struct_sextic_hexagon_symmetric(coeff, real = real)
-    
-    if w >= 0 and w + z >= 0:
-        # Easy case 1, really trivial
-        y = [
-            m,
-            p + m * 4,
-            (q - m * 6 + 2 * (p + m * 4)) / 2,
-            w,
-            z + w,
-            rem
-        ]
 
-        if all(_ >= 0 for _ in y):
-            exprs = [
-                CyclicSum(a*b*(a-b)**4),
-                CyclicSum(a**2*b**2*(a-b)**2),
-                CyclicSum(a*b) * CyclicSum(a**2*(b-c)**2),
-                CommonExpr.schur(3) * CyclicProduct(a),
-                CyclicSum(a*(b-c)**2) * CyclicProduct(a),
-                CyclicProduct(a**2)
-            ]
-            return sum_y_exprs(y, exprs)
-
-
-    if p >= -4 * m and q + 2 * (p + m) >= 0:
-        # Easy case 2, subtract enough p(a-b)2 and s(ab(a-c)2(b-c)2)
-        # e.g. s(a(b+c)(b+c-2a)4)
-        y = [
-            m,
-            (p + 4 * m),
-            q + 2 * (p + m),
-            w + 2 * (p + 4 * m) - (q + 2 * (p + m)),
-            4*m + 4*p + 2*q + w + z,
-            rem
-        ]
-        
-        if all(_ >= 0 for _ in y):
-            exprs = [
-                CyclicSum(a*b*(a-b)**4),
-                CyclicProduct((a-b)**2),
-                CyclicSum(a*b*(a-c)**2*(b-c)**2),
-                CommonExpr.schur(3) * CyclicProduct(a),
-                CyclicSum(a*(b-c)**2) * CyclicProduct(a),
-                CyclicProduct(a**2)
-            ]
-            return sum_y_exprs(y, exprs)
-
+    # Easy case 1, solved by schur split
+    solution = _sos_struct_sextic_symmetric_schur_split(coeff, real = real)
+    if solution is not None:
+        return solution
 
     if p >= 0 and q + 2 * m + 2 * p >= 0:
-        # Easy case 3, subtract s(ab(a-b)2(a+b-xc)2) such that the coeffs of 
+        # Easy case 2, subtract s(ab(a-b)2(a+b-xc)2) such that the coeffs of 
         # a^4bc and a^3b^3 are equal
         
         if True:
@@ -801,7 +799,7 @@ def _sos_struct_sextic_iran96(coeff, real = False):
                 return sum_y_exprs(y, exprs)
 
 
-        # Easy case 4, when we do not need to higher the degree
+        # Easy case 3, when we do not need to higher the degree
 
         # find some u such that
         # w' = w + 2 * p + 4 * u * m >= 0
@@ -844,7 +842,7 @@ def _sos_struct_sextic_iran96(coeff, real = False):
 
 
     if True:
-        # Case 5. the border is tight.
+        # Case 4. the border is tight.
         y_hex = radsimp(q - p**2/4/m - 2*m)
         if y_hex >= 0:
             x_ = p / m / 4
@@ -866,7 +864,7 @@ def _sos_struct_sextic_iran96(coeff, real = False):
                 return sum_y_exprs(y, exprs)
 
     if coeff.is_rational:
-        # Easy case 6, when we can extract some s(ab) * quartic
+        # Easy case 5, when we can extract some s(ab) * quartic
         # e.g. s(ab)s(a4-4a3b-4ab3+7a2bc+15(a2b2-a2bc))
         #      s(ab)s(a2(a-b)(a-c))
 
@@ -1914,30 +1912,9 @@ def _sos_struct_sextic_symmetric_ultimate(coeff, real = True):
             except:
                 pass
 
-        if m + p >= 0:
-            # s(a2-ab)s(a2(a-b)(a-c)) = s(a(a-b)(a-c))^2 + 3p(a-b)^2
-            # s(a2-ab)s(ab(a-b)2) = s(ab(a-b)^4) + p(a-b)^2
-            # s(a2-ab)s(a2b2-a2bc) = s(ab(a-c)^2(b-c)^2) + p(a-b)^2
-            if u >= 0 and u + v >= 0:
-                y = radsimp([
-                    m,
-                    m + p,
-                    n + 2*(m + p),
-                    1,
-                    3*m + 3*(m + p) + n + w
-                ])
-                if all(_ >= 0 for _ in y):
-                    p1 = u*CommonExpr.schur(3) + (u+v)*CyclicSum(a*(b-c)**2)
-                    p1 = p1.together().as_coeff_Mul()
-                    y[-2] = p1[0]
-                    exprs = [
-                        CyclicSum(a*(a-b)*(a-c))**2,
-                        CyclicSum(a*b*(a-b)**4),
-                        CyclicSum(a*b*(a-c)**2*(b-c)**2),
-                        CyclicProduct(a) * p1[1],
-                        CyclicProduct((a-b)**2)
-                    ]
-                    return sum_y_exprs(y, exprs)
+    solution = _sos_struct_sextic_symmetric_schur_split(coeff, real = real)
+    if solution is not None:
+        return solution
 
     # roots detection
     u, v, w, x, z = sp.symbols('u v w x z')

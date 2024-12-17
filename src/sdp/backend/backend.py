@@ -188,8 +188,8 @@ class DualBackend(SDPBackend, ABC):
         m = int(round(np.sqrt(space.shape[0])))
         # subtract the relaxation variable on the diagonal
         space2 = np.hstack([space, np.eye(m).reshape((m**2, 1)) * (-k)])
-        for i in range(m):
-            x[i**2] -= b # the diagonal elements
+        for i in range(0, m**2, m+1):
+            x[i] -= b # the diagonal elements
         return x, space2
 
 

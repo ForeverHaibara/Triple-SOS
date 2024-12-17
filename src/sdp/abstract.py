@@ -12,37 +12,15 @@ from .ipm import SDPRationalizeError
 from .rationalize import (
     rationalize_and_decompose, RationalizeWithMask, RationalizeSimultaneously, IdentityRationalizer
 )
-from .utils import is_empty_matrix, Mat2Vec, congruence_with_perturbation, exprs_to_arrays
+from .utils import (
+    is_empty_matrix, Mat2Vec, congruence_with_perturbation, align_iters, IteratorAlignmentError
+)
 
 Decomp = Dict[str, Tuple[Matrix, Matrix, List[Rational]]]
-Objective = Tuple[str, Union[Expr, Callable[[SDPBackend], Any]]]
+Objective = Union[Expr, ndarray, Callable[[SDPBackend], Any]]
 Constraint = Callable[[SDPBackend], Any]
 MinEigen = Union[float, int, tuple, Dict[str, Union[float, int, tuple]]]
 
-
-def _align_iters(
-        iters: List[Union[Any, List[Any]]],
-        default_types: List[Union[List[Any], Callable[[Any], bool]]]
-    ) -> List[List[Any]]:
-    """
-    Align the iterators with the default types.
-    """
-    check_tp = lambda i, tp: (callable(tp) and not isinstance(tp, type) and tp(i)) or isinstance(i, tp)
-    aligned_iters = []
-    for i, tp in zip(iters, default_types):
-        if isinstance(i, list):
-            if len(i) == 0 and not check_tp(i, tp):
-                return [[] for _ in range(len(iters))]
-            if len(i) and check_tp(i[0], tp):
-                aligned_iters.append(i)
-                continue
-        aligned_iters.append(None)
-    lengths = [len(i) if i is not None else 0 for i in aligned_iters]
-    max_len = max(lengths) if lengths else 0
-    if max_len == 0:
-        # everything iterator is a single value
-        return [[i] for i in iters]
-    return [is_single if is_single is not None else [i] * max_len for is_single, i in zip(aligned_iters, iters)]
 
 
 class SDPProblemBase(ABC):
@@ -316,12 +294,12 @@ class SDPProblemBase(ABC):
         return None
 
     def solve(self,
-            objectives: Union[Objective, List[Objective]] = [],
-            constraints: Union[List[Constraint], List[List[Constraint]]] = [],
-            min_eigen: Union[MinEigen, List[MinEigen]] = [],
+            objective: Union[Objective, List[Objective]] = None,
+            constraints: Union[List[Constraint], List[List[Constraint]]] = None,
+            min_eigen: Union[MinEigen, List[MinEigen]] = None,
             scaling: float = 6.,
             solver: Optional[str] = None,
-            use_default_configs: bool = True,
+            use_default_configs: int = 1,
             allow_numer: int = 0,
             verbose: bool = False,
             solve_child: bool = True,
@@ -334,16 +312,23 @@ class SDPProblemBase(ABC):
 
         Parameters
         ----------
-        use_default_configs : bool
-            Whether to use the default configurations of objectives+constraints+min_eigen.
-            If True, it appends the default configurations of SDP to the given configurations.
-            If False, it only uses the given configurations.
+        use_default_configs : int
+            Whether to use the default configurations of objective+constraints+min_eigen.
+            Defaults to 1.
+            * If 0, it only uses the given configurations.
+            * If 1, it appends the default configurations to the given configurations if 
+            no configurations are given. But when any configuration is given,
+            it only uses the given configurations.
+            * If 2, it appends the default configurations to the given configurations.
+            Defaults to 1.
+
         allow_numer : int
-            Whether to accept numerical solution. 
-            If 0, then it claims failure if the rational feasible solution does not exist.
-            If 1, then it accepts a numerical solution if the rational feasible solution does not exist.
-            If 2, then it accepts the first numerical solution if rationalization fails.
-            If 3, then it accepts the first numerical solution directly. Defaults to 0.
+            Whether to accept numerical solution. Defaults to 0.
+            * If 0, then it claims failure if the rational feasible solution does not exist.
+            * If 1, then it accepts a numerical solution if the rational feasible solution does not exist.
+            * If 2, then it accepts the first numerical solution if rationalization fails.
+            * If 3, then it accepts the first numerical solution directly.
+
         verbose : bool
             If True, print the information of the solving process.
         solve_child : bool
@@ -355,7 +340,8 @@ class SDPProblemBase(ABC):
         solver_options : Dict[str, Any]
             The options passed to the SDP backend solver.
         raise_exception : bool
-            If True, raise an exception if an error occurs.
+            If True, raise an exception if an error occurs in the backend. It is for 
+            debugging purpose.
 
         Returns
         ----------
@@ -368,7 +354,7 @@ class SDPProblemBase(ABC):
             child: SDPProblemBase = self.get_last_child()
             if child is not self:
                 return child.solve(
-                    objectives = objectives,
+                    objective = objective,
                     constraints = constraints,
                     min_eigen = min_eigen,
                     scaling = scaling,
@@ -381,14 +367,20 @@ class SDPProblemBase(ABC):
                     raise_exception = raise_exception
                 )
 
-        configs = _align_iters(
-            [objectives, constraints, min_eigen],
-            [tuple, list, (float, int, tuple, dict)]
-        )
+        try:
+            configs = align_iters(
+                [objective, constraints, min_eigen],
+                [(ndarray, Expr, float, int), list, (float, int, tuple, dict)],
+                raise_exception = True
+            )
+        except IteratorAlignmentError as e:
+            raise IteratorAlignmentError("Incompatible lengths of configurations: objectives {}, constraints {}, min_eigen {}.".format(*e.args[1]))
+
         if use_default_configs:
-            default_configs = self._get_defaulted_configs()
-            for i in range(len(configs)):
-                configs[i] += default_configs[i]
+            if use_default_configs > 1 or (use_default_configs == 1 and len(configs[0]) == 0):
+                default_configs = self._get_defaulted_configs()
+                for i in range(len(configs)):
+                    configs[i] += default_configs[i]
         if self.dof == 0:
             # trim the configs to the first one
             if len(configs[0]) > 1:

@@ -1,13 +1,15 @@
 import sympy as sp
 
 from ..solution import SolutionStructuralSimple
+from ..pivoting.univariate import prove_univariate
 from ..ternary.utils import CommonExpr
 from ..ternary import (
     sos_struct_acyclic_quadratic, sos_struct_quartic,
     sos_struct_cubic, sos_struct_sextic
 )
+from ..ternary.dense_symmetric import sym_axis, _homogenize_sym_proof
 from ..utils import (
-    Coeff, CyclicSum, CyclicProduct,
+    Coeff, CyclicSum, CyclicProduct, SS,
     uniquely_named_symbol, radsimp, rationalize_func, congruence
 )
 
@@ -35,18 +37,21 @@ def constrained_acute(poly, ineq_constraints, eq_constraints):
     Gname = uniquely_named_symbol("_G", gens + tuple(ineq_constraints.values()))
     F, G = sp.Function(Fname), sp.Function(Gname)
 
-    degree = coeff.degree()
-    solution = None
-    SOLVERS = {
-        2: _constrained_acute_quadratic,
-        3: _constrained_acute_cubic,
-        4: _constrained_acute_quartic
-    }
-    solver = SOLVERS.get(degree)
-    if solver is not None:
-        solution = solver(coeff, F)
-    if solution is None:
-        return None
+    if coeff.is_symmetric():
+        solution = _constrained_acute_dense_symmetric(coeff, F)
+    else:
+        degree = coeff.degree()
+        solution = None
+        SOLVERS = {
+            2: _constrained_acute_quadratic,
+            3: _constrained_acute_cubic,
+            4: _constrained_acute_quartic
+        }
+        solver = SOLVERS.get(degree)
+        if solver is not None:
+            solution = solver(coeff, F)
+        if solution is None:
+            return None
 
     extra_checker = lambda x: x if isinstance(x, F) else None
     solution = SolutionStructuralSimple._extract_nonnegative_exprs(solution, func_name=Gname, extra_checker=extra_checker)
@@ -96,11 +101,11 @@ def _constrained_acute_cubic(coeff, F):
 
     (s(-a3+9/7(a2b+ab2))-32/7abc)
 
-    (s(-a3+(3/sqrt(2)-1)(a2b+ab2))+(sqrt(2)-5)abc)
-
     s(-a3+(8sqrt(2)-3)/7(a2b+ab2)-4abc/3)
 
     s(-a3+a2(b+c)-abc+sqrt(2)/2a(b-c)2)
+
+    (-s(31a3-33a2b-33a2c+32abc))
     """
     c300, c210, c120, c111 = coeff((3,0,0)), coeff((2,1,0)), coeff((1,2,0)), coeff((1,1,1))
     if c210 != c120:
@@ -207,10 +212,10 @@ def _constrained_acute_cubic(coeff, F):
                 uy = 3 - 6*ux
                 yt = 16*t/(t**2 - 2*t - 7)
                 w = (uy - y)/(uy - yt)
-            return ux, w
+            return radsimp(ux), radsimp(w)
         def _validation(t):
             ux, w = _get_ux_w(t)
-            return (ux is not sp.oo) and (ux - 1)**2*2 >= 1 and w >= 0 and w <= 1
+            return (ux is not sp.oo) and radsimp((ux - 1)**2*2) >= 1 and w >= 0 and w <= 1
         if 14*x**2 - 4*x*y - 4*x - y**2 + 4*y - 2 == 0:
             t = 2*sp.sqrt(2) - 1
         elif _validation(sp.S(1)):
@@ -301,3 +306,75 @@ def _constrained_acute_quartic(coeff, F):
         sol = sos_struct_quartic(new_coeff)
         if sol is not None:
             return sol + 2*x*CyclicSum(F(a)*(2*a+b+c)*(a-b)**2*(a-c)**2)/(CyclicSum(a*(b+c-2*a)**2)+CyclicSum(a*(b-c)**2))
+
+
+def _constrained_acute_trivial_uncentered(coeff, F):
+    """Subtract some p(b^2+c^2-a^2)*(...) to call basic ternary solver."""
+    d = coeff.degree()
+    if d < 6:
+        return None
+    p = coeff.poly111()
+    if p <= 0:
+        return None
+    expr = CyclicProduct(F(a)) * CyclicSum(a**(d - 6)) * p/3
+    expr2 = CyclicProduct((b**2 + c**2 - a**2)) * CyclicSum(a**(d - 6)) * p/3
+    rem = coeff.as_poly(a,b,c) - expr2.doit().as_poly(a,b,c)
+    # from ....utils.expression import poly_get_factor_form
+    # print(poly_get_factor_form(rem))
+    solution = SS.structsos.ternary._structural_sos_3vars_cyclic(Coeff(rem))
+    if solution is not None:
+        solution = solution + expr
+    return solution
+
+def _constrained_acute_dense_symmetric(coeff, F):
+    degree = coeff.degree()
+    if degree == 0:
+        return sp.S(0)
+    elif degree in (2, 3, 4):
+        SOLVERS = {
+            2: _constrained_acute_quadratic,
+            3: _constrained_acute_cubic,
+            4: _constrained_acute_quartic
+        }
+        return SOLVERS[degree](coeff, F)
+    elif degree >= 6:
+        solution = _constrained_acute_trivial_uncentered(coeff, F)
+        if solution is not None:
+            return solution
+    return _constrained_acute_lift_for_six(coeff, F)
+
+def _constrained_acute_lift_for_six(coeff, F):
+    d0 = coeff.degree()
+    sym = sym_axis(coeff)
+    if sym.is_zero:
+        poly = sym.as_poly(a,b,c).div(CyclicProduct((a-b)**2).as_poly(a,b,c))[0]
+        solution = _constrained_acute_dense_symmetric(Coeff(poly), F)
+        if solution is not None:
+            solution = solution * CyclicProduct((a-b)**2)
+        return solution
+
+    sym = sym.div(sp.Poly([1,-2,1], a))
+    if not sym[1].is_zero:
+        return None
+
+    div = sym[0].div(sp.Poly([-1,0,2], a))
+    solution = 0
+    if not div[1].is_zero:
+        return None
+
+    d = 0 # min(_[0] for _ in div[0].monoms()) # order of a^d in div[0]
+    pure_div = div[0].div(sp.Poly([1] + [0]*d, a))[0] # divided by a^d
+    sym_proof = prove_univariate(pure_div, return_raw=True)
+    if sym_proof is None:
+        return None
+    lifted_sym = _homogenize_sym_proof(sym_proof, d0 - 4, (a,b,c))
+
+    multiplier = CyclicSum((a**3-a**2*c+a*b**2-a*c**2-2*b**3+b**2*c+c**3)**2)/6
+    new_poly = coeff.as_poly(a,b,c) * multiplier
+    new_poly -= CyclicSum((a-b)**2*(a-c)**2 * lifted_sym) * CyclicProduct((b**2+c**2-a**2))
+    new_poly = new_poly.div(CyclicProduct((a-b)**2).doit().as_poly(a,b,c))#[0]
+    if not new_poly[1].is_zero:
+        return None
+    solution = _constrained_acute_dense_symmetric(Coeff(new_poly[0]), F)
+    if solution is not None:
+        return (solution * CyclicProduct((a-b)**2) + CyclicSum((a-b)**2*(a-c)**2 * lifted_sym) * CyclicProduct(F(a)))/multiplier

@@ -1,4 +1,5 @@
 from .sparse  import sos_struct_sparse, sos_struct_heuristic
+from .dense_symmetric import sos_struct_dense_symmetric, sos_struct_liftfree_for_six
 from .quadratic import sos_struct_quadratic, sos_struct_acyclic_quadratic
 from .cubic   import sos_struct_cubic, sos_struct_acyclic_cubic
 from .quartic import sos_struct_quartic, sos_struct_acyclic_quartic
@@ -18,6 +19,7 @@ __all__ = [
 
 _registry = [
     sos_struct_sparse, sos_struct_heuristic,
+    sos_struct_dense_symmetric, sos_struct_liftfree_for_six,
     sos_struct_quadratic, sos_struct_acyclic_quadratic,
     sos_struct_cubic, sos_struct_acyclic_cubic,
     sos_struct_quartic, sos_struct_acyclic_quartic,

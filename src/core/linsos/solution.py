@@ -111,7 +111,8 @@ class SolutionLinear(SolutionSimple):
         exprs = []
         for v, base in zip(self.y, self.basis):
             cls = base.__class__
-            if cls not in (LinearBasisTangent,):
+            # if cls not in (LinearBasisTangent,):
+            if not issubclass(cls, LinearBasisTangent):
                 expr = v * base.as_expr(symbols)
                 exprs.append(expr)
                 continue

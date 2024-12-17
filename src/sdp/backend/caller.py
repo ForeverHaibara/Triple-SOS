@@ -81,7 +81,7 @@ def _create_numerical_dual_sdp(
             for key, (x0, space) in x0_and_space.items():
                 x0_and_space[key] = (x0 * scaling, space * scaling)
             min_eigen = {key: (k * scaling, b * scaling) for key, (k, b) in min_eigen.items()}
-            constraints = [(c, rhs * scaling, op) for c, rhs, op in constraints]
+            # constraints = [(c, rhs * scaling, op) for c, rhs, op in constraints]
             
 
     for key, (x0, space) in x0_and_space.items():

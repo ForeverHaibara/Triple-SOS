@@ -464,6 +464,58 @@ def exprs_to_arrays(locals: Dict[str, Any], symbols: List[Symbol],
     return result
 
 
+class IteratorAlignmentError(Exception): ...
+
+def align_iters(
+        iters: List[Union[Any, List[Any]]],
+        default_types: List[Union[List[Any], Callable[[Any], bool]]],
+        raise_exception: bool = False
+    ) -> List[List[Any]]:
+    """
+    Align the iterators with the default types.
+
+    Parameters
+    ----------
+    iters : List[Union[Any, List[Any]]]
+        The iterators to be aligned.
+    default_types : List[Union[List[Any], Callable[[Any], bool]]]
+        The default types for each iterator. For each element, it can be a list of types or a function.
+        If it is a function, it should return True if the element is of the type.
+    raise_exception : bool
+        If True, raise exception when it cannot align the iterators.
+        If False, use the minimum length of the iterators.
+    """
+    if len(iters) == 0:
+        return None
+    check_tp = lambda i, tp: (callable(tp) and not isinstance(tp, type) and tp(i)) or isinstance(i, tp)
+    aligned_iters = []
+    for i, tp in zip(iters, default_types):
+        if i is None:
+            aligned_iters.append([])
+            continue
+        if isinstance(i, list):
+            if len(i) == 0 and not check_tp(i, tp):
+                # unrecognized type
+                # return [[] for _ in range(len(iters))]
+                aligned_iters.append([])
+                continue
+            elif len(i) and check_tp(i[0], tp):
+                # every element of the list is of the expected type
+                aligned_iters.append(i)
+                continue
+        if check_tp(i, tp):
+            # single element is of the expected type
+            aligned_iters.append([i])
+        else:
+            # unrecognized type
+            aligned_iters.append([])
+    lengths = [len(i) for i in aligned_iters]
+    if raise_exception and len(set(lengths)) > 1:
+        raise IteratorAlignmentError("Iterator lengths incompatible", lengths)
+    min_len = min(lengths)
+    return [i[:min_len] for i in aligned_iters]
+
+
 @contextmanager
 def indented_print(indent = 4, indent_fill = ' ', verbose = True):
     """

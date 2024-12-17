@@ -1,3 +1,5 @@
+from typing import Tuple, List
+
 import sympy as sp
 
 from .utils import (
@@ -29,7 +31,7 @@ def _sos_struct_dense_symmetric(coeff, real=True):
     if d < 8:
         methods.append(SS.structsos.ternary._structural_sos_3vars_cyclic)
     else:
-        methods.append(_sos_struct_liftfree_for_six)
+        methods.append(sos_struct_liftfree_for_six)
         methods.append(_sos_struct_lift_for_six)
 
     for method in methods:
@@ -61,15 +63,18 @@ def _sos_struct_trivial_additive(coeff, real=True):
 
 
 
-def sym_axis(coeff: Coeff, d: int) -> sp.Poly:
-    # compute f(a,1,1)
+def sym_axis(coeff: Coeff, d: int = -1) -> sp.Poly:
+    """Compute f(a,1,1)."""
+    if d == -1: d = coeff.degree()
     coeff_list = [0] * (d+1)
     for m, v in coeff.coeffs.items():
         coeff_list[m[0]] += v
     return sp.Poly(radsimp(coeff_list)[::-1], a)
 
-def _homogenize_sym_axis(sym: sp.Poly, d: int) -> sp.Expr:
-    # homogenize f(a,1,1) to f(a,b,c)
+def _homogenize_sym_axis(sym: sp.Poly, d: int, abc: Tuple[sp.Symbol] = None) -> sp.Expr:
+    """Homogenize f(a,1,1) to f(a,b,c) given degree."""
+    if abc is None: abc = sp.symbols('a b c')
+    a, b, c = abc
     s = [0]
     for (m,), v in sym.terms():
         k, r = divmod(d-m, 2)
@@ -79,6 +84,28 @@ def _homogenize_sym_axis(sym: sp.Poly, d: int) -> sp.Expr:
             s.append(v/2 * a**m * b**(k+1) * c**k)
             s.append(v/2 * a**m * b**k * c**(k+1))
     return sp.Add(*s)
+
+def _homogenize_sym_proof(sym_proof, d: int, abc: Tuple[sp.Symbol] = None) -> sp.Expr:
+    """Homogenize the result from prove_univariate."""
+    if abc is None: abc = sp.symbols('a b c')
+    a, b, c = abc
+    exprs = []
+    for i in range(len(sym_proof)):
+        leading = sym_proof[i][0]
+        ld = leading.as_poly(a).degree()
+        part_expr = []
+        for k, v in zip(sym_proof[i][1], sym_proof[i][2]):
+            v2 = _homogenize_sym_axis(v, v.degree(), abc)
+            rd = (d - ld - v.degree()*2) // 2
+            part_expr.append(k * v2**2 * b**rd * c**rd)
+        part_expr = sp.Add(*part_expr)
+        if (d - ld) % 2 == 1:
+            part_expr = part_expr * leading * (b + c) / 2
+        else:
+            part_expr = part_expr * leading
+        exprs.append(part_expr)
+    return sp.Add(*exprs)
+
 
 @sos_struct_handle_uncentered
 def _sos_struct_lift_for_six(coeff, real=True):
@@ -117,27 +144,12 @@ def _sos_struct_lift_for_six(coeff, real=True):
     #     return None
 
     if all(_ >= 0 for _ in div[0].coeffs()):
-        lifted_sym = _homogenize_sym_axis(div[0], d - 2)
+        lifted_sym = _homogenize_sym_axis(div[0], d - 2, (a, b, c))
     else:
         sym_proof = prove_univariate(div[0], return_raw=True)
         if sym_proof is None:
             return None
-        exprs = []
-        for i in range(len(sym_proof)):
-            leading = sym_proof[i][0]
-            ld = leading.as_poly(a).degree()
-            part_expr = []
-            for k, v in zip(sym_proof[i][1], sym_proof[i][2]):
-                v2 = _homogenize_sym_axis(v, v.degree())
-                rd = (d - 2 - ld - v.degree()*2) // 2
-                part_expr.append(k * v2**2 * b**rd * c**rd)
-            part_expr = sp.Add(*part_expr)
-            if (d - 2 - ld) % 2 == 1:
-                part_expr = part_expr * leading * (b + c) / 2
-            else:
-                part_expr = part_expr * leading
-            exprs.append(part_expr)
-        lifted_sym = sp.Add(*exprs)
+        lifted_sym = _homogenize_sym_proof(sym_proof, d - 2, (a, b, c))
         # print(lifted_sym)
 
 
@@ -163,7 +175,7 @@ def _sos_struct_lift_for_six(coeff, real=True):
 
 
 @sos_struct_handle_uncentered
-def _sos_struct_liftfree_for_six(coeff, real=True):
+def sos_struct_liftfree_for_six(coeff, real=True):
     """
     Solve high-degree (dense) symmetric inequalities without
     lifting the degree. This will be tried in prior because
@@ -187,7 +199,7 @@ def _sos_struct_liftfree_for_six(coeff, real=True):
     s(a2)s((s(ab)2+a2bc)(b2+ac)(c2+ab))-p(a2+bc)*3s(a3b+a3c+3a2bc)
     """
     d = coeff.degree()
-    if d < 8:
+    if d < 6:
         return None
 
     a, b, c = sp.symbols('a b c')
@@ -224,13 +236,14 @@ def _sos_struct_liftfree_for_six(coeff, real=True):
     def _subtractor1(n, m):
         # Return some f(a,b,c), such that f(a,b,c) >= 0 holds
         # and f = s(a**n*b**m*c**m*(a-b)*(a-c)) (mod p(a-b)^2)
-        # NOTE: n + 2*m + 2 = d >= 8
+        # NOTE: n + 2*m + 2 = d >= 6
         if n >= m:
             if (n - m) % 2 == 0:
                 return CyclicProduct(a**m) * CyclicSum((b+c-a)**(n-m)*(b-c)**2)/2
             else:
-                # if n == m + 1: # m >= 1
-                #     return CyclicProduct(a**(m-1)) * CyclicSum(a**2*(a*b+a*c-b**2-c**2)**2)/6
+                if n == m + 1 and m >= 1:
+                    # tighter
+                    return CyclicProduct(a**(m-1)) * CyclicSum(a**2*(a*b+a*c-b**2-c**2)**2)/6
                 if m >= 1:
                     return CyclicProduct(a**(m-1)) * CyclicSum(a**2*(b-c)**2*(b+c-a)**(n-m+1))/2
         else:
@@ -238,7 +251,7 @@ def _sos_struct_liftfree_for_six(coeff, real=True):
     def _subtractor2(n, m):
         # Return some f(a,b,c), such that f(a,b,c) >= 0 holds
         # and f = s(a**n*b**m*c**m*(a-b)*(a-c)*(b+c)/2) (mod p(a-b)^2)
-        # NOTE: n + 2*m + 3 = d >= 8
+        # NOTE: n + 2*m + 3 = d >= 6
         if n >= m:
             if (n - m) % 2 == 0:
                 return CyclicProduct(a**m) * CyclicSum(a*(b+c-a)**(n-m)*(b-c)**2)/2
@@ -246,7 +259,6 @@ def _sos_struct_liftfree_for_six(coeff, real=True):
                 return CyclicProduct(a**m) * CyclicSum(b*c*(b-c)**2*(b+c-a)**(n-m-1))/2
         else:
             return CyclicProduct(a**n) * CyclicSum(a**(2*(m-n)+1)*(b-c)**2)/2
-
 
     if (d - n - 3) % 2 == 0:
         # subtract s(a^n*b^m*c^m*(u2*a + v2*(b+c)/2)*(a-b)*(a-c)) + p(a-b)^2*...
@@ -284,7 +296,7 @@ def _sos_struct_liftfree_for_six_ord4(coeff, div2=None, real=True):
 
     d = coeff.degree()
     if all(_ >= 0 for _ in div2.coeffs()):
-        lifted_sym = _homogenize_sym_axis(div2, d - 4)
+        lifted_sym = _homogenize_sym_axis(div2, d - 4, (a, b, c))
     else:
         return None # not implemented
 

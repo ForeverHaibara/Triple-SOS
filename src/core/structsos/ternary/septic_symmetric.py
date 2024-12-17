@@ -3,7 +3,7 @@ from functools import partial
 import sympy as sp
 
 from .utils import (
-    CyclicSum, CyclicProduct, CommonExpr, Coeff,
+    CyclicSum, CyclicProduct, CommonExpr, Coeff, SS,
     prove_univariate, quadratic_weighting
 )
 from .cubic import _sos_struct_cubic_symmetric
@@ -14,6 +14,10 @@ a, b, c = sp.symbols('a b c')
 def sos_struct_septic_symmetric(coeff, real=False):
     if not all(coeff((i,j,k)) == coeff((j,i,k)) for (i,j,k) in ((6,1,0),(5,2,0),(4,3,0),(4,2,1))):
         return
+
+    solution = SS.structsos.ternary.sos_struct_liftfree_for_six(coeff)
+    if solution is not None:
+        return solution
 
     if coeff.is_rational:
         return _sos_struct_septic_symmetric_quadratic_form(coeff.as_poly(), coeff)

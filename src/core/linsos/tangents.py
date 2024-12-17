@@ -481,8 +481,8 @@ class _tangents_helper_ternary_mixed(_tangents_helper_ternary):
                 res = [sp.S(1), -x-y, x*y]
             elif isinstance(x, sp.Rational) or isinstance(y, sp.Rational):
                 return []
-        if res is None:
-            res = pslq([x**2, x, 1])
+            if res is None:
+                res = pslq([x**2, x, 1])
         if res is None:
             return []
         c2, c1, c0 = res

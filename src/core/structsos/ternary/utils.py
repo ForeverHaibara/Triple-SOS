@@ -1,4 +1,5 @@
 from typing import Callable, Union
+from functools import wraps
 
 import sympy as sp
 
@@ -106,6 +107,7 @@ def sos_struct_handle_uncentered(solver: Callable) -> Callable:
     A decorator for structural SOS with uncentered polynomial handling.
     It only supports cyclic polynomials.
     """
+    @wraps(solver)
     def _wrapped_solver(poly: Union[sp.Poly, Coeff], *args, **kwargs):
         bias = 0
         if isinstance(poly, Coeff):
