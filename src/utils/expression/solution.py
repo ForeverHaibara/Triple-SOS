@@ -4,6 +4,7 @@ import re
 import sympy as sp
 from sympy.core.singleton import S
 from sympy.printing.precedence import precedence_traditional, PRECEDENCE
+from sympy.combinatorics import PermutationGroup, Permutation
 
 from ..expression.cyclic import is_cyclic_expr, CyclicSum, CyclicProduct, CyclicExpr
 
@@ -433,8 +434,22 @@ class SolutionSimple(Solution):
             return self
 
         self.problem = self.problem.subs(homogenizer, 1)
-        self.numerator = self.numerator.xreplace({homogenizer: 1})
-        self.multiplier = self.multiplier.xreplace({homogenizer: 1})
+        def _deflat_perm_group(expr):
+            # e.g.
+            # CyclicSum(a**2, (a,b,c,d), PermutationGroup(Permutation([1,2,0,3])))
+            # => CyclicSum(a**2, (a,b,c), PermutationGroup(Permutation([1,2,0])))
+            f, symbols, perm_group = expr.args
+            n = len(symbols)
+            if symbols[n-1] == homogenizer and len(perm_group.orbit(n-1)) == 1:
+                new_perm = PermutationGroup(*[Permutation(_.array_form[:-1]) for _ in perm_group.args])
+                return expr.func(f, symbols[:n-1], new_perm)
+            return expr
+        def dehom(f):
+            f = f.xreplace({homogenizer: 1})
+            f = f.replace(lambda x: isinstance(x, CyclicExpr), _deflat_perm_group)
+            return f
+        self.numerator = dehom(self.numerator)
+        self.multiplier = dehom(self.multiplier)
         self.solution = self.numerator / self.multiplier
         return self
 
