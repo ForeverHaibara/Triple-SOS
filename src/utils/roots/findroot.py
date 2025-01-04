@@ -4,6 +4,8 @@ from typing import Union, Callable, List, Optional, Tuple
 
 import numpy as np
 import sympy as sp
+from sympy.core import Symbol, Expr
+from sympy.polys.polytools import Poly
 from sympy.plotting.experimental_lambdify import vectorized_lambdify
 from scipy.optimize import minimize
 
@@ -85,7 +87,7 @@ def find_nearest_root(poly, v, method = 'rootof'):
     return best
 
 
-def _compute_hessian(f: sp.Expr, vars: Tuple[sp.Symbol, sp.Symbol] = None, vectorized = True):
+def _compute_hessian(f: Expr, vars: Tuple[Symbol, Symbol] = None, vectorized = True):
     """
     Compute df/dx, df/dy, d2f/dx2, d2f/dxdy, d2f/dy2
     with respect to a 2d function f(x,y).
@@ -166,9 +168,73 @@ def optimize_discriminant(discriminant, soft = False, verbose = False):
 
     return {x: a_, y: b_}
 
+def kkt(
+        f: Union[Expr, Poly],
+        ineq_constraints: List[Union[Expr, Poly]] = [],
+        eq_constraints: List[Union[Expr, Poly]] = [],
+        as_poly: bool = True,
+        with_self: bool = False
+    ) -> Tuple[List[Poly], Tuple[Tuple[Symbol], Tuple[Symbol], Tuple[Symbol], Tuple[Symbol]]]:
+    """
+    Compute the Karush-Kuhn-Tucker system of a function with inequality and equality constraints.
+
+    Parameters
+    ----------
+    f : sympy.Expr
+        The function to be minimized.
+    ineq_constraints : List[sympy.Expr]
+        The inequality constraints, G1, G2, ... (>= 0).
+    eq_constraints : List[sympy.Expr]
+        The equality constraints. H1, H2, ... (== 0).
+    as_poly : bool
+        Whether to return the system as polynomials. Defaults to True.
+    with_self : bool
+        Whether to include f in the system. Defaults to False.
+
+    Returns
+    ----------
+    system : List[sympy.Poly]
+        The KKT system.
+    (symbs0, lambs, mus, symbs) : Tuple[Tuple[sympy.Symbol], Tuple[sympy.Symbol], Tuple[sympy.Symbol], Tuple[sympy.Symbol]]
+        The symbols used in the system.
+        symbs0 are the original variables,
+        lambs are the Lagrange multipliers for ineq_constraints,
+        mus are the Lagrange multipliers for eq_constraints,
+        symbs = symbs0 + lambs + mus.
+        Also, KKT condition requires lambs >= 0.
+
+    Examples
+    ----------
+    >>> x, y, z = sp.symbols('x y')
+    >>> kkt(2*x + 3*y, [x], [x**2 + y**2 - 1], as_poly = False)
+    [-_\lambda_0 + 2*_\mu_0*x + 2, 2*_\mu_0*y + 3, _\lambda_0*x, x**2 + y**2 - 1]
+    """
+    f = sp.sympify(f)
+    symbs = f.gens if hasattr(f, 'gens') else tuple(sorted(f.free_symbols, key=lambda x: x.name))
+    symbs = symbs + tuple(set.union(set(), 
+                *[_.free_symbols for _ in ineq_constraints],
+                *[_.free_symbols for _ in eq_constraints]) - set(symbs))
+    symbs0 = symbs
+
+    lambs = tuple(sp.Dummy('\\lambda_%d' % i) for i in range(len(ineq_constraints)))
+    mus = tuple(sp.Dummy('\\mu_%d' % i) for i in range(len(eq_constraints)))
+    lag = f - sum(l*ineq for l, ineq in zip(lambs, ineq_constraints)) \
+            + sum(m*eq for m, eq in zip(mus, eq_constraints))
+
+    stationarity = [lag.diff(_) for _ in symbs]
+    complementarity = [l*ineq for l, ineq in zip(lambs, ineq_constraints)]
+
+    system = stationarity + complementarity + eq_constraints
+    symbs = symbs + lambs + mus
+
+    if as_poly:
+        system = [_.as_poly(symbs) for _ in system]
+    if with_self:
+        system.append(f.as_poly(symbs) if as_poly else f)
+    return system, (symbs0, lambs, mus, symbs)
 
 def findroot(
-        poly: sp.Poly,
+        poly: Poly,
         most: int = 5,
         grid: Optional[GridPoly] = None,
         method: str = 'nsolve',
@@ -204,7 +270,7 @@ def findroot(
     rootsinfo : RootsInfo
         The roots information.
     """
-    if not isinstance(poly, sp.Poly):
+    if not isinstance(poly, Poly):
         return RootsInfo()
 
     if len(poly.gens) != 3:
@@ -260,7 +326,7 @@ class _findroot_helper():
     """
     @classmethod
     def findroot(cls, 
-            poly: sp.Poly,
+            poly: Poly,
             grid: GridPoly, 
             method: str = 'nsolve',
             standardize_method: str = 'simplex',
@@ -300,7 +366,7 @@ class _findroot_helper():
         return getattr(cls, '_findroot_' + name.replace('-', '_'))
 
     @classmethod
-    def _destd_poly(cls, poly: sp.Poly, standardize_method: str = 'simplex') -> Tuple[sp.Expr, List[sp.Symbol]]:
+    def _destd_poly(cls, poly: Poly, standardize_method: str = 'simplex') -> Tuple[Expr, List[Symbol]]:
         """
         De-homogenize the polynomial and convert it to a sympy expression.
         """
@@ -381,7 +447,7 @@ class _findroot_helper():
         return extrema
 
     @classmethod
-    def _findroot_border(cls, poly: sp.Poly, cyc: bool = True) -> List[Root]:
+    def _findroot_border(cls, poly: Poly, cyc: bool = True) -> List[Root]:
         """
         Return roots on the border of a 3-var polynomial.
         """
@@ -389,7 +455,7 @@ class _findroot_helper():
         if cyc:
             a = poly.gens[0]
             rep = [_[0] if len(_) else 0 for _ in poly.rep.to_list()[-1]]
-            poly = sp.Poly.from_list(rep, a)
+            poly = Poly.from_list(rep, a)
             poly_diff = poly.diff(a)
             poly_diff2 = poly_diff.diff(a)
             try:
@@ -421,7 +487,7 @@ class _findroot_helper():
         return roots
 
     @classmethod
-    def _findroot_symmetric(cls, poly: sp.Poly, skip_border: bool = False) -> List[Root]:
+    def _findroot_symmetric(cls, poly: Poly, skip_border: bool = False) -> List[Root]:
         """
         Return roots on the symmetric axis of a 3-var polynomial.
         If skip_border is True, the root (0,1,1) is not included.
@@ -429,7 +495,7 @@ class _findroot_helper():
         roots = []
         a = poly.gens[0]
         rep = [sum(sum(__) for __ in _) for _ in poly.rep.to_list()]
-        poly = sp.Poly.from_list(rep, a)
+        poly = Poly.from_list(rep, a)
         poly_diff = poly.diff(a)
         poly_diff2 = poly_diff.diff(a)
         try:
@@ -509,7 +575,7 @@ class _findroot_helper():
         return cls._std_root(roots, standardize_method = standardize_method)
 
 
-def findroot_resultant(poly: sp.Poly) -> List[Root]:
+def findroot_resultant(poly: Poly) -> List[Root]:
     """
     Find the roots of a 3-var homogeneous polynomial using the resultant method. 
     This is essential in SDP SOS, because we need to construct exact subspace
@@ -716,7 +782,7 @@ class _findroot_helper_resultant():
         for (a_, b_), (i, j) in pairs:
             fx, fy = factors1[i][0], factors2[j][0]
             # reverse fx
-            fx = sp.Poly(fx.all_coeffs()[::-1], fy.gens[0]) if is_cyc else fx
+            fx = Poly(fx.all_coeffs()[::-1], fy.gens[0]) if is_cyc else fx
             if fx.degree() == 0:
                 a_ = sp.S(0)
             else:
@@ -757,7 +823,7 @@ class _findroot_helper_resultant():
             factors_border = set(sp.polys.gcd(poly_border, grad_border).factor_list()[1])
             if len(factors_border):
                 # conjugate factors, b = 0
-                factors_border.add((sp.Poly([1,0], b), len(factors_border)))
+                factors_border.add((Poly([1,0], b), len(factors_border)))
             factors |= factors_border
             factors = list(factors)
 

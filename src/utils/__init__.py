@@ -19,11 +19,12 @@ from .expression import (
 from .roots import (
     RootsInfo, Root, RootAlgebraic, RootRational, RootTernary, RootAlgebraicTernary, RootRationalTernary,
     GridRender,
-    findroot, find_nearest_root, findroot_resultant,
+    findroot, find_nearest_root, findroot_resultant, kkt,
     RootTangent,
     nroots, univariate_intervals, rationalize, rationalize_array, rationalize_bound,
     rationalize_quadratic_curve, common_region_of_conics, square_perturbation,
     cancel_denominator,
+    rpa_monotonic, rpa_gmop, rpa_polyopt
 )
 
 
@@ -38,9 +39,9 @@ __all__ = [
     'Solution', 'SolutionSimple',
     'RootsInfo', 'Root', 'RootAlgebraic', 'RootRational', 'RootTernary', 'RootAlgebraicTernary', 'RootRationalTernary',
     'GridRender',
-    'findroot', 'find_nearest_root', 'findroot_resultant',
+    'findroot', 'find_nearest_root', 'findroot_resultant', 'kkt',
     'RootTangent',
     'nroots', 'univariate_intervals', 'rationalize', 'rationalize_array', 'rationalize_bound',
     'rationalize_quadratic_curve', 'common_region_of_conics', 'square_perturbation',
-    'cancel_denominator',
+    'cancel_denominator', 'rpa_monotonic', 'rpa_gmop', 'rpa_polyopt'
 ]

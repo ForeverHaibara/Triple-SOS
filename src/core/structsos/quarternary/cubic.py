@@ -118,7 +118,7 @@ def _quarternary_cubic_partial_symmetric(coeff, real = False):
         return radsimp(c000 - 4*x*(3*c2*x - 4*c100)**3/3/(3*x**2 - 4*c100)**2)
     
     def check_x(x):
-        if x == 0: return get_const(x) >= 0 # t = 0, y = c2
+        if x == 0: return c100 == 0 and get_const(x) >= 0 # t = 0, y = c2
         if x is None or (not x.is_finite) or (not 3*x**2/4 >= c100):
             return False
         r = get_const(x)
@@ -148,7 +148,7 @@ def _quarternary_cubic_partial_symmetric(coeff, real = False):
     if t1 < 0 or t2 < 0:
         return None
     y = (c2 - x*t1)/t2 if t2 != 0 else 0
-    
+
     return sp.Add(
         radsimp(c111 * t1) * get_sol1(x),
         radsimp(c111 * t2) * get_sol2(y),

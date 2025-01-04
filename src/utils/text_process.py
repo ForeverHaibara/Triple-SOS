@@ -232,13 +232,15 @@ def preprocess_text(
 
         try:
             frac = fraction(cancel(poly))
-            if len(frac[1].free_symbols) == 0:
-                poly0 = Poly(poly, gens, extension = True)
-                poly1 = Poly(1, gens, extension = True)
-                return poly0, poly1
 
             poly0 = Poly(frac[0], gens, extension = True)
             poly1 = Poly(frac[1], gens, extension = True)
+
+            if len(frac[1].free_symbols) == 0:
+                div0, div1 = poly0.div(poly1)
+                if div1.is_zero:
+                    one = Poly(1, gens, extension = True)
+                    return div0, one
             return poly0, poly1
         except:
             return None, None
