@@ -666,6 +666,7 @@ def _sos_struct_sextic_symmetric_schur_split(coeff, real = False):
         c222 + 6*c321 + 3*c330 + 3*c411 + 6*c420 + 6*c510 + 3*c600
     ])
     if all(_ >= 0 for _ in y[1:]):
+        # Case 1.
         if y[0] >= 0:
             exprs = [
                 y[0] * CyclicProduct((a-b)**2),
@@ -676,6 +677,7 @@ def _sos_struct_sextic_symmetric_schur_split(coeff, real = False):
             ]
             return sp.Add(*exprs)
 
+        # Case 2. (Stricter Criterion)
         y[0] = radsimp(8*c321/3 + 17*c330/3 + 7*c411/3 + 35*c420/3 + 38*c510/3 + 35*c600/3)
         if y[0] >= 0:
             exprs = [
@@ -688,6 +690,27 @@ def _sos_struct_sextic_symmetric_schur_split(coeff, real = False):
                 CyclicProduct(a**2)
             ]
             return sum_y_exprs(y, exprs)
+
+    y = radsimp(
+        [c600,
+        2*c510 + 2*c600,
+        c411 + 2*c420 + 4*c510 + 3*c600,
+        2*c321 + 2*c330 + 2*c411 + 4*c420 + 6*c510 + 4*c600,
+        c330 + 2*c420 + 2*c510 + 2*c600,
+        -c330/3 - c411/3 - c420/3 - 2*c510 - 2*c600
+    ])
+    if all(_ >= 0 for _ in y):
+        # Case 3.
+        exprs = [
+            CyclicSum((a**3-a**2*b-a*b**2+a*c**2+b**3+b*c**2-2*c**3)**2)/6,
+            CyclicSum(a*b*(a-b)**2*(a+b-c)**2)/2,
+            CyclicSum(a**2*(a*b+a*c-b**2-c**2)**2)/6,
+            CyclicSum(a**2*b*c*(b-c)**2)/2,
+            CyclicSum((a*b**2+a*c**2-b**2*c-b*c**2)**2)/6,
+            CyclicProduct((a-b)**2)
+        ]
+        return sum_y_exprs(y, exprs)
+
 
 
 def _sos_struct_sextic_iran96(coeff, real = False):

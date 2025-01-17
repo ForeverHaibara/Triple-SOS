@@ -336,6 +336,7 @@ def _LinearSOS(
         # prepare to lift the degree in an iterative way
         for lift_degree_info in lift_degree(poly, ineq_constraints=ineq_constraints, symmetry=symmetry, lift_degree_limit=lift_degree_limit):
             # RHS
+            time0 = time()
             degree = lift_degree_info['degree']
             basis, arrays = _prepare_basis(poly.gens, all_nonnegative=all_nonnegative, degree=degree, tangents=tangents,
                                             eq_constraints=eq_constraints, rootsinfo=rootsinfo, symmetry=symmetry, basis_limit=basis_limit)
@@ -352,7 +353,8 @@ def _LinearSOS(
             arrays = np.hstack([arrays, regularizer[:, None]])
 
             if verbose:
-                print('Linear Programming Shape = (%d, %d)'%(arrays.shape[0], arrays.shape[1]))
+                time1 = time()
+                print('Linear Programming Shape = (%d, %d)'%(arrays.shape[0], arrays.shape[1]), '\tPreparation Time: %.3f s'%(time1 - time0), end = '')
 
             b = np.zeros(arrays.shape[1])
             b[-1] = 1
@@ -371,7 +373,11 @@ def _LinearSOS(
                     pass
             if linear_sos is None or not linear_sos.success:
                 # lift the degree up and retry
+                if verbose:
+                    print('\tLP failed.')
                 continue
+            if verbose:
+                print('\t\033[92mLP succeeded.\033[0m')
 
             y, basis, is_equal = linear_correction(
                 linear_sos.x,

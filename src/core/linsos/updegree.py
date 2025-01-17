@@ -133,6 +133,12 @@ def _get_multipliers(ineq_constraints: Dict[sp.Poly, sp.Expr], symbols: Tuple[sp
             mul_expr = sp.Mul(*(ineq_constraints[i][1]**power[i] for i in range(n_constraints)))
             multipliers.append((mul_poly, mul_expr))
 
+    if n_plus > 2 and n_plus % 2 == 0:
+        for power in generate_expr(len(symbols), n_plus//2)[1]:
+            mul_poly = sp.Poly({tuple(p*2 for p in power): 1}, *symbols)
+            mul_expr = sp.Mul(*(si**(pi*2) for si, pi in zip(symbols, power)))
+            multipliers.append((mul_poly, mul_expr))
+
     multipliers = clear_polys_by_symmetry(multipliers, symbols, symmetry)
 
     return multipliers

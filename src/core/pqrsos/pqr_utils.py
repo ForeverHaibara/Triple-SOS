@@ -123,6 +123,10 @@ def pqr_cyc(poly: sp.Poly, new_gens: Optional[List[sp.Symbol]] = None) -> Tuple[
     result = pqr_coeffs_cyc(poly)
     part_sym = sum(y * p**i * q**j * r**k for y, ((i, j, k), _) in result[0])
     part_cyc = sum(y * p**i * q**j * r**k for y, ((i, j, k), _) in result[1])
+    if isinstance(part_sym, int):
+        part_sym = sp.S(part_sym)
+    if isinstance(part_cyc, int):
+        part_cyc = sp.S(part_cyc)
     return part_sym, part_cyc
 
 def pqr_ker(new_gens: Optional[List[sp.Symbol]] = None) -> sp.Expr:
