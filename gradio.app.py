@@ -4,9 +4,9 @@ import numpy as np
 import gradio as gr
 from PIL import Image
 
-from src.utils import RootsInfo
-from src.utils.text_process import short_constant_parser
-from src.gui.sos_manager import SOS_Manager
+from triples.utils import RootsInfo
+from triples.utils.text_process import short_constant_parser
+from triples.gui.sos_manager import SOS_Manager
 
 def gradio_markdown() -> gr.Markdown:
     version = gr.__version__

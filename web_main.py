@@ -8,10 +8,10 @@ from flask_cors import CORS
 
 import sympy as sp
 
-from src.utils.roots import RootTangent, RootsInfo
-from src.utils.text_process import pl
-from src.utils.expression.solution import SolutionSimple
-from src.gui.sos_manager import SOS_Manager
+from triples.utils.roots import RootTangent, RootsInfo
+from triples.utils.text_process import pl
+from triples.utils.expression.solution import SolutionSimple
+from triples.gui.sos_manager import SOS_Manager
 
 # def _async_raise(tid, exctype):
 #     '''Raises an exception in the threads with id tid'''
