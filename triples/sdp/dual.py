@@ -15,6 +15,32 @@ from .transform import DualTransformMixin
 from .utils import S_from_y, decompose_matrix, exprs_to_arrays
 
 
+def _get_unique_symbols(_x0_and_space, dof: int, xname: str = 'y'):
+    """
+    Generate `dof` unique symbols that differ from the existing symbols in `_x0_and_space`.
+
+    Parameters
+    ----------
+    _x0_and_space : Dict[str, Tuple[Matrix, Matrix]]
+        The given matrices.
+    dof : int
+        The number of symbols to generate.
+    xname : str
+        The prefix of the symbol name.
+    """
+    used_symbols = set()
+    for x0, space in _x0_and_space.values():
+        if hasattr(x0, 'free_symbols'):
+            used_symbols.update(set(_.name for _ in x0.free_symbols))
+        if hasattr(space, 'free_symbols'):
+            used_symbols.update(set(_.name for _ in space.free_symbols))
+    xname = xname + '_{'
+    n = len(xname)
+    used_symbols = set(s[n:-1] for s in used_symbols if s.startswith(xname) and s[-1] == '}')
+    digits = '0123456789'
+    used_digits = list(map(int, filter(lambda x: all(d in digits for d in x), used_symbols)))
+    max_digit = max(used_digits, default=-1) + 1
+    return [Symbol(xname + str(i) + '}') for i in range(max_digit, max_digit + dof)]
 
 def _infer_free_symbols(x0_and_space: Dict[str, Tuple[Matrix, Matrix]], free_symbols: List[Symbol]) -> List[Symbol]:
     """
@@ -47,7 +73,8 @@ def _infer_free_symbols(x0_and_space: Dict[str, Tuple[Matrix, Matrix]], free_sym
                 raise ValueError("Length of free_symbols and space should be the same. But got %d and %d."%(len(free_symbols), dof))
             return list(free_symbols)
         else:
-            return list(Symbol('y_{%d}'%i) for i in range(dof))
+            return _get_unique_symbols(x0_and_space, dof, xname='y')
+            # return list(Symbol('y_{%d}'%i) for i in range(dof))
     return []
 
 

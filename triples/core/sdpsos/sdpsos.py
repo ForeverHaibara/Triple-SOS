@@ -208,7 +208,8 @@ def _get_equal_entries(ineq_constraints: List[Poly], eq_constraints: List[Poly],
     return equal_entries
 
 def _constrain_nullspace(sdp: SDPProblem, ineq_constraints: List[Poly], eq_constraints: List[Poly],
-        nullspaces: Optional[Union[List[sp.Matrix], RootSubspace]], verbose: bool = False) -> SDPProblem:
+        nullspaces: Optional[Union[List[sp.Matrix], RootSubspace]],
+        deparametrize: bool = True, verbose: bool = False) -> SDPProblem:
     # constrain nullspace
     time0 = time()
     sdp = sdp.get_last_child()
@@ -225,12 +226,16 @@ def _constrain_nullspace(sdp: SDPProblem, ineq_constraints: List[Poly], eq_const
         print(f"Time for computing nullspace            : {time() - time0:.6f} seconds.")
         time0 = time()
 
+    if deparametrize:
+        sdp.deparametrize()
+
     if nullspaces is not None:
         sdp.constrain_nullspace(nullspaces, to_child=True)
 
     if verbose:
         print(f"Time for constraining nullspace         : {time() - time0:.6f} seconds. Dof = {sdp.get_last_child().dof}")
         time0 = time()
+
     return sdp
 
 
@@ -305,6 +310,7 @@ class SOSProblem():
         self,
         ineq_constraints: List[Union[Poly, Expr]] = [],
         eq_constraints: List[Union[Poly, Expr]] = [],
+        deparametrize: bool = True,
         verbose: bool = False,
     ) -> SDPProblem:
         """
@@ -316,6 +322,9 @@ class SOSProblem():
             Inequality constraints.
         eq_constraints : List[Union[Poly, Expr]]
             Equality constraints.
+        deparametrize : bool
+            Whether to deparametrize the SDP problem if there
+            exists linear free symbols in the coefficients. Default is True.
         verbose : bool
             Whether to print the progress. Default is False.
 
@@ -336,7 +345,8 @@ class SOSProblem():
         self._sdp = sdp
         self._eqvec = eqvec
 
-        _constrain_nullspace(sdp, ineq_constraints, eq_constraints, self.manifold, verbose=verbose)
+        _constrain_nullspace(sdp, ineq_constraints, eq_constraints, self.manifold,
+                             deparametrize=deparametrize, verbose=verbose)
 
         if verbose:
             sdp.print_graph()

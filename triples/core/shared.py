@@ -141,16 +141,45 @@ def identify_symmetry_from_lists(lst_of_lsts: List[List[sp.Poly]], has_homogeniz
 
     # List a few candidates: symmetric, alternating, cyclic groups...
     nvars = len(gens)
+    def _rotated(n, start=0):
+        return list(range(start+1, n+start)) + [start]
+    def _reflected(n, start=0):
+        return [start+1, start] + list(range(start+2, n+start))
+    def pp(p):
+        return Permutation(p)
+
     if nvars > 1:
         candidates = [SymmetricGroup(nvars)]
-        if nvars > 3:
-            candidates.append(AlternatingGroup(nvars))
+        if has_homogenized and nvars > 2:
+            # exclude the homogenizer
+            p1, p2 = pp(_rotated(nvars - 1) + [nvars - 1]), pp(_reflected(nvars - 1) + [nvars - 1])
+            candidates.append(PermutationGroup(p1, p2))
+
+        # if nvars > 3:
+        #     candidates.append(AlternatingGroup(nvars))
+
+        # bi-symmetric group etc.
+        if nvars > 3 and (nvars - int(has_homogenized)) % 2 == 0:
+            half = nvars // 2
+            p1 = _rotated(half) + _rotated(half, half)
+            p2 = _reflected(half) + _reflected(half, half)
+            p3 = list(range(half,half*2)) + list(range(half))
+            if has_homogenized:
+                p1.append(nvars - 1)
+                p2.append(nvars - 1)
+                p3.append(nvars - 1)
+            p1, p2, p3 = pp(p1), pp(p2), pp(p3)
+            candidates.append(PermutationGroup(p1, p2, p3))
+            candidates.append(PermutationGroup(p1, p2))
+            candidates.append(PermutationGroup(p1))
+
+        # cyclic group
         if nvars > 2:
             candidates.append(CyclicGroup(nvars))
         if has_homogenized and nvars > 2:
-            # exclude the homogenizer
-            candidates.append(SymmetricGroup(nvars).stabilizer(nvars - 1))
-            candidates.append(PermutationGroup(Permutation(list(range(1, nvars - 1)) + [0, nvars - 1])))
+            p1 = pp(_rotated(nvars - 1) + [nvars - 1])
+            candidates.append(PermutationGroup(p1))
+
         for group in candidates:
             if all(check_symmetry(l, group) for l in lst_of_lsts):
                 return group
@@ -329,22 +358,32 @@ def sanitize_input(
 
 
 def _get_constraints_wrapper(symbols: Tuple[int, ...], ineq_constraints: Dict[sp.Poly, sp.Expr], eq_constraints: Dict[sp.Poly, sp.Expr], perm_group: PermutationGroup):
-    i2g = {ineq: Function("_G%d"%i)(*symbols) for i, ineq in enumerate(ineq_constraints.keys())}
-    e2h = {eq: Function("_H%d"%i)(*symbols) for i, eq in enumerate(eq_constraints.keys())}
+    def _get_mask(symbols, dlist):
+        # only reserve symbols with degree > 0, this reduces time complexity greatly
+        return tuple(s for d, s in zip(dlist, symbols) if d != 0)
 
-    def _get_inverse(constraints, name='_G'):
+    def _get_dicts(constraints, name='_G'):
+        dt = dict()
         inv = dict()
         rep_dict = dict((p.rep, v) for p, v in constraints.items())
-        for p in perm_group.elements:
-            reorder = p(symbols)
-            invorder = p.__invert__()(symbols)
-            for i, base in enumerate(constraints.keys()):
+        counter = 0  
+        for base in constraints.keys():
+            if base.rep in dt:
+                continue
+            dlist = base.degree_list()
+            for p in perm_group.elements:
+                invorder = p.__invert__()(symbols)
                 permed_base = base.reorder(*invorder).rep
-                permed_poly = rep_dict.get(permed_base)
-                if permed_poly is None:
+                permed_expr = rep_dict.get(permed_base)
+                if permed_expr is None:
                     raise ValueError("Given constraints are not symmetric with respect to the permutation group.")
-                inv[Function(name + str(i))(*reorder)] = permed_poly
-        return inv
-    g2i = _get_inverse(ineq_constraints, name='_G')
-    h2e = _get_inverse(eq_constraints, name='_H')
+                compressed = _get_mask(p(symbols), dlist)
+                value = sp.Function(name + str(counter))(*compressed)
+                dt[permed_base] = value
+                inv[value] = permed_expr
+            counter += 1
+        dt = dict((sp.Poly.new(k, *symbols), v) for k, v in dt.items())
+        return dt, inv
+    i2g, g2i = _get_dicts(ineq_constraints, name='_G')
+    e2h, h2e = _get_dicts(eq_constraints, name='_H')
     return i2g, e2h, g2i, h2e

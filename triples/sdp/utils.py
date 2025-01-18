@@ -360,6 +360,9 @@ def decompose_matrix(
     Decomposes a symbolic matrix into the form vec(M) = x + A @ v
     where x is a constant vector, A is a constant matrix, and v is a vector of variables.
 
+    Please always ensure that the matrix is linear with respect to the variables.
+    Nonlinear terms will be ignored.
+
     See also in `sympy.solvers.solveset.linear_eq_to_matrix`.
 
     Parameters

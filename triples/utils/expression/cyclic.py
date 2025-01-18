@@ -1,10 +1,10 @@
 from importlib import import_module
 from numbers import Number
-from typing import List
+from typing import List, Tuple, Union, Callable
 
 import sympy as sp
 from sympy.core.cache import cacheit
-from sympy.core import sympify, S, Mul, Add, Symbol
+from sympy.core import sympify, S, Mul, Add, Symbol, Expr
 from sympy.core.containers import Dict
 from sympy.core.numbers import zoo, nan
 from sympy.core.parameters import global_parameters
@@ -814,11 +814,70 @@ setattr(sp, 'radsimp', radsimp)
 setattr(MonomialCyclic, 'cyclic_sum', lambda self, *args, **kwargs: CyclicSum(*args, **kwargs))
 setattr(MonomialPerm, 'cyclic_sum', lambda self, expr, gens=None: CyclicSum(expr, gens, self.perm_group))
 
-if __name__ == '__main__':
-    a,b,c,d = sp.symbols('a b c d')
-    print(CyclicProduct(sp.S(4)*d))
-    x = CyclicSum(sp.S(4)/7*b*c*(a*a-b*b+sp.S(23)/11*(a*b-a*c)+(b*c-a*b))**2) + CyclicProduct((a-b)**2)
-    print(x.as_numer_denom())
-    print(sp.latex(x))
-    print(x.as_content_primitive())
-    print(x.doit())
+
+def _get_rewriting_replacement(symbols: Tuple[Symbol], perm_group: PermutationGroup) -> Callable[[Expr], Expr]:
+    """
+    Get a replacement function to convert all cyclic expressions to the default cyclic group.
+    The replacement function can be used as sympy.Expr.replace(lambda x: isinstance(x, CyclicExpr), replacement))
+    This is an internal function. Use `rewrite_symmetry` instead.
+    """
+    # if perm_group.is_trivial:
+    #     return lambda x: x.doit()
+    def replacement(x: Expr) -> Expr:
+        if not x.has(CyclicExpr):
+            return x
+        if not isinstance(x, CyclicExpr):
+            # we do not need to call recursion because sympy.Expr.replace will do it
+            return x # .func(*[replacement(_) for _ in x.args])
+        if x.args[1] == symbols:
+            # if x.is_cyclic_group:
+            #     return x
+            # elif x.is_symmetric_group:
+            #     a, b, c = symbols
+            #     v = (signsimp(x.args[0]) + signsimp(x.args[0].xreplace({a:b,b:a}))).together()
+            #     v = replacement(v)
+            #     return x.func(v, x.args[1], perm_group)
+
+            if x.args[2] == perm_group:
+                # 1. if the expression is already with respect to the default cyclic group
+                return x
+            elif x.args[2].is_subgroup(perm_group):
+                # 2. check whether the expression is symmetric with respect to the given permutation group
+                # e.g. CyclicSum(a*(b-c)**2, (a,b,c), CyclicGroup(3)) is also symmetric with respect to SymmetricGroup(3)
+                expr = x.doit(deep=False)
+                expr2 = x.func(x.args[0], x.args[1], perm_group).doit(deep=False)
+                mul = perm_group.order() // x.args[2].order()
+                if isinstance(x, CyclicSum):
+                    if signsimp(mul * expr - expr2) == 0:
+                        # we only check signsimp rather than mul * expr == expr2
+                        return x.func(x.args[0], x.args[1], perm_group) / mul
+                # elif isinstance(x, CyclicProduct):
+                #     if signsimp(expr**mul - expr2) == 0:
+                #         return x.func(x.args[0], x.args[1], perm_group) ** (1/mul)
+            elif perm_group.is_subgroup(x.args[2]):
+                # 3. check whether the given permutation group is a subgroup of the expression's permutation group
+                transversals = x.args[2].coset_transversal(perm_group)
+                translations = [dict(zip(x.args[1], p(x.args[1]))) for p in transversals]
+                trans_perm_group = [dict(zip(x.args[1], p(x.args[1]))) for p in perm_group.elements]
+                exprs = [x.args[0].xreplace(t) for t in translations]
+                for i, expr in enumerate(exprs):
+                    for t in trans_perm_group:
+                        # find the simplest form up to permutation
+                        expr2 = (expr.xreplace(t))
+                        if expr.compare(expr2) > 0:
+                            expr = expr2
+                    exprs[i] = expr
+                merged_expr = x.base_func(*(expr for expr in exprs)).together()
+                merged_expr = x.func(merged_expr, x.args[1], perm_group)
+                return merged_expr
+
+        return x.doit(deep=False)
+    return replacement
+
+def rewrite_symmetry(expr: Expr, symbols: Tuple[Symbol], perm_group: PermutationGroup) -> Expr:
+    """
+    Rewrite the expression with respect to the given permutation group.
+    This function will rewrite all cyclic expressions to the default cyclic group.
+    After rewriting, it is expected all expressions are expanded or in the given permutation group.
+    """
+    return expr.replace(lambda x: isinstance(x, CyclicExpr), _get_rewriting_replacement(symbols, perm_group))

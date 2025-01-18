@@ -9,7 +9,7 @@ from .arithmetic import (
     matmul, matmul_multiple, symmetric_bilinear, symmetric_bilinear_multiple
 )
 from .abstract import SDPProblemBase
-from .utils import is_empty_matrix, Mat2Vec
+from .utils import is_empty_matrix, Mat2Vec, decompose_matrix
 
 class SDPTransformation(ABC):
     """
@@ -503,6 +503,62 @@ class SDPVectorTransform(SDPTransformation):
         return parent_node
 
 
+class SDPDeparametrization(SDPTransformation):
+    def __new__(cls, parent_node):
+        if parent_node.is_dual:
+            return DualDeparametrization(parent_node)
+        if parent_node.is_primal:
+            raise NotImplementedError("Primal deparametrization is not implemented yet.")
+        raise ValueError("The parent node should be either primal or dual.")
+
+class DualDeparametrization(SDPDeparametrization):
+    def __new__(cls, parent_node):
+        has_free_symbols = False
+        for key, (x0, space) in parent_node._x0_and_space.items():
+            if hasattr(x0, 'free_symbols') and len(x0.free_symbols):
+                has_free_symbols = True
+            if hasattr(space, 'free_symbols') and len(space.free_symbols):
+                raise ValueError("The space should not contain free symbols, which is nonlinear otherwise."
+                                    f"But symbols {space.free_symbols} found in the space[{key}].")
+            if has_free_symbols:
+                break
+        if not has_free_symbols:
+            return SDPIdentityTransform.__new__(SDPIdentityTransform, parent_node)
+        return object.__new__(cls)
+
+    def _init_child_node(self):
+        parent_node = self.parent_node
+        free_symbols = set()
+        for key, (x0, space) in parent_node._x0_and_space.items():
+            free_symbols |= x0.free_symbols if hasattr(x0, 'free_symbols') else set()
+        new_x0_and_space = {}
+        intersection = set(self.parent_node.free_symbols).intersection(free_symbols)
+        if len(intersection):
+            raise ValueError(f"Free symbols {intersection} are both parameters and variables, which is not allowed.")
+        free_symbols = list(free_symbols)
+        new_free_symbols = self.parent_node.free_symbols + free_symbols
+        for key, (x0, space) in parent_node._x0_and_space.items():
+            x1, A, _ = decompose_matrix(x0, free_symbols)
+            new_x0_and_space[key] = (x1, Matrix.hstack(space, A))
+        return self._create_dual_problem(new_x0_and_space, new_free_symbols)
+
+    def propagate_to_parent(self, recursive: bool = True):
+        parent_node, child_node = self.parent_node, self.child_node
+        if child_node.y is None:
+            return parent_node
+        parent_node.S = child_node.S
+        parent_node.decompositions = child_node.decompositions
+        parent_node.y = child_node.y[:parent_node.dof,:]
+        if len(parent_node.y) == 0:
+            parent_node.y = sp.Matrix.zeros(0, 1)
+        if recursive:
+            parent_node.propagate_to_parent(recursive = recursive)
+        return parent_node
+
+    def propagate_nullspace_to_child(self, nullspace: Dict[str, sp.Matrix]):
+        return nullspace
+
+
 class SDPPrimaltoDual(SDPTransformation):
     """
     Convert a primal problem to a dual problem.
@@ -772,6 +828,9 @@ class DualTransformMixin(SDPTransformMixin):
 
     def constrain_zero_diagonals(self, recursive: bool = True) -> SDPProblemBase:
         return SDPRowMasking.constrain_zero_diagonals(self, recursive = recursive).child_node
+
+    def deparametrize(self, to_child: bool = True) -> SDPProblemBase:
+        return SDPDeparametrization(self.get_last_child() if to_child else self).child_node
 
 
 class PrimalTransformMixin(SDPTransformMixin):
