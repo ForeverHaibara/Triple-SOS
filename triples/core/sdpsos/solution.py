@@ -40,7 +40,9 @@ class SolutionSDP(SolutionSimple):
 
         return SolutionSDP(
             problem = poly,
-            numerator = qmodule_expr + ideal_expr,
+            solution = qmodule_expr + ideal_expr,
+            ineq_constraints = ineq_constraints,
+            eq_constraints = eq_constraints,
             is_equal = not _is_numer_solution(decompositions)
         )
 

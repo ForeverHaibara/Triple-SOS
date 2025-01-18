@@ -15,36 +15,6 @@ class SolutionStructural(Solution):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    def as_simple_solution(self):
-        """
-        When the expression is a nested fraction, we can simplify it.
-        """
-        numerator, multiplier = sp.fraction(sp.together(self.solution))
-
-        if len(multiplier.free_symbols) == 0:
-            const, multiplier = multiplier, S.One
-        else:
-            const, multiplier = multiplier.as_coeff_Mul()
-            # if isinstance(const, sp.Rational):
-            #     multiplier = multiplier_
-            # else:
-            #     const = S.One
-
-            # const, multiplier = S.One, multiplier
-
-        if const is not S.One:
-            if isinstance(numerator, sp.Add):
-                numerator = sp.Add(*[arg / const for arg in numerator.args])
-            else:
-                numerator = numerator / const
-
-        return SolutionStructuralSimple(
-            problem = self.problem, 
-            numerator = numerator,
-            multiplier = multiplier,
-            is_equal = self.is_equal_
-        )
-
     @classmethod
     def _extract_nonnegative_exprs(cls, expr: sp.Expr, func_name: str = "_G", extra_checker: Optional[Callable] = None):
         """
@@ -129,18 +99,22 @@ class SolutionStructuralSimple(SolutionSimple, SolutionStructural):
 
         # for debug purpose
         verified = self._verified
+        if verified:
+            self._is_equal = True
+            return
         arguments = [
             {'extension': True},
-            {'domain': self.problem.domain}
+            {'domain': self.problem.domain} if hasattr(self.problem, 'domain') else dict(),
         ]
         if not verified:
-            self.is_equal_ = False
+            self._is_equal = False
         while (not verified) and len(arguments):
             try:
                 argument = arguments.pop()
-                mul = self.multiplier.doit().as_poly(*self.gens, **argument)
-                num = self.numerator.doit().as_poly(*self.gens, **argument)
-                self.is_equal_ = (mul * self.problem - num).is_zero
+                num, mul = sp.fraction(self.solution.together())
+                num = num.doit().as_poly(*self.gens, **argument)
+                mul = mul.doit().as_poly(*self.gens, **argument)
+                self._is_equal = (mul * self.problem - num).is_zero
                 verified = True
             except:
                 pass

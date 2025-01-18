@@ -1,12 +1,14 @@
 from typing import Optional, List, Union
 import re
+from warnings import warn
 
 import sympy as sp
 from sympy.core.singleton import S
+from sympy.polys import Poly
 from sympy.printing.precedence import precedence_traditional, PRECEDENCE
 from sympy.combinatorics import PermutationGroup, Permutation
 
-from ..expression.cyclic import is_cyclic_expr, CyclicSum, CyclicProduct, CyclicExpr
+from ..expression.cyclic import is_cyclic_expr, CyclicSum, CyclicProduct, CyclicExpr, rewrite_symmetry
 
 def _solution_latex_to_txt(s: str) -> str:
     """
@@ -91,20 +93,24 @@ class Solution():
         'MULTILINE_ALLOW_SORT': True
     }
     method = ''
-    def __init__(self, problem: Optional[sp.Poly] = None, solution: Optional[sp.Expr] = None, is_equal: bool = None):
-        self.problem: sp.Poly = problem
-        self.solution: sp.Expr = solution
-        self.is_equal_ = is_equal
+    def __init__(self, problem=None, solution=None, ineq_constraints=None, eq_constraints=None, is_equal=None):
+        self.problem = problem
+        self.solution = solution
+        self.ineq_constraints = ineq_constraints if ineq_constraints is not None else dict()
+        self.eq_constraints = eq_constraints if eq_constraints is not None else dict()
+        self._start_time = 0
+        self._end_time = 0
+        self._is_equal = None
 
     def __str__(self) -> str:
-        return f"{self.problem} = {self.solution}"
+        return f"Solution({self.problem})"
 
     def __repr__(self) -> str:
         return self.__str__()
 
     @property
     def gens(self) -> List[sp.Symbol]:
-        return self.problem.gens
+        return self.problem.gens if hasattr(self.problem, 'gens') else tuple(self.problem.free_symbols)
 
     @property
     def is_equal(self) -> bool:
@@ -114,7 +120,7 @@ class Solution():
 
         See also: is_ill.
         """
-        return self.is_equal_
+        return self._is_equal
 
     @property
     def is_ill(self) -> bool:
@@ -124,12 +130,12 @@ class Solution():
         """
         if self.solution in (None, S.NaN, S.Infinity, S.NegativeInfinity, S.ComplexInfinity):
             return True
-        if self.solution is S.Zero and not self.problem.is_zero:
+        if self.solution is S.Zero and isinstance(self.problem, Poly) and not self.problem.is_zero:
             return True
         return False
 
-    def _str_f(self) -> str:
-        return "f(%s)"%(','.join(str(_) for _ in self.gens))
+    def _str_f(self, name='f') -> str:
+        return "%s(%s)"%(name, ','.join(str(_) for _ in self.gens))
 
     @property
     def str_latex(self) -> str:
@@ -176,35 +182,39 @@ class Solution():
         """
         When the expression is a nested fraction, we can simplify it.
         """
-        numerator, multiplier = sp.fraction(sp.together(self.solution))
-    
-        if len(multiplier.free_symbols) == 0:
-            const, multiplier = S.One, multiplier
-        else:
-            const, multiplier = multiplier.as_coeff_Mul()
+        sol = SolutionSimple(problem = self.problem, solution = self.solution,
+            ineq_constraints = self.ineq_constraints, eq_constraints = self.eq_constraints, is_equal = self.is_equal)
+        return sol
 
-        if isinstance(numerator, sp.Add):
-            numerator = sp.Add(*[arg / const for arg in numerator.args])
-        else:
-            numerator = numerator / const
-
-        return SolutionSimple(
-            problem = self.problem, 
-            numerator = numerator,
-            multiplier = multiplier,
-            is_equal = self.is_equal_
-        )
+    def signsimp(self) -> 'Solution':
+        """
+        Apply signsimp on the solution of self. This is done in-place.
+        """
+        self.solution = sp.signsimp(self.solution)
+        return self
 
     def xreplace(self, *args, **kwargs) -> 'Solution':
+        """
+        Apply xreplace on the solution of self. This is done in-place.
+        """
         self.solution = self.solution.xreplace(*args, **kwargs)
         return self
 
     def doit(self, *args, **kwargs) -> sp.Expr:
+        """
+        Return the evaluated solution (by expanding CyclicSum, etc.).
+        """
         return self.solution.doit(*args, **kwargs)
 
     def as_expr(self, *args, **kwargs) -> sp.Expr:
+        """
+        Return the solution as an expression. It is equivalent to .solution.
+        """
         return self.solution#.doit(*args, **kwargs)
 
+    def rewrite_symmetry(self, symbols, perm_group: PermutationGroup):
+        self.solution = rewrite_symmetry(self.solution, symbols, perm_group)
+        return self
 
 # class SolutionNull(Solution):
 #     def __init__(self, problem = None, solution = None):
@@ -230,78 +240,28 @@ class SolutionSimple(Solution):
     All (rational) SOS solutions can be presented in the form of f(a,b,c) = g(a,b,c) / h(a,b,c)
     where g and h are polynomials.
     """
-    def __init__(self, problem = None, numerator = None, multiplier = None, is_equal = None):
-        if multiplier is None:
-            multiplier = S.One
+    def __init__(self, problem=None, solution=None, ineq_constraints=None, eq_constraints=None, is_equal=None):
         self.problem = problem
-        self.solution = numerator / multiplier
-        self.numerator = numerator
-        self.multiplier = multiplier
-        self.is_equal_ = is_equal
+        self.solution = solution
+        self.ineq_constraints = ineq_constraints if ineq_constraints is not None else dict()
+        self.eq_constraints = eq_constraints if eq_constraints is not None else dict()
+        self._start_time = 0
+        self._end_time = 0
+        self._is_equal = is_equal
+
+    @property
+    def time(self) -> float:
+        return self._end_time - self._start_time
 
     @property
     def is_equal(self):
-        if self.is_equal_ is None:
+        if self._is_equal is None:
             symbols = self.gens # | set(self.numerator.free_symbols) | set(self.multiplier.free_symbols)
             difference = (self.problem  * self.multiplier - self.numerator)
             difference = difference.doit().as_poly(*symbols)
-            self.is_equal_ = difference.is_zero
+            self._is_equal = difference.is_zero
 
-        return self.is_equal_
-
-    def as_congruence(self):
-        """
-        Note that (part of) g(a,b,c) can be represented sum of squares. For example, polynomial of degree 4 
-        has form [a^2,b^2,c^2,ab,bc,ca] * M * [a^2,b^2,c^2,ab,bc,ca]' where M is positive semidefinite matrix.
-
-        We can first reconstruct and M and then find its congruence decomposition, 
-        this reduces the number of terms.
-
-        WARNING: WE ONLY SUPPORT 3-VAR CASE.
-        """
-        if not isinstance(self.numerator, sp.Add):
-            # in this case, the numerator is already simplified
-            return self
-
-        return self
-
-        # not implemented yet
-
-        # now we only handle cyclic expressions
-        sqr_args = {}
-        unsqr_args = []
-        
-        def _is_symbol(s):
-            return isinstance(s, sp.Symbol) and s in self.problem.symbols
-
-        def _is_core_monomial(core):
-            """Whether core == a^i * b^j * c^k."""
-            if core.is_constant() or _is_symbol(core):
-                return True
-            if isinstance(core, sp.Pow) and _is_symbol(core.args[0]):
-                return True
-            if isinstance(core, sp.Mul):
-                return all(_is_core_monomial(x) for x in core.args)
-            return False
-
-        for arg in self.numerator.args:
-            core = None
-            if is_cyclic_expr(arg, self.problem.symbols):
-                if isinstance(arg, CyclicSum):
-                    core = _arg_sqr_core(arg.args[0])
-                else:
-                    core = _arg_sqr_core(arg)
-                if not _is_core_monomial(core):
-                    core = None
-
-            if core is not None:
-                # reduce monomial core once more, e.g. a^4 b^5 c^3 -> bc
-                core = _arg_sqr_core(core)
-                if len(core.free_symbols) not in sqr_args:
-                    sqr_args[len(core.free_symbols)] = []
-                sqr_args[len(core.free_symbols)].append(arg)
-            else:
-                unsqr_args.append(arg)
+        return self._is_equal
 
     def _str_multiplier(self, add_paren = None, get_str = None):
         """
@@ -448,46 +408,39 @@ class SolutionSimple(Solution):
             f = f.xreplace({homogenizer: 1})
             f = f.replace(lambda x: isinstance(x, CyclicExpr), _deflat_perm_group)
             return f
-        self.numerator = dehom(self.numerator)
-        self.multiplier = dehom(self.multiplier)
-        self.solution = self.numerator / self.multiplier
+        self.solution = dehom(self.solution)
         return self
 
-    def as_content_primitive(self):
+    def as_fraction(self, together = True, inplace = False):
         """
-        Move the constant of the multiplier to the numerator.
+        Denest the fractions and express the solution as the division of two fraction-free expressions.
         """
-        # return self.multiplier.as_content_primitive()
-        v, m = self.multiplier.as_content_primitive()
+        solution = self.solution.together() if together else self.solution
+        numerator, multiplier = sp.fraction(solution)
+        v, m = multiplier.as_content_primitive()
         if v < 0:
             v, m = -v, -m
-        self.multiplier = m
+        multiplier = m
 
         inv_v = S.One/v
-        self.numerator = inv_v * self.numerator
-        v, m = self.numerator.as_content_primitive()
+        numerator = inv_v * numerator
+        v, m = numerator.as_content_primitive()
         if v < 0:
             v, m = -v, -m
         if isinstance(m, sp.Add):
-            self.numerator = sp.Add(*[v * arg for arg in m.args])
+            numerator = sp.Add(*[v * arg for arg in m.args])
 
-        self.solution = self.numerator / self.multiplier
-        return self
+        if inplace:
+            self.solution = numerator / multiplier
+        return numerator, multiplier
 
-    def signsimp(self) -> 'SolutionSimple':
-        """
-        Apply signsimp on the solution of self.
-        """
-        self.numerator = sp.signsimp(self.numerator)
-        self.multiplier = sp.signsimp(self.multiplier)
-        self.solution = self.numerator / self.multiplier
-        return self
 
-    def xreplace(self, *args, **kwargs) -> 'SolutionSimple':
-        """
-        Apply xreplace on the solution of self.        
-        """
-        self.numerator = self.numerator.xreplace(*args, **kwargs)
-        self.multiplier = self.multiplier.xreplace(*args, **kwargs)
-        self.solution = self.numerator / self.multiplier
-        return self
+    @property
+    def numerator(self):
+        warn("Calling Solution.numerator will be deprecated. Use Solution.as_fraction()[0] instead.", DeprecationWarning, stacklevel=2)
+        return self.as_fraction()[0]
+
+    @property
+    def multiplier(self):
+        warn("Calling Solution.multiplier will be deprecated. Use Solution.as_fraction()[1] instead.", DeprecationWarning, stacklevel=2)
+        return self.as_fraction()[1]

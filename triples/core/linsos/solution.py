@@ -64,16 +64,15 @@ class SolutionLinear(SolutionSimple):
             symmetry = MonomialPerm(symmetry)
 
         self._symmetry = symmetry
-        self.is_equal_ = is_equal
+        self._is_equal = is_equal
 
-        self._collect_multipliers(y, basis, problem.gens, symmetry)
+        multiplier = self._collect_multipliers(y, basis, problem.gens, symmetry)
 
         if collect:
-            self._collect_common_tangents(problem.gens, symmetry)
+            numerator = self._collect_common_tangents(problem.gens, symmetry)
         else:
             raise NotImplementedError
-            self.numerator = sum(v * b.expr for v, b in zip(self.y, self.basis) if v != 0)
-            self.solution = self.numerator / self.multiplier
+        self.solution = numerator / multiplier
 
 
     def _collect_multipliers(self, 
@@ -97,9 +96,10 @@ class SolutionLinear(SolutionSimple):
         r, multiplier = sp.Add(*multipliers).as_content_primitive()
         # r = S.One
 
-        self.multiplier = symmetry.cyclic_sum(multiplier, symbols)
         self.y = [v / r for v in non_mul_y]
         self.basis = nom_mul_basis
+        multiplier = symmetry.cyclic_sum(multiplier, symbols)
+        return multiplier
 
     def _collect_common_tangents(self, symbols: Tuple[sp.Symbol, ...], symmetry: MonomialReduction):
         """
@@ -131,6 +131,4 @@ class SolutionLinear(SolutionSimple):
             common_base = _merge_common_basis(y, base_powers, symbols) * tangent.together()
             exprs.append(common_base)
 
-        self.numerator = sp.Add(*(symmetry.cyclic_sum(expr, symbols) for expr in exprs))
-        self.solution = self.numerator / self.multiplier
-        return self
+        return sp.Add(*(symmetry.cyclic_sum(expr, symbols) for expr in exprs))
