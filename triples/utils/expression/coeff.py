@@ -61,7 +61,7 @@ class Coeff():
         """
         return len(self.coeffs)
 
-    def is_cyclic(self, perm_group: Optional[PermutationGroup] = None) -> bool:
+    def is_cyclic(self, perm_group: Optional[Union[Permutation, List[Permutation], PermutationGroup]] = None) -> bool:
         """
         Check whether the coefficients are cyclic with respect to a permutation group.
         If not specified, it assumes to be the cyclic group.
@@ -72,22 +72,30 @@ class Coeff():
         >>> coeff.is_cyclic()
         True
         """
-        if self.nvars == 1:
-            return True
-
         if perm_group is None:
             perm_group = CyclicGroup(self.nvars)
-        elif (not self.is_zero) and perm_group.degree != self.nvars:
-            return False
 
-        for perm in perm_group.generators:
+        if self.nvars == 1:
+            return True
+        
+        perms = []
+        if isinstance(perm_group, PermutationGroup):
             # checking the generators is enough
+            perms = perm_group.generators
+        elif isinstance(perm_group, Permutation):
+            perms = [perm_group]
+        else:
+            perms = perm_group
+
+        for perm in perms:
+            if perm.size != self.nvars:
+                return False
             for k, v in self.coeffs.items():
                 if self(perm(k)) != v:
                     return False
         return True
 
-    def is_symmetric(self, perm_group: Optional[PermutationGroup] = None) -> bool:
+    def is_symmetric(self, perm_group: Optional[Union[Permutation, List[Permutation], PermutationGroup]] = None) -> bool:
         """
         Check whether the coefficients are symmetric with respect to a permutation group.
         If not specified, it assumes to be the symmetric group. When the perm_group

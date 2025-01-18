@@ -248,8 +248,7 @@ class SOS_Manager():
             configs = configs
         )
         if cls.CONFIG_STANDARDIZE_CYCLICEXPR:
-            replacement = _get_standardized_replacement(gens, perm)
-            solution = _standardize_solution_perm(solution, replacement)
+            solution.rewrite_symmetry(gens, perm)
         return solution
 
     # def save_heatmap(self, poly, *args, **kwargs):
@@ -317,94 +316,3 @@ def _render_LaTeX(a, path, usetex=True, show=False, dpi=500, fontsize=20):
         plt.show()
     else:
         plt.close()
-
-
-
-def _get_standardized_replacement(
-        gens: Tuple[Symbol] = sp.symbols("a b c"),
-        perm: PermutationGroup = CyclicGroup(3)
-    ) -> Callable[[Expr], Expr]:
-    """
-    Get a replacement function to standardize the cyclic expressions in a polynomial.
-    """
-    # if perm.is_trivial:
-    #     return lambda x: x.doit()
-    def replacement(x: Expr) -> Expr:
-        if not x.has(CyclicExpr):
-            return x
-        if not isinstance(x, CyclicExpr):
-            # we do not need to call recursion because sympy.Expr.replace will do it
-            return x # .func(*[replacement(_) for _ in x.args])
-        if x.args[1] == gens:
-            # if x.is_cyclic_group:
-            #     return x
-            # elif x.is_symmetric_group:
-            #     a, b, c = gens
-            #     v = (signsimp(x.args[0]) + signsimp(x.args[0].xreplace({a:b,b:a}))).together()
-            #     v = replacement(v)
-            #     return x.func(v, x.args[1], perm)
-
-            if x.args[2] == perm:
-                # 1. if the expression is already with respect to the default cyclic group
-                return x
-            elif x.args[2].is_subgroup(perm):
-                # 2. check whether the expression is symmetric with respect to the given permutation group
-                # e.g. CyclicSum(a*(b-c)**2, (a,b,c), CyclicGroup(3)) is also symmetric with respect to SymmetricGroup(3)
-                expr = x.doit(deep=False)
-                expr2 = x.func(x.args[0], x.args[1], perm).doit(deep=False)
-                mul = perm.order() // x.args[2].order()
-                if isinstance(x, CyclicSum):
-                    if signsimp(mul * expr - expr2) == 0:
-                        # we only check signsimp rather than mul * expr == expr2
-                        return x.func(x.args[0], x.args[1], perm) / mul
-                # elif isinstance(x, CyclicProduct):
-                #     if signsimp(expr**mul - expr2) == 0:
-                #         return x.func(x.args[0], x.args[1], perm) ** (1/mul)
-            elif perm.is_subgroup(x.args[2]):
-                # 3. check whether the given permutation group is a subgroup of the expression's permutation group
-                transversals = x.args[2].coset_transversal(perm)
-                translations = [dict(zip(x.args[1], p(x.args[1]))) for p in transversals]
-                trans_perm = [dict(zip(x.args[1], p(x.args[1]))) for p in perm.elements]
-                exprs = [x.args[0].xreplace(t) for t in translations]
-                for i, expr in enumerate(exprs):
-                    for t in trans_perm:
-                        # find the simplest form up to permutation
-                        expr2 = (expr.xreplace(t))
-                        if expr.compare(expr2) > 0:
-                            expr = expr2
-                    exprs[i] = expr
-                merged_expr = x.base_func(*(expr for expr in exprs)).together()
-                merged_expr = x.func(merged_expr, x.args[1], perm)
-                return merged_expr
-
-        return x.doit(deep=False)
-    return replacement
-
-
-def _standardize_solution_perm(
-        solution: Optional[Union[Solution, Expr]],
-        replacement: Callable[[Expr], Expr]
-    ) -> Optional[Union[Solution, Expr]]:
-    """
-    For display purpose, we require cyclic expressions to be with respect to default cyclic group.
-    """
-    if solution is None:
-        return None
-    if isinstance(solution, Solution):
-        if not isinstance(solution, SolutionSimple):
-            try:
-                solution = solution.as_simple_solution()
-            except:
-                pass
-        if isinstance(solution, SolutionSimple):
-            solution.numerator = _standardize_solution_perm(solution.numerator, replacement).together()
-            solution.multiplier = _standardize_solution_perm(solution.multiplier, replacement).together()
-            solution.solution = solution.numerator / solution.multiplier
-            solution.as_content_primitive()
-            solution.signsimp()
-        else:
-            solution.solution = _standardize_solution_perm(solution.solution, replacement)
-        return solution
-
-    solution = solution.replace(lambda x: isinstance(x, CyclicExpr), replacement)
-    return solution

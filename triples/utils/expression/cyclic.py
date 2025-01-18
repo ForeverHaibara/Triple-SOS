@@ -363,6 +363,9 @@ class CyclicExpr(sp.Expr):
     def is_alternating_group(self):
         return self.perm.is_alternating
 
+    @property
+    def is_dihedral_group(self):
+        return self.perm.is_dihedral
 
 class CyclicSum(CyclicExpr):
     """
@@ -425,6 +428,8 @@ class CyclicSum(CyclicExpr):
             cyc = r'\sum_{\mathrm{sym}} '
         elif expr.is_alternating_group:
             cyc = r'\sum_{\mathrm{alt}} '
+        elif expr.is_dihedral_group:
+            cyc = r'\sum_{\mathrm{dih}} '
 
         return cyc + s
 
@@ -546,6 +551,9 @@ class CyclicProduct(CyclicExpr):
             cyc = r'\prod_{\mathrm{sym}} '
         elif expr.is_alternating_group:
             cyc = r'\prod_{\mathrm{alt}} '
+        elif expr.is_dihedral_group:
+            cyc = r'\prod_{\mathrm{dih}} '
+
         return cyc + s
 
     @classmethod

@@ -6,7 +6,6 @@ from sympy import sympify, Function
 from sympy.core.symbol import uniquely_named_symbol
 from sympy.combinatorics import Permutation, PermutationGroup, SymmetricGroup, AlternatingGroup, CyclicGroup
 
-from ..utils.expression.form import _reduce_factor_list
 from ..utils.expression import SolutionSimple, CyclicExpr
 from ..utils.basis_generator import MonomialReduction, MonomialFull, MonomialPerm, MonomialHomogeneousFull
 
@@ -128,16 +127,20 @@ def identify_symmetry_from_lists(lst_of_lsts: List[List[sp.Poly]], has_homogeniz
         if gens is not None:
             break
 
-    class PseudoPoly():
-        def __init__(self, polys, gens, d):
-            self.polys = polys
-            self.gens = gens
-            self.order = d
-        def factor_list(self,*args,**kwargs):
-            return (sp.S(1), [(p, self.order) for p in self.polys])
-    def check_symmetry(polys, perm_group):
-        r = _reduce_factor_list(PseudoPoly(polys, gens, perm_group.order()), perm_group)
-        return len(r[1]) == 0
+    def check_symmetry(polys, perm):
+        rep_set = set()
+        reorder_set = set()
+        for poly in polys:
+            rep = poly.rep
+            reorder = poly.reorder(*perm(gens)).rep
+            if rep == reorder:
+                continue
+            rep_set.add(rep)
+            reorder_set.add(reorder)
+        for r in reorder_set:
+            if r not in rep_set:
+                return False
+        return True
 
     # List a few candidates: symmetric, alternating, cyclic groups...
     nvars = len(gens)
@@ -145,18 +148,13 @@ def identify_symmetry_from_lists(lst_of_lsts: List[List[sp.Poly]], has_homogeniz
         return list(range(start+1, n+start)) + [start]
     def _reflected(n, start=0):
         return [start+1, start] + list(range(start+2, n+start))
-    def pp(p):
-        return Permutation(p)
 
+    verified = [] # storing permutations that fit the input
+    candidates = [] # a list of permutations
     if nvars > 1:
-        candidates = [SymmetricGroup(nvars)]
-        if has_homogenized and nvars > 2:
-            # exclude the homogenizer
-            p1, p2 = pp(_rotated(nvars - 1) + [nvars - 1]), pp(_reflected(nvars - 1) + [nvars - 1])
-            candidates.append(PermutationGroup(p1, p2))
-
-        # if nvars > 3:
-        #     candidates.append(AlternatingGroup(nvars))
+        candidates.append(_rotated(nvars))
+        if nvars > 2:
+            candidates.append(_reflected(nvars))
 
         # bi-symmetric group etc.
         if nvars > 3 and (nvars - int(has_homogenized)) % 2 == 0:
@@ -168,23 +166,23 @@ def identify_symmetry_from_lists(lst_of_lsts: List[List[sp.Poly]], has_homogeniz
                 p1.append(nvars - 1)
                 p2.append(nvars - 1)
                 p3.append(nvars - 1)
-            p1, p2, p3 = pp(p1), pp(p2), pp(p3)
-            candidates.append(PermutationGroup(p1, p2, p3))
-            candidates.append(PermutationGroup(p1, p2))
-            candidates.append(PermutationGroup(p1))
-
-        # cyclic group
-        if nvars > 2:
-            candidates.append(CyclicGroup(nvars))
+            candidates.append(p1)
+            candidates.append(p2)
+            candidates.append(p3)
+            
         if has_homogenized and nvars > 2:
-            p1 = pp(_rotated(nvars - 1) + [nvars - 1])
-            candidates.append(PermutationGroup(p1))
+            candidates.append(_rotated(nvars - 1) + [nvars - 1])
+            if nvars > 3:
+                candidates.append(_reflected(nvars - 1) + [nvars - 1])
 
-        for group in candidates:
-            if all(check_symmetry(l, group) for l in lst_of_lsts):
-                return group
+    for perm in map(Permutation, candidates):
+        if all(check_symmetry(l, perm) for l in lst_of_lsts):
+            verified.append(perm)
 
-    return PermutationGroup(Permutation(list(range(nvars))))
+    if len(verified) == 0:
+        verified.append(Permutation(list(range(nvars))))
+
+    return PermutationGroup(*verified)
 
 
 def clear_polys_by_symmetry(polys: List[Union[sp.Expr, Tuple[sp.Expr, ...]]],
