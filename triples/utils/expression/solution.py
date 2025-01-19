@@ -1,4 +1,4 @@
-from typing import Optional, List, Union
+from typing import Optional, List, Union, Tuple
 import re
 from warnings import warn
 
@@ -113,6 +113,11 @@ class Solution():
     def __repr__(self) -> str:
         return self.__str__()
 
+    def copy(self) -> 'Solution':
+        obj = self.__class__.__new__(self.__class__)
+        obj.__dict__.update(self.__dict__)
+        return obj
+
     @property
     def gens(self) -> List[sp.Symbol]:
         return self.problem.gens if hasattr(self.problem, 'gens') else tuple(self.problem.free_symbols)
@@ -193,21 +198,23 @@ class Solution():
 
     def signsimp(self) -> 'Solution':
         """
-        Apply signsimp on the solution of self. This is done in-place.
+        Make a copy of the solution and apply signsimp on it.
         """
+        self = self.copy()
         self.solution = sp.signsimp(self.solution)
         return self
 
     def xreplace(self, *args, **kwargs) -> 'Solution':
         """
-        Apply xreplace on the solution of self. This is done in-place.
+        Make a copy of the solution and apply xreplace on it.
         """
+        self = self.copy()
         self.solution = self.solution.xreplace(*args, **kwargs)
         return self
 
     def doit(self, *args, **kwargs) -> sp.Expr:
         """
-        Return the evaluated solution (by expanding CyclicSum, etc.).
+        Return the evaluated solution expression (by expanding CyclicSum, etc.).
         """
         return self.solution.doit(*args, **kwargs)
 
@@ -217,7 +224,33 @@ class Solution():
         """
         return self.solution#.doit(*args, **kwargs)
 
-    def rewrite_symmetry(self, symbols, perm_group: PermutationGroup):
+    def rewrite_symmetry(self, symbols: Tuple[sp.Symbol], perm_group: PermutationGroup) -> 'Solution':
+        """
+        Rewrite the expression heuristically with respect to the given permutation group.
+        After rewriting, it is expected all cyclic expressions are expanded or in the given permutation group.
+        This avoids the ambiguity of the cyclic expressions.
+
+        It makes a copy of the solution and applies the rewriting on it. Note that
+        the rewriting is not reversible if cyclic expressions are expanded. If this
+        method is to be called multiple times, it is recommended to call on the original solution.
+
+        Parameters
+        ----------
+        symbols : Tuple[sp.Symbol]
+            The symbols that the permutation group acts on.
+        perm_group : PermutationGroup
+            Sympy permutation group object.
+        
+        Returns
+        ----------
+        Solution
+            A new solution object with the rewritten expression.
+
+        See also
+        ----------
+        rewrite_symmetry
+        """
+        self = self.copy()
         self.solution = rewrite_symmetry(self.solution, symbols, perm_group)
         return self
 
@@ -395,6 +428,7 @@ class SolutionSimple(Solution):
         if homogenizer is None:
             return self
 
+        self = self.copy()
         self.problem = self.problem.subs(homogenizer, 1)
         def _deflat_perm_group(expr):
             # e.g.

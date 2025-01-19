@@ -15,7 +15,6 @@ from sympy.printing.str import StrPrinter
 from sympy.printing.precedence import precedence_traditional, PRECEDENCE
 from sympy.simplify import signsimp
 
-from ..basis_generator import MonomialCyclic, MonomialPerm
 
 def _leading_symbol(expr):
     if isinstance(expr, sp.Symbol):
@@ -365,7 +364,8 @@ class CyclicExpr(sp.Expr):
 
     @property
     def is_dihedral_group(self):
-        return self.perm.is_dihedral
+        # is_dihedral is supported after https://github.com/sympy/sympy/pull/24384, sympy version 1.12
+        return hasattr(self.perm, 'is_dihedral') and self.perm.is_dihedral and self.perm.order() == self.perm.degree * 2
 
 class CyclicSum(CyclicExpr):
     """
@@ -611,216 +611,222 @@ setattr(StrPrinter, '_print_CyclicSum', lambda self, expr: CyclicSum.str_str(sel
 setattr(StrPrinter, '_print_CyclicProduct', lambda self, expr: CyclicProduct.str_str(self, expr))
 
 
+if sp.__version__ < '1.14':
+    def radsimp(expr, symbolic=True, max_terms=4):
+        r"""
+        Rationalize the denominator by removing square roots.
 
-def radsimp(expr, symbolic=True, max_terms=4):
-    r"""
-    Rationalize the denominator by removing square roots.
+        Fix sympy.radsimp on non-Expr sympy objects for sympy < 1.14.
+        See details in https://github.com/sympy/sympy/pull/26720
+        """
+        from collections import defaultdict
+        from sympy.core.expr import Expr
+        from sympy.core.exprtools import Factors, gcd_terms
+        from sympy.core.function import _mexpand, expand_mul
+        from sympy.core.sorting import ordered
+        from sympy.core.symbol import symbols
+        from sympy.core.mul import _unevaluated_Mul
+        from sympy.functions import sqrt, log
+        from sympy.simplify.radsimp import numer, denom, fraction, rad_rationalize
+        from sympy.simplify.simplify import signsimp
+        from sympy.simplify.sqrtdenest import sqrtdenest
 
-    Fix sympy.radsimp on non-Expr sympy objects for sympy < 1.14.
-    """
-    from collections import defaultdict
-    from sympy.core.expr import Expr
-    from sympy.core.exprtools import Factors, gcd_terms
-    from sympy.core.function import _mexpand, expand_mul
-    from sympy.core.sorting import ordered
-    from sympy.core.symbol import symbols
-    from sympy.core.mul import _unevaluated_Mul
-    from sympy.functions import sqrt, log
-    from sympy.simplify.radsimp import numer, denom, fraction, rad_rationalize
-    from sympy.simplify.simplify import signsimp
-    from sympy.simplify.sqrtdenest import sqrtdenest
+        syms = symbols("a:d A:D")
+        def _num(rterms):
+            # return the multiplier that will simplify the expression described
+            # by rterms [(sqrt arg, coeff), ... ]
+            a, b, c, d, A, B, C, D = syms
+            if len(rterms) == 2:
+                reps = dict(list(zip([A, a, B, b], [j for i in rterms for j in i])))
+                return (
+                sqrt(A)*a - sqrt(B)*b).xreplace(reps)
+            if len(rterms) == 3:
+                reps = dict(list(zip([A, a, B, b, C, c], [j for i in rterms for j in i])))
+                return (
+                (sqrt(A)*a + sqrt(B)*b - sqrt(C)*c)*(2*sqrt(A)*sqrt(B)*a*b - A*a**2 -
+                B*b**2 + C*c**2)).xreplace(reps)
+            elif len(rterms) == 4:
+                reps = dict(list(zip([A, a, B, b, C, c, D, d], [j for i in rterms for j in i])))
+                return ((sqrt(A)*a + sqrt(B)*b - sqrt(C)*c - sqrt(D)*d)*(2*sqrt(A)*sqrt(B)*a*b
+                    - A*a**2 - B*b**2 - 2*sqrt(C)*sqrt(D)*c*d + C*c**2 +
+                    D*d**2)*(-8*sqrt(A)*sqrt(B)*sqrt(C)*sqrt(D)*a*b*c*d + A**2*a**4 -
+                    2*A*B*a**2*b**2 - 2*A*C*a**2*c**2 - 2*A*D*a**2*d**2 + B**2*b**4 -
+                    2*B*C*b**2*c**2 - 2*B*D*b**2*d**2 + C**2*c**4 - 2*C*D*c**2*d**2 +
+                    D**2*d**4)).xreplace(reps)
+            elif len(rterms) == 1:
+                return sqrt(rterms[0][0])
+            else:
+                raise NotImplementedError
 
-    syms = symbols("a:d A:D")
-    def _num(rterms):
-        # return the multiplier that will simplify the expression described
-        # by rterms [(sqrt arg, coeff), ... ]
-        a, b, c, d, A, B, C, D = syms
-        if len(rterms) == 2:
-            reps = dict(list(zip([A, a, B, b], [j for i in rterms for j in i])))
-            return (
-            sqrt(A)*a - sqrt(B)*b).xreplace(reps)
-        if len(rterms) == 3:
-            reps = dict(list(zip([A, a, B, b, C, c], [j for i in rterms for j in i])))
-            return (
-            (sqrt(A)*a + sqrt(B)*b - sqrt(C)*c)*(2*sqrt(A)*sqrt(B)*a*b - A*a**2 -
-            B*b**2 + C*c**2)).xreplace(reps)
-        elif len(rterms) == 4:
-            reps = dict(list(zip([A, a, B, b, C, c, D, d], [j for i in rterms for j in i])))
-            return ((sqrt(A)*a + sqrt(B)*b - sqrt(C)*c - sqrt(D)*d)*(2*sqrt(A)*sqrt(B)*a*b
-                - A*a**2 - B*b**2 - 2*sqrt(C)*sqrt(D)*c*d + C*c**2 +
-                D*d**2)*(-8*sqrt(A)*sqrt(B)*sqrt(C)*sqrt(D)*a*b*c*d + A**2*a**4 -
-                2*A*B*a**2*b**2 - 2*A*C*a**2*c**2 - 2*A*D*a**2*d**2 + B**2*b**4 -
-                2*B*C*b**2*c**2 - 2*B*D*b**2*d**2 + C**2*c**4 - 2*C*D*c**2*d**2 +
-                D**2*d**4)).xreplace(reps)
-        elif len(rterms) == 1:
-            return sqrt(rterms[0][0])
-        else:
-            raise NotImplementedError
-
-    def ispow2(d, log2=False):
-        if not d.is_Pow:
-            return False
-        e = d.exp
-        if e.is_Rational and e.q == 2 or symbolic and denom(e) == 2:
-            return True
-        if log2:
-            q = 1
-            if e.is_Rational:
-                q = e.q
-            elif symbolic:
-                d = denom(e)
-                if d.is_Integer:
-                    q = d
-            if q != 1 and log(q, 2).is_Integer:
+        def ispow2(d, log2=False):
+            if not d.is_Pow:
+                return False
+            e = d.exp
+            if e.is_Rational and e.q == 2 or symbolic and denom(e) == 2:
                 return True
-        return False
+            if log2:
+                q = 1
+                if e.is_Rational:
+                    q = e.q
+                elif symbolic:
+                    d = denom(e)
+                    if d.is_Integer:
+                        q = d
+                if q != 1 and log(q, 2).is_Integer:
+                    return True
+            return False
 
-    def handle(expr):
-        # Handle first reduces to the case
-        # expr = 1/d, where d is an add, or d is base**p/2.
-        # We do this by recursively calling handle on each piece.
-        from sympy.simplify.simplify import nsimplify
+        def handle(expr):
+            # Handle first reduces to the case
+            # expr = 1/d, where d is an add, or d is base**p/2.
+            # We do this by recursively calling handle on each piece.
+            from sympy.simplify.simplify import nsimplify
 
-        if expr.is_Atom:
-            return expr
-        elif not isinstance(expr, Expr):
-            return expr.func(*[handle(a) for a in expr.args])
-
-        n, d = fraction(expr)
-
-        if d.is_Atom and n.is_Atom:
-            return expr
-        elif not n.is_Atom:
-            n = n.func(*[handle(a) for a in n.args])
-            return _unevaluated_Mul(n, handle(1/d))
-        elif n is not S.One:
-            return _unevaluated_Mul(n, handle(1/d))
-        elif d.is_Mul:
-            return _unevaluated_Mul(*[handle(1/d) for d in d.args])
-
-        # By this step, expr is 1/d, and d is not a mul.
-        if not symbolic and d.free_symbols:
-            return expr
-
-        if ispow2(d):
-            d2 = sqrtdenest(sqrt(d.base))**numer(d.exp)
-            if d2 != d:
-                return handle(1/d2)
-        elif d.is_Pow and (d.exp.is_integer or d.base.is_positive):
-            # (1/d**i) = (1/d)**i
-            return handle(1/d.base)**d.exp
-
-        if not (d.is_Add or ispow2(d)):
-            return 1/d.func(*[handle(a) for a in d.args])
-
-        # handle 1/d treating d as an Add (though it may not be)
-
-        keep = True  # keep changes that are made
-
-        # flatten it and collect radicals after checking for special
-        # conditions
-        d = _mexpand(d)
-
-        # did it change?
-        if d.is_Atom:
-            return 1/d
-
-        # is it a number that might be handled easily?
-        if d.is_number:
-            _d = nsimplify(d)
-            if _d.is_Number and _d.equals(d):
-                return 1/_d
-
-        while True:
-            # collect similar terms
-            collected = defaultdict(list)
-            for m in Add.make_args(d):  # d might have become non-Add
-                p2 = []
-                other = []
-                for i in Mul.make_args(m):
-                    if ispow2(i, log2=True):
-                        p2.append(i.base if i.exp is S.Half else i.base**(2*i.exp))
-                    elif i is S.ImaginaryUnit:
-                        p2.append(S.NegativeOne)
-                    else:
-                        other.append(i)
-                collected[tuple(ordered(p2))].append(Mul(*other))
-            rterms = list(ordered(list(collected.items())))
-            rterms = [(Mul(*i), Add(*j)) for i, j in rterms]
-            nrad = len(rterms) - (1 if rterms[0][0] is S.One else 0)
-            if nrad < 1:
-                break
-            elif nrad > max_terms:
-                # there may have been invalid operations leading to this point
-                # so don't keep changes, e.g. this expression is troublesome
-                # in collecting terms so as not to raise the issue of 2834:
-                # r = sqrt(sqrt(5) + 5)
-                # eq = 1/(sqrt(5)*r + 2*sqrt(5)*sqrt(-sqrt(5) + 5) + 5*r)
-                keep = False
-                break
-            if len(rterms) > 4:
-                # in general, only 4 terms can be removed with repeated squaring
-                # but other considerations can guide selection of radical terms
-                # so that radicals are removed
-                if all(x.is_Integer and (y**2).is_Rational for x, y in rterms):
-                    nd, d = rad_rationalize(S.One, Add._from_args(
-                        [sqrt(x)*y for x, y in rterms]))
-                    n *= nd
-                else:
-                    # is there anything else that might be attempted?
-                    keep = False
-                break
-            from sympy.simplify.powsimp import powsimp, powdenest
-
-            num = powsimp(_num(rterms))
-            n *= num
-            d *= num
-            d = powdenest(_mexpand(d), force=symbolic)
-            if d.has(S.Zero, nan, zoo):
+            if expr.is_Atom:
                 return expr
+            elif not isinstance(expr, Expr):
+                return expr.func(*[handle(a) for a in expr.args])
+
+            n, d = fraction(expr)
+
+            if d.is_Atom and n.is_Atom:
+                return expr
+            elif not n.is_Atom:
+                n = n.func(*[handle(a) for a in n.args])
+                return _unevaluated_Mul(n, handle(1/d))
+            elif n is not S.One:
+                return _unevaluated_Mul(n, handle(1/d))
+            elif d.is_Mul:
+                return _unevaluated_Mul(*[handle(1/d) for d in d.args])
+
+            # By this step, expr is 1/d, and d is not a mul.
+            if not symbolic and d.free_symbols:
+                return expr
+
+            if ispow2(d):
+                d2 = sqrtdenest(sqrt(d.base))**numer(d.exp)
+                if d2 != d:
+                    return handle(1/d2)
+            elif d.is_Pow and (d.exp.is_integer or d.base.is_positive):
+                # (1/d**i) = (1/d)**i
+                return handle(1/d.base)**d.exp
+
+            if not (d.is_Add or ispow2(d)):
+                return 1/d.func(*[handle(a) for a in d.args])
+
+            # handle 1/d treating d as an Add (though it may not be)
+
+            keep = True  # keep changes that are made
+
+            # flatten it and collect radicals after checking for special
+            # conditions
+            d = _mexpand(d)
+
+            # did it change?
             if d.is_Atom:
-                break
+                return 1/d
 
-        if not keep:
-            return expr
-        return _unevaluated_Mul(n, 1/d)
+            # is it a number that might be handled easily?
+            if d.is_number:
+                _d = nsimplify(d)
+                if _d.is_Number and _d.equals(d):
+                    return 1/_d
 
-    if not isinstance(expr, Expr):
-        return expr.func(*[radsimp(a, symbolic=symbolic, max_terms=max_terms) for a in expr.args])
+            while True:
+                # collect similar terms
+                collected = defaultdict(list)
+                for m in Add.make_args(d):  # d might have become non-Add
+                    p2 = []
+                    other = []
+                    for i in Mul.make_args(m):
+                        if ispow2(i, log2=True):
+                            p2.append(i.base if i.exp is S.Half else i.base**(2*i.exp))
+                        elif i is S.ImaginaryUnit:
+                            p2.append(S.NegativeOne)
+                        else:
+                            other.append(i)
+                    collected[tuple(ordered(p2))].append(Mul(*other))
+                rterms = list(ordered(list(collected.items())))
+                rterms = [(Mul(*i), Add(*j)) for i, j in rterms]
+                nrad = len(rterms) - (1 if rterms[0][0] is S.One else 0)
+                if nrad < 1:
+                    break
+                elif nrad > max_terms:
+                    # there may have been invalid operations leading to this point
+                    # so don't keep changes, e.g. this expression is troublesome
+                    # in collecting terms so as not to raise the issue of 2834:
+                    # r = sqrt(sqrt(5) + 5)
+                    # eq = 1/(sqrt(5)*r + 2*sqrt(5)*sqrt(-sqrt(5) + 5) + 5*r)
+                    keep = False
+                    break
+                if len(rterms) > 4:
+                    # in general, only 4 terms can be removed with repeated squaring
+                    # but other considerations can guide selection of radical terms
+                    # so that radicals are removed
+                    if all(x.is_Integer and (y**2).is_Rational for x, y in rterms):
+                        nd, d = rad_rationalize(S.One, Add._from_args(
+                            [sqrt(x)*y for x, y in rterms]))
+                        n *= nd
+                    else:
+                        # is there anything else that might be attempted?
+                        keep = False
+                    break
+                from sympy.simplify.powsimp import powsimp, powdenest
 
-    coeff, expr = expr.as_coeff_Add()
-    expr = expr.normal()
-    old = fraction(expr)
-    n, d = fraction(handle(expr))
-    if old != (n, d):
-        if not d.is_Atom:
-            was = (n, d)
-            n = signsimp(n, evaluate=False)
-            d = signsimp(d, evaluate=False)
-            u = Factors(_unevaluated_Mul(n, 1/d))
-            u = _unevaluated_Mul(*[k**v for k, v in u.factors.items()])
-            n, d = fraction(u)
-            if old == (n, d):
-                n, d = was
-        n = expand_mul(n)
-        if d.is_Number or d.is_Add:
-            n2, d2 = fraction(gcd_terms(_unevaluated_Mul(n, 1/d)))
-            if d2.is_Number or (d2.count_ops() <= d.count_ops()):
-                n, d = [signsimp(i) for i in (n2, d2)]
-                if n.is_Mul and n.args[0].is_Number:
-                    n = n.func(*n.args)
+                num = powsimp(_num(rterms))
+                n *= num
+                d *= num
+                d = powdenest(_mexpand(d), force=symbolic)
+                if d.has(S.Zero, nan, zoo):
+                    return expr
+                if d.is_Atom:
+                    break
 
-    return coeff + _unevaluated_Mul(n, 1/d)
+            if not keep:
+                return expr
+            return _unevaluated_Mul(n, 1/d)
+
+        if not isinstance(expr, Expr):
+            return expr.func(*[radsimp(a, symbolic=symbolic, max_terms=max_terms) for a in expr.args])
+
+        coeff, expr = expr.as_coeff_Add()
+        expr = expr.normal()
+        old = fraction(expr)
+        n, d = fraction(handle(expr))
+        if old != (n, d):
+            if not d.is_Atom:
+                was = (n, d)
+                n = signsimp(n, evaluate=False)
+                d = signsimp(d, evaluate=False)
+                u = Factors(_unevaluated_Mul(n, 1/d))
+                u = _unevaluated_Mul(*[k**v for k, v in u.factors.items()])
+                n, d = fraction(u)
+                if old == (n, d):
+                    n, d = was
+            n = expand_mul(n)
+            if d.is_Number or d.is_Add:
+                n2, d2 = fraction(gcd_terms(_unevaluated_Mul(n, 1/d)))
+                if d2.is_Number or (d2.count_ops() <= d.count_ops()):
+                    n, d = [signsimp(i) for i in (n2, d2)]
+                    if n.is_Mul and n.args[0].is_Number:
+                        n = n.func(*n.args)
+
+        return coeff + _unevaluated_Mul(n, 1/d)
 
 
-_radsimp_module = import_module(".simplify.radsimp", "sympy")
-_old_radsimp = _radsimp_module.radsimp
-setattr(_radsimp_module, 'radsimp', radsimp)
-setattr(import_module(".simplify", "sympy"), 'radsimp', radsimp)
-setattr(sp, 'radsimp', radsimp)
+    _radsimp_module = import_module(".simplify.radsimp", "sympy")
+    _old_radsimp = _radsimp_module.radsimp
+    setattr(_radsimp_module, 'radsimp', radsimp)
+    setattr(import_module(".simplify", "sympy"), 'radsimp', radsimp)
+    setattr(sp, 'radsimp', radsimp)
 
-setattr(MonomialCyclic, 'cyclic_sum', lambda self, *args, **kwargs: CyclicSum(*args, **kwargs))
-setattr(MonomialPerm, 'cyclic_sum', lambda self, expr, gens=None: CyclicSum(expr, gens, self.perm_group))
+try:
+    # local hijack, representing cyclic sums and products using new classes
+    from ..basis_generator import MonomialCyclic, MonomialPerm
+    setattr(MonomialCyclic, 'cyclic_sum', lambda self, *args, **kwargs: CyclicSum(*args, **kwargs))
+    setattr(MonomialPerm, 'cyclic_sum', lambda self, expr, gens=None: CyclicSum(expr, gens, self.perm_group))
+except ImportError:
+    pass
 
 
 def _get_rewriting_replacement(symbols: Tuple[Symbol], perm_group: PermutationGroup) -> Callable[[Expr], Expr]:
@@ -884,8 +890,35 @@ def _get_rewriting_replacement(symbols: Tuple[Symbol], perm_group: PermutationGr
 
 def rewrite_symmetry(expr: Expr, symbols: Tuple[Symbol], perm_group: PermutationGroup) -> Expr:
     """
-    Rewrite the expression with respect to the given permutation group.
-    This function will rewrite all cyclic expressions to the default cyclic group.
-    After rewriting, it is expected all expressions are expanded or in the given permutation group.
+    Rewrite the expression heuristically with respect to the given permutation group.
+    After rewriting, it is expected all cyclic expressions are expanded or in the given permutation group.
+    This avoids the ambiguity of the cyclic expressions.
+
+    The process is done inplace and is not reversible. For reversible transformation,
+    call `rewrite_symmetry` on the solution expression directly or make a copy of the solution.
+
+    Parameters
+    ----------
+    symbols : Tuple[sp.Symbol]
+        The symbols that the permutation group acts on.
+    perm_group : PermutationGroup
+        Sympy permutation group object.
+
+    Returns
+    ----------
+    expr : Expr
+        The rewritten expression.
+
+    Examples
+    ----------
+    >>> from sympy.combinatorics import CyclicGroup, DihedralGroup, SymmetricGroup, PermutationGroup
+    >>> from sympy.abc import a, b, c, d
+    >>> expr = CyclicSum((a*c-b*d)**2, (a,b,c,d), DihedralGroup(4)) + CyclicProduct((a-b)**2, (a,b,c,d), SymmetricGroup(4))
+    >>> rewritten = rewrite_symmetry(expr, (a,b,c,d), CyclicGroup(4))
+    >>> rewritten
+    (∏(a - b)**4)*(∏(a - c)**4)*(∏(a - d)**4) + 2*(Σ(a*c - b*d)**2)
+    >>> rewritten.find(PermutationGroup)
+    {PermutationGroup([
+     (0 1 2 3)])}
     """
     return expr.replace(lambda x: isinstance(x, CyclicExpr), _get_rewriting_replacement(symbols, perm_group))

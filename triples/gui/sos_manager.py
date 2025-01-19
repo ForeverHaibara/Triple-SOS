@@ -4,7 +4,6 @@ from typing import Tuple, List, Dict, Optional, Any, Union, Callable
 
 import sympy as sp
 from sympy import Expr, Poly, Symbol
-from sympy.simplify import signsimp
 from sympy.combinatorics import Permutation, PermutationGroup, CyclicGroup
 
 from ..utils import (
@@ -248,7 +247,7 @@ class SOS_Manager():
             configs = configs
         )
         if cls.CONFIG_STANDARDIZE_CYCLICEXPR:
-            solution.rewrite_symmetry(gens, perm)
+            solution = solution.rewrite_symmetry(gens, perm)
         return solution
 
     # def save_heatmap(self, poly, *args, **kwargs):
