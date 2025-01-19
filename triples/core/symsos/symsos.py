@@ -9,7 +9,7 @@ from .representation import (
     prove_numerator
 )
 from .solution import SolutionSymmetric, SolutionSymmetricSimple
-from ..shared import sanitize_input
+from ..shared import sanitize_input, sanitize_output
 from ...utils import Coeff
 
 
@@ -23,6 +23,8 @@ def nonnegative_vars(ineq_constraints: List[sp.Poly], symbols: Tuple[sp.Symbol, 
             nonnegative.update(ineq.free_symbols)
     return [1 if s in nonnegative else 0 for s in symbols]
 
+
+@sanitize_output()
 @sanitize_input(homogenize=True)
 def SymmetricSOS(
         poly: sp.Poly,

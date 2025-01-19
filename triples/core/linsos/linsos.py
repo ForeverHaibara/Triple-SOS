@@ -16,7 +16,7 @@ from .tangents import root_tangents
 from .correction import linear_correction
 from .updegree import lift_degree
 from .solution import SolutionLinear
-from ..shared import homogenize_expr_list, clear_polys_by_symmetry, sanitize_input
+from ..shared import homogenize_expr_list, clear_polys_by_symmetry, sanitize_input, sanitize_output
 from ...utils import findroot, RootsInfo, RootTangent
 from ...utils.basis_generator import MonomialReduction
 
@@ -220,6 +220,7 @@ def _get_qmodule_list(poly: Poly, ineq_constraints: Dict[Poly, Expr],
     return (qmodule)
 
 
+@sanitize_output()
 @sanitize_input(homogenize=True, infer_symmetry=True, wrap_constraints=True)
 def LinearSOS(
         poly: Poly,

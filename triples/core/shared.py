@@ -1,3 +1,5 @@
+from datetime import datetime
+from functools import wraps
 from inspect import signature
 from typing import Tuple, Dict, List, Union, Optional
 
@@ -6,7 +8,7 @@ from sympy import sympify, Function
 from sympy.core.symbol import uniquely_named_symbol
 from sympy.combinatorics import Permutation, PermutationGroup, SymmetricGroup, AlternatingGroup, CyclicGroup
 
-from ..utils.expression import SolutionSimple, CyclicExpr
+from ..utils.expression import Solution, SolutionSimple, CyclicExpr
 from ..utils.basis_generator import MonomialReduction, MonomialFull, MonomialPerm, MonomialHomogeneousFull
 
 class PropertyDict(dict):
@@ -241,6 +243,30 @@ def _std_eq_constraints(p: sp.Poly, e: sp.Expr) -> Tuple[sp.Poly, sp.Expr]:
         e = e.__neg__()
     return ret, e
 
+
+def sanitize_output(*_args, **_kwargs):
+    """
+    Decorator for sum of square functions. It writes extra information to the solution object.
+    """
+    def decorator(func):
+        @wraps(func)
+        def wrapper(poly: sp.Expr,
+                ineq_constraints: Union[List[sp.Expr], Dict[sp.Expr, sp.Expr]] = {},
+                eq_constraints: Union[List[sp.Expr], Dict[sp.Expr, sp.Expr]] = {}, *args, **kwargs):
+            start_time = datetime.now()
+            sol = func(poly, ineq_constraints, eq_constraints, *args, **kwargs)
+            end_time = datetime.now()
+            if isinstance(sol, Solution):
+                sol._start_time = start_time
+                sol._end_time = end_time
+                sol.problem = poly
+                sol.ineq_constraints = ineq_constraints
+                sol.eq_constraints = eq_constraints
+            return sol
+        return wrapper
+    return decorator
+
+
 def sanitize_input(
         homogenize: bool = False,
         ineq_constraint_sqf: bool = True,
@@ -260,6 +286,7 @@ def sanitize_input(
     and parse constraints dictionary to a form that is compatible with the symmetry.
     """
     def decorator(func):
+        @wraps(func)
         def wrapper(poly: sp.Expr,
                 ineq_constraints: Union[List[sp.Expr], Dict[sp.Expr, sp.Expr]] = {},
                 eq_constraints: Union[List[sp.Expr], Dict[sp.Expr, sp.Expr]] = {}, *args, **kwargs):

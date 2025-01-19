@@ -15,6 +15,11 @@ class SolutionStructural(Solution):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
+    def as_simple_solution(self):
+        sol = SolutionStructuralSimple(problem = self.problem, solution = self.solution,
+            ineq_constraints = self.ineq_constraints, eq_constraints = self.eq_constraints, is_equal = self.is_equal)
+        return sol
+
     @classmethod
     def _extract_nonnegative_exprs(cls, expr: sp.Expr, func_name: str = "_G", extra_checker: Optional[Callable] = None):
         """

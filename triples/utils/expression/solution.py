@@ -98,9 +98,14 @@ class Solution():
         self.solution = solution
         self.ineq_constraints = ineq_constraints if ineq_constraints is not None else dict()
         self.eq_constraints = eq_constraints if eq_constraints is not None else dict()
-        self._start_time = 0
-        self._end_time = 0
+        self._start_time = None
+        self._end_time = None
         self._is_equal = None
+
+    @property
+    def time(self) -> float:
+        """Get the elapsed time for computing the solution. Return -1. if not registered."""
+        return (self._end_time - self._start_time).total_seconds() if self._end_time is not None else -1.
 
     def __str__(self) -> str:
         return f"Solution({self.problem})"
@@ -180,7 +185,7 @@ class Solution():
 
     def as_simple_solution(self):
         """
-        When the expression is a nested fraction, we can simplify it.
+        When the solution is a sympy expression class, it is converted to SolutionSimple.
         """
         sol = SolutionSimple(problem = self.problem, solution = self.solution,
             ineq_constraints = self.ineq_constraints, eq_constraints = self.eq_constraints, is_equal = self.is_equal)
@@ -237,8 +242,9 @@ def _arg_sqr_core(arg):
 
 class SolutionSimple(Solution):
     """
-    All (rational) SOS solutions can be presented in the form of f(a,b,c) = g(a,b,c) / h(a,b,c)
-    where g and h are polynomials.
+    Most of SOS solutions can be represented in f(a,b,c) = (some sympy expression that is trivially nonnegative),
+    where the original problem is on the one side and the solution is on the other side.
+    This class is designed to handle such cases.
     """
     def __init__(self, problem=None, solution=None, ineq_constraints=None, eq_constraints=None, is_equal=None):
         self.problem = problem
@@ -248,10 +254,6 @@ class SolutionSimple(Solution):
         self._start_time = 0
         self._end_time = 0
         self._is_equal = is_equal
-
-    @property
-    def time(self) -> float:
-        return self._end_time - self._start_time
 
     @property
     def is_equal(self):

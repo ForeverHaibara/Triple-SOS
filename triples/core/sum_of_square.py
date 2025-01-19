@@ -8,7 +8,7 @@ from .linsos import LinearSOS
 from .structsos import StructuralSOS
 from .symsos import SymmetricSOS
 from .sdpsos import SDPSOS
-from .shared import sanitize_input
+from .shared import sanitize_input, sanitize_output
 
 from ..utils import deg, PolyReader, Solution
 
@@ -37,6 +37,7 @@ DEFAULT_CONFIGS = {
 }
 
 
+@sanitize_output()
 # @sanitize_input(homogenize=True)
 def sum_of_square(
         poly: Union[sp.Poly, sp.Expr],

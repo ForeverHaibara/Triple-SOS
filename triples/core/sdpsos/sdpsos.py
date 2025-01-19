@@ -10,7 +10,7 @@ from sympy.combinatorics import PermutationGroup
 
 from .manifold import RootSubspace
 from .solution import SolutionSDP
-from ..shared import sanitize_input, identify_symmetry_from_lists, clear_polys_by_symmetry
+from ..shared import sanitize_input, sanitize_output, identify_symmetry_from_lists, clear_polys_by_symmetry
 from ...sdp import SDPProblem
 from ...sdp.arithmetic import solve_csr_linear
 from ...utils.basis_generator import generate_expr, MonomialReduction, MonomialPerm, MonomialCyclic
@@ -445,6 +445,7 @@ def _get_qmodule_list(poly: Poly, ineq_constraints: List[Tuple[Poly, Expr]],
         yield qmodule
 
 
+@sanitize_output()
 @sanitize_input(homogenize=True, infer_symmetry=True, wrap_constraints=True)
 def SDPSOS(
         poly: Poly,
