@@ -7,7 +7,7 @@ from sympy import Poly
 
 from ...utils import (
     convex_hull_poly, findroot_resultant, Root, RootAlgebraic, RootRational,
-    MonomialReduction, generate_expr, arraylize_sp
+    MonomialManager, generate_expr, arraylize_sp
 )
 
 
@@ -77,7 +77,7 @@ def _hull_space(
         degree: int,
         convex_hull: Dict[Tuple[int, ...], bool],
         monomial: Tuple[int, ...],
-        symmetry: MonomialReduction
+        symmetry: MonomialManager
     ) -> Optional[sp.Matrix]:
     """
     For example, s(ab(a-b)2(a+b-3c)2) does not have a^6,
@@ -257,7 +257,7 @@ def _root_space(manifold: 'RootSubspace', root: RootAlgebraic, constraint: Poly)
         for j, permed_root in enumerate(symmetry.permute(root.root)):
             if not vanish(Root(permed_root)):
                 for i in range(span.shape[1]):
-                    span2 = symmetry.permute_vec(nvars, span[:,i])[:,j]
+                    span2 = symmetry.permute_vec(span[:,i], d)[:,j]
                     spans.append(span2)        
         # for i in range(span.shape[1]):
         #     span2 = symmetry.permute_vec(nvars, span[:,i])
@@ -268,7 +268,7 @@ def _root_space(manifold: 'RootSubspace', root: RootAlgebraic, constraint: Poly)
     return sp.Matrix.hstack(*spans)
 
 
-def _findroot_binary(poly: Poly, symmetry: MonomialReduction = None) -> List[Root]:
+def _findroot_binary(poly: Poly, symmetry: MonomialManager = None) -> List[Root]:
     """
     Very easy implementation to find binary roots of the polynomial.
     """
@@ -279,7 +279,7 @@ def _findroot_binary(poly: Poly, symmetry: MonomialReduction = None) -> List[Roo
         #     roots.append(root)
         if poly(*root) == 0:
             # roots.append(RootRational(root))
-            roots.add(symmetry._standard_monom(root))
+            roots.add(symmetry.standard_monom(root))
     roots = set(roots)
     all_zero = tuple([0] * len(poly.gens))
     if all_zero in roots:
@@ -289,11 +289,11 @@ def _findroot_binary(poly: Poly, symmetry: MonomialReduction = None) -> List[Roo
 
 
 class RootSubspace():
-    def __init__(self, poly: Poly, symmetry: MonomialReduction) -> None:
+    def __init__(self, poly: Poly, symmetry: MonomialManager) -> None:
         self.poly = poly
         self._degree: int = poly.total_degree()
         self._nvars : int = len(poly.gens)
-        self._symmetry: MonomialReduction = symmetry
+        self._symmetry: MonomialManager = symmetry
 
         self.convex_hull = None # deprecated
         self.roots = []

@@ -6,10 +6,10 @@ from typing import Tuple, Dict, List, Union, Optional
 import sympy as sp
 from sympy import sympify, Function
 from sympy.core.symbol import uniquely_named_symbol
-from sympy.combinatorics import Permutation, PermutationGroup, SymmetricGroup, AlternatingGroup, CyclicGroup
+from sympy.combinatorics import Permutation, PermutationGroup
 
 from ..utils.expression import Solution, SolutionSimple, CyclicExpr
-from ..utils.basis_generator import MonomialReduction, MonomialFull, MonomialPerm, MonomialHomogeneousFull
+from ..utils.basis_generator import MonomialManager
 
 class PropertyDict(dict):
     def __getattr__(self, key):
@@ -188,11 +188,11 @@ def identify_symmetry_from_lists(lst_of_lsts: List[List[sp.Poly]], has_homogeniz
 
 
 def clear_polys_by_symmetry(polys: List[Union[sp.Expr, Tuple[sp.Expr, ...]]],
-        symbols: Tuple[sp.Symbol, ...], symmetry: MonomialReduction) -> List[Union[sp.Expr, Tuple[sp.Expr, ...]]]:
+        symbols: Tuple[sp.Symbol, ...], symmetry: MonomialManager) -> List[Union[sp.Expr, Tuple[sp.Expr, ...]]]:
     """
     Remove duplicate polys by symmetry.
     """
-    if isinstance(symmetry, MonomialFull):
+    if symmetry.is_trivial:
         return polys if isinstance(polys, list) else list(polys)
 
     def _get_representation(t: sp.Expr):
@@ -201,7 +201,7 @@ def clear_polys_by_symmetry(polys: List[Union[sp.Expr, Tuple[sp.Expr, ...]]],
         # if t.is_monomial and len(t.free_symbols) == 1:
         #     return None
         vec = symmetry.base().arraylize_sp(t)
-        mat = symmetry.permute_vec(len(symbols), vec)
+        mat = symmetry.permute_vec(vec, t.total_degree())
         cols = [tuple(mat[:, i]) for i in range(mat.shape[1])]
         return max(cols)
  
@@ -340,8 +340,7 @@ def sanitize_input(
             symmetry = kwargs.get('symmetry')
             if homogenizer is not None and symmetry is not None:
                 # the generators might increase after homogenization
-                if isinstance(symmetry, MonomialPerm):
-                    symmetry = symmetry.perm_group
+                symmetry = symmetry.perm_group
                 nvars = len(poly.gens)
                 if symmetry.degree != nvars:
                     symmetry = PermutationGroup(*[Permutation(_.array_form + [nvars-1]) for _ in symmetry.args])
@@ -349,10 +348,8 @@ def sanitize_input(
             if infer_symmetry and symmetry is None:
                 symmetry = identify_symmetry_from_lists(
                     [[poly], list(ineq_constraints.keys()), list(eq_constraints.keys())], has_homogenized=homogenizer is not None)
-            if symmetry is not None and not isinstance(symmetry, MonomialReduction):
-                symmetry = MonomialPerm(symmetry)
-            elif symmetry is None:
-                symmetry = MonomialHomogeneousFull()
+            
+            symmetry = MonomialManager(len(poly.gens), symmetry)
 
             _has_symmetry_kwarg = signature(func).parameters.get('symmetry') is not None
             if _has_symmetry_kwarg:
@@ -361,7 +358,7 @@ def sanitize_input(
             constraints_wrapper = None
             if wrap_constraints:
                 # wrap ineq/eq constraints to be sympy function class wrt. generators rather irrelevent symbols
-                constraints_wrapper = _get_constraints_wrapper(poly.gens, ineq_constraints, eq_constraints, symmetry.to_perm_group(len(poly.gens)))
+                constraints_wrapper = _get_constraints_wrapper(poly.gens, ineq_constraints, eq_constraints, symmetry.perm_group)
                 ineq_constraints, eq_constraints = constraints_wrapper[0], constraints_wrapper[1]
 
             ########################################################

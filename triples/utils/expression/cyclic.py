@@ -822,9 +822,8 @@ if sp.__version__ < '1.14':
 
 try:
     # local hijack, representing cyclic sums and products using new classes
-    from ..basis_generator import MonomialCyclic, MonomialPerm
-    setattr(MonomialCyclic, 'cyclic_sum', lambda self, *args, **kwargs: CyclicSum(*args, **kwargs))
-    setattr(MonomialPerm, 'cyclic_sum', lambda self, expr, gens=None: CyclicSum(expr, gens, self.perm_group))
+    from ..basis_generator import MonomialManager
+    setattr(MonomialManager, 'cyclic_sum', lambda self, expr, gens=None: CyclicSum(expr, gens, self.perm_group))
 except ImportError:
     pass
 

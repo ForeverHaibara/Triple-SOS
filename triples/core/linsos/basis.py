@@ -5,7 +5,7 @@ import numpy as np
 from sympy.combinatorics import PermutationGroup, Permutation
 from sympy.core.singleton import S
 
-from ...utils import arraylize, arraylize_sp, MonomialReduction, MonomialPerm
+from ...utils import arraylize, arraylize_sp, MonomialManager
 
 class _callable_expr():
     """
@@ -153,7 +153,7 @@ class LinearBasisTangent(LinearBasis):
         basis, mat, perm_group = None, None, None
         cache = _get_tangent_cache_key(cls, tangent, symbols) if quad_diff else None
         if cache is not None:
-            perm_group = symmetry.to_perm_group(len(symbols)) if isinstance(symmetry, MonomialReduction) else symmetry
+            perm_group = symmetry.perm_group if isinstance(symmetry, MonomialManager) else symmetry
             basis = cache.get((degree, len(symbols)))
             if basis is not None:
                 mat = cache.get((degree, perm_group))
@@ -190,8 +190,7 @@ class LinearBasisTangent(LinearBasis):
                 return tuple(x + y for x, y in zip(t1, t2))
 
             mat_ind = 0
-            if not isinstance(symmetry, MonomialReduction):
-                symmetry = MonomialPerm(symmetry)
+            symmetry = MonomialManager(len(symbols), symmetry)
             poly_from_dict = sp.Poly.from_dict
             for t in cross_tangents:
                 p2 = t.doit().as_poly(symbols) * p

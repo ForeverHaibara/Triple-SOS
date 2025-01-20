@@ -8,7 +8,7 @@ from .basis import LinearBasis, LinearBasisTangent
 from .updegree import LinearBasisMultiplier
 from ...utils.expression.cyclic import CyclicSum
 from ...utils.expression.solution import SolutionSimple
-from ...utils import MonomialPerm, MonomialReduction
+from ...utils import MonomialManager
 
 def _merge_common_basis(
         y: List[sp.Expr], powers: List[Tuple], symbols: Tuple[sp.Symbol, ...]
@@ -30,7 +30,7 @@ class SolutionLinear(SolutionSimple):
             problem = None,
             y: List[sp.Rational] = [],
             basis: List[LinearBasis] = [],
-            symmetry: Union[PermutationGroup, MonomialPerm] = PermutationGroup(),
+            symmetry: MonomialManager = None,
             is_equal: bool = True,
             collect: bool = True,
         ):
@@ -60,9 +60,6 @@ class SolutionLinear(SolutionSimple):
         self.y = y
         self.basis = basis
 
-        if isinstance(symmetry, PermutationGroup):
-            symmetry = MonomialPerm(symmetry)
-
         self._symmetry = symmetry
         self._is_equal = is_equal
 
@@ -77,7 +74,7 @@ class SolutionLinear(SolutionSimple):
 
     def _collect_multipliers(self, 
             y: List[sp.Rational], basis: List[LinearBasis],
-            symbols: Tuple[sp.Symbol, ...], symmetry: MonomialReduction
+            symbols: Tuple[sp.Symbol, ...], symmetry: MonomialManager
         ) -> None:
         r"""
         Collect multipliers. For example, if we have 
@@ -101,7 +98,7 @@ class SolutionLinear(SolutionSimple):
         multiplier = symmetry.cyclic_sum(multiplier, symbols)
         return multiplier
 
-    def _collect_common_tangents(self, symbols: Tuple[sp.Symbol, ...], symmetry: MonomialReduction):
+    def _collect_common_tangents(self, symbols: Tuple[sp.Symbol, ...], symmetry: MonomialManager):
         """
         Collect terms with same tangents. For example, if we have
         a*b*(a^2-b^2-ab-ac+2bc)^2 + a*c*(a^2-b^2-ab-ac+2bc)^2, then we should combine them.

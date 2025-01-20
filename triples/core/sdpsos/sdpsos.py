@@ -13,11 +13,10 @@ from .solution import SolutionSDP
 from ..shared import sanitize_input, sanitize_output, identify_symmetry_from_lists, clear_polys_by_symmetry
 from ...sdp import SDPProblem
 from ...sdp.arithmetic import solve_csr_linear
-from ...utils.basis_generator import generate_expr, MonomialReduction, MonomialPerm, MonomialCyclic
-from ...utils import arraylize_sp, Coeff, CyclicExpr
+from ...utils import arraylize_sp, Coeff, CyclicExpr, generate_expr, MonomialManager
 
 
-def _define_mapping(nvars: int, degree: int, monomial: Tuple[int, ...], symmetry: MonomialReduction, half: bool = True) -> Callable[[int, int], Tuple[int, int]]:
+def _define_mapping(nvars: int, degree: int, monomial: Tuple[int, ...], symmetry: MonomialManager, half: bool = True) -> Callable[[int, int], Tuple[int, int]]:
     """
     Given a gram matrix of standard monomials and a permutation group, we want
     to know how the entry a_{ij} contributes to the monomial of the product of two monomials.
@@ -54,7 +53,7 @@ def _define_mapping(nvars: int, degree: int, monomial: Tuple[int, ...], symmetry
     return mapping
 
 
-def _get_monomial_list(nvars: int, d: int, symmetry: MonomialReduction) -> List[Tuple[int, ...]]:
+def _get_monomial_list(nvars: int, d: int, symmetry: MonomialManager) -> List[Tuple[int, ...]]:
     """
     Get all tuples (a1, ..., an) such that a1 + ... + an = d and every ai is 0 or 1.
     """
@@ -71,7 +70,7 @@ def _get_monomial_list(nvars: int, d: int, symmetry: MonomialReduction) -> List[
 
 
 def _form_sdp(ineq_constraints: List[Poly], eq_constraints: List[Poly], nvars: int, degree: int,
-                rhs: sp.Matrix, symmetry: MonomialReduction, verbose: bool = False) -> SDPProblem:
+                rhs: sp.Matrix, symmetry: MonomialManager, verbose: bool = False) -> SDPProblem:
     time0 = time()
     matrix_size = len(generate_expr(nvars, degree, symmetry=symmetry)[0])
     get_inv_half = lambda d: generate_expr(nvars, d, symmetry=symmetry.base())[1]
@@ -152,10 +151,10 @@ def _form_sdp(ineq_constraints: List[Poly], eq_constraints: List[Poly], nvars: i
     return sdp, eq_vec
 
 def _get_equal_entries(ineq_constraints: List[Poly], eq_constraints: List[Poly],
-        nvars: int, degree: int, symmetry: MonomialReduction) -> List[List[int]]:
+        nvars: int, degree: int, symmetry: MonomialManager) -> List[List[int]]:
     offset = 0
     equal_entries = []
-    perm_group = symmetry.to_perm_group(nvars)
+    perm_group = symmetry.perm_group
     for ineq in ineq_constraints:
         d = ineq.homogeneous_order()
         if d > degree or (degree - d) % 2 != 0:
@@ -253,7 +252,7 @@ class SOSProblem():
     def __init__(
         self,
         poly: Poly,
-        symmetry: Optional[Union[MonomialReduction, PermutationGroup]] = None,
+        symmetry: Optional[Union[MonomialManager, PermutationGroup]] = None,
         _check_homogeneous: bool = True,
         _check_symmetry: bool = True,
     ):
@@ -263,16 +262,15 @@ class SOSProblem():
 
         if symmetry is None:
             symmetry = identify_symmetry_from_lists([[poly]])
-        if not isinstance(symmetry, MonomialReduction):
-            symmetry = MonomialPerm(symmetry)
+        symmetry = MonomialManager(self._nvars, symmetry)
 
         if _check_homogeneous and not poly.is_homogeneous:
             # TODO: shall we support non-homogeneous polynomials?
             raise ValueError("The polynomial is not homogeneous.")
-        if _check_symmetry and not Coeff(poly).is_symmetric(symmetry.to_perm_group(self._nvars)):
+        if _check_symmetry and not Coeff(poly).is_symmetric(symmetry.perm_group):
             raise ValueError("The polynomial is not symmetric with respect to the symmetry group.")
 
-        self._symmetry: MonomialReduction = MonomialPerm(symmetry) if not isinstance(symmetry, MonomialReduction) else symmetry
+        self._symmetry: MonomialManager = symmetry
         self.manifold = RootSubspace(poly, symmetry=self._symmetry)
         self._sdp: SDPProblem = None
         self._eqvec: Dict[Poly, Tuple[sp.Matrix, sp.Matrix]] = {}
@@ -451,7 +449,7 @@ def SDPSOS(
         poly: Poly,
         ineq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
         eq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
-        symmetry: Optional[Union[MonomialReduction, PermutationGroup]] = None,
+        symmetry: Optional[Union[MonomialManager, PermutationGroup]] = None,
         ineq_constraints_with_trivial: bool = True,
         preordering: str = 'linear-progressive',
         degree_limit: int = 12,
@@ -504,9 +502,9 @@ def SDPSOS(
     eq_constraints: List[Poly]
         Equality constraints to the problem. This assumes h_1(x) = 0, h_2(x) = 0, ...
         This is used to generate the ideal (quotient ring).
-    symmetry: PermutationGroup or MonomialReduction
+    symmetry: PermutationGroup or MonomialManager
         The symmetry of the polynomial. When it is None, it will be automatically generated. 
-        If we want to skip the symmetry generation algorithm, please pass in a MonomialReduction object.
+        If we want to skip the symmetry generation algorithm, please pass in a MonomialManager object.
     ineq_constraints_with_trivial: bool
         Whether to add the trivial inequality constraint 1 >= 0. This is used to generate the
         quadratic module. Default is True.
@@ -534,7 +532,7 @@ def _SDPSOS(
         poly: Poly,
         ineq_constraints: Dict[Poly, Expr] = {},
         eq_constraints: Dict[Poly, Expr] = {},
-        symmetry: MonomialReduction = None,
+        symmetry: MonomialManager = None,
         ineq_constraints_with_trivial: bool = True,
         preordering: str = 'linear-progressive',
         degree_limit: int = 12,
@@ -553,10 +551,7 @@ def _SDPSOS(
 
     if verbose:
         print(f'SDPSOS nvars = {nvars} degree = {degree}')
-        if isinstance(symmetry, MonomialCyclic):
-            print('Identified Symmetry = Cyclic Group')
-        elif isinstance(symmetry, MonomialPerm):
-            print('Identified Symmetry = %s' % str(symmetry.perm_group))
+        print('Identified Symmetry = %s' % str(symmetry.perm_group).replace('\n', '').replace('  ',''))
 
     sos_problem = SOSProblem(poly, symmetry=symmetry, _check_homogeneous=False, _check_symmetry=False)
 

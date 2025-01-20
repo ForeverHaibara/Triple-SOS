@@ -3,7 +3,7 @@ from typing import List, Tuple, Dict, Optional
 import sympy as sp
 from sympy.simplify import signsimp
 
-from ...utils import MonomialReduction, SolutionSimple
+from ...utils import MonomialManager, SolutionSimple
 
 
 
@@ -21,7 +21,7 @@ class SolutionSDP(SolutionSimple):
         poly: sp.Poly,
         decompositions: Dict[str, Tuple[sp.Matrix, sp.Matrix]],
         eqvec: Dict[str, sp.Matrix],
-        symmetry: MonomialReduction,
+        symmetry: MonomialManager,
         ineq_constraints: Optional[Dict[sp.Poly, sp.Expr]] = None,
         eq_constraints: Optional[Dict[sp.Poly, sp.Expr]] = None
     ) -> 'SolutionSDP':
@@ -33,8 +33,9 @@ class SolutionSDP(SolutionSimple):
 
         ideal_exprs = []
         for key, vec in eqvec.items():
+            codeg = poly.total_degree() - key.total_degree()
             key = _get_expr_from_dict(eq_constraints, key)
-            vec = symmetry.base().invarraylize(vec, poly.gens).as_expr()
+            vec = symmetry.base().invarraylize(vec, poly.gens, codeg).as_expr()
             ideal_exprs.append(symmetry.cyclic_sum(vec * key, poly.gens).together())
         ideal_expr = sp.Add(*ideal_exprs)
 
@@ -50,7 +51,7 @@ def _decomp_as_sos(
         decompositions: Dict[str, Tuple[sp.Matrix, sp.Matrix]],
         degree: int,
         gens: List[sp.Symbol],
-        symmetry: MonomialReduction,
+        symmetry: MonomialManager,
         ineq_constraints: Optional[Dict[sp.Poly, sp.Expr]] = None,
         factor: bool = True,
     ) -> sp.Expr:
@@ -67,7 +68,7 @@ def _decomp_as_sos(
     for key, (U, S) in decompositions.items():
         codeg = (degree - key.total_degree()) // 2
         key = _get_expr_from_dict(ineq_constraints, key)
-        vecs = [symmetry_half.invarraylize(U[i,:], gens, degree=codeg).as_expr() for i in range(U.shape[0])]
+        vecs = [symmetry_half.invarraylize(U[i,:], gens, codeg).as_expr() for i in range(U.shape[0])]
         if factor:
             vecs = [_.factor() for _ in vecs]
         vecs = [compute_cyc_sum(S[i] * key * vecs[i]**2) for i in range(U.shape[0])]

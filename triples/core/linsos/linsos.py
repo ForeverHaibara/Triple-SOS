@@ -18,7 +18,7 @@ from .updegree import lift_degree
 from .solution import SolutionLinear
 from ..shared import homogenize_expr_list, clear_polys_by_symmetry, sanitize_input, sanitize_output
 from ...utils import findroot, RootsInfo, RootTangent
-from ...utils.basis_generator import MonomialReduction
+from ...utils.basis_generator import MonomialManager
 
 LINPROG_OPTIONS = {
     'method': 'highs-ds' if SCIPY_VERSION >= '1.6.0' else 'simplex',
@@ -70,7 +70,7 @@ def _prepare_basis(
         eq_constraints: List[Tuple[Poly, Expr]] = {},
         rootsinfo = None,
         basis: Optional[List[LinearBasis]] = None,
-        symmetry: Union[MonomialReduction, PermutationGroup] = PermutationGroup(),
+        symmetry: Union[MonomialManager, PermutationGroup] = PermutationGroup(),
         basis_limit: int = 15000,
     ) -> Tuple[List[LinearBasis], np.ndarray]:
     """
@@ -226,7 +226,7 @@ def LinearSOS(
         poly: Poly,
         ineq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
         eq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
-        symmetry: Optional[Union[PermutationGroup, MonomialReduction]] = None,
+        symmetry: Optional[Union[PermutationGroup, MonomialManager]] = None,
         tangents: List[Expr] = [],
         rootsinfo: Optional[RootsInfo] = None,
         preordering: str = 'linear',
@@ -248,9 +248,9 @@ def LinearSOS(
         Inequality constraints to the problem. This assumes g_1(x) >= 0, g_2(x) >= 0, ...
     eq_constraints: Union[List[Expr], Dict[Expr, Expr]]
         Equality constraints to the problem. This assumes h_1(x) = 0, h_2(x) = 0, ...
-    symmetry: PermutationGroup or MonomialReduction
+    symmetry: PermutationGroup or MonomialManager
         The symmetry of the polynomial. When it is None, it will be automatically generated. 
-        If we want to skip the symmetry generation algorithm, please pass in a MonomialReduction object.
+        If we want to skip the symmetry generation algorithm, please pass in a MonomialManager object.
     tangents: list
         Additional tangents to be added to the basis.
     rootsinfo: RootsInfo
@@ -297,7 +297,7 @@ def _LinearSOS(
         poly: Poly,
         ineq_constraints: Dict[Poly, Expr] = {},
         eq_constraints: Dict[Poly, Expr] = {},
-        symmetry: MonomialReduction = None,
+        symmetry: MonomialManager = None,
         tangents: List[Poly] = [],
         rootsinfo: Optional[RootsInfo] = None,
         preordering: str = 'linear',

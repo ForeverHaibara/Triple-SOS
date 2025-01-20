@@ -5,7 +5,7 @@ from sympy.combinatorics import PermutationGroup, CyclicGroup
 
 from .basis import LinearBasis, quadratic_difference, _callable_expr
 from ..shared import clear_polys_by_symmetry
-from ...utils import MonomialReduction, generate_expr
+from ...utils import MonomialManager, generate_expr
 
 
 class LinearBasisMultiplier(LinearBasis):
@@ -42,7 +42,7 @@ class LinearBasisMultiplier(LinearBasis):
 def lift_degree(
         poly: sp.Poly,
         ineq_constraints: Dict[sp.Poly, sp.Expr],
-        symmetry: MonomialReduction,
+        symmetry: MonomialManager,
         degree_limit: int = 1000,
         lift_degree_limit: int = 4
     ) -> Generator[Dict, None, None]:
@@ -61,7 +61,7 @@ def lift_degree(
         The target polynomial.
     ineq_constraints: Dict[sp.Poly, sp.Expr]
         Inequality constraints added to the problem.
-    symmetry: MonomialReduction
+    symmetry: MonomialManager
         The symmetry of the polynomial.
     degree_limit: int
         When the degree of f(a,b,c) * h(a,b,c) is larger than this limit, 
@@ -105,7 +105,7 @@ def lift_degree(
 
 
 def _get_multipliers(ineq_constraints: Dict[sp.Poly, sp.Expr], symbols: Tuple[sp.Symbol, ...], n_plus: int,
-                        symmetry: MonomialReduction, preordering: str ='linear') -> Dict[sp.Poly, sp.Expr]:
+                        symmetry: MonomialManager, preordering: str ='linear') -> Dict[sp.Poly, sp.Expr]:
     if preordering == 'linear':
         ineq_constraints = [(k, v) for k, v in ineq_constraints.items() if k.is_linear]
     else:

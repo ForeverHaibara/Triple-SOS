@@ -1,6 +1,5 @@
 from .basis_generator import (
-    MonomialReduction, MonomialFull, MonomialHomogeneous, MonomialHomogeneousFull, MonomialCyclic, MonomialPerm,
-    generate_expr, arraylize, arraylize_sp, invarraylize
+    MonomialManager, generate_expr, arraylize, arraylize_sp, invarraylize
 )
 
 from .text_process import preprocess_text, pl, PolyReader
@@ -29,8 +28,7 @@ from .roots import (
 
 
 __all__ = [
-    'MonomialReduction', 'MonomialFull', 'MonomialHomogeneous', 'MonomialHomogeneousFull', 'MonomialCyclic', 'MonomialPerm',
-    'generate_expr', 'arraylize', 'arraylize_sp', 'invarraylize',
+    'MonomialManager', 'generate_expr', 'arraylize', 'arraylize_sp', 'invarraylize',
     'preprocess_text', 'pl', 'PolyReader',
     'deg', 'verify_hom_cyclic', 'verify_is_symmetric', 
     'monom_of', 'convex_hull_poly',
