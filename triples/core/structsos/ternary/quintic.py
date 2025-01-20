@@ -7,7 +7,7 @@ from .cubic import sos_struct_cubic
 from .quartic import sos_struct_quartic
 from .quintic_symmetric import sos_struct_quintic_symmetric
 from ....utils.roots.roots import RootTernary
-from ....utils.basis_generator import invarraylize
+from ....utils.monomials import invarraylize
 from .utils import (
     CyclicSum, CyclicProduct, Coeff,
     sum_y_exprs, nroots, rationalize, rationalize_bound, rationalize_func, cancel_denominator, radsimp,

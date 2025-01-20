@@ -1,4 +1,4 @@
-from .basis_generator import (
+from .monomials import (
     MonomialManager, generate_expr, arraylize, arraylize_sp, invarraylize
 )
 

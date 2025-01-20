@@ -9,7 +9,7 @@ from sympy.core.symbol import uniquely_named_symbol
 from sympy.combinatorics import Permutation, PermutationGroup
 
 from ..utils.expression import Solution, SolutionSimple, CyclicExpr
-from ..utils.basis_generator import MonomialManager
+from ..utils.monomials import MonomialManager
 
 class PropertyDict(dict):
     def __getattr__(self, key):
@@ -340,7 +340,7 @@ def sanitize_input(
             symmetry = kwargs.get('symmetry')
             if homogenizer is not None and symmetry is not None:
                 # the generators might increase after homogenization
-                symmetry = symmetry.perm_group
+                symmetry = symmetry.perm_group if isinstance(symmetry, MonomialManager) else symmetry
                 nvars = len(poly.gens)
                 if symmetry.degree != nvars:
                     symmetry = PermutationGroup(*[Permutation(_.array_form + [nvars-1]) for _ in symmetry.args])

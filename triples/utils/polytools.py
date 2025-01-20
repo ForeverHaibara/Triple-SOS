@@ -5,7 +5,7 @@ from typing import List, Tuple, Dict
 
 import sympy as sp
 
-from .basis_generator import generate_expr
+from .monomials import generate_expr
 
 def deg(poly: sp.Poly) -> int:
     """

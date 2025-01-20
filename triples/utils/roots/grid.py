@@ -13,7 +13,7 @@ import numpy as np
 
 from ..polytools import deg
 from ..roots import Root, RootRational
-from ..basis_generator import generate_expr
+from ..monomials import generate_expr
 
 class GridPoly():
     """

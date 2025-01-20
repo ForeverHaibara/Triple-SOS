@@ -4,7 +4,7 @@ import numpy as np
 import sympy as sp
 
 from .rationalize import rationalize
-from ..basis_generator import generate_expr
+from ..monomials import generate_expr
 
 def _zip_power(gens: List[sp.Symbol], powers: List[int]) -> sp.Expr:
     return sp.Mul(*[g**p for g, p in zip(gens, powers)])

@@ -18,7 +18,7 @@ from .updegree import lift_degree
 from .solution import SolutionLinear
 from ..shared import homogenize_expr_list, clear_polys_by_symmetry, sanitize_input, sanitize_output
 from ...utils import findroot, RootsInfo, RootTangent
-from ...utils.basis_generator import MonomialManager
+from ...utils.monomials import MonomialManager
 
 LINPROG_OPTIONS = {
     'method': 'highs-ds' if SCIPY_VERSION >= '1.6.0' else 'simplex',

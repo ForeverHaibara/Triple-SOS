@@ -401,7 +401,7 @@ def coefficient_triangle(poly: Poly, degree: int = None) -> str:
         degree = poly.total_degree()
     if poly.is_homogeneous and len(poly.gens) == 4:
         if not poly.is_zero:
-            from .basis_generator import arraylize_sp
+            from .monomials import arraylize_sp
             vec = arraylize_sp(poly)
             return [short_constant_parser(_) for _ in vec]
         else:
