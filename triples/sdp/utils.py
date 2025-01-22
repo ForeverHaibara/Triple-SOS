@@ -8,10 +8,20 @@ from sympy import Matrix, MatrixBase, Expr, Rational, Symbol, re, eye, collect
 from sympy.core.relational import GreaterThan, StrictGreaterThan, LessThan, StrictLessThan, Equality, Relational
 from sympy.core.singleton import S as singleton
 
-def congruence(M: Union[Matrix, ndarray]) -> Union[None, Tuple[Matrix, Matrix]]:
+def congruence(M: Union[Matrix, ndarray], signfunc = None) -> Union[None, Tuple[Matrix, Matrix]]:
     """
-    Write a symmetric matrix as a sum of squares.
+    Write a symmetric matrix as the decomposition
     M = U.T @ S @ U where U is upper triangular and S is diagonal.
+
+    Parameters
+    ----------
+    M : Matrix | ndarray
+        Symmetric matrix to be decomposed.
+    signfunc : Callable
+        Function to determine the sign of a value. It takes a value as input
+        and returns 1, -1, or 0. If None, it uses the default comparison.
+        This is useful when the matrix is symbolic and there 
+        includes complicated expressions, e.g. nested square roots. 
 
     Returns
     -------
@@ -21,7 +31,14 @@ def congruence(M: Union[Matrix, ndarray]) -> Union[None, Tuple[Matrix, Matrix]]:
         Diagonal vector (1D array).
 
     Return None if M is not positive semidefinite.
+
+    See also
+    ---------
+    sympy.matrices.dense.DenseMatrix.LDLdecomposition
     """
+    if signfunc is None:
+        signfunc = lambda x: 1 if x > 0 else (-1 if x < 0 else 0)
+
     M = M.copy()
     n = M.shape[0]
     if isinstance(M[0,0], Expr):
@@ -31,18 +48,19 @@ def congruence(M: Union[Matrix, ndarray]) -> Union[None, Tuple[Matrix, Matrix]]:
         U, S = np_zeros((n,n)), np_zeros(n)
         One = 1
     for i in range(n-1):
-        if M[i,i] > 0:
+        sgn = signfunc(M[i,i])
+        if sgn > 0:
             S[i] = M[i,i]
             U[i,i+1:] = M[i,i+1:] / (S[i])
             U[i,i] = One
             M[i+1:,i+1:] -= U[i:i+1,i+1:].T @ (U[i:i+1,i+1:] * S[i])
-        elif M[i,i] < 0:
+        elif sgn < 0:
             return None
-        elif M[i,i] == 0 and any(_ for _ in M[i+1:,i]):
+        elif sgn == 0 and any(signfunc(_) != 0 for _ in M[i+1:,i]):
             return None
     U[-1,-1] = One
     S[-1] = M[-1,-1]
-    if S[-1] < 0:
+    if signfunc(S[-1]) < 0:
         return None
     return U, S
 

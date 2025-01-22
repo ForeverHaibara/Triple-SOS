@@ -656,7 +656,7 @@ def _sos_struct_quintic_symmetric_hexagon(coeff):
     if m < 0:
         return None
 
-    rem = (m + coeff((3,2,0))) * 2 + coeff((3,1,1)) + coeff((2,2,1))
+    rem = radsimp((m + coeff((3,2,0))) * 2 + coeff((3,1,1)) + coeff((2,2,1)))
     if rem < 0:
         return None
 

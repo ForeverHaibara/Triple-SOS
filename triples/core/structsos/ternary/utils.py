@@ -5,7 +5,7 @@ import sympy as sp
 
 from ..utils import (
     Coeff, 
-    radsimp, sum_y_exprs, rationalize_func, quadratic_weighting, zip_longest,
+    radsimp, sum_y_exprs, rationalize_func, quadratic_weighting, zip_longest, congruence,
     StructuralSOSError, PolynomialNonpositiveError, PolynomialUnsolvableError
 )
 
@@ -15,10 +15,7 @@ from ....utils.roots.rationalize import (
     nroots, rationalize, rationalize_bound, univariate_intervals,
     square_perturbation, cancel_denominator, common_region_of_conics
 )
-from ....sdp import congruence
 from ....utils import CyclicExpr, CyclicSum, CyclicProduct
-
-
 
 
 def reflect_expression(expr: sp.Expr) -> sp.Expr:

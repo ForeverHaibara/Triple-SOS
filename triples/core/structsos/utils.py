@@ -3,7 +3,7 @@ from typing import Union, Tuple, List, Dict, Callable, Optional
 import sympy as sp
 
 from ..shared import uniquely_named_symbol, SS
-from ...sdp import congruence
+from ...sdp import congruence as _congruence
 from ...utils.expression import Coeff, CyclicSum, CyclicProduct
 from ...utils.roots.rationalize import nroots, rationalize_bound
 
@@ -31,6 +31,18 @@ def radsimp(expr: Union[sp.Expr, List[sp.Expr]]) -> sp.Expr:
     # if n is not S.One:
     expr = (numer*n).expand()/d
     return expr
+
+def congruence(M: sp.Matrix) -> Tuple[sp.Matrix, sp.Matrix]:
+    """
+    Decompose a positive semidefinite matrix M as M = U.T @ S @ U. Returns U and S.
+    """
+    def signfunc(x):
+        # handle nested radicals also, e.g. (sqrt(2)+2)/(sqrt(2)+1)- sqrt(2) == 0
+        x = radsimp(x)
+        if x > 0: return 1
+        if x == 0: return 0
+        return -1
+    return _congruence(M, signfunc=signfunc)
 
 def intervals(polys: List[sp.Poly]) -> List[sp.Expr]:
     """
