@@ -189,7 +189,9 @@ class AMGM3:
             return c1*sol + (c1 + c2)*CyclicSum(m2.as_monom(a,b,c))
     @classmethod
     def _solve(cls, m1: CoeffMonom, m2: CoeffMonom):
-        funcs = [cls._solve_center, cls._solve_circumscribing, cls._solve_spiral, cls._solve_spiral2] #, cls._solve_amgm]
+        funcs = [cls._solve_center, cls._solve_circumscribing,
+                 cls._solve_spiral1,
+                 cls._solve_spiral2] #, cls._solve_amgm]
         for func in funcs:
             sol = func(m1, m2)
             if sol is not None: return sol
@@ -206,8 +208,20 @@ class AMGM3:
     def local_ineq(cls, m1, p, m2) -> Optional[Tuple[sp.Expr, int, int]]:
         """
         Solve CyclicSum(..*m1.as_monom(a,b,c) + ..*p.as_monom(a,b,c) + ..*m2.as_monom(a,b,c)) >= 0
+        where m1, p, m2 are collinear.
         Return expr, x, y such that
-        expr = CyclicSum(x*m1.as_monom(a,b,c) - (x+y)*p.as_monom(a,b,c) + y*m2.as_monom(a,b,c)) >= 0
+        expr = CyclicSum(x*m1.as_monom(a,b,c) - (x+y)*p.as_monom(a,b,c) + y*m2.as_monom(a,b,c)) >= 0.
+
+        Theorem: The polynomial inequality u*x^(u+v) - (u+v)*x^u + v >= 0 holds for x >= 0. This
+        is trivial by AMGM, or by factoring out (x-1)^2.
+
+        Moreover, when u+v is even, the inequality holds for all real number x. When u is even,
+        it is trivial as it is a polynomial with respect to a^2. When u is odd, we can show that
+        
+            u*x^(u+v) - (u+v)*x^u + v >= u*x^(u+v) - (u+v)/2*x^(u+1) - (u+v)/2*x^(u-1) + v
+        
+        where the right-hand-side can be split into two even degree AMGMs. In fact, the right-
+        hand-side can be factored by (a-1)^2*(a+1)^2.
         """
         a, b, c = cls.abc
         v1, v2 = p - m1, m2 - p
@@ -217,10 +231,22 @@ class AMGM3:
             d1, d2 = d1//dgcd, d2//dgcd
             x = sp.Symbol('x')
             f1 = sp.Poly({(d1+d2,): d1, (d1,): -(d1+d2), (0,):d2}, x)
-            dm = divmod(f1, sp.Poly([1,-2,1], x))
-            if not dm[1].is_zero: return None # should not happen
+            # solve f1 >= 0
+
+            if (d1 + d2) % 2 == 1:
+                dm = divmod(f1, sp.Poly([1,-2,1], x))
+                if not dm[1].is_zero: return None # should not happen
+                f1sol = dm[0].as_expr()*(x - 1)**2
+            else:
+                # when (d1 + d2) is even, f1 >= 0 holds for all real number x
+                # since d1 and d2 is coprime, d1 must be odd
+                f2 = f1 - sp.Poly({(d1+1,): sp.S(d1+d2)/2, (d1,):-(d1+d2), (d1-1,):sp.S(d1+d2)/2}, x)
+                dm = divmod(f2, sp.Poly([1, 0, -2, 0, 1], x))
+                if not dm[1].is_zero: return None # should not happen
+                f1sol = dm[0].as_expr()*(x**2 - 1)**2 + sp.S(d1+d2)/2*(x - 1)**2*x**(d1 - 1)
+
             x2 = (v2//d2).as_monom(a,b,c)
-            sol = m1.as_monom(a,b,c) * dm[0].as_expr().subs(x, x2) * (x2 - 1)**2
+            sol = m1.as_monom(a,b,c) * f1sol.subs(x, x2)
             return CyclicSum(sol.together()), d2, d1
             
     @classmethod
@@ -293,18 +319,28 @@ class AMGM3:
             return sol1[0]/sol1[1] + sol2
 
     @classmethod
-    def _solve_spiral(cls, m1: CoeffMonom, m2: CoeffMonom):
-        # e.g. s(a8b3-a6b3c2)
+    def _solve_spiral1(cls, m1: CoeffMonom, m2: CoeffMonom):
         nex = m1.next()
+        nexx = nex.next()
+        for p1 in m2.cycle():
+            p = CoeffMonom.integer_intersection(m1, p1, nex, nexx)
+            if p is not None:
+                if (m1 - p1).dot(p1 - p) > 0:
+                    sol1 = cls.local_ineq(m1, p1, p)
+                    sol2 = cls._solve_circumscribing(m1, p)
+                    if sol1 is not None and sol2 is not None:
+                        return sol1[0]/(sol1[1]+sol1[2]) + sol2*sol1[2]/(sol1[1]+sol1[2])
+
+        # e.g. s(a8b3-a6b3c2)
         for p1, p2 in permutations(m2.cycle(), 2):
             p = CoeffMonom.integer_intersection(m1, p1, nex, p2)
             if p is not None:
                 if (m1 - p1).dot(p1 - p) > 0:
                     sol1 = cls.local_ineq(m1, p1, p)
                     if p.is_center:
-                        sol2 = cls._solve_center(p1, p)
+                        sol2 = cls._solve_center(m1, p)
                         if sol2 is not None:
-                            return sol1[0]/sol1[1] + sol2*sol1[2]/sol1[1]
+                            return sol1[0]/(sol1[1]+sol1[2]) + sol2*sol1[2]/(sol1[1]+sol1[2])
                         return None
                     sol2 = cls._solve_circumscribing(m1, p)
                     if sol1 is not None and sol2 is not None:

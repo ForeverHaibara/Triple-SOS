@@ -372,7 +372,7 @@ def _sos_struct_quartic_uncentered_real(coeff):
     def is_valid(w):
         return sp.sign(eq(w)) * sp.sign(w - 1) <= 0 and radsimp(9*(1 - w)**2 - s) >= 0
 
-    denom = radsimp(3*a1*a3-a2**2)    
+    denom = radsimp(3*a1*a3-a2**2)
     if denom == 0:
         # order 3 multiplicity if discriminant >= 0
         candidates = [radsimp(-a2/(3*a3))]

@@ -87,6 +87,9 @@ def structural_sos_3vars(poly, ineq_constraints: Dict[sp.Poly, sp.Expr] = {}, eq
     if not is_hom: # should not happen
         raise ValueError("structural_sos_3vars only supports homogeneous polynomials.")
 
+    if len(ineq_constraints) == 0 and len(eq_constraints) == 0 and poly.total_degree() % 2 == 1:
+        return
+
     if is_cyc:
         func = _structural_sos_3vars_cyclic
     else:

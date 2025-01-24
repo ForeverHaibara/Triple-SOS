@@ -617,6 +617,8 @@ def _sos_struct_quintic_windmill(coeff):
 
     (s(c(4b2-c2)(a-b)2)-11s(c2(b-a)3))
 
+    10s(a3b2-6/5a2b3+3/4ab4-101/40a3bc+79/40a2b2c)
+
     2s(a4b-3a3b2+ 4a2b3-2a2b2c)-17/2abcs(a2-ab)
 
     s(a4b-3a3b2-8a3bc+7a3c2+3a2b2c)

@@ -4,7 +4,7 @@ import sympy as sp
 
 from .quartic import sos_struct_quartic
 from .utils import (
-    CyclicSum, CyclicProduct, Coeff, CommonExpr, sos_struct_handle_uncentered,
+    CyclicSum, CyclicProduct, Coeff, CommonExpr, SS, sos_struct_handle_uncentered,
     sum_y_exprs, nroots, rationalize_bound, rationalize_func, quadratic_weighting, radsimp,
     prove_univariate
 )
@@ -654,6 +654,12 @@ def _sos_struct_sextic_symmetric_schur_split(coeff, real = False):
     Try solving sextics by rewriting them as a sum of squares of Schur polynomials.
 
     The function does not check the symmetry of the polynomial.
+
+    Examples
+    ---------
+    (s((a2(a+2b)(a+2c))(a-b)(a-c))+14s(ab(a-b)2(a+b-1/2c)2)+s(ab(a-c)2(b-c)2))
+
+    (-s(a5b+a5c+3a4bc-2a3b3-4a3b2c-4a3bc2-10/3a2b2c2)-25p(b2+c2-a2))
     """
     c600, c510, c420, c411, c330, c321, c222 = [coeff(_) for _ in [(6,0,0), (5,1,0), (4,2,0), (4,1,1), (3,3,0), (3,2,1), (2,2,2)]]
     y = radsimp([
@@ -711,6 +717,39 @@ def _sos_struct_sextic_symmetric_schur_split(coeff, real = False):
         ]
         return sum_y_exprs(y, exprs)
 
+    # Case 4~5. lift one degree
+    # y = radsimp([
+    #     c600,
+    #     c510 + 3*c600,
+    #     c330 + 2*c420 + 2*c510 + 2*c600,
+    #     -c321 - 2*c411 - 2*c420 - 4*c510 + 0,
+    #     c321/2 + 3*c411/2 + 2*c420 + 8*c510 + 9*c600 - 0//2,
+    #     5*c321/2 + 9*c330/2 + 3*c411 + 10*c420 + 13*c510 + 9*c600 - 0//2,
+    #     0,
+    #     c420 + 3*c510 + 5*c600,
+    #     c222 + 6*c321 + 3*c330 + 3*c411 + 6*c420 + 6*c510 + 3*c600
+    # ])
+    # if all(_ >= 0 for _ in y[:3]) and all(_ >= 0 for _ in y[4:]):
+    #     if y[3] < 0 and radsimp(min(y[4], y[5])*2 + y[3]) >= 0:
+    #         y[6] = radsimp(min(y[4], y[5])*2)
+    #         y[4] = radsimp(y[4] - y[6]/2)
+    #         y[5] = radsimp(y[5] - y[6]/2)
+    #         y[3] = radsimp(y[3] + y[6])
+    #     if y[3] >= 0:
+    #         p1 = y[0]*a**3 + y[1]*a**2*b + y[1]*a**2*c + y[2]*b**2*c + y[2]*b*c**2 + y[3]*a*b*c
+    #         exprs = [
+    #             CyclicSum((a-b)**2*(a-c)**2*p1.together()),
+    #             y[4] * CyclicProduct(a) * CyclicSum((a-b)**2*(a+b-c)**2),
+    #             y[5] * CyclicProduct(a) * CyclicSum(a**2*(b-c)**2),
+    #             y[6] * CyclicProduct(a) * CyclicSum(a*b*(a-b)**2),
+    #             y[7] * CyclicProduct((a-b)**2) * CyclicSum(a),
+    #             y[8] * CyclicSum(a) * CyclicProduct(a**2)
+    #         ]
+    #         return sp.Add(*exprs) / CyclicSum(a)
+    lifted_coeff = Coeff(coeff.as_poly(a,b,c) * (a+b+c).as_poly(a,b,c))
+    solution = SS.structsos.ternary.sos_struct_liftfree_for_six(lifted_coeff)
+    if solution is not None:
+        return solution / CyclicSum(a)
 
 
 def _sos_struct_sextic_iran96(coeff, real = False):
@@ -1196,7 +1235,7 @@ def _sos_struct_sextic_symmetric_full_sdp(coeff):
     ----------
     [1] https://github.com/duong-db/paramSOS
     """
-    rem = coeff.poly111()
+    rem = radsimp(coeff.poly111())
     if rem < 0:
         return
     c600, c510, c420, c330, c411, c321 = [coeff(_) for _ in [(6,0,0),(5,1,0),(4,2,0),(3,3,0),(4,1,1),(3,2,1)]]
@@ -1205,6 +1244,7 @@ def _sos_struct_sextic_symmetric_full_sdp(coeff):
     a2 = c411 + 2*c420 + 10*c510 + 15*c600
     a1 = 2*c321 + 2*c330 + 4*c411 + 8*c420 + 20*c510 + 20*c600
     a0 = 2*c321 + 3*c330 + 3*c411 + 8*c420 + 14*c510 + 12*c600
+    a4, a3, a2, a1, a0 = radsimp([a4, a3, a2, a1, a0])
     if a4 <= 0 or a0 < 0:
         return
 
@@ -1243,9 +1283,6 @@ def _sos_struct_sextic_symmetric_full_sdp(coeff):
         # impossible to make l11(u) >= 0 and w(u) >= 0
         return
 
-    if detu.discriminant() < 0:
-        return
-
     def _get_solution(u):
         w = func_w(u)
         l00 = radsimp(-(-36*a0*a4 + u**2)/(36*a0))
@@ -1262,15 +1299,36 @@ def _sos_struct_sextic_symmetric_full_sdp(coeff):
             rem * CyclicProduct(a**2)
         )
 
-    # print(sp.latex(detu.subs(u, sp.Symbol('x'))), 'u0', u0, 'det(u0) =', detu(u0))
-    # print(sp.latex(-_eq_w.subs(u, sp.Symbol('x'))))
-
-    if detu(u0) >= 0:
-        return _get_solution(u0)
-
     def _validation(u):
         if func_w(u) >= 0 and func_l11(u) >= 0:
             return True
+
+    # print(sp.latex(detu.subs(u, sp.Symbol('x'))), 'u0', u0, 'det(u0) =', detu(u0))
+    # print(sp.latex(-_eq_w.subs(u, sp.Symbol('x'))))
+
+    if radsimp(detu(u0)) >= 0:
+        return _get_solution(u0)
+
+    disc = radsimp(detu.discriminant())
+    if disc < 0:
+        return
+    elif disc == 0:
+        c3, c2, c1, c0 = detu.all_coeffs()
+        denom = radsimp(3*c1*c3-c2**2)
+        if denom == 0:
+            u1 = radsimp(-c2/(3*c3))
+            if _validation(u1):
+                return _get_solution(u1)
+        else:
+            u1 = radsimp((-9*c0*c3+c1*c2)/2/denom)
+            if _validation(u1):
+                return _get_solution(u1)
+            u2 = radsimp((9*c0*c3**2-4*c1*c2*c3+c2**3)/c3/denom)
+            if _validation(u2):
+                return _get_solution(u2)
+
+        return
+
 
     u0 = rationalize_func(detu, _validation, direction = 1)
     if u0 is not None:
@@ -1429,7 +1487,9 @@ class _sextic_sym_axis:
         Return p1, c1, c2, multiplier such that
         F(x,y) * s(mutiplier[0]*a^2 + multiplier[1]*a*b) = p1 + s(c1*a^2 + c2*a*b) * p(a-b)^2
         """
-        p1 = 2 * (CyclicSum(a**2 - b*c)*CyclicSum(x*a**2 + y*a*b) - CyclicSum(a**4 - a**2*b*c))**2
+        # p1 = 2 * (CyclicSum(a**2 - b*c)*CyclicSum(x*a**2 + y*a*b) - CyclicSum(a**4 - a**2*b*c))**2
+        # s((x-1)a4+(y-x)a3(b+c)+(2x-y)a2b2-(x+y-1)a2bc)
+        p1 = 2 * CyclicSum(a**2*((x-1)*a**2 + (y-x)*a*b + (y-x)*a*c + (2*x-y)/2*b**2 + (2*x-y)/2*c**2 - (x+y-1)*b*c).together())**2
         c1, c2 = sp.S(0), sp.S(2)
         return p1, c1, c2, (2, -2)
 
@@ -1873,14 +1933,16 @@ def _sos_struct_sextic_symmetric_ultimate(coeff, real = True):
             # do not try
             return None
 
-        m = x0
-        p = x0 + x1
-        n = -2*x0 + 2*x2 + x3
-        u = 8*x0 + 6*x1 - x3 + x4
-        v = -6*x0 - 2*x1 + 4*x2 + 3*x3 + x5
-        w = 2*x0 + x1 - x2 - x3
+        m, p, n, u, v, w = radsimp([
+            x0,
+            x0 + x1,
+            -2*x0 + 2*x2 + x3,
+            8*x0 + 6*x1 - x3 + x4,
+            -6*x0 - 2*x1 + 4*x2 + 3*x3 + x5,
+            2*x0 + x1 - x2 - x3
+        ])
 
-        if 3*u + 2*v < 0:
+        if radsimp(3*u + 2*v) < 0:
             # this implies that the value on the symmetric axis is negative around (1,1,1)
             return None
 
@@ -1899,26 +1961,6 @@ def _sos_struct_sextic_symmetric_ultimate(coeff, real = True):
                     return solution
                 return None
 
-            if True:
-                # this case will lead to failure in _sos_struct_sextic_symmetric_quadratic_form
-                t_ = radsimp(p / (-2*m))
-                n_ = n - m * (t_**2 + 2)
-                u_ = u - 3*m*(1 - t_)**2
-                y = radsimp([
-                    m / 2,
-                    n_ / 4 - u_ / 12,
-                    u_ / 6,
-                    w + 3 * n_ / 4 - u_ / 4,
-                ])
-                if all(_ >= 0 for _ in y):
-                    exprs = [
-                        CyclicSum((a-b)**2) * CyclicSum(a*(a - t_*b))**2,
-                        CyclicSum(a*(b-c)**2)**2,
-                        CyclicSum((a-b)**2) * CyclicSum(a*b)**2,
-                        CyclicProduct((a-b)**2)
-                    ]
-                    return sum_y_exprs(y, exprs)
-
         # try full sdp
         solution = _sos_struct_sextic_symmetric_full_sdp(coeff)
         if solution is not None:
@@ -1926,7 +1968,7 @@ def _sos_struct_sextic_symmetric_ultimate(coeff, real = True):
 
         # try neat cases
         # note that this might also handle cases for real numbers
-        poly = coeff.as_poly()
+        poly = coeff.as_poly(a, b, c)
         if coeff.is_rational:
             try:
                 solution = _sos_struct_sextic_symmetric_quadratic_form(poly, coeff)
