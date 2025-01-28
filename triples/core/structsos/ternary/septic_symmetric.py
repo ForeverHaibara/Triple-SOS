@@ -160,6 +160,17 @@ class _septic_sym_axis():
         return p1 / CommonExpr.schur(3), 0
 
     @staticmethod
+    def _F_square(x, y):
+        """
+        When x + y == 5/3,
+        F_{x,y} = 1/9 * s(a(a-b)^2(a-c)^2(3*(x-1)*a-(3*x-1)*(b+c)/2)^2) + (x-1)(9x-13)/12 * s(a) * p(a-b)^2
+        """
+        if x + y == sp.S(5)/3:
+            p1 = (3*(x - 1)*a - (3*x-1)/2*b - (3*x-1)/2*c).together()
+            return CyclicSum(a*(a-b)**2*(a-c)**2*p1**2) / 9, -(x-1)*(9*x-13)/12
+            
+        return None, sp.oo
+    @staticmethod
     def _F_sos(x, y, z_type = 0):
         """
         F(x, y) * s(a) = CyclicSum((a-b)**2*p1**2)/18 + CyclicSum(a*b*(a-b)**2*p2**2) + rem * p(a-b)^2
@@ -355,6 +366,7 @@ class _septic_sym_axis():
 
         cls = _septic_sym_axis
         F_SOLVERS = [
+            cls._F_square,
             partial(cls._F_sos, z_type = 0),
             partial(cls._F_sos, z_type = 1),
             cls._F_border,

@@ -52,7 +52,7 @@ def StructuralSOS(
 def _structural_sos(poly: sp.Poly, ineq_constraints: Dict[sp.Poly, sp.Expr] = {}, eq_constraints: Dict[sp.Poly, sp.Expr] = {}) -> sp.Expr:
     """
     Internal function of StructuralSOS, returns a sympy expression only.
-    The polynomial must be homogeneous.
+    The polynomial must be homogeneous. TODO: remove the homogeneous requirement?
     """
     d = poly.total_degree()
     nvars = len(poly.gens)

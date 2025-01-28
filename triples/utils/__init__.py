@@ -12,7 +12,8 @@ from .polytools import (
 from .expression import (
     Coeff, CyclicExpr, CyclicSum, CyclicProduct, SymmetricSum, SymmetricProduct, is_cyclic_expr, identify_symmetry, rewrite_symmetry,
     poly_get_factor_form, poly_get_standard_form, latex_coeffs,
-    Solution, SolutionSimple
+    Solution, SolutionSimple,
+    pqr_sym, pqr_cyc, pqr_ker
 )
 
 from .roots import (
@@ -35,6 +36,7 @@ __all__ = [
     'Coeff', 'CyclicExpr', 'CyclicSum', 'CyclicProduct', 'SymmetricSum', 'SymmetricProduct', 'is_cyclic_expr', 'identify_symmetry', 'rewrite_symmetry',
     'poly_get_factor_form', 'poly_get_standard_form', 'latex_coeffs',
     'Solution', 'SolutionSimple',
+    'pqr_sym', 'pqr_cyc', 'pqr_ker',
     'RootsInfo', 'Root', 'RootAlgebraic', 'RootRational', 'RootTernary', 'RootAlgebraicTernary', 'RootRationalTernary',
     'GridRender',
     'findroot', 'find_nearest_root', 'findroot_resultant', 'kkt',

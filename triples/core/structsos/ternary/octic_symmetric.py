@@ -763,6 +763,8 @@ def _sos_struct_octic_symmetric_quadratic_form(poly, coeff):
     Examples
     ---------
     s(a2(a-b)(a-c))s(a2-ab)2-p(a-b)2s(3/2a2)
+
+    s(a6(a-b)(a-c))-p(a-b)2(1/2s(a2)+1/6s(a)2)
     """
     return
     

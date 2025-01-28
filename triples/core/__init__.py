@@ -15,12 +15,10 @@ from .structsos import (
     prove_univariate, prove_univariate_interval
 )
 
-from .pqrsos import (
-    pqr_sym, pqr_cyc, pqr_ker
-)
+from ..utils import pqr_sym, pqr_cyc, pqr_ker
 
 from .symsos import (
-    SymmetricSOS, sym_representation, TRANSLATION_POSITIVE, TRANSLATION_REAL,
+    SymmetricSOS, sym_representation, sym_representation_inv,
     SolutionSymmetric, SolutionSymmetricSimple
 )
 
@@ -36,7 +34,7 @@ __all__ = [
     'StructuralSOS', 'SolutionStructural', 'SolutionStructuralSimple',
     'prove_univariate', 'prove_univariate_interval',
     'pqr_sym', 'pqr_cyc', 'pqr_ker',
-    'SymmetricSOS', 'sym_representation', 'TRANSLATION_POSITIVE', 'TRANSLATION_REAL',
+    'SymmetricSOS', 'sym_representation', 'sym_representation_inv',
     'SolutionSymmetric', 'SolutionSymmetricSimple',
     'SDPSOS', 'SDPProblem', 'SOSProblem', 'RootSubspace', 'SolutionSDP'
 ]

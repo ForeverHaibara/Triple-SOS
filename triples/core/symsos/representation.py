@@ -1,176 +1,23 @@
+from typing import Tuple, Dict, List
+
 import sympy as sp
 
-from ..structsos.pivoting.univariate import prove_univariate, prove_univariate_interval, check_univariate
-from ..pqrsos import pqr_sym
-from ...utils import CyclicSum, CyclicProduct
+from .basic import SymmetricTransform
+from .symmetric import SymmetricPositive, SymmetricReal
+from ...utils import Coeff
 
-a, b, c, x, y, z, w, p = sp.symbols('a b c x y z w p')
-
-_SCHUR = CyclicSum(a*(a-b)*(a-c))
-_SCHUR = (CyclicSum((b-c)**2*(b+c-a)**2) + 2*CyclicSum(b*c*(b-c)**2))/2/CyclicSum(a)
-
-TRANSLATION_POSITIVE = {
-    x: _SCHUR,
-    y: CyclicSum(a*(b-c)**2),
-    z: CyclicProduct((a-b)**2) * CyclicSum(a)**3 / CyclicProduct(a),
-    w: _SCHUR * CyclicSum(a*(b-c)**2)**2 / CyclicProduct(a),
-    p: CyclicSum(a)
+_METHOD_TO_TRANSFORM = {
+    'real': SymmetricReal,
+    'positive': SymmetricPositive
 }
 
-TRANSLATION_REAL = {
-    x: CyclicSum(a) * CyclicSum((a-b)**2) / 2,
-    y: CyclicProduct(2*a - b - c) / 2,
-    z: sp.S(27)/4 * CyclicProduct((a-b)**2),
-    w: CyclicSum((a-b)**2) / 2,
-    p: CyclicSum(a)
-}
+def _get_transform_from_method(method: str, nvars: int) -> SymmetricTransform:
+    if method not in _METHOD_TO_TRANSFORM:
+        raise ValueError(f"Unknown method {method}.")
+    return _METHOD_TO_TRANSFORM[method]
 
 
-def _extract_factor(poly, factor, symbol):
-    """
-    Given a polynomial and a factor, find degree and remainder such
-    that `poly = factor ^ degree * remainder`
-
-    Parameters
-    ----------
-    poly : sympy.Poly
-        The polynomial to be factorized.
-    factor : sympy.Poly
-        The factor to be extracted.
-    symbol : sympy.Symbol
-        Poly and factor is treated as single variate polynomials of `symbol`.
-
-    Returns
-    -------
-    degree : int
-        The degree of the factor.
-    remainder : sympy.Poly
-        The remainder of the polynomial after extracting the factor.    
-    """
-    poly = poly.as_poly(symbol)
-    factor = factor.as_poly(symbol)
-
-    if poly.is_zero:
-        return poly
-
-    degree = 0
-    while True:
-        quotient, remain = divmod(poly, factor)
-        if remain.is_zero:
-            poly = quotient
-            degree += 1
-        else:
-            break
-
-    return degree, poly
-
-
-def _sym_representation_positive(poly_pqr, return_poly = False):
-    """
-    Given a polynomial represented in pqr form where
-    `p = a+b+c`, `q = ab+bc+ca`, `r = abc`, return the
-    new form of polynomial with respect to
-    ```
-    x = s(a(a-b)(a-c))
-    y = s(a(b-c)^2)
-    z = p(a-b)^2 * s(a)^3 / p(a)
-    w = x * y^2 / p(a)
-    ```
-
-    Actually we can solve that
-    ```
-    w   = (y - 2*x)^2 + z
-    p^3 = (z*(x + 4*y) + 4*(x + y)^3) / w
-    q   = y * ((x + y)*(4*x + y) + z) / w / p
-    r   = x * y^2 / w
-    ```
-
-    Reference
-    -------
-    [1] https://zhuanlan.zhihu.com/p/616532245
-    """
-    x, y, z, p, q, r, w = sp.symbols('x y z p q r w')
-
-    # to avoid cubic root, we keep p here
-    poly = sp.together(poly_pqr.subs({
-        q: y * (4*x**2 + 5*x*y + y**2 + z) / w / p,
-        r: x * y**2 / w
-    }))
-
-    numerator, denominator = sp.fraction(poly)
-
-    # numerator
-    # do not collect p here, because terms with p naturally contains factors w
-    # so that the w can be cancelled in each term
-    numerator = numerator.subs(p, sp.cancel((z*(x+4*y)+4*(x+y)**3) / w)**(sp.S(1)/3))
-    numerator = numerator.subs(w, y**2 - 4*x*y + 4*x**2 + z)
-
-    degree, numerator = _extract_factor(numerator, (y**2 - 4*x*y + 4*x**2 + z), z)
-    denominator /= w ** degree
-    numerator = numerator.as_poly(z)
-
-    if return_poly:
-        return numerator, denominator
-
-    numerator = sum(coeff.factor() * z**deg for ((deg, ), coeff) in numerator.terms())
-
-    # denominator is in the form of p**r * w**s
-    # w = (abc(s(a(b-c)2)-2s(a(a-b)(a-c)))2+s(a3)p(a-b)2) / (abc)
-    # w = s(a(b-c)2)2s(a(a-b)(a-c)) / abc
-    return numerator / denominator
-
-
-def _sym_representation_real(poly_pqr, return_poly = False):
-    """
-    Given a polynomial represented in pqr form where
-    `p = a+b+c`, `q = ab+bc+ca`, `r = abc`, return the
-    new form of polynomial with respect to
-    ```
-    x = s(a^3 - abc)
-    y = p(2*a - b - c) / 2
-    z = 27/4 * p(a-b)^2
-    ```
-
-    Actually we can solve that
-    ```
-    w^3 = y^2 + z
-    p   = x / w
-    q   = (x^2 - y^2 - z) / (3*w^2)
-    r   = (x^3/w^3 - 3*x + 2*y) / 27
-    ```
-
-    Reference
-    -------
-    [1] https://zhuanlan.zhihu.com/p/616532245
-    """
-    x, y, z, p, q, r, w = sp.symbols('x y z p q r w')
-
-    # to avoid cubic root, we keep p here
-    poly = sp.together(poly_pqr.subs({
-        p: x / w,
-        q: (x**2 - y**2 - z) / 3 / w**2,
-        r: (x**3 / w**3 - 3*x + 2*y) / 27
-    }))
-
-    numerator, denominator = sp.fraction(poly)
-
-    # numerator
-    numerator = numerator.subs(w, sp.Pow(y**2 + z, sp.S(1)/3))
-
-    degree, numerator = _extract_factor(numerator, (y**2 + z), z)
-    denominator /= w ** (3 * degree)
-    numerator = numerator.as_poly(z)
-
-    if return_poly:
-        return numerator, denominator
-
-    numerator = sum(coeff.factor() * z**deg for ((deg, ), coeff) in numerator.terms())
-
-    # denominator is in the form of w**s
-    return numerator / denominator
-
-
-def sym_representation(poly, is_pqr = False, positive = True, return_poly = False):
+def sym_representation(poly, symbols, return_poly = False, method = 'real'):
     """
     Represent a polynoimal to the symmetric form.
 
@@ -179,55 +26,56 @@ def sym_representation(poly, is_pqr = False, positive = True, return_poly = Fals
     
     Parameters
     ----------
-    poly : sympy.Poly or sympy.Expr
+    poly : sympy.Poly
         The polynomial to be represented. Could be either a polynomial of (a,b,c)
         or its pqr representation.
-    is_pqr : bool
-        Whether the input polynomial is in pqr form. If it is None,
-        it will automatically infer from the input polynomial.
-    positive : bool
-        Whether use the positive representation or the real representation.
+    symbols : Tuple[sympy.Symbol]
+    return_poly : bool
+        If True, ...
+    method : str
+        'real' or 'positive'.
 
     Returns
     -------
     sympy.Expr
         The polynomial in the new representation.
     """
-    if poly.is_zero:
-        return poly
+    if not poly.is_homogeneous:
+        raise ValueError("The polynomial must be homogeneous.")
 
-    if not is_pqr:
-        poly = pqr_sym(poly)
+    trans = _get_transform_from_method(method, len(poly.gens))
 
-    if positive:
-        return _sym_representation_positive(poly, return_poly)
-    else:
-        return _sym_representation_real(poly, return_poly)
+    return trans.transform(poly, symbols, return_poly=return_poly)
 
 
-def prove_numerator(numerator: sp.Poly, positive = True):
+def sym_representation_inv(expr, original_symbols, new_symbols, method = 'real'):
+    trans = _get_transform_from_method(method, len(original_symbols))
+    return trans.inv_transform(expr, original_symbols=original_symbols, new_symbols=new_symbols)
+
+
+def sym_transform(poly: sp.Poly, ineq_constraints: Dict[sp.Poly, sp.Expr], eq_constraints: Dict[sp.Poly, sp.Expr],
+                symbols: List[sp.Symbol], deparametrize: bool = False, method: str = 'real') -> Tuple[sp.Poly, Dict[sp.Poly, sp.Expr], Dict[sp.Poly, sp.Expr], sp.Expr]:
     """
+    Transform a symmetric inequality problem along with its constraints.
     """
-    # z = numerator.gens[0]
-    x, y, z = sp.symbols('x y z')
-    args = []
+    trans = _get_transform_from_method(method, len(poly.gens))
+    numerator, denominator = trans.transform(poly, symbols, return_poly=True)
 
-    for ((deg, ), coeff) in numerator.terms():
-        # first scan whether the coefficient is positive
-        y_degree = coeff.as_poly(x, y).total_degree()
-        coeff = coeff.subs(y, 1).as_poly(x) # de-homogenize
-        if not check_univariate(coeff, positive):
-            return None
-        args.append((coeff, deg, y_degree))
+    ineq_constraints2 = dict()
+    eq_constraints2 = dict()
 
-    for i, (coeff, deg, y_degree) in enumerate(args):
-        # perform SOS on each coefficient
-        ans = prove_univariate(coeff)
-        if ans is None:
-            return None
+    for collection, new_collection in ((ineq_constraints, ineq_constraints2), 
+                                       (eq_constraints, eq_constraints2)):
+        for p, value in collection.items():
+            pgens = p.gens
+            p = p.as_poly(*poly.gens)
+            if not Coeff(p).is_symmetric():
+                continue
+            n, d = trans.transform(p, symbols, return_poly=True)
+            new_collection[n] = value * d
 
-        ans = sp.together(sp.together(ans).xreplace({x: x/y}))
-        ans *= y**y_degree * z**deg
-        args[i] = ans
+    extra_ineq, extra_eq = trans.get_default_constraints(symbols)
+    ineq_constraints2.update(extra_ineq)
+    eq_constraints2.update(extra_eq)
 
-    return sp.Add(*args)
+    return numerator, ineq_constraints2, eq_constraints2, denominator

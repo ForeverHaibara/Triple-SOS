@@ -1,19 +1,16 @@
-from typing import Tuple, List, Optional
+from typing import Tuple, Set, List, Optional
 
 import sympy as sp
 from sympy.core.symbol import uniquely_named_symbol
 
-from .representation import (
-    sym_representation,
-    TRANSLATION_POSITIVE, TRANSLATION_REAL,
-    prove_numerator
-)
+from .basic import prove_by_pivoting
+from .representation import sym_transform, sym_representation_inv
 from .solution import SolutionSymmetric, SolutionSymmetricSimple
 from ..shared import sanitize_input, sanitize_output
 from ...utils import Coeff
 
 
-def nonnegative_vars(ineq_constraints: List[sp.Poly], symbols: Tuple[sp.Symbol, ...]) -> List[bool]:
+def _nonnegative_vars(ineq_constraints: List[sp.Poly]) -> Set[sp.Symbol]:
     """
     Infer the nonnegativity of each variable from the inequality constraints.
     """
@@ -21,7 +18,7 @@ def nonnegative_vars(ineq_constraints: List[sp.Poly], symbols: Tuple[sp.Symbol, 
     for ineq in ineq_constraints:
         if ineq.is_monomial and ineq.total_degree() == 1 and ineq.LC() >= 0:
             nonnegative.update(ineq.free_symbols)
-    return [1 if s in nonnegative else 0 for s in symbols]
+    return nonnegative
 
 
 @sanitize_output()
@@ -59,30 +56,24 @@ def SymmetricSOS(
         return None
     if not poly.is_homogeneous or not Coeff(poly).is_symmetric():
         return None
-    if poly.total_degree() <= 1:
-        return None
-    # if poly(1,1,1) != 0:
-    #     return None
 
-    positives = [False]
-    if all(nonnegative_vars(ineq_constraints, poly.gens)):
-        positives.append(True)
+    methods = ['real']
+    nonneg = _nonnegative_vars(ineq_constraints)
+    if all(i in nonneg for i in poly.gens):
+        methods.append('positive')
 
-    for positive in positives:
-        if poly.homogeneous_order() % 2 != 0 and not positive:
-            # cannot be positive on the whole plane R^3
-            continue
+    dummys = [sp.Dummy("s") for _ in range(len(poly.gens))]
 
-        numerator, denominator = sym_representation(poly, is_pqr = False, positive = positive, return_poly = True)
-        numerator = prove_numerator(numerator, positive = positive)
+    for method in methods:
+        numerator, ineq_constraints2, eq_constraints2, denominator = sym_transform(
+            poly, ineq_constraints, eq_constraints, dummys, method=method
+        )
+        numerator = prove_by_pivoting(numerator, nonnegative_symbols=_nonnegative_vars(ineq_constraints2))
         if numerator is None:
             continue
         expr = numerator / denominator
 
-        expr = expr.subs(
-            TRANSLATION_POSITIVE if positive else TRANSLATION_REAL, simultaneous=True
-        )
-        solution = expr.xreplace(dict(zip(sp.symbols("a b c"), poly.gens)))
+        solution = sym_representation_inv(expr, poly.gens, dummys, method=method)
 
         ####################################################################
         # replace assumed-nonnegative symbols with inequality constraints

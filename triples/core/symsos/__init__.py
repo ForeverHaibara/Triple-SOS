@@ -1,11 +1,8 @@
-from .symsos import (
-    SymmetricSOS, sym_representation, TRANSLATION_POSITIVE, TRANSLATION_REAL
-)
-from .representation import prove_univariate, prove_univariate_interval
+from .symsos import SymmetricSOS
+from .representation import sym_representation, sym_representation_inv
 from .solution import SolutionSymmetric, SolutionSymmetricSimple
 
 __all__ = [
-    'SymmetricSOS', 'sym_representation', 'TRANSLATION_POSITIVE', 'TRANSLATION_REAL',
-    'prove_univariate', 'prove_univariate_interval',
+    'SymmetricSOS', 'sym_representation', 'sym_representation_inv',
     'SolutionSymmetric', 'SolutionSymmetricSimple'
 ]
