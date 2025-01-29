@@ -81,7 +81,7 @@ def _form_sdp(ineq_constraints: List[Poly], eq_constraints: List[Poly], nvars: i
     eq_list = [[] for _ in range(matrix_size)]
     cnt = 0
     for ineq in ineq_constraints:
-        d = ineq.homogeneous_order()
+        d = ineq.total_degree()
         if d > degree or (degree - d) % 2 != 0:
             raise ValueError("The degree of the inequality constraint is invalid, received %d while the total degree is %d." % (d, degree))
 
@@ -110,7 +110,7 @@ def _form_sdp(ineq_constraints: List[Poly], eq_constraints: List[Poly], nvars: i
     ############################################
     # For equality constraints we do not need PSD vars, but simply a vector of unbounded vars
     for eq in eq_constraints:
-        d = eq.homogeneous_order()
+        d = eq.total_degree()
         if d > degree:
             continue
         inv_monoms_nonhalf = generate_expr(nvars, degree - d, symmetry=symmetry.base())[1]
@@ -156,7 +156,7 @@ def _get_equal_entries(ineq_constraints: List[Poly], eq_constraints: List[Poly],
     equal_entries = []
     perm_group = symmetry.perm_group
     for ineq in ineq_constraints:
-        d = ineq.homogeneous_order()
+        d = ineq.total_degree()
         if d > degree or (degree - d) % 2 != 0:
             continue
 
@@ -185,7 +185,7 @@ def _get_equal_entries(ineq_constraints: List[Poly], eq_constraints: List[Poly],
         offset += n**2
 
     for eq in eq_constraints:
-        d = eq.homogeneous_order()
+        d = eq.total_degree()
         if d > degree:
             continue
 
@@ -253,20 +253,33 @@ class SOSProblem():
         self,
         poly: Poly,
         symmetry: Optional[Union[MonomialManager, PermutationGroup]] = None,
-        _check_homogeneous: bool = True,
+        # is_homogeneous: Optional[bool] = None,
         _check_symmetry: bool = True,
     ):
+        """
+        Construct the SOS problem.
+
+        Parameters
+        ----------
+        poly : Poly
+            The polynomial to perform SOS on.
+        symmetry : PermutationGroup or MonomialManager
+            The symmetry of the problem. It can be a sympy PermutationGroup object.        
+        """
         self.poly = poly
         self._nvars = len(poly.gens)
         self._degree = poly.total_degree()
 
-        if symmetry is None:
-            symmetry = identify_symmetry_from_lists([[poly]])
-        symmetry = MonomialManager(self._nvars, symmetry)
-
-        if _check_homogeneous and not poly.is_homogeneous:
-            # TODO: shall we support non-homogeneous polynomials?
+        is_homogeneous = True
+        if is_homogeneous is None:
+            is_homogeneous = poly.is_homogeneous
+        elif is_homogeneous and not poly.is_homogeneous:
             raise ValueError("The polynomial is not homogeneous.")
+
+        # if symmetry is None:
+        #     symmetry = identify_symmetry_from_lists([[poly]])
+        symmetry = MonomialManager(self._nvars, symmetry, is_homogeneous=is_homogeneous)
+
         if _check_symmetry and not Coeff(poly).is_symmetric(symmetry.perm_group):
             raise ValueError("The polynomial is not symmetric with respect to the symmetry group.")
 
@@ -274,6 +287,10 @@ class SOSProblem():
         self.manifold = RootSubspace(poly, symmetry=self._symmetry)
         self._sdp: SDPProblem = None
         self._eqvec: Dict[Poly, Tuple[sp.Matrix, sp.Matrix]] = {}
+
+    @property
+    def is_homogeneous(self) -> bool:
+        return self._symmetry.is_homogeneous
 
     @property
     def sdp(self) -> SDPProblem:
@@ -334,6 +351,10 @@ class SOSProblem():
         gens = self.poly.gens
         ineq_constraints = [Poly(ineq, *gens) for ineq in ineq_constraints]
         eq_constraints = [Poly(eq, *gens) for eq in eq_constraints]
+        if self.is_homogeneous and (not all(eq.is_homogeneous for eq in eq_constraints) 
+                            or not all(ineq.is_homogeneous for ineq in ineq_constraints)):
+            raise ValueError("Expecting all constraints to be homogeneous.")
+                            #  "Set is_homogeneous=False in initialization to allow non-homogeneous constraints.")
 
         degree = self._degree
         symmetry = self._symmetry
@@ -394,12 +415,12 @@ def _get_qmodule_list(poly: Poly, ineq_constraints: List[Tuple[Poly, Expr]],
     if not preordering in _ACCEPTED_PREORDERINGS:
         raise ValueError("Invalid preordering method, expected one of %s, received %s." % (str(_ACCEPTED_PREORDERINGS), preordering))
 
-    degree = poly.homogeneous_order()
+    degree = poly.total_degree()
     poly_one = Poly(1, *poly.gens)
 
     def degree_filter(polys_and_exprs):
-        return [pe for pe in polys_and_exprs if pe[0].homogeneous_order() <= degree \
-                    and (degree - pe[0].homogeneous_order()) % 2 == 0]
+        return [pe for pe in polys_and_exprs if pe[0].total_degree() <= degree \
+                    and (degree - pe[0].total_degree()) % 2 == 0]
 
     if preordering == 'none':
         if ineq_constraints_with_trivial:
@@ -426,12 +447,12 @@ def _get_qmodule_list(poly: Poly, ineq_constraints: List[Tuple[Poly, Expr]],
             mul = poly_one
             for c in comb:
                 mul = mul * c[0]
-            d = mul.homogeneous_order()
+            d = mul.total_degree()
             if d > degree:
                 continue
             mul_expr = sp.Mul(*(c[1] for c in comb))
             for ineq, e in nonlin_ineqs:
-                new_d = d + ineq.homogeneous_order()
+                new_d = d + ineq.total_degree()
                 if new_d <= degree and (degree - new_d) % 2 == 0:
                     qmodule.append((mul * ineq, mul_expr * e))
                     has_additional = True
@@ -543,7 +564,7 @@ def _SDPSOS(
         **kwargs
     ) -> Optional[SolutionSDP]:
     nvars = len(poly.gens)
-    degree = poly.homogeneous_order()
+    degree = poly.total_degree()
     if degree > degree_limit or degree < 1 or nvars < 1:
         return None
     if not (poly.domain in (sp.ZZ, sp.QQ)):
@@ -553,7 +574,7 @@ def _SDPSOS(
         print(f'SDPSOS nvars = {nvars} degree = {degree}')
         print('Identified Symmetry = %s' % str(symmetry.perm_group).replace('\n', '').replace('  ',''))
 
-    sos_problem = SOSProblem(poly, symmetry=symmetry, _check_homogeneous=False, _check_symmetry=False)
+    sos_problem = SOSProblem(poly, symmetry=symmetry)
 
     qmodule_list = _get_qmodule_list(poly, ineq_constraints.items(),
                         ineq_constraints_with_trivial=ineq_constraints_with_trivial, preordering=preordering)

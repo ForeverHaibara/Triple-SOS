@@ -5,10 +5,9 @@ import sympy as sp
 def _get_pqr_symbols(symbols: Optional[List[sp.Symbol]] = None) -> Tuple[sp.Symbol, sp.Symbol, sp.Symbol]:
     """Return p,q,r from symbols. If None, create new symbols."""
     if symbols is not None:
-        p, q, r = symbols
+        return symbols
     else:
-        p, q, r = sp.symbols('p q r')
-    return p, q, r
+        return sp.symbols('p q r')
 
 def pqr_sym(poly: sp.Poly, symbols: Optional[List[sp.Symbol]] = None) -> sp.Expr:
     """

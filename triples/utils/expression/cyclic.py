@@ -57,13 +57,13 @@ def _func_perm(func, expr, symbols, perm_group):
     expr = func(*new_args)
     return expr
 
-def _is_same_dict(d1, d2):
+def _is_same_dict(d1, d2, simpfunc=signsimp):
     if len(d1) != len(d2):
         return False
-    d1 = dict((cancel(k), cancel(v)) for k, v in d1.items())
-    d2 = dict((cancel(k), cancel(v)) for k, v in d2.items())
+    d1 = dict((simpfunc(k), simpfunc(v)) for k, v in d1.items())
+    d2 = dict((simpfunc(k), simpfunc(v)) for k, v in d2.items())
     for k, v in d1.items():
-        if k not in d2 or (not cancel(d2[k] - v) is S.Zero):
+        if k not in d2 or (not simpfunc(d2[k]) == simpfunc(v)):
             return False
     return True
 
@@ -270,19 +270,25 @@ class CyclicExpr(sp.Expr):
         if not isinstance(rule, (dict, Dict)):
             # might be a sympy Transform object
             return _func_perm(self.base_func, self.args[0], self.symbols, self.perm)._xreplace(rule)
-        # first substitute the expression
-        arg0, changed0 = self.args[0]._xreplace(rule)
-
-        if all(cancel(k - v) is S.Zero for k, v in rule.items()):
-            # identical replacement, e.g. signsimp
-            return self.func(arg0, self.symbols, self.perm), changed0
 
         def fs(x):
             if hasattr(x, 'free_symbols'): return x.free_symbols
             return set()
 
-        rule_vars = set.union(set(), *(fs(_) for _ in rule.keys()), *(fs(_) for _ in rule.values()))
+        rule_vars = set.union(set(), *(fs(_) for _ in rule.keys()))
+        if len(rule_vars.intersection(self.free_symbols)) == 0:
+            # nothing has changed
+            return self, False
+
+        # first substitute the expression
+        arg0, changed0 = self.args[0]._xreplace(rule)
+
+        if all(signsimp(k) == signsimp(v) for k, v in rule.items()):
+            # identical replacement, e.g. signsimp
+            return self.func(arg0, self.symbols, self.perm), changed0
+
         self_vars = set(self.symbols)
+        rule_vars = set.union(rule_vars, *(fs(_) for _ in rule.values()))
         changed_vars = rule_vars.intersection(self_vars)
         if len(changed_vars) == 0:
             # no symbol is changed, so we can preserve the cyclic property
