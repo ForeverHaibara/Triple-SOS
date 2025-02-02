@@ -5,7 +5,7 @@ import numpy as np
 from sympy.combinatorics import PermutationGroup, Permutation
 from sympy.core.singleton import S
 
-from ...utils import arraylize, arraylize_sp, MonomialManager
+from ...utils import arraylize_np, arraylize_sp, MonomialManager
 
 class _callable_expr():
     """
@@ -64,7 +64,7 @@ class LinearBasis():
     def degree(self) -> int:
         return self.as_poly(self._get_default_symbols()).total_degree()
     def as_array_np(self, **kwargs) -> np.ndarray:
-        return arraylize(self.as_poly(self._get_default_symbols()), **kwargs)
+        return arraylize_np(self.as_poly(self._get_default_symbols()), **kwargs)
     def as_array_sp(self, **kwargs) -> sp.Matrix:
         return arraylize_sp(self.as_poly(self._get_default_symbols()), **kwargs)
 
@@ -199,7 +199,7 @@ class LinearBasisTangent(LinearBasis):
                     power = tuple(i*step for i in power)
                     new_p_dict = dict((tuple_sum(power, k), v) for k, v in p2dict.items())
                     new_p = poly_from_dict(new_p_dict, symbols)
-                    mat[mat_ind] = symmetry.arraylize(new_p, expand_cyc=True)
+                    mat[mat_ind] = symmetry.arraylize_np(new_p, expand_cyc=True)
                     mat_ind += 1
 
             mat = np.vstack(mat) if len(mat) > 0 else np.array([], dtype='float')

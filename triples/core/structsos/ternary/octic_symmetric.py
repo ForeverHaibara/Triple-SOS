@@ -157,7 +157,7 @@ def _sos_struct_octic_symmetric_hexagon_sdp(coeff):
             return None
         u210, u102, u201, u111, r, quad_form = sol
         quad_form_sol = _compute_quad_form_sol(quad_form)
-        if r >= 0 or quad_form_sol is not None:
+        if r >= 0 and quad_form_sol is not None:
             a, b, c = sp.symbols('a b c')
             ker = (a-b)*(u102*c**2*(b+a) + u210*(a*b*(a+b)-c**3) + u201*c*(a**2+b**2+c**2) + u111*a*b*c).expand().together()
             return r * CyclicSum(ker**2) + quad_form_sol

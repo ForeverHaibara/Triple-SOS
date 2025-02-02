@@ -13,7 +13,7 @@ import numpy as np
 
 from ..polytools import deg
 from ..roots import Root, RootRational
-from ..monomials import generate_expr
+from ..monomials import generate_monoms
 
 class GridPoly():
     """
@@ -226,7 +226,7 @@ class GridRender():
 
     @classmethod
     def grid_coor(cls, nvars: int = 3, size: int = 60) -> List[Tuple[int, int]]:
-        return generate_expr(nvars, size)[1]
+        return generate_monoms(nvars, size)[1]
 
     @classmethod
     def _render_grid_value(cls, poly: sp.Poly, size: int = 60, value_method: str = 'integer_lambdify') -> List[float]:

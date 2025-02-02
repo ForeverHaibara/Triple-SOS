@@ -4,7 +4,7 @@ import numpy as np
 import sympy as sp
 
 from .rationalize import rationalize
-from ..monomials import generate_expr
+from ..monomials import generate_monoms
 
 def _zip_power(gens: List[sp.Symbol], powers: List[int]) -> sp.Expr:
     return sp.Mul(*[g**p for g, p in zip(gens, powers)])
@@ -148,9 +148,9 @@ class Root():
         numer : bool
             If numer, return a numpy array instead of sympy Matrix.
         options : dict
-            Other options for the function generate_expr.
+            Other options for the function generate_monoms.
         """
-        monoms = generate_expr(self.nvars, n, **options)[1]
+        monoms = generate_monoms(self.nvars, n, **options)[1]
 
         if diff is None:
             f = lambda m: _zip_power(self.root, m)
@@ -253,7 +253,7 @@ class RootAlgebraic(Root):
         """
         Compute the rational span of the Root.as_vec(n, diff, **options).      
         """
-        monoms = generate_expr(self.nvars, n, **options)[1]
+        monoms = generate_monoms(self.nvars, n, **options)[1]
 
         vec = [None] * len(monoms)
         _single_power = self._single_power_monomial

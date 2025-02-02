@@ -1,4 +1,4 @@
-from typing import Tuple, Set, List, Optional
+from typing import Dict, Set, List, Optional
 
 import sympy as sp
 from sympy.core.symbol import uniquely_named_symbol
@@ -25,12 +25,13 @@ def _nonnegative_vars(ineq_constraints: List[sp.Poly]) -> Set[sp.Symbol]:
 @sanitize_input(homogenize=True)
 def SymmetricSOS(
         poly: sp.Poly,
-        ineq_constraints: List[sp.Poly] = [],
-        eq_constraints: List[sp.Poly] = [],
+        ineq_constraints: Dict[sp.Poly, sp.Expr] = {},
+        eq_constraints: Dict[sp.Poly, sp.Expr] = {},
     ) -> Optional[SolutionSymmetricSimple]:
     """
-    Represent a 3-var symmetric polynomial in SOS using special
-    changes of variables. The algorithm is described in [1].
+    Solve symmetric polynomial inequalities using special
+    changes of variables. The algorithm is powerful but produces
+    EXTREMELY COMPLICATED solutions.
 
     Parameters
     ----------
@@ -45,10 +46,14 @@ def SymmetricSOS(
     -----------
     SolutionSymmetricSimple
         The solution of the problem.
-        
-    Reference
-    -------
-    [1] https://zhuanlan.zhihu.com/p/616532245
+
+    References
+    -----------
+    [1] 陈胜利.不等式的分拆降维幂方法与可读证明.哈尔滨工业大学出版社,2016.
+
+    [2] https://zhuanlan.zhihu.com/p/616532245
+    
+    [3] https://zhuanlan.zhihu.com/p/20969491385
     """
 
     # check symmetricity here # and (1,1,1) == 0

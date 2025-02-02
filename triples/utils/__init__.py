@@ -1,12 +1,11 @@
 from .monomials import (
-    MonomialManager, generate_expr, arraylize, arraylize_sp, invarraylize
+    MonomialManager, generate_monoms, generate_expr, arraylize_np, arraylize_sp, invarraylize
 )
 
 from .text_process import preprocess_text, pl, PolyReader
 
 from .polytools import (
-    deg, verify_hom_cyclic, verify_is_symmetric, 
-    monom_of, convex_hull_poly
+    deg, verify_hom_cyclic, verify_is_symmetric, monom_of, convex_hull_poly
 )
 
 from .expression import (
@@ -29,7 +28,7 @@ from .roots import (
 
 
 __all__ = [
-    'MonomialManager', 'generate_expr', 'arraylize', 'arraylize_sp', 'invarraylize',
+    'MonomialManager', 'generate_monoms', 'generate_expr', 'arraylize_np', 'arraylize_sp', 'invarraylize',
     'preprocess_text', 'pl', 'PolyReader',
     'deg', 'verify_hom_cyclic', 'verify_is_symmetric', 
     'monom_of', 'convex_hull_poly',

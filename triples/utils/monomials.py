@@ -1,4 +1,5 @@
 from typing import Union, Optional, Dict, List, Tuple, Callable
+from warnings import warn
 
 import numpy as np
 import sympy as sp
@@ -204,7 +205,7 @@ class MonomialManager():
                         array[v] += coeff
         return array
 
-    def arraylize(self, poly: sp.Poly, expand_cyc: bool = False) -> np.ndarray:
+    def arraylize_np(self, poly: sp.Poly, expand_cyc: bool = False) -> np.ndarray:
         """
         Return the vector representation of the polynomial in numpy array.
         """
@@ -218,7 +219,7 @@ class MonomialManager():
 
     def invarraylize(self, array: Union[List, np.ndarray, sp.Matrix], gens: List[sp.Symbol], degree: int) -> sp.Poly:
         """
-        Reverse the arraylize function to get the polynomial from its vector representation.
+        Reverse the arraylize_np function to get the polynomial from its vector representation.
         """
         self._assert_equal_nvars(gens)
         inv_monoms = self.inv_monoms(degree)
@@ -244,6 +245,7 @@ class MonomialManager():
 
 
 def _parse_options(nvars, **options) -> MonomialManager:
+    """Fetch the corresponding MonomialManager object given options."""
     if nvars < 0:
         raise ValueError("Number of variables should be non-negative.")
 
@@ -275,20 +277,221 @@ def _parse_options(nvars, **options) -> MonomialManager:
     raise ValueError(f"Invalid symmetry type {type(symmetry)}. Expected MonomialManager or PermutationGroup.")
 
 
-def arraylize(poly: sp.Poly, expand_cyc: bool = False, **options) -> np.ndarray:
+def arraylize_np(poly: sp.Poly, expand_cyc: bool = False, **options) -> np.ndarray:
+    """
+    Convert a sympy polynomial to a numpy vector of coefficients.
+
+    Parameters
+    -----------
+    poly: Poly
+        The sympy polynomial.
+
+    expand_cyc: bool
+        Whether to accumulate the non-standard monomials given a
+        symmetry group.
+
+    Keyword Arguments
+    -----------------
+    hom: bool
+        If True, only homogeneous monomials are considered.
+        Default is True.
+    cyc: bool
+        If True, monomials are reduced by a cyclic group.
+        Default is False.
+    sym: bool
+        If True, monomials are reduced by a symmetric group.
+        Default is False.
+    symmetry: PermutationGroup
+        Sympy permutation group object for the monomials. This specifies the symmetry
+        beyond cyclic and symmetric groups.
+
+    Returns
+    ---------
+    vec: Matrix
+        Sympy matrix (vector) that stores the coefficients of the polynomial.
+
+    Examples
+    ---------
+    >>> from sympy.abc import a, b, c
+    >>> print(arraylize_np(((a-b)**2+(b-c)**2+(c-a)**2).as_poly(a,b,c)))
+    [ 2. -2. -2.  2. -2.  2.]
+
+    >>> print(arraylize_np(((a**2+b**2+c**2)**2-3*(a**3*b+b**3*c+c**3*a)).as_poly(a,b,c), cyc = True))
+    [ 1. -3.  0.  2.  0.]
+
+    >>> print(arraylize_np((a*b*c).as_poly(a,b,c), sym = True))
+    [0. 0. 1.]
+
+    >>> print(arraylize_np((b**2*c + c**2*a).as_poly(a,b,c), expand_cyc = True, cyc = True))
+    [0. 2. 0. 0.]
+
+    See Also
+    ----------
+    arraylize_sp, invarraylize, generate_monoms
+    """
     option = _parse_options(len(poly.gens), **options)
-    return option.arraylize(poly, expand_cyc = expand_cyc)
+    return option.arraylize_np(poly, expand_cyc = expand_cyc)
 
 def arraylize_sp(poly: sp.Poly, expand_cyc: bool = False, **options) -> sp.Matrix:
+    """
+    Convert a sympy polynomial to a sympy vector of coefficients.
+
+    Parameters
+    -----------
+    poly: Poly
+        The sympy polynomial.
+
+    expand_cyc: bool
+        Whether to accumulate the non-standard monomials given a
+        symmetry group.
+
+    Keyword Arguments
+    -----------------
+    hom: bool
+        If True, only homogeneous monomials are considered.
+        Default is True.
+    cyc: bool
+        If True, monomials are reduced by a cyclic group.
+        Default is False.
+    sym: bool
+        If True, monomials are reduced by a symmetric group.
+        Default is False.
+    symmetry: PermutationGroup
+        Sympy permutation group object for the monomials. This specifies the symmetry
+        beyond cyclic and symmetric groups.
+
+    Returns
+    ---------
+    vec: Matrix
+        Sympy matrix (vector) that stores the coefficients of the polynomial.
+
+    Examples
+    ---------
+    >>> from sympy.abc import a, b, c
+    >>> print(arraylize_sp(((a-b)**2+(b-c)**2+(c-a)**2).as_poly(a,b,c)))
+    Matrix([[2], [-2], [-2], [2], [-2], [2]])
+
+    >>> print(arraylize_sp(((a**2+b**2+c**2)**2-3*(a**3*b+b**3*c+c**3*a)).as_poly(a,b,c), cyc = True))
+    Matrix([[1], [-3], [0], [2], [0]])
+
+    >>> print(arraylize_sp((a*b*c).as_poly(a,b,c), sym = True))
+    Matrix([[0], [0], [1]])
+
+    >>> print(arraylize_sp((b**2*c + c**2*a).as_poly(a,b,c), expand_cyc = True, cyc = True))
+    Matrix([[0], [2], [0], [0]])
+
+    See Also
+    ----------
+    arraylize_np, invarraylize, generate_monoms
+    """
     option = _parse_options(len(poly.gens), **options)
     return option.arraylize_sp(poly, expand_cyc = expand_cyc)
 
 def invarraylize(array: Union[List, np.ndarray, sp.Matrix], gens: List[sp.Symbol], degree: int, **options) -> sp.Poly:
+    """
+    Convert a vector representation of polynomial back to the sympy polynomial.
+
+    Parameters
+    -----------
+    array: List or ndarray or Matrix
+        1D iterable object representing the vector of coefficients.
+    gens: List[Symbol]
+        A list of symbols as the generators of the polynomial.
+    degree: int
+        The total degree of the polynomial.
+
+    Keyword Arguments
+    -----------------
+    hom: bool
+        If True, only homogeneous monomials are considered.
+        Default is True.
+    cyc: bool
+        If True, monomials are reduced by a cyclic group.
+        Default is False.
+    sym: bool
+        If True, monomials are reduced by a symmetric group.
+        Default is False.
+    symmetry: PermutationGroup
+        Sympy permutation group object for the monomials. This specifies the symmetry
+        beyond cyclic and symmetric groups.
+        
+
+    Returns
+    ---------
+    poly: Poly
+        Sympy polynomial.
+
+    Examples
+    ---------
+    >>> from sympy.abc import a, b, c, x, y, z
+    >>> v1 = arraylize_sp(((a**2+b**2+c**2)**2-3*(a**3*b+b**3*c+c**3*a)).as_poly(a,b,c), cyc = True)
+    >>> invarraylize(v1, (x, y, z), 3, cyc = True)
+    Poly(x**3 - 3*x**2*y + 2*x*y*z - 3*x*z**2 + y**3 - 3*y**2*z + z**3, x, y, z, domain='ZZ')
+
+    >>> invarraylize([x,y], (a,b,c), 2, sym = True)
+    Poly(x*a**2 + y*a*b + y*a*c + x*b**2 + y*b*c + x*c**2, a, b, c, domain='ZZ[x,y]')
+
+    See Also
+    ----------
+    arraylize_np, arraylize_sp, generate_monoms
+    """
     option = _parse_options(len(gens), **options)
     return option.invarraylize(array, gens, degree)
 
-def generate_expr(nvars: int, degree: int, **options) -> Tuple[Dict[Tuple[int, ...], int], List[Tuple[int, ...]]]:
+def generate_monoms(nvars: int, degree: int, **options) -> Tuple[Dict[Tuple[int, ...], int], List[Tuple[int, ...]]]:
+    """
+    Generate monomials of given number of variables and degree.
+
+    Returns a dictionary of monomials with indices as values and a list of monomials.
+
+    Parameters
+    ----------
+    nvars: int
+        Number of variables.
+    degree: int
+        Degree of monomials.
+
+    Keyword Arguments
+    -----------------
+    hom: bool
+        If True, only homogeneous monomials are generated.
+        Default is True.
+    cyc: bool
+        If True, the monomials are generated with cyclic symmetry.
+        Default is False.
+    sym: bool
+        If True, the monomials are generated with symmetric symmetry.
+        Default is False.
+    symmetry: PermutationGroup
+        Sympy permutation group object for the monomials. This specifies the symmetry
+        beyond cyclic and symmetric groups.
+
+    Returns
+    ----------
+    dict_monoms : Dict[Tuple[int, ...], int]
+        Dictionary of monomials with indices as values.
+    inv_monoms : List[Tuple[int, ...]]
+        List of monomials.
+
+    Examples
+    ----------
+    >>> generate_monoms(3, 3, cyc = True)
+    ({(3, 0, 0): 0, (2, 1, 0): 1, (2, 0, 1): 2, (1, 1, 1): 3},
+     [(3, 0, 0), (2, 1, 0), (2, 0, 1), (1, 1, 1)])
+
+    >>> from sympy.combinatorics import AlternatingGroup
+    >>> generate_monoms(4, 3, symmetry=AlternatingGroup(4))
+    ({(3, 0, 0, 0): 0, (2, 1, 0, 0): 1, (1, 1, 1, 0): 2},
+     [(3, 0, 0, 0), (2, 1, 0, 0), (1, 1, 1, 0)])
+
+    >>> generate_monoms(3, 2, hom = False, sym = True)
+    ({(2, 0, 0): 0, (1, 1, 0): 1, (1, 0, 0): 2, (0, 0, 0): 3},
+     [(2, 0, 0), (1, 1, 0), (1, 0, 0), (0, 0, 0)])
+    """
     option = _parse_options(nvars, **options)
     return option._register_monoms(degree)
 
 
+def generate_expr(nvars: int, degree: int, **options) -> Tuple[Dict[Tuple[int, ...], int], List[Tuple[int, ...]]]:
+    warn("generate_expr is deprecated. Use generate_monoms instead.", DeprecationWarning, stacklevel=2)
+    return generate_monoms(nvars, degree, **options)

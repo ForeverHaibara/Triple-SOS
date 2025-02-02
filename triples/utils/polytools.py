@@ -5,8 +5,6 @@ from typing import List, Tuple, Dict
 
 import sympy as sp
 
-from .monomials import generate_expr
-
 def deg(poly: sp.Poly) -> int:
     """
     Return the degree of a polynomial. We shall assume the polynomial is homogeneous.

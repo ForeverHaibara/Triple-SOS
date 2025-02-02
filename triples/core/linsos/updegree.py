@@ -5,7 +5,7 @@ from sympy.combinatorics import PermutationGroup, CyclicGroup
 
 from .basis import LinearBasis, quadratic_difference, _callable_expr
 from ..shared import clear_polys_by_symmetry
-from ...utils import MonomialManager, generate_expr
+from ...utils import MonomialManager, generate_monoms
 
 
 class LinearBasisMultiplier(LinearBasis):
@@ -125,7 +125,7 @@ def _get_multipliers(ineq_constraints: Dict[sp.Poly, sp.Expr], symbols: Tuple[sp
         multipliers = []
         poly_one = sp.Poly(1, *symbols)
         n_constraints = len(ineq_constraints)
-        for power in generate_expr(len(ineq_constraints), n_plus)[1]:
+        for power in generate_monoms(len(ineq_constraints), n_plus)[1]:
             mul_poly = poly_one
             for i in range(n_constraints):
                 if power[i] > 0:
@@ -134,7 +134,7 @@ def _get_multipliers(ineq_constraints: Dict[sp.Poly, sp.Expr], symbols: Tuple[sp
             multipliers.append((mul_poly, mul_expr))
 
     if n_plus > 2 and n_plus % 2 == 0:
-        for power in generate_expr(len(symbols), n_plus//2)[1]:
+        for power in generate_monoms(len(symbols), n_plus//2)[1]:
             mul_poly = sp.Poly({tuple(p*2 for p in power): 1}, *symbols)
             mul_expr = sp.Mul(*(si**(pi*2) for si, pi in zip(symbols, power)))
             multipliers.append((mul_poly, mul_expr))

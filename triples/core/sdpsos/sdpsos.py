@@ -13,7 +13,7 @@ from .solution import SolutionSDP
 from ..shared import sanitize_input, sanitize_output, identify_symmetry_from_lists, clear_polys_by_symmetry
 from ...sdp import SDPProblem
 from ...sdp.arithmetic import solve_csr_linear
-from ...utils import arraylize_sp, Coeff, CyclicExpr, generate_expr, MonomialManager
+from ...utils import arraylize_sp, Coeff, CyclicExpr, generate_monoms, MonomialManager
 
 
 def _define_mapping(nvars: int, degree: int, monomial: Tuple[int, ...], symmetry: MonomialManager, half: bool = True) -> Callable[[int, int], Tuple[int, int]]:
@@ -25,8 +25,8 @@ def _define_mapping(nvars: int, degree: int, monomial: Tuple[int, ...], symmetry
     """
     m = sum(monomial)
     codegree = (degree - m)//2 if half else degree - m
-    vec = generate_expr(nvars, codegree, symmetry=symmetry.base())[1]
-    dict_monoms = generate_expr(nvars, degree, symmetry=symmetry)[0]
+    vec = generate_monoms(nvars, codegree, symmetry=symmetry.base())[1]
+    dict_monoms = generate_monoms(nvars, degree, symmetry=symmetry)[0]
 
     if half:
         def mapping(i: int, j: int) -> Tuple[int, int]:
@@ -72,8 +72,8 @@ def _get_monomial_list(nvars: int, d: int, symmetry: MonomialManager) -> List[Tu
 def _form_sdp(ineq_constraints: List[Poly], eq_constraints: List[Poly], nvars: int, degree: int,
                 rhs: sp.Matrix, symmetry: MonomialManager, verbose: bool = False) -> SDPProblem:
     time0 = time()
-    matrix_size = len(generate_expr(nvars, degree, symmetry=symmetry)[0])
-    get_inv_half = lambda d: generate_expr(nvars, d, symmetry=symmetry.base())[1]
+    matrix_size = len(generate_monoms(nvars, degree, symmetry=symmetry)[0])
+    get_inv_half = lambda d: generate_monoms(nvars, d, symmetry=symmetry.base())[1]
     splits_ineq = {}
     splits_eq = {}
 
@@ -113,7 +113,7 @@ def _form_sdp(ineq_constraints: List[Poly], eq_constraints: List[Poly], nvars: i
         d = eq.total_degree()
         if d > degree:
             continue
-        inv_monoms_nonhalf = generate_expr(nvars, degree - d, symmetry=symmetry.base())[1]
+        inv_monoms_nonhalf = generate_monoms(nvars, degree - d, symmetry=symmetry.base())[1]
         vector_size = len(inv_monoms_nonhalf)
         splits_eq[eq] = vector_size
 
@@ -160,7 +160,7 @@ def _get_equal_entries(ineq_constraints: List[Poly], eq_constraints: List[Poly],
         if d > degree or (degree - d) % 2 != 0:
             continue
 
-        dict_monoms_half, inv_monoms_half = generate_expr(nvars, (degree - d)//2, symmetry=symmetry.base())
+        dict_monoms_half, inv_monoms_half = generate_monoms(nvars, (degree - d)//2, symmetry=symmetry.base())
         n = len(inv_monoms_half)
 
         if not Coeff(ineq).is_symmetric(perm_group):
@@ -189,7 +189,7 @@ def _get_equal_entries(ineq_constraints: List[Poly], eq_constraints: List[Poly],
         if d > degree:
             continue
 
-        dict_monoms_nonhalf, inv_monoms_nonhalf = generate_expr(nvars, degree - d, symmetry=symmetry.base())
+        dict_monoms_nonhalf, inv_monoms_nonhalf = generate_monoms(nvars, degree - d, symmetry=symmetry.base())
         n = len(inv_monoms_nonhalf)
 
         if Coeff(eq).is_symmetric(perm_group):

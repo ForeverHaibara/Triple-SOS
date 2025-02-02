@@ -8,7 +8,7 @@ class SymmetricPositive(SymmetricTransform):
     """
     Given a polynomial represented in pqr form where
     `p = a+b+c`, `q = ab+bc+ca`, `r = abc`, return the
-    new form of polynomial with respect to
+    new form of the polynomial with respect to
     ```
     x = a*(a-b)*(a-c) + b*(b-c)*(b-a) + c*(c-a)*(c-b)
     y = a*(b-c)^2 + b*(c-a)^2 + c*(a-b)^2
@@ -24,9 +24,12 @@ class SymmetricPositive(SymmetricTransform):
     r   = x * y^2 / w
     ```
 
-    Reference
-    -------
-    [1] https://zhuanlan.zhihu.com/p/616532245
+    This algorithm was proposed in [1, Chapter 4] and mentioned in [2].
+
+    References
+    ----------
+    [1] 陈胜利.不等式的分拆降维幂方法与可读证明.哈尔滨工业大学出版社,2016.
+    [2] https://zhuanlan.zhihu.com/p/616532245
     """
     @classmethod
     def _transform_pqr(cls, poly_pqr, original_symbols, new_symbols, return_poly=True):
@@ -98,7 +101,7 @@ class SymmetricReal(SymmetricTransform):
     """
     Given a polynomial represented in pqr form where
     `p = a+b+c`, `q = ab+bc+ca`, `r = abc`, return the
-    new form of polynomial with respect to
+    new form of the polynomial with respect to
     ```
     x = a^3 + b^3 + c^3 - 3*a*b*c
     y = (2*a - b - c) * (2*b - c - a) * (2*c - a - b)/2
@@ -113,9 +116,38 @@ class SymmetricReal(SymmetricTransform):
     r   = (x^3/w^3 - 3*x + 2*y) / 27
     ```
 
-    Reference
-    -------
+    This algorithm was proposed in [1].
+
+    The algorithm can be extended to 4-var case [2], where
+    ```
+    D = (a-b)^2*(b-c)^2*(c-d)^2*(d-a)^2*(a-c)^2*(b-d)^2
+    x = S[a]S[(a-b)^2*(b-c)^2*(c-a)^2]*S[(a-b)^2]/(144*(a+b-c-d)*(a+c-b-d)*(a+d-b-c))
+    y = S[(a-b)^2*(b-c)^2*(c-a)^2]/6
+    z = S[(a-b)^2*(c-d)^4]/2 - y
+    w = D*S[(a-b)^2]^3/(4*(a+b-c-d)^2*(a+c-b-d)^2*(a+d-b-c)^2)
+    ```
+
+    The notation "S[.]" stands for the 24-term complete symmetric summation.
+    It can be solved that
+
+    ```
+    D = w*y^2*z / (16*((8*y+z)*w + (2*y+z)^3))
+    p/(r2*q2^2) = 1024*x*D*(w + (y-z)^2)/(w*y^3*z)
+    q2^3 = -w*y^2*z/(1024*D*(w + (y-z)^2))
+    r2^2 = y^2*z/(8*(w + (y-z)^2))
+    s2/q2^2 = 4*D*(w - 8*y^2 - 2*y*z + z^2)/(w*y^2)
+    q2 = -3*p^2/8 + q
+    r2 = p^3/8 - p*q/2 + r
+    s2 = -3*p^4/256 + p^2*q/16 - p*r/4 + s
+    ```
+
+    where `p = a+b+c+d`, `q = ab+bc+cd+da+ac+bd`, `r = abc+bcd+cda+dab`, `s = abcd`.
+
+    References
+    ----------
     [1] https://zhuanlan.zhihu.com/p/616532245
+
+    [2] https://zhuanlan.zhihu.com/p/20969491385
     """
     @classmethod
     def _transform_pqr(cls, poly_pqr, original_symbols, new_symbols, return_poly=True):

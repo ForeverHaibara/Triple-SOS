@@ -7,7 +7,7 @@ from sympy import Poly
 
 from ...utils import (
     convex_hull_poly, findroot_resultant, Root, RootAlgebraic, RootRational,
-    MonomialManager, generate_expr, arraylize_sp
+    MonomialManager, generate_monoms, arraylize_sp
 )
 
 
@@ -90,7 +90,7 @@ def _hull_space(
         return None
 
     half_degree = (degree - sum(monomial)) // 2
-    dict_monoms = generate_expr(nvars, half_degree, symmetry=symmetry.base())[0]
+    dict_monoms = generate_monoms(nvars, half_degree, symmetry=symmetry.base())[0]
 
     def onehot(i: int) -> List[int]:
         v = [0] * len(dict_monoms)
