@@ -555,8 +555,8 @@ def _sos_struct_sextic_rotated_tree(coeff):
         CyclicSum(a) * CyclicSum(a**2*c*(a**2*c-x*a*b**2-x*b*c**2+(x*x-1)*b**2*c-x*(x-2)*a*b*c)**2),
         CyclicProduct(a**2) * CyclicSum(((x-1)*a-b)**2*(a+(x-1)*b-x*c)**2),
         CyclicProduct(a) * CyclicSum(c*((x-1)*a-b)**2*(x*a*b-a*c-(x-1)*b*c)**2),
-        CyclicProduct(a) * CyclicSum(a) * CyclicSum(a**2*c - CyclicProduct(a)) * CyclicSum(a*b**2 + z*a*b*c),
-        CyclicProduct(a) * CyclicSum(a) * CyclicSum(a**2*b - CyclicProduct(a)) * CyclicSum(a*b**2 + z*a*b*c),
+        CyclicProduct(a) * CyclicSum(a) * CommonExpr.amgm((2,0,1),(1,1,1)) * CyclicSum(a*b**2 + z*a*b*c),
+        CyclicProduct(a) * CyclicSum(a) * CommonExpr.amgm((2,1,0),(1,1,1)) * CyclicSum(a*b**2 + z*a*b*c),
         CyclicProduct(a**2) * CyclicSum(a) * CyclicSum(a*b**2 + z*a*b*c)
     ]
 

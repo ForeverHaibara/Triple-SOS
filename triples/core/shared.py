@@ -238,7 +238,8 @@ def _std_eq_constraints(p: sp.Poly, e: sp.Expr) -> Tuple[sp.Poly, sp.Expr]:
     for q, d in lst:
         ret *= q
         e = e * q.as_expr()**(max_d - d)
-    e = sp.Pow(e, 1/max_d, evaluate=False)
+    if max_d != 1:
+        e = sp.Pow(e, 1/max_d, evaluate=False)
     if c < 0:
         e = e.__neg__()
     return ret, e
@@ -310,9 +311,9 @@ def sanitize_input(
             symbols = tuple(sorted(list(symbols), key=lambda x: x.name))
             symbols = tuple(original_symbols) + symbols
 
-            poly = sp.Poly(poly, *symbols)
-            ineq_constraints = dict((sp.Poly(e, *symbols), e2) for e, e2 in ineq_constraints.items())
-            eq_constraints = dict((sp.Poly(e, *symbols), e2) for e, e2 in eq_constraints.items())
+            poly = sp.Poly(poly.doit(), *symbols)
+            ineq_constraints = dict((sp.Poly(e.doit(), *symbols), e2) for e, e2 in ineq_constraints.items())
+            eq_constraints = dict((sp.Poly(e.doit(), *symbols), e2) for e, e2 in eq_constraints.items())
 
             homogenizer = None
             is_hom = poly.is_homogeneous

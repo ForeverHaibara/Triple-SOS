@@ -423,7 +423,7 @@ class CyclicSum(CyclicExpr):
         return obj
 
     @classmethod
-    def str_latex(cls, printer, expr):
+    def _str_latex(cls, printer, expr):
         s = printer._print(expr.args[0])
         if precedence_traditional(expr.args[0]) < cls.precedence:
             s = printer._add_parens(s)
@@ -440,7 +440,7 @@ class CyclicSum(CyclicExpr):
         return cyc + s
 
     @classmethod
-    def str_str(cls, printer, expr):
+    def _str_str(cls, printer, expr):
         if cls.PRINT_FULL:
             return f"{cls.__name__}({', '.join(printer._print(arg) for arg in expr.args)})"
         s = printer._print(expr.args[0])
@@ -545,7 +545,7 @@ class CyclicProduct(CyclicExpr):
         return obj
 
     @classmethod
-    def str_latex(cls, printer, expr):
+    def _str_latex(cls, printer, expr):
         s = printer._print(expr.args[0])
         if precedence_traditional(expr.args[0]) < cls.precedence:
             s = printer._add_parens(s)
@@ -563,7 +563,7 @@ class CyclicProduct(CyclicExpr):
         return cyc + s
 
     @classmethod
-    def str_str(cls, printer, expr):
+    def _str_str(cls, printer, expr):
         if cls.PRINT_FULL:
             return f"{cls.__name__}({', '.join(printer._print(arg) for arg in expr.args)})"
 
@@ -610,11 +610,11 @@ def SymmetricProduct(expr, symbols, **kwargs):
     return CyclicProduct(expr, symbols, SymmetricGroup(len(symbols)), **kwargs)
 
 
-setattr(LatexPrinter, '_print_CyclicSum', lambda self, expr: CyclicSum.str_latex(self, expr))
-setattr(LatexPrinter, '_print_CyclicProduct', lambda self, expr: CyclicProduct.str_latex(self, expr))
+setattr(LatexPrinter, '_print_CyclicSum', lambda self, expr: CyclicSum._str_latex(self, expr))
+setattr(LatexPrinter, '_print_CyclicProduct', lambda self, expr: CyclicProduct._str_latex(self, expr))
 
-setattr(StrPrinter, '_print_CyclicSum', lambda self, expr: CyclicSum.str_str(self, expr))
-setattr(StrPrinter, '_print_CyclicProduct', lambda self, expr: CyclicProduct.str_str(self, expr))
+setattr(StrPrinter, '_print_CyclicSum', lambda self, expr: CyclicSum._str_str(self, expr))
+setattr(StrPrinter, '_print_CyclicProduct', lambda self, expr: CyclicProduct._str_str(self, expr))
 
 
 if sp.__version__ < '1.14':

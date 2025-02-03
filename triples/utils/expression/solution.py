@@ -6,6 +6,7 @@ import sympy as sp
 from sympy.core.singleton import S
 from sympy.polys import Poly
 from sympy.printing.precedence import precedence_traditional, PRECEDENCE
+from sympy.printing.str import StrPrinter
 from sympy.combinatorics import PermutationGroup, Permutation
 
 from ..expression.cyclic import is_cyclic_expr, CyclicSum, CyclicProduct, CyclicExpr, rewrite_symmetry
@@ -298,6 +299,51 @@ class SolutionSimple(Solution):
 
         return self._is_equal
 
+    def as_eq(self, lhs_expr=None, together=True, cancel=True):
+        lhs = self.problem.as_expr() if lhs_expr is None else lhs_expr
+        if cancel:
+            rhs, denom = self.as_fraction(together=together)
+            lhs = lhs * denom
+        else:
+            rhs = self.solution.together() if together else self.solution
+        return sp.Equality(lhs, rhs, evaluate=False)
+
+    def to_string(self, mode: str = 'latex', lhs_expr=None, together=True, cancel=True):
+        eq = self.as_eq(lhs_expr=lhs_expr, together=together, cancel=cancel)
+        lhs, rhs = eq.lhs, eq.rhs
+        if mode == 'latex':
+            to_str = lambda x: sp.latex(x)
+        elif mode == 'txt' or mode == 'formatted':
+            if mode == 'txt':
+                cyclic_sum_name = 'Σ'
+                cyclic_product_name = '∏'
+                with_cyclic_parens = False
+            else:
+                cyclic_sum_name = 's'
+                cyclic_product_name = 'p'
+                with_cyclic_parens = True
+            _to_str = lambda x: _print_str(x, cyclic_sum_name=cyclic_sum_name,
+                cyclic_product_name=cyclic_product_name, with_cyclic_parens=with_cyclic_parens).replace('**','^')
+
+            if mode == 'txt':
+                def _convert_superscript(s):
+                    pow_trans = str.maketrans('0123456789', '⁰¹²³⁴⁵⁶⁷⁸⁹')
+                    return re.sub(r'\^(\d+)', lambda m: m.group(1).translate(pow_trans), s)
+                to_str = lambda x: _convert_superscript(_to_str(x).replace('*',''))
+            else:
+                to_str = lambda x: _to_str(x)
+        else:
+            raise ValueError(f"Unknown mode {mode}.")
+        
+        lhs_str = to_str(lhs)
+        rhs_str = to_str(rhs)
+        return f"{lhs_str} = {rhs_str}"   
+
+    def _repr_latex_(self):
+        # s = self.to_string(mode='latex')
+        # return f"$\\displaystyle {s}$"
+        return self.as_eq()._repr_latex_()
+
     def _str_multiplier(self, add_paren = None, get_str = None):
         """
         Util function for printing.
@@ -447,7 +493,7 @@ class SolutionSimple(Solution):
         self.solution = dehom(self.solution)
         return self
 
-    def as_fraction(self, together = True, inplace = False):
+    def as_fraction(self, together=True, inplace=False):
         """
         Denest the fractions and express the solution as the division of two fraction-free expressions.
         """
@@ -480,3 +526,20 @@ class SolutionSimple(Solution):
     def multiplier(self):
         warn("Calling Solution.multiplier will be deprecated. Use Solution.as_fraction()[1] instead.", DeprecationWarning, stacklevel=2)
         return self.as_fraction()[1]
+
+def _print_str(expr: sp.Expr, cyclic_sum_name = 'Σ', cyclic_product_name = '∏',
+               with_cyclic_parens = False, settings=None):
+    """Advanced printing to handle cyclic expressions."""
+    printer = StrPrinter(settings=settings)
+    def _print_CyclicExpr(prefix):
+        def _str_str(expr):
+            s = printer._print(expr.args[0])
+            if with_cyclic_parens or precedence_traditional(expr.args[0]) < expr.__class__.precedence:
+                s = '(%s)'%s
+            return prefix + s
+        return _str_str
+    _print_CyclicSum = _print_CyclicExpr(cyclic_sum_name)
+    _print_CyclicProduct = _print_CyclicExpr(cyclic_product_name)
+    setattr(printer, '_print_CyclicSum', lambda expr: _print_CyclicSum(expr))
+    setattr(printer, '_print_CyclicProduct', lambda expr: _print_CyclicProduct(expr))
+    return printer.doprint(expr)
