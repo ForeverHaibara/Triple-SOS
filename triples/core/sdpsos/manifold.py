@@ -6,7 +6,7 @@ import sympy as sp
 from sympy import Poly
 
 from ...utils import (
-    convex_hull_poly, findroot_resultant, Root, RootAlgebraic, RootRational,
+    findroot_resultant, Root, RootAlgebraic, RootRational,
     MonomialManager, generate_monoms, arraylize_sp
 )
 

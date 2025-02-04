@@ -5,7 +5,7 @@ from sympy.core.symbol import uniquely_named_symbol
 
 from .basic import prove_by_pivoting
 from .representation import sym_transform, sym_representation_inv
-from .solution import SolutionSymmetric, SolutionSymmetricSimple
+from .solution import SolutionSymmetric
 from ..shared import sanitize_input, sanitize_output
 from ...utils import Coeff
 
@@ -27,7 +27,7 @@ def SymmetricSOS(
         poly: sp.Poly,
         ineq_constraints: Dict[sp.Poly, sp.Expr] = {},
         eq_constraints: Dict[sp.Poly, sp.Expr] = {},
-    ) -> Optional[SolutionSymmetricSimple]:
+    ) -> Optional[SolutionSymmetric]:
     """
     Solve symmetric polynomial inequalities using special
     changes of variables. The algorithm is powerful but produces
@@ -104,7 +104,7 @@ def SymmetricSOS(
             problem = poly,
             solution = solution,
             is_equal = True
-        ).as_simple_solution()
+        )
 
         return solution
 

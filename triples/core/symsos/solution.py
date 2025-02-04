@@ -4,15 +4,14 @@ from sympy.core.singleton import S
 from ...utils.expression.solution import Solution, SolutionSimple
 
 
-class SolutionSymmetric(Solution):
+class SolutionSymmetric(SolutionSimple):
     method = 'SymmetricSOS'
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    def as_simple_solution(self):
-        sol = SolutionSymmetricSimple(problem = self.problem, solution = self.solution,
-            ineq_constraints = self.ineq_constraints, eq_constraints = self.eq_constraints, is_equal = self.is_equal)
-        return sol
+    @property
+    def is_equal(self):
+        return True
 
     @classmethod
     def _extract_nonnegative_exprs(cls, expr: sp.Expr, func_name: str = "_G"):
@@ -23,15 +22,5 @@ class SolutionSymmetric(Solution):
 
         TODO: Move this to SolutionSimple???
         """
-        from ..structsos.solution import SolutionStructuralSimple
-        return SolutionStructuralSimple._extract_nonnegative_exprs(expr, func_name)
-
-
-class SolutionSymmetricSimple(SolutionSimple):#, SolutionSymmetric):
-    method = 'SymmetricSOS'
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-    @property
-    def is_equal(self):
-        return True
+        from ..structsos.solution import SolutionStructural
+        return SolutionStructural._extract_nonnegative_exprs(expr, func_name)

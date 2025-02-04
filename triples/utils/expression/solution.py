@@ -276,7 +276,7 @@ def _arg_sqr_core(arg):
 
 class SolutionSimple(Solution):
     """
-    Most of SOS solutions can be represented in f(a,b,c) = (some sympy expression that is trivially nonnegative),
+    Most of SOS solutions can be represented in LHS = (some math expression that is trivially nonnegative),
     where the original problem is on the one side and the solution is on the other side.
     This class is designed to handle such cases.
     """
@@ -298,6 +298,9 @@ class SolutionSimple(Solution):
             self._is_equal = difference.is_zero
 
         return self._is_equal
+
+    def as_simple_solution(self):
+        return self
 
     def as_eq(self, lhs_expr=None, together=True, cancel=True):
         lhs = self.problem.as_expr() if lhs_expr is None else lhs_expr

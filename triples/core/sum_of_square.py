@@ -10,7 +10,7 @@ from .symsos import SymmetricSOS
 from .sdpsos import SDPSOS
 from .shared import sanitize_input, sanitize_output
 
-from ..utils import deg, PolyReader, Solution
+from ..utils import deg, PolyReader, SolutionSimple
 
 NAME_TO_METHOD = {
     'LinearSOS': LinearSOS,
@@ -45,7 +45,7 @@ def sum_of_square(
         eq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
         method_order: Optional[List[str]] = METHOD_ORDER,
         configs: Optional[Dict[str, Dict]] = DEFAULT_CONFIGS
-    ) -> Optional[Solution]:
+    ) -> Optional[SolutionSimple]:
     """
     Main function for sum of square decomposition.
 

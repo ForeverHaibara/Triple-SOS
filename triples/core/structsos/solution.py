@@ -9,16 +9,14 @@ from ...utils import Solution, SolutionSimple, CyclicSum, CyclicProduct
 class _rewriting_exception(Exception): ...
 
 
-class SolutionStructural(Solution):
+class SolutionStructural(SolutionSimple):
     method = 'StructuralSOS'
     _verified = True # ...?
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-    def as_simple_solution(self):
-        sol = SolutionStructuralSimple(problem = self.problem, solution = self.solution,
-            ineq_constraints = self.ineq_constraints, eq_constraints = self.eq_constraints, is_equal = self.is_equal)
-        return sol
+        if not self._verified:
+            self._is_equal = bool(self.as_eq().simplify())
 
     @classmethod
     def _extract_nonnegative_exprs(cls, expr: sp.Expr, func_name: str = "_G", extra_checker: Optional[Callable] = None):
@@ -96,30 +94,3 @@ class SolutionStructural(Solution):
         except _rewriting_exception:
             return None
         return new_expr
-
-class SolutionStructuralSimple(SolutionSimple, SolutionStructural):
-    method = 'StructuralSOS'
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-        # for debug purpose
-        verified = self._verified
-        if verified:
-            self._is_equal = True
-            return
-        arguments = [
-            {'extension': True},
-            {'domain': self.problem.domain} if hasattr(self.problem, 'domain') else dict(),
-        ]
-        if not verified:
-            self._is_equal = False
-        while (not verified) and len(arguments):
-            try:
-                argument = arguments.pop()
-                num, mul = sp.fraction(self.solution.together())
-                num = num.doit().as_poly(*self.gens, **argument)
-                mul = mul.doit().as_poly(*self.gens, **argument)
-                self._is_equal = (mul * self.problem - num).is_zero
-                verified = True
-            except:
-                pass

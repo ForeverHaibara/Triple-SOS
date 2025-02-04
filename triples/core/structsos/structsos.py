@@ -4,7 +4,7 @@ import sympy as sp
 from sympy.core.symbol import uniquely_named_symbol
 
 from .utils import Coeff, has_gen, clear_free_symbols
-from .solution import SolutionStructural, SolutionStructuralSimple
+from .solution import SolutionStructural
 from .nvars import sos_struct_nvars_quartic_symmetric
 from .constrained import structural_sos_constrained
 from .sparse import sos_struct_linear, sos_struct_quadratic
@@ -19,7 +19,7 @@ def StructuralSOS(
         poly: sp.Poly,
         ineq_constraints: Union[List[sp.Poly], Dict[sp.Poly, sp.Expr]] = {},
         eq_constraints: Union[List[sp.Poly], Dict[sp.Poly, sp.Expr]] = {},
-    ) -> SolutionStructuralSimple:
+    ) -> SolutionStructural:
     """
     Main function of structural SOS. It solves polynomial inequalities by
     synthetic heuristics. For example, quartic 3-var cyclic polynomials have a complete
@@ -43,7 +43,6 @@ def StructuralSOS(
     if solution is None:
         return None
     solution = SolutionStructural(problem = poly, solution = solution, is_equal = True)
-    solution = solution.as_simple_solution()
     if solution.is_ill:
         return None
     return solution

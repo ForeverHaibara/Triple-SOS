@@ -5,7 +5,7 @@ from .monomials import (
 from .text_process import preprocess_text, pl, PolyReader
 
 from .polytools import (
-    deg, verify_hom_cyclic, verify_is_symmetric, monom_of, convex_hull_poly
+    deg, verify_hom_cyclic, verify_is_symmetric, monom_of
 )
 
 from .expression import (
@@ -30,8 +30,7 @@ from .roots import (
 __all__ = [
     'MonomialManager', 'generate_monoms', 'generate_expr', 'arraylize_np', 'arraylize_sp', 'invarraylize',
     'preprocess_text', 'pl', 'PolyReader',
-    'deg', 'verify_hom_cyclic', 'verify_is_symmetric', 
-    'monom_of', 'convex_hull_poly',
+    'deg', 'verify_hom_cyclic', 'verify_is_symmetric', 'monom_of',
     'Coeff', 'CyclicExpr', 'CyclicSum', 'CyclicProduct', 'SymmetricSum', 'SymmetricProduct', 'is_cyclic_expr', 'identify_symmetry', 'rewrite_symmetry',
     'poly_get_factor_form', 'poly_get_standard_form', 'latex_coeffs',
     'Solution', 'SolutionSimple',

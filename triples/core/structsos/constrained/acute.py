@@ -1,6 +1,6 @@
 import sympy as sp
 
-from ..solution import SolutionStructuralSimple
+from ..solution import SolutionStructural
 from ..pivoting.univariate import prove_univariate
 from ..ternary.utils import CommonExpr
 from ..ternary import (
@@ -54,7 +54,7 @@ def constrained_acute(poly, ineq_constraints, eq_constraints):
             return None
 
     extra_checker = lambda x: x if isinstance(x, F) else None
-    solution = SolutionStructuralSimple._extract_nonnegative_exprs(solution, func_name=Gname, extra_checker=extra_checker)
+    solution = SolutionStructural._extract_nonnegative_exprs(solution, func_name=Gname, extra_checker=extra_checker)
     
     if solution is None:
         return None
