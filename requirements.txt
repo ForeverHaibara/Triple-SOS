@@ -6,7 +6,7 @@ scipy # recommend version >= 1.6 for high-ds in Linear Programming
 # SDP solver (can be replaced by other python SDP libraries,
 # e.g. mosek, clarabel, cvxopt, cvxpy, sdpa, etc.,
 # this will be detected automatically by the code):
-picos==2.3.12
+picos
 
 
 
