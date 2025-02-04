@@ -4,9 +4,9 @@ import numpy as np
 import gradio as gr
 from PIL import Image
 
-from src.utils import RootsInfo
-from src.utils.text_process import short_constant_parser
-from src.gui.sos_manager import SOS_Manager
+from triples.utils import RootsInfo
+from triples.utils.text_process import short_constant_parser
+from triples.gui.sos_manager import SOS_Manager
 
 def gradio_markdown() -> gr.Markdown:
     version = gr.__version__
@@ -177,13 +177,16 @@ class GradioInterface():
             else:
                 rootsinfo = RootsInfo()
             try:
+                ineq_constraints = poly.free_symbols if SOS_Manager.CONFIG_ALLOW_NONSTANDARD_GENS else poly.gens
                 solution = SOS_Manager.sum_of_square(
                     poly,
-                    rootsinfo = rootsinfo,
+                    ineq_constraints = list(ineq_constraints),
+                    eq_constraints = [],
                     method_order = ['%sSOS'%method for method in methods],
                     configs = DEPLOY_CONFIGS
                 )
             except Exception as e:
+                # print(e)
                 pass
 
         if solution is not None:

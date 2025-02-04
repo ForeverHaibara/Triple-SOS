@@ -8,10 +8,10 @@ from flask_cors import CORS
 
 import sympy as sp
 
-from src.utils.roots import RootTangent, RootsInfo
-from src.utils.text_process import pl
-from src.utils.expression.solution import SolutionSimple
-from src.gui.sos_manager import SOS_Manager
+from triples.utils.roots import RootTangent, RootsInfo
+from triples.utils.text_process import pl
+from triples.utils.expression.solution import SolutionSimple
+from triples.gui.sos_manager import SOS_Manager
 
 # def _async_raise(tid, exctype):
 #     '''Raises an exception in the threads with id tid'''
@@ -141,7 +141,7 @@ def preprocess():
         req['poly'],
         gens = gens,
         perm = perm,
-        render_triangle = True,
+        render_triangle = True if 3 <= len(gens) <= 4 else False,
         render_grid = True,
         homogenize = req.get('homogenize', False),
         dehomogenize = req.get('dehomogenize', None),
@@ -154,7 +154,7 @@ def preprocess():
 
     n = result['degree']
     txt = result['txt']
-    triangle = result['triangle']
+    triangle = result.get('triangle', None)
     grid = result.get('grid', None)
     grid_color = grid.grid_color if grid is not None else None
  
@@ -268,11 +268,19 @@ def sum_of_square(sid, **kwargs):
     try:
         method_order = [key for key, value in kwargs['methods'].items() if value]
 
+        if 'LinearSOS' in method_order:
+            if 'LinearSOS' not in kwargs['configs']:
+                kwargs['configs']['LinearSOS'] = {}
+            kwargs['configs']['LinearSOS']['rootsinfo'] = rootsinfo
+
+        gens = kwargs['gens']
+        ineq_constraints = kwargs['poly'].free_symbols if SOS_Manager.CONFIG_ALLOW_NONSTANDARD_GENS else gens
         solution = SOS_Manager.sum_of_square(
             kwargs['poly'],
-            gens = kwargs['gens'],
+            ineq_constraints = list(ineq_constraints),
+            eq_constraints = [],
+            gens = gens,
             perm = kwargs['perm'],
-            rootsinfo = rootsinfo,
             method_order = method_order,
             configs = kwargs['configs']
         )
