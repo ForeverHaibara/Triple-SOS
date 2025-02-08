@@ -38,13 +38,21 @@ function renderVisualization(data){
 
     if (_3d_vis.in3d){
         // VIEW2DPARENT.hidden = true;
-        _3d_vis.tetrahedron.visible = true;
-        _3d_vis.pointCloud.visible = true;
+        if (_3d_vis.tetrav.length){
+            _3d_vis.tetrahedron.visible = true;
+            _3d_vis.pointCloud.visible = true;
+        }else{
+            _3d_vis.tetrahedron.style.display = 'block';
+        }
         renderHeatmap3D(data.heatmap);
     }else{
         // VIEW2DPARENT.hidden = false;
-        _3d_vis.tetrahedron.visible = false;
-        _3d_vis.pointCloud.visible = false;
+        if (_3d_vis.tetrav.length){
+            _3d_vis.tetrahedron.visible = false;
+            _3d_vis.pointCloud.visible = false;
+        }else{
+            _3d_vis.tetrahedron.style.display = 'none';
+        }
         renderHeatmap(data.heatmap);
     }
     // _3d_vis.controls.enableDamping = _3d_vis.in3d;
@@ -315,7 +323,7 @@ function init3DVisualization(){// Get the div element
         renderer.render(scene, camera);
     }
     animate();
-    
+
 }
 
 function _initDashlinesPlugin(){
@@ -424,11 +432,6 @@ function _init3DHeatmap(){
         pointCloud.material.needsUpdate = true;
     }
 }
-
-init3DVisualization();
-
-
-
 
 
 function updateTextPositions() {
@@ -546,4 +549,52 @@ function renderHeatmap3D(heatmap){
         color.setXYZ(i, heatValue[0]/255, heatValue[1]/255, heatValue[2]/255);
     });
     color.needsUpdate = true;
+}
+
+
+
+function _init3DWebGLCheck(){
+    const canvas = document.createElement('canvas');
+    const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl') || canvas.getContext('webgl2');
+    if (!gl) {
+        return false;
+    } else {
+        return true;
+    }
+}
+
+function _init3DVisualizationFallback(){
+    // When WebGL is not supported
+    const coeffs_view = VIEW3DPARENT;
+    _3d_vis.scene = {};
+    _3d_vis.camera = {};
+    _3d_vis.renderer = {};
+    _3d_vis.controls = {};
+    _3d_vis.raycaster = {};
+    _3d_vis.tetrahedron = coeffs_view.appendChild(document.createElement('div'));
+    _3d_vis.tetrahedron.innerHTML = 
+        'WebGL is not supported in your browser.<br>' +
+        'Please visit <a href="https://get.webgl.org/" target="_blank">https://get.webgl.org/</a> for more information.';
+    _3d_vis.tetrahedron.style.color = 'black';
+    _3d_vis.tetrahedron.style.position = 'absolute';
+    _3d_vis.tetrahedron.style.top = '15px';
+    _3d_vis.tetrahedron.style.left = '15px';
+    _3d_vis.tetrahedron.style.display = 'none';
+    _3d_vis.positions = [];
+    // _3d_vis.frustum = frustum;
+    _3d_vis.pointCloud = {};
+    _3d_vis.dashlines = null;
+    _3d_vis.cameraViewProjectionMatrix = {};
+    _3d_vis.tetrav = [];
+}
+
+if (_init3DWebGLCheck()){
+    init3DVisualization();
+}else{
+    _init3DVisualizationFallback();
+    updateTextPositions = () => {};
+    renderCoeffs3D = () => {_3d_vis.in3d = true;};
+    renderHeatmap3D = () => {renderHeatmap(null);};
+    console.warn('WebGL is not supported in your browser.\nPlease visit https://get.webgl.org/ for more information.');
+    console.log('WebGL is not supported in your browser.\nPlease visit https://get.webgl.org/ for more information.');
 }
