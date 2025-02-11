@@ -4,12 +4,14 @@
 # arithmetic operations, aiming to provide a more efficient alternative to  
 # using sympy.Rational for matrix computations.  
 #
-# NOTE: sympy has supported DomainMatrix on ZZ/QQ to compute rref faster
-# with version > 1.12 (exclusive)
+# NOTE: Using sympy.Matrix to create a new object is very slow.
+#       Always build from rep (SDM, DDM, DFM classes) instead.
+#       SDM -> DomainMatrix -> MutableDenseMatrix
 # TODO: compare the performance of the two implementations
-# TODO: use numpy for matrix computation
 
 # from fractions import Fraction
+from collections import defaultdict
+from distutils.version import LooseVersion
 from math import gcd
 from time import time
 from typing import List, Tuple, Union, Optional
@@ -26,11 +28,26 @@ from sympy.polys.matrices.domainmatrix import DomainMatrix # polys.matrices >= 1
 from sympy.polys.matrices.ddm import DDM
 from sympy.polys.matrices.sdm import SDM
 
-if _SYMPY_VERSION >= '1.13':
+if LooseVersion(_SYMPY_VERSION) >= LooseVersion('1.13'):
     from sympy.polys.matrices.dfm import DFM
+
+    primitive = lambda x: x.primitive()
 else:
     class _DFM_dummy: ...
     DFM = _DFM_dummy
+
+    from sympy.polys.densetools import dup_primitive
+
+    def primitive(self: DomainMatrix):
+        K = self.domain
+        dok = self.rep.to_dok()
+        elements, data = list(dok.values()), list(dok.keys())
+        content, prims = dup_primitive(elements, K)
+        sdm = defaultdict(dict)
+        for (i, j), v in zip(data, prims):
+            sdm[i][j] = v
+        M_primitive = self.from_rep(SDM(sdm, self.shape, K))
+        return content, M_primitive
 
 from .utils import Mat2Vec, is_empty_matrix
 
@@ -51,9 +68,7 @@ def _lcm(x, y):
     return x * y // gcd(x, y)
 
 def is_zz_qq_mat(mat):
-    """
-    Judge whether a matrix is a ZZ/QQ RepMatrix.
-    """
+    """Judge whether a matrix is a ZZ/QQ RepMatrix."""
     return isinstance(mat, RepMatrix) and mat._rep.domain in (ZZ, QQ)
 
 def _find_reasonable_pivot_naive(col):
@@ -367,15 +382,15 @@ def _rref(M, pivots=True, normalize_last=True):
     if not is_zz_qq_mat(M):
         return M.rref(pivots=pivots, normalize_last=normalize_last)
 
-    sdm = M._rep.to_sdm()
+    sdm = M._rep.rep.to_sdm()
     K = sdm.domain
 
     sdm_rref_dict, den, pivots = sdm_rref_den(sdm, K)
     sdm_rref = sdm.new(sdm_rref_dict, sdm.shape, sdm.domain)
     dM = DomainMatrix.from_rep(sdm_rref)
-    if den != K.one:
+    if den != 1:
         dM = dM.to_field()
-        dM = dM / den
+        dM = dM * K.get_field().quo(K.one, den)
 
     mat = M.__class__._fromrep(dM)
     # dM_rref = M.new(dM_rref, M.shape, M.domain)
@@ -390,6 +405,7 @@ def _rref(M, pivots=True, normalize_last=True):
     return mat
 
 def _permute_matrix_rows(matrix, permutation):
+    """Fast operation of matrix rowswap."""
     rep = matrix._rep.rep if isinstance(matrix, RepMatrix) else None
 
     if isinstance(rep, SDM):
@@ -505,8 +521,7 @@ def solve_nullspace(A: sp.Matrix) -> sp.Matrix:
 
 
 
-def solve_column_separated_linear(A: List[List[Tuple[int, Rational]]], b: sp.Matrix, x0_equal_indices: List[List[int]] = [],
-                                  _cols: int = -1, domain = None):
+def solve_column_separated_linear(A: sp.Matrix, b: sp.Matrix, x0_equal_indices: List[List[int]] = []):
     """
     This is a function that solves a special linear system Ax = b => x = x_0 + C * y
     where each column of A has at most 1 nonzero element. For more general cases, use solve_csr_linear.
@@ -532,15 +547,8 @@ def solve_column_separated_linear(A: List[List[Tuple[int, Rational]]], b: sp.Mat
     space: Matrix
         All solution x is in the form of x0 + space @ y.
     """
-    # count the number of columns of A
-    cols = _cols if _cols != -1 else (max(max(k[0] for k in row) for row in A) + 1)
-
-    if not isinstance(b, RepMatrix):
-        domain = EXRAW
-    elif domain is None:
-        domain = QQ # EXRAW
-    else:
-        domain = domain.unify(b._rep.domain).get_field()
+    cols = A.shape[1]
+    domain = A._rep.domain.unify(b._rep.domain).get_field()
 
     if _VERBOSE_SOLVE_CSR_LINEAR:
         time0 = time()
@@ -562,13 +570,15 @@ def solve_column_separated_linear(A: List[List[Tuple[int, Rational]]], b: sp.Mat
         print('>> UFS construction time', time() - time0) # 0 sec, can be ignored
         time0 = time()
 
-    toK = domain.from_sympy
+    toK = lambda x: x # domain.from_sympy
     one, zero = domain.one, domain.zero
-    b = b._rep.convert_to(domain).to_sdm() # DomainMatrix
+    A = A._rep.convert_to(domain).rep.to_sdm() # SDM
+    b = b._rep.convert_to(domain).rep.to_sdm() # SDM
 
     x0 = []
     spaces = []
-    for i, row in enumerate(A):
+    for i, row in A.items():
+        row = list(row.items())
         if len(row):
             pivot = row[0]
             head = ufs[pivot[0]]
@@ -631,7 +641,7 @@ def solve_column_separated_linear(A: List[List[Tuple[int, Rational]]], b: sp.Mat
     return x0, spaces
 
 
-def solve_csr_linear(A: List[List[Tuple[int, Rational]]], b: sp.Matrix, x0_equal_indices: List[List[int]] = [], _cols: int = -1):
+def solve_csr_linear(A: sp.Matrix, b: sp.Matrix, x0_equal_indices: List[List[int]] = []):
     """
     Solve a linear system Ax = b where A is stored in CSR format.
     Further, we could require some of entries of x to be equal.
@@ -646,8 +656,6 @@ def solve_csr_linear(A: List[List[Tuple[int, Rational]]], b: sp.Matrix, x0_equal
         Right-hand side
     x0_equal_indices: List[List[int]]
         Each sublist contains indices of equal elements.
-    _cols: int
-        Number of columns of A. If not specified, it will be inferred from A.
 
     Returns
     ---------
@@ -656,27 +664,30 @@ def solve_csr_linear(A: List[List[Tuple[int, Rational]]], b: sp.Matrix, x0_equal
     space: Matrix
         All solution x is in the form of x0 + space @ y.
     """
-    cols = _cols if _cols != -1 else (max(max(k[0] for k in row) for row in A) + 1)
+    cols = A.shape[1]
     if _VERBOSE_SOLVE_CSR_LINEAR:
-        print('SolveCsrLinear A shape', (len(A), cols))
+        print('SolveCsrLinear A shape', A.shape)
         time0 = time()
 
-    # check whether there is at most one nonzero element in each column
-    _column_separated = True
-    seen_cols = set()
-    for row in A:
-        for col, _ in row:
-            if col in seen_cols:
-                _column_separated = False
-                break
-            seen_cols.add(col)
-        if not _column_separated:
-            break
+    Arep = A._rep.rep.to_sdm()
 
-    if _column_separated:
-        if _VERBOSE_SOLVE_CSR_LINEAR:
-            print('>> Column Separated System recognized', time() - time0)
-        return solve_column_separated_linear(A, b, x0_equal_indices, _cols=cols)
+    # check whether there is at most one nonzero element in each column
+    if isinstance(A, RepMatrix) and isinstance(b, RepMatrix):
+        _column_separated = True
+        seen_cols = set()
+        for row in Arep.values():
+            for col, _ in row.items():
+                if col in seen_cols:
+                    _column_separated = False
+                    break
+                seen_cols.add(col)
+            if not _column_separated:
+                break
+
+        if _column_separated:
+            if _VERBOSE_SOLVE_CSR_LINEAR:
+                print('>> Column Separated System recognized', time() - time0)
+            return solve_column_separated_linear(A, b, x0_equal_indices)
 
     # convert to dense matrix
 
@@ -697,21 +708,36 @@ def solve_csr_linear(A: List[List[Tuple[int, Rational]]], b: sp.Matrix, x0_equal
 
     # compress the columns
     cols2 = len(groups)
-    A2 = [[0] * cols2 for _ in range(len(A))]
-    for i, row in enumerate(A):
-        for j, v in row:
-            A2[i][group_inds[ufs[j]]] += v
+    domain = Arep.domain
+    zero = domain.zero
+    A2 = {}
+    for i, row in Arep.items():
+        for j, v in row.items():
+            A2i = A2.get(i)
+            if A2i is None:
+                A2i = defaultdict(lambda : zero)
+                A2[i] = A2i
+            A2i[group_inds[ufs[j]]] += v
 
-    A2 = sp.Matrix(A2)
+    A2 = A._fromrep(DomainMatrix.from_rep(SDM(A2, (A.shape[0], cols2), domain)))
     x0_compressed, space_compressed = solve_undetermined_linear(A2, b)
-    space_compressed = space_compressed.tolist()
-    x0, space = [0] * cols, [None for _ in range(cols)]
 
-    # restore the solution
-    for i in range(cols):
-        x0[i] = x0_compressed[group_inds[ufs[i]]]
-        space[i] = space_compressed[group_inds[ufs[i]]]
-    x0, space = sp.Matrix(x0), sp.Matrix(space)
+    # restore the solution: row[i] = row_compressed[mapping[i]]
+    mapping = [group_inds[ufs[i]] for i in range(cols)]
+    def _restore_from_compressed(mat, mapping):
+        # Set new_mat[i] = mat[mapping[i]]
+        rep = mat._rep.rep.to_sdm()
+        new_rep = []
+        for i, j in enumerate(mapping):
+            repj = rep.get(j)
+            if repj:
+                new_rep.append((i, repj)) # Shall we make a copy?
+        new_rep = dict(new_rep)
+        sdm = SDM(new_rep, (cols, rep.shape[1]), rep.domain)
+        return sp.Matrix._fromrep(DomainMatrix.from_rep(sdm))
+
+    x0 = _restore_from_compressed(x0_compressed, mapping)
+    space = _restore_from_compressed(space_compressed, mapping)
     return x0, space
 
 
@@ -738,23 +764,11 @@ def _common_denoms(A: Union[List, sp.Matrix], bound: int = 4096) -> Optional[int
         if q > bound:
             return None
     return int(q)
-    # try:
-    #     vec = unique(np_array([_.q for _ in A]).astype('int'))
-    #     if len(vec) > 20 or abs(vec).max() > bound:
-    #         return None
-
-    #     q = 1
-    #     for v in vec:
-    #         q = _lcm(q, v)
-    #         if q > bound:
-    #             return None
-    #     return int(q)
-    # except:
-    #     return None # not all elements are Rational
 
 def _cast_sympy_matrix_to_numpy(sympy_mat_rep, dtype: str = 'int64'):
+    """Cast a sympy RepMatrix on ZZ to numpy int64 matrix."""
     rows, cols = sympy_mat_rep.shape
-    items = list(sympy_mat_rep.iter_items())
+    items = list(sympy_mat_rep.rep.to_dok().items()) # avoid .iter_items() for version compatibility
     n = len(items)
 
     row_indices = [0] * n
@@ -799,7 +813,7 @@ def matmul(A: sp.Matrix, B: sp.Matrix, q1: Optional[int] = None, q2: Optional[in
     if not (is_zz_qq_mat(A) and is_zz_qq_mat(B)):
         return A0 * B0
 
-    q1, A = A._rep.primitive()
+    q1, A = primitive(A._rep)
     try:
         A = _cast_sympy_matrix_to_numpy(A, dtype = 'int64')
     except OverflowError:
@@ -808,7 +822,7 @@ def matmul(A: sp.Matrix, B: sp.Matrix, q1: Optional[int] = None, q2: Optional[in
     if isnan(_MAXA) or _MAXA == inf or _MAXA > _INT64_MAX:
         return A0 * B0
 
-    q2, B = B._rep.primitive()
+    q2, B = primitive(B._rep)
     try:
         B = _cast_sympy_matrix_to_numpy(B, dtype = 'int64')
     except OverflowError:
@@ -871,7 +885,7 @@ def matmul_multiple(A: sp.Matrix, B: sp.Matrix, q1: Optional[int] = None, q2: Op
     N = A.shape[0]
     n, m = B.shape
 
-    q1, A = A._rep.primitive()
+    q1, A = primitive(A._rep)
     try:
         A = _cast_sympy_matrix_to_numpy(A, dtype = 'int64')
     except OverflowError:
@@ -880,7 +894,7 @@ def matmul_multiple(A: sp.Matrix, B: sp.Matrix, q1: Optional[int] = None, q2: Op
     if isnan(_MAXA) or _MAXA == inf or _MAXA > _INT64_MAX:
         return default(A0, B0)
 
-    q2, B = B._rep.primitive()
+    q2, B = primitive(B._rep)
     try:
         B = _cast_sympy_matrix_to_numpy(B, dtype = 'int64')
     except OverflowError:
@@ -1001,7 +1015,7 @@ def symmetric_bilinear_multiple(U: sp.Matrix, A: sp.Matrix) -> sp.Matrix:
     n, m = U.shape
 
 
-    q1, A = A._rep.primitive()
+    q1, A = primitive(A._rep)
     try:
         A = _cast_sympy_matrix_to_numpy(A, dtype = 'int64')
     except OverflowError:
@@ -1010,7 +1024,7 @@ def symmetric_bilinear_multiple(U: sp.Matrix, A: sp.Matrix) -> sp.Matrix:
     if isnan(_MAXA) or _MAXA == inf or _MAXA > _INT64_MAX:
         return default(A0, U0)
 
-    q2, U = U._rep.primitive()
+    q2, U = primitive(U._rep)
     try:
         U = _cast_sympy_matrix_to_numpy(U, dtype = 'int64')
     except OverflowError:
