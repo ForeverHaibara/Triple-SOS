@@ -652,7 +652,8 @@ def matmul(A: sp.Matrix, B: sp.Matrix, return_shape = None) -> sp.Matrix:
         Shape of the result. If not specified, it will be inferred.
     """
     if A.shape[0] == 0 or B.shape[0] == 0 or B.shape[1] == 0:
-        return sp.zeros(A.shape[0], B.shape[1])
+        return_shape = return_shape or (A.shape[0], B.shape[1])
+        return sp.zeros(*return_shape)
     A0, B0 = A, B
 
     def default(A0, B0):
