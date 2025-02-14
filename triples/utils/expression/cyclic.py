@@ -617,7 +617,24 @@ setattr(StrPrinter, '_print_CyclicSum', lambda self, expr: CyclicSum._str_str(se
 setattr(StrPrinter, '_print_CyclicProduct', lambda self, expr: CyclicProduct._str_str(self, expr))
 
 
-if sp.__version__ < '1.14':
+def _is_version_greater_than(v1, v2) -> bool:
+    """Version comparison. No dependencies on distutils
+    (which has been deprecated since Python 3.10)."""
+    def _version(s):
+        from re import findall
+        parts = []
+        for comp in s.split('.'):
+            for elem in findall(r'\d+|\D+', comp):
+                parts.append(int(elem) if elem.isdigit() else elem)
+        return tuple(parts)
+    for i, j in zip(_version(v1), _version(v2)):
+        if isinstance(i, str) or isinstance(j, str): i, j = str(i), str(j)
+        if i > j: return True
+        if i < j: return False
+    return bool(len(_version(v1)) >= len(_version(v2)))
+
+# if sp.__version__ < '1.14':
+if not _is_version_greater_than(sp.__version__, '1.14'):
     def radsimp(expr, symbolic=True, max_terms=4):
         r"""
         Rationalize the denominator by removing square roots.
