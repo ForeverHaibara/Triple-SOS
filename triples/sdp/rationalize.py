@@ -58,7 +58,7 @@ class RationalizeWithMask(Rationalizer):
     def __call__(self, y: np.ndarray) -> Generator[sp.Matrix, None, None]:
         tol = max(1, np.abs(y).max()) * self.zero_tolerance
         y_rational_mask = np.abs(y) > tol
-        y_rational = np.where(y_rational_mask, y, 0)
+        y_rational = np.where(y_rational_mask, y, 0).flatten().tolist()
         y_rational = [rationalize(v, rounding = abs(v) * 1e-4) for v in y_rational]
         y_rational = sp.Matrix(y_rational)
         return (y_rational,)
@@ -171,6 +171,8 @@ def rationalize_and_decompose(
         rationalizers = [IdentityRationalizer()]
     if len(y) == 0:
         rationalizers = [EmptyRationalizer()]
+    if isinstance(y, np.ndarray):
+        y = y.flatten().tolist()
 
     for rationalizer in rationalizers:
         # print(rationalizer, rationalizer(y))

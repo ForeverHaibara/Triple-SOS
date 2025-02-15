@@ -225,11 +225,10 @@ def preprocess_text(
     if return_type == 'text':
         return poly
 
+    poly = sympify(poly)
     if return_type == 'expr':
-        return sympify(poly)
-    elif return_type == 'frac': 
-        poly = sympify(poly)
-
+        return poly
+    elif return_type == 'frac':
         try:
             frac = fraction(cancel(poly))
 

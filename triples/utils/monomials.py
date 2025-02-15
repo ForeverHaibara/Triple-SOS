@@ -55,6 +55,14 @@ class MonomialManager():
     def copy(self) -> 'MonomialManager':
         return MonomialManager(self.nvars, perm_group=self._perm_group, is_homogeneous=self._is_homogeneous)
 
+    def __hash__(self) -> int:
+        return hash((self.__class__, self.nvars, self._perm_group, self._is_homogeneous))
+
+    def __eq__(self, other: 'MonomialManager') -> bool:
+        if self is other:
+            return True
+        return self.nvars == other.nvars and self._perm_group == other._perm_group and self._is_homogeneous == other._is_homogeneous
+
     @property
     def is_homogeneous(self) -> bool:
         return self._is_homogeneous
@@ -287,8 +295,8 @@ def arraylize_np(poly: sp.Poly, expand_cyc: bool = False, **options) -> np.ndarr
         The sympy polynomial.
 
     expand_cyc: bool
-        Whether to accumulate the non-standard monomials given a
-        symmetry group.
+        Whether to compute the cyclic sum of the polynomial given
+        the symmetry group.
 
     Keyword Arguments
     -----------------
@@ -342,8 +350,8 @@ def arraylize_sp(poly: sp.Poly, expand_cyc: bool = False, **options) -> sp.Matri
         The sympy polynomial.
 
     expand_cyc: bool
-        Whether to accumulate the non-standard monomials given a
-        symmetry group.
+        Whether to compute the cyclic sum of the polynomial given
+        the symmetry group.
 
     Keyword Arguments
     -----------------

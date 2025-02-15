@@ -9,7 +9,7 @@ from sympy import Poly, Expr, Symbol
 from sympy.core.singleton import S
 from sympy.combinatorics import PermutationGroup
 from scipy.optimize import linprog
-from scipy import __version__ as SCIPY_VERSION
+from scipy import __version__ as _SCIPY_VERSION
 
 from .basis import LinearBasis, LinearBasisTangent, LinearBasisTangentEven
 from .tangents import root_tangents
@@ -20,8 +20,26 @@ from ..shared import homogenize_expr_list, clear_polys_by_symmetry, sanitize_inp
 from ...utils import findroot, RootsInfo, RootTangent
 from ...utils.monomials import MonomialManager
 
+
+def _is_version_greater_than(v1, v2) -> bool:
+    """Version comparison. No dependencies on distutils
+    (which has been deprecated since Python 3.10)."""
+    def _version(s):
+        from re import findall
+        parts = []
+        for comp in s.split('.'):
+            for elem in findall(r'\d+|\D+', comp):
+                parts.append(int(elem) if elem.isdigit() else elem)
+        return tuple(parts)
+    for i, j in zip(_version(v1), _version(v2)):
+        if isinstance(i, str) or isinstance(j, str): i, j = str(i), str(j)
+        if i > j: return True
+        if i < j: return False
+    return bool(len(_version(v1)) >= len(_version(v2)))
+
+
 LINPROG_OPTIONS = {
-    'method': 'highs-ds' if SCIPY_VERSION >= '1.6.0' else 'simplex',
+    'method': 'highs-ds' if _is_version_greater_than(_SCIPY_VERSION, '1.6') else 'simplex',
     'options': {
         'presolve': False,
     }

@@ -1,11 +1,19 @@
+from functools import lru_cache
 from typing import Any, Union, Tuple, List, Dict, Callable, Optional
+from time import time
 
 import sympy as sp
 import numpy as np
+from scipy.sparse import coo_matrix
 from sympy.combinatorics import PermutationGroup, Permutation
 from sympy.core.singleton import S
 
 from ...utils import arraylize_np, arraylize_sp, MonomialManager
+
+_VERBOSE_GENERATE_QUAD_DIFF = False
+
+def tuple_sum(t1: Tuple[int, ...], t2: Tuple[int, ...]) -> Tuple[int, ...]:
+    return tuple(x + y for x, y in zip(t1, t2))
 
 class _callable_expr():
     """
@@ -142,7 +150,7 @@ class LinearBasisTangent(LinearBasis):
 
     @classmethod
     def generate_quad_diff(cls, 
-            tangent: sp.Expr, symbols: Tuple[int, ...], degree: int, symmetry: PermutationGroup,
+            tangent: sp.Expr, symbols: Tuple[sp.Symbol, ...], degree: int, symmetry: PermutationGroup,
             tangent_p: Optional[sp.Poly] = None, quad_diff: bool = True
         ) -> Tuple[List['LinearBasisTangent'], np.ndarray]:
         """
@@ -174,6 +182,10 @@ class LinearBasisTangent(LinearBasis):
         else:
             cross_tangents = [S.One]
 
+        if _VERBOSE_GENERATE_QUAD_DIFF:
+            print('GenerateQuadDiff cross_tangents num =', len(cross_tangents))
+            time0 = time()
+
         if basis is None:
             # no cache, generate the bases first
             basis = []
@@ -181,28 +193,30 @@ class LinearBasisTangent(LinearBasis):
                 p2 = t.as_poly(symbols) * p
                 basis += cls.generate(t * tangent, symbols, degree, tangent_p=p2, require_equal=True)
 
+            if _VERBOSE_GENERATE_QUAD_DIFF:
+                print('>> Time for generating bases instances:', time() - time0)
+                time0 = time()
+
         if mat is None:
             # convert the bases to matrix
             # mat = np.array([x.as_array_np(expand_cyc=True, symmetry=symmetry) for x in basis]) # too slow
-            mat = [0] * len(basis)
+            mat = []
             step = cls._degree_step
-            def tuple_sum(t1: Tuple[int, ...], t2: Tuple[int, ...]) -> Tuple[int, ...]:
-                return tuple(x + y for x, y in zip(t1, t2))
 
-            mat_ind = 0
             symmetry = MonomialManager(len(symbols), symmetry)
-            poly_from_dict = sp.Poly.from_dict
             for t in cross_tangents:
                 p2 = t.doit().as_poly(symbols) * p
-                p2dict = p2.as_dict()
-                for power in  _degree_combinations([cls._degree_step] * len(symbols), degree - p2.homogeneous_order(), require_equal=True):
-                    power = tuple(i*step for i in power)
-                    new_p_dict = dict((tuple_sum(power, k), v) for k, v in p2dict.items())
-                    new_p = poly_from_dict(new_p_dict, symbols)
-                    mat[mat_ind] = symmetry.arraylize_np(new_p, expand_cyc=True)
-                    mat_ind += 1
+
+                degree_comb_mat = _degree_combinations([step] * len(symbols), degree - p2.homogeneous_order(), require_equal=True)
+                degree_comb_mat = np.array(degree_comb_mat, dtype='int32') * step
+
+                mat2 = _get_matrix_of_lifted_degrees(p2, degree_comb_mat, symmetry, degree)
+                mat.append(mat2)
 
             mat = np.vstack(mat) if len(mat) > 0 else np.array([], dtype='float')
+
+            if _VERBOSE_GENERATE_QUAD_DIFF:
+                print('>> Time for converting bases to matrix:', time() - time0)
 
         if cache is not None:
             # cache the result
@@ -292,6 +306,9 @@ def quadratic_difference(symbols: Tuple[sp.Symbol, ...]) -> List[sp.Expr]:
             exprs.append((symbols[i] - symbols[j])**2)
     return exprs
 
+###########################################################
+# Fast operations for computing basis
+###########################################################
 
 
 def _define_common_tangents() -> List[sp.Expr]:
@@ -315,3 +332,171 @@ def _get_tangent_cache_key(cls, tangent: sp.Expr, symbols: Tuple[int, ...]) -> O
     std_tangent = callable_tangent.default(len(symbols))
     cache = _CACHED_TANGENT_BASIS if cls is LinearBasisTangent else _CACHED_TANGENT_BASIS_EVEN
     return cache.get(std_tangent)
+
+
+
+def _compute_sym_multiplicity(arr: np.ndarray, need_sort: bool = True) -> np.ndarray:
+    """
+    Compute by row the multiplicity of each row invariant in the
+    completely symmetric permutation.
+    """
+    X, N = arr.shape
+    if need_sort:
+        arr = np.sort(arr, axis=1)
+    mask = (arr[:, 1:] != arr[:, :-1]).astype('int')
+    indices = np.tile(np.arange(1,N), (X, 1)) * mask
+    indices = np.hstack([np.zeros((X,1),dtype='int'), indices, np.full((X,1),N,dtype='int')])
+    ind_cum_max = np.maximum.accumulate(indices, axis=1)
+    length_of_group = np.diff(ind_cum_max, axis=1)
+
+    factorial = np.cumprod([1] + list(range(1, N+1)))
+    group_factorial = factorial[length_of_group]
+    group_invariant = np.prod(group_factorial, axis=1)
+    return group_invariant
+
+
+@lru_cache()
+def _get_reduced_indices(symmetry: MonomialManager, degree: int) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Get the indices of monomials after being reduced by symmetry.
+
+    Since it is called multiple times in generating, the function is wrapper by lru_cache.
+    However, this might need optimization for parallel use.
+    
+    Returns
+    -----------
+    full_encod_to_reduced_indices : np.ndarray
+        A mapping from encoding of full monomials to encoding of reduced monomials.
+    multiplicity : np.ndarray
+        The multiplicity of each reduced monomial in cyclic sums.
+        It equals to the number of permutations that make the reduced monomial invariant.
+    """
+    _DTYPE = 'int32'
+    encoding = np.array([(degree + 1)**i for i in range(symmetry.nvars)], dtype=_DTYPE)
+    reduced_monoms = symmetry.inv_monoms(degree)
+    reduced_monoms = np.array(reduced_monoms, dtype=_DTYPE)
+    reduced_encodings = reduced_monoms @ encoding
+
+    # mapping reduced encoding to indices
+    reduced_indices = np.zeros(reduced_encodings.max() + 1, dtype=_DTYPE)
+    reduced_indices[reduced_encodings] = np.arange(reduced_monoms.shape[0])
+
+    no_symmetry = symmetry.base()
+    full_monoms = no_symmetry.inv_monoms(degree)
+
+    if symmetry.perm_group.is_trivial:
+        full_to_reduced = full_monoms
+        multiplicity = np.ones(reduced_monoms.shape[0], dtype=_DTYPE)
+    elif symmetry.perm_group.is_symmetric:
+        full_to_reduced = np.sort(np.array(full_monoms, dtype=_DTYPE), axis=1)[:, ::-1]
+        multiplicity = _compute_sym_multiplicity(reduced_monoms, need_sort=False)
+    else:
+        full_to_reduced = [symmetry.standard_monom(m) for m in full_monoms]
+        multiplicity = [sum(_ == m for _ in symmetry.permute(m)) for m in 
+                            symmetry.inv_monoms(degree)]
+        multiplicity = np.array(multiplicity, dtype=_DTYPE)
+
+
+    full_encoding = np.array(full_monoms, dtype=_DTYPE) @ encoding
+    full_to_reduced = np.array(full_to_reduced, dtype=_DTYPE) @ encoding
+
+    full_encod_to_reduced_indices = np.zeros(full_encoding.max() + 1, dtype=_DTYPE)
+    full_encod_to_reduced_indices[full_encoding] = reduced_indices[full_to_reduced]
+    return full_encod_to_reduced_indices, multiplicity
+
+
+def _count_contribution_of_monoms(A: np.ndarray, v: np.ndarray, M: int) -> np.ndarray:
+    """
+    (Written by Deepseek R1)
+
+    Parameters
+    -----------
+    A : np.ndarray with shape (X, N), each element to be an integer in [0, M)
+    v : np.ndarray with shape (N,)
+    M : int
+    
+    Returns
+    -----------
+    B : np.ndarray
+        B[i,m] = sum(v[j] for j where A[i,j] == m)
+    """
+    A = np.asarray(A)
+    v = np.asarray(v)
+    X, N = A.shape
+    # assert v.shape == (N,)
+
+    # it seems scipy is slower?
+    if False:
+        rows = np.repeat(np.arange(X), N)  # row coors [0,0,0,1,1,1,...]
+        cols = A.ravel()                   # column coors [A[0,0],A[0,1],...,A[1,0],...]
+        data = np.tile(v, X)               # values [v[0],v[1],...,v[0],v[1],...]
+        
+        return coo_matrix((data, (rows, cols)), shape=(X, M)).toarray()
+    else:
+        B = np.zeros((X, M), dtype=v.dtype)
+
+        for m in range(M):
+            mask = (A == m)
+            B[:, m] = np.dot(mask, v)
+
+        return B
+
+def _get_matrix_of_lifted_degrees(poly: sp.Poly, degree_comb_mat: np.ndarray,
+        symmetry: MonomialManager, degree: int) -> np.ndarray:
+
+    if degree_comb_mat.shape[0] == 0:
+        return np.array([], dtype='float')
+
+    symbols = poly.gens
+
+    # # This a naive implementation
+    # def _naive_implementation():
+    #     mat = [None] * degree_comb_mat.shape[0]
+    #     poly_from_dict = sp.Poly.from_dict
+    #     p2dict = poly.as_dict()
+    #     for power in degree_comb_mat:
+    #         new_p_dict = dict((tuple_sum(power, k), v) for k, v in p2dict.items())
+    #         new_p = poly_from_dict(new_p_dict, symbols)
+    #         mat[mat_ind] = symmetry.arraylize_np(new_p, expand_cyc=True)
+    #         mat_ind += 1
+    #     return np.vstack(mat) if len(mat) > 0 else np.array([], dtype='float')
+
+    # Below is a faster, low-level implementation
+    # But it is not equivalent to the naive implementation
+    nvars = len(symbols)
+
+    # encoding is a vector dot operation that maps monomials to a single integer
+    # e.g. (4,3,2,1) -> 4 + 3*5 + 2*5^2 + 1*5^3 = 4 + 15 + 50 + 125 = 194
+    # i.e. (4,3,2,1) * (1,5,25,125) = 194
+    # Since it is linear, encoding of sum of monomials is the sum of encodings.
+    # Don't worry about overflow, if there are too many monomials, then it is
+    # impossible to solve the problem anyway.
+    _DTYPE = 'int32'
+    encoding = np.array([(degree + 1)**i for i in range(nvars)], dtype=_DTYPE)
+
+    source_symmetry = symmetry.base()
+    source_monoms = source_symmetry.inv_monoms(poly.total_degree())  # a list of monomials
+    source_monoms = np.array(source_monoms, dtype=_DTYPE) @ encoding
+
+    degree_comb_mat = degree_comb_mat.astype(_DTYPE) @ encoding
+
+    target_monoms = symmetry.inv_monoms(degree)
+    length_of_target = len(target_monoms)
+    target_monoms = np.array(target_monoms, dtype=_DTYPE) @ encoding
+
+    # add source monoms with degree_comb_mat
+    # TODO: will the matrix cause MemoryError?
+    source_monoms = np.tile(source_monoms.reshape((1, -1)), (degree_comb_mat.shape[0], 1))
+    new_monoms = source_monoms + degree_comb_mat.reshape((-1, 1))
+
+    # map encoding to indices
+    inv_target_monoms, multiplicity = _get_reduced_indices(symmetry, degree)
+
+    new_monoms = inv_target_monoms[new_monoms] # map to the indices of target monoms
+
+    poly_vec = source_symmetry.arraylize_np(poly) #, expand_cyc=True)
+
+    new_mat = _count_contribution_of_monoms(new_monoms, poly_vec, length_of_target)
+    new_mat = new_mat * multiplicity.reshape((1, -1))
+
+    return new_mat

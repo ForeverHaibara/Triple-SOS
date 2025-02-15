@@ -200,6 +200,7 @@ class Solution():
     def signsimp(self) -> 'Solution':
         """
         Make a copy of the solution and apply signsimp on it.
+        See also: sympy.signsimp.
         """
         self = self.copy()
         self.solution = sp.signsimp(self.solution)
@@ -208,16 +209,30 @@ class Solution():
     def xreplace(self, *args, **kwargs) -> 'Solution':
         """
         Make a copy of the solution and apply xreplace on it.
+        See also: sympy.xreplace.
         """
         self = self.copy()
         self.solution = self.solution.xreplace(*args, **kwargs)
         return self
 
-    def doit(self, *args, **kwargs) -> sp.Expr:
+    def doit(self, *args, **kwargs) -> 'Solution':
         """
-        Return the evaluated solution expression (by expanding CyclicSum, etc.).
+        Make a copy of the solution and apply doit on it.
+        This is useful to expand cyclic expressions.
+        See also: sympy.doit.
         """
-        return self.solution.doit(*args, **kwargs)
+        self = self.copy()
+        self.solution = self.solution.doit(*args, **kwargs)
+        return self
+
+    def collect(self, *args, **kwargs) -> 'Solution':
+        """
+        Make a copy of the solution and apply collect on it.
+        See also: sympy.collect.
+        """
+        self = self.copy()
+        self.solution = self.solution.collect(*args, **kwargs)
+        return self
 
     def as_expr(self, *args, **kwargs) -> sp.Expr:
         """

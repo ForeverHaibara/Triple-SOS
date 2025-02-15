@@ -253,7 +253,7 @@ class SDPProblem(DualTransformMixin):
         elif isinstance(y, np.ndarray):
             if y.size != m:
                 raise ValueError(f"Vector y must be an array of shape ({m},) or ({m}, 1), but got {y.shape}.")
-            y = Matrix(y.flatten())
+            y = Matrix(m, 1, y.flatten().tolist())
         elif isinstance(y, dict):
             y = Matrix([y.get(v, v) for v in self.free_symbols]).reshape(m, 1)
 

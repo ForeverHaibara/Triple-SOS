@@ -5,8 +5,10 @@ from typing import Union, Optional, List, Tuple, Dict, Callable, Generator, Any
 
 import numpy as np
 import sympy as sp
-from sympy import Poly, Expr
+from sympy import Poly, Expr, ZZ, QQ
 from sympy.combinatorics import PermutationGroup
+from sympy.polys.matrices.domainmatrix import DomainMatrix
+from sympy.polys.matrices.sdm import SDM
 
 from .manifold import RootSubspace
 from .solution import SolutionSDP
@@ -77,7 +79,13 @@ def _form_sdp(ineq_constraints: List[Poly], eq_constraints: List[Poly], nvars: i
     splits_ineq = {}
     splits_eq = {}
 
-    # CSR format, each column is the contribution of an entry to the poly
+    domain = ZZ
+    for ineq in ineq_constraints:
+        domain = domain.unify(ineq.domain)
+    for eq in eq_constraints:
+        domain = domain.unify(eq.domain)
+
+    # CSR (SDM) format, each column is the contribution of an entry to the poly
     eq_list = [[] for _ in range(matrix_size)]
     cnt = 0
     for ineq in ineq_constraints:
@@ -85,9 +93,10 @@ def _form_sdp(ineq_constraints: List[Poly], eq_constraints: List[Poly], nvars: i
         if d > degree or (degree - d) % 2 != 0:
             raise ValueError("The degree of the inequality constraint is invalid, received %d while the total degree is %d." % (d, degree))
 
+        rep = ineq.rep.convert(domain)
         cur_cnt = cnt
-        contribution = defaultdict(int)
-        for monomial, const in ineq.terms():
+        contribution = defaultdict(lambda : domain.zero)
+        for monomial, const in rep.terms():
             cnt = cur_cnt
             inv_monoms_half = get_inv_half((degree - d)//2)
             vector_size = len(inv_monoms_half)
@@ -113,13 +122,15 @@ def _form_sdp(ineq_constraints: List[Poly], eq_constraints: List[Poly], nvars: i
         d = eq.total_degree()
         if d > degree:
             continue
+        
         inv_monoms_nonhalf = generate_monoms(nvars, degree - d, symmetry=symmetry.base())[1]
         vector_size = len(inv_monoms_nonhalf)
         splits_eq[eq] = vector_size
 
+        rep = eq.rep.convert(domain)
         cur_cnt = cnt
-        contribution = defaultdict(int)
-        for monomial, const in eq.terms():
+        contribution = defaultdict(lambda : domain.zero)
+        for monomial, const in rep.terms():
             cnt = cur_cnt
             mapping = _define_mapping(nvars, degree, monomial, symmetry, half=False)
 
@@ -132,12 +143,14 @@ def _form_sdp(ineq_constraints: List[Poly], eq_constraints: List[Poly], nvars: i
         for (row, col), v in contribution.items():
             eq_list[row].append((col, v))
 
+    eq_list = dict((i, dict(row)) for i, row in enumerate(eq_list))
+    eq_list = sp.Matrix._fromrep(DomainMatrix.from_rep(SDM(eq_list, (matrix_size, cnt), domain)))
 
     x0_equal_indices = _get_equal_entries(ineq_constraints, eq_constraints, nvars, degree, symmetry)
     if verbose:
         print(f"Time for constructing coeff equations   : {time() - time0:.6f} seconds.")
-    
-    x0, space = solve_csr_linear(eq_list, rhs, x0_equal_indices, _cols=cnt)
+
+    x0, space = solve_csr_linear(eq_list, rhs, x0_equal_indices)
     sdp = SDPProblem.from_full_x0_and_space(x0, space, splits_ineq, constrain_symmetry=False)
     if verbose:
         print(f"Time for solving coefficient equations  : {time() - time0:.6f} seconds. Dof = {sdp.dof}")

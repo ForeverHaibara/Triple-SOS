@@ -213,7 +213,7 @@ class DualMatrixTransform(SDPMatrixTransform):
 
             # Ai0 = Mat2Vec.vec2mat(x0)
             # new_x0 = Mat2Vec.mat2vec(U.T * Ai0 * U) + eq_mat * trans_x0
-            new_x0 = sp.Matrix(symmetric_bilinear(U, x0, is_A_vec = True, return_vec = True))
+            new_x0 = symmetric_bilinear(U, x0, is_A_vec = True, return_shape=(U.shape[1]**2, 1))
             new_x0 += eq_mat * trans_x0
             # new_x0 += matmul(eq_mat, trans_x0)
 
