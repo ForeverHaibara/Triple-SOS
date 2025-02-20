@@ -1,5 +1,5 @@
 # tested on Python 3.7-3.12
-sympy
+sympy>=1.10
 numpy
 scipy # recommend version >= 1.6 for high-ds in Linear Programming
 

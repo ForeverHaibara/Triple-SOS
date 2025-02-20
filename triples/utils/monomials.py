@@ -13,6 +13,11 @@ try:
 except ImportError: # sympy <= 1.7
     SDM = None
 
+try:
+    from sympy.external.gmpy import GROUND_TYPES
+    _IS_GROUND_TYPES_FLINT = (GROUND_TYPES == 'flint')
+except ImportError: # sympy <= 1.8 or no flint installed
+    _IS_GROUND_TYPES_FLINT = False
 
 def generate_partitions(nvars: int, degree: int, equal: bool = False) -> List[Tuple[int, ...]]:
     """
@@ -234,6 +239,11 @@ class MonomialManager():
         if not (rep.dom is ZZ or rep.dom is QQ):
             to_sympy = rep.dom.to_sympy
             vec = [to_sympy(v) for v in vec]
+        elif _IS_GROUND_TYPES_FLINT:
+            if rep.dom is QQ:
+                vec = [int(v.numerator) / int(v.denominator) for v in vec]
+            else:
+                vec = [int(v) for v in vec]
         return np.array(vec).astype(np.float64)
 
     def arraylize_sp(self, poly: Union[sp.Poly, DMP], expand_cyc: bool = False) -> sp.Matrix:
