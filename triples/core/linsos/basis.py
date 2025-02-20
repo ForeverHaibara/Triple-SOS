@@ -1,4 +1,4 @@
-from functools import lru_cache
+from functools import lru_cache, wraps
 from typing import Any, Union, Tuple, List, Dict, Callable, Optional
 from time import time
 
@@ -6,7 +6,7 @@ import sympy as sp
 import numpy as np
 from scipy.sparse import coo_matrix
 from sympy.combinatorics import PermutationGroup, Permutation
-from sympy.core.singleton import S
+from sympy.polys.polyclasses import DMP
 
 from ...utils import arraylize_np, arraylize_sp, MonomialManager
 
@@ -106,7 +106,8 @@ class LinearBasisTangent(LinearBasis):
         return sp.Poly.from_dict({self._powers: 1}, symbols) * self._tangent(symbols, poly=True)
     def __neg__(self) -> 'LinearBasisTangent':
         return self.__class__.from_callable_expr(self._powers, lambda *args, **kwargs: -self._tangent(*args, **kwargs).as_expr())
-
+    def __len__(self) -> int:
+        return 1
     def to_even(self, symbols: List[sp.Expr]) -> 'LinearBasisTangentEven':
         """
         Convert the linear basis to an even basis.
@@ -137,7 +138,7 @@ class LinearBasisTangent(LinearBasis):
         with total degree == degree or total degree <= degree.
         """
         if tangent_p is None:
-            tangent_degree = tangent.as_poly(symbols).total_degree()
+            tangent_degree = tangent.doit().as_poly(symbols).total_degree()
         else:
             tangent_degree = tangent_p.total_degree()
         degree = degree - tangent_degree
@@ -151,77 +152,79 @@ class LinearBasisTangent(LinearBasis):
     @classmethod
     def generate_quad_diff(cls, 
             tangent: sp.Expr, symbols: Tuple[sp.Symbol, ...], degree: int, symmetry: PermutationGroup,
-            tangent_p: Optional[sp.Poly] = None, quad_diff: bool = True
+            tangent_p: Optional[sp.Poly] = None, quad_diff_order: Union[bool, int] = 8,
         ) -> Tuple[List['LinearBasisTangent'], np.ndarray]:
         """
         Generate all possible linear bases of the form x1^a1 * x2^a2 * ... * xn^an * (x1-x2)^(2b_12) * ... * (xi-xj)^(2b_ij) * tangent
         with total degree == degree.
         Also, return the matrix representation of the bases.
+
+        Parameters
+        ----------
+        tangent: sp.Expr
+            The sympy expression of the tangent.
+        symbols: Tuple[sp.Symbol, ...]
+            A tuple of symbols.
+        degree: int
+            The total degree of the generated bases.
+        symmetry: PermutationGroup
+            The permutation group of the symmetry. Bases are summed
+            over the permutation group before converting to matrix representation.
+        tangent_p: Optional[sp.Poly]
+            The sympy polynomial of the tangent. If the tangent parameter
+            is an alias of the polynomial that does not actually
+            form a polynomial, then this parameter should be used. 
+            See also the example below.
+        quad_diff_order: Union[bool, int]
+            If an intger, generate only quadratic differences with degree <= quad_diff.
+            If True, no upper bound is set. If False, do not generate quadratic differences.
+            Set this smaller to reduce the number of bases generated and improve speed.
+
+        Examples
+        --------
+        >>> from sympy.abc import a, b, c
+        >>> from sympy.combinatorics import CyclicGroup(3)
+        >>> from sympy import Function
+        >>> bases, mat = LinearBasisTangent.generate_quad_diff(
+                Function("F")(a,b,c), (a,b,c), 4, CyclicGroup(3), 
+                tangent_p=((a+b-c)**2).as_poly(a,b,c), quad_diff_order=4)
+
+        >>> [_.__class__.__name__ for _ in [bases[0], mat]]
+        ['LinearBasisTangent', 'ndarray']
+
+        >>> (bases[8].as_expr((a,b,c)), mat[8])
+        ((a - b)**2*F(a, b, c), array([ 2., -2., -2.,  0.,  2.]))
         """
-        basis, mat, perm_group = None, None, None
-        cache = _get_tangent_cache_key(cls, tangent, symbols) if quad_diff else None
-        if cache is not None:
-            perm_group = symmetry.perm_group if isinstance(symmetry, MonomialManager) else symmetry
-            basis = cache.get((degree, len(symbols)))
-            if basis is not None:
-                mat = cache.get((degree, perm_group))
-                if mat is not None:
-                    return basis, mat
+        # 1. standardize the input
+        if tangent_p is None:
+            tangent_p = tangent.doit().as_poly(symbols)
 
-        if not isinstance(tangent_p, sp.Poly):
-            p = tangent.as_poly(symbols)
-        else:
-            p = tangent_p
-        d = p.total_degree()
-        if p.is_zero or len(p.free_symbols_in_domain) or d > degree:
-            return [], np.array([], dtype='float')
+        if isinstance(quad_diff_order, bool):
+            quad_diff_order = 2147483647 if quad_diff_order else 0
+        quad_diff_order = max(0, min(quad_diff_order, degree - tangent_p.total_degree()))
 
-        if quad_diff:
-            quad_diff = quadratic_difference(symbols)
-            cross_tangents = cross_exprs(quad_diff, symbols, degree - d)
-        else:
-            cross_tangents = [S.One]
+        # 2. get cross(quad_diff) * tangent_p
+        cross_exprs_mul_p, cross_polys_mul_p = _get_cross_exprs_and_polys_of_quad_diff(
+            symbols, quad_diff_order, tangent, tangent_p
+        )
 
+        # 3. Construct the basis objects
+        # This is not slow compared to other parts
+        # as it is only involves object creation.
+        basis = []
         if _VERBOSE_GENERATE_QUAD_DIFF:
-            print('GenerateQuadDiff cross_tangents num =', len(cross_tangents))
+            print('>> Time for converting cross_tangents to polys:', time() - time0)
             time0 = time()
 
-        if basis is None:
-            # no cache, generate the bases first
-            basis = []
-            for t in cross_tangents:
-                p2 = t.as_poly(symbols) * p
-                basis += cls.generate(t * tangent, symbols, degree, tangent_p=p2, require_equal=True)
+        for t2, p2 in zip(cross_exprs_mul_p, cross_polys_mul_p):
+            basis += cls.generate(t2, symbols, degree, tangent_p=p2, require_equal=True)
 
-            if _VERBOSE_GENERATE_QUAD_DIFF:
-                print('>> Time for generating bases instances:', time() - time0)
-                time0 = time()
+        if _VERBOSE_GENERATE_QUAD_DIFF:
+            print('>> Time for generating bases instances:', time() - time0)
+            time0 = time()
 
-        if mat is None:
-            # convert the bases to matrix
-            # mat = np.array([x.as_array_np(expand_cyc=True, symmetry=symmetry) for x in basis]) # too slow
-            mat = []
-            step = cls._degree_step
-
-            symmetry = MonomialManager(len(symbols), symmetry)
-            for t in cross_tangents:
-                p2 = t.doit().as_poly(symbols) * p
-
-                degree_comb_mat = _degree_combinations([step] * len(symbols), degree - p2.homogeneous_order(), require_equal=True)
-                degree_comb_mat = np.array(degree_comb_mat, dtype='int32') * step
-
-                mat2 = _get_matrix_of_lifted_degrees(p2, degree_comb_mat, symmetry, degree)
-                mat.append(mat2)
-
-            mat = np.vstack(mat) if len(mat) > 0 else np.array([], dtype='float')
-
-            if _VERBOSE_GENERATE_QUAD_DIFF:
-                print('>> Time for converting bases to matrix:', time() - time0)
-
-        if cache is not None:
-            # cache the result
-            cache[(degree, len(symbols))] = basis
-            cache[(degree, perm_group)] = mat
+        # 4. Convert polys to the numpy matrix representation.
+        mat = _get_matrix_of_quad_diff(tangent_p, degree, quad_diff_order, cls._degree_step, symmetry)
 
         return basis, mat
 
@@ -274,9 +277,25 @@ def _degree_combinations(d_list: List[int], degree: int, require_equal = False) 
 
 def cross_exprs(exprs: List[sp.Expr], symbols: Tuple[sp.Symbol, ...], degree: int) -> List[sp.Expr]:
     """
-    Generate cross products of exprs within given degree.
+    Given expressions f1, f2, ..., fn,
+    generate all expressions of the form f1^a1 * f2^a2 * ... * fn^an
+    bounded by the degree.
+
+    Parameters
+    ----------
+    exprs: sp.Expr
+        A list of sympy expressions.
+    symbols: Tuple[sp.Symbol, ...]
+        A tuple of symbols.
+    degree: int
+        The maximum degree of the cross products.
+
+    Returns
+    -------
+    List[sp.Expr]
+        A list of sympy expressions.
     """
-    polys = [_.as_poly(symbols) for _ in exprs]
+    polys = [_.doit().as_poly(symbols) for _ in exprs]
     poly_degrees = [_.total_degree() for _ in polys]
 
     # remove zero-degree polynomials
@@ -288,7 +307,9 @@ def cross_exprs(exprs: List[sp.Expr], symbols: Tuple[sp.Symbol, ...], degree: in
     # find all a1*d1 + a2*d2 + ... + an*dn <= degree
     powers = _degree_combinations(poly_degrees, degree)
     # map the powers to expressions
-    return [sp.Mul(*(x**i for x, i in zip(exprs, p))) for p in powers]
+    new_exprs = [sp.Mul(*(x**i for x, i in zip(exprs, p))) for p in powers]
+
+    return new_exprs
 
 def quadratic_difference(symbols: Tuple[sp.Symbol, ...]) -> List[sp.Expr]:
     """
@@ -307,32 +328,162 @@ def quadratic_difference(symbols: Tuple[sp.Symbol, ...]) -> List[sp.Expr]:
     return exprs
 
 ###########################################################
-# Fast operations for computing basis
+# Fast operations for computing bases
 ###########################################################
 
+def switchable_lru_cache(maxsize=128, typed=False, enabled=True):
+    def decorator(func):
+        cached_func = lru_cache(maxsize, typed)(func)
+        wrapper = wraps(func)(SwitchableWrapper(func, cached_func))
+        wrapper.enabled = enabled
+        return wrapper
+    return decorator
 
-def _define_common_tangents() -> List[sp.Expr]:
-    # define keys of quad_diff bases that should be cached
-    a, b, c, d = sp.symbols('x:4')
-    return [
-        S.One,
-        (a**2 - b*c)**2, (b**2 - a*c)**2, (c**2 - a*b)**2,
-        (a**3 - b*c**2)**2, (a**3 - b**2*c)**2, (b**3 - a*c**2)**2,
-        (b**3 - a**2*c)**2, (c**3 - a*b**2)**2, (c**3 - a**2*b)**2,
+class SwitchableWrapper:
+    def __init__(self, func, cached_func):
+        self.func = func
+        self.cached_func = cached_func
+        self.enabled = True
+
+    def __call__(self, *args, **kwargs):
+        if self.enabled:
+            return self.cached_func(*args, **kwargs)
+        return self.func(*args, **kwargs)
+    def enable_cache(self):
+        self.enabled = True
+    def disable_cache(self):
+        self.enabled = False
+    def cache_clear(self):
+        self.cached_func.cache_clear()
+    def clear_cache(self):
+        self.cache_clear()
+
+@switchable_lru_cache()
+def _get_cross_dmps_of_quad_diff(quad_diff_order: int, tangent_dmp: DMP) -> List[DMP]:
+    """
+    Compute the DMP of polynomials of the form prod((ai - aj)^2) * tangent.
+
+    This is a low-level and optimized function for generating bases,
+    which computes polynomials by dynamic programming rather than
+    converting expressions to polynomials. It is cached by lru_cache.
+
+    Parameters
+    ----------
+    quad_diff_order: int
+        The maximum degree of the quadratic differences.
+    tangent_dmp: DMP
+        The sympy polynomial representation (DMP object) of the tangent.
+    """
+    tangent_dmp = tangent_dmp.rep if isinstance(tangent_dmp, sp.Poly) else tangent_dmp
+    nvars = tangent_dmp.lev + 1
+    ndiff = nvars * (nvars - 1) // 2
+    powers = _degree_combinations([2] * ndiff, quad_diff_order)
+    domain = tangent_dmp.dom
+
+    # polys are the DMPs of (ai - aj)^2 for all i < j
+    polys, lst = [None] * ndiff, [0] * nvars
+    cnt, lev, one, negtwo = 0, nvars - 1, domain.one, domain.one * -2
+    for i in range(nvars):
+        for j in range(i+1, nvars):
+            coeffs = {}
+            lst[i] = 2
+            coeffs[tuple(lst)] = one
+            lst[i] = 0
+            lst[j] = 2
+            coeffs[tuple(lst)] = one
+            lst[j] = 1
+            lst[i] = 1
+            coeffs[tuple(lst)] = negtwo
+            lst[i] = 0
+            lst[j] = 0
+            polys[cnt] = DMP.from_dict(coeffs, lev, domain)
+            cnt += 1
+
+    cache = {(0,) * ndiff: tangent_dmp} # tangent_dmp.one(nvars - 1, tangent_dmp.dom)
+    
+    if _VERBOSE_GENERATE_QUAD_DIFF:
+        time0 = time()
+
+    # compute the polynomials of prod((ai - aj)^2) * tangent
+    # via dynamic programming
+    def _compute_power_with_cache(polys, cache, power):
+        cache_p = cache.get(power)
+        if cache_p is None:
+            first_nonzero_ind = next(i for i, p in enumerate(power) if p)
+            reduced_power = (0,) * first_nonzero_ind \
+                + (power[first_nonzero_ind]-1,) + power[first_nonzero_ind+1:]
+            cache_p = polys[first_nonzero_ind] * \
+                _compute_power_with_cache(polys, cache, reduced_power)
+            cache[power] = cache_p
+        return cache_p
+
+    new_poly_reps = [None] * len(powers)
+    for i, power in enumerate(powers):
+        new_poly_reps[i] = _compute_power_with_cache(polys, cache, power)
+
+    if _VERBOSE_GENERATE_QUAD_DIFF:
+        print('>> Time for computing polys in cross_exprs:', time() - time0)
+        time0 = time()
+    return new_poly_reps
+
+
+def _get_cross_exprs_and_polys_of_quad_diff(symbols: Tuple[sp.Symbol], quad_diff_order: int, tangent: sp.Expr, tangent_p: sp.Poly) -> Tuple[List[sp.Expr], List[sp.Poly]]:
+    """
+    Generate all sympy expressions of the form prod((ai - aj)^2) * tangent and return the polynomials,
+    the degree of prod((ai - aj)^2) is bounded by quad_diff_order.
+
+    This is a low-level and optimized function for generating bases,
+    which computes polynomials by dynamic programming rather than
+    converting expressions to polynomials.
+
+    Parameters
+    ----------
+    symbols: Tuple[sp.Symbol]
+        A tuple of symbols.
+    quad_diff_order: int
+        The maximum degree of the quadratic differences.
+    tangent: sp.Expr
+        The sympy expression of the tangent.
+    tangent_p: sp.Poly
+        The sympy polynomial of the tangent.
+
+    Returns
+    ---------
+    Tuple[List[sp.Expr], List[sp.Poly]]
+        A list of sympy expressions and a list of corresponding polynomials.
+    """
+    # # This is a naive implementation
+    # def _naive_implementation():
+    #     quad_diff = quadratic_difference(symbols)
+    #     exprs = cross_exprs(quad_diff, symbols, quad_diff_order)
+    #     exprs_mul_p = [tangent * e for e in exprs]
+    #     polys_mul_p = [tangent_p * e.as_poly(symbols) for e in exprs]
+    #     # Do not use [e.as_poly(symbols) for e in exprs]
+    #     # since we cannot ensure tangent.as_poly(symbols) == tangent_p
+    #     return exprs_mul_p, polys_mul_p
+    # return _naive_implementation()
+
+    # Faster implementation
+    nvars = len(symbols)
+    symbols = sorted(list(symbols), key=lambda x: x.name)
+    inds = [(i,j) for i in range(nvars) for j in range(nvars) if i < j]
+    powers = _degree_combinations([2] * (nvars*(nvars-1)//2), quad_diff_order)
+
+    exprs = [
+        sp.Mul(tangent, 
+            *((sp.Pow(symbols[i] - symbols[j], 2*p) if p else sp.S.One)
+                for (i,j), p in zip(inds, power))) for power in powers
     ]
 
-_CACHED_TANGENT_BASIS = dict((k, {}) for k in _define_common_tangents())
-_CACHED_TANGENT_BASIS_EVEN = dict((k, {}) for k in _define_common_tangents())
+    dmps = _get_cross_dmps_of_quad_diff(quad_diff_order, tangent_p.rep)
 
-def _get_tangent_cache_key(cls, tangent: sp.Expr, symbols: Tuple[int, ...]) -> Optional[Dict]:
-    """
-    Given a tangent and symbols, return the cache key if it is in the cache.
-    """
-    callable_tangent = _callable_expr.from_expr(tangent, symbols)
-    std_tangent = callable_tangent.default(len(symbols))
-    cache = _CACHED_TANGENT_BASIS if cls is LinearBasisTangent else _CACHED_TANGENT_BASIS_EVEN
-    return cache.get(std_tangent)
+    _new_func, _new_func_arg = sp.Basic.__new__, sp.Poly
+    polys = [_new_func(_new_func_arg) for _ in range(len(exprs))]
+    for new_p, new_rep in zip(polys, dmps):
+        new_p.rep = new_rep
+        new_p.gens = symbols
 
+    return exprs, polys
 
 
 def _compute_sym_multiplicity(arr: np.ndarray, need_sort: bool = True) -> np.ndarray:
@@ -355,7 +506,7 @@ def _compute_sym_multiplicity(arr: np.ndarray, need_sort: bool = True) -> np.nda
     return group_invariant
 
 
-@lru_cache()
+@switchable_lru_cache()
 def _get_reduced_indices(symmetry: MonomialManager, degree: int) -> Tuple[np.ndarray, np.ndarray]:
     """
     Get the indices of monomials after being reduced by symmetry.
@@ -441,29 +592,101 @@ def _count_contribution_of_monoms(A: np.ndarray, v: np.ndarray, M: int) -> np.nd
 
         return B
 
-def _get_matrix_of_lifted_degrees(poly: sp.Poly, degree_comb_mat: np.ndarray,
+@switchable_lru_cache()
+def _get_matrix_of_quad_diff(tangent_dmp: DMP, degree: int, quad_diff_order: int, step: int, symmetry: PermutationGroup) -> np.ndarray:
+    """
+    Generate the matrix representation of all bases of the form
+
+        x1^a1 * x2^a2 * ... * xn^an * (x1-x2)^(2b_12) * ... * (xi-xj)^(2b_ij) * tangent
+    
+    with total degree == degree and (2b_12 + ... + 2b_ij) <= quad_diff_order and
+    a1 % step == a2 % step == ... == an % step == 0.
+
+    This is a low-level and optimized function for generating bases, and is
+    cached by lru_cache.
+
+    Parameters
+    -----------
+    tangent_dmp : DMP
+        The sympy polynomial representation (DMP object) of the tangent.
+    degree : int
+        The total degree of the generated bases.
+    quad_diff_order : int
+        The maximum degree of the quadratic differences.
+    step : int
+        The step of the generated bases.
+    symmetry : PermutationGroup
+        The permutation group of the symmetry.
+
+    Returns
+    -----------
+    np.ndarray
+        The matrix representation of the bases.
+    """
+    polys = _get_cross_dmps_of_quad_diff(quad_diff_order, tangent_dmp)
+    if len(polys) == 0:
+        return np.array([], dtype='float')
+    if _VERBOSE_GENERATE_QUAD_DIFF:
+        time0 = time()
+
+    mat = []
+    nvars = (polys[0].rep if isinstance(polys[0], sp.Poly) else polys[0]).lev + 1
+    nvars_of_steps = [step] * nvars
+    symmetry = MonomialManager(nvars, symmetry)
+    for p in polys:
+        degree_comb_mat = _degree_combinations(nvars_of_steps, degree - p.total_degree(), require_equal=True)
+        degree_comb_mat = np.array(degree_comb_mat, dtype='int32') * step
+
+        submat = _get_matrix_of_lifted_degrees(p, degree_comb_mat, symmetry, degree)
+        if submat.shape[0]:
+            mat.append(submat)
+
+    mat = np.vstack(mat) if len(mat) > 0 else np.array([], dtype='float')
+
+    if _VERBOSE_GENERATE_QUAD_DIFF:
+        print('>> Time for converting bases to matrix:', time() - time0)
+
+    return mat
+
+
+def _get_matrix_of_lifted_degrees(poly: Union[DMP, sp.Poly], degree_comb_mat: np.ndarray,
         symmetry: MonomialManager, degree: int) -> np.ndarray:
+    """
+    Low-level function to convert bases to matrix representation efficiently.
+
+    Parameters
+    -----------
+    poly : Union[DMP, sp.Poly]
+        The sympy polynomial or poly.rep.
+    degree_comb_mat : np.ndarray
+        A numpy matrix indicating the combinations of powers
+        in each variable.
+    symmetry : MonomialManager
+        The monomial manager for reduced monomials.
+    degree : int
+        The total degree of the generated bases.
+    """
 
     if degree_comb_mat.shape[0] == 0:
         return np.array([], dtype='float')
 
-    symbols = poly.gens
+    nvars = (poly.rep if isinstance(poly, sp.Poly) else poly).lev + 1
 
     # # This a naive implementation
     # def _naive_implementation():
+    #     symbols = [sp.Symbol(f'x{i}') for i in range(nvars)]
     #     mat = [None] * degree_comb_mat.shape[0]
     #     poly_from_dict = sp.Poly.from_dict
     #     p2dict = poly.as_dict()
-    #     for power in degree_comb_mat:
+    #     for mat_ind, power in enumerate(degree_comb_mat):
     #         new_p_dict = dict((tuple_sum(power, k), v) for k, v in p2dict.items())
     #         new_p = poly_from_dict(new_p_dict, symbols)
     #         mat[mat_ind] = symmetry.arraylize_np(new_p, expand_cyc=True)
-    #         mat_ind += 1
     #     return np.vstack(mat) if len(mat) > 0 else np.array([], dtype='float')
+    # return _naive_implementation()
 
     # Below is a faster, low-level implementation
     # But it is not equivalent to the naive implementation
-    nvars = len(symbols)
 
     # encoding is a vector dot operation that maps monomials to a single integer
     # e.g. (4,3,2,1) -> 4 + 3*5 + 2*5^2 + 1*5^3 = 4 + 15 + 50 + 125 = 194

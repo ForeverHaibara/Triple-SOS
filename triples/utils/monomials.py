@@ -3,7 +3,16 @@ from warnings import warn
 
 import numpy as np
 import sympy as sp
+from sympy.polys.domains import ZZ, QQ
+from sympy.polys.polyclasses import DMP
 from sympy.combinatorics import Permutation, PermutationGroup, CyclicGroup, SymmetricGroup
+
+try:
+    from sympy.polys.matrices.sdm import SDM
+    from sympy.polys.matrices import DomainMatrix
+except ImportError: # sympy <= 1.7
+    SDM = None
+
 
 def generate_partitions(nvars: int, degree: int, equal: bool = False) -> List[Tuple[int, ...]]:
     """
@@ -29,6 +38,8 @@ def generate_partitions(nvars: int, degree: int, equal: bool = False) -> List[Tu
     # dict_monoms = {t: i for i, t in enumerate(inv_monoms)}
     # return dict_monoms, inv_monoms
 
+def _poly_rep(poly: Union[sp.Poly, DMP]) -> DMP:
+    return poly.rep if isinstance(poly, sp.Poly) else poly
 
 class MonomialManager():
     """
@@ -189,41 +200,55 @@ class MonomialManager():
     #     warn("_standard_monom is deprecated. Use standard_monom instead.", DeprecationWarning, stacklevel=2)
     #     return self.standard_monom(monom)
 
-    def _assert_equal_nvars(self, t: Tuple[int, ...]) -> bool:
-        if len(t) != self.nvars:
+    def _assert_equal_nvars(self, t: Union[int, Tuple[int, ...]]) -> bool:
+        if (t if isinstance(t, int) else len(t)) != self.nvars:
             raise ValueError("Number of variables does not match. Expected %d but received %d." % (self.nvars, len(t)))
             return False
         return True
 
-    def _arraylize_list(self, poly: sp.Poly, expand_cyc: bool = False) -> List[int]:
-        self._assert_equal_nvars(poly.gens)
-        degree = poly.total_degree()
+    def _arraylize_list(self, poly: Union[sp.Poly, DMP], expand_cyc: bool = False) -> List:
+        rep = _poly_rep(poly)
+        self._assert_equal_nvars(rep.lev + 1)
+        degree = rep.total_degree()
         dict_monoms = self.dict_monoms(degree)
-        array = [0] * len(dict_monoms)
+        array = [rep.dom.zero] * len(dict_monoms)
         if not expand_cyc:
-            for monom, coeff in poly.terms():
+            for monom, coeff in rep.terms():
                 v = dict_monoms.get(monom)
                 if v is not None:
                     array[v] = coeff
         else:
-            for monom, coeff in poly.terms():
+            for monom, coeff in rep.terms():
                 for monom2 in self.permute(monom):
                     v = dict_monoms.get(monom2)
                     if v is not None:
                         array[v] += coeff
         return array
 
-    def arraylize_np(self, poly: sp.Poly, expand_cyc: bool = False) -> np.ndarray:
+    def arraylize_np(self, poly: Union[sp.Poly, DMP], expand_cyc: bool = False) -> np.ndarray:
         """
         Return the vector representation of the polynomial in numpy array.
         """
-        return np.array(self._arraylize_list(poly, expand_cyc = expand_cyc)).astype(np.float64)
+        vec = self._arraylize_list(poly, expand_cyc = expand_cyc)
+        rep = _poly_rep(poly)
+        if not (rep.dom is ZZ or rep.dom is QQ):
+            to_sympy = rep.dom.to_sympy
+            vec = [to_sympy(v) for v in vec]
+        return np.array(vec).astype(np.float64)
 
-    def arraylize_sp(self, poly: sp.Poly, expand_cyc: bool = False) -> sp.Matrix:
+    def arraylize_sp(self, poly: Union[sp.Poly, DMP], expand_cyc: bool = False) -> sp.Matrix:
         """
         Return the vector representation of the polynomial in sympy matrix (column vector).
         """
-        return sp.Matrix(self._arraylize_list(poly, expand_cyc = expand_cyc))
+        vec = self._arraylize_list(poly, expand_cyc = expand_cyc)
+        rep = _poly_rep(poly)
+        if SDM is not None:
+            sdm = dict((i, {0: v}) for i, v in enumerate(vec) if v)
+            return sp.Matrix._fromrep(DomainMatrix.from_rep(SDM(sdm, (len(vec), 1), rep.dom)))
+        else: # sympy <= 1.7
+            to_sympy = rep.dom.to_sympy
+            vec = [to_sympy(v) for v in vec]
+            return sp.Matrix(vec)
 
     def invarraylize(self, array: Union[List, np.ndarray, sp.Matrix], gens: List[sp.Symbol], degree: int) -> sp.Poly:
         """
@@ -285,7 +310,7 @@ def _parse_options(nvars, **options) -> MonomialManager:
     raise ValueError(f"Invalid symmetry type {type(symmetry)}. Expected MonomialManager or PermutationGroup.")
 
 
-def arraylize_np(poly: sp.Poly, expand_cyc: bool = False, **options) -> np.ndarray:
+def arraylize_np(poly: Union[sp.Poly, DMP], expand_cyc: bool = False, **options) -> np.ndarray:
     """
     Convert a sympy polynomial to a numpy vector of coefficients.
 
@@ -337,10 +362,11 @@ def arraylize_np(poly: sp.Poly, expand_cyc: bool = False, **options) -> np.ndarr
     ----------
     arraylize_sp, invarraylize, generate_monoms
     """
-    option = _parse_options(len(poly.gens), **options)
+    nvars = (poly.rep if isinstance(poly, sp.Poly) else poly).lev + 1
+    option = _parse_options(nvars, **options)
     return option.arraylize_np(poly, expand_cyc = expand_cyc)
 
-def arraylize_sp(poly: sp.Poly, expand_cyc: bool = False, **options) -> sp.Matrix:
+def arraylize_sp(poly: Union[sp.Poly, DMP], expand_cyc: bool = False, **options) -> sp.Matrix:
     """
     Convert a sympy polynomial to a sympy vector of coefficients.
 
@@ -392,7 +418,8 @@ def arraylize_sp(poly: sp.Poly, expand_cyc: bool = False, **options) -> sp.Matri
     ----------
     arraylize_np, invarraylize, generate_monoms
     """
-    option = _parse_options(len(poly.gens), **options)
+    nvars = (poly.rep if isinstance(poly, sp.Poly) else poly).lev + 1
+    option = _parse_options(nvars, **options)
     return option.arraylize_sp(poly, expand_cyc = expand_cyc)
 
 def invarraylize(array: Union[List, np.ndarray, sp.Matrix], gens: List[sp.Symbol], degree: int, **options) -> sp.Poly:

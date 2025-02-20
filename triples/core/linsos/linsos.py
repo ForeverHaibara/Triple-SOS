@@ -72,6 +72,11 @@ def _prepare_tangents(symbols, prepared_tangents = [], rootsinfo: RootsInfo = No
                 (a**3 - b*c**2)**2, (a**3 - b**2*c)**2, (b**3 - a*c**2)**2,
                 (b**3 - a**2*c)**2, (c**3 - a*b**2)**2, (c**3 - a**2*b)**2,
             ]
+        elif len(symbols) == 4:
+            a, b, c, d = symbols
+            tangents += [
+                (a*b - c*d)**2, (a*c - b*d)**2, (a*d - b*c)**2,
+            ]
 
     return dict((Poly(t, symbols), t) for t in tangents)
 
@@ -89,6 +94,7 @@ def _prepare_basis(
         rootsinfo = None,
         basis: Optional[List[LinearBasis]] = None,
         symmetry: Union[MonomialManager, PermutationGroup] = PermutationGroup(),
+        quad_diff_order: int = 8,
         basis_limit: int = 15000,
     ) -> Tuple[List[LinearBasis], np.ndarray]:
     """
@@ -113,6 +119,10 @@ def _prepare_basis(
         we skip the loading of normal basis like AMGM.
     basis: list
         Additional basis to be added to the basis.
+    symmetry: MonomialManager or PermutationGroup
+        The symmetry of the polynomial. When it is None, it will be automatically generated.
+    quad_diff_order: int
+        The maximum degree of the form (xi - xj)^(2k)*... in the basis. Defaults to 8.
     basis_limit: int
         Limit of the basis. When the basis exceeds the limit, raise an error to kill the solver.
 
@@ -141,13 +151,13 @@ def _prepare_basis(
         cls = LinearBasisTangentEven
 
     for tangent_p, tangent in tangents: # .items():
-        basis, mat = cls.generate_quad_diff(tangent, symbols, degree, symmetry=symmetry, tangent_p=tangent_p)
+        basis, mat = cls.generate_quad_diff(tangent, symbols, degree, symmetry=symmetry, tangent_p=tangent_p, quad_diff_order=quad_diff_order)
         all_basis += basis
         _check_basis_limit(all_basis, basis_limit)
         all_arrays.append(mat)
 
     for eq_p, eq in eq_constraints: # .items():
-        basis, mat = LinearBasisTangent.generate_quad_diff(eq, symbols, degree, symmetry=symmetry, tangent_p=eq_p, quad_diff=False)
+        basis, mat = LinearBasisTangent.generate_quad_diff(eq, symbols, degree, symmetry=symmetry, tangent_p=eq_p, quad_diff_order=0)
         all_basis += basis
         all_arrays.append(mat)
         basis = [b.__neg__() for b in basis]
@@ -249,6 +259,7 @@ def LinearSOS(
         rootsinfo: Optional[RootsInfo] = None,
         preordering: str = 'linear',
         verbose: bool = False,
+        quad_diff_order: int = 8,
         basis_limit: int = 15000,
         lift_degree_limit: int = 4,
         linprog_options: Dict = LINPROG_OPTIONS,
@@ -279,6 +290,8 @@ def LinearSOS(
         The preordering method for extending the basis. It can be 'none' or 'linear'. Defaults to 'linear'.
     verbose: bool
         Whether to print the information of the linear programming problem. Defaults to False.
+    quad_diff_order: int
+        The maximum degree of the form (xi - xj)^(2k)*... in the basis. Defaults to 8.
     basis_limit: int
         The limit of the basis. When the basis exceeds the limit, the solver stops and returns None.
         Defaults to 15000.
@@ -307,7 +320,8 @@ def LinearSOS(
     """
     return _LinearSOS(poly, ineq_constraints=ineq_constraints, eq_constraints=eq_constraints,
                 symmetry=symmetry,tangents=tangents,rootsinfo=rootsinfo,preordering=preordering,
-                verbose=verbose,basis_limit=basis_limit,lift_degree_limit=lift_degree_limit,
+                verbose=verbose,quad_diff_order=quad_diff_order,
+                basis_limit=basis_limit,lift_degree_limit=lift_degree_limit,
                 linprog_options=linprog_options,allow_numer=allow_numer,_homogenizer=_homogenizer)
 
 
@@ -320,6 +334,7 @@ def _LinearSOS(
         rootsinfo: Optional[RootsInfo] = None,
         preordering: str = 'linear',
         verbose: bool = False,
+        quad_diff_order: int = 8,
         basis_limit: int = 15000,
         lift_degree_limit: int = 4,
         linprog_options: Dict = LINPROG_OPTIONS,
@@ -358,7 +373,8 @@ def _LinearSOS(
             time0 = time()
             degree = lift_degree_info['degree']
             basis, arrays = _prepare_basis(poly.gens, all_nonnegative=all_nonnegative, degree=degree, tangents=tangents,
-                                            eq_constraints=eq_constraints, rootsinfo=rootsinfo, symmetry=symmetry, basis_limit=basis_limit)
+                                            eq_constraints=eq_constraints, rootsinfo=rootsinfo, symmetry=symmetry, 
+                                            quad_diff_order=quad_diff_order, basis_limit=basis_limit)
             if len(basis) <= 0:
                 continue
 
