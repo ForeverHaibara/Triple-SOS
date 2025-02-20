@@ -465,7 +465,7 @@ def _get_cross_exprs_and_polys_of_quad_diff(symbols: Tuple[sp.Symbol], quad_diff
 
     # Faster implementation
     nvars = len(symbols)
-    symbols = sorted(list(symbols), key=lambda x: x.name)
+    # symbols = sorted(list(symbols), key=lambda x: x.name) # sorting makes rep reordered
     inds = [(i,j) for i in range(nvars) for j in range(nvars) if i < j]
     powers = _degree_combinations([2] * (nvars*(nvars-1)//2), quad_diff_order)
 
