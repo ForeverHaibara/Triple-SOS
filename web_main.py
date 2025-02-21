@@ -232,10 +232,10 @@ def findroot(sid, **kwargs):
             rootsinfo.tangents = tangents
     if 'sos' in kwargs['actions']:
         kwargs['rootsinfo'] = rootsinfo
-        sum_of_square(sid, **kwargs)
+        sum_of_squares(sid, **kwargs)
 
 
-def sum_of_square(sid, **kwargs):
+def sum_of_squares(sid, **kwargs):
     """
     Perform the sum of square decomposition, and emit the result to the client.
     Always emit the result to the client, even if the solution is None or an error occurs.
@@ -275,7 +275,7 @@ def sum_of_square(sid, **kwargs):
 
         gens = kwargs['gens']
         ineq_constraints = kwargs['poly'].free_symbols if SOS_Manager.CONFIG_ALLOW_NONSTANDARD_GENS else gens
-        solution = SOS_Manager.sum_of_square(
+        solution = SOS_Manager.sum_of_squares(
             kwargs['poly'],
             ineq_constraints = list(ineq_constraints),
             eq_constraints = [],

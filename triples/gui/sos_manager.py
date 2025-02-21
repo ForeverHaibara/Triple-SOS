@@ -12,7 +12,7 @@ from ..utils import (
 )
 from ..utils.text_process import preprocess_text, degree_of_zero, coefficient_triangle
 from ..utils.roots import RootsInfo, GridRender, findroot
-from ..core.sum_of_square import sum_of_square, DEFAULT_CONFIGS
+from ..core.sum_of_squares import sum_of_squares, DEFAULT_CONFIGS
 from ..core.linsos import root_tangents
 
 
@@ -207,7 +207,7 @@ class SOS_Manager():
         return roots_info
 
     @classmethod
-    def sum_of_square(cls,
+    def sum_of_squares(cls,
             poly,
             ineq_constraints: List[Poly] = [],
             eq_constraints: List[Poly] = [],
@@ -218,7 +218,7 @@ class SOS_Manager():
         ):
         """
         Perform the sum of square decomposition of a polynomial.
-        The keyword arguments are passed to the function sum_of_square.
+        The keyword arguments are passed to the function sum_of_squares.
         """
         if poly is None or (not isinstance(poly, Poly)):
             return None
@@ -239,7 +239,7 @@ class SOS_Manager():
                 configs[method]['verbose'] = False
         method_order = cls.CONFIG_METHOD_CHECK(poly, method_order)
 
-        solution = sum_of_square(
+        solution = sum_of_squares(
             poly,
             ineq_constraints = ineq_constraints,
             eq_constraints = eq_constraints,
