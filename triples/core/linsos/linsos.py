@@ -422,12 +422,10 @@ def _LinearSOS(
             )
             if is_equal or allow_numer > 0:
                 basis = _odd_basis_to_even(basis, poly.gens, ineq_constraints)
-                solution = SolutionLinear(
-                    problem = poly,
-                    y = y,
-                    basis = basis,
-                    symmetry = symmetry,
-                    is_equal = is_equal,
+                solution = SolutionLinear._from_y_basis(
+                    problem=poly, y=y, basis=basis, symmetry=symmetry,
+                    ineq_constraints=ineq_constraints, eq_constraints=dict(eq_constraints),
+                    is_equal=is_equal
                 )
                 return solution
     except _basis_limit_exceeded:
