@@ -465,7 +465,7 @@ class _tangents_helper_ternary_mixed(_tangents_helper_ternary):
 
         t5 = (-u + x)/(u*v - 1)
         tangents += [_tangent_t2(_) for _ in (sp.oo, t5)]
-        tangents = [_.expand() for _ in tangents]
+        tangents = [_.expand() for _ in tangents if _ is not None]
         return tangents
 
     @classmethod
