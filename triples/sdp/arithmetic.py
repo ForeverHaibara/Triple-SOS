@@ -245,8 +245,9 @@ def _rref(M, pivots=True, normalize_last=True):
     """
     See also in sympy.matrices.reductions.rref
     """
+    return_pivots = pivots
     if not is_zz_qq_mat(M):
-        return M.rref(pivots=pivots, normalize_last=normalize_last)
+        return M.rref(pivots=return_pivots, normalize_last=normalize_last)
 
     if _USE_SDM_RREF_DEN:
         # sdm_rref_den is implemented in sympy since 1.13
@@ -268,7 +269,7 @@ def _rref(M, pivots=True, normalize_last=True):
     else:
         mat, pivots, _ = _row_reduce(M, normalize_last=normalize_last, normalize=True, zero_above=True)
 
-    if pivots:
+    if return_pivots:
         mat = (mat, pivots)
     return mat
 
