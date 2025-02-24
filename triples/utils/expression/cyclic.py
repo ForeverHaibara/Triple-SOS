@@ -1,15 +1,15 @@
 from importlib import import_module
 from numbers import Number
 from typing import List, Tuple, Union, Callable
+from typing import Dict as tDict
 
 import sympy as sp
 from sympy.core.cache import cacheit
-from sympy.core import sympify, S, Mul, Add, Symbol, Expr
+from sympy.core import sympify, S, Mul, Add, Symbol, Expr, Basic
 from sympy.core.containers import Dict
 from sympy.core.numbers import zoo, nan
 from sympy.core.parameters import global_parameters
 from sympy.combinatorics import Permutation, PermutationGroup, CyclicGroup, SymmetricGroup
-from sympy.polys import cancel
 from sympy.printing.latex import LatexPrinter
 from sympy.printing.str import StrPrinter
 from sympy.printing.precedence import precedence_traditional, PRECEDENCE
@@ -57,6 +57,20 @@ def _func_perm(func, expr, symbols, perm_group):
     expr = func(*new_args)
     return expr
 
+def _replace_symbols(expr: Expr, replace_dict: tDict[Symbol, Symbol]) -> Expr:
+    """Replace a SymPy expression with a dictionary of replacements of SYMBOLS.
+    This function operates directly on the tree structure of the expression,
+    and does not rely on sympy `subs`, `xreplace`, or `replace` methods.
+    """
+    def _replace(e: Basic) -> Basic:
+        if isinstance(e, Symbol):
+            return replace_dict.get(e, e)
+        if e.is_Atom:
+            return e
+        new_args = [_replace(arg) for arg in e.args]
+        return e.func(*new_args)
+    return _replace(expr)
+
 def _is_same_dict(d1, d2, simpfunc=signsimp):
     if len(d1) != len(d2):
         return False
@@ -74,11 +88,10 @@ def _is_perm_invariant_dict(symbols, perm_group, d):
     """
     for perm_dict in CyclicExpr._generate_all_translations(symbols, perm_group, full=False):
         # checking only generators is sufficient
-        # perm_symbols = tuple(perm_dict[s] for s in rule.keys())
-        perm_symbols = [sympify(s).subs(perm_dict, simultaneous=True) for s in d.keys()]
-        permed_rule = [sympify(d[s]).subs(perm_dict, simultaneous=True) for s in d.keys()]
-        permed_rule = dict(zip(perm_symbols, permed_rule))
-        if not _is_same_dict(permed_rule, d):
+        permed_keys = [_replace_symbols(sympify(s), perm_dict) for s in d.keys()]
+        permed_rules = [_replace_symbols(sympify(d[s]), perm_dict) for s in d.keys()]
+        permed_rules = dict(zip(permed_keys, permed_rules))
+        if not _is_same_dict(permed_rules, d):
             return False
     return True
 
@@ -133,6 +146,8 @@ class CyclicExpr(sp.Expr):
             raise ValueError("Invalid arguments.")
         if not all(isinstance(_, sp.Symbol) for _ in symbols):
             raise ValueError("Second argument should be a tuple of sympy symbols.")
+        if len(set(symbols)) != len(symbols):
+            raise ValueError("Symbols should be distinct.")
 
         if perm is None:
             perm = CyclicGroup(len(symbols))
@@ -153,7 +168,8 @@ class CyclicExpr(sp.Expr):
             for translation in cls._generate_all_translations(symbols, perm, full=True):
                 # find the simplest form up to permutation
                 # expr2 = signsimp(expr0.xreplace(translation)) # signsimp is unstable
-                expr2 = expr0.xreplace(translation)
+                # expr2 = expr0.xreplace(translation)
+                expr2 = _replace_symbols(expr0, translation)
                 if expr.compare(expr2) > 0:
                     expr = expr2
 
@@ -300,11 +316,12 @@ class CyclicExpr(sp.Expr):
                 # the replacement is not cyclic with respect to the permutation group
                 break
         else:
-            # check other rule are not related to these symbols
-            other_rule = [fs(k) | fs(v) for k, v in rule.items() if not k in changed_vars]
-            if not any(_.intersection(self_vars) for _ in other_rule):
+            # check other rules not intersecting self symbols
+            other_rules = [fs(k) | fs(v) for k, v in rule.items() if not k in changed_vars]
+            if not any(_.intersection(self_vars) for _ in other_rules):
                 new_symbols = tuple(rule.get(s, s) for s in self.symbols)
-                if len(set(new_symbols)) == len(new_symbols): # distinct
+                if len(set(new_symbols)) == len(new_symbols):
+                    # distinct new symbols
                     return self.func(arg0, new_symbols, self.perm), changed0
 
         # Case B. if we are replacing symbols to f(symbols)...
@@ -314,10 +331,11 @@ class CyclicExpr(sp.Expr):
 
         # # fall back to the default implementation
         if len(changed_vars) >= len(self_vars) - 1:
-            # every symbol is changed, so we can't preserve the cyclic property
+            # at most 1 symbol unchanged, so we can't preserve the cyclic property
             return _func_perm(self.base_func, self.args[0], self.symbols, self.perm)._xreplace(rule)
         else:
             # partial change, compute the stabilized subgroup
+            # TODO: use traversals
             changed_inds = tuple(i for i, s in enumerate(self.symbols) if s in changed_vars)
             unchanged_inds = tuple(i for i, s in enumerate(self.symbols) if s not in changed_vars)
 
