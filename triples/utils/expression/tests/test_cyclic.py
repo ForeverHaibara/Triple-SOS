@@ -50,7 +50,7 @@ def test_cyclic_sum_random_xreplace():
 
                 subset = set(choices(symbols, k = randint(1, min(n, 4))))
                 subset = dict((s, 7 + i) for i, s in enumerate(subset))
-                assert _compare_replacement(val, subset), '%s(%s).xreplace(%s) -> %s'%(val.func, val.args, subset, diff)
+                assert _compare_replacement(val, subset), '%s(%s).xreplace(%s)'%(val.func, val.args, subset)
 
 def test_cyclic_sum_xreplace_preserve_structure():
     F = Function('F')
