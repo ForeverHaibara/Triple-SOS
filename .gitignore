@@ -3,4 +3,3 @@ __pycache__/
 *.csv
 *.zip
 .vscode/
-test_cyclic.py
