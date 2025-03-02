@@ -178,7 +178,7 @@ class GradioInterface():
                 rootsinfo = RootsInfo()
             try:
                 ineq_constraints = poly.free_symbols if SOS_Manager.CONFIG_ALLOW_NONSTANDARD_GENS else poly.gens
-                solution = SOS_Manager.sum_of_square(
+                solution = SOS_Manager.sum_of_squares(
                     poly,
                     ineq_constraints = list(ineq_constraints),
                     eq_constraints = [],

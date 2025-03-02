@@ -1,4 +1,5 @@
 from typing import Optional, Dict, List, Union, Callable, Any
+from warnings import warn
 
 import numpy as np
 import sympy as sp
@@ -39,7 +40,7 @@ DEFAULT_CONFIGS = {
 
 @sanitize_output()
 # @sanitize_input(homogenize=True)
-def sum_of_square(
+def sum_of_squares(
         poly: Union[sp.Poly, sp.Expr],
         ineq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
         eq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
@@ -58,7 +59,7 @@ def sum_of_square(
 
     Call the function by passing in a SymPy polynomial or polynomial-like expression:
 
-        >>> result = sum_of_square(a**2+b**2+c**2-a*b-b*c-c*a)
+        >>> result = sum_of_squares(a**2+b**2+c**2-a*b-b*c-c*a)
 
     The result will be None if the function fails. However, when the function fails
     it does not mean the polynomial is non positive semidefinite or non sum-of-squares. It only
@@ -79,20 +80,20 @@ def sum_of_square(
     or equality constraints. This should be the second and the third argument respectively. Here is
     an example for the constraints a,b,c >= 0:
 
-        >>> sum_of_square(a*(a-b)*(a-c)+b*(b-c)*(b-a)+c*(c-a)*(c-b), [a,b,c]).solution
+        >>> sum_of_squares(a*(a-b)*(a-c)+b*(b-c)*(b-a)+c*(c-a)*(c-b), [a,b,c]).solution
         ((Σ(a - b)**2*(a + b - c)**2)/2 + Σa*b*(a - b)**2)/(Σa)
 
     If we want to track the constraints, we can also pass in a dictionary to imply the "name" of the
     constraints:
 
-        >>> sum_of_square(((a+2)*(b+2)*(c+2)*(a**2/(2+a)+b**2/(2+b)+c**2/(2+c)-1)).cancel(), [a,b,c], {a*b*c-1:x}).solution
-        x*(Σa)/3 + 13*x + Σa*(b - c)**2 + (Σa*b*(c - 1)**2)/6 + 5*(Σ(a - 1)**2)/6 + 7*(Σ(a - b)**2)/12
+        >>> sum_of_squares(((a+2)*(b+2)*(c+2)*(a**2/(2+a)+b**2/(2+b)+c**2/(2+c)-1)).cancel(), [a,b,c], {a*b*c-1:x}).solution
+        x*(Σ(2*a + 13))/6 + Σa*(b - c)**2 + (Σa*b*(c - 1)**2)/6 + 5*(Σ(a - 1)**2)/6 + 7*(Σ(a - b)**2)/12
 
-        >>> sum_of_square(x+y+z-(x*y+y*z+z*x), {x:x, y:y, z:z, 4-(x*y+y*z+z*x+x*y*z):a}).solution
-        (6*a*(Σx) + 3*a*(Σx**2) + 3*(Σx*y*(x - y)**2) + 3*(Σx*y*z*(x - y)**2)/2)/(Σ(x*y*z + 6*x*y + 12*x + 8))
+        >>> sum_of_squares(x+y+z-(x*y+y*z+z*x), {x:x, y:y, z:z, 4-(x*y+y*z+z*x+x*y*z):a}).solution
+        (a*(Σ(x**2 + 2*x*y)) + Σx*y*(x - y)**2 + (Σx*y*z*(x - y)**2)/2)/(Σ(x*y*z + 4*x*y + 4*x))
 
         >>> G = Function("G")
-        >>> sum_of_square(x*(y-z)**2+y*(z-x)**2+z*(x-y)**2, {x:G(x),y:G(y),z:G(z)}).solution
+        >>> sum_of_squares(x*(y-z)**2+y*(z-x)**2+z*(x-y)**2, {x:G(x),y:G(y),z:G(z)}).solution
         Σ(x - y)**2*G(z)
 
     Parameters
@@ -130,7 +131,7 @@ def sum_of_square(
     return None
 
 
-def sum_of_square_multiple(
+def sum_of_squares_multiple(
         polys: Union[List[Union[sp.Poly, str]], str],
         ineq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
         eq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
@@ -172,7 +173,7 @@ def sum_of_square_multiple(
         name of the solution to save. If it is a callable, it will be called on the solution to
         save the result. It should handle None as well.
     verbose_sos : bool
-        Whether to send verbose=True to the sum_of_square function.
+        Whether to send verbose=True to the sum_of_squares function.
     verbose_progress : bool
         Whether to show the progress bar. Requires tqdm to be installed.
 
@@ -224,7 +225,7 @@ def sum_of_square_multiple(
         record = {'problem': poly_str, 'deg': deg(poly)}
         try:
             t0 = time()
-            solution = sum_of_square(poly, ineq_constraints, eq_constraints,
+            solution = sum_of_squares(poly, ineq_constraints, eq_constraints,
                 method_order=method_order, configs=configs
             )
             used_time = time() - t0
@@ -309,3 +310,14 @@ def _process_records(
         records_save.to_csv(filename)
 
     return records_pd
+
+
+def sum_of_square(*args, **kwargs):
+    """Deprecated function. Please use sum_of_squares instead."""
+    warn('sum_of_square is deprecated. Please use sum_of_squares instead.', DeprecationWarning, stacklevel=2)
+    return sum_of_squares(*args, **kwargs)
+
+def sum_of_square_multiple(*args, **kwargs):
+    """Deprecated function. Please use sum_of_squares_multiple instead."""
+    warn('sum_of_square_multiple is deprecated. Please use sum_of_squares_multiple instead.', DeprecationWarning, stacklevel=2)
+    return sum_of_squares_multiple(*args, **kwargs)

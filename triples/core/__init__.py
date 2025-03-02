@@ -1,5 +1,5 @@
-from .sum_of_square import (
-    sum_of_square, sum_of_square_multiple,
+from .sum_of_squares import (
+    sum_of_squares, sum_of_squares_multiple, sum_of_square, sum_of_square_multiple,
     METHOD_ORDER, DEFAULT_CONFIGS
 )
 
@@ -27,7 +27,7 @@ from .sdpsos import (
 )
 
 __all__ = [
-    'sum_of_square', 'sum_of_square_multiple',
+    'sum_of_squares', 'sum_of_squares_multiple', 'sum_of_square', 'sum_of_square_multiple',
     'METHOD_ORDER', 'DEFAULT_CONFIGS',
     'LinearSOS', 'root_tangents', 'LinearBasis', 'LinearBasisTangent',
     'SolutionLinear',

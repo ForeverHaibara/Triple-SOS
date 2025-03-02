@@ -194,6 +194,7 @@ class _tangents_helper_ternary_cyclic():
                 (v**2 - v + 1)*diamond(a,b,c) + (u*v - 1)*diamond(b,c,a),
                 (u*v - 1)*diamond(a,b,c) + (u**2 - u + 1)*diamond(b,c,a),
             ]
+        tangents = [_.expand() for _ in tangents]
         return tangents
 
     @classmethod
@@ -299,6 +300,7 @@ class _tangents_helper_ternary_cyclic():
         cyc_diff2 = b * tangent - c * tangent.xreplace({a:b, b:c, c:a})
 
         tangents = [tangent, cyc_sum, cyc_diff, cyc_sum2, cyc_diff2]
+        tangents = [_.expand() for _ in tangents]
         return tangents
 
 
@@ -463,6 +465,7 @@ class _tangents_helper_ternary_mixed(_tangents_helper_ternary):
 
         t5 = (-u + x)/(u*v - 1)
         tangents += [_tangent_t2(_) for _ in (sp.oo, t5)]
+        tangents = [_.expand() for _ in tangents if _ is not None]
         return tangents
 
     @classmethod
@@ -513,7 +516,7 @@ class _tangents_helper_ternary_mixed(_tangents_helper_ternary):
         def _tangent_t(t):
             if t is sp.zoo: return None
             x1, x2, x3, x4, x5, x6 = [(1-t)*v1 + t*v2 for v1, v2 in zip(vertex1, vertex2)]
-            return (x1 * a + x2 * b + x3 * c) * quad(a,b,c) + (x4 * a + x5 * b + x6 * c) * quad(b,c,a)
+            return ((x1 * a + x2 * b + x3 * c) * quad(a,b,c) + (x4 * a + x5 * b + x6 * c) * quad(b,c,a)).expand()
 
         tangents = [quad(a, b, c), _tangent_t(0)]
         s1, r1 = sum(vertex1[:3]), sum(vertex1[3:])

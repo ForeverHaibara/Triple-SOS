@@ -1,15 +1,15 @@
 from importlib import import_module
 from numbers import Number
 from typing import List, Tuple, Union, Callable
+from typing import Dict as tDict
 
 import sympy as sp
 from sympy.core.cache import cacheit
-from sympy.core import sympify, S, Mul, Add, Symbol, Expr
+from sympy.core import sympify, S, Mul, Add, Pow, Symbol, Expr, Basic
 from sympy.core.containers import Dict
 from sympy.core.numbers import zoo, nan
 from sympy.core.parameters import global_parameters
 from sympy.combinatorics import Permutation, PermutationGroup, CyclicGroup, SymmetricGroup
-from sympy.polys import cancel
 from sympy.printing.latex import LatexPrinter
 from sympy.printing.str import StrPrinter
 from sympy.printing.precedence import precedence_traditional, PRECEDENCE
@@ -17,7 +17,7 @@ from sympy.simplify import signsimp
 
 
 def _leading_symbol(expr):
-    if isinstance(expr, sp.Symbol):
+    if isinstance(expr, Symbol):
         return expr
     if hasattr(expr, '_leading_symbol'):
         return expr._leading_symbol
@@ -35,10 +35,11 @@ def is_cyclic_expr(expr, symbols, perm):
         return True
     if isinstance(expr, (Add, Mul)):
         return all(is_cyclic_expr(arg, symbols, perm) for arg in expr.args)
-    if isinstance(expr, sp.Pow) and expr.args[1].is_constant():
+    if isinstance(expr, Pow) and expr.args[1].is_constant():
         return is_cyclic_expr(expr.args[0], symbols, perm)
     return False
 
+@cacheit
 def _std_seq(symbols, perm_group):
     ind = sorted(list(range(len(symbols))), key = lambda i: symbols[i].name)
     inv_ind = [0] * len(symbols)
@@ -49,11 +50,24 @@ def _std_seq(symbols, perm_group):
     # return tuple(sorted_symbols[i] for i in p)
     return tuple(symbols[ind[i]] for i in p)
 
+def _replace_symbols(expr: Expr, replace_dict: tDict[Symbol, Symbol]) -> Expr:
+    """Replace a SymPy expression with a dictionary of replacements of SYMBOLS.
+    This function operates directly on the tree structure of the expression,
+    and does not rely on sympy `subs`, `xreplace`, or `replace` methods.
+    """
+    def _replace(e: Basic) -> Basic:
+        if isinstance(e, Symbol):
+            return replace_dict.get(e, e)
+        if e.is_Atom:
+            return e
+        new_args = [_replace(arg) for arg in e.args]
+        return e.func(*new_args)
+    return _replace(expr)
+
 def _func_perm(func, expr, symbols, perm_group):
     new_args = [None] *  perm_group.order()
-    symbols = symbols
     for i, translation in enumerate(CyclicExpr._generate_all_translations(symbols, perm_group)):
-        new_args[i] = expr.xreplace(translation)
+        new_args[i] = _replace_symbols(expr, translation)
     expr = func(*new_args)
     return expr
 
@@ -74,11 +88,10 @@ def _is_perm_invariant_dict(symbols, perm_group, d):
     """
     for perm_dict in CyclicExpr._generate_all_translations(symbols, perm_group, full=False):
         # checking only generators is sufficient
-        # perm_symbols = tuple(perm_dict[s] for s in rule.keys())
-        perm_symbols = [sympify(s).subs(perm_dict, simultaneous=True) for s in d.keys()]
-        permed_rule = [sympify(d[s]).subs(perm_dict, simultaneous=True) for s in d.keys()]
-        permed_rule = dict(zip(perm_symbols, permed_rule))
-        if not _is_same_dict(permed_rule, d):
+        permed_keys = [_replace_symbols(sympify(s), perm_dict) for s in d.keys()]
+        permed_rules = [_replace_symbols(sympify(d[s]), perm_dict) for s in d.keys()]
+        permed_rules = dict(zip(permed_keys, permed_rules))
+        if not _is_same_dict(permed_rules, d):
             return False
     return True
 
@@ -133,6 +146,8 @@ class CyclicExpr(sp.Expr):
             raise ValueError("Invalid arguments.")
         if not all(isinstance(_, sp.Symbol) for _ in symbols):
             raise ValueError("Second argument should be a tuple of sympy symbols.")
+        if len(set(symbols)) != len(symbols):
+            raise ValueError("Symbols should be distinct.")
 
         if perm is None:
             perm = CyclicGroup(len(symbols))
@@ -153,7 +168,8 @@ class CyclicExpr(sp.Expr):
             for translation in cls._generate_all_translations(symbols, perm, full=True):
                 # find the simplest form up to permutation
                 # expr2 = signsimp(expr0.xreplace(translation)) # signsimp is unstable
-                expr2 = expr0.xreplace(translation)
+                # expr2 = expr0.xreplace(translation)
+                expr2 = _replace_symbols(expr0, translation)
                 if expr.compare(expr2) > 0:
                     expr = expr2
 
@@ -267,32 +283,52 @@ class CyclicExpr(sp.Expr):
         return super().xreplace(*args, **kwargs)
 
     def _xreplace(self, rule):
+        def _fallback_xreplace(self, rule):
+            def astuple(*args):
+                return args
+            args_list = _func_perm(astuple, self.args[0], self.symbols, self.perm)
+
+            # apply xreplace on the expanded args
+            args_new = [arg._xreplace(rule) for arg in args_list]
+            if all(arg[1] == False for arg in args_new):
+                # nothing has changed
+                return self, False
+            return self.base_func(*[arg[0] for arg in args_new]), True
+
+        def _xreplace_arg0(self, rule, symbols):
+            arg0, changed = self.args[0]._xreplace(rule)
+            changed = changed or (not (self.symbols is symbols))
+            if not changed:
+                return self, False
+            return self.func(arg0, symbols, self.perm), changed
+
         if not isinstance(rule, (dict, Dict)):
             # might be a sympy Transform object
-            return _func_perm(self.base_func, self.args[0], self.symbols, self.perm)._xreplace(rule)
+            return _fallback_xreplace(self, rule)
 
         def fs(x):
             if hasattr(x, 'free_symbols'): return x.free_symbols
             return set()
+
+        if self in rule:
+            return rule[self], True
 
         rule_vars = set.union(set(), *(fs(_) for _ in rule.keys()))
         if len(rule_vars.intersection(self.free_symbols)) == 0:
             # nothing has changed
             return self, False
 
-        # first substitute the expression
-        arg0, changed0 = self.args[0]._xreplace(rule)
-
         if all(signsimp(k) == signsimp(v) for k, v in rule.items()):
             # identical replacement, e.g. signsimp
-            return self.func(arg0, self.symbols, self.perm), changed0
+            return _xreplace_arg0(self, rule, self.symbols)
 
-        self_vars = set(self.symbols)
+        symbols = self.symbols
+        self_vars = set(symbols) # symbols is a tuple while self_vars is a set
         rule_vars = set.union(rule_vars, *(fs(_) for _ in rule.values()))
         changed_vars = rule_vars.intersection(self_vars)
         if len(changed_vars) == 0:
             # no symbol is changed, so we can preserve the cyclic property
-            return self.func(arg0, self.args[1], self.args[2]), changed0
+            return _xreplace_arg0(self, rule, symbols)
 
         # Case A. if we are replacing symbols to symbols
         for var in changed_vars:
@@ -300,60 +336,59 @@ class CyclicExpr(sp.Expr):
                 # the replacement is not cyclic with respect to the permutation group
                 break
         else:
-            # check other rule are not related to these symbols
-            other_rule = [fs(k) | fs(v) for k, v in rule.items() if not k in changed_vars]
-            if not any(_.intersection(self_vars) for _ in other_rule):
+            # check other rules not intersecting self symbols
+            other_rules = [fs(k) | fs(v) for k, v in rule.items() if not k in changed_vars]
+            if not any(_.intersection(self_vars) for _ in other_rules):
                 new_symbols = tuple(rule.get(s, s) for s in self.symbols)
-                if len(set(new_symbols)) == len(new_symbols): # distinct
-                    return self.func(arg0, new_symbols, self.perm), changed0
+                if len(set(new_symbols)) == len(new_symbols):
+                    # distinct new symbols
+                    return _xreplace_arg0(self, rule, new_symbols)
 
         # Case B. if we are replacing symbols to f(symbols)...
         # we check whether the symmetry of the replacement rule agrees with the permutation group
-        if _is_perm_invariant_dict(self.symbols, self.perm, rule):
-            return self.func(arg0, self.symbols, self.perm), changed0
+        if _is_perm_invariant_dict(symbols, self.perm, rule):
+            return _xreplace_arg0(self, rule, symbols)
+
+        if len(changed_vars) >= len(self_vars) - 1:
+            # at most 1 symbol unchanged, so we can't preserve the cyclic property
+            return _fallback_xreplace(self, rule)
+        else:
+            # changed vars should be brocasted by the permutation group
+            changed_inds = list(i for i, s in enumerate(symbols) if s in changed_vars)
+            changed_inds = self.perm.orbit(changed_inds, action='union')
+            unchanged_inds = tuple(i for i in range(len(symbols)) if i not in changed_inds)
 
         # # fall back to the default implementation
-        if len(changed_vars) >= len(self_vars) - 1:
-            # every symbol is changed, so we can't preserve the cyclic property
-            return _func_perm(self.base_func, self.args[0], self.symbols, self.perm)._xreplace(rule)
+        if len(unchanged_inds) < 2:
+            return _fallback_xreplace(self, rule)
         else:
             # partial change, compute the stabilized subgroup
-            changed_inds = tuple(i for i, s in enumerate(self.symbols) if s in changed_vars)
-            unchanged_inds = tuple(i for i, s in enumerate(self.symbols) if s not in changed_vars)
-
-            if len(unchanged_inds) < 2:
-                return _func_perm(self.base_func, self.args[0], self.symbols, self.perm)._xreplace(rule)
+            # TODO: use traversals
 
             stab = self.perm.pointwise_stabilizer(list(changed_inds))
             stab_proj = _project_perm_group(stab, unchanged_inds)
             if stab_proj.is_trivial:
-                return _func_perm(self.base_func, self.args[0], self.symbols, self.perm)._xreplace(rule)
+                return _fallback_xreplace(self, rule)
 
+            # changed_vars = tuple(symbols[i] for i in changed_inds)
+            unchanged_vars = tuple(symbols[i] for i in unchanged_inds)
 
-            changed_vars = tuple(self.symbols[i] for i in changed_inds)
-            unchanged_vars = tuple(self.symbols[i] for i in unchanged_inds)
-
-            orbits = {changed_inds}
-            moving_perms = [self.perm.identity]
-            for p in self.perm.elements:
-                # get where the changed variables are permuted to
-                q = tuple(p.array_form[i] for i in changed_inds)
-                if not (q in orbits):
-                    moving_perms.append(p)
-                    orbits.add(q)
-
-            # sum up with respect to moving perms
-            other_vars = tuple(s for s in rule.keys() if s not in self.symbols)
-            other_dict = dict((s, rule.get(s, s)) for s in other_vars)
             new_args = []
-            for p in moving_perms:
-                trans = dict((self.symbols[i], rule.get(s, s)) for (s, i) in zip(self.symbols, p.array_form))
-                trans.update(other_dict)
-                new_args.append(self.func(self.args[0]._xreplace(trans)[0], unchanged_vars, stab_proj))
+            changed = False
+            stab_perp = self.perm.pointwise_stabilizer(list(unchanged_inds))
+            for p in stab_perp.elements:
+                # make every unchanged inds unchanged
+                # i.e. stab_perp.contains(p)
+                trans = dict(zip(symbols, p(symbols)))
+                arg_perm = _replace_symbols(self.args[0], trans)
+                arg_perm, changed2 = arg_perm._xreplace(rule)
+                changed = changed or changed2
+                new_args.append(self.func(arg_perm, unchanged_vars, stab_proj))
+            if not changed: # nothing has changed
+                return self, False
             return self.base_func(*new_args), True
 
-        arg1, changed1 = self.args[1]._xreplace(rule)
-        return self.func(arg0, arg1, self.args[2]), changed0 or changed1
+        return _fallback_xreplace(self, rule)
 
 
     @property
