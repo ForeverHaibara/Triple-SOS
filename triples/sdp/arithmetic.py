@@ -21,29 +21,14 @@ import sympy as sp
 from sympy import __version__ as _SYMPY_VERSION
 from sympy import Rational
 from sympy.external.gmpy import MPQ, MPZ # >= 1.9
+from sympy.external.importtools import version_tuple
 from sympy.matrices.repmatrix import RepMatrix
 from sympy.polys.domains import ZZ, QQ, EX, EXRAW # EXRAW >= 1.9
 from sympy.polys.matrices.domainmatrix import DomainMatrix # polys.matrices >= 1.8
 from sympy.polys.matrices.ddm import DDM
 from sympy.polys.matrices.sdm import SDM
 
-def _is_version_greater_than(v1, v2) -> bool:
-    """Version comparison. No dependencies on distutils
-    (which has been deprecated since Python 3.10)."""
-    def _version(s):
-        from re import findall
-        parts = []
-        for comp in s.split('.'):
-            for elem in findall(r'\d+|\D+', comp):
-                parts.append(int(elem) if elem.isdigit() else elem)
-        return tuple(parts)
-    for i, j in zip(_version(v1), _version(v2)):
-        if isinstance(i, str) or isinstance(j, str): i, j = str(i), str(j)
-        if i > j: return True
-        if i < j: return False
-    return bool(len(_version(v1)) >= len(_version(v2)))
-
-if _is_version_greater_than(_SYMPY_VERSION, '1.13'):
+if version_tuple(_SYMPY_VERSION) >= (1, 13):
     from sympy.polys.matrices.dfm import DFM
 
     primitive = lambda x: x.primitive()
