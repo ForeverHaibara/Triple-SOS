@@ -9,7 +9,7 @@ from sympy.printing.precedence import precedence_traditional, PRECEDENCE
 from sympy.printing.str import StrPrinter
 from sympy.combinatorics import PermutationGroup, Permutation
 
-from ..expression.cyclic import is_cyclic_expr, CyclicSum, CyclicProduct, CyclicExpr, rewrite_symmetry
+from .expression.cyclic import is_cyclic_expr, CyclicSum, CyclicProduct, CyclicExpr, rewrite_symmetry
 
 def _solution_latex_to_txt(s: str) -> str:
     """

@@ -2,17 +2,15 @@ from .monomials import (
     MonomialManager, generate_monoms, generate_expr, arraylize_np, arraylize_sp, invarraylize
 )
 
-from .text_process import preprocess_text, pl, PolyReader
+from .text_process import preprocess_text, pl, poly_get_standard_form, poly_get_factor_form, coefficient_triangle_latex, PolyReader
 
-from .polytools import (
-    deg, verify_hom_cyclic, verify_is_symmetric, monom_of
-)
+from .pqr import pqr_sym, pqr_cyc, pqr_ker
+
+from .solution import Solution, SolutionSimple
 
 from .expression import (
-    Coeff, CyclicExpr, CyclicSum, CyclicProduct, SymmetricSum, SymmetricProduct, is_cyclic_expr, identify_symmetry, rewrite_symmetry,
-    poly_get_factor_form, poly_get_standard_form, latex_coeffs,
-    Solution, SolutionSimple,
-    pqr_sym, pqr_cyc, pqr_ker
+    Coeff, CyclicExpr, CyclicSum, CyclicProduct, SymmetricSum, SymmetricProduct, is_cyclic_expr,
+    rewrite_symmetry, identify_symmetry, identify_symmetry_from_lists,
 )
 
 from .roots import (
@@ -29,10 +27,9 @@ from .roots import (
 
 __all__ = [
     'MonomialManager', 'generate_monoms', 'generate_expr', 'arraylize_np', 'arraylize_sp', 'invarraylize',
-    'preprocess_text', 'pl', 'PolyReader',
-    'deg', 'verify_hom_cyclic', 'verify_is_symmetric', 'monom_of',
-    'Coeff', 'CyclicExpr', 'CyclicSum', 'CyclicProduct', 'SymmetricSum', 'SymmetricProduct', 'is_cyclic_expr', 'identify_symmetry', 'rewrite_symmetry',
-    'poly_get_factor_form', 'poly_get_standard_form', 'latex_coeffs',
+    'preprocess_text', 'pl', 'poly_get_factor_form', 'poly_get_standard_form', 'coefficient_triangle_latex', 'PolyReader',
+    'Coeff', 'CyclicExpr', 'CyclicSum', 'CyclicProduct', 'SymmetricSum', 'SymmetricProduct',
+    'is_cyclic_expr', 'rewrite_symmetry', 'identify_symmetry', 'identify_symmetry_from_lists',
     'Solution', 'SolutionSimple',
     'pqr_sym', 'pqr_cyc', 'pqr_ker',
     'RootsInfo', 'Root', 'RootAlgebraic', 'RootRational', 'RootTernary', 'RootAlgebraicTernary', 'RootRationalTernary',

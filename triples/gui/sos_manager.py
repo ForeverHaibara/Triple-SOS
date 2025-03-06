@@ -6,11 +6,11 @@ import sympy as sp
 from sympy import Expr, Poly, Symbol
 from sympy.combinatorics import Permutation, PermutationGroup, CyclicGroup
 
-from ..utils import (
-    Solution, SolutionSimple, CyclicExpr, CyclicSum, CyclicProduct,
-    deg, poly_get_factor_form, poly_get_standard_form, latex_coeffs
+from ..utils import Solution, SolutionSimple, CyclicExpr, CyclicSum, CyclicProduct
+from ..utils.text_process import (
+    preprocess_text, poly_get_factor_form, poly_get_standard_form,
+    degree_of_zero, coefficient_triangle, coefficient_triangle_latex
 )
-from ..utils.text_process import preprocess_text, degree_of_zero, coefficient_triangle
 from ..utils.roots import RootsInfo, GridRender, findroot
 from ..core.sum_of_squares import sum_of_squares, DEFAULT_CONFIGS
 from ..core.linsos import root_tangents
@@ -167,7 +167,7 @@ class SOS_Manager():
         """
         if poly is None or (not isinstance(poly, Poly)):
             return False
-        if len(poly.gens) != 3 or (poly.is_zero) or (not poly.is_homogeneous) or deg(poly) < 1:
+        if len(poly.gens) != 3 or (poly.is_zero) or (not poly.is_homogeneous) or poly.total_degree() < 1:
             return False
         if not poly.domain.is_Numerical:
             return False
@@ -262,7 +262,7 @@ class SOS_Manager():
             poly, denom = preprocess_text(txt, gens=gens, perm=perm, return_type='frac')
         except:
             return ''
-        return latex_coeffs(poly, *args, **kwargs)
+        return coefficient_triangle_latex(poly, *args, **kwargs)
 
     @classmethod
     def _parse_perm_group(cls, txt: Union[str, List[List[int]]]) -> PermutationGroup:

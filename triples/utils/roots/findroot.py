@@ -13,8 +13,10 @@ from .grid import GridRender, GridPoly
 from .rationalize import nroots, rationalize
 from .roots import Root, RootAlgebraic, RootRational
 from .rootsinfo import RootsInfo
-from ..polytools import deg, verify_hom_cyclic
+from ..expression import Coeff
 
+def _is_cyclic(poly) -> bool:
+    return Coeff(poly).is_cyclic()
 
 def find_best(
         choices: List,
@@ -282,7 +284,7 @@ def findroot(
 
     roots = []
     if len(poly.gens) == 3 and (poly.domain in (sp.polys.ZZ, sp.polys.QQ, sp.polys.RR)):
-        is_cyc = verify_hom_cyclic(poly)[1]
+        is_cyc = _is_cyclic(poly)
         roots = _findroot_helper.findroot(poly, grid, method, standardize_method = standardize_method)
         roots = [r.approximate() if hasattr(r, 'approximate') else r for r in roots]
         roots = [r for r in roots if r.is_nontrivial]
@@ -300,7 +302,7 @@ def findroot(
     if len(vals) > most:
         vals = vals[:most]
 
-    reg = max(abs(i) for i in poly.coeffs()) * deg(poly) * 5e-9
+    reg = max(abs(i) for i in poly.coeffs()) * poly.total_degree() * 5e-9
 
     strict_roots = [roots[i] for v, i in vals if v < reg]
     roots = [roots[i] for v, i in vals]
@@ -442,7 +444,7 @@ class _findroot_helper():
         """
         Given grid coordinate and grid value, search for local minima.    
         """
-        extrema = grid.local_minima(filter_nontrivial=True, cyc=verify_hom_cyclic(grid.poly)[1])
+        extrema = grid.local_minima(filter_nontrivial=True, cyc=_is_cyclic(grid.poly))
 
         return extrema
 
@@ -612,7 +614,7 @@ class _findroot_helper_resultant():
     def _findroot_resultant_ternary(cls, poly):
         """See findroot_resultant."""
         a, b, c = poly.gens
-        is_cyc = verify_hom_cyclic(poly)[1]
+        is_cyc = _is_cyclic(poly)
         poly0 = poly
         poly = poly.subs(c,1) # -a-b).as_poly(a,b)
         parts = poly.factor_list()[1]

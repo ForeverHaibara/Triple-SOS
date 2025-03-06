@@ -7,8 +7,7 @@ from sympy.simplify.sqrtdenest import _sqrt_match
 from ...utils import (
     RootsInfo, Root, RootRational, RootTangent,
     rationalize, find_nearest_root,
-    verify_hom_cyclic, verify_is_symmetric,
-    CyclicSum, CyclicProduct
+    CyclicSum, CyclicProduct, Coeff
 )
 
 a, b, c = sp.symbols('a b c')
@@ -102,10 +101,11 @@ def root_tangents(
     if nvars != 3:
         return []
 
-    is_hom, is_cyc = verify_hom_cyclic(rootsinfo.poly)
+    is_hom = rootsinfo.poly.is_homogeneous
+    is_cyc = Coeff(rootsinfo.poly).is_cyclic()
     if not is_hom:
         return []
-    is_sym = is_cyc and verify_is_symmetric(rootsinfo.poly)
+    is_sym = is_cyc and Coeff(rootsinfo.poly).is_symmetric()
     is_centered = rootsinfo.is_centered
     strict_roots = rootsinfo.strict_roots
     normal_roots = rootsinfo.normal_roots

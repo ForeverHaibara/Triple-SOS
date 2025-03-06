@@ -1,7 +1,6 @@
 import sympy as sp
 
-from ...utils.expression import poly_get_factor_form
-from ...utils.polytools import deg
+from ...utils import poly_get_factor_form
 
 
 class RootTangent():
@@ -10,7 +9,7 @@ class RootTangent():
     def __init__(self, expr, symbols = sp.symbols('a b c')):
         self.expr = expr
         self.poly = expr.doit().as_poly(symbols)
-        self.degree = deg(self.poly)
+        self.degree = (self.poly).total_degree()
         self._length = len(self.poly.coeffs())
 
     def __str__(self):

@@ -11,7 +11,6 @@ import sympy as sp
 import numpy as np
 # from sympy.plotting.experimental_lambdify import vectorized_lambdify
 
-from ..polytools import deg
 from ..roots import Root, RootRational
 from ..monomials import generate_monoms
 
@@ -93,7 +92,7 @@ class GridPoly():
 
         distance = max(maxlen + maxlen % 2 + 1, 8)
         # print(maxlen,distance)
-        n = deg(self.poly)
+        n = (self.poly).total_degree()
         strings = [((distance + 1) // 2 * i) * ' ' for i in range(n+1)]
 
         t = 0
@@ -236,7 +235,7 @@ class GridRender():
         nvars = len(poly.gens)
         grid_coor = cls.grid_coor(nvars, size)
         grid_value = [0] * len(grid_coor)
-        if size > cls.size_limit or deg(poly) > cls.degree_limit:
+        if size > cls.size_limit or poly.total_degree() > cls.degree_limit:
             return grid_value
         
 
@@ -305,7 +304,7 @@ class GridRender():
         grid_coor = cls.grid_coor(nvars, size)
         grid_value = cls._render_grid_value(poly, size=size, value_method=value_method)
 
-        if deg(poly) > cls.degree_limit:
+        if poly.total_degree() > cls.degree_limit:
             grid_color = [WHITE] * len(grid_coor)
             return grid_value, grid_color
 

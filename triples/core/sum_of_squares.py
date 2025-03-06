@@ -11,7 +11,7 @@ from .symsos import SymmetricSOS
 from .sdpsos import SDPSOS
 from .shared import sanitize_input, sanitize_output
 
-from ..utils import deg, PolyReader, SolutionSimple
+from ..utils import PolyReader, SolutionSimple
 
 NAME_TO_METHOD = {
     'LinearSOS': LinearSOS,
@@ -222,7 +222,7 @@ def sum_of_squares_multiple(
             records.append(record)
             continue
 
-        record = {'problem': poly_str, 'deg': deg(poly)}
+        record = {'problem': poly_str, 'deg': poly.total_degree()}
         try:
             t0 = time()
             solution = sum_of_squares(poly, ineq_constraints, eq_constraints,

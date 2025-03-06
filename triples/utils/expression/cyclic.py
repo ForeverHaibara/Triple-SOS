@@ -963,3 +963,115 @@ def rewrite_symmetry(expr: Expr, symbols: Tuple[Symbol], perm_group: Permutation
      (0 1 2 3)])}
     """
     return expr.replace(lambda x: isinstance(x, CyclicExpr), _get_rewriting_replacement(symbols, perm_group))
+
+
+def identify_symmetry_from_lists(lst_of_lsts: List[List[sp.Poly]]) -> PermutationGroup:
+    """
+    Infer a symmetric group so that each list of (list of polynomials) is symmetric with respect to the rule.
+    It only identifies very common groups like complete symmetric and cyclic groups.
+
+    TODO: Implement a complete algorithm to identify all symmetric groups.
+
+    Parameters
+    ----------
+    lst_of_lsts : List[List[sp.Poly]]
+        A list of lists of polynomials.
+
+    Returns
+    ----------
+    PermutationGroup
+        The inferred permutation group.
+
+    Examples
+    ----------
+    >>> identify_symmetry_from_lists([[(a+b+c-3).as_poly(a,b,c)], [a.as_poly(a,b,c), b.as_poly(a,b,c), c.as_poly(a,b,c)]]).is_symmetric
+    True
+
+    >>> identify_symmetry_from_lists([[(a+b+c-3).as_poly(a,b,c)], [(2*a+b).as_poly(a,b,c), (2*b+c).as_poly(a,b,c), (2*c+a).as_poly(a,b,c)]])
+    PermutationGroup([
+        (0 1 2)])
+
+    See Also
+    ----------
+    identify_symmetry
+
+    Reference
+    ----------
+    [1] https://cs.stackexchange.com/questions/64335/how-to-find-the-symmetry-group-of-a-polynomial
+    """
+    gens = None
+    for l in lst_of_lsts:
+        for p in l:
+            gens = p.gens
+            break
+        if gens is not None:
+            break
+    for l in lst_of_lsts:
+        for p in l:
+            if p.gens != gens:
+                raise ValueError("All polynomials should have the same generators.")
+
+    def check_symmetry(polys, perm):
+        rep_set = set()
+        reorder_set = set()
+        for poly in polys:
+            rep = poly.rep
+            reorder = poly.reorder(*perm(gens)).rep
+            if rep == reorder:
+                continue
+            rep_set.add(rep)
+            reorder_set.add(reorder)
+        for r in reorder_set:
+            if r not in rep_set:
+                return False
+        return True
+
+    # List a few candidates: symmetric, alternating, cyclic groups...
+    nvars = len(gens)
+    def _rotated(n, start=0):
+        return list(range(start+1, n+start)) + [start]
+    def _reflected(n, start=0):
+        return [start+1, start] + list(range(start+2, n+start))
+
+    verified = [] # storing permutations that fit the input
+    candidates = [] # a list of permutations
+    if nvars > 1:
+        candidates.append(_rotated(nvars))
+        if nvars > 2:
+            candidates.append(_reflected(nvars))
+
+        # bi-symmetric group etc.
+        if nvars > 3:
+            half = nvars // 2
+            p1 = _rotated(half) + _rotated(half, half)
+            p2 = _reflected(half) + _reflected(half, half)
+            p3 = list(range(half,half*2)) + list(range(half))
+            if nvars % 2 == 1:
+                p1.append(nvars - 1)
+                p2.append(nvars - 1)
+                p3.append(nvars - 1)
+            candidates.append(p1)
+            candidates.append(p2)
+            candidates.append(p3)
+            
+        if nvars > 2:
+            candidates.append(_rotated(nvars - 1) + [nvars - 1])
+            if nvars > 3:
+                candidates.append(_reflected(nvars - 1) + [nvars - 1])
+
+    for perm in map(Permutation, candidates):
+        if all(check_symmetry(l, perm) for l in lst_of_lsts):
+            verified.append(perm)
+
+    if len(verified) == 0:
+        verified.append(Permutation(list(range(nvars))))
+
+    return PermutationGroup(*verified)
+
+
+def identify_symmetry(poly: sp.Poly) -> PermutationGroup:
+    """
+    Infer a symmetric group so that the polynomial is symmetric with respect to the rule.
+    It only identifies very simple groups like complete symmetric and cyclic groups.
+    """
+    return identify_symmetry_from_lists([[poly]])

@@ -8,8 +8,7 @@ from sympy import sympify, Function
 from sympy.core.symbol import uniquely_named_symbol
 from sympy.combinatorics import Permutation, PermutationGroup
 
-from ..utils.expression import Solution, SolutionSimple, CyclicExpr
-from ..utils.monomials import MonomialManager
+from ..utils import MonomialManager, Solution, SolutionSimple, CyclicExpr, identify_symmetry_from_lists
 
 class PropertyDict(dict):
     def __getattr__(self, key):
@@ -88,103 +87,6 @@ def homogenize_expr_list(expr_list: List[Union[sp.Expr, sp.Poly]], homogenizer: 
         elif isinstance(x, sp.Poly):
             return x.homogenize(homogenizer)
     return [hom(x) for x in expr_list]
-
-
-
-def identify_symmetry_from_lists(lst_of_lsts: List[List[sp.Poly]], has_homogenized: bool = False) -> PermutationGroup:
-    """
-    Infer a symmetric group so that each list of (list of polynomials) is symmetric with respect to the rule.
-    It only identifies very simple groups like complete symmetric and cyclic groups.
-
-    Parameters
-    ----------
-    lst_of_lsts : List[List[sp.Poly]]
-        A list of lists of polynomials.
-    has_homogenized : bool
-        If has_homogenized is True, it hints the function to check the symmetry before homogenization.
-
-    Returns
-    ----------
-    PermutationGroup
-        The inferred permutation group.
-
-    Examples
-    ----------
-    >>> identify_symmetry_from_lists([[(a+b+c-3).as_poly(a,b,c)], [a.as_poly(a,b,c), b.as_poly(a,b,c), c.as_poly(a,b,c)]]).is_symmetric
-    True
-
-    >>> identify_symmetry_from_lists([[(a+b+c-3).as_poly(a,b,c)], [(2*a+b).as_poly(a,b,c), (2*b+c).as_poly(a,b,c), (2*c+a).as_poly(a,b,c)]], has_homogenized=True)
-    PermutationGroup([
-        (0 1 2)])
-
-    See Also
-    ----------
-    identify_symmetry
-    """
-    gens = None
-    for l in lst_of_lsts:
-        for p in l:
-            gens = p.gens
-            break
-        if gens is not None:
-            break
-
-    def check_symmetry(polys, perm):
-        rep_set = set()
-        reorder_set = set()
-        for poly in polys:
-            rep = poly.rep
-            reorder = poly.reorder(*perm(gens)).rep
-            if rep == reorder:
-                continue
-            rep_set.add(rep)
-            reorder_set.add(reorder)
-        for r in reorder_set:
-            if r not in rep_set:
-                return False
-        return True
-
-    # List a few candidates: symmetric, alternating, cyclic groups...
-    nvars = len(gens)
-    def _rotated(n, start=0):
-        return list(range(start+1, n+start)) + [start]
-    def _reflected(n, start=0):
-        return [start+1, start] + list(range(start+2, n+start))
-
-    verified = [] # storing permutations that fit the input
-    candidates = [] # a list of permutations
-    if nvars > 1:
-        candidates.append(_rotated(nvars))
-        if nvars > 2:
-            candidates.append(_reflected(nvars))
-
-        # bi-symmetric group etc.
-        if nvars > 3 and (nvars - int(has_homogenized)) % 2 == 0:
-            half = nvars // 2
-            p1 = _rotated(half) + _rotated(half, half)
-            p2 = _reflected(half) + _reflected(half, half)
-            p3 = list(range(half,half*2)) + list(range(half))
-            if has_homogenized:
-                p1.append(nvars - 1)
-                p2.append(nvars - 1)
-                p3.append(nvars - 1)
-            candidates.append(p1)
-            candidates.append(p2)
-            candidates.append(p3)
-            
-        if has_homogenized and nvars > 2:
-            candidates.append(_rotated(nvars - 1) + [nvars - 1])
-            if nvars > 3:
-                candidates.append(_reflected(nvars - 1) + [nvars - 1])
-
-    for perm in map(Permutation, candidates):
-        if all(check_symmetry(l, perm) for l in lst_of_lsts):
-            verified.append(perm)
-
-    if len(verified) == 0:
-        verified.append(Permutation(list(range(nvars))))
-
-    return PermutationGroup(*verified)
 
 
 def clear_polys_by_symmetry(polys: List[Union[sp.Expr, Tuple[sp.Expr, ...]]],
@@ -348,7 +250,7 @@ def sanitize_input(
 
             if infer_symmetry and symmetry is None:
                 symmetry = identify_symmetry_from_lists(
-                    [[poly], list(ineq_constraints.keys()), list(eq_constraints.keys())], has_homogenized=homogenizer is not None)
+                    [[poly], list(ineq_constraints.keys()), list(eq_constraints.keys())])
             
             symmetry = MonomialManager(len(poly.gens), symmetry)
 

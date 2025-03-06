@@ -8,9 +8,7 @@ from flask_cors import CORS
 
 import sympy as sp
 
-from triples.utils.roots import RootTangent, RootsInfo
-from triples.utils.text_process import pl
-from triples.utils.expression.solution import SolutionSimple
+from triples.utils import RootTangent, RootsInfo, pl, SolutionSimple
 from triples.gui.sos_manager import SOS_Manager
 
 # def _async_raise(tid, exctype):
