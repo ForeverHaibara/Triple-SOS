@@ -188,6 +188,10 @@ class CommonExpr:
         a, b, c = cls.abc
         if x == 0:
             return y * CyclicSum(a*b)
+        if y == 0:
+            return x * CyclicSum(a**2)
+        if x == y:
+            return x/2 * CyclicSum((a+b)**2)
         if y > 2 * x:
             return CyclicSum(x * a**2 + y * b*c)
         w1 = (2*x - y) / 3
