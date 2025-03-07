@@ -1,14 +1,16 @@
-from typing import Union, List, Tuple, Optional
+from typing import Union, List, Tuple, Optional, Dict
 from functools import partial
 from collections import defaultdict
 # import re
 
-from sympy import Expr, Poly, Rational, Integer, Float, Symbol, sympify, fraction, cancel, latex
+from sympy import Expr, Poly, Rational, Integer, Float, Symbol
+from sympy import sympify, fraction, cancel, latex
 from sympy import symbols as sp_symbols
 from sympy.core.singleton import S
 from sympy.combinatorics import Permutation, PermutationGroup, CyclicGroup
+from sympy.printing.precedence import precedence_traditional, PRECEDENCE
 
-from .expression import Coeff
+from .expression import Coeff, CyclicSum, CyclicProduct
 
 def cycle_expansion(
         f: str,
@@ -32,9 +34,10 @@ def cycle_expansion(
     perm: Optional[PermutationGroup]
         The permutation group of the expression. If None, it will be cyclic group.
 
-    Return
+    Returns
     -------
-    a string, the result of cycle expansion
+    str
+        A string, the result of the cycle expansion.
     """
     if perm is None:
         perm = CyclicGroup(len(gens))
@@ -52,44 +55,63 @@ def cycle_expansion(
 #
 ##########################################################################
 
-def _preprocess_text_delatex(poly: str) -> str:
+def _preprocess_text_delatex(poly: str, funcs: Dict[str, Tuple[str, int]]) -> str:
     """
-    Convert a latex formula to standard representation.
+    Convert a latex formula to standard representation. This is experimental and unsafe.
     """
 
-    # \frac{..}{...} -> (..)/(...)
+    # frac{..}{...} -> (..)/(...)
     poly = poly.replace(' ','')
     poly = poly.replace('left','')
     poly = poly.replace('right','')
     poly = poly.replace('}{' , ')/(')
     poly = poly.replace('frac' , '')
-    poly = poly.translate({123: 40, 125: 41, 92: 32, 36: 32}) # { -> ( , } -> ) , \ -> space, $ -> space
+    poly = poly.translate({123: 40, 125: 41, 92: 32, 36: 32, 91: 40, 93: 41, 65288: 40, 65289: 41}) # { -> ( , } -> ) , \ -> space, $ -> space, [ -> (, ] -> )
     poly = poly.replace(' ','')
 
-    # \sum ... -> s(...)
-    # \prod ... -> p(...)
+    # sum ... -> s(...)
+    # prod ... -> p(...)
     parenthesis = 0
     paren_depth = [-1]
+    precedences = []
     i = 0
-    while i < len(poly) - 4:
-        if poly[i:i+3] == 'sum':
+
+    if '' in funcs:
+        funcs.pop('')
+    funckeys = sorted(list(funcs), key=lambda x: -len(x))
+    def _match_pattern(poly, i):
+        for pattern in funckeys:
+            if len(poly) >= i + len(pattern) and poly[i:i+len(pattern)] == pattern:
+                return pattern
+        return None
+
+    while i < len(poly):
+        matched = _match_pattern(poly, i)
+        if matched is not None:
             parenthesis += 1
             paren_depth.append(parenthesis)
-            poly = poly[:i] + 's(' + poly[i+3:]
-            i += 1
-        elif poly[i:i+4] == 'prod':
-            parenthesis += 1
-            paren_depth.append(parenthesis)
-            poly = poly[:i] + 'p(' + poly[i+4:]
-            i += 1
+            replacement, precedence = funcs[matched]
+            precedences.append(precedence)
+            poly = poly[:i] + replacement + '(' + poly[i+len(matched):]
+            i += len(replacement) + 1
+            continue
         elif poly[i] == '(':
             parenthesis += 1
+        elif parenthesis == paren_depth[-1]:
+            # auto parenthesize
+            need = False
+            if precedences[-1] <= PRECEDENCE["Add"]:
+                need = poly[i] in '+-'
+            elif precedences[-1] <= PRECEDENCE["Mul"]:
+                need = poly[i] in '+-(*/' # or poly[i].isalpha()
+            if need:
+                # auto parenthesize
+                poly = poly[:i] + ')' + poly[i:]
+                parenthesis -= 1
+                paren_depth.pop()
+                precedences.pop()
         elif poly[i] == ')':
             parenthesis -= 1
-        elif parenthesis == paren_depth[-1] and (poly[i] == '+' or poly[i] == '-'):
-            poly = poly[:i] + ')' + poly[i:]
-            parenthesis -= 1
-            paren_depth.pop()
         i += 1
     poly += ')' * (len(paren_depth) - 1)
 
@@ -131,8 +153,7 @@ def _preprocess_text_expansion(poly: str, gens: Tuple[Symbol], perm: Permutation
 def _preprocess_text_completion(
         poly: str,
         scientific_notation: bool = False,
-        preserve_sqrt: bool = True,
-        preserve_cbrt: bool = False
+        preserve_patterns: List[str] = ('sqrt',)
     ) -> str:
     """
     Complete the polynomial with * and ^. E.g. 
@@ -147,22 +168,38 @@ def _preprocess_text_completion(
         If False, 1e2 will be parsed as e^2 where e is a free variable.
     """
     SCI = 'e' if scientific_notation else ''
-    CHECK_SQRT = (lambda poly, i: len(poly) >= i + 5 and poly[i:i+5] == 'sqrt(') if preserve_sqrt else (lambda poly, i: False)
-    CHECK_CBRT = (lambda poly, i: len(poly) >= i + 5 and poly[i:i+5] == 'cbrt(') if preserve_cbrt else (lambda poly, i: False)
+    preserve_patterns = set(preserve_patterns)
+    if scientific_notation:
+        preserve_patterns.add('e')
+    if '' in preserve_patterns:
+        preserve_patterns.remove('') # will cause infinite loop
+    preserve_patterns = sorted(list(preserve_patterns), key=lambda x: -len(x))
+    def _pattern_match(poly, i):
+        lenp = len(poly)
+        for pattern in preserve_patterns:
+            if lenp >= i + len(pattern) and poly[i:i+len(pattern)] == pattern:
+                return pattern
+        return None
     poly = poly.replace(' ','')
     i = 0 
     while i < len(poly) - 1:
-        if 48 <= ord(poly[i]) <= 57: # '0'~'9'
-            if poly[i+1] == '(' or (97 <= ord(poly[i+1]) <= 122 and poly[i+1] != SCI): # alphabets
+        if poly[i].isdigit(): # '0'~'9'
+            if poly[i+1] == '(' or (poly[i+1].isalpha() and poly[i+1] != SCI): # alphabets
+                # when using scientific notation, e.g. '1e' should not be converted to '1*e'
                 poly = poly[:i+1] + '*' + poly[i+1:]
                 i += 1
-        elif poly[i] == ')' or (97 <= ord(poly[i]) <= 122 and poly[i] != SCI): # alphabets
-            if CHECK_SQRT(poly, i) or CHECK_CBRT(poly, i):
-                i += 4
-            elif poly[i+1] == '(' or 97 <= ord(poly[i+1]) <= 122:
+        elif poly[i] == ')' or poly[i].isalpha(): # alphabets
+            matched = _pattern_match(poly, i)
+            if matched is not None:
+                i += len(matched) - 1
+                if i + 1 < len(poly):
+                    if poly[i+1].isalpha(): # alphabets
+                        poly = poly[:i+1] + '*' + poly[i+1:]
+                        i += 1
+            elif poly[i+1] == '(' or poly[i+1].isalpha():
                 poly = poly[:i+1] + '*' + poly[i+1:]
                 i += 1
-            elif 48 <= ord(poly[i+1]) <= 57: # '0'~'9'
+            elif poly[i+1].isdigit(): # '0'~'9'
                 poly = poly[:i+1] + '^' + poly[i+1:]  
                 i += 1
         i += 1
@@ -175,12 +212,16 @@ def preprocess_text(
         gens: Tuple[Symbol] = sp_symbols("a b c"),
         perm: Optional[PermutationGroup] = None,
         return_type: str = "poly",
+        cyclic_sum_func: str = 's',
+        cyclic_prod_func: str = 'p',
         scientific_notation: bool = False,
-        preserve_sqrt: bool = True,
-        preserve_cbrt: bool = False
+        lowercase: bool = True,
+        latex: bool = False,
+        preserve_patterns: List[str] = ('sqrt',),
+        sympify_kwargs: Dict = {}
     ) -> Union[str, Expr, Poly, Tuple[Poly, Poly]]:
     """
-    Parse a text to sympy polynomial with respect to the given generators conveniently.
+    Parse a text to a sympy polynomial with respect to the given generators conveniently.
     The function assumes each variable to be a single character.
     For more general cases, please do not rely on this function.
 
@@ -188,51 +229,145 @@ def preprocess_text(
     ----------
     return_type: str
         One of ['text', 'expr', 'poly', 'frac'].
-        If 'text', return the text of the polynomial.
-        If 'expr', return the sympy expression of the polynomial.
-        If 'poly', return the sympy polynomial of the polynomial.
+        If 'text', return the text of the expression.
+        If 'expr', return the sympy expression of the expression.
+        If 'poly', return the sympy polynomial of the expression.
         If 'frac', return a tuple of sympy polynomials (numerator, denominator). If
             it fails to cancel the polynomial, return (None, None).
     gens: Tuple[Symbol]
-        The generators of the polynomial.
+        The generators of the cyclic sum or products.
     perm: Optional[PermutationGroup]
         The permutation group of the expression. If None, it will be cyclic group.
+    s: str
+        Stands for the cyclic sum. Defaults to 's'.
+    p: str
+        Stands for the cyclic product. Defaults to 'p'.
     scientific_notation: bool
         Whether to parse the scientific notation. If True, 1e2 will be parsed as 100.
         If False, 1e2 will be parsed as e^2 where e is a free variable.
-    preserve_sqrt: bool
-        Whether to preserve the sqrt function. If True, sqrt will be inferred as square root
-        rather than s*q*r*t.
-    preserve_cbrt: bool
-        Whether to preserve the cbrt function. If True, cbrt will be inferred as cubic root
-        rather than c*b*r*t.
+    lowercase: bool
+        Whether to convert the text to lowercase. Defaults to True.
+    latex: bool
+        Whether to parse the latex expression. THIS IS EXPERIMENTAL AND UNSAFE.
+        Defaults to False.
+    preserve_patterns: List[str]
+        The patterns to be preserved when completing the text. Defaults to ['sqrt'].
+    sympify_kwargs: Dict
+        The arguments for sympy sympyify.
 
     Returns
-    -------
-    See return_type.    
+    --------
+    See return_type.
+
+
+    Examples
+    --------
+    By default, the function will return a sympy polynomial with respect to a, b, c.
+    Omitted multiplication signs and powers will be completed.
+    >>> from sympy.abc import x, y, z, a, b, c    
+    >>> preprocess_text('xa+1/4yb2+z2c3')
+    Poly(x*a + y/4*b**2 + z**2*c**3, a, b, c, domain='QQ[x,y,z]')
+
+    >>> preprocess_text('xa+1/4yb2+z2c3', (x,y,z,a,b,c))
+    Poly(x*a + 1/4*y*b**2 + z**2*c**3, x, y, z, a, b, c, domain='QQ')
+
+    >>> preprocess_text('sqrt(2)abc/x-2')
+    Poly(sqrt(2)/x*a*b*c - 2, a, b, c, domain='EX')
+
+    >>> preprocess_text('1+a2/b') is None # since it is not a polynomial in a, b, c
+    True
+
+    
+    Configure the return type.
+
+    >>> preprocess_text('1+a2/b', return_type='expr')
+    a**2/b + 1
+    >>> preprocess_text('3/4a3b2c + (x2)2', return_type='text')
+    '3/4*a^3*b^2*c+(x^2)^2'
+    >>> preprocess_text('a/(b+c)+b/(c+a)', return_type='frac')
+    (Poly(a**2 + a*c + b**2 + b*c, a, b, c, domain='ZZ'), Poly(a*b + a*c + b*c + c**2, a, b, c, domain='ZZ'))
+
+
+    Strings 's' and 'p' are used to represent the cyclic sums and products respectively.
+    They are computed with respect to the given generators and the permutation group.
+
+    >>> preprocess_text('s(a2b-c)+3/4p(a3)')
+    Poly(3/4*a**3*b**3*c**3 + a**2*b + a*c**2 - a + b**2*c - b - c, a, b, c, domain='QQ')
+    >>> preprocess_text('s(x(x-y)(x-z))')
+    Poly(3*x**3 - 3*x**2*y - 3*x**2*z + 3*x*y*z, a, b, c, domain='ZZ[x,y,z]')
+    >>> preprocess_text('s(x2-xy)', (x,y,z))
+    Poly(x**2 - x*y - x*z + y**2 - y*z + z**2, x, y, z, domain='ZZ')
+
+    >>> from sympy.combinatorics import SymmetricGroup
+    >>> preprocess_text('s(x2-xy)', (x,y,z), SymmetricGroup(3))
+    Poly(2*x**2 - 2*x*y - 2*x*z + 2*y**2 - 2*y*z + 2*z**2, x, y, z, domain='ZZ')
+
+    >>> preprocess_text('s(1/x2)', (x,a,b), return_type='expr').doit()
+    x**(-2) + b**(-2) + a**(-2)
+
+    Configure cyclic_sum_func and cyclic_prod_func to use other strings for cyclic sums and products.
+    Sometimes the expression involves uppercase letters, and it requires to set lowercase to False.
+
+    >>> preprocess_text('Σ(x(y-z)2) - s', (x,y,z), cyclic_sum_func='Σ', lowercase=False)
+    Poly(x**2*y + x**2*z + x*y**2 - 6*x*y*z + x*z**2 + y**2*z + y*z**2 - s, x, y, z, domain='ZZ[s]')
+
+    
+    To avoid certain patterns from being completed, set preserve_patterns.
+
+    >>> preprocess_text('cbrt(x2)+y2',return_type='expr')
+    b*c*r*t*x**2 + y**2
+    >>> preprocess_text('cbrt(x2)+y2',return_type='expr',preserve_patterns=('cbrt','x'))
+    x2**(1/3) + y**2
+    >>> preprocess_text('x1x2x3-y1y2y3',return_type='expr',preserve_patterns=('y',))
+    x**6 - y1*y2*y3
+
+
+    See also
+    ---------
+    pl, degree_of_zero, sympify, parse_expr
     """
-    poly = poly.lower()
+    if lowercase:
+        poly = poly.lower()
 
     if perm is None:
         perm = CyclicGroup(len(gens))
 
-    poly = _preprocess_text_delatex(poly)
-    poly = _preprocess_text_expansion(poly, gens, perm)
+    if latex:
+        poly = _preprocess_text_delatex(poly,
+            funcs = {'sum': (cyclic_sum_func, PRECEDENCE["Add"]),
+                     'prod': (cyclic_prod_func, PRECEDENCE["Mul"])}
+                    #  'sqrt': ('sqrt', PRECEDENCE["Mul"])}
+        )
+    else:
+        poly = poly.replace(' ','')
+        poly = poly.translate({123: 40, 125: 41, 92: 32, 36: 32, 91: 40, 93: 41, 65288: 40, 65289: 41})
+    # poly = _preprocess_text_expansion(poly, gens, perm)
+
+    preserve_patterns = set(preserve_patterns)
+    if cyclic_sum_func: preserve_patterns.add(cyclic_sum_func)
+    if cyclic_prod_func: preserve_patterns.add(cyclic_prod_func)
     poly = _preprocess_text_completion(poly,
         scientific_notation=scientific_notation,
-        preserve_sqrt=preserve_sqrt,
-        preserve_cbrt=preserve_cbrt
+        preserve_patterns=preserve_patterns
     )
     
     if return_type == 'text':
         return poly
 
-    poly = sympify(poly)
+    _cyclic_sum = lambda x: CyclicSum(x, gens, perm)
+    _cyclic_prod = lambda x: CyclicProduct(x, gens, perm)
+    if 'locals' not in sympify_kwargs:
+        sympify_kwargs['locals'] = {}
+    else:
+        sympify_kwargs['locals'] = sympify_kwargs['locals'].copy()
+    sympify_kwargs['locals'].update({cyclic_sum_func: _cyclic_sum, cyclic_prod_func: _cyclic_prod})
+
+    poly = sympify(poly, **sympify_kwargs)
     if return_type == 'expr':
         return poly
     elif return_type == 'frac':
         try:
-            frac = fraction(cancel(poly))
+            frac = fraction(cancel(poly.doit()))
 
             poly0 = Poly(frac[0], gens, extension = True)
             poly1 = Poly(frac[1], gens, extension = True)
@@ -247,7 +382,7 @@ def preprocess_text(
             return None, None
     else:
         try:
-            poly = Poly(poly, gens, extension = True)
+            poly = Poly(poly.doit(), gens, extension = True)
         except:
             poly = None
 
@@ -256,20 +391,14 @@ def preprocess_text(
 
 def pl(*args, **kwargs):
     """
-    Parse a text to sympy polynomial with respect to the given generators conveniently.
+    Parse a text to a sympy polynomial with respect to the given generators conveniently.
     This is a shortcut for preprocess_text.
     """
     return preprocess_text(*args, **kwargs)
 pl = preprocess_text
 
-def degree_of_zero(
-        poly: str,
-        gens: Tuple[Symbol] = sp_symbols("a b c"),
-        perm: Optional[PermutationGroup] = None,
-        scientific_notation: bool = False,
-        preserve_sqrt: bool = True,
-        preserve_cbrt: bool = False
-    ) -> int:
+
+def degree_of_zero(poly: str, gens: Tuple[Symbol] = sp_symbols("a b c"), *args, **kwargs) -> int:
     """
     Infer the degree of a homogeneous zero polynomial.
     Idea: delete the additions and subtractions, which do not affect the degree.
@@ -280,17 +409,8 @@ def degree_of_zero(
         The polynomial of which to infer the degree.
     gens: Tuple[Symbol]
         The generators of the polynomial.
-    perm: Optional[PermutationGroup]
-        The permutation group of the expression. If None, it will be cyclic group.
-    scientific_notation: bool
-        Whether to parse the scientific notation. If True, 1e2 will be parsed as 100.
-        If False, 1e2 will be parsed as e^2 where e is a free variable.
-    preserve_sqrt: bool
-        Whether to preserve the sqrt function. If True, sqrt will be inferred as square root
-        rather than s*q*r*t.
-    preserve_cbrt: bool
-        Whether to preserve the cbrt function. If True, cbrt will be inferred as cubic root
-        rather than c*b*r*t.
+    args, kwargs:
+        Other arguments for preprocess_text.
 
     Returns
     -------
@@ -301,69 +421,35 @@ def degree_of_zero(
     --------
     >>> degree_of_zero('p(a)(s(a2)2-s(a4+2a2b2))')
     7
+    >>> degree_of_zero('(r2+r+1)s((x-y)2(x+y-tz)2)-s(((y-z)(y+z-tx)-r(x-y)(x+y-tz))2)')
+    4
     """
-    poly = poly.lower()
+    if 'return_type' in kwargs:
+        raise ValueError("return_type should not be specified.")
+    if 'sympify_kwargs' in kwargs:
+        kwargs['sympify_kwargs'] = kwargs['sympify_kwargs'].copy()
+    else:
+        kwargs['sympify_kwargs'] = {}
+    kwargs['sympify_kwargs']['evaluate'] = False
+    expr = preprocess_text(poly, gens, *args, **kwargs, return_type='expr')
 
-    if perm is None:
-        perm = CyclicGroup(len(gens))
-
-    poly = _preprocess_text_delatex(poly)
-    poly = _preprocess_text_expansion(poly, gens, perm)
-    poly = _preprocess_text_completion(poly,
-        scientific_notation=scientific_notation,
-        preserve_sqrt=preserve_sqrt,
-        preserve_cbrt=preserve_cbrt
-    )
-    gen_names = set([_.name for _ in gens])
-
-    i = 0
-    length = len(poly)
-    bracket = 0
-    while i < length:
-        if poly[i] == '+' or poly[i] == '-': 
-            # run to the end of this bracket (sum does not affect the degree)
-            # e.g. a*(a^2+a*b)*c -> a*(a^2)*c
-            bracket_cur = bracket
-            j = i + 1
-            is_constant = True 
-            while j < length:
-                if poly[j] == '(':
-                    bracket += 1
-                elif poly[j] == ')':
-                    bracket -= 1
-                    if bracket < bracket_cur:
-                        break 
-                elif poly[j] in gen_names:
-                    is_constant = False 
-                j += 1
-            if is_constant == False:
-                poly = poly[:i] + poly[j:]
-                length = len(poly)
-        elif poly[i] == ')':
-            bracket -= 1
-        elif poly[i] == '(':
-            bracket += 1
-            # e.g. a*(-b*c) ,    a*(--+-b*c)
-            i += 1
-            while i < length and (poly[i] == '-' or poly[i] == '+'):
-                i += 1
-            if i == length:
-                break 
-            
-        i += 1
-        
-    try:
-        deg = lambda x: x.total_degree()
-    #     degree = deg(Poly(poly))
-        poly = fraction(sympify(poly))
-        if poly[1].is_constant():
-            degree = deg(Poly(poly[0]))
-        else:
-            degree = deg(Poly(poly[0])) - deg(Poly(poly[1]))
-    except:
-        degree = 0
-        
-    return degree
+    def _get_degree(expr):
+        if expr.is_Atom:
+            return 1 if expr.is_Symbol and expr in gens else 0
+        elif expr.is_Add:
+            return max(_get_degree(_) for _ in expr.args) if len(expr.args) else 0
+        elif expr.is_Mul:
+            return sum(_get_degree(_) for _ in expr.args) if len(expr.args) else 0
+        elif expr.is_Pow:
+            if expr.exp.is_Integer:
+                return int(expr.exp) * _get_degree(expr.base)
+            return 0
+        elif isinstance(expr, CyclicSum):
+            return _get_degree(expr.args[0])
+        elif isinstance(expr, CyclicProduct):
+            return _get_degree(expr.args[0]) * int(expr.args[2].order())
+        return 0
+    return _get_degree(expr)
 
 
 def _is_single_paren(s: str) -> bool:
@@ -429,8 +515,9 @@ def poly_get_standard_form(
 
     Examples
     --------
+    >>> from sympy.abc import x, y, z, a, b, c
     >>> poly_get_standard_form(((x*a+y*b+z*c)**2).as_poly(x,y,z))
-    '(a^2)x2+(2*a*b)xy+(2*a*c)xz+(b^2)y2+(2*b*c)yz+(c^2)z2'
+    '((a^2)x2+(2*a*b)xy+(2*a*c)xz+(b^2)y2+(2*b*c)yz+(c^2)z2)'
     >>> poly_get_standard_form(((x*a+y*b+z*c)**2).as_poly(x,y,z,a,b,c), PermutationGroup(Permutation([1,2,0,4,5,3])))
     's(x2a2+2xyab)'
     """
@@ -549,7 +636,8 @@ def _reduce_factor_list(poly: Poly, perm_group: PermutationGroup) -> Tuple[Expr,
 
     Examples
     --------
-    >>> _reduce_factor_list((b**8*a**6*c**3*(a**2+b*c)*(b**2+c*a)*(a-b)**7*(b-c)**6*(c-a)**8).as_poly(a,b,c), CyclicGroup(3))
+    >>> from sympy.abc import a, b, c
+    >>> _reduce_factor_list((b**8*a**6*c**3*(a**2+b*c)*(b**2+c*a)*(a-b)**7*(b-c)**6*(c-a)**8).as_poly(a,b,c), CyclicGroup(3)) # doctest:+SKIP
     (1,
      [(Poly(b, a, b, c, domain='ZZ'), 5),
       (Poly(a*c + b**2, a, b, c, domain='ZZ'), 1),

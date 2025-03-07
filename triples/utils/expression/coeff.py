@@ -9,6 +9,7 @@ from sympy.utilities.iterables import iterable
 class Coeff():
     """
     A standard class for representing a polynomial with coefficients.
+    It can also represent sparse polynomials. The coefficients are stored in a dictionary.
     """
     def __new__(cls, *args, **kwargs):
         # if it is already a Coeff object, return it.

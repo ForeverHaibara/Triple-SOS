@@ -1,3 +1,7 @@
+"""
+This module provides customized SymPy expressions and classes. 
+"""
+
 from .coeff import Coeff
 
 from .cyclic import (
