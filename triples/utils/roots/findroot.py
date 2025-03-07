@@ -207,9 +207,10 @@ def kkt(
 
     Examples
     ----------
-    >>> x, y, z = sp.symbols('x y')
-    >>> kkt(2*x + 3*y, [x], [x**2 + y**2 - 1], as_poly = False)
-    [-_\lambda_0 + 2*_\mu_0*x + 2, 2*_\mu_0*y + 3, _\lambda_0*x, x**2 + y**2 - 1]
+    >>> x, y, z = sp.symbols('x y z')
+    >>> kkt(2*x + 3*y, [x], [x**2 + y**2 - 1], as_poly = False) # doctest: +NORMALIZE_WHITESPACE
+    ([-_\lambda_0 + 2*_\mu_0*x + 2, 2*_\mu_0*y + 3, _\lambda_0*x, x**2 + y**2 - 1],
+        ((x, y), (_\lambda_0,), (_\mu_0,), (x, y, _\lambda_0, _\mu_0)))
     """
     f = sp.sympify(f)
     symbs = f.gens if hasattr(f, 'gens') else tuple(sorted(f.free_symbols, key=lambda x: x.name))

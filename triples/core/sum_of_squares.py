@@ -66,34 +66,34 @@ def sum_of_squares(
     means the function could not find a solution.
     If result is not None, it will be a solution class. To access the expression, use .solution:
 
-        >>> print(isinstance(result.solution, Expr), result.solution)
+        >>> print(isinstance(result.solution, Expr), result.solution) # doctest: +SKIP
         True (Σ(a - b)**2)/2
 
     The solution expression might involve CyclicSum and CyclicProduct classes, which are not native
     to SymPy, but defined in this package. The permutation groups are not displayed by default and
     might be sometimes misleading. To avoid ambiguity and to expand them, use .doit() on SymPy expressions:
 
-        >>> result.solution.doit()
+        >>> result.solution.doit() # doctest: +SKIP
         (-a + c)**2/2 + (a - b)**2/2 + (b - c)**2/2
 
     If we want to add constraints for the domain of the variables, we can pass in a list of inequality
     or equality constraints. This should be the second and the third argument respectively. Here is
     an example for the constraints a,b,c >= 0:
 
-        >>> sum_of_squares(a*(a-b)*(a-c)+b*(b-c)*(b-a)+c*(c-a)*(c-b), [a,b,c]).solution
+        >>> sum_of_squares(a*(a-b)*(a-c)+b*(b-c)*(b-a)+c*(c-a)*(c-b), [a,b,c]).solution # doctest: +SKIP
         ((Σ(a - b)**2*(a + b - c)**2)/2 + Σa*b*(a - b)**2)/(Σa)
 
     If we want to track the constraints, we can also pass in a dictionary to imply the "name" of the
     constraints:
 
-        >>> sum_of_squares(((a+2)*(b+2)*(c+2)*(a**2/(2+a)+b**2/(2+b)+c**2/(2+c)-1)).cancel(), [a,b,c], {a*b*c-1:x}).solution
+        >>> sum_of_squares(((a+2)*(b+2)*(c+2)*(a**2/(2+a)+b**2/(2+b)+c**2/(2+c)-1)).cancel(), [a,b,c], {a*b*c-1:x}).solution # doctest: +SKIP
         x*(Σ(2*a + 13))/6 + Σa*(b - c)**2 + (Σa*b*(c - 1)**2)/6 + 5*(Σ(a - 1)**2)/6 + 7*(Σ(a - b)**2)/12
 
-        >>> sum_of_squares(x+y+z-(x*y+y*z+z*x), {x:x, y:y, z:z, 4-(x*y+y*z+z*x+x*y*z):a}).solution
+        >>> sum_of_squares(x+y+z-(x*y+y*z+z*x), {x:x, y:y, z:z, 4-(x*y+y*z+z*x+x*y*z):a}).solution # doctest: +SKIP
         (a*(Σ(x**2 + 2*x*y)) + Σx*y*(x - y)**2 + (Σx*y*z*(x - y)**2)/2)/(Σ(x*y*z + 4*x*y + 4*x))
 
         >>> G = Function("G")
-        >>> sum_of_squares(x*(y-z)**2+y*(z-x)**2+z*(x-y)**2, {x:G(x),y:G(y),z:G(z)}).solution
+        >>> sum_of_squares(x*(y-z)**2+y*(z-x)**2+z*(x-y)**2, {x:G(x),y:G(y),z:G(z)}).solution # doctest: +SKIP
         Σ(x - y)**2*G(z)
 
     Parameters

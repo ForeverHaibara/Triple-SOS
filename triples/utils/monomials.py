@@ -520,16 +520,16 @@ def generate_monoms(nvars: int, degree: int, **options) -> Tuple[Dict[Tuple[int,
 
     Examples
     ----------
-    >>> generate_monoms(3, 3, cyc = True)
+    >>> generate_monoms(3, 3, cyc = True) # doctest: +NORMALIZE_WHITESPACE
     ({(3, 0, 0): 0, (2, 1, 0): 1, (2, 0, 1): 2, (1, 1, 1): 3},
      [(3, 0, 0), (2, 1, 0), (2, 0, 1), (1, 1, 1)])
 
     >>> from sympy.combinatorics import AlternatingGroup
-    >>> generate_monoms(4, 3, symmetry=AlternatingGroup(4))
+    >>> generate_monoms(4, 3, symmetry=AlternatingGroup(4)) # doctest: +NORMALIZE_WHITESPACE
     ({(3, 0, 0, 0): 0, (2, 1, 0, 0): 1, (1, 1, 1, 0): 2},
      [(3, 0, 0, 0), (2, 1, 0, 0), (1, 1, 1, 0)])
 
-    >>> generate_monoms(3, 2, hom = False, sym = True)
+    >>> generate_monoms(3, 2, hom = False, sym = True) # doctest: +NORMALIZE_WHITESPACE
     ({(2, 0, 0): 0, (1, 1, 0): 1, (1, 0, 0): 2, (0, 0, 0): 3},
      [(2, 0, 0), (1, 1, 0), (1, 0, 0), (0, 0, 0)])
     """

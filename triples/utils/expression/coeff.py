@@ -69,6 +69,7 @@ class Coeff():
 
         Examples
         ---------
+        >>> from sympy.abc import a, b, c, d
         >>> coeff = Coeff((a**2*b+b**2*c+c**2*d+d**2*a).as_poly(a, b, c, d))
         >>> coeff.is_cyclic()
         True
@@ -105,6 +106,7 @@ class Coeff():
         Examples
         ---------
         >>> from sympy.combinatorics import Permutation, PermutationGroup
+        >>> from sympy.abc import a, b, c
         >>> coeff = Coeff((a**2+b**2+c*(a+b)+4*c**2).as_poly(a, b, c))
         >>> coeff.is_symmetric(PermutationGroup(Permutation((1,0,2))))
         True

@@ -22,12 +22,14 @@ class _callable_expr():
 
     Example
     ========
+    >>> from sympy.abc import a, b, c, x, y
+    >>> from sympy import Function
     >>> _callable_expr.from_expr(a**3*b**2, (a,b))((x,y))
     x**3*y**2
 
-    >>> e = _callable_expr.from_expr(sp.Function("F")(a,b,c), (a,b,c), (a**3+b**3+c**3).as_poly(a,b,c))
+    >>> e = _callable_expr.from_expr(Function("F")(a,b,c), (a,b,c), (a**3+b**3+c**3).as_poly(a,b,c))
     >>> e((a,b,c))
-    F(a,b,c)
+    F(a, b, c)
     >>> e((a,b,c), poly=True)
     Poly(a**3 + b**3 + c**3, a, b, c, domain='ZZ')
     
@@ -183,10 +185,10 @@ class LinearBasisTangent(LinearBasis):
         Examples
         --------
         >>> from sympy.abc import a, b, c
-        >>> from sympy.combinatorics import CyclicGroup(3)
+        >>> from sympy.combinatorics import CyclicGroup
         >>> from sympy import Function
-        >>> bases, mat = LinearBasisTangent.generate_quad_diff(
-                Function("F")(a,b,c), (a,b,c), 4, CyclicGroup(3), 
+        >>> bases, mat = LinearBasisTangent.generate_quad_diff(\
+                Function("F")(a,b,c), (a,b,c), 4, CyclicGroup(3),\
                 tangent_p=((a+b-c)**2).as_poly(a,b,c), quad_diff_order=4)
 
         >>> [_.__class__.__name__ for _ in [bases[0], mat]]
@@ -317,6 +319,7 @@ def quadratic_difference(symbols: Tuple[sp.Symbol, ...]) -> List[sp.Expr]:
 
     Example
     ========
+    >>> from sympy.abc import a, b, c
     >>> quadratic_difference((a, b, c))
     [(a - b)**2, (a - c)**2, (b - c)**2]
     """

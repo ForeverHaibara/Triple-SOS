@@ -24,10 +24,12 @@ def reflect_expression(expr: sp.Expr) -> sp.Expr:
 
     Examples
     ----------
+    >>> from sympy.abc import a, b, c
     >>> CyclicExpr.PRINT_FULL = True
     >>> reflect_expression(CyclicSum(a**2*b**3*c**4))
     CyclicSum(a**2*b**4*c**3, (a, b, c), PermutationGroup([
         (0 1 2)]))
+    >>> CyclicExpr.PRINT_FULL = False
     """
     if isinstance(expr, CyclicExpr):
         return expr.func(reflect_expression(expr.args[0]), *expr.args[1:])

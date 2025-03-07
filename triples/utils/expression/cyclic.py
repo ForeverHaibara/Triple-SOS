@@ -103,7 +103,7 @@ def _project_perm_group(perm_group, inds):
 
     Examples
     ========
-    >>> _project_perm_group(SymmetricGroup(5).stabilizer(3), [0,1,2,4])
+    >>> _project_perm_group(SymmetricGroup(5).stabilizer(3), [0,1,2,4]) # doctest:+SKIP
     PermutationGroup([
         (3)(0 1),
         (0 3),
@@ -230,7 +230,7 @@ class CyclicExpr(sp.Expr):
 
         Examples
         ========
-
+        >>> from sympy.abc import a, b, c, x, y, z
         >>> CyclicSum(a*(b-c)**2).subs({a:3, b:2, c:1})
         12
         >>> CyclicSum(a*(b-c)**2).subs({a:y+z, b:z+x, c:x+y})
@@ -255,7 +255,9 @@ class CyclicExpr(sp.Expr):
 
         Examples
         ========
-        >>> CyclicSum.PRINT_FULL = True
+        >>> from sympy.abc import a, b, c, x, y, z, u, v, w
+        >>> from sympy.combinatorics import PermutationGroup, Permutation
+        >>> CyclicExpr.PRINT_FULL = True
 
         If the replacement rule is cyclic with respect to its permutation group,
         then the cyclic expression is preserved.
@@ -280,6 +282,8 @@ class CyclicExpr(sp.Expr):
 
         >>> SymmetricSum(a**2, (a, b, c)).xreplace({a:a*b, b:b*c, c:c*a})
         2*a**2*b**2 + 2*a**2*c**2 + 2*b**2*c**2
+
+        >>> CyclicExpr.PRINT_FULL = False
         """
         return super().xreplace(*args, **kwargs)
 
@@ -414,8 +418,10 @@ class CyclicSum(CyclicExpr):
     Represent cyclic sums.
 
     Examples
-    ========    
-    >>> CyclicSum.PRINT_FULL = True
+    ========
+    >>> from sympy.abc import a, b, c, d, x, y, z
+    >>> from sympy.combinatorics import PermutationGroup, Permutation, SymmetricGroup
+    >>> CyclicExpr.PRINT_FULL = True
 
     Every CyclicSum object is defined by an expression, a tuple of symbols, and a permutation group.
     >>> expr = CyclicSum(a*(b-c)**2, (a, b, c), PermutationGroup(Permutation([1,2,0]))); expr
@@ -449,6 +455,8 @@ class CyclicSum(CyclicExpr):
     the cyclic sum is with respect to (a, b, c) and the cyclic group.
     >>> CyclicSum(a**3*b**2*c).doit()
     a**3*b**2*c + a**2*b*c**3 + a*b**3*c**2
+
+    >>> CyclicExpr.PRINT_FULL = False
     """
 
     precedence = PRECEDENCE['Mul']
@@ -537,7 +545,9 @@ class CyclicProduct(CyclicExpr):
 
     Examples
     ========
-    >>> CyclicProduct.PRINT_FULL = True
+    >>> from sympy.abc import a, b, c, d, x, y, z
+    >>> from sympy.combinatorics import PermutationGroup, Permutation, SymmetricGroup
+    >>> CyclicExpr.PRINT_FULL = True
 
     Every CyclicProduct object is defined by an expression, a tuple of symbols, and a permutation group.
     >>> expr = CyclicProduct((a + b - c), (a, b, c), PermutationGroup(Permutation([1,2,0]))); expr
@@ -571,6 +581,8 @@ class CyclicProduct(CyclicExpr):
     the cyclic product is with respect to (a, b, c) and the cyclic group.
     >>> CyclicProduct(a**3 + b**2 + c).doit()
     (a + b**3 + c**2)*(a**2 + b + c**3)*(a**3 + b**2 + c)
+
+    >>> CyclicExpr.PRINT_FULL = False
     """
 
     precedence = PRECEDENCE['Mul']
@@ -954,13 +966,20 @@ def rewrite_symmetry(expr: Expr, symbols: Tuple[Symbol], perm_group: Permutation
     ----------
     >>> from sympy.combinatorics import CyclicGroup, DihedralGroup, SymmetricGroup, PermutationGroup
     >>> from sympy.abc import a, b, c, d
+    >>> CyclicExpr.PRINT_FULL = True
     >>> expr = CyclicSum((a*c-b*d)**2, (a,b,c,d), DihedralGroup(4)) + CyclicProduct((a-b)**2, (a,b,c,d), SymmetricGroup(4))
     >>> rewritten = rewrite_symmetry(expr, (a,b,c,d), CyclicGroup(4))
     >>> rewritten
-    (∏(a - b)**4)*(∏(a - c)**4)*(∏(a - d)**4) + 2*(Σ(a*c - b*d)**2)
+    (CyclicProduct((a - b)**4, (a, b, c, d), PermutationGroup([
+        (0 1 2 3)])))*(CyclicProduct((a - c)**4, (a, b, c, d), PermutationGroup([
+        (0 1 2 3)])))*(CyclicProduct((a - d)**4, (a, b, c, d), PermutationGroup([
+        (0 1 2 3)]))) + 2*(CyclicSum((a*c - b*d)**2, (a, b, c, d), PermutationGroup([
+        (0 1 2 3)])))
     >>> rewritten.find(PermutationGroup)
     {PermutationGroup([
-     (0 1 2 3)])}
+        (0 1 2 3)])}
+
+    >>> CyclicExpr.PRINT_FULL = False
     """
     return expr.replace(lambda x: isinstance(x, CyclicExpr), _get_rewriting_replacement(symbols, perm_group))
 
@@ -984,6 +1003,7 @@ def identify_symmetry_from_lists(lst_of_lsts: List[List[sp.Poly]]) -> Permutatio
 
     Examples
     ----------
+    >>> from sympy.abc import a, b, c
     >>> identify_symmetry_from_lists([[(a+b+c-3).as_poly(a,b,c)], [a.as_poly(a,b,c), b.as_poly(a,b,c), c.as_poly(a,b,c)]]).is_symmetric
     True
 

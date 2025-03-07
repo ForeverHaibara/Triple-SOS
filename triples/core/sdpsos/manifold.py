@@ -134,10 +134,12 @@ def _compute_diff_orders(poly: Poly, root: Root, mixed=False, only_binary_roots=
 
     Examples
     --------
+    >>> from sympy.abc import a, b, c
+    >>> from triples.utils import pl
     >>> _compute_diff_orders((a**3*(a-b)*(a-c)+b**3*(b-c)*(b-a)+c**3*(c-a)*(c-b)).as_poly(a,b,c), Root((1,1,0)))
     [(0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1), (0, 0, 2)]
 
-    >>>  _compute_diff_orders(pl('16p(2a-b-c)2-27p(a)s((a-b)2(13a-5b-17c))'), Root((1,2,0)), only_binary_roots=False)
+    >>> _compute_diff_orders(pl('16p(2a-b-c)2-27p(a)s((a-b)2(13a-5b-17c))'), Root((1,2,0)), only_binary_roots=False)
     [(0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1)]
     """
     gens = poly.gens

@@ -4,7 +4,7 @@ from collections import defaultdict
 # import re
 
 from sympy import Expr, Poly, Rational, Integer, Float, Symbol
-from sympy import sympify, fraction, cancel, latex
+from sympy import parse_expr, sympify, fraction, cancel, latex
 from sympy import symbols as sp_symbols
 from sympy.core.singleton import S
 from sympy.combinatorics import Permutation, PermutationGroup, CyclicGroup
@@ -218,7 +218,7 @@ def preprocess_text(
         lowercase: bool = True,
         latex: bool = False,
         preserve_patterns: List[str] = ('sqrt',),
-        sympify_kwargs: Dict = {}
+        parse_expr_kwargs: Optional[Dict] = None,
     ) -> Union[str, Expr, Poly, Tuple[Poly, Poly]]:
     """
     Parse a text to a sympy polynomial with respect to the given generators conveniently.
@@ -252,7 +252,7 @@ def preprocess_text(
         Defaults to False.
     preserve_patterns: List[str]
         The patterns to be preserved when completing the text. Defaults to ['sqrt'].
-    sympify_kwargs: Dict
+    parse_expr_kwargs: Dict
         The arguments for sympy sympyify.
 
     Returns
@@ -354,15 +354,19 @@ def preprocess_text(
     if return_type == 'text':
         return poly
 
+    if parse_expr_kwargs is None:
+        parse_expr_kwargs = {}
+    if 'local_dict' not in parse_expr_kwargs:
+        parse_expr_kwargs['local_dict'] = {}
+    else:
+        parse_expr_kwargs['local_dict'] = parse_expr_kwargs['local_dict'].copy()
+
     _cyclic_sum = lambda x: CyclicSum(x, gens, perm)
     _cyclic_prod = lambda x: CyclicProduct(x, gens, perm)
-    if 'locals' not in sympify_kwargs:
-        sympify_kwargs['locals'] = {}
-    else:
-        sympify_kwargs['locals'] = sympify_kwargs['locals'].copy()
-    sympify_kwargs['locals'].update({cyclic_sum_func: _cyclic_sum, cyclic_prod_func: _cyclic_prod})
+    parse_expr_kwargs['local_dict'].update({cyclic_sum_func: _cyclic_sum, cyclic_prod_func: _cyclic_prod})
 
-    poly = sympify(poly, **sympify_kwargs)
+    poly = poly.replace('^','**')
+    poly = parse_expr(poly, **parse_expr_kwargs)
     if return_type == 'expr':
         return poly
     elif return_type == 'frac':
@@ -419,18 +423,19 @@ def degree_of_zero(poly: str, gens: Tuple[Symbol] = sp_symbols("a b c"), *args, 
 
     Examples
     --------
+    >>> from sympy.abc import a, b, c, x, y, z
     >>> degree_of_zero('p(a)(s(a2)2-s(a4+2a2b2))')
     7
-    >>> degree_of_zero('(r2+r+1)s((x-y)2(x+y-tz)2)-s(((y-z)(y+z-tx)-r(x-y)(x+y-tz))2)')
+    >>> degree_of_zero('(r2+r+1)s((x-y)2(x+y-tz)2)-s(((y-z)(y+z-tx)-r(x-y)(x+y-tz))2)', (x,y,z))
     4
     """
     if 'return_type' in kwargs:
         raise ValueError("return_type should not be specified.")
-    if 'sympify_kwargs' in kwargs:
-        kwargs['sympify_kwargs'] = kwargs['sympify_kwargs'].copy()
+    if 'parse_expr_kwargs' in kwargs:
+        kwargs['parse_expr_kwargs'] = kwargs['parse_expr_kwargs'].copy()
     else:
-        kwargs['sympify_kwargs'] = {}
-    kwargs['sympify_kwargs']['evaluate'] = False
+        kwargs['parse_expr_kwargs'] = {}
+    kwargs['parse_expr_kwargs']['evaluate'] = False
     expr = preprocess_text(poly, gens, *args, **kwargs, return_type='expr')
 
     def _get_degree(expr):

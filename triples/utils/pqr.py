@@ -32,7 +32,7 @@ def pqr_sym(poly: sp.Poly, symbols: Optional[List[sp.Symbol]] = None) -> sp.Expr
 
     Examples
     ----------
-    >>> a, b, c, x, y, z = sp.symbols('a b c x y z')
+    >>> from sympy.abc import a, b, c, x, y, z
     >>> pqr_sym(((a-b)**2*(b-c)**2*(c-a)**2).as_poly(a,b,c))
     -4*p**3*r + p**2*q**2 + 18*p*q*r - 4*q**3 - 27*r**2
     >>> pqr_sym(((a-b)**2*(b-c)**2*(c-a)**2).as_poly(a,b,c), (x,y,z))
@@ -75,7 +75,7 @@ def pqr_cyc(poly: sp.Poly, symbols: Optional[List[sp.Symbol]] = None) -> Tuple[s
 
     Examples
     ----------
-    >>> a, b, c = sp.symbols('a b c')
+    >>> from sympy.abc import a, b, c, p, q, r
     >>> pqr_cyc((a**2*b+b**2*c+c**2*a).as_poly(a,b,c))
     (p*q/2 - 3*r/2, -1/2)
     """
