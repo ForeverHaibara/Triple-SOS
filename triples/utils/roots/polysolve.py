@@ -6,13 +6,14 @@ from typing import List, Tuple, Union
 
 import sympy as sp
 from sympy import Poly, Expr, Rational, Symbol
-from sympy.core.sorting import default_sort_key
 from sympy.polys.polyerrors import BasePolynomialError
-from sympy.polys.polytools import groebner, PurePoly
+from sympy.polys.polytools import resultant, groebner, PurePoly
 from sympy.polys.rootoftools import ComplexRootOf as CRootOf
 from sympy.utilities import postfixes
 from mpmath.libmp.libhyper import NoConvergence
 
+# Comparison of tuples of sympy Expressions, compatible with sympy <= 1.9
+default_sort_key = lambda x: tuple(_.sort_key() for _ in x) if not isinstance(x, Expr) else x.sort_key()
 
 def _filter_trivial_system(polys: List[Poly]) -> Union[List[Poly], None]:
     """
@@ -42,7 +43,8 @@ def _get_realroots_sqf(poly: Poly) -> List[Union[Rational, CRootOf]]:
     if poly.total_degree() == 0:
         return []
     if not (poly.domain.is_QQ or poly.domain.is_ZZ):
-        return [_[0] for _ in sp.real_roots(poly, multiple=False, radicals=False)]
+        # fallback
+        return list(set(CRootOf.real_roots(poly, radicals=False)))
     if poly.total_degree() == 1:
         return [-poly.coeff_monomial((0,)) / poly.coeff_monomial((1,))]
 
@@ -210,7 +212,7 @@ def solve_triangulated_crt(polys: List[Poly], symbols: List[Symbol]) -> List[Tup
 
     f, G = G[0].ltrim(-1), G[1:]
 
-    zeros = [_[0] for _ in sp.real_roots(f, multiple=False, radicals=False)]
+    zeros = univar_realroots(f, f.gen)
     solutions = {((zero,), sp.QQ.algebraic_field(zero)) for zero in zeros}
 
     var_seq = reversed(symbols[:-1])
@@ -234,7 +236,7 @@ def solve_triangulated_crt(polys: List[Poly], symbols: List[Symbol]) -> List[Tup
 
             if len(H):
                 p = min(H, key=lambda h: h.degree())
-                zeros = [_[0] for _ in sp.real_roots(p, multiple=False, radicals=False)]
+                zeros = univar_realroots(p, p.gen)
             else:
                 zeros = []
 
@@ -277,11 +279,11 @@ def _solve_poly_system_2vars_resultant(polys: List[Poly], symbols: List[Symbol])
         return []
 
     x, y = symbols    
-    res0 = sp.resultant(polys[0], polys[1], x).as_poly(y)
+    res0 = resultant(polys[0], polys[1], x).as_poly(y)
     for poly in polys[2:]:
         if res0.total_degree() == 0 and (not res0.is_zero):
             return []
-        new_res = sp.resultant(polys[0], poly, x).as_poly(y)
+        new_res = resultant(polys[0], poly, x).as_poly(y)
         res0 = sp.gcd(res0, new_res)
 
     roots1 = univar_realroots(res0, y)
@@ -295,7 +297,7 @@ def _solve_poly_system_2vars_resultant(polys: List[Poly], symbols: List[Symbol])
                 if all(pevalf.polysign(poly, (root0, root1)) == 0 for poly in polys):
                     roots.append((root0, root1))
     else:
-        res1 = sp.resultant(polys[0], polys[1], y)
+        res1 = resultant(polys[0], polys[1], y)
         roots0 = univar_realroots(res1, x)
         for root0 in roots0:
             for root1 in roots1:

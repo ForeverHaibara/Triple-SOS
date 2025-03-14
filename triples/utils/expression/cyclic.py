@@ -665,7 +665,11 @@ setattr(StrPrinter, '_print_CyclicSum', lambda self, expr: CyclicSum._str_str(se
 setattr(StrPrinter, '_print_CyclicProduct', lambda self, expr: CyclicProduct._str_str(self, expr))
 
 # if sp.__version__ < '1.14':
-if not version_tuple(sp.__version__) >= (1, 14):
+if not tuple(version_tuple(sp.__version__)) >= (1, 14):
+    try:
+        from sympy.core.sorting import ordered
+    except (ImportError, ModuleNotFoundError): # <= 1.9
+        ordered = lambda x: x
     def radsimp(expr, symbolic=True, max_terms=4):
         r"""
         Rationalize the denominator by removing square roots.
@@ -677,7 +681,6 @@ if not version_tuple(sp.__version__) >= (1, 14):
         from sympy.core.expr import Expr
         from sympy.core.exprtools import Factors, gcd_terms
         from sympy.core.function import _mexpand, expand_mul
-        from sympy.core.sorting import ordered
         from sympy.core.symbol import symbols
         from sympy.core.mul import _unevaluated_Mul
         from sympy.functions import sqrt, log

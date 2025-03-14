@@ -23,7 +23,7 @@ from ...utils.monomials import MonomialManager
 
 
 LINPROG_OPTIONS = {
-    'method': 'highs-ds' if version_tuple(_SCIPY_VERSION) >= (1, 6) else 'simplex',
+    'method': 'highs-ds' if tuple(version_tuple(_SCIPY_VERSION)) >= (1, 6) else 'simplex',
     'options': {
         'presolve': False,
     }

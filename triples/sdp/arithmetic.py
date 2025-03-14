@@ -28,7 +28,7 @@ from sympy.polys.matrices.domainmatrix import DomainMatrix # polys.matrices >= 1
 from sympy.polys.matrices.ddm import DDM
 from sympy.polys.matrices.sdm import SDM
 
-if version_tuple(_SYMPY_VERSION) >= (1, 13):
+if tuple(version_tuple(_SYMPY_VERSION)) >= (1, 13):
     from sympy.polys.matrices.dfm import DFM
 
     primitive = lambda x: x.primitive()

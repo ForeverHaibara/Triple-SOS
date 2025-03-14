@@ -34,7 +34,7 @@ def test_preprocess_test():
 
         p1 = pl(s)
         if p1 is not None:
-            p2 = Poly(t, a, b, c)
+            p2 = Poly(t, a, b, c, extension=True)
             assert (p1.domain.is_Exact and p1.gens == p2.gens and (p1 - p2).is_zero)\
                 or all(abs(_) < 1e-9 for _ in (p1 - p2).coeffs())
 
@@ -76,8 +76,8 @@ def test_preprocess_test():
     for s, t in zip(strings, targets):
         print(s, pl(s, return_type='text'))
         p1 = pl(s, return_type='frac')
-        assert (p1[0] - Poly(t[0].doit(), (a,b,c))).is_zero and\
-                (p1[1] - Poly(t[1].doit(), (a,b,c))).is_zero
+        assert (p1[0] - Poly(t[0].doit(), (a,b,c), extension=True)).is_zero and\
+                (p1[1] - Poly(t[1].doit(), (a,b,c), extension=True)).is_zero
 
     assert pl('2/5b31e-4a-1e-8-s(ex+.2e5)',(e,x,a), scientific_notation=True,return_type='expr')\
         == Rational(2,5)*b**Float('31e-4')*a - Float('1e-8') - CyclicSum(e*x + Float('.2e5'), (e,x,a))

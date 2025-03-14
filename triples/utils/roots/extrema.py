@@ -10,11 +10,14 @@ from typing import List, Dict, Tuple, Union
 
 import sympy as sp
 from sympy import Symbol, Float, Expr, Poly, Rational
-from sympy.core.sorting import default_sort_key
 from sympy.polys.polyerrors import BasePolynomialError, PolificationFailed, GeneratorsNeeded
+from sympy.polys.polytools import resultant
 from sympy.polys.rootoftools import ComplexRootOf as CRootOf
 
 from .polysolve import univar_realroots, solve_poly_system_crt, PolyEvalf, _filter_trivial_system
+
+# Comparison of tuples of sympy Expressions, compatible with sympy <= 1.9
+default_sort_key = lambda x: tuple(_.sort_key() for _ in x) if not isinstance(x, Expr) else x.sort_key()
 
 def polysubs(poly: Poly, subs: Dict[Symbol, Expr], symbols: List[Symbol]) -> Poly:
     """Substitute the symbols in a polynomial with the given values."""
@@ -163,7 +166,7 @@ def _solve_2vars_zero_extrema(poly: Poly, symbols: Symbol) -> List[Tuple[CRootOf
     """
     x, y = symbols
     dx, dy = poly.diff(x), poly.diff(y)
-    res0 = sp.resultant(poly, dy, y).as_poly(x)
+    res0 = resultant(poly, dy, y).as_poly(x)
     res0 = sp.gcd(res0, res0.diff(x))
     roots1 = univar_realroots(res0, x)
 
@@ -181,7 +184,7 @@ def _solve_2vars_zero_extrema(poly: Poly, symbols: Symbol) -> List[Tuple[CRootOf
         return roots
 
     # compute the resultant of the other variable
-    res1 = sp.resultant(poly, dx, x).as_poly(y)
+    res1 = resultant(poly, dx, x).as_poly(y)
     res1 = sp.gcd(res1, res1.diff(y))
     roots2 = univar_realroots(res1, y)
 
