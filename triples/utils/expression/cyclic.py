@@ -983,6 +983,72 @@ def rewrite_symmetry(expr: Expr, symbols: Tuple[Symbol], perm_group: Permutation
     """
     return expr.replace(lambda x: isinstance(x, CyclicExpr), _get_rewriting_replacement(symbols, perm_group))
 
+def verify_symmetry(polys: Union[List[sp.Poly], sp.Poly], perm_group: Union[Permutation, PermutationGroup]) -> bool:
+    """
+    Verify whether the polynomials are symmetric with respect to the permutation group.
+
+    Parameters
+    ----------
+    polys : Union[List[sp.Poly], sp.Poly]
+        A list of polynomials or a single polynomial. Must have the same generators.
+    perm_group : Union[Permutation, PermutationGroup]
+        A permutation or a permutation group to verify.
+
+    Returns
+    ----------
+    bool
+        Whether the polynomials are symmetric with respect to the permutation group.
+
+    Examples
+    ----------
+    >>> from sympy.combinatorics import Permutation, PermutationGroup, SymmetricGroup
+    >>> from sympy.abc import a, b, c, d
+    >>> verify_symmetry((a*(a-b)*(a-c)+b*(b-c)*(b-a)+c*(c-a)*(c-b)).as_poly(a,b,c), SymmetricGroup(3))
+    True
+
+    >>> f = lambda x: x.as_poly(a,b,c,d)
+    >>> verify_symmetry([f(a+1),f(b+1),f(c+1),f(d+1)], SymmetricGroup(4))
+    True
+
+    >>> perm_group = PermutationGroup(Permutation([2,3,0,1]))
+    >>> verify_symmetry([f(a-c+b-d)], perm_group)
+    False
+    >>> verify_symmetry([f(a-c+b-d), f(c-a+d-b)], perm_group)
+    True
+    """
+    if isinstance(polys, sp.Poly):
+        polys = [polys]
+    if len(polys) == 0:
+        return True
+    for p in polys:
+        gens = p.gens
+        break
+    if len(polys) > 1 and any(p.gens != gens for p in polys):
+        raise ValueError("All polynomials should have the same generators.")
+
+    if isinstance(perm_group, PermutationGroup):
+        if perm_group.degree != len(gens):
+            raise ValueError("The permutation group should have the same degree as the number of generators.")
+        perms = perm_group.generators
+    elif isinstance(perm_group, Permutation):
+        if perm_group.size != len(gens):
+            raise ValueError("The permutation should have the same size as the number of generators.")
+        perms = [perm_group]
+
+    for perm in perms:
+        rep_set = set()
+        reorder_set = set()
+        for poly in polys:
+            rep = poly.rep
+            reorder = poly.reorder(*perm(gens)).rep
+            if rep == reorder:
+                continue
+            rep_set.add(rep)
+            reorder_set.add(reorder)
+        for r in reorder_set:
+            if r not in rep_set:
+                return False
+    return True
 
 def identify_symmetry_from_lists(lst_of_lsts: List[List[sp.Poly]]) -> PermutationGroup:
     """
@@ -1031,21 +1097,6 @@ def identify_symmetry_from_lists(lst_of_lsts: List[List[sp.Poly]]) -> Permutatio
             if p.gens != gens:
                 raise ValueError("All polynomials should have the same generators.")
 
-    def check_symmetry(polys, perm):
-        rep_set = set()
-        reorder_set = set()
-        for poly in polys:
-            rep = poly.rep
-            reorder = poly.reorder(*perm(gens)).rep
-            if rep == reorder:
-                continue
-            rep_set.add(rep)
-            reorder_set.add(reorder)
-        for r in reorder_set:
-            if r not in rep_set:
-                return False
-        return True
-
     # List a few candidates: symmetric, alternating, cyclic groups...
     nvars = len(gens)
     def _rotated(n, start=0):
@@ -1080,7 +1131,7 @@ def identify_symmetry_from_lists(lst_of_lsts: List[List[sp.Poly]]) -> Permutatio
                 candidates.append(_reflected(nvars - 1) + [nvars - 1])
 
     for perm in map(Permutation, candidates):
-        if all(check_symmetry(l, perm) for l in lst_of_lsts):
+        if all(verify_symmetry(l, perm) for l in lst_of_lsts):
             verified.append(perm)
 
     if len(verified) == 0:

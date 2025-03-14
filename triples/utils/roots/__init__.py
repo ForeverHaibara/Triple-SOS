@@ -3,12 +3,16 @@ from .roots import (
     RootTernary, RootAlgebraicTernary, RootRationalTernary
 )
 
+from .polysolve import univar_realroots
+
+from .extrema import kkt, optimize_poly
+
 from .rootsinfo import RootsInfo
 
 from .grid import GridRender
 
 from .findroot import (
-    findroot, find_nearest_root, findroot_resultant, kkt
+    findroot, find_nearest_root, findroot_resultant
 )
 
 from .tangents import RootTangent
@@ -24,6 +28,8 @@ from .monotonic_opt import rpa_monotonic, rpa_gmop, poly_as_dm, rpa_polyopt
 __all__ = [
     'Root', 'RootAlgebraic', 'RootRational',
     'RootTernary', 'RootAlgebraicTernary', 'RootRationalTernary',
+    'univar_realroots',
+    'optimize_poly',
     'RootsInfo',
     'GridRender',
     'findroot', 'find_nearest_root', 'findroot_resultant', 'kkt',
