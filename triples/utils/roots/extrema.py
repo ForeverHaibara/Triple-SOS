@@ -370,7 +370,7 @@ def _optimize_by_symbol_reduction(poly: Poly, ineq_constraints: List[Poly], eq_c
 
     inds = list(range(len(new_symbols)))
     for comb in product(inds, repeat=len(symbols)):
-        active_symbols = tuple(new_symbols[i] for i in set(comb))
+        active_symbols = tuple(new_symbols[i] for i in set(comb) if (not new_symbols[i] is sp.S.Zero))
         if len(active_symbols) < max_different:
             continue
 
