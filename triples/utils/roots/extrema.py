@@ -177,8 +177,9 @@ def _solve_2vars_zero_extrema(poly: Poly, symbols: Symbol) -> List[Tuple[CRootOf
         # solve the other root by direct substitution
         roots = []
         for root1 in roots1:
-            poly2 = poly.eval(y, root1)
-            roots2 = univar_realroots(poly2, x)
+            poly2 = poly.eval(x, root1)
+            poly2 = sp.gcd(poly2, poly2.diff(y))
+            roots2 = univar_realroots(poly2, y)
             for root2 in roots2:
                 roots.append((root1, root2))
         return roots
@@ -235,6 +236,7 @@ def _optimize_by_eq_kkt(poly, ineq_constraints, eq_constraints, symbols,
     elif len(symbols) == 2:
         x, y = symbols
         poly = poly.as_poly(x, y, extension=True)
+        # print(eq_constraints)
         if len(eq_constraints) >= 2:
             sol = solve_poly_system_crt(eq_constraints, [x, y])
             return sol # either inconsistent or has finite solutions
@@ -347,6 +349,46 @@ def _restore_solution(points: List[Tuple[CRootOf]], elim: Dict[Symbol, Expr],
     return points
 
 
+def _optimize_by_symbol_reduction(poly: Poly, ineq_constraints: List[Poly], eq_constraints: List[Poly],
+        symbols: Symbol, max_different=2, solver=None, include_zero=True) -> List[Tuple[CRootOf]]:
+    """
+    Optimize a polynomial by reducing the number of different variables.
+    If the current number of different variables exceeds `max_different`,
+    then some of them are set to zero or equal to each other. After
+    the reduction, the system is passed into the downstream solver `solver`.
+
+    Larger `max_different` might not lead to more extrema when there
+    exists nonzero dimensional variety.
+    """
+    if len(symbols) <= max_different:
+        return solver(poly, ineq_constraints, eq_constraints, symbols)
+
+    all_points = []
+    new_symbols = [sp.Dummy(f'x{i}') for i in range(max_different)]
+    if include_zero:
+        new_symbols.append(sp.S.Zero)
+
+    inds = list(range(len(new_symbols)))
+    for comb in product(inds, repeat=len(symbols)):
+        active_symbols = tuple(new_symbols[i] for i in set(comb))
+        if len(active_symbols) < max_different:
+            continue
+
+        replacement = dict(zip(symbols, [new_symbols[i] for i in comb]))
+
+        poly2 = polysubs(poly, replacement, active_symbols)
+        eq_constraints2 = [polysubs(_, replacement, active_symbols) for _ in eq_constraints]
+        eq_constraints2 = _filter_trivial_system(eq_constraints2)
+        if eq_constraints2 is None:
+            continue
+        ineq_constraints2 = [polysubs(_, replacement, active_symbols) for _ in ineq_constraints]
+
+        points = solver(poly2, ineq_constraints2, eq_constraints2, active_symbols)
+        points = _restore_solution(points, replacement, symbols, active_symbols)
+        all_points.extend(points)
+    return all_points
+
+
 @_checkineq_decorator
 def _optimize_by_ineq_comb(poly: Poly, ineq_constraints: List[Poly], eq_constraints: List[Poly],
         symbols: Symbol, eliminate_func=None, solver=None) -> List[Tuple[CRootOf]]:
@@ -382,43 +424,6 @@ def _optimize_by_ineq_comb(poly: Poly, ineq_constraints: List[Poly], eq_constrai
         points = _restore_solution(points, elim, symbols, symbols2)
         all_points.extend(points)
     return all_points
-
-def _optimize_by_symbol_reduction(poly: Poly, ineq_constraints: List[Poly], eq_constraints: List[Poly],
-        symbols: Symbol, max_different=2, solver=None, include_zero=True) -> List[Tuple[CRootOf]]:
-    """
-    Optimize a polynomial by reducing the number of different variables.
-    If the current number of different variables exceeds `max_different`,
-    then some of them are set to zero or equal to each other. After
-    the reduction, the system is passed into the downstream solver `solver`.
-
-    Larger `max_different` might not lead to more extrema when there
-    exists nonzero dimensional variety.
-    """
-    if len(symbols) <= max_different:
-        return solver(poly, ineq_constraints, eq_constraints, symbols)
-
-    all_points = []
-    new_symbols = [sp.Dummy('x') for _ in range(max_different)]
-    if include_zero:
-        new_symbols.append(sp.S.Zero)
-
-    inds = list(range(len(new_symbols)))
-    for comb in product(inds, repeat=len(symbols)):
-        active_symbols = tuple(new_symbols[i] for i in set(comb))
-        if len(active_symbols) < max_different:
-            continue
-
-        replacement = dict(zip(symbols, [new_symbols[i] for i in comb]))
-
-        poly2 = polysubs(poly, replacement, active_symbols)
-        ineq_constraints2 = [polysubs(_, replacement, active_symbols) for _ in ineq_constraints]
-        eq_constraints2 = [polysubs(_, replacement, active_symbols) for _ in eq_constraints]
-
-        points = solver(poly2, ineq_constraints2, eq_constraints2, active_symbols)
-        points = _restore_solution(points, replacement, symbols, active_symbols)
-        all_points.extend(points)
-    return all_points
-
 
 
 def optimize_poly(poly: Union[Poly, Expr], ineq_constraints: List[Union[Poly, Expr]] = [], eq_constraints: List[Union[Poly, Expr]] = [],
