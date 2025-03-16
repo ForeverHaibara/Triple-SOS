@@ -349,6 +349,26 @@ def _restore_solution(points: List[Tuple[Expr]], elim: Dict[Symbol, Expr],
     return points
 
 
+
+def _assign_groups(nvars: int, m: int, include_zero: bool = True):
+    l = [0] * nvars
+    total = []
+    start = 0 if include_zero else 1
+    def _recur(total, l, i, group_ind):
+        if i == nvars:
+            if group_ind == m:
+                total.append(tuple(l))
+            return
+        for j in range(start, group_ind + 1):
+            l[i] = j
+            _recur(total, l, i + 1, group_ind)
+        if group_ind < m:
+            l[i] = group_ind + 1
+            _recur(total, l, i + 1, group_ind + 1)
+    _recur(total, l, 0, 0)
+    return total
+
+
 def _optimize_by_symbol_reduction(poly: Poly, ineq_constraints: List[Poly], eq_constraints: List[Poly],
         symbols: Symbol, max_different=2, solver=None, include_zero=True) -> List[Tuple[Expr]]:
     """
@@ -364,15 +384,12 @@ def _optimize_by_symbol_reduction(poly: Poly, ineq_constraints: List[Poly], eq_c
         return solver(poly, ineq_constraints, eq_constraints, symbols)
 
     all_points = []
-    new_symbols = [sp.Dummy(f'x{i}') for i in range(max_different)]
-    if include_zero:
-        new_symbols.append(sp.S.Zero)
+    new_symbols = [sp.S.Zero] + [sp.Dummy(f'x{i}') for i in range(max_different)]
 
-    inds = list(range(len(new_symbols)))
-    for comb in product(inds, repeat=len(symbols)):
-        active_symbols = tuple(new_symbols[i] for i in set(comb) if (not new_symbols[i] is sp.S.Zero))
-        if len(active_symbols) < max_different:
-            continue
+    # assign symbols to some groups
+    # group indices are standardized: e.g. (a,a,b,a,b) is equivalent as (b,b,a,b,a)
+    for comb in _assign_groups(len(symbols), max_different, include_zero):
+        active_symbols = new_symbols[1: 1 + max(comb)]
 
         replacement = dict(zip(symbols, [new_symbols[i] for i in comb]))
 

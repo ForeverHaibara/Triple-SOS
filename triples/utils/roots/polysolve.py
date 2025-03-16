@@ -291,7 +291,7 @@ def _solve_poly_system_2vars_resultant(polys: List[Poly], symbols: List[Symbol])
     pevalf = PolyEvalf()
     if all(isinstance(_, Rational) for _ in roots1):
         for root1 in roots1:
-            res1 = polys[1].subs(y, root1)
+            res1 = polys[1].eval(y, root1)
             roots0 = univar_realroots(res1, x)
             for root0 in roots0:
                 if all(pevalf.polysign(poly, (root0, root1)) == 0 for poly in polys):

@@ -29,6 +29,12 @@ LINPROG_OPTIONS = {
     }
 }
 
+if _SCIPY_VERSION in ('1.15.0','1.15.1','1.15.2'):
+    warnings.warn('SciPy 1.15.0-1.15.2 has a bug in linprog that gets stuck with large scale problems.\n'
+        'Please upgrade to 1.15.3 or higher or downgrade to 1.14.x.\n'
+        'See https://github.com/scipy/scipy/issues/22655 for details.')
+
+
 class _basis_limit_exceeded(Exception): ...
 
 def _prepare_tangents(symbols, prepared_tangents = [], rootsinfo: RootsInfo = None) -> Dict[Poly, Expr]:
