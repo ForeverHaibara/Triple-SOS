@@ -28,7 +28,7 @@ def polysubs(poly: Poly, subs: Dict[Symbol, Expr], symbols: List[Symbol]) -> Pol
         return poly.expand()
     return poly.as_poly(*symbols)
 
-def _get_minimal(poly: Poly, points: List[Tuple[CRootOf]]) -> List[Tuple[CRootOf]]:
+def _get_minimal(poly: Poly, points: List[Tuple[Expr]]) -> List[Tuple[Expr]]:
     """
     Get the minimal points in the list of points up to `eps` precision.
     Points are evaluated at precision `n`.
@@ -158,7 +158,7 @@ def kkt(
 
 
 
-def _solve_2vars_zero_extrema(poly: Poly, symbols: Symbol) -> List[Tuple[CRootOf]]:
+def _solve_2vars_zero_extrema(poly: Poly, symbols: Symbol) -> List[Tuple[Expr]]:
     """
     Solve the system poly = poly.diff(x) = poly.diff(y) = 0 via resultants.
     It exploits the fact that the roots have multiplicity 2 and finds them
@@ -329,8 +329,8 @@ def _eliminate_linear(polys, symbols):
 
     return eliminated, polys
 
-def _restore_solution(points: List[Tuple[CRootOf]], elim: Dict[Symbol, Expr],
-        symbols: List[Symbol], symbols2: List[Symbol]) -> List[Tuple[CRootOf]]:
+def _restore_solution(points: List[Tuple[Expr]], elim: Dict[Symbol, Expr],
+        symbols: List[Symbol], symbols2: List[Symbol]) -> List[Tuple[Expr]]:
     """
     After solving the reduced system, restore the eliminated variables.
     """
@@ -350,7 +350,7 @@ def _restore_solution(points: List[Tuple[CRootOf]], elim: Dict[Symbol, Expr],
 
 
 def _optimize_by_symbol_reduction(poly: Poly, ineq_constraints: List[Poly], eq_constraints: List[Poly],
-        symbols: Symbol, max_different=2, solver=None, include_zero=True) -> List[Tuple[CRootOf]]:
+        symbols: Symbol, max_different=2, solver=None, include_zero=True) -> List[Tuple[Expr]]:
     """
     Optimize a polynomial by reducing the number of different variables.
     If the current number of different variables exceeds `max_different`,
@@ -391,7 +391,7 @@ def _optimize_by_symbol_reduction(poly: Poly, ineq_constraints: List[Poly], eq_c
 
 @_checkineq_decorator
 def _optimize_by_ineq_comb(poly: Poly, ineq_constraints: List[Poly], eq_constraints: List[Poly],
-        symbols: Symbol, eliminate_func=None, solver=None) -> List[Tuple[CRootOf]]:
+        symbols: Symbol, eliminate_func=None, solver=None) -> List[Tuple[Expr]]:
     """
     Optimize a polynomial with inequality constraints by considering all possible
     combinations of active inequality constraints. After each dicision of active
@@ -426,82 +426,12 @@ def _optimize_by_ineq_comb(poly: Poly, ineq_constraints: List[Poly], eq_constrai
     return all_points
 
 
-def optimize_poly(poly: Union[Poly, Expr], ineq_constraints: List[Union[Poly, Expr]] = [], eq_constraints: List[Union[Poly, Expr]] = [],
-        symbols: List[Symbol] = None, objective: str = 'min', return_dict: bool = False, max_different: int = 2
-    ) -> Union[List[Tuple[CRootOf]], List[Dict[Symbol, CRootOf]]]:
+def _optimize_poly(poly: Poly, ineq_constraints: List[Poly], eq_constraints: List[Poly], symbols: List[Symbol],
+        max_different: int = 2) -> List[Tuple[Expr]]:
     """
-    Algebraically optimize a polynomial with given inequality and equality constraints
-    using heuristic methods. It uses incomplete algorithm to balance the efficiency
-    and effectiveness.
-    If there exists zero dimensional variety, particular solutions will be sampled.
-
-    Parameters
-    ----------
-    poly : Poly or Expr
-        The polynomial to be optimized.
-    ineq_constraints : List[Poly or Expr]
-        The inequality constraints, G1, G2, ... (>= 0).
-    eq_constraints : List[Poly or Expr]
-        The equality constraints, H1, H2, ... (== 0).
-    symbols : List[Symbol]
-        The symbols to optimize on. If None, it is inferred from the polynomial and constraints.
-    objective : str
-        The objective to optimize. Either 'min' or 'max' or 'all'.
-        When 'min', the function returns the global minimizers
-        When 'max', the function returns the global maximizers.
-        When 'all', the function returns all recognized extrema.
-    return_dict : bool
-        Whether to return the result as a list of dictionaries.
-    max_different : int
-        The maximum number of different variables to consider.
-        This is a heuristic to accelerate the computation.
-        It does not force all extrema to be bounded by this number
-        if they are easy to compute.
-
-    Returns
-    ----------
-    solutions : List[Tuple[CRootOf]] or List[Dict[Symbol, CRootOf]]
-        The extrema of the polynomial. If return_dict is True, then
-        the extrema are returned as dictionaries.
-
-    Examples
-    ----------
-    >>> from sympy.abc import a, b, c, x, y
-    >>> optimize_poly(a + 2*b, [a, b], [a**2 + b**2 - 1], (a, b), objective='max')
-    [(CRootOf(5*a**2 - 1, 1), CRootOf(5*b**2 - 4, 1))]
-
-    >>> optimize_poly((a**2+b**2+c**2)**2-3*(a**3*b+b**3*c+c**3*a)) # doctest: +NORMALIZE_WHITESPACE
-    [(1, 1, 1),
-     (CRootOf(a**3 - 6*a**2 + 5*a - 1, 0), CRootOf(b**3 - 5*b**2 + 6*b - 1, 1), 1),
-     (CRootOf(a**3 - 6*a**2 + 5*a - 1, 1), CRootOf(b**3 - 5*b**2 + 6*b - 1, 0), 1),
-     (CRootOf(a**3 - 6*a**2 + 5*a - 1, 2), CRootOf(b**3 - 5*b**2 + 6*b - 1, 2), 1)]
+    Internal function to optimize a polynomial with inequality and equality constraints.
     """
-    if symbols is None:
-        if isinstance(poly, Poly):
-            symbols = poly.gens
-        else:
-            symbols = set.union(poly.free_symbols,
-                *[_.free_symbols for _ in ineq_constraints],
-                *[_.free_symbols for _ in eq_constraints])
-            symbols = sorted(symbols, key=lambda x: x.name)
-    if not (objective in ('min', 'max', 'all')):
-        raise ValueError('Objective must be either "min" or "max" or "all".')
-    if len(symbols) == 0:
-        return []
-
-    def polylize(f, symbols):
-        if not isinstance(f, Poly):
-            f = Poly(f, *symbols) #, extension=True)
-        if f is None:
-            raise PolificationFailed({}, f, f)
-        return f
-    poly = polylize(poly, symbols)
-    ineq_constraints = [polylize(ineq, symbols) for ineq in ineq_constraints]
-    eq_constraints = [polylize(eq, symbols) for eq in eq_constraints]
-
-    poly0 = poly
     symbols0 = symbols
-
     # TODO: sometimes there are partial homogeneity
     # For instance, (a^2+b^2+c^2-a*b-b*c-c*a)+(x^6+y^6+z^6-x^2*y^2*z^2)
     # is homogeneous in (a,b,c) and also in (x,y,z), but not in (a,b,c,x,y,z),
@@ -541,15 +471,104 @@ def optimize_poly(poly: Union[Poly, Expr], ineq_constraints: List[Union[Poly, Ex
         eliminate_func = _eliminate_linear, solver=solver)
 
     points = _restore_solution(points, elim_linear, symbols0, symbols)
+    return points
+
+
+def optimize_poly(poly: Union[Poly, Expr], ineq_constraints: List[Union[Poly, Expr]] = [], eq_constraints: List[Union[Poly, Expr]] = [],
+        symbols: List[Symbol] = None, objective: str = 'min', return_dict: bool = False, max_different: int = 2
+    ) -> Union[List[Tuple[Expr]], List[Dict[Symbol, Expr]]]:
+    """
+    Algebraically optimize a polynomial with given inequality and equality constraints
+    using heuristic methods. It uses incomplete algorithm to balance the efficiency
+    and effectiveness.
+    If there exists zero dimensional variety, particular solutions will be sampled.
+
+    Parameters
+    ----------
+    poly : Poly or Expr
+        The polynomial to be optimized.
+    ineq_constraints : List[Poly or Expr]
+        The inequality constraints, G1, G2, ... (>= 0).
+    eq_constraints : List[Poly or Expr]
+        The equality constraints, H1, H2, ... (== 0).
+    symbols : List[Symbol]
+        The symbols to optimize on. If None, it is inferred from the polynomial and constraints.
+    objective : str
+        The objective to optimize. Either 'min' or 'max' or 'all'.
+        When 'min', the function returns the global minimizers
+        When 'max', the function returns the global maximizers.
+        When 'all', the function returns all recognized extrema.
+    return_dict : bool
+        Whether to return the result as a list of dictionaries.
+    max_different : int
+        The maximum number of different variables to consider.
+        This is a heuristic to accelerate the computation.
+        It does not force all extrema to be bounded by this number
+        if they are easy to compute.
+
+    Returns
+    ----------
+    solutions : List[Tuple[Expr]] or List[Dict[Symbol, Expr]]
+        The extrema of the polynomial. If return_dict is True, then
+        the extrema are returned as dictionaries.
+
+    Examples
+    ----------
+    >>> from sympy.abc import a, b, c, x, y
+    >>> optimize_poly(a + 2*b, [a, b], [a**2 + b**2 - 1], (a, b), objective='max')
+    [(CRootOf(5*a**2 - 1, 1), CRootOf(5*b**2 - 4, 1))]
+
+    >>> optimize_poly((a**2+b**2+c**2)**2-3*(a**3*b+b**3*c+c**3*a)) # doctest: +NORMALIZE_WHITESPACE
+    [(1, 1, 1),
+     (CRootOf(a**3 - 6*a**2 + 5*a - 1, 0), CRootOf(b**3 - 5*b**2 + 6*b - 1, 1), 1),
+     (CRootOf(a**3 - 6*a**2 + 5*a - 1, 1), CRootOf(b**3 - 5*b**2 + 6*b - 1, 0), 1),
+     (CRootOf(a**3 - 6*a**2 + 5*a - 1, 2), CRootOf(b**3 - 5*b**2 + 6*b - 1, 2), 1)]
+    """
+    if symbols is None:
+        if isinstance(poly, Poly):
+            symbols = poly.gens
+        else:
+            symbols = set.union(poly.free_symbols,
+                *[_.free_symbols for _ in ineq_constraints],
+                *[_.free_symbols for _ in eq_constraints])
+            symbols = sorted(symbols, key=lambda x: x.name)
+    if not (objective in ('min', 'max', 'all')):
+        raise ValueError('Objective must be either "min" or "max" or "all".')
+    if len(symbols) == 0:
+        return []
+
+    def polylize(f, symbols):
+        if not isinstance(f, Poly):
+            f = Poly(f, *symbols) #, extension=True)
+        if f is None:
+            raise PolificationFailed({}, f, f)
+        return f
+    poly = polylize(poly, symbols)
+    ineq_constraints = [polylize(ineq, symbols) for ineq in ineq_constraints]
+    eq_constraints = [polylize(eq, symbols) for eq in eq_constraints]
+
+    solver = partial(_optimize_poly, max_different=max_different)
+    points = []
+    if poly in eq_constraints:
+        # This often happens when solving for the equality case of a nonnegative poly.
+        parts = [_[0] for _ in poly.factor_list()[1]]
+        eq_constraints.remove(poly)
+        for part_poly in parts:
+            new_eq_constraints = eq_constraints.copy()
+            new_eq_constraints.append(part_poly)
+            points.extend(solver(part_poly, ineq_constraints, new_eq_constraints, symbols))
+    else:
+        points = solver(poly, ineq_constraints, eq_constraints, symbols)
 
     if len(points) > 1:
         points = list(set(points))
         if len(points) > 1 and objective != 'all':
             if objective == 'max':
-                poly0 = -poly0
+                poly = -poly
                 # objective = 'min'
-            points = sorted(_get_minimal(poly0, points), key=default_sort_key)
+            points = _get_minimal(poly, points)
+        points = sorted(points, key=default_sort_key)
 
     if return_dict:
-        points = [dict(zip(symbols0, _)) for _ in points]
+        points = [dict(zip(symbols, _)) for _ in points]
     return points

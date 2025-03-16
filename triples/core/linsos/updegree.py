@@ -120,6 +120,7 @@ def _get_multipliers(ineq_constraints: Dict[sp.Poly, sp.Expr], symbols: Tuple[sp
             return [(x[i][0] * x[j][0], x[i][1] * x[j][1]) for i in range(len(x)) for j in range(i+1, len(x))]
         multipliers.extend(cross_mul(ineq_constraints))
 
+    # TODO: this should be more carefully considered???
     if multipliers is None:
         # default case
         multipliers = []

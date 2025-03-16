@@ -7,6 +7,7 @@ import sympy as sp
 from sympy import sympify, Function
 from sympy.core.symbol import uniquely_named_symbol
 from sympy.combinatorics import Permutation, PermutationGroup
+from sympy.external.importtools import version_tuple
 
 from ..utils import MonomialManager, Solution, SolutionSimple, CyclicExpr, identify_symmetry_from_lists
 
@@ -97,15 +98,51 @@ def clear_polys_by_symmetry(polys: List[Union[sp.Expr, Tuple[sp.Expr, ...]]],
     if symmetry.is_trivial:
         return polys if isinstance(polys, list) else list(polys)
 
+    base = symmetry.base()
     def _get_representation(t: sp.Expr):
         """Get the standard representation of the poly given symmetry."""
         t = sp.Poly(t, symbols) if not isinstance(t, tuple) else sp.Poly(t[0], symbols)
         # if t.is_monomial and len(t.free_symbols) == 1:
         #     return None
-        vec = symmetry.base().arraylize_sp(t)
-        mat = symmetry.permute_vec(vec, t.total_degree())
-        cols = [tuple(mat[:, i]) for i in range(mat.shape[1])]
-        return max(cols)
+        vec = base.arraylize_sp(t)
+        shape = vec.shape[0]
+
+        rep = vec._rep.rep.to_list_flat() # avoid conversion from rep to sympy
+        # getvalue = lambda i: vec[i,0] # get a single value
+        getvalue = lambda i: rep[i]
+        if shape <= 1:
+            return tuple(getvalue(i) for i in range(shape))
+
+        # # The naive implementation below could take minutes for calling 50 times on a 6-order group
+        # mat = symmetry.permute_vec(vec, t.total_degree())
+        # cols = [tuple(mat[:, i]) for i in range(mat.shape[1])]
+        # return max(cols)
+
+        # We should highly optimize the algorithm.
+        dict_monoms = base.dict_monoms(t.total_degree())
+        inv_monoms = base.inv_monoms(t.total_degree())
+
+        # get the value of index i in the vector after permutation
+        v = lambda perm, i: getvalue(dict_monoms[tuple(perm(inv_monoms[i]))])
+
+        perms = list(symmetry.perm_group.elements)
+        queue, queue_len, best_perm = [0]*shape, 0, perms[0]
+        for perm in perms[1:]:
+            for j in range(shape):
+                s = v(perm, j)
+                if j >= queue_len:
+                    # compare the next element
+                    queue[j] = v(best_perm, j)
+                    queue_len += 1
+                if s > queue[j]:
+                    queue[j], queue_len, best_perm = s, j + 1, perm
+                    break
+                elif s < queue[j]:
+                    break
+        for j in range(queue_len, shape): # fill the rest
+            queue[j] = v(best_perm, j)
+        return tuple(queue)
+
  
     representation = dict(((_get_representation(t), t) for i, t in enumerate(polys)))
     if None in representation:
@@ -115,7 +152,7 @@ def clear_polys_by_symmetry(polys: List[Union[sp.Expr, Tuple[sp.Expr, ...]]],
 
 # fix the bug in sqf_list before 1.13.0
 # https://github.com/sympy/sympy/pull/26182
-if sp.__version__ >= '1.13.0':
+if tuple(version_tuple(sp.__version__)) >= (1, 13):
     _sqf_list = lambda p: p.sqf_list()
 else:
     _sqf_list = lambda p: p.factor_list() # it would be slower, but correct

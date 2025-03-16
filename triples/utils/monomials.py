@@ -193,13 +193,23 @@ class MonomialManager():
         inv_monoms = base.inv_monoms(degree)
         f = lambda i: dict_monoms[i]
         # get all permutations of all monoms first
-        all_vecs = [[0] * vec.shape[0] for _ in range(self.order())]
-        for v, m in zip(vec, inv_monoms):
-            for ind, j in enumerate(map(f, self.permute(m))):
-                # write the value to the corresponding column
-                all_vecs[ind][j] = v
-        return sp.Matrix(all_vecs).T
+
+        # Dense version (too slow when converting between reps and sympy objs)
+        # all_vecs = [[0] * vec.shape[0] for _ in range(self.order())]
+        # for v, m in zip(vec, inv_monoms):
+        #     for ind, j in enumerate(map(f, self.permute(m))):
+        #         # write the value to the corresponding column
+        #         all_vecs[ind][j] = v
+        # return sp.Matrix(all_vecs).T
  
+        sdm = {i: {} for i in range(vec.shape[0])}
+        rep = vec._rep.rep.to_sdm()
+        for i in rep.keys():
+            v, m = rep[i][0], inv_monoms[i]
+            for ind, j in enumerate(map(f, self.permute(m))):
+                sdm[j][ind] = v
+        return sp.Matrix._fromrep(DomainMatrix.from_rep(SDM(sdm, (vec.shape[0], self.order()), rep.domain)))
+
 
     # def _standard_monom(self, monom: Tuple[int, ...]) -> Tuple[int, ...]:
     #     warn("_standard_monom is deprecated. Use standard_monom instead.", DeprecationWarning, stacklevel=2)
