@@ -7,15 +7,11 @@ from .polysolve import univar_realroots
 
 from .extrema import kkt, optimize_poly
 
-from .rootsinfo import RootsInfo
-
 from .grid import GridRender
 
 from .findroot import (
     findroot, find_nearest_root, findroot_resultant
 )
-
-from .tangents import RootTangent
 
 from .rationalize import (
     nroots, univariate_intervals, rationalize, rationalize_array, rationalize_bound,
@@ -30,10 +26,8 @@ __all__ = [
     'RootTernary', 'RootAlgebraicTernary', 'RootRationalTernary',
     'univar_realroots',
     'optimize_poly',
-    'RootsInfo',
     'GridRender',
     'findroot', 'find_nearest_root', 'findroot_resultant', 'kkt',
-    'RootTangent',
     'nroots', 'univariate_intervals', 'rationalize', 'rationalize_array', 'rationalize_bound',
     'rationalize_quadratic_curve', 'common_region_of_conics', 'square_perturbation',
     'cancel_denominator',

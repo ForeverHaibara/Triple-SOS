@@ -8,7 +8,7 @@ from flask_cors import CORS
 
 import sympy as sp
 
-from triples.utils import RootTangent, RootsInfo, pl, SolutionSimple
+from triples.utils import pl, SolutionSimple
 from triples.gui.sos_manager import SOS_Manager
 
 # def _async_raise(tid, exctype):
@@ -248,8 +248,8 @@ def sum_of_squares(sid, **kwargs):
         The methods to use.
     configs : dict[str, dict]
         The configurations for each method.
-    rootsinfo : RootsInfo
-        The roots information. This is passed in internally by the `findroot` function.
+    roots : list[Root]
+        The roots of the polynomial.
 
     Returns
     ----------
@@ -262,7 +262,7 @@ def sum_of_squares(sid, **kwargs):
     success : bool
         Whether the solution was found.
     """
-    rootsinfo = kwargs['rootsinfo'] or RootsInfo()
+    rootsinfo = kwargs['rootsinfo'] or []
     try:
         method_order = [key for key, value in kwargs['methods'].items() if value]
 

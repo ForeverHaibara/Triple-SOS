@@ -15,7 +15,7 @@ from .solution import SolutionSDP
 from ..shared import sanitize_input, sanitize_output, identify_symmetry_from_lists, clear_polys_by_symmetry
 from ...sdp import SDPProblem
 from ...sdp.arithmetic import solve_csr_linear
-from ...utils import arraylize_sp, Coeff, CyclicExpr, generate_monoms, MonomialManager
+from ...utils import arraylize_sp, Coeff, CyclicExpr, generate_monoms, MonomialManager, Root
 
 
 def _define_mapping(nvars: int, degree: int, monomial: Tuple[int, ...], symmetry: MonomialManager, half: bool = True) -> Callable[[int, int], Tuple[int, int]]:
@@ -338,6 +338,7 @@ class SOSProblem():
         self,
         ineq_constraints: List[Union[Poly, Expr]] = [],
         eq_constraints: List[Union[Poly, Expr]] = [],
+        roots: Optional[List[Root]] = None,
         deparametrize: bool = True,
         verbose: bool = False,
     ) -> SDPProblem:
@@ -350,6 +351,8 @@ class SOSProblem():
             Inequality constraints.
         eq_constraints : List[Union[Poly, Expr]]
             Equality constraints.
+        roots : List[Root]
+            The roots of the polynomial. Default is None.
         deparametrize : bool
             Whether to deparametrize the SDP problem if there
             exists linear free symbols in the coefficients. Default is True.

@@ -1,16 +1,26 @@
 from typing import List, Tuple
 
-from mpmath import pslq
+from mpmath import pslq as mp_pslq
 import sympy as sp
+from sympy import Expr
 from sympy.simplify.sqrtdenest import _sqrt_match
 
 from ...utils import (
-    RootsInfo, Root, RootRational, RootTangent,
-    rationalize, find_nearest_root,
+    Root, RootRational, find_nearest_root,
     CyclicSum, CyclicProduct, Coeff
 )
+from ...utils import rationalize as _utils_rationalize
 
 a, b, c = sp.symbols('a b c')
+
+def pslq(coeffs: List[float], *args, **kwargs) -> List[sp.Rational]:
+    """Wrapper of mpmath.pslq."""
+    coeffs = [_.n(20) if isinstance(_, Expr) else _ for _ in coeffs]
+    return mp_pslq(coeffs, *args, **kwargs)
+
+def rationalize(v: float, **kwargs) -> sp.Rational:
+    """Wrapper of _utils_rationalize."""
+    return _utils_rationalize(v.n(20), **kwargs) if not isinstance(v, sp.Rational) else v
 
 class _option():
     """
@@ -91,30 +101,28 @@ def _standard_symmetric_root(root):
     raise ValueError(f"Root {root} is not on the symmetric axis.")
 
 
-def root_tangents(
-        rootsinfo: RootsInfo,
-    ) -> List[RootTangent]:
+def root_tangents(poly: sp.Poly, roots: List[Root]) -> List[Expr]:
     """
     Generate tangents for linear programming.
     """
-    nvars = len(rootsinfo.poly.gens)
+    nvars = len(poly.gens)
     if nvars != 3:
         return []
 
-    is_hom = rootsinfo.poly.is_homogeneous
-    is_cyc = Coeff(rootsinfo.poly).is_cyclic()
+    is_hom = poly.is_homogeneous
+    is_cyc = Coeff(poly).is_cyclic()
     if not is_hom:
         return []
-    is_sym = is_cyc and Coeff(rootsinfo.poly).is_symmetric()
-    is_centered = rootsinfo.is_centered
-    strict_roots = rootsinfo.strict_roots
-    normal_roots = rootsinfo.normal_roots
+    is_sym = is_cyc and Coeff(poly).is_symmetric()
+    is_centered = any(_.is_centered for _ in roots)
+    strict_roots = roots
+    normal_roots = []
 
     tangents = []
     for is_strict, roots in [(True, strict_roots), (False, normal_roots)]:
         tangents += _tangents_helper_ternary.root_tangents(
             roots,
-            rootsinfo.poly.gens,
+            poly.gens,
             _option(
                 cyc = is_cyc,
                 sym = is_sym,
@@ -125,14 +133,13 @@ def root_tangents(
         if len(tangents) > 0:
             break
 
-    tangents = [_.normalize() for _ in tangents]
     return tangents
 
 
 class _tangents_helper_ternary():
     """Helper class for generating tangents."""
     @classmethod
-    def root_tangents(cls, roots: List[Root], gens: Tuple[sp.Symbol], option: _option) -> List[RootTangent]:
+    def root_tangents(cls, roots: List[Root], gens: Tuple[sp.Symbol], option: _option) -> List[Expr]:
         if not option.cyc:
             helper = _tangents_helper_ternary_acyclic
         elif option.sym:
@@ -158,7 +165,7 @@ class _tangents_helper_ternary():
         tangents = [_ for _ in tangents if _ is not None]
         tangents = [_.together().as_coeff_Mul()[1] for _ in tangents]
         tangents = [_.xreplace(dict(zip((a,b,c), gens))) for _ in tangents]
-        tangents = [RootTangent(_, gens) for _ in tangents]
+        # tangents = [Expr(_, gens) for _ in tangents]
         return tangents
 
 

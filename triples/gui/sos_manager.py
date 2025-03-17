@@ -11,7 +11,7 @@ from ..utils.text_process import (
     preprocess_text, poly_get_factor_form, poly_get_standard_form,
     degree_of_zero, coefficient_triangle, coefficient_triangle_latex
 )
-from ..utils.roots import RootsInfo, GridRender, findroot
+from ..utils.roots import GridRender, findroot
 from ..core.sum_of_squares import sum_of_squares, DEFAULT_CONFIGS
 from ..core.linsos import root_tangents
 
@@ -193,18 +193,17 @@ class SOS_Manager():
         Find the roots / local minima of a polynomial.
         """
         if not cls.check_poly(poly):
-            return RootsInfo()
+            return []
 
-        roots_info = findroot(
+        roots = findroot(
             poly, 
             most = 5, 
             grid = grid, 
             with_tangents = root_tangents
         )
-        roots_info.sort_tangents()
         if verbose:
-            print(roots_info)
-        return roots_info
+            print(roots)
+        return roots
 
     @classmethod
     def sum_of_squares(cls,

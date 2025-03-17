@@ -86,6 +86,7 @@ class Root():
 
     @property
     def is_centered(self):
+        if len(self.root) == 1: return True
         p = self.root[0]
         return all(p == _ for _ in self.root[1:])
 
@@ -194,16 +195,13 @@ class RootAlgebraic(Root):
         self.K = None
         self.root_anp = None
         for i in range(len(root)):
-            if not isinstance(root[i], sp.Rational):
-                self.K = sp.QQ.algebraic_field(root[i])
-                try:
-                    self.root_anp = [
-                        self.K.from_sympy(r) for r in root
-                    ]
-                except Exception as e: # Coercion Failed
-                    self.K = None
-                if self.K is not None:
-                    break
+            self.K = sp.QQ
+            for r in root:
+                if not (isinstance(r, sp.Rational) or r in self.K):
+                    self.K = self.K.algebraic_field(r)
+            self.root_anp = [
+               self.K.from_sympy(r) for r in root
+            ]
         if self.root_anp is None:
             self.root_anp = self.root
     

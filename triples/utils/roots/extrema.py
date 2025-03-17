@@ -555,10 +555,12 @@ def optimize_poly(poly: Union[Poly, Expr], ineq_constraints: List[Union[Poly, Ex
         return []
 
     def polylize(f, symbols):
-        if not isinstance(f, Poly):
+        if not isinstance(f, Poly) or not f.domain.is_Numerical:
             f = Poly(f, *symbols) #, extension=True)
         if f is None:
             raise PolificationFailed({}, f, f)
+        if not (f.domain.is_Numerical and f.domain.is_Exact):
+            raise TypeError('Polynomial domains must be exact.')
         return f
     poly = polylize(poly, symbols)
     ineq_constraints = [polylize(ineq, symbols) for ineq in ineq_constraints]

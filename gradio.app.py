@@ -4,7 +4,6 @@ import numpy as np
 import gradio as gr
 from PIL import Image
 
-from triples.utils import RootsInfo
 from triples.utils.text_process import short_constant_parser
 from triples.gui.sos_manager import SOS_Manager
 
@@ -172,10 +171,10 @@ class GradioInterface():
         poly = res0.pop('poly', None)
         grid = res0.pop('grid', None)
         if poly is not None:
-            if 'Linear' in methods:
-                rootsinfo = SOS_Manager.findroot(poly, grid, verbose = False)
-            else:
-                rootsinfo = RootsInfo()
+            # if 'Linear' in methods:
+            #     rootsinfo = SOS_Manager.findroot(poly, grid, verbose = False)
+            # else:
+            #     rootsinfo = []
             try:
                 ineq_constraints = poly.free_symbols if SOS_Manager.CONFIG_ALLOW_NONSTANDARD_GENS else poly.gens
                 solution = SOS_Manager.sum_of_squares(

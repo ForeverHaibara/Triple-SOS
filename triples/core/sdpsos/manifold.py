@@ -72,47 +72,6 @@ def _is_binary_root(root: Root) -> bool:
     return isinstance(root, RootRational) and len(set(root.root)) <= 2
 
 
-def _hull_space(
-        nvars: int,
-        degree: int,
-        convex_hull: Dict[Tuple[int, ...], bool],
-        monomial: Tuple[int, ...],
-        symmetry: MonomialManager
-    ) -> Optional[sp.Matrix]:
-    """
-    For example, s(ab(a-b)2(a+b-3c)2) does not have a^6,
-    so in the positive semidefinite representation, the entry (a^3,a^3) of M is zero.
-    This requires that Me_i = 0 where i is the index of a^3.
-
-    Deprecated: This is not used anymore. Use SDPProblem.constrain_zero_diagonals() instead.
-    """
-    if convex_hull is None:
-        return None
-
-    half_degree = (degree - sum(monomial)) // 2
-    dict_monoms = generate_monoms(nvars, half_degree, symmetry=symmetry.base())[0]
-
-    def onehot(i: int) -> List[int]:
-        v = [0] * len(dict_monoms)
-        v[i] = 1
-        return v
-
-    space = []
-    for key, value in convex_hull.items():
-        if value:
-            continue
-
-        # value == False: not in convex hull
-        rest_monom = tuple(key[i] - monomial[i] for i in range(nvars))
-        if any(r % 2 for r in rest_monom):
-            continue
-        rest_monom = tuple(r // 2 for r in rest_monom)
-
-        space.append(onehot(dict_monoms[rest_monom]))
-
-    return sp.Matrix(space).T
-
-
 def _compute_diff_orders(poly: Poly, root: Root, mixed=False, only_binary_roots=True) -> List[Tuple[int, ...]]:
     """
     Compute tuples (a1, ..., an) such that d^a1/dx1^a1 ... d^an/dxn^an f = 0 at the root.

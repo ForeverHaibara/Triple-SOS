@@ -12,7 +12,6 @@ from scipy.optimize import minimize
 from .grid import GridRender, GridPoly
 from .rationalize import nroots, rationalize
 from .roots import Root, RootAlgebraic, RootRational
-from .rootsinfo import RootsInfo
 from ..expression import Coeff
 
 def _is_cyclic(poly) -> bool:
@@ -179,7 +178,7 @@ def findroot(
         standardize_method: str = 'partial',
         verbose: bool = False,
         with_tangents: Union[bool, Callable] = False,
-    ) -> RootsInfo:
+    ) -> List[Root]:
     """
     Find the possible local minima of a 3-var cyclic polynomial by gradient descent and guessing. 
     The polynomial is automatically standardlized so no need worry the stability. 
@@ -205,15 +204,12 @@ def findroot(
 
     Returns
     ----------
-    rootsinfo : RootsInfo
-        The roots information.
+    roots : list of Root
+        The searched roots of the polynomial.
     """
-    if not isinstance(poly, Poly):
-        return RootsInfo()
-
-    if len(poly.gens) != 3:
+    if not isinstance(poly, Poly) or len(poly.gens) != 3:
         # not implemented
-        return RootsInfo(poly=poly)
+        return []
 
     if grid is None:
         grid = GridRender.render(poly, with_color=False)
@@ -247,15 +243,15 @@ def findroot(
         print('Tolerance =', reg, '\nStrict Roots =', strict_roots,'\nNormal Roots =',
                 list(set(roots) ^ set(strict_roots)))
 
-    rootsinfo = RootsInfo(
-        poly = poly,
-        roots = roots,
-        strict_roots = strict_roots,
-        reg = reg,
-        with_tangents = with_tangents,
-    )
+    # rootsinfo = RootsInfo(
+    #     poly = poly,
+    #     roots = roots,
+    #     strict_roots = strict_roots,
+    #     reg = reg,
+    #     with_tangents = with_tangents,
+    # )
 
-    return rootsinfo
+    return roots # info
 
 
 class _findroot_helper():

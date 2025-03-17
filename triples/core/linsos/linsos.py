@@ -18,7 +18,7 @@ from .correction import linear_correction
 from .updegree import lift_degree
 from .solution import SolutionLinear
 from ..shared import homogenize_expr_list, clear_polys_by_symmetry, sanitize_input, sanitize_output
-from ...utils import findroot, RootsInfo, RootTangent
+from ...utils import Root, RootAlgebraic, optimize_poly
 from ...utils.monomials import MonomialManager
 
 
@@ -37,21 +37,33 @@ if _SCIPY_VERSION in ('1.15.0','1.15.1','1.15.2'):
 
 class _basis_limit_exceeded(Exception): ...
 
-def _prepare_tangents(symbols, prepared_tangents = [], rootsinfo: RootsInfo = None) -> Dict[Poly, Expr]:
+def _prepare_tangents(poly, prepared_tangents = [], roots = [], ineq_constraints: Dict[Poly, Expr] = {}) -> Dict[Poly, Expr]:
     """
     Combine appointed tangents and tangents generated from rootsinfo.
     Roots that do not vanish at strict roots will be filtered out.
     """
-    if rootsinfo is not None:
-        # filter out tangents that do not vanish at strict roots
-        prepared_tangents = rootsinfo.filter_tangents([
-            RootTangent(expr, symbols) if isinstance(expr, Expr) else expr for expr in prepared_tangents
-        ])
-        tangents = [t.as_expr() for t in prepared_tangents] + [t.as_expr()**2 for t in rootsinfo.tangents]
-    else:
-        tangents = prepared_tangents.copy()
-        
-    if rootsinfo is None or not rootsinfo.has_nontrivial_roots():
+    symbols = poly.gens
+    tangents = [t.as_expr() for t in prepared_tangents]
+    # roots = [r for r in roots if not r.is_centered]
+    if roots:
+        # TODO: remove it???
+        tangents.extend([_.as_expr()**2 for _ in root_tangents(poly, roots)])
+
+        new_tangents = []
+        for degree in range(1, 8):
+            # TODO: nullspace is not good
+            # TODO2: include ineq constraints
+            mat = sp.Matrix.hstack(*[r.span(degree) for r in roots]).T.nullspace()
+            if not mat:
+                continue
+            monomial_manager = MonomialManager(len(symbols))
+            new_tangents.extend([monomial_manager.invarraylize(p, symbols, degree).as_expr()**2 for p in mat])
+            if len(new_tangents) > 3:
+                break
+        tangents.extend(new_tangents)
+
+    # if rootsinfo is None or not rootsinfo.has_nontrivial_roots():
+    if all(not r.is_nontrivial for r in roots):
         if S.One not in tangents:
             tangents.append(S.One)
 
@@ -81,7 +93,6 @@ def _prepare_basis(
         degree: int,
         tangents: List[Tuple[Poly, Expr]] = {},
         eq_constraints: List[Tuple[Poly, Expr]] = {},
-        rootsinfo = None,
         basis: Optional[List[LinearBasis]] = None,
         symmetry: Union[MonomialManager, PermutationGroup] = PermutationGroup(),
         quad_diff_order: int = 8,
@@ -246,7 +257,8 @@ def LinearSOS(
         eq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
         symmetry: Optional[Union[PermutationGroup, MonomialManager]] = None,
         tangents: List[Expr] = [],
-        rootsinfo: Optional[RootsInfo] = None,
+        # rootsinfo: Optional[RootsInfo] = None,
+        roots: Optional[List[Root]] = None,
         preordering: str = 'linear',
         verbose: bool = False,
         quad_diff_order: int = 8,
@@ -276,6 +288,8 @@ def LinearSOS(
         Roots information of the polynomial to be optimized. When it is None, it will be automatically
         generated. If we want to skip the root finding algorithm or the tangent generation algorithm,
         please pass in a RootsInfo object. TODO: Shall we deprecate it?
+    roots: list
+        Additional roots to be added to the basis.
     preordering: str
         The preordering method for extending the basis. It can be 'none' or 'linear'. Defaults to 'linear'.
     verbose: bool
@@ -309,7 +323,7 @@ def LinearSOS(
         programming SOS fails.
     """
     return _LinearSOS(poly, ineq_constraints=ineq_constraints, eq_constraints=eq_constraints,
-                symmetry=symmetry,tangents=tangents,rootsinfo=rootsinfo,preordering=preordering,
+                symmetry=symmetry,tangents=tangents,roots=roots,preordering=preordering,
                 verbose=verbose,quad_diff_order=quad_diff_order,
                 basis_limit=basis_limit,lift_degree_limit=lift_degree_limit,
                 linprog_options=linprog_options,allow_numer=allow_numer,_homogenizer=_homogenizer)
@@ -321,7 +335,8 @@ def _LinearSOS(
         eq_constraints: Dict[Poly, Expr] = {},
         symmetry: MonomialManager = None,
         tangents: List[Poly] = [],
-        rootsinfo: Optional[RootsInfo] = None,
+        # rootsinfo: Optional[RootsInfo] = None,
+        roots: Optional[List[Root]] = None,
         preordering: str = 'linear',
         verbose: bool = False,
         quad_diff_order: int = 8,
@@ -340,13 +355,16 @@ def _LinearSOS(
         tagents_poly = [t.as_poly(poly.gens) for t in tangents]
         tangents = [t for t, p in zip(tangents, tagents_poly) if len(p.free_symbols_in_domain)==0 and p.is_homogeneous]
 
-    if rootsinfo is None:
-        rootsinfo = findroot(poly, with_tangents = root_tangents)
+    if roots is None:
+        roots = []
+        if poly.domain.is_QQ or poly.domain.is_ZZ:
+            roots = optimize_poly(poly, list(ineq_constraints), [poly] + list(eq_constraints), poly.gens)
+        roots = [RootAlgebraic(r) for r in roots]
 
     signs = _get_signs_of_vars(ineq_constraints, poly.gens)
     all_nonnegative = all(s > 0 for s in signs.values())
 
-    tangents = _prepare_tangents(poly.gens, tangents, rootsinfo)
+    tangents = _prepare_tangents(poly, tangents, roots, ineq_constraints=ineq_constraints)
     tangents.update(ineq_constraints)
     tangents = _get_qmodule_list(poly, tangents, all_nonnegative=all_nonnegative, preordering=preordering)
 
@@ -363,7 +381,7 @@ def _LinearSOS(
             time0 = time()
             degree = lift_degree_info['degree']
             basis, arrays = _prepare_basis(poly.gens, all_nonnegative=all_nonnegative, degree=degree, tangents=tangents,
-                                            eq_constraints=eq_constraints, rootsinfo=rootsinfo, symmetry=symmetry, 
+                                            eq_constraints=eq_constraints, symmetry=symmetry, 
                                             quad_diff_order=quad_diff_order, basis_limit=basis_limit)
             if len(basis) <= 0:
                 continue
