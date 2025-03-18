@@ -11,7 +11,7 @@ from scipy.optimize import minimize
 
 from .grid import GridRender, GridPoly
 from .rationalize import nroots, rationalize
-from .roots import Root, RootAlgebraic, RootRational
+from .roots import Root
 from ..expression import Coeff
 
 def _is_cyclic(poly) -> bool:
@@ -529,7 +529,7 @@ def findroot_resultant(poly: Poly) -> List[Root]:
 
     Returns
     ----------
-    roots : List[RootAlgebraic]
+    roots : List[Root]
         A list of roots of the polynomial.
     """
     if len(poly.gens) != 3 or not poly.is_homogeneous:
@@ -562,7 +562,7 @@ class _findroot_helper_resultant():
             #     continue
             elif poly.total_degree() == 2 and is_cyc:
                 if poly(1,1) == 0:
-                    roots.append(RootRational((1,1,1)))
+                    roots.append(Root((1,1,1)))
                 continue
             else:
                 roots.extend(findroot_func(poly, is_cyc = is_cyc))
@@ -707,7 +707,7 @@ class _findroot_helper_resultant():
                     r[i] = root
                     r[(i+1)%3] = 1
                     r[(i+2)%3] = 0
-                    all_roots.append(RootAlgebraic(tuple(r)))
+                    all_roots.append(Root(tuple(r)))
         return all_roots
 
     @classmethod
@@ -722,7 +722,7 @@ class _findroot_helper_resultant():
             else:
                 a_ = find_nearest_root(fx, a_, method = 'rootof')
             b_ = find_nearest_root(fy, b_, method = 'rootof')
-            root = RootAlgebraic((a_, b_, 1))
+            root = Root((a_, b_, 1))
             roots.append(root)
         return roots
 
@@ -741,7 +741,7 @@ class _findroot_helper_resultant():
 
         Returns
         -------
-        roots: List[RootAlgebraic]
+        roots: List[Root]
             The roots of the polynomial.    
         """
         a, b = poly.gens

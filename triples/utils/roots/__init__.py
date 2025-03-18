@@ -1,7 +1,4 @@
-from .roots import (
-    Root, RootAlgebraic, RootRational,
-    RootTernary, RootAlgebraicTernary, RootRationalTernary
-)
+from .roots import Root
 
 from .polysolve import univar_realroots
 
@@ -22,8 +19,7 @@ from .rationalize import (
 from .monotonic_opt import rpa_monotonic, rpa_gmop, poly_as_dm, rpa_polyopt
 
 __all__ = [
-    'Root', 'RootAlgebraic', 'RootRational',
-    'RootTernary', 'RootAlgebraicTernary', 'RootRationalTernary',
+    'Root',
     'univar_realroots',
     'optimize_poly',
     'GridRender',

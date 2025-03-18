@@ -14,7 +14,7 @@ from .expression import (
 )
 
 from .roots import (
-    Root, RootAlgebraic, RootRational, RootTernary, RootAlgebraicTernary, RootRationalTernary,
+    Root,
     univar_realroots, optimize_poly,
     GridRender,
     findroot, find_nearest_root, findroot_resultant, kkt,
@@ -33,7 +33,7 @@ __all__ = [
     'is_cyclic_expr', 'rewrite_symmetry', 'verify_symmetry', 'identify_symmetry', 'identify_symmetry_from_lists',
     'Solution', 'SolutionSimple',
     'pqr_sym', 'pqr_cyc', 'pqr_ker',
-    'Root', 'RootAlgebraic', 'RootRational', 'RootTernary', 'RootAlgebraicTernary', 'RootRationalTernary',
+    'Root',
     'GridRender',
     'findroot', 'find_nearest_root', 'findroot_resultant', 'kkt',
     'nroots', 'univariate_intervals', 'rationalize', 'rationalize_array', 'rationalize_bound',

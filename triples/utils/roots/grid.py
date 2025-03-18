@@ -11,7 +11,7 @@ import sympy as sp
 import numpy as np
 # from sympy.plotting.experimental_lambdify import vectorized_lambdify
 
-from ..roots import Root, RootRational
+from ..roots import Root
 from ..monomials import generate_monoms
 
 class GridPoly():
@@ -150,7 +150,7 @@ class GridPoly():
         """
         if len(self.poly.gens) != 3:
             # raise NotImplementedError('Only 3-var polynomials are supported.')
-            return [RootRational((1,)*len(self.poly.gens))] if not filter_nontrivial else []
+            return [Root((1,)*len(self.poly.gens))] if not filter_nontrivial else []
 
         grid_coor, grid_value = self.grid_coor, self.grid_value
         # grid_coor[k] = (i,j) stands for the value  f(n-i-j, i, j)
@@ -189,9 +189,9 @@ class GridPoly():
         for (i, j, k), v in iterator:
             if checker(i, j, k, v):
                 if cyc:
-                    extrema.append(RootRational((j,k,i)))
+                    extrema.append(Root((j,k,i)))
                 else:
-                    extrema.append(RootRational((i,j,k)))
+                    extrema.append(Root((i,j,k)))
 
         if filter_nontrivial:
             extrema = [r for r in extrema if r.is_nontrivial]

@@ -18,7 +18,7 @@ from .correction import linear_correction
 from .updegree import lift_degree
 from .solution import SolutionLinear
 from ..shared import homogenize_expr_list, clear_polys_by_symmetry, sanitize_input, sanitize_output
-from ...utils import Root, RootAlgebraic, optimize_poly
+from ...utils import Root, optimize_poly
 from ...utils.monomials import MonomialManager
 
 
@@ -359,7 +359,8 @@ def _LinearSOS(
         roots = []
         if poly.domain.is_QQ or poly.domain.is_ZZ:
             roots = optimize_poly(poly, list(ineq_constraints), [poly] + list(eq_constraints), poly.gens)
-        roots = [RootAlgebraic(r) for r in roots]
+        roots = [Root(r) for r in roots]
+    roots = [Root(r) if not isinstance(r, Root) else r for r in roots]
 
     signs = _get_signs_of_vars(ineq_constraints, poly.gens)
     all_nonnegative = all(s > 0 for s in signs.values())

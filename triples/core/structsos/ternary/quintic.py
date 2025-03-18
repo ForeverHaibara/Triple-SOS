@@ -6,7 +6,7 @@ import numpy as np
 from .cubic import sos_struct_cubic
 from .quartic import sos_struct_quartic
 from .quintic_symmetric import sos_struct_quintic_symmetric
-from ....utils.roots.roots import RootTernary
+from ....utils.roots.roots import Root
 from ....utils.monomials import invarraylize
 from .utils import (
     CyclicSum, CyclicProduct, Coeff,
@@ -445,9 +445,9 @@ def _sos_struct_quintic_full(coeff):
         # construct the linear system, which is 10*10
         eqs = [np.array([1.] + [0] * 9), np.array([1.] * 10)]
 
-        uvroot = RootTernary.from_uv(u_, v_)
+        uvroot = Root.from_uv(u_, v_)
         a0, b0, c0 = uvroot.root
-        as_vec = lambda *x: np.array(RootTernary(x).as_vec(3, numer=False)).astype(np.float64).flatten()
+        as_vec = lambda *x: np.array(Root(x).as_vec(3, numer=False)).astype(np.float64).flatten()
         eqs.extend([as_vec(a0,b0,c0), as_vec(b0,c0,a0), as_vec(c0,a0,b0)])
 
         criterion = lambda m,p,n,q: (m>0 and (3*m*(m+n)-p**2-p*q-q**2)>=0) or (m==0 and p>=0 and 4*p*q>=n**2)
@@ -463,8 +463,8 @@ def _sos_struct_quintic_full(coeff):
             eqs = np.array(eqs, dtype = np.float64)
             target = np.array([1] + [0]*9, dtype=eqs.dtype)
             borderdiff = border.all_coeffs()[-2]
-            as_vec_float = lambda *x: np.array(RootTernary(x).as_vec(3, numer=False)).astype(np.float64).reshape((1,10))
-            as_vec_complex = lambda *x: np.array(RootTernary(x).as_vec(3, numer=False)).astype(np.complex128).reshape((1,10))
+            as_vec_float = lambda *x: np.array(Root(x).as_vec(3, numer=False)).astype(np.float64).reshape((1,10))
+            as_vec_complex = lambda *x: np.array(Root(x).as_vec(3, numer=False)).astype(np.complex128).reshape((1,10))
 
             eqs_choices = []
             for r in nroots(border):

@@ -6,7 +6,7 @@ from sympy import Expr
 from sympy.simplify.sqrtdenest import _sqrt_match
 
 from ...utils import (
-    Root, RootRational, find_nearest_root,
+    Root, find_nearest_root,
     CyclicSum, CyclicProduct, Coeff
 )
 from ...utils import rationalize as _utils_rationalize
@@ -589,7 +589,7 @@ class _tangents_helper_ternary_acyclic(_tangents_helper_ternary):
 
     @classmethod
     def _tangents_border(cls, root: Root, option: _option) -> List[sp.Expr]:
-        if (not isinstance(root, RootRational)) or root.is_symmetric:
+        if (not root.is_Rational) or root.is_symmetric:
             return []
         x, y, z = root.root
         # line passing through (1,1,1) and its perpendicular line

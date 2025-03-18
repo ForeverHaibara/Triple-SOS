@@ -8,7 +8,8 @@ from flask_cors import CORS
 
 import sympy as sp
 
-from triples.utils import pl, SolutionSimple
+from triples.utils import pl, SolutionSimple, poly_get_factor_form, optimize_poly, RootAlgebraic
+from triples.core.linsos.tangents import root_tangents
 from triples.gui.sos_manager import SOS_Manager
 
 # def _async_raise(tid, exctype):
@@ -194,15 +195,18 @@ def findroot(sid, **kwargs):
     """
     if 'findroot' in kwargs['actions']:
         poly = kwargs['poly']
-        grid = kwargs.get('grid', None)
-        rootsinfo = SOS_Manager.findroot(poly, grid, verbose=False)
+        roots = optimize_poly(poly, [], [poly]) if poly.domain in (sp.ZZ, sp.QQ) else []
         tangents = kwargs.get('tangents')
         if tangents is None:
-            tangents = [_.as_factor_form(remove_minus_sign=True, perm=kwargs['perm']) for _ in rootsinfo.tangents]
+            # not having computed tangents, recompute them
+            tangents = root_tangents(poly, [RootAlgebraic(_) for _ in roots])
+            tangents = [poly_get_factor_form(_.as_poly(poly.gens)) for _ in tangents]
             socketio.emit(
                 'rootangents',
                 {
-                    'rootsinfo': rootsinfo.gui_description,
+                    'rootsinfo': 'Local Minima Approx:\n' + '\n'.join(
+                        [str(tuple(__ if isinstance(__, sp.Rational) else __.n(8) for __ in r))
+                                for r in roots[:min(len(roots), 5)]]),
                     'tangents': tangents,
                     'timestamp': kwargs.get('timestamp', 0)
                 },
@@ -225,11 +229,10 @@ def findroot(sid, **kwargs):
                             elif 'tangents' not in kwargs['configs']['LinearSOS']:
                                 kwargs['configs']['LinearSOS']['tangents'] = []
                             kwargs['configs']['LinearSOS']['tangents'].append(tg**2)
-                    except:
+                            kwargs['configs']['LinearSOS']['roots'] = roots
+                    except Exception as e:
                         pass
-            rootsinfo.tangents = tangents
     if 'sos' in kwargs['actions']:
-        kwargs['rootsinfo'] = rootsinfo
         sum_of_squares(sid, **kwargs)
 
 
@@ -262,14 +265,12 @@ def sum_of_squares(sid, **kwargs):
     success : bool
         Whether the solution was found.
     """
-    rootsinfo = kwargs['rootsinfo'] or []
     try:
         method_order = [key for key, value in kwargs['methods'].items() if value]
 
         if 'LinearSOS' in method_order:
             if 'LinearSOS' not in kwargs['configs']:
                 kwargs['configs']['LinearSOS'] = {}
-            kwargs['configs']['LinearSOS']['rootsinfo'] = rootsinfo
 
         gens = kwargs['gens']
         ineq_constraints = kwargs['poly'].free_symbols if SOS_Manager.CONFIG_ALLOW_NONSTANDARD_GENS else gens
@@ -285,7 +286,6 @@ def sum_of_squares(sid, **kwargs):
 
         assert solution is not None, 'No solution found.'
     except Exception as e:
-        # raise e
         return socketio.emit(
             'sos',
             {'latex': '', 'txt': '', 'formatted': '', 'success': False,

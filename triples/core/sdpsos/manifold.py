@@ -6,7 +6,7 @@ import sympy as sp
 from sympy import Poly
 
 from ...utils import (
-    findroot_resultant, Root, RootAlgebraic, RootRational,
+    findroot_resultant, Root,
     MonomialManager, generate_monoms, arraylize_sp
 )
 
@@ -69,8 +69,8 @@ class _bilinear():
 
 
 def _is_binary_root(root: Root) -> bool:
-    return isinstance(root, RootRational) and len(set(root.root)) <= 2
-
+    # return isinstance(root, RootRational) and len(set(root.root)) <= 2
+    return root.is_Rational and len(set(root.root)) <= 2
 
 def _compute_diff_orders(poly: Poly, root: Root, mixed=False, only_binary_roots=True) -> List[Tuple[int, ...]]:
     """
@@ -181,9 +181,9 @@ def _compute_nonvanishing_diff_orders(poly: Poly, root: Root, monomial: Tuple[in
     return handled_zeros
 
 
-def _root_space(manifold: 'RootSubspace', root: RootAlgebraic, constraint: Poly) -> sp.Matrix:
+def _root_space(manifold: 'RootSubspace', root: Root, constraint: Poly) -> sp.Matrix:
     """
-    Compute the constraint nullspace spaned by a given root.
+    Compute the constrained nullspace spanned by a given root.
 
     For normal case, it is simply the span of the root. However, things become
     nontrivial if the derivative is also zero. Imagine
@@ -197,14 +197,14 @@ def _root_space(manifold: 'RootSubspace', root: RootAlgebraic, constraint: Poly)
     symmetry = manifold._symmetry
     base_symmetry = symmetry.base()
     spans = []
-    if isinstance(root, RootRational) and constraint.is_monomial:
+    if root.is_Rational and constraint.is_monomial:
         monomial = tuple(constraint.monoms()[0])
         for r_ in symmetry.permute(root.root):
-            new_r = RootRational(r_)
+            # new_r = Root(r_, domain=root.domain)
+            new_r = Root((1,1,1))
             orders = _compute_nonvanishing_diff_orders(manifold.poly, new_r, monomial)
             for order in orders:
                 spans.append(new_r.span(d, order, symmetry=base_symmetry))
-
     else:
         if constraint.is_monomial and not constraint.is_zero and all(_ != 0 for _ in root.root):
             vanish = lambda _: False
@@ -219,13 +219,12 @@ def _root_space(manifold: 'RootSubspace', root: RootAlgebraic, constraint: Poly)
             if not vanish(Root(permed_root)):
                 for i in range(span.shape[1]):
                     span2 = symmetry.permute_vec(span[:,i], d)[:,j]
-                    spans.append(span2)        
+                    spans.append(span2)
         # for i in range(span.shape[1]):
         #     span2 = symmetry.permute_vec(nvars, span[:,i])
         #     for j, perm in zip(range(span2.shape[1]), symmetry.permute(root.root)):
         #         if not vanish(Root(perm)):
         #             spans.append(span2[:,j])
-
     return sp.Matrix.hstack(*spans)
 
 
@@ -245,7 +244,7 @@ def _findroot_binary(poly: Poly, symmetry: MonomialManager = None) -> List[Root]
     all_zero = tuple([0] * len(poly.gens))
     if all_zero in roots:
         roots.remove(all_zero)
-    roots = [RootRational(root) for root in roots]
+    roots = [Root(root) for root in roots]
     return roots
 
 
@@ -329,7 +328,7 @@ class RootSubspace():
         return None
         # return _hull_space(self._nvars, self._degree, self.convex_hull, constraint, self._symmetry)
 
-    def _nullspace_from_roots(self, constraint: Poly, ineq_constraints: List[Poly] = [], eq_constraints: List[Poly] = [], roots: List[RootAlgebraic] = None) -> List[sp.Matrix]:
+    def _nullspace_from_roots(self, constraint: Poly, ineq_constraints: List[Poly] = [], eq_constraints: List[Poly] = [], roots: List[Root] = None) -> List[sp.Matrix]:
         nullspaces = []
         if roots is None: roots = self.roots
         for root in roots:
