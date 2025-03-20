@@ -200,8 +200,7 @@ def _root_space(manifold: 'RootSubspace', root: Root, constraint: Poly) -> sp.Ma
     if root.is_Rational and constraint.is_monomial:
         monomial = tuple(constraint.monoms()[0])
         for r_ in symmetry.permute(root.root):
-            # new_r = Root(r_, domain=root.domain)
-            new_r = Root((1,1,1))
+            new_r = Root(r_, domain=root.domain)
             orders = _compute_nonvanishing_diff_orders(manifold.poly, new_r, monomial)
             for order in orders:
                 spans.append(new_r.span(d, order, symmetry=base_symmetry))
