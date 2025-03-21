@@ -1,10 +1,14 @@
 import sympy as sp
-from sympy import sqrt, cbrt, sin, pi, I, Poly, Rational, CRootOf
+from sympy import sqrt, sin, cos, asin, acos, pi, I, Poly, Rational, CRootOf
 from sympy.abc import a, b, c, x
 from sympy.combinatorics import SymmetricGroup
 from sympy.testing.pytest import raises
+from sympy.external.importtools import version_tuple
 
 from ..roots import Root
+
+def test_root_hash():
+    assert Root((sqrt(2)+1, 2)) in {Root(((3+2*sqrt(2))/(1+sqrt(2)), 2))}
 
 def test_as_vec_and_span():
     # ZZ, QQ, AA, ZZ_I, QQ_I, RR, CC, EX, EXRAW
@@ -74,10 +78,28 @@ def test_uv():
     assert Root.from_uv(5, 3).uv() == (5, 3)
     assert Root.from_uv(5.4869, 4.321).domain.is_RR
     assert abs(Root.from_uv(5.4869, 4.321).uv()[0] - 5.4869) < 1e-8
-    assert abs(Root.from_uv(Rational(-36,511) + 373*sqrt(2)/511, Rational(114,511) + 437*sqrt(2)/511)[0]\
-               - (9 - 6*2**.5)) < 1e-8
     raises(ValueError, lambda: Root.from_uv(-1, (3 + sqrt(2))/(1 + sqrt(2)) - 2*sqrt(2)))
 
+    assert (Root.from_uv(1,2)/Root.from_uv(1,2)[0]).uv() == (1, 2)
+    assert (Root.from_uv(1,2)/Root.from_uv(1,2)[0]**2).uv() == (1, 2)
+    assert (Root.from_uv(1,2)/Root.from_uv(1,2)[2]).uv() == (1, 2)
+
     # slow
-    assert Root.from_uv((2*sqrt(7)+1)/3,(2+sqrt(7))/3).eval(
-        Poly(a**3 + a**2*b - a*b**2 - 3*a*c**2 - b**3 + 2*b**2*c + b*c**2, a, b, c)) == 0
+    if tuple(version_tuple(sp.__version__)) >= (1, 14):
+        assert abs(Root.from_uv(Rational(-36,511) + 373*sqrt(2)/511, Rational(114,511) + 437*sqrt(2)/511)[0]\
+                - (9 - 6*2**.5)) < 1e-8
+        assert Root.from_uv((2*sqrt(7)+1)/3,(2+sqrt(7))/3).eval(
+            Poly(a**3 + a**2*b - a*b**2 - 3*a*c**2 - b**3 + 2*b**2*c + b*c**2, a, b, c)) == 0
+
+def test_as_trig():
+    root37 = Root.from_uv(3, 7)
+    root37_trig = root37.as_trig()
+    assert root37 != root37_trig and sum(abs(_) for _ in (root37_trig.n(8) - root37.n(8))) < 1e-6\
+        and (root37_trig[0].has(sin) or root37_trig[0].has(cos))\
+        and not (root37_trig[0].has(asin) or root37_trig[0].has(acos))
+
+    rootn1n2 = Root.from_uv(-1, -2)
+    rootn1n2_trig = rootn1n2.as_trig()
+    assert rootn1n2 != rootn1n2_trig and sum(abs(_) for _ in (rootn1n2_trig.n(8) - rootn1n2.n(8))) < 1e-6\
+        and (rootn1n2_trig[0].has(sin) or rootn1n2_trig[0].has(cos))\
+        and not (rootn1n2_trig[0].has(asin) or rootn1n2_trig[0].has(acos))

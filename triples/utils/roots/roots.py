@@ -2,14 +2,14 @@ from typing import Optional, Union, List, Tuple
 
 import numpy as np
 import sympy as sp
-from sympy import Poly, Expr, Symbol, Rational
+from sympy import Poly, Expr, Symbol, Rational, Integer
 from sympy.combinatorics import PermutationGroup, CyclicGroup
 from sympy.polys.constructor import construct_domain
 from sympy.polys.domains import Domain
 from sympy.polys.domains.gaussiandomains import GaussianElement
 from sympy.polys.matrices.sdm import SDM
 from sympy.polys.matrices.domainmatrix import DomainMatrix
-from sympy.polys.numberfields.subfield import primitive_element
+# from sympy.polys.numberfields.subfield import primitive_element
 from sympy.polys.polyclasses import DMP, ANP
 from sympy.polys.rootoftools import ComplexRootOf as CRootOf
 
@@ -26,6 +26,7 @@ except:
 
 def _reg_matrix(M):
     # normalize so that the largest entry in each column is 1
+    # TODO: ...?
     reg = np.max(np.abs(M), axis = 0)
     reg = 1 / np.tile(reg, (M.shape[0], 1))
     reg = sp.Matrix(reg)
@@ -40,32 +41,34 @@ def _algebraic_extension(vec: List[ANP], domain: Domain) -> sp.Matrix:
         sdm = SDM({i: {0: x} for i, x in enumerate(vec) if x != 0}, (len(vec), 1), domain)
         return sdm
 
-    sdm = None
-    if domain.is_QQ or domain.is_ZZ or (not hasattr(domain, 'mod')):
-        sdm = default(vec, domain)
+    rep, mod, sdm = None, None, None
+    if domain.is_QQ_I or domain.is_ZZ_I:
+        mod = domain.mod if hasattr(domain, 'mod') else \
+            [domain.dom.one, domain.dom.zero, domain.dom.one] # version compatibility
+    elif (not domain.is_QQ) and (not domain.is_ZZ) and hasattr(domain, 'mod'):
+        mod = domain.mod
+
+    if hasattr(vec[0], 'rep'):
+        rep = lambda z: z.rep
+    elif isinstance(vec[0], GaussianElement):
+        rep = lambda z: (z.y, z.x)
+
+    if mod is not None and rep is not None:
+        mod = mod.to_list() if hasattr(mod, 'to_list') else mod
+        zero = domain.zero
+
+        sdm = {}
+        for row, x in enumerate(vec):
+            l = len(rep(x))
+            for i in range(1, l + 1): # len(x.rep) = l >= i
+                if rep(x)[-i] == zero:
+                    continue
+                if not (row in sdm):
+                    sdm[row] = {}
+                sdm[row][i-1] = rep(x)[-i]
+        sdm = SDM(sdm, (len(vec), len(mod) - 1), sp.QQ)
     else:
-        if hasattr(vec[0], 'rep'):
-            rep = lambda z: z.rep
-        elif isinstance(vec[0], GaussianElement):
-            rep = lambda z: (z.y, z.x)
-        else:
-            sdm = default(vec, domain)
-
-        if sdm is None:
-            mod = domain.mod
-            mod = mod.to_list() if hasattr(mod, 'to_list') else mod
-            zero = domain.zero
-
-            sdm = {}
-            for row, x in enumerate(vec):
-                l = len(rep(x))
-                for i in range(1, l + 1): # len(x.rep) = l >= i
-                    if rep(x)[-i] == zero:
-                        continue
-                    if not (row in sdm):
-                        sdm[row] = {}
-                    sdm[row][i-1] = rep(x)[-i]
-            sdm = SDM(sdm, (len(vec), len(mod) - 1), sp.QQ)
+        sdm = default(vec, domain)
 
     return sp.Matrix._fromrep(DomainMatrix.from_rep(sdm))
 
@@ -79,18 +82,59 @@ def _derv(n: int, i: int) -> int:
     return sp.factorial(n) // sp.factorial(n - i)
 
 
+def _root_op(f, g, op, broadcast_f=True, broadcast_g=True, field=False):
+    _rootify = lambda x: Root((x,)) if not isinstance(x, Root) else x
+    f, g = _rootify(f), _rootify(g)
+
+    domain = f.domain.unify(g.domain)
+    if domain == f.domain:
+        # There is a bug that domain == f.domain but sometimes
+        # domain.mod != f.domain.mod, so we need to replace the domain.
+        # See also https://github.com/sympy/sympy/issues/27798
+        domain = f.domain
+    elif domain == g.domain:
+        domain = g.domain
+    if field and not domain.is_Field:
+        domain = domain.get_field()
+
+    f, g = f.set_domain(domain), g.set_domain(domain)
+
+    if len(f) != len(g):
+        if broadcast_f and len(f) == 1:
+            f = Root((f.root[0],) * len(g), domain=f.domain, rep=[f.rep[0]] * len(g))
+        elif broadcast_g and len(g) == 1:
+            g = Root((g.root[0],) * len(f), domain=g.domain, rep=[g.rep[0]] * len(f))
+        else:
+            raise ValueError('The number of variables in the roots does not match.')
+
+    root = [getattr(a, op)(b) for a, b in zip(f.root, g.root)]
+    rep = [getattr(a, op)(b) for a, b in zip(f.rep, g.rep)]
+    return Root(root, domain=domain, rep=rep)
 
 class Root():
     """
     A tuple (vector) to represent a point in n-dimensional space with
     specialized operations. It has a domain property to control the
     arithmetic operations, which is similar to sympy's DomainMatrix.
+
+    Examples
+    ----------
+    >>> from sympy.abc import a, b, c
+    >>> from sympy import sqrt, Poly
+    >>> root = Root((1 + sqrt(2), 1 - sqrt(2))); root
+    (1 + sqrt(2), 1 - sqrt(2))
+
+    Root class supports commonly used arithmetic operations.
+
+    >>> root.eval(Poly(a**2 + b**2, a, b))
+    6
+    >>> root * 2 + 1
+    (2*sqrt(2) + 3, 3 - 2*sqrt(2))
+    >>> root.elementary_polynomials()
+    [1, 2, -1]
     """
     domain: Domain
     def __init__(self, root: List[Expr], domain: Optional[Domain]=None, rep: Optional[List[ANP]]=None):
-        """
-        Initialize the root.
-        """
         root = tuple(sp.S(r) for r in root)
         self.rep = rep
         self.domain = domain
@@ -98,10 +142,13 @@ class Root():
             if all(len(r.free_symbols) == 0 for r in root):
                 self.domain, self.rep = construct_domain(root, extension=True)
             else:
+                # do not rely on whether the default symbolic domain is EX or EXRAW
                 self.domain = EXRAW
 
         if self.rep is None:
-            self.rep = [self.domain.from_sympy(r) for r in root]
+            self.rep = tuple(self.domain.from_sympy(r) for r in root)
+        if not isinstance(self.rep, tuple): # make it hashable and immutable
+            self.rep = tuple(self.rep)
         self.root = root
 
         self._make_single_power_cached_func()
@@ -168,12 +215,64 @@ class Root():
         return repr(self.root)
 
     def __hash__(self):
-        return hash(self.root)
+        return hash((self.domain, self.rep))
 
     def __eq__(self, __value: object) -> bool:
         if not isinstance(__value, Root):
             return False
         return self.domain == __value.domain and self.rep == __value.rep
+
+    def __add__(self, other: Expr) -> 'Root':
+        return _root_op(self, other, '__add__')
+
+    def __radd__(self, other: Expr) -> 'Root':
+        return _root_op(other, self, '__add__')
+
+    def __sub__(self, other: Expr) -> 'Root':
+        return _root_op(self, other, '__sub__')
+
+    def __rsub__(self, other: Expr) -> 'Root':
+        return _root_op(other, self, '__sub__')
+
+    def __neg__(self) -> 'Root':
+        return Root((-r for r in self.root), domain=self.domain, rep=[-r for r in self.rep])
+
+    def __mul__(self, other: Expr) -> 'Root':
+        return _root_op(self, other, '__mul__')
+
+    def __rmul__(self, other: Expr) -> 'Root':
+        return _root_op(other, self, '__mul__')
+
+    def __truediv__(self, other: Expr) -> 'Root':
+        return _root_op(self, other, '__truediv__', field=True, broadcast_f=False)
+
+    def __pow__(self, other: Expr) -> 'Root':
+        if not isinstance(other, (int, Integer)):
+            raise ValueError('The power should be an integer')
+        if other < 0:
+            self = self.to_field()
+        root = [r**other for r in self.root]
+        rep = [r**other for r in self.rep]
+        return Root(root, domain=self.domain, rep=rep)
+
+    def sum(self, to_sympy: bool = True) -> Expr:
+        """
+        Evaluate the sum of the root.
+
+        Examples
+        ----------
+        >>> from sympy import sqrt
+        >>> Root((2, 1 + sqrt(2), 1 - 2*sqrt(2))).sum()
+        4 - sqrt(2)
+        """
+        s = sum(self.rep)
+        if to_sympy:
+            s = self.domain.to_sympy(s)
+        return s
+
+    def simplify(self) -> 'Root':
+        root = [self.domain.to_sympy(r) for r in self.rep]
+        return Root(root, domain=self.domain, rep=self.rep)
 
     def evalf(self, *args, **kwargs) -> 'Root':
         """
@@ -218,8 +317,11 @@ class Root():
     def set_domain(self, domain: Domain) -> 'Root':
         if domain == self.domain:
             return self
-        convert = domain.convert
-        rep = [convert(r) for r in self.rep]
+        if not self.is_Rational:
+            _convert = lambda x: domain.convert(self.domain.to_sympy(x))
+        else:
+            _convert = domain.convert
+        rep = [_convert(r) for r in self.rep]
         return Root(self.root, domain=domain, rep=rep)
 
     def to_field(self) -> 'Root':
@@ -449,7 +551,39 @@ class Root():
     def cyclic_sum(self, monom: List[int], perm_group: Optional[PermutationGroup] = None,
             standardize: bool = False, to_sympy: bool = True) -> Expr:
         """
-        
+        Compute the cyclic sum of the root over a monomial.
+
+        Parameters
+        ----------
+        monom : List[int]
+            The monomial to be summed over.
+        perm_group : Optional[PermutationGroup]
+            The permutation group to be used. Default is the cyclic group.
+        standardize : bool
+            Whether to standardize the result by dividing by (sum(root)**sum(monom)).
+            This is useful for homogeneous expressions.
+
+        Returns
+        ----------
+        s : Expr
+            The cyclic sum of the root.
+
+        Examples
+        ----------
+        >>> from sympy.abc import a, b, c
+        >>> Root((a, b, c)).cyclic_sum((3, 2, 1))
+        a**3*b**2*c + a**2*b*c**3 + a*b**3*c**2
+        >>> Root((2, 3, 5)).cyclic_sum((1, 1, 1))
+        90
+
+        The permutation group can be specified.
+
+        >>> from sympy.combinatorics import SymmetricGroup
+        >>> Root((a, b ,c)).cyclic_sum((3, 2, 1), perm_group=SymmetricGroup(3))
+        a**3*b**2*c + a**3*b*c**2 + a**2*b**3*c + a**2*b*c**3 + a*b**3*c**2 + a*b**2*c**3
+
+        >>> Root((2, 3, 5)).cyclic_sum((1, 1, 1), standardize=True)
+        9/100
         """
         nvars = len(self.root)
         if len(monom) != nvars:
@@ -482,12 +616,78 @@ class Root():
             s = domain.to_sympy(s)
         return s
 
+    def elementary_polynomials(self, to_sympy: bool = True) -> List[Expr]:
+        """
+        Compute the 0th~nth elementary polynomials of the root.
+
+        Returns
+        ----------
+        sigmas : List[Expr]
+            The list of elementary polynomials. Starting from σ₀ = 1.
+
+        Examples
+        ----------
+        >>> from sympy.abc import a, b, c
+        >>> from sympy import EX
+        >>> Root((a, b, c), domain=EX).elementary_polynomials()
+        [1, a + b + c, a*b + a*c + b*c, a*b*c]
+        >>> Root((1, 2, 3, 4)).elementary_polynomials()
+        [1, 10, 35, 50, 24]
+        """
+        self = self.to_field()
+        def newton_to_elementary(p_list, domain):
+            n = len(p_list)
+            sigma = [domain.one]  # σ₀ = 1
+            for k in range(1, n+1):
+                total = domain.zero
+                for i in range(1, k+1):
+                    sign = domain.one if i % 2 == 1 else -domain.one
+                    p_i = p_list[i-1]
+                    total += sign * sigma[k - i] * p_i
+                sigma_k = total / (domain.one * k)
+                sigma.append(sigma_k)
+            return sigma
+        nvars = len(self)
+        domain = self.domain
+        newtons = [self.cyclic_sum((i,) + (0,)*(nvars-1), to_sympy=False) for i in range(1, nvars+1)]
+        sigmas = newton_to_elementary(newtons, domain)
+        if to_sympy:
+            sigmas = [domain.to_sympy(_) for _ in sigmas]
+        return sigmas
+
     def poly(self, x: Optional[Symbol] = None) -> Poly:
         """
-        Return a univariate polynomial with given roots.
-        """
-        raise NotImplementedError
+        Return a monic univariate polynomial with given roots.
 
+        Parameters
+        ----------
+        x : Optional[Symbol]
+            The symbol for the polynomial.
+
+        Returns
+        ----------
+        >>> from sympy import exp, pi, I, Symbol, Poly, CRootOf
+        >>> from sympy.abc import x, y
+        >>> Root((1, 2, 3, 4)).poly(y).as_expr().factor()
+        (y - 4)*(y - 3)*(y - 2)*(y - 1)
+        >>> Root((1, exp(2*pi*I/3), exp(4*pi*I/3))).poly()
+        Poly(x**3 - 1, x, domain='QQ<exp(-2*I*pi/3)>')
+        
+        >>> poly = Poly(49*x**3 - 49*x**2 + 14*x - 1, x)
+        >>> root = Root((CRootOf(poly, 2), CRootOf(poly, 1), CRootOf(poly, 0))); root.n(6)
+        (0.543134, 0.349292, 0.107574)
+        >>> root.poly()
+        Poly(x**3 - x**2 + 2/7*x - 1/49, x, domain='QQ<CRootOf(49*x**3 - 49*x**2 + 14*x - 1, 0)>')
+        """
+        domain = self.to_field().domain
+        sigmas = self.elementary_polynomials(to_sympy=False)
+        signed_sigmas = [x if i % 2 == 0 else -x for i, x in enumerate(sigmas)]
+        if x is None:
+            x = sp.Symbol('x')
+        poly = sp.Basic.__new__(Poly)
+        poly.rep = DMP(signed_sigmas, domain, 0)
+        poly.gens = (x,)
+        return poly
 
     def uv(self, to_sympy = True):
         """
@@ -523,6 +723,8 @@ class Root():
         >>> from sympy.abc import a, b, c, x
         >>> Root((6, 4, 2)).uv()
         (17/13, 29/13)
+        >>> Root((2, 4, 6)).uv()
+        (29/13, 17/13)
         >>> Root((1, 1, 1)).uv()
         (2, 2)
         >>> Root((a, a, 1), domain=EX).uv()
@@ -653,6 +855,8 @@ class Root():
             b0 = perm(a0)
             c0 = perm(b0)
 
+            # (a, b, c) and (a, c, b) are different permutations
+            # check the order of the roots
             wrong_order = False
             if not is_real:
                 b1, c1 = domain.to_sympy(b0), domain.to_sympy(c0)
@@ -666,42 +870,112 @@ class Root():
                 a0, b0, c0 = c0, b0, a0
         return Root((a,b,c), domain=domain, rep=[a0,b0,c0])
 
+    def as_trig(self) -> 'Root':
+        """
+        Try to convert a ternary root to a trigonometric form when its
+        u, v are rational numbers. It bases on the Kronecker-Weber theorem
+        that every abelian extension of the rationals is contained in a
+        cyclotomic field and that roots of equations with abelian galois group
+        can be expressed as a rational linear combination of exp(2kπi/n).
+        The implementation is experimental and may be very
+        slow for high order cyclotomic fields.
+
+        Returns
+        ----------
+        root : Root
+            The trigonometric form of the root.
+        
+        Examples
+        ----------
+        >>> Root.from_uv(1, 2)[0]
+        CRootOf(49*x**3 - 49*x**2 + 14*x - 1, 2)
+        >>> Root.from_uv(1, 2).as_trig()[0]
+        -2*cos(3*pi/7)/7 + 2*cos(2*pi/7)/7 + 3/7
+
+        >>> from sympy.abc import x
+        >>> from sympy import Poly
+        >>> root = Root(Poly(x**3 - 3*x**2 + 1, x).all_roots()); root
+        (CRootOf(x**3 - 3*x**2 + 1, 0), CRootOf(x**3 - 3*x**2 + 1, 1), CRootOf(x**3 - 3*x**2 + 1, 2))
+        >>> root.uv()
+        (2, -1)
+        >>> root.as_trig()
+        (1 - 2*cos(2*pi/9), 1 - 2*cos(4*pi/9), 2*cos(4*pi/9) + 1 + 2*cos(2*pi/9))
+        """
+        if len(self) != 3:
+            raise NotImplementedError('The method as_trig() is only available for ternary roots.')
+        if (self.is_Rational) or (not self.is_algebraic):
+            return self
+
+        self = self.to_field()
+        domain = self.domain
+        u, v = self.uv()
+        if not (u.is_Rational and v.is_Rational):
+            return self
+        u, v = domain.from_sympy(u), domain.from_sympy(v)
+        invker = domain.one / (u**2 - u*v + v**2 + u + v + 1)
+        sqrtdisc = (u - v)*(u**2 - u*v - 2*u + v**2 - 2*v + 4)*invker**2
+        sqrtdisc = domain.to_sympy(sqrtdisc)
+
+        def _get_conductor(sqrtdisc):
+            """
+            The conductor of a rational cubic polynomial with cyclic galois group
+            must take the form of p1*p2*...*pn where pi are distinct integers
+            from the set {9} + {p is prime and p = 1 (mod 3)}.
+            """
+            p, q = sqrtdisc.numerator, sqrtdisc.denominator
+            # convert p/q to integer by multiplying u^3
+            p = sp.factorint(abs(p))
+            for k, v in sp.factorint(abs(q)).items():
+                p[k] = (p.get(k, 0) - v) % 3
+                if p[k] < 0:
+                    p[k] += 3
+            if 3 in p:
+                p.pop(3)
+                p[9] = 1
+
+            conductor = sp.prod([k for k, v in p.items() if k % 3 == 1 or k == 9])
+            # print('Sqrt[D] =', sqrtdisc, '-> Conductor =', conductor)
+            return conductor
+
+        conductor = _get_conductor(sqrtdisc)
+        cyclo = sp.QQ.algebraic_field(sp.cos(2*sp.pi/conductor))
+        ext = cyclo.convert(domain.ext)
+
+        rep = [r.rep for r in self.rep]
+        rep = [sum(r[-k]*ext**(k-1) for k in range(1, 1+len(r))) for r in rep]
+
+        def _to_trig_seq(n, r, one=1):
+            """Convert a polynomial in cos(2π/n) to a linear combination of cos(2kπ/n)."""
+            r = r[::-1]
+            coeff = [0] * n
+            for m in range(len(r)):
+                a_m = r[m]
+                if a_m == 0:
+                    continue
+                
+                # expand ((z + 1/z)/2)^m
+                current_c = one  # C(m,0) = 1
+                for k in range(0, m//2 + 1):
+                    t = m - 2 * k
+                    contribution = a_m * current_c / (2 ** m)
+                    # no need to record t < 0
+                    coeff[t] += contribution
+                    
+                    # compute C(m,k+1)
+                    current_c = current_c * (m - k) / (k + 1)
+
+            coeff = [coeff[0]] + [2 * k for k in coeff[1:]]
+            return coeff
+        def _to_trig(n, r, one=1):
+            seq = _to_trig_seq(n, r, one)
+            return sum([c*sp.cos(2*sp.pi*k/n) for k, c in enumerate(seq)])
+        # root = [cyclo.to_sympy(r) for r in rep]
+        root = [_to_trig(conductor, r.rep, sp.QQ.one) for r in rep]
+        return Root(root, domain=cyclo, rep=rep)
+
 
     def ker(self, to_sympy = True):
         raise NotImplementedError
-
-
-# ###################################################################
-# #
-# #
-# #                         Ternary roots
-# #
-# #
-# ###################################################################
-
-# class TernaryMixin():
-#     """
-#     Abstract mixin class for roots of 3-var cyclic polynomials.
-#     """
-#     def __init__(self):
-#         if self.is_centered:
-#             self._uv = (sp.S(2), sp.S(2))
-#         elif self.is_corner:
-#             self._uv = (sp.oo, sp.oo)
-#         else:
-#             a, b, c = self.root if not hasattr(self, 'rep') else self.rep
-#             one = sp.S(1) if not hasattr(self, 'K') else self.domain.one
-#             sa2b2 = a**2*b**2 + b**2*c**2 + c**2*a**2
-#             sa2bc = a*b*c * (a + b + c)
-#             sab3 = a*b**3 + b*c**3 + c*a**3
-#             sa3b = a**3*b + b**3*c + c**3*a
-#             inv_sa2b2_sa2bc = one / (sa2b2 - sa2bc)
-#             u = (sab3 - sa2bc) * inv_sa2b2_sa2bc
-#             v = (sa3b - sa2bc) * inv_sa2b2_sa2bc
-#             self._uv = (u, v)
-
-#         u, v = self._uv
-#         self._ker = u**2 - u*v + v**2 + u + v + 1
 
 
 #     def ker(self):
@@ -712,18 +986,6 @@ class Root():
 #         if hasattr(self, 'K') and self.domain is not None:
 #             return self.domain.to_sympy(ker)
 #         return ker
-
-#     def poly(self, x: Symbol = None) -> Poly:
-#         """
-#         Return a polynomial whose three roots are (proportional to) a, b, c.
-#         """
-#         x = x or Symbol('x')
-#         poly = x**3 - x**2 + self.cyclic_sum((1,1,0)) * x - self.cyclic_sum((1,1,1)) / 3
-#         return poly.as_poly(x)
-
-
-
-    
 #     def standardize(self, cyc: bool = False, inplace: bool = False) -> 'Root':
 #         """
 #         Standardize the root by setting a + b + c == 3.
@@ -805,19 +1067,3 @@ class Root():
 #                 r[i] = v
 
 #         return RootTernary((r[0], r[1], r[2]))
-
-
-# class RootTernary(Root, TernaryMixin):
-#     """
-#     Cyclic root of CyclicSum((a^2-b^2+u(ab-ac)+v(bc-ab))^2).
-#     Clearly, it should satisfy a^2-b^2+u(ab-ac)+v(bc-ab) = 0 and its permutations.
-#     For example, Vasile inequality is the case of (u, v) = (1, 2).
-
-#     When uv = 1, it degenerates to a root on border, (u, 0, 1) and permutations.
-#     When uv != 1, the root is computed by:
-#     x = ((v - u)(uv + u + v - 2) + u^3 + 1)/(1 - uv)
-#     y = ((u - v)(uv + u + v - 2) - v^3 - 1)/(1 - uv)
-
-#     Then b/c is a root of t^3 + xt^2 + yt - 1 = 0.
-#     And a/c is determined by a/c = ((b/c)^2 + (b/c)(u - v) - 1)/((b/c)u - v).
-#     """
