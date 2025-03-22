@@ -24,20 +24,42 @@ except:
     pass
 
 
-def _reg_matrix(M):
-    # normalize so that the largest entry in each column is 1
-    # TODO: ...?
-    reg = np.max(np.abs(M), axis = 0)
-    reg = 1 / np.tile(reg, (M.shape[0], 1))
-    reg = sp.Matrix(reg)
-    M = M.multiply_elementwise(reg)
-    return M
+def _reg_matrix(M: sp.Matrix) -> sp.Matrix:
+    """Normalize so that the largest entry in each column is 1"""
+    rep = M._rep.rep.to_sdm()
+    domain = rep.domain
+    if not (domain.is_QQ or domain.is_ZZ):
+        # not expected to reach here given that
+        # the input is a matrix of rational numbers
+        return M
+    if domain.is_ZZ:
+        domain = domain.get_field()
+        rep = rep.convert_to(domain)
+    one, zero = domain.one, domain.zero
+
+    colmax = {}
+    for row in rep.values():
+        for col, val in row.items():
+            if col not in colmax:
+                colmax[col] = abs(val)
+            elif val != zero:
+                colmax[col] = max(colmax[col], abs(val))
+
+    colmax = {col: one / val for col, val in colmax.items()}
+    newsdm = {r: {col: val * colmax[col] for col, val in row.items()} for r, row in rep.items()}
+    newsdm = SDM(newsdm, rep.shape, domain)
+    return sp.Matrix._fromrep(DomainMatrix.from_rep(newsdm))
 
 def _algebraic_extension(vec: List[ANP], domain: Domain) -> sp.Matrix:
+    """
+    Convert a column vector of algebraic numbers to a matrix of rational numbers.
+    """
     if len(vec) == 0:
         return sp.Matrix(0, 0, [])
 
     def default(vec, domain):
+        # Fails to convert to a matrix of rational numbers:
+        # return the original vector as a matrix.
         sdm = SDM({i: {0: x} for i, x in enumerate(vec) if x != 0}, (len(vec), 1), domain)
         return sdm
 
@@ -73,24 +95,19 @@ def _algebraic_extension(vec: List[ANP], domain: Domain) -> sp.Matrix:
     return sp.Matrix._fromrep(DomainMatrix.from_rep(sdm))
 
 def _derv(n: int, i: int) -> int:
-    """
-    Compute n! / (n-i)!.
-    """
+    """Compute n! / (n-i)!."""
     if i == 1: return n
     if n < i:
         return 0
     return sp.factorial(n) // sp.factorial(n - i)
 
-
 def _root_op(f, g, op, broadcast_f=True, broadcast_g=True, field=False):
+    """Perform the operation op between two Root instances f and g."""
     _rootify = lambda x: Root((x,)) if not isinstance(x, Root) else x
     f, g = _rootify(f), _rootify(g)
 
     domain = f.domain.unify(g.domain)
     if domain == f.domain:
-        # There is a bug that domain == f.domain but sometimes
-        # domain.mod != f.domain.mod, so we need to replace the domain.
-        # See also https://github.com/sympy/sympy/issues/27798
         domain = f.domain
     elif domain == g.domain:
         domain = g.domain
@@ -140,7 +157,15 @@ class Root():
         self.domain = domain
         if domain is None:
             if all(len(r.free_symbols) == 0 for r in root):
-                self.domain, self.rep = construct_domain(root, extension=True)
+                domain, rep = construct_domain(root, extension=True)
+                if domain.is_AlgebraicField:
+                    content, mp = domain.ext.minpoly.primitive()
+                    if content != 1:
+                        # See also https://github.com/sympy/sympy/issues/27798
+                        setattr(domain.ext, 'minpoly', mp)
+                        domain = domain.__class__(domain.dom, domain.ext)
+                        rep = [ANP(r.rep, domain.mod, domain.dom) for r in rep]
+                self.domain, self.rep = domain, rep
             else:
                 # do not rely on whether the default symbolic domain is EX or EXRAW
                 self.domain = EXRAW
@@ -178,26 +203,34 @@ class Root():
             or self.domain.is_QQ_I or self.domain.is_ZZ_I
 
     @property
+    def is_zero(self):
+        """Whether all coordinates of the root are zero."""
+        zero = self.domain.zero
+        return all(_ == zero for _ in self.rep)
+
+    @property
     def is_corner(self):
         """Whether there is at most one nonzero in the root."""
-        return sum(_ != 0 for _ in self.root) <= 1
+        zero = self.domain.zero
+        return sum(_ != zero for _ in self.rep) <= 1
 
     @property
     def is_border(self):
         """Whether there is a zero in the root."""
-        return any(_ == 0 for _ in self.root)
+        zero = self.domain.zero
+        return any(_ == zero for _ in self.rep)
 
     @property
     def is_symmetric(self):
         """Whether at least two coordinates of the root are equal."""
-        return len(set(self.root)) < self.nvars
+        return len(set(self.rep)) < self.nvars
 
     @property
     def is_center(self):
         """Whether all coordinates of the root are equal."""
-        if len(self.root) == 1: return True
-        p = self.root[0]
-        return all(p == _ for _ in self.root[1:])
+        if len(self) == 1: return True
+        p = self.rep[0]
+        return all(p == _ for _ in self.rep[1:])
 
     @property
     def is_centered(self):
@@ -244,7 +277,10 @@ class Root():
         return _root_op(other, self, '__mul__')
 
     def __truediv__(self, other: Expr) -> 'Root':
-        return _root_op(self, other, '__truediv__', field=True, broadcast_f=False)
+        return _root_op(self, other, '__truediv__', field=True) # broadcast_f=False)
+
+    def __rtruediv__(self, other: Expr) -> 'Root':
+        return _root_op(other, self, '__truediv__', field=True) # broadcast_g=False)
 
     def __pow__(self, other: Expr) -> 'Root':
         if not isinstance(other, (int, Integer)):
@@ -254,6 +290,9 @@ class Root():
         root = [r**other for r in self.root]
         rep = [r**other for r in self.rep]
         return Root(root, domain=self.domain, rep=rep)
+
+    def __abs__(self) -> 'Root':
+        return Root(tuple(abs(r) for r in self.root))
 
     def sum(self, to_sympy: bool = True) -> Expr:
         """
@@ -684,9 +723,7 @@ class Root():
         signed_sigmas = [x if i % 2 == 0 else -x for i, x in enumerate(sigmas)]
         if x is None:
             x = sp.Symbol('x')
-        poly = sp.Basic.__new__(Poly)
-        poly.rep = DMP(signed_sigmas, domain, 0)
-        poly.gens = (x,)
+        poly = Poly.new(DMP(signed_sigmas, domain, 0), x)
         return poly
 
     def uv(self, to_sympy = True):
@@ -836,9 +873,7 @@ class Root():
             sab = (u + v - 1) * invker
             abc = (u*v - 1) * invker**2
 
-            poly = sp.Basic.__new__(Poly)
-            poly.rep = DMP([one, -one, sab, -abc], domain, 0)
-            poly.gens = (sp.Symbol('x'),)
+            poly = Poly.new(DMP([one, -one, sab, -abc], domain, 0), sp.Symbol('x'))
             a, b, c = poly.all_roots(radicals=False) if poly.domain.is_Exact else poly.nroots()
 
             if not (a in domain):
@@ -973,97 +1008,58 @@ class Root():
         root = [_to_trig(conductor, r.rep, sp.QQ.one) for r in rep]
         return Root(root, domain=cyclo, rep=rep)
 
+    # def ker(self, to_sympy = True):
+    #     """
+    #     Return u^2 - uv + v^2 + u + v + 1.
+    #     """
+    #     raise NotImplementedError
+    #     ker = self._ker
+    #     if hasattr(self, 'K') and self.domain is not None:
+    #         return self.domain.to_sympy(ker)
+    #     return ker
 
-    def ker(self, to_sympy = True):
-        raise NotImplementedError
+    def approximate(self, tolerance = 1e-6):
+        """
+        Try to convert a numerical root to algebraic by approximating
+        the coefficient of its polynomial. It assumes all elements are
+        the roots of a rational coefficient polynomial.
 
+        Parameters
+        ----------
+        tolerance : float
+            The tolerance for approximating the coefficients. It is passed
+            to the sympy.nsimplify function.
 
-#     def ker(self):
-#         """
-#         Return u^2 - uv + v^2 + u + v + 1.
-#         """
-#         ker = self._ker
-#         if hasattr(self, 'K') and self.domain is not None:
-#             return self.domain.to_sympy(ker)
-#         return ker
-#     def standardize(self, cyc: bool = False, inplace: bool = False) -> 'Root':
-#         """
-#         Standardize the root by setting a + b + c == 3.
+        Returns
+        ----------
+        root : Root
+            The approximated root.
 
-#         Parameters
-#         ----------
-#         cyc : bool
-#             Whether to standardize cyclically. If True, return
-#             (a,b,c) such that a=max(a,b,c). If a == max(b,c), then
-#             return (a,b,c) such that b=max(b,c).
+        Examples
+        ----------
+        >>> root = Root((-0.1773629621, 0.2175678816, 0.9597950805))
+        >>> root.approximate()
+        (CRootOf(27*x**3 - 27*x**2 + 1, 0), CRootOf(27*x**3 - 27*x**2 + 1, 1), CRootOf(27*x**3 - 27*x**2 + 1, 2))
+        >>> Root((2.414213,-0.414213)).approximate(tolerance=1e-2)
+        (CRootOf(x**2 - 2*x - 1, 1), CRootOf(x**2 - 2*x - 1, 0))
+        >>> Root((.5+1j, .5-1j)).approximate()
+        (CRootOf(4*x**2 - 4*x + 5, 1), CRootOf(4*x**2 - 4*x + 5, 0))
+        """
+        if not (self.domain.is_RR or self.domain.is_CC):
+            return self
+        poly = self.poly()
+        all_coeffs = [sp.nsimplify(_, rational=True, tolerance=tolerance) for _ in poly.all_coeffs()]
+        poly = Poly(all_coeffs, poly.gen)
+        roots = poly.all_roots(radicals=False)
 
-#         inplace : bool
-#             Whether to modify the root inplace. If False, return
-#             a new Root object. If True, return self.
+        # sort original numerical roots
+        domain = self.domain
+        is_imag = lambda x: domain.imag(x) != 0
+        repkeys = [(is_imag(r), r.real, r.imag, i)
+                        for i, r in enumerate(self.rep)]
+        repkeys = sorted(repkeys)
 
-#         Returns
-#         ----------
-#         root : Root
-#             The standardized root. If inplace is True, return self
-#             after modification.
-#         """
-#         if self.is_centered:
-#             root = (sp.S(1), sp.S(1), sp.S(1))
-#         else:
-#             s = sum(self.root) / 3
-#             root = (self.root[0] / s, self.root[1] / s, self.root[2] / s)
-#             if cyc:
-#                 if not self.is_symmetric:
-#                     m = max(root)
-#                     for i in range(3):
-#                         if root[i] == m:
-#                             root = (root[i], root[(i+1)%3], root[(i+2)%3])
-#                             break
-#                 else:
-#                     m = max(root)
-#                     for i in range(3):
-#                         if root[i] == m and root[(i+2)%3] < m:
-#                             root = (root[i], root[(i+1)%3], root[(i+2)%3])
-#                             break
-
-#         if inplace:
-#             self.root = root
-#             return self
-#         return RootTernary(root)
-
-
-#     def approximate(self, tolerance = 1e-3, approximate_tolerance = 1e-6):
-#         """
-#         Approximate the root of a ternary equation, especially it is on the border or symmetric axis.
-#         Currently only supports constant roots.
-#         """
-#         def n(a, b, tol = tolerance):
-#             # whether a, b are close enough
-#             return abs(a - b) < tol
-#         a, b, c = self.root
-#         s = (a + b + c) / 3
-#         r = [a/s, b/s, c/s]
-#         if n(r[0], r[1]) and n(r[1], r[2]) and n(r[0], r[2]):
-#             return RootRationalTernary((1,1,1))
-
-#         r = [0 if n(x, 0) else x for x in r]
-#         if sum(x != 0 for x in r) == 1:
-#             # two of them are zero
-#             r = [0 if x == 0 else 1 for x in r]
-#             return RootRationalTernary(r)
-
-#         perms = [(0,1,2),(1,2,0),(2,0,1)]
-#         for perm in perms:
-#             if n(r[perm[0]], r[perm[1]]):
-#                 r[perm[2]] = r[perm[2]] / r[perm[0]]
-#                 r[perm[0]] = r[perm[1]] = 1
-#             elif n(r[perm[0]], 0):
-#                 r[perm[2]] = r[perm[2]] / r[perm[1]]
-#                 r[perm[1]] = 1
-
-#         for i in range(3):
-#             v = rationalize(r[i], rounding=.1, reliable=False)
-#             if n(v, r[i], approximate_tolerance):
-#                 r[i] = v
-
-#         return RootTernary((r[0], r[1], r[2]))
+        sorted_roots = [None] * len(roots)
+        for key, root in zip(repkeys, roots):
+            sorted_roots[key[-1]] = root
+        return Root(sorted_roots)

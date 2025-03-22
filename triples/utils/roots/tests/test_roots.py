@@ -103,3 +103,9 @@ def test_as_trig():
     assert rootn1n2 != rootn1n2_trig and sum(abs(_) for _ in (rootn1n2_trig.n(8) - rootn1n2.n(8))) < 1e-6\
         and (rootn1n2_trig[0].has(sin) or rootn1n2_trig[0].has(cos))\
         and not (rootn1n2_trig[0].has(asin) or rootn1n2_trig[0].has(acos))
+
+def test_approximate():
+    root = Root.from_uv(3, 7)
+    assert (root.n(10).approximate() - root).is_zero
+    root = Root.from_uv(7, 3)
+    assert (root.n(10).approximate() - root).is_zero
