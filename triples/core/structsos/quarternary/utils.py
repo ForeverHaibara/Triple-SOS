@@ -6,10 +6,10 @@ from ..utils import (
 )
 
 from ..pivoting import prove_univariate
-from ....utils.roots.rationalize import (
-    nroots, rationalize, rationalize_bound, univariate_intervals
+from ....utils import (
+    nroots, rationalize, rationalize_bound, univariate_intervals,
+    CyclicExpr, CyclicSum, CyclicProduct, SymmetricSum, SymmetricProduct
 )
-from ....utils import CyclicExpr, CyclicSum, CyclicProduct, SymmetricSum, SymmetricProduct
 
 a, b, c, d = sp.symbols("a b c d")
 

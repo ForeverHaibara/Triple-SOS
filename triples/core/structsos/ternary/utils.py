@@ -11,12 +11,11 @@ from ..utils import (
 
 from ..pivoting import prove_univariate, prove_univariate_interval
 from ...shared import SS
-from ....utils.roots.rationalize import (
+from ....utils import (
     nroots, rationalize, rationalize_bound, univariate_intervals,
-    square_perturbation, cancel_denominator, common_region_of_conics
+    square_perturbation, cancel_denominator, common_region_of_conics,
+    CyclicExpr, CyclicSum, CyclicProduct
 )
-from ....utils import CyclicExpr, CyclicSum, CyclicProduct
-
 
 def reflect_expression(expr: sp.Expr) -> sp.Expr:
     """

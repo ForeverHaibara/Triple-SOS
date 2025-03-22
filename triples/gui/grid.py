@@ -11,8 +11,7 @@ import sympy as sp
 import numpy as np
 # from sympy.plotting.experimental_lambdify import vectorized_lambdify
 
-from ..roots import Root
-from ..monomials import generate_monoms
+from ..utils import Root, generate_monoms
 
 class GridPoly():
     """

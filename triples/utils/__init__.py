@@ -14,11 +14,9 @@ from .expression import (
 )
 
 from .roots import (
-    Root,
-    univar_realroots, optimize_poly,
-    GridRender,
+    Root, univar_realroots, nroots, optimize_poly,
     findroot, find_nearest_root, findroot_resultant, kkt,
-    nroots, univariate_intervals, rationalize, rationalize_array, rationalize_bound,
+    univariate_intervals, rationalize, rationalize_array, rationalize_bound,
     rationalize_quadratic_curve, common_region_of_conics, square_perturbation,
     cancel_denominator,
     rpa_monotonic, rpa_gmop, rpa_polyopt
@@ -28,13 +26,11 @@ from .roots import (
 __all__ = [
     'MonomialManager', 'generate_monoms', 'generate_expr', 'arraylize_np', 'arraylize_sp', 'invarraylize',
     'preprocess_text', 'pl', 'poly_get_factor_form', 'poly_get_standard_form', 'coefficient_triangle_latex', 'PolyReader',
-    'univar_realroots', 'optimize_poly',
     'Coeff', 'CyclicExpr', 'CyclicSum', 'CyclicProduct', 'SymmetricSum', 'SymmetricProduct',
     'is_cyclic_expr', 'rewrite_symmetry', 'verify_symmetry', 'identify_symmetry', 'identify_symmetry_from_lists',
     'Solution', 'SolutionSimple',
     'pqr_sym', 'pqr_cyc', 'pqr_ker',
-    'Root',
-    'GridRender',
+    'Root', 'univar_realroots', 'optimize_poly',
     'findroot', 'find_nearest_root', 'findroot_resultant', 'kkt',
     'nroots', 'univariate_intervals', 'rationalize', 'rationalize_array', 'rationalize_bound',
     'rationalize_quadratic_curve', 'common_region_of_conics', 'square_perturbation',

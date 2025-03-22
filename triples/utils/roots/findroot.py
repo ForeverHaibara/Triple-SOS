@@ -1,6 +1,6 @@
 from collections import deque
 from itertools import product
-from typing import Union, Callable, List, Optional, Tuple
+from typing import Union, Callable, List, Optional, Tuple, Any
 
 import numpy as np
 import sympy as sp
@@ -9,8 +9,8 @@ from sympy.polys.polytools import Poly
 from sympy.plotting.experimental_lambdify import vectorized_lambdify
 from scipy.optimize import minimize
 
-from .grid import GridRender, GridPoly
-from .rationalize import nroots, rationalize
+from .polysolve import nroots
+from .rationalize import rationalize
 from .roots import Root
 from ..expression import Coeff
 
@@ -173,7 +173,7 @@ def optimize_discriminant(discriminant, soft = False, verbose = False):
 def findroot(
         poly: Poly,
         most: int = 5,
-        grid: Optional[GridPoly] = None,
+        grid: Optional[Any] = None,
         method: str = 'nsolve',
         standardize_method: str = 'partial',
         verbose: bool = False,
@@ -211,8 +211,8 @@ def findroot(
         # not implemented
         return []
 
-    if grid is None:
-        grid = GridRender.render(poly, with_color=False)
+    # if grid is None:
+    #     grid = GridRender.render(poly, with_color=False)
 
     roots = []
     if len(poly.gens) == 3 and (poly.domain in (sp.polys.ZZ, sp.polys.QQ, sp.polys.RR)):
@@ -261,7 +261,7 @@ class _findroot_helper():
     @classmethod
     def findroot(cls, 
             poly: Poly,
-            grid: GridPoly, 
+            grid: Any, #GridPoly, 
             method: str = 'nsolve',
             standardize_method: str = 'simplex',
         ) -> List[Root]:
@@ -372,7 +372,7 @@ class _findroot_helper():
         return roots
 
     @classmethod
-    def _initial_guess(cls, grid: GridPoly) -> List[Root]:
+    def _initial_guess(cls, grid) -> List[Root]:
         """
         Given grid coordinate and grid value, search for local minima.    
         """
