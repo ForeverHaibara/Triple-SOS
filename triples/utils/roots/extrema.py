@@ -28,6 +28,18 @@ def polysubs(poly: Poly, subs: Dict[Symbol, Expr], symbols: List[Symbol]) -> Pol
         return poly.expand()
     return poly.as_poly(*symbols)
 
+def _infer_symbols(symbols: List[Symbol], poly: Poly, *constraint_lists: List[Poly]) -> List[Symbol]:
+    """Infer the symbols from the polynomial and constraints."""
+    if symbols is None:
+        if isinstance(poly, Poly):
+            symbols = poly.gens
+        else:
+            symbols = poly.free_symbols
+            for c in constraint_lists:
+                symbols = symbols.union(*[_.free_symbols for _ in c])
+            symbols = sorted(symbols, key=lambda x: x.name)
+    return symbols
+
 def _get_minimal(poly: Poly, points: List[Tuple[Expr]]) -> List[Tuple[Expr]]:
     """
     Get the minimal points in the list of points up to `eps` precision.
@@ -541,22 +553,15 @@ def optimize_poly(poly: Union[Poly, Expr], ineq_constraints: List[Union[Poly, Ex
      (CRootOf(a**3 - 6*a**2 + 5*a - 1, 1), CRootOf(b**3 - 5*b**2 + 6*b - 1, 0), 1),
      (CRootOf(a**3 - 6*a**2 + 5*a - 1, 2), CRootOf(b**3 - 5*b**2 + 6*b - 1, 2), 1)]
     """
-    if symbols is None:
-        if isinstance(poly, Poly):
-            symbols = poly.gens
-        else:
-            symbols = set.union(poly.free_symbols,
-                *[_.free_symbols for _ in ineq_constraints],
-                *[_.free_symbols for _ in eq_constraints])
-            symbols = sorted(symbols, key=lambda x: x.name)
-    if not (objective in ('min', 'max', 'all')):
-        raise ValueError('Objective must be either "min" or "max" or "all".')
+    symbols = _infer_symbols(symbols, poly, ineq_constraints, eq_constraints)
     if len(symbols) == 0:
         return []
+    if not (objective in ('min', 'max', 'all')):
+        raise ValueError('Objective must be either "min" or "max" or "all".')
 
     def polylize(f, symbols):
         if not isinstance(f, Poly) or not f.domain.is_Numerical:
-            f = Poly(f, *symbols) #, extension=True)
+            f = Poly(f.doit(), *symbols) #, extension=True)
         if f is None:
             raise PolificationFailed({}, f, f)
         if not (f.domain.is_Numerical and f.domain.is_Exact):

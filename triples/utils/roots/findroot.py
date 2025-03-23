@@ -211,8 +211,9 @@ def findroot(
         # not implemented
         return []
 
-    # if grid is None:
-    #     grid = GridRender.render(poly, with_color=False)
+    if grid is None:
+        from ...gui.grid import GridRender
+        grid = GridRender.render(poly, with_color=False)
 
     roots = []
     if len(poly.gens) == 3 and (poly.domain in (sp.polys.ZZ, sp.polys.QQ, sp.polys.RR)):

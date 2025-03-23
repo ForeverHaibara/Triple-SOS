@@ -14,7 +14,7 @@ from .expression import (
 )
 
 from .roots import (
-    Root, univar_realroots, nroots, optimize_poly,
+    Root, univar_realroots, nroots, optimize_poly, numeric_optimize_poly,
     findroot, find_nearest_root, findroot_resultant, kkt,
     univariate_intervals, rationalize, rationalize_array, rationalize_bound,
     rationalize_quadratic_curve, common_region_of_conics, square_perturbation,
@@ -30,7 +30,7 @@ __all__ = [
     'is_cyclic_expr', 'rewrite_symmetry', 'verify_symmetry', 'identify_symmetry', 'identify_symmetry_from_lists',
     'Solution', 'SolutionSimple',
     'pqr_sym', 'pqr_cyc', 'pqr_ker',
-    'Root', 'univar_realroots', 'optimize_poly',
+    'Root', 'univar_realroots', 'optimize_poly', 'numeric_optimize_poly',
     'findroot', 'find_nearest_root', 'findroot_resultant', 'kkt',
     'nroots', 'univariate_intervals', 'rationalize', 'rationalize_array', 'rationalize_bound',
     'rationalize_quadratic_curve', 'common_region_of_conics', 'square_perturbation',
