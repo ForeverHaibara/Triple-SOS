@@ -6,15 +6,15 @@ uses a heuristic approach to compute the extrema of the polynomial.
 """
 from functools import wraps, partial
 from itertools import product
-from typing import List, Dict, Tuple, Union
+from typing import List, Dict, Tuple, Union, Callable
 
 import sympy as sp
 from sympy import Symbol, Float, Expr, Poly, Rational
 from sympy.polys.polyerrors import BasePolynomialError, PolificationFailed, GeneratorsNeeded
 from sympy.polys.polytools import resultant
-from sympy.polys.rootoftools import ComplexRootOf as CRootOf
 
 from .polysolve import univar_realroots, solve_poly_system_crt, PolyEvalf, _filter_trivial_system
+from .roots import Root
 
 # Comparison of tuples of sympy Expressions, compatible with sympy <= 1.9
 default_sort_key = lambda x: tuple(_.sort_key() for _ in x) if not isinstance(x, Expr) else x.sort_key()
@@ -39,6 +39,25 @@ def _infer_symbols(symbols: List[Symbol], poly: Poly, *constraint_lists: List[Po
                 symbols = symbols.union(*[_.free_symbols for _ in c])
             symbols = sorted(symbols, key=lambda x: x.name)
     return symbols
+
+def polylize_input(poly: Expr, ineq_constraints: List[Expr], eq_constraints: List[Expr], symbols: List[Symbol],
+        check_poly: Callable=None) -> Tuple[Poly, List[Poly], List[Poly]]:
+    """Convert input expressions to sympy polynomial instances."""
+    if check_poly is None:
+        check_poly = lambda *args, **kwargs: True
+    def polylize(f, symbols):
+        f = sp.sympify(f)
+        if not isinstance(f, Poly) or not f.domain.is_Numerical:
+            f = Poly(f.doit(), *symbols) #, extension=True)
+        if f is None:
+            raise PolificationFailed({}, f, f)
+        if not check_poly(f):
+            raise TypeError('Polynomial domains must be exact.')
+        return f
+    poly = polylize(poly, symbols)
+    ineq_constraints = [polylize(ineq, symbols) for ineq in ineq_constraints]
+    eq_constraints = [polylize(eq, symbols) for eq in eq_constraints]
+    return poly, ineq_constraints, eq_constraints
 
 def _get_minimal(poly: Poly, points: List[Tuple[Expr]]) -> List[Tuple[Expr]]:
     """
@@ -86,7 +105,7 @@ def kkt(
         fj: bool = False,
         with_self: bool = False
     ) -> Tuple[List[Poly], Tuple[Tuple[Symbol], Tuple[Symbol], Tuple[Symbol], Tuple[Symbol]]]:
-    """
+    r"""
     Compute the Karush-Kuhn-Tucker system of a function with inequality and equality constraints.
 
     Parameters
@@ -504,8 +523,8 @@ def _optimize_poly(poly: Poly, ineq_constraints: List[Poly], eq_constraints: Lis
 
 
 def optimize_poly(poly: Union[Poly, Expr], ineq_constraints: List[Union[Poly, Expr]] = [], eq_constraints: List[Union[Poly, Expr]] = [],
-        symbols: List[Symbol] = None, objective: str = 'min', return_dict: bool = False, max_different: int = 2
-    ) -> Union[List[Tuple[Expr]], List[Dict[Symbol, Expr]]]:
+        symbols: List[Symbol] = None, objective: str = 'min', return_type: str = 'tuple', max_different: int = 2
+    ) -> List[Root]:
     """
     Algebraically optimize a polynomial with given inequality and equality constraints
     using heuristic methods. It uses incomplete algorithm to balance the efficiency
@@ -527,8 +546,10 @@ def optimize_poly(poly: Union[Poly, Expr], ineq_constraints: List[Union[Poly, Ex
         When 'min', the function returns the global minimizers
         When 'max', the function returns the global maximizers.
         When 'all', the function returns all recognized extrema.
-    return_dict : bool
-        Whether to return the result as a list of dictionaries.
+    return_type : str
+        The returned type, should be one of "tuple", "root" or "dict".
+        Warning: "root" might spend a lot of time constructing
+        the algebraic Root instances.
     max_different : int
         The maximum number of different variables to consider.
         This is a heuristic to accelerate the computation.
@@ -558,18 +579,13 @@ def optimize_poly(poly: Union[Poly, Expr], ineq_constraints: List[Union[Poly, Ex
         return []
     if not (objective in ('min', 'max', 'all')):
         raise ValueError('Objective must be either "min" or "max" or "all".')
+    if not (return_type in ('root', 'tuple', 'dict')):
+        raise ValueError('Return type must be either "root" or "tuple" or "dict".')
 
-    def polylize(f, symbols):
-        if not isinstance(f, Poly) or not f.domain.is_Numerical:
-            f = Poly(f.doit(), *symbols) #, extension=True)
-        if f is None:
-            raise PolificationFailed({}, f, f)
-        if not (f.domain.is_Numerical and f.domain.is_Exact):
-            raise TypeError('Polynomial domains must be exact.')
-        return f
-    poly = polylize(poly, symbols)
-    ineq_constraints = [polylize(ineq, symbols) for ineq in ineq_constraints]
-    eq_constraints = [polylize(eq, symbols) for eq in eq_constraints]
+    poly, ineq_constraints, eq_constraints = polylize_input(
+        poly, ineq_constraints, eq_constraints, symbols=symbols,
+        check_poly=lambda p: p.domain.is_Numerical and p.domain.is_Exact
+    )
 
     solver = partial(_optimize_poly, max_different=max_different)
     points = []
@@ -593,6 +609,8 @@ def optimize_poly(poly: Union[Poly, Expr], ineq_constraints: List[Union[Poly, Ex
             points = _get_minimal(poly, points)
         points = sorted(points, key=default_sort_key)
 
-    if return_dict:
+    if return_type == 'root':
+        points = [Root(_) for _ in points]
+    elif return_type == 'dict':
         points = [dict(zip(symbols, _)) for _ in points]
     return points
