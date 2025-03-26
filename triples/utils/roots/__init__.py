@@ -6,10 +6,6 @@ from .extrema import kkt, optimize_poly
 
 from .num_extrema import numeric_optimize_poly
 
-from .findroot import (
-    findroot, find_nearest_root, findroot_resultant
-)
-
 from .rationalize import (
     univariate_intervals, rationalize, rationalize_array, rationalize_bound,
     rationalize_quadratic_curve, common_region_of_conics, square_perturbation,
@@ -21,8 +17,7 @@ from .monotonic_opt import rpa_monotonic, rpa_gmop, poly_as_dm, rpa_polyopt
 __all__ = [
     'Root',
     'univar_realroots', 'nroots',
-    'optimize_poly', 'numeric_optimize_poly',
-    'findroot', 'find_nearest_root', 'findroot_resultant', 'kkt',
+    'kkt', 'optimize_poly', 'numeric_optimize_poly',
     'nroots', 'univariate_intervals', 'rationalize', 'rationalize_array', 'rationalize_bound',
     'rationalize_quadratic_curve', 'common_region_of_conics', 'square_perturbation',
     'cancel_denominator',

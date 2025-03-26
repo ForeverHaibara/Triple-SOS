@@ -5,10 +5,7 @@ from typing import Optional, Dict, List, Tuple
 import sympy as sp
 from sympy import Poly
 
-from ...utils import (
-    findroot_resultant, Root,
-    MonomialManager, generate_monoms, arraylize_sp
-)
+from ...utils import optimize_poly, Root, MonomialManager, generate_monoms, arraylize_sp
 
 
 class _bilinear():
@@ -258,7 +255,7 @@ class RootSubspace():
         self.roots = []
 
         if self._nvars == 3 and poly.domain.is_Numerical:
-            self.roots = findroot_resultant(poly)
+            self.roots = optimize_poly(poly, [], [poly], return_type='root')
         elif self._nvars <= 10:
             self.roots = _findroot_binary(poly, symmetry)
 

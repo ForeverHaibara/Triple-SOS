@@ -5,10 +5,7 @@ import sympy as sp
 from sympy import Expr
 from sympy.simplify.sqrtdenest import _sqrt_match
 
-from ...utils import (
-    Root, find_nearest_root,
-    CyclicSum, CyclicProduct, Coeff
-)
+from ...utils import Root, CyclicSum, CyclicProduct, Coeff
 from ...utils import rationalize as _utils_rationalize
 
 a, b, c = sp.symbols('a b c')
@@ -21,6 +18,35 @@ def pslq(coeffs: List[float], *args, **kwargs) -> List[sp.Rational]:
 def rationalize(v: float, **kwargs) -> sp.Rational:
     """Wrapper of _utils_rationalize."""
     return _utils_rationalize(v.n(20), **kwargs) if not isinstance(v, sp.Rational) else v
+
+def find_nearest_root(poly, v, method = 'rootof'):
+    """
+    Find the nearest root of a univariate polynomial to a given value.
+    This helps select the closed-form root corresponding to a numerical value.
+
+    Parameters
+    ----------
+    poly : sympy.Poly
+        The polynomial to be solved.
+    v : float
+        The approximated root value.
+    method : str
+        One of 'roots' or 'rootof'.
+    """
+    if poly.degree() == 1:
+        c1, c0 = poly.all_coeffs()
+        return sp.Rational(-c0, c1)
+    v = v.n(20)
+    if method == 'roots':
+        roots = sp.polys.roots(poly)
+    elif method == 'rootof':
+        roots = poly.all_roots()
+    best, best_dist = None, None
+    for r in roots:
+        dist = abs(r.n(20) - v)
+        if best is None or dist < best_dist:
+            best, best_dist = r, dist
+    return best
 
 class _option():
     """

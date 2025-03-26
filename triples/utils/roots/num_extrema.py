@@ -2,7 +2,7 @@
 This module provides heuristic functions to optimize a polynomial
 with inequality and equality constraints NUMERICALLY.
 """
-from typing import List, Union, Tuple, Dict, Callable
+from typing import List, Union, Tuple, Dict, Optional, Callable
 import warnings
 
 import numpy as np
@@ -21,7 +21,27 @@ DEFAULT_SHGO_KWARGS = { # default values
 }
 
 class NumerFuncWrapper:
-    def __init__(self, symbols, free_symbols=None, embedding=None, **kwargs):
+    """
+    Class to convert sympy expressions to numerical functions.
+
+    Parameters
+    ----------
+    symbols : tuple of sympy.Symbol
+        The symbols in the expression.
+    free_symbols : tuple of sympy.Symbol, optional
+        The symbols that are free to vary. If None, all symbols are free.
+        If given, the function is defined as a function of the free symbols.
+        And free symbols are converted to symbols using the `embedding`
+        dictionary.
+    embedding : dict, optional
+        A dictionary mapping free symbols to symbols. Only to be used if
+        `free_symbols` is given.
+    kwargs : dict, optional
+        Additional keyword arguments to pass to `lambdify`.
+
+    """
+    def __init__(self, symbols: List[Symbol], free_symbols: Optional[List[Symbol]]=None,
+                        embedding: Optional[Dict[Symbol, Expr]]=None, **kwargs):
         self.symbols = symbols
         self.free_symbols = free_symbols
         self.embedding = embedding
@@ -32,13 +52,17 @@ class NumerFuncWrapper:
         """Number of free variables."""
         return len(self.symbols) if self.free_symbols is None else len(self.free_symbols)
 
-    def _make_embedding(self, embedding, **kwargs):
+    def _make_embedding(self, embedding: Dict[Symbol, Expr], **kwargs) -> Callable[[np.ndarray], np.ndarray]:
+        """
+        Make a function that maps free symbols to symbols.
+        """
         symbols, free_symbols = self.symbols, self.free_symbols
         if free_symbols is None:
             return None
         embedding = {k: lambdify(free_symbols, e, **kwargs) for k, e in embedding.items()}
         embedding_funcs = []
         for i, symbol in enumerate(symbols):
+            # TIP: be careful about the local variables in the lambda functions
             if symbol in embedding:
                 func = embedding[symbol]
                 embedding_funcs.append(lambda args, f=func: f(*args))
@@ -50,7 +74,11 @@ class NumerFuncWrapper:
         new_func = lambda x: np.array([f(x) for f in embedding_funcs])
         return new_func
 
-    def _make_jacobian(self, embedding, **kwargs):
+    def _make_jacobian(self, embedding: Dict[Symbol, Expr], **kwargs) -> Callable[[np.ndarray], np.ndarray]:
+        """
+        Make a function that computes the Jacobian matrix of the expression.
+        The returned shape is (len(free_symbols), len(symbols)).
+        """
         if self.free_symbols is None:
             return None
         diff_wrt = []
@@ -64,13 +92,26 @@ class NumerFuncWrapper:
         new_func = lambda x: np.vstack([f(x) for f in diff_wrt])
         return new_func
 
-    def wrap(self, func, jac=False, **kwargs):
+    def wrap(self, func: Expr, jac: bool=False, **kwargs) -> Callable[[np.ndarray], Union[float,np.ndarray]]:
+        """
+        Wrap a sympy expression into a numerical function.
+
+        Parameters
+        ----------
+        func : sympy.Expr or sympy.Poly
+            The expression to wrap.
+        jac : bool, optional
+            Whether to compute the Jacobian matrix instead of the function value.
+        kwargs : dict, optional
+            Additional keyword arguments to pass to `lambdify`.
+        """
         if not isinstance(func, Expr):
             func = func.as_expr()
         _wrapper = self._wrap_f if not jac else self._wrap_jac
         return _wrapper(func, **kwargs)
 
     def _wrap_f(self, f, **kwargs):
+        """Wrap a sympy expression into a numerical function."""
         symbols = self.symbols
         _new_func = lambdify(symbols, f, **kwargs)
         if self.free_symbols is None:
@@ -80,6 +121,7 @@ class NumerFuncWrapper:
         return new_func
 
     def _wrap_jac(self, f, **kwargs):
+        """Wrap a sympy expression into a numerical Jacobian function."""
         symbols = self.symbols
         jac = [lambdify(symbols, f.diff(s)) for s in symbols]
         if self.free_symbols is None:
@@ -89,7 +131,7 @@ class NumerFuncWrapper:
                 A = self.jacobian(args)
                 new_args = self.free_symbols_to_symbols(args)
                 b = np.array([_(*new_args) for _ in jac])
-                return A @ b
+                return A @ b # chain rule
         return new_func
 
 

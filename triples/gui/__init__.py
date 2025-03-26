@@ -1,3 +1,8 @@
+"""
+This module contains extensive and experimental tools for
+visualizations and interactions, etc. The API is not stable yet.
+"""
+
 from .sos_manager import SOS_Manager
 
 from .grid import GridPoly, GridRender
