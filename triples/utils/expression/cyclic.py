@@ -1114,24 +1114,33 @@ def identify_symmetry_from_lists(lst_of_lsts: List[List[sp.Poly]]) -> Permutatio
         if nvars > 2:
             candidates.append(_reflected(nvars))
 
-        # bi-symmetric group etc.
+    for perm in map(Permutation, candidates):
+        if all(verify_symmetry(l, perm) for l in lst_of_lsts):
+            verified.append(perm)
+    if len(verified) == 2:
+        # reflection + cyclic -> complete symmetric group
+        return PermutationGroup(*verified)
+
+    candidates = []
+    # bi-symmetric group etc.
+    if nvars > 3:
+        half = nvars // 2
+        p1 = _rotated(half) + _rotated(half, half)
+        p2 = _reflected(half) + _reflected(half, half)
+        p3 = list(range(half,half*2)) + list(range(half))
+        if nvars % 2 == 1:
+            for p in [p1, p2, p3]:
+                p.append(nvars - 1)
+                candidates.append(p)
+                p = [0] + [_ + 1 for _ in p[:-1]]
+                candidates.append(p)
+
+    if nvars > 2:
+        candidates.append(_rotated(nvars - 1) + [nvars - 1])
+        candidates.append([0] + _rotated(nvars - 1, 1))
         if nvars > 3:
-            half = nvars // 2
-            p1 = _rotated(half) + _rotated(half, half)
-            p2 = _reflected(half) + _reflected(half, half)
-            p3 = list(range(half,half*2)) + list(range(half))
-            if nvars % 2 == 1:
-                p1.append(nvars - 1)
-                p2.append(nvars - 1)
-                p3.append(nvars - 1)
-            candidates.append(p1)
-            candidates.append(p2)
-            candidates.append(p3)
-            
-        if nvars > 2:
-            candidates.append(_rotated(nvars - 1) + [nvars - 1])
-            if nvars > 3:
-                candidates.append(_reflected(nvars - 1) + [nvars - 1])
+            candidates.append(_reflected(nvars - 1) + [nvars - 1])
+            candidates.append([0] + _reflected(nvars - 1, 1))
 
     for perm in map(Permutation, candidates):
         if all(verify_symmetry(l, perm) for l in lst_of_lsts):

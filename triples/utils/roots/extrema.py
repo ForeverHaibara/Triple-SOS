@@ -6,15 +6,17 @@ uses a heuristic approach to compute the extrema of the polynomial.
 """
 from functools import wraps, partial
 from itertools import product
-from typing import List, Dict, Tuple, Union, Callable
+from typing import List, Dict, Tuple, Union, Optional, Callable, Generator
 
 import sympy as sp
 from sympy import Symbol, Float, Expr, Poly, Rational
 from sympy.polys.polyerrors import BasePolynomialError, PolificationFailed, GeneratorsNeeded
 from sympy.polys.polytools import resultant
+from sympy.combinatorics import PermutationGroup
 
 from .polysolve import univar_realroots, solve_poly_system_crt, PolyEvalf, _filter_trivial_system
 from .roots import Root
+from ..expression import identify_symmetry_from_lists
 
 # Comparison of tuples of sympy Expressions, compatible with sympy <= 1.9
 default_sort_key = lambda x: tuple(_.sort_key() for _ in x) if not isinstance(x, Expr) else x.sort_key()
@@ -28,7 +30,7 @@ def polysubs(poly: Poly, subs: Dict[Symbol, Expr], symbols: List[Symbol]) -> Pol
         return poly.expand()
     return poly.as_poly(*symbols)
 
-def _infer_symbols(symbols: List[Symbol], poly: Poly, *constraint_lists: List[Poly]) -> List[Symbol]:
+def _infer_symbols(symbols: Optional[List[Symbol]], poly: Poly, *constraint_lists: List[Poly]) -> List[Symbol]:
     """Infer the symbols from the polynomial and constraints."""
     if symbols is None:
         if isinstance(poly, Poly):
@@ -96,6 +98,49 @@ def _checkineq_decorator(func):
         points = [p for p in points if all(pevalf.polysign(_, p) >= 0 for _ in ineq_constraints)]
         return points
     return wrapper
+
+class PolyCombSymmetry:
+    """
+    Class to manipulate the combination of a polynomial list given a symmetry group.
+    """
+    def __init__(self, polys: List[Poly], symmetry: Optional[PermutationGroup]=None):
+        self.polys = polys
+        self.symmetry = symmetry
+        self.rep = [_.rep for _ in polys]
+        self.rep_dict = {r: i for i, r in enumerate(self.rep)}
+    def __len__(self) -> int:
+        return len(self.polys)
+    def generate(self) -> Generator[List[int], None, None]:
+        """Generate the combinations of the polynomials."""
+        if self.symmetry is None:
+            for comb in product([False, True], repeat=len(self.polys)):
+                yield tuple(i for i, j in enumerate(comb) if j)
+            return
+
+        def reorder(perm, poly):
+            gens = poly.gens
+            return poly.reorder(*perm(gens)).rep
+        checked = {}
+        cnt = 0
+        polys, rep_dict = self.polys, self.rep_dict
+        generators = [_ for _ in self.symmetry.generators if not _.is_identity]
+        for comb in product([False, True], repeat=len(self.polys)):
+            inds = tuple(i for i, j in enumerate(comb) if j)
+            if inds in checked:
+                continue
+            new_comb = True
+            new_checked = {inds: True}
+            for p in generators: # TODO: using elements might be more proper
+                new_inds = tuple(sorted([rep_dict.get(reorder(p, polys[i]), -1) for i in inds]))
+                if new_inds in checked:
+                    # print('Polys', [polys[i] for i in inds], 'equiv to', [polys[i] for i in new_inds])
+                    new_comb = False
+                    # break # is breaking correct?
+                new_checked[new_inds] = True
+            if new_comb:
+                checked.update(new_checked)
+                cnt += 1
+                yield inds
 
 def kkt(
         f: Union[Expr, Poly],
@@ -437,19 +482,42 @@ def _optimize_by_symbol_reduction(poly: Poly, ineq_constraints: List[Poly], eq_c
     return all_points
 
 
-@_checkineq_decorator
 def _optimize_by_ineq_comb(poly: Poly, ineq_constraints: List[Poly], eq_constraints: List[Poly],
-        symbols: Symbol, eliminate_func=None, solver=None) -> List[Tuple[Expr]]:
+        symbols: Symbol, eliminate_func=None, solver=None,
+        ineq_comb: Optional[PolyCombSymmetry]=None
+    ) -> List[Tuple[Expr]]:
     """
     Optimize a polynomial with inequality constraints by considering all possible
     combinations of active inequality constraints. After each dicision of active
     inequality constraints, the new system is first eliminated by `eliminate_func`
     and then passed into the downstream solver `solver`.
     """
+
+    if ineq_comb is None:
+        # decide all non-equivalent combinations of active ineq_constraints
+        # given a symmetry group 
+        symmetry = identify_symmetry_from_lists([[poly], ineq_constraints, eq_constraints])
+        ineq_comb = PolyCombSymmetry(ineq_constraints, symmetry)
+
+    #############################################
+    # always remove linear variables
+    symbols0 = symbols
+    outer_elim, eq_constraints = _eliminate_linear(eq_constraints, symbols)
+    if outer_elim is None: # inconsistent
+        return []
+
+    if len(outer_elim):
+        symbols = [s for s in symbols if s not in outer_elim]
+        poly = polysubs(poly, outer_elim, symbols)
+        ineq_constraints = [polysubs(_, outer_elim, symbols) for _ in ineq_constraints]
+    #############################################
+
     all_points = []
     elim = {}
-    for active in product([False, True], repeat=len(ineq_constraints)):
-        active_ineq0 = [ineq for ineq, act in zip(ineq_constraints, active) if act]
+    pevalf = PolyEvalf()
+
+    for active in ineq_comb.generate():
+        active_ineq0 = [ineq_constraints[i] for i in active]
         if eliminate_func is not None:
             elim, active_ineq = eliminate_func(active_ineq0, symbols)
         if elim is None: # inconsistent
@@ -460,17 +528,34 @@ def _optimize_by_ineq_comb(poly: Poly, ineq_constraints: List[Poly], eq_constrai
             # poly2 = poly.as_expr().xreplace(elim).as_poly(*symbols2)
             poly2 = polysubs(poly, elim, symbols2)
             eq_constraints2 = [polysubs(_, elim, symbols2) for _ in eq_constraints]
-            eq_constraints2 = _filter_trivial_system(eq_constraints2)
+            eq_constraints2 = _filter_trivial_system(active_ineq + eq_constraints2)
             if eq_constraints2 is None:
                 continue
         else:
-            poly2, eq_constraints2, symbols2 = poly, eq_constraints, symbols
+            poly2, eq_constraints2, symbols2 = poly, active_ineq + eq_constraints, symbols
         
-        points = solver(poly2, {}, active_ineq + eq_constraints2, symbols2)
+        points = solver(poly2, {}, eq_constraints2, symbols2)
 
+        #############################################
         # restore the eliminated variables
         points = _restore_solution(points, elim, symbols, symbols2)
+        
+        # check inactive ineqs >= 0
+        inactive_ineq = [ineq_constraints[i] for i in set(range(len(ineq_constraints))) - set(active)]
+        points = [_ for _ in points if all(pevalf.polysign(ineq, _) >= 0 for ineq in inactive_ineq)]
+
+        points = _restore_solution(points, outer_elim, symbols0, symbols)
+        if len(active_ineq0):
+            # restore the permutations of points given the symmetry group
+            points = set(points)
+            for p in ineq_comb.symmetry.elements:
+                points.update([tuple(p(point)) for point in points])
+            points = list(points)
+        #############################################
+
         all_points.extend(points)
+        # print('Time =', time()-time0, 'Active =', active_ineq0, 'Points =', points)
+
     return all_points
 
 
@@ -479,7 +564,6 @@ def _optimize_poly(poly: Poly, ineq_constraints: List[Poly], eq_constraints: Lis
     """
     Internal function to optimize a polynomial with inequality and equality constraints.
     """
-    symbols0 = symbols
     # TODO: sometimes there are partial homogeneity
     # For instance, (a^2+b^2+c^2-a*b-b*c-c*a)+(x^6+y^6+z^6-x^2*y^2*z^2)
     # is homogeneous in (a,b,c) and also in (x,y,z), but not in (a,b,c,x,y,z),
@@ -490,35 +574,26 @@ def _optimize_poly(poly: Poly, ineq_constraints: List[Poly], eq_constraints: Lis
     dehomogenize = {}
     if poly.is_homogeneous and all(_.is_homogeneous for _ in ineq_constraints)\
         and all(_.is_homogeneous for _ in eq_constraints):
-        gen = symbols[-1]
-        one = sp.S.One
-        dehomogenize[gen] = one
-        poly = poly.eval(gen, one)
-        ineq_constraints = [_.eval(gen, one) for _ in ineq_constraints]
-        eq_constraints = [_.eval(gen, one) for _ in eq_constraints]
-        symbols = symbols[:-1]
 
-    # always remove linear variables
-    elim_linear, eq_constraints = _eliminate_linear(eq_constraints, symbols)
-    if elim_linear is None: # inconsistent
-        return []
-    elim_linear.update(dehomogenize)
+        # # WARNING: Setting one of symbols to 1 will break the symmetry,
+        # # which causes `ineq_comb` selecting insufficient combinations.
+        # gen = symbols[-1]
+        # one = sp.S.One
+        # dehomogenize[gen] = one
+        # poly = poly.eval(gen, one)
+        # ineq_constraints = [_.eval(gen, one) for _ in ineq_constraints]
+        # eq_constraints = [_.eval(gen, one) for _ in eq_constraints]
+        # symbols = symbols[:-1]
 
-    if len(elim_linear):
-        symbols = [s for s in symbols if s not in elim_linear]
-        poly = polysubs(poly, elim_linear, symbols)
-        ineq_constraints = [polysubs(_, elim_linear, symbols) for _ in ineq_constraints]
-
-    # if len(symbols) > max_different:
-    #     return []
+        # This should be eliminated by `_eliminate_linear`
+        eq_constraints.append(Poly(sum(symbols) - 1, *symbols))
 
     solver = partial(_optimize_by_symbol_reduction, max_different=max_different,
         solver=partial(_optimize_by_eq_kkt, max_different=max_different)
     )
     points = _optimize_by_ineq_comb(poly, ineq_constraints, eq_constraints, symbols,
-        eliminate_func = _eliminate_linear, solver=solver)
+        eliminate_func=_eliminate_linear, solver=solver)
 
-    points = _restore_solution(points, elim_linear, symbols0, symbols)
     return points
 
 
