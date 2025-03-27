@@ -381,7 +381,12 @@ class SOSProblem():
         self._eqvec = eqvec
 
         if roots is None:
-            roots = optimize_poly(self.poly, ineq_constraints, eq_constraints + [self.poly], return_type='root')
+            if self.poly.domain.is_ZZ or self.poly.domain.is_QQ:
+                roots = optimize_poly(self.poly, ineq_constraints, eq_constraints + [self.poly], return_type='root')
+            else:
+                # TODO: clean this
+                from ..sdpsos.manifold import _findroot_binary
+                roots = _findroot_binary(self.poly, symmetry=self._symmetry)
         self.manifold.roots = roots
         _constrain_nullspace(sdp, ineq_constraints, eq_constraints, self.manifold,
                              deparametrize=deparametrize, verbose=verbose)

@@ -67,7 +67,7 @@ class PolyEvalf:
         poly = poly.set_domain(domain)
         return poly(*(p.n(n) for p in point))
 
-    def polysign(self, poly, point, max_tries=4):
+    def polysign(self, poly, point, max_tries=3):
         """Infer the sign of a polynomial at a point numerically."""
         if all(isinstance(_, Rational) for _ in point):
             v = poly(*point)
