@@ -59,6 +59,13 @@ class PolyEvalf:
     dps = 15
     def polyeval(self, poly, point, n=dps):
         """Evaluate a polynomial at a point numerically."""
+        if poly is sp.S.Zero or (isinstance(poly, Poly) and poly.is_zero):
+            return sp.S.Zero
+        if len(point) == 0:
+            v = poly.as_expr()
+            if not isinstance(v, Rational):
+                v = v.n(n)
+            return v
         if all(isinstance(_, Rational) for _ in point):
             return poly(*point)
 
@@ -70,7 +77,7 @@ class PolyEvalf:
     def polysign(self, poly, point, max_tries=3):
         """Infer the sign of a polynomial at a point numerically."""
         if all(isinstance(_, Rational) for _ in point):
-            v = poly(*point)
+            v = self.polyeval(poly, point)
             return 1 if v > 0 else (0 if v == 0 else -1)
         def try_dps(dps, tries):
             for i in range(tries):

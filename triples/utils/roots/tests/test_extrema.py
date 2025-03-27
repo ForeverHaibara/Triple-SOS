@@ -1,5 +1,5 @@
 import sympy as sp
-from sympy.abc import a,b,c,d,x,y,z,w
+from sympy.abc import a,b,c,d,n,x,y,z,w
 
 from ..extrema import optimize_poly
 from ....utils import CyclicSum
@@ -48,3 +48,7 @@ def test_extrema():
 def test_extrema_max_different():
     assert optimize_poly((a-2*b+2)**4+(b-c-1)**2+(c+2*a-3*d-1)**2+(d-a+3)**4,max_different=4)\
         == [(16,9,8,13)]
+
+def test_extrema_issues():
+    # this should exit successfully and return nothing since (0,0,0) is not feasible
+    assert optimize_poly(z-2*n*x+2*n-1,[z,n-1,n,x,(z-1-(2*n)*(x-1))],[n,z,x]) == []

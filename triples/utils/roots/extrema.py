@@ -287,7 +287,9 @@ def _optimize_by_eq_kkt(poly, ineq_constraints, eq_constraints, symbols,
     or use the upstream `_optimize_by_ineq_comb` instead.
     """
     if len(symbols) == 0:
-        return [tuple()]
+        if all(_ is sp.S.Zero or (isinstance(_, Poly) and _.is_zero) for _ in eq_constraints):
+            return [tuple()]
+        return []
     elif len(symbols) > max_different:
         return []
 
@@ -346,7 +348,7 @@ def _optimize_by_eq_kkt(poly, ineq_constraints, eq_constraints, symbols,
     sol = [tuple(_[i] for i in symbinds) for _ in sol]
     return sol
 
-def _eliminate_linear(polys, symbols):
+def _eliminate_linear(polys, symbols) -> Tuple[Dict[Symbol, Expr], List[Poly]]:
     """Eliminate linear symbols in the eq_constraints."""
     has_eliminated = True
     eliminated = {}
@@ -383,12 +385,18 @@ def _eliminate_linear(polys, symbols):
         rest_inds = set(range(len(polys))) - new_eliminated_polys
         new_eliminated_polys = [polys[i] for i in new_eliminated_polys]
 
+        # TODO: clean this
         linsys = sp.linear_eq_to_matrix(
             [_.as_expr() for _ in new_eliminated_polys], new_eliminated_symbols)
         sol = sp.linsolve(linsys, *new_eliminated_symbols)
         if sol is sp.S.EmptySet or len(sol) == 0:
             return None, polys
         sol = sol[0] if not isinstance(sol, sp.FiniteSet) else sol.args[0]
+        eliminated_set = set(new_eliminated_symbols)
+        if any(_.free_symbols.intersection(eliminated_set) for _ in sol):
+            # Underdetermined system -> nonzero dimensional variety
+            # TODO: handle this properly
+            return None, polys
         sol = dict(zip(new_eliminated_symbols, sol))
 
         symbols = [s for s in symbols if s not in new_eliminated_symbols]
@@ -483,8 +491,7 @@ def _optimize_by_symbol_reduction(poly: Poly, ineq_constraints: List[Poly], eq_c
 
 
 def _optimize_by_ineq_comb(poly: Poly, ineq_constraints: List[Poly], eq_constraints: List[Poly],
-        symbols: Symbol, eliminate_func=None, solver=None,
-        ineq_comb: Optional[PolyCombSymmetry]=None
+        symbols: Symbol, eliminate_func=None, solver=None, symmetry: Optional[PermutationGroup]=None
     ) -> List[Tuple[Expr]]:
     """
     Optimize a polynomial with inequality constraints by considering all possible
@@ -493,11 +500,11 @@ def _optimize_by_ineq_comb(poly: Poly, ineq_constraints: List[Poly], eq_constrai
     and then passed into the downstream solver `solver`.
     """
 
-    if ineq_comb is None:
-        # decide all non-equivalent combinations of active ineq_constraints
-        # given a symmetry group 
+    # decide all non-equivalent combinations of active ineq_constraints
+    # given a symmetry group
+    if symmetry is None:
         symmetry = identify_symmetry_from_lists([[poly], ineq_constraints, eq_constraints])
-        ineq_comb = PolyCombSymmetry(ineq_constraints, symmetry)
+    ineq_comb = PolyCombSymmetry(ineq_constraints, symmetry)
 
     #############################################
     # always remove linear variables
@@ -570,6 +577,8 @@ def _optimize_poly(poly: Poly, ineq_constraints: List[Poly], eq_constraints: Lis
     # and the variety of the KKT system is not zero-dimensional.
     # HOW TO DEAL WITH THIS?
 
+    symmetry = identify_symmetry_from_lists([[poly], ineq_constraints, eq_constraints])
+
     # TODO 2: dehomogenize shall we consider x = 0?
     dehomogenize = {}
     if poly.is_homogeneous and all(_.is_homogeneous for _ in ineq_constraints)\
@@ -592,7 +601,7 @@ def _optimize_poly(poly: Poly, ineq_constraints: List[Poly], eq_constraints: Lis
         solver=partial(_optimize_by_eq_kkt, max_different=max_different)
     )
     points = _optimize_by_ineq_comb(poly, ineq_constraints, eq_constraints, symbols,
-        eliminate_func=_eliminate_linear, solver=solver)
+        eliminate_func=_eliminate_linear, solver=solver, symmetry=symmetry)
 
     return points
 
