@@ -60,7 +60,8 @@ def _algebraic_extension(vec: List[ANP], domain: Domain) -> sp.Matrix:
     def default(vec, domain):
         # Fails to convert to a matrix of rational numbers:
         # return the original vector as a matrix.
-        sdm = SDM({i: {0: x} for i, x in enumerate(vec) if x != 0}, (len(vec), 1), domain)
+        zero = domain.zero
+        sdm = SDM({i: {0: x} for i, x in enumerate(vec) if x != zero}, (len(vec), 1), domain)
         return sdm
 
     rep, mod, sdm = None, None, None
@@ -77,7 +78,7 @@ def _algebraic_extension(vec: List[ANP], domain: Domain) -> sp.Matrix:
 
     if mod is not None and rep is not None:
         mod = mod.to_list() if hasattr(mod, 'to_list') else mod
-        zero = domain.zero
+        zero = 0
 
         sdm = {}
         for row, x in enumerate(vec):
@@ -510,7 +511,8 @@ class Root():
                     powers = [order_m - order_diff for order_m, order_diff in zip(monom, diff)]
                     vec[ind] = int(sp.prod(dervs)) * _single_power(powers)
 
-        sdm = SDM({i: {0: x} for i, x in enumerate(vec) if x != 0}, (len(vec), 1), self.domain)
+        zero = self.domain.zero
+        sdm = SDM({i: {0: x} for i, x in enumerate(vec) if x != zero}, (len(vec), 1), self.domain)
         vec = sp.Matrix._fromrep(DomainMatrix.from_rep(sdm))
         if numer:
             vec = np.array(vec).astype(np.float64).flatten()

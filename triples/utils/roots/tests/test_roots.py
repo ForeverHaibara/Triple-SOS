@@ -2,6 +2,7 @@ import sympy as sp
 from sympy import sqrt, sin, cos, asin, acos, pi, I, Poly, Rational, CRootOf
 from sympy.abc import a, b, c, x
 from sympy.combinatorics import SymmetricGroup
+from sympy.polys.matrices.sdm import SDM
 from sympy.testing.pytest import raises
 from sympy.external.importtools import version_tuple
 
@@ -51,6 +52,15 @@ def test_as_vec_and_span():
 
     assert sp.Eq(Root((1,2,3,4)).span(3, diff=(0,0,0,1), normalize=True) * 4**2*3,
             Root((1,2,3,4)).span(3, diff=(0,0,0,1), normalize=False))
+
+    # zero must not in rep
+    root = Root((0, 1 - CRootOf(5*b**2 - 5*b + 1, 0), CRootOf(5*b**2 - 5*b + 1, 0)))
+    for mat in (root.as_vec(3), root.span(3), root.span(3, normalize=True)):
+        rep = mat._rep.rep
+        if isinstance(rep, SDM):
+            zero = rep.domain.zero
+            assert all(all(v != zero for v in row.values()) for row in rep.values())
+
 
 def test_cyclic_sum():
     assert Root((sqrt(2),)).cyclic_sum((5,)) == 4*sqrt(2)

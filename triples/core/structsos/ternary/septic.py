@@ -1,3 +1,5 @@
+from itertools import product
+
 import sympy as sp
 
 from .quartic import sos_struct_quartic
@@ -36,11 +38,16 @@ def optimize_discriminant(discriminant, soft = False, verbose = False):
     if v <= 0:
         return {x: a, y: b}
 
+    def _compute_hessian(f, symbols):
+        x, y = symbols
+        f = f.as_poly(x, y)
+        return f.diff(x), f.diff(y), f.diff(x, x), f.diff(x, y), f.diff(y, y)
+
     if v > 0:
         a = a * 1.0
         b = b * 1.0
-        dervs = _compute_hessian(discriminant, (x, y), vectorized=False)
-        # x =[a',b'] <- x - inv(nabla)^-1 @ grad
+        dervs = _compute_hessian(discriminant, (x, y))
+        # x = [a',b'] <- x - inv(nabla)^-1 @ grad
         for i in range(20):
             lasta , lastb = a , b
             da_, db_, da2_, dab_, db2_ = [f(a,b) for f in dervs]

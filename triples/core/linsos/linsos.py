@@ -53,7 +53,8 @@ def _prepare_tangents(poly, prepared_tangents = [], roots = [], ineq_constraints
         for degree in range(1, 8):
             # TODO: nullspace is not good
             # TODO2: include ineq constraints
-            mat = sp.Matrix.hstack(*[r.span(degree) for r in roots]).T.nullspace()
+            mat = sp.Matrix.hstack(*[r.span(degree) for r in roots])
+            mat = mat.T.nullspace()
             if not mat:
                 continue
             monomial_manager = MonomialManager(len(symbols))
