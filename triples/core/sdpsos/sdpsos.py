@@ -15,7 +15,7 @@ from .solution import SolutionSDP
 from ..shared import sanitize_input, sanitize_output, identify_symmetry_from_lists, clear_polys_by_symmetry
 from ...sdp import SDPProblem
 from ...sdp.arithmetic import solve_csr_linear
-from ...utils import arraylize_sp, Coeff, CyclicExpr, generate_monoms, MonomialManager, Root
+from ...utils import arraylize_sp, Coeff, CyclicExpr, generate_monoms, MonomialManager, Root, optimize_poly
 
 
 def _define_mapping(nvars: int, degree: int, monomial: Tuple[int, ...], symmetry: MonomialManager, half: bool = True) -> Callable[[int, int], Tuple[int, int]]:
@@ -380,6 +380,9 @@ class SOSProblem():
         self._sdp = sdp
         self._eqvec = eqvec
 
+        if roots is None:
+            roots = optimize_poly(self.poly, ineq_constraints, eq_constraints + [self.poly], return_type='root')
+        self.manifold.roots = roots
         _constrain_nullspace(sdp, ineq_constraints, eq_constraints, self.manifold,
                              deparametrize=deparametrize, verbose=verbose)
 

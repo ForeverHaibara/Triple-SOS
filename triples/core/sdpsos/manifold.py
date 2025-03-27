@@ -254,10 +254,10 @@ class RootSubspace():
         self.convex_hull = None # deprecated
         self.roots = []
 
-        if self._nvars == 3 and poly.domain.is_Numerical:
-            self.roots = optimize_poly(poly, [], [poly], return_type='root')
-        elif self._nvars <= 10:
-            self.roots = _findroot_binary(poly, symmetry)
+        # if self._nvars == 3 and poly.domain.is_Numerical:
+        #     self.roots = optimize_poly(poly, [], [poly], return_type='root')
+        # elif self._nvars <= 10:
+        #     self.roots = _findroot_binary(poly, symmetry)
 
         # self.roots = [r for r in self.roots if not r.is_corner]
         self._additional_nullspace = {}

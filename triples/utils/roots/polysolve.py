@@ -56,21 +56,31 @@ class PolyEvalf:
     """
     Class to evaluate a polynomial at a point with numerical precision.
     """
-    prec = 18
-    def polyeval(self, poly, point, n=prec):
+    dps = 15
+    def polyeval(self, poly, point, n=dps):
         """Evaluate a polynomial at a point numerically."""
         if all(isinstance(_, Rational) for _ in point):
             return poly(*point)
+
+        # high dps should be careful with the context domain
+        domain = sp.RealField(dps=n) if n != 15 else sp.RR
+        poly = poly.set_domain(domain)
         return poly(*(p.n(n) for p in point))
 
-    def polysign(self, poly, point):
+    def polysign(self, poly, point, max_tries=4):
         """Infer the sign of a polynomial at a point numerically."""
-        prec = self.prec
-        v = self.polyeval(poly, point, n=prec+2).n(prec).n(prec*2//3, chop=True)
-        eps = sp.Float(f'1e-{prec//3}')
-        if -eps < v < eps:
+        if all(isinstance(_, Rational) for _ in point):
+            v = poly(*point)
+            return 1 if v > 0 else (0 if v == 0 else -1)
+        def try_dps(dps, tries):
+            for i in range(tries):
+                v = self.polyeval(poly, point, n=dps) # .n(dps*2//3, chop=True)
+                if -1 < v*10**(dps//3) < 1:
+                    dps = dps * 2
+                    continue
+                return 1 if v > 0 else -1
             return 0
-        return 1 if v > 0 else -1
+        return try_dps(self.dps, max_tries)
 
 def univar_realroots(poly: Union[Poly, Expr], symbol: Symbol) -> List[Union[Rational, CRootOf]]: #, max_degree: int = 30):
     """

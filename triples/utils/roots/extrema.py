@@ -71,7 +71,7 @@ def _get_minimal(poly: Poly, points: List[Tuple[Expr]]) -> List[Tuple[Expr]]:
     original_points = points
 
     pevalf = PolyEvalf()
-    eps = Float(f'1e-{pevalf.prec//3}')
+    eps = Float(f'1e-{pevalf.dps//3}')
     f0 = pevalf.polyeval(poly, points[0])
     points = [points[0]]
     for point in original_points[1:]:
