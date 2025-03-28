@@ -411,6 +411,8 @@ class Root():
         """
         if not (len(poly.gens) == self.nvars):
             raise ValueError('The number of variables in the polynomial does not match the root.')
+        if (not poly.domain.is_Numerical):
+            return self.subs(poly.as_expr(), poly.gens)
         return self.to_sympy(self._subs_poly_rep(poly))
 
     def subs(self, expr: Union[sp.Basic], symbols: Optional[List[Symbol]] = None) -> Union[sp.Basic]:

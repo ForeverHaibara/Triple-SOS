@@ -58,20 +58,31 @@ def _decomp_as_sos(
     """
     Convert a {key: (U, S)} dictionary to sum of squares.
     """
-    def compute_cyc_sum(expr: sp.Expr) -> sp.Expr:
+    def compute_cyc_sum_of_squares(coeff, key_primitive, poly: sp.Poly) -> sp.Expr:
+        """Computes symmetry.cyclic_sum(coeff * key_primitive[0] * key_primitive[1] * poly.as_expr()**2,
+        and returns a pretty expression."""
         # if isinstance(expr, sp.Add):
         #     expr = sp.UnevaluatedExpr(expr)
-        return symmetry.cyclic_sum(signsimp(expr), gens).together()
+        coeff, key = coeff * key_primitive[0], key_primitive[1]
+        if factor:
+            c, parts = poly.factor_list()
+            coeff = coeff * c**2
+            exprs = [p.as_expr()**(2*d) for p, d in parts]
+            expr = sp.Mul(key, *exprs)
+        else:
+            c, poly = poly.primitive()
+            coeff = coeff * c**2
+            expr = key * poly.as_expr()**2
+        return coeff * symmetry.cyclic_sum(expr, gens)
 
     exprs = []
     symmetry_half = symmetry.base()
     for key, (U, S) in decompositions.items():
         codeg = (degree - key.total_degree()) // 2
         key = _get_expr_from_dict(ineq_constraints, key)
-        vecs = [symmetry_half.invarraylize(U[i,:], gens, codeg).as_expr() for i in range(U.shape[0])]
-        if factor:
-            vecs = [_.factor() for _ in vecs]
-        vecs = [compute_cyc_sum(S[i] * key * vecs[i]**2) for i in range(U.shape[0])]
+        key_primitive = key.primitive()
+        vecs = [symmetry_half.invarraylize(U[i,:], gens, codeg) for i in range(U.shape[0])]
+        vecs = [compute_cyc_sum_of_squares(S[i], key_primitive, vecs[i]) for i in range(U.shape[0])]
 
         exprs.extend(vecs)
     return sp.Add(*exprs)

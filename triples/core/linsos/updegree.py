@@ -31,7 +31,8 @@ class LinearBasisMultiplier(LinearBasis):
         return len(self.poly.gens)
     def as_poly(self, symbols) -> sp.Poly:
         poly = (self.poly * (-self._tangent(self.poly.gens, poly=True)))
-        return poly.xreplace(dict(zip(self.poly.gens, symbols)))
+        poly.gens = symbols
+        return poly
     def as_expr(self, symbols) -> sp.Expr:
         return (self.poly.as_expr() * self.multiplier).xreplace(dict(zip(self.poly.gens, symbols)))
 

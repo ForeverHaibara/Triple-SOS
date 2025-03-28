@@ -12,6 +12,7 @@ import sympy as sp
 from sympy import Symbol, Float, Expr, Poly, Rational
 from sympy.polys.polyerrors import BasePolynomialError, PolificationFailed, GeneratorsNeeded
 from sympy.polys.polytools import resultant
+from sympy.polys.polyclasses import DMP
 from sympy.combinatorics import PermutationGroup
 
 from .polysolve import univar_realroots, solve_poly_system_crt, PolyEvalf, _filter_trivial_system
@@ -22,13 +23,42 @@ from ..expression import identify_symmetry_from_lists
 default_sort_key = lambda x: tuple(_.sort_key() for _ in x) if not isinstance(x, Expr) else x.sort_key()
 
 def polysubs(poly: Poly, subs: Dict[Symbol, Expr], symbols: List[Symbol]) -> Poly:
-    """Substitute the symbols in a polynomial with the given values."""
+    """Substitutes the symbols in a polynomial with the given values and
+    makes it a polynomial in the given symbols."""
     if len(subs) == 0:
         return poly
-    poly = poly.as_expr().xreplace(subs)
     if len(symbols) == 0:
-        return poly.expand()
-    return poly.as_poly(*symbols)
+        # TODO: make it faster
+        return poly.as_expr().xreplace(subs).expand()
+
+    poly0 = poly
+    # poly = poly.as_expr().xreplace(subs)
+    # return poly.as_poly(*symbols)
+
+    inds = [poly.gens.index(s) if s in poly.gens else -1 for s in symbols]
+    rest_inds = [i for i, g in enumerate(poly.gens) if (g not in symbols)]
+    marginalize1 = lambda x: tuple(x[i] if i != -1 else 0 for i in inds)
+    marginalize2 = lambda x: tuple(x[i] for i in rest_inds)
+    coeffs = {}
+    # Rearrange the poly to be a polynomial in the to-be-substituted-variables.
+    for monom, coeff in poly.rep.terms():
+        m1 = marginalize1(monom)
+        m2 = marginalize2(monom)
+        if not (m2 in coeffs):
+            coeffs[m2] = {}
+        coeffs[m2][m1] = coeff
+    lev = len(inds) - 1
+    coeffs = {k: DMP.from_dict(rep, lev, poly.domain) for k, rep in coeffs.items()}
+
+    subs = [sp.Poly(subs[poly.gens[i]], symbols).rep for i in rest_inds]
+    s = 0
+    for monom, coeff in coeffs.items():
+        for i, d in enumerate(monom):
+            if d:
+                coeff = coeff * subs[i]**d
+        s = s + coeff
+    return Poly.new(s, *symbols)
+
 
 def _infer_symbols(symbols: Optional[List[Symbol]], poly: Poly, *constraint_lists: List[Poly]) -> List[Symbol]:
     """Infer the symbols from the polynomial and constraints."""
@@ -242,7 +272,7 @@ def _solve_2vars_zero_extrema(poly: Poly, symbols: Symbol) -> List[Tuple[Expr]]:
     """
     x, y = symbols
     dx, dy = poly.diff(x), poly.diff(y)
-    res0 = resultant(poly, dy, y).as_poly(x)
+    res0 = poly.reorder(y, x).resultant(dy.reorder(y, x))
     res0 = sp.gcd(res0, res0.diff(x))
     roots1 = univar_realroots(res0, x)
 
@@ -261,7 +291,7 @@ def _solve_2vars_zero_extrema(poly: Poly, symbols: Symbol) -> List[Tuple[Expr]]:
         return roots
 
     # compute the resultant of the other variable
-    res1 = resultant(poly, dx, x).as_poly(y)
+    res1 = poly.resultant(dx)
     res1 = sp.gcd(res1, res1.diff(y))
     roots2 = univar_realroots(res1, y)
 

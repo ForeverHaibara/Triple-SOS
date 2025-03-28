@@ -4,6 +4,7 @@ from typing import Optional, Dict, List, Tuple
 
 import sympy as sp
 from sympy import Poly
+from sympy.combinatorics import PermutationGroup
 
 from ...utils import optimize_poly, Root, MonomialManager, generate_monoms, arraylize_sp
 
@@ -64,6 +65,15 @@ class _bilinear():
     def __repr__(self) -> str:
         return self.__str__()
 
+def _permute_root(perm_group: PermutationGroup, root: Root):
+    """Permute a Root object efficiently given a permutation group."""
+    perms = list(perm_group.elements)
+    roots = [None] * len(perms)
+    root0, rep, domain = root.root, root.rep, root.domain
+    for i, perm in enumerate(perms):
+        roots[i] = Root(perm(root0), domain=domain, rep=perm(rep))
+    return roots
+
 
 def _is_binary_root(root: Root) -> bool:
     # return isinstance(root, RootRational) and len(set(root.root)) <= 2
@@ -100,7 +110,7 @@ def _compute_diff_orders(poly: Poly, root: Root, mixed=False, only_binary_roots=
     """
     gens = poly.gens
     nvars = len(gens)
-    if only_binary_roots and not _is_binary_root(root):
+    if (only_binary_roots and not _is_binary_root(root)):
         return [(0,) * nvars]
 
     if mixed:
@@ -109,7 +119,7 @@ def _compute_diff_orders(poly: Poly, root: Root, mixed=False, only_binary_roots=
             for i in range(nvars):
                 # take one more derivative
                 poly2 = poly.diff(gens[i])
-                if poly2.total_degree() and root.subs(poly2, gens) == 0:
+                if poly2.total_degree() and root.eval(poly2) == 0:
                     new_order = order[:i] + (order[i] + 1,) + order[i+1:]
                     orders.extend(dfs(poly2, new_order))
             return orders
@@ -120,7 +130,7 @@ def _compute_diff_orders(poly: Poly, root: Root, mixed=False, only_binary_roots=
         for i in range(nvars):
             poly2 = poly.diff(gens[i])
             j = 1
-            while poly2.total_degree() and root.subs(poly2, gens) == 0:
+            while poly2.total_degree() and root.eval(poly2) == 0:
                 orders.append((0,) * i + (j,) + (0,) * (nvars - i - 1))
                 poly2 = poly2.diff(gens[i])
                 j += 1
@@ -196,8 +206,8 @@ def _root_space(manifold: 'RootSubspace', root: Root, constraint: Poly) -> sp.Ma
     spans = []
     if root.is_Rational and constraint.is_monomial:
         monomial = tuple(constraint.monoms()[0])
-        for r_ in symmetry.permute(root.root):
-            new_r = Root(r_, domain=root.domain)
+        # for r_ in symmetry.permute(root.root):
+        for new_r in _permute_root(symmetry.perm_group, root):
             orders = _compute_nonvanishing_diff_orders(manifold.poly, new_r, monomial)
             for order in orders:
                 spans.append(new_r.span(d, order, symmetry=base_symmetry))
@@ -205,14 +215,14 @@ def _root_space(manifold: 'RootSubspace', root: Root, constraint: Poly) -> sp.Ma
         if constraint.is_monomial and not constraint.is_zero and all(_ != 0 for _ in root.root):
             vanish = lambda _: False
         else:
-            vanish = lambda r: r.subs(constraint, constraint.gens) == 0
+            vanish = lambda r: r.eval(constraint) == 0
 
         # this is an incomplete (but fast) implementation
         # we do not consider higher order derivatives
         # TODO: consider higher order nonvanishing derivatives for irrational roots
         span = root.span(d, symmetry=base_symmetry)
-        for j, permed_root in enumerate(symmetry.permute(root.root)):
-            if not vanish(Root(permed_root)):
+        for j, permed_root in enumerate(_permute_root(symmetry.perm_group, root)):
+            if not vanish(permed_root):
                 for i in range(span.shape[1]):
                     span2 = symmetry.permute_vec(span[:,i], d)[:,j]
                     spans.append(span2)
@@ -329,10 +339,9 @@ class RootSubspace():
         if roots is None: roots = self.roots
         for root in roots:
             is_feasible = True
-            for permed_root in self._symmetry.permute(root.root):
-                permed_root = Root(permed_root)
-                if any(permed_root.subs(ineq, self.poly.gens) < 0 for ineq in ineq_constraints) or\
-                        any(permed_root.subs(eq, self.poly.gens) != 0 for eq in eq_constraints):
+            for permed_root in _permute_root(self._symmetry.perm_group, root):
+                if any(permed_root.eval(ineq) < 0 for ineq in ineq_constraints) or\
+                        any(permed_root.eval(eq) != 0 for eq in eq_constraints):
                     is_feasible = False
                     break
             # print('root =', permed_root, 'is_feasible =', is_feasible)
