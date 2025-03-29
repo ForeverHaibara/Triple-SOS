@@ -238,9 +238,9 @@ def preprocess_text(
         The generators of the cyclic sum or products.
     perm: Optional[PermutationGroup]
         The permutation group of the expression. If None, it will be cyclic group.
-    s: str
+    cyclic_sum_func: str
         Stands for the cyclic sum. Defaults to 's'.
-    p: str
+    cyclic_prod_func: str
         Stands for the cyclic product. Defaults to 'p'.
     scientific_notation: bool
         Whether to parse the scientific notation. If True, 1e2 will be parsed as 100.

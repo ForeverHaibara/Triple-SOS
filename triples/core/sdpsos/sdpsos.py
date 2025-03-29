@@ -599,7 +599,7 @@ def _SDPSOS(
         print('Identified Symmetry = %s' % str(symmetry.perm_group).replace('\n', '').replace('  ',''))
 
     sos_problem = SOSProblem(poly, symmetry=symmetry)
-
+    roots = None
     qmodule_list = _get_qmodule_list(poly, ineq_constraints.items(),
                         ineq_constraints_with_trivial=ineq_constraints_with_trivial, preordering=preordering)
 
@@ -627,7 +627,13 @@ def _SDPSOS(
         time0 = time()
         # now we solve the problem
         try:
-            sdp = sos_problem.construct([e[0] for e in qmodule], list(eq_constraints.keys()), verbose=verbose)
+            if roots is None:
+                time1 = time()
+                roots = optimize_poly(poly, list(ineq_constraints.keys()), [poly] + list(eq_constraints.keys()), return_type='root')
+                if verbose:
+                    print(f"Time for finding roots                  : {time() - time1:.6f} seconds.")
+            
+            sdp = sos_problem.construct([e[0] for e in qmodule], list(eq_constraints.keys()), roots=roots, verbose=verbose)
             if sos_problem.solve(allow_numer=allow_numer, verbose=verbose, solver=solver, solver_options=solver_options, **kwargs):
                 if verbose:
                     print(f"Time for solving SDP{' ':20s}: {time() - time0:.6f} seconds. \033[32mSuccess\033[0m.")

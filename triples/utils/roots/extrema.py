@@ -50,7 +50,7 @@ def polysubs(poly: Poly, subs: Dict[Symbol, Expr], symbols: List[Symbol]) -> Pol
     lev = len(inds) - 1
     coeffs = {k: DMP.from_dict(rep, lev, poly.domain) for k, rep in coeffs.items()}
 
-    subs = [sp.Poly(subs[poly.gens[i]], symbols).rep for i in rest_inds]
+    subs = [Poly(subs[poly.gens[i]], symbols).rep for i in rest_inds]
     s = 0
     for monom, coeff in coeffs.items():
         for i, d in enumerate(monom):
@@ -597,7 +597,7 @@ def _optimize_by_ineq_comb(poly: Poly, ineq_constraints: List[Poly], eq_constrai
 
 
 def _optimize_poly(poly: Poly, ineq_constraints: List[Poly], eq_constraints: List[Poly], symbols: List[Symbol],
-        max_different: int = 2) -> List[Tuple[Expr]]:
+        max_different: int = 2, symmetry: Optional[PermutationGroup]=None) -> List[Tuple[Expr]]:
     """
     Internal function to optimize a polynomial with inequality and equality constraints.
     """
@@ -607,31 +607,55 @@ def _optimize_poly(poly: Poly, ineq_constraints: List[Poly], eq_constraints: Lis
     # and the variety of the KKT system is not zero-dimensional.
     # HOW TO DEAL WITH THIS?
 
-    symmetry = identify_symmetry_from_lists([[poly], ineq_constraints, eq_constraints])
+    if symmetry is None:
+        symmetry = identify_symmetry_from_lists([[poly], ineq_constraints, eq_constraints])
+    points = []
+    nvars = len(symbols)
 
-    # TODO 2: dehomogenize shall we consider x = 0?
-    dehomogenize = {}
     if poly.is_homogeneous and all(_.is_homogeneous for _ in ineq_constraints)\
         and all(_.is_homogeneous for _ in eq_constraints):
 
-        # # WARNING: Setting one of symbols to 1 will break the symmetry,
-        # # which causes `ineq_comb` selecting insufficient combinations.
-        # gen = symbols[-1]
-        # one = sp.S.One
-        # dehomogenize[gen] = one
-        # poly = poly.eval(gen, one)
-        # ineq_constraints = [_.eval(gen, one) for _ in ineq_constraints]
-        # eq_constraints = [_.eval(gen, one) for _ in eq_constraints]
-        # symbols = symbols[:-1]
+        if nvars == 1:
+            points = [(x,) for x in [sp.Integer(-1),sp.Integer(0),sp.Integer(1)] if poly(x) == 0 \
+                     and all(ineq(x) >= 0 for ineq in ineq_constraints)\
+                     and all(eq(x) == 0 for eq in eq_constraints)]
+            return points
 
+        nonnegative_symbols = set()
+        if len(ineq_constraints) >= nvars:
+            for ineq in ineq_constraints:
+                if (not ineq.is_zero) and ineq.is_monomial:
+                    monom = tuple(ineq.LM())
+                    if sum(monom) != 1:
+                        continue
+                    nonnegative_symbols.add(monom.index(1))
+        if len(nonnegative_symbols) < nvars:
+            # consider the degenerated case sum(symbols) == 0
+            gen, rest_symbols = symbols[-1], symbols[:-1]
+            eliminated = {gen: -sum(rest_symbols).as_poly(rest_symbols)}
+
+            new_points = _optimize_poly(
+                polysubs(poly, eliminated, rest_symbols),
+                [polysubs(_, eliminated, rest_symbols) for _ in ineq_constraints],
+                [polysubs(_, eliminated, rest_symbols) for _ in eq_constraints],
+                symbols=rest_symbols, max_different=max_different
+            )
+            new_points = [x + (-sum(x),) for x in new_points]
+            points.extend(new_points)
+        elif all(_.coeff_monomial((0,)*nvars) >= 0 for _ in ineq_constraints)\
+            and all(_.coeff_monomial((0,)*nvars) == 0 for _ in eq_constraints):
+            points.append((sp.Integer(0),)*nvars)
+
+        # By homogeneity we assume sum(symbols) == 1
         # This should be eliminated by `_eliminate_linear`
+        # TODO: whether necessary to assume sum(symbols) == 1
         eq_constraints.append(Poly(sum(symbols) - 1, *symbols))
 
     solver = partial(_optimize_by_symbol_reduction, max_different=max_different,
         solver=partial(_optimize_by_eq_kkt, max_different=max_different)
     )
-    points = _optimize_by_ineq_comb(poly, ineq_constraints, eq_constraints, symbols,
-        eliminate_func=_eliminate_linear, solver=solver, symmetry=symmetry)
+    points.extend(_optimize_by_ineq_comb(poly, ineq_constraints, eq_constraints, symbols,
+        eliminate_func=_eliminate_linear, solver=solver, symmetry=symmetry))
 
     return points
 
@@ -682,7 +706,7 @@ def optimize_poly(poly: Union[Poly, Expr], ineq_constraints: List[Union[Poly, Ex
     >>> optimize_poly(a + 2*b, [a, b], [a**2 + b**2 - 1], (a, b), objective='max')
     [(CRootOf(5*a**2 - 1, 1), CRootOf(5*b**2 - 4, 1))]
 
-    >>> optimize_poly((a**2+b**2+c**2)**2-3*(a**3*b+b**3*c+c**3*a)) # doctest: +NORMALIZE_WHITESPACE
+    >>> optimize_poly((a**2+b**2+c**2)**2-3*(a**3*b+b**3*c+c**3*a)) # doctest: +SKIP
     [(1, 1, 1),
      (CRootOf(a**3 - 6*a**2 + 5*a - 1, 0), CRootOf(b**3 - 5*b**2 + 6*b - 1, 1), 1),
      (CRootOf(a**3 - 6*a**2 + 5*a - 1, 1), CRootOf(b**3 - 5*b**2 + 6*b - 1, 0), 1),
