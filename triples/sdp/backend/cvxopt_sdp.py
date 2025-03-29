@@ -7,7 +7,7 @@ from .backend import DualBackend
 def to_square(x):
     if not hasattr(x, 'size'): # float
         return x
-    n = round(np.sqrt(x.size))
+    n = int(round(np.sqrt(x.size)))
     return x.reshape((n, n))
 
 class DualBackendCVXOPT(DualBackend):

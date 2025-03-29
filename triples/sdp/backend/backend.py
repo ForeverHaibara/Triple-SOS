@@ -331,7 +331,7 @@ def min_trace_objective(space: np.ndarray) -> np.ndarray:
     Return the objective function minimizing the trace of the matrix.
     """
     space = np.array(space).astype(np.float64)
-    m = round(np.sqrt(space.shape[0]))
+    m = int(round(np.sqrt(space.shape[0])))
     return space[::m+1, :].sum(axis=0)
 
 def max_trace_objective(space: np.ndarray) -> np.ndarray:
@@ -339,7 +339,7 @@ def max_trace_objective(space: np.ndarray) -> np.ndarray:
     Return the objective function maximizing the trace of the matrix.
     """
     space = np.array(space).astype(np.float64)
-    m = round(np.sqrt(space.shape[0]))
+    m = int(round(np.sqrt(space.shape[0])))
     return -space[::m+1, :].sum(axis=0)
 
 def min_inner_objective(space: np.ndarray, S: Union[float, np.ndarray]) -> np.ndarray:
