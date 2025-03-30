@@ -13,7 +13,7 @@ from scipy.optimize import linprog
 from scipy import __version__ as _SCIPY_VERSION
 
 from .basis import LinearBasis, LinearBasisTangent, LinearBasisTangentEven
-from .tangents import root_tangents
+from .tangents import prepare_tangents, get_qmodule_list
 from .correction import linear_correction
 from .updegree import lift_degree
 from .solution import SolutionLinear
@@ -36,52 +36,6 @@ if _SCIPY_VERSION in ('1.15.0','1.15.1','1.15.2'):
 
 
 class _basis_limit_exceeded(Exception): ...
-
-def _prepare_tangents(poly, prepared_tangents = [], roots = [], ineq_constraints: Dict[Poly, Expr] = {}) -> Dict[Poly, Expr]:
-    """
-    Combine appointed tangents and tangents generated from rootsinfo.
-    Roots that do not vanish at strict roots will be filtered out.
-    """
-    symbols = poly.gens
-    tangents = [t.as_expr() for t in prepared_tangents]
-    # roots = [r for r in roots if not r.is_centered]
-    if roots:
-        # TODO: remove it???
-        tangents.extend([_.as_expr()**2 for _ in root_tangents(poly, roots)])
-
-        new_tangents = []
-        for degree in range(1, 8):
-            # TODO: nullspace is not good
-            # TODO2: include ineq constraints
-            mat = sp.Matrix.hstack(*[r.span(degree) for r in roots])
-            mat = mat.T.nullspace()
-            if not mat:
-                continue
-            monomial_manager = MonomialManager(len(symbols))
-            new_tangents.extend([monomial_manager.invarraylize(p, symbols, degree).as_expr()**2 for p in mat])
-            if len(new_tangents) > 3:
-                break
-        tangents.extend(new_tangents)
-
-    # if rootsinfo is None or not rootsinfo.has_nontrivial_roots():
-    if all(not r.is_nontrivial for r in roots):
-        if S.One not in tangents:
-            tangents.append(S.One)
-
-        if len(symbols) == 3:
-            a, b, c = symbols
-            tangents += [
-                (a**2 - b*c)**2, (b**2 - a*c)**2, (c**2 - a*b)**2,
-                (a**3 - b*c**2)**2, (a**3 - b**2*c)**2, (b**3 - a*c**2)**2,
-                (b**3 - a**2*c)**2, (c**3 - a*b**2)**2, (c**3 - a**2*b)**2,
-            ]
-        elif len(symbols) == 4:
-            a, b, c, d = symbols
-            tangents += [
-                (a*b - c*d)**2, (a*c - b*d)**2, (a*d - b*c)**2,
-            ]
-
-    return dict((Poly(t, symbols), t) for t in tangents)
 
 
 def _check_basis_limit(basis: List, limit: int = 15000) -> None:
@@ -202,54 +156,6 @@ def _odd_basis_to_even(basis: List[LinearBasis], symbols: Tuple[Symbol, ...], in
     return new_basis
 
 
-def _get_qmodule_list(poly: Poly, ineq_constraints: Dict[Poly, Expr],
-        all_nonnegative: bool = False, preordering: str = 'linear') -> List[Tuple[Poly, Expr]]:
-    _ACCEPTED_PREORDERINGS = ['none', 'linear']
-    if not preordering in _ACCEPTED_PREORDERINGS:
-        raise ValueError("Invalid preordering method, expected one of %s, received %s." % (str(_ACCEPTED_PREORDERINGS), preordering))
-
-    degree = poly.homogeneous_order()
-    poly_one = Poly(1, *poly.gens)
-
-    monomials = []
-    linear_ineqs = []
-    nonlin_ineqs = [(poly_one, S.One)]
-    for ineq, e in ineq_constraints.items():
-        if ineq.is_monomial and len(ineq.free_symbols) == 1 and ineq.total_degree() == 1 and ineq.LC() >= 0:
-            monomials.append((ineq, e))
-        elif ineq.is_linear:
-            linear_ineqs.append((ineq, e))
-        else:
-            nonlin_ineqs.append((ineq, e))
-
-    if all_nonnegative:
-        # in this case we generate basis by LinaerBasisTangent rather than LinearBasisTangentEven
-        # we discard all monomials
-        pass
-    else:
-        linear_ineqs = monomials + linear_ineqs
-
-    if preordering == 'none':
-        return linear_ineqs + nonlin_ineqs
-
-    qmodule = nonlin_ineqs.copy()
-    for n in range(1, len(linear_ineqs) + 1):
-        for comb in combinations(linear_ineqs, n):
-            mul = poly_one
-            for c in comb:
-                mul = mul * c[0]
-            d = mul.homogeneous_order()
-            if d > degree:
-                continue
-            mul_expr = sp.Mul(*(c[1] for c in comb))
-            for ineq, e in nonlin_ineqs:
-                new_d = d + ineq.homogeneous_order()
-                if new_d <= degree:
-                    qmodule.append((mul * ineq, mul_expr * e))
-
-    return (qmodule)
-
-
 @sanitize_output()
 @sanitize_input(homogenize=True, infer_symmetry=True, wrap_constraints=True)
 def LinearSOS(
@@ -366,10 +272,10 @@ def _LinearSOS(
     signs = _get_signs_of_vars(ineq_constraints, poly.gens)
     all_nonnegative = all(s > 0 for s in signs.values())
 
-    tangents = _prepare_tangents(poly, tangents, roots, ineq_constraints=ineq_constraints)
-    tangents.update(ineq_constraints)
-    tangents = _get_qmodule_list(poly, tangents, all_nonnegative=all_nonnegative, preordering=preordering)
+    qmodule = get_qmodule_list(poly, ineq_constraints, all_nonnegative=all_nonnegative, preordering=preordering)
+    qmodule = clear_polys_by_symmetry(qmodule, poly.gens, symmetry)
 
+    tangents = list(prepare_tangents(poly, qmodule, eq_constraints, roots=roots, additional_tangents=tangents).items())
     # remove duplicate tangents by symmetry
     # print('Tangents before removing duplicates:', tangents)
     tangents = clear_polys_by_symmetry(tangents, poly.gens, symmetry)

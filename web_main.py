@@ -9,7 +9,7 @@ from flask_cors import CORS
 import sympy as sp
 
 from triples.utils import pl, SolutionSimple, poly_get_factor_form, optimize_poly, Root
-from triples.core.linsos.tangents import root_tangents
+# from triples.core.linsos.tangents import root_tangents
 from triples.gui.sos_manager import SOS_Manager
 
 # def _async_raise(tid, exctype):
@@ -199,7 +199,7 @@ def findroot(sid, **kwargs):
         tangents = kwargs.get('tangents')
         if tangents is None:
             # not having computed tangents, recompute them
-            tangents = root_tangents(poly, [Root(_) for _ in roots])
+            tangents = [] # root_tangents(poly, [Root(_) for _ in roots])
             tangents = [poly_get_factor_form(_.as_poly(poly.gens)) for _ in tangents]
             socketio.emit(
                 'rootangents',

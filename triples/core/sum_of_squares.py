@@ -312,12 +312,12 @@ def _process_records(
     return records_pd
 
 
-def sum_of_square(*args, **kwargs):
-    """Deprecated function. Please use sum_of_squares instead."""
-    warn('sum_of_square is deprecated. Please use sum_of_squares instead.', DeprecationWarning, stacklevel=2)
-    return sum_of_squares(*args, **kwargs)
+# def sum_of_square(*args, **kwargs):
+#     """Deprecated function. Please use sum_of_squares instead."""
+#     warn('sum_of_square is deprecated. Please use sum_of_squares instead.', DeprecationWarning, stacklevel=2)
+#     return sum_of_squares(*args, **kwargs)
 
-def sum_of_square_multiple(*args, **kwargs):
-    """Deprecated function. Please use sum_of_squares_multiple instead."""
-    warn('sum_of_square_multiple is deprecated. Please use sum_of_squares_multiple instead.', DeprecationWarning, stacklevel=2)
-    return sum_of_squares_multiple(*args, **kwargs)
+# def sum_of_square_multiple(*args, **kwargs):
+#     """Deprecated function. Please use sum_of_squares_multiple instead."""
+#     warn('sum_of_square_multiple is deprecated. Please use sum_of_squares_multiple instead.', DeprecationWarning, stacklevel=2)
+#     return sum_of_squares_multiple(*args, **kwargs)

@@ -13,7 +13,7 @@ from ..utils.text_process import (
     degree_of_zero, coefficient_triangle, coefficient_triangle_latex
 )
 from ..core.sum_of_squares import sum_of_squares, DEFAULT_CONFIGS
-from ..core.linsos import root_tangents
+# from ..core.linsos import root_tangents
 
 
 def _default_polynomial_check(poly: Poly, method_order: List[str]) -> List[str]:
