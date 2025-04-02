@@ -13,7 +13,7 @@ from scipy.optimize import linprog
 from scipy import __version__ as _SCIPY_VERSION
 
 from .basis import LinearBasis, LinearBasisTangent, LinearBasisTangentEven
-from .tangents import prepare_tangents, get_qmodule_list
+from .tangents import prepare_tangents, prepare_inexact_tangents, get_qmodule_list
 from .correction import linear_correction
 from .updegree import lift_degree
 from .solution import SolutionLinear
@@ -163,9 +163,9 @@ def LinearSOS(
         ineq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
         eq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
         symmetry: Optional[Union[PermutationGroup, MonomialManager]] = None,
-        tangents: List[Expr] = [],
-        # rootsinfo: Optional[RootsInfo] = None,
         roots: Optional[List[Root]] = None,
+        tangents: List[Expr] = [],
+        augment_tangents: bool = True,
         preordering: str = 'linear',
         verbose: bool = False,
         quad_diff_order: int = 8,
@@ -189,14 +189,13 @@ def LinearSOS(
     symmetry: PermutationGroup or MonomialManager
         The symmetry of the polynomial. When it is None, it will be automatically generated. 
         If we want to skip the symmetry generation algorithm, please pass in a MonomialManager object.
-    tangents: list
-        Additional tangents to be added to the basis.
-    rootsinfo: RootsInfo
-        Roots information of the polynomial to be optimized. When it is None, it will be automatically
-        generated. If we want to skip the root finding algorithm or the tangent generation algorithm,
-        please pass in a RootsInfo object. TODO: Shall we deprecate it?
     roots: list
-        Additional roots to be added to the basis.
+        Equality cases of the inequality. If None, it will be searched automatically. To disable auto
+        search, pass in an empty list.
+    tangents: list
+        Additional tangents to form the bases. Each tangent is a sympy nonnegative expression.
+    augment_tangents: bool
+        Whether to augment the tangents using heuristic methods. Defaults to True.
     preordering: str
         The preordering method for extending the basis. It can be 'none' or 'linear'. Defaults to 'linear'.
     verbose: bool
@@ -230,8 +229,8 @@ def LinearSOS(
         programming SOS fails.
     """
     return _LinearSOS(poly, ineq_constraints=ineq_constraints, eq_constraints=eq_constraints,
-                symmetry=symmetry,tangents=tangents,roots=roots,preordering=preordering,
-                verbose=verbose,quad_diff_order=quad_diff_order,
+                symmetry=symmetry,roots=roots,tangents=tangents,augment_tangents=augment_tangents,
+                preordering=preordering,verbose=verbose,quad_diff_order=quad_diff_order,
                 basis_limit=basis_limit,lift_degree_limit=lift_degree_limit,
                 linprog_options=linprog_options,allow_numer=allow_numer,_homogenizer=_homogenizer)
 
@@ -241,9 +240,9 @@ def _LinearSOS(
         ineq_constraints: Dict[Poly, Expr] = {},
         eq_constraints: Dict[Poly, Expr] = {},
         symmetry: MonomialManager = None,
-        tangents: List[Poly] = [],
-        # rootsinfo: Optional[RootsInfo] = None,
         roots: Optional[List[Root]] = None,
+        tangents: List[Poly] = [],
+        augment_tangents: bool = True,
         preordering: str = 'linear',
         verbose: bool = False,
         quad_diff_order: int = 8,
@@ -269,6 +268,10 @@ def _LinearSOS(
         roots = [Root(r) for r in roots]
     roots = [Root(r) if not isinstance(r, Root) else r for r in roots]
 
+
+    ##############################################
+    # prepare tangents to form linear bases
+    ##############################################
     signs = _get_signs_of_vars(ineq_constraints, poly.gens)
     all_nonnegative = all(s > 0 for s in signs.values())
 
@@ -276,11 +279,14 @@ def _LinearSOS(
     qmodule = clear_polys_by_symmetry(qmodule, poly.gens, symmetry)
 
     tangents = list(prepare_tangents(poly, qmodule, eq_constraints, roots=roots, additional_tangents=tangents).items())
-    # remove duplicate tangents by symmetry
-    # print('Tangents before removing duplicates:', tangents)
+    if augment_tangents:
+        tangents += list(prepare_inexact_tangents(poly, ineq_constraints, eq_constraints,
+            symmetry=symmetry, roots=roots, all_nonnegative=all_nonnegative).items())
+
     tangents = clear_polys_by_symmetry(tangents, poly.gens, symmetry)
     eq_constraints = clear_polys_by_symmetry(eq_constraints.items(), poly.gens, symmetry)
-    # print('Tangents after  removing duplicates:', tangents)
+    # print('Tangents after removing duplicates:', tangents)
+
 
     try:
         # prepare to lift the degree in an iterative way

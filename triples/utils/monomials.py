@@ -91,6 +91,10 @@ class MonomialManager():
     def is_trivial(self) -> bool:
         return self._perm_group.is_trivial
 
+    @property
+    def is_symmetric(self) -> bool:
+        return self._perm_group.is_symmetric
+
     @classmethod
     def from_perm_group(cls, perm_group: PermutationGroup, is_homogeneous: bool = True) -> 'MonomialManager':
         """

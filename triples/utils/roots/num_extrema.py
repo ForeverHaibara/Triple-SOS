@@ -8,7 +8,9 @@ import warnings
 import numpy as np
 import sympy as sp
 from sympy import Poly, Expr, Symbol, lambdify
-from scipy.optimize import OptimizeResult, shgo
+from sympy.combinatorics import Permutation, PermutationGroup
+from scipy.optimize import OptimizeResult, shgo, minimize
+from scipy.stats.qmc import Halton
 
 from .extrema import _infer_symbols, polylize_input
 from .roots import Root
@@ -20,119 +22,164 @@ DEFAULT_SHGO_KWARGS = { # default values
     'options': {'maxiter': 4}
 }
 
-class NumerFuncWrapper:
-    """
-    Class to convert sympy expressions to numerical functions.
 
-    Parameters
-    ----------
-    symbols : tuple of sympy.Symbol
-        The symbols in the expression.
-    free_symbols : tuple of sympy.Symbol, optional
-        The symbols that are free to vary. If None, all symbols are free.
-        If given, the function is defined as a function of the free symbols.
-        And free symbols are converted to symbols using the `embedding`
-        dictionary.
-    embedding : dict, optional
-        A dictionary mapping free symbols to symbols. Only to be used if
-        `free_symbols` is given.
-    kwargs : dict, optional
-        Additional keyword arguments to pass to `lambdify`.
+class NumerFunc:
+    """Class of callable functions with automatic gradient computation."""
+    def __init__(self, f, g = None):
+        self.f = f
+        self.g = g
+    def __call__(self, x):
+        return self.f(x)
+    @property
+    def grad(self):
+        return self.g
+    def __add__(self, other):
+        if isinstance(other, (float, int)):
+            return NumerFunc(lambda x: self.f(x) + other, self.g)
+        elif isinstance(other, NumerFunc):
+            return NumerFunc(lambda x: self.f(x) + other.f(x), lambda x: self.g(x) + other.g(x))
+        else:
+            raise TypeError(f'Cannot add {type(other)} to NumerFunc.')
+    def __radd__(self, other):
+        return self.__add__(other)
+    def __sub__(self, other):
+        if isinstance(other, (float, int)):
+            return NumerFunc(lambda x: self.f(x) - other, self.g)
+        elif isinstance(other, NumerFunc):
+            return NumerFunc(lambda x: self.f(x) - other.f(x), lambda x: self.g(x) - other.g(x))
+        else:
+            raise TypeError(f'Cannot subtract {type(other)} from NumerFunc.')
+    def __rsub__(v, u):
+        if isinstance(u, (float, int)):
+            return NumerFunc(lambda x: u - v.f(x), lambda x: -v.g(x))
+        elif isinstance(u, NumerFunc):
+            return NumerFunc(lambda x: u.f(x) - v.f(x), lambda x: u.g(x) - v.g(x))
+        else:
+            raise TypeError(f'Cannot subtract NumerFunc from {type(other)}.')
+    def __neg__(self):
+        return NumerFunc(lambda x: -self.f(x), lambda x: -self.g(x))
+    def __mul__(u, v):
+        if isinstance(v, (float, int)):
+            return NumerFunc(lambda x: u.f(x) * v, lambda x: u.g(x) * v)
+        elif isinstance(v, NumerFunc):
+            return NumerFunc(lambda x: u.f(x) * v.f(x), lambda x: u.g(x) * v.f(x) + u.f(x) * v.g(x))
+        else:
+            raise TypeError(f'Cannot multiply {type(other)} with NumerFunc.')
+    def __rmul__(self, other):
+        return self.__mul__(other)
+    def __truediv__(u, v):
+        if isinstance(v, (float, int)):
+            return NumerFunc(lambda x: u.f(x) / v, lambda x: u.g(x) / v)
+        elif isinstance(v, NumerFunc):
+            def new_g(x):
+                vf = v.f(x)
+                return (u.g(x) * vf - u.f(x) * v.g(x)) / vf**2
+            return NumerFunc(lambda x: u.f(x) / v.f(x), new_g)
+        else:
+            raise TypeError(f'Cannot divide NumerFunc by {type(other)}.')
+    def __rtruediv__(v, u):
+        if isinstance(u, (float, int)):
+            return NumerFunc(lambda x: u / v.f(x), lambda x: -u / v.f(x)**2 * v.g(x))
+        elif isinstance(u, NumerFunc):
+            def new_g(x):
+                vf = v.f(x)
+                return (u.g(x) * vf - u.f(x) * v.g(x)) / vf**2
+            return NumerFunc(lambda x: u.f(x) / v.f(x), new_g)
+    def __pow__(u, v):
+        if isinstance(v, (float, int)):
+            return NumerFunc(lambda x: u.f(x) ** v, lambda x: v * u.f(x) ** (v - 1) * u.g(x))
+        elif isinstance(v, NumerFunc):
+            def new_g(x):
+                vf = v.f(x)
+                return (vf * u.f(x) ** (vf - 1) * u.g(x) + v.g(x) * u.f(x) ** vf * np.log(u.f(x)))
+            return NumerFunc(lambda x: u.f(x) ** v.f(x), new_g)
+        else:
+            raise TypeError(f'Cannot raise NumerFunc to {type(other)}.')
 
-    """
-    def __init__(self, symbols: List[Symbol], free_symbols: Optional[List[Symbol]]=None,
-                        embedding: Optional[Dict[Symbol, Expr]]=None, **kwargs):
-        self.symbols = symbols
-        self.free_symbols = free_symbols
-        self.embedding = embedding
-        self.free_symbols_to_symbols = self._make_embedding(embedding, **kwargs)
-        self.jacobian = self._make_jacobian(embedding, **kwargs)
+    @classmethod
+    def sum(cls, funcs: List['NumerFunc']) -> 'NumerFunc':
+        """Create a new NumerFunc object so that f1(x) = sum(f0(x) for f0 in funcs)."""
+        return NumerFunc(lambda x: sum(f.f(x) for f in funcs), lambda x: sum(f.g(x) for f in funcs))
 
-    def __len__(self):
-        """Number of free variables."""
-        return len(self.symbols) if self.free_symbols is None else len(self.free_symbols)
+    def log(self):
+        return NumerFunc(lambda x: np.log(self.f(x)), lambda x: self.g(x) / self.f(x))
 
-    def _make_embedding(self, embedding: Dict[Symbol, Expr], **kwargs) -> Callable[[np.ndarray], np.ndarray]:
+    @classmethod
+    def vectorize(cls, funcs: List['NumerFunc']) -> 'NumerFunc':
+        """Create a new NumerFunc object so that f1(x) = np.array([func(x) for func in funcs])."""
+        return NumerFunc(lambda x: np.array([f(x) for f in funcs]),
+                lambda x: np.vstack([f.g(x) for f in funcs]).T)
+
+    def compose(self, funcs: Optional[Union['NumerFunc', List['NumerFunc']]]) -> 'NumerFunc':
+        """Create a new NumerFunc object so that f1(x) = f0([func(x) for func in funcs])."""
+        if funcs is None:
+            return self
+        func = NumerFunc.vectorize(funcs) if not isinstance(funcs, NumerFunc) else funcs
+        return NumerFunc(lambda x: self.f(func(x)), lambda x: func.g(x) @ self.g(func(x)))
+
+    @classmethod
+    def wrap(cls, expr: Union[Expr, List[Expr]], symbols: List[Symbol], **kwargs) -> 'NumerFunc':
         """
-        Make a function that maps free symbols to symbols.
-        """
-        symbols, free_symbols = self.symbols, self.free_symbols
-        if free_symbols is None:
-            return None
-        embedding = {k: lambdify(free_symbols, e, **kwargs) for k, e in embedding.items()}
-        embedding_funcs = []
-        for i, symbol in enumerate(symbols):
-            # TIP: be careful about the local variables in the lambda functions
-            if symbol in embedding:
-                func = embedding[symbol]
-                embedding_funcs.append(lambda args, f=func: f(*args))
-            elif symbol in free_symbols:
-                ind = free_symbols.index(symbol)
-                embedding_funcs.append(lambda args, i=ind: args[i])
-            else:
-                raise ValueError(f'Undefined non-free symbol {symbol}.')
-        new_func = lambda x: np.array([f(x) for f in embedding_funcs])
-        return new_func
-
-    def _make_jacobian(self, embedding: Dict[Symbol, Expr], **kwargs) -> Callable[[np.ndarray], np.ndarray]:
-        """
-        Make a function that computes the Jacobian matrix of the expression.
-        The returned shape is (len(free_symbols), len(symbols)).
-        """
-        if self.free_symbols is None:
-            return None
-        diff_wrt = []
-        embedding = embedding.copy()
-        for k in self.symbols:
-            if not (k in embedding):
-                embedding[k] = k
-        for v in self.free_symbols:
-            embedding_diff = {k: e.diff(v) for k, e in embedding.items()}
-            diff_wrt.append(self._make_embedding(embedding_diff, **kwargs))
-        new_func = lambda x: np.vstack([f(x) for f in diff_wrt])
-        return new_func
-
-    def wrap(self, func: Expr, jac: bool=False, **kwargs) -> Callable[[np.ndarray], Union[float,np.ndarray]]:
-        """
-        Wrap a sympy expression into a numerical function.
+        Convert sympy expressions to numerical functions.
 
         Parameters
         ----------
-        func : sympy.Expr or sympy.Poly
-            The expression to wrap.
-        jac : bool, optional
-            Whether to compute the Jacobian matrix instead of the function value.
+        expr : sympy.Expr
+            The expression to convert.
+        symbols : tuple of sympy.Symbol
+            The symbols in the expression.
         kwargs : dict, optional
             Additional keyword arguments to pass to `lambdify`.
         """
-        if not isinstance(func, Expr):
-            func = func.as_expr()
-        _wrapper = self._wrap_f if not jac else self._wrap_jac
-        return _wrapper(func, **kwargs)
+        def _wrap_single(expr, symbols):
+            if isinstance(expr, Poly):
+                expr = expr.as_expr()
+            expr = expr.doit()
+            f = lambdify(symbols, expr, **kwargs)
+            fdiff = [lambdify(symbols, expr.diff(_), **kwargs) for _ in symbols]
+            f0 = NumerFunc(lambda x: f(*x), lambda x: np.array([df(*x) for df in fdiff]))
+            return f0
 
-    def _wrap_f(self, f, **kwargs):
-        """Wrap a sympy expression into a numerical function."""
-        symbols = self.symbols
-        _new_func = lambdify(symbols, f, **kwargs)
-        if self.free_symbols is None:
-            new_func = lambda args: _new_func(*args)
-        else:
-            new_func = lambda args: _new_func(*self.free_symbols_to_symbols(args))
-        return new_func
+        if isinstance(expr, (list, tuple, sp.MatrixBase)):
+            fs = [_wrap_single(e, symbols) for e in expr]
+            return NumerFunc.vectorize(fs)
+        elif isinstance(expr, (Expr, Poly)):
+            return _wrap_single(expr, symbols)
+        
+        raise TypeError(f"Unsupported type {type(expr)} for wrapping.")
 
-    def _wrap_jac(self, f, **kwargs):
-        """Wrap a sympy expression into a numerical Jacobian function."""
-        symbols = self.symbols
-        jac = [lambdify(symbols, f.diff(s)) for s in symbols]
-        if self.free_symbols is None:
-            new_func = lambda args: np.array([_(*args) for _ in jac])
-        else:
-            def new_func(args):
-                A = self.jacobian(args)
-                new_args = self.free_symbols_to_symbols(args)
-                b = np.array([_(*new_args) for _ in jac])
-                return A @ b # chain rule
-        return new_func
+    @classmethod
+    def index(cls, i):
+        """Create a new NumerFunc object so that f(x) = x[i]."""
+        def new_g(x):
+            g = np.zeros_like(x)
+            g[i] = 1
+            return g
+        return NumerFunc(lambda x: x[i], new_g)
+
+    @classmethod
+    def identity(cls):
+        """Create a new NumerFunc object so that f(x) = x."""
+        return NumerFunc(lambda x: x, lambda x: np.eye(x.shape[0]))
+
+    @classmethod
+    def affine(cls, A, b):
+        """Create a new NumerFunc object so that f(x) = A @ x + b."""
+        A, b = np.array(A), np.array(b)
+        if len(A.shape) == 1:
+            return NumerFunc(lambda x: np.dot(A, x) + b, lambda x: A)
+        return NumerFunc(lambda x: A @ x + b, lambda x: A.T)
+
+    def compose_affine(self, A, b=None):
+        """Create a new NumerFunc object so that f1(x) = f0(A @ x + b)."""
+        A = np.array(A)
+        b = np.array(b) if b is not None else 0
+        return NumerFunc(lambda x: self.f(A @ x + b), lambda x: A.T @ self.g(A @ x + b))
+
+    def permute(self, perm: List[int]) -> 'NumerFunc':
+        """Create a new NumerFunc object so that f1(x) = f0(x[perm])."""
+        inv_perm = np.argsort(perm)
+        return NumerFunc(lambda x: self.f(x[perm]), lambda x: self.g(x[perm])[inv_perm])
 
 
 def _update_dict(d1: Dict, d2: Dict) -> Dict:
@@ -143,6 +190,120 @@ def _update_dict(d1: Dict, d2: Dict) -> Dict:
         else:
             d1[k] = v
     return d1
+
+
+def numeric_optimize_skew_symmetry(poly: Union[Expr, Poly], symbols: List[Symbol],
+        perm_group: Union[List[List[int]],Permutation,PermutationGroup],
+        num: int = 5, is_homogeneous: Optional[bool] = None,
+        points: Optional[np.ndarray]=None, optimizer: Optional[Callable]=None,
+    ) -> List[np.ndarray]:
+    """
+    Numerically optimize a polynomial with no constraints by exploiting the skew-symmetry
+    of the polynomial.
+
+    Parameters
+    ----------
+    poly : sympy.Poly or sympy.Expr
+        The polynomial to optimize.
+    symbols : tuple of sympy.Symbol
+        The symbols in the polynomial.
+    perm_group : list of permutations or sympy.PermutationGroup
+        Explore the space by permuting the symbols.
+        The polynomial should NOT be symmetric with the given permutations
+        to highlight the biases in the values across permutations.
+    num : int, optional
+        Number of extrema to find. Default is 5.
+    is_homogeneous : bool, optional
+        Whether the objective is homogeneous. If None, it is inferred from the polynomial.
+        If the `poly` argument is a sympy expression, it will not be inferred.
+    points : np.ndarray, optional
+        Initial points to start the optimization. If None, points are generated
+        using Halton sequence. If given, it should be a matrix of shape (N, len(symbols)).
+    optimizer : callable, optional
+        The optimizer to use for finding a local minima given a initial point.
+        If None, it uses scipy.optimize.minimize with BFGS method.
+        The optimizer should have signature `optimizer(f, x0, jac) -> np.ndarray`.
+
+    Returns
+    -------
+    extrema : list of np.ndarray
+        The extrema found. Each element is a tuple of the coordinates of the extrema.
+
+    Examples
+    --------
+    >>> from sympy.abc import a, b, c
+    >>> from sympy.combinatorics import SymmetricGroup
+    >>> p = ((a**2+b**2+c**2)**2-3*(a**3*b+b**3*c+c**3*a)).as_poly(a,b,c)
+    >>> xs = numeric_optimize_skew_symmetry(p, (a,b,c), SymmetricGroup(3), num=3); xs # doctest: +SKIP
+    [(0.543133976714614, 0.3492916988562254, 0.10757432442916048),
+     (0.5431339850218285, 0.34929170314855795, 0.10757431182961352),
+     (0.33333334444005286, 0.33333333749340305, 0.3333333180665441)]
+    >>> p(*xs[0]) # doctest: +SKIP
+    1.27502175484295e-16
+    """
+    if isinstance(perm_group, PermutationGroup):
+        perm_group = list(perm_group.elements)
+    elif isinstance(perm_group, Permutation):
+        perm_group = [perm_group]
+    elif not isinstance(perm_group, list):
+        raise TypeError("Perm_group must be a list, a Permutation, or a PermutationGroup object.")
+    perm_group = [_.array_form if isinstance(_, Permutation) else _ for _ in perm_group]
+    if len(perm_group) == 0:
+        raise ValueError("Perm_group must not be empty.")
+
+    if is_homogeneous is None:
+        is_homogeneous = poly.is_homogeneous if hasattr(poly, 'is_homogeneous') else False
+
+    f = NumerFunc.wrap(poly, symbols)
+    if points is None: # generate points using Halton sequence
+        points = Halton(d=len(symbols), scramble=False).random(64)[1:]
+        if is_homogeneous: # normalize the points
+            points = points / (np.abs(points.sum(axis=1, keepdims=True)) + 1e-8)
+
+    permed_values = []
+    for perm in perm_group:
+        permed_values.append(f(points[:,perm].T))
+    permed_values = np.array(permed_values)
+    permed_values -= np.min(permed_values) - 1e-8 # shift every value to be positive
+    values = np.min(permed_values, axis=0)
+    ratio = (values / permed_values.mean(axis=0))
+
+
+    fdenom = NumerFunc.sum([f.permute(perm) for perm in perm_group])
+    f2_ = f / fdenom
+    if is_homogeneous:
+        affine_map = np.eye(len(symbols), len(symbols)-1)
+        affine_map[-1,:] = -1
+        affine_b = np.zeros(len(symbols))
+        affine_b[-1] = 1
+        f2 = f2_.compose_affine(affine_map, affine_b)
+    else:
+        f2 = f2_
+
+    def _solve_local_minima(f: Callable, x0: np.ndarray, jac: Optional[Callable]=None):
+        with warnings.catch_warnings():
+            # disable RuntimeWarning like invalid zero division
+            warnings.filterwarnings("ignore", category=RuntimeWarning)
+            res = minimize(f, x0, jac=jac, method='BFGS', tol=1e-6)
+            if res is not None and hasattr(res, 'x'):
+                return res.x
+            return x0
+    if optimizer is None:
+        optimizer = _solve_local_minima
+
+    inds = np.argsort(ratio)
+    extrema = []
+    for ind in inds[:num]:
+        perm_ind = np.argmin(permed_values[:,ind])
+        x0 = points[ind][perm_group[perm_ind]]
+        # print('Starting from', x0, 'with value =', values[ind], 'ratio =', ratio[ind], 'f2 =', f2_(x0), fdenom(x0), fdenom.g(x0))
+        if is_homogeneous:
+            x0 = x0[:-1]
+        extrema.append(tuple(optimizer(f2, x0, jac=f2.g)))
+    if is_homogeneous:
+        extrema = [tuple((*_, 1 - sum(_))) for _ in extrema]
+    return extrema
+
 
 def _numeric_optimize_shgo(poly: Union[Poly, Expr], ineq_constraints: List[Union[Poly, Expr]], eq_constraints: List[Union[Poly, Expr]],
         symbols: List[Symbol], free_symbols: List[Symbol]=None, embedding: Dict[Symbol, Expr]=None,
@@ -162,37 +323,40 @@ def _numeric_optimize_shgo(poly: Union[Poly, Expr], ineq_constraints: List[Union
         res.funl = np.array([res.fun])
         return res
 
-    wrapper = NumerFuncWrapper(symbols, free_symbols=free_symbols, embedding=embedding)
+    embedding_f = None
+    if free_symbols is not None:
+        embedding_list = [embedding.get(s, s) for s in symbols]
+        embedding_f = NumerFunc.wrap(embedding_list, free_symbols)
 
-    f = wrapper.wrap(poly)
-    f_jac = wrapper.wrap(poly, jac=True)
+    f = NumerFunc.wrap(poly, symbols).compose(embedding_f)
 
     def _to_shgo_con(con, type='ineq'):
-        return {'type': type, 'fun': wrapper.wrap(con),
-                'jac': wrapper.wrap(con, jac=True)}
+        con_f = NumerFunc.wrap(con, symbols).compose(embedding_f)
+        return {'type': type, 'fun': con_f, 'jac': con_f.g}
     constraints = [_to_shgo_con(_, 'ineq') for _ in ineq_constraints] \
                 + [_to_shgo_con(_, 'eq') for _ in eq_constraints]
 
     shgo_kwargs = _update_dict(
-        _update_dict({'options': {'jac': f_jac}}, DEFAULT_SHGO_KWARGS), shgo_kwargs
+        _update_dict({'options': {'jac': f.g}}, DEFAULT_SHGO_KWARGS), shgo_kwargs
     )
 
     with warnings.catch_warnings():
         # disable RuntimeWarning like invalid zero division
         warnings.filterwarnings("ignore", category=RuntimeWarning, module=r".*_shgo")
         # try:
-        result = shgo(f, bounds=[(0, 1)] * len(wrapper),
+        dof = len(free_symbols) if free_symbols is not None else len(symbols)
+        result = shgo(f, bounds=[(0, 1)] * dof,
                     constraints=constraints, **shgo_kwargs)
         # except Exception as e:
         #     if isinstance(e, (TypeError, ValueError, KeyboardInterrupt)):
         #         raise e
         #     return []
 
-    if restore and (wrapper.free_symbols is not None):
+    if restore and (free_symbols is not None):
         if hasattr(result, 'x'):
-            result.x = wrapper.free_symbols_to_symbols(result.x)
+            result.x = embedding_f(result.x)
         if hasattr(result, 'xl'):
-            result.xl = wrapper.free_symbols_to_symbols(result.xl.T).T
+            result.xl = embedding_f(result.xl.T).T
 
     return result
 
@@ -221,8 +385,7 @@ def numeric_optimize_poly(poly: Union[Poly, Expr], ineq_constraints: List[Union[
     ) -> List[Root]:
     """
     Numerically polynomial optimize a polynomial with given inequality and equality constraints
-    using heuristic methods. It uses incomplete algorithm to balance the efficiency
-    and effectiveness.
+    using heuristic methods. It is HIGHLY EXPERIMENTAL and may be unstable for complicated systems.
 
     Parameters
     ----------

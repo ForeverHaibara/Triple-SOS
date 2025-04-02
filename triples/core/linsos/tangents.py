@@ -8,6 +8,7 @@ from sympy.combinatorics import PermutationGroup
 from sympy.polys.polyclasses import DMP
 
 from ...utils import Root, MonomialManager
+from ...utils.roots.num_extrema import numeric_optimize_skew_symmetry
 from ...sdp.arithmetic import _permute_matrix_rows
 
 DEFAULT_TANGENTS = {
@@ -203,4 +204,20 @@ def get_qmodule_list(poly: Poly, ineq_constraints: Dict[Poly, Expr],
                 if new_d <= degree:
                     qmodule.append((mul * ineq, mul_expr * e))
 
-    return (qmodule)
+    return qmodule
+
+
+def prepare_inexact_tangents(poly: Poly, ineq_constraints: Dict[Poly, Expr] = {}, eq_constraints: Dict[Poly, Expr] = {},
+    symmetry: MonomialManager = None, roots: List[Root] = [], all_nonnegative: bool = False) -> Dict[Poly, Expr]:
+    """
+    """
+    nvars = len(poly.gens)
+    if nvars <= 1 or len(eq_constraints) or symmetry.is_symmetric or any(not r.is_nontrivial for r in roots):
+        return dict()
+
+    perms = [[1,0] + list(range(2, nvars))] # reflection
+    if nvars >= 2:
+        perms.append(list(range(1, nvars)) + [0])
+    # roots = numeric_optimize_skew_symmetry(poly, poly.gens, perms)
+
+    return dict()
