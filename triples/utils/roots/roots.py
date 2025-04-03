@@ -3,7 +3,7 @@ from typing import Optional, Union, List, Tuple
 import numpy as np
 import sympy as sp
 from sympy import Poly, Expr, Symbol, Rational, Integer
-from sympy.combinatorics import PermutationGroup, CyclicGroup
+from sympy.combinatorics import PermutationGroup, Permutation, CyclicGroup
 from sympy.polys.constructor import construct_domain
 from sympy.polys.domains import Domain
 from sympy.polys.domains.gaussiandomains import GaussianElement
@@ -180,8 +180,16 @@ class Root():
         self._make_single_power_cached_func()
 
     def __getitem__(self, i):
-        """Get the i-th element of the root."""
-        return self.root[i]
+        """Get the i-th element of the root or get 
+        a slicing of the root."""
+        if isinstance(i, int):
+            return self.root[i]
+        elif isinstance(i, slice):
+            return Root(self.root[i], domain=self.domain, rep=self.rep[i])
+        # iterables
+        if any(not isinstance(_, int) for _ in i):
+            raise TypeError("Indices must be integers.")
+        return Root([self.root[_] for _ in i], domain=self.domain, rep=[self.rep[_] for _ in i])
 
     def __len__(self):
         """Return the number of variables."""

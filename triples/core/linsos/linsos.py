@@ -281,7 +281,7 @@ def _LinearSOS(
     tangents = list(prepare_tangents(poly, qmodule, eq_constraints, roots=roots, additional_tangents=tangents).items())
     if augment_tangents:
         tangents += list(prepare_inexact_tangents(poly, ineq_constraints, eq_constraints,
-            symmetry=symmetry, roots=roots, all_nonnegative=all_nonnegative).items())
+            monomial_manager=symmetry, roots=roots, all_nonnegative=all_nonnegative).items())
 
     tangents = clear_polys_by_symmetry(tangents, poly.gens, symmetry)
     eq_constraints = clear_polys_by_symmetry(eq_constraints.items(), poly.gens, symmetry)

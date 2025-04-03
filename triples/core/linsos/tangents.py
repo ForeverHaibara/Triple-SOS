@@ -47,6 +47,29 @@ def _get_sorted_nullspace(monomial_manager: MonomialManager, mat: Matrix, degree
     #     vecs.extend(_get_sorted_nullspace_by_weights(mat, -weights))
     return vecs
 
+def _canonicalize(p):
+    """Extract trivial factors from a polynomial p,
+    e.g. a*b*(a+b-c) -> a+b-c."""
+    monoms = np.array(p.monoms(), dtype=int)
+    if monoms.shape[0] <= 1: # monomials, just discard
+        return None
+
+    d = np.min(monoms, axis=0)
+    if np.any(d):
+        monoms = monoms - d.reshape((1, -1))
+
+    if monoms.shape[0] == 2: # check whether it is a^n - b^n
+        if np.max(monoms[0]) == np.max(monoms[1]) and \
+            (monoms != 0).sum() == 2 and \
+            sum(p.rep.coeffs()) == p.rep.dom.zero:
+            return None
+
+    if not np.any(d):
+        return p
+    new_monoms = [tuple(_) for _ in monoms.tolist()]
+    rep = dict(zip(new_monoms, p.rep.coeffs()))
+    rep = DMP.from_dict(rep, p.rep.lev, p.rep.dom)
+    return Poly.new(rep, *p.gens)
 
 def _get_ineq_constrained_tangents(ineq: Poly, ineq_expr: Expr, roots: List[Root] = [], monomial_manager: MonomialManager = None) -> Dict[Poly, Expr]:
     """
@@ -59,30 +82,6 @@ def _get_ineq_constrained_tangents(ineq: Poly, ineq_expr: Expr, roots: List[Root
     if ineq.is_monomial and sum(_ != 0 for _ in tuple(ineq.LM())) == 1:
         ineq, ineq_expr = Poly(1, *symbols), sp.Integer(1)
     if roots:
-        def _canonicalize(p):
-            """Extract trivial factors from a polynomial p,
-            e.g. a*b*(a+b-c) -> a+b-c."""
-            monoms = np.array(p.monoms(), dtype=int)
-            if monoms.shape[0] <= 1: # monomials, just discard
-                return None
-
-            d = np.min(monoms, axis=0)
-            if np.any(d):
-                monoms = monoms - d.reshape((1, -1))
-
-            if monoms.shape[0] == 2: # check whether it is a^n - b^n
-                if np.max(monoms[0]) == np.max(monoms[1]) and \
-                    (monoms != 0).sum() == 2 and \
-                    sum(p.rep.coeffs()) == p.rep.dom.zero:
-                    return None
-
-            if not np.any(d):
-                return p
-            new_monoms = [tuple(_) for _ in monoms.tolist()]
-            rep = dict(zip(new_monoms, p.rep.coeffs()))
-            rep = DMP.from_dict(rep, p.rep.lev, p.rep.dom)
-            return Poly.new(rep, *p.gens)
-
         for degree in range(1, 8): # TODO: avoid magic numbers
             mat = Matrix.hstack(*[r.span(degree) for r in roots])
             vecs = _get_sorted_nullspace(monomial_manager, mat, degree)
@@ -208,16 +207,51 @@ def get_qmodule_list(poly: Poly, ineq_constraints: Dict[Poly, Expr],
 
 
 def prepare_inexact_tangents(poly: Poly, ineq_constraints: Dict[Poly, Expr] = {}, eq_constraints: Dict[Poly, Expr] = {},
-    symmetry: MonomialManager = None, roots: List[Root] = [], all_nonnegative: bool = False) -> Dict[Poly, Expr]:
+    monomial_manager: MonomialManager = None, roots: List[Root] = [], all_nonnegative: bool = False) -> Dict[Poly, Expr]:
     """
     """
     nvars = len(poly.gens)
-    if nvars <= 1 or len(eq_constraints) or symmetry.is_symmetric or any(not r.is_nontrivial for r in roots):
+    if nvars <= 1 or len(eq_constraints) or monomial_manager.is_symmetric or any(r.is_nontrivial for r in roots):
         return dict()
 
     perms = [[1,0] + list(range(2, nvars))] # reflection
-    if nvars >= 2:
+    if nvars >= 3:
         perms.append(list(range(1, nvars)) + [0])
-    # roots = numeric_optimize_skew_symmetry(poly, poly.gens, perms)
 
-    return dict()
+    new_roots = []
+    try:
+        new_roots = numeric_optimize_skew_symmetry(poly, poly.gens, perms, num=5)
+        new_roots = [r for r in new_roots if all(ineq(*r) >= 0 for ineq in ineq_constraints)]
+        new_roots = [Root(_, domain=sp.RR) for _ in new_roots] # convert to RR
+    except Exception as e: # shall we handle this?
+        if isinstance(e, (KeyboardInterrupt, SystemExit)):
+            raise e
+        pass
+
+    if len(new_roots) == 0:
+        return dict()
+
+    new_tangents = []
+    monomial_base = monomial_manager.base() # no symmetry version
+    for root in new_roots:
+        value = poly(*root)
+        mean_value = sum([poly(*root[perm]) for perm in perms])/len(perms)
+        if value < 0 or value > mean_value/2:
+            continue
+
+        for degree in range(2, 5): # TODO: avoid magic numbers
+            mat = monomial_manager.permute_vec(root.span(degree), degree)
+            mat = sp.Matrix.hstack(mat, sp.Matrix.ones(mat.shape[0], 1)) # TODO
+            vecs = _get_sorted_nullspace(monomial_base, mat, degree)
+            if not vecs:
+                continue
+
+            vecs = [(vec * (1260/max(vec))).applyfunc(round)/1260 for vec in vecs] # TODO
+            new_tangents.extend([
+                _canonicalize(monomial_base.invarraylize(p, poly.gens, degree).retract()) for p in vecs])
+            break
+
+    new_tangents = dict([(t**2, t.as_expr()**2) for t in new_tangents if t is not None])
+    # print('New tangents:\n', list(new_tangents.values()))
+
+    return new_tangents
