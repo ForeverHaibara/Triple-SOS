@@ -166,7 +166,7 @@ def LinearSOS(
         roots: Optional[List[Root]] = None,
         tangents: List[Expr] = [],
         augment_tangents: bool = True,
-        preordering: str = 'linear',
+        preordering: str = 'quadratic',
         verbose: bool = False,
         quad_diff_order: int = 8,
         basis_limit: int = 15000,
@@ -197,7 +197,8 @@ def LinearSOS(
     augment_tangents: bool
         Whether to augment the tangents using heuristic methods. Defaults to True.
     preordering: str
-        The preordering method for extending the basis. It can be 'none' or 'linear'. Defaults to 'linear'.
+        The preordering method for extending the basis. It can be 'none', 'linear', 'quadratic' or 'full'.
+        Defaults to 'quadratic'.
     verbose: bool
         Whether to print the information of the linear programming problem. Defaults to False.
     quad_diff_order: int
@@ -243,7 +244,7 @@ def _LinearSOS(
         roots: Optional[List[Root]] = None,
         tangents: List[Poly] = [],
         augment_tangents: bool = True,
-        preordering: str = 'linear',
+        preordering: str = 'quadratic',
         verbose: bool = False,
         quad_diff_order: int = 8,
         basis_limit: int = 15000,

@@ -23,33 +23,52 @@ DEFAULT_TANGENTS = {
 }
 
 
-def _get_sorted_nullspace_by_weights(mat: Matrix, weights: List[int]) -> List[Matrix]:
-    inds = np.argsort(weights)
-    invinds = np.argsort(inds)
+def _get_sorted_nullspace_by_weights(mat: Matrix, weights: Optional[List[int]]=None) -> List[Matrix]:
+    """Compute a left nullspace of a matrix by first ordering the rows by weights."""
+    if weights is not None:
+        inds = np.argsort(weights)
+        invinds = np.argsort(inds)
 
-    # new_mat[i] = mat[inds[i]]
-    new_mat = _permute_matrix_rows(mat, invinds)
+        # new_mat[i] = mat[inds[i]]
+        mat = _permute_matrix_rows(mat, invinds)
 
-    vecs = new_mat.T.nullspace()
-    vecs = [_permute_matrix_rows(v, inds) for v in vecs]
+    vecs = mat.T.nullspace()
+    if weights is not None:
+        vecs = [_permute_matrix_rows(v, inds) for v in vecs]
     return vecs
 
 def _get_sorted_nullspace(monomial_manager: MonomialManager, mat: Matrix, degree: int) -> List[Matrix]:
     """
     Compute a list of sympy vectors (column matrices) that are perpendicular to the given matrix
-    by heuristic sorting.    
+    by heuristic sorting. Recall that the computation of the left nullspace of a matrix depends on
+    the order of rows, the function uses heuristic orderings of the rows.
+
+    Given a monomial `(x1,...,xn)`, consider the monomial `p = a1**x1*...*an**xn`. We study the behaviour
+    of `p` around `(1,...,1)`, given by:
+
+        sum(p(1,...,1+t,...,1-t,....1) - 1 for i, j in combinations(range(n), 2))
+        = sum((1 + t)**xi * (1 - t)**xj - 1 for i, j in combinations(range(n), 2))
+        = -sum(xi*xj for i, j in combinations(range(n), 2))*t^2 + o(t**2).
+
+    For monomials with lower `-sum(xi*xj for i, j in combinations(range(n), 2))`, i.e.,
+    lower values of `sum(xi**2 for i in range(n))`, they tend to be lower around `(1,...,1)`
+    as they have lower `t^2` terms and produce tighter inequalities. Therefore, we sort the
+    terms with respect to this ordering.
     """
     # return mat.T.nullspace() # <- no sorting version
 
     weights = (np.array(monomial_manager.inv_monoms(degree), dtype=int)**2).sum(axis = 1)
     vecs = _get_sorted_nullspace_by_weights(mat, weights)
-    # if len(vecs) > 1:
+    # if len(vecs):
+    #     vecs.extend(_get_sorted_nullspace_by_weights(mat))
     #     vecs.extend(_get_sorted_nullspace_by_weights(mat, -weights))
     return vecs
 
 def _canonicalize(p):
-    """Extract trivial factors from a polynomial p,
-    e.g. a*b*(a+b-c) -> a+b-c."""
+    """
+    Extract trivial factors from a polynomial p. E.g. a*b*(a+b-c) -> a+b-c.
+    It helps remove redundant or trivial tangents for forming the LinearSOS bases.
+    """
     monoms = np.array(p.monoms(), dtype=int)
     if monoms.shape[0] <= 1: # monomials, just discard
         return None
@@ -71,9 +90,32 @@ def _canonicalize(p):
     rep = DMP.from_dict(rep, p.rep.lev, p.rep.dom)
     return Poly.new(rep, *p.gens)
 
-def _get_ineq_constrained_tangents(ineq: Poly, ineq_expr: Expr, roots: List[Root] = [], monomial_manager: MonomialManager = None) -> Dict[Poly, Expr]:
+def _get_ineq_constrained_tangents(ineq: Poly, ineq_expr: Expr, roots: List[Root] = [],
+        monomial_manager: MonomialManager = None, num_tangents: int = 5, max_degree: int = 8) -> Dict[Poly, Expr]:
     """
-    ...
+    Compute a dictionary of items `(ineq*poly**2, ineq_expr*expr**2)` such that
+    `ineq * poly` vanishes at all given roots. As there are infinitely many polynomials
+    that satisfy this condition, the function heuristically picks a few.
+
+    Parameters
+    ----------
+    ineq : Poly
+        The inequality constraint.
+    ineq_expr : Expr
+        The sympy expression of the inequality constraint.
+    roots : List[Root]
+        The list of roots at which `ineq*poly**2` is forced to vanish.
+    monomial_manager : MonomialManager
+        The monomial manager object for generating monomials.
+    num_tangents : int
+        Tangents are generated in a loop until it reaches the expected number of tangents.
+    max_degree : int
+        Tangents are generated in a loop until it reaches the maximum degree.
+
+    Returns
+    -------
+    Dict[Poly, Expr]
+        A dictionary of items `(ineq*poly**2, ineq_expr*expr**2)`.
     """
     roots = [r for r in roots if r.eval(ineq) != 0]
 
@@ -82,7 +124,7 @@ def _get_ineq_constrained_tangents(ineq: Poly, ineq_expr: Expr, roots: List[Root
     if ineq.is_monomial and sum(_ != 0 for _ in tuple(ineq.LM())) == 1:
         ineq, ineq_expr = Poly(1, *symbols), sp.Integer(1)
     if roots:
-        for degree in range(1, 8): # TODO: avoid magic numbers
+        for degree in range(1, max_degree):
             mat = Matrix.hstack(*[r.span(degree) for r in roots])
             vecs = _get_sorted_nullspace(monomial_manager, mat, degree)
             if not vecs:
@@ -93,7 +135,7 @@ def _get_ineq_constrained_tangents(ineq: Poly, ineq_expr: Expr, roots: List[Root
             new_polys = [_canonicalize(p) for p in new_polys]
             new_polys = set([p for p in new_polys if p is not None])
             tangents.update(dict([(ineq*p**2, ineq_expr*p.as_expr()**2) for p in new_polys]))
-            if len(tangents) > 5:
+            if len(tangents) > num_tangents:
                 break
 
     if all(not r.is_nontrivial for r in roots):
@@ -113,18 +155,42 @@ def prepare_tangents(poly: Poly, ineq_constraints: Dict[Poly, Expr] = {}, eq_con
     The "tangent" does not have a definition of canonical forms, so the behaviour of this
     function might change in the future.
 
-    Suppose the original polynomial can be written in the SOS-form:
-    
-        F = sum(ineq * SOS for ineq in ineq_constraints) + sum(eq * p for eq in eq_constraints).
+    The Polya's Positivstellensatz claims that if a homogeneous polynomial `F(x1,...xn) > 0`
+    strictly holds over the simplex `x1,..,xn>=0, x1+...+xn=1`, then there must be a positive integer
+    `m` such that all coefficients of `(x1+..+xn)^m*F(x1,..,xn)` are nonnegative. This gives a
+    sum-of-squares proof of `F > 0`. However, this property does not hold when the inequality is weak,
+    i.e., when there exists `F(x1,...,xn)=0` in the domain. The principle is easy to understand,
+    as `(x1+..+xn)^m*F(x1,..,xn)` must exist negative coefficients to attain the zero. Thus the
+    zeros (roots) of an inequality should be carefully handled to avoid conflicts.
 
-    Suppose `root` satisfies that F(*root) == 0, ineq(*root) >= 0 and eq(*root) == 0. Then if
-    ineq_constraints[i](*root) > 0, then there must be the complementary: SOS[i](*root) == 0.
-    This constrains SOS[i] to lie in a subspace where the root vanishes. The
-    function generates a linear bases of this subspace for each inequality constraint.
+    Consider a polynomial inequality `F >= 0` over R, but `F(*root) == 0` attains the zero of F.
+    Suppose F can be decomposed into SOS: `F = (...)^2 + (...)^2 + ...`. Then each of the squares
+    should attain zero at the given root, which forms implicit linear constraints on the coefficients.
+
+    In SDPSOS, the feasible set of the sum-of-squares implicity satisfies a linear constraint
+    in this case and has no interior. It can be reduced to a low-rank problem by applying
+    a linear transformation. For example, if `p1,...,pn` form a basis of the polys that
+    vanish in the roots, then the SDPSOS is instead trying to find a PSD quadratic form
+    of `p1,...,pn` that evaluates to F and each base of the squares is a linear combinations
+    of `p1,...,pn`. Working on the vanishing ideal keeps the zeros of F. For LinearSOS, 
+    we may relax the problem to `F = p1*PSD[1] + p2*PSD[2] + ...`, where PSD[i] are
+    linear combinations of nonnegative polynomials.
+
+
+    More generally, consider an inequality on a generic semialgebra set.
+    Suppose the original polynomial can be written in the SOS-form:
+
+        `F = sum(ineq * SOS for ineq in ineq_constraints) + sum(eq * p for eq in eq_constraints)`.
+
+    Suppose `root` satisfies that `F(*root) == 0`, `ineq(*root) >= 0` and `eq(*root) == 0`. Then if
+    `ineq_constraints[i](*root) > 0`, then there must be the complementary: `SOS[i](*root) == 0`.
+    This constrains `SOS[i]` to lie in a subspace where the root vanishes.
+
+    The function generates a linear basis of this subspace for each inequality constraint.
 
     In practice, the `ineq_constraints` are actually generators of a quadratic module. For instance:
 
-        (a^2+b^2-c^2 >= 0, a^2+c^2-b^2 >= 0) => ((a^2+b^2-c^2)*(a^2+c^2-b^2) >= 0).
+        `(a^2+b^2-c^2 >= 0, a^2+c^2-b^2 >= 0) => ((a^2+b^2-c^2)*(a^2+c^2-b^2) >= 0)`.
 
     Thus new ineq_constraints are obtained by taking the product of possible combinations of
     the given ineq_constraints.
@@ -135,6 +201,9 @@ def prepare_tangents(poly: Poly, ineq_constraints: Dict[Poly, Expr] = {}, eq_con
 
     tangents = [t.as_expr() for t in additional_tangents]
     if all(not r.is_nontrivial for r in roots):
+        # When there is a nontrivial root, then there cannot be
+        # terms like "a^i*b^j*c^k*(a-b)^(2l)*(b-c)^(2m)*(c-a)^(2n)" in the SOS form,
+        # as it does not vanish at the root.
         if sp.S.One not in tangents:
             tangents.append(sp.S.One)
 
@@ -144,9 +213,6 @@ def prepare_tangents(poly: Poly, ineq_constraints: Dict[Poly, Expr] = {}, eq_con
 
     # remove very trivial roots
     roots = [r for r in roots if (not r.is_corner)] # and len(set(r.rep)) > 1]
-
-    # TODO: remove it???
-    # tangents.extend([_.as_expr()**2 for _ in root_tangents(poly, roots)])
 
     monomial_manager = MonomialManager(len(symbols))
     ineq_constraints = ineq_constraints.items() if isinstance(ineq_constraints, dict) else ineq_constraints
@@ -159,12 +225,29 @@ def prepare_tangents(poly: Poly, ineq_constraints: Dict[Poly, Expr] = {}, eq_con
 
 
 def get_qmodule_list(poly: Poly, ineq_constraints: Dict[Poly, Expr],
-        all_nonnegative: bool = False, preordering: str = 'linear') -> List[Tuple[Poly, Expr]]:
-    _ACCEPTED_PREORDERINGS = ['none', 'linear']
+        all_nonnegative: bool = False, preordering: str = 'quadratic') -> List[Tuple[Poly, Expr]]:
+    """
+    Extend the generators of the quadratic module given `ineq_constraints` given a
+    preordering rule. For instance, if `F >= 0` given assumptions: `G1, ..., Gn >= 0`,
+    then we would possibly assume `F = sum_i G_{i1} * ... * G_{ik_i} * SOS[i]`.
+
+    Parameters
+    ----------
+    poly : Poly
+        The target polynomial.
+    ineq_constraints : Dict[Poly, Expr]
+        The dictionary of inequality constraints.
+    all_nonnegative : bool, optional
+        If True, then all monomials are known to be nonnegative and trivial `ineq_constraints`
+        (e.g. a monomial) will be filtered out to reduce the number of generators.
+    preordering : str, optional
+        The preordering rule, one of 'none', 'linear', 'quadratic', 'full'.
+    """
+    _ACCEPTED_PREORDERINGS = ['none', 'linear', 'quadratic', 'full']
     if not preordering in _ACCEPTED_PREORDERINGS:
         raise ValueError("Invalid preordering method, expected one of %s, received %s." % (str(_ACCEPTED_PREORDERINGS), preordering))
 
-    degree = poly.homogeneous_order()
+    degree = poly.total_degree()
     poly_one = Poly(1, *poly.gens)
 
     monomials = []
@@ -175,11 +258,15 @@ def get_qmodule_list(poly: Poly, ineq_constraints: Dict[Poly, Expr],
             monomials.append((ineq, e))
         elif ineq.is_linear:
             linear_ineqs.append((ineq, e))
+        elif preordering == 'quadratic' and ineq.is_quadratic:
+            # Although they seem to be nonlinear, but they should be combined
+            # as linear constraints, so we treat them together.
+            linear_ineqs.append((ineq, e))
         else:
             nonlin_ineqs.append((ineq, e))
 
     if all_nonnegative:
-        # in this case we generate basis by LinaerBasisTangent rather than LinearBasisTangentEven
+        # In this case we generate basis by LinaerBasisTangent rather than LinearBasisTangentEven
         # we discard all monomials
         pass
     else:
@@ -187,6 +274,9 @@ def get_qmodule_list(poly: Poly, ineq_constraints: Dict[Poly, Expr],
 
     if preordering == 'none':
         return linear_ineqs + nonlin_ineqs
+    if preordering == 'full':
+        linear_ineqs = linear_ineqs + nonlin_ineqs
+        nonlin_ineqs = [(poly_one, sp.S.One)]
 
     qmodule = nonlin_ineqs.copy()
     for n in range(1, len(linear_ineqs) + 1):
@@ -194,32 +284,44 @@ def get_qmodule_list(poly: Poly, ineq_constraints: Dict[Poly, Expr],
             mul = poly_one
             for c in comb:
                 mul = mul * c[0]
-            d = mul.homogeneous_order()
+            d = mul.total_degree()
             if d > degree:
                 continue
             mul_expr = sp.Mul(*(c[1] for c in comb))
             for ineq, e in nonlin_ineqs:
-                new_d = d + ineq.homogeneous_order()
+                new_d = d + ineq.total_degree()
                 if new_d <= degree:
                     qmodule.append((mul * ineq, mul_expr * e))
 
     return qmodule
 
 
+###################################################################
+#
+#          Various heuristics to approximate tangents
+#
+###################################################################
+
 def prepare_inexact_tangents(poly: Poly, ineq_constraints: Dict[Poly, Expr] = {}, eq_constraints: Dict[Poly, Expr] = {},
-    monomial_manager: MonomialManager = None, roots: List[Root] = [], all_nonnegative: bool = False) -> Dict[Poly, Expr]:
+    monomial_manager: MonomialManager = None, roots: List[Root] = [],
+    all_nonnegative: bool = False, threshold: float = 0.5, max_degree: int = 5) -> Dict[Poly, Expr]:
     """
+    The function `prepare_tangents` has highlighted the importance of handling the roots.
+    However, even if there are no zeros, we need to pay attention to local minima that are very close
+    to zeros. They can be handled by a slight numerical perturbation that makes them numerical zeros.
     """
     nvars = len(poly.gens)
     if nvars <= 1 or len(eq_constraints) or monomial_manager.is_symmetric or any(r.is_nontrivial for r in roots):
         return dict()
 
+    # parameters for numerical optimization
     perms = [[1,0] + list(range(2, nvars))] # reflection
     if nvars >= 3:
         perms.append(list(range(1, nvars)) + [0])
 
     new_roots = []
     try:
+        # numerically find local extrema in the feasible set
         new_roots = numeric_optimize_skew_symmetry(poly, poly.gens, perms, num=5)
         new_roots = [r for r in new_roots if all(ineq(*r) >= 0 for ineq in ineq_constraints)]
         new_roots = [Root(_, domain=sp.RR) for _ in new_roots] # convert to RR
@@ -232,20 +334,25 @@ def prepare_inexact_tangents(poly: Poly, ineq_constraints: Dict[Poly, Expr] = {}
         return dict()
 
     new_tangents = []
-    monomial_base = monomial_manager.base() # no symmetry version
+    monomial_base = monomial_manager.base()
     for root in new_roots:
         value = poly(*root)
         mean_value = sum([poly(*root[perm]) for perm in perms])/len(perms)
-        if value < 0 or value > mean_value/2:
+        if value < 0 or value > mean_value * threshold:
+            # If value > mean_value * threshold, 
+            # it is not very close to zero and we discard it.
             continue
 
-        for degree in range(2, 5): # TODO: avoid magic numbers
+        for degree in range(2, max_degree):
+            # Pretend that we require the root to be a zero of poly,
+            # which generates polynomials that have low values around the root.
             mat = monomial_manager.permute_vec(root.span(degree), degree)
             mat = sp.Matrix.hstack(mat, sp.Matrix.ones(mat.shape[0], 1)) # TODO
             vecs = _get_sorted_nullspace(monomial_base, mat, degree)
             if not vecs:
                 continue
 
+            # Convert numerical polys to rationals
             vecs = [(vec * (1260/max(vec))).applyfunc(round)/1260 for vec in vecs] # TODO
             new_tangents.extend([
                 _canonicalize(monomial_base.invarraylize(p, poly.gens, degree).retract()) for p in vecs])

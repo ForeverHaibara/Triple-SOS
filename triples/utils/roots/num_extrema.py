@@ -118,7 +118,7 @@ class NumerFunc:
         return NumerFunc(lambda x: self.f(func(x)), lambda x: func.g(x) @ self.g(func(x)))
 
     @classmethod
-    def wrap(cls, expr: Union[Expr, List[Expr]], symbols: List[Symbol], **kwargs) -> 'NumerFunc':
+    def wrap(cls, expr: Union[Expr, List[Expr]], symbols: List[Symbol]) -> 'NumerFunc':
         """
         Convert sympy expressions to numerical functions.
 
@@ -128,15 +128,17 @@ class NumerFunc:
             The expression to convert.
         symbols : tuple of sympy.Symbol
             The symbols in the expression.
-        kwargs : dict, optional
-            Additional keyword arguments to pass to `lambdify`.
-        """
-        def _wrap_single(expr, symbols):
+        """            
+        def _lambdify(symbols, expr):
             if isinstance(expr, Poly):
                 expr = expr.as_expr()
-            expr = expr.doit()
-            f = lambdify(symbols, expr, **kwargs)
-            fdiff = [lambdify(symbols, expr.diff(_), **kwargs) for _ in symbols]
+                # expr = sp.horner(expr)
+            else:
+                expr = expr.doit()
+            return lambdify(symbols, expr, modules='numpy', docstring_limit=-1)
+        def _wrap_single(expr, symbols):
+            f = _lambdify(symbols, expr)
+            fdiff = [_lambdify(symbols, expr.diff(_)) for _ in symbols]
             f0 = NumerFunc(lambda x: f(*x), lambda x: np.array([df(*x) for df in fdiff]))
             return f0
 
