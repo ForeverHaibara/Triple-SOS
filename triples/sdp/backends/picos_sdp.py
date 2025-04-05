@@ -1,6 +1,7 @@
-from .backend import DualBackend
-
 import numpy as np
+
+from .backend import DualBackend
+from .status import SDPStatus
 
 class DualBackendPICOS(DualBackend):
     """
@@ -37,10 +38,26 @@ class DualBackendPICOS(DualBackend):
         return problem
 
     def _solve(self):
+        from picos.modeling import Strategy
+        from picos.modeling.solution import (
+            SS_OPTIMAL, SS_INFEASIBLE, SS_UNKNOWN,
+            PS_INFEASIBLE, PS_UNBOUNDED, PS_UNKNOWN, PS_INF_OR_UNB
+        )
         problem = self._create_problem()
-        problem.solve(verbosity = 0)
-        value = problem.variables['y'].value
-        if isinstance(value, (float, int)):
-            value = [value]
-        value = np.array(value).flatten()
-        return value
+        strategy = Strategy.from_problem(problem, primals=True)
+        solution = strategy.execute(primals=True)
+        if solution.primalStatus == SS_OPTIMAL:
+            solution.apply(snapshotStatus=True)
+            value = problem.variables['y'].value
+            if isinstance(value, (float, int)):
+                value = [value]
+            value = np.array(value).flatten()
+            return value
+
+        elif solution.primalStatus in (SS_INFEASIBLE, PS_INFEASIBLE):
+            self.set_status(SDPStatus.INFEASIBLE)
+        elif solution.primalStatus in (PS_UNBOUNDED,):
+            self.set_status(SDPStatus.UNBOUNDED)
+        elif solution.primalStatus in (SS_UNKNOWN, PS_UNKNOWN, PS_INF_OR_UNB):
+            self.set_status(SDPStatus.INFEASIBLE_OR_UNBOUNDED)
+        self.set_status(SDPStatus.ERROR)

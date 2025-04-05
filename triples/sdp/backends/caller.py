@@ -89,7 +89,7 @@ def create_numerical_dual_sdp(
     As = [space for x0, space in x0_and_space]
     bs = [x0 for x0, space in x0_and_space]
 
-    c = as_array(objective)
+    c = as_array(objective).flatten()
 
     ineq_lhs, ineq_rhs = [], []
     eq_lhs, eq_rhs = [], []
@@ -100,7 +100,7 @@ def create_numerical_dual_sdp(
 
         constraint = as_array(constraint)
         if len(constraint.shape) == 1:
-            constraint = constraint.reshape(1, -1)
+            constraint = constraint.reshape(1, c.shape[0])
         rhs = as_array(rhs).flatten()
 
         if op == '__le__':
@@ -132,7 +132,7 @@ def solve_numerical_dual_sdp(
         constraints: List[Tuple[ndarray, float, str]] = [],
         solver: Optional[str] = None,
         solver_options: Dict[str, Any] = {},
-        raise_exception: bool = False,
+        raise_exception: bool = True,
     ) -> Optional[ndarray]:
     """
     Solve for y such that all(Mat(x0 + space @ y) >> 0 for x0, space in x0_and_space.values()).

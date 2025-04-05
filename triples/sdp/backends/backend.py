@@ -3,15 +3,26 @@ from typing import List
 import numpy as np
 from numpy import ndarray
 
+from .status import SDPError, SDPStatusClass, SDPStatus
+
 class SDPBackend:
     _dependencies = tuple()
 
+    status = None
+
+    @classmethod
     def is_available(cls) -> bool:
         for dep in cls._dependencies:
             try:
                 __import__(dep)
             except ImportError:
                 return False
+        return True
+
+    def set_status(self, status: SDPStatusClass):
+        self.status = status
+        if status.error_cls is not None:
+            raise status.error_cls
         return True
 
     @classmethod
@@ -77,6 +88,20 @@ class DualBackend(SDPBackend):
         raise NotImplementedError
 
     def solve(self, *args, **kwargs):
+        if self.dof == 0:
+            # Most solvers would not allow a variable with shape (0,),
+            # so we shall handle it separately.
+            if np.all(self.ineq_rhs >= 0) and np.all(self.eq_rhs == 0):
+                for b, n in zip(self.bs, self.mat_sizes):
+                    b = b.reshape(n, n)
+                    eigs = np.linalg.eigvalsh(b)
+                    min_eig, max_eig = np.min(eigs), np.max(eigs)
+                    if min_eig < -1e-8:
+                        break
+                else:
+                    return np.zeros((0,), dtype=np.float64)
+            self.set_status(SDPStatus.INFEASIBLE)
+            return
         return self._solve()
 
 

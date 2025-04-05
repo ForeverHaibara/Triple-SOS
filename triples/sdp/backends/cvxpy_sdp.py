@@ -1,4 +1,5 @@
 from .backend import DualBackend
+from .status import SDPStatus
 
 class DualBackendCVXPY(DualBackend):
     """
@@ -40,11 +41,20 @@ class DualBackendCVXPY(DualBackend):
         return problem
 
     def _solve(self):
+        from cvxpy import settings as s
         problem = self._create_problem()
         obj = problem.solve(verbose=False)
-        for var in problem.variables():
-            if var.name() == 'y':
-                value = var.value.flatten()
-                return value
-        # should not reach here
-        raise NotImplementedError
+        if problem.status in (s.OPTIMAL, s.OPTIMAL_INACCURATE):
+            self.set_status(SDPStatus.OPTIMAL)
+            for var in problem.variables():
+                if var.name() == 'y':
+                    value = var.value.flatten()
+                    return value
+        elif problem.status in (s.INFEASIBLE, s.INFEASIBLE_INACCURATE):
+            self.set_status(SDPStatus.INFEASIBLE)
+        elif problem.status in (s.UNBOUNDED, s.UNBOUNDED_INACCURATE):
+            self.set_status(SDPStatus.UNBOUNDED)
+        elif problem.status in (s.INFEASIBLE_OR_UNBOUNDED,):
+            self.set_status(SDPStatus.INFEASIBLE_OR_UNBOUNDED)
+        self.set_status(SDPStatus.ERROR)
+        # raise NotImplementedError
