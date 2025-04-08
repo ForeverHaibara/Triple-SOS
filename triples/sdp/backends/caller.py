@@ -131,8 +131,13 @@ def solve_numerical_dual_sdp(
         objective: ndarray,
         constraints: List[Tuple[ndarray, float, str]] = [],
         solver: Optional[str] = None,
-        solver_options: Dict[str, Any] = {},
         raise_exception: bool = True,
+        verbose: Union[bool, int] = 0,
+        tol_fsb_abs: float = 1e-8,
+        tol_fsb_rel: float = 1e-8,
+        tol_gap_abs: float = 1e-8,
+        tol_gap_rel: float = 1e-8,
+        solver_options: Dict[str, Any] = {},
     ) -> Optional[ndarray]:
     """
     Solve for y such that all(Mat(x0 + space @ y) >> 0 for x0, space in x0_and_space.values()).
@@ -149,15 +154,20 @@ def solve_numerical_dual_sdp(
     solver : str
         The solver to use, defaults to None (auto selected). Refer to _DUAL_BACKEND for all solvers,
         but users should install the corresponding packages.
-    solver_options : Dict[str, Any]
-        The options to pass to the solver.
     raise_exception : bool
         Whether to raise exception when the solver fails.
     """
     backend = create_numerical_dual_sdp(x0_and_space, objective, constraints, solver=solver)
 
     try:
-        y = backend.solve(**solver_options)
+        y = backend.solve(
+            verbose=verbose,
+            tol_fsb_abs=tol_fsb_abs,
+            tol_fsb_rel=tol_fsb_rel,
+            tol_gap_abs=tol_gap_abs,
+            tol_gap_rel=tol_gap_rel,
+            solver_options=solver_options,
+        )
     except Exception as e:
         if raise_exception:
             raise e

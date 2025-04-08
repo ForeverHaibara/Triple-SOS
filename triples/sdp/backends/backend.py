@@ -3,7 +3,7 @@ from typing import List
 import numpy as np
 from numpy import ndarray
 
-from .status import SDPError, SDPStatusClass, SDPStatus
+from .settings import SDPError, SDPStatusClass, SDPStatus, SolverConfigs
 
 class SDPBackend:
     _dependencies = tuple()
@@ -29,8 +29,45 @@ class SDPBackend:
     def as_array(cls, x):
         return np.array(x).astype(np.float64)
 
-    def solve(self, *args, **kwargs):
+    def is_feasible(self, x, tol_fsb_abs: float = 1e-8, tol_fsb_rel: float = 1e-8) -> bool:
+        """
+        Check if the solution `x` is feasible. It will not be checked twice
+        if it has been checked by the backend solver.
+        """
         raise NotImplementedError
+
+    def _create_problem(self):
+        """
+        Some solvers formulate a Problem object and call `solve` method to solve the SDP problem,
+        e.g., cvxpy. This method is used to wrap the construction of the Problem object for
+        convenience.
+        """
+        raise NotImplementedError
+
+    def _solve(self, configs: SolverConfigs) -> ndarray:
+        """
+        Solve the SDP problem given sanitized configurations, e.g., verbosity, tolerances,
+        solver options. The solvers should implement handling of these configurations.
+        The output must be a numpy array of shape `(dof,)`. If the solver occurs errors like
+        infeasibility or unboundedness, the status of `self` should be set correspondingly.
+        """
+        raise NotImplementedError
+
+    def solve(self,
+            verbose: int = SolverConfigs.verbose,
+            tol_gap_abs: float = SolverConfigs.tol_gap_abs,
+            tol_gap_rel: float = SolverConfigs.tol_gap_rel,
+            tol_fsb_abs: float = SolverConfigs.tol_fsb_abs,
+            tol_fsb_rel: float = SolverConfigs.tol_fsb_rel,
+            solver_options: dict = SolverConfigs.solver_options,
+        ) -> ndarray:
+        """
+        Solve the SDP problem. The output must be a numpy array of shape `(dof,)`. If the solver
+        occurs errors like infeasibility or unboundedness, the status of `self` should be set
+        correspondingly.
+        """
+        raise NotImplementedError
+
 
 class DualBackend(SDPBackend):
     """
@@ -80,29 +117,50 @@ class DualBackend(SDPBackend):
         # else:
         #     return [int(np.sqrt(A.shape[0])*2) for A in self.As]
 
+    def is_feasible(self, x, tol_fsb_abs: float = 1e-8, tol_fsb_rel: float = 1e-8) -> bool:
+        if self.ineq_lhs.shape[0] > 0:
+            v = self.ineq_lhs @ x - self.ineq_rhs
+            minv = np.min(v)
+            if minv < -tol_fsb_abs or minv < -tol_fsb_rel * max(1, np.max(np.abs(v))):
+                return False
+        if self.eq_lhs.shape[0] > 0:
+            v = np.abs(self.eq_lhs @ x - self.eq_rhs)
+            maxv = np.max(v)
+            if maxv > tol_fsb_abs: # and
+                return False
+        for A, b, n in zip(self.As, self.bs, self.mat_sizes):
+            if n <= 0:
+                continue
+            mat = A @ x + b
+            mat = mat.reshape(n, n)
+            eigs = np.linalg.eigvalsh(mat)
+            min_eig, max_eig = np.min(eigs), np.max(eigs)
+            if min_eig < -tol_fsb_abs and min_eig < -tol_fsb_rel * max(1, abs(max_eig)):
+                return False
+        return True
 
-    def _create_problem(self):
-        raise NotImplementedError
+    def solve(self, **kwargs):
+        configs = SolverConfigs(**kwargs)
 
-    def _solve(self):
-        raise NotImplementedError
-
-    def solve(self, *args, **kwargs):
         if self.dof == 0:
             # Most solvers would not allow a variable with shape (0,),
             # so we shall handle it separately.
-            if np.all(self.ineq_rhs >= 0) and np.all(self.eq_rhs == 0):
-                for b, n in zip(self.bs, self.mat_sizes):
-                    b = b.reshape(n, n)
-                    eigs = np.linalg.eigvalsh(b)
-                    min_eig, max_eig = np.min(eigs), np.max(eigs)
-                    if min_eig < -1e-8:
-                        break
-                else:
-                    return np.zeros((0,), dtype=np.float64)
+            # if np.all(self.ineq_rhs >= 0) and np.all(self.eq_rhs == 0):
+            #     for b, n in zip(self.bs, self.mat_sizes):
+            #         b = b.reshape(n, n)
+            #         eigs = np.linalg.eigvalsh(b)
+            #         min_eig, max_eig = np.min(eigs), np.max(eigs)
+            #         if min_eig < -1e-8:
+            #             break
+            #     else:
+            #         return np.zeros((0,), dtype=np.float64)
+            x = np.zeros((self.dof,), dtype=np.float64)
+            if self.is_feasible(x, tol_fsb_abs=configs.tol_fsb_abs, tol_fsb_rel=configs.tol_fsb_rel):
+                self.set_status(SDPStatus.OPTIMAL)
+                return x
             self.set_status(SDPStatus.INFEASIBLE)
             return
-        return self._solve()
+        return self._solve(configs)
 
 
     @classmethod

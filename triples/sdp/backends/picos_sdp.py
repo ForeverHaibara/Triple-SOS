@@ -1,7 +1,7 @@
 import numpy as np
 
 from .backend import DualBackend
-from .status import SDPStatus
+from .settings import SDPStatus, SolverConfigs
 
 class DualBackendPICOS(DualBackend):
     """
@@ -20,7 +20,7 @@ class DualBackendPICOS(DualBackend):
     _opt_ineq_to_1d = False
     _opt_eq_to_ineq = False
 
-    def _create_problem(self):
+    def _create_problem(self, configs: SolverConfigs=None):
         from picos import Problem, RealVariable, SymmetricVariable
         problem = Problem()
         y = RealVariable('y', shape = self.dof)
@@ -35,17 +35,26 @@ class DualBackendPICOS(DualBackend):
             problem.add_constraint(self.eq_lhs * y == self.eq_rhs)
 
         problem.set_objective('min', self.c * y)
+
+        if configs is not None:
+            problem.options['verbosity'] = configs.verbose
+            problem.options['abs_dual_fsb_tol'] = configs.tol_fsb_abs
+            problem.options['rel_dual_fsb_tol'] = configs.tol_fsb_rel
+            problem.options['abs_prim_fsb_tol'] = configs.tol_fsb_abs
+            problem.options['rel_prim_fsb_tol'] = configs.tol_fsb_rel
+            problem.options['abs_ipm_opt_tol'] = configs.tol_gap_abs
+            problem.options['rel_ipm_opt_tol'] = configs.tol_gap_rel
         return problem
 
-    def _solve(self):
+    def _solve(self, configs: SolverConfigs):
         from picos.modeling import Strategy
         from picos.modeling.solution import (
             SS_OPTIMAL, SS_INFEASIBLE, SS_UNKNOWN,
             PS_INFEASIBLE, PS_UNBOUNDED, PS_UNKNOWN, PS_INF_OR_UNB
         )
-        problem = self._create_problem()
-        strategy = Strategy.from_problem(problem, primals=True)
-        solution = strategy.execute(primals=True)
+        problem = self._create_problem(configs)
+        strategy = Strategy.from_problem(problem, primals=True, **configs.solver_options)
+        solution = strategy.execute(primals=True, **configs.solver_options)
         if solution.primalStatus == SS_OPTIMAL:
             solution.apply(snapshotStatus=True)
             value = problem.variables['y'].value

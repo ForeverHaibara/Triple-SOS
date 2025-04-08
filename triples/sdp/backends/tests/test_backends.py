@@ -2,7 +2,7 @@ import numpy as np
 import sympy as sp
 
 from ..caller import _DUAL_BACKENDS, solve_numerical_dual_sdp
-from ..status import SDPError, SDPInfeasibleError, SDPUnboundedError, SDPProblemError
+from ..settings import SDPError, SDPInfeasibleError, SDPUnboundedError, SDPProblemError
 
 class SDPDualProblems:
     """
@@ -48,6 +48,11 @@ class SDPDualProblems:
         answer = -9.
         return (x0_and_space, objective, []), answer
 
+    def problem_dof1(self):
+        # A = [[2-y, 1], [1, -y]], min(-y)
+        x0_and_space = {0: ([2,1,1,0], [[-1],[0],[0],[-1]])}
+        return (x0_and_space, sp.Matrix([-1]), []), 2**.5 - 1
+
 
     def problem_infeasible(self):
         # A = [[2, 2*a, 2*a - 8], [2*a, 2, 1 - a], [2*a - 8, 1 - a, 2]]
@@ -67,6 +72,7 @@ class SDPDualProblems:
         x0_and_space = {0: ([0,1,1,0], np.array([[1,0,0,1],[1,1,1,0]]).T.tolist())}
         return (x0_and_space, [1,2], [([-3,-5],2,'<=')]), -np.inf
 
+
     def problem_empty0(self):
         x0_and_space = dict()
         return (x0_and_space, [], []), 0.
@@ -80,7 +86,15 @@ class SDPDualProblems:
                         2: (np.array([3.14]), np.zeros((1,0)))}
         constraints = [(np.zeros((0,)), -2/3, '<'),
                         (np.zeros((4,0)), np.zeros((4,)), '=='),
-                        (np.zeros((2,0)), [2e5, 3.14e-6], '>')]
+                        (np.zeros((2,0)), [2e5, 3.14e-6], '<')]
+        return (x0_and_space, [], constraints), None
+
+    def problem_empty_numerical(self):
+        x0_and_space = {1: (np.array([1,-2,-2,4])/3, np.zeros((4,0))),
+                        2: (np.array([3.14]), np.zeros((1,0)))}
+        constraints = [(np.zeros((0,)), 1e-15, '=='),
+                        (np.zeros((2,0)), [-1.2e-14, 1.123e-15], '='),
+                        (np.zeros((2,0)), [1e-14, -2], '>')]
         return (x0_and_space, [], constraints), 0.
 
     def problem_empty3(self):
@@ -103,7 +117,8 @@ def test_duals():
             # print(f'{problem_name} with {solver_name}')
             (x0_and_space, objective, constraints), answer = problem()
             if answer is not None and not np.isinf(answer):
-                y = solve_numerical_dual_sdp(x0_and_space, objective, constraints, solver=solver_name)
+                y = solve_numerical_dual_sdp(x0_and_space, objective, constraints,
+                            solver=solver_name, raise_exception=False)
                 objective = np.array(objective).astype(float).flatten()
                 assert isinstance(y, np.ndarray) and y.shape == objective.shape,\
                     f'Dual solver {solver_name} failed on problem {problem_name} with unexpected return {y}.'

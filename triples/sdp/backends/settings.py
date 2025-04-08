@@ -49,10 +49,44 @@ class StatusError(SDPStatusClass):
     error      = True
     error_cls  = SDPError
 
-class SDPStatus:
+class SDPStatus(metaclass=NoInstanceMeta):
     """Namespace for SDP statuses."""
     OPTIMAL = StatusOptimal
     INFEASIBLE_OR_UNBOUNDED = StatusInfOrUnb
     INFEASIBLE = StatusInfeasible
     UNBOUNDED = StatusUnbounded
     ERROR = StatusError
+
+
+class SolverConfigs:
+    verbose = 0
+    tol_gap_abs = 1e-8
+    tol_gap_rel = 1e-8
+    tol_fsb_abs = 1e-8
+    tol_fsb_rel = 1e-8
+    solver_options = dict()
+    _KEYS = ('verbose', 'tol_gap_abs', 'tol_gap_rel', 'tol_fsb_abs', 'tol_fsb_rel', 'solver_options')
+    def __init__(self, **kwargs):
+        for key in self._KEYS:
+            setattr(self, key, kwargs.pop(key, getattr(self, key)))
+
+        if kwargs:
+            raise TypeError(f"Unexpected keyword arguments for SolverConfigs: {list(kwargs.keys())}")
+
+    def keys(self):
+        return list(self._KEYS)
+
+    def values(self):
+        return [getattr(self, key) for key in self._KEYS]
+
+    def items(self):
+        return [(key, getattr(self, key)) for key in self._KEYS]
+
+    def __getitem__(self, key):
+        return getattr(self, key)
+
+    def __repr__(self):
+        return f"SolverConfigs({', '.join(f'{key}={getattr(self, key)!r}' for key in self._KEYS)})"
+
+    def __str__(self):
+        return f"SolverConfigs({', '.join(f'{key}={getattr(self, key)}' for key in self._KEYS)})"

@@ -1,5 +1,5 @@
 from .backend import DualBackend
-from .status import SDPStatus
+from .settings import SDPStatus, SolverConfigs
 
 class DualBackendCVXPY(DualBackend):
     """
@@ -40,10 +40,10 @@ class DualBackendCVXPY(DualBackend):
     
         return problem
 
-    def _solve(self):
+    def _solve(self, configs: SolverConfigs):
         from cvxpy import settings as s
         problem = self._create_problem()
-        obj = problem.solve(verbose=False)
+        obj = problem.solve(verbose=configs.verbose, **configs.solver_options)
         if problem.status in (s.OPTIMAL, s.OPTIMAL_INACCURATE):
             self.set_status(SDPStatus.OPTIMAL)
             for var in problem.variables():
