@@ -29,12 +29,10 @@ class SDPProblemBase(ABC):
     """
     is_dual = False
     is_primal = False
+    y = None
+    S = None
+    decompositions = None
     def __init__(self, *args, **kwargs) -> None:
-        # associated with the PSD matrices
-        self.y = None
-        self.S = None
-        self.decompositions = None
-
         # record the numerical solutions
         self._ys = []
 
@@ -189,11 +187,28 @@ class SDPProblemBase(ABC):
             return None
         if verbose:
             S = self.S_from_y(y)
-            S_numer = [np.array(mat).astype('float64') for mat in S.values()]
+            S_numer = [np.array(mat).astype(np.float64) for mat in S.values()]
             S_eigen = [np.min(np.linalg.eigvalsh(mat)) if mat.size else 0 for mat in S_numer]
             print(f'Minimum Eigenvalues = {S_eigen}')
         return rationalize_and_decompose(y, mat_func=self.S_from_y, projection=self.project, **kwargs)
 
+    def solve_obj(self,
+            objective: Objective,
+            constraints: List[Constraint] = [],
+            solver: Optional[str] = None,
+            solve_child: bool = True,
+            propagate_to_parent: bool = True,
+            raise_exception: bool = False,
+            verbose: bool = False,
+            tol_gap_rel: float = 1e-8,
+            tol_gap_abs: float = 1e-8,
+            tol_fsb_abs: float = 1e-8,
+            tol_fsb_rel: float = 1e-8,
+            solver_options: Dict[str, Any] = {},
+        ) -> Optional[Matrix]:
+        """
+        Solve the SDP problem with a given objective and constraints.
+        """
 
     @abstractmethod
     def _solve_numerical_sdp(self,

@@ -9,7 +9,7 @@ from sympy.polys.polyclasses import DMP
 
 from ...utils import Root, MonomialManager
 from ...utils.roots.num_extrema import numeric_optimize_skew_symmetry
-from ...sdp.arithmetic import _permute_matrix_rows
+from ...sdp.arithmetic import permute_matrix_rows
 
 DEFAULT_TANGENTS = {
     3: (lambda a, b, c: [

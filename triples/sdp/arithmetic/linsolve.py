@@ -1,76 +1,20 @@
-# arithmetic.py  
-#  
-# This module provides an implementation of rational number matrices and their  
-# arithmetic operations, aiming to provide a more efficient alternative to  
-# using sympy.Rational for matrix computations.  
-#
-# NOTE: Using sympy.Matrix to create a new object is very slow.
-#       Always build from rep (SDM, DDM, DFM classes) instead.
-#       SDM -> DomainMatrix -> MutableDenseMatrix
-# TODO: compare the performance of the two implementations
-
-# from fractions import Fraction
 from collections import defaultdict
 from math import gcd
 from time import time
-from typing import List, Tuple, Union, Optional
+from typing import List, Tuple
 
-from numpy import array as np_array, around as np_round, zeros as np_zeros, iinfo as np_iinfo
-from numpy import isnan, inf, unique
-import sympy as sp
-from sympy import __version__ as _SYMPY_VERSION
-from sympy import Rational
 from sympy.external.gmpy import MPQ, MPZ # >= 1.9
-from sympy.external.importtools import version_tuple
+from sympy.matrices import MutableDenseMatrix as Matrix
 from sympy.matrices.repmatrix import RepMatrix
 from sympy.polys.domains import ZZ, QQ, EX, EXRAW # EXRAW >= 1.9
 from sympy.polys.matrices.domainmatrix import DomainMatrix # polys.matrices >= 1.8
-from sympy.polys.matrices.ddm import DDM
 from sympy.polys.matrices.sdm import SDM
 
-if tuple(version_tuple(_SYMPY_VERSION)) >= (1, 13):
-    from sympy.polys.matrices.dfm import DFM
+from .matop import is_zz_qq_mat, is_empty_matrix, permute_matrix_rows
 
-    primitive = lambda x: x.primitive()
-else:
-    class _DFM_dummy: ...
-    DFM = _DFM_dummy
-
-    from sympy.polys.densetools import dup_primitive
-
-    def primitive(self: DomainMatrix):
-        K = self.domain
-        dok = self.rep.to_dok()
-        elements, data = list(dok.values()), list(dok.keys())
-        content, prims = dup_primitive(elements, K)
-        sdm = defaultdict(dict)
-        for (i, j), v in zip(data, prims):
-            sdm[i][j] = v
-        M_primitive = self.from_rep(SDM(sdm, self.shape, K))
-        return content, M_primitive
-
-from .utils import Mat2Vec, is_empty_matrix
-
-_INT32_MAX = np_iinfo('int32').max # 2147483647
-_INT64_MAX = np_iinfo('int64').max # 9223372036854775807
-
-# for dev purpose only
-_VERBOSE_MATMUL_MULTIPLE = False
 _VERBOSE_SOLVE_UNDETERMINED_LINEAR = False
 _VERBOSE_SOLVE_CSR_LINEAR = False
 _USE_SDM_RREF_DEN = False # has bug in low sympy versions due to behaviour of quo
-
-
-def _lcm(x, y):
-    """
-    LCM func for python internal integers. DO NOT USE SYMPY BECAUSE IT IS SLOW
-    WHEN CONVERTING TO SYMPY INTEGERS.
-    """
-    return x * y // gcd(x, y)
-
-def is_zz_qq_mat(mat):
-    """Judge whether a matrix is a ZZ/QQ RepMatrix."""
-    return isinstance(mat, RepMatrix) and mat._rep.domain in (ZZ, QQ)
 
 def _row_reduce_dict(mat, rows, cols, normalize_last=True, normalize=True, zero_above=True):
     """
@@ -258,40 +202,9 @@ def _rref(M, pivots=True, normalize_last=True):
         mat = (mat, pivots)
     return mat
 
-def _permute_matrix_rows(matrix, permutation):
-    """Fast operation of matrix rowswap."""
-    rep = matrix._rep.rep if isinstance(matrix, RepMatrix) else None
-
-    if isinstance(rep, SDM):
-        new_rep = {}
-        for orig_row, cols_dict in rep.items():
-            new_rep[permutation[orig_row]] = cols_dict #.copy()
-        new_rep = SDM(new_rep, rep.shape, rep.domain)
-        return matrix.__class__._fromrep(DomainMatrix.from_rep(new_rep))
-
-    elif isinstance(rep, DDM):
-        new_rep = [None for _ in range(rep.shape[0])]
-        for orig_row in range(rep.shape[0]):
-            new_rep[permutation[orig_row]] = rep[orig_row]#[:]
-        new_rep = DDM(new_rep, rep.shape, rep.domain)
-        return matrix.__class__._fromrep(DomainMatrix.from_rep(new_rep))
-
-    elif isinstance(rep, DFM):
-        new_rep = [None for _ in range(rep.shape[0])]
-        rep2 = rep.rep.tolist()
-        for orig_row in range(rep.shape[0]):
-            new_rep[permutation[orig_row]] = rep2[orig_row]
-        new_rep = DFM(new_rep, rep.shape, rep.domain)
-        return matrix.__class__._fromrep(DomainMatrix.from_rep(new_rep))
-
-    # else:
-    new_mat = matrix.copy()
-    for orig_row in range(matrix.shape[0]):
-        new_mat[permutation[orig_row], :] = matrix[orig_row, :]
-    return new_mat
 
 
-def solve_undetermined_linear(M: sp.Matrix, B: sp.Matrix) -> Tuple[sp.Matrix, sp.Matrix]:
+def solve_undetermined_linear(M: Matrix, B: Matrix) -> Tuple[Matrix, Matrix]:
     """
     Solve an undetermined linear system Mx = B with LU decomposition.
     See details at sympy.Matrix.gauss_jordan_solve.
@@ -339,13 +252,13 @@ def solve_undetermined_linear(M: sp.Matrix, B: sp.Matrix) -> Tuple[sp.Matrix, sp
 
     # Full parametric solution
     V        = A[:rank, free_var_index]
-    V        = V.col_join(-sp.eye(V.cols))
+    V        = V.col_join(-A.eye(V.cols))
     vt       = v[:rank, :]
-    vt       = vt.col_join(sp.zeros(V.cols, vt.cols))
+    vt       = vt.col_join(A.zeros(V.cols, vt.cols))
 
     # Undo permutation
-    V2 = _permute_matrix_rows(V, permutation)
-    vt2 = _permute_matrix_rows(vt, permutation)
+    V2 = permute_matrix_rows(V, permutation)
+    vt2 = permute_matrix_rows(vt, permutation)
     # for k in range(col):
     #     V2[permutation[k], :] = V[k, :]
     #     vt2[permutation[k]] = vt[k]
@@ -356,7 +269,8 @@ def solve_undetermined_linear(M: sp.Matrix, B: sp.Matrix) -> Tuple[sp.Matrix, sp
 
     return vt2, V2
 
-def solve_nullspace(A: sp.Matrix) -> sp.Matrix:
+
+def solve_nullspace(A: Matrix) -> Matrix:
     """
     Compute the null space of a matrix A.
     If A is full-rank and has shape m x n (m > n), then the null space has shape m x (m-n).
@@ -364,16 +278,15 @@ def solve_nullspace(A: sp.Matrix) -> sp.Matrix:
     # try:
     #     x0, space = solve_undetermined_linear(A.T, sp.zeros(A.cols, 1))
     # except ValueError:
-    #     return sp.Matrix.zeros(A.rows, 0)
+    #     return Matrix.zeros(A.rows, 0)
     # return space
-    m = sp.Matrix.hstack(*A.T.nullspace())
+    m = Matrix.hstack(*A.T.nullspace())
     if is_empty_matrix(m):
-        return sp.zeros(A.shape[0], 0)
+        return A.zeros(A.shape[0], 0)
     return m
 
 
-
-def solve_column_separated_linear(A: sp.Matrix, b: sp.Matrix, x0_equal_indices: List[List[int]] = []):
+def solve_column_separated_linear(A: Matrix, b: Matrix, x0_equal_indices: List[List[int]] = []):
     """
     This is a function that solves a special linear system Ax = b => x = x_0 + C * y
     where each column of A has at most 1 nonzero element. For more general cases, use solve_csr_linear.
@@ -381,9 +294,9 @@ def solve_column_separated_linear(A: sp.Matrix, b: sp.Matrix, x0_equal_indices: 
 
     Parameters
     ----------
-    A: sp.Matrix
+    A: Matrix
         Sympy matrix that satisfies the condition.
-    b: sp.Matrix
+    b: Matrix
         Right-hand side
     x0_equal_indices: List[List[int]]
         Each sublist contains indices of equal elements.
@@ -479,8 +392,8 @@ def solve_column_separated_linear(A: sp.Matrix, b: sp.Matrix, x0_equal_indices: 
         print('>> Solve separated system time:', time() - time0) # fast, < 1 sec over (100 x 10000)
         time0 = time()
 
-    to_mat = lambda x, shape: sp.Matrix._fromrep(DomainMatrix.from_rep(SDM(x, shape, domain)))
-    # x0, space = sp.Matrix(x0), sp.Matrix(spaces).T
+    to_mat = lambda x, shape: Matrix._fromrep(DomainMatrix.from_rep(SDM(x, shape, domain)))
+    # x0, space = Matrix(x0), Matrix(spaces).T
     x0 = to_mat(x0, (cols, 1))
     spaces = to_mat(spaces, (len(spaces), cols)).T
 
@@ -490,16 +403,16 @@ def solve_column_separated_linear(A: sp.Matrix, b: sp.Matrix, x0_equal_indices: 
     return x0, spaces
 
 
-def solve_csr_linear(A: sp.Matrix, b: sp.Matrix, x0_equal_indices: List[List[int]] = []):
+def solve_csr_linear(A: Matrix, b: Matrix, x0_equal_indices: List[List[int]] = []):
     """
     Solve a linear system Ax = b where A is stored in SDM (CSR) format.
     Further, we could require some of entries of x to be equal.
 
     Parameters
     ----------
-    A: sp.Matrix
+    A: Matrix
         Sympy matrix (with preferably SDM format).
-    b: sp.Matrix
+    b: Matrix
         Right-hand side
     x0_equal_indices: List[List[int]]
         Each sublist contains indices of equal elements.
@@ -581,271 +494,9 @@ def solve_csr_linear(A: sp.Matrix, b: sp.Matrix, x0_equal_indices: List[List[int
                 new_rep.append((i, repj)) # Shall we make a copy?
         new_rep = dict(new_rep)
         sdm = SDM(new_rep, (cols, rep.shape[1]), rep.domain)
-        return sp.Matrix._fromrep(DomainMatrix.from_rep(sdm))
+        return Matrix._fromrep(DomainMatrix.from_rep(sdm))
 
     x0 = _restore_from_compressed(x0_compressed, mapping)
     space = _restore_from_compressed(space_compressed, mapping)
     return x0, space
 
-def _cast_sympy_matrix_to_numpy(sympy_mat_rep, dtype: str = 'int64'):
-    """Cast a sympy RepMatrix on ZZ to numpy int64 matrix."""
-    rows, cols = sympy_mat_rep.shape
-    items = list(sympy_mat_rep.rep.to_dok().items()) # avoid .iter_items() for version compatibility
-    n = len(items)
-
-    row_indices = [0] * n
-    col_indices = [0] * n
-    data_list = [0] * n
-
-    for k in range(n):
-        (i, j), v = items[k]
-        row_indices[k] = i
-        col_indices[k] = j
-        data_list[k] = v.__int__()
-
-    arr = np_zeros((rows, cols), dtype=dtype)
-    if data_list:
-        arr[row_indices, col_indices] = data_list
-    return arr
-
-def _cast_list_to_sympy_matrix(rows: int, cols: int, lst: List[int]) -> sp.Matrix:
-    """Convert a list of INTEGER values to a sympy matrix efficiently."""
-    sdm = {}
-    for i in range(rows):
-        row = {}
-        for j, v in enumerate(lst[i*cols:(i+1)*cols]):
-            if v:
-                row[j] = MPZ(v)
-        if row:
-            sdm[i] = row
-    return sp.Matrix._fromrep(DomainMatrix.from_rep(SDM(sdm, (rows, cols), ZZ)))
-
-
-
-def matmul(A: sp.Matrix, B: sp.Matrix, return_shape = None) -> sp.Matrix:
-    """
-    Fast, low-level implementation of symbolic matrix multiplication.
-    When A and B are both rational matrices, it calls NumPy to compute the result.
-    Otherwise, it falls back to the default method.
-
-    Parameters
-    ----------
-    A: Matrix
-        Matrix A
-    B: Matrix
-        Matrix B
-    return_shape: Tuple[int, int]
-        Shape of the result. If not specified, it will be inferred.
-    """
-    if A.shape[0] == 0 or B.shape[0] == 0 or B.shape[1] == 0:
-        return_shape = return_shape or (A.shape[0], B.shape[1])
-        return sp.zeros(*return_shape)
-    A0, B0 = A, B
-
-    def default(A0, B0):
-        AB = A0 * B0
-        if return_shape: AB = AB.reshape(*return_shape)
-        return AB
-    
-    if not (is_zz_qq_mat(A) and is_zz_qq_mat(B)):
-        return default(A0, B0)
-
-    q1, A = primitive(A._rep)
-    try:
-        A = _cast_sympy_matrix_to_numpy(A, dtype = 'int64')
-    except OverflowError:
-        return default(A0, B0)
-    _MAXA = abs(A).max()
-    if isnan(_MAXA) or _MAXA == inf or _MAXA > _INT64_MAX:
-        return default(A0, B0)
-
-    q2, B = primitive(B._rep)
-    try:
-        B = _cast_sympy_matrix_to_numpy(B, dtype = 'int64')
-    except OverflowError:
-        return default(A0, B0)
-    _MAXB = abs(B).max()
-    if isnan(_MAXB) or _MAXB == inf or _MAXB > _INT64_MAX or int(_MAXA) * int(_MAXB) * B.shape[0] > _INT64_MAX:
-        return default(A0, B0)
-
-    C = (A @ B).flatten().tolist()
-    q1q2 = q1 * q2
-    return_shape = return_shape or (A0.shape[0], B0.shape[1])
-    C = _cast_list_to_sympy_matrix(*return_shape, C) * q1q2
-    return C
-
-
-def matmul_multiple(A: sp.Matrix, B: sp.Matrix) -> sp.Matrix:
-    """
-    Perform multiple matrix multiplications. This can be regarded as a 3-dim tensor multiplication.
-    Assume A has shape N x (n^2) and B has shape n x m, then the result has shape N x (n*m).
-
-    Parameters
-    ----------
-    A: Matrix
-        Matrix A
-    B: Matrix
-        Matrix B
-    """
-    if A.shape[0] == 0 or B.shape[0] == 0 or B.shape[1] == 0:
-        return sp.zeros(A.shape[0], B.shape[0]*B.shape[1])
-
-    A0, B0 = A, B
-    def default(A, B):
-        eq_mat = []
-        for i in range(A.shape[0]):
-            Aij = Mat2Vec.vec2mat(A[i,:])
-            eq = matmul(Aij, B, return_shape = (1, Aij.shape[0]*B.shape[1]))
-            eq_mat.append(eq)
-        eq_mat = sp.Matrix.vstack(*eq_mat)
-        return eq_mat
-
-    if _VERBOSE_MATMUL_MULTIPLE:
-        print('MatmulMultiple A B shape =', A.shape, B.shape)
-        sparsity = lambda x: len(list(x.iter_values())) / (x.shape[0] * x.shape[1])
-        print('>> Sparsity A B =', sparsity(A), sparsity(B))
-        time0 = time()
-
-
-    if not (is_zz_qq_mat(A) and is_zz_qq_mat(B)):
-        # fallback to defaulted method
-        return default(A0, B0)
-
-    N = A.shape[0]
-    n, m = B.shape
-
-    q1, A = primitive(A._rep)
-    try:
-        A = _cast_sympy_matrix_to_numpy(A, dtype = 'int64')
-    except OverflowError:
-        return default(A0, B0)
-    _MAXA = abs(A).max()
-    if isnan(_MAXA) or _MAXA == inf or _MAXA > _INT64_MAX:
-        return default(A0, B0)
-
-    q2, B = primitive(B._rep)
-    try:
-        B = _cast_sympy_matrix_to_numpy(B, dtype = 'int64')
-    except OverflowError:
-        return default(A0, B0)
-    _MAXB = abs(B).max()
-    if isnan(_MAXB) or _MAXB == inf or _MAXB > _INT64_MAX or int(_MAXA) * int(_MAXB) * n > _INT64_MAX:
-        return default(A0, B0)
-
-    A = A.reshape((N, n, n))
-
-    if _VERBOSE_MATMUL_MULTIPLE:
-        print('>> Time for casting to numpy:', time() - time0)
-        time0 = time()
-
-    C = (A @ B).flatten().tolist()
-
-    if _VERBOSE_MATMUL_MULTIPLE:
-        print('>> Time for numpy matmul:', time() - time0) # very fast (can be ignored)
-        time0 = time()
-
-    q1q2 = q1 * q2
-    C = _cast_list_to_sympy_matrix(N, n*m, C) * q1q2
-
-    if _VERBOSE_MATMUL_MULTIPLE:
-        print('>> Time for casting to sympy:', time() - time0) # < 1 sec over (800*8000)
-        time0 = time()
-
-    return C
-
-
-def symmetric_bilinear(U: sp.Matrix, A: sp.Matrix, is_A_vec: bool = False, return_shape = None):
-    """
-    Compute U.T * A * U efficiently.
-    Assume U is n x m, U.T is m x n and A is n x n. The result is m x m.
-
-    Complexity: Kronecker product is O(m^2n^2), and using direct matmul is O(mn(n+m)).
-    When A is sparse with k nonzeros, the complexity is O(2m^2k).
-
-    Parameters
-    ----------
-    U: Matrix
-        Matrix U
-    A: Matrix
-        Matrix A
-    is_A_vec: bool
-        Whether A is stored as a vector. If True, it first converts A to a matrix.
-    return_shape: Optional[Tuple[int, int]]
-        Shape of the returned matrix.
-    """
-    # n, m = U.shape
-    
-    if is_A_vec:
-        A = Mat2Vec.vec2mat(A)
-    M = matmul(U.T, matmul(A, U))
-    # M = U.T * A * U
-
-    if return_shape is not None:
-        return M.reshape(return_shape[0], return_shape[1])
-    return M
-
-
-def symmetric_bilinear_multiple(U: sp.Matrix, A: sp.Matrix) -> sp.Matrix:
-    """
-    Perform multiple symmetric bilinear products.
-    Assume U has shape n x m and A has shape N x (n^2), then the result has shape N x m^2.
-
-    Parameters
-    ----------
-    U: Matrix
-        Matrix U
-    A: Matrix
-        Matrix A
-    """
-    A0, U0 = A, U
-    def default(A, U):
-        eq_mat = []
-        for i in range(A.shape[0]):
-            # Aij = Mat2Vec.vec2mat(space[i,:])
-            # eq = U.T * Aij * U
-            eq = symmetric_bilinear(U, A[i,:], is_A_vec = True, return_shape = (1, U.shape[1]**2))
-            eq_mat.append(eq)
-        eq_mat = sp.Matrix.vstack(*eq_mat)
-        return eq_mat
-
-    N = A.shape[0]
-    if N == 0:
-        return sp.Matrix.zeros(0, U.shape[1]**2)
-
-    if not (is_zz_qq_mat(A) and is_zz_qq_mat(U)):
-        return default(A0, U0)
-    # return default(A0, U0)
-    n, m = U.shape
-
-
-    q1, A = primitive(A._rep)
-    try:
-        A = _cast_sympy_matrix_to_numpy(A, dtype = 'int64')
-    except OverflowError:
-        return default(A0, U0)
-    _MAXA = abs(A).max()
-    if isnan(_MAXA) or _MAXA == inf or _MAXA > _INT64_MAX:
-        return default(A0, U0)
-
-    q2, U = primitive(U._rep)
-    try:
-        U = _cast_sympy_matrix_to_numpy(U, dtype = 'int64')
-    except OverflowError:
-        return default(A0, U0)
-    _MAXU = abs(U).max()
-    if isnan(_MAXU) or _MAXU == inf or _MAXU > _INT64_MAX or int(_MAXA) * int(_MAXU)**2 * n**2 > _INT64_MAX:
-        return default(A0, U0)
-    A = A.reshape((N, n, n))
-
-    C = (U.T @ A @ U).flatten().tolist()
-
-    if _VERBOSE_MATMUL_MULTIPLE:
-        time0 = time()
-
-    q1q22 = q1 * q2**2
-    C = _cast_list_to_sympy_matrix(N, m**2, C) * q1q22
-
-    if _VERBOSE_MATMUL_MULTIPLE:
-        print('>> Time for casting to sympy Bilinear:', time() - time0)
-
-    return C

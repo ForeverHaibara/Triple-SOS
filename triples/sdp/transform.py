@@ -52,7 +52,7 @@ class SDPIdentityTransform(SDPTransformation):
     created by __new__ from other classes. And it should not be used directly.
     """
     # __slots__ = ('parent_node', 'child_node')
-    def __new__(cls, parent_node):
+    def __new__(cls, parent_node, *args, **kwargs):
         obj = object.__new__(cls)
         obj.parent_node = parent_node
         obj.child_node = parent_node
