@@ -285,6 +285,15 @@ def solve_nullspace(A: Matrix) -> Matrix:
         return A.zeros(A.shape[0], 0)
     return m
 
+def solve_columnspace(A: Matrix) -> Matrix:
+    """
+    Compute the column space of a matrix A.
+    If A is full-rank and has shape m x n (m < n), then the column space has shape m x n.
+    """
+    m = Matrix.hstack(*A.columnspace())
+    if is_empty_matrix(m):
+        return A.zeros(A.shape[0], 0)
+    return m
 
 def solve_column_separated_linear(A: Matrix, b: Matrix, x0_equal_indices: List[List[int]] = []):
     """

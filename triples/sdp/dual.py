@@ -10,7 +10,7 @@ from .backend import (
     SDPBackend, solve_numerical_dual_sdp,
     max_relax_var_objective, min_trace_objective, max_inner_objective
 )
-from .transform import DualTransformMixin
+from .transforms import TransformableDual
 
 from .utils import S_from_y, decompose_matrix, exprs_to_arrays
 
@@ -78,7 +78,7 @@ def _infer_free_symbols(x0_and_space: Dict[str, Tuple[Matrix, Matrix]], free_sym
     return []
 
 
-class SDPProblem(DualTransformMixin):
+class SDPProblem(TransformableDual):
     """
     Class to solve rational dual SDP feasible problems, which is in the form of
 

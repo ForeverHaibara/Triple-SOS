@@ -1,18 +1,22 @@
+"""
+This module contains basic linear transformations of SDP problems.
+"""
+
 from typing import List, Tuple, Dict, Optional, Any
 
 from sympy.matrices import MutableDenseMatrix as Matrix
 
-from .transform import SDPTransformation
+from .transform import SDPTransformation, SDPProblemBase
 from ..arithmetic import (
-    solve_undetermined_linear, solve_nullspace,
+    is_empty_matrix, vec2mat,
+    solve_undetermined_linear, solve_nullspace, solve_columnspace,
     matmul, matmul_multiple, symmetric_bilinear, symmetric_bilinear_multiple
 )
-from ..utils import is_empty_matrix, Mat2Vec, decompose_matrix
 
 
-class SDPLinearTransform(SDPTransformation):
+class SDPMatrixTransform(SDPTransformation):
     """
-    Standard linear transformation class of SDP problems.
+    Standard matrix transformation class of SDP problems.
 
     Parameters
     -----------
@@ -20,10 +24,10 @@ class SDPLinearTransform(SDPTransformation):
         The parent node of the transformation.
     child_node : SDPProblemBase
         The child node of the transformation.
-    columnspaces : Dict[Tuple[Any, Any], Matrix]
+    columnspace : Dict[Any, Matrix]
         The column spaces of the transformation. Should be a dictionary of
         (key, new_key): matrix. If the dict is None, the mapping is assumed to be the identity.
-    nullspaces : Dict[Tuple[Any, Any], Matrix]
+    nullspace : Dict[Any, Matrix]
         The null spaces of the transformation. Should be a dictionary of
         (key, new_key): matrix. If the dict is None, the mapping is assumed to be the identity.
     A : Matrix
@@ -33,22 +37,24 @@ class SDPLinearTransform(SDPTransformation):
         The matrix b in y = Ay' + b.
         If None, the linear transformation is assumed to be the identity y = y'.
     """
-    _columnspaces = None
-    _nullspaces = None
+    _columnspace = None
+    _nullspace = None
     _A = None
     _b = None
     def __init__(self, parent_node, child_node,
-            columnspaces: Optional[Dict[Tuple[Any, Any], Matrix]]=None,
-            nullspaces: Optional[Dict[Tuple[Any, Any], Matrix]]=None,
+            columnspace: Optional[Dict[Any, Matrix]]=None,
+            nullspace: Optional[Dict[Any, Matrix]]=None,
             A: Optional[Matrix]=None,
             b: Optional[Matrix]=None):
         super().__init__(parent_node, child_node)
-        self._columnspaces = columnspaces
-        self._nullspaces = nullspaces
+        self._columnspace = columnspace
+        self._nullspace = nullspace
         self._A = A
         self._b = b
-        if (A is None and (b is not None)) or (b is None and (A is not None)):
+        if (A is None) ^ (b is None):
             raise ValueError("A and b should be both None or both not None.")
+        if (columnspace is None) ^ (nullspace is None):
+            raise ValueError("The columnspace and nullspace should be both None or both not None.")
 
     def _propagate_to_parent(self):
         parent = self.parent_node
@@ -61,10 +67,39 @@ class SDPLinearTransform(SDPTransformation):
             # no linear transformation
             parent.y = child.y
         else:
-            parent.y = self._A * child.y + self._b
+            parent.y = matmul(self._A, child.y) + self._b
+
+        if self._columnspace is None:
+            # no columnspace transformation
+            parent.S = child.S
+            parent.decompositions = child.decompositions
+        else:
+            parent.register_y(parent.y)
+
+    def _propagate_nullspace_to_child(self, nullspace):
+        columnspace = self._columnspace
+        return {key: matmul(columnspace[key].T, nullspace[key]) for key in columnspace.keys()}
 
 
-class DualMatrixTransform(SDPLinearTransform):
+    @classmethod
+    def apply(cls, parent_node, columnspace: Dict[Any, Matrix]=None, nullspace: Dict[Any, Matrix]=None, to_child: bool=True) -> SDPProblemBase:
+        if parent_node.is_dual:
+            return DualMatrixTransform.apply(parent_node, columnspace=columnspace, nullspace=nullspace, to_child=to_child)
+        raise NotImplementedError
+
+    @classmethod
+    def apply_from_affine(cls, parent_node, A: Matrix, b: Matrix) -> SDPProblemBase:
+        if parent_node.is_dual:
+            return DualMatrixTransform.apply_from_affine(parent_node, A, b)
+        raise NotImplementedError
+
+    @classmethod
+    def apply_from_equations(cls, parent_node, eqs: Matrix, rhs: Matrix) -> SDPProblemBase:
+        b, A = solve_undetermined_linear(eqs, rhs)
+        return cls.apply_from_affine(parent_node, A, b)
+
+
+class DualMatrixTransform(SDPMatrixTransform):
     """
     Assume the original problem to be S1 >= 0, ... Sn >= 0.
     We assume that Si = Ui * Mi * Ui' given matrices U1, ... Un.
@@ -93,15 +128,32 @@ class DualMatrixTransform(SDPLinearTransform):
         (A_i0Vi) + y_1 * (A_i1Vi) + ... + y_n * (A_inVi) = 0.
     """
     @classmethod
-    def apply(cls, parent_node, columnspaces: Dict[Any, Matrix]=None, nullspaces: Dict[Any, Matrix]=None):
+    def apply(cls, parent_node, columnspace: Dict[Any, Matrix]=None, nullspace: Dict[Any, Matrix]=None, to_child: bool=True):
         if not parent_node.is_dual:
             raise ValueError("The parent node should be dual.")
-        if columnspaces is None and nullspaces is None:
-            raise ValueError("At least one of columnspaces and nullspaces should be provided.")
-        if columnspaces is None:
-            nullspaces = {}
+        if columnspace is None and nullspace is None:
+            raise ValueError("At least one of columnspace and nullspace should be provided.")
+        if nullspace is None:
+            columnspace = {key: solve_columnspace(space) for key, space in columnspace.items()}
+            nullspace = {key: solve_nullspace(space) for key, space in columnspace.items()}
+        else:
+            nullspace = {key: solve_columnspace(space) for key, space in nullspace.items()}
 
-        def _get_new_params(x0_and_space, columnspaces, nullspaces):
+        if all(is_empty_matrix(m) for m in nullspace.values()):
+            return parent_node.get_last_child() if to_child else parent_node
+
+        if to_child:
+            while len(parent_node.children):
+                columnspace = None
+                child_node = parent_node.children[-1]
+                transform = child_node.common_transform(parent_node)
+                nullspace = transform.propagate_nullspace_to_child(nullspace)
+                parent_node = child_node
+        if columnspace is None:
+            columnspace = {key: solve_nullspace(space) for key, space in nullspace.items()}
+
+
+        def _get_new_params(x0_and_space, columnspace, nullspace):
             # form the constraints of y by computing Sum(y_i * A_ij * Vi) = -A_i0 * Vi
             # TODO: faster fraction arithmetic
             # NOTE: the major bottleneck lies in:
@@ -113,14 +165,14 @@ class DualMatrixTransform(SDPLinearTransform):
             # from time import time
             # time0 = time()
             for key, (x0, space) in x0_and_space.items():
-                V = nullspaces[key]
+                V = nullspace[key]
                 if is_empty_matrix(V):
                     continue
 
                 eq_mat = matmul_multiple(space.T, V).T
                 eq_list.append(eq_mat)
 
-                Ai0 = Mat2Vec.vec2mat(x0)
+                Ai0 = vec2mat(x0)
                 # new_x0 = list(Ai0 * V)
                 new_x0 = list(matmul(Ai0, V))
                 x0_list.extend(new_x0)
@@ -134,23 +186,33 @@ class DualMatrixTransform(SDPLinearTransform):
             # Sum(Ui' * Aij * Ui * (trans_x0 + trans_space * z)[j]) >> 0
             new_x0_and_space = {}
             for key, (x0, space) in x0_and_space.items():
-                U = columnspaces[key]
+                U = columnspace[key]
                 if is_empty_matrix(U):
                     continue
                 eq_mat = symmetric_bilinear_multiple(U, space.T).T
                 new_space = eq_mat * trans_space
                 # new_space = matmul(eq_mat, trans_space)
 
-                # Ai0 = Mat2Vec.vec2mat(x0)
-                # new_x0 = Mat2Vec.mat2vec(U.T * Ai0 * U) + eq_mat * trans_x0
+                # Ai0 = vec2mat(x0)
+                # new_x0 = .mat2vec(U.T * Ai0 * U) + eq_mat * trans_x0
                 new_x0 = symmetric_bilinear(U, x0, is_A_vec = True, return_shape=(U.shape[1]**2, 1))
-                new_x0 += eq_mat * trans_x0
+                new_x0 += matmul(eq_mat, trans_x0)
                 # new_x0 += matmul(eq_mat, trans_x0)
 
                 new_x0_and_space[key] = (new_x0, new_space)
             # print(f"Time: {time() - time0}")
             return new_x0_and_space, trans_space, trans_x0
 
-        new_x0_and_space, A, b = _get_new_params(parent_node._x0_and_space, columnspaces, nullspaces)
+        new_x0_and_space, A, b = _get_new_params(parent_node._x0_and_space, columnspace, nullspace)
         child_node = parent_node.__class__(new_x0_and_space)
-        return cls(parent_node, child_node, columnspaces=columnspaces, nullspaces=nullspaces, A=A, b=b)
+        return cls(parent_node, child_node, columnspace=columnspace, nullspace=nullspace, A=A, b=b)
+
+    @classmethod
+    def apply_from_affine(cls, parent_node, A: Matrix, b: Matrix):
+        x0_and_space = {}
+        for key, (x0, space) in parent_node._x0_and_space.items():
+            x0_ = x0 + matmul(space, b)
+            space_ = matmul(space, A)
+            x0_and_space[key] = (x0_, space_)
+        child_node = parent_node.__class__(x0_and_space)
+        return cls(parent_node, child_node, A=A, b=b)

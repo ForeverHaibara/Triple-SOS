@@ -47,6 +47,8 @@ def is_empty_matrix(M: Union[Matrix, ndarray], check_all_zeros: bool = False) ->
     return False
 
 def size_of_mat(M: Union[Matrix, ndarray]) -> int:
+    if len(M.shape) == 0:
+        return 0
     return int(np.prod(M.shape))
 
 def sqrtsize_of_mat(M: Union[Matrix, ndarray]) -> int:

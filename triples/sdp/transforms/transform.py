@@ -1,6 +1,8 @@
+from ..abstract import SDPProblemBase
+
 class SDPTransformation:
-    parent_node = parent_node
-    child_node = child_node
+    parent_node: SDPProblemBase = None
+    child_node: SDPProblemBase = None
     def __init__(self, parent_node, child_node, *args, **kwargs):
         self.parent_node = parent_node
         self.child_node = child_node
@@ -26,10 +28,21 @@ class SDPTransformation:
                 child.propagate_to_child(recursive=recursive)
     """
     Should also propagate objectives, constraints, e.g. linear operators,..,
-    nullspaces / columnspaces / ...
+    nullspace / columnspaces / ...
     Basic: Matrix Transformations and Vector Transformations.
     Composite transformations
     """
+
+
+    def _propagate_nullspace_to_child(self, nullspace):
+        raise NotImplementedError
+    def propagate_nullspace_to_child(self, nullspace, recursive: bool = True):
+        spaces = self._propagate_nullspace_to_child()
+        latest_spaces = spaces
+        if recursive:
+            for child in self.child_node.children:
+                latest_spaces = child.propagate_nullspace_to_child(spaces, recursive=recursive)
+        return latest_spaces
 
     @classmethod
     def apply(cls, parent_node, *args, **kwargs):
@@ -44,8 +57,7 @@ class SDPIdentityTransform(SDPTransformation):
     The class is used when the transformation is not needed,
     created by __new__ from other classes. And it should not be used directly.
     """
-    # __slots__ = ('parent_node', 'child_node')
-    def __new__(cls, parent_node):
+    def __new__(cls, parent_node, *args, **kwargs):
         obj = object.__new__(cls)
         obj.parent_node = parent_node
         obj.child_node = parent_node
