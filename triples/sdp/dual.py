@@ -10,6 +10,8 @@ from .backend import (
     SDPBackend, solve_numerical_dual_sdp,
     max_relax_var_objective, min_trace_objective, max_inner_objective
 )
+from .backends import SDPError, SDPProblemError, SDPInfeasibleError
+from .rationalize import RationalizeWithMask, RationalizeSimultaneously
 from .transforms import TransformableDual
 
 from .utils import S_from_y, decompose_matrix, exprs_to_arrays
@@ -313,7 +315,7 @@ class SDPProblem(TransformableDual):
             )
 
 
-    def solve(self,
+    def _old_solve(self,
             objective: Union[Objective, List[Objective]] = None,
             constraints: Union[List[Constraint], List[List[Constraint]]] = None,
             min_eigen: Union[MinEigen, List[MinEigen]] = None,
@@ -455,3 +457,57 @@ class SDPProblem(TransformableDual):
             propagate_to_parent=propagate_to_parent, solver_options=solver_options,
             raise_exception=raise_exception
         )
+
+    def solve(self,
+            solver: Optional[str] = None,
+            verbose: bool = False,
+            solve_child: bool = True,
+            propagate_to_parent: bool = True,
+        ) -> bool:
+        if solve_child:
+            self = self.get_last_child()
+        if self.dof == 0:
+            y = Matrix.zeros(0, 1)
+            try:
+                self.register_y(y)
+                return True
+            except ValueError:
+                raise SDPInfeasibleError
+            return False
+
+        success = False
+
+        from .backends import solve_numerical_dual_sdp
+        x0_and_space = {}
+        size = self.size
+        for key, (x0, space) in self._x0_and_space.items():
+            n = size[key]
+            diagonals = Matrix([-i%(n+1) for i in range(n**2)])
+            x0_and_space[key] = (x0, Matrix.hstack(space, diagonals))
+        objective = np.zeros(self.dof + 1)
+        objective[-1] = -1
+        constraints = [(objective, 0, '<'), (objective, -10, '>')]
+        sol = None
+        try:
+            sol = solve_numerical_dual_sdp(
+                x0_and_space, objective=objective, constraints=constraints,
+                solver=solver
+            )
+        except SDPError as e:
+            if isinstance(e, SDPProblemError):
+                raise SDPInfeasibleError from None
+        if sol is not None:
+            sol = sol[:-1]
+            self._ys.append(sol)
+            solution = self.rationalize(sol, verbose=verbose,
+                rationalizers=[RationalizeWithMask(), RationalizeSimultaneously([1,1260,1260**3])])
+            if solution is not None:
+                self.y = solution[0]
+                self.S = dict((key, S[0]) for key, S in solution[1].items())
+                self.decompositions = dict((key, S[1:]) for key, S in solution[1].items())
+                success = True
+
+        if propagate_to_parent:
+            self.propagate_to_parent(recursive=True)
+
+        return success

@@ -1,9 +1,5 @@
-from contextlib import contextmanager
-from math import sqrt
 from typing import Union, Optional, Tuple, List, Dict, Callable, Generator, Any
 
-from numpy import zeros as np_zeros
-from numpy import ndarray
 from sympy import Matrix, MatrixBase, Expr, Rational, Symbol, re, eye, collect
 from sympy.core.relational import GreaterThan, StrictGreaterThan, LessThan, StrictLessThan, Equality, Relational
 from sympy.core.singleton import S as singleton

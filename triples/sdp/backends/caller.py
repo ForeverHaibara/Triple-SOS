@@ -9,6 +9,8 @@ from .backend import DualBackend
 from .cvxpy_sdp import DualBackendCVXPY
 from .picos_sdp import DualBackendPICOS
 
+from .settings import SDPError
+
 _DUAL_BACKENDS: Dict[str, DualBackend] = {
     # 'clarabel': DualBackendCLARABEL,
     # 'cvxopt': DualBackendCVXOPT,
@@ -168,9 +170,9 @@ def solve_numerical_dual_sdp(
             tol_gap_rel=tol_gap_rel,
             solver_options=solver_options,
         )
-    except Exception as e:
+    except SDPError as e:
         if raise_exception:
-            raise e
+            raise e from None
         return None
     return y
 
