@@ -8,7 +8,7 @@ from sympy.polys.matrices.sdm import SDM
 
 from .transform import SDPTransformation, SDPIdentityTransform
 from .linear import SDPMatrixTransform
-from ..arithmetic import sqrtsize_of_mat, solve_undetermined_linear
+from ..arithmetic import sqrtsize_of_mat, solve_undetermined_linear, matmul
 
 def complement(n: int, mask: List[int]) -> List[int]:
     """Get the complement of a mask."""
@@ -16,8 +16,8 @@ def complement(n: int, mask: List[int]) -> List[int]:
     return [i for i in range(n) if i not in mask]
 
 def onehot(n: int, inds: int) -> Matrix:
-    """Create a matrix where M[i, inds[i]] = 1 and others are 0."""
-    sdm = {i: {j: ZZ.one} for i, j in enumerate(inds)}
+    """Create a matrix where M[inds[i], i] = 1 and others are 0."""
+    sdm = {j: {i: ZZ.one} for i, j in enumerate(inds)}
     mat = Matrix._fromrep(DomainMatrix.from_rep(SDM(sdm, (n, len(inds)), ZZ)))
     return mat
 
@@ -97,12 +97,9 @@ class SDPRowExtraction(SDPMatrixTransform):
     def __new__(cls, parent_node, child_node, extractions: Dict[Tuple[Any, Any], List[int]], A: Matrix=None, b: Matrix=None):
         size = parent_node.size
         identical = True
-        for (key, new_key), extraction in extractions.items():
+        for key, extraction in extractions.items():
             if key not in size:
                 raise ValueError(f'Key {key} not found in the parent node.')
-            if key != new_key:
-                identical = False
-                break
             n = size[key]
             if len(extraction) != n:
                 identical = False
@@ -110,10 +107,11 @@ class SDPRowExtraction(SDPMatrixTransform):
         if identical:
             # no need to create a new object
             return SDPIdentityTransform(parent_node)
-        return super().__new__(cls, parent_node, child_node, A=A, b=b)
+        obj = object.__new__(cls)
+        return obj
 
     def __init__(self, parent_node, child_node, extractions: Dict[Tuple[Any, Any], List[int]], A: Matrix=None, b: Matrix=None):
-        SDPTransformation.__init__(self, parent_node, child_node, A=A, b=b)
+        SDPTransformation.__init__(self, parent_node, child_node)
         self._extractions = extractions
         self._A = A
         self._b = b
@@ -142,14 +140,61 @@ class SDPRowExtraction(SDPMatrixTransform):
             raise NotImplementedError
         raise TypeError('Parent_node should be a SDPProblemBase object.')
 
+    def _propagate_to_parent(self):
+        parent, child = self.parent_node, self.child_node
+        is_dual = parent.is_dual
+        if is_dual:
+            if self._A is None:
+                # no linear transformation
+                parent.y = child.y
+            else:
+                parent.y = matmul(self._A, child.y) + self._b
+
+        mats = {key: child.y.zeros(m, m) for key, m in parent.size.items()}
+        y = child.y.zeros(parent.dof, 1)
+        y_offset = 0
+        decomps = {key: None for key in parent.size.keys()}
+        for key, m in parent.size.items():
+            extraction = self._extractions[key]
+
+            S = child.S[key]
+            mat = mats[key]
+            for i, i1 in enumerate(extraction):
+                for j, j1 in enumerate(extraction):
+                    mat[i1,j1] = S[i,j]
+            if not is_dual:
+                y[y_offset:y_offset+m**2, :] = mat.reshape(m**2, 1)
+
+            U, S = child.decompositions[key]
+            U1 = U.zeros(U.shape[0], m)
+            for i, i1 in enumerate(extraction):
+                U1[:,i1] = U[:,i]
+            decomps[key] = (U1, S)
+            y_offset += m**2
+        if not is_dual:
+            parent.y = y
+        parent.S = mats
+        parent.decompositions = decomps
+
 
 class DualRowExtraction(SDPRowExtraction):
     @classmethod
     def apply(cls, parent_node, extractions: Dict[Any, List[int]]=None, masks: Dict[Any, List[int]]=None):
         if not parent_node.is_dual:
             raise TypeError('Parent_node should be a SDPProblem object.')
+
         if masks is None and extractions is None:
-            raise ValueError('At least one of extractions or masks should be provided.')
+            child_node = None
+            while True:
+                zero_diagonals = get_zero_diagonals(parent_node)
+                if not any(len(_) for _ in zero_diagonals.values()):
+                    break
+                child_node = cls.apply(parent_node, masks=zero_diagonals)
+                if child_node is None or child_node is parent_node:
+                    break
+                parent_node = child_node
+            return child_node if child_node is not None else parent_node
+
         if extractions is None:
             extractions = {key: complement(n, masks.get(key, tuple())) for key, n in parent_node.size.items()}
         if masks is None:
@@ -191,5 +236,5 @@ class DualRowExtraction(SDPRowExtraction):
         new_x0_and_space, A, b = _get_new_params(x0_and_space, extractions, masks)
 
         child_node = parent_node.__class__(new_x0_and_space)
-        extractions = {(key, key): value for key, value in extractions.items()}
-        return cls(parent_node, child_node, extractions=extractions, A=A, b=b)
+        transform = cls(parent_node, child_node, extractions=extractions, A=A, b=b)
+        return child_node

@@ -17,15 +17,23 @@ class SDPTransformation:
     def _propagate_to_child(self):
         raise NotImplementedError
     def propagate_to_parent(self, recursive: bool = True):
+        # if self.child_node.y is None:
+        #     return
         self._propagate_to_parent()
         if recursive:
-            for parent in self.parent_node.parents:
-                parent.propagate_to_parent(recursive=recursive)
+            parent = self.parent_node
+            for transform in parent._transforms:
+                if transform.is_child(parent):
+                    transform.propagate_to_parent(recursive=recursive)
     def propagate_to_child(self, recursive: bool = True):
+        # if self.parent_node.y is None:
+        #     return
         self._propagate_to_child()
         if recursive:
-            for child in self.child_node.children:
-                child.propagate_to_child(recursive=recursive)
+            child = self.child_node
+            for transform in child._transforms:
+                if transform.is_parent(child):
+                    transform.propagate_to_child(recursive=recursive)
     """
     Should also propagate objectives, constraints, e.g. linear operators,..,
     nullspace / columnspaces / ...
@@ -37,15 +45,16 @@ class SDPTransformation:
     def _propagate_nullspace_to_child(self, nullspace):
         raise NotImplementedError
     def propagate_nullspace_to_child(self, nullspace, recursive: bool = True):
-        spaces = self._propagate_nullspace_to_child()
+        spaces = self._propagate_nullspace_to_child(nullspace)
         latest_spaces = spaces
         if recursive:
             for child in self.child_node.children:
-                latest_spaces = child.propagate_nullspace_to_child(spaces, recursive=recursive)
+                transform = child.common_transform(self.child_node)
+                latest_spaces = transform.propagate_nullspace_to_child(spaces, recursive=recursive)
         return latest_spaces
 
     @classmethod
-    def apply(cls, parent_node, *args, **kwargs):
+    def apply(cls, parent_node, *args, **kwargs) -> SDPProblemBase:
         raise NotImplementedError
 
 class SDPIdentityTransform(SDPTransformation):

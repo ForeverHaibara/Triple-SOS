@@ -128,7 +128,7 @@ class DualMatrixTransform(SDPMatrixTransform):
         (A_i0Vi) + y_1 * (A_i1Vi) + ... + y_n * (A_inVi) = 0.
     """
     @classmethod
-    def apply(cls, parent_node, columnspace: Dict[Any, Matrix]=None, nullspace: Dict[Any, Matrix]=None, to_child: bool=True):
+    def apply(cls, parent_node, columnspace: Dict[Any, Matrix]=None, nullspace: Dict[Any, Matrix]=None, to_child: bool=True) -> SDPProblemBase:
         if not parent_node.is_dual:
             raise ValueError("The parent node should be dual.")
         if columnspace is None and nullspace is None:
@@ -147,7 +147,7 @@ class DualMatrixTransform(SDPMatrixTransform):
                 columnspace = None
                 child_node = parent_node.children[-1]
                 transform = child_node.common_transform(parent_node)
-                nullspace = transform.propagate_nullspace_to_child(nullspace)
+                nullspace = transform.propagate_nullspace_to_child(nullspace, recursive=False)
                 parent_node = child_node
         if columnspace is None:
             columnspace = {key: solve_nullspace(space) for key, space in nullspace.items()}
@@ -205,14 +205,16 @@ class DualMatrixTransform(SDPMatrixTransform):
 
         new_x0_and_space, A, b = _get_new_params(parent_node._x0_and_space, columnspace, nullspace)
         child_node = parent_node.__class__(new_x0_and_space)
-        return cls(parent_node, child_node, columnspace=columnspace, nullspace=nullspace, A=A, b=b)
+        transform = cls(parent_node, child_node, columnspace=columnspace, nullspace=nullspace, A=A, b=b)
+        return transform.child_node
 
     @classmethod
-    def apply_from_affine(cls, parent_node, A: Matrix, b: Matrix):
+    def apply_from_affine(cls, parent_node, A: Matrix, b: Matrix) -> SDPProblemBase:
         x0_and_space = {}
         for key, (x0, space) in parent_node._x0_and_space.items():
             x0_ = x0 + matmul(space, b)
             space_ = matmul(space, A)
             x0_and_space[key] = (x0_, space_)
         child_node = parent_node.__class__(x0_and_space)
-        return cls(parent_node, child_node, A=A, b=b)
+        transform = cls(parent_node, child_node, A=A, b=b)
+        return transform.child_node

@@ -101,7 +101,7 @@ class TransformableProblem(SDPProblemBase):
         return get_zero_diagonals(self)
 
     def constrain_zero_diagonals(self):
-        return SDPRowExtraction.apply(self, masks=self.get_zero_diagonals())
+        return SDPRowExtraction.apply(self)
 
     def deparametrize(self):
         # TODO
