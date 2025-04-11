@@ -5,7 +5,7 @@ from typing import Union, Optional, Tuple, List, Dict, Callable, Generator
 import numpy as np
 import sympy as sp
 
-from .utils import congruence_with_perturbation
+from .arithmetic import congruence_with_perturbation
 
 Decomp = Dict[str, Tuple[sp.Matrix, sp.Matrix, List[sp.Rational]]]
 

@@ -4,6 +4,8 @@ from .matop import (
 
 from .matmul import matmul, matmul_multiple, symmetric_bilinear, symmetric_bilinear_multiple
 
+from .eigens import congruence, congruence_with_perturbation
+
 from .linsolve import (
     solve_undetermined_linear, solve_nullspace, solve_columnspace, solve_csr_linear, solve_column_separated_linear
 )
@@ -11,5 +13,6 @@ from .linsolve import (
 __all__ = [
     'is_empty_matrix','is_zz_qq_mat','size_of_mat','sqrtsize_of_mat','vec2mat','primitive','permute_matrix_rows',
     'matmul', 'matmul_multiple', 'symmetric_bilinear', 'symmetric_bilinear_multiple',
+    'congruence','congruence_with_perturbation',
     'solve_undetermined_linear','solve_nullspace','solve_columnspace','solve_csr_linear','solve_column_separated_linear'
 ]

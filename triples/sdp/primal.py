@@ -6,9 +6,9 @@ from sympy import MutableDenseMatrix as Matrix
 from sympy import MatrixBase, Symbol, Float
 
 from .abstract import Decomp, Objective, Constraint, MinEigen
+from .arithmetic import sqrtsize_of_mat, vec2mat
 from .backend import solve_numerical_primal_sdp
 from .transform import PrimalTransformMixin
-from .utils import Mat2Vec
 
 class SDPPrimal(PrimalTransformMixin):
     """
@@ -95,7 +95,7 @@ class SDPPrimal(PrimalTransformMixin):
         # return sum(n*(n+1)//2 for n in self.size.values())
 
     def get_size(self, key: str) -> int:
-        return Mat2Vec.length_of_mat(self._space[key].shape[1])
+        return sqrtsize_of_mat(self._space[key].shape[1])
 
     def S_from_y(self, y: Optional[Union[Matrix, ndarray]] = None) -> Dict[str, Matrix]:
         if y is None:
@@ -116,7 +116,7 @@ class SDPPrimal(PrimalTransformMixin):
         S = {}
         cnt = 0
         for key, m in self.size.items():
-            S[key] = Mat2Vec.vec2mat(y[cnt: cnt+m**2,:])
+            S[key] = vec2mat(y[cnt: cnt+m**2,:])
             cnt += m**2
         return S
 

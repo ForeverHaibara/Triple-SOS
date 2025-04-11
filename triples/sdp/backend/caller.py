@@ -10,7 +10,6 @@ from .cvxpy_sdp import DualBackendCVXPY, PrimalBackendCVXPY
 from .mosek_sdp import DualBackendMOSEK, PrimalBackendMOSEK
 from .picos_sdp import DualBackendPICOS, PrimalBackendPICOS
 from .sdpap_sdp import DualBackendSDPAP
-from ..utils import Mat2Vec
 
 
 _DUAL_BACKENDS: Dict[str, DualBackend] = {

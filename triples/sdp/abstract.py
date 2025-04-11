@@ -7,14 +7,13 @@ from sympy import MutableDenseMatrix as Matrix
 from sympy import MatrixBase, Expr, Rational
 import sympy as sp
 
+from .arithmetic import sqrtsize_of_mat, is_empty_matrix, congruence_with_perturbation
 from .backend import SDPBackend
 from .ipm import SDPRationalizeError
 from .rationalize import (
     rationalize_and_decompose, RationalizeWithMask, RationalizeSimultaneously, IdentityRationalizer
 )
-from .utils import (
-    is_empty_matrix, Mat2Vec, congruence_with_perturbation, align_iters, IteratorAlignmentError
-)
+from .utils import align_iters, IteratorAlignmentError
 
 Decomp = Dict[str, Tuple[Matrix, Matrix, List[Rational]]]
 Objective = Union[Expr, ndarray, Callable[[SDPBackend], Any]]
@@ -58,7 +57,7 @@ class SDPProblemBase(ABC):
     def dof(self) -> int: ...
 
     def get_size(self, key: str) -> int:
-        return Mat2Vec.length_of_mat(self._x0_and_space[key][0].shape[0])
+        return sqrtsize_of_mat(self._x0_and_space[key][0])
 
     @property
     def size(self) -> Dict[str, int]:

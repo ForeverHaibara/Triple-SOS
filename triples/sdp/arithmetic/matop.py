@@ -51,8 +51,10 @@ def size_of_mat(M: Union[Matrix, ndarray]) -> int:
         return 0
     return int(np.prod(M.shape))
 
-def sqrtsize_of_mat(M: Union[Matrix, ndarray]) -> int:
-    return int(np.sqrt(size_of_mat(M)))
+def sqrtsize_of_mat(M: Union[Matrix, ndarray, int]) -> int:
+    if isinstance(M, int):
+        return int(np.round(np.sqrt(M)))
+    return int(np.round(np.sqrt(size_of_mat(M))))
 
 def vec2mat(v: Union[Matrix, ndarray]) -> Matrix:
     """

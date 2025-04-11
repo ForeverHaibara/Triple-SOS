@@ -5,11 +5,11 @@ import sympy as sp
 from sympy.matrices import Matrix
 
 from .arithmetic import (
-    solve_undetermined_linear, solve_nullspace,
+    solve_undetermined_linear, solve_nullspace, is_empty_matrix,
     matmul, matmul_multiple, symmetric_bilinear, symmetric_bilinear_multiple
 )
 from .abstract import SDPProblemBase
-from .utils import is_empty_matrix, Mat2Vec, decompose_matrix
+from .utils import decompose_matrix
 
 class SDPTransformation(ABC):
     """
