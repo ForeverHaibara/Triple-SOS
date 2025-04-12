@@ -9,23 +9,13 @@
 #       SDM -> DomainMatrix -> MutableDenseMatrix
 # TODO: compare the performance of the two implementations
 
-# from fractions import Fraction
-from collections import defaultdict
-from math import gcd
 from time import time
 from typing import List, Tuple, Union, Optional
 
 from numpy import iinfo as np_iinfo
 from numpy import isnan, inf, unique
 import sympy as sp
-from sympy import __version__ as _SYMPY_VERSION
 from sympy.matrices import MutableDenseMatrix as Matrix
-from sympy.external.importtools import version_tuple
-from sympy.matrices.repmatrix import RepMatrix
-from sympy.polys.domains import ZZ, QQ, EX, EXRAW # EXRAW >= 1.9
-from sympy.polys.matrices.domainmatrix import DomainMatrix # polys.matrices >= 1.8
-from sympy.polys.matrices.ddm import DDM
-from sympy.polys.matrices.sdm import SDM
 
 from .matop import (
     is_zz_qq_mat, vec2mat, primitive, _cast_list_to_sympy_matrix, _cast_sympy_matrix_to_numpy

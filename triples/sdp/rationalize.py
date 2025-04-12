@@ -5,7 +5,7 @@ from typing import Union, Optional, Tuple, List, Dict, Callable, Generator
 import numpy as np
 import sympy as sp
 
-from .arithmetic import congruence_with_perturbation
+from .arithmetic import congruence
 
 Decomp = Dict[str, Tuple[sp.Matrix, sp.Matrix, List[sp.Rational]]]
 
@@ -188,7 +188,7 @@ def rationalize_and_decompose(
                 if reg != 0:
                     S = S + reg * sp.eye(S.shape[0])
 
-                congruence_decomp = congruence_with_perturbation(S, perturb = perturb)
+                congruence_decomp = congruence(S, perturb=perturb, upper=False)
                 if congruence_decomp is None:
                     break
 

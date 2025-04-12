@@ -1,5 +1,5 @@
 from collections import defaultdict
-from typing import List, Tuple, Union
+from typing import List, Dict, Tuple, Union
 
 import numpy as np
 from numpy import ndarray
@@ -56,12 +56,29 @@ def sqrtsize_of_mat(M: Union[Matrix, ndarray, int]) -> int:
         return int(np.round(np.sqrt(M)))
     return int(np.round(np.sqrt(size_of_mat(M))))
 
+def reshape(A: Union[Matrix, ndarray], shape: Tuple[int, int]) -> Matrix:
+    if A.shape == shape:
+        return A
+    if isinstance(A, RepMatrix):
+        rep = A._rep.rep
+        n, m = A.shape
+        n2, m2 = shape
+        f = lambda row, col: divmod(row*m + col, m2)
+        dt = {f(i, j): v for (i, j), v in rep.to_dok().items()}
+        dt_by_row = {}
+        for (i, j), v in dt.items():
+            if i not in dt_by_row:
+                dt_by_row[i] = {}
+            dt_by_row[i][j] = v
+        return rep_matrix_from_dict(dt_by_row, shape, rep.domain)
+    return A.reshape(*shape)
+
 def vec2mat(v: Union[Matrix, ndarray]) -> Matrix:
     """
     Convert a vector to a matrix.
     """
     n = sqrtsize_of_mat(v)
-    return v.reshape(n, n)
+    return reshape(v, (n, n))
 
 def mat2vec(M: Union[Matrix, ndarray]) -> Matrix:
     """
@@ -69,7 +86,27 @@ def mat2vec(M: Union[Matrix, ndarray]) -> Matrix:
     """
     if isinstance(M, ndarray):
         return M.flatten()
-    return M.reshape((size_of_mat(M), 1))
+    return reshape(M, (size_of_mat(M), 1))
+
+def rep_matrix_from_dict(x: Dict, shape: Tuple[int, int], domain) -> RepMatrix:
+    return Matrix._fromrep(DomainMatrix.from_rep(SDM(x, shape, domain)))
+
+def rep_matrix_from_list(x: Union[List, List[List]], shape: Union[int, Tuple[int, int]], domain) -> RepMatrix:
+    zero = domain.zero
+    if isinstance(shape, int):
+        y = {i: {0: j} for i, j in enumerate(x) if j != zero}
+        shape = (shape, 1)
+    else:
+        y = {}
+        for i in range(shape[0]):
+            xi = x[i]
+            yi = {}
+            for j in range(shape[1]):
+                if xi[j] != zero:
+                    yi[j] = xi[j]
+            if len(yi):
+                y[i] = yi
+    return rep_matrix_from_dict(y, shape, domain)
 
 
 

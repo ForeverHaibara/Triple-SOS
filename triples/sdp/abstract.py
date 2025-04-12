@@ -10,7 +10,7 @@ from sympy.polys.matrices import DomainMatrix
 from sympy.polys.matrices.sdm import SDM
 import sympy as sp
 
-from .arithmetic import sqrtsize_of_mat, is_empty_matrix, congruence_with_perturbation
+from .arithmetic import sqrtsize_of_mat, is_empty_matrix, congruence, rep_matrix_from_list
 from .backend import SDPBackend
 from .ipm import SDPRationalizeError
 from .rationalize import (
@@ -150,7 +150,7 @@ class SDPProblemBase(ABC):
         S = self.S_from_y(y)
         decomps = {}
         for key, s in S.items():
-            decomp = congruence_with_perturbation(s, perturb = perturb)
+            decomp = congruence(s, perturb=perturb, upper=False)
             if decomp is None:
                 raise ValueError(f"Matrix {key} is not positive semidefinite given y.")
             decomps[key] = decomp
@@ -237,8 +237,7 @@ class SDPProblemBase(ABC):
             convert = sp.RR.convert
             zero = sp.RR.zero
             sdm = [convert(i) for i in y.tolist()]
-            sdm = {i: {0: yi} for i, yi in enumerate(sdm) if yi != zero}
-            y = Matrix._fromrep(DomainMatrix.from_rep(SDM(sdm, (self.dof, 1), sp.RR)))
+            y = rep_matrix_from_list(sdm, self.dof, sp.RR)
         else:
             y = Matrix(y.tolist())
         self.register_y(y, project=False, perturb=True, propagate_to_parent=propagate_to_parent)

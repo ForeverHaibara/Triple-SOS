@@ -1,20 +1,36 @@
+from re import I
 from typing import List, Tuple, Union, Optional
 
-from numpy import zeros as np_zeros
+import numpy as np
 from numpy import ndarray
+from numpy.linalg import eigvalsh, cholesky, eigh, LinAlgError
 
-from sympy import Matrix, MatrixBase, Expr, Rational, Symbol, re, eye, collect
+from sympy import Matrix, MatrixBase, Expr, RR, re, eye
 from sympy.core.singleton import S as singleton
+from sympy.matrices.repmatrix import RepMatrix
 
-def congruence(M: Union[Matrix, ndarray], signfunc = None) -> Union[None, Tuple[Matrix, Matrix]]:
+from .matop import rep_matrix_from_list
+
+def congruence(M: Union[Matrix, ndarray], perturb: Union[bool, float]=False,
+    upper: bool=True, signfunc = None) -> Optional[Tuple[Matrix, Matrix]]:
     """
-    Write a symmetric matrix as the decomposition
-    M = U.T @ S @ U where U is upper triangular and S is diagonal.
+    Compute the decomposition of a positive semidefinite matrix M:
+    `M = U.T @ diag(S) @ U` where `S` is stored as a (column) vector.
 
     Parameters
     ----------
     M : Matrix | ndarray
         Symmetric matrix to be decomposed.
+    perturb : bool | float
+        If `perturb` is given and M is a numerical matrix, then add a small
+        perturbation to the diagonal of M to make it positive semidefinite
+        to avoid numerical issues. If `perturb` is a float, then it is used as
+        the upper bound of the perturbation. If M is an exact matrix (e.g.
+        integer or rational matrix), then the perturbation is ignored.
+    upper : bool
+        If True, force M to be upper triangular. If False, M is not forced to be
+        upper triangular. Set to False improves numerical stability if M is
+        a numerical matrix.
     signfunc : Callable
         Function to determine the sign of a value. It takes a value as input
         and returns 1, -1, or 0. If None, it uses the default comparison.
@@ -34,6 +50,15 @@ def congruence(M: Union[Matrix, ndarray], signfunc = None) -> Union[None, Tuple[
     ---------
     sympy.matrices.dense.DenseMatrix.LDLdecomposition
     """
+    if isinstance(M, RepMatrix):
+        domain = M._rep.domain
+        if domain.is_Exact and domain.is_Numerical:
+            return _congruence_on_exact_domain(M)
+        if not domain.is_Exact:
+            return _congruence_numerically(M, perturb=perturb, upper=upper)
+    if isinstance(M, ndarray):
+        return _congruence_numerically(M, perturb=perturb, upper=upper)
+
     if signfunc is None:
         signfunc = lambda x: 1 if x > 0 else (-1 if x < 0 else 0)
 
@@ -43,7 +68,7 @@ def congruence(M: Union[Matrix, ndarray], signfunc = None) -> Union[None, Tuple[
         U, S = Matrix.zeros(n), Matrix.zeros(n, 1)
         One = singleton.One
     else:
-        U, S = np_zeros((n,n)), np_zeros(n)
+        U, S = np.zeros((n,n)), np.zeros(n)
         One = 1
     for i in range(n-1):
         sgn = signfunc(M[i,i])
@@ -67,37 +92,120 @@ def congruence_with_perturbation(
         M: Matrix,
         perturb: bool = False
     ) -> Optional[Tuple[Matrix, Matrix]]:
-    """
-    Perform congruence decomposition on M. This is a wrapper of congruence.
-    Write it as M = U.T @ S @ U where U is upper triangular and S is a diagonal matrix.
+    return congruence(M, perturb=perturb)
 
-    Parameters
-    ----------
-    M : Matrix
-        Symmetric matrix to be decomposed.
-    perturb : bool
-        If perturb == True, make a slight perturbation to force M to be positive semidefinite.
-        This is useful when there exists numerical errors in the matrix.
 
-    Returns
-    ---------
-    U : Matrix
-        Upper triangular matrix.
-    S : Matrix
-        Diagonal vector (1D array).
+def _congruence_on_exact_domain(M: RepMatrix) -> Optional[Tuple[RepMatrix, RepMatrix]]:
     """
-    if M.shape[0] == 0 or M.shape[1] == 0:
-        return Matrix(), Matrix()
-    if not perturb:
-        return congruence(M)
+    Perform congruence decomposition on M fast if M is a SymPy RepMatrix.
+    This functions exploits low-level arithmetic on domain elements, e.g. rational numbers
+    or algebraic numbers, which accelerates the computation.
+
+    The function should only be called when M is a SymPy RepMatrix and is on a
+    exact, numerical domain. Because SymPy uses EXRAW as domains for matrices of irrational numbers
+    by default, they should be converted to AlgebraicFields to accelerate if possible.
+    """
+    dM = M._rep.to_field()
+    n, domain, M = dM.shape[0], dM.domain, dM.rep.to_list()
+    one, zero = domain.one, domain.zero
+
+    if domain.is_QQ or domain.is_ZZ:
+        signfunc = lambda x: 0 if x == zero else (1 if x > 0 else -1)
     else:
-        min_eig = min([re(v) for v in M.n(20).eigenvals()])
-        if min_eig < 0:
-            eps = 1e-15
-            for i in range(10):
-                cong = congruence(M + (-min_eig + eps) * eye(M.shape[0]))
-                if cong is not None:
-                    return cong
-                eps *= 10
-        return congruence(M)
-    return None
+        signfunc = lambda x: 0 if x == zero else (1 if re(domain.to_sympy(x)) > 0 else -1)
+
+    S = [zero] * n
+    U = [[zero for _ in range(n)] for __ in range(n)]
+    for i in range(n):
+        Mi, Ui = M[i], U[i]
+        p = Mi[i]
+        sgn = signfunc(p)
+        if sgn > 0:
+            S[i] = p
+            Ui[i] = one
+
+            # # The vectorized version:
+            # U[i,i+1:] = M[i,i+1:] / p
+            # M[i+1:,i+1:] -= U[i:i+1,i+1:].T @ (U[i:i+1,i+1:] * p)
+
+            invp = one / p
+            for j in range(i+1, n):
+                Ui[j] = Mi[j] * invp
+            for k in range(i+1, n):
+                Mk = M[k]
+                for j in range(k, n):
+                    Mk[j] = Mk[j] - Ui[j] * Mi[k] # rank 1 update
+        elif sgn < 0:
+            print('negative', p, domain.to_sympy(p))
+            return None
+        elif sgn == 0:
+            # # The vectorized version:
+            # if any(signfunc(_) != 0 for _ in M[i+1:,i]):
+            #     return None
+            if any(Mi[j] != zero for j in range(i+1, n)):
+                return None
+
+    U = rep_matrix_from_list(U, (n, n), domain)
+    S = rep_matrix_from_list(S, n, domain)
+    return U, S
+
+def _congruence_numerically(M: Union[MatrixBase, ndarray], perturb: Union[bool, float]=0,
+        upper: bool=True) -> Optional[Tuple[Union[Matrix, ndarray], Union[Matrix, ndarray]]]:
+    """
+    ...
+    """
+    # from scipy.linalg import ldl
+    is_sympy = isinstance(M, MatrixBase)
+    n = M.shape[0]
+    if n == 0:
+        if is_sympy:
+            return M.reshape(0, 0), M.reshape(0, 1)
+        return M.reshape(0, 0), M.reshape(0)
+    if is_sympy:
+        M = np.array(M.n(15))
+    if isinstance(M, ndarray):
+        M = M.astype(float)
+
+    if upper:
+        def silent_chol(M):
+            U = None
+            try:
+                U = cholesky(M)
+            except LinAlgError:
+                pass
+            return U
+
+        U = silent_chol(M)
+
+        if U is None and (not (perturb is False)):
+            if perturb is True:
+                perturb = 1
+            mineig = float(np.min(eigvalsh(M)))
+            if mineig < -perturb:
+                return None
+
+            npeye = np.eye(n)
+            eps = min(perturb, abs(mineig)*2 if mineig < -1e-14 else 1e-14)
+            U = silent_chol(M + npeye*eps)
+            for i in range(13, 0, -1):
+                eps = 10**-i
+                if U is not None or eps > perturb:
+                    break
+                U = silent_chol(M + npeye*eps)
+        S = np.ones((n,), dtype=float)
+    else:
+        if perturb is True or perturb is False:
+            perturb = int(perturb)
+        S, U = eigh(M)
+        if np.min(S) < -perturb:
+            return None
+        S = np.where(S < 0, 0., S)
+
+    if U is None:
+        return None
+    U = U.T
+    if is_sympy:
+        conv = RR.convert
+        U = rep_matrix_from_list([[conv(_) for _ in row] for row in U.tolist()], (n, n), RR)
+        S = rep_matrix_from_list([conv(_) for _ in S.flatten().tolist()], n, RR)
+    return U, S
