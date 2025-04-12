@@ -38,7 +38,10 @@ class SDPTransformation:
         """
         parent, child = self.parent_node, self.child_node
         A, b = self.get_y_transform_from_child()
-        y = A @ child.y + b
+        if A is None and b is None:
+            y = child.y
+        else:
+            y = A @ child.y + b
         parent.register_y(y)
 
     def propagate_to_child(self):

@@ -3,8 +3,11 @@ from typing import Dict, Tuple, List, Union, Callable, Optional, Any
 
 from numpy import ndarray
 import numpy as np
-from sympy import MutableDenseMatrix as Matrix
 from sympy import MatrixBase, Expr, Rational
+from sympy.core.relational import Relational
+from sympy.matrices import MutableDenseMatrix as Matrix
+from sympy.polys.matrices import DomainMatrix
+from sympy.polys.matrices.sdm import SDM
 import sympy as sp
 
 from .arithmetic import sqrtsize_of_mat, is_empty_matrix, congruence_with_perturbation
@@ -16,10 +19,6 @@ from .rationalize import (
 from .utils import exprs_to_arrays, merge_constraints
 
 Decomp = Dict[Any, Tuple[Matrix, Matrix, List[Rational]]]
-Objective = Union[Expr, ndarray, Callable[[SDPBackend], Any]]
-Constraint = Callable[[SDPBackend], Any]
-MinEigen = Union[float, int, tuple, Dict[Any, Union[float, int, tuple]]]
-
 
 
 class SDPProblemBase(ABC):
@@ -197,8 +196,8 @@ class SDPProblemBase(ABC):
         """
 
     def solve_obj(self,
-        objective: Objective,
-        constraints: List[Constraint] = [],
+        objective: Union[Matrix, Expr],
+        constraints: List[Union[Relational, Tuple[Matrix, Matrix, str]]] = [],
         solver: Optional[str] = None,
         solve_child: bool = True,
         propagate_to_parent: bool = True,
@@ -210,20 +209,39 @@ class SDPProblemBase(ABC):
         obj = exprs_to_arrays(None, self.free_symbols, [objective], dtype=np.float64)[0]
         cons = exprs_to_arrays(None, self.free_symbols, constraints, dtype=np.float64)
 
-        cons = [(_[0], _[1], '>') if len(_) == 2 else _ for _ in cons]
+        cons = [(_[0], _[1], '==') if len(_) == 2 else _ for _ in cons]
         ineq_lhs, ineq_rhs, eq_lhs, eq_rhs = merge_constraints(cons, self.dof)
 
+        if obj[0].shape != (1, self.dof):
+            raise ValueError(f"The objective should have shape (1, {self.dof}), but got {obj[0].shape}.")
+        if ineq_lhs.shape[1] != self.dof or ineq_lhs.shape[0] != ineq_rhs.shape[0]:
+            raise ValueError(f"The inequality constraints should have dof = {self.dof},"
+                             f" but got lhs shape {ineq_lhs.shape} and rhs shape {ineq_rhs.shape}.")
+        if eq_lhs.shape[1]!= self.dof or eq_lhs.shape[0] != eq_rhs.shape[0]:
+            raise ValueError(f"The equality constraints should have dof = {self.dof},"
+                             f" but got lhs shape {eq_lhs.shape} and rhs shape {eq_rhs.shape}.")
+
         if solve_child:
+            obj = self.propagate_affine_to_child(obj[0], obj[1], recursive=True)
+            ineq_lhs, ineq_rhs = self.propagate_affine_to_child(ineq_lhs, ineq_rhs, recursive=True)
+            eq_lhs, eq_rhs = self.propagate_affine_to_child(eq_lhs, eq_rhs, recursive=True)
             self = self.get_last_child()
-            obj = self.propagate_affine_to_child(obj[0], obj[1])
-            ineq_lhs, ineq_rhs = self.propagate_affine_to_child(ineq_lhs, ineq_rhs)
-            eq_lhs, eq_rhs = self.propagate_affine_to_child(eq_lhs, eq_rhs)
 
         cons = [(ineq_lhs, ineq_rhs, '>'), (eq_lhs, eq_rhs, '==')]
 
         y = self._solve_numerical_sdp(objective=obj[0], constraints=cons, solver=solver, kwargs=kwargs)
-        if y is not None and propagate_to_parent:
-            self.propagate_to_parent(recursive = True)
+        if y is None:
+            return None
+
+        if y.dtype in (np.float64, np.float32):
+            convert = sp.RR.convert
+            zero = sp.RR.zero
+            sdm = [convert(i) for i in y.tolist()]
+            sdm = {i: {0: yi} for i, yi in enumerate(sdm) if yi != zero}
+            y = Matrix._fromrep(DomainMatrix.from_rep(SDM(sdm, (self.dof, 1), sp.RR)))
+        else:
+            y = Matrix(y.tolist())
+        self.register_y(y, project=False, perturb=True, propagate_to_parent=propagate_to_parent)
         return y
 
     @abstractmethod

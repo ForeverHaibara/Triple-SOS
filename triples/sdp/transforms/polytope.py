@@ -140,6 +140,19 @@ class SDPRowExtraction(SDPMatrixTransform):
             raise NotImplementedError
         raise TypeError('Parent_node should be a SDPProblemBase object.')
 
+    @classmethod
+    def apply_zero_diagonals(cls, parent_node):
+        child_node = None
+        while True:
+            zero_diagonals = get_zero_diagonals(parent_node)
+            if not any(len(_) for _ in zero_diagonals.values()):
+                break
+            child_node = cls.apply(parent_node, masks=zero_diagonals)
+            if child_node is None or child_node is parent_node:
+                break
+            parent_node = child_node
+        return child_node if child_node is not None else parent_node
+
     def propagate_to_parent(self):
         parent, child = self.parent_node, self.child_node
         is_dual = parent.is_dual
@@ -184,16 +197,7 @@ class DualRowExtraction(SDPRowExtraction):
             raise TypeError('Parent_node should be a SDPProblem object.')
 
         if masks is None and extractions is None:
-            child_node = None
-            while True:
-                zero_diagonals = get_zero_diagonals(parent_node)
-                if not any(len(_) for _ in zero_diagonals.values()):
-                    break
-                child_node = cls.apply(parent_node, masks=zero_diagonals)
-                if child_node is None or child_node is parent_node:
-                    break
-                parent_node = child_node
-            return child_node if child_node is not None else parent_node
+            return cls.apply_zero_diagonals(parent_node)
 
         if extractions is None:
             extractions = {key: complement(n, masks.get(key, tuple())) for key, n in parent_node.size.items()}

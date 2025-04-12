@@ -5,7 +5,7 @@ from sympy import Expr, Symbol, Rational, MatrixBase
 from sympy.core.relational import Relational
 from sympy import MutableDenseMatrix as Matrix
 
-from .abstract import Decomp, Objective, Constraint, MinEigen
+from .abstract import Decomp
 from .arithmetic import solve_undetermined_linear
 from .backends import (
     SDPError, SDPProblemError, SDPInfeasibleError,
@@ -14,7 +14,7 @@ from .backends import (
 from .rationalize import RationalizeWithMask, RationalizeSimultaneously
 from .transforms import TransformableDual
 
-from .utils import S_from_y, decompose_matrix, exprs_to_arrays
+from .utils import S_from_y, decompose_matrix
 
 
 def _get_unique_symbols(_x0_and_space, dof: int, xname: str = 'y'):
@@ -268,8 +268,8 @@ class SDPProblem(TransformableDual):
         return dict(zip(self.free_symbols, self.y))
 
     def _solve_numerical_sdp(self,
-        objective: Objective,
-        constraints: List[Constraint] = [],
+        objective: np.ndarray,
+        constraints: List[Tuple[np.ndarray, np.ndarray, str]] = [],
         solver: Optional[str] = None,
         kwargs: Dict[str, Any] = {}
     ) -> Optional[np.ndarray]:
@@ -280,7 +280,7 @@ class SDPProblem(TransformableDual):
 
     def solve_obj(self,
         objective: Union[Matrix, Expr],
-        constraints: List[Union[Relational, Tuple[Matrix, Matrix, str]]],
+        constraints: List[Union[Relational, Tuple[Matrix, Matrix, str]]] = [],
         solver: Optional[str] = None,
         solve_child: bool = True,
         propagate_to_parent: bool = True,

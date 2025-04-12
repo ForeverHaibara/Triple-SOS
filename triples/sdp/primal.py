@@ -5,7 +5,7 @@ import numpy as np
 from sympy import MutableDenseMatrix as Matrix
 from sympy import MatrixBase, Symbol, Float
 
-from .abstract import Decomp, Objective, Constraint, MinEigen
+from .abstract import Decomp
 from .arithmetic import sqrtsize_of_mat, vec2mat
 from .backend import solve_numerical_primal_sdp
 from .transform import PrimalTransformMixin
@@ -174,16 +174,11 @@ class SDPPrimal(PrimalTransformMixin):
         return objectives, constraints, min_eigens
 
     def _solve_numerical_sdp(self,
-            objective: Objective,
-            constraints: List[Constraint] = [],
-            min_eigen: MinEigen = 0,
-            scaling: float = 6.,
-            solver: Optional[str] = None,
-            verbose: bool = False,
-            solver_options: Dict[str, Any] = {},
-            raise_exception: bool = False
-        ):
-
+        objective: np.ndarray,
+        constraints: List[Tuple[np.ndarray, np.ndarray, str]] = [],
+        solver: Optional[str] = None,
+        kwargs: Dict[str, Any] = {}
+    ) -> Optional[np.ndarray]:
         # if len(constraints):
         #     raise NotImplementedError("The primal form does not support constraints.")
         return solve_numerical_primal_sdp(
