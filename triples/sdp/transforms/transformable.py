@@ -8,6 +8,33 @@ from .polytope import get_zero_diagonals, SDPRowExtraction
 from ..abstract import SDPProblemBase
 from ..arithmetic import sqrtsize_of_mat
 
+
+
+def _propagate_args_to_last(self, next_node, func, recursive, *args):
+    if next_node == 'child':
+        get_next = lambda x: x.child_node
+        check_transform = lambda x, self: x.is_parent(self)
+    elif next_node == 'parent':
+        get_next = lambda x: x.parent_node
+        check_transform = lambda x, self: x.is_child(self)
+    else:
+        raise ValueError("The next_node should be either 'child' or 'parent'.")
+
+    start = True
+    while recursive or start:
+        start = False
+        transform = None
+        for _transform in self._transforms[::-1]:
+            if check_transform(_transform, self) and not (get_next(_transform) is self):
+                transform = _transform
+                break
+        if transform is None:
+            break
+        args = func(transform, *args)
+        self = get_next(transform)
+    return args
+
+
 class TransformableProblem(SDPProblemBase):
     def __init__(self, *args, **kwargs):
         # record the transformation dependencies
@@ -74,7 +101,9 @@ class TransformableProblem(SDPProblemBase):
         """
         for transform in self._transforms:
             if transform.is_child(self):
-                transform.propagate_to_parent(recursive=recursive)
+                transform.propagate_to_parent()
+                if recursive:
+                    transform.parent_node.propagate_to_parent(recursive=recursive)
 
     def propagate_to_child(self, recursive: bool = True):
         """
@@ -83,7 +112,18 @@ class TransformableProblem(SDPProblemBase):
         for transform in self._transforms:
             if transform.is_parent(self):
                 transform.propagate_to_child(recursive=recursive)
+                if recursive:
+                    transform.child_node.propagate_to_child(recursive=recursive)
 
+    def propagate_nullspace_to_child(self, nullspace: Dict[Any, Matrix], recursive: bool = True):
+        func = lambda transform, nullspace: (transform.propagate_nullspace_to_child(nullspace),)
+        args = _propagate_args_to_last(self, 'child', func, recursive, nullspace)
+        return args[0]
+
+    def propagate_affine_to_child(self, A: Matrix, b: Matrix, recursive: bool = True):
+        func = lambda transform, A, b: transform.propagate_affine_to_child(A, b)
+        args = _propagate_args_to_last(self, 'child', func, recursive, A, b)
+        return args
 
     def constrain_columnspace(self, columnspace: Dict[Any, Matrix], to_child: bool=True):
         """

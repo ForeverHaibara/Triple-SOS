@@ -140,7 +140,7 @@ class SDPRowExtraction(SDPMatrixTransform):
             raise NotImplementedError
         raise TypeError('Parent_node should be a SDPProblemBase object.')
 
-    def _propagate_to_parent(self):
+    def propagate_to_parent(self):
         parent, child = self.parent_node, self.child_node
         is_dual = parent.is_dual
         if is_dual:

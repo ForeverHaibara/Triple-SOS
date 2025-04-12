@@ -1,5 +1,7 @@
 from typing import Union, Optional, Tuple, List, Dict, Callable, Generator, Any
 
+from numpy import ndarray
+import numpy as np
 from sympy import Matrix, MatrixBase, Expr, Rational, Symbol, re, eye, collect
 from sympy.core.relational import GreaterThan, StrictGreaterThan, LessThan, StrictLessThan, Equality, Relational
 from sympy.core.singleton import S as singleton
@@ -42,11 +44,22 @@ def S_from_y(
 
 
 _RELATIONAL_TO_OPERATOR = {
-    GreaterThan: (1, '__ge__'),
-    StrictGreaterThan: (1, '__ge__'),
-    LessThan: (-1, '__ge__'),
-    StrictLessThan: (-1, '__ge__'),
-    Equality: (1, '__eq__')
+    GreaterThan: (1, '>='),
+    StrictGreaterThan: (1, '>'),
+    LessThan: (-1, '>='),
+    StrictLessThan: (-1, '>'),
+    Equality: (1, '=='),
+    '>': (1, '>'),
+    '>=': (1, '>='),
+    '__gt__': (1, '>'),
+    '__ge__': (1, '>='),
+    '<': (-1, '>'),
+    '<=': (-1, '>='),
+    '__lt__': (-1, '>'),
+    '__le__': (-1, '>='),
+    '==': (1, '=='),
+    '=': (1, '=='),
+    '__eq__': (1, '=='),
 }
 
 
@@ -104,10 +117,11 @@ def decompose_matrix(
 
 
 def exprs_to_arrays(locals: Dict[str, Any], symbols: List[Symbol],
-        exprs: List[Union[Callable, Expr, Relational, Union[Tuple[Matrix, Rational], Tuple[Matrix, Rational, str]]]]
-    ) -> List[Union[Tuple[Matrix, Rational], Tuple[Matrix, Rational, str]]]:
+        exprs: List[Union[Callable, Expr, Relational, Tuple[Matrix, float], Tuple[Matrix, float, str]]],
+        dtype: Optional[Any] = None
+    ) -> List[Union[Tuple[Matrix, Matrix], Tuple[Matrix, Matrix, str]]]:
     """
-    Convert expressions to arrays with respect to the free symbols.
+    Convert linear expressions to arrays with respect to the given symbols.
 
     Parameters
     ----------
@@ -116,16 +130,45 @@ def exprs_to_arrays(locals: Dict[str, Any], symbols: List[Symbol],
     symbols : List[Symbol]
         The free symbols.
     exprs : List[Union[Callable, Expr, Relational, Matrix]]
-        For each expression, it can be a Callable, Expr, Relational, or matrix.
-        If it is a Callable, it should be a function that calls on the locals and returns Expr/Relational/Matrix.
-        If it is a Expr, it should be with respect to the free symbols.
-        If it is a Relational, it should be with respect to the free symbols.
+        For each expression, it can be a Callable, Expr, Relational.
+        If it is a Callable, it is first applied on the locals.
+        If it is a Expr, it should be linear with respect to the given symbols.
+        If it is a Relational, it should be linear with respect to the given symbols.
+    dtype : Optional[Any]
+        The data type of the returned arrays. If given, matrices are converted
+        to numpy arrays with the given data type.
 
     Returns
     ----------
-    Matrix, Rational, [, operator] : Union[Tuple[Matrix, Rational], Tuple[Matrix, Rational, str]]
-        The coefficient vector with respect to the free symbols and the Rational of RHS (constant).
-        If it is a Relational, it returns the operator also.
+    List[Tuple[A, b, [, operator]]] :
+        For each expression, the returned `A`, `b` satisfy that `A @ Matrix(symbols) - b = expression`.
+        If the expression is a Relational, `A @ Matrix(symbols) (operator) b` should be an
+        inequality equivalent to the expression.
+        Matrix `A` must be 2D and `b` must be a vector.
+
+    Examples
+    ----------
+    >>> from sympy.abc import a, b, c
+    >>> from sympy import Matrix, Eq
+    >>> exprs_to_arrays({'x': a}, [a,b,c],
+    ...      [2*a+3*b+4*c+1,
+    ...      a-2*b<=3*c-5,
+    ...      Eq(a/2-b/3-c/4,1),
+    ...      lambda l: (l['x']-2),
+    ...      (Matrix([[7],[8],[9]]), 2),
+    ...      ([0.2,0.3,0.4], [-0.5], '>')])  # doctest: +NORMALIZE_WHITESPACE
+    [(Matrix([[2, 3, 4]]), Matrix([[-1]])),
+     (Matrix([[-1, 2, 3]]), Matrix([[5]]), '>='),
+     (Matrix([[1/2, -1/3, -1/4]]), Matrix([[1]]), '=='),
+     (Matrix([[1, 0, 0]]), Matrix([[2]])),
+     (Matrix([[7, 8, 9]]), Matrix([[2]])),
+     (Matrix([[0.2, 0.3, 0.4]]), Matrix([[-0.5]]), '>')]
+
+    2D matrices are also supported:
+
+    >>> exprs_to_arrays(None, [a,b,c], 
+    ...     [([[4,5,6],[1,2,3]], [[-4,-8]])], dtype=int) # doctest: +NORMALIZE_WHITESPACE
+    [(array([[4, 5, 6], [1, 2, 3]]), array([-4, -8]))]
     """
     op_list = []
     vec_list = []
@@ -138,8 +181,10 @@ def exprs_to_arrays(locals: Dict[str, Any], symbols: List[Symbol],
         if isinstance(expr, tuple):
             if len(expr) == 3:
                 expr, c, op = expr
-            else:
+            elif len(expr) == 2:
                 expr, c = expr
+            else:
+                raise ValueError("The tuple should be of length 2 or 3.")
         if isinstance(expr, Relational):
             sign, op = _RELATIONAL_TO_OPERATOR[expr.__class__]
             expr = expr.lhs - expr.rhs if sign == 1 else expr.rhs - expr.lhs
@@ -148,11 +193,23 @@ def exprs_to_arrays(locals: Dict[str, Any], symbols: List[Symbol],
             vec_list.append(expr)
             op_list.append(op)
             index_list.append(i)
-        else:
+        elif isinstance(expr, (list, ndarray, MatrixBase)):
+            if isinstance(expr, list):
+                expr = Matrix(expr)
+            if isinstance(c, list):
+                c = Matrix(c)
             if op is not None:
+                if op in _RELATIONAL_TO_OPERATOR:
+                    sign, op = _RELATIONAL_TO_OPERATOR[op]
+                else:
+                    raise ValueError(f"The operator {op} at line {i} is not supported.")
+                if sign == -1:
+                    expr, c = -expr, -c
                 result[i] = (expr, c, op)
             else:
                 result[i] = (expr, c)
+        else:
+            raise ValueError(f"The expression {type(expr)} at line {i} is not supported.")
 
     const, A, _ = decompose_matrix(Matrix(vec_list), symbols)
 
@@ -162,7 +219,64 @@ def exprs_to_arrays(locals: Dict[str, Any], symbols: List[Symbol],
             result[i] = (A[j,:], -const[j], op_list[j])
         else:
             result[i] = (A[j,:], -const[j])
+
+    nvars = len(symbols)
+    for i in range(len(result)):
+        expr, c = result[i][0], result[i][1]
+        if not isinstance(c, (ndarray, MatrixBase)):
+            c = Matrix([c])
+        elif isinstance(c, ndarray):
+            c = c.flatten()
+        if isinstance(expr, ndarray):
+            expr = expr.reshape(1, -1)
+        elif isinstance(expr, MatrixBase):
+            expr = expr.reshape(expr.shape[0]*expr.shape[1]//nvars, nvars)
+        if len(result[i]) == 3:
+            result[i] = (expr, c, result[i][2])
+        else:
+            result[i] = (expr, c)
+
+    if dtype is not None:
+        f = lambda x: x.astype(dtype) if isinstance(x, ndarray) else np.array(x.tolist()).astype(dtype)
+        for i in range(len(result)):
+            if len(result[i]) == 3:
+                result[i] = (f(result[i][0]), f(result[i][1]).flatten(), result[i][2])
+            else:
+                result[i] = (f(result[i][0]), f(result[i][1]).flatten())
+
     return result
+
+
+def merge_constraints(constraints: List[Tuple[ndarray, ndarray, str]], dof: int) -> Tuple[ndarray, ndarray, ndarray, ndarray]:
+    ineq_lhs, ineq_rhs = [], []
+    eq_lhs, eq_rhs = [], []
+    for lhs, rhs, op in constraints:
+        if op in ('>', '>='):
+            ineq_lhs.append(lhs)
+            ineq_rhs.append(rhs)
+        elif op in ('<', '<='):
+            ineq_lhs.append(-lhs)
+            ineq_rhs.append(-rhs)
+        elif op in ('==', '='):
+            eq_lhs.append(lhs)
+            eq_rhs.append(rhs)
+        else:
+            raise ValueError(f"Unknown operator {op}.")
+
+    if len(ineq_lhs):
+        ineq_lhs = np.vstack(ineq_lhs)
+        ineq_rhs = np.concatenate(ineq_rhs)
+    else:
+        ineq_lhs = np.zeros((0, dof))
+        ineq_rhs = np.zeros((0,))
+
+    if len(eq_lhs):
+        eq_lhs = np.vstack(eq_lhs)
+        eq_rhs = np.concatenate(eq_rhs)
+    else:
+        eq_lhs = np.zeros((0, dof))
+        eq_rhs = np.zeros((0,))
+    return ineq_lhs, ineq_rhs, eq_lhs, eq_rhs
 
 
 class IteratorAlignmentError(Exception): ...

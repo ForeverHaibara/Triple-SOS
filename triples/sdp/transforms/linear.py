@@ -56,7 +56,10 @@ class SDPMatrixTransform(SDPTransformation):
         if (columnspace is None) ^ (nullspace is None):
             raise ValueError("The columnspace and nullspace should be both None or both not None.")
 
-    def _propagate_to_parent(self):
+    def get_y_transform_from_child(self) -> Tuple[Matrix, Matrix]:
+        return self._A, self._b
+
+    def propagate_to_parent(self):
         parent = self.parent_node
         child = self.child_node
         if child.y is None:
@@ -76,9 +79,9 @@ class SDPMatrixTransform(SDPTransformation):
         else:
             parent.register_y(parent.y)
 
-    def _propagate_nullspace_to_child(self, nullspace):
+    def propagate_nullspace_to_child(self, nullspace):
         columnspace = self._columnspace
-        return {key: matmul(columnspace[key].T, nullspace[key]) for key in columnspace.keys()}
+        return {key: matmul(columnspace[key].T, nullspace[key]) for key in nullspace.keys()}
 
 
     @classmethod
@@ -143,12 +146,9 @@ class DualMatrixTransform(SDPMatrixTransform):
             return parent_node.get_last_child() if to_child else parent_node
 
         if to_child:
-            while len(parent_node.children):
-                columnspace = None
-                child_node = parent_node.children[-1]
-                transform = child_node.common_transform(parent_node)
-                nullspace = transform.propagate_nullspace_to_child(nullspace, recursive=False)
-                parent_node = child_node
+            columnspace = None
+            nullspace = parent_node.propagate_nullspace_to_child(nullspace, recursive=True)
+            parent_node = parent_node.get_last_child()
         if columnspace is None:
             columnspace = {key: solve_nullspace(space) for key, space in nullspace.items()}
 
@@ -194,7 +194,7 @@ class DualMatrixTransform(SDPMatrixTransform):
                 # new_space = matmul(eq_mat, trans_space)
 
                 # Ai0 = vec2mat(x0)
-                # new_x0 = .mat2vec(U.T * Ai0 * U) + eq_mat * trans_x0
+                # new_x0 = mat2vec(U.T * Ai0 * U) + eq_mat * trans_x0
                 new_x0 = symmetric_bilinear(U, x0, is_A_vec = True, return_shape=(U.shape[1]**2, 1))
                 new_x0 += matmul(eq_mat, trans_x0)
                 # new_x0 += matmul(eq_mat, trans_x0)
