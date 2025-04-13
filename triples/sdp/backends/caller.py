@@ -135,6 +135,7 @@ def solve_numerical_dual_sdp(
         solver: Optional[str] = None,
         raise_exception: bool = True,
         verbose: Union[bool, int] = 0,
+        max_iters: int = 200,
         tol_fsb_abs: float = 1e-8,
         tol_fsb_rel: float = 1e-8,
         tol_gap_abs: float = 1e-8,
@@ -164,6 +165,7 @@ def solve_numerical_dual_sdp(
     try:
         y = backend.solve(
             verbose=verbose,
+            max_iters=max_iters,
             tol_fsb_abs=tol_fsb_abs,
             tol_fsb_rel=tol_fsb_rel,
             tol_gap_abs=tol_gap_abs,

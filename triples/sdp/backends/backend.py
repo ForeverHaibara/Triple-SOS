@@ -55,6 +55,7 @@ class SDPBackend:
 
     def solve(self,
             verbose: int = SolverConfigs.verbose,
+            max_iters: int = SolverConfigs.max_iters,
             tol_gap_abs: float = SolverConfigs.tol_gap_abs,
             tol_gap_rel: float = SolverConfigs.tol_gap_rel,
             tol_fsb_abs: float = SolverConfigs.tol_fsb_abs,

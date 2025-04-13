@@ -60,12 +60,13 @@ class SDPStatus(metaclass=NoInstanceMeta):
 
 class SolverConfigs:
     verbose = 0
+    max_iters = 200
     tol_gap_abs = 1e-8
     tol_gap_rel = 1e-8
     tol_fsb_abs = 1e-8
     tol_fsb_rel = 1e-8
     solver_options = dict()
-    _KEYS = ('verbose', 'tol_gap_abs', 'tol_gap_rel', 'tol_fsb_abs', 'tol_fsb_rel', 'solver_options')
+    _KEYS = ('verbose', 'max_iters', 'tol_gap_abs', 'tol_gap_rel', 'tol_fsb_abs', 'tol_fsb_rel', 'solver_options')
     def __init__(self, **kwargs):
         for key in self._KEYS:
             setattr(self, key, kwargs.pop(key, getattr(self, key)))

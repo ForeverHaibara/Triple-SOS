@@ -38,6 +38,7 @@ class DualBackendPICOS(DualBackend):
 
         if configs is not None:
             problem.options['verbosity'] = configs.verbose
+            problem.options['max_iterations'] = configs.max_iters
             problem.options['abs_dual_fsb_tol'] = configs.tol_fsb_abs
             problem.options['rel_dual_fsb_tol'] = configs.tol_fsb_rel
             problem.options['abs_prim_fsb_tol'] = configs.tol_fsb_abs
@@ -49,7 +50,7 @@ class DualBackendPICOS(DualBackend):
     def _solve(self, configs: SolverConfigs):
         from picos.modeling import Strategy
         from picos.modeling.solution import (
-            SS_OPTIMAL, SS_INFEASIBLE, SS_UNKNOWN,
+            SS_OPTIMAL, SS_INFEASIBLE, SS_UNKNOWN, SS_EMPTY,
             PS_INFEASIBLE, PS_UNBOUNDED, PS_UNKNOWN, PS_INF_OR_UNB
         )
         problem = self._create_problem(configs)
@@ -67,6 +68,6 @@ class DualBackendPICOS(DualBackend):
             self.set_status(SDPStatus.INFEASIBLE)
         elif solution.primalStatus in (PS_UNBOUNDED,):
             self.set_status(SDPStatus.UNBOUNDED)
-        elif solution.primalStatus in (SS_UNKNOWN, PS_UNKNOWN, PS_INF_OR_UNB):
+        elif solution.primalStatus in (SS_UNKNOWN, PS_UNKNOWN, SS_EMPTY, PS_INF_OR_UNB):
             self.set_status(SDPStatus.INFEASIBLE_OR_UNBOUNDED)
         self.set_status(SDPStatus.ERROR)

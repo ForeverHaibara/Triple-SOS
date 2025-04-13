@@ -134,10 +134,10 @@ def test_duals():
                     assert False, f'Dual solver {solver_name} returned {y} on INFEASIBLE problem {problem_name}.'
                 except Exception as e:
                     if isinstance(e, AssertionError):
-                        raise e
+                        raise e from None
                     else:
                         assert isinstance(e, SDPProblemError) and not isinstance(e, SDPUnboundedError),\
-                            f'Dual solver {solver_name} raised {e} on INFEASIBLE problem {problem_name}.'
+                            f'Dual solver {solver_name} raised {e} ({type(e)}) on INFEASIBLE problem {problem_name}.'
             elif np.isinf(answer):
                 try:
                     y = solve_numerical_dual_sdp(x0_and_space, objective, constraints,
@@ -145,7 +145,7 @@ def test_duals():
                     assert False, f'Dual solver {solver_name} returned {y} on UNBOUNDED problem {problem_name}.'
                 except Exception as e:
                     if isinstance(e, AssertionError):
-                        raise e
+                        raise e from None
                     else:
                         assert isinstance(e, SDPProblemError) and not isinstance(e, SDPInfeasibleError),\
-                            f'Dual solver {solver_name} raised {e} on UNBOUNDED problem {problem_name}.'
+                            f'Dual solver {solver_name} raised {e} ({type(e)}) on UNBOUNDED problem {problem_name}.'

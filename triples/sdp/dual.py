@@ -317,7 +317,7 @@ class SDPProblem(TransformableDual):
         return super().solve_obj(
             objective, constraints=constraints, solver=solver,
             solve_child=solve_child, propagate_to_parent=propagate_to_parent,
-            **kwargs
+            kwargs=kwargs
         )
 
     def solve(self,
