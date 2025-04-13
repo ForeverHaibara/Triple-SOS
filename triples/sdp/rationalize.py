@@ -5,7 +5,7 @@ from typing import Union, Optional, Tuple, List, Dict, Callable, Generator
 import numpy as np
 import sympy as sp
 
-from .arithmetic import congruence
+from .arithmetic import congruence, rep_matrix_from_numpy
 
 Decomp = Dict[str, Tuple[sp.Matrix, sp.Matrix, List[sp.Rational]]]
 
@@ -77,10 +77,9 @@ class RationalizeSimultaneously(Rationalizer):
         self.lcms = lcms
 
     def __call__(self, y: np.ndarray) -> Generator[sp.Matrix, None, None]:
+        y = np.array(y).astype(float)
         for lcm in self.lcms:
-            lcm = sp.Integer(lcm)
-            y_rational = [round(v * lcm) / lcm for v in y]
-            y_rational = sp.Matrix(y_rational)
+            y_rational = rep_matrix_from_numpy(np.round(y*lcm).astype(np.int64)) / lcm
             yield y_rational
 
 

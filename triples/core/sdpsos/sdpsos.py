@@ -500,9 +500,8 @@ def SDPSOS(
         degree_limit: int = 12,
         verbose: bool = False,
         solver: Optional[str] = None,
-        solver_options: Dict[str, Any] = {},
         allow_numer: int = 0,
-        **kwargs
+        solve_kwargs: Dict[str, Any] = {},
     ) -> Optional[SolutionSDP]:
     """
     Solve a polynomial SOS problem with SDP.
@@ -562,15 +561,13 @@ def SDPSOS(
         Whether to print the progress. Default is False.
     solver: str
         The numerical SDP solver to use. When set to None, it is automatically selected. Default is None.
-    solver_options: Dict[str, Any]
-        Additional options to pass to the SDP solver.
     allow_numer: int
         Whether to allow numerical solution (still under development).
     """
     return _SDPSOS(poly, ineq_constraints=ineq_constraints, eq_constraints=eq_constraints,
                 symmetry=symmetry, ineq_constraints_with_trivial=ineq_constraints_with_trivial,
                 preordering=preordering, degree_limit=degree_limit, verbose=verbose,
-                solver=solver, solver_options=solver_options, allow_numer=allow_numer, **kwargs)
+                solver=solver, allow_numer=allow_numer, solve_kwargs=solve_kwargs)
 
 
 def _SDPSOS(
@@ -583,9 +580,8 @@ def _SDPSOS(
         degree_limit: int = 12,
         verbose: bool = False,
         solver: Optional[str] = None,
-        solver_options: Dict[str, Any] = {},
         allow_numer: int = 0,
-        **kwargs
+        solve_kwargs: Dict[str, Any] = {},
     ) -> Optional[SolutionSDP]:
     nvars = len(poly.gens)
     degree = poly.total_degree()
@@ -634,7 +630,7 @@ def _SDPSOS(
                     print(f"Time for finding roots                  : {time() - time1:.6f} seconds.")
             
             sdp = sos_problem.construct([e[0] for e in qmodule], list(eq_constraints.keys()), roots=roots, verbose=verbose)
-            if sos_problem.solve(verbose=verbose, solver=solver):
+            if sos_problem.solve(verbose=verbose, solver=solver, allow_numer=allow_numer, kwargs=solve_kwargs):
                 if verbose:
                     print(f"Time for solving SDP{' ':20s}: {time() - time0:.6f} seconds. \033[32mSuccess\033[0m.")
                 solution = sos_problem.as_solution(ineq_constraints=dict(qmodule), eq_constraints=eq_constraints)

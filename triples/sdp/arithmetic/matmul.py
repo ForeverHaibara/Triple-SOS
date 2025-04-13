@@ -18,7 +18,8 @@ import sympy as sp
 from sympy.matrices import MutableDenseMatrix as Matrix
 
 from .matop import (
-    is_zz_qq_mat, vec2mat, primitive, _cast_list_to_sympy_matrix, _cast_sympy_matrix_to_numpy
+    is_zz_qq_mat, vec2mat, primitive, _cast_sympy_matrix_to_numpy,
+    rep_matrix_from_numpy
 )
 
 _INT32_MAX = np_iinfo('int32').max # 2147483647
@@ -74,10 +75,10 @@ def matmul(A: Matrix, B: Matrix, return_shape = None) -> Matrix:
     if isnan(_MAXB) or _MAXB == inf or _MAXB > _INT64_MAX or int(_MAXA) * int(_MAXB) * B.shape[0] > _INT64_MAX:
         return default(A0, B0)
 
-    C = (A @ B).flatten().tolist()
     q1q2 = q1 * q2
     return_shape = return_shape or (A0.shape[0], B0.shape[1])
-    C = _cast_list_to_sympy_matrix(*return_shape, C) * q1q2
+    C = (A @ B).reshape(return_shape)
+    C = rep_matrix_from_numpy(C) * q1q2
     return C
 
 
@@ -144,14 +145,14 @@ def matmul_multiple(A: Matrix, B: Matrix) -> Matrix:
         print('>> Time for casting to numpy:', time() - time0)
         time0 = time()
 
-    C = (A @ B).flatten().tolist()
+    C = (A @ B).reshape((N, n*m))
 
     if _VERBOSE_MATMUL_MULTIPLE:
         print('>> Time for numpy matmul:', time() - time0) # very fast (can be ignored)
         time0 = time()
 
     q1q2 = q1 * q2
-    C = _cast_list_to_sympy_matrix(N, n*m, C) * q1q2
+    C = rep_matrix_from_numpy(C) * q1q2
 
     if _VERBOSE_MATMUL_MULTIPLE:
         print('>> Time for casting to sympy:', time() - time0) # < 1 sec over (800*8000)
@@ -243,13 +244,13 @@ def symmetric_bilinear_multiple(U: Matrix, A: Matrix) -> Matrix:
         return default(A0, U0)
     A = A.reshape((N, n, n))
 
-    C = (U.T @ A @ U).flatten().tolist()
+    C = (U.T @ A @ U).reshape((N, m**2))
 
     if _VERBOSE_MATMUL_MULTIPLE:
         time0 = time()
 
     q1q22 = q1 * q2**2
-    C = _cast_list_to_sympy_matrix(N, m**2, C) * q1q22
+    C = rep_matrix_from_numpy(C) * q1q22
 
     if _VERBOSE_MATMUL_MULTIPLE:
         print('>> Time for casting to sympy Bilinear:', time() - time0)

@@ -70,14 +70,14 @@ class SDPMatrixTransform(SDPTransformation):
             # no linear transformation
             parent.y = child.y
         else:
-            parent.y = matmul(self._A, child.y) + self._b
+            parent.y = self._A @ child.y + self._b
 
         if self._columnspace is None:
             # no columnspace transformation
             parent.S = child.S
             parent.decompositions = child.decompositions
         else:
-            parent.register_y(parent.y)
+            parent.register_y(parent.y, perturb=True)
 
     def propagate_nullspace_to_child(self, nullspace):
         columnspace = self._columnspace

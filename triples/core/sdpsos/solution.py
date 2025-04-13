@@ -28,8 +28,12 @@ class SolutionSDP(SolutionSimple):
         """
         Create SDP solution from decompositions.
         """
+        is_zz_qq_mat = lambda x: x._rep.domain.is_ZZ or x._rep.domain.is_QQ
+        factor = all(is_zz_qq_mat(U) and is_zz_qq_mat(S) for U, S in decompositions.values())
+        factor = factor and (poly.domain.is_ZZ or poly.domain.is_QQ)
+
         qmodule_expr = _decomp_as_sos(decompositions, poly.total_degree(), poly.gens,
-                            symmetry=symmetry, ineq_constraints=ineq_constraints)
+                            symmetry=symmetry, ineq_constraints=ineq_constraints, factor=factor)
 
         ideal_exprs = []
         for key, vec in eqvec.items():

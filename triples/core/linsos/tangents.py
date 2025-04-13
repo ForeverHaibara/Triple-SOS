@@ -30,11 +30,11 @@ def _get_sorted_nullspace_by_weights(mat: Matrix, weights: Optional[List[int]]=N
         invinds = np.argsort(inds)
 
         # new_mat[i] = mat[inds[i]]
-        mat = _permute_matrix_rows(mat, invinds)
+        mat = permute_matrix_rows(mat, invinds)
 
     vecs = mat.T.nullspace()
     if weights is not None:
-        vecs = [_permute_matrix_rows(v, inds) for v in vecs]
+        vecs = [permute_matrix_rows(v, inds) for v in vecs]
     return vecs
 
 def _get_sorted_nullspace(monomial_manager: MonomialManager, mat: Matrix, degree: int) -> List[Matrix]:

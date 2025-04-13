@@ -8,7 +8,7 @@ from sympy.external.gmpy import MPQ, MPZ # >= 1.9
 from sympy.external.importtools import version_tuple
 from sympy.matrices import MutableDenseMatrix as Matrix
 from sympy.matrices.repmatrix import RepMatrix
-from sympy.polys.domains import ZZ, QQ, EX, EXRAW # EXRAW >= 1.9
+from sympy.polys.domains import ZZ, QQ, RR, EX, EXRAW # EXRAW >= 1.9
 from sympy.polys.matrices.domainmatrix import DomainMatrix # polys.matrices >= 1.8
 from sympy.polys.matrices.ddm import DDM
 from sympy.polys.matrices.sdm import SDM
@@ -145,7 +145,21 @@ def _cast_list_to_sympy_matrix(rows: int, cols: int, lst: List[int]) -> Matrix:
                 row[j] = MPZ(v)
         if row:
             sdm[i] = row
-    return Matrix._fromrep(DomainMatrix.from_rep(SDM(sdm, (rows, cols), ZZ)))
+    return rep_matrix_from_dict(sdm, (rows, cols), ZZ)
+
+def rep_matrix_from_numpy(arr: ndarray) -> RepMatrix:
+    if np.issubdtype(arr.dtype, np.integer):
+        shape = arr.shape if len(arr.shape) == 2 else (arr.shape[0], 1)
+        return _cast_list_to_sympy_matrix(shape[0], shape[1], arr.flatten().tolist())
+    elif np.issubdtype(arr.dtype, np.floating):
+        conv = RR.convert
+        if len(arr.shape) == 2:
+            lst = [[conv(_) for _ in row] for row in arr.tolist()]
+            return rep_matrix_from_list(lst, arr.shape, RR)
+        else:
+            lst = [conv(_) for _ in arr.tolist()]
+            return rep_matrix_from_list(lst, arr.shape[0], RR)
+    return Matrix(arr.tolist())
 
 
 def permute_matrix_rows(matrix, permutation):

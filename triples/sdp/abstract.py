@@ -10,7 +10,7 @@ from sympy.polys.matrices import DomainMatrix
 from sympy.polys.matrices.sdm import SDM
 import sympy as sp
 
-from .arithmetic import sqrtsize_of_mat, is_empty_matrix, congruence, rep_matrix_from_list
+from .arithmetic import sqrtsize_of_mat, is_empty_matrix, congruence, rep_matrix_from_list, rep_matrix_from_numpy
 from .backend import SDPBackend
 from .ipm import SDPRationalizeError
 from .rationalize import (
@@ -140,6 +140,10 @@ class SDPProblemBase(ABC):
         """
         if len(y) == 0 and self.dof != 0:
             raise ValueError("No solution is given to be registered.")
+        if isinstance(y, list):
+            y = np.array(y)
+        if isinstance(y, np.ndarray):
+            y = rep_matrix_from_numpy(y.flatten())
         y2 = self.project(y)
         if (not (y2 is y)) and not project:
             # FIXME for numpy array
@@ -249,6 +253,7 @@ class SDPProblemBase(ABC):
         verbose: bool = False,
         solve_child: bool = True,
         propagate_to_parent: bool = True,
+        allow_numer: bool = False
     ) -> bool:
         """
         Interface for solving the SDP problem.

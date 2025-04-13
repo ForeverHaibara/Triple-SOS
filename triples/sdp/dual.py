@@ -6,7 +6,7 @@ from sympy.core.relational import Relational
 from sympy import MutableDenseMatrix as Matrix
 
 from .abstract import Decomp
-from .arithmetic import solve_undetermined_linear
+from .arithmetic import solve_undetermined_linear, rep_matrix_from_numpy
 from .backends import (
     SDPError, SDPProblemError, SDPInfeasibleError,
     solve_numerical_dual_sdp
@@ -255,7 +255,7 @@ class SDPProblem(TransformableDual):
         elif isinstance(y, np.ndarray):
             if y.size != m:
                 raise ValueError(f"Vector y must be an array of shape ({m},) or ({m}, 1), but got {y.shape}.")
-            y = Matrix(m, 1, y.flatten().tolist())
+            y = rep_matrix_from_numpy(y)
         elif isinstance(y, dict):
             y = Matrix([y.get(v, v) for v in self.free_symbols]).reshape(m, 1)
 
@@ -325,6 +325,8 @@ class SDPProblem(TransformableDual):
         verbose: bool = False,
         solve_child: bool = True,
         propagate_to_parent: bool = True,
+        allow_numer: int = 0,
+        kwargs: Dict[Any, Any] = {}
     ) -> bool:
         if solve_child:
             self = self.get_last_child()
@@ -352,7 +354,7 @@ class SDPProblem(TransformableDual):
         try:
             sol = solve_numerical_dual_sdp(
                 x0_and_space, objective=objective, constraints=constraints,
-                solver=solver
+                solver=solver, **kwargs
             )
         except SDPError as e:
             if isinstance(e, SDPProblemError):
@@ -367,6 +369,9 @@ class SDPProblem(TransformableDual):
                 self.y = solution[0]
                 self.S = dict((key, S[0]) for key, S in solution[1].items())
                 self.decompositions = dict((key, S[1:]) for key, S in solution[1].items())
+                success = True
+            elif allow_numer:
+                self.register_y(sol, perturb=True, propagate_to_parent=propagate_to_parent)
                 success = True
 
         if propagate_to_parent:

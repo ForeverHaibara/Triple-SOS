@@ -42,7 +42,7 @@ class SDPTransformation:
             y = child.y
         else:
             y = A @ child.y + b
-        parent.register_y(y)
+        parent.register_y(y, perturb=True)
 
     def propagate_to_child(self):
         """

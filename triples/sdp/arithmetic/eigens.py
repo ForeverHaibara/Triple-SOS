@@ -88,13 +88,6 @@ def congruence(M: Union[Matrix, ndarray], perturb: Union[bool, float]=False,
     return U, S
 
 
-def congruence_with_perturbation(
-        M: Matrix,
-        perturb: bool = False
-    ) -> Optional[Tuple[Matrix, Matrix]]:
-    return congruence(M, perturb=perturb)
-
-
 def _congruence_on_exact_domain(M: RepMatrix) -> Optional[Tuple[RepMatrix, RepMatrix]]:
     """
     Perform congruence decomposition on M fast if M is a SymPy RepMatrix.
@@ -136,7 +129,6 @@ def _congruence_on_exact_domain(M: RepMatrix) -> Optional[Tuple[RepMatrix, RepMa
                 for j in range(k, n):
                     Mk[j] = Mk[j] - Ui[j] * Mi[k] # rank 1 update
         elif sgn < 0:
-            print('negative', p, domain.to_sympy(p))
             return None
         elif sgn == 0:
             # # The vectorized version:
