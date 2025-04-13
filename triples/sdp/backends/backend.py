@@ -69,16 +69,43 @@ class SDPBackend:
         """
         raise NotImplementedError
 
+    @classmethod
+    def _convert_space_to_isometric(cls, space: np.ndarray, order='row') -> np.ndarray:
+        ndims = 2
+        if len(space.shape) == 1:
+            ndims = 1
+            space = space.reshape(-1, 1)
+
+        n = int(round(np.sqrt(space.shape[0])))
+
+        # multiply 2**.5 on off-diagonal entries
+        space = space * (2**.5)
+        space[np.arange(0,n**2,n+1), :] *= 2**-.5
+
+        # extract the upper triangular part
+        if order == 'row': # row major
+            rows = np.array([i*n+j for i in range(n) for j in range(n) if i <= j])
+        elif order == 'col': # column major
+            rows = np.array([i*n+j for j in range(n) for i in range(n) if i <= j])
+        else:
+            raise ValueError('Order should be one of "row" or "col".')
+        upper = space[rows, :]
+
+        if ndims == 1: # flatten to vector
+            upper = upper.flatten()
+        return upper
+
 
 class DualBackend(SDPBackend):
     """
     Configuration Flags (class variables):
-    _opt_isometric          : If True, store symmetric matrices in isometric form.
-    _opt_ineq_to_1d         : If True, convert inequality constraints to 1D matrices.
-    _opt_eq_to_ineq         : If True, convert equality constraints to two inequality constraints.
+    _opt_isometric        : If 'row' or 'col', store symmetric matrices in isometric form in given order.
+    _opt_sparse           : If 'csc', 'csr' or 'coo', convert 2d matrices to scipy sparse format.
+    _opt_ineq_to_1d       : If True, convert inequality constraints to 1D matrices.
+    _opt_eq_to_ineq       : If True, convert equality constraints to two inequality constraints.
     """
-    _opt_sparse     = False
     _opt_isometric  = False
+    _opt_sparse     = False
     _opt_ineq_to_1d = True
     _opt_eq_to_ineq = True
 
@@ -86,6 +113,14 @@ class DualBackend(SDPBackend):
     def __init__(self, As: List[ndarray], bs: List[ndarray], ineq_lhs: ndarray, ineq_rhs: ndarray,
                     eq_lhs: ndarray, eq_rhs: ndarray, c: ndarray):
         dof = c.shape[0]
+
+        # store a copy of the original inputs
+        self._As = As
+        self._bs = bs
+        self._ineq_lhs = ineq_lhs
+        self._ineq_rhs = ineq_rhs
+        self._eq_lhs   = eq_lhs
+        self._eq_rhs   = eq_rhs
 
         if self._opt_eq_to_ineq:
             ineq_lhs = np.vstack((ineq_lhs, eq_lhs, -eq_lhs))
@@ -98,12 +133,25 @@ class DualBackend(SDPBackend):
             bs.extend([ineq_rhs[i:i+1] for i in range(ineq_rhs.shape[0])])
             ineq_lhs, ineq_rhs = np.zeros((0, dof)), np.zeros((0,))
 
+        if self._opt_isometric:
+            As = [self._convert_space_to_isometric(A, order=self._opt_isometric) for A in As]
+            bs = [self._convert_space_to_isometric(b, order=self._opt_isometric) for b in bs]
+
+        if self._opt_sparse:
+            if not self._opt_sparse in ('csc', 'csr', 'coo'):
+                raise ValueError('DualBackend._opt_sparse must be one of "csc" or "csr" or "coo".')
+            from scipy import sparse
+            to_mat = getattr(sparse, self._opt_sparse + '_matrix')
+            As = [to_mat(A) for A in As]
+            ineq_lhs = to_mat(ineq_lhs)
+            eq_lhs = to_mat(eq_lhs)
+
         self.As = As
         self.bs = bs
         self.ineq_lhs = ineq_lhs
         self.ineq_rhs = ineq_rhs
-        self.eq_lhs = eq_lhs
-        self.eq_rhs = eq_rhs
+        self.eq_lhs   = eq_lhs
+        self.eq_rhs   = eq_rhs
         self.c = c
 
     @property
@@ -112,24 +160,24 @@ class DualBackend(SDPBackend):
 
     @property
     def mat_sizes(self) -> List[int]:
-        shapes = np.array([A.shape[0] for A in self.As])
-        if not self._opt_isometric:
-            return np.round(np.sqrt(shapes)).astype(int).tolist()
+        shapes = np.array([A.shape[0] for A in self._As])
+        # if not self._opt_isometric:
+        return np.round(np.sqrt(shapes)).astype(int).tolist()
         # else:
-        #     return [int(np.sqrt(A.shape[0])*2) for A in self.As]
+        #     return np.round(np.sqrt(shapes*2+.25)).astype(int).tolist()
 
     def is_feasible(self, x, tol_fsb_abs: float = 1e-8, tol_fsb_rel: float = 1e-8) -> bool:
-        if self.ineq_lhs.shape[0] > 0:
-            v = self.ineq_lhs @ x - self.ineq_rhs
+        if self._ineq_lhs.shape[0] > 0:
+            v = self._ineq_lhs @ x - self._ineq_rhs
             minv = np.min(v)
             if minv < -tol_fsb_abs or minv < -tol_fsb_rel * max(1, np.max(np.abs(v))):
                 return False
-        if self.eq_lhs.shape[0] > 0:
-            v = np.abs(self.eq_lhs @ x - self.eq_rhs)
+        if self._eq_lhs.shape[0] > 0:
+            v = np.abs(self._eq_lhs @ x - self._eq_rhs)
             maxv = np.max(v)
             if maxv > tol_fsb_abs: # and
                 return False
-        for A, b, n in zip(self.As, self.bs, self.mat_sizes):
+        for A, b, n in zip(self._As, self._bs, self.mat_sizes):
             if n <= 0:
                 continue
             mat = A @ x + b

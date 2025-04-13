@@ -345,8 +345,9 @@ class SDPProblem(TransformableDual):
         size = self.size
         for key, (x0, space) in self._x0_and_space.items():
             n = size[key]
-            diagonals = Matrix([-i%(n+1) for i in range(n**2)])
-            x0_and_space[key] = (x0, Matrix.hstack(space, diagonals))
+            # diagonals = Matrix([-int(i%(n+1)==0) for i in range(n**2)])
+            diagonals = -np.eye(n).reshape(n**2, 1)
+            x0_and_space[key] = (x0, np.hstack([np.array(space).astype(float), diagonals]))
         objective = np.zeros(self.dof + 1)
         objective[-1] = -1
         constraints = [(objective, 0, '<'), (objective, -100, '>')]

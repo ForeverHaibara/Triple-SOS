@@ -5,15 +5,16 @@ from numpy import ndarray
 from sympy import MutableDenseMatrix as Matrix
 
 from .backend import DualBackend
-# from .cvxopt_sdp import DualBackendCVXOPT
+from .clarabel_sdp import DualBackendCLARABEL
+from .cvxopt_sdp import DualBackendCVXOPT
 from .cvxpy_sdp import DualBackendCVXPY
 from .picos_sdp import DualBackendPICOS
 
 from .settings import SDPError
 
 _DUAL_BACKENDS: Dict[str, DualBackend] = {
-    # 'clarabel': DualBackendCLARABEL,
-    # 'cvxopt': DualBackendCVXOPT,
+    'clarabel': DualBackendCLARABEL,
+    'cvxopt': DualBackendCVXOPT,
     'cvxpy': DualBackendCVXPY,
     # 'mosek': DualBackendMOSEK,
     'picos': DualBackendPICOS,
@@ -29,7 +30,7 @@ _PRIMAL_BACKENDS: Dict[str, Any] = {
 }
 
 _RECOMMENDED_BACKENDS = [
-    'picos',
+    'clarabel', 'cvxopt', 'cvxpy', 'picos',
 #     'mosek', 'clarabel', 'cvxopt', 'sdpa', 'picos', 'cvxpy',
 ]
 
