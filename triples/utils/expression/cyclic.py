@@ -1134,6 +1134,9 @@ def identify_symmetry_from_lists(lst_of_lsts: List[List[sp.Poly]]) -> Permutatio
                 candidates.append(p)
                 p = [0] + [_ + 1 for _ in p[:-1]]
                 candidates.append(p)
+        else:
+            for p in [p1, p2, p3]:
+                candidates.append(p)
 
     if nvars > 2:
         candidates.append(_rotated(nvars - 1) + [nvars - 1])
