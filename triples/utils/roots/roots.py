@@ -421,7 +421,7 @@ class Root():
             raise ValueError('The number of variables in the polynomial does not match the root.')
         if (not poly.domain.is_Numerical):
             return self.subs(poly.as_expr(), poly.gens)
-        return self.to_sympy(self._subs_poly_rep(poly))
+        return self._subs_poly_rep(poly, to_sympy=True)
 
     def subs(self, expr: Union[sp.Basic], symbols: Optional[List[Symbol]] = None) -> Union[sp.Basic]:
         """
@@ -584,19 +584,20 @@ class Root():
             M = _reg_matrix(M)
         return M
 
-    def _subs_poly_rep(self, poly: Poly) -> ANP:
+    def _subs_poly_rep(self, poly: Poly, to_sympy: bool=False) -> Union[ANP, Expr]:
         """
         Substitute the root into a polynomial. This returns an ANP object,
         which is different from the general method self.eval(poly). This
         function is only available for RootAlgebraic class.
         """
-        if not (self.domain.is_QQ or self.domain.is_ZZ
-                or poly.domain.is_QQ or poly.domain.is_ZZ or self.domain == poly.domain):
+        if not (self.domain == poly.domain):
             poly = poly.set_domain(poly.domain.unify(self.domain))
             self = self.set_domain(poly.domain)
         s = poly.domain.zero
         for monom, coeff in poly.rep.terms():
             s += self._single_power_monomial(monom) * coeff
+        if to_sympy:
+            s = self.to_sympy(s)
         return s
 
     def cyclic_sum(self, monom: List[int], perm_group: Optional[PermutationGroup] = None,

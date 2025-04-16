@@ -61,6 +61,9 @@ def test_as_vec_and_span():
             zero = rep.domain.zero
             assert all(all(v != zero for v in row.values()) for row in rep.values())
 
+def test_eval():
+    assert Root((1,0,1)).eval(Poly(2*a/3,a,b,c)) == Rational(2,3)
+    assert abs(Root((1,0,1)).eval(Poly(2/3*a,a,b,c)) - 2/3) < 1e-10
 
 def test_cyclic_sum():
     assert Root((sqrt(2),)).cyclic_sum((5,)) == 4*sqrt(2)
