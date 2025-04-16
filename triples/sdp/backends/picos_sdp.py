@@ -9,6 +9,10 @@ class DualBackendPICOS(DualBackend):
     Picos is a Python interface to conic optimization solvers,
     and the default solver is CVXOPT.
 
+    Warnings:
+    1. PICOS reformulation of the SDP might be more difficult to solve and would
+    be slower than calling the solver-specific backends.
+
     Installation:
     pip install picos
 

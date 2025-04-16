@@ -8,6 +8,7 @@ from .backend import DualBackend
 from .clarabel_sdp import DualBackendCLARABEL
 from .cvxopt_sdp import DualBackendCVXOPT
 from .cvxpy_sdp import DualBackendCVXPY
+from .mosek_sdp import DualBackendMOSEK
 from .picos_sdp import DualBackendPICOS
 
 from .settings import SDPError, SDPResult
@@ -16,7 +17,7 @@ _DUAL_BACKENDS: Dict[str, DualBackend] = {
     'clarabel': DualBackendCLARABEL,
     'cvxopt': DualBackendCVXOPT,
     'cvxpy': DualBackendCVXPY,
-    # 'mosek': DualBackendMOSEK,
+    'mosek': DualBackendMOSEK,
     'picos': DualBackendPICOS,
     # 'sdpa': DualBackendSDPAP,
     # 'sdpap': DualBackendSDPAP,
@@ -30,7 +31,7 @@ _PRIMAL_BACKENDS: Dict[str, Any] = {
 }
 
 _RECOMMENDED_BACKENDS = [
-    'clarabel', 'cvxopt', 'cvxpy', 'picos',
+    'mosek', 'clarabel', 'cvxopt', 'cvxpy', 'picos',
 #     'mosek', 'clarabel', 'cvxopt', 'sdpa', 'picos', 'cvxpy',
 ]
 
