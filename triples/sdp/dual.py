@@ -7,10 +7,7 @@ from sympy import MutableDenseMatrix as Matrix
 
 from .abstract import Decomp
 from .arithmetic import solve_undetermined_linear, rep_matrix_from_numpy
-from .backends import (
-    SDPError, SDPProblemError, SDPInfeasibleError,
-    solve_numerical_dual_sdp
-)
+from .backends import SDPError, solve_numerical_dual_sdp
 from .rationalize import RationalizeWithMask, RationalizeSimultaneously
 from .transforms import TransformableDual
 
@@ -336,7 +333,7 @@ class SDPProblem(TransformableDual):
                 self.register_y(y)
                 return True
             except ValueError:
-                raise SDPInfeasibleError
+                raise SDPError.from_kwargs(infeasible=True)
             return False
 
         success = False
@@ -350,21 +347,16 @@ class SDPProblem(TransformableDual):
             x0_and_space[key] = (x0, np.hstack([np.array(space).astype(float), diagonals]))
         objective = np.zeros(self.dof + 1)
         objective[-1] = -1
-        constraints = [(objective, 0, '<'), (objective, -100, '>')]
-        sol = None
-        try:
-            sol = solve_numerical_dual_sdp(
-                x0_and_space, objective=objective, constraints=constraints,
-                solver=solver, **kwargs
-            )
-        except SDPError as e:
-            if isinstance(e, SDPProblemError):
-                raise SDPInfeasibleError from None
+        constraints = [(objective, 0, '<'), (objective, -5, '>')]
+        sol = solve_numerical_dual_sdp(
+            x0_and_space, objective=objective, constraints=constraints,
+            solver=solver, **kwargs, return_result=True
+        )
 
-        if sol is not None:
-            sol = sol[:-1]
-            self._ys.append(sol)
-            solution = self.rationalize(sol, verbose=verbose,
+        if sol.y is not None and (not sol.infeasible):
+            y = sol.y[:-1] # discard the eigenvalue relaxation
+            self._ys.append(y)
+            solution = self.rationalize(y, verbose=verbose,
                 rationalizers=[RationalizeWithMask(), RationalizeSimultaneously([1,1260,1260**3])])
             if solution is not None:
                 self.y = solution[0]
@@ -372,7 +364,7 @@ class SDPProblem(TransformableDual):
                 self.decompositions = dict((key, S[1:]) for key, S in solution[1].items())
                 success = True
             elif allow_numer:
-                self.register_y(sol, perturb=True, propagate_to_parent=propagate_to_parent)
+                self.register_y(y, perturb=True, propagate_to_parent=propagate_to_parent)
                 success = True
 
         if propagate_to_parent:

@@ -1,7 +1,7 @@
 from copy import deepcopy
 
 from .backend import DualBackend
-from .settings import SDPStatus, SolverConfigs, SDPError
+from .settings import SolverConfigs, SDPError
 
 _CVXPY_SOLVER_CONFIGS = {
     'CLARABEL': {
@@ -124,17 +124,24 @@ class DualBackendCVXPY(DualBackend):
         problem = self._create_problem()
         solver_options = update_solver_options(problem, configs.solver_options, configs)
         obj = problem.solve(verbose=bool(configs.verbose), **solver_options)
+
+        for var in problem.variables():
+            if var.name() == 'y':
+                y = var.value
+        if y is not None:
+            y = y.flatten()
+        result = {'y': y}
+
         if problem.status in (s.OPTIMAL, s.OPTIMAL_INACCURATE):
-            self.set_status(SDPStatus.OPTIMAL)
-            for var in problem.variables():
-                if var.name() == 'y':
-                    value = var.value.flatten()
-                    return value
+            result['optimal'] = True
         elif problem.status in (s.INFEASIBLE, s.INFEASIBLE_INACCURATE):
-            self.set_status(SDPStatus.INFEASIBLE)
+            result['infeasible'] = True
         elif problem.status in (s.UNBOUNDED, s.UNBOUNDED_INACCURATE):
-            self.set_status(SDPStatus.UNBOUNDED)
+            result['unbounded'] = True
         elif problem.status in (s.INFEASIBLE_OR_UNBOUNDED,):
-            self.set_status(SDPStatus.INFEASIBLE_OR_UNBOUNDED)
-        self.set_status(SDPStatus.ERROR)
-        # raise NotImplementedError
+            result['inf_or_unb'] = True
+        if problem.status in s.INACCURATE:
+            result['inaccurate'] = True
+        if problem.status in s.ERROR:
+            result['error'] = True
+        return result

@@ -8,7 +8,7 @@ from .caller import (
     solve_numerical_dual_sdp,# solve_numerical_primal_sdp, get_default_sdp_backend
 )
 
-from .settings import SDPError, SDPInfeasibleError, SDPUnboundedError, SDPProblemError
+from .settings import SDPError, SDPResult
 
 __all__ = [
     # 'SDPBackend', 'DualBackend', 
@@ -16,5 +16,5 @@ __all__ = [
     # 'DualBackendCLARABEL', 'DualBackendCVXOPT', 'DualBackendCVXPY', 'DualBackendMOSEK', 'DualBackendPICOS', 'DualBackendSDPAP',
     # 'PrimalBackendCLARABEL', 'PrimalBackendCVXPY', 'PrimalBackendMOSEK', 'PrimalBackendPICOS',
     # 'solve_numerical_dual_sdp', 'solve_numerical_primal_sdp', 'get_default_sdp_backend',
-    'SDPError', 'SDPInfeasibleError', 'SDPUnboundedError', 'SDPProblemError',
+    'SDPError', 'SDPResult'
 ]

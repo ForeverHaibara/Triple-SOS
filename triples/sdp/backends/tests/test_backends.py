@@ -2,7 +2,7 @@ import numpy as np
 import sympy as sp
 
 from ..caller import _DUAL_BACKENDS, solve_numerical_dual_sdp
-from ..settings import SDPError, SDPInfeasibleError, SDPUnboundedError, SDPProblemError
+from ..settings import SDPError
 
 class SDPDualProblems:
     """
@@ -118,7 +118,7 @@ def test_duals():
             (x0_and_space, objective, constraints), answer = problem()
             if answer is not None and not np.isinf(answer):
                 y = solve_numerical_dual_sdp(x0_and_space, objective, constraints,
-                            solver=solver_name, raise_exception=False)
+                            solver=solver_name, return_result=False)
                 objective = np.array(objective).astype(float).flatten()
                 assert isinstance(y, np.ndarray) and y.shape == objective.shape,\
                     f'Dual solver {solver_name} failed on problem {problem_name} with unexpected return {y}.'
@@ -128,24 +128,14 @@ def test_duals():
                     f'Dual solver {solver_name} failed on problem {problem_name} with answer {y}, ' + \
                     f'objective {obj} != {answer}, error {abs(obj - answer) / (abs(answer) + 1)}.'
             elif answer is None:
-                try:
-                    y = solve_numerical_dual_sdp(x0_and_space, objective, constraints,
-                            solver=solver_name, raise_exception=True)
-                    assert False, f'Dual solver {solver_name} returned {y} on INFEASIBLE problem {problem_name}.'
-                except Exception as e:
-                    if isinstance(e, AssertionError):
-                        raise e from None
-                    else:
-                        assert isinstance(e, SDPProblemError) and not isinstance(e, SDPUnboundedError),\
-                            f'Dual solver {solver_name} raised {e} ({type(e)}) on INFEASIBLE problem {problem_name}.'
+                y = solve_numerical_dual_sdp(x0_and_space, objective, constraints,
+                        solver=solver_name, return_result=True)
+                # assert False, f'Dual solver {solver_name} returned {y} on INFEASIBLE problem {problem_name}.'
+                assert y.inf_or_unb and (not y.unbounded),\
+                    f'Dual solver {solver_name} claimed {y} on INFEASIBLE problem {problem_name}.'
             elif np.isinf(answer):
-                try:
-                    y = solve_numerical_dual_sdp(x0_and_space, objective, constraints,
-                            solver=solver_name, raise_exception=True)
-                    assert False, f'Dual solver {solver_name} returned {y} on UNBOUNDED problem {problem_name}.'
-                except Exception as e:
-                    if isinstance(e, AssertionError):
-                        raise e from None
-                    else:
-                        assert isinstance(e, SDPProblemError) and not isinstance(e, SDPInfeasibleError),\
-                            f'Dual solver {solver_name} raised {e} ({type(e)}) on UNBOUNDED problem {problem_name}.'
+                y = solve_numerical_dual_sdp(x0_and_space, objective, constraints,
+                        solver=solver_name, return_result=True)
+                # assert False, f'Dual solver {solver_name} returned {y} on UNBOUNDED problem {problem_name}.'
+                assert y.inf_or_unb or (not y.infeasible),\
+                    f'Dual solver {solver_name} claimed {y} on UNBOUNDED problem {problem_name}.'

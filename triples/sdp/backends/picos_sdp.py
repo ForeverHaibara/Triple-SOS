@@ -1,7 +1,7 @@
 import numpy as np
 
 from .backend import DualBackend
-from .settings import SDPStatus, SolverConfigs
+from .settings import SolverConfigs
 
 class DualBackendPICOS(DualBackend):
     """
@@ -50,24 +50,36 @@ class DualBackendPICOS(DualBackend):
     def _solve(self, configs: SolverConfigs):
         from picos.modeling import Strategy
         from picos.modeling.solution import (
-            SS_OPTIMAL, SS_INFEASIBLE, SS_UNKNOWN, SS_EMPTY,
-            PS_INFEASIBLE, PS_UNBOUNDED, PS_UNKNOWN, PS_INF_OR_UNB
+            SS_OPTIMAL, SS_INFEASIBLE, SS_PREMATURE, SS_FAILURE,
+            PS_INFEASIBLE, PS_UNBOUNDED, PS_INF_OR_UNB
         )
         problem = self._create_problem(configs)
         strategy = Strategy.from_problem(problem, primals=True, **configs.solver_options)
         solution = strategy.execute(primals=True, **configs.solver_options)
-        if solution.primalStatus == SS_OPTIMAL:
-            solution.apply(snapshotStatus=True)
-            value = problem.variables['y'].value
-            if isinstance(value, (float, int)):
-                value = [value]
-            value = np.array(value).flatten()
-            return value
+        solution.apply(snapshotStatus=True)
+        y = problem.variables['y'].value
+        if y is not None:
+            if isinstance(y, (float, int)):
+                y = [y]
+            y = np.array(y, dtype=float).flatten()
 
-        elif solution.primalStatus in (SS_INFEASIBLE, PS_INFEASIBLE):
-            self.set_status(SDPStatus.INFEASIBLE)
-        elif solution.primalStatus in (PS_UNBOUNDED,):
-            self.set_status(SDPStatus.UNBOUNDED)
-        elif solution.primalStatus in (SS_UNKNOWN, PS_UNKNOWN, SS_EMPTY, PS_INF_OR_UNB):
-            self.set_status(SDPStatus.INFEASIBLE_OR_UNBOUNDED)
-        self.set_status(SDPStatus.ERROR)
+        result = {'y': y}
+
+        # PICOS have multiple status APIs, and I am not sure which to use.
+        # Note that some unbounded problems will be claimed wrongly as primal infeasible
+        # by ".status" or ".lastStatus" properties.
+        ps = solution.problemStatus
+        ss = solution.primalStatus
+        if ss == SS_OPTIMAL:
+            result['optimal'] = True
+        elif ss == SS_INFEASIBLE or ps == PS_INFEASIBLE:
+            result['infeasible'] = True
+        elif ps == PS_UNBOUNDED:
+            result['unbounded'] = True
+        elif ss == PS_INF_OR_UNB or ps == PS_INF_OR_UNB:
+            result['inf_or_unb'] = True
+        elif ss == SS_PREMATURE or ps == SS_PREMATURE:
+            result['inaccurate'] = True
+        elif ss == SS_FAILURE:
+            result['error'] = True
+        return result

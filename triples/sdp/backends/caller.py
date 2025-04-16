@@ -10,7 +10,7 @@ from .cvxopt_sdp import DualBackendCVXOPT
 from .cvxpy_sdp import DualBackendCVXPY
 from .picos_sdp import DualBackendPICOS
 
-from .settings import SDPError
+from .settings import SDPError, SDPResult
 
 _DUAL_BACKENDS: Dict[str, DualBackend] = {
     'clarabel': DualBackendCLARABEL,
@@ -134,7 +134,7 @@ def solve_numerical_dual_sdp(
         objective: ndarray,
         constraints: List[Tuple[ndarray, float, str]] = [],
         solver: Optional[str] = None,
-        raise_exception: bool = True,
+        return_result: bool = False,
         verbose: Union[bool, int] = 0,
         max_iters: int = 200,
         tol_fsb_abs: float = 1e-8,
@@ -142,7 +142,7 @@ def solve_numerical_dual_sdp(
         tol_gap_abs: float = 1e-8,
         tol_gap_rel: float = 1e-8,
         solver_options: Dict[str, Any] = {},
-    ) -> Optional[ndarray]:
+    ) -> Optional[Union[ndarray, SDPResult]]:
     """
     Solve for y such that all(Mat(x0 + space @ y) >> 0 for x0, space in x0_and_space.values()).
     This is the dual form of SDP problem.
@@ -158,26 +158,24 @@ def solve_numerical_dual_sdp(
     solver : str
         The solver to use, defaults to None (auto selected). Refer to _DUAL_BACKEND for all solvers,
         but users should install the corresponding packages.
-    raise_exception : bool
-        Whether to raise exception when the solver fails.
+    return_result : bool
+        Whether to return a SDPResult object. If True, the return value is a SDPResult object.
+        Otherwise, the return value is an 1D numpy array.
     """
     backend = create_numerical_dual_sdp(x0_and_space, objective, constraints, solver=solver)
 
-    try:
-        y = backend.solve(
-            verbose=verbose,
-            max_iters=max_iters,
-            tol_fsb_abs=tol_fsb_abs,
-            tol_fsb_rel=tol_fsb_rel,
-            tol_gap_abs=tol_gap_abs,
-            tol_gap_rel=tol_gap_rel,
-            solver_options=solver_options,
-        )
-    except SDPError as e:
-        if raise_exception:
-            raise e from None
-        return None
-    return y
+    result = backend.solve(
+        verbose=verbose,
+        max_iters=max_iters,
+        tol_fsb_abs=tol_fsb_abs,
+        tol_fsb_rel=tol_fsb_rel,
+        tol_gap_abs=tol_gap_abs,
+        tol_gap_rel=tol_gap_rel,
+        solver_options=solver_options,
+    )
+    if return_result:
+        return result
+    return result.raises()
 
 
 # def _create_numerical_primal_sdp(

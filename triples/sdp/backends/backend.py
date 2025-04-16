@@ -1,9 +1,9 @@
-from typing import List
+from typing import List, Dict, Any
 
 import numpy as np
 from numpy import ndarray
 
-from .settings import SDPError, SDPStatusClass, SDPStatus, SolverConfigs
+from .settings import SDPResult, SolverConfigs
 
 class SDPBackend:
     _dependencies = tuple()
@@ -17,12 +17,6 @@ class SDPBackend:
                 __import__(dep)
             except ImportError:
                 return False
-        return True
-
-    def set_status(self, status: SDPStatusClass):
-        self.status = status
-        if status.error_cls is not None:
-            raise status.error_cls
         return True
 
     @classmethod
@@ -44,7 +38,7 @@ class SDPBackend:
         """
         raise NotImplementedError
 
-    def _solve(self, configs: SolverConfigs) -> ndarray:
+    def _solve(self, configs: SolverConfigs) -> Dict[str, Any]:
         """
         Solve the SDP problem given sanitized configurations, e.g., verbosity, tolerances,
         solver options. The solvers should implement handling of these configurations.
@@ -61,7 +55,7 @@ class SDPBackend:
             tol_fsb_abs: float = SolverConfigs.tol_fsb_abs,
             tol_fsb_rel: float = SolverConfigs.tol_fsb_rel,
             solver_options: dict = SolverConfigs.solver_options,
-        ) -> ndarray:
+        ) -> SDPResult:
         """
         Solve the SDP problem. The output must be a numpy array of shape `(dof,)`. If the solver
         occurs errors like infeasibility or unboundedness, the status of `self` should be set
@@ -188,28 +182,17 @@ class DualBackend(SDPBackend):
                 return False
         return True
 
-    def solve(self, **kwargs):
+    def solve(self, **kwargs) -> SDPResult:
         configs = SolverConfigs(**kwargs)
 
         if self.dof == 0:
             # Most solvers would not allow a variable with shape (0,),
             # so we shall handle it separately.
-            # if np.all(self.ineq_rhs >= 0) and np.all(self.eq_rhs == 0):
-            #     for b, n in zip(self.bs, self.mat_sizes):
-            #         b = b.reshape(n, n)
-            #         eigs = np.linalg.eigvalsh(b)
-            #         min_eig, max_eig = np.min(eigs), np.max(eigs)
-            #         if min_eig < -1e-8:
-            #             break
-            #     else:
-            #         return np.zeros((0,), dtype=np.float64)
             x = np.zeros((self.dof,), dtype=np.float64)
             if self.is_feasible(x, tol_fsb_abs=configs.tol_fsb_abs, tol_fsb_rel=configs.tol_fsb_rel):
-                self.set_status(SDPStatus.OPTIMAL)
-                return x
-            self.set_status(SDPStatus.INFEASIBLE)
-            return
-        return self._solve(configs)
+                return SDPResult(y=x, optimal=True)
+            return SDPResult(infeasible=True)
+        return SDPResult(**self._solve(configs))
 
 
     @classmethod

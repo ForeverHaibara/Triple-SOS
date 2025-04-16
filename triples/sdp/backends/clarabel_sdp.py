@@ -1,7 +1,7 @@
 import numpy as np
 
 from .backend import DualBackend
-from .settings import SDPStatus, SolverConfigs, SDPError
+from .settings import SolverConfigs
 
 class DualBackendCLARABEL(DualBackend):
     """
@@ -41,6 +41,8 @@ class DualBackendCLARABEL(DualBackend):
         return P, q, A, b, cones
 
     def _create_problem(self, configs: SolverConfigs=None):
+        if configs is None:
+            configs = SolverConfigs()
         from clarabel import DefaultSolver, DefaultSettings
         P, q, A, b, cones = self._get_PqAbcones()
         settings = DefaultSettings()
@@ -57,18 +59,25 @@ class DualBackendCLARABEL(DualBackend):
         return solver
 
     def _solve(self, configs: SolverConfigs):
-        from clarabel import SolverStatus
+        from clarabel import SolverStatus as s
         solver = self._create_problem(configs)
-        solution = solver.solve()
-        status = solution.status
+        sol = solver.solve()
 
-        if status in (SolverStatus.Solved, SolverStatus.AlmostSolved):
-            self.set_status(SDPStatus.OPTIMAL)
-            return np.array(solution.x).flatten()
-        elif status in (SolverStatus.PrimalInfeasible, SolverStatus.AlmostPrimalInfeasible):
-            self.set_status(SDPStatus.INFEASIBLE)
-        elif status in (SolverStatus.DualInfeasible, SolverStatus.AlmostDualInfeasible,
-                        SolverStatus.NumericalError):
-            self.set_status(SDPStatus.INFEASIBLE_OR_UNBOUNDED)
+        status = sol.status
+        y = np.array(sol.x).flatten() if sol.x is not None else None
+        result = {'y': y}
 
-        self.set_status(SDPStatus.ERROR)
+        if status in (s.Solved, s.AlmostSolved):
+            result['optimal'] = True
+        elif status in (s.PrimalInfeasible, s.AlmostPrimalInfeasible):
+            result['infeasible'] = True
+        elif status in (s.DualInfeasible, s.AlmostDualInfeasible):
+            if y is not None and self.is_feasible(y,
+                    tol_fsb_abs=configs.tol_fsb_abs, tol_fsb_rel=configs.tol_fsb_rel):
+                result['unbounded'] = True
+            result['inf_or_unb'] = True
+
+        if status in (s.MaxIterations, s.MaxTime, s.InsufficientProgress):
+            result['inaccurate'] = True
+
+        return result

@@ -1,11 +1,9 @@
-from typing import List, Tuple, Dict, Optional
+from typing import List, Tuple, Dict, Optional, Callable
 
 import sympy as sp
-from sympy.simplify import signsimp
+import numpy as np
 
 from ...utils import MonomialManager, SolutionSimple
-
-
 
 class SolutionSDP(SolutionSimple):
     method = 'SDPSOS'
@@ -33,7 +31,7 @@ class SolutionSDP(SolutionSimple):
         factor = factor and (poly.domain.is_ZZ or poly.domain.is_QQ)
 
         qmodule_expr = _decomp_as_sos(decompositions, poly.total_degree(), poly.gens,
-                            symmetry=symmetry, ineq_constraints=ineq_constraints, factor=factor)
+                            symmetry=symmetry, ineq_constraints=ineq_constraints)
 
         ideal_exprs = []
         for key, vec in eqvec.items():
@@ -57,26 +55,22 @@ def _decomp_as_sos(
         gens: List[sp.Symbol],
         symmetry: MonomialManager,
         ineq_constraints: Optional[Dict[sp.Poly, sp.Expr]] = None,
-        factor: bool = True,
+        simplify_poly: Optional[Callable] = None,
     ) -> sp.Expr:
     """
     Convert a {key: (U, S)} dictionary to sum of squares.
     """
+    if simplify_poly is None:
+        simplify_poly = _default_simplify_poly
     def compute_cyc_sum_of_squares(coeff, key_primitive, poly: sp.Poly) -> sp.Expr:
         """Computes symmetry.cyclic_sum(coeff * key_primitive[0] * key_primitive[1] * poly.as_expr()**2,
         and returns a pretty expression."""
         # if isinstance(expr, sp.Add):
         #     expr = sp.UnevaluatedExpr(expr)
         coeff, key = coeff * key_primitive[0], key_primitive[1]
-        if factor:
-            c, parts = poly.factor_list()
-            coeff = coeff * c**2
-            exprs = [p.as_expr()**(2*d) for p, d in parts]
-            expr = sp.Mul(key, *exprs)
-        else:
-            c, poly = poly.primitive()
-            coeff = coeff * c**2
-            expr = key * poly.as_expr()**2
+        c, expr = simplify_poly(poly)
+        coeff = coeff * c**2
+        expr = key * expr**2
         return coeff * symmetry.cyclic_sum(expr, gens)
 
     exprs = []
@@ -96,6 +90,44 @@ def _get_expr_from_dict(d: Dict, k: sp.Poly):
         return k.as_expr()
     v = d.get(k)
     return v if v is not None else k.as_expr()
+
+def _default_simplify_poly(poly: sp.Poly, bound: int=10000) -> Tuple[sp.Expr, sp.Expr]:
+    """Simplify the polynomial. Return c, expr such that poly = c * expr."""
+
+    def _extract_monomials(p: sp.Poly) -> Tuple[sp.Expr, sp.Poly]:
+        monoms = p.monoms()
+        if len(monoms) == 0:
+            return sp.Integer(1), p
+        monoms = np.array(monoms, dtype=int)
+        d = np.min(monoms, axis=0)
+
+        if not np.any(d):
+            return sp.Integer(1), p
+
+        monoms = monoms - d.reshape(1, -1)
+        new_monoms = [tuple(_) for _ in monoms.tolist()]
+        rep = dict(zip(new_monoms, p.rep.coeffs()))
+        rep = p.rep.from_dict(rep, p.rep.lev, p.rep.dom)
+        m = sp.Mul(*(g**i for g, i in zip(p.gens, d.flatten().tolist())))
+        return m, poly.new(rep, *p.gens)
+
+    def _standard_form(poly: sp.Poly) -> sp.Poly:
+        if poly.domain.is_ZZ or poly.domain.is_QQ:
+            if all(abs(_.denominator) <= bound for _ in poly.coeffs()):
+                c, parts = poly.factor_list()
+                exprs = [p.as_expr()**d for p, d in parts]
+                return c, sp.Mul(*exprs)
+    
+        c, poly = poly.primitive()
+        if poly.LC() < 0:
+            c, poly = -c, -poly
+        return c, poly.as_expr()
+
+        # return sp.Integer(1), poly.as_expr()
+
+    m, p = _extract_monomials(poly)
+    c, p = _standard_form(p)
+    return c, m * p
 
 def _is_numer_solution(decompositions: Dict[str, Tuple[sp.Matrix, sp.Matrix]]) -> bool:
     """
