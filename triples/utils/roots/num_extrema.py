@@ -3,14 +3,17 @@ This module provides heuristic functions to optimize a polynomial
 with inequality and equality constraints NUMERICALLY.
 """
 from typing import List, Union, Tuple, Dict, Optional, Callable
+from functools import partial
 import warnings
 
 import numpy as np
 import sympy as sp
-from sympy import Poly, Expr, Symbol, lambdify
+from sympy import Poly, Expr, Symbol, lambdify, nextprime
+from sympy import __version__ as SYMPY_VERSION
+from sympy.external.importtools import version_tuple
 from sympy.combinatorics import Permutation, PermutationGroup
+from scipy import __version__ as SCIPY_VERSION
 from scipy.optimize import OptimizeResult, shgo, minimize
-from scipy.stats.qmc import Halton
 
 from .extrema import _infer_symbols, polylize_input
 from .roots import Root
@@ -21,6 +24,46 @@ DEFAULT_SHGO_KWARGS = { # default values
     'sampling_method': 'sobol',
     'options': {'maxiter': 4}
 }
+
+if tuple(version_tuple(SYMPY_VERSION)) >= tuple(version_tuple('1.12')):
+    anonymous_lambdify = partial(lambdify, docstring_limit=-1)
+else:
+    anonymous_lambdify = lambdify
+
+if tuple(version_tuple(SCIPY_VERSION)) >= tuple(version_tuple('1.7')):
+    from scipy.stats.qmc import Halton
+else:
+    class Halton:
+        """Implemented Halton sampler for scipy version < 1.7."""
+        def __init__(self, d, scramble=False):
+            self.d = d
+            self.scramble = scramble
+
+        def random(self, n):
+            def van_der_corput(n, base=2):
+                sequence = []
+                for i in range(n):
+                    num = i
+                    value = 0
+                    denominator = 1
+                    while num > 0:
+                        num, remainder = divmod(num, base)
+                        denominator *= base
+                        value += remainder / denominator
+                    sequence.append(value)
+                return np.array(sequence)
+
+            samples = np.zeros((n, self.d))
+            base = 2
+            for i in range(self.d):
+                if i > 0:
+                    base = int(nextprime(base))
+                samples[:, i] = van_der_corput(n, base)
+
+            if self.scramble:
+                for i in range(self.d):
+                    np.random.shuffle(samples[:, i])
+            return samples
 
 
 class NumerFunc:
@@ -135,7 +178,8 @@ class NumerFunc:
                 # expr = sp.horner(expr)
             else:
                 expr = expr.doit()
-            return lambdify(symbols, expr, modules='numpy', docstring_limit=-1)
+            # TODO: avoid converting to expr for polynomials
+            return anonymous_lambdify(symbols, expr, modules='numpy')
         def _wrap_single(expr, symbols):
             f = _lambdify(symbols, expr)
             fdiff = [_lambdify(symbols, expr.diff(_)) for _ in symbols]
