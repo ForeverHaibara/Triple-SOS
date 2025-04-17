@@ -296,11 +296,11 @@ def _solve_poly_system_2vars_resultant(polys: List[Poly], symbols: List[Symbol])
         return []
 
     x, y = symbols    
-    res0 = resultant(polys[0], polys[1], x).as_poly(y)
+    res0 = polys[0].resultant(polys[1]).as_poly(y)
     for poly in polys[2:]:
         if res0.total_degree() == 0 and (not res0.is_zero):
             return []
-        new_res = resultant(polys[0], poly, x).as_poly(y)
+        new_res = polys[0].resultant(poly).as_poly(y)
         res0 = sp.gcd(res0, new_res)
 
     roots1 = univar_realroots(res0, y)
@@ -314,7 +314,7 @@ def _solve_poly_system_2vars_resultant(polys: List[Poly], symbols: List[Symbol])
                 if all(pevalf.polysign(poly, (root0, root1)) == 0 for poly in polys):
                     roots.append((root0, root1))
     else:
-        res1 = resultant(polys[0], polys[1], y)
+        res1 = polys[0].reorder(y, x).resultant(polys[1].reorder(y, x))
         roots0 = univar_realroots(res1, x)
         for root0 in roots0:
             for root1 in roots1:
