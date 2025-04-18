@@ -1,4 +1,4 @@
-from typing import List, Tuple, Dict, Union, Optional, Any
+from typing import List, Tuple, Dict, Union, Optional, Any, Type
 
 import numpy as np
 from numpy import ndarray
@@ -64,7 +64,7 @@ def create_numerical_dual_sdp(
         x0_and_space: Dict[str, Tuple[Matrix, Matrix]],
         objective: ndarray,
         constraints: List[Tuple[ndarray, float, str]] = [],
-        solver: Optional[str] = None,
+        solver: Optional[Union[str, Type[DualBackend]]] = None,
     ) -> DualBackend:
     """
     Create a numerical dual SDP problem.

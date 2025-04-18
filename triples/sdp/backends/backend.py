@@ -92,7 +92,38 @@ class SDPBackend:
 
 class DualBackend(SDPBackend):
     """
-    Configuration Flags (class variables):
+    Dual backends must implement `def _solve(self, configs: SolverConfigs):` to solve the SDP:
+
+        min c^T y
+
+        s.t.    MAT(Ai @ y + bi) >> 0 for Ai, bi in zip(As, bs)
+
+                ineq_lhs @ y >= ineq_rhs
+
+                eq_lhs @ y == eq_rhs
+
+    where `MAT(.)` is the operation that converts a vector to a symmetric matrix. The output
+    must be a dictionary with {'y': y, 'optimal': True} if the solution is optimal. Attributes
+    `As`, `bs`, `ineq_lhs`, `ineq_rhs`, `eq_lhs`, `eq_rhs`, `c` are the inputs to the constructor
+    and can be accessed by `self.`. The variable `y` is ensured to be nonempty.
+    If there are no ineq or eq constraints, the corresponding matrices have 0 row.
+
+    - Statuses:
+    For unsuccessful solutions, the returned dictionary is suggested to contain corresponding
+    status messages, e.g., `infeasible`, `unbounded`, `inf_or_unb`, `error`, `inaccurate`, etc.
+    The dictionary might still contain the key `y` for intermediate solutions.
+    The detailed descriptions of these statuses can be found in the class `SDPResult`.
+
+    - SolverConfigs:
+    The only input to the `_solve` method is a `SolverConfigs` object, which contains attributes
+    including `verbose`, `max_iters`, `tol_fsb_abs`, etc. It is intended to control the solver behavior,
+    but the backend is free to ignore these options if it does not support them.
+
+    - Configuration Flags (class variables):
+    For some solvers, the matrices are stored in special formats, e.g., sparse matrices,
+    isometric matrices, etc. The backend provides specific flags to control the storage format
+    when initializing the backend object. The detailed flags are listed below.
+
     _opt_isometric        : If 'row' or 'col', store symmetric matrices in isometric form in given order.
     _opt_sparse           : If 'csc', 'csr' or 'coo', convert 2d matrices to scipy sparse format.
     _opt_ineq_to_1d       : If True, convert inequality constraints to 1D matrices.

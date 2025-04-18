@@ -1,11 +1,10 @@
-from re import I
 from typing import List, Tuple, Union, Optional
 
 import numpy as np
 from numpy import ndarray
 from numpy.linalg import eigvalsh, cholesky, eigh, LinAlgError
 
-from sympy import Matrix, MatrixBase, Expr, RR, re, eye
+from sympy import Matrix, MatrixBase, Expr, RR, re, eye, Float
 from sympy.core.singleton import S as singleton
 from sympy.matrices.repmatrix import RepMatrix
 
@@ -16,6 +15,8 @@ def congruence(M: Union[Matrix, ndarray], perturb: Union[bool, float]=False,
     """
     Compute the decomposition of a positive semidefinite matrix M:
     `M = U.T @ diag(S) @ U` where `S` is stored as a (column) vector.
+    The input M must be symmetric and real, which users should ensure by themselves.
+    If M is not positive semidefinite, return None.
 
     Parameters
     ----------
@@ -29,7 +30,7 @@ def congruence(M: Union[Matrix, ndarray], perturb: Union[bool, float]=False,
         integer or rational matrix), then the perturbation is ignored.
     upper : bool
         If True, force M to be upper triangular. If False, M is not forced to be
-        upper triangular. Set to False improves numerical stability if M is
+        upper triangular. Set to False to improve numerical stability if M is
         a numerical matrix.
     signfunc : Callable
         Function to determine the sign of a value. It takes a value as input
@@ -46,18 +47,86 @@ def congruence(M: Union[Matrix, ndarray], perturb: Union[bool, float]=False,
 
     Return None if M is not positive semidefinite.
 
+    Examples
+    --------
+    >>> from sympy import Matrix, Rational
+    >>> hilbert = Matrix([[Rational(1,i+j+1) for j in range(3)] for i in range(3)])
+    >>> hilbert
+    Matrix([
+    [  1, 1/2, 1/3],
+    [1/2, 1/3, 1/4],
+    [1/3, 1/4, 1/5]])
+    >>> U, S = congruence(hilbert); U, S
+    (Matrix([
+    [1, 1/2, 1/3],
+    [0,   1,   1],
+    [0,   0,   1]]), Matrix([
+    [    1],
+    [ 1/12],
+    [1/180]]))
+    >>> U.T @ Matrix.diag(*S) @ U == hilbert
+    True
+
+    The function also supports positive semidefinite matrices.
+    >>> M = Matrix([[1, -2], [-2, 4]])
+    >>> congruence(M)
+    (Matrix([
+    [1, -2],
+    [0,  0]]), Matrix([
+    [1],
+    [0]]))
+
+    For numerical matrices, set the `perturb` parameter to a small float value
+    to avoid numerical issues.
+    >>> M = Matrix([[1, 1.73205081], [1.73205081, 3]])
+    >>> congruence(M) is None
+    True
+    >>> congruence(M, perturb=1e-8) # doctest: +SKIP
+    (Matrix([
+    [1.00000000210541,    1.73205080635332],
+    [             0.0, 9.17695800206094e-5]]), Matrix([
+    [1.0],
+    [1.0]]))
+
+    However, the `perturb` parameter is ignored if the matrix
+    is an exact SymPy matrix, e.g. an integer or a rational matrix.
+    >>> M2 = Matrix([[1, Rational(173205081,10**8)], [Rational(173205081,10**8), 3]])
+    >>> congruence(M2, perturb=1e-8) is None
+    True
+
+    Set `upper=False` to allow the matrix U not to be upper triangular.
+    This may be more numerically stable for numerical matrices. The
+    relation M = U.T @ diag(S) @ U still holds up to a small numerical error.
+    >>> U, S = congruence(M, perturb=1e-8, upper=False); U, S # doctest: +SKIP
+    (Matrix([
+    [-0.866025403632494, 0.500000000263177],
+    [ 0.500000000263177, 0.866025403632494]]), Matrix([
+    [             0.0],
+    [4.00000000210541]]))
+
+    If the input is a numpy array, the function returns numpy arrays.
+    And the array is treated as a floating value matrix even if its dtype is int.
+    >>> import numpy as np
+    >>> congruence(np.array([[1, 2], [2, 5]]))
+    (array([[1., 2.],
+           [0., 1.]]), array([1., 1.]))
+
+
     See also
     ---------
     sympy.matrices.dense.DenseMatrix.LDLdecomposition
     """
+    if isinstance(M, ndarray):
+        return _congruence_numerically(M, perturb=perturb, upper=upper)
     if isinstance(M, RepMatrix):
         domain = M._rep.domain
         if domain.is_Exact and domain.is_Numerical:
             return _congruence_on_exact_domain(M)
         if not domain.is_Exact:
             return _congruence_numerically(M, perturb=perturb, upper=upper)
-    if isinstance(M, ndarray):
-        return _congruence_numerically(M, perturb=perturb, upper=upper)
+    if isinstance(M, MatrixBase):
+        if M.has(Float):
+            return _congruence_numerically(M, perturb=perturb, upper=upper)
 
     if signfunc is None:
         signfunc = lambda x: 1 if x > 0 else (-1 if x < 0 else 0)
@@ -144,7 +213,8 @@ def _congruence_on_exact_domain(M: RepMatrix) -> Optional[Tuple[RepMatrix, RepMa
 def _congruence_numerically(M: Union[MatrixBase, ndarray], perturb: Union[bool, float]=0,
         upper: bool=True) -> Optional[Tuple[Union[Matrix, ndarray], Union[Matrix, ndarray]]]:
     """
-    ...
+    Perform congruence decomposition on M if M is numerical. It converts the matrix
+    to numpy and calls cholesky or ldl decomposition. If upper=False, it calls eigh.
     """
     # from scipy.linalg import ldl
     is_sympy = isinstance(M, MatrixBase)
@@ -156,7 +226,10 @@ def _congruence_numerically(M: Union[MatrixBase, ndarray], perturb: Union[bool, 
     if is_sympy:
         M = np.array(M.n(15))
     if isinstance(M, ndarray):
-        M = M.astype(float)
+        try:
+            M = M.astype(float)
+        except TypeError:
+            M = np.real(M.astype(complex))
 
     if upper:
         def silent_chol(M):

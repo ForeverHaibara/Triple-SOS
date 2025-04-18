@@ -1,5 +1,14 @@
+"""
+This module contains very low level apis for matrix operations.
+
+In SymPy, Matrix([...]) initializer needs to convert each SymPy element to
+a domain element, e.g. MPQ or MPZ for rational or integers. This conversion
+is very slow for large matrices. This module provides a faster way for
+basic matrix operations.
+"""
+
 from collections import defaultdict
-from typing import List, Dict, Tuple, Union
+from typing import List, Dict, Tuple, Union, Any
 
 import numpy as np
 from numpy import ndarray
@@ -8,7 +17,7 @@ from sympy.external.gmpy import MPQ, MPZ # >= 1.9
 from sympy.external.importtools import version_tuple
 from sympy.matrices import MutableDenseMatrix as Matrix
 from sympy.matrices.repmatrix import RepMatrix
-from sympy.polys.domains import ZZ, QQ, RR, EX, EXRAW # EXRAW >= 1.9
+from sympy.polys.domains import ZZ, QQ, RR, CC # EXRAW >= 1.9
 from sympy.polys.matrices.domainmatrix import DomainMatrix # polys.matrices >= 1.8
 from sympy.polys.matrices.ddm import DDM
 from sympy.polys.matrices.sdm import SDM
@@ -37,26 +46,116 @@ else:
 
 def is_empty_matrix(M: Union[Matrix, ndarray], check_all_zeros: bool = False) -> bool:
     """
-    Check whether a matrix is zero size. Set check_all_zeros == True to
+    Check whether a matrix is zero. Set check_all_zeros == True to
     check whether all entries are zero.
+
+    Parameters
+    ----------
+    M : Matrix or ndarray
+        The matrix to be checked.
+    check_all_zeros : bool, optional
+        Whether to check whether all entries are zero. If False,
+        only check whether the size of the matrix is zero. Default is False.
+
+    Examples
+    --------
+    >>> from sympy import Matrix
+    >>> M = Matrix([[0, 0], [0, 0]])
+    >>> is_empty_matrix(M)
+    False
+    >>> is_empty_matrix(M, check_all_zeros=True)
+    True
+    >>> is_empty_matrix(Matrix.zeros(15, 0))
+    True
+    >>> is_empty_matrix(Matrix.eye(3))
+    False
     """
     if any(_ == 0 for _ in M.shape):
         return True
-    if check_all_zeros and not any(M):
-        return True
+    if check_all_zeros:
+        if isinstance(M, ndarray):
+            return bool(np.all(M == 0))
+        if isinstance(M, RepMatrix):
+            rep = M._rep
+            zero = rep.domain.zero
+            for _, v in rep.to_dok():
+                if v != zero:
+                    return False
+            return True
+        return not any(M)
     return False
 
 def size_of_mat(M: Union[Matrix, ndarray]) -> int:
+    """
+    Return the size of a matrix.
+
+    Parameters
+    ----------
+    M : Matrix or ndarray
+        The matrix to be computed.
+
+    Examples
+    ----------
+    >>> from sympy import Matrix
+    >>> M = Matrix([[1, 2], [3, 4], [5, 6]])
+    >>> size_of_mat(M)
+    6
+    >>> size_of_mat(Matrix.zeros(3, 0))
+    0
+    """
     if len(M.shape) == 0:
         return 0
     return int(np.prod(M.shape))
 
 def sqrtsize_of_mat(M: Union[Matrix, ndarray, int]) -> int:
+    """
+    Return the int square root of the size of a matrix. This is
+    helpful to infer the size of a symmetric matrix from its vector form.
+
+    Parameters
+    ----------
+    M : Matrix or ndarray or int
+        The matrix to be computed. If M is an integer, return the int square root of M.
+
+    Examples
+    ----------
+    >>> from sympy import Matrix
+    >>> sqrtsize_of_mat(Matrix([1,2,3,4,5,6,7,8,9]))
+    3
+    >>> sqrtsize_of_mat(100)
+    10
+    """
     if isinstance(M, int):
         return int(np.round(np.sqrt(M)))
     return int(np.round(np.sqrt(size_of_mat(M))))
 
+
 def reshape(A: Union[Matrix, ndarray], shape: Tuple[int, int]) -> Matrix:
+    """
+    Reshape a matrix to a new shape. This function maintains the domain
+    of SymPy RepMatrix for low SymPy versions.
+
+    Parameters
+    ----------
+    A : Matrix or ndarray
+        The matrix to be reshaped.
+    shape : Tuple[int, int]
+        The new shape of the matrix.
+
+    Examples
+    ----------
+    >>> from sympy import Matrix, sqrt, QQ
+    >>> M = Matrix([[1+sqrt(2), 2], [3, 4-sqrt(2)]])
+    >>> reshape(M, (1, 4))
+    Matrix([[1 + sqrt(2), 2, 3, 4 - sqrt(2)]])
+
+    >>> dom = QQ.algebraic_field(sqrt(2))
+    >>> M = Matrix._fromrep(M._rep.convert_to(dom))
+    >>> M._rep.domain
+    QQ<sqrt(2)>
+    >>> reshape(M, (1, 4))._rep.domain
+    QQ<sqrt(2)>
+    """
     if A.shape == shape:
         return A
     if isinstance(A, RepMatrix):
@@ -75,7 +174,22 @@ def reshape(A: Union[Matrix, ndarray], shape: Tuple[int, int]) -> Matrix:
 
 def vec2mat(v: Union[Matrix, ndarray]) -> Matrix:
     """
-    Convert a vector to a matrix.
+    Convert a vector to a symmetric matrix.
+
+    Parameters
+    ----------
+    v : Matrix or ndarray
+        The vector to be converted.
+
+    Examples
+    ----------
+    >>> from sympy import Matrix
+    >>> v = Matrix([1, 2, 3, 2, 4, 5, 3, 5, 7])
+    >>> vec2mat(v)
+    Matrix([
+    [1, 2, 3],
+    [2, 4, 5],
+    [3, 5, 7]])
     """
     n = sqrtsize_of_mat(v)
     return reshape(v, (n, n))
@@ -83,15 +197,84 @@ def vec2mat(v: Union[Matrix, ndarray]) -> Matrix:
 def mat2vec(M: Union[Matrix, ndarray]) -> Matrix:
     """
     Convert a matrix to a vector.
+
+    Parameters
+    ----------
+    M : Matrix or ndarray
+        The matrix to be converted.
+
+    Examples
+    ----------
+    >>> from sympy import Matrix
+    >>> M = Matrix([[1, 2, 3], [2, 4, 5], [3, 5, 7]])
+    >>> print(mat2vec(M))
+    Matrix([[1], [2], [3], [2], [4], [5], [3], [5], [7]])
     """
     if isinstance(M, ndarray):
         return M.flatten()
     return reshape(M, (size_of_mat(M), 1))
 
-def rep_matrix_from_dict(x: Dict, shape: Tuple[int, int], domain) -> RepMatrix:
+def rep_matrix_from_dict(x: Dict[int, Dict[int, Any]], shape: Tuple[int, int], domain) -> RepMatrix:
+    """
+    Create a SymPy RepMatrix from a dictionary of domain elements.
+
+    Parameters
+    ----------
+    x : Dict[int, Dict[int, Any]]
+        The x[row][col] = value dictionary where each value is a domain element.
+        Zeros should not be stored.
+    shape : Tuple[int, int]
+        The shape of the matrix.
+    domain : Domain
+        The domain of the matrix.
+
+    Examples
+    ----------
+    >>> from sympy import QQ
+    >>> x = {0: {1: QQ(2,5)}, 1: {0: QQ(3,5), 1: QQ(4,5)}}
+    >>> rep_matrix_from_dict(x, (3, 2), QQ)
+    Matrix([
+    [  0, 2/5],
+    [3/5, 4/5],
+    [  0,   0]])
+    """
     return Matrix._fromrep(DomainMatrix.from_rep(SDM(x, shape, domain)))
 
 def rep_matrix_from_list(x: Union[List, List[List]], shape: Union[int, Tuple[int, int]], domain) -> RepMatrix:
+    """
+    Create a SymPy RepMatrix from a list of domain elements.
+
+    Parameters
+    ----------
+    x : List or List[List]
+        If x is an 1D list, it is treated as a column vector,
+        and the return is a matrix with shape (len(x), 1).
+        Otherwise, x is treated as a dense matrix.
+        Each value of x must be a domain element.
+        Zeros are allowed but they will be filtered out by this function.
+    shape: int or Tuple[int, int]
+        The shape of the matrix. If x is an 1D list, shape must be an integer.
+        Otherwise, shape must be a tuple of two integers.
+    domain : Domain
+        The domain of the matrix.
+
+    Examples
+    ----------
+    >>> from sympy import QQ, ZZ
+    >>> x = [QQ(2,5), QQ(3,5), QQ(4,5)]
+    >>> rep_matrix_from_list(x, 3, QQ)
+    Matrix([
+    [2/5],
+    [3/5],
+    [4/5]])
+
+    >>> x = [[ZZ(0), ZZ(1), ZZ(2)], [ZZ(3), ZZ(4), ZZ(5)]]
+    >>> rep_matrix_from_list(x, (2, 3), ZZ)
+    Matrix([
+    [0, 1, 2],
+    [3, 4, 5]])
+    """
+    # filter out zeros in the list, which should not be stored in a sparse rep
     zero = domain.zero
     if isinstance(shape, int):
         y = {i: {0: j} for i, j in enumerate(x) if j != zero}
@@ -111,11 +294,26 @@ def rep_matrix_from_list(x: Union[List, List[List]], shape: Union[int, Tuple[int
 
 
 def is_zz_qq_mat(mat):
-    """Judge whether a matrix is a ZZ/QQ RepMatrix."""
-    return isinstance(mat, RepMatrix) and mat._rep.domain in (ZZ, QQ)
+    """
+    Judge whether a matrix is a SymPy ZZ/QQ RepMatrix.
+
+    Parameters
+    ----------
+    mat : Matrix
+        The matrix to be checked.
+
+    Examples
+    ----------
+    >>> from sympy import Matrix
+    >>> is_zz_qq_mat(Matrix([1, 2, 3, 4])/5)
+    True
+    >>> is_zz_qq_mat(Matrix([1, 2, 3, 4]) * 0.1234)
+    False
+    """
+    return isinstance(mat, RepMatrix) and (mat._rep.domain.is_ZZ or mat._rep.domain.is_QQ)
 
 def _cast_sympy_matrix_to_numpy(sympy_mat_rep: RepMatrix, dtype: str = 'int64') -> ndarray:
-    """Cast a sympy RepMatrix on ZZ to numpy int64 matrix."""
+    """Cast a sympy RepMatrix on ZZ to numpy int64 matrix. Internal."""
     rows, cols = sympy_mat_rep.shape
     items = list(sympy_mat_rep.rep.to_dok().items()) # avoid .iter_items() for version compatibility
     n = len(items)
@@ -136,7 +334,7 @@ def _cast_sympy_matrix_to_numpy(sympy_mat_rep: RepMatrix, dtype: str = 'int64') 
     return arr
 
 def _cast_list_to_sympy_matrix(rows: int, cols: int, lst: List[int]) -> Matrix:
-    """Convert a list of INTEGER values to a sympy matrix efficiently."""
+    """Convert a list of INTEGER values to a sympy matrix efficiently. Internal."""
     sdm = {}
     for i in range(rows):
         row = {}
@@ -148,11 +346,39 @@ def _cast_list_to_sympy_matrix(rows: int, cols: int, lst: List[int]) -> Matrix:
     return rep_matrix_from_dict(sdm, (rows, cols), ZZ)
 
 def rep_matrix_from_numpy(arr: ndarray) -> RepMatrix:
+    """
+    Cast a numpy matrix to a sympy RepMatrix by handling dtypes carefully.
+
+    Parameters
+    ----------
+    arr : ndarray
+        The numpy matrix to be casted, can be either 1D or 2D.
+
+    Examples
+    ----------
+    >>> import numpy as np
+    >>> arr = np.array([[1, 2, 3], [4, 5, 6]], dtype=np.int64)
+    >>> rep_matrix_from_numpy(arr)
+    Matrix([
+    [1, 2, 3],
+    [4, 5, 6]])
+
+    >>> arr = np.array([1.1, 2.2, 3.3], dtype=np.float64)
+    >>> M = rep_matrix_from_numpy(arr); print(M)
+    Matrix([[1.10000000000000], [2.20000000000000], [3.30000000000000]])
+    >>> M._rep.domain
+    RR
+    """
     if np.issubdtype(arr.dtype, np.integer):
         shape = arr.shape if len(arr.shape) == 2 else (arr.shape[0], 1)
         return _cast_list_to_sympy_matrix(shape[0], shape[1], arr.flatten().tolist())
-    elif np.issubdtype(arr.dtype, np.floating):
+
+    conv = None
+    if np.issubdtype(arr.dtype, np.floating):
         conv = RR.convert
+    elif np.issubdtype(arr.dtype, np.complexfloating):
+        conv = CC.convert
+    if conv is not None:
         if len(arr.shape) == 2:
             lst = [[conv(_) for _ in row] for row in arr.tolist()]
             return rep_matrix_from_list(lst, arr.shape, RR)
@@ -162,34 +388,56 @@ def rep_matrix_from_numpy(arr: ndarray) -> RepMatrix:
     return Matrix(arr.tolist())
 
 
-def permute_matrix_rows(matrix, permutation):
-    """Fast operation of matrix rowswap."""
+def permute_matrix_rows(matrix: Union[Matrix, ndarray], permutation: List[int]):
+    """
+    Fast operation of matrix[permutation].
+    
+    Parameters
+    ----------
+    matrix : Matrix or ndarray
+        The matrix to be permuted.
+    permutation : List[int]
+        The permutation of rows such that new_mat[i] = matrix[permutation[i]].
+
+    Examples
+    ----------
+    >>> from sympy import Matrix
+    >>> M = Matrix([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+    >>> permute_matrix_rows(M, [2, 0, 0])
+    Matrix([
+    [7, 8, 9],
+    [1, 2, 3],
+    [1, 2, 3]])
+    """
     rep = matrix._rep.rep if isinstance(matrix, RepMatrix) else None
 
     if isinstance(rep, SDM):
         new_rep = {}
-        for orig_row, cols_dict in rep.items():
-            new_rep[permutation[orig_row]] = cols_dict #.copy()
-        new_rep = SDM(new_rep, rep.shape, rep.domain)
-        return matrix.__class__._fromrep(DomainMatrix.from_rep(new_rep))
+        for r in range(rep.shape[0]):
+            v = rep.get(permutation[r], None)
+            if v is not None:
+                new_rep[r] = v #.copy()
+        return rep_matrix_from_dict(new_rep, rep.shape, rep.domain)
 
     elif isinstance(rep, DDM):
         new_rep = [None for _ in range(rep.shape[0])]
-        for orig_row in range(rep.shape[0]):
-            new_rep[permutation[orig_row]] = rep[orig_row]#[:]
+        for r in range(rep.shape[0]):
+            new_rep[r] = rep[permutation[r]]#[:]
         new_rep = DDM(new_rep, rep.shape, rep.domain)
         return matrix.__class__._fromrep(DomainMatrix.from_rep(new_rep))
 
     elif isinstance(rep, DFM):
         new_rep = [None for _ in range(rep.shape[0])]
         rep2 = rep.rep.tolist()
-        for orig_row in range(rep.shape[0]):
-            new_rep[permutation[orig_row]] = rep2[orig_row]
+        for r in range(rep.shape[0]):
+            new_rep[r] = rep2[permutation[r]]
         new_rep = DFM(new_rep, rep.shape, rep.domain)
         return matrix.__class__._fromrep(DomainMatrix.from_rep(new_rep))
 
-    # else:
+    elif isinstance(M, ndarray):
+        return M[permutation]
+
     new_mat = matrix.copy()
-    for orig_row in range(matrix.shape[0]):
-        new_mat[permutation[orig_row], :] = matrix[orig_row, :]
+    for r in range(matrix.shape[0]):
+        new_mat[r, :] = matrix[permutation[r], :]
     return new_mat

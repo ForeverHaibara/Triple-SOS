@@ -37,9 +37,12 @@ class DualBackendMOSEK(DualBackend):
     [2] https://docs.mosek.com/latest/pythonapi/intro_info.html
     [3] https://docs.mosek.com/latest/pythonfusion/tutorial-sdo-shared.html#doc-tutorial-sdo
     """
-    _opt_isometric  = 'row'
-
     _dependencies = ('mosek',)
+
+    _opt_isometric  = 'row'
+    _opt_ineq_to_1d = False
+    _opt_eq_to_ineq = False
+
     @classmethod
     def is_available(cls) -> bool:
         try:
@@ -58,9 +61,9 @@ class DualBackendMOSEK(DualBackend):
             M.constraint("A%d"%i, Expr.add(Expr.mul(A, x), b), Domain.inSVecPSDCone(len(b)))
 
         if self.ineq_lhs.size > 0:
-            M.constraint("geq", Expr.dot(ineq_lhs, x), Domain.GreaterThan(ineq_rhs))
+            M.constraint("geq", Expr.mul(self.ineq_lhs, x), Domain.greaterThan(self.ineq_rhs))
         if self.eq_lhs.size > 0:
-            M.constraint("eq", Expr.dot(eq_lhs, x), Domain.equalsTo(eq_rhs))
+            M.constraint("eq", Expr.mul(self.eq_lhs, x), Domain.equalsTo(self.eq_rhs))
 
         M.objective(ObjectiveSense.Minimize, Expr.dot(self.c, x))
         return x

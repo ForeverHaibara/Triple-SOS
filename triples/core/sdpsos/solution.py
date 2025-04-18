@@ -92,7 +92,12 @@ def _get_expr_from_dict(d: Dict, k: sp.Poly):
     return v if v is not None else k.as_expr()
 
 def _default_simplify_poly(poly: sp.Poly, bound: int=10000) -> Tuple[sp.Expr, sp.Expr]:
-    """Simplify the polynomial. Return c, expr such that poly = c * expr."""
+    """
+    Simplify the polynomial. Return c, expr such that poly = c * expr.
+    Using factorization would be extremely slow sometimes, e.g. in the case
+    of very large integer coefficients, and this function uses a heuristic
+    strategy to balance the speed and complexity.
+    """
 
     def _extract_monomials(p: sp.Poly) -> Tuple[sp.Expr, sp.Poly]:
         monoms = p.monoms()

@@ -3,6 +3,7 @@ from math import gcd
 from time import time
 from typing import List, Tuple
 
+from numpy import argsort
 from sympy.external.gmpy import MPQ, MPZ # >= 1.9
 from sympy.matrices import MutableDenseMatrix as Matrix
 from sympy.matrices.repmatrix import RepMatrix
@@ -257,8 +258,9 @@ def solve_undetermined_linear(M: Matrix, B: Matrix) -> Tuple[Matrix, Matrix]:
     vt       = vt.col_join(A.zeros(V.cols, vt.cols))
 
     # Undo permutation
-    V2 = permute_matrix_rows(V, permutation)
-    vt2 = permute_matrix_rows(vt, permutation)
+    inv_permutation = argsort(permutation).tolist()
+    V2 = permute_matrix_rows(V, inv_permutation)
+    vt2 = permute_matrix_rows(vt, inv_permutation)
     # for k in range(col):
     #     V2[permutation[k], :] = V[k, :]
     #     vt2[permutation[k]] = vt[k]
