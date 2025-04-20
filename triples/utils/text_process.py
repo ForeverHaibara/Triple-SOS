@@ -361,6 +361,9 @@ def preprocess_text(
     else:
         parse_expr_kwargs['local_dict'] = parse_expr_kwargs['local_dict'].copy()
 
+    for s in gens:
+        parse_expr_kwargs['local_dict'][s.name] = s
+
     _cyclic_sum = lambda x: CyclicSum(x, gens, perm)
     _cyclic_prod = lambda x: CyclicProduct(x, gens, perm)
     parse_expr_kwargs['local_dict'].update({cyclic_sum_func: _cyclic_sum, cyclic_prod_func: _cyclic_prod})

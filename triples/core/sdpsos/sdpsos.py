@@ -397,7 +397,7 @@ class SOSProblem():
         return sdp
 
 
-    def solve(self, *args, **kwargs) -> bool:
+    def solve(self, *args, **kwargs) -> Optional[sp.Matrix]:
         """
         Solve the SOS problem. Keyword arguments are passed to SDPProblem.solve.
         """
@@ -630,7 +630,7 @@ def _SDPSOS(
                     print(f"Time for finding roots                  : {time() - time1:.6f} seconds.")
             
             sdp = sos_problem.construct([e[0] for e in qmodule], list(eq_constraints.keys()), roots=roots, verbose=verbose)
-            if sos_problem.solve(verbose=verbose, solver=solver, allow_numer=allow_numer, kwargs=solve_kwargs):
+            if sos_problem.solve(verbose=verbose, solver=solver, allow_numer=allow_numer, kwargs=solve_kwargs) is not None:
                 if verbose:
                     print(f"Time for solving SDP{' ':20s}: {time() - time0:.6f} seconds. \033[32mSuccess\033[0m.")
                 solution = sos_problem.as_solution(ineq_constraints=dict(qmodule), eq_constraints=eq_constraints)

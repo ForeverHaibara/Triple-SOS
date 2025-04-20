@@ -6,13 +6,9 @@ import numpy as np
 from sympy import MatrixBase, Expr, Rational
 from sympy.core.relational import Relational
 from sympy.matrices import MutableDenseMatrix as Matrix
-from sympy.polys.matrices import DomainMatrix
-from sympy.polys.matrices.sdm import SDM
 import sympy as sp
 
-from .arithmetic import sqrtsize_of_mat, is_empty_matrix, congruence, rep_matrix_from_list, rep_matrix_from_numpy
-from .backend import SDPBackend
-from .ipm import SDPRationalizeError
+from .arithmetic import sqrtsize_of_mat, is_empty_matrix, congruence, rep_matrix_from_numpy
 from .rationalize import (
     rationalize_and_decompose, RationalizeWithMask, RationalizeSimultaneously, IdentityRationalizer
 )
@@ -37,9 +33,9 @@ class SDPProblemBase(ABC):
     def _init_space(self, arg: Union[list, Dict], argname: str) -> Dict[Any, Matrix]:
         """
         Init self from a list or a dict and write the result to self.argname.
+        The function always converts the arg to a dict.
         """
         if isinstance(arg, list):
-            # keys = ['S_%d'%i for i in range(len(arg))]
             keys = list(range(len(arg)))
             arg = dict(zip(keys, arg))
         elif isinstance(arg, dict):
@@ -68,6 +64,12 @@ class SDPProblemBase(ABC):
 
     def __str__(self) -> str:
         return self.__repr__()
+
+    @abstractmethod
+    def free_symbols(self) -> List[sp.Symbol]:
+        """
+        Return the free symbols of the SDP problem.
+        """
 
     def _standardize_mat_dict(self, mat_dict: Dict[Any, Matrix]) -> Dict[Any, Matrix]:
         """
@@ -103,12 +105,6 @@ class SDPProblemBase(ABC):
             The symmetric matrices that SDP requires to be positive semidefinite.
         """
 
-    def mats(self, *args, **kwargs) -> Dict[Any, Matrix]:
-        """
-        Alias of `S_from_y`.
-        """
-        return self.S_from_y(*args, **kwargs)
-
     def project(self, y: Matrix) -> Matrix:
         """
         Project the vector `y` to the feasible region.
@@ -120,7 +116,7 @@ class SDPProblemBase(ABC):
         project: bool = True,
         perturb: bool = False,
         propagate_to_parent: bool = True
-    ) -> None:
+    ) -> bool:
         """
         Manually register a solution y to the SDP problem.
 
@@ -163,6 +159,7 @@ class SDPProblemBase(ABC):
         self.decompositions = decomps
         if propagate_to_parent:
             self.propagate_to_parent(recursive = True)
+        return True
 
     def propagate_to_parent(self, *args, **kwargs) -> None:
         # this method should be implemented in the TransformMixin
@@ -193,6 +190,7 @@ class SDPProblemBase(ABC):
         objective: Matrix,
         constraints: List[Tuple[Matrix, Matrix, str]] = [],
         solver: Optional[str] = None,
+        return_result: bool = False,
         kwargs: Dict[Any, Any] = {}
     ) -> Optional[ndarray]:
         """
@@ -205,13 +203,15 @@ class SDPProblemBase(ABC):
         solver: Optional[str] = None,
         solve_child: bool = True,
         propagate_to_parent: bool = True,
+        verbose: bool = False,
         kwargs: Dict[Any, Any] = {}
     ) -> Optional[Matrix]:
         """
         Solve the SDP problem with a given objective and constraints.
         """
-        obj = exprs_to_arrays(None, self.free_symbols, [objective], dtype=np.float64)[0]
-        cons = exprs_to_arrays(None, self.free_symbols, constraints, dtype=np.float64)
+        original_self = self
+        obj = exprs_to_arrays(None, self.gens, [objective], dtype=np.float64)[0]
+        cons = exprs_to_arrays(None, self.gens, constraints, dtype=np.float64)
 
         cons = [(_[0], _[1], '==') if len(_) == 2 else _ for _ in cons]
         ineq_lhs, ineq_rhs, eq_lhs, eq_rhs = merge_constraints(cons, self.dof)
@@ -233,18 +233,16 @@ class SDPProblemBase(ABC):
 
         cons = [(ineq_lhs, ineq_rhs, '>'), (eq_lhs, eq_rhs, '==')]
 
-        y = self._solve_numerical_sdp(objective=obj[0], constraints=cons, solver=solver, kwargs=kwargs)
-        if y is None:
-            return None
+        if not ('verbose' in kwargs):
+            kwargs['verbose'] = verbose
 
-        if y.dtype in (np.float64, np.float32):
-            convert = sp.RR.convert
-            zero = sp.RR.zero
-            sdm = [convert(i) for i in y.tolist()]
-            y = rep_matrix_from_list(sdm, self.dof, sp.RR)
-        else:
-            y = Matrix(y.tolist())
-        self.register_y(y, project=False, perturb=True, propagate_to_parent=propagate_to_parent)
+        y = self._solve_numerical_sdp(objective=obj[0], constraints=cons, solver=solver, 
+            return_result=False, kwargs=kwargs)
+
+        if y is not None:
+            y = rep_matrix_from_numpy(y)
+            self.register_y(y, project=False, perturb=True, propagate_to_parent=propagate_to_parent)
+            y = original_self.y
         return y
 
     @abstractmethod
@@ -254,7 +252,7 @@ class SDPProblemBase(ABC):
         solve_child: bool = True,
         propagate_to_parent: bool = True,
         allow_numer: bool = False
-    ) -> bool:
+    ) -> Optional[Matrix]:
         """
         Interface for solving the SDP problem.
 

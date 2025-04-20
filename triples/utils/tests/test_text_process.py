@@ -90,6 +90,11 @@ def test_preprocess_test():
     assert pl('ab-acbcbrt(3)/ab*ba+3cbrty2/5',preserve_patterns=('ab','cbrt','cbrty'),return_type='expr')\
         == ab - a*c*b*cbrt(3)/ab*b*a + 3*cbrty2/5
 
+    # test variables with extra assumptions
+    a2, b2, c2 = [Symbol(_, real=True) for _ in 'abc']
+    assert pl('s(a2)2-3s(a3b)', (a2,b2,c2), return_type='expr')\
+        == CyclicSum(a2**2, (a2,b2,c2))**2 - 3*CyclicSum(a2**3*b2, (a2,b2,c2))
+
 
 def test_degree_of_zero():
     strings_gens_perms_degrees = [

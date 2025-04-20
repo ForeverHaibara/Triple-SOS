@@ -6,7 +6,7 @@ from sympy import Matrix, MatrixBase, Expr, Rational, Symbol, re, eye, collect
 from sympy.core.relational import GreaterThan, StrictGreaterThan, LessThan, StrictLessThan, Equality, Relational
 from sympy.core.singleton import S as singleton
 
-from .arithmetic import vec2mat
+from .arithmetic import vec2mat, reshape
 
 def S_from_y(
         y: Matrix,
@@ -230,7 +230,11 @@ def exprs_to_arrays(locals: Dict[str, Any], symbols: List[Symbol],
         if isinstance(expr, ndarray):
             expr = expr.reshape(1, -1)
         elif isinstance(expr, MatrixBase):
-            expr = expr.reshape(expr.shape[0]*expr.shape[1]//nvars, nvars)
+            if expr.shape[0] == nvars and expr.shape[1] == 1: # column vec
+                expr = reshape(expr, (1, nvars))
+            if expr.shape[1] != nvars:
+                raise ValueError(f"Invalid shape of expr matrix, expected (*,{nvars}), but got {expr.shape}.")
+            # expr = expr.reshape(expr.shape[0]*expr.shape[1]//nvars, nvars)
         if len(result[i]) == 3:
             result[i] = (expr, c, result[i][2])
         else:

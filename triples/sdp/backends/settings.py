@@ -87,7 +87,7 @@ class SDPResult:
         return self.optimal and (not self.inaccurate)
     def raises(self):
         if not self.success:
-            pass
+            raise SDPError(self)
         return self.y
 
 
