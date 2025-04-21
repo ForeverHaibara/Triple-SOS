@@ -1,12 +1,12 @@
-from typing import Union, Optional, Tuple, List, Dict, Callable, Generator, Any
+from typing import Union, Optional, Tuple, List, Dict, Callable, Any
 
 from numpy import ndarray
 import numpy as np
-from sympy import Matrix, MatrixBase, Expr, Rational, Symbol, re, eye, collect
+from sympy import Matrix, MatrixBase, Expr, Symbol, collect
 from sympy.core.relational import GreaterThan, StrictGreaterThan, LessThan, StrictLessThan, Equality, Relational
-from sympy.core.singleton import S as singleton
+from sympy.solvers.solveset import linear_eq_to_matrix
 
-from .arithmetic import vec2mat, reshape
+from .arithmetic import vec2mat, mat2vec, reshape
 
 def S_from_y(
         y: Matrix,
@@ -91,28 +91,55 @@ def decompose_matrix(
         The constant matrix.
     v : Matrix
         The vector of variables.
+
+    Examples
+    ----------
+    >>> from sympy.abc import a, b, c, x, y, z
+    >>> M = Matrix([c*x + z - 1 - c, y + z, x - y])
+    >>> decompose_matrix(M, [x, y, z])
+    (Matrix([
+    [-c - 1],
+    [     0],
+    [     0]]), Matrix([
+    [c,  0, 1],
+    [0,  1, 1],
+    [1, -1, 0]]), Matrix([
+    [x],
+    [y],
+    [z]]))
+
+    If the matrix is not linear with respect to the variables, it will raise a
+    NonlinearError, which is a subclass of ValueError.
+
+    >>> decompose_matrix(M) # doctest: +SKIP
+    Traceback (most recent call last):
+    ...
+    NonlinearError: nonlinear cross-term: c*x
     """
-    rows, cols = M.shape
     if variables is None:
         variables = list(M.free_symbols)
         variables = sorted(variables, key = lambda x: x.name)
-    variable_index = {var: idx for idx, var in enumerate(variables)}
-
     v = Matrix(variables)
-    x = Matrix.zeros(rows * cols, 1)
-    A = Matrix.zeros(rows * cols, len(variables))
 
-    for i in range(rows):
-        for j in range(cols):
-            expr = M[i, j]
-            terms = collect(expr, variables, evaluate=False)
+    # rows, cols = M.shape
+    # variable_index = {var: idx for idx, var in enumerate(variables)}
 
-            constant_term = terms.pop(singleton.One, 0)  # Extract and remove constant term for x
-            x[i * cols + j] = constant_term
+    # x = Matrix.zeros(rows * cols, 1)
+    # A = Matrix.zeros(rows * cols, len(variables))
 
-            for term, coeff in terms.items():
-                A[i * cols + j, variable_index[term]] = coeff  # Extract coefficients for A
+    # for i in range(rows):
+    #     for j in range(cols):
+    #         expr = M[i, j]
+    #         terms = collect(expr, variables, evaluate=False)
 
+    #         constant_term = terms.pop(sp.Integer(1), 0)  # Extract and remove constant term for x
+    #         x[i * cols + j] = constant_term
+
+    #         for term, coeff in terms.items():
+    #             A[i * cols + j, variable_index[term]] = coeff  # Extract coefficients for A
+
+    A, x = linear_eq_to_matrix(mat2vec(M), *variables)
+    x = -x
     return x, A, v
 
 

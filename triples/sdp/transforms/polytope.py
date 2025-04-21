@@ -1,4 +1,3 @@
-from math import sqrt
 from typing import Any, Dict, List, Tuple
 
 from sympy.matrices import MutableDenseMatrix as Matrix

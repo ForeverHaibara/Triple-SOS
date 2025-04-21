@@ -14,7 +14,81 @@ from ..arithmetic import (
 )
 
 
-class SDPMatrixTransform(SDPTransformation):
+class SDPLinearTransform(SDPTransformation):
+    """
+    Standard linear transformation class of SDP problems.
+
+    Parameters
+    -----------
+    parent_node : SDPProblemBase
+        The parent node of the transformation.
+    child_node : SDPProblemBase
+        The child node of the transformation.
+    A : Matrix
+        The matrix A in y = Ay' + b.
+        If None, the linear transformation is assumed to be the identity y = y'.
+    b : Matrix
+        The matrix b in y = Ay' + b.
+        If None, the linear transformation is assumed to be the identity y = y'.
+    """
+    _A = None
+    _b = None
+    def __init__(self, parent_node, child_node, A: Optional[Matrix]=None, b: Optional[Matrix]=None):
+        super().__init__(parent_node, child_node)
+        self._A = A
+        self._b = b
+        if (A is None) ^ (b is None):
+            raise ValueError("A and b should be both None or both not None.")
+
+    def get_y_transform_from_child(self) -> Tuple[Matrix, Matrix]:
+        return self._A, self._b
+
+    def propagate_to_parent(self):
+        """
+        Propagate the solution of the child problem to the parent problem.
+        """
+        parent, child = self.parent_node, self.child_node
+        A, b = self.get_y_transform_from_child()
+        if A is None and b is None:
+            y = child.y
+        else:
+            y = A @ child.y + b
+        parent.y = y
+        parent.S = child.S
+        parent.decompositions = child.decompositions
+
+    def propagate_nullspace_to_child(self, nullspace):
+        return nullspace
+
+    def propagate_affine_to_child(self, A, b) -> Tuple[Matrix, Matrix]:
+        """
+        Get `A'`, `b'` such that `A@y + b = A'@y' + b'`, where `y` and `y'`
+        are the solutions of the parent and child problems respectively.
+        """
+        U, v = self.get_y_transform_from_child()
+        return A@U, A@v + b
+
+
+    @classmethod
+    def apply_from_affine(cls, parent_node, A: Matrix, b: Matrix) -> SDPProblemBase:
+        if parent_node.is_dual:
+            x0_and_space = {}
+            for key, (x0, space) in parent_node._x0_and_space.items():
+                x0_ = x0 + matmul(space, b)
+                space_ = matmul(space, A)
+                x0_and_space[key] = (x0_, space_)
+            child_node = parent_node.__class__(x0_and_space)
+            transform = cls(parent_node, child_node, A=A, b=b)
+            return transform.child_node
+        raise NotImplementedError
+
+    @classmethod
+    def apply_from_equations(cls, parent_node, eqs: Matrix, rhs: Matrix) -> SDPProblemBase:
+        b, A = solve_undetermined_linear(eqs, rhs)
+        return cls.apply_from_affine(parent_node, A, b)
+
+
+class SDPMatrixTransform(SDPLinearTransform):
     """
     Standard matrix transformation class of SDP problems.
 
@@ -56,9 +130,6 @@ class SDPMatrixTransform(SDPTransformation):
         if (columnspace is None) ^ (nullspace is None):
             raise ValueError("The columnspace and nullspace should be both None or both not None.")
 
-    def get_y_transform_from_child(self) -> Tuple[Matrix, Matrix]:
-        return self._A, self._b
-
     def propagate_to_parent(self):
         parent = self.parent_node
         child = self.child_node
@@ -83,23 +154,11 @@ class SDPMatrixTransform(SDPTransformation):
         columnspace = self._columnspace
         return {key: matmul(columnspace[key].T, nullspace[key]) for key in nullspace.keys()}
 
-
     @classmethod
     def apply(cls, parent_node, columnspace: Dict[Any, Matrix]=None, nullspace: Dict[Any, Matrix]=None, to_child: bool=True) -> SDPProblemBase:
         if parent_node.is_dual:
             return DualMatrixTransform.apply(parent_node, columnspace=columnspace, nullspace=nullspace, to_child=to_child)
         raise NotImplementedError
-
-    @classmethod
-    def apply_from_affine(cls, parent_node, A: Matrix, b: Matrix) -> SDPProblemBase:
-        if parent_node.is_dual:
-            return DualMatrixTransform.apply_from_affine(parent_node, A, b)
-        raise NotImplementedError
-
-    @classmethod
-    def apply_from_equations(cls, parent_node, eqs: Matrix, rhs: Matrix) -> SDPProblemBase:
-        b, A = solve_undetermined_linear(eqs, rhs)
-        return cls.apply_from_affine(parent_node, A, b)
 
 
 class DualMatrixTransform(SDPMatrixTransform):
@@ -206,15 +265,4 @@ class DualMatrixTransform(SDPMatrixTransform):
         new_x0_and_space, A, b = _get_new_params(parent_node._x0_and_space, columnspace, nullspace)
         child_node = parent_node.__class__(new_x0_and_space)
         transform = cls(parent_node, child_node, columnspace=columnspace, nullspace=nullspace, A=A, b=b)
-        return transform.child_node
-
-    @classmethod
-    def apply_from_affine(cls, parent_node, A: Matrix, b: Matrix) -> SDPProblemBase:
-        x0_and_space = {}
-        for key, (x0, space) in parent_node._x0_and_space.items():
-            x0_ = x0 + matmul(space, b)
-            space_ = matmul(space, A)
-            x0_and_space[key] = (x0_, space_)
-        child_node = parent_node.__class__(x0_and_space)
-        transform = cls(parent_node, child_node, A=A, b=b)
         return transform.child_node

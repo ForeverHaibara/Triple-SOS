@@ -151,7 +151,9 @@ def _form_sdp(ineq_constraints: List[Poly], eq_constraints: List[Poly], nvars: i
         print(f"Time for constructing coeff equations   : {time() - time0:.6f} seconds.")
 
     x0, space = solve_csr_linear(eq_list, rhs, x0_equal_indices)
-    sdp = SDPProblem.from_full_x0_and_space(x0, space, splits_ineq, constrain_symmetry=False)
+    splits_size = sum(n**2 for n in splits_ineq.values())
+    sdp = SDPProblem.from_full_x0_and_space(x0[:splits_size,:], space[:splits_size,:],
+            splits_ineq, constrain_symmetry=False)
     if verbose:
         print(f"Time for solving coefficient equations  : {time() - time0:.6f} seconds. Dof = {sdp.dof}")
 

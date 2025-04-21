@@ -1,9 +1,11 @@
 from typing import List, Tuple, Dict, Optional, Any
 
 from sympy.matrices import MutableDenseMatrix as Matrix
+from sympy import Symbol
 
 from .transform import SDPTransformation
-from .linear import SDPMatrixTransform
+from .linear import SDPLinearTransform, SDPMatrixTransform
+from .parametric import SDPDeparametrization
 from .polytope import get_zero_diagonals, SDPRowExtraction
 from ..abstract import SDPProblemBase
 from ..arithmetic import sqrtsize_of_mat
@@ -85,6 +87,18 @@ class TransformableProblem(SDPProblemBase):
             return self
         return children[-1].get_last_child()
 
+    def clear_parents(self):
+        """
+        Clear all the parent nodes.
+        """
+        self._transforms = [_ for _ in self._transforms if not _.is_child(self)] 
+
+    def clear_children(self):
+        """
+        Clear all the child nodes.
+        """
+        self._transforms = [_ for _ in self._transforms if not _.is_parent(self)]
+
     def common_transform(self, other: SDPProblemBase) -> SDPTransformation:
         """
         Return the common transformation (linkage) between two SDP problems.
@@ -143,9 +157,8 @@ class TransformableProblem(SDPProblemBase):
     def constrain_zero_diagonals(self, extractions: Optional[Dict[Any, List[int]]]=None, masks: Optional[Dict[Any, List[int]]]=None) -> 'TransformableProblem':
         return SDPRowExtraction.apply(self, extractions=extractions, masks=masks)
 
-    def deparametrize(self):
-        # TODO
-        return self
+    def deparametrize(self, symbols: Optional[List[Symbol]]=None) -> 'TransformableProblem':
+        return SDPDeparametrization.apply(self, symbols=symbols)
 
 
 class TransformableDual(TransformableProblem):
@@ -164,7 +177,7 @@ class TransformableDual(TransformableProblem):
             return self
         eqs = Matrix.vstack(*eqs)
         rhs = Matrix(rhs)
-        return SDPMatrixTransform.apply_from_equations(self, eqs, rhs)
+        return SDPLinearTransform.apply_from_equations(self, eqs, rhs)
 
 class TransformablePrimal(TransformableProblem):
     def constrain_symmetry(self) -> SDPProblemBase:

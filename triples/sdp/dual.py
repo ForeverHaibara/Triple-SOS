@@ -80,7 +80,7 @@ class SDPProblem(TransformableDual):
         >>> sdp
         <SDPProblem dof=2 size={'X': 4}>
 
-    We can visualize the symbolic matrix by calling the `S_from_y` method:
+    We can take a look at the symbolic matrix by calling the `S_from_y` method:
 
         >>> sdp.S_from_y()
         {'X': Matrix([
@@ -757,6 +757,13 @@ class SDPProblem(TransformableDual):
     
         The function will sanitize the input so it is also acceptable to pass in lists or numpy
         arrays instead of sympy matrices.
+
+        Nonlinear objectives or constraints are not supported, e.g.,
+
+            >>> sdp.solve_obj(-x-2*y, constraints=[y<=x**2]) # doctest: +SKIP
+            Traceback (most recent call last):
+            ...
+            NonlinearError: nonlinear term: x**2
 
         ### Handling exceptions
 
