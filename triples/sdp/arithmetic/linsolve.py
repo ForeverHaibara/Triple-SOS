@@ -17,11 +17,15 @@ _VERBOSE_SOLVE_UNDETERMINED_LINEAR = False
 _VERBOSE_SOLVE_CSR_LINEAR = False
 _USE_SDM_RREF_DEN = False # has bug in low sympy versions due to behaviour of quo
 
-def _row_reduce_dict(mat, rows, cols, normalize_last=True, normalize=True, zero_above=True):
+def _row_reduce_dict(mat, rows, cols, domain=QQ, normalize_last=True, normalize=True, zero_above=True):
     """
     See also in sympy.matrices.reductions._row_reduce_list
     """
-    one, zero = QQ.one, QQ.zero
+    one, zero = domain.one, domain.zero
+    if domain.is_QQ or domain.is_ZZ:
+        gcdab = lambda a, b: MPQ(gcd(a.numerator, b.numerator), gcd(a.denominator, b.denominator))
+    else:
+        gcdab = lambda a, b: one
 
     def row_swap(i, j):
         # mat[i*cols:(i + 1)*cols], mat[j*cols:(j + 1)*cols] = \
@@ -38,8 +42,8 @@ def _row_reduce_dict(mat, rows, cols, normalize_last=True, normalize=True, zero_
     def cross_cancel(a, i, b, j):
         """Does the row op row[i] = a*row[i] - b*row[j]"""
         # q = (j - i)*cols
-        gcdab = MPQ(gcd(a.numerator, b.numerator), gcd(a.denominator, b.denominator))
-        a, b = a / gcdab, b / gcdab
+        _gcd = gcdab(a, b)
+        a, b = a / _gcd, b / _gcd
         mati = mat.get(i, {})
         if mati:
             if a:
@@ -152,14 +156,15 @@ def _row_reduce(M, normalize_last=True,
     if _VERBOSE_SOLVE_UNDETERMINED_LINEAR:
         time0 = time()
 
-    sdm = M._rep.to_field().rep.to_sdm()
-    sdm = {k: {k2: i for k2, i in v.items()} for k, v in sdm.items()}
+    sdm = M._rep.to_field().rep
+    domain = sdm.domain
+    sdm = {k: {k2: i for k2, i in v.items()} for k, v in sdm.to_sdm().items()}
 
     if _VERBOSE_SOLVE_UNDETERMINED_LINEAR:
         print(">> Time for converting to MPQ:", time() - time0)
         time0 = time()
 
-    mat, pivot_cols, swaps = _row_reduce_dict(sdm, M.shape[0], M.shape[1],
+    mat, pivot_cols, swaps = _row_reduce_dict(sdm, M.shape[0], M.shape[1], domain=domain,
             normalize_last=normalize_last, normalize=normalize, zero_above=zero_above)
 
     if _VERBOSE_SOLVE_UNDETERMINED_LINEAR:
@@ -176,7 +181,7 @@ def _rref(M, pivots=True, normalize_last=True):
     See also in sympy.matrices.reductions.rref
     """
     return_pivots = pivots
-    if not is_zz_qq_mat(M):
+    if not M._rep.domain.is_Exact:
         return M.rref(pivots=return_pivots, normalize_last=normalize_last)
 
     if _USE_SDM_RREF_DEN:

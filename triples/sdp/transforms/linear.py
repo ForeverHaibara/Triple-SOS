@@ -10,7 +10,7 @@ from .transform import SDPTransformation, SDPProblemBase
 from ..arithmetic import (
     is_empty_matrix, vec2mat,
     solve_undetermined_linear, solve_nullspace, solve_columnspace,
-    matmul, matmul_multiple, symmetric_bilinear, symmetric_bilinear_multiple
+    matmul, matadd, matmul_multiple, symmetric_bilinear, symmetric_bilinear_multiple
 )
 
 
@@ -66,7 +66,7 @@ class SDPLinearTransform(SDPTransformation):
         are the solutions of the parent and child problems respectively.
         """
         U, v = self.get_y_transform_from_child()
-        return A@U, A@v + b
+        return matmul(A, U), matadd(matmul(A, v), b)
 
 
     @classmethod

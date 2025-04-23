@@ -120,13 +120,13 @@ def congruence(M: Union[Matrix, ndarray], perturb: Union[bool, float]=False,
         return _congruence_numerically(M, perturb=perturb, upper=upper)
     if isinstance(M, RepMatrix):
         domain = M._rep.domain
-        if domain.is_Exact and domain.is_Numerical:
-            return _congruence_on_exact_domain(M)
-        if not domain.is_Exact:
+        if (not domain.is_Exact) or ((domain.is_EX or domain.is_EXRAW) and M.has(Float)):
             return _congruence_numerically(M, perturb=perturb, upper=upper)
-    if isinstance(M, MatrixBase):
-        if M.has(Float):
-            return _congruence_numerically(M, perturb=perturb, upper=upper)
+        # if domain.is_Exact: # and domain.is_Numerical:
+        return _congruence_on_exact_domain(M, signfunc=signfunc)
+    # if isinstance(M, MatrixBase):
+    #     if M.has(Float):
+    #         return _congruence_numerically(M, perturb=perturb, upper=upper)
 
     if signfunc is None:
         signfunc = lambda x: 1 if x > 0 else (-1 if x < 0 else 0)
@@ -135,6 +135,10 @@ def congruence(M: Union[Matrix, ndarray], perturb: Union[bool, float]=False,
     n = M.shape[0]
     if isinstance(M[0,0], Expr):
         U, S = Matrix.zeros(n), Matrix.zeros(n, 1)
+        # if isinstance(M, RepMatrix):
+        #     M = Matrix._fromrep(M._rep.convert_to(M._rep.domain.get_field()))
+        #     U = Matrix._fromrep(U._rep.convert_to(M._rep.domain))
+        #     S = Matrix._fromrep(S._rep.convert_to(M._rep.domain))
         One = singleton.One
     else:
         U, S = np.zeros((n,n)), np.zeros(n)
@@ -157,7 +161,7 @@ def congruence(M: Union[Matrix, ndarray], perturb: Union[bool, float]=False,
     return U, S
 
 
-def _congruence_on_exact_domain(M: RepMatrix) -> Optional[Tuple[RepMatrix, RepMatrix]]:
+def _congruence_on_exact_domain(M: RepMatrix, signfunc=None) -> Optional[Tuple[RepMatrix, RepMatrix]]:
     """
     Perform congruence decomposition on M fast if M is a SymPy RepMatrix.
     This functions exploits low-level arithmetic on domain elements, e.g. rational numbers
@@ -171,17 +175,20 @@ def _congruence_on_exact_domain(M: RepMatrix) -> Optional[Tuple[RepMatrix, RepMa
     n, domain, M = dM.shape[0], dM.domain, dM.rep.to_list()
     one, zero = domain.one, domain.zero
 
-    if domain.is_QQ or domain.is_ZZ:
-        signfunc = lambda x: 0 if x == zero else (1 if x > 0 else -1)
+    if signfunc is None:
+        if domain.is_QQ or domain.is_ZZ:
+            _signfunc = lambda x: 0 if x == zero else (1 if x > 0 else -1)
+        else:
+            _signfunc = lambda x: 0 if x == zero else (1 if re(domain.to_sympy(x)) > 0 else -1)
     else:
-        signfunc = lambda x: 0 if x == zero else (1 if re(domain.to_sympy(x)) > 0 else -1)
+        _signfunc = lambda x: signfunc(domain.to_sympy(x)) # convert to sympy first
 
     S = [zero] * n
     U = [[zero for _ in range(n)] for __ in range(n)]
     for i in range(n):
         Mi, Ui = M[i], U[i]
         p = Mi[i]
-        sgn = signfunc(p)
+        sgn = _signfunc(p)
         if sgn > 0:
             S[i] = p
             Ui[i] = one

@@ -24,6 +24,19 @@ _INT64_MAX = np_iinfo('int64').max # 9223372036854775807
 _VERBOSE_MATMUL_MULTIPLE = False
 
 
+def matadd(A: Union[Matrix, ndarray], B: Union[Matrix, ndarray]):
+    """
+    Compute A + B with proper data types casting.
+    """
+    if isinstance(A, ndarray) and isinstance(B, ndarray):
+        return A + B
+    if isinstance(A, ndarray):
+        A = rep_matrix_from_numpy(A)
+    if isinstance(B, ndarray):
+        B = rep_matrix_from_numpy(B)
+    return A + B
+
+
 def matmul(A: Union[Matrix, ndarray], B: Union[Matrix, ndarray],
         return_shape: Optional[Tuple[int, int]] = None) -> Union[Matrix, ndarray]:
     """

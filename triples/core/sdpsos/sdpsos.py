@@ -222,8 +222,7 @@ def _get_equal_entries(ineq_constraints: List[Poly], eq_constraints: List[Poly],
     return equal_entries
 
 def _constrain_nullspace(sdp: SDPProblem, ineq_constraints: List[Poly], eq_constraints: List[Poly],
-        nullspaces: Optional[Union[List[sp.Matrix], RootSubspace]],
-        deparametrize: bool = True, verbose: bool = False) -> SDPProblem:
+        nullspaces: Optional[Union[List[sp.Matrix], RootSubspace]], verbose: bool = False) -> SDPProblem:
     # constrain nullspace
     time0 = time()
     sdp = sdp.get_last_child()
@@ -240,8 +239,8 @@ def _constrain_nullspace(sdp: SDPProblem, ineq_constraints: List[Poly], eq_const
         print(f"Time for computing nullspace            : {time() - time0:.6f} seconds.")
         time0 = time()
 
-    if deparametrize:
-        sdp.deparametrize()
+    # if deparametrize:
+    #     sdp.deparametrize()
 
     if nullspaces is not None:
         sdp.constrain_nullspace(nullspaces, to_child=True)
@@ -380,6 +379,10 @@ class SOSProblem():
 
         sdp, eqvec = _form_sdp(ineq_constraints, eq_constraints, self._nvars, degree, rhs, symmetry, verbose=verbose)
         self._sdp = sdp
+        if deparametrize:
+            sdp = sdp.deparametrize()
+            sdp.clear_parents()
+        self._sdp = sdp
         self._eqvec = eqvec
 
         if roots is None:
@@ -390,8 +393,7 @@ class SOSProblem():
                 from ..sdpsos.manifold import _findroot_binary
                 roots = _findroot_binary(self.poly, symmetry=self._symmetry)
         self.manifold.roots = roots
-        _constrain_nullspace(sdp, ineq_constraints, eq_constraints, self.manifold,
-                             deparametrize=deparametrize, verbose=verbose)
+        _constrain_nullspace(sdp, ineq_constraints, eq_constraints, self.manifold, verbose=verbose)
 
         if verbose:
             sdp.print_graph()

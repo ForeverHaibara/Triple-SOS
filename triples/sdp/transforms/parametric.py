@@ -33,10 +33,12 @@ class DualDeparametrization(SDPDeparametrization):
 
         new_x0_and_space = {}
         for key, (x0, space) in parent_node._x0_and_space.items():
-            new_x0_and_space[key] = (x0, space)
             if hasattr(x0, 'free_symbols') and len(x0.free_symbols):
                 x1, A, v = decompose_matrix(x0, symbols)
-                new_x0_and_space[key] = (x1, Matrix.hstack(space, A))
+            else:
+                x1 = x0
+                A = Matrix.zeros(x0.shape[0], len(symbols))
+            new_x0_and_space[key] = (x1, Matrix.hstack(space, A))
 
         child = parent_node.__class__(new_x0_and_space, gens=parent_node.gens + symbols)
         A = Matrix.eye(parent_node.dof, child.dof)
