@@ -8,10 +8,12 @@ class DualObjProblems:
     """
     Each of the problem must return a tuple of (sdp, obj, constraints, val)
     """
-    def collect(self):
-        return {k: getattr(self, k) for k in dir(self) if k.startswith('problem')}
+    @classmethod
+    def collect(cls):
+        return {k: getattr(cls, k) for k in dir(cls) if k.startswith('problem')}
 
-    def problem_conic_opt(self):
+    @classmethod
+    def problem_conic_opt(cls):
         """Jiawang Nie, Moment and Polynomial Optimization, Example 1.6.2"""
         y1, y2, y3 = sp.symbols('y1 y2 y3')
         sdp = SDPProblem.from_matrix([
@@ -20,7 +22,8 @@ class DualObjProblems:
         ])
         return sdp, y1-y3, [y1+y2+y3-3, -1>-y1-y2, -1>-y2-y3], -2.
 
-    def problem_quartic_opt(self):
+    @classmethod
+    def problem_quartic_opt(cls):
         """Minimize the parameter t for a nonnegative univariate quartic polynomial."""
         poly = ((x-2)**2 * (x**2+(1+t)*x+5-t)).as_poly(x)
         c4, c3, c2, c1, c0 = poly.all_coeffs()
@@ -31,7 +34,7 @@ class DualObjProblems:
 
 
 def test_dual_solve_obj(tol = 1e-5):
-    problems = DualObjProblems().collect()
+    problems = DualObjProblems.collect()
     for name, problem in problems.items():
         sdp, obj, constraints, val = problem()
         assert sdp.solve_obj(obj, constraints), 'Failed to solve obj for %s' % name

@@ -676,7 +676,7 @@ class SDPProblem(TransformableDual):
         >>> sdp.as_params() # doctest: +SKIP
         {a: 0.499986210665879, b: 2.00005510893102}
         """
-        return dict(zip(self.gens, self.y))
+        return super().as_params()
 
     def _solve_numerical_sdp(self,
         objective: np.ndarray,

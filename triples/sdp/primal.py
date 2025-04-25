@@ -6,7 +6,7 @@ from sympy import MutableDenseMatrix as Matrix
 from sympy import MatrixBase, Symbol, Float, Expr, Dummy
 from sympy.core.relational import Relational
 
-from .arithmetic import sqrtsize_of_mat, vec2mat, rep_matrix_from_numpy
+from .arithmetic import sqrtsize_of_mat, vec2mat, is_numerical_mat, rep_matrix_from_numpy
 from .backends import solve_numerical_primal_sdp
 from .rationalize import RationalizeWithMask, RationalizeSimultaneously
 from .transforms import TransformablePrimal
@@ -254,8 +254,8 @@ class SDPPrimal(TransformablePrimal):
         for n in self.size.values():
             for i in range(n):
                 for j in range(i+1,n):
-                    if gens[i*n+j] == gens[j*n+i]:
-                        gens[j*n+i] = Dummy('_') # mask non-unique symbols
+                    if gens[bias+i*n+j] == gens[bias+j*n+i]:
+                        gens[bias+j*n+i] = Dummy('_') # mask non-unique symbols
             bias += n**2
         arrs = exprs_to_arrays(None, gens, exprs, dtype=dtype)
 
@@ -307,7 +307,7 @@ class SDPPrimal(TransformablePrimal):
         dy = None
         if A.rows >= A.cols:
             dy = A.LDLsolve(r)
-        elif allow_numerical_solver and (r._rep.domain.is_RR or r.has(Float)):
+        elif allow_numerical_solver and is_numerical_mat(r):
             # use numerical solver for float numbers
             A2 = np.array(A).astype(np.float64)
             r2 = np.array(r).astype(np.float64)

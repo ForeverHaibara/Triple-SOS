@@ -69,6 +69,9 @@ class SDPProblemBase(ABC):
         Return the free symbols of the SDP problem.
         """
 
+    def as_params(self) -> Dict[sp.Symbol, Expr]:
+        return dict(zip(self.gens, self.y))
+
     def _standardize_mat_dict(self, mat_dict: Dict[Any, Matrix]) -> Dict[Any, Matrix]:
         """
         Standardize the matrix dictionary.
