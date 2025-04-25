@@ -9,9 +9,7 @@ from sympy.matrices import MutableDenseMatrix as Matrix
 import sympy as sp
 
 from .arithmetic import sqrtsize_of_mat, is_empty_matrix, congruence, rep_matrix_from_numpy
-from .rationalize import (
-    rationalize_and_decompose, RationalizeWithMask, RationalizeSimultaneously, IdentityRationalizer
-)
+from .rationalize import rationalize_and_decompose
 from .utils import exprs_to_arrays, merge_constraints
 
 Decomp = Dict[Any, Tuple[Matrix, Matrix, List[Rational]]]
@@ -144,7 +142,7 @@ class SDPProblemBase(ABC):
         if (not (y2 is y)) and not project:
             # FIXME for numpy array
             raise ValueError("The vector y is not feasible by the equality constraints."
-                             "Use project=True to project the approximated solution to the feasible region.")
+                             " Use project=True to project the approximated solution to the feasible region.")
         y = y2
   
         S = self.S_from_y(y)
@@ -185,6 +183,9 @@ class SDPProblemBase(ABC):
             print(f'Minimum Eigenvalues = {S_eigen}')
         return rationalize_and_decompose(y, mat_func=self.S_from_y, projection=self.project, **kwargs)
 
+    def exprs_to_arrays(self, exprs: List[Union[Callable, Expr, Relational, Tuple[Matrix, float], Tuple[Matrix, float, str]]], dtype=np.float64):
+        return exprs_to_arrays(None, self.gens, exprs, dtype=dtype)
+
     @abstractmethod
     def _solve_numerical_sdp(self,
         objective: Matrix,
@@ -210,8 +211,8 @@ class SDPProblemBase(ABC):
         Solve the SDP problem with a given objective and constraints.
         """
         original_self = self
-        obj = exprs_to_arrays(None, self.gens, [objective], dtype=np.float64)[0]
-        cons = exprs_to_arrays(None, self.gens, constraints, dtype=np.float64)
+        obj = self.exprs_to_arrays([objective])[0]
+        cons = self.exprs_to_arrays(constraints)
 
         cons = [(_[0], _[1], '==') if len(_) == 2 else _ for _ in cons]
         ineq_lhs, ineq_rhs, eq_lhs, eq_rhs = merge_constraints(cons, self.dof)
@@ -241,7 +242,7 @@ class SDPProblemBase(ABC):
 
         if y is not None:
             y = rep_matrix_from_numpy(y)
-            self.register_y(y, project=False, perturb=True, propagate_to_parent=propagate_to_parent)
+            self.register_y(y, project=True, perturb=True, propagate_to_parent=propagate_to_parent)
             y = original_self.y
         return y
 

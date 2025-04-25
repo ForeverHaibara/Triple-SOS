@@ -1069,7 +1069,7 @@ class SDPProblem(TransformableDual):
         constraints = [(objective, 0, '<'), (objective, -5, '>')]
         sol = solve_numerical_dual_sdp(
             x0_and_space, objective=objective, constraints=constraints,
-            solver=solver, **kwargs, return_result=True
+            solver=solver, return_result=True, **kwargs
         )
 
         if sol.y is not None and (not sol.infeasible):

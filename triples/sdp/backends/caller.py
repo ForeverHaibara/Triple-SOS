@@ -100,7 +100,7 @@ def collect_constraints(constraints: List[Tuple[ndarray, float, str]], dof: int)
 
 
 def create_numerical_dual_sdp(
-        x0_and_space: Dict[str, Tuple[Matrix, Matrix]],
+        x0_and_space: Union[List[Tuple[Matrix, Matrix]], Dict[Any, Tuple[Matrix, Matrix]]],
         objective: ndarray,
         constraints: List[Tuple[ndarray, float, str]] = [],
         solver: Optional[Union[str, Type[DualBackend]]] = None,
@@ -124,9 +124,14 @@ def create_numerical_dual_sdp(
     else:
         raise TypeError(f'Unknown solver type "{type(solver)}".')
 
+    if not isinstance(x0_and_space, (dict, list)):
+        raise TypeError(f'x0_and_space must be a dict or list, but got {type(x0_and_space)}.')
+    elif isinstance(x0_and_space, dict):
+        x0_and_space = list(x0_and_space.values())
+
     as_array = backend.as_array
 
-    x0_and_space = [(as_array(x0).flatten(), as_array(space)) for key, (x0, space) in x0_and_space.items()]
+    x0_and_space = [(as_array(x0).flatten(), as_array(space)) for x0, space in x0_and_space]
     x0_and_space = [(x0, space) for x0, space in x0_and_space if x0.shape[0] > 0]
 
     As = [space for x0, space in x0_and_space]
@@ -140,7 +145,7 @@ def create_numerical_dual_sdp(
 
 
 def solve_numerical_dual_sdp(
-        x0_and_space: Dict[str, Tuple[ndarray, ndarray]],
+        x0_and_space: Union[List[Tuple[Matrix, Matrix]], Dict[Any, Tuple[Matrix, Matrix]]],
         objective: ndarray,
         constraints: List[Tuple[ndarray, float, str]] = [],
         solver: Optional[str] = None,
@@ -159,8 +164,8 @@ def solve_numerical_dual_sdp(
 
     Parameters
     ----------
-    x0_and_space : Dict[str, Tuple[ndarray, ndarray]]
-        A dictionary of x0 and space matrices.
+    x0_and_space : Tuple[List[Tuple[Matrix, Matrix]], Dict[str, Tuple[Matrix, Matrix]]]
+        A list or a dictionary of x0 and space matrices.
     objective : ndarray
         The objective function, which is a vector.
     constraints : List[Tuple[ndarray, float, str]]
@@ -257,7 +262,7 @@ def _extract_triu(space: ndarray, n: int) -> ndarray:
     return space.T.reshape(n, n, -1)[i, j, :].T
 
 def solve_numerical_primal_sdp(
-        x0_and_space: Tuple[ndarray, Dict[str, ndarray]],
+        x0_and_space: Tuple[ndarray, Union[List[ndarray], Dict[Any, ndarray]]],
         objective: ndarray,
         constraints: List[Tuple[ndarray, float, str]] = [],
         solver: Optional[str] = None,
@@ -279,8 +284,8 @@ def solve_numerical_primal_sdp(
 
     Parameters
     ----------
-    x0_and_space : Tuple[ndarray, Dict[str, ndarray]]
-        Vector x0 and a dictionary of space matrices.
+    x0_and_space : Tuple[ndarray, Union[List[ndarray], Dict[Any, ndarray]]]
+        Vector x0 and a list or a dictionary of space matrices.
     objective : ndarray
         The objective function, which is a vector.
     constraints : List[Tuple[ndarray, float, str]]
@@ -305,14 +310,19 @@ def solve_numerical_primal_sdp(
     else:
         raise TypeError(f'Unknown solver type "{type(solver)}".')
 
+    if not isinstance(spaces, (dict, list)):
+        raise TypeError(f'spaces must be a dict or list, but got {type(spaces)}.')
+    elif isinstance(spaces, dict):
+        spaces = list(spaces.values())
+
     asarray = backend.as_array
     x0 = asarray(x0).flatten()
     objective = asarray(objective).flatten().copy()
 
     if x0.size > 0:
-        spaces = [asarray(space).reshape(x0.size, -1) for space in spaces.values()]
+        spaces = [asarray(space).reshape(x0.size, -1) for space in spaces]
     else:
-        spaces = [asarray(space).reshape(0, space.size) for space in spaces.values()]
+        spaces = [asarray(space).reshape(0, space.size) for space in spaces]
     spaces = [space.copy() for space in spaces if space.shape[1] > 0]
 
     # Formulate the dual form (but not lagrangian dual) by creating

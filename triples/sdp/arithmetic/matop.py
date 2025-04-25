@@ -15,6 +15,7 @@ from numpy import ndarray
 from sympy import __version__ as _SYMPY_VERSION
 from sympy.external.gmpy import MPQ, MPZ # >= 1.9
 from sympy.external.importtools import version_tuple
+from sympy import MatrixBase
 from sympy.matrices import MutableDenseMatrix as Matrix
 from sympy.matrices.repmatrix import RepMatrix
 from sympy.polys.domains import ZZ, QQ, RR, CC # EXRAW >= 1.9
@@ -311,6 +312,22 @@ def is_zz_qq_mat(mat):
     False
     """
     return isinstance(mat, RepMatrix) and (mat._rep.domain.is_ZZ or mat._rep.domain.is_QQ)
+
+def is_numerical_mat(mat):
+    """
+    Judge whether a matrix is numerical, including RR, EX(RAW) with Float and numpy arrays.
+    """
+    if isinstance(mat, RepMatrix):
+        if not mat._rep.domain.is_Exact:
+            return True
+        if (mat._rep.domain.is_EX or mat._rep.domain.is_EXRAW) and mat.has(Float):
+            return True
+    elif isintance(mat, MatrixBase) and mat.has(Float):
+        return True
+    elif isinstance(mat, ndarray):
+        return True
+    return False
+
 
 def _cast_sympy_matrix_to_numpy(sympy_mat_rep: RepMatrix, dtype: str = 'int64') -> ndarray:
     """Cast a sympy RepMatrix on ZZ to numpy int64 matrix. Internal."""
