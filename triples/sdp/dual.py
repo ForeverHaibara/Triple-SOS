@@ -53,6 +53,8 @@ class SDPProblem(TransformableDual):
     where x_i and space_i are known. The problem is to find a feasible solution y such that S_i >> 0
     and minimize a linear objective function c^Ty.
 
+    ## Solving Dual SDP
+
     Here is a simple tutorial to use this class to solve SDPs. Consider the example from
     https://github.com/vsdp/SDPLIB/tree/master:
 
@@ -199,6 +201,62 @@ class SDPProblem(TransformableDual):
         Matrix([
         [1.0],
         [1.0]])
+
+
+    ## Solving SOS programming
+
+    We next illustrate an example of SOS programming from https://hankyang.seas.harvard.edu/Semidefinite/SOS.html,
+    Example 4.13:
+
+        min   -a - b
+
+        s.t.  x^4+a*x+(2+b) is SOS
+              (a-b+1)*x^2 + b*x + 1 is SOS
+
+    To define the problem, we assume the two SOS polys to be v1'*Q1*v1, v2'*Q2*v2,
+    where v1 = [1,x,x^2], v2 = [1,x]. We need to create two symmetric matrices
+    using SymPy matrices and symbols.
+
+        >>> from sympy import Matrix, Symbol
+        >>> from sympy.abc import x, a, b
+        >>> v1, v2 = Matrix([1,x,x**2]), Matrix([1,x])
+        >>> Q1 = Matrix([[Symbol(f'Q1_{min(i,j)}_{max(i,j)}') for j in range(3)] for i in range(3)])
+        >>> Q2 = Matrix([[Symbol(f'Q2_{min(i,j)}_{max(i,j)}') for j in range(2)] for i in range(2)])
+        >>> Q1 # check the matrix Q1, which must be symmetric
+        Matrix([
+        [Q1_0_0, Q1_0_1, Q1_0_2],
+        [Q1_0_1, Q1_1_1, Q1_1_2],
+        [Q1_0_2, Q1_1_2, Q1_2_2]])
+
+    We need to compute the relations of the variables by comparing the coefficients:
+
+        >>> p1 = ((v1.T @ Q1 @ v1)[0,0] - (x**4 + a*x + (2+b))).as_poly(x)
+        >>> p2 = ((v2.T @ Q2 @ v2)[0,0] - ((a-b+1)*x**2 + b*x + 1)).as_poly(x)
+        >>> eq = p1.coeffs() + p2.coeffs()
+        >>> eq # all following values should be zeros
+        [Q1_2_2 - 1, 2*Q1_1_2, 2*Q1_0_2 + Q1_1_1, 2*Q1_0_1 - a, Q1_0_0 - b - 2, Q2_1_1 - a + b - 1, 2*Q2_0_1 - b, Q2_0_0 - 1]
+
+    We can then initialize the SDPProblem object and solve it via:
+
+        >>> symbols = list(Q1.free_symbols) + list(Q2.free_symbols) + [a,b] # collect all symbols
+        >>> sdp = SDPProblem.from_matrix({'Q1': Q1, 'Q2': Q2}, gens=symbols)
+        >>> sol = sdp.solve_obj(-a-b, constraints=eq)
+
+    After solving, calling the `.as_params()` method will return a dictionary of parameter values:
+
+        >>> print('(a, b) =', (sdp.as_params()[a], sdp.as_params()[b])) # doctest: +SKIP
+        (a, b) = (6.61890359483024, 3.87159385296789)
+
+    It is also possible to access the values of the matrices by:
+
+        >>> sdp.S # doctest: +SKIP
+        {'Q1': Matrix([
+        [ 5.87159385296789, 3.30945179741512, -1.39899944005445],
+        [ 3.30945179741512,  2.7979988801089,               0.0],
+        [-1.39899944005445,              0.0,               1.0]]), 'Q2': Matrix([
+        [             1.0, 1.93579692648395],
+        [1.93579692648395, 3.74730974186235]])}
+
     """
     is_dual = True
     is_primal = False

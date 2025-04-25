@@ -32,7 +32,6 @@ _PRIMAL_BACKENDS: Dict[str, Any] = {
 
 _RECOMMENDED_BACKENDS = [
     'mosek', 'clarabel', 'cvxopt', 'cvxpy', 'picos',
-#     'mosek', 'clarabel', 'cvxopt', 'sdpa', 'picos', 'cvxpy',
 ]
 
 def get_default_sdp_backend(dual = True) -> str:
@@ -59,6 +58,46 @@ _STANDARDIZED_OPERATORS = {
     '__leq__': '__le__',
     '__geq__': '__ge__',
 }
+
+def collect_constraints(constraints: List[Tuple[ndarray, float, str]], dof: int)\
+        -> Tuple[ndarray, ndarray, ndarray, ndarray]:
+    """
+    Collect constraints and separate them into inequality and equality constraints.
+    """
+    as_array = DualBackend.as_array # TODO
+
+    ineq_lhs, ineq_rhs = [], []
+    eq_lhs, eq_rhs = [], []
+    for constraint, rhs, op in constraints:
+        op = _STANDARDIZED_OPERATORS[op]
+        if isinstance(rhs, (float, int)) or not hasattr(rhs, '__len__'):
+            rhs = [rhs]
+
+        constraint = as_array(constraint)
+        if len(constraint.shape) == 1:
+            constraint = constraint.reshape(1, dof)
+        rhs = as_array(rhs).flatten()
+
+        if op == '__le__':
+            constraint, rhs, op = -constraint, -rhs, '__ge__'
+        if op == '__ge__':
+            ineq_lhs.append(constraint)
+            ineq_rhs.append(rhs)
+        else: # if op == '__eq__':
+            eq_lhs.append(constraint)
+            eq_rhs.append(rhs)
+
+    if len(ineq_lhs):
+        ineq_lhs, ineq_rhs = np.vstack(ineq_lhs), np.concatenate(ineq_rhs)
+    else:
+        ineq_lhs, ineq_rhs = np.zeros((0, dof)), np.zeros((0,))
+
+    if len(eq_lhs):
+        eq_lhs, eq_rhs = np.vstack(eq_lhs), np.concatenate(eq_rhs)
+    else:
+        eq_lhs, eq_rhs = np.zeros((0, dof)), np.zeros((0,))
+    return ineq_lhs, ineq_rhs, eq_lhs, eq_rhs
+
 
 def create_numerical_dual_sdp(
         x0_and_space: Dict[str, Tuple[Matrix, Matrix]],
@@ -95,37 +134,7 @@ def create_numerical_dual_sdp(
 
     c = as_array(objective).flatten()
 
-    ineq_lhs, ineq_rhs = [], []
-    eq_lhs, eq_rhs = [], []
-    for constraint, rhs, op in constraints:
-        op = _STANDARDIZED_OPERATORS[op]
-        if isinstance(rhs, (float, int)) or not hasattr(rhs, '__len__'):
-            rhs = [rhs]
-
-        constraint = as_array(constraint)
-        if len(constraint.shape) == 1:
-            constraint = constraint.reshape(1, c.shape[0])
-        rhs = as_array(rhs).flatten()
-
-        if op == '__le__':
-            constraint, rhs, op = -constraint, -rhs, '__ge__'
-        if op == '__ge__':
-            ineq_lhs.append(constraint)
-            ineq_rhs.append(rhs)
-        else: # if op == '__eq__':
-            eq_lhs.append(constraint)
-            eq_rhs.append(rhs)
-
-    if len(ineq_lhs):
-        ineq_lhs, ineq_rhs = np.vstack(ineq_lhs), np.concatenate(ineq_rhs)
-    else:
-        ineq_lhs, ineq_rhs = np.zeros((0, c.shape[0])), np.zeros((0,))
-
-    if len(eq_lhs):
-        eq_lhs, eq_rhs = np.vstack(eq_lhs), np.concatenate(eq_rhs)
-    else:
-        eq_lhs, eq_rhs = np.zeros((0, c.shape[0])), np.zeros((0,))
-
+    ineq_lhs, ineq_rhs, eq_lhs, eq_rhs = collect_constraints(constraints, c.size)
     backend = backend(As, bs, ineq_lhs, ineq_rhs, eq_lhs, eq_rhs, c)
     return backend
 
@@ -228,34 +237,152 @@ def solve_numerical_dual_sdp(
 #     return backend
 
 
-# def solve_numerical_primal_sdp(
-#         space: Dict[str, ndarray],
-#         x0: ndarray,
-#         objective: ndarray,
-#         constraints: List[Tuple[ndarray, float, str]] = [],
-#         min_eigen: Union[float, tuple, Dict[str, Union[float, tuple]]] = 0,
-#         # lower_bound: Optional[float] = None,
-#         scaling: float = 6.,
-#         solver: Optional[str] = None,
-#         solver_options: Dict[str, Any] = {},
-#         raise_exception: bool = False,
-#     ) -> Optional[ndarray]:
-#     """
-#     Solve for x such that Sum(space_i @ Si) = x0.
-#     This is the primal form of SDP problem.
-#     """
-#     backend = _create_numerical_primal_sdp(space, x0, objective, constraints, min_eigen, scaling=scaling, solver=solver)
+def _fill_space(space: ndarray, n: int, bias: int) -> ndarray:
+    """Set space[k(i,j), bias+i*n+j] = space[k(i,j), bias+j*n+i] = 1 for 0 <= i <= j < n
+    where space has n*(n+1)//2 rows and k(i,j) is the index of (i,j) in the sorted set (0 <= i <= j < n).
+    The modification is in-place.
+    """
+    i, j = np.triu_indices(n)
+    cols = np.arange(bias, bias + n*(n+1)//2)
+    rows1 = i*n + j
+    rows2 = j*n + i
+    space[rows1, cols] = 1
+    space[rows2, cols] = 1
+    return space
 
-#     try:
-#         y = backend.solve(solver_options)
-#         if y is not None and y.size != backend.dof:
-#             if y.size == 0: # no solution is found
-#                 y = None
-#             else:
-#                 raise ValueError(f"Solution y has wrong size {y.size}, expected {backend.dof}.")
-#     except Exception as e:
-#         if raise_exception:
-#             raise e
-#         return None
-#     # y = backend.solve()
-#     return y
+def _extract_triu(space: ndarray, n: int) -> ndarray:
+    """Assume space has shape m x N where N = n**2. Return a matrix of shape m * (n*(n+1)//2)
+    where each column is the upper triangular part of the corresponding column of space."""
+    i, j = np.triu_indices(n)
+    return space.T.reshape(n, n, -1)[i, j, :].T
+
+def solve_numerical_primal_sdp(
+        x0_and_space: Tuple[ndarray, Dict[str, ndarray]],
+        objective: ndarray,
+        constraints: List[Tuple[ndarray, float, str]] = [],
+        solver: Optional[str] = None,
+        return_result: bool = False,
+        verbose: Union[bool, int] = 0,
+        max_iters: int = 200,
+        tol_fsb_abs: float = 1e-8,
+        tol_fsb_rel: float = 1e-8,
+        tol_gap_abs: float = 1e-8,
+        tol_gap_rel: float = 1e-8,
+        solver_options: Dict[str, Any] = {},
+    ) -> Optional[ndarray]:
+    """
+    Solve for x such that Sum(space_i @ Si) = x0.
+    This is the primal form of SDP problem.
+
+    Now the implementation converts the primal form to an exact dual form.
+    TODO: shall we implement a primal backend class directly?
+
+    Parameters
+    ----------
+    x0_and_space : Tuple[ndarray, Dict[str, ndarray]]
+        Vector x0 and a dictionary of space matrices.
+    objective : ndarray
+        The objective function, which is a vector.
+    constraints : List[Tuple[ndarray, float, str]]
+        A list of constraints, each represented as a tuple of (constraint, rhs, operator).
+    solver : str
+        The solver to use, defaults to None (auto selected). Refer to _DUAL_BACKEND for all solvers,
+        but users should install the corresponding packages.
+    return_result : bool
+        Whether to return a SDPResult object. If True, the return value is a SDPResult object.
+        Otherwise, the return value is an 1D numpy array.
+    """
+    x0, spaces = x0_and_space
+
+    if solver is None:
+        solver = get_default_sdp_backend(dual=True)
+    if isinstance(solver, str):
+        if (solver not in _DUAL_BACKENDS):
+            raise ValueError(f'Unknown solver "{solver}".')
+        backend: DualBackend = _DUAL_BACKENDS[solver]
+    elif issubclass(solver, DualBackend):
+        backend = solver
+    else:
+        raise TypeError(f'Unknown solver type "{type(solver)}".')
+
+    asarray = backend.as_array
+    x0 = asarray(x0).flatten()
+    objective = asarray(objective).flatten().copy()
+
+    if x0.size > 0:
+        spaces = [asarray(space).reshape(x0.size, -1) for space in spaces.values()]
+    else:
+        spaces = [asarray(space).reshape(0, space.size) for space in spaces.values()]
+    spaces = [space.copy() for space in spaces if space.shape[1] > 0]
+
+    # Formulate the dual form (but not lagrangian dual) by creating
+    # a dual SDP with sum(n*(n+1)//2) degrees of freedom.
+    # Each entry of the vector represents the (i,j),(j,i) entries of a symmetric matrix.
+    sizes = [int(round(np.sqrt(space.shape[1]))) for space in spaces]
+    dof = sum(n*(n+1)//2 for n in sizes)
+
+    As = [np.zeros((n**2, dof), dtype=np.float64) for n in sizes]
+    bs = [np.zeros((n**2,)) for n in sizes]
+    bias = 0
+    for i, n in enumerate(sizes):
+        _fill_space(As[i], n, bias)
+        bias += n*(n+1)//2
+
+    def _extract_triu_multiple(mat):
+        target = np.zeros((mat.shape[0], dof), dtype=np.float64)
+        bias, bias2 = 0, 0
+        for n in sizes:
+            space = _extract_triu(mat[:, bias2:bias2+n**2], n)
+            target[:, bias:bias+n*(n+1)//2] = space
+            bias += n*(n+1)//2
+            bias2 += n**2
+        return target
+
+
+    # constraints at off-diagonals are doubled since only the upper triangular
+    # contributes to the sum
+    bias = 0
+    for space, n in zip(spaces, sizes):
+        space[:, np.arange(0, n**2, n+1)] /= 2.
+        space *= 2.
+        objective[bias:bias+n**2][np.arange(0, n**2, n+1)] /= 2.
+        objective[bias:bias+n**2] *= 2.
+        bias += n**2
+
+    c = _extract_triu_multiple(objective.reshape(1, objective.size)).flatten()
+    ineq_lhs, ineq_rhs, eq_lhs, eq_rhs = collect_constraints(constraints, objective.size)
+    if len(spaces):
+        eq_lhs = np.vstack([eq_lhs, np.hstack(spaces)])
+        eq_rhs = np.concatenate([eq_rhs, x0])
+
+    ineq_lhs = _extract_triu_multiple(ineq_lhs)
+    eq_lhs = _extract_triu_multiple(eq_lhs)
+
+    backend = backend(As, bs, ineq_lhs, ineq_rhs, eq_lhs, eq_rhs, c)
+    result = backend.solve(
+        verbose=verbose,
+        max_iters=max_iters,
+        tol_fsb_abs=tol_fsb_abs,
+        tol_fsb_rel=tol_fsb_rel,
+        tol_gap_abs=tol_gap_abs,
+        tol_gap_rel=tol_gap_rel,
+        solver_options=solver_options,
+    )
+    if result.y is not None:
+        # restore the triu vector representation to the original matrix representation
+        def _triu_to_mat(vec: np.ndarray, n: int) -> np.ndarray:
+            mat = np.zeros((n, n))
+            triu = np.triu_indices(n)
+            mat[triu] = vec
+            return mat + mat.T - np.diag(np.diag(mat))
+        new_y = np.zeros((sum(n**2 for n in sizes),), dtype=np.float64)
+        bias, bias2 = 0, 0
+        for n in sizes:
+            new_y[bias2:bias2+n**2] = _triu_to_mat(result.y[bias:bias+n*(n+1)//2], n).flatten()
+            bias += n*(n+1)//2
+            bias2 += n**2
+        result.y = new_y
+
+    if return_result:
+        return result
+    return result.raises()
