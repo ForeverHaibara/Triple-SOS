@@ -138,64 +138,68 @@ def decompose_matrix(
     #         for term, coeff in terms.items():
     #             A[i * cols + j, variable_index[term]] = coeff  # Extract coefficients for A
 
+    if len(variables) == 0:
+        return mat2vec(M), Matrix.zeros(M.shape[0]*M.shape[1], 0), Matrix.zeros(0, 1)
+
     A, x = linear_eq_to_matrix(mat2vec(M), *variables)
     x = -x
     return x, A, v
 
 
-def exprs_to_arrays(locals: Dict[str, Any], symbols: List[Symbol],
+def exprs_to_arrays(
         exprs: List[Union[Callable, Expr, Relational, Tuple[Matrix, float], Tuple[Matrix, float, str]]],
+        symbols: List[Symbol],
+        locals: Optional[Dict[str, Any]] = None,
         dtype: Optional[Any] = None
-    ) -> List[Union[Tuple[Matrix, Matrix], Tuple[Matrix, Matrix, str]]]:
+    ) -> List[Union[Tuple[Matrix, Matrix, str]]]:
     """
     Convert linear expressions to arrays with respect to the given symbols.
 
     Parameters
     ----------
-    locals : Dict[str, Any]
-        The local variables.
-    symbols : List[Symbol]
-        The free symbols.
     exprs : List[Union[Callable, Expr, Relational, Matrix]]
         For each expression, it can be a Callable, Expr, Relational.
         If it is a Callable, it is first applied on the locals.
         If it is a Expr, it should be linear with respect to the given symbols.
         If it is a Relational, it should be linear with respect to the given symbols.
+    symbols : List[Symbol]
+        The free symbols.
+    locals : Optional[Dict[str, Any]]
+        The local variables.
     dtype : Optional[Any]
         The data type of the returned arrays. If given, matrices are converted
         to numpy arrays with the given data type.
 
     Returns
     ----------
-    List[Tuple[A, b, [, operator]]] :
-        For each expression, the returned `A`, `b` satisfy that `A @ Matrix(symbols) - b = expression`.
-        If the expression is a Relational, `A @ Matrix(symbols) (operator) b` should be an
-        inequality equivalent to the expression.
+    List[Tuple[A, b, operator]] :
+        For each expression, the returned `A @ Matrix(symbols) (operator) b` should be an
+        inequality or an equality equivalent to the expression.
         Matrix `A` must be 2D and `b` must be a vector.
 
     Examples
     ----------
     >>> from sympy.abc import a, b, c
     >>> from sympy import Matrix, Eq
-    >>> exprs_to_arrays({'x': a}, [a,b,c],
-    ...      [2*a+3*b+4*c+1,
+    >>> exprs_to_arrays([
+    ...      2*a+3*b+4*c+1,
     ...      a-2*b<=3*c-5,
     ...      Eq(a/2-b/3-c/4,1),
     ...      lambda l: (l['x']-2),
     ...      (Matrix([[7],[8],[9]]), 2),
-    ...      ([0.2,0.3,0.4], [-0.5], '>')])  # doctest: +NORMALIZE_WHITESPACE
-    [(Matrix([[2, 3, 4]]), Matrix([[-1]])),
+    ...      ([0.2,0.3,0.4], [-0.5], '>')],
+    ...       [a,b,c], locals={'x': a})  # doctest: +NORMALIZE_WHITESPACE
+    [(Matrix([[2, 3, 4]]), Matrix([[-1]]), '=='),
      (Matrix([[-1, 2, 3]]), Matrix([[5]]), '>='),
      (Matrix([[1/2, -1/3, -1/4]]), Matrix([[1]]), '=='),
-     (Matrix([[1, 0, 0]]), Matrix([[2]])),
-     (Matrix([[7, 8, 9]]), Matrix([[2]])),
+     (Matrix([[1, 0, 0]]), Matrix([[2]]), '=='),
+     (Matrix([[7, 8, 9]]), Matrix([[2]]), '=='),
      (Matrix([[0.2, 0.3, 0.4]]), Matrix([[-0.5]]), '>')]
 
     2D matrices are also supported:
 
-    >>> exprs_to_arrays(None, [a,b,c], 
-    ...     [([[4,5,6],[1,2,3]], [[-4,-8]])], dtype=int) # doctest: +NORMALIZE_WHITESPACE
-    [(array([[4, 5, 6], [1, 2, 3]]), array([-4, -8]))]
+    >>> exprs_to_arrays([([[4,5,6],[1,2,3]], [[-4,-8]])], [a,b,c], dtype=int) # doctest: +NORMALIZE_WHITESPACE
+    [(array([[4, 5, 6], [1, 2, 3]]), array([-4, -8]), '==')]
     """
     op_list = []
     vec_list = []
@@ -222,9 +226,9 @@ def exprs_to_arrays(locals: Dict[str, Any], symbols: List[Symbol],
             index_list.append(i)
         elif isinstance(expr, (list, ndarray, MatrixBase)):
             if isinstance(expr, list):
-                expr = Matrix(expr)
+                expr = Matrix(expr) if len(expr) else Matrix.zeros(0, 1)
             if isinstance(c, list):
-                c = Matrix(c)
+                c = Matrix(c) if len(c) else Matrix.zeros(0, 1)
             if op is not None:
                 if op in _RELATIONAL_TO_OPERATOR:
                     sign, op = _RELATIONAL_TO_OPERATOR[op]
@@ -264,21 +268,23 @@ def exprs_to_arrays(locals: Dict[str, Any], symbols: List[Symbol],
             # expr = expr.reshape(expr.shape[0]*expr.shape[1]//nvars, nvars)
         if len(result[i]) == 3:
             result[i] = (expr, c, result[i][2])
+        elif len(result[i]) == 2:
+            result[i] = (expr, c, '==')
         else:
-            result[i] = (expr, c)
+            raise ValueError(f"Invalid length of result tuple, expected 2 or 3, but got {len(result[i])} at line {i}.")
 
     if dtype is not None:
         f = lambda x: x.astype(dtype) if isinstance(x, ndarray) else np.array(x.tolist()).astype(dtype)
         for i in range(len(result)):
             if len(result[i]) == 3:
                 result[i] = (f(result[i][0]), f(result[i][1]).flatten(), result[i][2])
-            else:
-                result[i] = (f(result[i][0]), f(result[i][1]).flatten())
+            # else:
+            #     result[i] = (f(result[i][0]), f(result[i][1]).flatten())
 
     return result
 
 
-def merge_constraints(constraints: List[Tuple[ndarray, ndarray, str]], dof: int) -> Tuple[ndarray, ndarray, ndarray, ndarray]:
+def collect_constraints(constraints: List[Tuple[ndarray, ndarray, str]], dof: int) -> Tuple[ndarray, ndarray, ndarray, ndarray]:
     ineq_lhs, ineq_rhs = [], []
     eq_lhs, eq_rhs = [], []
     for lhs, rhs, op in constraints:

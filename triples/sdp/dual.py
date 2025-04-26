@@ -1050,7 +1050,7 @@ class SDPProblem(TransformableDual):
             y = Matrix.zeros(0, 1)
             try:
                 self.register_y(y)
-                return True
+                return original_self.y
             except ValueError:
                 raise SDPError.from_kwargs(infeasible=True)
             return False

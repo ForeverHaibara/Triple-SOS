@@ -15,11 +15,11 @@ class PrimalObjProblems:
 
     @classmethod
     def problem_trace(cls):
-        # [[a, 1-a], [1-a, b]] >> 0 and a + 2b <= 5
+        # min(-3a-b-1) s.t. [[a, 1-a], [1-a, b]] >> 0 and a + 2b <= 5
         x0_and_space = (Matrix([2]), {0: Matrix([[2,1,1,0]])})
         sdp = SDPPrimal(x0_and_space)
-        a, _, __, b = sdp.gens
-        return sdp, -3*a - b - 1, [a + 2*b <= 5], -29/4-5*57**.5/12
+        a, na, na2, b = sdp.gens
+        return sdp, -2*a + na*.2+na2*.8 - b - 2, [2*a + 2*b <= 6-.7*na-.3*na2], -29/4-5*57**.5/12
 
 def test_primal_solve_obj(tol = 1e-5):
     problems = PrimalObjProblems.collect()

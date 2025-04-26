@@ -257,7 +257,7 @@ class SDPPrimal(TransformablePrimal):
                     if gens[bias+i*n+j] == gens[bias+j*n+i]:
                         gens[bias+j*n+i] = Dummy('_') # mask non-unique symbols
             bias += n**2
-        arrs = exprs_to_arrays(None, gens, exprs, dtype=dtype)
+        arrs = exprs_to_arrays(exprs, gens, dtype=dtype)
 
         def _symmetrize(arr):
             if isinstance(arr, ndarray):

@@ -10,7 +10,7 @@ import sympy as sp
 
 from .arithmetic import sqrtsize_of_mat, is_empty_matrix, congruence, rep_matrix_from_numpy
 from .rationalize import rationalize_and_decompose
-from .utils import exprs_to_arrays, merge_constraints
+from .utils import exprs_to_arrays, collect_constraints
 
 Decomp = Dict[Any, Tuple[Matrix, Matrix, List[Rational]]]
 
@@ -186,8 +186,8 @@ class SDPProblemBase(ABC):
             print(f'Minimum Eigenvalues = {S_eigen}')
         return rationalize_and_decompose(y, mat_func=self.S_from_y, projection=self.project, **kwargs)
 
-    def exprs_to_arrays(self, exprs: List[Union[Callable, Expr, Relational, Tuple[Matrix, float], Tuple[Matrix, float, str]]], dtype=np.float64):
-        return exprs_to_arrays(None, self.gens, exprs, dtype=dtype)
+    def exprs_to_arrays(self, exprs: List[Union[Expr, Relational, Tuple[Matrix, float], Tuple[Matrix, float, str]]], dtype=np.float64):
+        return exprs_to_arrays(exprs, self.gens, dtype=dtype)
 
     @abstractmethod
     def _solve_numerical_sdp(self,
@@ -217,8 +217,7 @@ class SDPProblemBase(ABC):
         obj = self.exprs_to_arrays([objective])[0]
         cons = self.exprs_to_arrays(constraints)
 
-        cons = [(_[0], _[1], '==') if len(_) == 2 else _ for _ in cons]
-        ineq_lhs, ineq_rhs, eq_lhs, eq_rhs = merge_constraints(cons, self.dof)
+        ineq_lhs, ineq_rhs, eq_lhs, eq_rhs = collect_constraints(cons, self.dof)
 
         if obj[0].shape != (1, self.dof):
             raise ValueError(f"The objective should have shape (1, {self.dof}), but got {obj[0].shape}.")

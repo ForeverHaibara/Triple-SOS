@@ -12,6 +12,7 @@ from .mosek_sdp import DualBackendMOSEK
 from .picos_sdp import DualBackendPICOS
 
 from .settings import SDPError, SDPResult
+# from ..utils import collect_constraints
 
 _DUAL_BACKENDS: Dict[str, DualBackend] = {
     'clarabel': DualBackendCLARABEL,
@@ -317,7 +318,7 @@ def solve_numerical_primal_sdp(
 
     asarray = backend.as_array
     x0 = asarray(x0).flatten()
-    objective = asarray(objective).flatten().copy()
+    objective = asarray(objective).flatten()
 
     if x0.size > 0:
         spaces = [asarray(space).reshape(x0.size, -1) for space in spaces]
@@ -331,6 +332,7 @@ def solve_numerical_primal_sdp(
     sizes = [int(round(np.sqrt(space.shape[1]))) for space in spaces]
     dof = sum(n*(n+1)//2 for n in sizes)
 
+    ineq_lhs, ineq_rhs, eq_lhs, eq_rhs = collect_constraints(constraints, objective.size)
     As = [np.zeros((n**2, dof), dtype=np.float64) for n in sizes]
     bs = [np.zeros((n**2,)) for n in sizes]
     bias = 0
@@ -355,15 +357,15 @@ def solve_numerical_primal_sdp(
     for space, n in zip(spaces, sizes):
         space[:, np.arange(0, n**2, n+1)] /= 2.
         space *= 2.
-        objective[bias:bias+n**2][np.arange(0, n**2, n+1)] /= 2.
-        objective[bias:bias+n**2] *= 2.
+        for mat in (objective, ineq_lhs, eq_lhs):
+            mat[..., bias:bias+n**2][..., np.arange(0, n**2, n+1)] /= 2.
+            mat[..., bias:bias+n**2] *= 2.
         bias += n**2
 
     c = _extract_triu_multiple(objective.reshape(1, objective.size)).flatten()
-    ineq_lhs, ineq_rhs, eq_lhs, eq_rhs = collect_constraints(constraints, objective.size)
-    if len(spaces):
-        eq_lhs = np.vstack([eq_lhs, np.hstack(spaces)])
-        eq_rhs = np.concatenate([eq_rhs, x0])
+    eq_lhs = np.vstack([eq_lhs, np.hstack(spaces) if len(spaces)
+                                 else np.zeros((x0.shape[0],0), dtype=np.float64)])
+    eq_rhs = np.concatenate([eq_rhs, x0])
 
     ineq_lhs = _extract_triu_multiple(ineq_lhs)
     eq_lhs = _extract_triu_multiple(eq_lhs)
