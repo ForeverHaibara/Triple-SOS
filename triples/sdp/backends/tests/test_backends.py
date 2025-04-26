@@ -2,12 +2,12 @@ import numpy as np
 import sympy as sp
 
 from ..caller import (_DUAL_BACKENDS, solve_numerical_dual_sdp, solve_numerical_primal_sdp,
-    DualBackendCVXOPT, DualBackendCLARABEL
+    DualBackendCVXOPT, DualBackendCLARABEL, DualBackendSDPAP
 )
 from ..settings import SDPError
 
 SOLVERS = _DUAL_BACKENDS
-SOLVERS = {'cvxopt': DualBackendCVXOPT}
+# SOLVERS = {'sdpa': DualBackendSDPAP}
 
 class SDPDualProblems:
     """
