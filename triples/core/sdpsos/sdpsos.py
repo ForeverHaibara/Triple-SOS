@@ -149,8 +149,22 @@ def _form_sdp(ineq_constraints: List[Poly], eq_constraints: List[Poly], nvars: i
     x0_equal_indices = _get_equal_entries(ineq_constraints, eq_constraints, nvars, degree, symmetry)
     if verbose:
         print(f"Time for constructing coeff equations   : {time() - time0:.6f} seconds.")
+        time0 = time()
 
-    x0, space = solve_csr_linear(eq_list, rhs, x0_equal_indices)
+    # Term sparsity:
+    # diagonal entries of the PSD vars should be nonnegative
+    # if a diagonal entry of a PSD var is zero, then the whole row is zero
+    nonnegative_indices = []
+    force_zeros = {}
+    offset = 0
+    for n in splits_ineq.values():
+        for i, i0 in enumerate(range(offset, offset+n**2, n+1)):
+            nonnegative_indices.append(i0)
+            force_zeros[i0] = list(range(i0-i, i0-i+n))
+        offset += n**2
+
+    x0, space = solve_csr_linear(eq_list, rhs, x0_equal_indices,
+                    nonnegative_indices=nonnegative_indices, force_zeros=force_zeros)
     splits_size = sum(n**2 for n in splits_ineq.values())
     sdp = SDPProblem.from_full_x0_and_space(x0[:splits_size,:], space[:splits_size,:],
             splits_ineq, constrain_symmetry=False)
@@ -400,6 +414,8 @@ class SOSProblem():
 
         return sdp
 
+    def solve_obj(self, *args, **kwargs) -> Optional[sp.Matrix]:
+        return self._sdp.solve_obj(*args, **kwargs)
 
     def solve(self, *args, **kwargs) -> Optional[sp.Matrix]:
         """

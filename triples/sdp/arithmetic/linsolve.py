@@ -1,7 +1,7 @@
 from collections import defaultdict
 from math import gcd
 from time import time
-from typing import List, Tuple
+from typing import List, Tuple, Dict, Union, Optional
 
 from numpy import argsort
 from sympy.external.gmpy import MPQ, MPZ # >= 1.9
@@ -11,11 +11,41 @@ from sympy.polys.domains import ZZ, QQ, EX, EXRAW # EXRAW >= 1.9
 from sympy.polys.matrices.domainmatrix import DomainMatrix # polys.matrices >= 1.8
 from sympy.polys.matrices.sdm import SDM
 
-from .matop import is_zz_qq_mat, is_empty_matrix, permute_matrix_rows
+from .matop import is_zz_qq_mat, is_empty_matrix, permute_matrix_rows, rep_matrix_from_dict
 
 _VERBOSE_SOLVE_UNDETERMINED_LINEAR = False
 _VERBOSE_SOLVE_CSR_LINEAR = False
 _USE_SDM_RREF_DEN = False # has bug in low sympy versions due to behaviour of quo
+
+def _restore_from_compressed(mat: Matrix, mapping: Union[List[int], Dict[int, int]], rows: Optional[int]=None):
+    """
+    Set new_mat[i] = mat[mapping[i]]
+
+    Parameters
+    ----------
+    mat : Matrix
+        The matrix to be restored.
+    mapping : list or dict
+        A list or a dict so that new_mat[i] = mat[mapping[i]].
+    rows : int, optional
+        The number of rows of the new matrix. If None, it will be set to the length of mapping.
+
+    Returns
+    -------
+    new_mat : Matrix
+        The restored matrix.
+    """
+    mapping = enumerate(mapping) if isinstance(mapping, list) else mapping.items()
+    if rows is None: rows = len(mapping)
+    rep = mat._rep.rep.to_sdm()
+    new_rep = []
+    for i, j in mapping:
+        repj = rep.get(j)
+        if repj:
+            new_rep.append((i, repj)) # Shall we make a copy?
+    new_rep = dict(new_rep)
+    return rep_matrix_from_dict(new_rep, (rows, rep.shape[1]), rep.domain)
+
 
 def _row_reduce_dict(mat, rows, cols, domain=QQ, normalize_last=True, normalize=True, zero_above=True):
     """
@@ -171,8 +201,7 @@ def _row_reduce(M, normalize_last=True,
         print(">> Time for row reduce list:", time() - time0)
         time0 = time()
 
-    mat = M._fromrep(DomainMatrix.from_rep(SDM(mat, M.shape, M._rep.domain.get_field())))
-
+    mat = rep_matrix_from_dict(mat, M.shape, M._rep.domain.get_field())
     return mat, pivot_cols, swaps
 
 
@@ -419,19 +448,35 @@ def solve_column_separated_linear(A: Matrix, b: Matrix, x0_equal_indices: List[L
     return x0, spaces
 
 
-def solve_csr_linear(A: Matrix, b: Matrix, x0_equal_indices: List[List[int]] = []):
+def solve_csr_linear(A: Matrix, b: Matrix,
+        x0_equal_indices: List[List[int]] = [],
+        nonnegative_indices: List[int] = [],
+        force_zeros: Dict[int, List[int]] = {}
+    ):
     """
     Solve a linear system Ax = b where A is stored in SDM (CSR) format.
-    Further, we could require some of entries of x to be equal.
+    Further, we could require some other properties.
 
     Parameters
     ----------
     A: Matrix
         Sympy matrix (with preferably SDM format).
     b: Matrix
-        Right-hand side
+        Right-hand side.
     x0_equal_indices: List[List[int]]
+        If given, it requires some entries of x to be equal.
         Each sublist contains indices of equal elements.
+        For example, a symmetric matrix might require its entries to be equal in pairs
+        (i, j) and (j, i) for all i, j.
+    nonnegative_indices: List[int]
+        If given, it requires some entries of x to be nonnegative.
+        If there exists an equation c1*x1+...+cn*xn = 0 where x1,...,xn are nonnegative
+        and c1,...,cn >= 0, then the solution is x1 = x2 = ... = xn = 0.
+        This is useful for positive semidefinite matrices which have nonnegative diagonals.
+    force_zeros: Dict[int, List[int]]
+        If given, each indices in `force_zeros[i]` must be zero if index `i` is zero.
+        This is useful when a positive semidefinite matrix has a zero diagonal entry,
+        which implies that the corresponding row and column must be all zeros.
 
     Returns
     ---------
@@ -463,7 +508,7 @@ def solve_csr_linear(A: Matrix, b: Matrix, x0_equal_indices: List[List[int]] = [
         if _column_separated:
             if _VERBOSE_SOLVE_CSR_LINEAR:
                 print('>> Column Separated System recognized', time() - time0)
-            return solve_column_separated_linear(A, b, x0_equal_indices)
+            # return solve_column_separated_linear(A, b, x0_equal_indices)
 
     # convert to dense matrix
 
@@ -487,32 +532,102 @@ def solve_csr_linear(A: Matrix, b: Matrix, x0_equal_indices: List[List[int]] = [
     domain = Arep.domain
     zero = domain.zero
     A2 = {}
+    mapping = [group_inds[ufs[i]] for i in range(cols)]
     for i, row in Arep.items():
         for j, v in row.items():
             A2i = A2.get(i)
             if A2i is None:
                 A2i = defaultdict(lambda : zero)
                 A2[i] = A2i
-            A2i[group_inds[ufs[j]]] += v
+            A2i[mapping[j]] += v
 
-    A2 = A._fromrep(DomainMatrix.from_rep(SDM(A2, (A.shape[0], cols2), domain)))
-    x0_compressed, space_compressed = solve_undetermined_linear(A2, b)
+    A2 = rep_matrix_from_dict(A2, (A.shape[0], cols2), domain)
+    # x0, space = solve_undetermined_linear(A2, b)
+
+    # compress other kwargs
+    nonnegative_indices = []#mapping[i] for i in nonnegative_indices]
+    new_force_zeros = {}
+    for i in force_zeros:
+        k = mapping[i]
+        if not (k in new_force_zeros):
+            new_force_zeros[k] = set()
+        new_force_zeros[k].update(set(mapping[j] for j in force_zeros[i]))
+
+    x0, space = _solve_csr_linear_force_zeros(A2, b,
+                    nonnegative_indices=nonnegative_indices, force_zeros=new_force_zeros)
 
     # restore the solution: row[i] = row_compressed[mapping[i]]
-    mapping = [group_inds[ufs[i]] for i in range(cols)]
-    def _restore_from_compressed(mat, mapping):
-        # Set new_mat[i] = mat[mapping[i]]
-        rep = mat._rep.rep.to_sdm()
-        new_rep = []
-        for i, j in enumerate(mapping):
-            repj = rep.get(j)
-            if repj:
-                new_rep.append((i, repj)) # Shall we make a copy?
-        new_rep = dict(new_rep)
-        sdm = SDM(new_rep, (cols, rep.shape[1]), rep.domain)
-        return Matrix._fromrep(DomainMatrix.from_rep(sdm))
-
-    x0 = _restore_from_compressed(x0_compressed, mapping)
-    space = _restore_from_compressed(space_compressed, mapping)
+    x0 = _restore_from_compressed(x0, mapping, rows=cols)
+    space = _restore_from_compressed(space, mapping, rows=cols)
     return x0, space
 
+def _solve_csr_linear_force_zeros(A, b, nonnegative_indices=[], force_zeros={}):
+    all_zero_inds = set() # all found zeros indices in the loop
+    zero_inds = set() # a dynamic queue
+    rep = A._rep.rep.to_sdm() # TODO: deepcopy?
+    domain = rep.domain
+    zero = domain.zero
+    signfunc = (lambda x: x >= zero) if domain.is_QQ or domain.is_ZZ or domain.is_RR else (lambda x: False)
+
+    nonzero_rows = set(b._rep.rep.to_sdm().keys())
+    zero_rows = set(range(A.shape[0])) - nonzero_rows
+    nonnegative_indices = set(nonnegative_indices)
+
+    found_new_zeros = True
+    while found_new_zeros:
+        found_new_zeros = False
+        zero_rows_to_remove = []
+        for i in zero_rows:
+            Ai = rep.get(i)
+            if (Ai is not None) and len(Ai) > 0:
+                if len(Ai) == 1:
+                    # only one entry left, it must be zero
+                    zero_inds.add(Ai.popitem()[0])
+                    zero_rows_to_remove.append(i) # the row is empty, skip it after handled once
+                    del rep[i]
+                elif all((signfunc(v) and v in nonnegative_indices) for v in Ai.values()):
+                    # all coefficients in this row are nonnegative and all variables are nonnegative
+                    # the corresponding indices must be 0
+                    for x in Ai:
+                        nonnegative_indices.remove(x)
+                        zero_inds.add(x)
+                    del rep[i]
+            else:
+                zero_rows_to_remove.append(i)
+        for i in zero_rows_to_remove:
+            zero_rows.remove(i)
+
+        while zero_inds:
+            # use while-loop but not for-loop since the set will be changed during iter
+            i = zero_inds.pop()
+            # new zeros are explored by the rule of force_zeros
+            found_new_zeros = True
+            all_zero_inds.add(i)
+            new_zeros = force_zeros.get(i)
+            if new_zeros is not None:
+                for j in new_zeros:
+                    if j != i:
+                        zero_inds.add(j)
+
+            # remove the corresponding column of A
+            for Ar in rep.values():
+                if i in Ar:
+                    del Ar[i]
+
+
+    # extract columns associated with nonzero indices
+    # print('All zero indices:', all_zero_inds)
+    new_A = A
+    if len(all_zero_inds):
+        nonzero_inds = (list(set(range(A.shape[1])) - all_zero_inds))
+        mapping = dict(zip(nonzero_inds, range(len(nonzero_inds))))
+        new_rep = {}
+        for i in rep:
+            new_rep[i] = {mapping[k]: v for k, v in rep[i].items() if k in mapping}
+        new_A = rep_matrix_from_dict(new_rep, (A.shape[0], len(nonzero_inds)), domain)
+
+    x0, space = solve_undetermined_linear(new_A, b)
+    if len(all_zero_inds):
+        x0 = _restore_from_compressed(x0, mapping, rows=A.shape[1])
+        space = _restore_from_compressed(space, mapping, rows=A.shape[1])
+    return x0, space

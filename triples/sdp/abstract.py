@@ -8,7 +8,7 @@ from sympy.core.relational import Relational
 from sympy.matrices import MutableDenseMatrix as Matrix
 import sympy as sp
 
-from .arithmetic import sqrtsize_of_mat, is_empty_matrix, congruence, rep_matrix_from_numpy
+from .arithmetic import sqrtsize_of_mat, is_empty_matrix, congruence, rep_matrix_from_numpy, rep_matrix_to_numpy
 from .rationalize import rationalize_and_decompose
 from .utils import exprs_to_arrays, collect_constraints
 
@@ -181,7 +181,7 @@ class SDPProblemBase(ABC):
             return None
         if verbose:
             S = self.S_from_y(y)
-            S_numer = [np.array(mat).astype(np.float64) for mat in S.values()]
+            S_numer = [rep_matrix_to_numpy(mat) for mat in S.values()]
             S_eigen = [np.min(np.linalg.eigvalsh(mat)) if mat.size else 0 for mat in S_numer]
             print(f'Minimum Eigenvalues = {S_eigen}')
         return rationalize_and_decompose(y, mat_func=self.S_from_y, projection=self.project, **kwargs)

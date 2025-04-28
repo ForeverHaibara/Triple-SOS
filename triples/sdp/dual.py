@@ -6,7 +6,7 @@ from sympy.core.relational import Relational
 from sympy import MutableDenseMatrix as Matrix
 
 from .abstract import Decomp
-from .arithmetic import solve_undetermined_linear, rep_matrix_from_numpy, sqrtsize_of_mat
+from .arithmetic import solve_undetermined_linear, rep_matrix_to_numpy, rep_matrix_from_numpy, sqrtsize_of_mat
 from .backends import SDPError, solve_numerical_dual_sdp
 from .rationalize import RationalizeWithMask, RationalizeSimultaneously
 from .transforms import TransformableDual
@@ -1063,7 +1063,7 @@ class SDPProblem(TransformableDual):
             n = size[key]
             # diagonals = Matrix([-int(i%(n+1)==0) for i in range(n**2)])
             diagonals = -np.eye(n).reshape(n**2, 1)
-            x0_and_space[key] = (x0, np.hstack([np.array(space).astype(float), diagonals]))
+            x0_and_space[key] = (x0, np.hstack([rep_matrix_to_numpy(space), diagonals]))
         objective = np.zeros(self.dof + 1)
         objective[-1] = -1
         constraints = [(objective, 0, '<'), (objective, -5, '>')]

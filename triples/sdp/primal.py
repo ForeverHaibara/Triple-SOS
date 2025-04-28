@@ -6,7 +6,7 @@ from sympy import MutableDenseMatrix as Matrix
 from sympy import MatrixBase, Symbol, Float, Expr, Dummy
 from sympy.core.relational import Relational
 
-from .arithmetic import sqrtsize_of_mat, vec2mat, is_numerical_mat, rep_matrix_from_numpy
+from .arithmetic import sqrtsize_of_mat, vec2mat, is_numerical_mat, rep_matrix_from_numpy, rep_matrix_to_numpy
 from .backends import solve_numerical_primal_sdp
 from .rationalize import RationalizeWithMask, RationalizeSimultaneously
 from .transforms import TransformablePrimal
@@ -309,8 +309,8 @@ class SDPPrimal(TransformablePrimal):
             dy = A.LDLsolve(r)
         elif allow_numerical_solver and is_numerical_mat(r):
             # use numerical solver for float numbers
-            A2 = np.array(A).astype(np.float64)
-            r2 = np.array(r).astype(np.float64)
+            A2 = rep_matrix_to_numpy(A)
+            r2 = rep_matrix_to_numpy(r)
             dy2 = np.linalg.lstsq(A2, r2, rcond=None)[0]
             dy = rep_matrix_from_numpy(dy2)
         else:
@@ -445,7 +445,7 @@ class SDPPrimal(TransformablePrimal):
 
         # add a relaxation variable on the diagonal to maximize the eigenvalue
         # sum(tr(AiSi)) = a => sum(tr(Ai(Xi + x*I))) = a where Si = Xi + xI
-        spaces = [np.array(_).astype(np.float64) for _ in spaces]
+        spaces = [rep_matrix_to_numpy(_) for _ in spaces]
         diag = np.zeros((x0.shape[0], ), dtype=np.float64)
         for space in spaces:
             n = sqrtsize_of_mat(space.shape[1])

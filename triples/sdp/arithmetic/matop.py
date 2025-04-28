@@ -329,27 +329,6 @@ def is_numerical_mat(mat):
     return False
 
 
-def _cast_sympy_matrix_to_numpy(sympy_mat_rep: RepMatrix, dtype: str = 'int64') -> ndarray:
-    """Cast a sympy RepMatrix on ZZ to numpy int64 matrix. Internal."""
-    rows, cols = sympy_mat_rep.shape
-    items = list(sympy_mat_rep.rep.to_dok().items()) # avoid .iter_items() for version compatibility
-    n = len(items)
-
-    row_indices = [0] * n
-    col_indices = [0] * n
-    data_list = [0] * n
-
-    for k in range(n):
-        (i, j), v = items[k]
-        row_indices[k] = i
-        col_indices[k] = j
-        data_list[k] = v.__int__()
-
-    arr = np.zeros((rows, cols), dtype=dtype)
-    if data_list:
-        arr[row_indices, col_indices] = data_list
-    return arr
-
 def _cast_list_to_sympy_matrix(rows: int, cols: int, lst: List[int]) -> Matrix:
     """Convert a list of INTEGER values to a sympy matrix efficiently. Internal."""
     sdm = {}
@@ -403,6 +382,63 @@ def rep_matrix_from_numpy(arr: ndarray) -> RepMatrix:
             lst = [conv(_) for _ in arr.tolist()]
             return rep_matrix_from_list(lst, arr.shape[0], RR)
     return Matrix(arr.tolist())
+
+def rep_matrix_to_numpy(M: Matrix, dtype = np.float64, sparse: bool = False) -> ndarray:
+    """
+    Cast a sympy RepMatrix to a numpy matrix efficiently.
+
+    Parameters
+    ----------
+    M : Matrix
+        The sympy matrix to be casted.
+    dtype : numpy.dtype
+        The dtype of the numpy matrix. Default is np.float64.
+    sparse : bool, optional
+        Whether to return a sparse matrix in scipy. Default is False.
+        This is more efficient when the matrix is sparse.
+    """
+    dtype = np.dtype(dtype)
+    f = None
+    if isinstance(M, (RepMatrix, DomainMatrix)):
+        if isinstance(M, RepMatrix):
+            M = M._rep # it is domain matrix
+        if np.issubdtype(dtype, np.integer):
+            f = lambda x: x.__int__()
+        elif np.issubdtype(dtype, np.floating):
+            f = lambda x: x.__float__()
+        elif np.issubdtype(dtype, np.complexfloating):
+            f = lambda x: x.__complex__()
+    
+    if f is not None:
+        rows, cols = M.shape
+        items = list(M.rep.to_dok().items()) # avoid .iter_items() for version compatibility
+        n = len(items)
+
+        row_indices = [0] * n
+        col_indices = [0] * n
+        data_list = [0] * n
+
+        for k in range(n):
+            (i, j), v = items[k]
+            row_indices[k] = i
+            col_indices[k] = j
+            data_list[k] = f(v)
+
+        if not sparse:
+            arr = np.zeros((rows, cols), dtype=dtype)
+            if n:
+                arr[row_indices, col_indices] = data_list
+        else:
+            from scipy.sparse import csr_matrix
+            arr = csr_matrix((data_list, (row_indices, col_indices)), shape=(rows, cols), dtype=dtype)
+        return arr
+
+    if isinstance(M, (MatrixBase, DomainMatrix)):
+        M = np.array(M).astype(dtype)
+    if sparse and isinstance(M, ndarray):
+        from scipy.sparse import csr_matrix
+        return csr_matrix(M)
+    return M
 
 
 def permute_matrix_rows(matrix: Union[Matrix, ndarray], permutation: List[int]):

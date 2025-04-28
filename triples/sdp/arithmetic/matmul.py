@@ -14,7 +14,7 @@ from sympy.matrices import MutableDenseMatrix as Matrix
 
 from .matop import (
     is_zz_qq_mat, vec2mat, reshape, primitive,
-    _cast_sympy_matrix_to_numpy, rep_matrix_from_numpy
+    rep_matrix_to_numpy, rep_matrix_from_numpy
 )
 
 _INT32_MAX = np_iinfo('int32').max # 2147483647
@@ -114,13 +114,13 @@ def matmul(A: Union[Matrix, ndarray], B: Union[Matrix, ndarray],
 
     try:
         q1, A = primitive(A._rep)
-        A = _cast_sympy_matrix_to_numpy(A, dtype=int64)
+        A = rep_matrix_to_numpy(A, dtype=int64)
         _MAXA = abs(A).max()
         if isnan(_MAXA) or _MAXA == inf or _MAXA > _INT64_MAX:
             raise OverflowError
 
         q2, B = primitive(B._rep)
-        B = _cast_sympy_matrix_to_numpy(B, dtype=int64)
+        B = rep_matrix_to_numpy(B, dtype=int64)
         _MAXB = abs(B).max()
         if isnan(_MAXB) or _MAXB == inf or _MAXB > _INT64_MAX or int(_MAXA) * int(_MAXB) * B.shape[0] > _INT64_MAX:
             raise OverflowError
@@ -213,13 +213,13 @@ def matmul_multiple(A: Union[Matrix, ndarray], B: Union[Matrix, ndarray]) -> Uni
 
     try:
         q1, A = primitive(A._rep)
-        A = _cast_sympy_matrix_to_numpy(A, dtype=int64)
+        A = rep_matrix_to_numpy(A, dtype=int64)
         _MAXA = abs(A).max()
         if isnan(_MAXA) or _MAXA == inf or _MAXA > _INT64_MAX:
             raise OverflowError
 
         q2, B = primitive(B._rep)
-        B = _cast_sympy_matrix_to_numpy(B, dtype=int64)
+        B = rep_matrix_to_numpy(B, dtype=int64)
         _MAXB = abs(B).max()
         if isnan(_MAXB) or _MAXB == inf or _MAXB > _INT64_MAX or int(_MAXA) * int(_MAXB) * n > _INT64_MAX:
             raise OverflowError
@@ -350,13 +350,13 @@ def symmetric_bilinear_multiple(U: Union[Matrix, ndarray], A: Union[Matrix, ndar
 
     try:
         q1, A = primitive(A._rep)
-        A = _cast_sympy_matrix_to_numpy(A, dtype=int64)
+        A = rep_matrix_to_numpy(A, dtype=int64)
         _MAXA = abs(A).max()
         if isnan(_MAXA) or _MAXA == inf or _MAXA > _INT64_MAX:
             raise OverflowError
 
         q2, U = primitive(U._rep)
-        U = _cast_sympy_matrix_to_numpy(U, dtype=int64)
+        U = rep_matrix_to_numpy(U, dtype=int64)
         _MAXU = abs(U).max()
         if isnan(_MAXU) or _MAXU == inf or _MAXU > _INT64_MAX or int(_MAXA) * int(_MAXU)**2 * n**2 > _INT64_MAX:
             raise OverflowError
