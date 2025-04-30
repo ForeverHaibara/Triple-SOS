@@ -22,6 +22,8 @@ from sympy.polys.domains import ZZ, QQ, RR, CC # EXRAW >= 1.9
 from sympy.polys.matrices.domainmatrix import DomainMatrix # polys.matrices >= 1.8
 from sympy.polys.matrices.ddm import DDM
 from sympy.polys.matrices.sdm import SDM
+from sympy.polys.fields import FracElement
+from sympy.polys.rings import PolyElement
 
 if tuple(version_tuple(_SYMPY_VERSION)) >= (1, 13):
     from sympy.polys.matrices.dfm import DFM
@@ -402,12 +404,32 @@ def rep_matrix_to_numpy(M: Matrix, dtype = np.float64, sparse: bool = False) -> 
     if isinstance(M, (RepMatrix, DomainMatrix)):
         if isinstance(M, RepMatrix):
             M = M._rep # it is domain matrix
+ 
+        wrapper = lambda _: _
+        if isinstance(M.domain.one, PolyElement):
+            def wrapper(f):
+                def _f(x):
+                    lt = x.LT
+                    if any(lt[0]):
+                        raise TypeError('Cannot convert PolyElement.')
+                    return f(x.const())
+                return _f
+        elif isinstance(M.domain.one, FracElement):
+            def wrapper(f):
+                def _f(x):
+                    x1, x2 = x.numer, x.denom
+                    lt1, lt2 = x1.LT, x2.LT
+                    if any(lt1[0]) or any(lt2[0]):
+                        raise TypeError('Cannot convert FieldElement.')
+                    return f(x1.const()) / f(x2.const())
+                return _f
+
         if np.issubdtype(dtype, np.integer):
-            f = lambda x: x.__int__()
+            f = wrapper(lambda x: x.__int__())
         elif np.issubdtype(dtype, np.floating):
-            f = lambda x: x.__float__()
+            f = wrapper(lambda x: x.__float__())
         elif np.issubdtype(dtype, np.complexfloating):
-            f = lambda x: x.__complex__()
+            f = wrapper(lambda x: x.__complex__())
     
     if f is not None:
         rows, cols = M.shape

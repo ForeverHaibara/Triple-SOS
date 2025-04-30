@@ -195,11 +195,18 @@ class DualMatrixTransform(SDPMatrixTransform):
             raise ValueError("The parent node should be dual.")
         if columnspace is None and nullspace is None:
             raise ValueError("At least one of columnspace and nullspace should be provided.")
+
         if nullspace is None:
             columnspace = {key: solve_columnspace(space) for key, space in columnspace.items()}
             nullspace = {key: solve_nullspace(space) for key, space in columnspace.items()}
+            for key, n in parent_node.size.items():
+                if (key not in nullspace) or is_empty_matrix(nullspace[key]):
+                    nullspace[key] = Matrix.zeros(n, 0)
         else:
             nullspace = {key: solve_columnspace(space) for key, space in nullspace.items()}
+            for key, n in parent_node.size.items():
+                if (key not in nullspace) or is_empty_matrix(nullspace[key]):
+                    nullspace[key] = Matrix.zeros(n, 0)
 
         if all(is_empty_matrix(m) for m in nullspace.values()):
             return parent_node.get_last_child() if to_child else parent_node
