@@ -1,12 +1,31 @@
+"""
+This module contains heuristic, experimental, imcomplete facial reduction algorithm for SDP algorithm
+via computing the equality cases of the original SOS problem.
+"""
 from collections import defaultdict, deque
 from itertools import product
-from typing import Optional, Dict, List, Tuple
+from typing import Dict, List, Tuple, Union, Optional, Any
 
-import sympy as sp
-from sympy import Poly
+from sympy import Poly, Expr, MatrixBase
+from sympy.matrices import MutableDenseMatrix as Matrix
 from sympy.combinatorics import PermutationGroup
 
-from ...utils import optimize_poly, Root, MonomialManager, generate_monoms, arraylize_sp
+from ...sdp.arithmetic import solve_columnspace
+from ...utils import optimize_poly, Root, MonomialManager
+
+
+def _permute_root(perm_group: PermutationGroup, root: Root) -> List[Root]:
+    """Permute a Root object efficiently given a permutation group."""
+    perms = list(perm_group.elements)
+    roots = [None] * len(perms)
+    root0, rep, domain = root.root, root.rep, root.domain
+    for i, perm in enumerate(perms):
+        roots[i] = Root(perm(root0), domain=domain, rep=perm(rep))
+    return roots
+
+def _is_binary_root(root: Root) -> bool:
+    # return isinstance(root, RootRational) and len(set(root.root)) <= 2
+    return root.is_Rational and len(set(root.root)) <= 2
 
 
 class _bilinear():
@@ -65,19 +84,6 @@ class _bilinear():
     def __repr__(self) -> str:
         return self.__str__()
 
-def _permute_root(perm_group: PermutationGroup, root: Root):
-    """Permute a Root object efficiently given a permutation group."""
-    perms = list(perm_group.elements)
-    roots = [None] * len(perms)
-    root0, rep, domain = root.root, root.rep, root.domain
-    for i, perm in enumerate(perms):
-        roots[i] = Root(perm(root0), domain=domain, rep=perm(rep))
-    return roots
-
-
-def _is_binary_root(root: Root) -> bool:
-    # return isinstance(root, RootRational) and len(set(root.root)) <= 2
-    return root.is_Rational and len(set(root.root)) <= 2
 
 def _compute_diff_orders(poly: Poly, root: Root, mixed=False, only_binary_roots=True) -> List[Tuple[int, ...]]:
     """
@@ -141,7 +147,7 @@ def _compute_nonvanishing_diff_orders(poly: Poly, root: Root, monomial: Tuple[in
                                         only_binary_roots=True) -> List[Tuple[int, ...]]:
     """
     Compute the differential orders that the root do not vanish at
-    the given quadratic module (monomial).    
+    the given quadratic module (monomial). TODO: extend to non-monomial cases
     """
     orders = _compute_diff_orders(poly, root, only_binary_roots=only_binary_roots)
     # if len(orders) <= 0 or (len(orders) == 1 and not any(orders[0])):
@@ -188,9 +194,14 @@ def _compute_nonvanishing_diff_orders(poly: Poly, root: Root, monomial: Tuple[in
     return handled_zeros
 
 
-def _root_space(manifold: 'RootSubspace', root: Root, constraint: Poly) -> sp.Matrix:
+def _root_space(root: Root, poly: Poly, qmodule: Poly, codegree: int, basis: MonomialManager) -> Matrix:
     """
-    Compute the constrained nullspace spanned by a given root.
+    Compute the constrained nullspace spanned by a given root. Consider:
+
+        `poly = CyclicSum(qmodule * SOS) + SOS_OTHERS`
+
+    where the poly vanishes at the given root. If the qmodule does not vanish,
+    then the associated SOS term must vanish.
 
     For normal case, it is simply the span of the root. However, things become
     nontrivial if the derivative is also zero. Imagine
@@ -198,46 +209,44 @@ def _root_space(manifold: 'RootSubspace', root: Root, constraint: Poly) -> sp.Ma
     When M >> 0 and a == 0, we still require Mx = 0 because
     (df/da) = (x'Mx) + a * ((dx/da)'Mx + x'M(dx/da)) = x'Mx.
     """
-    d = (manifold._degree - constraint.homogeneous_order()) // 2
-    nvars = len(constraint.gens)
-
-    symmetry = manifold._symmetry
-    base_symmetry = symmetry.base()
     spans = []
-    if root.is_Rational and constraint.is_monomial:
-        monomial = tuple(constraint.monoms()[0])
-        # for r_ in symmetry.permute(root.root):
-        for new_r in _permute_root(symmetry.perm_group, root):
-            orders = _compute_nonvanishing_diff_orders(manifold.poly, new_r, monomial)
-            for order in orders:
-                spans.append(new_r.span(d, order, symmetry=base_symmetry))
-    else:
-        if constraint.is_monomial and not constraint.is_zero and all(_ != 0 for _ in root.root):
-            vanish = lambda _: False
-        else:
-            vanish = lambda r: r.eval(constraint) == 0
 
+    if qmodule.is_monomial and not qmodule.is_zero and all(_ != 0 for _ in root.root):
+        vanish = lambda _: False
+    else:
+        vanish = lambda r: r.eval(qmodule) == 0
+
+    if qmodule.is_zero:
+        pass
+    elif root.is_Rational and qmodule.is_monomial:
+        # also compute high order dervs
+        monomial = tuple(qmodule.monoms()[0])
+        orders = _compute_nonvanishing_diff_orders(poly, root, monomial)
+        for order in orders:
+            spans.append(root.span(codegree, order, symmetry=basis))
+    else:
         # this is an incomplete (but fast) implementation
         # we do not consider higher order derivatives
         # TODO: consider higher order nonvanishing derivatives for irrational roots
-        span = root.span(d, symmetry=base_symmetry)
-        for j, permed_root in enumerate(_permute_root(symmetry.perm_group, root)):
-            if not vanish(permed_root):
-                for i in range(span.shape[1]):
-                    span2 = symmetry.permute_vec(span[:,i], d)[:,j]
-                    spans.append(span2)
-        # for i in range(span.shape[1]):
-        #     span2 = symmetry.permute_vec(nvars, span[:,i])
-        #     for j, perm in zip(range(span2.shape[1]), symmetry.permute(root.root)):
-        #         if not vanish(Root(perm)):
-        #             spans.append(span2[:,j])
-    return sp.Matrix.hstack(*spans)
+        if not vanish(root):
+            spans.append(root.span(codegree, symmetry=basis))
+
+        # for j, permed_root in enumerate(_permute_root(perm_group, root)):
+        #     if not vanish(permed_root):
+        #         for i in range(span.shape[1]):
+        #             span2 = symmetry.permute_vec(span[:,i], codegree)[:,j]
+        #             spans.append(span2)
+
+    if len(spans):
+        return Matrix.hstack(*spans)
+    return Matrix.zeros(len(basis.inv_monoms(codegree)), 0)
 
 
-def _findroot_binary(poly: Poly, symmetry: MonomialManager = None) -> List[Root]:
+def _findroot_binary(poly: Poly, symmetry: PermutationGroup = None) -> List[Root]:
     """
     Very easy implementation to find binary roots of the polynomial.
     """
+    symmetry = MonomialManager(len(poly.gens), perm_group=symmetry)
     roots = set()
     for root in product([0, 1], repeat=len(poly.gens)):
         # root = RootRational(root)
@@ -254,116 +263,37 @@ def _findroot_binary(poly: Poly, symmetry: MonomialManager = None) -> List[Root]
     return roots
 
 
-class RootSubspace():
-    def __init__(self, poly: Poly, symmetry: MonomialManager) -> None:
-        self.poly = poly
-        self._degree: int = poly.total_degree()
-        self._nvars : int = len(poly.gens)
-        self._symmetry: MonomialManager = symmetry
+def get_nullspace(poly: Poly, ineq_constraints: Dict[Any, Poly], eq_constraints: Dict[Any, Poly],
+        ineq_bases: Dict[Any, MonomialManager], eq_bases: Dict[Any, MonomialManager],
+        degree: Optional[int]=None, roots: List[Root] = [], perm_group: Optional[PermutationGroup] = None) -> Dict[Any, Matrix]:
+    """
+    In the current, all roots must satisfy poly(roots) == 0 and ineq_constraints(roots) >= 0,
+    and eq_constraints(roots) == 0, and this property will not be checked.
+    """
+    if degree is None:
+        degree = poly.total_degree()
+    # for root in roots:
+    #     is_feasible = True
+    #     for permed_root in _permute_root(perm_group, root):
+    #         if any(permed_root.eval(ineq) < 0 for ineq in ineq_constraints) or\
+    #                 any(permed_root.eval(eq) != 0 for eq in eq_constraints):
+    #             is_feasible = False
+    #             break
+    #     # print('root =', permed_root, 'is_feasible =', is_feasible)
+    #     if not is_feasible:
+    #         continue
 
-        self.convex_hull = None # deprecated
-        self.roots = []
+    nullspaces = {}
 
-        # if self._nvars == 3 and poly.domain.is_Numerical:
-        #     self.roots = optimize_poly(poly, [], [poly], return_type='root')
-        # elif self._nvars <= 10:
-        #     self.roots = _findroot_binary(poly, symmetry)
-
-        # self.roots = [r for r in self.roots if not r.is_corner]
-        self._additional_nullspace = {}
-
-    @property
-    def additional_nullspace(self) -> Dict[Tuple[int, ...], sp.Matrix]:
-        return self._additional_nullspace
-
-    def set_nullspace(self, constraint: Poly, nullspace: sp.Matrix) -> None:
-        """
-        Set extra nullspace for given constraint.
-        """
-        ns = self._additional_nullspace
-        ns[constraint] = nullspace
-
-    def append_nullspace(self, constraint: Poly, nullspace: sp.Matrix) -> None:
-        """
-        Append extra nullspace for given constraint.
-        """
-        ns = self._additional_nullspace
-        if constraint in ns:
-            ns[constraint] = sp.Matrix.hstack(ns[constraint], nullspace)
-        else:
-            ns[constraint] = nullspace
-
-    def nullspace(self, constraint: Poly, ineq_constraints: List[Poly] = [], eq_constraints: List[Poly] = []) -> sp.Matrix:
-        """
-        Compute the nullspace for SDP of the polynomial.
-
-        Parameters
-        ----------
-        constraint : Poly
-            The specific constraint, a generator of the quadratic module. Should be homogeneous.
-        ineq_constraints : List[Poly]
-            List of all inequality constraints, used to test whether a root is in the feasible region.
-        eq_constraints : List[Poly]
-            List of all equality constraints, used to test whether a root is in the feasible region.
-        """
-        half_degree = (self._degree - constraint.homogeneous_order()) # // 2
-        if half_degree % 2 != 0:
-            raise ValueError(f"Degree of the polynomial ({self._degree}) minus the degree of the constraint {constraint} must be even.")
-        half_degree //= 2
-
-        funcs = [
-            self._nullspace_hull,
-            lambda *args, **kwargs: self._nullspace_from_roots(*args, **kwargs),
-            self._nullspace_extra,
-        ]
-
-        nullspaces = []
-        for func in funcs:
-            n_ = func(constraint, ineq_constraints, eq_constraints)
-            if isinstance(n_, list) and len(n_) and isinstance(n_[0], sp.MatrixBase):
-                nullspaces.extend(n_)
-            elif isinstance(n_, sp.MatrixBase) and n_.shape[0] * n_.shape[1] > 0:
-                nullspaces.append(n_)
-
-        nullspaces = list(filter(lambda x: x.shape[0] * x.shape[1] > 0, nullspaces))
-        return sp.Matrix.hstack(*nullspaces)
-
-    def _nullspace_hull(self, constraint: Poly, ineq_constraints: List[Poly] = [], eq_constraints: List[Poly] = []) -> sp.Matrix:
-        # This is deprecated, use SDPProblem.constrain_zero_diagonals() instead.
-        # We do not need to compute the convex hull (Newton polytope) of the polynomial now.
-        return None
-        # return _hull_space(self._nvars, self._degree, self.convex_hull, constraint, self._symmetry)
-
-    def _nullspace_from_roots(self, constraint: Poly, ineq_constraints: List[Poly] = [], eq_constraints: List[Poly] = [], roots: List[Root] = None) -> List[sp.Matrix]:
-        nullspaces = []
-        if roots is None: roots = self.roots
+    for key, ineq in ineq_constraints.items():
+        spans = []
         for root in roots:
-            is_feasible = True
-            for permed_root in _permute_root(self._symmetry.perm_group, root):
-                if any(permed_root.eval(ineq) < 0 for ineq in ineq_constraints) or\
-                        any(permed_root.eval(eq) != 0 for eq in eq_constraints):
-                    is_feasible = False
-                    break
-            # print('root =', permed_root, 'is_feasible =', is_feasible)
-            if not is_feasible:
-                continue
-
-            span = _root_space(self, root, constraint)
-
+            span = _root_space(root, poly, qmodule=ineq,
+                        codegree=(degree-ineq.total_degree())//2, basis=ineq_bases[key])
             if span.shape[1] > 0:
-                span = sp.Matrix.hstack(*span.columnspace())
+                spans.append(solve_columnspace(span))
 
-            nullspaces.append(span)
+        if len(spans):
+            nullspaces[key] = Matrix.hstack(*spans)
 
-        return nullspaces
-
-    def _nullspace_extra(self, constraint: Poly, ineq_constraints: List[Poly] = [], eq_constraints: List[Poly] = []):
-        ns = self._additional_nullspace
-        return ns.get(constraint, None)
-
-
-    def __str__(self) -> str:
-        return f"RootSubspace(poly={self.poly})"
-
-    def __repr__(self) -> str:
-        return f"<RootSubspace nvars={self._nvars} degree={self._degree} roots={self.roots}>"
+    return nullspaces

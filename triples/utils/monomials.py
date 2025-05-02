@@ -103,6 +103,13 @@ class MonomialManager():
         """
         return MonomialManager(perm_group.degree, perm_group=perm_group, is_homogeneous=is_homogeneous)
 
+    @classmethod
+    def add(cls, *monomials) -> Tuple[int, ...]:
+        """
+        Add multiple monomials (element-wise).
+        """
+        return tuple(map(sum, zip(*monomials)))
+
     def _register_monoms(self, degree: int) -> Tuple[Dict[Tuple[int, ...], int], List[Tuple[int, ...]]]:
         """
         Register dict_monoms and inv_monoms for degree if not computed.

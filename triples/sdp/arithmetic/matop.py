@@ -404,7 +404,9 @@ def rep_matrix_to_numpy(M: Matrix, dtype = np.float64, sparse: bool = False) -> 
     if isinstance(M, (RepMatrix, DomainMatrix)):
         if isinstance(M, RepMatrix):
             M = M._rep # it is domain matrix
- 
+
+        # for domains like QQ[x], QQ(x), elements cannot be converted
+        # directly to int/float/complex, and should be carefully handled
         wrapper = lambda _: _
         if isinstance(M.domain.one, PolyElement):
             def wrapper(f):
@@ -412,7 +414,7 @@ def rep_matrix_to_numpy(M: Matrix, dtype = np.float64, sparse: bool = False) -> 
                     lt = x.LT
                     if any(lt[0]):
                         raise TypeError('Cannot convert PolyElement.')
-                    return f(x.const())
+                    return f(lt[1])
                 return _f
         elif isinstance(M.domain.one, FracElement):
             def wrapper(f):
@@ -420,8 +422,8 @@ def rep_matrix_to_numpy(M: Matrix, dtype = np.float64, sparse: bool = False) -> 
                     x1, x2 = x.numer, x.denom
                     lt1, lt2 = x1.LT, x2.LT
                     if any(lt1[0]) or any(lt2[0]):
-                        raise TypeError('Cannot convert FieldElement.')
-                    return f(x1.const()) / f(x2.const())
+                        raise TypeError('Cannot convert FracElement.')
+                    return f(lt1[1]) / f(lt2[1])
                 return _f
 
         if np.issubdtype(dtype, np.integer):

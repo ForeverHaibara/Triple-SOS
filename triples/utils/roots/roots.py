@@ -152,7 +152,7 @@ class Root():
     [1, 2, -1]
     """
     domain: Domain
-    def __init__(self, root: List[Expr], domain: Optional[Domain]=None, rep: Optional[List[ANP]]=None):
+    def __init__(self, root: Tuple[Expr, ...], domain: Optional[Domain]=None, rep: Optional[Tuple[ANP, ...]]=None):
         root = tuple(sp.S(r) for r in root)
         self.rep = rep
         self.domain = domain
@@ -423,7 +423,7 @@ class Root():
             return self.subs(poly.as_expr(), poly.gens)
         return self._subs_poly_rep(poly, to_sympy=True)
 
-    def subs(self, expr: Union[sp.Basic], symbols: Optional[List[Symbol]] = None) -> Union[sp.Basic]:
+    def subs(self, expr: Union[sp.Basic], symbols: Optional[Tuple[Symbol, ...]] = None) -> Union[sp.Basic]:
         """
         Substitute the root into an expression or a matrix of expressions.
         """
@@ -432,7 +432,7 @@ class Root():
         return expr.subs(dict(zip(symbols, self.root)))
 
 
-    def _single_power_monomial(self, monomial: List[int]) -> ANP:
+    def _single_power_monomial(self, monomial: Tuple[int, ...]) -> ANP:
         """Compute r[0]**monomial[0] * r[1]**monomial[1] * ...
         and return the result as a low-level ANP object."""
         return sp.prod([self._single_power(i, p) for i, p in enumerate(monomial)])
@@ -600,14 +600,14 @@ class Root():
             s = self.to_sympy(s)
         return s
 
-    def cyclic_sum(self, monom: List[int], perm_group: Optional[PermutationGroup] = None,
+    def cyclic_sum(self, monom: Tuple[int, ...], perm_group: Optional[PermutationGroup] = None,
             standardize: bool = False, to_sympy: bool = True) -> Expr:
         """
         Compute the cyclic sum of the root over a monomial.
 
         Parameters
         ----------
-        monom : List[int]
+        monom : Tuple[int, ...]
             The monomial to be summed over.
         perm_group : Optional[PermutationGroup]
             The permutation group to be used. Default is the cyclic group.

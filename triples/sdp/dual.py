@@ -1,4 +1,4 @@
-from typing import Union, Optional, Any, Tuple, List, Dict
+from typing import Tuple, List, Dict, Union, Optional, Any, Callable
 
 import numpy as np
 from sympy import Expr, Symbol, Rational, MatrixBase
@@ -6,7 +6,10 @@ from sympy.core.relational import Relational
 from sympy import MutableDenseMatrix as Matrix
 
 from .abstract import Decomp
-from .arithmetic import solve_undetermined_linear, rep_matrix_to_numpy, rep_matrix_from_numpy, sqrtsize_of_mat
+from .arithmetic import (
+    solve_undetermined_linear, solve_csr_linear,
+    rep_matrix_from_dict, rep_matrix_to_numpy, rep_matrix_from_numpy, sqrtsize_of_mat
+)
 from .backends import SDPError, solve_numerical_dual_sdp
 from .rationalize import RationalizeWithMask, RationalizeSimultaneously
 from .transforms import TransformableDual
@@ -1090,3 +1093,80 @@ class SDPProblem(TransformableDual):
             self.propagate_to_parent(recursive=True)
 
         return original_self.y if success else None
+
+
+    @classmethod
+    def from_entry_contribution(cls,
+        rhs: Matrix,
+        psd_size: Dict[Any, int],
+        psd_contribution: Dict[Any, Callable[[int], Tuple[int, Expr]]],
+        linear_size: Optional[Dict[Any, int]] = None,
+        linear_contribution: Optional[Dict[Any, Callable[[int], Tuple[int, Expr]]]] = None,
+        domain = None,
+        equal_indices: List[Tuple[int, int]] = [],
+    ) -> Tuple['SDPProblem', Dict[Any, Tuple[Matrix, Matrix]]]:
+        if domain is None:
+            raise TypeError("Domain must be specified.")
+
+        # CSR (SDM) format, each column is the contribution of an entry to the target
+        eq_list = [[] for _ in range(rhs.shape[0])]
+
+        offset = 0
+        for key, n in psd_size.items():
+            mapping = psd_contribution[key]
+            for i in range(n):
+                for rhs_ind, v in mapping(i, i):
+                    # The following is equivalent to: mat[rhs_ind, cnt] += v
+                    eq_list[rhs_ind].append((i*n+i+offset, v))
+                for j in range(i+1,n):
+                    # Off-diagonal elements contribute twice
+                    for rhs_ind, v in mapping(i, j):
+                        eq_list[rhs_ind].append((i*n+j+offset, v*2))
+            offset += n**2
+
+        if linear_size is not None:
+            for key, n in linear_size.items():
+                mapping = linear_contribution[key]
+                for i in range(n):
+                    # The following is equivalent to: mat[rhs_ind, cnt] += v
+                    for rhs_ind, v in mapping(i):
+                        eq_list[rhs_ind].append((offset, v))
+                    offset += 1
+    
+        
+        # Term sparsity:
+        # diagonal entries of the PSD vars should be nonnegative
+        # if a diagonal entry of a PSD var is zero, then the whole row is zero
+        nonnegative_indices = []
+        force_zeros = {}
+        offset = 0
+        for n in psd_size.values():
+            for i, i0 in enumerate(range(offset, offset+n**2, n+1)):
+                nonnegative_indices.append(i0)
+                force_zeros[i0] = list(range(i0-i, i0-i+n))
+            offset += n**2
+
+        # Equal indices: constrain symmetric entries to be equal
+        offset = 0
+        for n in psd_size.values():
+            for i in range(n):
+                for j in range(i+1, n):
+                    equal_indices.append([i*n+j+offset, j*n+i+offset])
+            offset += n**2
+
+        total_qmodule = sum(n**2 for n in psd_size.values())
+        total_ideal = sum(linear_size.values())
+
+        eq_list = dict((i, dict(row)) for i, row in enumerate(eq_list))
+        eq_list = rep_matrix_from_dict(eq_list, (rhs.shape[0], total_qmodule+total_ideal), domain)
+        x0, space = solve_csr_linear(eq_list, rhs, x0_equal_indices=equal_indices,
+                        nonnegative_indices=nonnegative_indices, force_zeros=force_zeros)
+        sdp = SDPProblem.from_full_x0_and_space(x0[:total_qmodule,:], space[:total_qmodule,:],
+                psd_size)
+
+        linear_space = {}
+        offset = total_qmodule
+        for key, s in linear_size.items():
+            linear_space[key] = (x0[offset:offset+s, :], space[offset:offset+s, :])
+            offset += s
+        return sdp, linear_space

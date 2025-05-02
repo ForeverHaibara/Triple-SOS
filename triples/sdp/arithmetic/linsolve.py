@@ -513,17 +513,7 @@ def solve_csr_linear(A: Matrix, b: Matrix,
     # convert to dense matrix
 
     # form the equal indices as a UFS
-    ufs = list(range(cols))
-    groups = {}
-    for group in x0_equal_indices:
-        for i in group:
-            ufs[i] = group[0]
-        groups[group[0]] = group
-    for i in range(cols):
-        if ufs[i] == i:
-            group = groups.get(i)
-            if group is None:
-                groups[i] = [i]
+    ufs, groups = _build_ufs(x0_equal_indices, cols)
     group_keys = list(groups.keys())
     group_inds = {k: i for i, k in enumerate(group_keys)}
 
@@ -560,6 +550,34 @@ def solve_csr_linear(A: Matrix, b: Matrix,
     x0 = _restore_from_compressed(x0, mapping, rows=cols)
     space = _restore_from_compressed(space, mapping, rows=cols)
     return x0, space
+
+
+def _build_ufs(groups: List[List[int]], n: int) -> Tuple[List[int], Dict[int, List[int]]]:
+    parent = list(range(n))
+    def find(x):
+        if parent[x] != x:
+            parent[x] = find(parent[x])
+        return parent[x]
+    def union(x, y):
+        root_x, root_y = find(x), find(y)
+        if root_x != root_y:
+            parent[root_y] = root_x
+
+    for group in groups:
+        if group:
+            base = group[0]
+            for x in group[1:]:
+                union(base, x)
+
+    new_groups = {}
+    findi = [find(i) for i in range(n)]
+    for i, f in enumerate(findi):
+        if i == f:
+            new_groups[i] = []
+    for i, f in enumerate(findi):
+        new_groups[f].append(i)
+    return parent, new_groups
+
 
 def _solve_csr_linear_force_zeros(A, b, nonnegative_indices=[], force_zeros={}):
     all_zero_inds = set() # all found zeros indices in the loop
