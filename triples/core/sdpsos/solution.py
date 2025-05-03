@@ -6,6 +6,7 @@ from sympy import Poly, Expr, Symbol
 from sympy.matrices import MutableDenseMatrix as Matrix
 
 from ...utils import MonomialManager, SolutionSimple
+from ...sdp.arithmetic import is_numerical_mat
 
 class SolutionSDP(SolutionSimple):
     method = 'SDPSOS'
@@ -57,9 +58,12 @@ class SolutionSDP(SolutionSimple):
             trace_operator=trace_operator,
         )
 
+        is_equal = not _is_numerical(decompositions, eqspace)
+
         return SolutionSDP(
             problem = poly,
             solution = qmodule_expr + ideal_expr,
+            is_equal = is_equal,
         )
 
 def _get_ideal_expr(
@@ -170,3 +174,13 @@ def _default_simplify_poly(poly: Poly, bound: int=10000) -> Tuple[Expr, Expr]:
     m, p = _extract_monomials(poly)
     c, p = _standard_form(p)
     return c, m * p
+
+
+def _is_numerical(decompositions, eqspace):
+    for U, S in decompositions.values():
+        if is_numerical_mat(U) or is_numerical_mat(S):
+            return True
+    for U in eqspace.values():
+        if is_numerical_mat(U):
+            return True
+    return False

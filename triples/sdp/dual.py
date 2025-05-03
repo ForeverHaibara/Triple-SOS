@@ -7,7 +7,7 @@ from sympy import MutableDenseMatrix as Matrix
 
 from .abstract import Decomp
 from .arithmetic import (
-    solve_undetermined_linear, solve_csr_linear,
+    solve_undetermined_linear, solve_csr_linear, free_symbols_of_mat,
     rep_matrix_from_dict, rep_matrix_to_numpy, rep_matrix_from_numpy, sqrtsize_of_mat
 )
 from .backends import SDPError, solve_numerical_dual_sdp
@@ -23,7 +23,7 @@ def _get_unique_symbols(used_symbols, dof: int, xname: str = 'y'):
 
     Parameters
     ----------
-    used_symbols: List[Symbol]
+    used_symbols: Tuple[Symbol, ...]
         The existing symbols.
     dof : int
         The number of symbols to generate.
@@ -294,10 +294,8 @@ class SDPProblem(TransformableDual):
                 raise ValueError(f"The number of columns of spaces should be the same, but got"
                                  f" {space.shape[1]} and {dof} for key {key}.")
 
-            if hasattr(x0, 'free_symbols'):
-                _free_symbols_in_domain.update(x0.free_symbols)
-            if hasattr(space, 'free_symbols'):
-                _free_symbols_in_domain.update(space.free_symbols)
+            _free_symbols_in_domain.update(free_symbols_of_mat(x0))
+            _free_symbols_in_domain.update(free_symbols_of_mat(space))
 
         _free_symbols_in_domain = sorted(list(_free_symbols_in_domain), key=lambda x: x.name)
         self._free_symbols_in_domain = _free_symbols_in_domain
@@ -367,13 +365,13 @@ class SDPProblem(TransformableDual):
         return super().size
 
     @property
-    def free_symbols(self) -> List[Symbol]:
+    def free_symbols(self) -> Tuple[Symbol, ...]:
         """
         The free symbols of the SDP problem, including parameters.
 
         Returns
         ----------
-        free_symbols : List[Symbol]
+        free_symbols : Tuple[Symbol, ...]
             The free symbols of the SDP problem.
 
         Examples
@@ -393,13 +391,13 @@ class SDPProblem(TransformableDual):
         return self._gens + self._free_symbols_in_domain
 
     @property
-    def gens(self) -> List[Symbol]:
+    def gens(self) -> Tuple[Symbol, ...]:
         """
         The variables of the SDP problem.
 
         Returns
         ----------
-        gens : List[Symbol]
+        gens : Tuple[Symbol, ...]
             The variables of the SDP problem.
     
         Examples
@@ -440,7 +438,7 @@ class SDPProblem(TransformableDual):
 
     @classmethod
     def from_full_x0_and_space(cls, x0: Matrix, space: Matrix, splits: Union[Dict[Any, int], List[int]],
-        gens: Optional[List[Symbol]]=None, constrain_symmetry: bool = False
+        gens: Optional[Tuple[Symbol, ...]]=None, constrain_symmetry: bool = False
     ) -> 'SDPProblem':
         """
         Initialize a SDP problem with the compressed x0 and space matrix.
@@ -453,7 +451,7 @@ class SDPProblem(TransformableDual):
             The concatednated (vstack) spaces of all matrices Si.
         splits : Union[Dict[Any, int], List[int]]
             The dimension of each matrix.
-        gens : Optional[List[Symbol]]
+        gens : Optional[Tuple[Symbol, ...]]
             The variable names.
         constrain_symmetry : bool
             If each column of the split space is not the vector form of
@@ -586,7 +584,7 @@ class SDPProblem(TransformableDual):
         return cls.from_full_x0_and_space(x0, space, splits, constrain_symmetry=True)
 
     @classmethod
-    def from_matrix(cls, S: Union[Matrix, List[Matrix], Dict[str, Matrix]], gens: Optional[List[Symbol]]=None,
+    def from_matrix(cls, S: Union[Matrix, List[Matrix], Dict[str, Matrix]], gens: Optional[Tuple[Symbol, ...]]=None,
     ) -> 'SDPProblem':
         """
         Construct a `SDPProblem` from symbolic symmetric matrices.
@@ -599,7 +597,7 @@ class SDPProblem(TransformableDual):
         S : Union[Matrix, List[Matrix], Dict[str, Matrix]]
             The symmetric matrices that SDP requires to be positive semidefinite.
             Each entry of the matrix should be linear in the free symbols (gens).
-        gens : Optional[List[Symbol]], optional
+        gens : Optional[Tuple[Symbol, ...]], optional
             The free symbols of the matrices, by default None.
             If None, it will be inferred from the matrices and sorted by names.
 

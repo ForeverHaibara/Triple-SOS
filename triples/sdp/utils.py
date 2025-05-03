@@ -140,6 +140,8 @@ def decompose_matrix(
 
     if len(variables) == 0:
         return mat2vec(M), Matrix.zeros(M.shape[0]*M.shape[1], 0), Matrix.zeros(0, 1)
+    if M.shape[0] * M.shape[1] == 0:
+        return Matrix.zeros(0, 1), Matrix.zeros(0, len(variables)), v
 
     A, x = linear_eq_to_matrix(mat2vec(M), *variables)
     x = -x

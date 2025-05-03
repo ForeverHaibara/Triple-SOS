@@ -8,14 +8,14 @@ basic matrix operations.
 """
 
 from collections import defaultdict
-from typing import List, Dict, Tuple, Union, Any
+from typing import List, Dict, Tuple, Union, Set, Any
 
 import numpy as np
 from numpy import ndarray
 from sympy import __version__ as _SYMPY_VERSION
 from sympy.external.gmpy import MPQ, MPZ # >= 1.9
 from sympy.external.importtools import version_tuple
-from sympy import MatrixBase
+from sympy import Symbol, Float, MatrixBase
 from sympy.matrices import MutableDenseMatrix as Matrix
 from sympy.matrices.repmatrix import RepMatrix
 from sympy.polys.domains import ZZ, QQ, RR, CC # EXRAW >= 1.9
@@ -329,6 +329,16 @@ def is_numerical_mat(mat):
     elif isinstance(mat, ndarray):
         return True
     return False
+
+def free_symbols_of_mat(mat: Union[Matrix, ndarray]) -> Set[Symbol]:
+    """
+    Get the free symbols of a matrix.
+    """
+    if isinstance(mat, RepMatrix) and mat._rep.domain.is_Numerical:
+        return set()
+    if isinstance(mat, MatrixBase):
+        return mat.free_symbols
+    return set()
 
 
 def _cast_list_to_sympy_matrix(rows: int, cols: int, lst: List[int]) -> Matrix:

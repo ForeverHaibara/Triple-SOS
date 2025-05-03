@@ -234,6 +234,24 @@ class Solution():
         self.solution = self.solution.collect(*args, **kwargs)
         return self
 
+    def n(self, *args, **kwargs) -> 'Solution':
+        """
+        Make a copy of the solution and apply n on it.
+        See also: sympy.n.
+        """
+        self = self.copy()
+        self.solution = self.solution.n(*args, **kwargs)
+        return self
+
+    def evalf(self, *args, **kwargs) -> 'Solution':
+        """
+        Make a copy of the solution and apply evalf on it.
+        See also: sympy.evalf.
+        """
+        self = self.copy()
+        self.solution = self.solution.evalf(*args, **kwargs)
+        return self
+
     def as_expr(self, *args, **kwargs) -> sp.Expr:
         """
         Return the solution as an expression. It is equivalent to .solution.

@@ -232,10 +232,11 @@ class MonomialManager():
             return False
         return True
 
-    def _arraylize_list(self, poly: Union[Poly, DMP], expand_cyc: bool = False) -> List:
+    def _arraylize_list(self, poly: Union[Poly, DMP], expand_cyc: bool = False, degree: Optional[int] = None) -> List:
         rep = _poly_rep(poly)
         self._assert_equal_nvars(rep.lev + 1)
-        degree = rep.total_degree()
+        if degree is None:
+            degree = rep.total_degree()
         dict_monoms = self.dict_monoms(degree)
         array = [rep.dom.zero] * len(dict_monoms)
         if not expand_cyc:
@@ -251,11 +252,11 @@ class MonomialManager():
                         array[v] += coeff
         return array
 
-    def arraylize_np(self, poly: Union[Poly, DMP], expand_cyc: bool = False) -> np.ndarray:
+    def arraylize_np(self, poly: Union[Poly, DMP], expand_cyc: bool = False, degree: Optional[int] = None) -> np.ndarray:
         """
         Return the vector representation of the polynomial in numpy array.
         """
-        vec = self._arraylize_list(poly, expand_cyc = expand_cyc)
+        vec = self._arraylize_list(poly, expand_cyc = expand_cyc, degree = degree)
         rep = _poly_rep(poly)
         if not (rep.dom is ZZ or rep.dom is QQ):
             to_sympy = rep.dom.to_sympy
@@ -267,11 +268,11 @@ class MonomialManager():
                 vec = [int(v) for v in vec]
         return np.array(vec).astype(np.float64)
 
-    def arraylize_sp(self, poly: Union[Poly, DMP], expand_cyc: bool = False) -> sp.Matrix:
+    def arraylize_sp(self, poly: Union[Poly, DMP], expand_cyc: bool = False, degree: Optional[int] = None) -> sp.Matrix:
         """
         Return the vector representation of the polynomial in sympy matrix (column vector).
         """
-        vec = self._arraylize_list(poly, expand_cyc = expand_cyc)
+        vec = self._arraylize_list(poly, expand_cyc = expand_cyc, degree = degree)
         rep = _poly_rep(poly)
         if SDM is not None:
             sdm = dict((i, {0: v}) for i, v in enumerate(vec) if v)
