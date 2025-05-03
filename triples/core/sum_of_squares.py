@@ -37,6 +37,8 @@ DEFAULT_CONFIGS = {
     }
 }
 
+DEFAULT_SAVE_SOLUTION = lambda x: (str(x.solution) if x is not None else '')
+
 
 @sanitize_output()
 # @sanitize_input(homogenize=True)
@@ -139,7 +141,7 @@ def sum_of_squares_multiple(
         configs: Dict[str, Dict] = DEFAULT_CONFIGS,
         poly_reader_configs: Dict[str, Any] = {},
         save_result: Union[bool, str] = True,
-        save_solution_method: Union[str, Callable] = 'str_formatted',
+        save_solution_method: Callable[[Optional[SolutionSimple]], str] = DEFAULT_SAVE_SOLUTION,
         verbose_sos: bool = False,
         verbose_progress: bool = True
     ):
@@ -168,10 +170,9 @@ def sum_of_squares_multiple(
         Whether to save the results. If True, it will be saved to a csv file in the same directory
         as the input file. If False, it will not be saved. If it is a string, it will be treated
         as the file name to save the results.
-    save_solution_method : Union[str, Callable]
-        The method to save the solution. If it is a string, it will be treated as the attribute
-        name of the solution to save. If it is a callable, it will be called on the solution to
-        save the result. It should handle None as well.
+    save_solution_method : Callable[[Optional[Solution]], str]
+        The method to convert a solution to string for saving the result.
+        It will be applied on each solution. It should handle None as well.
     verbose_sos : bool
         Whether to send verbose=True to the sum_of_squares function.
     verbose_progress : bool
@@ -255,7 +256,7 @@ def sum_of_squares_multiple(
 def _process_records(
         records: List[Dict],
         save_result: Union[bool, str] = True,
-        save_solution_method: Union[str, Callable] = 'str_formatted',
+        save_solution_method: Callable[[Optional[SolutionSimple]], str] = DEFAULT_SAVE_SOLUTION,
         source: Optional[str] = None
     ) -> Any:
     """
@@ -269,18 +270,14 @@ def _process_records(
         Whether to save the results. If True, it will be saved to a csv file in the same directory
         as the input file. If False, it will not be saved. If it is a string, it will be treated
         as the file name to save the results.
-    save_solution_method : Union[str, Callable]
-        The method to save the solution. If it is a string, it will be treated as the attribute
-        name of the solution to save. If it is a callable, it will be called on the solution to
-        save the result.
+    save_solution_method : Callable[[Optional[Solution]], str]
+        The method to convert a solution to string for saving the result.
+        It will be applied on each solution. It should handle None as well.
     source : Optional[str]
         The file name of the input file. If None, it will not be used.
     """
     from time import strftime
     import os
-    if isinstance(save_solution_method, str):
-        attr = save_solution_method
-        save_solution_method = lambda x: getattr(x, attr) if x is not None else None
 
     import pandas as pd
     records_pd = pd.DataFrame(records, index = range(1, len(records)+1))

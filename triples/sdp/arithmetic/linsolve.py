@@ -251,6 +251,9 @@ def solve_undetermined_linear(M: Matrix, B: Matrix) -> Tuple[Matrix, Matrix]:
     space: Matrix
         All solution x is in the form of x0 + space @ y.
     """
+    if isinstance(M._rep.rep, SDM) and _is_column_separated(M):
+        return solve_column_separated_linear(M, B)
+
     aug      = M.hstack(M.copy(), B.copy())
     B_cols   = B.cols
     row, col = aug[:, :-B_cols].shape
@@ -331,11 +334,27 @@ def solve_columnspace(A: Matrix) -> Matrix:
         return A.zeros(A.shape[0], 0)
     return m
 
-def solve_column_separated_linear(A: Matrix, b: Matrix, x0_equal_indices: List[List[int]] = []):
+
+def _is_column_separated(A: Matrix) -> bool:
+    seen_cols = set()
+    Arep = A._rep.rep.to_sdm()
+    for row in Arep.values():
+        for col in row.keys():
+            if col in seen_cols:
+                return False
+            seen_cols.add(col)
+    # if len(seen_cols) != A.shape[1]:
+    #     return False
+    return True
+
+
+def solve_column_separated_linear(A: Matrix, b: Matrix):
     """
     This is a function that solves a special linear system Ax = b => x = x_0 + C * y
     where each column of A has at most 1 nonzero element. For more general cases, use solve_csr_linear.
     Further, we could require some of entries of x to be equal.
+
+    WARNING: IT IS NOT SAFE
 
     Parameters
     ----------
@@ -343,10 +362,6 @@ def solve_column_separated_linear(A: Matrix, b: Matrix, x0_equal_indices: List[L
         Sympy matrix that satisfies the condition.
     b: Matrix
         Right-hand side
-    x0_equal_indices: List[List[int]]
-        Each sublist contains indices of equal elements.
-    _cols: int
-        Number of columns of A. If not specified, it will be inferred from A.
 
     Returns
     ---------
@@ -361,86 +376,58 @@ def solve_column_separated_linear(A: Matrix, b: Matrix, x0_equal_indices: List[L
     if _VERBOSE_SOLVE_CSR_LINEAR:
         time0 = time()
 
-    # form the equal indices as a UFS
-    ufs = list(range(cols))
-    groups = {}
-    for group in x0_equal_indices:
-        for i in group:
-            ufs[i] = group[0]
-        groups[group[0]] = group
-    for i in range(cols):
-        if ufs[i] == i:
-            group = groups.get(i)
-            if group is None:
-                groups[i] = [i]
-
-    if _VERBOSE_SOLVE_CSR_LINEAR:
-        print('>> UFS construction time', time() - time0) # 0 sec, can be ignored
-        time0 = time()
-
-    toK = lambda x: x # domain.from_sympy
+    # toK = lambda x: x # domain.from_sympy
     one, zero = domain.one, domain.zero
     A = A._rep.convert_to(domain).rep.to_sdm() # SDM
     b = b._rep.convert_to(domain).rep.to_sdm() # SDM
 
     x0 = []
     spaces = []
+
+    def _assert_empty(b, i):
+        bi = b.get(i, 0)
+        if bi != 0 and bi.get(0, zero) != zero:
+            raise ValueError("Linear system has no solution")
+
+    for i in set(range(A.shape[0])) - set(A.keys()):
+        _assert_empty(b, i)
+
     for i, row in A.items():
         row = list(row.items())
         if len(row):
-            pivot = row[0]
-            head = ufs[pivot[0]]
-            group = groups[head]
-            w = len(group) * toK(pivot[1])
+            head, w = row[0]
             bi = b.get(i, 0)
             if bi:
                 bi = bi.get(0, zero)
-                v = bi / w
-                for k in group:
-                    x0.append((k, {0: v}))
+                if bi:
+                    v = bi / w
+                    x0.append((head, {0: v}))
 
-            for j in range(1, len(row)):
-                pivot2 = row[j]
-                head2 = ufs[pivot2[0]]
-                if pivot2[0] != head2 or head2 == head:
-                    continue
-                # only handle the case that pivot is the head of the group
-                group2 = groups[head2]
-                w2 = len(group2) * toK(pivot2[1])
-
-                space = {}
-                if w2:
-                    for k in group:
-                        space[k] = w2
-                if w:
-                    for k in group2:
-                        space[k] = -w
-                spaces.append(space)
+            if len(row) > 1:
+                for head2, w2 in row[1:]:
+                    spaces.append({head: w2, head2: -w})
 
         else:
-            bi = b.get(i, 0)
-            if bi != 0 and bi.get(0, zero) != zero:
-                raise ValueError("Linear system has no solution")
+            _assert_empty(b, i)
 
-            for j in range(len(row)):
-                if ufs[row[j][0]] == row[j][0]:
-                    group = groups[row[j][0]]
-
-                    space = {}
-                    for k in group:
-                        space[k] = one
-                    spaces.append(space)
-
-    x0 = dict(x0)
-    spaces = dict(enumerate(spaces))
     if _VERBOSE_SOLVE_CSR_LINEAR:
         print('>> Solve separated system time:', time() - time0) # fast, < 1 sec over (100 x 10000)
         time0 = time()
 
-    to_mat = lambda x, shape: Matrix._fromrep(DomainMatrix.from_rep(SDM(x, shape, domain)))
-    # x0, space = Matrix(x0), Matrix(spaces).T
-    x0 = to_mat(x0, (cols, 1))
-    spaces = to_mat(spaces, (len(spaces), cols)).T
+    all_cols = []
+    for row in A.values():
+        all_cols.extend(list(row.keys()))
+    all_cols = set(all_cols)
+
+    if len(all_cols) != cols:
+        # unseen cols are free
+        unseen_cols = set(range(cols)) - set(all_cols)
+        spaces.extend([{i: one} for i in unseen_cols])
+
+    x0 = dict(x0)
+    spaces = dict(enumerate(spaces))
+    x0 = rep_matrix_from_dict(x0, (cols, 1), domain)
+    spaces = rep_matrix_from_dict(spaces, (len(spaces), cols), domain).T
 
     if _VERBOSE_SOLVE_CSR_LINEAR:
         print('>> Matrix restoration time:', time() - time0, 'space shape =', spaces.shape)
@@ -460,7 +447,8 @@ def solve_csr_linear(A: Matrix, b: Matrix,
     Parameters
     ----------
     A: Matrix
-        Sympy matrix (with preferably SDM format).
+        Sympy matrix (with preferably SDM format). Non-sdm format
+        matrices will be automatically converted to SDM.
     b: Matrix
         Right-hand side.
     x0_equal_indices: List[List[int]]
@@ -492,25 +480,6 @@ def solve_csr_linear(A: Matrix, b: Matrix,
 
     Arep = A._rep.rep.to_sdm()
 
-    # check whether there is at most one nonzero element in each column
-    if isinstance(A, RepMatrix) and isinstance(b, RepMatrix):
-        _column_separated = True
-        seen_cols = set()
-        for row in Arep.values():
-            for col, _ in row.items():
-                if col in seen_cols:
-                    _column_separated = False
-                    break
-                seen_cols.add(col)
-            if not _column_separated:
-                break
-
-        if _column_separated:
-            if _VERBOSE_SOLVE_CSR_LINEAR:
-                print('>> Column Separated System recognized', time() - time0)
-            # return solve_column_separated_linear(A, b, x0_equal_indices)
-
-    # convert to dense matrix
 
     # form the equal indices as a UFS
     ufs, groups = _build_ufs(x0_equal_indices, cols)
@@ -591,6 +560,43 @@ def _solve_csr_linear_force_zeros(A, b, nonnegative_indices=[], force_zeros={}):
     zero_rows = set(range(A.shape[0])) - nonzero_rows
     nonnegative_indices = set(nonnegative_indices)
 
+    col_to_rows = None
+
+    def _build_col_to_rows(): # csr to csc:
+        col_to_rows = defaultdict(list)
+        for i, row in rep.items():
+            for j in row.keys():
+                col_to_rows[j].append(i)
+        return col_to_rows
+
+    def _del_A_col(i, col_to_rows):
+        # for Ar in rep.values():
+        #     if i in Ar:
+        #         del Ar[i]
+        coli = col_to_rows.get(i)
+        if coli:
+            for j in coli:
+                repj = rep.get(j)
+                if repj:
+                    del repj[i]
+
+    def _clear_zero_inds(zero_inds, all_zero_inds, col_to_rows):
+        """Handle newly found zero indices by deleting the corresponding columns
+        and explore new zero indices from `force_zeros`"""
+        while zero_inds:
+            # use while-loop but not for-loop since the set will be changed during iter
+            i = zero_inds.pop()
+            # new zeros are explored by the rule of force_zeros
+            all_zero_inds.add(i)
+            new_zeros = force_zeros.get(i)
+            if new_zeros is not None:
+                for j in new_zeros:
+                    if not (j in all_zero_inds):
+                        zero_inds.add(j)
+
+            # remove the corresponding column of A
+            _del_A_col(i, col_to_rows)
+
     found_new_zeros = True
     while found_new_zeros:
         found_new_zeros = False
@@ -615,22 +621,11 @@ def _solve_csr_linear_force_zeros(A, b, nonnegative_indices=[], force_zeros={}):
         for i in zero_rows_to_remove:
             zero_rows.remove(i)
 
-        while zero_inds:
-            # use while-loop but not for-loop since the set will be changed during iter
-            i = zero_inds.pop()
-            # new zeros are explored by the rule of force_zeros
+        if len(zero_inds):
             found_new_zeros = True
-            all_zero_inds.add(i)
-            new_zeros = force_zeros.get(i)
-            if new_zeros is not None:
-                for j in new_zeros:
-                    if j != i:
-                        zero_inds.add(j)
-
-            # remove the corresponding column of A
-            for Ar in rep.values():
-                if i in Ar:
-                    del Ar[i]
+            if col_to_rows is None:
+                col_to_rows = _build_col_to_rows()
+            _clear_zero_inds(zero_inds, all_zero_inds, col_to_rows)
 
 
     # extract columns associated with nonzero indices

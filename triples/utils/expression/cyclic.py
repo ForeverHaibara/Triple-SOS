@@ -96,6 +96,19 @@ def _is_perm_invariant_dict(symbols, perm_group, d):
             return False
     return True
 
+def _compare_translation_argwise(expr, translation):
+    """Compute expr.compare(_replace_symbols(expr, translation)) efficiently."""
+    if expr.is_Symbol:
+        return expr.compare(translation.get(expr, expr))
+    if expr.is_Atom:
+        return 0
+    for arg in expr.args:
+        sign = _compare_translation_argwise(arg, translation)
+        if sign != 0:
+            return sign
+    return 0
+
+
 def _project_perm_group(perm_group, inds):
     """
     Project the permutation group (especially stabilizers) to given indices,
@@ -167,12 +180,16 @@ class CyclicExpr(sp.Expr):
             expr = sympify(expr)
             expr0 = expr
             for translation in cls._generate_all_translations(symbols, perm, full=True):
-                # find the simplest form up to permutation
+                # find the lexiographically smallest form up to permutation
                 # expr2 = signsimp(expr0.xreplace(translation)) # signsimp is unstable
                 # expr2 = expr0.xreplace(translation)
-                expr2 = _replace_symbols(expr0, translation)
-                if expr.compare(expr2) > 0:
-                    expr = expr2
+
+                # expr2 = _replace_symbols(expr0, translation)
+                # if expr.compare(expr2) > 0:
+                #     expr = expr2
+                if _compare_translation_argwise(expr, translation) > 0:
+                    expr = _replace_symbols(expr0, translation)
+
 
             return cls._eval_simplify_(expr, symbols, perm)
 

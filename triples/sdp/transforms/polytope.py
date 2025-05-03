@@ -4,6 +4,7 @@ from sympy.matrices import MutableDenseMatrix as Matrix
 from sympy.polys.domains import ZZ
 from sympy.polys.matrices.domainmatrix import DomainMatrix
 from sympy.polys.matrices.sdm import SDM
+from sympy.matrices.repmatrix import RepMatrix
 
 from .transform import SDPTransformation, SDPIdentityTransform
 from .linear import SDPMatrixTransform
@@ -26,10 +27,14 @@ def _get_zero_diagonals_of_dual(self) -> Dict[Any, List[int]]:
     size = self.size
     for key, (x0, space) in self._x0_and_space.items():
         n = size[key]
-        zero_diagonals[key] = []
-        for i in range(n):
-            if x0[i*n+i] == 0 and not any(space[i*n+i,:]):
-                zero_diagonals[key].append(i)
+        if isinstance(x0, RepMatrix) and isinstance(space, RepMatrix):
+            x_rep, space_rep = x0._rep.rep.to_sdm(), space._rep.rep.to_sdm()
+            zero_diagonals[key] = [i for i in range(n) if (i*n+i not in x_rep) and (i*n+i not in space_rep)]
+        else:
+            zero_diagonals[key] = []
+            for i in range(n):
+                if x0[i*n+i] == 0 and not any(space[i*n+i,:]):
+                    zero_diagonals[key].append(i)
     return zero_diagonals
 
 def _get_zero_diagonals_of_primal(self) -> Dict[Any, List[int]]:

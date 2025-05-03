@@ -13,6 +13,7 @@ from .solution import SolutionSDP
 from ...utils import CyclicSum, verify_symmetry, MonomialManager, Root, optimize_poly
 from ...sdp import SDPProblem
 
+CHECK_SYMMETRY = True
 
 def _constrain_root_nullspace(sdp: SDPProblem, poly: Poly, ineq_constraints: Dict, eq_constraints: Dict,
         ineq_bases: Dict[Any, Any], eq_bases: Dict[Any, Any], degree: int,
@@ -266,7 +267,7 @@ class SOSProblem():
         Get the bases associated with each equality constraint.
         """
         bases, gens = {}, self.gens
-        for key, basis in self._ineq_bases.items():
+        for key, basis in self._eq_bases.items():
             basis = basis.inv_monoms(self._eq_codegrees[key])
             bases[key] = [Mul(*(c**i for c, i in zip(gens, b))) for b in basis]
         return bases
@@ -321,8 +322,8 @@ class SOSProblem():
         self,
         ineq_constraints: List[Union[Poly, Expr]] = [],
         eq_constraints: List[Union[Poly, Expr]] = [],
-        symmetry: Optional[PermutationGroup] = None,
         degree: Optional[int] = None,
+        symmetry: Optional[PermutationGroup] = None,
         roots: Optional[List[Root]] = None,
         term_sparsity: int = 1,
         deparametrize: bool = True,
@@ -343,10 +344,10 @@ class SOSProblem():
             List or dict of polynomial or sympy expression equality constraints,
             H1, H2,..., Hm = 0.
             Used as the generators of the quotient ring / ideal of the SOS problem.
+        degree : Optional[int]
+            Degree bound of the monomials. If not specified, it will be the degree of the poly.
         symmetry : Optional[PermutationGroup]
             Sympy permutation group indicating the symmetry of the variables. If given, it assumes
-        degree : Optional[int]
-            Degree bound of the monomials. If not specified, it will be inferred from the constraints.
         roots : Optional[List[Root]]
             List of roots (zeros) of the polynomial. The roots must satisfy all given ineq and eq constraints.
             This helps reduce the degree of freedom but may be computationally expensive.
@@ -408,6 +409,8 @@ class SOSProblem():
         self.ineq_constraints = ineq_constraints
         self.eq_constraints = eq_constraints
 
+        if (symmetry is not None) and CHECK_SYMMETRY and (not verify_symmetry(poly, symmetry)):
+            raise ValueError("The polynomial is not symmetric under the given permutation group.")
         self._symmetry = symmetry
 
         ###################################################################

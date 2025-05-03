@@ -3,8 +3,9 @@ from typing import List, Optional
 from sympy import Matrix, Symbol
 
 from .transform import SDPTransformation
-from.linear import SDPLinearTransform, SDPMatrixTransform
+from .linear import SDPLinearTransform, SDPMatrixTransform
 from ..utils import decompose_matrix
+from ..arithmetic import free_symbols_of_mat
 
 class SDPDeparametrization(SDPLinearTransform):
     @classmethod
@@ -24,8 +25,9 @@ class DualDeparametrization(SDPDeparametrization):
         if symbols is None:
             symbols = set()
             for key, (x0, space) in parent_node._x0_and_space.items():
-                if hasattr(x0, 'free_symbols'):
-                    symbols.update(x0.free_symbols)
+                # if hasattr(x0, 'free_symbols'):
+                #     symbols.update(x0.free_symbols)
+                symbols.update(free_symbols_of_mat(x0))
         symbols = list(symbols)
 
         if len(symbols) == 0:
@@ -33,7 +35,7 @@ class DualDeparametrization(SDPDeparametrization):
 
         new_x0_and_space = {}
         for key, (x0, space) in parent_node._x0_and_space.items():
-            if hasattr(x0, 'free_symbols') and len(x0.free_symbols):
+            if free_symbols_of_mat(x0): # is not empty
                 x1, A, v = decompose_matrix(x0, symbols)
             else:
                 x1 = x0
