@@ -469,6 +469,8 @@ def rep_matrix_to_numpy(M: Matrix, dtype = np.float64, sparse: bool = False) -> 
 
     if isinstance(M, (MatrixBase, DomainMatrix)):
         M = np.array(M).astype(dtype)
+    if isinstance(M, ndarray) and M.dtype != dtype:
+        M = M.astype(dtype)
     if sparse and isinstance(M, ndarray):
         from scipy.sparse import csr_matrix
         return csr_matrix(M)

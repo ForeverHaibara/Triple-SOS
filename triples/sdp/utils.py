@@ -6,7 +6,7 @@ from sympy import Matrix, MatrixBase, Expr, Symbol, collect
 from sympy.core.relational import GreaterThan, StrictGreaterThan, LessThan, StrictLessThan, Equality, Relational
 from sympy.solvers.solveset import linear_eq_to_matrix
 
-from .arithmetic import vec2mat, mat2vec, reshape
+from .arithmetic import vec2mat, mat2vec, reshape, rep_matrix_to_numpy
 
 def S_from_y(
         y: Matrix,
@@ -207,6 +207,7 @@ def exprs_to_arrays(
     vec_list = []
     index_list = []
     result = [None for _ in range(len(exprs))]
+    nvars = len(symbols)
     for i, expr in enumerate(exprs):
         c, op = 0, None
         if callable(expr):
@@ -228,7 +229,7 @@ def exprs_to_arrays(
             index_list.append(i)
         elif isinstance(expr, (list, ndarray, MatrixBase)):
             if isinstance(expr, list):
-                expr = Matrix(expr) if len(expr) else Matrix.zeros(0, 1)
+                expr = Matrix(expr) if len(expr) else Matrix.zeros(0, nvars)
             if isinstance(c, list):
                 c = Matrix(c) if len(c) else Matrix.zeros(0, 1)
             if op is not None:
@@ -253,7 +254,6 @@ def exprs_to_arrays(
         else:
             result[i] = (A[j,:], -const[j])
 
-    nvars = len(symbols)
     for i in range(len(result)):
         expr, c = result[i][0], result[i][1]
         if not isinstance(c, (ndarray, MatrixBase)):
@@ -261,10 +261,10 @@ def exprs_to_arrays(
         elif isinstance(c, ndarray):
             c = c.flatten()
         if isinstance(expr, ndarray):
-            expr = expr.reshape(1, -1)
+            expr = expr.reshape(c.shape[0], nvars)
         elif isinstance(expr, MatrixBase):
             if expr.shape[0] == nvars and expr.shape[1] == 1: # column vec
-                expr = reshape(expr, (1, nvars))
+                expr = reshape(expr, (c.shape[0], nvars))
             if expr.shape[1] != nvars:
                 raise ValueError(f"Invalid shape of expr matrix, expected (*,{nvars}), but got {expr.shape}.")
             # expr = expr.reshape(expr.shape[0]*expr.shape[1]//nvars, nvars)
@@ -276,7 +276,7 @@ def exprs_to_arrays(
             raise ValueError(f"Invalid length of result tuple, expected 2 or 3, but got {len(result[i])} at line {i}.")
 
     if dtype is not None:
-        f = lambda x: x.astype(dtype) if isinstance(x, ndarray) else np.array(x.tolist()).astype(dtype)
+        f = lambda x: rep_matrix_to_numpy(x, dtype=dtype)
         for i in range(len(result)):
             if len(result[i]) == 3:
                 result[i] = (f(result[i][0]), f(result[i][1]).flatten(), result[i][2])

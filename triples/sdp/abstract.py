@@ -230,8 +230,9 @@ class SDPProblemBase(ABC):
 
         if solve_child:
             obj = self.propagate_affine_to_child(obj[0], obj[1], recursive=True)
-            ineq_lhs, ineq_rhs = self.propagate_affine_to_child(ineq_lhs, ineq_rhs, recursive=True)
-            eq_lhs, eq_rhs = self.propagate_affine_to_child(eq_lhs, eq_rhs, recursive=True)
+            ineq_lhs, ineq_rhs = self.propagate_affine_to_child(ineq_lhs, -ineq_rhs, recursive=True)
+            eq_lhs, eq_rhs = self.propagate_affine_to_child(eq_lhs, -eq_rhs, recursive=True)
+            ineq_rhs, eq_rhs = -ineq_rhs, -eq_rhs
             self = self.get_last_child()
 
         cons = [(ineq_lhs, ineq_rhs, '>'), (eq_lhs, eq_rhs, '==')]

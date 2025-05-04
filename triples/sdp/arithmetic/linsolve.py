@@ -351,10 +351,8 @@ def _is_column_separated(A: Matrix) -> bool:
 def solve_column_separated_linear(A: Matrix, b: Matrix):
     """
     This is a function that solves a special linear system Ax = b => x = x_0 + C * y
-    where each column of A has at most 1 nonzero element. For more general cases, use solve_csr_linear.
-    Further, we could require some of entries of x to be equal.
-
-    WARNING: IT IS NOT SAFE
+    where each column of A has at most 1 nonzero element. This is automatically called
+    for internal use and is a subroutine of `solve_undetermined_linear`.
 
     Parameters
     ----------
@@ -461,6 +459,7 @@ def solve_csr_linear(A: Matrix, b: Matrix,
         If there exists an equation c1*x1+...+cn*xn = 0 where x1,...,xn are nonnegative
         and c1,...,cn >= 0, then the solution is x1 = x2 = ... = xn = 0.
         This is useful for positive semidefinite matrices which have nonnegative diagonals.
+        THIS IS UNDER DEVELOPMENT AND WILL BE IGNORED.
     force_zeros: Dict[int, List[int]]
         If given, each indices in `force_zeros[i]` must be zero if index `i` is zero.
         This is useful when a positive semidefinite matrix has a zero diagonal entry,

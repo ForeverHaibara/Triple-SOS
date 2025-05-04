@@ -4,12 +4,14 @@ via computing the equality cases of the original SOS problem.
 """
 from collections import defaultdict, deque
 from itertools import product
+from time import time
 from typing import Dict, List, Tuple, Union, Optional, Any
 
 from sympy import Poly, Expr, MatrixBase
 from sympy.matrices import MutableDenseMatrix as Matrix
 from sympy.combinatorics import PermutationGroup
 
+from ...sdp import SDPProblem
 from ...sdp.arithmetic import solve_columnspace
 from ...utils import optimize_poly, Root, MonomialManager
 
@@ -297,3 +299,62 @@ def get_nullspace(poly: Poly, ineq_constraints: Dict[Any, Poly], eq_constraints:
             nullspaces[key] = Matrix.hstack(*spans)
 
     return nullspaces
+
+
+
+def constrain_root_nullspace(sdp: SDPProblem, poly: Poly, ineq_constraints: Dict, eq_constraints: Dict,
+        ineq_bases: Dict[Any, Any], eq_bases: Dict[Any, Any], degree: int,
+        roots: Optional[List[Root]]=None, symmetry: Optional[PermutationGroup]=None, verbose: bool = False
+    ) -> Tuple[SDPProblem, List[Root]]:
+    """
+    Internal helper function to constrain the nullspace of the SDP problem. It will be called
+    in `SOSProblem.construct`.
+    """
+    def _symmetry_expand(polys):
+        """Add in the permuted polynomoials given a symmetry group."""
+        if symmetry is None or len(polys) == 0 or symmetry.is_trivial:
+            return list(polys)
+        rep_set = set()
+        polylize, gens = polys[0].__class__.new, polys[0].gens
+        for poly in polys:
+            rep = poly.rep
+            rep_set.add(rep)
+            for perm in symmetry.elements:
+                reorder = poly.reorder(*perm(gens)).rep
+                if rep == reorder:
+                    continue
+                rep_set.add(reorder)
+        return [polylize(rep, *gens) for rep in rep_set] 
+
+    time0 = time()
+    if roots is None:
+        # find roots automatically
+        all_polys = list(ineq_constraints.values()) + list(eq_constraints.values()) + [poly]
+        if all(p.domain.is_ZZ or p.domain.is_QQ for p in all_polys):
+            ineqs = _symmetry_expand(list(ineq_constraints.values()))
+            eqs   = _symmetry_expand(list(eq_constraints.values()))
+            roots = optimize_poly(poly, ineqs, eqs + [poly], return_type='root')
+        else:
+            # TODO: clean this
+            roots = _findroot_binary(poly)# symmetry=self._symmetry)
+        if verbose:
+            print(f"Time for finding roots num = {len(roots):<6d}     : {time() - time0:.6f} seconds.")
+            time0 = time()
+    else:
+        roots = [Root(_) if not isinstance(_, Root) else _ for _ in roots]
+
+
+    time0 = time()
+    nullspaces = get_nullspace(poly, ineq_constraints, eq_constraints, ineq_bases, eq_bases,
+                        degree=degree, roots=roots)
+    if verbose:
+        print(f"Time for computing nullspace            : {time() - time0:.6f} seconds.")
+        time0 = time()
+
+    new_sdp = sdp.constrain_nullspace(nullspaces, to_child=True)
+
+    if verbose:
+        print(f"Time for constraining nullspace         : {time() - time0:.6f} seconds. Dof = {sdp.get_last_child().dof}")
+        time0 = time()
+
+    return new_sdp, roots

@@ -4,55 +4,20 @@ from time import time
 # from warnings import warn
 
 from numpy import ndarray
+import numpy as np
 from sympy.combinatorics import PermutationGroup
 from sympy import Poly, Expr, Symbol, Mul, ZZ
+from sympy.core.relational import Relational
 from sympy.matrices import MutableDenseMatrix as Matrix
 
-from .manifold import get_nullspace
+from .manifold import constrain_root_nullspace
 from .solution import SolutionSDP
-from ...utils import CyclicSum, verify_symmetry, MonomialManager, Root, optimize_poly
+from ...utils import CyclicSum, verify_symmetry, MonomialManager, Root
 from ...sdp import SDPProblem
+from ...sdp.arithmetic import matmul, matadd
+from ...sdp.utils import exprs_to_arrays, collect_constraints
 
 CHECK_SYMMETRY = True
-
-def _constrain_root_nullspace(sdp: SDPProblem, poly: Poly, ineq_constraints: Dict, eq_constraints: Dict,
-        ineq_bases: Dict[Any, Any], eq_bases: Dict[Any, Any], degree: int,
-        roots: Optional[List[Root]]=None, verbose: bool = False
-    ) -> Tuple[SDPProblem, List[Root]]:
-    # constrain nullspace
-    # sdp = sdp.get_last_child()
-
-    time0 = time()
-    if roots is None:
-        all_polys = list(ineq_constraints.values()) + list(eq_constraints.values()) + [poly]
-        if all(p.domain.is_ZZ or p.domain.is_QQ for p in all_polys):
-            roots = optimize_poly(poly,
-                list(ineq_constraints.values()), list(eq_constraints.values()) + [poly], return_type='root')
-        else:
-            # TODO: clean this
-            from ..sdpsos.manifold import _findroot_binary
-            roots = _findroot_binary(poly)# symmetry=self._symmetry)
-        if verbose:
-            print(f"Time for finding roots num = {len(roots):<6d}     : {time() - time0:.6f} seconds.")
-            time0 = time()
-    else:
-        roots = [Root(_) if not isinstance(_, Root) else _ for _ in roots]
-
-
-    time0 = time()
-    nullspaces = get_nullspace(poly, ineq_constraints, eq_constraints, ineq_bases, eq_bases,
-                        degree=degree, roots=roots)
-    if verbose:
-        print(f"Time for computing nullspace            : {time() - time0:.6f} seconds.")
-        time0 = time()
-
-    new_sdp = sdp.constrain_nullspace(nullspaces, to_child=True)
-
-    if verbose:
-        print(f"Time for constraining nullspace         : {time() - time0:.6f} seconds. Dof = {sdp.get_last_child().dof}")
-        time0 = time()
-
-    return new_sdp, roots
 
 def _define_mapping_psd(ineq: Poly, ineq_basis: MonomialManager, full_monomial_manager: MonomialManager,
         degree: int) -> Callable[[int, int], List[Tuple[int, Expr]]]:
@@ -177,6 +142,54 @@ def _get_equal_entries(symmetry: MonomialManager, degree: int,
     return equal_entries
 
 
+#################################################################################
+#
+#                           Deparametrization tools
+#
+#################################################################################
+
+def _get_deparametrization(poly: Poly, deparametrize: Union[bool, Tuple[Symbol, ...]]
+    ) -> Tuple[Poly, List[Symbol], List[Poly]]:
+    if not deparametrize:
+        return poly, [], []
+
+    params = deparametrize if isinstance(deparametrize, (list, tuple))\
+                else poly.free_symbols - set(poly.gens)
+    params = list(params)
+    if len(params) == 0:
+        return poly, [], []
+
+    gens = poly.gens
+    poly = poly.as_poly(params)
+    if poly.total_degree() > 1:
+        raise ValueError("Unable to deparametrize due to nonlinear parameters found in the polynomial."
+                            " Set deparametrize to False or to a tuple of linear parameters.")
+    
+    onehot = [0]*len(params)
+    coeff_of_params = [0]*len(params)
+    for i in range(len(params)):
+        onehot[i] = 1
+        coeff_of_params[i] = poly.coeff_monomial(tuple(onehot)).as_poly(gens)
+        onehot[i] = 0
+    poly = poly.coeff_monomial(tuple(onehot)).as_poly(gens)
+    return poly, params, coeff_of_params
+
+
+def _deparam_injection(eq_mapping: Dict[Any, Callable], eq_size: Dict[Any, int],
+        full_monomial_manager: MonomialManager, degree: int, coeff_of_params: List[Poly]=[]) -> Any:
+    """
+    Treat linear parameters as equality constraints and inject them into the `eq_mapping`.
+    """
+    class _parameters: # any object not in collision with other keys in eq_mapping
+        pass
+    key = _parameters()
+    vecs = [-full_monomial_manager.arraylize_sp(p, degree=degree).T for p in coeff_of_params]
+    mapping = lambda i: list(vecs[i]._rep.rep.get(0, {}).items())
+    eq_mapping[key] = mapping
+    eq_size[key] = len(coeff_of_params)
+    return key
+
+
 class SOSProblem():
     """
     Helper class for SDPSOS. See details at SOSProblem.solve.
@@ -192,18 +205,23 @@ class SOSProblem():
     gens: List[Symbol]
     _degree: int
     _symmetry: MonomialManager
-
-    ineq_constraints: Dict[Any, Poly]
-    eq_constraints: Dict[Any, Poly]
-    _ineq_bases: Dict[Any, MonomialManager]
-    _eq_bases: Dict[Any, MonomialManager]
-    _ineq_codegrees: Dict[Any, int]
-    _eq_codegrees: Dict[Any, int]
-
     _sdp: SDPProblem
-    _eq_space: Dict[Any, Tuple[Matrix, Matrix]]
     _roots: List[Root]
 
+    # inequality constraints: (quadratic module)
+    ineq_constraints: Dict[Any, Poly]
+    _ineq_bases: Dict[Any, MonomialManager]
+    _ineq_codegrees: Dict[Any, int]
+
+    # equality constraints: (ideal)
+    eq_constraints: Dict[Any, Poly]
+    _eq_bases: Dict[Any, MonomialManager]
+    _eq_codegrees: Dict[Any, int]
+    _eq_space: Dict[Any, Tuple[Matrix, Matrix]]
+
+    # linear parameters in polynomial
+    _parameter_spaces: Tuple[Matrix, Matrix]
+    _parameter_bases: List[Symbol]
 
     def __init__(self, poly: Poly, gens: Optional[Tuple[Symbol, ...]]=None):
         """
@@ -239,11 +257,29 @@ class SOSProblem():
         """
         return self.sdp.get_last_child() if self.sdp is not None else None
 
-    def solve_obj(self, *args, **kwargs) -> Optional[Matrix]:
+    def solve_obj(self,
+        objective: Union[Expr, Matrix, List],
+        constraints: List[Union[Relational, Expr, Tuple[Matrix, Matrix, str]]] = [],
+        solver: Optional[str] = None,
+        verbose: bool = False,
+        kwargs: Dict[Any, Any] = {}
+    ) -> Optional[Matrix]:
         """
         Solve the SOS problem. Arguments are passed to SDPProblem.solve.
         """
-        return self.sdp.solve_obj(*args, **kwargs)
+        obj = exprs_to_arrays([objective], self._parameter_bases, dtype=np.float64)[0][0]
+        cons = exprs_to_arrays(constraints, self._parameter_bases, dtype=np.float64)
+        ineq_lhs, ineq_rhs, eq_lhs, eq_rhs = collect_constraints(cons, len(self._parameter_bases))
+        x0, space = self._parameter_space
+
+        # ineq_lhs * (x0 + space * y) >= ineq_rhs
+        obj      = matmul(obj, space)
+        ineq_lhs = matmul(ineq_lhs, space)
+        ineq_rhs = matadd(ineq_rhs, -matmul(ineq_lhs, x0))
+        eq_lhs   = matmul(eq_lhs, space)
+        eq_rhs   = matadd(eq_rhs, -matmul(eq_lhs, x0))
+        return self.sdp.solve_obj(obj, [(ineq_lhs, ineq_rhs, '>'), (eq_lhs, eq_rhs, '==')],
+                solver=solver, verbose=verbose, kwargs=kwargs)
 
     def solve(self, *args, **kwargs) -> Optional[Matrix]:
         """
@@ -272,6 +308,12 @@ class SOSProblem():
             bases[key] = [Mul(*(c**i for c, i in zip(gens, b))) for b in basis]
         return bases
 
+    def as_params(self) -> Dict[Symbol, Expr]:
+        if len(self._parameter_bases) == 0:
+            return {}
+        x0, space = self._parameter_space
+        y = x0 + space @ self.sdp.y
+        return dict(zip(self._parameter_bases, y))
 
     def as_solution(
         self,
@@ -401,6 +443,12 @@ class SOSProblem():
         self._degree = degree
 
 
+        # prepare deparametrization by separating linear parameters in poly
+        poly_deparam, params, coeff_of_params = _get_deparametrization(poly, deparametrize)
+        self._parameter_bases = params
+
+
+        # unify domains
         domain = ZZ
         for p in all_polys[1:]:
             domain = domain.unify(p.domain)
@@ -436,18 +484,31 @@ class SOSProblem():
                             monomial_manager, degree) for key, basis in ineq_bases.items()}
         eq_mapping = {key: _define_mapping_linear(eq_constraints[key], basis,
                             monomial_manager, degree) for key, basis in eq_bases.items()}
+        ineq_size = {k: len(v.inv_monoms(self._ineq_codegrees[k])) for k, v in ineq_bases.items()}
+        eq_size = {k: len(v.inv_monoms(self._eq_codegrees[k])) for k, v in eq_bases.items()}
 
+
+        # inject linear parameters into the eq_mapping
+        _param_key = None if len(params) == 0 else\
+            _deparam_injection(eq_mapping, eq_size, monomial_manager, degree, coeff_of_params)
+
+
+        # constrain equal variables by permutation group
         equal_indices = _get_equal_entries(monomial_manager, degree,
                             ineq_constraints, eq_constraints, ineq_bases, eq_bases)
 
+
         time0 = time()
         sdp, eq_space = SDPProblem.from_entry_contribution(
-            monomial_manager.arraylize_sp(poly, degree=degree),
-            {k: len(v.inv_monoms(self._ineq_codegrees[k])) for k, v in ineq_bases.items()}, ineq_mapping,
-            {k: len(v.inv_monoms(self._eq_codegrees[k])) for k, v in eq_bases.items()}, eq_mapping,
+            monomial_manager.arraylize_sp(poly_deparam, degree=degree),
+            ineq_size, ineq_mapping, eq_size, eq_mapping,
             equal_indices=equal_indices, domain=domain
         )
         self._sdp = sdp
+        if _param_key is not None:
+            self._parameter_space = eq_space.pop(_param_key)
+        else:
+            self._parameter_space = (Matrix.zeros(0, 1), Matrix.zeros(0, sdp.dof))
         self._eq_space = eq_space
         if verbose:
             print(f"Time for solving coefficient equations  : {time() - time0:.6f} seconds. Dof = {sdp.dof}")
@@ -456,10 +517,10 @@ class SOSProblem():
         ###################################################################
         #            Apply transforms and facial reductions
         ###################################################################
-        if deparametrize:
-            sdp = sdp.deparametrize()
-            sdp.clear_parents()
-            self._sdp = sdp
+        # if deparametrize:
+        #     sdp = sdp.deparametrize()
+        #     sdp.clear_parents()
+        #     self._sdp = sdp
 
         if term_sparsity:
             time0 = time()
@@ -467,8 +528,9 @@ class SOSProblem():
             if verbose:
                 print(f"Time for constraining zero diagonals    : {time() - time0:.6f} seconds. Dof = {sdp.get_last_child().dof}")
     
-        _, roots = _constrain_root_nullspace(sdp, poly, ineq_constraints, eq_constraints,
-            ineq_bases=ineq_bases, eq_bases=eq_bases, degree=degree, roots=roots, verbose=verbose)
+        _, roots = constrain_root_nullspace(sdp, poly, ineq_constraints, eq_constraints,
+            ineq_bases=ineq_bases, eq_bases=eq_bases, degree=degree,
+            roots=roots, symmetry=symmetry, verbose=verbose)
         self._roots = roots
 
         if verbose:
