@@ -6,9 +6,15 @@ import numpy as np
 import sympy as sp
 
 from .arithmetic import congruence, rep_matrix_from_numpy
+from .backends import SDPError
 
 Decomp = Dict[str, Tuple[sp.Matrix, sp.Matrix, List[sp.Rational]]]
 
+
+class SDPRationalizeError(SDPError):
+    @classmethod
+    def from_sdp_error(cls, error: SDPError) -> "SDPRationalizeError":
+        return cls(error.result)
 
 def rationalize(x, rounding = 1e-2, **kwargs):
     """

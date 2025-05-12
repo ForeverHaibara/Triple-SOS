@@ -7,13 +7,15 @@ from itertools import product
 from time import time
 from typing import Dict, List, Tuple, Union, Optional, Any
 
-from sympy import Poly, Expr, MatrixBase
+from sympy import Poly, Expr, MatrixBase, prod
 from sympy.matrices import MutableDenseMatrix as Matrix
 from sympy.combinatorics import PermutationGroup
 
+from .algebra import SOSBasis
 from ...sdp import SDPProblem
-from ...sdp.arithmetic import solve_columnspace
+from ...sdp.arithmetic import solve_columnspace, rep_matrix_from_list, rep_matrix_to_numpy
 from ...utils import optimize_poly, Root, MonomialManager
+from ...utils.roots.roots import _algebraic_extension, _derv
 
 
 def _permute_root(perm_group: PermutationGroup, root: Root) -> List[Root]:
@@ -29,6 +31,37 @@ def _is_binary_root(root: Root) -> bool:
     # return isinstance(root, RootRational) and len(set(root.root)) <= 2
     return root.is_Rational and len(set(root.root)) <= 2
 
+def _root_span(root: Root, basis: Any, degree: int = 0, diff: Tuple[int,...] = None) -> Matrix:
+    if isinstance(basis, MonomialManager):
+        return root.span(degree, diff, symmetry=basis)
+    elif isinstance(basis, SOSBasis):
+        monoms = basis._basis # should be a list of tuple
+
+        vec = [None] * len(monoms)
+        _single_power = root._single_power_monomial
+
+        zero = root.domain.zero
+        if diff is None:
+            for ind, monom in enumerate(monoms):
+                vec[ind] = _single_power(monom)
+        else:
+            for ind, monom in enumerate(monoms):
+                if any(order_m < order_diff for order_m, order_diff in zip(monom, diff)):
+                    vec[ind] = zero
+                else:
+                    dervs = [_derv(order_m, order_diff) for order_m, order_diff in zip(monom, diff)]
+                    powers = [order_m - order_diff for order_m, order_diff in zip(monom, diff)]
+                    vec[ind] = int(prod(dervs)) * _single_power(powers)
+
+        if not root.is_Rational:
+            vec = _algebraic_extension(vec, root.domain)
+        else:
+            vec = rep_matrix_from_list(vec, len(vec), domain=root.domain)
+        return vec
+
+ 
+    raise TypeError(f"Unknown basis type {type(basis)}")
+    
 
 class _bilinear():
     """
@@ -225,13 +258,15 @@ def _root_space(root: Root, poly: Poly, qmodule: Poly, codegree: int, basis: Mon
         monomial = tuple(qmodule.monoms()[0])
         orders = _compute_nonvanishing_diff_orders(poly, root, monomial)
         for order in orders:
-            spans.append(root.span(codegree, order, symmetry=basis))
+            # spans.append(root.span(codegree, order, symmetry=basis))
+            spans.append(_root_span(root, basis, codegree, order))
     else:
         # this is an incomplete (but fast) implementation
         # we do not consider higher order derivatives
         # TODO: consider higher order nonvanishing derivatives for irrational roots
         if not vanish(root):
-            spans.append(root.span(codegree, symmetry=basis))
+            # spans.append(root.span(codegree, symmetry=basis))
+            spans.append(_root_span(root, basis, codegree))
 
         # for j, permed_root in enumerate(_permute_root(perm_group, root)):
         #     if not vanish(permed_root):
@@ -241,7 +276,8 @@ def _root_space(root: Root, poly: Poly, qmodule: Poly, codegree: int, basis: Mon
 
     if len(spans):
         return Matrix.hstack(*spans)
-    return Matrix.zeros(len(basis.inv_monoms(codegree)), 0)
+    n = len(basis.inv_monoms(codegree)) if isinstance(basis, MonomialManager) else len(basis)
+    return Matrix.zeros(n, 0)
 
 
 def _findroot_binary(poly: Poly, symmetry: PermutationGroup = None) -> List[Root]:
@@ -266,7 +302,7 @@ def _findroot_binary(poly: Poly, symmetry: PermutationGroup = None) -> List[Root
 
 
 def get_nullspace(poly: Poly, ineq_constraints: Dict[Any, Poly], eq_constraints: Dict[Any, Poly],
-        ineq_bases: Dict[Any, MonomialManager], eq_bases: Dict[Any, MonomialManager],
+        ineq_bases: Dict[Any, SOSBasis], eq_bases: Dict[Any, SOSBasis],
         degree: Optional[int]=None, roots: List[Root] = [], perm_group: Optional[PermutationGroup] = None) -> Dict[Any, Matrix]:
     """
     In the current, all roots must satisfy poly(roots) == 0 and ineq_constraints(roots) >= 0,

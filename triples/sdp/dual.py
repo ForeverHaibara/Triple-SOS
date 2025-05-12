@@ -11,7 +11,7 @@ from .arithmetic import (
     rep_matrix_from_dict, rep_matrix_to_numpy, rep_matrix_from_numpy, sqrtsize_of_mat
 )
 from .backends import SDPError, solve_numerical_dual_sdp
-from .rationalize import RationalizeWithMask, RationalizeSimultaneously
+from .rationalize import SDPRationalizeError, RationalizeWithMask, RationalizeSimultaneously
 from .transforms import TransformableDual
 
 from .utils import S_from_y, decompose_matrix
@@ -517,14 +517,19 @@ class SDPProblem(TransformableDual):
         return sdp
 
     @classmethod
-    def from_equations(cls, eq: Matrix, rhs: Matrix, splits: Optional[Union[Dict[str, int], List[int]]]=None
-    ) -> 'SDPProblem':
+    def from_equations(cls, eq: Matrix, rhs: Matrix,
+        splits: Optional[Union[Dict[str, int], List[int]]]=None,
+        force_zeros: Dict[int, List[int]] = {},
+        add_force_zeros: bool = False,
+        equal_entries: List[Tuple[int, int]] = [],
+        add_equal_entries: bool = True,
+    ) -> Tuple['SDPProblem', Tuple[Matrix, Matrix]]:
         """
         Assume the SDP problem can be rewritten in the form of
 
-            eq * [vec(S1); vec(S2); ...] = rhs
+            eq * [vec(S1); vec(S2); ...] + eq * M = rhs
         
-        where Si.shape[0] = splits[i].
+        where Si >> 0 and Si.shape[0] = splits[i], and M is the linear part.
         The function formulates the SDP problem from the given equations.
         This is also the primal form of the SDP problem.
 
@@ -537,11 +542,21 @@ class SDPProblem(TransformableDual):
         splits : Optional[Union[Dict[str, int], List[int]]]
             The splits of the size of each symmetric matrix.
             If None, it assumes there is only one matrix.
+        add_force_zeros: bool
+            If True, if a digonal entry of the PSD matrix is zero,
+            then it also sets the corresponding row to zero.
+        add_equal_entries: bool
+            If True, constrain the pair (i,j) and (j,i) entries of a symmetric
+            matrix to be equal when solving the linear system. This is important to be
+            True unless the constraint has been provided in the `equal_entries` argument.
 
         Returns
         ---------
         sdp : SDPProblem
             The created SDP problem instance.
+        (x0, space): Tuple[Matrix, Matrix]
+            The rest of the linear variables can be represented by x0 + space @ y
+            where y is the generator vector of the SDPProblem.
 
         Examples
         ---------
@@ -562,7 +577,8 @@ class SDPProblem(TransformableDual):
             >>> from sympy import Matrix
             >>> A = Matrix([[1,2,4,2,3,5,4,5,6]])
             >>> b = Matrix([1])
-            >>> sdp = SDPProblem.from_equations(A, b); sdp
+            >>> sdp, (x0, space) = SDPProblem.from_equations(A, b)
+            >>> sdp
             <SDPProblem dof=5 size={0: 3}>
             >>> sdp.S_from_y() # doctest: +SKIP
             {0: Matrix([
@@ -580,8 +596,36 @@ class SDPProblem(TransformableDual):
         """
         if splits is None:
             splits = [sqrtsize_of_mat(eq.shape[1])]
-        x0, space = solve_undetermined_linear(eq, rhs)
-        return cls.from_full_x0_and_space(x0, space, splits, constrain_symmetry=True)
+            if splits[0]**2 != eq.shape[1]:
+                raise ValueError(f"The size of the matrix should be a square number, but got {eq.shape[1]}.")
+
+        sizes = list(splits.values()) if isinstance(splits, dict) else splits
+
+        force_zeros = dict(force_zeros)
+        equal_entries = list(equal_entries)
+        if add_equal_entries:
+            offset = 0
+            for n in sizes:
+                equal_entries.extend([
+                    (i*n+j+offset, j*n+i+offset) for i in range(n) for j in range(i+1,n)])
+                offset += n**2
+        if add_force_zeros:
+            offset = 0
+            for n in sizes:
+                for i in range(n):
+                    j = i*(n+1)+offset
+                    fj = force_zeros.get(j)
+                    if fj is None:
+                        force_zeros[j] = (list(range(j-i, j-i+n)))
+                    else: # avoid overwriting by .extend
+                        force_zeros[j] = force_zeros[j] + list(range(j-i, j-i+n))
+                offset += n**2
+
+        x0, space = solve_csr_linear(eq, rhs, x0_equal_indices=equal_entries, force_zeros=force_zeros)
+        n = sum([_**2 for _ in sizes])
+
+        sdp = cls.from_full_x0_and_space(x0[:n,:], space[:n,:], splits)
+        return sdp, (x0[n:,:], space[n:,:])
 
     @classmethod
     def from_matrix(cls, S: Union[Matrix, List[Matrix], Dict[str, Matrix]], gens: Optional[Tuple[Symbol, ...]]=None,
@@ -1028,8 +1072,10 @@ class SDPProblem(TransformableDual):
             >>> S1 = Matrix([[a,2],[2,2*a]])
             >>> S2 = Matrix([[2,a],[a,1]])
             >>> sdp = SDPProblem.from_matrix({'S1': S1, 'S2': S2})
-            >>> sdp.solve() is None
-            True
+            >>> sdp.solve() # doctest: +SKIP
+            Traceback (most recent call last):
+            ...
+            SDPRationalizeError: SDP solution failed:
 
         However, we can allow numerical solutions by setting `allow_numer=True`.
         The `solve` method will then return a numerical solution up to a small
@@ -1086,6 +1132,11 @@ class SDPProblem(TransformableDual):
             elif allow_numer:
                 self.register_y(y, perturb=True, propagate_to_parent=propagate_to_parent)
                 success = True
+
+            if not success:
+                raise SDPRationalizeError(sol)
+        else: # infeasible
+            raise SDPError(sol)
 
         if propagate_to_parent:
             self.propagate_to_parent(recursive=True)

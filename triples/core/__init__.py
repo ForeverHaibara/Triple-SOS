@@ -19,7 +19,7 @@ from .symsos import (
 )
 
 from .sdpsos import (
-    SDPSOS, SDPProblem, SOSProblem, SolutionSDP
+    SDPSOS, SDPProblem, SOSPoly, SolutionSDP
 )
 
 __all__ = [
@@ -30,5 +30,5 @@ __all__ = [
     'pqr_sym', 'pqr_cyc', 'pqr_ker',
     'SymmetricSOS', 'sym_representation', 'sym_representation_inv',
     'SolutionSymmetric',
-    'SDPSOS', 'SDPProblem', 'SOSProblem', 'SolutionSDP'
+    'SDPSOS', 'SDPProblem', 'SOSPoly', 'SolutionSDP'
 ]

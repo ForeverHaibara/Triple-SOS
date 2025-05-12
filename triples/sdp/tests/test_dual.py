@@ -2,6 +2,8 @@ import sympy as sp
 from sympy.abc import a, b, c, x, y, z, t
 from sympy.matrices import MutableDenseMatrix as Matrix
 
+import pytest
+
 from ..dual import SDPProblem
 
 class DualObjProblems:
@@ -32,11 +34,10 @@ class DualObjProblems:
         sdp.constrain_nullspace({0: Matrix([1,2,4])}) # [1,x,x^2] is in its nullspace
         return sdp, t+3, [], -2*7**.5 # optimal t = -3 - 2*7**.5
 
-
-def test_dual_solve_obj(tol = 1e-5):
-    problems = DualObjProblems.collect()
-    for name, problem in problems.items():
-        sdp, obj, constraints, val = problem()
-        assert sdp.solve_obj(obj, constraints), 'Failed to solve obj for %s' % name
-        val2 = obj.xreplace(sdp.as_params())
-        assert abs(val2 - val) < tol, f'Failed to solve obj for {name}, expected {val}, but got {val2}.'
+@pytest.mark.parametrize('problem', DualObjProblems.collect().values(),
+    ids=DualObjProblems.collect().keys())
+def test_dual_solve_obj(problem, tol=1e-5):
+    sdp, obj, constraints, val = problem()
+    assert sdp.solve_obj(obj, constraints)
+    val2 = obj.xreplace(sdp.as_params())
+    assert abs(val2 - val) < tol

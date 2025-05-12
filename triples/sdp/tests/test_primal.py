@@ -3,6 +3,8 @@ import sympy as sp
 from sympy import MutableDenseMatrix as Matrix
 from sympy import Symbol
 
+import pytest
+
 from ..primal import SDPPrimal
 
 class PrimalObjProblems:
@@ -21,13 +23,14 @@ class PrimalObjProblems:
         a, na, na2, b = sdp.gens
         return sdp, -2*a + na*.2+na2*.8 - b - 2, [2*a + 2*b <= 6-.7*na-.3*na2], -29/4-5*57**.5/12
 
-def test_primal_solve_obj(tol = 1e-5):
-    problems = PrimalObjProblems.collect()
-    for name, problem in problems.items():
-        sdp, obj, constraints, val = problem()
-        assert sdp.solve_obj(obj, constraints), 'Failed to solve obj for %s' % name
-        val2 = obj.xreplace(sdp.as_params())
-        assert abs(val2 - val) < tol, f'Failed to solve obj for {name}, expected {val}, but got {val2}.'
+@pytest.mark.parametrize('problem', PrimalObjProblems.collect().values(),
+    ids=PrimalObjProblems.collect().keys())
+def test_primal_solve_obj(problem, tol=1e-5):
+    sdp, obj, constraints, val = problem()
+    assert sdp.solve_obj(obj, constraints)
+    val2 = obj.xreplace(sdp.as_params())
+    assert abs(val2 - val) < tol
+
 
 def test_primal_exprs_to_arrays():
     _gens = [Symbol('x%d'%i) for i in range(13)]

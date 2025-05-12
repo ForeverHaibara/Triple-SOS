@@ -7,10 +7,21 @@ import sympy as sp
 from sympy import Poly, Expr
 from sympy.combinatorics import PermutationGroup
 
-from .sos import SOSProblem
+from .sos import SOSPoly
 from .solution import SolutionSDP
 from ..shared import sanitize_input, sanitize_output, clear_polys_by_symmetry
 from ...utils import MonomialManager, optimize_poly
+
+
+class _lazy_iter:
+    """A wrapper for recyclable iterators but initialized when first called."""
+    def __init__(self, initializer: Callable[[], Any]):
+        self._initializer = initializer
+        self._iter = None
+    def __iter__(self):
+        if self._iter is None:
+            self._iter = self._initializer()
+        return iter(self._iter)
 
 
 def _get_qmodule_list(poly: Poly, ineq_constraints: List[Tuple[Poly, Expr]],
@@ -174,7 +185,6 @@ def _SDPSOS(
         print(f'SDPSOS nvars = {nvars} degree = {degree}')
         print('Identified Symmetry = %s' % str(symmetry.perm_group).replace('\n', '').replace('  ',''))
 
-    sos_problem = SOSProblem(poly)
     roots = None
     qmodule_list = _get_qmodule_list(poly, ineq_constraints.items(),
                         ineq_constraints_with_trivial=ineq_constraints_with_trivial, preordering=preordering)
@@ -205,20 +215,22 @@ def _SDPSOS(
         try:
             if roots is None:
                 time1 = time()
-                roots = optimize_poly(poly, list(ineq_constraints.keys()), [poly] + list(eq_constraints.keys()), return_type='root')
-                if verbose:
-                    print(f"Time for finding roots num = {len(roots):<6d}     : {time() - time1:.6f} seconds.")
-            
-            sdp = sos_problem.construct(
-                ineq_constraints = [e[0] for e in qmodule],
-                eq_constraints   = list(eq_constraints.keys()),
-                symmetry=symmetry.perm_group, roots=roots, verbose=verbose
-            )
+                def _lazy_find_roots():
+                    roots = optimize_poly(poly, list(ineq_constraints.keys()), [poly] + list(eq_constraints.keys()), return_type='root')
+                    if verbose:
+                        print(f"Time for finding roots num = {len(roots):<6d}     : {time() - time1:.6f} seconds.")
+                    return roots
+                roots = _lazy_iter(_lazy_find_roots)
+ 
+            sos_problem = SOSPoly(poly, poly.gens, qmodule = [e[0] for e in qmodule], ideal = list(eq_constraints.keys()),
+                                    symmetry = symmetry.perm_group, roots = roots)
+            sdp = sos_problem.construct(verbose=verbose)
 
             if sos_problem.solve(verbose=verbose, solver=solver, allow_numer=allow_numer, kwargs=solve_kwargs) is not None:
                 if verbose:
                     print(f"Time for solving SDP{' ':20s}: {time() - time0:.6f} seconds. \033[32mSuccess\033[0m.")
-                solution = sos_problem.as_solution(ineq_constraints=dict(qmodule), eq_constraints=eq_constraints)
+                solution = sos_problem.as_solution(qmodule=dict(enumerate([e[1] for e in qmodule])),
+                                                    ideal=dict(enumerate(list(eq_constraints.values()))))
                 return solution
         except Exception as e:
             if verbose:

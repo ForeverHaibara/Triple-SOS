@@ -10,6 +10,7 @@ from sympy import Poly, Expr, Symbol, Mul, ZZ
 from sympy.core.relational import Relational
 from sympy.matrices import MutableDenseMatrix as Matrix
 
+from .abstract import AtomSOSElement
 from .manifold import constrain_root_nullspace
 from .solution import SolutionSDP
 from ...utils import CyclicSum, verify_symmetry, MonomialManager, Root
@@ -19,306 +20,59 @@ from ...sdp.utils import exprs_to_arrays, collect_constraints
 
 CHECK_SYMMETRY = True
 
-def _define_mapping_psd(ineq: Poly, ineq_basis: MonomialManager, full_monomial_manager: MonomialManager,
-        degree: int) -> Callable[[int, int], List[Tuple[int, Expr]]]:
-    """
-    Given a gram matrix of standard monomials and a permutation group, we want
-    to know how the entry a_{ij} contributes to the monomial of the product of two monomials.
-    The function returns a mapping from (i, j) to (std_ind, v) where std_ind is the index of the monomial
-    and v is the multiplicity of the monomial in the permutation group.
-    """
-    ineqterms = ineq.rep.terms()
-    var_terms = ineq_basis.inv_monoms((degree - ineq.total_degree())//2)
-    dict_monoms = full_monomial_manager.dict_monoms(degree)
-    zero, one = ineq.domain.zero, ineq.domain.one
-    monom_add, permute = full_monomial_manager.add, full_monomial_manager.permute
-    def mapping(i: int, j: int) -> Tuple[int, int]:
-        vec = defaultdict(lambda: zero)
-        m2, m3 = var_terms[i], var_terms[j]
-        m2m3 = monom_add(m2, m3)
-        for m1, v1 in ineqterms:
-            monom = monom_add(m1, m2m3) # TODO: incorrect for nc polys
-            std_ind = None
-            v = zero
-            for p in permute(monom):
-                ind = dict_monoms.get(p)
-                if ind is not None:
-                    std_ind = ind
-                    v += one
-            # If std_ind is None, then the addition of monomials is not in
-            # the monomial list of poly, which will cause an error when forming the matrix
-            if std_ind is None:
-                raise ValueError(f"Product of monomials {m1}, {m2} and {m3}"
-                                    " is not expected in the monomial list of poly.")
-            vec[std_ind] += v1*v
-        return [(k, v) for k, v in vec.items() if v]
-    return mapping
 
-def _define_mapping_linear(eq: Poly, eq_basis: MonomialManager, full_monomial_manager: MonomialManager,
-        degree: int) -> Callable[[int], List[Tuple[int, Expr]]]:
-    eqterms = eq.rep.terms()
-    var_terms = eq_basis.inv_monoms(degree - eq.total_degree())
-    dict_monoms = full_monomial_manager.dict_monoms(degree)
-    zero, one = eq.domain.zero, eq.domain.one
-    monom_add, permute = full_monomial_manager.add, full_monomial_manager.permute
-    def mapping(i: int) -> Tuple[int, int]:
-        vec = defaultdict(lambda: zero)
-        m2 = var_terms[i]
-        for m1, v1 in eqterms:
-            monom = monom_add(m1, m2)
-            std_ind = None
-            v = zero
-            for p in permute(monom):
-                ind = dict_monoms.get(p)
-                if ind is not None:
-                    std_ind = ind
-                    v += one
-            # If std_ind is None, then the addition of monomials is not in
-            # the monomial list of poly, which will cause an error when forming the matrix
-            if std_ind is None:
-                raise ValueError(f"Product of monomials {m1} and {m2}"
-                                    " is not expected in the monomial list of poly.")
-            vec[std_ind] += v1*v
-        return [(k, v) for k, v in vec.items() if v]
-    return mapping
+class SOSPoly(AtomSOSElement):
+    ##########################################################
+    # Manually set any variables below after construction
+    # could be unsafe, and results in unexpected behaviors.
+    ##########################################################
 
+    gens: Tuple[Symbol,...]
+    roots: List[Root]
 
-def _get_equal_entries(symmetry: MonomialManager, degree: int,
-        ineq_constraints: Dict[Any, Poly], eq_constraints: Dict[Any, Poly],
-        ineq_bases: Dict[Any, List[Tuple[int, ...]]], eq_bases: Dict[Any, List[Tuple[int, ...]]]) -> List[List[int]]:
-    if symmetry.is_trivial:
-        return []
-    offset = 0
-    equal_entries = []
-    perm_group = symmetry.perm_group
-    for key, ineq in ineq_constraints.items():
-        codegree = (degree - ineq.total_degree())//2
-        basis_dict = ineq_bases[key].dict_monoms(codegree)
-        basis = ineq_bases[key].inv_monoms(codegree)
-        n = len(basis)
-        if not all(isinstance(_, (tuple, list)) for _ in basis):
-            offset += n**2
-            continue
-
-        if verify_symmetry(ineq, perm_group):
-            # TODO: it does not need to be fully symmetric,
-            # partially symmetric is also acceptable
-            for i in range(n):
-                m1 = basis[i]
-                if not symmetry.is_standard_monom(m1):
-                    continue
-                for j in range(i, n):
-                    m2 = basis[j]
-                    s = set((i*n+j+offset, j*n+i+offset))
-                    for p1, p2 in zip(symmetry.permute(m1), symmetry.permute(m2)):
-                        i2, j2 = basis_dict.get(p1), basis_dict.get(p2)
-                        # if i2 is not None and j2 is not None
-                        s.add(i2*n+j2+offset)
-                        # s.add(j2*n+i2+offset)
-                    equal_entries.append(list(s))
-        offset += n**2
-
-    for key, eq in eq_constraints.items():
-        codegree = (degree - eq.total_degree())
-        basis_dict = eq_bases[key].dict_monoms(codegree)
-        basis = eq_bases[key].inv_monoms(codegree)
-        n = len(basis)
-        if not all(isinstance(_, (tuple, list)) for _ in basis):
-            offset += n
-            continue
-
-        if verify_symmetry(eq, perm_group):
-            for i in range(n):
-                m1 = basis[i]
-                if not symmetry.is_standard_monom(m1):
-                    continue
-                s = set((i+offset,))
-                for p1 in symmetry.permute(m1):
-                    i2 = basis_dict.get(p1)
-                    s.add(i2+offset)
-                equal_entries.append(list(s))
-        offset += n
-
-    return equal_entries
-
-
-#################################################################################
-#
-#                           Deparametrization tools
-#
-#################################################################################
-
-def _get_deparametrization(poly: Poly, deparametrize: Union[bool, Tuple[Symbol, ...]]
-    ) -> Tuple[Poly, List[Symbol], List[Poly]]:
-    if not deparametrize:
-        return poly, [], []
-
-    params = deparametrize if isinstance(deparametrize, (list, tuple))\
-                else poly.free_symbols - set(poly.gens)
-    params = list(params)
-    if len(params) == 0:
-        return poly, [], []
-
-    gens = poly.gens
-    poly = poly.as_poly(params)
-    if poly.total_degree() > 1:
-        raise ValueError("Unable to deparametrize due to nonlinear parameters found in the polynomial."
-                            " Set deparametrize to False or to a tuple of linear parameters.")
-    
-    onehot = [0]*len(params)
-    coeff_of_params = [0]*len(params)
-    for i in range(len(params)):
-        onehot[i] = 1
-        coeff_of_params[i] = poly.coeff_monomial(tuple(onehot)).as_poly(gens)
-        onehot[i] = 0
-    poly = poly.coeff_monomial(tuple(onehot)).as_poly(gens)
-    return poly, params, coeff_of_params
-
-
-def _deparam_injection(eq_mapping: Dict[Any, Callable], eq_size: Dict[Any, int],
-        full_monomial_manager: MonomialManager, degree: int, coeff_of_params: List[Poly]=[]) -> Any:
-    """
-    Treat linear parameters as equality constraints and inject them into the `eq_mapping`.
-    """
-    class _parameters: # any object not in collision with other keys in eq_mapping
-        pass
-    key = _parameters()
-    vecs = [-full_monomial_manager.arraylize_sp(p, degree=degree).T for p in coeff_of_params]
-    mapping = lambda i: list(vecs[i]._rep.rep.get(0, {}).items())
-    eq_mapping[key] = mapping
-    eq_size[key] = len(coeff_of_params)
-    return key
-
-
-class SOSProblem():
-    """
-    Helper class for SDPSOS. See details at SOSProblem.solve.
-
-    Assume that a polynomial can be written in the form v^T @ M @ v.
-    Sometimes there are implicit constraints that M = Q @ S @ Q.T where Q is a rational matrix.
-    So we can solve the problem on S first and then restore it back to M.
-
-    To summarize, it is about solving for S >> 0 such that
-    eq @ vec(S) = vec(P) where P is determined by the target polynomial.
-    """
-    poly: Poly
-    gens: List[Symbol]
-    _degree: int
-    _symmetry: MonomialManager
-    _sdp: SDPProblem
-    _roots: List[Root]
-
-    # inequality constraints: (quadratic module)
-    ineq_constraints: Dict[Any, Poly]
-    _ineq_bases: Dict[Any, MonomialManager]
-    _ineq_codegrees: Dict[Any, int]
-
-    # equality constraints: (ideal)
-    eq_constraints: Dict[Any, Poly]
-    _eq_bases: Dict[Any, MonomialManager]
-    _eq_codegrees: Dict[Any, int]
-    _eq_space: Dict[Any, Tuple[Matrix, Matrix]]
-
-    # linear parameters in polynomial
-    _parameter_spaces: Tuple[Matrix, Matrix]
-    _parameter_bases: List[Symbol]
-
-    def __init__(self, poly: Poly, gens: Optional[Tuple[Symbol, ...]]=None):
-        """
-        Construct the SOS problem.
-
-        Parameters
-        ----------
-        poly : Poly
-            The polynomial to perform SOS on.
-        gens : Optional[Tuple[Symbol,...]]
-            The generators of the polynomial. Inferred from the polynomial if not specified.
-        """
-        if gens is None:
-            if not isinstance(poly, Poly):
-                raise ValueError("Generators must be specified when the polynomial is not a Poly object.")
-            gens = poly.gens
-        else:
-            poly = Poly(poly, gens)
-        self.poly = poly
+    def __init__(self,
+        poly,
+        gens,
+        qmodule: List[Union[Poly, Expr]] = [],
+        ideal: List[Union[Poly, Expr]] = [],
+        degree: Optional[int] = None,
+        symmetry: Optional[PermutationGroup] = None,
+        roots: Optional[List[Root]] = [],
+        # qmodule_bases: Optional[List[Tuple[int, ...]]] = None,
+        # ideal_bases: Optional[List[Tuple[int, ...]]] = None,
+    ):
+        self.poly = Poly(poly, gens)
         self.gens = gens
 
-    @property
-    def sdp(self) -> SDPProblem:
-        """
-        Return the root node of the constructed SDP problem.
-        """
-        return self._sdp
+        if not isinstance(qmodule, dict):
+            qmodule = dict(enumerate(qmodule))
+        if not isinstance(ideal, dict):
+            ideal = dict(enumerate(ideal))
+        self._qmodule = {k: Poly(v, gens) for k, v in qmodule.items()}
+        self._ideal = {k: Poly(v, gens) for k, v in ideal.items()}
+        
+        degree = degree if degree is not None else self.poly.total_degree()
+        is_homogeneous = self.poly.is_homogeneous \
+            and all(_.is_homogeneous for _ in self._qmodule.values()) \
+            and all(_.is_homogeneous for _ in self._ideal.values())
+        from .algebra import PolyRing
+        self.algebra = PolyRing(len(gens), degree=degree, symmetry=symmetry, is_homogeneous=is_homogeneous)
 
-    @property
-    def sdpp(self) -> SDPProblem:
-        """
-        Return the child node of the SDP problem.
-        """
-        return self.sdp.get_last_child() if self.sdp is not None else None
 
-    def solve_obj(self,
-        objective: Union[Expr, Matrix, List],
-        constraints: List[Union[Relational, Expr, Tuple[Matrix, Matrix, str]]] = [],
-        solver: Optional[str] = None,
-        verbose: bool = False,
-        kwargs: Dict[Any, Any] = {}
-    ) -> Optional[Matrix]:
-        """
-        Solve the SOS problem. Arguments are passed to SDPProblem.solve.
-        """
-        obj = exprs_to_arrays([objective], self._parameter_bases, dtype=np.float64)[0][0]
-        cons = exprs_to_arrays(constraints, self._parameter_bases, dtype=np.float64)
-        ineq_lhs, ineq_rhs, eq_lhs, eq_rhs = collect_constraints(cons, len(self._parameter_bases))
-        x0, space = self._parameter_space
+        self.roots = roots
 
-        # ineq_lhs * (x0 + space * y) >= ineq_rhs
-        obj      = matmul(obj, space)
-        ineq_lhs = matmul(ineq_lhs, space)
-        ineq_rhs = matadd(ineq_rhs, -matmul(ineq_lhs, x0))
-        eq_lhs   = matmul(eq_lhs, space)
-        eq_rhs   = matadd(eq_rhs, -matmul(eq_lhs, x0))
-        return self.sdp.solve_obj(obj, [(ineq_lhs, ineq_rhs, '>'), (eq_lhs, eq_rhs, '==')],
-                solver=solver, verbose=verbose, kwargs=kwargs)
+    def _post_construct(self, verbose: bool = False):
+        self.sdp.constrain_zero_diagonals()
 
-    def solve(self, *args, **kwargs) -> Optional[Matrix]:
-        """
-        Solve the SOS problem. Arguments are passed to SDPProblem.solve.
-        """
-        return self.sdp.solve(*args, **kwargs)
-
-    def ineq_bases(self) -> Dict[Any, Matrix]:
-        """
-        Get the bases associated with each inequality constraint.
-        """
-        bases, gens = {}, self.gens
-        for key, basis in self._ineq_bases.items():
-            # TODO: what if the bases are not monomial tuples?
-            basis = basis.inv_monoms(self._ineq_codegrees[key])
-            bases[key] = [Mul(*(c**i for c, i in zip(gens, b))) for b in basis]
-        return bases
-
-    def eq_bases(self) -> Dict[Any, Matrix]:
-        """
-        Get the bases associated with each equality constraint.
-        """
-        bases, gens = {}, self.gens
-        for key, basis in self._eq_bases.items():
-            basis = basis.inv_monoms(self._eq_codegrees[key])
-            bases[key] = [Mul(*(c**i for c, i in zip(gens, b))) for b in basis]
-        return bases
-
-    def as_params(self) -> Dict[Symbol, Expr]:
-        if len(self._parameter_bases) == 0:
-            return {}
-        x0, space = self._parameter_space
-        y = x0 + space @ self.sdp.y
-        return dict(zip(self._parameter_bases, y))
+        _, roots = constrain_root_nullspace(self.sdp, self.poly, self._qmodule, self._ideal,
+            ineq_bases=self._qmodule_bases, eq_bases=self._ideal_bases, degree=self.algebra.degree,
+            roots=self.roots, symmetry=self.algebra.symmetry, verbose=verbose)
+        self.roots = roots
 
     def as_solution(
         self,
-        ineq_constraints: Optional[Dict[Any, Expr]] = None,
-        eq_constraints: Optional[Dict[Any, Expr]] = None,
+        qmodule: Optional[Dict[Any, Expr]] = None,
+        ideal: Optional[Dict[Any, Expr]] = None,
         adjoint_operator: Optional[Callable[[Expr], Expr]] = None,
         trace_operator: Optional[Callable[[Expr], Expr]] = None,
     ) -> SolutionSDP:
@@ -327,213 +81,29 @@ class SOSProblem():
 
         Parameters
         ----------
-        ineq_constraints: Optional[Dict[Any, Expr]]
+        qmodule: Optional[Dict[Any, Expr]]
             Conversion of polynomial inequality constraints to sympy expression forms.
-        eq_constraints: Optional[Dict[Any, Expr]]
+        ideal: Optional[Dict[Any, Expr]]
             Conversion of polynomial equality constraints to sympy expression forms.
         """
         decomp = self.sdp.decompositions
         if decomp is None:
             raise ValueError("The problem has not been solved yet.")
-        if ineq_constraints is None:
-            ineq_constraints = self.ineq_constraints
-        if eq_constraints is None:
-            eq_constraints = self.eq_constraints
-        eqspace = {eq: x + space * self.sdp.y for eq, (x, space) in self._eq_space.items()}
+        qmodule = self._qmodule if qmodule is None else qmodule
+        ideal = self._ideal if ideal is None else ideal
+        eqspace = {eq: x + space * self.sdp.y for eq, (x, space) in self._ideal_space.items()}
 
         solution = SolutionSDP.from_decompositions(self.poly, decomp, eqspace,
-            ineq_constraints = ineq_constraints,
-            ineq_bases       = self._ineq_bases,
-            ineq_codegrees   = self._ineq_codegrees,
-            eq_constraints   = eq_constraints,
-            eq_bases         = self._eq_bases,
-            eq_codegrees     = self._eq_codegrees,
-            cyclic_sum       = (lambda x: CyclicSum(x, self.gens, self._symmetry))\
-                                    if self._symmetry is not None else (lambda x: x),
+            qmodule          = qmodule,
+            qmodule_bases    = self._qmodule_bases,
+            ideal            = ideal,
+            ideal_bases      = self._ideal_bases,
+            state_operator   = (lambda x: CyclicSum(x, self.gens, self.algebra.symmetry))\
+                                    if self.algebra.symmetry is not None else (lambda x: x),
             adjoint_operator = adjoint_operator,
-            trace_operator   = trace_operator,
         )
 
         # overwrite the constraints information in the form of dict((Poly, Expr))
-        solution.ineq_constraints = {self.ineq_constraints[key]: expr for key, expr in ineq_constraints.items()}
-        solution.eq_constraints = {self.eq_constraints[key]: expr for key, expr in eq_constraints.items()}
+        solution.ineq_constraints = {self._qmodule[key]: expr for key, expr in qmodule.items()}
+        solution.eq_constraints = {self._ideal[key]: expr for key, expr in ideal.items()}
         return solution
-
-
-    def construct(
-        self,
-        ineq_constraints: List[Union[Poly, Expr]] = [],
-        eq_constraints: List[Union[Poly, Expr]] = [],
-        degree: Optional[int] = None,
-        symmetry: Optional[PermutationGroup] = None,
-        roots: Optional[List[Root]] = None,
-        term_sparsity: int = 1,
-        deparametrize: bool = True,
-        verbose: bool = False,
-        ineq_bases: Optional[List[Tuple[int, ...]]] = None,
-        eq_bases: Optional[List[Tuple[int, ...]]] = None,
-    ) -> SDPProblem:
-        """
-        Construct the SDP problem given inequality and equality constraints.
-
-        Parameters
-        ----------
-        ineq_constraints : List[Union[Poly, Expr]]
-            List or dict of polynomial or sympy expression inequality constraints,
-            G1, G2, ..., Gn >= 0.
-            Used as the generators of quadratic modules of the SOS problem.
-        eq_constraints : List[Union[Poly, Expr]]
-            List or dict of polynomial or sympy expression equality constraints,
-            H1, H2,..., Hm = 0.
-            Used as the generators of the quotient ring / ideal of the SOS problem.
-        degree : Optional[int]
-            Degree bound of the monomials. If not specified, it will be the degree of the poly.
-        symmetry : Optional[PermutationGroup]
-            Sympy permutation group indicating the symmetry of the variables. If given, it assumes
-        roots : Optional[List[Root]]
-            List of roots (zeros) of the polynomial. The roots must satisfy all given ineq and eq constraints.
-            This helps reduce the degree of freedom but may be computationally expensive.
-            If `roots=None`, roots will be automatically computed by heuristic methods.
-            **THIS WILL BE SLOW IF THE PROBLEM IS LARGE.** TO SKIP ROOTS COMPUTATION, pass in an empty list.
-        term_sparsity : int
-            Level to exploit term sparsity.
-            If 0, no term-sparsity is exploited.
-            If 1, term-sparsity is exploited when solving the equation system.
-        deparametrize : bool
-            Whether to deparametrize the SDP if the polynomial has linear parameters in the coefficients.
-        verbose : bool
-            Whether to print the progress.
-        
-        Returns
-        ----------
-        SDPProblem
-            The constructed root node of the SDP problem. It can also be accessed by `self.sdp`.
-            The leaf node of the SDP problem can be accessed by `self.sdpp`. 
-
-        Examples
-        ----------
-        """
-        gens, poly = self.gens, self.poly
-        nvars = len(gens)
-        ineq_constraints = dict((ineq, ineq) for ineq in ineq_constraints)\
-            if not isinstance(ineq_constraints, dict) else ineq_constraints
-        eq_constraints = dict((eq, eq) for eq in eq_constraints)\
-            if not isinstance(eq_constraints, dict) else eq_constraints
-        ineq_constraints = {key: Poly(ineq, *gens) for key, ineq in ineq_constraints.items()}
-        eq_constraints = {key: Poly(eq, *gens) for key, eq in eq_constraints.items()}
-
-        all_polys = [self.poly] + list(ineq_constraints.values()) + list(eq_constraints.values())
-
-        ###################################################################
-        #       Basic operations: compute degrees & unify domains
-        ###################################################################
-        if degree is None:
-            # TODO: what if the highest degree is odd?
-            # degree = max(all_polys, key=lambda x: x.total_degree()).total_degree()
-            degree = self.poly.total_degree()
-
-        self._ineq_codegrees = {key: (degree - ineq_constraints[key].total_degree())//2
-                                for key in ineq_constraints.keys()}
-        self._eq_codegrees = {key: (degree - eq_constraints[key].total_degree())
-                                for key in eq_constraints.keys()}
-        # TODO: shall we raise an exception?
-        # if any(_ < 0 for _ in self._ineq_codegrees.values())\
-        #         or any(_ < 0 for _ in self._eq_codegrees.values()):
-        #     raise ValueError("The working degree is too small to contain the constraints.")
-        self._degree = degree
-
-
-        # prepare deparametrization by separating linear parameters in poly
-        poly_deparam, params, coeff_of_params = _get_deparametrization(poly, deparametrize)
-        self._parameter_bases = params
-
-
-        # unify domains
-        domain = ZZ
-        for p in all_polys[1:]:
-            domain = domain.unify(p.domain)
-        ineq_constraints = {key: ineq.set_domain(domain) for key, ineq in ineq_constraints.items()}
-        eq_constraints = {key: eq.set_domain(domain) for key, eq in eq_constraints.items()}
-        self.ineq_constraints = ineq_constraints
-        self.eq_constraints = eq_constraints
-
-        if (symmetry is not None) and CHECK_SYMMETRY and (not verify_symmetry(poly, symmetry)):
-            raise ValueError("The polynomial is not symmetric under the given permutation group.")
-        self._symmetry = symmetry
-
-        ###################################################################
-        #                       Infer bases for SDP
-        ###################################################################
-        # TODO: correlation sparsity + term sparsity
-        homogeneous = all(p.is_homogeneous for p in all_polys)
-        mg = MonomialManager(nvars, is_homogeneous=homogeneous)
-        if ineq_bases is None:
-            ineq_bases = {key: mg for key in ineq_constraints.keys()}
-
-        if eq_bases is None:
-            eq_bases = {key: mg for key in eq_constraints.keys()}
-
-        self._ineq_bases = ineq_bases
-        self._eq_bases = eq_bases
-
-        ###################################################################
-        #                  Get contribution func of bases
-        ###################################################################
-        monomial_manager = MonomialManager(nvars, perm_group=symmetry, is_homogeneous=homogeneous)
-        ineq_mapping = {key: _define_mapping_psd(ineq_constraints[key], basis,
-                            monomial_manager, degree) for key, basis in ineq_bases.items()}
-        eq_mapping = {key: _define_mapping_linear(eq_constraints[key], basis,
-                            monomial_manager, degree) for key, basis in eq_bases.items()}
-        ineq_size = {k: len(v.inv_monoms(self._ineq_codegrees[k])) for k, v in ineq_bases.items()}
-        eq_size = {k: len(v.inv_monoms(self._eq_codegrees[k])) for k, v in eq_bases.items()}
-
-
-        # inject linear parameters into the eq_mapping
-        _param_key = None if len(params) == 0 else\
-            _deparam_injection(eq_mapping, eq_size, monomial_manager, degree, coeff_of_params)
-
-
-        # constrain equal variables by permutation group
-        equal_indices = _get_equal_entries(monomial_manager, degree,
-                            ineq_constraints, eq_constraints, ineq_bases, eq_bases)
-
-
-        time0 = time()
-        sdp, eq_space = SDPProblem.from_entry_contribution(
-            monomial_manager.arraylize_sp(poly_deparam, degree=degree),
-            ineq_size, ineq_mapping, eq_size, eq_mapping,
-            equal_indices=equal_indices, domain=domain
-        )
-        self._sdp = sdp
-        if _param_key is not None:
-            self._parameter_space = eq_space.pop(_param_key)
-        else:
-            self._parameter_space = (Matrix.zeros(0, 1), Matrix.zeros(0, sdp.dof))
-        self._eq_space = eq_space
-        if verbose:
-            print(f"Time for solving coefficient equations  : {time() - time0:.6f} seconds. Dof = {sdp.dof}")
-
-
-        ###################################################################
-        #            Apply transforms and facial reductions
-        ###################################################################
-        # if deparametrize:
-        #     sdp = sdp.deparametrize()
-        #     sdp.clear_parents()
-        #     self._sdp = sdp
-
-        if term_sparsity:
-            time0 = time()
-            sdp.get_last_child().constrain_zero_diagonals()
-            if verbose:
-                print(f"Time for constraining zero diagonals    : {time() - time0:.6f} seconds. Dof = {sdp.get_last_child().dof}")
-    
-        _, roots = constrain_root_nullspace(sdp, poly, ineq_constraints, eq_constraints,
-            ineq_bases=ineq_bases, eq_bases=eq_bases, degree=degree,
-            roots=roots, symmetry=symmetry, verbose=verbose)
-        self._roots = roots
-
-        if verbose:
-            sdp.print_graph()
-
-        return sdp

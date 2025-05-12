@@ -105,7 +105,7 @@ _EXPECTED_STATUS = {
 class SDPError(Exception):
     """Base class for exceptions in this module."""
     result = None
-    def __init__(self, result: SDPResult):   
+    def __init__(self, result: SDPResult):
         self.result = result
         error_messages = []
         for key, value in _EXPECTED_STATUS.items():

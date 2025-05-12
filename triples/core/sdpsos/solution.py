@@ -5,8 +5,16 @@ import numpy as np
 from sympy import Poly, Expr, Symbol
 from sympy.matrices import MutableDenseMatrix as Matrix
 
+from .algebra import SOSBasis
 from ...utils import MonomialManager, SolutionSimple
 from ...sdp.arithmetic import is_numerical_mat
+
+def _invarraylize(basis: SOSBasis, vec: Matrix, gens: Tuple[Symbol, ...]) -> Poly:
+    b = basis._basis
+    vec = vec._rep.rep
+    rep = {b[i]: v[0] for i, v in vec.items() if v.get(0)}
+    return Poly.from_dict(rep, *gens, domain=vec.domain)
+
 
 class SolutionSDP(SolutionSimple):
     method = 'SDPSOS'
@@ -22,40 +30,31 @@ class SolutionSDP(SolutionSimple):
         poly: Poly,
         decompositions: Dict[Any, Tuple[Matrix, Matrix]],
         eqspace: Dict[Any, Matrix],
-        ineq_constraints: Dict[Any, Expr],
-        ineq_bases: Dict[Any, MonomialManager],
-        ineq_codegrees: Dict[Any, int],
-        eq_constraints: Dict[Any, Expr],
-        eq_bases: Dict[Any, MonomialManager],
-        eq_codegrees: Dict[Any, int],
-        cyclic_sum: Optional[Callable[[Expr], Expr]] = None,
+        qmodule: Dict[Any, Expr],
+        qmodule_bases: Dict[Any, MonomialManager],
+        ideal: Dict[Any, Expr],
+        ideal_bases: Dict[Any, MonomialManager],
         adjoint_operator: Optional[Callable[[Expr], Expr]] = None,
-        trace_operator: Optional[Callable[[Expr], Expr]] = None,
+        state_operator: Optional[Callable[[Expr], Expr]] = None,
     ) -> 'SolutionSDP':
         """
         Create SDP solution from decompositions.
         """
-        if cyclic_sum is None:
-            cyclic_sum = lambda x: x
 
         qmodule_expr = _get_qmodule_expr(
             decompositions, poly.gens,
-            ineq_constraints=ineq_constraints,
-            ineq_bases=ineq_bases,
-            ineq_codegrees=ineq_codegrees,
-            cyclic_sum=cyclic_sum,
+            qmodule=qmodule,
+            qmodule_bases=qmodule_bases,
             adjoint_operator=adjoint_operator,
-            trace_operator=trace_operator,
+            state_operator=state_operator,
         )
 
         ideal_expr = _get_ideal_expr(
             eqspace, poly.gens,
-            eq_constraints=eq_constraints,
-            eq_bases=eq_bases,
-            eq_codegrees=eq_codegrees,
-            cyclic_sum=cyclic_sum,
+            ideal=ideal,
+            ideal_bases=ideal_bases,
             adjoint_operator=adjoint_operator,
-            trace_operator=trace_operator,
+            state_operator=state_operator,
         )
 
         is_equal = not _is_numerical(decompositions, eqspace)
@@ -69,32 +68,27 @@ class SolutionSDP(SolutionSimple):
 def _get_ideal_expr(
         eqspace: Dict[Any, Matrix],
         gens: List[Symbol],
-        eq_constraints: Dict[Any, Expr],
-        eq_bases: Dict[Any, MonomialManager],
-        eq_codegrees: Dict[Any, int],
-        cyclic_sum: Callable[[Expr], Expr],
+        ideal: Dict[Any, Expr],
+        ideal_bases: Dict[Any, MonomialManager],
         adjoint_operator: Optional[Callable[[Expr], Expr]] = None,
-        trace_operator: Optional[Callable[[Expr], Expr]] = None,
+        state_operator: Optional[Callable[[Expr], Expr]] = None,
     ):
         ideal_exprs = []
         for key, vec in eqspace.items():
-            codeg = eq_codegrees[key]
-            expr = eq_constraints[key].as_expr()
-            vec = eq_bases[key].invarraylize(vec, gens, codeg).as_expr()
-            ideal_exprs.append(cyclic_sum(vec * expr).together())
-        if trace_operator is not None:
-            ideal_exprs = map(trace_operator, ideal_exprs)
+            expr = ideal[key].as_expr()
+            vec = _invarraylize(ideal_bases[key], vec, gens).as_expr()
+            ideal_exprs.append(vec * expr.together())
+        if state_operator is not None:
+            ideal_exprs = map(lambda x: state_operator(x), ideal_exprs)
         return sp.Add(*ideal_exprs)
 
 def _get_qmodule_expr(
         decompositions: Dict[Any, Tuple[Matrix, Matrix]],
         gens: List[Symbol],
-        ineq_constraints: Optional[Dict[Any, Expr]],
-        ineq_bases: Optional[Dict[Any, MonomialManager]],
-        ineq_codegrees: Optional[Dict[Any, int]],
-        cyclic_sum: Callable[[Expr], Expr],
+        qmodule: Optional[Dict[Any, Expr]],
+        qmodule_bases: Optional[Dict[Any, MonomialManager]],
         adjoint_operator: Optional[Callable[[Expr], Expr]] = None,
-        trace_operator: Optional[Callable[[Expr], Expr]] = None,
+        state_operator: Optional[Callable[[Expr], Expr]] = None,
         simplify_poly: Optional[Callable] = None,
     ) -> Expr:
     """
@@ -118,18 +112,16 @@ def _get_qmodule_expr(
             coeff = coeff/2 # since we have doubled the "q"
         else:
             expr = sp.Mul(expr, q, expr)
-        return coeff * cyclic_sum(expr)
+        return coeff * state_operator(expr) if state_operator is not None else coeff * expr
 
     exprs = []
     for key, (U, S) in decompositions.items():
-        codeg = ineq_codegrees[key]
-        expr = ineq_constraints[key]
-        vecs = [ineq_bases[key].invarraylize(U[i,:], gens, codeg) for i in range(U.shape[0])]
+        expr = qmodule[key]
+        # vecs = [qmodule_bases[key].invarraylize(U[i,:], gens, codeg) for i in range(U.shape[0])]
+        vecs = [_invarraylize(qmodule_bases[key], U[i,:].T, gens) for i in range(U.shape[0])]
         vecs = [compute_cyc_sum_of_squares(S[i], expr, vecs[i]) for i in range(U.shape[0])]
         exprs.extend(vecs)
 
-    if trace_operator is not None:
-        exprs = map(trace_operator, exprs)
     return sp.Add(*exprs)
 
 def _default_simplify_poly(poly: Poly, bound: int=10000) -> Tuple[Expr, Expr]:
