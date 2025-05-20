@@ -10,7 +10,7 @@ from sympy.combinatorics import PermutationGroup
 from .sos import SOSPoly
 from .solution import SolutionSDP
 from ..shared import sanitize_input, sanitize_output, clear_polys_by_symmetry
-from ...utils import MonomialManager, optimize_poly
+from ...utils import MonomialManager, optimize_poly, Root
 
 
 class _lazy_iter:
@@ -86,6 +86,7 @@ def SDPSOS(
         ineq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
         eq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
         symmetry: Optional[Union[MonomialManager, PermutationGroup]] = None,
+        roots: Optional[List[Root]] = None,
         ineq_constraints_with_trivial: bool = True,
         preordering: str = 'linear-progressive',
         degree_limit: int = 12,
@@ -140,6 +141,8 @@ def SDPSOS(
     symmetry: PermutationGroup or MonomialManager
         The symmetry of the polynomial. When it is None, it will be automatically generated. 
         If we want to skip the symmetry generation algorithm, please pass in a MonomialManager object.
+    roots: Optional[List[Root]]
+        The roots of the polynomial satisfying constraints. When it is None, it will be automatically generated.
     ineq_constraints_with_trivial: bool
         Whether to add the trivial inequality constraint 1 >= 0. This is used to generate the
         quadratic module. Default is True.
@@ -156,7 +159,7 @@ def SDPSOS(
         Whether to allow numerical solution (still under development).
     """
     return _SDPSOS(poly, ineq_constraints=ineq_constraints, eq_constraints=eq_constraints,
-                symmetry=symmetry, ineq_constraints_with_trivial=ineq_constraints_with_trivial,
+                symmetry=symmetry, roots=roots, ineq_constraints_with_trivial=ineq_constraints_with_trivial,
                 preordering=preordering, degree_limit=degree_limit, verbose=verbose,
                 solver=solver, allow_numer=allow_numer, solve_kwargs=solve_kwargs)
 
@@ -166,6 +169,7 @@ def _SDPSOS(
         ineq_constraints: Dict[Poly, Expr] = {},
         eq_constraints: Dict[Poly, Expr] = {},
         symmetry: MonomialManager = None,
+        roots: Optional[List[Root]] = None,
         ineq_constraints_with_trivial: bool = True,
         preordering: str = 'linear-progressive',
         degree_limit: int = 12,
@@ -185,7 +189,7 @@ def _SDPSOS(
         print(f'SDPSOS nvars = {nvars} degree = {degree}')
         print('Identified Symmetry = %s' % str(symmetry.perm_group).replace('\n', '').replace('  ',''))
 
-    roots = None
+    # roots = None
     qmodule_list = _get_qmodule_list(poly, ineq_constraints.items(),
                         ineq_constraints_with_trivial=ineq_constraints_with_trivial, preordering=preordering)
 
@@ -235,7 +239,7 @@ def _SDPSOS(
         except Exception as e:
             if verbose:
                 print(f"Time for solving SDP{' ':20s}: {time() - time0:.6f} seconds. \033[31mFailed with exceptions\033[0m.")
-                print(f"{e.__class__}: {e}")
+                print(f"{e.__class__.__name__}: {e}")
             continue
 
 

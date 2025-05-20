@@ -60,10 +60,10 @@ class PolyRing(CommutativeStateAlgebra):
         for key, q in qmodule.items():
             d = q.total_degree()
             if is_homogeneous and ((degree - d)%2 != 0 or (not q.is_homogeneous)):
-                qmodule_bases[key] = QmoduleBasis(self, [])
+                qmodule_bases[key] = QmoduleBasis(self, q, basis=[])
                 continue
             if d > degree:
-                qmodule_bases[key] = QmoduleBasis(self, [])
+                qmodule_bases[key] = QmoduleBasis(self, q, basis=[])
                 continue
             dict_basis, basis = generate_monoms(
                 self.nvars, (degree - d)//2, hom=is_homogeneous)
@@ -73,10 +73,10 @@ class PolyRing(CommutativeStateAlgebra):
         for key, i in ideal.items():
             d = i.total_degree()
             if is_homogeneous and (not i.is_homogeneous):
-                ideal_bases[key] = IdealBasis(self, [])
+                ideal_bases[key] = IdealBasis(self, i, basis=[])
                 continue
             if d > degree:
-                ideal_bases[key] = IdealBasis(self, [])
+                ideal_bases[key] = IdealBasis(self, i, basis=[])
                 continue
             dict_basis, basis = generate_monoms(
                 self.nvars, (degree - d), hom=is_homogeneous)

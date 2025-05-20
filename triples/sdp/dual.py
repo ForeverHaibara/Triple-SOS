@@ -731,7 +731,9 @@ class SDPProblem(TransformableDual):
         kwargs: Dict[str, Any] = {}
     ) -> Optional[np.ndarray]:
         return solve_numerical_dual_sdp(
-            self._x0_and_space, objective=objective, constraints=constraints,
+            {key: (rep_matrix_to_numpy(x0), rep_matrix_to_numpy(space))
+                for key, (x0, space) in self._x0_and_space.items()},
+            objective=objective, constraints=constraints,
             solver=solver, return_result=return_result, **kwargs
         )
 

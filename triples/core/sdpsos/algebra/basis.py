@@ -54,7 +54,9 @@ class QmoduleBasis(SOSBasis):
         if dict_basis is None:
             self._dict_basis = {b: i for i, b in enumerate(basis)}
 
-    def _nc_localizing_mapping(self, domain: Any) -> Callable[[int, int], List[TERM]]:
+    def _nc_localizing_mapping(self, domain: Any=None) -> Callable[[int, int], List[TERM]]:
+        if domain is None:
+            domain = self.qmodule.domain
         algebra = self.algebra
         qmodule = algebra.terms(self.qmodule.set_domain(domain))
         one, zero = domain.one, domain.zero
@@ -71,7 +73,9 @@ class QmoduleBasis(SOSBasis):
             return {k: v for k, v in vec.items() if v != zero}
         return _mapping
 
-    def _comm_localizing_mapping(self, domain: Any) -> Callable[[int, int], Dict[MONOM, Expr]]:
+    def _comm_localizing_mapping(self, domain: Any=None) -> Callable[[int, int], Dict[MONOM, Expr]]:
+        if domain is None:
+            domain = self.qmodule.domain
         algebra = self.algebra
         qmodule = algebra.terms(self.qmodule.set_domain(domain))
         one, zero = domain.one, domain.zero
@@ -87,12 +91,14 @@ class QmoduleBasis(SOSBasis):
             return {k: v for k, v in vec.items() if v != zero}
         return _mapping
 
-    def _localizing_mapping(self, domain: Any) -> Callable[[int, int], Dict[MONOM, Expr]]:
+    def _localizing_mapping(self, domain: Any=None) -> Callable[[int, int], Dict[MONOM, Expr]]:
         if self.is_commutative:
             return self._comm_localizing_mapping(domain)
         return self._nc_localizing_mapping(domain)
 
-    def localizing_matrix(self, domain: Any) -> Matrix:
+    def localizing_matrix(self, domain: Any=None) -> Matrix:
+        if domain is None:
+            domain = self.qmodule.domain
         mapping = self._localizing_mapping(domain)
         N, n = len(self.algebra), len(self)
 
@@ -159,9 +165,11 @@ class IdealBasis(SOSBasis):
         if dict_basis is None:
             self._dict_basis = {b: i for i, b in enumerate(basis)}
 
-    def _localizing_mapping(self, domain: Any) -> Callable[[int], List[TERM]]:
+    def _localizing_mapping(self, domain: Any=None) -> Callable[[int], List[TERM]]:
         # be careful that it should be a two-sided ideal for non-commutative algebra,
         # let's think more about it.
+        if domain is None:
+            domain = self.ideal.domain
         algebra = self.algebra
         ideal = algebra.terms(self.ideal.set_domain(domain))
         one, zero = domain.one, domain.zero
@@ -177,7 +185,9 @@ class IdealBasis(SOSBasis):
             return {k: v for k, v in vec.items() if v != zero}
         return _mapping
 
-    def localizing_matrix(self, domain: Any) -> Matrix:
+    def localizing_matrix(self, domain: Any=None) -> Matrix:
+        if domain is None:
+            domain = self.ideal.domain
         mapping = self._localizing_mapping(domain)
         N, n = len(self.algebra), len(self)
 
