@@ -27,14 +27,14 @@ def _get_sorted_nullspace_by_weights(mat: Matrix, weights: Optional[List[int]]=N
     """Compute a left nullspace of a matrix by first ordering the rows by weights."""
     if weights is not None:
         inds = np.argsort(weights)
-        # invinds = np.argsort(inds)
+        invinds = np.argsort(inds)
 
         # new_mat[i] = mat[inds[i]]
         mat = permute_matrix_rows(mat, inds)
 
     vecs = mat.T.nullspace()
     if weights is not None:
-        vecs = [permute_matrix_rows(v, inds) for v in vecs]
+        vecs = [permute_matrix_rows(v, invinds) for v in vecs]
     return vecs
 
 def _get_sorted_nullspace(monomial_manager: MonomialManager, mat: Matrix, degree: int) -> List[Matrix]:

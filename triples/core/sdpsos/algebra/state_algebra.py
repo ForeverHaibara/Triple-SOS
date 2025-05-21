@@ -62,6 +62,9 @@ class StateAlgebra:
     def inv_monoms(self) -> List[MONOM]:
         return self._inv_monoms
 
+    def total_degree(self, monom: MONOM) -> int:
+        raise NotImplementedError
+
     def permute_monom(self, monom: MONOM, perm: Permutation) -> MONOM:
         raise NotImplementedError
 
@@ -100,6 +103,9 @@ class StateAlgebra:
                 continue
             vec[ind] = {0: coeff}
         return rep_matrix_from_dict(vec, (len(self), 1), poly.domain)
+
+    def as_expr(self, poly: Poly) -> Expr:
+        raise NotImplementedError
 
     def mul(self, term1: TERM, term2: TERM) -> TERM:
         raise NotImplementedError

@@ -5,7 +5,7 @@ import numpy as np
 from sympy import Poly, Expr, Symbol
 from sympy.matrices import MutableDenseMatrix as Matrix
 
-from .algebra import SOSBasis
+from .algebra import SOSBasis, PolyRing, PseudoSMP, PseudoPoly
 from ...utils import MonomialManager, SolutionSimple
 from ...sdp.arithmetic import is_numerical_mat
 
@@ -13,7 +13,11 @@ def _invarraylize(basis: SOSBasis, vec: Matrix, gens: Tuple[Symbol, ...]) -> Pol
     b = basis._basis
     vec = vec._rep.rep
     rep = {b[i]: v[0] for i, v in vec.items() if v.get(0)}
-    return Poly.from_dict(rep, *gens, domain=vec.domain)
+    if isinstance(basis.algebra, PolyRing):
+        return Poly.from_dict(rep, *gens, domain=vec.domain)
+    else:
+        rep = PseudoSMP.from_dict(rep, len(gens)-1, vec.domain, algebra=basis.algebra)
+        return PseudoPoly.new(rep, *gens)
 
 
 class SolutionSDP(SolutionSimple):
@@ -61,7 +65,7 @@ class SolutionSDP(SolutionSimple):
 
         return SolutionSDP(
             problem = poly,
-            solution = qmodule_expr + ideal_expr,
+            solution = sp.Add(qmodule_expr, ideal_expr),
             is_equal = is_equal,
         )
 
@@ -131,6 +135,9 @@ def _default_simplify_poly(poly: Poly, bound: int=10000) -> Tuple[Expr, Expr]:
     of very large integer coefficients, and this function uses a heuristic
     strategy to balance the speed and complexity.
     """
+    if isinstance(poly, PseudoPoly):
+        c, p = poly.primitive()
+        return c, p.as_expr()
 
     def _extract_monomials(p: Poly) -> Tuple[Expr, Poly]:
         monoms = p.monoms()

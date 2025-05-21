@@ -62,10 +62,10 @@ class QmoduleBasis(SOSBasis):
         one, zero = domain.one, domain.zero
         mul, state, adjoint, index = algebra.mul, algebra.s, algebra.adjoint, algebra.index
         basis = self._basis
-        basis_star = [adjoint(term) for term in basis]
+        basis_star = [adjoint((m, one)) for m in basis]
         def _mapping(i, j):
             vec = defaultdict(lambda : zero)
-            m1, m2 = (basis_star[i], one), (basis[j], one)
+            m1, m2 = basis_star[i], (basis[j], one)
             for t in qmodule:
                 t2 = mul(m1, mul(t, m2))
                 st2 = state(t2)
@@ -104,12 +104,20 @@ class QmoduleBasis(SOSBasis):
 
         if isinstance(domain, Domain):
             rows = defaultdict(lambda : dict())
-            for i in range(n):
-                for t, v in mapping(i, i).items():
-                    rows[t][i*(n+1)] = v
-                for j in range(i+1, n):
-                    for t, v in mapping(i, j).items():
-                        rows[t][i*n+j] = 2*v
+            if self.is_commutative:
+                for i in range(n):
+                    for t, v in mapping(i, i).items():
+                        rows[t][i*(n+1)] = v
+                    for j in range(i+1, n):
+                        for t, v in mapping(i, j).items():
+                            rows[t][i*n+j] = 2*v
+            else:
+                for i in range(n):
+                    # for t, v in mapping(i, i).items():
+                    #     rows[t][i*(n+1)] = v
+                    for j in range(n):
+                        for t, v in mapping(i, j).items():
+                            rows[t][i*n+j] = v
             return rep_matrix_from_dict(rows, (N, n**2), domain)
         raise NotImplementedError
 

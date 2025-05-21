@@ -45,8 +45,14 @@ class PolyRing(CommutativeStateAlgebra):
     def permute_monom(self, monom: MONOM, perm: Permutation) -> MONOM:
         return tuple(perm(monom))
 
+    def total_degree(self, monom: MONOM) -> int:
+        return sum(monom)
+
     def terms(self, poly: Poly) -> List[TERM]:
         return poly.rep.terms()
+
+    def as_expr(self, poly: Poly) -> Expr:
+        return poly.as_expr()
 
     def mul(self, term1: TERM, term2: TERM) -> TERM:
         (t1, v1), (t2, v2) = term1, term2
