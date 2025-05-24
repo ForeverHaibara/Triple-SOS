@@ -147,8 +147,9 @@ class SOHSPoly(AtomSOSElement):
         self._ideal = {k: convert_expr_to_nc_poly(v, gens) for k, v in ideal.items()}
 
         if degree is None:
-            degree = max([self.poly] + list(self._qmodule.values()) + list(self._ideal.values()),
-                            key=lambda _: _.total_degree()).total_degree()
+            # degree = max([self.poly] + list(self._qmodule.values()) + list(self._ideal.values()),
+            #                 key=lambda _: _.total_degree()).total_degree()
+            degree = self.poly.total_degree()
         else:
             degree = int(degree)
             if degree < 0 or degree < self.poly.total_degree():
@@ -156,7 +157,8 @@ class SOHSPoly(AtomSOSElement):
 
         is_homogeneous = self.poly.is_homogeneous \
             and all(_.is_homogeneous for _ in self._qmodule.values()) \
-            and all(_.is_homogeneous for _ in self._ideal.values())
+            and all(_.is_homogeneous for _ in self._ideal.values()) \
+            and self.poly.total_degree() == degree
         self.algebra = NCPolyRing(len(poly.gens), degree=degree, is_homogeneous=is_homogeneous)
 
     def _post_construct(self, verbose: bool = False, **kwargs):

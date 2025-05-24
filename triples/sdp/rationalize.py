@@ -1,11 +1,18 @@
 from abc import ABC, abstractmethod
 from itertools import chain
-from typing import Union, Optional, Tuple, List, Dict, Callable, Generator
+from typing import Union, Optional, Tuple, List, Dict, Callable, Generator, Any
 
 import numpy as np
 import sympy as sp
+try:
+    from sympy.polys.matrices.exceptions import DMError
+except ImportError:
+    class DMError(Exception): ...
 
-from .arithmetic import congruence, rep_matrix_from_numpy
+from .arithmetic import (
+    matadd, matmul, matmul_multiple, solve_undetermined_linear,
+    sqrtsize_of_mat, congruence, rep_matrix_from_numpy, rep_matrix_to_numpy, lll
+)
 from .backends import SDPError
 
 Decomp = Dict[str, Tuple[sp.Matrix, sp.Matrix, List[sp.Rational]]]
@@ -33,7 +40,153 @@ def rationalize(x, rounding = 1e-2, **kwargs):
     return sp.nsimplify(x, tolerance = rounding, rational = True)
 
 
+class DualRationalizer:
+    LLL_WEIGHT = 10**19
+    LLL_TRUNC  = 500 # TODO
+    ROUND_DENOMS = (1, 12, 240, 2520, 2304, 2970, 210600, 1260**3)
+
+    def __init__(self, sdp):
+        self._sdp = sdp
+        self._x0_and_space_numer = None
+
+    @property
+    def x0_and_space(self) -> Dict[Any, Tuple[sp.Matrix, sp.Matrix]]:
+        return self._sdp._x0_and_space
+
+    @property
+    def x0_and_space_numer(self) -> Dict[Any, Tuple[np.ndarray, np.ndarray]]:
+        if self._x0_and_space_numer is None:
+            self._x0_and_space_numer = {k:
+                (rep_matrix_to_numpy(v[0]).flatten(), rep_matrix_to_numpy(v[1]))
+                for k, v in self.x0_and_space.items()
+            }
+        return self._x0_and_space_numer
+
+    def S_from_y(self, y):
+        x0_and_space = self.x0_and_space
+        if isinstance(y, np.ndarray):
+            x0_and_space = self.x0_and_space_numer
+        size = {key: sqrtsize_of_mat(x0.shape[0]) for key, (x0, space) in x0_and_space.items()}
+        return {key: matadd(x0, matmul(space, y)).reshape(size[key], size[key])
+                    for key, (x0, space) in x0_and_space.items()}
+
+    def eigvalsh(self, y: np.ndarray) -> Dict[Any, np.ndarray]:
+        return {key: np.linalg.eigvalsh(S) for key, S in self.S_from_y(y).items()}
+
+    def mineigs(self, y: np.ndarray) -> Dict[Any, float]:
+        return {key: float(np.min(eigs)) if len(eigs) else 0. for key, eigs in self.eigvalsh(y).items()}
+
+    def mineig(self, y: np.ndarray) -> float:
+        return min(self.mineigs(y).values()) if len(self.x0_and_space) else 0.
+
+    def decompose(self, y: sp.Matrix) -> Optional[Tuple[sp.Matrix, Decomp]]:
+        """
+        Decompose a vector `y` into a sum of rational numbers.
+        """
+        decomps = {}
+        S = self.S_from_y(y)
+        for key, s in S.items():
+            decomp = congruence(s, upper=False)
+            if decomp is None:
+                return None
+            U, diag = decomp
+            decomps[key] = (s, U, diag)
+        return y, decomps
+
+    def nullspaces_lll(self, y: np.ndarray) -> Dict[Any, sp.Matrix]:
+        """
+        Infer the nullspaces of PSD matrices by the LLL algorithm, see [1].
+
+        References
+        ----------
+        [1] David Monniaux. On using sums-of-squares for exact computations without
+        strict feasibility. 2010. hal-00487279
+        """
+        y = rep_matrix_from_numpy(y)
+        S = self.S_from_y(y)
+        V = {}
+        trunc = self.LLL_TRUNC
+        for key, s in S.items():
+            aug = sp.Matrix.hstack(
+                (self.LLL_WEIGHT*s).applyfunc(round), s.eye(s.shape[0]))
+            try:
+                v = lll(aug)[:, s.shape[0]:]
+                vrep = v._rep.rep.to_sdm()
+                for row in range(v.shape[0]):
+                    if any(map(lambda x: abs(x) > trunc, vrep.get(row, {}).values())):
+                        v = v[:row, :]
+                        break
+                v = v.T
+            except (DMError, ValueError, ZeroDivisionError) as e: # LLL algorithm failed
+                v = sp.Matrix.zeros(s.shape[0], 0)
+            V[key] = v
+        return V
+
+    def rationalize_lll(self, y: np.ndarray) -> Optional[Tuple[sp.Matrix, Decomp]]:
+        V = self.nullspaces_lll(y)
+        eq_space = []
+        eq_rhs = []
+        for key, (x0, space) in self.x0_and_space.items():
+            y_space = matmul_multiple(space.T, V[key])
+            rhs = matmul_multiple(x0.T, V[key])
+            eq_space.append(y_space.T)
+            eq_rhs.append(-rhs.T)
+
+        eq_space = sp.Matrix.vstack(*eq_space)
+        eq_rhs = sp.Matrix.vstack(*eq_rhs)
+        try:
+            x0, space = solve_undetermined_linear(eq_space, eq_rhs)
+        except ValueError: # Linear system no solution
+            return None
+
+        x0_numer = rep_matrix_to_numpy(x0).flatten()
+        space_numer = rep_matrix_to_numpy(space)
+        v0 = np.linalg.lstsq(space_numer, y - x0_numer, rcond=None)[0]
+
+        for denom in self.ROUND_DENOMS:
+            v = np.round(v0 * denom) / denom
+            y = x0_numer + space_numer @ v
+            if self.mineig(y) >= -1e-10:
+                v = rep_matrix_from_numpy(np.round(v0 * denom).astype(int)) / denom
+                y = x0 + space @ v
+                result = self.decompose(y)
+                if result is not None:
+                    return result
+
+    def rationalize(self, y: np.ndarray) -> Optional[Tuple[sp.Matrix, Decomp]]:
+        if not isinstance(y, np.ndarray):
+            y = rep_matrix_to_numpy(y)
+        y = y.astype(float)
+        y0 = y.copy()
+
+        if y.size == 0:
+            return self.decompose(sp.Matrix.zeros(0, 1))
+        # if y.size == 1: # A + xB -> generalized eigenvalue problem
+        #     pass
+
+        # eigvalsh = self.eigvalsh(y)
+        mineig_y0 = self.mineig(y0)
+
+        for denom in self.ROUND_DENOMS:
+            y = np.round(y0 * denom) / denom
+            if self.mineig(y) >= -1e-10:
+                y = rep_matrix_from_numpy(np.round(y0 * denom).astype(int)) / denom
+                result = self.decompose(y)
+                if result is not None:
+                    return result
+
+        if abs(mineig_y0) < 1e-4:
+            result = self.rationalize_lll(y0)
+            if result is not None:
+                return result
+
+        return None
+
+
+
+
 class Rationalizer(ABC):
+    """TODO: deprecation"""
     @abstractmethod
     def __call__(self, y: np.ndarray) -> Generator[sp.Matrix, None, None]:
         raise NotImplementedError
@@ -138,6 +291,8 @@ def rationalize_and_decompose(
         check_pretty: bool = True,
     ) -> Optional[Tuple[sp.Matrix, Decomp]]:
     """
+    TODO: deprecation
+
     Recover symmetric matrices from `x0 + space * y` and check whether they are
     positive semidefinite.
 

@@ -126,8 +126,8 @@ class SOSPoly(AtomSOSElement):
         a**2 - a + b**2 - b + c**2 - c
 
     Note that the original polynomial a^2+b^2+c^2-a-b-c has degree 2 and the constraint a*b*c-1 has degree 3,
-    but we obtain a solution in degree 4. If `degree=4` is not set, the default degree will be 3 and there
-    is no solution:
+    but we obtain a solution in degree 4. If `degree=4` is not set, the default degree will be 2, the degree
+    of the target polynomial and there is no solution:
 
         >>> sos = SOSPoly(a**2+b**2+c**2-a-b-c, (a,b,c), [1,a*b], [a*b*c-1], symmetry=SymmetricGroup(3))
         >>> solved = sos.solve()  # doctest:+SKIP
@@ -143,9 +143,10 @@ class SOSPoly(AtomSOSElement):
     is presented to show the set {(x,y): x-y^2+3>=0, y+x^2+2==0} is empty. This is done
     by finding polynomials g1, g2 and h1 such that -1 = g1 + (x-y^2+3)*g2 + (y+x^2+2)*h1,
     where g1, g2 >= 0 are sum-of-squares. If such polynomials are found, then -1 >= 0
-    leads to an immediate contradiction, implying the set is empty.
+    leads to an immediate contradiction, implying the set is empty. We need to set `degree = 2`
+    so that it considers combinations of polynomials in degree 2.
 
-        >>> sos = SOSPoly(-1, (x,y), [1, x-y**2+3], [y+x**2+2])
+        >>> sos = SOSPoly(-1, (x,y), [1, x-y**2+3], [y+x**2+2], degree=2)
         >>> solved = sos.solve()
         >>> sos.as_solution().solution  # doctest:+SKIP
         -10*x**2 + 2*x - 2*y**2 - 10*y + (10*x - 1)**2/10 + (2*y + 5)**2/2 - 68/5
@@ -188,8 +189,9 @@ class SOSPoly(AtomSOSElement):
         self._ideal = {k: Poly(v, gens) for k, v in ideal.items()}
         
         if degree is None:
-            degree = max([self.poly] + list(self._qmodule.values()) + list(self._ideal.values()),
-                            key=lambda _: _.total_degree()).total_degree()
+            # degree = max([self.poly] + list(self._qmodule.values()) + list(self._ideal.values()),
+            #                 key=lambda _: _.total_degree()).total_degree()
+            degree = self.poly.total_degree()
         else:
             degree = int(degree)
             if degree < 0 or degree < self.poly.total_degree():
@@ -197,7 +199,8 @@ class SOSPoly(AtomSOSElement):
 
         is_homogeneous = self.poly.is_homogeneous \
             and all(_.is_homogeneous for _ in self._qmodule.values()) \
-            and all(_.is_homogeneous for _ in self._ideal.values())
+            and all(_.is_homogeneous for _ in self._ideal.values()) \
+            and self.poly.total_degree() == degree
         self.algebra = PolyRing(len(gens), degree=degree, symmetry=symmetry, is_homogeneous=is_homogeneous)
 
         if symmetry is not None and not self.algebra.is_symmetric(poly, symmetry):

@@ -11,7 +11,7 @@ from .arithmetic import (
     rep_matrix_from_dict, rep_matrix_to_numpy, rep_matrix_from_numpy, sqrtsize_of_mat
 )
 from .backends import SDPError, solve_numerical_dual_sdp
-from .rationalize import SDPRationalizeError, RationalizeWithMask, RationalizeSimultaneously
+from .rationalize import SDPRationalizeError, DualRationalizer
 from .transforms import TransformableDual
 
 from .utils import S_from_y, decompose_matrix
@@ -723,6 +723,21 @@ class SDPProblem(TransformableDual):
         """
         return super().as_params()
 
+    def rationalize(self, y: np.ndarray, verbose = False, **kwargs) -> Optional[Tuple[Matrix, Decomp]]:
+        """
+        Rationalize a NumPy vector `y`. If verbose == True, display the numerical eigenvalues
+        before rationalization.
+        """
+        if y is None: return None
+        if len(y) == 0 and self.dof != 0:
+            # rationalize an empty vector
+            return None
+        f = DualRationalizer(self)
+        if verbose:
+            S_eigen = list(f.mineigs(y).values())
+            print(f'Minimum Eigenvalues = {S_eigen}')
+        return f.rationalize(y)
+
     def _solve_numerical_sdp(self,
         objective: np.ndarray,
         constraints: List[Tuple[np.ndarray, np.ndarray, str]] = [],
@@ -1124,8 +1139,7 @@ class SDPProblem(TransformableDual):
         if sol.y is not None and (not sol.infeasible):
             y = sol.y[:-1] # discard the eigenvalue relaxation
             self._ys.append(y)
-            solution = self.rationalize(y, verbose=verbose,
-                rationalizers=[RationalizeWithMask(), RationalizeSimultaneously([1,1260,1260**3])])
+            solution = self.rationalize(y, verbose=verbose)
             if solution is not None:
                 self.y = solution[0]
                 self.S = dict((key, S[0]) for key, S in solution[1].items())
