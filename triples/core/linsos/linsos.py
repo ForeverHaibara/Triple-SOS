@@ -17,7 +17,8 @@ from .tangents import prepare_tangents, prepare_inexact_tangents, get_qmodule_li
 from .correction import linear_correction
 from .updegree import lift_degree
 from .solution import SolutionLinear
-from ..shared import homogenize_expr_list, clear_polys_by_symmetry, sanitize_input, sanitize_output
+from ..preprocess import sanitize
+from ..shared import homogenize_expr_list, clear_polys_by_symmetry
 from ...utils import Root, optimize_poly
 from ...utils.monomials import MonomialManager
 
@@ -156,8 +157,7 @@ def _odd_basis_to_even(basis: List[LinearBasis], symbols: Tuple[Symbol, ...], in
     return new_basis
 
 
-@sanitize_output()
-@sanitize_input(homogenize=True, infer_symmetry=True, wrap_constraints=True)
+@sanitize(homogenize=True, infer_symmetry=True, wrap_constraints=True)
 def LinearSOS(
         poly: Poly,
         ineq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},

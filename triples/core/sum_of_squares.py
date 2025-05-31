@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Optional, Dict, List, Union, Callable, Any
 from warnings import warn
 
@@ -9,7 +10,6 @@ from .linsos import LinearSOS
 from .structsos import StructuralSOS
 from .symsos import SymmetricSOS
 from .sdpsos import SDPSOS
-from .shared import sanitize_input, sanitize_output
 
 from ..utils import PolyReader, SolutionSimple
 
@@ -40,7 +40,7 @@ DEFAULT_CONFIGS = {
 DEFAULT_SAVE_SOLUTION = lambda x: (str(x.solution) if x is not None else '')
 
 
-@sanitize_output()
+# @sanitize_output()
 # @sanitize_input(homogenize=True)
 def sum_of_squares(
         poly: Union[sp.Poly, sp.Expr],
@@ -117,6 +117,7 @@ def sum_of_squares(
     Optional[Solution]
         The solution. If no solution is found, None is returned.
     """
+    start_time = datetime.now()
     if method_order is None:
         method_order = METHOD_ORDER
     if configs is None:
@@ -128,6 +129,9 @@ def sum_of_squares(
         method = NAME_TO_METHOD[method]
         solution = method(poly, ineq_constraints, eq_constraints, **config)
         if solution is not None:
+            end_time = datetime.now()
+            solution._start_time = start_time
+            solution._end_time = end_time
             return solution
 
     return None

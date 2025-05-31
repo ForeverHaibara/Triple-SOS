@@ -11,10 +11,10 @@ from .sparse import sos_struct_linear, sos_struct_quadratic
 from .ternary import structural_sos_3vars
 from .quarternary import structural_sos_4vars
 from .pivoting import structural_sos_2vars
-from ..shared import sanitize_input, sanitize_output
+from ..preprocess import sanitize
 
-@sanitize_output()
-@sanitize_input(homogenize=True, infer_symmetry=False, wrap_constraints=False)
+
+@sanitize(homogenize=True, infer_symmetry=False, wrap_constraints=False)
 def StructuralSOS(
         poly: sp.Poly,
         ineq_constraints: Union[List[sp.Poly], Dict[sp.Poly, sp.Expr]] = {},

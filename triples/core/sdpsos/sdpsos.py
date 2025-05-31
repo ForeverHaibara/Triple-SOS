@@ -9,7 +9,8 @@ from sympy.combinatorics import PermutationGroup
 
 from .sos import SOSPoly
 from .solution import SolutionSDP
-from ..shared import sanitize_input, sanitize_output, clear_polys_by_symmetry
+from ..preprocess import sanitize
+from ..shared import clear_polys_by_symmetry
 from ...utils import MonomialManager, optimize_poly, Root
 
 
@@ -79,8 +80,7 @@ def _get_qmodule_list(poly: Poly, ineq_constraints: List[Tuple[Poly, Expr]],
         yield qmodule
 
 
-@sanitize_output()
-@sanitize_input(homogenize=True, infer_symmetry=True, wrap_constraints=True)
+@sanitize(homogenize=False, infer_symmetry=True, wrap_constraints=True)
 def SDPSOS(
         poly: Poly,
         ineq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
@@ -89,7 +89,6 @@ def SDPSOS(
         roots: Optional[List[Root]] = None,
         ineq_constraints_with_trivial: bool = True,
         preordering: str = 'linear-progressive',
-        degree_limit: int = 12,
         verbose: bool = False,
         solver: Optional[str] = None,
         allow_numer: int = 0,
@@ -149,8 +148,6 @@ def SDPSOS(
     preordering: str
         The preordering method for extending the generators of the quadratic module. It can be
         'none', 'linear', 'linear-progressive'. Default is 'linear-progressive'.
-    degree_limit: int
-        The maximum degree of the polynomial to be considered. Default is 12.
     verbose: bool
         Whether to print the progress. Default is False.
     solver: str
@@ -160,7 +157,7 @@ def SDPSOS(
     """
     return _SDPSOS(poly, ineq_constraints=ineq_constraints, eq_constraints=eq_constraints,
                 symmetry=symmetry, roots=roots, ineq_constraints_with_trivial=ineq_constraints_with_trivial,
-                preordering=preordering, degree_limit=degree_limit, verbose=verbose,
+                preordering=preordering, verbose=verbose,
                 solver=solver, allow_numer=allow_numer, solve_kwargs=solve_kwargs)
 
 
@@ -172,7 +169,6 @@ def _SDPSOS(
         roots: Optional[List[Root]] = None,
         ineq_constraints_with_trivial: bool = True,
         preordering: str = 'linear-progressive',
-        degree_limit: int = 12,
         verbose: bool = False,
         solver: Optional[str] = None,
         allow_numer: int = 0,
@@ -180,9 +176,16 @@ def _SDPSOS(
     ) -> Optional[SolutionSDP]:
     nvars = len(poly.gens)
     degree = poly.total_degree()
-    if degree > degree_limit or degree < 1 or nvars < 1:
+    if degree < 1 or nvars < 1:
         return None
-    if not (poly.domain in (sp.ZZ, sp.QQ)):
+    is_hom = poly.is_homogeneous and \
+        all(_.is_homogeneous for _ in ineq_constraints.keys()) and \
+        all(_.is_homogeneous for _ in eq_constraints.keys())
+    if not is_hom:
+        degree = max([degree]\
+            + [_.total_degree() for _ in ineq_constraints.keys()]\
+            + [_.total_degree() for _ in eq_constraints.keys()])
+    if not (poly.domain in (sp.ZZ, sp.QQ, sp.RR)):
         return None
 
     if verbose:
@@ -227,7 +230,7 @@ def _SDPSOS(
                 roots = _lazy_iter(_lazy_find_roots)
  
             sos_problem = SOSPoly(poly, poly.gens, qmodule = [e[0] for e in qmodule], ideal = list(eq_constraints.keys()),
-                                    symmetry = symmetry.perm_group, roots = roots)
+                                    symmetry = symmetry.perm_group, roots = roots, degree=degree)
             sdp = sos_problem.construct(verbose=verbose)
 
             if sos_problem.solve(verbose=verbose, solver=solver, allow_numer=allow_numer, kwargs=solve_kwargs) is not None:
