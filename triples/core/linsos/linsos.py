@@ -157,7 +157,8 @@ def _odd_basis_to_even(basis: List[LinearBasis], symbols: Tuple[Symbol, ...], in
     return new_basis
 
 
-@sanitize(homogenize=True, infer_symmetry=True, wrap_constraints=True)
+@sanitize(homogenize=True, infer_symmetry=True, wrap_constraints=True,
+    disable_denom_finding_roots=True)
 def LinearSOS(
         poly: Poly,
         ineq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
@@ -166,6 +167,7 @@ def LinearSOS(
         roots: Optional[List[Root]] = None,
         tangents: List[Expr] = [],
         augment_tangents: bool = True,
+        centralize: bool = True,
         preordering: str = 'quadratic',
         verbose: bool = False,
         quad_diff_order: int = 8,
@@ -231,7 +233,7 @@ def LinearSOS(
     """
     return _LinearSOS(poly, ineq_constraints=ineq_constraints, eq_constraints=eq_constraints,
                 symmetry=symmetry,roots=roots,tangents=tangents,augment_tangents=augment_tangents,
-                preordering=preordering,verbose=verbose,quad_diff_order=quad_diff_order,
+                centralize=centralize,preordering=preordering,verbose=verbose,quad_diff_order=quad_diff_order,
                 basis_limit=basis_limit,lift_degree_limit=lift_degree_limit,
                 linprog_options=linprog_options,allow_numer=allow_numer,_homogenizer=_homogenizer)
 
@@ -244,6 +246,7 @@ def _LinearSOS(
         roots: Optional[List[Root]] = None,
         tangents: List[Poly] = [],
         augment_tangents: bool = True,
+        centralize: bool = True,
         preordering: str = 'quadratic',
         verbose: bool = False,
         quad_diff_order: int = 8,
@@ -257,6 +260,9 @@ def _LinearSOS(
     if _homogenizer is not None: 
         # homogenize the tangents
         tangents = homogenize_expr_list(tangents, _homogenizer)
+        if roots is not None:
+            roots = [Root(r) if not isinstance(r, Root) else r for r in roots]
+            roots = [Root(r.root + (sp.Integer(1),), r.domain, r.rep + (r.domain.one,)) for r in roots]
     else:
         # homogeneous polynomial does not accept non-homogeneous tangents
         tagents_poly = [t.as_poly(poly.gens) for t in tangents]
@@ -265,14 +271,52 @@ def _LinearSOS(
     if roots is None:
         roots = []
         if poly.domain.is_QQ or poly.domain.is_ZZ:
-            roots = optimize_poly(poly, list(ineq_constraints), [poly] + list(eq_constraints), poly.gens)
+            time1 = time()
+            roots = optimize_poly(poly, list(ineq_constraints),
+                ([poly] + list(eq_constraints) + [_homogenizer - 1] if _homogenizer is not None else []), poly.gens)
+            if verbose:
+                print(f"Time for finding roots num = {len(roots):<6d}     : {time() - time1:.6f} seconds.")
+
         roots = [Root(r) for r in roots]
     roots = [Root(r) if not isinstance(r, Root) else r for r in roots]
+    roots = [r for r in roots if not r.is_zero]
 
 
-    ##############################################
-    # prepare tangents to form linear bases
-    ##############################################
+
+    ####################################################################
+    #            Centralize the polynomial and symmetry
+    ####################################################################
+    if centralize and len(roots) == 1 and roots[0].is_Rational and symmetry.is_trivial and any(ri != 1 and ri != 0 for ri in roots[0]):
+        gens = poly.gens
+        centralizer = {gens[i]: roots[0][i]*gens[i] for i in range(len(gens)) if roots[0][i] != 0 and roots[0][i] != 1}
+        def ct(x):
+            return x.as_expr().xreplace(centralizer).as_poly(gens)
+        new_poly = ct(poly)
+        new_ineqs = {ct(k): v.xreplace(centralizer) for k, v in ineq_constraints.items()}
+        new_eqs = {ct(k): v.xreplace(centralizer) for k, v in eq_constraints.items()}
+        new_tangents = [ct(t) for t in tangents]
+        new_roots = [Root(tuple(1 if roots[0][i] != 0 else 0 for i in range(len(gens))))]
+        if verbose:
+            print(f'LinearSOS centralizing {centralizer}')
+            # print('Goal         :', new_poly)
+            # print('Inequalities :', new_ineqs)
+            # print('Equalities   :', new_eqs)
+        sol = _LinearSOS(new_poly, ineq_constraints=new_ineqs, eq_constraints=new_eqs,
+                symmetry=symmetry,roots=new_roots,tangents=new_tangents,augment_tangents=augment_tangents,
+                centralize=False,preordering=preordering,verbose=verbose,quad_diff_order=quad_diff_order,
+                basis_limit=basis_limit,lift_degree_limit=lift_degree_limit,
+                linprog_options=linprog_options,allow_numer=allow_numer)
+        if sol is not None:
+            sol.problem = poly
+            sol.solution = sol.solution.xreplace({
+                gens[i]: gens[i]/roots[0][i] for i in range(len(gens)) if roots[0][i] != 0 and roots[0][i] != 1
+            })
+        return sol
+
+
+    ####################################################################
+    #            Prepare tangents to form linear bases
+    ####################################################################
     signs = _get_signs_of_vars(ineq_constraints, poly.gens)
     all_nonnegative = all(s > 0 for s in signs.values())
 
@@ -312,7 +356,8 @@ def _LinearSOS(
 
             if verbose:
                 time1 = time()
-                print('Linear Programming Shape = (%d, %d)'%(arrays.shape[0], arrays.shape[1]), '\tPreparation Time: %.3f s'%(time1 - time0), end = '')
+                print('Linear Programming Shape = (%d, %d)'%(arrays.shape[0], arrays.shape[1]),
+                      '\tPreparation Time: %.3f s'%(time1 - time0), end = '')
 
             b = np.zeros(arrays.shape[1])
             b[-1] = 1
@@ -351,6 +396,10 @@ def _LinearSOS(
                     is_equal=is_equal
                 )
                 return solution
+            else:
+                if verbose:
+                    print('\tRationalization failed.')
+
     except _basis_limit_exceeded:
         if verbose:
             print(f'Basis limit {basis_limit} exceeded. LinearSOS aborted.')

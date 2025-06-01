@@ -26,7 +26,9 @@ class _lazy_iter:
 
 
 def _get_qmodule_list(poly: Poly, ineq_constraints: List[Tuple[Poly, Expr]],
-        ineq_constraints_with_trivial: bool = True, preordering: str = 'linear-progressive') -> Generator[List[Tuple[Poly, Expr]], None, None]:
+        ineq_constraints_with_trivial: bool = True,
+        preordering: str = 'linear-progressive',
+        is_homogeneous: bool = True) -> Generator[List[Tuple[Poly, Expr]], None, None]:
     _ACCEPTED_PREORDERINGS = ['none', 'linear', 'linear-progressive']
     if not preordering in _ACCEPTED_PREORDERINGS:
         raise ValueError("Invalid preordering method, expected one of %s, received %s." % (str(_ACCEPTED_PREORDERINGS), preordering))
@@ -36,7 +38,7 @@ def _get_qmodule_list(poly: Poly, ineq_constraints: List[Tuple[Poly, Expr]],
 
     def degree_filter(polys_and_exprs):
         return [pe for pe in polys_and_exprs if pe[0].total_degree() <= degree \
-                    and (degree - pe[0].total_degree()) % 2 == 0]
+                    and ((degree - pe[0].total_degree()) % 2 == 0 if is_homogeneous else True)]
 
     if preordering == 'none':
         if ineq_constraints_with_trivial:
@@ -80,7 +82,8 @@ def _get_qmodule_list(poly: Poly, ineq_constraints: List[Tuple[Poly, Expr]],
         yield qmodule
 
 
-@sanitize(homogenize=False, infer_symmetry=True, wrap_constraints=True)
+@sanitize(homogenize=False, infer_symmetry=True, wrap_constraints=True,
+    disable_denom_finding_roots=True)
 def SDPSOS(
         poly: Poly,
         ineq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
@@ -194,7 +197,8 @@ def _SDPSOS(
 
     # roots = None
     qmodule_list = _get_qmodule_list(poly, ineq_constraints.items(),
-                        ineq_constraints_with_trivial=ineq_constraints_with_trivial, preordering=preordering)
+                        ineq_constraints_with_trivial=ineq_constraints_with_trivial,
+                        preordering=preordering, is_homogeneous=is_hom)
 
     # odd_degree_vars = [i for i in range(nvars) if poly.degree(i) % 2 == 1]
     for qmodule in qmodule_list:
@@ -223,6 +227,8 @@ def _SDPSOS(
             if roots is None:
                 time1 = time()
                 def _lazy_find_roots():
+                    if not poly.domain.is_Exact:
+                        return []
                     roots = optimize_poly(poly, list(ineq_constraints.keys()), [poly] + list(eq_constraints.keys()), return_type='root')
                     if verbose:
                         print(f"Time for finding roots num = {len(roots):<6d}     : {time() - time1:.6f} seconds.")

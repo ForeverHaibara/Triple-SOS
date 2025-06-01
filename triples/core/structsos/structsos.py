@@ -19,6 +19,7 @@ def StructuralSOS(
         poly: sp.Poly,
         ineq_constraints: Union[List[sp.Poly], Dict[sp.Poly, sp.Expr]] = {},
         eq_constraints: Union[List[sp.Poly], Dict[sp.Poly, sp.Expr]] = {},
+        verbose: Union[bool, int] = False,
     ) -> SolutionStructural:
     """
     Main function of structural SOS. It solves polynomial inequalities by

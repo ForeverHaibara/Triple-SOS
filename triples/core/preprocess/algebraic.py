@@ -1,4 +1,5 @@
 from functools import wraps
+from inspect import signature
 from typing import List, Dict, Tuple, Union
 
 import sympy as sp
@@ -7,6 +8,7 @@ from sympy import Expr, Poly, Rational, Integer, fraction
 from ...utils import SolutionSimple as Solution
 
 def handle_rational(
+    disable_denom_finding_roots = False,
 ):
     """
     Convert all rational expressions to polynomials.
@@ -53,7 +55,10 @@ def handle_rational(
                 # else: the sign is not determined
 
             else:
-                denom_sol = func(denom, new_ineqs, new_eqs, *args, **kwargs)
+                denom_kwargs = kwargs.copy()
+                if disable_denom_finding_roots:
+                    denom_kwargs['roots'] = []
+                denom_sol = func(denom, new_ineqs, new_eqs, *args, **denom_kwargs)
                 if denom_sol is not None:
                     denom_sol = denom_sol.solution
 

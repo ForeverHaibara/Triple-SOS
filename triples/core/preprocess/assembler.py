@@ -10,6 +10,7 @@ from .polynomial import handle_polynomial
 from ...utils import Solution
 
 def sanitize(
+        disable_denom_finding_roots: bool = False,
         homogenize: bool = False,
         ineq_constraint_sqf: bool = True,
         eq_constraint_sqf: bool = True,
@@ -38,7 +39,7 @@ def sanitize(
             new_func = handle_polynomial(
                 homogenize=homogenize, ineq_constraint_sqf=ineq_constraint_sqf, eq_constraint_sqf=eq_constraint_sqf,
                 infer_symmetry=infer_symmetry, wrap_constraints=wrap_constraints)(func)
-            new_func = handle_rational()(new_func)
+            new_func = handle_rational(disable_denom_finding_roots=disable_denom_finding_roots)(new_func)
             new_func = handle_general_expr()(new_func)
             
             sol = new_func(poly, ineq_constraints, eq_constraints, *args, **kwargs)
