@@ -1,40 +1,51 @@
 import re
 
 import numpy as np
+from sympy import Function, Symbol
+from sympy.external.importtools import version_tuple
 import gradio as gr
 from PIL import Image
 
 from triples.utils.text_process import short_constant_parser
 from triples.gui.sos_manager import SOS_Manager
+from triples.gui.linebreak import recursive_latex_auto_linebreak
+
+GRADIO_VERSION = tuple(version_tuple(gr.__version__))
+# https://github.com/gradio-app/gradio/pull/8822
+GRADIO_LATEX_SUPPORTS_ALIGNED = (GRADIO_VERSION[0] == 4 and GRADIO_VERSION[1] in (39, 40, 41, 43, 44))\
+    or GRADIO_VERSION[0] > 4
 
 def gradio_markdown() -> gr.Markdown:
-    version = gr.__version__
-    if version >= '4.0':
+    version = GRADIO_VERSION
+    if version >= (4, 0):
         return gr.Markdown(latex_delimiters=[{"left": "$", "right": "$", "display": False}])
     return gr.Markdown()
 
 def _convert_to_gradio_latex(content):
-    version = gr.__version__
+    version = GRADIO_VERSION
     replacement = {
         '\n': ' \n\n ',
         '$$': '$',
-        '&': ' ',
-        '\\\\': ' $ \n\n  $',
-        '\\begin{aligned}': '',
-        '\\end{aligned}': '',
-        '\\left\\{': '',
-        '\\right.': '',
+        # '\\left\\{': '',
+        # '\\right.': '',
     }
-    if version >= '4.0':
+    if not GRADIO_LATEX_SUPPORTS_ALIGNED:
+        replacement.update({
+            '&': ' ',
+            '\\\\': ' $ \n\n  $',
+            '\\begin{aligned}': '',
+            '\\end{aligned}': '',
+        })
+    if version >= (4, 0):
         replacement['\\frac'] = '\\dfrac'
-    else:
-        replacement['\\begin{aligned}'] = ''
-        replacement['\\end{aligned}'] = ''
+    # else:
+    #     replacement['\\begin{aligned}'] = ''
+    #     replacement['\\end{aligned}'] = ''
 
     for k,v in replacement.items():
         content = content.replace(k,v)
 
-    if version >= '4.0':
+    if version >= (4, 0):
         content = re.sub('\$(.*?)\$', '$\\ \\1$', content, flags=re.DOTALL)
     else:
         content = re.sub('\$(.*?)\$', '$\\\displaystyle \\1$', content, flags=re.DOTALL)
@@ -51,7 +62,7 @@ DEPLOY_CONFIGS = {
     },
     'SDPSOS': {
         'verbose': False,
-        'degree_limit': 12,
+        # 'degree_limit': 14,
     }
 }
 
@@ -188,14 +199,21 @@ class GradioInterface():
                 # print(e)
                 pass
 
+        gens = poly.free_symbols if SOS_Manager.CONFIG_ALLOW_NONSTANDARD_GENS else poly.gens
+        gens = sorted(gens, key=lambda x:x.name)
+        lhs_expr = Function('F')(*gens) if len(gens) > 0 else Symbol('\\text{LHS}')
         if solution is not None:
-            gradio_latex = _convert_to_gradio_latex(solution.str_latex)
+            tex = solution.to_string(mode='latex', lhs_expr=lhs_expr, settings={'long_frac_ratio': 2})
+            if GRADIO_LATEX_SUPPORTS_ALIGNED:
+                tex = recursive_latex_auto_linebreak(tex)
+            tex = '$$%s$$' % tex
+            gradio_latex = _convert_to_gradio_latex(tex)
             res = {
                 self.output_box: gradio_latex,
                 self.output_box2: gradio_latex,
-                self.output_box_latex: solution.str_latex,
-                self.output_box_txt: solution.str_txt,
-                self.output_box_formatted: solution.str_formatted,
+                self.output_box_latex: tex,
+                self.output_box_txt: solution.to_string(mode='txt', lhs_expr=lhs_expr),
+                self.output_box_formatted: solution.to_string(mode='formatted', lhs_expr=lhs_expr),
             }
         else:
             res = {

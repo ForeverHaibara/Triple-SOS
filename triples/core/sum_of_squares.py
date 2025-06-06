@@ -11,7 +11,7 @@ from .structsos import StructuralSOS
 from .symsos import SymmetricSOS
 from .sdpsos import SDPSOS
 
-from ..utils import PolyReader, SolutionSimple
+from ..utils import PolyReader, Solution
 
 NAME_TO_METHOD = {
     'LinearSOS': LinearSOS,
@@ -48,7 +48,7 @@ def sum_of_squares(
         eq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
         method_order: Optional[List[str]] = METHOD_ORDER,
         configs: Optional[Dict[str, Dict]] = DEFAULT_CONFIGS
-    ) -> Optional[SolutionSimple]:
+    ) -> Optional[Solution]:
     """
     Main function for sum of square decomposition.
 
@@ -145,7 +145,7 @@ def sum_of_squares_multiple(
         configs: Dict[str, Dict] = DEFAULT_CONFIGS,
         poly_reader_configs: Dict[str, Any] = {},
         save_result: Union[bool, str] = True,
-        save_solution_method: Callable[[Optional[SolutionSimple]], str] = DEFAULT_SAVE_SOLUTION,
+        save_solution_method: Callable[[Optional[Solution]], str] = DEFAULT_SAVE_SOLUTION,
         verbose_sos: bool = False,
         verbose_progress: bool = True
     ):
@@ -239,10 +239,10 @@ def sum_of_squares_multiple(
                 record['solution'] = None
                 record['method'] = None
             else:
-                if not solution.is_equal:
-                    record['status'] = 'inaccurate'
-                else:
-                    record['status'] = 'success'
+                # if not solution.is_Exact:
+                #     record['status'] = 'inaccurate'
+                # else:
+                record['status'] = 'success'
                 record['solution'] = solution
                 record['method'] = solution.method
         except Exception as e:
@@ -260,7 +260,7 @@ def sum_of_squares_multiple(
 def _process_records(
         records: List[Dict],
         save_result: Union[bool, str] = True,
-        save_solution_method: Callable[[Optional[SolutionSimple]], str] = DEFAULT_SAVE_SOLUTION,
+        save_solution_method: Callable[[Optional[Solution]], str] = DEFAULT_SAVE_SOLUTION,
         source: Optional[str] = None
     ) -> Any:
     """

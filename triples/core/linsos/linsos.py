@@ -273,7 +273,7 @@ def _LinearSOS(
         if poly.domain.is_QQ or poly.domain.is_ZZ:
             time1 = time()
             roots = optimize_poly(poly, list(ineq_constraints),
-                ([poly] + list(eq_constraints) + [_homogenizer - 1] if _homogenizer is not None else []), poly.gens)
+                ([poly] + list(eq_constraints) + ([_homogenizer - 1] if _homogenizer is not None else [])), poly.gens)
             if verbose:
                 print(f"Time for finding roots num = {len(roots):<6d}     : {time() - time1:.6f} seconds.")
 

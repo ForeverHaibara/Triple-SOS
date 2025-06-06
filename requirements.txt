@@ -12,7 +12,7 @@ picos
 
 # For gradio launch (and deployment on online platforms, e.g. huggingface):
 pillow
-gradio==3.44.4 # LaTeX rendering sensitive to the version, recommend 3.44.4
+gradio==4.44 # LaTeX rendering sensitive to the version, recommend 4.44
 
 # For flask launch (recommended for individual use):
 # pip install flask

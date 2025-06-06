@@ -8,9 +8,10 @@ from flask_cors import CORS
 
 import sympy as sp
 
-from triples.utils import pl, SolutionSimple, poly_get_factor_form, optimize_poly, Root
+from triples.utils import pl, Solution, poly_get_factor_form, optimize_poly, Root
 # from triples.core.linsos.tangents import root_tangents
 from triples.gui.sos_manager import SOS_Manager
+from triples.gui.linebreak import recursive_latex_auto_linebreak
 
 # def _async_raise(tid, exctype):
 #     '''Raises an exception in the threads with id tid'''
@@ -293,15 +294,21 @@ def sum_of_squares(sid, **kwargs):
             to=sid
         )
 
-    if isinstance(solution, SolutionSimple):
+    gens = kwargs['poly'].free_symbols if SOS_Manager.CONFIG_ALLOW_NONSTANDARD_GENS else gens
+    gens = sorted(gens, key=lambda x:x.name)
+    lhs_expr = sp.Function('F')(*gens) if len(gens) > 0 else sp.Symbol('\\text{LHS}')
+    if isinstance(solution, Solution):
         # # remove the aligned environment
-        # latex_ = '$$%s$$'%solution.str_latex[17:-15].replace('&','')
-        latex_ = solution.str_latex#.replace('aligned', 'align*')
+        tex = solution.to_string(mode='latex', lhs_expr=lhs_expr, settings={'long_frac_ratio':2})#.replace('aligned', 'align*')
+        tex = recursive_latex_auto_linebreak(tex)
+        tex = '$$%s$$'%tex
 
     return socketio.emit(
         'sos',
-        {'latex': latex_, 'txt': solution.str_txt, 'formatted': solution.str_formatted, 'success': True,
-            'timestamp': kwargs.get('timestamp', 0)},
+        {'latex': tex, 
+        'txt': solution.to_string(mode='txt', lhs_expr=lhs_expr),
+        'formatted': solution.to_string(mode='formatted', lhs_expr=lhs_expr),
+        'success': True, 'timestamp': kwargs.get('timestamp', 0)},
         to=sid
     )
 

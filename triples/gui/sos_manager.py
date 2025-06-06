@@ -25,7 +25,7 @@ def _default_polynomial_check(poly: Poly, method_order: List[str]) -> List[str]:
     is_hom = int(poly.is_homogeneous)
     nvars = len(poly.gens) + (1 - is_hom)
     degree = poly.total_degree()
-    upper_bounds = [30, 30, 30, 12, 11, 8, 6, 4, 4, 4, 4]
+    upper_bounds = [30, 30, 30, 14, 12, 8, 6, 4, 4, 4, 4]
     if degree > upper_bounds[nvars]:
         # remove LinearSOS and SDPSOS
         method_order = [method for method in method_order if method not in ('LinearSOS', 'SDPSOS')]

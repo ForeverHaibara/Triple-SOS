@@ -46,6 +46,11 @@ else:
         M_primitive = self.from_rep(SDM(sdm, self.shape, K))
         return content, M_primitive
 
+try:
+    from flint import fmpq, fmpz
+    FLINT_TYPE = (fmpq, fmpz)
+except ImportError:
+    FLINT_TYPE = tuple()
 
 def is_empty_matrix(M: Union[Matrix, ndarray], check_all_zeros: bool = False) -> bool:
     """
@@ -439,7 +444,10 @@ def rep_matrix_to_numpy(M: Matrix, dtype = np.float64, sparse: bool = False) -> 
         if np.issubdtype(dtype, np.integer):
             f = wrapper(lambda x: x.__int__())
         elif np.issubdtype(dtype, np.floating):
-            f = wrapper(lambda x: x.__float__())
+            if isinstance(M.domain.one, FLINT_TYPE):
+                f = lambda x: x.numerator.__int__() / x.denominator.__int__()
+            else:
+                f = wrapper(lambda x: x.__float__())
         elif np.issubdtype(dtype, np.complexfloating):
             f = wrapper(lambda x: x.__complex__())
     

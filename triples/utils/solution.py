@@ -7,87 +7,38 @@ from sympy.core.singleton import S
 from sympy.polys import Poly
 from sympy.printing.precedence import precedence_traditional, PRECEDENCE
 from sympy.printing.str import StrPrinter
+from sympy.printing.latex import LatexPrinter
 from sympy.combinatorics import PermutationGroup, Permutation
+from sympy.core.relational import Equality
 
 from .expression.cyclic import is_cyclic_expr, CyclicSum, CyclicProduct, CyclicExpr, rewrite_symmetry
 
-def _solution_latex_to_txt(s: str) -> str:
+
+class SolutionBase:
+    pass
+
+class Solution(SolutionBase):
     """
-    Turn a latex string into a text string.
-    WARNING: It has bug when handling nested fractions.
+    The `Solution` class holds information about an inequality problem and its solution.
+    It is used as the return type of the `sum_of_squares` function.
 
-    Deprecated.
+    >>> from sympy.abc import a
+    >>> from triples.core import sum_of_squares
+    >>> sol = sum_of_squares(a**2 - 2*a + 1)
+    >>> sol # doctest: +SKIP
+    Solution(problem = a**2 - 2*a + 1, solution = (a - 1)**2)
+
+    The problem and the solution can be accessed via `.problem` and `.solution` properties,
+    which are sympy objects.
+
+    >>> sol.problem # doctest: +SKIP
+    a**2 - 2*a + 1
+    >>> sol.solution # doctest: +SKIP
+    (a - 1)**2
+
+    >>> sol.time # doctest: +SKIP
+    0.014049
     """
-    s = s.strip('$')
-    
-    parener = lambda x: '(%s)'%x if '+' in x or '-' in x else x
-    s = re.sub('frac\{(.*?)\}\{(.*?)\}',
-                    lambda x: '%s/%s'%(parener(x.group(1)), parener(x.group(2))),
-                    s)
-
-    replacements = dict([
-        (' ',''),
-        ('\\', ''),
-        ('left', ''),
-        ('right', ''),
-        ('{', ''),
-        ('}', ''),
-        ('cdot', ''),
-        ('sum', 'Σ'),
-        ('prod', '∏'),
-        ('sqrt', '√'),
-        *map(lambda x: ('^%d'%(x[0]+2), x[1]), enumerate('²³⁴⁵⁶⁷⁸⁹'))
-    ])
-
-    for old, new in replacements.items():
-        s = s.replace(old, new)
-    return s
-
-
-def _multiline_equation_latex(
-        s: List = [], 
-        head: str = '',
-        max_line_length: Optional[int] = None, 
-        environment: str = 'aligned',
-        equal_sign: str = '=',
-        allow_sort: bool = True,
-    ) -> str:
-    """
-    Automatically split a sum into multilines.
-    """
-
-    if len(s) == 0:
-        return head
-    if max_line_length is None:
-        max_line_length = max(3 * len(head), 120)
-
-    alignment = ' &'
-    if environment is None or len(environment) == 0:
-        alignment = ''
-
-    if allow_sort:
-        # rearrange the longer ones in the front
-        s = sorted(s, key = lambda x: len(x), reverse = True)
-
-    lines = ['%s %s %s'%(alignment, equal_sign, s[0])]
-    for i in range(1, len(s)):
-        expected_length = len(lines[-1]) + len(s[i])
-        if abs(expected_length - max_line_length) < abs(len(lines[-1]) - max_line_length):
-            lines[-1] += ' + ' + s[i]
-        else:
-            max_line_length = len(lines[0])
-            lines.append('%s + %s'%(alignment, s[i]))
-
-    s = ' \\\\ '.join(lines)
-    if environment is not None and len(environment) > 0:
-        s = '\\begin{%s} %s %s \\end{%s}'%(environment, head, s, environment)
-    else:
-        s = '%s %s'%(head, s)
-    return s
-
-
-
-class Solution():
     PRINT_CONFIGS = {
         'WITH_CYC': False,
         'MULTILINE_ENVIRON': 'aligned',
@@ -109,7 +60,7 @@ class Solution():
         return (self._end_time - self._start_time).total_seconds() if self._end_time is not None else -1.
 
     def __str__(self) -> str:
-        return f"Solution({self.problem})"
+        return f"Solution(problem = {self.problem}, solution = {self.solution})"
 
     def __repr__(self) -> str:
         return self.__str__()
@@ -120,17 +71,45 @@ class Solution():
         return obj
 
     @property
-    def gens(self) -> List[sp.Symbol]:
-        return self.problem.gens if hasattr(self.problem, 'gens') else tuple(self.problem.free_symbols)
+    def gens(self) -> Tuple[sp.Symbol, ...]:
+        """
+        Get the free symbols of problem.
+
+        Examples
+        ---------
+        >>> from sympy.abc import a, b, c
+        >>> from sympy import Function
+        >>> sol = Solution((a**2+b**2+c**2-a*b-b*c-c*a)*2, (a-b)**2+(b-c)**2+(c-a)**2)
+        >>> sol.gens # doctest: +SKIP
+        (c, a, b)
+        >>> Function('F')(*sol.gens) # doctest: +SKIP
+        F(c, a, b)
+        """
+        return tuple(self.problem.gens) if hasattr(self.problem, 'gens') else tuple(self.problem.free_symbols)
 
     @property
     def is_equal(self) -> bool:
         """
-        Verify whether the solution is strictly equal to the problem.
-        When the problem is numerical (rather algebraic), it returns False.
+        Verify whether the solution is correct. This is heuristic and might fail
+        for hard cases or take a very long time. It is more suggested to verify
+        the solution manually by sampling a few points.
 
-        See also: is_ill.
+        Examples
+        ----------
+        >>> from sympy.abc import a, b
+        >>> from sympy import sqrt
+        >>> sol1 = Solution(a**2 + a*b + b**2, (((2-sqrt(3))*a + b)**2 + (a + (2-sqrt(3))*b)**2)/(8-4*sqrt(3)))
+        >>> sol1.is_equal
+        True
+        >>> sol2 = Solution(a**2 + a*b + b**2, (((2-3**.5)*a + b)**2 + (a + (2-3**.5)*b)**2)/(8-4*3**.5))
+        >>> sol2.is_equal
+        False
         """
+        if self._is_equal is None:
+            if self.as_eq().simplify() in (sp.true, True):
+                self._is_equal = True
+            else:
+                self._is_equal = False
         return self._is_equal
 
     @property
@@ -138,6 +117,14 @@ class Solution():
         """
         Whether the solution is ill-defined, e.g. +oo, -oo, NaN, etc.
         This avoids bugs when encountering 0/0, etc.
+
+        Examples
+        ----------
+        >>> from sympy.abc import a
+        >>> from sympy import nan
+        >>> sol = Solution(a**2 - 2*a + 1, nan)
+        >>> sol.is_ill
+        True
         """
         if self.solution in (None, S.NaN, S.Infinity, S.NegativeInfinity, S.ComplexInfinity):
             return True
@@ -145,197 +132,46 @@ class Solution():
             return True
         return False
 
+    @property
+    def is_Exact(self) -> bool:
+        """
+        Whether the solution does not contain floating point numbers.
+
+        Examples
+        ----------
+        >>> from sympy.abc import a
+        >>> from sympy import sqrt
+        >>> sol = Solution(a**2 - 2*sqrt(3)*a + 3, (a - 1.73205080757)**2)
+        >>> sol.is_Exact
+        False
+        """
+        return not (self.is_ill or self.solution.has(sp.Float))
+
     def _str_f(self, name='f') -> str:
         return "%s(%s)"%(name, ','.join(str(_) for _ in self.gens))
 
-    @property
-    def str_latex(self) -> str:
-        s = sp.latex(self.solution)
-        equal_sign = '=' if self.is_equal else '\\approx'
-        if not self.PRINT_CONFIGS['WITH_CYC']:
-            s = s.replace('_{\\mathrm{cyc}}', '')
-        return "$$%s %s %s$$"%(self._str_f(), equal_sign, s)
-
-    @property
-    def str_txt(self) -> str:
-        CyclicExpr.PRINT_WITH_PARENS = False
-        # s = _solution_latex_to_txt(self.str_latex)
-        s = str(self.solution)
-        equal_sign = '=' if self.is_equal else '≈'
-        replacements = dict([
-            ('**', '^'),
-            ('*', ' '),
-            *map(lambda x: ('^%d'%(x[0]+2), x[1]), enumerate('²³⁴⁵⁶⁷⁸⁹'))
-        ])
-        for old, new in replacements.items():
-            s = s.replace(old, new)
-        s = '%s %s %s'%(self._str_f(), equal_sign, s)
-        return s
-
-    @property
-    def str_formatted(self):
-        CyclicExpr.PRINT_WITH_PARENS = True
-        s = str(self.solution)
-        equal_sign = '=' if self.is_equal else '≈'
-        replacements = dict([
-            (' ',''),
-            ('**','^'),
-            ('*',''),
-            ('Σ', 's'),
-            ('∏', 'p'),
-        ])
-        for old, new in replacements.items():
-            s = s.replace(old, new)
-        s = '%s %s %s'%(self._str_f(), equal_sign, s)
-        return s
-
-    def as_simple_solution(self):
+    def as_eq(self, lhs_expr=None, together=True, cancel=True) -> Equality:
         """
-        When the solution is a sympy expression class, it is converted to SolutionSimple.
+        Convert the solution to a sympy equality object.
+
+        Examples
+        ---------
+        >>> from sympy.abc import a
+        >>> sol = Solution(a**2 - 2 + 1/a**2, (a**2 - 1)**2/a**2)
+        >>> sol.as_eq()
+        Eq(a**2*(a**2 - 2 + a**(-2)), (a**2 - 1)**2)
+        >>> sol.as_eq().lhs, sol.as_eq().rhs
+        (a**2*(a**2 - 2 + a**(-2)), (a**2 - 1)**2)
+        >>> sol.as_eq().simplify()
+        True
+        >>> sol.as_eq(cancel=False)
+        Eq(a**2 - 2 + a**(-2), (a**2 - 1)**2/a**2)
+
+        >>> from sympy import Function
+        >>> f = Function('f')
+        >>> sol.as_eq(lhs_expr=f(a))
+        Eq(a**2*f(a), (a**2 - 1)**2)
         """
-        sol = SolutionSimple(problem = self.problem, solution = self.solution,
-            ineq_constraints = self.ineq_constraints, eq_constraints = self.eq_constraints, is_equal = self.is_equal)
-        return sol
-
-    def signsimp(self) -> 'Solution':
-        """
-        Make a copy of the solution and apply signsimp on it.
-        See also: sympy.signsimp.
-        """
-        self = self.copy()
-        self.solution = sp.signsimp(self.solution)
-        return self
-
-    def xreplace(self, *args, **kwargs) -> 'Solution':
-        """
-        Make a copy of the solution and apply xreplace on it.
-        See also: sympy.xreplace.
-        """
-        self = self.copy()
-        self.solution = self.solution.xreplace(*args, **kwargs)
-        return self
-
-    def doit(self, *args, **kwargs) -> 'Solution':
-        """
-        Make a copy of the solution and apply doit on it.
-        This is useful to expand cyclic expressions.
-        See also: sympy.doit.
-        """
-        self = self.copy()
-        self.solution = self.solution.doit(*args, **kwargs)
-        return self
-
-    def collect(self, *args, **kwargs) -> 'Solution':
-        """
-        Make a copy of the solution and apply collect on it.
-        See also: sympy.collect.
-        """
-        self = self.copy()
-        self.solution = self.solution.collect(*args, **kwargs)
-        return self
-
-    def n(self, *args, **kwargs) -> 'Solution':
-        """
-        Make a copy of the solution and apply n on it.
-        See also: sympy.n.
-        """
-        self = self.copy()
-        self.solution = self.solution.n(*args, **kwargs)
-        return self
-
-    def evalf(self, *args, **kwargs) -> 'Solution':
-        """
-        Make a copy of the solution and apply evalf on it.
-        See also: sympy.evalf.
-        """
-        self = self.copy()
-        self.solution = self.solution.evalf(*args, **kwargs)
-        return self
-
-    def as_expr(self, *args, **kwargs) -> sp.Expr:
-        """
-        Return the solution as an expression. It is equivalent to .solution.
-        """
-        return self.solution#.doit(*args, **kwargs)
-
-    def rewrite_symmetry(self, symbols: Tuple[sp.Symbol], perm_group: PermutationGroup) -> 'Solution':
-        """
-        Rewrite the expression heuristically with respect to the given permutation group.
-        After rewriting, it is expected all cyclic expressions are expanded or in the given permutation group.
-        This avoids the ambiguity of the cyclic expressions.
-
-        It makes a copy of the solution and applies the rewriting on it. Note that
-        the rewriting is not reversible if cyclic expressions are expanded. If this
-        method is to be called multiple times, it is recommended to call on the original solution.
-
-        Parameters
-        ----------
-        symbols : Tuple[sp.Symbol]
-            The symbols that the permutation group acts on.
-        perm_group : PermutationGroup
-            Sympy permutation group object.
-        
-        Returns
-        ----------
-        Solution
-            A new solution object with the rewritten expression.
-
-        See also
-        ----------
-        rewrite_symmetry
-        """
-        self = self.copy()
-        self.solution = rewrite_symmetry(self.solution, symbols, perm_group)
-        return self
-
-# class SolutionNull(Solution):
-#     def __init__(self, problem = None, solution = None):
-#         super().__init__(problem = problem, solution = None)
-
-
-def _arg_sqr_core(arg):
-    if arg.is_constant():
-        return S.One
-    if isinstance(arg, sp.Symbol):
-        return arg
-    if arg.is_Pow:
-        return S.One if arg.args[1] % 2 == 0 else arg.args[0]
-    if arg.is_Mul:
-        return sp.Mul(*[_arg_sqr_core(x) for x in arg.args])
-    if isinstance(arg, CyclicProduct):
-        return CyclicProduct(_arg_sqr_core(arg.args[0]), arg.symbols).doit()
-    return None
-
-
-class SolutionSimple(Solution):
-    """
-    Most of SOS solutions can be represented in LHS = (some math expression that is trivially nonnegative),
-    where the original problem is on the one side and the solution is on the other side.
-    This class is designed to handle such cases.
-    """
-    def __init__(self, problem=None, solution=None, ineq_constraints=None, eq_constraints=None, is_equal=None):
-        self.problem = problem
-        self.solution = solution
-        self.ineq_constraints = ineq_constraints if ineq_constraints is not None else dict()
-        self.eq_constraints = eq_constraints if eq_constraints is not None else dict()
-        self._start_time = 0
-        self._end_time = 0
-        self._is_equal = is_equal
-
-    @property
-    def is_equal(self):
-        if self._is_equal is None:
-            symbols = self.gens # | set(self.numerator.free_symbols) | set(self.multiplier.free_symbols)
-            difference = (self.problem  * self.multiplier - self.numerator)
-            difference = difference.doit().as_poly(*symbols)
-            self._is_equal = difference.is_zero
-
-        return self._is_equal
-
-    def as_simple_solution(self):
-        return self
-
-    def as_eq(self, lhs_expr=None, together=True, cancel=True):
         lhs = self.problem.as_expr() if lhs_expr is None else lhs_expr
         if cancel:
             rhs, denom = self.as_fraction(together=together)
@@ -344,11 +180,39 @@ class SolutionSimple(Solution):
             rhs = self.solution.together() if together else self.solution
         return sp.Equality(lhs, rhs, evaluate=False)
 
-    def to_string(self, mode: str = 'latex', lhs_expr=None, together=True, cancel=True):
+    def to_string(self, mode: str = 'latex', lhs_expr=None, together=True, cancel=True, settings=None) -> str:
+        """
+        Convert the solution to a string. The mode can be 'latex', 'txt', or 'formatted'.
+
+        Parameters
+        ----------
+        mode : str, optional
+            The mode of the string, by default 'latex'.
+            'latex': Convert to latex string.
+            'txt': Convert to plain text string.
+            'formatted': Convert to formatted string where "s" and "p" stands for
+            cyclic sum and cyclic product, respectively. This is not safe when
+            the symbols contain s or p.
+        lhs_expr : Expr
+            Sympy expressions to replace the left-hand side problem.
+        together : bool, optional
+            Whether to apply `sympy.together` on the right-hand side solution, by default True.
+        cancel : bool, optional
+            Whether to apply `sympy.cancel` on the right-hand side solution, by default True.
+        settings : dict, optional
+            Settings for printing. See `sympy.printing.str.StrPrinter._print` for details.
+
+        Examples
+        ---------
+        >>> from sympy.abc import a, b, c
+        >>> sol = Solution(a**2 + a*b + b**2, (a + b/2)**2 + 3*b**2/4)
+
+
+        """
         eq = self.as_eq(lhs_expr=lhs_expr, together=together, cancel=cancel)
         lhs, rhs = eq.lhs, eq.rhs
         if mode == 'latex':
-            to_str = lambda x: sp.latex(x)
+            to_str = lambda x: _print_latex(x, settings=settings)
         elif mode == 'txt' or mode == 'formatted':
             if mode == 'txt':
                 cyclic_sum_name = 'Σ'
@@ -359,7 +223,8 @@ class SolutionSimple(Solution):
                 cyclic_product_name = 'p'
                 with_cyclic_parens = True
             _to_str = lambda x: _print_str(x, cyclic_sum_name=cyclic_sum_name,
-                cyclic_product_name=cyclic_product_name, with_cyclic_parens=with_cyclic_parens).replace('**','^')
+                cyclic_product_name=cyclic_product_name, with_cyclic_parens=with_cyclic_parens,
+                settings=settings).replace('**','^')
 
             if mode == 'txt':
                 def _convert_superscript(s):
@@ -376,136 +241,150 @@ class SolutionSimple(Solution):
         return f"{lhs_str} = {rhs_str}"   
 
     def _repr_latex_(self):
-        # s = self.to_string(mode='latex')
-        # return f"$\\displaystyle {s}$"
-        return self.as_eq()._repr_latex_()
+        eq = self.as_eq()
+        return eq._repr_latex_()
+        # s = sp.latex(eq, mode='plain', long_frac_ratio=2)
+        # return "$\\displaystyle %s$" % s
 
-    def _str_multiplier(self, add_paren = None, get_str = None):
+    def as_simple_solution(self):
         """
-        Util function for printing.
+        When the solution is a sympy expression class, it is converted to SolutionSimple.
         """
-        if isinstance(self.multiplier, (int, sp.Integer)):
-            if self.multiplier == 1:
-                s_multiplier = self._str_f()
-            else:
-                s_multiplier = "%s %s"%(self.multiplier, self._str_f())
-        else:
-            s_multiplier = get_str(self.multiplier)
-            if isinstance(self.multiplier, sp.Add) or isinstance(self.multiplier, CyclicSum):
-            # if s_multiplier[-1] != ')':
-                s_multiplier = "%s %s"%(add_paren(s_multiplier), self._str_f())
-            else:
-                s_multiplier = "%s %s"%(s_multiplier, self._str_f())
-        return s_multiplier
+        warn('This function is deprecated.')
+        return self
 
-    def _str_extract_constant_afront(self, add_paren = None, get_str = None):
+    def together(self, *args, **kwargs) -> 'Solution':
         """
-        Util function for printing. Extract the constant of CyclicSum, e.g.
-        4 CyclicSum(a) / 7 shall be written in the form of 4/7 CyclicSum(a).
+        Make a copy of the solution and apply `together` on it.
+        See also: sympy.together.
+
+        Examples
+        ---------
+        >>> from sympy.abc import a, b
+        >>> sol = Solution(a**2 - a*b + b**2, (a + b/2)**2 + 3*b**2/4)
+        >>> sol
+        Solution(problem = a**2 - a*b + b**2, solution = 3*b**2/4 + (a + b/2)**2)
+        >>> sol.together()
+        Solution(problem = a**2 - a*b + b**2, solution = (3*b**2 + (2*a + b)**2)/4)
         """
-        s_args = []
-        if isinstance(self.numerator, sp.Add):
-            numerator_args = self.numerator.args
-        else:
-            numerator_args = [self.numerator]
-        for x in numerator_args:
-            # if isinstance(x, sp.Mul) and len(x.args) >= 2 and x.args[0].is_constant():
-            #     if len(x.args) == 2:
-            #         # extract the rational coefficient and move it to the front
-            #         if precedence_traditional(x.args[1]) < PRECEDENCE["Mul"]:
-            #             s_args.append(get_str(x.args[0]) + '%s'%add_paren(get_str(x.args[1])))
-            #         else:
-            #             s_args.append(get_str(x.args[0]) + get_str(x.args[1]))
-            #     else:
-            #         s_args.append(get_str(x.args[0]) + get_str(sp.Mul(*x.args[1:])))
-            # else:
-            #     s_args.append(get_str(x))
+        self = self.copy()
+        self.solution = sp.together(self.solution, *args, **kwargs)
+        return self
 
-            x_as_coeff_Mul = x.as_coeff_Mul()
-            if x_as_coeff_Mul[0] is S.One or x_as_coeff_Mul[1] is S.One:
-                s_args.append(get_str(x))
-            elif precedence_traditional(x_as_coeff_Mul[1]) < PRECEDENCE["Mul"]:
-                s_args.append(get_str(x_as_coeff_Mul[0]) + '%s'%add_paren(get_str(x_as_coeff_Mul[1])))
-            else:
-                s_args.append(get_str(x_as_coeff_Mul[0]) + get_str(x_as_coeff_Mul[1]))
-
-        return s_args
-
-    @property
-    def str_latex(self):
+    def signsimp(self, *args, **kwargs) -> 'Solution':
         """
-        1. Move the multiplier to the left hand side to cancel the denominator.
-        2. Move rational coefficients in front of each term.
+        Make a copy of the solution and apply `signsimp` on it.
+        See also: sympy.signsimp.
+
+        Examples
+        ---------
+        >>> from sympy.abc import a, b
+        >>> sol = Solution(a**2 - 2*a*b + b**2, (-a - b)**2)
+        >>> sol
+        Solution(problem = a**2 - 2*a*b + b**2, solution = (-a - b)**2)
+        >>> sol.signsimp()
+        Solution(problem = a**2 - 2*a*b + b**2, solution = (a + b)**2)
         """
-        parener = lambda x: "\\left(%s\\right)"%x
+        self = self.copy()
+        self.solution = sp.signsimp(self.solution, *args, **kwargs)
+        return self
 
-        s_multiplier = self._str_multiplier(add_paren = parener, get_str = lambda x: sp.latex(x))
+    def xreplace(self, *args, **kwargs) -> 'Solution':
+        """
+        Make a copy of the solution and apply `xreplace` on it.
+        See also: sympy.xreplace.
 
-        s_args = self._str_extract_constant_afront(add_paren = parener, get_str = lambda x: sp.latex(x))
+        Examples
+        ---------
+        >>> from sympy.abc import a, b, x
+        >>> sol = Solution(a**2 - 2*a*b + b**2, (a - b)**2)
+        >>> sol.xreplace({a: x})
+        Solution(problem = a**2 - 2*a*b + b**2, solution = (-b + x)**2)
+        """
+        self = self.copy()
+        self.solution = self.solution.xreplace(*args, **kwargs)
+        return self
 
-        s = _multiline_equation_latex(
-            s_args, 
-            head = s_multiplier,
-            equal_sign = '=' if self.is_equal else '\\approx',
-            environment = self.PRINT_CONFIGS['MULTILINE_ENVIRON'],
-            allow_sort = self.PRINT_CONFIGS['MULTILINE_ALLOW_SORT']
-        )
-    
-        # s = s.replace('\\left(- a + c\\right)^{2}', '\\left(a - c\\right)^{2}')
+    def doit(self, *args, **kwargs) -> 'Solution':
+        """
+        Make a copy of the solution and apply doit on it.
+        This is useful to expand cyclic expressions.
+        See also: sympy.doit.
 
-        s = '$$%s$$'%s
+        Examples
+        ---------
+        >>> from sympy.abc import a, b, c
+        >>> sol = Solution((a+b+c)*(a*b+b*c+c*a)-9*a*b*c, CyclicSum(a*(b-c)**2, (a,b,c)))
+        >>> sol
+        Solution(problem = -9*a*b*c + (a + b + c)*(a*b + a*c + b*c), solution = Σa*(b - c)**2)
+        >>> sol.doit()
+        Solution(problem = -9*a*b*c + (a + b + c)*(a*b + a*c + b*c), solution = a*(b - c)**2 + b*(-a + c)**2 + c*(a - b)**2)
+        """
+        self = self.copy()
+        self.solution = self.solution.doit(*args, **kwargs)
+        return self
 
+    def collect(self, *args, **kwargs) -> 'Solution':
+        """
+        Make a copy of the solution and apply `collect` on it.
+        See also: sympy.collect.
 
-        if not self.PRINT_CONFIGS['WITH_CYC']:
-            s = s.replace('_{\\mathrm{cyc}}', '')
-        return s
+        Examples
+        ---------
+        >>> from sympy.abc import a, b, c
+        >>> sol = Solution((a+b**2+c)*(b-c)**2, a*(b-c)**2 + b**2*(b-c)**2 + c*(b-c)**2)
+        >>> sol
+        Solution(problem = (b - c)**2*(a + b**2 + c), solution = a*(b - c)**2 + b**2*(b - c)**2 + c*(b - c)**2)
+        >>> sol.collect((b-c)**2)
+        Solution(problem = (b - c)**2*(a + b**2 + c), solution = (b - c)**2*(a + b**2 + c))
+        """
+        self = self.copy()
+        self.solution = self.solution.collect(*args, **kwargs)
+        return self
 
-    @property
-    def str_txt(self):
-        CyclicExpr.PRINT_WITH_PARENS = False
-        equal_sign = '=' if self.is_equal else '≈'
+    def n(self, *args, **kwargs) -> 'Solution':
+        """
+        Make a copy of the solution and apply `n` on it.
+        See also: sympy.n.
 
-        parener = lambda x: "(%s)"%x
-        s_multiplier = self._str_multiplier(add_paren = parener, get_str = lambda x: str(x))
-        s_args = self._str_extract_constant_afront(add_paren = parener, get_str = lambda x: str(x))
-        s = '+'.join(s_args)
-        s = '%s%s%s'%(s_multiplier, equal_sign, s)
+        Examples
+        ---------
+        >>> from sympy.abc import a, b
+        >>> from sympy import sqrt
+        >>> sol = Solution(a**2+a*b+b**2, (((2-sqrt(3))*a+b)**2+((2-sqrt(3))*b+a)**2)/(8-4*sqrt(3)))
+        >>> sol.n(4)
+        Solution(problem = a**2 + a*b + b**2, solution = 0.933*(0.2679*a + b)**2 + 0.933*(a + 0.2679*b)**2)
+        """
+        self = self.copy()
+        self.solution = self.solution.n(*args, **kwargs)
+        return self
 
-        replacements = dict([
-            (' ',''),
-            ('**', '^'),
-            ('*', ''),
-            *map(lambda x: ('^%d'%(x[0]+2), x[1]), enumerate('²³⁴⁵⁶⁷⁸⁹'))
-        ])
-        for old, new in replacements.items():
-            s = s.replace(old, new)
-        return s
+    def evalf(self, *args, **kwargs) -> 'Solution':
+        """
+        Make a copy of the solution and apply `evalf` on it.
+        See also: sympy.evalf.
 
-    @property
-    def str_formatted(self):
-        CyclicExpr.PRINT_WITH_PARENS = True
-        equal_sign = '=' if self.is_equal else '≈'
+        Examples
+        ---------
+        >>> from sympy.abc import a, b
+        >>> from sympy import sqrt
+        >>> sol = Solution(a**2+a*b+b**2, (((2-sqrt(3))*a+b)**2+((2-sqrt(3))*b+a)**2)/(8-4*sqrt(3)))
+        >>> sol.evalf(4)
+        Solution(problem = a**2 + a*b + b**2, solution = 0.933*(0.2679*a + b)**2 + 0.933*(a + 0.2679*b)**2)
+        """
+        self = self.copy()
+        self.solution = self.solution.evalf(*args, **kwargs)
+        return self
 
-        parener = lambda x: "(%s)"%x
-        s_multiplier = self._str_multiplier(add_paren = parener, get_str = lambda x: str(x))
-        s_args = self._str_extract_constant_afront(add_paren = parener, get_str = lambda x: str(x))
-        s = '+'.join(s_args)
-        s = '%s%s%s'%(s_multiplier, equal_sign, s)
-
-        replacements = dict([
-            (' ',''),
-            ('**','^'),
-            ('*',''),
-            ('Σ', 's'),
-            ('∏', 'p'),
-        ])
-        for old, new in replacements.items():
-            s = s.replace(old, new)
-        return s
+    def as_expr(self, *args, **kwargs) -> sp.Expr:
+        """
+        Return the solution as an expression. It is equivalent to .solution.
+        """
+        return self.solution#.doit(*args, **kwargs)
 
     def dehomogenize(self, homogenizer: Optional[sp.Symbol] = None):
         """
-        Dehomogenize the solution.
+        Dehomogenize the solution. Used internally.
         """
         if homogenizer is None:
             return self
@@ -532,6 +411,13 @@ class SolutionSimple(Solution):
     def as_fraction(self, together=True, inplace=False):
         """
         Denest the fractions and express the solution as the division of two fraction-free expressions.
+
+        Examples
+        ---------
+        >>> from sympy.abc import a, b
+        >>> sol = Solution(a**2 - 2 + 1/a**2, (a**2 - 1)**2/a**2)
+        >>> sol.as_fraction()
+        ((a**2 - 1)**2, a**2)
         """
         solution = self.solution.together() if together else self.solution
         numerator, multiplier = sp.fraction(solution)
@@ -563,10 +449,65 @@ class SolutionSimple(Solution):
         warn("Calling Solution.multiplier will be deprecated. Use Solution.as_fraction()[1] instead.", DeprecationWarning, stacklevel=2)
         return self.as_fraction()[1]
 
+    def rewrite_symmetry(self, symbols: Tuple[sp.Symbol], perm_group: PermutationGroup) -> 'Solution':
+        """
+        Rewrite the expression heuristically with respect to the given permutation group.
+        After rewriting, it is expected all cyclic expressions are expanded or in the given permutation group.
+        This avoids the ambiguity of the cyclic expressions.
+
+        It makes a copy of the solution and applies the rewriting on it. Note that
+        the rewriting is not reversible if cyclic expressions are expanded. If this
+        method is to be called multiple times, it is recommended to call on the original solution.
+
+        Parameters
+        ----------
+        symbols : Tuple[sp.Symbol]
+            The symbols that the permutation group acts on.
+        perm_group : PermutationGroup
+            Sympy permutation group object.
+        
+        Returns
+        ----------
+        Solution
+            A new solution object with the rewritten expression.
+
+        See also
+        ----------
+        rewrite_symmetry
+        """
+        self = self.copy()
+        self.solution = rewrite_symmetry(self.solution, symbols, perm_group)
+        return self
+
+
+
+# class SolutionNull(Solution):
+#     def __init__(self, problem = None, solution = None):
+#         super().__init__(problem = problem, solution = None)
+
+
+def _arg_sqr_core(arg):
+    if arg.is_constant():
+        return S.One
+    if isinstance(arg, sp.Symbol):
+        return arg
+    if arg.is_Pow:
+        return S.One if arg.args[1] % 2 == 0 else arg.args[0]
+    if arg.is_Mul:
+        return sp.Mul(*[_arg_sqr_core(x) for x in arg.args])
+    if isinstance(arg, CyclicProduct):
+        return CyclicProduct(_arg_sqr_core(arg.args[0]), arg.symbols).doit()
+    return None
+
+
+SolutionSimple = Solution
+
+
 def _print_str(expr: sp.Expr, cyclic_sum_name = 'Σ', cyclic_product_name = '∏',
                with_cyclic_parens = False, settings=None):
     """Advanced printing to handle cyclic expressions."""
-    printer = StrPrinter(settings=settings)
+    settings = {} if settings is None else settings
+    printer = StrPrinter(**settings)
     def _print_CyclicExpr(prefix):
         def _str_str(expr):
             s = printer._print(expr.args[0])
@@ -579,3 +520,9 @@ def _print_str(expr: sp.Expr, cyclic_sum_name = 'Σ', cyclic_product_name = '∏
     setattr(printer, '_print_CyclicSum', lambda expr: _print_CyclicSum(expr))
     setattr(printer, '_print_CyclicProduct', lambda expr: _print_CyclicProduct(expr))
     return printer.doprint(expr)
+
+def _print_latex(expr: sp.Expr, settings=None):
+    # if 'long_frac_ratio' not in settings:
+    #     settings['long_frac_ratio'] = 2
+    settings = {} if settings is None else settings
+    return sp.latex(expr, **settings)

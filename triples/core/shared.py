@@ -1,15 +1,9 @@
-from datetime import datetime
-from functools import wraps
-from inspect import signature
 from typing import Tuple, Dict, List, Union, Optional
 
 import sympy as sp
-from sympy import sympify, Function
 from sympy.core.symbol import uniquely_named_symbol
-from sympy.combinatorics import Permutation, PermutationGroup
-from sympy.external.importtools import version_tuple
 
-from ..utils import MonomialManager, Solution, SolutionSimple, CyclicExpr, identify_symmetry_from_lists
+from ..utils import MonomialManager
 
 class PropertyDict(dict):
     def __getattr__(self, key):
