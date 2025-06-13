@@ -1,4 +1,7 @@
-# tested on Python 3.7-3.12
+# This package file is currently for online deployment, e.g. huggingface,
+# some addons are not required for individual use.
+
+# tested on Python 3.7-3.13
 sympy>=1.10
 numpy
 scipy # recommend version >= 1.6 for high-ds in Linear Programming
@@ -6,13 +9,16 @@ scipy # recommend version >= 1.6 for high-ds in Linear Programming
 # SDP solver (can be replaced by other python SDP libraries,
 # e.g. mosek, clarabel, cvxopt, cvxpy, sdpa, etc.,
 # this will be detected automatically by the code):
-picos
+clarabel
 
 
 
 # For gradio launch (and deployment on online platforms, e.g. huggingface):
 pillow
-gradio==4.44 # LaTeX rendering sensitive to the version, recommend 4.44
+# LaTeX rendering sensitive to the version, recommend >= 4.44 for a bug fix,
+# If 4.44 or >= 5 are not available, 3.44 is also recommended.
+gradio>=4.44
+
 
 # For flask launch (recommended for individual use):
 # pip install flask
@@ -26,3 +32,4 @@ gmpy2
 
 # For enhanced performance, consider installing python-flint (compatible with CPython 3.9-3.12):
 # pip install python-flint
+python-flint

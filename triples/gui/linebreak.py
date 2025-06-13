@@ -174,12 +174,18 @@ def wrap_with_aligned_if_needed(latex_str,
 
     # Format with \begin{aligned} and &
     aligned_body_parts = []
-    for term_group in output_lines_as_term_lists:
+    for i, term_group in enumerate(output_lines_as_term_lists):
         # Construct line string: "term1" + " " + "+term2" ...
         line_str = term_group[0]
         for k in range(1, len(term_group)):
             line_str += " " + term_group[k]
-        aligned_body_parts.append("& " + line_str) # Each line starts with "& "
+        # if i == 0 and line_str.count("=") == 1:
+        #     # TODO: Handle cases where there are multiple "="
+        #     line_str = line_str.replace("=", "= & ")
+        # else:
+        #     # Each line starts with "& "
+        line_str = "& " + line_str
+        aligned_body_parts.append(line_str)
 
     if len(aligned_body_parts) == 1:
         return latex_str

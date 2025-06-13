@@ -7,6 +7,7 @@ import gradio as gr
 from PIL import Image
 
 from triples.utils.text_process import short_constant_parser
+from triples.core import sum_of_squares
 from triples.gui.sos_manager import SOS_Manager
 from triples.gui.linebreak import recursive_latex_auto_linebreak
 
@@ -105,11 +106,29 @@ class GradioInterface():
             self.external_link = gr.HTML('<a href="https://github.com/ForeverHaibara/Triple-SOS">GitHub Link</a>')
 
             self.input_box.submit(fn = self.set_poly, inputs = [self.input_box], 
-                                outputs = [self.image, self.coefficient_triangle])
+                                outputs = [self.image, self.coefficient_triangle], show_api=False)
             self.compute_btn.click(fn = self.solve, inputs = [self.input_box, self.methods_btn],
                                 outputs = [self.output_box, self.output_box_latex, self.output_box_txt, self.output_box_formatted, 
                                             self.image, self.coefficient_triangle,
-                                            self.output_box2])
+                                            self.output_box2], show_api=False)
+
+            with gr.Row(render=False, equal_height=False):
+                # Add hidden components for API
+                self.api_input_expr = gr.Textbox(visible=False, min_width=0, label="Problem")
+                self.api_input_ineq = gr.Textbox(visible=False, min_width=0, label="Ineqs",
+                    info="Nonnegative expressions separated by ';', e.g., a;b;c for a>=0, b>=0, c>=0.")
+                self.api_input_eq = gr.Textbox(visible=False, min_width=0, label="Eqs",
+                    info="Zero expressions separated by ';', e.g., a*b*c-1;x^2+y^2-1 for a*b*c-1=0,x^2+y^2-1=0.")
+                self.api_output = gr.JSON(visible=False, min_width=0, height=0)
+
+                # API endpoint
+                self.api_input_expr.change(
+                    fn=self.api_sum_of_squares,
+                    inputs=[self.api_input_expr, self.api_input_ineq, self.api_input_eq],
+                    outputs=[self.api_output],
+                    api_name="sum_of_squares"
+                )
+
 
     def set_poly(self, input_text, with_poly = False):
         res = SOS_Manager.set_poly(input_text)
@@ -229,6 +248,53 @@ class GradioInterface():
                 print(input_text)
         res.update(res0)
         return res
+
+    def api_sum_of_squares(self, expr, ineq_constraints, eq_constraints):
+        # from sympy.parsing.sympy_parser import parse_expr
+        # from sympy.parsing.sympy_parser import T
+        from sympy import sympify
+        # parser = lambda x: parse_expr(x, transformations=T[:7])
+        def parser(x):
+            x = sympify(x)
+            if any(len(s.name) > 1 for s in x.free_symbols):
+                # prevent a*b miswritten as ab
+                raise ValueError("Variable names should be single characters.")
+            return x
+        parser_t = lambda x: tuple(map(parser, (x.split(':', 1) if ':' in x else (x, x))))
+        try:
+            # Parse string inputs to SymPy expressions
+            parsed_expr = parser(expr)
+            parsed_ineqs = dict(parser_t(c) for c in (ineq_constraints or '').split(';') if c)
+            parsed_eqs = dict(parser_t(c) for c in (eq_constraints or '').split(';') if c)
+
+            # Call the core function
+            result = sum_of_squares(
+                poly=parsed_expr,
+                ineq_constraints=parsed_ineqs,
+                eq_constraints=parsed_eqs
+            )
+            tex = None
+            tex_aligned = None
+            if result is not None:
+                lhs_expr = Symbol('\\text{LHS}')
+                tex = result.to_string(mode='latex', lhs_expr=lhs_expr, settings={'long_frac_ratio': 2})
+                tex_aligned = recursive_latex_auto_linebreak(tex)
+
+            return {
+                'success': bool(result is not None),
+                'solution': result.solution.doit() if result is not None else None,
+                'latex': tex,
+                'latex_aligned': tex_aligned,
+                'error': None
+            }
+        except Exception as e:
+            return {
+                'success': False,
+                'solution': None,
+                'latex': None,
+                'latex_aligned': None,
+                'error': str(e)
+            }
 
 
 if __name__ == '__main__':
