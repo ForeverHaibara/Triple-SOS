@@ -56,8 +56,8 @@
     /* Position the menu and hide it initially */
     .submenu {
         position: absolute;
-        bottom: 100%; /* Moves menu above the button */
         left: 0;
+        z-index: 1000;
         display: none;
         min-width: 200px;
         background: #ffffff;
@@ -272,8 +272,8 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
                         </svg>
                     </button>
                         <!-- <span class="visually-hidden">Sort</span> -->
-                    
-                    <div class="submenu" style="color:black; font-size: 14px; border-radius: 5px; text-align: left; min-width: 160px;">
+
+                    <div class="submenu" style="color:black; bottom: 100%; font-size: 14px; border-radius: 5px; text-align: left; min-width: 160px;">
                         <hr style="margin:7px;">
                         <div class="hover_text" style="padding-left: 20px;" onclick="PolyTools('abcd2xyzw')">ABCD ↔ XYZW</div><hr style="margin:7px;">
                         <div class="hover_text" style="padding-left: 20px;" onclick="PolyTools('homogenize')">Homogenize</div><hr style="margin:7px;">
@@ -298,7 +298,7 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
                             <path d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 0l-.094.319a.873.873 0 0 1-1.255.52l-.292-.16c-1.64-.892-3.433.902-2.54 2.541l.159.292a.873.873 0 0 1-.52 1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a.873.873 0 0 1 .52 1.255l-.16.292c-.892 1.64.901 3.434 2.541 2.54l.292-.159a.873.873 0 0 1 1.255.52l.094.319c.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 0 1 1.255-.52l.292.16c1.64.893 3.434-.902 2.54-2.541l-.159-.292a.873.873 0 0 1 .52-1.255l.319-.094c1.79-.527 1.79-3.065 0-3.592l-.319-.094a.873.873 0 0 1-.52-1.255l.16-.292c.893-1.64-.902-3.433-2.541-2.54l-.292.159a.873.873 0 0 1-1.255-.52zm-2.633.283c.246-.835 1.428-.835 1.674 0l.094.319a1.873 1.873 0 0 0 2.693 1.115l.291-.16c.764-.415 1.6.42 1.184 1.185l-.159.292a1.873 1.873 0 0 0 1.116 2.692l.318.094c.835.246.835 1.428 0 1.674l-.319.094a1.873 1.873 0 0 0-1.115 2.693l.16.291c.415.764-.42 1.6-1.185 1.184l-.291-.159a1.873 1.873 0 0 0-2.693 1.116l-.094.318c-.246.835-1.428.835-1.674 0l-.094-.319a1.873 1.873 0 0 0-2.692-1.115l-.292.16c-.764.415-1.6-.42-1.184-1.185l.159-.291A1.873 1.873 0 0 0 1.945 8.93l-.319-.094c-.835-.246-.835-1.428 0-1.674l.319-.094A1.873 1.873 0 0 0 3.06 4.377l-.16-.292c-.415-.764.42-1.6 1.185-1.184l.292.159a1.873 1.873 0 0 0 2.692-1.115z"/>
                         </svg>
                     </button>
-                    <div class="submenu p-3" style="color:black; font-size: 14px; border-radius: 5px;" id="submenu_config">
+                    <div class="submenu p-3" style="color:black; bottom: 100%; font-size: 14px; border-radius: 5px;" id="submenu_config">
                         <!-- Sliders or other controls go here -->
                         <label for="config_3D_PointSize">3D Point Size</label>
                         <input type="range" id="config_3D_PointSize" min="1" max="300" value="50"> <!-- Multiplied by 1000 -->
@@ -364,7 +364,14 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
                 </table>
             </div>
             <div class="d-flex gap-1 mt-1" style="margin-left: 5%;">
-                <button class="btn btn-xs btn-outline-primary" style="padding: 0.1rem 0.3rem; font-size: 10px; height: 22px;" onclick="constraintsAddRow('≥0')">+ Inequality</button>
+                <div class=" dropdown_item">
+                    <button class="btn btn-xs btn-outline-primary" style="padding: 0.1rem 0.3rem; font-size: 10px; height: 22px;" onclick="constraintsAddRow('≥0')">+ Inequality</button>
+                    <div class="submenu" style="color:black; font-size: 12px; border-radius: 5px; text-align: left; min-width: 150px;">
+                        <hr style="margin:7px;">
+                        <div class="hover_text" style="padding-left: 20px; height: 16px;" onclick="constraintsAddTools('triangle', '≥0')">Triangle</div><hr style="margin:7px;">
+                        <div class="hover_text" style="padding-left: 20px; height: 16px;" onclick="constraintsAddTools('acute triangle', '≥0')">Acute Triangle</div><hr style="margin:7px;">
+                    </div>
+                </div>
                 <button class="btn btn-xs btn-outline-secondary" style="padding: 0.1rem 0.3rem; font-size: 10px; height: 22px;" onclick="constraintsAddRow('=0')">+ Equality</button>
                 <button class="btn btn-xs btn-outline-success" id="constraints-lock" style="padding: 0.1rem 0.3rem; font-size: 10px; height: 22px;
                 --bs-btn-hover-bg: var(--bs-btn-bg);  --bs-btn-hover-border-color: var(--bs-btn-border-color); --bs-btn-hover-color: var(--bs-btn-color);" onclick="constraintsToggleLock()">
@@ -460,17 +467,38 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
 <script src="static/js/on_change.js"></script>
 <script src="static/js/socket.js"></script>
 <script>
+    function getConstraints(kwargs){
+        let ineq_constraints = {};
+        let eq_constraints = {};
+        document.getElementById('constraints_table_body').querySelectorAll('tr').forEach(
+            (row) => {
+                const constraint = row.getElementsByClassName('constraints-constraint')[0].value;
+                if (constraint.trim().length === 0) return;
+                const constraint_alias = row.getElementsByClassName('constraints-alias')[0].value;
+                const constraint_type = row.getElementsByClassName('constraints-type')[0].innerHTML;
+                if (constraint_type === '≥0'){
+                    ineq_constraints[constraint] = constraint_alias;
+                }else if (constraint_type === '=0'){
+                    eq_constraints[constraint] = constraint_alias;
+                }
+            }
+        )
+        return {ineq_constraints: ineq_constraints, eq_constraints: eq_constraints};
+    }
     function preprocessInput(kwargs){
         const input_poly = document.getElementById('input_poly').value.trim();
         if ((input_poly.length === 0)||(!/^[\x00-\x7F]*$/.test(input_poly))){
             return;
         }
 
+        const constraints = (typeof(kwargs)==='undefined'||typeof(kwargs.ineq_constraints)=== 'undefined'? getConstraints(): kwargs);
         const cur_data = {
             poly: input_poly,
             gens: document.getElementById('setting_gens_input').value,
             perm_choice: document.querySelector('input[name="setting_perm"]:checked').value,
             perm: document.getElementById('setting_perm_input').value,
+            ineq_constraints: constraints.ineq_constraints,
+            eq_constraints: constraints.eq_constraints
             // timestamp: timestamp
         };
 
@@ -547,7 +575,10 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
                 // decompose_method: document.getElementById("setting_method_SDPSOS_reduced_decompose").checked?'reduce':'raw',
             }
         }
-        let kwargs = {methods: methods, configs: configs, actions: ['findroot', 'sos']};
+        const constraints = getConstraints();
+
+        let kwargs = {ineq_constraints: constraints.ineq_constraints, eq_constraints: constraints.eq_constraints,
+                methods: methods, configs: configs, actions: ['findroot', 'sos']};
 
         // console.log(kwargs);
 
@@ -621,6 +652,7 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
             document.getElementById('setting_gens_input').value = exchanger(gens);
             sos_poly = exchanger(sos_poly);
             document.getElementById('input_poly').value = exchanger(document.getElementById('input_poly').value);
+            document.getElementById('constraints_table_body').querySelectorAll('input').forEach((x) => {x.value = exchanger(x.value);});
         }else if (event === 'homogenize'){
             sos_poly = ''; // reset
             preprocessInput({homogenize: true});

@@ -130,6 +130,8 @@ def preprocess():
         The heatmap of the polynomial coefficients in RGBA format.
     """
     req = request.get_json()
+    if len(req['poly'].strip()) == 0:
+        return jsonify()
 
     gens = req.get('gens', 'abc')
     gens = tuple(sp.Symbol(_) for _ in gens)
@@ -250,12 +252,17 @@ def sum_of_squares(sid, **kwargs):
         The session ID.
     poly : str
         The input polynomial.
+    ineq_constraints: dict[str, str]
+        The ineq constraints.
+    eq_constraints: dict[str, str]
+        The eq constraints.
     methods : dict[str, bool]
         The methods to use.
     configs : dict[str, dict]
         The configurations for each method.
     roots : list[Root]
         The roots of the polynomial.
+    perm : PermutationGroup
 
     Returns
     ----------
@@ -276,11 +283,29 @@ def sum_of_squares(sid, **kwargs):
                 kwargs['configs']['LinearSOS'] = {}
 
         gens = kwargs['gens']
-        ineq_constraints = kwargs['poly'].free_symbols if SOS_Manager.CONFIG_ALLOW_NONSTANDARD_GENS else gens
+        # ineq_constraints = kwargs['poly'].free_symbols if SOS_Manager.CONFIG_ALLOW_NONSTANDARD_GENS else gens
+
+        def parse_constraint_dict(source):
+            constraints = {}
+            for key, value in source.items():
+                key, value = key.strip(), value.strip()
+                if len(key) == 0:
+                    continue
+                key = pl(key, gens, kwargs['perm'], return_type='expr')
+                if len(value) != 0:
+                    value = sp.sympify(value)
+                else:
+                    value = key
+                constraints[key] = value
+            return constraints
+
+        ineq_constraints = parse_constraint_dict(kwargs['ineq_constraints'])
+        eq_constraints = parse_constraint_dict(kwargs['eq_constraints'])
+
         solution = SOS_Manager.sum_of_squares(
             kwargs['poly'],
-            ineq_constraints = list(ineq_constraints),
-            eq_constraints = [],
+            ineq_constraints = ineq_constraints,
+            eq_constraints = eq_constraints,
             gens = gens,
             perm = kwargs['perm'],
             method_order = method_order,
@@ -298,7 +323,8 @@ def sum_of_squares(sid, **kwargs):
 
     gens = kwargs['poly'].free_symbols if SOS_Manager.CONFIG_ALLOW_NONSTANDARD_GENS else gens
     gens = sorted(gens, key=lambda x:x.name)
-    lhs_expr = sp.Function('F')(*gens) if len(gens) > 0 else sp.Symbol('\\text{LHS}')
+    # lhs_expr = sp.Function('F')(*gens) if len(gens) > 0 else 
+    lhs_expr = sp.Symbol('\\text{LHS}')
     if isinstance(solution, Solution):
         # # remove the aligned environment
         tex = solution.to_string(mode='latex', lhs_expr=lhs_expr, settings={'long_frac_ratio':2})#.replace('aligned', 'align*')

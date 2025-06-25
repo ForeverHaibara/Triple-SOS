@@ -35,9 +35,31 @@ function isSameHistoryRecord(data){
     if (history_data.length === 0){
         return false;
     }
-    const keys = ['poly', 'gens', 'perm', 'perm_choice'];
+    function isEqual(a, b) {
+        if (typeof a === 'string' && typeof b === 'string') {
+            return a.trim() === b.trim();
+        }
+
+        if (typeof a === 'object' && a !== null && typeof b === 'object' && b !== null) {
+            const keysA = Object.keys(a);
+            const keysB = Object.keys(b);
+
+            if (keysA.length !== keysB.length) return false;
+
+            for (const key of keysA) {
+                if (!keysB.includes(key) || !isEqual(a[key], b[key])) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        return a === b;
+    }
+
+    const keys = ['poly', 'gens', 'perm', 'perm_choice', 'ineq_constraints', 'eq_constraints'];
     for (let key of keys){
-        if (history_data[0][key].trim() !== data[key].trim()){
+        if (!isEqual(history_data[0][key], data[key])) {
             return false;
         }
     }
@@ -46,6 +68,9 @@ function isSameHistoryRecord(data){
 
 
 function _setRecordProperties(record, index){
+    /*
+    Fill in the forms from history records.
+    */
     record._history_index = index;
     const data = history_data[index];
     record.style = 'cursor: pointer; margin: 0; padding: 0px; border: none; font-size: 13px; background-color: ' + 
@@ -60,9 +85,39 @@ function _setRecordProperties(record, index){
     });
     record.addEventListener('click', () => {
         document.getElementById('input_poly').value = data.poly;
+
+        // set generators and permutation group
         document.getElementById('setting_gens_input').value = data.gens;
         document.getElementById('setting_perm_input').value = data.perm;
         document.querySelector('input[name="setting_perm"][value="' + data.perm_choice + '"]').checked = true;
+
+        // judge whether the constraints are gens >= 0
+        function _constraintShouldLock(){
+            const gens = data.gens;//.split('');
+            const n = gens.length;
+            if (Object.keys(data.eq_constraints).length === 0 && Object.keys(data.ineq_constraints).length === n){
+                for (let i=0;i<n;++i){
+                    if (data.ineq_constraints[gens[i]] !== '') return false;
+                }
+                return true;
+            }
+            return false;
+        }
+        const constraint_should_lock = _constraintShouldLock();
+
+        // set constraints
+        const constraint_table = document.getElementById('constraints_table_body');
+        if (constraints_locked !== constraint_should_lock){
+            constraintsToggleLock();
+        }
+        if (!constraint_should_lock){
+            constraint_table.innerHTML = '';
+            Object.entries(data.ineq_constraints).forEach(
+                (x)=> constraintsAddRow('≥0', constraint_should_lock, constraint=x[0], alias=x[1]))
+            Object.entries(data.eq_constraints).forEach(
+                (x) => constraintsAddRow('=0', constraint_should_lock, constraint=x[0], alias=x[1]))
+        }
+
         renderVisualization(data.vis);
         setSOSResult(data.sos_results);
         setPermChange();

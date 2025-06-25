@@ -19,7 +19,7 @@ from ..core.sum_of_squares import sum_of_squares, DEFAULT_CONFIGS
 def _default_polynomial_check(poly: Poly, method_order: List[str]) -> List[str]:
     """
     Check the degree and nvars of a polynomial to decide
-    whether a method is applicabls. For too high degree polynomials,
+    whether a method is applicable. For too high degree polynomials,
     methods like SDPSOS are removed to avoid long computation time.
     """
     is_hom = int(poly.is_homogeneous)
@@ -208,8 +208,8 @@ class SOS_Manager():
     @classmethod
     def sum_of_squares(cls,
             poly,
-            ineq_constraints: List[Poly] = [],
-            eq_constraints: List[Poly] = [],
+            ineq_constraints: Dict[Poly, Expr] = [],
+            eq_constraints: Dict[Poly, Expr] = [],
             gens = CONFIG_DEFAULT_GENS,
             perm = CONFIG_DEFAULT_PERM,
             method_order = None,
