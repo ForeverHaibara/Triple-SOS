@@ -363,24 +363,25 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
                     </tbody>
                 </table>
             </div>
-            <div class="d-flex gap-1 mt-1" style="margin-left: 5%;">
-                <div class=" dropdown_item">
-                    <button class="btn btn-xs btn-outline-primary" style="padding: 0.1rem 0.3rem; font-size: 10px; height: 22px;" onclick="constraintsAddRow('≥0')">+ Inequality</button>
+            <div style="margin-top: 2%;">
+                 <!-- class="d-flex gap-1 mt-1"> -->
+                <div class="dropdown_item">
+                    <button class="btn btn-xs btn-outline-primary" style="padding: 0.1rem 0.3rem; font-size: 9px; height: 22px;" onclick="constraintsAddRow('≥0')">+ Inequality</button>
                     <div class="submenu" style="color:black; font-size: 12px; border-radius: 5px; text-align: left; min-width: 150px;">
                         <hr style="margin:7px;">
                         <div class="hover_text" style="padding-left: 20px; height: 16px;" onclick="constraintsAddTools('triangle', '≥0')">Triangle</div><hr style="margin:7px;">
                         <div class="hover_text" style="padding-left: 20px; height: 16px;" onclick="constraintsAddTools('acute triangle', '≥0')">Acute Triangle</div><hr style="margin:7px;">
                     </div>
                 </div>
-                <button class="btn btn-xs btn-outline-secondary" style="padding: 0.1rem 0.3rem; font-size: 10px; height: 22px;" onclick="constraintsAddRow('=0')">+ Equality</button>
-                <button class="btn btn-xs btn-outline-success" id="constraints-lock" style="padding: 0.1rem 0.3rem; font-size: 10px; height: 22px;
+                <button class="btn btn-xs btn-outline-secondary" style="padding: 0.1rem 0.3rem; font-size: 9px; height: 22px;" onclick="constraintsAddRow('=0')">+ Equality</button>
+                <button class="btn btn-xs btn-outline-success" id="constraints-lock" style="padding: 0.1rem 0.3rem; font-size: 9px; height: 22px;
                 --bs-btn-hover-bg: var(--bs-btn-bg);  --bs-btn-hover-border-color: var(--bs-btn-border-color); --bs-btn-hover-color: var(--bs-btn-color);" onclick="constraintsToggleLock()">
                     <svg id="lockIcon"  xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" class="bi bi-lock" viewBox="0 0 16 16">
                     <path fill-rule="evenodd" d="M8 0a4 4 0 0 1 4 4v2.05a2.5 2.5 0 0 1 2 2.45v5a2.5 2.5 0 0 1-2.5 2.5h-7A2.5 2.5 0 0 1 2 13.5v-5a2.5 2.5 0 0 1 2-2.45V4a4 4 0 0 1 4-4M4.5 7A1.5 1.5 0 0 0 3 8.5v5A1.5 1.5 0 0 0 4.5 15h7a1.5 1.5 0 0 0 1.5-1.5v-5A1.5 1.5 0 0 0 11.5 7zM8 1a3 3 0 0 0-3 3v2h6V4a3 3 0 0 0-3-3"/> -->
                     </svg>
                     Positive
                 </button>
-                <button class="btn btn-xs btn-outline-danger" style="padding: 0.1rem 0.3rem; font-size: 10px; height: 22px;" onclick="constraintsClear()">Clear</button>
+                <button class="btn btn-xs btn-outline-danger" style="padding: 0.1rem 0.3rem; font-size: 9px; height: 22px;" onclick="constraintsClear()">Clear</button>
             </div>
         </div>
     </div>
