@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0">
-    <title>Sum of Square</title>
+    <title>Sum of Squares</title>
     <style>
     .collapse {
         transition-duration: 0;
@@ -28,6 +28,10 @@
         background-color: #54c3e8;
         border-radius: 4px;
     }
+    /* .table-locked {
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        transition: box-shadow 0.3s ease;
+    } */
     .coeff-label3d {
         transition: opacity 0.2s; /* Smooth transition for opacity changes */
     }
@@ -173,7 +177,7 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
               <input type="text" class="form-control" id="setting_gens_input" value="abc" style="height:23px;font-size:12px;">
             </div>
         </div>
-        <div class="row" style="font-size: 12px; margin-top: 6px;">
+        <div class="row mt-2" style="font-size: 12px;">
             <div class="col-4">
               <label for="setting_perm">Permutation</label>
             </div>
@@ -312,20 +316,21 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
 </div>
 
 
-<div id="frontpageright" style="width: 22%; height: 100%; margin-left: 1.5%;"> 
-    <div id="heatmap_area" style="width: 90%; height: 40%; margin-left: 5%; position:relative;">
+
+<div id="frontpageright"  style="width: 22%; height: 100%; margin-left: 1.5%;"> 
+    <div id="heatmap_area" style="width: 90%; height: 40%; margin-top: -0.5%; margin-left: 5%; position:relative;">
         <div id="heatmap" style="width: 100%; height: 100%; top: 0; left: 0; position:absolute;">
         </div>
         <!-- <button onclick="HeatmapScreenShot()" style="position:a">Take Screenshot</button> -->
-        <button type="button" class="btn btn-outline-primary" id="heatmap_screenshot_button" onclick="HeatmapScreenShot();" style="bottom:0;right:0;position:absolute;">
+        <button type="button" class="btn btn-outline-primary" id="heatmap_screenshot_button" onclick="HeatmapScreenShot();" style="bottom:5%;right:0;position:absolute;">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-save" viewBox="0 0 16 16">
                 <path d="M2 1a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H9.5a1 1 0 0 0-1 1v7.293l2.646-2.647a.5.5 0 0 1 .708.708l-3.5 3.5a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L7.5 9.293V2a2 2 0 0 1 2-2H14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h2.5a.5.5 0 0 1 0 1H2z"/>
             </svg>
           <span class="visually-hidden">Button</span>
         </button>
     </div>
-    <button id="sumofsquare" 
-    style="width: 90%; height: 5%; margin-left: 5%; margin-top: 2%; position: relative;
+    <button id="sumofsquares"
+    style="width: 90%; height: 5%; margin-left: 5%; margin-top: -5%; position: relative;
      font-size: small;
      background: linear-gradient(to bottom, rgb(247,247,247),rgb(221,221,221)); 
      border: 1px solid; border-color: rgba(200,200,200); color: rgb(60,60,60)"
@@ -333,18 +338,49 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
                     this.style.color = 'rgb(0,0,0)';" 
      onmouseleave="this.style.background = 'linear-gradient(to bottom, rgb(247,247,247),rgb(221,221,221))';
                     this.style.color = 'rgb(60,60,60)';" 
-     onclick="SumOfSquare();"
+    onclick="SumOfSquares();"
     >
-    Sum of Square
+    Sum of Squares
     </button>
 
 
-    <div id="tangents" style="width: 96%; height: 20%; margin-left: 2%; margin-top: 4%">    
-        <textarea id="input_tangents" style="border: 1px solid black; border-radius: 8px; font-family:'Times New Roman', Times, serif;
-        width: 99%; height: 100%; padding-left: 1%; resize: none; font-size: small;" ></textarea>
+    <div id="constraints" class="w-100 h-20 ms-1 mt-3">
+        <!-- Planning to add some new UIs -->
+         
+        <div class="h-100 w-100 text-center" style="font-size: 10px;">
+            <div class="customized_scrollbar" style="height: 120px; border: 1px solid #ddd; border-radius: 4px; padding: 2px;">
+                <table class="table table-sm table-hover" style="font-size: 10px;">
+                    <thead></thead>
+                        <tr>
+                            <th style="width: 40%; padding: 0.1rem 0.3rem;">Constraint</th>
+                            <th style="width: 30%; padding: 0.1rem 0.3rem;">Alias</th>
+                            <th style="width: 15%; padding: 0.1rem 0.3rem;">Type</th>
+                            <th style="width: 15%; padding: 0.1rem 0.3rem;"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="constraints_table_body">
+                        <!-- Dynamic rows will be added here -->
+                    </tbody>
+                </table>
+            </div>
+            <div class="d-flex gap-1 mt-1" style="margin-left: 5%;">
+                <button class="btn btn-xs btn-outline-primary" style="padding: 0.1rem 0.3rem; font-size: 10px; height: 22px;" onclick="constraintsAddRow('≥0')">+ Inequality</button>
+                <button class="btn btn-xs btn-outline-secondary" style="padding: 0.1rem 0.3rem; font-size: 10px; height: 22px;" onclick="constraintsAddRow('=0')">+ Equality</button>
+                <button class="btn btn-xs btn-outline-success" id="constraints-lock" style="padding: 0.1rem 0.3rem; font-size: 10px; height: 22px;
+                --bs-btn-hover-bg: var(--bs-btn-bg);  --bs-btn-hover-border-color: var(--bs-btn-border-color); --bs-btn-hover-color: var(--bs-btn-color);" onclick="constraintsToggleLock()">
+                    <svg id="lockIcon"  xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" class="bi bi-lock" viewBox="0 0 16 16">
+                    <path fill-rule="evenodd" d="M8 0a4 4 0 0 1 4 4v2.05a2.5 2.5 0 0 1 2 2.45v5a2.5 2.5 0 0 1-2.5 2.5h-7A2.5 2.5 0 0 1 2 13.5v-5a2.5 2.5 0 0 1 2-2.45V4a4 4 0 0 1 4-4M4.5 7A1.5 1.5 0 0 0 3 8.5v5A1.5 1.5 0 0 0 4.5 15h7a1.5 1.5 0 0 0 1.5-1.5v-5A1.5 1.5 0 0 0 11.5 7zM8 1a3 3 0 0 0-3 3v2h6V4a3 3 0 0 0-3-3"/> -->
+                    </svg>
+                    Positive
+                </button>
+                <button class="btn btn-xs btn-outline-danger" style="padding: 0.1rem 0.3rem; font-size: 10px; height: 22px;" onclick="constraintsClear()">Clear</button>
+            </div>
+        </div>
     </div>
-    <div id="outputs" style="width: 96%; height: 25%; margin-left: 2%; margin-top: 6%; ">  
-        <div id="output_types" style="width: 99%; height: 20%;">
+    
+    <hr style="width: 95%; margin-left: 10px; margin-top: 10px; margin-bottom: 5px;">
+    <div id="outputs" style="width: 96%; height: 24%; margin-left: 2%; margin-top: 1%; ">  
+        <div id="output_types" class="flex mt-0" style="width: 100%; height: 20%; font-size: 14px;">
             <!-- <button id="output_showlatex" style="width:31%;height:100%;margin-left:2%;">LaTeX</button>
             <button id="output_showtxt" style="width:31%;height:100%">txt</button>
             <button id="output_showformatted" style="width:31%;height:100%">formatted</button> -->
@@ -357,7 +393,7 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
             onclick = "changeShowType('formatted')">formatted</div>
         </div>
         <textarea id="output_result" style="border: 1px solid black; border-radius: 8px; font-family:'Times New Roman', Times, serif;
-        width: 99%; height: 82.5%; padding-left: 1%; margin-top: 3%; resize: none; font-size: small;" readonly="readonly"></textarea>
+        width: 99%; height: 76%; padding-left: 1%; margin-top: 3%; resize: none; font-size: small; background: rgba(240,240,240)" readonly="readonly"></textarea>
     </div>
 </div>
 
@@ -487,12 +523,11 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
     };
 
     
-    function SumOfSquare(){
-        document.getElementById("sumofsquare").blur();
+    function SumOfSquares(){
+        document.getElementById("sumofsquares").blur();
         changeNumOfSOS(sos_work.num + 1);
 
         const input_poly = document.getElementById('input_poly').value;
-        const tangents = document.getElementById('input_tangents').value;
         const methods = {
             StructuralSOS: document.getElementById("setting_method_use_StructuralSOS").checked,
             LinearSOS: document.getElementById("setting_method_use_LinearSOS").checked,
@@ -513,11 +548,8 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
             }
         }
         let kwargs = {methods: methods, configs: configs, actions: ['findroot', 'sos']};
-        
-        if (sos_poly === input_poly){
-            kwargs.tangents = tangents;
-        }
-        console.log(kwargs);
+
+        // console.log(kwargs);
 
         preprocessInput(kwargs);
     }
@@ -589,7 +621,6 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
             document.getElementById('setting_gens_input').value = exchanger(gens);
             sos_poly = exchanger(sos_poly);
             document.getElementById('input_poly').value = exchanger(document.getElementById('input_poly').value);
-            document.getElementById('input_tangents').value = exchanger(document.getElementById('input_tangents').value);
         }else if (event === 'homogenize'){
             sos_poly = ''; // reset
             preprocessInput({homogenize: true});

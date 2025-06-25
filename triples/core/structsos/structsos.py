@@ -57,7 +57,7 @@ def _structural_sos(poly: sp.Poly, ineq_constraints: Dict[sp.Poly, sp.Expr] = {}
     d = poly.total_degree()
     nvars = len(poly.gens)
     if poly.is_monomial:
-        if poly.LC() >= 0:
+        if poly.LC() >= 0 and d % 2 == 0:
             # since the poly is homogeneous, it must be a monomial
             return poly.as_expr()
         return None

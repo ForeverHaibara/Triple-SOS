@@ -9,7 +9,7 @@ from flask_cors import CORS
 import sympy as sp
 
 from triples.utils import pl, Solution, poly_get_factor_form, optimize_poly, Root
-# from triples.core.linsos.tangents import root_tangents
+from triples.core.linsos.tangents import prepare_tangents
 from triples.gui.sos_manager import SOS_Manager
 from triples.gui.linebreak import recursive_latex_auto_linebreak
 
@@ -201,7 +201,9 @@ def findroot(sid, **kwargs):
         if tangents is None:
             # not having computed tangents, recompute them
             tangents = [] # root_tangents(poly, [Root(_) for _ in roots])
-            tangents = [poly_get_factor_form(_.as_poly(poly.gens)) for _ in tangents]
+            # ineqs = [_.as_poly(poly.gens) for _ in poly.gens]
+            # tangents = prepare_tangents(poly, dict(zip(ineqs, [_.as_expr() for _ in ineqs])) , roots=roots)
+            # tangents = [poly_get_factor_form(_.as_poly(poly.gens)) for _ in tangents]
             socketio.emit(
                 'rootangents',
                 {
@@ -229,7 +231,7 @@ def findroot(sid, **kwargs):
                                 kwargs['configs']['LinearSOS'] = {'tangents': []}
                             elif 'tangents' not in kwargs['configs']['LinearSOS']:
                                 kwargs['configs']['LinearSOS']['tangents'] = []
-                            kwargs['configs']['LinearSOS']['tangents'].append(tg**2)
+                            kwargs['configs']['LinearSOS']['tangents'].append(tg)
                             kwargs['configs']['LinearSOS']['roots'] = roots
                     except Exception as e:
                         pass

@@ -19,8 +19,9 @@ class SolutionBase:
 
 class Solution(SolutionBase):
     """
-    The `Solution` class holds information about an inequality problem and its solution.
-    It is used as the return type of the `sum_of_squares` function.
+    The `Solution` class is the standard return type of the `sum_of_squares` function.
+    It holds information about an inequality problem and its solution.
+    In a Jupyter notebook, it is displayed as a SymPy equation.
 
     >>> from sympy.abc import a
     >>> from triples.core import sum_of_squares
@@ -39,11 +40,6 @@ class Solution(SolutionBase):
     >>> sol.time # doctest: +SKIP
     0.014049
     """
-    PRINT_CONFIGS = {
-        'WITH_CYC': False,
-        'MULTILINE_ENVIRON': 'aligned',
-        'MULTILINE_ALLOW_SORT': True
-    }
     method = ''
     def __init__(self, problem=None, solution=None, ineq_constraints=None, eq_constraints=None, is_equal=None):
         self.problem = problem
@@ -206,8 +202,15 @@ class Solution(SolutionBase):
         ---------
         >>> from sympy.abc import a, b, c
         >>> sol = Solution(a**2 + a*b + b**2, (a + b/2)**2 + 3*b**2/4)
+        >>> sol.to_string()  # doctest: +SKIP
+        'a^{2} + a b + b^{2} = \\frac{3 b^{2}}{4} + \\frac{\\left(2 a + b\\right)^{2}}{4}'
+        >>> sol.to_string(mode = 'txt')  # doctest: +SKIP
+        'a² + ab + b² = 3b²/4 + (2a + b)²/4'
 
-
+        >>> from sympy import Function
+        >>> F = Function('F')
+        >>> sol.to_string(mode = 'txt', lhs_expr=F(a,b))  # doctest: +SKIP
+        'F(a, b) = 3b²/4 + (2a + b)²/4'
         """
         eq = self.as_eq(lhs_expr=lhs_expr, together=together, cancel=cancel)
         lhs, rhs = eq.lhs, eq.rhs

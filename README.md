@@ -7,6 +7,9 @@ Triples is an automatic inequality proving software developed by ForeverHaibara,
 
 在线体验 Online Servers:
 
+**GitHub Page & Documentation** [https://foreverhaibara.github.io/#/triples](https://foreverhaibara.github.io/#/triples)
+
+Gradio Servers
 * **Hugging Face**      [https://huggingface.co/spaces/ForeverHaibara/Ternary-Inequality-Prover](https://huggingface.co/spaces/ForeverHaibara/Ternary-Inequality-Prover)
 * **AIStudio**               [https://aistudio.baidu.com/application/detail/37245](https://aistudio.baidu.com/application/detail/37245)
 * **AIStudio Backup** [https://aistudio.baidu.com/application/detail/13542](https://aistudio.baidu.com/application/detail/13542)

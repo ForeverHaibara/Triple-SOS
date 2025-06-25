@@ -299,4 +299,24 @@ class GradioInterface():
 
 if __name__ == '__main__':
     interface = GradioInterface()
+
+    ALLOW_CORS = True
+    if ALLOW_CORS:
+        from fastapi import FastAPI
+        from fastapi.middleware.cors import CORSMiddleware
+
+        app = interface.demo.app
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=[
+                "https://foreverhaibara.github.io", 
+                # "http://localhost:5173",             # Vite 开发环境
+                # "http://127.0.0.1:5173"              # 本地测试
+            ],
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+            expose_headers=["*"]
+        )
+    
     interface.demo.launch(show_error=True) #, debug=True)

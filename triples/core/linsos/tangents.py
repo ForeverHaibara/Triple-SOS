@@ -147,7 +147,9 @@ def _get_ineq_constrained_tangents(ineq: Poly, ineq_expr: Expr, roots: List[Root
 
 
 def prepare_tangents(poly: Poly, ineq_constraints: Dict[Poly, Expr] = {}, eq_constraints: Dict[Poly, Expr] = {},
-        roots: List[Root] = [], additional_tangents: List[Expr] = [],
+        roots: List[Root] = [],
+        default_tangents = DEFAULT_TANGENTS,
+        additional_tangents: List[Expr] = [],
     ) -> Dict[Poly, Expr]:
     """
     Prepare tangents for LinearSOS given a list of roots (equality cases). The tangents should
@@ -207,8 +209,8 @@ def prepare_tangents(poly: Poly, ineq_constraints: Dict[Poly, Expr] = {}, eq_con
         if sp.S.One not in tangents:
             tangents.append(sp.S.One)
 
-        if len(symbols) in DEFAULT_TANGENTS:
-            tangents.extend(DEFAULT_TANGENTS[len(symbols)](*symbols))
+        if len(symbols) in default_tangents:
+            tangents.extend(default_tangents[len(symbols)](*symbols))
     tangents = dict((Poly(t, symbols), t) for t in tangents)
 
     # remove very trivial roots

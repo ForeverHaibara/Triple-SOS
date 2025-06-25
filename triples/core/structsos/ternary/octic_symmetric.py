@@ -507,12 +507,12 @@ def _sos_struct_octic_symmetric_hexagon_sdp(coeff):
             M22t = w5 / (c611 + 2*c620)
 
         u210 = sp.S(1)
-        u102 = -c530/(c611 + 2*c620)
-        u201 = sp.S(0)
-        u111 = -2*u102 - 1
+        if c611 + 2*c620 != 0:
+            u102 = -c530/(c611 + 2*c620)
+            u201 = sp.S(0)
+            u111 = -2*u102 - 1
         quad_form = stack_quad_form(M00t, M01t, M02t, M22t)
         return u210, u102, u201, u111, r, quad_form
-
 
     if w4 > 0:
         if w1 != 0:
@@ -596,7 +596,7 @@ def _sos_struct_octic_symmetric_hexagram(coeff):
 
     The idea is to write the problem to s(bc(xa^4 + ya^3(b+c) + za^2(b^2+c^2) + wa^2bc + uabc(b+c) + vb^2c^2)(a-b)(a-c)).
     Then, we use the following lemma: if f(a,b,c) and g(a,b,c) are both symmetric polynomials with respect to b,c.
-    Then, \sum f(a,b,c)(a-b)(a-c) * \sum g(a,b,c)(a-b)(a-c) - \sum f(a,b,c)g(a,b,c)(a-b)(a-c)
+    Then, sum f(a,b,c)(a-b)(a-c) * sum g(a,b,c)(a-b)(a-c) - sum f(a,b,c)g(a,b,c)(a-b)(a-c)
     must be a multiple of p(a-b)2.
     A common choice of g is g(a,b,c) = 1.
 

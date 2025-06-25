@@ -40,11 +40,11 @@ function connectSocket(callback){
         }
         document.getElementById("rootsinfo").innerHTML = str;
         
-        str = data.tangents;
-        if (Array.isArray(str)){
-            str = str.join('\n');
-        }
-        document.getElementById("input_tangents").value = str;
+        // str = data.tangents;
+        // if (Array.isArray(str)){
+        //     str = str.join('\n');
+        // }
+        // document.getElementById("input_tangents").value = str;
     });
 
     socket.on('sos', function(data){
@@ -56,7 +56,7 @@ function connectSocket(callback){
 
         document.getElementById("shadow").hidden = "";
         document.getElementById("input_poly").blur();
-        document.getElementById("input_tangents").blur();
+        // document.getElementById("input_tangents").blur();
         sos_results.displaying = 1;
     });
 }
