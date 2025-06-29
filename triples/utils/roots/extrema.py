@@ -413,6 +413,8 @@ def _eliminate_linear(polys, symbols) -> Tuple[Dict[Symbol, Expr], List[Poly]]:
         else:
             has_eliminated = True
         rest_inds = set(range(len(polys))) - new_eliminated_polys
+        # rest_inds = sorted(list(rest_inds))
+        # new_eliminated_polys = sorted(list(new_eliminated_polys))
         new_eliminated_polys = [polys[i] for i in new_eliminated_polys]
 
         # TODO: clean this

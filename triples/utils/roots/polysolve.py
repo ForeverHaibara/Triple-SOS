@@ -20,8 +20,9 @@ def _filter_trivial_system(polys: List[Poly]) -> Union[List[Poly], None]:
     Simplify a list of polynomial equations by removing zero or duplicate equations.
     If the system contains nonzero constants, return None.
     """
+    ordered_inds = []
     new_polys = set()
-    for poly in polys:
+    for ind, poly in enumerate(polys):
         if isinstance(poly, sp.Expr):
             poly = poly.expand()
             if poly is sp.S.Zero:
@@ -33,8 +34,10 @@ def _filter_trivial_system(polys: List[Poly]) -> Union[List[Poly], None]:
                 continue
             elif poly.total_degree() == 0: # inconsistent system
                 return None
-        new_polys.add(poly)
-    return list(new_polys)
+        if not (poly in new_polys):
+            new_polys.add(poly)
+            ordered_inds.append(ind)
+    return [polys[ind] for ind in ordered_inds]
 
 def _get_realroots_sqf(poly: Poly) -> List[Union[Rational, CRootOf]]:
     """
