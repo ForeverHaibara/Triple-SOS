@@ -98,11 +98,11 @@ def _sos_struct_quintic_full(coeff):
     Try to solve quintic with nonzero a^5 coefficient by subtracting something.
 
     Let f(a,b,c) = a^2-b^2 + u(ab-ac) + v(bc-ab) to be the quadratic form. We consider
-    F(a,b,c) = \sum a(f(a,b,c) + xf(b,c,a))^2 + k\sum cf(a,b,c)^2 >= 0.
+    F(a,b,c) = sum a(f(a,b,c) + xf(b,c,a))^2 + k*sum cf(a,b,c)^2 >= 0.
     This is tight when uv >= 1 and u,v >= 0 because there exists nontrivial equality cases.
 
     Expand F, we obtain
-    F(a,b,c) = \sum (a + c(x^2+k))f(a,b,c)^2 + 2x\sum af(a,b,c)f(b,c,a).
+    F(a,b,c) = sum (a + c(x^2+k))f(a,b,c)^2 + 2x*sum af(a,b,c)f(b,c,a).
     Now we take y = x^2 + k >= x^2. 
     We solve u,v,x,y from the coefficient of a^5,a^4b,a^3b^2,a^2b^3,ab^4.
     
@@ -237,7 +237,7 @@ def _sos_struct_quintic_full(coeff):
         that the equality satisfies a^2-b^2+u(ab-ac)+v(bc-ab) = 0 and its cyclic permutations.
 
         Now we represent F in the form of 
-        F(a,b,c) = \sum (a + cy)f(a,b,c)^2 + 2x\sum af(a,b,c)f(b,c,a).
+        F(a,b,c) = sum (a + cy)f(a,b,c)^2 + 2x*sum af(a,b,c)f(b,c,a).
 
         Return u, v, x, y.
         """
@@ -350,7 +350,7 @@ def _sos_struct_quintic_full(coeff):
         Let f(a,b,c) be a septic (degree-7) cyclic polynomial without a^7 term.
         Then B(x) = f(x,1,0) / x is quintic. Assume that B(x) >= 0 (x >= 0).
         Given such B, we find a sum of square form g(a,b,c), such that 
-        \sum abg(a,b,c) = f(a,b,c) when c = 0. That is, the border of \sum g
+        sum abg(a,b,c) = f(a,b,c) when c = 0. That is, the border of sum g
         coincides with the border of f.
 
         This is used to cancel out the border of a septic polynomial, so that 
@@ -379,17 +379,17 @@ def _sos_struct_quintic_full(coeff):
     def _compute_ker(poly, uv = None):
         """
         Given quintic F(a,b,c). We denote B(x) = F(x,1,0) >= 0 be its border.
-        Assume F(a,b,c) * \sum(a^2 + zab) = \sum a*V(a,b,c)^2 + abc\sum R(a,b,c).
+        Assume F(a,b,c) * sum(a^2 + zab) = sum a*V(a,b,c)^2 + abc*sum R(a,b,c).
         We can apply the quartic theorem on R(a,b,c). Now we will illustrate how to find V and z.
 
         Let f(x) = V(x,1,0) and g(x) = V(1,0,x). Take b = 1 and c = 0 in the identity
         we yield xf(x)^2 + g(x)^2 = B(x)(x^2 + zx + 1).
 
         Now we take x to be the five roots of B(x), then for each root we must have
-        sqrt(-x) * f(x) \pm g(x) = 0
+        sqrt(-x) * f(x) pm g(x) = 0
         Also we may assume V(1,0,0) = 1 when the leading coeff F is 1. We also require V(1,1,1) = 0
         to cover the equality at the center. Moreover, when F has tight nontrivial equality case
-        (a0, b0, c0) and its permutations satisfying that \sum (a^2-b^2+u(ab-ac)+v(bc-ab))^2 == 0,
+        (a0, b0, c0) and its permutations satisfying that sum (a^2-b^2+u(ab-ac)+v(bc-ab))^2 == 0,
         we need V(a0,b0,c0) = 0 and its permutations.
 
         Together, there are 10 equations and 10 unknowns. And we can solve for V by solving a linear system,
@@ -400,7 +400,7 @@ def _sos_struct_quintic_full(coeff):
         In most ideal cases, V and z are rational and everything is done. However, when V and z are
         not rational, we first assume that the R(a,b,c) > 0 is strict when (a,b,c) != (1,1,1). Then
         we can add a little more:
-        F(a,b,c) * \sum (a^2 + (z+dz)ab) = \sum a* #V(a,b,c)^2 + \sum abU(a,b,c) + abc\sum #R(a,b,c).
+        F(a,b,c) * sum (a^2 + (z+dz)ab) = sum a* #V(a,b,c)^2 + sum abU(a,b,c) + abc*sum #R(a,b,c).
         Here #V is a perturbation of V. We select dz > 0 such that the border is slightly larger than
         the original. Then U(a,b,c) is small and we use it to handle the remaining part of the border.
         Lastly we apply quartic theorem on the perturbed #R.
@@ -454,7 +454,7 @@ def _sos_struct_quintic_full(coeff):
 
         def _solve_flip_sgn_eqs(eqs, border, _get_quartic_remain = _get_quartic_remain, mpnq_criterion = criterion):
             """
-            Add in the constraints of sqrt(-x) * f(x) \pm g(x) = 0.
+            Add in the constraints of sqrt(-x) * f(x) pm g(x) = 0.
             Note that there are 2 choices of sign for each equation, we need to try
             both of them.
 
@@ -1561,7 +1561,7 @@ def _solve_quintic_hexagon_pqz(p, q, z, mul = sp.S(1)):
     Proof: Take w = z + 8, u = 4(2p^2-qw)/(w^2-4pq), v = 4(2q^2-pw)/(w^2-4pq),
     and t = (4pq-w^2)^2/(8(2p+2q+w)(3(p-q)^2+(w-p-q)^2)),
     then 1 - t = Det/... >= 0, and we have
-    f(a,b,c) = t\sum c(a^2-b^2+u(ab-ac)+v(bc-ab))^2 + (1 - t)\sum c(a-b)^4 >= 0.
+    f(a,b,c) = tsum c(a^2-b^2+u(ab-ac)+v(bc-ab))^2 + (1 - t)sum c(a-b)^4 >= 0.
 
     The function solves for mul * s(a^4b + pa^3b^2 + qa^2b^3 + ab^4 + za^3bc - (p+q+z+2)a^2b^2c)
     """
@@ -1607,7 +1607,7 @@ def _sos_struct_quintic_hexagon(coeff):
     Proof: Take w = z + 8, u = 4(2p^2-qw)/(w^2-4pq), v = 4(2q^2-pw)/(w^2-4pq),
     and t = (4pq-w^2)^2/(8(2p+2q+w)(3(p-q)^2+(w-p-q)^2)),
     then 1 - t = Det/... >= 0, and we have
-    f(a,b,c) = t\sum c(a^2-b^2+u(ab-ac)+v(bc-ab))^2 + (1 - t)\sum c(a-b)^4 >= 0.
+    f(a,b,c) = t*sum c(a^2-b^2+u(ab-ac)+v(bc-ab))^2 + (1 - t)sum c(a-b)^4 >= 0.
 
     Examples
     -------

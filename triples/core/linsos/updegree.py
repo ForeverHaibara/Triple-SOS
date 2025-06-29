@@ -53,7 +53,7 @@ def lift_degree(
     f(a,b,c) = g(a,b,c) / h(a,b,c) where g and h are both positive. In other words,
     f(a,b,c) * h(a,b,c) = g(a,b,c).
 
-    In practice, we can try out h(a,b,c) = \sum a, h(a,b,c) = \sum (a^2-ab + xab) and so on.
+    In practice, we can try out h(a,b,c) = Sum(a), h(a,b,c) = Sum(a^2-ab + xab) and so on.
     This `lift_degree` function would generate the h(a,b,c) and associated information.
 
     Parameters

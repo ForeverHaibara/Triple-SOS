@@ -438,7 +438,7 @@ def _sos_struct_septic_hexagon(coeff):
         # Proof: Take w = z + 8, u = 4(2p^2-qw)/(w^2-4pq), v = 4(2q^2-pw)/(w^2-4pq),
         # and t = (4pq-w^2)^2/(8(2p+2q+w)(3(p-q)^2+(w-p-q)^2)),
         # then 1 - t = Det/... >= 0, and we have
-        # f(a,b,c) = t\sum c(a^2-b^2+u(ab-ac)+v(bc-ab))^2 + (1 - t)\sum c(a-b)^4 >= 0.
+        # f(a,b,c) = t*sum c(a^2-b^2+u(ab-ac)+v(bc-ab))^2 + (1 - t)*sum c(a-b)^4 >= 0.
 
         coeff410 = coeff((5,2,0))
 

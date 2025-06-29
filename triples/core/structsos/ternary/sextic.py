@@ -804,8 +804,8 @@ def _sos_struct_sextic_full_sdp(coeff):
     """
     Heuristically solve full sextics with the method of unknown coefficients.
     Idea: Let f(a,b,c) = a^3-b^3+ua^2b+vb^2c-(u+v)ac^2+xab^2+ya^2c-(x+y)bc^2.
-    Then we note that \sum f(a,b,c) == 0.
-    We subtract some \sum f(a,b,c)^2 from the original polynomial to ensure that
+    Then we note that sum f(a,b,c) == 0.
+    We subtract some sum f(a,b,c)^2 from the original polynomial to ensure that
     the rest part is a quadratic form with respect to s(a^3-abc), s(a^2b-abc), s(ab^2-abc).
 
 
@@ -881,7 +881,7 @@ def _sos_struct_sextic_full_sdp(coeff):
         r1, r2 = rest_form[1] / rest_form[0], rest_form[2] / rest_form[0]
         denom = ((r1 + 2*r2 + sp.Rational(9,2))**2 + sp.Rational(27,4))
 
-        # We shall subtract r/z * \sum f(a,b,c)^2 from the original polynomial to make rest_form == 0
+        # We shall subtract r/z * sum f(a,b,c)^2 from the original polynomial to make rest_form == 0
         # where z = x^2 + x(y-3) + y^2 + 3 is a variable
         r = rest_form[0] / (54*(r1 + r2 + 3)/denom)
 
