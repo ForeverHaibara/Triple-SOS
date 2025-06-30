@@ -50,9 +50,11 @@ class StateAlgebra:
     _inv_monoms: List[MONOM] # index: monom
 
     def __len__(self):
+        """Number of monomials in the (degree-truncated) algebra."""
         return len(self._dict_monoms)
 
     def index(self, monom: MONOM) -> int:
+        """Index of a monomial in the (degree-truncated) algebra."""
         # return self._dict_monoms[monom]
         i = self._dict_monoms.get(monom)
         if i is None:
@@ -60,21 +62,29 @@ class StateAlgebra:
         return i
 
     def inv_monoms(self) -> List[MONOM]:
+        """Get the mapping `inv_monoms[i] = monom` of the algebra."""
         return self._inv_monoms
 
     def total_degree(self, monom: MONOM) -> int:
+        """Compute the total degree of a monomial."""
         raise NotImplementedError
 
     def permute_monom(self, monom: MONOM, perm: Permutation) -> MONOM:
+        """Permute a monomial given a permutation over the generators."""
         raise NotImplementedError
 
     def permute(self, monom: MONOM) -> List[MONOM]:
+        """Get all elements in the orbit of a monomial of self's permutation group."""
         if self.symmetry is None:
             return [monom]
         pm = self.permute_monom
         return [pm(monom, p) for p in self.symmetry.elements]
 
     def is_symmetric(self, poly: Poly, perm: Optional[Union[Permutation, PermutationGroup]]=None) -> bool:
+        """
+        Decide whether a polynomial is symmetric with respect to a permutation
+        or a permutation group in the algebra.
+        """
         if perm is None:
             perm = self.symmetry
             if perm is None:
@@ -90,12 +100,22 @@ class StateAlgebra:
         return all(_check_single(p) for p in perm)
 
     def s(self, term: TERM) -> TERM:
+        """Apply the state operator on a term."""
         raise NotImplementedError
 
     def terms(self, poly: Poly) -> List[TERM]:
+        """
+        Get the list of terms of a polynomial in the algebra.
+        This is automatically implemented if the polynomial object has the method `.rep.terms()`.
+        """
         return poly.rep.terms()
 
     def arraylize(self, poly: Poly, state: bool = False) -> Matrix:
+        """
+        Convert a polynomial to a sympy vector (Matrix). The polynomial
+        should lie in the algebra. Monomials outside the (degree-truncated)
+        algebra will be automatically ignored.
+        """
         vec = {}
         for monom, coeff in self.terms(poly):
             ind = self._dict_monoms.get(monom)
@@ -105,16 +125,25 @@ class StateAlgebra:
         return rep_matrix_from_dict(vec, (len(self), 1), poly.domain)
 
     def as_expr(self, poly: Poly) -> Expr:
+        """Convert a polynomial in this algebra to sympy Expr."""
         raise NotImplementedError
 
     def mul(self, term1: TERM, term2: TERM) -> TERM:
+        """Define the product of two terms (monom1, coeff1) * (monom2, coeff2)."""
         raise NotImplementedError
 
     def adjoint(self, term: TERM) -> TERM:
+        """
+        Define the complex adjoint of a term (monom, coeff). For commutative
+        real algebras, this should be the identity.
+        """
         raise NotImplementedError
 
     def infer_bases(self, poly: Poly, qmodule: Dict[Any, Poly], ideal: Dict[Any, Poly],
             **kwargs) -> Tuple[Dict[Any, Any], Dict[Any, Any]]:
+        """
+        Get default bases for an SOS problem given the polynomial, qmodule and ideal.
+        """
         raise NotImplementedError
 
 

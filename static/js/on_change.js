@@ -112,6 +112,20 @@ function constraintsAddRow(type, locked=false, constraint='', alias='') {
     }
     tableBody.appendChild(newRow);
 }
+
+function constraintsAddPositiveGens(clear=false) {
+    const tableBody = document.getElementById('constraints_table_body');
+    if (clear)
+        tableBody.innerHTML = '';
+    const gensInput = document.getElementById('setting_gens_input').value;
+    const chars = gensInput.split('');
+    chars.forEach(char => {
+        if (char.trim()) {
+            constraintsAddRow('≥0', disable=true, constraint=char);
+        }
+    });
+}
+
 function constraintsClear() {
     if (constraints_locked) constraintsToggleLock();
     document.getElementById('constraints_table_body').innerHTML = '';
@@ -124,24 +138,17 @@ function constraintsToggleLock() {
     // const table = tableBody.closest('table');
     
     if (constraints_locked) {
-        // 切换到锁定状态
+        // switch to locked
         lockIcon.classList.remove('bi-unlock');
         lockIcon.classList.add('bi-lock');
         lockButton.classList.remove('btn-outline-success');
         lockButton.classList.add('btn-success');
         // table.classList.add('table-locked');
         
-        // 清空表格并添加新行
-        tableBody.innerHTML = '';
-        const gensInput = document.getElementById('setting_gens_input').value;
-        const chars = gensInput.split('');
-        chars.forEach(char => {
-            if (char.trim()) { // 忽略空格
-                constraintsAddRow('≥0', disable=true, constraint=char);
-            }
-        });
+        // clear the table and insert gens >= 0
+        constraintsAddPositiveGens(clear=true);
     } else {
-        // 切换到未锁定状态
+        // switch to unlocked
         lockIcon.classList.remove('bi-lock');
         lockIcon.classList.add('bi-unlock');
         lockButton.classList.remove('btn-success');

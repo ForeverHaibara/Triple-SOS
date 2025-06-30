@@ -110,10 +110,13 @@ function _setRecordProperties(record, index){
         if (constraints_locked !== constraint_should_lock){
             constraintsToggleLock();
         }
+        if (constraints_locked){
+            constraintsAddPositiveGens(clear=true);
+        }
         if (!constraint_should_lock){
             constraint_table.innerHTML = '';
             Object.entries(data.ineq_constraints).forEach(
-                (x)=> constraintsAddRow('≥0', constraint_should_lock, constraint=x[0], alias=x[1]))
+                (x) => constraintsAddRow('≥0', constraint_should_lock, constraint=x[0], alias=x[1]))
             Object.entries(data.eq_constraints).forEach(
                 (x) => constraintsAddRow('=0', constraint_should_lock, constraint=x[0], alias=x[1]))
         }

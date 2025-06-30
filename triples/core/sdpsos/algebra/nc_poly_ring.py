@@ -38,6 +38,15 @@ def generate_monoms_nc(nvars, degree, hom=True):
       
 
 class NCPolyRing(StateAlgebra):
+    """
+    Basic noncommutative polynomial ring (free algebra). A monomial
+    `a1**d1*a2**d2*...*an**dn` is represented by `((a1, d1), (a2, d2), ..., (an, dn))`.
+    Here `a1, a2, ..., an` are hermitian variables and might include duplicated variables.
+    However, it is important that `a_{i}!=a_{i+1}`. The degrees `d1, ..., dn` are nonnegative integers.
+    
+    To allow inverses like `a^{-1}`, one must add `a1^{-1}` to the variables
+    and define the relation `a*a^{-1}=a^{-1}*a=1`.
+    """
     def __init__(self, nvars, degree, is_homogeneous=True, symmetry=None):
         self.nvars = nvars
         self.degree = degree

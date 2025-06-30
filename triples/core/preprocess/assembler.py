@@ -6,7 +6,7 @@ from sympy import Expr, Poly, sympify
 
 from .algebraic import handle_rational
 from .modeling import handle_general_expr
-from .polynomial import handle_polynomial
+from .polynomial import handle_polynomial, sanitize_input
 from ...utils import Solution
 
 def sanitize(
@@ -36,9 +36,10 @@ def sanitize(
             ineq_constraints = dict((sympify(e), sympify(e2).as_expr()) for e, e2 in ineq_constraints.items())
             eq_constraints = dict((sympify(e), sympify(e2).as_expr()) for e, e2 in eq_constraints.items())
 
+            new_func = sanitize_input(
+                homogenize=homogenize, infer_symmetry=infer_symmetry, wrap_constraints=wrap_constraints)(func)
             new_func = handle_polynomial(
-                homogenize=homogenize, ineq_constraint_sqf=ineq_constraint_sqf, eq_constraint_sqf=eq_constraint_sqf,
-                infer_symmetry=infer_symmetry, wrap_constraints=wrap_constraints)(func)
+                ineq_constraint_sqf=ineq_constraint_sqf, eq_constraint_sqf=eq_constraint_sqf)(new_func)
             new_func = handle_rational(disable_denom_finding_roots=disable_denom_finding_roots)(new_func)
             new_func = handle_general_expr()(new_func)
             

@@ -183,7 +183,17 @@ class DualRationalizer:
         return None
 
 
-
+####################################################################
+"""
+Below is the old code for rationalizing the solution of a SDP problem. It is
+still used internally by the SDPPrimal class. However, the SDPProblem (dual form)
+class uses the latest DualRationalizer algorithms from above.
+Currently, the SDPSOS solver for inequalities uses the SDPProblem (dual form) class
+instead of the SDPPrimal class. So it does not affect the behaviour of the SDPSOS
+solver although it is outdated.
+In the future, the following code for rationalization will be deprecated and removed.
+"""
+####################################################################
 
 class Rationalizer(ABC):
     """TODO: deprecation"""

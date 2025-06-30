@@ -51,6 +51,9 @@ def _polylize(poly: Expr,
         ineq_constraint_sqf: bool = True,
         eq_constraint_sqf: bool = True
     ) -> Tuple[Poly, Dict[Poly, Expr], Dict[Poly, Expr], Tuple[Symbol, ...]]:
+    """
+    Convert every expression in the input to be a sympy polynomial.
+    """
     original_symbols = [] if not isinstance(poly, Poly) else poly.gens
     symbols = set.union(
         set(poly.free_symbols), 
@@ -81,12 +84,9 @@ def _polylize(poly: Expr,
 
 
 def handle_polynomial(
-    homogenize: bool = False,
-    ineq_constraint_sqf: bool = True,
-    eq_constraint_sqf: bool = True,
-    infer_symmetry: bool = False,
-    wrap_constraints: bool = False
-):
+        ineq_constraint_sqf: bool = True,
+        eq_constraint_sqf: bool = True,
+    ):
     """
     Wrap a solver function so that it converts sympy expr inputs to sympy polynomials.
     """
@@ -103,7 +103,39 @@ def handle_polynomial(
                 poly, ineq_constraints, eq_constraints,
                 ineq_constraint_sqf=ineq_constraint_sqf, eq_constraint_sqf=eq_constraint_sqf)
 
+            sol = func(poly, ineq_constraints, eq_constraints, *args, **kwargs)
+            return sol
+        return wrapper
+    return decorator
 
+
+def sanitize_input(
+        homogenize: bool = False,
+        infer_symmetry: bool = False,
+        wrap_constraints: bool = False
+    ):
+    """
+    Most inner decorator for solver functions. Sanitize input types for internal solvers.
+
+    Parameters
+    -----------
+    homogenize: bool
+        Whether to homogenize the polynomial and inequality and equality constraints by
+        introducing a new variable. This is useful for solvers that only accepts homogeneous problems.
+    infer_symmetry: bool
+        Whether to automatically inferred the symmetry group and convert it to a MonomialManager
+        object. This is useful for solvers that needs access to the symmetry of the problem.
+    wrap_constraints: bool
+        Whether to convert the constraint dictionary {key: value} to {key: value'} to avoid
+        collision in the symbols in the new values of the dictionary.
+    """
+    def decorator(func):
+        @wraps(func)
+        def wrapper(poly: Poly,
+            ineq_constraints: Dict[Poly, Expr],
+            eq_constraints: Dict[Poly, Expr], *args, **kwargs
+        ):
+            symbols = poly.gens
             ################################################################
             #           Homogenize the polynomial and constraints
             ################################################################
@@ -137,7 +169,7 @@ def handle_polynomial(
             if infer_symmetry and symmetry is None:
                 symmetry = identify_symmetry_from_lists(
                     [[poly], list(ineq_constraints.keys()), list(eq_constraints.keys())])
-            
+
             symmetry = MonomialManager(len(poly.gens), symmetry)
 
             _has_symmetry_kwarg = signature(func).parameters.get('symmetry') is not None
@@ -172,6 +204,7 @@ def handle_polynomial(
             return sol
         return wrapper
     return decorator
+
 
 
 def _get_constraints_wrapper(symbols: Tuple[int, ...],

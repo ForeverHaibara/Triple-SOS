@@ -106,7 +106,7 @@ class SOSPoly(AtomSOSElement):
     Suppose we want the polynomial to be in the form of Σ SOS1 + Σ a*b*SOS2 + Σ (a*b*c-1)*Poly,
     where Σ denotes a symmetric sum (6 terms) with respect to (a, b, c).
     Besides, we also consider polynomials of degree = 4, i.e., Σ (a*b*c-1)*Poly can be a degree-4 polynomial.
-    Then we can initialize the instance as follows。 Note that the SOS result might vary depending on the solver.
+    Then we can initialize the instance as follows. Note that the SOS result might vary depending on the solver.
 
         >>> from sympy.combinatorics import SymmetricGroup
         >>> sos = SOSPoly(a**2+b**2+c**2-a-b-c, (a,b,c), [1,a*b], [a*b*c-1], degree=4, symmetry=SymmetricGroup(3))
