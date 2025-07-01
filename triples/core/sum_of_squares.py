@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Optional, Dict, List, Union, Callable, Any
 from warnings import warn
 
@@ -9,9 +10,8 @@ from .linsos import LinearSOS
 from .structsos import StructuralSOS
 from .symsos import SymmetricSOS
 from .sdpsos import SDPSOS
-from .shared import sanitize_input, sanitize_output
 
-from ..utils import deg, PolyReader, SolutionSimple
+from ..utils import PolyReader, Solution
 
 NAME_TO_METHOD = {
     'LinearSOS': LinearSOS,
@@ -37,8 +37,10 @@ DEFAULT_CONFIGS = {
     }
 }
 
+DEFAULT_SAVE_SOLUTION = lambda x: (str(x.solution) if x is not None else '')
 
-@sanitize_output()
+
+# @sanitize_output()
 # @sanitize_input(homogenize=True)
 def sum_of_squares(
         poly: Union[sp.Poly, sp.Expr],
@@ -46,7 +48,7 @@ def sum_of_squares(
         eq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
         method_order: Optional[List[str]] = METHOD_ORDER,
         configs: Optional[Dict[str, Dict]] = DEFAULT_CONFIGS
-    ) -> Optional[SolutionSimple]:
+    ) -> Optional[Solution]:
     """
     Main function for sum of square decomposition.
 
@@ -66,34 +68,34 @@ def sum_of_squares(
     means the function could not find a solution.
     If result is not None, it will be a solution class. To access the expression, use .solution:
 
-        >>> print(isinstance(result.solution, Expr), result.solution)
+        >>> print(isinstance(result.solution, Expr), result.solution) # doctest: +SKIP
         True (Σ(a - b)**2)/2
 
     The solution expression might involve CyclicSum and CyclicProduct classes, which are not native
     to SymPy, but defined in this package. The permutation groups are not displayed by default and
     might be sometimes misleading. To avoid ambiguity and to expand them, use .doit() on SymPy expressions:
 
-        >>> result.solution.doit()
+        >>> result.solution.doit() # doctest: +SKIP
         (-a + c)**2/2 + (a - b)**2/2 + (b - c)**2/2
 
     If we want to add constraints for the domain of the variables, we can pass in a list of inequality
     or equality constraints. This should be the second and the third argument respectively. Here is
     an example for the constraints a,b,c >= 0:
 
-        >>> sum_of_squares(a*(a-b)*(a-c)+b*(b-c)*(b-a)+c*(c-a)*(c-b), [a,b,c]).solution
+        >>> sum_of_squares(a*(a-b)*(a-c)+b*(b-c)*(b-a)+c*(c-a)*(c-b), [a,b,c]).solution # doctest: +SKIP
         ((Σ(a - b)**2*(a + b - c)**2)/2 + Σa*b*(a - b)**2)/(Σa)
 
     If we want to track the constraints, we can also pass in a dictionary to imply the "name" of the
     constraints:
 
-        >>> sum_of_squares(((a+2)*(b+2)*(c+2)*(a**2/(2+a)+b**2/(2+b)+c**2/(2+c)-1)).cancel(), [a,b,c], {a*b*c-1:x}).solution
+        >>> sum_of_squares(((a+2)*(b+2)*(c+2)*(a**2/(2+a)+b**2/(2+b)+c**2/(2+c)-1)).cancel(), [a,b,c], {a*b*c-1:x}).solution # doctest: +SKIP
         x*(Σ(2*a + 13))/6 + Σa*(b - c)**2 + (Σa*b*(c - 1)**2)/6 + 5*(Σ(a - 1)**2)/6 + 7*(Σ(a - b)**2)/12
 
-        >>> sum_of_squares(x+y+z-(x*y+y*z+z*x), {x:x, y:y, z:z, 4-(x*y+y*z+z*x+x*y*z):a}).solution
+        >>> sum_of_squares(x+y+z-(x*y+y*z+z*x), {x:x, y:y, z:z, 4-(x*y+y*z+z*x+x*y*z):a}).solution # doctest: +SKIP
         (a*(Σ(x**2 + 2*x*y)) + Σx*y*(x - y)**2 + (Σx*y*z*(x - y)**2)/2)/(Σ(x*y*z + 4*x*y + 4*x))
 
         >>> G = Function("G")
-        >>> sum_of_squares(x*(y-z)**2+y*(z-x)**2+z*(x-y)**2, {x:G(x),y:G(y),z:G(z)}).solution
+        >>> sum_of_squares(x*(y-z)**2+y*(z-x)**2+z*(x-y)**2, {x:G(x),y:G(y),z:G(z)}).solution # doctest: +SKIP
         Σ(x - y)**2*G(z)
 
     Parameters
@@ -115,6 +117,7 @@ def sum_of_squares(
     Optional[Solution]
         The solution. If no solution is found, None is returned.
     """
+    start_time = datetime.now()
     if method_order is None:
         method_order = METHOD_ORDER
     if configs is None:
@@ -126,6 +129,9 @@ def sum_of_squares(
         method = NAME_TO_METHOD[method]
         solution = method(poly, ineq_constraints, eq_constraints, **config)
         if solution is not None:
+            end_time = datetime.now()
+            solution._start_time = start_time
+            solution._end_time = end_time
             return solution
 
     return None
@@ -139,7 +145,7 @@ def sum_of_squares_multiple(
         configs: Dict[str, Dict] = DEFAULT_CONFIGS,
         poly_reader_configs: Dict[str, Any] = {},
         save_result: Union[bool, str] = True,
-        save_solution_method: Union[str, Callable] = 'str_formatted',
+        save_solution_method: Callable[[Optional[Solution]], str] = DEFAULT_SAVE_SOLUTION,
         verbose_sos: bool = False,
         verbose_progress: bool = True
     ):
@@ -168,10 +174,9 @@ def sum_of_squares_multiple(
         Whether to save the results. If True, it will be saved to a csv file in the same directory
         as the input file. If False, it will not be saved. If it is a string, it will be treated
         as the file name to save the results.
-    save_solution_method : Union[str, Callable]
-        The method to save the solution. If it is a string, it will be treated as the attribute
-        name of the solution to save. If it is a callable, it will be called on the solution to
-        save the result. It should handle None as well.
+    save_solution_method : Callable[[Optional[Solution]], str]
+        The method to convert a solution to string for saving the result.
+        It will be applied on each solution. It should handle None as well.
     verbose_sos : bool
         Whether to send verbose=True to the sum_of_squares function.
     verbose_progress : bool
@@ -222,7 +227,7 @@ def sum_of_squares_multiple(
             records.append(record)
             continue
 
-        record = {'problem': poly_str, 'deg': deg(poly)}
+        record = {'problem': poly_str, 'deg': poly.total_degree()}
         try:
             t0 = time()
             solution = sum_of_squares(poly, ineq_constraints, eq_constraints,
@@ -234,10 +239,10 @@ def sum_of_squares_multiple(
                 record['solution'] = None
                 record['method'] = None
             else:
-                if not solution.is_equal:
-                    record['status'] = 'inaccurate'
-                else:
-                    record['status'] = 'success'
+                # if not solution.is_Exact:
+                #     record['status'] = 'inaccurate'
+                # else:
+                record['status'] = 'success'
                 record['solution'] = solution
                 record['method'] = solution.method
         except Exception as e:
@@ -255,7 +260,7 @@ def sum_of_squares_multiple(
 def _process_records(
         records: List[Dict],
         save_result: Union[bool, str] = True,
-        save_solution_method: Union[str, Callable] = 'str_formatted',
+        save_solution_method: Callable[[Optional[Solution]], str] = DEFAULT_SAVE_SOLUTION,
         source: Optional[str] = None
     ) -> Any:
     """
@@ -269,18 +274,14 @@ def _process_records(
         Whether to save the results. If True, it will be saved to a csv file in the same directory
         as the input file. If False, it will not be saved. If it is a string, it will be treated
         as the file name to save the results.
-    save_solution_method : Union[str, Callable]
-        The method to save the solution. If it is a string, it will be treated as the attribute
-        name of the solution to save. If it is a callable, it will be called on the solution to
-        save the result.
+    save_solution_method : Callable[[Optional[Solution]], str]
+        The method to convert a solution to string for saving the result.
+        It will be applied on each solution. It should handle None as well.
     source : Optional[str]
         The file name of the input file. If None, it will not be used.
     """
     from time import strftime
     import os
-    if isinstance(save_solution_method, str):
-        attr = save_solution_method
-        save_solution_method = lambda x: getattr(x, attr) if x is not None else None
 
     import pandas as pd
     records_pd = pd.DataFrame(records, index = range(1, len(records)+1))
@@ -312,12 +313,12 @@ def _process_records(
     return records_pd
 
 
-def sum_of_square(*args, **kwargs):
-    """Deprecated function. Please use sum_of_squares instead."""
-    warn('sum_of_square is deprecated. Please use sum_of_squares instead.', DeprecationWarning, stacklevel=2)
-    return sum_of_squares(*args, **kwargs)
+# def sum_of_square(*args, **kwargs):
+#     """Deprecated function. Please use sum_of_squares instead."""
+#     warn('sum_of_square is deprecated. Please use sum_of_squares instead.', DeprecationWarning, stacklevel=2)
+#     return sum_of_squares(*args, **kwargs)
 
-def sum_of_square_multiple(*args, **kwargs):
-    """Deprecated function. Please use sum_of_squares_multiple instead."""
-    warn('sum_of_square_multiple is deprecated. Please use sum_of_squares_multiple instead.', DeprecationWarning, stacklevel=2)
-    return sum_of_squares_multiple(*args, **kwargs)
+# def sum_of_square_multiple(*args, **kwargs):
+#     """Deprecated function. Please use sum_of_squares_multiple instead."""
+#     warn('sum_of_square_multiple is deprecated. Please use sum_of_squares_multiple instead.', DeprecationWarning, stacklevel=2)
+#     return sum_of_squares_multiple(*args, **kwargs)

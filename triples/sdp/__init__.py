@@ -10,7 +10,7 @@
 from .dual import SDPProblem
 from .primal import SDPPrimal
 
-from .utils import congruence
+from .arithmetic import congruence
 
 __all__ = [
     # 'solve_column_separated_linear', 'solve_undetermined_linear',

@@ -1,7 +1,7 @@
 import sympy as sp
 from sympy.core.singleton import S
 
-from ...utils.expression.solution import Solution, SolutionSimple
+from ...utils import Solution, SolutionSimple
 
 
 class SolutionSymmetric(SolutionSimple):

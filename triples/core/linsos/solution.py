@@ -8,8 +8,7 @@ import numpy as np
 from .basis import LinearBasis, LinearBasisTangent
 from .updegree import LinearBasisMultiplier
 from ...utils.expression.cyclic import CyclicSum
-from ...utils.expression.solution import SolutionSimple
-from ...utils import MonomialManager, Coeff
+from ...utils import MonomialManager, Coeff, SolutionSimple
 
 def _merge_common_basis(
         y: List[sp.Expr], powers: List[Tuple], symbols: List[sp.Symbol]

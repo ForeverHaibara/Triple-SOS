@@ -2106,20 +2106,20 @@ def _sos_struct_sextic_symmetric_ultimate_1root(coeff, poly, roots, real = True)
         # s((z0(a^2+b^2) + z1ab + z2c(a+b) + z3c^2)(a-b)^2(a+b-xc)^2).
 
         # First try sum-of-square for real numbers if available.
-        # Suppose 2F(a,b,c) = 2\sum f(a,b,c)^2 
-        #   = \sum (f(a,b,c)^2 + f(b,a,c)^2)
-        #   = 2/3*(\sum f)^2 + 1/3*\sum (f(a,b,c) - f(b,c,a))^2 + 1/3*\sum (f(b,a,c) - f(a,c,b))^2
-        #   = 2/3*(\sum f)^2 + 1/3*\sum (f(a,b,c)+f(b,a,c)-f(a,c,b)-f(b,c,a))^2
-        #          + 1/3*\sum (f(a,b,c)-f(b,a,c)+f(a,c,b)-f(b,c,a))^2 
+        # Suppose 2F(a,b,c) = 2sum f(a,b,c)^2 
+        #   = sum (f(a,b,c)^2 + f(b,a,c)^2)
+        #   = 2/3*(sum f)^2 + 1/3*sum (f(a,b,c) - f(b,c,a))^2 + 1/3*sum (f(b,a,c) - f(a,c,b))^2
+        #   = 2/3*(sum f)^2 + 1/3*sum (f(a,b,c)+f(b,a,c)-f(a,c,b)-f(b,c,a))^2
+        #          + 1/3*sum (f(a,b,c)-f(b,a,c)+f(a,c,b)-f(b,c,a))^2 
       
-        # 1. Here the leading term \sum f has only two degrees of freedom:
-        # \sum f ~ p(a-b) or s((b-c)^2(b+c-xa))
+        # 1. Here the leading term sum f has only two degrees of freedom:
+        # sum f ~ p(a-b) or s((b-c)^2(b+c-xa))
 
         # 2. The second term is symmetric w.r.t. a,b,c and also covers equalities at (x-1,1,1) 
         # and its permutations. Also, s((a-b) * cubic) == 0 by assumption. The form should be
         # s((a3+b3-2c3+u(a2b+ab2-a2c-b2c)+v(a2b+ab2-ac2-bc2))2) where u = -vx - x^2 + x - 1.
 
-        # 3. The last can be divided by (a-b)^2. So it is \sum (a-b)^2 * quadratic^2.
+        # 3. The last can be divided by (a-b)^2. So it is sum (a-b)^2 * quadratic^2.
         # The quadratic polynomial must be symmetric w.r.t. a,b and also cover equalities at
         # (x-1,1,1). Also, s((a-b) * quadratic) == 0 by assumption. The form should be
         # s((a-b)2(a2+b2-c(a+b)+ucs(a)+vs(ab))2) where u = (-2*v*x + v - x**2 + 3*x - 2)/(x + 1).

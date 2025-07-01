@@ -3,24 +3,16 @@ from typing import Dict, Tuple, List, Union, Callable, Optional, Any
 
 from numpy import ndarray
 import numpy as np
-from sympy import MutableDenseMatrix as Matrix
 from sympy import MatrixBase, Expr, Rational
+from sympy.core.relational import Relational
+from sympy.matrices import MutableDenseMatrix as Matrix
 import sympy as sp
 
-from .backend import SDPBackend
-from .ipm import SDPRationalizeError
-from .rationalize import (
-    rationalize_and_decompose, RationalizeWithMask, RationalizeSimultaneously, IdentityRationalizer
-)
-from .utils import (
-    is_empty_matrix, Mat2Vec, congruence_with_perturbation, align_iters, IteratorAlignmentError
-)
+from .arithmetic import sqrtsize_of_mat, is_empty_matrix, congruence, rep_matrix_from_numpy, rep_matrix_to_numpy
+from .rationalize import rationalize_and_decompose
+from .utils import exprs_to_arrays, collect_constraints
 
-Decomp = Dict[str, Tuple[Matrix, Matrix, List[Rational]]]
-Objective = Union[Expr, ndarray, Callable[[SDPBackend], Any]]
-Constraint = Callable[[SDPBackend], Any]
-MinEigen = Union[float, int, tuple, Dict[str, Union[float, int, tuple]]]
-
+Decomp = Dict[Any, Tuple[Matrix, Matrix, List[Rational]]]
 
 
 class SDPProblemBase(ABC):
@@ -29,21 +21,20 @@ class SDPProblemBase(ABC):
     """
     is_dual = False
     is_primal = False
+    y = None
+    S = None
+    decompositions = None
     def __init__(self, *args, **kwargs) -> None:
-        # associated with the PSD matrices
-        self.y = None
-        self.S = None
-        self.decompositions = None
-
         # record the numerical solutions
         self._ys = []
 
-    def _init_space(self, arg: Union[list, Dict], argname: str) -> Dict[str, Matrix]:
+    def _init_space(self, arg: Union[list, Dict], argname: str) -> Dict[Any, Matrix]:
         """
         Init self from a list or a dict and write the result to self.argname.
+        The function always converts the arg to a dict.
         """
         if isinstance(arg, list):
-            keys = ['S_%d'%i for i in range(len(arg))]
+            keys = list(range(len(arg)))
             arg = dict(zip(keys, arg))
         elif isinstance(arg, dict):
             keys = list(arg.keys())
@@ -60,10 +51,10 @@ class SDPProblemBase(ABC):
     def dof(self) -> int: ...
 
     def get_size(self, key: str) -> int:
-        return Mat2Vec.length_of_mat(self._x0_and_space[key][0].shape[0])
+        return sqrtsize_of_mat(self._x0_and_space[key][0])
 
     @property
-    def size(self) -> Dict[str, int]:
+    def size(self) -> Dict[Any, int]:
         return {key: self.get_size(key) for key in self.keys()}
 
     def __repr__(self) -> str:
@@ -72,7 +63,16 @@ class SDPProblemBase(ABC):
     def __str__(self) -> str:
         return self.__repr__()
 
-    def _standardize_mat_dict(self, mat_dict: Dict[str, Matrix]) -> Dict[str, Matrix]:
+    @abstractmethod
+    def free_symbols(self) -> List[sp.Symbol]:
+        """
+        Return the free symbols of the SDP problem.
+        """
+
+    def as_params(self) -> Dict[sp.Symbol, Expr]:
+        return dict(zip(self.gens, self.y))
+
+    def _standardize_mat_dict(self, mat_dict: Dict[Any, Matrix]) -> Dict[Any, Matrix]:
         """
         Standardize the matrix dictionary.
         """
@@ -87,7 +87,7 @@ class SDPProblemBase(ABC):
         return mat_dict
 
     @abstractmethod
-    def S_from_y(self, y: Optional[Union[Matrix, ndarray, Dict]] = None) -> Dict[str, Matrix]:
+    def S_from_y(self, y: Optional[Union[Matrix, ndarray, Dict]] = None) -> Dict[Any, Matrix]:
         
         """
         Given y, compute the symmetric matrices. This is useful when we want to see the
@@ -102,15 +102,9 @@ class SDPProblemBase(ABC):
 
         Returns
         ----------
-        S : Dict[str, Matrix]
+        S : Dict[Any, Matrix]
             The symmetric matrices that SDP requires to be positive semidefinite.
         """
-
-    def mats(self, *args, **kwargs) -> Dict[str, Matrix]:
-        """
-        Alias of `S_from_y`.
-        """
-        return self.S_from_y(*args, **kwargs)
 
     def project(self, y: Matrix) -> Matrix:
         """
@@ -119,11 +113,11 @@ class SDPProblemBase(ABC):
         return y
 
     def register_y(self,
-            y: Union[Matrix, ndarray, Dict],
-            project: bool = True,
-            perturb: bool = False,
-            propagate_to_parent: bool = True
-        ) -> None:
+        y: Union[Matrix, ndarray, Dict],
+        project: bool = True,
+        perturb: bool = False,
+        propagate_to_parent: bool = True
+    ) -> bool:
         """
         Manually register a solution y to the SDP problem.
 
@@ -143,17 +137,21 @@ class SDPProblemBase(ABC):
         """
         if len(y) == 0 and self.dof != 0:
             raise ValueError("No solution is given to be registered.")
+        if isinstance(y, list):
+            y = np.array(y)
+        if isinstance(y, np.ndarray):
+            y = rep_matrix_from_numpy(y.flatten())
         y2 = self.project(y)
         if (not (y2 is y)) and not project:
             # FIXME for numpy array
             raise ValueError("The vector y is not feasible by the equality constraints."
-                             "Use project=True to project the approximated solution to the feasible region.")
+                             " Use project=True to project the approximated solution to the feasible region.")
         y = y2
   
         S = self.S_from_y(y)
         decomps = {}
         for key, s in S.items():
-            decomp = congruence_with_perturbation(s, perturb = perturb)
+            decomp = congruence(s, perturb=perturb, upper=False)
             if decomp is None:
                 raise ValueError(f"Matrix {key} is not positive semidefinite given y.")
             decomps[key] = decomp
@@ -162,6 +160,7 @@ class SDPProblemBase(ABC):
         self.decompositions = decomps
         if propagate_to_parent:
             self.propagate_to_parent(recursive = True)
+        return True
 
     def propagate_to_parent(self, *args, **kwargs) -> None:
         # this method should be implemented in the TransformMixin
@@ -170,13 +169,6 @@ class SDPProblemBase(ABC):
     def get_last_child(self) -> 'SDPProblemBase':
         # this method should be implemented in the TransformMixin
         return self
-
-    @abstractmethod
-    def _get_defaulted_configs(self) -> List[List[Any]]:
-        """
-        Get the default configurations of the SDP problem.
-        """
-        ...
 
     def rationalize(self, y: ndarray, verbose = False, **kwargs) -> Optional[Tuple[Matrix, Decomp]]:
         """
@@ -189,146 +181,93 @@ class SDPProblemBase(ABC):
             return None
         if verbose:
             S = self.S_from_y(y)
-            S_numer = [np.array(mat).astype('float64') for mat in S.values()]
+            S_numer = [rep_matrix_to_numpy(mat) for mat in S.values()]
             S_eigen = [np.min(np.linalg.eigvalsh(mat)) if mat.size else 0 for mat in S_numer]
             print(f'Minimum Eigenvalues = {S_eigen}')
         return rationalize_and_decompose(y, mat_func=self.S_from_y, projection=self.project, **kwargs)
 
+    def exprs_to_arrays(self, exprs: List[Union[Expr, Relational, Tuple[Matrix, float], Tuple[Matrix, float, str]]], dtype=np.float64):
+        return exprs_to_arrays(exprs, self.gens, dtype=dtype)
 
     @abstractmethod
     def _solve_numerical_sdp(self,
-            objective: Objective,
-            constraints: List[Constraint] = [],
-            min_eigen: MinEigen = 0,
-            scaling: float = 6.,
-            solver: Optional[str] = None,
-            verbose: bool = False,
-            solver_options: Dict[str, Any] = {},
-            raise_exception: bool = False
-        ) -> Optional[ndarray]:
+        objective: Matrix,
+        constraints: List[Tuple[Matrix, Matrix, str]] = [],
+        solver: Optional[str] = None,
+        return_result: bool = False,
+        kwargs: Dict[Any, Any] = {}
+    ) -> Optional[ndarray]:
         """
-        Solve a single numerical SDP.
+        Internal interface to solve a single numerical SDP by calling backends.
         """
 
-    def _solve_from_multiple_configs(self,
-            list_of_objective: List[Objective] = [],
-            list_of_constraints: List[List[Constraint]] = [],
-            list_of_min_eigen: List[MinEigen] = [],
-            scaling: float = 6.,
-            solver: Optional[str] = None,
-            allow_numer: int = 0,
-            verbose: bool = False,
-            solver_options: Dict[str, Any] = {},
-            raise_exception: bool = False
-        ) -> Optional[Tuple[Matrix, Decomp]]:
+    def solve_obj(self,
+        objective: Union[Matrix, Expr],
+        constraints: List[Union[Relational, Tuple[Matrix, Matrix, str]]] = [],
+        solver: Optional[str] = None,
+        solve_child: bool = True,
+        propagate_to_parent: bool = True,
+        verbose: bool = False,
+        kwargs: Dict[Any, Any] = {}
+    ) -> Optional[Matrix]:
         """
-        Attempt multiple numerical SDP trials given multiple solver configurations.
-
-        Parameters
-        ----------
-        list_of_objective : List[Objective]
-            The list of objectives.
-        list_of_constraints : List[List[Constraint]]
-            The list of constraints.
-        list_of_min_eigen : List[MinEigen]
-            The list of minimum eigenvalues for the symmetric matrices.
-        solver : Optional[str]
-            The name of the solver. Refer to sdp.backend.caller._BACKENDS for the list of available solvers.
-        allow_numer : int
-            Whether to accept numerical solution. 
-            If 0, then it claims failure if the rational feasible solution does not exist.
-            If 1, then it accepts a numerical solution if the rational feasible solution does not exist.
-            If 2, then it accepts the first numerical solution if rationalization fails.
-            If 3, then it accepts the first numerical solution directly. Defaults to 0.
-        verbose : bool
-            If True, print the information of the solving process.
-        solver_options : Dict[str, Any]
-            The options passed to the SDP backend solver.
-        raise_exception : bool
-            If True, raise an exception if an error occurs.
+        Solve the SDP problem with a given objective and constraints.
         """
-        num_sol = len(self._ys)
+        original_self = self
+        obj = self.exprs_to_arrays([objective])[0]
+        cons = self.exprs_to_arrays(constraints)
 
-        for obj, con, eig in zip(list_of_objective, list_of_constraints, list_of_min_eigen):
-            # iterate through the configurations
-            y = self._solve_numerical_sdp(objective=obj, constraints=con, min_eigen=eig, scaling=scaling,
-                solver=solver, solver_options=solver_options, raise_exception=raise_exception
-            )
-            if y is not None:
-                self._ys.append(y)
+        ineq_lhs, ineq_rhs, eq_lhs, eq_rhs = collect_constraints(cons, self.dof)
 
-                def _force_return(self: SDPProblemBase, y):
-                    self.register_y(y, perturb = True, propagate_to_parent = False)
-                    _decomp = dict((key, (s, d)) for (key, s), d in zip(self.S.items(), self.decompositions.values()))
-                    return y, _decomp
+        if obj[0].shape != (1, self.dof):
+            raise ValueError(f"The objective should have shape (1, {self.dof}), but got {obj[0].shape}.")
+        if ineq_lhs.shape[1] != self.dof or ineq_lhs.shape[0] != ineq_rhs.shape[0]:
+            raise ValueError(f"The inequality constraints should have dof = {self.dof},"
+                             f" but got lhs shape {ineq_lhs.shape} and rhs shape {ineq_rhs.shape}.")
+        if eq_lhs.shape[1]!= self.dof or eq_lhs.shape[0] != eq_rhs.shape[0]:
+            raise ValueError(f"The equality constraints should have dof = {self.dof},"
+                             f" but got lhs shape {eq_lhs.shape} and rhs shape {eq_rhs.shape}.")
 
-                if allow_numer >= 3:
-                    # force to return the numerical solution
-                    return _force_return(self, y)
+        if solve_child:
+            obj = self.propagate_affine_to_child(obj[0], obj[1], recursive=True)
+            ineq_lhs, ineq_rhs = self.propagate_affine_to_child(ineq_lhs, -ineq_rhs, recursive=True)
+            eq_lhs, eq_rhs = self.propagate_affine_to_child(eq_lhs, -eq_rhs, recursive=True)
+            ineq_rhs, eq_rhs = -ineq_rhs, -eq_rhs
+            self = self.get_last_child()
 
-                decomp = self.rationalize(y, verbose=verbose, #check_pretty=False,
-                            rationalizers=[RationalizeWithMask(), RationalizeSimultaneously([1,1260,1260**3])])
-                if decomp is not None:
-                    return decomp
+        cons = [(ineq_lhs, ineq_rhs, '>'), (eq_lhs, eq_rhs, '==')]
 
-                if allow_numer == 2:
-                    # force to return the numerical solution if rationalization fails
-                    return _force_return(self, y)
+        if not ('verbose' in kwargs):
+            kwargs['verbose'] = verbose
 
-        if len(self._ys) > num_sol:
-            # new numerical solution found
-            decomp = self.rationalize(np.array(self._ys).mean(axis=0), verbose=verbose, check_pretty=False,
-                        rationalizers=[RationalizeWithMask(), RationalizeSimultaneously()])
-            if decomp is not None:
-                return decomp
+        y = self._solve_numerical_sdp(objective=obj[0], constraints=cons, solver=solver, 
+            return_result=False, kwargs=kwargs)
 
-            if allow_numer == 1:
-                y = self._ys[-1]
-                return self.rationalize(y, verbose=verbose,
-                            perturb=True, check_pretty=False, rationalizers=[IdentityRationalizer()])
-            else:
-                raise SDPRationalizeError(
-                    "Failed to find a rational solution despite having a numerical solution."
-                )
+        if y is not None:
+            y = rep_matrix_from_numpy(y)
+            self.register_y(y, project=True, perturb=True, propagate_to_parent=propagate_to_parent)
+            y = original_self.y
+        return y
 
-        return None
-
+    @abstractmethod
     def solve(self,
-            objective: Union[Objective, List[Objective]] = None,
-            constraints: Union[List[Constraint], List[List[Constraint]]] = None,
-            min_eigen: Union[MinEigen, List[MinEigen]] = None,
-            scaling: float = 6.,
-            solver: Optional[str] = None,
-            use_default_configs: int = 1,
-            allow_numer: int = 0,
-            verbose: bool = False,
-            solve_child: bool = True,
-            propagate_to_parent: bool = True,
-            solver_options: Dict[str, Any] = {},
-            raise_exception: bool = False
-        ) -> bool:
+        solver: Optional[str] = None,
+        verbose: bool = False,
+        solve_child: bool = True,
+        propagate_to_parent: bool = True,
+        allow_numer: bool = False
+    ) -> Optional[Matrix]:
         """
         Interface for solving the SDP problem.
 
         Parameters
         ----------
-        use_default_configs : int
-            Whether to use the default configurations of objective+constraints+min_eigen.
-            Defaults to 1.
-            * If 0, it only uses the given configurations.
-            * If 1, it appends the default configurations to the given configurations if 
-            no configurations are given. But when any configuration is given,
-            it only uses the given configurations.
-            * If 2, it appends the default configurations to the given configurations.
-            Defaults to 1.
-
         allow_numer : int
             Whether to accept numerical solution. Defaults to 0.
             * If 0, then it claims failure if the rational feasible solution does not exist.
             * If 1, then it accepts a numerical solution if the rational feasible solution does not exist.
             * If 2, then it accepts the first numerical solution if rationalization fails.
             * If 3, then it accepts the first numerical solution directly.
-
         verbose : bool
             If True, print the information of the solving process.
         solve_child : bool
@@ -337,11 +276,6 @@ class SDPProblemBase(ABC):
             it defaults to solve the problem by itself.
         propagate_to_parent : bool
             Whether to propagate the result to the parent node. Defaults to True.
-        solver_options : Dict[str, Any]
-            The options passed to the SDP backend solver.
-        raise_exception : bool
-            If True, raise an exception if an error occurs in the backend. It is for 
-            debugging purpose.
 
         Returns
         ----------
@@ -349,59 +283,3 @@ class SDPProblemBase(ABC):
             Whether the problem is solved. If True, the result can be accessed by
             SDPProblem.y and SDPProblem.S and SDPProblem.decompositions.
         """
-        
-        if solve_child:
-            child: SDPProblemBase = self.get_last_child()
-            if child is not self:
-                return child.solve(
-                    objective = objective,
-                    constraints = constraints,
-                    min_eigen = min_eigen,
-                    scaling = scaling,
-                    solver = solver,
-                    allow_numer = allow_numer,
-                    verbose = verbose,
-                    solve_child = solve_child,
-                    propagate_to_parent = propagate_to_parent,
-                    solver_options = solver_options,
-                    raise_exception = raise_exception
-                )
-
-        try:
-            configs = align_iters(
-                [objective, constraints, min_eigen],
-                [(ndarray, Expr, float, int), list, (float, int, tuple, dict)],
-                raise_exception = True
-            )
-        except IteratorAlignmentError as e:
-            raise IteratorAlignmentError("Incompatible lengths of configurations: objectives {}, constraints {}, min_eigen {}.".format(*e.args[1]))
-
-        if use_default_configs:
-            if use_default_configs > 1 or (use_default_configs == 1 and len(configs[0]) == 0):
-                default_configs = self._get_defaulted_configs()
-                for i in range(len(configs)):
-                    configs[i] += default_configs[i]
-        if self.dof == 0:
-            # trim the configs to the first one
-            if len(configs[0]) > 1:
-                configs = [[_[0]] for _ in configs]
-
-
-        #################################################
-        #            Solve the SDP problem
-        #################################################
-        solution = self._solve_from_multiple_configs(
-            *configs, scaling=scaling, solver=solver, allow_numer = allow_numer, verbose = verbose,
-            solver_options = solver_options, raise_exception = raise_exception
-        )
-
-        if solution is not None:
-            # register the solution
-            self.y = solution[0]
-            self.S = dict((key, S[0]) for key, S in solution[1].items())
-            self.decompositions = dict((key, S[1:]) for key, S in solution[1].items())
-
-        if propagate_to_parent:
-            self.propagate_to_parent()
-
-        return (solution is not None)

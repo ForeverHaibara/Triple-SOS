@@ -193,8 +193,15 @@ function setSOSResult(data){
     // render the new result
     let svg = window.MathJax.tex2svg(str).children[0];
     // shadow_box.style.height = '80%';
+    const getValue = (x) => {return x.endsWith('ex')? x.slice(0,-2):100;}
+    const svg_height = getValue(svg.getAttribute('height'));
+    const svg_width  = getValue(svg.getAttribute('width'));
     shadow_box.appendChild(svg);
-    svg.setAttribute('style', 'width: 95%; height: 90%; margin-top: 2%'); 
+    if (svg_width<50&&svg_height<10&&svg_height*svg_width<80){
+        svg.setAttribute('style', 'width: 63%; height: 59%; margin-top: 8%;');
+    }else {
+        svg.setAttribute('style', 'width: 95%; height: 90%; margin-top: 2%;');
+    }
     shadow_box.hidden = "";
     return shadow_box;
 }

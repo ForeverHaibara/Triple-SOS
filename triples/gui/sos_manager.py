@@ -6,26 +6,26 @@ import sympy as sp
 from sympy import Expr, Poly, Symbol
 from sympy.combinatorics import Permutation, PermutationGroup, CyclicGroup
 
-from ..utils import (
-    Solution, SolutionSimple, CyclicExpr, CyclicSum, CyclicProduct,
-    deg, poly_get_factor_form, poly_get_standard_form, latex_coeffs
+from .grid import GridRender
+from ..utils import Solution, SolutionSimple, CyclicExpr, CyclicSum, CyclicProduct
+from ..utils.text_process import (
+    preprocess_text, poly_get_factor_form, poly_get_standard_form,
+    degree_of_zero, coefficient_triangle, coefficient_triangle_latex
 )
-from ..utils.text_process import preprocess_text, degree_of_zero, coefficient_triangle
-from ..utils.roots import RootsInfo, GridRender, findroot
 from ..core.sum_of_squares import sum_of_squares, DEFAULT_CONFIGS
-from ..core.linsos import root_tangents
+# from ..core.linsos import root_tangents
 
 
 def _default_polynomial_check(poly: Poly, method_order: List[str]) -> List[str]:
     """
     Check the degree and nvars of a polynomial to decide
-    whether a method is applicabls. For too high degree polynomials,
+    whether a method is applicable. For too high degree polynomials,
     methods like SDPSOS are removed to avoid long computation time.
     """
     is_hom = int(poly.is_homogeneous)
     nvars = len(poly.gens) + (1 - is_hom)
     degree = poly.total_degree()
-    upper_bounds = [30, 30, 30, 12, 11, 8, 6, 4, 4, 4, 4]
+    upper_bounds = [30, 30, 30, 14, 12, 8, 6, 4, 4, 4, 4]
     if degree > upper_bounds[nvars]:
         # remove LinearSOS and SDPSOS
         method_order = [method for method in method_order if method not in ('LinearSOS', 'SDPSOS')]
@@ -167,7 +167,7 @@ class SOS_Manager():
         """
         if poly is None or (not isinstance(poly, Poly)):
             return False
-        if len(poly.gens) != 3 or (poly.is_zero) or (not poly.is_homogeneous) or deg(poly) < 1:
+        if len(poly.gens) != 3 or (poly.is_zero) or (not poly.is_homogeneous) or poly.total_degree() < 1:
             return False
         if not poly.domain.is_Numerical:
             return False
@@ -187,30 +187,29 @@ class SOS_Manager():
         """
         return poly_get_factor_form(poly, perm, **kwargs)
 
-    @classmethod
-    def findroot(cls, poly, grid = None, verbose = True):
-        """
-        Find the roots / local minima of a polynomial.
-        """
-        if not cls.check_poly(poly):
-            return RootsInfo()
+    # @classmethod
+    # def findroot(cls, poly, grid = None, verbose = True):
+    #     """
+    #     Find the roots / local minima of a polynomial.
+    #     """
+    #     if not cls.check_poly(poly):
+    #         return []
 
-        roots_info = findroot(
-            poly, 
-            most = 5, 
-            grid = grid, 
-            with_tangents = root_tangents
-        )
-        roots_info.sort_tangents()
-        if verbose:
-            print(roots_info)
-        return roots_info
+    #     roots = findroot(
+    #         poly, 
+    #         most = 5, 
+    #         grid = grid, 
+    #         with_tangents = root_tangents
+    #     )
+    #     if verbose:
+    #         print(roots)
+    #     return roots
 
     @classmethod
     def sum_of_squares(cls,
             poly,
-            ineq_constraints: List[Poly] = [],
-            eq_constraints: List[Poly] = [],
+            ineq_constraints: Dict[Poly, Expr] = [],
+            eq_constraints: Dict[Poly, Expr] = [],
             gens = CONFIG_DEFAULT_GENS,
             perm = CONFIG_DEFAULT_PERM,
             method_order = None,
@@ -262,7 +261,7 @@ class SOS_Manager():
             poly, denom = preprocess_text(txt, gens=gens, perm=perm, return_type='frac')
         except:
             return ''
-        return latex_coeffs(poly, *args, **kwargs)
+        return coefficient_triangle_latex(poly, *args, **kwargs)
 
     @classmethod
     def _parse_perm_group(cls, txt: Union[str, List[List[int]]]) -> PermutationGroup:

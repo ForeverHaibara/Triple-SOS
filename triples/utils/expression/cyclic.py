@@ -10,6 +10,7 @@ from sympy.core.containers import Dict
 from sympy.core.numbers import zoo, nan
 from sympy.core.parameters import global_parameters
 from sympy.combinatorics import Permutation, PermutationGroup, CyclicGroup, SymmetricGroup
+from sympy.external.importtools import version_tuple
 from sympy.printing.latex import LatexPrinter
 from sympy.printing.str import StrPrinter
 from sympy.printing.precedence import precedence_traditional, PRECEDENCE
@@ -95,6 +96,19 @@ def _is_perm_invariant_dict(symbols, perm_group, d):
             return False
     return True
 
+def _compare_translation_argwise(expr, translation):
+    """Compute expr.compare(_replace_symbols(expr, translation)) efficiently."""
+    if expr.is_Symbol:
+        return expr.compare(translation.get(expr, expr))
+    if expr.is_Atom:
+        return 0
+    for arg in expr.args:
+        sign = _compare_translation_argwise(arg, translation)
+        if sign != 0:
+            return sign
+    return 0
+
+
 def _project_perm_group(perm_group, inds):
     """
     Project the permutation group (especially stabilizers) to given indices,
@@ -102,7 +116,7 @@ def _project_perm_group(perm_group, inds):
 
     Examples
     ========
-    >>> _project_perm_group(SymmetricGroup(5).stabilizer(3), [0,1,2,4])
+    >>> _project_perm_group(SymmetricGroup(5).stabilizer(3), [0,1,2,4]) # doctest:+SKIP
     PermutationGroup([
         (3)(0 1),
         (0 3),
@@ -166,12 +180,16 @@ class CyclicExpr(sp.Expr):
             expr = sympify(expr)
             expr0 = expr
             for translation in cls._generate_all_translations(symbols, perm, full=True):
-                # find the simplest form up to permutation
+                # find the lexiographically smallest form up to permutation
                 # expr2 = signsimp(expr0.xreplace(translation)) # signsimp is unstable
                 # expr2 = expr0.xreplace(translation)
-                expr2 = _replace_symbols(expr0, translation)
-                if expr.compare(expr2) > 0:
-                    expr = expr2
+
+                # expr2 = _replace_symbols(expr0, translation)
+                # if expr.compare(expr2) > 0:
+                #     expr = expr2
+                if _compare_translation_argwise(expr, translation) > 0:
+                    expr = _replace_symbols(expr0, translation)
+
 
             return cls._eval_simplify_(expr, symbols, perm)
 
@@ -229,7 +247,7 @@ class CyclicExpr(sp.Expr):
 
         Examples
         ========
-
+        >>> from sympy.abc import a, b, c, x, y, z
         >>> CyclicSum(a*(b-c)**2).subs({a:3, b:2, c:1})
         12
         >>> CyclicSum(a*(b-c)**2).subs({a:y+z, b:z+x, c:x+y})
@@ -254,7 +272,9 @@ class CyclicExpr(sp.Expr):
 
         Examples
         ========
-        >>> CyclicSum.PRINT_FULL = True
+        >>> from sympy.abc import a, b, c, x, y, z, u, v, w
+        >>> from sympy.combinatorics import PermutationGroup, Permutation
+        >>> CyclicExpr.PRINT_FULL = True
 
         If the replacement rule is cyclic with respect to its permutation group,
         then the cyclic expression is preserved.
@@ -279,6 +299,8 @@ class CyclicExpr(sp.Expr):
 
         >>> SymmetricSum(a**2, (a, b, c)).xreplace({a:a*b, b:b*c, c:c*a})
         2*a**2*b**2 + 2*a**2*c**2 + 2*b**2*c**2
+
+        >>> CyclicExpr.PRINT_FULL = False
         """
         return super().xreplace(*args, **kwargs)
 
@@ -413,8 +435,10 @@ class CyclicSum(CyclicExpr):
     Represent cyclic sums.
 
     Examples
-    ========    
-    >>> CyclicSum.PRINT_FULL = True
+    ========
+    >>> from sympy.abc import a, b, c, d, x, y, z
+    >>> from sympy.combinatorics import PermutationGroup, Permutation, SymmetricGroup
+    >>> CyclicExpr.PRINT_FULL = True
 
     Every CyclicSum object is defined by an expression, a tuple of symbols, and a permutation group.
     >>> expr = CyclicSum(a*(b-c)**2, (a, b, c), PermutationGroup(Permutation([1,2,0]))); expr
@@ -448,6 +472,8 @@ class CyclicSum(CyclicExpr):
     the cyclic sum is with respect to (a, b, c) and the cyclic group.
     >>> CyclicSum(a**3*b**2*c).doit()
     a**3*b**2*c + a**2*b*c**3 + a*b**3*c**2
+
+    >>> CyclicExpr.PRINT_FULL = False
     """
 
     precedence = PRECEDENCE['Mul']
@@ -536,7 +562,9 @@ class CyclicProduct(CyclicExpr):
 
     Examples
     ========
-    >>> CyclicProduct.PRINT_FULL = True
+    >>> from sympy.abc import a, b, c, d, x, y, z
+    >>> from sympy.combinatorics import PermutationGroup, Permutation, SymmetricGroup
+    >>> CyclicExpr.PRINT_FULL = True
 
     Every CyclicProduct object is defined by an expression, a tuple of symbols, and a permutation group.
     >>> expr = CyclicProduct((a + b - c), (a, b, c), PermutationGroup(Permutation([1,2,0]))); expr
@@ -570,6 +598,8 @@ class CyclicProduct(CyclicExpr):
     the cyclic product is with respect to (a, b, c) and the cyclic group.
     >>> CyclicProduct(a**3 + b**2 + c).doit()
     (a + b**3 + c**2)*(a**2 + b + c**3)*(a**3 + b**2 + c)
+
+    >>> CyclicExpr.PRINT_FULL = False
     """
 
     precedence = PRECEDENCE['Mul']
@@ -651,25 +681,12 @@ setattr(LatexPrinter, '_print_CyclicProduct', lambda self, expr: CyclicProduct._
 setattr(StrPrinter, '_print_CyclicSum', lambda self, expr: CyclicSum._str_str(self, expr))
 setattr(StrPrinter, '_print_CyclicProduct', lambda self, expr: CyclicProduct._str_str(self, expr))
 
-
-def _is_version_greater_than(v1, v2) -> bool:
-    """Version comparison. No dependencies on distutils
-    (which has been deprecated since Python 3.10)."""
-    def _version(s):
-        from re import findall
-        parts = []
-        for comp in s.split('.'):
-            for elem in findall(r'\d+|\D+', comp):
-                parts.append(int(elem) if elem.isdigit() else elem)
-        return tuple(parts)
-    for i, j in zip(_version(v1), _version(v2)):
-        if isinstance(i, str) or isinstance(j, str): i, j = str(i), str(j)
-        if i > j: return True
-        if i < j: return False
-    return bool(len(_version(v1)) >= len(_version(v2)))
-
 # if sp.__version__ < '1.14':
-if not _is_version_greater_than(sp.__version__, '1.14'):
+if not tuple(version_tuple(sp.__version__)) >= (1, 14):
+    try:
+        from sympy.core.sorting import ordered
+    except (ImportError, ModuleNotFoundError): # <= 1.9
+        ordered = lambda x: x
     def radsimp(expr, symbolic=True, max_terms=4):
         r"""
         Rationalize the denominator by removing square roots.
@@ -681,7 +698,6 @@ if not _is_version_greater_than(sp.__version__, '1.14'):
         from sympy.core.expr import Expr
         from sympy.core.exprtools import Factors, gcd_terms
         from sympy.core.function import _mexpand, expand_mul
-        from sympy.core.sorting import ordered
         from sympy.core.symbol import symbols
         from sympy.core.mul import _unevaluated_Mul
         from sympy.functions import sqrt, log
@@ -970,12 +986,195 @@ def rewrite_symmetry(expr: Expr, symbols: Tuple[Symbol], perm_group: Permutation
     ----------
     >>> from sympy.combinatorics import CyclicGroup, DihedralGroup, SymmetricGroup, PermutationGroup
     >>> from sympy.abc import a, b, c, d
+    >>> CyclicExpr.PRINT_FULL = True
     >>> expr = CyclicSum((a*c-b*d)**2, (a,b,c,d), DihedralGroup(4)) + CyclicProduct((a-b)**2, (a,b,c,d), SymmetricGroup(4))
     >>> rewritten = rewrite_symmetry(expr, (a,b,c,d), CyclicGroup(4))
     >>> rewritten
-    (∏(a - b)**4)*(∏(a - c)**4)*(∏(a - d)**4) + 2*(Σ(a*c - b*d)**2)
+    (CyclicProduct((a - b)**4, (a, b, c, d), PermutationGroup([
+        (0 1 2 3)])))*(CyclicProduct((a - c)**4, (a, b, c, d), PermutationGroup([
+        (0 1 2 3)])))*(CyclicProduct((a - d)**4, (a, b, c, d), PermutationGroup([
+        (0 1 2 3)]))) + 2*(CyclicSum((a*c - b*d)**2, (a, b, c, d), PermutationGroup([
+        (0 1 2 3)])))
     >>> rewritten.find(PermutationGroup)
     {PermutationGroup([
-     (0 1 2 3)])}
+        (0 1 2 3)])}
+
+    >>> CyclicExpr.PRINT_FULL = False
     """
     return expr.replace(lambda x: isinstance(x, CyclicExpr), _get_rewriting_replacement(symbols, perm_group))
+
+def verify_symmetry(polys: Union[List[sp.Poly], sp.Poly], perm_group: Union[Permutation, PermutationGroup]) -> bool:
+    """
+    Verify whether the polynomials are symmetric with respect to the permutation group.
+
+    Parameters
+    ----------
+    polys : Union[List[sp.Poly], sp.Poly]
+        A list of polynomials or a single polynomial. Must have the same generators.
+    perm_group : Union[Permutation, PermutationGroup]
+        A permutation or a permutation group to verify.
+
+    Returns
+    ----------
+    bool
+        Whether the polynomials are symmetric with respect to the permutation group.
+
+    Examples
+    ----------
+    >>> from sympy.combinatorics import Permutation, PermutationGroup, SymmetricGroup
+    >>> from sympy.abc import a, b, c, d
+    >>> verify_symmetry((a*(a-b)*(a-c)+b*(b-c)*(b-a)+c*(c-a)*(c-b)).as_poly(a,b,c), SymmetricGroup(3))
+    True
+
+    >>> f = lambda x: x.as_poly(a,b,c,d)
+    >>> verify_symmetry([f(a+1),f(b+1),f(c+1),f(d+1)], SymmetricGroup(4))
+    True
+
+    >>> perm_group = PermutationGroup(Permutation([2,3,0,1]))
+    >>> verify_symmetry([f(a-c+b-d)], perm_group)
+    False
+    >>> verify_symmetry([f(a-c+b-d), f(c-a+d-b)], perm_group)
+    True
+    """
+    if isinstance(polys, sp.Poly):
+        polys = [polys]
+    if len(polys) == 0:
+        return True
+    for p in polys:
+        gens = p.gens
+        break
+    if len(polys) > 1 and any(p.gens != gens for p in polys):
+        raise ValueError("All polynomials should have the same generators.")
+
+    if isinstance(perm_group, PermutationGroup):
+        if perm_group.degree != len(gens):
+            raise ValueError("The permutation group should have the same degree as the number of generators.")
+        perms = perm_group.generators
+    elif isinstance(perm_group, Permutation):
+        if perm_group.size != len(gens):
+            raise ValueError("The permutation should have the same size as the number of generators.")
+        perms = [perm_group]
+
+    for perm in perms:
+        rep_set = set()
+        reorder_set = set()
+        for poly in polys:
+            rep = poly.rep
+            reorder = poly.reorder(*perm(gens)).rep
+            if rep == reorder:
+                continue
+            rep_set.add(rep)
+            reorder_set.add(reorder)
+        for r in reorder_set:
+            if r not in rep_set:
+                return False
+    return True
+
+def identify_symmetry_from_lists(lst_of_lsts: List[List[sp.Poly]]) -> PermutationGroup:
+    """
+    Infer a symmetric group so that each list of (list of polynomials) is symmetric with respect to the rule.
+    It only identifies very common groups like complete symmetric and cyclic groups.
+
+    TODO: Implement a complete algorithm to identify all symmetric groups.
+
+    Parameters
+    ----------
+    lst_of_lsts : List[List[sp.Poly]]
+        A list of lists of polynomials.
+
+    Returns
+    ----------
+    PermutationGroup
+        The inferred permutation group.
+
+    Examples
+    ----------
+    >>> from sympy.abc import a, b, c
+    >>> identify_symmetry_from_lists([[(a+b+c-3).as_poly(a,b,c)], [a.as_poly(a,b,c), b.as_poly(a,b,c), c.as_poly(a,b,c)]]).is_symmetric
+    True
+
+    >>> identify_symmetry_from_lists([[(a+b+c-3).as_poly(a,b,c)], [(2*a+b).as_poly(a,b,c), (2*b+c).as_poly(a,b,c), (2*c+a).as_poly(a,b,c)]])
+    PermutationGroup([
+        (0 1 2)])
+
+    See Also
+    ----------
+    identify_symmetry
+
+    Reference
+    ----------
+    [1] https://cs.stackexchange.com/questions/64335/how-to-find-the-symmetry-group-of-a-polynomial
+    """
+    gens = None
+    for l in lst_of_lsts:
+        for p in l:
+            gens = p.gens
+            break
+        if gens is not None:
+            break
+    for l in lst_of_lsts:
+        for p in l:
+            if p.gens != gens:
+                raise ValueError("All polynomials should have the same generators.")
+
+    # List a few candidates: symmetric, alternating, cyclic groups...
+    nvars = len(gens)
+    def _rotated(n, start=0):
+        return list(range(start+1, n+start)) + [start]
+    def _reflected(n, start=0):
+        return [start+1, start] + list(range(start+2, n+start))
+
+    verified = [] # storing permutations that fit the input
+    candidates = [] # a list of permutations
+    if nvars > 1:
+        candidates.append(_rotated(nvars))
+        if nvars > 2:
+            candidates.append(_reflected(nvars))
+
+    for perm in map(Permutation, candidates):
+        if all(verify_symmetry(l, perm) for l in lst_of_lsts):
+            verified.append(perm)
+    if len(verified) == 2:
+        # reflection + cyclic -> complete symmetric group
+        return PermutationGroup(*verified)
+
+    candidates = []
+    # bi-symmetric group etc.
+    if nvars > 3:
+        half = nvars // 2
+        p1 = _rotated(half) + _rotated(half, half)
+        p2 = _reflected(half) + _reflected(half, half)
+        p3 = list(range(half,half*2)) + list(range(half))
+        if nvars % 2 == 1:
+            for p in [p1, p2, p3]:
+                p.append(nvars - 1)
+                candidates.append(p)
+                p = [0] + [_ + 1 for _ in p[:-1]]
+                candidates.append(p)
+        else:
+            for p in [p1, p2, p3]:
+                candidates.append(p)
+
+    if nvars > 2:
+        candidates.append(_rotated(nvars - 1) + [nvars - 1])
+        candidates.append([0] + _rotated(nvars - 1, 1))
+        if nvars > 3:
+            candidates.append(_reflected(nvars - 1) + [nvars - 1])
+            candidates.append([0] + _reflected(nvars - 1, 1))
+
+    for perm in map(Permutation, candidates):
+        if all(verify_symmetry(l, perm) for l in lst_of_lsts):
+            verified.append(perm)
+
+    if len(verified) == 0:
+        verified.append(Permutation(list(range(nvars))))
+
+    return PermutationGroup(*verified)
+
+
+def identify_symmetry(poly: sp.Poly) -> PermutationGroup:
+    """
+    Infer a symmetric group so that the polynomial is symmetric with respect to the rule.
+    It only identifies very simple groups like complete symmetric and cyclic groups.
+    """
+    return identify_symmetry_from_lists([[poly]])

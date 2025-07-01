@@ -11,12 +11,11 @@ from ..utils import (
 
 from ..pivoting import prove_univariate, prove_univariate_interval
 from ...shared import SS
-from ....utils.roots.rationalize import (
+from ....utils import (
     nroots, rationalize, rationalize_bound, univariate_intervals,
-    square_perturbation, cancel_denominator, common_region_of_conics
+    square_perturbation, cancel_denominator, common_region_of_conics,
+    CyclicExpr, CyclicSum, CyclicProduct
 )
-from ....utils import CyclicExpr, CyclicSum, CyclicProduct
-
 
 def reflect_expression(expr: sp.Expr) -> sp.Expr:
     """
@@ -24,10 +23,12 @@ def reflect_expression(expr: sp.Expr) -> sp.Expr:
 
     Examples
     ----------
+    >>> from sympy.abc import a, b, c
     >>> CyclicExpr.PRINT_FULL = True
     >>> reflect_expression(CyclicSum(a**2*b**3*c**4))
     CyclicSum(a**2*b**4*c**3, (a, b, c), PermutationGroup([
         (0 1 2)]))
+    >>> CyclicExpr.PRINT_FULL = False
     """
     if isinstance(expr, CyclicExpr):
         return expr.func(reflect_expression(expr.args[0]), *expr.args[1:])
@@ -188,6 +189,10 @@ class CommonExpr:
         a, b, c = cls.abc
         if x == 0:
             return y * CyclicSum(a*b)
+        if y == 0:
+            return x * CyclicSum(a**2)
+        if x == y:
+            return x/2 * CyclicSum((a+b)**2)
         if y > 2 * x:
             return CyclicSum(x * a**2 + y * b*c)
         w1 = (2*x - y) / 3

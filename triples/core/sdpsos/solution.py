@@ -1,10 +1,23 @@
-from typing import List, Tuple, Dict, Optional
+from typing import List, Tuple, Dict, Optional, Callable, Any
 
 import sympy as sp
-from sympy.simplify import signsimp
+import numpy as np
+from sympy import Poly, Expr, Symbol
+from sympy.matrices import MutableDenseMatrix as Matrix
 
+from .algebra import SOSBasis, PolyRing, PseudoSMP, PseudoPoly
 from ...utils import MonomialManager, SolutionSimple
+from ...sdp.arithmetic import is_numerical_mat
 
+def _invarraylize(basis: SOSBasis, vec: Matrix, gens: Tuple[Symbol, ...]) -> Poly:
+    b = basis._basis
+    vec = vec._rep.rep
+    rep = {b[i]: v[0] for i, v in vec.items() if v.get(0)}
+    if isinstance(basis.algebra, PolyRing):
+        return Poly.from_dict(rep, *gens, domain=vec.domain)
+    else:
+        rep = PseudoSMP.from_dict(rep, len(gens)-1, vec.domain, algebra=basis.algebra)
+        return PseudoPoly.new(rep, *gens)
 
 
 class SolutionSDP(SolutionSimple):
@@ -18,92 +31,155 @@ class SolutionSDP(SolutionSimple):
 
     @classmethod
     def from_decompositions(self,
-        poly: sp.Poly,
-        decompositions: Dict[str, Tuple[sp.Matrix, sp.Matrix]],
-        eqvec: Dict[str, sp.Matrix],
-        symmetry: MonomialManager,
-        ineq_constraints: Optional[Dict[sp.Poly, sp.Expr]] = None,
-        eq_constraints: Optional[Dict[sp.Poly, sp.Expr]] = None
+        poly: Poly,
+        decompositions: Dict[Any, Tuple[Matrix, Matrix]],
+        eqspace: Dict[Any, Matrix],
+        qmodule: Dict[Any, Expr],
+        qmodule_bases: Dict[Any, MonomialManager],
+        ideal: Dict[Any, Expr],
+        ideal_bases: Dict[Any, MonomialManager],
+        adjoint_operator: Optional[Callable[[Expr], Expr]] = None,
+        state_operator: Optional[Callable[[Expr], Expr]] = None,
     ) -> 'SolutionSDP':
         """
         Create SDP solution from decompositions.
         """
-        qmodule_expr = _decomp_as_sos(decompositions, poly.total_degree(), poly.gens,
-                            symmetry=symmetry, ineq_constraints=ineq_constraints)
 
-        ideal_exprs = []
-        for key, vec in eqvec.items():
-            codeg = poly.total_degree() - key.total_degree()
-            key = _get_expr_from_dict(eq_constraints, key)
-            vec = symmetry.base().invarraylize(vec, poly.gens, codeg).as_expr()
-            ideal_exprs.append(symmetry.cyclic_sum(vec * key, poly.gens).together())
-        ideal_expr = sp.Add(*ideal_exprs)
+        qmodule_expr = _get_qmodule_expr(
+            decompositions, poly.gens,
+            qmodule=qmodule,
+            qmodule_bases=qmodule_bases,
+            adjoint_operator=adjoint_operator,
+            state_operator=state_operator,
+        )
+
+        ideal_expr = _get_ideal_expr(
+            eqspace, poly.gens,
+            ideal=ideal,
+            ideal_bases=ideal_bases,
+            adjoint_operator=adjoint_operator,
+            state_operator=state_operator,
+        )
+
+        is_equal = not _is_numerical(decompositions, eqspace)
 
         return SolutionSDP(
             problem = poly,
-            solution = qmodule_expr + ideal_expr,
-            ineq_constraints = ineq_constraints,
-            eq_constraints = eq_constraints,
-            is_equal = not _is_numer_solution(decompositions)
+            solution = sp.Add(qmodule_expr, ideal_expr),
+            is_equal = is_equal,
         )
 
-def _decomp_as_sos(
-        decompositions: Dict[str, Tuple[sp.Matrix, sp.Matrix]],
-        degree: int,
-        gens: List[sp.Symbol],
-        symmetry: MonomialManager,
-        ineq_constraints: Optional[Dict[sp.Poly, sp.Expr]] = None,
-        factor: bool = True,
-    ) -> sp.Expr:
+def _get_ideal_expr(
+        eqspace: Dict[Any, Matrix],
+        gens: List[Symbol],
+        ideal: Dict[Any, Expr],
+        ideal_bases: Dict[Any, MonomialManager],
+        adjoint_operator: Optional[Callable[[Expr], Expr]] = None,
+        state_operator: Optional[Callable[[Expr], Expr]] = None,
+    ):
+        ideal_exprs = []
+        for key, vec in eqspace.items():
+            expr = ideal[key].as_expr()
+            vec = _invarraylize(ideal_bases[key], vec, gens).as_expr()
+            ideal_exprs.append(vec * expr.together())
+        if state_operator is not None:
+            ideal_exprs = map(lambda x: state_operator(x), ideal_exprs)
+        return sp.Add(*ideal_exprs)
+
+def _get_qmodule_expr(
+        decompositions: Dict[Any, Tuple[Matrix, Matrix]],
+        gens: List[Symbol],
+        qmodule: Optional[Dict[Any, Expr]],
+        qmodule_bases: Optional[Dict[Any, MonomialManager]],
+        adjoint_operator: Optional[Callable[[Expr], Expr]] = None,
+        state_operator: Optional[Callable[[Expr], Expr]] = None,
+        simplify_poly: Optional[Callable] = None,
+    ) -> Expr:
     """
     Convert a {key: (U, S)} dictionary to sum of squares.
     """
-    def compute_cyc_sum(expr: sp.Expr) -> sp.Expr:
+    if simplify_poly is None:
+        simplify_poly = _default_simplify_poly
+
+    def compute_cyc_sum_of_squares(coeff, q_module: Expr, poly: Poly) -> Expr:
+        """Computes cyclic_sum(coeff * q_module * poly.as_expr()**2),
+        and returns a pretty expression."""
         # if isinstance(expr, sp.Add):
         #     expr = sp.UnevaluatedExpr(expr)
-        return symmetry.cyclic_sum(signsimp(expr), gens).together()
+        q_primitive = q_module.primitive()
+        coeff, q = coeff * q_primitive[0], q_primitive[1].as_expr()
+        c, expr = simplify_poly(poly)
+        coeff = coeff * c**2
+    
+        if adjoint_operator is not None:
+            expr = adjoint_operator(expr) * (q + adjoint_operator(q)) * expr
+            coeff = coeff/2 # since we have doubled the "q"
+        else:
+            expr = sp.Mul(expr, q, expr)
+        return coeff * state_operator(expr) if state_operator is not None else coeff * expr
 
     exprs = []
-    symmetry_half = symmetry.base()
     for key, (U, S) in decompositions.items():
-        codeg = (degree - key.total_degree()) // 2
-        key = _get_expr_from_dict(ineq_constraints, key)
-        vecs = [symmetry_half.invarraylize(U[i,:], gens, codeg).as_expr() for i in range(U.shape[0])]
-        if factor:
-            vecs = [_.factor() for _ in vecs]
-        vecs = [compute_cyc_sum(S[i] * key * vecs[i]**2) for i in range(U.shape[0])]
-
+        expr = qmodule[key]
+        # vecs = [qmodule_bases[key].invarraylize(U[i,:], gens, codeg) for i in range(U.shape[0])]
+        vecs = [_invarraylize(qmodule_bases[key], U[i,:].T, gens) for i in range(U.shape[0])]
+        vecs = [compute_cyc_sum_of_squares(S[i], expr, vecs[i]) for i in range(U.shape[0])]
         exprs.extend(vecs)
+
     return sp.Add(*exprs)
 
-def _get_expr_from_dict(d: Dict, k: sp.Poly):
-    if d is None:
-        return k.as_expr()
-    v = d.get(k)
-    return v if v is not None else k.as_expr()
-
-def _is_numer_solution(decompositions: Dict[str, Tuple[sp.Matrix, sp.Matrix]]) -> bool:
+def _default_simplify_poly(poly: Poly, bound: int=10000) -> Tuple[Expr, Expr]:
     """
-    Check whether the solution is a numerical solution.
-
-    Parameters
-    ----------
-    decompositions : Dict[(str, Tuple[sp.Matrix, sp.Matrix])]
-        The decompositions of the symmetric matrices.
-
-    Returns
-    -------
-    bool
-        Whether the solution is a numerical solution.
+    Simplify the polynomial. Return c, expr such that poly = c * expr.
+    Using factorization would be extremely slow sometimes, e.g. in the case
+    of very large integer coefficients, and this function uses a heuristic
+    strategy to balance the speed and complexity.
     """
+    if isinstance(poly, PseudoPoly):
+        c, p = poly.primitive()
+        return c, p.as_expr()
 
-    def is_numer_matrix(M: sp.Matrix) -> bool:
-        """
-        Check whether a matrix contains sp.Float.
-        """
-        return any(not isinstance(v, sp.Rational) for v in M)
+    def _extract_monomials(p: Poly) -> Tuple[Expr, Poly]:
+        monoms = p.monoms()
+        if len(monoms) == 0:
+            return sp.Integer(1), p
+        monoms = np.array(monoms, dtype=int)
+        d = np.min(monoms, axis=0)
 
-    for _, (U, S) in decompositions.items():
-        if is_numer_matrix(U) or is_numer_matrix(S):
+        if not np.any(d):
+            return sp.Integer(1), p
+
+        monoms = monoms - d.reshape(1, -1)
+        new_monoms = [tuple(_) for _ in monoms.tolist()]
+        rep = dict(zip(new_monoms, p.rep.coeffs()))
+        rep = p.rep.from_dict(rep, p.rep.lev, p.rep.dom)
+        m = sp.Mul(*(g**i for g, i in zip(p.gens, d.flatten().tolist())))
+        return m, poly.new(rep, *p.gens)
+
+    def _standard_form(poly: Poly) -> Poly:
+        if poly.domain.is_ZZ or poly.domain.is_QQ:
+            if all(abs(_.denominator) <= bound for _ in poly.coeffs()):
+                c, parts = poly.factor_list()
+                exprs = [p.as_expr()**d for p, d in parts]
+                return c, sp.Mul(*exprs)
+    
+        c, poly = poly.primitive()
+        if poly.LC() < 0:
+            c, poly = -c, -poly
+        return c, poly.as_expr()
+
+        # return sp.Integer(1), poly.as_expr()
+
+    m, p = _extract_monomials(poly)
+    c, p = _standard_form(p)
+    return c, m * p
+
+
+def _is_numerical(decompositions, eqspace):
+    for U, S in decompositions.values():
+        if is_numerical_mat(U) or is_numerical_mat(S):
+            return True
+    for U in eqspace.values():
+        if is_numerical_mat(U):
             return True
     return False

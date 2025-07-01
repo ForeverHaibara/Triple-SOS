@@ -31,7 +31,8 @@ class LinearBasisMultiplier(LinearBasis):
         return len(self.poly.gens)
     def as_poly(self, symbols) -> sp.Poly:
         poly = (self.poly * (-self._tangent(self.poly.gens, poly=True)))
-        return poly.xreplace(dict(zip(self.poly.gens, symbols)))
+        poly.gens = symbols
+        return poly
     def as_expr(self, symbols) -> sp.Expr:
         return (self.poly.as_expr() * self.multiplier).xreplace(dict(zip(self.poly.gens, symbols)))
 
@@ -52,7 +53,7 @@ def lift_degree(
     f(a,b,c) = g(a,b,c) / h(a,b,c) where g and h are both positive. In other words,
     f(a,b,c) * h(a,b,c) = g(a,b,c).
 
-    In practice, we can try out h(a,b,c) = \sum a, h(a,b,c) = \sum (a^2-ab + xab) and so on.
+    In practice, we can try out h(a,b,c) = Sum(a), h(a,b,c) = Sum(a^2-ab + xab) and so on.
     This `lift_degree` function would generate the h(a,b,c) and associated information.
 
     Parameters
@@ -120,6 +121,7 @@ def _get_multipliers(ineq_constraints: Dict[sp.Poly, sp.Expr], symbols: Tuple[sp
             return [(x[i][0] * x[j][0], x[i][1] * x[j][1]) for i in range(len(x)) for j in range(i+1, len(x))]
         multipliers.extend(cross_mul(ineq_constraints))
 
+    # TODO: this should be more carefully considered???
     if multipliers is None:
         # default case
         multipliers = []

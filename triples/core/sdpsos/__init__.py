@@ -1,8 +1,9 @@
-from .sdpsos import SDPSOS, SOSProblem
-from .manifold import RootSubspace
+from .abstract import JointSOSElement
+from .sdpsos import SDPSOS
+from .sos import SOSPoly
 from .solution import SolutionSDP
 from ...sdp import SDPProblem
 
 __all__ = [
-    'SDPSOS', 'SDPProblem', 'SOSProblem', 'RootSubspace', 'SolutionSDP'
+    'SDPSOS', 'SOSPoly', 'JointSOSElement', 'SolutionSDP', 'SDPProblem'
 ]

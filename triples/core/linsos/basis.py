@@ -22,12 +22,14 @@ class _callable_expr():
 
     Example
     ========
+    >>> from sympy.abc import a, b, c, x, y
+    >>> from sympy import Function
     >>> _callable_expr.from_expr(a**3*b**2, (a,b))((x,y))
     x**3*y**2
 
-    >>> e = _callable_expr.from_expr(sp.Function("F")(a,b,c), (a,b,c), (a**3+b**3+c**3).as_poly(a,b,c))
+    >>> e = _callable_expr.from_expr(Function("F")(a,b,c), (a,b,c), (a**3+b**3+c**3).as_poly(a,b,c))
     >>> e((a,b,c))
-    F(a,b,c)
+    F(a, b, c)
     >>> e((a,b,c), poly=True)
     Poly(a**3 + b**3 + c**3, a, b, c, domain='ZZ')
     
@@ -183,10 +185,10 @@ class LinearBasisTangent(LinearBasis):
         Examples
         --------
         >>> from sympy.abc import a, b, c
-        >>> from sympy.combinatorics import CyclicGroup(3)
+        >>> from sympy.combinatorics import CyclicGroup
         >>> from sympy import Function
-        >>> bases, mat = LinearBasisTangent.generate_quad_diff(
-                Function("F")(a,b,c), (a,b,c), 4, CyclicGroup(3), 
+        >>> bases, mat = LinearBasisTangent.generate_quad_diff(\
+                Function("F")(a,b,c), (a,b,c), 4, CyclicGroup(3),\
                 tangent_p=((a+b-c)**2).as_poly(a,b,c), quad_diff_order=4)
 
         >>> [_.__class__.__name__ for _ in [bases[0], mat]]
@@ -317,6 +319,7 @@ def quadratic_difference(symbols: Tuple[sp.Symbol, ...]) -> List[sp.Expr]:
 
     Example
     ========
+    >>> from sympy.abc import a, b, c
     >>> quadratic_difference((a, b, c))
     [(a - b)**2, (a - c)**2, (b - c)**2]
     """
@@ -507,7 +510,7 @@ def _compute_sym_multiplicity(arr: np.ndarray, need_sort: bool = True) -> np.nda
 
 
 @switchable_lru_cache()
-def _get_reduced_indices(symmetry: MonomialManager, degree: int) -> Tuple[np.ndarray, np.ndarray]:
+def _get_reduced_indices(symmetry: MonomialManager, symmetry_base: MonomialManager, degree: int) -> Tuple[np.ndarray, np.ndarray]:
     """
     Get the indices of monomials after being reduced by symmetry.
 
@@ -532,7 +535,7 @@ def _get_reduced_indices(symmetry: MonomialManager, degree: int) -> Tuple[np.nda
     reduced_indices = np.zeros(reduced_encodings.max() + 1, dtype=_DTYPE)
     reduced_indices[reduced_encodings] = np.arange(reduced_monoms.shape[0])
 
-    no_symmetry = symmetry.base()
+    no_symmetry = symmetry_base
     full_monoms = no_symmetry.inv_monoms(degree)
 
     if symmetry.perm_group.is_trivial:
@@ -577,7 +580,7 @@ def _count_contribution_of_monoms(A: np.ndarray, v: np.ndarray, M: int) -> np.nd
     # assert v.shape == (N,)
 
     # it seems scipy is slower?
-    if False:
+    if True:
         rows = np.repeat(np.arange(X), N)  # row coors [0,0,0,1,1,1,...]
         cols = A.ravel()                   # column coors [A[0,0],A[0,1],...,A[1,0],...]
         data = np.tile(v, X)               # values [v[0],v[1],...,v[0],v[1],...]
@@ -633,11 +636,12 @@ def _get_matrix_of_quad_diff(tangent_dmp: DMP, degree: int, quad_diff_order: int
     nvars = (polys[0].rep if isinstance(polys[0], sp.Poly) else polys[0]).lev + 1
     nvars_of_steps = [step] * nvars
     symmetry = MonomialManager(nvars, symmetry)
+    symmetry_base = symmetry.base() # initialize once to use cached properties
     for p in polys:
         degree_comb_mat = _degree_combinations(nvars_of_steps, degree - p.total_degree(), require_equal=True)
         degree_comb_mat = np.array(degree_comb_mat, dtype='int32') * step
 
-        submat = _get_matrix_of_lifted_degrees(p, degree_comb_mat, symmetry, degree)
+        submat = _get_matrix_of_lifted_degrees(p, degree_comb_mat, symmetry, symmetry_base, degree)
         if submat.shape[0]:
             mat.append(submat)
 
@@ -650,7 +654,7 @@ def _get_matrix_of_quad_diff(tangent_dmp: DMP, degree: int, quad_diff_order: int
 
 
 def _get_matrix_of_lifted_degrees(poly: Union[DMP, sp.Poly], degree_comb_mat: np.ndarray,
-        symmetry: MonomialManager, degree: int) -> np.ndarray:
+        symmetry: MonomialManager, symmetry_base: MonomialManager, degree: int) -> np.ndarray:
     """
     Low-level function to convert bases to matrix representation efficiently.
 
@@ -663,6 +667,8 @@ def _get_matrix_of_lifted_degrees(poly: Union[DMP, sp.Poly], degree_comb_mat: np
         in each variable.
     symmetry : MonomialManager
         The monomial manager for reduced monomials.
+    symmetry_base : MonomialManager
+        Should be symmetry.base().
     degree : int
         The total degree of the generated bases.
     """
@@ -697,8 +703,7 @@ def _get_matrix_of_lifted_degrees(poly: Union[DMP, sp.Poly], degree_comb_mat: np
     _DTYPE = 'int32'
     encoding = np.array([(degree + 1)**i for i in range(nvars)], dtype=_DTYPE)
 
-    source_symmetry = symmetry.base()
-    source_monoms = source_symmetry.inv_monoms(poly.total_degree())  # a list of monomials
+    source_monoms = symmetry_base.inv_monoms(poly.total_degree())  # a list of monomials
     source_monoms = np.array(source_monoms, dtype=_DTYPE) @ encoding
 
     degree_comb_mat = degree_comb_mat.astype(_DTYPE) @ encoding
@@ -713,11 +718,11 @@ def _get_matrix_of_lifted_degrees(poly: Union[DMP, sp.Poly], degree_comb_mat: np
     new_monoms = source_monoms + degree_comb_mat.reshape((-1, 1))
 
     # map encoding to indices
-    inv_target_monoms, multiplicity = _get_reduced_indices(symmetry, degree)
+    inv_target_monoms, multiplicity = _get_reduced_indices(symmetry, symmetry_base, degree)
 
     new_monoms = inv_target_monoms[new_monoms] # map to the indices of target monoms
 
-    poly_vec = source_symmetry.arraylize_np(poly) #, expand_cyc=True)
+    poly_vec = symmetry_base.arraylize_np(poly) #, expand_cyc=True)
 
     new_mat = _count_contribution_of_monoms(new_monoms, poly_vec, length_of_target)
     new_mat = new_mat * multiplicity.reshape((1, -1))

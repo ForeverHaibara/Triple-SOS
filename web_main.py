@@ -8,10 +8,10 @@ from flask_cors import CORS
 
 import sympy as sp
 
-from triples.utils.roots import RootTangent, RootsInfo
-from triples.utils.text_process import pl
-from triples.utils.expression.solution import SolutionSimple
+from triples.utils import pl, Solution, poly_get_factor_form, optimize_poly, Root
+from triples.core.linsos.tangents import prepare_tangents
 from triples.gui.sos_manager import SOS_Manager
+from triples.gui.linebreak import recursive_latex_auto_linebreak
 
 # def _async_raise(tid, exctype):
 #     '''Raises an exception in the threads with id tid'''
@@ -130,6 +130,8 @@ def preprocess():
         The heatmap of the polynomial coefficients in RGBA format.
     """
     req = request.get_json()
+    if len(req['poly'].strip()) == 0:
+        return jsonify()
 
     gens = req.get('gens', 'abc')
     gens = tuple(sp.Symbol(_) for _ in gens)
@@ -196,15 +198,20 @@ def findroot(sid, **kwargs):
     """
     if 'findroot' in kwargs['actions']:
         poly = kwargs['poly']
-        grid = kwargs.get('grid', None)
-        rootsinfo = SOS_Manager.findroot(poly, grid, verbose=False)
+        roots = optimize_poly(poly, [], [poly]) if poly.domain in (sp.ZZ, sp.QQ) else []
         tangents = kwargs.get('tangents')
         if tangents is None:
-            tangents = [_.as_factor_form(remove_minus_sign=True, perm=kwargs['perm']) for _ in rootsinfo.tangents]
+            # not having computed tangents, recompute them
+            tangents = [] # root_tangents(poly, [Root(_) for _ in roots])
+            # ineqs = [_.as_poly(poly.gens) for _ in poly.gens]
+            # tangents = prepare_tangents(poly, dict(zip(ineqs, [_.as_expr() for _ in ineqs])) , roots=roots)
+            # tangents = [poly_get_factor_form(_.as_poly(poly.gens)) for _ in tangents]
             socketio.emit(
                 'rootangents',
                 {
-                    'rootsinfo': rootsinfo.gui_description,
+                    'rootsinfo': 'Local Minima Approx:\n' + '\n'.join(
+                        [str(tuple(__ if isinstance(__, sp.Rational) else __.n(8) for __ in r))
+                                for r in roots[:min(len(roots), 5)]]),
                     'tangents': tangents,
                     'timestamp': kwargs.get('timestamp', 0)
                 },
@@ -226,12 +233,11 @@ def findroot(sid, **kwargs):
                                 kwargs['configs']['LinearSOS'] = {'tangents': []}
                             elif 'tangents' not in kwargs['configs']['LinearSOS']:
                                 kwargs['configs']['LinearSOS']['tangents'] = []
-                            kwargs['configs']['LinearSOS']['tangents'].append(tg**2)
-                    except:
+                            kwargs['configs']['LinearSOS']['tangents'].append(tg)
+                            kwargs['configs']['LinearSOS']['roots'] = roots
+                    except Exception as e:
                         pass
-            rootsinfo.tangents = tangents
     if 'sos' in kwargs['actions']:
-        kwargs['rootsinfo'] = rootsinfo
         sum_of_squares(sid, **kwargs)
 
 
@@ -246,12 +252,17 @@ def sum_of_squares(sid, **kwargs):
         The session ID.
     poly : str
         The input polynomial.
+    ineq_constraints: dict[str, str]
+        The ineq constraints.
+    eq_constraints: dict[str, str]
+        The eq constraints.
     methods : dict[str, bool]
         The methods to use.
     configs : dict[str, dict]
         The configurations for each method.
-    rootsinfo : RootsInfo
-        The roots information. This is passed in internally by the `findroot` function.
+    roots : list[Root]
+        The roots of the polynomial.
+    perm : PermutationGroup
 
     Returns
     ----------
@@ -264,21 +275,37 @@ def sum_of_squares(sid, **kwargs):
     success : bool
         Whether the solution was found.
     """
-    rootsinfo = kwargs['rootsinfo'] or RootsInfo()
     try:
         method_order = [key for key, value in kwargs['methods'].items() if value]
 
         if 'LinearSOS' in method_order:
             if 'LinearSOS' not in kwargs['configs']:
                 kwargs['configs']['LinearSOS'] = {}
-            kwargs['configs']['LinearSOS']['rootsinfo'] = rootsinfo
 
         gens = kwargs['gens']
-        ineq_constraints = kwargs['poly'].free_symbols if SOS_Manager.CONFIG_ALLOW_NONSTANDARD_GENS else gens
+        # ineq_constraints = kwargs['poly'].free_symbols if SOS_Manager.CONFIG_ALLOW_NONSTANDARD_GENS else gens
+
+        def parse_constraint_dict(source):
+            constraints = {}
+            for key, value in source.items():
+                key, value = key.strip(), value.strip()
+                if len(key) == 0:
+                    continue
+                key = pl(key, gens, kwargs['perm'], return_type='expr')
+                if len(value) != 0:
+                    value = sp.sympify(value)
+                else:
+                    value = key
+                constraints[key] = value
+            return constraints
+
+        ineq_constraints = parse_constraint_dict(kwargs['ineq_constraints'])
+        eq_constraints = parse_constraint_dict(kwargs['eq_constraints'])
+
         solution = SOS_Manager.sum_of_squares(
             kwargs['poly'],
-            ineq_constraints = list(ineq_constraints),
-            eq_constraints = [],
+            ineq_constraints = ineq_constraints,
+            eq_constraints = eq_constraints,
             gens = gens,
             perm = kwargs['perm'],
             method_order = method_order,
@@ -287,7 +314,6 @@ def sum_of_squares(sid, **kwargs):
 
         assert solution is not None, 'No solution found.'
     except Exception as e:
-        # raise e
         return socketio.emit(
             'sos',
             {'latex': '', 'txt': '', 'formatted': '', 'success': False,
@@ -295,15 +321,22 @@ def sum_of_squares(sid, **kwargs):
             to=sid
         )
 
-    if isinstance(solution, SolutionSimple):
+    gens = kwargs['poly'].free_symbols if SOS_Manager.CONFIG_ALLOW_NONSTANDARD_GENS else gens
+    gens = sorted(gens, key=lambda x:x.name)
+    # lhs_expr = sp.Function('F')(*gens) if len(gens) > 0 else 
+    lhs_expr = sp.Symbol('\\text{LHS}')
+    if isinstance(solution, Solution):
         # # remove the aligned environment
-        # latex_ = '$$%s$$'%solution.str_latex[17:-15].replace('&','')
-        latex_ = solution.str_latex#.replace('aligned', 'align*')
+        tex = solution.to_string(mode='latex', lhs_expr=lhs_expr, settings={'long_frac_ratio':2})#.replace('aligned', 'align*')
+        tex = recursive_latex_auto_linebreak(tex)
+        tex = '$$%s$$'%tex
 
     return socketio.emit(
         'sos',
-        {'latex': latex_, 'txt': solution.str_txt, 'formatted': solution.str_formatted, 'success': True,
-            'timestamp': kwargs.get('timestamp', 0)},
+        {'latex': tex, 
+        'txt': solution.to_string(mode='txt', lhs_expr=lhs_expr),
+        'formatted': solution.to_string(mode='formatted', lhs_expr=lhs_expr),
+        'success': True, 'timestamp': kwargs.get('timestamp', 0)},
         to=sid
     )
 

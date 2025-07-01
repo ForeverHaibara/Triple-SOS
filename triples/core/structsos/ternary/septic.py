@@ -1,8 +1,9 @@
+from itertools import product
+
 import sympy as sp
 
 from .quartic import sos_struct_quartic
 from .septic_symmetric import sos_struct_septic_symmetric
-from ....utils.roots.findroot import optimize_discriminant
 from .utils import (
     CyclicSum, CyclicProduct, Coeff, SS,
     sum_y_exprs, nroots, rationalize, rationalize_bound, reflect_expression, try_perturbations, radsimp,
@@ -11,6 +12,72 @@ from .utils import (
 
 a, b, c = sp.symbols('a b c')
 _VERBOSE_OPTIMIZE_DISCRIMINANT = False
+
+def optimize_discriminant(discriminant, soft = False, verbose = False):
+    # TODO: DEPRECATE IT?
+    x, y = discriminant.gens
+    best_choice = (2147483647, 0, 0)
+    for a, b in product(range(-5, 7, 2), repeat = 2): # integer
+        v = discriminant(a, b)
+        if v <= 0:
+            best_choice = (v, a, b)
+        elif v < best_choice[0]:
+            best_choice = (v, a, b)
+
+    v , a , b = best_choice
+    if v > 0:
+        for a, b in product(range(a-1, a+2), range(b-1, b+2)): # search a neighborhood
+            v = discriminant(a, b)
+            if v <= 0:
+                best_choice = (v, a, b)
+                break
+            elif v < best_choice[0]:
+                best_choice = (v, a, b)
+    if verbose:
+        print('Starting Search From', best_choice[1:], ' f =', best_choice[0])
+    if v <= 0:
+        return {x: a, y: b}
+
+    def _compute_hessian(f, symbols):
+        x, y = symbols
+        f = f.as_poly(x, y)
+        return f.diff(x), f.diff(y), f.diff(x, x), f.diff(x, y), f.diff(y, y)
+
+    if v > 0:
+        a = a * 1.0
+        b = b * 1.0
+        dervs = _compute_hessian(discriminant, (x, y))
+        # x = [a',b'] <- x - inv(nabla)^-1 @ grad
+        for i in range(20):
+            lasta , lastb = a , b
+            da_, db_, da2_, dab_, db2_ = [f(a,b) for f in dervs]
+            det_ = da2_ * db2_ - dab_ * dab_
+            if verbose:
+                print('Step Position %s, f = %s, H = %s'%((a,b), discriminant(a,b).n(20), det_))
+            if det_ == 0:
+                break
+            else:
+                a , b = a - (db2_ * da_ - dab_ * db_) / det_ , b - (-dab_ * da_ + da2_ * db_) / det_
+                if abs(lasta - a) < 1e-9 and abs(lastb - b) < 1e-9:
+                    break
+        v = discriminant(a, b)
+
+    if v > 1e-6 and not soft:
+        return None
+
+    # iterative deepening
+    rounding = 0.5
+    for i in range(5):
+        a_ = rationalize(a, rounding, reliable = False)
+        b_ = rationalize(b, rounding, reliable = False)
+        v = discriminant(a_, b_)
+        if v <= 0:
+            break
+        rounding *= .1
+    else:
+        return {x: a_, y: b_} if soft else None
+
+    return {x: a_, y: b_}
 
 def sos_struct_septic(coeff, real = True):
     if coeff((7,0,0)) == 0 and coeff((6,1,0)) == 0 and coeff((6,0,1)) == 0:
@@ -371,7 +438,7 @@ def _sos_struct_septic_hexagon(coeff):
         # Proof: Take w = z + 8, u = 4(2p^2-qw)/(w^2-4pq), v = 4(2q^2-pw)/(w^2-4pq),
         # and t = (4pq-w^2)^2/(8(2p+2q+w)(3(p-q)^2+(w-p-q)^2)),
         # then 1 - t = Det/... >= 0, and we have
-        # f(a,b,c) = t\sum c(a^2-b^2+u(ab-ac)+v(bc-ab))^2 + (1 - t)\sum c(a-b)^4 >= 0.
+        # f(a,b,c) = t*sum c(a^2-b^2+u(ab-ac)+v(bc-ab))^2 + (1 - t)*sum c(a-b)^4 >= 0.
 
         coeff410 = coeff((5,2,0))
 

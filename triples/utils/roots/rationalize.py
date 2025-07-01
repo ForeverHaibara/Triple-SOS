@@ -1,46 +1,8 @@
 from typing import Optional, Tuple, List, Dict, Union, Generator
 
 import sympy as sp
-from numpy import roots as nproots
 
-def nroots(poly, method = 'numpy', real = False, nonnegative = False):
-    """
-    Wrapper function to find the numerical roots of a sympy polynomial.
-    Note that sympy nroots is not stable when the polynomial has multiplicative roots,
-    so we need to factorize the polynomial sometimes.
-
-    Parameters
-    ----------
-    poly : sympy.Poly
-        The polynomial to be solved.
-    method : str, optional
-        The method to be used. 'numpy' uses numpy.roots, 'sympy' uses sympy.nroots.
-    real : bool, optional
-        Whether to only return real roots.
-    nonnegative : bool, optional
-        Whether to only return nonnegative roots.
-    """
-    if method == 'numpy':
-        roots = [sp.S(_) for _ in nproots(poly.all_coeffs())]
-    elif method == 'sympy':
-        roots = sp.polys.nroots(poly)
-    elif method == 'factor':
-        roots_rational = []
-        roots = []
-        for part, mul in poly.factor_list()[1]:
-            if part.degree() == 1:
-                roots_rational.append(-part.all_coeffs()[1] / part.all_coeffs()[0])
-            else:
-                roots.extend(sp.polys.nroots(part))
-        roots = roots_rational + roots
-
-    if real:
-        roots = [_ for _ in roots if _.is_real]
-    if nonnegative:
-        roots = [_ for _ in roots if _.is_nonnegative]
-    
-    return roots
-
+from .polysolve import nroots
 
 def univariate_intervals(polys: Union[sp.Poly, List[sp.Poly]]) -> Generator[sp.Rational, None, None]:
     """

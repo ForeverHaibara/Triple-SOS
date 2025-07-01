@@ -9,6 +9,7 @@ from sympy.utilities.iterables import iterable
 class Coeff():
     """
     A standard class for representing a polynomial with coefficients.
+    It can also represent sparse polynomials. The coefficients are stored in a dictionary.
     """
     def __new__(cls, *args, **kwargs):
         # if it is already a Coeff object, return it.
@@ -68,6 +69,7 @@ class Coeff():
 
         Examples
         ---------
+        >>> from sympy.abc import a, b, c, d
         >>> coeff = Coeff((a**2*b+b**2*c+c**2*d+d**2*a).as_poly(a, b, c, d))
         >>> coeff.is_cyclic()
         True
@@ -104,6 +106,7 @@ class Coeff():
         Examples
         ---------
         >>> from sympy.combinatorics import Permutation, PermutationGroup
+        >>> from sympy.abc import a, b, c
         >>> coeff = Coeff((a**2+b**2+c*(a+b)+4*c**2).as_poly(a, b, c))
         >>> coeff.is_symmetric(PermutationGroup(Permutation((1,0,2))))
         True
@@ -261,45 +264,3 @@ class Coeff():
         new_coeff = Coeff({tuple([i//d for i in monom]): _ for monom, _ in self.coeffs.items() if _ != 0})
         new_coeff.is_rational = self.is_rational
         return d, new_coeff
-
-
-
-def identify_symmetry(poly: sp.Poly, homogenizer: Optional[sp.Symbol] = None) -> PermutationGroup:
-    """
-    Identify the symmetry group of the polynomial heuristically.
-    It only identifies very simple groups like complete symmetric and cyclic groups.
-    TODO: Implement an algorithm to identify all symmetric groups.
-
-    Reference
-    ----------
-    [1] https://cs.stackexchange.com/questions/64335/how-to-find-the-symmetry-group-of-a-polynomial
-    """
-    coeff = Coeff(poly)
-    nvars = len(poly.gens)
-    if coeff.is_symmetric():
-        return SymmetricGroup(nvars)
-    if coeff.is_cyclic():
-        return CyclicGroup(nvars)
-    if nvars > 3:
-        alt = AlternatingGroup(nvars)
-        if coeff.is_symmetric(alt):
-            return alt
-
-    if homogenizer is not None and nvars > 2:
-        # check the symmetry of the polynomial before homogenization
-        a = list(range(1, nvars - 1))
-        a.append(0)
-        a.append(nvars - 1)
-        gen1 = Permutation(a)
-        a = list(range(nvars))
-        a[0], a[1] = a[1], a[0]
-        gen2 = Permutation(a)
-        G = PermutationGroup([gen1, gen2])
-        if coeff.is_symmetric(G):
-            return G
-
-        G = PermutationGroup([gen1])
-        if coeff.is_symmetric(G):
-            return G
-
-    return PermutationGroup(Permutation(list(range(nvars))))

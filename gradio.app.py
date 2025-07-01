@@ -1,41 +1,52 @@
 import re
 
 import numpy as np
+from sympy import Function, Symbol
+from sympy.external.importtools import version_tuple
 import gradio as gr
 from PIL import Image
 
-from triples.utils import RootsInfo
 from triples.utils.text_process import short_constant_parser
+from triples.core import sum_of_squares
 from triples.gui.sos_manager import SOS_Manager
+from triples.gui.linebreak import recursive_latex_auto_linebreak
+
+GRADIO_VERSION = tuple(version_tuple(gr.__version__))
+# https://github.com/gradio-app/gradio/pull/8822
+GRADIO_LATEX_SUPPORTS_ALIGNED = (GRADIO_VERSION[0] == 4 and GRADIO_VERSION[1] in (39, 40, 41, 43, 44))\
+    or GRADIO_VERSION[0] > 4
 
 def gradio_markdown() -> gr.Markdown:
-    version = gr.__version__
-    if version >= '4.0':
+    version = GRADIO_VERSION
+    if version >= (4, 0):
         return gr.Markdown(latex_delimiters=[{"left": "$", "right": "$", "display": False}])
     return gr.Markdown()
 
 def _convert_to_gradio_latex(content):
-    version = gr.__version__
+    version = GRADIO_VERSION
     replacement = {
         '\n': ' \n\n ',
         '$$': '$',
-        '&': ' ',
-        '\\\\': ' $ \n\n  $',
-        '\\begin{aligned}': '',
-        '\\end{aligned}': '',
-        '\\left\\{': '',
-        '\\right.': '',
+        # '\\left\\{': '',
+        # '\\right.': '',
     }
-    if version >= '4.0':
+    if not GRADIO_LATEX_SUPPORTS_ALIGNED:
+        replacement.update({
+            '&': ' ',
+            '\\\\': ' $ \n\n  $',
+            '\\begin{aligned}': '',
+            '\\end{aligned}': '',
+        })
+    if version >= (4, 0):
         replacement['\\frac'] = '\\dfrac'
-    else:
-        replacement['\\begin{aligned}'] = ''
-        replacement['\\end{aligned}'] = ''
+    # else:
+    #     replacement['\\begin{aligned}'] = ''
+    #     replacement['\\end{aligned}'] = ''
 
     for k,v in replacement.items():
         content = content.replace(k,v)
 
-    if version >= '4.0':
+    if version >= (4, 0):
         content = re.sub('\$(.*?)\$', '$\\ \\1$', content, flags=re.DOTALL)
     else:
         content = re.sub('\$(.*?)\$', '$\\\displaystyle \\1$', content, flags=re.DOTALL)
@@ -52,7 +63,7 @@ DEPLOY_CONFIGS = {
     },
     'SDPSOS': {
         'verbose': False,
-        'degree_limit': 12,
+        # 'degree_limit': 14,
     }
 }
 
@@ -95,11 +106,29 @@ class GradioInterface():
             self.external_link = gr.HTML('<a href="https://github.com/ForeverHaibara/Triple-SOS">GitHub Link</a>')
 
             self.input_box.submit(fn = self.set_poly, inputs = [self.input_box], 
-                                outputs = [self.image, self.coefficient_triangle])
+                                outputs = [self.image, self.coefficient_triangle], show_api=False)
             self.compute_btn.click(fn = self.solve, inputs = [self.input_box, self.methods_btn],
                                 outputs = [self.output_box, self.output_box_latex, self.output_box_txt, self.output_box_formatted, 
                                             self.image, self.coefficient_triangle,
-                                            self.output_box2])
+                                            self.output_box2], show_api=False)
+
+            with gr.Row(render=False, equal_height=False):
+                # Add hidden components for API
+                self.api_input_expr = gr.Textbox(visible=False, min_width=0, label="Problem")
+                self.api_input_ineq = gr.Textbox(visible=False, min_width=0, label="Ineqs",
+                    info="Nonnegative expressions separated by ';', e.g., a;b;c for a>=0, b>=0, c>=0.")
+                self.api_input_eq = gr.Textbox(visible=False, min_width=0, label="Eqs",
+                    info="Zero expressions separated by ';', e.g., a*b*c-1;x^2+y^2-1 for a*b*c-1=0,x^2+y^2-1=0.")
+                self.api_output = gr.JSON(visible=False, min_width=0, height=0)
+
+                # API endpoint
+                self.api_input_expr.change(
+                    fn=self.api_sum_of_squares,
+                    inputs=[self.api_input_expr, self.api_input_ineq, self.api_input_eq],
+                    outputs=[self.api_output],
+                    api_name="sum_of_squares"
+                )
+
 
     def set_poly(self, input_text, with_poly = False):
         res = SOS_Manager.set_poly(input_text)
@@ -172,10 +201,10 @@ class GradioInterface():
         poly = res0.pop('poly', None)
         grid = res0.pop('grid', None)
         if poly is not None:
-            if 'Linear' in methods:
-                rootsinfo = SOS_Manager.findroot(poly, grid, verbose = False)
-            else:
-                rootsinfo = RootsInfo()
+            # if 'Linear' in methods:
+            #     rootsinfo = SOS_Manager.findroot(poly, grid, verbose = False)
+            # else:
+            #     rootsinfo = []
             try:
                 ineq_constraints = poly.free_symbols if SOS_Manager.CONFIG_ALLOW_NONSTANDARD_GENS else poly.gens
                 solution = SOS_Manager.sum_of_squares(
@@ -189,14 +218,21 @@ class GradioInterface():
                 # print(e)
                 pass
 
+        gens = poly.free_symbols if SOS_Manager.CONFIG_ALLOW_NONSTANDARD_GENS else poly.gens
+        gens = sorted(gens, key=lambda x:x.name)
+        lhs_expr = Function('F')(*gens) if len(gens) > 0 else Symbol('\\text{LHS}')
         if solution is not None:
-            gradio_latex = _convert_to_gradio_latex(solution.str_latex)
+            tex = solution.to_string(mode='latex', lhs_expr=lhs_expr, settings={'long_frac_ratio': 2})
+            if GRADIO_LATEX_SUPPORTS_ALIGNED:
+                tex = recursive_latex_auto_linebreak(tex)
+            tex = '$$%s$$' % tex
+            gradio_latex = _convert_to_gradio_latex(tex)
             res = {
                 self.output_box: gradio_latex,
                 self.output_box2: gradio_latex,
-                self.output_box_latex: solution.str_latex,
-                self.output_box_txt: solution.str_txt,
-                self.output_box_formatted: solution.str_formatted,
+                self.output_box_latex: tex,
+                self.output_box_txt: solution.to_string(mode='txt', lhs_expr=lhs_expr),
+                self.output_box_formatted: solution.to_string(mode='formatted', lhs_expr=lhs_expr),
             }
         else:
             res = {
@@ -213,7 +249,74 @@ class GradioInterface():
         res.update(res0)
         return res
 
+    def api_sum_of_squares(self, expr, ineq_constraints, eq_constraints):
+        # from sympy.parsing.sympy_parser import parse_expr
+        # from sympy.parsing.sympy_parser import T
+        from sympy import sympify
+        # parser = lambda x: parse_expr(x, transformations=T[:7])
+        def parser(x):
+            x = sympify(x)
+            if any(len(s.name) > 1 for s in x.free_symbols):
+                # prevent a*b miswritten as ab
+                raise ValueError("Variable names should be single characters.")
+            return x
+        parser_t = lambda x: tuple(map(parser, (x.split(':', 1) if ':' in x else (x, x))))
+        try:
+            # Parse string inputs to SymPy expressions
+            parsed_expr = parser(expr)
+            parsed_ineqs = dict(parser_t(c) for c in (ineq_constraints or '').split(';') if c)
+            parsed_eqs = dict(parser_t(c) for c in (eq_constraints or '').split(';') if c)
+
+            # Call the core function
+            result = sum_of_squares(
+                poly=parsed_expr,
+                ineq_constraints=parsed_ineqs,
+                eq_constraints=parsed_eqs
+            )
+            tex = None
+            tex_aligned = None
+            if result is not None:
+                lhs_expr = Symbol('\\text{LHS}')
+                tex = result.to_string(mode='latex', lhs_expr=lhs_expr, settings={'long_frac_ratio': 2})
+                tex_aligned = recursive_latex_auto_linebreak(tex)
+
+            return {
+                'success': bool(result is not None),
+                'solution': result.solution.doit() if result is not None else None,
+                'latex': tex,
+                'latex_aligned': tex_aligned,
+                'error': None
+            }
+        except Exception as e:
+            return {
+                'success': False,
+                'solution': None,
+                'latex': None,
+                'latex_aligned': None,
+                'error': str(e)
+            }
+
 
 if __name__ == '__main__':
     interface = GradioInterface()
+
+    ALLOW_CORS = True
+    if ALLOW_CORS:
+        from fastapi import FastAPI
+        from fastapi.middleware.cors import CORSMiddleware
+
+        app = interface.demo.app
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=[
+                "https://foreverhaibara.github.io", 
+                # "http://localhost:5173",             # Vite 开发环境
+                # "http://127.0.0.1:5173"              # 本地测试
+            ],
+            allow_credentials=True,
+            allow_methods=["*"],
+            allow_headers=["*"],
+            expose_headers=["*"]
+        )
+    
     interface.demo.launch(show_error=True) #, debug=True)

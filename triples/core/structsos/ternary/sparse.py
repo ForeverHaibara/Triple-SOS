@@ -388,7 +388,7 @@ class AMGM3:
 def _sos_struct_sparse_amgm(coeff):
     """
     Solve 
-    \sum coeff(large) * a^u*b^v*c^w + \sum coeff(small) * a^x*b^y*c^z >= 0
+    sum coeff(large) * a^u*b^v*c^w + sum coeff(small) * a^x*b^y*c^z >= 0
     where triangle Cyclic(x,y,z) is contained in the triangle Cyclic(u,v,w).
     Also, |x-y|+|y-z|+|z-x| > 0.
 

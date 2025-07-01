@@ -11,14 +11,15 @@ from .sparse import sos_struct_linear, sos_struct_quadratic
 from .ternary import structural_sos_3vars
 from .quarternary import structural_sos_4vars
 from .pivoting import structural_sos_2vars
-from ..shared import sanitize_input, sanitize_output
+from ..preprocess import sanitize
 
-@sanitize_output()
-@sanitize_input(homogenize=True, infer_symmetry=False, wrap_constraints=False)
+
+@sanitize(homogenize=True, infer_symmetry=False, wrap_constraints=False)
 def StructuralSOS(
         poly: sp.Poly,
         ineq_constraints: Union[List[sp.Poly], Dict[sp.Poly, sp.Expr]] = {},
         eq_constraints: Union[List[sp.Poly], Dict[sp.Poly, sp.Expr]] = {},
+        verbose: Union[bool, int] = False,
     ) -> SolutionStructural:
     """
     Main function of structural SOS. It solves polynomial inequalities by
@@ -56,7 +57,7 @@ def _structural_sos(poly: sp.Poly, ineq_constraints: Dict[sp.Poly, sp.Expr] = {}
     d = poly.total_degree()
     nvars = len(poly.gens)
     if poly.is_monomial:
-        if poly.LC() >= 0:
+        if poly.LC() >= 0 and d % 2 == 0:
             # since the poly is homogeneous, it must be a monomial
             return poly.as_expr()
         return None

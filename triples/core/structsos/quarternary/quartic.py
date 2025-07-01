@@ -56,6 +56,10 @@ def _quarternary_quartic_real(coeff, real=True):
     s(((1-t)(a2-b2)+0(a2-c2)+(1+t)(a2-d2)+x(ab-cd)+y(bc-ad)+z(cd-bc)+w(ac-bd))2)
 
     so that the rest falls in the case of fluroite. This is heuristic and may not work for all cases.
+    
+    Examples
+    ----------
+    s(((1-2)(a2-b2)+0(a2-c2)+(1+2)(a2-d2)-1(ab-cd)+6(bc-ad)+8(cd-bc)+2(ac-bd))2)
     """
     if not any(coeff(_) for _ in ((4,0,0,0),(3,1,0,0),(3,0,1,0),(3,0,0,1))):
         return _quarternary_quartic_fluroite(coeff, real=real)

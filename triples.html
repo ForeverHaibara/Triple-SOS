@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0">
-    <title>Sum of Square</title>
+    <title>Sum of Squares</title>
     <style>
     .collapse {
         transition-duration: 0;
@@ -28,6 +28,10 @@
         background-color: #54c3e8;
         border-radius: 4px;
     }
+    /* .table-locked {
+        box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+        transition: box-shadow 0.3s ease;
+    } */
     .coeff-label3d {
         transition: opacity 0.2s; /* Smooth transition for opacity changes */
     }
@@ -52,8 +56,8 @@
     /* Position the menu and hide it initially */
     .submenu {
         position: absolute;
-        bottom: 100%; /* Moves menu above the button */
         left: 0;
+        z-index: 1000;
         display: none;
         min-width: 200px;
         background: #ffffff;
@@ -173,7 +177,7 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
               <input type="text" class="form-control" id="setting_gens_input" value="abc" style="height:23px;font-size:12px;">
             </div>
         </div>
-        <div class="row" style="font-size: 12px; margin-top: 6px;">
+        <div class="row mt-2" style="font-size: 12px;">
             <div class="col-4">
               <label for="setting_perm">Permutation</label>
             </div>
@@ -268,8 +272,8 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
                         </svg>
                     </button>
                         <!-- <span class="visually-hidden">Sort</span> -->
-                    
-                    <div class="submenu" style="color:black; font-size: 14px; border-radius: 5px; text-align: left; min-width: 160px;">
+
+                    <div class="submenu" style="color:black; bottom: 100%; font-size: 14px; border-radius: 5px; text-align: left; min-width: 160px;">
                         <hr style="margin:7px;">
                         <div class="hover_text" style="padding-left: 20px;" onclick="PolyTools('abcd2xyzw')">ABCD ↔ XYZW</div><hr style="margin:7px;">
                         <div class="hover_text" style="padding-left: 20px;" onclick="PolyTools('homogenize')">Homogenize</div><hr style="margin:7px;">
@@ -294,7 +298,7 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
                             <path d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 0l-.094.319a.873.873 0 0 1-1.255.52l-.292-.16c-1.64-.892-3.433.902-2.54 2.541l.159.292a.873.873 0 0 1-.52 1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a.873.873 0 0 1 .52 1.255l-.16.292c-.892 1.64.901 3.434 2.541 2.54l.292-.159a.873.873 0 0 1 1.255.52l.094.319c.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 0 1 1.255-.52l.292.16c1.64.893 3.434-.902 2.54-2.541l-.159-.292a.873.873 0 0 1 .52-1.255l.319-.094c1.79-.527 1.79-3.065 0-3.592l-.319-.094a.873.873 0 0 1-.52-1.255l.16-.292c.893-1.64-.902-3.433-2.541-2.54l-.292.159a.873.873 0 0 1-1.255-.52zm-2.633.283c.246-.835 1.428-.835 1.674 0l.094.319a1.873 1.873 0 0 0 2.693 1.115l.291-.16c.764-.415 1.6.42 1.184 1.185l-.159.292a1.873 1.873 0 0 0 1.116 2.692l.318.094c.835.246.835 1.428 0 1.674l-.319.094a1.873 1.873 0 0 0-1.115 2.693l.16.291c.415.764-.42 1.6-1.185 1.184l-.291-.159a1.873 1.873 0 0 0-2.693 1.116l-.094.318c-.246.835-1.428.835-1.674 0l-.094-.319a1.873 1.873 0 0 0-2.692-1.115l-.292.16c-.764.415-1.6-.42-1.184-1.185l.159-.291A1.873 1.873 0 0 0 1.945 8.93l-.319-.094c-.835-.246-.835-1.428 0-1.674l.319-.094A1.873 1.873 0 0 0 3.06 4.377l-.16-.292c-.415-.764.42-1.6 1.185-1.184l.292.159a1.873 1.873 0 0 0 2.692-1.115z"/>
                         </svg>
                     </button>
-                    <div class="submenu p-3" style="color:black; font-size: 14px; border-radius: 5px;" id="submenu_config">
+                    <div class="submenu p-3" style="color:black; bottom: 100%; font-size: 14px; border-radius: 5px;" id="submenu_config">
                         <!-- Sliders or other controls go here -->
                         <label for="config_3D_PointSize">3D Point Size</label>
                         <input type="range" id="config_3D_PointSize" min="1" max="300" value="50"> <!-- Multiplied by 1000 -->
@@ -312,20 +316,21 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
 </div>
 
 
-<div id="frontpageright" style="width: 22%; height: 100%; margin-left: 1.5%;"> 
-    <div id="heatmap_area" style="width: 90%; height: 40%; margin-left: 5%; position:relative;">
+
+<div id="frontpageright"  style="width: 22%; height: 100%; margin-left: 1.5%;"> 
+    <div id="heatmap_area" style="width: 90%; height: 40%; margin-top: -0.5%; margin-left: 5%; position:relative;">
         <div id="heatmap" style="width: 100%; height: 100%; top: 0; left: 0; position:absolute;">
         </div>
         <!-- <button onclick="HeatmapScreenShot()" style="position:a">Take Screenshot</button> -->
-        <button type="button" class="btn btn-outline-primary" id="heatmap_screenshot_button" onclick="HeatmapScreenShot();" style="bottom:0;right:0;position:absolute;">
+        <button type="button" class="btn btn-outline-primary" id="heatmap_screenshot_button" onclick="HeatmapScreenShot();" style="bottom:5%;right:0;position:absolute;">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-save" viewBox="0 0 16 16">
                 <path d="M2 1a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H9.5a1 1 0 0 0-1 1v7.293l2.646-2.647a.5.5 0 0 1 .708.708l-3.5 3.5a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L7.5 9.293V2a2 2 0 0 1 2-2H14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h2.5a.5.5 0 0 1 0 1H2z"/>
             </svg>
           <span class="visually-hidden">Button</span>
         </button>
     </div>
-    <button id="sumofsquare" 
-    style="width: 90%; height: 5%; margin-left: 5%; margin-top: 2%; position: relative;
+    <button id="sumofsquares"
+    style="width: 90%; height: 5%; margin-left: 5%; margin-top: -5%; position: relative;
      font-size: small;
      background: linear-gradient(to bottom, rgb(247,247,247),rgb(221,221,221)); 
      border: 1px solid; border-color: rgba(200,200,200); color: rgb(60,60,60)"
@@ -333,18 +338,57 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
                     this.style.color = 'rgb(0,0,0)';" 
      onmouseleave="this.style.background = 'linear-gradient(to bottom, rgb(247,247,247),rgb(221,221,221))';
                     this.style.color = 'rgb(60,60,60)';" 
-     onclick="SumOfSquare();"
+    onclick="SumOfSquares();"
     >
-    Sum of Square
+    Sum of Squares
     </button>
 
 
-    <div id="tangents" style="width: 96%; height: 20%; margin-left: 2%; margin-top: 4%">    
-        <textarea id="input_tangents" style="border: 1px solid black; border-radius: 8px; font-family:'Times New Roman', Times, serif;
-        width: 99%; height: 100%; padding-left: 1%; resize: none; font-size: small;" ></textarea>
+    <div id="constraints" class="w-100 h-20 ms-1 mt-3">
+        <!-- Planning to add some new UIs -->
+         
+        <div class="h-100 w-100 text-center" style="font-size: 10px;">
+            <div class="customized_scrollbar" style="height: 120px; border: 1px solid #ddd; border-radius: 4px; padding: 2px;">
+                <table class="table table-sm table-hover" style="font-size: 10px;">
+                    <thead></thead>
+                        <tr>
+                            <th style="width: 40%; padding: 0.1rem 0.3rem;">Constraint</th>
+                            <th style="width: 30%; padding: 0.1rem 0.3rem;">Alias</th>
+                            <th style="width: 15%; padding: 0.1rem 0.3rem;">Type</th>
+                            <th style="width: 15%; padding: 0.1rem 0.3rem;"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="constraints_table_body">
+                        <!-- Dynamic rows will be added here -->
+                    </tbody>
+                </table>
+            </div>
+            <div style="margin-top: 2%;">
+                 <!-- class="d-flex gap-1 mt-1"> -->
+                <div class="dropdown_item">
+                    <button class="btn btn-xs btn-outline-primary" style="padding: 0.1rem 0.3rem; font-size: 9px; height: 22px;" onclick="constraintsAddRow('≥0')">+ Inequality</button>
+                    <div class="submenu" style="color:black; font-size: 12px; border-radius: 5px; text-align: left; min-width: 150px;">
+                        <hr style="margin:7px;">
+                        <div class="hover_text" style="padding-left: 20px; height: 16px;" onclick="constraintsAddTools('triangle', '≥0')">Triangle</div><hr style="margin:7px;">
+                        <div class="hover_text" style="padding-left: 20px; height: 16px;" onclick="constraintsAddTools('acute triangle', '≥0')">Acute Triangle</div><hr style="margin:7px;">
+                    </div>
+                </div>
+                <button class="btn btn-xs btn-outline-secondary" style="padding: 0.1rem 0.3rem; font-size: 9px; height: 22px;" onclick="constraintsAddRow('=0')">+ Equality</button>
+                <button class="btn btn-xs btn-outline-success" id="constraints-lock" style="padding: 0.1rem 0.3rem; font-size: 9px; height: 22px;
+                --bs-btn-hover-bg: var(--bs-btn-bg);  --bs-btn-hover-border-color: var(--bs-btn-border-color); --bs-btn-hover-color: var(--bs-btn-color);" onclick="constraintsToggleLock()">
+                    <svg id="lockIcon"  xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" class="bi bi-lock" viewBox="0 0 16 16">
+                    <path fill-rule="evenodd" d="M8 0a4 4 0 0 1 4 4v2.05a2.5 2.5 0 0 1 2 2.45v5a2.5 2.5 0 0 1-2.5 2.5h-7A2.5 2.5 0 0 1 2 13.5v-5a2.5 2.5 0 0 1 2-2.45V4a4 4 0 0 1 4-4M4.5 7A1.5 1.5 0 0 0 3 8.5v5A1.5 1.5 0 0 0 4.5 15h7a1.5 1.5 0 0 0 1.5-1.5v-5A1.5 1.5 0 0 0 11.5 7zM8 1a3 3 0 0 0-3 3v2h6V4a3 3 0 0 0-3-3"/> -->
+                    </svg>
+                    Positive
+                </button>
+                <button class="btn btn-xs btn-outline-danger" style="padding: 0.1rem 0.3rem; font-size: 9px; height: 22px;" onclick="constraintsClear()">Clear</button>
+            </div>
+        </div>
     </div>
-    <div id="outputs" style="width: 96%; height: 25%; margin-left: 2%; margin-top: 6%; ">  
-        <div id="output_types" style="width: 99%; height: 20%;">
+    
+    <hr style="width: 95%; margin-left: 10px; margin-top: 10px; margin-bottom: 5px;">
+    <div id="outputs" style="width: 96%; height: 24%; margin-left: 2%; margin-top: 1%; ">  
+        <div id="output_types" class="flex mt-0" style="width: 100%; height: 20%; font-size: 14px;">
             <!-- <button id="output_showlatex" style="width:31%;height:100%;margin-left:2%;">LaTeX</button>
             <button id="output_showtxt" style="width:31%;height:100%">txt</button>
             <button id="output_showformatted" style="width:31%;height:100%">formatted</button> -->
@@ -357,7 +401,7 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
             onclick = "changeShowType('formatted')">formatted</div>
         </div>
         <textarea id="output_result" style="border: 1px solid black; border-radius: 8px; font-family:'Times New Roman', Times, serif;
-        width: 99%; height: 82.5%; padding-left: 1%; margin-top: 3%; resize: none; font-size: small;" readonly="readonly"></textarea>
+        width: 99%; height: 76%; padding-left: 1%; margin-top: 3%; resize: none; font-size: small; background: rgba(240,240,240)" readonly="readonly"></textarea>
     </div>
 </div>
 
@@ -424,17 +468,38 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
 <script src="static/js/on_change.js"></script>
 <script src="static/js/socket.js"></script>
 <script>
+    function getConstraints(kwargs){
+        let ineq_constraints = {};
+        let eq_constraints = {};
+        document.getElementById('constraints_table_body').querySelectorAll('tr').forEach(
+            (row) => {
+                const constraint = row.getElementsByClassName('constraints-constraint')[0].value;
+                if (constraint.trim().length === 0) return;
+                const constraint_alias = row.getElementsByClassName('constraints-alias')[0].value;
+                const constraint_type = row.getElementsByClassName('constraints-type')[0].innerHTML;
+                if (constraint_type === '≥0'){
+                    ineq_constraints[constraint] = constraint_alias;
+                }else if (constraint_type === '=0'){
+                    eq_constraints[constraint] = constraint_alias;
+                }
+            }
+        )
+        return {ineq_constraints: ineq_constraints, eq_constraints: eq_constraints};
+    }
     function preprocessInput(kwargs){
         const input_poly = document.getElementById('input_poly').value.trim();
         if ((input_poly.length === 0)||(!/^[\x00-\x7F]*$/.test(input_poly))){
             return;
         }
 
+        const constraints = (typeof(kwargs)==='undefined'||typeof(kwargs.ineq_constraints)=== 'undefined'? getConstraints(): kwargs);
         const cur_data = {
             poly: input_poly,
             gens: document.getElementById('setting_gens_input').value,
             perm_choice: document.querySelector('input[name="setting_perm"]:checked').value,
             perm: document.getElementById('setting_perm_input').value,
+            ineq_constraints: constraints.ineq_constraints,
+            eq_constraints: constraints.eq_constraints
             // timestamp: timestamp
         };
 
@@ -487,12 +552,11 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
     };
 
     
-    function SumOfSquare(){
-        document.getElementById("sumofsquare").blur();
+    function SumOfSquares(){
+        document.getElementById("sumofsquares").blur();
         changeNumOfSOS(sos_work.num + 1);
 
         const input_poly = document.getElementById('input_poly').value;
-        const tangents = document.getElementById('input_tangents').value;
         const methods = {
             StructuralSOS: document.getElementById("setting_method_use_StructuralSOS").checked,
             LinearSOS: document.getElementById("setting_method_use_LinearSOS").checked,
@@ -512,12 +576,12 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
                 // decompose_method: document.getElementById("setting_method_SDPSOS_reduced_decompose").checked?'reduce':'raw',
             }
         }
-        let kwargs = {methods: methods, configs: configs, actions: ['findroot', 'sos']};
-        
-        if (sos_poly === input_poly){
-            kwargs.tangents = tangents;
-        }
-        console.log(kwargs);
+        const constraints = getConstraints();
+
+        let kwargs = {ineq_constraints: constraints.ineq_constraints, eq_constraints: constraints.eq_constraints,
+                methods: methods, configs: configs, actions: ['findroot', 'sos']};
+
+        // console.log(kwargs);
 
         preprocessInput(kwargs);
     }
@@ -589,7 +653,7 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
             document.getElementById('setting_gens_input').value = exchanger(gens);
             sos_poly = exchanger(sos_poly);
             document.getElementById('input_poly').value = exchanger(document.getElementById('input_poly').value);
-            document.getElementById('input_tangents').value = exchanger(document.getElementById('input_tangents').value);
+            document.getElementById('constraints_table_body').querySelectorAll('input').forEach((x) => {x.value = exchanger(x.value);});
         }else if (event === 'homogenize'){
             sos_poly = ''; // reset
             preprocessInput({homogenize: true});

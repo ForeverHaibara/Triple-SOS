@@ -17,7 +17,6 @@ from .acyclic import sos_struct_acyclic_sparse
 from ..utils import Coeff, PolynomialNonpositiveError, PolynomialUnsolvableError
 from ..sparse import sos_struct_common, sos_struct_degree_specified_solver
 from ..solution import SolutionStructural
-from ....utils import verify_hom_cyclic
 
 SOLVERS = {
     2: sos_struct_quadratic,
@@ -83,10 +82,12 @@ def structural_sos_3vars(poly, ineq_constraints: Dict[sp.Poly, sp.Expr] = {}, eq
     if len(poly.gens) != 3: # should not happen
         raise ValueError("structural_sos_3vars only supports 3-var polynomials.")
 
-    is_hom, is_cyc = verify_hom_cyclic(poly)
+    is_hom = poly.is_homogeneous
     if not is_hom: # should not happen
         raise ValueError("structural_sos_3vars only supports homogeneous polynomials.")
 
+    coeff_poly = Coeff(poly)
+    is_cyc = coeff_poly.is_cyclic()
     if len(ineq_constraints) == 0 and len(eq_constraints) == 0 and poly.total_degree() % 2 == 1:
         return
 
@@ -96,7 +97,7 @@ def structural_sos_3vars(poly, ineq_constraints: Dict[sp.Poly, sp.Expr] = {}, eq
         func = _structural_sos_3vars_acyclic
 
     try:
-        solution = func(Coeff(poly), real = 1)
+        solution = func(coeff_poly, real = 1)
     except (PolynomialNonpositiveError, PolynomialUnsolvableError):
         return None
 
