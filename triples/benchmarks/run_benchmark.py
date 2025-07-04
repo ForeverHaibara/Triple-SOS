@@ -181,14 +181,13 @@ def run_bench(benchmarks=BENCHMARKS, save_interval=600):
 if __name__ == '__main__':
     _append_paths(paths=['./', '../../'])
 
-    from problems import ProblemSet, mark
-    from problems import (
-        IMOProblems, IMOSLProblems
-    )
+    from problems import *
 
     BENCHMARKS = [
+        # CMOProblems,
+        ChinaHighSchoolMathLeague2,
         # IMOProblems,
-        IMOSLProblems
+        # IMOSLProblems,
     ]
 
     run_bench(BENCHMARKS)
