@@ -279,7 +279,7 @@ class CMOProblems(ProblemSet):
         ai = symbols('a1:41')
         a_, b_, c_, d_ = ai[9], ai[19], ai[29], ai[39]
         cons = [1 - Abs(ai[i]-ai[(i+1)%40]) for i in range(40)]
-        return 10 - a_ - b_ - c_ - d_, cons, []
+        return 10 - a_ - b_ - c_ - d_, cons, [Add(*ai)]
 
     @mark(mark.skip, mark.nvars)
     def problem_CMO_2019_p1_q2(self):
@@ -287,7 +287,7 @@ class CMOProblems(ProblemSet):
         ai = symbols('a1:41')
         a_, b_, c_, d_ = ai[9], ai[19], ai[29], ai[39]
         cons = [1 - Abs(ai[i]-ai[(i+1)%40]) for i in range(40)]
-        return Rational(425,8) - a_*b_ - c_*d_, cons, []
+        return Rational(425,8) - a_*b_ - c_*d_, cons, [Add(*ai)]
 
     @mark(mark.noimpl, mark.nvars)
     def problem_CMO_2020_p1(self):
@@ -511,3 +511,484 @@ class ChinaHighSchoolMathLeague2(ProblemSet):
         M = (Rational(n-1,2)*a + Rational(n+1,2))**n / (n**n * a_**(Rational(n-1,2)))
         # M = (1011*a + 1012)**2023/(2023**2023 * a**1011)
         return M - Mul(*yi, *[1/_ for _ in xi]), cons, []
+
+
+class CTSTProblems(ProblemSet):
+    """China Team Selection Test"""
+    @mark(mark.noimpl)
+    def problem_CTST_1998_p3(self):
+        ...
+
+    @mark(mark.noimpl, mark.geom)
+    def problem_CTST_1998_p4(self):
+        """Prove incenter I is inside BOH given acute ABC (A<B<C<pi/2)."""
+        ...
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_CTST_1999_p1(self):
+        """xi>=0, x1+...+xn=1, show that sum(xi^4-xi^5) <= 1/12."""
+        ...
+
+    @mark(mark.noimpl)
+    def problem_CTST_1999_p6(self):
+        ...
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_CTST_2001_p4(self):
+        ...
+
+    @mark(mark.noimpl, mark.quant)
+    def problem_CTST_2001_p6(self):
+        """Compute min_{a,b,c} max_{1<=x<=3} |x^3-ax^2-bx-c|"""
+        ...
+
+    @mark(mark.noimpl)
+    def problem_CTST_2002_p1(self):
+        """(2^n-2)*sqrt(2*i-1) >= (sum_{j=0}^{i-1}C_n^j + C_{n-1}^{i-1})*sqrt(n)
+        where n>=3 is integer and 1<=i<=floor(n/2)."""
+        ...
+
+    @mark(mark.noimpl, mark.geom)
+    def problem_CTST_2002_p2(self):
+        ...
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_CTST_2002_p4(self):
+        ...
+
+    @mark(mark.skip, mark.geom)
+    def problem_CTST_2002_p5(self):
+        """t = sinBcosA/(2sinC) = b/c*(b^2+c^2-a^2)/(4bc)"""
+        t_ = (b**2+c**2-a**2)/(4*c**2)
+        r_ = (c**2+a**2-b**2)/(4*a**2)
+        m_ = (a**2+b**2-c**2)/(4*b**2)
+        fx = lambda x,y,z: x**2/y**2 * (z/(1-2*z))**2
+        obj = fx(a,b,t_) + fx(b,c,r_) + fx(c,a,m_) + 16*t_*r_*m_ - 1
+        return obj, [b**2+c**2-a**2,c**2+a**2-b**2,a**2+b**2-c**2,a,b,c], []
+
+    @mark(mark.skip, mark.geom)
+    def problem_CTST_2002_p13(self):
+        A,B,C = a,b,c
+        lhs = sin(A)**3*cos(B-C)**2 + sin(B)**3*cos(C-A)**2 + sin(C)**3*cos(A-B)**2
+        rhs = 3*sin(A)*sin(B)*sin(C)
+        return rhs-lhs, [cos(A),cos(B),cos(C),sin(A),sin(B),sin(C)],\
+            [A+B+C-pi]
+
+    @mark(mark.noimpl, mark.recur, mark.nvars)
+    def problem_CTST_2002_p26(self):
+        ...
+
+    @mark(mark.noimpl, mark.quant)
+    def problem_CTST_2002_p30(self):
+        ...
+
+    def problem_CTST_2003_p1(self):
+        return x**7*(y*z-1)+y**7*(x*z-1)+z**7*(x*y-1)-162*sqrt(3),\
+            [x,y,z], [x+y+z-x*y*z]
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_CTST_2003_p6(self):
+        ...
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_CTST_2003_p16(self):
+        ...
+
+    @mark(mark.noimpl, mark.geom)
+    def problem_CTST_2003_p18(self):
+        ...
+
+    @mark(mark.noimpl, mark.geom)
+    def problem_CTST_2003_p19(self):
+        ...
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_CTST_2003_p20(self):
+        ...
+
+    @mark(mark.noimpl, mark.geom)
+    def problem_CTST_2004_p10(self):
+        """Brocard point."""
+        ...
+
+    def problem_CTST_2004_p11(self):
+        k_ = 174960
+        obj = (a+b+c)*(3**4*(a+b+c+d)**5+2**4*(a+b+c+2*d)**5) - k_*a*b*c*d**3
+        return obj, [a,b,c,d], []
+
+    @mark(mark.noimpl, mark.geom)
+    def problem_CTST_2004_p15(self):
+        """Convex polyhedron."""
+        ...
+
+    @mark(mark.noimpl, mark.geom)
+    def problem_CTST_2004_p19(self):
+        ...
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_CTST_2004_p21(self):
+        ...
+
+    @mark(mark.skip, mark.geom)
+    def problem_CTST_2004_p24(self):
+        return sin(a)+sin(b)-sin(c), [b+c-a,c+a-b,a+b-c,2*pi-a-b-c], []
+
+    def problem_CTST_2005_p2(self):
+        return 3-(1/(a**2-b*c+1)+1/(b**2-c*a+1)+1/(c**2-a*b+1)),\
+            [a,b,c], [a*b+b*c+c*a-Rational(1,3)]
+
+    @mark(mark.noimpl, mark.geom)
+    def problem_CTST_2005_p5(self):
+        ...
+
+    def problem_CTST_2005_p6(self):
+        fx = lambda x: 1/(1+x)**2
+        return fx(a)+fx(b)+fx(c)+fx(d)-1, [a,b,c,d], [a*b*c*d-1]
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_CTST_2006_p21(self):
+        ...
+
+    @mark(mark.skip, mark.nvars)
+    def problem_CTST_2005_p22(self):
+        ns = lambda args, n: Add(*[_**n  for _ in args])
+        ai,bi,ci,di = symbols('a1:7'), symbols('b1:7'), symbols('c1:7'), [1,2,3,4,5,6]
+        cons =  [ns(ai,k)-ns(di,k) for k in range(1,7)]
+        cons += [ns(bi,k)-ns(di,k) for k in range(1,7)]
+        cons += [ns(ci,k)-ns(di,k) for k in range(1,7)]
+        obj = Add(*[aj*bj*cj for aj,bj,cj in zip(ai,bi,ci)]) - 162
+        return obj, cons, []
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_CTST_2005_p23(self):
+        ...
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_CTST_2006_p8(self):
+        ...
+
+    def problem_CTST_2006_p11(self):
+        fx = lambda a,b,c: a*b/sqrt(a*b+b*c)
+        return sqrt(2)/2-(fx(x,y,z)+fx(y,z,x)+fx(z,x,y)), [x,y,z], [x+y+z-1]
+
+    def problem_CTST_2007_p4(self):
+        return sqrt(v*w/u)+sqrt(w*u/v)+sqrt(u*v/w)-u-v-w,\
+            [u,v,w], [u+v+w+sqrt(u*v*w)-4]
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_CTST_2007_p10(self):
+        ...
+
+    def problem_CTST_2007_p15(self):
+        return Rational(5,4) - ((1-b**2)/a+(1-c**2)/b+(1-a**2)/c),\
+            [a,b,c,1-a,1-b,1-c], [a**2+b**2+c**2-2]
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_CTST_2007_p23(self):
+        ...
+
+    @mark(mark.geom)
+    def problem_CTST_2007_p15(self):
+        return (1+2*x/(y+z))*(1+2*y/(z+x))*(1+2*z/(x+y))-8, [x,y,z], []
+
+    @mark(mark.noimpl, mark.geom, mark.nvars)
+    def problem_CTST_2008_p3(self):
+        """Prove that there must exist obtuse given 9 points in a 3D space."""
+        ...
+
+    @mark(mark.noimpl, mark.geom)
+    def problem_CTST_2008_p6(self):
+        """Complex. Marden theorem. Sendov-Ilieff."""
+        ...
+
+    def problem_CTST_2008_p11(self):
+        return x*y/z + y*z/x + z*x/y - 2*cbrt(x**3+y**3+z**3), [x,y,z], []
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_CTST_2008_p15(self):
+        ...
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_CTST_2008_p23(self):
+        ...
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_CTST_2009_p3(self):
+        ...
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_CTST_2009_p14(self):
+        ...
+
+    @mark(mark.skip)
+    def problem_CTST_2009_p15(self):
+        ai = symbols('a1:5')
+        A = Add(*[sqrt(ai[i]**2+ai[i]*ai[(i+3)%4]+ai[(i+3)%4]**2+ai[(i+3)%4]*ai[(i+2)%4])
+            for i in range(4)])
+        B = Add(*[sqrt(ai[i]**2+ai[i]*ai[(i+1)%4]+ai[(i+1)%4]**2+ai[(i+1)%4]*ai[(i+2)%4])
+            for i in range(4)])
+        return Max(A,B)-2, list(ai), [Add(*ai) - 1]
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_CTST_2009_p20(self):
+        """Nonconvex QP"""
+        ...
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_CTST_2009_p23(self):
+        ...
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_CTST_2010_p1(self):
+        """Nonconvex QP"""
+        ...
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_CTST_2010_p8(self):
+        ...
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_CTST_2010_p11(self):
+        """n>=2, ai>=0, sum(ai)=n, lambda>=(n/(n-1))^(n-1)
+        show that sum(1/ai) - lambda*prod(1/ai) <= n-lambda."""
+        ...
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_CTST_2010_p13(self):
+        """n>=2, a>=0, x1*...*xn=1, xi>=0, M >= 1/a, M >= n/(a+n-1),
+        show that sum(1/(a+(x1+..+xn)-xi)) <= M."""
+        ...
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_CTST_2011_p12(self):
+        """Given x1,...,x_{2n}>=0 and
+        1/(2*n)*sum_{i=1}^{2n}((xi+2)^n) >= prod_{i=1}^{2n}xi,
+        show that:
+        1/(2*n)*sum_{i=1}^{2n}((xi+1)^n) >= (3/4)^n * prod_{i=1}^{2n}xi.
+        """
+        ...
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_CTST_2011_p13(self):
+        ...
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_CTST_2012_p1(self):
+        ...
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_CTST_2012_p11(self):
+        ...
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_CTST_2012_p14(self):
+        ...
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_CTST_2012_p15(self):
+        ...
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_CTST_2013_p4(self):
+        ...
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_CTST_2013_p12(self):
+        """Nonconvex QP"""
+        ...
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_CTST_2013_p17(self):
+        ...
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_CTST_2014_p4(self):
+        ...
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_CTST_2014_p17(self):
+        ...
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_CTST_2015_p8(self):
+        ...
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_CTST_2015_p16(self):
+        ...
+
+    def problem_CTST_2016_p2(self):
+        z1 = (a,b)
+        z2 = (c,d)
+        z3 = (-a-c, -b-d)
+        mulz = lambda u,v: (u[0]*v[0]-u[1]*v[1], u[0]*v[1]+u[1]*v[0])
+        addz = lambda u,v: (u[0]+v[0], u[1]+v[1])
+        norm2 = lambda u: u[0]**2+u[1]**2
+        obj = norm2(addz(addz(mulz(z1,z2), mulz(z2,z3)), mulz(z3,z1)))
+        obj += norm2(z1)*norm2(z2)*norm2(z3)
+        obj = 1 - obj
+        return obj, [1-norm2(z1), 1-norm2(z2), 1-norm2(z3)], []
+
+    @mark(mark.skip, mark.geom)
+    def problem_CTST_2016_p8(self):
+        """Nonconvex QCQP"""
+        xi, yi = symbols('x1:13'), symbols('y1:13')
+        dist2 = lambda i,j: (xi[i]-xi[j])**2+(yi[i]-yi[j])**2
+        cons = [dist2(i,j) for i in range(12) for j in range(i+1,12)]
+        return 48-Add(*cons), [1 - _ for _ in cons], []
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_CTST_2016_p13(self):
+        ...
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_CTST_2017_p2(self):
+        ...
+
+    def problem_CTST_2017_p13_n4(self):
+        n_ = 4
+        xi = symbols(f'x1:{n_+1}')
+        obj = Add(*[xi[i]*xi[(i+1)%n_]*xi[(i+2)%n_] for i in range(n_)])
+        return Rational(1,16) - obj, list(xi), [Add(*xi)-1]
+
+    def problem_CTST_2017_p13_n5(self):
+        n_ = 5
+        xi = symbols(f'x1:{n_+1}')
+        obj = Add(*[xi[i]*xi[(i+1)%n_]*xi[(i+2)%n_] for i in range(n_)])
+        return Rational(1,25) - obj, list(xi), [Add(*xi)-1]
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_CTST_2017_p13_n6(self):
+        ...
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_CTST_2017_p23(self):
+        """m>=2, x1,...,xm>=0, prove that
+        (m-1)^(m-1)*(sum(xi^m) - m*prod(xi)) >= sum(xi)^m - m^m*prod(xi)."""
+        ...
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_CTST_2018_p11(self):
+        ...
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_CTST_2018_p15(self):
+        ...
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_CTST_2018_p23(self):
+        ...
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_CTST_2018_p24(self):
+        """LP"""
+        ...
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_CTST_2019_p9(self):
+        """Nonconvex QP"""
+        ...
+
+    @mark(mark.skip)
+    def problem_CTST_2019_p13(self):
+        X = (a,b)
+        Y = (c,d)
+        Z = (p,q)
+        mulz = lambda u,v: (u[0]*v[0]-u[1]*v[1], u[0]*v[1]+u[1]*v[0])
+        addz = lambda args: (Add(*[_[0] for _ in args]), Add(*[_[1] for _ in args]))
+        cubic = lambda z: mulz(mulz(z,z),z)
+        norm2 = lambda z: (z[0]**2+z[1]**2)
+        n3xyz = mulz((-3,0), mulz(X,mulz(Y,Z)))
+        obj = 1 - norm2(addz([cubic(X), cubic(Y), cubic(Z), n3xyz]))
+        return obj, [], [norm2(X)+norm2(Y)+norm2(Z)-1]
+
+    @mark(mark.noimpl)
+    def problem_CTST_2019_p23(self):
+        obj = a**r+b**r+c**r-x**r-y**r-z**r
+        return obj, [a,b,c,x,y,z,a-x,a-y,a-z,r], [a+b+c-x-y-z, a*b*c-x*y*z]
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_CTST_2020_p5(self):
+        ...
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_CTST_2020_p1(self):
+        ...
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_CTST_2021_p15(self):
+        ...
+
+    @mark(mark.skip, mark.nvars)
+    def problem_CTST_2021_p22(self):
+        xi = symbols('x1:61')
+        return 40 - Add(*[xi[i]**2*(xi[(i+1)%60] - xi[(i+59)%60]) for i in range(60)]),\
+            [1 - _ for _ in xi] + [1 + _ for _ in xi], []
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_CTST_2022_p5(self):
+        ...
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_CTST_2022_p10(self):
+        ...
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_CTST_2022_p18(self):
+        ...
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_CTST_2022_p23(self):
+        """LP"""
+        ...
+
+    @mark(mark.noimpl, mark.nvars, mark.geom)
+    def problem_CTST_2023_p5(self):
+        ...
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_CTST_2023_p6(self):
+        ...
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_CTST_2023_p11(self):
+        ...
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_CTST_2023_p18(self):
+        """LP"""
+        ...
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_CTST_2023_p21(self):
+        """LP"""
+        ...
+
+    @mark(mark.noimpl)
+    def problem_CTST_2024_p10(self):
+        """Integer"""
+        ...
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_CTST_2024_p18(self):
+        """Nonconvex QP"""
+        ...
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_CTST_2024_p21(self):
+        ...
+
+    @mark(mark.noimpl, mark.nvars, mark.quant)
+    def problem_CTST_2024_p23(self):
+        ...
+
+    def problem_CTST_2025_p1(self):
+        return x**4*(x-y)*(x-z) + y**4*(y-z)*(y-x) + z**4*(z-x)*(z-y), [], []
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_CTST_2025_p9(self):
+        ...
+
+    @mark(mark.noimpl)
+    def problem_CTST_2025_p18(self):
+        ...

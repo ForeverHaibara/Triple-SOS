@@ -185,7 +185,8 @@ if __name__ == '__main__':
 
     BENCHMARKS = [
         # CMOProblems,
-        ChinaHighSchoolMathLeague2,
+        # ChinaHighSchoolMathLeague2,
+        CTSTProblems,
         # IMOProblems,
         # IMOSLProblems,
     ]

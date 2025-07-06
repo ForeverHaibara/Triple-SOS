@@ -33,6 +33,37 @@ class mark:
 
 
 class ProblemSet:
+    """
+    A collection of problems from a source.
+
+    * books:
+        Inequalities from books. Highly structured. Many 3 or 4 variable inequalities
+        over real or positive real numbers.
+
+    * forums:
+        Inequalities from forums. Some problems are much harder than those in books.
+        Solutions to these problems are often computer-aided and are not suitable
+        by hands.
+
+    * contests:
+        Inequalities from contests are often raw, and often require suitable
+        preprocessing or transformations to simplify the problem. Some algebraic
+        inequalities are obtained by unpleasant reformulations of the original
+        problems. Below are some examples.
+            * The constraint "a1,a2,a3,a4,a5" are a permutation of "1,2,3,4,5" might be
+            formulated as the zero-dim ideal `a1^k+a2^k+a3^k+a4^k+a5^k = 1^k+2^k+3^k+4^k+5^k`
+            for `k=1,2,3,4,5`.
+            * The constraint "there exists i,j,k such that ai+aj+ak>=0" might be
+            formulated as `Max_{i,j,k}(ai+aj+ak)>=0`, involving O(n^3) terms.
+            * A geometric inequality involing the distances between 4 coplanar points A,B,C,D
+            might introduce a Cayley-Menger determinant as the constraint.
+
+        These problems might introduce many new variables and constraints in
+        the reformulation, which make the problem harder to solve. Additionally,
+        some contest problems might involve thousands of variables or constraints, which will
+        cause time and space complexity issues. These problems should not be expanded
+        to (dense) polynomials and should be solved by operating on the symbolic tree only.
+    """
     @classmethod
     def collect(cls, include=tuple(), exclude=tuple()):
         cands = {k: getattr(cls, k) for k in dir(cls) if k.startswith('problem')}
