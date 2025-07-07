@@ -184,9 +184,10 @@ if __name__ == '__main__':
     from problems import *
 
     BENCHMARKS = [
+        MathematicalInequalitiesVol1,
         # CMOProblems,
         # ChinaHighSchoolMathLeague2,
-        CTSTProblems,
+        # CTSTProblems,
         # IMOProblems,
         # IMOSLProblems,
     ]
