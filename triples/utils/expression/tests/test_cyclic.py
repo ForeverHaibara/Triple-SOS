@@ -4,7 +4,7 @@ from sympy.combinatorics import Permutation, PermutationGroup, DihedralGroup, Cy
 from sympy.core import Function, Symbol
 from sympy.simplify import signsimp
 from sympy.testing.pytest import slow
-from ..cyclic import CyclicSum, SymmetricSum
+from ..cyclic import CyclicSum, SymmetricSum, rewrite_symmetry
 
 def _get_random_perm_group(degree, perm_count):
     perms = []
@@ -113,3 +113,22 @@ def test_cyclic_sum_xreplace_nonsymbol():
     val = CyclicSum(F(a,b,c,x,y,z), (x,y,z,a,b,c),
             PermutationGroup(Permutation(3,4,5)(0,1,2),Permutation(4,3,size=6),Permutation(0,1,size=6)))
     assert val.xreplace({F(a,b,c): x}) == val
+
+
+def test_rewrite_symmetry():
+    val = SymmetricSum(a*(b**2+c), (a,b,c))
+
+    for arr in ([1,0,2], [0,1,2]):
+        p1 = PermutationGroup(Permutation(arr))
+        val2 = rewrite_symmetry(val, (a,b,c), p1)
+        assert (val - val2).doit().expand() == 0
+
+    p0 = PermutationGroup(
+        Permutation([1,2,0,4,5,3]),
+        Permutation([3,4,5,0,1,2]),
+        Permutation([1,0,2,4,3,5])
+    )
+    val = CyclicSum(a*b**2*c**3*x**4*y**5*z**6, (a,b,c,x,y,z))
+    for p1 in p0.args:
+        val2 = rewrite_symmetry(val, (a,b,c,x,y,z), PermutationGroup(p1))
+        assert (val - val2).doit().expand() == 0

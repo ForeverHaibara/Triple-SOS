@@ -15,7 +15,8 @@ def sanitize(
         ineq_constraint_sqf: bool = True,
         eq_constraint_sqf: bool = True,
         infer_symmetry: bool = False,
-        wrap_constraints: bool = False
+        wrap_constraints: bool = False,
+        rewrite_symmetry: bool = True,
     ):
     """
     Decorator for sum of square functions. It sanitizes the input type before calling the solver function.
@@ -46,6 +47,8 @@ def sanitize(
             sol = new_func(poly, ineq_constraints, eq_constraints, *args, **kwargs)
 
             if isinstance(sol, Solution):
+                if rewrite_symmetry:
+                    sol = sol.rewrite_symmetry()
                 end_time = datetime.now()
                 sol._start_time = start_time
                 sol._end_time = end_time
