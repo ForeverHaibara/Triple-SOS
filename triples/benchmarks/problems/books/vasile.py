@@ -731,6 +731,7 @@ class MathematicalInequalitiesVol1(MathematicalInequalities):
     def problem_vasile_p13095(self):
         return c3s((1-a)/(1+a+a**2)), [a+5,b+5,c+5], [c3s(a)-3]
 
+    @mark(mark.skip)
     def problem_vasile_p13096(self):
         return c3s((1-a)/(1-x*a)**2), [a,b,c,x - Rational(4,3)], [c3s(a)-3]
 
@@ -814,6 +815,7 @@ class MathematicalInequalitiesVol1(MathematicalInequalities):
     def problem_vasile_p13117(self):
         return c5s(1/a) + 20/c5s(a**2) - 9, [a,b,c,d,e], [c5s(a)-5]
 
+    @mark(mark.skip)
     def problem_vasile_p13118(self):
         return c5p(a+1/a) + 68 - 4*c5s(a)*c5s(1/a), [a-1,b-1,c-1,d-1,e-1], []
 

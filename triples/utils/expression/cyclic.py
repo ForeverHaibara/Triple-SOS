@@ -944,9 +944,9 @@ def _get_rewriting_replacement(symbols: Tuple[Symbol], perm_group: PermutationGr
             elif perm_group.is_subgroup(x.args[2]):
                 # 3. check whether the given permutation group is a subgroup of the expression's permutation group
                 transversals = x.args[2].coset_transversal(perm_group)
-                translations = [dict(zip(x.args[1], p(x.args[1]))) for p in transversals]
-                trans_perm_group = [dict(zip(x.args[1], p(x.args[1]))) for p in perm_group.elements]
+                translations = [dict(zip(p(x.args[1]), (x.args[1]))) for p in transversals]
                 exprs = [x.args[0].xreplace(t) for t in translations]
+                trans_perm_group = [dict(zip(x.args[1], p(x.args[1]))) for p in perm_group.elements]
                 for i, expr in enumerate(exprs):
                     for t in trans_perm_group:
                         # find the simplest form up to permutation
@@ -957,7 +957,6 @@ def _get_rewriting_replacement(symbols: Tuple[Symbol], perm_group: PermutationGr
                 merged_expr = x.base_func(*(expr for expr in exprs)).together()
                 merged_expr = x.func(merged_expr, x.args[1], perm_group)
                 return merged_expr
-
         return x.doit(deep=False)
     return replacement
 

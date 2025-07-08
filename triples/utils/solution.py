@@ -1,3 +1,5 @@
+from collections import defaultdict
+
 from typing import Optional, List, Union, Tuple
 import re
 from warnings import warn
@@ -8,7 +10,7 @@ from sympy.polys import Poly
 from sympy.printing.precedence import precedence_traditional, PRECEDENCE
 from sympy.printing.str import StrPrinter
 from sympy.printing.latex import LatexPrinter
-from sympy.combinatorics import PermutationGroup, Permutation
+from sympy.combinatorics import PermutationGroup, Permutation, CyclicGroup
 from sympy.core.relational import Equality
 
 from .expression.cyclic import is_cyclic_expr, CyclicSum, CyclicProduct, CyclicExpr, rewrite_symmetry
@@ -452,7 +454,7 @@ class Solution(SolutionBase):
         warn("Calling Solution.multiplier will be deprecated. Use Solution.as_fraction()[1] instead.", DeprecationWarning, stacklevel=2)
         return self.as_fraction()[1]
 
-    def rewrite_symmetry(self, symbols: Tuple[sp.Symbol], perm_group: PermutationGroup) -> 'Solution':
+    def rewrite_symmetry(self, symbols: Tuple[sp.Symbol]=None, perm_group: PermutationGroup=None) -> 'Solution':
         """
         Rewrite the expression heuristically with respect to the given permutation group.
         After rewriting, it is expected all cyclic expressions are expanded or in the given permutation group.
@@ -467,8 +469,8 @@ class Solution(SolutionBase):
         symbols : Tuple[sp.Symbol]
             The symbols that the permutation group acts on.
         perm_group : PermutationGroup
-            Sympy permutation group object.
-        
+            Sympy permutation group object. Defaults to the CyclicGroup if not given.
+
         Returns
         ----------
         Solution
@@ -478,7 +480,34 @@ class Solution(SolutionBase):
         ----------
         rewrite_symmetry
         """
+        if symbols is None and (perm_group is not None):
+            raise ValueError("Symbols must be given if perm_group is given.")
+        if (symbols is not None) and perm_group is None:
+            perm_group = CyclicGroup(len(symbols))
+
         self = self.copy()
+
+        if symbols is None:
+            # align perm groups to a single kind
+            cyc_exprs = self.solution.find(CyclicExpr)
+            if len(cyc_exprs) <= 1:
+                return self
+
+            perms = set([_.args[1:] for _ in cyc_exprs])
+            if len(perms) == 1:
+                return self
+
+            def _count_weight(arg):
+                if arg.is_Atom:
+                    return 1
+                return sum([_count_weight(_) for _ in arg.args])
+
+            # get the perm group with the maximum weight
+            counter = defaultdict(int)
+            for cyc_expr in cyc_exprs:
+                counter[(cyc_expr.args[1], cyc_expr.args[2])] += _count_weight(cyc_expr.args[0])
+            (symbols, perm_group), weight = max(counter.items(), key=lambda x: x[1])
+
         self.solution = rewrite_symmetry(self.solution, symbols, perm_group)
         return self
 
