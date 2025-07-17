@@ -496,6 +496,83 @@ def _get_coeff_str(coeff, MUL = '*') -> str:
         coeff_str += MUL
     return coeff_str
 
+
+def poly_reduce_by_symmetry(
+        poly: Poly,
+        perm: PermutationGroup
+    ) -> Poly:
+    """
+    Given a polynomial which is symmetric with respect to the permutation group,
+    return a new_poly such that `CyclicSum(new_poly, new_poly.gens, perm) == poly`.
+    Users should ensure that the given poly is symmetric with respect to the permutation group
+    and this is not checked.
+
+    Parameters
+    ----------
+    poly : Poly
+        The polynomial to be reduced.
+    perm : PermutationGroup
+        The permutation group to be considered.
+
+    Returns
+    ----------
+    Poly
+        The reduced polynomial.
+
+    Examples
+    ----------
+    >>> from sympy.abc import a, b, c, d
+    >>> from sympy.combinatorics import SymmetricGroup, DihedralGroup, CyclicGroup
+    >>> p1 = (a**2+b**2+c**2+d**2+a*b+b*c+c*d+d*a+a*c+b*d).as_poly(a,b,c,d)
+    >>> poly_reduce_by_symmetry(p1, SymmetricGroup(4))
+    Poly(1/6*a**2 + 1/4*a*b, a, b, c, d, domain='QQ')
+    >>> poly_reduce_by_symmetry(p1, DihedralGroup(4))
+    Poly(1/2*a**2 + 1/2*a*b + 1/4*a*c, a, b, c, d, domain='QQ')
+    >>> poly_reduce_by_symmetry(p1, CyclicGroup(4))
+    Poly(a**2 + a*b + 1/2*a*c, a, b, c, d, domain='QQ')
+    """
+    if perm is None:
+        return poly
+
+    extracted = []
+    perm_group_gens = perm.generators
+    perm_order = perm.order()
+    ufs = {}
+    # monomials invariant under the permutation group is recorded in ufs
+    def ufs_find(monom):
+        v = ufs.get(monom, monom)
+        if v == monom:
+            return monom
+        w = ufs_find(v)
+        ufs[monom] = w
+        return w
+    for m1, coeff in poly.terms():
+        for p in perm_group_gens:
+            m2 = tuple(p(m1))
+            f1, f2 = ufs_find(m1), ufs_find(m2)
+            # merge to the maximum
+            if f1 > f2:
+                ufs[f2] = f1
+            else:
+                ufs[f1] = f2
+
+    ufs_size = defaultdict(int)
+    for m in ufs.keys():
+        ufs_size[ufs_find(m)] += 1
+
+    def get_order(monom):
+        # get the multiplicity of the monomials given the permutation group
+        # i.e. how many permutations make it invariant
+        return perm_order // ufs_size[ufs_find(monom)]
+    
+    # only reserve the keys for ufs[monom] == monom
+    for monom, coeff in poly.terms():
+        if ufs_find(monom) == monom:
+            order = get_order(monom)
+            extracted.append((monom, coeff/order))
+    return Poly(dict(extracted), poly.gens)
+
+
 def poly_get_standard_form(
         poly: Poly,
         perm: Optional[PermutationGroup] = None,
@@ -528,6 +605,8 @@ def poly_get_standard_form(
     '((a^2)x2+(2*a*b)xy+(2*a*c)xz+(b^2)y2+(2*b*c)yz+(c^2)z2)'
     >>> poly_get_standard_form(((x*a+y*b+z*c)**2).as_poly(x,y,z,a,b,c), PermutationGroup(Permutation([1,2,0,4,5,3])))
     's(x2a2+2xyab)'
+    >>> poly_get_standard_form((a*(a-b)*(a-c)+b*(b-c)*(b-a)+c*(c-a)*(c-b)).as_poly(a,b,c))
+    's(a3-a2b-a2c+abc)'
     """
     if poly.total_degree() == 0:
         # is constant polynomial
@@ -544,48 +623,9 @@ def poly_get_standard_form(
 
     extracted = []
     if _is_cyc:
-        perm_group_gens = perm.generators
-        perm_order = perm.order()
-        ufs = {}
-        # monomials invariant under the permutation group is recorded in ufs
-        def ufs_find(monom):
-            v = ufs.get(monom, monom)
-            if v == monom:
-                return monom
-            w = ufs_find(v)
-            ufs[monom] = w
-            return w
-        for m1, coeff in poly.terms():
-            for p in perm_group_gens:
-                m2 = tuple(p(m1))
-                f1, f2 = ufs_find(m1), ufs_find(m2)
-                # merge to the maximum
-                if f1 > f2:
-                    ufs[f2] = f1
-                else:
-                    ufs[f1] = f2
-
-        ufs_size = defaultdict(int)
-        for m in ufs.keys():
-            ufs_size[ufs_find(m)] += 1
-
-        def get_order(monom):
-            # get the multiplicity of the monomials given the permutation group
-            # i.e. how many permutations make it invariant
-            return perm_order // ufs_size[ufs_find(monom)]
-        
-        # only reserve the keys for ufs[monom] == monom
-        for monom, coeff in poly.terms():
-            if ufs_find(monom) == monom:
-                extracted.append((sum(monom), monom, coeff))
+        extracted = poly_reduce_by_symmetry(poly, perm).terms()
     else:
-        One = S.One
-        def get_order(monom):
-            return One
-        for monom, coeff in poly.terms():
-            extracted.append((sum(monom), monom, coeff))
- 
-    extracted = sorted(extracted, reverse=True)
+        extracted = poly.terms()
 
     MUL = '*' if not omit_mul else ''
     POW = '^' if not omit_pow else ''
@@ -612,9 +652,7 @@ def poly_get_standard_form(
         return _concat(coeff_str, _get_monom_str(monom))
 
     strings = []
-    for _, monom, coeff in extracted:
-        order = get_order(monom)
-        coeff = coeff / order
+    for monom, coeff in extracted:
         strings.append(get_string(monom, coeff))
     s = ''.join(strings)
     if s.startswith('+'):
