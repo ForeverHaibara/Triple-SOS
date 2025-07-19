@@ -2,6 +2,7 @@ from .problem_set import ProblemSet, mark
 
 from .books import (
     MathematicalInequalitiesVol1,
+    MathematicalInequalitiesVol3
 )
 
 from .contests import (
@@ -11,6 +12,7 @@ from .contests import (
 
 __all__ = ['ProblemSet', 'mark',
     'MathematicalInequalitiesVol1',
+    'MathematicalInequalitiesVol3',
     'CMOProblems', 'ChinaHighSchoolMathLeague2', 'CTSTProblems',
     'IMOProblems', 'IMOSLProblems'
 ]

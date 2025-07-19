@@ -1,5 +1,5 @@
 from ..problem_set import ProblemSet, mark
-from sympy.abc import a,b,c,d,e,p,q,r,s,u,v,x,y,z,w
+from sympy.abc import a,b,c,d,e,f,k,p,q,r,s,u,v,x,y,z,w
 from sympy import symbols, Rational, Add, Mul, sqrt, cbrt, sin, cos, pi, Abs, Min, Max
 
 CyclicSum = lambda x, y: Add(*[x.xreplace(
@@ -853,4 +853,725 @@ class MathematicalInequalitiesVol1(MathematicalInequalities):
 
     @mark(mark.noimpl, mark.nvars)
     def problem_vasile_p13127(self):
+        ...
+
+
+class MathematicalInequalitiesVol3(MathematicalInequalities):
+    """Cyclic and Noncyclic Inequalities"""
+    def problem_vasile_p31001(self):
+        return c3s(1/(a*(a+2*b))) - 3/c3s(a*b), [a,b,c], []
+
+    def problem_vasile_p31002(self):
+        return 4-c3s(a*b**2), [a,b,c], [c3s(a)-3]
+
+    def problem_vasile_p31003_q1(self):
+        return c3s(a*b**2)+6-3*c3s(a), [a-1,b-1,c-1], []
+
+    def problem_vasile_p31003_q2(self):
+        return 2*c3s(a*b**2)+3-3*c3s(a*b), [a-1,b-1,c-1], []
+
+    def problem_vasile_p31004(self):
+        return c3s(a/(b**2+2*c))-1, [a,b,c], [c3s(a)-3]
+
+    def problem_vasile_p31005(self):
+        return c3s((a-1)/(b+1)), [a,b,c,c3s(a)-3], []
+
+    def problem_vasile_p31006(self):
+        return c3s(1/(2*a*b**2+1))-1, [a,b,c], [c3s(a)-3]
+
+    def problem_vasile_p31007(self):
+        return Rational(3,5)-c3s(a*b/(9-4*b*c)), [a,b,c], [c3s(a)-3]
+
+    def problem_vasile_p31008_q1(self):
+        return c3s(a**2/(2*a+b**2))-1, [a,b,c], [c3s(a)-3]
+
+    def problem_vasile_p31008_q2(self):
+        return c3s(a**2/(a+2*b**2))-1, [a,b,c], [c3s(a)-3]
+
+    def problem_vasile_p31009(self):
+        return 1-c3s(1/(a+b**2+c**3)), [a,b,c], [c3s(a)-3]
+
+    def problem_vasile_p31010(self):
+        return c3s((1+a**2)/(1+b+c**2))-2, [a,b,c], []
+
+    def problem_vasile_p31011(self):
+        return Rational(1,3) - c3s(a/(4*a+4*b+c)), [a,b,c], []
+
+    def problem_vasile_p31012(self):
+        return c3s((a+b)/(a+7*b+c)) - Rational(2,3), [a,b,c], []
+
+    def problem_vasile_p31013(self):
+        return c3s((2*a+b)/(2*a+c)) - 3, [a,b,c], []
+
+    def problem_vasile_p31014(self):
+        return c3s((5*a+b)/(a+c)) - 9, [a,b,c], []
+
+    def problem_vasile_p31015(self):
+        return 3*c3s(a**2)/c3s(a) - c3s(a*(a+b)/(a+c)), [a,b,c], []
+
+    def problem_vasile_p31016(self):
+        return c3s((a**2-b*c)/(4*a**2+b**2+4*c**2)), [], []
+
+    def problem_vasile_p31017_p1(self):
+        return c3s(a*(a+b)**3), [], []
+
+    def problem_vasile_p31017_p1(self):
+        return c3s(a*(a+b)**5), [], []
+        
+    def problem_vasile_p31018(self):
+        return 3*c3s(a**4)+4*c3s(a**3*b), [], []
+
+    def problem_vasile_p31019(self):
+        return c3s((a-b)*(3*a+b)/(a**2+b**2)), [a,b,c], []
+
+    def problem_vasile_p31020(self):
+        return 1 - c3s(1/(1+a+b**2)), [a,b,c], [a*b*c-1]
+
+    def problem_vasile_p31021(self):
+        return c3s(a/(a+1)/(b+2)) - Rational(1,2), [a,b,c], [a*b*c-1]
+
+    def problem_vasile_p31022(self):
+        return c3p(a+2*b)-27, [a,b,c], [c3s(a*b)-3]
+
+    def problem_vasile_p31023(self):
+        return 1 - c3s(a/(a+a**3+b)), [a,b,c], [c3s(a*b)-3]
+
+    def problem_vasile_p31024(self):
+        return c3s(1/(a+2*b))-1, [a,b,c,a-b,b-c], [c3s(a*b)-3]
+
+    def problem_vasile_p31025(self):
+        return c3s(a/(4*b**2+5)) - Rational(1,3), [a,b,c,1-a,1-b,1-c], []
+
+    def problem_vasile_p31026(self):
+        return c3ss(a/(a+b)) - Rational(7,5), [3*a-1,3*b-1,3*c-1,3-a,3-b,3-c], []
+
+    def problem_vasile_p31027(self):
+        return c3s(3/(a+2*b)-2/(a+b)),\
+            [sqrt(2)*a-1,sqrt(2)*b-1,sqrt(2)*c-1,a-sqrt(2),b-sqrt(2),c-sqrt(2)], []
+
+    def problem_vasile_p31028_p1(self):
+        return 4 - c3s(a*b**2) - c3p(a), [a,b,c], [c3s(a)-3]
+
+    def problem_vasile_p31028_p2(self):
+        return 1 - c3s(a/(4-b)), [a,b,c], [c3s(a)-3]
+
+    def problem_vasile_p31028_p3(self):
+        return 12 - c3s(a*b**3) - c3s(a*b)**2, [a,b,c], [c3s(a)-3]
+
+    def problem_vasile_p31028_p4(self):
+        return 1 - c3s(a*b**2/(1+a+b)), [a,b,c], [c3s(a)-3]
+
+    def problem_vasile_p31029(self):
+        return 4*c3p(a)/(c3s(a*b**2)+c3p(a)) + c3s(a**2)/c3s(a*b) - 2, [a,b,c], []
+
+    def problem_vasile_p31030(self):
+        return c3s(1/(a*b**2+8)) - Rational(1,3), [a,b,c], [c3s(a)-3]
+
+    def problem_vasile_p31031(self):
+        return Rational(3,4) - c3s(a*b/(b*c+3)), [a,b,c], [c3s(a)-3]
+
+    def problem_vasile_p31032(self):
+        return 9 - c3s(a*b)*c3s(a*b**2), [a,b,c], [c3s(a)-3]
+
+    def problem_vasile_p31033_p1(self):
+        return 2 + c3p(a) - c3s(a*b**2), [a,b,c], [c3s(a**2)-3]
+
+    def problem_vasile_p31033_p2(self):
+        return 1 - c3s(a/(b+2)), [a,b,c], [c3s(a**2) - 3]
+
+    def problem_vasile_p31034(self):
+        return 3 - c3s(a**2*b**3), [a,b,c], [c3s(a**2)-3]
+
+    def problem_vasile_p31035(self):
+        return c3s(a**4*b**2) + 4 - c3s(a**3*b**3), [a,b,c], [c3s(a)-3]
+
+    def problem_vasile_p31036_p1(self):
+        return c3s(a/(b**2+3)) - Rational(3,4), [a,b,c], [c3s(a)-3]
+
+    def problem_vasile_p31036_p2(self):
+        return c3s(a/(b**2+1)) - Rational(3,2), [a,b,c], [c3s(a)-3]
+
+    def problem_vasile_p31037(self):
+        x_ = a+1/b-1
+        y_ = b+1/c-1
+        z_ = c+1/a-1
+        return x_*y_+y_*z_+z_*x_ - 3, [a,b,c], []
+
+    def problem_vasile_p31038(self):
+        return c3s((a-1/b-sqrt(2))**2) - 6, [a,b,c], [c3p(a)-1]
+
+    def problem_vasile_p31039(self):
+        return c3s(Abs(1+a-1/b))-2, [a,b,c], [c3p(a)-1]
+
+    def problem_vasile_p31040(self):
+        return c3s(Abs(1+a/(b-c)))-2, [a,b,c], []
+
+    def problem_vasile_p31041(self):
+        return c3s((2*a-1/b-Rational(1,2))**2) - Rational(3,4), [a,b,c], [c3p(a)-1]
+
+    def problem_vasile_p31042(self):
+        x_ = a+1/b-Rational(5,4)
+        y_ = b+1/c-Rational(5,4)
+        z_ = c+1/a-Rational(5,4)
+        return x_*y_+y_*z_+z_*x_ - Rational(27,16), [a-b,b-c,c], []
+
+    def problem_vasile_p31043(self):
+        E = c3p(a+1/a-sqrt(3))
+        F = c3p(a+1/b-sqrt(3))
+        return E-F, [a,b,c], []
+
+    def problem_vasile_p31044(self):
+        return c3s(b/a) - Rational(17,4), [a,b,c], [c3s(a/b)-5]
+
+    def problem_vasile_p31045_p1(self):
+        return 1 + c3s(a/b) - 2*sqrt(1+c3s(b/a)), [a,b,c], []
+
+    def problem_vasile_p31045_p2(self):
+        return 1 + 2*c3s(a/b) - sqrt(1+16*c3s(b/a)), [a,b,c], []
+
+    def problem_vasile_p31046(self):
+        return c3s(a**2/b**2+15*b/a-16*a/b), [a,b,c], []
+
+    def problem_vasile_p31047_p1(self):
+        return c3s(a/b-a), [a,b,c], [c3p(a)-1]
+
+    def problem_vasile_p31047_p2(self):
+        return c3s(a/b) - Rational(3,2)*(c3s(a)-1), [a,b,c], [c3p(a)-1]
+
+    def problem_vasile_p31047_p3(self):
+        return c3s(a/b) + 2 - Rational(5,3)*c3s(a), [a,b,c], [c3p(a)-1]
+
+    def problem_vasile_p31048_p1(self):
+        return c3s(a/b) - 2 - 3/c3s(a*b), [a,b,c], [c3s(a**2)-3]
+
+    def problem_vasile_p31048_p2(self):
+        return c3s(a/b) - 9/c3s(a), [a,b,c], [c3s(a**2)-3]
+
+    def problem_vasile_p31049(self):
+        return 6*c3s(a/b)+5*c3s(a*b)-33, [a,b,c], [c3s(a**2)-3]
+
+    def problem_vasile_p31050_p1(self):
+        return 6*c3s(a/b)+3-7*c3s(a**2), [a,b,c], [c3s(a)-3]
+
+    def problem_vasile_p31050_p2(self):
+        return c3s(a/b-a**2), [a,b,c], [c3s(a)-3]
+
+    def problem_vasile_p31051(self):
+        return c3s(a/b)+2-14*c3s(a**2)/c3s(a)**2, [a,b,c], []
+
+    def problem_vasile_p31052(self):
+        x_ = 3*a+1/b
+        y_ = 3*b+1/c
+        z_ = 3*c+1/a
+        return x_*y+y_*z_+z_*x_-48, [a,b,c], [c3s(a)-3]
+
+    def problem_vasile_p31053(self):
+        return c3s((a+1)/b) - 2*c3s(a**2), [a,b,c], [c3s(a)-3]
+
+    def problem_vasile_p31054(self):
+        return c3s(a**2/b)+3-2*c3s(a**2), [a,b,c], [c3s(a)-3]
+
+    def problem_vasile_p31055(self):
+        return c3s(a**3/b)+2*c3s(a*b)-3*c3s(a**2), [a,b,c], []
+
+    def problem_vasile_p31056_p1(self):
+        return c3s(a**2/b)-3, [a,b,c], [c3s(a**4)-3]
+
+    def problem_vasile_p31056_p2(self):
+        return c3s(a**2/(b+c))-Rational(3,2), [a,b,c], [c3s(a**4)-3]
+
+    def problem_vasile_p31057(self):
+        return c3s(a**2/b) - 3*c3s(a**3)/c3s(a**2), [a,b,c], []
+
+    def problem_vasile_p31058(self):
+        return c3s(a**2/b)+c3s(a) - 2*sqrt(c3s(a**2)*c3s(a/b)), [a,b,c], []
+
+    def problem_vasile_p31059(self):
+        return c3s(a/b)+32*c3s(a/(a+b))-51, [a,b,c], []
+
+    def problem_vasile_p31060_p1(self):
+        K = 1
+        return c3s(a/b)-3 - K*(c3s(a/(b+c))-Rational(3,2)), [a,b,c], []
+
+    def problem_vasile_p31060_p2(self):
+        K = 27
+        return c3s(a/b)-3 + K*(c3s(a/(2*a+b)) - 1), [a,b,c], []
+
+    def problem_vasile_p31061(self):
+        return 8*c3s(a/b) - 5*c3s(b/a) - 9, [2*a-1,2*b-1,2*c-1,2-a,2-b,2-c], []
+
+    def problem_vasile_p31062(self):
+        return c3s(a/b) - c3s(2*a/(b+c)), [a,b,c,c-b,b-a], []
+
+    def problem_vasile_p31063_p1(self):
+        return c3s(a/b) - c3s(a**Rational(3,2)), [a,b,c,c-b,b-a], [a*b*c-1]
+
+    @mark(mark.noimpl)
+    def problem_vasile_p31063_p2(self):
+        return c3s(a/b) - c3s(a**sqrt(3)), [c-b,b-1,1-a,a], [a*b*c-1]
+
+    def problem_vasile_p31064(self):
+        return c3s(1/((k+1)*a+b)) - c3s(1/(k*a+b+c)), [k,a,b,c], []
+
+    def problem_vasile_p31065_p1(self):
+        return sqrt(c3s(a)) - c3s(a/sqrt(2*a+b)), [a,b,c], []
+
+    def problem_vasile_p31065_p2(self):
+        return c3s(a/sqrt(a+2*b)) - sqrt(c3s(a)), [a,b,c], []
+
+    def problem_vasile_p31066(self):
+        return 3 - c3s(a*sqrt((a+2*b)/3)), [a,b,c], [c3s(a)-3]
+
+    def problem_vasile_p31067(self):
+        return 5 - c3s(a*sqrt(1+b**3)), [a,b,c], [c3s(a)-3]
+
+    def problem_vasile_p31068_p1(self):
+        return c3s(sqrt(a/(b+3))) - Rational(3,2), [a,b,c], [c3p(a)-1]
+
+    def problem_vasile_p31068_p2(self):
+        return c3s(cbrt(a/(b+7))) - Rational(3,2), [a,b,c], [c3p(a)-1]
+
+    def problem_vasile_p31069(self):
+        return c3s((1+4*a/(a+b))**2) - 27, [a,b,c], []
+
+    def problem_vasile_p31070(self):
+        return 3 - c3s(sqrt(2*a/(a+b))), [a,b,c], []
+
+    def problem_vasile_p31071(self):
+        return 1 - c3s(a/(4*a+5*b)), [a,b,c], []
+
+    def problem_vasile_p31072(self):
+        return 1 - a/c3s(sqrt(4*a**2+a*b+4*b**2)), [a,b,c], []
+
+    def problem_vasile_p31073_p1(self):
+        return c3s(sqrt(a/(3*b+c))) - Rational(3,2), [a,b,c], []
+
+    def problem_vasile_p31073_p2(self):
+        return c3s(sqrt(a/(2*b+c))) - 8**Rational(1,4), [a,b,c], []
+
+    def problem_vasile_p31074(self):
+        return c3s(sqrt(a/(a+b+7*c))) - 1, [a,b,c], []
+
+    def problem_vasile_p31075_p1(self):
+        return c3s(1/(a+b)/(3*a+b)) - Rational(3,8), [a,b,c], [c3s(a*b)-3]
+
+    def problem_vasile_p31075_p2(self):
+        return c3s(1/(2*a+b)**2) - Rational(1,3), [a,b,c], [c3s(a*b)-3]
+
+    def problem_vasile_p31076(self):
+        return c3s(a**4)+15*c3s(a**3*b)-Rational(47,4)*c3s(a**2*b**2), [a,b,c], []
+
+    def problem_vasile_p31077(self):
+        return 27 - c3s(a**3*b), [a,b,c], [c3s(a)-4]
+
+    def problem_vasile_p31078(self):
+        return c3s(a**4) - Rational(82,27)*c3s(a**3*b),\
+            [a,b,c], [c3s(a**2)-Rational(10,3)*c3s(a*b)]
+
+    def problem_vasile_p31079(self):
+        return c3s(a**3/(2*a**2+b**2)) - c3s(a)/3, [a,b,c], []
+
+    def problem_vasile_p31080(self):
+        return c3s(a**4/(a**3+b**3)) - c3s(a)/3, [a,b,c], []
+
+    def problem_vasile_p31081_p1(self):
+        return 3*c3s(a**2/b)+4*c3s(b/a**2)-7*c3s(a**2), [a,b,c], [c3p(a)-1]
+
+    def problem_vasile_p31081_p2(self):
+        return 8*c3s(a**3/b)+5*c3s(b/a**3)-13*c3s(a**3), [a,b,c], [c3p(a)-1]
+
+    def problem_vasile_p31082(self):
+        return c3s(a**2)/c3s(a*b) - c3s(a*b/(b**2+b*c+c**2)), [a,b,c], []
+
+    def problem_vasile_p31083(self):
+        return c3s((a-b)/(b*(2*b+c))), [a,b,c], []
+
+    def problem_vasile_p31084_p1(self):
+        return c3s((a**2+6*b*c)/(a*b+2*b*c))-7, [a,b,c], []
+
+    def problem_vasile_p31084_p2(self):
+        return c3s((a**2+7*b*c)/(a*b+b*c))-12, [a,b,c], []
+
+    def problem_vasile_p31085_p1(self):
+        return c3s(a**2)/c3s(a) - c3s(a*b/(2*b+c)), [a,b,c], []
+
+    def problem_vasile_p31085_p2(self):
+        return 3*c3s(a**2)/(2*c3s(a)) - c3s(a*b/(b+c)), [a,b,c], []
+  
+    def problem_vasile_p31085_p1(self):
+        return c3s(a**2)/(3*c3s(a)) - c3s(a*b/(4*b+5*c)), [a,b,c], []
+
+    def problem_vasile_p31086_p1(self):
+        return c3s(a)**2 - c3s(a*sqrt(b**2+8*c**2)), [a,b,c], []
+
+    def problem_vasile_p31086_p2(self):
+        return c3s(a**2+a*b) - c3s(a*sqrt(b**2+3*c**2)), [a,b,c], []
+
+    def problem_vasile_p31087_p1(self):
+        return c3s(1/a/sqrt(a+2*b)) - sqrt(3/c3p(a)), [a,b,c], []
+
+    def problem_vasile_p31087_p2(self):
+        return c3s(1/a/sqrt(a+8*b)) - sqrt(1/c3p(a)), [a,b,c], []
+
+    def problem_vasile_p31088(self):
+        return sqrt(c3s(a)/3) - c3s(a/sqrt(5*a+4*b)), [a,b,c], []
+
+    def problem_vasile_p31089_p1(self):
+        return c3s(a/sqrt(a+b)) - c3s(sqrt(a)/sqrt(2)), [a,b,c], []
+
+    @mark(mark.skip)
+    def problem_vasile_p31089_p2(self):
+        return c3s(a/sqrt(a+b)) - (27*c3s(a*b)/4)**Rational(1,4), [a,b,c], []
+
+    def problem_vasile_p31090(self):
+        return c3s(sqrt(3*a+b**2)) - 6, [a,b,c], [c3s(a)-3]
+
+    def problem_vasile_p31091(self):
+        return c3s(sqrt(a**2+b**2+2*b*c)) - 2*c3s(a), [a,b,c], [c3s(a)-3]
+
+    def problem_vasile_p31092(self):
+        return c3s(sqrt(a**2+b**2+7*b*c)) - 3*sqrt(3*c3s(a*b)), [a,b,c], []
+
+    def problem_vasile_p31093(self):
+        return c3s(a**4)+5*c3s(a**3*b)-6*c3s(a**2*b**2), [a,b,c], []
+
+    def problem_vasile_p31094(self):
+        return c3s(a**5-a**4*b)-2*c3p(a)*(c3s(a**2-a*b)), [a,b,c], []
+
+    def problem_vasile_p31095(self):
+        return c3s(a**2)**2 - 3*c3s(a**3*b), [], []
+
+    def problem_vasile_p31096(self):
+        return c3s(a**4+a*b**3-2*a**3*b), [], []
+
+    def problem_vasile_p31097(self):
+        return c3s(a**2/(a*b+2*c**2)) - 1, [a,b,c], []
+
+    def problem_vasile_p31098(self):
+        return c3s(a/(a*b+1)) - Rational(3,2), [a,b,c], [c3s(a)-3]
+
+    def problem_vasile_p31099(self):
+        return Rational(3,2) - c3s(a/(3*a+b**2)), [a,b,c], [c3s(a)-3]
+
+    def problem_vasile_p31100(self):
+        return c3s(a/(b**2+c)) - Rational(3,2), [a,b,c], [c3s(a)-3]
+
+    def problem_vasile_p31101(self):
+        return c3s(a*sqrt(a+b)) - 3*sqrt(2), [a,b,c], [c3s(a)-3]
+
+    def problem_vasile_p31102(self):
+        return c3s(a/(2*b**2+c)) - 1, [a,b,c], [c3s(a)-3]
+
+    def problem_vasile_p31103(self):
+        return c3s(a**3/(a+b**5)) - Rational(3,2), [a,b,c], [c3s(a**2)-3]
+
+    def problem_vasile_p31104(self):
+        return c3s(a/(1+b)) - Rational(3,2), [a,b,c], [c3s(a**2)-3]
+
+    def problem_vasile_p31105(self):
+        return c3s(a**2*b)+9-4*c3s(a), [], [c3s(a**2)-3]
+
+    def problem_vasile_p31106(self):
+        return c3s((1-a)*(1-a*b)), [], [c3s(a**2)-3]
+
+    def problem_vasile_p31107(self):
+        return 1 - c3s(1/(a**2+b+1)), [a,b,c], [c3s(a-a*b)]
+
+    @mark(mark.noimpl)
+    def problem_vasile_p31108(self):
+        return c3s(a**x/b**y) - 3, [a,b,c,y,x-y], [c3s(a**(x+y))-3]
+
+    def problem_vasile_p31109_p1(self):
+        return c3s(1/(4*a)+1/(a+b)-3/(3*a+b)), [a,b,c], []
+
+    def problem_vasile_p31109_p2(self):
+        return c3s(1/(4*a)+1/(a+3*b)-2/(3*a+b)), [a,b,c], []
+
+    def problem_vasile_p31110(self):
+        return c3s(a**5/b)-3, [a,b,c], [c3s(a**6)-3]
+
+    def problem_vasile_p31111(self):
+        return 1/c3s(a*b)/4 -  c3s(1/(a+2*b+3*c)**2), [a,b,c], []
+
+    def problem_vasile_p31112(self):
+        return Rational(5,4) - c3s(a*(1-b**2)), [a,b,c,1-a,1-b,1-c], []
+
+    def problem_vasile_p31113_p1(self):
+        return c3s(a**2*b)-c3p(a)-2, [c-b,b-1,1-a,a], [c3s(a)-3]
+
+    def problem_vasile_p31113_p2(self):
+        return c3s(a**2*b)-3, [c-b,b-1,1-a,a], [c3s(a*b)-3]
+
+    def problem_vasile_p31114(self):
+        return c3s(a**4)-Rational(17,8)*c3s(a**3*b), [a,b,c], [c3s(a**2)-Rational(5,2)*c3s(a*b)]
+
+    def problem_vasile_p31115_p1(self):
+        return 2*c3s(a**3*b) - c3s(a**2*b**2) - c3p(a)*c3s(a),\
+            [a,b,c], [c3s(a**2)-Rational(5,2)*c3s(a*b)]
+
+    def problem_vasile_p31115_p2(self):
+        return 11*c3s(a**4) - 17*c3s(a**3*b) - 129*c3p(a)*c3s(a),\
+            [a,b,c], [c3s(a**2)-Rational(5,2)*c3s(a*b)]
+
+    def problem_vasile_p31115_p3(self):
+        return (14+sqrt(102))/8*c3s(a**2*b**2) - c3s(a**3*b),\
+            [a,b,c], [c3s(a**2)-Rational(5,2)*c3s(a*b)]
+
+    def problem_vasile_p31116(self):
+        k_ = (1 + sqrt(21+8*sqrt(7)))/2
+        return c3s(a**2) - k_*c3s(a*b), [-c3s(a**3*b)]
+
+    def problem_vasile_p31117(self):
+        k_ = (-1 + sqrt(21+8*sqrt(7)))/2
+        return c3s(a**2) + k_*c3s(a*b), [c3s(a**3*b)]
+
+    @mark(mark.skip)
+    def problem_vasile_p31118_p1(self):
+        alpha = (1+13*k-5*k**2-2*(1-k)*(1+2*k)*sqrt(7*(1-k)/(1+2*k)))/27
+        return c3s(a**3*b)/c3s(a**2)**2 - alpha, [2*k+1,1-k], [k*c3s(a**2)-c3s(a*b)]
+
+    @mark(mark.skip)
+    def problem_vasile_p31118_p2(self):
+        beta = (1+13*k-5*k**2+2*(1-k)*(1+2*k)*sqrt(7*(1-k)/(1+2*k)))/27
+        return beta - c3s(a**3*b)/c3s(a**2)**2, [2*k+1,1-k], [k*c3s(a**2)-c3s(a*b)]
+
+    def problem_vasile_p31119(self):
+        return c3s((a**2+3*a*b)/(b+c)**2) - 3, [a,b,c], []
+
+    def problem_vasile_p31120(self):
+        return c3s((a**2*b+1)/(a*(b+1))) - 3, [a,b,c], []
+
+    def problem_vasile_p31121(self):
+        return c3s(sqrt(a**3+3*b)) - 6, [a,b,c], [c3s(a)-3]
+
+    def problem_vasile_p31122(self):
+        return c3s(sqrt(a/(a+6*b+2*b*c)))-1, [a,b,c], [c3p(a)-1]
+
+    def problem_vasile_p31123(self):
+        return c3s(a**2/(4*a+b**2)) - Rational(3,5), [a,b,c], [c3s(a)-3]
+
+    def problem_vasile_p31124(self):
+        return c3s(a)**2/(3*c3s(a*b)) - c3s((a**2+b*c)/(a+b)), [a,b,c], []
+
+    def problem_vasile_p31125(self):
+        return 3*sqrt(2)-c3s(sqrt(a*b**2+b*c**2)), [a,b,c], [c3s(a)-3]
+
+    def problem_vasile_p31126(self):
+        return c3s((a+1/b)**2) - 6*(c3s(a)-1), [a,b,c], [c3p(a)-1]
+
+    def problem_vasile_p31127(self):
+        return 3+1/c3p(a)-12/c3s(a**2*b), [a,b,c], [c3s(a)-3]
+
+    def problem_vasile_p31128(self):
+        return 24/c3s(a**2*b)+1/c3p(a)-9, [a,b,c], [c3s(a)-3]
+
+    def problem_vasile_p31129(self):
+        return c3s(a/(a+b)) - c3s(a)/(c3s(a)-cbrt(c3p(a))), [a,b,c]
+
+    def problem_vasile_p31130(self):
+        return 3*sqrt(3) - c3s(a*sqrt(b**2+b+1)), [a,b,c], [c3s(a)-3]
+
+    def problem_vasile_p31131(self):
+        return 1/(12*c3p(a)) - c3s(1/(b*(a+2*b+3*c)**2)), [a,b,c], []
+
+    def problem_vasile_p31132_p1(self):
+        return c3s((a**2+9*b)/(b+c)) - 15, [a,b,c], [c3s(a)-3]
+
+    def problem_vasile_p31132_p2(self):
+        return c3s((a**2+3*b)/(a+b)) - 6, [a,b,c], [c3s(a)-3]
+
+    def problem_vasile_p31133(self):
+        return c3s(a**2/b)-3, [a,b,c], [c3s(a**5)-3]
+
+    @mark(mark.noimpl, mark.quant)
+    def problem_vasile_p31134(self):
+        return
+
+    def problem_vasile_p31135(self):
+        return c3s(a**3)-3*c3p(a) - sqrt(9+6*sqrt(3))*c3p(a-b), [a,b,c], []
+
+    def problem_vasile_p31136(self):
+        return c3s(a/(3*a+b-c))-1, [b+c-a,c+a-b,a+b-c], []
+
+    def problem_vasile_p31137(self):
+        return -c3s((a**2-b**2)/(a**2+b*c)), [b+c-a,c+a-b,a+b-c], []
+
+    def problem_vasile_p31138(self):
+        return c3s(a**2*(a+b)*(b-c)), [b+c-a,c+a-b,a+b-c], []
+
+    def problem_vasile_p31139(self):
+        return c3s(a**2*(b/c-1)), [b+c-a,c+a-b,a+b-c], []
+
+    def problem_vasile_p31140_p1(self):
+        return c3s(a**3*b)-c3s(a**2*b**2), [b+c-a,c+a-b,a+b-c], []
+
+    def problem_vasile_p31140_p2(self):
+        return 3*c3s(a**3*b)-c3s(a*b)*c3s(a**2), [b+c-a,c+a-b,a+b-c], []
+
+    def problem_vasile_p31140_p3(self):
+        return c3s(a**3*b)/3-c3s(a/3)**4, [b+c-a,c+a-b,a+b-c], []
+
+    def problem_vasile_p31141(self):
+        return 2*c3s(a**2/b**2) - c3s(b**2/a**2) - 3, [b+c-a,c+a-b,a+b-c], []
+
+    def problem_vasile_p31142(self):
+        return -c3s(a**2/(a**2-b**2)), [c-b,b-a,a,b+c-a,c+a-b,a+b-c], []
+
+    def problem_vasile_p31143(self):
+        return c3s(a/b)+3-2*c3s((a+b)/(b+c)), [b+c-a,c+a-b,a+b-c], []
+
+    @mark(mark.noimpl)
+    def problem_vasile_p31144(self):
+        return c3s(a**k*b*(a-b)), [b+c-a,c+a-b,a+b-c,k-2], []
+
+    @mark(mark.noimpl)
+    def problem_vasile_p31145(self):
+        return 3*c3s(a**k*b)-c3s(a)*c3s(a**(k-1)*b), [b+c-a,c+a-b,a+b-c,k-2]
+
+    def problem_vasile_p31146(self):
+        return c4s(a/(3+b))-1, [a,b,c,d], [c4s(a)-4]
+
+    def problem_vasile_p31147(self):
+        return c4s(a/(1+b**2))-2, [a,b,c,d], [c4s(a)-4]
+
+    def problem_vasile_p31148(self):
+        return 4 - c4s(a**2*b*c), [a,b,c,d], [c4s(a)-4]
+
+    def problem_vasile_p31149(self):
+        return 16 - c4s(a*(b+c)**2), [a,b,c,d], [c4s(a)-4]
+
+    def problem_vasile_p31150(self):
+        return c4s((a-b)/(b+c)), [a,b,c,d], []
+
+    def problem_vasile_p31151_p1(self):
+        return c4s((a-b)/(a+2*b+c)), [a,b,c,d], []
+
+    def problem_vasile_p31151_p2(self):
+        return 1 - c4s(a/(2*a+b+c)), [a,b,c,d], []
+
+    def problem_vasile_p31152(self):
+        return c4s(1/(a*(a+b))) - 2, [a,b,c,d], [c4p(a)-1]
+
+    def problem_vasile_p31153_p1(self):
+        return c4s(1/(a*(1+b))) - 16/(1+8*sqrt(c4p(a))), [a,b,c,d], []
+
+    def problem_vasile_p31153_p2(self):
+        return 1/a/(1+b)+1/b/(1+a)+1/c/(1+d)+1/d/(1+c) - 16/(1+8*sqrt(c4p(a))), [a,b,c,d], []
+
+    def problem_vasile_p31154_p1(self):
+        return 3*c4s(a)-2*c4s(a*b)-4, [a,b,c,d], [c4s(a**2)-4]
+
+    def problem_vasile_p31154_p2(self):
+        return c4s(a)-4-(2-sqrt(2))*(c4s(a*b)-4), [a,b,c,d], [c4s(a**2)-4]
+
+    def problem_vasile_p31155_p1(self):
+        return c4p(a+1/b)-c4s(a)*c4s(1/a), [a-1,b-1,c-1,d-1], []
+
+    def problem_vasile_p31155_p2(self):
+        return c4p(a+1/b)-c4s(a)*c4s(1/a), [a,b,c,d], [c4p(a)-1]
+
+    def problem_vasile_p31156(self):
+        return c4s((1+a/(a+b))**2) - 7, [a,b,c,d], []
+
+    def problem_vasile_p31157(self):
+        return c4s((a**2-b*d)/(b+2*c+d)), [a,b,c,d], []
+
+    def problem_vasile_p31158(self):
+        return 4 - c4s(sqrt(2*a/(a+b))), [d-c,c-b,b-a,a], []
+
+    def problem_vasile_p31159_p1(self):
+        x_, y_, z_, t_ = a/(b+c), b/(c+d), c/(d+a), d/(a+b)
+        return 1 - sqrt(x_*z_) - sqrt(y_*t_), [a,b,c,d], []
+
+    def problem_vasile_p31159_p2(self):
+        x_, y_, z_, t_ = a/(b+c), b/(c+d), c/(d+a), d/(a+b)
+        return x_+y_+z_+t_+4*(x_*z_+y_*t_)-4, [a,b,c,d], []
+
+    def problem_vasile_p31160(self):
+        return c4p(1+2*a/(b+c)) - 9, [a,b,c,d] ,[]
+
+    @mark(mark.skip)
+    def problem_vasile_p31161(self):
+        return c4p(1+k*a/(b+c)) - (1+k)**2, [a,b,c,d,k], []
+
+    def problem_vasile_p31162(self):
+        return c4s(1/(a*b)) - c4s(a**2), [a,b,c,d], [c4s(a)-4]
+
+    def problem_vasile_p31163(self):
+        return c4s(a**2/(a+b+c)**2) - Rational(4,9), [a,b,c,d], []
+
+    def problem_vasile_p31164(self):
+        return 4 - c4s(a*b*(b+c)), [a,b,c,d], [c4s(a)-3]
+
+    def problem_vasile_p31165(self):
+        return 1 - c4s(a*b*(b+c)), [a-b,b-c,c-d,d], [c4s(a)-2]
+
+    def problem_vasile_p31166(self):
+        return 4*(1+k) - c4s(a*b*(b+k*c)), [a,b,c,d,k-Rational(37,27)], [c4s(a)-4]
+
+    def problem_vasile_p31167(self):
+        return 2*c4s(a/b) - 4 - c4s(a/c), [d-c,c-b,b-a,a], []
+
+    def problem_vasile_p31168(self):
+        return c4s(a/b) - c4s(a*b), [d-c,c-b,b-a,a], [c4p(a)-1]
+
+    def problem_vasile_p31169(self):
+        return 4 + c4s(a/b) - 2*c4s(a), [d-c,c-b,b-a,a], [c4p(a)-1]
+
+    @mark(mark.noimpl, mark.quant)
+    def problem_vasile_p31170(self):
+        ...
+
+    def problem_vasile_p31171(self):
+        return 1 + 4/c5p(a) - c5s(a/b), [a,b,c,d,e], [c5s(a)-5]
+
+    def problem_vasile_p31172_p1(self):
+        return (sqrt(5)-1)/4 - c5s(a*b)/c5s(a**2), [], [c5s(a)]
+
+    def problem_vasile_p31172_p1(self):
+        return (sqrt(5)+1)/4 + c5s(a*b)/c5s(a**2), [], [c5s(a)]
+
+    def problem_vasile_p31173(self):
+        return c5s(a**2/(b+c+d)) - Rational(5,3), [a,b,c,d,e], [c5s(a**2)-5]
+
+    def problem_vasile_p31174(self):
+        return Rational(729,2) - c5p(a**2+b**2), [a,b,c,d,e], [c5s(a)-5]
+
+    def problem_vasile_p31175(self):
+        return c5s((a-b)/(b+c)), [a-1,b-1,c-1,d-1,e-1,5-a,5-b,5-c,5-d,5-e], []
+
+    def problem_vasile_p31176(self):
+        return (a-b)/(b+c)+(b-c)/(c+d)+(c-d)/(d+e)+(d-e)/(e+f)+(e-f)/(f+a)+(f-a)/(a+b),\
+            [_-1 for _ in [a,b,c,d,e,f]] + [3-_ for _ in [a,b,c,d,e,f]], []
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_vasile_p31177(self):
+        ...
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_vasile_p31178(self):
+        ...
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_vasile_p31179(self):
+        ...
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_vasile_p31180(self):
+        ...
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_vasile_p31181(self):
+        ...
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_vasile_p31182(self):
+        ...
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_vasile_p31183(self):
+        ...
+
+    @mark(mark.noimpl, mark.nvars)
+    def problem_vasile_p31184(self):
         ...
