@@ -6,10 +6,8 @@ import warnings
 import numpy as np
 import sympy as sp
 from sympy import Poly, Expr, Symbol
-from sympy.core.singleton import S
 from sympy.combinatorics import PermutationGroup
 from sympy.external.importtools import version_tuple
-from scipy.optimize import linprog
 from scipy import __version__ as _SCIPY_VERSION
 
 from .basis import LinearBasis, LinearBasisTangent, LinearBasisTangentEven
@@ -370,6 +368,7 @@ def _LinearSOS(
             linear_sos = None
             with warnings.catch_warnings(record=True) as __warns:
                 warnings.simplefilter('once')
+                from scipy.optimize import linprog
                 try:
                     linear_sos = linprog(optimized, A_eq=arrays.T, b_eq=b, **linprog_options)
                 except:
