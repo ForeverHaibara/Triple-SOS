@@ -3,9 +3,11 @@ from functools import partial
 from collections import defaultdict
 # import re
 
-from sympy import Expr, Poly, Rational, Integer, Float, Symbol
+from sympy import Expr, Poly, QQ, Rational, Integer, Float, Symbol
 from sympy import parse_expr, sympify, fraction, cancel, latex
 from sympy import symbols as sp_symbols
+from sympy.polys import ring
+from sympy.polys.polyclasses import DMP
 from sympy.core.singleton import S
 from sympy.combinatorics import Permutation, PermutationGroup, CyclicGroup
 from sympy.printing.precedence import precedence_traditional, PRECEDENCE
@@ -207,6 +209,82 @@ def _preprocess_text_completion(
     return poly
 
 
+def expand_poly(expr: Expr, gens=None) -> Union[Expr, Poly]:
+    """
+    Faster implementation of `sympy.expand`. This is experimental.
+    """
+    class UnhandledExpr(Exception):
+        pass
+    expr = sympify(expr)
+    symbols = tuple(sorted(list(expr.free_symbols), key=lambda x:x.name))
+    other_symbols = []
+    if gens is None:
+        gens = symbols
+    else:
+        other_symbols = [_ for _ in symbols if _ not in gens]
+
+    if len(gens) == 0:
+        return expr
+    if not all(_.is_commutative for _ in symbols):
+        return expr.expand()
+    dom = QQ
+    dom_ext = dom[other_symbols] if len(other_symbols) else dom
+    expr_ring = ring(gens, dom_ext)[0]
+    def _expandpoly(_):
+        if _.is_Symbol or _.is_Rational:
+            return expr_ring(_)
+
+        elif _.is_Add:
+            s = expr_ring.zero
+            for i in _.args:
+                s = s + _expandpoly(i)
+            return s
+
+        elif _.is_Mul:
+            s = expr_ring.one
+            for i in _.args:
+                s = s * _expandpoly(i)
+            return s
+
+        elif _.is_Pow:
+            if isinstance(_.exp, Integer) and int(_.exp) >= 0:
+                return _expandpoly(_.base) ** int(_.exp)
+
+        elif isinstance(_, (CyclicSum, CyclicProduct)):
+            arg0dict = _expandpoly(_.args[0]).to_dict()
+            symbol_inds = [gens.index(i) for i in _.args[1]]
+            n = len(symbol_inds)
+            new_args = []
+            for p in _.args[2].elements: # permutations
+                new_inds = p(symbol_inds)
+                new_perm = list(range(len(gens)))
+                for i in range(n):
+                    new_perm[symbol_inds[i]] = new_inds[i]
+                new_dict = {}
+                for k, v in arg0dict.items():
+                    new_dict[tuple(k[i] for i in new_perm)] = v
+                new_args.append(expr_ring.from_dict(new_dict))
+            if isinstance(_, CyclicSum):
+                s = expr_ring.zero
+                for i in new_args:
+                    s = s + i
+                return s
+            elif isinstance(_, CyclicProduct):
+                s = expr_ring.one
+                for i in new_args:
+                    s = s * i
+                return s
+        raise UnhandledExpr
+    arg0 = None
+    try:
+        arg0 = _expandpoly(expr)
+        dmp = DMP.from_dict(arg0.to_dict(), len(gens)-1, dom_ext)
+        arg0 = Poly.new(dmp, *gens)
+    except UnhandledExpr:
+        arg0 = expr.expand()
+    return arg0
+
+
 def preprocess_text(
         poly: str,
         gens: Tuple[Symbol] = sp_symbols("a b c"),
@@ -285,7 +363,7 @@ def preprocess_text(
     >>> preprocess_text('3/4a3b2c + (x2)2', return_type='text')
     '3/4*a^3*b^2*c+(x^2)^2'
     >>> preprocess_text('a/(b+c)+b/(c+a)', return_type='frac')
-    (Poly(a**2 + a*c + b**2 + b*c, a, b, c, domain='ZZ'), Poly(a*b + a*c + b*c + c**2, a, b, c, domain='ZZ'))
+    (Poly(a**2 + a*c + b**2 + b*c, a, b, c, domain='QQ'), Poly(a*b + a*c + b*c + c**2, a, b, c, domain='QQ'))
 
 
     Strings 's' and 'p' are used to represent the cyclic sums and products respectively.
@@ -294,13 +372,13 @@ def preprocess_text(
     >>> preprocess_text('s(a2b-c)+3/4p(a3)')
     Poly(3/4*a**3*b**3*c**3 + a**2*b + a*c**2 - a + b**2*c - b - c, a, b, c, domain='QQ')
     >>> preprocess_text('s(x(x-y)(x-z))')
-    Poly(3*x**3 - 3*x**2*y - 3*x**2*z + 3*x*y*z, a, b, c, domain='ZZ[x,y,z]')
+    Poly(3*x**3 - 3*x**2*y - 3*x**2*z + 3*x*y*z, a, b, c, domain='QQ[x,y,z]')
     >>> preprocess_text('s(x2-xy)', (x,y,z))
-    Poly(x**2 - x*y - x*z + y**2 - y*z + z**2, x, y, z, domain='ZZ')
+    Poly(x**2 - x*y - x*z + y**2 - y*z + z**2, x, y, z, domain='QQ')
 
     >>> from sympy.combinatorics import SymmetricGroup
     >>> preprocess_text('s(x2-xy)', (x,y,z), SymmetricGroup(3))
-    Poly(2*x**2 - 2*x*y - 2*x*z + 2*y**2 - 2*y*z + 2*z**2, x, y, z, domain='ZZ')
+    Poly(2*x**2 - 2*x*y - 2*x*z + 2*y**2 - 2*y*z + 2*z**2, x, y, z, domain='QQ')
 
     >>> preprocess_text('s(1/x2)', (x,a,b), return_type='expr').doit()
     x**(-2) + b**(-2) + a**(-2)
@@ -309,7 +387,7 @@ def preprocess_text(
     Sometimes the expression involves uppercase letters, and it requires to set lowercase to False.
 
     >>> preprocess_text('Σ(x(y-z)2) - s', (x,y,z), cyclic_sum_func='Σ', lowercase=False)
-    Poly(x**2*y + x**2*z + x*y**2 - 6*x*y*z + x*z**2 + y**2*z + y*z**2 - s, x, y, z, domain='ZZ[s]')
+    Poly(x**2*y + x**2*z + x*y**2 - 6*x*y*z + x*z**2 + y**2*z + y*z**2 - s, x, y, z, domain='QQ[s]')
 
     
     To avoid certain patterns from being completed, set preserve_patterns.
@@ -370,30 +448,56 @@ def preprocess_text(
 
     poly = poly.replace('^','**')
     poly = parse_expr(poly, **parse_expr_kwargs)
+
+    def _parse_poly(expr, gens):
+        if isinstance(expr, Expr):
+            expr = expand_poly(expr, gens)
+        if isinstance(expr, Poly):
+            if expr.gens != gens:
+                expr = expr.as_poly(gens, extension = True)
+            return expr
+        return expr.doit().as_poly(gens, extension = True)
+
     if return_type == 'expr':
         return poly
-    elif return_type == 'frac':
+    
+    try:
+        # try if it has no fractions, which avoids expanding CyclicExprs manually
+        poly0 = _parse_poly(poly, gens)
+        if poly0 is not None:
+            if return_type == 'poly':
+                return poly0
+            elif return_type == 'frac':
+                return poly0, Poly(1, gens)
+    except Exception as e:
+        if isinstance(e, (KeyboardInterrupt, SystemExit)):
+            raise e
+        pass
+
+    if return_type == 'frac':
         try:
-            frac = fraction(cancel(poly.doit()))
+            # doit is currently needed as `together` does not apply to CyclicExprs
+            frac = fraction(poly.doit().together())
+            # frac = fraction(cancel(poly.doit()))
 
-            poly0 = Poly(frac[0], gens, extension = True)
-            poly1 = Poly(frac[1], gens, extension = True)
+            poly0 = _parse_poly(frac[0], gens)
+            poly1 = _parse_poly(frac[1], gens)
+            if poly0.domain.is_Numerical and poly1.domain.is_Numerical:
+                poly0, poly1 = poly0.cancel(poly1, include=True)
 
-            if len(frac[1].free_symbols) == 0:
+            if len(poly1.free_symbols) == 0:
                 div0, div1 = poly0.div(poly1)
                 if div1.is_zero:
                     one = Poly(1, gens, extension = True)
                     return div0, one
             return poly0, poly1
-        except:
+        except Exception as e:
+            if isinstance(e, (KeyboardInterrupt, SystemExit)):
+                raise e
             return None, None
-    else:
-        try:
-            poly = Poly(poly.doit(), gens, extension = True)
-        except:
-            poly = None
 
-    return poly
+    return None
+    # return poly
 
 
 def pl(*args, **kwargs):
