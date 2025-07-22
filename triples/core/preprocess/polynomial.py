@@ -163,6 +163,10 @@ def sanitize_input(
             poly, ineq_constraints, eq_constraints = quotient_ring_reduction['problem']
             homogenizer = quotient_ring_reduction['homogenizer']
             restoration = quotient_ring_reduction['restoration']
+            _has_homogenizer_kwarg = signature(func).parameters.get('_homogenizer') is not None
+            if _has_homogenizer_kwarg:
+                kwargs['_homogenizer'] = homogenizer
+
 
             ################################################################
             #                       Infer symmetry

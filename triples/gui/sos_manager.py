@@ -138,7 +138,7 @@ class SOS_Manager():
                 elif standardize_text == 'expand':
                     triv_group = PermutationGroup([Permutation(list(range(len(poly.gens))))])
                     txt2 = poly_get_standard_form(poly, triv_group, omit_mul=omit_mul, omit_pow=omit_pow)
-            elif not denom.degree() == 0:
+            elif not denom.total_degree() == 0:
                 txt2 = poly_get_standard_form(poly, perm)
             if isinstance(txt2, str):
                 txt = txt2
