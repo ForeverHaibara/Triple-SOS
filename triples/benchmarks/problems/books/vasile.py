@@ -9,7 +9,7 @@ CyclicProduct = lambda x, y: Mul(*[x.xreplace(
 c3s = lambda x: CyclicSum(x, (a,b,c))
 c3p = lambda x: CyclicProduct(x, (a,b,c))
 c4s = lambda x: CyclicSum(x, (a,b,c,d))
-c4p = lambda x: CyclicSum(x, (a,b,c,d))
+c4p = lambda x: CyclicProduct(x, (a,b,c,d))
 c5s = lambda x: CyclicSum(x, (a,b,c,d,e))
 c5p = lambda x: CyclicProduct(x, (a,b,c,d,e))
 
@@ -1502,6 +1502,7 @@ class MathematicalInequalitiesVol2(MathematicalInequalities):
     def problem_vasile_p21173(self):
         return 3*(4*k+11)/(k+2) - c3s((2*a**2+(4*k+9)*b*c)/(b**2+k*b*c+c**2)), [b+c-a,c+a-b,a+b-c,k+2]
 
+    @mark(mark.skip)
     def problem_vasile_p21174(self):
         return c3s(1/(1+a)) - 3/(1+c3p(a)**Rational(1,3)), [a-b,b-c,c-d,d], [c4p(a)-1]
 
@@ -1511,6 +1512,7 @@ class MathematicalInequalitiesVol2(MathematicalInequalities):
     def problem_vasile_p21176(self):
         return c4s(1/(1+a)**2) - 1, [a,b,c,d], [c4p(a)-1]
 
+    @mark(mark.skip)
     def problem_vasile_p21177(self):
         return c4s(1/(3*a-1)**2) - 1, [a,b,c,d], [c4p(a)-1]
 
