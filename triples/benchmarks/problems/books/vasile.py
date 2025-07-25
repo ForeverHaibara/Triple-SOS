@@ -67,7 +67,7 @@ class MathematicalInequalitiesVol1(MathematicalInequalities):
         return c3p(a**2+a*b+b**2)-3*c3s(a**2*b)*c3s(a*b**2), [], []
 
     def problem_vasile_p12015(self):
-        return 4*c3p(a+1/a)-9*c3s(a), [], [c3p(a)]
+        return 4*c3p(a+1/a)-9*c3s(a), [c3p(a)], []
 
     def problem_vasile_p12016_q1(self):
         return c3s(a**2)*c3s(a*b)**2 - c3p(a**2+2*b*c), [], []
@@ -139,7 +139,7 @@ class MathematicalInequalitiesVol1(MathematicalInequalities):
         return c3p(a**2+a*b+b**2) - 3*c3s(a*b)*c3s(a**2*b**2), [], []
 
     def problem_vasile_p12036(self):
-        return c3p(a**2+a*b+b**2) - 3*c3s(a*b)**3, [], [-c3p(a)]
+        return c3p(a**2+a*b+b**2) - 3*c3s(a*b)**3, [a,b,-c], []
 
     def problem_vasile_p12037(self):
         return c3p(a**2+a*b+b**2) - 3*c3p(a**2+b**2)/8, [], []
@@ -257,7 +257,7 @@ class MathematicalInequalitiesVol1(MathematicalInequalities):
         return Rational(3,4) - c3s(a*b*(a+b))/c3p(a**2+1), [], []
 
     def problem_vasile_p12069(self):
-        return c3p(a+1/a-1) + 2 - c3s(a)*c3s(1/a)/3, [], [c3p(a)]
+        return c3p(a+1/a-1) + 2 - c3s(a)*c3s(1/a)/3, [c3p(a)], []
 
     def problem_vasile_p12070(self):
         return c3p(a**2 + Rational(1,2)) - c3p(a + b - Rational(1,2)), [], []
