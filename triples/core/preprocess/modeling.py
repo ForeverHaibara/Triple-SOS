@@ -107,7 +107,7 @@ class ModelingHelper:
         elif len(x.args) == 1:
             return x, {}, {}
         z = self.symbol_gen('Max')
-        ineqs = {z - i: z - x for i in x.args}
+        ineqs = {z - i: x - i for i in x.args}
         eqs = {sp.prod(z - i for i in x.args): Integer(0)}
         return z, ineqs, eqs
 
