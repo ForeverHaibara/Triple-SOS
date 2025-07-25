@@ -1,5 +1,6 @@
 __pycache__/
 *.ipynb
+!notebooks/examples.ipynb
 *.csv
 *.zip
 .vscode/
