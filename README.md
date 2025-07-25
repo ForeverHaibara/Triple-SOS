@@ -4,17 +4,25 @@ Triples 是由 forever豪3 开发的基于 Python 的 SymPy 库的多项式不�
 
 Triples is an automatic inequality proving software developed by ForeverHaibara, based on the Python SymPy library. It focuses on generating readable proofs of inequalities through sum of squares (SOS). The program offers both a graphical user interface and a code interface to facilitate the exploration of Olympiad-level algebraic inequalities.
 
-
-在线体验 Online Servers:
+> 在线体验 Online Servers:
 
 **GitHub Page & Documentation** [https://foreverhaibara.github.io/#/triples](https://foreverhaibara.github.io/#/triples)
 
-Gradio Servers
+> Gradio Servers
+
 * **Hugging Face**      [https://huggingface.co/spaces/ForeverHaibara/Ternary-Inequality-Prover](https://huggingface.co/spaces/ForeverHaibara/Ternary-Inequality-Prover)
 * **AIStudio**               [https://aistudio.baidu.com/application/detail/37245](https://aistudio.baidu.com/application/detail/37245)
 * **AIStudio Backup** [https://aistudio.baidu.com/application/detail/13542](https://aistudio.baidu.com/application/detail/13542)
 
-## 快速开始 Quick Start
+> 范例 Notebook Examples:
+
+[notebooks/examples.ipynb](notebooks/examples.ipynb)
+
+<!-- <a href="https://colab.research.google.com/github/ForeverHaibara/Triple-SOS/blob/main/notebooks/examples.ipynb" target="_blank" style="display:inline-block; background-color:#f9ab00; color:white; text-decoration:none; padding:10px 15px; border-radius:5px; font-family:Arial,sans-serif; font-size:14px; font-weight:bold;">
+  <i class="fa fa-colab" style="margin-right:5px;"></i> Open in Colab
+</a> -->
+
+## 图形化界面 Graphic User Interface
 
 本程序图形化界面有两种启动方式。一种是 Flask，另一种是 Gradio。
 
@@ -28,7 +36,7 @@ Two graphical backends are supported. One is Flask and the other is Gradio.
 pip install sympy
 pip install numpy
 pip install scipy
-pip install picos
+pip install clarabel
 pip install flask
 pip install flask_cors
 pip install flask_socketio
@@ -41,19 +49,17 @@ pip install flask_socketio
 
 1. 安装依赖: Install Dependencies
 
-   注意：目前 gradio 3.44.4 是已知唯一正常支持 LaTeX 的版本。Warning: gradio 3.44.4 is the only known version that supports LaTeX display with pretty line breaks.
-
 ```
 pip install sympy
 pip install numpy
 pip install scipy
-pip install cvxopt
-pip install gradio==3.44.4
+pip install clarabel
+pip install gradio>=4.44
 pip install pillow
 ```
 
-2. 控制台中运行 `python gradio.app.py` 启动后端。 Run `python gradio.app.py` to launch the backend.
-3. 浏览器打开控制台中显示的地址。 Open the link displayed in the console using the browser.
+1. 控制台中运行 `python gradio.app.py` 启动后端。 Run `python gradio.app.py` to launch the backend.
+2. 浏览器打开控制台中显示的地址。 Open the link displayed in the console using the browser.
 
 输入关于 a,b,c 的齐次式。注: 幂符号 ^ 可以省略，函数 s 与 p 分别表示轮换和与轮换积，例如 `s(a2)` 表示 `a^2+b^2+c^2`。
 
@@ -69,8 +75,10 @@ Configure the Generators in the bottom left corner to visualize quaternary homog
 
 ## 代码调用 Code Usage
 
-Note: Flask or Gradio is not required for code usage.
+SEE ALSO IN
+[notebooks/examples.ipynb](notebooks/examples.ipynb)
 
+Note: Flask or Gradio is not required for code usage.
 
 ```py
 >>> from triples.core import sum_of_squares
@@ -81,11 +89,11 @@ Note: Flask or Gradio is not required for code usage.
 ### Sum of Squares
 
 Given a sympy polynomial, the `sum_of_squares` solver  will return a Solution-class object if it succeeds. It returns None if it fails (but it does not mean the polynomial is not a sum of square or positive semidefinite).
- 
 
 **Example 1** $a,b,c\in\mathbb{R}$, prove:  $\left(a^2+b^2+c^2\right)^2\geq 3\left(a^3b+b^3c+c^3a\right)$.
+
 ```py
->>> sol = sum_of_squares(((a**2 + b**2 + c**2)**2 - 3*(a**3*b + b**3*c + c**3*a)).as_poly(a, b, c))
+>>> sol = sum_of_squares((a**2 + b**2 + c**2)**2 - 3*(a**3*b + b**3*c + c**3*a))
 >>> sol.solution # this should be a sympy expression
 (Σ(a**2 - a*b - a*c - b**2 + 2*b*c)**2)/2
 >>> sol.solution.doit() # this expands the cyclic sums
@@ -94,12 +102,12 @@ Given a sympy polynomial, the `sum_of_squares` solver  will return a Solution-cl
 
 <br>
 
-
 If there are inequality or equality constraints, send them as a list of sympy expressions to `ineq_constraints` and `eq_constraints`.
 
 **Example 2** $a,b,c\in\mathbb{R}_+$, prove:  $a(a-b)(a-c)+b(b-c)(b-a)+c(c-a)(c-b)\geq 0$.
+
 ```py
->>> sol = sum_of_squares((a*(a-b)*(a-c) + b*(b-c)*(b-a) + c*(c-a)*(c-b)).as_poly(a, b, c), ineq_constraints = [a,b,c])
+>>> sol = sum_of_squares(a*(a-b)*(a-c) + b*(b-c)*(b-a) + c*(c-a)*(c-b), ineq_constraints = [a,b,c])
 >>> sol.solution
 ((Σ(a - b)**2*(a + b - c)**2)/2 + Σa*b*(a - b)**2)/(Σa)
 ```
@@ -109,6 +117,7 @@ If there are inequality or equality constraints, send them as a list of sympy ex
 If you want to track the inequality and equality constraints, you can send in a dict containing the alias of the constraints.
 
 **Example 3** $a,b,c\in\mathbb{R}_+$ and $abc=1$, prove: $\sum \frac{a^2}{2+a}\geq 1$.
+
 ```py
 >>> sol = sum_of_squares(((a+2)*(b+2)*(c+2)*(a**2/(2+a)+b**2/(2+b)+c**2/(2+c)-1)).cancel(), ineq_constraints=[a,b,c], eq_constraints={a*b*c-1:x})
 >>> sol.solution
@@ -121,8 +130,6 @@ a*b*(c - 1)**2/3 + a*c*(b - 1)**2/3 + a*(-b + c)**2 + a*(b - c)**2 + b*c*(a - 1)
 >>> sol.solution
 x*(Σ(2*F(a) + 13))/6 + Σ(a - b)**2*F(c) + (Σ(a - 1)**2*F(b)*F(c))/6 + 5*(Σ(a - 1)**2)/6 + 7*(Σ(a - b)**2)/12
 ```
-
-
 
 ## 讨论交流 Discussions
 

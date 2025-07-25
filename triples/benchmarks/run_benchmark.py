@@ -153,7 +153,8 @@ def run_bench(benchmarks=BENCHMARKS, save_interval=600):
                             {'set': problem_set_name, 'name': problem_name, 'status': 'failed',
                             'time': elapsed_time, 'solution': None, 'length': None}
                         )
-                    print(f"{'\b'*DATETIME_LEN}{status_code} {start_time.time()} --- {end_time.time()} "\
+                    backspace = '\b' # f-string does not accept backslash for low Python versions
+                    print(f"{backspace*DATETIME_LEN}{status_code} {start_time.time()} --- {end_time.time()} "\
                             + f"[{success/total*100:.2f}%/{i/total*100:.2f}%]")
 
                     if (end_time - last_save_time).total_seconds() >= save_interval:

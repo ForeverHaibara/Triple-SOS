@@ -13,7 +13,9 @@ from sympy import __version__ as SYMPY_VERSION
 from sympy.external.importtools import version_tuple
 from sympy.combinatorics import Permutation, PermutationGroup
 from scipy import __version__ as SCIPY_VERSION
-from scipy.optimize import OptimizeResult, shgo, minimize
+
+class OptimizeResult: # this is only for type hint
+    ...
 
 from .extrema import _infer_symbols, polylize_input
 from .roots import Root
@@ -30,40 +32,40 @@ if tuple(version_tuple(SYMPY_VERSION)) >= tuple(version_tuple('1.12')):
 else:
     anonymous_lambdify = lambdify
 
-if tuple(version_tuple(SCIPY_VERSION)) >= tuple(version_tuple('1.7')):
-    from scipy.stats.qmc import Halton
-else:
-    class Halton:
-        """Implemented Halton sampler for scipy version < 1.7."""
-        def __init__(self, d, scramble=False):
-            self.d = d
-            self.scramble = scramble
+USE_SCIPY_HALTON = True
+if tuple(version_tuple(SCIPY_VERSION)) < tuple(version_tuple('1.7')):
+    USE_SCIPY_HALTON = False
+class HaltonManual:
+    """Implemented Halton sampler for scipy version < 1.7."""
+    def __init__(self, d, scramble=False):
+        self.d = d
+        self.scramble = scramble
 
-        def random(self, n):
-            def van_der_corput(n, base=2):
-                sequence = []
-                for i in range(n):
-                    num = i
-                    value = 0
-                    denominator = 1
-                    while num > 0:
-                        num, remainder = divmod(num, base)
-                        denominator *= base
-                        value += remainder / denominator
-                    sequence.append(value)
-                return np.array(sequence)
+    def random(self, n):
+        def van_der_corput(n, base=2):
+            sequence = []
+            for i in range(n):
+                num = i
+                value = 0
+                denominator = 1
+                while num > 0:
+                    num, remainder = divmod(num, base)
+                    denominator *= base
+                    value += remainder / denominator
+                sequence.append(value)
+            return np.array(sequence)
 
-            samples = np.zeros((n, self.d))
-            base = 2
+        samples = np.zeros((n, self.d))
+        base = 2
+        for i in range(self.d):
+            if i > 0:
+                base = int(nextprime(base))
+            samples[:, i] = van_der_corput(n, base)
+
+        if self.scramble:
             for i in range(self.d):
-                if i > 0:
-                    base = int(nextprime(base))
-                samples[:, i] = van_der_corput(n, base)
-
-            if self.scramble:
-                for i in range(self.d):
-                    np.random.shuffle(samples[:, i])
-            return samples
+                np.random.shuffle(samples[:, i])
+        return samples
 
 
 class NumerFunc:
@@ -302,6 +304,10 @@ def numeric_optimize_skew_symmetry(poly: Union[Expr, Poly], symbols: List[Symbol
 
     f = NumerFunc.wrap(poly, symbols)
     if points is None: # generate points using Halton sequence
+        if USE_SCIPY_HALTON:
+            from scipy.stats.qmc import Halton
+        else:
+            Halton = HaltonManual
         points = Halton(d=len(symbols), scramble=False).random(64)[1:]
         if is_homogeneous: # normalize the points
             points = points / (np.abs(points.sum(axis=1, keepdims=True)) + 1e-8)
@@ -327,6 +333,7 @@ def numeric_optimize_skew_symmetry(poly: Union[Expr, Poly], symbols: List[Symbol
         f2 = f2_
 
     def _solve_local_minima(f: Callable, x0: np.ndarray, jac: Optional[Callable]=None):
+        from scipy.optimize import minimize
         with warnings.catch_warnings():
             # disable RuntimeWarning like invalid zero division
             warnings.filterwarnings("ignore", category=RuntimeWarning)
@@ -359,6 +366,7 @@ def _numeric_optimize_shgo(poly: Union[Poly, Expr], ineq_constraints: List[Union
     Internal function to numerically optimize a polynomial with given inequality and equality constraints
     by calling scipy.optimize.shgo.
     """
+    from scipy.optimize import OptimizeResult, shgo
     if isinstance(poly, Poly) and poly.total_degree() <= 0:
         res = OptimizeResult(nit=0, nfev=0, nlfev=0, nljev=0, nlhev=0, success=True,
                 status='success', message='Optimization terminated successfully.')

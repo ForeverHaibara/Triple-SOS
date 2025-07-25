@@ -2,7 +2,6 @@ from collections import namedtuple
 from typing import List
 
 import numpy as np
-from scipy.optimize import root_scalar
 import sympy as sp
 
 RPAResult = namedtuple('RPAResult', ['x', 'f', 'iterations', 'converged', 'a', 'b'])
@@ -19,6 +18,7 @@ def _find_sup(f, a, b, xtol=_xtol, maxiter=100):
     if -_rtol <= f(b) <= _rtol:
         return b
 
+    from scipy.optimize import root_scalar
     # Step 1: Apply Brent's method (using scipy.optimize.root_scalar with brentq)
     result = root_scalar(f, bracket=(a, b), method='brentq', xtol=xtol, maxiter=maxiter)
     
