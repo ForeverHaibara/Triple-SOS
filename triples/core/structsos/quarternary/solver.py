@@ -97,7 +97,7 @@ def structural_sos_4vars(poly: sp.Poly, ineq_constraints: Dict[sp.Poly, sp.Expr]
     elif coeff.is_cyclic():
         func = _structural_sos_4vars_cyclic
     else:
-        if coeff.is_cyclic(PermutationGroup(Permutation([1,2,0,3]))):
+        if coeff.is_cyclic(PermutationGroup(Permutation([1,2,0,3]), Permutation([1,0,2,3]))):
             func = _structural_sos_4vars_partial_symmetric
 
     try:
