@@ -32,6 +32,17 @@ def _default_polynomial_check(poly: Poly, method_order: List[str]) -> List[str]:
     return method_order
 
 
+def _default_restrict_input_chars(txt: str) -> bool:
+    """
+    Check if the input text contains only ascii characters.
+    Forbid certain characters to avoid potential security risks, e.g. harmful texts
+
+    Returns True if the text is safe.
+    """
+    f = lambda x: x < 128 or (945 <= x <= 969) # ascii or lower greek
+    return all(f(ord(c)) for c in txt)
+
+
 class SOS_Manager():
     """
     A convenient class to manage the sum of square decomposition of a polynomial,
@@ -43,7 +54,7 @@ class SOS_Manager():
 
     CONFIG_DEFAULT_GENS = sp.symbols("a b c")
     CONFIG_DEFAULT_PERM = CyclicGroup(3)
-    CONFIG_RESTRICT_INPUT_CHARS = True
+    CONFIG_RESTRICT_INPUT_CHARS = _default_restrict_input_chars
     CONFIG_METHOD_CHECK = _default_polynomial_check
     CONFIG_ALLOW_NONSTANDARD_GENS = True
     CONFIG_STANDARDIZE_CYCLICEXPR = True
@@ -89,9 +100,8 @@ class SOS_Manager():
         dict
             A dictionary containing the polynomial, degree, text, coefficient triangle, and grid heatmap.
         """
-        if cls.CONFIG_RESTRICT_INPUT_CHARS:
-            # forbid non-ascii characters to avoid potential security risks
-            if not all(ord(_) < 128 for _ in txt):
+        if cls.CONFIG_RESTRICT_INPUT_CHARS is not None:
+            if not cls.CONFIG_RESTRICT_INPUT_CHARS(txt):
                 return None
 
         try:
@@ -108,6 +118,7 @@ class SOS_Manager():
         if poly is None:
             return None
 
+        # Apply transformations to the polynomial
         if homogenize and not poly.is_homogeneous and len(poly.gens) and poly.degree(-1) == 0:
             gen = poly.gens[-1]
             poly = poly.eval(gen, 0).homogenize(gen)

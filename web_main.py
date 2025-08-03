@@ -116,7 +116,7 @@ def preprocess():
         The standardization of the text. If None, the text is not standardized.
         See `SOS_Manager.set_poly` for more information.
     actions : list[str]
-        Additional actions to perform.
+        Additional actions to perform. Supporting 
 
     Returns
     ----------
@@ -360,7 +360,9 @@ def get_latex_coeffs():
         The LaTeX representation of the coefficients
     """
     req = request.get_json()
-    poly = req['poly']
+    poly = req.get('poly', None)
+    if poly is None:
+        return None
     gens = tuple(sp.Symbol(_) for _ in req.get('gens', 'abc'))
     perm = SOS_Manager._parse_perm_group(req.get('perm'))
     coeffs = SOS_Manager.latex_coeffs(poly, gens, perm,

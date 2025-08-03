@@ -749,7 +749,7 @@ class MathematicalInequalitiesVol1(MathematicalInequalities):
         return c4p(a+1/a-1) + 3 - c4s(1/a), [a,b,c,d], [c4s(a)-4]
 
     def problem_vasile_p13101(self):
-        return 4*c4s(a)+15*c4s(a*b*c)-c4s(a)**3, [a,b,c,d], []
+        return 4*c4s(a**3)+15*c4s(a*b*c)-c4s(a)**3, [a,b,c,d], []
 
     def problem_vasile_p13102(self):
         return 1 + 2*c4s(a*b*c) - 9*Min(a,b,c,d), [a,b,c,d], [c4s(a)-4]
@@ -3044,7 +3044,7 @@ class MathematicalInequalitiesVol3(MathematicalInequalities):
         return 6*(a**2 + b**2 + c**2 + d**2) + (a + b + c + d)**2 - 12*(a*b + b*c + c*d), [], []
 
     def problem_vasile_p32083(self):
-        return 1/(a**2 + a*b) + 1/(b**2 + b*c) + 1/(c**2 + c*d) + 1/(d**2 + d*a) - 4/(a*c + b*d), [], []
+        return 1/(a**2 + a*b) + 1/(b**2 + b*c) + 1/(c**2 + c*d) + 1/(d**2 + d*a) - 4/(a*c + b*d), [a,b,c,d], []
 
     def problem_vasile_p32084(self):
         return 4 - a**3*b*c*d, [a - b, b - c, c - d, d], [a*b + b*c + c*d + d*a - 3]
