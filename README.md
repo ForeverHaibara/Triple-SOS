@@ -133,7 +133,7 @@ x*(Σ(2*F(a) + 13))/6 + Σ(a - b)**2*F(c) + (Σ(a - 1)**2*F(b)*F(c))/6 + 5*(Σ(a
 
 ## 讨论交流 Discussions
 
-配方器的主要函数在 `triples.core.sum_of_squares.sum_of_squares`。配方器基于多种算法尝试配方，但其无法保证 100% 配出，程序还在不断改进，三元齐次不等式的研究进一步交流可加入 QQ 群 875413273。
+配方器的主要函数在 `triples.core.sum_of_squares.sum_of_squares`。配方器基于多种算法尝试配方，但其无法保证 100% 配出，程序还在不断改进，三元齐次不等式的研究进一步交流可加入配方器交流群 1001789778 。
 
 The main function of the sum-of-square solver is `triples.core.sum_of_squares.sum_of_squares`. The solver uses a mixed strategy. It does not guarantee to solve all problems.
 
