@@ -788,6 +788,8 @@ def _sos_struct_sextic_hexagon_to_hexagram(coeff):
     if x0 == -3*c30 and y0 == -3*c30:
         # Degenerates to c1*s(a2b-abc)^2 + c2*s(ab2-abc)^2 + c3s(a2b-abc)s(ab2-abc) + 0
         c3 = -c30
+        if not _check_valid(c3):
+            c3 = None
     else:
         eq = sp.Poly.from_list([1, 0, -4*c1*c2], sp.Symbol('u'))
         c3 = rationalize_func(eq, _check_valid, validation_initial = lambda x: x >= 0, direction = -1)
