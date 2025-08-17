@@ -4,20 +4,22 @@ from warnings import warn
 
 import numpy as np
 import sympy as sp
-from sympy import Expr
+from sympy import Expr, sympify
 
-from .linsos import LinearSOS
-from .structsos import StructuralSOS
+from .problem import InequalityProblem
+from .node import SolveProblem, _sum_of_squares, SolvePolynomial
+from .linsos.linsos import LinearSOSSolver
+from .structsos.structsos import StructuralSOSSolver
 from .symsos import SymmetricSOS
-from .sdpsos import SDPSOS
+from .sdpsos.sdpsos import SDPSOSSolver
 
 from ..utils import PolyReader, Solution
 
 NAME_TO_METHOD = {
-    'LinearSOS': LinearSOS,
-    'StructuralSOS': StructuralSOS,
-    'SymmetricSOS': SymmetricSOS,
-    'SDPSOS': SDPSOS
+    'LinearSOS': LinearSOSSolver,
+    'StructuralSOS': StructuralSOSSolver,
+    # 'SymmetricSOS': SymmetricSOS,
+    'SDPSOS': SDPSOSSolver,
 }
 
 METHOD_ORDER = ['StructuralSOS', 'LinearSOS', 'SDPSOS', 'SymmetricSOS']
@@ -117,24 +119,13 @@ def sum_of_squares(
     Optional[Solution]
         The solution. If no solution is found, None is returned.
     """
-    start_time = datetime.now()
-    if method_order is None:
-        method_order = METHOD_ORDER
-    if configs is None:
-        configs = DEFAULT_CONFIGS
-
-    for method in method_order:
-        config = configs.get(method, {})
-
-        method = NAME_TO_METHOD[method]
-        solution = method(poly, ineq_constraints, eq_constraints, **config)
-        if solution is not None:
-            end_time = datetime.now()
-            solution._start_time = start_time
-            solution._end_time = end_time
-            return solution
-
-    return None
+    problem = InequalityProblem(poly, ineq_constraints, eq_constraints)
+    configs = {
+        SolvePolynomial: {
+            'solvers': [NAME_TO_METHOD[_] for _ in method_order if _ in NAME_TO_METHOD]
+        },
+    }
+    return _sum_of_squares(problem, configs)
 
 
 def sum_of_squares_multiple(

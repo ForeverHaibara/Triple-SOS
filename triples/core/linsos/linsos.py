@@ -16,6 +16,8 @@ from .correction import linear_correction
 from .updegree import lift_degree
 from .solution import SolutionLinear
 from ..preprocess import sanitize
+from ..problem import InequalityProblem
+from ..node import ProofNode, SolvePolynomial
 from ..shared import homogenize_expr_list, clear_polys_by_symmetry
 from ...utils import Root, optimize_poly
 from ...utils.monomials import MonomialManager
@@ -32,6 +34,7 @@ if _SCIPY_VERSION in ('1.15.0','1.15.1','1.15.2'):
     warnings.warn('SciPy 1.15.0-1.15.2 has a bug in linprog that gets stuck with large scale problems.\n'
         'Please upgrade to 1.15.3 or higher or downgrade to 1.14.x.\n'
         'See https://github.com/scipy/scipy/issues/22655 for details.')
+
 
 
 class _basis_limit_exceeded(Exception): ...
@@ -155,8 +158,8 @@ def _odd_basis_to_even(basis: List[LinearBasis], symbols: Tuple[Symbol, ...], in
     return new_basis
 
 
-@sanitize(homogenize=True, infer_symmetry=True, wrap_constraints=True,
-    disable_denom_finding_roots=True)
+# @sanitize(homogenize=True, infer_symmetry=True, wrap_constraints=True,
+#     disable_denom_finding_roots=True)
 def LinearSOS(
         poly: Poly,
         ineq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
@@ -229,177 +232,206 @@ def LinearSOS(
         The solution of the linear programming SOS. When solution is None, it means that the linear
         programming SOS fails.
     """
-    return _LinearSOS(poly, ineq_constraints=ineq_constraints, eq_constraints=eq_constraints,
-                symmetry=symmetry,roots=roots,tangents=tangents,augment_tangents=augment_tangents,
-                centralize=centralize,preordering=preordering,verbose=verbose,quad_diff_order=quad_diff_order,
-                basis_limit=basis_limit,lift_degree_limit=lift_degree_limit,
-                linprog_options=linprog_options,allow_numer=allow_numer,_homogenizer=_homogenizer)
+    problem = InequalityProblem(poly, ineq_constraints, eq_constraints)
+    configs = {
+        SolvePolynomial: {
+            'solvers': [LinearSOSSolver],
+        },
+        LinearSOSSolver: {
+            'verbose': verbose,
+            'linprog_options': linprog_options,
+            'allow_numer': allow_numer,
+            # 'symmetry': symmetry,
+            # 'roots': roots,
+            # 'tangents': tangents,
+            'augment_tangents': augment_tangents,
+            'centralize': centralize,
+            'preordering': preordering,
+            'quad_diff_order': quad_diff_order,
+            'basis_limit': basis_limit,
+            'lift_degree_limit': lift_degree_limit,
+        }
+    }
+    return problem.sum_of_squares(configs)
 
 
-def _LinearSOS(
-        poly: Poly,
-        ineq_constraints: Dict[Poly, Expr] = {},
-        eq_constraints: Dict[Poly, Expr] = {},
-        symmetry: MonomialManager = None,
-        roots: Optional[List[Root]] = None,
-        tangents: List[Poly] = [],
-        augment_tangents: bool = True,
-        centralize: bool = True,
-        preordering: str = 'quadratic',
-        verbose: bool = False,
-        quad_diff_order: int = 8,
-        basis_limit: int = 15000,
-        lift_degree_limit: int = 4,
-        linprog_options: Dict = LINPROG_OPTIONS,
-        allow_numer: int = 0,
-        _homogenizer: Optional[Symbol] = None
-    ) -> Optional[SolutionLinear]:
+class LinearSOSSolver(ProofNode):
+    def explore(self, configs):
+        if self.status != 0:
+            return
 
-    if _homogenizer is not None: 
-        # homogenize the tangents
-        tangents = homogenize_expr_list(tangents, _homogenizer)
-        if roots is not None:
-            roots = [Root(r) if not isinstance(r, Root) else r for r in roots]
-            roots = [Root(r.root + (sp.Integer(1),), r.domain, r.rep + (r.domain.one,)) for r in roots]
-    else:
-        # homogeneous polynomial does not accept non-homogeneous tangents
-        tagents_poly = [t.as_poly(poly.gens) for t in tangents]
-        tangents = [t for t, p in zip(tangents, tagents_poly) if len(p.free_symbols_in_domain)==0 and p.is_homogeneous]
-
-    if roots is None:
-        roots = []
-        if poly.domain.is_QQ or poly.domain.is_ZZ:
-            time1 = time()
-            roots = optimize_poly(poly, list(ineq_constraints),
-                ([poly] + list(eq_constraints) + ([_homogenizer - 1] if _homogenizer is not None else [])), poly.gens)
-            if verbose:
-                print(f"Time for finding roots num = {len(roots):<6d}     : {time() - time1:.6f} seconds.")
-
-        roots = [Root(r) for r in roots]
-    roots = [Root(r) if not isinstance(r, Root) else r for r in roots]
-    roots = [r for r in roots if not r.is_zero]
+        poly = self.problem.expr
+        ineq_constraints = self.problem.ineq_constraints
+        eq_constraints = self.problem.eq_constraints
 
 
-
-    ####################################################################
-    #            Centralize the polynomial and symmetry
-    ####################################################################
-    if centralize and len(roots) == 1 and roots[0].is_Rational and symmetry.is_trivial and any(ri != 1 and ri != 0 for ri in roots[0]):
-        gens = poly.gens
-        centralizer = {gens[i]: roots[0][i]*gens[i] for i in range(len(gens)) if roots[0][i] != 0 and roots[0][i] != 1}
-        def ct(x):
-            return x.as_expr().xreplace(centralizer).as_poly(gens)
-        new_poly = ct(poly)
-        new_ineqs = {ct(k): v.xreplace(centralizer) for k, v in ineq_constraints.items()}
-        new_eqs = {ct(k): v.xreplace(centralizer) for k, v in eq_constraints.items()}
-        new_tangents = [ct(t) for t in tangents]
-        new_roots = [Root(tuple(1 if roots[0][i] != 0 else 0 for i in range(len(gens))))]
-        if verbose:
-            print(f'LinearSOS centralizing {centralizer}')
-            # print('Goal         :', new_poly)
-            # print('Inequalities :', new_ineqs)
-            # print('Equalities   :', new_eqs)
-        sol = _LinearSOS(new_poly, ineq_constraints=new_ineqs, eq_constraints=new_eqs,
-                symmetry=symmetry,roots=new_roots,tangents=new_tangents,augment_tangents=augment_tangents,
-                centralize=False,preordering=preordering,verbose=verbose,quad_diff_order=quad_diff_order,
-                basis_limit=basis_limit,lift_degree_limit=lift_degree_limit,
-                linprog_options=linprog_options,allow_numer=allow_numer)
-        if sol is not None:
-            sol.problem = poly
-            sol.solution = sol.solution.xreplace({
-                gens[i]: gens[i]/roots[0][i] for i in range(len(gens)) if roots[0][i] != 0 and roots[0][i] != 1
-            })
-        return sol
+        ####################################################################
+        #                        Get configurations
+        ####################################################################
+        _homogenizer = None
+        symmetry = MonomialManager(len(poly.gens), self.problem.identify_symmetry())
+        roots = None
+        tangents = []
+        augment_tangents = configs.get('augment_tangents', True)
+        centralize = False# configs.get('centralize', True)
+        preordering = configs.get('preordering', 'quadratic')
+        verbose = configs.get('verbose', False)
+        quad_diff_order = configs.get('quad_diff_order', 8)
+        basis_limit = configs.get('basis_limit', 15000)
+        lift_degree_limit = configs.get('lift_degree_limit', 4)
+        linprog_options = configs.get('linprog_options', LINPROG_OPTIONS)
+        allow_numer = configs.get('allow_numer', 0)
 
 
-    ####################################################################
-    #            Prepare tangents to form linear bases
-    ####################################################################
-    signs = _get_signs_of_vars(ineq_constraints, poly.gens)
-    all_nonnegative = all(s > 0 for s in signs.values())
+        if _homogenizer is not None: 
+            # homogenize the tangents
+            tangents = homogenize_expr_list(tangents, _homogenizer)
+            if roots is not None:
+                roots = [Root(r) if not isinstance(r, Root) else r for r in roots]
+                roots = [Root(r.root + (sp.Integer(1),), r.domain, r.rep + (r.domain.one,)) for r in roots]
+        else:
+            # homogeneous polynomial does not accept non-homogeneous tangents
+            tagents_poly = [t.as_poly(poly.gens) for t in tangents]
+            tangents = [t for t, p in zip(tangents, tagents_poly) if len(p.free_symbols_in_domain)==0 and p.is_homogeneous]
 
-    qmodule = get_qmodule_list(poly, ineq_constraints, all_nonnegative=all_nonnegative, preordering=preordering)
-    qmodule = clear_polys_by_symmetry(qmodule, poly.gens, symmetry)
-
-    tangents = list(prepare_tangents(poly, qmodule, eq_constraints, roots=roots, additional_tangents=tangents).items())
-    if augment_tangents:
-        tangents += list(prepare_inexact_tangents(poly, ineq_constraints, eq_constraints,
-            monomial_manager=symmetry, roots=roots, all_nonnegative=all_nonnegative).items())
-
-    tangents = clear_polys_by_symmetry(tangents, poly.gens, symmetry)
-    eq_constraints = clear_polys_by_symmetry(eq_constraints.items(), poly.gens, symmetry)
-    # print('Tangents after removing duplicates:', tangents)
-
-
-    try:
-        # prepare to lift the degree in an iterative way
-        for lift_degree_info in lift_degree(poly, ineq_constraints=ineq_constraints, symmetry=symmetry, lift_degree_limit=lift_degree_limit):
-            # RHS
-            time0 = time()
-            degree = lift_degree_info['degree']
-            basis, arrays = _prepare_basis(poly.gens, all_nonnegative=all_nonnegative, degree=degree, tangents=tangents,
-                                            eq_constraints=eq_constraints, symmetry=symmetry, 
-                                            quad_diff_order=quad_diff_order, basis_limit=basis_limit)
-            if len(basis) <= 0:
-                continue
-
-            # LHS (from multipliers * poly)
-            basis += lift_degree_info['basis']
-            arrays = np.vstack([arrays, np.array([x.as_array_np(expand_cyc=True, symmetry=symmetry) for x in lift_degree_info['basis']])])
-
-            # sum of coefficients of the multipliers should be 1
-            regularizer = np.zeros(arrays.shape[0])
-            regularizer[-len(lift_degree_info['basis']):] = 1
-            arrays = np.hstack([arrays, regularizer[:, None]])
-
-            if verbose:
+        if roots is None:
+            roots = []
+            if poly.domain.is_QQ or poly.domain.is_ZZ:
                 time1 = time()
-                print('Linear Programming Shape = (%d, %d)'%(arrays.shape[0], arrays.shape[1]),
-                      '\tPreparation Time: %.3f s'%(time1 - time0), end = '')
-
-            b = np.zeros(arrays.shape[1])
-            b[-1] = 1
-            optimized = np.ones(arrays.shape[0])
-
-
-            ##############################################
-            # main function: linear programming
-            ##############################################
-            linear_sos = None
-            with warnings.catch_warnings(record=True) as __warns:
-                warnings.simplefilter('once')
-                from scipy.optimize import linprog
-                try:
-                    linear_sos = linprog(optimized, A_eq=arrays.T, b_eq=b, **linprog_options)
-                except:
-                    pass
-            if linear_sos is None or not linear_sos.success:
-                # lift the degree up and retry
+                roots = optimize_poly(poly, list(ineq_constraints),
+                    ([poly] + list(eq_constraints) + ([_homogenizer - 1] if _homogenizer is not None else [])), poly.gens)
                 if verbose:
-                    print('\tLP failed.')
-                continue
+                    print(f"Time for finding roots num = {len(roots):<6d}     : {time() - time1:.6f} seconds.")
+
+            roots = [Root(r) for r in roots]
+        roots = [Root(r) if not isinstance(r, Root) else r for r in roots]
+        roots = [r for r in roots if not r.is_zero]
+
+
+        ####################################################################
+        #            Centralize the polynomial and symmetry
+        ####################################################################
+        if centralize and len(roots) == 1 and roots[0].is_Rational and symmetry.is_trivial and any(ri != 1 and ri != 0 for ri in roots[0]):
+            gens = poly.gens
+            centralizer = {gens[i]: roots[0][i]*gens[i] for i in range(len(gens)) if roots[0][i] != 0 and roots[0][i] != 1}
+            def ct(x):
+                return x.as_expr().xreplace(centralizer).as_poly(gens)
+            new_poly = ct(poly)
+            new_ineqs = {ct(k): v.xreplace(centralizer) for k, v in ineq_constraints.items()}
+            new_eqs = {ct(k): v.xreplace(centralizer) for k, v in eq_constraints.items()}
+            new_tangents = [ct(t) for t in tangents]
+            new_roots = [Root(tuple(1 if roots[0][i] != 0 else 0 for i in range(len(gens))))]
             if verbose:
-                print('\t\033[92mLP succeeded.\033[0m')
+                print(f'LinearSOS centralizing {centralizer}')
+                # print('Goal         :', new_poly)
+                # print('Inequalities :', new_ineqs)
+                # print('Equalities   :', new_eqs)
+            sol = _LinearSOS(new_poly, ineq_constraints=new_ineqs, eq_constraints=new_eqs,
+                    symmetry=symmetry,roots=new_roots,tangents=new_tangents,augment_tangents=augment_tangents,
+                    centralize=False,preordering=preordering,verbose=verbose,quad_diff_order=quad_diff_order,
+                    basis_limit=basis_limit,lift_degree_limit=lift_degree_limit,
+                    linprog_options=linprog_options,allow_numer=allow_numer)
+            if sol is not None:
+                sol.problem = poly
+                sol.solution = sol.solution.xreplace({
+                    gens[i]: gens[i]/roots[0][i] for i in range(len(gens)) if roots[0][i] != 0 and roots[0][i] != 1
+                })
+            return sol
 
-            y, basis, is_equal = linear_correction(
-                linear_sos.x,
-                basis,
-                num_multipliers = len(lift_degree_info['basis']),
-                symmetry = symmetry
-            )
-            if is_equal or allow_numer > 0:
-                basis = _odd_basis_to_even(basis, poly.gens, ineq_constraints)
-                solution = SolutionLinear._from_y_basis(
-                    problem=poly, y=y, basis=basis, symmetry=symmetry,
-                    ineq_constraints=ineq_constraints, eq_constraints=dict(eq_constraints),
-                    is_equal=is_equal
-                )
-                return solution
-            else:
+
+        ####################################################################
+        #            Prepare tangents to form linear bases
+        ####################################################################
+        signs = _get_signs_of_vars(ineq_constraints, poly.gens)
+        all_nonnegative = all(s > 0 for s in signs.values())
+
+        qmodule = get_qmodule_list(poly, ineq_constraints, all_nonnegative=all_nonnegative, preordering=preordering)
+        qmodule = clear_polys_by_symmetry(qmodule, poly.gens, symmetry)
+
+        tangents = list(prepare_tangents(poly, qmodule, eq_constraints, roots=roots, additional_tangents=tangents).items())
+        if augment_tangents:
+            tangents += list(prepare_inexact_tangents(poly, ineq_constraints, eq_constraints,
+                monomial_manager=symmetry, roots=roots, all_nonnegative=all_nonnegative).items())
+
+        tangents = clear_polys_by_symmetry(tangents, poly.gens, symmetry)
+        eq_constraints = clear_polys_by_symmetry(eq_constraints.items(), poly.gens, symmetry)
+        # print('Tangents after removing duplicates:', tangents)
+
+
+        try:
+            # prepare to lift the degree in an iterative way
+            for lift_degree_info in lift_degree(poly, ineq_constraints=ineq_constraints, symmetry=symmetry, lift_degree_limit=lift_degree_limit):
+                # RHS
+                time0 = time()
+                degree = lift_degree_info['degree']
+                basis, arrays = _prepare_basis(poly.gens, all_nonnegative=all_nonnegative, degree=degree, tangents=tangents,
+                                                eq_constraints=eq_constraints, symmetry=symmetry, 
+                                                quad_diff_order=quad_diff_order, basis_limit=basis_limit)
+                if len(basis) <= 0:
+                    continue
+
+                # LHS (from multipliers * poly)
+                basis += lift_degree_info['basis']
+                arrays = np.vstack([arrays, np.array([x.as_array_np(expand_cyc=True, symmetry=symmetry) for x in lift_degree_info['basis']])])
+
+                # sum of coefficients of the multipliers should be 1
+                regularizer = np.zeros(arrays.shape[0])
+                regularizer[-len(lift_degree_info['basis']):] = 1
+                arrays = np.hstack([arrays, regularizer[:, None]])
+
                 if verbose:
-                    print('\tRationalization failed.')
+                    time1 = time()
+                    print('Linear Programming Shape = (%d, %d)'%(arrays.shape[0], arrays.shape[1]),
+                        '\tPreparation Time: %.3f s'%(time1 - time0), end = '')
 
-    except _basis_limit_exceeded:
-        if verbose:
-            print(f'Basis limit {basis_limit} exceeded. LinearSOS aborted.')
-    return None
+                b = np.zeros(arrays.shape[1])
+                b[-1] = 1
+                optimized = np.ones(arrays.shape[0])
+
+
+                ##############################################
+                # main function: linear programming
+                ##############################################
+                linear_sos = None
+                with warnings.catch_warnings(record=True) as __warns:
+                    warnings.simplefilter('once')
+                    from scipy.optimize import linprog
+                    try:
+                        linear_sos = linprog(optimized, A_eq=arrays.T, b_eq=b, **linprog_options)
+                    except:
+                        pass
+                if linear_sos is None or not linear_sos.success:
+                    # lift the degree up and retry
+                    if verbose:
+                        print('\tLP failed.')
+                    continue
+                if verbose:
+                    print('\t\033[92mLP succeeded.\033[0m')
+
+                y, basis, is_equal = linear_correction(
+                    linear_sos.x,
+                    basis,
+                    num_multipliers = len(lift_degree_info['basis']),
+                    symmetry = symmetry
+                )
+                if is_equal or allow_numer > 0:
+                    basis = _odd_basis_to_even(basis, poly.gens, ineq_constraints)
+                    solution = SolutionLinear._from_y_basis(
+                        problem=poly, y=y, basis=basis, symmetry=symmetry,
+                        ineq_constraints=ineq_constraints, eq_constraints=dict(eq_constraints),
+                        is_equal=is_equal
+                    ).solution
+                    self.problem.solution = solution
+                    self.status = 1
+                    self.finished = True
+                    break
+                else:
+                    if verbose:
+                        print('\tRationalization failed.')
+
+        except _basis_limit_exceeded:
+            if verbose:
+                print(f'Basis limit {basis_limit} exceeded. LinearSOS aborted.')
+
+        self.status = 1
+        self.finished = True

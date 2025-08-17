@@ -12,9 +12,23 @@ from .ternary import structural_sos_3vars
 from .quarternary import structural_sos_4vars
 from .pivoting import structural_sos_2vars
 from ..preprocess import sanitize
+from ..problem import InequalityProblem
+from ..node import ProofNode, SolvePolynomial, _sum_of_squares
 
 
-@sanitize(homogenize=True, infer_symmetry=False, wrap_constraints=False)
+class StructuralSOSSolver(ProofNode):
+    def explore(self, *args, **kwargs):
+        if self.status == 0:
+            problem = self.problem
+            solution = _structural_sos(problem.expr, problem.ineq_constraints, problem.eq_constraints)
+            if solution is not None:
+                self.problem.solution = solution
+
+        self.status = 1
+        self.finished = True
+
+
+# @sanitize(homogenize=True, infer_symmetry=False, wrap_constraints=False)
 def StructuralSOS(
         poly: sp.Poly,
         ineq_constraints: Union[List[sp.Poly], Dict[sp.Poly, sp.Expr]] = {},
@@ -40,13 +54,11 @@ def StructuralSOS(
     solution: SolutionStructuralSimple
 
     """
-    solution = _structural_sos(poly, ineq_constraints, eq_constraints)
-    if solution is None:
-        return None
-    solution = SolutionStructural(problem = poly, solution = solution, is_equal = True)
-    if solution.is_ill:
-        return None
-    return solution
+    problem = InequalityProblem(poly, ineq_constraints, eq_constraints)
+    configs = {
+        SolvePolynomial: {'solvers': [StructuralSOSSolver]}
+    }
+    return _sum_of_squares(problem, configs)
 
 
 def _structural_sos(poly: sp.Poly, ineq_constraints: Dict[sp.Poly, sp.Expr] = {}, eq_constraints: Dict[sp.Poly, sp.Expr] = {}) -> sp.Expr:

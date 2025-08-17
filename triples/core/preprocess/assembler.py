@@ -41,8 +41,8 @@ def sanitize(
                 homogenize=homogenize, infer_symmetry=infer_symmetry, wrap_constraints=wrap_constraints)(func)
             new_func = handle_polynomial(
                 ineq_constraint_sqf=ineq_constraint_sqf, eq_constraint_sqf=eq_constraint_sqf)(new_func)
-            new_func = handle_rational(disable_denom_finding_roots=disable_denom_finding_roots)(new_func)
-            new_func = handle_general_expr()(new_func)
+            # new_func = handle_rational(disable_denom_finding_roots=disable_denom_finding_roots)(new_func)
+            # new_func = handle_general_expr()(new_func)
             
             sol = new_func(poly, ineq_constraints, eq_constraints, *args, **kwargs)
 
