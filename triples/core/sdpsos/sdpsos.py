@@ -9,10 +9,8 @@ from sympy.combinatorics import PermutationGroup
 
 from .sos import SOSPoly
 from .solution import SolutionSDP
-from ..preprocess import sanitize
+from ..preprocess import ProofNode, SolvePolynomial
 from ..shared import clear_polys_by_symmetry
-from ..problem import InequalityProblem
-from ..node import ProofNode, SolvePolynomial
 from ...utils import MonomialManager, optimize_poly, Root
 
 
@@ -161,7 +159,7 @@ def SDPSOS(
         Whether to allow numerical solution (still under development).
     """
     
-    problem = InequalityProblem(poly, ineq_constraints, eq_constraints)
+    problem = ProofNode.new_problem(poly, ineq_constraints, eq_constraints)
     configs = {
         SolvePolynomial: {
             'solvers': [SDPSOSSolver],
@@ -183,8 +181,10 @@ class SDPSOSSolver(ProofNode):
             return
 
         poly = self.problem.expr
-        ineq_constraints = self.problem.ineq_constraints
-        eq_constraints = self.problem.eq_constraints
+        symmetry = MonomialManager(len(poly.gens), self.problem.identify_symmetry())
+        constraints_wrapper = self.problem.wrap_constraints(symmetry.perm_group)
+        ineq_constraints = constraints_wrapper[0]
+        eq_constraints = constraints_wrapper[1]
         nvars = len(poly.gens)
         degree = poly.total_degree()
         if nvars < 1:
@@ -193,8 +193,6 @@ class SDPSOSSolver(ProofNode):
         ####################################################################
         #                        Get configurations
         ####################################################################
-        
-        symmetry = MonomialManager(nvars, self.problem.identify_symmetry())
         roots = None
         ineq_constraints_with_trivial = configs.get('ineq_constraints_with_trivial', True)
         preordering = configs.get('preordering', 'linear-progressive')
@@ -265,8 +263,10 @@ class SDPSOSSolver(ProofNode):
                     if verbose:
                         print(f"Time for solving SDP{' ':20s}: {time() - time0:.6f} seconds. \033[32mSuccess\033[0m.")
                     solution = sos_problem.as_solution(qmodule=dict(enumerate([e[1] for e in qmodule])),
-                                                        ideal=dict(enumerate(list(eq_constraints.values()))))
-                    self.problem.solution = solution.solution
+                                                        ideal=dict(enumerate(list(eq_constraints.values())))).solution
+                    solution = solution.xreplace(constraints_wrapper[2])
+                    solution = solution.xreplace(constraints_wrapper[3])
+                    self.problem.solution = solution
                     break
             except Exception as e:
                 if verbose:

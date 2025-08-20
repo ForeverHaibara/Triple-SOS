@@ -1,13 +1,10 @@
-from datetime import datetime
 from typing import Optional, Dict, List, Union, Callable, Any
-from warnings import warn
 
 import numpy as np
 import sympy as sp
 from sympy import Expr, sympify
 
-from .problem import InequalityProblem
-from .node import SolveProblem, _sum_of_squares, SolvePolynomial
+from .preprocess import ProofNode, SolvePolynomial
 from .linsos.linsos import LinearSOSSolver
 from .structsos.structsos import StructuralSOSSolver
 from .symsos import SymmetricSOS
@@ -119,13 +116,13 @@ def sum_of_squares(
     Optional[Solution]
         The solution. If no solution is found, None is returned.
     """
-    problem = InequalityProblem(poly, ineq_constraints, eq_constraints)
+    problem = ProofNode.new_problem(poly, ineq_constraints, eq_constraints)
     configs = {
         SolvePolynomial: {
             'solvers': [NAME_TO_METHOD[_] for _ in method_order if _ in NAME_TO_METHOD]
         },
     }
-    return _sum_of_squares(problem, configs)
+    return problem.sum_of_squares(configs)
 
 
 def sum_of_squares_multiple(

@@ -1,3 +1,4 @@
-from .assembler import sanitize
+from ..node import ProofNode
+from .polynomial import SolvePolynomial
 
-__all__ = ['sanitize']
+__all__ = ['ProofNode', 'SolvePolynomial']

@@ -1,29 +1,26 @@
-from functools import wraps
-from inspect import signature
 from typing import List, Dict, Tuple, Union, Optional
 
 import sympy as sp
 from sympy import Expr, Poly, Rational, Integer, fraction
 
+from .polynomial import SolvePolynomial
+from ..node import ProofNode
 from ...utils import Solution
 
-def handle_rational(
-    disable_denom_finding_roots = False,
-):
-    """
-    Convert all rational expressions to polynomials.
-    """
-    def decorator(func):
-        @wraps(func)
-        def wrapper(poly: Expr,
-                ineq_constraints: Dict[Expr, Expr] = {},
-                eq_constraints: Dict[Expr, Expr] = {}, *args, **kwargs):
+
+class CancelDenominator(ProofNode):
+    _numer = None
+    _denom = None
+    _numer_sol = None
+    _denom_sol = None
+    def explore(self, configs):
+        problem = self.problem
+        poly, ineq_constraints, eq_constraints = problem.expr, problem.ineq_constraints, problem.eq_constraints
+        if self.status == 0:
             if isinstance(poly, Expr):
-                numer, denom = fraction(poly.together())
+                numer, denom = fraction(poly.doit().together())
             elif isinstance(poly, Poly):
-                numer, denom = poly.as_expr(), Integer(1)
-            else:
-                raise TypeError("poly must be an Expr or Poly object") # not expected to happen
+                numer, denom = poly, Integer(1)
 
             # handle constraints
             new_ineqs = {}
@@ -42,31 +39,35 @@ def handle_rational(
                 elif isinstance(eq, Poly):
                     new_eqs[eq] = expr
 
-            numer_sol = None
-            denom_sol = None
-            denom_solver = func
-            if not isinstance(denom, Rational):
-                denom_kwargs = kwargs.copy()
-                if disable_denom_finding_roots:
-                    denom_kwargs['roots'] = []
-                denom_solver = lambda *_args, **_kwargs: func(*_args,  **_kwargs, **denom_kwargs)
-                if denom_sol is not None:
-                    denom_sol = denom_sol.solution
-            denom_sol = prove_expr(denom, new_ineqs, new_eqs, denom_solver)
+            self._numer = self.new_problem(numer, new_ineqs, new_eqs)
+            self._denom = self.new_problem(denom, new_ineqs, new_eqs)
 
-            if denom_sol is not None:
-                numer_sol = func(numer, new_ineqs, new_eqs, *args, **kwargs)
-                if numer_sol is not None:
-                    new_sol = Solution(
-                        problem = poly,
-                        solution = numer_sol.solution / denom_sol,
-                        ineq_constraints = ineq_constraints,
-                        eq_constraints = eq_constraints,
-                    )
-                    return new_sol
-        return wrapper
-    return decorator
+            self.children = [
+                SolvePolynomial(self._denom)
+            ]
 
+            self.status = 1
+            return
+
+    def update(self, *args, **kwargs):
+        if not self.children:
+            return
+        child = self.children[0]
+        if child.finished:
+            if child.problem is self._denom:
+                if child.problem.solution is None:
+                    self.finished = True
+                    return
+                self.status = 3
+                self.children = [
+                    SolvePolynomial(self._numer)
+                ]
+            elif child.problem is self._numer:
+                if child.problem.solution is None:
+                    return
+
+                self.problem.solution = self._numer.solution / self._denom.solution
+                self.finished = True
 
 def prove_expr(expr: Expr,
         ineq_constraints: Dict[Expr, Expr],

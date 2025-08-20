@@ -6,7 +6,6 @@ from sympy.core.symbol import uniquely_named_symbol
 from .basic import prove_by_pivoting
 from .representation import sym_transform, sym_representation_inv
 from .solution import SolutionSymmetric
-from ..preprocess import sanitize
 from ...utils import Coeff
 
 
@@ -21,7 +20,7 @@ def _nonnegative_vars(ineq_constraints: List[sp.Poly]) -> Set[sp.Symbol]:
     return nonnegative
 
 
-@sanitize(homogenize=True)
+# @sanitize(homogenize=True)
 def SymmetricSOS(
         poly: sp.Poly,
         ineq_constraints: Dict[sp.Poly, sp.Expr] = {},

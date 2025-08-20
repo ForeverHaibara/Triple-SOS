@@ -1,7 +1,6 @@
 from typing import Union, List, Dict, Optional, Any
 
 import sympy as sp
-from sympy.core.symbol import uniquely_named_symbol
 
 from .utils import Coeff, has_gen, clear_free_symbols
 from .solution import SolutionStructural
@@ -11,18 +10,21 @@ from .sparse import sos_struct_linear, sos_struct_quadratic
 from .ternary import structural_sos_3vars
 from .quarternary import structural_sos_4vars
 from .pivoting import structural_sos_2vars
-from ..preprocess import sanitize
-from ..problem import InequalityProblem
-from ..node import ProofNode, SolvePolynomial, _sum_of_squares
+from ..preprocess import ProofNode, SolvePolynomial
 
+from ...utils import Solution
 
 class StructuralSOSSolver(ProofNode):
     def explore(self, *args, **kwargs):
         if self.status == 0:
-            problem = self.problem
+            problem, _homogenizer = self.problem.homogenize()
+
             solution = _structural_sos(problem.expr, problem.ineq_constraints, problem.eq_constraints)
             if solution is not None:
-                self.problem.solution = solution
+                problem.solution = solution
+
+                if _homogenizer is not None:
+                    self.problem.solution = Solution.dehomogenize(solution, _homogenizer)
 
         self.status = 1
         self.finished = True
@@ -54,11 +56,11 @@ def StructuralSOS(
     solution: SolutionStructuralSimple
 
     """
-    problem = InequalityProblem(poly, ineq_constraints, eq_constraints)
+    problem = ProofNode.new_problem(poly, ineq_constraints, eq_constraints)
     configs = {
         SolvePolynomial: {'solvers': [StructuralSOSSolver]}
     }
-    return _sum_of_squares(problem, configs)
+    return problem.sum_of_squares(configs)
 
 
 def _structural_sos(poly: sp.Poly, ineq_constraints: Dict[sp.Poly, sp.Expr] = {}, eq_constraints: Dict[sp.Poly, sp.Expr] = {}) -> sp.Expr:

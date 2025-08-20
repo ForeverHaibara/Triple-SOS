@@ -1,4 +1,3 @@
-from functools import wraps
 from typing import List, Dict, Tuple, Union, Set, Callable, Optional
 
 import sympy as sp
@@ -7,6 +6,9 @@ from sympy import (Expr, Poly, Symbol, Rational, Integer,
     sin, cos, tan, cot, sec, csc,
 )
 from sympy.utilities.iterables import iterable
+
+from .algebraic import CancelDenominator
+from ..node import ProofNode
 
 class _unique_symbol_generator:
     def __init__(self, symbols: Tuple[Symbol,...]):
@@ -295,46 +297,30 @@ class ModelingHelper:
         return new_poly, new_ineqs, new_eqs, inverse
 
 
-def handle_general_expr(
+class ReformulateAlgebraic(ProofNode):
+    inverse = None
+    def explore(self, configs):
+        if self.status == 0:
+            problem = self.problem
+            expr, ineq_constraints, eq_constraints = problem.expr, problem.ineq_constraints, problem.eq_constraints
+            helper = ModelingHelper(expr, ineq_constraints, eq_constraints)
+            new_expr, new_ineqs, new_eqs, inverse = helper.formulate()
 
-):
-    """
-    Decorator factory to handle general sympy expressions and convert them to algebraic
-    or rational expressions. For example, the expression Abs(x) is converted to a symbol "y"
-    with constraints y >= 0 and y**2 - x**2 = 0.
+            # print('Problem Reformulation')
+            # print(f'Goal         : {new_expr}')
+            # print(f'Inequalities : {new_ineqs}')
+            # print(f'Equalities   : {new_eqs}')
+            # print(f'Replacement  : {inverse}')
 
-    Noncommutative: (TODO)
+            self.children = [
+                CancelDenominator(
+                    self.new_problem(new_expr, new_ineqs, new_eqs)
+                )
+            ]
+            self.inverse = inverse
+            self.status = 1
 
-    Commutative:
-        Complex variables (TODO)
-
-        Pow, Min, Max, Abs
-
-        Piecewise (TODO)
-    """
-    def decorator(func):
-        @wraps(func)
-        def wrapper(poly: Expr,
-                ineq_constraints: Dict[Expr, Expr] = {},
-                eq_constraints: Dict[Expr, Expr] = {}, *args, **kwargs):
-
-            helper = ModelingHelper(poly, ineq_constraints, eq_constraints)
-            new_poly, new_ineqs, new_eqs, inverse = helper.formulate()
-
-            if len(inverse) and float(kwargs.get('verbose', 0)) > 0:
-                print('Problem Reformulation')
-                print(f'Goal         : {new_poly}')
-                print(f'Inequalities : {new_ineqs}')
-                print(f'Equalities   : {new_eqs}')
-                print(f'Replacement  : {inverse}')
-
-            sol = func(new_poly, new_ineqs, new_eqs, *args, **kwargs)
-            if sol is not None:
-                sol.problem = poly
-                sol.ineq_constraints = ineq_constraints
-                sol.eq_constraints = eq_constraints
-                if len(inverse):
-                    sol.solution = sol.solution.xreplace(inverse)
-            return sol
-        return wrapper
-    return decorator
+    def update(self, *args, **kwargs):
+        if self.children and self.children[0].problem.solution is not None:
+            self.problem.solution = self.children[0].problem.solution.xreplace(self.inverse)
+            self.finished = True

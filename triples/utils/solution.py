@@ -394,8 +394,11 @@ class Solution(SolutionBase):
         if homogenizer is None:
             return self
 
-        self = self.copy()
-        self.problem = self.problem.subs(homogenizer, 1)
+        expr = self
+        if isinstance(self, Solution):
+            self = self.copy()
+            self.problem = self.problem.subs(homogenizer, 1)
+            expr = self.solution
         def _deflat_perm_group(expr):
             # e.g.
             # CyclicSum(a**2, (a,b,c,d), PermutationGroup(Permutation([1,2,0,3])))
@@ -410,7 +413,11 @@ class Solution(SolutionBase):
             f = f.xreplace({homogenizer: 1})
             f = f.replace(lambda x: isinstance(x, CyclicExpr), _deflat_perm_group)
             return f
-        self.solution = dehom(self.solution)
+
+        if isinstance(self, Solution):
+            self.solution = dehom(expr)
+        else:
+            self = dehom(expr)
         return self
 
     def as_fraction(self, together=True, inplace=False):

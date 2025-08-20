@@ -15,11 +15,9 @@ from .tangents import prepare_tangents, prepare_inexact_tangents, get_qmodule_li
 from .correction import linear_correction
 from .updegree import lift_degree
 from .solution import SolutionLinear
-from ..preprocess import sanitize
-from ..problem import InequalityProblem
-from ..node import ProofNode, SolvePolynomial
+from ..preprocess import ProofNode, SolvePolynomial
 from ..shared import homogenize_expr_list, clear_polys_by_symmetry
-from ...utils import Root, optimize_poly
+from ...utils import Root, optimize_poly, Solution
 from ...utils.monomials import MonomialManager
 
 
@@ -232,7 +230,7 @@ def LinearSOS(
         The solution of the linear programming SOS. When solution is None, it means that the linear
         programming SOS fails.
     """
-    problem = InequalityProblem(poly, ineq_constraints, eq_constraints)
+    problem = ProofNode.new_problem(poly, ineq_constraints, eq_constraints)
     configs = {
         SolvePolynomial: {
             'solvers': [LinearSOSSolver],
@@ -260,16 +258,17 @@ class LinearSOSSolver(ProofNode):
         if self.status != 0:
             return
 
-        poly = self.problem.expr
-        ineq_constraints = self.problem.ineq_constraints
-        eq_constraints = self.problem.eq_constraints
+        problem, _homogenizer = self.problem.homogenize()
+        poly = problem.expr
+        symmetry = MonomialManager(len(poly.gens), problem.identify_symmetry())
+        constraints_wrapper = problem.wrap_constraints(symmetry.perm_group)
+        ineq_constraints = constraints_wrapper[0]
+        eq_constraints = constraints_wrapper[1]
 
 
         ####################################################################
         #                        Get configurations
         ####################################################################
-        _homogenizer = None
-        symmetry = MonomialManager(len(poly.gens), self.problem.identify_symmetry())
         roots = None
         tangents = []
         augment_tangents = configs.get('augment_tangents', True)
@@ -421,9 +420,9 @@ class LinearSOSSolver(ProofNode):
                         ineq_constraints=ineq_constraints, eq_constraints=dict(eq_constraints),
                         is_equal=is_equal
                     ).solution
-                    self.problem.solution = solution
-                    self.status = 1
-                    self.finished = True
+                    solution = solution.xreplace(constraints_wrapper[2])
+                    solution = solution.xreplace(constraints_wrapper[3])
+                    problem.solution = solution
                     break
                 else:
                     if verbose:
@@ -432,6 +431,9 @@ class LinearSOSSolver(ProofNode):
         except _basis_limit_exceeded:
             if verbose:
                 print(f'Basis limit {basis_limit} exceeded. LinearSOS aborted.')
+
+        if problem.solution is not None and _homogenizer is not None:
+            self.problem.solution = Solution.dehomogenize(problem.solution, _homogenizer)
 
         self.status = 1
         self.finished = True

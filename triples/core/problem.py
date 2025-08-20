@@ -1,9 +1,11 @@
-from typing import Dict, Tuple
-from sympy import Expr, Symbol, Poly, Integer, sympify
+from typing import Dict, Tuple, Optional
+from sympy import Expr, Symbol, Poly, Integer, Function, sympify
 from sympy import __version__ as SYMPY_VERSION
+from sympy.combinatorics.perm_groups import Permutation, PermutationGroup
+from sympy.core.symbol import uniquely_named_symbol
 from sympy.external.importtools import version_tuple
 
-from ..utils import identify_symmetry_from_lists
+from ..utils import identify_symmetry_from_lists, Solution
 
 # fix the bug in sqf_list before 1.13.0
 # https://github.com/sympy/sympy/pull/26182
@@ -64,7 +66,7 @@ class InequalityProblem:
         self.ineq_constraints = ineq_constraints
         self.eq_constraints = eq_constraints
 
-    def copy(self):
+    def copy(self) -> 'InequalityProblem':
         return InequalityProblem(
             self.expr,
             self.ineq_constraints.copy(),
@@ -82,14 +84,20 @@ class InequalityProblem:
     def evaluate_complexity(self):
         ...
 
-    def sum_of_squares(self, configs):
+    def sum_of_squares(self, configs) -> Solution:
         from .node import _sum_of_squares
         return _sum_of_squares(self, configs)
+
+    @property
+    def is_homogeneous(self) -> bool:
+        return self.expr.is_homogeneous and \
+            all(e.is_homogeneous for e in self.ineq_constraints.keys()) and \
+            all(e.is_homogeneous for e in self.eq_constraints.keys())
 
     def polylize(self,
         ineq_constraint_sqf: bool = True,
         eq_constraint_sqf: bool = True,
-    ):
+    ) -> 'InequalityProblem':
         problem = self.copy()
         expr, ineq_constraints, eq_constraints = \
             problem.expr, problem.ineq_constraints, problem.eq_constraints
@@ -114,7 +122,64 @@ class InequalityProblem:
             expr, ineq_constraints, eq_constraints
         return problem
 
-    def identify_symmetry(self):
+    def homogenize(self) -> Tuple['InequalityProblem', Optional[Symbol]]:
+        if not self.is_homogeneous:
+            hom = uniquely_named_symbol('1', tuple(self.free_symbols))
+            expr = self.expr.homogenize(hom)
+            ineqs = {e.homogenize(hom): v for e, v in self.ineq_constraints.items()}
+            ineqs[Poly(hom, expr.gens)] = hom # homogenizer = 1 >= 0
+            eqs = {e.homogenize(hom): v for e, v in self.eq_constraints.items()}
+
+            new_problem = InequalityProblem(expr, ineqs, eqs)
+            return new_problem, hom
+        return self, None
+
+    def identify_symmetry(self) -> PermutationGroup:
         return identify_symmetry_from_lists(
             [[self.expr], list(self.ineq_constraints), list(self.eq_constraints)]
         )
+
+    def wrap_constraints(self, symmetry: Optional[PermutationGroup]=None) -> \
+            Tuple[Dict[Poly, Expr], Dict[Poly, Expr], Dict[Expr, Expr], Dict[Expr, Expr]]:
+        gens = self.expr.gens
+        return _get_constraints_wrapper(
+            gens, self.ineq_constraints, self.eq_constraints, symmetry
+        )
+
+
+def _get_constraints_wrapper(symbols: Tuple[int, ...],
+    ineq_constraints: Dict[Poly, Expr], eq_constraints: Dict[Poly, Expr],
+    perm_group: Optional[PermutationGroup]=None):
+    if perm_group is None:
+        # trivial group
+        perm_group = PermutationGroup(Permutation(list(range(symbols))))
+
+    def _get_mask(symbols, dlist):
+        # only reserve symbols with degree > 0, this reduces time complexity greatly
+        return tuple(s for d, s in zip(dlist, symbols) if d != 0)
+
+    def _get_dicts(constraints, name='_G'):
+        dt = dict()
+        inv = dict()
+        rep_dict = dict((p.rep, v) for p, v in constraints.items())
+        counter = 0  
+        for base in constraints.keys():
+            if base.rep in dt:
+                continue
+            dlist = base.degree_list()
+            for p in perm_group.elements:
+                invorder = p.__invert__()(symbols)
+                permed_base = base.reorder(*invorder).rep
+                permed_expr = rep_dict.get(permed_base)
+                if permed_expr is None:
+                    raise ValueError("Given constraints are not symmetric with respect to the permutation group.")
+                compressed = _get_mask(p(symbols), dlist)
+                value = Function(name + str(counter))(*compressed)
+                dt[permed_base] = value
+                inv[value] = permed_expr
+            counter += 1
+        dt = dict((Poly.new(k, *symbols), v) for k, v in dt.items())
+        return dt, inv
+    i2g, g2i = _get_dicts(ineq_constraints, name='_G')
+    e2h, h2e = _get_dicts(eq_constraints, name='_H')
+    return i2g, e2h, g2i, h2e
