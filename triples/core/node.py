@@ -99,7 +99,7 @@ def _sum_of_squares(problem: InequalityProblem, configs = {}):
     solution = Solution(
         problem.expr,
         problem.solution,
-    )
+    ).rewrite_symmetry()
     solution._start_time = start_time
     solution._end_time = end_time
     return solution

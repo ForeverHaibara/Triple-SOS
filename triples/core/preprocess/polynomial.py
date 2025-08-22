@@ -1,7 +1,6 @@
 from typing import List, Dict, Union, Tuple
 
 from sympy import Expr, Poly
-from sympy.core.symbol import uniquely_named_symbol
 
 from ..node import ProofNode
 from ...utils import (
@@ -11,10 +10,16 @@ from ...utils import (
 
 
 class SolvePolynomial(ProofNode):
+    """
+    Solve a dense polynomial inequality. The target expression and its constraints
+    are all converted and stored as sympy (dense) Poly class. However, the process
+    of converting expressions to dense polynomials is inefficient for very large inputs.
+    """
     _dense_problem = None
+    _restoration = None
     def explore(self, configs):
         if self.status == 0:
-            self._dense_problem = self.problem.polylize()
+            self._dense_problem, self._restoration = reduce_over_quotient_ring(self.problem.polylize())
 
             solvers = configs.get('solvers', None)
             if solvers is None:
@@ -28,12 +33,16 @@ class SolvePolynomial(ProofNode):
                 ]
             self.children = [solver(self._dense_problem) for solver in solvers]
 
-            self.status = 1
+            self.status = 10000
 
     def update(self, *args, **kwargs):
         if self._dense_problem is not None and self._dense_problem.solution is not None:
-            self.problem.solution = self._dense_problem.solution
+            self.problem.solution = self._restoration(self._dense_problem.solution)
             self.finished = True
+        if self.status > 1000 and len(self.children) == 0:
+            # all children failed
+            self.finished = True
+
 
 #########################################################
 #
@@ -124,11 +133,7 @@ def _align_degree(p, p1, p2, accept_odd_degree=False):
     return q, muldeg, divrem[0]
 
 
-def reduce_over_quotient_ring(poly: Poly,
-        ineq_constraints: Dict[Poly, Expr],
-        eq_constraints: Dict[Poly, Expr],
-        homogenize: bool = False,
-    ):
+def reduce_over_quotient_ring(problem):
     """
     Perform quotient ring reduction of the problem, including operations like
     homogenization.
@@ -136,35 +141,20 @@ def reduce_over_quotient_ring(poly: Poly,
     Given equality constraint f(x) = g(x) where f,g are nonzero homogeneous polynomials
     and deg(f) = deg(g), we obtain 1 = (f(x)/g(x)) and can be used for homogenization.
 
-    Parameters
-    ----------
-    homogenize: bool
-        Whether to homogenize the problem by introducing a new variable.
-
-    TODO: move it elsewhere
-
-    Returns a dict containing
-    {
-        'problem': (new_poly, new_ineq_constraints, new_eq_constraints),
-        'restoration': restoration,
-        **kwargs
-    }
+    TODO:
+    1. Eliminate linear equality constraints, e.g. a+2b=3
+    2. Eliminate linear inequality constraints, e.g. b+c-a, c+a-b, a+b-c>=0
     """
-    symbols = poly.gens
+    poly, ineq_constraints, eq_constraints = problem.expr, problem.ineq_constraints, problem.eq_constraints
     restorations = []
     ################################################################
     #           Homogenize the polynomial and constraints
     ################################################################
-    homogenizer = None
     is_hom = poly.is_homogeneous and all(e.is_homogeneous for e in ineq_constraints)\
         and all(e.is_homogeneous for e in eq_constraints)
     if is_hom:
         # nothing to do
-        return {
-            'problem': (poly, ineq_constraints, eq_constraints),
-            'homogenizer': homogenizer,
-            'restoration': lambda x: x
-        }
+        return problem, lambda x: x
 
     ################################################################
     #         Homogenize using bidegree constraints
@@ -230,24 +220,12 @@ def reduce_over_quotient_ring(poly: Poly,
         is_hom = True
         ineq_constraints, eq_constraints = new_ineqs, new_eqs
         def _align_degree_restore(x):
-            if not isinstance(x, Solution): return None
-            x.solution = (x.solution - p2expr(new_poly[2])*sgn_expr) / p1_expr**new_poly[1]
-            return x
+            return (x - p2expr(new_poly[2])*sgn_expr) / p1_expr**new_poly[1]
         restorations.append(_align_degree_restore)
         break
 
-
-    if (not is_hom) and homogenize:
-        homogenizer = uniquely_named_symbol('1', 
-            tuple(set.union(
-                set(symbols), *(e.free_symbols for e in ineq_constraints.values()), 
-                *(e.free_symbols for e in eq_constraints.values()))))
-        poly = poly.homogenize(homogenizer)
-        ineq_constraints = dict((e.homogenize(homogenizer), e2) for e, e2 in ineq_constraints.items())
-        ineq_constraints[homogenizer.as_poly(*poly.gens)] = homogenizer
-        eq_constraints = dict((e.homogenize(homogenizer), e2) for e, e2 in eq_constraints.items())
-        restorations.append(lambda sol: sol.dehomogenize(homogenizer))
-
+    if len(restorations) == 0:
+        restorations.append(lambda x: x)
     def restoration(sol):
         if sol is None:
             return None
@@ -255,8 +233,7 @@ def reduce_over_quotient_ring(poly: Poly,
             sol = rs(sol)
         return sol
 
-    return {
-        'problem': (poly, ineq_constraints, eq_constraints),
-        'homogenizer': homogenizer,
-        'restoration': restoration
-    }
+    new_problem = ProofNode.new_problem(
+        poly, ineq_constraints, eq_constraints,
+    )
+    return new_problem, restoration

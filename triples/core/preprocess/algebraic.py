@@ -1,7 +1,7 @@
 from typing import List, Dict, Tuple, Union, Optional
 
 import sympy as sp
-from sympy import Expr, Poly, Rational, Integer, fraction
+from sympy import Expr, Poly, Rational, Integer, Mul, Symbol, fraction
 
 from .polynomial import SolvePolynomial
 from ..node import ProofNode
@@ -43,7 +43,7 @@ class CancelDenominator(ProofNode):
             self._denom = self.new_problem(denom, new_ineqs, new_eqs)
 
             self.children = [
-                SolvePolynomial(self._denom)
+                SolveMul(self._denom)
             ]
 
             self.status = 1
@@ -69,67 +69,99 @@ class CancelDenominator(ProofNode):
                 self.problem.solution = self._numer.solution / self._denom.solution
                 self.finished = True
 
-def prove_expr(expr: Expr,
-        ineq_constraints: Dict[Expr, Expr],
-        eq_constraints: Dict[Expr, Expr],
-        solver,
-    ) -> Optional[Expr]:
-    """Prove the nonnegativity of a sympy expression without expanding
-    it to a sympy polynomial. This is useful for trivially nonnegative expressions,
-    e.g., the denominator of an expression."""
-    def wrapped_solver(*args, **kwargs):
-        sol = solver(*args, **kwargs)
-        if isinstance(sol, Solution):
-            sol = sol.solution
-        return sol
-    def _prove_by_recur(expr):
+
+
+class SolveMul(ProofNode):
+    """
+    Prove the nonnegativity of a Mul expression before it is expanded to a
+    polynomial. Trivially nonnegative terms in the multiplication are removed from the expression.
+    """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.proved = []
+        self.unproved = []
+
+    def explore(self, configs):
+        """Prove the nonnegativity of a sympy expression without expanding
+        it to a sympy polynomial. This is useful for trivially nonnegative expressions,
+        e.g., the denominator of an expression."""
+        if self.status != 0:
+            return
+        self.status = 1
+
+        expr = self.problem.expr
         if isinstance(expr, Rational):
-            if expr.numerator >= 0:
-                return expr
-            return None
-        elif expr.is_Pow:
-            if isinstance(expr.args[1], Rational) and int(expr.args[1].numerator) % 2 == 0:
-                return expr
-            sol = _prove_by_recur(expr.args[0])
+            if expr.numerator >= 0 and expr.denominator > 0:
+                self.problem.solution = expr
+            self.status = 4
+            self.finished = True
+            return
+
+        args = Mul.make_args(expr)
+        signs = self.problem.get_symbol_signs()
+
+        for arg in args:
+            # prove nonnegativity for each term
+            sol = _naive_prove_by_recur(arg, signs)
             if sol is not None:
-                return sol ** expr.args[1]
-        elif expr.is_Mul:
-            # prove the nonnegativity of each term in the Mul object
-            # NOTE: this does not hold for noncommutative problems
-            proved = []
-            unproved = []
-            for arg in expr.args:
-                arg_sol = _prove_by_recur(arg)
-                if arg_sol is not None:
-                    proved.append(arg_sol)
+                self.proved.append(sol)
+            else:
+                if arg.is_Pow and isinstance(arg.exp, Integer) and arg.exp % 2 == 0:
+                    self.unproved.append((arg.base, 1))
+                    self.proved.append(arg.base ** (arg.exp - 1))
                 else:
-                    arg_sol_neg = _prove_by_recur(arg)
-                    if arg_sol_neg is not None:
-                        proved.append(arg_sol_neg)
-                        unproved.append(-Rational(1,1))
-                    else:
-                        unproved.append(arg)
+                    self.unproved.append((arg, 1))
 
-            proved_sol = expr.func(*proved)
-            if len(unproved) == 0:
-                return proved_sol
-            unproved = expr.func(*unproved)
-            if isinstance(unproved, Rational):
-                if unproved >= 0:
-                    return unproved * proved_sol
-                else:
-                    return None
-            unproved_sol = wrapped_solver(unproved, ineq_constraints, eq_constraints)
-            if unproved_sol is not None:
-                return proved_sol * unproved_sol
+        if self.unproved:
+            rest = Mul(*[base for base, exp in self.unproved])
+            rest_problem = self.new_problem(rest, self.problem.ineq_constraints, self.problem.eq_constraints)
+            self.children = [
+                SolvePolynomial(rest_problem)
+            ]
+            self.status = 2
+        else:
+            self.problem.solution = Mul(*self.proved)
+            self.status = 4
+            self.finished = True
 
-        if len(expr.free_symbols) == 0:
-            # e.g. (sqrt(2) - 1)
-            sgn = (expr >= 0)
-            if sgn in (sp.true, True):
-                return expr
-            return None
 
-        # elif expr.is_Add:
-        return wrapped_solver(expr, ineq_constraints, eq_constraints)
-    return _prove_by_recur(expr)
+    def update(self, *args, **kwargs):
+        if len(self.children) == 1:
+            sol = self.children[0].problem.solution
+            if sol is not None:
+                self.problem.solution = sol * Mul(*self.proved)
+            if self.children[0].finished:
+                self.status = 2
+                self.finished = True
+
+
+
+def _naive_prove_by_recur(expr, signs: Dict[Symbol, Tuple[int, Expr]]):
+    if isinstance(expr, Rational):
+        if expr.numerator >= 0 and expr.denominator > 0:
+            return expr
+        return None
+    elif expr.is_Symbol:
+        if signs[expr][0] == 1:
+            return signs[expr][1]
+        return None
+    elif expr.is_Pow:
+        if isinstance(expr.exp, Rational) and int(expr.exp.numerator) % 2 == 0:
+            return expr
+        sol = _naive_prove_by_recur(expr.base, signs)
+        if sol is not None:
+            return sol ** expr.exp
+        return None
+    elif expr.is_Add or expr.is_Mul:
+        nonneg = []
+        for arg in expr.args:
+            nonneg.append(_naive_prove_by_recur(arg, signs))
+            if nonneg[-1] is None:
+                return None
+        return expr.func(*nonneg)
+    if len(expr.free_symbols) == 0:
+        # e.g. (sqrt(2) - 1)
+        sgn = (expr >= 0)
+        if sgn in (sp.true, True):
+            return expr
+        return None

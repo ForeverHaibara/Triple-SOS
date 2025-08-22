@@ -1,5 +1,6 @@
 from typing import Dict, Tuple, Optional
-from sympy import Expr, Symbol, Poly, Integer, Function, sympify
+from unicodedata import name
+from sympy import Expr, Symbol, Poly, Integer, Rational, Function, Mul, sympify
 from sympy import __version__ as SYMPY_VERSION
 from sympy.combinatorics.perm_groups import Permutation, PermutationGroup
 from sympy.core.symbol import uniquely_named_symbol
@@ -80,6 +81,74 @@ class InequalityProblem:
             *[set(e.free_symbols) for e in self.ineq_constraints.keys()],
             *[set(e.free_symbols) for e in self.eq_constraints.keys()]
         )
+
+    def get_symbol_signs(self):
+        fs = tuple(self.free_symbols)
+        signs = {s: (None, None) for s in fs}
+        for eq, expr in self.eq_constraints.items():
+            if not isinstance(eq, Poly):
+                eq = Poly(eq, *fs)
+
+            monoms = eq.monoms()
+            if len(monoms) == 1:
+                # x1**d1 * x2**d2 * ... == 0
+                lm = monoms[0]
+                c1 = eq.coeff_monomial(lm)
+                nnz = [i for i in range(len(lm)) if lm[i] != 0]
+                if len(nnz) == 1:
+                    signs[fs[nnz[0]]] = (0, (expr / c1)**Rational(1, lm[nnz[0]]))
+            elif len(monoms) == 2:
+                # c1 * x1**d1 * x2**d2 * ... + c2* x1**e1 * x2**e2 * ... == expr >= 0
+                lm = monoms[0]
+                tm = monoms[1]
+                nnz1 = [i for i in range(len(lm)) if lm[i] != 0]
+                nnz2 = [i for i in range(len(tm)) if tm[i] != 0]
+                # if len(nnz1) == 0 or len(nnz2) == 0 or \
+                #     (len(nnz1) == 1 and len(nnz2) == 1 and nnz1[0] == nnz2[0]):
+                #     d1 = lm[nnz1[0]] if len(nnz1) else 0
+                #     d2 = tm[nnz2[0]] if len(nnz2) else 0
+                #     if (d1 - d2) % 2 == 1:
+                #         # e.g. x^5 - 3*x^2 = 0  => x = 0 or x = 3^(1/3)
+                #         c1 = eq.coeff_monomial(lm)
+                #         c2 = eq.coeff_monomial(tm)
+                #         sgn = bool(c1 > 0)^bool(c2 > 0)
+                #         sgn = 1 if sgn else -1
+                #         expr2 = sgn*(-sgn * c2 / c1)**Rational(1, d1 - d2)
+                #         signs[fs[nnz1[0]]] = (sgn, expr2)
+
+
+        for ineq, expr in self.ineq_constraints.items():
+            if not isinstance(ineq, Poly):
+                ineq = Poly(ineq, *fs)
+
+            monoms = ineq.monoms()
+            c1 = 0
+            if len(monoms) == 1:
+                c1 = ineq.coeff_monomial(monoms[0])
+
+            # if len(monoms) == 2:
+            #     # c1 * t1 + c2 * t2 = expr >= 0
+            #     # equivalent to (c1/(c2*sgn))*(t1/t2) = expr/(c2*sgn*t2) - sgn >= 0
+            #     m1, m2 = monoms
+            #     c1 = ineq.coeff_monomial(m1)
+            #     c2 = ineq.coeff_monomial(m2)
+            #     monom_diff = tuple([m1[i] - m2[i] for i in range(len(m1))])
+            #     sgn = 1 if bool(c2 > 0) else -1
+            #     c1 = c1 / (sgn * c2)
+            #     expr = expr / (sgn * c2 * Mul(*[fs[i]**m2[i] for i in range(len(m2))])) - sgn
+            #     monoms = [monom_diff]
+            #     # now it goes to the len(monoms) == 1 case
+            if len(monoms) == 1:
+                # c1 * x1**d1 * x2**d2 * ... >= 0
+                lm = monoms[0]
+                odds = [i for i in range(len(lm)) if lm[i] % 2 == 1]  
+                if len(odds) == 1:
+                    sgn = 1 if bool(c1 > 0) else -1
+                    other = Mul(sgn*c1, *[fs[i]**lm[i] for i in range(len(lm)) if i != odds[0]])
+                    signs[fs[odds[0]]] = (sgn, sgn*(expr / other)**Rational(1, lm[odds[0]]))
+        return signs
+
+
 
     def evaluate_complexity(self):
         ...
