@@ -42,7 +42,7 @@ class ProofNode:
     def explore(self, configs):
         ...
 
-    def update(self, node, *args, **kwargs):
+    def update(self, *args, **kwargs):
         if self.problem.solution is not None:
             self.finished = True
 
@@ -52,6 +52,25 @@ class ProofNode:
         Convenient method to create a new InequalityProblem instance.
         """
         return InequalityProblem(*args, **kwargs)
+
+
+class TransformNode(ProofNode):
+    """
+    A special class of nodes that expects solutions from child problems.
+    """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.restorations = {}
+
+    def update(self, *args, **kwargs):
+        if self.finished:
+            return
+        for child in self.children:
+            if child.problem.solution is not None:
+                restoration = self.restorations[child]
+                self.problem.solution = restoration(child.problem.solution)
+                self.finished = True
+                break
 
 
 class SolveProblem(ProofNode):

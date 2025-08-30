@@ -5,7 +5,7 @@ from sympy import Expr, Poly, Rational, Integer, Mul, Symbol, fraction
 
 from .polynomial import SolvePolynomial
 from ..node import ProofNode
-from ...utils import Solution
+from ...utils import CyclicExpr, Solution
 
 
 class CancelDenominator(ProofNode):
@@ -102,7 +102,7 @@ class SolveMul(ProofNode):
 
         for arg in args:
             # prove nonnegativity for each term
-            sol = _naive_prove_by_recur(arg, signs)
+            sol = prove_by_recur(arg, signs)
             if sol is not None:
                 self.proved.append(sol)
             else:
@@ -136,29 +136,41 @@ class SolveMul(ProofNode):
 
 
 
-def _naive_prove_by_recur(expr, signs: Dict[Symbol, Tuple[int, Expr]]):
+def prove_by_recur(expr, signs: Dict[Symbol, Tuple[int, Expr]]):
+    """
+    Very fast and simple nonnegativity check for a SymPy (commutative, real)
+    expression instance given signs of symbols.
+    """
     if isinstance(expr, Rational):
         if expr.numerator >= 0 and expr.denominator > 0:
             return expr
         return None
     elif expr.is_Symbol:
-        if signs[expr][0] == 1:
+        if signs.get(expr, (0, None))[0] == 1:
             return signs[expr][1]
         return None
     elif expr.is_Pow:
         if isinstance(expr.exp, Rational) and int(expr.exp.numerator) % 2 == 0:
             return expr
-        sol = _naive_prove_by_recur(expr.base, signs)
+        sol = prove_by_recur(expr.base, signs)
         if sol is not None:
             return sol ** expr.exp
         return None
     elif expr.is_Add or expr.is_Mul:
         nonneg = []
         for arg in expr.args:
-            nonneg.append(_naive_prove_by_recur(arg, signs))
+            nonneg.append(prove_by_recur(arg, signs))
             if nonneg[-1] is None:
                 return None
         return expr.func(*nonneg)
+    elif isinstance(expr, CyclicExpr):
+        if expr.args[0].is_Pow:
+            if isinstance(expr.exp, Rational) and int(expr.exp.numerator) % 2 == 0:
+                return expr
+
+        # TODO: make it nicer
+        return prove_by_recur(expr.doit(deep=False), signs)
+
     if len(expr.free_symbols) == 0:
         # e.g. (sqrt(2) - 1)
         sgn = (expr >= 0)

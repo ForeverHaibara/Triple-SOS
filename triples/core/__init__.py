@@ -3,7 +3,7 @@ from .sum_of_squares import (
 )
 
 from .linsos import (
-    LinearSOS, LinearBasis, LinearBasisTangent, SolutionLinear
+    LinearSOS,
 )
 
 from .structsos import (
@@ -24,7 +24,7 @@ from .sdpsos import (
 
 __all__ = [
     'sum_of_squares', 'sum_of_squares_multiple', 'METHOD_ORDER', 'DEFAULT_CONFIGS',
-    'LinearSOS', 'LinearBasis', 'LinearBasisTangent', 'SolutionLinear',
+    'LinearSOS',
     'StructuralSOS', 'SolutionStructural',
     'prove_univariate', 'prove_univariate_interval',
     'pqr_sym', 'pqr_cyc', 'pqr_ker',

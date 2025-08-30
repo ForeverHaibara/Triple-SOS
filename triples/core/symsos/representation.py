@@ -3,12 +3,12 @@ from typing import Tuple, Dict, List, Union
 import sympy as sp
 
 from .basic import SymmetricTransform
-from .symmetric import SymmetricPositive, SymmetricReal
+from .symmetric import UE3Real, UE3Positive
 from ...utils import Coeff
 
 _METHOD_TO_TRANSFORM = {
-    'real': SymmetricReal,
-    'positive': SymmetricPositive
+    'real': UE3Real,
+    'positive': UE3Positive
 }
 
 def _get_transform_from_method(method: str, nvars: int) -> SymmetricTransform:

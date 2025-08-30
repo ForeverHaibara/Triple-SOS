@@ -1002,7 +1002,7 @@ def rewrite_symmetry(expr: Expr, symbols: Tuple[Symbol], perm_group: Permutation
     """
     return expr.replace(lambda x: isinstance(x, CyclicExpr), _get_rewriting_replacement(symbols, perm_group))
 
-def verify_symmetry(polys: Union[List[sp.Poly], sp.Poly], perm_group: Union[Permutation, PermutationGroup]) -> bool:
+def verify_symmetry(polys: Union[List[sp.Poly], sp.Poly], perm_group: Union[str, Permutation, PermutationGroup]) -> bool:
     """
     Verify whether the polynomials are symmetric with respect to the permutation group.
 
@@ -1010,8 +1010,8 @@ def verify_symmetry(polys: Union[List[sp.Poly], sp.Poly], perm_group: Union[Perm
     ----------
     polys : Union[List[sp.Poly], sp.Poly]
         A list of polynomials or a single polynomial. Must have the same generators.
-    perm_group : Union[Permutation, PermutationGroup]
-        A permutation or a permutation group to verify.
+    perm_group : Union[str, Permutation, PermutationGroup]
+        A permutation or a permutation group to verify. If string, it should be one of 'sym' or 'cyc'.
 
     Returns
     ----------
@@ -1045,6 +1045,13 @@ def verify_symmetry(polys: Union[List[sp.Poly], sp.Poly], perm_group: Union[Perm
     if len(polys) > 1 and any(p.gens != gens for p in polys):
         raise ValueError("All polynomials should have the same generators.")
 
+    if isinstance(perm_group, str):
+        if perm_group == 'sym':
+            perm_group = SymmetricGroup(len(gens))
+        elif perm_group == 'cyc':
+            perm_group = CyclicGroup(len(gens))
+        else:
+            raise ValueError("The permutation group should be 'sym', 'cyc', or a PermutationGroup object.")
     if isinstance(perm_group, PermutationGroup):
         if perm_group.degree != len(gens):
             raise ValueError("The permutation group should have the same degree as the number of generators.")

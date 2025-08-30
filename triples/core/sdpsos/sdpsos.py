@@ -71,7 +71,7 @@ def _get_qmodule_list(poly: Poly, ineq_constraints: List[Tuple[Poly, Expr]],
             mul_expr = sp.Mul(*(c[1] for c in comb))
             for ineq, e in nonlin_ineqs:
                 new_d = d + ineq.total_degree()
-                if new_d <= degree and (degree - new_d) % 2 == 0:
+                if new_d <= degree and ((not is_homogeneous) or (degree - new_d) % 2 == 0):
                     qmodule.append((mul * ineq, mul_expr * e))
                     has_additional = True
 

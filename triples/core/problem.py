@@ -6,7 +6,7 @@ from sympy.combinatorics.perm_groups import Permutation, PermutationGroup
 from sympy.core.symbol import uniquely_named_symbol
 from sympy.external.importtools import version_tuple
 
-from ..utils import identify_symmetry_from_lists, Solution
+from ..utils import optimize_poly, Root, identify_symmetry_from_lists, Solution
 
 # fix the bug in sqf_list before 1.13.0
 # https://github.com/sympy/sympy/pull/26182
@@ -47,8 +47,10 @@ class InequalityProblem:
     _is_commutative = True
     _is_polynomial = None
 
-    counter_example = None
+    counter_examples = None
     solution = None
+
+    roots = None
 
     def __init__(self,
         expr: Expr,
@@ -167,9 +169,9 @@ class InequalityProblem:
         ineq_constraint_sqf: bool = True,
         eq_constraint_sqf: bool = True,
     ) -> 'InequalityProblem':
-        problem = self.copy()
+        problem = self
         expr, ineq_constraints, eq_constraints = \
-            problem.expr, problem.ineq_constraints, problem.eq_constraints
+            problem.expr, problem.ineq_constraints.copy(), problem.eq_constraints.copy()
         symbols = self.free_symbols
         
         if len(symbols) == 0: # and len(original_symbols) == 0:
@@ -186,9 +188,8 @@ class InequalityProblem:
         if eq_constraint_sqf:
             eq_constraints = dict(_std_eq_constraints(*item) for item in eq_constraints.items())
         eq_constraints = dict((e, e2) for e, e2 in eq_constraints.items() if e.total_degree() > 0)
-        
-        problem.expr, problem.ineq_constraints, problem.eq_constraints = \
-            expr, ineq_constraints, eq_constraints
+
+        problem = InequalityProblem(expr, ineq_constraints, eq_constraints)
         return problem
 
     def homogenize(self) -> Tuple['InequalityProblem', Optional[Symbol]]:
@@ -200,6 +201,8 @@ class InequalityProblem:
             eqs = {e.homogenize(hom): v for e, v in self.eq_constraints.items()}
 
             new_problem = InequalityProblem(expr, ineqs, eqs)
+            if self.roots is not None:
+                new_problem.roots = [Root(r.root + (Integer(1),), r.domain, r.rep + (r.domain.one,)) for r in self.roots]
             return new_problem, hom
         return self, None
 
@@ -214,6 +217,13 @@ class InequalityProblem:
         return _get_constraints_wrapper(
             gens, self.ineq_constraints, self.eq_constraints, symmetry
         )
+
+    def find_roots(self):
+        """Find the equality cases of the problem heuristically."""
+        roots = optimize_poly(self.expr, list(self.ineq_constraints), [self.expr] + list(self.eq_constraints),
+                    self.expr.gens, return_type='root')
+        self.roots = roots
+        return self.roots
 
 
 def _get_constraints_wrapper(symbols: Tuple[int, ...],

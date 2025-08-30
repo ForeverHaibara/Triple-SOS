@@ -1,10 +1,8 @@
-from itertools import combinations
 from typing import Optional, Tuple, List, Dict, Union
 from time import time
 import warnings
 
 import numpy as np
-import sympy as sp
 from sympy import Poly, Expr, Symbol
 from sympy.combinatorics import PermutationGroup
 from sympy.external.importtools import version_tuple
@@ -14,10 +12,10 @@ from .basis import LinearBasis, LinearBasisTangent, LinearBasisTangentEven
 from .tangents import prepare_tangents, prepare_inexact_tangents, get_qmodule_list
 from .correction import linear_correction
 from .updegree import lift_degree
-from .solution import SolutionLinear
+from .solution import create_linear_sol_from_y_basis
 from ..preprocess import ProofNode, SolvePolynomial
 from ..shared import homogenize_expr_list, clear_polys_by_symmetry
-from ...utils import Root, optimize_poly, Solution
+from ...utils import Root, Solution
 from ...utils.monomials import MonomialManager
 
 
@@ -175,7 +173,7 @@ def LinearSOS(
         linprog_options: Dict = LINPROG_OPTIONS,
         allow_numer: int = 0,
         _homogenizer: Optional[Symbol] = None
-    ) -> Optional[SolutionLinear]:
+    ) -> Optional[Solution]:
     """
     Main function for linear programming SOS.
 
@@ -254,88 +252,105 @@ def LinearSOS(
 
 
 class LinearSOSSolver(ProofNode):
+    _transformed_problem = None
+    _tangents = None
+    _decentralizer = None
+    def _centralize(self, configs):
+        """
+        Apply an auto scaling on the variables so that one of the roots is (1,1,...,1).
+        The new transformed problem overwrites `self._transformed_problem` and `self._tangents`.
+        """
+        problem = self._transformed_problem
+        if problem.roots is None:
+            return
+
+        poly = problem.expr
+        gens = poly.gens 
+        roots = [r for r in problem.roots if not r.is_zero]
+        symmetry = MonomialManager(len(gens), problem.identify_symmetry())
+        if not (len(roots) == 1 and roots[0].is_Rational and symmetry.is_trivial\
+                    and any(ri != 1 and ri != 0 for ri in roots[0])):
+            return
+
+        centralizer = {gens[i]: roots[0][i]*gens[i] for i in range(len(gens)) if roots[0][i] != 0 and roots[0][i] != 1}
+        def ct(x):
+            return x.as_expr().xreplace(centralizer).as_poly(gens)
+        new_poly = ct(poly)
+        new_ineqs = {ct(k): v.xreplace(centralizer) for k, v in problem.ineq_constraints.items()}
+        new_eqs = {ct(k): v.xreplace(centralizer) for k, v in problem.eq_constraints.items()}
+        new_roots = [Root(tuple(1 if roots[0][i] != 0 else 0 for i in range(len(gens))))]
+        new_tangents = [ct(t) for t in self._tangents]
+
+        self._transformed_problem = self.new_problem(new_poly, new_ineqs, new_eqs)
+        self._transformed_problem.roots = new_roots
+        self._tangents = new_tangents
+        self._decentralizer = {gens[i]: gens[i]/roots[0][i] for i in range(len(gens)) if roots[0][i] != 0 and roots[0][i] != 1}
+
+        if configs.get('verbose', False):
+            print(f'LinearSOS centralizing {centralizer}')
+            # print('Goal         :', new_poly)
+            # print('Inequalities :', new_ineqs)
+            # print('Equalities   :', new_eqs)
+            # print('Roots        :', new_roots)
+
+
     def explore(self, configs):
         if self.status != 0:
             return
 
+        verbose = configs.get('verbose', False)
+        if self.problem.roots is None:
+            domain = self.problem.expr.domain
+            if domain.is_QQ or domain.is_ZZ:
+                time1 = time()
+                roots = self.problem.find_roots()
+                if verbose:
+                    print(f"Time for finding roots num = {len(roots):<6d}     : {time() - time1:.6f} seconds.")
+
         problem, _homogenizer = self.problem.homogenize()
+        self._transformed_problem = problem
+        tangents = []
+
+        if _homogenizer is not None: 
+            # homogenize the tangents
+            tangents = homogenize_expr_list(tangents, _homogenizer)
+        else:
+            # homogeneous polynomial does not accept non-homogeneous tangents
+            tagents_poly = [t.as_poly(poly.gens) for t in tangents]
+            tangents = [t for t, p in zip(tangents, tagents_poly) if len(p.free_symbols_in_domain)==0 and p.is_homogeneous]
+        self._tangents = tangents
+
+
+        ####################################################################
+        #            Centralize the polynomial and symmetry
+        ####################################################################
+        if configs.get('centralize', True):
+            self._centralize(configs)
+            problem = self._transformed_problem
+            tangents = self._tangents
+
         poly = problem.expr
         symmetry = MonomialManager(len(poly.gens), problem.identify_symmetry())
         constraints_wrapper = problem.wrap_constraints(symmetry.perm_group)
         ineq_constraints = constraints_wrapper[0]
         eq_constraints = constraints_wrapper[1]
 
+        roots = problem.roots
+        if roots is None:
+            roots = []
+        roots = [r for r in roots if not r.is_zero]
+
 
         ####################################################################
         #                        Get configurations
         ####################################################################
-        roots = None
-        tangents = []
         augment_tangents = configs.get('augment_tangents', True)
-        centralize = False# configs.get('centralize', True)
         preordering = configs.get('preordering', 'quadratic')
-        verbose = configs.get('verbose', False)
         quad_diff_order = configs.get('quad_diff_order', 8)
         basis_limit = configs.get('basis_limit', 15000)
         lift_degree_limit = configs.get('lift_degree_limit', 4)
         linprog_options = configs.get('linprog_options', LINPROG_OPTIONS)
         allow_numer = configs.get('allow_numer', 0)
-
-
-        if _homogenizer is not None: 
-            # homogenize the tangents
-            tangents = homogenize_expr_list(tangents, _homogenizer)
-            if roots is not None:
-                roots = [Root(r) if not isinstance(r, Root) else r for r in roots]
-                roots = [Root(r.root + (sp.Integer(1),), r.domain, r.rep + (r.domain.one,)) for r in roots]
-        else:
-            # homogeneous polynomial does not accept non-homogeneous tangents
-            tagents_poly = [t.as_poly(poly.gens) for t in tangents]
-            tangents = [t for t, p in zip(tangents, tagents_poly) if len(p.free_symbols_in_domain)==0 and p.is_homogeneous]
-
-        if roots is None:
-            roots = []
-            if poly.domain.is_QQ or poly.domain.is_ZZ:
-                time1 = time()
-                roots = optimize_poly(poly, list(ineq_constraints),
-                    ([poly] + list(eq_constraints) + ([_homogenizer - 1] if _homogenizer is not None else [])), poly.gens)
-                if verbose:
-                    print(f"Time for finding roots num = {len(roots):<6d}     : {time() - time1:.6f} seconds.")
-
-            roots = [Root(r) for r in roots]
-        roots = [Root(r) if not isinstance(r, Root) else r for r in roots]
-        roots = [r for r in roots if not r.is_zero]
-
-
-        ####################################################################
-        #            Centralize the polynomial and symmetry
-        ####################################################################
-        if centralize and len(roots) == 1 and roots[0].is_Rational and symmetry.is_trivial and any(ri != 1 and ri != 0 for ri in roots[0]):
-            gens = poly.gens
-            centralizer = {gens[i]: roots[0][i]*gens[i] for i in range(len(gens)) if roots[0][i] != 0 and roots[0][i] != 1}
-            def ct(x):
-                return x.as_expr().xreplace(centralizer).as_poly(gens)
-            new_poly = ct(poly)
-            new_ineqs = {ct(k): v.xreplace(centralizer) for k, v in ineq_constraints.items()}
-            new_eqs = {ct(k): v.xreplace(centralizer) for k, v in eq_constraints.items()}
-            new_tangents = [ct(t) for t in tangents]
-            new_roots = [Root(tuple(1 if roots[0][i] != 0 else 0 for i in range(len(gens))))]
-            if verbose:
-                print(f'LinearSOS centralizing {centralizer}')
-                # print('Goal         :', new_poly)
-                # print('Inequalities :', new_ineqs)
-                # print('Equalities   :', new_eqs)
-            sol = _LinearSOS(new_poly, ineq_constraints=new_ineqs, eq_constraints=new_eqs,
-                    symmetry=symmetry,roots=new_roots,tangents=new_tangents,augment_tangents=augment_tangents,
-                    centralize=False,preordering=preordering,verbose=verbose,quad_diff_order=quad_diff_order,
-                    basis_limit=basis_limit,lift_degree_limit=lift_degree_limit,
-                    linprog_options=linprog_options,allow_numer=allow_numer)
-            if sol is not None:
-                sol.problem = poly
-                sol.solution = sol.solution.xreplace({
-                    gens[i]: gens[i]/roots[0][i] for i in range(len(gens)) if roots[0][i] != 0 and roots[0][i] != 1
-                })
-            return sol
 
 
         ####################################################################
@@ -357,6 +372,7 @@ class LinearSOSSolver(ProofNode):
         # print('Tangents after removing duplicates:', tangents)
 
 
+        solution = None
         try:
             # prepare to lift the degree in an iterative way
             for lift_degree_info in lift_degree(poly, ineq_constraints=ineq_constraints, symmetry=symmetry, lift_degree_limit=lift_degree_limit):
@@ -415,25 +431,28 @@ class LinearSOSSolver(ProofNode):
                 )
                 if is_equal or allow_numer > 0:
                     basis = _odd_basis_to_even(basis, poly.gens, ineq_constraints)
-                    solution = SolutionLinear._from_y_basis(
+                    solution = create_linear_sol_from_y_basis(
                         problem=poly, y=y, basis=basis, symmetry=symmetry,
-                        ineq_constraints=ineq_constraints, eq_constraints=dict(eq_constraints),
-                        is_equal=is_equal
-                    ).solution
+                        ineq_constraints=ineq_constraints, eq_constraints=dict(eq_constraints)
+                    )
                     solution = solution.xreplace(constraints_wrapper[2])
                     solution = solution.xreplace(constraints_wrapper[3])
-                    problem.solution = solution
                     break
                 else:
                     if verbose:
                         print('\tRationalization failed.')
 
         except _basis_limit_exceeded:
+            solution = None
             if verbose:
                 print(f'Basis limit {basis_limit} exceeded. LinearSOS aborted.')
 
-        if problem.solution is not None and _homogenizer is not None:
-            self.problem.solution = Solution.dehomogenize(problem.solution, _homogenizer)
+        if solution is not None:
+            if self._decentralizer is not None:
+                solution = solution.xreplace(self._decentralizer)
+            if _homogenizer is not None:
+                solution = Solution.dehomogenize(solution, _homogenizer)
+            self.problem.solution = solution
 
         self.status = 1
         self.finished = True

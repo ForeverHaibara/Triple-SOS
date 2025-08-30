@@ -4,7 +4,7 @@ from sympy.combinatorics import AlternatingGroup
 from .basic import SymmetricTransform, extract_factor
 from ...utils import CyclicSum, CyclicProduct, SymmetricSum, SymmetricProduct
 
-class SymmetricPositive(SymmetricTransform):
+class UE3Positive(SymmetricTransform):
     """
     Given a polynomial represented in pqr form where
     `p = a+b+c`, `q = ab+bc+ca`, `r = abc`, return the
@@ -31,6 +31,8 @@ class SymmetricPositive(SymmetricTransform):
     [1] 陈胜利.不等式的分拆降维幂方法与可读证明.哈尔滨工业大学出版社,2016.
     [2] https://zhuanlan.zhihu.com/p/616532245
     """
+    nvars = 3
+    symmetry = 'sym'
     @classmethod
     def _transform_pqr(cls, poly_pqr, original_symbols, new_symbols, return_poly=True):
         p, q, r = poly_pqr.gens
@@ -97,7 +99,7 @@ class SymmetricPositive(SymmetricTransform):
             sp.Poly(z, (x,y,z)): z
         }, dict()
 
-class SymmetricReal(SymmetricTransform):
+class UE3Real(SymmetricTransform):
     """
     Given a polynomial represented in pqr form where
     `p = a+b+c`, `q = ab+bc+ca`, `r = abc`, return the
@@ -149,64 +151,61 @@ class SymmetricReal(SymmetricTransform):
 
     [2] https://zhuanlan.zhihu.com/p/20969491385
     """
+    nvars = 3
+    symmetry = 'sym'
     @classmethod
     def _transform_pqr(cls, poly_pqr, original_symbols, new_symbols, return_poly=True):
-        func = None
-        nvars = len(poly_pqr.gens)
-        cls._check_nvars(nvars)
-        if nvars == 3:
-            func = _symmetric_real_3vars
-        elif nvars == 4:
-            func = _symmetric_real_4vars
+        func = _symmetric_real_3vars
         return func(poly_pqr, original_symbols, new_symbols, return_poly=return_poly)
 
     @classmethod
-    def _check_nvars(cls, nvars: int) -> bool:
-        if nvars != 3 and nvars != 4:
-            raise ValueError("Only 3-var or 4-var polynomials are supported.")
-        return True
-
-    @classmethod
     def get_inv_dict(cls, symbols, new_symbols):
-        nvars = len(symbols)
-        if nvars == 3:
-            a, b, c = symbols
-            x, y, z = new_symbols
-            return {
-                x: CyclicSum(a, (a,b,c)) * CyclicSum((a-b)**2, (a,b,c)) / 2,
-                y: CyclicProduct(2*a - b - c, (a,b,c)) / 2,
-                z: sp.S(27)/4 * CyclicProduct((a-b)**2, (a,b,c))
-            }
-        else: # if nvars == 4:
-            a, b, c, d = symbols
-            x, y, z, w = new_symbols
-            rr = (a - b - c + d)*(a - b + c - d)*(a + b - c - d)
-            disc = (a - b)**2*(a - c)**2*(a - d)**2*(b - c)**2*(b - d)**2*(c - d)**2
-            y_ = SymmetricSum((a-b)**2*(b-c)**2*(c-a)**2, (a,b,c,d))/6
-            w_ = disc * SymmetricSum((a-b)**2,(a,b,c,d))**3 / (4*rr**2)
-            J = -(a*b - 2*a*c + a*d + b*c - 2*b*d + c*d)*(a*b + a*c - 2*a*d - 2*b*c + b*d + c*d)*(2*a*b - a*c - a*d - b*c - b*d + 2*c*d)
-            # z_ = y_ - 4*J
-            ker1 = w_ + 16*J**2
-            z_ = ker1*rr**2 / (8*y_**2)
-            # ker2 = w_*y_**2*z_ / 16 / disc
-            x_ = SymmetricSum(a,(a,b,c,d))*SymmetricSum((a-b)**2,(a,b,c,d))*y_/24/rr
-  
-            return {x: x_, y: y_, z: z_, w: w_}
+        a, b, c = symbols
+        x, y, z = new_symbols
+        return {
+            x: CyclicSum(a, (a,b,c)) * CyclicSum((a-b)**2, (a,b,c)) / 2,
+            y: CyclicProduct(2*a - b - c, (a,b,c)) / 2,
+            z: sp.S(27)/4 * CyclicProduct((a-b)**2, (a,b,c))
+        }
 
     @classmethod
     def get_default_constraints(cls, symbols):
-        nvars = len(symbols)
-        if nvars == 3:
-            x, y, z = symbols
-            return {sp.Poly(z, (x,y,z)): z}, dict()
-        else: # if nvars == 4:
-            x, y, z, w = symbols
-            return {
-                sp.Poly(y, (x,y,z,w)): y,
-                sp.Poly(z, (x,y,z,w)): z,
-                sp.Poly(w, (x,y,z,w)): w
-            }, dict()
+        x, y, z = symbols
+        return {sp.Poly(z, (x,y,z)): z}, dict()
 
+class UE4Real(SymmetricTransform):
+    nvars = 4
+    symmetry = 'sym'
+    @classmethod
+    def _transform_pqr(cls, poly_pqr, original_symbols, new_symbols, return_poly=True):
+        func = _symmetric_real_4vars
+        return func(poly_pqr, original_symbols, new_symbols, return_poly=return_poly)
+
+    @classmethod
+    def get_inv_dict(cls, symbols, new_symbols):
+        a, b, c, d = symbols
+        x, y, z, w = new_symbols
+        rr = (a - b - c + d)*(a - b + c - d)*(a + b - c - d)
+        disc = (a - b)**2*(a - c)**2*(a - d)**2*(b - c)**2*(b - d)**2*(c - d)**2
+        y_ = SymmetricSum((a-b)**2*(b-c)**2*(c-a)**2, (a,b,c,d))/6
+        w_ = disc * SymmetricSum((a-b)**2,(a,b,c,d))**3 / (4*rr**2)
+        J = -(a*b - 2*a*c + a*d + b*c - 2*b*d + c*d)*(a*b + a*c - 2*a*d - 2*b*c + b*d + c*d)*(2*a*b - a*c - a*d - b*c - b*d + 2*c*d)
+        # z_ = y_ - 4*J
+        ker1 = w_ + 16*J**2
+        z_ = ker1*rr**2 / (8*y_**2)
+        # ker2 = w_*y_**2*z_ / 16 / disc
+        x_ = SymmetricSum(a,(a,b,c,d))*SymmetricSum((a-b)**2,(a,b,c,d))*y_/24/rr
+
+        return {x: x_, y: y_, z: z_, w: w_}
+
+    @classmethod
+    def get_default_constraints(cls, symbols):
+        x, y, z, w = symbols
+        return {
+            sp.Poly(y, (x,y,z,w)): y,
+            sp.Poly(z, (x,y,z,w)): z,
+            sp.Poly(w, (x,y,z,w)): w
+        }, dict()
 
 def _symmetric_real_3vars(poly_pqr, original_symbols, new_symbols, return_poly=True):
     p, q, r = poly_pqr.gens

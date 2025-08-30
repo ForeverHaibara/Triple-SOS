@@ -2,43 +2,51 @@ from typing import List, Dict, Union, Tuple
 
 from sympy import Expr, Poly
 
-from ..node import ProofNode
+from ..node import ProofNode, TransformNode
 from ...utils import (
     Solution, MonomialManager, CyclicSum,
     identify_symmetry_from_lists, verify_symmetry, poly_reduce_by_symmetry
 )
 
 
-class SolvePolynomial(ProofNode):
+class SolvePolynomial(TransformNode):
     """
     Solve a dense polynomial inequality. The target expression and its constraints
     are all converted and stored as sympy (dense) Poly class. However, the process
     of converting expressions to dense polynomials is inefficient for very large inputs.
     """
     _dense_problem = None
-    _restoration = None
     def explore(self, configs):
         if self.status == 0:
-            self._dense_problem, self._restoration = reduce_over_quotient_ring(self.problem.polylize())
+            self._dense_problem, _restoration = reduce_over_quotient_ring(self.problem.polylize())
 
             solvers = configs.get('solvers', None)
             if solvers is None:
                 from ..structsos.structsos import StructuralSOSSolver
                 from ..linsos.linsos import LinearSOSSolver
                 from ..sdpsos.sdpsos import SDPSOSSolver
+                from ..symsos.symsos import SymmetricSubstitution
                 solvers = [
                     StructuralSOSSolver,
                     LinearSOSSolver,
                     SDPSOSSolver,
+                    SymmetricSubstitution
                 ]
+            # from ..structsos.structsos import StructuralSOSSolver
+            # from ..linsos.linsos import LinearSOSSolver
+            # from ..sdpsos.sdpsos import SDPSOSSolver
+            # from ..symsos.symsos import SymmetricSubstitution
+            # solvers = [
+            #         SymmetricSubstitution,
+            #         StructuralSOSSolver,
+            #         LinearSOSSolver,
+            #         SDPSOSSolver,
+            # ]
             self.children = [solver(self._dense_problem) for solver in solvers]
 
             self.status = 10000
 
-    def update(self, *args, **kwargs):
-        if self._dense_problem is not None and self._dense_problem.solution is not None:
-            self.problem.solution = self._restoration(self._dense_problem.solution)
-            self.finished = True
+        self.restorations = {c: _restoration for c in self.children}
         if self.status > 1000 and len(self.children) == 0:
             # all children failed
             self.finished = True
