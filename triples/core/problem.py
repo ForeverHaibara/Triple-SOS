@@ -85,11 +85,12 @@ class InequalityProblem:
         )
 
     def get_symbol_signs(self):
-        fs = tuple(self.free_symbols)
-        signs = {s: (None, None) for s in fs}
+        fs0 = tuple(self.free_symbols)
+        signs = {s: (None, None) for s in fs0}
         for eq, expr in self.eq_constraints.items():
             if not isinstance(eq, Poly):
-                eq = Poly(eq, *fs)
+                eq = Poly(eq, *fs0)
+            fs = eq.gens
 
             monoms = eq.monoms()
             if len(monoms) == 1:
@@ -121,7 +122,8 @@ class InequalityProblem:
 
         for ineq, expr in self.ineq_constraints.items():
             if not isinstance(ineq, Poly):
-                ineq = Poly(ineq, *fs)
+                ineq = Poly(ineq, *fs0)
+            fs = ineq.gens
 
             monoms = ineq.monoms()
             c1 = 0

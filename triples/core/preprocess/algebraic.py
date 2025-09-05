@@ -176,8 +176,7 @@ def prove_by_recur(expr, signs: Dict[Symbol, Tuple[int, Expr]]):
             if isinstance(x, Rational) and x >= 0:
                 return True
             return False
-
-        if all(single(_) for _ in mulargs):
+        if len(mulargs) and all(single(_) for _ in mulargs):
             return expr
 
         # TODO: make it nicer

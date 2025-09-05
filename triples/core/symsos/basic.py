@@ -147,14 +147,22 @@ class SymmetricTransform():
         new_expr, mul = trans(expr)
 
         const, new_expr = new_expr.primitive()
-        mul_proof = cls.inv_transform(mul, symbols, new_symbols) / const
 
         new_cons = cls.get_constraints(symbols, new_symbols, problem)
         if new_cons is None:
             return None
         new_ineqs, new_eqs = new_cons
 
+
         pro = InequalityProblem(new_expr, new_ineqs, new_eqs)
+
+        signs = problem.get_symbol_signs().copy()
+        signs.update(pro.get_symbol_signs())
+        mul_proof = prove_by_recur(mul, signs)
+        if mul_proof is None:
+            return None
+        mul_proof = cls.inv_transform(mul_proof, symbols, new_symbols) / const
+
         # print(new_expr, new_ineqs, new_eqs)
 
         restoration = lambda x: cls.inv_transform(x, symbols, new_symbols) / mul_proof

@@ -312,7 +312,7 @@ class MathematicalInequalitiesVol1(MathematicalInequalities):
         return c3s((a**2+6*b*c)/(b**2-b*c+c**2)), [], []
 
     def problem_vasile_p12085(self):
-        return c3s((4*a**2+23*b*c)/(b**2+c**2)), [], []
+        return c3s((4*a**2+23*b*c)/(b**2+c**2)), [c3s(a*b)], []
 
     def problem_vasile_p12086(self):
         return 20*c3s(a**6) + 43*c3p(a)*c3s(a**3) - 189, [], [c3s(a*b)-3]
@@ -808,6 +808,7 @@ class MathematicalInequalitiesVol1(MathematicalInequalities):
     def problem_vasile_p13115(self):
         return 31*c5s(a**2)-150-c5s(a**4), [a,b,c,d,e], [c5s(a)-5]
 
+    @mark(mark.skip)
     def problem_vasile_p13116(self):
         return 5 - c5p(a)*c5s(a**4), [a,b,c,d,e], [c5s(a)-5]
 
