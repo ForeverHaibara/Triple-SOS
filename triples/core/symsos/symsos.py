@@ -1,43 +1,34 @@
 from typing import Dict, Set, List, Optional
 
-import sympy as sp
-from sympy.core.symbol import uniquely_named_symbol
+from sympy import Poly, Expr, Dummy
+from sympy.polys import ZZ, QQ
 
-from .symmetric import UE3Real
+from .symmetric import UE3Real, UE3Positive
 from .basic import prove_by_pivoting
-from .representation import sym_transform, sym_representation_inv
-from .solution import SolutionSymmetric
-from ...utils import Coeff, verify_symmetry
+from ...utils import Solution, verify_symmetry
 
 
 from ..node import TransformNode
 from ..preprocess import SolvePolynomial
 
-def _nonnegative_vars(ineq_constraints: List[sp.Poly]) -> Set[sp.Symbol]:
-    """
-    Infer the nonnegativity of each variable from the inequality constraints.
-    """
-    nonnegative = set()
-    for ineq in ineq_constraints:
-        if ineq.is_monomial and ineq.total_degree() == 1 and ineq.LC() >= 0:
-            nonnegative.update(ineq.free_symbols)
-    return nonnegative
-
 
 class SymmetricSubstitution(TransformNode):
+    """
+    Apply symmetric substitution on the variables.
+    """
     def explore(self, configs):
         if self.status != 0:
             return
 
-        # check symmetricity here # and (1,1,1) == 0
+        # check symmetry here
         poly = self.problem.expr
-        if (len(poly.gens) != 3 or not (poly.domain in (sp.ZZ, sp.QQ)))\
+        if len(poly.gens) != 3 or not (poly.domain in (ZZ, QQ))\
                 or not poly.is_homogeneous:
             self.status = 1
             self.finished = True
             return None
 
-        methods = [UE3Real]
+        methods = [UE3Real, UE3Positive]
         # methods = ['real']
         # signs = self.problem.get_symbol_signs()
         # nonneg = {k: expr for k, (sgn, expr) in signs.items() if sgn == 1}
@@ -45,10 +36,9 @@ class SymmetricSubstitution(TransformNode):
         #     methods.append('positive')
 
         # dummys = [sp.Dummy("s") for _ in range(len(poly.gens))]
-        dummys = sp.symbols('x y z')
-
+        dummys = [Dummy(_) for _ in 'xyz']
         for method in methods:
-            if method.nvars != poly.gens or (not verify_symmetry(poly, method.symmetry)):
+            if method.nvars != len(poly.gens) or (not verify_symmetry(poly, method.symmetry)):
                 continue
 
             applied = method.apply(self.problem, poly.gens, dummys)
@@ -57,7 +47,7 @@ class SymmetricSubstitution(TransformNode):
 
             solver = SolvePolynomial(applied[0])
             self.children.append(solver)
-            self.restorations[solver] = restoration
+            self.restorations[solver] = applied[1]
 
         self.status = 1
         if len(self.children) == 0:
@@ -66,10 +56,10 @@ class SymmetricSubstitution(TransformNode):
 
 # @sanitize(homogenize=True)
 def SymmetricSOS(
-        poly: sp.Poly,
-        ineq_constraints: Dict[sp.Poly, sp.Expr] = {},
-        eq_constraints: Dict[sp.Poly, sp.Expr] = {},
-    ) -> Optional[SolutionSymmetric]:
+        poly: Poly,
+        ineq_constraints: Dict[Poly, Expr] = {},
+        eq_constraints: Dict[Poly, Expr] = {},
+    ) -> Optional[Solution]:
     """
     Solve symmetric polynomial inequalities using special
     changes of variables. The algorithm is powerful but produces
@@ -77,16 +67,16 @@ def SymmetricSOS(
 
     Parameters
     ----------
-    poly: sp.Poly
+    poly: Poly
         The polynomial to perform SOS on.
-    ineq_constraints: List[sp.Poly]
+    ineq_constraints: List[Poly]
         Inequality constraints to the problem. This assumes g_1(x) >= 0, g_2(x) >= 0, ...
-    eq_constraints: List[sp.Poly]
+    eq_constraints: List[Poly]
         Equality constraints to the problem. This assumes h_1(x) = 0, h_2(x) = 0, ...
 
     Returns
     -----------
-    SolutionSymmetricSimple
+    Solution
         The solution of the problem.
 
     References

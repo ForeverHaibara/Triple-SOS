@@ -6,7 +6,7 @@ from sympy import Poly, Expr, Symbol
 from sympy.matrices import MutableDenseMatrix as Matrix
 
 from .algebra import SOSBasis, PolyRing, PseudoSMP, PseudoPoly
-from ...utils import MonomialManager, SolutionSimple
+from ...utils import MonomialManager, Solution
 from ...sdp.arithmetic import is_numerical_mat
 
 def _invarraylize(basis: SOSBasis, vec: Matrix, gens: Tuple[Symbol, ...]) -> Poly:
@@ -20,7 +20,7 @@ def _invarraylize(basis: SOSBasis, vec: Matrix, gens: Tuple[Symbol, ...]) -> Pol
         return PseudoPoly.new(rep, *gens)
 
 
-class SolutionSDP(SolutionSimple):
+class SolutionSDP(Solution):
     method = 'SDPSOS'
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

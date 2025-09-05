@@ -1,3 +1,3 @@
-from .linsos import LinearSOS
+from .linsos import LinearSOS, LinearSOSSolver
 
-__all__ = ['LinearSOS']
+__all__ = ['LinearSOS', 'LinearSOSSolver']

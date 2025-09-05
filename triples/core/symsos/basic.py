@@ -5,10 +5,22 @@ from sympy import Poly, Expr, Dummy, Symbol, Integer, Add
 from ..structsos.pivoting.bivariate import structural_sos_2vars
 from ...utils import pqr_sym, verify_symmetry
 from ..problem import InequalityProblem
+from ..preprocess.algebraic import prove_by_recur
 
 class SymmetricTransform():
     """
-    Class to store transformations of variables.    
+    Class to store rules of transformations of variables.
+
+    A transform has an `apply` method that applies the transformation on an given
+    InequalityProblem and certain variables, and returns a new problem and the
+    restoration function.
+
+    A few function protocols have been implemented for the transform class,
+    but some methods are left to be implemented by the subclass:
+    - `transform`: apply the transformation on a polynomial. If it is a completely-symmetric
+        transformation, the `_transform_pqr` method can be implemented instead.
+    - `get_inv_dict`: get the inverse dictionary of the transformation
+    - `get_natural_constraints`: get the natural constraints of the transformation.
     """
 
     nvars = 0
@@ -34,40 +46,40 @@ class SymmetricTransform():
         return expr.xreplace(inv_dict)
 
     @classmethod
-    def get_default_constraints(cls, symbols):
+    def _get_default_constraints(cls, new_symbols: Tuple[Symbol]) -> Tuple[Dict[Poly, Expr], Dict[Poly, Expr]]:
         raise NotImplementedError
 
     @classmethod
-    def get_natural_constraints(cls, symbols: Tuple[Symbol], new_symbols: Tuple[Symbol], problem: InequalityProblem) \
-            -> Optional[Tuple[Dict[Poly, Expr], Dict[Poly, Expr]]]:
+    def get_natural_constraints(cls, symbols: Tuple[Symbol], new_symbols: Tuple[Symbol],
+            problem: InequalityProblem) -> Optional[Tuple[Dict[Poly, Expr], Dict[Poly, Expr]]]:
         """
-        Consider a transform of variables from `symbols` to `new_symbols`,
-        new natural constraints over `new_symbols` are introduced
+        Get inequality and equality constraints over the new symbols. By default it calls
+        `_get_natural_constraints_from_signs` method, so the `_get_natural_constraints_from_signs`
+        method should be implemented. For more general cases, this function should be overriden
+        to provide proof to the natural constraints over the new symbols.
+
+        If it fails to establish the natural constraints, it returns None.
         """
-        raise NotImplementedError
+        signs = problem.get_symbol_signs()
+        return cls._get_natural_constraints_from_signs(symbols, new_symbols, signs)
 
     @classmethod
-    def get_constraints(cls, symbols: Tuple[Symbol], new_symbols: Tuple[Symbol], problem: InequalityProblem) \
-            -> Optional[Tuple[Dict[Poly, Expr], Dict[Poly, Expr]]]:
+    def _get_natural_constraints_from_signs(cls, symbols: Tuple[Symbol], new_symbols: Tuple[Symbol],
+            signs: Dict[Symbol, Tuple[int, Expr]]) -> Optional[Tuple[Dict[Poly, Expr], Dict[Poly, Expr]]]:
         """
-        Apply the transform on the constraints of the problem.
+        Get inequality and equality constraints over the new symbols. The method only
+        depends on the signs of the old symbols.
         """
-        ineqs = problem.ineq_constraints
-        eqs = problem.eq_constraints
-        new_cons = cls.get_natural_constraints(symbols, new_symbols, problem)
-        if new_cons is None:
-            return None
-        new_ineqs, new_eqs = new_cons
-
-        trans = lambda x: cls.transform(x.as_poly(symbols), new_symbols)
-        for old, new in ((ineqs, new_ineqs), (eqs, new_eqs)):
-            for p, e in old.items():
-                p = p.as_poly(symbols)
-                if not verify_symmetry(p, cls.symmetry):
-                    continue # TODO
-                new_p, mul = trans(p, symbols)
-                new[new_p] = e * mul
-        return new_ineqs, new_eqs
+        ineqs, eqs = cls._get_default_constraints(new_symbols)
+        proved_ineqs, proved_eqs = {}, {}
+        for cons, new_cons in ((ineqs, proved_ineqs), (eqs, proved_eqs)):    
+            for k, v in cons.items():
+                translated = cls.inv_transform(v, symbols, new_symbols)
+                proved = prove_by_recur(translated, signs)
+                if proved is None:
+                    return None
+                new_cons[k] = proved
+        return proved_ineqs, proved_eqs
 
     @classmethod
     def get_dict(cls, symbols: Tuple[Symbol], new_symbols: Tuple[Symbol]) -> Dict[Symbol, Expr]:
@@ -86,13 +98,56 @@ class SymmetricTransform():
         raise NotImplementedError
 
     @classmethod
+    def get_constraints(cls, symbols: Tuple[Symbol], new_symbols: Tuple[Symbol], problem: InequalityProblem) \
+            -> Optional[Tuple[Dict[Poly, Expr], Dict[Poly, Expr]]]:
+        """
+        Get the constraints of a problem after applying the transform.
+        It also applies the transform on the constraints of the problem.
+        """
+        ineqs = problem.ineq_constraints
+        eqs = problem.eq_constraints
+        new_cons = cls.get_natural_constraints(symbols, new_symbols, problem)
+        if new_cons is None:
+            return None
+        new_ineqs, new_eqs = new_cons
+
+        trans = lambda x: cls.transform(x.as_poly(symbols), new_symbols)
+        for old, new in ((ineqs, new_ineqs), (eqs, new_eqs)):
+            for p, e in old.items():
+                p = p.as_poly(symbols)
+                if not verify_symmetry(p, cls.symmetry):
+                    continue # TODO
+                new_p, mul = trans(p)
+                new[new_p] = e * mul
+        return new_ineqs, new_eqs
+
+    @classmethod
     def apply(cls, problem: InequalityProblem, symbols: Tuple[Symbol], new_symbols: Tuple[Symbol]=None) \
             -> Tuple[InequalityProblem, Callable]:
+        """
+        Apply the transform on the problem and get the new problem and the restoration function.
 
+        Parameters
+        -----------
+        problem : InequalityProblem
+            The problem to be transformed.
+        symbols : Tuple[Symbol]
+            The symbols to be transformed.
+        new_symbols : Tuple[Symbol], optional
+            The new symbols after transformation.
+
+        Returns
+        -------
+        Tuple[InequalityProblem, Callable]
+            The new problem and the restoration function.
+        """
         expr = problem.expr
 
         trans = lambda x: cls.transform(x.as_poly(symbols), new_symbols)
-        new_expr = trans(expr, symbols)
+        new_expr, mul = trans(expr)
+
+        const, new_expr = new_expr.primitive()
+        mul_proof = cls.inv_transform(mul, symbols, new_symbols) / const
 
         new_cons = cls.get_constraints(symbols, new_symbols, problem)
         if new_cons is None:
@@ -100,7 +155,9 @@ class SymmetricTransform():
         new_ineqs, new_eqs = new_cons
 
         pro = InequalityProblem(new_expr, new_ineqs, new_eqs)
-        restoration = lambda x: cls.inv_transform(x, symbols, new_symbols)
+        # print(new_expr, new_ineqs, new_eqs)
+
+        restoration = lambda x: cls.inv_transform(x, symbols, new_symbols) / mul_proof
         return pro, restoration
 
         

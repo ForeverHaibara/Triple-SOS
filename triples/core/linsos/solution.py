@@ -246,6 +246,17 @@ def _solve_optimal_factor(A: np.ndarray, c: np.ndarray, nz: int = 5) -> np.ndarr
             best_v = candidates[best_idx]
     return best_v
 
+def _solve_binomial_bound(x: int, y: int = 1500, bound: int = 5):
+    """Compute max n such that binomial(x,n) <= y and n <= bound."""
+    comb = 1
+    for n in range(min(x, bound) + 1):
+        comb *= x - n
+        comb = comb // (n + 1)
+        if comb > y:
+            return n
+    return bound
+
+
 def _solve_optimal_factor_recursively(A: np.ndarray, c: np.ndarray,
         nz: int = 5, iter_times: int = 1000) -> List[Tuple[np.ndarray, np.ndarray]]:
     """
@@ -349,7 +360,8 @@ def _collect_ineq_constraints(tangents_and_exprs: List[Tuple[Expr, Expr]], symbo
             degrees[i, factor_inds[arg]] += 1
 
     # 4. compute optimal factors recursively
-    selections_and_inds = _solve_optimal_factor_recursively(degrees, complexity)
+    selections_and_inds = _solve_optimal_factor_recursively(degrees, complexity,
+                                nz = _solve_binomial_bound(degrees.shape[1], 1500))
 
     # 5. group by selections of common factors
     ret = []

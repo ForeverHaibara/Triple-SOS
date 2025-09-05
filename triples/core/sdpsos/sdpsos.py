@@ -181,6 +181,7 @@ class SDPSOSSolver(ProofNode):
             return
 
         poly = self.problem.expr
+
         symmetry = MonomialManager(len(poly.gens), self.problem.identify_symmetry())
         constraints_wrapper = self.problem.wrap_constraints(symmetry.perm_group)
         ineq_constraints = constraints_wrapper[0]

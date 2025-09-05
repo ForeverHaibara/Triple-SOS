@@ -1,8 +1,6 @@
-from .symsos import SymmetricSOS
+from .symsos import SymmetricSubstitution, SymmetricSOS
 from .representation import sym_representation, sym_representation_inv
-from .solution import SolutionSymmetric
 
 __all__ = [
-    'SymmetricSOS', 'sym_representation', 'sym_representation_inv',
-    'SolutionSymmetric'
+    'SymmetricSubstitution', 'SymmetricSOS', 'sym_representation', 'sym_representation_inv'
 ]

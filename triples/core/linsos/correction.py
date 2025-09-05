@@ -6,6 +6,7 @@ from sympy.combinatorics import PermutationGroup
 from sympy.polys.matrices import DomainMatrix
 
 from .basis import LinearBasis
+from ...sdp.arithmetic import reshape
 from ...utils.roots.rationalize import rationalize_array
 
 def _filter_zero_y(y: List[float], basis: List[LinearBasis], num_multipliers: int) -> Tuple[List[float], List[LinearBasis], int]:
@@ -26,7 +27,7 @@ def _basis_as_matrix(basis: List[LinearBasis], symmetry: PermutationGroup) -> sp
     Extract the array representations of each basis and stack them into a matrix.
     """
     mat = [b.as_array_sp(expand_cyc=True, symmetry=symmetry) for b in basis]
-    mat = sp.Matrix(mat).reshape(len(mat), mat[0].shape[0]).T
+    mat = reshape(sp.Matrix(mat), (len(mat), mat[0].shape[0])).T
     return mat
 
 def _add_regularizer(mat: sp.Matrix, num_multipliers: int) -> sp.Matrix:

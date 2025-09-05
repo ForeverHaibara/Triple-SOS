@@ -7,16 +7,16 @@ from sympy import Expr, sympify
 from .preprocess import ProofNode, SolvePolynomial
 from .linsos.linsos import LinearSOSSolver
 from .structsos.structsos import StructuralSOSSolver
-from .symsos import SymmetricSOS
+from .symsos import SymmetricSubstitution
 from .sdpsos.sdpsos import SDPSOSSolver
 
 from ..utils import PolyReader, Solution
 
 NAME_TO_METHOD = {
-    'LinearSOS': LinearSOSSolver,
     'StructuralSOS': StructuralSOSSolver,
-    # 'SymmetricSOS': SymmetricSOS,
+    'LinearSOS': LinearSOSSolver,
     'SDPSOS': SDPSOSSolver,
+    'SymmetricSOS': SymmetricSubstitution,
 }
 
 METHOD_ORDER = ['StructuralSOS', 'LinearSOS', 'SDPSOS', 'SymmetricSOS']
@@ -46,6 +46,7 @@ def sum_of_squares(
         ineq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
         eq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
         method_order: Optional[List[str]] = METHOD_ORDER,
+        verbose: bool = False,
         configs: Optional[Dict[str, Dict]] = DEFAULT_CONFIGS
     ) -> Optional[Solution]:
     """
@@ -118,6 +119,9 @@ def sum_of_squares(
     """
     problem = ProofNode.new_problem(poly, ineq_constraints, eq_constraints)
     configs = {
+        ProofNode: {
+            'verbose': verbose,
+        },
         SolvePolynomial: {
             'solvers': [NAME_TO_METHOD[_] for _ in method_order if _ in NAME_TO_METHOD]
         },

@@ -164,9 +164,21 @@ def prove_by_recur(expr, signs: Dict[Symbol, Tuple[int, Expr]]):
                 return None
         return expr.func(*nonneg)
     elif isinstance(expr, CyclicExpr):
-        if expr.args[0].is_Pow:
-            if isinstance(expr.exp, Rational) and int(expr.exp.numerator) % 2 == 0:
-                return expr
+        arg = expr.args[0]
+        mulargs = []
+        if arg.is_Pow:
+            mulargs = [arg]
+        elif arg.is_Mul:
+            mulargs = arg.args
+        def single(x):
+            if x.is_Pow and isinstance(x.exp, Rational) and int(x.exp.numerator) % 2 == 0:
+                return True
+            if isinstance(x, Rational) and x >= 0:
+                return True
+            return False
+
+        if all(single(_) for _ in mulargs):
+            return expr
 
         # TODO: make it nicer
         return prove_by_recur(expr.doit(deep=False), signs)

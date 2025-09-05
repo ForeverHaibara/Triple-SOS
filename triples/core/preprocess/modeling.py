@@ -267,10 +267,14 @@ class ModelingHelper:
             for key in self._trigs_var_cosine.keys():
                 c, s = self._trigs_var_cosine[key], self._trigs_var_sine[key]
                 new_eqs[c**2 + s**2 - Integer(1)] = Integer(0)
-                new_ineqs[Integer(1) + c] = 2*cos(key/2)**2
-                new_ineqs[Integer(1) - c] = 2*sin(key/2)**2
-                new_ineqs[Integer(1) + s] = 2*cos(sp.pi/4 - key/2)**2
-                new_ineqs[Integer(1) - s] = 2*sin(sp.pi/4 - key/2)**2
+                # new_ineqs[Integer(1) + c] = 2*cos(key/2)**2
+                # new_ineqs[Integer(1) - c] = 2*sin(key/2)**2
+                # new_ineqs[Integer(1) + s] = 2*cos(sp.pi/4 - key/2)**2
+                # new_ineqs[Integer(1) - s] = 2*sin(sp.pi/4 - key/2)**2
+                new_ineqs[Integer(1) + c] = (sin(key)**2 + (cos(key) + 1)**2)/2
+                new_ineqs[Integer(1) - c] = (sin(key)**2 + (cos(key) - 1)**2)/2
+                new_ineqs[Integer(1) + s] = (cos(key)**2 + (sin(key) + 1)**2)/2
+                new_ineqs[Integer(1) - s] = (cos(key)**2 + (sin(key) - 1)**2)/2
                 inverse[c] = cos(key)
                 inverse[s] = sin(key)
 

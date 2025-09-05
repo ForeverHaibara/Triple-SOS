@@ -251,13 +251,6 @@ class Solution(SolutionBase):
         # s = sp.latex(eq, mode='plain', long_frac_ratio=2)
         # return "$\\displaystyle %s$" % s
 
-    def as_simple_solution(self):
-        """
-        When the solution is a sympy expression class, it is converted to SolutionSimple.
-        """
-        warn('This function is deprecated.')
-        return self
-
     def together(self, *args, **kwargs) -> 'Solution':
         """
         Make a copy of the solution and apply `together` on it.
@@ -538,8 +531,6 @@ def _arg_sqr_core(arg):
         return CyclicProduct(_arg_sqr_core(arg.args[0]), arg.symbols).doit()
     return None
 
-
-SolutionSimple = Solution
 
 
 def _print_str(expr: sp.Expr, cyclic_sum_name = 'Σ', cyclic_product_name = '∏',

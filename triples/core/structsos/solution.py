@@ -4,12 +4,12 @@ from typing import Dict, Optional, Callable
 import sympy as sp
 from sympy.core.singleton import S
 
-from ...utils import Solution, SolutionSimple, CyclicSum, CyclicProduct
+from ...utils import Solution, CyclicSum, CyclicProduct
 
 class _rewriting_exception(Exception): ...
 
 
-class SolutionStructural(SolutionSimple):
+class SolutionStructural(Solution):
     method = 'StructuralSOS'
     _verified = True # ...?
     def __init__(self, *args, **kwargs):

@@ -18,6 +18,7 @@ class SolvePolynomial(TransformNode):
     _dense_problem = None
     def explore(self, configs):
         if self.status == 0:
+            # self._dense_problem, _restoration = self.problem.polylize(), lambda x: x
             self._dense_problem, _restoration = reduce_over_quotient_ring(self.problem.polylize())
 
             solvers = configs.get('solvers', None)
@@ -42,6 +43,7 @@ class SolvePolynomial(TransformNode):
             #         LinearSOSSolver,
             #         SDPSOSSolver,
             # ]
+
             self.children = [solver(self._dense_problem) for solver in solvers]
 
             self.status = 10000

@@ -57,6 +57,10 @@ class ProofNode:
 class TransformNode(ProofNode):
     """
     A special class of nodes that expects solutions from child problems.
+    Each child node is associated with a restoration function.
+
+    When any child is solved, `update` is called to restore the solution
+    to the original problem.
     """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -103,8 +107,13 @@ def _sum_of_squares(problem: InequalityProblem, configs = {}):
                 break
 
         # explore the deepest child
+        cfg = configs.get(cur, {})
+        for cls in cur.__class__.mro()[::-1]:
+            if cls in configs:
+                cfg.update(configs[cls])
         # print(f'Exploring {cur}')
-        cur.explore(configs.get(cur.__class__, {}))
+        cur.explore(cfg)
+
         if cur.finished:
             for p in path[::-1]:
                 p.update(cur)

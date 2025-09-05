@@ -9,7 +9,7 @@ from .text_process import (
 
 from .pqr import pqr_sym, pqr_cyc, pqr_ker
 
-from .solution import Solution, SolutionSimple
+from .solution import Solution
 
 from .expression import (
     Coeff, CyclicExpr, CyclicSum, CyclicProduct, SymmetricSum, SymmetricProduct, is_cyclic_expr,
@@ -30,7 +30,7 @@ __all__ = [
     'preprocess_text', 'pl', 'poly_reduce_by_symmetry', 'poly_get_factor_form', 'poly_get_standard_form', 'coefficient_triangle_latex', 'PolyReader',
     'Coeff', 'CyclicExpr', 'CyclicSum', 'CyclicProduct', 'SymmetricSum', 'SymmetricProduct',
     'is_cyclic_expr', 'rewrite_symmetry', 'verify_symmetry', 'identify_symmetry', 'identify_symmetry_from_lists',
-    'Solution', 'SolutionSimple',
+    'Solution',
     'pqr_sym', 'pqr_cyc', 'pqr_ker',
     'Root', 'univar_realroots', 'kkt', 'optimize_poly', 'numeric_optimize_poly', 'numeric_optimize_skew_symmetry',
     'nroots', 'univariate_intervals', 'rationalize', 'rationalize_array', 'rationalize_bound',

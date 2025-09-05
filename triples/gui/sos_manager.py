@@ -7,7 +7,7 @@ from sympy import Expr, Poly, Symbol
 from sympy.combinatorics import Permutation, PermutationGroup, CyclicGroup
 
 from .grid import GridRender
-from ..utils import Solution, SolutionSimple, CyclicExpr, CyclicSum, CyclicProduct
+from ..utils import Solution, CyclicExpr, CyclicSum, CyclicProduct
 from ..utils.text_process import (
     preprocess_text, poly_get_factor_form, poly_get_standard_form,
     degree_of_zero, coefficient_triangle, coefficient_triangle_latex
@@ -242,11 +242,11 @@ class SOS_Manager():
                 nonzero_gens = [gen for gen, d in zip(poly.gens, degree_of_each_gen) if d > 0]
                 poly = poly.as_poly(*nonzero_gens)
 
-        if cls.verbose is False:
-            for method in ('LinearSOS', 'SDPSOS'):
-                if configs.get(method) is None:
-                    configs[method] = {}
-                configs[method]['verbose'] = False
+        # if cls.verbose is False:
+        #     for method in ('LinearSOS', 'SDPSOS'):
+        #         if configs.get(method) is None:
+        #             configs[method] = {}
+        #         configs[method]['verbose'] = False
         method_order = cls.CONFIG_METHOD_CHECK(poly, method_order)
 
         solution = sum_of_squares(
@@ -254,6 +254,7 @@ class SOS_Manager():
             ineq_constraints = ineq_constraints,
             eq_constraints = eq_constraints,
             method_order = method_order,
+            verbose = cls.verbose,
             configs = configs
         )
         if cls.CONFIG_STANDARDIZE_CYCLICEXPR:
