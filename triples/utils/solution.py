@@ -14,7 +14,7 @@ from sympy.combinatorics import PermutationGroup, Permutation, CyclicGroup
 from sympy.core.relational import Equality
 
 from .expression.cyclic import is_cyclic_expr, CyclicSum, CyclicProduct, CyclicExpr, rewrite_symmetry
-
+from .expression.psatz import SOSlist, PSatz
 
 class SolutionBase:
     pass
@@ -177,6 +177,14 @@ class Solution(SolutionBase):
         else:
             rhs = self.solution.together() if together else self.solution
         return sp.Equality(lhs, rhs, evaluate=False)
+
+    def as_sos_list(self) -> Optional[SOSlist]:
+        return SOSlist.from_sympy(self.solution)
+
+    def as_psatz(self) -> Optional[PSatz]:
+        preorder = list(self.ineq_constraints.values())
+        ideal = list(self.eq_constraints.values())
+        return PSatz.from_sympy(preorder, ideal, self.solution)
 
     def to_string(self, mode: str = 'latex', lhs_expr=None, together=True, cancel=True, settings=None) -> str:
         """

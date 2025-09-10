@@ -1,11 +1,10 @@
 from typing import List, Dict, Tuple, Union, Optional
 
-import sympy as sp
-from sympy import Expr, Poly, Rational, Integer, Mul, Symbol, fraction
+from sympy import Expr, Poly, Rational, Integer, Mul, fraction
 
 from .polynomial import SolvePolynomial
+from .signs import sign_sos
 from ..node import ProofNode
-from ...utils import CyclicExpr, Solution
 
 
 class CancelDenominator(ProofNode):
@@ -102,7 +101,7 @@ class SolveMul(ProofNode):
 
         for arg in args:
             # prove nonnegativity for each term
-            sol = prove_by_recur(arg, signs)
+            sol = sign_sos(arg, signs)
             if sol is not None:
                 self.proved.append(sol)
             else:
@@ -133,58 +132,3 @@ class SolveMul(ProofNode):
             if self.children[0].finished:
                 self.status = 2
                 self.finished = True
-
-
-
-def prove_by_recur(expr, signs: Dict[Symbol, Tuple[int, Expr]]):
-    """
-    Very fast and simple nonnegativity check for a SymPy (commutative, real)
-    expression instance given signs of symbols.
-    """
-    if isinstance(expr, Rational):
-        if expr.numerator >= 0 and expr.denominator > 0:
-            return expr
-        return None
-    elif expr.is_Symbol:
-        if signs.get(expr, (0, None))[0] == 1:
-            return signs[expr][1]
-        return None
-    elif expr.is_Pow:
-        if isinstance(expr.exp, Rational) and int(expr.exp.numerator) % 2 == 0:
-            return expr
-        sol = prove_by_recur(expr.base, signs)
-        if sol is not None:
-            return sol ** expr.exp
-        return None
-    elif expr.is_Add or expr.is_Mul:
-        nonneg = []
-        for arg in expr.args:
-            nonneg.append(prove_by_recur(arg, signs))
-            if nonneg[-1] is None:
-                return None
-        return expr.func(*nonneg)
-    elif isinstance(expr, CyclicExpr):
-        arg = expr.args[0]
-        mulargs = []
-        if arg.is_Pow:
-            mulargs = [arg]
-        elif arg.is_Mul:
-            mulargs = arg.args
-        def single(x):
-            if x.is_Pow and isinstance(x.exp, Rational) and int(x.exp.numerator) % 2 == 0:
-                return True
-            if isinstance(x, Rational) and x >= 0:
-                return True
-            return False
-        if len(mulargs) and all(single(_) for _ in mulargs):
-            return expr
-
-        # TODO: make it nicer
-        return prove_by_recur(expr.doit(deep=False), signs)
-
-    if len(expr.free_symbols) == 0:
-        # e.g. (sqrt(2) - 1)
-        sgn = (expr >= 0)
-        if sgn in (sp.true, True):
-            return expr
-        return None

@@ -5,7 +5,7 @@ from sympy import Poly, Expr, Dummy, Symbol, Integer, Add
 from ..structsos.pivoting.bivariate import structural_sos_2vars
 from ...utils import pqr_sym, verify_symmetry
 from ..problem import InequalityProblem
-from ..preprocess.algebraic import prove_by_recur
+from ..preprocess import sign_sos
 
 class SymmetricTransform():
     """
@@ -75,7 +75,7 @@ class SymmetricTransform():
         for cons, new_cons in ((ineqs, proved_ineqs), (eqs, proved_eqs)):    
             for k, v in cons.items():
                 translated = cls.inv_transform(v, symbols, new_symbols)
-                proved = prove_by_recur(translated, signs)
+                proved = sign_sos(translated, signs)
                 if proved is None:
                     return None
                 new_cons[k] = proved
@@ -158,7 +158,7 @@ class SymmetricTransform():
 
         signs = problem.get_symbol_signs().copy()
         signs.update(pro.get_symbol_signs())
-        mul_proof = prove_by_recur(mul, signs)
+        mul_proof = sign_sos(mul, signs)
         if mul_proof is None:
             return None
         mul_proof = cls.inv_transform(mul_proof, symbols, new_symbols) / const
