@@ -882,9 +882,9 @@ class PSatz:
         B = ps1*ps6 + ps2*ps5
         C = ps1*ps8 + ps2*ps7 + ps3*ps6 + ps4*ps5
         # return (F**2*A + B)/C
-        A = A.mul_sqr(F[0])
-        B = B.mul_sqr(F[1])
-        C = C.mul_sqr(F[1])
+        A = A.mul_sqr((F[0], Integer(1)))
+        B = B.mul_sqr((F[1], Integer(1)))
+        C = C.mul_sqr((F[1], Integer(1)))
         D = A + B
         p1, i1 = D.numer_preorder, D.numer_ideal
         p2, i2 = C.numer_preorder, C.numer_ideal
