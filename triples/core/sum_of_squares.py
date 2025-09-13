@@ -5,6 +5,7 @@ import sympy as sp
 from sympy import Expr, sympify
 
 from .preprocess import ProofNode, SolvePolynomial
+from .preprocess.pivoting import Pivoting
 from .linsos.linsos import LinearSOSSolver
 from .structsos.structsos import StructuralSOSSolver
 from .symsos import SymmetricSubstitution
@@ -118,15 +119,16 @@ def sum_of_squares(
         The solution. If no solution is found, None is returned.
     """
     problem = ProofNode.new_problem(poly, ineq_constraints, eq_constraints)
-    configs = {
+    _configs = {
         ProofNode: {
             'verbose': verbose,
         },
         SolvePolynomial: {
-            'solvers': [NAME_TO_METHOD[_] for _ in method_order if _ in NAME_TO_METHOD]
+            'solvers': [NAME_TO_METHOD[_] for _ in method_order if _ in NAME_TO_METHOD] + [Pivoting]
         },
     }
-    return problem.sum_of_squares(configs)
+    _configs.update(configs)
+    return problem.sum_of_squares(_configs)
 
 
 def sum_of_squares_multiple(

@@ -27,11 +27,13 @@ class SolvePolynomial(TransformNode):
                 from ..linsos.linsos import LinearSOSSolver
                 from ..sdpsos.sdpsos import SDPSOSSolver
                 from ..symsos.symsos import SymmetricSubstitution
+                from .pivoting import Pivoting
                 solvers = [
                     StructuralSOSSolver,
                     LinearSOSSolver,
                     SDPSOSSolver,
-                    SymmetricSubstitution
+                    SymmetricSubstitution,
+                    Pivoting
                 ]
             # from ..structsos.structsos import StructuralSOSSolver
             # from ..linsos.linsos import LinearSOSSolver

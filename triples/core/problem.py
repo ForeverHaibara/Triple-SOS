@@ -1,9 +1,10 @@
-from typing import Dict, Tuple, Optional
+from typing import Dict, Tuple, Optional, Union, Callable
 from unicodedata import name
 from sympy import Expr, Symbol, Poly, Integer, Rational, Function, Mul, sympify
 from sympy import __version__ as SYMPY_VERSION
 from sympy.combinatorics.perm_groups import Permutation, PermutationGroup
 from sympy.core.symbol import uniquely_named_symbol
+from sympy.core.function import AppliedUndef
 from sympy.external.importtools import version_tuple
 
 from ..utils import optimize_poly, Root, identify_symmetry_from_lists, Solution
@@ -70,11 +71,14 @@ class InequalityProblem:
         self.eq_constraints = eq_constraints
 
     def copy(self) -> 'InequalityProblem':
-        return InequalityProblem(
+        problem = InequalityProblem(
             self.expr,
             self.ineq_constraints.copy(),
             self.eq_constraints.copy()
         )
+        problem.solution = self.solution
+        problem.roots = self.roots
+        return problem
 
     @property
     def free_symbols(self):
@@ -83,6 +87,21 @@ class InequalityProblem:
             *[set(e.free_symbols) for e in self.ineq_constraints.keys()],
             *[set(e.free_symbols) for e in self.eq_constraints.keys()]
         )
+
+    def extract_constraints(self, symbols: Union[Symbol, Tuple[Symbol]]) \
+            -> Tuple[Dict[Expr, Expr], Dict[Expr, Expr], Dict[Expr, Expr], Dict[Expr, Expr]]:
+        if isinstance(symbols, Symbol):
+            symbols = {symbols}
+        symbols = set(symbols)
+
+        ineqs = [{}, {}]
+        eqs = [{}, {}]
+        for src, dst in [(self.ineq_constraints, ineqs), (self.eq_constraints, eqs)]:
+            for p, e in src.items():
+                dst[int(bool(p.free_symbols & symbols))][p] = e
+
+        return ineqs[1], eqs[1], ineqs[0], eqs[0]
+
 
     def get_symbol_signs(self):
         from .preprocess import get_symbol_signs
@@ -147,12 +166,18 @@ class InequalityProblem:
             [[self.expr], list(self.ineq_constraints), list(self.eq_constraints)]
         )
 
-    def wrap_constraints(self, symmetry: Optional[PermutationGroup]=None) -> \
-            Tuple[Dict[Poly, Expr], Dict[Poly, Expr], Dict[Expr, Expr], Dict[Expr, Expr]]:
+    def wrap_constraints(self, symmetry: Optional[PermutationGroup]=None) -> Tuple['InequalityProblem', Callable]:
         gens = self.expr.gens
-        return _get_constraints_wrapper(
+        i2g, e2h, g2i, h2e = _get_constraints_wrapper(
             gens, self.ineq_constraints, self.eq_constraints, symmetry
         )
+        problem = self.copy()
+        problem.ineq_constraints = i2g
+        problem.eq_constraints = e2h
+        def restoration(x):
+            if x is None: return None
+            return x.xreplace(g2i).xreplace(h2e)
+        return problem, restoration
 
     def find_roots(self):
         """Find the equality cases of the problem heuristically."""
@@ -167,17 +192,29 @@ def _get_constraints_wrapper(symbols: Tuple[int, ...],
     perm_group: Optional[PermutationGroup]=None):
     if perm_group is None:
         # trivial group
-        perm_group = PermutationGroup(Permutation(list(range(symbols))))
+        perm_group = PermutationGroup(Permutation(list(range(len(symbols)))))
 
     def _get_mask(symbols, dlist):
         # only reserve symbols with degree > 0, this reduces time complexity greatly
         return tuple(s for d, s in zip(dlist, symbols) if d != 0)
 
-    def _get_dicts(constraints, name='_G'):
+    def _get_counter(name='_G'):
+        # avoid duplicate function counters
+        k = len(name)
+        exprs = [e for e in ineq_constraints.values()] + [e for e in eq_constraints.values()]
+        names = [[f.name for f in e.find(AppliedUndef)] for e in exprs]
+        names = [item for sublist in names for item in sublist]
+        names = [n[k:] for n in names if n.startswith(name)]
+        digits = [int(n) for n in names if n.isdigit()]
+        return max(digits, default=-1) + 1
+
+    def _get_dicts(constraints, name='_G', counter=None):
         dt = dict()
         inv = dict()
         rep_dict = dict((p.rep, v) for p, v in constraints.items())
-        counter = 0  
+        if counter is None:
+            counter = _get_counter(name)
+
         for base in constraints.keys():
             if base.rep in dt:
                 continue

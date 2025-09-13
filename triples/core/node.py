@@ -90,7 +90,7 @@ class SolveProblem(ProofNode):
 def _sum_of_squares(problem: InequalityProblem, configs = {}):
     start_time = datetime.now()
     root = SolveProblem(problem)
-    max_explore = 20
+    max_explore = 100
     for _ in range(max_explore):
         # get the deepest child
         cur = root
@@ -111,7 +111,9 @@ def _sum_of_squares(problem: InequalityProblem, configs = {}):
         for cls in cur.__class__.mro()[::-1]:
             if cls in configs:
                 cfg.update(configs[cls])
-        # print(f'Exploring {cur}')
+
+        if cfg.get('verbose', 0):
+            print(f'Exploring {" -> ".join([_.__class__.__name__ for _ in path])}')
         cur.explore(cfg)
 
         if cur.finished:

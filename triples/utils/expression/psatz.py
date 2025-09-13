@@ -855,7 +855,7 @@ class PSatz:
         establish a "joint" proof for the two cases, we let (i) u = b >= 0 (ii) v = -b >= 0
         and join the proof with respect to `u` and `v` (v = -u) by `PSatz.join`.
 
-        >>> from sympy.abc import a, b, c, u, x, y, z
+        >>> from sympy.abc import a, b, c, u, v, x, y, z
         >>> p1 = a*x**2 + u*x + c
         >>> p2 = a*(x + b/(2*a))**2 + (v*y + z)/(4*a) + (4*a*c - b**2 + b*y - z)/(4*a)
         >>> p1 = PSatz.from_sympy([a,c,u,x,y,z], [4*a*c-b**2+b*y-z], p1)

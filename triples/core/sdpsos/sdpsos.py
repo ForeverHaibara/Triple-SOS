@@ -183,9 +183,9 @@ class SDPSOSSolver(ProofNode):
         poly = self.problem.expr
 
         symmetry = MonomialManager(len(poly.gens), self.problem.identify_symmetry())
-        constraints_wrapper = self.problem.wrap_constraints(symmetry.perm_group)
-        ineq_constraints = constraints_wrapper[0]
-        eq_constraints = constraints_wrapper[1]
+        problem, cons_restoration = self.problem.wrap_constraints(symmetry.perm_group)
+        ineq_constraints = problem.ineq_constraints
+        eq_constraints = problem.eq_constraints
         nvars = len(poly.gens)
         degree = poly.total_degree()
         if nvars < 1:
@@ -265,8 +265,7 @@ class SDPSOSSolver(ProofNode):
                         print(f"Time for solving SDP{' ':20s}: {time() - time0:.6f} seconds. \033[32mSuccess\033[0m.")
                     solution = sos_problem.as_solution(qmodule=dict(enumerate([e[1] for e in qmodule])),
                                                         ideal=dict(enumerate(list(eq_constraints.values())))).solution
-                    solution = solution.xreplace(constraints_wrapper[2])
-                    solution = solution.xreplace(constraints_wrapper[3])
+                    solution = cons_restoration(solution)
                     self.problem.solution = solution
                     break
             except Exception as e:

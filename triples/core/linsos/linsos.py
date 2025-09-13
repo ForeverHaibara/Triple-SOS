@@ -331,9 +331,9 @@ class LinearSOSSolver(ProofNode):
 
         poly = problem.expr
         symmetry = MonomialManager(len(poly.gens), problem.identify_symmetry())
-        constraints_wrapper = problem.wrap_constraints(symmetry.perm_group)
-        ineq_constraints = constraints_wrapper[0]
-        eq_constraints = constraints_wrapper[1]
+        problem, cons_restoration = problem.wrap_constraints(symmetry.perm_group)
+        ineq_constraints = problem.ineq_constraints
+        eq_constraints = problem.eq_constraints
 
         roots = problem.roots
         if roots is None:
@@ -435,8 +435,7 @@ class LinearSOSSolver(ProofNode):
                         problem=poly, y=y, basis=basis, symmetry=symmetry,
                         ineq_constraints=ineq_constraints, eq_constraints=dict(eq_constraints)
                     )
-                    solution = solution.xreplace(constraints_wrapper[2])
-                    solution = solution.xreplace(constraints_wrapper[3])
+                    solution = cons_restoration(solution)
                     break
                 else:
                     if verbose:
