@@ -84,6 +84,13 @@ class SolveProblem(ProofNode):
             self.children = [ReformulateAlgebraic(self.problem)]
             self.status = 1
 
+    def update(self, *args, **kwargs):
+        if self.status > 0 and all(_.finished and _.problem.solution is None for _ in self.children):
+            self.status = 100
+            self.finished = True
+        if self.problem.solution is not None:
+            self.finished = True
+
 
 
 

@@ -50,6 +50,9 @@ class CancelDenominator(ProofNode):
 
     def update(self, *args, **kwargs):
         if not self.children:
+            if self.status > 0:
+                self.status = 4
+                self.finished = True
             return
         child = self.children[0]
         if child.finished:
@@ -63,11 +66,11 @@ class CancelDenominator(ProofNode):
                 ]
             elif child.problem is self._numer:
                 if child.problem.solution is None:
+                    self.finished = True
                     return
 
                 self.problem.solution = self._numer.solution / self._denom.solution
                 self.finished = True
-
 
 
 class SolveMul(ProofNode):
@@ -132,3 +135,6 @@ class SolveMul(ProofNode):
             if self.children[0].finished:
                 self.status = 2
                 self.finished = True
+        elif self.status > 0 and len(self.children) == 0:
+            self.status = 4
+            self.finished = True
