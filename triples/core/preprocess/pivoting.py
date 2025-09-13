@@ -57,7 +57,7 @@ class Pivoting(ProofNode):
             if any(_.finished and _.problem.solution is None for _ in pivot['children']):
                 del self._pivots[ind]
 
-        if len(self._pivots) == 0 and self.solution is None:
+        if len(self._pivots) == 0 and self.problem.solution is None:
             self.status = 100
             self.finished = True
 
