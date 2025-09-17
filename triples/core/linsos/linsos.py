@@ -48,7 +48,7 @@ def _prepare_basis(
         eq_constraints: List[Tuple[Poly, Expr]] = {},
         basis: Optional[List[LinearBasis]] = None,
         symmetry: Union[MonomialManager, PermutationGroup] = PermutationGroup(),
-        quad_diff_order: int = 8,
+        quad_diff_order: int = 6,
         basis_limit: int = 15000,
     ) -> Tuple[List[LinearBasis], np.ndarray]:
     """
@@ -76,7 +76,7 @@ def _prepare_basis(
     symmetry: MonomialManager or PermutationGroup
         The symmetry of the polynomial. When it is None, it will be automatically generated.
     quad_diff_order: int
-        The maximum degree of the form (xi - xj)^(2k)*... in the basis. Defaults to 8.
+        The maximum degree of the form (xi - xj)^(2k)*... in the basis. Defaults to 6.
     basis_limit: int
         Limit of the basis. When the basis exceeds the limit, raise an error to kill the solver.
 

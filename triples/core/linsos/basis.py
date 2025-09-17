@@ -2,11 +2,14 @@ from functools import lru_cache, wraps
 from typing import Any, Union, Tuple, List, Dict, Callable, Optional
 from time import time
 
-import sympy as sp
 import numpy as np
 from scipy.sparse import coo_matrix
+import sympy as sp
+from sympy import Poly, Expr, Symbol, Mul, Pow, Integer, Basic
+from sympy import symbols as sp_symbols
 from sympy.combinatorics import PermutationGroup, Permutation
 from sympy.polys.polyclasses import DMP
+from sympy.polys.rings import PolyRing, PolyElement
 
 from ...utils import arraylize_np, arraylize_sp, MonomialManager
 
@@ -35,13 +38,13 @@ class _callable_expr():
     
     """
     __slots__ = ['_func']
-    def __init__(self, func: Callable[[Tuple[sp.Symbol, ...], Any], sp.Expr]):
+    def __init__(self, func: Callable[[Tuple[Symbol, ...], Any], Expr]):
         self._func = func
-    def __call__(self, symbols: Tuple[sp.Symbol, ...], *args, **kwargs) -> sp.Expr:
+    def __call__(self, symbols: Tuple[Symbol, ...], *args, **kwargs) -> Expr:
         return self._func(symbols, *args, **kwargs)
 
     @classmethod
-    def from_expr(cls, expr: sp.Expr, symbols: Tuple[sp.Symbol, ...], p: Optional[sp.Poly] = None) -> '_callable_expr':
+    def from_expr(cls, expr: Expr, symbols: Tuple[Symbol, ...], p: Optional[Poly] = None) -> '_callable_expr':
         if p is None:
             def func(s, poly=False):
                 e = expr.xreplace(dict(zip(symbols, s)))
@@ -51,25 +54,35 @@ class _callable_expr():
             def func(s, poly=False):
                 if not poly:
                     return expr.xreplace(dict(zip(symbols, s)))
-                return p.as_expr().xreplace(dict(zip(symbols, s))).as_poly(s)
+                # new_p = p.as_expr().xreplace(dict(zip(symbols, s))).as_poly(s)                
+                new_p = Basic.__new__(Poly)
+                new_p.gens = tuple(s)
+                if isinstance(p, PolyElement):
+                    new_p.rep = DMP.from_dict(dict(p), len(new_p.gens) - 1, p.ring.domain)
+                elif isinstance(p, Poly):
+                    new_p.rep = p.rep
+                elif isinstance(p, DMP):
+                    new_p.rep = p
+                return new_p
+
         return cls(func)
 
-    def default(self, nvars: int) -> sp.Expr:
+    def default(self, nvars: int) -> Expr:
         """
         Get the defaulted value of the expression given nvars.
         """
-        symbols = sp.symbols(f'x:{nvars}')
+        symbols = sp_symbols(f'x:{nvars}')
         return self._func(symbols)
 
 
 class LinearBasis():
     def nvars(self) -> int:
         raise NotImplementedError
-    def _get_default_symbols(self) -> Tuple[sp.Symbol, ...]:
-        return tuple(sp.symbols(f'x:{self.nvars()}'))
-    def as_expr(self, symbols) -> sp.Expr:
+    def _get_default_symbols(self) -> Tuple[Symbol, ...]:
+        return tuple(sp_symbols(f'x:{self.nvars()}'))
+    def as_expr(self, symbols) -> Expr:
         raise NotImplementedError
-    def as_poly(self, symbols) -> sp.Poly:
+    def as_poly(self, symbols) -> Poly:
         return self.as_expr(symbols).doit().as_poly(symbols)
     def degree(self) -> int:
         return self.as_poly(self._get_default_symbols()).total_degree()
@@ -80,18 +93,18 @@ class LinearBasis():
 
 class LinearBasisExpr(LinearBasis):
     __slots__ = ['_expr', '_symbols']
-    def __init__(self, expr: sp.Expr, symbols: Tuple[int, ...]):
+    def __init__(self, expr: Expr, symbols: Tuple[int, ...]):
         self._expr = expr.as_expr()
         self._symbols = symbols
     def nvars(self) -> int:
         return len(self._symbols)
-    def as_expr(self, symbols) -> sp.Expr:
+    def as_expr(self, symbols) -> Expr:
         return self._expr.xreplace(dict(zip(self._symbols, symbols)))
 
 class LinearBasisTangent(LinearBasis):
     _degree_step = 1
     __slots__ = ['_powers', '_tangent']
-    def __init__(self, powers: Tuple[int, ...], tangent: sp.Expr, symbols: Tuple[sp.Symbol, ...]):
+    def __init__(self, powers: Tuple[int, ...], tangent: Expr, symbols: Tuple[Symbol, ...]):
         self._powers = powers
         self._tangent = _callable_expr.from_expr(tangent, symbols)
     @property
@@ -102,15 +115,15 @@ class LinearBasisTangent(LinearBasis):
         return self._tangent
     def nvars(self) -> int:
         return len(self._powers)
-    def as_expr(self, symbols) -> sp.Expr:
-        return sp.Mul(*(x**i for x, i in zip(symbols, self._powers))) * self._tangent(symbols).as_expr()
-    def as_poly(self, symbols) -> sp.Poly:
-        return sp.Poly.from_dict({self._powers: 1}, symbols) * self._tangent(symbols, poly=True)
+    def as_expr(self, symbols) -> Expr:
+        return Mul(*(x**i for x, i in zip(symbols, self._powers))) * self._tangent(symbols).as_expr()
+    def as_poly(self, symbols) -> Poly:
+        return Poly.from_dict({self._powers: 1}, symbols) * self._tangent(symbols, poly=True)
     def __neg__(self) -> 'LinearBasisTangent':
         return self.__class__.from_callable_expr(self._powers, lambda *args, **kwargs: -self._tangent(*args, **kwargs).as_expr())
     def __len__(self) -> int:
         return 1
-    def to_even(self, symbols: List[sp.Expr]) -> 'LinearBasisTangentEven':
+    def to_even(self, symbols: List[Expr]) -> 'LinearBasisTangentEven':
         """
         Convert the linear basis to an even basis.
         """
@@ -118,7 +131,7 @@ class LinearBasisTangent(LinearBasis):
         even_powers = tuple(d - r for d, r in zip(self._powers, rem_powers))
         def _new_tangent(s, poly=False):
             if poly: return self._tangent(s, poly=True)
-            monom = sp.Mul(*(symbols[i] for i, d in enumerate(rem_powers) if d))
+            monom = Mul(*(symbols[i] for i, d in enumerate(rem_powers) if d))
             return self._tangent(s, poly=False).as_expr() * monom
         return LinearBasisTangentEven.from_callable_expr(even_powers, _callable_expr(_new_tangent))
 
@@ -134,13 +147,15 @@ class LinearBasisTangent(LinearBasis):
         return obj
 
     @classmethod
-    def generate(cls, tangent: sp.Expr, symbols: Tuple[int, ...], degree: int, tangent_p: Optional[sp.Poly] = None, require_equal: bool = True) -> List['LinearBasisTangent']:
+    def generate(cls, tangent: Expr, symbols: Tuple[int, ...], degree: int, tangent_p: Optional[Poly] = None, require_equal: bool = True) -> List['LinearBasisTangent']:
         """
         Generate all possible linear bases of the form x1^a1 * x2^a2 * ... * xn^an * tangent
         with total degree == degree or total degree <= degree.
         """
         if tangent_p is None:
             tangent_degree = tangent.doit().as_poly(symbols).total_degree()
+        elif isinstance(tangent_p, PolyElement):
+            tangent_degree = max(map(sum, tangent_p.keys()), default=0)
         else:
             tangent_degree = tangent_p.total_degree()
         degree = degree - tangent_degree
@@ -153,8 +168,8 @@ class LinearBasisTangent(LinearBasis):
 
     @classmethod
     def generate_quad_diff(cls, 
-            tangent: sp.Expr, symbols: Tuple[sp.Symbol, ...], degree: int, symmetry: PermutationGroup,
-            tangent_p: Optional[sp.Poly] = None, quad_diff_order: Union[bool, int] = 8,
+            tangent: Expr, symbols: Tuple[Symbol, ...], degree: int, symmetry: PermutationGroup,
+            tangent_p: Optional[Poly] = None, quad_diff_order: Union[bool, int] = 8,
         ) -> Tuple[List['LinearBasisTangent'], np.ndarray]:
         """
         Generate all possible linear bases of the form x1^a1 * x2^a2 * ... * xn^an * (x1-x2)^(2b_12) * ... * (xi-xj)^(2b_ij) * tangent
@@ -163,16 +178,16 @@ class LinearBasisTangent(LinearBasis):
 
         Parameters
         ----------
-        tangent: sp.Expr
+        tangent: Expr
             The sympy expression of the tangent.
-        symbols: Tuple[sp.Symbol, ...]
+        symbols: Tuple[Symbol, ...]
             A tuple of symbols.
         degree: int
             The total degree of the generated bases.
         symmetry: PermutationGroup
             The permutation group of the symmetry. Bases are summed
             over the permutation group before converting to matrix representation.
-        tangent_p: Optional[sp.Poly]
+        tangent_p: Optional[Poly]
             The sympy polynomial of the tangent. If the tangent parameter
             is an alias of the polynomial that does not actually
             form a polynomial, then this parameter should be used. 
@@ -277,7 +292,7 @@ def _degree_combinations(d_list: List[int], degree: int, require_equal = False) 
                 i += 1
     return powers
 
-def cross_exprs(exprs: List[sp.Expr], symbols: Tuple[sp.Symbol, ...], degree: int) -> List[sp.Expr]:
+def cross_exprs(exprs: List[Expr], symbols: Tuple[Symbol, ...], degree: int) -> List[Expr]:
     """
     Given expressions f1, f2, ..., fn,
     generate all expressions of the form f1^a1 * f2^a2 * ... * fn^an
@@ -285,16 +300,16 @@ def cross_exprs(exprs: List[sp.Expr], symbols: Tuple[sp.Symbol, ...], degree: in
 
     Parameters
     ----------
-    exprs: sp.Expr
+    exprs: Expr
         A list of sympy expressions.
-    symbols: Tuple[sp.Symbol, ...]
+    symbols: Tuple[Symbol, ...]
         A tuple of symbols.
     degree: int
         The maximum degree of the cross products.
 
     Returns
     -------
-    List[sp.Expr]
+    List[Expr]
         A list of sympy expressions.
     """
     polys = [_.doit().as_poly(symbols) for _ in exprs]
@@ -309,11 +324,11 @@ def cross_exprs(exprs: List[sp.Expr], symbols: Tuple[sp.Symbol, ...], degree: in
     # find all a1*d1 + a2*d2 + ... + an*dn <= degree
     powers = _degree_combinations(poly_degrees, degree)
     # map the powers to expressions
-    new_exprs = [sp.Mul(*(x**i for x, i in zip(exprs, p))) for p in powers]
+    new_exprs = [Mul(*(x**i for x, i in zip(exprs, p))) for p in powers]
 
     return new_exprs
 
-def quadratic_difference(symbols: Tuple[sp.Symbol, ...]) -> List[sp.Expr]:
+def quadratic_difference(symbols: Tuple[Symbol, ...]) -> List[Expr]:
     """
     Generate all expressions of the form (ai - aj)^2
 
@@ -362,7 +377,7 @@ class SwitchableWrapper:
         self.cache_clear()
 
 @switchable_lru_cache()
-def _get_cross_dmps_of_quad_diff(quad_diff_order: int, tangent_dmp: DMP) -> List[DMP]:
+def _get_cross_dmps_of_quad_diff(quad_diff_order: int, tangent_dmp: DMP) -> List[PolyElement]:
     """
     Compute the DMP of polynomials of the form prod((ai - aj)^2) * tangent.
 
@@ -377,11 +392,14 @@ def _get_cross_dmps_of_quad_diff(quad_diff_order: int, tangent_dmp: DMP) -> List
     tangent_dmp: DMP
         The sympy polynomial representation (DMP object) of the tangent.
     """
-    tangent_dmp = tangent_dmp.rep if isinstance(tangent_dmp, sp.Poly) else tangent_dmp
+    tangent_dmp = tangent_dmp.rep if isinstance(tangent_dmp, Poly) else tangent_dmp
     nvars = tangent_dmp.lev + 1
     ndiff = nvars * (nvars - 1) // 2
     powers = _degree_combinations([2] * ndiff, quad_diff_order)
     domain = tangent_dmp.dom
+
+    rng = PolyRing(f'x:{nvars}', domain)
+    smp = PolyElement(rng, tangent_dmp.to_dict())
 
     # polys are the DMPs of (ai - aj)^2 for all i < j
     polys, lst = [None] * ndiff, [0] * nvars
@@ -399,10 +417,12 @@ def _get_cross_dmps_of_quad_diff(quad_diff_order: int, tangent_dmp: DMP) -> List
             coeffs[tuple(lst)] = negtwo
             lst[i] = 0
             lst[j] = 0
-            polys[cnt] = DMP.from_dict(coeffs, lev, domain)
+            # polys[cnt] = DMP.from_dict(coeffs, lev, domain)
+            polys[cnt] = PolyElement(rng, coeffs)
             cnt += 1
 
-    cache = {(0,) * ndiff: tangent_dmp} # tangent_dmp.one(nvars - 1, tangent_dmp.dom)
+    # cache = {(0,) * ndiff: tangent_dmp} # tangent_dmp.one(nvars - 1, tangent_dmp.dom)
+    cache = {(0,) * ndiff: smp}
     
     if _VERBOSE_GENERATE_QUAD_DIFF:
         time0 = time()
@@ -430,7 +450,8 @@ def _get_cross_dmps_of_quad_diff(quad_diff_order: int, tangent_dmp: DMP) -> List
     return new_poly_reps
 
 
-def _get_cross_exprs_and_polys_of_quad_diff(symbols: Tuple[sp.Symbol], quad_diff_order: int, tangent: sp.Expr, tangent_p: sp.Poly) -> Tuple[List[sp.Expr], List[sp.Poly]]:
+def _get_cross_exprs_and_polys_of_quad_diff(symbols: Tuple[Symbol],
+        quad_diff_order: int, tangent: Expr, tangent_p: Poly) -> Tuple[List[Expr], List[PolyElement]]:
     """
     Generate all sympy expressions of the form prod((ai - aj)^2) * tangent and return the polynomials,
     the degree of prod((ai - aj)^2) is bounded by quad_diff_order.
@@ -441,18 +462,18 @@ def _get_cross_exprs_and_polys_of_quad_diff(symbols: Tuple[sp.Symbol], quad_diff
 
     Parameters
     ----------
-    symbols: Tuple[sp.Symbol]
+    symbols: Tuple[Symbol]
         A tuple of symbols.
     quad_diff_order: int
         The maximum degree of the quadratic differences.
-    tangent: sp.Expr
+    tangent: Expr
         The sympy expression of the tangent.
-    tangent_p: sp.Poly
+    tangent_p: Poly
         The sympy polynomial of the tangent.
 
     Returns
     ---------
-    Tuple[List[sp.Expr], List[sp.Poly]]
+    Tuple[List[Expr], List[PolyElement]]
         A list of sympy expressions and a list of corresponding polynomials.
     """
     # # This is a naive implementation
@@ -473,19 +494,20 @@ def _get_cross_exprs_and_polys_of_quad_diff(symbols: Tuple[sp.Symbol], quad_diff
     powers = _degree_combinations([2] * (nvars*(nvars-1)//2), quad_diff_order)
 
     exprs = [
-        sp.Mul(tangent, 
-            *((sp.Pow(symbols[i] - symbols[j], 2*p) if p else sp.S.One)
+        Mul(tangent, 
+            *((Pow(symbols[i] - symbols[j], 2*p) if p else Integer(1))
                 for (i,j), p in zip(inds, power))) for power in powers
     ]
 
     dmps = _get_cross_dmps_of_quad_diff(quad_diff_order, tangent_p.rep)
 
-    _new_func, _new_func_arg = sp.Basic.__new__, sp.Poly
-    polys = [_new_func(_new_func_arg) for _ in range(len(exprs))]
-    for new_p, new_rep in zip(polys, dmps):
-        new_p.rep = new_rep
-        new_p.gens = symbols
+    # _new_func, _new_func_arg = Basic.__new__, Poly
+    # polys = [_new_func(_new_func_arg) for _ in range(len(exprs))]
+    # for new_p, new_rep in zip(polys, dmps):
+    #     new_p.rep = new_rep
+    #     new_p.gens = symbols
 
+    polys = dmps
     return exprs, polys
 
 
@@ -632,13 +654,21 @@ def _get_matrix_of_quad_diff(tangent_dmp: DMP, degree: int, quad_diff_order: int
     if _VERBOSE_GENERATE_QUAD_DIFF:
         time0 = time()
 
+    _sparse = isinstance(polys[0], PolyElement)
+    if _sparse:
+        deg = lambda p: max(map(sum, p.keys()), default=0)
+        nvars = polys[0].ring.ngens    
+    else:
+        deg = lambda p: p.total_degree()
+        nvars = (polys[0].rep if isinstance(polys[0], Poly) else polys[0]).lev + 1
+
+
     mat = []
-    nvars = (polys[0].rep if isinstance(polys[0], sp.Poly) else polys[0]).lev + 1
     nvars_of_steps = [step] * nvars
     symmetry = MonomialManager(nvars, symmetry)
     symmetry_base = symmetry.base() # initialize once to use cached properties
     for p in polys:
-        degree_comb_mat = _degree_combinations(nvars_of_steps, degree - p.total_degree(), require_equal=True)
+        degree_comb_mat = _degree_combinations(nvars_of_steps, degree - deg(p), require_equal=True)
         degree_comb_mat = np.array(degree_comb_mat, dtype='int32') * step
 
         submat = _get_matrix_of_lifted_degrees(p, degree_comb_mat, symmetry, symmetry_base, degree)
@@ -653,14 +683,14 @@ def _get_matrix_of_quad_diff(tangent_dmp: DMP, degree: int, quad_diff_order: int
     return mat
 
 
-def _get_matrix_of_lifted_degrees(poly: Union[DMP, sp.Poly], degree_comb_mat: np.ndarray,
+def _get_matrix_of_lifted_degrees(poly: Union[DMP, Poly, PolyElement], degree_comb_mat: np.ndarray,
         symmetry: MonomialManager, symmetry_base: MonomialManager, degree: int) -> np.ndarray:
     """
     Low-level function to convert bases to matrix representation efficiently.
 
     Parameters
     -----------
-    poly : Union[DMP, sp.Poly]
+    poly : Union[DMP, Poly, PolyElement]
         The sympy polynomial or poly.rep.
     degree_comb_mat : np.ndarray
         A numpy matrix indicating the combinations of powers
@@ -676,13 +706,18 @@ def _get_matrix_of_lifted_degrees(poly: Union[DMP, sp.Poly], degree_comb_mat: np
     if degree_comb_mat.shape[0] == 0:
         return np.array([], dtype='float')
 
-    nvars = (poly.rep if isinstance(poly, sp.Poly) else poly).lev + 1
+    if isinstance(poly, PolyElement):
+        nvars = poly.ring.ngens
+        deg = lambda p: max(map(sum, p.keys()), default=0)
+    else:
+        nvars = (poly.rep if isinstance(poly, Poly) else poly).lev + 1
+        deg = lambda p: p.total_degree()
 
     # # This a naive implementation
     # def _naive_implementation():
-    #     symbols = [sp.Symbol(f'x{i}') for i in range(nvars)]
+    #     symbols = [Symbol(f'x{i}') for i in range(nvars)]
     #     mat = [None] * degree_comb_mat.shape[0]
-    #     poly_from_dict = sp.Poly.from_dict
+    #     poly_from_dict = Poly.from_dict
     #     p2dict = poly.as_dict()
     #     for mat_ind, power in enumerate(degree_comb_mat):
     #         new_p_dict = dict((tuple_sum(power, k), v) for k, v in p2dict.items())
@@ -703,7 +738,7 @@ def _get_matrix_of_lifted_degrees(poly: Union[DMP, sp.Poly], degree_comb_mat: np
     _DTYPE = 'int32'
     encoding = np.array([(degree + 1)**i for i in range(nvars)], dtype=_DTYPE)
 
-    source_monoms = symmetry_base.inv_monoms(poly.total_degree())  # a list of monomials
+    source_monoms = symmetry_base.inv_monoms(deg(poly))  # a list of monomials
     source_monoms = np.array(source_monoms, dtype=_DTYPE) @ encoding
 
     degree_comb_mat = degree_comb_mat.astype(_DTYPE) @ encoding
