@@ -48,10 +48,10 @@ class SolvePolynomial(TransformNode):
 
             self.children = [solver(self._dense_problem) for solver in solvers]
 
-            self.status = 10000
+            self.status = - 1
 
         self.restorations = {c: _restoration for c in self.children}
-        if self.status > 1000 and len(self.children) == 0:
+        if self.status > 0 and len(self.children) == 0:
             # all children failed
             self.finished = True
 

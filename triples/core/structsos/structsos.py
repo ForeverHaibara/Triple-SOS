@@ -26,7 +26,7 @@ class StructuralSOSSolver(ProofNode):
                 if _homogenizer is not None:
                     self.problem.solution = Solution.dehomogenize(solution, _homogenizer)
 
-        self.status = 1
+        self.status = -1
         self.finished = True
 
 

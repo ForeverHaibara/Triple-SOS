@@ -10,8 +10,6 @@ from ..node import ProofNode
 class CancelDenominator(ProofNode):
     _numer = None
     _denom = None
-    _numer_sol = None
-    _denom_sol = None
     def explore(self, configs):
         problem = self.problem
         poly, ineq_constraints, eq_constraints = problem.expr, problem.ineq_constraints, problem.eq_constraints
@@ -49,28 +47,21 @@ class CancelDenominator(ProofNode):
             return
 
     def update(self, *args, **kwargs):
-        if not self.children:
-            if self.status > 0:
-                self.status = 4
-                self.finished = True
-            return
-        child = self.children[0]
-        if child.finished:
-            if child.problem is self._denom:
-                if child.problem.solution is None:
-                    self.finished = True
-                    return
-                self.status = 3
+        if self.status == 1:
+            if self._denom.solution is not None:
                 self.children = [
                     SolvePolynomial(self._numer)
                 ]
-            elif child.problem is self._numer:
-                if child.problem.solution is None:
-                    self.finished = True
-                    return
-
-                self.problem.solution = self._numer.solution / self._denom.solution
+                self.status = -1
+            elif len(self.children) == 0 and self._denom.solution is None:
+                self.status = -1
                 self.finished = True
+                return
+            
+        elif self.status == -1:
+            if self._numer.solution is not None:
+                self.register_solution(self._numer.solution / self._denom.solution)
+
 
 
 class SolveMul(ProofNode):
@@ -94,8 +85,8 @@ class SolveMul(ProofNode):
         expr = self.problem.expr
         if isinstance(expr, Rational):
             if expr.numerator >= 0 and expr.denominator > 0:
-                self.problem.solution = expr
-            self.status = 4
+                self.register_solution(expr)
+            self.status = -1
             self.finished = True
             return
 
@@ -120,21 +111,15 @@ class SolveMul(ProofNode):
             self.children = [
                 SolvePolynomial(rest_problem)
             ]
-            self.status = 2
+            self.status = -1
         else:
-            self.problem.solution = Mul(*self.proved)
-            self.status = 4
+            self.register_solution(Mul(*self.proved))
             self.finished = True
+        self.status = -1
 
 
     def update(self, *args, **kwargs):
         if len(self.children) == 1:
             sol = self.children[0].problem.solution
             if sol is not None:
-                self.problem.solution = sol * Mul(*self.proved)
-            if self.children[0].finished:
-                self.status = 2
-                self.finished = True
-        elif self.status > 0 and len(self.children) == 0:
-            self.status = 4
-            self.finished = True
+                self.register_solution(sol * Mul(*self.proved))

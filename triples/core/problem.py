@@ -1,5 +1,4 @@
 from typing import Dict, Tuple, Optional, Union, Callable
-from unicodedata import name
 from sympy import Expr, Symbol, Poly, Integer, Rational, Function, Mul, sympify
 from sympy import __version__ as SYMPY_VERSION
 from sympy.combinatorics.perm_groups import Permutation, PermutationGroup
@@ -110,9 +109,9 @@ class InequalityProblem:
     def evaluate_complexity(self):
         ...
 
-    def sum_of_squares(self, configs) -> Solution:
+    def sum_of_squares(self, configs: dict = {}, time: float = 3600, mode: str = 'fast') -> Solution:
         from .node import _sum_of_squares
-        return _sum_of_squares(self, configs)
+        return _sum_of_squares(self, configs, time, mode)
 
     @property
     def is_homogeneous(self) -> bool:

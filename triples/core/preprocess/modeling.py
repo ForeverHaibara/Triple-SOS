@@ -322,13 +322,9 @@ class ReformulateAlgebraic(ProofNode):
                 )
             ]
             self.inverse = inverse
-            self.status = 1
+            self.status = -1
+
 
     def update(self, *args, **kwargs):
         if self.children and self.children[0].problem.solution is not None:
-            self.problem.solution = self.children[0].problem.solution.xreplace(self.inverse)
-            self.finished = True
-
-        if self.status > 0 and all(_.finished and _.problem.solution is None for _ in self.children):
-            self.status = 100
-            self.finished = True
+            self.register_solution(self.children[0].problem.solution.xreplace(self.inverse))

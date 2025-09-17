@@ -453,5 +453,5 @@ class LinearSOSSolver(ProofNode):
                 solution = Solution.dehomogenize(solution, _homogenizer)
             self.problem.solution = solution
 
-        self.status = 1
+        self.status = -1
         self.finished = True

@@ -1,3 +1,5 @@
+from typing import Optional
+
 from datetime import datetime
 
 from sympy import Expr, Poly, Rational, Integer, fraction
@@ -39,12 +41,32 @@ class ProofNode:
     def __str__(self):
         return self.__repr__()
 
+    def select(self) -> 'ProofNode':
+        """
+        Select the most promising child node based on heuristics.
+        It can also return itself if self is to be explored.
+        """
+        if self.children:
+            return self.children[0]
+        return self
+
     def explore(self, configs):
-        ...
+        pass
 
     def update(self, *args, **kwargs):
-        if self.problem.solution is not None:
-            self.finished = True
+        pass
+
+    def register_solution(self, solution: Optional[Expr]) -> Optional[Expr]:
+        if solution is not None:
+            if self.problem.solution is None:
+                self.problem.solution = solution
+            else:
+                len_old = len(str(self.problem.solution))
+                len_new = len(str(solution))
+                if len_new < len_old:
+                    self.problem.solution = solution
+            # print('Register solution to', self.__class__, self.problem.solution)
+        return solution
 
     @classmethod
     def new_problem(cls, *args, **kwargs) -> InequalityProblem:
@@ -72,9 +94,7 @@ class TransformNode(ProofNode):
         for child in self.children:
             if child.problem.solution is not None:
                 restoration = self.restorations[child]
-                self.problem.solution = restoration(child.problem.solution)
-                self.finished = True
-                break
+                self.register_solution(restoration(child.problem.solution))
 
 
 class SolveProblem(ProofNode):
@@ -82,20 +102,22 @@ class SolveProblem(ProofNode):
         if self.status == 0:
             from .preprocess.modeling import ReformulateAlgebraic
             self.children = [ReformulateAlgebraic(self.problem)]
-            self.status = 1
-
-    def update(self, *args, **kwargs):
-        if self.status > 0 and all(_.finished and _.problem.solution is None for _ in self.children):
-            self.status = 100
-            self.finished = True
-        if self.problem.solution is not None:
-            self.finished = True
+            self.status = -1
 
 
 
-
-def _sum_of_squares(problem: InequalityProblem, configs = {}):
+def _sum_of_squares(
+        problem: InequalityProblem,
+        configs: dict = {},
+        time: float = 3600,
+        mode: str = 'fast',
+    ):
     start_time = datetime.now()
+
+    configs = configs.copy()
+    configs['start_time'] = start_time
+    configs['time'] = time
+
     root = SolveProblem(problem)
     max_explore = 100
     for _ in range(max_explore):
@@ -106,12 +128,14 @@ def _sum_of_squares(problem: InequalityProblem, configs = {}):
             for c in cur.children.copy():
                 if c.finished:
                     cur.children.remove(c)
-                else:
-                    cur = c
-                    path.append(c)
-                    break
-            else:
+            
+            new_cur = cur.select()
+            if new_cur is cur:
+                # explore itself
                 break
+            else:
+                cur = new_cur
+                path.append(cur)
 
         # explore the deepest child
         cfg = configs.get(cur, {})
@@ -123,10 +147,18 @@ def _sum_of_squares(problem: InequalityProblem, configs = {}):
             print(f'Exploring {" -> ".join([_.__class__.__name__ for _ in path])}')
         cur.explore(cfg)
 
-        if cur.finished:
-            for p in path[::-1]:
-                p.update(cur)
+        # if cur.finished:
+        for p in path[::-1]:
+            p.update(cur)
+
+            if mode == 'fast' and p.problem.solution is not None:
+                p.finished = True
+            if p.status < 0 and all(_.finished for _ in p.children):
+                p.finished = True
         if root.finished:
+            break
+
+        if (datetime.now() - start_time).total_seconds() > time:
             break
 
     if problem.solution is None:

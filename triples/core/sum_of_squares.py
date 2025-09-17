@@ -40,15 +40,15 @@ DEFAULT_CONFIGS = {
 DEFAULT_SAVE_SOLUTION = lambda x: (str(x.solution) if x is not None else '')
 
 
-# @sanitize_output()
-# @sanitize_input(homogenize=True)
 def sum_of_squares(
         poly: Union[sp.Poly, sp.Expr],
         ineq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
         eq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
         method_order: Optional[List[str]] = METHOD_ORDER,
+        configs: Optional[Dict[str, Dict]] = DEFAULT_CONFIGS,
+        time: float = 3600,
+        mode: str = 'fast',
         verbose: bool = False,
-        configs: Optional[Dict[str, Dict]] = DEFAULT_CONFIGS
     ) -> Optional[Solution]:
     """
     Main function for sum of square decomposition.
@@ -112,6 +112,16 @@ def sum_of_squares(
     configs: Dict[str, Dict]
         The configurations for each method. Defaults to DEFAULT_CONFIGS.
         It should be a dictionary containing the method names as keys and the kwargs as values.
+    time: float
+        The time limit (in seconds) for the solver. Defaults to 3600. When the time limit is
+        reached, the solver is killed when it returns to the main loop.
+        However, it might not be killed instantly if it is stuck in an internal function.
+    mode: str
+        The mode of the solver. Defaults to 'fast'. Supports 'fast' and 'pretty'.
+        If 'pretty', it traverses all methods and selects the most pretty solution.
+    verbose: bool
+        Whether to print verbose information. Defaults to False.
+
 
     Returns
     ----------
@@ -128,7 +138,7 @@ def sum_of_squares(
         },
     }
     _configs.update(configs)
-    return problem.sum_of_squares(_configs)
+    return problem.sum_of_squares(_configs, time=time, mode=mode)
 
 
 def sum_of_squares_multiple(

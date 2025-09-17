@@ -50,7 +50,7 @@ class SymmetricSubstitution(TransformNode):
             self.children.append(solver)
             self.restorations[solver] = applied[1]
 
-        self.status = 1
+        self.status = -1
         if len(self.children) == 0:
             self.finished = True
 

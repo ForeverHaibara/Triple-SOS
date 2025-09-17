@@ -34,7 +34,7 @@ class Pivoting(ProofNode):
 
         if poly.total_degree() <= 2:
             # this should be handled by QCQP solvers
-            self.status = 100
+            self.status = -1
             self.finished = True
 
         gens = poly.gens
@@ -44,22 +44,22 @@ class Pivoting(ProofNode):
             elif poly.degree(gen) == 2:
                 _quadratic_pivoting(self, gen)
 
-        return
+        self.status = -1
 
     def update(self, *args, **kwargs):
+        deleted = False
         for ind, pivot in enumerate(self._pivots.copy()):
             if all(_.problem.solution is not None for _ in pivot['children']):
-                self.problem.solution = pivot['restoration']()
-                if self.problem.solution is not None:
-                    self.status = 100
-                    self.finished = True
-                    break
+                self.register_solution(pivot['restoration']())
             if any(_.finished and _.problem.solution is None for _ in pivot['children']):
                 del self._pivots[ind]
+                deleted = True
 
-        if len(self._pivots) == 0 and self.problem.solution is None:
-            self.status = 100
-            self.finished = True
+        if deleted:
+            for child in self.children.copy():
+                if not any(child in pivot['children'] for pivot in self._pivots):
+                    self.children.remove(child)
+
 
 
 

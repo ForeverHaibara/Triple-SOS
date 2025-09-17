@@ -275,5 +275,5 @@ class SDPSOSSolver(ProofNode):
                 continue
 
 
-        self.status = 1
+        self.status = -1
         self.finished = True
