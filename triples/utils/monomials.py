@@ -21,29 +21,67 @@ try:
 except ImportError: # sympy <= 1.8 or no flint installed
     _IS_GROUND_TYPES_FLINT = False
 
-def generate_partitions(nvars: int, degree: int, equal: bool = False) -> List[Tuple[int, ...]]:
+def generate_partitions(d_list: Union[int, List[int]], degree: int,
+        equal: bool = False, descending: bool = True) -> List[Tuple[int, ...]]:
     """
-    Generate all tuples (a0,a1,...,an) such that n = nvars and sum(ai) <= degree.
-    If equal is True, then it requires sum(ai) == degree.
-    """
-    if nvars == 0:
-        return [()] if degree == 0 or (not equal) else []
-    def generate_tuples(current_tuple: Tuple[int, ...], current_sum: int, remaining_vars: int) -> List[Tuple[int, ...]]:
-        if remaining_vars == 0:
-            return [current_tuple]
-        else:
-            tuples = []
-            for i in range(degree - current_sum, -1, -1):
-                tuples.extend(generate_tuples(current_tuple + (i,), current_sum + i, remaining_vars - 1))
-            return tuples
+    Generate all tuples (a0,a1,...,an) such that n = len(d_list) and sum(ai*di) <= degree.
+    If equal is True, then it requires sum(ai*di) == degree. 
 
-    monoms = generate_tuples((), 0, nvars) if not equal else generate_tuples((), 0, nvars - 1)
-    if equal:
-        monoms = [m + (degree - sum(m),) for m in monoms]
-    return monoms
-    # inv_monoms = list(filter(self.is_standard_monom, inv_monoms))
-    # dict_monoms = {t: i for i, t in enumerate(inv_monoms)}
-    # return dict_monoms, inv_monoms
+    When d_list is an integer, it assumes d_list = [1, 1, ..., 1] of length nvars.
+    """
+    if isinstance(d_list, int):
+        nvars = d_list
+        if nvars == 0:
+            return [()] if degree == 0 or (not equal) else []
+        def generate_tuples(current_tuple: Tuple[int, ...], current_sum: int, remaining_vars: int) -> List[Tuple[int, ...]]:
+            if remaining_vars == 0:
+                return [current_tuple]
+            else:
+                tuples = []
+                for i in range(degree - current_sum, -1, -1):
+                    tuples.extend(generate_tuples(current_tuple + (i,), current_sum + i, remaining_vars - 1))
+                return tuples
+
+        monoms = generate_tuples((), 0, nvars) if not equal else generate_tuples((), 0, nvars - 1)
+        if equal:
+            monoms = [m + (degree - sum(m),) for m in monoms]
+        return monoms if descending else monoms[::-1]
+
+    n = len(d_list)
+    if n == 0:
+        return [tuple()]
+
+    powers = []
+    i = 0
+    current_degree = 0
+    current_powers = [0 for _ in range(n)]
+    while True:
+        if i == n - 1:
+            if degree >= current_degree:
+                if not equal:
+                    for j in range(1 + (degree - current_degree)//d_list[i]):
+                        current_powers[i] = j
+                        powers.append(tuple(current_powers))
+                elif (degree - current_degree) % d_list[i] == 0:
+                    current_powers[i] = (degree - current_degree) // d_list[i]
+                    powers.append(tuple(current_powers))
+            i -= 1
+            current_powers[i] += 1
+            current_degree += d_list[i]
+        else:
+            if current_degree > degree:
+                # reset the current power
+                current_degree -= d_list[i] * current_powers[i]
+                current_powers[i] = 0
+                i -= 1
+                if i < 0:
+                    break
+                current_powers[i] += 1
+                current_degree += d_list[i]
+            else:
+                i += 1
+    return powers[::-1] if descending else powers
+
 
 def _poly_rep(poly: Union[Poly, DMP, PolyElement]) -> Tuple[List[Tuple], Domain, int, int]:
     """Return [(monom, coeff)], domain, ngens, degree"""

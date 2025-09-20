@@ -180,6 +180,8 @@ class InequalityProblem:
 
     def find_roots(self):
         """Find the equality cases of the problem heuristically."""
+        if self.roots is not None:
+            return self.roots
         roots = optimize_poly(self.expr, list(self.ineq_constraints), [self.expr] + list(self.eq_constraints),
                     self.expr.gens, return_type='root')
         self.roots = roots

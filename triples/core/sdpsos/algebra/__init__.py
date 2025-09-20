@@ -8,8 +8,10 @@ from .poly_ring import PolyRing
 
 from .nc_poly_ring import NCPolyRing
 
+from .moment_algebra import MixedMomentAlgebra
+
 __all__ = [
     'SOSBasis', 'QmoduleBasis', 'IdealBasis', 'PseudoPoly', 'PseudoSMP',
     'StateAlgebra', 'CommutativeStateAlgebra',
-    'PolyRing', 'NCPolyRing'
+    'PolyRing', 'NCPolyRing', 'MixedMomentAlgebra'
 ]

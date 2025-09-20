@@ -1,7 +1,7 @@
 from itertools import product
-from typing import Dict, Any
+from typing import Dict, List, Optional, Any
 
-from sympy import Poly, Expr, Add, Mul
+from sympy import Poly, Expr, Add, Mul, Symbol
 
 from .state_algebra import StateAlgebra, TERM, MONOM
 from .basis import QmoduleBasis, IdealBasis
@@ -35,7 +35,6 @@ def generate_monoms_nc(nvars, degree, hom=True):
     inv_monoms = monoms
     return dict_monoms, inv_monoms
 
-      
 
 class NCPolyRing(StateAlgebra):
     """
@@ -62,6 +61,11 @@ class NCPolyRing(StateAlgebra):
 
     def s(self, term: TERM) -> TERM:
         return term
+
+    def gen_monom(self, i: Optional[int]) -> MONOM:
+        if i is None:
+            return tuple()
+        return ((i, 1),)
 
     def total_degree(self, monom: MONOM) -> int:
         return sum(_[1] for _ in monom) if len(monom) else 0

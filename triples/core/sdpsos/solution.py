@@ -1,4 +1,5 @@
-from typing import List, Tuple, Dict, Optional, Callable, Any
+from functools import partial
+from typing import List, Tuple, Dict, Optional, Callable, Any, Union
 
 import sympy as sp
 import numpy as np
@@ -18,6 +19,15 @@ def _invarraylize(basis: SOSBasis, vec: Matrix, gens: Tuple[Symbol, ...]) -> Pol
     else:
         rep = PseudoSMP.from_dict(rep, len(gens)-1, vec.domain, algebra=basis.algebra)
         return PseudoPoly.new(rep, *gens)
+
+def _as_expr(poly: Union[Poly, PseudoPoly], state_operator: Optional[Callable[[Expr], Expr]] = None) -> Expr:
+    if state_operator is None:
+        return poly.as_expr()
+    if isinstance(poly, Poly):
+        return poly.as_expr()
+    elif isinstance(poly, Expr):
+        return poly
+    return poly.as_expr(state_operator=state_operator)
 
 
 class SolutionSDP(Solution):
@@ -64,7 +74,7 @@ class SolutionSDP(Solution):
         is_equal = not _is_numerical(decompositions, eqspace)
 
         return SolutionSDP(
-            problem = poly,
+            problem = _as_expr(poly, state_operator=state_operator) if state_operator is not None else poly,
             solution = sp.Add(qmodule_expr, ideal_expr),
             is_equal = is_equal,
         )
@@ -79,8 +89,8 @@ def _get_ideal_expr(
     ):
         ideal_exprs = []
         for key, vec in eqspace.items():
-            expr = ideal[key].as_expr()
-            vec = _invarraylize(ideal_bases[key], vec, gens).as_expr()
+            expr = _as_expr(ideal[key], state_operator=state_operator)
+            vec = _as_expr(_invarraylize(ideal_bases[key], vec, gens), state_operator=state_operator)
             ideal_exprs.append(vec * expr.together())
         if state_operator is not None:
             ideal_exprs = map(lambda x: state_operator(x), ideal_exprs)
@@ -99,7 +109,10 @@ def _get_qmodule_expr(
     Convert a {key: (U, S)} dictionary to sum of squares.
     """
     if simplify_poly is None:
-        simplify_poly = _default_simplify_poly
+        if state_operator is None:
+            simplify_poly = _default_simplify_poly
+        else:
+            simplify_poly = partial(_default_simplify_poly, state_operator=state_operator)
 
     def compute_cyc_sum_of_squares(coeff, q_module: Expr, poly: Poly) -> Expr:
         """Computes cyclic_sum(coeff * q_module * poly.as_expr()**2),
@@ -107,7 +120,7 @@ def _get_qmodule_expr(
         # if isinstance(expr, sp.Add):
         #     expr = sp.UnevaluatedExpr(expr)
         q_primitive = q_module.primitive()
-        coeff, q = coeff * q_primitive[0], q_primitive[1].as_expr()
+        coeff, q = coeff * q_primitive[0], _as_expr(q_primitive[1], state_operator=state_operator)
         c, expr = simplify_poly(poly)
         coeff = coeff * c**2
     
@@ -128,7 +141,9 @@ def _get_qmodule_expr(
 
     return sp.Add(*exprs)
 
-def _default_simplify_poly(poly: Poly, bound: int=10000) -> Tuple[Expr, Expr]:
+def _default_simplify_poly(poly: Poly, bound: int=10000,
+        state_operator: Optional[Callable[[Expr], Expr]] = None) -> Tuple[Expr, Expr]:
+
     """
     Simplify the polynomial. Return c, expr such that poly = c * expr.
     Using factorization would be extremely slow sometimes, e.g. in the case
@@ -137,7 +152,7 @@ def _default_simplify_poly(poly: Poly, bound: int=10000) -> Tuple[Expr, Expr]:
     """
     if isinstance(poly, PseudoPoly):
         c, p = poly.primitive()
-        return c, p.as_expr()
+        return c, _as_expr(p, state_operator=state_operator)
 
     def _extract_monomials(p: Poly) -> Tuple[Expr, Poly]:
         monoms = p.monoms()

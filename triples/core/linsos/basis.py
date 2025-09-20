@@ -4,14 +4,15 @@ from time import time
 
 import numpy as np
 from scipy.sparse import coo_matrix
-import sympy as sp
 from sympy import Poly, Expr, Symbol, Mul, Pow, Integer, Basic
 from sympy import symbols as sp_symbols
+from sympy.matrices import MutableDenseMatrix as Matrix
 from sympy.combinatorics import PermutationGroup, Permutation
 from sympy.polys.polyclasses import DMP
 from sympy.polys.rings import PolyRing, PolyElement
 
 from ...utils import arraylize_np, arraylize_sp, MonomialManager
+from ...utils.monomials import generate_partitions
 
 _VERBOSE_GENERATE_QUAD_DIFF = False
 
@@ -88,7 +89,7 @@ class LinearBasis():
         return self.as_poly(self._get_default_symbols()).total_degree()
     def as_array_np(self, **kwargs) -> np.ndarray:
         return arraylize_np(self.as_poly(self._get_default_symbols()), **kwargs)
-    def as_array_sp(self, **kwargs) -> sp.Matrix:
+    def as_array_sp(self, **kwargs) -> Matrix:
         return arraylize_sp(self.as_poly(self._get_default_symbols()), **kwargs)
 
 class LinearBasisExpr(LinearBasis):
@@ -164,7 +165,7 @@ class LinearBasisTangent(LinearBasis):
             return []
         tangent = _callable_expr.from_expr(tangent, symbols, p=tangent_p)
         return [LinearBasisTangent.from_callable_expr(tuple(i*step for i in comb), tangent) for comb in \
-                _degree_combinations([cls._degree_step] * len(symbols), degree, require_equal=require_equal)]
+                generate_partitions([cls._degree_step] * len(symbols), degree, equal=require_equal, descending=False)]
 
     @classmethod
     def generate_quad_diff(cls, 
@@ -253,45 +254,6 @@ class LinearBasisTangentEven(LinearBasisTangent):
     _degree_step = 2
 
 
-def _degree_combinations(d_list: List[int], degree: int, require_equal = False) -> List[Tuple[int, ...]]:
-    """
-    Find a1, a2, ..., an such that a1*d1 + a2*d2 + ... + an*dn <= degree.
-    """
-    n = len(d_list)
-    if n == 0:
-        return []
-
-    powers = []
-    i = 0
-    current_degree = 0
-    current_powers = [0 for _ in range(n)]
-    while True:
-        if i == n - 1:
-            if degree >= current_degree:
-                if not require_equal:
-                    for j in range(1 + (degree - current_degree)//d_list[i]):
-                        current_powers[i] = j
-                        powers.append(tuple(current_powers))
-                elif (degree - current_degree) % d_list[i] == 0:
-                    current_powers[i] = (degree - current_degree) // d_list[i]
-                    powers.append(tuple(current_powers))
-            i -= 1
-            current_powers[i] += 1
-            current_degree += d_list[i]
-        else:
-            if current_degree > degree:
-                # reset the current power
-                current_degree -= d_list[i] * current_powers[i]
-                current_powers[i] = 0
-                i -= 1
-                if i < 0:
-                    break
-                current_powers[i] += 1
-                current_degree += d_list[i]
-            else:
-                i += 1
-    return powers
-
 def cross_exprs(exprs: List[Expr], symbols: Tuple[Symbol, ...], degree: int) -> List[Expr]:
     """
     Given expressions f1, f2, ..., fn,
@@ -322,7 +284,7 @@ def cross_exprs(exprs: List[Expr], symbols: Tuple[Symbol, ...], degree: int) -> 
         return []
 
     # find all a1*d1 + a2*d2 + ... + an*dn <= degree
-    powers = _degree_combinations(poly_degrees, degree)
+    powers = generate_partitions(poly_degrees, degree, descending=False)
     # map the powers to expressions
     new_exprs = [Mul(*(x**i for x, i in zip(exprs, p))) for p in powers]
 
@@ -395,7 +357,7 @@ def _get_cross_dmps_of_quad_diff(quad_diff_order: int, tangent_dmp: DMP) -> List
     tangent_dmp = tangent_dmp.rep if isinstance(tangent_dmp, Poly) else tangent_dmp
     nvars = tangent_dmp.lev + 1
     ndiff = nvars * (nvars - 1) // 2
-    powers = _degree_combinations([2] * ndiff, quad_diff_order)
+    powers = generate_partitions([2] * ndiff, quad_diff_order, descending=False)
     domain = tangent_dmp.dom
 
     rng = PolyRing(f'x:{nvars}', domain)
@@ -491,7 +453,7 @@ def _get_cross_exprs_and_polys_of_quad_diff(symbols: Tuple[Symbol],
     nvars = len(symbols)
     # symbols = sorted(list(symbols), key=lambda x: x.name) # sorting makes rep reordered
     inds = [(i,j) for i in range(nvars) for j in range(nvars) if i < j]
-    powers = _degree_combinations([2] * (nvars*(nvars-1)//2), quad_diff_order)
+    powers = generate_partitions([2] * (nvars*(nvars-1)//2), quad_diff_order, descending=False)
 
     exprs = [
         Mul(tangent, 
@@ -668,7 +630,7 @@ def _get_matrix_of_quad_diff(tangent_dmp: DMP, degree: int, quad_diff_order: int
     symmetry = MonomialManager(nvars, symmetry)
     symmetry_base = symmetry.base() # initialize once to use cached properties
     for p in polys:
-        degree_comb_mat = _degree_combinations(nvars_of_steps, degree - deg(p), require_equal=True)
+        degree_comb_mat = generate_partitions(nvars_of_steps, degree - deg(p), equal=True, descending=False)
         degree_comb_mat = np.array(degree_comb_mat, dtype='int32') * step
 
         submat = _get_matrix_of_lifted_degrees(p, degree_comb_mat, symmetry, symmetry_base, degree)
