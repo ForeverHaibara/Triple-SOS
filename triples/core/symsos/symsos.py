@@ -46,7 +46,6 @@ class SymmetricSubstitution(TransformNode):
                 continue
 
             solver = SolvePolynomial(applied[0])
-            print(applied[0], applied[0].ineq_constraints)
             self.children.append(solver)
             self.restorations[solver] = applied[1]
 

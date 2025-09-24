@@ -35,6 +35,7 @@ class SOSMomentPoly(AtomSOSElement):
         >>> E = Function('E')
         >>> sos = SOSMomentPoly(E(a**2)*(E(a**2)*E(b**2) - E(a*b)**2), [a, b], [1], state_operator=E)
         >>> sos.solve()
+        Matrix([[1]])
         >>> sos.as_solution().solution
         E((a*E(a*b) - b*E(a**2))**2)
     """
