@@ -29,6 +29,7 @@ class ProofNode:
     """
     status = 0
     finished = False
+    default_configs = {}
     def __init__(self,
         problem: InequalityProblem
     ):
@@ -138,7 +139,8 @@ def _sum_of_squares(
                 path.append(cur)
 
         # explore the deepest child
-        cfg = configs.get(cur, {})
+        cfg = cur.default_configs.copy()
+        cfg.update(configs.get(cur, {}))
         for cls in cur.__class__.mro()[::-1]:
             if cls in configs:
                 cfg.update(configs[cls])

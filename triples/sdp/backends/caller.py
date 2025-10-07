@@ -10,6 +10,7 @@ from .cvxopt_sdp import DualBackendCVXOPT
 from .cvxpy_sdp import DualBackendCVXPY
 from .mosek_sdp import DualBackendMOSEK
 from .picos_sdp import DualBackendPICOS
+from .qics_sdp import DualBackendQICS
 from .sdpap_sdp import DualBackendSDPAP
 
 from .settings import SDPError, SDPResult
@@ -21,6 +22,7 @@ _DUAL_BACKENDS: Dict[str, DualBackend] = {
     'cvxpy': DualBackendCVXPY,
     'mosek': DualBackendMOSEK,
     'picos': DualBackendPICOS,
+    'qics': DualBackendQICS,
     'sdpa': DualBackendSDPAP,
     # 'sdpap': DualBackendSDPAP,
 }
@@ -33,7 +35,7 @@ _PRIMAL_BACKENDS: Dict[str, Any] = {
 }
 
 _RECOMMENDED_BACKENDS = [
-    'mosek', 'clarabel', 'cvxopt', 'cvxpy', 'picos', 'sdpa',
+    'mosek', 'clarabel', 'qics', 'cvxopt', 'cvxpy', 'picos', 'sdpa',
 ]
 
 def get_default_sdp_backend(dual = True) -> str:

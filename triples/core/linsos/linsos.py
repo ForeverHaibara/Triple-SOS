@@ -252,6 +252,19 @@ def LinearSOS(
 
 
 class LinearSOSSolver(ProofNode):
+    default_configs = {
+        'verbose': False,
+        'linprog_options': LINPROG_OPTIONS,
+        'allow_numer': 0,
+        'centralize': True,
+        'augment_tangents': True,
+        'preordering': 'quadratic',
+        'quad_diff_order': 8,
+        'basis_limit': 15000,
+        'lift_degree_limit': 4,
+    }
+
+
     _transformed_problem = None
     _tangents = None
     _decentralizer = None
@@ -298,7 +311,7 @@ class LinearSOSSolver(ProofNode):
         if self.status != 0:
             return
 
-        verbose = configs.get('verbose', False)
+        verbose = configs['verbose']
         if self.problem.roots is None:
             domain = self.problem.expr.domain
             if domain.is_QQ or domain.is_ZZ:
@@ -324,7 +337,7 @@ class LinearSOSSolver(ProofNode):
         ####################################################################
         #            Centralize the polynomial and symmetry
         ####################################################################
-        if configs.get('centralize', True):
+        if configs['centralize']:
             self._centralize(configs)
             problem = self._transformed_problem
             tangents = self._tangents
@@ -342,28 +355,16 @@ class LinearSOSSolver(ProofNode):
 
 
         ####################################################################
-        #                        Get configurations
-        ####################################################################
-        augment_tangents = configs.get('augment_tangents', True)
-        preordering = configs.get('preordering', 'quadratic')
-        quad_diff_order = configs.get('quad_diff_order', 8)
-        basis_limit = configs.get('basis_limit', 15000)
-        lift_degree_limit = configs.get('lift_degree_limit', 4)
-        linprog_options = configs.get('linprog_options', LINPROG_OPTIONS)
-        allow_numer = configs.get('allow_numer', 0)
-
-
-        ####################################################################
         #            Prepare tangents to form linear bases
         ####################################################################
         signs = _get_signs_of_vars(ineq_constraints, poly.gens)
         all_nonnegative = all(s > 0 for s in signs.values())
 
-        qmodule = get_qmodule_list(poly, ineq_constraints, all_nonnegative=all_nonnegative, preordering=preordering)
+        qmodule = get_qmodule_list(poly, ineq_constraints, all_nonnegative=all_nonnegative, preordering=configs['preordering'])
         qmodule = clear_polys_by_symmetry(qmodule, poly.gens, symmetry)
 
         tangents = list(prepare_tangents(poly, qmodule, eq_constraints, roots=roots, additional_tangents=tangents).items())
-        if augment_tangents:
+        if configs['augment_tangents']:
             tangents += list(prepare_inexact_tangents(poly, ineq_constraints, eq_constraints,
                 monomial_manager=symmetry, roots=roots, all_nonnegative=all_nonnegative).items())
 
@@ -375,19 +376,22 @@ class LinearSOSSolver(ProofNode):
         solution = None
         try:
             # prepare to lift the degree in an iterative way
-            for lift_degree_info in lift_degree(poly, ineq_constraints=ineq_constraints, symmetry=symmetry, lift_degree_limit=lift_degree_limit):
+            for lift_degree_info in lift_degree(poly, ineq_constraints=ineq_constraints,
+                                        symmetry=symmetry, lift_degree_limit=configs['lift_degree_limit']):
                 # RHS
                 time0 = time()
                 degree = lift_degree_info['degree']
-                basis, arrays = _prepare_basis(poly.gens, all_nonnegative=all_nonnegative, degree=degree, tangents=tangents,
-                                                eq_constraints=eq_constraints, symmetry=symmetry, 
-                                                quad_diff_order=quad_diff_order, basis_limit=basis_limit)
+                basis, arrays = _prepare_basis(poly.gens,
+                                    all_nonnegative=all_nonnegative, degree=degree, tangents=tangents,
+                                    eq_constraints=eq_constraints, symmetry=symmetry,
+                                    quad_diff_order=configs['quad_diff_order'], basis_limit=configs['basis_limit'])
                 if len(basis) <= 0:
                     continue
 
                 # LHS (from multipliers * poly)
                 basis += lift_degree_info['basis']
-                arrays = np.vstack([arrays, np.array([x.as_array_np(expand_cyc=True, symmetry=symmetry) for x in lift_degree_info['basis']])])
+                arrays = np.vstack([arrays,
+                    np.array([x.as_array_np(expand_cyc=True, symmetry=symmetry) for x in lift_degree_info['basis']])])
 
                 # sum of coefficients of the multipliers should be 1
                 regularizer = np.zeros(arrays.shape[0])
@@ -412,7 +416,7 @@ class LinearSOSSolver(ProofNode):
                     warnings.simplefilter('once')
                     from scipy.optimize import linprog
                     try:
-                        linear_sos = linprog(optimized, A_eq=arrays.T, b_eq=b, **linprog_options)
+                        linear_sos = linprog(optimized, A_eq=arrays.T, b_eq=b, **configs['linprog_options'])
                     except:
                         pass
                 if linear_sos is None or not linear_sos.success:
@@ -429,7 +433,7 @@ class LinearSOSSolver(ProofNode):
                     num_multipliers = len(lift_degree_info['basis']),
                     symmetry = symmetry
                 )
-                if is_equal or allow_numer > 0:
+                if is_equal or configs['allow_numer'] > 0:
                     basis = _odd_basis_to_even(basis, poly.gens, ineq_constraints)
                     solution = create_linear_sol_from_y_basis(
                         problem=poly, y=y, basis=basis, symmetry=symmetry,
@@ -444,7 +448,7 @@ class LinearSOSSolver(ProofNode):
         except _basis_limit_exceeded:
             solution = None
             if verbose:
-                print(f'Basis limit {basis_limit} exceeded. LinearSOS aborted.')
+                print(f"Basis limit {configs['basis_limit']} exceeded. LinearSOS aborted.")
 
         if solution is not None:
             if self._decentralizer is not None:

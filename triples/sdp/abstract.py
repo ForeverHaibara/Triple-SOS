@@ -9,6 +9,7 @@ from sympy.matrices import MutableDenseMatrix as Matrix
 import sympy as sp
 
 from .arithmetic import sqrtsize_of_mat, is_empty_matrix, congruence, rep_matrix_from_numpy, rep_matrix_to_numpy
+from .backends import SDPError
 from .rationalize import rationalize_and_decompose
 from .utils import exprs_to_arrays, collect_constraints
 
@@ -240,8 +241,14 @@ class SDPProblemBase(ABC):
         if not ('verbose' in kwargs):
             kwargs['verbose'] = verbose
 
-        y = self._solve_numerical_sdp(objective=obj[0], constraints=cons, solver=solver, 
-            return_result=False, kwargs=kwargs)
+        try:
+            y = self._solve_numerical_sdp(objective=obj[0], constraints=cons, solver=solver, 
+                return_result=False, kwargs=kwargs)
+            self._ys.append(y)
+        except SDPError as e:
+            if e.y is not None:
+                self._ys.append(e.y)
+            raise e
 
         if y is not None:
             y = rep_matrix_from_numpy(y)

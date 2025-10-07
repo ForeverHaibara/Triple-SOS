@@ -22,6 +22,16 @@ class _lazy_iter:
             self._iter = self._initializer()
         return iter(self._iter)
 
+def _lazy_find_roots(problem, verbose=False):
+    poly = problem.poly
+    time1 = time()
+    if not poly.domain.is_Exact:
+        return []
+    roots = problem.find_roots()
+    if verbose:
+        print(f"Time for finding roots num = {len(roots):<6d}     : {time() - time1:.6f} seconds.")
+    return roots
+
 
 def _get_qmodule_list(poly: Poly, ineq_constraints: List[Tuple[Poly, Expr]],
         ineq_constraints_with_trivial: bool = True,
@@ -117,6 +127,60 @@ def _is_infeasible(
 
 
 class SDPSOSSolver(ProofNode):
+    """
+    Solve a constrained polynomial inequality problem by semidefinite programming (SDP).
+
+    Although the theory of numerical solution to sum of squares using SDP is well established,
+    there exists certain limitations in practice. One of the most major concerns is that we
+    require accurate, rational solution rather a numerical one. If the SDP is strictly feasible
+    and has strictly positive definite solutions, then a rational solution can be obtained by
+    rounding an interior solution. See [1]. However, if the solution is semipositive definite,
+    then it is generally difficult or even impossible to round to a rational solution.
+
+    To handle such cases, we need to compute the low-rank feasible set of the SDP in advance
+    and solve the SDP on the subspace. This is known as facial reduction.
+    Take Vasile's inequality as an example, `(a^2+b^2+c^2)^2 - 3*(a^3*b+b^3*c+c^3*a) >= 0`
+    has four equality cases up to a scaling. If it can be written as a semidefinite form `x'Mx`, then
+    `x'Mx = 0` at these four points. This shows to Mx = 0 for these four vectors. As a result, the 
+    semidefinite matrix `M` lies in a subspace orthogonal to these four vectors. We can assume 
+    `M = QSQ'` where `Q` is the nullspace of the four vectors `x` and solve the SDP with respect to `S`.
+    The low-rank subspace is currently computed heuristically by computing the equality cases of the
+    inequality. SOS exploiting term-sparsity by Newton polytope is also a special case of facial reduction.
+
+    This class provides a node to solve inequality problems by SDPSOS. For more flexible or
+    low-level usage, e.g. manipulating the Gram matrices, please use `SOSPoly`.
+
+    Reference
+    ----------
+    [1] Helfried Peyrl and Pablo A. Parrilo. 2008. Computing sum of squares decompositions with
+    rational coefficients. Theor. Comput. Sci. 409, 2 (December, 2008), 269-281.
+
+    Parameters
+    ----------
+    roots: Optional[List[Root]]
+        The roots of the polynomial satisfying constraints. When it is None, it will be automatically generated.
+    ineq_constraints_with_trivial: bool
+        Whether to add the trivial inequality constraint 1 >= 0. This is used to generate the
+        quadratic module. Default is True.
+    preordering: str
+        The preordering method for extending the generators of the quadratic module. It can be
+        'none', 'linear', 'linear-progressive'. Default is 'linear-progressive'.
+    verbose: bool
+        Whether to print the progress. Default is False.
+    solver: str
+        The numerical SDP solver to use. When set to None, it is automatically selected. Default is None.
+    allow_numer: int
+        Whether to allow numerical solution.
+    """
+    default_configs = {
+        'ineq_constraints_with_trivial': True,
+        'preordering': 'linear-progressive',
+        'verbose': False,
+        'solver': None,
+        'allow_numer': 0,
+        'solve_kwargs': {},
+    }
+
     def explore(self, configs):
         if self.status != 0:
             return
@@ -130,18 +194,14 @@ class SDPSOSSolver(ProofNode):
         nvars = len(poly.gens)
         degree = poly.total_degree()
         if nvars < 1:
+            self.status = -1
+            self.finished = True
             return None
 
-        ####################################################################
-        #                        Get configurations
-        ####################################################################
+
         roots = None
-        ineq_constraints_with_trivial = configs.get('ineq_constraints_with_trivial', True)
-        preordering = configs.get('preordering', 'linear-progressive')
-        verbose = configs.get('verbose', False)
-        solver = configs.get('solver', None)
-        allow_numer = configs.get('allow_numer', 0)
-        solve_kwargs = configs.get('solve_kwargs', {})
+        verbose = configs['verbose']
+        solver = configs['solver']
 
         is_hom = problem.is_homogeneous
         if not is_hom:
@@ -149,6 +209,8 @@ class SDPSOSSolver(ProofNode):
                 + [_.total_degree() for _ in ineq_constraints.keys()]\
                 + [_.total_degree() for _ in eq_constraints.keys()])
         if not (poly.domain in (ZZ, QQ, RR)):
+            self.status = -1
+            self.finished = True
             return None
 
         if verbose:
@@ -156,8 +218,8 @@ class SDPSOSSolver(ProofNode):
             print('Identified Symmetry = %s' % str(symmetry.perm_group).replace('\n', '').replace('  ',''))
 
         qmodule_list = _get_qmodule_list(poly, ineq_constraints.items(),
-                            ineq_constraints_with_trivial=ineq_constraints_with_trivial,
-                            preordering=preordering, is_homogeneous=is_hom)
+                            ineq_constraints_with_trivial=configs['ineq_constraints_with_trivial'],
+                            preordering=configs['preordering'], is_homogeneous=is_hom)
 
         ideal = list(eq_constraints.keys())
         for qmodule in qmodule_list:
@@ -173,21 +235,14 @@ class SDPSOSSolver(ProofNode):
             # now we solve the problem
             try:
                 if roots is None:
-                    time1 = time()
-                    def _lazy_find_roots():
-                        if not poly.domain.is_Exact:
-                            return []
-                        roots = problem.find_roots()
-                        if verbose:
-                            print(f"Time for finding roots num = {len(roots):<6d}     : {time() - time1:.6f} seconds.")
-                        return roots
-                    roots = _lazy_iter(_lazy_find_roots)
+                    roots = _lazy_iter(lambda: _lazy_find_roots(problem, verbose))
     
                 sos_problem = SOSPoly(poly, poly.gens, qmodule = qmodule, ideal = ideal,
                                         symmetry = symmetry.perm_group, roots = roots, degree=degree)
                 sdp = sos_problem.construct(verbose=verbose)
 
-                if sos_problem.solve(verbose=verbose, solver=solver, allow_numer=allow_numer, kwargs=solve_kwargs) is not None:
+                if sos_problem.solve(verbose=verbose, solver=solver,
+                        allow_numer=configs['allow_numer'], kwargs=configs['solve_kwargs']) is not None:
                     if verbose:
                         print(f"Time for solving SDP{' ':20s}: {time() - time0:.6f} seconds. \033[32mSuccess\033[0m.")
                     solution = sos_problem.as_solution(qmodule=dict(enumerate([e[1] for e in qmodule_tuples])),
@@ -220,31 +275,9 @@ def SDPSOS(
         solve_kwargs: Dict[str, Any] = {},
     ) -> Optional[SolutionSDP]:
     """
-    Solve a polynomial SOS problem with SDP.
+    Solve a constrained polynomial inequality problem by semidefinite programming (SDP).
 
-    Although the theory of numerical solution to sum of squares using SDP (semidefinite programming)
-    is well established, there exists certain limitations in practice. One of the most major
-    concerns is that we need accurate, rational solution rather a numerical one. One might argue 
-    that SDP is convex and we could perturb a solution to get a rational, interior one. However,
-    this is not always the case. If the feasible set of SDP is convex but not full-rank, then
-    our solution might be on the boundary of the feasible set. In this case, perturbation does
-    not work.
-
-    To handle the problem, we need to derive the true low-rank subspace of the feasible set in advance
-    and perform SDP on the subspace. Take Vasile's inequality as an example, s(a^2)^2 - 3s(a^3b) >= 0
-    has four equality cases. If it can be written as a positive definite matrix M, then we have
-    x'Mx = 0 at these four points. This leads to Mx = 0 for these four vectors. As a result, the 
-    semidefinite matrix M lies on a subspace perpendicular to these four vectors. We can assume 
-    M = QSQ' where Q is the nullspace of the four vectors x, so that the problem is reduced to find S.
-
-    Hence the key problem is to find the root and construct such Q. Also, in our algorithm, the Q
-    is constructed as a rational matrix, so that a rational solution to S converts back to a rational
-    solution to M. We must note that the equality cases might not be rational as in Vasile's inequality.
-    However, the cyclic sum of its permutations is rational. So we can use the linear combination of 
-    x and its permutations, which would be rational, to construct Q. This requires knowledge of 
-    algebraic numbers and minimal polynomials.
-
-    For more flexible usage, please use `SOSPoly`.
+    See the documentation of `SDPSOSSolver` for more details.
 
     Parameters
     ----------
