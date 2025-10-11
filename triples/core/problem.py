@@ -1,4 +1,4 @@
-from typing import Dict, Tuple, Optional, Union, Callable
+from typing import Dict, Tuple, Optional, Union, Callable, Any
 from sympy import Expr, Symbol, Poly, Integer, Rational, Function, Mul, sympify
 from sympy import __version__ as SYMPY_VERSION
 from sympy.combinatorics.perm_groups import Permutation, PermutationGroup
@@ -79,13 +79,16 @@ class InequalityProblem:
         problem.roots = self.roots
         return problem
 
+    def reduce(self, f, reduction = all) -> Any:
+        """Apply a function over self.expr, self.ineq_constraints.keys()
+        and self.eq_constraints.keys(), and reduce them by a given rule.
+        """
+        return reduction(map(f, [
+            self.expr, *self.ineq_constraints.keys(), *self.eq_constraints.keys()]))
+
     @property
     def free_symbols(self):
-        return set.union(
-            set(self.expr.free_symbols), 
-            *[set(e.free_symbols) for e in self.ineq_constraints.keys()],
-            *[set(e.free_symbols) for e in self.eq_constraints.keys()]
-        )
+        return self.reduce(lambda e: set(e.free_symbols), lambda x: set.union(*x))
 
     def extract_constraints(self, symbols: Union[Symbol, Tuple[Symbol]]) \
             -> Tuple[Dict[Expr, Expr], Dict[Expr, Expr], Dict[Expr, Expr], Dict[Expr, Expr]]:
@@ -115,9 +118,7 @@ class InequalityProblem:
 
     @property
     def is_homogeneous(self) -> bool:
-        return self.expr.is_homogeneous and \
-            all(e.is_homogeneous for e in self.ineq_constraints.keys()) and \
-            all(e.is_homogeneous for e in self.eq_constraints.keys())
+        return self.reduce(lambda e: e.is_homogeneous, all)
 
     def polylize(self,
         ineq_constraint_sqf: bool = True,

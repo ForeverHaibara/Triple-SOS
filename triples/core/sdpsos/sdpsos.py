@@ -23,7 +23,7 @@ class _lazy_iter:
         return iter(self._iter)
 
 def _lazy_find_roots(problem, verbose=False):
-    poly = problem.poly
+    poly = problem.expr
     time1 = time()
     if not poly.domain.is_Exact:
         return []
@@ -128,27 +128,28 @@ def _is_infeasible(
 
 class SDPSOSSolver(ProofNode):
     """
-    Solve a constrained polynomial inequality problem by semidefinite programming (SDP).
+    Solve a constrained polynomial inequality problem using semidefinite programming (SDP).
 
-    Although the theory of numerical solution to sum of squares using SDP is well established,
-    there exists certain limitations in practice. One of the most major concerns is that we
-    require accurate, rational solution rather a numerical one. If the SDP is strictly feasible
+    Although the theory of numerically solving sum-of-squares problems using SDP is well established,
+    there are certain limitations in practice. One of the most significant concerns is that we 
+    require an accurate, rational solution rather than a numerical one. If the SDP is strictly feasible
     and has strictly positive definite solutions, then a rational solution can be obtained by
     rounding an interior solution. See [1]. However, if the solution is semipositive definite,
-    then it is generally difficult or even impossible to round to a rational solution.
+    it is generally difficult or even impossible to round it to a rational solution.
 
     To handle such cases, we need to compute the low-rank feasible set of the SDP in advance
-    and solve the SDP on the subspace. This is known as facial reduction.
-    Take Vasile's inequality as an example, `(a^2+b^2+c^2)^2 - 3*(a^3*b+b^3*c+c^3*a) >= 0`
-    has four equality cases up to a scaling. If it can be written as a semidefinite form `x'Mx`, then
-    `x'Mx = 0` at these four points. This shows to Mx = 0 for these four vectors. As a result, the 
-    semidefinite matrix `M` lies in a subspace orthogonal to these four vectors. We can assume 
-    `M = QSQ'` where `Q` is the nullspace of the four vectors `x` and solve the SDP with respect to `S`.
-    The low-rank subspace is currently computed heuristically by computing the equality cases of the
-    inequality. SOS exploiting term-sparsity by Newton polytope is also a special case of facial reduction.
+    and solve the SDP on this subspace. This process is known as facial reduction.
+    For example, consider Vasile's inequality `(a^2+b^2+c^2)^2 - 3*(a^3*b+b^3*c+c^3*a) >= 0`.
+    Up to scaling, there are four equality cases. If this inequality can be written in the
+    semidefinite form `x'Mx`, then `x'Mx = 0` at these four points. This implies that Mx = 0
+    for these four vectors. As a result, the semidefinite matrix `M` lies in a subspace orthogonal
+    to these four vectors. We can assume `M = QSQ'`, where `Q` is the nullspace of the four
+    vectors`x`, and solve the SDP with respect to `S`. Currently, the low-rank subspace is computed
+    heuristically by finding the equality cases of the inequality. Note that SOS that exploits
+    term-sparsity through the Newton polytope is also a special case of facial reduction.
 
-    This class provides a node to solve inequality problems by SDPSOS. For more flexible or
-    low-level usage, e.g. manipulating the Gram matrices, please use `SOSPoly`.
+    This class provides a node to solve inequality problems using SDPSOS. For more flexible or
+    low-level usage, such as manipulating Gram matrices, please use `SOSPoly`.
 
     Reference
     ----------
