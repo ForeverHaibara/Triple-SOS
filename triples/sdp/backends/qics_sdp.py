@@ -44,6 +44,7 @@ class DualBackendQICS(DualBackend):
         from qics import Solver
         return Solver(self._create_model(),
             max_iter = configs.max_iters,
+            max_time = configs.time_limit,
             tol_gap = configs.tol_gap_rel,
             tol_feas = configs.tol_fsb_rel,
             verbose = int(configs.verbose))

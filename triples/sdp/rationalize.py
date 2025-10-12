@@ -10,7 +10,7 @@ except ImportError:
     class DMError(Exception): ...
 
 from .arithmetic import (
-    matadd, matmul, matmul_multiple, solve_undetermined_linear,
+    ArithmeticTimeout, matadd, matmul, matmul_multiple, solve_undetermined_linear,
     sqrtsize_of_mat, congruence, rep_matrix_from_numpy, rep_matrix_to_numpy, lll
 )
 from .backends import SDPError
@@ -122,20 +122,24 @@ class DualRationalizer:
             V[key] = v
         return V
 
-    def rationalize_lll(self, y: np.ndarray) -> Optional[Tuple[sp.Matrix, Decomp]]:
+    def rationalize_lll(self, y: np.ndarray,
+            time_limit: Optional[Union[Callable, float]] = None) -> Optional[Tuple[sp.Matrix, Decomp]]:
+        time_limit = ArithmeticTimeout.make_checker(time_limit)
+
         V = self.nullspaces_lll(y)
         eq_space = []
         eq_rhs = []
         for key, (x0, space) in self.x0_and_space.items():
-            y_space = matmul_multiple(space.T, V[key])
-            rhs = matmul_multiple(x0.T, V[key])
+            y_space = matmul_multiple(space.T, V[key], time_limit = time_limit)
+            rhs = matmul_multiple(x0.T, V[key], time_limit = time_limit)
             eq_space.append(y_space.T)
             eq_rhs.append(-rhs.T)
+            time_limit()
 
         eq_space = sp.Matrix.vstack(*eq_space)
         eq_rhs = sp.Matrix.vstack(*eq_rhs)
         try:
-            x0, space = solve_undetermined_linear(eq_space, eq_rhs)
+            x0, space = solve_undetermined_linear(eq_space, eq_rhs, time_limit = time_limit)
         except ValueError: # Linear system no solution
             return None
 
@@ -152,10 +156,15 @@ class DualRationalizer:
                 result = self.decompose(y)
                 if result is not None:
                     return result
+                time_limit()
 
-    def rationalize(self, y: np.ndarray) -> Optional[Tuple[sp.Matrix, Decomp]]:
+    def rationalize(self, y: np.ndarray,
+            time_limit: Optional[Union[Callable, float]] = None) -> Optional[Tuple[sp.Matrix, Decomp]]:
+        time_limit = ArithmeticTimeout.make_checker(time_limit)
+
         if not isinstance(y, np.ndarray):
             y = rep_matrix_to_numpy(y)
+            time_limit()
         y = y.astype(float)
         y0 = y.copy()
 
@@ -166,6 +175,7 @@ class DualRationalizer:
 
         # eigvalsh = self.eigvalsh(y)
         mineig_y0 = self.mineig(y0)
+        time_limit()
 
         for denom in self.ROUND_DENOMS:
             y = np.round(y0 * denom) / denom
@@ -174,9 +184,10 @@ class DualRationalizer:
                 result = self.decompose(y)
                 if result is not None:
                     return result
+                time_limit()
 
         if abs(mineig_y0) < 1e-4:
-            result = self.rationalize_lll(y0)
+            result = self.rationalize_lll(y0, time_limit = time_limit)
             if result is not None:
                 return result
 

@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from time import perf_counter
 from typing import Dict, Tuple, List, Union, Callable, Optional, Any
 
 from numpy import ndarray
@@ -8,7 +9,7 @@ from sympy.core.relational import Relational
 from sympy.matrices import MutableDenseMatrix as Matrix
 import sympy as sp
 
-from .arithmetic import sqrtsize_of_mat, is_empty_matrix, congruence, rep_matrix_from_numpy, rep_matrix_to_numpy
+from .arithmetic import ArithmeticTimeout, sqrtsize_of_mat, is_empty_matrix, congruence, rep_matrix_from_numpy, rep_matrix_to_numpy
 from .backends import SDPError
 from .rationalize import rationalize_and_decompose
 from .utils import exprs_to_arrays, collect_constraints
@@ -209,11 +210,15 @@ class SDPProblemBase(ABC):
         solve_child: bool = True,
         propagate_to_parent: bool = True,
         verbose: bool = False,
+        time_limit: Optional[float] = None,
         kwargs: Dict[Any, Any] = {}
     ) -> Optional[Matrix]:
         """
         Solve the SDP problem with a given objective and constraints.
         """
+        end_time = perf_counter() + time_limit if isinstance(time_limit, (int, float)) else None
+        time_limit = ArithmeticTimeout.make_checker(time_limit)
+
         original_self = self
         obj = self.exprs_to_arrays([objective])[0]
         cons = self.exprs_to_arrays(constraints)
@@ -234,12 +239,16 @@ class SDPProblemBase(ABC):
             ineq_lhs, ineq_rhs = self.propagate_affine_to_child(ineq_lhs, -ineq_rhs, recursive=True)
             eq_lhs, eq_rhs = self.propagate_affine_to_child(eq_lhs, -eq_rhs, recursive=True)
             ineq_rhs, eq_rhs = -ineq_rhs, -eq_rhs
+            time_limit()
             self = self.get_last_child()
 
         cons = [(ineq_lhs, ineq_rhs, '>'), (eq_lhs, eq_rhs, '==')]
 
+        kwargs = kwargs.copy()
         if not ('verbose' in kwargs):
             kwargs['verbose'] = verbose
+        if end_time is not None and (not ('time_limit' in kwargs)):
+            kwargs['time_limit'] = end_time - perf_counter()
 
         try:
             y = self._solve_numerical_sdp(objective=obj[0], constraints=cons, solver=solver, 
@@ -249,9 +258,11 @@ class SDPProblemBase(ABC):
             if e.y is not None:
                 self._ys.append(e.y)
             raise e
+        time_limit()
 
         if y is not None:
             y = rep_matrix_from_numpy(y)
+            time_limit()
             self.register_y(y, project=True, perturb=True, propagate_to_parent=propagate_to_parent)
             y = original_self.y
         return y

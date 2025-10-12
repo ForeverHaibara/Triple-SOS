@@ -8,7 +8,8 @@ basic matrix operations.
 """
 
 from collections import defaultdict
-from typing import List, Dict, Tuple, Union, Set, Any
+from time import perf_counter
+from typing import List, Dict, Tuple, Union, Optional, Callable, Set, Any
 
 import numpy as np
 from numpy import ndarray
@@ -51,6 +52,20 @@ try:
     FLINT_TYPE = (fmpq, fmpz)
 except ImportError:
     FLINT_TYPE = tuple()
+
+class ArithmeticTimeout(Exception):
+    @classmethod
+    def make_checker(cls, time_limit: Optional[Union[Callable, float]] = None) -> Callable[[float], None]:
+        """Returns a callable that raises an Exception when called if time exceeds current_time + time_limit."""
+        if time_limit is None:
+            return lambda : None
+        if callable(time_limit):
+           return time_limit
+        future = perf_counter() + time_limit
+        def checker():
+            if perf_counter() > future:
+                raise cls()
+        return checker
 
 def is_empty_matrix(M: Union[Matrix, ndarray], check_all_zeros: bool = False) -> bool:
     """

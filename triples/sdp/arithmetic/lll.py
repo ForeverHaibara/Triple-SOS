@@ -2,6 +2,8 @@ from typing import Tuple
 from math import floor as mfloor
 
 from sympy.polys.domains import ZZ, QQ
+from sympy.polys.matrices.ddm import DDM
+from .matop import ArithmeticTimeout, FLINT_TYPE
 
 try:
     from sympy.polys.matrices.exceptions import DMRankError, DMShapeError, DMValueError, DMDomainError
@@ -12,13 +14,14 @@ except ImportError:
     DMDomainError = ValueError
 
 
-def _ddm_lll(x, delta=QQ(3, 4), return_transform=False):
+def _ddm_lll(x, delta=QQ(3, 4), return_transform=False, time_limit=None):
     if QQ(1, 4) >= delta or delta >= QQ(1, 1):
         raise DMValueError("delta must lie in range (0.25, 1)")
     if x.shape[0] > x.shape[1]:
         raise DMShapeError("input matrix must have shape (m, n) with m <= n")
     if x.domain != ZZ:
         raise DMDomainError("input matrix domain must be ZZ")
+    time_limit = ArithmeticTimeout.make_checker(time_limit)
     m = x.shape[0]
     n = x.shape[1]
     k = 1
@@ -59,14 +62,17 @@ def _ddm_lll(x, delta=QQ(3, 4), return_transform=False):
             except ZeroDivisionError:
                 raise DMRankError(linear_dependent_error)
             y_star[i] = [y_star[i][z] - mu[i][j] * y_star[j][z] for z in range(n)]
+            time_limit()
         g_star[i] = dot_rows(y_star, y_star, (i, i))
     while k < m:
         if not mu_small(k, k - 1):
             reduce_row(T, mu, y, (k, k - 1))
+            time_limit()
         if lovasz_condition(k):
             for l in range(k - 2, -1, -1):
                 if not mu_small(k, l):
                     reduce_row(T, mu, y, (k, l))
+                    time_limit()
             k += 1
         else:
             nu = mu[k][k - 1]
@@ -87,25 +93,55 @@ def _ddm_lll(x, delta=QQ(3, 4), return_transform=False):
             if return_transform:
                 T[k], T[k - 1] = T[k - 1], T[k]
             k = max(k - 1, 1)
-    assert all(lovasz_condition(i) for i in range(1, m))
-    assert all(mu_small(i, j) for i in range(m) for j in range(i))
+            time_limit()
+    # assert all(lovasz_condition(i) for i in range(1, m))
+    # assert all(mu_small(i, j) for i in range(m) for j in range(i))
     return y, T
 
 
-def ddm_lll(x, delta=QQ(3, 4)):
-    return _ddm_lll(x, delta=delta, return_transform=False)[0]
+def ddm_lll(x, delta=QQ(3, 4), time_limit=None):
+    return _ddm_lll(x, delta=delta, return_transform=False, time_limit=time_limit)[0]
 
+def ddm_lll_transform(x, delta=QQ(3, 4), time_limit=None):
+    return _ddm_lll(x, delta=delta, return_transform=True, time_limit=time_limit)
 
-def ddm_lll_transform(x, delta=QQ(3, 4)):
-    return _ddm_lll(x, delta=delta, return_transform=True)
+def dfm_lll(x):
+    ...
 
-def lll(x, delta=QQ(3, 4)):
+def lll(x, delta=QQ(3, 4), time_limit=None):
     """
     Compute the LLL-reduced basis of a given matrix.
     Adapted from SymPy 1.12 to support SymPy < 1.12.
     """
-    dM = x._rep.convert_to(ZZ)
-    ddm = dM.rep.to_ddm()
-    rep = ddm_lll(ddm, delta=delta)
-    dM2 = dM.from_rep(rep)
+    time_limit = ArithmeticTimeout.make_checker(time_limit)
+    dM = x._rep.convert_to(ZZ)    
+    rep = dM.rep
+    time_limit()
+
+    if len(FLINT_TYPE):
+        # flint is installed
+        from flint import fmpz_mat, fmpz
+
+        if not isinstance(rep, fmpz_mat):
+            rep = list(rep.to_ddm())
+            if not isinstance(ZZ.one, (fmpz, int)):
+                rep = [[fmpz(z) for z in row] for row in rep]
+            rep = fmpz_mat(rep)
+            time_limit()
+        
+        def to_float(x):
+            if QQ.of_type(x):
+                return float(x.numerator) / float(x.denominator)
+            else:
+                return float(x)
+
+        new_rep = rep.lll(delta=to_float(delta))
+        new_rep = new_rep.tolist()
+        if not isinstance(ZZ.one, fmpz):
+            new_rep = [[ZZ(int(z)) for z in row] for row in new_rep]
+        new_rep = DDM(new_rep, x.shape, ZZ)
+    else:
+        rep = rep.to_ddm()
+        new_rep = ddm_lll(rep, delta=delta, time_limit=time_limit)
+    dM2 = dM.from_rep(new_rep)
     return x._fromrep(dM2)

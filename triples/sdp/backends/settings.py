@@ -207,16 +207,19 @@ class SDPError(Exception):
 class SolverConfigs:
     verbose = 0
     max_iters = 200
+    time_limit = 1e10
     tol_gap_abs = 1e-8
     tol_gap_rel = 1e-8
     tol_fsb_abs = 1e-8
     tol_fsb_rel = 1e-8
     solver_options = dict()
-    _KEYS = ('verbose', 'max_iters', 'tol_gap_abs', 'tol_gap_rel', 'tol_fsb_abs', 'tol_fsb_rel', 'solver_options')
+    _KEYS = ('verbose', 'max_iters', 'time_limit', 'tol_gap_abs', 'tol_gap_rel', 'tol_fsb_abs', 'tol_fsb_rel', 'solver_options')
     def __init__(self, **kwargs):
         for key in self._KEYS:
             setattr(self, key, kwargs.pop(key, getattr(self, key)))
 
+        if self.time_limit is None:
+            self.time_limit = 1e10
         if kwargs:
             raise TypeError(f"Unexpected keyword arguments for SolverConfigs: {list(kwargs.keys())}")
 
