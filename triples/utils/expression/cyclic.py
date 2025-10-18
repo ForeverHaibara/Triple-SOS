@@ -7,6 +7,7 @@ from numbers import Number
 from typing import List, Tuple, Union, Callable, Any
 from typing import Dict as tDict
 
+import sympy as sp # for hijacking default behaviors of sympy
 from sympy import sympify, S, Mul, Add, Pow, Symbol, Poly, Expr, Basic
 from sympy.core.cache import cacheit
 from sympy.core.containers import Dict
@@ -19,6 +20,8 @@ from sympy.printing.str import StrPrinter
 from sympy.printing.precedence import precedence_traditional, PRECEDENCE
 from sympy.simplify import signsimp
 from sympy import __version__ as SYMPY_VERSION
+
+HIJACK_SYMPY = True
 
 def _leading_symbol(expr):
     if isinstance(expr, Symbol):
@@ -686,7 +689,7 @@ setattr(StrPrinter, '_print_CyclicSum', lambda self, expr: CyclicSum._str_str(se
 setattr(StrPrinter, '_print_CyclicProduct', lambda self, expr: CyclicProduct._str_str(self, expr))
 
 # if SYMPY_VERSION < '1.14':
-if not tuple(version_tuple(SYMPY_VERSION)) >= (1, 14):
+if HIJACK_SYMPY and not tuple(version_tuple(SYMPY_VERSION)) >= (1, 14):
     try:
         from sympy.core.sorting import ordered
     except (ImportError, ModuleNotFoundError): # <= 1.9
