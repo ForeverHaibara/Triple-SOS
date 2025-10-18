@@ -46,7 +46,7 @@ def sum_of_squares(
         eq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
         method_order: Optional[List[str]] = METHOD_ORDER,
         configs: Optional[Dict[str, Dict]] = DEFAULT_CONFIGS,
-        time: float = 3600,
+        time_limit: float = 3600,
         mode: str = 'fast',
         verbose: bool = False,
     ) -> Optional[Solution]:
@@ -138,7 +138,7 @@ def sum_of_squares(
         },
     }
     _configs.update(configs)
-    return problem.sum_of_squares(_configs, time=time, mode=mode)
+    return problem.sum_of_squares(_configs, time_limit=time_limit, mode=mode)
 
 
 def sum_of_squares_multiple(

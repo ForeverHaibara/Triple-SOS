@@ -10,7 +10,7 @@ from sympy.matrices import MutableDenseMatrix as Matrix
 import sympy as sp
 
 from .arithmetic import ArithmeticTimeout, sqrtsize_of_mat, is_empty_matrix, congruence, rep_matrix_from_numpy, rep_matrix_to_numpy
-from .backends import SDPError
+from .backends import SDPError, SDPTimeoutError, SDPResult
 from .rationalize import rationalize_and_decompose
 from .utils import exprs_to_arrays, collect_constraints
 
@@ -198,7 +198,7 @@ class SDPProblemBase(ABC):
         solver: Optional[str] = None,
         return_result: bool = False,
         kwargs: Dict[Any, Any] = {}
-    ) -> Optional[ndarray]:
+    ) -> Optional[Union[ndarray, SDPResult]]:
         """
         Internal interface to solve a single numerical SDP by calling backends.
         """
@@ -234,13 +234,16 @@ class SDPProblemBase(ABC):
             raise ValueError(f"The equality constraints should have dof = {self.dof},"
                              f" but got lhs shape {eq_lhs.shape} and rhs shape {eq_rhs.shape}.")
 
-        if solve_child:
-            obj = self.propagate_affine_to_child(obj[0], obj[1], recursive=True)
-            ineq_lhs, ineq_rhs = self.propagate_affine_to_child(ineq_lhs, -ineq_rhs, recursive=True)
-            eq_lhs, eq_rhs = self.propagate_affine_to_child(eq_lhs, -eq_rhs, recursive=True)
-            ineq_rhs, eq_rhs = -ineq_rhs, -eq_rhs
-            time_limit()
-            self = self.get_last_child()
+        try:
+            if solve_child:
+                obj = self.propagate_affine_to_child(obj[0], obj[1], recursive=True)
+                ineq_lhs, ineq_rhs = self.propagate_affine_to_child(ineq_lhs, -ineq_rhs, recursive=True)
+                eq_lhs, eq_rhs = self.propagate_affine_to_child(eq_lhs, -eq_rhs, recursive=True)
+                ineq_rhs, eq_rhs = -ineq_rhs, -eq_rhs
+                time_limit()
+                self = self.get_last_child()
+        except ArithmeticTimeout as e:
+            raise SDPTimeoutError.from_kwargs() from e
 
         cons = [(ineq_lhs, ineq_rhs, '>'), (eq_lhs, eq_rhs, '==')]
 
@@ -250,21 +253,21 @@ class SDPProblemBase(ABC):
         if end_time is not None and (not ('time_limit' in kwargs)):
             kwargs['time_limit'] = end_time - perf_counter()
 
-        try:
-            y = self._solve_numerical_sdp(objective=obj[0], constraints=cons, solver=solver, 
-                return_result=False, kwargs=kwargs)
-            self._ys.append(y)
-        except SDPError as e:
-            if e.y is not None:
-                self._ys.append(e.y)
-            raise e
-        time_limit()
-
+        sol = self._solve_numerical_sdp(objective=obj[0], constraints=cons, solver=solver, 
+                    return_result=True, kwargs=kwargs)
+        y = sol.y
         if y is not None:
-            y = rep_matrix_from_numpy(y)
-            time_limit()
-            self.register_y(y, project=True, perturb=True, propagate_to_parent=propagate_to_parent)
-            y = original_self.y
+            self._ys.append(y)
+        sol.raises()
+
+        try:
+            if y is not None:
+                y = rep_matrix_from_numpy(y)
+                time_limit()
+                self.register_y(y, project=True, perturb=True, propagate_to_parent=propagate_to_parent)
+                y = original_self.y
+        except ArithmeticTimeout as e:
+            raise SDPTimeoutError(sol) from e
         return y
 
     @abstractmethod

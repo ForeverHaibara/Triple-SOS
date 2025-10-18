@@ -1,6 +1,6 @@
 from functools import lru_cache, wraps
 from typing import Any, Union, Tuple, List, Dict, Callable, Optional
-from time import time
+from time import perf_counter
 
 import numpy as np
 from scipy.sparse import coo_matrix
@@ -231,15 +231,15 @@ class LinearBasisTangent(LinearBasis):
         # as it is only involves object creation.
         basis = []
         if _VERBOSE_GENERATE_QUAD_DIFF:
-            print('>> Time for converting cross_tangents to polys:', time() - time0)
-            time0 = time()
+            print('>> Time for converting cross_tangents to polys:', perf_counter() - time0)
+            time0 = perf_counter()
 
         for t2, p2 in zip(cross_exprs_mul_p, cross_polys_mul_p):
             basis += cls.generate(t2, symbols, degree, tangent_p=p2, require_equal=True)
 
         if _VERBOSE_GENERATE_QUAD_DIFF:
-            print('>> Time for generating bases instances:', time() - time0)
-            time0 = time()
+            print('>> Time for generating bases instances:', perf_counter() - time0)
+            time0 = perf_counter()
 
         # 4. Convert polys to the numpy matrix representation.
         mat = _get_matrix_of_quad_diff(tangent_p, degree, quad_diff_order, cls._degree_step, symmetry)
@@ -361,7 +361,8 @@ def _get_cross_dmps_of_quad_diff(quad_diff_order: int, tangent_dmp: DMP) -> List
     domain = tangent_dmp.dom
 
     rng = PolyRing(f'x:{nvars}', domain)
-    smp = PolyElement(rng, tangent_dmp.to_dict())
+    rng_zero = rng.zero
+    smp = rng_zero.new(tangent_dmp.to_dict())
 
     # polys are the DMPs of (ai - aj)^2 for all i < j
     polys, lst = [None] * ndiff, [0] * nvars
@@ -380,14 +381,14 @@ def _get_cross_dmps_of_quad_diff(quad_diff_order: int, tangent_dmp: DMP) -> List
             lst[i] = 0
             lst[j] = 0
             # polys[cnt] = DMP.from_dict(coeffs, lev, domain)
-            polys[cnt] = PolyElement(rng, coeffs)
+            polys[cnt] = rng_zero.new(coeffs)
             cnt += 1
 
     # cache = {(0,) * ndiff: tangent_dmp} # tangent_dmp.one(nvars - 1, tangent_dmp.dom)
     cache = {(0,) * ndiff: smp}
     
     if _VERBOSE_GENERATE_QUAD_DIFF:
-        time0 = time()
+        time0 = perf_counter()
 
     # compute the polynomials of prod((ai - aj)^2) * tangent
     # via dynamic programming
@@ -407,8 +408,8 @@ def _get_cross_dmps_of_quad_diff(quad_diff_order: int, tangent_dmp: DMP) -> List
         new_poly_reps[i] = _compute_power_with_cache(polys, cache, power)
 
     if _VERBOSE_GENERATE_QUAD_DIFF:
-        print('>> Time for computing polys in cross_exprs:', time() - time0)
-        time0 = time()
+        print('>> Time for computing polys in cross_exprs:', perf_counter() - time0)
+        time0 = perf_counter()
     return new_poly_reps
 
 
@@ -614,7 +615,7 @@ def _get_matrix_of_quad_diff(tangent_dmp: DMP, degree: int, quad_diff_order: int
     if len(polys) == 0:
         return np.array([], dtype='float')
     if _VERBOSE_GENERATE_QUAD_DIFF:
-        time0 = time()
+        time0 = perf_counter()
 
     _sparse = isinstance(polys[0], PolyElement)
     if _sparse:
@@ -640,7 +641,7 @@ def _get_matrix_of_quad_diff(tangent_dmp: DMP, degree: int, quad_diff_order: int
     mat = np.vstack(mat) if len(mat) > 0 else np.array([], dtype='float')
 
     if _VERBOSE_GENERATE_QUAD_DIFF:
-        print('>> Time for converting bases to matrix:', time() - time0)
+        print('>> Time for converting bases to matrix:', perf_counter() - time0)
 
     return mat
 

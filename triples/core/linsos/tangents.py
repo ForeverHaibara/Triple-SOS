@@ -3,10 +3,12 @@ from itertools import combinations
 
 import numpy as np
 import sympy as sp
-from sympy import Poly, Expr, Matrix
+from sympy import Poly, Expr, Integer, Mul, RR
+from sympy import MutableDenseMatrix as Matrix
 from sympy.combinatorics import PermutationGroup
 from sympy.polys.polyclasses import DMP
 
+from ..problem import InequalityProblem
 from ...utils import Root, MonomialManager
 from ...utils.roots.num_extrema import numeric_optimize_skew_symmetry
 from ...sdp.arithmetic import permute_matrix_rows
@@ -122,7 +124,7 @@ def _get_ineq_constrained_tangents(ineq: Poly, ineq_expr: Expr, roots: List[Root
     symbols = ineq.gens
     tangents = {}
     if ineq.is_monomial and sum(_ != 0 for _ in tuple(ineq.LM())) == 1:
-        ineq, ineq_expr = Poly(1, *symbols), sp.Integer(1)
+        ineq, ineq_expr = Poly(1, *symbols), Integer(1)
     if roots:
         for degree in range(1, max_degree):
             mat = Matrix.hstack(*[r.span(degree) for r in roots])
@@ -146,8 +148,8 @@ def _get_ineq_constrained_tangents(ineq: Poly, ineq_expr: Expr, roots: List[Root
     return tangents
 
 
-def prepare_tangents(poly: Poly, ineq_constraints: Dict[Poly, Expr] = {}, eq_constraints: Dict[Poly, Expr] = {},
-        roots: List[Root] = [],
+def prepare_tangents(problem: InequalityProblem,
+        qmodule: Optional[Dict[Poly, Expr]] = None,
         default_tangents = DEFAULT_TANGENTS,
         additional_tangents: List[Expr] = [],
     ) -> Dict[Poly, Expr]:
@@ -199,6 +201,10 @@ def prepare_tangents(poly: Poly, ineq_constraints: Dict[Poly, Expr] = {}, eq_con
 
     TODO: Handle high-order roots.
     """
+    poly = problem.expr
+    ineq_constraints = qmodule if qmodule is not None else problem.ineq_constraints
+    roots = [r for r in problem.roots if not r.is_zero] if problem.roots is not None else []
+
     symbols = poly.gens
 
     tangents = [t.as_expr() for t in additional_tangents]
@@ -206,8 +212,8 @@ def prepare_tangents(poly: Poly, ineq_constraints: Dict[Poly, Expr] = {}, eq_con
         # When there is a nontrivial root, then there cannot be
         # terms like "a^i*b^j*c^k*(a-b)^(2l)*(b-c)^(2m)*(c-a)^(2n)" in the SOS form,
         # as it does not vanish at the root.
-        if sp.S.One not in tangents:
-            tangents.append(sp.S.One)
+        if Integer(1) not in tangents:
+            tangents.append(Integer(1))
 
         if len(symbols) in default_tangents:
             tangents.extend(default_tangents[len(symbols)](*symbols))
@@ -254,7 +260,7 @@ def get_qmodule_list(poly: Poly, ineq_constraints: Dict[Poly, Expr],
 
     monomials = []
     linear_ineqs = []
-    nonlin_ineqs = [(poly_one, sp.S.One)]
+    nonlin_ineqs = [(poly_one, Integer(1))]
     for ineq, e in ineq_constraints.items():
         if ineq.is_monomial and len(ineq.free_symbols) == 1 and ineq.total_degree() == 1 and ineq.LC() >= 0:
             monomials.append((ineq, e))
@@ -278,7 +284,7 @@ def get_qmodule_list(poly: Poly, ineq_constraints: Dict[Poly, Expr],
         return linear_ineqs + nonlin_ineqs
     if preordering == 'full':
         linear_ineqs = linear_ineqs + nonlin_ineqs
-        nonlin_ineqs = [(poly_one, sp.S.One)]
+        nonlin_ineqs = [(poly_one, Integer(1))]
 
     qmodule = nonlin_ineqs.copy()
     for n in range(1, len(linear_ineqs) + 1):
@@ -289,7 +295,7 @@ def get_qmodule_list(poly: Poly, ineq_constraints: Dict[Poly, Expr],
             d = mul.total_degree()
             if d > degree:
                 continue
-            mul_expr = sp.Mul(*(c[1] for c in comb))
+            mul_expr = Mul(*(c[1] for c in comb))
             for ineq, e in nonlin_ineqs:
                 new_d = d + ineq.total_degree()
                 if new_d <= degree:
@@ -304,15 +310,22 @@ def get_qmodule_list(poly: Poly, ineq_constraints: Dict[Poly, Expr],
 #
 ###################################################################
 
-def prepare_inexact_tangents(poly: Poly, ineq_constraints: Dict[Poly, Expr] = {}, eq_constraints: Dict[Poly, Expr] = {},
-    monomial_manager: MonomialManager = None, roots: List[Root] = [],
-    all_nonnegative: bool = False, threshold: float = 0.5, max_degree: int = 5) -> Dict[Poly, Expr]:
+def prepare_inexact_tangents(problem: InequalityProblem,
+        monomial_manager: MonomialManager = None,
+        all_nonnegative: bool = False,
+        threshold: float = 0.5,
+        max_degree: int = 5
+    ) -> Dict[Poly, Expr]:
     """
     The function `prepare_tangents` has highlighted the importance of handling the roots.
     However, even if there are no zeros, we need to pay attention to local minima that are very close
     to zeros. They can be handled by a slight numerical perturbation that makes them numerical zeros.
     """
+    poly = problem.expr
+    ineq_constraints = problem.ineq_constraints
+    eq_constraints = problem.eq_constraints
     nvars = len(poly.gens)
+    roots = [r for r in problem.roots if not r.is_zero] if problem.roots is not None else []
     if nvars <= 1 or len(eq_constraints) or monomial_manager.is_symmetric or any(r.is_nontrivial for r in roots):
         return dict()
 
@@ -326,7 +339,7 @@ def prepare_inexact_tangents(poly: Poly, ineq_constraints: Dict[Poly, Expr] = {}
         # numerically find local extrema in the feasible set
         new_roots = numeric_optimize_skew_symmetry(poly, poly.gens, perms, num=5)
         new_roots = [r for r in new_roots if all(ineq(*r) >= 0 for ineq in ineq_constraints)]
-        new_roots = [Root(_, domain=sp.RR) for _ in new_roots] # convert to RR
+        new_roots = [Root(_, domain=RR) for _ in new_roots] # convert to RR
     except Exception as e: # shall we handle this?
         if isinstance(e, (KeyboardInterrupt, SystemExit)):
             raise e
@@ -349,7 +362,7 @@ def prepare_inexact_tangents(poly: Poly, ineq_constraints: Dict[Poly, Expr] = {}
             # Pretend that we require the root to be a zero of poly,
             # which generates polynomials that have low values around the root.
             mat = monomial_manager.permute_vec(root.span(degree), degree)
-            mat = sp.Matrix.hstack(mat, sp.Matrix.ones(mat.shape[0], 1)) # TODO
+            mat = Matrix.hstack(mat, Matrix.ones(mat.shape[0], 1)) # TODO
             vecs = _get_sorted_nullspace(monomial_base, mat, degree)
             if not vecs:
                 continue

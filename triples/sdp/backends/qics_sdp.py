@@ -27,7 +27,7 @@ class DualBackendQICS(DualBackend):
         c = self.c[:, None]
         A = self.eq_lhs
         b = self.eq_rhs[:, None]
-        G = -np.r_[self.ineq_lhs, *self.As]
+        G = -np.concatenate([self.ineq_lhs] + self.As)
         h = np.concatenate([-self.ineq_rhs] + self.bs)[:, None]
 
         from qics.cones import NonNegOrthant, PosSemidefinite

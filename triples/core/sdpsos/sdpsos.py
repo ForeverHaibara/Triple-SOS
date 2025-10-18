@@ -1,5 +1,5 @@
 from itertools import combinations
-from time import time
+from time import time, perf_counter
 from typing import Union, Optional, List, Tuple, Dict, Callable, Generator, Any
 
 from sympy import Poly, Expr, Integer, Mul, ZZ, QQ, RR
@@ -10,6 +10,7 @@ from .solution import SolutionSDP
 from ..preprocess import ProofNode, SolvePolynomial
 from ..shared import clear_polys_by_symmetry
 from ...utils import MonomialManager, Root
+from ...sdp import ArithmeticTimeout
 
 
 class _lazy_iter:
@@ -203,6 +204,7 @@ class SDPSOSSolver(ProofNode):
         roots = None
         verbose = configs['verbose']
         solver = configs['solver']
+        expected_end_time = perf_counter() + configs['time_limit']
 
         is_hom = problem.is_homogeneous
         if not is_hom:
@@ -240,10 +242,12 @@ class SDPSOSSolver(ProofNode):
     
                 sos_problem = SOSPoly(poly, poly.gens, qmodule = qmodule, ideal = ideal,
                                         symmetry = symmetry.perm_group, roots = roots, degree=degree)
-                sdp = sos_problem.construct(verbose=verbose)
+                sdp = sos_problem.construct(verbose=verbose, time_limit=expected_end_time - perf_counter())
 
                 if sos_problem.solve(verbose=verbose, solver=solver,
-                        allow_numer=configs['allow_numer'], kwargs=configs['solve_kwargs']) is not None:
+                        time_limit=expected_end_time - perf_counter(),
+                        allow_numer=configs['allow_numer'],
+                        kwargs=configs['solve_kwargs']) is not None:
                     if verbose:
                         print(f"Time for solving SDP{' ':20s}: {time() - time0:.6f} seconds. \033[32mSuccess\033[0m.")
                     solution = sos_problem.as_solution(qmodule=dict(enumerate([e[1] for e in qmodule_tuples])),
@@ -255,8 +259,9 @@ class SDPSOSSolver(ProofNode):
                 if verbose:
                     print(f"Time for solving SDP{' ':20s}: {time() - time0:.6f} seconds. \033[31mFailed with exceptions\033[0m.")
                     print(f"{e.__class__.__name__}: {e}")
+                if isinstance(e, ArithmeticTimeout):
+                    raise e
                 continue
-
 
         self.status = -1
         self.finished = True
@@ -271,6 +276,7 @@ def SDPSOS(
         ineq_constraints_with_trivial: bool = True,
         preordering: str = 'linear-progressive',
         verbose: bool = False,
+        time_limit: float = 3600,
         solver: Optional[str] = None,
         allow_numer: int = 0,
         solve_kwargs: Dict[str, Any] = {},
@@ -323,4 +329,5 @@ def SDPSOS(
             'solve_kwargs': solve_kwargs,
         }
     }
-    return problem.sum_of_squares(configs)
+    return problem.sum_of_squares(configs, time_limit=time_limit)
+

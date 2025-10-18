@@ -1,6 +1,7 @@
 from typing import Generator, Dict, Tuple, List, Optional
 
 import sympy as sp
+from sympy import Poly, Expr, Symbol, Mul
 from sympy.combinatorics import PermutationGroup, CyclicGroup
 
 from .basis import LinearBasis, quadratic_difference, _callable_expr
@@ -21,28 +22,28 @@ class LinearBasisMultiplier(LinearBasis):
     This converts the problem to a usual linear programming by adding the basis
     CyclicSum(-a**2)*f and CyclicSum(-a*b)*f to the linear programming.
     """
-    def __init__(self, poly: sp.Poly, multiplier: _callable_expr):
+    def __init__(self, poly: Poly, multiplier: _callable_expr):
         self.poly = poly
         self._tangent = multiplier
     @property
-    def multiplier(self) -> sp.Expr:
+    def multiplier(self) -> Expr:
         return self._tangent(self.poly.gens)
     def nvars(self) -> int:
         return len(self.poly.gens)
-    def as_poly(self, symbols) -> sp.Poly:
+    def as_poly(self, symbols) -> Poly:
         poly = (self.poly * (-self._tangent(self.poly.gens, poly=True)))
         poly.gens = symbols
         return poly
-    def as_expr(self, symbols) -> sp.Expr:
+    def as_expr(self, symbols) -> Expr:
         return (self.poly.as_expr() * self.multiplier).xreplace(dict(zip(self.poly.gens, symbols)))
 
     @classmethod
-    def from_expr(cls, poly: sp.Poly, expr: sp.Expr, p: Optional[sp.Poly] = None) -> 'LinearBasisMultiplier':
+    def from_expr(cls, poly: Poly, expr: Expr, p: Optional[Poly] = None) -> 'LinearBasisMultiplier':
         return cls(poly, _callable_expr.from_expr(expr, poly.gens, p))
 
 def lift_degree(
-        poly: sp.Poly,
-        ineq_constraints: Dict[sp.Poly, sp.Expr],
+        poly: Poly,
+        ineq_constraints: Dict[Poly, Expr],
         symmetry: MonomialManager,
         degree_limit: int = 1000,
         lift_degree_limit: int = 4
@@ -58,9 +59,9 @@ def lift_degree(
 
     Parameters
     ----------
-    poly: sp.polys.Poly
+    poly: Poly
         The target polynomial.
-    ineq_constraints: Dict[sp.Poly, sp.Expr]
+    ineq_constraints: Dict[Poly, Expr]
         Inequality constraints added to the problem.
     symmetry: MonomialManager
         The symmetry of the polynomial.
@@ -73,9 +74,9 @@ def lift_degree(
     Yields
     ----------
     Dict containing following items:
-        poly: sp.polys.Poly
+        poly: Poly
             The f(a,b,c) * h(a,b,c).
-        multiplier: sp.Expr
+        multiplier: Expr
             The multiplier h(a,b,c).
         basis: List[LinearBasisMultiplier]
             The additional basis to be added to the linear programming. 
@@ -105,8 +106,8 @@ def lift_degree(
 
 
 
-def _get_multipliers(ineq_constraints: Dict[sp.Poly, sp.Expr], symbols: Tuple[sp.Symbol, ...], n_plus: int,
-                        symmetry: MonomialManager, preordering: str ='linear') -> Dict[sp.Poly, sp.Expr]:
+def _get_multipliers(ineq_constraints: Dict[Poly, Expr], symbols: Tuple[Symbol, ...], n_plus: int,
+                        symmetry: MonomialManager, preordering: str ='linear') -> Dict[Poly, Expr]:
     if preordering == 'linear':
         ineq_constraints = [(k, v) for k, v in ineq_constraints.items() if k.is_linear]
     else:
@@ -116,7 +117,7 @@ def _get_multipliers(ineq_constraints: Dict[sp.Poly, sp.Expr], symbols: Tuple[sp
     multipliers = None
     if n_plus == 2:
         multipliers = quadratic_difference(symbols)
-        multipliers = [(sp.Poly(e, *symbols), e) for e in multipliers]
+        multipliers = [(Poly(e, *symbols), e) for e in multipliers]
         def cross_mul(x):
             return [(x[i][0] * x[j][0], x[i][1] * x[j][1]) for i in range(len(x)) for j in range(i+1, len(x))]
         multipliers.extend(cross_mul(ineq_constraints))
@@ -125,20 +126,20 @@ def _get_multipliers(ineq_constraints: Dict[sp.Poly, sp.Expr], symbols: Tuple[sp
     if multipliers is None:
         # default case
         multipliers = []
-        poly_one = sp.Poly(1, *symbols)
+        poly_one = Poly(1, *symbols)
         n_constraints = len(ineq_constraints)
         for power in generate_monoms(len(ineq_constraints), n_plus)[1]:
             mul_poly = poly_one
             for i in range(n_constraints):
                 if power[i] > 0:
                     mul_poly *= ineq_constraints[i][0]**power[i]
-            mul_expr = sp.Mul(*(ineq_constraints[i][1]**power[i] for i in range(n_constraints)))
+            mul_expr = Mul(*(ineq_constraints[i][1]**power[i] for i in range(n_constraints)))
             multipliers.append((mul_poly, mul_expr))
 
     if n_plus > 2 and n_plus % 2 == 0:
         for power in generate_monoms(len(symbols), n_plus//2)[1]:
-            mul_poly = sp.Poly({tuple(p*2 for p in power): 1}, *symbols)
-            mul_expr = sp.Mul(*(si**(pi*2) for si, pi in zip(symbols, power)))
+            mul_poly = Poly({tuple(p*2 for p in power): 1}, *symbols)
+            mul_expr = Mul(*(si**(pi*2) for si, pi in zip(symbols, power)))
             multipliers.append((mul_poly, mul_expr))
 
     multipliers = clear_polys_by_symmetry(multipliers, symbols, symmetry)

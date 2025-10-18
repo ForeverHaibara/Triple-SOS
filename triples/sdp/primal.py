@@ -7,8 +7,8 @@ from sympy import MutableDenseMatrix as Matrix
 from sympy import MatrixBase, Symbol, Float, Expr, Dummy
 from sympy.core.relational import Relational
 
-from .arithmetic import sqrtsize_of_mat, vec2mat, is_numerical_mat, rep_matrix_from_numpy, rep_matrix_to_numpy
-from .backends import solve_numerical_primal_sdp
+from .arithmetic import ArithmeticTimeout, sqrtsize_of_mat, vec2mat, is_numerical_mat, rep_matrix_from_numpy, rep_matrix_to_numpy
+from .backends import SDPTimeoutError, solve_numerical_primal_sdp
 from .rationalize import RationalizeWithMask, RationalizeSimultaneously
 from .transforms import TransformablePrimal
 from .utils import exprs_to_arrays
@@ -462,22 +462,26 @@ class SDPPrimal(TransformablePrimal):
 
         # add a relaxation variable on the diagonal to maximize the eigenvalue
         # sum(tr(AiSi)) = a => sum(tr(Ai(Xi + x*I))) = a where Si = Xi + xI
-        spaces = [rep_matrix_to_numpy(_) for _ in spaces]
-        diag = np.zeros((x0.shape[0], ), dtype=np.float64)
-        for space in spaces:
-            n = sqrtsize_of_mat(space.shape[1])
+        try:
+            spaces = [rep_matrix_to_numpy(_) for _ in spaces]
+            diag = np.zeros((x0.shape[0], ), dtype=np.float64)
+            for space in spaces:
+                n = sqrtsize_of_mat(space.shape[1])
 
-            # get the contribution of diagonals, i.e. traces
-            diag += space[:,np.arange(0,n**2,n+1)].sum(axis = 1)
-        spaces.append(diag)
-        objective = np.array([0]*self.dof + [-1], dtype=np.float64)
-        constraints = [(objective, 5, '<')] # avoid unboundness
-        time_limit()
+                # get the contribution of diagonals, i.e. traces
+                diag += space[:,np.arange(0,n**2,n+1)].sum(axis = 1)
+            spaces.append(diag)
+            objective = np.array([0]*self.dof + [-1], dtype=np.float64)
+            constraints = [(objective, 5, '<')] # avoid unboundness
+            time_limit()
+        except ArithmeticTimeout as e:
+            raise SDPTimeoutError.from_kwargs() from e
+
 
         kwargs = kwargs.copy()
         if (not ('verbose' in kwargs)) and float(verbose) > 1:
             kwargs['verbose'] = verbose
-        if time_limit is not None and (not ('time_limit' in kwargs)):
+        if end_time is not None and (not ('time_limit' in kwargs)):
             kwargs['time_limit'] = end_time - perf_counter()
 
         sol = solve_numerical_primal_sdp(
@@ -486,27 +490,30 @@ class SDPPrimal(TransformablePrimal):
         )
 
         success = False
-        if sol.y is not None and (not sol.infeasible):
-            y, eig = sol.y[:-1], sol.y[-1] # discard the eigenvalue relaxation
+        try:
+            if sol.y is not None and (not sol.infeasible):
+                y, eig = sol.y[:-1], sol.y[-1] # discard the eigenvalue relaxation
 
-            # restore matrices by adding the eigenvalue relaxation
-            bias = 0
-            for n in self.size.values():
-                y[bias: bias+n**2][np.arange(0,n**2,n+1)] += eig
-                bias += n**2
+                # restore matrices by adding the eigenvalue relaxation
+                bias = 0
+                for n in self.size.values():
+                    y[bias: bias+n**2][np.arange(0,n**2,n+1)] += eig
+                    bias += n**2
 
-            self._ys.append(y)
-            time_limit()
-            solution = self.rationalize(y, verbose=verbose,
-                rationalizers=[RationalizeWithMask(), RationalizeSimultaneously([1,1260,1260**3])])
-            if solution is not None:
-                self.y = solution[0]
-                self.S = dict((key, S[0]) for key, S in solution[1].items())
-                self.decompositions = dict((key, S[1:]) for key, S in solution[1].items())
-                success = True
-            elif allow_numer:
-                self.register_y(y, perturb=True, propagate_to_parent=propagate_to_parent)
-                success = True
+                self._ys.append(y)
+                time_limit()
+                solution = self.rationalize(y, verbose=verbose,
+                    rationalizers=[RationalizeWithMask(), RationalizeSimultaneously([1,1260,1260**3])])
+                if solution is not None:
+                    self.y = solution[0]
+                    self.S = dict((key, S[0]) for key, S in solution[1].items())
+                    self.decompositions = dict((key, S[1:]) for key, S in solution[1].items())
+                    success = True
+                elif allow_numer:
+                    self.register_y(y, perturb=True, propagate_to_parent=propagate_to_parent)
+                    success = True
+        except ArithmeticTimeout as e:
+            raise SDPTimeoutError(sol) from e
 
         if propagate_to_parent:
             self.propagate_to_parent(recursive=True)

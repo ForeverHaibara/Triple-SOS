@@ -1,11 +1,12 @@
-from typing import Optional
-
 from datetime import datetime
+from time import perf_counter
+from typing import Optional
 
 from sympy import Expr, Poly, Rational, Integer, fraction
 
 from .problem import InequalityProblem
 from ..utils import Solution
+from ..sdp import ArithmeticTimeout
 
 class ProofNode:
     """
@@ -110,14 +111,15 @@ class SolveProblem(ProofNode):
 def _sum_of_squares(
         problem: InequalityProblem,
         configs: dict = {},
-        time: float = 3600,
+        time_limit: float = 3600,
         mode: str = 'fast',
     ):
     start_time = datetime.now()
 
     configs = configs.copy()
     configs['start_time'] = start_time
-    configs['time'] = time
+    expected_end_time = perf_counter() + time_limit
+    # configs['time_limit'] = time_limit
 
     root = SolveProblem(problem)
     max_explore = 100
@@ -140,6 +142,7 @@ def _sum_of_squares(
 
         # explore the deepest child
         cfg = cur.default_configs.copy()
+        cfg['time_limit'] = (expected_end_time - perf_counter())
         cfg.update(configs.get(cur, {}))
         for cls in cur.__class__.mro()[::-1]:
             if cls in configs:
@@ -147,7 +150,10 @@ def _sum_of_squares(
 
         if cfg.get('verbose', 0):
             print(f'Exploring {" -> ".join([_.__class__.__name__ for _ in path])}')
-        cur.explore(cfg)
+        try:
+            cur.explore(cfg)
+        except ArithmeticTimeout:
+            break
 
         # if cur.finished:
         for p in path[::-1]:
@@ -160,7 +166,7 @@ def _sum_of_squares(
         if root.finished:
             break
 
-        if (datetime.now() - start_time).total_seconds() > time:
+        if perf_counter() > expected_end_time:
             break
 
     if problem.solution is None:

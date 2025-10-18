@@ -89,7 +89,7 @@ def sign_sos(expr: Expr, signs: Dict[Symbol, Tuple[int, Expr]]):
         return sol[0]
 
 
-def get_symbol_signs(problem: InequalityProblem) -> Dict[Symbol, Tuple[int, Expr]]:
+def get_symbol_signs(problem: InequalityProblem) -> Dict[Symbol, Tuple[Optional[int], Expr]]:
     """
     Infer the signs of each symbol in the problem given inequality
     and equality constraints. It can also be called by the class method
@@ -99,12 +99,14 @@ def get_symbol_signs(problem: InequalityProblem) -> Dict[Symbol, Tuple[int, Expr
 
     Returns
     -------
-    Dict[Symbol, Tuple[int, Expr]]
+    Dict[Symbol, Tuple[Optional[int], Expr]]
         A dictionary mapping each symbol to a tuple of its sign and a
         representative expression. The sign is 1 if the symbol is nonnegative,
-        -1 if the symbol is nonpositive, and 0 if the symbol is zero.
-        If 1 or -1, Expr is an nonnegative expression equal to the ABSOLUTE VALUE
-        of the symbol. If 0, Expr is an expression of zero.
+        -1 if the symbol is nonpositive, and 0 if the symbol is zero. The sign
+        is None if the sign of the symbol is undetermined.
+
+        If sign == 1 or -1, Expr is an nonnegative expression equal to the ABSOLUTE VALUE
+        of the symbol. If sign == 0, Expr is an expression of zero.
     """
 
     eq_constraints, ineq_constraints = problem.eq_constraints, problem.ineq_constraints

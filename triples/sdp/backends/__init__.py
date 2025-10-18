@@ -8,7 +8,8 @@ from .caller import (
     solve_numerical_dual_sdp, solve_numerical_primal_sdp, get_default_sdp_backend
 )
 
-from .settings import SDPError, SDPResult
+from .settings import SDPError, SDPTimeoutError, SDPResult
+
 
 __all__ = [
     'SDPBackend', 'DualBackend',
@@ -16,5 +17,5 @@ __all__ = [
     # 'DualBackendCLARABEL', 'DualBackendCVXOPT', 'DualBackendCVXPY', 'DualBackendMOSEK', 'DualBackendPICOS', 'DualBackendSDPAP',
     # 'PrimalBackendCLARABEL', 'PrimalBackendCVXPY', 'PrimalBackendMOSEK', 'PrimalBackendPICOS',
     'solve_numerical_dual_sdp','solve_numerical_primal_sdp', 'get_default_sdp_backend',
-    'SDPError', 'SDPResult'
+    'SDPError', 'SDPTimeoutError', 'SDPResult'
 ]

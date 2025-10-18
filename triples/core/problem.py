@@ -105,16 +105,16 @@ class InequalityProblem:
         return ineqs[1], eqs[1], ineqs[0], eqs[0]
 
 
-    def get_symbol_signs(self):
+    def get_symbol_signs(self) -> Dict[Symbol, Tuple[Optional[int], Expr]]:
         from .preprocess import get_symbol_signs
         return get_symbol_signs(self)
 
     def evaluate_complexity(self):
         ...
 
-    def sum_of_squares(self, configs: dict = {}, time: float = 3600, mode: str = 'fast') -> Solution:
+    def sum_of_squares(self, configs: dict = {}, time_limit: float = 3600, mode: str = 'fast') -> Solution:
         from .node import _sum_of_squares
-        return _sum_of_squares(self, configs, time, mode)
+        return _sum_of_squares(self, configs, time_limit, mode)
 
     @property
     def is_homogeneous(self) -> bool:
