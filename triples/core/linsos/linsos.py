@@ -14,10 +14,9 @@ from .correction import linear_correction, odd_basis_to_even
 from .updegree import lift_degree
 from .solution import create_linear_sol_from_y_basis
 from ..preprocess import ProofNode, SolvePolynomial
-from ..shared import homogenize_expr_list, clear_polys_by_symmetry
+from ..shared import homogenize_expr_list
 from ...sdp.arithmetic import ArithmeticTimeout
-from ...utils import Root, Solution
-from ...utils.monomials import MonomialManager
+from ...utils import Root, Solution, MonomialManager, clear_polys_by_symmetry
 
 
 LINPROG_OPTIONS = {

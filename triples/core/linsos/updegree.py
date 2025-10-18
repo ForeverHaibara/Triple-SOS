@@ -1,12 +1,10 @@
 from typing import Generator, Dict, Tuple, List, Optional
 
-import sympy as sp
 from sympy import Poly, Expr, Symbol, Mul
 from sympy.combinatorics import PermutationGroup, CyclicGroup
 
 from .basis import LinearBasis, quadratic_difference, _callable_expr
-from ..shared import clear_polys_by_symmetry
-from ...utils import MonomialManager, generate_monoms
+from ...utils import MonomialManager, generate_monoms, clear_polys_by_symmetry
 
 
 class LinearBasisMultiplier(LinearBasis):

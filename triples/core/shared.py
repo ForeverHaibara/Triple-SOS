@@ -3,8 +3,6 @@ from typing import Tuple, Dict, List, Union, Optional
 import sympy as sp
 from sympy.core.symbol import uniquely_named_symbol
 
-from ..utils import MonomialManager
-
 class PropertyDict(dict):
     def __getattr__(self, key):
         return self.get(key)
@@ -82,63 +80,3 @@ def homogenize_expr_list(expr_list: List[Union[sp.Expr, sp.Poly]], homogenizer: 
         elif isinstance(x, sp.Poly):
             return x.homogenize(homogenizer)
     return [hom(x) for x in expr_list]
-
-
-def clear_polys_by_symmetry(polys: List[Union[sp.Expr, Tuple[sp.Expr, ...]]],
-        symbols: Tuple[sp.Symbol, ...], symmetry: MonomialManager) -> List[Union[sp.Expr, Tuple[sp.Expr, ...]]]:
-    """
-    Remove duplicate polys by symmetry.
-    """
-    if symmetry.is_trivial:
-        return polys if isinstance(polys, list) else list(polys)
-
-    base = symmetry.base()
-    def _get_representation(t: sp.Expr):
-        """Get the standard representation of the poly given symmetry."""
-        t = sp.Poly(t, symbols) if not isinstance(t, tuple) else sp.Poly(t[0], symbols)
-        # if t.is_monomial and len(t.free_symbols) == 1:
-        #     return None
-        vec = base.arraylize_sp(t)
-        shape = vec.shape[0]
-
-        rep = vec._rep.rep.to_list_flat() # avoid conversion from rep to sympy
-        # getvalue = lambda i: vec[i,0] # get a single value
-        getvalue = lambda i: rep[i]
-        if shape <= 1:
-            return tuple(getvalue(i) for i in range(shape))
-
-        # # The naive implementation below could take minutes for calling 50 times on a 6-order group
-        # mat = symmetry.permute_vec(vec, t.total_degree())
-        # cols = [tuple(mat[:, i]) for i in range(mat.shape[1])]
-        # return max(cols)
-
-        # We should highly optimize the algorithm.
-        dict_monoms = base.dict_monoms(t.total_degree())
-        inv_monoms = base.inv_monoms(t.total_degree())
-
-        # get the value of index i in the vector after permutation
-        v = lambda perm, i: getvalue(dict_monoms[tuple(perm(inv_monoms[i]))])
-
-        perms = list(symmetry.perm_group.elements)
-        queue, queue_len, best_perm = [0]*shape, 0, perms[0]
-        for perm in perms[1:]:
-            for j in range(shape):
-                s = v(perm, j)
-                if j >= queue_len:
-                    # compare the next element
-                    queue[j] = v(best_perm, j)
-                    queue_len += 1
-                if s > queue[j]:
-                    queue[j], queue_len, best_perm = s, j + 1, perm
-                    break
-                elif s < queue[j]:
-                    break
-        for j in range(queue_len, shape): # fill the rest
-            queue[j] = v(best_perm, j)
-        return tuple(queue)
-
- 
-    representation = dict(((_get_representation(t), t) for i, t in enumerate(polys)))
-    if None in representation:
-        del representation[None]
-    return list(representation.values())

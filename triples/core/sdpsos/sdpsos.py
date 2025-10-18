@@ -1,5 +1,5 @@
 from itertools import combinations
-from time import time, perf_counter
+from time import perf_counter
 from typing import Union, Optional, List, Tuple, Dict, Callable, Generator, Any
 
 from sympy import Poly, Expr, Integer, Mul, ZZ, QQ, RR
@@ -8,8 +8,7 @@ from sympy.combinatorics import PermutationGroup
 from .sos import SOSPoly
 from .solution import SolutionSDP
 from ..preprocess import ProofNode, SolvePolynomial
-from ..shared import clear_polys_by_symmetry
-from ...utils import MonomialManager, Root
+from ...utils import MonomialManager, Root, clear_polys_by_symmetry
 from ...sdp import ArithmeticTimeout
 
 
@@ -25,12 +24,12 @@ class _lazy_iter:
 
 def _lazy_find_roots(problem, verbose=False):
     poly = problem.expr
-    time1 = time()
+    time1 = perf_counter()
     if not poly.domain.is_Exact:
         return []
     roots = problem.find_roots()
     if verbose:
-        print(f"Time for finding roots num = {len(roots):<6d}     : {time() - time1:.6f} seconds.")
+        print(f"Time for finding roots num = {len(roots):<6d}     : {perf_counter() - time1:.6f} seconds.")
     return roots
 
 
@@ -234,7 +233,7 @@ class SDPSOSSolver(ProofNode):
 
             if verbose:
                 print(f"Qmodule = {qmodule}\nIdeal   = {list(eq_constraints.keys())}")
-            time0 = time()
+            time0 = perf_counter()
             # now we solve the problem
             try:
                 if roots is None:
@@ -249,7 +248,7 @@ class SDPSOSSolver(ProofNode):
                         allow_numer=configs['allow_numer'],
                         kwargs=configs['solve_kwargs']) is not None:
                     if verbose:
-                        print(f"Time for solving SDP{' ':20s}: {time() - time0:.6f} seconds. \033[32mSuccess\033[0m.")
+                        print(f"Time for solving SDP{' ':20s}: {perf_counter() - time0:.6f} seconds. \033[32mSuccess\033[0m.")
                     solution = sos_problem.as_solution(qmodule=dict(enumerate([e[1] for e in qmodule_tuples])),
                                                         ideal=dict(enumerate(list(eq_constraints.values())))).solution
                     solution = cons_restoration(solution)
@@ -257,7 +256,7 @@ class SDPSOSSolver(ProofNode):
                     break
             except Exception as e:
                 if verbose:
-                    print(f"Time for solving SDP{' ':20s}: {time() - time0:.6f} seconds. \033[31mFailed with exceptions\033[0m.")
+                    print(f"Time for solving SDP{' ':20s}: {perf_counter() - time0:.6f} seconds. \033[31mFailed with exceptions\033[0m.")
                     print(f"{e.__class__.__name__}: {e}")
                 if isinstance(e, ArithmeticTimeout):
                     raise e

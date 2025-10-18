@@ -322,7 +322,7 @@ class Solution(SolutionBase):
         >>> from sympy.abc import a, b, c
         >>> sol = Solution((a+b+c)*(a*b+b*c+c*a)-9*a*b*c, CyclicSum(a*(b-c)**2, (a,b,c)))
         >>> sol
-        Solution(problem = -9*a*b*c + (a + b + c)*(a*b + a*c + b*c), solution = Σa*(b - c)**2)
+        Solution(problem = -9*a*b*c + (a + b + c)*(a*b + a*c + b*c), solution = Σ(a*(b - c)**2))
         >>> sol.doit()
         Solution(problem = -9*a*b*c + (a + b + c)*(a*b + a*c + b*c), solution = a*(b - c)**2 + b*(-a + c)**2 + c*(a - b)**2)
         """

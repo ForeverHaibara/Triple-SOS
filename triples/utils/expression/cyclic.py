@@ -1,11 +1,14 @@
+"""
+This module contains the customized classes for cyclic expressions, involving
+CyclicExpr, CyclicSum and CyclicProduct.
+"""
 from importlib import import_module
 from numbers import Number
-from typing import List, Tuple, Union, Callable
+from typing import List, Tuple, Union, Callable, Any
 from typing import Dict as tDict
 
-import sympy as sp
+from sympy import sympify, S, Mul, Add, Pow, Symbol, Poly, Expr, Basic
 from sympy.core.cache import cacheit
-from sympy.core import sympify, S, Mul, Add, Pow, Symbol, Expr, Basic
 from sympy.core.containers import Dict
 from sympy.core.numbers import zoo, nan
 from sympy.core.parameters import global_parameters
@@ -15,7 +18,7 @@ from sympy.printing.latex import LatexPrinter
 from sympy.printing.str import StrPrinter
 from sympy.printing.precedence import precedence_traditional, PRECEDENCE
 from sympy.simplify import signsimp
-
+from sympy import __version__ as SYMPY_VERSION
 
 def _leading_symbol(expr):
     if isinstance(expr, Symbol):
@@ -136,29 +139,30 @@ def _project_perm_group(perm_group, inds):
     return PermutationGroup(projs)
 
 
-class CyclicExpr(sp.Expr):
+class CyclicExpr(Expr):
     """
     Represent cyclic expressions. The printing style for __str__ and __repr__
     can be configured by global variable CyclicExpr.PRINT_WITH_PARENS and CyclicExpr.PRINT_FULL.
 
     This is a base class for CyclicSum and CyclicProduct, and should not be used directly.
     """
-    PRINT_WITH_PARENS = False
+    PRINT_WITH_PARENS = True
     PRINT_FULL = False
+    DEFAULT_SYMBOLS = tuple(Symbol(_) for _ in ('a', 'b', 'c'))
     is_commutative = True
     def __new__(cls, expr, *args, evaluate = None):
         if evaluate is None:
             evaluate = global_parameters.evaluate
 
         if len(args) == 0:
-            symbols, perm = sp.symbols('a b c'), None
+            symbols, perm = cls.DEFAULT_SYMBOLS, None
         elif len(args) == 1:
             symbols, perm = args[0], None
         elif len(args) == 2:
             symbols, perm = args
         else:
             raise ValueError("Invalid arguments.")
-        if not all(isinstance(_, sp.Symbol) for _ in symbols):
+        if not all(isinstance(_, Symbol) for _ in symbols):
             raise ValueError("Second argument should be a tuple of sympy symbols.")
         if len(set(symbols)) != len(symbols):
             raise ValueError("Symbols should be distinct.")
@@ -193,12 +197,12 @@ class CyclicExpr(sp.Expr):
 
             return cls._eval_simplify_(expr, symbols, perm)
 
-        obj = sp.Expr.__new__(cls, expr, symbols, perm)
+        obj = Expr.__new__(cls, expr, symbols, perm)
         return obj
 
     @classmethod
     def _eval_simplify_(cls, *args, **kwargs):
-        return sp.Expr.__new__(cls, *args, **kwargs)
+        return Expr.__new__(cls, *args, **kwargs)
 
     @property
     def symbols(self):
@@ -527,12 +531,12 @@ class CyclicSum(CyclicExpr):
                 if is_cyclic_expr(arg, symbols, perm):
                     cyc_args.append(arg)
 
-                # elif isinstance(arg, sp.Symbol) and arg in symbols:
+                # elif isinstance(arg, Symbol) and arg in symbols:
                 #     # e.g. CyclicSum(a**2 * b * c) = CyclicSum(a) * CyclicProduct(a)
                 #     symbol_degrees[arg] = 1
-                # elif isinstance(arg, sp.Pow):
+                # elif isinstance(arg, Pow):
                 #     arg2 = arg.args[0] 
-                #     if isinstance(arg2, sp.Symbol) and arg2 in symbols and arg.args[1].is_constant():
+                #     if isinstance(arg2, Symbol) and arg2 in symbols and arg.args[1].is_constant():
                 #         symbol_degrees[arg2] = arg.args[1]
                 else:
                     uncyc_args.append(arg)
@@ -546,7 +550,7 @@ class CyclicSum(CyclicExpr):
                 obj0 = cls(expr.func(*uncyc_args), symbols, perm)
                 obj = Mul(obj0, *cyc_args)
                 return obj
-        return sp.Expr.__new__(cls, expr, symbols, perm)
+        return Expr.__new__(cls, expr, symbols, perm)
 
     def as_content_primitive(self, radical=False, clear=True):
         c, p = self.args[0].as_content_primitive(radical=radical, clear=clear)
@@ -653,7 +657,7 @@ class CyclicProduct(CyclicExpr):
             obj0 = Mul(*[cls(arg, symbols, perm) for arg in uncyc_args])
             obj = Mul(obj0, *cyc_args)
             return obj
-        return sp.Expr.__new__(cls, expr, symbols, perm)
+        return Expr.__new__(cls, expr, symbols, perm)
 
     def as_content_primitive(self, radical=False, clear=True):
         c, p = self.args[0].as_content_primitive(radical=radical, clear=clear)
@@ -681,8 +685,8 @@ setattr(LatexPrinter, '_print_CyclicProduct', lambda self, expr: CyclicProduct._
 setattr(StrPrinter, '_print_CyclicSum', lambda self, expr: CyclicSum._str_str(self, expr))
 setattr(StrPrinter, '_print_CyclicProduct', lambda self, expr: CyclicProduct._str_str(self, expr))
 
-# if sp.__version__ < '1.14':
-if not tuple(version_tuple(sp.__version__)) >= (1, 14):
+# if SYMPY_VERSION < '1.14':
+if not tuple(version_tuple(SYMPY_VERSION)) >= (1, 14):
     try:
         from sympy.core.sorting import ordered
     except (ImportError, ModuleNotFoundError): # <= 1.9
@@ -899,6 +903,8 @@ try:
     from ..monomials import MonomialManager
     setattr(MonomialManager, 'cyclic_sum', lambda self, expr, gens=None: CyclicSum(expr, gens, self.perm_group))
 except ImportError:
+    # not expected to happen
+    MonomialManager = None
     pass
 
 
@@ -971,7 +977,7 @@ def rewrite_symmetry(expr: Expr, symbols: Tuple[Symbol], perm_group: Permutation
 
     Parameters
     ----------
-    symbols : Tuple[sp.Symbol]
+    symbols : Tuple[Symbol]
         The symbols that the permutation group acts on.
     perm_group : PermutationGroup
         Sympy permutation group object.
@@ -1002,185 +1008,13 @@ def rewrite_symmetry(expr: Expr, symbols: Tuple[Symbol], perm_group: Permutation
     """
     return expr.replace(lambda x: isinstance(x, CyclicExpr), _get_rewriting_replacement(symbols, perm_group))
 
-def verify_symmetry(polys: Union[List[sp.Poly], sp.Poly], perm_group: Union[str, Permutation, PermutationGroup]) -> bool:
-    """
-    Verify whether the polynomials are symmetric with respect to the permutation group.
 
-    Parameters
-    ----------
-    polys : Union[List[sp.Poly], sp.Poly]
-        A list of polynomials or a single polynomial. Must have the same generators.
-    perm_group : Union[str, Permutation, PermutationGroup]
-        A permutation or a permutation group to verify. If string, it should be one of 'sym' or 'cyc'.
-
-    Returns
-    ----------
-    bool
-        Whether the polynomials are symmetric with respect to the permutation group.
-
-    Examples
-    ----------
-    >>> from sympy.combinatorics import Permutation, PermutationGroup, SymmetricGroup
-    >>> from sympy.abc import a, b, c, d
-    >>> verify_symmetry((a*(a-b)*(a-c)+b*(b-c)*(b-a)+c*(c-a)*(c-b)).as_poly(a,b,c), SymmetricGroup(3))
-    True
-
-    >>> f = lambda x: x.as_poly(a,b,c,d)
-    >>> verify_symmetry([f(a+1),f(b+1),f(c+1),f(d+1)], SymmetricGroup(4))
-    True
-
-    >>> perm_group = PermutationGroup(Permutation([2,3,0,1]))
-    >>> verify_symmetry([f(a-c+b-d)], perm_group)
-    False
-    >>> verify_symmetry([f(a-c+b-d), f(c-a+d-b)], perm_group)
-    True
-    """
-    if isinstance(polys, sp.Poly):
-        polys = [polys]
-    if len(polys) == 0:
-        return True
-    for p in polys:
-        gens = p.gens
-        break
-    if len(polys) > 1 and any(p.gens != gens for p in polys):
-        raise ValueError("All polynomials should have the same generators.")
-
-    if isinstance(perm_group, str):
-        if perm_group == 'sym':
-            perm_group = SymmetricGroup(len(gens))
-        elif perm_group == 'cyc':
-            perm_group = CyclicGroup(len(gens))
-        else:
-            raise ValueError("The permutation group should be 'sym', 'cyc', or a PermutationGroup object.")
-    if isinstance(perm_group, PermutationGroup):
-        if perm_group.degree != len(gens):
-            raise ValueError("The permutation group should have the same degree as the number of generators.")
-        perms = perm_group.generators
-    elif isinstance(perm_group, Permutation):
-        if perm_group.size != len(gens):
-            raise ValueError("The permutation should have the same size as the number of generators.")
-        perms = [perm_group]
-
-    for perm in perms:
-        rep_set = set()
-        reorder_set = set()
-        for poly in polys:
-            rep = poly.rep
-            reorder = poly.reorder(*perm(gens)).rep
-            if rep == reorder:
-                continue
-            rep_set.add(rep)
-            reorder_set.add(reorder)
-        for r in reorder_set:
-            if r not in rep_set:
-                return False
-    return True
-
-def identify_symmetry_from_lists(lst_of_lsts: List[List[sp.Poly]]) -> PermutationGroup:
-    """
-    Infer a symmetric group so that each list of (list of polynomials) is symmetric with respect to the rule.
-    It only identifies very common groups like complete symmetric and cyclic groups.
-
-    TODO: Implement a complete algorithm to identify all symmetric groups.
-
-    Parameters
-    ----------
-    lst_of_lsts : List[List[sp.Poly]]
-        A list of lists of polynomials.
-
-    Returns
-    ----------
-    PermutationGroup
-        The inferred permutation group.
-
-    Examples
-    ----------
-    >>> from sympy.abc import a, b, c
-    >>> identify_symmetry_from_lists([[(a+b+c-3).as_poly(a,b,c)], [a.as_poly(a,b,c), b.as_poly(a,b,c), c.as_poly(a,b,c)]]).is_symmetric
-    True
-
-    >>> identify_symmetry_from_lists([[(a+b+c-3).as_poly(a,b,c)], [(2*a+b).as_poly(a,b,c), (2*b+c).as_poly(a,b,c), (2*c+a).as_poly(a,b,c)]])
-    PermutationGroup([
-        (0 1 2)])
-
-    See Also
-    ----------
-    identify_symmetry
-
-    Reference
-    ----------
-    [1] https://cs.stackexchange.com/questions/64335/how-to-find-the-symmetry-group-of-a-polynomial
-    """
-    gens = None
-    for l in lst_of_lsts:
-        for p in l:
-            gens = p.gens
-            break
-        if gens is not None:
-            break
-    for l in lst_of_lsts:
-        for p in l:
-            if p.gens != gens:
-                raise ValueError("All polynomials should have the same generators.")
-
-    # List a few candidates: symmetric, alternating, cyclic groups...
-    nvars = len(gens)
-    def _rotated(n, start=0):
-        return list(range(start+1, n+start)) + [start]
-    def _reflected(n, start=0):
-        return [start+1, start] + list(range(start+2, n+start))
-
-    verified = [] # storing permutations that fit the input
-    candidates = [] # a list of permutations
-    if nvars > 1:
-        candidates.append(_rotated(nvars))
-        if nvars > 2:
-            candidates.append(_reflected(nvars))
-
-    for perm in map(Permutation, candidates):
-        if all(verify_symmetry(l, perm) for l in lst_of_lsts):
-            verified.append(perm)
-    if len(verified) == 2:
-        # reflection + cyclic -> complete symmetric group
-        return PermutationGroup(*verified)
-
-    candidates = []
-    # bi-symmetric group etc.
-    if nvars > 3:
-        half = nvars // 2
-        p1 = _rotated(half) + _rotated(half, half)
-        p2 = _reflected(half) + _reflected(half, half)
-        p3 = list(range(half,half*2)) + list(range(half))
-        if nvars % 2 == 1:
-            for p in [p1, p2, p3]:
-                p.append(nvars - 1)
-                candidates.append(p)
-                p = [0] + [_ + 1 for _ in p[:-1]]
-                candidates.append(p)
-        else:
-            for p in [p1, p2, p3]:
-                candidates.append(p)
-
-    if nvars > 2:
-        candidates.append(_rotated(nvars - 1) + [nvars - 1])
-        candidates.append([0] + _rotated(nvars - 1, 1))
-        if nvars > 3:
-            candidates.append(_reflected(nvars - 1) + [nvars - 1])
-            candidates.append([0] + _reflected(nvars - 1, 1))
-
-    for perm in map(Permutation, candidates):
-        if all(verify_symmetry(l, perm) for l in lst_of_lsts):
-            verified.append(perm)
-
-    if len(verified) == 0:
-        verified.append(Permutation(list(range(nvars))))
-
-    return PermutationGroup(*verified)
-
-
-def identify_symmetry(poly: sp.Poly) -> PermutationGroup:
-    """
-    Infer a symmetric group so that the polynomial is symmetric with respect to the rule.
-    It only identifies very simple groups like complete symmetric and cyclic groups.
-    """
-    return identify_symmetry_from_lists([[poly]])
+# for import purposes
+from ..monomials import (
+    verify_symmetry, identify_symmetry, identify_symmetry_from_lists,
+    arraylize_up_to_symmetry, clear_polys_by_symmetry
+)
+(
+    verify_symmetry, identify_symmetry, identify_symmetry_from_lists,
+    arraylize_up_to_symmetry, clear_polys_by_symmetry
+)

@@ -2,7 +2,6 @@ from typing import Tuple, List, Dict, Optional
 from itertools import combinations
 
 import numpy as np
-import sympy as sp
 from sympy import Poly, Expr, Integer, Mul, RR
 from sympy import MutableDenseMatrix as Matrix
 from sympy.combinatorics import PermutationGroup
