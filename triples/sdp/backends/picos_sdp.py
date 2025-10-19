@@ -1,4 +1,3 @@
-from cvxpy.expressions.cvxtypes import partial_problem
 import numpy as np
 
 from .backend import DualBackend
