@@ -3,6 +3,7 @@ This file contains the functions for rendering the visualization of the polynomi
 */
 
 let _3d_vis = {'in3d': false, 'heatmap_size_3d': 18};
+
 // const VIEW3DPARENT = document.getElementById('centerscreen');
 const VIEW3DPARENT = document.getElementById('coeffs');
 const VIEW2DPARENT = document.getElementById('coeffs');
@@ -93,9 +94,11 @@ function renderCoeffs(degree, triangle_vals, all_gens = 'abc'){
     }
 
     const gens = _get_first_three_gens(all_gens);
+    const hideZeros = !document.getElementById('config_ShowZeros').checked;
     for (let i = 0; i <= degree; ++i){
         for (let j = 0; j <= i; ++j){
             let coeff = document.createElement('p');
+            coeff.classList.add('coeff-label');
             coeffs_view.appendChild(coeff);
             coeff.innerHTML = triangle_vals[t];
             let x =  (ulx + l*(2*i-j)/2 - triangle_vals[t].length * lengthscale - 2*Math.floor(triangle_vals[t].length/4)), 
@@ -108,6 +111,9 @@ function renderCoeffs(degree, triangle_vals, all_gens = 'abc'){
             if (triangle_vals[t] === '0'){
                 coeff.style.color = 'rgb(180,180,180)';
                 coeff.onmouseout  = () => {coeff.style.color = 'rgb(180,180,180)';}
+                if (hideZeros){
+                    coeff.style.display = 'none';
+                }
             }else{
                 coeff.style.color = 'black';
                 coeff.onmouseout  = () => {coeff.style.color = 'black';}
@@ -459,7 +465,14 @@ function updateTextPositions() {
     const rect = coeffs_view.getBoundingClientRect();
     const widthHalf = rect.width/2; //coeffs_view.clientWidth / 2;
     const heightHalf = rect.height/2; //coeffs_view.clientHeight / 2;
+    const hideZeros = !document.getElementById('config_ShowZeros').checked;
     sos_coeffs.forEach((textElement, index) => {
+        // Check if text is '0' and show zeros is disabled
+        if (textElement.textContent === '0' && hideZeros) {
+            textElement.style.display = 'none';
+            return;
+        }
+
         const pos = positions[index];
         // console.log(pos);
 
@@ -510,7 +523,7 @@ function renderCoeffs3D(degree, triangle_vals, all_gens = 'abcd'){
         
         const coeff = document.createElement('p');
         coeff.innerText = triangle_vals[i];
-        coeff.className = 'coeff-label3d'; // Add a class name
+        coeff.classList.add('coeff-label');
         coeff.style.position = 'absolute';
         coeff.style.color = 'black';
         coeff.style.pointerEvents = 'auto';
@@ -558,6 +571,15 @@ function renderHeatmap3D(heatmap){
     color.needsUpdate = true;
 }
 
+
+function toggleShowZeros(show) {
+    // Toggle visibility of coefficient labels that have zero value
+    sos_coeffs.forEach(coeff => {
+        if (coeff.textContent === '0') {
+            coeff.style.display = show ? 'block' : 'none';
+        }
+    });
+}
 
 
 function _init3DWebGLCheck(){
