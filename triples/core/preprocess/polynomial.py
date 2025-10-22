@@ -1,7 +1,8 @@
-from typing import List, Dict, Union, Tuple
+from typing import List, Dict, Union, Tuple, Callable, Optional
 
 from sympy import Expr, Poly
 
+from ..problem import InequalityProblem
 from ..node import ProofNode, TransformNode
 from ...utils import (
     Solution, MonomialManager, CyclicSum,
@@ -58,11 +59,11 @@ class SolvePolynomial(TransformNode):
 
 #########################################################
 #
-#           Transformations on the Problem
+#                Bidegree Homogenization
 #
 #########################################################
 
-def _is_bidegree(p):
+def _is_bidegree(p: Poly) -> Optional[Tuple[Poly, Poly, int]]:
     """Check whether a multivariate polynomial has two different degrees.
     Returns l1, l2, sgn such that p = sgn * (l2 - l1). Also,
     l1, l2 are homogeneous, deg(l1) < deg(l2) and l1.LC() > 0. Returns
@@ -107,11 +108,38 @@ def _is_bidegree(p):
         sgn = -1
     return l1, l2, sgn
 
-def _align_degree(p, p1, p2, accept_odd_degree=False):
-    """Homogenize p given p1 == p2 and deg(p1) < deg(p2).
+def _align_degree(p: Poly, p1: Poly, p2: Poly, accept_odd_degree: bool = False) -> Optional[Tuple[Poly, int, Poly]]:
+    """
+    Homogenize p given p1 == p2 and deg(p1) < deg(p2).
     Returns q, d, x such that q = p1**d * p + x(p2 - p1) where q, x are polynomials
-    and q is homogeneous. Returns None if it fails"""
+    and q is homogeneous. Returns None if it fails.
+
+    Parameters
+    ----------
+    p: Poly
+        The polynomial to be homogenized.
+    p1: Poly
+        The first polynomial in the alignment.
+    p2: Poly
+        The second polynomial in the alignment.
+    accept_odd_degree: bool
+        If False, d is forced to be even.
+
+    Examples
+    --------
+    >>> from sympy.abc import a, b, c
+    >>> from sympy import Poly
+    >>> p, p1, p2 = Poly(a**2+b**2+c**2 - 3, (a,b,c)), Poly(3, (a,b,c)), Poly(a+b+c, (a,b,c))
+    >>> q, d, x = _align_degree(p, p1, p2); (q, d, x) # doctest: +NORMALIZE_WHITESPACE
+    (Poly(6*a**2 - 6*a*b - 6*a*c + 6*b**2 - 6*b*c + 6*c**2, a, b, c, domain='ZZ'),
+    2,
+    Poly(-3*a - 3*b - 3*c - 9, a, b, c, domain='ZZ'))
+    >>> (q - (p1**d * p + x*(p2 - p1)))
+    Poly(0, a, b, c, domain='ZZ')
+    """
     ddiff = p2.total_degree() - p1.total_degree()
+    if ddiff == 0:
+        return None
     terms = {}
     for m, c in p.terms():
         d = sum(m)
@@ -144,8 +172,88 @@ def _align_degree(p, p1, p2, accept_odd_degree=False):
     # print(p, '- (hom) ->', q, muldeg, divrem[0])
     return q, muldeg, divrem[0]
 
+def _bidegree_recover_expr(lst: List[Dict[Poly, Tuple[Poly, int, Poly]]], p1: Poly, sgn_expr: Expr) -> Expr:
+    """
+    Utility function for bidegree homogenization.
+    Recover the original expressions from homogenization info, each represented
+    by a tuple (mul_deg, expr, quo). After recovery, it would be:
 
-def reduce_over_quotient_ring(problem):
+        `p1.as_expr()**mul_deg * expr + sgn_expr * quo.as_expr()`
+
+    The modification is done in-place. Returns only the expression
+    form of `p1`.
+    """
+    symmetry = identify_symmetry_from_lists([list(d.keys()) for d in lst])
+    if symmetry.is_trivial:
+        symmetry = None
+
+    def p2expr(p: Poly) -> Expr:
+        # convert a polynomial to expr wisely by exploting the symmetry
+        if (symmetry is not None) and verify_symmetry(p, symmetry):
+            p = poly_reduce_by_symmetry(p, symmetry)
+            return CyclicSum(p.as_expr(), p.gens, symmetry)
+        return p.as_expr()
+    p1_expr = p2expr(p1)
+    for d in lst:
+        for p, (mul_deg, expr, quo) in d.items():
+            d[p] = p1_expr**mul_deg * expr + p2expr(quo)*sgn_expr
+    return p1_expr
+
+def _bidegree_attempt(problem: InequalityProblem, eq: Poly) -> Optional[Tuple[InequalityProblem, Callable]]:
+    """
+    Test whether the constraint `eq` can be use to homogenize the original problem.
+
+    If yes, returns a new problem and a function to recover the solution.
+    """
+    poly, ineq_constraints, eq_constraints = problem.expr, problem.ineq_constraints, problem.eq_constraints
+
+    bideg = _is_bidegree(eq)
+    if bideg is None:
+        return None
+    p1, p2, sgn = bideg
+
+    accept_odd = True if (p1.total_degree() == 0 and p1.LC() > 0) else False
+    # print(f'Bidegree: {eq} == 0  <=>  {p1} == {p2}')
+
+    # handle them universally
+    dicts = [{poly: 0}, ineq_constraints, eq_constraints]
+    new_dicts = [{}, {}, {}]
+
+    for dict_i, src in enumerate(dicts):
+        dst = new_dicts[dict_i]
+        for key, expr in src.items():
+            if dict_i == 2 and key == eq:
+                continue
+            alignment = _align_degree(key, p1, p2, accept_odd_degree=accept_odd)
+            if alignment is None:
+                return None
+            # to avoid wasting time, we only store the homogenization info here
+            new_poly, mul_deg, quo = alignment
+            dst[new_poly] = (mul_deg, expr, quo)
+
+    # All polynomials are homogenized,
+    # now we restore the homogenization info (tuples) to exprs.
+    mul_deg = next(iter(new_dicts[0].values()))[0]
+    eq_expr = eq_constraints[eq]
+    p1_expr = _bidegree_recover_expr(new_dicts, p1, sgn * eq_expr)
+
+    new_poly, expr_shift = next(iter(new_dicts[0].items()))
+    def _align_degree_restore(x):
+        """Recover z such that `(p1_expr**mul_deg * z + expr_shift) == x`"""
+        return (x - expr_shift) / p1_expr**mul_deg
+    new_problem = InequalityProblem(new_poly, new_dicts[1], new_dicts[2])
+    new_problem.roots = problem.roots
+    return new_problem, _align_degree_restore
+
+def bidegree_homogenization(problem: InequalityProblem) -> Tuple[InequalityProblem, Callable]:
+    for eq in problem.eq_constraints:
+        attempt = _bidegree_attempt(problem, eq)
+        if attempt is not None:
+            return attempt
+    return problem, lambda x: x
+
+
+def reduce_over_quotient_ring(problem: InequalityProblem):
     """
     Perform quotient ring reduction of the problem, including operations like
     homogenization.
@@ -172,69 +280,8 @@ def reduce_over_quotient_ring(problem):
     #         Homogenize using bidegree constraints
     ################################################################
 
-    # tested_bidgree = 0
-    for eq, expr in eq_constraints.items():
-        bideg = _is_bidegree(eq)
-        if bideg is None:
-            continue
-        p1, p2, sgn = bideg
-        # diffdeg = p2.total_degree() - p1.total_degree()
-        accept_odd = True if (p1.total_degree() == 0 and p1.LC() > 0) else False
-        # print(f'Bidegree: {eq} == 0  <=>  {p1} == {p2}')
-
-        new_poly = _align_degree(poly, p1, p2, accept_odd_degree=accept_odd)
-        if new_poly is None:
-            continue
-        sgn_expr = sgn * expr
-        new_ineqs = {}
-        new_eqs = {}
-        success = True
-        for ineq, ineq_expr in ineq_constraints.items():
-            new_ineq = _align_degree(ineq, p1, p2, accept_odd_degree=accept_odd)
-            if new_ineq is None:
-                success = False
-                break
-            new_ineq, muldeg, quo = new_ineq
-            new_ineqs[new_ineq] = (muldeg, ineq_expr, quo)
-        if not success:
-            continue
-        for eq2, eq_expr in eq_constraints.items():
-            if eq2 == eq:
-                continue
-            new_eq = _align_degree(eq2, p1, p2, accept_odd_degree=accept_odd)
-            if new_eq is None:
-                success = False
-                break
-            new_eq, muldeg, quo = new_eq
-            new_eqs[new_eq] = (muldeg, eq_expr, quo)
-        if not success:
-            continue
-
-        # update the expression associated with each constraint after homogenization
-        symmetry = identify_symmetry_from_lists(
-                    [[new_poly[0]], list(new_ineqs.keys()), list(new_eqs.keys())])
-        if symmetry.is_trivial:
-            symmetry = None
-        def p2expr(p: Poly) -> Expr:
-            # convert a polynomial to expr wisely by exploting the symmetry
-            if (symmetry is not None) and verify_symmetry(p, symmetry):
-                p = poly_reduce_by_symmetry(p, symmetry)
-                return CyclicSum(p.as_expr(), p.gens, symmetry)
-            return p.as_expr()
-        p1_expr = p2expr(p1)
-        for new_ineq, (muldeg, ineq_expr, quo) in new_ineqs.items():
-            new_ineqs[new_ineq] = p1_expr**muldeg * ineq_expr + p2expr(quo)*sgn_expr 
-        for new_eq, (muldeg, eq_expr, quo) in new_eqs.items():
-            new_eqs[new_eq] = p1_expr**muldeg * eq_expr + p2expr(quo)*sgn_expr
-
-        # homogenize successfully
-        poly = new_poly[0]
-        is_hom = True
-        ineq_constraints, eq_constraints = new_ineqs, new_eqs
-        def _align_degree_restore(x):
-            return (x - p2expr(new_poly[2])*sgn_expr) / p1_expr**new_poly[1]
-        restorations.append(_align_degree_restore)
-        break
+    problem, restore = bidegree_homogenization(problem)
+    restorations.append(restore)
 
     if len(restorations) == 0:
         restorations.append(lambda x: x)
@@ -245,7 +292,4 @@ def reduce_over_quotient_ring(problem):
             sol = rs(sol)
         return sol
 
-    new_problem = ProofNode.new_problem(
-        poly, ineq_constraints, eq_constraints,
-    )
-    return new_problem, restoration
+    return problem, restoration

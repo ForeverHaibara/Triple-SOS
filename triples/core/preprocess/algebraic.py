@@ -8,6 +8,11 @@ from ..node import ProofNode
 
 
 class CancelDenominator(ProofNode):
+    """
+    Handle sparse rational / algebraic expression before
+    converting them to SymPy dense polynomials, e.g. avoid
+    expanding brackets if unnecessary.
+    """
     _numer = None
     _denom = None
     def explore(self, configs):
