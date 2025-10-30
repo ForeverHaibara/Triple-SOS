@@ -6,6 +6,7 @@ from sympy import Expr, sympify
 
 from .preprocess import ProofNode, SolvePolynomial
 from .preprocess.pivoting import Pivoting
+from .preprocess.reparam import Reparametrization
 from .linsos.linsos import LinearSOSSolver
 from .structsos.structsos import StructuralSOSSolver
 from .symsos import SymmetricSubstitution
@@ -134,7 +135,7 @@ def sum_of_squares(
             'verbose': verbose,
         },
         SolvePolynomial: {
-            'solvers': [NAME_TO_METHOD[_] for _ in method_order if _ in NAME_TO_METHOD] + [Pivoting]
+            'solvers': [NAME_TO_METHOD[_] for _ in method_order if _ in NAME_TO_METHOD] + [Reparametrization, Pivoting]
         },
     }
     _configs.update(configs)

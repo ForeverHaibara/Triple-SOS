@@ -38,7 +38,7 @@ class ProofNode:
         self.children = []
 
     def __repr__(self):
-        return f"ProofNode.{self.__class__.__name__}({self.problem})"
+        return f"ProofNode.{self.__class__.__name__}({repr(self.problem)})"
 
     def __str__(self):
         return self.__repr__()

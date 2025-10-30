@@ -16,43 +16,37 @@ class SolvePolynomial(TransformNode):
     are all converted and stored as sympy (dense) Poly class. However, the process
     of converting expressions to dense polynomials is inefficient for very large inputs.
     """
-    _dense_problem = None
+    def get_polynomial_solvers(self, configs):
+        solvers = configs.get('solvers', None)
+        if solvers is None:
+            from ..structsos.structsos import StructuralSOSSolver
+            from ..linsos.linsos import LinearSOSSolver
+            from ..sdpsos.sdpsos import SDPSOSSolver
+            from ..symsos.symsos import SymmetricSubstitution
+            from .pivoting import Pivoting
+            from .reparam import Reparametrization
+            solvers = [
+                StructuralSOSSolver,
+                LinearSOSSolver,
+                SDPSOSSolver,
+                SymmetricSubstitution,
+                Reparametrization,
+                Pivoting
+            ]
+        return solvers
+
     def explore(self, configs):
         if self.status == 0:
-            # self._dense_problem, _restoration = self.problem.polylize(), lambda x: x
-            self._dense_problem, _restoration = reduce_over_quotient_ring(self.problem.polylize())
+            problem = self.problem.polylize()
+            problem, _restoration = reduce_over_quotient_ring(problem)
 
-            solvers = configs.get('solvers', None)
-            if solvers is None:
-                from ..structsos.structsos import StructuralSOSSolver
-                from ..linsos.linsos import LinearSOSSolver
-                from ..sdpsos.sdpsos import SDPSOSSolver
-                from ..symsos.symsos import SymmetricSubstitution
-                from .pivoting import Pivoting
-                solvers = [
-                    StructuralSOSSolver,
-                    LinearSOSSolver,
-                    SDPSOSSolver,
-                    SymmetricSubstitution,
-                    Pivoting
-                ]
-            # from ..structsos.structsos import StructuralSOSSolver
-            # from ..linsos.linsos import LinearSOSSolver
-            # from ..sdpsos.sdpsos import SDPSOSSolver
-            # from ..symsos.symsos import SymmetricSubstitution
-            # solvers = [
-            #         SymmetricSubstitution,
-            #         StructuralSOSSolver,
-            #         LinearSOSSolver,
-            #         SDPSOSSolver,
-            # ]
-
-            self.children = [solver(self._dense_problem) for solver in solvers]
+            solvers = self.get_polynomial_solvers(configs)
+            self.children = [solver(problem) for solver in solvers]
 
             self.status = - 1
 
         self.restorations = {c: _restoration for c in self.children}
-        if self.status > 0 and len(self.children) == 0:
+        if self.status != 0 and len(self.children) == 0:
             # all children failed
             self.finished = True
 

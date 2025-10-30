@@ -1,6 +1,7 @@
 from typing import List, Dict, Tuple, Union, Set, Optional
 
 from sympy import Expr, Poly, Rational, Integer, Add, Mul, Symbol, true
+from sympy.polys.rings import PolyElement
 
 from ..problem import InequalityProblem
 from ...utils import CyclicExpr
@@ -44,6 +45,9 @@ def sign_sos(expr: Expr, signs: Dict[Symbol, Tuple[int, Expr]]) -> Optional[Expr
     >>> sign_sos(a**12 + b**12 + c**12 - 3*a**4*b**4*c**4, signs) is None
     True
     """
+    if isinstance(expr, (Poly, PolyElement)):
+        expr = expr.as_expr()
+
     def is_nonneg_pow(x: Expr) -> bool:
         if isinstance(x.exp, Rational) and (int(x.exp.numerator) % 2 == 0 or
                 int(x.exp.denominator) % 2 == 0):

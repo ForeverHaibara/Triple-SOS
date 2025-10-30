@@ -1,5 +1,5 @@
-from typing import Dict, Tuple, Optional, Union, Callable, Any
-from sympy import Expr, Symbol, Poly, Integer, Rational, Function, Mul, sympify
+from typing import Dict, List, Tuple, Optional, Union, Callable, Any
+from sympy import Expr, Symbol, Poly, Integer, Rational, Function, Mul, sympify, fraction
 from sympy import __version__ as SYMPY_VERSION
 from sympy.combinatorics.perm_groups import Permutation, PermutationGroup
 from sympy.core.symbol import uniquely_named_symbol
@@ -44,6 +44,13 @@ def _std_eq_constraints(p: Poly, e: Expr) -> Tuple[Poly, Expr]:
 
 
 class InequalityProblem:
+    """
+    Represents an inequality problem:
+
+        Prove expr >= 0
+            given {g >= 0 for g in ineq_constraints.keys()}
+            and   {h == 0 for h in eq_constraints.keys()}.
+    """
     _is_commutative = True
     _is_polynomial = None
 
@@ -68,6 +75,29 @@ class InequalityProblem:
         self.expr = expr
         self.ineq_constraints = ineq_constraints
         self.eq_constraints = eq_constraints
+
+    def __str__(self) -> str:
+        ss = [f"Prove {self.expr} >= 0"]
+        if len(self.ineq_constraints):
+            ss.append(f"    given inequality constraints:")
+            for p, e in self.ineq_constraints.items():
+                ss.append(f"        {p} >= 0" + (f"    ({e})" if p.as_expr() != e else ""))
+        else:
+            ss.append("    given no inequality constraints,")
+
+        if len(self.eq_constraints):
+            ss.append(f"    and equality constraints:")
+            for p, e in self.eq_constraints.items():
+                ss.append(f"        {p} == 0" + (f"    ({e})" if e != 0 and p.as_expr() != e else ""))
+        else:
+            ss.append("    and no equality constraints.")
+        return '\n'.join(ss)
+
+    def __repr__(self) -> str:
+        nvars = len(self.free_symbols)
+        ineqs, eqs = len(self.ineq_constraints), len(self.eq_constraints)
+        poly_info = f' and degree {self.expr.total_degree()}' if isinstance(self.expr, Poly) else ''
+        return f'<InequalityProblem of {nvars} variables{poly_info}, with {ineqs} inequality and {eqs} equality constraints>'
 
     def copy(self) -> 'InequalityProblem':
         problem = InequalityProblem(
@@ -136,15 +166,9 @@ class InequalityProblem:
         ineq_constraints = dict((Poly(e.doit(), *symbols), e2) for e, e2 in ineq_constraints.items())
         eq_constraints = dict((Poly(e.doit(), *symbols), e2) for e, e2 in eq_constraints.items())
 
-        if ineq_constraint_sqf:
-            ineq_constraints = dict(_std_ineq_constraints(*item) for item in ineq_constraints.items())
-        ineq_constraints = dict((e, e2) for e, e2 in ineq_constraints.items() if e.total_degree() > 0)
-
-        if eq_constraint_sqf:
-            eq_constraints = dict(_std_eq_constraints(*item) for item in eq_constraints.items())
-        eq_constraints = dict((e, e2) for e, e2 in eq_constraints.items() if e.total_degree() > 0)
-
         problem = InequalityProblem(expr, ineq_constraints, eq_constraints)
+        problem, _ = problem.sqr_free(problem_sqf=False,
+            ineq_constraint_sqf=ineq_constraint_sqf, eq_constraint_sqf=eq_constraint_sqf, inplace=True)
         return problem
 
     def homogenize(self) -> Tuple['InequalityProblem', Optional[Symbol]]:
@@ -160,6 +184,36 @@ class InequalityProblem:
                 new_problem.roots = [Root(r.root + (Integer(1),), r.domain, r.rep + (r.domain.one,)) for r in self.roots]
             return new_problem, hom
         return self, None
+
+    def sqr_free(self,
+            problem_sqf: bool = False,
+            ineq_constraint_sqf: bool = True,
+            eq_constraint_sqf: bool = True,
+            inplace: bool = False
+        ) -> Tuple['InequalityProblem', Expr]:
+        if not inplace:
+            self = self.copy()
+
+        sqr = Integer(1)
+        if problem_sqf:
+            c, lst = _sqf_list(self.expr)
+            sqr = []
+            sqf = c.as_poly(*self.expr.gens)
+            for p, d in lst:
+                sqr.append(p.as_expr()**(d//2))
+                if d % 2 == 1:
+                    sqf = sqf*p
+            sqr = Mul(*sqr)
+            self.expr = sqf
+            
+        if ineq_constraint_sqf:
+            ineq_constraints = dict(_std_ineq_constraints(*item) for item in self.ineq_constraints.items())
+        self.ineq_constraints = dict((e, e2) for e, e2 in ineq_constraints.items() if e.total_degree() > 0)
+
+        if eq_constraint_sqf:
+            eq_constraints = dict(_std_eq_constraints(*item) for item in self.eq_constraints.items())
+        self.eq_constraints = dict((e, e2) for e, e2 in eq_constraints.items() if e.total_degree() > 0)
+        return self, sqr
 
     def identify_symmetry(self) -> PermutationGroup:
         return identify_symmetry_from_lists(
@@ -187,6 +241,58 @@ class InequalityProblem:
                     self.expr.gens, return_type='root')
         self.roots = roots
         return self.roots
+
+    def transform(self, transform: Dict[Symbol, Expr], inv_transform: Dict[Symbol, Expr]) -> Tuple['InequalityProblem', Callable]:
+        """
+
+
+        Examples
+        --------
+        A manual approach to solve the IMO-1983 problem by Ravi substitution:
+
+        >>> from sympy.abc import a, b, c, x, y, z
+        >>> from sympy import Function
+        >>> F = Function('F')
+        >>> problem = InequalityProblem(a**2*b*(a-b)+b**2*c*(b-c)+c**2*a*(c-a),{b+c-a:F(a),c+a-b:F(b),a+b-c:F(c)})
+        >>> new_pro, restore = problem.transform({a:y+z,b:z+x,c:x+y}, {x:(b+c-a)/2,y:(c+a-b)/2, z:(a+b-c)/2})
+        >>> new_pro.expr.expand(), new_pro.ineq_constraints # doctest: +NORMALIZE_WHITESPACE
+        (2*x**3*z - 2*x**2*y*z + 2*x*y**3 - 2*x*y**2*z - 2*x*y*z**2 + 2*y*z**3,
+         {2*x: F(a), 2*y: F(b), 2*z: F(c)})
+
+        As we find a solution (sympy Expr) to the transformed problem, we use `restore` to 
+        transform it back to the original problem.
+        >>> sol = (F(a)*F(c)*(x-y)**2 + F(b)*F(a)*(y-z)**2 + F(c)*F(b)*(z-x)**2)/2
+        >>> (sol.xreplace({F(a): 2*x, F(b): 2*y, F(c): 2*z}) - new_pro.expr).expand()
+        0
+        >>> restore(sol) # doctest: +SKIP
+        (-a + b)**2*F(a)*F(c)/2 + (a - c)**2*F(b)*F(c)/2 + (-b + c)**2*F(a)*F(b)/2
+        >>> (restore(sol).xreplace({F(a):b+c-a, F(b):c+a-b, F(c):a+b-c}) - problem.expr).expand()
+        0
+        """
+        src_dicts = [{self.expr:1}, self.ineq_constraints, self.eq_constraints]
+        dst_dicts = [{}, {}, {}]
+        if isinstance(self.expr, Poly):
+            new_symbols = tuple(sorted(list(inv_transform.keys()), key=lambda x:x.name))
+            symbols = tuple([_ for _ in self.expr.gens if (not _ in transform)]) + new_symbols
+        for src, dst in zip(src_dicts, dst_dicts):
+            for p, e in src.items():
+                if isinstance(p, Expr):
+                    p = p.xreplace(transform)
+                else:
+                    p, denom_list = _polysubs_frac(p, transform, symbols)
+                    for d, mul in denom_list:
+                        e *= d.as_expr()**(((mul+1)//2)*2)
+                        if mul % 2 == 1:
+                            p = p*d
+                dst[p] = e
+
+        problem = InequalityProblem(next(iter(dst_dicts[0].keys())), dst_dicts[1], dst_dicts[2])
+
+        def restore(x: Optional[Expr]) -> Optional[Expr]:
+            if x is None:
+                return None
+            return x.xreplace(inv_transform) / next(iter(dst_dicts[0].values()))
+        return problem, restore
 
 
 def _get_constraints_wrapper(symbols: Tuple[int, ...],
@@ -237,3 +343,24 @@ def _get_constraints_wrapper(symbols: Tuple[int, ...],
     i2g, g2i = _get_dicts(ineq_constraints, name='_G')
     e2h, h2e = _get_dicts(eq_constraints, name='_H')
     return i2g, e2h, g2i, h2e
+
+
+def _polysubs_frac(poly: Poly, transform: Dict[Symbol, Expr], new_gens: List[Symbol]) -> Tuple[Poly, List[Tuple[Poly, int]]]:
+    """
+    Substitute the variables in the polynomial with a given transform.
+    The result can be written in the form of `new_poly/(Mul(*denom_list) * expr)`
+    where `denom_list` is a list of (sqr-free) polynomials, and `expr` is a square expression.
+    """
+    frac = fraction(poly.as_expr().xreplace(transform).together())
+    numer = frac[0]
+
+    denom = Mul.make_args(frac[1])
+    denom_list = [0] * len(denom)
+    for i, arg in enumerate(denom):
+        if arg.is_Pow:
+            denom_list[i] = (arg.base, arg.exp)
+        else:
+            denom_list[i] = (arg, 1)
+    numer = Poly(numer, new_gens)
+    denom_list = [(Poly(d, new_gens), mul) for d, mul in denom_list]
+    return numer, denom_list

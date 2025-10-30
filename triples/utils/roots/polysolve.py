@@ -5,7 +5,7 @@ polynomial systems and provides supports for low SymPy versions.
 from typing import List, Tuple, Union
 
 import sympy as sp
-from sympy import Poly, Expr, Rational, Symbol
+from sympy import Poly, Expr, Rational, Symbol, RR, QQ
 from sympy.polys.polyerrors import BasePolynomialError
 from sympy.polys.polytools import resultant, groebner, PurePoly
 from sympy.polys.rootoftools import ComplexRootOf as CRootOf
@@ -23,13 +23,13 @@ def _filter_trivial_system(polys: List[Poly]) -> Union[List[Poly], None]:
     ordered_inds = []
     new_polys = set()
     for ind, poly in enumerate(polys):
-        if isinstance(poly, sp.Expr):
+        if isinstance(poly, Expr):
             poly = poly.expand()
             if poly is sp.S.Zero:
                 continue
             if poly.is_constant(): # inconsistent system
                 return None
-        elif isinstance(poly, sp.Poly):
+        elif isinstance(poly, Poly):
             if poly.is_zero:
                 continue
             elif poly.total_degree() == 0: # inconsistent system
@@ -73,7 +73,7 @@ class PolyEvalf:
             return poly(*point)
 
         # high dps should be careful with the context domain
-        domain = sp.RealField(dps=n) if n != 15 else sp.RR
+        domain = sp.RealField(dps=n) if n != 15 else RR
         poly = poly.set_domain(domain)
         return poly(*(p.n(n) for p in point))
 
@@ -233,7 +233,7 @@ def solve_triangulated_crt(polys: List[Poly], symbols: List[Symbol]) -> List[Tup
     f, G = G[0].ltrim(-1), G[1:]
 
     zeros = univar_realroots(f, f.gen)
-    solutions = {((zero,), sp.QQ.algebraic_field(zero)) for zero in zeros}
+    solutions = {((zero,), QQ.algebraic_field(zero)) for zero in zeros}
 
     var_seq = reversed(symbols[:-1])
     vars_seq = postfixes(symbols[1:])
@@ -347,7 +347,7 @@ def solve_poly_system_crt(polys: List[Poly], symbols: List[Symbol]) -> List[Tupl
         return default(polys, symbols)
 
     try:
-        polys = [sp.Poly(_, *symbols, extension=True) for _ in polys]
+        polys = [Poly(_, *symbols, extension=True) for _ in polys]
     except BasePolynomialError:
         return default(polys, symbols)
     if not all(_.domain.is_Exact for _ in polys):
