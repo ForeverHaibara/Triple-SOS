@@ -1,10 +1,10 @@
 from datetime import datetime
 from time import perf_counter
-from typing import Optional
+from typing import List, Optional
 
 from sympy import Expr, Poly, Rational, Integer, fraction
 
-from .problem import InequalityProblem
+from .problem import InequalityProblem, ProblemComplexity
 from ..utils import Solution
 from ..sdp import ArithmeticTimeout
 
@@ -31,6 +31,9 @@ class ProofNode:
     status = 0
     finished = False
     default_configs = {}
+    
+    children: List['ProofNode'] = None
+    _complexity: ProblemComplexity = None
     def __init__(self,
         problem: InequalityProblem
     ):
@@ -38,7 +41,7 @@ class ProofNode:
         self.children = []
 
     def __repr__(self):
-        return f"ProofNode.{self.__class__.__name__}({repr(self.problem)})"
+        return f"ProofNode.{self.__class__.__name__}({repr(self.problem)}, status={self.status}, children={len(self.children)})"
 
     def __str__(self):
         return self.__repr__()
@@ -48,9 +51,19 @@ class ProofNode:
         Select the most promising child node based on heuristics.
         It can also return itself if self is to be explored.
         """
-        if self.children:
-            return self.children[0]
-        return self
+        if not self.children:
+            return self
+        return self.children[0]
+        # return min(self.children, key=lambda x: x.evaluate_complexity().time)
+
+    def evaluate_complexity(self) -> ProblemComplexity:
+        if self._complexity is None or self._complexity.status != self.status:
+            self._complexity = self._evaluate_complexity()
+        self._complexity.status = self.status
+        return self._complexity
+
+    def _evaluate_complexity(self) -> ProblemComplexity:
+        return self.problem.evaluate_complexity()
 
     def explore(self, configs):
         pass
@@ -86,9 +99,21 @@ class TransformNode(ProofNode):
     When any child is solved, `update` is called to restore the solution
     to the original problem.
     """
+    default_complexity = (1., 1.)
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.restorations = {}
+
+    def _evaluate_complexity(self) -> ProblemComplexity:
+        if self.status == 0:
+            return ProblemComplexity(*self.default_complexity)
+        if not self.children:
+            return self.problem.evaluate_complexity()
+        complexities = [child.evaluate_complexity() for child in self.children]
+        c = complexities[0]
+        for c2 in complexities[1:]:
+            c = c | c2
+        return c
 
     def update(self, *args, **kwargs):
         if self.finished:
@@ -107,6 +132,98 @@ class SolveProblem(ProofNode):
             self.status = -1
 
 
+class ProofTree:
+    configs = None
+    parents = None
+    mode = 'fast'
+    time_limit: float = 3600
+    expected_end_time: float = 0
+
+    def __init__(self, root: ProofNode):
+        self.root = root
+        self.parents = {}
+
+    def get_configs(self, node: ProofNode):
+        cfg = node.default_configs.copy()
+        cfg['time_limit'] = (self.expected_end_time - perf_counter())
+        cfg.update(self.configs.get(node, {}))
+        for cls in node.__class__.mro()[::-1]:
+            if cls in self.configs:
+                cfg.update(self.configs[cls])
+        return cfg
+
+    def select(self) -> ProofNode:
+        """
+        Select the most promising node to explore.
+
+        TODO: perhaps we need a heap to select the most promising node.
+        """
+        leaves = self.get_leaves()
+        complexities = [(leaf, leaf.evaluate_complexity()) for leaf in leaves]
+        # print("Leaves:\n    " + "\n    ".join([f'{leaf}: {c}' for leaf, c in complexities]))
+        best = min(complexities, key=lambda x: x[1].time/(x[1].prob + x[1].EPS))[0]
+        return best
+
+    def get_leaves(self) -> List[ProofNode]:
+        """
+        Get all leaf nodes in the proof tree.
+        """
+        cur = self.root
+        leaves = []
+        queue = [cur]
+        while queue:
+            cur = queue.pop(0)
+            cur.children = [_ for _ in cur.children if not _.finished]
+            if (not cur.children) or cur in cur.children:
+                leaves.append(cur)
+            queue.extend(cur.children)
+            for c in cur.children:
+                self.parents[c] = cur
+        return leaves
+
+    def explore(self):
+        """
+        Explore the most promising node.
+        """
+        node = self.select()
+        cfg = self.get_configs(node)
+        if cfg.get('verbose', False):
+            path = [node]
+            MAX_PATH_LEN = 5
+            while path[-1] in self.parents and len(path) < MAX_PATH_LEN:
+                path.append(self.parents[path[-1]])
+            print(f'Exploring ... {" -> ".join([_.__class__.__name__ for _ in path[::-1]])}')
+        node.explore(cfg)
+        self.propagate(node)
+
+    def propagate(self, node: ProofNode):
+        """
+        Propagate the status of a node to its parents.
+        """
+        p = node
+        while p is not None:
+            p.update(None)
+            if self.mode == 'fast' and p.problem.solution is not None:
+                p.finished = True
+            if p.status < 0 and all(_.finished for _ in p.children):
+                p.finished = True
+            p = self.parents.get(p, None)
+
+    def solve(self) -> Optional[Expr]:
+        self.expected_end_time = perf_counter() + self.time_limit
+        max_explore = 100
+        for _ in range(max_explore):
+            try:
+                self.explore()
+            except ArithmeticTimeout:
+                break
+            if perf_counter() > self.expected_end_time:
+                break
+            if self.root.finished:
+                break
+
+        return self.root.problem.solution
+
 
 def _sum_of_squares(
         problem: InequalityProblem,
@@ -116,60 +233,14 @@ def _sum_of_squares(
     ):
     start_time = datetime.now()
 
-    configs = configs.copy()
-    configs['start_time'] = start_time
-    expected_end_time = perf_counter() + time_limit
-    # configs['time_limit'] = time_limit
-
     root = SolveProblem(problem)
-    max_explore = 100
-    for _ in range(max_explore):
-        # get the deepest child
-        cur = root
-        path = [cur]
-        while cur.children:
-            for c in cur.children.copy():
-                if c.finished:
-                    cur.children.remove(c)
-            
-            new_cur = cur.select()
-            if new_cur is cur:
-                # explore itself
-                break
-            else:
-                cur = new_cur
-                path.append(cur)
+    tree = ProofTree(root)
+    tree.configs = configs
+    tree.time_limit = time_limit
+    tree.mode = mode
 
-        # explore the deepest child
-        cfg = cur.default_configs.copy()
-        cfg['time_limit'] = (expected_end_time - perf_counter())
-        cfg.update(configs.get(cur, {}))
-        for cls in cur.__class__.mro()[::-1]:
-            if cls in configs:
-                cfg.update(configs[cls])
-
-        if cfg.get('verbose', 0):
-            print(f'Exploring {" -> ".join([_.__class__.__name__ for _ in path])}')
-        try:
-            cur.explore(cfg)
-        except ArithmeticTimeout:
-            break
-
-        # if cur.finished:
-        for p in path[::-1]:
-            p.update(cur)
-
-            if mode == 'fast' and p.problem.solution is not None:
-                p.finished = True
-            if p.status < 0 and all(_.finished for _ in p.children):
-                p.finished = True
-        if root.finished:
-            break
-
-        if perf_counter() > expected_end_time:
-            break
-
-    if problem.solution is None:
+    solution = tree.solve()
+    if solution is None:
         return None
 
     end_time = datetime.now()

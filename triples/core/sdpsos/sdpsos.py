@@ -10,6 +10,7 @@ from .solution import SolutionSDP
 from ..preprocess import ProofNode, SolvePolynomial
 from ...utils import MonomialManager, Root, clear_polys_by_symmetry
 from ...sdp import ArithmeticTimeout
+from ...sdp.rationalize import SDPRationalizeError
 
 
 class _lazy_iter:
@@ -260,6 +261,9 @@ class SDPSOSSolver(ProofNode):
                     print(f"{e.__class__.__name__}: {e}")
                 if isinstance(e, ArithmeticTimeout):
                     raise e
+                elif isinstance(e, (SDPRationalizeError, MemoryError)):
+                    # do not try further
+                    break
                 continue
 
         self.status = -1

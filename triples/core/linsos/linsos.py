@@ -387,6 +387,9 @@ class LinearSOSSolver(ProofNode):
                 if verbose:
                     print(f"Arithmetic timeout. LinearSOS aborted.")
                 raise e
+            elif isinstance(e, MemoryError):
+                if verbose:
+                    print(f"Memory error: {e}. LinearSOS aborted.")
             else:
                 raise e
 

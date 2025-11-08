@@ -3,7 +3,7 @@ from functools import partial
 from collections import defaultdict
 # import re
 
-from sympy import Expr, Poly, QQ, Rational, Integer, Float, Symbol
+from sympy import Expr, Poly, QQ, RR, Rational, Integer, Float, Symbol
 from sympy import parse_expr, sympify, fraction, cancel, latex
 from sympy import symbols as sp_symbols
 from sympy.polys import ring
@@ -227,11 +227,11 @@ def expand_poly(expr: Expr, gens=None) -> Union[Expr, Poly]:
         return expr
     if not all(_.is_commutative for _ in symbols):
         return expr.expand()
-    dom = QQ
+    dom = QQ if not expr.has(Float) else RR
     dom_ext = dom[other_symbols] if len(other_symbols) else dom
     expr_ring = ring(gens, dom_ext)[0]
     def _expandpoly(_):
-        if _.is_Symbol or _.is_Rational:
+        if _.is_Symbol or _.is_Rational or _.is_Float:
             return expr_ring(_)
 
         elif _.is_Add:
