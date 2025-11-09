@@ -16,7 +16,7 @@ from ..core.sum_of_squares import sum_of_squares, DEFAULT_CONFIGS
 # from ..core.linsos import root_tangents
 
 
-def _default_polynomial_check(poly: Poly, method_order: List[str]) -> List[str]:
+def _default_polynomial_check(poly: Poly, methods: List[str]) -> List[str]:
     """
     Check the degree and nvars of a polynomial to decide
     whether a method is applicable. For too high degree polynomials,
@@ -28,8 +28,8 @@ def _default_polynomial_check(poly: Poly, method_order: List[str]) -> List[str]:
     upper_bounds = [30, 30, 30, 14, 12, 8, 6, 4, 4, 4, 4]
     if degree > upper_bounds[nvars]:
         # remove LinearSOS and SDPSOS
-        method_order = [method for method in method_order if method not in ('LinearSOS', 'SDPSOS')]
-    return method_order
+        methods = [method for method in methods if method not in ('LinearSOS', 'SDPSOS')]
+    return methods
 
 
 def _default_restrict_input_chars(txt: str) -> bool:
@@ -223,7 +223,7 @@ class SOS_Manager():
             eq_constraints: Dict[Poly, Expr] = [],
             gens = CONFIG_DEFAULT_GENS,
             perm = CONFIG_DEFAULT_PERM,
-            method_order = None,
+            methods = None,
             configs = DEFAULT_CONFIGS
         ):
         """
@@ -247,13 +247,13 @@ class SOS_Manager():
         #         if configs.get(method) is None:
         #             configs[method] = {}
         #         configs[method]['verbose'] = False
-        method_order = cls.CONFIG_METHOD_CHECK(poly, method_order)
+        methods = cls.CONFIG_METHOD_CHECK(poly, methods)
 
         solution = sum_of_squares(
             poly,
             ineq_constraints = ineq_constraints,
             eq_constraints = eq_constraints,
-            method_order = method_order,
+            methods = methods,
             verbose = cls.verbose,
             configs = configs
         )

@@ -276,11 +276,8 @@ def sum_of_squares(sid, **kwargs):
         Whether the solution was found.
     """
     try:
-        method_order = [key for key, value in kwargs['methods'].items() if value]
-
-        if 'LinearSOS' in method_order:
-            if 'LinearSOS' not in kwargs['configs']:
-                kwargs['configs']['LinearSOS'] = {}
+        methods = [key for key, value in kwargs['methods'].items() if value]
+        methods.extend(['Pivoting', 'Reparametrization'])
 
         gens = kwargs['gens']
         # ineq_constraints = kwargs['poly'].free_symbols if SOS_Manager.CONFIG_ALLOW_NONSTANDARD_GENS else gens
@@ -308,7 +305,7 @@ def sum_of_squares(sid, **kwargs):
             eq_constraints = eq_constraints,
             gens = gens,
             perm = kwargs['perm'],
-            method_order = method_order,
+            methods = methods,
             configs = kwargs['configs']
         )
 

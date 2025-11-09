@@ -52,22 +52,6 @@ def _convert_to_gradio_latex(content):
         content = re.sub('\$(.*?)\$', '$\\\displaystyle \\1$', content, flags=re.DOTALL)
     return content
 
-DEPLOY_CONFIGS = {
-    'LinearSOS': {
-        'verbose': False,
-    },
-    'StructuralSOS': {
-    },
-    'SymmetricSOS': {
-
-    },
-    'SDPSOS': {
-        'verbose': False,
-        # 'degree_limit': 14,
-    }
-}
-
-# DEPLOY_CONFIGS = {}
 
 class GradioInterface():
     def __init__(self):
@@ -201,18 +185,13 @@ class GradioInterface():
         poly = res0.pop('poly', None)
         grid = res0.pop('grid', None)
         if poly is not None:
-            # if 'Linear' in methods:
-            #     rootsinfo = SOS_Manager.findroot(poly, grid, verbose = False)
-            # else:
-            #     rootsinfo = []
             try:
                 ineq_constraints = poly.free_symbols if SOS_Manager.CONFIG_ALLOW_NONSTANDARD_GENS else poly.gens
                 solution = SOS_Manager.sum_of_squares(
                     poly,
                     ineq_constraints = list(ineq_constraints),
                     eq_constraints = [],
-                    method_order = ['%sSOS'%method for method in methods],
-                    configs = DEPLOY_CONFIGS
+                    methods = ['%sSOS'%method for method in methods] + ['Pivoting', 'Reparametrization'],
                 )
             except Exception as e:
                 # print(e)
@@ -298,6 +277,8 @@ class GradioInterface():
 
 
 if __name__ == '__main__':
+    SOS_Manager.verbose = False
+
     interface = GradioInterface()
 
     ALLOW_CORS = True

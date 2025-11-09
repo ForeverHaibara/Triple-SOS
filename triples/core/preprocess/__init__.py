@@ -4,8 +4,13 @@ and calls appropriate solvers.
 """
 
 from ..node import ProofNode
-from .signs import sign_sos, get_symbol_signs
 from .features import get_features
+from .pivoting import Pivoting
 from .polynomial import SolvePolynomial
+from .reparam import Reparametrization
+from .signs import sign_sos, get_symbol_signs
 
-__all__ = ['ProofNode', 'SolvePolynomial', 'sign_sos', 'get_symbol_signs', 'get_features']
+__all__ = [
+    'ProofNode', 'get_features', 'Pivoting', 'SolvePolynomial', 'Reparametrization',
+    'sign_sos', 'get_symbol_signs',
+]

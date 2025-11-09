@@ -2,7 +2,7 @@ from typing import Optional, Dict, List, Union, Callable, Any
 
 import numpy as np
 import sympy as sp
-from sympy import Expr, sympify
+from sympy import Poly, Expr, sympify
 
 from .preprocess import ProofNode, SolvePolynomial
 from .preprocess.pivoting import Pivoting
@@ -19,36 +19,26 @@ NAME_TO_METHOD = {
     'LinearSOS': LinearSOSSolver,
     'SDPSOS': SDPSOSSolver,
     'SymmetricSOS': SymmetricSubstitution,
+    'Pivoting': Pivoting,
+    'Reparametrization': Reparametrization,
 }
-
-METHOD_ORDER = ['StructuralSOS', 'LinearSOS', 'SDPSOS', 'SymmetricSOS']
+NAME_TO_METHOD.update({v.__name__: v for v in NAME_TO_METHOD.values()})
 
 DEFAULT_CONFIGS = {
-    'LinearSOS': {
-
-    },
-    'StructuralSOS': {
-
-    },
-    'SymmetricSOS': {
-
-    },
-    'SDPSOS': {
-
-    }
 }
 
 DEFAULT_SAVE_SOLUTION = lambda x: (str(x.solution) if x is not None else '')
 
 
 def sum_of_squares(
-        poly: Union[sp.Poly, sp.Expr],
+        poly: Union[Poly, Expr],
         ineq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
         eq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
-        method_order: Optional[List[str]] = METHOD_ORDER,
+        methods: Optional[List[str]] = None,
         configs: Optional[Dict[str, Dict]] = DEFAULT_CONFIGS,
         time_limit: float = 3600,
         mode: str = 'fast',
+        method_order: Optional[List[str]] = None, # deprecated
         verbose: bool = False,
     ) -> Optional[Solution]:
     """
@@ -102,26 +92,26 @@ def sum_of_squares(
 
     Parameters
     ----------
-    poly: Union[sp.Poly, sp.Expr]
+    poly: Union[Poly, Expr]
         The polynomial to perform SOS on.
     ineq_constraints: Union[List[Expr], Dict[Expr, Expr]]
         Inequality constraints to the problem. This assumes g_1(x) >= 0, g_2(x) >= 0, ...
     eq_constraints: Union[List[Expr], Dict[Expr, Expr]]
         Equality constraints to the problem. This assumes h_1(x) = 0, h_2(x) = 0, ...
-    method_order: List[str]
-        The order of methods to try. Defaults to METHOD_ORDER.
+    methods: Optional[List[str]]
+        The methods to try.
     configs: Dict[str, Dict]
         The configurations for each method. Defaults to DEFAULT_CONFIGS.
-        It should be a dictionary containing the method names as keys and the kwargs as values.
+        It should be a dictionary containing the ProofNode classes as keys and the kwargs as values.
     time: float
         The time limit (in seconds) for the solver. Defaults to 3600. When the time limit is
         reached, the solver is killed when it returns to the main loop.
         However, it might not be killed instantly if it is stuck in an internal function.
     mode: str
-        The mode of the solver. Defaults to 'fast'. Supports 'fast' and 'pretty'.
+        Experimental. The mode of the solver. Defaults to 'fast'. Supports 'fast' and 'pretty'.
         If 'pretty', it traverses all methods and selects the most pretty solution.
     verbose: bool
-        Whether to print verbose information. Defaults to False.
+        Whether to print information during the solving process. Defaults to False.
 
 
     Returns
@@ -130,12 +120,26 @@ def sum_of_squares(
         The solution. If no solution is found, None is returned.
     """
     problem = ProofNode.new_problem(poly, ineq_constraints, eq_constraints)
+
+    if method_order is not None:
+        from warnings import warn
+        warn("method_order is deprecated. Use methods instead.", DeprecationWarning, stacklevel=2)
+        methods = methods or method_order
+
+    if methods is not None:
+        _methods = [NAME_TO_METHOD[_] for _ in methods if _ in NAME_TO_METHOD\
+                    or isinstance(_, ProofNode)]
+        if len(_methods) != len(methods):
+            diff = set(methods) - set(_methods)
+            raise ValueError(f"Methods {diff} are not supported.")
+        methods = _methods
+
     _configs = {
         ProofNode: {
             'verbose': verbose,
         },
         SolvePolynomial: {
-            'solvers': [NAME_TO_METHOD[_] for _ in method_order if _ in NAME_TO_METHOD] + [Reparametrization, Pivoting]
+            'solvers': methods,
         },
     }
     _configs.update(configs)
@@ -143,24 +147,24 @@ def sum_of_squares(
 
 
 def sum_of_squares_multiple(
-        polys: Union[List[Union[sp.Poly, str]], str],
+        polys: Union[List[Union[Poly, str]], str],
         ineq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
         eq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
-        method_order: List[str] = METHOD_ORDER,
-        configs: Dict[str, Dict] = DEFAULT_CONFIGS,
         poly_reader_configs: Dict[str, Any] = {},
         save_result: Union[bool, str] = True,
         save_solution_method: Callable[[Optional[Solution]], str] = DEFAULT_SAVE_SOLUTION,
-        verbose_sos: bool = False,
-        verbose_progress: bool = True
+        verbose_progress: bool = True,
+        **sos_kwargs
     ):
     """
+    TODO: This function is currently unmaintained, and is not intended to be used.
+
     Decompose multiple polynomials into sum of squares and return the results
     as a pandas DataFrame.
 
     Parameters
     ----------
-    polys : Union[List[Union[sp.Poly, str]], str]
+    polys : Union[List[Union[Poly, str]], str]
         The polynomials to solve. If it is a string, it will be treated as a file name.
         If it is a list of strings, each string will be treated as a polynomial.
         Empty lines will be ignored.
@@ -168,11 +172,6 @@ def sum_of_squares_multiple(
         Inequality constraints to all problems. This assumes g_1(x) >= 0, g_2(x) >= 0, ...
     eq_constraints: Union[List[Expr], Dict[Expr, Expr]]
         Equality constraints to all problems. This assumes h_1(x) = 0, h_2(x) = 0, ...
-    method_order : List[str]
-        The order of methods to try. Defaults to METHOD_ORDER.
-    configs : Dict[str, Dict]
-        The configurations for each method. Defaults to DEFAULT_CONFIGS.
-        It should be a dictionary containing the method names as keys and the kwargs as values.
     poly_reader_configs : Dict[str, Any]
         The configurations for the PolyReader. It should be a dictionary containing the kwargs.
     save_result : Union[bool, str]
@@ -182,10 +181,10 @@ def sum_of_squares_multiple(
     save_solution_method : Callable[[Optional[Solution]], str]
         The method to convert a solution to string for saving the result.
         It will be applied on each solution. It should handle None as well.
-    verbose_sos : bool
-        Whether to send verbose=True to the sum_of_squares function.
     verbose_progress : bool
         Whether to show the progress bar. Requires tqdm to be installed.
+    **sos_kwargs
+        The keyword arguments to pass to the `sum_of_squares` function.
 
     Returns
     ----------
@@ -193,19 +192,11 @@ def sum_of_squares_multiple(
         The results as a pandas DataFrame.
     """
     from time import time
-    from copy import deepcopy
 
     try:
         import pandas as pd
     except ImportError:
         raise ImportError('Please install pandas to use this function.')
-
-    configs = deepcopy(configs)
-    for key in DEFAULT_CONFIGS:
-        if key not in configs:
-            configs[key] = {}
-        if key in ('LinearSOS', 'SDPSOS'):
-            configs[key]['verbose'] = verbose_sos
 
     if 'ignore_errors' not in poly_reader_configs:
         poly_reader_configs['ignore_errors'] = True
@@ -235,9 +226,7 @@ def sum_of_squares_multiple(
         record = {'problem': poly_str, 'deg': poly.total_degree()}
         try:
             t0 = time()
-            solution = sum_of_squares(poly, ineq_constraints, eq_constraints,
-                method_order=method_order, configs=configs
-            )
+            solution = sum_of_squares(poly, ineq_constraints, eq_constraints, **sos_kwargs)
             used_time = time() - t0
             if solution is None:
                 record['status'] = 'fail'
@@ -316,14 +305,3 @@ def _process_records(
         records_save.to_csv(filename)
 
     return records_pd
-
-
-# def sum_of_square(*args, **kwargs):
-#     """Deprecated function. Please use sum_of_squares instead."""
-#     warn('sum_of_square is deprecated. Please use sum_of_squares instead.', DeprecationWarning, stacklevel=2)
-#     return sum_of_squares(*args, **kwargs)
-
-# def sum_of_square_multiple(*args, **kwargs):
-#     """Deprecated function. Please use sum_of_squares_multiple instead."""
-#     warn('sum_of_square_multiple is deprecated. Please use sum_of_squares_multiple instead.', DeprecationWarning, stacklevel=2)
-#     return sum_of_squares_multiple(*args, **kwargs)
