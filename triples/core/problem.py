@@ -139,8 +139,12 @@ class InequalityProblem:
         from .preprocess import get_symbol_signs
         return get_symbol_signs(self)
 
+    def get_features(self) -> Dict[str, Any]:
+        from .preprocess.features import get_features
+        return get_features(self)
+
     def evaluate_complexity(self):
-        # this is experimental and heuristic, and should be replaced with better estimation in the future
+        # The estimation here is only a placeholder. In ProofNodes it will overloaded by model predictions.
         nvars = len(self.free_symbols)
         return ProblemComplexity(
             time=nvars**4/81 * (len(self.ineq_constraints)+1)*(len(self.eq_constraints)+1),

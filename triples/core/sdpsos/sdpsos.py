@@ -183,6 +183,7 @@ class SDPSOSSolver(ProofNode):
         'solve_kwargs': {},
     }
 
+    _complexity_models = True
     def explore(self, configs):
         if self.status != 0:
             return
@@ -243,6 +244,7 @@ class SDPSOSSolver(ProofNode):
                 sos_problem = SOSPoly(poly, poly.gens, qmodule = qmodule, ideal = ideal,
                                         symmetry = symmetry.perm_group, roots = roots, degree=degree)
                 sdp = sos_problem.construct(verbose=verbose, time_limit=expected_end_time - perf_counter())
+                # TODO: add a dof0_limit check here to prevent memory explosion (which might kill the program)
 
                 if sos_problem.solve(verbose=verbose, solver=solver,
                         time_limit=expected_end_time - perf_counter(),

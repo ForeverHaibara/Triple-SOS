@@ -66,6 +66,7 @@ class LinearSOSSolver(ProofNode):
     _transformed_problem = None
     _tangents = None
     _decentralizer = None
+    _complexity_models = True
     def _centralize(self, configs):
         """
         Apply an auto scaling on the variables so that one of the roots is (1,1,...,1).

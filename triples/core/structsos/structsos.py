@@ -12,6 +12,7 @@ from .quarternary import structural_sos_4vars
 from .pivoting import structural_sos_2vars
 from ..preprocess import ProofNode, SolvePolynomial
 
+from ..problem import ProblemComplexity
 from ...utils import Solution
 
 class StructuralSOSSolver(ProofNode):
@@ -29,6 +30,8 @@ class StructuralSOSSolver(ProofNode):
         self.status = -1
         self.finished = True
 
+    def _evaluate_complexity(self) -> ProblemComplexity:
+        return ProblemComplexity(0.001, 1.)
 
 # @sanitize(homogenize=True, infer_symmetry=False, wrap_constraints=False)
 def StructuralSOS(

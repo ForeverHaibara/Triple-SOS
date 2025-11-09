@@ -1,11 +1,14 @@
 from datetime import datetime
 from time import perf_counter
-from typing import List, Optional
+from typing import Dict, List, Optional
+import os
 
 from sympy import Expr, Poly, Rational, Integer, fraction
+import numpy as np
 
 from .problem import InequalityProblem, ProblemComplexity
 from ..utils import Solution
+from ..utils.tree_predictor import TreePredictor
 from ..sdp import ArithmeticTimeout
 
 class ProofNode:
@@ -34,6 +37,7 @@ class ProofNode:
     
     children: List['ProofNode'] = None
     _complexity: ProblemComplexity = None
+    _complexity_models: Dict = None
     def __init__(self,
         problem: InequalityProblem
     ):
@@ -63,7 +67,36 @@ class ProofNode:
         return self._complexity
 
     def _evaluate_complexity(self) -> ProblemComplexity:
-        return self.problem.evaluate_complexity()
+        if self._complexity_models is None:
+            return self.problem.evaluate_complexity()
+        if self._complexity_models is True:
+            models = self._load_complexity_models()
+            self.__class__._complexity_models = models
+            self._complexity_models = models
+        models = self._complexity_models
+        features = self.problem.get_features()
+        complexity = ProblemComplexity(
+            models["time_model"].predict(features),
+            models["prob_model"].predict(features),
+            models["length_model"].predict(features),
+        )
+        return complexity
+
+    def _load_complexity_models(self) -> Dict:
+        from importlib import import_module
+        models = {}
+        clsname = self.__class__.__name__.lower()
+        join = os.path.join
+        filename = import_module(self.__class__.__module__).__file__
+        path = os.path.dirname(os.path.abspath(filename))
+        models["time_model"] = TreePredictor.load_model(join(path, "models", clsname+"_time_model.npz"))
+        models["prob_model"] = TreePredictor.load_model(join(path, "models", clsname+"_prob_model.npz"))
+        models["length_model"] = TreePredictor.load_model(join(path, "models", clsname+"_length_model.npz"))
+        _time_func = models["time_model"].get_default_func()
+        _length_func = models["length_model"].get_default_func()
+        models["time_model"].func = lambda x: max(float(np.exp(_time_func(x)) - 1.), 1e-14)
+        models["length_model"].func = lambda x: max(float(np.exp(_length_func(x)) - 1.), 1e-14)
+        return models
 
     def explore(self, configs):
         pass
@@ -99,14 +132,15 @@ class TransformNode(ProofNode):
     When any child is solved, `update` is called to restore the solution
     to the original problem.
     """
-    default_complexity = (1., 1.)
+    _default_complexity = (1., 1.)
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.restorations = {}
 
     def _evaluate_complexity(self) -> ProblemComplexity:
         if self.status == 0:
-            return ProblemComplexity(*self.default_complexity)
+            # when not explored, encourage exploration
+            return ProblemComplexity(*self._default_complexity)
         if not self.children:
             return self.problem.evaluate_complexity()
         complexities = [child.evaluate_complexity() for child in self.children]
