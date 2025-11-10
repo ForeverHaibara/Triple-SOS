@@ -1,12 +1,13 @@
-from typing import Dict, List, Tuple, Optional, Union, Callable, Any
+from typing import Dict, List, Tuple, Set, Optional, Union, Callable, Any
 from sympy import Expr, Symbol, Poly, Integer, Rational, Function, Mul, sympify, fraction
 from sympy import __version__ as SYMPY_VERSION
 from sympy.combinatorics.perm_groups import Permutation, PermutationGroup
 from sympy.core.symbol import uniquely_named_symbol
 from sympy.core.function import AppliedUndef
 from sympy.external.importtools import version_tuple
+from sympy.polys.rings import PolyElement
 
-from ..utils import optimize_poly, Root, identify_symmetry_from_lists, Solution
+from ..utils import optimize_poly, Root, RootList, identify_symmetry_from_lists, Solution
 
 # fix the bug in sqf_list before 1.13.0
 # https://github.com/sympy/sympy/pull/26182
@@ -54,10 +55,10 @@ class InequalityProblem:
     _is_commutative = True
     _is_polynomial = None
 
-    counter_examples = None
+    counter_examples: RootList = None
     solution = None
 
-    roots = None
+    roots: RootList = None
 
     def __init__(self,
         expr: Expr,
@@ -117,11 +118,64 @@ class InequalityProblem:
             self.expr, *self.ineq_constraints.keys(), *self.eq_constraints.keys()]))
 
     @property
-    def free_symbols(self):
+    def free_symbols(self) -> Set[Symbol]:
         return self.reduce(lambda e: set(e.free_symbols), lambda x: set.union(*x))
 
-    def extract_constraints(self, symbols: Union[Symbol, Tuple[Symbol]]) \
+    @property
+    def gens(self) -> Tuple[Symbol, ...]:
+        """
+        Returns an ordered tuple of symbols in `self.expr`,
+        `self.ineq_constraints.keys()` and `self.eq_constraints.keys()`.
+
+        Ordering rules:
+        * If `self.expr` is polynomial, its generators come first in the original order.
+        * Other free symbols are sorted in names.
+
+        Examples
+        ----------
+        >>> from sympy.abc import a, b, c, x, y
+        >>> from sympy import Poly
+        >>> InequalityProblem(b*2 + c, [b-a, a, c-a], [b+c-1]).gens
+        (a, b, c)
+        >>> InequalityProblem(Poly(y**2*b + 2*c, (c, b)), [b, x], [a-c, a-1]).gens
+        (c, b, a, x, y)
+        """
+        poly_gens = self.expr.gens if isinstance(self.expr, (Poly, PolyElement)) else ()
+        other_syms = self.free_symbols - set(poly_gens)
+        other_syms = sorted(list(other_syms), key=lambda x: x.name)
+        return poly_gens + tuple(other_syms)
+
+    def extract_constraints(self, symbols: Union[Symbol, List[Symbol]]) \
             -> Tuple[Dict[Expr, Expr], Dict[Expr, Expr], Dict[Expr, Expr], Dict[Expr, Expr]]:
+        """
+        Split constraints into those that contain given symbols and those that do not.
+        Returns (contained_ineqs, contained_eqs, uncontained_ineqs, uncontained_eqs).
+
+        Parameters
+        ----------
+        symbols: Union[Symbol, List[Symbol]]
+            The symbols to split constraints by. It can be a symbol or an iterable of symbols.
+
+        Returns
+        ----------
+        Tuple[Dict[Expr, Expr], Dict[Expr, Expr], Dict[Expr, Expr], Dict[Expr, Expr]]
+            (contained_ineqs, contained_eqs, uncontained_ineqs, uncontained_eqs)
+
+        Examples
+        ----------
+        >>> from sympy.abc import a, b, c
+        >>> problem = InequalityProblem(a*b, [a, b, a*b, b+c], [a-1, b+c-1])
+        >>> problem.extract_constraints(a) # doctest: +NORMALIZE_WHITESPACE
+        ({a: a, a*b: a*b},
+         {a - 1: a - 1},
+         {b: b, b + c: b + c},
+         {b + c - 1: b + c - 1})
+        >>> problem.extract_constraints([b, c]) # doctest: +NORMALIZE_WHITESPACE
+        ({b: b, a*b: a*b, b + c: b + c},
+         {b + c - 1: b + c - 1},
+         {a: a},
+         {a - 1: a - 1})
+        """
         if isinstance(symbols, Symbol):
             symbols = {symbols}
         symbols = set(symbols)
@@ -214,7 +268,7 @@ class InequalityProblem:
                     sqf = sqf*p
             sqr = Mul(*sqr)
             self.expr = sqf
-            
+
         if ineq_constraint_sqf:
             ineq_constraints = dict(_std_ineq_constraints(*item) for item in self.ineq_constraints.items())
         self.ineq_constraints = dict((e, e2) for e, e2 in ineq_constraints.items() if e.total_degree() > 0)
@@ -230,6 +284,43 @@ class InequalityProblem:
         )
 
     def wrap_constraints(self, symmetry: Optional[PermutationGroup]=None) -> Tuple['InequalityProblem', Callable]:
+        """
+        Wrap the constraints of the problem by dummy functions.
+
+        Parameters
+        ----------
+        symmetry : PermutationGroup, optional
+            The symmetry group of the problem.
+
+        Returns
+        ----------
+        problem : InequalityProblem
+            The problem with wrapped constraints.
+        restoration : Callable
+            A function to restore the expression from the wrapped expression.
+
+        Examples
+        ----------
+        Consider proving x >= 0 given x + y >= 1 and x**2 + y**2 == 1:
+
+        >>> from sympy.abc import x, y
+        >>> pro = InequalityProblem(x, {x+y-1: x+y-1}, {x**2+y**2-1: x**2+y**2-1}).polylize()
+        >>> newpro, restore = pro.wrap_constraints()
+        >>> newpro.ineq_constraints, newpro.eq_constraints # doctest: +NORMALIZE_WHITESPACE
+        ({Poly(x + y - 1, x, y, domain='ZZ'): _G0(x, y)},
+         {Poly(x**2 + y**2 - 1, x, y, domain='ZZ'): _H0(x, y)})
+
+        We can define the solution with G0 and H0 and restore it using the restoration function.
+        However, restoration expands the brackets and might break the sum-of-squares structure.
+
+        >>> G0, H0 = list(newpro.ineq_constraints.values())[0], list(newpro.eq_constraints.values())[0]
+        >>> sol = G0 - H0/2 + x**2/2 + (y-1)**2/2; sol
+        x**2/2 + (y - 1)**2/2 + _G0(x, y) - _H0(x, y)/2
+        >>> restore(sol)
+        x - y**2/2 + y + (y - 1)**2/2 - 1/2
+        >>> restore(sol).expand()
+        x
+        """
         gens = self.expr.gens
         i2g, e2h, g2i, h2e = _get_constraints_wrapper(
             gens, self.ineq_constraints, self.eq_constraints, symmetry
@@ -242,7 +333,7 @@ class InequalityProblem:
             return x.xreplace(g2i).xreplace(h2e)
         return problem, restoration
 
-    def find_roots(self):
+    def find_roots(self) -> RootList:
         """Find the equality cases of the problem heuristically."""
         if self.roots is not None:
             return self.roots
@@ -296,6 +387,8 @@ class InequalityProblem:
                 dst[p] = e
 
         problem = InequalityProblem(next(iter(dst_dicts[0].keys())), dst_dicts[1], dst_dicts[2])
+        if isinstance(self.roots, RootList):
+            problem.roots = self.roots.transform(inv_transform, problem.free_symbols)
 
         def restore(x: Optional[Expr]) -> Optional[Expr]:
             if x is None:

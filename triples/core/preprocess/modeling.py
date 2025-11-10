@@ -316,10 +316,12 @@ class ReformulateAlgebraic(ProofNode):
             # print(f'Equalities   : {new_eqs}')
             # print(f'Replacement  : {inverse}')
 
+            new_problem = self.new_problem(new_expr, new_ineqs, new_eqs)
+            if self.problem.roots is not None:
+                new_problem.roots = self.problem.roots.transform(inverse, new_problem.free_symbols)
+
             self.children = [
-                CancelDenominator(
-                    self.new_problem(new_expr, new_ineqs, new_eqs)
-                )
+                CancelDenominator(new_problem)
             ]
             self.inverse = inverse
             self.status = -1

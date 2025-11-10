@@ -1,14 +1,16 @@
-from typing import Optional, Union, List, Tuple
+from typing import Optional, Union, List, Dict, Tuple
 
 import numpy as np
 import sympy as sp
-from sympy import Poly, Expr, Symbol, Rational, Integer
+from sympy import Poly, Expr, Symbol, Rational, Integer, QQ, fraction, sympify
 from sympy.combinatorics import PermutationGroup, Permutation, CyclicGroup
 from sympy.polys.constructor import construct_domain
 from sympy.polys.domains import Domain
 from sympy.polys.domains.gaussiandomains import GaussianElement
 from sympy.polys.matrices.sdm import SDM
 from sympy.polys.matrices.domainmatrix import DomainMatrix
+from sympy.matrices import MutableDenseMatrix as Matrix
+from sympy.polys.polyerrors import BasePolynomialError
 # from sympy.polys.numberfields.subfield import primitive_element
 from sympy.polys.polyclasses import DMP, ANP
 from sympy.polys.rootoftools import ComplexRootOf as CRootOf
@@ -24,7 +26,7 @@ except:
     pass
 
 
-def _reg_matrix(M: sp.Matrix) -> sp.Matrix:
+def _reg_matrix(M: Matrix) -> Matrix:
     """Normalize so that the largest entry in each column is 1"""
     rep = M._rep.rep.to_sdm()
     domain = rep.domain
@@ -48,14 +50,14 @@ def _reg_matrix(M: sp.Matrix) -> sp.Matrix:
     colmax = {col: one / val for col, val in colmax.items()}
     newsdm = {r: {col: val * colmax[col] for col, val in row.items()} for r, row in rep.items()}
     newsdm = SDM(newsdm, rep.shape, domain)
-    return sp.Matrix._fromrep(DomainMatrix.from_rep(newsdm))
+    return Matrix._fromrep(DomainMatrix.from_rep(newsdm))
 
-def _algebraic_extension(vec: List[ANP], domain: Domain) -> sp.Matrix:
+def _algebraic_extension(vec: List[ANP], domain: Domain) -> Matrix:
     """
     Convert a column vector of algebraic numbers to a matrix of rational numbers.
     """
     if len(vec) == 0:
-        return sp.Matrix(0, 0, [])
+        return Matrix(0, 0, [])
 
     def default(vec, domain):
         # Fails to convert to a matrix of rational numbers:
@@ -89,11 +91,11 @@ def _algebraic_extension(vec: List[ANP], domain: Domain) -> sp.Matrix:
                 if not (row in sdm):
                     sdm[row] = {}
                 sdm[row][i-1] = rep(x)[-i]
-        sdm = SDM(sdm, (len(vec), len(mod) - 1), sp.QQ)
+        sdm = SDM(sdm, (len(vec), len(mod) - 1), QQ)
     else:
         sdm = default(vec, domain)
 
-    return sp.Matrix._fromrep(DomainMatrix.from_rep(sdm))
+    return Matrix._fromrep(DomainMatrix.from_rep(sdm))
 
 def _derv(n: int, i: int) -> int:
     """Compute n! / (n-i)!."""
@@ -153,7 +155,7 @@ class Root():
     """
     domain: Domain
     def __init__(self, root: Tuple[Expr, ...], domain: Optional[Domain]=None, rep: Optional[Tuple[ANP, ...]]=None):
-        root = tuple(sp.S(r) for r in root)
+        root = tuple(sympify(r) for r in root)
         self.rep = rep
         self.domain = domain
         if domain is None:
@@ -423,7 +425,7 @@ class Root():
             return self.subs(poly.as_expr(), poly.gens)
         return self._subs_poly_rep(poly, to_sympy=True)
 
-    def subs(self, expr: Union[sp.Basic], symbols: Optional[Tuple[Symbol, ...]] = None) -> Union[sp.Basic]:
+    def subs(self, expr: Union[Expr], symbols: Optional[Tuple[Symbol, ...]] = None) -> Union[Expr]:
         """
         Substitute the root into an expression or a matrix of expressions.
         """
@@ -431,6 +433,13 @@ class Root():
             symbols = expr.free_symbols
         return expr.subs(dict(zip(symbols, self.root)))
 
+    def xreplace(self, expr: Union[Expr], symbols: Optional[Tuple[Symbol, ...]] = None) -> Union[Expr]:
+        """
+        Xreplace the root into an expression or a matrix of expressions.
+        """
+        if symbols is None:
+            symbols = expr.free_symbols
+        return expr.xreplace(dict(zip(symbols, self.root)))
 
     def _single_power_monomial(self, monomial: Tuple[int, ...]) -> ANP:
         """Compute r[0]**monomial[0] * r[1]**monomial[1] * ...
@@ -462,7 +471,7 @@ class Root():
 
     def as_vec(self, n: int, diff: Optional[Tuple[int, ...]] = None,
         numer: bool = False, **options
-    ) -> Union[sp.Matrix, np.ndarray]:
+    ) -> Union[Matrix, np.ndarray]:
         """
         Evaluate the root at monomials of degree n.
 
@@ -479,7 +488,7 @@ class Root():
 
         Returns
         ----------
-        vec : Union[sp.Matrix, np.ndarray]
+        vec : Union[Matrix, np.ndarray]
             The vector of evaluated monomials of degree n.
 
         Examples
@@ -523,13 +532,13 @@ class Root():
 
         zero = self.domain.zero
         sdm = SDM({i: {0: x} for i, x in enumerate(vec) if x != zero}, (len(vec), 1), self.domain)
-        vec = sp.Matrix._fromrep(DomainMatrix.from_rep(sdm))
+        vec = Matrix._fromrep(DomainMatrix.from_rep(sdm))
         if numer:
             vec = np.array(vec).astype(np.float64).flatten()
         return vec
 
     def span(self, n: int, diff: Optional[Tuple[int, ...]] = None,
-             normalize: bool = False, **options) -> sp.Matrix:
+             normalize: bool = False, **options) -> Matrix:
         """
         Compute the rational span of the Root.as_vec(n, diff, **options).
         It degenerates to `as_vec` if the root is not algebraic.
@@ -548,7 +557,7 @@ class Root():
 
         Returns
         ----------
-        M : sp.Matrix
+        M : Matrix
             The matrix of the span of the monomials.
 
         Examples
@@ -735,7 +744,7 @@ class Root():
         sigmas = self.elementary_polynomials(to_sympy=False)
         signed_sigmas = [x if i % 2 == 0 else -x for i, x in enumerate(sigmas)]
         if x is None:
-            x = sp.Symbol('x')
+            x = Symbol('x')
         poly = Poly.new(DMP(signed_sigmas, domain, 0), x)
         return poly
 
@@ -794,7 +803,7 @@ class Root():
         if len(self) != 3:
             raise NotImplementedError('The method uv() is only available for ternary roots.')
         if self.is_center:
-            return (sp.Integer(2), sp.Integer(2))
+            return (Integer(2), Integer(2))
         if self.is_corner:
             return (sp.zoo, sp.zoo)
         cyclic_sum = self.cyclic_sum
@@ -866,7 +875,7 @@ class Root():
         >>> Root.from_uv(-2, 5).eval(Poly(a**2 - b**2 - 2*(a*b - a*c) + 5*(b*c - a*b), a, b, c))
         0
         """
-        u0, v0 = sp.S(u), sp.S(v)
+        u0, v0 = sympify(u), sympify(v)
 
         is_real = (u0.is_real and v0.is_real) in (sp.true, True)
 
@@ -886,12 +895,12 @@ class Root():
             sab = (u + v - 1) * invker
             abc = (u*v - 1) * invker**2
 
-            poly = Poly.new(DMP([one, -one, sab, -abc], domain, 0), sp.Symbol('x'))
+            poly = Poly.new(DMP([one, -one, sab, -abc], domain, 0), Symbol('x'))
             a, b, c = poly.all_roots(radicals=False) if poly.domain.is_Exact else poly.nroots()
 
             if not (a in domain):
                 u, v = domain.to_sympy(u), domain.to_sympy(v)
-                domain = domain.algebraic_field(a) if not domain.is_QQ_I else sp.QQ.algebraic_field(a, sp.I)
+                domain = domain.algebraic_field(a) if not domain.is_QQ_I else QQ.algebraic_field(a, sp.I)
                 u, v, one = domain.convert(u), domain.convert(v), domain.one
             invuv = one / (u - v)
             alpha = -(u**2 - u*v + v**2 + u + v + one)*invuv
@@ -986,7 +995,7 @@ class Root():
             return conductor
 
         conductor = _get_conductor(sqrtdisc)
-        cyclo = sp.QQ.algebraic_field(sp.cos(2*sp.pi/conductor))
+        cyclo = QQ.algebraic_field(sp.cos(2*sp.pi/conductor))
         ext = cyclo.convert(domain.ext)
 
         rep = [r.rep for r in self.rep]
@@ -1018,7 +1027,7 @@ class Root():
             seq = _to_trig_seq(n, r, one)
             return sum([c*sp.cos(2*sp.pi*k/n) for k, c in enumerate(seq)])
         # root = [cyclo.to_sympy(r) for r in rep]
-        root = [_to_trig(conductor, r.rep, sp.QQ.one) for r in rep]
+        root = [_to_trig(conductor, r.rep, QQ.one) for r in rep]
         return Root(root, domain=cyclo, rep=rep)
 
     # def ker(self, to_sympy = True):
@@ -1076,3 +1085,70 @@ class Root():
         for key, root in zip(repkeys, roots):
             sorted_roots[key[-1]] = root
         return Root(sorted_roots)
+
+    def transform(self, symbols: List[Symbol], subs: Union[Dict[Symbol, Expr], List[Expr]],
+            new_symbols: Optional[List[Symbol]]=None) -> 'Root':
+        """
+        Transform the root to a new root.
+
+        Parameters
+        ----------
+        symbols: List[Symbol]
+            The symbols associated with each entry of the root.
+        subs: Union[Dict[Symbol, Expr], List[Expr]]
+            Substitution of the variables.
+        new_symbols: Optional[List[Symbol]]
+            The new order of symbols. If None, it is inferred from the substitution.
+
+        Returns
+        ----------
+        root: Root
+            The new root in the new symbols.
+
+        Examples
+        ----------
+        >>> from sympy.abc import a, b, c, x, y, z
+        >>> root = Root((1, 2, 3))/4; root
+        (1/4, 1/2, 3/4)
+        >>> root.transform((a, b, c), {x:a/b, y:b+c, z:-c/a}, (x, y, z))
+        (1/2, 5/4, -3)
+
+        >>> from sympy import sqrt
+        >>> root.transform((a, b, c), [sqrt(a), sqrt(b), sqrt(c)])
+        (1/2, sqrt(2)/2, sqrt(3)/2)
+        """
+        if new_symbols is None:
+            new_symbols = list(subs.keys()) if isinstance(subs, dict) else list(range(len(subs)))
+        subs = [subs[s] if ((not isinstance(s, Symbol)) or s in subs) else s for s in new_symbols]
+        symbols = tuple(symbols)
+        fracs = []
+        polylize = lambda x: x.as_poly(symbols, extension=True) if not (isinstance(x, Poly) and x.gens == symbols) else x
+        polyone = polylize(Integer(1))
+
+        try:
+            for expr in subs:
+                expr = sympify(expr)
+                if isinstance(expr, Expr):
+                    expr = fraction(expr.doit().together())
+                    expr = (polylize(expr[0]), polylize(expr[1]))
+                elif isinstance(expr, Poly):
+                    expr = (polylize(expr), polyone)
+                else:
+                    raise TypeError(f"Unknown type {type(expr)}")
+                if expr[0] is None or expr[1] is None:
+                    raise BasePolynomialError
+                fracs.append(expr)
+        except BasePolynomialError:
+            dt = dict(zip(symbols, self.root))
+            return Root([_.xreplace(dt) for _ in subs])
+
+        domain = self.domain.get_field()
+        for frac in fracs:
+            domain = domain.unify(frac[0].domain)
+            domain = domain.unify(frac[1].domain)
+        self = self.set_domain(domain)
+
+        reps = [self._subs_poly_rep(frac[0], to_sympy=False)/\
+                self._subs_poly_rep(frac[1], to_sympy=False) for frac in fracs]
+        root = [self.domain.to_sympy(rep) for rep in reps]
+        return Root(root, domain=domain, rep=reps)

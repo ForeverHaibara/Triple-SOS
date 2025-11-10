@@ -17,6 +17,7 @@ from sympy.combinatorics import PermutationGroup
 
 from .polysolve import univar_realroots, solve_poly_system_crt, PolyEvalf, _filter_trivial_system
 from .roots import Root
+from .root_list import RootList
 from ..expression import identify_symmetry_from_lists
 
 # Comparison of tuples of sympy Expressions, compatible with sympy <= 1.9
@@ -750,7 +751,7 @@ def optimize_poly(poly: Union[Poly, Expr], ineq_constraints: List[Union[Poly, Ex
         points = sorted(points, key=default_sort_key)
 
     if return_type == 'root':
-        points = [Root(_) for _ in points]
+        points = RootList(symbols, [Root(_) for _ in points])
     elif return_type == 'dict':
         points = [dict(zip(symbols, _)) for _ in points]
     return points

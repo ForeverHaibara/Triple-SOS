@@ -19,6 +19,7 @@ class OptimizeResult: # this is only for type hint
 
 from .extrema import _infer_symbols, polylize_input
 from .roots import Root
+from .root_list import RootList
 
 DEFAULT_SHGO_KWARGS = { # default values
     'n': 256,
@@ -495,7 +496,7 @@ def numeric_optimize_poly(poly: Union[Poly, Expr], ineq_constraints: List[Union[
     points = [tuple(_) for _ in points]
 
     if return_type == 'root':
-        points = [Root(_) for _ in points]
+        points = RootList(symbols, [Root(_) for _ in points])
     elif return_type == 'dict':
         points = [dict(zip(symbols, _)) for _ in points]
     return points
