@@ -3,11 +3,12 @@ from typing import Dict, Any
 from sympy import Poly, Expr, Integer, Dummy, Symbol
 
 from ..node import ProofNode
+from ..problem import InequalityProblem
 from ...utils import PSatz
 
 def _solver(expr, ineq_constraints, eq_constraints) -> ProofNode:
     from .polynomial import SolvePolynomial
-    problem = ProofNode.new_problem(expr, ineq_constraints, eq_constraints)
+    problem = InequalityProblem.new(expr, ineq_constraints, eq_constraints)
     return SolvePolynomial(problem)
 
 
@@ -17,6 +18,7 @@ def _dict_inject(x: Dict[Any, Any], y: Dict[Any, Any]) -> Dict[Any, Any]:
     return x
 
 class Pivoting(ProofNode):
+    problem: InequalityProblem
     _constraints_wrapper = None
     def __init__(self, *args ,**kwargs):
         super().__init__(*args, **kwargs)

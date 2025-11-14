@@ -1,50 +1,36 @@
-from typing import Dict, List, Tuple, Set, Optional, Union, Callable, Any
-from sympy import Expr, Symbol, Poly, Integer, Rational, Function, Mul, sympify, fraction
-from sympy import __version__ as SYMPY_VERSION
+from functools import wraps
+from typing import (
+    Dict, List, Tuple, Set, Optional, Union, Iterable, Callable,
+    Any, TypeVar, Generic
+)
+from sympy import (
+    Basic, Expr, Symbol, Dummy, Poly, Integer, Rational, Function, Mul, Pow,
+    signsimp, fraction
+)
 from sympy.combinatorics.perm_groups import Permutation, PermutationGroup
 from sympy.core.symbol import uniquely_named_symbol
+from sympy.core.sympify import sympify, CantSympify
 from sympy.core.function import AppliedUndef
-from sympy.external.importtools import version_tuple
-from sympy.polys.rings import PolyElement
+from sympy.polys.polyerrors import BasePolynomialError
 
-from ..utils import optimize_poly, Root, RootList, identify_symmetry_from_lists, Solution
-
-# fix the bug in sqf_list before 1.13.0
-# https://github.com/sympy/sympy/pull/26182
-if tuple(version_tuple(SYMPY_VERSION)) >= (1, 13):
-    _sqf_list = lambda p: p.sqf_list()
-else:
-    _sqf_list = lambda p: p.factor_list() # it would be slower, but correct
-
-
-def _std_ineq_constraints(p: Poly, e: Expr) -> Tuple[Poly, Expr]:
-    if p.is_zero: return p, e
-    c, lst = _sqf_list(p)
-    ret = Integer(1 if c > 0 else -1).as_poly(*p.gens, domain=p.domain)
-    e = e / (c if c > 0 else -c)
-    for q, d in lst:
-        if d % 2 == 1:
-            ret *= q
-        e = e / q.as_expr()**(d - d%2)
-    return ret, e
-
-def _std_eq_constraints(p: Poly, e: Expr) -> Tuple[Poly, Expr]:
-    if p.is_zero: return p, e
-    c, lst = _sqf_list(p)
-    ret = Integer(1 if c > 0 else -1).as_poly(*p.gens, domain=p.domain)
-    e = e / c
-    max_d = Integer(max(1, *(d for q, d in lst)))
-    for q, d in lst:
-        ret *= q
-        e = e * q.as_expr()**(max_d - d)
-    if max_d != 1:
-        e = Pow(e, 1/max_d, evaluate=False)
-    if c < 0:
-        e = e.__neg__()
-    return ret, e
+from .complexity import ProblemComplexity
+from .dispatch import (
+    _dtype_free_symbols, _dtype_gens, _dtype_is_zero, _dtype_convert,
+    _dtype_is_homogeneous, _dtype_homogenize, _dtype_sqf_list
+)
+from ..utils import optimize_poly, Root, RootList, Solution
+from ..utils.monomials import (
+    verify_closure, _identify_symmetry_from_blackbox, identify_symmetry_from_lists
+)
 
 
-class InequalityProblem:
+class NonPolynomialError(BasePolynomialError):
+    pass
+
+T = TypeVar('T')
+
+
+class InequalityProblem(Generic[T]):
     """
     Represents an inequality problem:
 
@@ -52,30 +38,49 @@ class InequalityProblem:
             given {g >= 0 for g in ineq_constraints.keys()}
             and   {h == 0 for h in eq_constraints.keys()}.
     """
+    expr: T
+    ineq_constraints: Dict[T, Expr]
+    eq_constraints: Dict[T, Expr]
+
     _is_commutative = True
-    _is_polynomial = None
+    _is_polynomial = False
 
-    counter_examples: RootList = None
-    solution = None
+    counter_examples: Optional[RootList] = None
+    solution: Optional[Expr] = None
 
-    roots: RootList = None
+    roots: Optional[RootList] = None
 
-    def __init__(self,
-        expr: Expr,
-        ineq_constraints: Dict[Expr, Expr] = {},
-        eq_constraints: Dict[Expr, Expr] = {}
+    def __new__(cls,
+        expr: T,
+        ineq_constraints: Union[Dict[T, Expr], Iterable[T]] = {},
+        eq_constraints: Union[Dict[T, Expr], Iterable[T]] = {}
     ):
-        expr = sympify(expr)
+        def _try_sympify(expr):
+            if isinstance(expr, CantSympify):
+                return expr
+            return sympify(expr)
+        expr = _try_sympify(expr)
         if not isinstance(ineq_constraints, dict):
             ineq_constraints = {e: e for e in ineq_constraints}
         if not isinstance(eq_constraints, dict):
             eq_constraints = {e: e for e in eq_constraints}
-        ineq_constraints = dict((sympify(e), sympify(e2).as_expr()) for e, e2 in ineq_constraints.items())
-        eq_constraints = dict((sympify(e), sympify(e2).as_expr()) for e, e2 in eq_constraints.items())
+        ineq_constraints = dict((_try_sympify(e), _try_sympify(e2).as_expr()) for e, e2 in ineq_constraints.items())
+        eq_constraints = dict((_try_sympify(e), _try_sympify(e2).as_expr()) for e, e2 in eq_constraints.items())
 
-        self.expr = expr
-        self.ineq_constraints = ineq_constraints
-        self.eq_constraints = eq_constraints
+        return cls.new(expr, ineq_constraints, eq_constraints)
+
+    @classmethod
+    def new(cls,
+        expr: T,
+        ineq_constraints: Dict[T, Expr] = {},
+        eq_constraints: Dict[T, Expr] = {}
+    ) -> 'InequalityProblem':
+        """Initialization of objects without sanity checks."""
+        obj = object.__new__(cls)
+        obj.expr = expr
+        obj.ineq_constraints = ineq_constraints
+        obj.eq_constraints = eq_constraints
+        return obj
 
     def __str__(self) -> str:
         ss = [f"Prove {self.expr} >= 0"]
@@ -100,26 +105,91 @@ class InequalityProblem:
         poly_info = f' and degree {self.expr.total_degree()}' if isinstance(self.expr, Poly) else ''
         return f'<InequalityProblem of {nvars} variables{poly_info}, with {ineqs} inequality and {eqs} equality constraints>'
 
-    def copy(self) -> 'InequalityProblem':
-        problem = InequalityProblem(
-            self.expr,
-            self.ineq_constraints.copy(),
-            self.eq_constraints.copy()
-        )
-        problem.solution = self.solution
-        problem.roots = self.roots
+    def copy_new(self,
+        expr: T,
+        ineq_constraints: Dict[T, Expr] = {},
+        eq_constraints: Dict[T, Expr] = {}
+    ) -> 'InequalityProblem':
+        """
+        Return a new InequalityProblem
+        with the given `expr`, `ineq_constraints` and `eq_constraints`
+        while other attributes are copied from self.
+        """
+        problem = self.new(0, {}, {})
+        problem.__dict__.update({k: v for k, v in self.__dict__.items() if k != "__weakref__"})
+        problem.expr = expr
+        problem.ineq_constraints = ineq_constraints
+        problem.eq_constraints = eq_constraints
+        problem.roots = self.roots.copy() if self.roots is not None else None
         return problem
 
-    def reduce(self, f, reduction = all) -> Any:
+    def copy(self) -> 'InequalityProblem':
+        return self.copy_new(self.expr,
+            self.ineq_constraints.copy(), self.eq_constraints.copy())
+
+    def reduce(self, f: Callable[[T], Any], reduction: Callable[[Iterable[Any]], Any] = all) -> Any:
         """Apply a function over self.expr, self.ineq_constraints.keys()
         and self.eq_constraints.keys(), and reduce them by a given rule.
         """
         return reduction(map(f, [
             self.expr, *self.ineq_constraints.keys(), *self.eq_constraints.keys()]))
 
+    def _dtype_is_zero(self, x: T) -> Optional[bool]:
+        return _dtype_is_zero(x)
+
+    def _dtype_convert(self, x: T, y: Any) -> T:
+        return _dtype_convert(x, y)
+
+    def _dtype_free_symbols(self, x: T) -> Set[Symbol]:
+        return _dtype_free_symbols(x)
+
+    def _dtype_gens(self, x: T) -> Tuple[Symbol, ...]:
+        return _dtype_gens(x)
+
+    def _dtype_is_homogeneous(self, x: T) -> Optional[bool]:
+        return _dtype_is_homogeneous(x)
+
+    def _dtype_homogenize(self, x: T, s: Symbol) -> T:
+        return _dtype_homogenize(x, s)
+
+    def _dtype_sqf_list(self, x: T) -> Tuple[Expr, List[Tuple[T, int]]]:
+        return _dtype_sqf_list(x)
+
+    def _dtype_std_ineq_constraints(self, p: T, e: Expr) -> Tuple[T, Expr]:
+        if self._dtype_is_zero(p): return p, e
+        c, lst = self._dtype_sqf_list(p)
+        ret = self._dtype_convert(p, 1)
+        sgn = 1 if c > 0 else -1
+        e = e / (c if sgn > 0 else -c)
+        for q, d in lst:
+            if d % 2 == 1:
+                ret = ret * q
+            e = e / q.as_expr()**(d - d%2)
+        if sgn == -1:
+            ret = ret.__neg__()
+        return ret, e
+
+    def _dtype_std_eq_constraints(self, p: T, e: Expr) -> Tuple[T, Expr]:
+        if self._dtype_is_zero(p): return p, e
+        c, lst = self._dtype_sqf_list(p)
+        ret = self._dtype_convert(p, 1)
+        sgn = 1 if c > 0 else -1
+        e = e / c
+        max_d = Integer(max(1, *(d for q, d in lst)))
+        for q, d in lst:
+            ret = ret * q
+            e = e * q.as_expr()**(max_d - d)
+        if max_d != 1:
+            e = Pow(e, 1/max_d, evaluate=False)
+        if sgn == -1:
+            e = e.__neg__()
+            ret = ret.__neg__()
+        return ret, e
+
     @property
     def free_symbols(self) -> Set[Symbol]:
-        return self.reduce(lambda e: set(e.free_symbols), lambda x: set.union(*x))
+        __dtype_free_symbols = self._dtype_free_symbols
+        return self.reduce(lambda e: __dtype_free_symbols(e), lambda x: set.union(*x))
 
     @property
     def gens(self) -> Tuple[Symbol, ...]:
@@ -140,13 +210,13 @@ class InequalityProblem:
         >>> InequalityProblem(Poly(y**2*b + 2*c, (c, b)), [b, x], [a-c, a-1]).gens
         (c, b, a, x, y)
         """
-        poly_gens = self.expr.gens if isinstance(self.expr, (Poly, PolyElement)) else ()
+        poly_gens = self._dtype_gens(self.expr)
         other_syms = self.free_symbols - set(poly_gens)
         other_syms = sorted(list(other_syms), key=lambda x: x.name)
         return poly_gens + tuple(other_syms)
 
     def extract_constraints(self, symbols: Union[Symbol, List[Symbol]]) \
-            -> Tuple[Dict[Expr, Expr], Dict[Expr, Expr], Dict[Expr, Expr], Dict[Expr, Expr]]:
+            -> Tuple[Dict[T, Expr], Dict[T, Expr], Dict[T, Expr], Dict[T, Expr]]:
         """
         Split constraints into those that contain given symbols and those that do not.
         Returns (contained_ineqs, contained_eqs, uncontained_ineqs, uncontained_eqs).
@@ -158,7 +228,7 @@ class InequalityProblem:
 
         Returns
         ----------
-        Tuple[Dict[Expr, Expr], Dict[Expr, Expr], Dict[Expr, Expr], Dict[Expr, Expr]]
+        Tuple[Dict[T, Expr], Dict[T, Expr], Dict[T, Expr], Dict[T, Expr]]
             (contained_ineqs, contained_eqs, uncontained_ineqs, uncontained_eqs)
 
         Examples
@@ -176,18 +246,27 @@ class InequalityProblem:
          {a: a},
          {a - 1: a - 1})
         """
+        # TODO: supports symbol-like expressions, e.g. Function, MatrixSymbol
         if isinstance(symbols, Symbol):
             symbols = {symbols}
         symbols = set(symbols)
 
         ineqs = [{}, {}]
         eqs = [{}, {}]
+        has_any = lambda f: bool(f.free_symbols & symbols)
         for src, dst in [(self.ineq_constraints, ineqs), (self.eq_constraints, eqs)]:
             for p, e in src.items():
-                dst[int(bool(p.free_symbols & symbols))][p] = e
+                dst[int(has_any(p))][p] = e
 
         return ineqs[1], eqs[1], ineqs[0], eqs[0]
 
+    @property
+    def is_polynomial(self) -> bool:
+        return bool(self._is_polynomial)
+
+    @property
+    def is_of_type(self, dtype) -> bool:
+        return self.reduce(lambda e: isinstance(e, dtype), all)
 
     def get_symbol_signs(self) -> Dict[Symbol, Tuple[Optional[int], Expr]]:
         from .preprocess import get_symbol_signs
@@ -195,73 +274,105 @@ class InequalityProblem:
 
     def get_features(self) -> Dict[str, Any]:
         from .preprocess.features import get_features
-        return get_features(self)
+        features = {}
+        try:
+            features = get_features(self.polylize())
+        except BasePolynomialError:
+            raise NonPolynomialError("Cannot extract features from non-polynomial problem.")
+        return features
 
-    def evaluate_complexity(self):
+    def evaluate_complexity(self) -> ProblemComplexity:
         # The estimation here is only a placeholder. In ProofNodes it will overloaded by model predictions.
         nvars = len(self.free_symbols)
         return ProblemComplexity(
             time=nvars**4/81 * (len(self.ineq_constraints)+1)*(len(self.eq_constraints)+1),
             prob=min(.95, 3.1**2/((nvars+.1)**2)),
-            length=nvars**4)
+            length=nvars**4
+        )
 
-    def sum_of_squares(self, configs: dict = {}, time_limit: float = 3600, mode: str = 'fast') -> Solution:
+    def sum_of_squares(self, configs: dict = {}, time_limit: float = 3600, mode: str = 'fast') -> Optional[Solution]:
         from .node import _sum_of_squares
         return _sum_of_squares(self, configs, time_limit, mode)
 
     @property
     def is_homogeneous(self) -> bool:
-        return self.reduce(lambda e: e.is_homogeneous, all)
+        return self.reduce(lambda e: self._dtype_is_homogeneous(e), all)
 
     def polylize(self,
-        ineq_constraint_sqf: bool = True,
-        eq_constraint_sqf: bool = True,
+        ineqs_sqf: bool = True,
+        eqs_sqf: bool = True,
     ) -> 'InequalityProblem':
         problem = self
         expr, ineq_constraints, eq_constraints = \
             problem.expr, problem.ineq_constraints.copy(), problem.eq_constraints.copy()
-        symbols = self.free_symbols
+        gens = self.gens
         
-        if len(symbols) == 0: # and len(original_symbols) == 0:
-            symbols = {Symbol('x')}
-        symbols = tuple(sorted(list(symbols), key=lambda x: x.name))
-        expr = Poly(expr.doit(), *symbols)
-        ineq_constraints = dict((Poly(e.doit(), *symbols), e2) for e, e2 in ineq_constraints.items())
-        eq_constraints = dict((Poly(e.doit(), *symbols), e2) for e, e2 in eq_constraints.items())
+        if len(gens) == 0:
+            gens = {Symbol('x')}
+        expr = Poly(expr.doit(), *gens)
+        ineq_constraints = dict((Poly(e.doit(), *gens), e2) for e, e2 in ineq_constraints.items())
+        eq_constraints = dict((Poly(e.doit(), *gens), e2) for e, e2 in eq_constraints.items())
 
         problem = InequalityProblem(expr, ineq_constraints, eq_constraints)
         problem, _ = problem.sqr_free(problem_sqf=False,
-            ineq_constraint_sqf=ineq_constraint_sqf, eq_constraint_sqf=eq_constraint_sqf, inplace=True)
+            ineqs_sqf=ineqs_sqf, eqs_sqf=eqs_sqf, inplace=True)
+        if self.roots is not None:
+            # TODO: sqf ineqs might lead exclude some roots here
+            problem.roots = self.roots.reorder(problem.gens)
         return problem
 
-    def homogenize(self) -> Tuple['InequalityProblem', Optional[Symbol]]:
-        if not self.is_homogeneous:
-            hom = uniquely_named_symbol('1', tuple(self.free_symbols))
-            expr = self.expr.homogenize(hom)
-            ineqs = {e.homogenize(hom): v for e, v in self.ineq_constraints.items()}
-            ineqs[Poly(hom, expr.gens)] = hom # homogenizer = 1 >= 0
-            eqs = {e.homogenize(hom): v for e, v in self.eq_constraints.items()}
-
-            new_problem = InequalityProblem(expr, ineqs, eqs)
-            if self.roots is not None:
-                new_problem.roots = [Root(r.root + (Integer(1),), r.domain, r.rep + (r.domain.one,)) for r in self.roots]
-            return new_problem, hom
-        return self, None
-
     def sqr_free(self,
-            problem_sqf: bool = False,
-            ineq_constraint_sqf: bool = True,
-            eq_constraint_sqf: bool = True,
-            inplace: bool = False
-        ) -> Tuple['InequalityProblem', Expr]:
+        problem_sqf: bool = False,
+        ineqs_sqf: bool = True,
+        eqs_sqf: bool = True,
+        inplace: bool = False
+    ) -> Tuple['InequalityProblem', Expr]:
+        """
+        Try to make the problem square-free.
+
+        Parameters
+        ----------
+        problem_sqf: bool, optional
+            Whether to make the problem expression square-free. Default is False.
+        ineqs_sqf: bool, optional
+            Whether to make the inequalities square-free. Default is True.
+        eqs_sqf: bool, optional
+            Whether to make the equalities square-free. Default is True.
+        inplace: bool, optional
+            Whether to modify the problem in-place. Default is False.
+
+        Returns
+        ----------
+        problem: InequalityProblem
+            The square-free problem.
+        sqr: Expr
+            The expression such that `new_problem.expr * sqr**2 == problem.expr`.
+
+        Examples
+        ----------
+        >>> from sympy.abc import a, b, c, d, x, y, z
+        >>> pro = InequalityProblem(a*(b+2) + c + b*d, {a/(b + 2)**3: x, c*b**2: y}, {d**3: z})
+        >>> pro.sqr_free()[0].ineq_constraints
+        {a*(b + 2): x*(b + 2)**4, c: y/b**2}
+        >>> pro.sqr_free()[0].eq_constraints
+        {d: z**(1/3)}
+
+        The second argument is the square-free expression from `self.expr`.
+
+        >>> pro = InequalityProblem((x - 2)**2*(x**2 - x + 1))
+        >>> pro.sqr_free(problem_sqf = True) # doctest: +NORMALIZE_WHITESPACE
+        (<InequalityProblem of 1 variables, with 0 inequality and 0 equality constraints>, x - 2)
+        >>> pro.sqr_free(problem_sqf = True)[0].expr
+        x**2 - x + 1
+        """
         if not inplace:
             self = self.copy()
 
         sqr = Integer(1)
-        if problem_sqf:
-            c, lst = _sqf_list(self.expr)
+        if problem_sqf and not self._dtype_is_zero(self.expr):
+            c, lst = self._dtype_sqf_list(self.expr)
             sqr = []
-            sqf = c.as_poly(*self.expr.gens)
+            sqf = self._dtype_convert(self.expr, c)
             for p, d in lst:
                 sqr.append(p.as_expr()**(d//2))
                 if d % 2 == 1:
@@ -269,19 +380,103 @@ class InequalityProblem:
             sqr = Mul(*sqr)
             self.expr = sqf
 
-        if ineq_constraint_sqf:
-            ineq_constraints = dict(_std_ineq_constraints(*item) for item in self.ineq_constraints.items())
-        self.ineq_constraints = dict((e, e2) for e, e2 in ineq_constraints.items() if e.total_degree() > 0)
+        if ineqs_sqf:
+            ineq_constraints = dict(self._dtype_std_ineq_constraints(*item)
+                for item in self.ineq_constraints.items())
+        self.ineq_constraints = dict((e, e2) for e, e2 in ineq_constraints.items())
 
-        if eq_constraint_sqf:
-            eq_constraints = dict(_std_eq_constraints(*item) for item in self.eq_constraints.items())
-        self.eq_constraints = dict((e, e2) for e, e2 in eq_constraints.items() if e.total_degree() > 0)
+        if eqs_sqf:
+            eq_constraints = dict(self._dtype_std_eq_constraints(*item)
+                for item in self.eq_constraints.items())
+        self.eq_constraints = dict((e, e2) for e, e2 in eq_constraints.items())
         return self, sqr
 
+    def homogenize(self, hom: Optional[Symbol]=None) -> Tuple['InequalityProblem', Optional[Symbol]]:
+        """
+        Try to homogenize the problem.
+
+        Parameters
+        ----------
+        hom: Symbol, optional
+            The homogenizer symbol. 
+            * If None, a new symbol named "1" will
+            be created if the problem is not homogeneous.
+            * If given, it tries to homogenize the problem
+            even if it is already homogeneous.
+
+        Returns
+        ----------
+        problem: InequalityProblem
+            The homogenized problem.
+        hom: Symbol, optional
+            The homogenizer symbol. None if no homogenizer is used.
+
+        Examples
+        ----------
+        >>> from sympy.abc import a, b, c
+        >>> pro = InequalityProblem(1/(a**2 + 1) + 1/(b**2 + 1) - 1, [a, b], [a + b - 2])
+        >>> pro.homogenize() # doctest: +NORMALIZE_WHITESPACE
+        (<InequalityProblem of 3 variables, with 3 inequality and 1 equality constraints>, 1)
+        >>> type(pro.homogenize()[1])
+        <class 'sympy.core.symbol.Symbol'>
+        >>> pro.homogenize()[0].expr # doctest: +SKIP
+        (1**2*(1**2 + a**2) + 1**2*(1**2 + b**2) - (1**2 + a**2)*(1**2 + b**2))/((1**2 + a**2)*(1**2 + b**2))
+
+        The homogenizer defaults to a Symbol named "1". It is also possible
+        to use a customized Symbol object:
+
+        >>> pro.homogenize(c)[0].expr # doctest: +SKIP
+        (c**2*(a**2 + c**2) + c**2*(b**2 + c**2) - (a**2 + c**2)*(b**2 + c**2))/((a**2 + c**2)*(b**2 + c**2))
+        """
+        if hom is None and self.is_homogeneous:
+            return self, None
+        if hom is None:
+            hom = uniquely_named_symbol("1", self.gens, real=True, positive=True, modify=lambda x: "_"+x)
+        _homogenize = self._dtype_homogenize
+        expr = _homogenize(self.expr, hom)
+        ineqs = {_homogenize(e, hom): v for e, v in self.ineq_constraints.items()}
+        ineqs[self._dtype_convert(expr, hom)] = hom # homogenizer = 1 >= 0
+        eqs = {_homogenize(e, hom): v for e, v in self.eq_constraints.items()}
+
+        new_problem = self.copy_new(expr, ineqs, eqs)
+        if self.roots is not None:
+            new_problem.roots = RootList.new(self.roots.symbols + (hom,), 
+                [Root(r.root + (Integer(1),), r.domain, r.rep + (r.domain.one,)) for r in self.roots])
+        return new_problem, hom
+
     def identify_symmetry(self) -> PermutationGroup:
-        return identify_symmetry_from_lists(
-            [[self.expr], list(self.ineq_constraints), list(self.eq_constraints)]
-        )
+        """
+        Try to identify the symmetry of the problem.
+
+        Returns
+        ----------
+        perm_group: PermutationGroup
+            The problem is invariant up to the permutation group.
+
+        Examples
+        ----------
+        >>> from sympy.abc import a, b, c
+        >>> pro = InequalityProblem(a**2*b+b**2*c+c**2*a-3, [a-1, b-1, c-1])
+        >>> pro.identify_symmetry()
+        PermutationGroup([
+            (0 1 2)])
+        >>> pro.gens
+        (a, b, c)
+        """
+        gens = self.gens
+        def get_rep(x):
+            if isinstance(x, Poly):
+                return x.rep
+            return x
+        ls = [[self.expr], list(self.ineq_constraints), list(self.eq_constraints)]
+        def verify_func(perm: Permutation) -> bool:
+            dt = dict(zip(gens, perm(gens)))
+            def reorder(x):
+                if isinstance(x, Poly):
+                    return x.reorder(*perm(gens))
+                return signsimp(x.xreplace(dt))
+            return all(verify_closure(l, reorder, get_rep=get_rep) for l in ls)
+        return _identify_symmetry_from_blackbox(verify_func, len(gens))
 
     def wrap_constraints(self, symmetry: Optional[PermutationGroup]=None) -> Tuple['InequalityProblem', Callable]:
         """
@@ -321,7 +516,7 @@ class InequalityProblem:
         >>> restore(sol).expand()
         x
         """
-        gens = self.expr.gens
+        gens = self.gens
         i2g, e2h, g2i, h2e = _get_constraints_wrapper(
             gens, self.ineq_constraints, self.eq_constraints, symmetry
         )
@@ -338,7 +533,7 @@ class InequalityProblem:
         if self.roots is not None:
             return self.roots
         roots = optimize_poly(self.expr, list(self.ineq_constraints), [self.expr] + list(self.eq_constraints),
-                    self.expr.gens, return_type='root')
+                    self.gens, return_type='root')
         self.roots = roots
         return self.roots
 
@@ -387,8 +582,8 @@ class InequalityProblem:
                 dst[p] = e
 
         problem = InequalityProblem(next(iter(dst_dicts[0].keys())), dst_dicts[1], dst_dicts[2])
-        if isinstance(self.roots, RootList):
-            problem.roots = self.roots.transform(inv_transform, problem.free_symbols)
+        if self.roots is not None:
+            problem.roots = self.roots.transform(inv_transform, problem.gens)
 
         def restore(x: Optional[Expr]) -> Optional[Expr]:
             if x is None:
@@ -396,66 +591,6 @@ class InequalityProblem:
             return x.xreplace(inv_transform) / next(iter(dst_dicts[0].values()))
         return problem, restore
 
-
-class ProblemComplexity:
-    """
-    time  : `E(time)` expected time to solve the problem.
-    prob  : `E(success prob)` assuming the problem is correct.
-    length: `E(length of solution | success)` expected length of the solution if the problem is solved.
-    status: Status code or timestamp when evaluated.
-
-    #### Comparison of ProblemComplexity
-    Consider solving a problem by two methods, A and B, with time t1, t2 and success probability p1, p2.
-    There are two choices: 1. try A first, and if it fails, try B; 2. try B first, and if it fails, try A.
-    The expected time cost using A->B is `t1 + t2(1 - p1)`, and the expected time cost using B->A is `t2 + t1(1 - p2)`.
-    Then:
-
-        `t1 + t2(1 - p1) < t2 + t1(1 - p2)     <=>     t1/p1 < t2/p2`
-    """
-    EPS = 1e-14
-    time: float = 0
-    prob: float = 0
-    length: float = 0
-    status: int = 0
-    def __init__(self, time, prob, length=0, status=0):
-        self.time = time
-        self.prob = prob
-        self.length = length
-        self.status = status
-
-    def __str__(self) -> str:
-        return f"{{time: {self.time:.2f}, prob: {self.prob:.2f}, length: {self.length:.2f}}}"
-
-    def __repr__(self) -> str:
-        return self.__str__()
-
-    def copy(self) -> 'ProblemComplexity':
-        return ProblemComplexity(self.time, self.prob, self.length, self.status)
-
-    def __and__(a, b) -> 'ProblemComplexity':
-        return ProblemComplexity(
-            a.time + b.time, a.prob * b.prob, a.length + b.length
-        )
-
-    def __or__(a, b) -> 'ProblemComplexity':
-        p = 1 - (1 - a.prob) * (1 - b.prob)
-        return ProblemComplexity(
-            a.time + b.time * (1 - a.prob), p,
-            (a.length * a.prob + b.length * (1 - a.prob) * b.prob)/max(p, ProblemComplexity.EPS)
-        )
-
-    def __gt__(a, b) -> bool:
-        return a.time / max(a.prob, ProblemComplexity.EPS) >  b.time / max(b.prob, ProblemComplexity.EPS)
-    def __lt__(a, b) -> bool:
-        return a.time / max(a.prob, ProblemComplexity.EPS) <  b.time / max(b.prob, ProblemComplexity.EPS)
-    def __ge__(a, b) -> bool:
-        return a.time / max(a.prob, ProblemComplexity.EPS) >= b.time / max(b.prob, ProblemComplexity.EPS)
-    def __le__(a, b) -> bool:
-        return a.time / max(a.prob, ProblemComplexity.EPS) <= b.time / max(b.prob, ProblemComplexity.EPS)
-
-    def __eq__(a, b) -> bool:
-        # todo: is it well-defined?
-        return a.time == b.time and a.prob == b.prob and a.length == b.length
 
 
 def _get_constraints_wrapper(symbols: Tuple[int, ...],

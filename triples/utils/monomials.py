@@ -3,7 +3,7 @@ This module provides functions to manipulate the group symmetry of a polynomial,
 and also utilities to compute monomial representations under the group symmetry.
 """
 from collections import defaultdict
-from typing import Union, Optional, Dict, List, Tuple, Callable, Any
+from typing import Union, Optional, Dict, List, Tuple, Iterable, Callable, Any
 from warnings import warn
 
 import numpy as np
@@ -97,7 +97,7 @@ def _poly_rep(poly: Union[Poly, DMP, PolyElement]) -> Tuple[List[Tuple], Domain,
         return poly.terms(), poly.dom, poly.lev + 1, poly.total_degree()
     if isinstance(poly, PolyElement):
         degree = max(map(sum, poly.keys()), default=0)
-        return poly.items(), poly.ring.domain, poly.ring.ngens, degree
+        return list(poly.items()), poly.ring.domain, poly.ring.ngens, degree
 
 class MonomialManager():
     """
@@ -279,7 +279,7 @@ class MonomialManager():
     #     warn("_standard_monom is deprecated. Use standard_monom instead.", DeprecationWarning, stacklevel=2)
     #     return self.standard_monom(monom)
 
-    def _assert_equal_nvars(self, t: Union[int, Tuple[int, ...]]) -> bool:
+    def _assert_equal_nvars(self, t: Union[int, Iterable]) -> bool:
         if (t if isinstance(t, int) else len(t)) != self.nvars:
             raise ValueError("Number of variables does not match. Expected %d but received %d." % (self.nvars, len(t)))
             return False
@@ -641,6 +641,28 @@ def generate_expr(nvars: int, degree: int, **options) -> Tuple[Dict[Tuple[int, .
 
 
 
+def verify_closure(l: List, f: Callable, get_rep: Optional[Callable]=None) -> bool:
+    """
+    Verify the list `l` is closed under an operator `f`.
+    """
+    if get_rep is None:
+        get_rep = lambda x: x
+    rep_set = set()
+    f_set = set()
+    for p in l:
+        rep = get_rep(p)
+        f_rep = get_rep(f(p))
+        # if rep == f_rep:
+        #     # it is invariant itself
+        #     continue
+        rep_set.add(rep)
+        f_set.add(f_rep)
+    for r in f_set:
+        if r not in rep_set:
+            return False
+    return True
+
+
 def verify_symmetry(polys: Union[List[Poly], Poly], perm_group: Union[str, Permutation, PermutationGroup]) -> bool:
     """
     Verify whether the polynomials are symmetric with respect to the permutation group.
@@ -700,70 +722,19 @@ def verify_symmetry(polys: Union[List[Poly], Poly], perm_group: Union[str, Permu
             raise ValueError("The permutation should have the same size as the number of generators.")
         perms = [perm_group]
 
+    get_rep = lambda p: p.rep
     for perm in perms:
-        rep_set = set()
-        reorder_set = set()
-        for poly in polys:
-            rep = poly.rep
-            reorder = poly.reorder(*perm(gens)).rep
-            if rep == reorder:
-                continue
-            rep_set.add(rep)
-            reorder_set.add(reorder)
-        for r in reorder_set:
-            if r not in rep_set:
-                return False
+        reorder = lambda x: x.reorder(*perm(gens))
+        if not verify_closure(polys, reorder, get_rep):
+            return False
     return True
 
-def identify_symmetry_from_lists(lst_of_lsts: List[List[Poly]]) -> PermutationGroup:
+
+def _identify_symmetry_from_blackbox(f: Callable[[Permutation], bool], nvars: int) -> PermutationGroup:
     """
-    Infer a symmetric group so that each list of (list of polynomials) is symmetric with respect to the rule.
-    It only identifies very common groups like complete symmetric and cyclic groups.
-
-    TODO: Implement a complete algorithm to identify all symmetric groups.
-
-    Parameters
-    ----------
-    lst_of_lsts : List[List[Poly]]
-        A list of lists of polynomials.
-
-    Returns
-    ----------
-    PermutationGroup
-        The inferred permutation group.
-
-    Examples
-    ----------
-    >>> from sympy.abc import a, b, c
-    >>> identify_symmetry_from_lists([[(a+b+c-3).as_poly(a,b,c)], [a.as_poly(a,b,c), b.as_poly(a,b,c), c.as_poly(a,b,c)]]).is_symmetric
-    True
-
-    >>> identify_symmetry_from_lists([[(a+b+c-3).as_poly(a,b,c)], [(2*a+b).as_poly(a,b,c), (2*b+c).as_poly(a,b,c), (2*c+a).as_poly(a,b,c)]])
-    PermutationGroup([
-        (0 1 2)])
-
-    See Also
-    ----------
-    identify_symmetry
-
-    Reference
-    ----------
-    [1] https://cs.stackexchange.com/questions/64335/how-to-find-the-symmetry-group-of-a-polynomial
+    Identify symmetry by calling a black-box function `f` on each permutation.
     """
-    gens = None
-    for l in lst_of_lsts:
-        for p in l:
-            gens = p.gens
-            break
-        if gens is not None:
-            break
-    for l in lst_of_lsts:
-        for p in l:
-            if p.gens != gens:
-                raise ValueError("All polynomials should have the same generators.")
-
     # List a few candidates: symmetric, alternating, cyclic groups...
-    nvars = len(gens)
     def _rotated(n, start=0):
         return list(range(start+1, n+start)) + [start]
     def _reflected(n, start=0):
@@ -777,7 +748,7 @@ def identify_symmetry_from_lists(lst_of_lsts: List[List[Poly]]) -> PermutationGr
             candidates.append(_reflected(nvars))
 
     for perm in map(Permutation, candidates):
-        if all(verify_symmetry(l, perm) for l in lst_of_lsts):
+        if f(perm):
             verified.append(perm)
     if len(verified) == 2:
         # reflection + cyclic -> complete symmetric group
@@ -808,13 +779,68 @@ def identify_symmetry_from_lists(lst_of_lsts: List[List[Poly]]) -> PermutationGr
             candidates.append([0] + _reflected(nvars - 1, 1))
 
     for perm in map(Permutation, candidates):
-        if all(verify_symmetry(l, perm) for l in lst_of_lsts):
+        if f(perm):
             verified.append(perm)
 
     if len(verified) == 0:
         verified.append(Permutation(list(range(nvars))))
 
     return PermutationGroup(*verified)
+
+
+def identify_symmetry_from_lists(lst_of_lsts: List[List[Poly]]) -> PermutationGroup:
+    """
+    Infer a symmetric group so that each list of (list of polynomials) is symmetric with respect to the rule.
+    It only identifies very common groups like complete symmetric and cyclic groups.
+
+    TODO: Implement a complete algorithm to identify all symmetric groups.
+
+    Parameters
+    ----------
+    lst_of_lsts : List[List[Poly]]
+        A list of lists of polynomials.
+
+    Returns
+    ----------
+    PermutationGroup
+        The inferred permutation group.
+
+    Examples
+    ----------
+    >>> from sympy.abc import a, b, c
+    >>> identify_symmetry_from_lists([[(a+b+c-3).as_poly(a,b,c)],
+    ... [a.as_poly(a,b,c), b.as_poly(a,b,c), c.as_poly(a,b,c)]]).is_symmetric
+    True
+
+    >>> identify_symmetry_from_lists([[(a+b+c-3).as_poly(a,b,c)],
+    ... [(2*a+b).as_poly(a,b,c), (2*b+c).as_poly(a,b,c), (2*c+a).as_poly(a,b,c)]])
+    PermutationGroup([
+        (0 1 2)])
+
+    See Also
+    ----------
+    identify_symmetry
+
+    Reference
+    ----------
+    [1] https://cs.stackexchange.com/questions/64335/how-to-find-the-symmetry-group-of-a-polynomial
+    """
+    gens = ()
+    for l in lst_of_lsts:
+        for p in l:
+            gens = p.gens
+            break
+        if gens:
+            break
+    for l in lst_of_lsts:
+        for p in l:
+            if p.gens != gens:
+                raise ValueError("All polynomials should have the same generators.")
+
+    nvars = len(gens)
+    def verify(perm):
+        return all(verify_symmetry(l, perm) for l in lst_of_lsts)
+    return _identify_symmetry_from_blackbox(verify, nvars)
 
 
 def identify_symmetry(poly: Poly) -> PermutationGroup:

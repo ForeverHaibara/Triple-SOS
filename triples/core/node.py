@@ -1,12 +1,13 @@
 from datetime import datetime
 from time import perf_counter
-from typing import Dict, List, Optional
+from typing import Dict, List, Union, Optional
 import os
 
 from sympy import Expr, Poly, Rational, Integer, fraction
 import numpy as np
 
-from .problem import InequalityProblem, ProblemComplexity
+from .problem import InequalityProblem
+from .complexity import ProblemComplexity
 from ..utils import Solution
 from ..utils.tree_predictor import TreePredictor
 from ..sdp import ArithmeticTimeout
@@ -35,9 +36,9 @@ class ProofNode:
     finished = False
     default_configs = {}
     
-    children: List['ProofNode'] = None
-    _complexity: ProblemComplexity = None
-    _complexity_models: Dict = None
+    children: List['ProofNode']
+    _complexity: Optional[ProblemComplexity] = None
+    _complexity_models: Optional[Union[Dict, bool]] = None
     def __init__(self,
         problem: InequalityProblem
     ):
@@ -167,14 +168,15 @@ class SolveProblem(ProofNode):
 
 
 class ProofTree:
-    configs = None
-    parents = None
-    mode = 'fast'
+    configs: dict
+    parents: dict
+    mode: str = 'fast'
     time_limit: float = 3600
     expected_end_time: float = 0
 
     def __init__(self, root: ProofNode):
         self.root = root
+        self.configs = {}
         self.parents = {}
 
     def get_configs(self, node: ProofNode):

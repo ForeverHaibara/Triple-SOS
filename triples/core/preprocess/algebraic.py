@@ -41,8 +41,10 @@ class CancelDenominator(ProofNode):
                 elif isinstance(eq, Poly):
                     new_eqs[eq] = expr
 
-            self._numer = self.new_problem(numer, new_ineqs, new_eqs)
-            self._denom = self.new_problem(denom, new_ineqs, new_eqs)
+            self._numer = problem.new(numer, new_ineqs, new_eqs)
+            self._numer.roots = problem.roots
+
+            self._denom = problem.new(denom, new_ineqs, new_eqs)
 
             self.children = [
                 SolveMul(self._denom)

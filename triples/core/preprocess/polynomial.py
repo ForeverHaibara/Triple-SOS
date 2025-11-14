@@ -235,7 +235,7 @@ def _bidegree_attempt(problem: InequalityProblem, eq: Poly) -> Optional[Tuple[In
     def _align_degree_restore(x):
         """Recover z such that `(p1_expr**mul_deg * z + expr_shift) == x`"""
         return (x - expr_shift) / p1_expr**mul_deg
-    new_problem = InequalityProblem(new_poly, new_dicts[1], new_dicts[2])
+    new_problem = problem.new(new_poly, new_dicts[1], new_dicts[2])
     new_problem.roots = problem.roots
     return new_problem, _align_degree_restore
 

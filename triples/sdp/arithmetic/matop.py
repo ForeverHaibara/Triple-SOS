@@ -55,7 +55,7 @@ except ImportError:
 
 class ArithmeticTimeout(Exception):
     @classmethod
-    def make_checker(cls, time_limit: Optional[Union[Callable, float]] = None) -> Callable[[float], None]:
+    def make_checker(cls, time_limit: Optional[Union[Callable, float]] = None) -> Callable[[], None]:
         """Returns a callable that raises an Exception when called if time exceeds current_time + time_limit."""
         if time_limit is None:
             return lambda : None
@@ -153,7 +153,7 @@ def sqrtsize_of_mat(M: Union[Matrix, ndarray, int]) -> int:
     return int(np.round(np.sqrt(size_of_mat(M))))
 
 
-def reshape(A: Union[Matrix, ndarray], shape: Tuple[int, int]) -> Matrix:
+def reshape(A: Union[Matrix, ndarray], shape: Tuple[int, int]) -> Union[Matrix, ndarray]:
     """
     Reshape a matrix to a new shape. This function maintains the domain
     of SymPy RepMatrix for low SymPy versions.
@@ -217,7 +217,7 @@ def vec2mat(v: Union[Matrix, ndarray]) -> Matrix:
     n = sqrtsize_of_mat(v)
     return reshape(v, (n, n))
 
-def mat2vec(M: Union[Matrix, ndarray]) -> Matrix:
+def mat2vec(M: Union[Matrix, ndarray]) -> Union[Matrix, ndarray]:
     """
     Convert a matrix to a vector.
 
@@ -237,7 +237,7 @@ def mat2vec(M: Union[Matrix, ndarray]) -> Matrix:
         return M.flatten()
     return reshape(M, (size_of_mat(M), 1))
 
-def rep_matrix_from_dict(x: Dict[int, Dict[int, Any]], shape: Tuple[int, int], domain) -> RepMatrix:
+def rep_matrix_from_dict(x: Dict[int, Dict[int, Any]], shape: Tuple[int, int], domain) -> Matrix:
     """
     Create a SymPy RepMatrix from a dictionary of domain elements.
 
@@ -263,7 +263,7 @@ def rep_matrix_from_dict(x: Dict[int, Dict[int, Any]], shape: Tuple[int, int], d
     """
     return Matrix._fromrep(DomainMatrix.from_rep(SDM(x, shape, domain)))
 
-def rep_matrix_from_list(x: Union[List, List[List]], shape: Union[int, Tuple[int, int]], domain) -> RepMatrix:
+def rep_matrix_from_list(x: Union[List, List[List]], shape: Union[int, Tuple[int, int]], domain) -> Matrix:
     """
     Create a SymPy RepMatrix from a list of domain elements.
 
