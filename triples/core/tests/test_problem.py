@@ -23,5 +23,5 @@ def test_is_homogeneous():
         ],
     )
     for k in ineq.ineq_constraints.keys():
-        assert ineq._dtype_is_homogeneous(k), f"failed to check homogeneity of {k}"
+        assert ineq._dtype_is_homogeneous(k), f"{k} is homogeneous, but asserted not"
     assert ineq.is_homogeneous

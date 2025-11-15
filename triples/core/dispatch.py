@@ -14,11 +14,12 @@ from typing import (
 )
 
 from sympy import (
-    Basic, Expr, Symbol, Dummy, Poly, Integer, Rational, Function, Mul, Pow,
+    Basic, Expr, Symbol, Dummy, Poly, Integer, Rational, Function, Add, Mul, Pow,
     sympify, signsimp, fraction
 )
 from sympy import __version__ as SYMPY_VERSION
 from sympy.external.importtools import version_tuple
+from sympy.combinatorics import Permutation
 from sympy.polys.rings import PolyElement
 from sympy.polys.fields import FracElement
 from sympy.polys.domains.domain import DomainElement
@@ -64,6 +65,11 @@ def _dtype_is_homogeneous(x: T) -> Optional[bool]:
 def _dtype_sqf_list(x: T) -> Tuple[Expr, List[Tuple[T, int]]]:
     return x.sqf_list()
 
+@singledispatch
+def _dtype_make_reorder_func(x: T, gens: Tuple[Symbol, ...]) -> Callable[[Permutation], T]:
+    """Return a callable `f` such that `f(perm) == x.xreplace(dict(zip(gens, perm(gens))))`."""
+    return lambda perm: x.xreplace(dict(zip(gens, perm(gens))))
+
 
 ###############################################################
 #                      Implementation
@@ -79,15 +85,36 @@ def _expr_gens(x: Expr) -> Tuple[Symbol, ...]:
 
 @_dtype_homogenize.register(Expr)
 def _expr_homogenize(x: Expr, s: Symbol) -> Expr:
-    # TODO: avoid together() changing the expression structure
-    z = x.xreplace({k: k/s for k in x.free_symbols}).together(deep = True)
-    if not (z.is_Mul or z.is_Pow):
-        return z
-    # extract s^k, e.g., s**2*(a + b + c) -> a + b + c
-    zargs = Mul.make_args(z)
-    zargs = [a for a in zargs if not
-        ((a == s or (a.is_Pow and a.base == s and a.exp.is_constant())))]
-    return Mul(*zargs)
+    z = x.xreplace({k: k/s for k in x.free_symbols})
+
+    def extract_mul(x: Expr) -> Tuple[int, Expr]:
+        """Return (d, z) such that x = s**d * z"""
+        if x.is_Mul or x.is_Pow:
+            xargs = Mul.make_args(x)
+            power = 0
+            other_args = []
+            for a in xargs:
+                if a == s:
+                    power += 1
+                elif a.is_Pow and a.base == s:
+                    power += a.exp
+                else:
+                    other_args.append(a)
+            return (power, Mul(*other_args))
+        return (0, x)
+        
+    def extract(x: Add) -> Add:
+        """Collect all terms of an Add expression by the power of s."""
+        args = Add.make_args(x)
+        ex = [extract_mul(a) for a in args]
+        dmin = min([_[0] for _ in ex], default=0)
+        return s**dmin * Add(*[s**(d - dmin)*v for d, v in ex])
+
+    z = z.replace(lambda x: x.is_Add, extract)
+
+    # e.g., s**2*a + s**2*b + s**2*c -> s**2*(a + b + c) -> a + b + c since s == 1
+    d, z = extract_mul(z)
+    return z
 
 @_dtype_is_homogeneous.register(Expr)
 def _expr_is_homogeneous(x: Expr) -> Optional[bool]:
@@ -105,6 +132,10 @@ def _expr_sqf_list(x: Expr) -> Tuple[Expr, List[Tuple[Expr, int]]]:
         return (Integer(1), [(x.base**(Integer(1)/x.exp.q), int(x.exp.p))])
     return (Integer(1), [(x, 1)])
 
+@_dtype_make_reorder_func.register(Expr)
+def _expr_make_reorder_func(x: Expr, gens: Tuple[Symbol, ...]) -> Callable[[Permutation], T]:
+    return lambda perm: signsimp(x.xreplace(dict(zip(gens, perm(gens)))))
+
 
 
 @_dtype_convert.register(Poly)
@@ -119,6 +150,12 @@ def _poly_convert(x: Poly, y: Any) -> Poly:
 @_dtype_sqf_list.register(Poly)
 def _poly_sqf_list(x: Poly) -> Tuple[Expr, List[Tuple[Poly, int]]]:
     return _sqf_list(x)
+
+@_dtype_make_reorder_func.register(Poly)
+def _poly_make_reorder_func(x: Poly, gens: Tuple[Symbol, ...]) -> Callable[[Permutation], T]:
+    if x.gens == gens:
+        return lambda perm: Poly.new(x.reorder(*perm.__invert__()(gens)).rep, *gens)
+    return lambda perm: Poly(x.as_expr().xreplace(dict(zip(gens, perm(gens)))), *gens)
 
 
 
@@ -153,8 +190,9 @@ def _polyelement_free_symbols(x: PolyElement) -> Set[Symbol]:
 @_dtype_homogenize.register(PolyElement)
 def _polyelement_homogenize(x: PolyElement, s: Symbol) -> PolyElement:
     """Homogenize a polynomial with respect to a symbol."""
-    d = 0 if x.is_zero else sum(x.degrees())
-    terms = [(t + (d - sum(t),), v) for t, v in x.terms()]
+    xterms = list(x.items())
+    d = max([sum(t) for t, v in xterms], default=0)
+    terms = [(t + (d - sum(t),), v) for t, v in xterms]
     ring = x.ring.__class__(x.ring.symbols + (s,), x.ring.domain, x.ring.order)
     return PolyElement(ring, dict(terms))
 
@@ -184,4 +222,4 @@ def _fracelement_is_homogeneous(x: FracElement) -> bool:
 @_dtype_homogenize.register(FracElement)
 def _fracelement_homogenize(x: FracElement, s: Symbol) -> FracElement:
     numer, denom = _polyelement_homogenize(x.numer, s), _polyelement_homogenize(x.denom, s)
-    return x.__class__(x.parent(), *numer.cancel(denom))
+    return x.__class__(numer.ring.to_field(), *numer.cancel(denom))

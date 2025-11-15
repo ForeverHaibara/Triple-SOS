@@ -478,6 +478,7 @@ def LinearSOS(
         programming SOS fails.
     """
     problem = ProofNode.new_problem(poly, ineq_constraints, eq_constraints)
+    problem.set_roots(roots)
     configs = {
         SolvePolynomial: {
             'solvers': [LinearSOSSolver],
