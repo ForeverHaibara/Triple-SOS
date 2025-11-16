@@ -11,9 +11,7 @@ from .text_process import (
 
 from .pqr import pqr_sym, pqr_cyc, pqr_ker
 
-from .solution import Solution
-
-from .expression import (
+from .expressions import (
     Coeff, CyclicExpr, CyclicSum, CyclicProduct, SymmetricSum, SymmetricProduct, is_cyclic_expr,
     rewrite_symmetry,
     SOSlist, PSatz
@@ -36,7 +34,6 @@ __all__ = [
     'Coeff', 'CyclicExpr', 'CyclicSum', 'CyclicProduct', 'SymmetricSum', 'SymmetricProduct',
     'is_cyclic_expr', 'rewrite_symmetry',
     'SOSlist', 'PSatz',
-    'Solution',
     'pqr_sym', 'pqr_cyc', 'pqr_ker',
     'Root', 'RootList', 'univar_realroots', 'kkt', 'optimize_poly', 'numeric_optimize_poly', 'numeric_optimize_skew_symmetry',
     'nroots', 'univariate_intervals', 'rationalize', 'rationalize_array', 'rationalize_bound',

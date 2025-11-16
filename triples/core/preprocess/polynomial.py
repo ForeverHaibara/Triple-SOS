@@ -5,7 +5,7 @@ from sympy import Expr, Poly
 from ..problem import InequalityProblem
 from ..node import ProofNode, TransformNode
 from ...utils import (
-    Solution, MonomialManager, CyclicSum,
+    CyclicSum,
     identify_symmetry_from_lists, verify_symmetry, poly_reduce_by_symmetry
 )
 

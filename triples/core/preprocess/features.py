@@ -31,7 +31,7 @@ def get_features(problem):
     dt = {
         'nvars':           nvars,
         'terms':           len(coeffs),
-        'sparsity':        len(coeffs)/len(generate_monoms(nvars, problem.expr.total_degree(), hom=homogeneous)[1]),
+        'sparsity':        len(coeffs)/(max(1, len(generate_monoms(nvars, problem.expr.total_degree(), hom=homogeneous)[1]))),
         'degree':          problem.reduce(lambda x:x.total_degree(), max),
         'ineqs_num':       len(ineq_constraints),
         'ineqs_deg_max':   np.max([c.total_degree() for c in ineq_constraints]) if ineq_constraints else 0,

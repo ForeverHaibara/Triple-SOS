@@ -7,7 +7,8 @@ from sympy import Poly, Expr, Symbol
 from sympy.matrices import MutableDenseMatrix as Matrix
 
 from .algebra import SOSBasis, PolyRing, PseudoSMP, PseudoPoly
-from ...utils import MonomialManager, Solution
+from ..solution import Solution
+from ...utils import MonomialManager
 from ...sdp.arithmetic import is_numerical_mat
 
 def _invarraylize(basis: SOSBasis, vec: Matrix, gens: Tuple[Symbol, ...]) -> Poly:

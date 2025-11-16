@@ -11,7 +11,7 @@ from sympy.polys.polyclasses import DMP
 from sympy.combinatorics import Permutation, PermutationGroup, CyclicGroup
 from sympy.printing.precedence import precedence_traditional, PRECEDENCE
 
-from .expression import Coeff, CyclicSum, CyclicProduct
+from .expressions import Coeff, CyclicSum, CyclicProduct
 from .monomials import poly_reduce_by_symmetry
 
 def cycle_expansion(

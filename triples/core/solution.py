@@ -13,8 +13,8 @@ from sympy.printing.latex import LatexPrinter
 from sympy.combinatorics import PermutationGroup, Permutation, CyclicGroup
 from sympy.core.relational import Equality
 
-from .expression.cyclic import is_cyclic_expr, CyclicSum, CyclicProduct, CyclicExpr, rewrite_symmetry
-from .expression.psatz import SOSlist, PSatz
+from ..utils.expressions.cyclic import is_cyclic_expr, CyclicSum, CyclicProduct, CyclicExpr, rewrite_symmetry
+from ..utils.expressions.psatz import SOSlist, PSatz
 
 class SolutionBase:
     pass

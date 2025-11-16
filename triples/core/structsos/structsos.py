@@ -13,7 +13,7 @@ from .pivoting import structural_sos_2vars
 from ..preprocess import ProofNode, SolvePolynomial
 
 from ..problem import ProblemComplexity
-from ...utils import Solution
+from ..solution import Solution
 
 class StructuralSOSSolver(ProofNode):
     def explore(self, *args, **kwargs):

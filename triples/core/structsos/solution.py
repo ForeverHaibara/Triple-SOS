@@ -4,7 +4,8 @@ from typing import Dict, Optional, Callable
 import sympy as sp
 from sympy.core.singleton import S
 
-from ...utils import Solution, CyclicSum, CyclicProduct
+from ..solution import Solution
+from ...utils import CyclicSum, CyclicProduct
 
 class _rewriting_exception(Exception): ...
 

@@ -8,7 +8,7 @@ import numpy as np
 
 from .problem import InequalityProblem
 from .complexity import ProblemComplexity
-from ..utils import Solution
+from .solution import Solution
 from ..utils.tree_predictor import TreePredictor
 from ..sdp import ArithmeticTimeout
 

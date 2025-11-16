@@ -319,7 +319,7 @@ def _constrained_acute_trivial_uncentered(coeff, F):
     expr = CyclicProduct(F(a)) * CyclicSum(a**(d - 6)) * p/3
     expr2 = CyclicProduct((b**2 + c**2 - a**2)) * CyclicSum(a**(d - 6)) * p/3
     rem = coeff.as_poly(a,b,c) - expr2.doit().as_poly(a,b,c)
-    # from ....utils.expression import poly_get_factor_form
+    # from ....utils.expressions import poly_get_factor_form
     # print(poly_get_factor_form(rem))
     solution = SS.structsos.ternary._structural_sos_3vars_cyclic(Coeff(rem))
     if solution is not None:

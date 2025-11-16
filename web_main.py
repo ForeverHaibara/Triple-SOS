@@ -8,7 +8,8 @@ from flask_cors import CORS
 
 import sympy as sp
 
-from triples.utils import pl, Solution, poly_get_factor_form, optimize_poly, Root
+from triples.utils import pl, poly_get_factor_form, optimize_poly, Root
+from triples.core import Solution
 from triples.core.linsos.tangents import prepare_tangents
 from triples.gui.sos_manager import SOS_Manager
 from triples.gui.linebreak import recursive_latex_auto_linebreak

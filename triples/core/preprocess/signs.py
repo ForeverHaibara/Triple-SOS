@@ -446,7 +446,7 @@ def get_symbol_signs(problem: InequalityProblem) -> Dict[Symbol, Tuple[Optional[
     eq_constraints0, ineq_constraints0 = problem.eq_constraints, problem.ineq_constraints
     eq_constraints, ineq_constraints = {}, {}
 
-    fs0 = tuple(sorted(list(problem.free_symbols), key=lambda x:x.name))
+    fs0 = problem.gens
 
     # polylize and make a copy
     for src, tar in ((eq_constraints0, eq_constraints), (ineq_constraints0, ineq_constraints)):

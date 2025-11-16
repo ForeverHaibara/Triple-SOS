@@ -1,5 +1,5 @@
 from sympy.abc import a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t,u,v,w,x,y,z
-from sympy import Function, Rational, fraction
+from sympy import Poly, Function, Rational, fraction
 
 F, G = Function('F'), Function('G')
 
@@ -128,3 +128,8 @@ def test_infer_signs(problem):
         if sign0 is not None:
             assert fraction((expr0 - expr1).together())[0].expand() == 0,\
                 f"got signs[{key}] = {signs1[key]}, expected {signs0[key]}"
+
+
+def test_infer_signs_empty():
+    pro = InequalityProblem(Poly(0, a, b), {}, {})
+    assert pro.get_symbol_signs() == {a: (None, None), b: (None, None)}

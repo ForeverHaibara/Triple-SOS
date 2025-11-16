@@ -5,11 +5,10 @@ from sympy.polys import ZZ, QQ
 
 from .symmetric import UE3Real, UE3Positive
 from .basic import prove_by_pivoting
-from ...utils import Solution, verify_symmetry
-
-
 from ..node import TransformNode
 from ..preprocess import SolvePolynomial
+from ..solution import Solution
+from ...utils import verify_symmetry
 
 
 class SymmetricSubstitution(TransformNode):

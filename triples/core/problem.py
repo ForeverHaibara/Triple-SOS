@@ -18,7 +18,7 @@ from .dispatch import (
     _dtype_free_symbols, _dtype_gens, _dtype_is_zero, _dtype_convert,
     _dtype_is_homogeneous, _dtype_homogenize, _dtype_sqf_list, _dtype_make_reorder_func
 )
-from ..utils import optimize_poly, Root, RootList, Solution
+from ..utils import optimize_poly, Root, RootList
 from ..utils.monomials import (
     verify_closure, _identify_symmetry_from_blackbox, identify_symmetry_from_lists
 )
@@ -354,7 +354,7 @@ class InequalityProblem(Generic[T]):
             length=nvars**4
         )
 
-    def sum_of_squares(self, configs: dict = {}, time_limit: float = 3600, mode: str = 'fast') -> Optional[Solution]:
+    def sum_of_squares(self, configs: dict = {}, time_limit: float = 3600, mode: str = 'fast'):
         from .node import _sum_of_squares
         return _sum_of_squares(self, configs, time_limit, mode)
 

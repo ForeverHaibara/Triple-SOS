@@ -12,7 +12,8 @@ from .structsos.structsos import StructuralSOSSolver
 from .symsos import SymmetricSubstitution
 from .sdpsos.sdpsos import SDPSOSSolver
 
-from ..utils import PolyReader, Solution
+from .solution import Solution
+from ..utils import PolyReader
 
 NAME_TO_METHOD = {
     'StructuralSOS': StructuralSOSSolver,

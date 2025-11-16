@@ -4,7 +4,7 @@ import sympy as sp
 
 from ..shared import uniquely_named_symbol, SS
 from ...sdp import congruence as _congruence
-from ...utils.expression import Coeff, CyclicSum, CyclicProduct
+from ...utils.expressions import Coeff, CyclicSum, CyclicProduct
 from ...utils.roots import nroots, rationalize_bound
 
 class StructuralSOSError(Exception): ...

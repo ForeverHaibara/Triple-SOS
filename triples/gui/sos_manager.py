@@ -7,12 +7,12 @@ from sympy import Expr, Poly, Symbol
 from sympy.combinatorics import Permutation, PermutationGroup, CyclicGroup
 
 from .grid import GridRender
-from ..utils import Solution, CyclicExpr, CyclicSum, CyclicProduct
+from ..utils import CyclicExpr, CyclicSum, CyclicProduct
 from ..utils.text_process import (
     preprocess_text, poly_get_factor_form, poly_get_standard_form,
     degree_of_zero, coefficient_triangle, coefficient_triangle_latex
 )
-from ..core.sum_of_squares import sum_of_squares, DEFAULT_CONFIGS
+from ..core import Solution, sum_of_squares, DEFAULT_CONFIGS
 # from ..core.linsos import root_tangents
 
 
