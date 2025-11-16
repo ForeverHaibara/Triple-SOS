@@ -129,8 +129,8 @@ def _construct_matrix_from_roots(
     """
     Assume an irreducible polynomial f(x) is positive over R, then
     all its roots are complex and paired by conjugate. Write
-    f(x) = \prod (x - root_i) * \prod (x - root_i.conjugate), then
-    f(x) = |\prod (x - root_i)|^2 = Re^2 + Im^2 is already sum of squares.
+    f(x) = prod (x - root_i) * prod (x - root_i.conjugate), then
+    f(x) = |prod (x - root_i)|^2 = Re^2 + Im^2 is already sum of squares.
 
     For each i, we can select either root_i or its conjugate to multiply.
     This generates 2^n different sum of squares expressions. We take the
@@ -437,8 +437,8 @@ def _prove_univariate_irreducible(
     Although it seems an SDP problem and requires an SDP solver, the univariate polynomial
     is degenerated. As guaranteed by Hilbert, a univariate polynomial positive over R
     is a sum of squares. This is quite easy to prove: if the polynomial has no real roots,
-    then it is product of conjugate pairs of complex roots. Write f(x) = \prod (x - a)(x - conj(a)).
-    As a consequence, f(x) = |\prod (x-a)|^2 = Re^2 + Im^2.
+    then it is product of conjugate pairs of complex roots. Write f(x) = prod (x - a)(x - conj(a)).
+    As a consequence, f(x) = |prod (x-a)|^2 = Re^2 + Im^2.
 
     This is a numerical solution. But we can reconstruct the positive definite matrix
     to make it rational and accurate.

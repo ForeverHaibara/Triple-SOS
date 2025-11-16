@@ -280,12 +280,7 @@ def _sum_of_squares(
         return None
 
     end_time = datetime.now()
-    solution = Solution(
-        problem.expr,
-        problem.solution,
-        ineq_constraints = problem.ineq_constraints,
-        eq_constraints = problem.eq_constraints,
-    ).rewrite_symmetry()
+    solution = Solution(problem, solution).rewrite_symmetry()
     solution._start_time = start_time
     solution._end_time = end_time
     return solution

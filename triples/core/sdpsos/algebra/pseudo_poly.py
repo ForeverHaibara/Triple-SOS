@@ -1,20 +1,20 @@
 from collections import defaultdict
 from typing import List, Any
 
-from sympy import Poly, Expr, Symbol, Add, Mul, Integer, sympify, EX
+from sympy import Basic, Poly, Expr, Symbol, Add, Mul, Integer, sympify, EX
 from sympy.polys.constructor import construct_domain
 from sympy.matrices.expressions import MatPow
 
 from .state_algebra import StateAlgebra
 
-class PseudoPoly:
+class PseudoPoly(Basic):
     """
     Polynomials on general algebra. It provides some interfaces similar to :class:`sympy.Poly`.
     """
     @classmethod
     def new(cls, rep, *gens):
         """Construct :class:`Poly` instance from raw representation. """
-        obj = object.__new__(cls)
+        obj = Basic.__new__(cls)
         obj.rep = rep
         obj.gens = gens
         return obj
@@ -67,6 +67,10 @@ class PseudoPoly:
     def primitive(f):
         cont, result = f.rep.primitive()
         return f.rep.dom.to_sympy(cont), f.per(result)
+
+
+    def __hash__(self):
+        return super().__hash__()
     @property
     def free_symbols(self):
         symbols = set(self.gens)

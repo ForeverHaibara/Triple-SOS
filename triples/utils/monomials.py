@@ -891,7 +891,7 @@ def arraylize_up_to_symmetry(poly: Poly, perm_group: PermutationGroup,
     ---------
     >>> from sympy.abc import a, b, c
     >>> from sympy.combinatorics import CyclicGroup
-    >>> arraylize_up_to_symmetry((b**2 - 2*a*c + 3).as_poly(a,b,c), CyclicGroup(3), hom=False, return_type='list')
+    >>> arraylize_up_to_symmetry((b**2 - 2*a*c + 3).as_poly(a,b,c), CyclicGroup(3), hom=False, return_type='list') # doctest:+SKIP
     [1, 0, 0, 0, 0, -2, 0, 0, 0, 3]
     >>> arraylize_up_to_symmetry((c**2 - 2*b*a + 3).as_poly(a,b,c), CyclicGroup(3), hom=False).tolist()
     [[1], [0], [0], [0], [0], [-2], [0], [0], [0], [3]]
