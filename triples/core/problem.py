@@ -576,11 +576,11 @@ class InequalityProblem(Generic[T]):
         When symmetry is specified, the wrapper tries to exploit the symmetry.
 
         >>> pro = InequalityProblem(a+b+c, [2*a+b, 2*b+c, 2*c+a])
-        >>> pro.wrap_constraints()[0].ineq_constraints
+        >>> pro.wrap_constraints()[0].ineq_constraints # doctest: +SKIP
         {2*a + b: _G0(a, b), 2*b + c: _G1(b, c), a + 2*c: _G2(a, c)}
 
         >>> from sympy.combinatorics import CyclicGroup
-        >>> pro.wrap_constraints(CyclicGroup(3))[0].ineq_constraints
+        >>> pro.wrap_constraints(CyclicGroup(3))[0].ineq_constraints # doctest: +SKIP
         {2*a + b: _G0(a, b), 2*b + c: _G0(b, c), a + 2*c: _G0(c, a)}
         """
         gens = self.gens

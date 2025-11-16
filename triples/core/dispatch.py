@@ -28,10 +28,22 @@ from sympy.polys.polyerrors import BasePolynomialError
 
 # fix the bug in sqf_list before 1.13.0
 # https://github.com/sympy/sympy/pull/26182
-if tuple(version_tuple(SYMPY_VERSION)) >= (1, 13):
+SYMPY_VERSION_TUPLE = tuple(version_tuple(SYMPY_VERSION))
+if SYMPY_VERSION_TUPLE >= (1, 13):
     _sqf_list = lambda p: p.sqf_list()
 else:
     _sqf_list = lambda p: p.factor_list() # it would be slower, but correct
+
+if SYMPY_VERSION_TUPLE >= (1, 14):
+    _polyelement_init = PolyElement
+    _fracelement_init = FracElement
+else:
+    def _polyelement_init(ring, init):
+        return ring.zero.new(init)
+    def _fracelement_init(field, numer, denom):
+        obj = object.__new__(FracElement)
+        obj.field, obj.numer, obj.denom = field, numer, denom
+        return obj
 
 HAS_EXRAW = bool(tuple(version_tuple(SYMPY_VERSION)) >= (1, 9))
 
@@ -187,6 +199,7 @@ def _polyelement_free_symbols(x: PolyElement) -> Set[Symbol]:
             symbols |= coeff.free_symbols
     return symbols
 
+
 @_dtype_homogenize.register(PolyElement)
 def _polyelement_homogenize(x: PolyElement, s: Symbol) -> PolyElement:
     """Homogenize a polynomial with respect to a symbol."""
@@ -194,7 +207,7 @@ def _polyelement_homogenize(x: PolyElement, s: Symbol) -> PolyElement:
     d = max([sum(t) for t, v in xterms], default=0)
     terms = [(t + (d - sum(t),), v) for t, v in xterms]
     ring = x.ring.__class__(x.ring.symbols + (s,), x.ring.domain, x.ring.order)
-    return PolyElement(ring, dict(terms))
+    return _polyelement_init(ring, dict(terms))
 
 @_dtype_is_homogeneous.register(PolyElement)
 def _polyelement_is_homogeneous(x: PolyElement) -> bool:
@@ -222,4 +235,4 @@ def _fracelement_is_homogeneous(x: FracElement) -> bool:
 @_dtype_homogenize.register(FracElement)
 def _fracelement_homogenize(x: FracElement, s: Symbol) -> FracElement:
     numer, denom = _polyelement_homogenize(x.numer, s), _polyelement_homogenize(x.denom, s)
-    return x.__class__(numer.ring.to_field(), *numer.cancel(denom))
+    return _fracelement_init(numer.ring.to_field(), *numer.cancel(denom))

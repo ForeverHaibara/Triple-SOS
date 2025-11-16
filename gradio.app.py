@@ -201,7 +201,8 @@ class GradioInterface():
         gens = sorted(gens, key=lambda x:x.name)
         lhs_expr = Function('F')(*gens) if len(gens) > 0 else Symbol('\\text{LHS}')
         if solution is not None:
-            tex = solution.to_string(mode='latex', lhs_expr=lhs_expr, settings={'long_frac_ratio': 2})
+            tex = solution.to_string(mode='latex', lhs_expr=lhs_expr,
+                together=True, cancel=True, settings={'long_frac_ratio': 2})
             if GRADIO_LATEX_SUPPORTS_ALIGNED:
                 tex = recursive_latex_auto_linebreak(tex)
             tex = '$$%s$$' % tex

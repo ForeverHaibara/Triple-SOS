@@ -325,7 +325,8 @@ def sum_of_squares(sid, **kwargs):
     lhs_expr = sp.Symbol('\\text{LHS}')
     if isinstance(solution, Solution):
         # # remove the aligned environment
-        tex = solution.to_string(mode='latex', lhs_expr=lhs_expr, settings={'long_frac_ratio':2})#.replace('aligned', 'align*')
+        tex = solution.to_string(mode='latex', lhs_expr=lhs_expr,
+            together=True, cancel=True, settings={'long_frac_ratio':2})#.replace('aligned', 'align*')
         tex = recursive_latex_auto_linebreak(tex)
         tex = '$$%s$$'%tex
 

@@ -199,7 +199,7 @@ class Solution(SolutionBase[T]):
     def _str_f(self, name='f') -> str:
         return "%s(%s)"%(name, ','.join(str(_) for _ in self.gens))
 
-    def as_eq(self, lhs_expr=None, together=True, cancel=True) -> Equality:
+    def as_eq(self, lhs_expr=None, together=False, cancel=False) -> Equality:
         """
         Convert the solution to a sympy equality object.
 
@@ -208,17 +208,17 @@ class Solution(SolutionBase[T]):
         >>> from sympy.abc import a
         >>> sol = Solution(a**2 - 2 + 1/a**2, (a**2 - 1)**2/a**2)
         >>> sol.as_eq()
-        Eq(a**2*(a**2 - 2 + a**(-2)), (a**2 - 1)**2)
+        Eq(a**2 - 2 + a**(-2), (a**2 - 1)**2/a**2)
         >>> sol.as_eq().lhs, sol.as_eq().rhs
-        (a**2*(a**2 - 2 + a**(-2)), (a**2 - 1)**2)
+        (a**2 - 2 + a**(-2), (a**2 - 1)**2/a**2)
         >>> sol.as_eq().simplify()
         True
-        >>> sol.as_eq(cancel=False)
-        Eq(a**2 - 2 + a**(-2), (a**2 - 1)**2/a**2)
+        >>> sol.as_eq(cancel=True)
+        Eq(a**2*(a**2 - 2 + a**(-2)), (a**2 - 1)**2)
 
         >>> from sympy import Function
         >>> f = Function('f')
-        >>> sol.as_eq(lhs_expr=f(a))
+        >>> sol.as_eq(lhs_expr=f(a), cancel=True)
         Eq(a**2*f(a), (a**2 - 1)**2)
         """
         lhs = self.expr.as_expr() if lhs_expr is None else lhs_expr
@@ -237,7 +237,7 @@ class Solution(SolutionBase[T]):
         ideal = list(self.eq_constraints.values())
         return PSatz.from_sympy(preorder, ideal, self.solution)
 
-    def to_string(self, mode: str = 'latex', lhs_expr=None, together=True, cancel=True, settings=None) -> str:
+    def to_string(self, mode: str = 'latex', lhs_expr=None, together=False, cancel=False, settings=None) -> str:
         """
         Convert the solution to a string. The mode can be 'latex', 'txt', or 'formatted'.
 
@@ -253,9 +253,9 @@ class Solution(SolutionBase[T]):
         lhs_expr : Expr
             Sympy expressions to replace the left-hand side problem.
         together : bool, optional
-            Whether to apply `sympy.together` on the right-hand side solution, by default True.
+            Whether to apply `sympy.together` on the right-hand side solution.
         cancel : bool, optional
-            Whether to apply `sympy.cancel` on the right-hand side solution, by default True.
+            Whether to apply `sympy.cancel` on the right-hand side solution.
         settings : dict, optional
             Settings for printing. See `sympy.printing.str.StrPrinter._print` for details.
 

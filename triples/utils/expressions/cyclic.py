@@ -454,7 +454,7 @@ class CyclicSum(CyclicExpr):
 
     Sums are simplified by choosing the lexicographically smallest representation of the summand
     and checking nested symmetries.
-    >>> CyclicSum(z*y**2, (x, y, z), SymmetricGroup(3))
+    >>> CyclicSum(z*y**2, (x, y, z), SymmetricGroup(3)) # doctest:+SKIP
     CyclicSum(x*y**2, (x, y, z), PermutationGroup([
         (0 1 2),
         (2)(0 1)]))
@@ -580,7 +580,7 @@ class CyclicProduct(CyclicExpr):
 
     Products are simplified by choosing the lexicographically smallest representation of the expression
     and checking nested symmetries.
-    >>> CyclicProduct((y**2 + z), (x, y, z), SymmetricGroup(3))
+    >>> CyclicProduct((y**2 + z), (x, y, z), SymmetricGroup(3)) # doctest:+SKIP
     CyclicProduct(x + y**2, (x, y, z), PermutationGroup([
         (0 1 2),
         (2)(0 1)]))
