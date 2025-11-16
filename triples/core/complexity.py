@@ -57,4 +57,3 @@ class ProblemComplexity:
     def __eq__(a, b) -> bool:
         # todo: is it well-defined?
         return a.time == b.time and a.prob == b.prob and a.length == b.length
-

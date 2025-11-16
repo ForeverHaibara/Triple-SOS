@@ -7,7 +7,7 @@ import mpmath as mp
 
 class _functional:
     """
-    Functional class that provides the basic operations for numpy, sympy and mpmath matrices.    
+    Functional class that provides the basic operations for numpy, sympy and mpmath matrices.
     """
     def __new__(cls, *args, **kwargs):
         """
@@ -57,7 +57,7 @@ class _functional:
         if len(x) > 1:
             for xi in x[1:]:
                 s += xi
-        return s        
+        return s
 
     @classmethod
     def shape(cls, x: np.ndarray) -> Tuple[int, int]:
@@ -166,7 +166,7 @@ def sdp_ipm(
     ) -> Tuple[Union[np.ndarray, sp.Matrix, mp.matrix], Union[np.ndarray, sp.Matrix, mp.matrix]]:
     """
     Solve the semidefinite program
-    
+
             min  <C, X>
             s.t. <A[i], X> = b[i], i = 1, ..., m
                 X >= 0
@@ -357,7 +357,7 @@ def sdp_ipm_feasible(
     Find a feasible point for the semidefinite program
             s.t. <A[i], X> = b[i], i = 1, ..., m
                 X >= 0
-                
+
     using the interior point method. The method supports numpy, sympy and mpmath matrices,
     which indicates arbitrary precision. All three libraries support @ for matrix multiplication.
 
@@ -439,7 +439,7 @@ def sdp_ipm_feasible(
         blocks = blocks + [1]
 
 
-    Xk, lam = sdp_ipm(A, b, C, X0, dtype=dtype, 
+    Xk, lam = sdp_ipm(A, b, C, X0, dtype=dtype,
                 rho=rho, epsilon=epsilon, max_iter=max_iter, blocks=blocks, callback=callback)
     return Xk[:n, :n]
 

@@ -138,7 +138,7 @@ class InequalityProblem(Generic[T]):
         if self.solution is not None:
             ss.append(f"**Solution**\n\n{delim_l}\\text{{LHS}}={latex(self.solution)}{delim_r}")
         return '\n\n'.join(ss)
-        
+
 
     def copy_new(self,
         expr: T,
@@ -345,7 +345,7 @@ class InequalityProblem(Generic[T]):
         return features
 
     def evaluate_complexity(self) -> ProblemComplexity:
-        # The estimation here is only a placeholder. 
+        # The estimation here is only a placeholder.
         # In ProofNodes it will overloaded by model predictions.
         nvars = len(self.free_symbols)
         return ProblemComplexity(
@@ -370,7 +370,7 @@ class InequalityProblem(Generic[T]):
         expr, ineq_constraints, eq_constraints = \
             problem.expr, problem.ineq_constraints.copy(), problem.eq_constraints.copy()
         gens = self.gens
-        
+
         if len(gens) == 0:
             gens = {Symbol('x')}
         expr = Poly(expr.doit(), *gens)
@@ -462,7 +462,7 @@ class InequalityProblem(Generic[T]):
         Parameters
         ----------
         hom: Symbol, optional
-            The homogenizer symbol. 
+            The homogenizer symbol.
             * If None, a new symbol named "1" will
             be created if the problem is not homogeneous.
             * If given, it tries to homogenize the problem
@@ -504,7 +504,7 @@ class InequalityProblem(Generic[T]):
 
         new_problem = self.copy_new(expr, ineqs, eqs)
         if self.roots is not None:
-            new_problem.roots = RootList.new(self.roots.symbols + (hom,), 
+            new_problem.roots = RootList.new(self.roots.symbols + (hom,),
                 [Root(r.root + (Integer(1),), r.domain, r.rep + (r.domain.one,)) for r in self.roots])
         return new_problem, hom
 
@@ -649,7 +649,7 @@ class InequalityProblem(Generic[T]):
         (2*x**3*z - 2*x**2*y*z + 2*x*y**3 - 2*x*y**2*z - 2*x*y*z**2 + 2*y*z**3,
          {2*x: F(a), 2*y: F(b), 2*z: F(c)})
 
-        As we find a solution (sympy Expr) to the transformed problem, we use `restore` to 
+        As we find a solution (sympy Expr) to the transformed problem, we use `restore` to
         transform it back to the original problem.
         >>> sol = (F(a)*F(c)*(x-y)**2 + F(b)*F(a)*(y-z)**2 + F(c)*F(b)*(z-x)**2)/2
         >>> (sol.xreplace({F(a): 2*x, F(b): 2*y, F(c): 2*z}) - new_pro.expr).expand()

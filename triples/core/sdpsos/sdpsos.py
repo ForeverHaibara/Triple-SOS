@@ -132,7 +132,7 @@ class SDPSOSSolver(ProofNode):
     Solve a constrained polynomial inequality problem using semidefinite programming (SDP).
 
     Although the theory of numerically solving sum-of-squares problems using SDP is well established,
-    there are certain limitations in practice. One of the most significant concerns is that we 
+    there are certain limitations in practice. One of the most significant concerns is that we
     require an accurate, rational solution rather than a numerical one. If the SDP is strictly feasible
     and has strictly positive definite solutions, then a rational solution can be obtained by
     rounding an interior solution. See [1]. However, if the solution is semipositive definite,
@@ -240,7 +240,7 @@ class SDPSOSSolver(ProofNode):
             try:
                 if roots is None:
                     roots = _lazy_iter(lambda: _lazy_find_roots(problem, verbose))
-    
+
                 sos_problem = SOSPoly(poly, poly.gens, qmodule = qmodule, ideal = ideal,
                                         symmetry = symmetry.perm_group, roots = roots, degree=degree)
                 sdp = sos_problem.construct(verbose=verbose, time_limit=expected_end_time - perf_counter())
@@ -302,7 +302,7 @@ def SDPSOS(
         Equality constraints to the problem. This assumes h_1(x) = 0, h_2(x) = 0, ...
         This is used to generate the ideal (quotient ring).
     symmetry: PermutationGroup or MonomialManager
-        The symmetry of the polynomial. When it is None, it will be automatically generated. 
+        The symmetry of the polynomial. When it is None, it will be automatically generated.
         If we want to skip the symmetry generation algorithm, please pass in a MonomialManager object.
     roots: Optional[List[Root]]
         The roots of the polynomial satisfying constraints. When it is None, it will be automatically generated.
@@ -335,4 +335,3 @@ def SDPSOS(
         }
     }
     return problem.sum_of_squares(configs, time_limit=time_limit)
-

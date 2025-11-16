@@ -93,7 +93,7 @@ def _sos_struct_sextic_hexagram(coeff):
         solution = _sos_struct_sextic_hexagram_symmetric(coeff)
         if solution is not None:
             return solution
-    
+
     if True:
         # First try trivial cases.
         # Idea: Observe s(ab(ab+vc^2-(1+v)/2c(a+b) + xc(a-b))^2) >= 0
@@ -118,7 +118,7 @@ def _sos_struct_sextic_hexagram(coeff):
 
         eq = sp.Poly.from_list([c1, 0, -c2], sp.Symbol('u'))
         v = rationalize_func(eq, _check_valid, validation_initial = lambda x: x >= 0, direction = -1)
-            
+
         if v is not None:
             x, rest = _compute_x_rest(v)
             p1 = ((c2 - c1*v**2) * CommonExpr.schur(3) + (rest*c1) * CyclicSum(a*(b-c)**2)).together().as_coeff_Mul()
@@ -328,7 +328,7 @@ def _sos_struct_sextic_hexagram(coeff):
                     if isinstance(det_, sp.Rational) and det_ >= 0:
                         break
                     det_ = None
-                
+
             if det_ is not None:
                 w, z = (u*u + v) / (u*v - 1), (v*v + u) / (u*v - 1)
                 p3, n3, q3 = p3 / m3, n3 / m3, q3 / m3
@@ -446,7 +446,7 @@ def _sos_struct_sextic_rotated_tree(coeff):
         if solution is not None:
             solution = reflect_expression(solution)
         return solution
-    
+
     u = coeff((3,2,1)) / coeff((2,4,0))
     if coeff((2,4,0)) <= 0 or coeff((4,2,0)) != 0 or u < -2:
         return None
@@ -464,7 +464,7 @@ def _sos_struct_sextic_rotated_tree(coeff):
             CyclicProduct(a**2)
         ]
         return sum_y_exprs(y, exprs)
-    
+
     if u >= 0 and v >= -2:
         y = [sp.S(1), u, v + 2,
             (coeff((2,4,0)) + coeff((3,1,2)) + coeff((3,2,1))) * 3 + coeff((2,2,2))
@@ -507,7 +507,7 @@ def _sos_struct_sextic_rotated_tree(coeff):
                 n1 = 2 / (y_ + 2) * (x_ - 1) * p1
                 if not (4*p1*q1 >= n1**2):
                     y_ = None
-            
+
             if y_ is not None:
                 multiplier = CyclicSum(a)
                 y = [
@@ -538,7 +538,7 @@ def _sos_struct_sextic_rotated_tree(coeff):
     # print(x, u, v, eq.as_expr().factor())
     if x is None:
         return None
-    
+
     z = x * (x + 1) / 3
 
     multiplier = CyclicSum(a*b**2 + z*a*b*c) * CyclicSum(a)
@@ -663,7 +663,7 @@ def _sos_struct_sextic_hexagon_sdp2(coeff):
     w2 = -c240 + c312 - c321 + c420
     w3 = 2*c240 - 2*c312 - c321 - 3*c330 - 3*c411 + c420
     w5 = c240**2 + c240*c312 + 2*c240*c321 + c240*c420 + c312**2 + c312*c321 + 2*c312*c420 + c321**2 + c321*c420 + c420**2
-    
+
     def stack_quad_form(x, y, z, only_lower = True, div3x = True):
         M = sp.Matrix.zeros(3)
         w0 = y**2 + y + 1
@@ -712,7 +712,7 @@ def _sos_struct_sextic_hexagon_sdp2(coeff):
         print('Time:', time1 - time0)
         print('GCD =', discriminant_gcd)
 
-    # Alternative: 
+    # Alternative:
     if True:
         # first detect whether
         0
@@ -760,7 +760,7 @@ def _sos_struct_sextic_hexagon_to_hexagram(coeff):
             coeffs_[(3,1,2)] = coeffs_[(2,3,1)]
             return Coeff(coeffs_)
         return params
-    
+
     def _check_valid(c3):
         if not (c3 >= 0 and 4*c1*c2 >= c3**2):
             return False
@@ -793,7 +793,7 @@ def _sos_struct_sextic_hexagon_to_hexagram(coeff):
     else:
         eq = sp.Poly.from_list([1, 0, -4*c1*c2], sp.Symbol('u'))
         c3 = rationalize_func(eq, _check_valid, validation_initial = lambda x: x >= 0, direction = -1)
-        
+
     if c3 is not None:
         remain_solution = _sos_struct_sextic_hexagram(_compute_subtracted_params(c3, return_func = True))
         if remain_solution is not None:
@@ -824,7 +824,7 @@ def _sos_struct_sextic_full_sdp(coeff):
     243s(a(a+b)5)-32s(a)6
 
     s((a-b)2(a2-2ab-ac+b2)2)
-    
+
     References
     ----------
     [1] https://artofproblemsolving.com/community/u585449h2736959p29529763
@@ -838,7 +838,7 @@ def _sos_struct_sextic_full_sdp(coeff):
     c60, c51, c42, c33, c24, c15 = [coeff((6-i,i,0)) for i in range(6)]
     c411, c321, c231 = [coeff((4-i,i+1,1)) for i in range(3)]
 
-    if (not coeff.is_rational) or c60 < 0 or coeff.poly111() != 0: 
+    if (not coeff.is_rational) or c60 < 0 or coeff.poly111() != 0:
         return None
 
     x, y = sp.symbols('x y')
@@ -850,7 +850,7 @@ def _sos_struct_sextic_full_sdp(coeff):
     #     [c51/2, c42-c15, c33/2-c60],
     #     [c15/2, c33/2-c60, c24-c51]
     # ]
-    
+
     def _compute_quad_form_sol(quad_form):
         q, ss = congruence(quad_form)
         quad_form_sol = [
@@ -864,8 +864,8 @@ def _sos_struct_sextic_full_sdp(coeff):
     # rest form is what the original polynomial subtracts the quadratic form,
     # corresponding to the coefficients of a^4bc, a^3b^2c, a^2b^3c
     rest_form = [
-        c411 + 3*c15 - c33 + 3*c51 + 8*c60, 
-        c321 + -6*c15 - 2*c24 + 3*c33 + 6*c42 + 4*c51 - 6*c60, 
+        c411 + 3*c15 - c33 + 3*c51 + 8*c60,
+        c321 + -6*c15 - 2*c24 + 3*c33 + 6*c42 + 4*c51 - 6*c60,
         c231 + 4*c15 + 6*c24 + 3*c33 - 2*c42 - 6*c51 - 6*c60
     ]
 
@@ -941,7 +941,7 @@ def _sos_struct_sextic_full_sdp(coeff):
                 break
 
     if not success:
-        return None            
+        return None
 
     if not isinstance(x_, sp.Rational) or not isinstance(y_, sp.Rational):
         # make a perturbation so that the quad_form is positive semidefinite

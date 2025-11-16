@@ -64,7 +64,7 @@ class CancelDenominator(ProofNode):
                 self.status = -1
                 self.finished = True
                 return
-            
+
         elif self.status == -1:
             if self._numer.solution is not None:
                 self.register_solution(self._numer.solution / self._denom.solution)

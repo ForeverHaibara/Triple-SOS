@@ -62,7 +62,7 @@ def linear_correction(
     ) -> Tuple[Matrix, Matrix, bool]:
     """
     Linear programming is a numerical way to solve the SOS problem. However, we require
-    the solution to be exact. This function is used to correct the numerical error. 
+    the solution to be exact. This function is used to correct the numerical error.
 
     Firstly it tries to approximate each of the coefficients in the solution by continued fraction
     so that the coefficients are rational numbers. If it still fails, it will try to solve a rational

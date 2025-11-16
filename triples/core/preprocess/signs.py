@@ -201,9 +201,9 @@ class SpecialHeap:
         Get the element with the minimum length of x[i],
         and remove it from the heap.
         Returns (x[i], i).
-        """        
+        """
         min_xi, min_yi = self.heap[0]
-    
+
         if len(self.heap) == 1:
             self.heap.pop()
             return (min_xi, min_yi)
@@ -330,7 +330,7 @@ def _get_signs_by_topological_order(ineq_constraints: Dict[Poly, Expr], eq_const
     Note
     ----
     * The function modifies `ineq_constraints` and `eq_constraints`
-    in place to remove constraints that are used or have no 
+    in place to remove constraints that are used or have no
     undetermined symbols.
     * The function modifies the `signs` in place.
 

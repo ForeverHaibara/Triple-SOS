@@ -44,7 +44,7 @@ def sum_of_squares(
     """
     Main function for sum of square decomposition.
 
-    Examples    
+    Examples
     ----------
     The function relies on SymPy for symbolic computation. We first import some items:
 

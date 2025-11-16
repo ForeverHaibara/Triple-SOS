@@ -175,7 +175,7 @@ def prepare_tangents(problem: InequalityProblem,
     a linear transformation. For example, if `p1,...,pn` form a basis of the polys that
     vanish in the roots, then the SDPSOS is instead trying to find a PSD quadratic form
     of `p1,...,pn` that evaluates to F and each base of the squares is a linear combinations
-    of `p1,...,pn`. Working on the vanishing ideal keeps the zeros of F. For LinearSOS, 
+    of `p1,...,pn`. Working on the vanishing ideal keeps the zeros of F. For LinearSOS,
     we may relax the problem to `F = p1*PSD[1] + p2*PSD[2] + ...`, where PSD[i] are
     linear combinations of nonnegative polynomials.
 
@@ -353,7 +353,7 @@ def prepare_inexact_tangents(problem: InequalityProblem,
         value = poly(*root)
         mean_value = sum([poly(*root[perm]) for perm in perms])/len(perms)
         if value < 0 or value > mean_value * threshold:
-            # If value > mean_value * threshold, 
+            # If value > mean_value * threshold,
             # it is not very close to zero and we discard it.
             continue
 

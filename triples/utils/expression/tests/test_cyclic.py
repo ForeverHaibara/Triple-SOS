@@ -73,7 +73,7 @@ def test_cyclic_sum_xreplace_preserve_structure():
 
 def test_cyclic_sum_xreplace_partial():
     F = Function('F')
-    val = CyclicSum(a**3*b**2*c, (a,b,c,d), 
+    val = CyclicSum(a**3*b**2*c, (a,b,c,d),
         PermutationGroup(Permutation([1,0,2,3]),Permutation([0,1,3,2])))
     replacements = [
         {c: d + 5},
@@ -97,7 +97,7 @@ def test_cyclic_sum_xreplace_nonsymbol():
     F = Function('F')
     val = CyclicSum(F(a), (a,b,c), CyclicGroup(3))
     assert _compare_replacement(val, {F(a): y})
-    
+
     val = CyclicSum(F(a), (a,b,c,d), DihedralGroup(4))
     assert _compare_replacement(val, {F(a): x})
     assert _compare_replacement(val, {F(b): y})

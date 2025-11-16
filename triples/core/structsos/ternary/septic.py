@@ -134,14 +134,14 @@ def _sos_struct_septic_star(coeff):
     """
     Solve s(ua4b3 + va3b4) + abcf(a,b,c) >= 0 where f is degree 4.
 
-    Idea: Subtract something and apply the quadratic theorem, which is a 
+    Idea: Subtract something and apply the quadratic theorem, which is a
     discriminant minimization theorem.
 
     Examples
     -------
     s(ab(a-c)2(b-c)2)s(a)
 
-    s((a-b)2(a-c)2(b+c))s(ab)-s(a)p(a-b)2 
+    s((a-b)2(a-c)2(b+c))s(ab)-s(a)p(a-b)2
 
     s(a3b3+7a4bc-29a3b2c+12a3bc2+9a2b2c2)s(a)
 
@@ -211,7 +211,7 @@ def _sos_struct_septic_star(coeff):
 
         u, v = u_, v_
         # print(u, v)
-        
+
         # now we have guaranteed discriminant >= 0 in the optimal value
         # we should make rational approximations
         for u_, v_ in zip_longest(
@@ -262,7 +262,7 @@ def _sos_struct_septic_star(coeff):
                 q2 = q - x**2 - 2*x*y + 2*x - y**2 - 2*y
 
             discriminant = -_quartic_det(m, p2, n2, q2).as_poly(x, y)
-            
+
             # print('Place 1', m, p2, n2, q2, '(P,Q) =', (p, q))
             result = optimize_discriminant(discriminant, verbose = _VERBOSE_OPTIMIZE_DISCRIMINANT)
             # print(result, print(sp.latex(discriminant)), 'here')
@@ -270,11 +270,11 @@ def _sos_struct_septic_star(coeff):
                 return None
 
             u, v = result[x], result[y]
-            
+
             # now we have guaranteed discriminant <= 0
             if coeff((4,3,0)) != 0:
                 solution = t * CyclicSum(b*(a**2*b+(z-1-2*v)*a*b*c-z*b*c**2+(u+v)*a**2*c+(v-u)*(a*c**2))**2)
-            else: # 
+            else: #
                 solution = t * CyclicSum(b*(b*c**2+(-2*v-1)*a*b*c+(u+v)*a**2*c+(v-u)*a*c**2)**2)
 
 
@@ -285,7 +285,7 @@ def _sos_struct_septic_star(coeff):
             new_solution = SS.structsos.ternary._structural_sos_3vars_cyclic(poly)
             if new_solution is not None:
                 return solution + new_solution * CyclicProduct(a)
-            
+
             return None
 
 
@@ -298,7 +298,7 @@ def _sos_struct_septic_star(coeff):
         # 1 -> (1 + 7/4)/2 = 11/8 -> (11/8+14/11)/2 = 233/176
 
         perturbation = CyclicSum(c*(a-b)**2*(a*b-a*c-b*c)**2)
-        
+
         solution = try_perturbations(coeff.as_poly(), coeff((3,4,0)), coeff((4,3,0)), perturbation)
         if solution is not None:
             return solution
@@ -400,7 +400,7 @@ def _sos_struct_septic_hexagon(coeff):
 
     s(4a5b2-2a5bc+4a5c2+8a4b3-8a4b2c+a4bc2-10a4c3+2a3b3c+a3b2c2)
 
-    (s(a2(a-b)(a2+b2-3ac+3c2))s(a2+ab)-s(a(a3-a2c+0(a2b-abc)-(ac2-abc)+5/4(bc2-abc))2)) 
+    (s(a2(a-b)(a2+b2-3ac+3c2))s(a2+ab)-s(a(a3-a2c+0(a2b-abc)-(ac2-abc)+5/4(bc2-abc))2))
 
     s(2a5b2-5a5bc+8a5c2-5a4b3+21a4b2c-21a4bc2+a4c3-7a3b3c+6a3b2c2)
 
@@ -410,7 +410,7 @@ def _sos_struct_septic_hexagon(coeff):
 
     (1/5(18s(a3(13b2+5c2)(13c2+5a2))-p(13a2+5b2)s(a))-585/64s(a(a2c-b2c-8/3(a2b-abc)+7/4(ab2-abc))2))
     """
-    
+
     if any(coeff(i) for i in ((7,0,0), (6,1,0), (6,0,1))):
         return None
 
@@ -430,7 +430,7 @@ def _sos_struct_septic_hexagon(coeff):
         # s(ab)s(c(a^2-b^2+u(ab-ac)+v(bc-ab))^2) to eliminate the border
         # See more details in _sos_struct_quintic_hexagon
 
-    
+
         # Theorem 1.
         # When Det = 64*p^3-16*p^2*q^2+8*p*q*z^2+32*p*q*z-256*p*q+64*q^3-z^4-24*z^3-192*z^2-512*z >= 0,
         # we have f(a,b,c) = s(a^4b + pa^3b^2 + qa^2b^3 + ab^4 + za^3bc - (p+q+z+2)a^2b^2c) >= 0.
@@ -519,7 +519,7 @@ def _sos_struct_septic_hexagon(coeff):
             g, u, v = radsimp([w**2-4*p*q, 4*(2*p**2-q*w), 4*(2*q**2-p*w)])
             denom = radsimp(1 / (8*(2*p + 2*q + w)*(3*(p-q)**2 + (w-p-q)**2)))
             f = lambda a,b,c: g*(a**2-b**2)+u*(a*b-a*c)+v*(b*c-a*b)
-            
+
             y = radsimp([denom * coeff410, (1 - g**2*denom) * coeff410])
             exprs = [
                 CyclicSum(c*(a*f(b,c,a)+b*f(c,a,b)).expand()**2),
@@ -540,7 +540,7 @@ def _sos_struct_septic_hexagon(coeff):
         p, q = 1 , 0
     else:
         p, q = (coeff((2,5,0)) / coeff((5,2,0))).as_numer_denom()
-    
+
     if sp.ntheory.primetest.is_square(p) and sp.ntheory.primetest.is_square(q):
         t = coeff((5,2,0)) / q if q != 0 else coeff((2,5,0))
 
@@ -558,7 +558,7 @@ def _sos_struct_septic_hexagon(coeff):
         u = sp.sqrt(q)
         v = sp.sqrt(p)
         candidates = []
-        
+
         if v == 0: # first reflect the problem, then reflect it back
             u , v = v , u
             p , q = q , p

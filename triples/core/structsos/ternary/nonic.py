@@ -37,7 +37,7 @@ def sos_struct_nonic(coeff, real = True):
             if all(coeff((i,j,k)) == coeff((j,i,k)) for (i,j,k) in ((6,0,3),(5,3,1),(4,3,2))):
                 return _sos_struct_nonic_hexagon_symmetric(coeff)
 
-    if not any(coeff(_) for _ in 
+    if not any(coeff(_) for _ in
         ((8,1,0),(7,2,0),(5,4,0),(5,0,4),(8,0,1),(7,0,2),
          (6,2,1),(6,1,2),(5,3,1),(5,1,3),(4,3,2),(4,2,3))
     ):
@@ -340,7 +340,7 @@ def _sos_struct_nonic_hexagram_symmetric(coeff):
             hexagram * multiplier * CyclicProduct(a)
         ]
         solution = sum_y_exprs(y, exprs) / multiplier
-    
+
     return solution
 
 
@@ -438,11 +438,11 @@ def _sos_struct_nonic_gear(coeff):
             for w_ in candidates:
                 if _check_valid_weight(vertex1, vertex2, w_):
                     return w_
-            
+
             # symmetric axis of a quadratic function
             g, h = x1 + y1 + z1, x2 + y2 + z2
             sym_axis = (2*g*h - 2*h**2 - x1*y2 - x2*y1 + 2*y1*y2)/(2*(-g**2 + 2*g*h - h**2 + x1*x2 - x1*y2 - x2*y1 + y1*y2))
-            
+
             # t = sp.symbols('x')
             # eq = (x1*t + x2*(1-t))*(y1*t + y2*(1-t)) - (g*t + h*(1-t))**2
             # print(sp.latex(eq))

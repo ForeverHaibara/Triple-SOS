@@ -239,7 +239,7 @@ def kkt(
     """
     f = sp.sympify(f)
     symbs = f.gens if hasattr(f, 'gens') else tuple(sorted(f.free_symbols, key=lambda x: x.name))
-    symbs = symbs + tuple(set.union(set(), 
+    symbs = symbs + tuple(set.union(set(),
                 *[_.free_symbols for _ in ineq_constraints],
                 *[_.free_symbols for _ in eq_constraints]) - set(symbs))
     symbs0 = symbs
@@ -362,7 +362,7 @@ def _optimize_by_eq_kkt(poly, ineq_constraints, eq_constraints, symbols,
                     sol.append(point)
             return sol
 
-        # 
+        #
         sol = solve_poly_system_crt(eq_constraints + [poly.diff(x), poly.diff(y)], [x, y])
         for eq in eq_constraints:
             sol.extend(solve_poly_system_crt(
@@ -573,13 +573,13 @@ def _optimize_by_ineq_comb(poly: Poly, ineq_constraints: List[Poly], eq_constrai
                 continue
         else:
             poly2, eq_constraints2, symbols2 = poly, active_ineq + eq_constraints, symbols
-        
+
         points = solver(poly2, {}, eq_constraints2, symbols2)
 
         #############################################
         # restore the eliminated variables
         points = _restore_solution(points, elim, symbols, symbols2)
-        
+
         # check inactive ineqs >= 0
         inactive_ineq = [ineq_constraints[i] for i in set(range(len(ineq_constraints))) - set(active)]
         points = [_ for _ in points if all(pevalf.polysign(ineq, _) >= 0 for ineq in inactive_ineq)]

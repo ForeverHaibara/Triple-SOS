@@ -183,7 +183,7 @@ def _sos_struct_cubic_nontrivial(coeff):
 
     t, p_, n_, q_ = _compute_params(u)
     # print(u, t, 3*(1+n_)**2 - (p_**2+p_*q_+q_**2))
-    
+
     y = [
         coeff3 / 2,
         -(p_**2 + p_*q_ + q_**2 - 3*(1 + n_))/6 * coeff3,
@@ -550,5 +550,3 @@ def _sos_struct_acyclic_cubic_symmetric(coeff):
         return p1 + p2 + p3
 
     return None
-
-

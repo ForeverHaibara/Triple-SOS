@@ -197,21 +197,21 @@ class SDPPrimalProblems:
     @classmethod
     def problem_empty1(cls):
         x0_and_space = ([], dict())
-        return (x0_and_space, [], 
+        return (x0_and_space, [],
                     [(np.ones((2,0)), [1,-1e-15], '<'),
                     (np.ones((1,0)), [1e-15], '=')]), 0.
 
     @classmethod
     def problem_empty2(cls):
         x0_and_space = ([], dict())
-        return (x0_and_space, [], 
+        return (x0_and_space, [],
                     [(np.ones((2,0)), [1,-1e-15], '<'),
                     (np.ones((1,0)), [1e-2], '=')]), None
-  
+
     @classmethod
     def problem_empty3(cls):
         x0_and_space = ([], dict())
-        return (x0_and_space, [], 
+        return (x0_and_space, [],
                     [(np.ones((2,0)), [1,-1e-15], '<'),
                     (np.ones((1,0)), [1e-15], '='),
                     (np.ones((2,0)), np.array([-0.8,2.4]).reshape(2,1), '>')]), None

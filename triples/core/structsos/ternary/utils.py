@@ -4,7 +4,7 @@ from functools import wraps
 import sympy as sp
 
 from ..utils import (
-    Coeff, 
+    Coeff,
     radsimp, sum_y_exprs, rationalize_func, quadratic_weighting, zip_longest, congruence,
     StructuralSOSError, PolynomialNonpositiveError, PolynomialUnsolvableError
 )
@@ -74,7 +74,7 @@ def inverse_substitution(expr: sp.Expr, factor_degree: int = 0) -> sp.Expr:
             if isinstance(expr.args[0], sp.Pow) and expr.args[0].base in (a,b,c):
                 return CyclicProduct(expr.args[0].base) ** expr.args[0].exp
         return expr
-    
+
     expr = sp.together(_try_factor(expr))
     if factor_degree != 0:
         expr = expr / CyclicProduct(a) ** factor_degree
@@ -145,7 +145,7 @@ def sos_struct_handle_uncentered(solver: Callable) -> Callable:
 
 class CommonExpr:
     """
-    Store commonly used expressions for structural SOS.    
+    Store commonly used expressions for structural SOS.
     """
     abc = sp.symbols("a b c")
     a, b, c = abc
@@ -200,7 +200,7 @@ class CommonExpr:
         return w1 / 2 * CyclicSum((a-b)**2) + w2 * CyclicSum(a)**2
 
 
-    
+
     _SPECIAL_AMGMS = {
         ((2,0,1),(1,1,1)): CyclicSum(c*(2*a+c)*(a-b)**2)/(2*CyclicSum(a)),
         ((2,1,0),(1,1,1)): CyclicSum(b*(2*a+b)*(a-c)**2)/(2*CyclicSum(a)),

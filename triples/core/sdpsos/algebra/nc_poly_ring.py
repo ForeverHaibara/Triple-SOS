@@ -42,7 +42,7 @@ class NCPolyRing(StateAlgebra):
     `a1**d1*a2**d2*...*an**dn` is represented by `((a1, d1), (a2, d2), ..., (an, dn))`.
     Here `a1, a2, ..., an` are hermitian variables and might include duplicated variables.
     However, it is important that `a_{i}!=a_{i+1}`. The degrees `d1, ..., dn` are nonnegative integers.
-    
+
     To allow inverses like `a^{-1}`, one must add `a1^{-1}` to the variables
     and define the relation `a*a^{-1}=a^{-1}*a=1`.
     """
@@ -92,7 +92,7 @@ class NCPolyRing(StateAlgebra):
         degree = self.degree
         if len(ideal):
             raise NotImplementedError
-            
+
         qmodule_bases = {}
         for key, q in qmodule.items():
             d = q.total_degree()
@@ -105,7 +105,7 @@ class NCPolyRing(StateAlgebra):
             dict_basis, basis = generate_monoms_nc(
                 self.nvars, (degree - d)//2, hom=is_homogeneous)
             qmodule_bases[key] = QmoduleBasis(self, q, basis=basis, dict_basis=dict_basis)
-    
+
         ideal_bases = {}
         # for key, i in ideal.items():
         #     d = i.total_degree()

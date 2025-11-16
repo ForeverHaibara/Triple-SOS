@@ -59,9 +59,9 @@ def _root_span(root: Root, basis: Any, degree: int = 0, diff: Tuple[int,...] = N
             vec = rep_matrix_from_list(vec, len(vec), domain=root.domain)
         return vec
 
- 
+
     raise TypeError(f"Unknown basis type {type(basis)}")
-    
+
 
 class _bilinear():
     """
@@ -366,7 +366,7 @@ def constrain_root_nullspace(sdp: SDPProblem, poly: Poly, ineq_constraints: Dict
                 if rep == reorder:
                     continue
                 rep_set.add(reorder)
-        return [polylize(rep, *gens) for rep in rep_set] 
+        return [polylize(rep, *gens) for rep in rep_set]
 
     time_limit = ArithmeticTimeout.make_checker(time_limit)
     time0 = time()

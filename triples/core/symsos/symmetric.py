@@ -67,7 +67,7 @@ class UE3Positive(SymmetricTransform):
         numerator = numerator.as_poly(x, y, z)
         p0 = CyclicSum(a,(a,b,c))
         # w0 = CyclicSum(a*(a-b)*(a-c),(a,b,c))*CyclicSum(a*(b-c)**2,(a,b,c))**2 / CyclicProduct(a,(a,b,c))
-        # w0 = (CyclicProduct((a-b)**2,(a,b,c))*p0**3 + 
+        # w0 = (CyclicProduct((a-b)**2,(a,b,c))*p0**3 +
         #         CyclicProduct(a,(a,b,c))*CyclicProduct((a+b-2*c)**2,(a,b,c)))/CyclicProduct(a,(a,b,c))
         # _SCHUR = (CyclicSum((b-c)**2*(b+c-a)**2, (a,b,c)) + 2*CyclicSum(b*c*(b-c)**2, (a,b,c)))/2/CyclicSum(a, (a,b,c))
         # w0 = _SCHUR * CyclicSum(a*(b-c)**2,(a,b,c))**2 / CyclicProduct(a,(a,b,c))
@@ -89,7 +89,7 @@ class UE3Positive(SymmetricTransform):
         return {
             x: _SCHUR,
             y: CyclicSum(a*(b-c)**2, (a,b,c)),
-            z: CyclicProduct((a-b)**2, (a,b,c)) * CyclicSum(a, (a,b,c))**3 / CyclicProduct(a, (a,b,c)),            
+            z: CyclicProduct((a-b)**2, (a,b,c)) * CyclicSum(a, (a,b,c))**3 / CyclicProduct(a, (a,b,c)),
         }
 
     @classmethod

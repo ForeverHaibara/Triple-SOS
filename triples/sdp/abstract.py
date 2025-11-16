@@ -90,7 +90,7 @@ class SDPProblemBase(ABC):
 
     @abstractmethod
     def S_from_y(self, y: Optional[Union[Matrix, ndarray, Dict]] = None) -> Dict[Any, Matrix]:
-        
+
         """
         Given y, compute the symmetric matrices. This is useful when we want to see the
         symbolic representation of the SDP problem.
@@ -149,7 +149,7 @@ class SDPProblemBase(ABC):
             raise ValueError("The vector y is not feasible by the equality constraints."
                              " Use project=True to project the approximated solution to the feasible region.")
         y = y2
-  
+
         S = self.S_from_y(y)
         decomps = {}
         for key, s in S.items():
@@ -253,7 +253,7 @@ class SDPProblemBase(ABC):
         if end_time is not None and (not ('time_limit' in kwargs)):
             kwargs['time_limit'] = end_time - perf_counter()
 
-        sol = self._solve_numerical_sdp(objective=obj[0], constraints=cons, solver=solver, 
+        sol = self._solve_numerical_sdp(objective=obj[0], constraints=cons, solver=solver,
                     return_result=True, kwargs=kwargs)
         y = sol.y
         if y is not None:

@@ -38,7 +38,7 @@ def check_univariate(poly: sp.Poly, positive: bool = True) -> bool:
     poly : sp.Poly
         The polynomial.
     positive : bool
-        Whether to prove the polynomial is positive over R+ or positive over R. 
+        Whether to prove the polynomial is positive over R+ or positive over R.
         When True, it checks over R+. When False, it checks over R.
 
     Returns
@@ -127,8 +127,8 @@ def _construct_matrix_from_roots(
         early_stop: int = -1
     ) -> Union[sp.Matrix, Tuple[sp.Matrix, sp.Matrix]]:
     """
-    Assume an irreducible polynomial f(x) is positive over R, then 
-    all its roots are complex and paired by conjugate. Write 
+    Assume an irreducible polynomial f(x) is positive over R, then
+    all its roots are complex and paired by conjugate. Write
     f(x) = \prod (x - root_i) * \prod (x - root_i.conjugate), then
     f(x) = |\prod (x - root_i)|^2 = Re^2 + Im^2 is already sum of squares.
 
@@ -138,12 +138,12 @@ def _construct_matrix_from_roots(
     and is often full rank.
 
     When f(x) is positive over R+, we have f(x) = g(x) ( h^2(x) + k^2(x) )
-    where all roots of g are negative numbers. Then 
+    where all roots of g are negative numbers. Then
     g = a_{2n}x^{2n} + a_{2n-2}x^{2n-2} + ... + a{0}
         + x(a_{2n-1}x^{2n-2} + ... + a{1})
-    where all coefficients a are positive. Then we can see that 
+    where all coefficients a are positive. Then we can see that
     f = u^2 + x* v^2. Then we can construct two symmetric matrices.
-    
+
     Parameters
     ----------
     real_roots: List[sp.Float]
@@ -183,7 +183,7 @@ def _construct_matrix_from_roots(
 
             vec_re = sp.Matrix(list(map(sp.re, vec)))
             vec_im = sp.Matrix(list(map(sp.im, vec)))
-            
+
             M += vec_re * vec_re.T + vec_im * vec_im.T
             cnt += 1
             if cnt >= early_stop:
@@ -214,7 +214,7 @@ def _construct_matrix_from_roots(
             poly = sp.Poly(coeffs, x)
             roots = sp.polys.roots(poly)
             _, complex_roots_extra = _classify_roots(roots)
-            M = _construct_matrix_from_roots([], 
+            M = _construct_matrix_from_roots([],
                 complex_roots_extra + complex_roots,
                 leading_coeff = leading_coeff * poly.LC(),
                 positive = False,
@@ -263,7 +263,7 @@ def _rationalize_matrix_simultaneously(
                 _rationalize_matrix_simultaneously(M, lcm, off_diagonal = i == 0)
             )
         M = new_Ms
-            
+
     return M
 
 
@@ -281,11 +281,11 @@ def _determine_diagonal_entries(M: Union[sp.Matrix, List[sp.Matrix]], poly: sp.P
         The symmetric matrix. If positive == True, it is a tuple of two matrices.
     poly : sp.Poly
         The polynomial.
-    
+
     Returns
     -------
     M : sp.Matrix | List[sp.Matrix]
-        The matrix with diagonal entries determined. The operation is 
+        The matrix with diagonal entries determined. The operation is
         done in-place.
     """
     if isinstance(M, sp.Matrix):
@@ -302,7 +302,7 @@ def _determine_diagonal_entries(M: Union[sp.Matrix, List[sp.Matrix]], poly: sp.P
                 l = min(m, n - m - 2)
                 s = sum(M[m - j, m + j + 1] for j in range(1, l + 1))
                 M[m, m + 1] = all_coeffs[i] / 2 - s
-                M[m + 1, m] = M[m, m + 1] 
+                M[m + 1, m] = M[m, m + 1]
     else:
         # positive == True
         Ms = M
@@ -431,7 +431,7 @@ def _prove_univariate_irreducible(
         n: int = 15
     ) -> Union[sp.Expr, List[Tuple[sp.Rational, List[sp.Rational], List[sp.Poly]]], None]:
     """
-    Prove an irreducible univariate polynomial is positive over the real line or 
+    Prove an irreducible univariate polynomial is positive over the real line or
     positive over R+. Return None if the algorithm fails.
 
     Although it seems an SDP problem and requires an SDP solver, the univariate polynomial
@@ -464,7 +464,7 @@ def _prove_univariate_irreducible(
     Returns
     ----------
     List[(multiplier, coeffs, polys)] : list
-        A sum of squares expression such that sos = 
+        A sum of squares expression such that sos =
             sum(multiplier[i] * sum(coeffs[i][j] * polys[i][j]**2))
     """
     if poly.LC() < 0:
@@ -653,7 +653,7 @@ def prove_univariate(
             if multiplicity > 1:
                 mul.append([(sp.S(1), [sp.S(1)], [factor ** (multiplicity // 2)])])
             mul.append(ret)
-    
+
     # merge the raw lists of each factor
     x = poly.gen
     p1 = [mul[0][1], mul[0][2]]
@@ -783,7 +783,7 @@ def prove_univariate_interval(
         for multiplier, coeff_list, poly_list in proof:
             poly_list2 = [trans(p) for p in poly_list]
             new_proof.append((trans_mul(multiplier), coeff_list, poly_list2))
-        
+
     else:
         d = b - a
         if d <= 0:

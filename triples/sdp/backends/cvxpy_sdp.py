@@ -121,7 +121,7 @@ class DualBackendCVXPY(DualBackend):
 
         objective = cp.Minimize(self.c @ y)
         problem = cp.Problem(objective, constraints)
-    
+
         return problem
 
     def _solve(self, configs: SolverConfigs):

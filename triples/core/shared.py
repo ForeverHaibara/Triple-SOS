@@ -66,7 +66,7 @@ def homogenize(poly: sp.Poly, t: Optional[sp.Symbol] = None) -> Tuple[sp.Poly, s
 
 def homogenize_expr_list(expr_list: List[Union[sp.Expr, sp.Poly]], homogenizer: sp.Symbol) -> List[sp.Expr]:
     """
-    Homogenize a list of sympy expressions or polynomials.    
+    Homogenize a list of sympy expressions or polynomials.
     """
     symbols = set.union(set(), *[set(e.free_symbols) for e in expr_list])
     if homogenizer in symbols:

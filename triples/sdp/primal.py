@@ -16,7 +16,7 @@ from .utils import exprs_to_arrays
 class SDPPrimal(TransformablePrimal):
     """
     Class to solve primal SDP problems, which is in the form of
-    
+
         sum_i trace(S_i*A_ij) = b_j, Si >> 0
 
     Primal form of SDP is not flexible to be used for symbolic purposes,
@@ -33,7 +33,7 @@ class SDPPrimal(TransformablePrimal):
         s.t.  tr(F1 * Y) = 10,
               tr(F2 * Y) = 20,
               Y >> 0.
-              
+
     where:
 
         F0 = Matrix(4,4,[1,0,0,0,0,2,0,0,0,0,3,0,0,0,0,4])
@@ -61,7 +61,7 @@ class SDPPrimal(TransformablePrimal):
         [X_{0,1}, X_{1,1}, X_{1,2}, X_{1,3}],
         [X_{0,2}, X_{1,2}, X_{2,2}, X_{2,3}],
         [X_{0,3}, X_{1,3}, X_{2,3}, X_{3,3}]])}
-       
+
     Then we can solve the problem by calling the `solve_obj` method
     by passing in the objective vector, and it is expected to return the solution vector.
 
@@ -83,7 +83,7 @@ class SDPPrimal(TransformablePrimal):
         [              0.0],
         [-2.29578098235181],
         [ 2.29579128881059]])
-    
+
     After the solution is found, the solution can also be accessed by `sdp.y`, `sdp.S`
     and `sdp.decompositions`. As the solving process is numerical, the matrix could
     be slightly nonpositive semidefinite up to a small numerical error.
@@ -238,7 +238,7 @@ class SDPPrimal(TransformablePrimal):
         if isinstance(splits, dict):
             keys = list(splits.keys())
             splits = list(splits.values())
-        
+
         space_list = []
         start = 0
         for n in splits:
@@ -331,7 +331,7 @@ class SDPPrimal(TransformablePrimal):
             solver=solver, return_result=return_result, **kwargs
         )
 
-    
+
     def solve_obj(self,
         objective: Union[Expr, Matrix, List],
         constraints: List[Union[Relational, Expr, Tuple[Matrix, Matrix, str]]] = [],
@@ -355,7 +355,7 @@ class SDPPrimal(TransformablePrimal):
         constraints : List[Union[Relational, Expr, Tuple[Matrix, Matrix, str]]]
             Additional affine constraints over variables. Each element of the list
             must be one of the following:
-            
+
             A sympy affine relational expression, e.g., `x > 0` or `Eq(x + y, 1)`.
               Note that equality constraints must use `sympy.Eq` class instead of `==` operator,
               because the latter `x + y == 1` will be evaluated to a boolean value.

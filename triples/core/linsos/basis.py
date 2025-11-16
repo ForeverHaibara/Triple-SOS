@@ -36,7 +36,7 @@ class _callable_expr():
     F(a, b, c)
     >>> e((a,b,c), poly=True)
     Poly(a**3 + b**3 + c**3, a, b, c, domain='ZZ')
-    
+
     """
     __slots__ = ['_func']
     def __init__(self, func: Callable[[Tuple[Symbol, ...], Any], Expr]):
@@ -55,7 +55,7 @@ class _callable_expr():
             def func(s, poly=False):
                 if not poly:
                     return expr.xreplace(dict(zip(symbols, s)))
-                # new_p = p.as_expr().xreplace(dict(zip(symbols, s))).as_poly(s)                
+                # new_p = p.as_expr().xreplace(dict(zip(symbols, s))).as_poly(s)
                 new_p = Basic.__new__(Poly)
                 new_p.gens = tuple(s)
                 if isinstance(p, PolyElement):
@@ -168,7 +168,7 @@ class LinearBasisTangent(LinearBasis):
                 generate_partitions([cls._degree_step] * len(symbols), degree, equal=require_equal, descending=False)]
 
     @classmethod
-    def generate_quad_diff(cls, 
+    def generate_quad_diff(cls,
             tangent: Expr, symbols: Tuple[Symbol, ...], degree: int, symmetry: PermutationGroup,
             tangent_p: Optional[Poly] = None, quad_diff_order: Union[bool, int] = 8,
         ) -> Tuple[List['LinearBasisTangent'], np.ndarray]:
@@ -191,7 +191,7 @@ class LinearBasisTangent(LinearBasis):
         tangent_p: Optional[Poly]
             The sympy polynomial of the tangent. If the tangent parameter
             is an alias of the polynomial that does not actually
-            form a polynomial, then this parameter should be used. 
+            form a polynomial, then this parameter should be used.
             See also the example below.
         quad_diff_order: Union[bool, int]
             If an intger, generate only quadratic differences with degree <= quad_diff.
@@ -386,7 +386,7 @@ def _get_cross_dmps_of_quad_diff(quad_diff_order: int, tangent_dmp: DMP) -> List
 
     # cache = {(0,) * ndiff: tangent_dmp} # tangent_dmp.one(nvars - 1, tangent_dmp.dom)
     cache = {(0,) * ndiff: smp}
-    
+
     if _VERBOSE_GENERATE_QUAD_DIFF:
         time0 = perf_counter()
 
@@ -457,7 +457,7 @@ def _get_cross_exprs_and_polys_of_quad_diff(symbols: Tuple[Symbol],
     powers = generate_partitions([2] * (nvars*(nvars-1)//2), quad_diff_order, descending=False)
 
     exprs = [
-        Mul(tangent, 
+        Mul(tangent,
             *((Pow(symbols[i] - symbols[j], 2*p) if p else Integer(1))
                 for (i,j), p in zip(inds, power))) for power in powers
     ]
@@ -501,7 +501,7 @@ def _get_reduced_indices(symmetry: MonomialManager, symmetry_base: MonomialManag
 
     Since it is called multiple times in generating, the function is wrapper by lru_cache.
     However, this might need optimization for parallel use.
-    
+
     Returns
     -----------
     full_encod_to_reduced_indices : np.ndarray
@@ -531,7 +531,7 @@ def _get_reduced_indices(symmetry: MonomialManager, symmetry_base: MonomialManag
         multiplicity = _compute_sym_multiplicity(reduced_monoms, need_sort=False)
     else:
         full_to_reduced = [symmetry.standard_monom(m) for m in full_monoms]
-        multiplicity = [sum(_ == m for _ in symmetry.permute(m)) for m in 
+        multiplicity = [sum(_ == m for _ in symmetry.permute(m)) for m in
                             symmetry.inv_monoms(degree)]
         multiplicity = np.array(multiplicity, dtype=_DTYPE)
 
@@ -553,7 +553,7 @@ def _count_contribution_of_monoms(A: np.ndarray, v: np.ndarray, M: int) -> np.nd
     A : np.ndarray with shape (X, N), each element to be an integer in [0, M)
     v : np.ndarray with shape (N,)
     M : int
-    
+
     Returns
     -----------
     B : np.ndarray
@@ -569,7 +569,7 @@ def _count_contribution_of_monoms(A: np.ndarray, v: np.ndarray, M: int) -> np.nd
         rows = np.repeat(np.arange(X), N)  # row coors [0,0,0,1,1,1,...]
         cols = A.ravel()                   # column coors [A[0,0],A[0,1],...,A[1,0],...]
         data = np.tile(v, X)               # values [v[0],v[1],...,v[0],v[1],...]
-        
+
         return coo_matrix((data, (rows, cols)), shape=(X, M)).toarray()
     else:
         B = np.zeros((X, M), dtype=v.dtype)
@@ -586,7 +586,7 @@ def _get_matrix_of_quad_diff(tangent_dmp: DMP, degree: int, quad_diff_order: int
     Generate the matrix representation of all bases of the form
 
         x1^a1 * x2^a2 * ... * xn^an * (x1-x2)^(2b_12) * ... * (xi-xj)^(2b_ij) * tangent
-    
+
     with total degree == degree and (2b_12 + ... + 2b_ij) <= quad_diff_order and
     a1 % step == a2 % step == ... == an % step == 0.
 
@@ -620,7 +620,7 @@ def _get_matrix_of_quad_diff(tangent_dmp: DMP, degree: int, quad_diff_order: int
     _sparse = isinstance(polys[0], PolyElement)
     if _sparse:
         deg = lambda p: max(map(sum, p.keys()), default=0)
-        nvars = polys[0].ring.ngens    
+        nvars = polys[0].ring.ngens
     else:
         deg = lambda p: p.total_degree()
         nvars = (polys[0].rep if isinstance(polys[0], Poly) else polys[0]).lev + 1

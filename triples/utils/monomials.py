@@ -31,7 +31,7 @@ def generate_partitions(d_list: Union[int, List[int]], degree: int,
         equal: bool = False, descending: bool = True) -> List[Tuple[int, ...]]:
     """
     Generate all tuples (a0,a1,...,an) such that n = len(d_list) and sum(ai*di) <= degree.
-    If equal is True, then it requires sum(ai*di) == degree. 
+    If equal is True, then it requires sum(ai*di) == degree.
 
     When d_list is an integer, it assumes d_list = [1, 1, ..., 1] of length nvars.
     """
@@ -151,7 +151,7 @@ class MonomialManager():
     @classmethod
     def from_perm_group(cls, perm_group: PermutationGroup, is_homogeneous: bool = True) -> 'MonomialManager':
         """
-        Create a `MonomialManager` object from a permutation group. The `nvars` argument is inferred from 
+        Create a `MonomialManager` object from a permutation group. The `nvars` argument is inferred from
         the degree of the group and is therefore not needed.
         """
         return MonomialManager(perm_group.degree, perm_group=perm_group, is_homogeneous=is_homogeneous)
@@ -230,7 +230,7 @@ class MonomialManager():
         For monomials in cyclic groups, only one representative is needed.
         For example, a^3b^2c, b^3c^2a, and c^3a^2b are equivalent wrt. CyclicGroup(3),
         and the standard monom (the representative) is (3, 2, 1), standing for a^3b^2c.
-        The function returns the standard monom for the input monom. 
+        The function returns the standard monom for the input monom.
         This is chosen to be the lexicographically largest monom among all permutations of the input monom.
         """
         return max(self.permute(monom))
@@ -265,7 +265,7 @@ class MonomialManager():
         #         # write the value to the corresponding column
         #         all_vecs[ind][j] = v
         # return Matrix(all_vecs).T
- 
+
         sdm = {i: {} for i in range(vec.shape[0])}
         rep = vec._rep.rep.to_sdm()
         for i in rep.keys():
@@ -354,7 +354,7 @@ class MonomialManager():
                 return Poly(0, *gens)
             else:
                 raise ValueError(f"Array must be a vector, but received shape {array.shape}.")
-            
+
             for i, z in rep_list:
                 if z != zero:
                     monom = inv_monoms[i]
@@ -400,7 +400,7 @@ def _parse_options(nvars, **options) -> MonomialManager:
                        ' Only "hom", "cyc", "sym", and "symmetry" are allowed.')
 
     if symmetry is not None and (cyc or sym):
-        raise ValueError("Cannot specify both symmetry and cyc or sym.")  
+        raise ValueError("Cannot specify both symmetry and cyc or sym.")
     elif cyc:
         if sym:
             raise ValueError("Cannot specify both cyc and sym.")
@@ -414,7 +414,7 @@ def _parse_options(nvars, **options) -> MonomialManager:
         return MonomialManager(nvars, is_homogeneous = hom)
     if isinstance(symmetry, PermutationGroup):
         return MonomialManager.from_perm_group(symmetry, is_homogeneous = hom)
-    
+
     raise ValueError(f"Invalid symmetry type {type(symmetry)}. Expected MonomialManager or PermutationGroup.")
 
 
@@ -557,7 +557,7 @@ def invarraylize(array: Union[List, np.ndarray, Matrix], gens: List[Symbol], deg
     symmetry: PermutationGroup
         Sympy permutation group object for the monomials. This specifies the symmetry
         beyond cyclic and symmetric groups.
-        
+
 
     Returns
     ---------
@@ -923,7 +923,7 @@ def arraylize_up_to_symmetry(poly: Poly, perm_group: PermutationGroup,
     def v(perm, i):
         """Get the value of index i in the vector after permutation"""
         # return getvalue(dict_monoms[tuple(perm(inv_monoms[i]))])
-        
+
         # because perm.__call__ has sanity checks, we should make it faster
         ii = inv_monoms[i]
         pii = tuple([ii[j] for j in perm._array_form])
@@ -1083,7 +1083,7 @@ def poly_reduce_by_symmetry(poly: Poly, perm_group: PermutationGroup) -> Poly:
         # get the multiplicity of the monomials given the permutation group
         # i.e. how many permutations make it invariant
         return perm_order // ufs_size[ufs_find(monom)]
-    
+
     # only reserve the keys for ufs[monom] == monom
     for monom, coeff in poly.terms():
         if ufs_find(monom) == monom:

@@ -182,7 +182,7 @@ class Root():
         self._make_single_power_cached_func()
 
     def __getitem__(self, i):
-        """Get the i-th element of the root or get 
+        """Get the i-th element of the root or get
         a slicing of the root."""
         if isinstance(i, int):
             return self.root[i]
@@ -377,7 +377,7 @@ class Root():
     def to_field(self) -> 'Root':
         """
         Return an equivalent root with domain set to the field.
-        
+
         Examples
         ----------
         >>> from sympy import QQ, ZZ
@@ -733,7 +733,7 @@ class Root():
         (y - 4)*(y - 3)*(y - 2)*(y - 1)
         >>> Root((1, exp(2*pi*I/3), exp(4*pi*I/3))).poly()
         Poly(x**3 - 1, x, domain='QQ<exp(-2*I*pi/3)>')
-        
+
         >>> poly = Poly(49*x**3 - 49*x**2 + 14*x - 1, x)
         >>> root = Root((CRootOf(poly, 2), CRootOf(poly, 1), CRootOf(poly, 0))); root.n(6)
         (0.543134, 0.349292, 0.107574)
@@ -941,7 +941,7 @@ class Root():
         ----------
         root : Root
             The trigonometric form of the root.
-        
+
         Examples
         ----------
         >>> Root.from_uv(1, 2)[0]
@@ -1009,7 +1009,7 @@ class Root():
                 a_m = r[m]
                 if a_m == 0:
                     continue
-                
+
                 # expand ((z + 1/z)/2)^m
                 current_c = one  # C(m,0) = 1
                 for k in range(0, m//2 + 1):
@@ -1017,7 +1017,7 @@ class Root():
                     contribution = a_m * current_c / (2 ** m)
                     # no need to record t < 0
                     coeff[t] += contribution
-                    
+
                     # compute C(m,k+1)
                     current_c = current_c * (m - k) / (k + 1)
 

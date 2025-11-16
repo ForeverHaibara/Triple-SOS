@@ -36,7 +36,7 @@ def _structural_sos_4vars_symmetric(
     """
     if not isinstance(coeff, Coeff):
         coeff = Coeff(coeff)
-    
+
     return sos_struct_common(coeff,
         sos_struct_degree_specified_solver(SOLVERS_SYMMETRIC, homogeneous=True),
         real=real
@@ -53,7 +53,7 @@ def _structural_sos_4vars_cyclic(
     """
     if not isinstance(coeff, Coeff):
         coeff = Coeff(coeff)
-    
+
     return sos_struct_common(coeff,
         sos_struct_degree_specified_solver(SOLVERS_CYCLIC, homogeneous=True),
         real=real
@@ -111,7 +111,7 @@ def structural_sos_4vars(poly: sp.Poly, ineq_constraints: Dict[sp.Poly, sp.Expr]
 
     if poly.gens != (sp.symbols("a b c d")):
         solution = solution.xreplace(dict(zip(sp.symbols("a b c d"), poly.gens)))
-    
+
     ####################################################################
     # replace assumed-nonnegative symbols with inequality constraints
     ####################################################################

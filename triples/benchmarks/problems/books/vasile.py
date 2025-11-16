@@ -2038,7 +2038,7 @@ class MathematicalInequalitiesVol3(MathematicalInequalities):
 
     def problem_vasile_p31017_p1(self):
         return c3s(a*(a+b)**5), [], []
-        
+
     def problem_vasile_p31018(self):
         return 3*c3s(a**4)+4*c3s(a**3*b), [], []
 
@@ -2318,7 +2318,7 @@ class MathematicalInequalitiesVol3(MathematicalInequalities):
 
     def problem_vasile_p31085_p2(self):
         return 3*c3s(a**2)/(2*c3s(a)) - c3s(a*b/(b+c)), [a,b,c], []
-  
+
     def problem_vasile_p31085_p1(self):
         return c3s(a**2)/(3*c3s(a)) - c3s(a*b/(4*b+5*c)), [a,b,c], []
 
@@ -2863,7 +2863,7 @@ class MathematicalInequalitiesVol3(MathematicalInequalities):
         return 1 - ( (a*b + b*c + c*a)/(a**2 + b**2 + c**2) + (b - c)**2/(2*(a*b + b*c + c*a)) ), [a - b, a - c, b, c], []
 
     def problem_vasile_p32043_p2(self):
-        return 1 - ( (a*b + b*c + c*a)/(a**2 + b**2 + c**2) + 2*(b - c)**2/(a + b + c)**2 ), [a - b, a - c, b, c], []   
+        return 1 - ( (a*b + b*c + c*a)/(a**2 + b**2 + c**2) + 2*(b - c)**2/(a + b + c)**2 ), [a - b, a - c, b, c], []
 
     def problem_vasile_p32044_p1(self):
         return (a**2 + b**2 + c**2)/(a*b + b*c + c*a) - 1 - 4*(b - c)**2/(3*(b + c)**2), [b - a, c - a, a], []

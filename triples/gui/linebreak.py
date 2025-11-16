@@ -32,7 +32,7 @@ def _get_latex_argument_content(text, start_pos):
         raise ValueError(f"Unmatched brace starting at {start_pos} in '{text}'")
     elif char == '\\':
         match = re.match(r"\\[a-zA-Z]+(?:\s*[*!]?)?", text[start_pos:]) or \
-                re.match(r"\\.", text[start_pos:]) 
+                re.match(r"\\.", text[start_pos:])
         if match:
             token = match.group(0)
             return token, start_pos + len(token)
@@ -43,7 +43,7 @@ def _get_latex_argument_content(text, start_pos):
 def get_additive_terms(latex_str):
     terms = []
     buffer = ""
-    depth_stack = [] 
+    depth_stack = []
     n_str = len(latex_str)
     idx = 0
     while idx < n_str:
@@ -54,7 +54,7 @@ def get_additive_terms(latex_str):
                 buffer += latex_str[idx : idx + len(l_delim_str)]
                 idx += len(l_delim_str)
                 found_left_delim = True
-                break 
+                break
         if found_left_delim: continue
 
         found_right_delim = False
@@ -66,7 +66,7 @@ def get_additive_terms(latex_str):
                 idx += len(expected_closer)
                 found_right_delim = True
         if found_right_delim: continue
-        
+
         char = latex_str[idx]
 
         if char in OPENING_BRACKETS_FOR_DEPTH:
@@ -80,41 +80,41 @@ def get_additive_terms(latex_str):
             buffer += char
             idx += 1
         elif latex_str.startswith("\\frac", idx) and not depth_stack:
-            buffer += char 
+            buffer += char
             idx += 1
         elif char in ('+', '-') and not depth_stack:
             if buffer: terms.append(buffer.strip())
-            buffer = char 
+            buffer = char
             idx += 1
         else:
             buffer += char
             idx += 1
-            
+
     if buffer: terms.append(buffer.strip())
-    
+
     final_terms = []
     if not terms: return None
 
-    if terms[0] == "" and len(terms) > 1: 
+    if terms[0] == "" and len(terms) > 1:
         first_term_candidate = terms[1]
         if first_term_candidate.startswith('+') or first_term_candidate.startswith('-'):
             final_terms.append(first_term_candidate)
             start_idx_for_loop = 2
-        else: 
-            final_terms.append(terms[0]) 
-            final_terms.append(terms[1]) 
+        else:
+            final_terms.append(terms[0])
+            final_terms.append(terms[1])
             start_idx_for_loop = 2
     elif terms[0] != "" and (terms[0].startswith('+') or terms[0].startswith('-')):
         final_terms.append(terms[0])
         start_idx_for_loop = 1
-    else: 
+    else:
         final_terms.append(terms[0])
         start_idx_for_loop = 1
 
     for i in range(start_idx_for_loop, len(terms)):
         final_terms.append(terms[i])
-    
-    final_terms = [t for t in final_terms if t or t == terms[0]] 
+
+    final_terms = [t for t in final_terms if t or t == terms[0]]
     if final_terms and final_terms[0] == "" and len(final_terms) > 1:
         final_terms.pop(0)
 
@@ -122,12 +122,12 @@ def get_additive_terms(latex_str):
 
 
 # --- Part 2: Wrap with aligned if needed (MODIFIED) ---
-DEFAULT_MAX_TERMS_FOR_ALIGN = 2 
+DEFAULT_MAX_TERMS_FOR_ALIGN = 2
 DEFAULT_MAX_LEN_FOR_ALIGN = 160
 DEFAULT_MAX_LINE_LEN_IN_ALIGNED = 100 # New default constant
 
-def wrap_with_aligned_if_needed(latex_str, 
-                                 max_terms_trigger=DEFAULT_MAX_TERMS_FOR_ALIGN, 
+def wrap_with_aligned_if_needed(latex_str,
+                                 max_terms_trigger=DEFAULT_MAX_TERMS_FOR_ALIGN,
                                  max_len_trigger=DEFAULT_MAX_LEN_FOR_ALIGN,
                                  max_line_len=DEFAULT_MAX_LINE_LEN_IN_ALIGNED): # New parameter
     terms = get_additive_terms(latex_str)
@@ -136,12 +136,12 @@ def wrap_with_aligned_if_needed(latex_str,
     if terms:
         if len(terms) > max_terms_trigger or len(latex_str) > max_len_trigger:
             apply_aligned_wrapper = True
-    
+
     if not apply_aligned_wrapper:
         return latex_str
 
     if not terms: # Should be caught by apply_aligned_wrapper logic, but safeguard
-        return latex_str 
+        return latex_str
 
     output_lines_as_term_lists = [] # List of lists of terms
     current_line_term_group = []
@@ -191,7 +191,7 @@ def wrap_with_aligned_if_needed(latex_str,
         return latex_str
 
     aligned_body = "\\\\\n".join(aligned_body_parts)
-        
+
     return f"\\begin{{aligned}}{aligned_body}\\end{{aligned}}"
 
 
@@ -207,12 +207,12 @@ def _find_next_opener_info(latex_str, start_pos, opener_regex_patterns):
                 if first_match_pos == -1 or current_match_pos < first_match_pos:
                     first_match_pos, found_actual_opener, found_opener_regex = \
                         current_match_pos, match.group(0), opener_pattern
-                break 
+                break
         except re.error: pass
     return (first_match_pos, found_actual_opener, found_opener_regex) if first_match_pos != -1 else (-1, None, None)
 
-def recursive_latex_auto_linebreak(latex_str, 
-                           max_terms_aligned=DEFAULT_MAX_TERMS_FOR_ALIGN, 
+def recursive_latex_auto_linebreak(latex_str,
+                           max_terms_aligned=DEFAULT_MAX_TERMS_FOR_ALIGN,
                            max_len_aligned=DEFAULT_MAX_LEN_FOR_ALIGN,
                            max_line_len_in_aligned=DEFAULT_MAX_LINE_LEN_IN_ALIGNED): # New parameter
     processed_parts = []
@@ -225,7 +225,7 @@ def recursive_latex_auto_linebreak(latex_str,
         if match_pos == -1:
             processed_parts.append(latex_str[current_pos:])
             break
-        
+
         if match_pos > current_pos:
             processed_parts.append(latex_str[current_pos:match_pos])
 
@@ -238,19 +238,19 @@ def recursive_latex_auto_linebreak(latex_str,
             formatted_num = recursive_latex_auto_linebreak(num_content, max_terms_aligned, max_len_aligned, max_line_len_in_aligned)
             processed_parts.append("{" + formatted_num + "}")
             current_pos = end_pos_num
-            
+
             den_content, end_pos_den = _get_latex_argument_content(latex_str, current_pos)
             formatted_den = recursive_latex_auto_linebreak(den_content, max_terms_aligned, max_len_aligned, max_line_len_in_aligned)
             processed_parts.append("{" + formatted_den + "}")
             current_pos = end_pos_den
-        else: 
+        else:
             literal_closer = DELIM_PAIRS.get(actual_opener_text)
-            if not literal_closer: 
-                continue 
+            if not literal_closer:
+                continue
 
             content_start_idx = current_pos
             level, search_idx, end_delim_start_idx = 0, content_start_idx, -1
-            
+
             while search_idx < n:
                 if latex_str.startswith(actual_opener_text, search_idx):
                     level += 1
@@ -261,13 +261,13 @@ def recursive_latex_auto_linebreak(latex_str,
                         break
                     level -= 1
                     search_idx += len(literal_closer)
-                elif latex_str.startswith("\\" + actual_opener_text, search_idx): 
+                elif latex_str.startswith("\\" + actual_opener_text, search_idx):
                     search_idx += len("\\" + actual_opener_text)
-                elif latex_str.startswith("\\" + literal_closer, search_idx): 
+                elif latex_str.startswith("\\" + literal_closer, search_idx):
                     search_idx += len("\\" + literal_closer)
                 else:
                     search_idx += 1
-            
+
             if end_delim_start_idx != -1:
                 content = latex_str[content_start_idx : end_delim_start_idx]
                 # Pass all formatting parameters recursively
@@ -276,7 +276,7 @@ def recursive_latex_auto_linebreak(latex_str,
                 processed_parts.append(literal_closer)
                 current_pos = end_delim_start_idx + len(literal_closer)
             else:
-                pass 
+                pass
 
     final_reconstructed_str = "".join(processed_parts)
     # Pass all formatting parameters to the final wrap
@@ -328,7 +328,7 @@ if __name__ == '__main__':
     # & a +b +c +d\\
     # & +e +f +g\\
     # & +h +i
-    
+
     print("\n--- Part 3: recursive_latex_auto_linebreak (passing new param) ---")
     # Test with a long expression inside parentheses, requiring internal alignment with line length
     long_paren_expr = "f(x) = (a+b+c+d+e+f+g+h+i+j+k+l+m+n+o+p+q+r) + (s+t+u+v+w) - 2(x+y+z)"

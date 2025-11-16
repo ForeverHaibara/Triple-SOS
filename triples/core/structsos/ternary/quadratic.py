@@ -6,7 +6,7 @@ from .utils import (
 
 def sos_struct_quadratic(coeff, real = True):
     """
-    Solve cyclic quadratic problems. 
+    Solve cyclic quadratic problems.
     It must be in the form CyclicSum(a**2 + x*a*b) where x >= -1.
 
     The function does not use the `real` argument.
@@ -35,8 +35,8 @@ def sos_struct_acyclic_quadratic(coeff, real = True):
 
     We can also prove the property of the copositve matrix for nvars = 3.
     Denote the matrix as M where M =
-    [[c00, c01/2, c02/2], 
-     [c01/2, c11, c12/2], 
+    [[c00, c01/2, c02/2],
+     [c01/2, c11, c12/2],
      [c02/2, c12/2, c22]].
     A necessary condition for M to be copositive is the diagonal elements are nonnegative.
     Next, we require c01/2 >= -sqrt(c00*c11), c02/2 >= -sqrt(c00*c22), c12/2 >= -sqrt(c11*c22).

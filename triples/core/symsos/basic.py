@@ -72,7 +72,7 @@ class SymmetricTransform():
         """
         ineqs, eqs = cls._get_default_constraints(new_symbols)
         proved_ineqs, proved_eqs = {}, {}
-        for cons, new_cons in ((ineqs, proved_ineqs), (eqs, proved_eqs)):    
+        for cons, new_cons in ((ineqs, proved_ineqs), (eqs, proved_eqs)):
             for k, v in cons.items():
                 translated = cls.inv_transform(v, symbols, new_symbols)
                 proved = sign_sos(translated, signs)
@@ -168,7 +168,7 @@ class SymmetricTransform():
         restoration = lambda x: cls.inv_transform(x, symbols, new_symbols) / mul_proof
         return pro, restoration
 
-        
+
 
 def extract_factor(poly, factor, points=[]):
     """
@@ -191,7 +191,7 @@ def extract_factor(poly, factor, points=[]):
     degree : int
         The degree of the factor.
     remainder : sympy.Poly
-        The remainder of the polynomial after extracting the factor.    
+        The remainder of the polynomial after extracting the factor.
     """
     if poly.is_zero:
         return 0, poly

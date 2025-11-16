@@ -276,7 +276,7 @@ def solve_undetermined_linear(M: Matrix, B: Matrix,
     # solve by reduced row echelon form
     A, pivots = _rref(aug, normalize_last=False, time_limit=time_limit)
 
-    
+
     if _VERBOSE_SOLVE_UNDETERMINED_LINEAR:
         print(">> Time for rref:", time() - time0) # main bottleneck
         time0 = time()

@@ -60,7 +60,7 @@ class SOS_Manager():
     CONFIG_STANDARDIZE_CYCLICEXPR = True
 
     @classmethod
-    def set_poly(cls, 
+    def set_poly(cls,
             txt: str,
             gens: Tuple[Symbol] = CONFIG_DEFAULT_GENS,
             perm: PermutationGroup = CONFIG_DEFAULT_PERM,
@@ -207,9 +207,9 @@ class SOS_Manager():
     #         return []
 
     #     roots = findroot(
-    #         poly, 
-    #         most = 5, 
-    #         grid = grid, 
+    #         poly,
+    #         most = 5,
+    #         grid = grid,
     #         with_tangents = root_tangents
     #     )
     #     if verbose:
@@ -291,13 +291,13 @@ class SOS_Manager():
 
 def _render_LaTeX(a, path, usetex=True, show=False, dpi=500, fontsize=20):
     '''render a text in LaTeX and save it to path'''
-    
+
     import matplotlib.pyplot as plt
 
     acopy = a
     # linenumber = a.count('\\\\') + 1
     # plt.figure(figsize=(12,10 ))
-    
+
     # set the figure small enough
     # even though the text cannot be display as a whole in the window
     # it will be saved correctly by setting bbox_inches = 'tight'
@@ -311,13 +311,13 @@ def _render_LaTeX(a, path, usetex=True, show=False, dpi=500, fontsize=20):
             plt.text(-0.3,0.9, a, fontsize=fontsize, usetex=usetex)#
         except:
             usetex = False
-    
+
     if not usetex:
         a = acopy
         a = a.strip('$')
         a = '\n'.join([' $ '+_+' $ ' for _ in a.split('\\\\')])
         plt.text(-0.3,0.9, a, fontsize=fontsize, usetex=usetex)#, fontfamily='Times New Roman')
-        
+
     plt.ylim(0,1)
     plt.xlim(0,6)
     plt.axis('off')

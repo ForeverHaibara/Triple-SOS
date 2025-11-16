@@ -18,7 +18,7 @@ def _sos_struct_nvars_quartic_symmetric_sdp(poly):
     Solve a quartic symmetric polynomial inequality on real numbers for nvars >= 4.
     This function does not check the degree & symmetry of the polynomial.
 
-    Idea: if the polynomial is SOS, then it can be written as 
+    Idea: if the polynomial is SOS, then it can be written as
     SymmetricSum((a-b)**2 * quad_form1) + quad_form2, where quad_form2 is a quadratic form
     with respect to SymmetricSum(a**2) and SymmetricSum(a*b). We perform symbolic SDP to find
     quad_form1 and quad_form2 to be PSD.
@@ -59,7 +59,7 @@ def _sos_struct_nvars_quartic_symmetric_sdp(poly):
             mat[i][i] = u
         mat = sp.Matrix(mat)
         return mat
-        
+
     def _get_solution(x, y, u, v, r):
         a, b = poly.gens[:2]
         sol = None

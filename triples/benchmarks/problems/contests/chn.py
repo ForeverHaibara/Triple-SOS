@@ -80,7 +80,7 @@ class CMOProblems(ProblemSet):
     @mark(mark.noimpl, mark.nvars)
     def problem_CMO_1995_p1(self):
         ...
-        
+
     @mark(mark.skip)
     def problem_CMO_1995_p3(self):
         summands = [2394*10**6]
@@ -106,7 +106,7 @@ class CMOProblems(ProblemSet):
         X,Y,Z = (a,0), (0,sqrt(3)*b), (1-c, sqrt(3)*c)
         return Max(dist2(X,Y),dist2(Y,Z),dist2(Z,X)) - Rational(3,7),\
             [a,b,c,1-a,1-b,1-c], []
-    
+
     @mark(mark.skip, mark.nvars)
     def problem_CMO_1997_p1(self):
         xi = symbols('x1:1998')

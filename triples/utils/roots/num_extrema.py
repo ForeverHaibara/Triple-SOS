@@ -174,7 +174,7 @@ class NumerFunc:
             The expression to convert.
         symbols : tuple of sympy.Symbol
             The symbols in the expression.
-        """            
+        """
         def _lambdify(symbols, expr):
             if isinstance(expr, Poly):
                 expr = expr.as_expr()
@@ -194,7 +194,7 @@ class NumerFunc:
             return NumerFunc.vectorize(fs)
         elif isinstance(expr, (Expr, Poly)):
             return _wrap_single(expr, symbols)
-        
+
         raise TypeError(f"Unsupported type {type(expr)} for wrapping.")
 
     @classmethod

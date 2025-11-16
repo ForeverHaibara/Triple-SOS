@@ -80,7 +80,7 @@ class LinearSOSSolver(ProofNode):
             return
 
         poly = problem.expr
-        gens = poly.gens 
+        gens = poly.gens
         roots = [r for r in problem.roots if not r.is_zero]
         symmetry = MonomialManager(len(gens), problem.identify_symmetry())
         if not (len(roots) == 1 and roots[0].is_Rational and symmetry.is_trivial\
@@ -258,7 +258,7 @@ class LinearSOSSolver(ProofNode):
         self._transformed_problem = problem
         tangents = []
 
-        if _homogenizer is not None: 
+        if _homogenizer is not None:
             # homogenize the tangents
             tangents = homogenize_expr_list(tangents, _homogenizer)
         else:
@@ -436,7 +436,7 @@ def LinearSOS(
     eq_constraints: Union[List[Expr], Dict[Expr, Expr]]
         Equality constraints to the problem. This assumes h_1(x) = 0, h_2(x) = 0, ...
     symmetry: PermutationGroup or MonomialManager
-        The symmetry of the polynomial. When it is None, it will be automatically generated. 
+        The symmetry of the polynomial. When it is None, it will be automatically generated.
         If we want to skip the symmetry generation algorithm, please pass in a MonomialManager object.
     roots: list
         Equality cases of the inequality. If None, it will be searched automatically. To disable auto
@@ -460,10 +460,10 @@ def LinearSOS(
     time_limit: float
         The time limit in seconds for the solver.
     linprog_options: dict
-        Options for scipy.optimize.linprog. Defaultedly use `{'method': 'highs-ds', 'options': {'presolve': False}}`. 
-        Note that interiorpoint oftentimes does not provide exact rational solution. Both 'highs-ds' or 'simplex' are 
+        Options for scipy.optimize.linprog. Defaultedly use `{'method': 'highs-ds', 'options': {'presolve': False}}`.
+        Note that interiorpoint oftentimes does not provide exact rational solution. Both 'highs-ds' or 'simplex' are
         recommended, yet the former is slightly faster.
-        
+
         Moreover, using `presolve == True` has bug solving s((b2-a2+3c2+ab+7bc-5ca)(a2-b2-ab+2bc-ca)2):
         Assertion failed: abs_value < pivot_tolerance, file ../../scipy/_lib/highs/src/util/HFactor.cpp, line 1474
         Thus, for stability, we use `presolve == False` by default. However, setting it to True could be slightly faster.

@@ -183,7 +183,7 @@ def _collect_eq_constraints(eqs_and_exprs: Dict[Poly, List[Expr]], symbols: List
     and the final solution can be written as
 
         `f = (sum of squares) + ... + h1 * poly1 + ... + hk * polyk`.
-    
+
     We gather terms involving h1, ..., hk to form poly1, ..., polyk.
 
     Parameters
@@ -314,7 +314,7 @@ def _collect_ineq_constraints(tangents_and_exprs: List[Tuple[Expr, Expr]], symbo
     Hence the goal is to maximize `(k-1) * (v^T * complexity(g))` where `v` is a binary
     vector. See `_solve_optimal_factor` for the detailed algorithm. This
     collecting process is repeated until no factor can be found.
- 
+
     Parameters
     ----------
     tangents_and_exprs : List[Tuple[Expr, Expr]]

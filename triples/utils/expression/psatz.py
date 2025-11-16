@@ -738,7 +738,7 @@ class PSatz:
                         numer = other[0] * other[1]
                         return PSatz.new(preorder, ideal,
                                 {}, {m: v*numer for m, v in y.numer_ideal.items()},
-                                {m: v.mul_sqr(other[1]) for m, v in y.denom_preorder.items()}, 
+                                {m: v.mul_sqr(other[1]) for m, v in y.denom_preorder.items()},
                                 y.denom_ideal)
             elif isinstance(x, CyclicExpr):
                 return _is_pure_ideal(x.doit(deep=False))
@@ -832,11 +832,11 @@ class PSatz:
 
     def join(a: 'PSatz', b: 'PSatz', ind: int, F: Optional[Expr] = None) -> 'PSatz':
         """
-        Join two PSatzs to eliminate the `ind`-th preorder generator. The `ind`-th 
+        Join two PSatzs to eliminate the `ind`-th preorder generator. The `ind`-th
         preorder generator of two PSatzs should imply opposite values.
 
         If the two PSatzs imply:
-        ```            
+        ```
             F = (f * ps1 + ps2)/(f * ps3 + ps4) = (-f * ps5 + ps6)/(-f * ps7 + ps8)
         ```
         where `f` and `-f` are the `ind`-th preorder generators, then
@@ -848,7 +848,7 @@ class PSatz:
         Examples
         ---------
         Consider (a, c, x, y, z) >= 0 and 4ac - b^2 = -by + z. Prove that:
-    
+
             F = a*x^2 + b*x + c >= 0
 
         The inequality can be proved by simple arguments over the cases b >= 0 and -b >= 0. To
@@ -888,7 +888,7 @@ class PSatz:
         D = A + B
         p1, i1 = D.numer_preorder, D.numer_ideal
         p2, i2 = C.numer_preorder, C.numer_ideal
-        return a.per(p1, i1, p2, i2)        
+        return a.per(p1, i1, p2, i2)
 
 
 PSatz.zero = PSatz.new([], [], {}, {}, PSATZ_UNIT, {})

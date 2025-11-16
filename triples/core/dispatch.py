@@ -102,7 +102,7 @@ def _expr_homogenize(x: Expr, s: Symbol) -> Expr:
                     other_args.append(a)
             return (power, Mul(*other_args))
         return (0, x)
-        
+
     def extract(x: Add) -> Add:
         """Collect all terms of an Add expression by the power of s."""
         args = Add.make_args(x)

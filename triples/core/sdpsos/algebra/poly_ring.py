@@ -91,7 +91,7 @@ class PolyRing(CommutativeStateAlgebra):
             dict_basis, basis = generate_monoms(
                 self.nvars, (degree - d)//2, hom=is_homogeneous)
             qmodule_bases[key] = QmoduleBasis(self, q, basis=basis, dict_basis=dict_basis)
-    
+
         ideal_bases = {}
         for key, i in ideal.items():
             d = i.total_degree()

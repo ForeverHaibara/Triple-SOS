@@ -67,7 +67,7 @@ def sos_struct_octic_symmetric(coeff, real=True):
 def _sos_struct_octic_symmetric_hexagon_sdp(coeff):
     """
     Solve symmetric hexagons for real numbers by subtracting r * s((a-b)^2(ab(a+b)+xc(a^2+b^2)+..)^2)
-    so that the remaining part is a quadratic form with respect to 
+    so that the remaining part is a quadratic form with respect to
     s(a^3b-a^2bc), s(a^3c-a^2bc) and s(a^2b^2-a^2bc).
 
     In particular, since the polynomial is symmetric, we assume s(a^3b-a^2bc) and s(a^3c-a^2bc) are
@@ -561,7 +561,7 @@ def _sos_struct_octic_symmetric_hexagon(coeff):
                     CyclicSum(a*(b-c)**2)**2 * CyclicSum(x_*a**2 + y_*b*c),
                     CyclicProduct((a-b)**2) * CyclicSum(z_*a**2 + w_*b*c)
                 )
-        
+
         if True:
             # Case 2.
             # use xs((a-b)2((a2b+a2c+ab2-ac2+b2c-bc2)+y(ac2+bc2-2abc))2)+p(a-b)2s(za2+wab)
@@ -628,7 +628,7 @@ def _sos_struct_octic_symmetric_hexagram(coeff):
     rem = sum(coeff((i,j,k)) * (1 if i==j or j==k else 2) for i,j,k in ((6,1,1),(5,2,1),(4,3,1),(4,4,0),(4,2,2),(3,3,2)))
     if x_ <= 0 or v_ < 0 or rem < 0:
         return None
-    
+
     y_ = coeff((5,2,1)) + x_
     u_ = coeff((4,3,1)) + v_ + y_
     balance = coeff((4,2,2)) - x_ + 2*u_ + 2*y_
@@ -637,9 +637,9 @@ def _sos_struct_octic_symmetric_hexagram(coeff):
 
     # now we ensure f(a,b,c) = (xa^4 + ya^3(b+c) + za^2(b^2+c^2) + wa^2bc + uabc(b+c) + vb^2c^2) >= 0
     # treat f as an quadratic form with respect to a^2, a(b+c) and bc, we shall have:
-    
+
     # DEPRECATED: f = x(a^2 + r1*a(b+c) + (u/y)*bc)^2 + (v - u^2x/(y^2))b^2c^2 + (balance - y^2/x - 2ux/y)a^2bc + (z - y^2/(4x))(a(b-c))^2
-    
+
     # let t be a parameter
     # f = x(a^2 + r1*a(b+c) + t*bc)^2 + (v - xt^2)(bc - ha(b+c))^2 + <rest>
     # rest = (w1 + z)a^2(b-c)^2 + (w2 + balance) * a^2bc
@@ -654,7 +654,7 @@ def _sos_struct_octic_symmetric_hexagram(coeff):
     bound = (v_ - x_ * t**2).as_poly(t)
     # det2 = (-4*x_**2*(u_ + 2*v_ + x_)*t**2 + 2*u_*x_*y_*t + (-u_**2*x_ + 4*u_*v_*x_ + 8*v_**2*x_ + 4*v_*x_**2 - v_*y_**2)).as_poly(t)
     # print(det,'\n', det2, '\n', bound)
-    
+
     for (t_, interval_end), _ in sp.polys.intervals(det * bound):
         bound_ = bound(t_)
         if bound_ > 0 and det(t_) >= 0: # and det2(t_) >= 0:
@@ -698,7 +698,7 @@ def _sos_struct_octic_symmetric_hexagram(coeff):
             # p1 == f(a,b,c)
             p1 = sp.together((2*x_)*(a**2 + r1*a*b + r1*a*c + r2*b*c)**2 + c2*2*(b*c - h*a*b - h*a*c)**2 + c3*2*a**2*b*c + c4*2*a*b*c*(b+c)).as_coeff_Mul()
             p2 = sp.together(degrade_a2b2 * CyclicSum(a**2*(b-c)**2) + 2*(degrade_a2bc + degrade_a2b2) * CyclicSum(a**2*b*c)).as_coeff_Mul()
-            
+
             y = [
                 p1[0],
                 p2[0],
@@ -723,9 +723,9 @@ def _sos_struct_octic_symmetric_hexagram(coeff):
             p1 = (a**2 + r1*a*b + r1*a*c + r2*b*c).as_coeff_Mul()
             p2 = (b*c-h*a*b-h*a*c).as_coeff_Mul()
             p_fin = sp.together(degrade_a3 * CommonExpr.schur(3)
-                                + (degrade_a2b + degrade_a3) * CyclicSum(a*(b-c)**2) 
+                                + (degrade_a2b + degrade_a3) * CyclicSum(a*(b-c)**2)
                                 + (degrade_a3*3 + degrade_a2b*6 + degrade_abc) * CyclicProduct(a)).as_coeff_Mul()
-            
+
             y = [
                 x_ * 2 * p1[0],
                 c2 * 2 * p2[0],
@@ -767,7 +767,7 @@ def _sos_struct_octic_symmetric_quadratic_form(poly, coeff):
     s(a6(a-b)(a-c))-p(a-b)2(1/2s(a2)+1/6s(a)2)
     """
     return
-    
+
     a, b, c = sp.symbols('a b c')
 
     # We require multiplicity 2 at (1,1,0) along the symmetric axis.
@@ -812,7 +812,7 @@ class _octic_sym_axis:
 
     The class provides different methods to solve F_{x,y}(a,b,c) >= 0. There are also
     two types of solvers.
-    """    
+    """
     @staticmethod
     def rem_poly(rem_coeff, rem_ratio):
         return rem_coeff * (CyclicSum(a**2 + rem_ratio*a*b)**2 if not rem_ratio is sp.oo else CyclicSum(a*b)**2)
@@ -833,7 +833,7 @@ class _octic_sym_axis:
         return _F
 
     @staticmethod
-    def solve(coeff0, x, y, ker_coeff, t_coeff, rem_coeff, rem_ratio):        
+    def solve(coeff0, x, y, ker_coeff, t_coeff, rem_coeff, rem_ratio):
         cls = _octic_sym_axis
         SOLVERS = [
             # type, func

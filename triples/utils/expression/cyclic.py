@@ -268,7 +268,7 @@ class CyclicExpr(Expr):
         xreplace
         """
         return super().subs(*args, **kwargs)
-    
+
     def _eval_subs(self, old, new):
         return self.doit()._subs(old, new)
 
@@ -538,12 +538,12 @@ class CyclicSum(CyclicExpr):
                 #     # e.g. CyclicSum(a**2 * b * c) = CyclicSum(a) * CyclicProduct(a)
                 #     symbol_degrees[arg] = 1
                 # elif isinstance(arg, Pow):
-                #     arg2 = arg.args[0] 
+                #     arg2 = arg.args[0]
                 #     if isinstance(arg2, Symbol) and arg2 in symbols and arg.args[1].is_constant():
                 #         symbol_degrees[arg2] = arg.args[1]
                 else:
                     uncyc_args.append(arg)
-            
+
             # if len(symbol_degrees) == len(symbols):
             #     # all symbols appear at least once
             #     base = min(symbol_degrees.values())

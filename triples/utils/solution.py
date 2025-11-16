@@ -248,10 +248,10 @@ class Solution(SolutionBase):
                 to_str = lambda x: _to_str(x)
         else:
             raise ValueError(f"Unknown mode {mode}.")
-        
+
         lhs_str = to_str(lhs)
         rhs_str = to_str(rhs)
-        return f"{lhs_str} = {rhs_str}"   
+        return f"{lhs_str} = {rhs_str}"
 
     def _repr_latex_(self):
         eq = self.as_eq()

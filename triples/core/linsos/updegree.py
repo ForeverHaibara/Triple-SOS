@@ -64,7 +64,7 @@ def lift_degree(
     symmetry: MonomialManager
         The symmetry of the polynomial.
     degree_limit: int
-        When the degree of f(a,b,c) * h(a,b,c) is larger than this limit, 
+        When the degree of f(a,b,c) * h(a,b,c) is larger than this limit,
         we stop to save computation resources.
     lift_degree_limit: int
         The degree of h(a,b,c) is at most this limit.
@@ -77,7 +77,7 @@ def lift_degree(
         multiplier: Expr
             The multiplier h(a,b,c).
         basis: List[LinearBasisMultiplier]
-            The additional basis to be added to the linear programming. 
+            The additional basis to be added to the linear programming.
             See details in `LinearBasisMultiplier`.
         degree: int
             The degree of f(a,b,c) * h(a,b,c).

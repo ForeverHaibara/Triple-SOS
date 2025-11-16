@@ -23,13 +23,13 @@ def sym_representation(poly: sp.Poly, symbols: List[sp.Symbol], return_poly: boo
 
     Please refer to functions `_sym_representation_positive` and `_sym_representation_real`
     for the details of the representation.
-    
+
     Parameters
     ----------
     symbols : List[Symbol]
         List of symbols used in the polynomial representation.
     return_poly : bool, optional
-        If False, returns a symbolic expression. 
+        If False, returns a symbolic expression.
         If True, returns a tuple (numerator, denominator) where numerator is a polynomial
         object in the new symbols, while the denominator is a sympy expression that is
         ensured to be positive semidefinite.
@@ -89,7 +89,7 @@ def sym_representation_inv(expr: sp.Expr, original_symbols: List[sp.Symbol], new
     >>> from sympy.abc import a, b, c, x, y, z
     >>> sym_representation_inv(2*(4*z + (x + 2*y)**2), (a,b,c), (x,y,z))
     2*(∏(-a - b + 2*c) + (Σ(a))*(Σ((a - b)**2))/2)**2 + 54*(∏((a - b)**2))
-    """    
+    """
     trans = _get_transform_from_method(method, len(original_symbols))
     return trans.inv_transform(expr, original_symbols=original_symbols, new_symbols=new_symbols)
 
@@ -105,7 +105,7 @@ def sym_transform(poly: sp.Poly, ineq_constraints: Dict[sp.Poly, sp.Expr], eq_co
     ineq_constraints2 = dict()
     eq_constraints2 = dict()
 
-    for collection, new_collection in ((ineq_constraints, ineq_constraints2), 
+    for collection, new_collection in ((ineq_constraints, ineq_constraints2),
                                        (eq_constraints, eq_constraints2)):
         for p, value in collection.items():
             pgens = p.gens

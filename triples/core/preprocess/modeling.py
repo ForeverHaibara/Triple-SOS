@@ -63,7 +63,7 @@ class ModelingHelper:
                     collection.append(expr)
                 if not expr.is_Atom:
                     for _ in expr.args:
-                        recur_find(_)                    
+                        recur_find(_)
         else:
             def recur_find(expr):
                 if classes(expr):
@@ -117,7 +117,7 @@ class ModelingHelper:
         z = self.symbol_gen('Abs')
         return z, {z: x}, {z**2 - x.args[0]**2: Integer(0)}
 
-    def _get_replacement_rule(self):     
+    def _get_replacement_rule(self):
         return {
             Pow: self._replace_Pow,
             Abs: self._replace_Abs,
@@ -241,7 +241,7 @@ class ModelingHelper:
                     has_changed = has_changed or changed
                 if has_changed:
                     expr = expr.func(*args)
-    
+
             f = rule.get(expr.__class__)
             if f is not None:
                 has_changed = True

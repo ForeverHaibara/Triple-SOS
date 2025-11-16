@@ -268,7 +268,7 @@ class PseudoSMP(dict):
         for m, c in list(p.items()):
             if c == zero:
                 del p[m]
-        return p1.per(p) 
+        return p1.per(p)
 
 
 def convert_expr_to_pseudo_poly(algebra: StateAlgebra, expr: Expr, gens: List[Symbol],
@@ -315,5 +315,3 @@ def convert_expr_to_pseudo_poly(algebra: StateAlgebra, expr: Expr, gens: List[Sy
     domain, coeffs = construct_domain(coeffs, **domain_kwargs)
     rep = PseudoSMP(algebra, domain, dict(zip(monoms, coeffs)))
     return PseudoPoly.new(rep, *gens)
-
-

@@ -14,7 +14,7 @@ class DualBackendSDPAP(DualBackend):
 
     Installation:
     pip install sdpa-python
-    
+
     Reference:
     [1] https://sdpa.sourceforge.net/index.html
     [2] https://sdpa-python.github.io/docs/installation/

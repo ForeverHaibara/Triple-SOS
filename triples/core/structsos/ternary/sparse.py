@@ -217,9 +217,9 @@ class AMGM3:
 
         Moreover, when u+v is even, the inequality holds for all real number x. When u is even,
         it is trivial as it is a polynomial with respect to a^2. When u is odd, we can show that
-        
+
             u*x^(u+v) - (u+v)*x^u + v >= u*x^(u+v) - (u+v)/2*x^(u+1) - (u+v)/2*x^(u-1) + v
-        
+
         where the right-hand-side can be split into two even degree AMGMs. In fact, the right-
         hand-side can be factored by (a-1)^2*(a+1)^2.
         """
@@ -248,7 +248,7 @@ class AMGM3:
             x2 = (v2//d2).as_monom(a,b,c)
             sol = m1.as_monom(a,b,c) * f1sol.subs(x, x2)
             return CyclicSum(sol.together()), d2, d1
-            
+
     @classmethod
     def _solve_circumscribing(cls, m1: CoeffMonom, m2: CoeffMonom):
         p = m1.is_circumscribing(m2)
@@ -387,7 +387,7 @@ class AMGM3:
 
 def _sos_struct_sparse_amgm(coeff):
     """
-    Solve 
+    Solve
     sum coeff(large) * a^u*b^v*c^w + sum coeff(small) * a^x*b^y*c^z >= 0
     where triangle Cyclic(x,y,z) is contained in the triangle Cyclic(u,v,w).
     Also, |x-y|+|y-z|+|z-x| > 0.
@@ -660,7 +660,7 @@ def sos_struct_heuristic(coeff, real=True):
 
     WARNING: Only call this function when degree > 6. And make sure that
     coeff.clear_zero() to remove zero terms on the border.
-    
+
     Examples
     -------
     s(ab(a-b)2(a4-3a3b+2a2b2+3b4))

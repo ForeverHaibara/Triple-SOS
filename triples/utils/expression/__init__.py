@@ -1,5 +1,5 @@
 """
-This module provides customized SymPy expressions and classes. 
+This module provides customized SymPy expressions and classes.
 """
 
 from .coeff import Coeff

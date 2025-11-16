@@ -46,7 +46,7 @@ class SDPProblem(TransformableDual):
     Class to solve dual SDP problems, which is in the form of
 
         S_i = C_i + y_1 * A_i1 + y_2 * A_i2 + ... + y_n * A_in >> 0.
-    
+
     where C, A_ij ... are known symmetric matrices, and y_i are free variables.
 
     It can be rewritten in the form of
@@ -400,7 +400,7 @@ class SDPProblem(TransformableDual):
         ----------
         gens : Tuple[Symbol, ...]
             The variables of the SDP problem.
-    
+
         Examples
         ----------
         >>> from sympy import Matrix
@@ -530,7 +530,7 @@ class SDPProblem(TransformableDual):
         Assume the SDP problem can be rewritten in the form of
 
             eq * [vec(S1); vec(S2); ...] + eq * M = rhs
-        
+
         where Si >> 0 and Si.shape[0] = splits[i], and M is the linear part.
         The function formulates the SDP problem from the given equations.
         This is also the primal form of the SDP problem.
@@ -578,7 +578,7 @@ class SDPProblem(TransformableDual):
             b = Matrix([1])
 
         To initialize the problem, just use the `from_equations` method.
- 
+
             >>> from sympy import Matrix
             >>> A = Matrix([[1,2,4,2,3,5,4,5,6]])
             >>> b = Matrix([1])
@@ -785,7 +785,7 @@ class SDPProblem(TransformableDual):
         constraints : List[Union[Relational, Expr, Tuple[Matrix, Matrix, str]]]
             Additional affine constraints over variables. Each element of the list
             must be one of the following:
-            
+
             A sympy affine relational expression, e.g., `x > 0` or `Eq(x + y, 1)`.
               Note that equality constraints must use `sympy.Eq` class instead of `==` operator,
               because the latter `x + y == 1` will be evaluated to a boolean value.
@@ -891,7 +891,7 @@ class SDPProblem(TransformableDual):
         equivalent to the previous example:
 
             >>> sol = sdp.solve_obj(-x-2*y, constraints=[(Matrix([[1,1]]), Matrix([0]), '<')])
-    
+
         The function will sanitize the input so it is also acceptable to pass in lists or numpy
         arrays instead of sympy matrices.
 
@@ -1242,8 +1242,8 @@ class SDPProblem(TransformableDual):
                     for rhs_ind, v in mapping(i):
                         eq_list[rhs_ind].append((offset, v))
                     offset += 1
-    
-        
+
+
         # Term sparsity:
         # diagonal entries of the PSD vars should be nonnegative
         # if a diagonal entry of a PSD var is zero, then the whole row is zero

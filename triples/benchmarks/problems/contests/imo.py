@@ -238,7 +238,7 @@ class IMOSLProblems(ProblemSet):
                 sqrt(a+b-c)/(sqrt(a)+sqrt(b)-sqrt(c))), [a,b,c,a+b-c,b+c-a,c+a-b], []
 
     @mark(mark.noimpl, mark.nvars)
-    
+
     @mark(mark.noimpl, mark.nvars)
     def problem_IMOSLA_2007_p2(self):
         """x^n+y^n=1, x,y>=0, n is positive integer. Show that ..."""
@@ -295,7 +295,7 @@ class IMOSLProblems(ProblemSet):
     @mark(mark.noimpl, mark.recur)
     def problem_IMOSLA_2013_p4(self):
         ...
-    
+
     @mark(mark.noimpl, mark.recur)
     def problem_IMOSLA_2015_p1(self):
         ...
@@ -327,7 +327,7 @@ class IMOSLProblems(ProblemSet):
         """Let 0=x0<x1<...<xn, show that sum(1/(x_i-x_{i-1})) >= 4/9*sum((i+1)/x_i)."""
         ...
 
-    @mark(mark.noimpl, mark.nvars)    
+    @mark(mark.noimpl, mark.nvars)
     def problem_IMOSLA_2017_p1(self):
         """Let 1/a1+..+1/an=k, a1,...,an>=1, x>0, show
         that a1*...*an*(x+1)^k - (x+a1)*...*(x+an) <= 0."""
@@ -345,7 +345,7 @@ class IMOSLProblems(ProblemSet):
     def problem_IMOSLA_2018_p4(self):
         ...
 
-        
+
     def problem_IMOSLA_2018_p7(self):
         return 8/cbrt(7) - (cbrt(a/(b+7))+cbrt(b/(c+7))+cbrt(c/(d+7))+cbrt(d/(a+7))),\
             [a,b,c,d], [a+b+c+d-100]
@@ -403,5 +403,3 @@ class IMOSLProblems(ProblemSet):
     @mark(mark.noimpl, mark.nvars)
     def problem_IMOSLA_2023_p7(self):
         ...
-
-    

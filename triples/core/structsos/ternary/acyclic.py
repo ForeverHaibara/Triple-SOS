@@ -15,4 +15,3 @@ def sos_struct_acyclic_sparse(coeff, real = True):
             return c1*a + c2*b + c3*c
         return None
     return None
-

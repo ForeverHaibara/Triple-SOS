@@ -55,7 +55,7 @@ def constrained_acute(poly, ineq_constraints, eq_constraints):
 
     extra_checker = lambda x: x if isinstance(x, F) else None
     solution = SolutionStructural._extract_nonnegative_exprs(solution, func_name=Gname, extra_checker=extra_checker)
-    
+
     if solution is None:
         return None
 
@@ -187,7 +187,7 @@ def _constrained_acute_cubic(coeff, F):
                 w1 = radsimp((xt - x)/(xt - 1))
                 if 0 <= w1 and w1 <= 1:
                     return w1*_solve_parabola(1) + (1-w1)*_solve_parabola(t)
-        
+
         # 3 <= 6*x + y <= 4
         # Find t such that ux := ux1/ux2 >= 1 + 1/sqrt(2).
         # This is equivalent to eqt := (ux1 - ux2)^2*2 - ux2^2 >= 0 and ux1 / ux2 >= 1.
@@ -221,7 +221,7 @@ def _constrained_acute_cubic(coeff, F):
         elif _validation(sp.S(1)):
             t = sp.S(1)
         else:
-            t = rationalize_func(sp.Poly([1,2,-7], _t), 
+            t = rationalize_func(sp.Poly([1,2,-7], _t),
                     validation=_validation, validation_initial=lambda t: t>0, direction=-1)
         if t is None:
             if isinstance(x, sp.Rational) and isinstance(y, sp.Rational):
@@ -240,7 +240,7 @@ def _constrained_acute_cubic(coeff, F):
     sol = get_sol(x, y)
     if sol is not None:
         return (-c300) * sol
-    
+
 def _constrained_acute_quartic(coeff, F):
     """
     It is not easy to solve quartic inequalities for acute triangles completely.

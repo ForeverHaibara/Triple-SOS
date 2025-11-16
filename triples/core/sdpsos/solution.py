@@ -123,7 +123,7 @@ def _get_qmodule_expr(
         coeff, q = coeff * q_primitive[0], _as_expr(q_primitive[1], state_operator=state_operator)
         c, expr = simplify_poly(poly)
         coeff = coeff * c**2
-    
+
         if adjoint_operator is not None:
             expr = adjoint_operator(expr) * (q + adjoint_operator(q)) * expr
             coeff = coeff/2 # since we have doubled the "q"
@@ -177,7 +177,7 @@ def _default_simplify_poly(poly: Poly, bound: int=10000,
                 c, parts = poly.factor_list()
                 exprs = [p.as_expr()**d for p, d in parts]
                 return c, sp.Mul(*exprs)
-    
+
         c, poly = poly.primitive()
         if poly.LC() < 0:
             c, poly = -c, -poly

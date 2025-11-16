@@ -16,7 +16,7 @@ def sos_struct_quartic(coeff, real = True):
     Solve cyclic quartic problems.
 
     Core theorem:
-    If f(a,b,c) = s(a4 + pa3b + na2b2 + qab3 - (1+p+n+q)a2bc) >= 0 holds for all a,b,c >= 0, 
+    If f(a,b,c) = s(a4 + pa3b + na2b2 + qab3 - (1+p+n+q)a2bc) >= 0 holds for all a,b,c >= 0,
     then it must be one of the following two cases:
 
     A. If [3*(1+n) - (p*p+p*q+q*q)] >= 0, then
@@ -26,9 +26,9 @@ def sos_struct_quartic(coeff, real = True):
     B. There exists a positive root of the quartic 2*u^4 + p*u^3 - q*u - 2 = 0,
         such that t = ((2*q+p)*u^2 + 6*u + (2*p+q)) / (2*(u^4 + u^2 + 1)) >= 0
         and the following polynomial
-            g(a,b,c) = f(a,b,c) - t * s(ab(a-c - u(b-c))^2) 
+            g(a,b,c) = f(a,b,c) - t * s(ab(a-c - u(b-c))^2)
         must satisfy the condition A.
-        
+
     Examples
     -------
     s(a2)2-3s(a3b)
@@ -113,7 +113,7 @@ def _sos_struct_quartic_core(coeff):
 def _sos_struct_quartic_quadratic_border(coeff):
     """
     Give a solution to s(a4 - 2t(a3b - ab3) + (t^2 - 2)(a2b2 - a2bc) - a2bc) >= 0,
-    which has nontrivial zeros (a, b, c) = ((sqrt(t*t + 4) - t)/2, 0, 1) 
+    which has nontrivial zeros (a, b, c) = ((sqrt(t*t + 4) - t)/2, 0, 1)
 
     f(a,b,c)s(a) = s(a(b2+c2-a2-bc+t(ab-ac))2) + (t^2 + 3)/2*abcs((b-c)2)
 
@@ -140,7 +140,7 @@ def _sos_struct_quartic_quadratic_border(coeff):
                     CyclicSum(a)**2 * CyclicProduct(a)
                 ]
                 return sum_y_exprs(y, exprs) / CyclicSum(a)
-    
+
         # if it is rational, then fall back to normal mode
         # u = (w + t) / 2
         # r = (2*t*(u**2 - 1) + 6*u) / (2*(u**4 + u**2 + 1))
@@ -152,7 +152,7 @@ def _sos_struct_quartic_biased(coeff):
     """
     Theorem:
     If f(a,b,c) = s(a4 + pa3b + na2b2 + qab3 - (1+p+n+q)a2bc) >= 0 holds for all a,b,c >= 0,
-    and if [3*(1+n) - (p*p+p*q+q*q)] < 0, 
+    and if [3*(1+n) - (p*p+p*q+q*q)] < 0,
     then there exists a positive root of the quartic 2*u^4 + p*u^3 - q*u - 2 = 0,
     such that t = ((2*q+p)*u^2 + 6*u + (2*p+q)) / (2*(u^4 + u^2 + 1)) >= 0
     and the following polynomial
@@ -186,10 +186,10 @@ def _sos_struct_quartic_biased(coeff):
     n, p, q = radsimp([n, p, q])
     u_ = None
     eq = sp.Poly([2, p, 0, -q, -2], sp.Symbol('x'))
-    
+
     # must satisfy that symmetric >= 0
     symmetric = lambda _x: radsimp(((2*q+p)*_x + 6)*_x + 2*p+q)
- 
+
     # the discriminant after subtraction
     head = radsimp(p**2 + p*q + q**2 - 3*n - 3)
     def new_det(sym, root):
@@ -222,7 +222,7 @@ def _sos_struct_quartic_biased(coeff):
         y_ = radsimp((symmetric(u_) / (2*(u_**2*(u_**2 + 1) + 1)) * m))
         if y_ >= 0:
             solution = y_ * CyclicSum((a*b*(a-u_*b+(u_-1)*c)**2)) + rem * CyclicSum(a**2*b*c)
-            
+
             def new_coeff(d):
                 subs = {(4,0,0): 0, (3,1,0): 1, (2,2,0): -2*u_, (1,3,0): u_**2, (2,1,1): 2*u_-u_**2-1}
                 return coeff(d) - y_ * subs[d] - (rem if d == (2,1,1) else 0)
@@ -298,7 +298,7 @@ def _sos_struct_quartic_uncentered_real(coeff):
             3*n*s - 81*n + 27*p**2 + 27*p*q - 6*p*s + 27*q**2 - 6*q*s + s**2 + 12*s - 81,
             -3*n*s + 27*n - 9*p**2 - 9*p*q - 9*q**2 + s**2 - 12*s + 27
         ]
-    
+
     where s = 3*(1 + p + n + q + r).
 
     To make the remaining polynomial nonnegative, we need to FIND A VALID w such that eq(w) * (w-1) <= 0
@@ -320,7 +320,7 @@ def _sos_struct_quartic_uncentered_real(coeff):
     s(a4-3a3b-2ab3+4a2b2+2/9a2bc)
 
     s(2a2-3ab)2
-    
+
     s(2a2-3ab)2+s(ab3-a2bc)
 
     s(2a2-3ab)2+s(ab3-5/3a2bc)
@@ -478,7 +478,7 @@ def _sos_struct_quartic_uncentered(coeff):
                     extrema.append((eqn(root), root))
                 else: # quadratic root
                     extrema.append((eqn(root.n(16)), root.n(16)))
-        
+
         try:
             for root in sp.polys.nroots(eqx):
                 if root.is_real and root > 0:
@@ -519,7 +519,7 @@ def _sos_struct_quartic_uncentered(coeff):
                     else:
                         x_ = root.n(16)
                     break
-            
+
         else:
             # do not compute the root here because it is not numerically stable
             # instead compute the root of derivative of discriminant
@@ -776,7 +776,7 @@ def _sos_struct_acyclic_quartic_symmetric(coeff, real = True):
                 ((0, 0), (4*c112*c220*c400 - c112*c310**2 - 8*c112*c400**2 + 8*c202*c220*c400 - 2*c202*c310**2 - 16*c202*c400**2 - 4*c211**2*c400 + 4*c211*c301*c310 + 8*c211*c301*c400 - 4*c220*c301**2 - 4*c301**2*c310 + 4*c301**2*c400)/16)
             ])
             det1 = sp.Poly.from_dict(det1, (a, b))
-    
+
             det2 = (r11*a - b**2).as_poly(a, b)
 
             point = common_region_of_conics([det1, det2])
@@ -838,7 +838,7 @@ def _sos_struct_acyclic_quartic_real(coeff):
 
     Hilbert's 17th problem, solved by Artin, answers the question that
     a 3-variable polynomial of degree 4 is nonnegative over R must be sum of squares.
-    The SOS decomposition can be attained by solving SDP. 
+    The SOS decomposition can be attained by solving SDP.
     This function is an alternative algorithm to solve the SDP manually.
 
     We follow the following steps:
@@ -957,7 +957,7 @@ def _sos_struct_acyclic_quartic_reaL_findroots(
     """
     if poly is None:
         poly = coeff.as_poly()
-    
+
     def find_trivial_root(coeff) -> List:
         if coeff((4,0,0)) == 0:
             if coeff((3,1,0)) == 0 and coeff((3,0,1)) == 0:
@@ -1026,7 +1026,7 @@ def _sos_struct_acyclic_quartic_reaL_findroots(
         subtraction = c * (root[2]*a - root[0]*c)
         return [(trans(x, y, 1), minimum, subtraction) for (x, y), v in roots]
 
-    
+
     def find_third_root(poly, root1, root2) -> List:
         """
         Define f = poly - ...*c^4 - - ...*c^2*(...*a -...*c)^2 >= 0

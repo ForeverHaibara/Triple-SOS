@@ -35,7 +35,7 @@ class ProofNode:
     status = 0
     finished = False
     default_configs = {}
-    
+
     children: List['ProofNode']
     _complexity: Optional[ProblemComplexity] = None
     _complexity_models: Optional[Union[Dict, bool]] = None

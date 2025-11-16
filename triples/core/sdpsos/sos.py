@@ -73,7 +73,7 @@ class SOSPoly(AtomSOSElement):
         [-3/4],
         [ 3/4],
         [-3/2]])
-    
+
     After the problem is solved successfully, the solution can be obtained by `sos.as_solution()`.
     It returns a Solution class object and the sympy expression can be accessed by `.solution`
     of the Solution object.
@@ -183,7 +183,7 @@ class SOSPoly(AtomSOSElement):
             ideal = dict(enumerate(ideal))
         self._qmodule = {k: Poly(v, gens) for k, v in qmodule.items()}
         self._ideal = {k: Poly(v, gens) for k, v in ideal.items()}
-        
+
         if degree is None:
             # degree = max([self.poly] + list(self._qmodule.values()) + list(self._ideal.values()),
             #                 key=lambda _: _.total_degree()).total_degree()

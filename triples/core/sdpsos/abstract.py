@@ -183,7 +183,7 @@ class SOSElement:
     def _get_parameters(self) -> List[Symbol]:
         """
         Infer all default parameters in the problem. For example, if we assume the polynomial
-        
+
             x^2-u*x*y+v*y^2 is a sum-of-squares in (x,y),
 
         then the parameters are [u,v]. For AtomSOSElement, it should be implemented
@@ -516,7 +516,7 @@ class JointSOSElement(SOSElement):
             verbose: bool = False,
             time_limit: Optional[Union[Callable, float]] = None
         ) -> SDPProblem:
-        
+
         # infer linear parameters if not given
         if parameters is True:
             parameters = self._get_parameters()

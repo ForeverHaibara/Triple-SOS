@@ -82,7 +82,7 @@ class SDPIdentityTransform(SDPTransformation):
         return obj
     def __init__(self, parent_node, *args, **kwargs):
         self.parent_node = parent_node
-        self.child_node = parent_node        
+        self.child_node = parent_node
     def is_parent(self, sdp):
         return False
     def is_child(self, sdp):
@@ -90,4 +90,3 @@ class SDPIdentityTransform(SDPTransformation):
     @classmethod
     def apply(cls, parent_node) -> SDPProblemBase:
         return parent_node
-

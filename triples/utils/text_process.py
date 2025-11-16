@@ -124,7 +124,7 @@ def _preprocess_text_expansion(poly: str, gens: Tuple[Symbol], perm: Permutation
     """
     Expand the polynomial with cycle expansion.
 
-    s(ab)    ->   (ab + bc + ca)     
+    s(ab)    ->   (ab + bc + ca)
 
     p(a+b)   ->   (a+b)(b+c)(c+a)
     """
@@ -158,7 +158,7 @@ def _preprocess_text_completion(
         preserve_patterns: List[str] = ('sqrt',)
     ) -> str:
     """
-    Complete the polynomial with * and ^. E.g. 
+    Complete the polynomial with * and ^. E.g.
     1/5a3b2c   ->   1/5*a^3*b^2*c
 
     Parameters
@@ -183,7 +183,7 @@ def _preprocess_text_completion(
                 return pattern
         return None
     poly = poly.replace(' ','')
-    i = 0 
+    i = 0
     while i < len(poly) - 1:
         if poly[i].isdigit(): # '0'~'9'
             if poly[i+1] == '(' or (poly[i+1].isalpha() and poly[i+1] != SCI): # alphabets
@@ -202,7 +202,7 @@ def _preprocess_text_completion(
                 poly = poly[:i+1] + '*' + poly[i+1:]
                 i += 1
             elif poly[i+1].isdigit(): # '0'~'9'
-                poly = poly[:i+1] + '^' + poly[i+1:]  
+                poly = poly[:i+1] + '^' + poly[i+1:]
                 i += 1
         i += 1
 
@@ -342,7 +342,7 @@ def preprocess_text(
     --------
     By default, the function will return a sympy polynomial with respect to a, b, c.
     Omitted multiplication signs and powers will be completed.
-    >>> from sympy.abc import x, y, z, a, b, c    
+    >>> from sympy.abc import x, y, z, a, b, c
     >>> preprocess_text('xa+1/4yb2+z2c3')
     Poly(x*a + y/4*b**2 + z**2*c**3, a, b, c, domain='QQ[x,y,z]')
 
@@ -355,7 +355,7 @@ def preprocess_text(
     >>> preprocess_text('1+a2/b') is None # since it is not a polynomial in a, b, c
     True
 
-    
+
     Configure the return type.
 
     >>> preprocess_text('1+a2/b', return_type='expr')
@@ -389,7 +389,7 @@ def preprocess_text(
     >>> preprocess_text('Σ(x(y-z)2) - s', (x,y,z), cyclic_sum_func='Σ', lowercase=False)
     Poly(x**2*y + x**2*z + x*y**2 - 6*x*y*z + x*z**2 + y**2*z + y*z**2 - s, x, y, z, domain='QQ[s]')
 
-    
+
     To avoid certain patterns from being completed, set preserve_patterns.
 
     >>> preprocess_text('cbrt(x2)+y2',return_type='expr')
@@ -428,7 +428,7 @@ def preprocess_text(
         scientific_notation=scientific_notation,
         preserve_patterns=preserve_patterns
     )
-    
+
     if return_type == 'text':
         return poly
 
@@ -460,7 +460,7 @@ def preprocess_text(
 
     if return_type == 'expr':
         return poly
-    
+
     try:
         # try if it has no fractions, which avoids expanding CyclicExprs manually
         poly0 = _parse_poly(poly, gens)
@@ -866,7 +866,7 @@ def coefficient_triangle(poly: Poly, degree: int = None) -> str:
         coeffs = poly.coeffs()
         monoms = poly.monoms()
         monoms.append((-1,-1,0))  # tail flag
-        
+
         t = 0
         triangle = []
         for i in range(degree+1):
@@ -974,7 +974,7 @@ def wrap_desmos(x: List[Expr]) -> str:
     var elt = document.getElementById('calculator');
     var calculator = Desmos.GraphingCalculator(elt);
     """
-    for i, content in enumerate(x):        
+    for i, content in enumerate(x):
         html_str += "\ncalculator.setExpression({id: '%d', latex: '%s'});"%(i, latex(content).replace('\\','\\\\'))
     html_str += "\n</script>"
     return html_str
@@ -1006,7 +1006,7 @@ class PolyReader:
             The generators of the polynomial.
         perm : Optional[PermutationGroup]
             The permutation group of the expression. If None, it will be cyclic group.
-        ignore_errors : bool    
+        ignore_errors : bool
             Whether to ignore errors. If True, invalid polynomials will be skipped by
             yielding None. If False, invalid polynomials will raise a ValueError.
         kwargs:

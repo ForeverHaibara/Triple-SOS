@@ -62,7 +62,7 @@ def _is_bidegree(p: Poly) -> Optional[Tuple[Poly, Poly, int]]:
     Returns l1, l2, sgn such that p = sgn * (l2 - l1). Also,
     l1, l2 are homogeneous, deg(l1) < deg(l2) and l1.LC() > 0. Returns
     None if p does not have the property.
-    
+
     Examples
     ---------
     >>> from sympy.abc import a, b, c

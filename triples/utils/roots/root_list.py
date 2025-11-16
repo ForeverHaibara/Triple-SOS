@@ -109,7 +109,7 @@ class RootList(list):
             The arguments to pass to the `n` method of each root.
         kwargs :
             The keyword arguments to pass to the `n` method of each root.
-        
+
         Returns
         ----------
         RootList

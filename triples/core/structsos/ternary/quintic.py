@@ -103,9 +103,9 @@ def _sos_struct_quintic_full(coeff):
 
     Expand F, we obtain
     F(a,b,c) = sum (a + c(x^2+k))f(a,b,c)^2 + 2x*sum af(a,b,c)f(b,c,a).
-    Now we take y = x^2 + k >= x^2. 
+    Now we take y = x^2 + k >= x^2.
     We solve u,v,x,y from the coefficient of a^5,a^4b,a^3b^2,a^2b^3,ab^4.
-    
+
     Examples
     -------
     s(a5+a4b-3a3b2-9a3bc+4a3c2+6a2b2c)
@@ -236,7 +236,7 @@ def _sos_struct_quintic_full(coeff):
         At this maximum t, there exists nontrivial equality cases, and we assume
         that the equality satisfies a^2-b^2+u(ab-ac)+v(bc-ab) = 0 and its cyclic permutations.
 
-        Now we represent F in the form of 
+        Now we represent F in the form of
         F(a,b,c) = sum (a + cy)f(a,b,c)^2 + 2x*sum af(a,b,c)f(b,c,a).
 
         Return u, v, x, y.
@@ -349,11 +349,11 @@ def _sos_struct_quintic_full(coeff):
         """
         Let f(a,b,c) be a septic (degree-7) cyclic polynomial without a^7 term.
         Then B(x) = f(x,1,0) / x is quintic. Assume that B(x) >= 0 (x >= 0).
-        Given such B, we find a sum of square form g(a,b,c), such that 
+        Given such B, we find a sum of square form g(a,b,c), such that
         sum abg(a,b,c) = f(a,b,c) when c = 0. That is, the border of sum g
         coincides with the border of f.
 
-        This is used to cancel out the border of a septic polynomial, so that 
+        This is used to cancel out the border of a septic polynomial, so that
         it remains to prove a quartic * abc.
         """
         if border.LC() < 0:
@@ -375,7 +375,7 @@ def _sos_struct_quintic_full(coeff):
                     poly = sum(v*a**i*b**(2-i) for (i,), v in poly.terms()) - bias*b*c
                     s_args.append(coeff * a * poly**2)
         return s_args # sp.Add(*s_args)
-    
+
     def _compute_ker(poly, uv = None):
         """
         Given quintic F(a,b,c). We denote B(x) = F(x,1,0) >= 0 be its border.
@@ -430,7 +430,7 @@ def _sos_struct_quintic_full(coeff):
             """
             Params is the coefficient of V, which is a length-10 vector.
             Compute _extract_quartic(f(a,b,c) * sum(z^2 + zab) - sum a*V(a,b,c)^2).
-            When setting return_mpnq = True, return the coefficient of 
+            When setting return_mpnq = True, return the coefficient of
             a^5bc, a^4b^2c, a^3b^3c, a^2b^4c (denoted by m, p, n, q).
             """
             _, x1, x2, x3, x4, x5, x6, x7, x8, x9 = params
@@ -458,7 +458,7 @@ def _sos_struct_quintic_full(coeff):
             Note that there are 2 choices of sign for each equation, we need to try
             both of them.
 
-            Return None if no solution is found. Return params of V and z otherwise.         
+            Return None if no solution is found. Return params of V and z otherwise.
             """
             eqs = np.array(eqs, dtype = np.float64)
             target = np.array([1] + [0]*9, dtype=eqs.dtype)
@@ -498,7 +498,7 @@ def _sos_struct_quintic_full(coeff):
                         # print('Expected mpnq =', (m_, p_, n_, q_), '\nExpected det =', (3*m_*(m_+n_) - (p_**2+p_*q_+q_**2)).n(20), '\nExpected mul =', mul_)
                         return params_, mul_
             return None
-        
+
         solved_params = _solve_flip_sgn_eqs(eqs, border)
         if solved_params is None:
             return None
@@ -609,7 +609,7 @@ def _sos_struct_quintic_windmill(coeff):
     -------
     s(a2c(4a-3b-c)2)-20abcs(a2-ab)
 
-    s(a)2s(a2b)-9abcs(a2) 
+    s(a)2s(a2b)-9abcs(a2)
 
     4s(c(a-b)2(a-c)2)-s(c2(11a-15b-c)(a-b)2)
 
@@ -686,7 +686,7 @@ def _sos_struct_quintic_windmill(coeff):
         else:
             u_ = coeff((3,1,1)) / (-2 * coeff((3,2,0)))
             y = [coeff((3,2,0)), sp.S(0), coeff((2,3,0)) - coeff((3,2,0)) * u_ ** 2, sp.S(0), const_]
-        
+
         if y is not None and all(_ >= 0 for _ in y):
             exprs = [
                 CyclicSum(b*(u_*a*b-(u_-1)*a*c-b*c)**2 if u_ is not None else a**3*b*c),
@@ -727,7 +727,7 @@ def _sos_struct_quintic_windmill(coeff):
                     character = b if coeff((3,2,0)) >= coeff((2,3,0)) else a
                     p1 = (y[0]*a**2 + y[1]*c**2 + y[2]*a*b + y[3]*character*c).together()
                     return CyclicSum(c*(a-b)**2*p1) + rem
-            
+
             # B. y^2 <= 4xz
             # x = coeff((1,4,0))
             # y + z = coeff((2,3,0))
@@ -736,7 +736,7 @@ def _sos_struct_quintic_windmill(coeff):
             #      => y <= coeff((2,3,0)) + x + coeff((3,1,1)) / 2
             # Problem: whether y >= ... has a solution such that
             # y^2 <= 4x(coeff((2,3,0)) - y)
-            
+
             bound_l = coeff((2,3,0)) - coeff((3,2,0))
             bound_r = coeff((2,3,0)) + coeff((1,4,0)) + coeff((3,1,1)) / 2
             if bound_l <= bound_r:
@@ -757,7 +757,7 @@ def _sos_struct_quintic_windmill(coeff):
                     (coeff((3,1,1)) / 2 + coeff((1,4,0)) + (coeff((2,3,0)) - bound)),
                     coeff((3,2,0)) - (coeff((2,3,0)) - bound)
                 ])
-                
+
                 if (y[0] >= 0 and y[2] >= 0 and 4*y[0]*y[2] >= y[1]**2):
                     p1 = (quadratic_weighting(y[0], y[1], y[2], a, c) + y[3]*a*b + y[4]*b*c).together()
                     return CyclicSum(c*(a-b)**2*p1) + rem
@@ -937,7 +937,7 @@ def _sos_struct_quintic_windmill(coeff):
             if eq2(w_) >= 0 and eq(w_) <= 0:
                 w = w_
                 break
-    
+
         if isinstance(w, sp.Rational):
             multiplier = CyclicSum((a-b)**2)
             _new_coeffs = {
@@ -1016,10 +1016,10 @@ def _sos_struct_quintic_windmill(coeff):
             u_ = rationalize_func(eq, _is_valid_u, validation_initial = lambda u: u >= 1, direction = -1)
             if u_ is None:
                 return None
-     
+
             # Despite (u,v) cancels out a^3b^2 and ab^4 terms perfectly,
             # the v is oftentimes too complicated.
-            # We can find a nicer v sometimes. 
+            # We can find a nicer v sometimes.
             v_ = _compute_v(u_)
             for v__ in rationalize_bound(u_.q * v_.n(20), direction = -1, compulsory = True):
                 # trick: keep the denominator of v and u aligned
@@ -1036,7 +1036,7 @@ def _sos_struct_quintic_windmill(coeff):
             # then perturbation has no chance
             # we take the limit of our sum of squares to the numerical, exact solution
             # e.g. s(c(2a2-ab-ac)2)-4abcs(a2-ab)
-            
+
             # first solve v, which is a cubic equation
             # r = -4(v+1) / (v**3 - 3*v**2 + 7*v - 13)
             v = sp.symbols('v')
@@ -1044,14 +1044,14 @@ def _sos_struct_quintic_windmill(coeff):
             eq = ((v**3 - 3*v**2 + 7*v - 13) + 4*(v+1) / r).as_poly(v)
             # we can see that eq is strictly increasing and has a real root > -1
             v_ = nroots(eq, method='factor', real=True)[0]
-            
+
             # the true g is given by
             # g = b*(a*a + (1-r)*a*b - r*b*b + 2*(r-1)*a*c) + z0*a*c*(r*a - c - (r-1)*b) + b*c*(z1*b+z2*c-(z1+z2)*a)
             # with z0, z1, z2 given below
             z0  = (v_ +1)/2
             z1 = (3-v_)/2 + r*(2*v_-1)
             z2 = (1-v_)*(3*v_-1)*r/4 - 1
-            
+
             w_ = coeff((3,1,1)) / coeff((3,2,0))
             # we have det >= 0 as long as w < -1 (in non-trivial case)
             def compute_discriminant(z0, z1, z2):
@@ -1061,7 +1061,7 @@ def _sos_struct_quintic_windmill(coeff):
                 q_ = 3*r**2*z0**2 - 6*r**2*z0 + 5*r**2 - 4*r*z0**2 + 2*r*z0*z1 + 2*r*z0*z2 + 6*r*z0 - 2*r*z2 - 6*r + w_*z0**2 + w_ + 2*z0 - 2*z1 - z2**2 - 1
                 det_ = 3 * m_ * (m_ + n_) - (p_ ** 2 + q_ ** 2 + p_ * q_)
                 return m_, n_, p_, q_, det_
-            
+
             det_, m_ = -1, -1
             for rounding in (.5, .2, .1, 1e-2, 1e-3, 1e-5, 1e-8):
                 z0_, z1_, z2_ = [rationalize(_, rounding = rounding, reliable = False) for _ in (z0, z1, z2)]
@@ -1139,7 +1139,7 @@ def _sos_struct_quintic_windmill_uv(u, v):
         c1 = (u - 1)*(u + v - 1)
         c2 = (2*u**2 - u*v - 2*u + 3)
         c3 = (-u**2 + u*v + 3*u - v**2 + 3*v - 5)
-        
+
         multiplier = CyclicSum((a-b)**2)
         denom2 = ((2*u - v + 1) / 4)
 
@@ -1182,8 +1182,8 @@ def _sos_struct_quintic_windmill_uv(u, v):
         ]
 
         return multiplier, sum_y_exprs(y, exprs)
-    
-    
+
+
     if (3*u**2 + 2*u*v - 4*u - v**2 - 8) >= 0:
         # Theorem 2.1
         # When 3u^2 + 2uv - 4u - v^2 - 8 >= 0, the inequality holds.
@@ -1250,7 +1250,7 @@ def _sos_struct_quintic_windmill_uv(u, v):
 
 def _sos_struct_quintic_uncentered(coeff):
     """
-    Give the solution to s(ab4+?a2b3-?a3bc+?a2b2c) >= 0, 
+    Give the solution to s(ab4+?a2b3-?a3bc+?a2b2c) >= 0,
     which might have equality not at (1,1,1) but elsewhere.
 
     Examples
@@ -1360,7 +1360,7 @@ def _sos_struct_quintic_uncentered(coeff):
             # is s(a2c(a-5/2b)2)-abcs(8a2-131/4ab)
             # in this case u = 1/2, v = (17+3*sqrt(13))/4
             # So we use the direct result:
-            # (s(a2c(a-5/2b)2)-abcs(8a2-131/4ab))s(ab(a-b+3c)2) = 
+            # (s(a2c(a-5/2b)2)-abcs(8a2-131/4ab))s(ab(a-b+3c)2) =
             # s(a(a^3c-8a^2bc-a^2c^2+10ab^2c-4abc^2-b^2c^2+3bc^3)^2)
             # + 1/2p(a)s((9a2c-2ab2-26abc-8ac2+b3-7b2c+5bc2+c3)2) + 3/2p(a)s(a2b-4a2c-6abc)2
             if r3 >= 39:
@@ -1452,7 +1452,7 @@ def _sos_struct_quintic_uncentered(coeff):
         m2 = (m2[0] * m2[1]) / sp.gcd(m2[0], m2[1])
 
         multiplier = CyclicSum(a**2 + phi*b*c)
-        
+
         y = [
             sp.S(1) / m2**2,
             r1_ * factor1**2 / (((u**2 - u + 1) * factor2 * m1)**2),
@@ -1516,7 +1516,7 @@ def _sos_struct_quintic_windmill_special(coeff):
         q_ = -w*z**2 - w + 2*x*z - y**2 - 2*y*z + 2*y + 3*z**2 - 6*z + 5
         det_ = (-3*w + 6*x + 3*z**2 + 6)*(w*z**2 - w + 2*x*y + 2*y*z + 2*y + 4) - (p_**2 + p_*q_ + q_**2)
         return p_, q_, det_
-    
+
     # candidate selections of (x,y,z) such that det >= 0
     candidates = [
         (sp.S(3), sp.S(2), sp.S(1)),                       # w = 3.5433               > 7/2
@@ -1549,7 +1549,7 @@ def _sos_struct_quintic_windmill_special(coeff):
         ]
 
         return sum_y_exprs(y, exprs) / multiplier
-    
+
     return None
 
 
@@ -1622,7 +1622,7 @@ def _sos_struct_quintic_hexagon(coeff):
     s(4a4b+a4c+9a3b2-36a3bc+2a3c2+20a2b2c)
 
     s(4a4b+a4c-3a3b2-16a3bc+2a3c2+12a2b2c)
-    
+
     s(a4b-3a3b2+6a2b3+3ab4-7a3bc)
 
     s(a4b+7a4c-3a3b2-17a3bc-a3c2+13a2b2c)
@@ -1674,7 +1674,7 @@ def _sos_struct_quintic_hexagon(coeff):
                 if -2 * u_ * v_ <= z:
                     break
                 u_, v_ = None, None
-        
+
         if u_ is None:
             try:
                 for root in sp.polys.nroots(eq):
@@ -1737,7 +1737,7 @@ def _sos_struct_quintic_hexagon(coeff):
             u = sp.symbols('u')
             u_, v_ = None, None
             eq = (x_**3*u**4 - 2*g*x_**2*u**2 + (-8*x_**3 - 4*x_**2*y_ + 2*x_*y_**2 + y_**3)*u + g**2*x_ - 4*h*x_**2 - 4*h*x_*y_ - h*y_**2).as_poly(u)
-            
+
             roots = nroots(eq, method='factor', real = True, nonnegative = True)
             for root in roots:
                 u_, v_, coef = _compute_uvcoef(root, x_, y_, s_, g)
@@ -1760,7 +1760,7 @@ def _sos_struct_quintic_hexagon(coeff):
         if params is not None:
             # now that x is rational
             u_, v_, coef = params
-            
+
             if not isinstance(u_, sp.Rational):
                 # for u__ in rationalize_bound(u_, )
                 direction = -1 if (4*u_*x_**2*(-g + u_**2*x_)/(2*x_ + y_)**2 - 2*x_ + y_) > 0 else 1
@@ -1792,6 +1792,6 @@ def _sos_struct_quintic_hexagon(coeff):
                     ]
                     return sum_y_exprs(y, exprs)
 
-            
+
 
     return None

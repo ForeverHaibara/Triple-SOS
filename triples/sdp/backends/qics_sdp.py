@@ -19,7 +19,7 @@ class DualBackendQICS(DualBackend):
     Adapted from contributor 数学规划-试验最优化.
     """
     _dependencies = ('qics',)
-    
+
     _opt_ineq_to_1d = False
     _opt_eq_to_ineq = False
 
@@ -53,11 +53,11 @@ class DualBackendQICS(DualBackend):
         problem = self._create_problem(configs)
         info = problem.solve()
         y = info['x_opt'].flatten()
-        
+
         result = {'y': y}
         status = info['sol_status']
         status2 = info['exit_status']
-        
+
         if status in ('optimal', 'near_optimal'):
             result['optimal'] = True
         elif status in ('pinfeas', 'near_pinfeas'):

@@ -84,7 +84,7 @@ def SymmetricSOS(
     [1] 陈胜利.不等式的分拆降维幂方法与可读证明.哈尔滨工业大学出版社,2016.
 
     [2] https://zhuanlan.zhihu.com/p/616532245
-    
+
     [3] https://zhuanlan.zhihu.com/p/20969491385
     """
     # from ..structsos import StructuralSOS

@@ -1,6 +1,6 @@
 """
-This module provides an implementation of rational number matrices and their  
-arithmetic operations, aiming to provide a more efficient interface to  
+This module provides an implementation of rational number matrices and their
+arithmetic operations, aiming to provide a more efficient interface to
 using sympy.Rational or numpy for matrix computations.
 """
 
@@ -112,7 +112,7 @@ def matmul(A: Union[Matrix, ndarray], B: Union[Matrix, ndarray],
 
     def default(A0, B0):
         return reshape(A0 @ B0, return_shape)
-    
+
     if not (is_zz_qq_mat(A) and is_zz_qq_mat(B)):
         return default(A0, B0)
 
@@ -233,7 +233,7 @@ def matmul_multiple(A: Union[Matrix, ndarray], B: Union[Matrix, ndarray],
         B = rep_matrix_to_numpy(B, dtype=int64)
         _MAXB = abs(B).max()
         if isnan(_MAXB) or _MAXB == inf or _MAXB > _INT64_MAX or int(_MAXA) * int(_MAXB) * n > _INT64_MAX:
-            raise OverflowError        
+            raise OverflowError
         time_limit()
     except OverflowError:
         return default(A0, B0)

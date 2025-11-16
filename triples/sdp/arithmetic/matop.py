@@ -465,7 +465,7 @@ def rep_matrix_to_numpy(M: Matrix, dtype = np.float64, sparse: bool = False) -> 
                 f = wrapper(lambda x: x.__float__())
         elif np.issubdtype(dtype, np.complexfloating):
             f = wrapper(lambda x: x.__complex__())
-    
+
     if f is not None:
         rows, cols = M.shape
         items = list(M.rep.to_dok().items()) # avoid .iter_items() for version compatibility
@@ -503,7 +503,7 @@ def rep_matrix_to_numpy(M: Matrix, dtype = np.float64, sparse: bool = False) -> 
 def permute_matrix_rows(matrix: Union[Matrix, ndarray], permutation: List[int]):
     """
     Fast operation of matrix[permutation].
-    
+
     Parameters
     ----------
     matrix : Matrix or ndarray

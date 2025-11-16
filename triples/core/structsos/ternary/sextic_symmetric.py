@@ -50,7 +50,7 @@ def _restructure_quartic_polynomial(poly):
     Conversely, we might consider whether solving the symmetric axis implies the proof to the original 3-var poly.
 
     Three special cases are:
-    * M(s(a^2-ab)^3) = M(p(2a-b-c)^2/4) = (a - 1)**4 
+    * M(s(a^2-ab)^3) = M(p(2a-b-c)^2/4) = (a - 1)**4
     * M(s(a^6+a^5b+a^5c+a^4bc-2a^3b^2c-2a^3bc^2) - 2s(a^4-a^2bc)s(xa^2+yab) + s(a^2-ab)s(xa^2+yab)^2)
         = ((x - 1)*a**2 - (2 - 2*y)*a + (2*x + y - 2))**2
     * M(s(a^2+rab)^2) = (a**2 + 2*r*a + r + 2)**2
@@ -217,7 +217,7 @@ def _sos_struct_sextic_hexagon_symmetric(coeff, real = False):
     Consider the following hexagon:
     F(a,b,c) = s(a^2b^2(a+b)^2 + xa^4bc + ya^3bc(b+c) - ...a^2b^2c^2)
     It has root (1,-1,0) over R.
-    
+
     Theorem 1:
     When t not in (-2,1), the following inequality holds for all real numbers a, b, c:
     f(a,b,c) = t^2/4 * p(a-b)^2 + s(bc(a-b)(a-c)(a-tb)(a-tc)) >= 0
@@ -264,7 +264,7 @@ def _sos_struct_sextic_hexagon_symmetric(coeff, real = False):
     s(bc(b+c)2(a-b)(a-c))+s(bc(a-b)(a-c)(a-2b)(a-2c))+2s(a4(b-c)2)  (real)
 
     p(a2+ab+b2)+12a2b2c2-3p(a+b)2/5    (real, uncentered)
-    
+
     References
     ----------
     [1] Vasile, Mathematical Inequalities Volume 1 - Symmetric Polynomial Inequalities. p.23
@@ -279,7 +279,7 @@ def _sos_struct_sextic_hexagon_symmetric(coeff, real = False):
     rem = radsimp((coeff((4,2,0)) + coeff((3,2,1))) * 6 + (coeff((3,3,0)) + coeff((4,1,1))) * 3 + coeff((2,2,2)))
     if rem < 0:
         return None
-    
+
     # although subtracting p(a-b)2 always succeeds,
     # we can handle cases for real numbers and cases where raising the degree is not necessary
     solution = _sos_struct_sextic_hexagon_symmetric_sdp(coeff)
@@ -414,7 +414,7 @@ def _sos_struct_sextic_hexagram_symmetric(coeff):
     """
     Solve s(a3b3+xa4bc+ya3b2c+ya2b3c+wa2b2c2) >= 0
 
-    Theorem 1: For real number u, 
+    Theorem 1: For real number u,
         f(a,b,c) = s(a4bc+(u-1)^2*a3b3-(u^2-u+1)*a2b2c(a+b)+u^2*a2b2c2) >= 0
     Because
         f(a,b,c) * 2s(a) = abcs((b-c)^2(b+c-ua)^2)+2s(a(b-c)^2((1-u)(ab+ac)+bcu)^2) >= 0
@@ -423,9 +423,9 @@ def _sos_struct_sextic_hexagram_symmetric(coeff):
     then it is positive.
 
     Examples
-    -------    
+    -------
     s(a4bc+4a3b3-7a3b2c-7a3bc2+9a2b2c2)
-    
+
     s(a3b3+2a4bc- 44/10(a3b2c+a3bc2-2a2b2c2)-3a2b2c2)
 
     s(21a4bc+7a3b3-40a3b2c-40a3bc2+52a2b2c2)
@@ -442,11 +442,11 @@ def _sos_struct_sextic_hexagram_symmetric(coeff):
 
     References
     -------
-    [1] https://tieba.baidu.com/p/8039371307 
+    [1] https://tieba.baidu.com/p/8039371307
     """
     if coeff((3,3,0)) < 0 or coeff((4,1,1)) < 0:
         return None
-    
+
     # first try trivial cases
     if True:
         # For s(a3b3+xa4bc+ya3b2c+ya2b3c+wa2b2c2) with 1+x+2y+w = 0,
@@ -469,7 +469,7 @@ def _sos_struct_sextic_hexagram_symmetric(coeff):
                 CyclicProduct(a**2)
             ]
             return sum_y_exprs(y, exprs)
-    
+
     if coeff((4,1,1)) != 0:
         x_ = coeff((3,3,0)) / coeff((4,1,1))
         y_ = coeff((3,2,1)) / coeff((4,1,1))
@@ -547,7 +547,7 @@ def _sos_struct_sextic_hexagram_symmetric(coeff):
                         CyclicSum(c*(c21*a**3*b + c22*a**2*b**2 + c23*a**2*b*c + c24*a**2*c**2 + c25*a*b**3 + c26*a*b**2*c + c27*a*b*c**2 + c28*b**2*c**2)**2),
                         multiplier * CyclicProduct(a**2)
                     ]
-    
+
                     return sum_y_exprs(y, exprs) / multiplier
     return None
 
@@ -560,14 +560,14 @@ def _sos_struct_sextic_tree(coeff):
     If the inequality holds for all a,b,c >= 0, then there must exist x >= 1
     such that
         f(a,b,c) = s(a2+xab) * s((a-b)^2*(a+b-xc)^2) / 2
-                    + (u - (x^3 - 3*x)) * s(a3b3 - a2b2c2) 
+                    + (u - (x^3 - 3*x)) * s(a3b3 - a2b2c2)
                         + (v + 3*x*(x-1)) * s(a4bc - a2b2c2)
 
     where (u - (x^3 - 3*x)) >= 0 and (v + 3*x*(x-1)) >= 0. Actually, x (>= 1)
     can be the root of (x^3 - 3*x - u).
-    
+
     We can see that the inequality holds for real numbers when -1 <= x <= 2.
-    Further, if (u,v) falls inside the (closed) parametric curve (x^3-3x,-3x(x-1)) where -1<=x<=2, 
+    Further, if (u,v) falls inside the (closed) parametric curve (x^3-3x,-3x(x-1)) where -1<=x<=2,
     which is 27*u^2+27*u*v+54*u+v^3+18*v^2+54*v = 0, a strophoid,
     then the inequality is a linear combination of two positive ones.
 
@@ -776,7 +776,7 @@ def _sos_struct_sextic_iran96(coeff, real = False):
     s(a2(a2-b2)(a2-c2))-s(a4(a-b)(a-c))+5p(a-b)2
 
     (s(a2bc(a2-b2+4(bc-ac)))+s(ac(3c+13/7b)(a-b)(3(a+b)c-4ab)))+9(s(ab(a2-b2+4(bc-ac))2)-6p(a-b)2)
-    
+
     s(ab(a4+b4)-6(a4b2+a2b4)+11a3b3+13abca(a-b)(a-c)-3(a3b2c+a2b3c)+5a2b2c2)
 
     (s(ab(a-b)4)-8abcs(a3-2a2b-2a2c+3abc))-p(a-b)2+1/4s(a3b3-a2b2c2)
@@ -786,7 +786,7 @@ def _sos_struct_sextic_iran96(coeff, real = False):
     s(4a6-a3b3-3a2b2c2)-63p(a-b)2-4s(a3-abc-3/2(a2b+ab2-2abc))2
 
     s(ab(a-b)2(a+b-c)2)-4p(a-b)2
-    
+
     (s(a(a+b)(a+c)(a+b+c)2)+12abcs(ab)-2p(a+b)s(a)2)s(a)-s(a(a-b)(a-c))2-16p(a-b)2
 
     s(a4(a-b)(a-c))-5p(a-b)2+s(a3-abc-3(a2b+ab2-2abc))2-10p(a-b)2-2s(a3-abc-9/4(a2b+ab2-2abc))2
@@ -838,9 +838,9 @@ def _sos_struct_sextic_iran96(coeff, real = False):
         return solution
 
     if p >= 0 and q + 2 * m + 2 * p >= 0:
-        # Easy case 2, subtract s(ab(a-b)2(a+b-xc)2) such that the coeffs of 
+        # Easy case 2, subtract s(ab(a-b)2(a+b-xc)2) such that the coeffs of
         # a^4bc and a^3b^3 are equal
-        
+
         if True:
             x_ = radsimp((q - w) / (4 * m) + sp.Rational(1,2))
             y = radsimp([
@@ -875,7 +875,7 @@ def _sos_struct_sextic_iran96(coeff, real = False):
         if u_ < 1:
             u_ = sp.S(1)
         w2 = w + 2 * p + 4 * u_ * m
-        
+
         if 2*q2 + w2 + min(2*q2, w2) + (z - 2*p - (u_**2 + 2*u_)*m) < 0:
             u_ = None
 
@@ -986,7 +986,7 @@ def _sos_struct_sextic_iran96(coeff, real = False):
 
         # both two cases should imply 2*p + q + 2 >= 0
         return None
-    
+
     # First, we peek whether there are nontrivial roots in the interior with a == b.
     # f(a,a,1)/(a-1)^2 = sym(a)
     u = sp.symbols('u')
@@ -1014,7 +1014,7 @@ def _sos_struct_sextic_iran96(coeff, real = False):
             root = None
 
     if u_ is not None:
-        # The polynomial must be in the form of 
+        # The polynomial must be in the form of
         # c1 * s((2a(b+c)-bc)(b-c)^2(b+c-ua)^2) + (1 - c1) * s(bc(b-c)^2(b+c-ua)^2) + rp(a-b)^2.
         # Note that SOS theorem states that
         # s((2a(b+c)-bc)(b-c)^2(b+c-ua)^2) = s(bc((a-b)(a+b-uc)-(c-a)(c+a-ub))2) >= 0
@@ -1049,7 +1049,7 @@ def _sos_struct_sextic_iran96(coeff, real = False):
     y_hex = 0
     if coeff.is_rational and not isinstance(r, sp.Rational):
         # make a perturbation on q so that 2*p + q' + 2 is a square
-        
+
         if u_ is None:
             # Case A.A there are no nontrivial roots, then we can make any slight perturbation
             # here we use s(ab(a-c)2(b-c)2)
@@ -1084,7 +1084,7 @@ def _sos_struct_sextic_iran96(coeff, real = False):
     t = - (p - r) / 2
     w -= -2 * r
     z -= 2 * r
-    
+
     # Third, determine u by the coefficient at (4,1,1), which is w
     coeff_z = lambda u__: -(t**2*u__**2 - t**2*u__ + t**2 - 4*t*u__ - u__**4 + 7*u__**2 - 6*u__ + 4)/(u__ - 1)**2
     if u_ is None:
@@ -1099,7 +1099,7 @@ def _sos_struct_sextic_iran96(coeff, real = False):
                     if coeff_z(u__) <= z:
                         u_ = u__
                         break
-                
+
             # find a rational approximation
             if u_ is None:
                 for u__ in sp.polys.nroots(equ)[::-1]:
@@ -1111,7 +1111,7 @@ def _sos_struct_sextic_iran96(coeff, real = False):
                                 if u_ != 1 and coeff_z(u_) <= z and (u_ - u__) * direction > 0:
                                     break
                                 u_ = None
-            
+
     # print('W Z R Y U T =', w, z, r, y_hex, u_, t)
     if u_ is None:
         return None
@@ -1157,7 +1157,7 @@ def _sos_struct_sextic_iran96(coeff, real = False):
         # very special case, it must be t == 2
         # f(a,b,c) = (s(ab(a-b)2(a+b-c)2)-4p(a-b)2)
         # then f(a,b,c)s(a) = s(a(b-c)2(b+c-a)4) + 2abcs((b-c)2(b+c-a)2)
-        
+
         multiplier = CyclicSum(a)
         y = radsimp([
             y_hex if root is None else sp.S(0),
@@ -1269,7 +1269,7 @@ def _sos_struct_sextic_symmetric_full_sdp(coeff):
         if quad_sol is None or w < 0:
             return
         return quad_sol + w * CyclicProduct((a-b)**2) + rem * CyclicProduct(a**2)
-        
+
 
     u = sp.Symbol('u')
     detu = sp.Poly(radsimp([1, -3*a2, -36*a0*a4 + 9*a1*a3, 108*a0*a2*a4 - 27*a0*a3**2 - 27*a1**2*a4]), u)
@@ -1380,7 +1380,7 @@ def _sos_struct_sextic_symmetric_quadratic_form(poly, coeff):
     s(a6-21a5b-21a5c-525a4b2+1731a4bc-525a4c2+11090a3b3-13710a3b2c-13710a3bc2+15690a2b2c2)
 
     s(a2(a-b)(a-c)(a-5b)(a-5c))+s(a2(a-b)(a-c)(a-3b)(a-3c))+15p(a-b)2
-    
+
     s(a2(a-b)(a-c)(3a-2b)(3a-2c))+15p(a-b)2        (real)
 
     s(56a6-41a5b-56a4b2+82a3b3-56a2b4-83a3b2c-83a2b3c-41ab5+98a2b2c2+124a4bc)      (real)
@@ -1425,7 +1425,7 @@ def _sos_struct_sextic_symmetric_quadratic_form(poly, coeff):
 
 
 class _sextic_sym_axis:
-    """    
+    """
     Let F0 = s(a^6+a^5b+a^5c+a^4bc-2a^3b^2c-2a^3bc^2) and f(a,b,c) = s(xa^2 + yab).
     Define
     F_{x,y}(a,b,c) = F0 - 2s(a^4-a^2bc)f(a,b,c) + s(a^2-ab)f(a,b,c)^2.
@@ -1511,7 +1511,7 @@ class _sextic_sym_axis:
             """
             The following h, c1, c2 satisfy that
             F(a,b,c) * 2s(a2-ab) = 1/9 * s(h(a,b,c)^2) + p(a-b)^2 * s(c1*a^2 + c2*a*b)
-            for arbitrary z. 
+            for arbitrary z.
             Therefore, we can choose z such that c1 >= 0 and c1 + c2 >= 0.
             This is often done by selecting the symmetric axis of the parabola.
             """
@@ -1717,14 +1717,14 @@ class _sextic_sym_axis:
         D2 = 4*m**3 - (4*suv+7)*m**2 + ((suv+4)**2+2*puv-20)*m + (puv-2)**2-2*suv**2
         phi = -puv**2 * D2 / (m-2) / (m+puv-2)**2 / (suv-2*m-1) - m
         final_coeff = D1*D2 / (m-2)**2 / (m+puv-2)**2 / (suv-2*m-1)
-        
+
         If w = (m**3 - (suv+1)*m**2 + (suv+puv-3)*m + (puv-1)**2+2*suv+1) / (m - 2),
         Then we have identity
         R(a,b,c) * s(a^2 + phi*b*c) = s((a-b)^2g(a,b,c)^2)/2 + (phi - (m-2)*(suv-2*m)/(m+puv-2)) * s(ab(a-b)^2h(a,b,c)^2)
             + final_coeff * (puv**2 * s(ab)p(a-b)^2 + (2-m)s(bc(a-b)(a-c)(a-ub)(a-uc)(a-vb)(a-vc)))
 
         Explicit forms of function g and h are omitted here. Please refer to the code.
-            
+
         In particular, if puv == 0, WLOG v = 0, suv = u. Let m -> 2, w = 5 - 3*u, when u <= 4
         R(a,b,c) * s(a^2-u/4*ab) = s(a(a-b)(a-c)(2a-ub-uc))^2/4 + (1-u/4)s(ab(a-b)^2((a-b)^2+(2-u)(a+b)c-(3-u)c^2)^2)
             + (1-u/4)/2 * s((a(b-c)((b+c-a)(b+c-(u+1)a)-u(a-c)(a-b)))^2)
@@ -1798,7 +1798,7 @@ class _sextic_sym_axis:
             if with_frac:
                 solution = solution / CommonExpr.quadratic(1, phi)
             return solution
-        
+
         if isinstance(params[2], sp.Rational):
             solution = sp.Add(
                 (x-1)**2 * _solve_border(*params, with_tail = False, with_frac = True),
@@ -1887,19 +1887,19 @@ class _sextic_sym_axis:
 def _sos_struct_sextic_symmetric_ultimate(coeff, real = True):
     """
     Handle nondegenerated symmetric sextic polynomial inequalities.
-    
+
     1. First we assume there exist nontrivial roots. Three cases:
         A. On the border, e.g. (.618, 0, 1), (1.618, 0, 1)
         B. On the symmetric axis, e.g. (0.5, 0.5, 1)
         C. Nontrivial interior, e.g. (.25, .5, 1), (.5, .25, 1)
-    
+
     Case A can subtract some s(a3-abc + x(ab2+a2b-2abc))2 to Case (A+B).
     Case B can subtract some p(a-b)2 to Case (A+B) or Case (B+C).
     Case C can subtract some s(a2-xab)2s(a2-ab) to Case (B+C).
 
     2. To summarize, we can move to Case (A+B) or Case (B+C).
     For Case (A+B), we subtract s(a3-abc + x(ab2+a2b-2abc))2 to cancel s(a6)
-        and call function iran96. 
+        and call function iran96.
     Note: a special case is when the border's root is (1,0,1), we shall handle more carefully.
     For Case (B+C), we can multiplicate s(a2+xab)
 
@@ -1911,7 +1911,7 @@ def _sos_struct_sextic_symmetric_ultimate(coeff, real = True):
 
 
     s(a6-a2b2c2)+s(a3b3-a4bc)-12s(a4b2+a4c2-2a2b2c2)+22s(a3b3-a2b2c2)+14s(a2b+ab2-2abc)abc-2p(a-b)2
-    
+
     Case C.
     s(409a6-1293a5b-1293a5c+651a4b2+5331a4bc+651a4c2+818a3b3-5190a3b2c-5190a3bc2+5106a2b2c2)
 
@@ -1927,7 +1927,7 @@ def _sos_struct_sextic_symmetric_ultimate(coeff, real = True):
 
     # try trivial cases
     if True:
-        # write in the form of 
+        # write in the form of
         # s(a2-ab)s(m(a^4-a^2bc)+p(a^3b+ab^3-2a^2bc)+n(a^2b^2-a^2bc) + ua^2bc) + vp(a)s(a(b-c)^2) + wp(a-b)^2
         if rem != 0:
             # do not try
@@ -1954,7 +1954,7 @@ def _sos_struct_sextic_symmetric_ultimate(coeff, real = True):
                     p * (a**3*(b+c) + b**3*(c+a) + c**3*(a+b)) +
                     n * (a**2*b**2 + b**2*c**2 + c**2*a**2) +
                     (u - m - 2*p - n) * (a**2*b*c + b**2*c*a + c**2*a*b)
-                ).as_poly(a,b,c) 
+                ).as_poly(a,b,c)
                 solution = sos_struct_quartic(Coeff(poly_div_quad))
                 if solution is not None:
                     solution = sp.Rational(1,2) * CyclicSum((a-b)**2) * solution
@@ -2018,7 +2018,7 @@ def _sos_struct_sextic_symmetric_ultimate(coeff, real = True):
 
     # Case C.
     # TO BE IMPLEMENTED
-  
+
     # print('Roots Info = ', roots)
     sum_of_roots = sum((len(_) > 0) for _ in roots)
 
@@ -2035,7 +2035,7 @@ def _sos_struct_sextic_symmetric_ultimate_1root(coeff, poly, roots, real = True)
     -------
     Case A.
         s(a2)3-27(abc)2-27p((a-b)2)
-        
+
         s(a2/3)3-a2b2c2-p(a-b)2
 
         s(4a6-a3b3-3a2b2c2)-63p(a-b)2
@@ -2054,7 +2054,7 @@ def _sos_struct_sextic_symmetric_ultimate_1root(coeff, poly, roots, real = True)
     [1] https://artofproblemsolving.com/community/c6t29440f6h3147050_zhihu_and_kuing
     """
     coeff6 = coeff((6,0,0))
-    if len(roots[0]): 
+    if len(roots[0]):
         # border
         # be careful that we use r + 1/r == roots[0][0]
         if len(roots[0]) == 1 and roots[0][0] != 2:
@@ -2106,16 +2106,16 @@ def _sos_struct_sextic_symmetric_ultimate_1root(coeff, poly, roots, real = True)
         # s((z0(a^2+b^2) + z1ab + z2c(a+b) + z3c^2)(a-b)^2(a+b-xc)^2).
 
         # First try sum-of-square for real numbers if available.
-        # Suppose 2F(a,b,c) = 2sum f(a,b,c)^2 
+        # Suppose 2F(a,b,c) = 2sum f(a,b,c)^2
         #   = sum (f(a,b,c)^2 + f(b,a,c)^2)
         #   = 2/3*(sum f)^2 + 1/3*sum (f(a,b,c) - f(b,c,a))^2 + 1/3*sum (f(b,a,c) - f(a,c,b))^2
         #   = 2/3*(sum f)^2 + 1/3*sum (f(a,b,c)+f(b,a,c)-f(a,c,b)-f(b,c,a))^2
-        #          + 1/3*sum (f(a,b,c)-f(b,a,c)+f(a,c,b)-f(b,c,a))^2 
-      
+        #          + 1/3*sum (f(a,b,c)-f(b,a,c)+f(a,c,b)-f(b,c,a))^2
+
         # 1. Here the leading term sum f has only two degrees of freedom:
         # sum f ~ p(a-b) or s((b-c)^2(b+c-xa))
 
-        # 2. The second term is symmetric w.r.t. a,b,c and also covers equalities at (x-1,1,1) 
+        # 2. The second term is symmetric w.r.t. a,b,c and also covers equalities at (x-1,1,1)
         # and its permutations. Also, s((a-b) * cubic) == 0 by assumption. The form should be
         # s((a3+b3-2c3+u(a2b+ab2-a2c-b2c)+v(a2b+ab2-ac2-bc2))2) where u = -vx - x^2 + x - 1.
 
@@ -2185,18 +2185,18 @@ def _sos_struct_sextic_symmetric_ultimate_2roots(coeff, poly, roots):
 
     s(a4(a-b)(a-c)) - 5p(a-b)2
 
-    
+
     Reference
     -------
     [1] Vasile, Mathematical Inequalities Volume 1 - Symmetric Polynomial Inequalities. 3.78
-    
+
     [2] https://artofproblemsolving.com/community/c6t243f6h3013463_symmetric_inequality
 
     [3] https://tieba.baidu.com/p/8261574122
     """
     coeff6 = coeff((6,0,0))
 
-    
+
     if len(roots[2]) == 0:
         diffpoly = None
         # Case (A + B)

@@ -91,7 +91,7 @@ class TransformableProblem(SDPProblemBase):
         """
         Clear all the parent nodes.
         """
-        self._transforms = [_ for _ in self._transforms if not _.is_child(self)] 
+        self._transforms = [_ for _ in self._transforms if not _.is_child(self)]
 
     def clear_children(self):
         """

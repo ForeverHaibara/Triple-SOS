@@ -264,12 +264,12 @@ class RationalizeSimultaneously(Rationalizer):
 
 
 def verify_is_pretty(
-        y: Union[List, sp.Matrix], 
+        y: Union[List, sp.Matrix],
         threshold: Optional[Callable] = None
     ) -> bool:
     """
     A heuristic method to check whether the rationalization of `y` is pretty.
-    Idea: in normal cases, the denominators of `y` should be aligned. For example, 
+    Idea: in normal cases, the denominators of `y` should be aligned. For example,
     `[2/11, 56/33, 18/11, 2/3]` seems to be reasonable and great. However,
     `[2/3, 3/5, 4/7, 5/11]` is nonsense because the denominators are not aligned.
 
@@ -281,7 +281,7 @@ def verify_is_pretty(
     y : Union[List, sp.Matrix]
         The vector to be checked.
     threshold : Optional[Callable]
-        The threshold function. It should be a function of y and returns the 
+        The threshold function. It should be a function of y and returns the
         corresponding threshold. If None, we use `max(36, max(v.q for v in y)) ** 2`
 
     Returns

@@ -29,7 +29,7 @@ def univariate_intervals(polys: Union[sp.Poly, List[sp.Poly]]) -> Generator[sp.R
 def rationalize(
         v: float,
         rounding: float = 1e-2,
-        reliable: bool = False, 
+        reliable: bool = False,
         truncate: Optional[int] = 32
     ) -> sp.Rational:
     """
@@ -91,7 +91,7 @@ def rationalize(
                 x = 1 / x
                 if abs(v - x) < 1e-6: # close approximation
                     return x
-                
+
                 # by experiment, |v-x| >> eps only happens when x.q = 2^k
                 # where we should use the full fraction list
                 x = 0
@@ -133,7 +133,7 @@ def rationalize(
                 #     return x
 
     return sp.nsimplify(v, rational = True, tolerance = rounding)
-    
+
 
 def rationalize_array(x, tol = 1e-7, reliable = True):
     '''
@@ -191,16 +191,16 @@ def rationalize_bound(v, direction = 1, roundings = None, compulsory = True):
         if v_ != previous_v and compare(v_, v):
             previous_v = v_
             yield v_
-    
+
     if not compulsory:
         return
-    
+
     for rounding in (1e-2, 1e-4, 1e-6, 1e-8, 1e-10, 1e-12):
         v_ = sp.nsimplify(v + direction * rounding * 10, rational = True, tolerance = rounding)
         if v_ != previous_v and compare(v_, v):
             previous_v = v_
             yield v_
-    
+
 
 def square_perturbation(a, b, times = 4):
     """
@@ -303,13 +303,13 @@ def rationalize_quadratic_curve(
         x0 = -curve.all_coeffs()[1]/2/curve.all_coeffs()[0]
         y0 = -curve_y.all_coeffs()[1]/2/curve_y.all_coeffs()[0]
         a, b, c = curve.all_coeffs()[0], curve_y.all_coeffs()[0], const
-        
+
         # cancel the denominator
         r = cancel_denominator((a,b,c))
         a, b, c = a / r, b / r, c / r
         if a < 0:
             a, b, c = -a, -b, -c
-        
+
         # convert to (sqrt(a)*(x-..))^2 + b*(y-...)^2 + c = 0
         t = core(a)
         a, b, c = a * t, b * t, c * t
@@ -318,7 +318,7 @@ def rationalize_quadratic_curve(
         sol = diop_DN(-b_, -c_)
         if len(sol) == 0:
             return
-        
+
         # u^2 + b_v^2 + c_ = 0 => (u * sqrt(c/c_))^2 + b * (v * sqrt(c/c_) / sqrt(b/b_))^2 + c = 0
         u, v = sol[0]
         tmp = sp.sqrt(c / c_)
@@ -327,7 +327,7 @@ def rationalize_quadratic_curve(
         x_ = x_ + x0.subs(y, y_)
     if one_point:
         return {x: x_, y: y_}
-    
+
     # now that (x_, y_) is a rational point on the curve, we can find a rational line
     t = gen
     curve_secant = curve.subs(y, t*(x-x_)+y_).as_poly(x) # x = x_ must be a root
@@ -339,7 +339,7 @@ def rationalize_quadratic_curve(
 def common_region_of_conics(polys: List[sp.Poly], _tol = 1e-10) -> Optional[Tuple[sp.Rational, sp.Rational]]:
     """
     Find (x, y) such that polys[i](x, y) >= 0 for all i.
-    where polys are rational conics of two variables.  
+    where polys are rational conics of two variables.
     """
     # assert len(polys) > 0, "At least one conic is required."
 

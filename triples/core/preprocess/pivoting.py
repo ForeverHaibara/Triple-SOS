@@ -140,5 +140,3 @@ def _quadratic_pivoting(self: Pivoting, x):
         'children': children,
         'restoration': compose(restoration)
     })
-
-

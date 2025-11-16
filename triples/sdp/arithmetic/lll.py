@@ -114,7 +114,7 @@ def lll(x, delta=QQ(3, 4), time_limit=None):
     Adapted from SymPy 1.12 to support SymPy < 1.12.
     """
     time_limit = ArithmeticTimeout.make_checker(time_limit)
-    dM = x._rep.convert_to(ZZ)    
+    dM = x._rep.convert_to(ZZ)
     rep = dM.rep
     time_limit()
 
@@ -128,7 +128,7 @@ def lll(x, delta=QQ(3, 4), time_limit=None):
                 rep = [[fmpz(z) for z in row] for row in rep]
             rep = fmpz_mat(rep)
             time_limit()
-        
+
         def to_float(x):
             if QQ.of_type(x):
                 return float(x.numerator) / float(x.denominator)
