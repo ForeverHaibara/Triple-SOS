@@ -158,7 +158,6 @@ Configure the Generators in the bottom left corner to visualize quaternary homog
 ## 讨论交流 Discussions
 
 * 配方器交流群 1001789778 .
-* Email: **69423537+ForeverHaibara@users.noreply.github.com**
 * Issues are welcome.
 
 ## 算法 Algorithms

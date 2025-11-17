@@ -97,6 +97,10 @@ def _reparam_power(eq: Poly, configs):
     gcdm = int(gcd(m1 + m2))
     c1, c2 = eq.coeffs()
     c = -c1/c2
+    if gcdm % 2 == 0:
+        # cannot take the squareroot because sqrt(x^2) != x for x < 0
+        # unless it can be proved that x >= 0
+        return []
 
     # replace every symbol x by x = x'^(d/q), so that every symbol is a d-perfect power
     # then the equality can be rewritten as c^(1/d) * [x']^(m1/d) * [x']^(m2/d)
@@ -120,6 +124,8 @@ def _reparam_power(eq: Poly, configs):
             continue
         gcd_ = gcd(d, di)
         pows[i] = d // gcd_
+        if pows[i] % 2 == 0:
+            return []
         pows2[i] = di // gcd_ if m1[i] > m2[i] else -di // gcd_
 
     if any(di > 1 for di in pows) and not configs['irrational_expr']:
