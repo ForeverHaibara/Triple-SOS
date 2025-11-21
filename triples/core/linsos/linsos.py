@@ -14,7 +14,7 @@ from .correction import linear_correction, odd_basis_to_even
 from .updegree import lift_degree
 from .solution import create_linear_sol_from_y_basis
 from ..solution import Solution
-from ..preprocess import ProofNode, SolvePolynomial
+from ..preprocess import ProofNode, ProofTree, SolvePolynomial
 from ..shared import homogenize_expr_list
 from ...sdp.arithmetic import ArithmeticTimeout
 from ...utils import Root, MonomialManager, clear_polys_by_symmetry
@@ -481,6 +481,9 @@ def LinearSOS(
     problem = ProofNode.new_problem(poly, ineq_constraints, eq_constraints)
     problem.set_roots(roots)
     configs = {
+        ProofTree: {
+            'time_limit': time_limit,
+        },
         SolvePolynomial: {
             'solvers': [LinearSOSSolver],
         },
@@ -499,4 +502,4 @@ def LinearSOS(
             'lift_degree_limit': lift_degree_limit,
         }
     }
-    return problem.sum_of_squares(configs, time_limit=time_limit)
+    return problem.sum_of_squares(configs)

@@ -1,6 +1,6 @@
 from datetime import datetime
 from time import perf_counter
-from typing import Dict, List, Union, Optional
+from typing import Dict, List, Union, Optional, Any
 import os
 
 from sympy import Expr, Poly, Rational, Integer, fraction
@@ -170,23 +170,38 @@ class SolveProblem(ProofNode):
 class ProofTree:
     configs: dict
     parents: dict
-    mode: str = 'fast'
-    time_limit: float = 3600
-    expected_end_time: float = 0
+    _expected_end_time: float
 
-    def __init__(self, root: ProofNode):
+    default_configs = {
+        "mode": "fast",
+        "max_explore": 100,
+        "time_limit": 3600.,
+        "select_quick_accept_threshold": 0.01,
+    }
+
+    def __init__(self, root: ProofNode, configs: Dict = {}):
         self.root = root
-        self.configs = {}
+        self.configs = configs
         self.parents = {}
+        self._expected_end_time = None
 
-    def get_configs(self, node: ProofNode):
+    def get_configs(self, node: Union[ProofNode, 'ProofTree']) -> Dict[str, Any]:
         cfg = node.default_configs.copy()
-        cfg['time_limit'] = (self.expected_end_time - perf_counter())
+
+        _expected_end_time = self._expected_end_time
+        if _expected_end_time is not None:
+            # compute the time limit dynamically (the remaining time)
+            cfg['time_limit'] = (_expected_end_time - perf_counter())        
+
         cfg.update(self.configs.get(node, {}))
         for cls in node.__class__.mro()[::-1]:
             if cls in self.configs:
                 cfg.update(self.configs[cls])
         return cfg
+
+    @property
+    def mode(self) -> str:
+        return self.get_configs(self)["mode"]
 
     def select(self) -> ProofNode:
         """
@@ -236,24 +251,29 @@ class ProofTree:
         """
         Propagate the status of a node to its parents.
         """
+        mode = self.mode
         p = node
         while p is not None:
             p.update(None)
-            if self.mode == 'fast' and p.problem.solution is not None:
+            if mode == 'fast' and p.problem.solution is not None:
                 p.finished = True
             if p.status < 0 and all(_.finished for _ in p.children):
                 p.finished = True
             p = self.parents.get(p, None)
 
     def solve(self) -> Optional[Expr]:
-        self.expected_end_time = perf_counter() + self.time_limit
-        max_explore = 100
+        _tree_configs = self.get_configs(self)
+        time_limit = _tree_configs["time_limit"]
+        max_explore = _tree_configs["max_explore"]
+
+        self._expected_end_time = perf_counter() + time_limit
+
         for _ in range(max_explore):
             try:
                 self.explore()
             except ArithmeticTimeout:
                 break
-            if perf_counter() > self.expected_end_time:
+            if perf_counter() > self._expected_end_time:
                 break
             if self.root.finished:
                 break
@@ -264,16 +284,11 @@ class ProofTree:
 def _sum_of_squares(
         problem: InequalityProblem,
         configs: dict = {},
-        time_limit: float = 3600,
-        mode: str = 'fast',
     ):
     start_time = datetime.now()
 
     root = SolveProblem(problem)
-    tree = ProofTree(root)
-    tree.configs = configs
-    tree.time_limit = time_limit
-    tree.mode = mode
+    tree = ProofTree(root, configs)
 
     solution = tree.solve()
     if solution is None:

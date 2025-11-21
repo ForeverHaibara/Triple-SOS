@@ -7,7 +7,7 @@ from sympy.combinatorics import PermutationGroup
 
 from .sos import SOSPoly
 from .solution import SolutionSDP
-from ..preprocess import ProofNode, SolvePolynomial
+from ..preprocess import ProofNode, ProofTree, SolvePolynomial
 from ...utils import MonomialManager, Root, clear_polys_by_symmetry
 from ...sdp import ArithmeticTimeout
 from ...sdp.rationalize import SDPRationalizeError
@@ -322,6 +322,9 @@ def SDPSOS(
     problem = ProofNode.new_problem(poly, ineq_constraints, eq_constraints)
     problem.set_roots(roots)
     configs = {
+        ProofTree: {
+            'time_limit': time_limit,
+        },
         SolvePolynomial: {
             'solvers': [SDPSOSSolver],
         },
@@ -334,4 +337,4 @@ def SDPSOS(
             'solve_kwargs': solve_kwargs,
         }
     }
-    return problem.sum_of_squares(configs, time_limit=time_limit)
+    return problem.sum_of_squares(configs)

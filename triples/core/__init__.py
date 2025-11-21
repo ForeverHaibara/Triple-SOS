@@ -1,9 +1,9 @@
-from .node import ProofNode
+from .node import ProofNode, ProofTree
 from .problem import InequalityProblem
 from .solution import Solution
 
 from .sum_of_squares import (
-    sum_of_squares, sum_of_squares_multiple, DEFAULT_CONFIGS
+    sum_of_squares, sum_of_squares_multiple
 )
 
 from .linsos import (
@@ -25,10 +25,10 @@ from .sdpsos import (
 )
 
 __all__ = [
-    'ProofNode',
+    'ProofNode', 'ProofTree',
     'InequalityProblem',
     'Solution',
-    'sum_of_squares', 'sum_of_squares_multiple', 'DEFAULT_CONFIGS',
+    'sum_of_squares', 'sum_of_squares_multiple',
     'LinearSOS',
     'StructuralSOS',
     'prove_univariate', 'prove_univariate_interval',

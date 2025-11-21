@@ -1,10 +1,9 @@
-from typing import Optional, Dict, List, Union, Callable, Any
+from typing import Tuple, Dict, List, Optional, Union, Callable, Any
 
 import numpy as np
-import sympy as sp
-from sympy import Poly, Expr, sympify
+from sympy import Poly, Expr, Symbol, sympify
 
-from .preprocess import ProofNode, SolvePolynomial
+from .preprocess import ProofNode, ProofTree, SolvePolynomial
 from .preprocess.pivoting import Pivoting
 from .preprocess.reparam import Reparametrization
 from .linsos.linsos import LinearSOSSolver
@@ -25,8 +24,6 @@ NAME_TO_METHOD = {
 }
 NAME_TO_METHOD.update({v.__name__: v for v in NAME_TO_METHOD.values()})
 
-DEFAULT_CONFIGS = {
-}
 
 DEFAULT_SAVE_SOLUTION = lambda x: (str(x.solution) if x is not None else '')
 
@@ -35,10 +32,11 @@ def sum_of_squares(
         poly: Union[Poly, Expr],
         ineq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
         eq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
+        roots: Optional[List[Union[Tuple[Expr, ...], Dict[Symbol, Expr]]]] = None,
         methods: Optional[List[str]] = None,
-        configs: Optional[Dict[str, Dict]] = DEFAULT_CONFIGS,
-        time_limit: float = 3600,
-        mode: str = 'fast',
+        configs: Dict[str, Dict] = {},
+        time_limit: float = 3600.,
+        mode: str = "fast",
         method_order: Optional[List[str]] = None, # deprecated
         verbose: bool = False,
     ) -> Optional[Solution]:
@@ -102,7 +100,7 @@ def sum_of_squares(
     methods: Optional[List[str]]
         The methods to try.
     configs: Dict[str, Dict]
-        The configurations for each method. Defaults to DEFAULT_CONFIGS.
+        The configurations for each method.
         It should be a dictionary containing the ProofNode classes as keys and the kwargs as values.
     time: float
         The time limit (in seconds) for the solver. Defaults to 3600. When the time limit is
@@ -121,6 +119,7 @@ def sum_of_squares(
         The solution. If no solution is found, None is returned.
     """
     problem = ProofNode.new_problem(poly, ineq_constraints, eq_constraints)
+    problem.set_roots(roots)
 
     if method_order is not None:
         from warnings import warn
@@ -136,6 +135,10 @@ def sum_of_squares(
         methods = _methods
 
     _configs = {
+        ProofTree: {
+            'mode': mode,
+            'time_limit': time_limit,
+        },
         ProofNode: {
             'verbose': verbose,
         },
@@ -144,7 +147,7 @@ def sum_of_squares(
         },
     }
     _configs.update(configs)
-    return problem.sum_of_squares(_configs, time_limit=time_limit, mode=mode)
+    return problem.sum_of_squares(_configs)
 
 
 def sum_of_squares_multiple(

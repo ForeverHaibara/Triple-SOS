@@ -354,9 +354,9 @@ class InequalityProblem(Generic[T]):
             length=nvars**4
         )
 
-    def sum_of_squares(self, configs: dict = {}, time_limit: float = 3600, mode: str = 'fast'):
+    def sum_of_squares(self, configs: dict = {}):
         from .node import _sum_of_squares
-        return _sum_of_squares(self, configs, time_limit, mode)
+        return _sum_of_squares(self, configs)
 
     @property
     def is_homogeneous(self) -> bool:
@@ -610,8 +610,10 @@ class InequalityProblem(Generic[T]):
         return self.roots
 
     def set_roots(self, roots) -> RootList:
-        """Safely set the roots of the problem. Accepts
-        multiple input types."""
+        """
+        Safely set the roots of the problem. Accepts
+        multiple input types (None or list of tuples or list of dicts).
+        """
         if roots is None:
             return
         if not isinstance(roots, RootList):

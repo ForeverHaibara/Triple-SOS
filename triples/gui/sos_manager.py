@@ -12,7 +12,7 @@ from ..utils.text_process import (
     preprocess_text, poly_get_factor_form, poly_get_standard_form,
     degree_of_zero, coefficient_triangle, coefficient_triangle_latex
 )
-from ..core import Solution, sum_of_squares, DEFAULT_CONFIGS
+from ..core import Solution, sum_of_squares
 # from ..core.linsos import root_tangents
 
 
@@ -224,7 +224,7 @@ class SOS_Manager():
             gens = CONFIG_DEFAULT_GENS,
             perm = CONFIG_DEFAULT_PERM,
             methods = None,
-            configs = DEFAULT_CONFIGS
+            configs = {}
         ):
         """
         Perform the sum of square decomposition of a polynomial.
