@@ -11,7 +11,9 @@ from .cyclic import (
     arraylize_up_to_symmetry, clear_polys_by_symmetry
 )
 
-from .psatz import SOSlist, PSatz
+from .exraw import EXRAW
+from .soscone import SOSCone, SOSElement, SOSlist
+from .psatz import PSatz
 
 
 __all__ = [
@@ -20,5 +22,5 @@ __all__ = [
     'is_cyclic_expr', 'rewrite_symmetry',
     'verify_symmetry', 'identify_symmetry', 'identify_symmetry_from_lists',
     'arraylize_up_to_symmetry', 'clear_polys_by_symmetry',
-    'SOSlist', 'PSatz'
+    'EXRAW', 'SOSCone', 'SOSElement', 'SOSlist', 'PSatz'
 ]

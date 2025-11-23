@@ -45,7 +45,7 @@ else:
         obj.field, obj.numer, obj.denom = field, numer, denom
         return obj
 
-HAS_EXRAW = bool(tuple(version_tuple(SYMPY_VERSION)) >= (1, 9))
+from ..utils.expressions.exraw import HAS_EXRAW
 
 T = TypeVar('T')
 

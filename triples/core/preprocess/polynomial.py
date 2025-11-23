@@ -1,6 +1,6 @@
 from typing import List, Dict, Union, Tuple, Callable, Optional
 
-from sympy import Expr, Poly
+from sympy import Expr, Poly, Integer
 
 from ..problem import InequalityProblem
 from ..node import ProofNode, TransformNode
@@ -39,6 +39,11 @@ class SolvePolynomial(TransformNode):
         if self.status == 0:
             problem = self.problem.polylize()
             problem, _restoration = reduce_over_quotient_ring(problem)
+            # if problem.expr.is_zero:
+            #     problem.solution = _restoration(Integer(0))
+            #     self.status = -1
+            #     self.finished = True
+            #     return
 
             solvers = self.get_polynomial_solvers(configs)
             self.children = [solver(problem) for solver in solvers]

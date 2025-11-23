@@ -1,8 +1,11 @@
 from typing import Optional, Union, List, Dict, Tuple
 
 import numpy as np
-import sympy as sp
-from sympy import Poly, Expr, Symbol, Rational, Integer, QQ, fraction, sympify
+from sympy import (
+    Poly, Expr, Symbol, Rational, Integer, QQ,
+    fraction, sympify, nsimplify, factorial, factorint, prod, cos
+)
+from sympy.core import S
 from sympy.combinatorics import PermutationGroup, Permutation, CyclicGroup
 from sympy.polys.constructor import construct_domain
 from sympy.polys.domains import Domain
@@ -17,8 +20,7 @@ from sympy.polys.rootoftools import ComplexRootOf as CRootOf
 
 # from .rationalize import rationalize
 from ..monomials import generate_monoms
-
-EXRAW = sp.EXRAW if hasattr(sp, 'EXRAW') else sp.EX
+from ..expressions import EXRAW
 
 try:
     setattr(CRootOf, 'is_algebraic', True)
@@ -102,7 +104,7 @@ def _derv(n: int, i: int) -> int:
     if i == 1: return n
     if n < i:
         return 0
-    return sp.factorial(n) // sp.factorial(n - i)
+    return factorial(n) // factorial(n - i)
 
 def _root_op(f, g, op, broadcast_f=True, broadcast_g=True, field=False):
     """Perform the operation op between two Root instances f and g."""
@@ -444,7 +446,7 @@ class Root():
     def _single_power_monomial(self, monomial: Tuple[int, ...]) -> ANP:
         """Compute r[0]**monomial[0] * r[1]**monomial[1] * ...
         and return the result as a low-level ANP object."""
-        return sp.prod([self._single_power(i, p) for i, p in enumerate(monomial)])
+        return prod([self._single_power(i, p) for i, p in enumerate(monomial)])
 
     def _make_single_power_cached_func(self):
         """
@@ -528,7 +530,7 @@ class Root():
                 else:
                     dervs = [_derv(order_m, order_diff) for order_m, order_diff in zip(monom, diff)]
                     powers = [order_m - order_diff for order_m, order_diff in zip(monom, diff)]
-                    vec[ind] = int(sp.prod(dervs)) * _single_power(powers)
+                    vec[ind] = int(prod(dervs)) * _single_power(powers)
 
         zero = self.domain.zero
         sdm = SDM({i: {0: x} for i, x in enumerate(vec) if x != zero}, (len(vec), 1), self.domain)
@@ -668,7 +670,7 @@ class Root():
         if standardize:
             s2 = sum(self.rep)**sum(monom)
             if s2 == domain.zero:
-                return sp.nan if s == domain.zero else sp.zoo
+                return S.NaN if s == domain.zero else S.ComplexInfinity
             if not domain.is_Field:
                 domain = self.domain.get_field()
                 s, s2 = domain.convert(s), domain.convert(s2)
@@ -805,7 +807,7 @@ class Root():
         if self.is_center:
             return (Integer(2), Integer(2))
         if self.is_corner:
-            return (sp.zoo, sp.zoo)
+            return (S.ComplexInfinity, S.ComplexInfinity)
         cyclic_sum = self.cyclic_sum
         sab3 = cyclic_sum((1,3,0), to_sympy=False)
         sac3 = cyclic_sum((1,0,3), to_sympy=False)
@@ -877,7 +879,7 @@ class Root():
         """
         u0, v0 = sympify(u), sympify(v)
 
-        is_real = (u0.is_real and v0.is_real) in (sp.true, True)
+        is_real = (u0.is_real and v0.is_real) in (S.true, True)
 
         domain, (u, v) = construct_domain((u0, v0), extension=True, field=True)
         one, zero = domain.one, domain.zero
@@ -900,7 +902,7 @@ class Root():
 
             if not (a in domain):
                 u, v = domain.to_sympy(u), domain.to_sympy(v)
-                domain = domain.algebraic_field(a) if not domain.is_QQ_I else QQ.algebraic_field(a, sp.I)
+                domain = domain.algebraic_field(a) if not domain.is_QQ_I else QQ.algebraic_field(a, S.ImaginaryUnit)
                 u, v, one = domain.convert(u), domain.convert(v), domain.one
             invuv = one / (u - v)
             alpha = -(u**2 - u*v + v**2 + u + v + one)*invuv
@@ -981,8 +983,8 @@ class Root():
             """
             p, q = sqrtdisc.numerator, sqrtdisc.denominator
             # convert p/q to integer by multiplying u^3
-            p = sp.factorint(abs(p))
-            for k, v in sp.factorint(abs(q)).items():
+            p = factorint(abs(p))
+            for k, v in factorint(abs(q)).items():
                 p[k] = (p.get(k, 0) - v) % 3
                 if p[k] < 0:
                     p[k] += 3
@@ -990,12 +992,12 @@ class Root():
                 p.pop(3)
                 p[9] = 1
 
-            conductor = sp.prod([k for k, v in p.items() if k % 3 == 1 or k == 9])
+            conductor = prod([k for k, v in p.items() if k % 3 == 1 or k == 9])
             # print('Sqrt[D] =', sqrtdisc, '-> Conductor =', conductor)
             return conductor
 
         conductor = _get_conductor(sqrtdisc)
-        cyclo = QQ.algebraic_field(sp.cos(2*sp.pi/conductor))
+        cyclo = QQ.algebraic_field(cos(2*S.Pi/conductor))
         ext = cyclo.convert(domain.ext)
 
         rep = [r.rep for r in self.rep]
@@ -1025,7 +1027,7 @@ class Root():
             return coeff
         def _to_trig(n, r, one=1):
             seq = _to_trig_seq(n, r, one)
-            return sum([c*sp.cos(2*sp.pi*k/n) for k, c in enumerate(seq)])
+            return sum([c*cos(2*S.Pi*k/n) for k, c in enumerate(seq)])
         # root = [cyclo.to_sympy(r) for r in rep]
         root = [_to_trig(conductor, r.rep, QQ.one) for r in rep]
         return Root(root, domain=cyclo, rep=rep)
@@ -1070,7 +1072,7 @@ class Root():
         if not (self.domain.is_RR or self.domain.is_CC):
             return self
         poly = self.poly()
-        all_coeffs = [sp.nsimplify(_, rational=True, tolerance=tolerance) for _ in poly.all_coeffs()]
+        all_coeffs = [nsimplify(_, rational=True, tolerance=tolerance) for _ in poly.all_coeffs()]
         poly = Poly(all_coeffs, poly.gen)
         roots = poly.all_roots(radicals=False)
 

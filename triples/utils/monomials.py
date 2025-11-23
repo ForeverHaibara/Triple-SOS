@@ -103,7 +103,10 @@ class MonomialManager():
     """
     Class to compute polynomial monomials given the symmetry of variables and homogeneity.
     """
-    def __init__(self, nvars: int, perm_group = None, is_homogeneous: bool = True) -> None:
+    nvars: int
+    _perm_group: PermutationGroup
+    _is_homogeneous: bool
+    def __init__(self, nvars: int, perm_group: Optional[PermutationGroup] = None, is_homogeneous: bool = True) -> None:
         self.nvars = nvars
         self._is_homogeneous = bool(is_homogeneous)
         if isinstance(perm_group, MonomialManager):

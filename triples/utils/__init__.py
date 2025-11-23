@@ -14,7 +14,7 @@ from .pqr import pqr_sym, pqr_cyc, pqr_ker
 from .expressions import (
     Coeff, CyclicExpr, CyclicSum, CyclicProduct, SymmetricSum, SymmetricProduct, is_cyclic_expr,
     rewrite_symmetry,
-    SOSlist, PSatz
+    EXRAW, SOSlist, PSatz
 )
 
 from .roots import (
@@ -33,7 +33,7 @@ __all__ = [
     'preprocess_text', 'pl', 'poly_get_factor_form', 'poly_get_standard_form', 'coefficient_triangle_latex', 'PolyReader',
     'Coeff', 'CyclicExpr', 'CyclicSum', 'CyclicProduct', 'SymmetricSum', 'SymmetricProduct',
     'is_cyclic_expr', 'rewrite_symmetry',
-    'SOSlist', 'PSatz',
+    'EXRAW', 'SOSlist', 'PSatz',
     'pqr_sym', 'pqr_cyc', 'pqr_ker',
     'Root', 'RootList', 'univar_realroots', 'kkt', 'optimize_poly', 'numeric_optimize_poly', 'numeric_optimize_skew_symmetry',
     'nroots', 'univariate_intervals', 'rationalize', 'rationalize_array', 'rationalize_bound',
