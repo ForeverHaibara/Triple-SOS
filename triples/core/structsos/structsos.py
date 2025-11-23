@@ -71,10 +71,12 @@ def _structural_sos(poly: sp.Poly, ineq_constraints: Dict[sp.Poly, sp.Expr] = {}
     Internal function of StructuralSOS, returns a sympy expression only.
     The polynomial must be homogeneous. TODO: remove the homogeneous requirement?
     """
+    if poly.is_zero:
+        return sp.Integer(0)
     d = poly.total_degree()
     nvars = len(poly.gens)
     if poly.is_monomial:
-        if poly.LC() >= 0 and d % 2 == 0:
+        if poly.LC() >= 0 and d % 2 == 0 and all(_ % 2 == 0 for _ in poly.degree_list()):
             # since the poly is homogeneous, it must be a monomial
             return poly.as_expr()
         return None
