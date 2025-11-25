@@ -3,8 +3,7 @@ This module provides functions to manipulate the group symmetry of a polynomial,
 and also utilities to compute monomial representations under the group symmetry.
 """
 from collections import defaultdict
-from typing import Union, Optional, Dict, List, Tuple, Iterable, Callable, Any
-from warnings import warn
+from typing import Dict, List, Tuple, Iterable, Callable, Union, Optional, Any
 
 import numpy as np
 from sympy import Poly, Expr, Symbol, Add, ZZ, QQ
@@ -102,6 +101,7 @@ def _poly_rep(poly: Union[Poly, DMP, PolyElement]) -> Tuple[List[Tuple], Domain,
 class MonomialManager():
     """
     Class to compute polynomial monomials given the symmetry of variables and homogeneity.
+    Monomials are sorted in graded lexicographical (grlex) order by default.
     """
     nvars: int
     _perm_group: PermutationGroup
@@ -288,8 +288,10 @@ class MonomialManager():
             return False
         return True
 
-    def _arraylize_list(self, poly: Union[Poly, DMP, PolyElement], expand_cyc: bool = False) -> List:
-        rep, dom, ngens, degree = _poly_rep(poly)
+    def _arraylize_list(self, poly: Union[Poly, DMP, PolyElement], degree: Optional[int] = None, expand_cyc: bool = False) -> List:
+        rep, dom, ngens, _degree = _poly_rep(poly)
+        if degree is None:
+            degree = _degree
         self._assert_equal_nvars(ngens)
         dict_monoms = self.dict_monoms(degree)
         array = [dom.zero] * len(dict_monoms)
@@ -306,12 +308,12 @@ class MonomialManager():
                         array[v] += coeff
         return array
 
-    def arraylize_np(self, poly: Union[Poly, DMP, PolyElement], expand_cyc: bool = False) -> np.ndarray:
+    def arraylize_np(self, poly: Union[Poly, DMP, PolyElement], degree: Optional[int] = None, expand_cyc: bool = False) -> np.ndarray:
         """
         Return the vector representation of the polynomial in numpy array.
         """
-        vec = self._arraylize_list(poly, expand_cyc = expand_cyc)
-        rep, dom, ngens, degree = _poly_rep(poly)
+        vec = self._arraylize_list(poly, degree = degree, expand_cyc = expand_cyc)
+        rep, dom, ngens, _degree = _poly_rep(poly)
         if not (dom is ZZ or dom is QQ):
             to_sympy = dom.to_sympy
             vec = [to_sympy(v) for v in vec]
@@ -322,12 +324,12 @@ class MonomialManager():
                 vec = [int(v) for v in vec]
         return np.array(vec).astype(np.float64)
 
-    def arraylize_sp(self, poly: Union[Poly, DMP, PolyElement], expand_cyc: bool = False) -> Matrix:
+    def arraylize_sp(self, poly: Union[Poly, DMP, PolyElement], degree: Optional[int] = None, expand_cyc: bool = False) -> Matrix:
         """
         Return the vector representation of the polynomial in sympy matrix (column vector).
         """
-        vec = self._arraylize_list(poly, expand_cyc = expand_cyc)
-        rep, dom, ngens, degree = _poly_rep(poly)
+        vec = self._arraylize_list(poly, degree = degree, expand_cyc = expand_cyc)
+        rep, dom, ngens, _degree = _poly_rep(poly)
         if SDM is not None:
             sdm = dict((i, {0: v}) for i, v in enumerate(vec) if v)
             return Matrix._fromrep(DomainMatrix.from_rep(SDM(sdm, (len(vec), 1), dom)))
@@ -421,9 +423,10 @@ def _parse_options(nvars, **options) -> MonomialManager:
     raise ValueError(f"Invalid symmetry type {type(symmetry)}. Expected MonomialManager or PermutationGroup.")
 
 
-def arraylize_np(poly: Union[Poly, DMP, PolyElement], expand_cyc: bool = False, **options) -> np.ndarray:
+def arraylize_np(poly: Union[Poly, DMP, PolyElement], degree: Optional[int] = None, expand_cyc: bool = False, **options) -> np.ndarray:
     """
     Convert a sympy polynomial to a numpy vector of coefficients.
+    Monomials are sorted in graded lexicographical (grlex) order.
 
     Parameters
     -----------
@@ -469,17 +472,28 @@ def arraylize_np(poly: Union[Poly, DMP, PolyElement], expand_cyc: bool = False, 
     >>> print(arraylize_np((b**2*c + c**2*a).as_poly(a,b,c), expand_cyc = True, cyc = True))
     [0. 2. 0. 0.]
 
+    For non-homogeneous polynomials, `hom=False` must be provided. The `degree`
+    argument should also be provided if its degree is lower than the desired degree.
+
+    >>> print(arraylize_np((a**2 + 2*b + 3).as_poly(a,b), hom = False))
+    [1. 0. 0. 0. 2. 3.]
+
+    >>> print(arraylize_np((a**2 + 2*b + 3).as_poly(a,b), degree = 3, hom = False))
+    [0. 0. 1. 0. 0. 0. 0. 0. 2. 3.]
+
     See Also
     ----------
     arraylize_sp, invarraylize, generate_monoms
     """
     nvars = (poly.rep if isinstance(poly, Poly) else poly).lev + 1
     option = _parse_options(nvars, **options)
-    return option.arraylize_np(poly, expand_cyc = expand_cyc)
+    return option.arraylize_np(poly, degree = degree, expand_cyc = expand_cyc)
 
-def arraylize_sp(poly: Union[Poly, DMP, PolyElement], expand_cyc: bool = False, **options) -> Matrix:
+
+def arraylize_sp(poly: Union[Poly, DMP, PolyElement], degree: Optional[int] = None, expand_cyc: bool = False, **options) -> Matrix:
     """
     Convert a sympy polynomial to a sympy vector of coefficients.
+    Monomials are sorted in graded lexicographical (grlex) order.
 
     Parameters
     -----------
@@ -525,17 +539,28 @@ def arraylize_sp(poly: Union[Poly, DMP, PolyElement], expand_cyc: bool = False, 
     >>> print(arraylize_sp((b**2*c + c**2*a).as_poly(a,b,c), expand_cyc = True, cyc = True))
     Matrix([[0], [2], [0], [0]])
 
+    For non-homogeneous polynomials, `hom=False` must be provided. The `degree`
+    argument should also be provided if its degree is lower than the desired degree.
+
+    >>> print(arraylize_sp((a**2 + 2*b + 3).as_poly(a,b), hom = False))
+    Matrix([[1], [0], [0], [0], [2], [3]])
+
+    >>> print(arraylize_sp((a**2 + 2*b + 3).as_poly(a,b), degree = 3, hom = False))
+    Matrix([[0], [0], [1], [0], [0], [0], [0], [0], [2], [3]])
+
     See Also
     ----------
     arraylize_np, invarraylize, generate_monoms
     """
     nvars = (poly.rep if isinstance(poly, Poly) else poly).lev + 1
     option = _parse_options(nvars, **options)
-    return option.arraylize_sp(poly, expand_cyc = expand_cyc)
+    return option.arraylize_sp(poly, degree = degree, expand_cyc = expand_cyc)
+
 
 def invarraylize(array: Union[List, np.ndarray, Matrix], gens: List[Symbol], degree: int, **options) -> Poly:
     """
     Convert a vector representation of polynomial back to the sympy polynomial.
+    Monomials are sorted in graded lexicographical (grlex) order.
 
     Parameters
     -----------
@@ -584,9 +609,11 @@ def invarraylize(array: Union[List, np.ndarray, Matrix], gens: List[Symbol], deg
     option = _parse_options(len(gens), **options)
     return option.invarraylize(array, gens, degree)
 
+
 def generate_monoms(nvars: int, degree: int, **options) -> Tuple[Dict[Tuple[int, ...], int], List[Tuple[int, ...]]]:
     """
     Generate monomials of given number of variables and degree.
+    Monomials are sorted in graded lexicographical (grlex) order.
 
     Returns a dictionary of monomials with indices as values and a list of monomials.
 
@@ -636,12 +663,6 @@ def generate_monoms(nvars: int, degree: int, **options) -> Tuple[Dict[Tuple[int,
     """
     option = _parse_options(nvars, **options)
     return option._register_monoms(degree)
-
-
-def generate_expr(nvars: int, degree: int, **options) -> Tuple[Dict[Tuple[int, ...], int], List[Tuple[int, ...]]]:
-    warn("generate_expr is deprecated. Use generate_monoms instead.", DeprecationWarning, stacklevel=2)
-    return generate_monoms(nvars, degree, **options)
-
 
 
 def verify_closure(l: List, f: Callable, get_rep: Optional[Callable]=None) -> bool:
@@ -854,7 +875,7 @@ def identify_symmetry(poly: Poly) -> PermutationGroup:
     return identify_symmetry_from_lists([[poly]])
 
 
-def arraylize_up_to_symmetry(poly: Poly, perm_group: PermutationGroup,
+def arraylize_up_to_symmetry(poly: Poly, perm_group: PermutationGroup, degree: Optional[int] = None,
         return_type: str = 'matrix', **options) -> Union[List, Matrix]:
     """
     Get the canonical representation of the poly up to given symmetry.
@@ -900,12 +921,12 @@ def arraylize_up_to_symmetry(poly: Poly, perm_group: PermutationGroup,
     [[1], [0], [0], [0], [0], [-2], [0], [0], [0], [3]]
 
     Note that the `arraylize_sp` method does not canonicalize the polynomial by symmetry:
-    >>> arraylize_sp((b**2 - 2*a*c + 3).as_poly(a,b,c), CyclicGroup(3), hom=False).tolist()
+    >>> arraylize_sp((b**2 - 2*a*c + 3).as_poly(a,b,c), hom=False).tolist()
     [[0], [0], [-2], [0], [1], [0], [0], [0], [0], [3]]
     """
     base = _parse_options(len(poly.gens), **options)
     domain = poly.domain
-    vec = base.arraylize_sp(poly)
+    vec = base.arraylize_sp(poly, degree=degree)
     shape = vec.shape[0]
 
     rep = vec._rep.rep.to_list_flat() # avoid conversion from rep to sympy
