@@ -1,12 +1,28 @@
-from typing import List, Optional, Tuple
+from typing import List, Tuple, Dict, Optional
 
 import numpy as np
-import sympy as sp
+from sympy import Poly, Expr, Symbol, Rational
+from sympy import MutableDenseMatrix as Matrix
 from sympy.combinatorics import PermutationGroup
 from sympy.polys.matrices import DomainMatrix
 
-from .basis import LinearBasis
+from .basis import LinearBasis, LinearBasisTangent, LinearBasisTangentEven
+from ...sdp.arithmetic import reshape
 from ...utils.roots.rationalize import rationalize_array
+
+
+def odd_basis_to_even(basis: List[LinearBasis], symbols: Tuple[Symbol, ...],
+        signs: Dict[Symbol, Tuple[Optional[int], Expr]]) -> List[LinearBasis]:
+    mapping = [signs[s][1] if signs[s][0] == 1 else s for s in symbols]
+    new_basis = []
+    for b in basis:
+        if isinstance(b, LinearBasisTangentEven) or not isinstance(b, LinearBasisTangent):
+            # already converted / no need to convert
+            new_basis.append(b)
+        else:
+            new_basis.append(b.to_even(mapping))
+    return new_basis
+
 
 def _filter_zero_y(y: List[float], basis: List[LinearBasis], num_multipliers: int) -> Tuple[List[float], List[LinearBasis], int]:
     """
@@ -21,20 +37,20 @@ def _filter_zero_y(y: List[float], basis: List[LinearBasis], num_multipliers: in
 
     return reduced_y, reduced_basis, reduced_num
 
-def _basis_as_matrix(basis: List[LinearBasis], symmetry: PermutationGroup) -> sp.Matrix:
+def _basis_as_matrix(basis: List[LinearBasis], symmetry: PermutationGroup) -> Matrix:
     """
     Extract the array representations of each basis and stack them into a matrix.
     """
     mat = [b.as_array_sp(expand_cyc=True, symmetry=symmetry) for b in basis]
-    mat = sp.Matrix(mat).reshape(len(mat), mat[0].shape[0]).T
+    mat = reshape(Matrix(mat), (len(mat), mat[0].shape[0])).T
     return mat
 
-def _add_regularizer(mat: sp.Matrix, num_multipliers: int) -> sp.Matrix:
+def _add_regularizer(mat: Matrix, num_multipliers: int) -> Matrix:
     """
     Add a regularizer row to the matrix.
     """
-    regularizer = sp.Matrix([[0] * (mat.shape[1] - num_multipliers) + [1] * num_multipliers])
-    mat = sp.Matrix.vstack(mat, regularizer)
+    regularizer = Matrix([[0] * (mat.shape[1] - num_multipliers) + [1] * num_multipliers])
+    mat = Matrix.vstack(mat, regularizer)
     return mat
 
 def linear_correction(
@@ -43,10 +59,10 @@ def linear_correction(
         num_multipliers: int = 1,
         symmetry: PermutationGroup = PermutationGroup(),
         zero_tol: float = 1e-6,
-    ) -> Tuple[sp.Matrix, sp.Matrix, bool]:
+    ) -> Tuple[Matrix, Matrix, bool]:
     """
     Linear programming is a numerical way to solve the SOS problem. However, we require
-    the solution to be exact. This function is used to correct the numerical error. 
+    the solution to be exact. This function is used to correct the numerical error.
 
     Firstly it tries to approximate each of the coefficients in the solution by continued fraction
     so that the coefficients are rational numbers. If it still fails, it will try to solve a rational
@@ -62,7 +78,7 @@ def linear_correction(
         The number of multipliers.
     symmetry: PermutationGroup
         Every term will be wrapped by a cyclic sum of symmetryutation group.
-    homogenizer: Optional[sp.Symbol]
+    homogenizer: Optional[Symbol]
         The homogenizer of the polynomial.
     """
 
@@ -73,13 +89,13 @@ def linear_correction(
     reduced_arrays = _basis_as_matrix(basis, symmetry=symmetry)
 
     # add a regularizer row
-    # regularizer = sp.Matrix([[0] * (reduced_arrays.shape[1] - num_multipliers) + [1] * num_multipliers])
-    # reduced_arrays = sp.Matrix.vstack(reduced_arrays, regularizer)
+    # regularizer = Matrix([[0] * (reduced_arrays.shape[1] - num_multipliers) + [1] * num_multipliers])
+    # reduced_arrays = Matrix.vstack(reduced_arrays, regularizer)
     reduced_arrays = _add_regularizer(reduced_arrays, num_multipliers)
 
-    target = sp.zeros(reduced_arrays.shape[0], 1)
+    target = Matrix.zeros(reduced_arrays.shape[0], 1)
     target[-1, 0] = 1 # sum of coefficients of the multipliers should be 1
-    obtained = reduced_arrays * sp.Matrix(y)
+    obtained = reduced_arrays * Matrix(y)
 
     is_equal = False
     if target == obtained:
@@ -94,7 +110,7 @@ def linear_correction(
                 reduced_y, reduced_basis, num_multipliers = _filter_zero_y(reduced_y, reduced_basis, num_multipliers)
                 reduced_arrays = _basis_as_matrix(reduced_basis, symmetry=symmetry)
                 reduced_arrays = _add_regularizer(reduced_arrays, num_multipliers)
-                reduced_y = sp.Matrix(reduced_y)
+                reduced_y = Matrix(reduced_y)
                 if _is_Ax_equal_to_b(reduced_arrays, reduced_y, target):
                     is_equal = True
                     y, basis = reduced_y, reduced_basis
@@ -104,7 +120,7 @@ def linear_correction(
 
     return y, basis, is_equal
 
-def LUsolve(A: sp.Matrix, b: sp.Matrix) -> sp.Matrix:
+def LUsolve(A: Matrix, b: Matrix) -> Matrix:
     """
     Solve the linear system Ax = b. Handle irrational cases cleverly.
     When the matrix contains algebraic numbers like sqrt(2)+1,
@@ -112,7 +128,7 @@ def LUsolve(A: sp.Matrix, b: sp.Matrix) -> sp.Matrix:
     which will be extremely slow. We need to convert them to DomainMatrix
     and solve the linear system in the extension field.
     """
-    # if all(isinstance(_, sp.Rational) for _ in A) and all(isinstance(_, sp.Rational) for _ in b):
+    # if all(isinstance(_, Rational) for _ in A) and all(isinstance(_, Rational) for _ in b):
     #     return A.LUsolve(b)
 
     A2 = None
@@ -132,7 +148,7 @@ def LUsolve(A: sp.Matrix, b: sp.Matrix) -> sp.Matrix:
     x = x.to_Matrix()
     return x
 
-def _is_Ax_equal_to_b(A: sp.Matrix, x: sp.Matrix, b: sp.Matrix) -> bool:
+def _is_Ax_equal_to_b(A: Matrix, x: Matrix, b: Matrix) -> bool:
     """
     Check if Ax = b. For rational cases, using A * x == b is enough. However,
     for irrational cases, we need to handle more carefully. For example,

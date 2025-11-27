@@ -43,6 +43,7 @@ class DualBackendPICOS(DualBackend):
         if configs is not None:
             problem.options['verbosity'] = configs.verbose
             problem.options['max_iterations'] = configs.max_iters
+            problem.options['timelimit'] = configs.time_limit
             problem.options['abs_dual_fsb_tol'] = configs.tol_fsb_abs
             problem.options['rel_dual_fsb_tol'] = configs.tol_fsb_rel
             problem.options['abs_prim_fsb_tol'] = configs.tol_fsb_abs

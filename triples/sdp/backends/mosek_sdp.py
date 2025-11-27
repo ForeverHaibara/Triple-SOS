@@ -6,6 +6,7 @@ from .settings import SolverConfigs
 # https://docs.mosek.com/latest/pythonfusion/parameters.html#doc-all-parameter-list
 MOSEK_PARAMS = {
     'intpntMaxIterations': 'max_iters',
+    'optimizerMaxTime': 'time_limit',
     'intpntCoTolRelGap': 'tol_gap_rel',
     'intpntCoTolDfeas': 'tol_fsb_abs',
     'intpntCoTolPfeas': 'tol_fsb_abs',

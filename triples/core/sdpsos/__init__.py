@@ -1,9 +1,12 @@
 from .abstract import JointSOSElement
-from .sdpsos import SDPSOS
+from .sdpsos import SDPSOS, SDPSOSSolver
 from .sos import SOSPoly
-from .solution import SolutionSDP
+from .sohs import SOHSPoly
+from .sos_moment import SOSMomentPoly
 from ...sdp import SDPProblem
 
 __all__ = [
-    'SDPSOS', 'SOSPoly', 'JointSOSElement', 'SolutionSDP', 'SDPProblem'
+    'SDPSOS', 'SDPSOSSolver', 'SOSPoly', 'SOHSPoly',
+    'SOSMomentPoly',
+    'JointSOSElement', 'SDPProblem'
 ]

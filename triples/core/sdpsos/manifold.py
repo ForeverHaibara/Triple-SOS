@@ -5,7 +5,7 @@ via computing the equality cases of the original SOS problem.
 from collections import defaultdict, deque
 from itertools import product
 from time import time
-from typing import Dict, List, Tuple, Union, Optional, Any
+from typing import Dict, List, Tuple, Union, Optional, Callable, Any
 
 from sympy import Poly, Expr, MatrixBase, prod
 from sympy.matrices import MutableDenseMatrix as Matrix
@@ -13,7 +13,7 @@ from sympy.combinatorics import PermutationGroup
 
 from .algebra import SOSBasis
 from ...sdp import SDPProblem
-from ...sdp.arithmetic import solve_columnspace, rep_matrix_from_list, rep_matrix_to_numpy
+from ...sdp.arithmetic import ArithmeticTimeout, solve_columnspace, rep_matrix_from_list, rep_matrix_to_numpy
 from ...utils import optimize_poly, Root, MonomialManager
 from ...utils.roots.roots import _algebraic_extension, _derv
 
@@ -59,9 +59,9 @@ def _root_span(root: Root, basis: Any, degree: int = 0, diff: Tuple[int,...] = N
             vec = rep_matrix_from_list(vec, len(vec), domain=root.domain)
         return vec
 
- 
+
     raise TypeError(f"Unknown basis type {type(basis)}")
-    
+
 
 class _bilinear():
     """
@@ -303,7 +303,9 @@ def _findroot_binary(poly: Poly, symmetry: PermutationGroup = None) -> List[Root
 
 def get_nullspace(poly: Poly, ineq_constraints: Dict[Any, Poly], eq_constraints: Dict[Any, Poly],
         ineq_bases: Dict[Any, SOSBasis], eq_bases: Dict[Any, SOSBasis],
-        degree: Optional[int]=None, roots: List[Root] = [], perm_group: Optional[PermutationGroup] = None) -> Dict[Any, Matrix]:
+        degree: Optional[int]=None, roots: List[Root] = [],
+        perm_group: Optional[PermutationGroup] = None,
+        time_limit: Optional[Union[Callable, float]]=None) -> Dict[Any, Matrix]:
     """
     In the current, all roots must satisfy poly(roots) == 0 and ineq_constraints(roots) >= 0,
     and eq_constraints(roots) == 0, and this property will not be checked.
@@ -321,6 +323,7 @@ def get_nullspace(poly: Poly, ineq_constraints: Dict[Any, Poly], eq_constraints:
     #     if not is_feasible:
     #         continue
 
+    time_limit = ArithmeticTimeout.make_checker(time_limit)
     nullspaces = {}
 
     for key, ineq in ineq_constraints.items():
@@ -328,8 +331,10 @@ def get_nullspace(poly: Poly, ineq_constraints: Dict[Any, Poly], eq_constraints:
         for root in roots:
             span = _root_space(root, poly, qmodule=ineq,
                         codegree=(degree-ineq.total_degree())//2, basis=ineq_bases[key])
+            time_limit()
             if span.shape[1] > 0:
                 spans.append(solve_columnspace(span))
+            time_limit()
 
         if len(spans):
             nullspaces[key] = Matrix.hstack(*spans)
@@ -340,7 +345,8 @@ def get_nullspace(poly: Poly, ineq_constraints: Dict[Any, Poly], eq_constraints:
 
 def constrain_root_nullspace(sdp: SDPProblem, poly: Poly, ineq_constraints: Dict, eq_constraints: Dict,
         ineq_bases: Dict[Any, Any], eq_bases: Dict[Any, Any], degree: int,
-        roots: Optional[List[Root]]=None, symmetry: Optional[PermutationGroup]=None, verbose: bool = False
+        roots: Optional[List[Root]]=None, symmetry: Optional[PermutationGroup]=None,
+        verbose: bool = False, time_limit: Optional[Union[Callable, float]]=None
     ) -> Tuple[SDPProblem, List[Root]]:
     """
     Internal helper function to constrain the nullspace of the SDP problem. It will be called
@@ -360,8 +366,9 @@ def constrain_root_nullspace(sdp: SDPProblem, poly: Poly, ineq_constraints: Dict
                 if rep == reorder:
                     continue
                 rep_set.add(reorder)
-        return [polylize(rep, *gens) for rep in rep_set] 
+        return [polylize(rep, *gens) for rep in rep_set]
 
+    time_limit = ArithmeticTimeout.make_checker(time_limit)
     time0 = time()
     if roots is None:
         # find roots automatically
@@ -370,6 +377,7 @@ def constrain_root_nullspace(sdp: SDPProblem, poly: Poly, ineq_constraints: Dict
             ineqs = _symmetry_expand(list(ineq_constraints.values()))
             eqs   = _symmetry_expand(list(eq_constraints.values()))
             roots = optimize_poly(poly, ineqs, eqs + [poly], return_type='root')
+            time_limit()
         else:
             # TODO: clean this
             roots = _findroot_binary(poly)# symmetry=self._symmetry)
@@ -378,7 +386,7 @@ def constrain_root_nullspace(sdp: SDPProblem, poly: Poly, ineq_constraints: Dict
             time0 = time()
     else:
         roots = [Root(_) if not isinstance(_, Root) else _ for _ in roots]
-
+    time_limit()
 
     time0 = time()
     nullspaces = get_nullspace(poly, ineq_constraints, eq_constraints, ineq_bases, eq_bases,
@@ -387,7 +395,7 @@ def constrain_root_nullspace(sdp: SDPProblem, poly: Poly, ineq_constraints: Dict
         print(f"Time for computing nullspace            : {time() - time0:.6f} seconds.")
         time0 = time()
 
-    new_sdp = sdp.constrain_nullspace(nullspaces, to_child=True)
+    new_sdp = sdp.constrain_nullspace(nullspaces, to_child=True, time_limit=time_limit)
 
     if verbose:
         print(f"Time for constraining nullspace         : {time() - time0:.6f} seconds. Dof = {sdp.get_last_child().dof}")

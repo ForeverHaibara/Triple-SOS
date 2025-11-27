@@ -83,7 +83,7 @@ def sos_struct_quintic_symmetric(coeff, real = True):
     #     return None
 
     # first determine how much abcs(a2-ab) can we subtract from the poly
-    
+
     m, z, u, v = coeff((5,0,0)), coeff((4,1,0)), coeff((3,2,0)), coeff((3,1,1))
     z, u, v = radsimp([z / m, u / m, v / m])
     rem = radsimp((1 + v + (z + u)*2) * m + coeff((2,2,1)))
@@ -153,7 +153,7 @@ def sos_struct_quintic_symmetric(coeff, real = True):
             _new_coeffs = {
                 (5,0,0): sp.S(0),
                 (4,1,0): radsimp(m*(2*x_-y_**2+z)), (1,4,0): radsimp(m*(2*x_-y_**2+z)),
-                (3,2,0): radsimp(m*u2), (2,3,0): radsimp(m*u2), 
+                (3,2,0): radsimp(m*u2), (2,3,0): radsimp(m*u2),
                 (3,1,1): radsimp(m*v2),
                 (2,2,1): radsimp(coeff((2,2,1)) + m*(4*x_**2 - 4*x_*y_ - 6*y_**2 + 4*y_ - 1))
             }
@@ -219,11 +219,11 @@ def sos_struct_quintic_symmetric(coeff, real = True):
 
         # theorem: 2t + 2z + 1 > 0 iff the point is below x = 0
 
-        # 1. when z >= 1/2, the node is below x = 0. Both intersections must below the 
+        # 1. when z >= 1/2, the node is below x = 0. Both intersections must below the
         # x = 0. Thus 2t + 2z + 1 >= 0 automatically holds.
 
         # 2. when -1 <= z <= 1/2, (2z - 1 + 2t) in [-1,0] where t = (1-2z)/3, so the node
-        # is positive but shall higher degree. Also, dv/dt < 0 when t > (1-2z)/3, so we can 
+        # is positive but shall higher degree. Also, dv/dt < 0 when t > (1-2z)/3, so we can
         # assume the second intersection has t > (1-2z)/3. It is also positive.
 
         t1 = (1 - 2*z) / 3
@@ -254,7 +254,7 @@ def sos_struct_quintic_symmetric(coeff, real = True):
                 multiplier = CyclicSum((a - b)**2)/2
                 if y2 <= 0: # 2z - 1 + 2t_2 >= 0
                     # note that:
-                    # s((a+b-c)(a-b)2(a+b-tc)2)s(a2-ab) 
+                    # s((a+b-c)(a-b)2(a+b-tc)2)s(a2-ab)
                     # = s(a(a-b)(a-c))s((b-c)2(b+c-ta)2) + 2(2-t)(t+1)s(a)p(a-b)2 >= 0
                     y = radsimp([
                         w1 * m / 2,
@@ -291,7 +291,7 @@ def sos_struct_quintic_symmetric(coeff, real = True):
                     return sum_y_exprs(y, exprs) / multiplier
 
 
-        
+
         # we assert the problem cannot be solved otherwise
         # but the inequalit might be true if it does not have root (1,1,1)
         return None
@@ -363,7 +363,7 @@ def sos_struct_quintic_symmetric(coeff, real = True):
                 CyclicProduct(a) * CyclicSum((a-b)**2) * CyclicSum(a*b)
             ]
             return sum_y_exprs(y, exprs) / multiplier
-        
+
         return None
 
     else: # if z <= -3
@@ -639,7 +639,7 @@ def _sos_struct_quintic_symmetric_hexagon(coeff):
     which is also (2x+y)^2 = -8y, then we can use the fact that any point on the parabola
     is equivalent to s(c(a-b)2(a+b-tc)2).
 
-    2. When (u,v) is on the upper-right of parametric parabola 
+    2. When (u,v) is on the upper-right of parametric parabola
     (24t(t-1)/(5t+1)^2, -48(t^2+4t+1)/(5t+1)^2),
     which is also (2x+y)^2 = 8(36x-7y-48), then we can use the fact that any point on the parabola
     is equivalent to s(a(b-c)2((7t-1)a2+(5t+1)(b2+c2-ab-ac)+(5t-11)bc)2).

@@ -3,12 +3,12 @@ from typing import Tuple, Dict, List, Union
 import sympy as sp
 
 from .basic import SymmetricTransform
-from .symmetric import SymmetricPositive, SymmetricReal
+from .symmetric import UE3Real, UE3Positive
 from ...utils import Coeff
 
 _METHOD_TO_TRANSFORM = {
-    'real': SymmetricReal,
-    'positive': SymmetricPositive
+    'real': UE3Real,
+    'positive': UE3Positive
 }
 
 def _get_transform_from_method(method: str, nvars: int) -> SymmetricTransform:
@@ -23,13 +23,13 @@ def sym_representation(poly: sp.Poly, symbols: List[sp.Symbol], return_poly: boo
 
     Please refer to functions `_sym_representation_positive` and `_sym_representation_real`
     for the details of the representation.
-    
+
     Parameters
     ----------
     symbols : List[Symbol]
         List of symbols used in the polynomial representation.
     return_poly : bool, optional
-        If False, returns a symbolic expression. 
+        If False, returns a symbolic expression.
         If True, returns a tuple (numerator, denominator) where numerator is a polynomial
         object in the new symbols, while the denominator is a sympy expression that is
         ensured to be positive semidefinite.
@@ -48,9 +48,9 @@ def sym_representation(poly: sp.Poly, symbols: List[sp.Symbol], return_poly: boo
     ----------
     >>> from sympy.abc import a, b, c, x, y, z
     >>> sym_representation((a**2*(a-b)*(a-c)+b**2*(b-c)*(b-a)+c**2*(c-a)*(c-b)).as_poly(a,b,c), (x,y,z), method='real')
-    2*(4*z + (x + 2*y)**2)/(9*(Σ(a - b)**2))
+    2*(4*z + (x + 2*y)**2)/(9*(Σ((a - b)**2)))
     >>> sym_representation((a**4*(a-b)*(a-c)+b**4*(b-c)*(b-a)+c**4*(c-a)*(c-b)).as_poly(a,b,c), (x,y,z), method='real', return_poly=True)
-    (Poly(1/81*x**4 + 8/81*x**3*y + 8/27*x**2*y**2 + 8/27*x**2*z + 32/81*x*y**3 + 32/81*x*y*z + 16/81*y**4 + 28/81*y**2*z + 4/27*z**2, x, y, z, domain='QQ'), (Σ(a - b)**2)**3/8)
+    (Poly(1/81*x**4 + 8/81*x**3*y + 8/27*x**2*y**2 + 8/27*x**2*z + 32/81*x*y**3 + 32/81*x*y*z + 16/81*y**4 + 28/81*y**2*z + 4/27*z**2, x, y, z, domain='QQ'), (Σ((a - b)**2))**3/8)
     """
     if not poly.is_homogeneous:
         raise ValueError("The polynomial must be homogeneous.")
@@ -88,8 +88,8 @@ def sym_representation_inv(expr: sp.Expr, original_symbols: List[sp.Symbol], new
     --------
     >>> from sympy.abc import a, b, c, x, y, z
     >>> sym_representation_inv(2*(4*z + (x + 2*y)**2), (a,b,c), (x,y,z))
-    2*(∏(-a - b + 2*c) + (Σa)*(Σ(a - b)**2)/2)**2 + 54*(∏(a - b)**2)
-    """    
+    2*(∏(-a - b + 2*c) + (Σ(a))*(Σ((a - b)**2))/2)**2 + 54*(∏((a - b)**2))
+    """
     trans = _get_transform_from_method(method, len(original_symbols))
     return trans.inv_transform(expr, original_symbols=original_symbols, new_symbols=new_symbols)
 
@@ -105,7 +105,7 @@ def sym_transform(poly: sp.Poly, ineq_constraints: Dict[sp.Poly, sp.Expr], eq_co
     ineq_constraints2 = dict()
     eq_constraints2 = dict()
 
-    for collection, new_collection in ((ineq_constraints, ineq_constraints2), 
+    for collection, new_collection in ((ineq_constraints, ineq_constraints2),
                                        (eq_constraints, eq_constraints2)):
         for p, value in collection.items():
             pgens = p.gens

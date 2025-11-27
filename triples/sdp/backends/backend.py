@@ -240,7 +240,7 @@ class DualBackend(SDPBackend):
                 if not (lines[i].startswith('"') or lines[i].startswith("*")):
                     # discard lines of comments
                     break
-            lines = lines[i:]                
+            lines = lines[i:]
             m = int(lines[0].split()[0])
             nBlock = int(lines[1].split()[0])
             block_sizes = list(map(abs, map(int, lines[2].strip().split())))

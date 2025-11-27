@@ -6,11 +6,13 @@ from .settings import SolverConfigs, SDPError
 _CVXPY_SOLVER_CONFIGS = {
     'CLARABEL': {
         'max_iter': 'max_iters',
+        'time_limit': 'time_limit',
         'tol_gap_abs': 'tol_gap_abs',
         'tol_gap_rel': 'tol_gap_rel',
         'tol_feas': 'tol_fsb_abs',
     },
     'COPT': {
+        'TimeLimit': 'time_limit',
         'RelGap': 'tol_gap_rel',
         'AbsGap': 'tol_gap_abs',
         'FeasTol': 'tol_fsb_abs',
@@ -119,7 +121,7 @@ class DualBackendCVXPY(DualBackend):
 
         objective = cp.Minimize(self.c @ y)
         problem = cp.Problem(objective, constraints)
-    
+
         return problem
 
     def _solve(self, configs: SolverConfigs):

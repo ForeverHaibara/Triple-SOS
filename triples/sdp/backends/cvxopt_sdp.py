@@ -36,7 +36,7 @@ class DualBackendCVXOPT(DualBackend):
 
     Installation:
     pip install cvxopt
-    
+
     Reference:
     [1] https://cvxopt.org/userguide/coneprog.html#semidefinite-programming
     """

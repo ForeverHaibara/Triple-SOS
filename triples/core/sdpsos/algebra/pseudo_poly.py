@@ -1,18 +1,20 @@
-from typing import Any
+from collections import defaultdict
+from typing import List, Any
 
-from sympy import Poly, Expr
+from sympy import Basic, Poly, Expr, Symbol, Add, Mul, Integer, sympify, EX
 from sympy.polys.constructor import construct_domain
+from sympy.matrices.expressions import MatPow
 
 from .state_algebra import StateAlgebra
 
-class PseudoPoly:
+class PseudoPoly(Basic):
     """
     Polynomials on general algebra. It provides some interfaces similar to :class:`sympy.Poly`.
     """
     @classmethod
     def new(cls, rep, *gens):
         """Construct :class:`Poly` instance from raw representation. """
-        obj = object.__new__(cls)
+        obj = Basic.__new__(cls)
         obj.rep = rep
         obj.gens = gens
         return obj
@@ -60,11 +62,15 @@ class PseudoPoly:
         return [f.rep.dom.to_sympy(c) for m, c in f.rep.coeffs(order=order)]
     def monoms(f, order=None):
         return f.rep.monoms(order=order)
-    def as_expr(f):
-        return f.algebra.as_expr(f)
+    def as_expr(f, **kwargs):
+        return f.algebra.as_expr(f, **kwargs)
     def primitive(f):
         cont, result = f.rep.primitive()
         return f.rep.dom.to_sympy(cont), f.per(result)
+
+
+    def __hash__(self):
+        return super().__hash__()
     @property
     def free_symbols(self):
         symbols = set(self.gens)
@@ -100,6 +106,19 @@ class PseudoPoly:
                 rep[monom] = domain.convert(coeff)
 
         return cls.new(PseudoSMP(algebra, domain, rep), *gens, algebra=algebra)
+
+    def __add__(p1, p2):
+        return p1.per(p1.rep + p2.rep)
+    def __sub__(p1, p2):
+        return p1.per(p1.rep - p2.rep)
+    def __neg__(p1):
+        return p1.per(-p1.rep)
+    def __mul__(p1, p2):
+        return p1.per(p1.rep * p2.rep)
+    def __pow__(p1, n):
+        return p1.per(p1.rep ** n)
+    def state(p1):
+        return p1.per(p1.rep.state())
 
 
 class PseudoSMP(dict):
@@ -157,6 +176,14 @@ class PseudoSMP(dict):
         return not f
 
     @property
+    def zero(f):
+        return f.per({})
+
+    @property
+    def one(f):
+        return f.per({f.algebra.gen_monom(None): f.dom.one})
+
+    @property
     def is_homogeneous(f):
         if not f: return True
         d = f.algebra.total_degree
@@ -175,42 +202,120 @@ class PseudoSMP(dict):
         return PseudoSMP(self.algebra, domain, {monom: domain.convert(coeff) for monom, coeff in self.items()})
 
     def __add__(p1, p2):
-        if not p2:
-            return p1.copy()
-        ring = p1.ring
-        if ring.is_element(p2):
-            p = p1.copy()
-            get = p.get
-            zero = ring.domain.zero
-            for k, v in p2.items():
-                v = get(k, zero) + v
-                if v:
-                    p[k] = v
-                else:
-                    del p[k]
-            return p
-        elif isinstance(p2, PolyElement):
-            if isinstance(ring.domain, PolynomialRing) and ring.domain.ring == p2.ring:
-                pass
-            elif isinstance(p2.ring.domain, PolynomialRing) and p2.ring.domain.ring == ring:
-                return p2.__radd__(p1)
+        # assume p1.ring == p2.ring and p1.domain == p2.domain
+        zero = p1.dom.zero
+        p = dict(p1.copy())
+        for m, c in p2.items():
+            if m in p:
+                p[m] += c
             else:
-                return NotImplemented
+                p[m] = c
+        for m, c in list(p.items()):
+            if c == zero:
+                del p[m]
+        return p1.per(p)
 
-        try:
-            cp2 = ring.domain_new(p2)
-        except CoercionFailed:
-            return NotImplemented
-        else:
-            p = p1.copy()
-            if not cp2:
-                return p
-            zm = ring.zero_monom
-            if zm not in p1.keys():
-                p[zm] = cp2
+    def __sub__(p1, p2):
+        # assume p1.ring == p2.ring and p1.domain == p2.domain
+        zero = p1.dom.zero
+        p = dict(p1.copy())
+        for m, c in p2.items():
+            if m in p:
+                p[m] -= c
             else:
-                if p2 == -p[zm]:
-                    del p[zm]
-                else:
-                    p[zm] += cp2
-            return p
+                p[m] = -c
+        for m, c in list(p.items()):
+            if c == zero:
+                del p[m]
+        return p1.per(p)
+
+    def __neg__(p1):
+        p = {m: -c for m, c in p1.items()}
+        return p1.per(p)
+
+    def __mul__(p1, p2):
+        # assume p1.ring == p2.ring and p1.domain == p2.domain
+        zero = p1.dom.zero
+        alg = p1.algebra
+        p = defaultdict(lambda: zero)
+        for m1, c1 in p1.items():
+            for m2, c2 in p2.items():
+                m3, c3 = alg.mul((m1, c1), (m2, c2))
+                p[m3] += c3
+        for m, c in list(p.items()):
+            if c == zero:
+                del p[m]
+        return p1.per(p)
+
+    def __pow__(p1, n):
+        if n < 0:
+            raise ValueError("Pseudo-polynomials do not support negative exponents.")
+        r = p1.one
+        b = p1
+        e = n
+        while e > 0:
+            if e % 2: r *= b
+            b *= b
+            e //= 2
+        return r
+
+    def state(p1):
+        alg = p1.algebra
+        zero = p1.dom.zero
+        p = {}
+        for m, c in p1.terms():
+            m, c = alg.s((m, c))
+            if m in p:
+                p[m] += c
+            else:
+                p[m] = c
+        for m, c in list(p.items()):
+            if c == zero:
+                del p[m]
+        return p1.per(p)
+
+
+def convert_expr_to_pseudo_poly(algebra: StateAlgebra, expr: Expr, gens: List[Symbol],
+        state_operator=None, **domain_kwargs) -> Poly:
+
+    expr = sympify(expr)
+    gens_dict = {v: i for i, v in enumerate(gens)}
+
+    # domain = EX
+    class _domain_cls:
+        one = Integer(1)
+        zero = Integer(0)
+    domain = _domain_cls
+
+    def _recur_build(x) -> PseudoSMP:
+        if x.is_Integer or x.is_Rational or x.is_Float:
+            return PseudoSMP(algebra, domain, {algebra.gen_monom(None): x})
+
+        i = gens_dict.get(x, None)
+        if i is not None:
+            return PseudoSMP(algebra, domain, {algebra.gen_monom(i): domain.one})
+        elif x.is_Add or x.is_Mul:
+            args = [_recur_build(arg) for arg in x.args]
+            arg0 = args[0]
+            if x.is_Add:
+                for i in range(1, len(args)):
+                    arg0 = arg0 + args[i]
+            elif x.is_Mul:
+                for i in range(1, len(args)):
+                    arg0 = arg0 * args[i]
+            return arg0
+        elif x.is_Pow or isinstance(x, MatPow):
+            if x.exp.is_Integer and x.exp >= 0:
+                return _recur_build(x.args[0]) ** x.args[1]
+            raise ValueError
+        elif state_operator is not None and isinstance(x, state_operator):
+            return _recur_build(x.args[0]).state()
+
+        if len(x.free_symbols) == 0:
+            return PseudoSMP(algebra, domain, {algebra.gen_monom(None): x})
+
+    smp = _recur_build(expr)
+    monoms, coeffs = smp.monoms(), smp.coeffs()
+    domain, coeffs = construct_domain(coeffs, **domain_kwargs)
+    rep = PseudoSMP(algebra, domain, dict(zip(monoms, coeffs)))
+    return PseudoPoly.new(rep, *gens)

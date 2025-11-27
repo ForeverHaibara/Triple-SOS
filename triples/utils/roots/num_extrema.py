@@ -19,6 +19,7 @@ class OptimizeResult: # this is only for type hint
 
 from .extrema import _infer_symbols, polylize_input
 from .roots import Root
+from .root_list import RootList
 
 DEFAULT_SHGO_KWARGS = { # default values
     'n': 256,
@@ -173,7 +174,7 @@ class NumerFunc:
             The expression to convert.
         symbols : tuple of sympy.Symbol
             The symbols in the expression.
-        """            
+        """
         def _lambdify(symbols, expr):
             if isinstance(expr, Poly):
                 expr = expr.as_expr()
@@ -193,7 +194,7 @@ class NumerFunc:
             return NumerFunc.vectorize(fs)
         elif isinstance(expr, (Expr, Poly)):
             return _wrap_single(expr, symbols)
-        
+
         raise TypeError(f"Unsupported type {type(expr)} for wrapping.")
 
     @classmethod
@@ -495,7 +496,7 @@ def numeric_optimize_poly(poly: Union[Poly, Expr], ineq_constraints: List[Union[
     points = [tuple(_) for _ in points]
 
     if return_type == 'root':
-        points = [Root(_) for _ in points]
+        points = RootList(symbols, [Root(_) for _ in points])
     elif return_type == 'dict':
         points = [dict(zip(symbols, _)) for _ in points]
     return points

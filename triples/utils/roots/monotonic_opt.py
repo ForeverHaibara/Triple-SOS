@@ -13,7 +13,7 @@ def _find_sup(f, a, b, xtol=_xtol, maxiter=100):
     """
     Find sup x: f(x) <= 0 over the interval [a, b] using hybrid Brent's method and bisection search.
     In the case of monotonic optimization, f must be monotonic non-decreasing over [a, b]
-    and f(a) <= 0, f(b) >= 0.    
+    and f(a) <= 0, f(b) >= 0.
     """
     if -_rtol <= f(b) <= _rtol:
         return b
@@ -21,26 +21,26 @@ def _find_sup(f, a, b, xtol=_xtol, maxiter=100):
     from scipy.optimize import root_scalar
     # Step 1: Apply Brent's method (using scipy.optimize.root_scalar with brentq)
     result = root_scalar(f, bracket=(a, b), method='brentq', xtol=xtol, maxiter=maxiter)
-    
+
     # Check if the root is found successfully and if the function at x + _xtol > 0
     x = result.root
     if f(x + _xtol) >= _rtol:
         return x
-    
+
     # Step 2: Fallback to bisection method if the condition is not satisfied
     left, right = x + _xtol, b
     for _ in range(maxiter):
         mid = (left + right) / 2
         fmid = f(mid)
-        
+
         if abs(right - left) < _xtol:
             return mid
-        
+
         if fmid <= 0:
             left = mid  # Move left bound up
         else:
             right = mid  # Move right bound down
-    
+
     # not expected to reach here because bisecting should converge
     raise ValueError("Maximum iterations exceeded")
 
@@ -78,7 +78,7 @@ def _red(f, g, h, a, b, cbv, root_solver=_find_sup):
     a_new : array_like
         New lower bound of the domain, R^n.
     b_new : array_like
-        New upper bound of the domain, R^n.    
+        New upper bound of the domain, R^n.
 
     References
     ----------
@@ -257,9 +257,9 @@ def rpa_gmop(f1_and_f2, g_and_h, a, b, tol=1e-5, max_iter=2000, cbv=np.inf, root
                 -f2(b) <= u <= -f2(a),
     where h(x) = sum_i h_i(x), g(x) = max_i(g_i(x) - h_i(x) + h(x))
 
-    Note that any function with bounded variation over the interval 
+    Note that any function with bounded variation over the interval
     can be written as the difference of two monotonic functions.
-    
+
 
     Parameters
     ----------
@@ -358,7 +358,7 @@ def rpa_gmop(f1_and_f2, g_and_h, a, b, tol=1e-5, max_iter=2000, cbv=np.inf, root
 
 def poly_as_dm(poly: sp.Poly, a=None):
     """
-    Write a polynomial in the form of difference of two monotonic 
+    Write a polynomial in the form of difference of two monotonic
     increasing functions over x >= a where a is n-dimensional.
     Hint: a polynomial on R+ can be written as the difference of
     its positive and negative terms.

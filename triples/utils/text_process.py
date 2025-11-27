@@ -3,16 +3,16 @@ from functools import partial
 from collections import defaultdict
 # import re
 
-from sympy import Expr, Poly, QQ, Rational, Integer, Float, Symbol
+from sympy import Expr, Poly, QQ, RR, Rational, Integer, Float, Symbol
 from sympy import parse_expr, sympify, fraction, cancel, latex
 from sympy import symbols as sp_symbols
 from sympy.polys import ring
 from sympy.polys.polyclasses import DMP
-from sympy.core.singleton import S
 from sympy.combinatorics import Permutation, PermutationGroup, CyclicGroup
 from sympy.printing.precedence import precedence_traditional, PRECEDENCE
 
-from .expression import Coeff, CyclicSum, CyclicProduct
+from .expressions import Coeff, CyclicSum, CyclicProduct
+from .monomials import poly_reduce_by_symmetry
 
 def cycle_expansion(
         f: str,
@@ -124,7 +124,7 @@ def _preprocess_text_expansion(poly: str, gens: Tuple[Symbol], perm: Permutation
     """
     Expand the polynomial with cycle expansion.
 
-    s(ab)    ->   (ab + bc + ca)     
+    s(ab)    ->   (ab + bc + ca)
 
     p(a+b)   ->   (a+b)(b+c)(c+a)
     """
@@ -158,7 +158,7 @@ def _preprocess_text_completion(
         preserve_patterns: List[str] = ('sqrt',)
     ) -> str:
     """
-    Complete the polynomial with * and ^. E.g. 
+    Complete the polynomial with * and ^. E.g.
     1/5a3b2c   ->   1/5*a^3*b^2*c
 
     Parameters
@@ -183,7 +183,7 @@ def _preprocess_text_completion(
                 return pattern
         return None
     poly = poly.replace(' ','')
-    i = 0 
+    i = 0
     while i < len(poly) - 1:
         if poly[i].isdigit(): # '0'~'9'
             if poly[i+1] == '(' or (poly[i+1].isalpha() and poly[i+1] != SCI): # alphabets
@@ -202,7 +202,7 @@ def _preprocess_text_completion(
                 poly = poly[:i+1] + '*' + poly[i+1:]
                 i += 1
             elif poly[i+1].isdigit(): # '0'~'9'
-                poly = poly[:i+1] + '^' + poly[i+1:]  
+                poly = poly[:i+1] + '^' + poly[i+1:]
                 i += 1
         i += 1
 
@@ -227,11 +227,11 @@ def expand_poly(expr: Expr, gens=None) -> Union[Expr, Poly]:
         return expr
     if not all(_.is_commutative for _ in symbols):
         return expr.expand()
-    dom = QQ
+    dom = QQ if not expr.has(Float) else RR
     dom_ext = dom[other_symbols] if len(other_symbols) else dom
     expr_ring = ring(gens, dom_ext)[0]
     def _expandpoly(_):
-        if _.is_Symbol or _.is_Rational:
+        if _.is_Symbol or _.is_Rational or _.is_Float:
             return expr_ring(_)
 
         elif _.is_Add:
@@ -342,7 +342,7 @@ def preprocess_text(
     --------
     By default, the function will return a sympy polynomial with respect to a, b, c.
     Omitted multiplication signs and powers will be completed.
-    >>> from sympy.abc import x, y, z, a, b, c    
+    >>> from sympy.abc import x, y, z, a, b, c
     >>> preprocess_text('xa+1/4yb2+z2c3')
     Poly(x*a + y/4*b**2 + z**2*c**3, a, b, c, domain='QQ[x,y,z]')
 
@@ -355,7 +355,7 @@ def preprocess_text(
     >>> preprocess_text('1+a2/b') is None # since it is not a polynomial in a, b, c
     True
 
-    
+
     Configure the return type.
 
     >>> preprocess_text('1+a2/b', return_type='expr')
@@ -389,7 +389,7 @@ def preprocess_text(
     >>> preprocess_text('Σ(x(y-z)2) - s', (x,y,z), cyclic_sum_func='Σ', lowercase=False)
     Poly(x**2*y + x**2*z + x*y**2 - 6*x*y*z + x*z**2 + y**2*z + y*z**2 - s, x, y, z, domain='QQ[s]')
 
-    
+
     To avoid certain patterns from being completed, set preserve_patterns.
 
     >>> preprocess_text('cbrt(x2)+y2',return_type='expr')
@@ -428,7 +428,7 @@ def preprocess_text(
         scientific_notation=scientific_notation,
         preserve_patterns=preserve_patterns
     )
-    
+
     if return_type == 'text':
         return poly
 
@@ -460,7 +460,7 @@ def preprocess_text(
 
     if return_type == 'expr':
         return poly
-    
+
     try:
         # try if it has no fractions, which avoids expanding CyclicExprs manually
         poly0 = _parse_poly(poly, gens)
@@ -599,82 +599,6 @@ def _get_coeff_str(coeff, MUL = '*') -> str:
             coeff_str = '+(%s)'%coeff_str
         coeff_str += MUL
     return coeff_str
-
-
-def poly_reduce_by_symmetry(
-        poly: Poly,
-        perm: PermutationGroup
-    ) -> Poly:
-    """
-    Given a polynomial which is symmetric with respect to the permutation group,
-    return a new_poly such that `CyclicSum(new_poly, new_poly.gens, perm) == poly`.
-    Users should ensure that the given poly is symmetric with respect to the permutation group
-    and this is not checked.
-
-    Parameters
-    ----------
-    poly : Poly
-        The polynomial to be reduced.
-    perm : PermutationGroup
-        The permutation group to be considered.
-
-    Returns
-    ----------
-    Poly
-        The reduced polynomial.
-
-    Examples
-    ----------
-    >>> from sympy.abc import a, b, c, d
-    >>> from sympy.combinatorics import SymmetricGroup, DihedralGroup, CyclicGroup
-    >>> p1 = (a**2+b**2+c**2+d**2+a*b+b*c+c*d+d*a+a*c+b*d).as_poly(a,b,c,d)
-    >>> poly_reduce_by_symmetry(p1, SymmetricGroup(4))
-    Poly(1/6*a**2 + 1/4*a*b, a, b, c, d, domain='QQ')
-    >>> poly_reduce_by_symmetry(p1, DihedralGroup(4))
-    Poly(1/2*a**2 + 1/2*a*b + 1/4*a*c, a, b, c, d, domain='QQ')
-    >>> poly_reduce_by_symmetry(p1, CyclicGroup(4))
-    Poly(a**2 + a*b + 1/2*a*c, a, b, c, d, domain='QQ')
-    """
-    if perm is None:
-        return poly
-
-    extracted = []
-    perm_group_gens = perm.generators
-    perm_order = perm.order()
-    ufs = {}
-    # monomials invariant under the permutation group is recorded in ufs
-    def ufs_find(monom):
-        v = ufs.get(monom, monom)
-        if v == monom:
-            return monom
-        w = ufs_find(v)
-        ufs[monom] = w
-        return w
-    for m1, coeff in poly.terms():
-        for p in perm_group_gens:
-            m2 = tuple(p(m1))
-            f1, f2 = ufs_find(m1), ufs_find(m2)
-            # merge to the maximum
-            if f1 > f2:
-                ufs[f2] = f1
-            else:
-                ufs[f1] = f2
-
-    ufs_size = defaultdict(int)
-    for m in ufs.keys():
-        ufs_size[ufs_find(m)] += 1
-
-    def get_order(monom):
-        # get the multiplicity of the monomials given the permutation group
-        # i.e. how many permutations make it invariant
-        return perm_order // ufs_size[ufs_find(monom)]
-    
-    # only reserve the keys for ufs[monom] == monom
-    for monom, coeff in poly.terms():
-        if ufs_find(monom) == monom:
-            order = get_order(monom)
-            extracted.append((monom, coeff/order))
-    return Poly(dict(extracted), poly.gens)
 
 
 def poly_get_standard_form(
@@ -942,7 +866,7 @@ def coefficient_triangle(poly: Poly, degree: int = None) -> str:
         coeffs = poly.coeffs()
         monoms = poly.monoms()
         monoms.append((-1,-1,0))  # tail flag
-        
+
         t = 0
         triangle = []
         for i in range(degree+1):
@@ -1050,7 +974,7 @@ def wrap_desmos(x: List[Expr]) -> str:
     var elt = document.getElementById('calculator');
     var calculator = Desmos.GraphingCalculator(elt);
     """
-    for i, content in enumerate(x):        
+    for i, content in enumerate(x):
         html_str += "\ncalculator.setExpression({id: '%d', latex: '%s'});"%(i, latex(content).replace('\\','\\\\'))
     html_str += "\n</script>"
     return html_str
@@ -1082,7 +1006,7 @@ class PolyReader:
             The generators of the polynomial.
         perm : Optional[PermutationGroup]
             The permutation group of the expression. If None, it will be cyclic group.
-        ignore_errors : bool    
+        ignore_errors : bool
             Whether to ignore errors. If True, invalid polynomials will be skipped by
             yielding None. If False, invalid polynomials will raise a ValueError.
         kwargs:

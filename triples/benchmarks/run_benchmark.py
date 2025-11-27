@@ -85,6 +85,7 @@ def run_bench(benchmarks=BENCHMARKS, save_interval=600):
     from datetime import datetime
     from tempfile import TemporaryDirectory
     import json
+    import sys
 
     DATETIME_LEN = 15
     start_bench_time = datetime.now()
@@ -96,7 +97,9 @@ def run_bench(benchmarks=BENCHMARKS, save_interval=600):
     results = []
     batch_results = []
 
-    with TemporaryDirectory(prefix=f".bench-{start_bench_time.strftime('%Y%m%d-%H%M%S')}", delete=False) as temp_dir:
+    # sys >= 3.12 supports TemporaryDirectory(delete=False)
+    _tmpdir_kwargs = {'delete': False} if sys.version_info >= (3, 12) else {}
+    with TemporaryDirectory(prefix=f".bench-{start_bench_time.strftime('%Y%m%d-%H%M%S')}", **_tmpdir_kwargs) as temp_dir:
         header = {
             "id": bench_id,
             "commit_hash": git_commit_id,

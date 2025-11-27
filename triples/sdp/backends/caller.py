@@ -10,6 +10,7 @@ from .cvxopt_sdp import DualBackendCVXOPT
 from .cvxpy_sdp import DualBackendCVXPY
 from .mosek_sdp import DualBackendMOSEK
 from .picos_sdp import DualBackendPICOS
+from .qics_sdp import DualBackendQICS
 from .sdpap_sdp import DualBackendSDPAP
 
 from .settings import SDPError, SDPResult
@@ -21,6 +22,7 @@ _DUAL_BACKENDS: Dict[str, DualBackend] = {
     'cvxpy': DualBackendCVXPY,
     'mosek': DualBackendMOSEK,
     'picos': DualBackendPICOS,
+    'qics': DualBackendQICS,
     'sdpa': DualBackendSDPAP,
     # 'sdpap': DualBackendSDPAP,
 }
@@ -33,7 +35,7 @@ _PRIMAL_BACKENDS: Dict[str, Any] = {
 }
 
 _RECOMMENDED_BACKENDS = [
-    'mosek', 'clarabel', 'cvxopt', 'cvxpy', 'picos', 'sdpa',
+    'mosek', 'clarabel', 'qics', 'cvxopt', 'cvxpy', 'picos', 'sdpa',
 ]
 
 def get_default_sdp_backend(dual = True) -> str:
@@ -154,6 +156,7 @@ def solve_numerical_dual_sdp(
         return_result: bool = False,
         verbose: Union[bool, int] = 0,
         max_iters: int = 200,
+        time_limit: float = 1e10,
         tol_fsb_abs: float = 1e-8,
         tol_fsb_rel: float = 1e-8,
         tol_gap_abs: float = 1e-8,
@@ -184,6 +187,7 @@ def solve_numerical_dual_sdp(
     result = backend.solve(
         verbose=verbose,
         max_iters=max_iters,
+        time_limit=time_limit,
         tol_fsb_abs=tol_fsb_abs,
         tol_fsb_rel=tol_fsb_rel,
         tol_gap_abs=tol_gap_abs,
@@ -271,6 +275,7 @@ def solve_numerical_primal_sdp(
         return_result: bool = False,
         verbose: Union[bool, int] = 0,
         max_iters: int = 200,
+        time_limit: float = 1e10,
         tol_fsb_abs: float = 1e-8,
         tol_fsb_rel: float = 1e-8,
         tol_gap_abs: float = 1e-8,
@@ -375,6 +380,7 @@ def solve_numerical_primal_sdp(
     result = backend.solve(
         verbose=verbose,
         max_iters=max_iters,
+        time_limit=time_limit,
         tol_fsb_abs=tol_fsb_abs,
         tol_fsb_rel=tol_fsb_rel,
         tol_gap_abs=tol_gap_abs,

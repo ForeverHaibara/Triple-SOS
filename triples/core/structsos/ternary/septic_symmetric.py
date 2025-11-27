@@ -52,7 +52,7 @@ def _sos_struct_septic_symmetric_quadratic_form(poly, coeff):
 
     s(9a7-33a6b-33a6c+45a5b2+103a5bc+45a5c2-21a4b3-123a4b2c-123a4bc2-21a4c3+122a3b3c+30a3b2c2)
 
-    s(a)(s(a2(a-b)(a-c)(a-4b)(a-4c))+0s(a2(a-b)(a-c)(a-3b)(a-3c))+11p(a-b)2)    
+    s(a)(s(a2(a-b)(a-c)(a-4b)(a-4c))+0s(a2(a-b)(a-c)(a-3b)(a-3c))+11p(a-b)2)
 
     1/361s(11664a7-33696a6b-33696a6c+31104a5b2+99720a5bc+31104a5c2-9072a4b3-94476a4b2c-94476a4bc2-9072a4c3+65929a3b3c+34967a3b2c2)
 
@@ -62,7 +62,7 @@ def _sos_struct_septic_symmetric_quadratic_form(poly, coeff):
 
     3s(a)p(2a2+b2+c2)-4s(b(2a2+b2+c2)(2c2+a2+b2))s(a2)-10p(a-b)2s(a)
     """
-    
+
     a, b, c = sp.symbols('a b c')
     sym = poly.subs({b:1,c:1}).div(sp.Poly([1,-2,1], a))
     if not sym[1].is_zero:
@@ -126,7 +126,7 @@ def _sos_struct_septic_symmetric_quadratic_form(poly, coeff):
 class _septic_sym_axis():
     """
     Let F0 = s(a7+a6b+a6c+a5bc-2a4b3-2a4c3) and f(a,b,c) = s(xa^2+yab)
-    
+
     Define
     F_{x,y}(a,b,c) = F0 - 2s(a5-a3b2+a3bc-a3c2)f(a,b,c) + s(a(a-b)(a-c))f(a,b,c)^2.
 
@@ -134,7 +134,7 @@ class _septic_sym_axis():
     F_{x,y} >= 0 because
     F_{x,y} * s(a(a-b)(a-c)) = (s(a(a-b)(a-c))f(a,b,c) - s(a5-a3b2+a3bc-a3c2))^2 + p(a)s(a)p(a-b)^2 >= 0.
 
-    
+
     Let G0 = s((b+c)(a2+a(b+c)+2bc)2(a-b)(a-c)) and g(a,b,c) = s(xa^2+yab)
     Define
     G_{x,y}(a,b,c) = G0 - 2s((b+c)(a2+a(b+c)+2bc)(a-b)(a-c))g(a,b,c) + s(a(b-c)^2)g(a,b,c)^/2.
@@ -168,7 +168,7 @@ class _septic_sym_axis():
         if x + y == sp.S(5)/3:
             p1 = (3*(x - 1)*a - (3*x-1)/2*b - (3*x-1)/2*c).together()
             return CyclicSum(a*(a-b)**2*(a-c)**2*p1**2) / 9, -(x-1)*(9*x-13)/12
-            
+
         return None, sp.oo
     @staticmethod
     def _F_sos(x, y, z_type = 0):
@@ -185,7 +185,7 @@ class _septic_sym_axis():
         z = [2 - y, -x**2/(6*(x - 1))][z_type]
         if z is sp.oo or z is sp.nan or z is sp.zoo:
             return None, sp.oo
-        
+
         c1, c2 = -x**2/3 - 2*x*z + 2*z, -2*x**2/3 + 2*x*z - 2*y*z - z**2 + 2*z
         p2 = a*b*(-x + y + z - 1) + c**2*z + (a*c + b*c)*(x + y - z - 1) + (a**2 + b**2)*(x - 1)
 

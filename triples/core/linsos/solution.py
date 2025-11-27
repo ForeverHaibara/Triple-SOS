@@ -1,95 +1,70 @@
 from itertools import combinations
 from typing import List, Tuple, Optional, Union, Dict
 
-import sympy as sp
-from sympy import count_ops
+from sympy import count_ops, Poly, Expr, Rational, Symbol, Add, Mul
 import numpy as np
 
 from .basis import LinearBasis, LinearBasisTangent
 from .updegree import LinearBasisMultiplier
-from ...utils.expression.cyclic import CyclicSum
-from ...utils import MonomialManager, Coeff, SolutionSimple
-
-def _merge_common_basis(
-        y: List[sp.Expr], powers: List[Tuple], symbols: List[sp.Symbol]
-    ) -> sp.Expr:
-    """
-    Get the common base and the extraction of the expression.
-    """
-    basis = sp.Add(*(yi*sp.Mul(*[s**p for s, p in zip(symbols, power)]) for yi, power in zip(y, powers))).together()
-    return basis
+from ...utils import MonomialManager, Coeff
 
 
-class SolutionLinear(SolutionSimple):
+def create_linear_sol_from_y_basis(
+        problem: Poly,
+        y: List[Rational],
+        basis: List[LinearBasis],
+        symmetry: MonomialManager,
+        ineq_constraints: Dict[Poly, Expr] = {},
+        eq_constraints: Dict[Poly, Expr] = {},
+        collect: bool = True
+    ) -> Expr:
     """
-    Solution of Linear SOS. It takes the form of 
-    f(a,b,c) * multiplier = sum(y_i * basis_i)
-    """
-    method = 'LinearSOS'
-    @classmethod
-    def _from_y_basis(cls,
-            problem: sp.Poly,
-            y: List[sp.Rational],
-            basis: List[LinearBasis],
-            symmetry: MonomialManager,
-            ineq_constraints: Dict[sp.Poly, sp.Expr] = {},
-            eq_constraints: Dict[sp.Poly, sp.Expr] = {},
-            is_equal: bool = True,
-            collect: bool = True
-        ) -> 'SolutionLinear':
-        """
-        Generate the solution from y and basis by LinearSOS. Collect terms
-        automatically if collect is True.
+    Generate the solution from y and basis by LinearSOS. Collect terms
+    automatically if collect is True. Returns a sympy expression.
 
-        Parameters
-        ----------
-        problem : sp.Poly
-            The polynomial problem.
-        y : List[sp.Rational]
-            The coefficients of the bases.
-        basis : List[LinearBasis]
-            The list of bases of the solution.
-        symmetry : MonomialManager
-            The monomial manager object indicating the symmetry group.
-        ineq_constraints : Dict[sp.Poly, sp.Expr]
-            The inequality constraints.
-        eq_constraints : Dict[sp.Poly, sp.Expr]
-            The equality constraints.
-        is_equal : bool
-            Whether the solution is equal to the problem. Should be false
-            for numerical or inexact solutions.
-        collect : bool
-            Whether to collect the terms in the solution. Default is True.
-        """
-        solution = _collect_constraints(y, basis, problem.gens, symmetry,
-                        ineq_constraints, eq_constraints, collect=collect)
-        obj = SolutionLinear(problem, solution,
-                            ineq_constraints=ineq_constraints, eq_constraints=eq_constraints,
-                             is_equal=is_equal)
-        return obj
+    Parameters
+    ----------
+    problem : Poly
+        The polynomial problem.
+    y : List[Rational]
+        The coefficients of the bases.
+    basis : List[LinearBasis]
+        The list of bases of the solution.
+    symmetry : MonomialManager
+        The monomial manager object indicating the symmetry group.
+    ineq_constraints : Dict[Poly, Expr]
+        The inequality constraints.
+    eq_constraints : Dict[Poly, Expr]
+        The equality constraints.
+    collect : bool
+        Whether to collect the terms in the solution. Default is True.
+    """
+    solution = _collect_constraints(y, basis, problem.gens, symmetry,
+                    ineq_constraints, eq_constraints, collect=collect)
+    return solution
 
 
 def _collect_constraints(
-        y: List[sp.Rational], basis: List[LinearBasis], symbols: List[sp.Symbol], symmetry: MonomialManager,
-        ineq_constraints: Dict[sp.Poly, sp.Expr], eq_constraints: Dict[sp.Poly, sp.Expr], collect: bool = True
-    ) -> sp.Expr:
+        y: List[Rational], basis: List[LinearBasis], symbols: List[Symbol], symmetry: MonomialManager,
+        ineq_constraints: Dict[Poly, Expr], eq_constraints: Dict[Poly, Expr], collect: bool = True
+    ) -> Expr:
     """
     Collect terms and extract common factors wisely to simplify the expression.
     For instance, `a*b*(a+b-c)**2 + b*c*(a+b-c)**2` may be simplified to `b*(a+c)*(a+b-c)**2`.
 
     Parameters
     ----------
-    y : List[sp.Rational]
+    y : List[Rational]
         The coefficients of the bases.
     basis : List[LinearBasis]
         The list of bases of the solution.
-    symbols : List[sp.Symbol]
+    symbols : List[Symbol]
         The list of symbols.
     symmetry : MonomialManager
         The monomial manager object indicating the symmetry group.
-    ineq_constraints : Dict[sp.Poly, sp.Expr]
+    ineq_constraints : Dict[Poly, Expr]
         The inequality constraints.
-    eq_constraints : Dict[sp.Poly, sp.Expr]
+    eq_constraints : Dict[Poly, Expr]
         The equality constraints.
     collect : bool
         Whether to collect the terms in the solution. Default is True.
@@ -102,7 +77,7 @@ def _collect_constraints(
     inv_eq_constraints = {v: k for k, v in eq_constraints.items()}
     if (not collect) or (len(inv_ineq_constraints) < len(ineq_constraints)) or (len(inv_eq_constraints) < len(eq_constraints)):
         # unsafe and is not expected to happen
-        return sp.Add(*[symmetry.cyclic_sum(v * base.as_expr(symbols), symbols) for v, base in zip(y, basis)]) / multiplier
+        return Add(*[symmetry.cyclic_sum(v * base.as_expr(symbols), symbols) for v, base in zip(y, basis)]) / multiplier
 
     nontangent_part = []
     ineq_part = []
@@ -118,7 +93,7 @@ def _collect_constraints(
                 mul_other_args = args[:i] + args[i+1:]
                 if arg0.is_Pow:
                     mul_other_args += (arg ** (arg0.exp - 1),)
-                mul_other_args = sp.Mul(*mul_other_args) # == tangent / arg
+                mul_other_args = Mul(*mul_other_args) # == tangent / arg
                 return arg, mul_other_args
         return None
 
@@ -129,14 +104,14 @@ def _collect_constraints(
             if has_eq_part is not None:
                 if not (has_eq_part[0] in eq_part): # not expected to happen
                     eq_part[has_eq_part[0]] = []
-                eq_part[has_eq_part[0]].append(v * has_eq_part[1] * sp.Mul(*[s**p for s, p in zip(symbols, base.powers)]))
+                eq_part[has_eq_part[0]].append(v * has_eq_part[1] * Mul(*[s**p for s, p in zip(symbols, base.powers)]))
             else:
-                ineq_part.append((tangent, v * sp.Mul(*[s**p for s, p in zip(symbols, base.powers)])))
+                ineq_part.append((tangent, v * Mul(*[s**p for s, p in zip(symbols, base.powers)])))
         else:
             nontangent_part.append(symmetry.cyclic_sum(v * base.as_expr(symbols), symbols))
 
     # Nontangent part: sum them up
-    nontangent_part = sp.Add(*nontangent_part)
+    nontangent_part = Add(*nontangent_part)
 
     # Equality constraints: extract them afront
     eq_part = _collect_eq_constraints(eq_part, symbols, symmetry, inv_eq_constraints)
@@ -148,8 +123,8 @@ def _collect_constraints(
 
 
 
-def _collect_multipliers(y: List[sp.Rational], basis: List[LinearBasis], symbols: List[sp.Symbol],
-        symmetry: MonomialManager) -> Tuple[sp.Expr, List[sp.Rational], List[LinearBasis]]:
+def _collect_multipliers(y: List[Rational], basis: List[LinearBasis], symbols: List[Symbol],
+        symmetry: MonomialManager) -> Tuple[Expr, List[Rational], List[LinearBasis]]:
     """
     Separate the multipliers from other parts.
 
@@ -162,20 +137,20 @@ def _collect_multipliers(y: List[sp.Rational], basis: List[LinearBasis], symbols
 
     Parameters
     ----------
-    y : List[sp.Rational]
+    y : List[Rational]
         The coefficients of the bases.
     basis : List[LinearBasis]
         The list of bases of the solution.
-    symbols : List[sp.Symbol]
+    symbols : List[Symbol]
         The list of symbols.
     symmetry : MonomialManager
         The monomial manager object indicating the symmetry group.
 
     Returns
     -------
-    multiplier : sp.Expr
+    multiplier : Expr
         The multiplier.
-    non_mul_y : List[sp.Rational]
+    non_mul_y : List[Rational]
         The coefficients of the bases without multipliers.
     non_mul_basis : List[LinearBasis]
         The list of bases without multipliers.
@@ -191,7 +166,7 @@ def _collect_multipliers(y: List[sp.Rational], basis: List[LinearBasis], symbols
             non_mul_basis.append(base)
 
     # discard the constant part
-    r, multiplier = sp.Add(*multipliers).as_content_primitive()
+    r, multiplier = Add(*multipliers).as_content_primitive()
     # r = S.One
 
     non_mul_y = [v / r for v in non_mul_y]
@@ -199,8 +174,8 @@ def _collect_multipliers(y: List[sp.Rational], basis: List[LinearBasis], symbols
     return multiplier, non_mul_y, non_mul_basis
 
 
-def _collect_eq_constraints(eqs_and_exprs: Dict[sp.Poly, List[sp.Expr]], symbols: List[sp.Symbol],
-        symmetry: MonomialManager, inv_eq_constraints: Dict[sp.Expr, sp.Poly]) -> sp.Expr:
+def _collect_eq_constraints(eqs_and_exprs: Dict[Poly, List[Expr]], symbols: List[Symbol],
+        symmetry: MonomialManager, inv_eq_constraints: Dict[Expr, Poly]) -> Expr:
     """
     Collect terms involving equality constraints (vanishing polynomials).
 
@@ -208,22 +183,22 @@ def _collect_eq_constraints(eqs_and_exprs: Dict[sp.Poly, List[sp.Expr]], symbols
     and the final solution can be written as
 
         `f = (sum of squares) + ... + h1 * poly1 + ... + hk * polyk`.
-    
+
     We gather terms involving h1, ..., hk to form poly1, ..., polyk.
 
     Parameters
     ----------
-    eqs_and_exprs : Dict[sp.Poly, List[sp.Expr]]
+    eqs_and_exprs : Dict[Poly, List[Expr]]
         The dictionary of equality constraints and the corresponding expressions.
-    symbols : List[sp.Symbol]
+    symbols : List[Symbol]
         The list of symbols.
     symmetry : MonomialManager
         The monomial manager object indicating the symmetry group.
-    inv_eq_constraints : Dict[sp.Expr, sp.Poly]
+    inv_eq_constraints : Dict[Expr, Poly]
         The dictionary mapping equality expressions to the their polynomial forms.
     """
     perm_group = symmetry.perm_group
-    eqs_and_exprs = {k: sp.Add(*v).together() for k, v in eqs_and_exprs.items()}
+    eqs_and_exprs = {k: Add(*v).together() for k, v in eqs_and_exprs.items()}
     eq_part = []
 
     for k, v in eqs_and_exprs.items():
@@ -235,7 +210,7 @@ def _collect_eq_constraints(eqs_and_exprs: Dict[sp.Poly, List[sp.Expr]], symbols
         else:
             eq_part.append(symmetry.cyclic_sum(k * v, symbols))
 
-    return sp.Add(*eq_part)
+    return Add(*eq_part)
 
 
 def _generate_01_vectors(m: int, nz: int):
@@ -271,6 +246,17 @@ def _solve_optimal_factor(A: np.ndarray, c: np.ndarray, nz: int = 5) -> np.ndarr
             best_v = candidates[best_idx]
     return best_v
 
+def _solve_binomial_bound(x: int, y: int = 1500, bound: int = 5):
+    """Compute max n such that binomial(x,n) <= y and n <= bound."""
+    comb = 1
+    for n in range(min(x, bound) + 1):
+        comb *= x - n
+        comb = comb // (n + 1)
+        if comb > y:
+            return n
+    return bound
+
+
 def _solve_optimal_factor_recursively(A: np.ndarray, c: np.ndarray,
         nz: int = 5, iter_times: int = 1000) -> List[Tuple[np.ndarray, np.ndarray]]:
     """
@@ -294,8 +280,8 @@ def _solve_optimal_factor_recursively(A: np.ndarray, c: np.ndarray,
     ret.append((np.zeros(A.shape[1], dtype=int), indices)) # remaining
     return ret
 
-def _collect_ineq_constraints(tangents_and_exprs: List[Tuple[sp.Expr, sp.Expr]], symbols: List[sp.Symbol],
-        symmetry: MonomialManager, inv_ineq_constraints: Dict[sp.Poly, sp.Expr]) -> sp.Expr:
+def _collect_ineq_constraints(tangents_and_exprs: List[Tuple[Expr, Expr]], symbols: List[Symbol],
+        symmetry: MonomialManager, inv_ineq_constraints: Dict[Poly, Expr]) -> Expr:
     """
     Collect terms involving inequality constraints heuristically.
 
@@ -328,24 +314,24 @@ def _collect_ineq_constraints(tangents_and_exprs: List[Tuple[sp.Expr, sp.Expr]],
     Hence the goal is to maximize `(k-1) * (v^T * complexity(g))` where `v` is a binary
     vector. See `_solve_optimal_factor` for the detailed algorithm. This
     collecting process is repeated until no factor can be found.
- 
+
     Parameters
     ----------
-    tangents_and_exprs : List[Tuple[sp.Expr, sp.Expr]]
+    tangents_and_exprs : List[Tuple[Expr, Expr]]
         The list of tuples (tangent, expression) so that y[i]*basis[i] = tangent * expression.
         The tangent part is where we can extract common factors.
-    symbols : List[sp.Symbol]
+    symbols : List[Symbol]
         The list of symbols.
     symmetry : MonomialManager
         The monomial manager object indicating the symmetry group.
-    inv_ineq_constraints : Dict[sp.Poly, sp.Expr]
+    inv_ineq_constraints : Dict[Poly, Expr]
         The dictionary mapping inequality expressions to the their polynomial forms.
     """
     # 0. if we skip collection:
-    # return sp.Add(*[symmetry.cyclic_sum(t * e, symbols) for t, e in tangents_and_exprs])
+    # return Add(*[symmetry.cyclic_sum(t * e, symbols) for t, e in tangents_and_exprs])
 
     # 1. gather all factors
-    one = sp.S.One
+    one = Rational(1, 1)
     factors = set(inv_ineq_constraints.keys())
     for i, (tangent, expr) in enumerate(tangents_and_exprs):
         r, args = tangent.as_coeff_mul()
@@ -353,7 +339,7 @@ def _collect_ineq_constraints(tangents_and_exprs: List[Tuple[sp.Expr, sp.Expr]],
             tangents_and_exprs[i] = (one, tangent * expr) # keep everything unchanged
             continue
         elif not (r is one):
-            tangents_and_exprs[i] = (sp.Mul(*args), r * expr) # move the constant to expr
+            tangents_and_exprs[i] = (Mul(*args), r * expr) # move the constant to expr
 
         factors.update(set(args))
 
@@ -374,22 +360,23 @@ def _collect_ineq_constraints(tangents_and_exprs: List[Tuple[sp.Expr, sp.Expr]],
             degrees[i, factor_inds[arg]] += 1
 
     # 4. compute optimal factors recursively
-    selections_and_inds = _solve_optimal_factor_recursively(degrees, complexity)
+    selections_and_inds = _solve_optimal_factor_recursively(degrees, complexity,
+                                nz = _solve_binomial_bound(degrees.shape[1], 1500))
 
     # 5. group by selections of common factors
     ret = []
     for selection, inds in selections_and_inds:
         if np.any(selection): # not all zero
-            common_factor = sp.Mul(*[factors[j] for j in range(m) if selection[j]])
+            common_factor = Mul(*[factors[j] for j in range(m) if selection[j]])
             other_degrees = (degrees[inds, :] - selection.reshape(1, -1)) > 0
-            other_factors = [sp.Mul(*[factors[j] for j in range(m) if other_degrees[i, j]])
+            other_factors = [Mul(*[factors[j] for j in range(m) if other_degrees[i, j]])
                                     for i in range(len(inds))]
             other_factors = [_ * tangents_and_exprs[i][1] for i, _ in zip(inds, other_factors)]
-            other_factors = sp.Add(*other_factors).together()
+            other_factors = Add(*other_factors).together()
             ret.append(symmetry.cyclic_sum(common_factor * other_factors, symbols))
 
         else:
             ret += [symmetry.cyclic_sum(
                         tangents_and_exprs[i][0] * tangents_and_exprs[i][1], symbols) for i in inds]
 
-    return sp.Add(*ret)
+    return Add(*ret)

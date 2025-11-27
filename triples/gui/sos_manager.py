@@ -7,16 +7,16 @@ from sympy import Expr, Poly, Symbol
 from sympy.combinatorics import Permutation, PermutationGroup, CyclicGroup
 
 from .grid import GridRender
-from ..utils import Solution, SolutionSimple, CyclicExpr, CyclicSum, CyclicProduct
+from ..utils import CyclicExpr, CyclicSum, CyclicProduct
 from ..utils.text_process import (
     preprocess_text, poly_get_factor_form, poly_get_standard_form,
     degree_of_zero, coefficient_triangle, coefficient_triangle_latex
 )
-from ..core.sum_of_squares import sum_of_squares, DEFAULT_CONFIGS
+from ..core import Solution, sum_of_squares
 # from ..core.linsos import root_tangents
 
 
-def _default_polynomial_check(poly: Poly, method_order: List[str]) -> List[str]:
+def _default_polynomial_check(poly: Poly, methods: List[str]) -> List[str]:
     """
     Check the degree and nvars of a polynomial to decide
     whether a method is applicable. For too high degree polynomials,
@@ -28,8 +28,8 @@ def _default_polynomial_check(poly: Poly, method_order: List[str]) -> List[str]:
     upper_bounds = [30, 30, 30, 14, 12, 8, 6, 4, 4, 4, 4]
     if degree > upper_bounds[nvars]:
         # remove LinearSOS and SDPSOS
-        method_order = [method for method in method_order if method not in ('LinearSOS', 'SDPSOS')]
-    return method_order
+        methods = [method for method in methods if method not in ('LinearSOS', 'SDPSOS')]
+    return methods
 
 
 def _default_restrict_input_chars(txt: str) -> bool:
@@ -60,7 +60,7 @@ class SOS_Manager():
     CONFIG_STANDARDIZE_CYCLICEXPR = True
 
     @classmethod
-    def set_poly(cls, 
+    def set_poly(cls,
             txt: str,
             gens: Tuple[Symbol] = CONFIG_DEFAULT_GENS,
             perm: PermutationGroup = CONFIG_DEFAULT_PERM,
@@ -207,9 +207,9 @@ class SOS_Manager():
     #         return []
 
     #     roots = findroot(
-    #         poly, 
-    #         most = 5, 
-    #         grid = grid, 
+    #         poly,
+    #         most = 5,
+    #         grid = grid,
     #         with_tangents = root_tangents
     #     )
     #     if verbose:
@@ -223,8 +223,8 @@ class SOS_Manager():
             eq_constraints: Dict[Poly, Expr] = [],
             gens = CONFIG_DEFAULT_GENS,
             perm = CONFIG_DEFAULT_PERM,
-            method_order = None,
-            configs = DEFAULT_CONFIGS
+            methods = None,
+            configs = {}
         ):
         """
         Perform the sum of square decomposition of a polynomial.
@@ -242,18 +242,19 @@ class SOS_Manager():
                 nonzero_gens = [gen for gen, d in zip(poly.gens, degree_of_each_gen) if d > 0]
                 poly = poly.as_poly(*nonzero_gens)
 
-        if cls.verbose is False:
-            for method in ('LinearSOS', 'SDPSOS'):
-                if configs.get(method) is None:
-                    configs[method] = {}
-                configs[method]['verbose'] = False
-        method_order = cls.CONFIG_METHOD_CHECK(poly, method_order)
+        # if cls.verbose is False:
+        #     for method in ('LinearSOS', 'SDPSOS'):
+        #         if configs.get(method) is None:
+        #             configs[method] = {}
+        #         configs[method]['verbose'] = False
+        methods = cls.CONFIG_METHOD_CHECK(poly, methods)
 
         solution = sum_of_squares(
             poly,
             ineq_constraints = ineq_constraints,
             eq_constraints = eq_constraints,
-            method_order = method_order,
+            methods = methods,
+            verbose = cls.verbose,
             configs = configs
         )
         if cls.CONFIG_STANDARDIZE_CYCLICEXPR:
@@ -290,13 +291,13 @@ class SOS_Manager():
 
 def _render_LaTeX(a, path, usetex=True, show=False, dpi=500, fontsize=20):
     '''render a text in LaTeX and save it to path'''
-    
+
     import matplotlib.pyplot as plt
 
     acopy = a
     # linenumber = a.count('\\\\') + 1
     # plt.figure(figsize=(12,10 ))
-    
+
     # set the figure small enough
     # even though the text cannot be display as a whole in the window
     # it will be saved correctly by setting bbox_inches = 'tight'
@@ -310,13 +311,13 @@ def _render_LaTeX(a, path, usetex=True, show=False, dpi=500, fontsize=20):
             plt.text(-0.3,0.9, a, fontsize=fontsize, usetex=usetex)#
         except:
             usetex = False
-    
+
     if not usetex:
         a = acopy
         a = a.strip('$')
         a = '\n'.join([' $ '+_+' $ ' for _ in a.split('\\\\')])
         plt.text(-0.3,0.9, a, fontsize=fontsize, usetex=usetex)#, fontfamily='Times New Roman')
-        
+
     plt.ylim(0,1)
     plt.xlim(0,6)
     plt.axis('off')

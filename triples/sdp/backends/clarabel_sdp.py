@@ -50,6 +50,7 @@ class DualBackendCLARABEL(DualBackend):
         if configs is not None:
             settings.verbose = bool(configs.verbose)
             settings.max_iter = configs.max_iters
+            settings.time_limit = configs.time_limit
             settings.tol_gap_abs = configs.tol_gap_abs
             settings.tol_gap_rel = configs.tol_gap_rel
             settings.tol_feas = configs.tol_fsb_abs

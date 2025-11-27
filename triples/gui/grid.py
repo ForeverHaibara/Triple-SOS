@@ -107,7 +107,7 @@ class GridPoly():
                     t += 1
                 else:
                     txt = '0'
-                    
+
                 strings[j] += ' ' * (max(0, distance - len(txt))) + txt
         monoms.pop()
 
@@ -208,7 +208,7 @@ def _grid_init_precal(size: int, degree_limit: int) -> List[List[int]]:
         for _ in range(degree_limit - 1):
             grid_precal[i].append(grid_precal[i][-1] * i)
     return grid_precal
-    
+
 
 class GridRender():
     """
@@ -236,7 +236,7 @@ class GridRender():
         grid_value = [0] * len(grid_coor)
         if size > cls.size_limit or poly.total_degree() > cls.degree_limit:
             return grid_value
-        
+
 
         if value_method == 'integer':
             # integer arithmetic runs much faster than accuarate floating point arithmetic
@@ -266,7 +266,7 @@ class GridRender():
 
 
     @classmethod
-    def _render_grid_color(cls, 
+    def _render_grid_color(cls,
             poly: sp.Poly,
             size: int = 60,
             value_method: str = 'integer_lambdify',
@@ -360,7 +360,7 @@ class GridRender():
 
             grid_color = color_numpy.tolist()
             return grid_value, grid_color
-            
+
 
     @classmethod
     def render(cls,

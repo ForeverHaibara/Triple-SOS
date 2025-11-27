@@ -2,19 +2,15 @@ from typing import List, Tuple, Dict, Union, Optional, Callable, Any
 from time import time
 # from warnings import warn
 
-from numpy import ndarray
-import numpy as np
 from sympy.combinatorics import PermutationGroup
 from sympy import Poly, Expr, Symbol
-from sympy.core.relational import Relational
 from sympy.matrices import MutableDenseMatrix as Matrix
 
 from .algebra import PolyRing
-from .abstract import AtomSOSElement
+from .abstract import AtomSOSElement, ArithmeticTimeout
 from .manifold import constrain_root_nullspace
 from .solution import SolutionSDP
-from ...utils import CyclicSum, verify_symmetry, MonomialManager, Root
-from ...sdp import SDPProblem
+from ...utils import CyclicSum, Root
 
 CHECK_SYMMETRY = True
 
@@ -77,7 +73,7 @@ class SOSPoly(AtomSOSElement):
         [-3/4],
         [ 3/4],
         [-3/2]])
-    
+
     After the problem is solved successfully, the solution can be obtained by `sos.as_solution()`.
     It returns a Solution class object and the sympy expression can be accessed by `.solution`
     of the Solution object.
@@ -187,7 +183,7 @@ class SOSPoly(AtomSOSElement):
             ideal = dict(enumerate(ideal))
         self._qmodule = {k: Poly(v, gens) for k, v in qmodule.items()}
         self._ideal = {k: Poly(v, gens) for k, v in ideal.items()}
-        
+
         if degree is None:
             # degree = max([self.poly] + list(self._qmodule.values()) + list(self._ideal.values()),
             #                 key=lambda _: _.total_degree()).total_degree()
@@ -209,15 +205,17 @@ class SOSPoly(AtomSOSElement):
 
         self.roots = roots
 
-    def _post_construct(self, verbose: bool = False, **kwargs):
-        self.sdp.constrain_zero_diagonals()
+    def _post_construct(self, verbose: bool = False, time_limit: Optional[Union[Callable, float]] = None, **kwargs):
+        time_limit = ArithmeticTimeout.make_checker(time_limit)
+        self.sdp.constrain_zero_diagonals(time_limit=time_limit)
 
         insert_prefix = lambda d: {(self, k): v for k, v in d.items()}
 
         _, roots = constrain_root_nullspace(self.sdp, self.poly,
             insert_prefix(self._qmodule), insert_prefix(self._ideal),
             ineq_bases=insert_prefix(self._qmodule_bases), eq_bases=insert_prefix(self._ideal_bases),
-            degree=self.algebra.degree, roots=self.roots, symmetry=self.algebra.symmetry, verbose=verbose)
+            degree=self.algebra.degree, roots=self.roots, symmetry=self.algebra.symmetry,
+            verbose=verbose, time_limit=time_limit)
         self.roots = roots
 
     def as_solution(

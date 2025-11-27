@@ -1,11 +1,18 @@
-from typing import Union, Optional, Dict, List, Tuple, Callable
-from warnings import warn
+"""
+This module provides functions to manipulate the group symmetry of a polynomial,
+and also utilities to compute monomial representations under the group symmetry.
+"""
+from collections import defaultdict
+from typing import Dict, List, Tuple, Iterable, Callable, Union, Optional, Any
 
 import numpy as np
-import sympy as sp
-from sympy import Poly, ZZ, QQ
+from sympy import Poly, Expr, Symbol, Add, ZZ, QQ
+from sympy.matrices import Matrix, MatrixBase
 from sympy.polys.polyclasses import DMP
+from sympy.polys.rings import PolyElement
+from sympy.polys.domains import Domain
 from sympy.combinatorics import Permutation, PermutationGroup, CyclicGroup, SymmetricGroup
+from ..sdp.arithmetic import rep_matrix_from_list
 
 try:
     from sympy.polys.matrices.sdm import SDM
@@ -19,38 +26,87 @@ try:
 except ImportError: # sympy <= 1.8 or no flint installed
     _IS_GROUND_TYPES_FLINT = False
 
-def generate_partitions(nvars: int, degree: int, equal: bool = False) -> List[Tuple[int, ...]]:
+def generate_partitions(d_list: Union[int, List[int]], degree: int,
+        equal: bool = False, descending: bool = True) -> List[Tuple[int, ...]]:
     """
-    Generate all tuples (a0,a1,...,an) such that n = nvars and sum(ai) <= degree.
-    If equal is True, then it requires sum(ai) == degree.
+    Generate all tuples (a0,a1,...,an) such that n = len(d_list) and sum(ai*di) <= degree.
+    If equal is True, then it requires sum(ai*di) == degree.
+
+    When d_list is an integer, it assumes d_list = [1, 1, ..., 1] of length nvars.
     """
-    if nvars == 0:
-        return [()] if degree == 0 or (not equal) else []
-    def generate_tuples(current_tuple: Tuple[int, ...], current_sum: int, remaining_vars: int) -> List[Tuple[int, ...]]:
-        if remaining_vars == 0:
-            return [current_tuple]
+    if isinstance(d_list, int):
+        nvars = d_list
+        if nvars == 0:
+            return [()] if degree == 0 or (not equal) else []
+        def generate_tuples(current_tuple: Tuple[int, ...], current_sum: int, remaining_vars: int) -> List[Tuple[int, ...]]:
+            if remaining_vars == 0:
+                return [current_tuple]
+            else:
+                tuples = []
+                for i in range(degree - current_sum, -1, -1):
+                    tuples.extend(generate_tuples(current_tuple + (i,), current_sum + i, remaining_vars - 1))
+                return tuples
+
+        monoms = generate_tuples((), 0, nvars) if not equal else generate_tuples((), 0, nvars - 1)
+        if equal:
+            monoms = [m + (degree - sum(m),) for m in monoms]
+        return monoms if descending else monoms[::-1]
+
+    n = len(d_list)
+    if n == 0:
+        return [tuple()]
+
+    powers = []
+    i = 0
+    current_degree = 0
+    current_powers = [0 for _ in range(n)]
+    while True:
+        if i == n - 1:
+            if degree >= current_degree:
+                if not equal:
+                    for j in range(1 + (degree - current_degree)//d_list[i]):
+                        current_powers[i] = j
+                        powers.append(tuple(current_powers))
+                elif (degree - current_degree) % d_list[i] == 0:
+                    current_powers[i] = (degree - current_degree) // d_list[i]
+                    powers.append(tuple(current_powers))
+            i -= 1
+            current_powers[i] += 1
+            current_degree += d_list[i]
         else:
-            tuples = []
-            for i in range(degree - current_sum, -1, -1):
-                tuples.extend(generate_tuples(current_tuple + (i,), current_sum + i, remaining_vars - 1))
-            return tuples
+            if current_degree > degree:
+                # reset the current power
+                current_degree -= d_list[i] * current_powers[i]
+                current_powers[i] = 0
+                i -= 1
+                if i < 0:
+                    break
+                current_powers[i] += 1
+                current_degree += d_list[i]
+            else:
+                i += 1
+    return powers[::-1] if descending else powers
 
-    monoms = generate_tuples((), 0, nvars) if not equal else generate_tuples((), 0, nvars - 1)
-    if equal:
-        monoms = [m + (degree - sum(m),) for m in monoms]
-    return monoms
-    # inv_monoms = list(filter(self.is_standard_monom, inv_monoms))
-    # dict_monoms = {t: i for i, t in enumerate(inv_monoms)}
-    # return dict_monoms, inv_monoms
 
-def _poly_rep(poly: Union[Poly, DMP]) -> DMP:
-    return poly.rep if isinstance(poly, Poly) else poly
+def _poly_rep(poly: Union[Poly, DMP, PolyElement]) -> Tuple[List[Tuple], Domain, int, int]:
+    """Return [(monom, coeff)], domain, ngens, degree"""
+    if isinstance(poly, Poly):
+        poly = poly.rep
+    if isinstance(poly, DMP):
+        return poly.terms(), poly.dom, poly.lev + 1, poly.total_degree()
+    if isinstance(poly, PolyElement):
+        degree = max(map(sum, poly.keys()), default=0)
+        return list(poly.items()), poly.ring.domain, poly.ring.ngens, degree
 
 class MonomialManager():
     """
     Class to compute polynomial monomials given the symmetry of variables and homogeneity.
+    Monomials are sorted in graded lexicographical (grlex) order by default.
     """
-    def __init__(self, nvars: int, perm_group = None, is_homogeneous: bool = True) -> None:
+    nvars: int
+    _perm_group: PermutationGroup
+    _is_homogeneous: bool
+    def __init__(self, nvars: int, perm_group: Optional[PermutationGroup] = None, is_homogeneous: bool = True) -> None:
         self.nvars = nvars
         self._is_homogeneous = bool(is_homogeneous)
         if isinstance(perm_group, MonomialManager):
@@ -98,7 +154,7 @@ class MonomialManager():
     @classmethod
     def from_perm_group(cls, perm_group: PermutationGroup, is_homogeneous: bool = True) -> 'MonomialManager':
         """
-        Create a `MonomialManager` object from a permutation group. The `nvars` argument is inferred from 
+        Create a `MonomialManager` object from a permutation group. The `nvars` argument is inferred from
         the degree of the group and is therefore not needed.
         """
         return MonomialManager(perm_group.degree, perm_group=perm_group, is_homogeneous=is_homogeneous)
@@ -177,7 +233,7 @@ class MonomialManager():
         For monomials in cyclic groups, only one representative is needed.
         For example, a^3b^2c, b^3c^2a, and c^3a^2b are equivalent wrt. CyclicGroup(3),
         and the standard monom (the representative) is (3, 2, 1), standing for a^3b^2c.
-        The function returns the standard monom for the input monom. 
+        The function returns the standard monom for the input monom.
         This is chosen to be the lexicographically largest monom among all permutations of the input monom.
         """
         return max(self.permute(monom))
@@ -191,7 +247,7 @@ class MonomialManager():
         """
         return monom == self.standard_monom(monom)
 
-    def permute_vec(self, vec: sp.Matrix, degree: int) -> sp.Matrix:
+    def permute_vec(self, vec: Matrix, degree: int) -> Matrix:
         """
         Permute the vector representation of a polynomial according to the permutation group.
         It returns a matrix with all permutations of the monoms.
@@ -211,78 +267,78 @@ class MonomialManager():
         #     for ind, j in enumerate(map(f, self.permute(m))):
         #         # write the value to the corresponding column
         #         all_vecs[ind][j] = v
-        # return sp.Matrix(all_vecs).T
- 
+        # return Matrix(all_vecs).T
+
         sdm = {i: {} for i in range(vec.shape[0])}
         rep = vec._rep.rep.to_sdm()
         for i in rep.keys():
             v, m = rep[i][0], inv_monoms[i]
             for ind, j in enumerate(map(f, self.permute(m))):
                 sdm[j][ind] = v
-        return sp.Matrix._fromrep(DomainMatrix.from_rep(SDM(sdm, (vec.shape[0], self.order()), rep.domain)))
+        return Matrix._fromrep(DomainMatrix.from_rep(SDM(sdm, (vec.shape[0], self.order()), rep.domain)))
 
 
     # def _standard_monom(self, monom: Tuple[int, ...]) -> Tuple[int, ...]:
     #     warn("_standard_monom is deprecated. Use standard_monom instead.", DeprecationWarning, stacklevel=2)
     #     return self.standard_monom(monom)
 
-    def _assert_equal_nvars(self, t: Union[int, Tuple[int, ...]]) -> bool:
+    def _assert_equal_nvars(self, t: Union[int, Iterable]) -> bool:
         if (t if isinstance(t, int) else len(t)) != self.nvars:
             raise ValueError("Number of variables does not match. Expected %d but received %d." % (self.nvars, len(t)))
             return False
         return True
 
-    def _arraylize_list(self, poly: Union[Poly, DMP], expand_cyc: bool = False, degree: Optional[int] = None) -> List:
-        rep = _poly_rep(poly)
-        self._assert_equal_nvars(rep.lev + 1)
+    def _arraylize_list(self, poly: Union[Poly, DMP, PolyElement], degree: Optional[int] = None, expand_cyc: bool = False) -> List:
+        rep, dom, ngens, _degree = _poly_rep(poly)
         if degree is None:
-            degree = rep.total_degree()
+            degree = _degree
+        self._assert_equal_nvars(ngens)
         dict_monoms = self.dict_monoms(degree)
-        array = [rep.dom.zero] * len(dict_monoms)
+        array = [dom.zero] * len(dict_monoms)
         if not expand_cyc:
-            for monom, coeff in rep.terms():
+            for monom, coeff in rep:
                 v = dict_monoms.get(monom)
                 if v is not None:
                     array[v] = coeff
         else:
-            for monom, coeff in rep.terms():
+            for monom, coeff in rep:
                 for monom2 in self.permute(monom):
                     v = dict_monoms.get(monom2)
                     if v is not None:
                         array[v] += coeff
         return array
 
-    def arraylize_np(self, poly: Union[Poly, DMP], expand_cyc: bool = False, degree: Optional[int] = None) -> np.ndarray:
+    def arraylize_np(self, poly: Union[Poly, DMP, PolyElement], degree: Optional[int] = None, expand_cyc: bool = False) -> np.ndarray:
         """
         Return the vector representation of the polynomial in numpy array.
         """
-        vec = self._arraylize_list(poly, expand_cyc = expand_cyc, degree = degree)
-        rep = _poly_rep(poly)
-        if not (rep.dom is ZZ or rep.dom is QQ):
-            to_sympy = rep.dom.to_sympy
+        vec = self._arraylize_list(poly, degree = degree, expand_cyc = expand_cyc)
+        rep, dom, ngens, _degree = _poly_rep(poly)
+        if not (dom is ZZ or dom is QQ):
+            to_sympy = dom.to_sympy
             vec = [to_sympy(v) for v in vec]
         elif _IS_GROUND_TYPES_FLINT:
-            if rep.dom is QQ:
+            if dom is QQ:
                 vec = [int(v.numerator) / int(v.denominator) for v in vec]
             else:
                 vec = [int(v) for v in vec]
         return np.array(vec).astype(np.float64)
 
-    def arraylize_sp(self, poly: Union[Poly, DMP], expand_cyc: bool = False, degree: Optional[int] = None) -> sp.Matrix:
+    def arraylize_sp(self, poly: Union[Poly, DMP, PolyElement], degree: Optional[int] = None, expand_cyc: bool = False) -> Matrix:
         """
         Return the vector representation of the polynomial in sympy matrix (column vector).
         """
-        vec = self._arraylize_list(poly, expand_cyc = expand_cyc, degree = degree)
-        rep = _poly_rep(poly)
+        vec = self._arraylize_list(poly, degree = degree, expand_cyc = expand_cyc)
+        rep, dom, ngens, _degree = _poly_rep(poly)
         if SDM is not None:
             sdm = dict((i, {0: v}) for i, v in enumerate(vec) if v)
-            return sp.Matrix._fromrep(DomainMatrix.from_rep(SDM(sdm, (len(vec), 1), rep.dom)))
+            return Matrix._fromrep(DomainMatrix.from_rep(SDM(sdm, (len(vec), 1), dom)))
         else: # sympy <= 1.7
-            to_sympy = rep.dom.to_sympy
+            to_sympy = dom.to_sympy
             vec = [to_sympy(v) for v in vec]
-            return sp.Matrix(vec)
+            return Matrix(vec)
 
-    def invarraylize(self, array: Union[List, np.ndarray, sp.Matrix], gens: List[sp.Symbol], degree: int) -> Poly:
+    def invarraylize(self, array: Union[List, np.ndarray, Matrix], gens: List[Symbol], degree: int) -> Poly:
         """
         Reverse the arraylize_np function to get the polynomial from its vector representation.
         """
@@ -290,7 +346,7 @@ class MonomialManager():
         inv_monoms = self.inv_monoms(degree)
         terms_dict = {}
         permute = self.permute if (not self.is_trivial) else lambda x: (x,)
-        if SDM is not None and isinstance(array, sp.MatrixBase):
+        if SDM is not None and isinstance(array, MatrixBase):
             rep = array._rep.rep.to_sdm()
             domain = rep.domain
             zero = domain.zero
@@ -303,7 +359,7 @@ class MonomialManager():
                 return Poly(0, *gens)
             else:
                 raise ValueError(f"Array must be a vector, but received shape {array.shape}.")
-            
+
             for i, z in rep_list:
                 if z != zero:
                     monom = inv_monoms[i]
@@ -319,7 +375,7 @@ class MonomialManager():
                 terms_dict[monom2] = coeff
         return Poly(terms_dict, gens)
 
-    def cyclic_sum(self, expr: sp.Expr, gens: List[sp.Symbol]) -> sp.Expr:
+    def cyclic_sum(self, expr: Expr, gens: List[Symbol]) -> Expr:
         """
         Sum up a given expression according to the permutation group.
 
@@ -331,7 +387,7 @@ class MonomialManager():
             perm_gens = perm(gens)
             expr = expr0.xreplace(dict(zip(gens, perm_gens)))
             s.append(expr)
-        return sp.Add(*s)
+        return Add(*s)
 
 
 def _parse_options(nvars, **options) -> MonomialManager:
@@ -349,7 +405,7 @@ def _parse_options(nvars, **options) -> MonomialManager:
                        ' Only "hom", "cyc", "sym", and "symmetry" are allowed.')
 
     if symmetry is not None and (cyc or sym):
-        raise ValueError("Cannot specify both symmetry and cyc or sym.")  
+        raise ValueError("Cannot specify both symmetry and cyc or sym.")
     elif cyc:
         if sym:
             raise ValueError("Cannot specify both cyc and sym.")
@@ -363,13 +419,14 @@ def _parse_options(nvars, **options) -> MonomialManager:
         return MonomialManager(nvars, is_homogeneous = hom)
     if isinstance(symmetry, PermutationGroup):
         return MonomialManager.from_perm_group(symmetry, is_homogeneous = hom)
-    
+
     raise ValueError(f"Invalid symmetry type {type(symmetry)}. Expected MonomialManager or PermutationGroup.")
 
 
-def arraylize_np(poly: Union[Poly, DMP], expand_cyc: bool = False, **options) -> np.ndarray:
+def arraylize_np(poly: Union[Poly, DMP, PolyElement], degree: Optional[int] = None, expand_cyc: bool = False, **options) -> np.ndarray:
     """
     Convert a sympy polynomial to a numpy vector of coefficients.
+    Monomials are sorted in graded lexicographical (grlex) order.
 
     Parameters
     -----------
@@ -415,17 +472,28 @@ def arraylize_np(poly: Union[Poly, DMP], expand_cyc: bool = False, **options) ->
     >>> print(arraylize_np((b**2*c + c**2*a).as_poly(a,b,c), expand_cyc = True, cyc = True))
     [0. 2. 0. 0.]
 
+    For non-homogeneous polynomials, `hom=False` must be provided. The `degree`
+    argument should also be provided if its degree is lower than the desired degree.
+
+    >>> print(arraylize_np((a**2 + 2*b + 3).as_poly(a,b), hom = False))
+    [1. 0. 0. 0. 2. 3.]
+
+    >>> print(arraylize_np((a**2 + 2*b + 3).as_poly(a,b), degree = 3, hom = False))
+    [0. 0. 1. 0. 0. 0. 0. 0. 2. 3.]
+
     See Also
     ----------
     arraylize_sp, invarraylize, generate_monoms
     """
     nvars = (poly.rep if isinstance(poly, Poly) else poly).lev + 1
     option = _parse_options(nvars, **options)
-    return option.arraylize_np(poly, expand_cyc = expand_cyc)
+    return option.arraylize_np(poly, degree = degree, expand_cyc = expand_cyc)
 
-def arraylize_sp(poly: Union[Poly, DMP], expand_cyc: bool = False, **options) -> sp.Matrix:
+
+def arraylize_sp(poly: Union[Poly, DMP, PolyElement], degree: Optional[int] = None, expand_cyc: bool = False, **options) -> Matrix:
     """
     Convert a sympy polynomial to a sympy vector of coefficients.
+    Monomials are sorted in graded lexicographical (grlex) order.
 
     Parameters
     -----------
@@ -471,17 +539,28 @@ def arraylize_sp(poly: Union[Poly, DMP], expand_cyc: bool = False, **options) ->
     >>> print(arraylize_sp((b**2*c + c**2*a).as_poly(a,b,c), expand_cyc = True, cyc = True))
     Matrix([[0], [2], [0], [0]])
 
+    For non-homogeneous polynomials, `hom=False` must be provided. The `degree`
+    argument should also be provided if its degree is lower than the desired degree.
+
+    >>> print(arraylize_sp((a**2 + 2*b + 3).as_poly(a,b), hom = False))
+    Matrix([[1], [0], [0], [0], [2], [3]])
+
+    >>> print(arraylize_sp((a**2 + 2*b + 3).as_poly(a,b), degree = 3, hom = False))
+    Matrix([[0], [0], [1], [0], [0], [0], [0], [0], [2], [3]])
+
     See Also
     ----------
     arraylize_np, invarraylize, generate_monoms
     """
     nvars = (poly.rep if isinstance(poly, Poly) else poly).lev + 1
     option = _parse_options(nvars, **options)
-    return option.arraylize_sp(poly, expand_cyc = expand_cyc)
+    return option.arraylize_sp(poly, degree = degree, expand_cyc = expand_cyc)
 
-def invarraylize(array: Union[List, np.ndarray, sp.Matrix], gens: List[sp.Symbol], degree: int, **options) -> Poly:
+
+def invarraylize(array: Union[List, np.ndarray, Matrix], gens: List[Symbol], degree: int, **options) -> Poly:
     """
     Convert a vector representation of polynomial back to the sympy polynomial.
+    Monomials are sorted in graded lexicographical (grlex) order.
 
     Parameters
     -----------
@@ -506,7 +585,7 @@ def invarraylize(array: Union[List, np.ndarray, sp.Matrix], gens: List[sp.Symbol
     symmetry: PermutationGroup
         Sympy permutation group object for the monomials. This specifies the symmetry
         beyond cyclic and symmetric groups.
-        
+
 
     Returns
     ---------
@@ -530,9 +609,11 @@ def invarraylize(array: Union[List, np.ndarray, sp.Matrix], gens: List[sp.Symbol
     option = _parse_options(len(gens), **options)
     return option.invarraylize(array, gens, degree)
 
+
 def generate_monoms(nvars: int, degree: int, **options) -> Tuple[Dict[Tuple[int, ...], int], List[Tuple[int, ...]]]:
     """
     Generate monomials of given number of variables and degree.
+    Monomials are sorted in graded lexicographical (grlex) order.
 
     Returns a dictionary of monomials with indices as values and a list of monomials.
 
@@ -584,6 +665,452 @@ def generate_monoms(nvars: int, degree: int, **options) -> Tuple[Dict[Tuple[int,
     return option._register_monoms(degree)
 
 
-def generate_expr(nvars: int, degree: int, **options) -> Tuple[Dict[Tuple[int, ...], int], List[Tuple[int, ...]]]:
-    warn("generate_expr is deprecated. Use generate_monoms instead.", DeprecationWarning, stacklevel=2)
-    return generate_monoms(nvars, degree, **options)
+def verify_closure(l: List, f: Callable, get_rep: Optional[Callable]=None) -> bool:
+    """
+    Verify the list `l` is closed under an operator `f`.
+    """
+    if get_rep is None:
+        get_rep = lambda x: x
+    rep_set = set()
+    f_set = set()
+    for p in l:
+        rep = get_rep(p)
+        f_rep = get_rep(f(p))
+        # if rep == f_rep:
+        #     # it is invariant itself
+        #     continue
+        rep_set.add(rep)
+        f_set.add(f_rep)
+    for r in f_set:
+        if r not in rep_set:
+            return False
+    return True
+
+
+def verify_symmetry(polys: Union[List[Poly], Poly], perm_group: Union[str, Permutation, PermutationGroup]) -> bool:
+    """
+    Verify whether the polynomials are symmetric with respect to the permutation group.
+
+    Parameters
+    ----------
+    polys : Union[List[Poly], Poly]
+        A list of polynomials or a single polynomial. Must have the same generators.
+    perm_group : Union[str, Permutation, PermutationGroup]
+        A permutation or a permutation group to verify. If string, it should be one of 'sym' or 'cyc'.
+
+    Returns
+    ----------
+    bool
+        Whether the polynomials are symmetric with respect to the permutation group.
+
+    Examples
+    ----------
+    >>> from sympy.combinatorics import Permutation, PermutationGroup, SymmetricGroup
+    >>> from sympy.abc import a, b, c, d
+    >>> verify_symmetry((a*(a-b)*(a-c)+b*(b-c)*(b-a)+c*(c-a)*(c-b)).as_poly(a,b,c), SymmetricGroup(3))
+    True
+
+    >>> f = lambda x: x.as_poly(a,b,c,d)
+    >>> verify_symmetry([f(a+1),f(b+1),f(c+1),f(d+1)], SymmetricGroup(4))
+    True
+
+    >>> perm_group = PermutationGroup(Permutation([2,3,0,1]))
+    >>> verify_symmetry([f(a-c+b-d)], perm_group)
+    False
+    >>> verify_symmetry([f(a-c+b-d), f(c-a+d-b)], perm_group)
+    True
+    """
+    if isinstance(polys, Poly):
+        polys = [polys]
+    if len(polys) == 0:
+        return True
+    for p in polys:
+        gens = p.gens
+        break
+    if len(polys) > 1 and any(p.gens != gens for p in polys):
+        raise ValueError("All polynomials should have the same generators.")
+
+    if isinstance(perm_group, str):
+        if perm_group == 'sym':
+            perm_group = SymmetricGroup(len(gens))
+        elif perm_group == 'cyc':
+            perm_group = CyclicGroup(len(gens))
+        else:
+            raise ValueError("The permutation group should be 'sym', 'cyc', or a PermutationGroup object.")
+    if isinstance(perm_group, PermutationGroup):
+        if perm_group.degree != len(gens):
+            raise ValueError("The permutation group should have the same degree as the number of generators.")
+        perms = perm_group.generators
+    elif isinstance(perm_group, Permutation):
+        if perm_group.size != len(gens):
+            raise ValueError("The permutation should have the same size as the number of generators.")
+        perms = [perm_group]
+
+    get_rep = lambda p: p.rep
+    for perm in perms:
+        reorder = lambda x: x.reorder(*perm(gens))
+        if not verify_closure(polys, reorder, get_rep):
+            return False
+    return True
+
+
+def _identify_symmetry_from_blackbox(f: Callable[[Permutation], bool], nvars: int) -> PermutationGroup:
+    """
+    Identify symmetry by calling a black-box function `f` on each permutation.
+    """
+    # List a few candidates: symmetric, alternating, cyclic groups...
+    def _rotated(n, start=0):
+        return list(range(start+1, n+start)) + [start]
+    def _reflected(n, start=0):
+        return [start+1, start] + list(range(start+2, n+start))
+
+    verified = [] # storing permutations that fit the input
+    candidates = [] # a list of permutations
+    if nvars > 1:
+        candidates.append(_rotated(nvars))
+        if nvars > 2:
+            candidates.append(_reflected(nvars))
+
+    for perm in map(Permutation, candidates):
+        if f(perm):
+            verified.append(perm)
+    if len(verified) == 2:
+        # reflection + cyclic -> complete symmetric group
+        return PermutationGroup(*verified)
+
+    candidates = []
+    # bi-symmetric group etc.
+    if nvars > 3:
+        half = nvars // 2
+        p1 = _rotated(half) + _rotated(half, half)
+        p2 = _reflected(half) + _reflected(half, half)
+        p3 = list(range(half,half*2)) + list(range(half))
+        if nvars % 2 == 1:
+            for p in [p1, p2, p3]:
+                p.append(nvars - 1)
+                candidates.append(p)
+                p = [0] + [_ + 1 for _ in p[:-1]]
+                candidates.append(p)
+        else:
+            for p in [p1, p2, p3]:
+                candidates.append(p)
+
+    if nvars > 2:
+        candidates.append(_rotated(nvars - 1) + [nvars - 1])
+        candidates.append([0] + _rotated(nvars - 1, 1))
+        if nvars > 3:
+            candidates.append(_reflected(nvars - 1) + [nvars - 1])
+            candidates.append([0] + _reflected(nvars - 1, 1))
+
+    for perm in map(Permutation, candidates):
+        if f(perm):
+            verified.append(perm)
+
+    if len(verified) == 0:
+        verified.append(Permutation(list(range(nvars))))
+
+    return PermutationGroup(*verified)
+
+
+def identify_symmetry_from_lists(lst_of_lsts: List[List[Poly]]) -> PermutationGroup:
+    """
+    Infer a symmetric group so that each list of (list of polynomials) is symmetric with respect to the rule.
+    It only identifies very common groups like complete symmetric and cyclic groups.
+
+    TODO: Implement a complete algorithm to identify all symmetric groups.
+
+    Parameters
+    ----------
+    lst_of_lsts : List[List[Poly]]
+        A list of lists of polynomials.
+
+    Returns
+    ----------
+    PermutationGroup
+        The inferred permutation group.
+
+    Examples
+    ----------
+    >>> from sympy.abc import a, b, c
+    >>> identify_symmetry_from_lists([[(a+b+c-3).as_poly(a,b,c)],
+    ... [a.as_poly(a,b,c), b.as_poly(a,b,c), c.as_poly(a,b,c)]]).is_symmetric
+    True
+
+    >>> identify_symmetry_from_lists([[(a+b+c-3).as_poly(a,b,c)],
+    ... [(2*a+b).as_poly(a,b,c), (2*b+c).as_poly(a,b,c), (2*c+a).as_poly(a,b,c)]])
+    PermutationGroup([
+        (0 1 2)])
+
+    See Also
+    ----------
+    identify_symmetry
+
+    Reference
+    ----------
+    [1] https://cs.stackexchange.com/questions/64335/how-to-find-the-symmetry-group-of-a-polynomial
+    """
+    gens = ()
+    for l in lst_of_lsts:
+        for p in l:
+            gens = p.gens
+            break
+        if gens:
+            break
+    for l in lst_of_lsts:
+        for p in l:
+            if p.gens != gens:
+                raise ValueError("All polynomials should have the same generators.")
+
+    nvars = len(gens)
+    def verify(perm):
+        return all(verify_symmetry(l, perm) for l in lst_of_lsts)
+    return _identify_symmetry_from_blackbox(verify, nvars)
+
+
+def identify_symmetry(poly: Poly) -> PermutationGroup:
+    """
+    Infer a symmetric group so that the polynomial is symmetric with respect to the rule.
+    It only identifies very simple groups like complete symmetric and cyclic groups.
+    """
+    return identify_symmetry_from_lists([[poly]])
+
+
+def arraylize_up_to_symmetry(poly: Poly, perm_group: PermutationGroup, degree: Optional[int] = None,
+        return_type: str = 'matrix', **options) -> Union[List, Matrix]:
+    """
+    Get the canonical representation of the poly up to given symmetry.
+    Two polynomials that are equivalent up to the symmetry should have the same representation.
+
+    Parameters
+    ----------
+    poly: Poly
+        The polynomial to be arraylized.
+    perm_group: PermutationGroup
+        Sympy permutation group object for the polynomial. This specifies the symmetry
+        beyond cyclic and symmetric groups.
+    return_type: str
+        The type of the return value.
+        If 'list', the return value is a list of coefficients.
+        If 'matrix', the return value is a matrix.
+        Default is 'matrix'.
+
+    Keyword Arguments
+    -----------------
+    hom: bool
+        If True, only homogeneous monomials are generated.
+        Default is True.
+    cyc: bool
+        If True, the monomials are generated with cyclic symmetry.
+        Default is False.
+    sym: bool
+        If True, the monomials are generated with symmetric symmetry.
+        Default is False.
+
+    Returns
+    --------
+    matrix: Matrix
+        Standard representation of the poly up to given symmetry.
+
+    Examples
+    ---------
+    >>> from sympy.abc import a, b, c
+    >>> from sympy.combinatorics import CyclicGroup
+    >>> arraylize_up_to_symmetry((b**2 - 2*a*c + 3).as_poly(a,b,c), CyclicGroup(3), hom=False, return_type='list') # doctest:+SKIP
+    [1, 0, 0, 0, 0, -2, 0, 0, 0, 3]
+    >>> arraylize_up_to_symmetry((c**2 - 2*b*a + 3).as_poly(a,b,c), CyclicGroup(3), hom=False).tolist()
+    [[1], [0], [0], [0], [0], [-2], [0], [0], [0], [3]]
+
+    Note that the `arraylize_sp` method does not canonicalize the polynomial by symmetry:
+    >>> arraylize_sp((b**2 - 2*a*c + 3).as_poly(a,b,c), hom=False).tolist()
+    [[0], [0], [-2], [0], [1], [0], [0], [0], [0], [3]]
+    """
+    base = _parse_options(len(poly.gens), **options)
+    domain = poly.domain
+    vec = base.arraylize_sp(poly, degree=degree)
+    shape = vec.shape[0]
+
+    rep = vec._rep.rep.to_list_flat() # avoid conversion from rep to sympy
+    # getvalue = lambda i: vec[i,0] # get a single value
+    getvalue = lambda i: rep[i]
+    # if shape <= 1:
+    #     return tuple(getvalue(i) for i in range(shape))
+
+    # # The naive implementation below could take minutes for calling 50 times on a 6-order group
+    # mat = symmetry.permute_vec(vec, t.total_degree())
+    # cols = [tuple(mat[:, i]) for i in range(mat.shape[1])]
+    # return max(cols)
+
+    # We should highly optimize the algorithm.
+    dict_monoms = base.dict_monoms(poly.total_degree())
+    inv_monoms = base.inv_monoms(poly.total_degree())
+
+    def v(perm, i):
+        """Get the value of index i in the vector after permutation"""
+        # return getvalue(dict_monoms[tuple(perm(inv_monoms[i]))])
+
+        # because perm.__call__ has sanity checks, we should make it faster
+        ii = inv_monoms[i]
+        pii = tuple([ii[j] for j in perm._array_form])
+        return getvalue(dict_monoms[pii])
+
+    perms = list(perm_group.elements)
+    queue, queue_len, best_perm = [domain.zero]*shape, 0, perms[0]
+    for perm in perms[1:]:
+        for j in range(shape):
+            s = v(perm, j)
+            if j >= queue_len:
+                # compare the next element
+                queue[j] = v(best_perm, j)
+                queue_len += 1
+            if s > queue[j]:
+                queue[j], queue_len, best_perm = s, j + 1, perm
+                break
+            elif s < queue[j]:
+                break
+    for j in range(queue_len, shape): # fill the rest
+        queue[j] = v(best_perm, j)
+    if return_type == 'list':
+        return queue
+    return rep_matrix_from_list(queue, shape, domain)
+
+
+def clear_polys_by_symmetry(
+        polys: Union[List[Union[Expr, Tuple[Expr, Any]]], Dict[Expr, Any]],
+        symbols: List[Symbol],
+        symmetry: Union[PermutationGroup, MonomialManager],
+    ) -> Union[List[Union[Expr, Tuple[Expr, Any]]], Dict[Expr, Any]]:
+    """
+    Remove duplicate polynomials up to given symmetry. This function
+    accepts list or dict inputs and preserves the input structure.
+
+    Parameters
+    ----------
+    polys: list or dict
+        A list or dict of polynomials or sympy expressions.
+    symbols: list of Symbol
+        The symbols in the polynomials.
+    symmetry: Union[PermutationGroup, MonomialManager]
+        The reference symmetry object.
+
+    Returns
+    --------
+    polys: list or dict
+        A list or dict of polynomials with duplicates removed. If a dict, the keys are the polynomials
+        and the values are the corresponding data.
+
+    Examples
+    ---------
+    >>> from sympy.abc import a, b, c
+    >>> from sympy.combinatorics import CyclicGroup
+    >>> polys = [b**2 - 2*a*c + 3, c**2 - 2*b*a + 3, b**2 - 2*b*c + 3, a*b - 1, b*c - 1]
+    >>> clear_polys_by_symmetry(polys, (a,b,c), CyclicGroup(3))
+    [-2*a*c + b**2 + 3, b**2 - 2*b*c + 3, a*b - 1]
+    >>> clear_polys_by_symmetry({polys[i]: i for i in range(5)}, (a,b,c), CyclicGroup(3))
+    {-2*a*c + b**2 + 3: 0, b**2 - 2*b*c + 3: 2, a*b - 1: 3}
+    """
+    base, perm_group = None, None
+    if isinstance(symmetry, PermutationGroup):
+        base = MonomialManager(len(symbols), is_homogeneous=False)
+        perm_group = symmetry
+    else:
+        base = symmetry.base()
+        perm_group = symmetry.perm_group
+
+    def _get_rep(t):
+        if isinstance(t, tuple):
+            t = t[0]
+        if not isinstance(t, Poly):
+            t = Poly(t, symbols)
+        rep = arraylize_up_to_symmetry(t, perm_group, symmetry=base, return_type='list')
+        return tuple(rep)
+
+    is_dict = isinstance(polys, dict)
+    if is_dict:
+        if perm_group.is_trivial:
+            return polys # .copy()
+        polys = polys.items()
+
+    # clear duplicate expressions while preserving order
+    reps = set()
+    collected = []
+    for i, t in enumerate(polys):
+        t_rep = _get_rep(t)
+        if t_rep not in reps:
+            reps.add(t_rep)
+            collected.append(t)
+    if is_dict:
+        collected = dict(collected)
+    return collected
+
+
+def poly_reduce_by_symmetry(poly: Poly, perm_group: PermutationGroup) -> Poly:
+    """
+    Given a polynomial which is symmetric with respect to the permutation group,
+    return a new_poly such that `CyclicSum(new_poly, new_poly.gens, perm_group) == poly`.
+    Users should ensure that the given poly is symmetric with respect to the permutation group
+    and this is not checked.
+
+    Parameters
+    ----------
+    poly: Poly
+        The polynomial to be reduced.
+    perm_group : PermutationGroup
+        The permutation group to be considered.
+
+    Returns
+    ----------
+    Poly
+        The reduced polynomial.
+
+    Examples
+    ----------
+    >>> from sympy.abc import a, b, c, d
+    >>> from sympy.combinatorics import SymmetricGroup, DihedralGroup, CyclicGroup
+    >>> p1 = (a**2+b**2+c**2+d**2+a*b+b*c+c*d+d*a+a*c+b*d).as_poly(a,b,c,d)
+    >>> poly_reduce_by_symmetry(p1, SymmetricGroup(4))
+    Poly(1/6*a**2 + 1/4*a*b, a, b, c, d, domain='QQ')
+    >>> poly_reduce_by_symmetry(p1, DihedralGroup(4))
+    Poly(1/2*a**2 + 1/2*a*b + 1/4*a*c, a, b, c, d, domain='QQ')
+    >>> poly_reduce_by_symmetry(p1, CyclicGroup(4))
+    Poly(a**2 + a*b + 1/2*a*c, a, b, c, d, domain='QQ')
+    """
+    if perm_group is None:
+        return poly
+
+    extracted = []
+    perm_group_gens = perm_group.generators
+    perm_order = perm_group.order()
+    ufs = {}
+    # monomials invariant under the permutation group is recorded in ufs
+    def ufs_find(monom):
+        v = ufs.get(monom, monom)
+        if v == monom:
+            return monom
+        w = ufs_find(v)
+        ufs[monom] = w
+        return w
+    for m1, coeff in poly.terms():
+        for p in perm_group_gens:
+            m2 = tuple(p(m1))
+            f1, f2 = ufs_find(m1), ufs_find(m2)
+            # merge to the maximum
+            if f1 > f2:
+                ufs[f2] = f1
+            else:
+                ufs[f1] = f2
+
+    ufs_size = defaultdict(int)
+    for m in ufs.keys():
+        ufs_size[ufs_find(m)] += 1
+
+    def get_order(monom):
+        # get the multiplicity of the monomials given the permutation group
+        # i.e. how many permutations make it invariant
+        return perm_order // ufs_size[ufs_find(monom)]
+
+    # only reserve the keys for ufs[monom] == monom
+    for monom, coeff in poly.terms():
+        if ufs_find(monom) == monom:
+            order = get_order(monom)
+            extracted.append((monom, coeff/order))
+    return Poly(dict(extracted), poly.gens)

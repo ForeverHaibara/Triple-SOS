@@ -37,7 +37,7 @@ class Coeff():
                 coeffs[monom] = coeff
         else:
             self._nvars = len(next(iter(coeffs.keys()))) if len(coeffs) > 0 else 0
-            
+
         self.coeffs = coeffs
         self.is_rational = is_rational
 
@@ -79,7 +79,7 @@ class Coeff():
 
         if self.nvars == 1:
             return True
-        
+
         perms = []
         if isinstance(perm_group, PermutationGroup):
             # checking the generators is enough

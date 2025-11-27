@@ -10,14 +10,14 @@ from typing import List, Dict, Tuple, Union, Optional, Callable, Generator
 
 import sympy as sp
 from sympy import Symbol, Float, Expr, Poly, Rational
-from sympy.polys.polyerrors import BasePolynomialError, PolificationFailed, GeneratorsNeeded
-from sympy.polys.polytools import resultant
+from sympy.polys.polyerrors import PolificationFailed, DomainError
 from sympy.polys.polyclasses import DMP
 from sympy.combinatorics import PermutationGroup
 
 from .polysolve import univar_realroots, solve_poly_system_crt, PolyEvalf, _filter_trivial_system
 from .roots import Root
-from ..expression import identify_symmetry_from_lists
+from .root_list import RootList
+from ..expressions import identify_symmetry_from_lists
 
 # Comparison of tuples of sympy Expressions, compatible with sympy <= 1.9
 default_sort_key = lambda x: tuple(_.sort_key() for _ in x) if not isinstance(x, Expr) else x.sort_key()
@@ -84,7 +84,7 @@ def polylize_input(poly: Expr, ineq_constraints: List[Expr], eq_constraints: Lis
         if f is None:
             raise PolificationFailed({}, f, f)
         if not check_poly(f):
-            raise TypeError('Polynomial domains must be exact.')
+            raise DomainError('Polynomial domains must be exact.')
         return f
     poly = polylize(poly, symbols)
     ineq_constraints = [polylize(ineq, symbols) for ineq in ineq_constraints]
@@ -238,7 +238,7 @@ def kkt(
     """
     f = sp.sympify(f)
     symbs = f.gens if hasattr(f, 'gens') else tuple(sorted(f.free_symbols, key=lambda x: x.name))
-    symbs = symbs + tuple(set.union(set(), 
+    symbs = symbs + tuple(set.union(set(),
                 *[_.free_symbols for _ in ineq_constraints],
                 *[_.free_symbols for _ in eq_constraints]) - set(symbs))
     symbs0 = symbs
@@ -361,7 +361,7 @@ def _optimize_by_eq_kkt(poly, ineq_constraints, eq_constraints, symbols,
                     sol.append(point)
             return sol
 
-        # 
+        #
         sol = solve_poly_system_crt(eq_constraints + [poly.diff(x), poly.diff(y)], [x, y])
         for eq in eq_constraints:
             sol.extend(solve_poly_system_crt(
@@ -572,13 +572,13 @@ def _optimize_by_ineq_comb(poly: Poly, ineq_constraints: List[Poly], eq_constrai
                 continue
         else:
             poly2, eq_constraints2, symbols2 = poly, active_ineq + eq_constraints, symbols
-        
+
         points = solver(poly2, {}, eq_constraints2, symbols2)
 
         #############################################
         # restore the eliminated variables
         points = _restore_solution(points, elim, symbols, symbols2)
-        
+
         # check inactive ineqs >= 0
         inactive_ineq = [ineq_constraints[i] for i in set(range(len(ineq_constraints))) - set(active)]
         points = [_ for _ in points if all(pevalf.polysign(ineq, _) >= 0 for ineq in inactive_ineq)]
@@ -715,17 +715,18 @@ def optimize_poly(poly: Union[Poly, Expr], ineq_constraints: List[Union[Poly, Ex
      (CRootOf(a**3 - 6*a**2 + 5*a - 1, 2), CRootOf(b**3 - 5*b**2 + 6*b - 1, 2), 1)]
     """
     symbols = _infer_symbols(symbols, poly, ineq_constraints, eq_constraints)
-    if len(symbols) == 0:
-        return []
     if not (objective in ('min', 'max', 'all')):
         raise ValueError('Objective must be either "min" or "max" or "all".')
     if not (return_type in ('root', 'tuple', 'dict')):
         raise ValueError('Return type must be either "root" or "tuple" or "dict".')
+    if len(symbols) == 0:
+        return [] if return_type != 'root' else RootList((), [])
 
     poly, ineq_constraints, eq_constraints = polylize_input(
         poly, ineq_constraints, eq_constraints, symbols=symbols,
         check_poly=lambda p: p.domain.is_Numerical and p.domain.is_Exact
     )
+
 
     solver = partial(_optimize_poly, max_different=max_different)
     points = []
@@ -750,7 +751,7 @@ def optimize_poly(poly: Union[Poly, Expr], ineq_constraints: List[Union[Poly, Ex
         points = sorted(points, key=default_sort_key)
 
     if return_type == 'root':
-        points = [Root(_) for _ in points]
+        points = RootList(symbols, [Root(_) for _ in points])
     elif return_type == 'dict':
         points = [dict(zip(symbols, _)) for _ in points]
     return points

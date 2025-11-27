@@ -207,7 +207,7 @@ class IdealBasis(SOSBasis):
             return rep_matrix_from_dict(rows, (N, n), domain)
         raise NotImplementedError
 
-    
+
     def get_equal_entries(self) -> List[List[int]]:
         # This might be temporary, in the future there might be more symmetries,
         # e.g. sign symmetries, finite matrix group. And there might be a Wedderburn decomposition.

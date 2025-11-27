@@ -1,29 +1,28 @@
-from functools import wraps
-from inspect import signature
 from typing import List, Dict, Tuple, Union, Optional
 
-import sympy as sp
-from sympy import Expr, Poly, Rational, Integer, fraction
+from sympy import Expr, Poly, Rational, Integer, Mul, fraction
 
-from ...utils import Solution
+from .polynomial import SolvePolynomial
+from .signs import sign_sos
+from ..node import ProofNode
 
-def handle_rational(
-    disable_denom_finding_roots = False,
-):
+
+class CancelDenominator(ProofNode):
     """
-    Convert all rational expressions to polynomials.
+    Handle sparse rational / algebraic expression before
+    converting them to SymPy dense polynomials, e.g. avoid
+    expanding brackets if unnecessary.
     """
-    def decorator(func):
-        @wraps(func)
-        def wrapper(poly: Expr,
-                ineq_constraints: Dict[Expr, Expr] = {},
-                eq_constraints: Dict[Expr, Expr] = {}, *args, **kwargs):
+    _numer = None
+    _denom = None
+    def explore(self, configs):
+        problem = self.problem
+        poly, ineq_constraints, eq_constraints = problem.expr, problem.ineq_constraints, problem.eq_constraints
+        if self.status == 0:
             if isinstance(poly, Expr):
-                numer, denom = fraction(poly.together())
+                numer, denom = fraction(poly.doit().together())
             elif isinstance(poly, Poly):
-                numer, denom = poly.as_expr(), Integer(1)
-            else:
-                raise TypeError("poly must be an Expr or Poly object") # not expected to happen
+                numer, denom = poly, Integer(1)
 
             # handle constraints
             new_ineqs = {}
@@ -42,93 +41,92 @@ def handle_rational(
                 elif isinstance(eq, Poly):
                     new_eqs[eq] = expr
 
-            numer_sol = None
-            denom_sol = None
-            denom_solver = func
-            if not isinstance(denom, Rational):
-                denom_kwargs = kwargs.copy()
-                if disable_denom_finding_roots:
-                    denom_kwargs['roots'] = []
-                denom_solver = lambda *_args, **_kwargs: func(*_args,  **_kwargs, **denom_kwargs)
-                if denom_sol is not None:
-                    denom_sol = denom_sol.solution
-            denom_sol = prove_expr(denom, new_ineqs, new_eqs, denom_solver)
+            self._numer = problem.new(numer, new_ineqs, new_eqs)
+            self._numer.roots = problem.roots
 
-            if denom_sol is not None:
-                numer_sol = func(numer, new_ineqs, new_eqs, *args, **kwargs)
-                if numer_sol is not None:
-                    new_sol = Solution(
-                        problem = poly,
-                        solution = numer_sol.solution / denom_sol,
-                        ineq_constraints = ineq_constraints,
-                        eq_constraints = eq_constraints,
-                    )
-                    return new_sol
-        return wrapper
-    return decorator
+            self._denom = problem.new(denom, new_ineqs, new_eqs)
+
+            self.children = [
+                SolveMul(self._denom)
+            ]
+
+            self.status = 1
+            return
+
+    def update(self, *args, **kwargs):
+        if self.status == 1:
+            if self._denom.solution is not None:
+                self.children = [
+                    SolvePolynomial(self._numer)
+                ]
+                self.status = -1
+            elif len(self.children) == 0 and self._denom.solution is None:
+                self.status = -1
+                self.finished = True
+                return
+
+        elif self.status == -1:
+            if self._numer.solution is not None:
+                self.register_solution(self._numer.solution / self._denom.solution)
 
 
-def prove_expr(expr: Expr,
-        ineq_constraints: Dict[Expr, Expr],
-        eq_constraints: Dict[Expr, Expr],
-        solver,
-    ) -> Optional[Expr]:
-    """Prove the nonnegativity of a sympy expression without expanding
-    it to a sympy polynomial. This is useful for trivially nonnegative expressions,
-    e.g., the denominator of an expression."""
-    def wrapped_solver(*args, **kwargs):
-        sol = solver(*args, **kwargs)
-        if isinstance(sol, Solution):
-            sol = sol.solution
-        return sol
-    def _prove_by_recur(expr):
+
+class SolveMul(ProofNode):
+    """
+    Prove the nonnegativity of a Mul expression before it is expanded to a
+    polynomial. Trivially nonnegative terms in the multiplication are removed from the expression.
+    """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.proved = []
+        self.unproved = []
+
+    def explore(self, configs):
+        """Prove the nonnegativity of a sympy expression without expanding
+        it to a sympy polynomial. This is useful for trivially nonnegative expressions,
+        e.g., the denominator of an expression."""
+        if self.status != 0:
+            return
+        self.status = 1
+
+        expr = self.problem.expr
         if isinstance(expr, Rational):
-            if expr.numerator >= 0:
-                return expr
-            return None
-        elif expr.is_Pow:
-            if isinstance(expr.args[1], Rational) and int(expr.args[1].numerator) % 2 == 0:
-                return expr
-            sol = _prove_by_recur(expr.args[0])
+            if expr.numerator >= 0 and expr.denominator > 0:
+                self.register_solution(expr)
+            self.status = -1
+            self.finished = True
+            return
+
+        args = Mul.make_args(expr)
+        signs = self.problem.get_symbol_signs()
+
+        for arg in args:
+            # prove nonnegativity for each term
+            sol = sign_sos(arg, signs)
             if sol is not None:
-                return sol ** expr.args[1]
-        elif expr.is_Mul:
-            # prove the nonnegativity of each term in the Mul object
-            # NOTE: this does not hold for noncommutative problems
-            proved = []
-            unproved = []
-            for arg in expr.args:
-                arg_sol = _prove_by_recur(arg)
-                if arg_sol is not None:
-                    proved.append(arg_sol)
+                self.proved.append(sol)
+            else:
+                if arg.is_Pow and isinstance(arg.exp, Integer) and arg.exp % 2 == 0:
+                    self.unproved.append((arg.base, 1))
+                    self.proved.append(arg.base ** (arg.exp - 1))
                 else:
-                    arg_sol_neg = _prove_by_recur(arg)
-                    if arg_sol_neg is not None:
-                        proved.append(arg_sol_neg)
-                        unproved.append(-Rational(1,1))
-                    else:
-                        unproved.append(arg)
+                    self.unproved.append((arg, 1))
 
-            proved_sol = expr.func(*proved)
-            if len(unproved) == 0:
-                return proved_sol
-            unproved = expr.func(*unproved)
-            if isinstance(unproved, Rational):
-                if unproved >= 0:
-                    return unproved * proved_sol
-                else:
-                    return None
-            unproved_sol = wrapped_solver(unproved, ineq_constraints, eq_constraints)
-            if unproved_sol is not None:
-                return proved_sol * unproved_sol
+        if self.unproved:
+            rest = Mul(*[base for base, exp in self.unproved])
+            rest_problem = self.new_problem(rest, self.problem.ineq_constraints, self.problem.eq_constraints)
+            self.children = [
+                SolvePolynomial(rest_problem)
+            ]
+            self.status = -1
+        else:
+            self.register_solution(Mul(*self.proved))
+            self.finished = True
+        self.status = -1
 
-        if len(expr.free_symbols) == 0:
-            # e.g. (sqrt(2) - 1)
-            sgn = (expr >= 0)
-            if sgn in (sp.true, True):
-                return expr
-            return None
 
-        # elif expr.is_Add:
-        return wrapped_solver(expr, ineq_constraints, eq_constraints)
-    return _prove_by_recur(expr)
+    def update(self, *args, **kwargs):
+        if len(self.children) == 1:
+            sol = self.children[0].problem.solution
+            if sol is not None:
+                self.register_solution(sol * Mul(*self.proved))

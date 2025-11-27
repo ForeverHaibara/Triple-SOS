@@ -1,7 +1,7 @@
 from collections import defaultdict
 from math import gcd
 from time import time
-from typing import List, Tuple, Dict, Union, Optional
+from typing import List, Tuple, Dict, Union, Optional, Callable
 
 from numpy import argsort
 from sympy.external.gmpy import MPQ, MPZ # >= 1.9
@@ -11,7 +11,7 @@ from sympy.polys.domains import ZZ, QQ, EX, EXRAW # EXRAW >= 1.9
 from sympy.polys.matrices.domainmatrix import DomainMatrix # polys.matrices >= 1.8
 from sympy.polys.matrices.sdm import SDM
 
-from .matop import is_zz_qq_mat, is_empty_matrix, permute_matrix_rows, rep_matrix_from_dict
+from .matop import ArithmeticTimeout, is_zz_qq_mat, is_empty_matrix, permute_matrix_rows, rep_matrix_from_dict
 
 _VERBOSE_SOLVE_UNDETERMINED_LINEAR = False
 _VERBOSE_SOLVE_CSR_LINEAR = False
@@ -47,7 +47,8 @@ def _restore_from_compressed(mat: Matrix, mapping: Union[List[int], Dict[int, in
     return rep_matrix_from_dict(new_rep, (rows, rep.shape[1]), rep.domain)
 
 
-def _row_reduce_dict(mat, rows, cols, domain=QQ, normalize_last=True, normalize=True, zero_above=True):
+def _row_reduce_dict(mat, rows, cols, domain=QQ, normalize_last=True, normalize=True,
+        zero_above=True, time_limit=None):
     """
     See also in sympy.matrices.reductions._row_reduce_list
     """
@@ -106,6 +107,8 @@ def _row_reduce_dict(mat, rows, cols, domain=QQ, normalize_last=True, normalize=
     pivot_cols = []
     swaps = []
 
+    time_limit = ArithmeticTimeout.make_checker(time_limit)
+
     # use a fraction free method to zero above and below each pivot
     while piv_col < cols and piv_row < rows:
         pivot_offset, pivot_val = _find_reasonable_pivot_naive(piv_row, piv_col)
@@ -135,6 +138,7 @@ def _row_reduce_dict(mat, rows, cols, domain=QQ, normalize_last=True, normalize=
                     mati[k] = v / pivot_val
             # after normalizing, the pivot value is 1
             pivot_val = one
+            time_limit()
 
         # zero above and below the pivot
         for row in range(rows):
@@ -154,6 +158,7 @@ def _row_reduce_dict(mat, rows, cols, domain=QQ, normalize_last=True, normalize=
                 continue
 
             cross_cancel(pivot_val, row, val, piv_row)
+            time_limit()
         piv_row += 1
 
     # normalize each row
@@ -171,12 +176,12 @@ def _row_reduce_dict(mat, rows, cols, domain=QQ, normalize_last=True, normalize=
             for k, v in mat_piv_i.items():
                 if k > piv_j:
                     mat_piv_i[k] = v / pivot_val
+            time_limit()
 
     return mat, tuple(pivot_cols), tuple(swaps)
 
 
-def _row_reduce(M, normalize_last=True,
-                normalize=True, zero_above=True):
+def _row_reduce(M, normalize_last=True, normalize=True, zero_above=True, time_limit=None):
     """
     See also in sympy.matrices.reductions._row_reduce
     It converts sympy Rational matrix to MPQ without checking.
@@ -195,7 +200,8 @@ def _row_reduce(M, normalize_last=True,
         time0 = time()
 
     mat, pivot_cols, swaps = _row_reduce_dict(sdm, M.shape[0], M.shape[1], domain=domain,
-            normalize_last=normalize_last, normalize=normalize, zero_above=zero_above)
+            normalize_last=normalize_last, normalize=normalize, zero_above=zero_above,
+            time_limit=time_limit)
 
     if _VERBOSE_SOLVE_UNDETERMINED_LINEAR:
         print(">> Time for row reduce list:", time() - time0)
@@ -205,7 +211,7 @@ def _row_reduce(M, normalize_last=True,
     return mat, pivot_cols, swaps
 
 
-def _rref(M, pivots=True, normalize_last=True):
+def _rref(M, pivots=True, normalize_last=True, time_limit=None):
     """
     See also in sympy.matrices.reductions.rref
     """
@@ -231,7 +237,8 @@ def _rref(M, pivots=True, normalize_last=True):
 
         mat = M.__class__._fromrep(dM)
     else:
-        mat, pivots, _ = _row_reduce(M, normalize_last=normalize_last, normalize=True, zero_above=True)
+        mat, pivots, _ = _row_reduce(M, normalize_last=normalize_last, normalize=True, zero_above=True,
+                            time_limit=time_limit)
 
     if return_pivots:
         mat = (mat, pivots)
@@ -239,7 +246,9 @@ def _rref(M, pivots=True, normalize_last=True):
 
 
 
-def solve_undetermined_linear(M: Matrix, B: Matrix) -> Tuple[Matrix, Matrix]:
+def solve_undetermined_linear(M: Matrix, B: Matrix,
+        time_limit: Optional[Union[Callable, float]] = None
+    ) -> Tuple[Matrix, Matrix]:
     """
     Solve an undetermined linear system Mx = B with LU decomposition.
     See details at sympy.Matrix.gauss_jordan_solve.
@@ -265,9 +274,9 @@ def solve_undetermined_linear(M: Matrix, B: Matrix) -> Tuple[Matrix, Matrix]:
         time0 = time()
 
     # solve by reduced row echelon form
-    A, pivots = _rref(aug, normalize_last=False)
+    A, pivots = _rref(aug, normalize_last=False, time_limit=time_limit)
 
-    
+
     if _VERBOSE_SOLVE_UNDETERMINED_LINEAR:
         print(">> Time for rref:", time() - time0) # main bottleneck
         time0 = time()
@@ -436,7 +445,8 @@ def solve_column_separated_linear(A: Matrix, b: Matrix):
 def solve_csr_linear(A: Matrix, b: Matrix,
         x0_equal_indices: List[List[int]] = [],
         nonnegative_indices: List[int] = [],
-        force_zeros: Dict[int, List[int]] = {}
+        force_zeros: Dict[int, List[int]] = {},
+        time_limit: Optional[Union[Callable, float]] = None
     ):
     """
     Solve a linear system Ax = b where A is stored in SDM (CSR) format.
@@ -479,11 +489,13 @@ def solve_csr_linear(A: Matrix, b: Matrix,
 
     Arep = A._rep.rep.to_sdm()
 
+    time_limit = ArithmeticTimeout.make_checker(time_limit)
 
     # form the equal indices as a UFS
     ufs, groups = _build_ufs(x0_equal_indices, cols)
     group_keys = list(groups.keys())
     group_inds = {k: i for i, k in enumerate(group_keys)}
+    time_limit()
 
     # compress the columns
     cols2 = len(groups)
@@ -498,6 +510,7 @@ def solve_csr_linear(A: Matrix, b: Matrix,
                 A2i = defaultdict(lambda : zero)
                 A2[i] = A2i
             A2i[mapping[j]] += v
+    time_limit()
 
     A2 = rep_matrix_from_dict(A2, (A.shape[0], cols2), domain)
     # x0, space = solve_undetermined_linear(A2, b)
@@ -510,9 +523,11 @@ def solve_csr_linear(A: Matrix, b: Matrix,
         if not (k in new_force_zeros):
             new_force_zeros[k] = set()
         new_force_zeros[k].update(set(mapping[j] for j in force_zeros[i]))
+    time_limit()
 
     x0, space = _solve_csr_linear_force_zeros(A2, b,
                     nonnegative_indices=nonnegative_indices, force_zeros=new_force_zeros)
+    time_limit()
 
     # restore the solution: row[i] = row_compressed[mapping[i]]
     x0 = _restore_from_compressed(x0, mapping, rows=cols)
@@ -547,7 +562,8 @@ def _build_ufs(groups: List[List[int]], n: int) -> Tuple[List[int], Dict[int, Li
     return parent, new_groups
 
 
-def _solve_csr_linear_force_zeros(A, b, nonnegative_indices=[], force_zeros={}):
+def _solve_csr_linear_force_zeros(A, b, nonnegative_indices=[], force_zeros={},
+        time_limit: Optional[Union[Callable, float]] = None):
     all_zero_inds = set() # all found zeros indices in the loop
     zero_inds = set() # a dynamic queue
     rep = A._rep.rep.to_sdm() # TODO: deepcopy?
@@ -560,6 +576,8 @@ def _solve_csr_linear_force_zeros(A, b, nonnegative_indices=[], force_zeros={}):
     nonnegative_indices = set(nonnegative_indices)
 
     col_to_rows = None
+    time_limit = ArithmeticTimeout.make_checker(time_limit)
+    time_limit()
 
     def _build_col_to_rows(): # csr to csc:
         col_to_rows = defaultdict(list)
@@ -619,12 +637,14 @@ def _solve_csr_linear_force_zeros(A, b, nonnegative_indices=[], force_zeros={}):
                 zero_rows_to_remove.append(i)
         for i in zero_rows_to_remove:
             zero_rows.remove(i)
+        time_limit()
 
         if len(zero_inds):
             found_new_zeros = True
             if col_to_rows is None:
                 col_to_rows = _build_col_to_rows()
             _clear_zero_inds(zero_inds, all_zero_inds, col_to_rows)
+            time_limit()
 
 
     # extract columns associated with nonzero indices
@@ -638,7 +658,7 @@ def _solve_csr_linear_force_zeros(A, b, nonnegative_indices=[], force_zeros={}):
             new_rep[i] = {mapping[k]: v for k, v in rep[i].items() if k in mapping}
         new_A = rep_matrix_from_dict(new_rep, (A.shape[0], len(nonzero_inds)), domain)
 
-    x0, space = solve_undetermined_linear(new_A, b)
+    x0, space = solve_undetermined_linear(new_A, b, time_limit=time_limit)
     if len(all_zero_inds):
         x0 = _restore_from_compressed(x0, mapping, rows=A.shape[1])
         space = _restore_from_compressed(space, mapping, rows=A.shape[1])

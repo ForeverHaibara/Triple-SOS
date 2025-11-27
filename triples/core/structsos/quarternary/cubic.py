@@ -50,7 +50,7 @@ def _quarternary_cubic_partial_symmetric(coeff, real = False):
     s(a)2(1+2abc+s(a2-2ab))
     = s((b-c)2(b+c-a)2)/2+s((a-b)2)/2+s(ab(a-b)2)+3s(ab(c-1)2)+2p(a)s(a-1)2
 
-    We always represent the polynomial as 
+    We always represent the polynomial as
           t * (3*v**2/4*(a+b+c) + v*(a**2+b**2+c**2-2*(a*b+b*c+c*a)) + a*b*c)
     + (1-t) * (4*v**3 + v*(a**2+b**2+c**2-2*(a*b+b*c+c*a)) + a*b*c) >= 0
 
@@ -105,7 +105,7 @@ def _quarternary_cubic_partial_symmetric(coeff, real = False):
             2 * CyclicProduct(a) * CyclicSum(a-2*v*d)**2
         ]) / (2 * CyclicSum(a)**2)
 
-    
+
     # find x, y, t such that
     # normalized poly >= get_sol1(x) * t + get_sol2(y) * (1-t)
     # 3*x**2/4 * t <= c100, 4*y**3 * (1-t) <= c000, x*t + y*(1-t) = c2
@@ -116,7 +116,7 @@ def _quarternary_cubic_partial_symmetric(coeff, real = False):
         if x == 0: return c000 - 4*c2**3 # t = 0, y = c2
         if x == c2: return c000 # t = 1, y = 0
         return radsimp(c000 - 4*x*(3*c2*x - 4*c100)**3/3/(3*x**2 - 4*c100)**2)
-    
+
     def check_x(x):
         if x == 0: return c100 == 0 and get_const(x) >= 0 # t = 0, y = c2
         if x is None or (not x.is_finite) or (not 3*x**2/4 >= c100):

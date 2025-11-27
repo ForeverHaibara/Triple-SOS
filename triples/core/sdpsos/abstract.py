@@ -1,6 +1,6 @@
 from collections import OrderedDict
 from typing import List, Tuple, Dict, Any, Callable, Optional, Union
-from time import time
+from time import time, perf_counter
 
 import numpy as np
 from sympy import Expr, Poly, Symbol, Domain, QQ
@@ -9,7 +9,7 @@ from sympy.core.relational import Relational
 
 from .algebra import StateAlgebra, SOSBasis
 from ...sdp import SDPProblem
-from ...sdp.arithmetic import sqrtsize_of_mat, matmul, matadd, solve_csr_linear, rep_matrix_from_dict
+from ...sdp.arithmetic import ArithmeticTimeout, sqrtsize_of_mat, matmul, matadd, solve_csr_linear, rep_matrix_from_dict
 from ...sdp.utils import exprs_to_arrays, collect_constraints
 
 
@@ -126,17 +126,24 @@ class SOSElement:
         constraints: List[Union[Relational, Expr, Tuple[Matrix, Matrix, str]]] = [],
         solver: Optional[str] = None,
         verbose: bool = False,
+        time_limit: Optional[float] = None,
         kwargs: Dict[Any, Any] = {}
     ) -> Optional[Matrix]:
         """
-        Solve the SOS problem. Arguments are passed to SDPProblem.solve.
+        Solve the SOS problem. Arguments are passed to `SDPProblem.solve`.
         """
+        end_time = perf_counter() + time_limit if isinstance(time_limit, (int, float)) else None
+        time_limit = ArithmeticTimeout.make_checker(time_limit)
         if self._sdp is None:
-            self.construct(verbose=verbose)
+            self.construct(verbose=verbose, time_limit=time_limit)
+        time_limit()
+        rest_time = end_time - perf_counter() if end_time is not None else time_limit
+
         obj = exprs_to_arrays([objective], self._parameters, dtype=np.float64)[0][0]
         cons = exprs_to_arrays(constraints, self._parameters, dtype=np.float64)
         ineq_lhs, ineq_rhs, eq_lhs, eq_rhs = collect_constraints(cons, len(self._parameters))
         x0, space = self._parameter_space
+        time_limit()
 
         # ineq_lhs * (x0 + space * y) >= ineq_rhs
         obj      = matmul(obj, space)
@@ -144,16 +151,31 @@ class SOSElement:
         ineq_rhs = matadd(ineq_rhs, -matmul(ineq_lhs, x0))
         eq_lhs   = matmul(eq_lhs, space)
         eq_rhs   = matadd(eq_rhs, -matmul(eq_lhs, x0))
+        time_limit()
         return self.sdp.solve_obj(obj, [(ineq_lhs, ineq_rhs, '>'), (eq_lhs, eq_rhs, '==')],
-                solver=solver, verbose=verbose, kwargs=kwargs)
+                solver=solver, verbose=verbose, time_limit=rest_time, kwargs=kwargs)
 
-    def solve(self, **kwargs) -> Optional[Matrix]:
+    def solve(self,
+        solver: Optional[str] = None,
+        solve_child: bool = True,
+        propagate_to_parent: bool = True,
+        verbose: bool = False,
+        time_limit: Optional[float] = None,
+        allow_numer: int = 0,
+        kwargs: Dict[Any, Any] = {},
+    ) -> Optional[Matrix]:
         """
-        Solve the SOS problem. Arguments are passed to SDPProblem.solve.
+        Solve the SOS problem. Arguments are passed to `SDPProblem.solve`.
         """
+        end_time = perf_counter() + time_limit if isinstance(time_limit, (int, float)) else None
+        time_limit = ArithmeticTimeout.make_checker(time_limit)
         if self._sdp is None:
-            self.construct(verbose=kwargs.get('verbose', False))
-        return self.sdp.solve(**kwargs)
+            self.construct(verbose=verbose, time_limit=time_limit)
+        time_limit()
+        rest_time = end_time - perf_counter() if end_time is not None else time_limit
+        return self.sdp.solve(solver=solver, solve_child=solve_child,
+                propagate_to_parent=propagate_to_parent, verbose=verbose,
+                time_limit=rest_time, allow_numer=allow_numer, kwargs=kwargs)
 
     def as_solution(self, *args, **kwargs):
         raise NotImplementedError
@@ -161,7 +183,7 @@ class SOSElement:
     def _get_parameters(self) -> List[Symbol]:
         """
         Infer all default parameters in the problem. For example, if we assume the polynomial
-        
+
             x^2-u*x*y+v*y^2 is a sum-of-squares in (x,y),
 
         then the parameters are [u,v]. For AtomSOSElement, it should be implemented
@@ -195,7 +217,7 @@ class SOSElement:
     def _insert_prefix(self, prefix: Any):
         raise NotImplementedError
 
-    def _post_construct(self, verbose: bool = False, **kwargs):
+    def _post_construct(self, verbose: bool = False, time_limit: Optional[Union[Callable, float]] = None, **kwargs):
         """
         Post-construct the SDPProblem instance. It might involve any operations
         that reduce the size of the SDPProblem or might apply transformations
@@ -205,7 +227,8 @@ class SOSElement:
 
     def construct(self,
             parameters: Union[List[Symbol], bool] = True,
-            verbose: bool = False
+            verbose: bool = False,
+            time_limit: Optional[Union[Callable, float]] = None
         ) -> SDPProblem:
         """
         Actually construct the SDPProblem instance from the problem data. It
@@ -217,12 +240,15 @@ class SOSElement:
 
         Parameters
         -----------
-        parameters : Union[List[Symbol], bool]
+        parameters: Union[List[Symbol], bool]
             All linear parameters in the problem will be converted to variables
             when solving the SDPProblem. If True, all free symbols in the polynomial
             will be used as parameters.
-        verbose : bool
+        verbose: bool
             If True, print the construction process.
+        time_limit: Optional[Union[Callable, float]]
+            Try to raise the ArithmeticTimeout Exception when timeout is detected.
+            If callable, it should be a function to check timeout and raise the Exception.
         TODO: add a numer option
         """
         raise NotImplementedError
@@ -327,8 +353,10 @@ class AtomSOSElement(SOSElement):
 
     def construct(self,
             parameters: Union[List[Symbol], bool] = True,
-            verbose: bool = False
+            verbose: bool = False,
+            time_limit: Optional[Union[Callable, float]] = None,
         ) -> SDPProblem:
+        time_limit = ArithmeticTimeout.make_checker(time_limit)
 
         # infer linear parameters if not given
         if parameters is True:
@@ -349,7 +377,7 @@ class AtomSOSElement(SOSElement):
 
         if verbose:
             print(f"Time for building coefficient equations : {time() - time0:.6f} seconds.")
-
+        time_limit()
 
         ######################################################################
         #           Solve the equation system to build SDPProblem
@@ -359,9 +387,11 @@ class AtomSOSElement(SOSElement):
             splits = {key: sqrtsize_of_mat(value.shape[1]) for key, value in eqs.psd_eqs.items()},
             add_force_zeros = True,
             equal_entries = eqs.equal_entries, add_equal_entries = True,
+            time_limit = time_limit
         )
         if verbose:
             print(f"Time for solving coefficient equations  : {time() - time0:.6f} seconds. Dof = {sdp.dof}")
+        time_limit()
 
 
         ######################################################################
@@ -376,7 +406,8 @@ class AtomSOSElement(SOSElement):
             offset += len(b)
         self._parameters = list(parameters)
         self._parameter_space = (x0[offset:,:], space[offset:,:])
-        self._post_construct(verbose=verbose)
+        time_limit()
+        self._post_construct(verbose=verbose, time_limit=time_limit)
 
         if verbose:
             self._sdp.print_graph()
@@ -475,15 +506,17 @@ class JointSOSElement(SOSElement):
             raise ValueError("SOS elements cannot be empty.")
         return SOSEquationSystem.vstack(*eqs)
 
-    def _post_construct(self, verbose: bool = False, **kwargs):
+    def _post_construct(self, verbose: bool = False, time_limit: Optional[Union[Callable, float]] = None, **kwargs):
+        time_limit = ArithmeticTimeout.make_checker(time_limit)
         for sos in self.sos_elements:
-            sos._post_construct(verbose=verbose, **kwargs)
+            sos._post_construct(verbose=verbose, time_limit=time_limit, **kwargs)
 
     def construct(self,
             parameters: Union[List[Symbol], bool] = True,
-            verbose: bool = False
+            verbose: bool = False,
+            time_limit: Optional[Union[Callable, float]] = None
         ) -> SDPProblem:
-        
+
         # infer linear parameters if not given
         if parameters is True:
             parameters = self._get_parameters()
@@ -546,7 +579,7 @@ class JointSOSElement(SOSElement):
         for (sos, key), b in eqs.linear_eqs.items():
             sos._ideal_space[key] = (x0[offset:offset+len(b),:], space[offset:offset+len(b),:])
 
-        self._post_construct(verbose=verbose)
+        self._post_construct(verbose=verbose, time_limit=time_limit)
         if verbose:
             self._sdp.print_graph()
 

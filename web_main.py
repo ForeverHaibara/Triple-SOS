@@ -8,7 +8,8 @@ from flask_cors import CORS
 
 import sympy as sp
 
-from triples.utils import pl, Solution, poly_get_factor_form, optimize_poly, Root
+from triples.utils import pl, poly_get_factor_form, optimize_poly, Root
+from triples.core import Solution
 from triples.core.linsos.tangents import prepare_tangents
 from triples.gui.sos_manager import SOS_Manager
 from triples.gui.linebreak import recursive_latex_auto_linebreak
@@ -276,11 +277,8 @@ def sum_of_squares(sid, **kwargs):
         Whether the solution was found.
     """
     try:
-        method_order = [key for key, value in kwargs['methods'].items() if value]
-
-        if 'LinearSOS' in method_order:
-            if 'LinearSOS' not in kwargs['configs']:
-                kwargs['configs']['LinearSOS'] = {}
+        methods = [key for key, value in kwargs['methods'].items() if value]
+        methods.extend(['Pivoting', 'Reparametrization'])
 
         gens = kwargs['gens']
         # ineq_constraints = kwargs['poly'].free_symbols if SOS_Manager.CONFIG_ALLOW_NONSTANDARD_GENS else gens
@@ -308,7 +306,7 @@ def sum_of_squares(sid, **kwargs):
             eq_constraints = eq_constraints,
             gens = gens,
             perm = kwargs['perm'],
-            method_order = method_order,
+            methods = methods,
             configs = kwargs['configs']
         )
 
@@ -327,7 +325,8 @@ def sum_of_squares(sid, **kwargs):
     lhs_expr = sp.Symbol('\\text{LHS}')
     if isinstance(solution, Solution):
         # # remove the aligned environment
-        tex = solution.to_string(mode='latex', lhs_expr=lhs_expr, settings={'long_frac_ratio':2})#.replace('aligned', 'align*')
+        tex = solution.to_string(mode='latex', lhs_expr=lhs_expr,
+            together=True, cancel=True, settings={'long_frac_ratio':2})#.replace('aligned', 'align*')
         tex = recursive_latex_auto_linebreak(tex)
         tex = '$$%s$$'%tex
 

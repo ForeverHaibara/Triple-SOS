@@ -8,7 +8,8 @@ basic matrix operations.
 """
 
 from collections import defaultdict
-from typing import List, Dict, Tuple, Union, Set, Any
+from time import perf_counter
+from typing import List, Dict, Tuple, Union, Optional, Callable, Set, Any
 
 import numpy as np
 from numpy import ndarray
@@ -51,6 +52,20 @@ try:
     FLINT_TYPE = (fmpq, fmpz)
 except ImportError:
     FLINT_TYPE = tuple()
+
+class ArithmeticTimeout(Exception):
+    @classmethod
+    def make_checker(cls, time_limit: Optional[Union[Callable, float]] = None) -> Callable[[], None]:
+        """Returns a callable that raises an Exception when called if time exceeds current_time + time_limit."""
+        if time_limit is None:
+            return lambda : None
+        if callable(time_limit):
+           return time_limit
+        future = perf_counter() + time_limit
+        def checker():
+            if perf_counter() > future:
+                raise cls()
+        return checker
 
 def is_empty_matrix(M: Union[Matrix, ndarray], check_all_zeros: bool = False) -> bool:
     """
@@ -138,7 +153,7 @@ def sqrtsize_of_mat(M: Union[Matrix, ndarray, int]) -> int:
     return int(np.round(np.sqrt(size_of_mat(M))))
 
 
-def reshape(A: Union[Matrix, ndarray], shape: Tuple[int, int]) -> Matrix:
+def reshape(A: Union[Matrix, ndarray], shape: Tuple[int, int]) -> Union[Matrix, ndarray]:
     """
     Reshape a matrix to a new shape. This function maintains the domain
     of SymPy RepMatrix for low SymPy versions.
@@ -202,7 +217,7 @@ def vec2mat(v: Union[Matrix, ndarray]) -> Matrix:
     n = sqrtsize_of_mat(v)
     return reshape(v, (n, n))
 
-def mat2vec(M: Union[Matrix, ndarray]) -> Matrix:
+def mat2vec(M: Union[Matrix, ndarray]) -> Union[Matrix, ndarray]:
     """
     Convert a matrix to a vector.
 
@@ -222,7 +237,7 @@ def mat2vec(M: Union[Matrix, ndarray]) -> Matrix:
         return M.flatten()
     return reshape(M, (size_of_mat(M), 1))
 
-def rep_matrix_from_dict(x: Dict[int, Dict[int, Any]], shape: Tuple[int, int], domain) -> RepMatrix:
+def rep_matrix_from_dict(x: Dict[int, Dict[int, Any]], shape: Tuple[int, int], domain) -> Matrix:
     """
     Create a SymPy RepMatrix from a dictionary of domain elements.
 
@@ -248,7 +263,7 @@ def rep_matrix_from_dict(x: Dict[int, Dict[int, Any]], shape: Tuple[int, int], d
     """
     return Matrix._fromrep(DomainMatrix.from_rep(SDM(x, shape, domain)))
 
-def rep_matrix_from_list(x: Union[List, List[List]], shape: Union[int, Tuple[int, int]], domain) -> RepMatrix:
+def rep_matrix_from_list(x: Union[List, List[List]], shape: Union[int, Tuple[int, int]], domain) -> Matrix:
     """
     Create a SymPy RepMatrix from a list of domain elements.
 
@@ -450,7 +465,7 @@ def rep_matrix_to_numpy(M: Matrix, dtype = np.float64, sparse: bool = False) -> 
                 f = wrapper(lambda x: x.__float__())
         elif np.issubdtype(dtype, np.complexfloating):
             f = wrapper(lambda x: x.__complex__())
-    
+
     if f is not None:
         rows, cols = M.shape
         items = list(M.rep.to_dok().items()) # avoid .iter_items() for version compatibility
@@ -488,7 +503,7 @@ def rep_matrix_to_numpy(M: Matrix, dtype = np.float64, sparse: bool = False) -> 
 def permute_matrix_rows(matrix: Union[Matrix, ndarray], permutation: List[int]):
     """
     Fast operation of matrix[permutation].
-    
+
     Parameters
     ----------
     matrix : Matrix or ndarray

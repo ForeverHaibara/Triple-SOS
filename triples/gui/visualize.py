@@ -13,7 +13,7 @@ def show_dets(M: sp.Matrix):
     Parameters
     ----------
     M : sympy.Matrix
-        The matrix whose determinants are to be displayed.    
+        The matrix whose determinants are to be displayed.
     """
     from IPython.display import display, HTML
     syms = list(M.free_symbols)

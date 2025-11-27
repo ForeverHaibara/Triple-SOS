@@ -1,7 +1,7 @@
 from itertools import product
-from typing import Dict, Any
+from typing import Dict, List, Optional, Any
 
-from sympy import Poly, Expr, Add, Mul
+from sympy import Poly, Expr, Add, Mul, Symbol
 
 from .state_algebra import StateAlgebra, TERM, MONOM
 from .basis import QmoduleBasis, IdealBasis
@@ -35,7 +35,6 @@ def generate_monoms_nc(nvars, degree, hom=True):
     inv_monoms = monoms
     return dict_monoms, inv_monoms
 
-      
 
 class NCPolyRing(StateAlgebra):
     """
@@ -43,7 +42,7 @@ class NCPolyRing(StateAlgebra):
     `a1**d1*a2**d2*...*an**dn` is represented by `((a1, d1), (a2, d2), ..., (an, dn))`.
     Here `a1, a2, ..., an` are hermitian variables and might include duplicated variables.
     However, it is important that `a_{i}!=a_{i+1}`. The degrees `d1, ..., dn` are nonnegative integers.
-    
+
     To allow inverses like `a^{-1}`, one must add `a1^{-1}` to the variables
     and define the relation `a*a^{-1}=a^{-1}*a=1`.
     """
@@ -62,6 +61,11 @@ class NCPolyRing(StateAlgebra):
 
     def s(self, term: TERM) -> TERM:
         return term
+
+    def gen_monom(self, i: Optional[int]) -> MONOM:
+        if i is None:
+            return tuple()
+        return ((i, 1),)
 
     def total_degree(self, monom: MONOM) -> int:
         return sum(_[1] for _ in monom) if len(monom) else 0
@@ -88,7 +92,7 @@ class NCPolyRing(StateAlgebra):
         degree = self.degree
         if len(ideal):
             raise NotImplementedError
-            
+
         qmodule_bases = {}
         for key, q in qmodule.items():
             d = q.total_degree()
@@ -101,7 +105,7 @@ class NCPolyRing(StateAlgebra):
             dict_basis, basis = generate_monoms_nc(
                 self.nvars, (degree - d)//2, hom=is_homogeneous)
             qmodule_bases[key] = QmoduleBasis(self, q, basis=basis, dict_basis=dict_basis)
-    
+
         ideal_bases = {}
         # for key, i in ideal.items():
         #     d = i.total_degree()

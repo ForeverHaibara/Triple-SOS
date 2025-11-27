@@ -1,10 +1,11 @@
 import sympy as sp
+from sympy import Poly, Rational, Dummy
 from sympy.combinatorics import AlternatingGroup
 
 from .basic import SymmetricTransform, extract_factor
 from ...utils import CyclicSum, CyclicProduct, SymmetricSum, SymmetricProduct
 
-class SymmetricPositive(SymmetricTransform):
+class UE3Positive(SymmetricTransform):
     """
     Given a polynomial represented in pqr form where
     `p = a+b+c`, `q = ab+bc+ca`, `r = abc`, return the
@@ -31,6 +32,8 @@ class SymmetricPositive(SymmetricTransform):
     [1] 陈胜利.不等式的分拆降维幂方法与可读证明.哈尔滨工业大学出版社,2016.
     [2] https://zhuanlan.zhihu.com/p/616532245
     """
+    nvars = 3
+    symmetry = 'sym'
     @classmethod
     def _transform_pqr(cls, poly_pqr, original_symbols, new_symbols, return_poly=True):
         p, q, r = poly_pqr.gens
@@ -64,10 +67,11 @@ class SymmetricPositive(SymmetricTransform):
         numerator = numerator.as_poly(x, y, z)
         p0 = CyclicSum(a,(a,b,c))
         # w0 = CyclicSum(a*(a-b)*(a-c),(a,b,c))*CyclicSum(a*(b-c)**2,(a,b,c))**2 / CyclicProduct(a,(a,b,c))
-        # w0 = (CyclicProduct((a-b)**2,(a,b,c))*p0**3 + 
+        # w0 = (CyclicProduct((a-b)**2,(a,b,c))*p0**3 +
         #         CyclicProduct(a,(a,b,c))*CyclicProduct((a+b-2*c)**2,(a,b,c)))/CyclicProduct(a,(a,b,c))
-        _SCHUR = (CyclicSum((b-c)**2*(b+c-a)**2, (a,b,c)) + 2*CyclicSum(b*c*(b-c)**2, (a,b,c)))/2/CyclicSum(a, (a,b,c))
-        w0 = _SCHUR * CyclicSum(a*(b-c)**2,(a,b,c))**2 / CyclicProduct(a,(a,b,c))
+        # _SCHUR = (CyclicSum((b-c)**2*(b+c-a)**2, (a,b,c)) + 2*CyclicSum(b*c*(b-c)**2, (a,b,c)))/2/CyclicSum(a, (a,b,c))
+        # w0 = _SCHUR * CyclicSum(a*(b-c)**2,(a,b,c))**2 / CyclicProduct(a,(a,b,c))
+        w0 = x*y**2 / CyclicProduct(a,(a,b,c))
         denominator = p0**p_degree * w0**w_degree
         if return_poly:
             return numerator, denominator
@@ -81,23 +85,24 @@ class SymmetricPositive(SymmetricTransform):
         a, b, c = symbols
         x, y, z = new_symbols
         # _SCHUR = CyclicSum(a*(a-b)*(a-c), (a,b,c))
-        _SCHUR = (CyclicSum((b-c)**2*(b+c-a)**2, (a,b,c)) + 2*CyclicSum(b*c*(b-c)**2, (a,b,c)))/2/CyclicSum(a, (a,b,c))
+        _SCHUR = (CyclicSum((b-c)**2*(b+c-a)**2, (a,b,c)) + 2*CyclicSum(b*c*(b-c)**2, (a,b,c)))/(2*CyclicSum(a, (a,b,c)))
         return {
             x: _SCHUR,
             y: CyclicSum(a*(b-c)**2, (a,b,c)),
-            z: CyclicProduct((a-b)**2, (a,b,c)) * CyclicSum(a, (a,b,c))**3 / CyclicProduct(a, (a,b,c)),            
+            z: CyclicProduct((a-b)**2, (a,b,c)) * CyclicSum(a, (a,b,c))**3 / CyclicProduct(a, (a,b,c)),
         }
 
     @classmethod
-    def get_default_constraints(cls, symbols):
-        x, y, z = symbols
+    def _get_default_constraints(cls, new_symbols):
+        x, y, z = new_symbols
         return {
-            sp.Poly(x, (x,y,z)): x,
-            sp.Poly(y, (x,y,z)): y,
-            sp.Poly(z, (x,y,z)): z
+            Poly(x, (x,y,z)): x,
+            Poly(y, (x,y,z)): y,
+            Poly(z, (x,y,z)): z
         }, dict()
 
-class SymmetricReal(SymmetricTransform):
+
+class UE3Real(SymmetricTransform):
     """
     Given a polynomial represented in pqr form where
     `p = a+b+c`, `q = ab+bc+ca`, `r = abc`, return the
@@ -118,7 +123,36 @@ class SymmetricReal(SymmetricTransform):
 
     This algorithm was proposed in [1].
 
-    The algorithm can be extended to 4-var case [2], where
+    Reference
+    ----------
+    [1] https://zhuanlan.zhihu.com/p/616532245
+    """
+    nvars = 3
+    symmetry = 'sym'
+    @classmethod
+    def _transform_pqr(cls, poly_pqr, original_symbols, new_symbols, return_poly=True):
+        func = _symmetric_real_3vars
+        return func(poly_pqr, original_symbols, new_symbols, return_poly=return_poly)
+
+    @classmethod
+    def get_inv_dict(cls, symbols, new_symbols):
+        a, b, c = symbols
+        x, y, z = new_symbols
+        return {
+            x: CyclicSum(a, (a,b,c)) * CyclicSum((a-b)**2, (a,b,c)) / 2,
+            y: CyclicProduct(2*a - b - c, (a,b,c)) / 2,
+            z: Rational(27, 4) * CyclicProduct((a-b)**2, (a,b,c))
+        }
+
+    @classmethod
+    def _get_default_constraints(cls, new_symbols):
+        x, y, z = new_symbols
+        return {Poly(z, (x,y,z)): z}, dict()
+
+
+class UE4Real(SymmetricTransform):
+    """
+    The algorithm of UE3Real was extended to 4-var case [2], where
     ```
     D = (a-b)^2*(b-c)^2*(c-d)^2*(d-a)^2*(a-c)^2*(b-d)^2
     x = S[a]S[(a-b)^2*(b-c)^2*(c-a)^2]*S[(a-b)^2]/(144*(a+b-c-d)*(a+c-b-d)*(a+d-b-c))
@@ -143,70 +177,43 @@ class SymmetricReal(SymmetricTransform):
 
     where `p = a+b+c+d`, `q = ab+bc+cd+da+ac+bd`, `r = abc+bcd+cda+dab`, `s = abcd`.
 
-    References
+    Reference
     ----------
-    [1] https://zhuanlan.zhihu.com/p/616532245
-
-    [2] https://zhuanlan.zhihu.com/p/20969491385
+    [1] https://zhuanlan.zhihu.com/p/20969491385
     """
+
+    nvars = 4
+    symmetry = 'sym'
     @classmethod
     def _transform_pqr(cls, poly_pqr, original_symbols, new_symbols, return_poly=True):
-        func = None
-        nvars = len(poly_pqr.gens)
-        cls._check_nvars(nvars)
-        if nvars == 3:
-            func = _symmetric_real_3vars
-        elif nvars == 4:
-            func = _symmetric_real_4vars
+        func = _symmetric_real_4vars
         return func(poly_pqr, original_symbols, new_symbols, return_poly=return_poly)
 
     @classmethod
-    def _check_nvars(cls, nvars: int) -> bool:
-        if nvars != 3 and nvars != 4:
-            raise ValueError("Only 3-var or 4-var polynomials are supported.")
-        return True
-
-    @classmethod
     def get_inv_dict(cls, symbols, new_symbols):
-        nvars = len(symbols)
-        if nvars == 3:
-            a, b, c = symbols
-            x, y, z = new_symbols
-            return {
-                x: CyclicSum(a, (a,b,c)) * CyclicSum((a-b)**2, (a,b,c)) / 2,
-                y: CyclicProduct(2*a - b - c, (a,b,c)) / 2,
-                z: sp.S(27)/4 * CyclicProduct((a-b)**2, (a,b,c))
-            }
-        else: # if nvars == 4:
-            a, b, c, d = symbols
-            x, y, z, w = new_symbols
-            rr = (a - b - c + d)*(a - b + c - d)*(a + b - c - d)
-            disc = (a - b)**2*(a - c)**2*(a - d)**2*(b - c)**2*(b - d)**2*(c - d)**2
-            y_ = SymmetricSum((a-b)**2*(b-c)**2*(c-a)**2, (a,b,c,d))/6
-            w_ = disc * SymmetricSum((a-b)**2,(a,b,c,d))**3 / (4*rr**2)
-            J = -(a*b - 2*a*c + a*d + b*c - 2*b*d + c*d)*(a*b + a*c - 2*a*d - 2*b*c + b*d + c*d)*(2*a*b - a*c - a*d - b*c - b*d + 2*c*d)
-            # z_ = y_ - 4*J
-            ker1 = w_ + 16*J**2
-            z_ = ker1*rr**2 / (8*y_**2)
-            # ker2 = w_*y_**2*z_ / 16 / disc
-            x_ = SymmetricSum(a,(a,b,c,d))*SymmetricSum((a-b)**2,(a,b,c,d))*y_/24/rr
-  
-            return {x: x_, y: y_, z: z_, w: w_}
+        a, b, c, d = symbols
+        x, y, z, w = new_symbols
+        rr = (a - b - c + d)*(a - b + c - d)*(a + b - c - d)
+        disc = (a - b)**2*(a - c)**2*(a - d)**2*(b - c)**2*(b - d)**2*(c - d)**2
+        y_ = SymmetricSum((a-b)**2*(b-c)**2*(c-a)**2, (a,b,c,d))/6
+        w_ = disc * SymmetricSum((a-b)**2,(a,b,c,d))**3 / (4*rr**2)
+        J = -(a*b - 2*a*c + a*d + b*c - 2*b*d + c*d)*(a*b + a*c - 2*a*d - 2*b*c + b*d + c*d)*(2*a*b - a*c - a*d - b*c - b*d + 2*c*d)
+        # z_ = y_ - 4*J
+        ker1 = w_ + 16*J**2
+        z_ = ker1*rr**2 / (8*y_**2)
+        # ker2 = w_*y_**2*z_ / 16 / disc
+        x_ = SymmetricSum(a,(a,b,c,d))*SymmetricSum((a-b)**2,(a,b,c,d))*y_/24/rr
+
+        return {x: x_, y: y_, z: z_, w: w_}
 
     @classmethod
-    def get_default_constraints(cls, symbols):
-        nvars = len(symbols)
-        if nvars == 3:
-            x, y, z = symbols
-            return {sp.Poly(z, (x,y,z)): z}, dict()
-        else: # if nvars == 4:
-            x, y, z, w = symbols
-            return {
-                sp.Poly(y, (x,y,z,w)): y,
-                sp.Poly(z, (x,y,z,w)): z,
-                sp.Poly(w, (x,y,z,w)): w
-            }, dict()
-
+    def _get_default_constraints(cls, symbols):
+        x, y, z, w = symbols
+        return {
+            Poly(y, (x,y,z,w)): y,
+            Poly(z, (x,y,z,w)): z,
+            Poly(w, (x,y,z,w)): w
+        }, dict()
 
 def _symmetric_real_3vars(poly_pqr, original_symbols, new_symbols, return_poly=True):
     p, q, r = poly_pqr.gens
@@ -238,7 +245,7 @@ def _symmetric_real_3vars(poly_pqr, original_symbols, new_symbols, return_poly=T
         min_x_degree = min(numerator.monoms(), key=lambda _:_[0])[0]
         if min_x_degree > 0:
             # x = p*w
-            numerator = sp.Poly(dict(((i-min_x_degree, j, k), v) for (i,j,k), v in numerator.terms()), x, y, z)
+            numerator = Poly(dict(((i-min_x_degree, j, k), v) for (i,j,k), v in numerator.terms()), x, y, z)
             p_degree -= min_x_degree
             w_degree -= min_x_degree
 
@@ -262,7 +269,7 @@ def _symmetric_real_4vars(poly_pqr, original_symbols, new_symbols, return_poly=T
     p, q, r, s = poly_pqr.gens
     x, y, z, w = new_symbols
     a, b, c, d = original_symbols
-    p2, q2, r2, s2 = sp.Dummy("p2"), sp.Dummy("q2"), sp.Dummy("r2"), sp.Dummy("s2")
+    p2, q2, r2, s2 = Dummy("p2"), Dummy("q2"), Dummy("r2"), Dummy("s2")
     degree = 0 if poly_pqr.is_zero else (lambda _: _[0]+_[1]*2+_[2]*3+_[3]*4)(poly_pqr.monoms()[0])
     poly_shifted = poly_pqr(p2, 3*p2**2/8 + q2, p2**3/16 + p2*q2/2 + r2, p2**4/256 + p2**2*q2/16 + p2*r2/4 + s2).as_poly(p2, q2, r2, s2)
 
@@ -271,7 +278,7 @@ def _symmetric_real_4vars(poly_pqr, original_symbols, new_symbols, return_poly=T
     q_degree = -((degree * 2) % 3)
     r_degree = -(degree % 2)
     # q^3 -> q, r^2 -> r
-    poly_dehom = sp.Poly(dict(((i,j//3,k//2,l), _) for (i,j,k,l), _ in poly_dehom.terms()), p, q, r, s)
+    poly_dehom = Poly(dict(((i,j//3,k//2,l), _) for (i,j,k,l), _ in poly_dehom.terms()), p, q, r, s)
 
     # Naive implementation:
     # ker1, ker2 = w + (y - z)**2, (27*y**2*z + (w + (y - z)**2)*(8*y + z))
@@ -297,7 +304,7 @@ def _symmetric_real_4vars(poly_pqr, original_symbols, new_symbols, return_poly=T
     ).as_poly(x, y, z, ker1, ker2)
     _min_degree = lambda poly, i: 0 if poly.is_zero else min(_[i] for _ in poly.monoms())
     min_degrees = [_min_degree(numerator, i) for i in range(5)]
-    numerator = sp.Poly(dict(
+    numerator = Poly(dict(
         (tuple(mi - mini for mi, mini in zip(m, min_degrees)), _)
         for m, _ in numerator.terms()
     ), x, y, z, ker1, ker2).as_poly(ker1, ker2)
@@ -332,7 +339,7 @@ def _symmetric_real_4vars(poly_pqr, original_symbols, new_symbols, return_poly=T
     if r_degree % 2 == 1:
         rd = r_degree
         # r2*x == S[a]*S[(a-b)^2]*y/192
-        denominator *= SymmetricSum(a,(a,b,c,d))**rd * SymmetricSum((a-b)**2,(a,b,c,d))**rd / sp.S(192)**rd
+        denominator *= SymmetricSum(a,(a,b,c,d))**rd * SymmetricSum((a-b)**2,(a,b,c,d))**rd / Rational(192)**rd
         yd = yd + rd
         xd = xd - rd
         r_degree = 0
@@ -343,7 +350,7 @@ def _symmetric_real_4vars(poly_pqr, original_symbols, new_symbols, return_poly=T
     elif k2d % 2 == 0:
         disc_pow_k2d = CyclicProduct((a-b)**2, (a,b,c,d), AlternatingGroup(4))**(k2d//2)
 
-    denominator *= sp.S(2)**(6*hom_degree - 4*k2d)\
+    denominator *= Rational(2)**(6*hom_degree - 4*k2d)\
         * x**xd * y**yd * z**zd * w**wd * (w + (y - z)**2)**k1d / disc_pow_k2d
 
     q2_ = -SymmetricSum((a-b)**2, (a,b,c,d))/32

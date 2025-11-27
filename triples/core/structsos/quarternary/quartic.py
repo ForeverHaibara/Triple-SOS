@@ -56,7 +56,7 @@ def _quarternary_quartic_real(coeff, real=True):
     s(((1-t)(a2-b2)+0(a2-c2)+(1+t)(a2-d2)+x(ab-cd)+y(bc-ad)+z(cd-bc)+w(ac-bd))2)
 
     so that the rest falls in the case of fluroite. This is heuristic and may not work for all cases.
-    
+
     Examples
     ----------
     s(((1-2)(a2-b2)+0(a2-c2)+(1+2)(a2-d2)-1(ab-cd)+6(bc-ad)+8(cd-bc)+2(ac-bd))2)
@@ -97,7 +97,7 @@ def _quarternary_quartic_real(coeff, real=True):
     z_p = Poly(radsimp([c3010*const_z, 0, (3*c3010-8)*const_z]), t)
     z_p2 = z_p**2
     c_sq_p = -8*z_p2 + c_sq_p1*z_p + c_sq_p0
-    w1_p = Poly(radsimp([-c2011/4 - c2101 - c2110/4 - c3001/4 - c3010 - c3100/4, 0, 
+    w1_p = Poly(radsimp([-c2011/4 - c2101 - c2110/4 - c3001/4 - c3010 - c3100/4, 0,
         -3*c2011/4 - 3*c2101 - 3*c2110/4 - 3*c3001/4 - 3*c3010 - 3*c3100/4]), t) - z_p2
     w2_p0 = Poly(radsimp([c2011 - c2110 - c3001 + c3100, 0, 3*c2011 - 3*c2110 - 3*c3001 + 3*c3100]), t)
     w2_p1 = Poly([c3010, 0, 3*c3010 - 8], t)

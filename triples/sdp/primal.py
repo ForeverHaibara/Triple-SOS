@@ -1,3 +1,4 @@
+from time import perf_counter
 from typing import Dict, List, Union, Optional, Tuple, Any, Callable
 
 from numpy import ndarray
@@ -6,8 +7,8 @@ from sympy import MutableDenseMatrix as Matrix
 from sympy import MatrixBase, Symbol, Float, Expr, Dummy
 from sympy.core.relational import Relational
 
-from .arithmetic import sqrtsize_of_mat, vec2mat, is_numerical_mat, rep_matrix_from_numpy, rep_matrix_to_numpy
-from .backends import solve_numerical_primal_sdp
+from .arithmetic import ArithmeticTimeout, sqrtsize_of_mat, vec2mat, is_numerical_mat, rep_matrix_from_numpy, rep_matrix_to_numpy
+from .backends import SDPTimeoutError, solve_numerical_primal_sdp
 from .rationalize import RationalizeWithMask, RationalizeSimultaneously
 from .transforms import TransformablePrimal
 from .utils import exprs_to_arrays
@@ -15,7 +16,7 @@ from .utils import exprs_to_arrays
 class SDPPrimal(TransformablePrimal):
     """
     Class to solve primal SDP problems, which is in the form of
-    
+
         sum_i trace(S_i*A_ij) = b_j, Si >> 0
 
     Primal form of SDP is not flexible to be used for symbolic purposes,
@@ -32,7 +33,7 @@ class SDPPrimal(TransformablePrimal):
         s.t.  tr(F1 * Y) = 10,
               tr(F2 * Y) = 20,
               Y >> 0.
-              
+
     where:
 
         F0 = Matrix(4,4,[1,0,0,0,0,2,0,0,0,0,3,0,0,0,0,4])
@@ -60,7 +61,7 @@ class SDPPrimal(TransformablePrimal):
         [X_{0,1}, X_{1,1}, X_{1,2}, X_{1,3}],
         [X_{0,2}, X_{1,2}, X_{2,2}, X_{2,3}],
         [X_{0,3}, X_{1,3}, X_{2,3}, X_{3,3}]])}
-       
+
     Then we can solve the problem by calling the `solve_obj` method
     by passing in the objective vector, and it is expected to return the solution vector.
 
@@ -82,7 +83,7 @@ class SDPPrimal(TransformablePrimal):
         [              0.0],
         [-2.29578098235181],
         [ 2.29579128881059]])
-    
+
     After the solution is found, the solution can also be accessed by `sdp.y`, `sdp.S`
     and `sdp.decompositions`. As the solving process is numerical, the matrix could
     be slightly nonpositive semidefinite up to a small numerical error.
@@ -237,7 +238,7 @@ class SDPPrimal(TransformablePrimal):
         if isinstance(splits, dict):
             keys = list(splits.keys())
             splits = list(splits.values())
-        
+
         space_list = []
         start = 0
         for n in splits:
@@ -330,7 +331,7 @@ class SDPPrimal(TransformablePrimal):
             solver=solver, return_result=return_result, **kwargs
         )
 
-    
+
     def solve_obj(self,
         objective: Union[Expr, Matrix, List],
         constraints: List[Union[Relational, Expr, Tuple[Matrix, Matrix, str]]] = [],
@@ -338,6 +339,7 @@ class SDPPrimal(TransformablePrimal):
         solve_child: bool = True,
         propagate_to_parent: bool = True,
         verbose: bool = False,
+        time_limit: Optional[float] = None,
         kwargs: Dict[Any, Any] = {}
     ) -> Optional[Matrix]:
         """
@@ -353,7 +355,7 @@ class SDPPrimal(TransformablePrimal):
         constraints : List[Union[Relational, Expr, Tuple[Matrix, Matrix, str]]]
             Additional affine constraints over variables. Each element of the list
             must be one of the following:
-            
+
             A sympy affine relational expression, e.g., `x > 0` or `Eq(x + y, 1)`.
               Note that equality constraints must use `sympy.Eq` class instead of `==` operator,
               because the latter `x + y == 1` will be evaluated to a boolean value.
@@ -382,6 +384,12 @@ class SDPPrimal(TransformablePrimal):
             Whether to allow the backend SDP solver to print the log. Defaults to False.
             This argument will be suppressed if `kwargs` contains a `verbose` key.
 
+        time_limit : Optional[float]
+            Time limit in seconds for the solver. If None, no time limit is set. Defaults to None.
+            When time limit is reached, the solver will try to terminate the process and raise
+            an Exception. Only a few solvers support time limit, e.g., 'mosek', 'clarabel' and 'qics',
+            and other solvers will not check timeout during the solving process.
+
         kwargs : Dict
             Extra kwargs passed to `sdp.backends.solve_numerical_dual_sdp`. Accepted kwargs keys:
             `verbose`, `max_iters`, `tol_gap_abs`, `tol_gap_rel`, `tol_fsb_abs`, `tol_fsb_rel`, `solver_options`,
@@ -390,7 +398,7 @@ class SDPPrimal(TransformablePrimal):
         return super().solve_obj(
             objective, constraints=constraints, solver=solver,
             solve_child=solve_child, propagate_to_parent=propagate_to_parent,
-            verbose=verbose, kwargs=kwargs
+            verbose=verbose, time_limit=time_limit, kwargs=kwargs
         )
 
     def solve(self,
@@ -399,6 +407,7 @@ class SDPPrimal(TransformablePrimal):
         propagate_to_parent: bool = True,
         verbose: bool = False,
         allow_numer: int = 0,
+        time_limit: Optional[float] = None,
         kwargs: Dict[Any, Any] = {}
     ) -> Optional[Matrix]:
         """
@@ -426,6 +435,12 @@ class SDPPrimal(TransformablePrimal):
             Whether to allow inexact, numerical feasible solutions. This is useful when the
             SDP is weakly feasible and no rational solution is found successfully.
 
+        time_limit : Optional[float]
+            Time limit in seconds for the solver. If None, no time limit is set. Defaults to None.
+            When time limit is reached, the solver will try to terminate the process and raise
+            an Exception. Only a few solvers support time limit, e.g., 'mosek', 'clarabel' and 'qics',
+            and other solvers will not check timeout during the solving process.
+
         kwargs : Dict
             Extra kwargs passed to `sdp.backends.solve_numerical_dual_sdp`. Accepted kwargs keys:
             `verbose`, `max_iters`, `tol_gap_abs`, `tol_gap_rel`, `tol_fsb_abs`, `tol_fsb_rel`, `solver_options`,
@@ -437,6 +452,8 @@ class SDPPrimal(TransformablePrimal):
             The solution of the SDP problem. If it fails, return None.
         """
         original_self = self
+        end_time = perf_counter() + time_limit if isinstance(time_limit, (int, float)) else None
+        time_limit = ArithmeticTimeout.make_checker(time_limit)
         if solve_child:
             self = self.get_last_child()
 
@@ -445,16 +462,27 @@ class SDPPrimal(TransformablePrimal):
 
         # add a relaxation variable on the diagonal to maximize the eigenvalue
         # sum(tr(AiSi)) = a => sum(tr(Ai(Xi + x*I))) = a where Si = Xi + xI
-        spaces = [rep_matrix_to_numpy(_) for _ in spaces]
-        diag = np.zeros((x0.shape[0], ), dtype=np.float64)
-        for space in spaces:
-            n = sqrtsize_of_mat(space.shape[1])
+        try:
+            spaces = [rep_matrix_to_numpy(_) for _ in spaces]
+            diag = np.zeros((x0.shape[0], ), dtype=np.float64)
+            for space in spaces:
+                n = sqrtsize_of_mat(space.shape[1])
 
-            # get the contribution of diagonals, i.e. traces
-            diag += space[:,np.arange(0,n**2,n+1)].sum(axis = 1)
-        spaces.append(diag)
-        objective = np.array([0]*self.dof + [-1], dtype=np.float64)
-        constraints = [(objective, 5, '<')] # avoid unboundness
+                # get the contribution of diagonals, i.e. traces
+                diag += space[:,np.arange(0,n**2,n+1)].sum(axis = 1)
+            spaces.append(diag)
+            objective = np.array([0]*self.dof + [-1], dtype=np.float64)
+            constraints = [(objective, 5, '<')] # avoid unboundness
+            time_limit()
+        except ArithmeticTimeout as e:
+            raise SDPTimeoutError.from_kwargs() from e
+
+
+        kwargs = kwargs.copy()
+        if (not ('verbose' in kwargs)) and float(verbose) > 1:
+            kwargs['verbose'] = verbose
+        if end_time is not None and (not ('time_limit' in kwargs)):
+            kwargs['time_limit'] = end_time - perf_counter()
 
         sol = solve_numerical_primal_sdp(
             (x0, spaces), objective=objective, constraints=constraints,
@@ -462,26 +490,30 @@ class SDPPrimal(TransformablePrimal):
         )
 
         success = False
-        if sol.y is not None and (not sol.infeasible):
-            y, eig = sol.y[:-1], sol.y[-1] # discard the eigenvalue relaxation
+        try:
+            if sol.y is not None and (not sol.infeasible):
+                y, eig = sol.y[:-1], sol.y[-1] # discard the eigenvalue relaxation
 
-            # restore matrices by adding the eigenvalue relaxation
-            bias = 0
-            for n in self.size.values():
-                y[bias: bias+n**2][np.arange(0,n**2,n+1)] += eig
-                bias += n**2
+                # restore matrices by adding the eigenvalue relaxation
+                bias = 0
+                for n in self.size.values():
+                    y[bias: bias+n**2][np.arange(0,n**2,n+1)] += eig
+                    bias += n**2
 
-            self._ys.append(y)
-            solution = self.rationalize(y, verbose=verbose,
-                rationalizers=[RationalizeWithMask(), RationalizeSimultaneously([1,1260,1260**3])])
-            if solution is not None:
-                self.y = solution[0]
-                self.S = dict((key, S[0]) for key, S in solution[1].items())
-                self.decompositions = dict((key, S[1:]) for key, S in solution[1].items())
-                success = True
-            elif allow_numer:
-                self.register_y(y, perturb=True, propagate_to_parent=propagate_to_parent)
-                success = True
+                self._ys.append(y)
+                time_limit()
+                solution = self.rationalize(y, verbose=verbose,
+                    rationalizers=[RationalizeWithMask(), RationalizeSimultaneously([1,1260,1260**3])])
+                if solution is not None:
+                    self.y = solution[0]
+                    self.S = dict((key, S[0]) for key, S in solution[1].items())
+                    self.decompositions = dict((key, S[1:]) for key, S in solution[1].items())
+                    success = True
+                elif allow_numer:
+                    self.register_y(y, perturb=True, propagate_to_parent=propagate_to_parent)
+                    success = True
+        except ArithmeticTimeout as e:
+            raise SDPTimeoutError(sol) from e
 
         if propagate_to_parent:
             self.propagate_to_parent(recursive=True)

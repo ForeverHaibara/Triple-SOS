@@ -1,11 +1,11 @@
 """
-This module provides an implementation of rational number matrices and their  
-arithmetic operations, aiming to provide a more efficient interface to  
+This module provides an implementation of rational number matrices and their
+arithmetic operations, aiming to provide a more efficient interface to
 using sympy.Rational or numpy for matrix computations.
 """
 
 from time import time
-from typing import List, Tuple, Union, Optional
+from typing import List, Tuple, Union, Optional, Callable
 
 from numpy import iinfo as np_iinfo
 from numpy import ndarray, int64, isnan, inf, unique
@@ -13,6 +13,7 @@ import sympy as sp
 from sympy.matrices import MutableDenseMatrix as Matrix
 
 from .matop import (
+    ArithmeticTimeout,
     is_zz_qq_mat, vec2mat, reshape, primitive,
     rep_matrix_to_numpy, rep_matrix_from_numpy
 )
@@ -38,7 +39,8 @@ def matadd(A: Union[Matrix, ndarray], B: Union[Matrix, ndarray]):
 
 
 def matmul(A: Union[Matrix, ndarray], B: Union[Matrix, ndarray],
-        return_shape: Optional[Tuple[int, int]] = None) -> Union[Matrix, ndarray]:
+        return_shape: Optional[Tuple[int, int]] = None,
+        time_limit: Optional[Union[Callable, float]] = None) -> Union[Matrix, ndarray]:
     """
     Fast, low-level implementation of symbolic matrix multiplication.
     When A and B are both rational matrices, it calls NumPy to compute the result.
@@ -96,10 +98,12 @@ def matmul(A: Union[Matrix, ndarray], B: Union[Matrix, ndarray],
         if return_shape is not None:
             C = C.reshape(return_shape)
         return C
+    time_limit = ArithmeticTimeout.make_checker(time_limit)
     if isinstance(A, ndarray):
         A = rep_matrix_from_numpy(A)
     if isinstance(B, ndarray):
         B = rep_matrix_from_numpy(B)
+    time_limit()
 
     return_shape = return_shape or (A.shape[0], B.shape[-1])
     if A.shape[0] == 0 or B.shape[0] == 0 or B.shape[-1] == 0:
@@ -108,7 +112,7 @@ def matmul(A: Union[Matrix, ndarray], B: Union[Matrix, ndarray],
 
     def default(A0, B0):
         return reshape(A0 @ B0, return_shape)
-    
+
     if not (is_zz_qq_mat(A) and is_zz_qq_mat(B)):
         return default(A0, B0)
 
@@ -118,22 +122,26 @@ def matmul(A: Union[Matrix, ndarray], B: Union[Matrix, ndarray],
         _MAXA = abs(A).max()
         if isnan(_MAXA) or _MAXA == inf or _MAXA > _INT64_MAX:
             raise OverflowError
+        time_limit()
 
         q2, B = primitive(B._rep)
         B = rep_matrix_to_numpy(B, dtype=int64)
         _MAXB = abs(B).max()
         if isnan(_MAXB) or _MAXB == inf or _MAXB > _INT64_MAX or int(_MAXA) * int(_MAXB) * B.shape[0] > _INT64_MAX:
             raise OverflowError
+        time_limit()
     except OverflowError:
         return default(A0, B0)
 
     q1q2 = q1 * q2
     C = (A @ B).reshape(return_shape)
+    time_limit()
     C = rep_matrix_from_numpy(C) * q1q2
     return C
 
 
-def matmul_multiple(A: Union[Matrix, ndarray], B: Union[Matrix, ndarray]) -> Union[Matrix, ndarray]:
+def matmul_multiple(A: Union[Matrix, ndarray], B: Union[Matrix, ndarray],
+        time_limit: Optional[Union[Callable, float]] = None) -> Union[Matrix, ndarray]:
     """
     Perform multiple matrix multiplications. This can be regarded as a 3-dim tensor multiplication.
     Assume A has shape N x (n^2) and B has shape n x m, then the result has shape N x (n*m).
@@ -179,10 +187,12 @@ def matmul_multiple(A: Union[Matrix, ndarray], B: Union[Matrix, ndarray]) -> Uni
     if isinstance(A, ndarray) and isinstance(B, ndarray):
         N, n = A.shape[0], B.shape[0]
         return (A.reshape(N, n, n) @ B).reshape(N, n*B.shape[1])
+    time_limit = ArithmeticTimeout.make_checker(time_limit)
     if isinstance(A, ndarray):
         A = rep_matrix_from_numpy(A)
     if isinstance(B, ndarray):
         B = rep_matrix_from_numpy(B)
+    time_limit()
 
     if A.shape[0] == 0 or B.shape[0] == 0 or B.shape[1] == 0:
         return sp.zeros(A.shape[0], B.shape[0]*B.shape[1])
@@ -192,7 +202,7 @@ def matmul_multiple(A: Union[Matrix, ndarray], B: Union[Matrix, ndarray]) -> Uni
         eq_mat = []
         for i in range(A.shape[0]):
             Aij = vec2mat(A[i,:])
-            eq = matmul(Aij, B, return_shape = (1, Aij.shape[0]*B.shape[1]))
+            eq = matmul(Aij, B, return_shape = (1, Aij.shape[0]*B.shape[1]), time_limit=time_limit)
             eq_mat.append(eq)
         eq_mat = Matrix.vstack(*eq_mat)
         return eq_mat
@@ -217,12 +227,14 @@ def matmul_multiple(A: Union[Matrix, ndarray], B: Union[Matrix, ndarray]) -> Uni
         _MAXA = abs(A).max()
         if isnan(_MAXA) or _MAXA == inf or _MAXA > _INT64_MAX:
             raise OverflowError
+        time_limit()
 
         q2, B = primitive(B._rep)
         B = rep_matrix_to_numpy(B, dtype=int64)
         _MAXB = abs(B).max()
         if isnan(_MAXB) or _MAXB == inf or _MAXB > _INT64_MAX or int(_MAXA) * int(_MAXB) * n > _INT64_MAX:
             raise OverflowError
+        time_limit()
     except OverflowError:
         return default(A0, B0)
 
@@ -233,6 +245,7 @@ def matmul_multiple(A: Union[Matrix, ndarray], B: Union[Matrix, ndarray]) -> Uni
         time0 = time()
 
     C = (A @ B).reshape((N, n*m))
+    time_limit()
 
     if _VERBOSE_MATMUL_MULTIPLE:
         print('>> Time for numpy matmul:', time() - time0) # very fast (can be ignored)
@@ -249,7 +262,8 @@ def matmul_multiple(A: Union[Matrix, ndarray], B: Union[Matrix, ndarray]) -> Uni
 
 
 def symmetric_bilinear(U: Union[Matrix, ndarray], A: Union[Matrix, ndarray], is_A_vec: bool = False,
-        return_shape: Tuple[int, int] = None) -> Union[Matrix, ndarray]:
+        return_shape: Tuple[int, int] = None,
+        time_limit: Optional[Union[Callable, float]] = None) -> Union[Matrix, ndarray]:
     """
     Compute U.T * A * U efficiently.
     Assume U is n x m, U.T is m x n and A is n x n. The result is m x m.
@@ -302,13 +316,14 @@ def symmetric_bilinear(U: Union[Matrix, ndarray], A: Union[Matrix, ndarray], is_
     """
     if is_A_vec:
         A = vec2mat(A)
-    M = matmul(U.T, matmul(A, U))
+    M = matmul(U.T, matmul(A, U, time_limit=time_limit), time_limit=time_limit)
     if return_shape is not None:
         return reshape(M, return_shape)
     return M
 
 
-def symmetric_bilinear_multiple(U: Union[Matrix, ndarray], A: Union[Matrix, ndarray]) -> Union[Matrix, ndarray]:
+def symmetric_bilinear_multiple(U: Union[Matrix, ndarray], A: Union[Matrix, ndarray],
+        time_limit: Optional[Union[Callable, float]] = None) -> Union[Matrix, ndarray]:
     """
     Perform multiple symmetric bilinear products.
     Assume U has shape n x m and A has shape N x (n^2), then the result has shape N x m^2.
@@ -323,10 +338,13 @@ def symmetric_bilinear_multiple(U: Union[Matrix, ndarray], A: Union[Matrix, ndar
     if isinstance(A, ndarray) and isinstance(U, ndarray):
         N, n = A.shape[0], U.shape[0]
         return (U.T @ A.reshape(N, n, n) @ U).reshape(N, U.shape[1]**2)
+    time_limit = ArithmeticTimeout.make_checker(time_limit)
     if isinstance(A, ndarray):
         A = rep_matrix_from_numpy(A)
     if isinstance(U, ndarray):
         U = rep_matrix_from_numpy(U)
+
+    time_limit()
 
     A0, U0 = A, U
     def default(A, U):
@@ -334,7 +352,8 @@ def symmetric_bilinear_multiple(U: Union[Matrix, ndarray], A: Union[Matrix, ndar
         for i in range(A.shape[0]):
             # Aij = vec2mat(space[i,:])
             # eq = U.T * Aij * U
-            eq = symmetric_bilinear(U, A[i,:], is_A_vec = True, return_shape = (1, U.shape[1]**2))
+            eq = symmetric_bilinear(U, A[i,:], is_A_vec = True, return_shape = (1, U.shape[1]**2),
+                                        time_limit = time_limit)
             eq_mat[i] = eq
         eq_mat = Matrix.vstack(*eq_mat)
         return eq_mat
@@ -354,17 +373,20 @@ def symmetric_bilinear_multiple(U: Union[Matrix, ndarray], A: Union[Matrix, ndar
         _MAXA = abs(A).max()
         if isnan(_MAXA) or _MAXA == inf or _MAXA > _INT64_MAX:
             raise OverflowError
+        time_limit()
 
         q2, U = primitive(U._rep)
         U = rep_matrix_to_numpy(U, dtype=int64)
         _MAXU = abs(U).max()
         if isnan(_MAXU) or _MAXU == inf or _MAXU > _INT64_MAX or int(_MAXA) * int(_MAXU)**2 * n**2 > _INT64_MAX:
             raise OverflowError
+        time_limit()
     except OverflowError:
         return default(A0, U0)
 
     A = A.reshape((N, n, n))
     C = (U.T @ A @ U).reshape((N, m**2))
+    time_limit()
 
     if _VERBOSE_MATMUL_MULTIPLE:
         time0 = time()

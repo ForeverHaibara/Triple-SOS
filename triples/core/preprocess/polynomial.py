@@ -1,271 +1,73 @@
-from functools import wraps
-from inspect import signature
-from typing import List, Dict, Union, Tuple
+from typing import List, Dict, Union, Tuple, Callable, Optional
 
-from sympy import __version__ as SYMPY_VERSION
-from sympy import Expr, Poly, Symbol, Integer, Pow, Function
-from sympy.core.symbol import uniquely_named_symbol
-from sympy.combinatorics import PermutationGroup, Permutation
+from sympy import Expr, Poly, Integer
 
+from ..problem import InequalityProblem
+from ..node import ProofNode, TransformNode
 from ...utils import (
-    Solution, MonomialManager, CyclicSum,
+    CyclicSum,
     identify_symmetry_from_lists, verify_symmetry, poly_reduce_by_symmetry
 )
-from sympy.external.importtools import version_tuple
-
-# fix the bug in sqf_list before 1.13.0
-# https://github.com/sympy/sympy/pull/26182
-if tuple(version_tuple(SYMPY_VERSION)) >= (1, 13):
-    _sqf_list = lambda p: p.sqf_list()
-else:
-    _sqf_list = lambda p: p.factor_list() # it would be slower, but correct
 
 
-def _std_ineq_constraints(p: Poly, e: Expr) -> Tuple[Poly, Expr]:
-    if p.is_zero: return p, e
-    c, lst = _sqf_list(p)
-    ret = Integer(1 if c > 0 else -1).as_poly(*p.gens, domain=p.domain)
-    e = e / (c if c > 0 else -c)
-    for q, d in lst:
-        if d % 2 == 1:
-            ret *= q
-        e = e / q.as_expr()**(d - d%2)
-    return ret, e
-
-def _std_eq_constraints(p: Poly, e: Expr) -> Tuple[Poly, Expr]:
-    if p.is_zero: return p, e
-    c, lst = _sqf_list(p)
-    ret = Integer(1 if c > 0 else -1).as_poly(*p.gens, domain=p.domain)
-    e = e / c
-    max_d = Integer(max(1, *(d for q, d in lst)))
-    for q, d in lst:
-        ret *= q
-        e = e * q.as_expr()**(max_d - d)
-    if max_d != 1:
-        e = Pow(e, 1/max_d, evaluate=False)
-    if c < 0:
-        e = e.__neg__()
-    return ret, e
-
-
-def _polylize(poly: Expr,
-        ineq_constraints: Dict[Expr, Expr] = {},
-        eq_constraints: Dict[Expr, Expr] = {},
-        ineq_constraint_sqf: bool = True,
-        eq_constraint_sqf: bool = True
-    ) -> Tuple[Poly, Dict[Poly, Expr], Dict[Poly, Expr], Tuple[Symbol, ...]]:
+class SolvePolynomial(TransformNode):
     """
-    Convert every expression in the input to be a sympy polynomial.
+    Solve a dense polynomial inequality. The target expression and its constraints
+    are all converted and stored as sympy (dense) Poly class. However, the process
+    of converting expressions to dense polynomials is inefficient for very large inputs.
     """
-    original_symbols = [] if not isinstance(poly, Poly) else poly.gens
-    symbols = set.union(
-        set(poly.free_symbols), 
-        *[set(e.free_symbols) for e in ineq_constraints.keys()],
-        *[set(e.free_symbols) for e in eq_constraints.keys()]
-    )
-    if len(symbols) == 0 and len(original_symbols) == 0:
-        symbols = {Symbol('x')}
-        # raise ValueError('No symbols found in the input.')
-    symbols = symbols - set(original_symbols)
-    symbols = tuple(sorted(list(symbols), key=lambda x: x.name))
-    symbols = tuple(original_symbols) + symbols
+    def get_polynomial_solvers(self, configs):
+        solvers = configs.get('solvers', None)
+        if solvers is None:
+            from ..structsos.structsos import StructuralSOSSolver
+            from ..linsos.linsos import LinearSOSSolver
+            from ..sdpsos.sdpsos import SDPSOSSolver
+            from ..symsos.symsos import SymmetricSubstitution
+            from .pivoting import Pivoting
+            from .reparam import Reparametrization
+            solvers = [
+                StructuralSOSSolver,
+                LinearSOSSolver,
+                SDPSOSSolver,
+                SymmetricSubstitution,
+                Reparametrization,
+                Pivoting
+            ]
+        return solvers
 
-    poly = Poly(poly.doit(), *symbols)
-    ineq_constraints = dict((Poly(e.doit(), *symbols), e2) for e, e2 in ineq_constraints.items())
-    eq_constraints = dict((Poly(e.doit(), *symbols), e2) for e, e2 in eq_constraints.items())
+    def explore(self, configs):
+        if self.status == 0:
+            problem = self.problem.polylize()
+            problem, _restoration = reduce_over_quotient_ring(problem)
+            # if problem.expr.is_zero:
+            #     problem.solution = _restoration(Integer(0))
+            #     self.status = -1
+            #     self.finished = True
+            #     return
 
+            solvers = self.get_polynomial_solvers(configs)
+            self.children = [solver(problem) for solver in solvers]
 
-    if ineq_constraint_sqf:
-        ineq_constraints = dict(_std_ineq_constraints(*item) for item in ineq_constraints.items())
-    ineq_constraints = dict((e, e2) for e, e2 in ineq_constraints.items() if e.total_degree() > 0)
+            self.status = - 1
 
-    if eq_constraint_sqf:
-        eq_constraints = dict(_std_eq_constraints(*item) for item in eq_constraints.items())
-    eq_constraints = dict((e, e2) for e, e2 in eq_constraints.items() if e.total_degree() > 0)
+        self.restorations = {c: _restoration for c in self.children}
+        if self.status != 0 and len(self.children) == 0:
+            # all children failed
+            self.finished = True
 
-    return poly, ineq_constraints, eq_constraints, symbols
-
-
-def handle_polynomial(
-        ineq_constraint_sqf: bool = True,
-        eq_constraint_sqf: bool = True,
-    ):
-    """
-    Wrap a solver function so that it converts sympy expr inputs to sympy polynomials.
-    """
-    def decorator(func):
-        @wraps(func)
-        def wrapper(poly: Expr,
-                ineq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
-                eq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {}, *args, **kwargs):
-
-            ################################################################
-            #               Convert inputs to sympy polynomials
-            ################################################################
-            poly, ineq_constraints, eq_constraints, symbols = _polylize(
-                poly, ineq_constraints, eq_constraints,
-                ineq_constraint_sqf=ineq_constraint_sqf, eq_constraint_sqf=eq_constraint_sqf)
-
-            sol = func(poly, ineq_constraints, eq_constraints, *args, **kwargs)
-            return sol
-        return wrapper
-    return decorator
-
-
-def sanitize_input(
-        homogenize: bool = False,
-        infer_symmetry: bool = False,
-        wrap_constraints: bool = False
-    ):
-    """
-    Most inner decorator for solver functions. Sanitize input types for internal solvers.
-
-    Parameters
-    -----------
-    homogenize: bool
-        Whether to homogenize the polynomial and inequality and equality constraints by
-        introducing a new variable. This is useful for solvers that only accepts homogeneous problems.
-    infer_symmetry: bool
-        Whether to automatically inferred the symmetry group and convert it to a MonomialManager
-        object. This is useful for solvers that needs access to the symmetry of the problem.
-    wrap_constraints: bool
-        Whether to convert the constraint dictionary {key: value} to {key: value'} to avoid
-        collision in the symbols in the new values of the dictionary.
-    """
-    def decorator(func):
-        @wraps(func)
-        def wrapper(poly: Poly,
-            ineq_constraints: Dict[Poly, Expr],
-            eq_constraints: Dict[Poly, Expr], *args, **kwargs
-        ):
-            symbols = poly.gens
-            ################################################################
-            #           Homogenize the polynomial and constraints
-            ################################################################
-            # homogenizer = None
-            # is_hom = poly.is_homogeneous and all(e.is_homogeneous for e in ineq_constraints)\
-            #     and all(e.is_homogeneous for e in eq_constraints)
-            # if (not is_hom) and homogenize:
-            #     homogenizer = uniquely_named_symbol('1', 
-            #         tuple(set.union(
-            #             set(symbols), *(e.free_symbols for e in ineq_constraints.values()), 
-            #             *(e.free_symbols for e in eq_constraints.values()))))
-            #     poly = poly.homogenize(homogenizer)
-            #     ineq_constraints = dict((e.homogenize(homogenizer), e2) for e, e2 in ineq_constraints.items())
-            #     ineq_constraints[homogenizer.as_poly(*poly.gens)] = homogenizer
-            #     eq_constraints = dict((e.homogenize(homogenizer), e2) for e, e2 in eq_constraints.items())
-            #     if '_homogenizer' in signature(func).parameters.keys():
-            #         kwargs['_homogenizer'] = homogenizer
-
-            quotient_ring_reduction = reduce_over_quotient_ring(
-                poly, ineq_constraints, eq_constraints, homogenize=homogenize
-            )
-            poly, ineq_constraints, eq_constraints = quotient_ring_reduction['problem']
-            homogenizer = quotient_ring_reduction['homogenizer']
-            restoration = quotient_ring_reduction['restoration']
-            _has_homogenizer_kwarg = signature(func).parameters.get('_homogenizer') is not None
-            if _has_homogenizer_kwarg:
-                kwargs['_homogenizer'] = homogenizer
-
-
-            ################################################################
-            #                       Infer symmetry
-            ################################################################
-            symmetry = kwargs.get('symmetry')
-            if homogenizer is not None and symmetry is not None:
-                # the generators might increase after homogenization
-                symmetry = symmetry.perm_group if isinstance(symmetry, MonomialManager) else symmetry
-                nvars = len(poly.gens)
-                if symmetry.degree != nvars:
-                    symmetry = PermutationGroup(*[Permutation(_.array_form + [nvars-1]) for _ in symmetry.args])
-
-            if infer_symmetry and symmetry is None:
-                symmetry = identify_symmetry_from_lists(
-                    [[poly], list(ineq_constraints.keys()), list(eq_constraints.keys())])
-
-            symmetry = MonomialManager(len(poly.gens), symmetry)
-
-            _has_symmetry_kwarg = signature(func).parameters.get('symmetry') is not None
-            if _has_symmetry_kwarg:
-                kwargs['symmetry'] = symmetry
-
-
-            ################################################################
-            #                    Wrap constraints
-            ################################################################
-            constraints_wrapper = None
-            if wrap_constraints:
-                # wrap ineq/eq constraints to be sympy function class wrt. generators rather irrelevent symbols
-                constraints_wrapper = _get_constraints_wrapper(
-                    poly.gens, ineq_constraints, eq_constraints, symmetry.perm_group)
-                ineq_constraints, eq_constraints = constraints_wrapper[0], constraints_wrapper[1]
-
-
-            ########################################################
-            #               Call the solver function
-            ########################################################
-            sol: Solution = func(poly, ineq_constraints, eq_constraints, *args, **kwargs)
-            if sol is None:
-                return None
-
-            if constraints_wrapper is not None:
-                # note: first restore the constraints (with homogenizer), and then dehomogenize
-                sol = sol.xreplace(constraints_wrapper[2])
-                sol = sol.xreplace(constraints_wrapper[3])
-
-            # if homogenizer is not None:
-            #     sol = sol.dehomogenize(homogenizer)
-            sol = restoration(sol)
-            return sol
-        return wrapper
-    return decorator
-
-
-
-def _get_constraints_wrapper(symbols: Tuple[int, ...],
-    ineq_constraints: Dict[Poly, Expr], eq_constraints: Dict[Poly, Expr], perm_group: PermutationGroup):
-    def _get_mask(symbols, dlist):
-        # only reserve symbols with degree > 0, this reduces time complexity greatly
-        return tuple(s for d, s in zip(dlist, symbols) if d != 0)
-
-    def _get_dicts(constraints, name='_G'):
-        dt = dict()
-        inv = dict()
-        rep_dict = dict((p.rep, v) for p, v in constraints.items())
-        counter = 0  
-        for base in constraints.keys():
-            if base.rep in dt:
-                continue
-            dlist = base.degree_list()
-            for p in perm_group.elements:
-                invorder = p.__invert__()(symbols)
-                permed_base = base.reorder(*invorder).rep
-                permed_expr = rep_dict.get(permed_base)
-                if permed_expr is None:
-                    raise ValueError("Given constraints are not symmetric with respect to the permutation group.")
-                compressed = _get_mask(p(symbols), dlist)
-                value = Function(name + str(counter))(*compressed)
-                dt[permed_base] = value
-                inv[value] = permed_expr
-            counter += 1
-        dt = dict((Poly.new(k, *symbols), v) for k, v in dt.items())
-        return dt, inv
-    i2g, g2i = _get_dicts(ineq_constraints, name='_G')
-    e2h, h2e = _get_dicts(eq_constraints, name='_H')
-    return i2g, e2h, g2i, h2e
 
 #########################################################
 #
-#           Transformations on the Problem
+#                Bidegree Homogenization
 #
 #########################################################
 
-def _is_bidegree(p):
+def _is_bidegree(p: Poly) -> Optional[Tuple[Poly, Poly, int]]:
     """Check whether a multivariate polynomial has two different degrees.
     Returns l1, l2, sgn such that p = sgn * (l2 - l1). Also,
     l1, l2 are homogeneous, deg(l1) < deg(l2) and l1.LC() > 0. Returns
     None if p does not have the property.
-    
+
     Examples
     ---------
     >>> from sympy.abc import a, b, c
@@ -305,11 +107,38 @@ def _is_bidegree(p):
         sgn = -1
     return l1, l2, sgn
 
-def _align_degree(p, p1, p2, accept_odd_degree=False):
-    """Homogenize p given p1 == p2 and deg(p1) < deg(p2).
+def _align_degree(p: Poly, p1: Poly, p2: Poly, accept_odd_degree: bool = False) -> Optional[Tuple[Poly, int, Poly]]:
+    """
+    Homogenize p given p1 == p2 and deg(p1) < deg(p2).
     Returns q, d, x such that q = p1**d * p + x(p2 - p1) where q, x are polynomials
-    and q is homogeneous. Returns None if it fails"""
+    and q is homogeneous. Returns None if it fails.
+
+    Parameters
+    ----------
+    p: Poly
+        The polynomial to be homogenized.
+    p1: Poly
+        The first polynomial in the alignment.
+    p2: Poly
+        The second polynomial in the alignment.
+    accept_odd_degree: bool
+        If False, d is forced to be even.
+
+    Examples
+    --------
+    >>> from sympy.abc import a, b, c
+    >>> from sympy import Poly
+    >>> p, p1, p2 = Poly(a**2+b**2+c**2 - 3, (a,b,c)), Poly(3, (a,b,c)), Poly(a+b+c, (a,b,c))
+    >>> q, d, x = _align_degree(p, p1, p2); (q, d, x) # doctest: +NORMALIZE_WHITESPACE
+    (Poly(6*a**2 - 6*a*b - 6*a*c + 6*b**2 - 6*b*c + 6*c**2, a, b, c, domain='ZZ'),
+    2,
+    Poly(-3*a - 3*b - 3*c - 9, a, b, c, domain='ZZ'))
+    >>> (q - (p1**d * p + x*(p2 - p1)))
+    Poly(0, a, b, c, domain='ZZ')
+    """
     ddiff = p2.total_degree() - p1.total_degree()
+    if ddiff == 0:
+        return None
     terms = {}
     for m, c in p.terms():
         d = sum(m)
@@ -342,12 +171,88 @@ def _align_degree(p, p1, p2, accept_odd_degree=False):
     # print(p, '- (hom) ->', q, muldeg, divrem[0])
     return q, muldeg, divrem[0]
 
+def _bidegree_recover_expr(lst: List[Dict[Poly, Tuple[Poly, int, Poly]]], p1: Poly, sgn_expr: Expr) -> Expr:
+    """
+    Utility function for bidegree homogenization.
+    Recover the original expressions from homogenization info, each represented
+    by a tuple (mul_deg, expr, quo). After recovery, it would be:
 
-def reduce_over_quotient_ring(poly: Poly,
-        ineq_constraints: Dict[Poly, Expr],
-        eq_constraints: Dict[Poly, Expr],
-        homogenize: bool = False,
-    ):
+        `p1.as_expr()**mul_deg * expr + sgn_expr * quo.as_expr()`
+
+    The modification is done in-place. Returns only the expression
+    form of `p1`.
+    """
+    symmetry = identify_symmetry_from_lists([list(d.keys()) for d in lst])
+    if symmetry.is_trivial:
+        symmetry = None
+
+    def p2expr(p: Poly) -> Expr:
+        # convert a polynomial to expr wisely by exploting the symmetry
+        if (symmetry is not None) and verify_symmetry(p, symmetry):
+            p = poly_reduce_by_symmetry(p, symmetry)
+            return CyclicSum(p.as_expr(), p.gens, symmetry)
+        return p.as_expr()
+    p1_expr = p2expr(p1)
+    for d in lst:
+        for p, (mul_deg, expr, quo) in d.items():
+            d[p] = p1_expr**mul_deg * expr + p2expr(quo)*sgn_expr
+    return p1_expr
+
+def _bidegree_attempt(problem: InequalityProblem, eq: Poly) -> Optional[Tuple[InequalityProblem, Callable]]:
+    """
+    Test whether the constraint `eq` can be use to homogenize the original problem.
+
+    If yes, returns a new problem and a function to recover the solution.
+    """
+    poly, ineq_constraints, eq_constraints = problem.expr, problem.ineq_constraints, problem.eq_constraints
+
+    bideg = _is_bidegree(eq)
+    if bideg is None:
+        return None
+    p1, p2, sgn = bideg
+
+    accept_odd = True if (p1.total_degree() == 0 and p1.LC() > 0) else False
+    # print(f'Bidegree: {eq} == 0  <=>  {p1} == {p2}')
+
+    # handle them universally
+    dicts = [{poly: 0}, ineq_constraints, eq_constraints]
+    new_dicts = [{}, {}, {}]
+
+    for dict_i, src in enumerate(dicts):
+        dst = new_dicts[dict_i]
+        for key, expr in src.items():
+            if dict_i == 2 and key == eq:
+                continue
+            alignment = _align_degree(key, p1, p2, accept_odd_degree=accept_odd)
+            if alignment is None:
+                return None
+            # to avoid wasting time, we only store the homogenization info here
+            new_poly, mul_deg, quo = alignment
+            dst[new_poly] = (mul_deg, expr, quo)
+
+    # All polynomials are homogenized,
+    # now we restore the homogenization info (tuples) to exprs.
+    mul_deg = next(iter(new_dicts[0].values()))[0]
+    eq_expr = eq_constraints[eq]
+    p1_expr = _bidegree_recover_expr(new_dicts, p1, sgn * eq_expr)
+
+    new_poly, expr_shift = next(iter(new_dicts[0].items()))
+    def _align_degree_restore(x):
+        """Recover z such that `(p1_expr**mul_deg * z + expr_shift) == x`"""
+        return (x - expr_shift) / p1_expr**mul_deg
+    new_problem = problem.new(new_poly, new_dicts[1], new_dicts[2])
+    new_problem.roots = problem.roots
+    return new_problem, _align_degree_restore
+
+def bidegree_homogenization(problem: InequalityProblem) -> Tuple[InequalityProblem, Callable]:
+    for eq in problem.eq_constraints:
+        attempt = _bidegree_attempt(problem, eq)
+        if attempt is not None:
+            return attempt
+    return problem, lambda x: x
+
+
+def reduce_over_quotient_ring(problem: InequalityProblem):
     """
     Perform quotient ring reduction of the problem, including operations like
     homogenization.
@@ -355,118 +260,30 @@ def reduce_over_quotient_ring(poly: Poly,
     Given equality constraint f(x) = g(x) where f,g are nonzero homogeneous polynomials
     and deg(f) = deg(g), we obtain 1 = (f(x)/g(x)) and can be used for homogenization.
 
-    Parameters
-    ----------
-    homogenize: bool
-        Whether to homogenize the problem by introducing a new variable.
-
-    TODO: move it elsewhere
-
-    Returns a dict containing
-    {
-        'problem': (new_poly, new_ineq_constraints, new_eq_constraints),
-        'restoration': restoration,
-        **kwargs
-    }
+    TODO:
+    1. Eliminate linear equality constraints, e.g. a+2b=3
+    2. Eliminate linear inequality constraints, e.g. b+c-a, c+a-b, a+b-c>=0
     """
-    symbols = poly.gens
+    poly, ineq_constraints, eq_constraints = problem.expr, problem.ineq_constraints, problem.eq_constraints
     restorations = []
     ################################################################
     #           Homogenize the polynomial and constraints
     ################################################################
-    homogenizer = None
     is_hom = poly.is_homogeneous and all(e.is_homogeneous for e in ineq_constraints)\
         and all(e.is_homogeneous for e in eq_constraints)
     if is_hom:
         # nothing to do
-        return {
-            'problem': (poly, ineq_constraints, eq_constraints),
-            'homogenizer': homogenizer,
-            'restoration': lambda x: x
-        }
+        return problem, lambda x: x
 
     ################################################################
     #         Homogenize using bidegree constraints
     ################################################################
 
-    # tested_bidgree = 0
-    for eq, expr in eq_constraints.items():
-        bideg = _is_bidegree(eq)
-        if bideg is None:
-            continue
-        p1, p2, sgn = bideg
-        # diffdeg = p2.total_degree() - p1.total_degree()
-        accept_odd = True if (p1.total_degree() == 0 and p1.LC() > 0) else False
-        # print(f'Bidegree: {eq} == 0  <=>  {p1} == {p2}')
+    problem, restore = bidegree_homogenization(problem)
+    restorations.append(restore)
 
-        new_poly = _align_degree(poly, p1, p2, accept_odd_degree=accept_odd)
-        if new_poly is None:
-            continue
-        sgn_expr = sgn * expr
-        new_ineqs = {}
-        new_eqs = {}
-        success = True
-        for ineq, ineq_expr in ineq_constraints.items():
-            new_ineq = _align_degree(ineq, p1, p2, accept_odd_degree=accept_odd)
-            if new_ineq is None:
-                success = False
-                break
-            new_ineq, muldeg, quo = new_ineq
-            new_ineqs[new_ineq] = (muldeg, ineq_expr, quo)
-        if not success:
-            continue
-        for eq2, eq_expr in eq_constraints.items():
-            if eq2 == eq:
-                continue
-            new_eq = _align_degree(eq2, p1, p2, accept_odd_degree=accept_odd)
-            if new_eq is None:
-                success = False
-                break
-            new_eq, muldeg, quo = new_eq
-            new_eqs[new_eq] = (muldeg, eq_expr, quo)
-        if not success:
-            continue
-
-        # update the expression associated with each constraint after homogenization
-        symmetry = identify_symmetry_from_lists(
-                    [[new_poly[0]], list(new_ineqs.keys()), list(new_eqs.keys())])
-        if symmetry.is_trivial:
-            symmetry = None
-        def p2expr(p: Poly) -> Expr:
-            # convert a polynomial to expr wisely by exploting the symmetry
-            if (symmetry is not None) and verify_symmetry(p, symmetry):
-                p = poly_reduce_by_symmetry(p, symmetry)
-                return CyclicSum(p.as_expr(), p.gens, symmetry)
-            return p.as_expr()
-        p1_expr = p2expr(p1)
-        for new_ineq, (muldeg, ineq_expr, quo) in new_ineqs.items():
-            new_ineqs[new_ineq] = p1_expr**muldeg * ineq_expr + p2expr(quo)*sgn_expr 
-        for new_eq, (muldeg, eq_expr, quo) in new_eqs.items():
-            new_eqs[new_eq] = p1_expr**muldeg * eq_expr + p2expr(quo)*sgn_expr
-
-        # homogenize successfully
-        poly = new_poly[0]
-        is_hom = True
-        ineq_constraints, eq_constraints = new_ineqs, new_eqs
-        def _align_degree_restore(x):
-            if not isinstance(x, Solution): return None
-            x.solution = (x.solution - p2expr(new_poly[2])*sgn_expr) / p1_expr**new_poly[1]
-            return x
-        restorations.append(_align_degree_restore)
-        break
-
-
-    if (not is_hom) and homogenize:
-        homogenizer = uniquely_named_symbol('1', 
-            tuple(set.union(
-                set(symbols), *(e.free_symbols for e in ineq_constraints.values()), 
-                *(e.free_symbols for e in eq_constraints.values()))))
-        poly = poly.homogenize(homogenizer)
-        ineq_constraints = dict((e.homogenize(homogenizer), e2) for e, e2 in ineq_constraints.items())
-        ineq_constraints[homogenizer.as_poly(*poly.gens)] = homogenizer
-        eq_constraints = dict((e.homogenize(homogenizer), e2) for e, e2 in eq_constraints.items())
-        restorations.append(lambda sol: sol.dehomogenize(homogenizer))
-
+    if len(restorations) == 0:
+        restorations.append(lambda x: x)
     def restoration(sol):
         if sol is None:
             return None
@@ -474,8 +291,4 @@ def reduce_over_quotient_ring(poly: Poly,
             sol = rs(sol)
         return sol
 
-    return {
-        'problem': (poly, ineq_constraints, eq_constraints),
-        'homogenizer': homogenizer,
-        'restoration': restoration
-    }
+    return problem, restoration

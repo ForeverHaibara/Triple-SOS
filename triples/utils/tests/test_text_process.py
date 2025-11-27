@@ -3,7 +3,7 @@ from sympy import Poly, QQ, ZZ, sympify, sqrt, cbrt, Rational, Float, Symbol
 from sympy.abc import a, b, c, d, e, x, y, z
 from sympy.combinatorics import CyclicGroup, SymmetricGroup, DihedralGroup, PermutationGroup, Permutation
 
-from ..expression import CyclicSum, CyclicProduct, SymmetricSum, SymmetricProduct
+from ..expressions import CyclicSum, CyclicProduct, SymmetricSum, SymmetricProduct
 from ..text_process import pl, degree_of_zero
 
 

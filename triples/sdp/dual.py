@@ -1,3 +1,4 @@
+from time import perf_counter
 from typing import Tuple, List, Dict, Union, Optional, Any, Callable
 
 import numpy as np
@@ -7,10 +8,10 @@ from sympy import MutableDenseMatrix as Matrix
 
 from .abstract import Decomp
 from .arithmetic import (
-    solve_undetermined_linear, solve_csr_linear, free_symbols_of_mat,
+    ArithmeticTimeout, solve_undetermined_linear, solve_csr_linear, free_symbols_of_mat,
     rep_matrix_from_dict, rep_matrix_to_numpy, rep_matrix_from_numpy, sqrtsize_of_mat
 )
-from .backends import SDPError, solve_numerical_dual_sdp
+from .backends import SDPError, SDPTimeoutError, solve_numerical_dual_sdp
 from .rationalize import SDPRationalizeError, DualRationalizer
 from .transforms import TransformableDual
 
@@ -45,7 +46,7 @@ class SDPProblem(TransformableDual):
     Class to solve dual SDP problems, which is in the form of
 
         S_i = C_i + y_1 * A_i1 + y_2 * A_i2 + ... + y_n * A_in >> 0.
-    
+
     where C, A_ij ... are known symmetric matrices, and y_i are free variables.
 
     It can be rewritten in the form of
@@ -399,7 +400,7 @@ class SDPProblem(TransformableDual):
         ----------
         gens : Tuple[Symbol, ...]
             The variables of the SDP problem.
-    
+
         Examples
         ----------
         >>> from sympy import Matrix
@@ -523,12 +524,13 @@ class SDPProblem(TransformableDual):
         add_force_zeros: bool = False,
         equal_entries: List[Tuple[int, int]] = [],
         add_equal_entries: bool = True,
+        time_limit: Optional[Union[Callable, float]] = None,
     ) -> Tuple['SDPProblem', Tuple[Matrix, Matrix]]:
         """
         Assume the SDP problem can be rewritten in the form of
 
             eq * [vec(S1); vec(S2); ...] + eq * M = rhs
-        
+
         where Si >> 0 and Si.shape[0] = splits[i], and M is the linear part.
         The function formulates the SDP problem from the given equations.
         This is also the primal form of the SDP problem.
@@ -549,6 +551,9 @@ class SDPProblem(TransformableDual):
             If True, constrain the pair (i,j) and (j,i) entries of a symmetric
             matrix to be equal when solving the linear system. This is important to be
             True unless the constraint has been provided in the `equal_entries` argument.
+        time_limit: Optional[Union[Callable, float]]
+            Try to raise the ArithmeticTimeout Exception when timeout is detected.
+            If callable, it should be a function to check timeout and raise the Exception.
 
         Returns
         ---------
@@ -573,7 +578,7 @@ class SDPProblem(TransformableDual):
             b = Matrix([1])
 
         To initialize the problem, just use the `from_equations` method.
- 
+
             >>> from sympy import Matrix
             >>> A = Matrix([[1,2,4,2,3,5,4,5,6]])
             >>> b = Matrix([1])
@@ -594,6 +599,8 @@ class SDPProblem(TransformableDual):
             >>> sdp.S[0].trace() # doctest: +SKIP
             0.0864750551103711
         """
+        time_limit = ArithmeticTimeout.make_checker(time_limit)
+
         if splits is None:
             splits = [sqrtsize_of_mat(eq.shape[1])]
             if splits[0]**2 != eq.shape[1]:
@@ -620,8 +627,10 @@ class SDPProblem(TransformableDual):
                     else: # avoid overwriting by .extend
                         force_zeros[j] = force_zeros[j] + list(range(j-i, j-i+n))
                 offset += n**2
+        time_limit()
 
-        x0, space = solve_csr_linear(eq, rhs, x0_equal_indices=equal_entries, force_zeros=force_zeros)
+        x0, space = solve_csr_linear(eq, rhs, x0_equal_indices=equal_entries, force_zeros=force_zeros,
+            time_limit=time_limit)
         n = sum([_**2 for _ in sizes])
 
         sdp = cls.from_full_x0_and_space(x0[:n,:], space[:n,:], splits)
@@ -723,7 +732,8 @@ class SDPProblem(TransformableDual):
         """
         return super().as_params()
 
-    def rationalize(self, y: np.ndarray, verbose = False, **kwargs) -> Optional[Tuple[Matrix, Decomp]]:
+    def rationalize(self, y: np.ndarray, verbose: bool = False,
+            time_limit: Optional[Union[Callable, float]] = None, **kwargs) -> Optional[Tuple[Matrix, Decomp]]:
         """
         Rationalize a NumPy vector `y`. If verbose == True, display the numerical eigenvalues
         before rationalization.
@@ -736,7 +746,7 @@ class SDPProblem(TransformableDual):
         if verbose:
             S_eigen = list(f.mineigs(y).values())
             print(f'Minimum Eigenvalues = {S_eigen}')
-        return f.rationalize(y)
+        return f.rationalize(y, time_limit=time_limit)
 
     def _solve_numerical_sdp(self,
         objective: np.ndarray,
@@ -759,6 +769,7 @@ class SDPProblem(TransformableDual):
         solve_child: bool = True,
         propagate_to_parent: bool = True,
         verbose: bool = False,
+        time_limit: Optional[float] = None,
         kwargs: Dict[Any, Any] = {}
     ) -> Optional[Matrix]:
         """
@@ -774,7 +785,7 @@ class SDPProblem(TransformableDual):
         constraints : List[Union[Relational, Expr, Tuple[Matrix, Matrix, str]]]
             Additional affine constraints over variables. Each element of the list
             must be one of the following:
-            
+
             A sympy affine relational expression, e.g., `x > 0` or `Eq(x + y, 1)`.
               Note that equality constraints must use `sympy.Eq` class instead of `==` operator,
               because the latter `x + y == 1` will be evaluated to a boolean value.
@@ -802,6 +813,12 @@ class SDPProblem(TransformableDual):
         verbose : bool
             Whether to allow the backend SDP solver to print the log. Defaults to False.
             This argument will be suppressed if `kwargs` contains a `verbose` key.
+
+        time_limit : Optional[float]
+            Time limit in seconds for the solver. If None, no time limit is set. Defaults to None.
+            When time limit is reached, the solver will try to terminate the process and raise
+            an Exception. Only a few solvers support time limit, e.g., 'mosek', 'clarabel' and 'qics',
+            and other solvers will not check timeout during the solving process.
 
         kwargs : Dict
             Extra kwargs passed to `sdp.backends.solve_numerical_dual_sdp`. Accepted kwargs keys:
@@ -874,7 +891,7 @@ class SDPProblem(TransformableDual):
         equivalent to the previous example:
 
             >>> sol = sdp.solve_obj(-x-2*y, constraints=[(Matrix([[1,1]]), Matrix([0]), '<')])
-    
+
         The function will sanitize the input so it is also acceptable to pass in lists or numpy
         arrays instead of sympy matrices.
 
@@ -939,7 +956,7 @@ class SDPProblem(TransformableDual):
         return super().solve_obj(
             objective, constraints=constraints, solver=solver,
             solve_child=solve_child, propagate_to_parent=propagate_to_parent,
-            verbose=verbose, kwargs=kwargs
+            verbose=verbose, time_limit=time_limit, kwargs=kwargs
         )
 
     def solve(self,
@@ -947,6 +964,7 @@ class SDPProblem(TransformableDual):
         solve_child: bool = True,
         propagate_to_parent: bool = True,
         verbose: bool = False,
+        time_limit: Optional[float] = None,
         allow_numer: int = 0,
         kwargs: Dict[Any, Any] = {}
     ) -> Optional[Matrix]:
@@ -970,6 +988,15 @@ class SDPProblem(TransformableDual):
         propagate_to_parent : bool
             If there is a transformation graph of the SDP, whether to propagate the solution of
             the SDP to its parents. Defaults to True.
+
+        verbose : bool
+            Whether to print the progress of the solver. Defaults to False.
+
+        time_limit : Optional[float]
+            Time limit in seconds for the solver. If None, no time limit is set. Defaults to None.
+            When time limit is reached, the solver will try to terminate the process and raise
+            an Exception. Only a few solvers support time limit, e.g., 'mosek', 'clarabel' and 'qics',
+            and other solvers will not check timeout during the solving process.
 
         allow_numer : bool
             Whether to allow inexact, numerical feasible solutions. This is useful when the
@@ -1008,57 +1035,31 @@ class SDPProblem(TransformableDual):
             >>> sdp = SDPProblem.from_matrix(X)
             >>> sdp.solve() # doctest: +SKIP
             Matrix([
-            [  -433/2302],
-            [8357/134991],
-            [  -433/2302]])
+            [0],
+            [0],
+            [0]])
 
         The `solve` method tries to find a rational solution if the SDP problem is rational
         by rationalization. After solving, the result can be accessed via `.y`, `.S` and `.as_params()`:
 
             >>> sdp.y # doctest: +SKIP
             Matrix([
-            [  -433/2302],
-            [8357/134991],
-            [  -433/2302]])
+            [0],
+            [0],
+            [0]])
             >>> sdp.S # doctest: +SKIP
-            {0: Matrix([
-            [          1,           1/2,     -433/2302, 8357/134991],
-            [        1/2,     1584/1151, 118277/269982,   -433/2302],
-            [  -433/2302, 118277/269982,     1584/1151,         1/2],
-            [8357/134991,     -433/2302,           1/2,           1]])}
-            >>> sdp.as_params() # doctest: +SKIP
-            {a: -433/2302, b: 8357/134991, c: -433/2302}
-
-        It is also possible to access the decompositions via `.decompositions`,
-        which contains a dictionary of (U, D) tuple such that U.T@diag(D)@U=S.
-
-            >>> sdp.decompositions # doctest: +SKIP
-            {0: (Matrix([
-            [1, 1/2,           -433/2302,                               8357/134991],
-            [0,   1, 330724757/699928335,                       -27228004/139985667],
-            [0,   0,                   1, 38499884941424340985/68179658483640649487],
-            [0,   0,                   0,                                         1]]), Matrix([
-            [                                                                   1],
-            [                                                           5185/4604],
-            [                         136359316967281298974/125172531956581997985],
-            [866868545756278356280599749609294/1430012304144122904319093542412497]]))}
-
-        ### Registering solutions
-
-        The rationalization might fail, or generate very nasty solutions, and we may
-        want to manually register a solution. The `register_y` method can be used to register
-        a solution. By registration, the feasibility will be verified and the matrices
-        and decompositions will be automatically updated.
-
-            >>> sdp.register_y([0,0,0])
-            True
-            >>> sdp.S
             {0: Matrix([
             [  1, 1/2,   0,   0],
             [1/2,   1, 1/2,   0],
             [  0, 1/2,   1, 1/2],
             [  0,   0, 1/2,   1]])}
-            >>> sdp.decompositions
+            >>> sdp.as_params() # doctest: +SKIP
+            {a: 0, b: 0, c: 0}
+
+        It is also possible to access the decompositions via `.decompositions`,
+        which contains a dictionary of (U, D) tuple such that U.T@diag(D)@U=S.
+
+            >>> sdp.decompositions # doctest: +SKIP
             {0: (Matrix([
             [1, 1/2,   0,   0],
             [0,   1, 2/3,   0],
@@ -1069,11 +1070,37 @@ class SDPProblem(TransformableDual):
             [2/3],
             [5/8]]))}
 
+        ### Registering solutions
+
+        The rationalization might fail, or generate very nasty solutions, and we may
+        want to manually register a solution. The `register_y` method can be used to register
+        a solution. By registration, the feasibility will be verified and the matrices
+        and decompositions will be automatically updated.
+
+            >>> sdp.register_y([0,half,0])
+            True
+            >>> sdp.S
+            {0: Matrix([
+            [  1, 1/2,   0, 1/2],
+            [1/2,   1,   0,   0],
+            [  0,   0,   1, 1/2],
+            [1/2,   0, 1/2,   1]])}
+            >>> sdp.decompositions
+            {0: (Matrix([
+            [1, 1/2, 0,  1/2],
+            [0,   1, 0, -1/3],
+            [0,   0, 1,  1/2],
+            [0,   0, 0,    1]]), Matrix([
+            [   1],
+            [ 3/4],
+            [   1],
+            [5/12]]))}
+
         We can then obtain a sum-of-squares proof via the decomposition:
 
             >>> U, D = sdp.decompositions[0]
             >>> sos = sum(coeff*p**2 for coeff, p in zip(D, U@xx)); sos
-            5*x**6/8 + (x/2 + 1)**2 + 3*(2*x**2/3 + x)**2/4 + 2*(3*x**3/4 + x**2)**2/3
+            5*x**6/12 + 3*(-x**3/3 + x)**2/4 + (x**3/2 + x**2)**2 + (x**3/2 + x/2 + 1)**2
             >>> sos.expand()
             x**6 + x**5 + x**4 + x**3 + x**2 + x + 1
 
@@ -1108,6 +1135,9 @@ class SDPProblem(TransformableDual):
             [1.41421356161294,              1.0]])}
         """
         original_self = self
+        end_time = perf_counter() + time_limit if isinstance(time_limit, (int, float)) else None
+        time_limit = ArithmeticTimeout.make_checker(time_limit)
+
         if solve_child:
             self = self.get_last_child()
         if self.dof == 0:
@@ -1121,38 +1151,53 @@ class SDPProblem(TransformableDual):
 
         success = False
 
-        x0_and_space = {}
-        size = self.size
-        for key, (x0, space) in self._x0_and_space.items():
-            n = size[key]
-            # diagonals = Matrix([-int(i%(n+1)==0) for i in range(n**2)])
-            diagonals = -np.eye(n).reshape(n**2, 1)
-            x0_and_space[key] = (x0, np.hstack([rep_matrix_to_numpy(space), diagonals]))
-        objective = np.zeros(self.dof + 1)
-        objective[-1] = -1
-        constraints = [(objective, 0, '<'), (objective, -5, '>')]
+        try:
+            x0_and_space = {}
+            size = self.size
+            for key, (x0, space) in self._x0_and_space.items():
+                n = size[key]
+                # diagonals = Matrix([-int(i%(n+1)==0) for i in range(n**2)])
+                diagonals = -np.eye(n).reshape(n**2, 1)
+                x0_and_space[key] = (x0, np.hstack([rep_matrix_to_numpy(space), diagonals]))
+                time_limit()
+            objective = np.zeros(self.dof + 1)
+            objective[-1] = -1
+            constraints = [(objective, 0, '<'), (objective, -5, '>')]
+        except ArithmeticTimeout as e:
+            raise SDPTimeoutError.from_kwargs() from e
+
+        kwargs = kwargs.copy()
+        if (not ('verbose' in kwargs)) and float(verbose) > 1:
+            kwargs['verbose'] = verbose
+        if end_time is not None and (not ('time_limit' in kwargs)):
+            kwargs['time_limit'] = end_time - perf_counter()
+
         sol = solve_numerical_dual_sdp(
             x0_and_space, objective=objective, constraints=constraints,
             solver=solver, return_result=True, **kwargs
         )
 
         if sol.y is not None and (not sol.infeasible):
-            y = sol.y[:-1] # discard the eigenvalue relaxation
-            self._ys.append(y)
-            solution = self.rationalize(y, verbose=verbose)
-            if solution is not None:
-                self.y = solution[0]
-                self.S = dict((key, S[0]) for key, S in solution[1].items())
-                self.decompositions = dict((key, S[1:]) for key, S in solution[1].items())
-                success = True
-            elif allow_numer:
-                self.register_y(y, perturb=True, propagate_to_parent=propagate_to_parent)
-                success = True
+            try:
+                y = sol.y[:-1] # discard the eigenvalue relaxation
+                self._ys.append(y)
+                time_limit()
+                solution = self.rationalize(y, verbose=verbose, time_limit=time_limit)
+                if solution is not None:
+                    self.y = solution[0]
+                    self.S = dict((key, S[0]) for key, S in solution[1].items())
+                    self.decompositions = dict((key, S[1:]) for key, S in solution[1].items())
+                    success = True
+                elif allow_numer:
+                    self.register_y(y, perturb=True, propagate_to_parent=propagate_to_parent)
+                    success = True
+            except ArithmeticTimeout as e:
+                raise SDPTimeoutError(sol) from e
 
             if not success:
                 raise SDPRationalizeError(sol)
         else: # infeasible
-            raise SDPError(sol)
+            sol.raises()
 
         if propagate_to_parent:
             self.propagate_to_parent(recursive=True)
@@ -1197,8 +1242,8 @@ class SDPProblem(TransformableDual):
                     for rhs_ind, v in mapping(i):
                         eq_list[rhs_ind].append((offset, v))
                     offset += 1
-    
-        
+
+
         # Term sparsity:
         # diagonal entries of the PSD vars should be nonnegative
         # if a diagonal entry of a PSD var is zero, then the whole row is zero

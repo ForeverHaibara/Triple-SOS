@@ -1,4 +1,4 @@
-from typing import List, Tuple, Dict, Optional, Any
+from typing import List, Tuple, Dict, Optional, Union, Callable, Any
 
 from sympy.matrices import MutableDenseMatrix as Matrix
 from sympy import Symbol
@@ -91,7 +91,7 @@ class TransformableProblem(SDPProblemBase):
         """
         Clear all the parent nodes.
         """
-        self._transforms = [_ for _ in self._transforms if not _.is_child(self)] 
+        self._transforms = [_ for _ in self._transforms if not _.is_child(self)]
 
     def clear_children(self):
         """
@@ -139,23 +139,26 @@ class TransformableProblem(SDPProblemBase):
         args = _propagate_args_to_last(self, 'child', func, recursive, A, b)
         return args
 
-    def constrain_columnspace(self, columnspace: Dict[Any, Matrix], to_child: bool=False) -> 'TransformableProblem':
+    def constrain_columnspace(self, columnspace: Dict[Any, Matrix], to_child: bool=False,
+            time_limit: Optional[Union[Callable, float]]=None) -> 'TransformableProblem':
         """
         Constrain the columnspace of the SDP problem.
         """
-        return SDPMatrixTransform.apply(self, columnspace=columnspace, to_child=to_child)
+        return SDPMatrixTransform.apply(self, columnspace=columnspace, to_child=to_child, time_limit=time_limit)
 
-    def constrain_nullspace(self, nullspace: Dict[Any, Matrix], to_child: bool=False) -> 'TransformableProblem':
+    def constrain_nullspace(self, nullspace: Dict[Any, Matrix], to_child: bool=False,
+            time_limit: Optional[Union[Callable, float]]=None) -> 'TransformableProblem':
         """
         Constrain the nullspace of the SDP problem.
         """
-        return SDPMatrixTransform.apply(self, nullspace=nullspace, to_child=to_child)
+        return SDPMatrixTransform.apply(self, nullspace=nullspace, to_child=to_child, time_limit=time_limit)
 
     def get_zero_diagonals(self) -> Dict[Any, List[int]]:
         return get_zero_diagonals(self)
 
-    def constrain_zero_diagonals(self, extractions: Optional[Dict[Any, List[int]]]=None, masks: Optional[Dict[Any, List[int]]]=None) -> 'TransformableProblem':
-        return SDPRowExtraction.apply(self, extractions=extractions, masks=masks)
+    def constrain_zero_diagonals(self, extractions: Optional[Dict[Any, List[int]]]=None, masks: Optional[Dict[Any, List[int]]]=None,
+            time_limit: Optional[Union[Callable, float]]=None) -> 'TransformableProblem':
+        return SDPRowExtraction.apply(self, extractions=extractions, masks=masks, time_limit=time_limit)
 
     def deparametrize(self, symbols: Optional[List[Symbol]]=None) -> 'TransformableProblem':
         return SDPDeparametrization.apply(self, symbols=symbols)

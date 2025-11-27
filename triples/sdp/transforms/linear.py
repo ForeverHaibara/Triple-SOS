@@ -2,13 +2,13 @@
 This module contains basic linear transformations of SDP problems.
 """
 
-from typing import List, Tuple, Dict, Optional, Any
+from typing import List, Tuple, Dict, Union, Optional, Callable, Any
 
 from sympy.matrices import MutableDenseMatrix as Matrix
 
 from .transform import SDPTransformation, SDPProblemBase
 from ..arithmetic import (
-    is_empty_matrix, vec2mat,
+    ArithmeticTimeout, is_empty_matrix, vec2mat,
     solve_undetermined_linear, solve_nullspace, solve_columnspace,
     matmul, matadd, matmul_multiple, symmetric_bilinear, symmetric_bilinear_multiple
 )
@@ -155,9 +155,11 @@ class SDPMatrixTransform(SDPLinearTransform):
         return {key: matmul(columnspace[key].T, nullspace[key]) for key in nullspace.keys()}
 
     @classmethod
-    def apply(cls, parent_node, columnspace: Dict[Any, Matrix]=None, nullspace: Dict[Any, Matrix]=None, to_child: bool=True) -> SDPProblemBase:
+    def apply(cls, parent_node, columnspace: Dict[Any, Matrix]=None, nullspace: Dict[Any, Matrix]=None,
+                to_child: bool=True, time_limit: Optional[Union[Callable, float]]=None) -> SDPProblemBase:
         if parent_node.is_dual:
-            return DualMatrixTransform.apply(parent_node, columnspace=columnspace, nullspace=nullspace, to_child=to_child)
+            return DualMatrixTransform.apply(parent_node, columnspace=columnspace, nullspace=nullspace,
+                to_child=to_child, time_limit=time_limit)
         raise NotImplementedError
 
 
@@ -190,20 +192,22 @@ class DualMatrixTransform(SDPMatrixTransform):
         (A_i0Vi) + y_1 * (A_i1Vi) + ... + y_n * (A_inVi) = 0.
     """
     @classmethod
-    def apply(cls, parent_node, columnspace: Dict[Any, Matrix]=None, nullspace: Dict[Any, Matrix]=None, to_child: bool=True) -> SDPProblemBase:
+    def apply(cls, parent_node, columnspace: Dict[Any, Matrix]=None, nullspace: Dict[Any, Matrix]=None,
+            to_child: bool=True, time_limit: Optional[Union[Callable, float]]=None) -> SDPProblemBase:
         if not parent_node.is_dual:
             raise ValueError("The parent node should be dual.")
         if columnspace is None and nullspace is None:
             raise ValueError("At least one of columnspace and nullspace should be provided.")
 
+        time_limit = ArithmeticTimeout.make_checker(time_limit)
         if nullspace is None:
-            columnspace = {key: solve_columnspace(space) for key, space in columnspace.items()}
-            nullspace = {key: solve_nullspace(space) for key, space in columnspace.items()}
+            columnspace = {key: (solve_columnspace(space), time_limit())[0] for key, space in columnspace.items()}
+            nullspace = {key: (solve_nullspace(space), time_limit())[0] for key, space in columnspace.items()}
             for key, n in parent_node.size.items():
                 if (key not in nullspace) or is_empty_matrix(nullspace[key]):
                     nullspace[key] = Matrix.zeros(n, 0)
         else:
-            nullspace = {key: solve_columnspace(space) for key, space in nullspace.items()}
+            nullspace = {key: (solve_columnspace(space), time_limit())[0] for key, space in nullspace.items()}
             for key, n in parent_node.size.items():
                 if (key not in nullspace) or is_empty_matrix(nullspace[key]):
                     nullspace[key] = Matrix.zeros(n, 0)
@@ -235,19 +239,19 @@ class DualMatrixTransform(SDPMatrixTransform):
                 if is_empty_matrix(V):
                     continue
 
-                eq_mat = matmul_multiple(space.T, V).T
+                eq_mat = matmul_multiple(space.T, V, time_limit=time_limit).T
                 eq_list.append(eq_mat)
 
                 Ai0 = vec2mat(x0)
                 # new_x0 = list(Ai0 * V)
-                new_x0 = list(matmul(Ai0, V))
+                new_x0 = list(matmul(Ai0, V, time_limit=time_limit))
                 x0_list.extend(new_x0)
-
+                time_limit()
 
             # eq * y + x0 = 0 => y = trans_x0 + trans_space * z
             eq_list = Matrix.vstack(*eq_list)
             x0_list = Matrix(x0_list)
-            trans_x0, trans_space = solve_undetermined_linear(eq_list, -x0_list)
+            trans_x0, trans_space = solve_undetermined_linear(eq_list, -x0_list, time_limit=time_limit)
 
             # Sum(Ui' * Aij * Ui * (trans_x0 + trans_space * z)[j]) >> 0
             new_x0_and_space = {}
@@ -255,17 +259,18 @@ class DualMatrixTransform(SDPMatrixTransform):
                 U = columnspace[key]
                 if is_empty_matrix(U):
                     continue
-                eq_mat = symmetric_bilinear_multiple(U, space.T).T
+                eq_mat = symmetric_bilinear_multiple(U, space.T, time_limit=time_limit).T
                 new_space = eq_mat * trans_space
                 # new_space = matmul(eq_mat, trans_space)
 
                 # Ai0 = vec2mat(x0)
                 # new_x0 = mat2vec(U.T * Ai0 * U) + eq_mat * trans_x0
-                new_x0 = symmetric_bilinear(U, x0, is_A_vec = True, return_shape=(U.shape[1]**2, 1))
-                new_x0 += matmul(eq_mat, trans_x0)
+                new_x0 = symmetric_bilinear(U, x0, is_A_vec = True, return_shape=(U.shape[1]**2, 1), time_limit=time_limit)
+                new_x0 += matmul(eq_mat, trans_x0, time_limit=time_limit)
                 # new_x0 += matmul(eq_mat, trans_x0)
 
                 new_x0_and_space[key] = (new_x0, new_space)
+                time_limit()
             # print(f"Time: {time() - time0}")
             return new_x0_and_space, trans_space, trans_x0
 

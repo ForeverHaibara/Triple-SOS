@@ -35,8 +35,8 @@ def congruence(M: Union[Matrix, ndarray], perturb: Union[bool, float]=False,
     signfunc : Callable
         Function to determine the sign of a value. It takes a value as input
         and returns 1, -1, or 0. If None, it uses the default comparison.
-        This is useful when the matrix is symbolic and there 
-        includes complicated expressions, e.g. nested square roots. 
+        This is useful when the matrix is symbolic and there
+        includes complicated expressions, e.g. nested square roots.
 
     Returns
     -------

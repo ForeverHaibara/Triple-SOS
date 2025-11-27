@@ -5,7 +5,7 @@ polynomial systems and provides supports for low SymPy versions.
 from typing import List, Tuple, Union
 
 import sympy as sp
-from sympy import Poly, Expr, Rational, Symbol
+from sympy import Poly, Expr, Rational, Symbol, RR, QQ
 from sympy.polys.polyerrors import BasePolynomialError
 from sympy.polys.polytools import resultant, groebner, PurePoly
 from sympy.polys.rootoftools import ComplexRootOf as CRootOf
@@ -23,13 +23,13 @@ def _filter_trivial_system(polys: List[Poly]) -> Union[List[Poly], None]:
     ordered_inds = []
     new_polys = set()
     for ind, poly in enumerate(polys):
-        if isinstance(poly, sp.Expr):
+        if isinstance(poly, Expr):
             poly = poly.expand()
             if poly is sp.S.Zero:
                 continue
             if poly.is_constant(): # inconsistent system
                 return None
-        elif isinstance(poly, sp.Poly):
+        elif isinstance(poly, Poly):
             if poly.is_zero:
                 continue
             elif poly.total_degree() == 0: # inconsistent system
@@ -73,7 +73,7 @@ class PolyEvalf:
             return poly(*point)
 
         # high dps should be careful with the context domain
-        domain = sp.RealField(dps=n) if n != 15 else sp.RR
+        domain = sp.RealField(dps=n) if n != 15 else RR
         poly = poly.set_domain(domain)
         return poly(*(p.n(n) for p in point))
 
@@ -178,7 +178,7 @@ def nroots(poly, method = 'numpy', real = False, nonnegative = False):
         roots = [_ for _ in roots if _.is_real]
     if nonnegative:
         roots = [_ for _ in roots if _.is_nonnegative]
-    
+
     return roots
 
 def heuristic_groebner_order(polys: List[Poly], symbols: List[Symbol]) -> List[Symbol]:
@@ -212,7 +212,7 @@ def heuristic_groebner_order(polys: List[Poly], symbols: List[Symbol]) -> List[S
 
     linear_vars_sorted = sorted(linear_vars, key=sort_key)
     nonlinear_vars_sorted = sorted(nonlinear_vars, key=sort_key)
-    
+
     return tuple(linear_vars_sorted + nonlinear_vars_sorted)
 
 def solve_triangulated_crt(polys: List[Poly], symbols: List[Symbol]) -> List[Tuple[CRootOf]]:
@@ -233,7 +233,7 @@ def solve_triangulated_crt(polys: List[Poly], symbols: List[Symbol]) -> List[Tup
     f, G = G[0].ltrim(-1), G[1:]
 
     zeros = univar_realroots(f, f.gen)
-    solutions = {((zero,), sp.QQ.algebraic_field(zero)) for zero in zeros}
+    solutions = {((zero,), QQ.algebraic_field(zero)) for zero in zeros}
 
     var_seq = reversed(symbols[:-1])
     vars_seq = postfixes(symbols[1:])
@@ -298,7 +298,7 @@ def _solve_poly_system_2vars_resultant(polys: List[Poly], symbols: List[Symbol])
     if len(symbols) != 2 or len(polys) < 2:
         return []
 
-    x, y = symbols    
+    x, y = symbols
     res0 = polys[0].resultant(polys[1]).as_poly(y)
     for poly in polys[2:]:
         if res0.total_degree() == 0 and (not res0.is_zero):
@@ -347,7 +347,7 @@ def solve_poly_system_crt(polys: List[Poly], symbols: List[Symbol]) -> List[Tupl
         return default(polys, symbols)
 
     try:
-        polys = [sp.Poly(_, *symbols, extension=True) for _ in polys]
+        polys = [Poly(_, *symbols, extension=True) for _ in polys]
     except BasePolynomialError:
         return default(polys, symbols)
     if not all(_.domain.is_Exact for _ in polys):

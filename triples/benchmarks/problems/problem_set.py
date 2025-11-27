@@ -8,13 +8,13 @@ class mark:
 
     noimpl = 'noimpl'
     """Unimplemented problem due to difficult modelling or other issues."""
-    
+
     nvars = 'nvars'
     """N-variate inequality."""
-    
+
     recur = 'recur'
     """Recursive inequality."""
-    
+
     geom = 'geom'
     """Geometric inequality."""
 

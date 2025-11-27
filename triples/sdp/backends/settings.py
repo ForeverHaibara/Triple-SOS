@@ -2,6 +2,8 @@ from typing import Optional
 
 import numpy as np
 
+from ..arithmetic import ArithmeticTimeout
+
 class SDPResult:
     """
     Class to store the result and status of the solution of an SDP.
@@ -68,7 +70,9 @@ class SDPResult:
             raise TypeError(f"y must be None or np.ndarray, but got {type(self.y)}.")
 
     def __str__(self):
-        return f"SDPResult(optimal={self.optimal}, infeasible={self.infeasible}, unbounded={self.unbounded}, inf_or_unb={self.inf_or_unb}, inaccurate={self.inaccurate}, error={self.error})"
+        return f"SDPResult(optimal={self.optimal}, infeasible={self.infeasible}, unbounded={self.unbounded}, inf_or_unb={self.inf_or_unb}, "\
+                + f"inaccurate={self.inaccurate}, error={self.error})"
+
     def __repr__(self):
         return self.__str__()
 
@@ -76,6 +80,7 @@ class SDPResult:
         if self.y is None:
             raise ValueError("y is None.")
         return self.y
+
     def _sympify_(self):
         if self.y is None:
             raise ValueError("y is None.")
@@ -84,7 +89,8 @@ class SDPResult:
 
     @property
     def success(self) -> bool:
-        return self.optimal and (not self.inaccurate)
+        return self.optimal and (not self.inaccurate) and (not self.error)
+
     def raises(self):
         if not self.success:
             raise SDPError(self)
@@ -141,10 +147,13 @@ class SDPError(Exception):
     @classmethod
     def from_kwargs(cls, **kwargs):
         result = SDPResult(**kwargs)
-        if result.success:
-            raise ValueError("SDPError.from_kwargs should be called with failed result.")
+        # if result.success:
+        #     raise ValueError("SDPError.from_kwargs should be called with failed result.")
         return cls(result)
 
+class SDPTimeoutError(SDPError, ArithmeticTimeout):
+    """Raised when the SDP solver terminates due to time limit."""
+    pass
 
 
 # class SDPProblemError(SDPError):
@@ -207,16 +216,19 @@ class SDPError(Exception):
 class SolverConfigs:
     verbose = 0
     max_iters = 200
+    time_limit = 1e10
     tol_gap_abs = 1e-8
     tol_gap_rel = 1e-8
     tol_fsb_abs = 1e-8
     tol_fsb_rel = 1e-8
     solver_options = dict()
-    _KEYS = ('verbose', 'max_iters', 'tol_gap_abs', 'tol_gap_rel', 'tol_fsb_abs', 'tol_fsb_rel', 'solver_options')
+    _KEYS = ('verbose', 'max_iters', 'time_limit', 'tol_gap_abs', 'tol_gap_rel', 'tol_fsb_abs', 'tol_fsb_rel', 'solver_options')
     def __init__(self, **kwargs):
         for key in self._KEYS:
             setattr(self, key, kwargs.pop(key, getattr(self, key)))
 
+        if self.time_limit is None:
+            self.time_limit = 1e10
         if kwargs:
             raise TypeError(f"Unexpected keyword arguments for SolverConfigs: {list(kwargs.keys())}")
 

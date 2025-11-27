@@ -1,25 +1,29 @@
 from collections import defaultdict
 
-from typing import Optional, List, Union, Tuple
+from typing import List, Tuple, Dict, Union, Optional, TypeVar, Generic
 import re
 from warnings import warn
 
 import sympy as sp
 from sympy.core.singleton import S
-from sympy.polys import Poly
+from sympy import Poly, Expr, Symbol, Float, Equality, Add, Mul
 from sympy.printing.precedence import precedence_traditional, PRECEDENCE
 from sympy.printing.str import StrPrinter
 from sympy.printing.latex import LatexPrinter
 from sympy.combinatorics import PermutationGroup, Permutation, CyclicGroup
 from sympy.core.relational import Equality
 
-from .expression.cyclic import is_cyclic_expr, CyclicSum, CyclicProduct, CyclicExpr, rewrite_symmetry
+from .problem import InequalityProblem
+from ..utils.expressions.cyclic import is_cyclic_expr, CyclicSum, CyclicProduct, CyclicExpr, rewrite_symmetry
+from ..utils.expressions.psatz import SOSlist, PSatz
 
 
-class SolutionBase:
+T = TypeVar('T')
+
+class SolutionBase(Generic[T]):
     pass
 
-class Solution(SolutionBase):
+class Solution(SolutionBase[T]):
     """
     The `Solution` class is the standard return type of the `sum_of_squares` function.
     It holds information about an inequality problem and its solution.
@@ -29,12 +33,13 @@ class Solution(SolutionBase):
     >>> from triples.core import sum_of_squares
     >>> sol = sum_of_squares(a**2 - 2*a + 1)
     >>> sol # doctest: +SKIP
-    Solution(problem = a**2 - 2*a + 1, solution = (a - 1)**2)
+    Solution(problem = <InequalityProblem of 1 variables, with 0 inequality and 0 equality constraints>,
+     solution = (a - 1)**2)
 
-    The problem and the solution can be accessed via `.problem` and `.solution` properties,
+    The problem expression and the solution can be accessed via `.expr` and `.solution` properties,
     which are sympy objects.
 
-    >>> sol.problem # doctest: +SKIP
+    >>> sol.expr
     a**2 - 2*a + 1
     >>> sol.solution # doctest: +SKIP
     (a - 1)**2
@@ -42,15 +47,62 @@ class Solution(SolutionBase):
     >>> sol.time # doctest: +SKIP
     0.014049
     """
+    _start_time = None
+    _end_time = None
+    _is_equal = None
+
     method = ''
-    def __init__(self, problem=None, solution=None, ineq_constraints=None, eq_constraints=None, is_equal=None):
+    def __init__(self,
+        problem: Optional[Union[InequalityProblem[T], T]]=None,
+        solution: Optional[Expr]=None,
+        ineq_constraints: Optional[Dict[T, Expr]]=None,
+        eq_constraints: Optional[Dict[T, Expr]]=None,
+        is_equal: Optional[bool]=None
+    ):
+
+        if not isinstance(problem, InequalityProblem):
+            ineq_constraints = ineq_constraints if ineq_constraints is not None else dict()
+            eq_constraints = eq_constraints if eq_constraints is not None else dict()
+            problem = InequalityProblem(problem, ineq_constraints, eq_constraints)
+            problem.solution = solution
+        else:
+            # isinstance(problem, InequalityProblem)
+            if ineq_constraints is not None or eq_constraints is not None:
+                raise ValueError("Inequality and equality constraints must be None if the problem is an InequalityProblem.")
+
+        if solution is None:
+            solution = problem.solution
+
         self.problem = problem
         self.solution = solution
-        self.ineq_constraints = ineq_constraints if ineq_constraints is not None else dict()
-        self.eq_constraints = eq_constraints if eq_constraints is not None else dict()
-        self._start_time = None
-        self._end_time = None
-        self._is_equal = None
+        self._is_equal = is_equal
+
+    @property
+    def expr(self) -> T:
+        return self.problem.expr
+
+    @property
+    def ineq_constraints(self) -> Dict[T, Expr]:
+        return self.problem.ineq_constraints
+
+    @property
+    def eq_constraints(self) -> Dict[T, Expr]:
+        return self.problem.eq_constraints
+
+    @expr.setter
+    def expr(self, value: T):
+        """Bypass immutability: directly overwrite the problem expression; use with care."""
+        self.problem.expr = value
+
+    @ineq_constraints.setter
+    def ineq_constraints(self, value: Dict[T, Expr]):
+        """Bypass immutability: directly overwrite the problem inequality constraints; use with care."""
+        self.problem.ineq_constraints = value
+
+    @eq_constraints.setter
+    def eq_constraints(self, value: Dict[T, Expr]):
+        """Bypass immutability: directly overwrite the problem equality constraints; use with care."""
+        self.problem.eq_constraints = value
 
     @property
     def time(self) -> float:
@@ -58,18 +110,17 @@ class Solution(SolutionBase):
         return (self._end_time - self._start_time).total_seconds() if self._end_time is not None else -1.
 
     def __str__(self) -> str:
-        return f"Solution(problem = {self.problem}, solution = {self.solution})"
+        return f"Solution(problem = {self.problem!r}, solution = {self.solution})"
 
     def __repr__(self) -> str:
         return self.__str__()
 
     def copy(self) -> 'Solution':
-        obj = self.__class__.__new__(self.__class__)
-        obj.__dict__.update(self.__dict__)
-        return obj
+        from copy import copy
+        return copy(self)
 
     @property
-    def gens(self) -> Tuple[sp.Symbol, ...]:
+    def gens(self) -> Tuple[Symbol, ...]:
         """
         Get the free symbols of problem.
 
@@ -78,12 +129,12 @@ class Solution(SolutionBase):
         >>> from sympy.abc import a, b, c
         >>> from sympy import Function
         >>> sol = Solution((a**2+b**2+c**2-a*b-b*c-c*a)*2, (a-b)**2+(b-c)**2+(c-a)**2)
-        >>> sol.gens # doctest: +SKIP
-        (c, a, b)
-        >>> Function('F')(*sol.gens) # doctest: +SKIP
-        F(c, a, b)
+        >>> sol.gens
+        (a, b, c)
+        >>> Function('F')(*sol.gens)
+        F(a, b, c)
         """
-        return tuple(self.problem.gens) if hasattr(self.problem, 'gens') else tuple(self.problem.free_symbols)
+        return self.problem.gens
 
     @property
     def is_equal(self) -> bool:
@@ -126,7 +177,7 @@ class Solution(SolutionBase):
         """
         if self.solution in (None, S.NaN, S.Infinity, S.NegativeInfinity, S.ComplexInfinity):
             return True
-        if self.solution is S.Zero and isinstance(self.problem, Poly) and not self.problem.is_zero:
+        if self.solution is S.Zero and isinstance(self.expr, Poly) and not self.expr.is_zero:
             return True
         return False
 
@@ -143,12 +194,12 @@ class Solution(SolutionBase):
         >>> sol.is_Exact
         False
         """
-        return not (self.is_ill or self.solution.has(sp.Float))
+        return not (self.is_ill or self.solution.has(Float))
 
     def _str_f(self, name='f') -> str:
         return "%s(%s)"%(name, ','.join(str(_) for _ in self.gens))
 
-    def as_eq(self, lhs_expr=None, together=True, cancel=True) -> Equality:
+    def as_eq(self, lhs_expr=None, together=False, cancel=False) -> Equality:
         """
         Convert the solution to a sympy equality object.
 
@@ -157,28 +208,36 @@ class Solution(SolutionBase):
         >>> from sympy.abc import a
         >>> sol = Solution(a**2 - 2 + 1/a**2, (a**2 - 1)**2/a**2)
         >>> sol.as_eq()
-        Eq(a**2*(a**2 - 2 + a**(-2)), (a**2 - 1)**2)
+        Eq(a**2 - 2 + a**(-2), (a**2 - 1)**2/a**2)
         >>> sol.as_eq().lhs, sol.as_eq().rhs
-        (a**2*(a**2 - 2 + a**(-2)), (a**2 - 1)**2)
+        (a**2 - 2 + a**(-2), (a**2 - 1)**2/a**2)
         >>> sol.as_eq().simplify()
         True
-        >>> sol.as_eq(cancel=False)
-        Eq(a**2 - 2 + a**(-2), (a**2 - 1)**2/a**2)
+        >>> sol.as_eq(cancel=True)
+        Eq(a**2*(a**2 - 2 + a**(-2)), (a**2 - 1)**2)
 
         >>> from sympy import Function
         >>> f = Function('f')
-        >>> sol.as_eq(lhs_expr=f(a))
+        >>> sol.as_eq(lhs_expr=f(a), cancel=True)
         Eq(a**2*f(a), (a**2 - 1)**2)
         """
-        lhs = self.problem.as_expr() if lhs_expr is None else lhs_expr
+        lhs = self.expr.as_expr() if lhs_expr is None else lhs_expr
         if cancel:
             rhs, denom = self.as_fraction(together=together)
             lhs = lhs * denom
         else:
             rhs = self.solution.together() if together else self.solution
-        return sp.Equality(lhs, rhs, evaluate=False)
+        return Equality(lhs, rhs, evaluate=False)
 
-    def to_string(self, mode: str = 'latex', lhs_expr=None, together=True, cancel=True, settings=None) -> str:
+    def as_sos_list(self) -> Optional[SOSlist]:
+        return SOSlist.from_sympy(self.solution)
+
+    def as_psatz(self) -> Optional[PSatz]:
+        return PSatz.from_sympy(self.solution, 
+            {v: k for k, v in self.ineq_constraints.items()},
+            {v: k for k, v in self.eq_constraints.items()})
+
+    def to_string(self, mode: str = 'latex', lhs_expr=None, together=False, cancel=False, settings=None) -> str:
         """
         Convert the solution to a string. The mode can be 'latex', 'txt', or 'formatted'.
 
@@ -194,9 +253,9 @@ class Solution(SolutionBase):
         lhs_expr : Expr
             Sympy expressions to replace the left-hand side problem.
         together : bool, optional
-            Whether to apply `sympy.together` on the right-hand side solution, by default True.
+            Whether to apply `sympy.together` on the right-hand side solution.
         cancel : bool, optional
-            Whether to apply `sympy.cancel` on the right-hand side solution, by default True.
+            Whether to apply `sympy.cancel` on the right-hand side solution.
         settings : dict, optional
             Settings for printing. See `sympy.printing.str.StrPrinter._print` for details.
 
@@ -240,23 +299,16 @@ class Solution(SolutionBase):
                 to_str = lambda x: _to_str(x)
         else:
             raise ValueError(f"Unknown mode {mode}.")
-        
+
         lhs_str = to_str(lhs)
         rhs_str = to_str(rhs)
-        return f"{lhs_str} = {rhs_str}"   
+        return f"{lhs_str} = {rhs_str}"
 
     def _repr_latex_(self):
         eq = self.as_eq()
         return eq._repr_latex_()
         # s = sp.latex(eq, mode='plain', long_frac_ratio=2)
         # return "$\\displaystyle %s$" % s
-
-    def as_simple_solution(self):
-        """
-        When the solution is a sympy expression class, it is converted to SolutionSimple.
-        """
-        warn('This function is deprecated.')
-        return self
 
     def together(self, *args, **kwargs) -> 'Solution':
         """
@@ -267,10 +319,10 @@ class Solution(SolutionBase):
         ---------
         >>> from sympy.abc import a, b
         >>> sol = Solution(a**2 - a*b + b**2, (a + b/2)**2 + 3*b**2/4)
-        >>> sol
-        Solution(problem = a**2 - a*b + b**2, solution = 3*b**2/4 + (a + b/2)**2)
-        >>> sol.together()
-        Solution(problem = a**2 - a*b + b**2, solution = (3*b**2 + (2*a + b)**2)/4)
+        >>> sol.solution
+        3*b**2/4 + (a + b/2)**2
+        >>> sol.together().solution
+        (3*b**2 + (2*a + b)**2)/4
         """
         self = self.copy()
         self.solution = sp.together(self.solution, *args, **kwargs)
@@ -285,10 +337,10 @@ class Solution(SolutionBase):
         ---------
         >>> from sympy.abc import a, b
         >>> sol = Solution(a**2 - 2*a*b + b**2, (-a - b)**2)
-        >>> sol
-        Solution(problem = a**2 - 2*a*b + b**2, solution = (-a - b)**2)
-        >>> sol.signsimp()
-        Solution(problem = a**2 - 2*a*b + b**2, solution = (a + b)**2)
+        >>> sol.solution
+        (-a - b)**2
+        >>> sol.signsimp().solution
+        (a + b)**2
         """
         self = self.copy()
         self.solution = sp.signsimp(self.solution, *args, **kwargs)
@@ -303,8 +355,8 @@ class Solution(SolutionBase):
         ---------
         >>> from sympy.abc import a, b, x
         >>> sol = Solution(a**2 - 2*a*b + b**2, (a - b)**2)
-        >>> sol.xreplace({a: x})
-        Solution(problem = a**2 - 2*a*b + b**2, solution = (-b + x)**2)
+        >>> sol.xreplace({a: x}).solution
+        (-b + x)**2
         """
         self = self.copy()
         self.solution = self.solution.xreplace(*args, **kwargs)
@@ -320,10 +372,10 @@ class Solution(SolutionBase):
         ---------
         >>> from sympy.abc import a, b, c
         >>> sol = Solution((a+b+c)*(a*b+b*c+c*a)-9*a*b*c, CyclicSum(a*(b-c)**2, (a,b,c)))
-        >>> sol
-        Solution(problem = -9*a*b*c + (a + b + c)*(a*b + a*c + b*c), solution = Σa*(b - c)**2)
-        >>> sol.doit()
-        Solution(problem = -9*a*b*c + (a + b + c)*(a*b + a*c + b*c), solution = a*(b - c)**2 + b*(-a + c)**2 + c*(a - b)**2)
+        >>> sol.solution
+        Σ(a*(b - c)**2)
+        >>> sol.doit().solution
+        a*(b - c)**2 + b*(-a + c)**2 + c*(a - b)**2
         """
         self = self.copy()
         self.solution = self.solution.doit(*args, **kwargs)
@@ -338,10 +390,10 @@ class Solution(SolutionBase):
         ---------
         >>> from sympy.abc import a, b, c
         >>> sol = Solution((a+b**2+c)*(b-c)**2, a*(b-c)**2 + b**2*(b-c)**2 + c*(b-c)**2)
-        >>> sol
-        Solution(problem = (b - c)**2*(a + b**2 + c), solution = a*(b - c)**2 + b**2*(b - c)**2 + c*(b - c)**2)
-        >>> sol.collect((b-c)**2)
-        Solution(problem = (b - c)**2*(a + b**2 + c), solution = (b - c)**2*(a + b**2 + c))
+        >>> sol.solution
+        a*(b - c)**2 + b**2*(b - c)**2 + c*(b - c)**2
+        >>> sol.collect((b-c)**2).solution
+        (b - c)**2*(a + b**2 + c)
         """
         self = self.copy()
         self.solution = self.solution.collect(*args, **kwargs)
@@ -357,8 +409,8 @@ class Solution(SolutionBase):
         >>> from sympy.abc import a, b
         >>> from sympy import sqrt
         >>> sol = Solution(a**2+a*b+b**2, (((2-sqrt(3))*a+b)**2+((2-sqrt(3))*b+a)**2)/(8-4*sqrt(3)))
-        >>> sol.n(4)
-        Solution(problem = a**2 + a*b + b**2, solution = 0.933*(0.2679*a + b)**2 + 0.933*(a + 0.2679*b)**2)
+        >>> sol.n(4).solution
+        0.933*(0.2679*a + b)**2 + 0.933*(a + 0.2679*b)**2
         """
         self = self.copy()
         self.solution = self.solution.n(*args, **kwargs)
@@ -374,28 +426,31 @@ class Solution(SolutionBase):
         >>> from sympy.abc import a, b
         >>> from sympy import sqrt
         >>> sol = Solution(a**2+a*b+b**2, (((2-sqrt(3))*a+b)**2+((2-sqrt(3))*b+a)**2)/(8-4*sqrt(3)))
-        >>> sol.evalf(4)
-        Solution(problem = a**2 + a*b + b**2, solution = 0.933*(0.2679*a + b)**2 + 0.933*(a + 0.2679*b)**2)
+        >>> sol.evalf(4).solution
+        0.933*(0.2679*a + b)**2 + 0.933*(a + 0.2679*b)**2
         """
         self = self.copy()
         self.solution = self.solution.evalf(*args, **kwargs)
         return self
 
-    def as_expr(self, *args, **kwargs) -> sp.Expr:
+    def as_expr(self, *args, **kwargs) -> Expr:
         """
         Return the solution as an expression. It is equivalent to .solution.
         """
         return self.solution#.doit(*args, **kwargs)
 
-    def dehomogenize(self, homogenizer: Optional[sp.Symbol] = None):
+    def dehomogenize(self, homogenizer: Optional[Symbol] = None):
         """
         Dehomogenize the solution. Used internally.
         """
         if homogenizer is None:
             return self
 
-        self = self.copy()
-        self.problem = self.problem.subs(homogenizer, 1)
+        expr = self
+        if isinstance(self, Solution):
+            self = self.copy()
+            self.problem = self.problem.subs(homogenizer, 1)
+            expr = self.solution
         def _deflat_perm_group(expr):
             # e.g.
             # CyclicSum(a**2, (a,b,c,d), PermutationGroup(Permutation([1,2,0,3])))
@@ -410,7 +465,11 @@ class Solution(SolutionBase):
             f = f.xreplace({homogenizer: 1})
             f = f.replace(lambda x: isinstance(x, CyclicExpr), _deflat_perm_group)
             return f
-        self.solution = dehom(self.solution)
+
+        if isinstance(self, Solution):
+            self.solution = dehom(expr)
+        else:
+            self = dehom(expr)
         return self
 
     def as_fraction(self, together=True, inplace=False):
@@ -436,8 +495,8 @@ class Solution(SolutionBase):
         v, m = numerator.as_content_primitive()
         if v < 0:
             v, m = -v, -m
-        if isinstance(m, sp.Add):
-            numerator = sp.Add(*[v * arg for arg in m.args])
+        if isinstance(m, Add):
+            numerator = Add(*[v * arg for arg in m.args])
 
         if inplace:
             self.solution = numerator / multiplier
@@ -454,7 +513,7 @@ class Solution(SolutionBase):
         warn("Calling Solution.multiplier will be deprecated. Use Solution.as_fraction()[1] instead.", DeprecationWarning, stacklevel=2)
         return self.as_fraction()[1]
 
-    def rewrite_symmetry(self, symbols: Tuple[sp.Symbol]=None, perm_group: PermutationGroup=None) -> 'Solution':
+    def rewrite_symmetry(self, symbols: Optional[Tuple[Symbol]]=None, perm_group: Optional[PermutationGroup]=None) -> 'Solution':
         """
         Rewrite the expression heuristically with respect to the given permutation group.
         After rewriting, it is expected all cyclic expressions are expanded or in the given permutation group.
@@ -466,7 +525,7 @@ class Solution(SolutionBase):
 
         Parameters
         ----------
-        symbols : Tuple[sp.Symbol]
+        symbols : Tuple[Symbol]
             The symbols that the permutation group acts on.
         perm_group : PermutationGroup
             Sympy permutation group object. Defaults to the CyclicGroup if not given.
@@ -521,21 +580,19 @@ class Solution(SolutionBase):
 def _arg_sqr_core(arg):
     if arg.is_constant():
         return S.One
-    if isinstance(arg, sp.Symbol):
+    if isinstance(arg, Symbol):
         return arg
     if arg.is_Pow:
         return S.One if arg.args[1] % 2 == 0 else arg.args[0]
     if arg.is_Mul:
-        return sp.Mul(*[_arg_sqr_core(x) for x in arg.args])
+        return Mul(*[_arg_sqr_core(x) for x in arg.args])
     if isinstance(arg, CyclicProduct):
         return CyclicProduct(_arg_sqr_core(arg.args[0]), arg.symbols).doit()
     return None
 
 
-SolutionSimple = Solution
 
-
-def _print_str(expr: sp.Expr, cyclic_sum_name = 'Σ', cyclic_product_name = '∏',
+def _print_str(expr: Expr, cyclic_sum_name = 'Σ', cyclic_product_name = '∏',
                with_cyclic_parens = False, settings=None):
     """Advanced printing to handle cyclic expressions."""
     settings = {} if settings is None else settings
@@ -553,7 +610,7 @@ def _print_str(expr: sp.Expr, cyclic_sum_name = 'Σ', cyclic_product_name = '∏
     setattr(printer, '_print_CyclicProduct', lambda expr: _print_CyclicProduct(expr))
     return printer.doprint(expr)
 
-def _print_latex(expr: sp.Expr, settings=None):
+def _print_latex(expr: Expr, settings=None):
     # if 'long_frac_ratio' not in settings:
     #     settings['long_frac_ratio'] = 2
     settings = {} if settings is None else settings

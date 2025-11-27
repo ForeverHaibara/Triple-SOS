@@ -10,11 +10,13 @@
 from .dual import SDPProblem
 from .primal import SDPPrimal
 
-from .arithmetic import congruence
+from .arithmetic import congruence, ArithmeticTimeout
+from .backends import SDPError, SDPTimeoutError
 
 __all__ = [
     # 'solve_column_separated_linear', 'solve_undetermined_linear',
     # 'matmul', 'matmul_multiple', 'symmetric_bilinear', 'symmetric_bilinear_multiple',
     'SDPProblem', 'SDPPrimal',
-    'congruence'
+    'congruence', 'ArithmeticTimeout',
+    'SDPError', 'SDPTimeoutError',
 ]

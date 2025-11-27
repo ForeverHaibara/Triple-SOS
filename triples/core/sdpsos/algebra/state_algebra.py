@@ -1,6 +1,6 @@
 from typing import List, Tuple, Dict, Union, Optional, Any
 
-from sympy import Expr, Poly
+from sympy import Expr, Poly, Symbol
 from sympy.matrices import MutableDenseMatrix as Matrix
 from sympy.combinatorics import PermutationGroup, Permutation
 
@@ -8,7 +8,6 @@ from ....sdp.arithmetic import rep_matrix_from_dict
 
 MONOM = Any
 TERM = Tuple[MONOM, Expr]
-
 
 
 class StateAlgebra:
@@ -64,6 +63,10 @@ class StateAlgebra:
     def inv_monoms(self) -> List[MONOM]:
         """Get the mapping `inv_monoms[i] = monom` of the algebra."""
         return self._inv_monoms
+
+    def gen_monom(self, i: Optional[int]) -> MONOM:
+        """Get the monomial representation of i-th generator. If None, it is the constant monomial."""
+        raise NotImplementedError
 
     def total_degree(self, monom: MONOM) -> int:
         """Compute the total degree of a monomial."""
@@ -124,9 +127,14 @@ class StateAlgebra:
             vec[ind] = {0: coeff}
         return rep_matrix_from_dict(vec, (len(self), 1), poly.domain)
 
-    def as_expr(self, poly: Poly) -> Expr:
+    def as_expr(self, poly: Poly, **kwargs) -> Expr:
         """Convert a polynomial in this algebra to sympy Expr."""
         raise NotImplementedError
+
+    def as_poly(self, expr: Expr, gens: List[Symbol], **kwargs) -> Poly:
+        """Convert a sympy Expr to a polynomial in this algebra."""
+        from .pseudo_poly import convert_expr_to_pseudo_poly
+        return convert_expr_to_pseudo_poly(self, expr, gens, **kwargs)
 
     def mul(self, term1: TERM, term2: TERM) -> TERM:
         """Define the product of two terms (monom1, coeff1) * (monom2, coeff2)."""
@@ -159,4 +167,3 @@ class CommutativeStateAlgebra(StateAlgebra):
 
     def adjoint(self, term: TERM) -> TERM:
         return term
-

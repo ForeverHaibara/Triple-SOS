@@ -139,18 +139,18 @@ def sos_struct_common(poly: Union[Poly, Coeff], *solvers, **kwargs):
                 solution = solver(poly, **kwargs)
                 if solution is not None:
                     break
-            
+
             except PolynomialUnsolvableError as e:
                 # When we are sure that the polynomial is nonpositive,
                 # we can return None directly.
                 if isinstance(e, PolynomialNonpositiveError):
                     return None
         return solution
-    
+
     # cancel abc
-    
+
     return sos_struct_extract_factors(poly, _wrapped_solver, **kwargs)
-    
+
 
 
 def sos_struct_degree_specified_solver(solvers: Dict[int, Callable], homogeneous: bool = False) -> Callable:

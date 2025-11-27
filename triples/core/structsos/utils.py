@@ -4,7 +4,7 @@ import sympy as sp
 
 from ..shared import uniquely_named_symbol, SS
 from ...sdp import congruence as _congruence
-from ...utils.expression import Coeff, CyclicSum, CyclicProduct
+from ...utils.expressions import Coeff, CyclicSum, CyclicProduct
 from ...utils.roots import nroots, rationalize_bound
 
 class StructuralSOSError(Exception): ...
@@ -152,7 +152,7 @@ def rationalize_func(
     for t in candidates:
         if isinstance(t, sp.Rational):
             if validation(t):
-                return t    
+                return t
         elif validation_initial(t):
             # make a perturbation
             for t_ in rationalize_bound(t, direction = direction_t(t), compulsory = True):
@@ -187,7 +187,7 @@ def quadratic_weighting(
         If True, return a list [(w1, (x1,y1))] so that sum(w_i * (x_i*a + y_i*b)**2) equals to the result.
         If False, return the sympy expression of the result.
         If formal == True, it overrides the mapping parameter.
-    
+
     Returns
     ----------
     result : Union[sp.Expr, List]

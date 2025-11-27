@@ -1,11 +1,9 @@
 from typing import Union, Tuple, List, Dict, Optional, Any, Callable
 
-from sympy import Expr, Poly, Symbol, Add, Mul, sympify
-from sympy.polys.constructor import construct_domain
-from sympy.matrices.expressions import MatPow
+from sympy import Expr, Poly, Symbol
 
 from .abstract import AtomSOSElement
-from .algebra import NCPolyRing, PseudoPoly, PseudoSMP
+from .algebra import NCPolyRing
 from .solution import SolutionSDP
 
 def DEFAULT_ADJOINT(x):
@@ -28,50 +26,6 @@ def DEFAULT_ADJOINT(x):
 #             cnt = 1
 #     m.append((pre, cnt))
 #     return tuple(m[1:]) # remove the first element (which is -1)
-
-def convert_expr_to_nc_poly(expr: Expr, gens: List[Symbol], **domain_kwargs):
-    """
-    Temporary function to convert a sympy expression containing noncommutative
-    symbols to a PseudoPoly class.
-    """
-    expr = sympify(expr).expand()
-    args = Add.make_args(expr)
-    gens_dict = {gen: i for i, gen in enumerate(gens)}
-
-    monoms = []
-    coeffs = []
-    for arg in args:
-        mul_arg = Mul.make_args(arg)
-        monom = []
-        coeff = 1
-        for v in mul_arg:
-            if gens_dict.get(v) is not None:
-                monom.append((gens_dict[v], 1))
-            elif v.is_Pow or isinstance(v, MatPow):
-                i = gens_dict.get(v.base)
-                if i is not None:
-                    if v.exp.is_Integer and v.exp >= 0:
-                        monom.append((i, int(v.exp)))
-                    else:
-                        raise ValueError("The exponent of generators should be a nonnegative integer.")
-                else:
-                    coeff *= v
-            else:
-                if (not (v.is_Integer or v.is_Rational or v.is_Float)) and any(v.has(_) for _ in gens):
-                    raise ValueError
-                coeff *= v
-        monoms.append(tuple(monom))
-        coeffs.append(coeff)
-    acc_terms = {}
-    for monom, coeff in zip(monoms, coeffs):
-        if monom in acc_terms:
-            acc_terms[monom] += coeff
-        else:
-            acc_terms[monom] = coeff
-    coeffs = list(acc_terms.values())
-    domain, coeffs = construct_domain(coeffs, **domain_kwargs)
-    rep = PseudoSMP(NCPolyRing(0, len(gens)), domain, dict(zip(monoms, coeffs)))
-    return PseudoPoly.new(rep, *gens)
 
 
 class SOHSPoly(AtomSOSElement):
@@ -133,7 +87,8 @@ class SOHSPoly(AtomSOSElement):
         degree: Optional[int] = None,
     ):
         gens = tuple(gens)
-        poly = convert_expr_to_nc_poly(poly, gens)
+        as_poly = NCPolyRing(len(gens), 0).as_poly
+        poly = as_poly(poly, gens)
         self.poly = poly
         self.gens = gens
 
@@ -143,8 +98,8 @@ class SOHSPoly(AtomSOSElement):
             qmodule = dict(enumerate(qmodule))
         if not isinstance(ideal, dict):
             ideal = dict(enumerate(ideal))
-        self._qmodule = {k: convert_expr_to_nc_poly(v, gens) for k, v in qmodule.items()}
-        self._ideal = {k: convert_expr_to_nc_poly(v, gens) for k, v in ideal.items()}
+        self._qmodule = {k: as_poly(v, gens) for k, v in qmodule.items()}
+        self._ideal = {k: as_poly(v, gens) for k, v in ideal.items()}
 
         if degree is None:
             # degree = max([self.poly] + list(self._qmodule.values()) + list(self._ideal.values()),

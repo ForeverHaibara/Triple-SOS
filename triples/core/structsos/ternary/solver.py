@@ -47,7 +47,7 @@ def _structural_sos_3vars_cyclic(
     """
     if not isinstance(coeff, Coeff):
         coeff = Coeff(coeff)
-    
+
     return sos_struct_common(coeff,
         sos_struct_sparse,
         sos_struct_degree_specified_solver(SOLVERS, homogeneous=True),
@@ -75,7 +75,7 @@ def _structural_sos_3vars_acyclic(
 
 def structural_sos_3vars(poly, ineq_constraints: Dict[sp.Poly, sp.Expr] = {}, eq_constraints: Dict[sp.Poly, sp.Expr] = {}) -> Optional[sp.Expr]:
     """
-    Main function of structural SOS for 3-var homogeneous polynomials. 
+    Main function of structural SOS for 3-var homogeneous polynomials.
     It first assumes the polynomial has variables (a,b,c), where a,b,c >= 0 and
     latter substitutes the variables with the original ones.
     """

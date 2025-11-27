@@ -1,17 +1,16 @@
 from itertools import combinations
-from time import time
+from time import perf_counter
 from typing import Union, Optional, List, Tuple, Dict, Callable, Generator, Any
 
-import numpy as np
-import sympy as sp
-from sympy import Poly, Expr
+from sympy import Poly, Expr, Integer, Mul, ZZ, QQ, RR
 from sympy.combinatorics import PermutationGroup
 
 from .sos import SOSPoly
 from .solution import SolutionSDP
-from ..preprocess import sanitize
-from ..shared import clear_polys_by_symmetry
-from ...utils import MonomialManager, optimize_poly, Root
+from ..preprocess import ProofNode, ProofTree, SolvePolynomial
+from ...utils import MonomialManager, Root, clear_polys_by_symmetry
+from ...sdp import ArithmeticTimeout
+from ...sdp.rationalize import SDPRationalizeError
 
 
 class _lazy_iter:
@@ -24,11 +23,25 @@ class _lazy_iter:
             self._iter = self._initializer()
         return iter(self._iter)
 
+def _lazy_find_roots(problem, verbose=False):
+    poly = problem.expr
+    time1 = perf_counter()
+    if not poly.domain.is_Exact:
+        return []
+    roots = problem.find_roots()
+    if verbose:
+        print(f"Time for finding roots num = {len(roots):<6d}     : {perf_counter() - time1:.6f} seconds.")
+    return roots
+
 
 def _get_qmodule_list(poly: Poly, ineq_constraints: List[Tuple[Poly, Expr]],
         ineq_constraints_with_trivial: bool = True,
         preordering: str = 'linear-progressive',
-        is_homogeneous: bool = True) -> Generator[List[Tuple[Poly, Expr]], None, None]:
+        is_homogeneous: bool = True
+    ) -> Generator[List[Tuple[Poly, Expr]], None, None]:
+    """
+    Generate the (generators of the) qmodule for the given problem.
+    """
     _ACCEPTED_PREORDERINGS = ['none', 'linear', 'linear-progressive']
     if not preordering in _ACCEPTED_PREORDERINGS:
         raise ValueError("Invalid preordering method, expected one of %s, received %s." % (str(_ACCEPTED_PREORDERINGS), preordering))
@@ -42,13 +55,13 @@ def _get_qmodule_list(poly: Poly, ineq_constraints: List[Tuple[Poly, Expr]],
 
     if preordering == 'none':
         if ineq_constraints_with_trivial:
-            ineq_constraints = [(poly_one, sp.S.One)] + ineq_constraints
+            ineq_constraints = [(poly_one, Integer(1))] + ineq_constraints
         ineq_constraints = degree_filter(ineq_constraints)
         yield ineq_constraints
         return
 
     linear_ineqs = []
-    nonlin_ineqs = [(poly_one, sp.S.One)]
+    nonlin_ineqs = [(poly_one, Integer(1))]
     for ineq, e in ineq_constraints:
         if ineq.is_linear:
             linear_ineqs.append((ineq, e))
@@ -68,10 +81,10 @@ def _get_qmodule_list(poly: Poly, ineq_constraints: List[Tuple[Poly, Expr]],
             d = mul.total_degree()
             if d > degree:
                 continue
-            mul_expr = sp.Mul(*(c[1] for c in comb))
+            mul_expr = Mul(*(c[1] for c in comb))
             for ineq, e in nonlin_ineqs:
                 new_d = d + ineq.total_degree()
-                if new_d <= degree and (degree - new_d) % 2 == 0:
+                if new_d <= degree and ((not is_homogeneous) or (degree - new_d) % 2 == 0):
                     qmodule.append((mul * ineq, mul_expr * e))
                     has_additional = True
 
@@ -82,8 +95,183 @@ def _get_qmodule_list(poly: Poly, ineq_constraints: List[Tuple[Poly, Expr]],
         yield qmodule
 
 
-@sanitize(homogenize=False, infer_symmetry=True, wrap_constraints=True,
-    disable_denom_finding_roots=True)
+def _is_infeasible(
+        poly: Poly,
+        qmodule: List[Poly],
+        ideal: List[Poly],
+        degree: int,
+        symmetry: PermutationGroup = None,
+    ) -> bool:
+    """
+    Check if the problem is trivially infeasible. Returns True if infeasible.
+    """
+    if poly.is_zero:
+        return False
+    if len(qmodule) == 0 and len(ideal) == 0:
+        return True
+
+    nvars = len(poly.gens)
+    if len(ideal) == 0:
+        if all(_.is_monomial for _ in qmodule):
+            qmodule_m = [_.monoms()[0] for _ in qmodule]
+            # if the poly has odd degree on some var, but all monomials are even up to permutation,
+            # then the poly is not SOS
+            odd_degree_vars = [i for i in range(nvars) if poly.degree(i) % 2 == 1]
+            for i in odd_degree_vars:
+                for i2 in symmetry.orbit(i):
+                    if any(m[i2] % 2 == 1 for m in qmodule_m):
+                        # odd degree monomial found -> okay
+                        break
+                else:
+                    return True
+    return False
+
+
+class SDPSOSSolver(ProofNode):
+    """
+    Solve a constrained polynomial inequality problem using semidefinite programming (SDP).
+
+    Although the theory of numerically solving sum-of-squares problems using SDP is well established,
+    there are certain limitations in practice. One of the most significant concerns is that we
+    require an accurate, rational solution rather than a numerical one. If the SDP is strictly feasible
+    and has strictly positive definite solutions, then a rational solution can be obtained by
+    rounding an interior solution. See [1]. However, if the solution is semipositive definite,
+    it is generally difficult or even impossible to round it to a rational solution.
+
+    To handle such cases, we need to compute the low-rank feasible set of the SDP in advance
+    and solve the SDP on this subspace. This process is known as facial reduction.
+    For example, consider Vasile's inequality `(a^2+b^2+c^2)^2 - 3*(a^3*b+b^3*c+c^3*a) >= 0`.
+    Up to scaling, there are four equality cases. If this inequality can be written in the
+    semidefinite form `x'Mx`, then `x'Mx = 0` at these four points. This implies that Mx = 0
+    for these four vectors. As a result, the semidefinite matrix `M` lies in a subspace orthogonal
+    to these four vectors. We can assume `M = QSQ'`, where `Q` is the nullspace of the four
+    vectors`x`, and solve the SDP with respect to `S`. Currently, the low-rank subspace is computed
+    heuristically by finding the equality cases of the inequality. Note that SOS that exploits
+    term-sparsity through the Newton polytope is also a special case of facial reduction.
+
+    This class provides a node to solve inequality problems using SDPSOS. For more flexible or
+    low-level usage, such as manipulating Gram matrices, please use `SOSPoly`.
+
+    Reference
+    ----------
+    [1] Helfried Peyrl and Pablo A. Parrilo. 2008. Computing sum of squares decompositions with
+    rational coefficients. Theor. Comput. Sci. 409, 2 (December, 2008), 269-281.
+
+    Parameters
+    ----------
+    roots: Optional[List[Root]]
+        The roots of the polynomial satisfying constraints. When it is None, it will be automatically generated.
+    ineq_constraints_with_trivial: bool
+        Whether to add the trivial inequality constraint 1 >= 0. This is used to generate the
+        quadratic module. Default is True.
+    preordering: str
+        The preordering method for extending the generators of the quadratic module. It can be
+        'none', 'linear', 'linear-progressive'. Default is 'linear-progressive'.
+    verbose: bool
+        Whether to print the progress. Default is False.
+    solver: str
+        The numerical SDP solver to use. When set to None, it is automatically selected. Default is None.
+    allow_numer: int
+        Whether to allow numerical solution.
+    """
+    default_configs = {
+        'ineq_constraints_with_trivial': True,
+        'preordering': 'linear-progressive',
+        'verbose': False,
+        'solver': None,
+        'allow_numer': 0,
+        'solve_kwargs': {},
+    }
+
+    _complexity_models = True
+    def explore(self, configs):
+        if self.status != 0:
+            return
+
+        poly = self.problem.expr
+
+        symmetry = MonomialManager(len(poly.gens), self.problem.identify_symmetry())
+        problem, cons_restoration = self.problem.wrap_constraints(symmetry.perm_group)
+        ineq_constraints = problem.ineq_constraints
+        eq_constraints = problem.eq_constraints
+        nvars = len(poly.gens)
+        degree = poly.total_degree()
+        if nvars < 1:
+            self.status = -1
+            self.finished = True
+            return None
+
+
+        roots = None
+        verbose = configs['verbose']
+        solver = configs['solver']
+        expected_end_time = perf_counter() + configs['time_limit']
+
+        is_hom = problem.is_homogeneous
+        if not is_hom:
+            degree = max([degree]\
+                + [_.total_degree() for _ in ineq_constraints.keys()]\
+                + [_.total_degree() for _ in eq_constraints.keys()])
+        if not (poly.domain in (ZZ, QQ, RR)):
+            self.status = -1
+            self.finished = True
+            return None
+
+        if verbose:
+            print(f'SDPSOS nvars = {nvars} degree = {degree}')
+            print('Identified Symmetry = %s' % str(symmetry.perm_group).replace('\n', '').replace('  ',''))
+
+        qmodule_list = _get_qmodule_list(poly, ineq_constraints.items(),
+                            ineq_constraints_with_trivial=configs['ineq_constraints_with_trivial'],
+                            preordering=configs['preordering'], is_homogeneous=is_hom)
+
+        ideal = list(eq_constraints.keys())
+        for qmodule in qmodule_list:
+            qmodule_tuples = clear_polys_by_symmetry(qmodule, poly.gens, symmetry)
+            qmodule = [e[0] for e in qmodule_tuples]
+
+            if _is_infeasible(poly, qmodule, ideal, degree, symmetry.perm_group):
+                continue
+
+            if verbose:
+                print(f"Qmodule = {qmodule}\nIdeal   = {list(eq_constraints.keys())}")
+            time0 = perf_counter()
+            # now we solve the problem
+            try:
+                if roots is None:
+                    roots = _lazy_iter(lambda: _lazy_find_roots(problem, verbose))
+
+                sos_problem = SOSPoly(poly, poly.gens, qmodule = qmodule, ideal = ideal,
+                                        symmetry = symmetry.perm_group, roots = roots, degree=degree)
+                sdp = sos_problem.construct(verbose=verbose, time_limit=expected_end_time - perf_counter())
+                # TODO: add a dof0_limit check here to prevent memory explosion (which might kill the program)
+
+                if sos_problem.solve(verbose=verbose, solver=solver,
+                        time_limit=expected_end_time - perf_counter(),
+                        allow_numer=configs['allow_numer'],
+                        kwargs=configs['solve_kwargs']) is not None:
+                    if verbose:
+                        print(f"Time for solving SDP{' ':20s}: {perf_counter() - time0:.6f} seconds. \033[32mSuccess\033[0m.")
+                    solution = sos_problem.as_solution(qmodule=dict(enumerate([e[1] for e in qmodule_tuples])),
+                                                        ideal=dict(enumerate(list(eq_constraints.values())))).solution
+                    solution = cons_restoration(solution)
+                    self.problem.solution = solution
+                    break
+            except Exception as e:
+                if verbose:
+                    print(f"Time for solving SDP{' ':20s}: {perf_counter() - time0:.6f} seconds. \033[31mFailed with exceptions\033[0m.")
+                    print(f"{e.__class__.__name__}: {e}")
+                if isinstance(e, ArithmeticTimeout):
+                    raise e
+                elif isinstance(e, (SDPRationalizeError, MemoryError)):
+                    # do not try further
+                    break
+                continue
+
+        self.status = -1
+        self.finished = True
+
+
 def SDPSOS(
         poly: Poly,
         ineq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
@@ -93,42 +281,15 @@ def SDPSOS(
         ineq_constraints_with_trivial: bool = True,
         preordering: str = 'linear-progressive',
         verbose: bool = False,
+        time_limit: float = 3600,
         solver: Optional[str] = None,
         allow_numer: int = 0,
         solve_kwargs: Dict[str, Any] = {},
     ) -> Optional[SolutionSDP]:
     """
-    Solve a polynomial SOS problem with SDP.
+    Solve a constrained polynomial inequality problem by semidefinite programming (SDP).
 
-    Although the theory of numerical solution to sum of squares using SDP (semidefinite programming)
-    is well established, there exists certain limitations in practice. One of the most major
-    concerns is that we need accurate, rational solution rather a numerical one. One might argue 
-    that SDP is convex and we could perturb a solution to get a rational, interior one. However,
-    this is not always the case. If the feasible set of SDP is convex but not full-rank, then
-    our solution might be on the boundary of the feasible set. In this case, perturbation does
-    not work.
-
-    To handle the problem, we need to derive the true low-rank subspace of the feasible set in advance
-    and perform SDP on the subspace. Take Vasile's inequality as an example, s(a^2)^2 - 3s(a^3b) >= 0
-    has four equality cases. If it can be written as a positive definite matrix M, then we have
-    x'Mx = 0 at these four points. This leads to Mx = 0 for these four vectors. As a result, the 
-    semidefinite matrix M lies on a subspace perpendicular to these four vectors. We can assume 
-    M = QSQ' where Q is the nullspace of the four vectors x, so that the problem is reduced to find S.
-
-    Hence the key problem is to find the root and construct such Q. Also, in our algorithm, the Q
-    is constructed as a rational matrix, so that a rational solution to S converts back to a rational
-    solution to M. We must note that the equality cases might not be rational as in Vasile's inequality.
-    However, the cyclic sum of its permutations is rational. So we can use the linear combination of 
-    x and its permutations, which would be rational, to construct Q. This requires knowledge of 
-    algebraic numbers and minimal polynomials.
-
-    For more flexible usage, please use
-    ```
-        sos_problem = SOSProblem(poly)
-        sos_problem.construct(*args)
-        sos_problem.solve(**kwargs)
-        solution = sos_problem.as_solution()
-    ```
+    See the documentation of `SDPSOSSolver` for more details.
 
     Parameters
     ----------
@@ -141,7 +302,7 @@ def SDPSOS(
         Equality constraints to the problem. This assumes h_1(x) = 0, h_2(x) = 0, ...
         This is used to generate the ideal (quotient ring).
     symmetry: PermutationGroup or MonomialManager
-        The symmetry of the polynomial. When it is None, it will be automatically generated. 
+        The symmetry of the polynomial. When it is None, it will be automatically generated.
         If we want to skip the symmetry generation algorithm, please pass in a MonomialManager object.
     roots: Optional[List[Root]]
         The roots of the polynomial satisfying constraints. When it is None, it will be automatically generated.
@@ -156,100 +317,24 @@ def SDPSOS(
     solver: str
         The numerical SDP solver to use. When set to None, it is automatically selected. Default is None.
     allow_numer: int
-        Whether to allow numerical solution (still under development).
+        Whether to allow numerical solution.
     """
-    return _SDPSOS(poly, ineq_constraints=ineq_constraints, eq_constraints=eq_constraints,
-                symmetry=symmetry, roots=roots, ineq_constraints_with_trivial=ineq_constraints_with_trivial,
-                preordering=preordering, verbose=verbose,
-                solver=solver, allow_numer=allow_numer, solve_kwargs=solve_kwargs)
-
-
-def _SDPSOS(
-        poly: Poly,
-        ineq_constraints: Dict[Poly, Expr] = {},
-        eq_constraints: Dict[Poly, Expr] = {},
-        symmetry: MonomialManager = None,
-        roots: Optional[List[Root]] = None,
-        ineq_constraints_with_trivial: bool = True,
-        preordering: str = 'linear-progressive',
-        verbose: bool = False,
-        solver: Optional[str] = None,
-        allow_numer: int = 0,
-        solve_kwargs: Dict[str, Any] = {},
-    ) -> Optional[SolutionSDP]:
-    nvars = len(poly.gens)
-    degree = poly.total_degree()
-    if degree < 1 or nvars < 1:
-        return None
-    is_hom = poly.is_homogeneous and \
-        all(_.is_homogeneous for _ in ineq_constraints.keys()) and \
-        all(_.is_homogeneous for _ in eq_constraints.keys())
-    if not is_hom:
-        degree = max([degree]\
-            + [_.total_degree() for _ in ineq_constraints.keys()]\
-            + [_.total_degree() for _ in eq_constraints.keys()])
-    if not (poly.domain in (sp.ZZ, sp.QQ, sp.RR)):
-        return None
-
-    if verbose:
-        print(f'SDPSOS nvars = {nvars} degree = {degree}')
-        print('Identified Symmetry = %s' % str(symmetry.perm_group).replace('\n', '').replace('  ',''))
-
-    # roots = None
-    qmodule_list = _get_qmodule_list(poly, ineq_constraints.items(),
-                        ineq_constraints_with_trivial=ineq_constraints_with_trivial,
-                        preordering=preordering, is_homogeneous=is_hom)
-
-    # odd_degree_vars = [i for i in range(nvars) if poly.degree(i) % 2 == 1]
-    for qmodule in qmodule_list:
-        qmodule = clear_polys_by_symmetry(qmodule, poly.gens, symmetry)
-
-        if len(qmodule) == 0 and len(eq_constraints) == 0:
-            continue
-        # if the poly has odd degree on some var, but all monomials are even up to permutation,
-        # then the poly is not SOS
-        # unhandled_odd = len(odd_degree_vars) > 0 # init to True if there is any odd degree var
-        # for i in odd_degree_vars:
-        #     for i2 in symmetry.to_perm_group(nvars).orbit(i):
-        #         if any(m[i2] % 2 == 1 for m in qmodule):
-        #             unhandled_odd = False
-        #             break
-        #     if unhandled_odd:
-        #         break
-        # if unhandled_odd:
-        #     continue
-
-        if verbose:
-            print(f"Qmodule = {[e[0] for e in qmodule]}\nIdeal   = {list(eq_constraints.keys())}")
-        time0 = time()
-        # now we solve the problem
-        try:
-            if roots is None:
-                time1 = time()
-                def _lazy_find_roots():
-                    if not poly.domain.is_Exact:
-                        return []
-                    roots = optimize_poly(poly, list(ineq_constraints.keys()), [poly] + list(eq_constraints.keys()), return_type='root')
-                    if verbose:
-                        print(f"Time for finding roots num = {len(roots):<6d}     : {time() - time1:.6f} seconds.")
-                    return roots
-                roots = _lazy_iter(_lazy_find_roots)
- 
-            sos_problem = SOSPoly(poly, poly.gens, qmodule = [e[0] for e in qmodule], ideal = list(eq_constraints.keys()),
-                                    symmetry = symmetry.perm_group, roots = roots, degree=degree)
-            sdp = sos_problem.construct(verbose=verbose)
-
-            if sos_problem.solve(verbose=verbose, solver=solver, allow_numer=allow_numer, kwargs=solve_kwargs) is not None:
-                if verbose:
-                    print(f"Time for solving SDP{' ':20s}: {time() - time0:.6f} seconds. \033[32mSuccess\033[0m.")
-                solution = sos_problem.as_solution(qmodule=dict(enumerate([e[1] for e in qmodule])),
-                                                    ideal=dict(enumerate(list(eq_constraints.values()))))
-                return solution
-        except Exception as e:
-            if verbose:
-                print(f"Time for solving SDP{' ':20s}: {time() - time0:.6f} seconds. \033[31mFailed with exceptions\033[0m.")
-                print(f"{e.__class__.__name__}: {e}")
-            continue
-
-
-    return None
+    problem = ProofNode.new_problem(poly, ineq_constraints, eq_constraints)
+    problem.set_roots(roots)
+    configs = {
+        ProofTree: {
+            'time_limit': time_limit,
+        },
+        SolvePolynomial: {
+            'solvers': [SDPSOSSolver],
+        },
+        SDPSOSSolver: {
+            'ineq_constraints_with_trivial': ineq_constraints_with_trivial,
+            'preordering': preordering,
+            'verbose': verbose,
+            'solver': solver,
+            'allow_numer': allow_numer,
+            'solve_kwargs': solve_kwargs,
+        }
+    }
+    return problem.sum_of_squares(configs)

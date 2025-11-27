@@ -29,7 +29,7 @@ def structural_sos_2vars(poly, ineq_constraints, eq_constraints):
 
     if sgn < 0:
         return None
-    
+
     return sgn * sp.Mul(*sols)
 
 
@@ -37,7 +37,7 @@ class HalfspaceIntersection2D():
     """
     Given multiple 2d homogenos halfplanes a*x + b*y >= 0, find the intersection
     represented by at most 2 linear constraints.
-    
+
     See also
     ---------
     scipy.spatial.HalfspaceIntersection

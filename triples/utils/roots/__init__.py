@@ -1,5 +1,7 @@
 from .roots import Root
 
+from .root_list import RootList
+
 from .polysolve import univar_realroots, nroots
 
 from .extrema import kkt, optimize_poly
@@ -15,7 +17,7 @@ from .rationalize import (
 from .monotonic_opt import rpa_monotonic, rpa_gmop, poly_as_dm, rpa_polyopt
 
 __all__ = [
-    'Root',
+    'Root', 'RootList',
     'univar_realroots', 'nroots',
     'kkt', 'optimize_poly', 'numeric_optimize_poly', 'numeric_optimize_skew_symmetry',
     'nroots', 'univariate_intervals', 'rationalize', 'rationalize_array', 'rationalize_bound',

@@ -31,4 +31,3 @@ def sos_struct_octic(coeff, real = True):
             return inverse_substitution(solution, factor_degree = 2)
 
     return None
-

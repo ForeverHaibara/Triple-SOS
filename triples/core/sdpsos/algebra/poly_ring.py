@@ -1,6 +1,6 @@
-from typing import List, Dict, Any
+from typing import List, Dict, Optional, Any
 
-from sympy import Expr, Poly
+from sympy import Expr, Poly, Symbol
 from sympy.combinatorics import PermutationGroup, Permutation
 
 from .state_algebra import CommutativeStateAlgebra, TERM, MONOM
@@ -54,6 +54,11 @@ class PolyRing(CommutativeStateAlgebra):
     def permute_monom(self, monom: MONOM, perm: Permutation) -> MONOM:
         return tuple(perm(monom))
 
+    def gen_monom(self, i: Optional[int]) -> MONOM:
+        if i is None:
+            return (0,) * self.nvars
+        return (0,) * i + (1,) + (0,) * (self.nvars - i - 1)
+
     def total_degree(self, monom: MONOM) -> int:
         return sum(monom)
 
@@ -62,6 +67,9 @@ class PolyRing(CommutativeStateAlgebra):
 
     def as_expr(self, poly: Poly) -> Expr:
         return poly.as_expr()
+
+    def as_poly(self, expr: Expr, gens: List[Symbol], **kwargs) -> Poly:
+        return Poly(expr, *gens, **kwargs)
 
     def mul(self, term1: TERM, term2: TERM) -> TERM:
         (t1, v1), (t2, v2) = term1, term2
@@ -83,7 +91,7 @@ class PolyRing(CommutativeStateAlgebra):
             dict_basis, basis = generate_monoms(
                 self.nvars, (degree - d)//2, hom=is_homogeneous)
             qmodule_bases[key] = QmoduleBasis(self, q, basis=basis, dict_basis=dict_basis)
-    
+
         ideal_bases = {}
         for key, i in ideal.items():
             d = i.total_degree()
