@@ -123,7 +123,7 @@ def _quadratic_pivoting(self: Pivoting, x):
             ideal = list(eqs.values())
             p1 = a*x**2 + db*lb_expr + c
             p2 = ((2*A*x + B)**2 + ndisc) / (4*a)
-            p1, p2 = [PSatz.from_sympy(preorder, ideal, _) for _ in [p1, p2]]
+            p1, p2 = [PSatz.from_sympy(_, preorder, ideal) for _ in [p1, p2]]
             if p1 is None or p2 is None:
                 return None
             ps = p1.join(p2, 0)

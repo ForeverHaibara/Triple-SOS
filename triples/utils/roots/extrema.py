@@ -10,8 +10,7 @@ from typing import List, Dict, Tuple, Union, Optional, Callable, Generator
 
 import sympy as sp
 from sympy import Symbol, Float, Expr, Poly, Rational
-from sympy.polys.polyerrors import BasePolynomialError, PolificationFailed, GeneratorsNeeded
-from sympy.polys.polytools import resultant
+from sympy.polys.polyerrors import PolificationFailed, DomainError
 from sympy.polys.polyclasses import DMP
 from sympy.combinatorics import PermutationGroup
 
@@ -85,7 +84,7 @@ def polylize_input(poly: Expr, ineq_constraints: List[Expr], eq_constraints: Lis
         if f is None:
             raise PolificationFailed({}, f, f)
         if not check_poly(f):
-            raise TypeError('Polynomial domains must be exact.')
+            raise DomainError('Polynomial domains must be exact.')
         return f
     poly = polylize(poly, symbols)
     ineq_constraints = [polylize(ineq, symbols) for ineq in ineq_constraints]
@@ -716,17 +715,18 @@ def optimize_poly(poly: Union[Poly, Expr], ineq_constraints: List[Union[Poly, Ex
      (CRootOf(a**3 - 6*a**2 + 5*a - 1, 2), CRootOf(b**3 - 5*b**2 + 6*b - 1, 2), 1)]
     """
     symbols = _infer_symbols(symbols, poly, ineq_constraints, eq_constraints)
-    if len(symbols) == 0:
-        return []
     if not (objective in ('min', 'max', 'all')):
         raise ValueError('Objective must be either "min" or "max" or "all".')
     if not (return_type in ('root', 'tuple', 'dict')):
         raise ValueError('Return type must be either "root" or "tuple" or "dict".')
+    if len(symbols) == 0:
+        return [] if return_type != 'root' else RootList((), [])
 
     poly, ineq_constraints, eq_constraints = polylize_input(
         poly, ineq_constraints, eq_constraints, symbols=symbols,
         check_poly=lambda p: p.domain.is_Numerical and p.domain.is_Exact
     )
+
 
     solver = partial(_optimize_poly, max_different=max_different)
     points = []

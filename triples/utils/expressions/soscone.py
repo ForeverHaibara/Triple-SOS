@@ -13,7 +13,7 @@ from .cyclic import CyclicExpr
 from .exraw import EXRAW
 
 
-# For static type checking purposes
+# For type annotations purposes, DO NOT IMPORT Ef, TExpr, Domain from this module.
 # XXX: move it elsewhere
 # from sympy.polys.domains.domain import Ef, FieldElement # SymPy >= 1.15
 from sympy.polys.domains.domain import Domain as _Domain
@@ -66,28 +66,16 @@ class SOSCone(Generic[Ef]):
             return -1
         return 1 if domain.to_sympy(x) > 0 else -1
 
-    def sum(self, elements: List['SOSElement[Ef]']) -> 'SOSElement[Ef]':
-        if not elements:
-            return self.zero
-        cone = elements[0].cone
-        for e in elements:
-            if e.cone != cone:
-                raise ValueError("Cannot add SOSElement with different cones.")
-        terms = []
-        for e in elements:
-            terms.extend(e.items())
-        return SOSElement.new(cone, terms)
+    def sum(self, elements: Iterator['SOSElement[Ef]']) -> 'SOSElement[Ef]':
+        e = self.zero
+        for e2 in elements:
+            e += e2
+        return e
 
-    def prod(self, elements: List['SOSElement[Ef]']) -> 'SOSElement[Ef]':
-        if not elements:
-            return self.one
-        cone = elements[0].cone
-        for e in elements:
-            if e.cone != cone:
-                raise ValueError("Cannot multiply SOSElement with different cones.")
-        e = elements[0]
-        for e2 in elements[1:]:
-            e = e * e2
+    def prod(self, elements: Iterator['SOSElement[Ef]']) -> 'SOSElement[Ef]':
+        e = self.one
+        for e2 in elements:
+            e *= e2
         return e
 
     def from_list(self, lst: List[Tuple[Ef, TExpr[Ef]]]) -> 'SOSElement[Ef]':
@@ -200,7 +188,9 @@ class SOSElement(DomainElement, CantSympify, Generic[Ef]):
 
     @property
     def is_zero(self) -> bool:
-        return self.algebra.is_zero(self.to_algebra())
+        # return self.algebra.is_zero(self.to_algebra())
+        dom, alg = self.domain, self.algebra
+        return all(dom.is_zero(c) or alg.is_zero(v) for c, v in self)
 
     @property
     def zero(self) -> 'SOSElement[Ef]':
@@ -232,7 +222,7 @@ class SOSElement(DomainElement, CantSympify, Generic[Ef]):
         if isinstance(other, SOSElement):
             if self.cone == other.cone:
                 return self._add(other)
-            raise ValueError("Cannot add SOSElement with different cones.")
+            raise ValueError("Cannot add SOSElements of different cones.")
 
         if self.domain.of_type(other):
             _other = other
@@ -273,7 +263,7 @@ class SOSElement(DomainElement, CantSympify, Generic[Ef]):
         if isinstance(other, SOSElement):
             if self.cone == other.cone:
                 return self._mul(other)
-            raise ValueError("Cannot multiply SOSElement with different cones.")
+            raise ValueError("Cannot multiply SOSElements of different cones.")
     
         if self.domain.of_type(other):
             _other = other
@@ -293,7 +283,7 @@ class SOSElement(DomainElement, CantSympify, Generic[Ef]):
         if isinstance(other, SOSElement):
             if self.cone == other.cone:
                 return other._mul(self)
-            raise ValueError("Cannot multiply SOSElement with different cones.")
+            raise ValueError("Cannot multiply SOSElements of different cones.")
     
         if self.domain.of_type(other):
             _other = other
@@ -323,7 +313,7 @@ class SOSElement(DomainElement, CantSympify, Generic[Ef]):
         if isinstance(other, SOSElement):
             if self.cone == other.cone:
                 return self._truediv(other)
-            raise ValueError("Cannot divide SOSElement with different cones.")
+            raise ValueError("Cannot divide SOSElements of different cones.")
 
         if self.domain.of_type(other):
             _other = other
@@ -343,7 +333,7 @@ class SOSElement(DomainElement, CantSympify, Generic[Ef]):
         if isinstance(other, SOSElement):
             if self.cone == other.cone:
                 return other._truediv(self)
-            raise ValueError("Cannot divide SOSElement with different cones.")
+            raise ValueError("Cannot divide SOSElements of different cones.")
         if self.domain.of_type(other):
             _other = other
         else:
@@ -372,7 +362,7 @@ class SOSElement(DomainElement, CantSympify, Generic[Ef]):
 
     def __pow__(self, n: int) -> 'SOSElement[Ef]':
         if not isinstance(n, int):
-            raise ValueError("Cannot raise SOSElement to non-integer power.")
+            raise TypeError("Cannot raise SOSElement to non-integer power.")
         # if n < 0:
         #     raise ValueError("Cannot raise SOSElement to negative power.")
         return self._pow_int(n)
@@ -404,7 +394,7 @@ class SOSElement(DomainElement, CantSympify, Generic[Ef]):
             if self.cone == x.cone:
                 return self._mul_sqr_algebra(x.to_algebra())
             else:
-                raise ValueError("Cannot multiply SOSElement with different cones.")
+                raise ValueError("Cannot multiply SOSElements of different cones.")
         if self.domain.of_type(x):
             _x = x
         else:
@@ -449,6 +439,79 @@ EXRAWSOSCone = SOSCone(EXRAW, EXRAW)
 
 
 class SOSlist(Generic[Ef]):
+    """
+    A class to represent a (weighted) sum-of-squares expression.
+
+    Attributes
+    ----------
+    rep: SOSElement
+        The internal representation of the SOSlist.
+        It uses sympy domains.
+
+    Methods
+    ----------
+    items() -> List[Tuple[Expr, Expr]]:
+        Returns the items of the SOSlist.
+        It equals to `sum(c * v**2 for c, v in self.items())
+    coeffs() -> List[Expr]:
+        Returns the coefficient of each item, i.e., `[c for c, v in self.items()]`
+    values() -> List[Expr]:
+        Returns the expression part of each item, i.e., `[v for c, v in self.items()]`
+    as_expr() -> Expr:
+        Convert the SOSlist to a sympy expression instance.
+
+    Examples
+    ---------
+
+    ## Basic Tutorials
+    
+    ### Building SOSlist by `SOSlist.from_sympy`
+
+    `SOSlist.from_sympy` automatically recognizes expressions that are in the form
+    of sum-of-squares and convert them to SOSlists. The result can be checked using
+    `.items()`.
+
+    >>> from sympy.abc import a, b, c, x, y, z
+    >>> sl = SOSlist.from_sympy((2*a**2 - 1)**2/4 + ((1 - 2*a)**2 + 2)/4)
+    >>> sl
+    1/2*(1)**2 + 1/4*(1 - 2*a)**2 + 1/4*(2*a**2 - 1)**2
+    >>> sl.items()
+    [(1/2, 1), (1/4, 1 - 2*a), (1/4, 2*a**2 - 1)]
+    >>> sl.as_expr()
+    (1 - 2*a)**2/4 + (2*a**2 - 1)**2/4 + 1/2
+
+    Expressions only involving add, mul, div of sum-of-squares elements are supported.
+    For example, the following codes converts the sum-of-squares proof to the Motzkin polynomial.
+
+    >>> sl = SOSlist.from_sympy(
+    ... (x**2*y**2*(x**2+y**2-2*z**2)**2 + z**2*(x**2*(y**2-z**2)**2 + y**2*(x**2-z**2)**2))/(x**2+y**2))
+    >>> sl.items() # doctest:+SKIP
+    [(1, x**2*z*(y**2 - z**2)/(x**2 + y**2)),
+     (1, x*y*z*(x**2 - z**2)/(x**2 + y**2)),
+     (1, x**2*y*(x**2 + y**2 - 2*z**2)/(x**2 + y**2)),
+     (1, x*y*z*(y**2 - z**2)/(x**2 + y**2)),
+     (1, y**2*z*(x**2 - z**2)/(x**2 + y**2)),
+     (1, x*y**2*(x**2 + y**2 - 2*z**2)/(x**2 + y**2))]
+    >>> sum(c * v**2 for c, v in sl.items()).factor()
+    x**4*y**2 + x**2*y**4 - 3*x**2*y**2*z**2 + z**6
+
+    It returns None if the expression is not explicitly in the form of sum-of-squares.
+
+    >>> SOSlist.from_sympy(x**2 - 2*x + 5) is None
+    True
+    >>> SOSlist.from_sympy((x - 1)**2 + 4)
+    4*(1)**2 + 1*(x - 1)**2
+
+    ### Building SOSlist from a list
+
+    An SOSlist can be initialized directly from a list of tuples `(c, v)` to
+    represent `sum(c * v**2 for c, v in lst)`.
+
+    >>> SOSlist([(1, a - b), (2, b - c), (3, a - c)])
+    1*(a - b)**2 + 2*(b - c)**2 + 3*(a - c)**2
+    >>> (SOSlist([(1, 1 - 2*a), (1, 2*a**2 - 1)]) + 2)/4
+    1/4*(1 - 2*a)**2 + 1/4*(2*a**2 - 1)**2 + 1/2*(1)**2
+    """
     rep: SOSElement[Ef]
     def __new__(cls, arg):
         if isinstance(arg, SOSlist):
@@ -457,9 +520,6 @@ class SOSlist(Generic[Ef]):
             return cls.new(arg)
         elif isinstance(arg, Iterable):
             return cls.new(SOSElement(EXRAWSOSCone, list(arg)))
-        rep = EXRAWSOSCone.from_sympy(arg)
-        if isinstance(rep, SOSElement):
-            return cls.new(rep)
         raise TypeError(f"Cannot convert {arg!r} to SOSlist.")
 
     @property
@@ -534,6 +594,13 @@ class SOSlist(Generic[Ef]):
 
     def as_expr(self) -> Expr:
         return self.rep.as_expr()
+
+    @classmethod
+    def from_sympy(cls, arg) -> Optional['SOSlist']:
+        rep = EXRAWSOSCone.from_sympy(arg)
+        if isinstance(rep, SOSElement):
+            return cls.new(rep)
+        return None
 
     def __add__(self, other: object) -> 'SOSlist[Ef]':
         if isinstance(other, SOSlist):

@@ -982,8 +982,9 @@ class CTSTProblems(ProblemSet):
     def problem_CTST_2024_p23(self):
         ...
 
+    @mark(mark.noimpl)
     def problem_CTST_2025_p1(self):
-        return x**4*(x-y)*(x-z) + y**4*(y-z)*(y-x) + z**4*(z-x)*(z-y), [], []
+        ...
 
     @mark(mark.noimpl, mark.nvars)
     def problem_CTST_2025_p9(self):

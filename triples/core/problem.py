@@ -330,6 +330,18 @@ class InequalityProblem(Generic[T]):
     def is_of_type(self, dtype) -> bool:
         return self.reduce(lambda e: isinstance(e, dtype), all)
 
+    def clear_roots(self) -> 'InequalityProblem[T]':
+        self.roots = None
+        return self
+
+    def clear_counter_examples(self) -> 'InequalityProblem[T]':
+        self.counter_examples = None
+        return self
+
+    def clear_solution(self) -> 'InequalityProblem[T]':
+        self.solution = None
+        return self
+
     def get_symbol_signs(self) -> Dict[Symbol, Tuple[Optional[int], Expr]]:
         from .preprocess import get_symbol_signs
         return get_symbol_signs(self)
@@ -604,8 +616,12 @@ class InequalityProblem(Generic[T]):
         """Find the equality cases of the problem heuristically."""
         if self.roots is not None:
             return self.roots
-        roots = optimize_poly(self.expr, list(self.ineq_constraints), [self.expr] + list(self.eq_constraints),
-                    self.gens, return_type='root')
+        from sympy.polys.polyerrors import DomainError
+        try:
+            roots = optimize_poly(self.expr, list(self.ineq_constraints), [self.expr] + list(self.eq_constraints),
+                        self.gens, return_type='root')
+        except DomainError:
+            roots = RootList(self.gens, [])
         self.roots = roots
         return self.roots
 

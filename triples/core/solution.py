@@ -233,9 +233,9 @@ class Solution(SolutionBase[T]):
         return SOSlist.from_sympy(self.solution)
 
     def as_psatz(self) -> Optional[PSatz]:
-        preorder = list(self.ineq_constraints.values())
-        ideal = list(self.eq_constraints.values())
-        return PSatz.from_sympy(preorder, ideal, self.solution)
+        return PSatz.from_sympy(self.solution, 
+            {v: k for k, v in self.ineq_constraints.items()},
+            {v: k for k, v in self.eq_constraints.items()})
 
     def to_string(self, mode: str = 'latex', lhs_expr=None, together=False, cancel=False, settings=None) -> str:
         """
