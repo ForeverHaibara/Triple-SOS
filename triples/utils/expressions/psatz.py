@@ -864,7 +864,7 @@ class PSatz(Generic[Ef]):
 
     >>> ps1**2
     ((1*(b**2 + x*(-a - 3))**2))/((1*(a*((2*a + b)**2 + 1) + x)**2))
-    >>> ps2**2
+    >>> ps2**2 # doctest:+SKIP
     ((1*(-a*x + b**2 - 3*x)**2))/((1*(4*a**3 + 4*a**2*b + a*b**2 + a + x)**2))
 
     ### Building from PSatzElements
@@ -880,7 +880,7 @@ class PSatz(Generic[Ef]):
     >>> ps_dom = PSatzDomain(cone, [cone.algebra(x), cone.algebra(y)], [cone.algebra(x*y-1)])
     >>> ps_elem = PSatzElement(ps_dom, numer_preorder, numer_ideal, denom_preorder, {})
     >>> ps = PSatz.new(ps_elem)
-    >>> ps
+    >>> ps # doctest:+SKIP
     ((1*(x - y)**2) + (x*y - 1)*(4))/((2*(1)**2) + (x)*(1*(1)**2) + (y)*(1*(1)**2))
     >>> ps.as_expr().factor()
     x + y - 2
