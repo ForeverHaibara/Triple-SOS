@@ -2,7 +2,7 @@
 # some addons are not required for individual use.
 
 # tested on Python 3.7-3.13
-sympy>=1.10
+sympy>=1.9
 numpy
 scipy # recommend version >= 1.6 for high-ds in Linear Programming
 
@@ -30,6 +30,7 @@ gradio>=4.44
 # For enhanced performance, consider installing gmpy2 (compatible with Python 3.7-3.13):
 gmpy2
 
-# For enhanced performance, consider installing python-flint (compatible with CPython 3.9-3.12):
+# For enhanced performance, consider installing python-flint (compatible with CPython >= 3.9):
+# this is really useful
 # pip install python-flint
 python-flint

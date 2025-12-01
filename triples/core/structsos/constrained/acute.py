@@ -1,7 +1,6 @@
 import sympy as sp
 
 from ..solution import SolutionStructural
-from ..pivoting.univariate import prove_univariate
 from ..ternary.utils import CommonExpr
 from ..ternary import (
     sos_struct_acyclic_quadratic, sos_struct_quartic,
@@ -12,6 +11,7 @@ from ..utils import (
     Coeff, CyclicSum, CyclicProduct, SS,
     uniquely_named_symbol, radsimp, rationalize_func, congruence
 )
+from ..univariate import prove_univariate
 
 a, b, c = sp.symbols("a b c")
 
@@ -364,7 +364,7 @@ def _constrained_acute_lift_for_six(coeff, F):
 
     d = 0 # min(_[0] for _ in div[0].monoms()) # order of a^d in div[0]
     pure_div = div[0].div(sp.Poly([1] + [0]*d, a))[0] # divided by a^d
-    sym_proof = prove_univariate(pure_div, return_raw=True)
+    sym_proof = prove_univariate(pure_div, (0, None), return_type='list')
     if sym_proof is None:
         return None
     lifted_sym = _homogenize_sym_proof(sym_proof, d0 - 4, (a,b,c))

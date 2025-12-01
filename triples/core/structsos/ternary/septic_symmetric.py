@@ -4,10 +4,11 @@ import sympy as sp
 
 from .utils import (
     CyclicSum, CyclicProduct, CommonExpr, Coeff, SS,
-    prove_univariate, quadratic_weighting
+    quadratic_weighting
 )
 from .cubic import _sos_struct_cubic_symmetric
 from .sextic_symmetric import _restructure_quartic_polynomial
+from ..univariate import prove_univariate
 
 a, b, c = sp.symbols('a b c')
 
@@ -69,7 +70,7 @@ def _sos_struct_septic_symmetric_quadratic_form(poly, coeff):
         return None
 
     # write the symmetric axis in sum-of-squares form
-    sym = prove_univariate(sym[0], return_raw = True)
+    sym = prove_univariate(sym[0], (0, None), return_type = 'list')
     if sym is None:
         return None
     # print(sym)
@@ -82,8 +83,8 @@ def _sos_struct_septic_symmetric_quadratic_form(poly, coeff):
         elif isinstance(f, int):
             return sp.Poly([f], a)
 
-    sym_f = as_poly(sum(i*j**2 for i, j in zip(sym[1][1], sym[1][2])))
-    sym_g = as_poly(sum(i*j**2 for i, j in zip(sym[0][1], sym[0][2])) * sp.Rational(1,2))
+    sym_f = as_poly(sum(i*j**2 for i, j in sym[1][1]))
+    sym_g = as_poly(sum(i*j**2 for i, j in sym[0][1]) * sp.Rational(1,2))
 
     ft_coeff, f_coeff, fx, fy, f_rem_coeff, f_rem_ratio = _restructure_quartic_polynomial(sym_f)
     gt_coeff, g_coeff, gx, gy, g_rem_coeff, g_rem_ratio = _restructure_quartic_polynomial(sym_g)

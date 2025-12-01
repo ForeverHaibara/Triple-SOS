@@ -4,7 +4,7 @@ from .sextic_symmetric import _restructure_quartic_polynomial
 
 from .utils import (
     CyclicSum, CyclicProduct, CommonExpr,
-    prove_univariate, quadratic_weighting, radsimp, sum_y_exprs, rationalize_func
+    quadratic_weighting, radsimp, sum_y_exprs, rationalize_func
 )
 
 a, b, c = sp.symbols('a b c')

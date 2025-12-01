@@ -3,9 +3,10 @@ from typing import Tuple, List
 import sympy as sp
 
 from .utils import (
-    CyclicSum, CyclicProduct, Coeff, radsimp, prove_univariate, SS,
+    CyclicSum, CyclicProduct, Coeff, radsimp, SS,
     sos_struct_handle_uncentered
 )
+from ..univariate import prove_univariate
 
 a, b, c = sp.symbols('a b c')
 
@@ -94,7 +95,7 @@ def _homogenize_sym_proof(sym_proof, d: int, abc: Tuple[sp.Symbol] = None) -> sp
         leading = sym_proof[i][0]
         ld = leading.as_poly(a).degree()
         part_expr = []
-        for k, v in zip(sym_proof[i][1], sym_proof[i][2]):
+        for k, v in sym_proof[i][1]:
             v2 = _homogenize_sym_axis(v, v.degree(), abc)
             rd = (d - ld - v.degree()*2) // 2
             part_expr.append(k * v2**2 * b**rd * c**rd)
@@ -146,7 +147,7 @@ def _sos_struct_lift_for_six(coeff, real=True):
     if all(_ >= 0 for _ in div[0].coeffs()):
         lifted_sym = _homogenize_sym_axis(div[0], d - 2, (a, b, c))
     else:
-        sym_proof = prove_univariate(div[0], return_raw=True)
+        sym_proof = prove_univariate(div[0], (0, None), return_type='list')
         if sym_proof is None:
             return None
         lifted_sym = _homogenize_sym_proof(sym_proof, d - 2, (a, b, c))

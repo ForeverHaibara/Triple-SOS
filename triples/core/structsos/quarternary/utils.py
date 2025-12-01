@@ -5,7 +5,6 @@ from ..utils import (
     StructuralSOSError, PolynomialNonpositiveError, PolynomialUnsolvableError
 )
 
-from ..pivoting import prove_univariate
 from ....utils import (
     nroots, rationalize, rationalize_bound, univariate_intervals,
     CyclicExpr, CyclicSum, CyclicProduct, SymmetricSum, SymmetricProduct

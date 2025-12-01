@@ -5,12 +5,13 @@ from math import gcd
 import sympy as sp
 
 from .utils import (
-    CyclicSum, CyclicProduct, Coeff, SS, prove_univariate, radsimp
+    CyclicSum, CyclicProduct, Coeff, SS, radsimp
 )
 from .dense_symmetric import sos_struct_dense_symmetric
 from .quadratic import sos_struct_quadratic
 from .cubic import sos_struct_cubic
 from .quartic import sos_struct_quartic
+from ..univariate import prove_univariate
 
 def sos_struct_sparse(coeff, real = True):
     """
@@ -713,7 +714,7 @@ def sos_struct_heuristic(coeff, real=True):
             x = sp.Symbol('x')
             a, b, c = sp.symbols('a b c')
             border_poly = sp.Poly.from_dict(dict(border), gens = (x,))
-            border_proof = prove_univariate(border_poly)
+            border_proof = prove_univariate(border_poly, (0, None), return_type='expr')
             if border_proof is not None:
                 if border is border1:
                     border_proof = border_proof.subs(x, a / b).together() * b**degree

@@ -233,7 +233,7 @@ class Solution(SolutionBase[T]):
         return SOSlist.from_sympy(self.solution)
 
     def as_psatz(self) -> Optional[PSatz]:
-        return PSatz.from_sympy(self.solution, 
+        return PSatz.from_sympy(self.solution,
             {v: k for k, v in self.ineq_constraints.items()},
             {v: k for k, v in self.eq_constraints.items()})
 

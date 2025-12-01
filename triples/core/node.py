@@ -191,7 +191,7 @@ class ProofTree:
         _expected_end_time = self._expected_end_time
         if _expected_end_time is not None:
             # compute the time limit dynamically (the remaining time)
-            cfg['time_limit'] = (_expected_end_time - perf_counter())        
+            cfg['time_limit'] = (_expected_end_time - perf_counter())
 
         cfg.update(self.configs.get(node, {}))
         for cls in node.__class__.mro()[::-1]:

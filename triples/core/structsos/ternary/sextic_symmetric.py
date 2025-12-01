@@ -6,8 +6,8 @@ from .quartic import sos_struct_quartic
 from .utils import (
     CyclicSum, CyclicProduct, Coeff, CommonExpr, SS, sos_struct_handle_uncentered,
     sum_y_exprs, nroots, rationalize_bound, rationalize_func, quadratic_weighting, radsimp,
-    prove_univariate
 )
+from ..univariate import prove_univariate
 
 #####################################################################
 #
@@ -58,12 +58,12 @@ def _restructure_quartic_polynomial(poly):
     if poly.is_zero:
         return tuple([0] * 6)
 
-    proof = prove_univariate(poly, return_raw = True)
+    proof = prove_univariate(poly, return_type = 'list')
     if proof is None or len(proof[1][1]):
         return None
 
     s, x, y, m, p, n = 0, 0, 0, 0, 0, 0
-    for coeff, part in zip(proof[0][1], proof[0][2]):
+    for coeff, part in proof[0][1]:
         w, v, u = [part.coeff_monomial((i,)) for i in range(3)]
         k1, k2, k3 = (4*u + v - 2*w)/2, (2*u + v - 2*w)/2, 2*u - w
         s += coeff * k1**2

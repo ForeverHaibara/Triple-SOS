@@ -97,7 +97,7 @@ class SOSCone(Generic[Ef]):
         if x.is_Add:
             return self.sum([self._rebuild_expr(t) for t in x.args])
         elif x.is_Mul:
-            return self.prod([self._rebuild_expr(t) for t in x.args]) 
+            return self.prod([self._rebuild_expr(t) for t in x.args])
         elif x.is_Pow:
             if isinstance(x.exp, Rational) and (int(x.exp.numerator) % 2 == 0
                     or int(x.exp.denominator) % 2 == 0):
@@ -264,7 +264,7 @@ class SOSElement(DomainElement, CantSympify, Generic[Ef]):
             if self.cone == other.cone:
                 return self._mul(other)
             raise ValueError("Cannot multiply SOSElements of different cones.")
-    
+
         if self.domain.of_type(other):
             _other = other
         else:
@@ -284,7 +284,7 @@ class SOSElement(DomainElement, CantSympify, Generic[Ef]):
             if self.cone == other.cone:
                 return other._mul(self)
             raise ValueError("Cannot multiply SOSElements of different cones.")
-    
+
         if self.domain.of_type(other):
             _other = other
         else:
@@ -464,7 +464,7 @@ class SOSlist(Generic[Ef]):
     ---------
 
     ## Basic Tutorials
-    
+
     ### Building SOSlist by `SOSlist.from_sympy`
 
     `SOSlist.from_sympy` automatically recognizes expressions that are in the form
@@ -620,7 +620,7 @@ class SOSlist(Generic[Ef]):
 
     def __pos__(self) -> 'SOSlist[Ef]':
         return self
-    
+
     def __neg__(self) -> 'SOSlist[Ef]':
         raise ValueError("Cannot negate SOSlist.")
 

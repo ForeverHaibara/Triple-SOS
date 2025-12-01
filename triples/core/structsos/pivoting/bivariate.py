@@ -1,7 +1,7 @@
 import sympy as sp
 from sympy.core.symbol import uniquely_named_symbol
 
-from .univariate import prove_univariate_interval
+from ..univariate import prove_univariate
 
 def structural_sos_2vars(poly, ineq_constraints, eq_constraints):
     """
@@ -147,7 +147,7 @@ def _sos_struct_bivariate_linear_ineq(poly, ineq_constraints, eq_constraints):
         if d % 2 != 0:
             return None
         all_coeffs = [poly.coeff_monomial((d-i, i)) for i in range(d+1)]
-        sol = prove_univariate_interval(sp.Poly(all_coeffs, a), (-sp.oo, sp.oo), return_raw=False)
+        sol = prove_univariate(sp.Poly(all_coeffs, a), (-sp.oo, sp.oo))
         if sol is None:
             return None
         sol = (sol.xreplace({a: a/b}) * b**d).together()

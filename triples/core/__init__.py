@@ -11,7 +11,7 @@ from .linsos import (
 )
 
 from .structsos import (
-    StructuralSOS, prove_univariate, prove_univariate_interval
+    StructuralSOS, prove_univariate
 )
 
 from ..utils import pqr_sym, pqr_cyc, pqr_ker
@@ -31,7 +31,7 @@ __all__ = [
     'sum_of_squares', 'sum_of_squares_multiple',
     'LinearSOS',
     'StructuralSOS',
-    'prove_univariate', 'prove_univariate_interval',
+    'prove_univariate',
     'pqr_sym', 'pqr_cyc', 'pqr_ker',
     'SymmetricSOS', 'sym_representation', 'sym_representation_inv',
     'SDPSOS', 'SDPProblem', 'JointSOSElement', 'SOSPoly', 'SOHSPoly'

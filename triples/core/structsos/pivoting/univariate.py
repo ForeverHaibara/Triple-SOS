@@ -2,11 +2,13 @@ from typing import List, Tuple, Union, Optional
 from itertools import product
 
 import sympy as sp
+from sympy import Poly, Expr, Float, Symbol, Integer, Rational
+from sympy.matrices import MutableDenseMatrix as Matrix
 
 from ..utils import radsimp
 from ....sdp import congruence as _congruence
 
-def congruence(M: sp.Matrix) -> Optional[Tuple[sp.Matrix, sp.Matrix]]:
+def congruence(M: Matrix) -> Optional[Tuple[Matrix, Matrix]]:
     """
     Write a symmetric matrix as a sum of squares.
     M = U.T @ S @ U where U is upper triangular and S is diagonal.
@@ -26,16 +28,16 @@ def congruence(M: sp.Matrix) -> Optional[Tuple[sp.Matrix, sp.Matrix]]:
     if cong is None:
         return None
     U, S = cong
-    return sp.Matrix(*U.shape, radsimp(U)), sp.Matrix(*S.shape, radsimp(S))
+    return Matrix(*U.shape, radsimp(U)), Matrix(*S.shape, radsimp(S))
 
-def check_univariate(poly: sp.Poly, positive: bool = True) -> bool:
+def check_univariate(poly: Poly, positive: bool = True) -> bool:
     """
     Check whether a univariate polynomial is positive
     over the real line or positive over R+.
 
     Parameters
     ----------
-    poly : sp.Poly
+    poly : Poly
         The polynomial.
     positive : bool
         Whether to prove the polynomial is positive over R+ or positive over R.
@@ -62,22 +64,22 @@ def check_univariate(poly: sp.Poly, positive: bool = True) -> bool:
     return True
 
 
-def _standardize_poly(poly: Union[sp.Expr, sp.Poly]) -> sp.Poly:
+def _standardize_poly(poly: Union[Expr, Poly]) -> Poly:
     """
     Convert an expression to a polynomial with domain == QQ or some algebraic field.
 
     Parameters
     ----------
-    poly : sp.Expr | sp.Poly
+    poly : Expr | Poly
         The polynomial.
 
     Returns
     ----------
-    sp.Poly
+    Poly
         The polynomial on QQ.
     """
-    if not isinstance(poly, sp.Poly):
-        if isinstance(poly, sp.Expr) and len(poly.free_symbols) == 1:
+    if not isinstance(poly, Poly):
+        if isinstance(poly, Expr) and len(poly.free_symbols) == 1:
             poly = poly.as_poly(list(poly.free_symbols)[0])#, extension = True)
         else:
             raise ValueError(f'The input should be a univariate polynomial, but received {poly}.')
@@ -91,7 +93,7 @@ def _standardize_poly(poly: Union[sp.Expr, sp.Poly]) -> sp.Poly:
     return poly
 
 
-def _classify_roots(roots: List[sp.Float]) -> Tuple[List[sp.Float], List[Tuple[sp.Float, sp.Float]]]:
+def _classify_roots(roots: List[Float]) -> Tuple[List[Float], List[Tuple[Float, Float]]]:
     """
     Given a list of sympy roots. Classify them into real roots and complex roots.
     Also, the complex roots are paired by conjugate.
@@ -100,14 +102,14 @@ def _classify_roots(roots: List[sp.Float]) -> Tuple[List[sp.Float], List[Tuple[s
 
     Parameters
     ----------
-    roots : List[sp.Float]
+    roots : List[Float]
         Roots of a polynomial.
 
     Returns
     -------
-    real_roots : List[sp.Float]
+    real_roots : List[Float]
         Real roots.
-    complex_roots : List[(sp.Float, sp.Float)]
+    complex_roots : List[(Float, Float)]
         Paired complex roots.
     """
     real_roots = [root for root in roots if root.is_real]
@@ -120,12 +122,12 @@ def _classify_roots(roots: List[sp.Float]) -> Tuple[List[sp.Float], List[Tuple[s
 
 
 def _construct_matrix_from_roots(
-        real_roots: List[sp.Float],
-        complex_roots: List[Tuple[sp.Float, sp.Float]],
-        leading_coeff: sp.Rational = 1,
+        real_roots: List[Float],
+        complex_roots: List[Tuple[Float, Float]],
+        leading_coeff: Rational = 1,
         positive: bool = False,
         early_stop: int = -1
-    ) -> Union[sp.Matrix, Tuple[sp.Matrix, sp.Matrix]]:
+    ) -> Union[Matrix, Tuple[Matrix, Matrix]]:
     """
     Assume an irreducible polynomial f(x) is positive over R, then
     all its roots are complex and paired by conjugate. Write
@@ -146,11 +148,11 @@ def _construct_matrix_from_roots(
 
     Parameters
     ----------
-    real_roots: List[sp.Float]
+    real_roots: List[Float]
         Real roots.
-    complex_roots : List[(sp.Float, sp.Float)]
+    complex_roots : List[(Float, Float)]
         Paired complex roots.
-    leading_coeff: sp.Rational
+    leading_coeff: Rational
         The leading coefficient of the polynomial.
     positive:
         Whether the polynomial is positive over R or R+.
@@ -163,13 +165,13 @@ def _construct_matrix_from_roots(
     Returns
     -------
     If positive == False:
-        M : sp.Matrix
+        M : Matrix
             The symmetric matrix.
     If positive == True:
-        M1, M2: Tuple[sp.Matrix, sp.Matrix]
+        M1, M2: Tuple[Matrix, Matrix]
             Two symmetric matrices.
     """
-    x = sp.Symbol('x')
+    x = Symbol('x')
     if not positive:
         M = sp.zeros(len(complex_roots) + 1)
         cnt = 0
@@ -181,8 +183,8 @@ def _construct_matrix_from_roots(
             vec = sp.prod((x - root[i]) for i, root in zip(comb, complex_roots))
             vec = vec.as_poly(x).all_coeffs()
 
-            vec_re = sp.Matrix(list(map(sp.re, vec)))
-            vec_im = sp.Matrix(list(map(sp.im, vec)))
+            vec_re = Matrix(list(map(sp.re, vec)))
+            vec_im = Matrix(list(map(sp.im, vec)))
 
             M += vec_re * vec_re.T + vec_im * vec_im.T
             cnt += 1
@@ -211,7 +213,7 @@ def _construct_matrix_from_roots(
                     coeffs.append(0)
             if minor == 1:
                 coeffs.pop()
-            poly = sp.Poly(coeffs, x)
+            poly = Poly(coeffs, x)
             roots = sp.polys.roots(poly)
             _, complex_roots_extra = _classify_roots(roots)
             M = _construct_matrix_from_roots([],
@@ -225,17 +227,17 @@ def _construct_matrix_from_roots(
 
 
 def _rationalize_matrix_simultaneously(
-        M: Union[sp.Matrix, List[sp.Matrix]],
+        M: Union[Matrix, List[Matrix]],
         lcm: int = 144,
         off_diagonal: bool = True
-    ) -> Union[sp.Matrix, List[sp.Matrix]]:
+    ) -> Union[Matrix, List[Matrix]]:
     """
     Rationalize entries of a symmetric matrix simultaneously.
     Off-diagonal entries are entries with strip > 1, i.e. not Toeplitz.
 
     Parameters
     ----------
-    M : sp.Matrix | List[sp.Matrix]
+    M : Matrix | List[Matrix]
         The symmetric matrix. If positive == True, it is a tuple of two matrices.
     lcm : int
         The least common multiple of denominators. The default is 144.
@@ -245,10 +247,10 @@ def _rationalize_matrix_simultaneously(
 
     Returns
     -------
-    M : sp.Matrix | List[sp.Matrix]
+    M : Matrix | List[Matrix]
         The rationalized matrix.
     """
-    if isinstance(M, sp.Matrix):
+    if isinstance(M, Matrix):
         n = M.shape[0]
         M = M.copy()
         for i in range(n):
@@ -267,7 +269,7 @@ def _rationalize_matrix_simultaneously(
     return M
 
 
-def _determine_diagonal_entries(M: Union[sp.Matrix, List[sp.Matrix]], poly: sp.Poly) -> Union[sp.Matrix, List[sp.Matrix]]:
+def _determine_diagonal_entries(M: Union[Matrix, List[Matrix]], poly: Poly) -> Union[Matrix, List[Matrix]]:
     """
     Determine the Toepiltz diagonal entries of a symmetric matrix
     from the coefficient of polynomial.
@@ -277,20 +279,20 @@ def _determine_diagonal_entries(M: Union[sp.Matrix, List[sp.Matrix]], poly: sp.P
 
     Parameters
     ----------
-    M : sp.Matrix | List[sp.Matrix]
+    M : Matrix | List[Matrix]
         The symmetric matrix. If positive == True, it is a tuple of two matrices.
-    poly : sp.Poly
+    poly : Poly
         The polynomial.
 
     Returns
     -------
-    M : sp.Matrix | List[sp.Matrix]
+    M : Matrix | List[Matrix]
         The matrix with diagonal entries determined. The operation is
         done in-place.
     """
-    if isinstance(M, sp.Matrix):
+    if isinstance(M, Matrix):
         n = M.shape[0]
-        if isinstance(poly, sp.Poly):
+        if isinstance(poly, Poly):
             all_coeffs = poly.all_coeffs()
         for i in range(len(all_coeffs)):
             m = i // 2
@@ -325,7 +327,7 @@ def _determine_diagonal_entries(M: Union[sp.Matrix, List[sp.Matrix]], poly: sp.P
                 s += M[m, m + 1]
                 all_coeffs[i] = s * 2
         all_coeffs.append(0)
-        poly -= sp.Poly(all_coeffs, poly.gen)
+        poly -= Poly(all_coeffs, poly.gen)
 
         # then determine the diagonal entries of the major
         M = _determine_diagonal_entries(Ms[0], poly)
@@ -336,40 +338,40 @@ def _determine_diagonal_entries(M: Union[sp.Matrix, List[sp.Matrix]], poly: sp.P
 
 
 def _create_sos_from_US(
-        U: sp.Matrix,
-        S: sp.Matrix,
-        x: Optional[sp.Symbol] = None,
-    ) -> Union[sp.Expr, Tuple[List[sp.Float], List[sp.Poly]]]:
+        U: Matrix,
+        S: Matrix,
+        x: Optional[Symbol] = None,
+    ) -> Union[Expr, Tuple[List[Float], List[Poly]]]:
     """
     Create a sum of squares from a congruence decomposition.
 
     Parameters
     ----------
-    U : sp.Matrix
+    U : Matrix
         The upper triangular matrix.
-    S : sp.Matrix
+    S : Matrix
         The diagonal matrix. Use a list to store the diagonal entries.
-    x : sp.Symbol, optional
+    x : Symbol, optional
         The symbol of polynomial. The default is None.
 
     Returns
     -------
-    S, polys: List, List[sp.Poly]
+    S, polys: List, List[Poly]
         When return_raw == True, return the coeffcients and the polynomials
         such that sos = sum(S[i] * polys[i]**2).
     """
     if x is None:
-        x = sp.Symbol('x')
+        x = Symbol('x')
     S = list(S)
-    polys = [sp.Poly.from_list(U[i,:].tolist()[0], x) for i in range(U.shape[0])]
+    polys = [Poly.from_list(U[i,:].tolist()[0], x) for i in range(U.shape[0])]
     return S, polys
 
 
 def _reduce_sos(
-        coeff_list: List[sp.Rational],
-        poly_list: List[sp.Poly],
-        x: Optional[sp.Symbol] = None
-    ) -> Tuple[List[sp.Rational], List[sp.Poly]]:
+        coeff_list: List[Rational],
+        poly_list: List[Poly],
+        x: Optional[Symbol] = None
+    ) -> Tuple[List[Rational], List[Poly]]:
     """
     Sometimes after multiplying two raw lists, we have redudant terms.
     E.g. f(x) = 3 * (x - 2)^2 + 2 * (x - 1)^2. We can make it to a
@@ -381,18 +383,18 @@ def _reduce_sos(
 
     Parameters
     ----------
-    coeff_list : List[sp.Rational]
+    coeff_list : List[Rational]
         The coefficient list.
-    poly_list : List[sp.Poly]
+    poly_list : List[Poly]
         The polynomial list.
-    x : sp.Symbol, optional
+    x : Symbol, optional
         The symbol of polynomial. The default is None.
 
     Returns
     ----------
-    coeff_list : List[sp.Rational]
+    coeff_list : List[Rational]
         The reduced coefficient list.
-    poly_list : List[sp.Poly]
+    poly_list : List[Poly]
         The reduced polynomial list.
     """
     if not coeff_list:
@@ -407,7 +409,7 @@ def _reduce_sos(
         for i in range(d + 1):
             for j in range(d + 1):
                 M[n-i, n-j] += coeff * poly_coeffs[i] * poly_coeffs[j]
-    M = sp.Matrix(n + 1, n + 1, radsimp(M))
+    M = Matrix(n + 1, n + 1, radsimp(M))
     ret = _create_sos_from_US(*congruence(M), x = x)
 
     def _remove_zeros(p):
@@ -426,10 +428,10 @@ def _reduce_sos(
 
 
 def _prove_univariate_irreducible(
-        poly: sp.Poly,
+        poly: Poly,
         early_stop: int = -1,
         n: int = 15
-    ) -> Union[sp.Expr, List[Tuple[sp.Rational, List[sp.Rational], List[sp.Poly]]], None]:
+    ) -> Union[Expr, List[Tuple[Rational, List[Rational], List[Poly]]], None]:
     """
     Prove an irreducible univariate polynomial is positive over the real line or
     positive over R+. Return None if the algorithm fails.
@@ -451,7 +453,7 @@ def _prove_univariate_irreducible(
 
     Parameters
     ----------
-    poly : sp.Poly
+    poly : Poly
         The polynomial.
     early_stop: int
         We compute the interior matrix of by summing up multiple matrices.
@@ -489,7 +491,7 @@ def _prove_univariate_irreducible(
     if positive and all(_ >= 0 for _ in poly.all_coeffs()):
         # very trivial case if all coefficients are positive
         x = poly.gen
-        result = [(sp.S(1), [], []), (x, [], [])]
+        result = [(Integer(1), [], []), (x, [], [])]
         for (monom,), coeff in poly.terms():
             if coeff != 0:
                 odd = monom % 2
@@ -511,7 +513,7 @@ def _prove_univariate_irreducible(
         if not positive:
             res = congruence(M)
             if res is not None and all(_ >= 0 for _ in res[1]):
-                return [(sp.S(1),) + _create_sos_from_US(*res, poly.gen)]
+                return [(Integer(1),) + _create_sos_from_US(*res, poly.gen)]
         else:
             res2 = congruence(M[1])
             if res2 is not None and all(_ >= 0 for _ in res2[1]):
@@ -519,7 +521,7 @@ def _prove_univariate_irreducible(
                 if res is not None and all(_ >= 0 for _ in res[1]):
                     p1 = _create_sos_from_US(*res, poly.gen)
                     p2 = _create_sos_from_US(*res2, poly.gen)
-                    return [(sp.S(1),) + p1, (poly.gen,) + p2]
+                    return [(Integer(1),) + p1, (poly.gen,) + p2]
         lcm *= 144
         if len(str(lcm)) > n:
             break
@@ -527,14 +529,14 @@ def _prove_univariate_irreducible(
 
 
 def _prove_univariate_simple(
-        poly: sp.Poly,
-    ) -> Union[sp.Expr, List[Tuple[sp.Rational, List[sp.Rational], List[sp.Poly]]], None]:
+        poly: Poly,
+    ) -> Union[Expr, List[Tuple[Rational, List[Rational], List[Poly]]], None]:
     """
     Prove a polynomial with degree <= 2 is positive over the real line or positive over R+.
 
     Parameters
     ----------
-    poly : sp.Poly
+    poly : Poly
         The polynomial.
 
     Returns
@@ -543,16 +545,16 @@ def _prove_univariate_simple(
         A sum of squares expression such that sos =
             sum(multiplier[i] * sum(coeffs[i][j] * polys[i][j]**2))
     """
-    const_poly = lambda: sp.S(1).as_poly(poly.gen)
+    const_poly = lambda: Integer(1).as_poly(poly.gen)
     if poly.degree() == 0:
         # constant polynomial
         if poly.LC() >= 0:
-            return [(sp.S(1), [poly.LC()], [const_poly()])]
+            return [(Integer(1), [poly.LC()], [const_poly()])]
         return None
     elif poly.degree() == 1:
         # linear polynomial
         if all(_ >= 0 for _ in poly.all_coeffs()):
-            return [(sp.S(1), [poly.all_coeffs()[1]], [const_poly()]),
+            return [(Integer(1), [poly.all_coeffs()[1]], [const_poly()]),
                     (poly.gen, [poly.all_coeffs()[0]], [const_poly()])]
         return None
     else:
@@ -563,40 +565,40 @@ def _prove_univariate_simple(
         if a < 0:
             return
         if a > 0 and b**2 - 4 * a * c < 0:
-            return [(sp.S(1), [a, c - b**2 / (4*a)], [(x +  b / (2*a)).as_poly(x), const_poly()])]
+            return [(Integer(1), [a, c - b**2 / (4*a)], [(x +  b / (2*a)).as_poly(x), const_poly()])]
 
         # then check if positive over R+
         if a > 0 and b >= 0 and c >= 0:
             # since the minimum of the quadratic polynomial is negative
             # b must be negative so that the symmetric axis is at the left of y-axis
-            return [(sp.S(1), [a, c], [x.as_poly(x), const_poly()]),
+            return [(Integer(1), [a, c], [x.as_poly(x), const_poly()]),
                     (x, [b], [const_poly()])]
         return None
 
 
-def _raw_to_expr(proof: List[Tuple[sp.Rational, List[sp.Rational], List[sp.Poly]]]) -> sp.Expr:
+def _raw_to_expr(proof: List[Tuple[Rational, List[Rational], List[Poly]]]) -> Expr:
     """
     Convert a raw proof to a sum of squares expression.
 
     Parameters
     ----------
-    proof : List[Tuple[sp.Rational, List[sp.Rational], List[sp.Poly]]]
+    proof : List[Tuple[Rational, List[Rational], List[Poly]]]
         The raw proof.
 
     Returns
     ----------
-    sp.Expr
+    Expr
         The sum of squares expression.
     """
     return sum(multiplier * sum(coeff[i] * poly[i].as_expr()**2 for i in range(len(coeff))) for multiplier, coeff, poly in proof)
 
 
 def prove_univariate(
-        poly: sp.Poly,
+        poly: Poly,
         return_raw: bool = False,
         early_stop: int = -1,
         n: int = 15
-    ) -> Union[sp.Expr, List[Tuple[sp.Rational, List[sp.Rational], List[sp.Poly]]], None]:
+    ) -> Union[Expr, List[Tuple[Rational, List[Rational], List[Poly]]], None]:
     """
     Prove a polynomial is positive over the real line or positive over R+.
     It automatically detects whether it is positive on R or merely on R+.
@@ -611,7 +613,7 @@ def prove_univariate(
 
     Parameters
     ----------
-    poly: sp.Poly
+    poly: Poly
         The polynomial.
     return_raw : bool, optional
         Whether return the raw lists.
@@ -626,7 +628,7 @@ def prove_univariate(
     Returns
     ----------
     Optional
-        sos: sp.Expr
+        sos: Expr
             A sum of squares expression.
 
         List[(multiplier, coeffs, polys)]: List
@@ -634,24 +636,24 @@ def prove_univariate(
                 sum(multiplier[i] * sum(coeffs[i][j] * polys[i][j]**2))
             It is guaranteed that the returned result is a length-2 list.
             The two corresponding multipliers are given by:
-                result[0][0] == sp.S(1) and result[1][0] == x where x is the symbol of the polynomial.
+                result[0][0] == Integer(1) and result[1][0] == x where x is the symbol of the polynomial.
     """
     poly = _standardize_poly(poly)
 
     lc, factors = poly.factor_list() if not poly.domain.is_Algebraic else poly.sqf_list()
     if lc < 0:
         return None
-    mul = [(sp.S(1), [lc], [sp.S(1).as_poly(poly.gen)])]
+    mul = [(Integer(1), [lc], [Integer(1).as_poly(poly.gen)])]
     for factor, multiplicity in factors:
         if multiplicity % 2 == 0:
-            mul.append([(sp.S(1), [sp.S(1)], [factor ** (multiplicity // 2)])])
+            mul.append([(Integer(1), [Integer(1)], [factor ** (multiplicity // 2)])])
         else:
             ret = _prove_univariate_irreducible(factor, early_stop = early_stop, n = n)
             if ret is None:
                 return None
 
             if multiplicity > 1:
-                mul.append([(sp.S(1), [sp.S(1)], [factor ** (multiplicity // 2)])])
+                mul.append([(Integer(1), [Integer(1)], [factor ** (multiplicity // 2)])])
             mul.append(ret)
 
     # merge the raw lists of each factor
@@ -690,7 +692,7 @@ def prove_univariate(
         p1 = _reduce_sos(*p1new, x = x)
         p2 = _reduce_sos(*p2new, x = x)
 
-    new_proof = [(sp.S(1), p1[0], p1[1]), (x, p2[0], p2[1])]
+    new_proof = [(Integer(1), p1[0], p1[1]), (x, p2[0], p2[1])]
 
     if not return_raw:
         return _raw_to_expr(new_proof)
@@ -699,12 +701,12 @@ def prove_univariate(
 
 
 def prove_univariate_interval(
-        poly: sp.Poly,
-        interval: Tuple[sp.Expr, sp.Expr] = None,
+        poly: Poly,
+        interval: Tuple[Expr, Expr] = None,
         return_raw: bool = False,
         early_stop: bool = -1,
         n: int = 15
-    ) -> Union[sp.Expr, List[Tuple[sp.Rational, List[sp.Rational], List[sp.Poly]]], None]:
+    ) -> Union[Expr, List[Tuple[Rational, List[Rational], List[Poly]]], None]:
     """
     Prove a polynomial is positive over an interval. The algorithm is to
     first find a fractional linear transformation to transform the interval [a,b]
@@ -715,9 +717,9 @@ def prove_univariate_interval(
 
     Parameters
     ----------
-    poly : sp.Poly
+    poly : Poly
         The polynomial.
-    interval : Tuple[sp.Expr, sp.Expr]
+    interval : Tuple[Expr, Expr]
         The interval [a, b]. It requires that a < b. The interval also supports
         infinite endpoints, e.g. (-oo, b) or (a, oo) or (-oo, oo).
         The infinity should be represented by sp.oo or -sp.oo using sympy
@@ -735,7 +737,7 @@ def prove_univariate_interval(
     Returns
     ----------
     Optional
-        sos : sp.Expr
+        sos : Expr
             A sum of squares expression.
         List[(multiplier, coeffs, polys)] : List
             A sum of squares expression such that sos =
@@ -759,7 +761,7 @@ def prove_univariate_interval(
             else:
                 poly_y = poly.shift(a)
         else:
-            poly_y = poly.transform((b - x).as_poly(x), sp.S(1).as_poly(x))
+            poly_y = poly.transform((b - x).as_poly(x), Integer(1).as_poly(x))
         proof = prove_univariate(poly_y, **kwargs)
         if proof is None:
             return None
@@ -768,7 +770,7 @@ def prove_univariate_interval(
             if a is -sp.oo:
                 # check whether it is positive over R
                 for multiplier, coeff_list, poly_list in proof:
-                    if multiplier != sp.S(1) and coeff_list:
+                    if multiplier != Integer(1) and coeff_list:
                         return None
                 trans = lambda p: p
                 trans_mul = lambda m: m
@@ -776,7 +778,7 @@ def prove_univariate_interval(
                 trans = lambda p: p.to_field().shift(-a)
                 trans_mul = lambda m: m if m == 1 else (x - a)
         else:
-            trans = lambda p: p.transform((b - x).as_poly(x), sp.S(1).as_poly(x))
+            trans = lambda p: p.transform((b - x).as_poly(x), Integer(1).as_poly(x))
             trans_mul = lambda m: m if m == 1 else (b - x)
 
         new_proof = []
@@ -800,8 +802,8 @@ def prove_univariate_interval(
         new_proof = []
         n = poly.degree()
         for multiplier, coeff_list, poly_list in proof:
-            if multiplier == sp.S(1):
-                multiplier2 = sp.S(1) if n % 2 == 0 else (b - x)
+            if multiplier == Integer(1):
+                multiplier2 = Integer(1) if n % 2 == 0 else (b - x)
                 mul_d = 0 if n % 2 == 0 else 1
             else:
                 multiplier2 = (x - a) if n % 2 == 1 else (x - a) * (b - x)

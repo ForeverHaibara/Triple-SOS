@@ -6,12 +6,13 @@ import numpy as np
 from .cubic import sos_struct_cubic
 from .quartic import sos_struct_quartic
 from .quintic_symmetric import sos_struct_quintic_symmetric
+from ..univariate import prove_univariate
 from ....utils.roots.roots import Root
 from ....utils.monomials import invarraylize
 from .utils import (
     CyclicSum, CyclicProduct, Coeff,
     sum_y_exprs, nroots, rationalize, rationalize_bound, rationalize_func, cancel_denominator, radsimp,
-    reflect_expression, prove_univariate, zip_longest, quadratic_weighting
+    reflect_expression, zip_longest, quadratic_weighting
 )
 
 a, b, c = sp.symbols('a b c')
@@ -358,19 +359,19 @@ def _sos_struct_quintic_full(coeff):
         """
         if border.LC() < 0:
             return None
-        proof = prove_univariate(border, return_raw = True)
+        proof = prove_univariate(border, (0, None), return_type = 'list')
         if proof is None:
             return None
         s_args = []
         a, b, c = sp.symbols('a b c')
-        for multiplier, coeffs, polys in proof:
+        for multiplier, cps in proof:
             if multiplier == 1:
-                for coeff, poly in zip(coeffs, polys):
+                for coeff, poly in cps:
                     bias = poly(1) # ensure f(1,1,1) = 0
                     poly = sum(v*a**i*b**(2-i) for (i,), v in poly.terms()) - bias*a*c
                     s_args.append(coeff * b * poly**2)
             elif multiplier == border.gen:
-                for coeff, poly in zip(coeffs, polys):
+                for coeff, poly in cps:
                     bias = poly(1)
                     poly = sum(v*a**i*b**(2-i) for (i,), v in poly.terms()) - bias*b*c
                     s_args.append(coeff * a * poly**2)

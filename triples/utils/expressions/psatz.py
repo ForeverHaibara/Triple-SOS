@@ -210,7 +210,7 @@ class PSatzDomain(Generic[Ef]):
         if x.is_Pow:
             if isinstance(x.exp, Integer):
                 if x.exp % 2 == 0:
-                    base = SOSElement.new(self.cone, 
+                    base = SOSElement.new(self.cone,
                         [(self.domain.one, self.algebra.from_sympy(x.base)**(abs(int(x.exp))//2))])
                     if x.exp > 0:
                         return self.from_sos_element(base)
@@ -271,7 +271,7 @@ class PSatzElement(DomainElement, CantSympify, Generic[Ef]):
         denom_ideal = denom_ideal or psatz_domain.one.denom_ideal
         return cls.new(psatz_domain,
             numer_preorder, numer_ideal, denom_preorder, denom_ideal)
-    
+
     @classmethod
     def new(cls, psatz_domain: PSatzDomain, numer_preorder, numer_ideal, denom_preorder, denom_ideal) -> 'PSatzElement':
         obj = super().__new__(cls)
@@ -403,7 +403,7 @@ class PSatzElement(DomainElement, CantSympify, Generic[Ef]):
             if self.psatz_domain == other.psatz_domain:
                 return self._mul(other)
             raise ValueError("Cannot multiply PSatzElements of different PSatzDomains.")
-        
+
         if self.domain.of_type(other):
             _other = other
         else:
@@ -423,7 +423,7 @@ class PSatzElement(DomainElement, CantSympify, Generic[Ef]):
             if self.psatz_domain == other.psatz_domain:
                 return self._mul(other)
             raise ValueError("Cannot multiply PSatzElements of different cones.")
-        
+
         if self.domain.of_type(other):
             _other = other
         else:
@@ -704,7 +704,7 @@ class PSatz(Generic[Ef]):
         `(sum(Gi1*...Gik * SOS_i) + sum(Hi * fi))/(sum(Gj1*...Gjk * SOS_j) + sum(Hj * fj))`
 
     Here we assume the denominator is always nonzero. The PSatz stores such elements
-    in a structured way and provides arithmetics (add, mul, div, pow) for them.    
+    in a structured way and provides arithmetics (add, mul, div, pow) for them.
 
     Attributes
     ----------
@@ -718,7 +718,7 @@ class PSatz(Generic[Ef]):
     numer_preorder: Dict[FrozenSet[int], SOSlist]
         The preorder of the numerator.
     numer_ideal: Dict[int, Expr]
-        The ideal of the numerator. 
+        The ideal of the numerator.
     denom_preorder: Dict[FrozenSet[int], SOSlist]
         The preorder of the denominator.
     denom_ideal: Dict[int, Expr]
@@ -779,7 +779,7 @@ class PSatz(Generic[Ef]):
 
     Consider `(b**2 - a*x)/(a*(2*a+b)**2 + x + a) >= 0` given `a >= 0, x == 0`. We
     convert it to a PSatz instance with:
-    
+
     >>> ps = PSatz.from_sympy((b**2 - a*x - 3*x)/(a*(2*a+b)**2 + x + a), [a], [x])
     >>> ps
     ((1*(b)**2) + (x)*(-a - 3))/((a)*(1*(1)**2 + 1*(2*a + b)**2) + (x)*(1))
@@ -903,7 +903,7 @@ class PSatz(Generic[Ef]):
             return arg
         elif isinstance(arg, PSatzElement):
             return cls.new(arg)
-            
+
         obj = cls.from_sympy(arg, preorder=preorder, ideal=ideal,
                 cone=cone, algebra=algebra, domain=domain)
         if obj is not None:
@@ -1034,17 +1034,17 @@ class PSatz(Generic[Ef]):
             if not (domain.is_EX or (HAS_EXRAW and domain.is_EXRAW)):
                 fs = arg.free_symbols.union(
                     *[_.free_symbols for _ in preorder.values()],
-                    *[_.free_symbols for _ in ideal.values()]    
+                    *[_.free_symbols for _ in ideal.values()]
                 )
                 fs = sorted(list(fs), key=lambda x: x.name)
-                algebra = domain[*fs]
+                algebra = domain[tuple(fs)]
             else:
                 algebra = domain
         if cone is None:
             cone = SOSCone(algebra, domain)
 
-        psatz_domain = PSatzDomain(cone, 
-            [algebra.from_sympy(v) for v in preorder.values()], 
+        psatz_domain = PSatzDomain(cone,
+            [algebra.from_sympy(v) for v in preorder.values()],
             [algebra.from_sympy(v) for v in ideal.values()]
         )
         rep = psatz_domain.from_sympy(arg,
@@ -1077,7 +1077,7 @@ class PSatz(Generic[Ef]):
 
     def __pos__(self) -> 'PSatz[Ef]':
         return self
-    
+
     def __neg__(self) -> 'PSatz[Ef]':
         return self.new(self.rep.__neg__())
 
@@ -1119,7 +1119,7 @@ class PSatz(Generic[Ef]):
 
     def join(self, other: 'PSatz[Ef]', ind: int,
             numer: Optional[Expr]=None, denom: Optional[Expr]=None, frac: bool=True) -> 'PSatz[Ef]':
-        """        
+        """
         Join two PSatzs to eliminate the `ind`-th preorder generator. The `ind`-th
         preorder generator of two PSatzs should imply opposite values.
 
