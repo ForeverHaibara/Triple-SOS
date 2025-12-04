@@ -40,7 +40,7 @@ def constrained_acute(poly, ineq_constraints, eq_constraints):
     if coeff.is_symmetric():
         solution = _constrained_acute_dense_symmetric(coeff, F)
     else:
-        degree = coeff.degree()
+        degree = coeff.total_degree()
         solution = None
         SOLVERS = {
             2: _constrained_acute_quadratic,
@@ -310,7 +310,7 @@ def _constrained_acute_quartic(coeff, F):
 
 def _constrained_acute_trivial_uncentered(coeff, F):
     """Subtract some p(b^2+c^2-a^2)*(...) to call basic ternary solver."""
-    d = coeff.degree()
+    d = coeff.total_degree()
     if d < 6:
         return None
     p = coeff.poly111()
@@ -327,7 +327,7 @@ def _constrained_acute_trivial_uncentered(coeff, F):
     return solution
 
 def _constrained_acute_dense_symmetric(coeff, F):
-    degree = coeff.degree()
+    degree = coeff.total_degree()
     if degree == 0:
         return sp.S(0)
     elif degree in (2, 3, 4):
@@ -344,7 +344,7 @@ def _constrained_acute_dense_symmetric(coeff, F):
     return _constrained_acute_lift_for_six(coeff, F)
 
 def _constrained_acute_lift_for_six(coeff, F):
-    d0 = coeff.degree()
+    d0 = coeff.total_degree()
     sym = sym_axis(coeff)
     if sym.is_zero:
         poly = sym.as_poly(a,b,c).div(CyclicProduct((a-b)**2).as_poly(a,b,c))[0]

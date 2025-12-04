@@ -2,6 +2,7 @@ from typing import Callable, Union
 from functools import wraps
 
 import sympy as sp
+from sympy import Poly, Expr, Add, Mul, Pow
 
 from ..utils import (
     Coeff,
@@ -17,7 +18,7 @@ from ....utils import (
     CyclicExpr, CyclicSum, CyclicProduct
 )
 
-def reflect_expression(expr: sp.Expr) -> sp.Expr:
+def reflect_expression(expr: Expr) -> Expr:
     """
     Exchange b and c in a three-var cyclic expression.
 
@@ -38,7 +39,7 @@ def reflect_expression(expr: sp.Expr) -> sp.Expr:
     return expr.func(*[reflect_expression(a) for a in expr.args])
 
 
-def inverse_substitution(expr: sp.Expr, factor_degree: int = 0) -> sp.Expr:
+def inverse_substitution(expr: Expr, factor_degree: int = 0) -> Expr:
     """
     Substitute a <- b * c, b <- c * a, c <- a * b into expr.
     Then the function extract the common factor of the expression, usually (abc)^k.
@@ -48,18 +49,18 @@ def inverse_substitution(expr: sp.Expr, factor_degree: int = 0) -> sp.Expr:
     expr = sp.together(expr.xreplace({a:b*c,b:c*a,c:a*b}))
 
     def _try_factor(expr):
-        if isinstance(expr, (sp.Add, sp.Mul, sp.Pow)):
+        if isinstance(expr, (Add, Mul, Pow)):
             return expr.func(*[_try_factor(arg) for arg in expr.args])
         elif isinstance(expr, CyclicSum):
             # Sum(a**3*b**2*c**2*(...)**2)
-            if isinstance(expr.args[0], sp.Mul):
+            if isinstance(expr.args[0], Mul):
                 args2 = expr.args[0].args
                 symbol_degrees = {}
                 other_args = []
                 for s in args2:
                     if s in (a,b,c):
                         symbol_degrees[s] = 1
-                    elif isinstance(s, sp.Pow) and s.base in (a,b,c):
+                    elif isinstance(s, Pow) and s.base in (a,b,c):
                         symbol_degrees[s.base] = s.exp
                     else:
                         other_args.append(s)
@@ -68,10 +69,10 @@ def inverse_substitution(expr: sp.Expr, factor_degree: int = 0) -> sp.Expr:
                     da, db, dc = symbol_degrees[a], symbol_degrees[b], symbol_degrees[c]
                     da, db, dc = da - degree, db - degree, dc - degree
                     other_args.extend([a**da, b**db, c**dc])
-                    return CyclicSum(sp.Mul(*other_args)) * CyclicProduct(a) ** degree
+                    return CyclicSum(Mul(*other_args)) * CyclicProduct(a) ** degree
         elif isinstance(expr, CyclicProduct):
             # Product(a**2) = Product(a) ** 2
-            if isinstance(expr.args[0], sp.Pow) and expr.args[0].base in (a,b,c):
+            if isinstance(expr.args[0], Pow) and expr.args[0].base in (a,b,c):
                 return CyclicProduct(expr.args[0].base) ** expr.args[0].exp
         return expr
 
@@ -90,8 +91,7 @@ def try_perturbations(
 
     This is possibly helpful for deriving rational sum-of-square solution.
     """
-    a, b, c = sp.symbols('a b c')
-    perturbation_poly = perturbation.doit().as_poly(a,b,c)
+    perturbation_poly = perturbation.doit().as_poly(poly.gens)
     for t in square_perturbation(p, q, times = times):
         poly2 = poly - t * perturbation_poly
         solution = SS.structsos.ternary._structural_sos_3vars_cyclic(Coeff(poly2))
@@ -106,11 +106,11 @@ def sos_struct_handle_uncentered(solver: Callable) -> Callable:
     It only supports cyclic polynomials.
     """
     @wraps(solver)
-    def _wrapped_solver(poly: Union[sp.Poly, Coeff], *args, **kwargs):
+    def _wrapped_solver(poly: Union[Poly, Coeff], *args, **kwargs):
         bias = 0
         if isinstance(poly, Coeff):
             bias = poly.poly111()
-        elif isinstance(poly, sp.Poly):
+        elif isinstance(poly, Poly):
             bias = poly(1,1,1)
             poly = Coeff(poly)
         else:
@@ -122,7 +122,7 @@ def sos_struct_handle_uncentered(solver: Callable) -> Callable:
         d = poly.total_degree()
         dd3, dm3 = divmod(d,3)
         i, j, k = dd3, dd3+(1 if dm3>=2 else 0), dd3+(1 if dm3 else 0)
-        coeff = poly.coeffs.copy()
+        coeff = dict(poly.terms())
         if not ((i,j,k) in coeff):
             coeff[(i,j,k)] = 0
             coeff[(j,k,i)] = 0
@@ -131,10 +131,11 @@ def sos_struct_handle_uncentered(solver: Callable) -> Callable:
         coeff[(j,k,i)] -= bias/3
         coeff[(k,i,j)] -= bias/3
 
-        new_poly = Coeff(coeff)
+        new_poly = poly.from_dict(coeff)
         solution = solver(new_poly, *args, **kwargs)
         if solution is not None:
-            a, b, c = sp.symbols('a b c')
+            a, b, c = poly.gens
+            CyclicSum, CyclicProduct = poly.cyclic_sum, poly.cyclic_product
             if dm3 == 0:
                 solution += bias * CyclicProduct(a**i)
             else:
@@ -150,55 +151,68 @@ class CommonExpr:
     abc = sp.symbols("a b c")
     a, b, c = abc
     @classmethod
-    def schur(cls, n):
+    def schur(cls, n, symbols = None):
         """
         Solve s(a^(n-2)*(a-b)*(a-c)) when n > 0
         """
         if n < 2:
             return
-        a, b, c = cls.abc
+
+        a, b, c = cls.abc if symbols is None else symbols
+        symbols = (a, b, c)
+        cyc_sum = lambda z: CyclicSum(z, symbols)
+        cyc_prod = lambda z: CyclicProduct(z, symbols)
+
         if n == 2:
-            return CyclicSum((a - b)**2)/2
+            return cyc_sum((a - b)**2)/2
         elif n == 3:
-            return (CyclicSum((a-b)**2*(a+b-c)**2) + 2*CyclicSum(a*b*(a-b)**2))/(2*CyclicSum(a))
+            return (cyc_sum((a-b)**2*(a+b-c)**2) + 2*cyc_sum(a*b*(a-b)**2))/(2*cyc_sum(a))
         elif n == 5:
-            return 2*(CyclicSum(a**3*(a-b)**2*(a-c)**2)+CyclicSum(a)*CyclicProduct((a-b)**2))/CyclicSum((a-b)**2)
+            return 2*(cyc_sum(a**3*(a-b)**2*(a-c)**2)+cyc_sum(a)*cyc_prod((a-b)**2))/cyc_sum((a-b)**2)
 
     @classmethod
-    def schurinv(cls, n):
+    def schurinv(cls, n, symbols = None):
         """
         Solve s(b^((n-2)/2)*c^((n-2)/2)*(a-b)*(a-c)) when n > 0
         """
-        a, b, c = cls.abc
+        a, b, c = cls.abc if symbols is None else symbols
+        symbols = (a, b, c)
+        cyc_sum = lambda z: CyclicSum(z, symbols)
+        cyc_prod = lambda z: CyclicProduct(z, symbols)
+
         if n == 2:
-            return CyclicSum((a-b)**2)
+            return cyc_sum((a-b)**2)
         elif n == 4:
-            return CyclicSum(a**2*(b-c)**2/2)
+            return cyc_sum(a**2*(b-c)**2/2)
         elif n == 6:
-            return (CyclicSum(c*(a-b)**2*(a*c+b*c-a*b)**2)*2 + CyclicProduct(a)*CyclicSum(a**2*(b-c)**2))/\
-                (2*CyclicSum(a))
+            return (cyc_sum(c*(a-b)**2*(a*c+b*c-a*b)**2)*2 + cyc_prod(a)*cyc_sum(a**2*(b-c)**2))/\
+                (2*cyc_sum(a))
 
     @classmethod
-    def quadratic(cls, x, y):
+    def quadratic(cls, x, y, symbols = None):
         """
         Solve s(x*a**2 + y*a*b)
         """
         if x < 0 or x + y < 0:
             return
         x, y = sp.S(x), sp.S(y)
-        a, b, c = cls.abc
+
+        a, b, c = cls.abc if symbols is None else symbols
+        symbols = (a, b, c)
+        cyc_sum = lambda z: CyclicSum(z, symbols)
+        cyc_prod = lambda z: CyclicProduct(z, symbols)
+
         if x == 0:
-            return y * CyclicSum(a*b)
+            return y * cyc_sum(a*b)
         if y == 0:
-            return x * CyclicSum(a**2)
+            return x * cyc_sum(a**2)
         if x == y:
-            return x/2 * CyclicSum((a+b)**2)
+            return x/2 * cyc_sum((a+b)**2)
         if y > 2 * x:
-            return CyclicSum(x * a**2 + y * b*c)
+            return cyc_sum(x * a**2 + y * b*c)
         w1 = (2*x - y) / 3
         w2 = x - w1
-        return w1 / 2 * CyclicSum((a-b)**2) + w2 * CyclicSum(a)**2
-
+        return w1 / 2 * cyc_sum((a-b)**2) + w2 * cyc_sum(a)**2
 
 
     _SPECIAL_AMGMS = {
@@ -223,7 +237,13 @@ class CommonExpr:
         ((8,0,0),(3,3,2)): CyclicSum((a**4-b**4)**2)/2 + CyclicSum(a**4*(b**2-c**2)**2)/2 + CyclicProduct(a**2)*CyclicSum((a-b)**2)/2,
     }
     @classmethod
-    def amgm(cls, d1, d2):
+    def amgm(cls, d1, d2, symbols = None):
         def _std(d):
             return max((d, (d[1],d[2],d[0]), (d[2],d[0],d[1])))
-        return cls._SPECIAL_AMGMS.get((_std(d1), _std(d2)))
+        v = cls._SPECIAL_AMGMS.get((_std(d1), _std(d2)))
+        if v is None:
+            return None
+
+        if symbols is not None:
+            v = v.xreplace(dict(zip(cls.abc, symbols)))
+        return v

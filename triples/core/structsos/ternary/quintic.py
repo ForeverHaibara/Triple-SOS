@@ -1,6 +1,7 @@
 from itertools import product
 
 import sympy as sp
+from sympy import Poly, Symbol, Rational, Float
 import numpy as np
 
 from .cubic import sos_struct_cubic
@@ -10,12 +11,10 @@ from ..univariate import prove_univariate
 from ....utils.roots.roots import Root
 from ....utils.monomials import invarraylize
 from .utils import (
-    CyclicSum, CyclicProduct, Coeff,
-    sum_y_exprs, nroots, rationalize, rationalize_bound, rationalize_func, cancel_denominator, radsimp,
+    Coeff,
+    sum_y_exprs, nroots, rationalize, rationalize_bound, rationalize_func, cancel_denominator,
     reflect_expression, zip_longest, quadratic_weighting
 )
-
-a, b, c = sp.symbols('a b c')
 
 def _verify_border_nonnegative(border):
     """Verify whether a polynomial >= 0 over R+."""
@@ -48,7 +47,7 @@ def sos_struct_quintic(coeff, real = True):
     return None
 
 
-def _solve_sa2minusab_mul_cubic(x, y, mul = sp.S(1)):
+def _solve_sa2minusab_mul_cubic(coeff: Coeff, x, y, mul = 1):
     """
     Solve mul * s(a^2-ab)s(a^3 + xa^2b + yab^2 - (x+y+1)abc) >= 0.
 
@@ -64,21 +63,23 @@ def _solve_sa2minusab_mul_cubic(x, y, mul = sp.S(1)):
 
     When (x, y) is not on the curve, it would be a linear combination of two points on the curve.
     """
+    a, b, c = coeff.gens
+    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
     if x >= 0 and y >= 0:
-        cubic_poly = Coeff({(3,0,0): 1, (2,1,0): x, (1,2,0): y, (1,1,1): -3*(x+y+1)})
-        return sp.Rational(1,2) * mul * CyclicSum((a-b)**2) * sos_struct_cubic(cubic_poly)
+        cubic_poly = coeff.from_list({(3,0,0): coeff.domain.one, (2,1,0): x, (1,2,0): y, (1,1,1): -3*(x+y+1)})
+        return Rational(1,2) * mul * CyclicSum((a-b)**2) * sos_struct_cubic(cubic_poly)
 
     def _solve_t(t):
-        return radsimp(1/t**2) * CyclicSum(a*(t*a - (t-1)*b - c)**2*(t*b - (t-1)*c - a)**2)
+        return (1/t**2) * CyclicSum(a*(t*a - (t-1)*b - c)**2*(t*b - (t-1)*c - a)**2)
 
     # find t such that (x,y) >= (-(2*t**3 - 1)/t**2, (t**3 - 2)/t)  (t > 0)
-    t = sp.Symbol('t')
-    eq1t = sp.Poly([2, x, 0, -1], t)
-    eq2t = sp.Poly([-1, 0, y, 2], t)
+    t = Symbol('t')
+    eq1t = Poly([2, x, 0, -1], t)
+    eq2t = Poly([-1, 0, y, 2], t)
     # first check whether there exists multiplicative roots
     eqgcd = sp.gcd(eq1t, eq2t)
     if eqgcd.degree() == 1 and eqgcd.coeff_monomial((0,)) != 0:
-        t_ = radsimp(- eqgcd.coeff_monomial((0,)) / eqgcd.coeff_monomial((1,)))
+        t_ = - eqgcd.coeff_monomial((0,)) / eqgcd.coeff_monomial((1,))
         return mul * _solve_t(t_)
 
     def _check_valid(t):
@@ -88,13 +89,13 @@ def _solve_sa2minusab_mul_cubic(x, y, mul = sp.S(1)):
     if t is None:
         return None
     p1 = mul * _solve_t(t)
-    x1 = radsimp(x + (2*t**3 - 1)/t**2)
-    y1 = radsimp(y - (t**3 - 2)/t)
-    p2 = radsimp(mul*x1) * (a - c)**2 + radsimp(mul*y1) * (a - b)**2
+    x1 = x + (2*t**3 - 1)/t**2
+    y1 = y - (t**3 - 2)/t
+    p2 = (mul*x1) * (a - c)**2 + (mul*y1) * (a - b)**2
     return p1 + CyclicSum(a * p2 * (b - c)**2)
 
 
-def _sos_struct_quintic_full(coeff):
+def _sos_struct_quintic_full(coeff: Coeff):
     """
     Try to solve quintic with nonzero a^5 coefficient by subtracting something.
 
@@ -151,6 +152,9 @@ def _sos_struct_quintic_full(coeff):
     if coeff((5,0,0)) <= 0:
         return None
 
+    a, b, c = coeff.gens
+    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+
     #########################################################
     #
     #                     Method 1
@@ -180,26 +184,25 @@ def _sos_struct_quintic_full(coeff):
         p, q = coeff((3,2,0)) / coeff500 - (1-x0+y0), coeff((2,3,0)) / coeff500 - (1-y0+x0)
 
         z0 = coeff((3,1,1)) / coeff500 + (4+4*(x0+y0))
-        x0, y0, p, q, z0 = radsimp([x0, y0, p, q, z0])
         # print(p, q, z0)
 
         if p >= 0 and q >= 0 and (4*p*q >= z0**2 or z0 >= 0):
-            t0 = sp.S(0)
+            t0 = 0
         else:
             # Plug in the discriminant, the discriminant is linear of t,
             # so we can solve the exact minimum t that makes the remaining poly nonnegative.
-            denom = radsimp((2*p + 2*q + z0)*(4*p**2 - 4*p*q - 2*p*z0 + 4*q**2 - 2*q*z0 + z0**2))
+            denom = (2*p + 2*q + z0)*(4*p**2 - 4*p*q - 2*p*z0 + 4*q**2 - 2*q*z0 + z0**2)
             if denom <= 0 or 4*p*q - z0**2 == 0:
                 t0 = None
             else:
-                t0 = radsimp((-4*p*q + z0**2)**2/(8*denom))
+                t0 = (-4*p*q + z0**2)**2/(8*denom)
 
         if t0 is None: # or t0 < 0:
             return
 
         x_, y_ = x0 - t0, y0 - t0
-        if (x_ >= 0 and y_ >= 0) or radsimp(-4*x_**3 + x_**2*y_**2 + 18*x_*y_ - 4*y_**3 - 27) <= 0:
-            p1 = _solve_sa2minusab_mul_cubic(x_, y_, mul = coeff500)
+        if (x_ >= 0 and y_ >= 0) or (-4*x_**3 + x_**2*y_**2 + 18*x_*y_ - 4*y_**3 - 27) <= 0:
+            p1 = _solve_sa2minusab_mul_cubic(coeff, x_, y_, mul = coeff500)
             if p1 is None:
                 return None
 
@@ -209,9 +212,9 @@ def _sos_struct_quintic_full(coeff):
                 (2,3,0): q,
                 (1,4,0): t0,
                 (3,1,1): z0 - 8*t0,
-                (2,2,1): radsimp(-(-6*t0+p+q+z0) + coeff.poly111() / 3 / coeff500)
+                (2,2,1): -(-6*t0+p+q+z0) + coeff.poly111() / 3 / coeff500
             }
-            p2 = _sos_struct_quintic_hexagon(Coeff(hexagon_coeffs, is_rational = coeff.is_rational))
+            p2 = _sos_struct_quintic_hexagon(coeff.from_dict(hexagon_coeffs))
 
             if p2 is not None:
                 return p1 + coeff500 * p2
@@ -289,7 +292,7 @@ def _sos_struct_quintic_full(coeff):
         x = (-p + q + 4*u - 2*v - 1)/(2*(u + v - 1))
         y = (g - h + 2*u**2*x - 4*u*v*x + 2*u*v + 2*u*x - 2*u - v**2 - 2*v*x + 2*v - 4*x + 2)/(u**2 + 2*u - v**2 - 2*v)
         # print('u v x y =', u, v, x, y)
-        if not isinstance(x, (sp.Float, sp.Rational)) or not isinstance(y, (sp.Float, sp.Rational)):
+        if not isinstance(x, (Float, Rational)) or not isinstance(y, (Float, Rational)):
             # this might happen when x = inf or y = inf
             return None
 
@@ -320,7 +323,6 @@ def _sos_struct_quintic_full(coeff):
             y = x**2
             if p + 2*(u*x-u+v) >= y:
                 _new_coeffs = {
-                    (5,0,0): sp.S(0),
                     (4,1,0): (p - (-2*u*x + 2*u - 2*v + y)) * m,
                     (1,4,0): (p - (-2*u*x + 2*u - 2*v + y)) * m,
                     (3,2,0): (g - (-2*u**2*x + u**2*y + u**2 + 2*u*v*x - 2*u*v + 2*u*x + v**2 - 2*v*y + 2*x - 2)) * m,
@@ -328,7 +330,7 @@ def _sos_struct_quintic_full(coeff):
                     (3,1,1): (z - (2*u**2*x - 2*u**2 + 2*u*v*x - 2*u*v*y + 2*u*v - 2*v**2*x)) * m,
                     (2,2,1): (w - (-u**2*y - 2*u*v*x + 2*u*v*y - 4*u*x + 2*u*y + 2*u + 2*v**2*x - v**2*y - v**2 + 2*v*y + 2*x - 2*y)) * m,
                 }
-                solution = _sos_struct_quintic_hexagon(Coeff(_new_coeffs))
+                solution = _sos_struct_quintic_hexagon(coeff.from_dict(_new_coeffs))
                 if solution is not None:
                     xu, xv = x*u, x*v
                     solution = m * CyclicSum(
@@ -409,7 +411,7 @@ def _sos_struct_quintic_full(coeff):
         def _extract_quartic(poly):
             """Given septic polynomial F(a,b,c), return the quartic polynomial with coefficients
             being the a^5bc, a^4b^2c, a^3b^3c, a^2b^4c, ab^5c coefficients of F."""
-            return sp.Poly([poly.coeff_monomial((5-i,i+1,1)) for i in range(5)], a)
+            return Poly([poly.coeff_monomial((5-i,i+1,1)) for i in range(5)], a)
 
         a, b, c, z = sp.symbols('a b c z')
         # standardize
@@ -584,21 +586,20 @@ def _sos_struct_quintic_full(coeff):
                 quartic_coeffs = {
                     (4,0,0): m_, (3,1,0): p_, (2,2,0): n_, (1,3,0): q_, (2,1,1): -(m_+p_+n_+q_)
                 }
-                rest = sos_struct_quartic(Coeff(quartic_coeffs), None)
+                rest = sos_struct_quartic(coeff.from_dict(quartic_coeffs), None)
                 rest += poly(1,1,1) * (1 + mul) * CyclicSum(a**2*b*c)
                 rest = coeff500 * CyclicProduct(a) * rest
                 return (coeff500 * sol_main + coeff500 * border_proof + rest) / multiplier
 
 
-
-    if not (isinstance(u_, sp.Rational) and isinstance(v_, sp.Rational)):
+    if not (isinstance(u_, Rational) and isinstance(v_, Rational)):
         return _compute_ker(coeff.as_poly(), (u_, v_))
 
     return None
 
 
 
-def _sos_struct_quintic_windmill(coeff):
+def _sos_struct_quintic_windmill(coeff: Coeff):
     """
     Give solution to s(a3b2+?a2b3+?ab4+?a3bc+?a2b2c) >= 0,
 
@@ -668,6 +669,9 @@ def _sos_struct_quintic_windmill(coeff):
             solution = reflect_expression(solution)
         return solution
 
+    a, b, c = coeff.gens
+    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+
     # now we assume coeff((4,1,0)) == 0
     if coeff((1,4,0)) < 0:
         return None
@@ -711,7 +715,7 @@ def _sos_struct_quintic_windmill(coeff):
         """
         Solve very simple cases without lifting the degree using several ideas.
         """
-        rem = radsimp(coeff.poly111() / 3) * CyclicSum(a*b) * CyclicProduct(a)
+        rem = (coeff.poly111() / 3) * CyclicSum(a*b) * CyclicProduct(a)
         if True:
             # Easy case 2. in the form of s(c(a-b)2(xa2+yac+zc2+uab+vbc)) + ...s(a2b2c)
             # such that y^2 <= 4xz where x = coeff((1,4,0)) is fixed
@@ -749,32 +753,31 @@ def _sos_struct_quintic_windmill(coeff):
                     bound = bound_l
                 else:
                     bound = bound_r
-                bound = radsimp(bound)
 
-                y = radsimp([
+                y = [
                     coeff((1,4,0)),
                     bound,
                     coeff((2,3,0)) - bound,
                     (coeff((3,1,1)) / 2 + coeff((1,4,0)) + (coeff((2,3,0)) - bound)),
                     coeff((3,2,0)) - (coeff((2,3,0)) - bound)
-                ])
+                ]
 
                 if (y[0] >= 0 and y[2] >= 0 and 4*y[0]*y[2] >= y[1]**2):
                     p1 = (quadratic_weighting(y[0], y[1], y[2], a, c) + y[3]*a*b + y[4]*b*c).together()
                     return CyclicSum(c*(a-b)**2*p1) + rem
 
-        x_, y_, z_ = radsimp([coeff((1,4,0)) / coeff((3,2,0)), coeff((2,3,0)) / coeff((3,2,0)), coeff((3,1,1)) / coeff((3,2,0))])
+        x_, y_, z_ = [coeff((1,4,0)) / coeff((3,2,0)), coeff((2,3,0)) / coeff((3,2,0)), coeff((3,1,1)) / coeff((3,2,0))]
         if True:
             # Easy case 3. try another case where we do not need to updegree
             # idea: use s(a*b^2*(a-ub+(u-1)c)^2)
-            u_ = radsimp(y_ / (-2))
-            y = radsimp([
+            u_ = (y_ / (-2))
+            y = [
                 sp.S(1),
                 x_ - u_ ** 2,
                 (z_ - (-2 * u_**2 + 2 * u_)) / 2 + (x_ - u_ ** 2)
-            ])
+            ]
             if all(_ >= 0 for _ in y):
-                y = radsimp([_ * coeff((3,2,0)) for _ in y])
+                y = [_ * coeff((3,2,0)) for _ in y]
                 exprs = [
                     CyclicSum(a*b**2*(a-u_*b+(u_-1)*c)**2),
                     CyclicSum(a*b**2*(b-c)**2),
@@ -785,8 +788,8 @@ def _sos_struct_quintic_windmill(coeff):
         if True:
             # Easy case 4. use s(c*(a-c)^2*(a-t*b)^2)
             if x_ >= 1:
-                t = radsimp((z_ + 2*(x_ - 1)) / (-4))
-                y1 = radsimp(coeff((2,3,0)) - (t**2 - 2) * coeff((3,2,0)))
+                t = (z_ + 2*(x_ - 1)) / (-4)
+                y1 = (coeff((2,3,0)) - (t**2 - 2) * coeff((3,2,0)))
                 if y1 >= 0:
                     y2 = coeff((1,4,0)) - coeff((3,2,0))
                     p1 = coeff((3,2,0)) * CyclicSum(c*(a-c)**2*(a-t*b)**2)
@@ -801,8 +804,8 @@ def _sos_struct_quintic_windmill(coeff):
                 # thus, (x - z/2 - 1)/(2x) <= t <= -z/(4x)
                 # in this bound, we should make t as close to 1 as possible
                 # to minimize t^2 - 2t - 2
-                bound_l = radsimp((x_ - z_ / 2 - 1) / (2*x_))
-                bound_r = radsimp(-z_ / (4*x_))
+                bound_l = (x_ - z_ / 2 - 1) / (2*x_)
+                bound_r = -z_ / (4*x_)
                 if bound_l <= bound_r:
                     if bound_l <= 1 <= bound_r:
                         t = sp.S(1)
@@ -812,15 +815,15 @@ def _sos_struct_quintic_windmill(coeff):
                         t = bound_r
 
                     # the sum of following equals to the polynomial
-                    y = radsimp([
+                    y = [
                         x_,
                         -z_ / 2 - 2*t*x_,
                         1 + 2*t*x_ - x_ + z_ / 2,
                         y_ - (t**2 - 2*t - 2)*x_ + z_ / 2
-                    ])
+                    ]
                     # print('(l,r) =', (bound_l, bound_r), '  t =', t,'\ny =', y)
                     if all(_ >= 0 for _ in y):
-                        y = radsimp([_ * coeff((3,2,0)) for _ in y])
+                        y = [_ * coeff((3,2,0)) for _ in y]
                         exprs = [
                             CyclicSum(c*(a-c)**2*(a-t*b)**2),
                             CyclicSum(a**3*(b-c)**2),
@@ -853,7 +856,7 @@ def _sos_struct_quintic_windmill(coeff):
         if eq1 >= 0 or eq1**2 <= sym1**2 * x_:
             # det_u >= 0
             u_ = sp.sqrt(x_)
-            if not isinstance(u_, sp.Rational):
+            if not isinstance(u_, Rational):
                 eq1 -= 12*x_
                 det_u = lambda u: 12*u**2 + sym1*u + eq1
                 for u__ in rationalize_bound(u_.n(20), direction = -1, compulsory = True):
@@ -871,7 +874,7 @@ def _sos_struct_quintic_windmill(coeff):
                     (3,1,1): 2*u_*v_ - 2*u_ + 2*v_ + z_ + 2,
                     (2,2,1): coeff((2,2,1)) / coeff((1,4,0)) + ((u_ - v_)**2 - 2*v_ - 1)
                 }
-                solution = _sos_struct_quintic_windmill(Coeff(_new_coeffs))
+                solution = _sos_struct_quintic_windmill(coeff.from_dict(_new_coeffs))
                 if solution is not None:
                     return solution * coeff((1,4,0)) + coeff((1,4,0)) * CyclicSum(c*(a**2+(u_-v_-1)*a*b-u_*a*c+v_*b*c)**2)
 
@@ -908,7 +911,7 @@ def _sos_struct_quintic_windmill(coeff):
                 c2 = sp.S(0)
 
         if c2 is not None and c2**2 <= 4*c1*c3:
-            pp = radsimp(c3 - c2**2/(4*c1)) * b + (coeff((2,3,0)) - c2) * a
+            pp = (c3 - c2**2/(4*c1)) * b + (coeff((2,3,0)) - c2) * a
             pp = sp.together(pp).as_coeff_Mul()
             y = [
                 2 * c1,
@@ -917,13 +920,13 @@ def _sos_struct_quintic_windmill(coeff):
             ]
             if all(_ >= 0 for _ in y):
                 multiplier = CyclicSum((a-b)**2)
-                w = radsimp(c2/(2*c1))
+                w = c2/(2*c1)
                 exprs = [
                     CyclicSum(a*(a-b)**2*(w*a*b-(2+2*w)*b*c+w*c**2+a*c+b**2)**2),
                     CyclicSum(c**2*(a-b)**2*pp[1]) * multiplier,
                     CyclicProduct(a) * CyclicSum((a-b)**2)**2
                 ]
-                return sum_y_exprs(y, exprs) / multiplier + radsimp(coeff.poly111()/3) * CyclicSum(a*b) * CyclicProduct(a)
+                return sum_y_exprs(y, exprs) / multiplier + (coeff.poly111()/3) * CyclicSum(a*b) * CyclicProduct(a)
 
         if not coeff.is_rational:
             return None
@@ -939,7 +942,7 @@ def _sos_struct_quintic_windmill(coeff):
                 w = w_
                 break
 
-        if isinstance(w, sp.Rational):
+        if isinstance(w, Rational):
             multiplier = CyclicSum((a-b)**2)
             _new_coeffs = {
                 (3,2,0): coeff((3,2,0)) - c1*w**2,
@@ -948,7 +951,7 @@ def _sos_struct_quintic_windmill(coeff):
                 (2,2,1): coeff((2,2,1)) - c1*(2 - w**2),
             }
 
-            solution = _sos_struct_quintic_windmill(Coeff(_new_coeffs))
+            solution = _sos_struct_quintic_windmill(coeff.from_dict(_new_coeffs))
             if solution is not None:
                 return (2*c1*CyclicSum(a*(a-b)**2*(w*a*b-(2+2*w)*b*c+w*c**2+a*c+b**2)**2) + solution * multiplier) / multiplier
 
@@ -1007,7 +1010,7 @@ def _sos_struct_quintic_windmill(coeff):
 
     for root in sp.polys.roots(eq, cubics = False, quartics = False).keys():
         # first try rational u, v if exists
-        if isinstance(root, sp.Rational) and _is_valid_u(root):
+        if isinstance(root, Rational) and _is_valid_u(root):
             u_ = root
             v_ = _compute_v(u_)
             break
@@ -1088,7 +1091,7 @@ def _sos_struct_quintic_windmill(coeff):
 
 
     # Now we call the solver to solve the problem at (u, v).
-    main_solution = _sos_struct_quintic_windmill_uv(u_, v_)
+    main_solution = _sos_struct_quintic_windmill_uv(coeff, u_, v_)
 
     if main_solution is not None:
         multiplier, main_solution = main_solution
@@ -1102,7 +1105,7 @@ def _sos_struct_quintic_windmill(coeff):
             (2,2,1): coeff((2,2,1)) / coeff((3,2,0)) - (-u**3 + 2*u**2*v + 2*u**2 - u*v**2 + u*v - 4*u + v**2 + 1) / denom
         }
 
-        rest_solution = _sos_struct_quintic_windmill(Coeff(_new_coeffs))
+        rest_solution = _sos_struct_quintic_windmill(coeff.from_dict(_new_coeffs))
         if rest_solution is not None:
             ker = coeff((3,2,0)) / 2 / denom
             return (ker * main_solution + coeff((3,2,0)) * multiplier * rest_solution) / multiplier
@@ -1110,7 +1113,7 @@ def _sos_struct_quintic_windmill(coeff):
     return None
 
 
-def _sos_struct_quintic_windmill_uv(u, v):
+def _sos_struct_quintic_windmill_uv(coeff: Coeff, u, v):
     """
     Given (u,v), solve inequality
     f(a,b,c) = s((b-a+(2u-1)c)(a^2-b^2+u(ab-ac)+v(bc-ab))^2) >= 0.
@@ -1121,8 +1124,11 @@ def _sos_struct_quintic_windmill_uv(u, v):
     -------
     [1] https://tieba.baidu.com/p/6472739202
     """
-    if u is None or not isinstance(u, sp.Rational) or u + v < 1:
+    if u is None or not isinstance(u, Rational) or u + v < 1:
         return None
+
+    a, b, c = coeff.gens
+    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
 
     if u > 1 and 2*u**2 - u*v - 2*u + 3 >= 0 and u**2 + u*v - u - v**2 + v - 1 >= 0:
         # Theorem 2.0
@@ -1249,7 +1255,7 @@ def _sos_struct_quintic_windmill_uv(u, v):
 
 
 
-def _sos_struct_quintic_uncentered(coeff):
+def _sos_struct_quintic_uncentered(coeff: Coeff):
     """
     Give the solution to s(ab4+?a2b3-?a3bc+?a2b2c) >= 0,
     which might have equality not at (1,1,1) but elsewhere.
@@ -1288,6 +1294,9 @@ def _sos_struct_quintic_uncentered(coeff):
     rem = coeff((2,3,0)) + coeff((1,4,0)) + coeff((3,1,1)) + coeff((2,2,1))
     if rem < 0:
         return None
+
+    a, b, c = coeff.gens
+    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
 
     if True:
         y = [coeff((2,3,0)), coeff((1,4,0)), coeff((3,1,1)) / 2 + coeff((1,4,0)), rem]
@@ -1399,13 +1408,13 @@ def _sos_struct_quintic_uncentered(coeff):
         eq = sum(eq_coeffs[i] * v ** (5 - i) for i in range(6)).as_poly(v)
 
         for root in sp.polys.roots(eq, cubics = False, quartics = False).keys():
-            if isinstance(root, sp.Rational) and root >= 2:
+            if isinstance(root, Rational) and root >= 2:
                 v_ = root
                 eq2 = u**4 + (r1 - v_ - 3)*u**3 + (r1*v_ - 3*r1 + v_**2 + 6)*u**2 \
                         + (-3*r1*v_ + 4*r1 - 2*v_ - 5)*u - r1*v_**2 + 3*r1*v_ - 2*r1 - v_ + 4
                 eq2 = eq2.as_poly(u)
                 for root2 in sp.polys.roots(eq2, cubics = False, quartics = False).keys():
-                    if isinstance(root2, sp.Rational) and root2 > 0:
+                    if isinstance(root2, Rational) and root2 > 0:
                         u_ = root2
                         r1_ = r1
                         r2_ = r2
@@ -1479,7 +1488,7 @@ def _sos_struct_quintic_uncentered(coeff):
     return None
 
 
-def _sos_struct_quintic_windmill_special(coeff):
+def _sos_struct_quintic_windmill_special(coeff: Coeff):
     """
     Give the solution to s(ab4-a2b2c) >= wabcs(a2-ab)
     here optimal w = 3.581412179607289955451719993913205662648 is the root of x**3-8*x**2+39*x-83
@@ -1503,6 +1512,9 @@ def _sos_struct_quintic_windmill_special(coeff):
     -------
     [1] https://tieba.baidu.com/p/7710460926
     """
+    a, b, c = coeff.gens
+    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+
     t = coeff((1,4,0))
     w =  - coeff((3,1,1)) / t
     if w > 3 and w**3 - 8*w*w + 39*w - 83 > 0:
@@ -1554,7 +1566,7 @@ def _sos_struct_quintic_windmill_special(coeff):
     return None
 
 
-def _solve_quintic_hexagon_pqz(p, q, z, mul = sp.S(1)):
+def _solve_quintic_hexagon_pqz(coeff: Coeff, p, q, z, mul = sp.S(1)):
     """
     When Det = 64*p^3-16*p^2*q^2+8*p*q*z^2+32*p*q*z-256*p*q+64*q^3-z^4-24*z^3-192*z^2-512*z >= 0,
     we have f(a,b,c) = s(a^4b + pa^3b^2 + qa^2b^3 + ab^4 + za^3bc - (p+q+z+2)a^2b^2c) >= 0.
@@ -1566,15 +1578,17 @@ def _solve_quintic_hexagon_pqz(p, q, z, mul = sp.S(1)):
 
     The function solves for mul * s(a^4b + pa^3b^2 + qa^2b^3 + ab^4 + za^3bc - (p+q+z+2)a^2b^2c)
     """
-    p, q, z = radsimp([p, q, z])
-    det = radsimp(64*p**3 - 16*p**2*q**2 + 8*p*q*z**2 + 32*p*q*z - 256*p*q + 64*q**3 - z**4 - 24*z**3 - 192*z**2 - 512*z)
+    a, b, c = coeff.gens
+    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+
+    det = (64*p**3 - 16*p**2*q**2 + 8*p*q*z**2 + 32*p*q*z - 256*p*q + 64*q**3 - z**4 - 24*z**3 - 192*z**2 - 512*z)
     if det >= 0:
         w = z + 8
         if p != q or w != p + q:
             # Actually the case p == q will be handled in quintic_symmetric, so we ignore it here.
-            denom = radsimp(1 / (8*(2*p + 2*q + w)*(3*(p-q)**2 + (w-p-q)**2)))
-            y = radsimp([denom * mul, det * denom * mul])
-            c1, c2, c3 = radsimp([w**2-4*p*q, 4*(2*p**2-q*w), 4*(2*q**2-p*w)])
+            denom = (1 / (8*(2*p + 2*q + w)*(3*(p-q)**2 + (w-p-q)**2)))
+            y = [denom * mul, det * denom * mul]
+            c1, c2, c3 = [w**2-4*p*q, 4*(2*p**2-q*w), 4*(2*q**2-p*w)]
             exprs = [
                 CyclicSum(c*(c1*(a**2-b**2) + c2*(a*b-a*c) + c3*(b*c-a*b))**2),
                 CyclicSum(c*(a-b)**4)
@@ -1582,13 +1596,12 @@ def _solve_quintic_hexagon_pqz(p, q, z, mul = sp.S(1)):
             return sum_y_exprs(y, exprs)
 
     if z >= -2:
-        det = radsimp(-16*(p**2*q**2 + 18*p*q - 4*p**3 - 4*q**3 - 27))
+        det = -16*(p**2*q**2 + 18*p*q - 4*p**3 - 4*q**3 - 27)
         if det >= 0 and (p != 3 or q != 3):
             u, v = (2*p**2 - 6*q) / (9 - p*q), (2*q**2 - 6*p) / (9 - p*q)
             t = (9 - p*q)**2 / (p + q + 3) / (3*(p - q)**2 + (6 - p - q)**2)
-            u, v, t = radsimp([u, v, t])
 
-            y = radsimp([(z + 2) * mul / 2, t * mul, (1 - t) * mul])
+            y = [(z + 2) * mul / 2, t * mul, (1 - t) * mul]
             exprs = [
                 CyclicProduct(a) * CyclicSum((a-b)**2),
                 CyclicSum(c*(a**2 - b**2 + u*(a*b-a*c) + v*(b*c-a*b))**2),
@@ -1597,7 +1610,7 @@ def _solve_quintic_hexagon_pqz(p, q, z, mul = sp.S(1)):
             return sum_y_exprs(y, exprs)
 
 
-def _sos_struct_quintic_hexagon(coeff):
+def _sos_struct_quintic_hexagon(coeff: Coeff):
     """
     Try solving quintics without s(a^5).
 
@@ -1641,10 +1654,12 @@ def _sos_struct_quintic_hexagon(coeff):
     if coeff((4,1,0)) == 0 or coeff((1,4,0)) == 0:
         return _sos_struct_quintic_windmill(coeff)
 
-    rem = radsimp(sum(coeff(_) for _ in [(4,1,0),(3,2,0),(2,3,0),(1,4,0),(3,1,1),(2,2,1)]))
+    rem = sum(coeff(_) for _ in [(4,1,0),(3,2,0),(2,3,0),(1,4,0),(3,1,1),(2,2,1)])
     if rem < 0:
         return None
 
+    a, b, c = coeff.gens
+    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
 
     if coeff((4,1,0)) == coeff((1,4,0)):
         # Theorem 1.
@@ -1653,7 +1668,7 @@ def _sos_struct_quintic_hexagon(coeff):
         coeff410 = coeff((4,1,0))
 
         p, q, z = coeff((3,2,0)) / coeff410, coeff((2,3,0)) / coeff410, coeff((3,1,1)) / coeff410
-        solution = _solve_quintic_hexagon_pqz(p, q, z, mul = coeff410)
+        solution = _solve_quintic_hexagon_pqz(coeff, p, q, z, mul = coeff410)
         if solution is not None:
             return solution + rem * CyclicSum(a**2*b**2*c)
 
@@ -1669,7 +1684,7 @@ def _sos_struct_quintic_hexagon(coeff):
         eq = ((u*u - p)**2 / 4 - 2*u - q).as_poly(u)
         u_, v_ = None, None
         for root in sp.polys.roots(eq, cubics = False, quartics = False):
-            if isinstance(root, sp.Rational):
+            if isinstance(root, Rational):
                 u_ = root
                 v_ = (u_ ** 2 - p) / 2
                 if -2 * u_ * v_ <= z:
@@ -1721,7 +1736,7 @@ def _sos_struct_quintic_hexagon(coeff):
         s_ = (coeff((4,1,0)) + coeff((1,4,0))) / 2 # s = x + z
         x_ = s_ / 2 + sp.sqrt(coeff((4,1,0)) * coeff((1,4,0))) / 2
         g, h = coeff((3,2,0)), coeff((2,3,0))
-        if not isinstance(x_, sp.Rational):
+        if not isinstance(x_, Rational):
             x_ = x_.n(20)
 
         # u^2x - 2vx - vy = g => v = (u^2x - g) / (2x + y)
@@ -1747,7 +1762,7 @@ def _sos_struct_quintic_hexagon(coeff):
 
 
         params = _solve_uvcoef(x_, y_, g, h, s_)
-        if params is not None and not isinstance(x_, sp.Rational):
+        if params is not None and not isinstance(x_, Rational):
             # perturb x to be slightly smaller
             for x__ in rationalize_bound(x_, direction = -1, compulsory = True):
                 if x__ < s_ / 2:
@@ -1762,7 +1777,7 @@ def _sos_struct_quintic_hexagon(coeff):
             # now that x is rational
             u_, v_, coef = params
 
-            if not isinstance(u_, sp.Rational):
+            if not isinstance(u_, Rational):
                 # for u__ in rationalize_bound(u_, )
                 direction = -1 if (4*u_*x_**2*(-g + u_**2*x_)/(2*x_ + y_)**2 - 2*x_ + y_) > 0 else 1
                 for u__ in rationalize_bound(u_, direction = direction, compulsory = True):
@@ -1772,7 +1787,7 @@ def _sos_struct_quintic_hexagon(coeff):
                         break
 
             # print(x_, params, u_, v_, (u_**2*x_ - 2*v_*x_ - v_*y_), (v_**2*x_ - 2*u_*x_ + u_*y_))
-            if isinstance(u_, sp.Rational):
+            if isinstance(u_, Rational):
                 z_ = s_ - x_
                 y = [
                     x_,
@@ -1792,7 +1807,6 @@ def _sos_struct_quintic_hexagon(coeff):
                         CyclicProduct(a) * CyclicSum(a*b)
                     ]
                     return sum_y_exprs(y, exprs)
-
 
 
     return None

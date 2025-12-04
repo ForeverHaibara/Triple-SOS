@@ -1,16 +1,16 @@
 from itertools import product
 
 import sympy as sp
+from sympy import Poly, Symbol, Rational, Add
 
 from .quartic import sos_struct_quartic
 from .septic_symmetric import sos_struct_septic_symmetric
 from .utils import (
-    CyclicSum, CyclicProduct, Coeff, SS,
-    sum_y_exprs, nroots, rationalize, rationalize_bound, reflect_expression, try_perturbations, radsimp,
+    Coeff, SS,
+    sum_y_exprs, nroots, rationalize, rationalize_bound, reflect_expression, try_perturbations,
     zip_longest
 )
 
-a, b, c = sp.symbols('a b c')
 _VERBOSE_OPTIMIZE_DISCRIMINANT = False
 
 def optimize_discriminant(discriminant, soft = False, verbose = False):
@@ -97,25 +97,27 @@ def _quartic_det(m, p, n, q):
     return 3*m*(m+n) - (p**2+p*q+q**2)
 
 
-def _fast_solve_quartic(m, p, n, q, rem = 0, mul_abc = True):
+def _fast_solve_quartic(coeff: Coeff, m, p, n, q, rem = 0, mul_abc = True):
     """
     Solve s(m*a^5bc + p*a^4b^2c + n*a^3b^3c + q*a^2b^4c + (rem-m-p-n-q)*a^3b^2c^2) >= 0.
     """
-    m, p, n, q = radsimp([m, p, n, q])
-    if isinstance(rem, sp.polys.Poly):
+    if isinstance(rem, Poly):
         rem = rem(1,1,1) / 3
     elif isinstance(rem, Coeff):
         rem = rem.poly111() / 3
-    rem = radsimp(rem)
     if rem < 0:
         return None
+
+    a, b, c = coeff.gens
+    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+
     if m > 0:
-        det = radsimp(_quartic_det(m, p, n, q))
+        det = _quartic_det(m, p, n, q)
         if det >= 0:
             # most common case, use inplace computation
-            solution = sp.Add(*[
+            solution = Add(*[
                 m / 2 * CyclicSum((a**2-b**2+(p+2*q)/3/m*(a*c-a*b)-(q+2*p)/3/m*(b*c-a*b))**2),
-                radsimp(det / 6 / m) * CyclicSum(a**2*(b-c)**2),
+                (det / 6 / m) * CyclicSum(a**2*(b-c)**2),
                 rem * CyclicSum(a**2*b*c)
             ]).as_coeff_Mul()
             return solution[0] * CyclicProduct(a) * solution[1]
@@ -123,14 +125,14 @@ def _fast_solve_quartic(m, p, n, q, rem = 0, mul_abc = True):
     coeffs_ = {
         (4,0,0): m, (3,1,0): p, (2,2,0): n, (1,3,0): q, (2,1,1): (rem - m - p - n - q)
     }
-    is_rational = all(isinstance(coeff, sp.Rational) for coeff in coeffs_.values())
+    is_rational = all(isinstance(coeff, Rational) for coeff in coeffs_.values())
     solution = sos_struct_quartic(Coeff(coeffs_, is_rational=is_rational), None)
     if mul_abc and solution is not None:
         solution = solution * CyclicProduct(a)
     return solution
 
 
-def _sos_struct_septic_star(coeff):
+def _sos_struct_septic_star(coeff: Coeff):
     """
     Solve s(ua4b3 + va3b4) + abcf(a,b,c) >= 0 where f is degree 4.
 
@@ -167,7 +169,7 @@ def _sos_struct_septic_star(coeff):
 
     if coeff((4,3,0)) == 0 and coeff((3,4,0)) == 0:
         # degenerated to quartic
-        return _fast_solve_quartic(
+        return _fast_solve_quartic(coeff,
             coeff((5,1,1)),
             coeff((4,2,1)),
             coeff((3,3,1)),
@@ -177,6 +179,9 @@ def _sos_struct_septic_star(coeff):
 
     if not coeff.is_rational:
         return None
+
+    a, b, c = coeff.gens
+    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
 
     if coeff((4,3,0)) == coeff((3,4,0)):
         # standard septic star
@@ -223,7 +228,8 @@ def _sos_struct_septic_star(coeff):
             if det >= 0:
                 m_, p_, n_, q_, u, v = m__, p__, n__, q__, u_, v_
                 main_solution = coeff43 * CyclicSum(c*(a**2*c-b**2*c-u*a**2*b+v*a*b**2+(u-v)*a*b*c)**2)
-                rest_solution = _fast_solve_quartic(m__*coeff43, p__*coeff43, n__*coeff43, q__*coeff43, rem = rem/3, mul_abc = True)
+                rest_solution = _fast_solve_quartic(coeff,
+                    m__*coeff43, p__*coeff43, n__*coeff43, q__*coeff43, rem = rem/3, mul_abc = True)
                 return main_solution + rest_solution
 
 
@@ -233,7 +239,7 @@ def _sos_struct_septic_star(coeff):
     if coeff((4,3,0)) == 0:
         p, q = 1 , 0
     else:
-        p, q = (coeff((3,4,0)) / coeff((4,3,0))).as_numer_denom()
+        p, q = coeff.domain.to_sympy(coeff((3,4,0)) / coeff((4,3,0))).as_numer_denom()
 
     x, y = sp.symbols('x y')
     if sp.ntheory.primetest.is_square(p) and sp.ntheory.primetest.is_square(q):
@@ -299,14 +305,15 @@ def _sos_struct_septic_star(coeff):
 
         perturbation = CyclicSum(c*(a-b)**2*(a*b-a*c-b*c)**2)
 
-        solution = try_perturbations(coeff.as_poly(), coeff((3,4,0)), coeff((4,3,0)), perturbation)
+        solution = try_perturbations(coeff.as_poly(),
+            coeff.domain.to_sympy(coeff((3,4,0))), coeff.domain.to_sympy(coeff((4,3,0))), perturbation)
         if solution is not None:
             return solution
 
     return None
 
 
-def _sos_struct_septic_biased(coeff):
+def _sos_struct_septic_biased(coeff: Coeff):
     """
     Solve septic hexagons without s(a5b2) and s(a4b3)
 
@@ -344,6 +351,9 @@ def _sos_struct_septic_biased(coeff):
 
     if coeff((5,2,0)) or coeff((4,3,0)):
         return None
+
+    a, b, c = coeff.gens
+    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
 
     if coeff((3,4,0)) == coeff((2,5,0)) and coeff((3,4,0)) != 0:
         coeff34 = coeff((3,4,0))
@@ -388,7 +398,7 @@ def _sos_struct_septic_biased(coeff):
     return None
 
 
-def _sos_struct_septic_hexagon(coeff):
+def _sos_struct_septic_hexagon(coeff: Coeff):
     """
     Solve septic without s(a7), s(a6b), s(a6c).
 
@@ -422,6 +432,9 @@ def _sos_struct_septic_hexagon(coeff):
     if coeff((5,1,1)) < 0 and coeff((5,1,1))**2 > coeff((5,2,0)) * coeff((5,0,2)) * 4:
         return None
 
+    a, b, c = coeff.gens
+    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+
     if coeff((5,2,0)) == coeff((2,5,0)):
         if coeff((5,2,0)) == 0 and coeff((2,5,0)) == 0:
             return _sos_struct_septic_star(coeff)
@@ -442,7 +455,7 @@ def _sos_struct_septic_hexagon(coeff):
 
         coeff410 = coeff((5,2,0))
 
-        p, q, z = radsimp([coeff((4,3,0)) / coeff410, coeff((3,4,0)) / coeff410, sp.symbols('z')])
+        p, q, z = [coeff((4,3,0)) / coeff410, coeff((3,4,0)) / coeff410, sp.symbols('z')]
         m0, p0, n0, q0 = [coeff((5-i,1+i,1)) for i in range(4)]
 
         # extract the minimum root, which is the lower bound of z
@@ -461,7 +474,7 @@ def _sos_struct_septic_hexagon(coeff):
                     z = z_
                     break
 
-        if isinstance(z, sp.Symbol):
+        if isinstance(z, Symbol):
             z = min(nroots(det, method = 'factor', real = True))
 
         # check whether we succeed if we subtract s(ab)s(a^4b + pa^3b^2 + qa^2b^3 + ab^4 + za^3bc - (p+q+z+2)a^2b^2c)
@@ -473,20 +486,20 @@ def _sos_struct_septic_hexagon(coeff):
 
         def _compute_mpnq(z):
             w = z + 8
-            g, u, v = radsimp([w**2-4*p*q, 4*(2*p**2-q*w), 4*(2*q**2-p*w)])
-            denom = radsimp(1 / (8*(2*p + 2*q + w)*(3*(p-q)**2 + (w-p-q)**2)))
-            dm, dp, dn, dq = radsimp([2*coeff410, (p+z+1)*coeff410, -(z+2)*coeff410, (q+z+1)*coeff410])
+            g, u, v = [w**2-4*p*q, 4*(2*p**2-q*w), 4*(2*q**2-p*w)]
+            denom = 1 / (8*(2*p + 2*q + w)*(3*(p-q)**2 + (w-p-q)**2))
+            dm, dp, dn, dq = [2*coeff410, (p+z+1)*coeff410, -(z+2)*coeff410, (q+z+1)*coeff410]
 
             # additionally restore 2abcs(f(a,b,c)^2)
-            t1 = radsimp(4 * denom * coeff410)
-            dm, dp, dn, dq = radsimp([dm - t1*g**2, dp - t1*g*(u-2*v), dn - t1*(u**2-u*v+v**2-g**2), dq - t1*g*(v-2*u)])
+            t1 = 4 * denom * coeff410
+            dm, dp, dn, dq = [dm - t1*g**2, dp - t1*g*(u-2*v), dn - t1*(u**2-u*v+v**2-g**2), dq - t1*g*(v-2*u)]
 
             # restore 4abcs(a2-ab)2
-            t2 = radsimp((1 - g**2 * denom) * coeff410 * 4)
+            t2 = (1 - g**2 * denom) * coeff410 * 4
             dm, dp, dn, dq = dm - t2, dp + 2*t2, dn - 3*t2, dq + 2*t2
 
             m1, p1, n1, q1 = m0 - dm, p0 - dp, n0 - dn, q0 - dq
-            det = radsimp(3*m1*(m1+n1) - (p1**2+p1*q1+q1**2))
+            det = (3*m1*(m1+n1) - (p1**2+p1*q1+q1**2))
             return m1, p1, n1, q1, det
 
         def _verify(z, check_quintic_det = True):
@@ -494,7 +507,7 @@ def _sos_struct_septic_hexagon(coeff):
                 return False
             if check_quintic_det:
                 det_quintic = 64*p**3 - 16*p**2*q**2 + 8*p*q*z**2 + 32*p*q*z - 256*p*q + 64*q**3 - z**4 - 24*z**3 - 192*z**2 - 512*z
-                if radsimp(det_quintic) < 0:
+                if det_quintic < 0:
                     return False
             m1, p1, n1, q1, det = _compute_mpnq(z)
             if m1 > 0 and det >= 0:
@@ -516,18 +529,18 @@ def _sos_struct_septic_hexagon(coeff):
             m1, p1, n1, q1, det = _compute_mpnq(z)
             # print('z =', z, '\n(m,p,n,q) =', (m1,p1,n1,q1), '\ndet =', det)
             w = z + 8
-            g, u, v = radsimp([w**2-4*p*q, 4*(2*p**2-q*w), 4*(2*q**2-p*w)])
-            denom = radsimp(1 / (8*(2*p + 2*q + w)*(3*(p-q)**2 + (w-p-q)**2)))
+            g, u, v = [w**2-4*p*q, 4*(2*p**2-q*w), 4*(2*q**2-p*w)]
+            denom = 1 / (8*(2*p + 2*q + w)*(3*(p-q)**2 + (w-p-q)**2))
             f = lambda a,b,c: g*(a**2-b**2)+u*(a*b-a*c)+v*(b*c-a*b)
 
-            y = radsimp([denom * coeff410, (1 - g**2*denom) * coeff410])
+            y = [denom * coeff410, (1 - g**2*denom) * coeff410]
             exprs = [
                 CyclicSum(c*(a*f(b,c,a)+b*f(c,a,b)).expand()**2),
                 CyclicSum(a*(b-c)**2*(a**2-2*a*b-2*a*c+3*b*c)**2)
             ]
 
             main_solution = sum_y_exprs(y, exprs)
-            remain_solution = _fast_solve_quartic(m1, p1, n1, q1, coeff)
+            remain_solution = _fast_solve_quartic(coeff, m1, p1, n1, q1, coeff)
             if remain_solution is not None:
                 return main_solution + remain_solution
 
@@ -539,7 +552,7 @@ def _sos_struct_septic_hexagon(coeff):
     if coeff((5,2,0)) == 0:
         p, q = 1 , 0
     else:
-        p, q = (coeff((2,5,0)) / coeff((5,2,0))).as_numer_denom()
+        p, q = coeff.domain.to_sympy(coeff((2,5,0)) / coeff((5,2,0))).as_numer_denom()
 
     if sp.ntheory.primetest.is_square(p) and sp.ntheory.primetest.is_square(q):
         t = coeff((5,2,0)) / q if q != 0 else coeff((2,5,0))
@@ -564,10 +577,10 @@ def _sos_struct_septic_hexagon(coeff):
             p , q = q , p
             m , n = n , m
 
-        x = sp.symbols('x')
+        x = Symbol('x')
         eq = ((x**2 - n)**2 - 4*p*(m - 2*u*x)).as_poly(x)
         for w in sp.polys.polyroots.roots(eq):
-            if isinstance(w, sp.Rational):
+            if isinstance(w, Rational):
                 z = (w*w - n) / 2 / v
                 candidates.append((w, z))
                 # print(w, v, z, n)
@@ -593,7 +606,7 @@ def _sos_struct_septic_hexagon(coeff):
             n2 = n - abs(n / perturbation)
             eq = ((x**2 - n2)**2 - 4*p*(m2 - 2*u*x)).as_poly(x)
             for w in sp.polys.roots(eq):
-                if isinstance(w, sp.Rational):
+                if isinstance(w, Rational):
                     z = (w*w - n) / 2 / v
                     candidates.append((w, z))
                 elif w.is_real is None or w.is_real == False:
@@ -652,7 +665,8 @@ def _sos_struct_septic_hexagon(coeff):
 
     elif p > 0 and q > 0:
         perturbation = CyclicSum(a) * CyclicProduct((a-b)**2)
-        solution = try_perturbations(coeff.as_poly(), coeff((2,5,0)), coeff((5,2,0)), perturbation)
+        solution = try_perturbations(coeff.as_poly(),
+            coeff.domain.to_sympy(coeff((2,5,0))), coeff.domain.to_sympy(coeff((5,2,0))), perturbation)
 
         if solution is not None:
             return solution

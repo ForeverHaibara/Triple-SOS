@@ -1,51 +1,194 @@
-from typing import Union, Dict, List, Tuple, Optional
+from typing import Union, Dict, List, Tuple, Optional, Iterator
 
-import sympy as sp
+from sympy import Poly, Expr, Symbol, Rational
 from sympy.combinatorics import Permutation, PermutationGroup
-from sympy.combinatorics.named_groups import CyclicGroup, SymmetricGroup, AlternatingGroup
-from sympy.polys.polytools import Poly
+from sympy.polys.rings import PolyElement
+from sympy.polys.polyclasses import DMP
 from sympy.utilities.iterables import iterable
+
+from .exraw import EXRAW
+from .cyclic import CyclicSum, CyclicProduct, SymmetricSum, SymmetricProduct
+from ..monomials import verify_symmetry
 
 class Coeff():
     """
-    A standard class for representing a polynomial with coefficients.
-    It can also represent sparse polynomials. The coefficients are stored in a dictionary.
+    Wrapper of sympy PolyElement.
     """
-    def __new__(cls, *args, **kwargs):
-        # if it is already a Coeff object, return it.
-        if len(args) == 1 and isinstance(args[0], cls):
-            return args[0]
-        return super().__new__(cls)
+    rep: PolyElement
 
-    def __init__(self, coeffs: Union[Poly, Dict], is_rational: bool = True):
-        if hasattr(self, 'coeffs'):
-            # if the object is already initialized,
-            # (this is the case when called from __new__ by Coeff(Coeff(...)) )
-            # then return without reinitializing.
-            return
-        if isinstance(coeffs, Poly):
-            self._nvars = len(coeffs.gens)
-            poly = coeffs
-            coeffs = {}
-            for monom, coeff in poly.terms():
-                if not isinstance(coeff, sp.Rational): #isinstance(coeff, sp.Float): # and degree > 4
-                    # if isinstance(coeff, sp.Float):
-                    #     coeff = rationalize(coeff, reliable = True)
-                    # else:
-                    is_rational = False
-                    # coeff = coeff.as_numer_denom()
-                coeffs[monom] = coeff
-        else:
-            self._nvars = len(next(iter(coeffs.keys()))) if len(coeffs) > 0 else 0
+    def __init__(self, arg, is_rational: bool = True, field = True):
+        if isinstance(arg, Coeff):
+            # make a copy
+            self.rep = arg.rep
+        elif isinstance(arg, dict):
+            if len(arg) == 0:
+                gens = (Symbol("a"),)
+            else:
+                nvars = len(next(iter(arg.keys())))
+                gens = tuple([Symbol(chr(97 + i)) for i in range(nvars)])
+            rep_dom = EXRAW[gens]
+            self.rep = rep_dom.one.ring.from_dict(arg)
+        elif isinstance(arg, Poly):
+            if field:
+                arg = arg.to_field()
+            rep_dom = arg.domain[arg.gens]
+            self.rep = rep_dom.one.ring.from_dict(arg.rep.to_dict())
+        elif isinstance(arg, PolyElement):
+            self.rep = arg
 
-        self.coeffs = coeffs
-        self.is_rational = is_rational
+    @classmethod
+    def new(cls, rep: PolyElement) -> 'Coeff':
+        obj = super().__new__(cls)
+        obj.rep = rep
+        return obj
+
+    def from_dict(self, rep: dict) -> 'Coeff':
+        return self.new(self.ring.from_dict(rep))
+
+    @property
+    def gens(self) -> Tuple[Symbol, ...]:
+        return self.rep.ring.symbols
 
     @property
     def nvars(self) -> int:
-        return self._nvars
+        return self.rep.ring.ngens
 
-    def __call__(self, *x) -> sp.Expr:
+    @property
+    def ring(self):
+        return self.rep.ring
+
+    @property
+    def domain(self):
+        return self.rep.ring.domain
+
+    @property
+    def is_rational(self) -> bool:
+        return self.domain.is_QQ or self.domain.is_ZZ
+
+    def __iter__(self):
+        return self.rep.__iter__()
+
+    def monoms(self) -> List[Tuple[int, ...]]:
+        return self.rep.monoms()
+
+    def coeffs(self) -> List[Expr]:
+        return self.rep.coeffs()
+
+    def terms(self) -> List[Tuple[Tuple[int, ...], Expr]]:
+        return self.rep.terms()
+
+    def keys(self) -> Iterator[Tuple[int, ...]]:
+        return self.rep.keys()
+
+    def values(self) -> Iterator[Expr]:
+        return self.rep.values()
+
+    def items(self) -> Iterator[Tuple[Tuple[int, ...], Expr]]:
+        return self.rep.items()
+
+    def itermonoms(self) -> Iterator[Tuple[int, ...]]:
+        return self.rep.itermonoms()
+
+    def itercoeffs(self) -> Iterator[Expr]:
+        return self.rep.itercoeffs()
+
+    def iterterms(self) -> Iterator[Tuple[Tuple[int, ...], Expr]]:
+        return self.rep.iterterms()
+
+    def listmonoms(self) -> List[Tuple[int, ...]]:
+        return self.rep.listmonoms()
+
+    def listcoeffs(self) -> List[Expr]:
+        return self.rep.listcoeffs()
+
+    def listterms(self) -> List[Tuple[Tuple[int, ...], Expr]]:
+        return self.rep.listterms()
+
+    def __len__(self) -> int:
+        return len(self.rep)
+
+    def __hash__(self) -> int:
+        return hash(self.rep)
+
+    @property
+    def is_zero(self) -> bool:
+        return self.rep.is_zero
+
+    @property
+    def is_homogeneous(self) -> bool:
+        monoms = self.monoms()
+        if len(monoms) == 0:
+            return True
+        d = sum(monoms[0])
+        return all(sum(m) == d for m in monoms[1:])
+
+    def total_degree(self) -> int:
+        return max((sum(m) for m in self.monoms()), default=0)
+
+    def as_poly(self, *args) -> Poly:
+        if len(args) == 0:
+            args = self.gens
+        dmp = DMP.from_dict(dict(self.rep), len(self.gens)-1, self.domain)
+        return Poly.new(dmp, *args)
+
+    def set_domain(self, domain) -> 'Coeff':
+        ring = domain[self.gens]
+        return self.set_ring(ring)
+
+    def set_ring(self, ring) -> 'Coeff':
+        if ring == self.ring:
+            return self
+        return self.new(self.rep.set_ring(ring))
+
+    def __add__(self, other) -> 'Coeff':
+        if isinstance(other, Poly):
+            return Coeff(self.as_poly() - other)
+        if isinstance(other, Coeff):
+            return self.new(self.rep + other.rep)
+        return NotImplemented
+
+    def __sub__(self, other) -> 'Coeff':
+        if isinstance(other, Poly):
+            return Coeff(self.as_poly() - other)
+        if isinstance(other, Coeff):
+            return self.new(self.rep - other.rep)
+        return NotImplemented
+
+    def __radd__(self, other) -> 'Coeff':
+        if isinstance(other, Poly):
+            return Coeff(other - self.as_poly())
+        if isinstance(other, Coeff):
+            return self.new(other.rep + self.rep)
+        return NotImplemented
+
+    def __rsub__(self, other) -> 'Coeff':
+        if isinstance(other, Poly):
+            return Coeff(other - self.as_poly())
+        if isinstance(other, Coeff):
+            return self.new(other.rep - self.rep)
+        return NotImplemented
+
+    def __pos__(self) -> 'Coeff':
+        return self
+
+    def __neg__(self) -> 'Coeff':
+        return self.new(-self.rep)
+
+    def __mul__(self, other) -> 'Coeff':
+        if isinstance(other, (int, Rational)):
+            return self.new(self.rep * self.domain.convert(other))
+        if self.domain.of_type(other):
+            return self.new(self.rep * other)
+        if isinstance(other, (Poly, Expr, float)):
+            return Coeff(self.as_poly() * other)
+        if isinstance(other, Coeff):
+            return self.new(self.rep * other.rep)
+        return NotImplemented
+
+    def __rmul__(self, other) -> 'Coeff':
+        return self.__mul__(other)
+
+    def __call__(self, *x) -> Expr:
         """
         Coeff((i,j,k)) -> returns the coefficient of a^i * b^j * c^k.
         """
@@ -54,13 +197,13 @@ class Coeff():
             x = x[0]
         if not isinstance(x, tuple):
             x = tuple(x)
-        return self.coeffs.get(x, sp.S(0))
+        return self.rep.get(x, self.domain.zero)
 
-    def __len__(self) -> int:
-        """
-        Number of coefficients. Sometimes the zero coefficients are not included.
-        """
-        return len(self.coeffs)
+    def poly111(self) -> Expr:
+        z = self.domain.zero
+        for c in self.coeffs():
+            z = z + c
+        return z
 
     def is_cyclic(self, perm_group: Optional[Union[Permutation, List[Permutation], PermutationGroup]] = None) -> bool:
         """
@@ -75,27 +218,8 @@ class Coeff():
         True
         """
         if perm_group is None:
-            perm_group = CyclicGroup(self.nvars)
-
-        if self.nvars == 1:
-            return True
-
-        perms = []
-        if isinstance(perm_group, PermutationGroup):
-            # checking the generators is enough
-            perms = perm_group.generators
-        elif isinstance(perm_group, Permutation):
-            perms = [perm_group]
-        else:
-            perms = perm_group
-
-        for perm in perms:
-            if perm.size != self.nvars:
-                return False
-            for k, v in self.coeffs.items():
-                if self(perm(k)) != v:
-                    return False
-        return True
+            perm_group = "cyc"
+        return verify_symmetry(self.as_poly(), perm_group)
 
     def is_symmetric(self, perm_group: Optional[Union[Permutation, List[Permutation], PermutationGroup]] = None) -> bool:
         """
@@ -114,132 +238,45 @@ class Coeff():
         False
         """
         if perm_group is None:
-            perm_group = SymmetricGroup(self.nvars)
-        return self.is_cyclic(perm_group)
+            perm_group = "sym"
+        return verify_symmetry(self.as_poly(), perm_group)
 
     def reflect(self) -> 'Coeff':
-        """
-        Reflect the coefficients of a, b, c with respect to a,b.
-        Returns a deepcopy.
-        """
         if self.is_zero:
-            return Coeff({}, is_rational = True)
-
-        assert self.nvars == 3, "The number of variables must be 3."
-
-        reflected_coeffs = dict([((j,i,k), v) for (i,j,k), v in self.coeffs.items()])
-        new_coeff = Coeff(reflected_coeffs, is_rational = self.is_rational)
+            return self.from_dict({})
+        if self.nvars == 1:
+            return self.from_dict(dict(self.rep))
+        refl = lambda z: tuple((z[1], z[0],) + z[2:])
+        reflected = dict([(refl(k), v) for k, v in self.items()])
+        new_coeff = self.from_dict(reflected)
         return new_coeff
 
     def clear_zero(self) -> None:
         """
-        Clear the coefficients that are zero.
+        Clear the coefficients that are zero. In-place. Used internally.
         """
-        self.coeffs = {k:v for k,v in self.coeffs.items() if v != 0}
+        self.rep = self.ring.from_dict({k: v for k, v in self.items() if v != 0})
 
-    def as_poly(self, *args) -> Poly:
-        """
-        Return the polynomial of given variables. If args is not given, it uses a-z.
-        """
-        if len(args) == 0:
-            if self.is_zero:
-                args = sp.symbols('a')
-            else:
-                args = sp.symbols(f'a:{chr(96+self.nvars)}')
-        elif len(args) == 1 and iterable(args[0]):
-            args = args[0]
-        return Poly.from_dict(self.coeffs, gens = args)
-
-    def is_homogeneous(self) -> bool:
-        """
-        Whether the polynomial is homogeneous.
-        """
-        if self.is_zero:
-            return True
-        degree = self.degree()
-        return all(sum(k) == degree for k in self.coeffs)
-
-    def degree(self) -> int:
-        """
-        Return the degree of the polynomial. Only works for homogeneous polynomials.
-        Please use `total_degree()` for non-homogeneous polynomials.
-        """
-        if len(self.coeffs) == 0:
-            return 0
-        for k in self.coeffs:
-            return sum(k)
-
-    def total_degree(self) -> int:
-        """
-        Return the total degree of the polynomial.
-        """
-        return max(sum(k) for k in self.coeffs)
-
-    @property
-    def is_zero(self) -> bool:
-        """
-        Whether the polynomial is zero.
-        """
-        return len(self.coeffs) == 0
-
-    def poly111(self) -> sp.Expr:
-        """
-        Evalutate the polynomial at (1,1,...,1).
-        """
-        return sum(self.coeffs.values())
-
-    def items(self):
-        return self.coeffs.items()
-
-    def __operator__(self, other, operator) -> 'Coeff':
-        new_coeffs = self.coeffs.copy()
-        for k, v2 in other.items():
-            v1 = self(k)
-            v3 = operator(v1, v2)
-            if v3 == 0 and v1 != 0:
-                del new_coeffs[k]
-            elif v3 != 0:
-                new_coeffs[k] = v3
-        new_coeffs = dict(sorted(new_coeffs.items(), reverse=True))
-        other_rational = (not isinstance(other, Coeff)) or other.is_rational
-        is_rational = self.is_rational and other_rational
-        return Coeff(new_coeffs, is_rational = is_rational)
-
-    def __add__(self, other) -> 'Coeff':
-        return self.__operator__(other, lambda x, y: x + y)
-
-    def __sub__(self, other) -> 'Coeff':
-        return self.__operator__(other, lambda x, y: x - y)
-
-    # def __mul__(self, other) -> 'Coeff':
-    #     return self.__operator__(other, lambda x, y: x * y)
-
-    # def __truediv__(self, other) -> 'Coeff':
-    #     return self.__operator__(other, lambda x, y: x / y)
-
-    def __pow__(self, other) -> 'Coeff':
-        return self.__operator__(other, lambda x, y: x ** y)
-
-    def cancel_abc(self) -> Tuple[List[int], 'Coeff']:
+    def cancel_abc(self) -> Tuple[Tuple[int, ...], 'Coeff']:
         """
         Assume poly = a^i*b^j*c^k * poly2.
         Return ((i,j,k), Coeff(poly2)).
         """
         if self.is_zero:
             return ((0,) * self.nvars, self)
-        all_monoms = list(self.coeffs.keys())
-        d = self.degree() + 1
+        monoms = self.monoms()
+        if len(monoms) == 0:
+            return ((0,) * self.nvars, self)
+        d = self.total_degree() + 1
         common = [d] * self.nvars
-        for monom in all_monoms:
+        for monom in monoms:
             common = [min(i, j) for i, j in zip(common, monom)]
             if all(_ == 0 for _ in common):
                 return ((0,) * self.nvars, self)
 
         common = tuple(common)
-        new_coeff = Coeff({tuple([i - j for i, j in zip(monom, common)]): _ for monom, _ in self.coeffs.items() if _ != 0})
-        new_coeff.is_rational = self.is_rational
+        new_coeff = self.from_dict({tuple([i - j for i, j in zip(m, common)]): v for m, v in self.items()})
         return common, new_coeff
-
 
     def cancel_k(self) -> Tuple[int, 'Coeff']:
         """
@@ -247,13 +284,14 @@ class Coeff():
         Write poly2 = Sum_{uvw}(x_{uvw} * a^{u} * b^{v} * c^{w}).
         Return (d, Coeff(poly2))
         """
-        if self.is_zero:
+        from math import gcd
+        monoms = self.monoms()
+        if len(monoms) == 0:
             return (1, self)
-        all_monoms = list(self.coeffs.keys())
         d = 0
-        for monom in all_monoms:
+        for monom in monoms:
             for u in monom:
-                d = sp.gcd(d, u)
+                d = gcd(d, u)
                 if d == 1:
                     return (1, self)
 
@@ -261,6 +299,17 @@ class Coeff():
         if d == 0:
             return 0, self
 
-        new_coeff = Coeff({tuple([i//d for i in monom]): _ for monom, _ in self.coeffs.items() if _ != 0})
-        new_coeff.is_rational = self.is_rational
+        new_coeff = self.from_dict({tuple([i//d for i in m]): v for m, v in self.items()})
         return d, new_coeff
+
+    def cyclic_sum(self, expr) -> Expr:
+        return CyclicSum(expr, self.gens)
+
+    def cyclic_product(self, expr) -> Expr:
+        return CyclicProduct(expr, self.gens)
+
+    def symmetric_sum(self, expr) -> Expr:
+        return SymmetricSum(expr, self.gens)
+
+    def symmetric_product(self, expr) -> Expr:
+        return SymmetricProduct(expr, self.gens)

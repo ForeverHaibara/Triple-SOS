@@ -12,9 +12,7 @@ def _null_solver(*args, **kwargs):
     return None
 
 def _get_defaulted_gens(poly: Union[Poly, Coeff]):
-    if isinstance(poly, Poly):
-        return poly.gens
-    return sp.symbols(f"a:{chr(96 + poly.nvars)}") if len(poly.coeffs) > 0 else []
+    return poly.gens
 
 def sos_struct_extract_factors(poly: Union[Poly, Coeff], solver: Callable, real: bool = True, **kwargs):
     """
@@ -96,7 +94,7 @@ def sos_struct_quadratic(poly: Poly, **kwargs):
     coeff = Coeff(poly)
     nvars = coeff.nvars
     mat = sp.zeros(nvars + 1)
-    for k, v in coeff.coeffs.items():
+    for k, v in coeff.items():
         inds = []
         for i in range(nvars):
             if k[i] > 2:
@@ -161,7 +159,7 @@ def sos_struct_degree_specified_solver(solvers: Dict[int, Callable], homogeneous
     """
     def _sos_struct_degree_specified_solver(poly: Union[Poly, Coeff], *args, **kwargs):
         if homogeneous and isinstance(poly, Coeff):
-            degree = poly.degree()
+            degree = poly.total_degree()
         else:
             degree = poly.total_degree()
         solver = solvers.get(degree, None)

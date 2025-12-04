@@ -27,7 +27,7 @@ def sos_struct_sparse(coeff, real = True):
     if len(coeff) > 6:
         return None
 
-    degree = coeff.degree()
+    degree = coeff.total_degree()
     if degree < 5:
         if degree == 0:
             v = coeff((0,0,0))
@@ -402,10 +402,10 @@ def _sos_struct_sparse_amgm(coeff):
     """
     if not len(coeff) <= 6:
         return None
-    monoms = set(CoeffMonom(*m).std() for m in coeff.coeffs.keys())
+    monoms = set(CoeffMonom(*m).std() for m in coeff.keys())
     monoms = list(monoms)
     if len(monoms) == 1:
-        degree = coeff.degree()
+        degree = coeff.total_degree()
         monoms.append(CoeffMonom(degree, 0, 0))
 
     def getv(m):
@@ -668,7 +668,7 @@ def sos_struct_heuristic(coeff, real=True):
 
     s(c8(a-b)2(a4-3a3b+2a2b2+3b4))
     """
-    degree = coeff.degree()
+    degree = coeff.total_degree()
     # assert degree > 6, "Degree must be greater than 6 in heuristic method."
     if degree <= 6:
         return None
@@ -683,7 +683,7 @@ def sos_struct_heuristic(coeff, real=True):
         # not implemented
         return None
 
-    monoms = list(coeff.coeffs.items())
+    monoms = list(coeff.items())
     if monoms[0][1] < 0 or monoms[-1][1] < 0 or monoms[-1][0][0] != 0:
         return None
 

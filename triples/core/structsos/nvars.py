@@ -1,15 +1,15 @@
 import sympy as sp
 
-from .utils import Coeff, quadratic_weighting
+from .utils import quadratic_weighting
 from ...sdp import congruence
-from ...utils import SymmetricSum
+from ...utils import SymmetricSum, verify_symmetry
 from ...utils.roots import common_region_of_conics
 
 def sos_struct_nvars_quartic_symmetric(poly, real=True):
     """
     Solve a homogeneous quartic symmetric polynomial inequality on real numbers for nvars >= 4.
     """
-    if poly.total_degree() == 4 and Coeff(poly).is_symmetric():
+    if poly.total_degree() == 4 and verify_symmetry(poly, "sym"):
         return _sos_struct_nvars_quartic_symmetric_sdp(poly)
 
 

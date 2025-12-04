@@ -11,8 +11,8 @@ from sympy.polys.polyclasses import DMP
 from sympy.combinatorics import Permutation, PermutationGroup, CyclicGroup
 from sympy.printing.precedence import precedence_traditional, PRECEDENCE
 
-from .expressions import Coeff, CyclicSum, CyclicProduct
-from .monomials import poly_reduce_by_symmetry
+from .expressions import CyclicSum, CyclicProduct
+from .monomials import poly_reduce_by_symmetry, verify_symmetry
 
 def cycle_expansion(
         f: str,
@@ -647,7 +647,7 @@ def poly_get_standard_form(
     if perm is None:
         perm = CyclicGroup(len(poly.gens))
     if _is_cyc is None:
-        _is_cyc = Coeff(poly).is_cyclic(perm)
+        _is_cyc = verify_symmetry(poly, perm)
 
     extracted = []
     if _is_cyc:

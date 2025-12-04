@@ -15,7 +15,7 @@ def sos_struct_dense_symmetric(coeff, real=True):
     Solve dense 3-var symmetric inequalities.
     Triggered only when the degree is at least 8 and the polynomial is symmetric.
     """
-    if coeff.degree() < 8 or not coeff.is_symmetric():
+    if coeff.total_degree() < 8 or not coeff.is_symmetric():
         return None
     return _sos_struct_dense_symmetric(coeff, real)
 
@@ -27,7 +27,7 @@ def _sos_struct_dense_symmetric(coeff, real=True):
     does not check the symmetry of the input polynomial, so it
     should only be called when the symmetry is guaranteed.
     """
-    d = coeff.degree()
+    d = coeff.total_degree()
     methods = [_sos_struct_trivial_additive]
     if d < 8:
         methods.append(SS.structsos.ternary._structural_sos_3vars_cyclic)
@@ -45,14 +45,14 @@ def _sos_struct_trivial_additive(coeff, real=True):
     """
     Solve trivial cyclic inequalities with nonnegative coefficients.
     """
-    if any(_ < 0 for _ in coeff.coeffs.values()):
+    if any(_ < 0 for _ in coeff.values()):
         return None
     exprs = []
-    for (i,j,k), v in coeff.coeffs.items():
+    for (i,j,k), v in coeff.items():
         if (i > j and i > k) or (i == j and i > k):
             exprs.append(v * a**i * b**j * c**k)
 
-    d = coeff.degree()
+    d = coeff.total_degree()
     if d % 3 == 0:
         d = d // 3
         v = coeff((d,d,d))
@@ -66,9 +66,9 @@ def _sos_struct_trivial_additive(coeff, real=True):
 
 def sym_axis(coeff: Coeff, d: int = -1) -> sp.Poly:
     """Compute f(a,1,1)."""
-    if d == -1: d = coeff.degree()
+    if d == -1: d = coeff.total_degree()
     coeff_list = [0] * (d+1)
-    for m, v in coeff.coeffs.items():
+    for m, v in coeff.items():
         coeff_list[m[0]] += v
     return sp.Poly(radsimp(coeff_list)[::-1], a)
 
@@ -128,11 +128,11 @@ def _sos_struct_lift_for_six(coeff, real=True):
 
     s(a2)s((s(ab)2+a2bc)(b2+ac)(c2+ab))-p(a2+bc)*3s(a3b+a3c+3a2bc)
     """
-    d = coeff.degree()
+    d = coeff.total_degree()
     if d < 8:
         return None
 
-    a, b, c = sp.symbols('a b c')
+    a, b, c = coeff.gens
     sym = sym_axis(coeff, d)
     div = sym.div(sp.Poly([1,-2,1], a))
     if not div[1].is_zero:
@@ -199,11 +199,11 @@ def sos_struct_liftfree_for_six(coeff, real=True):
 
     s(a2)s((s(ab)2+a2bc)(b2+ac)(c2+ab))-p(a2+bc)*3s(a3b+a3c+3a2bc)
     """
-    d = coeff.degree()
+    d = coeff.total_degree()
     if d < 6:
         return None
 
-    a, b, c = sp.symbols('a b c')
+    a, b, c = coeff.gens
     sym = sym_axis(coeff, d)
     div = sym.div(sp.Poly([1,-2,1], a))
     if not div[1].is_zero:
@@ -284,9 +284,9 @@ def _sos_struct_liftfree_for_six_ord4(coeff, div2=None, real=True):
 
     which would perhaps be trivially nonnegative if successful.
     """
-    a, b, c = sp.symbols('a b c')
+    a, b, c = coeff.gens
     if div2 is None:
-        sym = sym_axis(coeff, coeff.degree())
+        sym = sym_axis(coeff, coeff.total_degree())
         div2 = sym.div(sp.Poly([1,-4,6,-4,1], a))
         if not div2[1].is_zero:
             return None
@@ -295,7 +295,7 @@ def _sos_struct_liftfree_for_six_ord4(coeff, div2=None, real=True):
     if div2.LC() < 0 or div2(0) < 0 or div2(1) < 0:
         return None
 
-    d = coeff.degree()
+    d = coeff.total_degree()
     if all(_ >= 0 for _ in div2.coeffs()):
         lifted_sym = _homogenize_sym_axis(div2, d - 4, (a, b, c))
     else:

@@ -1,4 +1,6 @@
 import sympy as sp
+from sympy import Poly, Symbol, Rational
+from sympy import MutableDenseMatrix as Matrix
 
 from .cubic import sos_struct_cubic
 from .sextic_symmetric import (
@@ -7,13 +9,11 @@ from .sextic_symmetric import (
     sos_struct_sextic_symmetric_ultimate
 )
 from .utils import (
-    CyclicSum, CyclicProduct, Coeff, CommonExpr,
-    sum_y_exprs, nroots, rationalize_bound, rationalize_func, radsimp,
+    Coeff, CommonExpr,
+    sum_y_exprs, nroots, rationalize_bound, rationalize_func,
     quadratic_weighting, reflect_expression, inverse_substitution, congruence,
     zip_longest
 )
-
-a, b, c = sp.symbols('a b c')
 
 def sos_struct_sextic(coeff, real = True):
     if coeff((5,1,0)) == coeff((1,5,0)) and coeff((4,2,0)) == coeff((2,4,0)) and coeff((3,2,1)) == coeff((3,1,2)):
@@ -28,7 +28,7 @@ def sos_struct_sextic(coeff, real = True):
     return None
 
 
-def _sos_struct_sextic_hexagram(coeff):
+def _sos_struct_sextic_hexagram(coeff: Coeff):
     """
     Solve s(a3b3+xa4bc+ya3b2c+za2b3c+wa2b2c2) >= 0. The structure is known as hexagram.
     Typically we multiply s(a) to solve it.
@@ -72,17 +72,20 @@ def _sos_struct_sextic_hexagram(coeff):
     """
     if coeff((3,3,0)) < 0 or coeff((4,1,1)) < 0:
         return None
+
+    a, b, c = coeff.gens
+    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
     if coeff((3,3,0)) == 0:
         # degenerates to cubic
         new_coeffs_ = {(3,0,0): coeff((4,1,1)), (2,1,0): coeff((3,2,1)), (1,2,0): coeff((2,3,1)), (1,1,1): coeff((2,2,2))}
-        solution = sos_struct_cubic(Coeff(new_coeffs_))
+        solution = sos_struct_cubic(coeff.from_dict(new_coeffs_))
         if solution is not None:
             return solution * CyclicProduct(a)
         return None
     if coeff((4,1,1)) == 0:
         # degenerates to inverse cubic
         new_coeffs_ = {(3,0,0): coeff((3,3,0)), (2,1,0): coeff((2,3,1)), (1,2,0): coeff((3,2,1)), (1,1,1): coeff((2,2,2))}
-        solution = sos_struct_cubic(Coeff(new_coeffs_))
+        solution = sos_struct_cubic(coeff.from_dict(new_coeffs_))
         if solution is not None:
             solution = inverse_substitution(solution, factor_degree = 0)
         return solution
@@ -116,12 +119,13 @@ def _sos_struct_sextic_hexagram(coeff):
                 return True
             return False
 
-        eq = sp.Poly.from_list([c1, 0, -c2], sp.Symbol('u'))
+        eq = Poly.from_list([c1, 0, -c2], Symbol('u'))
         v = rationalize_func(eq, _check_valid, validation_initial = lambda x: x >= 0, direction = -1)
 
         if v is not None:
             x, rest = _compute_x_rest(v)
-            p1 = ((c2 - c1*v**2) * CommonExpr.schur(3) + (rest*c1) * CyclicSum(a*(b-c)**2)).together().as_coeff_Mul()
+            p1 = ((c2 - c1*v**2) * CommonExpr.schur(3, (a,b,c)) \
+                    + (rest*c1) * CyclicSum(a*(b-c)**2)).together().as_coeff_Mul()
             y = [
                 c1,
                 p1[0],
@@ -145,8 +149,8 @@ def _sos_struct_sextic_hexagram(coeff):
         y_ = (coeff((3,1,2)) / coeff((3,3,0)))
         # 4u+v^2 = x => u = (x-v^2)/4
         t, u_, v_ = sp.symbols('t'), None, None
-        center0 = radsimp(coeff((2,2,2)) / coeff((3,3,0)))
-        rem0 = radsimp(rem / coeff((3,3,0)))
+        center0 = coeff((2,2,2)) / coeff((3,3,0))
+        rem0 = rem / coeff((3,3,0))
 
         # let t = u - v, keep coeff((3,2,1)) == coeff((3,1,2)) after subtraction, make eqt <= 0
         eqt = (t**4 + 48*t**2 + 32*t*y_ + (-2*t**2 - 16*t)*(x_ + y_) + (x_ - y_)**2).as_poly(t)
@@ -160,17 +164,17 @@ def _sos_struct_sextic_hexagram(coeff):
             # Instead we compute the resultant directly.
 
             z_ = center0
-            det = radsimp(-20736*x_**3 + 1296*x_**2*y_**2 - 72*x_*y_*(z_**2 - 60*z_ - 4284) - 20736*y_**3 + (z_ - 102)**3*(z_ - 6))
+            det = -20736*x_**3 + 1296*x_**2*y_**2 - 72*x_*y_*(z_**2 - 60*z_ - 4284) - 20736*y_**3 + (z_ - 102)**3*(z_ - 6)
             # det = sp.polys.resultant(sp.polys.resultant(4*u+v**2-x,4*v+u**2-y,u), 6*(x-v**2)/4*v+6-z, v).factor()
             if det == 0:
                 # v is computed by symbolic gcd
-                v_ = radsimp(24*(6*x_**2 + y_*z_ - 102*y_)/(36*x_*y_ - z_**2 + 204*z_ - 10404))
-                u_ = radsimp((x_ - v_**2)/4)
-                t_ = radsimp(u_ - v_)
+                v_ = 24*(6*x_**2 + y_*z_ - 102*y_)/(36*x_*y_ - z_**2 + 204*z_ - 10404)
+                u_ = (x_ - v_**2)/4
+                t_ = u_ - v_
 
         if v_ is None:
             def _compute_uv(t):
-                v_ = radsimp((t*(4 - t) - x_ + y_)/(2*t))
+                v_ = (t*(4 - t) - x_ + y_)/(2*t)
                 return t + v_, v_
 
             def _is_valid_t(t):
@@ -182,11 +186,11 @@ def _sos_struct_sextic_hexagram(coeff):
                 u_, v_ = _compute_uv(t_)
 
         if v_ is not None:
-            y = radsimp([
+            y = [
                 coeff((3,3,0)),
                 - eqt(t_) / 4 / t_**2 * coeff((3,3,0)),
                 coeff((3,3,0)) * (rem0 - (u_ + v_ + 2)**2 * 3),
-            ])
+            ]
             exprs = [
                 CyclicSum(a*b*(a*b + c**2 + u_*a*c + v_*b*c)**2),
                 CyclicProduct(a) * CyclicSum(a*(b-c)**2),
@@ -198,30 +202,29 @@ def _sos_struct_sextic_hexagram(coeff):
         if coeff((3,2,1)) == 0 or coeff((3,1,2)) == 0:
             reflect = False if coeff((3,2,1)) == 0 else True
             coeff33 = coeff((3,3,0))
-            x_ = radsimp(coeff((2,2,2)) / coeff33 - 3)
-            y_ = radsimp(-(coeff((3,2,1)) + coeff((3,1,2))) / coeff33)
-            y3 = radsimp(y_**3)
-            y3_bound = radsimp(27*x_**2/32 + 135*x_/8 - 27*(x_ - 8)*sp.sqrtdenest(sp.sqrt(radsimp(x_**2 - 8*x_)))/32 - sp.S(27)/4)
+            x_ = coeff((2,2,2)) / coeff33 - 3
+            y_ = -(coeff((3,2,1)) + coeff((3,1,2))) / coeff33
+            y3 = y_**3
+            y3_bound = 27*x_**2/32 + 135*x_/8 - 27*(x_ - 8)*sp.sqrtdenest(sp.sqrt(x_**2 - 8*x_))/32 - sp.S(27)/4
             if y3 == y3_bound: # y3 <= y3_bound
-                y3, y3_copy, y_, y_copy = y3_bound, y3, y3_bound**sp.Rational(1,3), y_
+                y3, y3_copy, y_, y_copy = y3_bound, y3, y3_bound**Rational(1,3), y_
 
                 r = (81*x_**5 + 2025*x_**4 - 21*x_**3*y3 + 17658*x_**3 - 2406*x_**2*y3 + 62370*x_**2 - 16*x_*y_**6 - 10773*x_*y3 + 79461*x_ + 864*y_**6 - 18468*y3 + 32805)\
                     /(y_*(27*x_**5 + 891*x_**4 - 16*x_**3*y3 + 9558*x_**3 - 1112*x_**2*y3 + 41742*x_**2 - 6336*x_*y3 + 78975*x_ + 384*y_**6 - 10044*y3 + 45927))
-                r = radsimp(r)
-                z0 = radsimp(r**2*(x_ - 3*y_ + 9)/(4*(r - 1)**4))
+                z0 = r**2*(x_ - 3*y_ + 9)/(4*(r - 1)**4)
                 z = min(sp.S(1), z0)
 
-                solution = radsimp(z / r**2) * CyclicSum(c*(-a + b*r)**2*(a*(b+c)*r - a*b - b*c)**2)
+                solution = (z / r**2) * CyclicSum(c*(-a + b*r)**2*(a*(b+c)*r - a*b - b*c)**2)
                 quartic_part = sp.S(0)
                 if z != 1:
-                    quartic_part = radsimp(1 / r**2 / 2) * CyclicSum((-a + b*r)**2*(a*r + b - c*(r+1))**2)
-                    solution += radsimp((1 - z) / r**2) * CyclicSum(c*(-a + b*r)**2*(a*(b-c)*r + a*b - b*c)**2)
+                    quartic_part = (1 / r**2 / 2) * CyclicSum((-a + b*r)**2*(a*r + b - c*(r+1))**2)
+                    solution += ((1 - z) / r**2) * CyclicSum(c*(-a + b*r)**2*(a*(b-c)*r + a*b - b*c)**2)
                 else:
-                    uncentered = radsimp(4 * (z0 - z) / 3)
-                    p1 = (r*a**2 - radsimp(r**2-r+1)*b*c).together().as_coeff_Mul()
+                    uncentered = (4 * (z0 - z) / 3)
+                    p1 = (r*a**2 - (r**2-r+1)*b*c).together().as_coeff_Mul()
                     if uncentered <= 1:
-                        quartic_part = radsimp((1 - uncentered) / r**2 / 2) * CyclicSum((-a + b*r)**2*(a*r + b - c*(r+1))**2) \
-                            + radsimp(uncentered / r**2 * p1[0]**2) * (CyclicSum(p1[1]))**2
+                        quartic_part = ((1 - uncentered) / r**2 / 2) * CyclicSum((-a + b*r)**2*(a*r + b - c*(r+1))**2) \
+                            + (uncentered / r**2 * p1[0]**2) * (CyclicSum(p1[1]))**2
                     else:
                         solution = None
 
@@ -325,7 +328,7 @@ def _sos_struct_sextic_hexagram(coeff):
                     rationalize_bound(v_, direction = 0, compulsory = True)
                 ):
                     det_, (m3, p3, n3, q3) = get_discriminant_uv(u, v)
-                    if isinstance(det_, sp.Rational) and det_ >= 0:
+                    if isinstance(det_, Rational) and det_ >= 0:
                         break
                     det_ = None
 
@@ -356,7 +359,7 @@ def _sos_struct_sextic_hexagram(coeff):
     return None
 
 
-def _sos_struct_sextic_hexagon(coeff, real = True):
+def _sos_struct_sextic_hexagon(coeff: Coeff, real = True):
     """
     Solve hexagon s(a4b2+xa2b4+ya3b3+za4bc+wa3b2c+ua2b3c+...a2b2c2)
 
@@ -417,7 +420,7 @@ def _sos_struct_sextic_hexagon(coeff, real = True):
             return solution
 
 
-def _sos_struct_sextic_rotated_tree(coeff):
+def _sos_struct_sextic_rotated_tree(coeff: Coeff):
     """
     Solve s(a2b4+xa3b2c-ya3bc2+za2b2c2) >= 0. Note that this structure is a rotated
     version of symmetric tree.
@@ -440,8 +443,7 @@ def _sos_struct_sextic_rotated_tree(coeff):
     """
     if coeff((4,2,0)) != 0:
         # reflect the polynomial so that coeff((4,2,0)) == 0
-        def new_coeff(c):
-            return coeff((c[0], c[2], c[1]))
+        new_coeff = coeff.from_dict({(c[0], c[2], c[1]): v for c, v in coeff.items()})
         solution = _sos_struct_sextic_rotated_tree(new_coeff)
         if solution is not None:
             solution = reflect_expression(solution)
@@ -452,6 +454,9 @@ def _sos_struct_sextic_rotated_tree(coeff):
         return None
     v = coeff((3,1,2)) / coeff((2,4,0))
 
+    a, b, c = coeff.gens
+    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+
     if u >= 2 and v >= -6:
         y = [sp.S(1), u - 2, v + 6,
             (coeff((2,4,0)) + coeff((3,1,2)) + coeff((3,2,1))) * 3 + coeff((2,2,2))
@@ -459,8 +464,8 @@ def _sos_struct_sextic_rotated_tree(coeff):
         y = [_ * coeff((2,4,0)) for _ in y[:-1]] + [y[-1]]
         exprs = [
             CyclicSum(a**2*c-a*b*c)**2,
-            CyclicProduct(a) * CommonExpr.amgm((2,1,0),(1,1,1)),
-            CyclicProduct(a) * CommonExpr.amgm((2,0,1),(1,1,1)),
+            CyclicProduct(a) * CommonExpr.amgm((2,1,0),(1,1,1), (a,b,c)),
+            CyclicProduct(a) * CommonExpr.amgm((2,0,1),(1,1,1), (a,b,c)),
             CyclicProduct(a**2)
         ]
         return sum_y_exprs(y, exprs)
@@ -472,8 +477,8 @@ def _sos_struct_sextic_rotated_tree(coeff):
         y = [_ * coeff((2,4,0)) for _ in y[:-1]] + [y[-1]]
         exprs = [
             CyclicSum(a**2*c**2*(a-b)**2),
-            CyclicProduct(a) * CommonExpr.amgm((2,1,0),(1,1,1)),
-            CyclicProduct(a) * CommonExpr.amgm((2,0,1),(1,1,1)),
+            CyclicProduct(a) * CommonExpr.amgm((2,1,0),(1,1,1), (a,b,c)),
+            CyclicProduct(a) * CommonExpr.amgm((2,0,1),(1,1,1), (a,b,c)),
             CyclicProduct(a**2)
         ]
         return sum_y_exprs(y, exprs)
@@ -481,13 +486,13 @@ def _sos_struct_sextic_rotated_tree(coeff):
     if True:
         # simple case, we only need to multiply s(a)
         y_ = sp.sqrt(u + 2)
-        if not isinstance(y_, sp.Rational):
+        if not isinstance(y_, Rational):
             y_ = y_.n(16)
 
         x_ = 1 - (y_ + 2)*(-u - v + 4*y_ + 4)/(2*(u + 4*y_ + 6))
         q1 = v - (x_ - 1)**2 + 2 + 4*y_
         if q1 >= 0:
-            if not isinstance(y_, sp.Rational):
+            if not isinstance(y_, Rational):
                 for y_ in rationalize_bound(y_, direction = -1, compulsory = True):
                     x_ = 1 - (y_ + 2)*(-u - v + 4*y_ + 4)/(2*(u + 4*y_ + 6))
                     q1 = v - (x_ - 1)**2 + 2 + 4*y_
@@ -555,8 +560,8 @@ def _sos_struct_sextic_rotated_tree(coeff):
         CyclicSum(a) * CyclicSum(a**2*c*(a**2*c-x*a*b**2-x*b*c**2+(x*x-1)*b**2*c-x*(x-2)*a*b*c)**2),
         CyclicProduct(a**2) * CyclicSum(((x-1)*a-b)**2*(a+(x-1)*b-x*c)**2),
         CyclicProduct(a) * CyclicSum(c*((x-1)*a-b)**2*(x*a*b-a*c-(x-1)*b*c)**2),
-        CyclicProduct(a) * CyclicSum(a) * CommonExpr.amgm((2,0,1),(1,1,1)) * CyclicSum(a*b**2 + z*a*b*c),
-        CyclicProduct(a) * CyclicSum(a) * CommonExpr.amgm((2,1,0),(1,1,1)) * CyclicSum(a*b**2 + z*a*b*c),
+        CyclicProduct(a) * CyclicSum(a) * CommonExpr.amgm((2,0,1),(1,1,1), (a,b,c)) * CyclicSum(a*b**2 + z*a*b*c),
+        CyclicProduct(a) * CyclicSum(a) * CommonExpr.amgm((2,1,0),(1,1,1), (a,b,c)) * CyclicSum(a*b**2 + z*a*b*c),
         CyclicProduct(a**2) * CyclicSum(a) * CyclicSum(a*b**2 + z*a*b*c)
     ]
 
@@ -580,7 +585,7 @@ def _sos_struct_sextic_hexagon_full(coeff):
         return None
 
     m = sp.sqrt(coeff((1,5,0)) / coeff51)
-    if not isinstance(m, sp.Rational):
+    if not isinstance(m, Rational):
         return None
 
     p, n, q = coeff((4,2,0)) / coeff51, coeff((3,3,0)) / coeff51, coeff((2,4,0)) / coeff51
@@ -599,7 +604,7 @@ def _sos_struct_sextic_hexagon_full(coeff):
 
 
 
-def _sos_struct_sextic_hexagon_sdp(coeff):
+def _sos_struct_sextic_hexagon_sdp(coeff: Coeff):
     """
     This function is a special case of _sos_struct_sextic_full_sdp
     when coefficients of s(a^6), s(a^5b), s(a^5c) are zero.
@@ -621,7 +626,9 @@ def _sos_struct_sextic_hexagon_sdp(coeff):
     if (not coeff.is_rational) or poly111 < 0:
         return None
 
-    p1 = 2*c231**2 + 14*c231*c24 + 5*c231*c321 + 18*c231*c33 + 9*c231*c411 + 22*c231*c42 + 20*c24**2 + 22*c24*c321 + 72*c24*c33 + 36*c24*c411 + 104*c24*c42 + 2*c321**2 + 18*c321*c33 + 9*c321*c411 + 14*c321*c42 + 27*c33**2 + 54*c33*c411 + 72*c33*c42 + 36*c411*c42 + 20*c42**2
+    p1 = 2*c231**2 + 14*c231*c24 + 5*c231*c321 + 18*c231*c33 + 9*c231*c411 + 22*c231*c42 + 20*c24**2 \
+        + 22*c24*c321 + 72*c24*c33 + 36*c24*c411 + 104*c24*c42 + 2*c321**2 + 18*c321*c33 + 9*c321*c411 \
+        + 14*c321*c42 + 27*c33**2 + 54*c33*c411 + 72*c33*c42 + 36*c411*c42 + 20*c42**2
     p3 = (c231 + 4*c24 + c321 + 3*c33 + 3*c411 + 4*c42)
     p2 = 3*p3*(2*c231 + 10*c24 + c321 + 6*c33 + 3*c411 + 2*c42) - p1
 
@@ -638,6 +645,9 @@ def _sos_struct_sextic_hexagon_sdp(coeff):
         c33 - 2*r*y*(x-2)
     ]
 
+    a, b, c = coeff.gens
+    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+
     if quad_form[0] >= 0 and quad_form[0] * quad_form[1] * 4 >= quad_form[2]**2:
         mapping = lambda x, y: CyclicSum((x*a**2*b + y*a*b**2 - (x+y)*a*b*c).together())**2
         quad_form_sol = quadratic_weighting(quad_form[0], quad_form[2], quad_form[1], mapping = mapping)
@@ -647,7 +657,7 @@ def _sos_struct_sextic_hexagon_sdp(coeff):
         return quad_form_sol + solution + poly111 * CyclicProduct(a**2)
 
 
-def _sos_struct_sextic_hexagon_sdp2(coeff):
+def _sos_struct_sextic_hexagon_sdp2(coeff: Coeff):
     """
     This function is a generalization of _sos_struct_sextic_hexagon_sdp
     that performs sum-of-square on the octic f_2(a,b,c) = f(a,b,c) * s(a^2-ab).
@@ -665,7 +675,7 @@ def _sos_struct_sextic_hexagon_sdp2(coeff):
     w5 = c240**2 + c240*c312 + 2*c240*c321 + c240*c420 + c312**2 + c312*c321 + 2*c312*c420 + c321**2 + c321*c420 + c420**2
 
     def stack_quad_form(x, y, z, only_lower = True, div3x = True):
-        M = sp.Matrix.zeros(3)
+        M = Matrix.zeros(3)
         w0 = y**2 + y + 1
         M[0,0] = (3*c420*x - z*w0)
         M[1,0] = (3*c411*x + z*(-x*y + x + w0))/2
@@ -688,7 +698,7 @@ def _sos_struct_sextic_hexagon_sdp2(coeff):
         eq1z = ((M[0,0]*M[1,1]-M[1,0]**2)*(M[2,2]*z)).as_poly(z)
         eq2z = (2*M[1,0]*M[2,0]*M[2,1] - M[1,1]*M[2,0]**2 - M[0,0]*M[2,1]**2).as_poly(z)
         # return eq1z + z * eq2z
-        return sp.Poly.from_list([
+        return Poly.from_list([
             eq1z.coeff_monomial((3,)) + eq2z.coeff_monomial((2,)),
             eq1z.coeff_monomial((2,)) + eq2z.coeff_monomial((1,)),
             eq1z.coeff_monomial((1,)) + eq2z.coeff_monomial((0,)),
@@ -741,12 +751,13 @@ def _sos_struct_sextic_hexagon_to_hexagram(coeff):
             e * d**3,
             -27 * e * d**2,
             - e * d * (4*s1**2 - 45*s1 - 4*s2 - 378),
-            (8*s1**5 - 207*s1**4 - 16*s1**3*s2 - 3051*s1**3 + 234*s1**2*s2 - 9963*s1**2 + 8*s1*s2**2 + 2970*s1*s2 - 729*s1 - 27*s2**2 + 9477*s2)/3,
+            (8*s1**5 - 207*s1**4 - 16*s1**3*s2 - 3051*s1**3 + 234*s1**2*s2 - 9963*s1**2 + 8*s1*s2**2 \
+                + 2970*s1*s2 - 729*s1 - 27*s2**2 + 9477*s2)/3,
             (10*s1**4 + 351*s1**3 - 20*s1**2*s2 + 1890*s1**2 - 351*s1*s2 + 486*s1 + 10*s2**2 - 1728*s2)/3,
             -(16*s1**3 + 207*s1**2 - 16*s1*s2 + 189*s1 - 171*s2)/3,
             (28*s1**2 + 111*s1 - 12*s2 + 9)/9,
             -(8*s1 + 3)/9,
-            sp.Rational(1,9)
+            Rational(1,9)
         ]
         u = x + y + 3*z + 3
         discriminant = sum(u**i*args[i] for i in range(len(args)))
@@ -758,7 +769,7 @@ def _sos_struct_sextic_hexagon_to_hexagram(coeff):
         if return_func:
             coeffs_ = dict(zip([(4,1,1),(3,2,1),(2,3,1),(3,3,0),(2,2,2)], params))
             coeffs_[(3,1,2)] = coeffs_[(2,3,1)]
-            return Coeff(coeffs_)
+            return coeff.from_dict(coeffs_)
         return params
 
     def _check_valid(c3):
@@ -791,18 +802,21 @@ def _sos_struct_sextic_hexagon_to_hexagram(coeff):
         if not _check_valid(c3):
             c3 = None
     else:
-        eq = sp.Poly.from_list([1, 0, -4*c1*c2], sp.Symbol('u'))
+        eq = Poly.from_list([1, 0, -4*c1*c2], Symbol('u'))
         c3 = rationalize_func(eq, _check_valid, validation_initial = lambda x: x >= 0, direction = -1)
 
     if c3 is not None:
         remain_solution = _sos_struct_sextic_hexagram(_compute_subtracted_params(c3, return_func = True))
         if remain_solution is not None:
+            a, b, c = coeff.gens
+            CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+
             mapping = lambda x, y: CyclicSum((x*a**2*b + y*a*b**2 - (x+y)*a*b*c).together())**2
             main_solution = quadratic_weighting(c1, -c3, c2, mapping = mapping)
             return main_solution + remain_solution
 
 
-def _sos_struct_sextic_full_sdp(coeff):
+def _sos_struct_sextic_full_sdp(coeff: Coeff):
     """
     Heuristically solve full sextics with the method of unknown coefficients.
     Idea: Let f(a,b,c) = a^3-b^3+ua^2b+vb^2c-(u+v)ac^2+xab^2+ya^2c-(x+y)bc^2.
@@ -851,6 +865,9 @@ def _sos_struct_sextic_full_sdp(coeff):
     #     [c15/2, c33/2-c60, c24-c51]
     # ]
 
+    a, b, c = coeff.gens
+    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+
     def _compute_quad_form_sol(quad_form):
         q, ss = congruence(quad_form)
         quad_form_sol = [
@@ -870,7 +887,7 @@ def _sos_struct_sextic_full_sdp(coeff):
     ]
 
     if all(_ == 0 for _ in rest_form):
-        quad_form = sp.Matrix([
+        quad_form = Matrix([
             [c60, c51/2, c15/2],
             [c51/2, c42-c15, c33/2-c60],
             [c15/2, c33/2-c60, c24-c51]
@@ -881,7 +898,7 @@ def _sos_struct_sextic_full_sdp(coeff):
 
     if rest_form[0] != 0:
         r1, r2 = rest_form[1] / rest_form[0], rest_form[2] / rest_form[0]
-        denom = ((r1 + 2*r2 + sp.Rational(9,2))**2 + sp.Rational(27,4))
+        denom = ((r1 + 2*r2 + Rational(9,2))**2 + Rational(27,4))
 
         # We shall subtract r/z * sum f(a,b,c)^2 from the original polynomial to make rest_form == 0
         # where z = x^2 + x(y-3) + y^2 + 3 is a variable
@@ -909,7 +926,7 @@ def _sos_struct_sextic_full_sdp(coeff):
 
     # find x, y such that the following quad_form is positive semidefinite
     # (the upper triangular part is omitted)
-    quad_form = sp.Matrix([
+    quad_form = Matrix([
         [c60*z - 2*r, 0, 0],
         [c51/2*z - r*(u-v), (c42-c15)*z - r*(2*u**2+2*u*v+2*v**2+6*x), 0],
         [c15/2*z - r*(y-x), (c33/2-c60)*z - r*(2*u*x - 2*u*y - 2*v*x - 4*v*y - 6)/2, (c24-c51)*z - r*(-6*u + 2*x**2 + 2*x*y + 2*y**2)]
@@ -943,7 +960,7 @@ def _sos_struct_sextic_full_sdp(coeff):
     if not success:
         return None
 
-    if not isinstance(x_, sp.Rational) or not isinstance(y_, sp.Rational):
+    if not isinstance(x_, Rational) or not isinstance(y_, Rational):
         # make a perturbation so that the quad_form is positive semidefinite
         x_, y_ = x_.n(15), y_.n(15)
         for x__, y__ in zip_longest(
