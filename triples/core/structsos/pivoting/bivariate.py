@@ -152,6 +152,7 @@ def _sos_struct_bivariate_linear_ineq(poly, ineq_constraints, eq_constraints):
             return None
         sol = (sol.xreplace({a: a/b}) * b**d).together()
         return sol
+    return
     if len(bound) == 1:
         # 1 constraint = halfspace: represented by boundary + normal
         # u*a + v*b = x, u*b - v*a = y (x >= 0)
