@@ -1320,7 +1320,7 @@ def _sos_struct_quintic_uncentered(coeff: Coeff):
         # h(a,b,c) = s(a(ac+b^2-2bc)^2(a-b)(a-c)) = s(a^2-ab)^2 * abc
         # This implies that f(a,b,c) - 2xh(a,b,c) + x^2g(a,b,c) >= 0.
         # This gives very beautiful solution, if valid.
-        x = max(sp.S(0), (r2 + 3) / (-2))
+        x = max(0, (r2 + 3) / (-2))
         y = [
             sp.S(2),
             r1 - x**2,

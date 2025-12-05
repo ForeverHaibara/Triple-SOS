@@ -39,13 +39,13 @@ def reflect_expression(expr: Expr) -> Expr:
     return expr.func(*[reflect_expression(a) for a in expr.args])
 
 
-def inverse_substitution(expr: Expr, factor_degree: int = 0) -> Expr:
+def inverse_substitution(coeff: Coeff, expr: Expr, factor_degree: int = 0) -> Expr:
     """
     Substitute a <- b * c, b <- c * a, c <- a * b into expr.
     Then the function extract the common factor of the expression, usually (abc)^k.
     Finally the expression is divided by (abc)^(factor_degree).
     """
-    a, b, c = sp.symbols('a b c')
+    a, b, c = coeff.gens
     expr = sp.together(expr.xreplace({a:b*c,b:c*a,c:a*b}))
 
     def _try_factor(expr):
@@ -69,16 +69,16 @@ def inverse_substitution(expr: Expr, factor_degree: int = 0) -> Expr:
                     da, db, dc = symbol_degrees[a], symbol_degrees[b], symbol_degrees[c]
                     da, db, dc = da - degree, db - degree, dc - degree
                     other_args.extend([a**da, b**db, c**dc])
-                    return CyclicSum(Mul(*other_args)) * CyclicProduct(a) ** degree
+                    return CyclicSum(Mul(*other_args), (a,b,c)) * CyclicProduct(a, (a,b,c)) ** degree
         elif isinstance(expr, CyclicProduct):
             # Product(a**2) = Product(a) ** 2
             if isinstance(expr.args[0], Pow) and expr.args[0].base in (a,b,c):
-                return CyclicProduct(expr.args[0].base) ** expr.args[0].exp
+                return CyclicProduct(expr.args[0].base, (a,b,c)) ** expr.args[0].exp
         return expr
 
     expr = sp.together(_try_factor(expr))
     if factor_degree != 0:
-        expr = expr / CyclicProduct(a) ** factor_degree
+        expr = expr / CyclicProduct(a, (a,b,c)) ** factor_degree
     return expr
 
 

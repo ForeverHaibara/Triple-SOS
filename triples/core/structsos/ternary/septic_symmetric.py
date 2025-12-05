@@ -281,7 +281,8 @@ class _septic_sym_axis():
                     det2 * CyclicProduct((a-b)**2) * CyclicSum(a) * CyclicProduct(a)
                 )
                 # multiplier = CyclicSum(a*(a-b)*(a-c) + u*a*(b-c)**2)
-                multiplier = _sos_struct_cubic_symmetric(Coeff({(3,0,0):sp.S(1), (2,1,0): u-1, (1,2,0): u-1, (1,1,1):3-6*u}))
+                multiplier = _sos_struct_cubic_symmetric(
+                    self._coeff.from_dict({(3,0,0):1, (2,1,0): u-1, (1,2,0): u-1, (1,1,1):3-6*u}))
                 return sol / multiplier, ker_coeff
         return None, sp.oo
 

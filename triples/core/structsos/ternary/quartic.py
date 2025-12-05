@@ -105,8 +105,7 @@ def _sos_struct_quartic_quadratic_border(coeff: Coeff):
     m, p, n, q = [coeff((4,0,0)), coeff((3,1,0)), coeff((2,2,0)), coeff((1,3,0))]
     t = q / 2 / m
     if p == -q and n == (t**2 - 2) * m:
-        w = sp.sqrt(t**2 + 4)
-        if not isinstance(w, Rational):
+        if (not coeff.is_rational) or (not isinstance(sp.sqrt(t**2 + 4), Rational)):
             y = [m, (t**2 + 3) / 2 * m, (coeff((2,1,1)) + m + p + n + q)]
             if y[-1] >= 0:
                 a, b, c = coeff.gens
@@ -151,7 +150,7 @@ def _sos_struct_quartic_biased(coeff: Coeff):
     m, p, n, q, r = coeff((4,0,0)), coeff((3,1,0)), coeff((2,2,0)), coeff((1,3,0)), coeff((2,1,1))
     rem = m + n + p + q + r
 
-    if coeff.is_rational and p == -q:
+    if p == -q:
         # handle some special case in advance
         solution = _sos_struct_quartic_quadratic_border(coeff)
         if solution is not None:
@@ -162,7 +161,7 @@ def _sos_struct_quartic_biased(coeff: Coeff):
     n, p, q = n / m, p / m, q / m
     n, p, q = [n, p, q]
     u_ = None
-    eq = Poly([2, p, 0, -q, -2], Symbol('x'))
+    eq = coeff.from_list([2, p, 0, -q, -2], gens=(Symbol("x"),)).as_poly()
 
     # must satisfy that symmetric >= 0
     symmetric = lambda _x: ((2*q+p)*_x + 6)*_x + 2*p+q
@@ -175,8 +174,8 @@ def _sos_struct_quartic_biased(coeff: Coeff):
 
     if True:
         # check whether there exists multiplicative roots on the border
-        eq_diff = Poly([1, p, n, q, 1], Symbol('x'))
-        eq_gcd = sp.gcd(eq, eq_diff)
+        eq_diff = coeff.from_list([1, p, n, q, 1], gens=(Symbol("x"),)).as_poly()
+        eq_gcd = eq.gcd(eq_diff)
         if eq_gcd.degree() == 1:
             u_ = -(eq_gcd.all_coeffs()[1] / eq_gcd.LC())
             if u_ < 0:
@@ -188,6 +187,8 @@ def _sos_struct_quartic_biased(coeff: Coeff):
             delta = c1**2 - 4*c2*c0
             if delta >= 0:
                 u_ = (-c1 + sp.sqrtdenest(sp.sqrt(delta))) / (2*c2)
+                if not isinstance(u_, Rational):
+                    u_ = None
 
     if u_ is None:
         def _is_valid(u):
@@ -196,6 +197,7 @@ def _sos_struct_quartic_biased(coeff: Coeff):
         u_ = rationalize_func(eq, _is_valid)
 
     if u_ is not None:
+        u_ = coeff.convert(u_)
         y_ = (symmetric(u_) / (2*(u_**2*(u_**2 + 1) + 1)) * m)
         if y_ >= 0:
             a, b, c = coeff.gens
@@ -363,9 +365,8 @@ def _sos_struct_quartic_uncentered_real(coeff: Coeff):
 
         # Although one of w1 or w2 must succeed, we still try its approximation
         # because it may avoid large numerators and denominators
-        # FIXME
-        w1n = coeff.domain.to_sympy(w1).n(10)
-        w2n = coeff.domain.to_sympy(w2).n(10)
+        w1n = coeff.to_sympy(w1).n(10)
+        w2n = coeff.to_sympy(w2).n(10)
         w1approx = sp.nsimplify(w1n, tolerance=3e-2, rational=True)
         w2approx = sp.nsimplify(w2n, tolerance=3e-2, rational=True)
         candidates = [w1approx, w2approx, w1, w2]
@@ -375,12 +376,12 @@ def _sos_struct_quartic_uncentered_real(coeff: Coeff):
 
     for w in candidates:
         if is_valid(w):
-            w = coeff.domain.convert(w)
+            w = coeff.convert(w)
             z = s / (1 - w) ** 2 / 9 * m
             solution = z * CyclicSum(a**2 - w*a*b).together()**2
 
             # subtract z * s(a^2 - wab)^2
-            subs = coeff.from_dict({(4,0,0): coeff.domain.one, (3,1,0): -2*w,
+            subs = coeff.from_dict({(4,0,0): 1, (3,1,0): -2*w,
                     (2,2,0): w**2+2, (1,3,0): -2*w, (2,1,1): 2*w*(w-1)})
             new_coeff = coeff - z * subs
 
@@ -523,7 +524,7 @@ def _sos_struct_quartic_uncentered(coeff: Coeff):
         # print('n =', n_, 'x = ', x_)
 
         def _try_solve(x_):
-            x_ = coeff.domain.convert(x_)
+            x_ = coeff.convert(x_)
             new_coeffs_ = {(4,0,0): coeff((4,0,0)), (3,1,0): coeff((3,1,0)),
                         (2,2,0): coeff((2,2,0)), (1,3,0): coeff((1,3,0)), (2,1,1): x_ * m}
             solution = _sos_struct_quartic_uncentered_real(coeff.from_dict(new_coeffs_))

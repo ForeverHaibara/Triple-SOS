@@ -1,7 +1,8 @@
 from functools import partial
 
 import sympy as sp
-from sympy import Poly, Symbol, Rational, Add
+from sympy import Poly, Expr, Symbol, Rational, Add
+from sympy.polys.polyerrors import CoercionFailed
 
 from .quartic import sos_struct_quartic
 from .utils import (
@@ -496,7 +497,7 @@ def _sos_struct_sextic_hexagram_symmetric(coeff: Coeff):
             # NOTE: the case x + y + 1 == 0 has been handled in the trivial case
 
             # abcs((b-c)2(b+c-ua)2)+2s(a(b-c)2((1-u)(ab+ac)+bcu)2)
-            r = coeff.domain.to_sympy(u_).as_numer_denom()[1] # cancel the denominator is good
+            r = coeff.to_sympy(u_).as_numer_denom()[1] # cancel the denominator is good
 
             y = [
                 w1 / 2,
@@ -610,7 +611,7 @@ def _sos_struct_sextic_tree(coeff: Coeff):
         if isinstance(t, int):
             q, p = t, 1
         else:
-            q, p = coeff.domain.to_sympy(t).as_numer_denom()
+            q, p = coeff.to_sympy(t).as_numer_denom()
         return (1/(2*p**3)) * CommonExpr.quadratic(p, q, (a,b,c)) * CyclicSum((a-b)**2*(p*a+p*b-q*c)**2)
 
     def _solve_regular(t):
@@ -758,7 +759,9 @@ def _sos_struct_sextic_symmetric_schur_split(coeff: Coeff, real = False):
     #             y[8] * CyclicSum(a) * CyclicProduct(a**2)
     #         ]
     #         return Add(*exprs) / CyclicSum(a)
-    lifted_coeff = coeff * (a+b+c).as_poly(a,b,c, domain=coeff.domain)
+
+    # lifted_coeff = coeff * (a+b+c).as_poly(a,b,c, domain=coeff.domain)
+    lifted_coeff = coeff * coeff.from_dict({(1,0,0):1,(0,1,0):1,(0,0,1):1}).as_poly()
     solution = SS.structsos.ternary.sos_struct_liftfree_for_six(lifted_coeff)
     if solution is not None:
         return solution / CyclicSum(a)
@@ -857,12 +860,12 @@ def _sos_struct_sextic_iran96(coeff: Coeff, real = False):
         # a^4bc and a^3b^3 are equal
 
         if True:
-            x_ = (q - w) / (4 * m) + Rational(1,2)
+            x_ = ((q - w) / (2 * m) + 1)/2
             y = [
                 m,
                 p,
                 q + 2 * m + 2 * p,
-                z - m*x_*(x_+2) - 2*p + 3*(q + 2*m + 2*p),
+                z - m*x_*(x_ + 2) - 2*p + 3*(q + 2*m + 2*p),
                 rem
             ]
             if all(_ >= 0 for _ in y):
@@ -888,7 +891,7 @@ def _sos_struct_sextic_iran96(coeff: Coeff, real = False):
         u_ = -(w + 2*p)/4/m
         q2 = 2*(m + p) + q
         if u_ < 1:
-            u_ = sp.S(1)
+            u_ = 1
         w2 = w + 2 * p + 4 * u_ * m
 
         if 2*q2 + w2 + min(2*q2, w2) + (z - 2*p - (u_**2 + 2*u_)*m) < 0:
@@ -956,15 +959,15 @@ def _sos_struct_sextic_iran96(coeff: Coeff, real = False):
         elif u_ >= 0 and v_ < 0:
             u_ = (2*p+m-w) / 4
         elif u_ < 0:
-            u_ = sp.S(0)
-            v_ = max(sp.S(0), (-u_+p-w-z)/2)
+            u_ = 0
+            v_ = max(0, (-u_+p-w-z)/2)
 
         tmp = m + q - (p-u_)**2/m + 2*u_
         if v_ <= tmp:
             pass
         elif m + p >= u_: # symmetric axis of the parabola >= u_
             u_ = m + p
-            v_ = max(sp.S(0), (-u_+p-w-z)/2)
+            v_ = max(0, (-u_+p-w-z)/2)
 
         if u_ >= 0 and 0 <= v_ <= tmp and v_ <= 4*u_+w-m-2*p and v_ >= (-u_+p-w-z)/2:
             y = [
@@ -994,9 +997,9 @@ def _sos_struct_sextic_iran96(coeff: Coeff, real = False):
     # process:
     p, q, w, z = [p / m, q / m, w / m, z / m]
 
-    if not ((p <= -4 and q >= p*p/4 + 2) or (p >= -4 and q >= -2*(p + 1))):
+    if not ((p <= -4 and q >= p**2/4 + 2) or (p >= -4 and q >= -2*(p + 1))):
         # checking the border yields that:
-        # when p <= -4, we must have q >= p*p / 4 + 2
+        # when p <= -4, we must have q >= p**2/ 4 + 2
         # when p >= -4, we must have q >= -2*(p + 1)
 
         # both two cases should imply 2*p + q + 2 >= 0
@@ -1006,7 +1009,7 @@ def _sos_struct_sextic_iran96(coeff: Coeff, real = False):
     # f(a,a,1)/(a-1)^2 = sym(a)
     u = sp.symbols('u')
     root, u_ = None, None
-    sym = ((2*p + q + 2)*a**3 + (4*p + 2*q + 2*w + 2*z + 6)*a**2 + (2*p + w + 4)*a + 2).as_poly(a)
+    sym = coeff.from_list([2*p + q + 2, 4*p + 2*q + 2*w + 2*z + 6, 2*p + w + 4, 2], gens=(a,)).as_poly()
 
     # sym should be nonnegative when a >= 0
     # sym_roots_count = sp.polys.count_roots(sym, 0, None)
@@ -1020,11 +1023,11 @@ def _sos_struct_sextic_iran96(coeff: Coeff, real = False):
     #     else:
     #         root = None
     sym_diff = sym.diff(a)
-    sym_gcd = sp.gcd(sym, sym_diff)
+    sym_gcd = sym.gcd(sym_diff)
     if sym_gcd.degree() == 1:
-        root = -sym_gcd.coeff_monomial((0,)) / sym_gcd.coeff_monomial((1,))
+        root = -sym_gcd.rep.TC() / sym_gcd.rep.LC()
         if root != 1:
-            u_ = 1 / root + 1
+            u_ = coeff.convert(1 / root + 1)
         else:
             root = None
 
@@ -1062,7 +1065,11 @@ def _sos_struct_sextic_iran96(coeff: Coeff, real = False):
     # Case A. r is irrational, instead we subtract some hexagrams
     r = p + 4 + sp.sqrtdenest(2 * sp.sqrt(2 * p + q + 2))
     y_hex = 0
-    if coeff.is_rational and not isinstance(r, Rational):
+    try:
+        r = coeff.convert(r)
+    except CoercionFailed:
+        r = None
+    if r is None:
         # make a perturbation on q so that 2*p + q' + 2 is a square
 
         if u_ is None:
@@ -1078,24 +1085,29 @@ def _sos_struct_sextic_iran96(coeff: Coeff, real = False):
 
         numer_r = sp.sqrt(2 * p + q + 2).n(20)
         for numer_r2 in rationalize_bound(numer_r, direction = -1, compulsory = True):
+            numer_r2 = coeff.convert(numer_r2)
             if numer_r2 >= 0 and p + 4 + 2 * numer_r2 >= 0:
-                q2 = numer_r2 ** 2 - 2 * p - 2
+                q2 = numer_r2**2 - 2 * p - 2
                 y_hex = q - q2
                 w2 = w - dw * y_hex
                 z2 = z - dz * y_hex
                 if y_hex >= 0:
-                    sym = ((2*p + q2 + 2)*a**3 + (4*p + 2*q2 + 2*w2 + 2*z2 + 6)*a**2 + (2*p + w2 + 4)*a + 2).as_poly(a)
+                    sym = coeff.from_list([2*p + q2 + 2, 4*p + 2*q2 + 2*w2 + 2*z2 + 6, 2*p + w2 + 4, 2], gens=(a,)).as_poly()
                     if sym.LC() >= 0 and sp.polys.count_roots(sym, 0, None) <= 1:
                         q = q2
+                        r = p + 4 + 2*numer_r2
                         break
         else:
             return None
 
         w -= dw * y_hex
         z -= dz * y_hex
-        r = p + 4 + 2 * sp.sqrt(2 * p + q + 2)
+        # r = p + 4 + 2 * sp.sqrt(2 * p + q + 2)
 
     # Case B. now 2*p + q + 2 is a square and r is rational
+    if r is None:
+        return None
+    r = coeff.convert(r)
     t = - (p - r) / 2
     w -= -2 * r
     z -= 2 * r
@@ -1123,6 +1135,7 @@ def _sos_struct_sextic_iran96(coeff: Coeff, real = False):
                             direction = ((t**2 - 4*t + 2*u__**3 - 6*u__**2 + 6*u__ + 2)/(u__ - 1))
                             direction = 1 if direction > 0 else -1
                             for u_ in rationalize_bound(u__, direction = direction, compulsory = True):
+                                u_ = coeff.convert(u_)
                                 if u_ != 1 and coeff_z(u_) <= z and (u_ - u__) * direction > 0:
                                     break
                                 u_ = None
@@ -1137,17 +1150,17 @@ def _sos_struct_sextic_iran96(coeff: Coeff, real = False):
 
         multiplier = CyclicSum(a)
         y = [
-            y_hex if root is None else sp.S(0),
+            y_hex if root is None else 0,
             r,
             rem / m,
-            sp.S(1),
-            sp.S(0) if root is None else 1 / (u_ - 1)**2 * y_hex
+            1,
+            0 if root is None else 1 / (u_ - 1)**2 * y_hex
         ]
         # print(r, t, u_, phi, y)
 
         pw1 = (w - (t**2 + 4*t*u_**2 - 8*t*u_ - 4*u_**3 + 8*u_**2 - 4*u_ + 4)/(u_ - 1)**2) / 2
         pw2 = z - coeff_z(u_)
-        pw3 = (t - 2*u_) ** 2 / 2 / (u_ - 1)**2 + (sp.S(0) if root is None else y_hex / 2 / (u_ - 1)**2)
+        pw3 = (t - 2*u_) ** 2 / 2 / (u_ - 1)**2 + (0 if root is None else y_hex / 2 / (u_ - 1)**2)
         pw1, pw2, pw3 = [m * pw1, m * pw2, m * pw3]
 
         if any(_ < 0 for _ in y) or any(_ < 0 for _ in [pw1, pw2, pw3]):
@@ -1251,7 +1264,7 @@ def _sos_struct_sextic_symmetric_full_sdp(coeff: Coeff):
     [1] https://github.com/duong-db/paramSOS
     """
     rem = coeff.poly111()
-    if rem < 0:
+    if not (rem >= 0):
         return
     c600, c510, c420, c330, c411, c321 = [coeff(_) for _ in [(6,0,0),(5,1,0),(4,2,0),(3,3,0),(4,1,1),(3,2,1)]]
     a4 = c600
@@ -1259,7 +1272,7 @@ def _sos_struct_sextic_symmetric_full_sdp(coeff: Coeff):
     a2 = c411 + 2*c420 + 10*c510 + 15*c600
     a1 = 2*c321 + 2*c330 + 4*c411 + 8*c420 + 20*c510 + 20*c600
     a0 = 2*c321 + 3*c330 + 3*c411 + 8*c420 + 14*c510 + 12*c600
-    if a4 <= 0 or a0 < 0:
+    if not (a4 > 0 and a0 >= 0):
         return
 
     a, b, c = coeff.gens
@@ -1288,19 +1301,21 @@ def _sos_struct_sextic_symmetric_full_sdp(coeff: Coeff):
         return quad_sol + w * CyclicProduct((a-b)**2) + rem * CyclicProduct(a**2)
 
 
-    u = Symbol('u')
-    detu = Poly([1, -3*a2, -36*a0*a4 + 9*a1*a3, 108*a0*a2*a4 - 27*a0*a3**2 - 27*a1**2*a4], u)
+    detu = coeff.from_list(
+        [1, -3*a2, -36*a0*a4 + 9*a1*a3, 108*a0*a2*a4 - 27*a0*a3**2 - 27*a1**2*a4], gens=(a,)).as_poly()
     func_l11 = lambda u: (-(-12*a0*a2 + 36*a0*a3 - 108*a0*a4 + 4*a0*u + 3*a1**2 - 6*a1*u + 3*u**2)/(48*a0))
 
-    _eq_w = Poly([9, 12*a0 - 18*a1, 16*a0**2 - 24*a0*a1 + 12*a0*a2 - 12*a0*a3 - 36*a0*a4 - 48*a0*c420 + 9*a1**2], u)
-    func_w = lambda u: (-_eq_w(u)/(48*a0)) # eqw <= 0
+    _eq_w = coeff.from_list(
+        [9, 12*a0 - 18*a1, 16*a0**2 - 24*a0*a1 + 12*a0*a2 - 12*a0*a3 - 36*a0*a4 - 48*a0*c420 + 9*a1**2], gens=(a,)).as_poly()
+    func_w = lambda u: (-coeff.convert(_eq_w.rep.eval(u))/(48*a0)) # eqw <= 0
 
     u0 = -2*a0/3 + a1
-    if func_l11(u0) < 0 or func_w(u0) < 0:
+    if not (func_l11(u0) >= 0 and func_w(u0) >= 0):
         # impossible to make l11(u) >= 0 and w(u) >= 0
         return
 
     def _get_solution(u):
+        u = coeff.convert(u)
         w = func_w(u)
         l00 = -(-36*a0*a4 + u**2)/(36*a0)
         l01 = (6*a0*a3 - 36*a0*a4 - a1*u + u**2)/(24*a0)
@@ -1317,20 +1332,19 @@ def _sos_struct_sextic_symmetric_full_sdp(coeff: Coeff):
         )
 
     def _validation(u):
+        u = coeff.convert(u)
         if func_w(u) >= 0 and func_l11(u) >= 0:
             return True
 
     # print(sp.latex(detu.subs(u, Symbol('x'))), 'u0', u0, 'det(u0) =', detu(u0))
     # print(sp.latex(-_eq_w.subs(u, Symbol('x'))))
 
-    if detu(u0) >= 0:
+    if coeff.convert(detu.rep.eval(u0)) >= 0:
         return _get_solution(u0)
 
     disc = detu.discriminant()
-    if disc < 0:
-        return
-    elif disc == 0:
-        c3, c2, c1, c0 = detu.all_coeffs()
+    if disc == 0:
+        c3, c2, c1, c0 = detu.rep.all_coeffs()
         denom = 3*c1*c3 - c2**2
         if denom == 0:
             u1 = -c2/(3*c3)
@@ -1344,6 +1358,8 @@ def _sos_struct_sextic_symmetric_full_sdp(coeff: Coeff):
             if _validation(u2):
                 return _get_solution(u2)
 
+        return
+    elif disc < 0:
         return
 
 
@@ -1461,7 +1477,8 @@ class _sextic_sym_axis:
         Return p1, c1, c2, multiplier such that
         F_{x,y} * s(mutiplier[0]*a^2 + multiplier[1]*a*b) = p1 + s(c1*a^2 + c2*a*b) * p(a-b)^2
     """
-    def __init__(self, coeff):
+    _coeff: Coeff
+    def __init__(self, coeff: Coeff):
         self._coeff = coeff
 
     @property

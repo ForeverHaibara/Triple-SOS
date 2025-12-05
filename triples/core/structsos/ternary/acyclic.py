@@ -6,7 +6,7 @@ def sos_struct_acyclic_sparse(coeff, real = True):
     """
     Solve acyclic 3-var polynomial inequalities.
     """
-    a, b, c = sp.symbols("a b c")
+    a, b, c = coeff.gens
 
     degree = coeff.total_degree()
     if degree == 1:

@@ -39,7 +39,7 @@ def _sos_struct_sextic_hexagram(coeff: Coeff):
     And F(a,b,c) is a multiple of s(a).
 
     Theorem 2:
-    When k >= max_rootof(16*k**3 + 567*k**2 - 3402*k - 18225) \approx 8.10864,
+    When k >= max_rootof(16*k**3 + 567*k**2 - 3402*k - 18225) = 8.10864...,
     s(a2c)s(b2c) + ka2b2c2 >= ws(a2c)abc
 
     Examples
@@ -87,7 +87,7 @@ def _sos_struct_sextic_hexagram(coeff: Coeff):
         new_coeffs_ = {(3,0,0): coeff((3,3,0)), (2,1,0): coeff((2,3,1)), (1,2,0): coeff((3,2,1)), (1,1,1): coeff((2,2,2))}
         solution = sos_struct_cubic(coeff.from_dict(new_coeffs_))
         if solution is not None:
-            solution = inverse_substitution(solution, factor_degree = 0)
+            solution = inverse_substitution(coeff, solution, factor_degree = 0)
         return solution
 
 
@@ -123,6 +123,7 @@ def _sos_struct_sextic_hexagram(coeff: Coeff):
         v = rationalize_func(eq, _check_valid, validation_initial = lambda x: x >= 0, direction = -1)
 
         if v is not None:
+            v = coeff.convert(v)
             x, rest = _compute_x_rest(v)
             p1 = ((c2 - c1*v**2) * CommonExpr.schur(3, (a,b,c)) \
                     + (rest*c1) * CyclicSum(a*(b-c)**2)).together().as_coeff_Mul()
@@ -157,10 +158,10 @@ def _sos_struct_sextic_hexagram(coeff: Coeff):
         if not coeff.is_rational:
             # first check the exact solution
             # eqv = (4*t + (x_ - t**2)**2/16 - y_).as_poly(t)  # here we borrow the symbol t but it is actually v
-            eqv2 = (6*(x_-t**2)/4*t + 6 - center0).as_poly(t)
+            # eqv2 = (6*(x_-t**2)/4*t + 6 - center0).as_poly(t)
             # eq_gcd = sp.gcd(eqv, eqv2)
 
-            # NOTE: direct gcd does not work because there may exist root that does not lie in the domain of eqv.
+            # XXX: direct gcd does not work because there may exist root that does not lie in the domain of eqv.
             # Instead we compute the resultant directly.
 
             z_ = center0
@@ -206,13 +207,14 @@ def _sos_struct_sextic_hexagram(coeff: Coeff):
             y_ = -(coeff((3,2,1)) + coeff((3,1,2))) / coeff33
             y3 = y_**3
             y3_bound = 27*x_**2/32 + 135*x_/8 - 27*(x_ - 8)*sp.sqrtdenest(sp.sqrt(x_**2 - 8*x_))/32 - sp.S(27)/4
-            if y3 == y3_bound: # y3 <= y3_bound
-                y3, y3_copy, y_, y_copy = y3_bound, y3, y3_bound**Rational(1,3), y_
+            if y3 == y3_bound: # TODO: y3 <= y3_bound
+                # y3, y3_copy, y_, y_copy = y3_bound, y3, y3_bound**Rational(1,3), y_
+                y3, y3_copy, y_, y_copy = y3, y3, y_, y_
 
                 r = (81*x_**5 + 2025*x_**4 - 21*x_**3*y3 + 17658*x_**3 - 2406*x_**2*y3 + 62370*x_**2 - 16*x_*y_**6 - 10773*x_*y3 + 79461*x_ + 864*y_**6 - 18468*y3 + 32805)\
                     /(y_*(27*x_**5 + 891*x_**4 - 16*x_**3*y3 + 9558*x_**3 - 1112*x_**2*y3 + 41742*x_**2 - 6336*x_*y3 + 78975*x_ + 384*y_**6 - 10044*y3 + 45927))
                 z0 = r**2*(x_ - 3*y_ + 9)/(4*(r - 1)**4)
-                z = min(sp.S(1), z0)
+                z = min(1, z0)
 
                 solution = (z / r**2) * CyclicSum(c*(-a + b*r)**2*(a*(b+c)*r - a*b - b*c)**2)
                 quartic_part = sp.S(0)
@@ -243,9 +245,9 @@ def _sos_struct_sextic_hexagram(coeff: Coeff):
         # (u**4 + u**3 - 3*u**2*v - 2*u*v**3 + 3*u*v**2 + 2*u - 2*v**3 - 3*v - 1)/(u*v - 1)**2  = coeff((3,2,1)) / coeff((4,1,1))
         # (-2*u**3*v - 2*u**3 + 3*u**2*v - 3*u*v**2 - 3*u + v**4 + v**3 + 2*v - 1)/(u*v - 1)**2 = coeff((3,1,2)) / coeff((4,1,1))
 
-        x_ = (coeff((3,2,1)) / coeff((3,3,0))).n(20)
-        y_ = (coeff((3,1,2)) / coeff((3,3,0))).n(20)
-        coeffs = [
+        x_ = (coeff((3,2,1)) / coeff((3,3,0)))
+        y_ = (coeff((3,1,2)) / coeff((3,3,0)))
+        coeffs_eqv = [
             4*x_**3 - x_**2*y_**2 - 18*x_*y_ + 4*y_**3 + 27,
             4*(2*x_**3 + 6*x_**2*y_ + 18*x_**2 - x_*y_**3 - 3*x_*y_**2 + 9*x_*y_ - 4*y_**3 - 9*y_**2 - 27*y_ - 27),
             4*x_**3 + 30*x_**2*y_ + 9*x_**2 + 75*x_*y_**2 + 207*x_*y_ + 189*x_ - 4*y_**4 + 25*y_**3 + 171*y_**2 + 378*y_ + 270,
@@ -257,7 +259,7 @@ def _sos_struct_sextic_hexagram(coeff: Coeff):
             16*x_**3 + 24*x_**2*y_ + 36*x_*y_**2 + 18*x_*y_ - 27*x_ - y_**4 + 13*y_**3 + 45*y_**2 + 27*y_ + 27
         ]
         u, v = sp.symbols('u v')
-        eqv = sum(coeff * v**i for coeff, i in zip(coeffs, range(8, -1, -1))).as_poly(v)
+        eqv = coeff.from_list(coeffs_eqv, gens=(v,)).as_poly()
 
         coeffsu1 = [
             4*x_**2 - x_*y_**2 - 3*y_,
@@ -319,7 +321,7 @@ def _sos_struct_sextic_hexagram(coeff: Coeff):
             det_ = None
             # print('(u, v) =', (u_, v_))
             # print('det =', get_discriminant_uv(u_, v_))
-            if get_discriminant_uv(u_, v_)[0] > -sp.S(10)**(-16):
+            if get_discriminant_uv(u_, v_)[0] > -sp.S(10)**(-14):
                 # first check that the result is good
 
                 # do rational approximation for both u and v
@@ -327,13 +329,14 @@ def _sos_struct_sextic_hexagram(coeff: Coeff):
                     rationalize_bound(u_, direction = 0, compulsory = True),
                     rationalize_bound(v_, direction = 0, compulsory = True)
                 ):
+                    u, v = coeff.convert(u), coeff.convert(v)
                     det_, (m3, p3, n3, q3) = get_discriminant_uv(u, v)
                     if isinstance(det_, Rational) and det_ >= 0:
                         break
                     det_ = None
 
             if det_ is not None:
-                w, z = (u*u + v) / (u*v - 1), (v*v + u) / (u*v - 1)
+                w, z = (u**2 + v) / (u*v - 1), (v**2 + u) / (u*v - 1)
                 p3, n3, q3 = p3 / m3, n3 / m3, q3 / m3
                 y = [
                         r_,

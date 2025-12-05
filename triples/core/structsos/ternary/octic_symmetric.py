@@ -131,7 +131,6 @@ def _sos_struct_octic_symmetric_hexagon_sdp(coeff: Coeff):
         [M01, M00, M02]
         [M02, M02, M22]]
         """
-        a, b, c = sp.symbols('a b c')
         s1 = (quad_form[0,0] - quad_form[0,1])/2 * CyclicSum(a)**2 * CyclicProduct((a-b)**2)
 
         def mapping(x, y):
@@ -162,7 +161,6 @@ def _sos_struct_octic_symmetric_hexagon_sdp(coeff: Coeff):
         u210, u102, u201, u111, r, quad_form = sol
         quad_form_sol = _compute_quad_form_sol(quad_form)
         if r >= 0 and quad_form_sol is not None:
-            a, b, c = sp.symbols('a b c')
             ker = (a-b)*(u102*c**2*(b+a) + u210*(a*b*(a+b)-c**3) + u201*c*(a**2+b**2+c**2) + u111*a*b*c).expand().together()
             return r * CyclicSum(ker**2) + quad_form_sol
 
@@ -730,7 +728,7 @@ def _sos_struct_octic_symmetric_hexagram(coeff: Coeff):
 
             p1 = (a**2 + r1*a*b + r1*a*c + r2*b*c).as_coeff_Mul()
             p2 = (b*c-h*a*b-h*a*c).as_coeff_Mul()
-            p_fin = sp.together(degrade_a3 * CommonExpr.schur(3)
+            p_fin = sp.together(degrade_a3 * CommonExpr.schur(3, (a,b,c))
                                 + (degrade_a2b + degrade_a3) * CyclicSum(a*(b-c)**2)
                                 + (degrade_a3*3 + degrade_a2b*6 + degrade_abc) * CyclicProduct(a)).as_coeff_Mul()
 
@@ -739,7 +737,7 @@ def _sos_struct_octic_symmetric_hexagram(coeff: Coeff):
                 c2 * 2 * p2[0],
                 c3 * 2,
                 c4 * 2,
-                sp.S(2) * p_fin[0],
+                2 * p_fin[0],
                 rem
             ]
             exprs = [

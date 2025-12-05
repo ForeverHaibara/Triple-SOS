@@ -104,9 +104,6 @@ def structural_sos_3vars(poly, ineq_constraints: Dict[sp.Poly, sp.Expr] = {}, eq
     if solution is None:
         return None
 
-    if poly.gens != (sp.symbols("a b c")):
-        solution = solution.xreplace(dict(zip(sp.symbols("a b c"), poly.gens)))
-
 
     ####################################################################
     # replace assumed-nonnegative symbols with inequality constraints

@@ -57,7 +57,7 @@ def _sos_struct_cubic_symmetric(coeff: Coeff):
         # use Schur
         exprs = [
             # CyclicSum(a*(a-b)*(a-c)),
-            CommonExpr.schur(3),
+            CommonExpr.schur(3, coeff.gens),
             CyclicSum(a*(b-c)**2),
             CyclicProduct(a)
         ]
@@ -251,8 +251,10 @@ def _sos_struct_cubic_nontrivial_irrational(coeff: Coeff):
         y = [m / 2, p, q, rem]
         exprs = [
             CyclicSum(a) * CyclicSum((b-c)**2),
-            CyclicSum(a**2*b - CyclicProduct(a)),
-            CyclicSum(a**2*c - CyclicProduct(a)),
+            # CyclicSum(a**2*b - CyclicProduct(a)),
+            # CyclicSum(a**2*c - CyclicProduct(a)),
+            CommonExpr.amgm((2,1,0), (1,1,1), coeff.gens),
+            CommonExpr.amgm((2,0,1), (1,1,1), coeff.gens),
             CyclicProduct(a)
         ]
         return sum_y_exprs(y, exprs)

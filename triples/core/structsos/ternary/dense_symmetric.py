@@ -1,14 +1,12 @@
 from typing import Tuple, List
 
-import sympy as sp
+from sympy import Poly, Expr, Symbol, Add
 
 from .utils import (
-    CyclicSum, CyclicProduct, Coeff, radsimp, SS,
-    sos_struct_handle_uncentered
+    Coeff, SS, sos_struct_handle_uncentered
 )
 from ..univariate import prove_univariate
 
-a, b, c = sp.symbols('a b c')
 
 def sos_struct_dense_symmetric(coeff, real=True):
     """
@@ -41,12 +39,15 @@ def _sos_struct_dense_symmetric(coeff, real=True):
             return solution
 
 
-def _sos_struct_trivial_additive(coeff, real=True):
+def _sos_struct_trivial_additive(coeff: Coeff, real=True):
     """
     Solve trivial cyclic inequalities with nonnegative coefficients.
     """
     if any(_ < 0 for _ in coeff.values()):
         return None
+    a, b, c = coeff.gens
+    CyclicSum = coeff.cyclic_sum
+
     exprs = []
     for (i,j,k), v in coeff.items():
         if (i > j and i > k) or (i == j and i > k):
@@ -59,23 +60,23 @@ def _sos_struct_trivial_additive(coeff, real=True):
         if v != 0:
             exprs.append(v/3 * a**d * b**d * c**d)
 
-    return CyclicSum(sp.Add(*exprs))
+    return CyclicSum(Add(*exprs))
 
 
 
 
-def sym_axis(coeff: Coeff, d: int = -1) -> sp.Poly:
+def sym_axis(coeff: Coeff, d: int = -1) -> Poly:
     """Compute f(a,1,1)."""
     if d == -1: d = coeff.total_degree()
     coeff_list = [0] * (d+1)
     for m, v in coeff.items():
         coeff_list[m[0]] += v
-    return sp.Poly(radsimp(coeff_list)[::-1], a)
+    a = coeff.gens[0]
+    return coeff.from_list(coeff_list[::-1], gens=(a,)).as_poly()
 
-def _homogenize_sym_axis(sym: sp.Poly, d: int, abc: Tuple[sp.Symbol] = None) -> sp.Expr:
+def _homogenize_sym_axis(coeff: Coeff, sym: Poly, d: int) -> Expr:
     """Homogenize f(a,1,1) to f(a,b,c) given degree."""
-    if abc is None: abc = sp.symbols('a b c')
-    a, b, c = abc
+    a, b, c = coeff.gens
     s = [0]
     for (m,), v in sym.terms():
         k, r = divmod(d-m, 2)
@@ -84,32 +85,31 @@ def _homogenize_sym_axis(sym: sp.Poly, d: int, abc: Tuple[sp.Symbol] = None) -> 
         else:
             s.append(v/2 * a**m * b**(k+1) * c**k)
             s.append(v/2 * a**m * b**k * c**(k+1))
-    return sp.Add(*s)
+    return Add(*s)
 
-def _homogenize_sym_proof(sym_proof, d: int, abc: Tuple[sp.Symbol] = None) -> sp.Expr:
+def _homogenize_sym_proof(coeff: Coeff, sym_proof, d: int) -> Expr:
     """Homogenize the result from prove_univariate."""
-    if abc is None: abc = sp.symbols('a b c')
-    a, b, c = abc
+    a, b, c = coeff.gens
     exprs = []
     for i in range(len(sym_proof)):
         leading = sym_proof[i][0]
         ld = leading.as_poly(a).degree()
         part_expr = []
         for k, v in sym_proof[i][1]:
-            v2 = _homogenize_sym_axis(v, v.degree(), abc)
+            v2 = _homogenize_sym_axis(coeff, v, v.degree())
             rd = (d - ld - v.degree()*2) // 2
             part_expr.append(k * v2**2 * b**rd * c**rd)
-        part_expr = sp.Add(*part_expr)
+        part_expr = Add(*part_expr)
         if (d - ld) % 2 == 1:
             part_expr = part_expr * leading * (b + c) / 2
         else:
             part_expr = part_expr * leading
         exprs.append(part_expr)
-    return sp.Add(*exprs)
+    return Add(*exprs)
 
 
 @sos_struct_handle_uncentered
-def _sos_struct_lift_for_six(coeff, real=True):
+def _sos_struct_lift_for_six(coeff: Coeff, real=True):
     """
     Solve high-degree (dense) symmetric inequalities by the method
     of lifting the degree for six. Idea: define f(a,1,1) to be the
@@ -133,8 +133,10 @@ def _sos_struct_lift_for_six(coeff, real=True):
         return None
 
     a, b, c = coeff.gens
+    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+
     sym = sym_axis(coeff, d)
-    div = sym.div(sp.Poly([1,-2,1], a))
+    div = sym.div(Poly([1,-2,1], a, domain=sym.domain))
     if not div[1].is_zero:
         return None
     if div[0].LC() < 0 or div[0](0) < 0 or div[0](1) < 0:
@@ -145,20 +147,20 @@ def _sos_struct_lift_for_six(coeff, real=True):
     #     return None
 
     if all(_ >= 0 for _ in div[0].coeffs()):
-        lifted_sym = _homogenize_sym_axis(div[0], d - 2, (a, b, c))
+        lifted_sym = _homogenize_sym_axis(coeff, div[0], d - 2)
     else:
         sym_proof = prove_univariate(div[0], (0, None), return_type='list')
         if sym_proof is None:
             return None
-        lifted_sym = _homogenize_sym_proof(sym_proof, d - 2, (a, b, c))
+        lifted_sym = _homogenize_sym_proof(coeff, sym_proof, d - 2)
         # print(lifted_sym)
 
 
-    def compute_diff(coeff, sym2, mul, tail) -> Coeff:
-        poly = coeff.as_poly((a, b, c)) * mul.as_poly(a, b, c)
-        diff = poly - CyclicSum(sym2 * tail).as_poly(a, b, c)
-        diff = diff.div(CyclicProduct((a-b)**2).as_poly(a, b, c))
-        return Coeff(diff[0])
+    def compute_diff(coeff: Coeff, sym2, mul, tail) -> Coeff:
+        poly = coeff.as_poly() * mul.as_poly(a, b, c, domain=coeff.domain)
+        diff = poly - CyclicSum(sym2 * tail).as_poly(a, b, c, domain=coeff.domain)
+        diff = diff.div(CyclicProduct((a-b)**2).as_poly(a, b, c, domain=coeff.domain))
+        return coeff.from_poly(diff[0])
 
     multipliers = [
         (CyclicSum((a-b)**2)/2, (a-b)**2*(a-c)**2)
@@ -169,7 +171,7 @@ def _sos_struct_lift_for_six(coeff, real=True):
         # print(diff.as_poly((a,b,c)).as_expr())
         sol_diff = _sos_struct_dense_symmetric(diff)
         if sol_diff is not None:
-            return sp.Add(
+            return Add(
                 CyclicSum(lifted_sym * tail),
                 CyclicProduct((a-b)**2) * sol_diff
             ) / mul
@@ -204,12 +206,14 @@ def sos_struct_liftfree_for_six(coeff, real=True):
         return None
 
     a, b, c = coeff.gens
+    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+
     sym = sym_axis(coeff, d)
-    div = sym.div(sp.Poly([1,-2,1], a))
+    div = sym.div(Poly([1,-2,1], a, domain=sym.domain))
     if not div[1].is_zero:
         return None
 
-    div2 = div[0].div(sp.Poly([1,-2,1], a))
+    div2 = div[0].div(Poly([1,-2,1], a, domain=sym.domain))
     if div2[1].is_zero:
         return _sos_struct_liftfree_for_six_ord4(coeff, div2[0], real=real)
 
@@ -269,8 +273,8 @@ def sos_struct_liftfree_for_six(coeff, real=True):
     else:
         # subtract s(a^n*b^m*c^m*(u2*a*(b+c)/2 + v2*b*c)*(a-b)*(a-c)) + p(a-b)^2*...
         subtractor = u2 * _subtractor2(n+1, m) + v2 * _subtractor1(n, m+1)
-    rem_poly = coeff.as_poly((a,b,c)) - subtractor.doit().as_poly((a,b,c))
-    solution = _sos_struct_liftfree_for_six_ord4(Coeff(rem_poly), real=real)
+    rem_poly = coeff - coeff.from_poly(subtractor.doit().as_poly(a,b,c,domain=coeff.domain))
+    solution = _sos_struct_liftfree_for_six_ord4(rem_poly, real=real)
     if solution is not None:
         return subtractor + solution
 
@@ -285,9 +289,11 @@ def _sos_struct_liftfree_for_six_ord4(coeff, div2=None, real=True):
     which would perhaps be trivially nonnegative if successful.
     """
     a, b, c = coeff.gens
+    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+
     if div2 is None:
         sym = sym_axis(coeff, coeff.total_degree())
-        div2 = sym.div(sp.Poly([1,-4,6,-4,1], a))
+        div2 = sym.div(Poly([1,-4,6,-4,1], a, domain=sym.domain))
         if not div2[1].is_zero:
             return None
         div2 = div2[0]
@@ -297,13 +303,13 @@ def _sos_struct_liftfree_for_six_ord4(coeff, div2=None, real=True):
 
     d = coeff.total_degree()
     if all(_ >= 0 for _ in div2.coeffs()):
-        lifted_sym = _homogenize_sym_axis(div2, d - 4, (a, b, c))
+        lifted_sym = _homogenize_sym_axis(coeff, div2, d - 4)
     else:
         return None # not implemented
 
-    poly = coeff.as_poly((a, b, c))
-    diff = poly - CyclicSum((a-b)**2*(a-c)**2*lifted_sym).as_poly(a, b, c)
-    diff = diff.div(CyclicProduct((a-b)**2).as_poly(a, b, c))[0]
-    sol_diff = _sos_struct_dense_symmetric(Coeff(diff))
+    poly = coeff.as_poly()
+    diff = poly - CyclicSum((a-b)**2*(a-c)**2*lifted_sym).doit().as_poly(a, b, c, domain=coeff.domain)
+    diff = diff.div(CyclicProduct((a-b)**2).doit().as_poly(a, b, c, domain=coeff.domain))[0]
+    sol_diff = _sos_struct_dense_symmetric(coeff.from_poly(diff))
     if sol_diff is not None:
         return CyclicSum(lifted_sym * (a-b)**2*(a-c)**2) + CyclicProduct((a-b)**2) * sol_diff

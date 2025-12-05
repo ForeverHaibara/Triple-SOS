@@ -257,7 +257,7 @@ def _sos_struct_nonic_hexagram_symmetric(coeff: Coeff):
         solution = SS.structsos.ternary._structural_sos_3vars_cyclic(poly2)
         if solution is None:
             return None
-        return inverse_substitution(solution, factor_degree = 1)
+        return inverse_substitution(coeff, solution, factor_degree = 1)
 
     def _compute_hexagram_coeffs(z):
         # Assume we subtract (c1)s(c5(a-b)4) +(c2)s(a2b2c(a-b)4) - 2zp(a)s(3a4b2-4a4bc+3a4c2-4a3b3+2a2b2c2) + wp(a-b)^2p(a)

@@ -1,11 +1,11 @@
-import sympy as sp
+from sympy import Poly, Add
 
-from .utils import CyclicSum, CyclicProduct, SymSum, radsimp, rationalize_func
+from .utils import Coeff, rationalize_func
 from ..sparse import sos_struct_quadratic
+from ....utils import CyclicSum as _CyclicSum
+from ....utils import CyclicProduct as _CyclicProduct
 
-a, b, c, d = sp.symbols("a b c d")
-
-def quarternary_cubic_symmetric(coeff, real = True):
+def quarternary_cubic_symmetric(coeff: Coeff, real = True):
     """
     Solve quarternary symmetric cubic polynomials. Symmetry is not checked here.
 
@@ -13,6 +13,9 @@ def quarternary_cubic_symmetric(coeff, real = True):
     -----------
     [1] https://tieba.baidu.com/p/9033429329
     """
+    a, b, c, d = coeff.gens
+    SymSum = coeff.symmetric_sum
+
     c3000, c2100, c1110 = coeff((3,0,0,0)), coeff((2,1,0,0)), coeff((1,1,1,0))
     x, y, z = c3000, c2100/2 + c1110/6, c3000 + c2100
     if x >= 0 and y >= 0 and z >= 0:
@@ -36,7 +39,7 @@ def quarternary_cubic_symmetric(coeff, real = True):
 #
 #####################################################################
 
-def _quarternary_cubic_partial_symmetric(coeff, real = False):
+def _quarternary_cubic_partial_symmetric(coeff: Coeff, real = False):
     """
     The function is equivalent to solving nonhomogeneous 3-var symmetric cubic polynomials in
     the form of
@@ -77,31 +80,35 @@ def _quarternary_cubic_partial_symmetric(coeff, real = False):
     elif c111 < 0 or c000 < 0:
         return None
     # normalize
-    c100, c000, c200, c110 = radsimp([_/c111 for _ in [c100, c000, c200, c110]])
+    c100, c000, c200, c110 = [_/c111 for _ in [c100, c000, c200, c110]]
 
     c1 = 2*c200 + c110
     c2 = -c200 - c110
     if c1 < 0 or c2 < 0:
         return None
 
+    a, b, c, d = coeff.gens
+    CyclicSum = lambda expr: _CyclicSum(expr, (a,b,c))
+    CyclicProduct = lambda expr: _CyclicProduct(expr, (a,b,c))
+
     def get_sol1(v):
         # solve 3*v**2/4*(a+b+c) + v*(a**2+b**2+c**2-2*(a*b+b*c+c*a)) + a*b*c >= 0
         # (8*a*b*v*(a - b)**2 + 2*a*b*(2*c - 3*v)**2*(a + b + c) + 3*v**2*(a - b)**2*(a + b + c) + 4*v*(b - c)**2*(-a + b + c)**2)
-        return sp.Add(*[
-            radsimp(4*v) * CyclicSum((b-c)**2*(b+c-a)**2) * d,
-            radsimp(3*v**2) * CyclicSum(a) * CyclicSum((a-b)**2) * d**2,
+        return Add(*[
+            (4*v) * CyclicSum((b-c)**2*(b+c-a)**2) * d,
+            (3*v**2) * CyclicSum(a) * CyclicSum((a-b)**2) * d**2,
             2 * CyclicSum(a) * CyclicSum(a*b*(2*c-3*v*d)**2),
-            radsimp(8*v) * CyclicSum(a*b*(a-b)**2) * d,
+            (8*v) * CyclicSum(a*b*(a-b)**2) * d,
         ]) / (8 * CyclicSum(a)**2)
 
 
     def get_sol2(v):
         # solve 4*v**3 + v*(a**2+b**2+c**2-2*(a*b+b*c+c*a)) + a*b*c >= 0
-        return sp.Add(*[
+        return Add(*[
             v * CyclicSum((b-c)**2*(b+c-a)**2) * d,
-            radsimp(4*v**3) * CyclicSum((a-b)**2) * d**3,
-            radsimp(6*v) * CyclicSum(a*b*(c-2*v*d)**2) * d,
-            radsimp(2*v) * CyclicSum(a*b*(a-b)**2) * d,
+            (4*v**3) * CyclicSum((a-b)**2) * d**3,
+            (6*v) * CyclicSum(a*b*(c-2*v*d)**2) * d,
+            (2*v) * CyclicSum(a*b*(a-b)**2) * d,
             2 * CyclicProduct(a) * CyclicSum(a-2*v*d)**2
         ]) / (2 * CyclicSum(a)**2)
 
@@ -115,43 +122,46 @@ def _quarternary_cubic_partial_symmetric(coeff, real = False):
     def get_const(x):
         if x == 0: return c000 - 4*c2**3 # t = 0, y = c2
         if x == c2: return c000 # t = 1, y = 0
-        return radsimp(c000 - 4*x*(3*c2*x - 4*c100)**3/3/(3*x**2 - 4*c100)**2)
+        z = 3*x**2 - 4*c100
+        if z == 0: return None
+        return c000 - 4*x*(3*c2*x - 4*c100)**3/3/z**2
 
     def check_x(x):
         if x == 0: return c100 == 0 and get_const(x) >= 0 # t = 0, y = c2
-        if x is None or (not x.is_finite) or (not 3*x**2/4 >= c100):
+        if x is None or (not 3*x**2/4 >= c100):
             return False
         r = get_const(x)
-        return r.is_finite and r >= 0
+        return (r is not None) and r >= 0
 
-    for x in [0, radsimp(4*c100/3/c2), None]:
+    for x in [0, 4*c100/3/c2 if c2 != 0 else None, None]:
         if check_x(x):
             break
     if x is None:
-        det = radsimp(c000**2 + 6*c000*c100*c2 - 4*c000*c2**3 + 4*c100**3 - 3*c100**2*c2**2)
+        det = c000**2 + 6*c000*c100*c2 - 4*c000*c2**3 + 4*c100**3 - 3*c100**2*c2**2
         if det < 0:
             return None
         # find x near 2*(c2 + sqrt(c2**2 - c100))/3
         if c2**2 - c100 < 0:
             return None
 
-        x = rationalize_func(sp.Poly([9, -12*c2, 4*c100], sp.Symbol('x')), validation=check_x,
-                            validation_initial=lambda x: x >= 2*c2/3, direction = 1)
+        isolation = coeff.from_list([9, -12*c2, 4*c100], gens=(a,)).as_poly()
+        x = rationalize_func(isolation, validation=check_x,
+                validation_initial=lambda x: x >= 2*c2/3, direction = 1)
     # print(x, get_const(x), 't =', radsimp(c100 / (3*x**2/4)))
     if x is None:
         return None
     res = get_const(x)
-    if res < 0:
+    if res is None or res < 0:
         return None
-    t1 = radsimp(c100 / (3*x**2/4)) if x != 0 else 0
+    t1 = (c100 / (3*x**2/4)) if x != 0 else 0
     t2 = 1 - t1
     if t1 < 0 or t2 < 0:
         return None
     y = (c2 - x*t1)/t2 if t2 != 0 else 0
 
-    return sp.Add(
-        radsimp(c111 * t1) * get_sol1(x),
-        radsimp(c111 * t2) * get_sol2(y),
-        radsimp(c111 * res) * d**3,
-        radsimp(c111 * c1/2) * CyclicSum((a-b)**2)*d
+    return Add(
+        (c111 * t1) * get_sol1(x),
+        (c111 * t2) * get_sol2(y),
+        (c111 * res) * d**3,
+        (c111 * c1/2) * CyclicSum((a-b)**2)*d
     )
