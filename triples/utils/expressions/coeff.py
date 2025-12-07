@@ -360,14 +360,14 @@ class Coeff():
         return verify_symmetry(self.as_poly(), perm_group)
 
     def reflect(self) -> 'Coeff':
-        if self.is_zero:
-            return self.from_dict({})
-        if self.nvars == 1:
-            return self.from_dict(dict(self.rep))
-        refl = lambda z: tuple((z[1], z[0],) + z[2:])
-        reflected = dict([(refl(k), v) for k, v in self.items()])
-        new_coeff = self.from_dict(reflected)
-        return new_coeff
+        if self.nvars <= 1:
+            return self
+        return self.reorder([1, 0] + list(range(2, self.nvars)))
+
+    def reorder(self, perm: List[int]) -> 'Coeff':
+        order = lambda x: tuple([x[i] for i in perm])
+        new_gens = order(self.gens)
+        return self.from_dict({order(k): v for k, v in self.items()}, new_gens)
 
     def clear_zero(self) -> None:
         """

@@ -5,7 +5,7 @@ from sympy import MutableDenseMatrix as Matrix
 from .sextic_symmetric import _restructure_quartic_polynomial
 
 from .utils import (
-    Coeff, CommonExpr,
+    Coeff, CommonExpr, DomainExpr,
     quadratic_weighting, sum_y_exprs, rationalize_func
 )
 
@@ -808,7 +808,7 @@ def _sos_struct_octic_symmetric_quadratic_form(poly, coeff: Coeff):
     )
 
 
-class _octic_sym_axis:
+class _octic_sym_axis(DomainExpr):
     """
     Let F0 = s(a^2(s(a^2+ab)-bc)^2(a-b)(a-c)) and f(a,b,c) = s(xa^2 + yab).
     Define
@@ -820,18 +820,6 @@ class _octic_sym_axis:
     The class provides different methods to solve F_{x,y}(a,b,c) >= 0. There are also
     two types of solvers.
     """
-    def __init__(self, coeff: Coeff):
-        self._coeff = coeff
-
-    @property
-    def gens(self):
-        return self._coeff.gens
-
-    def cyclic_sum(self, expr):
-        return self._coeff.cyclic_sum(expr)
-
-    def cyclic_product(self, expr):
-        return self._coeff.cyclic_product(expr)
 
     def rem_poly(self, rem_coeff, rem_ratio):
         a, b, c = self.gens

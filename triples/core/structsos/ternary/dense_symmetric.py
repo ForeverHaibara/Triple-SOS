@@ -3,7 +3,7 @@ from typing import Tuple, List
 from sympy import Poly, Expr, Symbol, Add
 
 from .utils import (
-    Coeff, SS, sos_struct_handle_uncentered
+    Coeff, sos_struct_handle_uncentered
 )
 from ..univariate import prove_univariate
 
@@ -28,7 +28,8 @@ def _sos_struct_dense_symmetric(coeff, real=True):
     d = coeff.total_degree()
     methods = [_sos_struct_trivial_additive]
     if d < 8:
-        methods.append(SS.structsos.ternary._structural_sos_3vars_cyclic)
+        from .solver import _structural_sos_3vars_cyclic
+        methods.append(_structural_sos_3vars_cyclic)
     else:
         methods.append(sos_struct_liftfree_for_six)
         methods.append(_sos_struct_lift_for_six)
@@ -43,7 +44,7 @@ def _sos_struct_trivial_additive(coeff: Coeff, real=True):
     """
     Solve trivial cyclic inequalities with nonnegative coefficients.
     """
-    if any(_ < 0 for _ in coeff.values()):
+    if any(_ < 0 for _ in map(coeff.wrap, coeff.values())):
         return None
     a, b, c = coeff.gens
     CyclicSum = coeff.cyclic_sum

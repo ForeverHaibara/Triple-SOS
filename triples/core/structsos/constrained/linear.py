@@ -1,6 +1,5 @@
-import sympy as sp
-
-from ...shared import SS, uniquely_named_symbol
+from sympy import Poly, Dummy, Integer
+from sympy.core.symbol import uniquely_named_symbol
 
 def _eliminate_linear_ineq(poly, var, ineq_constraints, eq_constraints):
     """
@@ -18,11 +17,12 @@ def _eliminate_linear_ineq(poly, var, ineq_constraints, eq_constraints):
     # eq_constraints2 = {eq.as_poly(gens): e for eq, e in eq_constraints.items()}
     k2, ineq_constraints2, eq_constraints2 = k, ineq_constraints, eq_constraints
 
-    ksol = SS.structsos._structural_sos(k2, ineq_constraints2, eq_constraints2)
+    from ..structsos import _structural_sos
+    ksol = _structural_sos(k2, ineq_constraints2, eq_constraints2)
     if ksol is not None:
         # k >= 0 and kx + b >= 0 -> x >= -b/k
         return k, b, ksol, 1
-    ksol = SS.structsos._structural_sos(-k2, ineq_constraints2, eq_constraints2)
+    ksol = _structural_sos(-k2, ineq_constraints2, eq_constraints2)
     if ksol is not None:
         # k <= 0 and kx + b >= 0 -> x <= -b/k
         return k, b, -ksol, -1
@@ -117,13 +117,13 @@ def _elimination_linear_bound_lu(poly, ineq_constraints, eq_constraints, gen, l_
     # x = (-bu/ku*t - bl/kl)/(t+1)  (t >= 0)
     # t = -l/u
 
-    # gcdklu = sp.gcd(kl, ku) # TODO: ensure gcdklu > 0
+    # gcdklu = gcd(kl, ku) # TODO: ensure gcdklu > 0
     # ku2, kl2 = ku.div(gcdklu)[0], kl.div(gcdklu)[0]
     ku2, kl2 = ku, kl
     lcm = -ku2 * kl
     h = uniquely_named_symbol(gen.name, gens) # homogenizer
-    p1, p2 = sp.Poly(bu*kl2*gen + bl*ku2*h, gen), sp.Poly(lcm*(gen + h), gen)
-    # x, y = sp.Dummy('x'), sp.Dummy('y')
+    p1, p2 = Poly(bu*kl2*gen + bl*ku2*h, gen), Poly(lcm*(gen + h), gen)
+    # x, y = Dummy('x'), Dummy('y')
     # print('FACT',poly.transform(p1, p2).as_expr().xreplace({gen:-x/y})\
     #       .subs({x:gen+bl.as_expr()/kl.as_expr(), y:gen+bu.as_expr()/ku.as_expr()}).factor(),
     #       '\np1p2', p1,p2)
@@ -132,7 +132,7 @@ def _elimination_linear_bound_lu(poly, ineq_constraints, eq_constraints, gen, l_
     ineq_constraints = {ineq.as_poly(gens): e for ineq, e in ineq_constraints.items()}
     eq_constraints = {eq.as_poly(gens): e for eq, e in eq_constraints.items()}
     ineq_constraints[gen.as_poly(gens)] = -l/u
-    ineq_constraints[h.as_poly(gens)] = sp.S(1)
+    ineq_constraints[h.as_poly(gens)] = Integer(1)
     restore = lambda x: x if x is None else x / (klsol*(-kusol)*(l/-u + 1))**d # x/(lcm*(gen+h))**d
 
     poly = poly.as_poly(gens)

@@ -1,42 +1,42 @@
-from typing import Callable, Union
+from typing import Tuple, Callable, Optional, Union
 from functools import wraps
 
 import sympy as sp
-from sympy import Poly, Expr, Add, Mul, Pow
+from sympy import Poly, Expr, Symbol, Add, Mul, Pow
+from sympy.combinatorics import CyclicGroup
 
 from ..utils import (
-    Coeff,
+    Coeff, DomainExpr,
     radsimp, sum_y_exprs, rationalize_func, quadratic_weighting, zip_longest, congruence,
     StructuralSOSError, PolynomialNonpositiveError, PolynomialUnsolvableError
 )
 
-# from ..pivoting import prove_univariate, prove_univariate_interval
-from ...shared import SS
 from ....utils import (
     nroots, rationalize, rationalize_bound, univariate_intervals,
     square_perturbation, cancel_denominator, common_region_of_conics,
     CyclicExpr, CyclicSum, CyclicProduct
 )
 
-def reflect_expression(expr: Expr) -> Expr:
+def align_cyclic_group(expr: Optional[Expr], gens: Tuple[Symbol, ...]) -> Expr:
     """
-    Exchange b and c in a three-var cyclic expression.
-
-    Examples
-    ----------
-    >>> from sympy.abc import a, b, c
-    >>> CyclicExpr.PRINT_FULL = True
-    >>> reflect_expression(CyclicSum(a**2*b**3*c**4))
-    CyclicSum(a**2*b**4*c**3, (a, b, c), PermutationGroup([
-        (0 1 2)]))
-    >>> CyclicExpr.PRINT_FULL = False
+    Replace `CyclicSum(F(a, b, c), (a, c, b))` to `CyclicSum(F(a, b, c), (a, b, c))`.
+    Note that this does not change the value of the expression.
+    The function depends on the fact that `CyclicExpr` automatically sorts the
+    symbols and might change its behaviour accordingly in the future.
     """
-    if isinstance(expr, CyclicExpr):
-        return expr.func(reflect_expression(expr.args[0]), *expr.args[1:])
-    if not expr.has(CyclicExpr):
-        b, c = sp.symbols('b c')
-        return expr.xreplace({b:c, c:b})
-    return expr.func(*[reflect_expression(a) for a in expr.args])
+    if expr is None:
+        return None
+    cg = CyclicGroup(3)
+    gens = CyclicSum(gens[0], gens).args[1] # sort the gens by default
+    wrong_gens = (gens[0], gens[2], gens[1])
+    def _recur(expr):
+        if isinstance(expr, CyclicExpr):
+            if expr.args[1] == wrong_gens and expr.args[2] == cg:
+                return expr.func(expr.args[0], gens, cg)
+        if not expr.has(CyclicExpr):
+            return expr
+        return expr.func(*[_recur(a) for a in expr.args])
+    return _recur(expr)
 
 
 def inverse_substitution(coeff: Coeff, expr: Expr, factor_degree: int = 0) -> Expr:
@@ -91,10 +91,11 @@ def try_perturbations(
 
     This is possibly helpful for deriving rational sum-of-square solution.
     """
+    from .solver import _structural_sos_3vars_cyclic
     perturbation_poly = perturbation.doit().as_poly(poly.gens)
     for t in square_perturbation(p, q, times = times):
         poly2 = poly - t * perturbation_poly
-        solution = SS.structsos.ternary._structural_sos_3vars_cyclic(Coeff(poly2))
+        solution = _structural_sos_3vars_cyclic(Coeff(poly2))
         if solution is not None:
             return solution + t * perturbation
     return None

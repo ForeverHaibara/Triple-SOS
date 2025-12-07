@@ -1,4 +1,5 @@
 import sympy as sp
+from sympy import Poly, Symbol, Rational
 
 from .utils import (
     Coeff, CommonExpr,
@@ -340,11 +341,11 @@ def _sos_struct_acyclic_cubic_hexagon(coeff):
 
         for i, (x, y) in enumerate(corners):
             z0 = -2 * sp.sqrt(x * y)
-            if isinstance(z0, sp.Rational):
+            if isinstance(z0, Rational):
                 zs[i] = z0
             else:
                 _check_valid_func = _get_check_valid_func(z0)
-                eqz = sp.Poly([1, 0, -4*x*y], sp.Symbol('z'))
+                eqz = Poly([1, 0, -4*x*y], Symbol('z'))
                 zs[i] = rationalize_func(eqz, _check_valid_func, validation_initial = lambda z: z <= 0, direction = -1)
             if zs[i] is None:
                 return None
@@ -355,7 +356,7 @@ def _sos_struct_acyclic_cubic_hexagon(coeff):
         return sum(exprs) + (center - sum(zs))*(a*b*c)
 
 
-def _sos_struct_acyclic_cubic_symmetric(coeff):
+def _sos_struct_acyclic_cubic_symmetric(coeff: Coeff):
     """
     Solve acyclic cubic polynomials that are symmetric with respect to two variables.
 
@@ -436,7 +437,7 @@ def _sos_struct_acyclic_cubic_symmetric(coeff):
         # The following x40 makes the symmetric axis have a multiplicity root (a,b,c) = (1,1,sym_c)
         # so either we require x4 >= x40, or the symmetric axis degree 1 term >= 0.
         x40 = -(16*x1*x3 - 4*x2**2 - 4*x2*x5 - x5**2)/(16*x1)
-        r = (x2/x3/2) if 4*x1*x3 >= x2**2 else sp.S(0)
+        r = (x2/x3/2) if 4*x1*x3 >= x2**2 else 0
         ker = (x1 - x3*r**2)
         if x1 > 0 and x4 >= x40:
             sym_c = (-2*x2 - x5)/(4*x1)
@@ -460,29 +461,31 @@ def _sos_struct_acyclic_cubic_symmetric(coeff):
         x0*(ta-c)^2(za+c) = x0*c^3 + x1*c^2*a + x2'*c*a^2 + x3'*a^3
         with x2' <= x2 and x3' <= x3. Also, z = x1/x0 + 2*t.
         """
-        t = sp.Symbol('t')
-        eqt1 = sp.Poly([3*x0, 2*x1, x2], t)
-        eqt2 = sp.Poly([-2*x0, -x1, 0, x3], t)
+        sym = -x1/x0/2
+        eqt1 = coeff.from_list([3*x0, 2*x1, x2], gens=(a,)).as_poly()
+        eqt2 = coeff.from_list([-2*x0, -x1, 0, x3], gens=(a,)).as_poly()
         def _check_valid(t):
-            return x1/x0 + 2*t >= 0 and eqt2(t) >= 0
+            t = coeff.convert(t)
+            return t >= sym and coeff.convert(eqt2.rep.eval(t)) >= 0
 
         t_ = None
         if x2 >= 0 and _check_valid(0):
-            t_ = sp.S(0)
-        elif eqt1(-x1/x0/2) >= 0 and eqt2(-x1/x0/2) >= 0:
-            t_ = (-x1/x0/2)
+            t_ = 0
+        elif coeff.convert(eqt1.rep.eval(sym)) >= 0 and coeff.convert(eqt2.rep.eval(sym)) >= 0:
+            t_ = sym
         else:
             # sometimes it is tight for irrational coefficients, we detect it first
-            eqgcd = sp.gcd(eqt1, eqt2)
+            eqgcd = eqt1.gcd(eqt2)
             if eqgcd.degree() == 1:
-                t_ = (-eqgcd.coeff_monomial((0,)) / eqgcd.coeff_monomial((1,)))
-                if x1/x0 + 2*t_ < 0:
+                t_ = coeff.convert(-eqgcd.rep.TC() / eqgcd.rep.LC())
+                if t_ < sym:
                     t_ = None
 
         if t_ is None:
             t_ = rationalize_func(eqt1, _check_valid, direction = 1)
         if t_ is not None:
-            return [t_, x1/x0 + 2*t_]
+            t_ = coeff.convert(t_)
+            return [t_, 2*(t_ - sym)]
 
     def _determine_w(x0, x4, x5, t, z):
         """
@@ -492,26 +495,32 @@ def _sos_struct_acyclic_cubic_symmetric(coeff):
         y1 = -3*(-2*t*w + w*z - 3)**2/w**3
         (-t**2*z+y0+y1) <= x4/x0 and (w0+w*y1) <= x5/x0.
         """
-        w = sp.Symbol('w')
         w0 = 2*(5*t**2 - 2*t*z + 2*z**2)/3
         y0 = 4*(-2*t + z)**3/27
         if z >= 2*t and y0 - t**2*z <= x4/x0 and w0 - 3*(z - 2*t)**2 <= x5/x0:
             return sp.oo
-        eqw1 = ((x5/x0 - w0)*w**2 + 3*(-2*t*w + w*z - 3)**2).as_poly(w)
-        eqw2 = ((x4/x0 + t**2*z - y0)*w**3 + 3*(-2*t*w + w*z - 3)**2).as_poly(w)
-        eqw3 = ((-8*t*w + 4*w*z - 9)).as_poly(w)
+
+        # eqw1 = ((x5/x0 - w0)*w**2 + 3*(-2*t*w + w*z - 3)**2).as_poly(w)
+        # eqw2 = ((x4/x0 + t**2*z - y0)*w**3 + 3*(-2*t*w + w*z - 3)**2).as_poly(w)
+        # eqw3 = ((-8*t*w + 4*w*z - 9)).as_poly(w)
+        eqtmp = 3 * coeff.from_list([-2*t + z, -3], gens=(a,)).as_poly()**2
+        eqw1 = coeff.from_list([x5/x0 - w0, 0, 0], gens=(a,)).as_poly() + eqtmp
+        eqw2 = coeff.from_list([x4/x0 + t**2*z - y0, 0, 0, 0], gens=(a,)).as_poly() + eqtmp
+        eqw3 = coeff.from_list([-8*t + 4*z, -9], gens=(a,)).as_poly()
+
         def _check_valid(w):
+            w = coeff.convert(w)
             return w != 0 and eqw3(w) * w >= 0 and eqw2(w) * w >= 0
         if z != 2*t:
             w_ = 9 / (z - 2*t) / 4
-            if eqw1(w_) >= 0 and _check_valid(w_):
+            if coeff.convert(eqw1.rep.eval(w_)) >= 0 and _check_valid(w_):
                 return w_
-        if eqw1(1) >= 0 and _check_valid(1):
-            return sp.S(1)
+        if coeff.convert(eqw1.rep.eval(1)) >= 0 and _check_valid(1):
+            return 1
         if True:
-            eqgcd = sp.gcd(eqw1, eqw2)
+            eqgcd = eqw1.gcd(eqw2)
             if eqgcd.degree() == 1:
-                w_ = (-eqgcd.coeff_monomial((0,)) / eqgcd.coeff_monomial((1,)))
+                w_ = (-eqgcd.rep.TC() / eqgcd.rep.LC())
                 if _check_valid(w_):
                     return w_
 
@@ -545,6 +554,7 @@ def _sos_struct_acyclic_cubic_symmetric(coeff):
     if w is None:
         return None
 
+    w = coeff.convert(w) if not (w is sp.oo) else w
     w0 = 2*(5*t**2 - 2*t*z + 2*z**2)/3
     y0 = 4*(-2*t + z)**3/27
     if w is sp.oo:

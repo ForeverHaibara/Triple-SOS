@@ -3,8 +3,8 @@ from sympy import Poly, Symbol, Rational, Add
 
 from .sextic_symmetric import _sos_struct_sextic_hexagram_symmetric, _sos_struct_sextic_tree
 from .utils import (
-    Coeff, CommonExpr, SS,
-    sum_y_exprs, rationalize_func, reflect_expression, inverse_substitution, nroots
+    Coeff, CommonExpr,
+    sum_y_exprs, rationalize_func, inverse_substitution, nroots, align_cyclic_group
 )
 
 def sos_struct_nonic(coeff, real = True):
@@ -215,7 +215,8 @@ def _sos_struct_nonic_hexagon_symmetric(coeff: Coeff):
         if rest_poly.is_zero:
             return solution
 
-        rest_solution = SS.structsos.ternary._structural_sos_3vars_cyclic(rest_poly, real = False)
+        from .solver import _structural_sos_3vars_cyclic
+        rest_solution = _structural_sos_3vars_cyclic(rest_poly, real = False)
         if rest_solution is None:
             return None
         return solution + rest_solution
@@ -243,8 +244,9 @@ def _sos_struct_nonic_hexagram_symmetric(coeff: Coeff):
     a, b, c = coeff.gens
     CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
 
+    from .solver import _structural_sos_3vars_cyclic
     if c1 == 0:
-        solution = SS.structsos.ternary._structural_sos_3vars_cyclic(coeff.as_poly().div((a*b*c).as_poly(a,b,c))[0])
+        solution = _structural_sos_3vars_cyclic(coeff.as_poly().div((a*b*c).as_poly(a,b,c))[0])
         if solution is None:
             return None
         return CyclicProduct(a) * solution
@@ -254,7 +256,7 @@ def _sos_struct_nonic_hexagram_symmetric(coeff: Coeff):
             coeff((5,4,0)) * a**5*(b+c) + coeff((5,3,1)) * a**4*(b**2+c**2) + coeff((5,2,2)) * a**3*b**3\
             + coeff((4,4,1)) * a**4*b*c + coeff((4,3,2)) * a**3*b*c*(b+c)
         ).doit().as_poly(a,b,c) + (coeff((3,3,3)) * a**2*b**2*c**2).as_poly(a,b,c)
-        solution = SS.structsos.ternary._structural_sos_3vars_cyclic(poly2)
+        solution = _structural_sos_3vars_cyclic(poly2)
         if solution is None:
             return None
         return inverse_substitution(coeff, solution, factor_degree = 1)
@@ -370,13 +372,12 @@ def _sos_struct_nonic_gear(coeff: Coeff):
     ----------
     [1] https://tieba.baidu.com/p/8457240407
     """
+
     if not (coeff((5,4,0)) == 0 and coeff((6,1,2)) == 0):
         # reflect the polynomial
-        reflect_coeffs = coeff.reflect()
-        solution = _sos_struct_nonic_gear(reflect_coeffs)
-        if solution is not None:
-            solution = reflect_expression(solution)
-        return solution
+        sol = _sos_struct_nonic_gear(coeff.reflect())
+        return align_cyclic_group(sol, coeff.gens)
+
     if coeff((4,5,0)) == 0 or coeff((6,2,1)) == 0:
         return None
 

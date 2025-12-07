@@ -4,7 +4,7 @@ import sympy as sp
 from sympy import Poly, Expr, Rational, Add
 
 from .utils import (
-    CommonExpr, Coeff, SS, quadratic_weighting
+    Coeff, CommonExpr, DomainExpr, quadratic_weighting
 )
 from .cubic import _sos_struct_cubic_symmetric
 from .sextic_symmetric import _restructure_quartic_polynomial
@@ -13,9 +13,10 @@ from ..univariate import prove_univariate
 
 def sos_struct_septic_symmetric(coeff, real=False):
     if not all(coeff((i,j,k)) == coeff((j,i,k)) for (i,j,k) in ((6,1,0),(5,2,0),(4,3,0),(4,2,1))):
-        return
+        return None
 
-    solution = SS.structsos.ternary.sos_struct_liftfree_for_six(coeff)
+    from .dense_symmetric import sos_struct_liftfree_for_six
+    solution = sos_struct_liftfree_for_six(coeff)
     if solution is not None:
         return solution
 
@@ -124,7 +125,7 @@ def _sos_struct_septic_symmetric_quadratic_form(poly, coeff: Coeff):
     )
     return solution
 
-class _septic_sym_axis():
+class _septic_sym_axis(DomainExpr):
     """
     Let F0 = s(a7+a6b+a6c+a5bc-2a4b3-2a4c3) and f(a,b,c) = s(xa^2+yab)
 
@@ -153,18 +154,6 @@ class _septic_sym_axis():
     G(x, y)
         Return g, ker_coeff. such that G(x,y) + ker_coeff * s(a) * p(a-b)^2 == g.
     """
-    def __init__(self, coeff: Coeff):
-        self._coeff = coeff
-
-    @property
-    def gens(self):
-        return self._coeff.gens
-
-    def cyclic_sum(self, expr):
-        return self._coeff.cyclic_sum(expr)
-
-    def cyclic_product(self, expr):
-        return self._coeff.cyclic_product(expr)
 
     def _F_regular(self, x, y):
         a, b, c = self.gens

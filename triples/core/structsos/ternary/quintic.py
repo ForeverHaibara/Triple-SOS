@@ -13,7 +13,7 @@ from ....utils.monomials import invarraylize
 from .utils import (
     Coeff,
     sum_y_exprs, nroots, rationalize, rationalize_bound, rationalize_func, cancel_denominator,
-    reflect_expression, zip_longest, quadratic_weighting
+    zip_longest, quadratic_weighting, align_cyclic_group
 )
 
 def _verify_border_nonnegative(border):
@@ -66,7 +66,7 @@ def _solve_sa2minusab_mul_cubic(coeff: Coeff, x, y, mul = 1):
     a, b, c = coeff.gens
     CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
     if x >= 0 and y >= 0:
-        cubic_poly = coeff.from_list({(3,0,0): coeff.domain.one, (2,1,0): x, (1,2,0): y, (1,1,1): -3*(x+y+1)})
+        cubic_poly = coeff.from_dict({(3,0,0): 1, (2,1,0): x, (1,2,0): y, (1,1,1): -3*(x+y+1)})
         return Rational(1,2) * mul * CyclicSum((a-b)**2) * sos_struct_cubic(cubic_poly)
 
     def _solve_t(t):
@@ -365,7 +365,6 @@ def _sos_struct_quintic_full(coeff: Coeff):
         if proof is None:
             return None
         s_args = []
-        a, b, c = sp.symbols('a b c')
         for multiplier, cps in proof:
             if multiplier == 1:
                 for coeff, poly in cps:
@@ -413,7 +412,8 @@ def _sos_struct_quintic_full(coeff: Coeff):
             being the a^5bc, a^4b^2c, a^3b^3c, a^2b^4c, ab^5c coefficients of F."""
             return Poly([poly.coeff_monomial((5-i,i+1,1)) for i in range(5)], a)
 
-        a, b, c, z = sp.symbols('a b c z')
+        a, b, c = coeff.gens
+        z = Symbol("z")
         # standardize
         coeff500 = poly.coeff_monomial((5,0,0))
         poly = (poly / coeff500).as_poly(a,b,c)
@@ -662,12 +662,11 @@ def _sos_struct_quintic_windmill(coeff: Coeff):
     if coeff.poly111() < 0:
         return None
 
+
     if coeff((4,1,0)) != 0:
         # reflect the polynomial so that coeff((4,1,0)) == 0
-        solution = _sos_struct_quintic_windmill(coeff.reflect())
-        if solution is not None:
-            solution = reflect_expression(solution)
-        return solution
+        sol = _sos_struct_quintic_windmill(coeff.reflect())
+        return align_cyclic_group(sol, coeff.gens)
 
     a, b, c = coeff.gens
     CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product

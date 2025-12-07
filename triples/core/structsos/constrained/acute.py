@@ -9,8 +9,7 @@ from ..ternary import (
 )
 from ..ternary.dense_symmetric import sym_axis, _homogenize_sym_proof
 from ..utils import (
-    Coeff, SS,
-    uniquely_named_symbol, rationalize_func, congruence
+    Coeff, uniquely_named_symbol, rationalize_func, congruence
 )
 from ..univariate import prove_univariate
 
@@ -329,7 +328,8 @@ def _constrained_acute_trivial_uncentered(coeff: Coeff, F):
     rem = coeff - Coeff(expr2.doit().as_poly(a,b,c, domain=coeff.domain))
     # from ....utils.expressions import poly_get_factor_form
     # print(poly_get_factor_form(rem))
-    solution = SS.structsos.ternary._structural_sos_3vars_cyclic(rem)
+    from ..ternary.solver import _structural_sos_3vars_cyclic
+    solution = _structural_sos_3vars_cyclic(rem)
     if solution is not None:
         solution = solution + expr
     return solution

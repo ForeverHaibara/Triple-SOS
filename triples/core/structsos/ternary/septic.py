@@ -6,8 +6,7 @@ from sympy import Poly, Symbol, Rational, Add
 from .quartic import sos_struct_quartic
 from .septic_symmetric import sos_struct_septic_symmetric
 from .utils import (
-    Coeff, SS,
-    sum_y_exprs, nroots, rationalize, rationalize_bound, reflect_expression, try_perturbations,
+    Coeff, sum_y_exprs, nroots, rationalize, rationalize_bound, try_perturbations,
     zip_longest
 )
 
@@ -287,7 +286,8 @@ def _sos_struct_septic_star(coeff: Coeff):
             # print(result, poly, discriminant.subs(result),'\n',discriminant)
             poly = sp.div(poly, (a*b*c).as_poly(a,b,c))[0]
 
-            new_solution = SS.structsos.ternary._structural_sos_3vars_cyclic(poly)
+            from .solver import _structural_sos_3vars_cyclic
+            new_solution = _structural_sos_3vars_cyclic(poly)
             if new_solution is not None:
                 return solution + new_solution * CyclicProduct(a)
 
@@ -343,10 +343,8 @@ def _sos_struct_septic_biased(coeff: Coeff):
 
     if coeff((5,2,0)) or coeff((4,3,0)):
         # reflect the polynomial so that coeff((5,2,0)) == 0
-        solution = _sos_struct_septic_biased(coeff.reflect())
-        if solution is not None:
-            solution = reflect_expression(solution)
-        return solution
+        sol = _sos_struct_septic_biased(coeff.reflect())
+        return align_cyclic_group(sol, coeff.gens)
 
     if coeff((5,2,0)) or coeff((4,3,0)):
         return None
@@ -657,7 +655,8 @@ def _sos_struct_septic_hexagon(coeff: Coeff):
             solution = t * CyclicSum(a * expr**2)
             poly2 = coeff.as_poly() - solution.doit().as_poly(a,b,c)
 
-            new_solution = SS.structsos.ternary._structural_sos_3vars_cyclic(poly2)
+            from .solver import _structural_sos_3vars_cyclic
+            new_solution = _structural_sos_3vars_cyclic(poly2)
             if new_solution is not None:
                 return solution + new_solution
             return None
