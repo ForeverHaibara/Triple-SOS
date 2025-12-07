@@ -1,7 +1,7 @@
 from typing import Callable, Tuple, List, Optional, Union, Dict
 
-import sympy as sp
-from sympy import Poly, Symbol
+from sympy import Poly, Expr, Symbol, Integer, Mul
+from sympy import MutableDenseMatrix as Matrix
 from sympy.combinatorics import PermutationGroup, CyclicGroup
 
 from .utils import Coeff, PolynomialUnsolvableError, PolynomialNonpositiveError
@@ -10,11 +10,6 @@ from ...utils import CyclicSum, CyclicProduct
 
 def _null_solver(*args, **kwargs):
     return None
-
-def _get_defaulted_gens(poly: Union[Poly, Coeff]):
-    if isinstance(poly, Poly):
-        return poly.gens
-    return sp.symbols(f"a:{chr(96 + poly.nvars)}") if len(poly.coeffs) > 0 else []
 
 def sos_struct_extract_factors(poly: Union[Poly, Coeff], solver: Callable, real: bool = True, **kwargs):
     """
@@ -25,7 +20,7 @@ def sos_struct_extract_factors(poly: Union[Poly, Coeff], solver: Callable, real:
     + If the polynomial is f(a^k, b^k, c^k), it first solves f(a,b,c) and then replaces a,b,c with a^k,b^k,c^k.
     """
     coeff = poly if isinstance(poly, Coeff) else Coeff(poly)
-    symbols = _get_defaulted_gens(poly)
+    symbols = coeff.gens
 
     def coeff_to_poly(new_coeff):
         if isinstance(poly, Poly):
@@ -40,7 +35,7 @@ def sos_struct_extract_factors(poly: Union[Poly, Coeff], solver: Callable, real:
             if coeff.nvars == 3 and all(i == monoms[0] for i in monoms):
                 multiplier = CyclicProduct(symbols[0]**monoms[0], symbols)
             else:
-                multiplier = sp.Mul(*[s**i for s, i in zip(symbols, monoms)])
+                multiplier = Mul(*[s**i for s, i in zip(symbols, monoms)])
             return multiplier * solution
         return None
 
@@ -61,7 +56,7 @@ def sos_struct_linear(poly: Union[Poly, Coeff], **kwargs):
     Solve a linear inequality. Supports non-homogeneous polynomials also.
     """
     if isinstance(poly, Coeff):
-        poly = poly.as_poly(*_get_defaulted_gens(poly))
+        poly = poly.as_poly()
     d = poly.total_degree()
     if d > 1 or not poly.domain.is_Numerical:
         return None
@@ -95,8 +90,8 @@ def sos_struct_quadratic(poly: Poly, **kwargs):
     """
     coeff = Coeff(poly)
     nvars = coeff.nvars
-    mat = sp.zeros(nvars + 1)
-    for k, v in coeff.coeffs.items():
+    mat = Matrix.zeros(nvars + 1)
+    for k, v in coeff.items():
         inds = []
         for i in range(nvars):
             if k[i] > 2:
@@ -121,8 +116,8 @@ def sos_struct_quadratic(poly: Poly, **kwargs):
     if res is None:
         return None
     U, S = res
-    gens = _get_defaulted_gens(poly)
-    genvec = sp.Matrix(list(gens) + [1])
+    gens = poly.gens
+    genvec = Matrix(list(gens) + [1])
     return sum(S[i] * (U[i, :] * genvec)[0,0]**2 for i in range(nvars + 1))
 
 
@@ -145,6 +140,10 @@ def sos_struct_common(poly: Union[Poly, Coeff], *solvers, **kwargs):
                 # we can return None directly.
                 if isinstance(e, PolynomialNonpositiveError):
                     return None
+        if solution is not None:
+            if not isinstance(solution, Expr):
+                # this should automatically cast the solution to Expr
+                solution = solution + Integer(0)
         return solution
 
     # cancel abc
@@ -161,7 +160,7 @@ def sos_struct_degree_specified_solver(solvers: Dict[int, Callable], homogeneous
     """
     def _sos_struct_degree_specified_solver(poly: Union[Poly, Coeff], *args, **kwargs):
         if homogeneous and isinstance(poly, Coeff):
-            degree = poly.degree()
+            degree = poly.total_degree()
         else:
             degree = poly.total_degree()
         solver = solvers.get(degree, None)

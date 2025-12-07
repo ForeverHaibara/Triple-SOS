@@ -35,7 +35,7 @@ def _leading_symbol(expr):
     return None
 
 def is_cyclic_expr(expr, symbols, perm):
-    symbols = _std_seq(symbols, perm)
+    symbols = _std_symbols(symbols, perm)
     if expr.free_symbols.isdisjoint(symbols):
         return True
     if hasattr(expr, '_eval_is_cyclic') and expr._eval_is_cyclic(symbols, perm):
@@ -47,15 +47,35 @@ def is_cyclic_expr(expr, symbols, perm):
     return False
 
 @cacheit
-def _std_seq(symbols, perm_group):
-    ind = sorted(list(range(len(symbols))), key = lambda i: symbols[i].name)
-    inv_ind = [0] * len(symbols)
-    for i, j in enumerate(ind):
-        inv_ind[j] = i
-    p = min(map(lambda x: x(inv_ind), perm_group.generate()))
-    # sorted_symbols = [symbols[i] for i in ind]
-    # return tuple(sorted_symbols[i] for i in p)
-    return tuple(symbols[ind[i]] for i in p)
+def _std_seq(p: Tuple, perm_group: PermutationGroup) -> Tuple:
+    """
+    Return `p o g o p^{-1}` where g is in the perm_group and `g o p^{-1}`
+    has minimum lexicographical order.
+    """
+    if len(p) == 0:
+        return tuple()
+    # elif len(perm_group.args) == 1 and \
+    #         perm_group.args[0].array_form == list(range(1, len(p))) + [0]:
+    #     # inv_p = ...
+    #     i = p.index(0)
+    #     # return tuple(p[i:] + p[:i])
+    elif perm_group.is_symmetric:
+        return p
+
+    inv_p = [0] * len(p)
+    for i, j in enumerate(p):
+        inv_p[j] = i
+
+    def perm(x):
+        # return x(inv_p) # <- this is clear but slower
+        return [inv_p[k] for k in x.array_form]
+    p2 = min(map(perm, perm_group.generate()))
+    return tuple(p[i] for i in p2)
+
+def _std_symbols(symbols: Tuple[Symbol, ...], perm_group: PermutationGroup) -> PermutationGroup:
+    p = sorted(list(range(len(symbols))), key = lambda i: symbols[i].name)
+    q = _std_seq(tuple(p), perm_group)
+    return tuple(symbols[i] for i in q)
 
 def _replace_symbols(expr: Expr, replace_dict: tDict[Symbol, Symbol]) -> Expr:
     """Replace a SymPy expression with a dictionary of replacements of SYMBOLS.
@@ -176,7 +196,7 @@ class CyclicExpr(Expr):
             return expr
 
         if evaluate:
-            symbols = _std_seq(symbols, perm)
+            symbols = _std_symbols(symbols, perm)
         symbols = sympify(tuple(symbols))
 
         # set is_Atom to True to skip sympy simplification

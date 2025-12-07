@@ -1,10 +1,10 @@
 from typing import Tuple, Dict, List, Union
 
-import sympy as sp
+from sympy import Poly, Expr, Symbol
 
 from .basic import SymmetricTransform
 from .symmetric import UE3Real, UE3Positive
-from ...utils import Coeff
+from ...utils import verify_symmetry
 
 _METHOD_TO_TRANSFORM = {
     'real': UE3Real,
@@ -17,7 +17,7 @@ def _get_transform_from_method(method: str, nvars: int) -> SymmetricTransform:
     return _METHOD_TO_TRANSFORM[method]
 
 
-def sym_representation(poly: sp.Poly, symbols: List[sp.Symbol], return_poly: bool = False, method: str = 'real') -> Union[sp.Expr, Tuple[sp.Poly, sp.Expr]]:
+def sym_representation(poly: Poly, symbols: List[Symbol], return_poly: bool = False, method: str = 'real') -> Union[Expr, Tuple[Poly, Expr]]:
     """
     Represent a polynoimal to the symmetric form.
 
@@ -59,7 +59,7 @@ def sym_representation(poly: sp.Poly, symbols: List[sp.Symbol], return_poly: boo
     return trans.transform(poly, symbols, return_poly=return_poly)
 
 
-def sym_representation_inv(expr: sp.Expr, original_symbols: List[sp.Symbol], new_symbols: List[sp.Symbol], method: str = 'real') -> sp.Expr:
+def sym_representation_inv(expr: Expr, original_symbols: List[Symbol], new_symbols: List[Symbol], method: str = 'real') -> Expr:
     """
     Compute the inverse transformation of a symbolic expression based on a specified method.
     This function takes a symbolic expression and reverses a previously applied
@@ -68,11 +68,11 @@ def sym_representation_inv(expr: sp.Expr, original_symbols: List[sp.Symbol], new
 
     Parameters
     ----------
-    expr : sp.Expr
+    expr : Expr
         The symbolic expression to be inversely transformed.
-    original_symbols : List[sp.Symbol]
+    original_symbols : List[Symbol]
         The list of original symbols in the expression before transformation.
-    new_symbols : List[sp.Symbol]
+    new_symbols : List[Symbol]
         The list of new symbols currently used in the transformed expression.
     method : str, optional
         The transformation method to use. Defaults to 'real'. Must be a valid
@@ -80,7 +80,7 @@ def sym_representation_inv(expr: sp.Expr, original_symbols: List[sp.Symbol], new
 
     Returns
     --------
-    sp.Expr
+    Expr
         The symbolic expression after applying the inverse transformation to
         restore it to its original representation.
 
@@ -94,8 +94,8 @@ def sym_representation_inv(expr: sp.Expr, original_symbols: List[sp.Symbol], new
     return trans.inv_transform(expr, original_symbols=original_symbols, new_symbols=new_symbols)
 
 
-def sym_transform(poly: sp.Poly, ineq_constraints: Dict[sp.Poly, sp.Expr], eq_constraints: Dict[sp.Poly, sp.Expr],
-                symbols: List[sp.Symbol], deparametrize: bool = False, method: str = 'real') -> Tuple[sp.Poly, Dict[sp.Poly, sp.Expr], Dict[sp.Poly, sp.Expr], sp.Expr]:
+def sym_transform(poly: Poly, ineq_constraints: Dict[Poly, Expr], eq_constraints: Dict[Poly, Expr],
+                symbols: List[Symbol], deparametrize: bool = False, method: str = 'real') -> Tuple[Poly, Dict[Poly, Expr], Dict[Poly, Expr], Expr]:
     """
     Transform a symmetric inequality problem along with its constraints.
     """
@@ -110,7 +110,7 @@ def sym_transform(poly: sp.Poly, ineq_constraints: Dict[sp.Poly, sp.Expr], eq_co
         for p, value in collection.items():
             pgens = p.gens
             p = p.as_poly(*poly.gens)
-            if not Coeff(p).is_symmetric():
+            if not verify_symmetry(p, "sym"):
                 continue
             n, d = trans.transform(p, symbols, return_poly=True)
             new_collection[n] = value * d

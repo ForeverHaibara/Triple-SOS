@@ -1,6 +1,6 @@
 from random import shuffle, seed, randint, choices
 from sympy.abc import a,b,c,d,x,y,z,w
-from sympy.combinatorics import Permutation, PermutationGroup, DihedralGroup, CyclicGroup
+from sympy.combinatorics import Permutation, PermutationGroup, DihedralGroup, CyclicGroup, SymmetricGroup
 from sympy.core import Function, Symbol
 from sympy.simplify import signsimp
 from sympy.testing.pytest import slow
@@ -33,6 +33,17 @@ def test_cyclic_sum_doit():
     val2 = a**3*b*d**2 + a**3*c*d**2 + a**2*b*d**3 + a**2*c*d**3\
           + a*b**3*c**2 + a*b**2*c**3 + b**3*c**2*d + b**2*c**3*d
     assert val1.doit() == val2
+
+    F = Function('F')
+    perm_group =  PermutationGroup(Permutation([1,2,5,0,6,3,4]), Permutation([0,1,2,5,4,3,6]))
+    val1 = CyclicSum(F(z,x,a,c,d,b,y), (x,d,y,c,z,a,b), perm_group)
+    set1 = set(val1.doit().args)
+    set2 = set([F(z,x,a,c,d,b,y).xreplace(dict(zip(
+        (x,d,y,c,z,a,b), g((x,d,y,c,z,a,b))))) for g in perm_group.generate()])
+    assert set1 == set2
+
+    val1 = CyclicSum(F(z,x,a,c,d,b,y), (x,d,y,c,z,a,b), SymmetricGroup(7))
+    assert val1.args[1] == (a,b,c,d,x,y,z)
 
 
 @slow

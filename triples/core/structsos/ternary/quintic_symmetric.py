@@ -1,14 +1,13 @@
 import sympy as sp
+from sympy import Symbol, Rational
 
 from .quartic import sos_struct_quartic
 from .utils import (
-    CyclicSum, CyclicProduct, Coeff, CommonExpr,
-    sum_y_exprs, nroots, radsimp, rationalize, rationalize_bound
+    Coeff, CommonExpr,
+    sum_y_exprs, nroots, rationalize, rationalize_bound
 )
 
-a, b, c = sp.symbols('a b c')
-
-def sos_struct_quintic_symmetric(coeff, real = True):
+def sos_struct_quintic_symmetric(coeff: Coeff, real = True):
     """
     The function solves symmetric quintic problems with s(a^5) term in an
     incomplete attempt.
@@ -85,38 +84,42 @@ def sos_struct_quintic_symmetric(coeff, real = True):
     # first determine how much abcs(a2-ab) can we subtract from the poly
 
     m, z, u, v = coeff((5,0,0)), coeff((4,1,0)), coeff((3,2,0)), coeff((3,1,1))
-    z, u, v = radsimp([z / m, u / m, v / m])
-    rem = radsimp((1 + v + (z + u)*2) * m + coeff((2,2,1)))
+    z, u, v = [z / m, u / m, v / m]
+    rem = (1 + v + (z + u)*2) * m + coeff((2,2,1))
     if rem < 0:
         return None
+
+    a, b, c = coeff.gens
+    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
 
     if True:
         # Try subtracting some s(a(a2-xab-xac-yb2-yc2+(2x+2y-1)bc)2) so that
         # the rest is positive. See criterion at _sos_struct_quintic_symmetric_hexagon.
         def _criterion(x):
-            denom = radsimp(2*(-4*u - v + 4*x**2 - 8*x - 8*z - 4))
+            denom = 2*(-4*u - v + 4*x**2 - 8*x - 8*z - 4)
             if denom == 0:
                 return None
-            y = radsimp(-(x - 1)*(-2*u - v + 4*x**2 - 12*x - 8*z - 2) / denom)
-            z2 = radsimp(2*x - y**2 + z)
+            y = (-(x - 1)*(-2*u - v + 4*x**2 - 12*x - 8*z - 2) / denom)
+            z2 = 2*x - y**2 + z
             if z2 < 0:
                 return None
-            u2 = radsimp(u - x**2 - 2*x*y + 2*y)
-            v2 = radsimp(v - 2*x**2 + 8*x*y - 4*x + 8*y**2 - 8*y + 2)
-            if (z2 > 0 and radsimp((2*u2 + v2)**2 + 8*v2*z2) <= 0) or (z2 == 0 and u2 >= 0 and 2*u2 + v2 >= 0):
+            u2 = u - x**2 - 2*x*y + 2*y
+            v2 = v - 2*x**2 + 8*x*y - 4*x + 8*y**2 - 8*y + 2
+            if (z2 > 0 and ((2*u2 + v2)**2 + 8*v2*z2) <= 0) or (z2 == 0 and u2 >= 0 and 2*u2 + v2 >= 0):
                 return y
             return None
 
-        x = sp.symbols('x')
+        x = Symbol('x')
         # We shall have det1 <= 0
-        det1 = (16*x**4 - 32*x**3 + (-16*u - 8*v - 32*z)*x**2 + (-16*u + 8*v - 16)*x + 4*u**2 + 4*u*v + 8*u + v**2 + 8*v*z + 4*v + 4).as_poly(x)
-        det2 = (-4*u - v + 6*x**2 - 12*x - 8*z - 2).as_poly(x)
+        det1 = coeff.from_list([16, -32, -16*u - 8*v - 32*z, -16*u + 8*v - 16, 4*u**2 + 4*u*v + 8*u + v**2 + 8*v*z + 4*v + 4], gens=(x,)).as_poly()
+        det2 = coeff.from_list([6, -12, -4*u - v - 8*z - 2], gens=(x,)).as_poly()
 
         y_ = None
         # first check whether there exists common roots
-        det_gcd = sp.gcd(det1, det1.diff())
+        det_gcd = det1.gcd(det1.diff())
         if det_gcd.degree() == 1:
-            x_ = radsimp(-det_gcd.coeff_monomial((0,)) / det_gcd.coeff_monomial((1,)))
+            x_ = -det_gcd.rep.TC() / det_gcd.rep.LC()
+            x_ = coeff.convert(x_)
             y_ = _criterion(x_)
 
         if y_ is None:
@@ -127,6 +130,7 @@ def sos_struct_quintic_symmetric(coeff, real = True):
                 if len(intervals):
                     for interval in intervals[:-1]:
                         x_ = interval[0][1]
+                        x_ = coeff.convert(x_)
                         y_ = _criterion(x_)
                         if y_ is not None:
                             break
@@ -139,6 +143,7 @@ def sos_struct_quintic_symmetric(coeff, real = True):
                         y_ = None
                         direction = 1 if det1.diff()(x_) <= 0 else -1
                         for x__ in rationalize_bound(x_, direction = direction, compulsory = True):
+                            x__ = coeff.convert(x__)
                             y__ = _criterion(x__)
                             if y__ is not None:
                                 x_, y_ = x__, y__
@@ -148,17 +153,17 @@ def sos_struct_quintic_symmetric(coeff, real = True):
                     y_ = None
 
         if y_ is not None:
-            u2 = radsimp(u - x_**2 - 2*x_*y_ + 2*y_)
-            v2 = radsimp(v - 2*x_**2 + 8*x_*y_ - 4*x_ + 8*y_**2 - 8*y_ + 2)
+            u2 = u - x_**2 - 2*x_*y_ + 2*y_
+            v2 = v - 2*x_**2 + 8*x_*y_ - 4*x_ + 8*y_**2 - 8*y_ + 2
             _new_coeffs = {
-                (5,0,0): sp.S(0),
-                (4,1,0): radsimp(m*(2*x_-y_**2+z)), (1,4,0): radsimp(m*(2*x_-y_**2+z)),
-                (3,2,0): radsimp(m*u2), (2,3,0): radsimp(m*u2),
-                (3,1,1): radsimp(m*v2),
-                (2,2,1): radsimp(coeff((2,2,1)) + m*(4*x_**2 - 4*x_*y_ - 6*y_**2 + 4*y_ - 1))
+                (4,1,0): m*(2*x_-y_**2+z), (1,4,0): m*(2*x_-y_**2+z),
+                (3,2,0): m*u2, (2,3,0): m*u2,
+                (3,1,1): m*v2,
+                (2,2,1): (coeff((2,2,1)) + m*(4*x_**2 - 4*x_*y_ - 6*y_**2 + 4*y_ - 1))
             }
-            solution = _sos_struct_quintic_symmetric_hexagon(Coeff(_new_coeffs, is_rational = coeff.is_rational))
+            solution = _sos_struct_quintic_symmetric_hexagon(coeff.from_dict(_new_coeffs))
             if solution is not None:
+                m, x_, y_ = [coeff.to_sympy(_) for _ in [m, x_, y_]]
                 solution = solution + m * CyclicSum(
                     a*(a**2 - x_*a*b - x_*a*c - y_*b**2 - y_*c**2 + (2*x_ + 2*y_ - 1)*b*c)**2
                 )
@@ -169,20 +174,20 @@ def sos_struct_quintic_symmetric(coeff, real = True):
         if u + 1 + z >= 0 and v + 3 + 4*z + 2*u >= 0:
             # everything is trivial if (u,v) is on the upper-right side of (-1-z, -1-2z), the
             # leftmost point of the cubic where t = 1.
-            y = radsimp([
-                m / 2 if 2*z + 1 >= 0 else sp.S(0),
+            y = [
+                m / 2 if 2*z + 1 >= 0 else 0,
 
                 # when 2z + 1 < 0, use Schur: s((a+b-c)(a-b)2(a+b-c)2) = s(a3(a-b)(a-c))
-                m if 2*z + 1 < 0 else sp.S(0),
-                m * (z+1) if 2*z + 1 < 0 else sp.S(0),
+                m if 2*z + 1 < 0 else 0,
+                m * (z+1) if 2*z + 1 < 0 else 0,
 
                 (u + 1 + z) * m,
                 (v + 3 + 4*z + 2*u) * m / 2,
                 rem
-            ])
+            ]
             exprs = [
                 CyclicSum((a+b+(2*z+1)*c)*(a-b)**2*(a+b-c)**2),
-                CommonExpr.schur(5),
+                CommonExpr.schur(5, coeff.gens),
                 CyclicSum(c*(a-b)**2*(a+b-c)**2),
                 CyclicSum(a**3*(b-c)**2),
                 CyclicProduct(a) * CyclicSum((a-b)**2),
@@ -193,13 +198,13 @@ def sos_struct_quintic_symmetric(coeff, real = True):
         if True:
             # very trivial case:
             # linear combination of s(a3(b-c)2), abcs(a2-ab), s((a+b+(2z-1)/3c))(a-b)2(a+b+(2z-1)/3c)2)
-            c1 = radsimp(coeff((3,2,0)) - m * (z + 1)*(4*z**2 + 8*z - 23)/27)
-            y = radsimp([
+            c1 = coeff((3,2,0)) - m * (z + 1)*(4*z**2 + 8*z - 23)/27
+            y = [
                 m / 2,
                 c1,
                 (coeff((3,1,1)) + 2 * c1 + m * (2*z - 1)**3/27) / 2,
                 rem
-            ])
+            ]
             if all(_ >= 0 for _ in y):
                 # the third equation is equivalent to
                 # -6*u - 3*v + 4*z**2 - 4*z - 5 <= 0
@@ -227,68 +232,69 @@ def sos_struct_quintic_symmetric(coeff, real = True):
         # assume the second intersection has t > (1-2z)/3. It is also positive.
 
         t1 = (1 - 2*z) / 3
-        t2 = radsimp(-(2*u*z - u + v*z + 4*v + 2*z - 1)/(-6*u - 3*v + 4*z**2 - 4*z - 5))
-        y1 = radsimp(-t1**2*(2*t1 + 2*z - 1))
-        y2 = radsimp(-t2**2*(2*t2 + 2*z - 1))
+        t2 = -(2*u*z - u + v*z + 4*v + 2*z - 1)/(-6*u - 3*v + 4*z**2 - 4*z - 5)
+        y1 = -t1**2*(2*t1 + 2*z - 1)
+        y2 = -t2**2*(2*t2 + 2*z - 1)
 
-        # weight of linear combination
-        w1 = radsimp((v - y2) / (y1 - y2))
-        w2 = 1 - w1
-        # print('(w1, w2) =', (w1, w2), '\n(y1, y2) =', (y1, y2), '\n(t1, t2) =', (t1, t2))
-        if y1 != y2 and 0 <= w1 <= 1:
-            if (w1 == 0 and y2 <= 0) or (y1 <= 0 and y2 <= 0):
-                y = radsimp([
-                    w1 * m / 2,
-                    w2 * m / 2,
-                    rem
-                ])
-                exprs = [
-                    CyclicSum((a + b + (2*z - 1 + 2*t1)*c)*(a - b)**2*(a + b - t1*c)**2),
-                    CyclicSum((a + b + (2*z - 1 + 2*t2)*c)*(a - b)**2*(a + b - t2*c)**2),
-                    CyclicProduct(a) * CyclicSum(a*b)
-                ]
-                return sum_y_exprs(y, exprs)
-            else:
-                # higher degree
-                # we must have t1 = (1 - 2z) / 3 <= 1
-                multiplier = CyclicSum((a - b)**2)/2
-                if y2 <= 0: # 2z - 1 + 2t_2 >= 0
-                    # note that:
-                    # s((a+b-c)(a-b)2(a+b-tc)2)s(a2-ab)
-                    # = s(a(a-b)(a-c))s((b-c)2(b+c-ta)2) + 2(2-t)(t+1)s(a)p(a-b)2 >= 0
-                    y = radsimp([
-                        w1 * m / 2,
-                        w1 * m * (2 - t1) * (t1 + 1),
-                        w1 * m * (z + t1) / 2,
-                        w2 * m / 4,
-                        rem / 2
-                    ])
-                    exprs = [
-                        CyclicSum(a*(a-b)*(a-c)) * CyclicSum((b-c)**2*(b+c-t1*a)**2),
-                        CyclicSum(a) * CyclicProduct((a-b)**2),
-                        CyclicSum((a-b)**2) * CyclicSum(c*(a - b)**2*(a + b - t1*c)**2),
-                        CyclicSum((a-b)**2) * CyclicSum((a + b + (2*z - 1 + 2*t2)*c)*(a - b)**2*(a + b - t2*c)**2),
-                        CyclicSum((a-b)**2) * CyclicProduct(a) * CyclicSum(a*b)
-                    ]
-                    return sum_y_exprs(y, exprs) / multiplier
-                else: # 2z - 1 + 2t_2 < 0, in this case t < 2
-                    y = radsimp([
+        if y1 != y2:
+            # weight of linear combination
+            w1 = (v - y2) / (y1 - y2)
+            w2 = 1 - w1
+            # print('(w1, w2) =', (w1, w2), '\n(y1, y2) =', (y1, y2), '\n(t1, t2) =', (t1, t2))
+            if 0 <= w1 <= 1:
+                if (w1 == 0 and y2 <= 0) or (y1 <= 0 and y2 <= 0):
+                    y = [
                         w1 * m / 2,
                         w2 * m / 2,
-                        (w1 * (2 - t1) * (t1 + 1) + w2 * (2 - t2) * (t2 + 1)) * m,
-                        w1 * m * (z + t1) / 2,
-                        w2 * m * (z + t2) / 2,
-                        rem / 2
-                    ])
-                    exprs = [
-                        CyclicSum(a*(a-b)*(a-c)) * CyclicSum((b-c)**2*(b+c-t1*a)**2),
-                        CyclicSum(a*(a-b)*(a-c)) * CyclicSum((b-c)**2*(b+c-t2*a)**2),
-                        CyclicSum(a) * CyclicProduct((a-b)**2),
-                        CyclicSum((a-b)**2) * CyclicSum(c*(a - b)**2*(a + b - t1*c)**2),
-                        CyclicSum((a-b)**2) * CyclicSum(c*(a - b)**2*(a + b - t2*c)**2),
-                        CyclicSum((a-b)**2) * CyclicProduct(a) * CyclicSum(a*b)
+                        rem
                     ]
-                    return sum_y_exprs(y, exprs) / multiplier
+                    exprs = [
+                        CyclicSum((a + b + (2*z - 1 + 2*t1)*c)*(a - b)**2*(a + b - t1*c)**2),
+                        CyclicSum((a + b + (2*z - 1 + 2*t2)*c)*(a - b)**2*(a + b - t2*c)**2),
+                        CyclicProduct(a) * CyclicSum(a*b)
+                    ]
+                    return sum_y_exprs(y, exprs)
+                else:
+                    # higher degree
+                    # we must have t1 = (1 - 2z) / 3 <= 1
+                    multiplier = CyclicSum((a - b)**2)/2
+                    if y2 <= 0: # 2z - 1 + 2t_2 >= 0
+                        # note that:
+                        # s((a+b-c)(a-b)2(a+b-tc)2)s(a2-ab)
+                        # = s(a(a-b)(a-c))s((b-c)2(b+c-ta)2) + 2(2-t)(t+1)s(a)p(a-b)2 >= 0
+                        y = [
+                            w1 * m / 2,
+                            w1 * m * (2 - t1) * (t1 + 1),
+                            w1 * m * (z + t1) / 2,
+                            w2 * m / 4,
+                            rem / 2
+                        ]
+                        exprs = [
+                            CyclicSum(a*(a-b)*(a-c)) * CyclicSum((b-c)**2*(b+c-t1*a)**2),
+                            CyclicSum(a) * CyclicProduct((a-b)**2),
+                            CyclicSum((a-b)**2) * CyclicSum(c*(a - b)**2*(a + b - t1*c)**2),
+                            CyclicSum((a-b)**2) * CyclicSum((a + b + (2*z - 1 + 2*t2)*c)*(a - b)**2*(a + b - t2*c)**2),
+                            CyclicSum((a-b)**2) * CyclicProduct(a) * CyclicSum(a*b)
+                        ]
+                        return sum_y_exprs(y, exprs) / multiplier
+                    else: # 2z - 1 + 2t_2 < 0, in this case t < 2
+                        y = [
+                            w1 * m / 2,
+                            w2 * m / 2,
+                            (w1 * (2 - t1) * (t1 + 1) + w2 * (2 - t2) * (t2 + 1)) * m,
+                            w1 * m * (z + t1) / 2,
+                            w2 * m * (z + t2) / 2,
+                            rem / 2
+                        ]
+                        exprs = [
+                            CyclicSum(a*(a-b)*(a-c)) * CyclicSum((b-c)**2*(b+c-t1*a)**2),
+                            CyclicSum(a*(a-b)*(a-c)) * CyclicSum((b-c)**2*(b+c-t2*a)**2),
+                            CyclicSum(a) * CyclicProduct((a-b)**2),
+                            CyclicSum((a-b)**2) * CyclicSum(c*(a - b)**2*(a + b - t1*c)**2),
+                            CyclicSum((a-b)**2) * CyclicSum(c*(a - b)**2*(a + b - t2*c)**2),
+                            CyclicSum((a-b)**2) * CyclicProduct(a) * CyclicSum(a*b)
+                        ]
+                        return sum_y_exprs(y, exprs) / multiplier
 
 
 
@@ -308,13 +314,13 @@ def sos_struct_quintic_symmetric(coeff, real = True):
         if True:
             # trivial case, where (u,v) is over the asymptotic line from (-1-z, z^2)
             # which is a linear combination of s((a+b-c)(a-b)2(a+b+zc)2), s(a3(b-c)2) and abcs(a2-ab)
-            y = radsimp([
+            y = [
                 m / 4,
                 (3 + z) * (1 - z) * m / 4,
                 (u + z + 1) * m / 2,
                 (v - z**2 + 2*(u + z + 1)) * m / 4,
                 rem / 2
-            ])
+            ]
             if all(_ >= 0 for _ in y):
                 multiplier = CyclicSum((a - b)**2)/2
                 exprs = [
@@ -328,30 +334,30 @@ def sos_struct_quintic_symmetric(coeff, real = True):
                 return sum_y_exprs(y, exprs) / multiplier
 
         t1 = -z
-        t2 = radsimp(-(2*u*z - u + v*z + 4*v + 2*z - 1)/(-6*u - 3*v + 4*z**2 - 4*z - 5))
+        t2 = -(2*u*z - u + v*z + 4*v + 2*z - 1)/(-6*u - 3*v + 4*z**2 - 4*z - 5)
 
         u1 = -z - 1
-        u2 = radsimp(t2**3 + t2**2*z - 2*t2**2 - 2*t2*z + t2 - 1)
-        u3 = sp.S(1)
-        v1 = radsimp(z**2)
-        v2 = radsimp(-t2**2*(2*t2 + 2*z - 1))
-        v3 = sp.S(-2)
+        u2 = (t2**3 + t2**2*z - 2*t2**2 - 2*t2*z + t2 - 1)
+        u3 = 1
+        v1 = (z**2)
+        v2 = (-t2**2*(2*t2 + 2*z - 1))
+        v3 = -2
 
         # w1 + w2 = 1
         # w1u1 + w2u2 + w3u3 = u
         # w1v1 + w2v2 + w3v3 = v
-        w1 = radsimp((u*v3 - u2*v3 - u3*v + u3*v2)/(u1*v3 - u2*v3 - u3*v1 + u3*v2))
+        w1 = (u*v3 - u2*v3 - u3*v + u3*v2)/(u1*v3 - u2*v3 - u3*v1 + u3*v2)
         w2 = 1 - w1
-        w3 = radsimp(u - w1*u1 - w2*u2)
+        w3 = u - w1*u1 - w2*u2
 
-        y = radsimp([
+        y = [
             w1 * m / 4,
             w2 * m / 4,
             (w1 * (3 + z) * (1 - z) + w2 * (3 - t2) * (1 + t2)) * m / 4,
             w2 * (z + t2) * m / 2,
             w3 * m / 2,
             rem / 2
-        ])
+        ]
         if all(_ >= 0 for _ in y):
             multiplier = CyclicSum((a - b)**2)/2
             exprs = [
@@ -368,7 +374,7 @@ def sos_struct_quintic_symmetric(coeff, real = True):
 
     else: # if z <= -3
         # In this case there might be roots on the border.
-        du = radsimp(u - (z**2 + 2*z + 5)/4) # ensure the border is positive
+        du = u - (z**2 + 2*z + 5)/4 # ensure the border is positive
         if du < 0:
             return None
 
@@ -376,8 +382,8 @@ def sos_struct_quintic_symmetric(coeff, real = True):
             # a trivial but beautiful case
             y = [
                 m,
-                radsimp(m * du / 2),
-                radsimp(m * (v - (z**2 - 6*z - 9)/2 + 2*du) / 4),
+                m * du / 2,
+                m * (v - (z**2 - 6*z - 9)/2 + 2*du) / 4,
                 rem / 2
             ]
             if y[-2] >= 0:
@@ -400,7 +406,7 @@ def sos_struct_quintic_symmetric(coeff, real = True):
         # dy/dt = -3*(t - 1)*(t + 1)*(3*t**2 + 2*t + 3)*(9*t**2 + 8*t*z + 2*t + 9)/(32*t**4)
         # We see that dy/dx < 0. So we can solve a point on the curve that is below (u,v).
 
-        t, t_ = sp.symbols('t'), None
+        t, t_ = Symbol('t'), None
         eqt1 = (27*t**6 + 36*t**5*z - 18*t**5 - 48*t**4*z + 69*t**4 + 24*t**3*z - 92*t**3 - 48*t**2*z + 69*t**2 + 36*t*z - 18*t + 27) - u*(64*t**3)
         eqt2 = (-27*t**6 - 36*t**5*z - 36*t**5 - 48*t**4*z - 93*t**4 - 88*t**3*z - 72*t**3 - 48*t**2*z - 93*t**2 - 36*t*z - 36*t - 27) - v*(32*t**3)
         eqt1, eqt2 = eqt1.as_poly(t), eqt2.as_poly(t)
@@ -419,8 +425,7 @@ def sos_struct_quintic_symmetric(coeff, real = True):
                 m_ = -2*r**2 - 8*r*y**2 - 4*r*y + v - 4*x*y + 4*x + 9*y**2 + 6*y + 3
                 p_ = 2*r**2*y**2 + r**2 - 4*r*x - 4*r*y**2 - 20*r*y + 6*r + v*y**2 + 2*v*y - 2*v - x**2 + 10*x*y - 4*x + 3*y**2 + 24*y - 9
                 n_ = -2*r**2*y**2 + 12*r**2*y - 12*r*x*y + 4*r*x + 8*r*y**2 - 8*r*y - 12*r - v*y**2 - 2*v*y + 3*v - 2*x**2 + 4*x*y + 8*x - 9*y**2 - 6*y + 15
-                m_, p_, n_ = radsimp([m_, p_, n_])
-                det = radsimp(3*m_*(m_ + n_) - 3*p_**2)
+                det = 3*m_*(m_ + n_) - 3*p_**2
                 return (m_, p_, n_), det
             def _verify_xy(x, y):
                 if -2 < y < 0:
@@ -432,29 +437,33 @@ def sos_struct_quintic_symmetric(coeff, real = True):
 
             # We shall find x, y such that m >= 0 and det >= 0 and y(y+2) >= 0.
             # We first compute the optimal x, y through the exact theorem.
-            w0, w1 = radsimp([(3-u_)/(4*u_), 9*(u_-1)**2*(u_+1)*(u_+3)/(32*u_**3)])
+            w0, w1 = [(3-u_)/(4*u_), 9*(u_-1)**2*(u_+1)*(u_+3)/(32*u_**3)]
             y0, x0 = -w0, -r*w0 - w1
 
             if _verify_xy(x0, y0):
-                if not isinstance(u_, sp.Rational):
+                if not isinstance(u_, Rational):
                     x0, y0 = x0.n(20), y0.n(20)
                     for rounding in (.5, .1, 1e-2, 1e-3, 1e-5, 1e-8, 1e-12):
                         x_, y_ = rationalize(x0, rounding=rounding, reliable = False), rationalize(y0, rounding=rounding, reliable=False)
                         if _verify_xy(x_, y_):
                             x0, y0 = x_, y_
                             break
+                    else:
+                        return None
 
-                multiplier = CommonExpr.quadratic(1, y0**2 + 2*y0 - 1)
+                multiplier = CommonExpr.quadratic(1, y0**2 + 2*y0 - 1, coeff.gens)
                 func_g = (c**2 - r*b*c + b**2 - (2-r)*a*b)*(c+y0*b) + (c**2 - r*a*c + a**2 - (2-r)*a*b)*(c+y0*a) - c**3 + a*b*c + x0*(a**2*b + a*b**2 - 2*a*b*c)
                 func_g = func_g.expand()
                 main_solution = m * CyclicSum(c * func_g**2)
 
                 m_, p_, n_ = _compute_mpnq_discriminant(x0, y0)[0]
-                m_, p_, n_ = radsimp([m*m_, m*p_, m*n_])
+                m_, p_, n_ = [m*m_, m*p_, m*n_]
                 quartic = {
                     (4,0,0): m_, (3,1,0): p_, (2,2,0): n_, (1,3,0): p_, (2,1,1): -m_-p_*2-n_
                 }
-                quartic_solution = sos_struct_quartic(Coeff(quartic), None)
+                quartic_solution = sos_struct_quartic(coeff.from_dict(quartic), None)
+                if quartic_solution is None: # not expected to happen
+                    return None
                 solution = main_solution + (quartic_solution + rem * CyclicSum(a*b) * multiplier) * CyclicProduct(a)
                 return solution / multiplier
 
@@ -469,7 +478,7 @@ def sos_struct_quintic_symmetric(coeff, real = True):
             sym_gcd = sp.polys.gcd(sym, sym_diff)
 
             if sym_gcd.degree() == 1:
-                root = radsimp(-sym_gcd.coeff_monomial((0,)) / sym_gcd.coeff_monomial((1,)))
+                root = -sym_gcd.coeff_monomial((0,)) / sym_gcd.coeff_monomial((1,))
                 t = root + 1
                 w = 2*z - 1 + 2*t
                 extra_w = sp.S(0)
@@ -477,12 +486,11 @@ def sos_struct_quintic_symmetric(coeff, real = True):
                 if du == 0 and not coeff.is_rational:
                     # This might happen when the exact u is irrational
                     # and we can solve it from (3u^2+2u+3) - 4ut = 0
-                    u_ = (2*t + 2*sp.sqrtdenest(sp.sqrt(radsimp(t**2 - t - 2))) - 1)/3
-                    u_ = radsimp(u_)
+                    u_ = (2*t + 2*sp.sqrtdenest(sp.sqrt(t**2 - t - 2)) - 1)/3
                     if u_ < 3:
                         return None
 
-                w_lower_bound = radsimp(-(u_**2 + 6*u_ - 9)/(2*u_**2))
+                w_lower_bound = (-(u_**2 + 6*u_ - 9)/(2*u_**2))
                 if w < w_lower_bound:
                     return None
 
@@ -493,15 +501,11 @@ def sos_struct_quintic_symmetric(coeff, real = True):
                     # v: coefficient of p(a-b)^2s(a)
                     # q: coefficient of s(c(a-b)^2(tab - (t-1)c(a+b))^2)
                     u = (4*t**2*x**2 - 4*t**2*x + t**2 - 8*t*x**2 - 8*t*x*y + 12*t*x + 4*t*y - 4*t - 2*w + 4*x**2 + 8*x*y - 16*x + 4*y**2 + 2)/4
-                    u = radsimp(u)
                     v = (2*t**2*w + 4*t**2*x**2 - 8*t**2*x*y + 4*t**2*y - 4*t*u - 4*t*w + 8*t*x**2 - 28*t*x + 8*t*y**2 + 12*t*y + 10*t + 2*u*w + 2*u - 16*x**2 + 12*x + 4*y + 3)/4
-                    v = radsimp(v)
                     q = -(-2*t**2*u*w - 2*t**2*u - 2*t**2*w + 4*t**2*x**2 - 16*t**2*x*y - 4*t**2*x + 4*t**2*y**2 + 12*t**2*y - t**2 + 4*t*u*w + 4*t*w + 8*t*x**2 + 24*t*x*y \
                             - 24*t*x - 8*t*y + 14*t + 4*u - 4*v - 2*w - 16*x**2 - 16*x*y + 20*x + 12*y + 1)/(4*(t - 1)**2)
-                    q = radsimp(q)
                     ind = (8*t**2*w*x**2 - 8*t**2*w*x + 2*t**2*w - 4*t**2*x**2 + 4*t**2*x - t**2 - 16*t*w*x**2 - 16*t*w*x*y + 24*t*w*x + 8*t*w*y \
                             - 8*t*w + 56*t*x**2 - 40*t*x*y - 36*t*x + 20*t*y + 4*t - 4*w**2 + 8*w*x**2 + 16*w*x*y - 32*w*x + 8*w*y**2 - 2*w - 68*x**2 + 24*x*y + 28*y**2 + 16*y + 10)/4
-                    ind = radsimp(ind)
                     return u, v, q, ind
 
                 def _verify_xy(x, y, w):
@@ -510,10 +514,10 @@ def sos_struct_quintic_symmetric(coeff, real = True):
                         return True
 
                 # We first compute the optimal x, y through the exact theorem.
-                w_ = radsimp((3*u_**3 + u_**2 + 9*u_ - 9)/(4*u_**2))
-                w0, w1 = radsimp([(3-u_)/(4*u_), 9*(u_-1)**2*(u_+1)*(u_+3)/(32*u_**3)])
-                x0 = radsimp((t**2 - 2*t - 2*w0*w_ - 2*w1 + 1)/(2*t**2 - 6*t + 4))
-                y0 = radsimp((-2*t*w0 - 2*w0*w_ + 4*w0 - 2*w1 + 1)/(2*t - 4))
+                w_ = (3*u_**3 + u_**2 + 9*u_ - 9)/(4*u_**2)
+                w0, w1 = [(3-u_)/(4*u_), 9*(u_-1)**2*(u_+1)*(u_+3)/(32*u_**3)]
+                x0 = (t**2 - 2*t - 2*w0*w_ - 2*w1 + 1)/(2*t**2 - 6*t + 4)
+                y0 = (-2*t*w0 - 2*w0*w_ + 4*w0 - 2*w1 + 1)/(2*t - 4)
 
                 # print('(x,y) =', (x0, y0), ' coeffs =', _compute_coeffs(x0, y0, w))
                 if not _verify_xy(x0, y0, w):
@@ -528,7 +532,7 @@ def sos_struct_quintic_symmetric(coeff, real = True):
                         return None
 
 
-                if (not isinstance(u_, sp.Rational)) and (coeff.is_rational or du != 0):
+                if (not isinstance(u_, Rational)) and (coeff.is_rational or du != 0):
                     x0, y0 = x0.n(20), y0.n(20)
                     for rounding in (.5, .1, 1e-2, 1e-3, 1e-5, 1e-8, 1e-12):
                         x_, y_ = rationalize(x0, rounding=rounding, reliable = False), rationalize(y0, rounding=rounding, reliable=False)
@@ -537,16 +541,16 @@ def sos_struct_quintic_symmetric(coeff, real = True):
                             break
 
                 c1, c2, c3, ind = _compute_coeffs(x0, y0, w)
-                multiplier = CommonExpr.quadratic(1, c1)
-                func_g = x0*((b+c-t*a)*(c-b)**2+(c+a-t*b)*(a-c)**2) + (sp.Rational(1,2)-x0)*(b+c-t*a)*(c+a-t*b)*(2*c-a-b) + y0*(a+b-t*c)*(a-b)**2
+                multiplier = CommonExpr.quadratic(1, c1, coeff.gens)
+                func_g = x0*((b+c-t*a)*(c-b)**2+(c+a-t*b)*(a-c)**2) + (Rational(1,2)-x0)*(b+c-t*a)*(c+a-t*b)*(2*c-a-b) + y0*(a+b-t*c)*(a-b)**2
                 func_g = func_g.expand()
 
                 y = [
                     m,
-                    radsimp(m * c2),
-                    radsimp(m * c3),
-                    radsimp(m * extra_w / 2),
-                    radsimp(m * ind / 2),
+                    m * c2,
+                    m * c3,
+                    m * extra_w / 2,
+                    m * ind / 2,
                     rem
                 ]
                 exprs = [
@@ -563,7 +567,7 @@ def sos_struct_quintic_symmetric(coeff, real = True):
         if True:
             # Case c. If it is strictly > 0 other than the centroid. Then it is easy to make a perturbation.
 
-            if not isinstance(t_, sp.Rational):
+            if not isinstance(t_, Rational):
                 direction = 1 if 9*t_**2 + 8*t_*z + 2*t_ + 9 <= 0 else -1
                 for t__ in rationalize_bound(t_, direction = direction, compulsory = True):
                     if t__ >= 3 and eqt1(t__) <= 0 and eqt2(t__) <= 0:
@@ -571,18 +575,18 @@ def sos_struct_quintic_symmetric(coeff, real = True):
                         break
 
             u_ = t_
-            t_ = radsimp((3*u_**2 + 2*u_ + 3) / (4*u_))
-            w_ = radsimp((3*u_**3 + u_**2 + 9*u_ - 9)/(4*u_**2))
-            sub = radsimp((u_**2 + 6*u_ - 9)/(2*u_**2))
-            extra = radsimp(2*w_ + 2*z)
+            t_ = (3*u_**2 + 2*u_ + 3) / (4*u_)
+            w_ = (3*u_**3 + u_**2 + 9*u_ - 9)/(4*u_**2)
+            sub = (u_**2 + 6*u_ - 9)/(2*u_**2)
+            extra = 2*w_ + 2*z
             # F(a,b,c) >= s((a+b + (extra - sub)c)(a-b)^2(a+b-tc)^2) / 2
 
             if extra >= sub:
                 m_inv_u = -m / (64*u_**3)
                 y = [
                     m / 2,
-                    radsimp(m_inv_u * eqt1(u_)),
-                    radsimp(m_inv_u * eqt2(u_)),
+                    m_inv_u * eqt1(u_),
+                    m_inv_u * eqt2(u_),
                     rem
                 ]
                 if any (_ < 0 for _ in y):
@@ -596,17 +600,17 @@ def sos_struct_quintic_symmetric(coeff, real = True):
                 return sum_y_exprs(y, exprs)
 
             elif extra >= 0:
-                w0, w1 = radsimp([(3-u_)/(4*u_), 9*(u_-1)**2*(u_+1)*(u_+3)/(32*u_**3)])
+                w0, w1 = [(3-u_)/(4*u_), 9*(u_-1)**2*(u_+1)*(u_+3)/(32*u_**3)]
                 func_g = ((w0*(a+b) - c)*(a**2+b**2+c**2 - (w_+1)/2*c*(a+b) + (w_-2)*a*b) - w1*a*b*(2*c-a-b)).expand()
-                multiplier = CommonExpr.quadratic(1, -radsimp((7*u_**2+30*u_-9)/(16*u_**2)))
+                multiplier = CommonExpr.quadratic(1, -(7*u_**2+30*u_-9)/(16*u_**2), coeff.gens)
                 m_inv_u = -m / (64*u_**3)
 
-                pw1, pw2 = radsimp(m_inv_u * eqt1(u_)), radsimp(m_inv_u * eqt2(u_))
+                pw1, pw2 = m_inv_u * eqt1(u_), m_inv_u * eqt2(u_)
                 if pw1 < 0 or pw2 < 0:
                     return None
 
                 p1 = sp.Add(*[
-                    radsimp(extra * m / 2) * CyclicSum(c*(a-b)**2*(a+b-t_*c)**2),
+                    (extra * m / 2) * CyclicSum(c*(a-b)**2*(a+b-t_*c)**2),
                     pw1 * CyclicSum(a**2*(b+c)*(b-c)**2),
                     pw2 * CyclicProduct(a) * CyclicSum((a-b)**2),
                     rem * CyclicProduct(a) * CyclicSum(a*b)
@@ -614,7 +618,7 @@ def sos_struct_quintic_symmetric(coeff, real = True):
 
                 y = [
                     m,
-                    radsimp(27*(u_ - 3)*(u_**2 - u_ + 2)/u_**3/32 * m),
+                    27*(u_ - 3)*(u_**2 - u_ + 2)/u_**3/32 * m,
                     p1[0]
                 ]
 
@@ -629,7 +633,7 @@ def sos_struct_quintic_symmetric(coeff, real = True):
 
 
 
-def _sos_struct_quintic_symmetric_hexagon(coeff):
+def _sos_struct_quintic_symmetric_hexagon(coeff: Coeff):
     """
     Prove symmetric quintic without s(a5). It should also handle
     the case when (1,1,1) is not a root.
@@ -656,9 +660,12 @@ def _sos_struct_quintic_symmetric_hexagon(coeff):
     if m < 0:
         return None
 
-    rem = radsimp((m + coeff((3,2,0))) * 2 + coeff((3,1,1)) + coeff((2,2,1)))
+    rem = (m + coeff((3,2,0))) * 2 + coeff((3,1,1)) + coeff((2,2,1))
     if rem < 0:
         return None
+
+    a, b, c = coeff.gens
+    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
 
     if True:
         # very trivial as a combination of s(a(b-c)4), s(a3(b-c)2), abcs(a2-ab)
@@ -682,15 +689,15 @@ def _sos_struct_quintic_symmetric_hexagon(coeff):
     if m == 0:
         return None
 
-    u, v = radsimp([coeff((3,2,0)) / m, coeff((3,1,1)) / m])
+    u, v = [coeff((3,2,0)) / m, coeff((3,1,1)) / m]
     if u >= -1 and v >= -2:
         # is strictly larger than the point (-1,-2) where t = -1
-        y = radsimp([
+        y = [
             m,
             (u + 1) * m,
             (v + 2*u + 4) * m / 2,
             rem
-        ])
+        ]
         exprs = [
             CyclicSum(a*(b-c)**2*(b+c-a)**2),
             CyclicSum(a**3*(b-c)**2),
@@ -702,18 +709,18 @@ def _sos_struct_quintic_symmetric_hexagon(coeff):
 
     if (2*u + v)**2 + 8*v <= 0:
         # linear combination of t1 = 2 and t2 = ...? on parabola (t^2-2t, -2t^2)
-        k = radsimp((v + 8) / u)
-        t2 = radsimp(-4/(k + 2))
-        x2 = radsimp(t2**2 - 2*t2)
+        k = (v + 8) / u
+        t2 = -4/(k + 2)
+        x2 = t2**2 - 2*t2
 
-        w2 = radsimp(u / x2) # (u - 0) / (x2 - 0)
+        w2 = u / x2 # (u - 0) / (x2 - 0)
         w1 = 1 - w2
         if x2 != 0 and 0 <= w1 <= 1:
-            y = radsimp([
+            y = [
                 w1 * m,
                 w2 * m,
                 rem
-            ])
+            ]
             exprs = [
                 CyclicSum(a*(b-c)**4), # s(a(b-c)2(b+c-2a)2) == s(a(b-c)4)
                 CyclicSum(a*(b-c)**2*(b+c-t2*a)**2),

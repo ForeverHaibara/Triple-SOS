@@ -1,10 +1,10 @@
-import sympy as sp
+from sympy import MutableDenseMatrix as Matrix
 
 from .utils import (
-    CyclicSum, CommonExpr, congruence, radsimp, sum_y_exprs
+    Coeff, CommonExpr, congruence, sum_y_exprs
 )
 
-def sos_struct_quadratic(coeff, real = True):
+def sos_struct_quadratic(coeff: Coeff, real = True):
     """
     Solve cyclic quadratic problems.
     It must be in the form CyclicSum(a**2 + x*a*b) where x >= -1.
@@ -16,10 +16,10 @@ def sos_struct_quadratic(coeff, real = True):
     and the inequality holds for all real numbers.
     When x > 2, it only holds for positive real numbers.
     """
-    return CommonExpr.quadratic(coeff((2,0,0)), coeff((1,1,0)))
+    return CommonExpr.quadratic(coeff((2,0,0)), coeff((1,1,0)), coeff.gens)
 
 
-def sos_struct_acyclic_quadratic(coeff, real = True):
+def sos_struct_acyclic_quadratic(coeff: Coeff, real = True):
     """
     Solve quadratic acyclic 3-var polynomial inequalities.
 
@@ -60,13 +60,13 @@ def sos_struct_acyclic_quadratic(coeff, real = True):
     -----------
     [1] P. H. Diananda, On non-negative forms in real variables some or all of which are non-negative
     """
-    a, b, c = sp.symbols("a b c")
+    a, b, c = coeff.gens
     c00, c01, c02, c11, c12, c22 = [coeff(_) for _ in ((2,0,0),(1,1,0),(1,0,1),(0,2,0),(0,1,1),(0,0,2))]
     if c00 < 0 or c11 < 0 or c22 < 0:
         return None
 
     def quad_form(c01, c02, c12):
-        M = sp.Matrix([
+        M = Matrix([
             [c00, c01/2, c02/2],
             [c01/2, c11, c12/2],
             [c02/2, c12/2, c22],
@@ -77,8 +77,7 @@ def sos_struct_acyclic_quadratic(coeff, real = True):
         decomp = congruence(M)
         if decomp is not None:
             U, S = decomp
-            U = sp.Matrix(radsimp(U)).reshape(3, 3)
-            S = radsimp(S)
+            U = Matrix(U).reshape(3, 3)
             exprs = [
                 (U[0,0]*a + U[0,1]*b + U[0,2]*c)**2,
                 (U[1,1]*b + U[1,2]*c)**2,
@@ -116,7 +115,7 @@ def sos_struct_acyclic_quadratic(coeff, real = True):
     psd = M.copy()
     for i in range(3):
         if psd[i, (i+1)%3] >= 0:
-            psd[i, (i+1)%3] = radsimp(psd[(i+1)%3, (i+2)%3] * psd[(i+2)%3, i%3] / psd[(i+2)%3, (i+2)%3])
+            psd[i, (i+1)%3] = (psd[(i+1)%3, (i+2)%3] * psd[(i+2)%3, i%3] / psd[(i+2)%3, (i+2)%3])
             psd[(i+1)%3, i] = psd[i, (i+1)%3]
             solution2 = solve_nonnegative(M - psd)
             solution1 = solve_psd(psd)

@@ -1,6 +1,6 @@
 from typing import Union, Dict, Optional, Any
 
-import sympy as sp
+from sympy import Poly, Expr, Function
 from sympy.core.symbol import uniquely_named_symbol
 from sympy.combinatorics import PermutationGroup, Permutation
 
@@ -26,7 +26,7 @@ SOLVERS_SYMMETRIC_NONHOM = {
 }
 
 def _structural_sos_4vars_symmetric(
-        coeff: Union[sp.Poly, Coeff, Dict],
+        coeff: Union[Poly, Coeff, Dict],
         real: int = 1
     ):
     """
@@ -43,7 +43,7 @@ def _structural_sos_4vars_symmetric(
     )
 
 def _structural_sos_4vars_cyclic(
-        coeff: Union[sp.Poly, Coeff, Dict],
+        coeff: Union[Poly, Coeff, Dict],
         real: int = 1
     ):
     """
@@ -60,9 +60,9 @@ def _structural_sos_4vars_cyclic(
     )
 
 def _structural_sos_4vars_partial_symmetric(
-        coeff: Union[sp.Poly, Coeff, Dict],
+        coeff: Union[Poly, Coeff, Dict],
         real: int = 1
-    ) -> Optional[sp.Expr]:
+    ) -> Optional[Expr]:
     """
     Internal function to solve a 4-var homogeneous partial symmetric polynomial using structural SOS.
     The function assumes the polynomial is wrt. (a, b, c, d). The permutation group is
@@ -79,7 +79,7 @@ def _structural_sos_4vars_partial_symmetric(
 
 
 
-def structural_sos_4vars(poly: sp.Poly, ineq_constraints: Dict[sp.Poly, sp.Expr] = {}, eq_constraints: Dict[sp.Poly, sp.Expr] = {}) -> sp.Expr:
+def structural_sos_4vars(poly: Poly, ineq_constraints: Dict[Poly, Expr] = {}, eq_constraints: Dict[Poly, Expr] = {}) -> Expr:
     """
     Main function of structural SOS for 4-var homogeneous polynomials. It first assumes the polynomial
     has variables (a,b,c) and latter substitutes the variables with the original ones.
@@ -109,14 +109,11 @@ def structural_sos_4vars(poly: sp.Poly, ineq_constraints: Dict[sp.Poly, sp.Expr]
     if solution is None:
         return None
 
-    if poly.gens != (sp.symbols("a b c d")):
-        solution = solution.xreplace(dict(zip(sp.symbols("a b c d"), poly.gens)))
-
     ####################################################################
     # replace assumed-nonnegative symbols with inequality constraints
     ####################################################################
     func_name = uniquely_named_symbol('G', poly.gens + tuple(ineq_constraints.values()))
-    func = sp.Function(func_name)
+    func = Function(func_name)
     solution = SolutionStructural._extract_nonnegative_exprs(solution, func_name=func_name)
     if solution is None:
         return None
