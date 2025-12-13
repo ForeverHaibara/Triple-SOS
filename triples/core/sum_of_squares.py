@@ -89,6 +89,21 @@ def sum_of_squares(
         >>> sum_of_squares(x*(y-z)**2+y*(z-x)**2+z*(x-y)**2, {x:G(x),y:G(y),z:G(z)}).solution # doctest: +SKIP
         Σ(x - y)**2*G(z)
 
+
+    ### Assumptions
+
+    In the current, all SymPy symbol assumptions are ignored and symbols are treated as
+    real variables. To claim nonnegativity of symbols, just add them to `ineq_constraints`.
+    Integer or noncommutative symbol assumptions are not supported in the current either.
+
+        >>> from sympy import Symbol
+        >>> _x = Symbol("x", positive=True)
+        >>> sum_of_squares(_x**2 + 3*_x + 1) is None
+        True
+        >>> sum_of_squares(_x**2 + 3*_x + 1, [_x]) is not None
+        True
+
+
     Parameters
     ----------
     poly: Union[Poly, Expr]

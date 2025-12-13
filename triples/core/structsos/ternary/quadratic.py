@@ -1,8 +1,10 @@
+from sympy import Add
 from sympy import MutableDenseMatrix as Matrix
 
 from .utils import (
     Coeff, CommonExpr, congruence, sum_y_exprs
 )
+from ..utils import congruence_solve
 
 def sos_struct_quadratic(coeff: Coeff, real = True):
     """
@@ -60,34 +62,25 @@ def sos_struct_acyclic_quadratic(coeff: Coeff, real = True):
     -----------
     [1] P. H. Diananda, On non-negative forms in real variables some or all of which are non-negative
     """
-    a, b, c = coeff.gens
+    gens = coeff.gens
     c00, c01, c02, c11, c12, c22 = [coeff(_) for _ in ((2,0,0),(1,1,0),(1,0,1),(0,2,0),(0,1,1),(0,0,2))]
     if c00 < 0 or c11 < 0 or c22 < 0:
         return None
 
     def quad_form(c01, c02, c12):
-        M = Matrix([
+        return coeff.as_matrix([
             [c00, c01/2, c02/2],
             [c01/2, c11, c12/2],
             [c02/2, c12/2, c22],
-        ])
-        return M
+        ], (3,3))
 
     def solve_psd(M):
-        decomp = congruence(M)
-        if decomp is not None:
-            U, S = decomp
-            U = Matrix(U).reshape(3, 3)
-            exprs = [
-                (U[0,0]*a + U[0,1]*b + U[0,2]*c)**2,
-                (U[1,1]*b + U[1,2]*c)**2,
-                (U[2,2]*c)**2,
-            ]
-            return sum_y_exprs(S, exprs)
+        return congruence_solve(M, gens)
 
     def solve_nonnegative(M):
         if all(_ >= 0 for _ in M):
-            return M[0,0] * a**2 + M[1,1] * b**2 + M[2,2] * c**2 + M[0,1]*2 * a*b + M[0,2]*2 * a*c + M[1,2]*2 * b*c
+            return Add(*[
+                M[i,j] * gens[i]*gens[j] for i in range(3) for j in range(3)])
 
     M = quad_form(c01, c02, c12)
     solution = solve_psd(M)

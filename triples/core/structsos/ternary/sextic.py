@@ -625,8 +625,8 @@ def _sos_struct_sextic_hexagon_sdp(coeff: Coeff):
     CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
 
     if quad_form[0] >= 0 and quad_form[0] * quad_form[1] * 4 >= quad_form[2]**2:
-        mapping = lambda x, y: CyclicSum((x*a**2*b + y*a*b**2 - (x+y)*a*b*c).together())**2
-        quad_form_sol = quadratic_weighting(quad_form[0], quad_form[2], quad_form[1], mapping = mapping)
+        mapping = lambda x: CyclicSum((x[0]*a**2*b + x[1]*a*b**2 - (x[0]+x[1])*a*b*c).together())**2
+        quad_form_sol = quadratic_weighting(coeff, quad_form[0], quad_form[2], quad_form[1], mapping = mapping)
 
         # rs((a2b-ac2-x(a2b-b2c)+y(a2c-ab2))^2)
         solution = r * CyclicSum((a**2*b-a*c**2-x*(a**2*b-b**2*c)+y*(a**2*c-a*b**2)).expand().together()**2)
@@ -740,6 +740,7 @@ def _sos_struct_sextic_hexagon_to_hexagram(coeff):
         return discriminant
 
     def _compute_subtracted_params(c3, return_func = False):
+        c3 = coeff.convert(c3)
         params = z0 + c3, x0 - 3*c3, y0 - 3*c3, c30 + c3, w0 + 12*c3
         # print('c3 =', c3, 'params =', params)
         if return_func:
@@ -749,6 +750,7 @@ def _sos_struct_sextic_hexagon_to_hexagram(coeff):
         return params
 
     def _check_valid(c3):
+        c3 = coeff.convert(c3)
         if not (c3 >= 0 and 4*c1*c2 >= c3**2):
             return False
         params = _compute_subtracted_params(c3)
@@ -787,8 +789,8 @@ def _sos_struct_sextic_hexagon_to_hexagram(coeff):
             a, b, c = coeff.gens
             CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
 
-            mapping = lambda x, y: CyclicSum((x*a**2*b + y*a*b**2 - (x+y)*a*b*c).together())**2
-            main_solution = quadratic_weighting(c1, -c3, c2, mapping = mapping)
+            mapping = lambda x: CyclicSum((x[0]*a**2*b + x[1]*a*b**2 - (x[0]+x[1])*a*b*c).together())**2
+            main_solution = quadratic_weighting(coeff, c1, -c3, c2, mapping = mapping)
             return main_solution + remain_solution
 
 

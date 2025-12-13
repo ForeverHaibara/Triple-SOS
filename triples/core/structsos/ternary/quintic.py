@@ -762,7 +762,7 @@ def _sos_struct_quintic_windmill(coeff: Coeff):
                 ]
 
                 if (y[0] >= 0 and y[2] >= 0 and 4*y[0]*y[2] >= y[1]**2):
-                    p1 = (quadratic_weighting(y[0], y[1], y[2], a, c) + y[3]*a*b + y[4]*b*c).together()
+                    p1 = (quadratic_weighting(coeff, y[0], y[1], y[2], [a, c]) + y[3]*a*b + y[4]*b*c).together()
                     return CyclicSum(c*(a-b)**2*p1) + rem
 
         x_, y_, z_ = [coeff((1,4,0)) / coeff((3,2,0)), coeff((2,3,0)) / coeff((3,2,0)), coeff((3,1,1)) / coeff((3,2,0))]

@@ -160,7 +160,8 @@ def _sos_struct_sextic_hexagon_symmetric_sdp(coeff: Coeff):
         if M00 < M01: return
         s1 = (M00 - M01)/2 * CyclicProduct((a-b)**2)
 
-        def mapping(x, y):
+        def mapping(_vec):
+            x, y = _vec
             # return s(x(a2b+a2c-2abc)+y/3(abc))^2
             if x == 1 and y == 0:
                 return CyclicSum(a*(b-c)**2)**2
@@ -170,7 +171,7 @@ def _sos_struct_sextic_hexagon_symmetric_sdp(coeff: Coeff):
             p = p.expand().together() if coeff.is_rational else p
             return CyclicSum(p)**2
 
-        s2 = quadratic_weighting(
+        s2 = quadratic_weighting(coeff,
             (M00 + M01)/2,
             M02 * 2,
             l22,
@@ -1282,7 +1283,8 @@ def _sos_struct_sextic_symmetric_full_sdp(coeff: Coeff):
     CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
 
     def _get_quad_sol(l00, l01, l11):
-        def mapping(x, y):
+        def mapping(_vec):
+            x, y = _vec
             if x == 0:
                 return y**2 * CyclicSum(a*(b - c)**2)**2
             elif y == -3*x/2:
@@ -1290,7 +1292,7 @@ def _sos_struct_sextic_symmetric_full_sdp(coeff: Coeff):
             elif y == -x:
                 return x**2 * CyclicSum(a*(a-b)*(a-c))**2
             return CyclicSum(x*a**3 + y*a*b**2 + y*a*c**2 - (x + 2*y)*a*b*c)**2
-        return quadratic_weighting(l00, 2*l01, l11, mapping = mapping)
+        return quadratic_weighting(coeff, l00, 2*l01, l11, mapping = mapping)
 
     if a0 == 0:
         if a1 != 0:
@@ -2115,8 +2117,15 @@ def _sos_struct_sextic_symmetric_ultimate_1root(coeff: Coeff, poly, roots, real 
             # Case A.
             # subtract some s(a3-abc-x(a2b+ab2-2abc))2
             x_ = roots[0][0] - 1
-            if isinstance(x_, Expr) and (not isinstance(x_, Rational)):
-                return None
+            if coeff.is_rational:
+                if isinstance(x_, Expr) and (not isinstance(x_, Rational)):
+                    return None
+                x_ = coeff.convert(x_)
+            else:
+                try:
+                    x_ = coeff.convert(x_)
+                except CoercionFailed:
+                    return None
 
             # 1. try subtracting all the s(a6)
             # e.g. s(a2/3)3-a2b2c2-p(a-b)2
@@ -2143,8 +2152,15 @@ def _sos_struct_sextic_symmetric_ultimate_1root(coeff: Coeff, poly, roots, real 
             x_ = roots[1][0] + 1
         else:
             return None
-        if coeff.is_rational and isinstance(x_, Expr) and (not isinstance(x_, Rational)):
-            return None
+        if coeff.is_rational:
+            if isinstance(x_, Expr) and (not isinstance(x_, Rational)):
+                return None
+            x_ = coeff.convert(x_)
+        else:
+            try:
+                x_ = coeff.convert(x_)
+            except CoercionFailed:
+                return None
         # try SOS theorem
         x0, x1, x2, x3 = [coeff((6-i, i, 0)) for i in range(4)]
 

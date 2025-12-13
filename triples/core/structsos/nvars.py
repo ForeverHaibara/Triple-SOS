@@ -72,9 +72,9 @@ def _sos_struct_nvars_quartic_symmetric_sdp(poly):
         return sol
     def _get_solution2(q1, q2, q3):
         a, b = poly.gens[:2]
-        sol2 = quadratic_weighting(q1, q2*2, q3, a**2/(m*(n-1)), a*b/(m*2),
-                mapping = lambda x,y: \
-                    SymmetricSum((a**2/(m*(n-1))*x + a*b/(m*2)*y).together(), poly.gens)**2)
+        sol2 = quadratic_weighting(coeff, q1, q2*2, q3,
+                mapping = lambda x: \
+                    SymmetricSum((a**2/(m*(n-1))*x[0] + a*b/(m*2)*x[1]).together(), poly.gens)**2)
         return sol2
 
     u_candidates = [2*cr, (2*x-cy)/(n-2), v]

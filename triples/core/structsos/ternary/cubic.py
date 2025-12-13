@@ -352,7 +352,8 @@ def _sos_struct_acyclic_cubic_hexagon(coeff):
 
         a, b, c = coeff.gens
         combs = [(a,b,c), (b,c,a), (c,a,b)]
-        exprs = [quadratic_weighting(x, z, y, a=b0, b=c0)*a0 for (x,y), z, (a0, b0, c0) in zip(corners, zs, combs)]
+        exprs = [quadratic_weighting(coeff, x, z, y, [b0, c0])*a0
+                    for (x,y), z, (a0, b0, c0) in zip(corners, zs, combs)]
         return sum(exprs) + (center - sum(zs))*(a*b*c)
 
 
@@ -429,8 +430,8 @@ def _sos_struct_acyclic_cubic_symmetric(coeff: Coeff):
             if not (x4 >= 0 and x2 >= 0 and 4*sp.sqrt(x4*x1) + 2*x2 + x5 >= 0):
                 return None
             p1 = x2 * c*(a-b)**2
-            p2 = quadratic_weighting(x4, x5/2 + x2, x1, a=a, b=c) * b
-            p3 = quadratic_weighting(x4, x5/2 + x2, x1, a=b, b=c) * a
+            p2 = quadratic_weighting(coeff, x4, x5/2 + x2, x1, [a, c]) * b
+            p3 = quadratic_weighting(coeff, x4, x5/2 + x2, x1, [b, c]) * a
             return p1 + p2 + p3
         if x2 < 0 and 4*x1*x3 < x2**2:
             return None

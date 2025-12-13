@@ -1,9 +1,12 @@
 from typing import Union, Dict, List, Tuple, Optional, Callable, Iterator
 
 from sympy import Poly, Expr, Basic, Symbol, Rational, sympify
+from sympy import MutableDenseMatrix as Matrix
 from sympy.combinatorics import Permutation, PermutationGroup
 from sympy.polys.rings import PolyElement
 from sympy.polys.domains import Domain
+from sympy.polys.matrices import DomainMatrix
+from sympy.polys.matrices.ddm import DDM
 from sympy.polys.polyclasses import DMP
 from sympy.polys.polyerrors import CoercionFailed
 from sympy.utilities.iterables import iterable
@@ -17,6 +20,9 @@ default_prover_implicit = lambda x: x >= 0
 identity1 = lambda self, x: x
 
 class PartialOrder:
+    """
+    Partial order on a domain.
+    """
     domain: Domain
     _prover: Callable[[object], Optional[Expr]]
     _prover_implicit: Callable[[object], Optional[bool]]
@@ -28,32 +34,35 @@ class PartialOrder:
         self._wrapper = wrapper if wrapper is not None else identity1
 
     def prove(self, x) -> Optional[Expr]:
-        if isinstance(x, CoeffElement):
+        if isinstance(x, PartialOrderElement):
             x = x.arg
         return self._prover(x)
 
     def prove_implicit(self, x) -> Optional[bool]:
-        if isinstance(x, CoeffElement):
+        if isinstance(x, PartialOrderElement):
             x = x.arg
         return self._prover_implicit(x)
 
     def wrap(self, x):
-        if isinstance(x, CoeffElement):
+        if isinstance(x, PartialOrderElement):
             return x
         return self._wrapper(self, x)
 
     def convert(self, x) -> object:
-        if isinstance(x, CoeffElement):
+        if isinstance(x, PartialOrderElement):
+            if self.domain.of_type(x.arg):
+                return x
             x = x.arg
         return self.wrap(self.domain.convert(x))
 
     def to_sympy(self, x) -> Expr:
-        if isinstance(x, CoeffElement):
+        if isinstance(x, PartialOrderElement):
             x = x.arg
         return self.domain.to_sympy(x)
 
     @classmethod
     def from_domain(cls, domain: Domain) -> 'PartialOrder':
+        """Create a PartialOrder from a Domain."""
         if domain.is_QQ or domain.is_RR or domain.is_EXRAW or domain.is_RR or domain.is_CC:
             _prover = default_prover
             _prover_implicit = default_prover_implicit
@@ -66,21 +75,58 @@ class PartialOrder:
                 return domain.to_sympy(x) >= 0
             _prover = _algebraic_prover
             _prover_implicit = _algebraic_prover_implicit
-            _wrapper = lambda s, x: CoeffElement(x, s)
+            _wrapper = lambda s, x: PartialOrderElement(x, s)
 
         else:
         # if domain.is_Poly or domain.is_Frac:
         #     self._prover = lambda x: x
         #     self._prover_implicit = lambda x: True
             _prover, _prover_implicit = default_prover, default_prover_implicit
-            _wrapper = lambda s, x: CoeffElement(x, s)
+            _wrapper = lambda s, x: PartialOrderElement(x, s)
 
         return cls(domain, _prover, _prover_implicit, _wrapper)
+
+    def from_rep(self, rep: PolyElement) -> 'Coeff':
+        """Create a Coeff instance from rep"""
+        return Coeff.new(rep, self)
+
+    def from_dict(self, rep: dict, gens: Tuple[Symbol, ...]) -> 'Coeff':
+        """Create a Coeff instance from rep"""
+        dt = {k: v if not isinstance(v, PartialOrderElement) else v.arg for k, v in rep.items()}
+        ring = self.domain[tuple(gens)].one.ring
+        return self.from_rep(ring.from_dict(dt))
+
+    def from_list(self, rep: list, gens: Tuple[Symbol, ...]) -> 'Coeff':
+        def _rebuild(rep):
+            if len(rep) == 0:
+                return rep
+            if isinstance(rep[0], list):
+                return [_rebuild(r) for r in rep]
+            return [v if not isinstance(v, PartialOrderElement) else v.arg for v in rep]
+        l = _rebuild(rep)
+        ring = self.domain[tuple(gens)].one.ring
+        return self.from_rep(ring.from_list(l))
+
+    def from_poly(self, rep: Poly, gens: Optional[Tuple[Symbol, ...]]=None) -> 'Coeff':
+        dmp = rep.set_domain(self.domain).rep
+        return self.from_dict(dmp.to_dict(), rep.gens if gens is None else gens)
+
+    def as_matrix(self, rep: List[List], shape: Tuple[int, int]) -> Matrix:
+        if isinstance(rep, Matrix):
+            return rep
+        def conv(z):
+            if isinstance(z, PartialOrderElement):
+                z = z.arg
+            return self.domain.convert(z)
+        rows = [[conv(v) for v in r] for r in rep]
+        ddm = DDM(rows, shape, self.domain)
+        return Matrix._fromrep(DomainMatrix.from_rep(ddm))
 
 
 class Coeff():
     """
-    Wrapper of sympy PolyElement.
+    Wrapper of sympy PolyElement that supports `__call__` and other methods.
+    Used internally.
     """
     rep: PolyElement
 
@@ -124,24 +170,16 @@ class Coeff():
         return self.new(rep, self._partial_order)
 
     def from_dict(self, rep: dict, gens: Optional[Tuple[Symbol, ...]] = None) -> 'Coeff':
-        dt = {k: v if not isinstance(v, CoeffElement) else v.arg for k, v in rep.items()}
-        ring = self.ring if gens is None else self.domain[tuple(gens)].one.ring
-        return self.from_rep(ring.from_dict(dt))
+        return self._partial_order.from_dict(rep, self.gens if gens is None else gens)
 
     def from_list(self, rep: list, gens: Optional[Tuple[Symbol, ...]] = None) -> 'Coeff':
-        def _rebuild(rep):
-            if len(rep) == 0:
-                return rep
-            if isinstance(rep[0], list):
-                return [_rebuild(r) for r in rep]
-            return [v if not isinstance(v, CoeffElement) else v.arg for v in rep]
-        l = _rebuild(rep)
-        ring = self.ring if gens is None else self.domain[tuple(gens)].one.ring
-        return self.from_rep(ring.from_list(l))
+        return self._partial_order.from_list(rep, self.gens if gens is None else gens)
 
-    def from_poly(self, rep: Poly) -> 'Coeff':
-        dmp = rep.set_domain(self.domain).rep
-        return self.from_dict(dmp.to_dict())
+    def from_poly(self, rep: Poly, gens: Optional[Tuple[Symbol, ...]] = None) -> 'Coeff':
+        return self._partial_order.from_poly(rep, gens)
+
+    def as_matrix(self, rep: List[List], shape: Tuple[int, int]) -> Matrix:
+        return self._partial_order.as_matrix(rep, shape)
 
     def prove(self, x) -> Optional[Expr]:
         return self._partial_order.prove(x)
@@ -433,36 +471,39 @@ class Coeff():
         return SymmetricProduct(expr, self.gens)
 
 
-class CoeffElement:
+class PartialOrderElement:
+    """
+    Element that supports comparison operators with other PartialOrderElement.
+    """
     def __init__(self, arg, partial_order=None):
         self.arg = arg
         self.partial_order = partial_order if partial_order is not None else PartialOrder()
 
     def from_arg(self, new_arg):
-        return CoeffElement(new_arg, self.partial_order)
+        return PartialOrderElement(new_arg, self.partial_order)
 
     def __str__(self):
-        return f"CoeffElement({self.arg!s})"
+        return f"PartialOrderElement({self.arg!s})"
 
     def __repr__(self):
-        return f"CoeffElement({self.arg!r})"
+        return f"PartialOrderElement({self.arg!r})"
 
     def __add__(self, other):
-        if isinstance(other, CoeffElement):
+        if isinstance(other, PartialOrderElement):
             return self.from_arg(self.arg + other.arg)
         elif isinstance(other, Basic):
             return self.as_expr() + other
         return self.from_arg(self.arg + other)
 
     def __sub__(self, other):
-        if isinstance(other, CoeffElement):
+        if isinstance(other, PartialOrderElement):
             return self.from_arg(self.arg - other.arg)
         elif isinstance(other, Basic):
             return self.as_expr() - other
         return self.from_arg(self.arg - other)
 
     def __mul__(self, other):
-        if isinstance(other, CoeffElement):
+        if isinstance(other, PartialOrderElement):
             return self.from_arg(self.arg * other.arg)
         elif isinstance(other, Basic):
             return self.as_expr() * other
@@ -471,7 +512,7 @@ class CoeffElement:
         return self.from_arg(self.arg * other)
 
     def __truediv__(self, other):
-        if isinstance(other, CoeffElement):
+        if isinstance(other, PartialOrderElement):
             return self.from_arg(self.arg / other.arg)
         elif isinstance(other, Basic):
             return self.as_expr() / other
@@ -483,7 +524,7 @@ class CoeffElement:
         return self.__add__(other)
 
     def __rsub__(self, other):
-        if isinstance(other, CoeffElement):
+        if isinstance(other, PartialOrderElement):
             return self.from_arg(other.arg - self.arg)
         elif isinstance(other, Basic):
             return other - self.as_expr()
@@ -493,7 +534,7 @@ class CoeffElement:
         return self.__mul__(other)
 
     def __rtruediv__(self, other):
-        if isinstance(other, CoeffElement):
+        if isinstance(other, PartialOrderElement):
             return self.from_arg(other.arg / self.arg)
         elif isinstance(other, Basic):
             return other / self.as_expr()
@@ -502,7 +543,7 @@ class CoeffElement:
         return self.from_arg(other / self.arg)
 
     def __pow__(self, other):
-        if isinstance(other, CoeffElement):
+        if isinstance(other, PartialOrderElement):
             return self.from_arg(self.arg ** other.arg)
         elif isinstance(other, Basic):
             return self.as_expr() ** other
@@ -515,7 +556,7 @@ class CoeffElement:
         return self.from_arg(-self.arg)
 
     def __eq__(self, other):
-        if isinstance(other, CoeffElement):
+        if isinstance(other, PartialOrderElement):
             return self.arg == other.arg
         if self.partial_order.domain.of_type(other):
             return self.arg == other

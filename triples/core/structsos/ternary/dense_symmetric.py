@@ -50,9 +50,10 @@ def _sos_struct_trivial_additive(coeff: Coeff, real=True):
     CyclicSum = coeff.cyclic_sum
 
     exprs = []
+    to_sympy = coeff.domain.to_sympy
     for (i,j,k), v in coeff.items():
         if (i > j and i > k) or (i == j and i > k):
-            exprs.append(v * a**i * b**j * c**k)
+            exprs.append(to_sympy(v) * a**i * b**j * c**k)
 
     d = coeff.total_degree()
     if d % 3 == 0:

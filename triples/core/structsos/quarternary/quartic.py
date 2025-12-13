@@ -39,8 +39,11 @@ def _quarternary_quartic_fluroite(coeff: Coeff, real=True):
     a, b, c, d = coeff.gens
     CycSum = coeff.cyclic_sum
 
-    expr = quadratic_weighting(w1, w2, w3,
-        mapping=lambda x,y: CycSum((x*a*b-x*b*c-x*a*d+x*c*d-y*a*c+y*b*d).together()**2)/4)
+    def _mapping(v):
+        x, y = v[0], v[1]
+        return CycSum((x*a*b-x*b*c-x*a*d+x*c*d-y*a*c+y*b*d).together()**2)/4
+
+    expr = quadratic_weighting(coeff, w1, w2, w3, _mapping)
     if expr is None:
         return None
     if all(_ >= 0 for _ in [c_sum, c_square, c_abcd]):
@@ -138,8 +141,10 @@ def _quarternary_quartic_real(coeff: Coeff, real=True):
 
     def _get_sol2(t):
         c_sum, c_square, w1, w2, w3 = _get_params2(t)
-        expr = quadratic_weighting(w1, w2, w3,
-            mapping=lambda x,y: CycSum((x*a*b-x*b*c-x*a*d+x*c*d-y*a*c+y*b*d).together()**2)/4)
+        def _mapping(v):
+            x, y = v[0], v[1]
+            return CycSum((x*a*b-x*b*c-x*a*d+x*c*d-y*a*c+y*b*d).together()**2)/4
+        expr = quadratic_weighting(coeff, w1, w2, w3, _mapping)
         if expr is None or c_sum < 0 or c_square < 0:
             return None
         mul = c4000 / (2*t**2 + 6)

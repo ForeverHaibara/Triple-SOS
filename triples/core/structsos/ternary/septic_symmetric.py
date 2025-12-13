@@ -248,9 +248,10 @@ class _septic_sym_axis(DomainExpr):
             p2 = (a - c)*(b - c)*((x + y - 2)*a**2 + (-4*x - 3*y + 6)*a*b + (1 - y)*a*c + (x + y - 2)*b**2 + (1 - y)*b*c + (1 - x)*c**2)
 
             u = (y - 1)/(4*(x - 1))
-            def _mapping(c1, c2):
+            def _mapping(_vec):
+                c1, c2 = _vec
                 return CyclicSum(c*(c1*p1 + c2*p2).expand()**2)
-            qw = quadratic_weighting(u, u, sp.S(1), mapping = _mapping)
+            qw = quadratic_weighting(self._coeff, u, u, 1, mapping = _mapping)
             if qw is not None and det >= 0: # actually this is always true in this case
                 sol = qw + det * CyclicProduct(a) * CyclicProduct((a-b)**2)
                 # p2 = (a**2 + (2*u - 1)*b*c).together().as_coeff_Mul()

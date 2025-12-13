@@ -133,7 +133,8 @@ def _sos_struct_octic_symmetric_hexagon_sdp(coeff: Coeff):
         """
         s1 = (quad_form[0,0] - quad_form[0,1])/2 * CyclicSum(a)**2 * CyclicProduct((a-b)**2)
 
-        def mapping(x, y):
+        def mapping(_vec):
+            x, y = _vec
             # return s(x(a3b+ab3-2a2bc)+y(a2b2-a2bc))^2
             if x == 1 and y == 2:
                 return CyclicSum(a)**2 * CyclicSum(a*(b-c)**2)**2
@@ -145,7 +146,7 @@ def _sos_struct_octic_symmetric_hexagon_sdp(coeff: Coeff):
             p2 = a**2*b**2 - a*b*c**2
             return CyclicSum((x*p1 + y*p2).expand().together())**2
 
-        s2 = quadratic_weighting(
+        s2 = quadratic_weighting(coeff,
             (quad_form[0,0] + quad_form[0,1])/2,
             quad_form[0,2] * 2,
             quad_form[2,2],

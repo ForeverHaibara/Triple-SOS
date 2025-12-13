@@ -252,8 +252,8 @@ def _sos_struct_quartic_degenerate(coeff: Coeff):
 
         else:
             # if n < 0, we must have p > 0 and q > 0
-            mapping = lambda x, y: CyclicSum(b*c*(x*(a-b) + y*(a-c))**2)
-            solution = quadratic_weighting(p, n, q, mapping = mapping)
+            mapping = lambda x: CyclicSum(b*c*(x[0]*(a-b) + x[1]*(a-c))**2)
+            solution = quadratic_weighting(coeff, p, n, q, mapping = mapping)
 
         return solution + rem
 

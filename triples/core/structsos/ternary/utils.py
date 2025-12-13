@@ -201,7 +201,6 @@ class CommonExpr:
         a, b, c = cls.abc if symbols is None else symbols
         symbols = (a, b, c)
         cyc_sum = lambda z: CyclicSum(z, symbols)
-        cyc_prod = lambda z: CyclicProduct(z, symbols)
 
         if x == 0:
             return y * cyc_sum(a*b)

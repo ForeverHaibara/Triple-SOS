@@ -1,13 +1,13 @@
 from typing import Union, Tuple, List, Dict, Callable, Optional
 
 from sympy import (
-    Poly, Expr, Symbol, Integer, Rational, MatrixBase, QQ, ZZ,
-    sympify, fraction
+    Poly, Expr, Symbol, Integer, Rational, MatrixBase, Add,
+    QQ, ZZ, sympify, fraction
 )
 from sympy import MutableDenseMatrix as Matrix
 from sympy.core.symbol import uniquely_named_symbol
 
-from ...sdp import congruence as _congruence
+from ...sdp import congruence
 from ...utils.expressions import Coeff, CyclicSum, CyclicProduct
 from ...utils.roots import nroots, rationalize_bound
 
@@ -52,18 +52,6 @@ def radsimp(expr: Union[Expr, List[Expr]]) -> Expr:
     # if n is not S.One:
     expr = (numer*n).expand()/d
     return expr
-
-def congruence(M: Matrix) -> Tuple[Matrix, Matrix]:
-    """
-    Decompose a positive semidefinite matrix M as M = U.T @ S @ U. Returns U and S.
-    """
-    def signfunc(x):
-        # handle nested radicals also, e.g. (sqrt(2)+2)/(sqrt(2)+1)- sqrt(2) == 0
-        x = radsimp(x)
-        if x > 0: return 1
-        if x == 0: return 0
-        return -1
-    return _congruence(M, signfunc=signfunc)
 
 def intervals(polys: List[Poly]) -> List[Expr]:
     """
@@ -163,15 +151,25 @@ def rationalize_func(
                     return t_
 
 
-def quadratic_weighting(
-        c1: Rational,
-        c2: Rational,
-        c3: Rational,
-        a: Optional[Expr] = None,
-        b: Optional[Expr] = None,
-        mapping: Optional[Callable[[Rational, Rational], Expr]] = None,
-        formal: bool = False
-    ) -> Union[Expr, List]:
+def congruence_solve(M: Matrix, mapping = Union[List, Callable]) -> Optional[Expr]:
+    cong = congruence(M)
+    if cong is None:
+        return None
+    U, S = cong
+
+    _mapping = mapping
+    if isinstance(mapping, (list, tuple)):
+        _mapping = lambda z: Add(*[z[i]*mapping[i] for i in range(len(mapping))])**2
+
+    args = []
+    for i in range(M.shape[0]):
+        args.append(S[i] * _mapping(U[i,:]))
+    return Add(*args)
+
+
+def quadratic_weighting(coeff: Coeff, c1, c2, c3,
+    mapping: Union[List[Expr], Callable] = None,
+) -> Optional[Expr]:
     """
     Give solution to c1*a^2 + c2*a*b + c3*b^2 >= 0 where a,b in R.
 
@@ -179,48 +177,11 @@ def quadratic_weighting(
     ----------
     c1, c2, c3 : Expr
         Coefficients of the quadratic form.
-    a, b : Expr
-        The basis of the quadratic form.
-    mapping : Callable
-        A function that receives two inputs, x, y, and
-        outputs the desired (x*a + y*b)**2. Default is
-        mapping = lambda x, y: (x*a + y*b)**2.
-        If mapping is not None, it overrides the parameters a, b.
-    formal : bool
-        If True, return a list [(w1, (x1,y1))] so that sum(w_i * (x_i*a + y_i*b)**2) equals to the result.
-        If False, return the sympy expression of the result.
-        If formal == True, it overrides the mapping parameter.
-
-    Returns
-    ----------
-    result : Union[Expr, List]
-        If formal = False, return the sympy expression of the result.
-        If formal = True, return a list [(w1, (x1,y1))] so that sum(w_i * (x_i*a + y_i*b)**2) equals to the result.
-        If 4*c1*c3 < c2**2 or c1 < 0 or c3 < 0, return None.
     """
-    if 4*c1*c3 < c2**2 or c1 < 0 or c3 < 0:
-        return None
-    c1, c2, c3 = radsimp(c1), radsimp(c2), radsimp(c3)
-
-    a = a or Symbol('a')
-    b = b or Symbol('b')
-    mapping = mapping or (lambda x, y: (x*a + y*b)**2)
-
-    if c1 == 0:
-        result = [(c3, (Integer(0), Integer(1)))]
-    elif c3 == 0:
-        result = [(c1, (Integer(1), Integer(0)))]
-    else:
-        # ratio = c2/c3/2
-        # result = [(c3, b + ratio*a), (c1 - ratio**2*c3, a)]
-        ratio = radsimp(sympify(c2)/c1/2)
-        result = [(c1, (Integer(1), ratio)), (c3 - ratio**2*c1, (Integer(0), Integer(1)))]
-
-    if formal:
-        return result
-
-    return sum(radsimp(wi) * mapping(*xi) for wi, xi in result)
-
+    c1, c2, c3 = [coeff.convert(c) for c in [c1, c2, c3]]
+    return congruence_solve(
+        coeff.as_matrix([[c1,c2/2],[c2/2,c3]], (2,2)), mapping=mapping)
+    
 
 def zip_longest(*args):
     """
