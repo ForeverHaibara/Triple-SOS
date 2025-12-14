@@ -540,6 +540,9 @@ class PartialOrderElement:
             return other / self.as_expr()
         elif isinstance(other, Coeff):
             return other / self.arg
+        elif isinstance(other, int):
+            # this is important as low-level SymPy did not support int / ANP
+            return self.from_arg(self.partial_order.domain.convert(other)/self.arg)
         return self.from_arg(other / self.arg)
 
     def __pow__(self, other):

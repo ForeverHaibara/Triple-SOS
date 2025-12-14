@@ -181,7 +181,7 @@ def quadratic_weighting(coeff: Coeff, c1, c2, c3,
     c1, c2, c3 = [coeff.convert(c) for c in [c1, c2, c3]]
     return congruence_solve(
         coeff.as_matrix([[c1,c2/2],[c2/2,c3]], (2,2)), mapping=mapping)
-    
+
 
 def zip_longest(*args):
     """

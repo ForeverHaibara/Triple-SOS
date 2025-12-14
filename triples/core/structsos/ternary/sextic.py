@@ -517,7 +517,7 @@ def _sos_struct_sextic_rotated_tree(coeff: Coeff):
     if v != -6 and u != 2:
         # Try sum of squares with real numbers first
         # if (u,v) falls on the right hand side of the parametric curve
-        # (x^3-3x,-3x(x-1)) where x >= -1, then it is a rational convex 
+        # (x^3-3x,-3x(x-1)) where x >= -1, then it is a rational convex
         # linear combination of (t^3-3t, -3t(t-1)) and (2, -6)
         # with t = -(3u + v) / (v + 6)
         # note: (2, -6) is the singular node of the strophoid

@@ -304,7 +304,7 @@ def _sos_struct_septic_star(coeff: Coeff):
 def _sos_struct_septic_hexagon_sdp(coeff: Coeff):
     """
     Assume `F(a,b,c) = CyclicSum(a * vec' * M * vec) + a*b*c*g` where `g`
-    has degree 4, 
+    has degree 4,
 
     ```
     vec = [
@@ -434,7 +434,7 @@ def _sos_struct_septic_hexagon_sdp(coeff: Coeff):
         quartic = _fast_solve_quartic(coeff, m, p, n, q)
         if quartic is None:
             return None
-        
+
         m02 = (v + 1)/2*m22 + (-c340 - c430*v + c502*u**2*v - 2*c502*u - c520*v**2)/(2*(u*v - 1)**2)
         m12 = (u + 1)/2*m22 + (-c340*u - c430 - c502*u**2 + c520*u*v**2 - 2*c520*v)/(2*(u*v - 1)**2)
         M = coeff.as_matrix([[c502, m01, m02], [m01, c520, m12], [m02, m12, m22]], (3, 3))
@@ -448,7 +448,7 @@ def _sos_struct_septic_hexagon_sdp(coeff: Coeff):
         if sol is None:
             return None
         return sol + quartic
-        
+
 
     for u__, v__ in zip_longest(
         rationalize_bound(u_, direction = 0, compulsory = True),
@@ -583,7 +583,7 @@ def _sos_struct_septic_star_sdp(coeff: Coeff):
         rationalize_bound(u_, direction=0, compulsory=True),
         rationalize_bound(v_, direction=0, compulsory=True),
         [m01_] if m01_**2 == c430*c340 else \
-            rationalize_bound(coeff.to_sympy(m01_).n(15), 
+            rationalize_bound(coeff.to_sympy(m01_).n(15),
                 direction=-1 if m01_>0 else 1, compulsory=True)
     ):
         u, v, z = coeff.convert(u), coeff.convert(v), coeff.convert(z)

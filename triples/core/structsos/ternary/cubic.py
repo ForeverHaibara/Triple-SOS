@@ -521,7 +521,7 @@ def _sos_struct_acyclic_cubic_symmetric(coeff: Coeff):
         if True:
             eqgcd = eqw1.gcd(eqw2)
             if eqgcd.degree() == 1:
-                w_ = (-eqgcd.rep.TC() / eqgcd.rep.LC())
+                w_ = coeff.convert(-eqgcd.rep.TC() / eqgcd.rep.LC())
                 if _check_valid(w_):
                     return w_
 
