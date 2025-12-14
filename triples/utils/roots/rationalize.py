@@ -204,32 +204,6 @@ def rationalize_bound(v, direction = 1, roundings = None, compulsory = True):
             yield v_
 
 
-def square_perturbation(a, b, times = 4):
-    """
-    Find t such that (a-t)/(b-t) is square, please be sure a/b is not a square
-    """
-    if a > b:
-        z = max(1, int((a / b)**0.5))
-    else:
-        z = max(1, int((b / a)**0.5))
-    z = Rational(z)  # convert to rational
-
-    for i in range(times): # Newton has quadratic convergence, we only try a few times
-        # (a-t)/(b-t) = z^2  =>  t = (a - z^2 b) / (1 - z^2)
-        if i > 0 or z == 1:
-            # easy to see z > sqrt(a/b) (or z > sqrt(b/a))
-            z = (z + a/b/z)/2 if a > b else (z + b/a/z)/2
-        if a > b:
-            t = (a - z*z*b) / (1 - z*z)
-            if t < 0 or b < t:
-                continue
-        else:
-            t = (b - z*z*a) / (1 - z*z)
-            if t < 0 or a < t:
-                continue
-        yield t
-
-
 def cancel_denominator(nums):
     """
     Extract the gcd of numerators and lcm of denominators.
@@ -243,7 +217,6 @@ def cancel_denominator(nums):
     q = reduce(sp.lcm, [_.as_numer_denom()[1] for _ in nums])
 
     return p / q
-
 
 
 def rationalize_quadratic_curve(

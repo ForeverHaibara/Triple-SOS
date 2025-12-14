@@ -67,7 +67,7 @@ class PartialOrder:
             _prover = default_prover
             _prover_implicit = default_prover_implicit
             _wrapper = identity1
-        elif domain.is_Algebraic:
+        elif domain.is_Algebraic or domain.is_Poly or domain.is_Frac:
             def _algebraic_prover(x):
                 z = domain.to_sympy(x)
                 return x if z >= 0 else None

@@ -159,11 +159,16 @@ def nroots(poly, method = 'numpy', real = False, nonnegative = False):
     nonnegative : bool, optional
         Whether to only return nonnegative roots.
     """
+    from mpmath.libmp import NoConvergence
+    roots = []
     if method == 'numpy':
         from numpy import roots as nproots
         roots = [sp.S(_) for _ in nproots(poly.all_coeffs())]
     elif method == 'sympy':
-        roots = sp.nroots(poly)
+        try:
+            roots = sp.nroots(poly)
+        except NoConvergence:
+            roots = []
     elif method == 'factor':
         roots_rational = []
         roots = []
@@ -171,7 +176,10 @@ def nroots(poly, method = 'numpy', real = False, nonnegative = False):
             if part.degree() == 1:
                 roots_rational.append(-part.all_coeffs()[1] / part.all_coeffs()[0])
             else:
-                roots.extend(sp.polys.nroots(part))
+                try:
+                    roots.extend(sp.polys.nroots(part))
+                except NoConvergence:
+                    pass
         roots = roots_rational + roots
 
     if real:

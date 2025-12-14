@@ -7,13 +7,14 @@ from sympy.combinatorics import CyclicGroup
 
 from ..utils import (
     Coeff, DomainExpr,
-    radsimp, sum_y_exprs, rationalize_func, quadratic_weighting, zip_longest, congruence,
+    radsimp, sum_y_exprs, rationalize_func, quadratic_weighting, zip_longest,
+    congruence, congruence_solve,
     StructuralSOSError, PolynomialNonpositiveError, PolynomialUnsolvableError
 )
 
 from ....utils import (
     nroots, rationalize, rationalize_bound, univariate_intervals,
-    square_perturbation, cancel_denominator, common_region_of_conics,
+    cancel_denominator, common_region_of_conics,
     CyclicExpr, CyclicSum, CyclicProduct
 )
 
@@ -80,25 +81,6 @@ def inverse_substitution(coeff: Coeff, expr: Expr, factor_degree: int = 0) -> Ex
     if factor_degree != 0:
         expr = expr / CyclicProduct(a, (a,b,c)) ** factor_degree
     return expr
-
-
-def try_perturbations(
-        poly, p, q, perturbation, times = 4, **kwargs
-    ):
-    """
-    Try subtracting t * perturbation from poly and perform recurrsive trials.
-    The subtracted t satisfies that (p - t) / (q - t) is a square
-
-    This is possibly helpful for deriving rational sum-of-square solution.
-    """
-    from .solver import _structural_sos_3vars_cyclic
-    perturbation_poly = perturbation.doit().as_poly(poly.gens)
-    for t in square_perturbation(p, q, times = times):
-        poly2 = poly - t * perturbation_poly
-        solution = _structural_sos_3vars_cyclic(Coeff(poly2))
-        if solution is not None:
-            return solution + t * perturbation
-    return None
 
 
 def sos_struct_handle_uncentered(solver: Callable) -> Callable:

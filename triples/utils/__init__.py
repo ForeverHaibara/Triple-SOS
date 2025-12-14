@@ -20,7 +20,7 @@ from .expressions import (
 from .roots import (
     Root, RootList, univar_realroots, nroots, kkt, optimize_poly, numeric_optimize_poly, numeric_optimize_skew_symmetry,
     univariate_intervals, rationalize, rationalize_array, rationalize_bound,
-    rationalize_quadratic_curve, common_region_of_conics, square_perturbation,
+    rationalize_quadratic_curve, common_region_of_conics,
     cancel_denominator,
     rpa_monotonic, rpa_gmop, rpa_polyopt
 )
@@ -37,6 +37,6 @@ __all__ = [
     'pqr_sym', 'pqr_cyc', 'pqr_ker',
     'Root', 'RootList', 'univar_realroots', 'kkt', 'optimize_poly', 'numeric_optimize_poly', 'numeric_optimize_skew_symmetry',
     'nroots', 'univariate_intervals', 'rationalize', 'rationalize_array', 'rationalize_bound',
-    'rationalize_quadratic_curve', 'common_region_of_conics', 'square_perturbation',
+    'rationalize_quadratic_curve', 'common_region_of_conics',
     'cancel_denominator', 'rpa_monotonic', 'rpa_gmop', 'rpa_polyopt'
 ]

@@ -1,4 +1,5 @@
-from typing import Union, List, Dict, Optional, Any
+from typing import List, Dict, Union, Optional, Any
+import traceback
 
 from sympy import Poly, Expr, Integer, construct_domain
 from sympy.polys.polyerrors import BasePolynomialError
@@ -17,11 +18,25 @@ from ..problem import ProblemComplexity
 from ..solution import Solution
 
 class StructuralSOSSolver(ProofNode):
-    def explore(self, *args, **kwargs):
+    default_configs = {
+        'verbose': False,
+        'raise_exception': False,
+    }
+    def explore(self, configs):
         if self.status == 0:
             problem, _homogenizer = self.problem.homogenize()
 
-            solution = _structural_sos(problem.expr, problem.ineq_constraints, problem.eq_constraints)
+            try:
+                solution = _structural_sos(problem.expr, problem.ineq_constraints, problem.eq_constraints)
+            except Exception as e:
+                # Internal errors are not expected, but could occur as the code is very complex
+                # To prevent the program from crashing, we catch them here
+                if configs['raise_exception']:
+                    raise e
+                if configs['verbose']:
+                    traceback.print_exc()
+                solution = None
+
             if solution is not None:
                 problem.solution = solution
 
@@ -32,6 +47,7 @@ class StructuralSOSSolver(ProofNode):
         self.finished = True
 
     def _evaluate_complexity(self) -> ProblemComplexity:
+        # Fast in most cases
         return ProblemComplexity(0.001, 1.)
 
 # @sanitize(homogenize=True, infer_symmetry=False, wrap_constraints=False)
@@ -40,11 +56,11 @@ def StructuralSOS(
         ineq_constraints: Union[List[Poly], Dict[Poly, Expr]] = {},
         eq_constraints: Union[List[Poly], Dict[Poly, Expr]] = {},
         verbose: Union[bool, int] = False,
-    ) -> SolutionStructural:
+        raise_exception: bool = False,
+    ) -> Optional[SolutionStructural]:
     """
-    Main function of structural SOS. It solves polynomial inequalities by
-    synthetic heuristics. For example, quartic 3-var cyclic polynomials have a complete
-    algorithm, which can be solved directly and beautifully.
+    A rule-based expert system to solve polynomial inequalities in specific structures.
+    Most algorithms run in O(1) or linear time.
 
     Parameters
     -------
@@ -54,15 +70,20 @@ def StructuralSOS(
         Inequality constraints to the problem. This assume g_1(x) >= 0, g_2(x) >= 0, ...
     eq_constraints: List[Poly]
         Equality constraints to the problem. This assume h_1(x) = 0, h_2(x) = 0, ...
+    verbose: bool
+        Whether to print verbose information.
+    raise_exception: bool
+        Whether to raise exception when an error occurs. Set to True for debug purpose.
 
     Returns
     -------
-    solution: SolutionStructuralSimple
+    solution: Solution
 
     """
     problem = ProofNode.new_problem(poly, ineq_constraints, eq_constraints)
     configs = {
-        SolvePolynomial: {'solvers': [StructuralSOSSolver]}
+        SolvePolynomial: {'solvers': [StructuralSOSSolver]},
+        StructuralSOSSolver: {'verbose': verbose, 'raise_exception': raise_exception},
     }
     return problem.sum_of_squares(configs)
 

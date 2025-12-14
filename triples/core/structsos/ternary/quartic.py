@@ -1,7 +1,7 @@
 from typing import Tuple, List
 
 import sympy as sp
-from sympy import Poly, Expr, Symbol, Rational, Float
+from sympy import Poly, Expr, Symbol, Rational, Integer, Float, Add
 from sympy import MutableDenseMatrix as Matrix
 
 from .utils import (
@@ -458,7 +458,7 @@ def _sos_struct_quartic_uncentered(coeff: Coeff):
         else:
             n_ = p**2 / 4 + 2
     else:
-        x = sp.symbols('x')
+        x = Symbol('x')
         eqx = (2*x**4 + p*x**3 - q*x - 2).as_poly(x) # the derivative of n
         eqn = lambda x: -(x**2 + 1/x**2 + p*x + q/x)
         extrema = []
@@ -467,7 +467,7 @@ def _sos_struct_quartic_uncentered(coeff: Coeff):
                 if isinstance(root, Rational):
                     extrema.append((eqn(root), root))
                 else: # quadratic root
-                    extrema.append((eqn(root.n(16)), root.n(16)))
+                    extrema.append((eqn(root.n(15)), root.n(15)))
 
         try:
             for root in sp.polys.nroots(eqx):
@@ -476,8 +476,11 @@ def _sos_struct_quartic_uncentered(coeff: Coeff):
                         # already found
                         continue
                     extrema.append((eqn(root), root))
-        except: pass
+        except Exception as e:
+            pass
 
+        if len(extrema) == 0:
+            return None
         n_, _ = max(extrema)
 
     # then we compute x such that
@@ -489,7 +492,7 @@ def _sos_struct_quartic_uncentered(coeff: Coeff):
         else:
             x_ = (9*(p + 2)**2 / 4)
     else:
-        u = sp.symbols('u')
+        u = Symbol('u')
         det_coeffs = [
             1,
             -3*(p*q + 14*p + 14*q - 20),
@@ -507,14 +510,14 @@ def _sos_struct_quartic_uncentered(coeff: Coeff):
                     if isinstance(root, Rational):
                         x_ = root
                     else:
-                        x_ = root.n(16)
+                        x_ = root.n(15)
                     break
 
         else:
             # do not compute the root here because it is not numerically stable
             # instead compute the root of derivative of discriminant
             detdiff = det.diff()
-            roots = [(abs(det(root)), root) for root in sp.polys.nroots(detdiff) if root.is_real and root > 0]
+            roots = [(abs(det(root)), root) for root in nroots(detdiff, real=True, nonnegative=True)]
             # print(roots)
             if len(roots) > 0:
                 x_ = min(roots)[1]
@@ -653,8 +656,8 @@ def _sos_struct_acyclic_quartic_symmetric(coeff: Coeff, real = True):
 
         def _US_vec(US, vec):
             U, S = US
-            return sp.Add(*[s*v.together()**2 for s, v in zip(S, U*vec)])
-        solution = sp.Add(
+            return Add(*[s*v.together()**2 for s, v in zip(S, U*vec)])
+        solution = Add(
             _US_vec(US1, Matrix([c**2, c*a+c*b, a*b, a**2-2*a*b+b**2])),
             (a-b)**2 * _US_vec(US2, Matrix([a+b, c]))
         )
@@ -678,11 +681,11 @@ def _sos_struct_acyclic_quartic_symmetric(coeff: Coeff, real = True):
                 (8*c004*c220*c400 - 2*c004*c310**2 - 16*c004*c400**2 + c103*c211*c310 - 4*c103*c211*c400 - 2*c103*c220*c301 \
                     + c103*c301*c310 + 8*c103*c301*c400 - 2*c112**2*c400 + 2*c112*c202*c310 + c112*c211*c301 - 3*c112*c301**2 \
                     - 2*c202**2*c220 + 4*c202**2*c400 - c202*c211**2 + 4*c202*c211*c301 - 3*c202*c301**2)/8,
-                _get_quad_forms(sp.S(0), sp.S(0), sp.S(0), sp.S(0))[0].det()
+                _get_quad_forms(Integer(0), Integer(0), Integer(0), Integer(0))[0].det()
             ], l)
             for l1 in univariate_intervals([Poly([1, 0], l), leading_det, det1]):
                 if l1 >= 0 and leading_det(l1) <= 0 and det1(l1) >= 0:
-                    solution = _get_solution(sp.S(0), sp.S(0), sp.S(0), l1)
+                    solution = _get_solution(Integer(0), Integer(0), Integer(0), l1)
                     if solution is not None:
                         return solution
             # TODO: consider r00 == r01 == 0 or r01 == r11 == 0 separately
@@ -959,15 +962,15 @@ def _sos_struct_acyclic_quartic_reaL_findroots(
     def find_trivial_root(coeff) -> List:
         if coeff((4,0,0)) == 0:
             if coeff((3,1,0)) == 0 and coeff((3,0,1)) == 0:
-                return [((1,0,0), 0, sp.S(0))]
+                return [((1,0,0), 0, Integer(0))]
             return None # not positive on R
         elif coeff((0,4,0)) == 0:
             if coeff((1,3,0)) == 0 and coeff((0,3,1)) == 0:
-                return [((0,1,0), 0, sp.S(0))]
+                return [((0,1,0), 0, Integer(0))]
             return None
         elif coeff((0,0,4)) == 0:
             if coeff((1,0,3)) == 0 and coeff((0,1,3)) == 0:
-                return [((0,0,1), 0, sp.S(0))]
+                return [((0,0,1), 0, Integer(0))]
             return None
         return []
 
@@ -990,7 +993,7 @@ def _sos_struct_acyclic_quartic_reaL_findroots(
         minimum = min(_[1] for _ in candidates)
         if minimum < 0:
             return []
-        roots = [((x[0][0], x[0][1], sp.S(1)), minimum, c**2) for x in candidates if x[1] == minimum]
+        roots = [((x[0][0], x[0][1], Integer(1)), minimum, c**2) for x in candidates if x[1] == minimum]
         return roots
 
     def find_second_root(poly, root) -> List:
