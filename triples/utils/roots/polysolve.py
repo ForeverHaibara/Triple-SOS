@@ -5,9 +5,9 @@ polynomial systems and provides supports for low SymPy versions.
 from typing import List, Tuple, Union
 
 import sympy as sp
-from sympy import Poly, Expr, Rational, Symbol, RR, QQ
+from sympy import Poly, Expr, Integer, Rational, Symbol, RR, QQ, sympify
 from sympy.polys.polyerrors import BasePolynomialError
-from sympy.polys.polytools import resultant, groebner, PurePoly
+from sympy.polys.polytools import groebner, PurePoly
 from sympy.polys.rootoftools import ComplexRootOf as CRootOf
 from sympy.utilities import postfixes
 from mpmath.libmp.libhyper import NoConvergence
@@ -25,7 +25,7 @@ def _filter_trivial_system(polys: List[Poly]) -> Union[List[Poly], None]:
     for ind, poly in enumerate(polys):
         if isinstance(poly, Expr):
             poly = poly.expand()
-            if poly is sp.S.Zero:
+            if poly is Integer(0):
                 continue
             if poly.is_constant(): # inconsistent system
                 return None
@@ -62,8 +62,8 @@ class PolyEvalf:
     dps = 15
     def polyeval(self, poly, point, n=dps):
         """Evaluate a polynomial at a point numerically."""
-        if poly is sp.S.Zero or (isinstance(poly, Poly) and poly.is_zero):
-            return sp.S.Zero
+        if poly is Integer(0) or (isinstance(poly, Poly) and poly.is_zero):
+            return Integer(0)
         if len(point) == 0:
             v = poly.as_expr()
             if not isinstance(v, Rational):
@@ -163,10 +163,10 @@ def nroots(poly, method = 'numpy', real = False, nonnegative = False):
     roots = []
     if method == 'numpy':
         from numpy import roots as nproots
-        roots = [sp.S(_) for _ in nproots(poly.all_coeffs())]
+        roots = [sympify(_) for _ in nproots(poly.all_coeffs()).tolist()]
     elif method == 'sympy':
         try:
-            roots = sp.nroots(poly)
+            roots = poly.nroots()
         except NoConvergence:
             roots = []
     elif method == 'factor':
@@ -174,10 +174,10 @@ def nroots(poly, method = 'numpy', real = False, nonnegative = False):
         roots = []
         for part, mul in poly.factor_list()[1]:
             if part.degree() == 1:
-                roots_rational.append(-part.all_coeffs()[1] / part.all_coeffs()[0])
+                roots_rational.append(-part.TC() / part.LC())
             else:
                 try:
-                    roots.extend(sp.polys.nroots(part))
+                    roots.extend(part.nroots())
                 except NoConvergence:
                     pass
         roots = roots_rational + roots

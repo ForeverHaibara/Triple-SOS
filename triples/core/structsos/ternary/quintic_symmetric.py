@@ -1,4 +1,4 @@
-from sympy import Symbol, Integer, Rational, Add, sqrt, sqrtdenest
+from sympy import Integer, Rational, Float, Add
 
 from .quartic import sos_struct_quartic
 from .utils import (
@@ -47,6 +47,8 @@ def sos_struct_quintic_symmetric(coeff: Coeff, real = True):
 
     s(a5-1/2ab(a3+b3)+5a2b2(a+b)-10a2b2c-22abc(a2-ab))
 
+    s((a+b-c)(a-b)2(a+b-1/2c)2)
+
     s((a+b+10c)(a-b)2(a+b-5c)2)+s((a+b)(a-b)2(a+b-3c)2)
 
     s(a5+4a4b+4a4c-39a3bc+30a2b2c)
@@ -79,14 +81,14 @@ def sos_struct_quintic_symmetric(coeff: Coeff, real = True):
     ----------
     [1] https://math.stackexchange.com/questions/3809195/proving-q-fraca3b3c3abbccak-cdot-fracabbccaa
     """
-    if not (coeff((4,1,0)) == coeff((1,4,0)) and coeff((3,2,0)) == coeff((2,3,0))) or coeff((5,0,0)) < 0:
+    if (not (coeff((4,1,0)) == coeff((1,4,0)) and coeff((3,2,0)) == coeff((2,3,0)))) or coeff((5,0,0)) < 0:
         return None
 
     if coeff((5,0,0)) == 0:
         return _sos_struct_quintic_symmetric_hexagon(coeff)
 
     # try simple case where we do not lift the degree
-    solution = _sos_struct_quintic_symmetric_trivial(coeff)
+    solution = _sos_struct_quintic_symmetric_sdp(coeff)
     if solution is not None:
         return solution
 
@@ -100,11 +102,30 @@ def sos_struct_quintic_symmetric(coeff: Coeff, real = True):
     CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
 
 
+    def _get_solution_t(t):
+        """Solve `1/2*s((a+b-c)(a-b)2(a+b-tc)2)s(a2-ab)`"""
+        if not (t >= -1 and t <= 3):
+            return None
+        return CyclicSum(a*(a+(1-t)/2*(b+c))**2*(a-b)**2*(a-c)**2)\
+            + (3-t)*(t+1)/4 * CyclicSum(a) * CyclicProduct((a-b)**2)
+
+    def _get_solution_tz(t, z):
+        """Solve `1/2*s((a+b+(2z-1+2t)c)(a-b)2(a+b-tc)2)s(a2-ab)`"""
+        w = 2*z - 1 + 2*t
+        if w >= 0:
+            return CyclicSum((a-b)**2) * CyclicSum((a+b+w*c)*(a-b)**2*(a+b-t*c)**2)/4
+        if w >= -1:
+            if not (t >= -1 and t <= 3):
+                return None
+            return _get_solution_t(t) \
+                + (w + 1)/4 * CyclicSum((a-b)**2) * CyclicSum(c*(a-b)**2*(a+b-t*c)**2)
+        return None
+
     # real start below
     if z >= -1:
         # Assume s((a+b+(2z-1+2t)c)(a-b)2(a+b-tc)2)/2 <= poly / coeff((5,0,0))
-        # this requires (u,v) is above the curve (t^3+(z-2)t^2+(1-2z)t-1, -2t^3+(1-2z)t^2)
-        # the curve is a singular cubic with node t = (1-2z)/3.
+        # this requires (u,v) to be above the curve (t^3+(z-2)t^2+(1-2z)t-1, -2t^3+(1-2z)t^2)
+        # The curve is a singular cubic with node t = (1-2z)/3.
         # Hence, when (u,v) is above the curve, it is often
         # a linear combination with node and another point, we can do the secant method.
 
@@ -116,73 +137,63 @@ def sos_struct_quintic_symmetric(coeff: Coeff, real = True):
         # 2. when -1 <= z <= 1/2, (2z - 1 + 2t) in [-1,0] where t = (1-2z)/3, so the node
         # is positive but shall higher degree. Also, dv/dt < 0 when t > (1-2z)/3, so we can
         # assume the second intersection has t > (1-2z)/3. It is also positive.
+        if u + 1 + z >= 0 and v + 3 + 4*z + 2*u >= 0:
+            # try subtracting schur
+            # everything is trivial if (u,v) is on the upper-right side of (-1-z, -1-2z), the
+            # leftmost point of the cubic where t = 1.
+            y = [
+                m / 2 if 2*z + 1 >= 0 else 0,
 
+                # when 2z + 1 < 0, use Schur: s((a+b-c)(a-b)2(a+b-c)2) = s(a3(a-b)(a-c))
+                m if 2*z + 1 < 0 else 0,
+                m * (z + 1) if 2*z + 1 < 0 else 0,
+
+                (u + 1 + z) * m,
+                (v + 3 + 4*z + 2*u) * m / 2,
+                rem
+            ]
+            exprs = [
+                CyclicSum((a+b+(2*z+1)*c)*(a-b)**2*(a+b-c)**2),
+                CommonExpr.schur(5, coeff.gens),
+                CyclicSum(c*(a-b)**2*(a+b-c)**2),
+                CyclicSum(a**3*(b-c)**2),
+                CyclicProduct(a) * CyclicSum((a-b)**2),
+                CyclicProduct(a) * CyclicSum(a*b)
+            ]
+            return sum_y_exprs(y, exprs)
+
+
+        if -6*u - 3*v + 4*z**2 - 4*z - 5 == 0:
+            return
         t1 = (1 - 2*z) / 3
         t2 = -(2*u*z - u + v*z + 4*v + 2*z - 1)/(-6*u - 3*v + 4*z**2 - 4*z - 5)
         y1 = -t1**2*(2*t1 + 2*z - 1)
         y2 = -t2**2*(2*t2 + 2*z - 1)
 
-        if y1 != y2:
-            # weight of linear combination
-            w1 = (v - y2) / (y1 - y2)
-            w2 = 1 - w1
-            # print('(w1, w2) =', (w1, w2), '\n(y1, y2) =', (y1, y2), '\n(t1, t2) =', (t1, t2))
-            if 0 <= w1 <= 1:
-                if (w1 == 0 and y2 <= 0) or (y1 <= 0 and y2 <= 0):
-                    y = [
-                        w1 * m / 2,
-                        w2 * m / 2,
-                        rem
-                    ]
-                    exprs = [
-                        CyclicSum((a + b + (2*z - 1 + 2*t1)*c)*(a - b)**2*(a + b - t1*c)**2),
-                        CyclicSum((a + b + (2*z - 1 + 2*t2)*c)*(a - b)**2*(a + b - t2*c)**2),
-                        CyclicProduct(a) * CyclicSum(a*b)
-                    ]
-                    return sum_y_exprs(y, exprs)
-                else:
-                    # higher degree
-                    # we must have t1 = (1 - 2z) / 3 <= 1
-                    multiplier = CyclicSum((a - b)**2)/2
-                    if y2 <= 0: # 2z - 1 + 2t_2 >= 0
-                        # note that:
-                        # s((a+b-c)(a-b)2(a+b-tc)2)s(a2-ab)
-                        # = s(a(a-b)(a-c))s((b-c)2(b+c-ta)2) + 2(2-t)(t+1)s(a)p(a-b)2 >= 0
-                        y = [
-                            w1 * m / 2,
-                            w1 * m * (2 - t1) * (t1 + 1),
-                            w1 * m * (z + t1) / 2,
-                            w2 * m / 4,
-                            rem / 2
-                        ]
-                        exprs = [
-                            CyclicSum(a*(a-b)*(a-c)) * CyclicSum((b-c)**2*(b+c-t1*a)**2),
-                            CyclicSum(a) * CyclicProduct((a-b)**2),
-                            CyclicSum((a-b)**2) * CyclicSum(c*(a - b)**2*(a + b - t1*c)**2),
-                            CyclicSum((a-b)**2) * CyclicSum((a + b + (2*z - 1 + 2*t2)*c)*(a - b)**2*(a + b - t2*c)**2),
-                            CyclicSum((a-b)**2) * CyclicProduct(a) * CyclicSum(a*b)
-                        ]
-                        return sum_y_exprs(y, exprs) / multiplier
-                    else: # 2z - 1 + 2t_2 < 0, in this case t < 2
-                        y = [
-                            w1 * m / 2,
-                            w2 * m / 2,
-                            (w1 * (2 - t1) * (t1 + 1) + w2 * (2 - t2) * (t2 + 1)) * m,
-                            w1 * m * (z + t1) / 2,
-                            w2 * m * (z + t2) / 2,
-                            rem / 2
-                        ]
-                        exprs = [
-                            CyclicSum(a*(a-b)*(a-c)) * CyclicSum((b-c)**2*(b+c-t1*a)**2),
-                            CyclicSum(a*(a-b)*(a-c)) * CyclicSum((b-c)**2*(b+c-t2*a)**2),
-                            CyclicSum(a) * CyclicProduct((a-b)**2),
-                            CyclicSum((a-b)**2) * CyclicSum(c*(a - b)**2*(a + b - t1*c)**2),
-                            CyclicSum((a-b)**2) * CyclicSum(c*(a - b)**2*(a + b - t2*c)**2),
-                            CyclicSum((a-b)**2) * CyclicProduct(a) * CyclicSum(a*b)
-                        ]
-                        return sum_y_exprs(y, exprs) / multiplier
+        if not (-1 <= t1 <= 3 and -1 <= t2 <= 3):
+            # perhaps this check is redundant, but we now reserve it
+            return None
 
+        if y1 == y2:
+            return None
 
+        # weight of linear combination
+        w1 = (v - y2) / (y1 - y2)
+        w2 = 1 - w1
+        # print('(w1, w2) =', (w1, w2), '\n(y1, y2) =', (y1, y2), '\n(t1, t2) =', (t1, t2))
+        if 0 <= w1 <= 1:
+            # lift the degree
+            # we must have t1 = (1 - 2z) / 3 <= 1
+
+            sol1 = _get_solution_tz(t1, z)
+            sol2 = _get_solution_tz(t2, z)
+
+            if sol1 is None or sol2 is None:
+                return None
+
+            multiplier = CyclicSum((a - b)**2)/2
+            rem_part = rem * multiplier * CyclicProduct(a) * CyclicSum(a*b)
+            return ((w1*m)*sol1 + (w2*m)*sol2 + rem_part) / multiplier
 
         # we assert the problem cannot be solved otherwise
         # but the inequality might be true if it does not have root (1,1,1)
@@ -200,24 +211,21 @@ def sos_struct_quintic_symmetric(coeff: Coeff, real = True):
         if True:
             # trivial case, where (u,v) is over the asymptotic line from (-1-z, z^2)
             # which is a linear combination of s((a+b-c)(a-b)2(a+b+zc)2), s(a3(b-c)2) and abcs(a2-ab)
+            sol1 = _get_solution_t(-z)
             y = [
-                m / 4,
-                (3 + z) * (1 - z) * m / 4,
                 (u + z + 1) * m / 2,
                 (v - z**2 + 2*(u + z + 1)) * m / 4,
                 rem / 2
             ]
-            if all(_ >= 0 for _ in y):
+            if sol1 is not None and all(_ >= 0 for _ in y):
                 multiplier = CyclicSum((a - b)**2)/2
                 exprs = [
-                    CyclicSum(c*(a-c)**2*(b-c)**2*((z+1)*(a+b) + 2*c)**2),
-                    CyclicSum(a) * CyclicProduct((a-b)**2),
                     CyclicSum((a-b)**2) * CyclicSum(a**3*(b-c)**2),
                     CyclicProduct(a) * CyclicSum((a-b)**2)**2,
                     CyclicSum((a-b)**2) * CyclicProduct(a) * CyclicSum(a*b),
                 ]
 
-                return sum_y_exprs(y, exprs) / multiplier
+                return (m*sol1 + sum_y_exprs(y, exprs)) / multiplier
 
         t1 = -z
         t2 = -(2*u*z - u + v*z + 4*v + 2*z - 1)/(-6*u - 3*v + 4*z**2 - 4*z - 5)
@@ -236,27 +244,19 @@ def sos_struct_quintic_symmetric(coeff: Coeff, real = True):
         w2 = 1 - w1
         w3 = u - w1*u1 - w2*u2
 
-        y = [
-            w1 * m / 4,
-            w2 * m / 4,
-            (w1 * (3 + z) * (1 - z) + w2 * (3 - t2) * (1 + t2)) * m / 4,
-            w2 * (z + t2) * m / 2,
-            w3 * m / 2,
-            rem / 2
-        ]
-        if all(_ >= 0 for _ in y):
-            multiplier = CyclicSum((a - b)**2)/2
-            exprs = [
-                CyclicSum(c*(a-c)**2*(b-c)**2*((1-t1)*(a+b) + 2*c)**2),
-                CyclicSum(c*(a-c)**2*(b-c)**2*((1-t2)*(a+b) + 2*c)**2),
-                CyclicSum(a) * CyclicProduct((a-b)**2),
-                CyclicSum((a-b)**2) * CyclicSum(c*(a-b)**2*(a+b-t2*c)**2),
-                CyclicSum((a-b)**2) * CyclicSum(a**3*(b-c)**2),
-                CyclicProduct(a) * CyclicSum((a-b)**2) * CyclicSum(a*b)
-            ]
-            return sum_y_exprs(y, exprs) / multiplier
+        if not (w3 >= 0 and (0 <= w1 <= 1)):
+            return None
 
-        return None
+        multiplier = CyclicSum((a - b)**2)/2
+        sol1 = _get_solution_tz(t1, z)
+        sol2 = _get_solution_tz(t2, z)
+        sol3 = multiplier * CyclicSum(a**3*(b-c)**2)
+        if sol1 is None or sol2 is None:
+            return None
+
+        rem_part = rem * multiplier * CyclicProduct(a) * CyclicSum(a*b)
+        return ((w1*m)*sol1 + (w2*m)*sol2 + (w3*m)*sol3 + rem_part) / multiplier
+
 
     else: # if z <= -3
         # In this case there might be roots on the border.
@@ -275,23 +275,29 @@ def sos_struct_quintic_symmetric(coeff: Coeff, real = True):
             if y[-2] >= 0:
                 multiplier = CyclicSum((a - b)**2)/2
                 exprs = [
-                    CyclicSum(c*(a**2*c+b**2*c+c**3-(1-z)/2*a*c**2-(1-z)/2*b*c**2-(2*z+3)*a*b*c+(z+1)/2*a**2*b+(z+1)/2*a*b**2)**2),
+                    CyclicSum(c*(a**2*c+b**2*c+c**3-(1-z)/2*a*c**2-(1-z)/2*b*c**2\
+                                 -(2*z+3)*a*b*c+(z+1)/2*a**2*b+(z+1)/2*a*b**2)**2),
                     CyclicSum(c**3*(a-b)**2) * CyclicSum((a-b)**2),
                     CyclicSum((a-b)**2)**2 * CyclicProduct(a),
                     CyclicSum((a-b)**2) * CyclicProduct(a) * CyclicSum(a*b)
                 ]
                 return sum_y_exprs(y, exprs) / multiplier
 
-        return _sos_struct_quintic_symmetric_border(coeff)
+        if du == 0:
+            return _sos_struct_quintic_symmetric_border(coeff)
+        return _sos_struct_quintic_symmetric_final(coeff)
 
 
     return None
 
 
-def _sos_struct_quintic_symmetric_trivial(coeff: Coeff):
+def _sos_struct_quintic_symmetric_sdp(coeff: Coeff):
     """
     Try subtracting some `s(a(a2-xab-xac-yb2-yc2+(2x+2y-1)bc)2)` so that
     the rest is positive. See criterion at `_sos_struct_quintic_symmetric_hexagon`.
+
+    This solver does not attempt to lift the degree of the polynomial and can only
+    solve inequalities that are SOS without degree lifting.
     """
     m, z, u, v = coeff((5,0,0)), coeff((4,1,0)), coeff((3,2,0)), coeff((3,1,1))
     z, u, v = [z / m, u / m, v / m]
@@ -373,7 +379,7 @@ def _sos_struct_quintic_symmetric_trivial(coeff: Coeff):
             return solution
 
 
-def _sos_struct_quintic_symmetric_border(coeff: Coeff):
+def _sos_struct_quintic_symmetric_final(coeff: Coeff):
     """
     Note that (u,v) should be over the following curve: (t >= 3 and z <= -3)
     ```
@@ -388,85 +394,38 @@ def _sos_struct_quintic_symmetric_border(coeff: Coeff):
     ```
     We see that dy/dx < 0. So we can solve a point on the curve that is below (u,v).
     """
-    a, b, c = coeff.gens
-    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
-
     m, z, u, v = coeff((5,0,0)), coeff((4,1,0)), coeff((3,2,0)), coeff((3,1,1))
     z, u, v = [z / m, u / m, v / m]
     rem = (1 + v + (z + u)*2) * m + coeff((2,2,1))
     if rem < 0:
         return None
 
-    t, t_ = Symbol('t'), None
+    du = u - (z**2 + 2*z + 5)/4 # ensure the border is positive
+    if du == 0:
+        # Case a. there is a root on the border
+        return _sos_struct_quintic_symmetric_border(coeff)
+
+    a, b, c = coeff.gens
+    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+
     eqt1 = [27, 36*z - 18, 69 - 48*z, -64*u + 24*z - 92, 69 - 48*z, 36*z - 18, 27]
     eqt2 = [-27, -36*z - 36, -48*z - 93, -32*v - 88*z - 72, -48*z - 93, -36*z - 36, -27]
     eqt1, eqt2 = [coeff.from_list(_, (a,)).as_poly() for _ in [eqt1, eqt2]]
 
+    t_ = None
+    inexact = True
     for t_ in nroots(eqt1, method = 'factor', real = True, nonnegative = True):
         if t_ >= 3 and eqt2(t_) <= 1e-8:
+            u_ = coeff.convert(t_)
+            inexact = isinstance(u_, Float)
             break
     else:
-        return None
-    u_ = t_
-
-    du = u - (z**2 + 2*z + 5)/4 # ensure the border is positive
-    if du == 0:
-        # Case a. There is a root on the border. We shall preserve the root.
-        r = (1 - z)/2
-        def _compute_mpnq_discriminant(x, y):
-            m_ = -2*r**2 - 8*r*y**2 - 4*r*y + v - 4*x*y + 4*x + 9*y**2 + 6*y + 3
-            p_ = 2*r**2*y**2 + r**2 - 4*r*x - 4*r*y**2 - 20*r*y + 6*r + v*y**2 + 2*v*y - 2*v - x**2 + 10*x*y - 4*x + 3*y**2 + 24*y - 9
-            n_ = -2*r**2*y**2 + 12*r**2*y - 12*r*x*y + 4*r*x + 8*r*y**2 - 8*r*y - 12*r - v*y**2 - 2*v*y + 3*v - 2*x**2 + 4*x*y + 8*x - 9*y**2 - 6*y + 15
-            det = 3*m_*(m_ + n_) - 3*p_**2
-            return (m_, p_, n_), det
-        def _verify_xy(x, y):
-            if -2 < y < 0:
-                return False
-            (m_, p_, n_), det = _compute_mpnq_discriminant(x, y)
-            if (m_ > 0 and det >= 0) or (m_ == 0 and 2*p_ + n_ >= 0):
-                return True
-            return False
-
-        # We shall find x, y such that m >= 0 and det >= 0 and y(y+2) >= 0.
-        # We first compute the optimal x, y through the exact theorem.
-        w0, w1 = [(3-u_)/(4*u_), 9*(u_-1)**2*(u_+1)*(u_+3)/(32*u_**3)]
-        y0, x0 = -w0, -r*w0 - w1
-
-        if _verify_xy(x0, y0):
-            if not isinstance(u_, Rational):
-                x0, y0 = x0.n(15), y0.n(15)
-                for rounding in (.5, .1, 1e-2, 1e-3, 1e-5, 1e-8, 1e-12):
-                    x_, y_ = rationalize(x0, rounding=rounding, reliable = False), rationalize(y0, rounding=rounding, reliable=False)
-                    if _verify_xy(x_, y_):
-                        x0, y0 = x_, y_
-                        break
-                else:
-                    return None
-
-            multiplier = CommonExpr.quadratic(1, y0**2 + 2*y0 - 1, coeff.gens)
-            func_g = (c**2 - r*b*c + b**2 - (2-r)*a*b)*(c+y0*b) + (c**2 - r*a*c + a**2 - (2-r)*a*b)*(c+y0*a) - c**3 + a*b*c + x0*(a**2*b + a*b**2 - 2*a*b*c)
-            func_g = func_g.expand()
-            main_solution = m * CyclicSum(c * func_g**2)
-
-            m_, p_, n_ = _compute_mpnq_discriminant(x0, y0)[0]
-            m_, p_, n_ = [m*m_, m*p_, m*n_]
-            quartic = {
-                (4,0,0): m_, (3,1,0): p_, (2,2,0): n_, (1,3,0): p_, (3,0,1): p_, (2,1,1): -m_-p_*2-n_
-            }
-            quartic_solution = sos_struct_quartic(coeff.from_dict(quartic), None)
-            if quartic_solution is None: # not expected to happen
-                return None
-            solution = main_solution + (quartic_solution + rem * CyclicSum(a*b) * multiplier) * CyclicProduct(a)
-            return solution / multiplier
-
-    if du == 0 and coeff.is_rational:
-        # this cannot happen
         return None
 
     if True:
         # Case b. If there is root on the symmetric axis. We shall preserve the root.
-        sym = (a**3 + (2*z + 2)*a**2 + (2*u + v + 4*z + 3)*a + 2*u + 2*z + 2).as_poly(a)
-        sym_diff = sym.diff(a)
+        sym = coeff.from_list([1, 2*z + 2, 2*u + v + 4*z + 3, 2*u + 2*z + 2], (a,)).as_poly()
+        sym_diff = sym.diff()
         sym_gcd = sym.gcd(sym_diff)
 
         if sym_gcd.degree() == 1:
@@ -475,13 +434,6 @@ def _sos_struct_quintic_symmetric_border(coeff: Coeff):
             t = root + 1
             w = 2*z - 1 + 2*t
             extra_w = Integer(0)
-
-            if du == 0 and not coeff.is_rational:
-                # This might happen when the exact u is irrational
-                # and we can solve it from (3u^2+2u+3) - 4ut = 0
-                u_ = (2*t + 2*sqrtdenest(sqrt(t**2 - t - 2)) - 1)/3
-                if u_ < 3:
-                    return None
 
             w_lower_bound = (-(u_**2 + 6*u_ - 9)/(2*u_**2))
             if w < w_lower_bound:
@@ -516,7 +468,8 @@ def _sos_struct_quintic_symmetric_border(coeff: Coeff):
             if not _verify_xy(x0, y0, w):
                 # It is expected that _verify_xy(x0, y0) is valid when w -> w_lower_bound,
                 # we can subtract more w to do the approximation
-                for w__ in rationalize_bound(w_lower_bound, direction = 1, compulsory = True):
+                for w__ in rationalize_bound(
+                        coeff.to_sympy(w_lower_bound).n(15), direction = 1, compulsory = True):
                     if w__ <= w and _verify_xy(x0, y0, w__):
                         extra_w = w - w__
                         w = w__
@@ -525,8 +478,8 @@ def _sos_struct_quintic_symmetric_border(coeff: Coeff):
                     return None
 
 
-            if (not isinstance(u_, Rational)) and (coeff.is_rational or du != 0):
-                x0, y0 = x0.n(15), y0.n(15)
+            if inexact and coeff.domain.is_Exact:
+                x0, y0 = [coeff.to_sympy(_).n(15) for _ in [x0, y0]]
                 for rounding in (.5, .1, 1e-2, 1e-3, 1e-5, 1e-8, 1e-12):
                     x_, y_ = rationalize(x0, rounding=rounding, reliable = False), rationalize(y0, rounding=rounding, reliable=False)
                     if _verify_xy(x_, y_, w):
@@ -623,23 +576,106 @@ def _sos_struct_quintic_symmetric_border(coeff: Coeff):
             return sum_y_exprs(y, exprs) / multiplier
 
 
+def _sos_struct_quintic_symmetric_border(coeff: Coeff):
+    """
+    Solve symmetric quintic inequalities with one root on the border.
+    The coefficient should satisfy `u = (z**2 + 2*z + 5)/4`.
+    """
+    m, z, u, v = coeff((5,0,0)), coeff((4,1,0)), coeff((3,2,0)), coeff((3,1,1))
+    z, u, v = [z / m, u / m, v / m]
+    rem = (1 + v + (z + u)*2) * m + coeff((2,2,1))
+    if rem < 0 or u - (z**2 + 2*z + 5)/4 != 0:
+        return None
+
+    a, b, c = coeff.gens
+    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+
+
+    # We shall find x, y such that m >= 0 and disc >= 0 and y(y+2) >= 0.
+    # We first compute the optimal x, y through the exact theorem.
+    equ = coeff.from_list([3, 4*z + 1, 9, -9], (a,)).as_poly()
+    u_ = None
+    inexact = False
+    for root in nroots(equ, method='factor', real=True, nonnegative=True):
+        if root >= 3:
+            u_ = coeff.convert(root)
+            inexact = isinstance(root, Float)
+            break
+    if u_ is None:
+        return None
+
+    r = (1 - z)/2
+    w0, w1 = [(3-u_)/(4*u_), 9*(u_-1)**2*(u_+1)*(u_+3)/(32*u_**3)]
+    y, x = -w0, -r*w0 - w1
+
+    def _compute_mpnq_discriminant(x, y):
+        m = -2*r**2 - 8*r*y**2 - 4*r*y + v - 4*x*y + 4*x + 9*y**2 + 6*y + 3
+        p = 2*r**2*y**2 + r**2 - 4*r*x - 4*r*y**2 - 20*r*y + 6*r + v*y**2 \
+            + 2*v*y - 2*v - x**2 + 10*x*y - 4*x + 3*y**2 + 24*y - 9
+        n = -2*r**2*y**2 + 12*r**2*y - 12*r*x*y + 4*r*x + 8*r*y**2 - 8*r*y - 12*r \
+            - v*y**2 - 2*v*y + 3*v - 2*x**2 + 4*x*y + 8*x - 9*y**2 - 6*y + 15
+        disc = 3*m*(m + n) - 3*p**2
+        return (m, p, n), disc
+    def _verify_xy(x, y):
+        if -2 < y < 0:
+            return False
+        (m, p, n), disc = _compute_mpnq_discriminant(x, y)
+        if (m > 0 and disc >= 0) or (m == 0 and 2*p + n >= 0 and p >= 0):
+            return True
+        return False
+
+
+    if not _verify_xy(x, y):
+        return None
+
+    if inexact and coeff.domain.is_Exact:
+        x, y = [coeff.to_sympy(_).n(15) for _ in [x, y]]
+        for rounding in (.5, .1, 1e-2, 1e-3, 1e-5, 1e-8, 1e-12):
+            x, y = rationalize(x, rounding=rounding, reliable = False), rationalize(y, rounding=rounding, reliable=False)
+            if _verify_xy(x, y):
+                break
+        else:
+            return None
+
+    multiplier = CommonExpr.quadratic(1, y**2 + 2*y - 1, coeff.gens)
+    # func_g = (c**2 - r*b*c + b**2 - (2-r)*a*b)*(c + y*b) \
+    #     + (c**2 - r*a*c + a**2 - (2-r)*a*b)*(c + y*a) - c**3 + a*b*c + x*(a**2*b + a*b**2 - 2*a*b*c)
+    func_g = y*a**3 + (r*y + x - 2*y)*a**2*b + (-r*y + 1)*a**2*c + (r*y + x - 2*y)*a*b**2 \
+        + (2*r - 2*x - 3)*a*b*c + (-r + y)*a*c**2 + y*b**3 + (-r*y + 1)*b**2*c + (-r + y)*b*c**2 + c**3
+    main_solution = m * CyclicSum(c * func_g**2)
+
+    m_, p_, n_ = _compute_mpnq_discriminant(x, y)[0]
+    m_, p_, n_ = m*m_, m*p_, m*n_
+    quartic = {
+        (4,0,0): m_, (3,1,0): p_, (2,2,0): n_, (1,3,0): p_, (3,0,1): p_, (2,1,1): -m_-p_*2-n_
+    }
+    quartic_solution = sos_struct_quartic(coeff.from_dict(quartic), None)
+    if quartic_solution is None: # not expected to happen
+        return None
+    solution = main_solution + (quartic_solution + rem * CyclicSum(a*b) * multiplier) * CyclicProduct(a)
+    return solution / multiplier
+
+
 def _sos_struct_quintic_symmetric_hexagon(coeff: Coeff):
     """
-    Prove symmetric quintic without s(a5). It should also handle
-    the case when (1,1,1) is not a root.
+    Prove symmetric quintic without s(a5).
+    TODO: It should also handle cases when (1,1,1) is not a root in the future.
 
-    Theorem: Suppose s(ab(a3+b3) + ua2b2(a+b) + va3bc + za2b2c) >= 0.
-    1. When (u,v) is on the upper-right of parametric parabola (t^2-2t, -2t^2),
-    which is also (2x+y)^2 = -8y, then we can use the fact that any point on the parabola
-    is equivalent to s(c(a-b)2(a+b-tc)2).
+    Theorem: Suppose `s(ab(a3+b3) + ua2b2(a+b) + va3bc + za2b2c) >= 0`.
+    1. When `(u, v)` is on the upper-right of parametric parabola `(t^2-2t, -2t^2)`,
+    which is also `(2x+y)^2 = -8y`, then we can use the fact that any point on the parabola
+    is equivalent to `s(c(a-b)2(a+b-tc)2)`.
 
-    2. When (u,v) is on the upper-right of parametric parabola
-    (24t(t-1)/(5t+1)^2, -48(t^2+4t+1)/(5t+1)^2),
-    which is also (2x+y)^2 = 8(36x-7y-48), then we can use the fact that any point on the parabola
-    is equivalent to s(a(b-c)2((7t-1)a2+(5t+1)(b2+c2-ab-ac)+(5t-11)bc)2).
+    2. When `(u, v)` is on the upper-right of parametric parabola
+    `(24t(t-1)/(5t+1)^2, -48(t^2+4t+1)/(5t+1)^2)`,
+    which is also `(2x+y)^2 = 8(36x-7y-48)`, then we can use the fact that any point on the parabola
+    is equivalent to
+    ```
+    s(a(b-c)2((7t-1)a2+(5t+1)(b2+c2-ab-ac)+(5t-11)bc)2).
+    ```
 
     Examples
-    -------
+    --------
     s(2c(a-b)2(a+b-3c)2)
 
     s(c(a-b)2(a+b-3c)2)+s(c(a-b)2(a+b-4c)2)

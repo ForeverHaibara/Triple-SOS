@@ -56,7 +56,9 @@ def rationalize(
     if isinstance(v, (Rational, int)):
         return sympify(v)
     else:
-        if (not isinstance(v, (float, Float))) and isinstance(v, Expr):
+        if not isinstance(v, Expr):
+            v = sympify(v)
+        if (not isinstance(v, (float, Float))):
             v = v.n(15)
         if True: # reliable:
             x = Rational(v)

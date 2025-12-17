@@ -1871,7 +1871,7 @@ def _sos_struct_quintic_hexagon(coeff: Coeff):
         s_ = (coeff((4,1,0)) + coeff((1,4,0))) / 2 # s = x + z
         x_ = s_ / 2 + sqrt(coeff((4,1,0)) * coeff((1,4,0))) / 2
         g, h = coeff((3,2,0)), coeff((2,3,0))
-        if not isinstance(x_, Rational):
+        if isinstance(x_, Expr) and not isinstance(x_, Rational):
             x_ = x_.n(15)
 
         # u^2x - 2vx - vy = g => v = (u^2x - g) / (2x + y)
