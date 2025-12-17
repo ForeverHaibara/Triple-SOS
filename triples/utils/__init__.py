@@ -22,7 +22,6 @@ from .roots import (
     univariate_intervals, rationalize, rationalize_array, rationalize_bound,
     rationalize_quadratic_curve, common_region_of_conics,
     cancel_denominator,
-    rpa_monotonic, rpa_gmop, rpa_polyopt
 )
 
 
@@ -38,5 +37,5 @@ __all__ = [
     'Root', 'RootList', 'univar_realroots', 'kkt', 'optimize_poly', 'numeric_optimize_poly', 'numeric_optimize_skew_symmetry',
     'nroots', 'univariate_intervals', 'rationalize', 'rationalize_array', 'rationalize_bound',
     'rationalize_quadratic_curve', 'common_region_of_conics',
-    'cancel_denominator', 'rpa_monotonic', 'rpa_gmop', 'rpa_polyopt'
+    'cancel_denominator'
 ]
