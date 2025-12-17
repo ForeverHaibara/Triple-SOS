@@ -50,7 +50,7 @@ class StructuralSOSSolver(ProofNode):
         # Fast in most cases
         return ProblemComplexity(0.001, 1.)
 
-# @sanitize(homogenize=True, infer_symmetry=False, wrap_constraints=False)
+
 def StructuralSOS(
         poly: Poly,
         ineq_constraints: Union[List[Poly], Dict[Poly, Expr]] = {},

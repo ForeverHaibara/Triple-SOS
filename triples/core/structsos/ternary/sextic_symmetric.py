@@ -2130,7 +2130,7 @@ def _sos_struct_sextic_symmetric_ultimate_1root(coeff: Coeff, poly, roots, real 
             # 1. try subtracting all the s(a6)
             # e.g. s(a2/3)3-a2b2c2-p(a-b)2
             if coeff((5,1,0)) >= -2 * x_:
-                poly2 = poly - ((a**3+b**3+c**3-3*a*b*c-x_*(a*a*(b+c)+b*b*(c+a)+c*c*(a+b)-6*a*b*c))**2).as_poly(a,b,c, domain=poly.domain) * coeff6
+                poly2 = poly - ((a**3+b**3+c**3-3*a*b*c-x_*(a*a*(b+c)+b*b*(c+a)+c*c*(a+b)-6*a*b*c))**2).as_poly(a,b,c, domain=poly.domain).mul_ground(coeff6)
                 solution = _sos_struct_sextic_iran96(coeff.from_poly(poly2), real = real)
                 if solution is not None:
                     if x_ == Rational(3,2):
@@ -2276,7 +2276,7 @@ def _sos_struct_sextic_symmetric_ultimate_2roots(coeff: Coeff, poly, roots):
             if isinstance(x_, Expr) and not isinstance(x_, Rational):
                 return None
             solution = CyclicSum(a**3-x_*a**2*(b+c)+(2*x_-1)*a*b*c)**2
-            diffpoly = solution.doit().as_poly(a,b,c)
+            diffpoly = solution.doit().as_poly(a,b,c, domain=coeff.domain)
             solution *= coeff6
 
         elif 1 <= len(roots[1]) <= 2: # roots[0][0] == 2:
@@ -2341,7 +2341,7 @@ def _sos_struct_sextic_symmetric_ultimate_2roots(coeff: Coeff, poly, roots):
 
 
         if diffpoly is not None:
-            new_poly = poly - coeff6 * diffpoly
+            new_poly = poly - diffpoly.mul_ground(coeff6)
             rest_solution = _sos_struct_sextic_iran96(coeff.from_poly(new_poly))
             if rest_solution is not None:
                 return sp.together(solution + rest_solution)
