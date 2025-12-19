@@ -16,6 +16,10 @@ class SolvePolynomial(TransformNode):
     are all converted and stored as sympy (dense) Poly class. However, the process
     of converting expressions to dense polynomials is inefficient for very large inputs.
     """
+    default_configs = {
+        "sqf": False,
+        "homogenize": True
+    }
     def get_polynomial_solvers(self, configs):
         solvers = configs.get('solvers', None)
         if solvers is None:
@@ -23,7 +27,7 @@ class SolvePolynomial(TransformNode):
             from ..linsos.linsos import LinearSOSSolver
             from ..sdpsos.sdpsos import SDPSOSSolver
             from ..symsos.symsos import SymmetricSubstitution
-            from .pivoting import Pivoting
+            from ..pivoting.pivoting import Pivoting
             from .reparam import Reparametrization
             solvers = [
                 StructuralSOSSolver,
@@ -38,19 +42,36 @@ class SolvePolynomial(TransformNode):
     def explore(self, configs):
         if self.status == 0:
             problem = self.problem.polylize()
-            problem, _restoration = reduce_over_quotient_ring(problem)
-            # if problem.expr.is_zero:
-            #     problem.solution = _restoration(Integer(0))
-            #     self.status = -1
-            #     self.finished = True
-            #     return
+
+            if configs["homogenize"]:
+                problem, _restoration = reduce_over_quotient_ring(problem)
+            else:
+                _restoration = lambda x: x
+
+            sqf = 1
+            if configs["sqf"]:
+                problem, sqf = problem.sqr_free(problem_sqf=True, ineqs_sqf=False, eqs_sqf=False)
+
+            if problem.expr.total_degree() <= 0 and problem.expr.LC() >= 0:
+                # nonnegative constant to prove
+                self.register_solution(problem.expr.LC() * sqf**2)
+                self.status = -1
+                self.finished = True
+                return
+
 
             solvers = self.get_polynomial_solvers(configs)
             self.children = [solver(problem) for solver in solvers]
 
-            self.status = - 1
+            self.status = -1
 
-        self.restorations = {c: _restoration for c in self.children}
+            def composed_restoration(x):
+                if x is None:
+                    return None
+                return sqf**2 * _restoration(x)
+
+            self.restorations = {c: composed_restoration for c in self.children}
+
         if self.status != 0 and len(self.children) == 0:
             # all children failed
             self.finished = True

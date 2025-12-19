@@ -4,9 +4,9 @@ import numpy as np
 from sympy import Poly, Expr, Symbol, sympify
 
 from .preprocess import ProofNode, ProofTree, SolvePolynomial
-from .preprocess.pivoting import Pivoting
 from .preprocess.reparam import Reparametrization
 from .linsos.linsos import LinearSOSSolver
+from .pivoting.pivoting import Pivoting
 from .structsos.structsos import StructuralSOSSolver
 from .symsos import SymmetricSubstitution
 from .sdpsos.sdpsos import SDPSOSSolver

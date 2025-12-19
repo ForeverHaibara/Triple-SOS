@@ -1,9 +1,9 @@
 from datetime import datetime
 from time import perf_counter
-from typing import Dict, List, Union, Optional, Any
+from typing import Dict, List, Union, Optional, Callable, Any
 import os
 
-from sympy import Expr, Poly, Rational, Integer, fraction
+from sympy import Expr
 import numpy as np
 
 from .problem import InequalityProblem
@@ -183,15 +183,15 @@ class ProofTree:
         self.root = root
         self.configs = configs
         self.parents = {}
-        self._expected_end_time = None
+        self._expected_end_time = perf_counter() \
+            + configs.get("time_limit", self.default_configs["time_limit"])
 
     def get_configs(self, node: Union[ProofNode, 'ProofTree']) -> Dict[str, Any]:
         cfg = node.default_configs.copy()
 
-        _expected_end_time = self._expected_end_time
-        if _expected_end_time is not None:
-            # compute the time limit dynamically (the remaining time)
-            cfg['time_limit'] = (_expected_end_time - perf_counter())
+        # compute the time limit dynamically (the remaining time)
+        cfg["time_limit"] = min(self._expected_end_time - perf_counter(),
+                                cfg.get("time_limit", float("inf")))
 
         cfg.update(self.configs.get(node, {}))
         for cls in node.__class__.mro()[::-1]:
@@ -244,7 +244,15 @@ class ProofTree:
             while path[-1] in self.parents and len(path) < MAX_PATH_LEN:
                 path.append(self.parents[path[-1]])
             print(f'Exploring ... {" -> ".join([_.__class__.__name__ for _ in path[::-1]])}')
+
+        if cfg.get("callback_before_explore"):
+            cfg["callback_before_explore"](self, node, cfg)
+
         node.explore(cfg)
+
+        if cfg.get("callback_after_explore"):
+            cfg["callback_after_explore"](self, node, cfg)
+
         self.propagate(node)
 
     def propagate(self, node: ProofNode):
@@ -261,12 +269,16 @@ class ProofTree:
                 p.finished = True
             p = self.parents.get(p, None)
 
-    def solve(self) -> Optional[Expr]:
+    def solve_until(self, condition: Callable[['ProofTree'], bool]):
+        """
+        Repeatly call `explore` until the condition is met
+        or it reaches the configured limit.
+        This function is helpful when called from nodes to solve
+        a subproblem.
+        """
         _tree_configs = self.get_configs(self)
-        time_limit = _tree_configs["time_limit"]
+        # time_limit = _tree_configs["time_limit"]
         max_explore = _tree_configs["max_explore"]
-
-        self._expected_end_time = perf_counter() + time_limit
 
         for _ in range(max_explore):
             try:
@@ -275,9 +287,15 @@ class ProofTree:
                 break
             if perf_counter() > self._expected_end_time:
                 break
-            if self.root.finished:
+            if condition(self):
                 break
 
+    def solve(self) -> Optional[Expr]:
+        # recompute expected end time
+        self._expected_end_time = perf_counter() \
+            + self.configs.get("time_limit", self.default_configs["time_limit"])
+
+        self.solve_until(lambda self: self.root.finished)
         return self.root.problem.solution
 
 

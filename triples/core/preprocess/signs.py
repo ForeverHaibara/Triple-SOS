@@ -6,7 +6,7 @@ from sympy.polys.rings import PolyElement
 from ..problem import InequalityProblem
 from ...utils import CyclicExpr
 
-def sign_sos(expr: Expr, signs: Dict[Symbol, Tuple[int, Expr]]) -> Optional[Expr]:
+def sign_sos(expr: Expr, signs: Dict[Symbol, Tuple[int, Expr]], factor: bool = False) -> Optional[Expr]:
     """
     Very fast and simple nonnegativity check for a SymPy (commutative, real)
     expression instance given signs of symbols.
@@ -45,8 +45,6 @@ def sign_sos(expr: Expr, signs: Dict[Symbol, Tuple[int, Expr]]) -> Optional[Expr
     >>> sign_sos(a**12 + b**12 + c**12 - 3*a**4*b**4*c**4, signs) is None
     True
     """
-    if isinstance(expr, (Poly, PolyElement)):
-        expr = expr.as_expr()
 
     def is_nonneg_pow(x: Expr) -> bool:
         if isinstance(x.exp, Rational) and (int(x.exp.numerator) % 2 == 0 or
@@ -122,9 +120,20 @@ def sign_sos(expr: Expr, signs: Dict[Symbol, Tuple[int, Expr]]) -> Optional[Expr
                 return expr, False
             return None
 
-    sol = prove_by_recur(expr)
+    sol = prove_by_recur(expr.as_expr())
     if sol is not None:
         return sol[0]
+
+    if factor:
+        if isinstance(expr, Poly):
+            factor_list = expr.factor_list()
+            expr = Mul(factor_list[0],
+                *[k.as_expr()**v for k, v in factor_list[1]])
+        else:
+            expr = expr.as_expr().doit().factor()
+        sol = prove_by_recur(expr)
+        if sol is not None:
+            return sol[0]
 
 
 class SpecialHeap:
