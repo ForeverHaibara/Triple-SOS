@@ -5,7 +5,7 @@ from typing import (
 )
 from sympy import (
     Basic, Expr, Symbol, Dummy, Poly, Integer, Rational, Function, Mul, Pow,
-    signsimp, fraction
+    fraction
 )
 from sympy.combinatorics.perm_groups import Permutation, PermutationGroup
 from sympy.core.symbol import uniquely_named_symbol
@@ -20,7 +20,7 @@ from .dispatch import (
 )
 from ..utils import optimize_poly, Root, RootList
 from ..utils.monomials import (
-    verify_closure, _identify_symmetry_from_blackbox, identify_symmetry_from_lists
+    verify_closure, _identify_symmetry_from_blackbox
 )
 
 
@@ -409,7 +409,7 @@ class InequalityProblem(Generic[T]):
         problem_sqf: bool = False,
         ineqs_sqf: bool = True,
         eqs_sqf: bool = True,
-        inplace: bool = False
+        inplace: bool = False,
     ) -> Tuple['InequalityProblem', Expr]:
         """
         Try to make the problem square-free.

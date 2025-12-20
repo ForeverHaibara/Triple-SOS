@@ -16,14 +16,14 @@ class SymmetricSubstitution(TransformNode):
     Apply symmetric substitution on the variables.
     """
     def explore(self, configs):
-        if self.status != 0:
+        if self.state != 0:
             return
 
         # check symmetry here
         poly = self.problem.expr
         if len(poly.gens) != 3 or not (poly.domain in (ZZ, QQ))\
                 or not poly.is_homogeneous:
-            self.status = 1
+            self.state = 1
             self.finished = True
             return None
 
@@ -48,7 +48,7 @@ class SymmetricSubstitution(TransformNode):
             self.children.append(solver)
             self.restorations[solver] = applied[1]
 
-        self.status = -1
+        self.state = -1
         if len(self.children) == 0:
             self.finished = True
 

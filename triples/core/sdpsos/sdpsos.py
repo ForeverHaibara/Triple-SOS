@@ -185,7 +185,7 @@ class SDPSOSSolver(ProofNode):
 
     _complexity_models = True
     def explore(self, configs):
-        if self.status != 0:
+        if self.state != 0:
             return
 
         poly = self.problem.expr
@@ -197,7 +197,7 @@ class SDPSOSSolver(ProofNode):
         nvars = len(poly.gens)
         degree = poly.total_degree()
         if nvars < 1:
-            self.status = -1
+            self.state = -1
             self.finished = True
             return None
 
@@ -213,7 +213,7 @@ class SDPSOSSolver(ProofNode):
                 + [_.total_degree() for _ in ineq_constraints.keys()]\
                 + [_.total_degree() for _ in eq_constraints.keys()])
         if not (poly.domain in (ZZ, QQ, RR)):
-            self.status = -1
+            self.state = -1
             self.finished = True
             return None
 
@@ -268,7 +268,7 @@ class SDPSOSSolver(ProofNode):
                     break
                 continue
 
-        self.status = -1
+        self.state = -1
         self.finished = True
 
 

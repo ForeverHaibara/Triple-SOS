@@ -5,7 +5,7 @@ from sympy import count_ops, Poly, Expr, Rational, Symbol, Add, Mul
 import numpy as np
 
 from .basis import LinearBasis, LinearBasisTangent
-from .updegree import LinearBasisMultiplier
+from .lift import LinearBasisMultiplier
 from ...utils import MonomialManager, verify_symmetry
 
 

@@ -40,7 +40,7 @@ class SolvePolynomial(TransformNode):
         return solvers
 
     def explore(self, configs):
-        if self.status == 0:
+        if self.state == 0:
             problem = self.problem.polylize()
 
             if configs["homogenize"]:
@@ -54,8 +54,7 @@ class SolvePolynomial(TransformNode):
 
             if problem.expr.total_degree() <= 0 and problem.expr.LC() >= 0:
                 # nonnegative constant to prove
-                self.register_solution(problem.expr.LC() * sqf**2)
-                self.status = -1
+                self.solution = problem.expr.LC() * sqf**2
                 self.finished = True
                 return
 
@@ -63,7 +62,7 @@ class SolvePolynomial(TransformNode):
             solvers = self.get_polynomial_solvers(configs)
             self.children = [solver(problem) for solver in solvers]
 
-            self.status = -1
+            self.state = -1
 
             def composed_restoration(x):
                 if x is None:
@@ -72,7 +71,7 @@ class SolvePolynomial(TransformNode):
 
             self.restorations = {c: composed_restoration for c in self.children}
 
-        if self.status != 0 and len(self.children) == 0:
+        if self.state != 0 and len(self.children) == 0:
             # all children failed
             self.finished = True
 

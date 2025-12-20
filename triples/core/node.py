@@ -1,4 +1,5 @@
 from datetime import datetime
+import traceback
 from time import perf_counter
 from typing import Dict, List, Union, Optional, Callable, Any
 import os
@@ -27,12 +28,12 @@ class ProofNode:
     A ProofNode can have multiple children, each representing a different
     branch of exploration.
 
-    A ProofNode instance is mutable and its status can be updated during
+    A ProofNode instance is mutable and its state can be updated during
     exploration.
 
 
     """
-    status = 0
+    state = 0
     finished = False
     default_configs = {}
 
@@ -46,10 +47,31 @@ class ProofNode:
         self.children = []
 
     def __repr__(self):
-        return f"ProofNode.{self.__class__.__name__}({repr(self.problem)}, status={self.status}, children={len(self.children)})"
+        return f"ProofNode.{self.__class__.__name__}({repr(self.problem)}, state={self.state}, children={len(self.children)})"
 
     def __str__(self):
         return self.__repr__()
+
+    @property
+    def status(self) -> int:
+        from warnings import warn
+        warn("status is renamed, use state instead", DeprecationWarning, stacklevel=2)
+        return self.state
+
+    @status.setter
+    def status(self, value: int):
+        from warnings import warn
+        warn("status is renamed, use state instead", DeprecationWarning, stacklevel=2)
+        self.state = value
+
+    @property
+    def solution(self):
+        return self.problem.solution
+
+    @solution.setter
+    def solution(self, value: Optional[Solution]):
+        # zen of python: there should be one obvious way to do it
+        self._register_solution(value)
 
     def select(self) -> 'ProofNode':
         """
@@ -62,9 +84,9 @@ class ProofNode:
         # return min(self.children, key=lambda x: x.evaluate_complexity().time)
 
     def evaluate_complexity(self) -> ProblemComplexity:
-        if self._complexity is None or self._complexity.status != self.status:
+        if self._complexity is None or self._complexity.state != self.state:
             self._complexity = self._evaluate_complexity()
-        self._complexity.status = self.status
+        self._complexity.state = self.state
         return self._complexity
 
     def _evaluate_complexity(self) -> ProblemComplexity:
@@ -105,7 +127,10 @@ class ProofNode:
     def update(self, *args, **kwargs):
         pass
 
-    def register_solution(self, solution: Optional[Expr]) -> Optional[Expr]:
+    def _register_solution(self, solution: Optional[Expr]) -> Optional[Expr]:
+        """
+        Default behaviour: reserve the better solution
+        """
         if solution is not None:
             if self.problem.solution is None:
                 self.problem.solution = solution
@@ -139,7 +164,7 @@ class TransformNode(ProofNode):
         self.restorations = {}
 
     def _evaluate_complexity(self) -> ProblemComplexity:
-        if self.status == 0:
+        if self.state == 0:
             # when not explored, encourage exploration
             return ProblemComplexity(*self._default_complexity)
         if not self.children:
@@ -156,15 +181,17 @@ class TransformNode(ProofNode):
         for child in self.children:
             if child.problem.solution is not None:
                 restoration = self.restorations[child]
-                self.register_solution(restoration(child.problem.solution))
+                solution = restoration(child.problem.solution)
+                if solution is not None:
+                    self.solution = solution
 
 
 class SolveProblem(ProofNode):
     def explore(self, configs):
-        if self.status == 0:
+        if self.state == 0:
             from .preprocess.modeling import ReformulateAlgebraic
             self.children = [ReformulateAlgebraic(self.problem)]
-            self.status = -1
+            self.state = -1
 
 
 class ProofTree:
@@ -183,20 +210,20 @@ class ProofTree:
         self.root = root
         self.configs = configs
         self.parents = {}
-        self._expected_end_time = perf_counter() \
-            + configs.get("time_limit", self.default_configs["time_limit"])
+        self._expected_end_time = 0
 
     def get_configs(self, node: Union[ProofNode, 'ProofTree']) -> Dict[str, Any]:
         cfg = node.default_configs.copy()
 
-        # compute the time limit dynamically (the remaining time)
-        cfg["time_limit"] = min(self._expected_end_time - perf_counter(),
-                                cfg.get("time_limit", float("inf")))
+        if not (node is self):
+            # compute the time limit dynamically (the remaining time)
+            cfg["time_limit"] = min(self._expected_end_time - perf_counter(),
+                                    cfg.get("time_limit", float("inf")))
 
-        cfg.update(self.configs.get(node, {}))
         for cls in node.__class__.mro()[::-1]:
             if cls in self.configs:
                 cfg.update(self.configs[cls])
+        cfg.update(self.configs.get(node, {}))
         return cfg
 
     @property
@@ -248,7 +275,19 @@ class ProofTree:
         if cfg.get("callback_before_explore"):
             cfg["callback_before_explore"](self, node, cfg)
 
-        node.explore(cfg)
+        try:
+            node.explore(cfg)
+        except Exception as e:
+            # Internal errors are not expected, but could occur as the code is very complex
+            # To prevent the program from crashing, we catch them here
+            if isinstance(e, ArithmeticTimeout):
+                # internal node reaches the time limit, ignore this
+                pass
+            else:
+                if cfg.get("raise_exception", False):
+                    raise e
+                if cfg.get("verbose", False):
+                    traceback.print_exc()
 
         if cfg.get("callback_after_explore"):
             cfg["callback_after_explore"](self, node, cfg)
@@ -257,7 +296,7 @@ class ProofTree:
 
     def propagate(self, node: ProofNode):
         """
-        Propagate the status of a node to its parents.
+        Propagate the state of a node to its parents.
         """
         mode = self.mode
         p = node
@@ -265,7 +304,7 @@ class ProofTree:
             p.update(None)
             if mode == 'fast' and p.problem.solution is not None:
                 p.finished = True
-            if p.status < 0 and all(_.finished for _ in p.children):
+            if p.state < 0 and all(_.finished for _ in p.children):
                 p.finished = True
             p = self.parents.get(p, None)
 
@@ -292,8 +331,8 @@ class ProofTree:
 
     def solve(self) -> Optional[Expr]:
         # recompute expected end time
-        self._expected_end_time = perf_counter() \
-            + self.configs.get("time_limit", self.default_configs["time_limit"])
+        time_limit = self.get_configs(self)["time_limit"]
+        self._expected_end_time = time_limit + perf_counter()
 
         self.solve_until(lambda self: self.root.finished)
         return self.root.problem.solution

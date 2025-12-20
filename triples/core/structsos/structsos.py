@@ -1,5 +1,4 @@
-from typing import List, Dict, Union, Optional, Any
-import traceback
+from typing import List, Dict, Union, Optional
 
 from sympy import Poly, Expr, Integer, construct_domain
 from sympy.polys.polyerrors import BasePolynomialError
@@ -18,32 +17,19 @@ from ..problem import ProblemComplexity
 from ..solution import Solution
 
 class StructuralSOSSolver(ProofNode):
-    default_configs = {
-        'verbose': False,
-        'raise_exception': False,
-    }
     def explore(self, configs):
-        if self.status == 0:
+        if self.state == 0:
             problem, _homogenizer = self.problem.homogenize()
 
-            try:
-                solution = _structural_sos(problem.expr, problem.ineq_constraints, problem.eq_constraints)
-            except Exception as e:
-                # Internal errors are not expected, but could occur as the code is very complex
-                # To prevent the program from crashing, we catch them here
-                if configs['raise_exception']:
-                    raise e
-                if configs['verbose']:
-                    traceback.print_exc()
-                solution = None
+            solution = _structural_sos(problem.expr, problem.ineq_constraints, problem.eq_constraints)
 
             if solution is not None:
-                problem.solution = solution
-
                 if _homogenizer is not None:
-                    self.problem.solution = Solution.dehomogenize(solution, _homogenizer)
+                    self.solution = Solution.dehomogenize(solution, _homogenizer)
+                else:
+                    self.solution = solution
 
-        self.status = -1
+        self.state = -1
         self.finished = True
 
     def _evaluate_complexity(self) -> ProblemComplexity:

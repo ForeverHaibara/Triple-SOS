@@ -35,7 +35,7 @@ class Reparametrization(TransformNode):
     }
 
     def explore(self, configs):
-        if self.status != 0:
+        if self.state != 0:
             return
 
         def make_restoration(restorations: List[Callable]) -> Callable:
@@ -73,7 +73,7 @@ class Reparametrization(TransformNode):
         self.children.append(c)
         self.restorations[c] = make_restoration(restorations)
 
-        self.status = -1
+        self.state = -1
 
 def _reparam_power(eq: Poly, configs):
     """

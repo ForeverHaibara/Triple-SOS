@@ -961,7 +961,7 @@ def _sos_struct_quintic_windmill_trivial(coeff: Coeff):
 
     x_, y_, z_ = [coeff((1,4,0)) / coeff((3,2,0)), coeff((2,3,0)) / coeff((3,2,0)), coeff((3,1,1)) / coeff((3,2,0))]
     if True:
-        # Easy case 3. try another case where we do not need to updegree
+        # Easy case 3. try another case where we do not need to lift the degree
         # idea: use s(a*b^2*(a-ub+(u-1)c)^2)
         u_ = (y_ / (-2))
         y = [
