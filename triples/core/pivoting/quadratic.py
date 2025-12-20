@@ -118,7 +118,7 @@ class PivotQuadratic(ProofNode):
 
             if ub is None:
                 # test whether sym_axis <= lb
-                pro_syml = InequalityProblem.new(2*A*lb + B, ineqs, eqs)
+                pro_syml = InequalityProblem.new(2*A.as_expr()*lb + B.as_expr(), ineqs, eqs)
                 node_syml = CancelDenominator(pro_syml)
                 _info["pro_syml"] = pro_syml
                 _info["node_syml"] = node_syml
@@ -132,7 +132,7 @@ class PivotQuadratic(ProofNode):
 
             if lb is None:
                 # test whether sym_axis >= ub
-                pro_symu = InequalityProblem.new(-2*A*ub - B, ineqs, eqs)
+                pro_symu = InequalityProblem.new(-2*A.as_expr()*ub - B.as_expr(), ineqs, eqs)
                 node_symu = CancelDenominator(pro_symu)
                 _info["pro_symu"] = pro_symu
                 _info["node_symu"] = node_symu
@@ -160,7 +160,7 @@ class PivotQuadratic(ProofNode):
                 # prove disc >= 0 given (-B/(2A)) >= lb
                 SYM = Dummy("S")
                 cond_disc = InequalityProblem.new(disc,
-                                dict_inject(ineqs, {-2*A*lb - B: SYM}), eqs)
+                    dict_inject(ineqs, {-2*A.as_expr()*lb - B.as_expr(): SYM}), eqs)
                 node_disc = CancelDenominator(cond_disc)
                 _info["pro_disc"] = cond_disc
                 _info["node_disc"] = node_disc
@@ -174,7 +174,7 @@ class PivotQuadratic(ProofNode):
                 # prove disc >= 0 given (-B/(2A)) <= ub
                 SYM = Dummy("S")
                 cond_disc = InequalityProblem.new(disc,
-                                dict_inject(ineqs, {2*A*ub + B: SYM}), eqs)
+                    dict_inject(ineqs, {2*A.as_expr()*ub + B.as_expr(): SYM}), eqs)
                 node_disc = CancelDenominator(cond_disc)
                 _info["pro_disc"] = cond_disc
                 _info["node_disc"] = node_disc

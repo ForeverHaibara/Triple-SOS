@@ -484,6 +484,10 @@ class PartialOrderElement:
     def from_arg(self, new_arg):
         return PartialOrderElement(new_arg, self.partial_order)
 
+    @property
+    def domain(self):
+        return self.partial_order.domain
+
     def __str__(self):
         return f"PartialOrderElement({self.arg!s})"
 
@@ -495,14 +499,22 @@ class PartialOrderElement:
             return self.from_arg(self.arg + other.arg)
         elif isinstance(other, Basic):
             return self.as_expr() + other
-        return self.from_arg(self.arg + other)
+        try:
+            _other = self.domain.convert(other)
+        except CoercionFailed:
+            return NotImplemented
+        return self.from_arg(self.arg + _other)
 
     def __sub__(self, other):
         if isinstance(other, PartialOrderElement):
             return self.from_arg(self.arg - other.arg)
         elif isinstance(other, Basic):
             return self.as_expr() - other
-        return self.from_arg(self.arg - other)
+        try:
+            _other = self.domain.convert(other)
+        except CoercionFailed:
+            return NotImplemented
+        return self.from_arg(self.arg - _other)
 
     def __mul__(self, other):
         if isinstance(other, PartialOrderElement):
@@ -511,7 +523,11 @@ class PartialOrderElement:
             return self.as_expr() * other
         elif isinstance(other, Coeff):
             return self.arg * other
-        return self.from_arg(self.arg * other)
+        try:
+            _other = self.domain.convert(other)
+        except CoercionFailed:
+            return NotImplemented
+        return self.from_arg(self.arg * _other)
 
     def __truediv__(self, other):
         if isinstance(other, PartialOrderElement):
@@ -520,7 +536,11 @@ class PartialOrderElement:
             return self.as_expr() / other
         elif isinstance(other, Coeff):
             return self.arg / other
-        return self.from_arg(self.arg / other)
+        try:
+            _other = self.domain.convert(other)
+        except CoercionFailed:
+            return NotImplemented
+        return self.from_arg(self.arg / _other)
 
     def __radd__(self, other):
         return self.__add__(other)
@@ -530,7 +550,11 @@ class PartialOrderElement:
             return self.from_arg(other.arg - self.arg)
         elif isinstance(other, Basic):
             return other - self.as_expr()
-        return self.from_arg(other - self.arg)
+        try:
+            _other = self.domain.convert(other)
+        except CoercionFailed:
+            return NotImplemented
+        return self.from_arg(_other - self.arg)
 
     def __rmul__(self, other):
         return self.__mul__(other)
@@ -542,10 +566,11 @@ class PartialOrderElement:
             return other / self.as_expr()
         elif isinstance(other, Coeff):
             return other / self.arg
-        elif isinstance(other, int):
-            # this is important as low-level SymPy did not support int / ANP
-            return self.from_arg(self.partial_order.domain.convert(other)/self.arg)
-        return self.from_arg(other / self.arg)
+        try:
+            _other = self.domain.convert(other)
+        except CoercionFailed:
+            return NotImplemented
+        return self.from_arg(_other / self.arg)
 
     def __pow__(self, other):
         if isinstance(other, PartialOrderElement):

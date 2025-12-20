@@ -284,6 +284,8 @@ class ProofTree:
                 # internal node reaches the time limit, ignore this
                 pass
             else:
+                # kill this node
+                node.finished = True
                 if cfg.get("raise_exception", False):
                     raise e
                 if cfg.get("verbose", False):

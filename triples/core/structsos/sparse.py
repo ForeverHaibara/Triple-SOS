@@ -3,6 +3,8 @@ from typing import Callable, Tuple, List, Optional, Union, Dict
 from sympy import Poly, Expr, Symbol, Integer, Mul
 from sympy import MutableDenseMatrix as Matrix
 from sympy.combinatorics import PermutationGroup, CyclicGroup
+from sympy.polys.matrices import DomainMatrix
+from sympy.polys.matrices.ddm import DDM
 
 from .utils import Coeff, PolynomialUnsolvableError, PolynomialNonpositiveError
 from ...sdp import congruence
@@ -90,7 +92,7 @@ def sos_struct_quadratic(poly: Poly, **kwargs):
     """
     coeff = Coeff(poly)
     nvars = coeff.nvars
-    mat = Matrix.zeros(nvars + 1)
+    mat = [[0 for _ in range(nvars + 1)] for __ in range(nvars + 1)]
     for k, v in coeff.items():
         inds = []
         for i in range(nvars):
@@ -108,10 +110,11 @@ def sos_struct_quadratic(poly: Poly, **kwargs):
         elif len(inds) == 0:
             inds = (nvars, nvars)
         if inds[0] == inds[1]:
-            mat[inds[0], inds[0]] = v
+            mat[inds[0]][inds[0]] = v
         else:
-            mat[inds[0], inds[1]] = v/2
-            mat[inds[1], inds[0]] = v/2
+            mat[inds[0]][inds[1]] = v/2
+            mat[inds[1]][inds[0]] = v/2
+    mat = Matrix._fromrep(DomainMatrix.from_rep(DDM(mat, (nvars+1,nvars+1), coeff.domain)))
     res = congruence(mat)
     if res is None:
         return None

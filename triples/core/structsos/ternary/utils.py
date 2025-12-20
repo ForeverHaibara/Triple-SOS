@@ -91,13 +91,14 @@ def sos_struct_handle_uncentered(solver: Callable) -> Callable:
     @wraps(solver)
     def _wrapped_solver(poly: Union[Poly, Coeff], *args, **kwargs):
         bias = 0
+        coeff = poly
         if isinstance(poly, Coeff):
-            bias = poly.poly111()
+            pass
         elif isinstance(poly, Poly):
-            bias = poly(1,1,1)
-            poly = Coeff(poly)
+            coeff = Coeff(poly)
         else:
-            raise ValueError("Unsupported polynomial type. Expected Coeff or Poly, but received %s." % type(poly))
+            raise TypeError("Unsupported polynomial type. Expected Coeff or Poly, but received %s." % type(poly))
+        bias = coeff.poly111()
         if bias < 0:
             # raise PolynomialNonpositiveError#("The polynomial is nonpositive.")
             return None
@@ -105,20 +106,22 @@ def sos_struct_handle_uncentered(solver: Callable) -> Callable:
         d = poly.total_degree()
         dd3, dm3 = divmod(d,3)
         i, j, k = dd3, dd3+(1 if dm3>=2 else 0), dd3+(1 if dm3 else 0)
-        coeff = dict(poly.terms())
-        if not ((i,j,k) in coeff):
-            coeff[(i,j,k)] = 0
-            coeff[(j,k,i)] = 0
-            coeff[(k,i,j)] = 0
-        coeff[(i,j,k)] -= bias/3
-        coeff[(j,k,i)] -= bias/3
-        coeff[(k,i,j)] -= bias/3
+        dt = dict(poly.terms())
+        zero = poly.convert(0)
+        if not ((i,j,k) in dt):
+            dt[(i,j,k)] = zero
+            dt[(j,k,i)] = zero
+            dt[(k,i,j)] = zero
+        # be careful with the operator precedence
+        dt[(i,j,k)] = -bias/3 + dt[(i,j,k)]
+        dt[(j,k,i)] = -bias/3 + dt[(j,k,i)]
+        dt[(k,i,j)] = -bias/3 + dt[(k,i,j)]
 
-        new_poly = poly.from_dict(coeff)
+        new_poly = coeff.from_dict(dt)
         solution = solver(new_poly, *args, **kwargs)
         if solution is not None:
-            a, b, c = poly.gens
-            CyclicSum, CyclicProduct = poly.cyclic_sum, poly.cyclic_product
+            a, b, c = coeff.gens
+            CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
             if dm3 == 0:
                 solution += bias * CyclicProduct(a**i)
             else:
