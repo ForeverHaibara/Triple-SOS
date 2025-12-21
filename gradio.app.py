@@ -8,7 +8,7 @@ from PIL import Image
 
 from triples.utils.text_process import short_constant_parser
 from triples.core import sum_of_squares
-from triples.gui.sos_manager import SOS_Manager
+from triples.gui.sos_manager import SOSManager
 from triples.gui.linebreak import recursive_latex_auto_linebreak
 
 GRADIO_VERSION = tuple(version_tuple(gr.__version__))
@@ -115,7 +115,7 @@ class GradioInterface():
 
 
     def set_poly(self, input_text, with_poly = False):
-        res = SOS_Manager.set_poly(input_text)
+        res = SOSManager.set_poly(input_text)
         if res is None or res.get('poly') is None:
             return {self.image: None, self.coefficient_triangle: None}
 
@@ -146,7 +146,7 @@ class GradioInterface():
             l = 100. / (1 + n)
             ulx = (50 - l * n / 2)
             uly = (29 - 13 * n * l / 45)
-            fontsize = max(11,int(28-1.5*n))
+            fontsize = max(11, int(28-1.5*n))
             lengthscale = .28 * fontsize / 20.;
             t = 0
             txts = []
@@ -179,15 +179,15 @@ class GradioInterface():
 
 
     def solve(self, input_text, methods):
-        # self.SOS_Manager.set_poly(input_text, cancel = True)
+        # self.SOSManager.set_poly(input_text, cancel = True)
         res0 = self.set_poly(input_text, with_poly = True)
         solution = None
         poly = res0.pop('poly', None)
         grid = res0.pop('grid', None)
         if poly is not None:
             try:
-                ineq_constraints = poly.free_symbols if SOS_Manager.CONFIG_ALLOW_NONSTANDARD_GENS else poly.gens
-                solution = SOS_Manager.sum_of_squares(
+                ineq_constraints = poly.free_symbols if SOSManager.ALLOW_NONSTANDARD_GENS else poly.gens
+                solution = SOSManager.sum_of_squares(
                     poly,
                     ineq_constraints = list(ineq_constraints),
                     eq_constraints = [],
@@ -197,7 +197,7 @@ class GradioInterface():
                 # print(e)
                 pass
 
-        gens = poly.free_symbols if SOS_Manager.CONFIG_ALLOW_NONSTANDARD_GENS else poly.gens
+        gens = poly.free_symbols if SOSManager.ALLOW_NONSTANDARD_GENS else poly.gens
         gens = sorted(gens, key=lambda x:x.name)
         lhs_expr = Function('F')(*gens) if len(gens) > 0 else Symbol('\\text{LHS}')
         if solution is not None:
@@ -216,11 +216,11 @@ class GradioInterface():
             }
         else:
             res = {
-                self.output_box: 'No solution found.',
-                self.output_box2: 'No solution found.',
-                self.output_box_latex: 'No solution found.',
-                self.output_box_txt: 'No solution found.',
-                self.output_box_formatted: 'No solution found.',
+                self.output_box: "No solution found",
+                self.output_box2: "No solution found",
+                self.output_box_latex: "No solution found",
+                self.output_box_txt: "No solution found",
+                self.output_box_formatted: "No solution found",
             }
             # if poly is not None and poly.domain.is_Numerical\
             #        and (not poly.is_zero) and poly.is_homogeneous and len(methods) == 4:
@@ -249,9 +249,9 @@ class GradioInterface():
 
             # Call the core function
             result = sum_of_squares(
-                poly=parsed_expr,
-                ineq_constraints=parsed_ineqs,
-                eq_constraints=parsed_eqs
+                parsed_expr,
+                parsed_ineqs,
+                parsed_eqs
             )
             tex = None
             tex_aligned = None
@@ -278,7 +278,7 @@ class GradioInterface():
 
 
 if __name__ == '__main__':
-    SOS_Manager.verbose = False
+    SOSManager.verbose = False
 
     interface = GradioInterface()
 

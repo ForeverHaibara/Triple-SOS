@@ -13,7 +13,7 @@ def _get_git_commit_id(digits=None):
         commit_id = subprocess.check_output(['git', 'rev-parse', 'HEAD']).decode('ascii').strip()
         if digits is not None:
             commit_id = commit_id[:digits]
-    except:
+    except Exception:
         commit_id = ""
     return commit_id
 

@@ -1,328 +1,342 @@
-# author: https://github.com/ForeverHaibara
+"""
+Extra utility functions for graphic user interfaces and deployment.
+"""
 from ast import literal_eval
-from typing import Tuple, List, Dict, Optional, Any, Union, Callable
+from typing import Tuple, List, Dict, Optional, Any, Union
 
-import sympy as sp
 from sympy import Expr, Poly, Symbol, sympify
 from sympy.combinatorics import Permutation, PermutationGroup, CyclicGroup
 
 from .grid import GridRender
-from ..utils import CyclicExpr, CyclicSum, CyclicProduct
 from ..utils.text_process import (
     preprocess_text, poly_get_factor_form, poly_get_standard_form,
     degree_of_zero, coefficient_triangle, coefficient_triangle_latex
 )
 from ..core import Solution, sum_of_squares
-# from ..core.linsos import root_tangents
 
 
-def _default_polynomial_check(poly: Poly, methods: List[str]) -> List[str]:
+class SOSManager:
     """
-    Check the degree and nvars of a polynomial to decide
-    whether a method is applicable. For too high degree polynomials,
-    methods like SDPSOS are removed to avoid long computation time.
-    """
-    is_hom = int(poly.is_homogeneous)
-    nvars = len(poly.gens) + (1 - is_hom)
-    degree = poly.total_degree()
-    upper_bounds = [30, 30, 30, 14, 12, 8, 6, 4, 4, 4, 4]
-    if degree > upper_bounds[nvars]:
-        # remove LinearSOS and SDPSOS
-        methods = [method for method in methods if method not in ('LinearSOS', 'SDPSOS')]
-    return methods
-
-
-def _default_restrict_input_chars(txt: str) -> bool:
-    """
-    Check if the input text contains only ascii characters.
-    Forbid certain characters to avoid potential security risks, e.g. harmful texts
-
-    Returns True if the text is safe.
-    """
-    f = lambda x: x < 128 or (945 <= x <= 969) # ascii or lower greek
-    return all(f(ord(c)) for c in txt)
-
-
-class SOS_Manager():
-    """
-    A convenient class to manage the sum of square decomposition of a polynomial,
+    A convenient class to manage the sum of squares decomposition of a polynomial,
     providing commonly used functions and properties.
 
     It adds more sanity checks and error handling to the core functions.
     """
     verbose = True
+    time_limit = 300.0
+    configs = {}
 
-    CONFIG_DEFAULT_GENS = tuple(Symbol(_) for _ in "abc")
-    CONFIG_DEFAULT_PERM = CyclicGroup(3)
-    CONFIG_RESTRICT_INPUT_CHARS = _default_restrict_input_chars
-    CONFIG_METHOD_CHECK = _default_polynomial_check
-    CONFIG_ALLOW_NONSTANDARD_GENS = True
-    CONFIG_STANDARDIZE_CYCLICEXPR = True
+    # Configuration parameters
+    DEFAULT_GENS = tuple(Symbol(_) for _ in "abc")
+    DEFAULT_PERM_GROUP = CyclicGroup(3)
+    RESTRICT_INPUT = None
+    ALLOW_NONSTANDARD_GENS = True
+    STANDARDIZE_CYCLICEXPR = True
+
+    HEATMAP_3VARS_DPI = 60
+    HEATMAP_4VARS_DPI = 18
 
     @classmethod
-    def set_poly(cls,
-            txt: str,
-            gens: Tuple[Symbol] = CONFIG_DEFAULT_GENS,
-            perm: PermutationGroup = CONFIG_DEFAULT_PERM,
-            render_triangle: bool = True,
-            render_grid: bool = True,
-            homogenize: bool = False,
-            dehomogenize: Optional[Expr] = None,
-            standardize_text: Optional[str] = None,
-            omit_mul: bool = True,
-            omit_pow: bool = True,
-        ) -> Dict[str, Any]:
+    def _default_restrict_input_chars(cls, txt: str) -> bool:
         """
-        Convert a text to a polynomial, and render the coefficient triangle and grid heatmap.
+        Check if the input text contains only safe characters.
+        Forbid certain characters to avoid potential security risks.
 
-        Parameters
-        ----------
-        txt : str
-            The text of the polynomial.
-        render_triangle : bool
-            Whether to render the coefficient triangle, by default True.
-        render_grid : bool
-            Whether to render the grid heatmap, by default True.
-        homogenize : bool
-            If True, homogenize the polynomial if it any variable is missing, by default False.
-        dehomogenize : bool
-            If True, set the last variable to the given value, by default None.
-        standardize_text : str, optional
-            If not None, it should be one of ['factor', 'sort', 'expand']. This will rewrite the polynomial
-            in the corresponding form. By default None.
-        omit_mul : bool
-            Whether to omit the multiplication sign when rewriting the polynomial, by default True.
-        omit_pow : bool
-            Whether to omit the power sign when rewriting the polynomial, by default True.
+        Args:
+            txt: Input text to check
 
-        Returns
-        -------
-        dict
-            A dictionary containing the polynomial, degree, text, coefficient triangle, and grid heatmap.
+        Returns:
+            True if the text is safe, False otherwise
         """
-        if cls.CONFIG_RESTRICT_INPUT_CHARS is not None:
-            if not cls.CONFIG_RESTRICT_INPUT_CHARS(txt):
-                return None
+        is_safe_char = lambda x: x < 128 or (945 <= x <= 969)  # ASCII or lower Greek
+        return all(is_safe_char(ord(c)) for c in txt)
 
-        try:
-            poly, denom = preprocess_text(txt, gens=gens, symmetry=perm, return_type='frac')
+    @classmethod
+    def set_poly(
+        cls,
+        txt: str,
+        gens: Tuple[Symbol, ...] = DEFAULT_GENS,
+        symmetry: PermutationGroup = DEFAULT_PERM_GROUP,
+        *,
+        render_triangle: bool = True,
+        render_grid: bool = True,
+        homogenize: bool = False,
+        dehomogenize: Optional[Expr] = None,
+        standardize_text: Optional[str] = None,
+        omit_mul: bool = True,
+        omit_pow: bool = True,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Convert a string to a polynomial and perform various operations.
 
-            if poly.is_zero:
-                n = degree_of_zero(txt, gens=gens, symmetry=perm)
-            else:
-                n = poly.total_degree()
-        except Exception as e:
-            # raise e
+        TODO: converting a string to a dense polynomial might be unsafe
+        in memory.
+
+        Args:
+            txt: The string representation of the polynomial
+            gens: Tuple of generators (symbols)
+            symmetry: Permutation group for symmetry
+            render_triangle: Whether to render the coefficient triangle
+            render_grid: Whether to render the grid heatmap
+            homogenize: If True, homogenize the polynomial if possible
+            dehomogenize: Value to set for dehomogenization
+            standardize_text: Format to standardize the polynomial text ('factor', 'sort', 'expand')
+            omit_mul: Whether to omit multiplication signs in output
+            omit_pow: Whether to omit power signs in output
+
+        Returns:
+            Dictionary containing the processed polynomial and related information,
+            or None if processing fails
+        """
+        # Input safety check
+        restrict_func = cls.RESTRICT_INPUT or cls._default_restrict_input_chars
+        if not restrict_func(txt):
             return None
 
-        if poly is None:
+        try:
+            poly, denom = preprocess_text(txt, gens, symmetry, return_type='frac')
+
+            # Determine the degree
+            if poly.is_zero:
+                degree = degree_of_zero(txt, gens, symmetry)
+            else:
+                degree = poly.total_degree()
+        except Exception as e:
+            if cls.verbose:
+                print(f"Error parsing polynomial: {e}")
+            return None
+
+        if not isinstance(poly, Poly):
             return None
 
         # Apply transformations to the polynomial
-        if homogenize and not poly.is_homogeneous and len(poly.gens) and poly.degree(-1) == 0:
+        if homogenize and not poly.is_homogeneous and len(poly.gens) > 0 and poly.degree(-1) == 0:
             gen = poly.gens[-1]
             poly = poly.eval(gen, 0).homogenize(gen)
-            if not standardize_text:
-                standardize_text = 'sort'
+            if standardize_text is None:
+                standardize_text = "sort"
 
         if dehomogenize is not None and dehomogenize is not False:
             try:
-                dehomogenize = sympify(dehomogenize)
-                if len(dehomogenize.free_symbols) == 0: # dehomogenize is a number
-                    for i in range(len(poly.gens)-1, -1, -1):
+                dehomogenize_val = sympify(dehomogenize)
+                if len(dehomogenize_val.free_symbols) == 0:  # dehomogenize is a constant
+                    for i in range(len(poly.gens) - 1, -1, -1):
                         if poly.degree(i) != 0:
-                            poly = poly.eval(poly.gens[i], dehomogenize)
+                            poly = poly.eval(poly.gens[i], dehomogenize_val)
                             poly = poly.as_poly(*gens, domain=poly.domain)
-                            n = poly.total_degree()
-                            if not standardize_text:
-                                standardize_text = 'sort'
+                            degree = poly.total_degree()
+                            if standardize_text is None:
+                                standardize_text = "sort"
                             break
-            except:
+            except Exception:
+                # Ignore dehomogenization errors
                 pass
 
         try:
             if standardize_text:
-                if standardize_text == 'factor':
-                    txt2 = poly_get_factor_form(poly, perm, omit_mul=omit_mul, omit_pow=omit_pow)
-                elif standardize_text == 'sort':
-                    txt2 = poly_get_standard_form(poly, perm, omit_mul=omit_mul, omit_pow=omit_pow)
-                elif standardize_text == 'expand':
-                    triv_group = PermutationGroup([Permutation(list(range(len(poly.gens))))])
-                    txt2 = poly_get_standard_form(poly, triv_group, omit_mul=omit_mul, omit_pow=omit_pow)
-            elif not denom.total_degree() == 0:
-                txt2 = poly_get_standard_form(poly, perm)
+                if standardize_text == "factor":
+                    txt2 = poly_get_factor_form(poly, symmetry, omit_mul=omit_mul, omit_pow=omit_pow)
+                elif standardize_text == "sort":
+                    txt2 = poly_get_standard_form(poly, symmetry, omit_mul=omit_mul, omit_pow=omit_pow)
+                elif standardize_text == "expand":
+                    txt2 = poly_get_standard_form(poly, "trivial", omit_mul=omit_mul, omit_pow=omit_pow)
+                else:
+                    txt2 = txt
+            elif denom.total_degree() != 0:
+                txt2 = poly_get_standard_form(poly, symmetry)
+            else:
+                txt2 = txt
+
             if isinstance(txt2, str):
                 txt = txt2
-        except:
-            pass
+        except Exception as e:
+            if cls.verbose:
+                print(f"Error standardizing polynomial: {e}")
 
+        result = {"poly": poly, "degree": degree, "txt": txt}
 
-        return_dict = {'poly': poly, 'degree': n, 'txt': txt}
         if render_triangle:
-            return_dict['triangle'] = coefficient_triangle(poly, n)
-
+            try:
+                result["triangle"] = coefficient_triangle(poly, degree)
+            except Exception as e:
+                if cls.verbose:
+                    print(f"Error rendering coefficient triangle: {e}")
 
         if render_grid:
-            if poly is not None and (not poly.is_zero) and 3 <= len(poly.gens) <= 4\
-                    and poly.domain.is_Numerical and poly.is_homogeneous:
-                size = 60 if len(poly.gens) == 3 else 18
-                grid = GridRender.render(poly, size=size, with_color=True)
-                return_dict['grid'] = grid
-        return return_dict
+            try:
+                if (poly is not None and not poly.is_zero and
+                        3 <= len(poly.gens) <= 4 and
+                        poly.domain.is_Numerical and
+                        poly.is_homogeneous):
+                    size = cls.HEATMAP_3VARS_DPI \
+                        if len(poly.gens) == 3 else cls.HEATMAP_4VARS_DPI
+                    grid = GridRender.render(poly, size=size, with_color=True)
+                    result["grid"] = grid
+            except Exception as e:
+                if cls.verbose:
+                    print(f"Error rendering grid: {e}")
+
+        return result
 
     @classmethod
-    def check_poly(cls, poly: Poly) -> bool:
+    def sum_of_squares(
+        cls,
+        expr: Expr,
+        ineq_constraints: List[Expr] = [],
+        eq_constraints: List[Expr] = [],
+        gens: Tuple[Symbol, ...] = DEFAULT_GENS,
+        symmetry: PermutationGroup = DEFAULT_PERM_GROUP,
+        methods: Optional[List[str]] = None,
+        configs: Dict[str, Any] = configs
+    ) -> Optional[Solution]:
         """
-        Check whether a polynomial is a valid polynomial:
-        3-var, non-zero, homogeneous, and numerical domain.
-        """
-        if poly is None or (not isinstance(poly, Poly)):
-            return False
-        if len(poly.gens) != 3 or (poly.is_zero) or (not poly.is_homogeneous) or poly.total_degree() < 1:
-            return False
-        if not poly.domain.is_Numerical:
-            return False
-        return True
+        Perform sum of squares decomposition on a polynomial.
 
-    @classmethod
-    def get_standard_form(cls, poly: Poly, perm: PermutationGroup = CONFIG_DEFAULT_PERM, **kwargs) -> str:
-        """
-        Rewrite a polynomial in the standard form.
-        """
-        return poly_get_standard_form(poly, perm, **kwargs)
+        Args:
+            poly: The polynomial to decompose
+            ineq_constraints: List of inequality constraints
+            eq_constraints: List of equality constraints
+            gens: Tuple of generators (symbols)
+            symmetry: Permutation group for symmetry
+            methods: List of methods to use for decomposition
+            configs: Additional configuration parameters
 
-    @classmethod
-    def get_factor_form(cls, poly: Poly, perm: PermutationGroup = CONFIG_DEFAULT_PERM, **kwargs) -> str:
+        Returns:
+            Solution object containing the decomposition, or None if decomposition fails
         """
-        Rewrite a polynomial in the factor form.
-        """
-        return poly_get_factor_form(poly, perm, **kwargs)
-
-    # @classmethod
-    # def findroot(cls, poly, grid = None, verbose = True):
-    #     """
-    #     Find the roots / local minima of a polynomial.
-    #     """
-    #     if not cls.check_poly(poly):
-    #         return []
-
-    #     roots = findroot(
-    #         poly,
-    #         most = 5,
-    #         grid = grid,
-    #         with_tangents = root_tangents
-    #     )
-    #     if verbose:
-    #         print(roots)
-    #     return roots
-
-    @classmethod
-    def sum_of_squares(cls,
-            poly,
-            ineq_constraints: Dict[Poly, Expr] = [],
-            eq_constraints: Dict[Poly, Expr] = [],
-            gens = CONFIG_DEFAULT_GENS,
-            perm = CONFIG_DEFAULT_PERM,
-            methods = None,
-            configs = {}
-        ):
-        """
-        Perform the sum of square decomposition of a polynomial.
-        The keyword arguments are passed to the function sum_of_squares.
-        """
-        if poly is None or (not isinstance(poly, Poly)):
+        if expr is None:
             return None
 
-        if cls.CONFIG_ALLOW_NONSTANDARD_GENS:
-            if len(poly.free_symbols_in_domain) > 0:
-                poly = poly.as_poly(*sorted(list(poly.gens) + list(poly.free_symbols_in_domain), key=lambda x:x.name))
-            degree_of_each_gen = [poly.degree(_) for _ in poly.gens]
-            if any(_ == 0 for _ in degree_of_each_gen):
-                # remove the gen
-                nonzero_gens = [gen for gen, d in zip(poly.gens, degree_of_each_gen) if d > 0]
-                poly = poly.as_poly(*nonzero_gens)
-
-        # if cls.verbose is False:
-        #     for method in ('LinearSOS', 'SDPSOS'):
-        #         if configs.get(method) is None:
-        #             configs[method] = {}
-        #         configs[method]['verbose'] = False
-        methods = cls.CONFIG_METHOD_CHECK(poly, methods)
-
-        solution = sum_of_squares(
-            poly,
-            ineq_constraints = ineq_constraints,
-            eq_constraints = eq_constraints,
-            methods = methods,
-            verbose = cls.verbose,
-            configs = configs
-        )
-        if cls.CONFIG_STANDARDIZE_CYCLICEXPR:
-            solution = solution.rewrite_symmetry(gens, perm)
-        return solution
-
-    # def save_heatmap(self, poly, *args, **kwargs):
-    #     return self._poly_info['grid'].save_heatmap(*args, **kwargs)
-
-    # def save_coeffs(self, poly, *args, **kwargs):
-    #     return self._poly_info['grid'].save_coeffs(*args, **kwargs)
-
-    @classmethod
-    def latex_coeffs(cls, txt, gens=CONFIG_DEFAULT_GENS, perm=CONFIG_DEFAULT_PERM, *args, **kwargs):
         try:
-            poly, denom = preprocess_text(txt, gens=gens, perm=perm, return_type='frac')
-        except:
-            return ''
-        return coefficient_triangle_latex(poly, *args, **kwargs)
+            solution = sum_of_squares(
+                expr,
+                ineq_constraints=ineq_constraints,
+                eq_constraints=eq_constraints,
+                methods=methods,
+                verbose=cls.verbose,
+                time_limit=cls.time_limit,
+                configs=configs
+            )
+
+            # Standardize cyclic expressions if needed
+            if cls.STANDARDIZE_CYCLICEXPR and solution is not None:
+                solution = solution.rewrite_symmetry(gens, symmetry)
+
+            return solution
+        except Exception as e:
+            if cls.verbose:
+                print(f"Error in sum of squares decomposition: {e}")
+            return None
 
     @classmethod
-    def _parse_perm_group(cls, txt: Union[str, List[List[int]]]) -> PermutationGroup:
+    def latex_coeffs(
+        cls,
+        txt: str,
+        gens: Tuple[Symbol, ...] = DEFAULT_GENS,
+        symmetry: PermutationGroup = DEFAULT_PERM_GROUP,
+        *args,
+        **kwargs
+    ) -> str:
         """
-        Parse a text or a list to a permutation group.
+        Generate LaTeX representation of the coefficient triangle for a polynomial.
+
+        Args:
+            txt: String representation of the polynomial
+            gens: Tuple of generators (symbols)
+            symmetry: Permutation group for symmetry
+            *args: Additional positional arguments
+            **kwargs: Additional keyword arguments
+
+        Returns:
+            LaTeX string for the coefficient triangle, or empty string if processing fails
         """
-        if isinstance(txt, str):
-            txt = literal_eval(txt)
-        if isinstance(txt, list):
-            txt = PermutationGroup(*(Permutation(_) for _ in txt))
-        if isinstance(txt, PermutationGroup):
-            return txt
-        return
+        try:
+            poly, denom = preprocess_text(txt, gens, symmetry, return_type='frac')
+            return coefficient_triangle_latex(poly, *args, **kwargs)
+        except Exception as e:
+            if cls.verbose:
+                print(f"Error generating LaTeX coefficients: {e}")
+            return ''
+
+    @classmethod
+    def parse_perm_group(cls, txt: Union[str, List[List[int]]]) -> Optional[PermutationGroup]:
+        """
+        Parse a string or list to a permutation group.
+
+        Args:
+            txt: String or list representation of permutations
+
+        Returns:
+            PermutationGroup object, or None if parsing fails
+        """
+        try:
+            if isinstance(txt, str):
+                txt = literal_eval(txt)
+
+            if isinstance(txt, list):
+                return PermutationGroup(*(Permutation(perm) for perm in txt))
+
+            if isinstance(txt, PermutationGroup):
+                return txt
+        except (ValueError, SyntaxError) as e:
+            if cls.verbose:
+                print(f"Error parsing permutation group: {e}")
+
+        return None
 
 
-def _render_LaTeX(a, path, usetex=True, show=False, dpi=500, fontsize=20):
-    '''render a text in LaTeX and save it to path'''
+def render_latex(
+    latex_str: str,
+    path: str,
+    usetex: bool = True,
+    show: bool = False,
+    dpi: int = 500,
+    fontsize: int = 20
+) -> str:
+    """
+    Render a LaTeX string to an image file.
 
+    Args:
+        latex_str: LaTeX string to render
+        path: Output file path
+        usetex: Whether to use LaTeX for rendering
+        show: Whether to display the rendered image
+        dpi: Resolution of the output image
+        fontsize: Font size for the LaTeX text
+    """
     import matplotlib.pyplot as plt
 
-    acopy = a
-    # linenumber = a.count('\\\\') + 1
-    # plt.figure(figsize=(12,10 ))
+    original_str = latex_str
 
-    # set the figure small enough
-    # even though the text cannot be display as a whole in the window
-    # it will be saved correctly by setting bbox_inches = 'tight'
-    plt.figure(figsize=(0.3,0.3))
+    # Create a small figure that will be expanded when saving
+    plt.figure(figsize=(0.3, 0.3))
+
     if usetex:
         try:
-            a = '$\\displaystyle ' + a.strip('$') + ' $'
-            #plt.figure(figsize=(12, linenumber*0.5 + linenumber**0.5 * 0.3 ))
-            #plt.text(-0.3,0.75+min(0.35,linenumber/25), a, fontsize=15, usetex=usetex)
-            #fontfamily='Times New Roman')
-            plt.text(-0.3,0.9, a, fontsize=fontsize, usetex=usetex)#
-        except:
+            # Format the LaTeX string for display
+            latex_str = f'$\\displaystyle {latex_str.strip("$")} $'
+            plt.text(-0.3, 0.9, latex_str, fontsize=fontsize, usetex=usetex)
+        except Exception:
+            # Fall back to non-LaTeX rendering if there's an error
             usetex = False
 
     if not usetex:
-        a = acopy
-        a = a.strip('$')
-        a = '\n'.join([' $ '+_+' $ ' for _ in a.split('\\\\')])
-        plt.text(-0.3,0.9, a, fontsize=fontsize, usetex=usetex)#, fontfamily='Times New Roman')
+        # Simple text rendering without LaTeX
+        latex_str = original_str.strip("$").split("\\\\")
+        latex_str = "\\n".join([f" $ {line} $ " for line in latex_str])
+        plt.text(-0.3, 0.9, latex_str, fontsize=fontsize, usetex=False)
 
-    plt.ylim(0,1)
-    plt.xlim(0,6)
+    # Set limits and hide axes
+    plt.ylim(0, 1)
+    plt.xlim(0, 6)
     plt.axis('off')
-    plt.savefig(path, dpi=dpi, bbox_inches ='tight')
+
+    # Save the figure with tight bounding box
+    plt.savefig(path, dpi=dpi, bbox_inches='tight')
+
     if show:
         plt.show()
     else:
         plt.close()
+
+    return path

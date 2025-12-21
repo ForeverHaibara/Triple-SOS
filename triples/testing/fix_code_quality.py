@@ -8,7 +8,7 @@ def fix_code_quality(path):
                 try:
                     with open(file_path, "r", encoding="utf-8") as f:
                         lines = f.readlines()
-                except:
+                except Exception:
                     print(f"Error reading {file_path}")
                     continue
                 new_lines = []

@@ -351,7 +351,7 @@ class LinearSOSSolver(ProofNode):
                             linprog_options['options']['time_limit'] = end_time - perf_counter()
 
                         linear_sos = linprog(optimized, A_eq=arrays.T, b_eq=b, **linprog_options)
-                    except:
+                    except Exception:
                         pass
                 if linear_sos is None or not linear_sos.success:
                     # lift the degree up and retry

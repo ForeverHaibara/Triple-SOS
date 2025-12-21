@@ -1,9 +1,11 @@
 """
 This module contains extensive and experimental tools for
-visualizations and interactions, etc. The API is not stable yet.
+visualizations, interactions, deployment, etc.
+
+The API is not stable and is highly unrecommended to be used.
 """
 
-from .sos_manager import SOS_Manager
+from .sos_manager import SOSManager
 
 from .grid import GridPoly, GridRender
 
@@ -12,6 +14,6 @@ from .visualize import (
 )
 
 __all__ = [
-    'SOS_Manager', 'GridPoly', 'GridRender',
+    'SOSManager', 'GridPoly', 'GridRender',
     'show_dets', 'plot_contour', 'plot_f'
 ]

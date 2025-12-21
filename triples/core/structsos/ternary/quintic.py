@@ -169,7 +169,7 @@ def _solve_uvxy(coeff: Coeff):
     # numerical solver: unstable
     # try:
     #     u, v = (nsolve((eq1, eq2), (u, v), (2, 2)))
-    # except:
+    #  except Exception:
     #     return None
 
     eq1 = coeff.from_rep(eq1p).as_poly()
@@ -1838,7 +1838,8 @@ def _sos_struct_quintic_hexagon(coeff: Coeff):
                                     break
                         else:
                             u_, v_ = None, None
-            except: pass
+            except Exception:
+                pass
 
         if u_ is not None:
             y = [

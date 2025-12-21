@@ -19,7 +19,7 @@ from .monomials import poly_reduce_by_symmetry, verify_symmetry
 def cycle_expansion(
         f: str,
         symbol: str = 's',
-        gens: Tuple[Symbol] = sp_symbols("a b c"),
+        gens: Tuple[Symbol, ...] = sp_symbols("a b c"),
         perm_group: Optional[PermutationGroup] = None
     ) -> str:
     """
@@ -33,7 +33,7 @@ def cycle_expansion(
         When symbol == 'p':
             a^3 * b^2 * c   ->   a^3 * b^2 * c * b^3 * c^2 * a * c^3 * a^2 * b
         Warning : Please add parenthesis yourself before expansion if necessary.
-    gens: Tuple[Symbol]
+    gens: Tuple[Symbol, ...]
         The generators of the polynomial.
     perm_group: Optional[PermutationGroup]
         The permutation group of the expression. If None, it will be cyclic group.
@@ -140,7 +140,7 @@ def _preprocess_text_delatex(poly: str, funcs: Dict[str, Tuple[str, int]]) -> st
     return poly
 
 
-def _preprocess_text_expansion(poly: str, gens: Tuple[Symbol], perm_group: PermutationGroup) -> str:
+def _preprocess_text_expansion(poly: str, gens: Tuple[Symbol, ...], perm_group: PermutationGroup) -> str:
     """
     Expand the polynomial with cycle expansion.
 
@@ -307,9 +307,10 @@ def expand_poly(expr: Expr, gens=None) -> Union[Expr, Poly]:
 
 def preprocess_text(
         poly: str,
-        gens: Tuple[Symbol] = sp_symbols("a b c"),
+        gens: Tuple[Symbol, ...] = sp_symbols("a b c"),
         symmetry: Union[PermutationGroup, str] = "cyc",
         return_type: str = "poly",
+        *,
         cyclic_sum_func: str = 's',
         cyclic_prod_func: str = 'p',
         scientific_notation: bool = False,
@@ -335,7 +336,7 @@ def preprocess_text(
         If 'poly', return the sympy polynomial of the expression.
         If 'frac', return a tuple of sympy polynomials (numerator, denominator). If
             it fails to cancel the polynomial, return (None, None).
-    gens: Tuple[Symbol]
+    gens: Tuple[Symbol, ...]
         The generators of the cyclic sum or products.
     symmetry: Union[PermutationGroup, str]
         The permutation group of the expression. If str, it should be one of
@@ -537,7 +538,7 @@ def pl(*args, **kwargs):
 pl = preprocess_text
 pl.__doc__ = preprocess_text.__doc__
 
-def degree_of_zero(poly: str, gens: Tuple[Symbol] = sp_symbols("a b c"), *args, **kwargs) -> int:
+def degree_of_zero(poly: str, gens: Tuple[Symbol, ...] = sp_symbols("a b c"), *args, **kwargs) -> int:
     """
     Infer the degree of a homogeneous zero polynomial.
     Idea: delete the additions and subtractions, which do not affect the degree.
@@ -546,7 +547,7 @@ def degree_of_zero(poly: str, gens: Tuple[Symbol] = sp_symbols("a b c"), *args, 
     ----------
     poly: str
         The polynomial of which to infer the degree.
-    gens: Tuple[Symbol]
+    gens: Tuple[Symbol, ...]
         The generators of the polynomial.
     args, kwargs:
         Other arguments for preprocess_text.
@@ -744,7 +745,8 @@ def _reduce_factor_list(poly: Poly, perm_group: PermutationGroup) -> Tuple[Expr,
     Examples
     --------
     >>> from sympy.abc import a, b, c
-    >>> _reduce_factor_list((b**8*a**6*c**3*(a**2+b*c)*(b**2+c*a)*(a-b)**7*(b-c)**6*(c-a)**8).as_poly(a,b,c), CyclicGroup(3)) # doctest:+SKIP
+    >>> _reduce_factor_list((b**8*a**6*c**3*(a**2+b*c)*(b**2+c*a)*\
+    ...  (a-b)**7*(b-c)**6*(c-a)**8).as_poly(a,b,c), CyclicGroup(3)) # doctest:+SKIP
     (1,
      [(Poly(b, a, b, c, domain='ZZ'), 5),
       (Poly(a*c + b**2, a, b, c, domain='ZZ'), 1),
@@ -1027,7 +1029,7 @@ class PolyReader:
     """
     def __init__(self,
         polys: Union[List[Union[Poly, str]], str],
-        gens: Tuple[Symbol] = sp_symbols("a b c"),
+        gens: Tuple[Symbol, ...] = sp_symbols("a b c"),
         symmetry: Optional[PermutationGroup] = None,
         ignore_errors: bool = False,
         **kwargs
@@ -1042,7 +1044,7 @@ class PolyReader:
             The polynomials to read. If it is a string, it will be treated as a file name.
             If it is a list of strings, each string will be treated as a polynomial.
             Empty lines will be ignored.
-        gens : Tuple[Symbol]
+        gens : Tuple[Symbol, ...]
             The generators of the polynomial.
         symmetry : Optional[PermutationGroup]
             The permutation group of the expression. If None, it will be cyclic group.
