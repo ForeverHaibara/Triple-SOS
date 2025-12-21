@@ -793,7 +793,7 @@ def _sos_struct_quintic_windmill(coeff: Coeff):
         by ensuring the coefficients of ab^4 >= 0, a^2b^3 >= 0,
         and a^3bc >= 0 after subtracting (x - x_) * s(a^2c(a-b)^2).
         """
-        # if not (u >= (v-1)**2/4 + 1 or 
+        # if not (u >= (v-1)**2/4 + 1 or
         #         (2*u**2-u*v**2+u*v-2*u+v+1 <= 0 and u**3-u**2-u*v+u+1 >= 0)):
         #     return False
         if u**3 - u**2 - u*v + u + 1 <= 0:
@@ -1318,7 +1318,7 @@ def _sos_struct_quintic_windmill_uv(coeff: Coeff, u, v):
 def _sos_struct_quintic_windmill_border(coeff: Coeff):
     """
     Case Special. when y_ < 0 and y_^2 = 4x_, then there is a root on the border
-    then perturbation has no chance, 
+    then perturbation has no chance,
     e.g. s(c(2a2-ab-ac)2)-4abcs(a2-ab)
 
     We take the limit of our sum-of-squares proof to the numerical, exact solution.

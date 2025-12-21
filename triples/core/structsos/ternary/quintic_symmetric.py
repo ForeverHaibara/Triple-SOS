@@ -32,12 +32,12 @@ def sos_struct_quintic_symmetric(coeff: Coeff, real = True):
     `F(a,b,c) = s((a+b - (u^2+6u-9)/(2u^2)c)(a-b)^2(a+b-tc)^2)/2 >= 0`.
     Proof: Denote
     ```
-    g(a,b,c) = ((3-u)/(4u)(a+b) - c)(a^2+b^2+c^2 - (t+1)/2c(a+b) + (t-2)ab) 
+    g(a,b,c) = ((3-u)/(4u)(a+b) - c)(a^2+b^2+c^2 - (t+1)/2c(a+b) + (t-2)ab)
         - 9(u-1)^2(u+1)(u+3)/(32u^3)*ab(2c-a-b).
     ```
     Then,
     ```
-    F(a,b,c) * s(a^2 - (7u^2+30u-9)/(16u^2)ab) 
+    F(a,b,c) * s(a^2 - (7u^2+30u-9)/(16u^2)ab)
         = CyclicSum(cg(a,b,c)^2) + 27(u-3)(u^2-u+2)/(32u^3)*CyclicSum((a-b)^2(a+b-tc)^2) >= 0.
     ```
 

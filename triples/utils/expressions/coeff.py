@@ -216,7 +216,7 @@ class Coeff():
     The following table illustrates the type conversion rules
     between various classes. Note that Python tries the left-hand
     operand first, so the behaviour of (xxx) + (coeff output)
-    could be undefined or even raise an error.    
+    could be undefined or even raise an error.
 
     |     Left     |    Right     |    Result    |
     |--------------|--------------|--------------|
@@ -239,7 +239,7 @@ class Coeff():
 
     The following shows how the order affects the result type:
 
-    >>> poly = Poly({(0,): 7**.5}, a, domain = RR) 
+    >>> poly = Poly({(0,): 7**.5}, a, domain = RR)
     >>> Coeff(poly)((0,)) + Rational(3, 5) # doctest: +SKIP
     mpf('3.2457513110645908')
     >>> Rational(3, 5) + Coeff(poly)((0,)) # doctest: +SKIP

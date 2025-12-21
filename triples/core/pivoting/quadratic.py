@@ -244,7 +244,7 @@ class PivotQuadratic(ProofNode):
         if _info["pro_syml"].solution is not None:
             self.solution = _quadratic_lb_monotone(
                 _info["gen"], *_info["coeffs"],
-                _info["pro_A"].solution, 
+                _info["pro_A"].solution,
                 _info["pro_syml"].solution,
                 _info["pro_lb"].solution,
                 _info["bounds"]
@@ -253,7 +253,7 @@ class PivotQuadratic(ProofNode):
                 and _info["pro_disc"].solution is not None:
             self.solution = _quadratic_lb_full(
                 _info["gen"], *_info["coeffs"],
-                _info["pro_A"].solution, 
+                _info["pro_A"].solution,
                 _info["pro_lb"].solution,
                 _info["pro_disc"].solution,
                 _info["bounds"],
@@ -274,7 +274,7 @@ class PivotQuadratic(ProofNode):
         if _info["pro_symu"].solution is not None:
             self.solution = _quadratic_ub_monotone(
                 _info["gen"], *_info["coeffs"],
-                _info["pro_A"].solution, 
+                _info["pro_A"].solution,
                 _info["pro_symu"].solution,
                 _info["pro_ub"].solution,
                 _info["bounds"]
@@ -283,7 +283,7 @@ class PivotQuadratic(ProofNode):
                 and _info["pro_disc"].solution is not None:
             self.solution = _quadratic_ub_full(
                 _info["gen"], *_info["coeffs"],
-                _info["pro_A"].solution, 
+                _info["pro_A"].solution,
                 _info["pro_ub"].solution,
                 _info["pro_disc"].solution,
                 _info["bounds"],
@@ -304,7 +304,7 @@ class PivotQuadratic(ProofNode):
         if _info["pro_A"].solution is not None:
             self.solution = _quadratic_lb_ub_concave(
                 _info["gen"], *_info["coeffs"],
-                _info["pro_A"].solution, 
+                _info["pro_A"].solution,
                 _info["pro_lb"].solution,
                 _info["pro_ub"].solution,
                 _info["bounds"]
@@ -315,7 +315,7 @@ class PivotQuadratic(ProofNode):
         gen = margin.gen
         other_gens = tuple([g for g in problem.gens if g != gen])
         domain = problem.expr.domain
-        coeffs = [Poly(_.to_dict(), other_gens, domain=domain) 
+        coeffs = [Poly(_.to_dict(), other_gens, domain=domain)
                     for _ in margin.rep.all_coeffs()]
 
         # remove constraints involving the generator

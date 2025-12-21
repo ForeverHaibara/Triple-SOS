@@ -808,7 +808,7 @@ def _sos_struct_sextic_full_sdp(coeff: Coeff):
     Examples
     --------
     :: ineqs = []
-    
+
     => s(2a6+a4bc-3a5b)
 
     => 16s(a2)3-9s((a3+3b2c)2)

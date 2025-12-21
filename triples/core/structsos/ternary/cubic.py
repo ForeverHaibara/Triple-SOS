@@ -316,9 +316,9 @@ def _sos_struct_acyclic_cubic_hexagon(coeff):
 
     Examples
     ---------
-    => (25a2b+14a2c+20ab2-82abc+5ac2+19b2c+10bc2-2abc)  
+    => (25a2b+14a2c+20ab2-82abc+5ac2+19b2c+10bc2-2abc)
 
-    => (5a2b+a2c+5ab2-10abc+ac2+b2c+bc2)  
+    => (5a2b+a2c+5ab2-10abc+ac2+b2c+bc2)
     """
     if any(coeff(_) != 0 for _ in ((3,0,0), (0,3,0), (0,0,3))):
         return None

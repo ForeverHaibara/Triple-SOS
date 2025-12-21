@@ -345,7 +345,7 @@ def parse_example_line(line: str, parse_ident_list: bool = True
             args.append(parsed_val)
 
     return args, kwargs
- 
+
 
 def parse_directive(line: str):
     import re
@@ -375,7 +375,7 @@ def _collect_doctest_examples_raw(doc: str,
         if not (line.startswith('=>') or line.startswith('::')):
             continue
 
-        # Although it can be implemented more carefully, 
+        # Although it can be implemented more carefully,
         # the current is enough
         idx = line.find('#')
         if idx >= 0:
