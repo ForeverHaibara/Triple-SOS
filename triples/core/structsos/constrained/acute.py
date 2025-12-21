@@ -1,5 +1,5 @@
-import sympy as sp
-from sympy import Poly, Symbol, Function, Rational, Add
+from sympy import Poly, Symbol, Function, Integer, Rational, Add, sqrt
+from sympy.polys.polyerrors import CoercionFailed
 
 from ..solution import SolutionStructural
 from ..ternary.utils import CommonExpr
@@ -93,16 +93,18 @@ def _constrained_acute_cubic(coeff: Coeff, F):
         det(border) = 7*x**2 - 2*x*y - 2*x - y**2 - 2*y - 9
 
     Examples
-    ---------
-    p(b+c-a)
+    --------
+    :: ineqs = [b2+c2-a2,c2+a2-b2,a2+b2-c2,a,b,c]
 
-    (s(-a3+9/7(a2b+ab2))-32/7abc)
+    => p(b+c-a)
 
-    s(-a3+(8sqrt(2)-3)/7(a2b+ab2)-4abc/3)
+    => (s(-a3+9/7(a2b+ab2))-32/7abc)
 
-    s(-a3+a2(b+c)-abc+sqrt(2)/2a(b-c)2)
+    => s(-a3+(8sqrt(2)-3)/7(a2b+ab2)-4abc/3)
 
-    (-s(31a3-33a2b-33a2c+32abc))
+    => s(-a3+a2(b+c)-abc+sqrt(2)/2a(b-c)2) # doctest:+SKIP
+
+    => (-s(31a3-33a2b-33a2c+32abc))
     """
     a, b, c = coeff.gens
     CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
@@ -134,7 +136,7 @@ def _constrained_acute_cubic(coeff: Coeff, F):
         if t == 1:
             return (8*CyclicProduct(a**2) + CyclicProduct(F(a)))/(CyclicSum(a)*CyclicSum(a**2))
         else:
-            p = ((t-1)*a**3+(t-1)*a**2*b+(t-1)*a**2*c-sp.S(8)/3*a*b*c).together().as_coeff_Mul()
+            p = ((t-1)*a**3+(t-1)*a**2*b+(t-1)*a**2*c-Integer(8)/3*a*b*c).together().as_coeff_Mul()
             p = p[0]**2*CyclicSum(p[1])**2
             return (1/(-t**2+2*t+7))*(p + 8*CyclicProduct(F(a)))/(CyclicSum(a)*CyclicSum(a**2))
     def _solve_bottom(t):
@@ -191,20 +193,19 @@ def _constrained_acute_cubic(coeff: Coeff, F):
         # 3 <= 6*x + y <= 4
         # Find t such that ux := ux1/ux2 >= 1 + 1/sqrt(2).
         # This is equivalent to eqt := (ux1 - ux2)^2*2 - ux2^2 >= 0 and ux1 / ux2 >= 1.
-        _t = Symbol('t')
-        ux1 = Poly([-3*x + y - 3, 22*x - 2*y + 6, 21*x + 9*y - 27], _t)
-        ux2 = Poly([-6*x - y - 6, 12*x + 2*y + 28, 42*x + 7*y - 54], _t)
-        # eqt = Poly([
+        ux1 = coeff.from_list([-3*x + y - 3, 22*x - 2*y + 6, 21*x + 9*y - 27], (a,)).as_poly()
+        ux2 = coeff.from_list([-6*x - y - 6, 12*x + 2*y + 28, 42*x + 7*y - 54], (a,)).as_poly()
+        # eqt = coeff.from_list([
         #     -18*x**2 + 12*x*y - 36*x + 7*y**2 + 12*y - 18,
         #     4*(66*x**2 + 20*x*y + 84*x - 7*y**2 - 36*y + 18),
         #     2*(154*x**2 - 92*x*y - 812*x + 29*y**2 + 228*y - 70),
         #     -4*(462*x**2 - 20*x*y - 468*x + 15*y**2 + 196*y - 162),
         #     -882*x**2 - 756*x*y + 2268*x - 41*y**2 + 972*y - 1458
-        # ], _t)
+        # ], (a,)).as_poly()
         def _get_ux_w(t):
-            ux2t = ux2(t)
-            if ux2t == 0: return sp.oo, 0
-            ux = ux1(t)/ux2t
+            ux2t = coeff.convert(ux2.rep.eval(t))
+            if ux2t == 0 or t**2 - 2*t - 7 == 0: return None, 0
+            ux = coeff.convert(ux1.rep.eval(t))/ux2t
             xt = -(t**2 - 2*t + 9)/(t**2 - 2*t - 7)
             if ux != xt:
                 w = (ux - x)/(ux - xt)
@@ -215,18 +216,25 @@ def _constrained_acute_cubic(coeff: Coeff, F):
             return ux, w
         def _validation(t):
             ux, w = _get_ux_w(t)
-            return (ux is not sp.oo) and (ux - 1)**2*2 >= 1 and w >= 0 and w <= 1
+            return (ux is not None) and (ux - 1)**2*2 >= 1 and w >= 0 and w <= 1
         if 14*x**2 - 4*x*y - 4*x - y**2 + 4*y - 2 == 0:
-            t = 2*sp.sqrt(2) - 1
-        elif _validation(sp.S(1)):
-            t = sp.S(1)
+            try:
+                t = coeff.convert(2*sqrt(2) - 1)
+            except CoercionFailed:
+                t = None
+        elif _validation(coeff.convert(1)):
+            t = coeff.convert(1)
         else:
-            t = rationalize_func(Poly([1,2,-7], _t),
+            t = rationalize_func(coeff.from_list([1,2,-7], (a,)).as_poly(),
                     validation=_validation, validation_initial=lambda t: t>0, direction=-1)
+            t = coeff.convert(t)
         if t is None:
-            if isinstance(x, Rational) and isinstance(y, Rational):
+            if coeff.is_rational:
                 return None
-            t = 2*sp.sqrt(2) - 1
+            try:
+                t = coeff.convert(2*sqrt(2) - 1)
+            except CoercionFailed:
+                t = None
             if not _validation(t):
                 return None
         # t is not None
@@ -284,9 +292,9 @@ def _constrained_acute_quartic(coeff: Coeff, F):
                 sol = _solve_quad(vb2, vc2)
             elif vbc >= 0:
                 if vac >= 0:
-                    vb2, vc2 = va2 + c400, sp.S(0)
+                    vb2, vc2 = va2 + c400, Integer(0)
                 else:
-                    vb2, vc2 = sp.S(0), va2 + c400
+                    vb2, vc2 = Integer(0), va2 + c400
                 sol = _solve_quad(vb2, vc2)
             elif va2 != 0: # and vbc < 0
                 if vac >= 0:
@@ -338,7 +346,7 @@ def _constrained_acute_trivial_uncentered(coeff: Coeff, F):
 def _constrained_acute_dense_symmetric(coeff: Coeff, F):
     degree = coeff.total_degree()
     if degree == 0:
-        return sp.S(0)
+        return Integer(0)
     elif degree in (2, 3, 4):
         SOLVERS = {
             2: _constrained_acute_quadratic,

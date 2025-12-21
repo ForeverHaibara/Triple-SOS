@@ -30,10 +30,10 @@ def sos_struct_quartic(coeff, real = True):
         must satisfy the condition A.
 
     Examples
-    -------
-    s(a2)2-3s(a3b)
+    --------
+    => s(a2)2-3s(a3b)
 
-    4s(a)s(2a3-a2b-a2c)
+    => 4s(a)s(2a3-a2b-a2c)
     """
     return  _sos_struct_quartic_uncentered(coeff)
 
@@ -53,14 +53,16 @@ def _sos_struct_quartic_core(coeff: Coeff):
         satisfies the main theorem.
 
     Examples
-    -------
-    s(a2)2-3s(a3b)
+    --------
+    :: ineqs = []
 
-    s(a2)2-3s(ab3)
+    => s(a2)2-3s(a3b)
 
-    s((a-2b+c)2(5a-b-7c)2)
+    => s(a2)2-3s(ab3)
 
-    s((a2-b2-ac+ab)2)
+    => s((a-2b+c)2(5a-b-7c)2)
+
+    => s((a2-b2-ac+ab)2)
     """
     m, p, n, q, r = [coeff((4,0,0)), coeff((3,1,0)), coeff((2,2,0)), coeff((1,3,0)), coeff((2,1,1))]
     if m == 0:
@@ -94,13 +96,13 @@ def _sos_struct_quartic_quadratic_border(coeff: Coeff):
 
     Examples
     --------
-    s(a4-2a3b+2ab3-a2b2)
+    => s(a4-2a3b+2ab3-a2b2)
 
-    s(a4+4a3b-4ab3+2a2b2-3a2bc)
+    => s(a4+4a3b-4ab3+2a2b2-3a2bc)
 
-    s(a4-3a3b+3ab3+1/4a2b2-5/4a2bc)
+    => s(a4-3a3b+3ab3+1/4a2b2-5/4a2bc)
 
-    s(a4 - 2sqrt(2)(a3b - ab3) - a2bc)
+    => s(a4 - 2sqrt(2)(a3b - ab3) - a2bc)
     """
     m, p, n, q = [coeff((4,0,0)), coeff((3,1,0)), coeff((2,2,0)), coeff((1,3,0))]
     t = q / 2 / m
@@ -137,15 +139,15 @@ def _sos_struct_quartic_biased(coeff: Coeff):
 
     Examples
     --------
-    s(a4-3a3b+3ab3+1/4a2b2-5/4a2bc)
+    => s(a4-3a3b+3ab3+1/4a2b2-5/4a2bc)
 
-    (9s(a3)+24abc-17s(a2c))s(a)
+    => (9s(a3)+24abc-17s(a2c))s(a)
 
-    s(a)s(a(a-b)(a-c))
+    => s(a)s(a(a-b)(a-c))
 
-    10s(a4-4a3b+2ab3+a2b2)+19s(a2b2-a2bc)
+    => 10s(a4-4a3b+2ab3+a2b2)+19s(a2b2-a2bc)
 
-    s((2a+b)(a-sqrt(2)b)2(a+b)-2a4+(12sqrt(2)-16)a2bc)
+    => s((2a+b)(a-sqrt(2)b)2(a+b)-2a4+(12sqrt(2)-16)a2bc)
     """
     m, p, n, q, r = coeff((4,0,0)), coeff((3,1,0)), coeff((2,2,0)), coeff((1,3,0)), coeff((2,1,1))
     rem = m + n + p + q + r
@@ -223,13 +225,13 @@ def _sos_struct_quartic_degenerate(coeff: Coeff):
 
     Examples
     -------
-    2/5s(ab(3a-2b-c)2)
+    => 2/5s(ab(3a-2b-c)2)
 
-    s(2a3b+a3c-a2b2-2a2bc)
+    => s(2a3b+a3c-a2b2-2a2bc)
 
-    s(a3b-14/5a2b2+2ab3-1/5a2bc)
+    => s(a3b-14/5a2b2+2ab3-1/5a2bc)
 
-    s(a2b2+3ab3-4a2bc)
+    => s(a2b2+3ab3-4a2bc)
     """
     m, p, n, q, r = coeff((4,0,0)), coeff((3,1,0)), coeff((2,2,0)), coeff((1,3,0)), coeff((2,1,1))
 
@@ -296,32 +298,34 @@ def _sos_struct_quartic_uncentered_real(coeff: Coeff):
     seen that one of the root isolation must satisfy our requirement for w.
 
     Examples
-    ---------
-    (s(a2)2-3s(a3b))/3+s(2a2-3ab)2/6
+    --------
+    :: ineqs = []
 
-    s(a4-3a3b-2ab3+4a2b2+2/9a2bc)
+    => (s(a2)2-3s(a3b))/3+s(2a2-3ab)2/6
 
-    s(2a2-3ab)2
+    => s(a4-3a3b-2ab3+4a2b2+2/9a2bc)
 
-    s(2a2-3ab)2+s(ab3-a2bc)
+    => s(2a2-3ab)2
 
-    s(2a2-3ab)2+s(ab3-5/3a2bc)
+    => s(2a2-3ab)2+s(ab3-a2bc)
 
-    s(2a2-3ab)2+s(ab3+81/5a2bc)
+    => s(2a2-3ab)2+s(ab3-5/3a2bc)
 
-    s(4a4-5a3b+7a2b2-9ab3+4a2bc)
+    => s(2a2-3ab)2+s(ab3+81/5a2bc)
 
-    115911s(a/6)4-s(a3b-32/3a2bc)
+    => s(4a4-5a3b+7a2b2-9ab3+4a2bc)
 
-    s(a2)2-2s(a2bc)
+    => 115911s(a/6)4-s(a3b-32/3a2bc)
 
-    s(a2)2+6s(a2bc)-s(ab3)
+    => s(a2)2-2s(a2bc)
 
-    (567+45sqrt(105))/32/81s(a)4-s(a3b)
+    => s(a2)2+6s(a2bc)-s(ab3)
 
-    s(a2)2-16sqrt(2)/9s(bc(b2-c2))
+    => (567+45sqrt(105))/32/81s(a)4-s(a3b)
 
-    s(a2)2-3s(a3b)+s(2a2-3ab)2+10^(-40)s(a2-ab)2
+    => s(a2)2-16sqrt(2)/9s(bc(b2-c2))
+
+    => s(a2)2-3s(a3b)+s(2a2-3ab)2+10^(-40)s(a2-ab)2
     """
     m, p, n, q, r = [coeff((4,0,0)), coeff((3,1,0)), coeff((2,2,0)), coeff((1,3,0)), coeff((2,1,1))]
     if m == 0:
@@ -403,17 +407,17 @@ def _sos_struct_quartic_uncentered(coeff: Coeff):
     remaining polynomial is nonnegative over the real number field.
 
     Examples
-    ----------
-    s(a4-3a3b-2ab3+7/2a2b2+5a2bc)
+    --------
+    => s(a4-3a3b-2ab3+7/2a2b2+5a2bc)
 
-    4s(a4)+11abcs(a)-8s(ab)s(a2-ab)
+    => 4s(a4)+11abcs(a)-8s(ab)s(a2-ab)
 
-    s(a4-a3b-2ab3+11/10a2b2)+2abcs(a)
+    => s(a4-a3b-2ab3+11/10a2b2)+2abcs(a)
 
-    s(a)3s(a)-s(a2)s(a)2/3
+    => s(a)3s(a)-s(a2)s(a)2/3
 
     References
-    -------
+    ----------
     [1] https://tieba.baidu.com/p/8069929018
 
     [2] https://tieba.baidu.com/p/8241977884
@@ -593,24 +597,24 @@ def _sos_struct_acyclic_quartic_symmetric(coeff: Coeff, real = True):
     The constraints det1 >= 0 and det2 >= 0 are both quadratic with respect to a and b.
 
     Examples
-    ----------
-    (b-c)2(b+c-3a)2+(a-c)2(a+c-3b)2+1/4(a+b-3/2c)2(a+b-3c)2
+    --------
+    => (b-c)2(b+c-3a)2+(a-c)2(a+c-3b)2+1/4(a+b-3/2c)2(a+b-3c)2
 
-    2(c-a)2(c+a-4b)2+7/2(c-a)2(c+a-b)2+s(c2-5ca)2
+    => 2(c-a)2(c+a-4b)2+7/2(c-a)2(c+a-b)2+s(c2-5ca)2
 
-    (3c4-2c3a-4c3b-c2a2+4c2ab-2ca3+4ca2b-2cab2+3a4-4a3b+b4)
+    => (3c4-2c3a-4c3b-c2a2+4c2ab-2ca3+4ca2b-2cab2+3a4-4a3b+b4)
 
-    s(2a2-5ab)2+(a-b)2(a+b-3c)2
+    => s(2a2-5ab)2+(a-b)2(a+b-3c)2
 
-    (a4-6a3c+2a2b2+2a2bc+10a2c2+2ab2c-16abc2+b4-6b3c+10b2c2)
+    => (a4-6a3c+2a2b2+2a2bc+10a2c2+2ab2c-16abc2+b4-6b3c+10b2c2)
 
-    (a-b)4 + c2(a-b)2
+    => (a-b)4 + c2(a-b)2
 
-    (b2-2ba+c2-2ca)2 +(b2+c2-5a2)2 +2(bc-a2)2
+    => (b2-2ba+c2-2ca)2 +(b2+c2-5a2)2 +2(bc-a2)2
 
-    (ab+c2)(a+b-3c)2+s(a2-3ab)2/4
+    => (ab+c2)(a+b-3c)2+s(a2-3ab)2/4 # doctest:+SKIP
 
-    (3339a4-5949a3b-2469a3c+9288a2b2-243a2bc+1159a2c2-5949ab3-243ab2c+278abc2-262ac3+3339b4-2469b3c+1159b2c2-262bc3+38c4)
+    => (3339a4-5949a3b-2469a3c+9288a2b2-243a2bc+1159a2c2-5949ab3-243ab2c+278abc2-262ac3+3339b4-2469b3c+1159b2c2-262bc3+38c4) # doctest:+SKIP
     """
     if not coeff.is_rational:
         return
@@ -850,8 +854,8 @@ def _sos_struct_acyclic_quartic_real(coeff: Coeff):
     the three roots, and g is then a quadratic form of xy, yz and zx.
 
     Examples
-    ----------
-    (20a4-94a3b-12a3c+171a2b2+28a2bc+4a2c2-151ab3-11ab2c-8abc2+77b4-21b3c+7b2c2)
+    --------
+    => (20a4-94a3b-12a3c+171a2b2+28a2bc+4a2c2-151ab3-11ab2c-8abc2+77b4-21b3c+7b2c2) # doctest:+SKIP
     """
     poly = coeff.as_poly()
     roots = _sos_struct_acyclic_quartic_reaL_findroots(coeff, poly)
@@ -947,7 +951,7 @@ def _sos_struct_acyclic_quartic_reaL_findroots(
     has at least three roots over R.
 
     Returns
-    ---------
+    -------
     List of (root, value, subtraction) where root is the root,
     so that the original poly - sum(value[j]*subtraction[j]**2 for j in range(i+1)) vanishes at root[i].
 

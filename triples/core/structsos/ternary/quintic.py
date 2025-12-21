@@ -224,44 +224,44 @@ def _sos_struct_quintic_full(coeff: Coeff):
     We solve u,v,x,y from the coefficient of a^5,a^4b,a^3b^2,a^2b^3,ab^4.
 
     Examples
-    -------
-    s(a5+a4b-3a3b2-9a3bc+4a3c2+6a2b2c)
+    --------
+    => s(a5+a4b-3a3b2-9a3bc+4a3c2+6a2b2c)
 
-    s(a5-3a4b+3a3b2-6a3bc+3a3c2+2a2b2c)
+    => s(a5-3a4b+3a3b2-6a3bc+3a3c2+2a2b2c)
 
-    s(2a5-5a4b+a4c+5a3b2-19a3bc+6a3c2+10a2b2c)
+    => s(2a5-5a4b+a4c+5a3b2-19a3bc+6a3c2+10a2b2c)
 
-    s(a2(a-b)(a2+2b2-2ac+2c2))-5/4abcs(a2-ab)
+    => s(a2(a-b)(a2+2b2-2ac+2c2))-5/4abcs(a2-ab)
 
-    s(31a5-58a4b-8a4c+35a3c2)
+    => s(31a5-58a4b-8a4c+35a3c2)
 
-    s(a2(a-b)(a2-3bc))
+    => s(a2(a-b)(a2-3bc))
 
-    s(10a5-19a4b+4a3b2+5a2b2c)
+    => s(10a5-19a4b+4a3b2+5a2b2c)
 
-    s(38a5-73a4b+16a3b2+19a2b2c)
+    => s(38a5-73a4b+16a3b2+19a2b2c)
 
-    s(a2(a-b)(a2+ab-5bc))
+    => s(a2(a-b)(a2+ab-5bc))
 
-    s(a2(a-b)(a2+b2-3ac+3c2))-1/3abcs(a2-ab)
+    => s(a2(a-b)(a2+b2-3ac+3c2))-1/3abcs(a2-ab)
 
-    s((a+b-c*4/5)(a2-b2+0(ab-ac)+(bc-ab))2)
+    => s((a+b-c*4/5)(a2-b2+0(ab-ac)+(bc-ab))2)
 
-    s(2a5-5a4b-7a4c+5a3b2+14a3bc+6a3c2-15a2b2c)
+    => s(2a5-5a4b-7a4c+5a3b2+14a3bc+6a3c2-15a2b2c)
 
-    s((23a-5b-c)(a-b)2(a+b-3c)2)
+    => s((23a-5b-c)(a-b)2(a+b-3c)2) # doctest:+SKIP
 
-    s(36a5-39a4b-164a4c-122a3b2+311a3bc+253a3c2-275a2b2c)
+    => s(36a5-39a4b-164a4c-122a3b2+311a3bc+253a3c2-275a2b2c) # doctest:+SKIP
 
-    s((a-2b)2(2a2-2ab+b2)(2a+b)-4a5+a3bc+25abc(a2-ab))
+    => s((a-2b)2(2a2-2ab+b2)(2a+b)-4a5+a3bc+25abc(a2-ab)) # doctest:+SKIP
 
-    s(53361a5-354459a4b-107547a4c+678010a3b2+1034825a3bc-254726a3c2-1049464a2b2c)
+    => s(53361a5-354459a4b-107547a4c+678010a3b2+1034825a3bc-254726a3c2-1049464a2b2c) # doctest:+SKIP
 
-    s(144400a5-261516a4b-1447320a4c-1613008a3b2+5235581a3bc+3966569a3c2-6024706a2b2c)
+    => s(144400a5-261516a4b-1447320a4c-1613008a3b2+5235581a3bc+3966569a3c2-6024706a2b2c) # doctest:+SKIP
 
-    s(34105600a5-71885436a4b-328258080a4c-328208596a3b2+1188005225a3bc+862751801a3c2-1356510514a2b2c)
+    => s(34105600a5-71885436a4b-328258080a4c-328208596a3b2+1188005225a3bc+862751801a3c2-1356510514a2b2c) # doctest:+SKIP
 
-    s(13660416a5-74323095a4b-26634720a4c+120979510a3b2+194638463a3bc-42269615a3c2-186050959a2b2c)
+    => s(13660416a5-74323095a4b-26634720a4c+120979510a3b2+194638463a3bc-42269615a3c2-186050959a2b2c) # doctest:+SKIP
     """
 
     if coeff((5,0,0)) <= 0:
@@ -665,48 +665,48 @@ def _sos_struct_quintic_windmill(coeff: Coeff):
     s((b-a+(2u-1)c)(a^2-b^2+u(ab-ac)+v(bc-ab))^2) >= 0
 
     Examples
-    -------
-    s(a2c(4a-3b-c)2)-20abcs(a2-ab)
+    --------
+    => s(a2c(4a-3b-c)2)-20abcs(a2-ab)
 
-    s(a)2s(a2b)-9abcs(a2)
+    => s(a)2s(a2b)-9abcs(a2)
 
-    4s(c(a-b)2(a-c)2)-s(c2(11a-15b-c)(a-b)2)
+    => 4s(c(a-b)2(a-c)2)-s(c2(11a-15b-c)(a-b)2)
 
-    s(4a4c+a3b2-23a3bc+4a3c2+14a2b2c)
+    => s(4a4c+a3b2-23a3bc+4a3c2+14a2b2c)
 
-    (s(c(4b2-c2)(a-b)2)-11s(c2(b-a)3))
+    => (s(c(4b2-c2)(a-b)2)-11s(c2(b-a)3))
 
-    10s(a3b2-6/5a2b3+3/4ab4-101/40a3bc+79/40a2b2c)
+    => 10s(a3b2-6/5a2b3+3/4ab4-101/40a3bc+79/40a2b2c)
 
-    2s(a4b-3a3b2+4a2b3-2a2b2c)-17/2abcs(a2-ab)
+    => 2s(a4b-3a3b2+4a2b3-2a2b2c)-17/2abcs(a2-ab)
 
-    s(a4b-3a3b2-8a3bc+7a3c2+3a2b2c)
+    => s(a4b-3a3b2-8a3bc+7a3c2+3a2b2c)
 
-    s(c(2a2-ab-ac)2)-4abcs(a2-ab)
+    => s(c(2a2-ab-ac)2)-4abcs(a2-ab)
 
-    s(ab2(2(a-b)-5(b-c))2)-59abcs(a2-ab)
+    => s(ab2(2(a-b)-5(b-c))2)-59abcs(a2-ab)
 
-    s(ac2(3(a-b)+5(b-c))2)-25abcs(a2-ab)
+    => s(ac2(3(a-b)+5(b-c))2)-25abcs(a2-ab)
 
-    s(6a4c+10a3b2-67a3bc+19a3c2+32a2b2c)
+    => s(6a4c+10a3b2-67a3bc+19a3c2+32a2b2c)
 
-    s(a4c+a3b2-13a3bc+6a3c2+5a2b2c)
+    => s(a4c+a3b2-13a3bc+6a3c2+5a2b2c)
 
-    s(29a4c+711a3b2-4100a3bc+3599a3c2-239a2b2c)
+    => s(29a4c+711a3b2-4100a3bc+3599a3c2-239a2b2c)
 
-    s(8a4c+2a3b2-425a3bc+613a3c2-198a2b2c)
+    => s(8a4c+2a3b2-425a3bc+613a3c2-198a2b2c)
 
-    s(9a4c+a3b2-44a3bc+6a3c2+28a2b2c)
+    => s(9a4c+a3b2-44a3bc+6a3c2+28a2b2c)
 
-    s(2a4b-6a3b2-5a3bc+8a3c2+a2b2c)
+    => s(2a4b-6a3b2-5a3bc+8a3c2+a2b2c)
 
-    s(c(a-b)2(2a2+3ab+10ac+2c2))-abcs(a2-ab)
+    => s(c(a-b)2(2a2+3ab+10ac+2c2))-abcs(a2-ab)
 
-    s((b-a+3c)(a2-b2+2(ab-ac)+31/9(bc-ab))2)
+    => s((b-a+3c)(a2-b2+2(ab-ac)+31/9(bc-ab))2) # doctest:+SKIP
 
-    s((b-a+207/100c)((a2-b2+307/200(ab-ac)+247/100(bc-ab)))2)
+    => s((b-a+207/100c)((a2-b2+307/200(ab-ac)+247/100(bc-ab)))2) # doctest:+SKIP
 
-    s(a4c+a3b2-a3bc-a2b2c)-3*2^(2/3)s(a2-ab)p(a)
+    => s(a4c+a3b2-a3bc-a2b2c)-3*2^(2/3)s(a2-ab)p(a)
 
     Reference
     ---------
@@ -1389,18 +1389,18 @@ def _sos_struct_quintic_uncentered(coeff: Coeff):
     which might have equality not at (1,1,1) but elsewhere.
 
     Examples
-    -------
-    s(2ab4+5a2b3-17a3bc+13a2b2c)
+    --------
+    => s(2ab4+5a2b3-17a3bc+13a2b2c)
 
-    s(ab4+347/30a2b3-3833/230a3bc+475/69a2b2c)
+    => s(ab4+347/30a2b3-3833/230a3bc+475/69a2b2c)
 
-    s(ab4+0a2b3-19/4a3bc+9/2a2b2c)
+    => s(ab4+0a2b3-19/4a3bc+9/2a2b2c)
 
-    s(2ab4+4a2b3-13a3bc+7a2b2c)
+    => s(2ab4+4a2b3-13a3bc+7a2b2c)
 
-    s(a2c(a-b)(a+c-4b))
+    => s(a2c(a-b)(a+c-4b))
 
-    s(a2c(a-5/2b)2)-abcs(8a2-131/4ab)
+    => s(a2c(a-5/2b)2)-abcs(8a2-131/4ab)
 
     References
     ----------
@@ -1758,26 +1758,26 @@ def _sos_struct_quintic_hexagon(coeff: Coeff):
     f(a,b,c) = t*sum c(a^2-b^2+u(ab-ac)+v(bc-ab))^2 + (1 - t)sum c(a-b)^4 >= 0.
 
     Examples
-    -------
-    s(c(a-b)2(a+b-3c)2)
+    --------
+    => s(c(a-b)2(a+b-3c)2)
 
-    s(a4b+a4c+6a3b2+a2b3-9a3bc)-10abcs(a2-ab)
+    => s(a4b+a4c+6a3b2+a2b3-9a3bc)-10abcs(a2-ab)
 
-    s(4a4b+4a4c-8a3b2-29a3bc+8a3c2+21a2b2c)
+    => s(4a4b+4a4c-8a3b2-29a3bc+8a3c2+21a2b2c)
 
-    s(a4b+a4c+5a3b2+3a2b3-10a2b2c)-20s(a3bc-a2b2c)
+    => s(a4b+a4c+5a3b2+3a2b3-10a2b2c)-20s(a3bc-a2b2c)
 
-    s(4a4b+a4c+9a3b2-36a3bc+2a3c2+20a2b2c)
+    => s(4a4b+a4c+9a3b2-36a3bc+2a3c2+20a2b2c)
 
-    s(4a4b+a4c-3a3b2-16a3bc+2a3c2+12a2b2c)
+    => s(4a4b+a4c-3a3b2-16a3bc+2a3c2+12a2b2c)
 
-    s(a4b-3a3b2+6a2b3+3ab4-7a3bc)
+    => s(a4b-3a3b2+6a2b3+3ab4-7a3bc) # doctest:+SKIP
 
-    s(a4b+7a4c-3a3b2-17a3bc-a3c2+13a2b2c)
+    => s(a4b+7a4c-3a3b2-17a3bc-a3c2+13a2b2c)
 
-    2s(a2(a-b)(a2-3bc))-s((a+b-c)(a-b)2(a+b-3/2c)2)
+    => 2s(a2(a-b)(a2-3bc))-s((a+b-c)(a-b)2(a+b-3/2c)2)
 
-    s((23(b-a)+31c)(a2-b2+(ab-ac)+2(bc-ab))2)
+    => s((23(b-a)+31c)(a2-b2+(ab-ac)+2(bc-ab))2) # doctest:+SKIP
 
     Reference
     -------

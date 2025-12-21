@@ -142,6 +142,7 @@ class PivotQuadratic(ProofNode):
             if key.startswith("node_"):
                 self.children.append(node)
                 if isinstance(node, SolvePolynomial):
+                    node.default_configs = SolvePolynomial.default_configs.copy()
                     node.default_configs["sqf"] = True
 
     def _explore_state_2(self, configs):

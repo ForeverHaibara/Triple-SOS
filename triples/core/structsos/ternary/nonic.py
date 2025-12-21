@@ -13,11 +13,11 @@ def sos_struct_nonic(coeff, real = True):
 
     Examples
     --------
-    s(ac2(a-b)4(b-c)2)-5p(a-b)2p(a)
+    => s(ac2(a-b)4(b-c)2)-5p(a-b)2p(a) # doctest:+SKIP
 
-    s(20a6b2c+20a6bc2+20a5b4+40a5b3c-34a5b2c2-108a5bc3+20a5c4-34a4b4c-43a4b3c2+31a4b2c3+68a3b3c3)
+    => s(20a6b2c+20a6bc2+20a5b4+40a5b3c-34a5b2c2-108a5bc3+20a5c4-34a4b4c-43a4b3c2+31a4b2c3+68a3b3c3) # doctest:+SKIP
 
-    s(a6b3+7a6c3-29a5b2c2+12a4bc4+9a3b3c3)
+    => s(a6b3+7a6c3-29a5b2c2+12a4bc4+9a3b3c3) # doctest:+SKIP
 
     Reference
     -------
@@ -60,12 +60,12 @@ def _sos_struct_nonic_symmetric_tree(coeff: Coeff):
     would be the root of -x^3+3x-1+w == 0.
 
     Examples
-    -------
-    s(a9+3a3b3(a3+b3)-5a7bc-4a4b4c+2p(a3))
+    --------
+    => s(a9+3a3b3(a3+b3)-5a7bc-4a4b4c+2p(a3))
 
-    s(4a9-25a7bc+14a6b3+14a6c3-16a4b4c+9a3b3c3)
+    => s(4a9-25a7bc+14a6b3+14a6c3-16a4b4c+9a3b3c3)
 
-    4/3s(a3-2/3abc)/2s(a2+3ab)s((a-b)2(a+b-3c)2)+p(a)s(a3b3-a2b2c2)+ s(a3(b3-c3)2)
+    => 4/3s(a3-2/3abc)/2s(a2+3ab)s((a-b)2(a+b-3c)2)+p(a)s(a3b3-a2b2c2)+ s(a3(b3-c3)2)
     """
     c0 = coeff((9,0,0))
     if c0 <= 0:
@@ -141,10 +141,10 @@ def _sos_struct_nonic_hexagon_symmetric(coeff: Coeff):
     Solve problems like s(a6b3+a3b6) + p(a)(...).
 
     Examples
-    -------
-    s(4a6b3+4a6c3-59a5b3c+30a5b2c2-59a5bc3+74a4b4c+90a4b3c2+90a4b2c3-174a3b3c3)
+    --------
+    => s(4a6b3+4a6c3-59a5b3c+30a5b2c2-59a5bc3+74a4b4c+90a4b3c2+90a4b2c3-174a3b3c3)
 
-    s(a3)s(a3b3)+27p(a3)-6p(a2)s(ab(a+b))
+    => s(a3)s(a3b3)+27p(a3)-6p(a2)s(ab(a+b))
     """
     c0 = coeff((6,3,0))
     if c0 <= 0:
@@ -232,10 +232,10 @@ def _sos_struct_nonic_hexagram_symmetric(coeff: Coeff):
     R(a,b,c) = p(a-b)^2*s(a)s(ab) + p(a)s((a-b)^2)s(a^2(b-c)^2) / 4 >= 0
 
     Examples
-    -------
-    s(a2b-abc)s(ab2-abc)s(a(b-c)2)-13p(a-b)2p(a)
+    --------
+    => s(a2b-abc)s(ab2-abc)s(a(b-c)2)-13p(a-b)2p(a)
 
-    s(2a6b2c+2a6bc2+5a5b4-34a5b3c+30a5b2c2-34a5bc3+5a5c4+16a4b4c+19a4b3c2+19a4b2c3-30a3b3c3)
+    => s(2a6b2c+2a6bc2+5a5b4-34a5b3c+30a5b2c2-34a5bc3+5a5c4+16a4b4c+19a4b3c2+19a4b2c3-30a3b3c3)
     """
     c1, c2, c3, c4, c5, c6 = [coeff(_) for _ in ((5,4,0),(6,2,1),(5,3,1),(4,4,1),(5,2,2),(4,3,2))]
     if c1 < 0 or c2 < 0:
@@ -363,10 +363,10 @@ def _sos_struct_nonic_gear(coeff: Coeff):
     s(c(a4b-3a3b2+5a3bc-3a3c2-a2b3-a2b2c-a2bc2+5ab3c-4ab2c2+4abc3-b3c2-b2c3)2)+6p(a)p(a-b)2s(a2-ab)+p(a)s(2a3b+a3c-6a2b2+3a2bc)2
 
     Examples
-    -------
-    s(a6b2c-a5b3c+a5c4-a4b3c2)
+    --------
+    => s(a6b2c-a5b3c+a5c4-a4b3c2)
 
-    s(ac2((b(a2-b2+1(ab-ac)+3(bc-ab)))+(((a2c-b2c)-2(a2b-abc)+5(ab2-abc))))2)
+    => s(ac2((b(a2-b2+1(ab-ac)+3(bc-ab)))+(((a2c-b2c)-2(a2b-abc)+5(ab2-abc))))2)
 
     References
     ----------

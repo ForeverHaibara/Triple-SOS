@@ -87,15 +87,15 @@ def _sos_struct_octic_symmetric_hexagon_sdp(coeff: Coeff):
 
     Examples
     --------
-    (s(a2(b2-c2)2)-3/8p(a-b)2)s(a2)+s(a4(b-c)2)s(a2)/8
+    => (s(a2(b2-c2)2)-3/8p(a-b)2)s(a2)+s(a4(b-c)2)s(a2)/8
 
-    s(4a4b2-7a4bc+4a4c2+8a3b3-12a3b2c-12a3bc2+15a2b2c2+a4(b-c)2)s(a2-ab)
+    => s(4a4b2-7a4bc+4a4c2+8a3b3-12a3b2c-12a3bc2+15a2b2c2+a4(b-c)2)s(a2-ab)
 
-    (85/336p(a-b)2+s(bc(a-b)(a-c)(a+b)(a+c))-16/15s(a2bc(b-c)2))s(a2-ab)
+    => (85/336p(a-b)2+s(bc(a-b)(a-c)(a+b)(a+c))-16/15s(a2bc(b-c)2))s(a2-ab)
 
-    s(a3(bc(a+b+c)((a-2b)(a-2c)-bc)+a(a-b-c)(a-3b-3c)(b-c)2))
+    => s(a3(bc(a+b+c)((a-2b)(a-2c)-bc)+a(a-b-c)(a-3b-3c)(b-c)2))
 
-    s(a2(a-(b+c))2((b-c)2+bc)(a-b)(a-c))
+    => s(a2(a-(b+c))2((b-c)2+bc)(a-b)(a-c))
     """
     c620, c530, c440, c611, c521, c431, c422 = [coeff(_) for _ in ((6,2,0),(5,3,0),(4,4,0),(6,1,1),(5,2,1),(4,3,1),(4,2,2))]
     if (not coeff.is_rational) or c620 <= 0 or coeff.poly111() != 0:
@@ -608,24 +608,24 @@ def _sos_struct_octic_symmetric_hexagram(coeff: Coeff):
     TODO: Restructure the function. It is too messy.
 
     Examples
-    ---------
-    s(bc(a2+1/2a(b+c)-bc)2(a-b)(a-c))
+    --------
+    => s(bc(a2+1/2a(b+c)-bc)2(a-b)(a-c))
 
-    s((a-b)2(a+b-3c)2)s(a2b2)+2s(a2(b-c)2(ab+ac-3/2bc)2)-p(a-b)2s(2a2-2ab)
+    => s((a-b)2(a+b-3c)2)s(a2b2)+2s(a2(b-c)2(ab+ac-3/2bc)2)-p(a-b)2s(2a2-2ab)
 
-    s(2a6bc-3a5b2c-3a5bc2+a4b4+3a4b2c2)
+    => s(2a6bc-3a5b2c-3a5bc2+a4b4+3a4b2c2)
 
-    s(bc(2a4+a3b+a3c+a2b2+9a2bc+a2c2-3ab2c-3abc2+b2c2)(a-b)(a-c))
+    => s(bc(2a4+a3b+a3c+a2b2+9a2bc+a2c2-3ab2c-3abc2+b2c2)(a-b)(a-c))
 
-    24s((a+b-c)(a-b)2(a+b-3c)2)p(a)+s(a2b2(ab-ac)(ab-bc))
+    => 24s((a+b-c)(a-b)2(a+b-3c)2)p(a)+s(a2b2(ab-ac)(ab-bc))
 
-    256p(a)s((64a+(b+c))(a+b-59/16c)(a+c-59/16b)(a-b)(a-c))+s(a2b2(ab-bc)(ab-ca))
+    => 256p(a)s((64a+(b+c))(a+b-59/16c)(a+c-59/16b)(a-b)(a-c))+s(a2b2(ab-bc)(ab-ca)) # doctest:+SKIP
 
-    s(bc(a-b)(a-c)(a-2b)(a-2c)(a-3b)(a-3c))
+    => s(bc(a-b)(a-c)(a-2b)(a-2c)(a-3b)(a-3c))
 
-    s(bc(a-b)(a-c)(a2-2a(b+c)+5bc)(a-2b)(a-2c))
+    => s(bc(a-b)(a-c)(a2-2a(b+c)+5bc)(a-2b)(a-2c))
 
-    s(a4)s(a4)-3abcs(a5)-s((a2-bc)4)
+    => s(a4)s(a4)-3abcs(a5)-s((a2-bc)4)
     """
     x_ = coeff((6,1,1))
     v_ = coeff((4,4,0))
@@ -768,10 +768,10 @@ def _sos_struct_octic_symmetric_quadratic_form(poly, coeff: Coeff):
     For a more primary case, see `_sos_struct_sextic_symmetric_quadratic_form`.
 
     Examples
-    ---------
-    s(a2(a-b)(a-c))s(a2-ab)2-p(a-b)2s(3/2a2)
+    --------
+    => s(a2(a-b)(a-c))s(a2-ab)2-p(a-b)2s(3/2a2) # doctest:+SKIP
 
-    s(a6(a-b)(a-c))-p(a-b)2(1/2s(a2)+1/6s(a)2)
+    => s(a6(a-b)(a-c))-p(a-b)2(1/2s(a2)+1/6s(a)2)
     """
     return
 

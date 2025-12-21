@@ -25,7 +25,7 @@ def _quarternary_quartic_fluroite(coeff: Coeff, real=True):
 
     Examples
     ---------
-    s(26a2b2+90a2bc-36a2bd+65a2c2-108a2cd-37abcd)
+    => s(26a2b2+90a2bc-36a2bd+65a2c2-108a2cd-37abcd)
     """
     if any(coeff(_) for _ in ((4,0,0,0),(3,1,0,0),(3,0,1,0),(3,0,0,1))):
         return None
@@ -63,8 +63,8 @@ def _quarternary_quartic_real(coeff: Coeff, real=True):
     so that the rest falls in the case of fluroite. This is heuristic and may not work for all cases.
 
     Examples
-    ----------
-    s(((1-2)(a2-b2)+0(a2-c2)+(1+2)(a2-d2)-1(ab-cd)+6(bc-ad)+8(cd-bc)+2(ac-bd))2)
+    --------
+    => s(((1-2)(a2-b2)+0(a2-c2)+(1+2)(a2-d2)-1(ab-cd)+6(bc-ad)+8(cd-bc)+2(ac-bd))2) # doctest:+SKIP
     """
     if not any(coeff(_) for _ in ((4,0,0,0),(3,1,0,0),(3,0,1,0),(3,0,0,1))):
         return _quarternary_quartic_fluroite(coeff, real=real)

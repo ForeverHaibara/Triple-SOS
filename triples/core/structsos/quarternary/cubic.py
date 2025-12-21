@@ -60,16 +60,18 @@ def _quarternary_cubic_partial_symmetric(coeff: Coeff, real = False):
     # TODO: It seems it is incomplete.
 
     Examples
-    ---------
-    4abc+9s(a2)-14s(ab)+4s(a)+4
+    --------
+    :: ineqs = [a,b,c], gens=[a,b,c]
 
-    29/3s(a2)+13/3s(a)-58/3s(bc)+1+15abc
+    => 4abc+9s(a2)-14s(ab)+4s(a)+4
 
-    1+2abc+s(a2-2ab)
+    => 29/3s(a2)+13/3s(a)-58/3s(bc)+1+15abc
 
-    s(2a2-4ab)+3abc+s(a)
+    => 1+2abc+s(a2-2ab)
 
-    s(a2-ab)-2s(a)+4+2abc
+    => s(2a2-4ab)+3abc+s(a)
+
+    => s(a2-ab)-2s(a)+4+2abc    # doctest:+SKIP
     """
     if coeff((3,0,0,0)) or coeff((2,1,0,0)):
         return None

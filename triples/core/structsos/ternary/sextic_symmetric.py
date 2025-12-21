@@ -241,34 +241,36 @@ def _sos_struct_sextic_hexagon_symmetric(coeff: Coeff, real = False):
 
 
     Examples
-    ----------
-    s(3a2b+ab2-4abc)2+s(a2b+3ab2-4abc)2    (real)
+    --------
+    :: ineqs = []
 
-    s((b-c)2(a2-3(ab+ac)+2bc)2)/14-8/14abcs(a2b+ab2-2abc)    (real)
+    => s(3a2b+ab2-4abc)2+s(a2b+3ab2-4abc)2
 
-    s(a2(b-c)4)-1/2p(a-b)2      (real)
+    => s((b-c)2(a2-3(ab+ac)+2bc)2)/14-8/14abcs(a2b+ab2-2abc)
 
-    s(a2(b2-c2)2)-3/8p(a-b)2    (real, root = (-1,-1,1))
+    => s(a2(b-c)4)-1/2p(a-b)2
 
-    3p(a2+ab+b2)-s(a)2s(ab)2    (real)
+    => s(a2(b2-c2)2)-3/8p(a-b)2    # doctest:+SKIP # root = (-1,-1,1)
 
-    p(a2+ab+b2)-3s(ab)s(a2b2)   (real)
+    => 3p(a2+ab+b2)-s(a)2s(ab)2    # doctest:+SKIP
 
-    s(a)s(ab)p(a+b)-6s(a(a+b)(a+c))p(a)-3abcs((a+b-c)(a-c)(b-c))   (real)
+    => p(a2+ab+b2)-3s(ab)s(a2b2)
 
-    8s(a2)3-9p(a+b)s(a3)-2s((b-c)2(b+c-1/8a))2    (real)
+    => s(a)s(ab)p(a+b)-6s(a(a+b)(a+c))p(a)-3abcs((a+b-c)(a-c)(b-c))
 
-    s(bc(a-b)(a-c)(a-3b)(a-3c)) +1/4s(a2b+ab2-2abc)2+5p(a-b)2+4abcs(a(b-c)2)    (real)
+    => 8s(a2)3-9p(a+b)s(a3)-2s((b-c)2(b+c-1/8a))2
 
-    s(bc(a-b)(a-c)(a-3b)(a-3c))+9/4p(a-b)2    (real)
+    => s(bc(a-b)(a-c)(a-3b)(a-3c)) +1/4s(a2b+ab2-2abc)2+5p(a-b)2+4abcs(a(b-c)2)
 
-    s(bc(a-b)(a-c)(a-9/8b)(a-9/8c))+81/256p(a-b)2    (real)
+    => s(bc(a-b)(a-c)(a-3b)(a-3c))+9/4p(a-b)2
 
-    s(4a4b2-7a4bc+4a4c2+8a3b3-12a3b2c-12a3bc2+15a2b2c2)   (real)
+    => s(bc(a-b)(a-c)(a-9/8b)(a-9/8c))+81/256p(a-b)2
 
-    s(bc(b+c)2(a-b)(a-c))+s(bc(a-b)(a-c)(a-2b)(a-2c))+2s(a4(b-c)2)  (real)
+    => s(4a4b2-7a4bc+4a4c2+8a3b3-12a3b2c-12a3bc2+15a2b2c2)
 
-    p(a2+ab+b2)+12a2b2c2-3p(a+b)2/5    (real, uncentered)
+    => s(bc(b+c)2(a-b)(a-c))+s(bc(a-b)(a-c)(a-2b)(a-2c))+2s(a4(b-c)2)
+
+    => p(a2+ab+b2)+12a2b2c2-3p(a+b)2/5    # uncentered
 
     References
     ----------
@@ -431,25 +433,25 @@ def _sos_struct_sextic_hexagram_symmetric(coeff: Coeff):
     then it is positive.
 
     Examples
-    -------
-    s(a4bc+4a3b3-7a3b2c-7a3bc2+9a2b2c2)
+    --------
+    => s(a4bc+4a3b3-7a3b2c-7a3bc2+9a2b2c2)
 
-    s(a3b3+2a4bc- 44/10(a3b2c+a3bc2-2a2b2c2)-3a2b2c2)
+    => s(a3b3+2a4bc- 44/10(a3b2c+a3bc2-2a2b2c2)-3a2b2c2)
 
-    s(21a4bc+7a3b3-40a3b2c-40a3bc2+52a2b2c2)
+    => s(21a4bc+7a3b3-40a3b2c-40a3bc2+52a2b2c2)
 
-    s(ab(a-c)2(b-c)2)+3s(ab(ab-bc)(ab-ca))
+    => s(ab(a-c)2(b-c)2)+3s(ab(ab-bc)(ab-ca))
 
-    s(ab)3+abcs(a)3+64a2b2c2-12abcs(a)s(ab)
+    => s(ab)3+abcs(a)3+64a2b2c2-12abcs(a)s(ab)
 
-    7s(ab)3+8abcs(a)3+392a2b2c2-84abcs(a)s(ab)
+    => 7s(ab)3+8abcs(a)3+392a2b2c2-84abcs(a)s(ab)
 
-    s(12a4bc+36a3b3-70a3b2c-70a3bc2+277/3a2b2c2)
+    => s(12a4bc+36a3b3-70a3b2c-70a3bc2+277/3a2b2c2) # doctest:+SKIP
 
-    s(a/3)2s(a2b2)+(11*sqrt(33)+81)/24p(a2)-3s(b2c2a)s(a/3)-1/9p(a-b)2
+    => s(a/3)2s(a2b2)+(11*sqrt(33)+81)/24p(a2)-3s(b2c2a)s(a/3)-1/9p(a-b)2 # doctest:+SKIP
 
     References
-    -------
+    ----------
     [1] https://tieba.baidu.com/p/8039371307
     """
     if coeff((3,3,0)) < 0 or coeff((4,1,1)) < 0:
@@ -579,12 +581,12 @@ def _sos_struct_sextic_tree(coeff: Coeff):
     then the inequality is a linear combination of two positive ones.
 
     Examples
-    -------
-    s(2a6-36a4bc+36a3b3-2a2b2c2)
+    --------
+    => s(2a6-36a4bc+36a3b3-2a2b2c2)
 
-    s(a6+4a3b3-7a4bc+2a2b2c2)
+    => s(a6+4a3b3-7a4bc+2a2b2c2)
 
-    4s(a6-a4bc+a3b3-a2b2c2)/3
+    => 4s(a6-a4bc+a3b3-a2b2c2)/3
     """
     a, b, c = coeff.gens
     CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
@@ -670,9 +672,9 @@ def _sos_struct_sextic_symmetric_schur_split(coeff: Coeff, real = False):
 
     Examples
     ---------
-    (s((a2(a+2b)(a+2c))(a-b)(a-c))+14s(ab(a-b)2(a+b-1/2c)2)+s(ab(a-c)2(b-c)2))
+    => (s((a2(a+2b)(a+2c))(a-b)(a-c))+14s(ab(a-b)2(a+b-1/2c)2)+s(ab(a-c)2(b-c)2))
 
-    (-s(a5b+a5c+3a4bc-2a3b3-4a3b2c-4a3bc2-10/3a2b2c2)-25p(b2+c2-a2))
+    => (-s(a5b+a5c+3a4bc-2a3b3-4a3b2c-4a3bc2-10/3a2b2c2)-25p(b2+c2-a2))
     """
     a, b, c = coeff.gens
     CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
@@ -789,48 +791,48 @@ def _sos_struct_sextic_iran96(coeff: Coeff, real = False):
     The structure is named after Iran-96, but the original Iran-96 as a sextic is very very weak.
 
     Examples
-    -------
-    4s(ab)s((a+b)^2(a+c)^2)-9p((a+b)^2)
+    --------
+    => 4s(ab)s((a+b)^2(a+c)^2)-9p((a+b)^2)
 
-    s(a2(a2-b2)(a2-c2))-s(a4(a-b)(a-c))+5p(a-b)2
+    => s(a2(a2-b2)(a2-c2))-s(a4(a-b)(a-c))+5p(a-b)2 # doctest:+SKIP
 
-    (s(a2bc(a2-b2+4(bc-ac)))+s(ac(3c+13/7b)(a-b)(3(a+b)c-4ab)))+9(s(ab(a2-b2+4(bc-ac))2)-6p(a-b)2)
+    => (s(a2bc(a2-b2+4(bc-ac)))+s(ac(3c+13/7b)(a-b)(3(a+b)c-4ab)))+9(s(ab(a2-b2+4(bc-ac))2)-6p(a-b)2)
 
-    s(ab(a4+b4)-6(a4b2+a2b4)+11a3b3+13abca(a-b)(a-c)-3(a3b2c+a2b3c)+5a2b2c2)
+    => s(ab(a4+b4)-6(a4b2+a2b4)+11a3b3+13abca(a-b)(a-c)-3(a3b2c+a2b3c)+5a2b2c2)
 
-    (s(ab(a-b)4)-8abcs(a3-2a2b-2a2c+3abc))-p(a-b)2+1/4s(a3b3-a2b2c2)
+    => (s(ab(a-b)4)-8abcs(a3-2a2b-2a2c+3abc))-p(a-b)2+1/4s(a3b3-a2b2c2)
 
-    s(2a6-a4(b2+c2))-27p(a-b)2-2s(a3-abc-7/5(a2b+ab2-2abc))2
+    => s(2a6-a4(b2+c2))-27p(a-b)2-2s(a3-abc-7/5(a2b+ab2-2abc))2
 
-    s(4a6-a3b3-3a2b2c2)-63p(a-b)2-4s(a3-abc-3/2(a2b+ab2-2abc))2
+    => s(4a6-a3b3-3a2b2c2)-63p(a-b)2-4s(a3-abc-3/2(a2b+ab2-2abc))2
 
-    s(ab(a-b)2(a+b-c)2)-4p(a-b)2
+    => s(ab(a-b)2(a+b-c)2)-4p(a-b)2
 
-    (s(a(a+b)(a+c)(a+b+c)2)+12abcs(ab)-2p(a+b)s(a)2)s(a)-s(a(a-b)(a-c))2-16p(a-b)2
+    => (s(a(a+b)(a+c)(a+b+c)2)+12abcs(ab)-2p(a+b)s(a)2)s(a)-s(a(a-b)(a-c))2-16p(a-b)2
 
-    s(a4(a-b)(a-c))-5p(a-b)2+s(a3-abc-3(a2b+ab2-2abc))2-10p(a-b)2-2s(a3-abc-9/4(a2b+ab2-2abc))2
+    => s(a4(a-b)(a-c))-5p(a-b)2+s(a3-abc-3(a2b+ab2-2abc))2-10p(a-b)2-2s(a3-abc-9/4(a2b+ab2-2abc))2
 
-    s(ab)s((a-b)2(a+b-5c)2)+2s(ab(a-c)2(b-c)2)+s(ab(a-b)4)-18p(a-b)2-2/3s(ab(a-c)2(b-c)2)
+    => s(ab)s((a-b)2(a+b-5c)2)+2s(ab(a-c)2(b-c)2)+s(ab(a-b)4)-18p(a-b)2-2/3s(ab(a-c)2(b-c)2)
 
-    s(a(b+c)(b+c-2a)4)
+    => s(a(b+c)(b+c-2a)4)
 
-    s(a(b+c)(b+c-2a)2(b-c)2)
+    => s(a(b+c)(b+c-2a)2(b-c)2)
 
-    s(12a5b+12a5c+72a4b2-212a4bc+72a4c2-167a3b3+200a3b2c+200a3bc2-189a2b2c2)
+    => s(12a5b+12a5c+72a4b2-212a4bc+72a4c2-167a3b3+200a3b2c+200a3bc2-189a2b2c2)
 
-    729p(a2)+288s(b2c2)s(a)2+21s(a3)s(a)3-14s(a)6-7s(a3-abc-3(a2b+ab2-2abc))2
+    => 729p(a2)+288s(b2c2)s(a)2+21s(a3)s(a)3-14s(a)6-7s(a3-abc-3(a2b+ab2-2abc))2
 
-    s(21a6-20a5b-20a5c+825a4b2-1667a4bc+825a4c2-1640a3b3+1679a3b2c+1679a3bc2-1682a2b2c2)-21s(a(a-b)(a-c))2
+    => s(21a6-20a5b-20a5c+825a4b2-1667a4bc+825a4c2-1640a3b3+1679a3b2c+1679a3bc2-1682a2b2c2)-21s(a(a-b)(a-c))2
 
-    s(ab(a2+b2-2c2-3(2ab-ac-bc))2)
+    => s(ab(a2+b2-2c2-3(2ab-ac-bc))2)
 
-    (s(22a6-36a5b-36ab5+657a4b2+657a2b4-28a3b3-540abc(a2b+ab2)-420a4bc+792/3a2b2c2)-22s(a(a-b)(a-c))2)
+    => (s(22a6-36a5b-36ab5+657a4b2+657a2b4-28a3b3-540abc(a2b+ab2)-420a4bc+792/3a2b2c2)-22s(a(a-b)(a-c))2)
 
-    s((a3+b3-2a2b-2ab2+c2(a+b)-3(c2a+c2b-c(a2+b2)))2)-s((b-c)2(b+c-a))2/2
+    => s((a3+b3-2a2b-2ab2+c2(a+b)-3(c2a+c2b-c(a2+b2)))2)-s((b-c)2(b+c-a))2/2
 
-    3s(a/3)6-s(ab)s(a/3)4-(69+11sqrt(33))/648p(a-b)2-s(a3-abc-(sqrt(33)/4 + 7/4-1)(a2b+ab2-2abc))2/243
+    => 3s(a/3)6-s(ab)s(a/3)4-(69+11sqrt(33))/648p(a-b)2-s(a3-abc-(sqrt(33)/4 + 7/4-1)(a2b+ab2-2abc))2/243
 
-    s(bc(b-c)2(b+c-(1+sqrt(2))a)2)+7/2s(bc(a-b)(a-c)(a-sqrt(2)b)(a-sqrt(2)c))-(2sqrt(7)+4)p(a-b)2
+    => s(bc(b-c)2(b+c-(1+sqrt(2))a)2)+7/2s(bc(a-b)(a-c)(a-sqrt(2)b)(a-sqrt(2)c))-(2sqrt(7)+4)p(a-b)2
 
     References
     ----------
@@ -1253,15 +1255,17 @@ def _sos_struct_sextic_symmetric_full_sdp(coeff: Coeff):
 
     Examples
     ----------
-    s((2*a4-3*a2bc+a((b+c)/2)3+5b2c2)(a-b)(a-c))       (real)
+    :: ineqs = []
 
-    s((2*a4-3*a2bc+2a((b+c)/2)3+5b2c2)(a-b)(a-c))-p(a-b)2/2        (real)
+    => s((2*a4-3*a2bc+a((b+c)/2)3+5b2c2)(a-b)(a-c))
 
-    72p(a+b-2c)2+s(a2-ab)s(11a2-14ab)2        (real)
+    => s((2*a4-3*a2bc+2a((b+c)/2)3+5b2c2)(a-b)(a-c))-p(a-b)2/2
 
-    729p(4a2+3s(a)2)-31^3s(a)6       (real)
+    => 72p(a+b-2c)2+s(a2-ab)s(11a2-14ab)2
 
-    s(a2-ab)3+p(a-b)2+4p(a+b-2c)2      (real)
+    => 729p(4a2+3s(a)2)-31^3s(a)6
+
+    => s(a2-ab)3+p(a-b)2+4p(a+b-2c)2
 
     Reference
     ----------
@@ -1401,33 +1405,35 @@ def _sos_struct_sextic_symmetric_quadratic_form(poly, coeff: Coeff):
 
     Examples
     --------
-    (s((b-c)2(7a2-b2-c2)2)-112p(a-b)2)
+    => (s((b-c)2(7a2-b2-c2)2)-112p(a-b)2)
 
-    s((a-b)2(-a2-b2+2c2+2(ab-c2)-3s(ab)+2s(a2))2)
+    => s((a-b)2(-a2-b2+2c2+2(ab-c2)-3s(ab)+2s(a2))2)
 
-    s(a5)s(a/3)+19abc(s(ab)s(a/3)-3s(a/3)3)+3abc(abc-2s(a/3)3)
+    => s(a5)s(a/3)+19abc(s(ab)s(a/3)-3s(a/3)3)+3abc(abc-2s(a/3)3)
 
-    s((a-b)(a-c)(a-2b)(a-2c)(a-18b)(a-18c))-53p(a-b)2
+    => s((a-b)(a-c)(a-2b)(a-2c)(a-18b)(a-18c))-53p(a-b)2
 
-    s((a-b)(a-c)(a-7b)(a-7c)(a-3b)(a-3c))-73p(a-b)2
+    => s((a-b)(a-c)(a-7b)(a-7c)(a-3b)(a-3c))-73p(a-b)2
 
-    s((b2+c2-5a(b+c))2(b-c)2)-22p(a-b)2
+    => s((b2+c2-5a(b+c))2(b-c)2)-22p(a-b)2
 
-    s(a6+6a5b+6a5c-93a4b2+3a4bc-93a4c2+236a3b3+87a3b2c+87a3bc2-240a2b2c2)
+    => s(a6+6a5b+6a5c-93a4b2+3a4bc-93a4c2+236a3b3+87a3b2c+87a3bc2-240a2b2c2)
 
-    s(a6-21a5b-21a5c-525a4b2+1731a4bc-525a4c2+11090a3b3-13710a3b2c-13710a3bc2+15690a2b2c2)
+    => s(a6-21a5b-21a5c-525a4b2+1731a4bc-525a4c2+11090a3b3-13710a3b2c-13710a3bc2+15690a2b2c2)
 
-    s(a2(a-b)(a-c)(a-5b)(a-5c))+s(a2(a-b)(a-c)(a-3b)(a-3c))+15p(a-b)2
+    => s(a2(a-b)(a-c)(a-5b)(a-5c))+s(a2(a-b)(a-c)(a-3b)(a-3c))+15p(a-b)2
 
-    s(a2(a-b)(a-c)(3a-2b)(3a-2c))+15p(a-b)2        (real)
+    :: ineqs = []
 
-    s(56a6-41a5b-56a4b2+82a3b3-56a2b4-83a3b2c-83a2b3c-41ab5+98a2b2c2+124a4bc)      (real)
+    => s(a2(a-b)(a-c)(3a-2b)(3a-2c))+15p(a-b)2
 
-    p(a2+s(a/6)2)-125/8p(a)s(a/6)3         (real)
+    => s(56a6-41a5b-56a4b2+82a3b3-56a2b4-83a3b2c-83a2b3c-41ab5+98a2b2c2+124a4bc)
 
-    s(36a6-84a5b-84a5c+87a4b2+130a4bc+87a4c2-77a3b3-55a3b2c-55a3bc2+15a2b2c2)       (real)
+    => p(a2+s(a/6)2)-125/8p(a)s(a/6)3
 
-    (s(a2(a-b)(a-c)(a-3b)(a-3c))+p(a-b)2)+s(a2-2ab)2s(a2-ab)/4+s((a-b)(a-c)(a-2b)(a-2c)(a-4b)(a-4c))-6p(a-b)2   (real)
+    => s(36a6-84a5b-84a5c+87a4b2+130a4bc+87a4c2-77a3b3-55a3b2c-55a3bc2+15a2b2c2)
+
+    => (s(a2(a-b)(a-c)(a-3b)(a-3c))+p(a-b)2)+s(a2-2ab)2s(a2-ab)/4+s((a-b)(a-c)(a-2b)(a-2c)(a-4b)(a-4c))-6p(a-b)2
 
     References
     ----------
@@ -1951,17 +1957,18 @@ def _sos_struct_sextic_symmetric_ultimate(coeff: Coeff, real = True):
     Examples
     --------
     Trivial.
-    s(5a2-ab)s(a)4-72(p(a2+b2)+11/2p(a2))
 
+    => s(5a2-ab)s(a)4-72(p(a2+b2)+11/2p(a2))
 
-    s(a6-a2b2c2)+s(a3b3-a4bc)-12s(a4b2+a4c2-2a2b2c2)+22s(a3b3-a2b2c2)+14s(a2b+ab2-2abc)abc-2p(a-b)2
+    => s(a6-a2b2c2)+s(a3b3-a4bc)-12s(a4b2+a4c2-2a2b2c2)+22s(a3b3-a2b2c2)+14s(a2b+ab2-2abc)abc-2p(a-b)2 # doctest:+SKIP
 
     Case C.
-    s(409a6-1293a5b-1293a5c+651a4b2+5331a4bc+651a4c2+818a3b3-5190a3b2c-5190a3bc2+5106a2b2c2)
 
-    s(38a6-148a5b-148a5c+225a4b2+392a4bc+225a4c2-210a3b3-320a3b2c-320a3bc2+266a2b2c2)
+    => s(409a6-1293a5b-1293a5c+651a4b2+5331a4bc+651a4c2+818a3b3-5190a3b2c-5190a3bc2+5106a2b2c2) # doctest:+SKIP
 
-    s(414a6-1470a5b-1470a5c+979a4b2+5864a4bc+979a4c2+644a3b3-5584a3b2c-5584a3bc2+5228a2b2c2)
+    => s(38a6-148a5b-148a5c+225a4b2+392a4bc+225a4c2-210a3b3-320a3b2c-320a3bc2+266a2b2c2) # doctest:+SKIP
+
+    => s(414a6-1470a5b-1470a5c+979a4b2+5864a4bc+979a4c2+644a3b3-5584a3b2c-5584a3bc2+5228a2b2c2) # doctest:+SKIP
     """
     coeff6 = coeff((6,0,0))
     x0, x1, x2, x3, x4, x5 = [coeff(_) for _ in [(6,0,0),(5,1,0),(4,2,0),(3,3,0),(4,1,1),(3,2,1)]]
@@ -2087,20 +2094,22 @@ def _sos_struct_sextic_symmetric_ultimate_1root(coeff: Coeff, poly, roots, real 
     Examples
     -------
     Case A.
-        s(a2)3-27(abc)2-27p((a-b)2)
 
-        s(a2/3)3-a2b2c2-p(a-b)2
+    => s(a2)3-27(abc)2-27p((a-b)2)
 
-        s(4a6-a3b3-3a2b2c2)-63p(a-b)2
+    => s(a2/3)3-a2b2c2-p(a-b)2
 
-        4s(a4(a-b)(a-c))+s(a(a-b)(a-c))2
+    => s(4a6-a3b3-3a2b2c2)-63p(a-b)2
 
-        3s(a/3)6-s(ab)s(a/3)4-(69+11sqrt(33))/648p(a-b)2
+    => 4s(a4(a-b)(a-c))+s(a(a-b)(a-c))2
+
+    => 3s(a/3)6-s(ab)s(a/3)4-(69+11sqrt(33))/648p(a-b)2
 
     Case B.
-        s((b2+c2+5bc-a2/2)(b-c)2(b+c-4a)2)
 
-        s(a)/3s(a5)+(21+9sqrt(5))/2abc(abc-s(a)3/27)-abcs(a)3/9
+    => s((b2+c2+5bc-a2/2)(b-c)2(b+c-4a)2)
+
+    => s(a)/3s(a5)+(21+9sqrt(5))/2abc(abc-s(a)3/27)-abcs(a)3/9
 
     Reference
     -------
@@ -2247,15 +2256,15 @@ def _sos_struct_sextic_symmetric_ultimate_2roots(coeff: Coeff, poly, roots):
     --------
     Case (A+B)
 
-    s((a-b-c)4a-abc(3a-b-c)2)s(a)-(s(ab(a2-b2+3(ab-ac)+3(bc-ab))2)-4p(a-b)2)
+    => s((a-b-c)4a-abc(3a-b-c)2)s(a)-(s(ab(a2-b2+3(ab-ac)+3(bc-ab))2)-4p(a-b)2)
 
-    s(4a6-6(a5b+a5c)-12(a4b2+a4c2)+37a4bc+28a3b3-31(a3b2c+a3bc2)+29a2b2c2)
+    => s(4a6-6(a5b+a5c)-12(a4b2+a4c2)+37a4bc+28a3b3-31(a3b2c+a3bc2)+29a2b2c2)
 
-    s(a4(a-b)(a-c)) - 5p(a-b)2
+    => s(a4(a-b)(a-c)) - 5p(a-b)2
 
 
-    Reference
-    -------
+    References
+    ----------
     [1] Vasile, Mathematical Inequalities Volume 1 - Symmetric Polynomial Inequalities. 3.78
 
     [2] https://artofproblemsolving.com/community/c6t243f6h3013463_symmetric_inequality

@@ -123,12 +123,12 @@ def _sos_struct_lift_for_six(coeff: Coeff, real=True):
     We can repeat this process until the degree is small enough.
 
     Examples
-    ---------
-    s(a9)s(a3)+9p(a4)-6a3b3c3s(a3)
+    --------
+    => s(a9)s(a3)+9p(a4)-6a3b3c3s(a3)
 
-    s(a12-3a8b2c2-a6b6+2a5b5c2+a4b4c4)
+    => s(a12-3a8b2c2-a6b6+2a5b5c2+a4b4c4)
 
-    s(a2)s((s(ab)2+a2bc)(b2+ac)(c2+ab))-p(a2+bc)*3s(a3b+a3c+3a2bc)
+    => s(a2)s((s(ab)2+a2bc)(b2+ac)(c2+ab))-p(a2+bc)*3s(a3b+a3c+3a2bc)
     """
     d = coeff.total_degree()
     if d < 8:
@@ -198,10 +198,10 @@ def sos_struct_liftfree_for_six(coeff, real=True):
     which would perhaps be trivially nonnegative if successful.
 
     Examples
-    ---------
-    s(a9)s(a3)+9p(a4)-6a3b3c3s(a3)
+    --------
+    => s(a9)s(a3)+9p(a4)-6a3b3c3s(a3)
 
-    s(a2)s((s(ab)2+a2bc)(b2+ac)(c2+ab))-p(a2+bc)*3s(a3b+a3c+3a2bc)
+    => s(a2)s((s(ab)2+a2bc)(b2+ac)(c2+ab))-p(a2+bc)*3s(a3b+a3c+3a2bc)
     """
     d = coeff.total_degree()
     if d < 6:

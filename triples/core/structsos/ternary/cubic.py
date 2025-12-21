@@ -154,11 +154,11 @@ def _sos_struct_cubic_nontrivial(coeff: Coeff):
 
     Examples
     ---------
-    s(4a3-15a2b+12ab2-abc)
+    => s(4a3-15a2b+12ab2-abc)
 
-    s(a3+2a2b-3a2c)
+    => s(a3+2a2b-3a2c)
 
-    s(a3-26/10a2b+ab2+6/10abc)
+    => s(a3-26/10a2b+ab2+6/10abc)
     """
     coeff3, p, q, z = coeff((3,0,0)), coeff((2,1,0)), coeff((1,2,0)), coeff((1,1,1))
     if coeff3 <= 0:
@@ -231,14 +231,14 @@ def _sos_struct_cubic_nontrivial_irrational(coeff: Coeff):
 
     Examples
     -------
-    s(a)3-27abc-2sqrt(3)s((a-b)3)
+    => s(a)3-27abc-2sqrt(3)s((a-b)3)
 
-    s((2a+b)(a-sqrt(2)b)2-2a3+(6sqrt(2)-7)abc)
+    => s((2a+b)(a-sqrt(2)b)2-2a3+(6sqrt(2)-7)abc)
 
-    s(a3-a2b)+(sqrt(13+16sqrt(2))-1)/2s(ab2-a2b)
+    => s(a3-a2b)+(sqrt(13+16sqrt(2))-1)/2s(ab2-a2b)
 
-    References
-    -------
+    Reference
+    ----------
     [1] http://kuing.infinityfreeapp.com/forum.php?mod=viewthread&tid=10631&extra=
     """
     a, b, c = coeff.gens
@@ -316,9 +316,9 @@ def _sos_struct_acyclic_cubic_hexagon(coeff):
 
     Examples
     ---------
-    (25a2b+14a2c+20ab2-82abc+5ac2+19b2c+10bc2-2abc)
+    => (25a2b+14a2c+20ab2-82abc+5ac2+19b2c+10bc2-2abc)  
 
-    (5a2b+a2c+5ab2-10abc+ac2+b2c+bc2)
+    => (5a2b+a2c+5ab2-10abc+ac2+b2c+bc2)  
     """
     if any(coeff(_) != 0 for _ in ((3,0,0), (0,3,0), (0,0,3))):
         return None
@@ -388,19 +388,19 @@ def _sos_struct_acyclic_cubic_symmetric(coeff: Coeff):
 
     Examples
     ---------
-    9s(a3)-3s(a)s(ab)-5s(a)(a-c)2
+    => 9s(a3)-3s(a)s(ab)-5s(a)(a-c)2
 
-    a(a-b)(a-c)+4/27(b+c)(b-c)2
+    => a(a-b)(a-c)+4/27(b+c)(b-c)2
 
-    (2a3+2a2b-8a2c+2ab2+21abc+4ac2+2b3-8b2c+4bc2+9c3)
+    => (2a3+2a2b-8a2c+2ab2+21abc+4ac2+2b3-8b2c+4bc2+9c3)
 
-    (sqrt(2)b-c)2(b+c)+(sqrt(2)a-c)2(a+c)-c3+4abc
+    => (sqrt(2)b-c)2(b+c)+(sqrt(2)a-c)2(a+c)-c3+4abc
 
-    (a+b+2c)((a+b-(sqrt(3)+1)/2c)2) + 4(a-b)2c
+    => (a+b+2c)((a+b-(sqrt(3)+1)/2c)2) + 4(a-b)2c
 
-    8(a(a-b-c)2+b(b-a-c)2)+4c(c-a-b)2-16abc
+    => 8(a(a-b-c)2+b(b-a-c)2)+4c(c-a-b)2-16abc
 
-    (81a3-77a2b-135a2c-77ab2+225abc+27ac2+81b3-135b2c+27bc2+27c3)
+    => (81a3-77a2b-135a2c-77ab2+225abc+27ac2+81b3-135b2c+27bc2+27c3)
     """
     a, b, c = None, None, None
     if all(coeff((i,j,k)) == coeff((j,i,k)) for (i,j,k) in ((3,0,0),(2,1,0),(2,0,1),(1,0,2))):

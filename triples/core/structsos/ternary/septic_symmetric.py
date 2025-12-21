@@ -40,28 +40,28 @@ def _sos_struct_septic_symmetric_quadratic_form(poly, coeff: Coeff):
     For a more primary case, see `_sos_struct_sextic_symmetric_quadratic_form`.
 
     Examples
-    ---------
-    s(a7-3a5bc+2a3b2c2)
+    --------
+    => s(a7-3a5bc+2a3b2c2)
 
-    s((b+c)(b2+c2-a2)2(a-b)(a-c))-8p(a-b)2s(a)
+    => s((b+c)(b2+c2-a2)2(a-b)(a-c))-8p(a-b)2s(a)
 
-    s(4a6b+4a6c-16a5b2-16a5c2+13a4b3+15a4b2c+15a4bc2+13a4c3-50a3b3c+18a3b2c2)
+    => s(4a6b+4a6c-16a5b2-16a5c2+13a4b3+15a4b2c+15a4bc2+13a4c3-50a3b3c+18a3b2c2) # doctest:+SKIP
 
-    s(a5(a-b)(a-c))-3s(a)p(a-b)2
+    => s(a5(a-b)(a-c))-3s(a)p(a-b)2
 
-    s(a7+a6b+a6c-9a5b2+13a5bc-9a5c2+7a4b3-9a4b2c-9a4bc2+7a4c3-9a3b3c+15a3b2c2)
+    => s(a7+a6b+a6c-9a5b2+13a5bc-9a5c2+7a4b3-9a4b2c-9a4bc2+7a4c3-9a3b3c+15a3b2c2)
 
-    s(9a7-33a6b-33a6c+45a5b2+103a5bc+45a5c2-21a4b3-123a4b2c-123a4bc2-21a4c3+122a3b3c+30a3b2c2)
+    => s(9a7-33a6b-33a6c+45a5b2+103a5bc+45a5c2-21a4b3-123a4b2c-123a4bc2-21a4c3+122a3b3c+30a3b2c2)
 
-    s(a)(s(a2(a-b)(a-c)(a-4b)(a-4c))+0s(a2(a-b)(a-c)(a-3b)(a-3c))+11p(a-b)2)
+    => s(a)(s(a2(a-b)(a-c)(a-4b)(a-4c))+0s(a2(a-b)(a-c)(a-3b)(a-3c))+11p(a-b)2) # doctest: +SKIP
 
-    1/361s(11664a7-33696a6b-33696a6c+31104a5b2+99720a5bc+31104a5c2-9072a4b3-94476a4b2c-94476a4bc2-9072a4c3+65929a3b3c+34967a3b2c2)
+    => 1/361s(11664a7-33696a6b-33696a6c+31104a5b2+99720a5bc+31104a5c2-9072a4b3-94476a4b2c-94476a4bc2-9072a4c3+65929a3b3c+34967a3b2c2)
 
-    s(a7+39a6b+39a6c-123a5b2+1531a5bc-123a5c2+83a4b3-4607a4b2c-4607a4bc2+83a4c3+12158a3b3c-4474a3b2c2)
+    => s(a7+39a6b+39a6c-123a5b2+1531a5bc-123a5c2+83a4b3-4607a4b2c-4607a4bc2+83a4c3+12158a3b3c-4474a3b2c2) # doctest:+SKIP
 
-    s(a)(s(a2(a2-b2)(a2-c2))-p(a)s(a(a-b)(a-c)))-8p(a-b)2s(a)
+    => s(a)(s(a2(a2-b2)(a2-c2))-p(a)s(a(a-b)(a-c)))-8p(a-b)2s(a)
 
-    3s(a)p(2a2+b2+c2)-4s(b(2a2+b2+c2)(2c2+a2+b2))s(a2)-10p(a-b)2s(a)
+    => 3s(a)p(2a2+b2+c2)-4s(b(2a2+b2+c2)(2c2+a2+b2))s(a2)-10p(a-b)2s(a) # doctest:+SKIP
     """
     a, b, c = coeff.gens
     CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product

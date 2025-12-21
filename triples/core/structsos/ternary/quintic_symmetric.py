@@ -43,39 +43,39 @@ def sos_struct_quintic_symmetric(coeff: Coeff, real = True):
 
     Examples
     --------
-    2(s(a5+2ab(a3+b3)+4a2b2(a+b)-13a3bc)-262/10abcs(a2-ab))
+    => 2(s(a5+2ab(a3+b3)+4a2b2(a+b)-13a3bc)-262/10abcs(a2-ab))
 
-    s(a5-1/2ab(a3+b3)+5a2b2(a+b)-10a2b2c-22abc(a2-ab))
+    => s(a5-1/2ab(a3+b3)+5a2b2(a+b)-10a2b2c-22abc(a2-ab))
 
-    s((a+b-c)(a-b)2(a+b-1/2c)2)
+    => s((a+b-c)(a-b)2(a+b-1/2c)2)
 
-    s((a+b+10c)(a-b)2(a+b-5c)2)+s((a+b)(a-b)2(a+b-3c)2)
+    => s((a+b+10c)(a-b)2(a+b-5c)2)+s((a+b)(a-b)2(a+b-3c)2)
 
-    s(a5+4a4b+4a4c-39a3bc+30a2b2c)
+    => s(a5+4a4b+4a4c-39a3bc+30a2b2c)
 
-    s(100a5-90a4b-90a4c-6a3b2+31a3bc-6a3c2+61a2b2c)
+    => s(100a5-90a4b-90a4c-6a3b2+31a3bc-6a3c2+61a2b2c)
 
-    s(a5-a2b2c-2ab(a3+b3-2abc)+a2b2(a+b-2c)+4abc(a2-ab))
+    => s(a5-a2b2c-2ab(a3+b3-2abc)+a2b2(a+b-2c)+4abc(a2-ab))
 
-    s(3(a+b-4/5c)(a-b)2(a+b-3/2c)2)
+    => s(3(a+b-4/5c)(a-b)2(a+b-3/2c)2)
 
-    s((a+b-5/4c)(a-b)2(a+b-3/2c)2)+s((a+b-2/3c)(a-b)2(a+b-5/3c)2)
+    => s((a+b-5/4c)(a-b)2(a+b-3/2c)2)+s((a+b-2/3c)(a-b)2(a+b-5/3c)2)
 
-    s((a+b-c)(a-b)2(a+b-3/2c)2)+s((a+b-1/2c)(a-b)2(a+b-c)2)
+    => s((a+b-c)(a-b)2(a+b-3/2c)2)+s((a+b-1/2c)(a-b)2(a+b-c)2)
 
-    s((2a2-11ab+2b2)2(a+b)-4a5-94a3bc+396abc(a2-ab))
+    => s((2a2-11ab+2b2)2(a+b)-4a5-94a3bc+396abc(a2-ab))
 
-    s((a+b-31/32c)(a-b)2(a+b-59/16c)2)
+    => s((a+b-31/32c)(a-b)2(a+b-59/16c)2)
 
-    s(625a5-2725a4b-2725a4c+2389a3b2+11132a3bc+2389a3c2-11085a2b2c)
+    => s(625a5-2725a4b-2725a4c+2389a3b2+11132a3bc+2389a3c2-11085a2b2c)
 
-    s((a+b-7/8c)(a-b)2(a+b-5c)2)     (HINT: s(c(a+b-2c)2(a2-10ab+5ac+b2+5bc-2c2)2))
+    => s((a+b-7/8c)(a-b)2(a+b-5c)2)     # HINT: s(c(a+b-2c)2(a2-10ab+5ac+b2+5bc-2c2)2)
 
-    s(a3)s(a)2+s(ab)p(a+b)*(27+18sqrt(3))/8-(3/8+(27+18sqrt(3))/24)p(a+b)s(a)2
+    => s(a3)s(a)2+s(ab)p(a+b)*(27+18sqrt(3))/8-(3/8+(27+18sqrt(3))/24)p(a+b)s(a)2
 
-    s((a+b-(1+sqrt(15))/5c)(a-b)2(a+b-(4sqrt(15)/5+1/2)c)2)
+    => s((a+b-(1+sqrt(15))/5c)(a-b)2(a+b-(4sqrt(15)/5+1/2)c)2)
 
-    s(a(b-c)2(b+c-a)2)+s(a3(a-b-c)2)
+    => s(a(b-c)2(b+c-a)2)+s(a3(a-b-c)2) # doctest:+SKIP
 
     References
     ----------
@@ -676,11 +676,11 @@ def _sos_struct_quintic_symmetric_hexagon(coeff: Coeff):
 
     Examples
     --------
-    s(2c(a-b)2(a+b-3c)2)
+    => s(2c(a-b)2(a+b-3c)2)
 
-    s(c(a-b)2(a+b-3c)2)+s(c(a-b)2(a+b-4c)2)
+    => s(c(a-b)2(a+b-3c)2)+s(c(a-b)2(a+b-4c)2)
 
-    s(a(a+b)(a+c))s(ab)-p(a)(12s(ab)+(9+4sqrt(2))s(a2-ab))
+    => s(a(a+b)(a+c))s(ab)-p(a)(12s(ab)+(9+4sqrt(2))s(a2-ab))
     """
     m = coeff((4,1,0))
     if m < 0:

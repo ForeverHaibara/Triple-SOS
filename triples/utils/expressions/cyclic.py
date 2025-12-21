@@ -928,7 +928,7 @@ if HIJACK_SYMPY and not tuple(version_tuple(SYMPY_VERSION)) >= (1, 14):
 try:
     # local hijack, representing cyclic sums and products using new classes
     from ..monomials import MonomialManager
-    setattr(MonomialManager, 'cyclic_sum', lambda self, expr, gens=None: CyclicSum(expr, gens, self.perm_group_group))
+    setattr(MonomialManager, 'cyclic_sum', lambda self, expr, gens=None: CyclicSum(expr, gens, self.perm_group))
 except ImportError:
     # not expected to happen
     MonomialManager = None

@@ -3,7 +3,7 @@ from ast import literal_eval
 from typing import Tuple, List, Dict, Optional, Any, Union, Callable
 
 import sympy as sp
-from sympy import Expr, Poly, Symbol
+from sympy import Expr, Poly, Symbol, sympify
 from sympy.combinatorics import Permutation, PermutationGroup, CyclicGroup
 
 from .grid import GridRender
@@ -52,7 +52,7 @@ class SOS_Manager():
     """
     verbose = True
 
-    CONFIG_DEFAULT_GENS = sp.symbols("a b c")
+    CONFIG_DEFAULT_GENS = tuple(Symbol(_) for _ in "abc")
     CONFIG_DEFAULT_PERM = CyclicGroup(3)
     CONFIG_RESTRICT_INPUT_CHARS = _default_restrict_input_chars
     CONFIG_METHOD_CHECK = _default_polynomial_check
@@ -105,10 +105,10 @@ class SOS_Manager():
                 return None
 
         try:
-            poly, denom = preprocess_text(txt, gens=gens, perm=perm, return_type='frac')
+            poly, denom = preprocess_text(txt, gens=gens, symmetry=perm, return_type='frac')
 
             if poly.is_zero:
-                n = degree_of_zero(txt, gens=gens, perm=perm)
+                n = degree_of_zero(txt, gens=gens, symmetry=perm)
             else:
                 n = poly.total_degree()
         except Exception as e:
@@ -127,7 +127,7 @@ class SOS_Manager():
 
         if dehomogenize is not None and dehomogenize is not False:
             try:
-                dehomogenize = sp.S(dehomogenize)
+                dehomogenize = sympify(dehomogenize)
                 if len(dehomogenize.free_symbols) == 0: # dehomogenize is a number
                     for i in range(len(poly.gens)-1, -1, -1):
                         if poly.degree(i) != 0:

@@ -50,13 +50,13 @@ def sos_struct_acyclic_quadratic(coeff: Coeff, real = True):
 
     Examples
     ---------
-    a2+b2+2c2-2ab+(sqrt(3)a-(b-c))2
+    => a2+b2+2c2-2ab+(sqrt(3)a-(b-c))2
 
-    (2b-3c+a)2+(2c-3a+b)2+7/3(a2-b2+c2)
+    => (2b-3c+a)2+(2c-3a+b)2+7/3(a2-b2+c2)
 
-    a2+2b2+5c2+2ac+5ab-6bc
+    => a2+2b2+5c2+2ac+5ab-6bc
 
-    ab+(sqrt(2)a-b-c)2
+    => ab+(sqrt(2)a-b-c)2
 
     References
     -----------

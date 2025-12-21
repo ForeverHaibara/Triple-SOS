@@ -43,31 +43,31 @@ def _sos_struct_sextic_hexagram(coeff: Coeff):
     s(a2c)s(b2c) + ka2b2c2 >= ws(a2c)abc
 
     Examples
-    -------
-    s(a3b3+7a4bc-29a3b2c+12a3bc2+9a2b2c2)
+    --------
+    => s(a3b3+7a4bc-29a3b2c+12a3bc2+9a2b2c2) # doctest:+SKIP
 
-    9s(a3b3)+4s(a4bc)-11abcp(a-b)-37s(a3b2c)+72a2b2c2
+    => 9s(a3b3)+4s(a4bc)-11abcp(a-b)-37s(a3b2c)+72a2b2c2
 
-    s(11a4bc+11a3b3+153a3bc2-153a3b2c-22a2b2c2)
+    => s(11a4bc+11a3b3+153a3bc2-153a3b2c-22a2b2c2) # doctest:+SKIP
 
-    s(bc(a2-bc+2(ab-ac)+3(bc-ab))2)
+    => s(bc(a2-bc+2(ab-ac)+3(bc-ab))2)
 
-    s(ab(ab-4ac+5bc-2c2)2)
+    => s(ab(ab-4ac+5bc-2c2)2)
 
-    s(3a4bc+2a3b3+a3bc2-6a2b2c2)
+    => s(3a4bc+2a3b3+a3bc2-6a2b2c2)
 
-    (s(a2c)s(b2c)+25/2p(a2)-27/4s(a2c)p(a))
+    => (s(a2c)s(b2c)+25/2p(a2)-27/4s(a2c)p(a))
 
-    s(a2c)s(b2c)+9p(a2)-15*4^(-2/3)p(a)s(a2b)
+    => s(a2c)s(b2c)+9p(a2)-15*4^(-2/3)p(a)s(a2b)
 
-    (s(a2c)s(b2c)+(5sqrt(5)-2)p(a2)-6s(a2c)p(a))
+    => (s(a2c)s(b2c)+(5sqrt(5)-2)p(a2)-6s(a2c)p(a))
 
-    (s(b2c)s(a2c)+25/3p(b2)-4*3^(1/3)s(b2c)p(b))
+    => (s(b2c)s(a2c)+25/3p(b2)-4*3^(1/3)s(b2c)p(b))
 
-    (s(a2c)s(b2c)+200/9p(a2)-19*18^(1/3)/6s(a2c)p(a))
+    => (s(a2c)s(b2c)+200/9p(a2)-19*18^(1/3)/6s(a2c)p(a))
 
     Reference
-    ----------
+    ---------
     [1] https://www.zhihu.com/question/619911891
     """
     if coeff((3,3,0)) < 0 or coeff((4,1,1)) < 0:
@@ -371,18 +371,18 @@ def _sos_struct_sextic_hexagon(coeff: Coeff, real = True):
     Solve hexagon s(a4b2+xa2b4+ya3b3+za4bc+wa3b2c+ua2b3c+...a2b2c2)
 
     Examples
-    -------
-    s(2a4b2-5a3b3+4a2b4-a4bc)-8/5s(a(b-c)2)p(a)
+    --------
+    => s(2a4b2-5a3b3+4a2b4-a4bc)-8/5s(a(b-c)2)p(a) # doctest:+SKIP
 
-    2s(a3b3+7a4bc-29a3b2c+12a3bc2+9a2b2c2)+s((2ab2-ca2-a2b-bc2+c2a)2)
+    => 2s(a3b3+7a4bc-29a3b2c+12a3bc2+9a2b2c2)+s((2ab2-ca2-a2b-bc2+c2a)2) # doctest:+SKIP
 
-    3s(3a4b2-7a4bc+9a4c2-10a3b3+20a3b2c-15a3bc2)-2(s(2a2b-3ab2)+3abc)2
+    => 3s(3a4b2-7a4bc+9a4c2-10a3b3+20a3b2c-15a3bc2)-2(s(2a2b-3ab2)+3abc)2 # doctest:+SKIP
 
-    2s((2ab2-ca2-a2b-bc2+c2a)2)-(s(2a2b-3ab2)+3abc)2
+    => 2s((2ab2-ca2-a2b-bc2+c2a)2)-(s(2a2b-3ab2)+3abc)2 # doctest:+SKIP
 
 
     Reference
-    -------
+    ---------
     [1] https://artofproblemsolving.com/community/u426077h1892902p16370027
     """
     # hexagon
@@ -434,20 +434,20 @@ def _sos_struct_sextic_rotated_tree(coeff: Coeff):
     See `_sos_struct_sextic_tree` for details.
 
     Examples
-    -------
-    s(a2b4-6a3bc2+2a3b2c+3a2b2c2)
+    --------
+    => s(a2b4-6a3bc2+2a3b2c+3a2b2c2)
 
-    s(a4b2-18a3b2c+18a3bc2-1a2b2c2)
+    => s(a4b2-18a3b2c+18a3bc2-1a2b2c2)
 
-    s(20a4b2-26a3b2c-29a3bc2+35a2b2c2)
+    => s(20a4b2-26a3b2c-29a3bc2+35a2b2c2)
 
-    s(a2b4+a3b2c-a3bc2-a2b2c2)
+    => s(a2b4+a3b2c-a3bc2-a2b2c2) # doctest:+SKIP
 
-    s(a4b2-14a3b2c+14a3bc2-1a2b2c2)
+    => s(a4b2-14a3b2c+14a3bc2-1a2b2c2)
 
-    s(2a2b4-8a3bc2+a3b2c+5a2b2c2)
+    => s(2a2b4-8a3bc2+a3b2c+5a2b2c2)
 
-    s(a4b2-p(a2))-(p(a-b)-s(a(b-c)2))2/8
+    => s(a4b2-p(a2))-(p(a-b)-s(a(b-c)2))2/8
     """
 
     if coeff((4,2,0)) != 0:
@@ -549,8 +549,8 @@ def _sos_struct_sextic_hexagon_full(coeff):
     Still in development
 
     Examples
-    -------
-    s(4a5b+9a5c-53a4bc+10a4c2-19a3b3+47a3b2c+52a3bc2-50a2b2c2)
+    --------
+    => s(4a5b+9a5c-53a4bc+10a4c2-19a3b3+47a3b2c+52a3bc2-50a2b2c2) # doctest:+SKIP
     """
     if coeff((6,0,0)) != 0:
         return None
@@ -593,7 +593,9 @@ def _sos_struct_sextic_hexagon_sdp(coeff: Coeff):
 
     Examples
     ----------
-    s(15a4b2-17a4bc+7a4c2-16a3b3-7a3b2c+21a3bc2-3a2b2c2)
+    :: ineqs = []
+
+    => s(15a4b2-17a4bc+7a4c2-16a3b3-7a3b2c+21a3bc2-3a2b2c2)
     """
     c42, c33, c24 = [coeff((4-i,i+2,0)) for i in range(3)]
     c411, c321, c231 = [coeff((4-i,i+1,1)) for i in range(3)]
@@ -804,18 +806,20 @@ def _sos_struct_sextic_full_sdp(coeff: Coeff):
 
 
     Examples
-    ----------
-    s(2a6+a4bc-3a5b)
+    --------
+    :: ineqs = []
+    
+    => s(2a6+a4bc-3a5b)
 
-    16s(a2)3-9s((a3+3b2c)2)
+    => 16s(a2)3-9s((a3+3b2c)2)
 
-    s((a3+3b2c)2)-16abcs(a3)
+    => s((a3+3b2c)2)-16abcs(a3)
 
-    s((a2-bc)(4b2+4c2+a2)(4c2+4a2+b2))
+    => s((a2-bc)(4b2+4c2+a2)(4c2+4a2+b2))
 
-    243s(a(a+b)5)-32s(a)6
+    => 243s(a(a+b)5)-32s(a)6
 
-    s((a-b)2(a2-2ab-ac+b2)2)
+    => s((a-b)2(a2-2ab-ac+b2)2)
 
     References
     ----------

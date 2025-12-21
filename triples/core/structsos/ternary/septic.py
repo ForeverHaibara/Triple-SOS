@@ -80,20 +80,20 @@ def _sos_struct_septic_biased(coeff: Coeff):
 
 
     Examples
-    -------
-    (s(a(a2c-ab2)(a2c-ab2-3abc))+5s(a3b3c-a3b2c2)-2s(a2b4c-a3b2c2))
+    --------
+    => (s(a(a2c-ab2)(a2c-ab2-3abc))+5s(a3b3c-a3b2c2)-2s(a2b4c-a3b2c2)) # doctest:+SKIP
 
-    s(a(a2c-ab2)(a2c-ab2-3abc))+s((a2-b2+2(ab-ac)+5(bc-ab))2)abc
+    => s(a(a2c-ab2)(a2c-ab2-3abc))+s((a2-b2+2(ab-ac)+5(bc-ab))2)abc # doctest:+SKIP
 
-    s(a5c2-3a4bc2+a4c3+3a3b3c-2a3b2c2)+15s(a3b3c-a3b2c2)-7s(a2b4c-a3b2c2)
+    => s(a5c2-3a4bc2+a4c3+3a3b3c-2a3b2c2)+15s(a3b3c-a3b2c2)-7s(a2b4c-a3b2c2) # doctest:+SKIP
 
-    s(a5c2-16a4bc2+a4c3+54a3b3c-40a3b2c2)
+    => s(a5c2-16a4bc2+a4c3+54a3b3c-40a3b2c2) # doctest:+SKIP
 
-    s(4a5c2-6a4b2c-12a4bc2+8a4c3-11a3b3c+17a3b2c2)
+    => s(4a5c2-6a4b2c-12a4bc2+8a4c3-11a3b3c+17a3b2c2) # doctest:+SKIP
 
-    s(a5c2+a4b2c+a4bc2-7a3b3c+4a3b2c2)
+    => s(a5c2+a4b2c+a4bc2-7a3b3c+4a3b2c2) # doctest:+SKIP
 
-    s(a3c-a2bc)p(a+b)+9p(a)s(a2b2-a2bc)-6p(a)s(a3b-a2bc)
+    => s(a3c-a2bc)p(a+b)+9p(a)s(a2b2-a2bc)-6p(a)s(a3b-a2bc) # doctest:+SKIP
     """
     return None # still in development
     if not coeff.is_rational:
@@ -156,18 +156,18 @@ def _sos_struct_septic_hexagon(coeff: Coeff):
     Solve septic without s(a7), s(a6b), s(a6c).
 
     Examples
-    -------
-    s(a5b2-a5bc+a5c2-a4b3-2a4b2c-2a4bc2-a4c3+10a3b3c-5a3b2c2)
+    --------
+    => s(a5b2-a5bc+a5c2-a4b3-2a4b2c-2a4bc2-a4c3+10a3b3c-5a3b2c2)
 
-    s(4a5b2-2a5bc+4a5c2+8a4b3-8a4b2c+a4bc2-10a4c3+2a3b3c+a3b2c2)
+    => s(4a5b2-2a5bc+4a5c2+8a4b3-8a4b2c+a4bc2-10a4c3+2a3b3c+a3b2c2)
 
-    (s(a2(a-b)(a2+b2-3ac+3c2))s(a2+ab)-s(a(a3-a2c+0(a2b-abc)-(ac2-abc)+5/4(bc2-abc))2))
+    => (s(a2(a-b)(a2+b2-3ac+3c2))s(a2+ab)-s(a(a3-a2c+0(a2b-abc)-(ac2-abc)+5/4(bc2-abc))2))
 
-    s(2a5b2-5a5bc+8a5c2-5a4b3+21a4b2c-21a4bc2+a4c3-7a3b3c+6a3b2c2)
+    => s(2a5b2-5a5bc+8a5c2-5a4b3+21a4b2c-21a4bc2+a4c3-7a3b3c+6a3b2c2) # doctest:+SKIP
 
-    (s(a2(a-b)(a2+ab-5bc))s(a)-s(a(a-b)(a-c))2-3s(ac(a2-bc-(c2-bc)-3/2(ab-bc))2))s(a)
+    => (s(a2(a-b)(a2+ab-5bc))s(a)-s(a(a-b)(a-c))2-3s(ac(a2-bc-(c2-bc)-3/2(ab-bc))2))s(a)
 
-    (1/5(18s(a3(13b2+5c2)(13c2+5a2))-p(13a2+5b2)s(a))-585/64s(a(a2c-b2c-8/3(a2b-abc)+7/4(ab2-abc))2))
+    => (1/5(18s(a3(13b2+5c2)(13c2+5a2))-p(13a2+5b2)s(a))-585/64s(a(a2c-b2c-8/3(a2b-abc)+7/4(ab2-abc))2)) # doctest:+SKIP
     """
 
     if any(coeff(i) for i in ((7,0,0), (6,1,0), (6,0,1))):
@@ -489,24 +489,24 @@ def _sos_struct_septic_star_sdp(coeff: Coeff):
 
 
     Examples
-    ---------
-    s(ab(a-c)2(b-c)2)s(a)
+    --------
+    => s(ab(a-c)2(b-c)2)s(a)
 
-    s((a-b)2(a-c)2(b+c))s(ab)-s(a)p(a-b)2
+    => s((a-b)2(a-c)2(b+c))s(ab)-s(a)p(a-b)2
 
-    s(a3b3+7a4bc-29a3b2c+12a3bc2+9a2b2c2)s(a)
+    => s(a3b3+7a4bc-29a3b2c+12a3bc2+9a2b2c2)s(a)
 
-    s(16a5bc+3a4b3-77a4b2c+3a4bc2+3a4c3+72a3b3c-20a3b2c2)
+    => s(16a5bc+3a4b3-77a4b2c+3a4bc2+3a4c3+72a3b3c-20a3b2c2)
 
-    s(20a5bc+4a4b3-31a4b2c-4a4bc2+4a4c3-46a3b3c+53a3b2c2)
+    => s(20a5bc+4a4b3-31a4b2c-4a4bc2+4a4c3-46a3b3c+53a3b2c2)
 
-    (3s(6a4c-31a3bc+6a3c2+19a2b2c)s(a2)-18s(c(a3-abc+(-8/3)(a2b-abc)+(1/3)(ab2-abc)-(bc2-abc))2))
+    => (3s(6a4c-31a3bc+6a3c2+19a2b2c)s(a2)-18s(c(a3-abc+(-8/3)(a2b-abc)+(1/3)(ab2-abc)-(bc2-abc))2))
 
-    s(16a5bc+4a4b3-80a4b2c+3a4bc2+7a4c3+64a3b3c-14a3b2c2)
+    => s(16a5bc+4a4b3-80a4b2c+3a4bc2+7a4c3+64a3b3c-14a3b2c2)
 
-    s(2a4b3+9a3b4+abc(18a4-66a3b+10a2b2+11ab3+16a2bc))
+    => s(2a4b3+9a3b4+abc(18a4-66a3b+10a2b2+11ab3+16a2bc))
 
-    s(72a5bc+24a4b3+156a4b2c-453a4bc2+44a4c3+176a3b3c-19a3b2c2)
+    => s(72a5bc+24a4b3+156a4b2c-453a4bc2+44a4c3+176a3b3c-19a3b2c2)
     """
     if not coeff.is_rational:
         return
