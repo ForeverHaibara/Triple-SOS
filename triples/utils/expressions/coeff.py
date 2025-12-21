@@ -21,7 +21,44 @@ identity1 = lambda self, x: x
 
 class PartialOrder:
     """
-    Partial order on a domain.
+    Partial order on a domain. Supports a callback function to
+    do comparisons between elements.
+
+    >>> from sympy import Symbol, QQ, count_roots
+    >>> x = Symbol("x", real=True)
+
+    Define a prover to check whether a univariate polynomial
+    is positive over reals. Returns itself if yes. Below we use
+    `.as_expr()` to convert an element in `QQ[x]` to sympy `Expr`.
+
+    >>> prover = lambda p: p if count_roots(p.as_expr()) == 0 and p(0) > 0 else None
+    >>> po = PartialOrder(QQ[x], prover, wrapper=PartialOrderElement)
+    >>> po.convert(x**4 + 1), po.convert(x)
+    (PartialOrderElement(x**4 + 1), PartialOrderElement(x))
+    >>> po.convert(x**4 + 1) > po.convert(x)
+    True
+
+    The above is True because `x**4 + 1 - x > 0` over reals, as asserted by
+    the prover. In general, sympy will not check `x**4 + 1 > x` automatically
+    if they are raw sympy expressions.
+
+    >>> x**4 + 1 > x
+    x**4 + 1 > x
+    >>> type(x**4 + 1 > x)
+    <class 'sympy.core.relational.StrictGreaterThan'>
+
+    The comparison always checks whether the difference is in the positive
+    cone defined by the prover and returns False if not. It is possible
+    where both `a <= b` and `b <= a` are False.
+
+    >>> po.convert(x**4) >= po.convert(1)
+    False
+    >>> po.convert(x**4) <= po.convert(1)
+    False
+    >>> po.convert(1) <= po.convert(x**4)
+    False
+    >>> po.convert(1) >= po.convert(x**4)
+    False
     """
     domain: Domain
     _prover: Callable[[object], Optional[Expr]]
@@ -75,14 +112,14 @@ class PartialOrder:
                 return domain.to_sympy(x) >= 0
             _prover = _algebraic_prover
             _prover_implicit = _algebraic_prover_implicit
-            _wrapper = lambda s, x: PartialOrderElement(x, s)
+            _wrapper = PartialOrderElement
 
         else:
         # if domain.is_Poly or domain.is_Frac:
         #     self._prover = lambda x: x
         #     self._prover_implicit = lambda x: True
             _prover, _prover_implicit = default_prover, default_prover_implicit
-            _wrapper = lambda s, x: PartialOrderElement(x, s)
+            _wrapper = PartialOrderElement
 
         return cls(domain, _prover, _prover_implicit, _wrapper)
 
@@ -125,12 +162,92 @@ class PartialOrder:
 
 class Coeff():
     """
-    Wrapper of sympy PolyElement that supports `__call__` and other methods.
-    Used internally.
+    Sparse polynomial representation for INTERNAL USAGE.
+
+    Wrapper of sympy `PolyElement` that supports `__call__` and other methods.
+    The outputs from `__call__` might be wrapped to support basic operators with
+    other types. The output type is low-level to exploit the fast field arithmetic.
+
+    >>> from sympy import Poly, QQ, RR, Rational, sqrt
+    >>> from sympy.abc import a
+    >>> K = QQ.algebraic_field(sqrt(7))
+    >>> v = K.convert(sqrt(7) + 1)
+    >>> v # doctest: +SKIP
+    ANP([1, 1], [1, 0, -7], QQ)
+
+    >>> v > 5 # doctest: +SKIP
+    Traceback (most recent call last):
+    ...
+    UnificationFailed: Cannot unify ANP([1, 1], [1, 0, -7], QQ) with 5
+
+    >>> v + a # doctest: +SKIP
+    Traceback (most recent call last):
+    ...
+    TypeError: unsupported operand type(s) for +: 'ANP' and 'Symbol'
+
+    If accessed from a `Coeff` wrapper, then the element will support
+    these operators better:
+
+    >>> poly = Poly({(0,): v}, a, domain = K)
+    >>> Coeff(poly)((0,)) # doctest: +SKIP
+    PartialOrderElement(ANP([1, 1], [1, 0, -7], QQ))
+
+    >>> Coeff(poly)((0,)) > 5
+    False
+
+    >>> Coeff(poly)((0,)) + a
+    a + 1 + sqrt(7)
+
+    >>> Coeff(poly)((0,))**2 # doctest: +SKIP
+    PartialOrderElement(ANP([2, 8], [1, 0, -7], QQ))
+
+    Whether the output element is wrapper by `PartialOrderElement` is
+    dependent on the domain. Typically, QQ, RR, EXRAW domains are not
+    wrapped as they naturally support these operators.
+
+    >>> poly = (a**2 - 2*a + 5).as_poly(a, domain = QQ)
+    >>> type(Coeff(poly)((1,))) # doctest: +SKIP
+    flint.types.fmpq.fmpq
+    >>> Coeff(poly)((1,)) + a
+    a - 2
+
+    ### Casting Rules
+
+    The following table illustrates the type conversion rules
+    between various classes. Note that Python tries the left-hand
+    operand first, so the behaviour of (xxx) + (coeff output)
+    could be undefined or even raise an error.    
+
+    |     Left     |    Right     |    Result    |
+    |--------------|--------------|--------------|
+    |  python int  | coeff output | coeff output |
+    | coeff output |  python int  | coeff output |
+    | coeff output | coeff output | coeff output |
+    | coeff output |domain element| coeff output |
+    |domain element| coeff output |  UNDEFINED   |
+    |  sympy expr  | coeff output |  sympy expr  |
+    | coeff output |  sympy expr  |  sympy expr  |
+    |sympy rational| coeff output |  UNDEFINED   |
+    |sympy rational| coeff output |  sympy expr  |
+
+    The following DomainElement + PartialOrderElement could
+    raise an error dependent on whether python-flint is installed.
+
+    >>> poly = Poly({(0,): K.convert(sqrt(7) + 1)}, a, domain = K)
+    >>> K.domain.one + Coeff(poly)((0,)) # doctest: +SKIP
+    PartialOrderElement(ANP([1, 2], [1, 0, -7], QQ))
+
+    The following shows how the order affects the result type:
+
+    >>> poly = Poly({(0,): 7**.5}, a, domain = RR) 
+    >>> Coeff(poly)((0,)) + Rational(3, 5) # doctest: +SKIP
+    mpf('3.2457513110645908')
+    >>> Rational(3, 5) + Coeff(poly)((0,)) # doctest: +SKIP
+    3.24575131106459
     """
     rep: PolyElement
 
-    def __init__(self, arg, partial_order=None, is_rational: bool = True, field = True, no_ex = True):
+    def __init__(self, arg, partial_order=None, field = True, no_ex = True):
         if isinstance(arg, Coeff):
             # make a copy
             self.rep = arg.rep
@@ -476,13 +593,14 @@ class Coeff():
 class PartialOrderElement:
     """
     Element that supports comparison operators with other PartialOrderElement.
+    See `Coeff` for details.
     """
-    def __init__(self, arg, partial_order=None):
+    def __init__(self, partial_order, arg):
+        self.partial_order = partial_order
         self.arg = arg
-        self.partial_order = partial_order if partial_order is not None else PartialOrder()
 
     def from_arg(self, new_arg):
-        return PartialOrderElement(new_arg, self.partial_order)
+        return PartialOrderElement(self.partial_order, new_arg)
 
     @property
     def domain(self):
