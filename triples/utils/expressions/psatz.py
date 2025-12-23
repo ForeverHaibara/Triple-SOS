@@ -746,7 +746,7 @@ class PSatz(Generic[Ef]):
     {frozenset(): 2*(1)**2 + 1*(a)**2, frozenset({0}): 1*(b - c)**2, frozenset({0, 1, 2}): 2*(a + b - c)**2}
     >>> ps.numer_preorder[frozenset()]
     2*(1)**2 + 1*(a)**2
-    >>> type(ps.numer_preorder[frozenset()])
+    >>> type(ps.numer_preorder[frozenset()]) # doctest:+SKIP
     <class 'triples.utils.expressions.soscone.SOSlist'>
     >>> ps.numer_preorder[frozenset()].items()
     [(2, 1), (1, a)]

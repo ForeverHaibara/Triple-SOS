@@ -1030,7 +1030,7 @@ class PolyReader:
     def __init__(self,
         polys: Union[List[Union[Poly, str]], str],
         gens: Tuple[Symbol, ...] = sp_symbols("a b c"),
-        symmetry: Optional[PermutationGroup] = None,
+        symmetry: Union[PermutationGroup, str] = "cyc",
         ignore_errors: bool = False,
         **kwargs
     ):
@@ -1046,8 +1046,9 @@ class PolyReader:
             Empty lines will be ignored.
         gens : Tuple[Symbol, ...]
             The generators of the polynomial.
-        symmetry : Optional[PermutationGroup]
-            The permutation group of the expression. If None, it will be cyclic group.
+        symmetry: Union[PermutationGroup, str]
+            The permutation group of the expression. If str, it should be one of
+            ["cyc", "sym", "alt", "dih", "trivial"].
         ignore_errors : bool
             Whether to ignore errors. If True, invalid polynomials will be skipped by
             yielding None. If False, invalid polynomials will raise a ValueError.

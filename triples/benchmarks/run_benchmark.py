@@ -134,7 +134,7 @@ def run_bench(benchmarks=BENCHMARKS, save_interval=600):
                     print(start_time.time(), end='')
                     solution = None
                     try:
-                        solution = sum_of_squares(*problem(instance))
+                        solution = sum_of_squares(*problem(instance), time_limit=600)
                     except Exception as e:
                         if isinstance(e, (KeyboardInterrupt, SystemExit)):
                             raise e
