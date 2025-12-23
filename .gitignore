@@ -4,6 +4,7 @@ __pycache__/
 *.csv
 *.zip
 .vscode/
+.trae/
 .benchmarks/
 *.log
 .coverage

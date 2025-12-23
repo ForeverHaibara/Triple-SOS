@@ -57,6 +57,7 @@ class SOSManager:
         txt: str,
         gens: Tuple[Symbol, ...] = DEFAULT_GENS,
         symmetry: PermutationGroup = DEFAULT_PERM_GROUP,
+        return_type: str = "frac",
         *,
         render_triangle: bool = True,
         render_grid: bool = True,
@@ -76,6 +77,7 @@ class SOSManager:
             txt: The string representation of the polynomial
             gens: Tuple of generators (symbols)
             symmetry: Permutation group for symmetry
+            return_type: Type of return value ('expr', 'frac', 'poly')
             render_triangle: Whether to render the coefficient triangle
             render_grid: Whether to render the grid heatmap
             homogenize: If True, homogenize the polynomial if possible
@@ -94,7 +96,7 @@ class SOSManager:
             return None
 
         try:
-            poly, denom = preprocess_text(txt, gens, symmetry, return_type='frac')
+            poly, denom = preprocess_text(txt, gens, symmetry, return_type=return_type)
 
             # Determine the degree
             if poly.is_zero:
@@ -106,7 +108,7 @@ class SOSManager:
                 print(f"Error parsing polynomial: {e}")
             return None
 
-        if not isinstance(poly, Poly):
+        if poly is None:
             return None
 
         # Apply transformations to the polynomial
@@ -186,26 +188,31 @@ class SOSManager:
         eq_constraints: List[Expr] = [],
         gens: Tuple[Symbol, ...] = DEFAULT_GENS,
         symmetry: PermutationGroup = DEFAULT_PERM_GROUP,
+        time_limit: Optional[float] = time_limit,
         methods: Optional[List[str]] = None,
         configs: Dict[str, Any] = configs
     ) -> Optional[Solution]:
         """
-        Perform sum of squares decomposition on a polynomial.
+        Perform sum of squares decomposition on an expression
 
         Args:
-            poly: The polynomial to decompose
+            expr: The expression to perform sum-of-squares on
             ineq_constraints: List of inequality constraints
             eq_constraints: List of equality constraints
             gens: Tuple of generators (symbols)
             symmetry: Permutation group for symmetry
-            methods: List of methods to use for decomposition
-            configs: Additional configuration parameters
+            time_limit: Time limit to compute
+            methods: List of methods to be used in `sum_of_squares`
+            configs: Additional configs passed to `sum_of_squares`
 
         Returns:
             Solution object containing the decomposition, or None if decomposition fails
         """
         if expr is None:
             return None
+
+        if time_limit > cls.time_limit:
+            time_limit = cls.time_limit
 
         try:
             solution = sum_of_squares(
@@ -214,7 +221,7 @@ class SOSManager:
                 eq_constraints=eq_constraints,
                 methods=methods,
                 verbose=cls.verbose,
-                time_limit=cls.time_limit,
+                time_limit=time_limit,
                 configs=configs
             )
 
