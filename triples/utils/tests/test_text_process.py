@@ -4,7 +4,7 @@ from sympy.abc import a, b, c, d, e, x, y, z
 from sympy.combinatorics import CyclicGroup, SymmetricGroup, DihedralGroup, PermutationGroup, Permutation
 
 from ..expressions import CyclicSum, CyclicProduct, SymmetricSum, SymmetricProduct
-from ..text_process import pl, degree_of_zero
+from ..text_process import pl, degree_of_expr
 
 
 def test_preprocess_test():
@@ -96,7 +96,7 @@ def test_preprocess_test():
         == CyclicSum(a2**2, (a2,b2,c2))**2 - 3*CyclicSum(a2**3*b2, (a2,b2,c2))
 
 
-def test_degree_of_zero():
+def test_degree_of_expr():
     strings_gens_perms_degrees = [
         ('s(a(a-b)(a-c))-s(a(a-b)(a-c))', (a,b,c), CyclicGroup(3), 3),
         ('4/7s(a2-ab)2-s(a2)+p(as(a)-b)-3/5s(a5)', (a,b,c), CyclicGroup(3), 6),
@@ -108,4 +108,6 @@ def test_degree_of_zero():
         ('(r2+r+1)s((x-y)2(x+y-tz)2)-s(((y-z)(y+z-tx)-r(x-y)(x+y-tz))2)', (x,y,z), CyclicGroup(3), 4),
     ]
     for s, g, p, degree in strings_gens_perms_degrees:
-        assert degree_of_zero(s, g, p) == degree
+        e = pl(s, g, p, return_type='expr',parse_expr_kwargs={'evaluate':False})
+        assert degree_of_expr(e, g) == degree, \
+            f"failed for {s}, expected {degree}, got {degree_of_expr(e, g)}"

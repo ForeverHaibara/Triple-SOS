@@ -10,17 +10,15 @@ from sympy.combinatorics import Permutation, PermutationGroup, CyclicGroup
 from .grid import GridRender
 from ..utils.text_process import (
     preprocess_text, poly_get_factor_form, poly_get_standard_form,
-    degree_of_zero, coefficient_triangle, coefficient_triangle_latex
+    degree_of_expr, coefficient_triangle, coefficient_triangle_latex
 )
 from ..core import Solution, sum_of_squares
 
 
 class SOSManager:
     """
-    A convenient class to manage the sum of squares decomposition of a polynomial,
-    providing commonly used functions and properties.
-
-    It adds more sanity checks and error handling to the core functions.
+    Helper class for graphic user interfaces and deployment,
+    with sanity checks and error handling.
     """
     verbose = True
     time_limit = 300.0
@@ -37,7 +35,7 @@ class SOSManager:
     HEATMAP_4VARS_DPI = 18
 
     @classmethod
-    def _default_restrict_input_chars(cls, txt: str) -> bool:
+    def _default_restrict_input_chars(cls, text: str) -> bool:
         """
         Check if the input text contains only safe characters.
         Forbid certain characters to avoid potential security risks.
@@ -49,7 +47,13 @@ class SOSManager:
             True if the text is safe, False otherwise
         """
         is_safe_char = lambda x: x < 128 or (945 <= x <= 969)  # ASCII or lower Greek
-        return all(is_safe_char(ord(c)) for c in txt)
+        return all(is_safe_char(ord(c)) for c in text)
+
+    def pl(
+        self,
+
+    ):
+        ...
 
     @classmethod
     def set_poly(
@@ -180,6 +184,13 @@ class SOSManager:
 
         return result
 
+    def get_standard_text(self,
+        method: Union[str, bool] = False,
+        omit_mul: bool = True,
+        omit_pow: bool = True
+    ) -> str:
+        ...
+
     @classmethod
     def sum_of_squares(
         cls,
@@ -238,7 +249,7 @@ class SOSManager:
     @classmethod
     def latex_coeffs(
         cls,
-        txt: str,
+        text: str,
         gens: Tuple[Symbol, ...] = DEFAULT_GENS,
         symmetry: PermutationGroup = DEFAULT_PERM_GROUP,
         *args,
@@ -248,7 +259,7 @@ class SOSManager:
         Generate LaTeX representation of the coefficient triangle for a polynomial.
 
         Args:
-            txt: String representation of the polynomial
+            text: String representation of the polynomial
             gens: Tuple of generators (symbols)
             symmetry: Permutation group for symmetry
             *args: Additional positional arguments
@@ -258,7 +269,7 @@ class SOSManager:
             LaTeX string for the coefficient triangle, or empty string if processing fails
         """
         try:
-            poly, denom = preprocess_text(txt, gens, symmetry, return_type='frac')
+            poly, denom = preprocess_text(text, gens, symmetry, return_type='frac')
             return coefficient_triangle_latex(poly, *args, **kwargs)
         except Exception as e:
             if cls.verbose:
@@ -266,7 +277,7 @@ class SOSManager:
             return ''
 
     @classmethod
-    def parse_perm_group(cls, txt: Union[str, List[List[int]]]) -> Optional[PermutationGroup]:
+    def parse_perm_group(cls, text: Union[str, List[List[int]]]) -> Optional[PermutationGroup]:
         """
         Parse a string or list to a permutation group.
 
@@ -277,14 +288,14 @@ class SOSManager:
             PermutationGroup object, or None if parsing fails
         """
         try:
-            if isinstance(txt, str):
-                txt = literal_eval(txt)
+            if isinstance(text, str):
+                text = literal_eval(text)
 
-            if isinstance(txt, list):
-                return PermutationGroup(*(Permutation(perm) for perm in txt))
+            if isinstance(text, list):
+                return PermutationGroup(*(Permutation(perm) for perm in text))
 
-            if isinstance(txt, PermutationGroup):
-                return txt
+            if isinstance(text, PermutationGroup):
+                return text
         except (ValueError, SyntaxError) as e:
             if cls.verbose:
                 print(f"Error parsing permutation group: {e}")

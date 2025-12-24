@@ -17,11 +17,11 @@ from .expressions import CyclicSum, CyclicProduct
 from .monomials import poly_reduce_by_symmetry, verify_symmetry
 
 def cycle_expansion(
-        f: str,
-        symbol: str = 's',
-        gens: Tuple[Symbol, ...] = sp_symbols("a b c"),
-        perm_group: Optional[PermutationGroup] = None
-    ) -> str:
+    f: str,
+    symbol: str = 's',
+    gens: Tuple[Symbol, ...] = sp_symbols("a b c"),
+    perm_group: Optional[PermutationGroup] = None
+) -> str:
     """
     Parameters
     -------
@@ -305,21 +305,85 @@ def expand_poly(expr: Expr, gens=None) -> Union[Expr, Poly]:
     return arg0
 
 
+def _preprocess_text_to_text(
+    text: str,
+    gens: Tuple[Symbol, ...] = sp_symbols("a b c"),
+    symmetry: Union[PermutationGroup, str] = "cyc",
+    *,
+    cyclic_sum_func: str = 's',
+    cyclic_prod_func: str = 'p',
+    scientific_notation: bool = False,
+    lowercase: bool = True,
+    latex: bool = False,
+    preserve_patterns: List[str] = ('sqrt',),
+) -> str:
+    if lowercase:
+        text = text.lower()
+
+    if latex:
+        text = _preprocess_text_delatex(text,
+            funcs = {'sum': (cyclic_sum_func, PRECEDENCE["Add"]),
+                     'prod': (cyclic_prod_func, PRECEDENCE["Mul"])}
+                    #  'sqrt': ('sqrt', PRECEDENCE["Mul"])}
+        )
+    else:
+        text = text.replace(' ','')
+        text = text.translate({123: 40, 125: 41, 92: 32, 36: 32, 91: 40, 93: 41, 65288: 40, 65289: 41})
+    # text = _preprocess_text_expansion(text, gens, symmetry)
+
+    preserve_patterns = set(preserve_patterns)
+    if cyclic_sum_func: preserve_patterns.add(cyclic_sum_func)
+    if cyclic_prod_func: preserve_patterns.add(cyclic_prod_func)
+    return _preprocess_text_completion(text,
+        scientific_notation=scientific_notation,
+        preserve_patterns=preserve_patterns
+    )
+
+def _preprocess_text_to_expr(
+    text: str,
+    gens: Tuple[Symbol, ...] = sp_symbols("a b c"),
+    symmetry: Union[PermutationGroup, str] = "cyc",
+    *,
+    cyclic_sum_func: str = 's',
+    cyclic_prod_func: str = 'p',
+    parse_expr_kwargs: Optional[Dict] = None,
+) -> Expr:
+    symmetry = _parse_symmetry(symmetry, len(gens))
+
+    if parse_expr_kwargs is None:
+        parse_expr_kwargs = {}
+    if 'local_dict' not in parse_expr_kwargs:
+        parse_expr_kwargs['local_dict'] = {}
+    else:
+        parse_expr_kwargs['local_dict'] = parse_expr_kwargs['local_dict'].copy()
+
+    for s in gens:
+        parse_expr_kwargs['local_dict'][s.name] = s
+
+    _cyclic_sum = lambda x: CyclicSum(x, gens, symmetry)
+    _cyclic_prod = lambda x: CyclicProduct(x, gens, symmetry)
+    parse_expr_kwargs['local_dict'].update({cyclic_sum_func: _cyclic_sum, cyclic_prod_func: _cyclic_prod})
+
+    text = text.replace('^','**')
+
+    return parse_expr(text, **parse_expr_kwargs)
+
+
 def preprocess_text(
-        poly: str,
-        gens: Tuple[Symbol, ...] = sp_symbols("a b c"),
-        symmetry: Union[PermutationGroup, str] = "cyc",
-        return_type: str = "poly",
-        *,
-        cyclic_sum_func: str = 's',
-        cyclic_prod_func: str = 'p',
-        scientific_notation: bool = False,
-        lowercase: bool = True,
-        latex: bool = False,
-        preserve_patterns: List[str] = ('sqrt',),
-        parse_expr_kwargs: Optional[Dict] = None,
-        perm = None, # deprecated, alias for "symmetry"
-    ) -> Union[str, Expr, Poly, Tuple[Poly, Poly]]:
+    text: Union[str, Expr],
+    gens: Tuple[Symbol, ...] = sp_symbols("a b c"),
+    symmetry: Union[PermutationGroup, str] = "cyc",
+    return_type: str = "poly",
+    *,
+    cyclic_sum_func: str = 's',
+    cyclic_prod_func: str = 'p',
+    scientific_notation: bool = False,
+    lowercase: bool = True,
+    latex: bool = False,
+    preserve_patterns: List[str] = ('sqrt',),
+    parse_expr_kwargs: Optional[Dict] = None,
+    perm = None, # deprecated, alias for "symmetry"
+) -> Union[str, Expr, Poly, Tuple[Poly, Poly]]:
     """
     Parse a text to a sympy polynomial with respect to the given generators conveniently.
     The function assumes each variable to be a single character.
@@ -429,56 +493,37 @@ def preprocess_text(
 
     See also
     ---------
-    pl, degree_of_zero, sympify, parse_expr
+    pl, sympify, parse_expr
     """
-    if lowercase:
-        poly = poly.lower()
-
     if perm is not None:
         from warnings import warn
         warn("perm is deprecated, use symmetry instead", DeprecationWarning, stacklevel=2)
         symmetry = perm
 
-    symmetry = _parse_symmetry(symmetry, len(gens))
-
-    if latex:
-        poly = _preprocess_text_delatex(poly,
-            funcs = {'sum': (cyclic_sum_func, PRECEDENCE["Add"]),
-                     'prod': (cyclic_prod_func, PRECEDENCE["Mul"])}
-                    #  'sqrt': ('sqrt', PRECEDENCE["Mul"])}
+    if isinstance(text, str):
+        text = _preprocess_text_to_text(text, gens, symmetry,
+            cyclic_sum_func=cyclic_sum_func, cyclic_prod_func=cyclic_prod_func,
+            scientific_notation=scientific_notation, lowercase=lowercase, latex=latex,
+            preserve_patterns=preserve_patterns,
         )
+
+        if return_type == 'text':
+            return text
+
+        expr = _preprocess_text_to_expr(text, gens, symmetry,
+            cyclic_sum_func=cyclic_sum_func, cyclic_prod_func=cyclic_prod_func,
+            parse_expr_kwargs=parse_expr_kwargs,
+        )
+    elif isinstance(text, Expr):
+        if return_type == 'text':
+            return str(text)
+
+        expr = text
     else:
-        poly = poly.replace(' ','')
-        poly = poly.translate({123: 40, 125: 41, 92: 32, 36: 32, 91: 40, 93: 41, 65288: 40, 65289: 41})
-    # poly = _preprocess_text_expansion(poly, gens, symmetry)
+        raise TypeError(f"text must be str or Expr, but got {type(text)}")
 
-    preserve_patterns = set(preserve_patterns)
-    if cyclic_sum_func: preserve_patterns.add(cyclic_sum_func)
-    if cyclic_prod_func: preserve_patterns.add(cyclic_prod_func)
-    poly = _preprocess_text_completion(poly,
-        scientific_notation=scientific_notation,
-        preserve_patterns=preserve_patterns
-    )
-
-    if return_type == 'text':
-        return poly
-
-    if parse_expr_kwargs is None:
-        parse_expr_kwargs = {}
-    if 'local_dict' not in parse_expr_kwargs:
-        parse_expr_kwargs['local_dict'] = {}
-    else:
-        parse_expr_kwargs['local_dict'] = parse_expr_kwargs['local_dict'].copy()
-
-    for s in gens:
-        parse_expr_kwargs['local_dict'][s.name] = s
-
-    _cyclic_sum = lambda x: CyclicSum(x, gens, symmetry)
-    _cyclic_prod = lambda x: CyclicProduct(x, gens, symmetry)
-    parse_expr_kwargs['local_dict'].update({cyclic_sum_func: _cyclic_sum, cyclic_prod_func: _cyclic_prod})
-
-    poly = poly.replace('^','**')
-    poly = parse_expr(poly, **parse_expr_kwargs)
+    if return_type == 'expr':
+        return expr
 
     def _parse_poly(expr, gens):
         if isinstance(expr, Expr):
@@ -489,26 +534,21 @@ def preprocess_text(
             return expr
         return expr.doit().as_poly(gens, extension = True)
 
-    if return_type == 'expr':
-        return poly
-
     try:
         # try if it has no fractions, which avoids expanding CyclicExprs manually
-        poly0 = _parse_poly(poly, gens)
+        poly0 = _parse_poly(expr, gens)
         if poly0 is not None:
             if return_type == 'poly':
                 return poly0
             elif return_type == 'frac':
-                return poly0, Poly(1, gens)
+                return poly0, Poly(1, gens, domain = poly0.domain)
     except Exception as e:
-        if isinstance(e, (KeyboardInterrupt, SystemExit)):
-            raise e
         pass
 
     if return_type == 'frac':
         try:
             # doit is currently needed as `together` does not apply to CyclicExprs
-            frac = fraction(poly.doit().together())
+            frac = fraction(expr.doit().together())
             # frac = fraction(cancel(poly.doit()))
 
             poly0 = _parse_poly(frac[0], gens)
@@ -519,7 +559,7 @@ def preprocess_text(
             if len(poly1.free_symbols) == 0:
                 div0, div1 = poly0.div(poly1)
                 if div1.is_zero:
-                    one = Poly(1, gens, extension = True)
+                    one = Poly(1, gens, domain = div0.domain)
                     return div0, one
             return poly0, poly1
         except Exception as e:
@@ -538,45 +578,30 @@ def pl(*args, **kwargs):
 pl = preprocess_text
 pl.__doc__ = preprocess_text.__doc__
 
-def degree_of_zero(poly: str, gens: Tuple[Symbol, ...] = sp_symbols("a b c"), *args, **kwargs) -> int:
+
+def degree_of_expr(expr: Expr, gens: Optional[Tuple[Symbol, ...]] = None) -> int:
     """
-    Infer the degree of a homogeneous zero polynomial.
-    Idea: delete the additions and subtractions, which do not affect the degree.
+    Estimate the degree of an expression with respect to the given generators.
 
     Parameters
     ----------
-    poly: str
-        The polynomial of which to infer the degree.
-    gens: Tuple[Symbol, ...]
-        The generators of the polynomial.
-    args, kwargs:
-        Other arguments for preprocess_text.
-
-    Returns
-    -------
-    int
-        The degree of the (homogeneous) polynomial.
+    expr: Expr
+        The expression to be estimated.
+    gens: Optional[Tuple[Symbol, ...]]
+        The generators. If None, it defaults to all free symbols.
 
     Examples
-    --------
-    >>> from sympy.abc import a, b, c, x, y, z
-    >>> degree_of_zero('p(a)(s(a2)2-s(a4+2a2b2))')
+    ---------
+    >>> from sympy.abc import a, b, c, r, t, x, y, z
+    >>> degree_of_expr(a*b*c*((a**2+b**2+c**2)**2 - CyclicSum(a**4+2*a**2*b**2, (a,b,c))))
     7
-    >>> degree_of_zero('(r2+r+1)s((x-y)2(x+y-tz)2)-s(((y-z)(y+z-tx)-r(x-y)(x+y-tz))2)', (x,y,z))
+    >>> degree_of_expr((r**2+r+1)*((x-y)**2*(x+y-t*z)**2) -
+    ... (((y-z)*(y+z-t*x)-r*(x-y)*(x+y-t*z))**2), (x,y,z))
     4
     """
-    if 'return_type' in kwargs:
-        raise ValueError("return_type should not be specified.")
-    if 'parse_expr_kwargs' in kwargs:
-        kwargs['parse_expr_kwargs'] = kwargs['parse_expr_kwargs'].copy()
-    else:
-        kwargs['parse_expr_kwargs'] = {}
-    kwargs['parse_expr_kwargs']['evaluate'] = False
-    expr = preprocess_text(poly, gens, *args, **kwargs, return_type='expr')
-
     def _get_degree(expr):
         if expr.is_Atom:
-            return 1 if expr.is_Symbol and expr in gens else 0
+            return 1 if expr.is_Symbol and (gens is None or expr in gens) else 0
         elif expr.is_Add:
             return max(_get_degree(_) for _ in expr.args) if len(expr.args) else 0
         elif expr.is_Mul:
@@ -631,13 +656,13 @@ def _get_coeff_str(coeff, MUL = '*') -> str:
 
 
 def poly_get_standard_form(
-        poly: Poly,
-        symmetry: Union[PermutationGroup, str] = "cyc",
-        omit_mul: bool = True,
-        omit_pow: bool = True,
-        _is_cyc: Optional[bool] = None,
-        perm = None
-    ) -> str:
+    poly: Poly,
+    symmetry: Union[PermutationGroup, str] = "cyc",
+    omit_mul: bool = True,
+    omit_pow: bool = True,
+    _is_cyc: Optional[bool] = None,
+    perm = None
+) -> str:
     """
     Express a polynomial in the standard form.
 
@@ -791,13 +816,13 @@ def _reduce_factor_list(poly: Poly, perm_group: PermutationGroup) -> Tuple[Expr,
 
 
 def poly_get_factor_form(
-        poly: Poly,
-        symmetry: Union[PermutationGroup, str] = "cyc",
-        omit_mul: bool = True,
-        omit_pow: bool = True,
-        perm = None
-        # return_type: str = 'text',
-    ) -> str:
+    poly: Poly,
+    symmetry: Union[PermutationGroup, str] = "cyc",
+    omit_mul: bool = True,
+    omit_pow: bool = True,
+    perm = None
+    # return_type: str = 'text',
+) -> str:
     """
     Get the factorized form of a polynomial.
 
