@@ -7,7 +7,7 @@ except ImportError:
 
 from typing import List, Tuple
 
-import sympy as sp
+from sympy import Poly, Symbol, Float, lambdify
 import numpy as np
 # from sympy.plotting.experimental_lambdify import vectorized_lambdify
 
@@ -98,7 +98,7 @@ class GridPoly():
         for i in range(n+1):
             for j in range(i+1):
                 if monoms[t][0] == n - i and monoms[t][1] == i - j:
-                    if isinstance(coeffs[t], sp.core.numbers.Float):
+                    if isinstance(coeffs[t], Float):
                         txt = f'{round(float(coeffs[t]),4)}'
                     else:
                         txt = f'{coeffs[t].p}' + (f'/{coeffs[t].q}' if coeffs[t].q != 1 else '')
@@ -227,7 +227,7 @@ class GridRender():
         return generate_monoms(nvars, size)[1]
 
     @classmethod
-    def _render_grid_value(cls, poly: sp.Poly, size: int = 60, value_method: str = 'integer_lambdify') -> List[float]:
+    def _render_grid_value(cls, poly: Poly, size: int = 60, value_method: str = 'integer_lambdify') -> List[float]:
         """
         Render the grid by computing the values.
         """
@@ -258,7 +258,7 @@ class GridRender():
                 grid_value[k] = sum(coeff * b for coeff, b in zip(coeffs, base))
 
         elif value_method == 'integer_lambdify':
-            f = sp.lambdify(poly.gens, poly.as_expr())
+            f = lambdify(poly.gens, poly.as_expr())
             grid_coor_np = np.array(grid_coor) / cls.degree_limit # normalize
             grid_value = f(*grid_coor_np.T)
 
@@ -267,7 +267,7 @@ class GridRender():
 
     @classmethod
     def _render_grid_color(cls,
-            poly: sp.Poly,
+            poly: Poly,
             size: int = 60,
             value_method: str = 'integer_lambdify',
             color_method: str = 'numpy',
@@ -278,7 +278,7 @@ class GridRender():
 
         Parameters
         ----------
-        poly : sp.Poly
+        poly : Poly
             The polynomial to be rendered.
         size : int
             The size of the grid. It is the number of sampling point in each axis.
@@ -364,7 +364,7 @@ class GridRender():
 
     @classmethod
     def render(cls,
-            poly: sp.Poly,
+            poly: Poly,
             size: int = 60,
             value_method: str = 'integer',
             color_method: str = 'numpy',
@@ -376,7 +376,7 @@ class GridRender():
 
         Parameters
         ----------
-        poly : sp.Poly
+        poly : Poly
             The polynomial to be rendered.
         size : int
             The size of the grid. It is the number of sampling point in each axis.
@@ -427,7 +427,7 @@ class GridRender():
         """
         grid_coor = cls.grid_coor(nvars, size)
         return GridPoly(
-                sp.Poly(0, sp.symbols(f'x:{nvars}')),
+                Poly(0, *[Symbol('x%d'%i) for i in range(nvars)]),
                 size = size,
                 grid_coor = grid_coor,
                 grid_value = [0] * len(grid_coor),

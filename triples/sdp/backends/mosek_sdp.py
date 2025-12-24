@@ -50,7 +50,7 @@ class DualBackendMOSEK(DualBackend):
             from mosek.fusion import Model
             with Model("SDP") as M:
                 _try_solve = M.solve() # checks if the license is available
-        except:
+        except Exception:
             return False
         return True
 

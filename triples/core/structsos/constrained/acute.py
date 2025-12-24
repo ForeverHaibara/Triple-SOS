@@ -1,4 +1,5 @@
-import sympy as sp
+from sympy import Poly, Symbol, Function, Integer, Rational, Add, sqrt
+from sympy.polys.polyerrors import CoercionFailed
 
 from ..solution import SolutionStructural
 from ..ternary.utils import CommonExpr
@@ -8,20 +9,16 @@ from ..ternary import (
 )
 from ..ternary.dense_symmetric import sym_axis, _homogenize_sym_proof
 from ..utils import (
-    Coeff, CyclicSum, CyclicProduct, SS,
-    uniquely_named_symbol, radsimp, rationalize_func, congruence
+    Coeff, uniquely_named_symbol, rationalize_func, congruence
 )
 from ..univariate import prove_univariate
-
-a, b, c = sp.symbols("a b c")
-
 
 def constrained_acute(poly, ineq_constraints, eq_constraints):
     gens = poly.gens
     if len(gens) != 3:
         return None
     a, b, c = gens
-    cons = tuple(sp.Poly(_, gens) for _ in (b**2+c**2-a**2, c**2+a**2-b**2, a**2+b**2-c**2))
+    cons = tuple(Poly(_, gens) for _ in (b**2+c**2-a**2, c**2+a**2-b**2, a**2+b**2-c**2))
     cons = tuple(ineq_constraints.get(_) for _ in cons)
     if any(_ is None for _ in cons):
         return None
@@ -35,12 +32,12 @@ def constrained_acute(poly, ineq_constraints, eq_constraints):
 
     Fname = uniquely_named_symbol("_F", gens + tuple(ineq_constraints.values()))
     Gname = uniquely_named_symbol("_G", gens + tuple(ineq_constraints.values()))
-    F, G = sp.Function(Fname), sp.Function(Gname)
+    F, G = Function(Fname), Function(Gname)
 
     if coeff.is_symmetric():
         solution = _constrained_acute_dense_symmetric(coeff, F)
     else:
-        degree = coeff.degree()
+        degree = coeff.total_degree()
         solution = None
         SOLVERS = {
             2: _constrained_acute_quadratic,
@@ -59,9 +56,6 @@ def constrained_acute(poly, ineq_constraints, eq_constraints):
     if solution is None:
         return None
 
-    if poly.gens != (sp.symbols("a b c")):
-        solution = solution.xreplace(dict(zip(sp.symbols("a b c"), poly.gens)))
-
     replacement = {F(a): cons[0], F(b): cons[1], F(c): cons[2]}
     for k, v in ineq_constraints.items():
         if len(k.free_symbols) == 1 and k.is_monomial and k.LC() >= 0:
@@ -73,20 +67,23 @@ def constrained_acute(poly, ineq_constraints, eq_constraints):
 
 
 
-def _constrained_acute_quadratic(coeff, F):
+def _constrained_acute_quadratic(coeff: Coeff, F):
     """
     s(2ab-a2) = s((b2+c2-a2)a+2abc)/(s(a))
     """
+    a, b, c = coeff.gens
+    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+
     c2, c1 = coeff((2,0,0)), coeff((1,1,0))
     if c2 >= 0 and c2 + c1 >= 0:
-        return CommonExpr.quadratic(c2, c1)
+        return CommonExpr.quadratic(c2, c1, coeff.gens)
     if c2 < 0 and c1 + 2*c2 >= 0:
         # s(2ab-a2) + ts(a2)
-        return sp.Add(c1/2 * (CyclicSum(F(a)*a) + 6*CyclicProduct(a))/CyclicSum(a),
+        return Add(c1/2 * (CyclicSum(F(a)*a) + 6*CyclicProduct(a))/CyclicSum(a),
                       (c2 + c1/2)*CyclicSum(a**2))
 
 
-def _constrained_acute_cubic(coeff, F):
+def _constrained_acute_cubic(coeff: Coeff, F):
     """
     Consider f(a,b,c) = s(-a^3 + x*(a^2*b+a^2*c) + y/3*a*b*c).
     Then f >= 0 for acute triangles iff x >= 1 and (x, y) is above the curves:
@@ -96,17 +93,22 @@ def _constrained_acute_cubic(coeff, F):
         det(border) = 7*x**2 - 2*x*y - 2*x - y**2 - 2*y - 9
 
     Examples
-    ---------
-    p(b+c-a)
+    --------
+    :: ineqs = [b2+c2-a2,c2+a2-b2,a2+b2-c2,a,b,c]
 
-    (s(-a3+9/7(a2b+ab2))-32/7abc)
+    => p(b+c-a)
 
-    s(-a3+(8sqrt(2)-3)/7(a2b+ab2)-4abc/3)
+    => (s(-a3+9/7(a2b+ab2))-32/7abc)
 
-    s(-a3+a2(b+c)-abc+sqrt(2)/2a(b-c)2)
+    => s(-a3+(8sqrt(2)-3)/7(a2b+ab2)-4abc/3)
 
-    (-s(31a3-33a2b-33a2c+32abc))
+    => s(-a3+a2(b+c)-abc+sqrt(2)/2a(b-c)2) # doctest:+SKIP
+
+    => (-s(31a3-33a2b-33a2c+32abc))
     """
+    a, b, c = coeff.gens
+    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+
     c300, c210, c120, c111 = coeff((3,0,0)), coeff((2,1,0)), coeff((1,2,0)), coeff((1,1,1))
     if c210 != c120:
         # lift to quartic and try (this is not complete)
@@ -116,7 +118,7 @@ def _constrained_acute_cubic(coeff, F):
 
     if c300 >= 0:
         return sos_struct_cubic(coeff)
-    x, y = radsimp(c210/-c300), radsimp(c111/-c300)
+    x, y = (c210/-c300), (c111/-c300)
 
     def _solve_trivial(t):
         """
@@ -134,9 +136,9 @@ def _constrained_acute_cubic(coeff, F):
         if t == 1:
             return (8*CyclicProduct(a**2) + CyclicProduct(F(a)))/(CyclicSum(a)*CyclicSum(a**2))
         else:
-            p = ((t-1)*a**3+(t-1)*a**2*b+(t-1)*a**2*c-sp.S(8)/3*a*b*c).together().as_coeff_Mul()
+            p = ((t-1)*a**3+(t-1)*a**2*b+(t-1)*a**2*c-Integer(8)/3*a*b*c).together().as_coeff_Mul()
             p = p[0]**2*CyclicSum(p[1])**2
-            return radsimp(1/(-t**2+2*t+7))*(p + 8*CyclicProduct(F(a)))/(CyclicSum(a)*CyclicSum(a**2))
+            return (1/(-t**2+2*t+7))*(p + 8*CyclicProduct(F(a)))/(CyclicSum(a)*CyclicSum(a**2))
     def _solve_bottom(t):
         """
         Solve s(-a3+x(a2b+ab2))+yabc >= 0 for acute triangles with
@@ -169,8 +171,8 @@ def _constrained_acute_cubic(coeff, F):
                 return _solve_parabola(1) + (y+2)*CyclicProduct(a)
             return None
         if 6*x + y - 4 > 0:
-            t = radsimp((8*x + y - 6)/(6*x + y - 4))
-            w1 = radsimp((t - x)/(t - 1))
+            t = (8*x + y - 6)/(6*x + y - 4)
+            w1 = (t - x)/(t - 1)
             if 0 <= w1 and w1 <= 1:
                 return w1*CyclicSum(F(a)*a**2)/CyclicSum(a) + (1-w1)*_solve_trivial(t)
         if 6*x + y < 3: # poly(1,1,1) = 6*x + y - 3 < 0
@@ -180,31 +182,30 @@ def _constrained_acute_cubic(coeff, F):
             # and it implies poly(sqrt(2),1,1) < 0.
             return None
         if x + y + 1 != 0:
-            t = radsimp((9 - 7*x + y)/(x + y + 1))
+            t = (9 - 7*x + y)/(x + y + 1)
             if t**2 - 2*t - 7 < 0:
-                xt = radsimp(-(t**2 - 2*t + 9)/(t**2 - 2*t - 7))
-                # yt = radsimp(16*t/(t**2 - 2*t - 7))
-                w1 = radsimp((xt - x)/(xt - 1))
+                xt = -(t**2 - 2*t + 9)/(t**2 - 2*t - 7)
+                # yt = 16*t/(t**2 - 2*t - 7)
+                w1 = (xt - x)/(xt - 1)
                 if 0 <= w1 and w1 <= 1:
                     return w1*_solve_parabola(1) + (1-w1)*_solve_parabola(t)
 
         # 3 <= 6*x + y <= 4
         # Find t such that ux := ux1/ux2 >= 1 + 1/sqrt(2).
         # This is equivalent to eqt := (ux1 - ux2)^2*2 - ux2^2 >= 0 and ux1 / ux2 >= 1.
-        _t = sp.Symbol('t')
-        ux1 = sp.Poly(radsimp([-3*x + y - 3, 22*x - 2*y + 6, 21*x + 9*y - 27]), _t)
-        ux2 = sp.Poly(radsimp([-6*x - y - 6, 12*x + 2*y + 28, 42*x + 7*y - 54]), _t)
-        # eqt = sp.Poly(radsimp([
+        ux1 = coeff.from_list([-3*x + y - 3, 22*x - 2*y + 6, 21*x + 9*y - 27], (a,)).as_poly()
+        ux2 = coeff.from_list([-6*x - y - 6, 12*x + 2*y + 28, 42*x + 7*y - 54], (a,)).as_poly()
+        # eqt = coeff.from_list([
         #     -18*x**2 + 12*x*y - 36*x + 7*y**2 + 12*y - 18,
         #     4*(66*x**2 + 20*x*y + 84*x - 7*y**2 - 36*y + 18),
         #     2*(154*x**2 - 92*x*y - 812*x + 29*y**2 + 228*y - 70),
         #     -4*(462*x**2 - 20*x*y - 468*x + 15*y**2 + 196*y - 162),
         #     -882*x**2 - 756*x*y + 2268*x - 41*y**2 + 972*y - 1458
-        # ]), _t)
+        # ], (a,)).as_poly()
         def _get_ux_w(t):
-            ux2t = ux2(t)
-            if ux2t == 0: return sp.oo, 0
-            ux = ux1(t)/ux2t
+            ux2t = coeff.convert(ux2.rep.eval(t))
+            if ux2t == 0 or t**2 - 2*t - 7 == 0: return None, 0
+            ux = coeff.convert(ux1.rep.eval(t))/ux2t
             xt = -(t**2 - 2*t + 9)/(t**2 - 2*t - 7)
             if ux != xt:
                 w = (ux - x)/(ux - xt)
@@ -212,25 +213,32 @@ def _constrained_acute_cubic(coeff, F):
                 uy = 3 - 6*ux
                 yt = 16*t/(t**2 - 2*t - 7)
                 w = (uy - y)/(uy - yt)
-            return radsimp(ux), radsimp(w)
+            return ux, w
         def _validation(t):
             ux, w = _get_ux_w(t)
-            return (ux is not sp.oo) and radsimp((ux - 1)**2*2) >= 1 and w >= 0 and w <= 1
+            return (ux is not None) and (ux - 1)**2*2 >= 1 and w >= 0 and w <= 1
         if 14*x**2 - 4*x*y - 4*x - y**2 + 4*y - 2 == 0:
-            t = 2*sp.sqrt(2) - 1
-        elif _validation(sp.S(1)):
-            t = sp.S(1)
+            try:
+                t = coeff.convert(2*sqrt(2) - 1)
+            except CoercionFailed:
+                t = None
+        elif _validation(coeff.convert(1)):
+            t = coeff.convert(1)
         else:
-            t = rationalize_func(sp.Poly([1,2,-7], _t),
+            t = rationalize_func(coeff.from_list([1,2,-7], (a,)).as_poly(),
                     validation=_validation, validation_initial=lambda t: t>0, direction=-1)
+            t = coeff.convert(t)
         if t is None:
-            if isinstance(x, sp.Rational) and isinstance(y, sp.Rational):
+            if coeff.is_rational:
                 return None
-            t = 2*sp.sqrt(2) - 1
+            try:
+                t = coeff.convert(2*sqrt(2) - 1)
+            except CoercionFailed:
+                t = None
             if not _validation(t):
                 return None
         # t is not None
-        ux, w = radsimp(_get_ux_w(t))
+        ux, w = _get_ux_w(t)
         if 0 <= w and w <= 1:
             sol_bottom = _solve_bottom(ux)
             if sol_bottom is None:
@@ -241,13 +249,16 @@ def _constrained_acute_cubic(coeff, F):
     if sol is not None:
         return (-c300) * sol
 
-def _constrained_acute_quartic(coeff, F):
+def _constrained_acute_quartic(coeff: Coeff, F):
     """
     It is not easy to solve quartic inequalities for acute triangles completely.
     We only handle some simple cases here.
 
     Note: s((b2+c2-a2)(a-b)(a-c))*s((2a+b+c)(a-b)(a-c)) = s((2a+b+c)(b2+c2-a2)(a-b)2(a-c)2)
     """
+    a, b, c = coeff.gens
+    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+
     # 1. Write it in the form of s((b^2+c^2-a^2)*quadratic)
     c400, c310, c220, c301, c211 = [coeff(_) for _ in [(4,0,0), (3,1,0), (2,2,0), (3,0,1), (2,1,1)]]
     if c400 + c310 + c220 + c301 + c211 < 0:
@@ -270,9 +281,9 @@ def _constrained_acute_quartic(coeff, F):
         sol, s1, s2 = None, 0, 0
         if va2 > 0:
             # maximize (vb2 - vab^2/(4va2))(vc2 - vac^2/(4va2))
-            s1, s2 = radsimp(vab**2/(4*va2)), radsimp(vac**2/(4*va2))
-            vb2 = radsimp((va2 + c400 + s1 - s2)/2)
-            vc2 = radsimp((va2 + c400 - s1 + s2)/2)
+            s1, s2 = vab**2/(4*va2), vac**2/(4*va2)
+            vb2 = (va2 + c400 + s1 - s2)/2
+            vc2 = (va2 + c400 - s1 + s2)/2
 
             sol = _solve_quad(vb2, vc2)
         if sol is None: # consider copositive quadratic forms
@@ -281,17 +292,17 @@ def _constrained_acute_quartic(coeff, F):
                 sol = _solve_quad(vb2, vc2)
             elif vbc >= 0:
                 if vac >= 0:
-                    vb2, vc2 = va2 + c400, sp.S(0)
+                    vb2, vc2 = va2 + c400, Integer(0)
                 else:
-                    vb2, vc2 = sp.S(0), va2 + c400
+                    vb2, vc2 = Integer(0), va2 + c400
                 sol = _solve_quad(vb2, vc2)
             elif va2 != 0: # and vbc < 0
                 if vac >= 0:
-                    vb2 = radsimp((va2 + c400 - s2)/2)
-                    vc2 = radsimp((va2 + c400 + s2)/2)
+                    vb2 = (va2 + c400 - s2)/2
+                    vc2 = (va2 + c400 + s2)/2
                 else:
-                    vb2 = radsimp((va2 + c400 + s1)/2)
-                    vc2 = radsimp((va2 + c400 - s1)/2)
+                    vb2 = (va2 + c400 + s1)/2
+                    vc2 = (va2 + c400 - s1)/2
                 sol = _solve_quad(vb2, vc2)
         if sol is not None:
             return sol
@@ -308,28 +319,34 @@ def _constrained_acute_quartic(coeff, F):
             return sol + 2*x*CyclicSum(F(a)*(2*a+b+c)*(a-b)**2*(a-c)**2)/(CyclicSum(a*(b+c-2*a)**2)+CyclicSum(a*(b-c)**2))
 
 
-def _constrained_acute_trivial_uncentered(coeff, F):
+def _constrained_acute_trivial_uncentered(coeff: Coeff, F):
     """Subtract some p(b^2+c^2-a^2)*(...) to call basic ternary solver."""
-    d = coeff.degree()
+    d = coeff.total_degree()
     if d < 6:
         return None
     p = coeff.poly111()
     if p <= 0:
         return None
+
+    a, b, c = coeff.gens
+    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+
     expr = CyclicProduct(F(a)) * CyclicSum(a**(d - 6)) * p/3
     expr2 = CyclicProduct((b**2 + c**2 - a**2)) * CyclicSum(a**(d - 6)) * p/3
-    rem = coeff.as_poly(a,b,c) - expr2.doit().as_poly(a,b,c)
+    rem = coeff - Coeff(expr2.doit().as_poly(a,b,c, domain=coeff.domain))
     # from ....utils.expressions import poly_get_factor_form
     # print(poly_get_factor_form(rem))
-    solution = SS.structsos.ternary._structural_sos_3vars_cyclic(Coeff(rem))
+    from ..ternary.solver import _structural_sos_3vars_cyclic
+    solution = _structural_sos_3vars_cyclic(rem)
     if solution is not None:
         solution = solution + expr
     return solution
 
-def _constrained_acute_dense_symmetric(coeff, F):
-    degree = coeff.degree()
+
+def _constrained_acute_dense_symmetric(coeff: Coeff, F):
+    degree = coeff.total_degree()
     if degree == 0:
-        return sp.S(0)
+        return Integer(0)
     elif degree in (2, 3, 4):
         SOLVERS = {
             2: _constrained_acute_quadratic,
@@ -343,8 +360,12 @@ def _constrained_acute_dense_symmetric(coeff, F):
             return solution
     return _constrained_acute_lift_for_six(coeff, F)
 
-def _constrained_acute_lift_for_six(coeff, F):
-    d0 = coeff.degree()
+
+def _constrained_acute_lift_for_six(coeff: Coeff, F):
+    a, b, c = coeff.gens
+    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+
+    d0 = coeff.total_degree()
     sym = sym_axis(coeff)
     if sym.is_zero:
         poly = sym.as_poly(a,b,c).div(CyclicProduct((a-b)**2).as_poly(a,b,c))[0]
@@ -353,21 +374,21 @@ def _constrained_acute_lift_for_six(coeff, F):
             solution = solution * CyclicProduct((a-b)**2)
         return solution
 
-    sym = sym.div(sp.Poly([1,-2,1], a))
+    sym = sym.div(Poly([1,-2,1], a, domain=sym.domain))
     if not sym[1].is_zero:
         return None
 
-    div = sym[0].div(sp.Poly([-1,0,2], a))
+    div = sym[0].div(Poly([-1,0,2], a, domain=sym[0].domain))
     solution = 0
     if not div[1].is_zero:
         return None
 
     d = 0 # min(_[0] for _ in div[0].monoms()) # order of a^d in div[0]
-    pure_div = div[0].div(sp.Poly([1] + [0]*d, a))[0] # divided by a^d
+    pure_div = div[0].div(Poly([1] + [0]*d, a, domain=div[0].domain))[0] # divided by a^d
     sym_proof = prove_univariate(pure_div, (0, None), return_type='list')
     if sym_proof is None:
         return None
-    lifted_sym = _homogenize_sym_proof(sym_proof, d0 - 4, (a,b,c))
+    lifted_sym = _homogenize_sym_proof(coeff, sym_proof, d0 - 4)
 
     multiplier = CyclicSum((a**3-a**2*c+a*b**2-a*c**2-2*b**3+b**2*c+c**3)**2)/6
     new_poly = coeff.as_poly(a,b,c) * multiplier

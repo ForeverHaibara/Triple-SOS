@@ -10,7 +10,7 @@ from .num_extrema import numeric_optimize_poly, numeric_optimize_skew_symmetry
 
 from .rationalize import (
     univariate_intervals, rationalize, rationalize_array, rationalize_bound,
-    rationalize_quadratic_curve, common_region_of_conics, square_perturbation,
+    rationalize_quadratic_curve, common_region_of_conics,
     cancel_denominator
 )
 
@@ -21,7 +21,7 @@ __all__ = [
     'univar_realroots', 'nroots',
     'kkt', 'optimize_poly', 'numeric_optimize_poly', 'numeric_optimize_skew_symmetry',
     'nroots', 'univariate_intervals', 'rationalize', 'rationalize_array', 'rationalize_bound',
-    'rationalize_quadratic_curve', 'common_region_of_conics', 'square_perturbation',
+    'rationalize_quadratic_curve', 'common_region_of_conics',
     'cancel_denominator',
     'rpa_monotonic', 'rpa_gmop', 'poly_as_dm', 'rpa_polyopt'
 ]

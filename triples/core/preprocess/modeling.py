@@ -304,7 +304,7 @@ class ModelingHelper:
 class ReformulateAlgebraic(ProofNode):
     inverse = None
     def explore(self, configs):
-        if self.status == 0:
+        if self.state == 0:
             problem = self.problem
             expr, ineq_constraints, eq_constraints = problem.expr, problem.ineq_constraints, problem.eq_constraints
             helper = ModelingHelper(expr, ineq_constraints, eq_constraints)
@@ -324,9 +324,9 @@ class ReformulateAlgebraic(ProofNode):
                 CancelDenominator(new_problem)
             ]
             self.inverse = inverse
-            self.status = -1
+            self.state = -1
 
 
     def update(self, *args, **kwargs):
         if self.children and self.children[0].problem.solution is not None:
-            self.register_solution(self.children[0].problem.solution.xreplace(self.inverse))
+            self.solution = self.children[0].problem.solution.xreplace(self.inverse)

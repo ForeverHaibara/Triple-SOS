@@ -5,7 +5,7 @@ from typing import (
 )
 from sympy import (
     Basic, Expr, Symbol, Dummy, Poly, Integer, Rational, Function, Mul, Pow,
-    signsimp, fraction
+    fraction
 )
 from sympy.combinatorics.perm_groups import Permutation, PermutationGroup
 from sympy.core.symbol import uniquely_named_symbol
@@ -20,7 +20,7 @@ from .dispatch import (
 )
 from ..utils import optimize_poly, Root, RootList
 from ..utils.monomials import (
-    verify_closure, _identify_symmetry_from_blackbox, identify_symmetry_from_lists
+    verify_closure, _identify_symmetry_from_blackbox
 )
 
 
@@ -103,13 +103,21 @@ class InequalityProblem(Generic[T]):
                 ss.append(f"    {p} == 0" + (f"    ({e})" if e != 0 and p.as_expr() != e else ""))
         else:
             ss.append("and no equality constraints.")
+
+        if self.solution is not None:
+            ss.append(f"[Solution]\n    LHS = {self.solution}")
         return '\n'.join(ss)
 
     def __repr__(self) -> str:
         nvars = len(self.free_symbols)
         ineqs, eqs = len(self.ineq_constraints), len(self.eq_constraints)
         poly_info = f' and degree {self.expr.total_degree()}' if isinstance(self.expr, Poly) else ''
-        return f'<InequalityProblem of {nvars} variables{poly_info}, with {ineqs} inequality and {eqs} equality constraints>'
+        proved = ""
+        if self.solution is not None:
+            proved = " (Solved)"
+        elif self.counter_examples is not None:
+            proved = " (Disproved)"
+        return f'<InequalityProblem of {nvars} variables{poly_info}, with {ineqs} inequality and {eqs} equality constraints{proved}>'
 
     def _repr_latex_(self):
         from sympy import latex
@@ -401,7 +409,7 @@ class InequalityProblem(Generic[T]):
         problem_sqf: bool = False,
         ineqs_sqf: bool = True,
         eqs_sqf: bool = True,
-        inplace: bool = False
+        inplace: bool = False,
     ) -> Tuple['InequalityProblem', Expr]:
         """
         Try to make the problem square-free.
@@ -456,14 +464,16 @@ class InequalityProblem(Generic[T]):
             sqr = Mul(*sqr)
             self.expr = sqf
 
+        ineq_constraints = self.ineq_constraints
         if ineqs_sqf:
             ineq_constraints = dict(self._dtype_std_ineq_constraints(*item)
-                for item in self.ineq_constraints.items())
+                for item in ineq_constraints.items())
         self.ineq_constraints = dict((e, e2) for e, e2 in ineq_constraints.items())
 
+        eq_constraints = self.eq_constraints
         if eqs_sqf:
             eq_constraints = dict(self._dtype_std_eq_constraints(*item)
-                for item in self.eq_constraints.items())
+                for item in eq_constraints.items())
         self.eq_constraints = dict((e, e2) for e, e2 in eq_constraints.items())
         return self, sqr
 

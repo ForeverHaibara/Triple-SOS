@@ -11,7 +11,7 @@ import sympy as sp
 from triples.utils import pl, poly_get_factor_form, optimize_poly, Root
 from triples.core import Solution
 from triples.core.linsos.tangents import prepare_tangents
-from triples.gui.sos_manager import SOS_Manager
+from triples.gui.sos_manager import SOSManager
 from triples.gui.linebreak import recursive_latex_auto_linebreak
 
 # def _async_raise(tid, exctype):
@@ -115,7 +115,7 @@ def preprocess():
         The input polynomial.
     standardize_text : str
         The standardization of the text. If None, the text is not standardized.
-        See `SOS_Manager.set_poly` for more information.
+        See `SOSManager.set_poly` for more information.
     actions : list[str]
         Additional actions to perform. Supporting 
 
@@ -136,14 +136,14 @@ def preprocess():
 
     gens = req.get('gens', 'abc')
     gens = tuple(sp.Symbol(_) for _ in gens)
-    perm = SOS_Manager._parse_perm_group(req.get('perm'))
+    perm = SOSManager.parse_perm_group(req.get('perm'))
     req['gens'] = gens
     req['perm'] = perm
 
-    result = SOS_Manager.set_poly(
+    result = SOSManager.set_poly(
         req['poly'],
-        gens = gens,
-        perm = perm,
+        gens,
+        perm,
         render_triangle = True if 3 <= len(gens) <= 4 else False,
         render_grid = True,
         homogenize = req.get('homogenize', False),
@@ -223,7 +223,7 @@ def findroot(sid, **kwargs):
             for tg in kwargs['tangents'].split('\n'):
                 if len(tg) > 0:
                     try:
-                        tg = pl(tg, gens=kwargs['gens'], perm=kwargs['perm'])
+                        tg = pl(tg, kwargs['gens'], kwargs['perm'])
                         if tg is not None:
                             # and (tg.domain in (sp.ZZ, sp.QQ)):
                             tg = tg.as_expr()
@@ -281,7 +281,7 @@ def sum_of_squares(sid, **kwargs):
         methods.extend(['Pivoting', 'Reparametrization'])
 
         gens = kwargs['gens']
-        # ineq_constraints = kwargs['poly'].free_symbols if SOS_Manager.CONFIG_ALLOW_NONSTANDARD_GENS else gens
+        # ineq_constraints = kwargs['poly'].free_symbols if SOSManager.ALLOW_NONSTANDARD_GENS else gens
 
         def parse_constraint_dict(source):
             constraints = {}
@@ -300,12 +300,12 @@ def sum_of_squares(sid, **kwargs):
         ineq_constraints = parse_constraint_dict(kwargs['ineq_constraints'])
         eq_constraints = parse_constraint_dict(kwargs['eq_constraints'])
 
-        solution = SOS_Manager.sum_of_squares(
+        solution = SOSManager.sum_of_squares(
             kwargs['poly'],
             ineq_constraints = ineq_constraints,
             eq_constraints = eq_constraints,
             gens = gens,
-            perm = kwargs['perm'],
+            symmetry = kwargs['perm'],
             methods = methods,
             configs = kwargs['configs']
         )
@@ -319,7 +319,7 @@ def sum_of_squares(sid, **kwargs):
             to=sid
         )
 
-    gens = kwargs['poly'].free_symbols if SOS_Manager.CONFIG_ALLOW_NONSTANDARD_GENS else gens
+    gens = kwargs['poly'].free_symbols if SOSManager.ALLOW_NONSTANDARD_GENS else gens
     gens = sorted(gens, key=lambda x:x.name)
     # lhs_expr = sp.Function('F')(*gens) if len(gens) > 0 else 
     lhs_expr = sp.Symbol('\\text{LHS}')
@@ -363,8 +363,8 @@ def get_latex_coeffs():
     if poly is None:
         return None
     gens = tuple(sp.Symbol(_) for _ in req.get('gens', 'abc'))
-    perm = SOS_Manager._parse_perm_group(req.get('perm'))
-    coeffs = SOS_Manager.latex_coeffs(poly, gens, perm,
+    perm = SOSManager.parse_perm_group(req.get('perm'))
+    coeffs = SOSManager.latex_coeffs(poly, gens, perm,
                 tabular = True, document = True, zeros='\\textcolor{lightgray}')
     return jsonify(coeffs = coeffs)
 
@@ -382,7 +382,7 @@ if __name__ == '__main__':
     PORT = 5000
     if DEPLOY:
         HOST = '0.0.0.0'
-        SOS_Manager.verbose = False
+        SOSManager.verbose = False
 
     print('=' * 50)
     print('Running the server at http://%s:%d'%(HOST, PORT))    

@@ -5,12 +5,12 @@ CyclicExpr, CyclicSum and CyclicProduct.
 from importlib import import_module
 from numbers import Number
 from typing import List, Tuple, Union, Callable, Any
-from typing import Dict as tDict
+from typing import Dict
 
 import sympy as sp # for hijacking default behaviors of sympy
 from sympy import sympify, S, Mul, Add, Pow, Symbol, Poly, Expr, Basic
 from sympy.core.cache import cacheit
-from sympy.core.containers import Dict
+from sympy.core.containers import Dict as SympyDict
 from sympy.core.numbers import zoo, nan
 from sympy.core.parameters import global_parameters
 from sympy.combinatorics import Permutation, PermutationGroup, CyclicGroup, SymmetricGroup
@@ -23,7 +23,7 @@ from sympy import __version__ as SYMPY_VERSION
 
 HIJACK_SYMPY = True
 
-def _leading_symbol(expr):
+def _leading_symbol(expr: Expr) -> Symbol:
     if isinstance(expr, Symbol):
         return expr
     if hasattr(expr, '_leading_symbol'):
@@ -34,30 +34,50 @@ def _leading_symbol(expr):
             return result
     return None
 
-def is_cyclic_expr(expr, symbols, perm):
-    symbols = _std_seq(symbols, perm)
+def is_cyclic_expr(expr: Expr, symbols: Tuple[Symbol, ...], perm_group: PermutationGroup) -> bool:
+    symbols = _std_symbols(symbols, perm_group)
     if expr.free_symbols.isdisjoint(symbols):
         return True
-    if hasattr(expr, '_eval_is_cyclic') and expr._eval_is_cyclic(symbols, perm):
+    if hasattr(expr, '_eval_is_cyclic') and expr._eval_is_cyclic(symbols, perm_group):
         return True
     if isinstance(expr, (Add, Mul)):
-        return all(is_cyclic_expr(arg, symbols, perm) for arg in expr.args)
+        return all(is_cyclic_expr(arg, symbols, perm_group) for arg in expr.args)
     if isinstance(expr, Pow) and expr.args[1].is_constant():
-        return is_cyclic_expr(expr.args[0], symbols, perm)
+        return is_cyclic_expr(expr.args[0], symbols, perm_group)
     return False
 
 @cacheit
-def _std_seq(symbols, perm_group):
-    ind = sorted(list(range(len(symbols))), key = lambda i: symbols[i].name)
-    inv_ind = [0] * len(symbols)
-    for i, j in enumerate(ind):
-        inv_ind[j] = i
-    p = min(map(lambda x: x(inv_ind), perm_group.generate()))
-    # sorted_symbols = [symbols[i] for i in ind]
-    # return tuple(sorted_symbols[i] for i in p)
-    return tuple(symbols[ind[i]] for i in p)
+def _std_seq(p: Tuple, perm_group: PermutationGroup) -> Tuple:
+    """
+    Return `p o g o p^{-1}` where g is in the perm_group and `g o p^{-1}`
+    has minimum lexicographical order.
+    """
+    if len(p) == 0:
+        return tuple()
+    # elif len(perm_group.args) == 1 and \
+    #         perm_group.args[0].array_form == list(range(1, len(p))) + [0]:
+    #     # inv_p = ...
+    #     i = p.index(0)
+    #     # return tuple(p[i:] + p[:i])
+    elif perm_group.is_symmetric:
+        return p
 
-def _replace_symbols(expr: Expr, replace_dict: tDict[Symbol, Symbol]) -> Expr:
+    inv_p = [0] * len(p)
+    for i, j in enumerate(p):
+        inv_p[j] = i
+
+    def perm(x):
+        # return x(inv_p) # <- this is clear but slower
+        return [inv_p[k] for k in x.array_form]
+    p2 = min(map(perm, perm_group.generate()))
+    return tuple(p[i] for i in p2)
+
+def _std_symbols(symbols: Tuple[Symbol, ...], perm_group: PermutationGroup) -> PermutationGroup:
+    p = sorted(list(range(len(symbols))), key = lambda i: symbols[i].name)
+    q = _std_seq(tuple(p), perm_group)
+    return tuple(symbols[i] for i in q)
+
+def _replace_symbols(expr: Expr, replace_dict: Dict[Symbol, Symbol]) -> Expr:
     """Replace a SymPy expression with a dictionary of replacements of SYMBOLS.
     This function operates directly on the tree structure of the expression,
     and does not rely on sympy `subs`, `xreplace`, or `replace` methods.
@@ -71,14 +91,15 @@ def _replace_symbols(expr: Expr, replace_dict: tDict[Symbol, Symbol]) -> Expr:
         return e.func(*new_args)
     return _replace(expr)
 
-def _func_perm(func, expr, symbols, perm_group):
+def _func_perm(func: Callable, expr: Expr,
+        symbols: Tuple[Symbol, ...], perm_group: PermutationGroup) -> Expr:
     new_args = [None] *  perm_group.order()
     for i, translation in enumerate(CyclicExpr._generate_all_translations(symbols, perm_group)):
         new_args[i] = _replace_symbols(expr, translation)
     expr = func(*new_args)
     return expr
 
-def _is_same_dict(d1, d2, simpfunc=signsimp):
+def _is_same_dict(d1: dict, d2: dict, simpfunc=signsimp) -> bool:
     if len(d1) != len(d2):
         return False
     d1 = dict((simpfunc(k), simpfunc(v)) for k, v in d1.items())
@@ -89,7 +110,7 @@ def _is_same_dict(d1, d2, simpfunc=signsimp):
     return True
 
 @cacheit
-def _is_perm_invariant_dict(symbols, perm_group, d):
+def _is_perm_invariant_dict(symbols: Tuple[Symbol, ...], perm_group: PermutationGroup, d: dict) -> bool:
     """
     Check whether the dictionary is invariant under the permutation group.
     """
@@ -158,11 +179,11 @@ class CyclicExpr(Expr):
             evaluate = global_parameters.evaluate
 
         if len(args) == 0:
-            symbols, perm = cls.DEFAULT_SYMBOLS, None
+            symbols, perm_group = cls.DEFAULT_SYMBOLS, None
         elif len(args) == 1:
-            symbols, perm = args[0], None
+            symbols, perm_group = args[0], None
         elif len(args) == 2:
-            symbols, perm = args
+            symbols, perm_group = args
         else:
             raise ValueError("Invalid arguments.")
         if not all(isinstance(_, Symbol) for _ in symbols):
@@ -170,23 +191,23 @@ class CyclicExpr(Expr):
         if len(set(symbols)) != len(symbols):
             raise ValueError("Symbols should be distinct.")
 
-        if perm is None:
-            perm = CyclicGroup(len(symbols))
-        if perm.degree < 2 or perm.is_trivial:
+        if perm_group is None:
+            perm_group = CyclicGroup(len(symbols))
+        if perm_group.degree < 2 or perm_group.is_trivial:
             return expr
 
         if evaluate:
-            symbols = _std_seq(symbols, perm)
+            symbols = _std_symbols(symbols, perm_group)
         symbols = sympify(tuple(symbols))
 
         # set is_Atom to True to skip sympy simplification
         # symbols.is_Atom = True
-        # perm.is_Atom = True
+        # perm_group.is_Atom = True
 
         if evaluate:
             expr = sympify(expr)
             expr0 = expr
-            for translation in cls._generate_all_translations(symbols, perm, full=True):
+            for translation in cls._generate_all_translations(symbols, perm_group, full=True):
                 # find the lexiographically smallest form up to permutation
                 # expr2 = signsimp(expr0.xreplace(translation)) # signsimp is unstable
                 # expr2 = expr0.xreplace(translation)
@@ -198,9 +219,9 @@ class CyclicExpr(Expr):
                     expr = _replace_symbols(expr0, translation)
 
 
-            return cls._eval_simplify_(expr, symbols, perm)
+            return cls._eval_simplify_(expr, symbols, perm_group)
 
-        obj = Expr.__new__(cls, expr, symbols, perm)
+        obj = Expr.__new__(cls, expr, symbols, perm_group)
         return obj
 
     @classmethod
@@ -212,14 +233,15 @@ class CyclicExpr(Expr):
         return self.args[1]
 
     @property
-    def perm(self) -> PermutationGroup:
+    def perm_group(self) -> PermutationGroup:
         return self.args[2]
 
-    def _eval_is_cyclic(self, symbols, perm):
-        return self.symbols == symbols and self.perm == perm
+    def _eval_is_cyclic(self, symbols, perm_group):
+        return self.symbols == symbols and self.perm_group == perm_group
 
     @classmethod
-    def _generate_all_translations(cls, symbols, perm, full=True):
+    def _generate_all_translations(cls,
+            symbols: Tuple[Symbol, ...], perm_group: PermutationGroup, full=True):
         """
         Generate all possible translations of the symbols according to the permutation group.
 
@@ -227,19 +249,19 @@ class CyclicExpr(Expr):
         ==========
         symbols : tuple
             The symbols to be translated.
-        perm : PermutationGroup
+        perm_group : PermutationGroup
             The permutation group.
         full : bool
             If True, generate all possible translations. If False, generate only the generators.
         """
-        for p in (perm.elements if full else perm.generators):
+        for p in (perm_group.elements if full else perm_group.generators):
             yield dict(zip(symbols, p(symbols)))
 
     def doit(self, **hints):
         """
         Expand the cyclic expression.
         """
-        expr = _func_perm(self.base_func, self.args[0], self.symbols, self.perm)
+        expr = _func_perm(self.base_func, self.args[0], self.symbols, self.perm_group)
         if hints.get("deep", True):
             return expr.doit(**hints)
         return expr
@@ -315,7 +337,7 @@ class CyclicExpr(Expr):
         def _fallback_xreplace(self, rule):
             def astuple(*args):
                 return args
-            args_list = _func_perm(astuple, self.args[0], self.symbols, self.perm)
+            args_list = _func_perm(astuple, self.args[0], self.symbols, self.perm_group)
 
             # apply xreplace on the expanded args
             args_new = [arg._xreplace(rule) for arg in args_list]
@@ -329,9 +351,9 @@ class CyclicExpr(Expr):
             changed = changed or (not (self.symbols is symbols))
             if not changed:
                 return self, False
-            return self.func(arg0, symbols, self.perm), changed
+            return self.func(arg0, symbols, self.perm_group), changed
 
-        if not isinstance(rule, (dict, Dict)):
+        if not isinstance(rule, (dict, SympyDict)):
             # might be a sympy Transform object
             return _fallback_xreplace(self, rule)
 
@@ -375,7 +397,7 @@ class CyclicExpr(Expr):
 
         # Case B. if we are replacing symbols to f(symbols)...
         # we check whether the symmetry of the replacement rule agrees with the permutation group
-        if _is_perm_invariant_dict(symbols, self.perm, rule):
+        if _is_perm_invariant_dict(symbols, self.perm_group, rule):
             return _xreplace_arg0(self, rule, symbols)
 
         if len(changed_vars) >= len(self_vars) - 1:
@@ -384,7 +406,7 @@ class CyclicExpr(Expr):
         else:
             # changed vars should be brocasted by the permutation group
             changed_inds = list(i for i, s in enumerate(symbols) if s in changed_vars)
-            changed_inds = self.perm.orbit(changed_inds, action='union')
+            changed_inds = self.perm_group.orbit(changed_inds, action='union')
             unchanged_inds = tuple(i for i in range(len(symbols)) if i not in changed_inds)
 
         # # fall back to the default implementation
@@ -394,7 +416,7 @@ class CyclicExpr(Expr):
             # partial change, compute the stabilized subgroup
             # TODO: use traversals
 
-            stab = self.perm.pointwise_stabilizer(list(changed_inds))
+            stab = self.perm_group.pointwise_stabilizer(list(changed_inds))
             stab_proj = _project_perm_group(stab, unchanged_inds)
             if stab_proj.is_trivial:
                 return _fallback_xreplace(self, rule)
@@ -404,7 +426,7 @@ class CyclicExpr(Expr):
 
             new_args = []
             changed = False
-            stab_perp = self.perm.pointwise_stabilizer(list(unchanged_inds))
+            stab_perp = self.perm_group.pointwise_stabilizer(list(unchanged_inds))
             for p in stab_perp.elements:
                 # make every unchanged inds unchanged
                 # i.e. stab_perp.contains(p)
@@ -422,20 +444,23 @@ class CyclicExpr(Expr):
 
     @property
     def is_cyclic_group(self):
-        return self.perm.is_cyclic and self.perm.order() == self.perm.degree
+        return self.perm_group.is_cyclic and self.perm_group.order() == self.perm_group.degree
 
     @property
     def is_symmetric_group(self):
-        return self.perm.is_symmetric
+        return self.perm_group.is_symmetric
 
     @property
     def is_alternating_group(self):
-        return self.perm.is_alternating
+        return self.perm_group.is_alternating
 
     @property
     def is_dihedral_group(self):
         # is_dihedral is supported after https://github.com/sympy/sympy/pull/24384, sympy version 1.12
-        return hasattr(self.perm, 'is_dihedral') and self.perm.is_dihedral and self.perm.order() == self.perm.degree * 2
+        return hasattr(self.perm_group, 'is_dihedral') \
+            and self.perm_group.is_dihedral \
+            and self.perm_group.order() == self.perm_group.degree * 2
+
 
 class CyclicSum(CyclicExpr):
     """
@@ -517,13 +542,13 @@ class CyclicSum(CyclicExpr):
         return 'Σ' + s
 
     @classmethod
-    def _eval_degenerate(cls, expr, perm):
-        return expr * perm.order()
+    def _eval_degenerate(cls, expr, perm_group: PermutationGroup):
+        return expr * perm_group.order()
 
     @classmethod
-    def _eval_simplify_(cls, expr, symbols, perm):
+    def _eval_simplify_(cls, expr, symbols, perm_group: PermutationGroup):
         if isinstance(expr, Number) or expr.free_symbols.isdisjoint(symbols):
-            return cls._eval_degenerate(expr, perm)
+            return cls._eval_degenerate(expr, perm_group)
 
         if isinstance(expr, Mul):
             cyc_args = []
@@ -531,7 +556,7 @@ class CyclicSum(CyclicExpr):
             symbol_degrees = {}
 
             for arg in expr.args:
-                if is_cyclic_expr(arg, symbols, perm):
+                if is_cyclic_expr(arg, symbols, perm_group):
                     cyc_args.append(arg)
 
                 # elif isinstance(arg, Symbol) and arg in symbols:
@@ -550,17 +575,16 @@ class CyclicSum(CyclicExpr):
             #     cyc_args.append(CyclicProduct(symbols[0] ** base, *symbols))
 
             if len(cyc_args) > 0:
-                obj0 = cls(expr.func(*uncyc_args), symbols, perm)
+                obj0 = cls(expr.func(*uncyc_args), symbols, perm_group)
                 obj = Mul(obj0, *cyc_args)
                 return obj
-        return Expr.__new__(cls, expr, symbols, perm)
+        return Expr.__new__(cls, expr, symbols, perm_group)
 
     def as_content_primitive(self, radical=False, clear=True):
         c, p = self.args[0].as_content_primitive(radical=radical, clear=clear)
         if c is S.One:
             return S.One, self
         return c, CyclicSum(p, *self.args[1:])
-
 
 
 class CyclicProduct(CyclicExpr):
@@ -645,22 +669,22 @@ class CyclicProduct(CyclicExpr):
         return '∏' + s
 
     @classmethod
-    def _eval_degenerate(cls, expr, perm):
-        return expr ** perm.order()
+    def _eval_degenerate(cls, expr, perm_group: PermutationGroup):
+        return expr ** perm_group.order()
 
     @classmethod
-    def _eval_simplify_(cls, expr, symbols, perm):
+    def _eval_simplify_(cls, expr, symbols, perm_group: PermutationGroup):
         if isinstance(expr, Number) or expr.free_symbols.isdisjoint(symbols):
-            return cls._eval_degenerate(expr, perm)
+            return cls._eval_degenerate(expr, perm_group)
 
         if isinstance(expr, Mul):
-            cyc_args = list(filter(lambda x: is_cyclic_expr(x, symbols, perm), expr.args))
+            cyc_args = list(filter(lambda x: is_cyclic_expr(x, symbols, perm_group), expr.args))
             cyc_args = [arg ** len(symbols) for arg in cyc_args]
-            uncyc_args = list(filter(lambda x: not is_cyclic_expr(x, symbols, perm), expr.args))
-            obj0 = Mul(*[cls(arg, symbols, perm) for arg in uncyc_args])
+            uncyc_args = list(filter(lambda x: not is_cyclic_expr(x, symbols, perm_group), expr.args))
+            obj0 = Mul(*[cls(arg, symbols, perm_group) for arg in uncyc_args])
             obj = Mul(obj0, *cyc_args)
             return obj
-        return Expr.__new__(cls, expr, symbols, perm)
+        return Expr.__new__(cls, expr, symbols, perm_group)
 
     def as_content_primitive(self, radical=False, clear=True):
         c, p = self.args[0].as_content_primitive(radical=radical, clear=clear)
@@ -911,7 +935,7 @@ except ImportError:
     pass
 
 
-def _get_rewriting_replacement(symbols: Tuple[Symbol], perm_group: PermutationGroup) -> Callable[[Expr], Expr]:
+def _get_rewriting_replacement(symbols: Tuple[Symbol, ...], perm_group: PermutationGroup) -> Callable[[Expr], Expr]:
     """
     Get a replacement function to convert all cyclic expressions to the default cyclic group.
     The replacement function can be used as sympy.Expr.replace(lambda x: isinstance(x, CyclicExpr), replacement))
@@ -969,7 +993,8 @@ def _get_rewriting_replacement(symbols: Tuple[Symbol], perm_group: PermutationGr
         return x.doit(deep=False)
     return replacement
 
-def rewrite_symmetry(expr: Expr, symbols: Tuple[Symbol], perm_group: PermutationGroup) -> Expr:
+
+def rewrite_symmetry(expr: Expr, symbols: Tuple[Symbol, ...], perm_group: PermutationGroup) -> Expr:
     """
     Rewrite the expression heuristically with respect to the given permutation group.
     After rewriting, it is expected all cyclic expressions are expanded or in the given permutation group.
@@ -980,7 +1005,7 @@ def rewrite_symmetry(expr: Expr, symbols: Tuple[Symbol], perm_group: Permutation
 
     Parameters
     ----------
-    symbols : Tuple[Symbol]
+    symbols : Tuple[Symbol, ...]
         The symbols that the permutation group acts on.
     perm_group : PermutationGroup
         Sympy permutation group object.

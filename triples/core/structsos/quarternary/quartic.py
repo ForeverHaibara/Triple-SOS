@@ -1,15 +1,13 @@
-import sympy as sp
-from sympy import Poly
+from sympy import Poly, Symbol, Add
 
-from .utils import CycSum, SymSum, quadratic_weighting, radsimp, intervals
+from .utils import Coeff, quadratic_weighting, intervals
 
-a, b, c, d = sp.symbols("a b c d")
 
 def quarternary_quartic(coeff, real=True):
     return _quarternary_quartic_real(coeff, real=real)
 
 
-def _quarternary_quartic_fluroite(coeff, real=True):
+def _quarternary_quartic_fluroite(coeff: Coeff, real=True):
     """
     This structure gets its name from the mineral fluroite, which is an octahedral crystal.
     It considers cyclic quartic 4-var polynomials with the form:
@@ -27,7 +25,7 @@ def _quarternary_quartic_fluroite(coeff, real=True):
 
     Examples
     ---------
-    s(26a2b2+90a2bc-36a2bd+65a2c2-108a2cd-37abcd)
+    => s(26a2b2+90a2bc-36a2bd+65a2c2-108a2cd-37abcd)
     """
     if any(coeff(_) for _ in ((4,0,0,0),(3,1,0,0),(3,0,1,0),(3,0,0,1))):
         return None
@@ -37,19 +35,26 @@ def _quarternary_quartic_fluroite(coeff, real=True):
     w1, w2, w3, w4 = c2200 - c_sum, c2011 + 4*c_sum, c2020 - 4*c_sum, c2101 - 2*c_sum
     c_square = w1 + w4/2 # coeff of s(a2b2-abcd)
     w1 -= c_square # = -w4/2
-    expr = quadratic_weighting(w1, w2, w3,
-        mapping=lambda x,y: CycSum((x*a*b-x*b*c-x*a*d+x*c*d-y*a*c+y*b*d).together()**2)/4)
+
+    a, b, c, d = coeff.gens
+    CycSum = coeff.cyclic_sum
+
+    def _mapping(v):
+        x, y = v[0], v[1]
+        return CycSum((x*a*b-x*b*c-x*a*d+x*c*d-y*a*c+y*b*d).together()**2)/4
+
+    expr = quadratic_weighting(coeff, w1, w2, w3, _mapping)
     if expr is None:
         return None
     if all(_ >= 0 for _ in [c_sum, c_square, c_abcd]):
-        return sp.Add(
+        return Add(
             expr,
             c_sum * CycSum(a*b-a*c)**2,
             c_square/2 * CycSum((a*b-c*d)**2),
             c_abcd * CycSum(a*b*c*d)
         )
 
-def _quarternary_quartic_real(coeff, real=True):
+def _quarternary_quartic_real(coeff: Coeff, real=True):
     """
     Solve cyclic quartic 4-var homogeneous polynomials. The idea is to subtract some
 
@@ -58,8 +63,8 @@ def _quarternary_quartic_real(coeff, real=True):
     so that the rest falls in the case of fluroite. This is heuristic and may not work for all cases.
 
     Examples
-    ----------
-    s(((1-2)(a2-b2)+0(a2-c2)+(1+2)(a2-d2)-1(ab-cd)+6(bc-ad)+8(cd-bc)+2(ac-bd))2)
+    --------
+    => s(((1-2)(a2-b2)+0(a2-c2)+(1+2)(a2-d2)-1(ab-cd)+6(bc-ad)+8(cd-bc)+2(ac-bd))2) # doctest:+SKIP
     """
     if not any(coeff(_) for _ in ((4,0,0,0),(3,1,0,0),(3,0,1,0),(3,0,0,1))):
         return _quarternary_quartic_fluroite(coeff, real=real)
@@ -67,43 +72,45 @@ def _quarternary_quartic_real(coeff, real=True):
     c4000, poly1111 = coeff((4,0,0,0)), coeff.poly111()
     if c4000 <= 0 or poly1111 < 0:
         return None
-    c3100, c3010, c3001 = radsimp([coeff(_)/c4000 for _ in ((3,1,0,0),(3,0,1,0),(3,0,0,1))])
-    c2200, c2110, c2101, c2020, c2011 = radsimp([coeff(_)/c4000 for _ in ((2,2,0,0),(2,1,1,0),(2,1,0,1),(2,0,2,0),(2,0,1,1))])
+    c3100, c3010, c3001 = [coeff(_)/c4000 for _ in ((3,1,0,0),(3,0,1,0),(3,0,0,1))]
+    c2200, c2110, c2101, c2020, c2011 = [coeff(_)/c4000 for _ in ((2,2,0,0),(2,1,1,0),(2,1,0,1),(2,0,2,0),(2,0,1,1))]
 
-    # hes = radsimp(c2011**2 + c2011*c2020 + 2*c2011*c2101 + 2*c2011*c3100 + 2*c2011 + 4*c2020*c2101 + c2020*c2110 + c2020*c3001 \
+    # hes = c2011**2 + c2011*c2020 + 2*c2011*c2101 + 2*c2011*c3100 + 2*c2011 + 4*c2020*c2101 + c2020*c2110 + c2020*c3001 \
     #     + 4*c2020*c3010 + c2020*c3100 + 2*c2101*c2110 + 2*c2101*c3001 - 8*c2101*c3010 + 2*c2101*c3100 + 8*c2101 \
-    #     + c2110**2 + 2*c2110*c3001 + 2*c2110 + c3001**2 + 2*c3001 - 8*c3010**2 + 8*c3010 + c3100**2 + 2*c3100)
+    #     + c2110**2 + 2*c2110*c3001 + 2*c2110 + c3001**2 + 2*c3001 - 8*c3010**2 + 8*c3010 + c3100**2 + 2*c3100
     # if hes < 0:
     #     return None
 
-    const_denom = radsimp(c2011 + 2*c2020 + c2110 + c3001 - 4*c3010 + c3100 + 4)
-    const_sum = radsimp(-(c2011 + c2110 + c3001 + c3100)/4)
+    const_denom = c2011 + 2*c2020 + c2110 + c3001 - 4*c3010 + c3100 + 4
+    const_sum = -(c2011 + c2110 + c3001 + c3100)/4
     if const_denom == 0 or const_sum < 0:
         return None
-    const_z = radsimp(-(c2011 - c2110 - c3001 + c3100)/(4*const_denom))
-    const_det = radsimp(-2*(c2011**2 + c2011*c2020 + 2*c2011*c2101 + 2*c2011*c3100 + 2*c2011 + 4*c2020*c2101 + c2020*c2110 \
+    const_z = -(c2011 - c2110 - c3001 + c3100)/(4*const_denom)
+    const_det = -2*(c2011**2 + c2011*c2020 + 2*c2011*c2101 + 2*c2011*c3100 + 2*c2011 + 4*c2020*c2101 + c2020*c2110 \
         + c2020*c3001 + 4*c2020*c3010 + c2020*c3100 + 2*c2101*c2110 + 2*c2101*c3001 - 8*c2101*c3010 + 2*c2101*c3100 + 8*c2101\
-        + c2110**2 + 2*c2110*c3001 + 2*c2110 + c3001**2 + 2*c3001 - 8*c3010**2 + 8*c3010 + c3100**2 + 2*c3100)/const_denom)
+        + c2110**2 + 2*c2110*c3001 + 2*c2110 + c3001**2 + 2*c3001 - 8*c3010**2 + 8*c3010 + c3100**2 + 2*c3100)/const_denom
     if const_det < 0:
         return None
 
-    t = sp.Symbol("t")
-    c_sq_p0 = Poly(radsimp(
+    a, b, c, d = coeff.gens
+    CycSum = coeff.cyclic_sum
+
+    t = Symbol("t")
+    c_sq_p0 = Poly(
         [c2011 + 2*c2101 + c2110 + 4*c2200 - c3001**2 + c3001 + 2*c3010 - c3100**2 + c3100, 0,
          4*c2011 + 8*c2101 + 4*c2110 + 16*c2200 - 6*c3001**2 + 4*c3001 + 8*c3010 - 6*c3100**2 + 4*c3100 + 16, 0,
-         3*c2011 + 6*c2101 + 3*c2110 + 12*c2200 - 9*c3001**2 + 3*c3001 + 6*c3010 - 9*c3100**2 + 3*c3100 + 16]
-    ), t)
-    c_sq_p1 = Poly(radsimp([-4*c3001 + 4*c3100, 0, -12*c3001 + 12*c3100]), t)
-    z_p = Poly(radsimp([c3010*const_z, 0, (3*c3010-8)*const_z]), t)
+         3*c2011 + 6*c2101 + 3*c2110 + 12*c2200 - 9*c3001**2 + 3*c3001 + 6*c3010 - 9*c3100**2 + 3*c3100 + 16], t)
+    c_sq_p1 = Poly([-4*c3001 + 4*c3100, 0, -12*c3001 + 12*c3100], t)
+    z_p = Poly([c3010*const_z, 0, (3*c3010-8)*const_z], t)
     z_p2 = z_p**2
     c_sq_p = -8*z_p2 + c_sq_p1*z_p + c_sq_p0
-    w1_p = Poly(radsimp([-c2011/4 - c2101 - c2110/4 - c3001/4 - c3010 - c3100/4, 0,
-        -3*c2011/4 - 3*c2101 - 3*c2110/4 - 3*c3001/4 - 3*c3010 - 3*c3100/4]), t) - z_p2
-    w2_p0 = Poly(radsimp([c2011 - c2110 - c3001 + c3100, 0, 3*c2011 - 3*c2110 - 3*c3001 + 3*c3100]), t)
+    w1_p = Poly([-c2011/4 - c2101 - c2110/4 - c3001/4 - c3010 - c3100/4, 0,
+        -3*c2011/4 - 3*c2101 - 3*c2110/4 - 3*c3001/4 - 3*c3010 - 3*c3100/4], t) - z_p2
+    w2_p0 = Poly([c2011 - c2110 - c3001 + c3100, 0, 3*c2011 - 3*c2110 - 3*c3001 + 3*c3100], t)
     w2_p1 = Poly([c3010, 0, 3*c3010 - 8], t)
     w2_p = w2_p1 * z_p + w2_p0
-    w3_p = Poly(radsimp([-c3010**2/4, 0, c2011 + 2*c2020 + c2110 + c3001 - 3*c3010**2/2 + c3100 + 4,
-        0, 3*c2011 + 6*c2020 + 3*c2110 + 3*c3001 - 9*c3010**2/4 + 3*c3100 - 4]), t)
+    w3_p = Poly([-c3010**2/4, 0, c2011 + 2*c2020 + c2110 + c3001 - 3*c3010**2/2 + c3100 + 4,
+        0, 3*c2011 + 6*c2020 + 3*c2110 + 3*c3001 - 9*c3010**2/4 + 3*c3100 - 4], t)
 
     # find t such that w3 >= 0 and c_sq >= 0
     for t_ in intervals([w3_p, c_sq_p]):
@@ -120,13 +127,13 @@ def _quarternary_quartic_real(coeff, real=True):
         w2 = w2_p(t)
         w3 = w3_p(t)
         # det = w3 * (t**2 + 3) # = 4*w1*w3 - w2**2
-        return radsimp([c_sum, c_square, w1, w2, w3])
+        return [c_sum, c_square, w1, w2, w3]
 
     def _get_sol(t):
         z = z_p(t)
-        w = radsimp(c3010*t**2/4 + 3*c3010/4)
-        x = radsimp((c3001*t**3 + 3*c3001*t + c3100*t**2 + 3*c3100 + t**2*z + 2*t*z - z)/(2*t**2 + 2))
-        y = radsimp((-c3001*t**2 - 3*c3001 + c3100*t**3 + 3*c3100*t + t**2*z - 2*t*z - z)/(2*t**2 + 2))
+        w = c3010*t**2/4 + 3*c3010/4
+        x = (c3001*t**3 + 3*c3001*t + c3100*t**2 + 3*c3100 + t**2*z + 2*t*z - z)/(2*t**2 + 2)
+        y = (-c3001*t**2 - 3*c3001 + c3100*t**3 + 3*c3100*t + t**2*z - 2*t*z - z)/(2*t**2 + 2)
 
         expr = CycSum((2*a**2+(x)*a*b+(w)*a*c+(-y)*a*d+(t-1)*b**2+(y-z)*b*c+(-w)*b*d+(-x+z)*c*d+(-t-1)*d**2).together()**2)
 
@@ -134,16 +141,18 @@ def _quarternary_quartic_real(coeff, real=True):
 
     def _get_sol2(t):
         c_sum, c_square, w1, w2, w3 = _get_params2(t)
-        expr = quadratic_weighting(w1, w2, w3,
-            mapping=lambda x,y: CycSum((x*a*b-x*b*c-x*a*d+x*c*d-y*a*c+y*b*d).together()**2)/4)
+        def _mapping(v):
+            x, y = v[0], v[1]
+            return CycSum((x*a*b-x*b*c-x*a*d+x*c*d-y*a*c+y*b*d).together()**2)/4
+        expr = quadratic_weighting(coeff, w1, w2, w3, _mapping)
         if expr is None or c_sum < 0 or c_square < 0:
             return None
-        mul = radsimp(c4000 / (2*t**2 + 6))
-        return sp.Add(
+        mul = c4000 / (2*t**2 + 6)
+        return Add(
             mul * _get_sol(t),
             mul * expr,
-            radsimp(mul * c_sum) * CycSum(a*b-a*c)**2,
-            radsimp(mul * c_square/2) * CycSum((a*b-c*d)**2),
+            (mul * c_sum) * CycSum(a*b-a*c)**2,
+            (mul * c_square/2) * CycSum((a*b-c*d)**2),
             (poly1111/4) * CycSum(a*b*c*d)
         )
     return _get_sol2(t_)

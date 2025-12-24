@@ -8,17 +8,19 @@ from sympy import parse_expr, sympify, fraction, cancel, latex
 from sympy import symbols as sp_symbols
 from sympy.polys import ring
 from sympy.polys.polyclasses import DMP
-from sympy.combinatorics import Permutation, PermutationGroup, CyclicGroup
+from sympy.combinatorics import (Permutation, PermutationGroup,
+    CyclicGroup, SymmetricGroup, AlternatingGroup, DihedralGroup
+)
 from sympy.printing.precedence import precedence_traditional, PRECEDENCE
 
-from .expressions import Coeff, CyclicSum, CyclicProduct
-from .monomials import poly_reduce_by_symmetry
+from .expressions import CyclicSum, CyclicProduct
+from .monomials import poly_reduce_by_symmetry, verify_symmetry
 
 def cycle_expansion(
         f: str,
         symbol: str = 's',
-        gens: Tuple[Symbol] = sp_symbols("a b c"),
-        perm: Optional[PermutationGroup] = None
+        gens: Tuple[Symbol, ...] = sp_symbols("a b c"),
+        perm_group: Optional[PermutationGroup] = None
     ) -> str:
     """
     Parameters
@@ -31,9 +33,9 @@ def cycle_expansion(
         When symbol == 'p':
             a^3 * b^2 * c   ->   a^3 * b^2 * c * b^3 * c^2 * a * c^3 * a^2 * b
         Warning : Please add parenthesis yourself before expansion if necessary.
-    gens: Tuple[Symbol]
+    gens: Tuple[Symbol, ...]
         The generators of the polynomial.
-    perm: Optional[PermutationGroup]
+    perm_group: Optional[PermutationGroup]
         The permutation group of the expression. If None, it will be cyclic group.
 
     Returns
@@ -41,15 +43,33 @@ def cycle_expansion(
     str
         A string, the result of the cycle expansion.
     """
-    if perm is None:
-        perm = CyclicGroup(len(gens))
+    if perm_group is None:
+        perm_group = CyclicGroup(len(gens))
 
     original_names = [ord(_.name) for _ in gens]
     translations = [
-        dict(zip(original_names, p(original_names))) for p in perm.elements
+        dict(zip(original_names, p(original_names))) for p in perm_group.elements
     ]
     symbol = ' * ' if symbol == 'p' else ' + '
     return symbol.join(f.translate(t) for t in translations)
+
+def _parse_symmetry(symmetry: Union[PermutationGroup, str], n: int) -> PermutationGroup:
+    if isinstance(symmetry, str):
+        maps = {
+            "cyc": CyclicGroup,
+            "sym": SymmetricGroup,
+            "alt": AlternatingGroup,
+            "dih": DihedralGroup,
+            "trivial": lambda n: PermutationGroup(Permutation(list(range(n))))
+        }
+        if symmetry in maps:
+            symmetry = maps[symmetry](n)
+        else:
+            raise ValueError(
+                f"Expected one of {tuple(maps.keys())} as symmetry, but received {symmetry}")
+    elif not isinstance(symmetry, PermutationGroup):
+        raise TypeError("Symmetry should be either PermutationGroup or str.")
+    return symmetry
 
 ##########################################################################
 #
@@ -120,7 +140,7 @@ def _preprocess_text_delatex(poly: str, funcs: Dict[str, Tuple[str, int]]) -> st
     return poly
 
 
-def _preprocess_text_expansion(poly: str, gens: Tuple[Symbol], perm: PermutationGroup) -> str:
+def _preprocess_text_expansion(poly: str, gens: Tuple[Symbol, ...], perm_group: PermutationGroup) -> str:
     """
     Expand the polynomial with cycle expansion.
 
@@ -131,7 +151,7 @@ def _preprocess_text_expansion(poly: str, gens: Tuple[Symbol], perm: Permutation
     parenthesis = 0
     paren_depth = [-1]
     cycle_begin = []
-    _cyc_expand = partial(cycle_expansion, gens=gens, perm=perm)
+    _cyc_expand = partial(cycle_expansion, gens=gens, perm_group=perm_group)
 
     i = 0
     while i < len(poly):
@@ -287,9 +307,10 @@ def expand_poly(expr: Expr, gens=None) -> Union[Expr, Poly]:
 
 def preprocess_text(
         poly: str,
-        gens: Tuple[Symbol] = sp_symbols("a b c"),
-        perm: Optional[PermutationGroup] = None,
+        gens: Tuple[Symbol, ...] = sp_symbols("a b c"),
+        symmetry: Union[PermutationGroup, str] = "cyc",
         return_type: str = "poly",
+        *,
         cyclic_sum_func: str = 's',
         cyclic_prod_func: str = 'p',
         scientific_notation: bool = False,
@@ -297,11 +318,14 @@ def preprocess_text(
         latex: bool = False,
         preserve_patterns: List[str] = ('sqrt',),
         parse_expr_kwargs: Optional[Dict] = None,
+        perm = None, # deprecated, alias for "symmetry"
     ) -> Union[str, Expr, Poly, Tuple[Poly, Poly]]:
     """
     Parse a text to a sympy polynomial with respect to the given generators conveniently.
     The function assumes each variable to be a single character.
     For more general cases, please do not rely on this function.
+
+    `pl` is a shortcut for `preprocess_text`.
 
     Parameters
     ----------
@@ -312,10 +336,11 @@ def preprocess_text(
         If 'poly', return the sympy polynomial of the expression.
         If 'frac', return a tuple of sympy polynomials (numerator, denominator). If
             it fails to cancel the polynomial, return (None, None).
-    gens: Tuple[Symbol]
+    gens: Tuple[Symbol, ...]
         The generators of the cyclic sum or products.
-    perm: Optional[PermutationGroup]
-        The permutation group of the expression. If None, it will be cyclic group.
+    symmetry: Union[PermutationGroup, str]
+        The permutation group of the expression. If str, it should be one of
+        ["cyc", "sym", "alt", "dih", "trivial"].
     cyclic_sum_func: str
         Stands for the cyclic sum. Defaults to 's'.
     cyclic_prod_func: str
@@ -376,6 +401,8 @@ def preprocess_text(
     >>> preprocess_text('s(x2-xy)', (x,y,z))
     Poly(x**2 - x*y - x*z + y**2 - y*z + z**2, x, y, z, domain='QQ')
 
+    >>> preprocess_text('s(x2-xy)', (x,y,z), "sym")
+    Poly(2*x**2 - 2*x*y - 2*x*z + 2*y**2 - 2*y*z + 2*z**2, x, y, z, domain='QQ')
     >>> from sympy.combinatorics import SymmetricGroup
     >>> preprocess_text('s(x2-xy)', (x,y,z), SymmetricGroup(3))
     Poly(2*x**2 - 2*x*y - 2*x*z + 2*y**2 - 2*y*z + 2*z**2, x, y, z, domain='QQ')
@@ -407,8 +434,12 @@ def preprocess_text(
     if lowercase:
         poly = poly.lower()
 
-    if perm is None:
-        perm = CyclicGroup(len(gens))
+    if perm is not None:
+        from warnings import warn
+        warn("perm is deprecated, use symmetry instead", DeprecationWarning, stacklevel=2)
+        symmetry = perm
+
+    symmetry = _parse_symmetry(symmetry, len(gens))
 
     if latex:
         poly = _preprocess_text_delatex(poly,
@@ -419,7 +450,7 @@ def preprocess_text(
     else:
         poly = poly.replace(' ','')
         poly = poly.translate({123: 40, 125: 41, 92: 32, 36: 32, 91: 40, 93: 41, 65288: 40, 65289: 41})
-    # poly = _preprocess_text_expansion(poly, gens, perm)
+    # poly = _preprocess_text_expansion(poly, gens, symmetry)
 
     preserve_patterns = set(preserve_patterns)
     if cyclic_sum_func: preserve_patterns.add(cyclic_sum_func)
@@ -442,8 +473,8 @@ def preprocess_text(
     for s in gens:
         parse_expr_kwargs['local_dict'][s.name] = s
 
-    _cyclic_sum = lambda x: CyclicSum(x, gens, perm)
-    _cyclic_prod = lambda x: CyclicProduct(x, gens, perm)
+    _cyclic_sum = lambda x: CyclicSum(x, gens, symmetry)
+    _cyclic_prod = lambda x: CyclicProduct(x, gens, symmetry)
     parse_expr_kwargs['local_dict'].update({cyclic_sum_func: _cyclic_sum, cyclic_prod_func: _cyclic_prod})
 
     poly = poly.replace('^','**')
@@ -492,8 +523,6 @@ def preprocess_text(
                     return div0, one
             return poly0, poly1
         except Exception as e:
-            if isinstance(e, (KeyboardInterrupt, SystemExit)):
-                raise e
             return None, None
 
     return None
@@ -507,9 +536,9 @@ def pl(*args, **kwargs):
     """
     return preprocess_text(*args, **kwargs)
 pl = preprocess_text
+pl.__doc__ = preprocess_text.__doc__
 
-
-def degree_of_zero(poly: str, gens: Tuple[Symbol] = sp_symbols("a b c"), *args, **kwargs) -> int:
+def degree_of_zero(poly: str, gens: Tuple[Symbol, ...] = sp_symbols("a b c"), *args, **kwargs) -> int:
     """
     Infer the degree of a homogeneous zero polynomial.
     Idea: delete the additions and subtractions, which do not affect the degree.
@@ -518,7 +547,7 @@ def degree_of_zero(poly: str, gens: Tuple[Symbol] = sp_symbols("a b c"), *args, 
     ----------
     poly: str
         The polynomial of which to infer the degree.
-    gens: Tuple[Symbol]
+    gens: Tuple[Symbol, ...]
         The generators of the polynomial.
     args, kwargs:
         Other arguments for preprocess_text.
@@ -603,10 +632,11 @@ def _get_coeff_str(coeff, MUL = '*') -> str:
 
 def poly_get_standard_form(
         poly: Poly,
-        perm: Optional[PermutationGroup] = None,
+        symmetry: Union[PermutationGroup, str] = "cyc",
         omit_mul: bool = True,
         omit_pow: bool = True,
-        _is_cyc: Optional[bool] = None
+        _is_cyc: Optional[bool] = None,
+        perm = None
     ) -> str:
     """
     Express a polynomial in the standard form.
@@ -615,9 +645,9 @@ def poly_get_standard_form(
     ----------
     poly : Poly
         The polynomial to be expressed.
-    perm : PermutationGroup
-        The permutation group to be considered. If None,
-        it uses the cyclic group generated by the variables.
+    symmetry : Union[PermutationGroup, str]
+        The permutation group of the expression. If str, it should be one of
+        ["cyc", "sym", "alt", "dih", "trivial"].
     omit_mul : bool
         Whether to omit the multiplication sign. Defaults to True.
     omit_pow : bool
@@ -644,14 +674,18 @@ def poly_get_standard_form(
             s = '(%s)'%s
         return s
 
-    if perm is None:
-        perm = CyclicGroup(len(poly.gens))
+    if perm is not None:
+        from warnings import warn
+        warn("perm is deprecated, use symmetry instead", DeprecationWarning, stacklevel=2)
+        symmetry = perm
+
+    symmetry = _parse_symmetry(symmetry, len(poly.gens))
     if _is_cyc is None:
-        _is_cyc = Coeff(poly).is_cyclic(perm)
+        _is_cyc = verify_symmetry(poly, symmetry)
 
     extracted = []
     if _is_cyc:
-        extracted = poly_reduce_by_symmetry(poly, perm).terms()
+        extracted = poly_reduce_by_symmetry(poly, symmetry).terms()
     else:
         extracted = poly.terms()
 
@@ -685,7 +719,7 @@ def poly_get_standard_form(
     s = ''.join(strings)
     if s.startswith('+'):
         s = s[1:]
-    if _is_cyc and not perm.is_trivial:
+    if _is_cyc and not symmetry.is_trivial:
         s = 's(%s)'%s
     else:
         s = '(%s)'%s
@@ -711,7 +745,8 @@ def _reduce_factor_list(poly: Poly, perm_group: PermutationGroup) -> Tuple[Expr,
     Examples
     --------
     >>> from sympy.abc import a, b, c
-    >>> _reduce_factor_list((b**8*a**6*c**3*(a**2+b*c)*(b**2+c*a)*(a-b)**7*(b-c)**6*(c-a)**8).as_poly(a,b,c), CyclicGroup(3)) # doctest:+SKIP
+    >>> _reduce_factor_list((b**8*a**6*c**3*(a**2+b*c)*(b**2+c*a)*\
+    ...  (a-b)**7*(b-c)**6*(c-a)**8).as_poly(a,b,c), CyclicGroup(3)) # doctest:+SKIP
     (1,
      [(Poly(b, a, b, c, domain='ZZ'), 5),
       (Poly(a*c + b**2, a, b, c, domain='ZZ'), 1),
@@ -757,9 +792,10 @@ def _reduce_factor_list(poly: Poly, perm_group: PermutationGroup) -> Tuple[Expr,
 
 def poly_get_factor_form(
         poly: Poly,
-        perm: Optional[PermutationGroup] = None,
+        symmetry: Union[PermutationGroup, str] = "cyc",
         omit_mul: bool = True,
         omit_pow: bool = True,
+        perm = None
         # return_type: str = 'text',
     ) -> str:
     """
@@ -769,9 +805,9 @@ def poly_get_factor_form(
     ----------
     poly : Poly
         The polynomial to be factorized.
-    perm : PermutationGroup
-        The permutation group to be considered. If None,
-        it uses the cyclic group generated by the variables.
+    symmetry : Union[PermutationGroup, str]
+        The permutation group of the expression. If str, it should be one of
+        ["cyc", "sym", "alt", "dih", "trivial"].
     omit_mul : bool
         Whether to omit the multiplication sign. Defaults to True.
     omit_pow : bool
@@ -780,10 +816,14 @@ def poly_get_factor_form(
     if poly.total_degree() == 0:
         return poly_get_standard_form(poly, perm, omit_mul, omit_pow)
 
-    if perm is None:
-        perm = CyclicGroup(len(poly.gens))
+    if perm is not None:
+        from warnings import warn
+        warn("perm is deprecated, use symmetry instead", DeprecationWarning, stacklevel=2)
+        symmetry = perm
 
-    coeff, factors, cyc_factors = _reduce_factor_list(poly, perm)
+    symmetry = _parse_symmetry(symmetry, len(poly.gens))
+
+    coeff, factors, cyc_factors = _reduce_factor_list(poly, symmetry)
 
     MUL = '*' if not omit_mul else ''
     POW = '^' if not omit_pow else ''
@@ -795,7 +835,7 @@ def poly_get_factor_form(
             if power == 1: return str(base.as_expr())
             return '%s%s%s'%(base.as_expr(), POW, power)
 
-        base = poly_get_standard_form(base, perm, omit_mul, omit_pow)
+        base = poly_get_standard_form(base, symmetry, omit_mul, omit_pow)
         if _is_single_paren(base): pass
         elif base.startswith('s(') and _is_single_paren(base[1:]): pass
         else: base = '(%s)'%base
@@ -984,11 +1024,13 @@ class PolyReader:
     """
     A class for reading polynomials from a file or a list of strings.
     This is an iterator class.
+
+    Experimental.
     """
     def __init__(self,
         polys: Union[List[Union[Poly, str]], str],
-        gens: Tuple[Symbol] = sp_symbols("a b c"),
-        perm: Optional[PermutationGroup] = None,
+        gens: Tuple[Symbol, ...] = sp_symbols("a b c"),
+        symmetry: Union[PermutationGroup, str] = "cyc",
         ignore_errors: bool = False,
         **kwargs
     ):
@@ -1002,10 +1044,11 @@ class PolyReader:
             The polynomials to read. If it is a string, it will be treated as a file name.
             If it is a list of strings, each string will be treated as a polynomial.
             Empty lines will be ignored.
-        gens : Tuple[Symbol]
+        gens : Tuple[Symbol, ...]
             The generators of the polynomial.
-        perm : Optional[PermutationGroup]
-            The permutation group of the expression. If None, it will be cyclic group.
+        symmetry: Union[PermutationGroup, str]
+            The permutation group of the expression. If str, it should be one of
+            ["cyc", "sym", "alt", "dih", "trivial"].
         ignore_errors : bool
             Whether to ignore errors. If True, invalid polynomials will be skipped by
             yielding None. If False, invalid polynomials will raise a ValueError.
@@ -1038,8 +1081,8 @@ class PolyReader:
         self.kwargs = kwargs
         if 'gens' not in self.kwargs:
             self.kwargs['gens'] = gens
-        if 'perm' not in self.kwargs:
-            self.kwargs['perm'] = perm
+        if 'symmetry' not in self.kwargs:
+            self.kwargs['symmetry'] = symmetry
 
         self.index = 0
         self.ignore_errors = ignore_errors
@@ -1054,7 +1097,7 @@ class PolyReader:
         if isinstance(poly, str):
             try:
                 poly = preprocess_text(poly, **self.kwargs)
-            except:
+            except Exception:
                 if not self.ignore_errors:
                     raise ValueError(f'Invalid polynomial at index {self.index}: {poly}')
                 poly = None

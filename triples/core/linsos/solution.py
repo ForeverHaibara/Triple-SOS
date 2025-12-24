@@ -5,8 +5,8 @@ from sympy import count_ops, Poly, Expr, Rational, Symbol, Add, Mul
 import numpy as np
 
 from .basis import LinearBasis, LinearBasisTangent
-from .updegree import LinearBasisMultiplier
-from ...utils import MonomialManager, Coeff
+from .lift import LinearBasisMultiplier
+from ...utils import MonomialManager, verify_symmetry
 
 
 def create_linear_sol_from_y_basis(
@@ -203,7 +203,7 @@ def _collect_eq_constraints(eqs_and_exprs: Dict[Poly, List[Expr]], symbols: List
 
     for k, v in eqs_and_exprs.items():
         poly = inv_eq_constraints.get(k)
-        if poly is not None and Coeff(poly).is_cyclic(perm_group):
+        if poly is not None and verify_symmetry(poly, perm_group):
             # if it is cyclic with respect to the symmetry group, we can
             # extract the eq_constraint outside the cyclic sum operator
             eq_part.append(k * symmetry.cyclic_sum(v, symbols))

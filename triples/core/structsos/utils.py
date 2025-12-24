@@ -1,9 +1,13 @@
 from typing import Union, Tuple, List, Dict, Callable, Optional
 
-import sympy as sp
+from sympy import (
+    Poly, Expr, Symbol, Integer, Rational, MatrixBase, Add,
+    QQ, ZZ, sympify, fraction
+)
+from sympy import MutableDenseMatrix as Matrix
+from sympy.core.symbol import uniquely_named_symbol
 
-from ..shared import uniquely_named_symbol, SS
-from ...sdp import congruence as _congruence
+from ...sdp import congruence
 from ...utils.expressions import Coeff, CyclicSum, CyclicProduct
 from ...utils.roots import nroots, rationalize_bound
 
@@ -14,49 +18,55 @@ class PolynomialUnsolvableError(StructuralSOSError): ...
 class PolynomialNonpositiveError(PolynomialUnsolvableError): ...
 
 
-def radsimp(expr: Union[sp.Expr, List[sp.Expr]]) -> sp.Expr:
+class DomainExpr:
+    """Mix in this class for classes that require gens."""
+    def __init__(self, coeff: Coeff):
+        self._coeff = coeff
+
+    @property
+    def gens(self) -> Tuple[Symbol, ...]:
+        return self._coeff.gens
+
+    def cyclic_sum(self, expr) -> Expr:
+        return self._coeff.cyclic_sum(expr)
+
+    def cyclic_product(self, expr) -> Expr:
+        return self._coeff.cyclic_product(expr)
+
+
+def radsimp(expr: Union[Expr, List[Expr]]) -> Expr:
     """
     Rationalize the denominator by removing square roots. Wrapper of sympy.radsimp.
     Also refer to sympy.simplify.
     """
-    if isinstance(expr, (list, tuple, sp.MatrixBase)):
+    if isinstance(expr, (list, tuple, MatrixBase)):
         return [radsimp(e) for e in expr]
-    if not isinstance(expr, sp.Expr):
-        expr = sp.sympify(expr)
-    if isinstance(expr, sp.Rational):
+    if not isinstance(expr, Expr):
+        expr = sympify(expr)
+    if isinstance(expr, Rational):
         return expr
 
     numer, denom = expr.as_numer_denom()
-    n, d = sp.fraction(sp.radsimp(1/denom, symbolic=False, max_terms=1))
+    from sympy import radsimp as _radsimp
+    n, d = fraction(_radsimp(1/denom, symbolic=False, max_terms=1))
     # if n is not S.One:
     expr = (numer*n).expand()/d
     return expr
 
-def congruence(M: sp.Matrix) -> Tuple[sp.Matrix, sp.Matrix]:
-    """
-    Decompose a positive semidefinite matrix M as M = U.T @ S @ U. Returns U and S.
-    """
-    def signfunc(x):
-        # handle nested radicals also, e.g. (sqrt(2)+2)/(sqrt(2)+1)- sqrt(2) == 0
-        x = radsimp(x)
-        if x > 0: return 1
-        if x == 0: return 0
-        return -1
-    return _congruence(M, signfunc=signfunc)
-
-def intervals(polys: List[sp.Poly]) -> List[sp.Expr]:
+def intervals(polys: List[Poly]) -> List[Expr]:
     """
     Return points where the polynomials change their signs.
     When one of the polynomials is not in QQ or ZZ, return [].
     If no signs are changed, return [0].
     """
     if len(polys) == 0:
-        return [sp.S(0)]
-    if any(_.domain not in [sp.QQ,sp.ZZ] for _ in polys):
+        return [Integer(0)]
+    if any(_.domain not in [QQ, ZZ] for _ in polys):
         return []
     ret = []
     pre = None
-    for (l,r), mul in sp.intervals(polys):
+    from sympy import intervals as _intervals
+    for (l,r), mul in _intervals(polys):
         if l != pre:
             ret.append(l)
             pre = l
@@ -65,30 +75,10 @@ def intervals(polys: List[sp.Poly]) -> List[sp.Expr]:
             pre = r
     if len(ret):
         return ret
-    return [sp.S(0)]
+    return [Integer(0)]
 
 
-# def radsimp_together(x: sp.Expr) -> sp.Expr:
-#     """
-#     Wrapper of sympy.together and radsimp.
-
-#     >>> sp.together((x + y)/(1+sp.sqrt(3)))
-#     (x + y)/(1 + sqrt(3))
-
-#     >>> radsimp_together(((x + y)/(1+sp.sqrt(3))))
-#     (-1 + sqrt(3))*(x + y)/2
-#     """
-#     f1, f2 = x.together().as_numer_denom()
-#     x1, y1 = f1.as_coeff_Mul()
-#     if f2.is_constant():
-#         x1, f2 = radsimp(x1/f2).as_numer_denom()
-#         return x1 * y1 / f2
-
-#     x2, y2 = f2.as_coeff_Mul()
-#     return radsimp(x1/x2) * y1/y2
-
-
-def sum_y_exprs(y: List[sp.Expr], exprs: List[sp.Expr]) -> sp.Expr:
+def sum_y_exprs(y: List[Expr], exprs: List[Expr]) -> Expr:
     """
     Return sum(y_i * expr_i).
     """
@@ -100,17 +90,17 @@ def sum_y_exprs(y: List[sp.Expr], exprs: List[sp.Expr]) -> sp.Expr:
 
 
 def rationalize_func(
-        poly: Union[sp.Poly, sp.Rational],
-        validation: Callable[[sp.Rational], bool],
-        validation_initial: Optional[Callable[[sp.Rational], bool]] = None,
+        poly: Union[Poly, Rational],
+        validation: Callable[[Rational], bool],
+        validation_initial: Optional[Callable[[Rational], bool]] = None,
         direction: int = 0,
-    ) -> Optional[sp.Rational]:
+    ) -> Optional[Rational]:
     """
     Find a rational number near the roots of poly that satisfies certain conditions.
 
     Parameters
     ----------
-    poly : Union[sp.Poly, sp.Rational]
+    poly : Union[Poly, Rational]
         Initial values are near to the roots of the polynomial.
     validation : Callable
         Return True if validation(..) >= 0.
@@ -125,32 +115,33 @@ def rationalize_func(
 
     Returns
     ----------
-    t : sp.Rational
+    t : Rational
         Proper rational number that satisfies the validation conditions.
         Return None if no such t is found.
     """
+    from sympy import sign
     validation_initial = validation_initial or validation
 
-    if isinstance(poly, sp.Poly):
+    if isinstance(poly, Poly):
         candidates = nroots(poly, method = 'factor', real = True)
         poly_diff = poly.diff()
         if direction != 0:
             def direction_t(t):
                 return direction if poly_diff(t) >= 0 else -direction
             def validation_t(t):
-                return sp.sign(poly(t)) * direction >= 0 and validation(t)
+                return sign(poly(t)) * direction >= 0 and validation(t)
         else:
             direction_t = lambda t: 0
             validation_t = lambda t: validation(t)
 
-    elif isinstance(poly, (int, float, sp.Rational)):
+    elif isinstance(poly, (int, float, Rational)):
         candidates = [poly]
         direction_t = lambda t: direction
         validation_t = lambda t: validation(t)
 
 
     for t in candidates:
-        if isinstance(t, sp.Rational):
+        if isinstance(t, Rational):
             if validation(t):
                 return t
         elif validation_initial(t):
@@ -160,63 +151,36 @@ def rationalize_func(
                     return t_
 
 
-def quadratic_weighting(
-        c1: sp.Rational,
-        c2: sp.Rational,
-        c3: sp.Rational,
-        a: Optional[sp.Expr] = None,
-        b: Optional[sp.Expr] = None,
-        mapping: Optional[Callable[[sp.Rational, sp.Rational], sp.Expr]] = None,
-        formal: bool = False
-    ) -> Union[sp.Expr, List]:
+def congruence_solve(M: Matrix, mapping = Union[List, Callable]) -> Optional[Expr]:
+    cong = congruence(M)
+    if cong is None:
+        return None
+    U, S = cong
+
+    _mapping = mapping
+    if isinstance(mapping, (list, tuple)):
+        _mapping = lambda z: Add(*[z[i]*mapping[i] for i in range(len(mapping))])**2
+
+    args = []
+    for i in range(M.shape[0]):
+        args.append(S[i] * _mapping(U[i,:]))
+    return Add(*args)
+
+
+def quadratic_weighting(coeff: Coeff, c1, c2, c3,
+    mapping: Union[List[Expr], Callable] = None,
+) -> Optional[Expr]:
     """
     Give solution to c1*a^2 + c2*a*b + c3*b^2 >= 0 where a,b in R.
 
     Parameters
     ----------
-    c1, c2, c3 : sp.Expr
+    c1, c2, c3 : Expr
         Coefficients of the quadratic form.
-    a, b : sp.Expr
-        The basis of the quadratic form.
-    mapping : Callable
-        A function that receives two inputs, x, y, and
-        outputs the desired (x*a + y*b)**2. Default is
-        mapping = lambda x, y: (x*a + y*b)**2.
-        If mapping is not None, it overrides the parameters a, b.
-    formal : bool
-        If True, return a list [(w1, (x1,y1))] so that sum(w_i * (x_i*a + y_i*b)**2) equals to the result.
-        If False, return the sympy expression of the result.
-        If formal == True, it overrides the mapping parameter.
-
-    Returns
-    ----------
-    result : Union[sp.Expr, List]
-        If formal = False, return the sympy expression of the result.
-        If formal = True, return a list [(w1, (x1,y1))] so that sum(w_i * (x_i*a + y_i*b)**2) equals to the result.
-        If 4*c1*c3 < c2**2 or c1 < 0 or c3 < 0, return None.
     """
-    if 4*c1*c3 < c2**2 or c1 < 0 or c3 < 0:
-        return None
-    c1, c2, c3 = radsimp(c1), radsimp(c2), radsimp(c3)
-
-    a = a or sp.Symbol('a')
-    b = b or sp.Symbol('b')
-    mapping = mapping or (lambda x, y: (x*a + y*b)**2)
-
-    if c1 == 0:
-        result = [(c3, (sp.S(0), sp.S(1)))]
-    elif c3 == 0:
-        result = [(c1, (sp.S(1), sp.S(0)))]
-    else:
-        # ratio = c2/c3/2
-        # result = [(c3, b + ratio*a), (c1 - ratio**2*c3, a)]
-        ratio = radsimp(sp.S(c2)/c1/2)
-        result = [(c1, (sp.S(1), ratio)), (c3 - ratio**2*c1, (sp.S(0), sp.S(1)))]
-
-    if formal:
-        return result
-
-    return sum(radsimp(wi) * mapping(*xi) for wi, xi in result)
+    c1, c2, c3 = [coeff.convert(c) for c in [c1, c2, c3]]
+    return congruence_solve(
+        coeff.as_matrix([[c1,c2/2],[c2/2,c3]], (2,2)), mapping=mapping)
 
 
 def zip_longest(*args):
@@ -239,22 +203,20 @@ def zip_longest(*args):
                     return
         yield tuple(lasts)
 
-def has_gen(gen: sp.Symbol, *args):
+def has_gen(gen: Symbol, *args):
     """
     Test whether a symbol is involved in a (list of) polynomial(s).
     """
-    to_iter = lambda x: (x,) if isinstance(x, sp.Poly) else x
+    to_iter = lambda x: (x,) if isinstance(x, Poly) else x
     return any(any(gen in p.free_symbols for p in arg) for arg in map(to_iter, args))
 
 
-def clear_free_symbols(poly: sp.Poly, ineq_constraints: Dict[sp.Poly, sp.Expr] = {}, eq_constraints: Dict[sp.Poly, sp.Expr] = {}) -> Tuple[sp.Poly, Dict[sp.Poly, sp.Expr], Dict[sp.Poly, sp.Expr]]:
+def clear_free_symbols(poly: Poly, ineq_constraints: Dict[Poly, Expr] = {}, eq_constraints: Dict[Poly, Expr] = {}) -> Tuple[Poly, Dict[Poly, Expr], Dict[Poly, Expr]]:
     """
     Clear nuisance free symbols from the polynomial and constraints.
     For example, if we want to solve x>=4 with constraints x>=y, x*y>=4, y>=0, a>=0. Then
     we can remove the symbol "a" from the constraints. But we cannot remove the symbol "y"
     even though it is not in the polynomial, as it is correlated with "x".
-
-    TODO: to be moved to shared.py?
     """
     # Construct the "correlation" graph of the free symbols: symbols that are path-connected to free
     # vars in the polynomial are considered as active symbols.

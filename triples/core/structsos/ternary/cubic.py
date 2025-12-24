@@ -1,11 +1,10 @@
 import sympy as sp
+from sympy import Poly, Symbol, Rational
 
 from .utils import (
-    CyclicSum, CyclicProduct, CommonExpr,
-    sum_y_exprs, radsimp, rationalize_func, quadratic_weighting
+    Coeff, CommonExpr,
+    sum_y_exprs, rationalize_func, quadratic_weighting
 )
-
-a, b, c = sp.symbols('a b c')
 
 def sos_struct_cubic(coeff, real = True):
     """
@@ -28,16 +27,19 @@ def sos_struct_cubic(coeff, real = True):
     return _sos_struct_cubic_nontrivial(coeff)
 
 
-def _sos_struct_cubic_symmetric(coeff):
+def _sos_struct_cubic_symmetric(coeff: Coeff):
     """
     Cubic symmetric inequality can be handled with Schur.
     """
-    rem = radsimp(3 * (coeff((3,0,0)) + coeff((2,1,0)) * 2) + coeff((1,1,1)))
-    y = radsimp([
+    a, b, c = coeff.gens
+    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+
+    rem = 3 * (coeff((3,0,0)) + coeff((2,1,0)) * 2) + coeff((1,1,1))
+    y = [
         coeff((3,0,0)) / 4,
         coeff((2,1,0)) + 3*coeff((3,0,0))/4,
         rem
-    ])
+    ]
     if all(_ >= 0 for _ in y):
         # we do not need to lift the degree in this case
         exprs = [
@@ -47,16 +49,16 @@ def _sos_struct_cubic_symmetric(coeff):
         ]
         return sum_y_exprs(y, exprs)
 
-    y = radsimp([
+    y = [
         coeff((3,0,0)),
         coeff((3,0,0)) + coeff((2,1,0)),
         rem
-    ])
+    ]
     if all(_ >= 0 for _ in y):
         # use Schur
         exprs = [
             # CyclicSum(a*(a-b)*(a-c)),
-            CommonExpr.schur(3),
+            CommonExpr.schur(3, coeff.gens),
             CyclicSum(a*(b-c)**2),
             CyclicProduct(a)
         ]
@@ -64,9 +66,9 @@ def _sos_struct_cubic_symmetric(coeff):
     return None
 
 
-def _sos_struct_cubic_degenerate(coeff):
-    # if coeff((3,0,0)) != 0:
-    #     return None
+def _sos_struct_cubic_degenerate(coeff: Coeff):
+    a, b, c = coeff.gens
+    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
 
     p, q, r = coeff((2,1,0)), coeff((1,2,0)), coeff((1,1,1))
     rem = 3 * (p + q) + r
@@ -76,11 +78,11 @@ def _sos_struct_cubic_degenerate(coeff):
     if p == q:
         return CyclicSum(a*(b-c)**2) * p + rem * CyclicProduct(a)
 
-    return p * CommonExpr.amgm((2,1,0),(1,1,1)) + q * CommonExpr.amgm((2,0,1),(1,1,1))\
+    return p * CommonExpr.amgm((2,1,0),(1,1,1), coeff.gens) + q * CommonExpr.amgm((2,0,1),(1,1,1), coeff.gens)\
              + rem * CyclicProduct(a)
 
 
-def _sos_struct_cubic_parabola(coeff):
+def _sos_struct_cubic_parabola(coeff: Coeff):
     """
     Although we can always multiply s(a) to convert the problem to a quartic one,
     sometimes the cubic inequality does not need to higher the degree.
@@ -89,6 +91,9 @@ def _sos_struct_cubic_parabola(coeff):
     are (t^2+4t+1, t^2-2t-2), respectively. This is a parabola (x-y-9)^2 = 36(y+3).
     We will test whether the inequality is a linear (convex) combination of two points on the parabola.
     """
+    a, b, c = coeff.gens
+    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+
     m, p, q, r = coeff((3,0,0)), coeff((2,1,0)), coeff((1,2,0)), coeff((1,1,1))
     rem = 3 * (p + q + m) + r
     if m < 0 or rem < 0:
@@ -128,7 +133,7 @@ def _sos_struct_cubic_parabola(coeff):
     return None
 
 
-def _sos_struct_cubic_nontrivial(coeff):
+def _sos_struct_cubic_nontrivial(coeff: Coeff):
     """
     Solve nontrivial cyclic cubic polynomial by multiplying s(a).
 
@@ -149,11 +154,11 @@ def _sos_struct_cubic_nontrivial(coeff):
 
     Examples
     ---------
-    s(4a3-15a2b+12ab2-abc)
+    => s(4a3-15a2b+12ab2-abc)
 
-    s(a3+2a2b-3a2c)
+    => s(a3+2a2b-3a2c)
 
-    s(a3-26/10a2b+ab2+6/10abc)
+    => s(a3-26/10a2b+ab2+6/10abc)
     """
     coeff3, p, q, z = coeff((3,0,0)), coeff((2,1,0)), coeff((1,2,0)), coeff((1,1,1))
     if coeff3 <= 0:
@@ -192,6 +197,9 @@ def _sos_struct_cubic_nontrivial(coeff):
     ]
     if y[-1] < 0:
         return None
+
+    a, b, c = coeff.gens
+    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
     exprs = [
         CyclicSum((a**2-b**2+(p_+2*q_)/3*a*c - (2*p_+q_)/3*b*c + (p_- q_)/3*a*b)**2),
         CyclicSum(a**2*(b-c)**2),
@@ -206,7 +214,7 @@ def _sos_struct_cubic_nontrivial(coeff):
     #     return solution / CyclicSum(a)
 
 
-def _sos_struct_cubic_nontrivial_irrational(coeff):
+def _sos_struct_cubic_nontrivial_irrational(coeff: Coeff):
     """
     Use ultimate theorem for cubic to handle general cases, including irrational coefficients.
 
@@ -223,44 +231,49 @@ def _sos_struct_cubic_nontrivial_irrational(coeff):
 
     Examples
     -------
-    s(a)3-27abc-2sqrt(3)s((a-b)3)
+    => s(a)3-27abc-2sqrt(3)s((a-b)3)
 
-    s((2a+b)(a-sqrt(2)b)2-2a3+(6sqrt(2)-7)abc)
+    => s((2a+b)(a-sqrt(2)b)2-2a3+(6sqrt(2)-7)abc)
 
-    s(a3-a2b)+(sqrt(13+16sqrt(2))-1)/2s(ab2-a2b)
+    => s(a3-a2b)+(sqrt(13+16sqrt(2))-1)/2s(ab2-a2b)
 
-    References
-    -------
+    Reference
+    ----------
     [1] http://kuing.infinityfreeapp.com/forum.php?mod=viewthread&tid=10631&extra=
     """
+    a, b, c = coeff.gens
+    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+
     m, p, q = coeff((3,0,0)), coeff((2,1,0)), coeff((1,2,0))
-    rem = radsimp(3 * (m + p + q) + coeff((1,1,1)))
+    rem = 3 * (m + p + q) + coeff((1,1,1))
     if m < 0 or rem < 0:
         return None
     if p >= 0 and q >= 0:
-        y = radsimp([m / 2, p, q, rem])
+        y = [m / 2, p, q, rem]
         exprs = [
             CyclicSum(a) * CyclicSum((b-c)**2),
-            CyclicSum(a**2*b - CyclicProduct(a)),
-            CyclicSum(a**2*c - CyclicProduct(a)),
+            # CyclicSum(a**2*b - CyclicProduct(a)),
+            # CyclicSum(a**2*c - CyclicProduct(a)),
+            CommonExpr.amgm((2,1,0), (1,1,1), coeff.gens),
+            CommonExpr.amgm((2,0,1), (1,1,1), coeff.gens),
             CyclicProduct(a)
         ]
         return sum_y_exprs(y, exprs)
 
     p, q = p / m, q / m
-    det = radsimp(-16*(p**2*q**2 + 18*p*q - 4*p**3 - 4*q**3 - 27))
+    det = -16*(p**2*q**2 + 18*p*q - 4*p**3 - 4*q**3 - 27)
     if det < 0:
         return None
     u, v = (2*p**2 - 6*q) / (9 - p*q), (2*q**2 - 6*p) / (9 - p*q)
     t = (9 - p*q)**2 / (p + q + 3) / (3*(p - q)**2 + (6 - p - q)**2)
-    u, v, t = radsimp([u, v, t])
+    u, v, t = [u, v, t]
 
-    y = radsimp([
+    y = [
         (p + q + 3) * m / 2,
         t * m,
         (1 - t) * m,
         rem
-    ])
+    ]
     exprs = [
         CyclicProduct(a) * CyclicSum((a-b)**2),
         CyclicSum(c*(a**2 - b**2 + u*(a*b-a*c) + v*(b*c-a*b))**2),
@@ -303,9 +316,9 @@ def _sos_struct_acyclic_cubic_hexagon(coeff):
 
     Examples
     ---------
-    (25a2b+14a2c+20ab2-82abc+5ac2+19b2c+10bc2-2abc)
+    => (25a2b+14a2c+20ab2-82abc+5ac2+19b2c+10bc2-2abc)
 
-    (5a2b+a2c+5ab2-10abc+ac2+b2c+bc2)
+    => (5a2b+a2c+5ab2-10abc+ac2+b2c+bc2)
     """
     if any(coeff(_) != 0 for _ in ((3,0,0), (0,3,0), (0,0,3))):
         return None
@@ -328,21 +341,23 @@ def _sos_struct_acyclic_cubic_hexagon(coeff):
 
         for i, (x, y) in enumerate(corners):
             z0 = -2 * sp.sqrt(x * y)
-            if isinstance(z0, sp.Rational):
+            if isinstance(z0, Rational):
                 zs[i] = z0
             else:
                 _check_valid_func = _get_check_valid_func(z0)
-                eqz = sp.Poly([1, 0, -4*x*y], sp.Symbol('z'))
+                eqz = Poly([1, 0, -4*x*y], Symbol('z'))
                 zs[i] = rationalize_func(eqz, _check_valid_func, validation_initial = lambda z: z <= 0, direction = -1)
             if zs[i] is None:
                 return None
 
+        a, b, c = coeff.gens
         combs = [(a,b,c), (b,c,a), (c,a,b)]
-        exprs = [quadratic_weighting(x, z, y, a=b0, b=c0)*a0 for (x,y), z, (a0, b0, c0) in zip(corners, zs, combs)]
+        exprs = [quadratic_weighting(coeff, x, z, y, [b0, c0])*a0
+                    for (x,y), z, (a0, b0, c0) in zip(corners, zs, combs)]
         return sum(exprs) + (center - sum(zs))*(a*b*c)
 
 
-def _sos_struct_acyclic_cubic_symmetric(coeff):
+def _sos_struct_acyclic_cubic_symmetric(coeff: Coeff):
     """
     Solve acyclic cubic polynomials that are symmetric with respect to two variables.
 
@@ -373,29 +388,31 @@ def _sos_struct_acyclic_cubic_symmetric(coeff):
 
     Examples
     ---------
-    9s(a3)-3s(a)s(ab)-5s(a)(a-c)2
+    => 9s(a3)-3s(a)s(ab)-5s(a)(a-c)2
 
-    a(a-b)(a-c)+4/27(b+c)(b-c)2
+    => a(a-b)(a-c)+4/27(b+c)(b-c)2
 
-    (2a3+2a2b-8a2c+2ab2+21abc+4ac2+2b3-8b2c+4bc2+9c3)
+    => (2a3+2a2b-8a2c+2ab2+21abc+4ac2+2b3-8b2c+4bc2+9c3)
 
-    (sqrt(2)b-c)2(b+c)+(sqrt(2)a-c)2(a+c)-c3+4abc
+    => (sqrt(2)b-c)2(b+c)+(sqrt(2)a-c)2(a+c)-c3+4abc
 
-    (a+b+2c)((a+b-(sqrt(3)+1)/2c)2) + 4(a-b)2c
+    => (a+b+2c)((a+b-(sqrt(3)+1)/2c)2) + 4(a-b)2c
 
-    8(a(a-b-c)2+b(b-a-c)2)+4c(c-a-b)2-16abc
+    => 8(a(a-b-c)2+b(b-a-c)2)+4c(c-a-b)2-16abc
 
-    (81a3-77a2b-135a2c-77ab2+225abc+27ac2+81b3-135b2c+27bc2+27c3)
+    => (81a3-77a2b-135a2c-77ab2+225abc+27ac2+81b3-135b2c+27bc2+27c3)
     """
     a, b, c = None, None, None
     if all(coeff((i,j,k)) == coeff((j,i,k)) for (i,j,k) in ((3,0,0),(2,1,0),(2,0,1),(1,0,2))):
-        a, b, c = sp.symbols("a b c")
+        a, b, c = coeff.gens
         x0, x1, x2, x3, x4, x5 = [coeff(_) for _ in ((0,0,3),(1,0,2),(2,0,1),(3,0,0),(2,1,0),(1,1,1))]
     if all(coeff((i,j,k)) == coeff((i,k,j)) for (i,j,k) in ((0,3,0),(0,2,1),(1,2,0),(2,1,0))):
-        a, b, c = sp.symbols("b c a")
+        a, b, c = coeff.gens
+        a, b, c = b, c, a
         x0, x1, x2, x3, x4, x5 = [coeff(_) for _ in ((3,0,0),(2,1,0),(1,2,0),(0,3,0),(0,2,1),(1,1,1))]
     if all(coeff((i,j,k)) == coeff((k,j,i)) for (i,j,k) in ((0,0,3),(1,0,2),(0,1,2),(0,2,1))):
-        a, b, c = sp.symbols("c a b")
+        a, b, c = coeff.gens
+        a, b, c = c, a, b
         x0, x1, x2, x3, x4, x5 = [coeff(_) for _ in ((0,3,0),(0,2,1),(0,1,2),(0,0,3),(1,0,2),(1,1,1))]
 
 
@@ -413,19 +430,19 @@ def _sos_struct_acyclic_cubic_symmetric(coeff):
             if not (x4 >= 0 and x2 >= 0 and 4*sp.sqrt(x4*x1) + 2*x2 + x5 >= 0):
                 return None
             p1 = x2 * c*(a-b)**2
-            p2 = quadratic_weighting(x4, x5/2 + x2, x1, a=a, b=c) * b
-            p3 = quadratic_weighting(x4, x5/2 + x2, x1, a=b, b=c) * a
+            p2 = quadratic_weighting(coeff, x4, x5/2 + x2, x1, [a, c]) * b
+            p3 = quadratic_weighting(coeff, x4, x5/2 + x2, x1, [b, c]) * a
             return p1 + p2 + p3
         if x2 < 0 and 4*x1*x3 < x2**2:
             return None
         # The following x40 makes the symmetric axis have a multiplicity root (a,b,c) = (1,1,sym_c)
         # so either we require x4 >= x40, or the symmetric axis degree 1 term >= 0.
-        x40 = radsimp(-(16*x1*x3 - 4*x2**2 - 4*x2*x5 - x5**2)/(16*x1))
-        r = radsimp(x2/x3/2) if 4*x1*x3 >= x2**2 else sp.S(0)
-        ker = radsimp(x1 - x3*r**2)
+        x40 = -(16*x1*x3 - 4*x2**2 - 4*x2*x5 - x5**2)/(16*x1)
+        r = (x2/x3/2) if 4*x1*x3 >= x2**2 else 0
+        ker = (x1 - x3*r**2)
         if x1 > 0 and x4 >= x40:
-            sym_c = radsimp((-2*x2 - x5)/(4*x1))
-            w = radsimp(1 + r*sym_c)
+            sym_c = (-2*x2 - x5)/(4*x1)
+            w = 1 + r*sym_c
             p1 = x3*a*(a + r*c - w*b)**2 + x3*b*(b + r*c - w*a)**2
             p2 = (x4 - x40)*a*b*(a+b) + (x2 - 2*r*x3)*c*(a-b)**2
             p3 = ker*a*(-sym_c*b + c)**2 + ker*b*(-sym_c*a + c)**2
@@ -445,29 +462,31 @@ def _sos_struct_acyclic_cubic_symmetric(coeff):
         x0*(ta-c)^2(za+c) = x0*c^3 + x1*c^2*a + x2'*c*a^2 + x3'*a^3
         with x2' <= x2 and x3' <= x3. Also, z = x1/x0 + 2*t.
         """
-        t = sp.Symbol('t')
-        eqt1 = sp.Poly([3*x0, 2*x1, x2], t)
-        eqt2 = sp.Poly([-2*x0, -x1, 0, x3], t)
+        sym = -x1/x0/2
+        eqt1 = coeff.from_list([3*x0, 2*x1, x2], gens=(a,)).as_poly()
+        eqt2 = coeff.from_list([-2*x0, -x1, 0, x3], gens=(a,)).as_poly()
         def _check_valid(t):
-            return x1/x0 + 2*t >= 0 and eqt2(t) >= 0
+            t = coeff.convert(t)
+            return t >= sym and coeff.convert(eqt2.rep.eval(t)) >= 0
 
         t_ = None
         if x2 >= 0 and _check_valid(0):
-            t_ = sp.S(0)
-        elif eqt1(-x1/x0/2) >= 0 and eqt2(-x1/x0/2) >= 0:
-            t_ = radsimp(-x1/x0/2)
+            t_ = 0
+        elif coeff.convert(eqt1.rep.eval(sym)) >= 0 and coeff.convert(eqt2.rep.eval(sym)) >= 0:
+            t_ = sym
         else:
             # sometimes it is tight for irrational coefficients, we detect it first
-            eqgcd = sp.gcd(eqt1, eqt2)
+            eqgcd = eqt1.gcd(eqt2)
             if eqgcd.degree() == 1:
-                t_ = radsimp(-eqgcd.coeff_monomial((0,)) / eqgcd.coeff_monomial((1,)))
-                if x1/x0 + 2*t_ < 0:
+                t_ = coeff.convert(-eqgcd.rep.TC() / eqgcd.rep.LC())
+                if t_ < sym:
                     t_ = None
 
         if t_ is None:
             t_ = rationalize_func(eqt1, _check_valid, direction = 1)
         if t_ is not None:
-            return radsimp([t_, x1/x0 + 2*t_])
+            t_ = coeff.convert(t_)
+            return [t_, 2*(t_ - sym)]
 
     def _determine_w(x0, x4, x5, t, z):
         """
@@ -477,26 +496,32 @@ def _sos_struct_acyclic_cubic_symmetric(coeff):
         y1 = -3*(-2*t*w + w*z - 3)**2/w**3
         (-t**2*z+y0+y1) <= x4/x0 and (w0+w*y1) <= x5/x0.
         """
-        w = sp.Symbol('w')
-        w0 = radsimp(2*(5*t**2 - 2*t*z + 2*z**2)/3)
-        y0 = radsimp(4*(-2*t + z)**3/27)
+        w0 = 2*(5*t**2 - 2*t*z + 2*z**2)/3
+        y0 = 4*(-2*t + z)**3/27
         if z >= 2*t and y0 - t**2*z <= x4/x0 and w0 - 3*(z - 2*t)**2 <= x5/x0:
             return sp.oo
-        eqw1 = (radsimp(x5/x0 - w0)*w**2 + 3*(-2*t*w + w*z - 3)**2).as_poly(w)
-        eqw2 = (radsimp(x4/x0 + t**2*z - y0)*w**3 + 3*(-2*t*w + w*z - 3)**2).as_poly(w)
-        eqw3 = ((-8*t*w + 4*w*z - 9)).as_poly(w)
+
+        # eqw1 = ((x5/x0 - w0)*w**2 + 3*(-2*t*w + w*z - 3)**2).as_poly(w)
+        # eqw2 = ((x4/x0 + t**2*z - y0)*w**3 + 3*(-2*t*w + w*z - 3)**2).as_poly(w)
+        # eqw3 = ((-8*t*w + 4*w*z - 9)).as_poly(w)
+        eqtmp = 3 * coeff.from_list([-2*t + z, -3], gens=(a,)).as_poly()**2
+        eqw1 = coeff.from_list([x5/x0 - w0, 0, 0], gens=(a,)).as_poly() + eqtmp
+        eqw2 = coeff.from_list([x4/x0 + t**2*z - y0, 0, 0, 0], gens=(a,)).as_poly() + eqtmp
+        eqw3 = coeff.from_list([-8*t + 4*z, -9], gens=(a,)).as_poly()
+
         def _check_valid(w):
+            w = coeff.convert(w)
             return w != 0 and eqw3(w) * w >= 0 and eqw2(w) * w >= 0
         if z != 2*t:
-            w_ = radsimp(9 / (z - 2*t) / 4)
-            if eqw1(w_) >= 0 and _check_valid(w_):
+            w_ = 9 / (z - 2*t) / 4
+            if coeff.convert(eqw1.rep.eval(w_)) >= 0 and _check_valid(w_):
                 return w_
-        if eqw1(1) >= 0 and _check_valid(1):
-            return sp.S(1)
+        if coeff.convert(eqw1.rep.eval(1)) >= 0 and _check_valid(1):
+            return 1
         if True:
-            eqgcd = sp.gcd(eqw1, eqw2)
+            eqgcd = eqw1.gcd(eqw2)
             if eqgcd.degree() == 1:
-                w_ = radsimp(-eqgcd.coeff_monomial((0,)) / eqgcd.coeff_monomial((1,)))
+                w_ = coeff.convert(-eqgcd.rep.TC() / eqgcd.rep.LC())
                 if _check_valid(w_):
                     return w_
 
@@ -504,11 +529,11 @@ def _sos_struct_acyclic_cubic_symmetric(coeff):
 
     def _solve_tzw(t, z, w):
         if w is sp.oo:
-            sym_c = radsimp((z - 2*t)/3)
-            p1 = z*(t*a+t*b-c)**2*(a-b)**2 + radsimp((16*z-32*t)/3)*a*b*(sym_c/2 *(a+b) - c)**2
+            sym_c = (z - 2*t)/3
+            p1 = z*(t*a+t*b-c)**2*(a-b)**2 + ((16*z-32*t)/3)*a*b*(sym_c/2 *(a+b) - c)**2
         else:
-            sym_c = radsimp((-2*t*w + w*z - 9)/(3*w))
-            p1 = z*(t*a+t*b-c)**2*(a-b)**2 + radsimp((-8*t*w+4*w*z-9)*4/(3*w))*a*b*(sym_c/2 *(a+b) - c)**2
+            sym_c = (-2*t*w + w*z - 9)/(3*w)
+            p1 = z*(t*a+t*b-c)**2*(a-b)**2 + ((-8*t*w+4*w*z-9)*4/(3*w))*a*b*(sym_c/2 *(a+b) - c)**2
         p2 = c*(a*(t*a+(sym_c-t)*b-c)**2 + b*(t*b+(sym_c-t)*a-c)**2)
         return (p1 + p2)/(a + b)
 
@@ -518,10 +543,10 @@ def _sos_struct_acyclic_cubic_symmetric(coeff):
         return None
 
     t, z = tz
-    y = radsimp([
+    y = [
         x3 - x0*t**2*z,
         x2 - x0*(t**2 - 2*t*z),
-    ])
+    ]
     x42 = x4 + y[0]
     x52 = x5 + 2*y[1]
 
@@ -530,19 +555,20 @@ def _sos_struct_acyclic_cubic_symmetric(coeff):
     if w is None:
         return None
 
-    w0 = radsimp(2*(5*t**2 - 2*t*z + 2*z**2)/3)
-    y0 = radsimp(4*(-2*t + z)**3/27)
+    w = coeff.convert(w) if not (w is sp.oo) else w
+    w0 = 2*(5*t**2 - 2*t*z + 2*z**2)/3
+    y0 = 4*(-2*t + z)**3/27
     if w is sp.oo:
-        y += radsimp([
+        y += [
             x42 - x0*(-t**2*z + y0),
             x52 - x0*(w0 - 3*(z - 2*t)**2)
-        ])
+        ]
     else:
-        y1 = radsimp(-3*(-2*t*w + w*z - 3)**2/w**3)
-        y += radsimp([
+        y1 = -3*(-2*t*w + w*z - 3)**2/w**3
+        y += [
             x42 - x0*(-t**2*z + y0 + y1),
             x52 - x0*(w0 + w * y1)
-        ])
+        ]
     if all(_ >= 0 for _ in y):
         p1 = (y[0]*(a+b) + y[1]*c).together() * (a-b)**2
         p2 = (y[2]*(a+b) + y[3]*c).together() * a*b

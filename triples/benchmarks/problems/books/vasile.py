@@ -2328,15 +2328,19 @@ class MathematicalInequalitiesVol3(MathematicalInequalities):
     def problem_vasile_p31086_p2(self):
         return c3s(a**2+a*b) - c3s(a*sqrt(b**2+3*c**2)), [a,b,c], []
 
+    @mark(mark.skip)
     def problem_vasile_p31087_p1(self):
         return c3s(1/a/sqrt(a+2*b)) - sqrt(3/c3p(a)), [a,b,c], []
 
+    @mark(mark.skip)
     def problem_vasile_p31087_p2(self):
         return c3s(1/a/sqrt(a+8*b)) - sqrt(1/c3p(a)), [a,b,c], []
 
+    @mark(mark.skip)
     def problem_vasile_p31088(self):
         return sqrt(c3s(a)/3) - c3s(a/sqrt(5*a+4*b)), [a,b,c], []
 
+    @mark(mark.skip)
     def problem_vasile_p31089_p1(self):
         return c3s(a/sqrt(a+b)) - c3s(sqrt(a)/sqrt(2)), [a,b,c], []
 

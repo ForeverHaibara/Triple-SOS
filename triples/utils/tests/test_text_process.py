@@ -50,10 +50,10 @@ def test_preprocess_test():
                   (x,a,b,d), DihedralGroup(4)),
     ]
     for (s, gens, perms), t in zip(strings_gens_perms, targets):
-        p1 = pl(s, gens=gens, perm=perms, return_type='expr')
+        p1 = pl(s, gens=gens, symmetry=perms, return_type='expr')
         assert p1 == t
 
-        p1 = pl(s, gens=gens, perm=perms)
+        p1 = pl(s, gens=gens, symmetry=perms)
         p2 = Poly(t, *gens)
         assert p1.gens == p2.gens and (p1 - p2).is_zero
 

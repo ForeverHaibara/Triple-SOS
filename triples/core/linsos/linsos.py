@@ -11,7 +11,7 @@ from scipy import __version__ as _SCIPY_VERSION
 from .basis import LinearBasis, LinearBasisTangent, LinearBasisTangentEven
 from .tangents import prepare_tangents, prepare_inexact_tangents, get_qmodule_list
 from .correction import linear_correction, odd_basis_to_even
-from .updegree import lift_degree
+from .lift import lift_degree
 from .solution import create_linear_sol_from_y_basis
 from ..solution import Solution
 from ..preprocess import ProofNode, ProofTree, SolvePolynomial
@@ -238,7 +238,7 @@ class LinearSOSSolver(ProofNode):
                     lift_degree_limit=configs['lift_degree_limit'])
 
     def explore(self, configs):
-        if self.status != 0:
+        if self.state != 0:
             return
 
         verbose = configs['verbose']
@@ -351,7 +351,7 @@ class LinearSOSSolver(ProofNode):
                             linprog_options['options']['time_limit'] = end_time - perf_counter()
 
                         linear_sos = linprog(optimized, A_eq=arrays.T, b_eq=b, **linprog_options)
-                    except:
+                    except Exception:
                         pass
                 if linear_sos is None or not linear_sos.success:
                     # lift the degree up and retry
@@ -402,7 +402,7 @@ class LinearSOSSolver(ProofNode):
                 solution = Solution.dehomogenize(solution, _homogenizer)
             self.problem.solution = solution
 
-        self.status = -1
+        self.state = -1
         self.finished = True
 
 

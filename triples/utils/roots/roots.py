@@ -24,7 +24,7 @@ from ..expressions import EXRAW
 
 try:
     setattr(CRootOf, 'is_algebraic', True)
-except:
+except Exception:
     pass
 
 

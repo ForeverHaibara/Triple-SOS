@@ -1,12 +1,13 @@
 from typing import Tuple, Dict, List, Optional, Union, Callable, Any
+from warnings import warn
 
 import numpy as np
 from sympy import Poly, Expr, Symbol, sympify
 
 from .preprocess import ProofNode, ProofTree, SolvePolynomial
-from .preprocess.pivoting import Pivoting
 from .preprocess.reparam import Reparametrization
 from .linsos.linsos import LinearSOSSolver
+from .pivoting.pivoting import Pivoting
 from .structsos.structsos import StructuralSOSSolver
 from .symsos import SymmetricSubstitution
 from .sdpsos.sdpsos import SDPSOSSolver
@@ -29,16 +30,18 @@ DEFAULT_SAVE_SOLUTION = lambda x: (str(x.solution) if x is not None else '')
 
 
 def sum_of_squares(
-        poly: Union[Poly, Expr],
+        expr: Expr,
         ineq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
         eq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
+        *,
         roots: Optional[List[Union[Tuple[Expr, ...], Dict[Symbol, Expr]]]] = None,
+        verbose: bool = False,
+        time_limit: float = 3600.,
         methods: Optional[List[str]] = None,
         configs: Dict[str, Dict] = {},
-        time_limit: float = 3600.,
         mode: str = "fast",
         method_order: Optional[List[str]] = None, # deprecated
-        verbose: bool = False,
+        poly: Optional[Poly] = None, # deprecated
     ) -> Optional[Solution]:
     """
     Main function for sum of square decomposition.
@@ -89,28 +92,46 @@ def sum_of_squares(
         >>> sum_of_squares(x*(y-z)**2+y*(z-x)**2+z*(x-y)**2, {x:G(x),y:G(y),z:G(z)}).solution # doctest: +SKIP
         Σ(x - y)**2*G(z)
 
+
+    ### Assumptions
+
+    In the current, all SymPy symbol assumptions are ignored and symbols are treated as
+    real variables. To claim nonnegativity of symbols, just add them to `ineq_constraints`.
+    Integer or noncommutative symbol assumptions are not supported in the current either.
+
+        >>> from sympy import Symbol
+        >>> _x = Symbol("x", positive=True)
+        >>> sum_of_squares(_x**2 + 3*_x + 1) is None
+        True
+        >>> sum_of_squares(_x**2 + 3*_x + 1, [_x]) is not None
+        True
+
+
     Parameters
     ----------
-    poly: Union[Poly, Expr]
-        The polynomial to perform SOS on.
+    expr: Expr
+        The expression to perform sum of squares on.
     ineq_constraints: Union[List[Expr], Dict[Expr, Expr]]
         Inequality constraints to the problem. This assumes g_1(x) >= 0, g_2(x) >= 0, ...
     eq_constraints: Union[List[Expr], Dict[Expr, Expr]]
         Equality constraints to the problem. This assumes h_1(x) = 0, h_2(x) = 0, ...
-    methods: Optional[List[str]]
-        The methods to try.
-    configs: Dict[str, Dict]
-        The configurations for each method.
-        It should be a dictionary containing the ProofNode classes as keys and the kwargs as values.
-    time: float
+    roots: Optional[List[Union[Tuple[Expr, ...], Dict[Symbol, Expr]]]]
+        Equality cases of the expression. This saves the time for searching equality
+        cases if provided.
+    verbose: bool
+        Whether to print information during the solving process. Defaults to False.
+    time_limit: float
         The time limit (in seconds) for the solver. Defaults to 3600. When the time limit is
         reached, the solver is killed when it returns to the main loop.
         However, it might not be killed instantly if it is stuck in an internal function.
+    configs: Dict[str, Dict]
+        The configurations for each method.
+        It should be a dictionary containing the ProofNode classes as keys and the kwargs as values.
+    methods: Optional[List[str]]
+        The methods to try.
     mode: str
         Experimental. The mode of the solver. Defaults to 'fast'. Supports 'fast' and 'pretty'.
         If 'pretty', it traverses all methods and selects the most pretty solution.
-    verbose: bool
-        Whether to print information during the solving process. Defaults to False.
 
 
     Returns
@@ -118,11 +139,14 @@ def sum_of_squares(
     Optional[Solution]
         The solution. If no solution is found, None is returned.
     """
-    problem = ProofNode.new_problem(poly, ineq_constraints, eq_constraints)
+    if poly is not None:
+        warn("poly is deprecated. Use expr instead.", DeprecationWarning, stacklevel=2)
+        expr = poly
+
+    problem = ProofNode.new_problem(expr, ineq_constraints, eq_constraints)
     problem.set_roots(roots)
 
     if method_order is not None:
-        from warnings import warn
         warn("method_order is deprecated. Use methods instead.", DeprecationWarning, stacklevel=2)
         methods = methods or method_order
 

@@ -3,7 +3,7 @@ class ProblemComplexity:
     time  : `E(time)` expected time to solve the problem.
     prob  : `E(success prob)` assuming the problem is correct.
     length: `E(length of solution | success)` expected length of the solution if the problem is solved.
-    status: Status code or timestamp when evaluated.
+    state: State code or timestamp when evaluated.
 
     #### Comparison of ProblemComplexity
     Consider solving a problem by two methods, A and B, with time t1, t2 and success probability p1, p2.
@@ -17,12 +17,12 @@ class ProblemComplexity:
     time: float = 0
     prob: float = 0
     length: float = 0
-    status: int = 0
-    def __init__(self, time, prob, length=0., status=0):
+    state: int = 0
+    def __init__(self, time, prob, length=0., state=0):
         self.time = time
         self.prob = prob
         self.length = length
-        self.status = status
+        self.state = state
 
     def __str__(self) -> str:
         return f"{{time: {self.time:.2f}, prob: {self.prob:.2f}, length: {self.length:.2f}}}"
@@ -31,7 +31,7 @@ class ProblemComplexity:
         return self.__str__()
 
     def copy(self) -> 'ProblemComplexity':
-        return ProblemComplexity(self.time, self.prob, self.length, self.status)
+        return ProblemComplexity(self.time, self.prob, self.length, self.state)
 
     def __and__(a, b) -> 'ProblemComplexity':
         return ProblemComplexity(

@@ -1,10 +1,11 @@
 from typing import Optional, Tuple, List, Dict, Union, Generator
 
 import sympy as sp
+from sympy import Poly, Expr, Symbol, Rational, Integer, Float, sympify
 
 from .polysolve import nroots
 
-def univariate_intervals(polys: Union[sp.Poly, List[sp.Poly]]) -> Generator[sp.Rational, None, None]:
+def univariate_intervals(polys: Union[Poly, List[Poly]]) -> Generator[Rational, None, None]:
     """
     Compute rational points where polys have sign changes.
 
@@ -31,7 +32,7 @@ def rationalize(
         rounding: float = 1e-2,
         reliable: bool = False,
         truncate: Optional[int] = 32
-    ) -> sp.Rational:
+    ) -> Rational:
     """
     Approximates a floating number to a reasonable fraction.
 
@@ -49,15 +50,18 @@ def rationalize(
 
     Return
     ----------
-    p/q : sp.Rational
+    p/q : Rational
         The approximation of v.
     """
-    if isinstance(v, (sp.Rational, int)):
-        return sp.S(v)
+    if isinstance(v, (Rational, int)):
+        return sympify(v)
     else:
+        if not isinstance(v, Expr):
+            v = sympify(v)
+        if (not isinstance(v, (float, Float))):
+            v = v.n(15)
         if True: # reliable:
-            # https://tieba.baidu.com/p/7846250213
-            x = sp.Rational(v)
+            x = Rational(v)
             t = sp.floor(x)
             x = x - t
             fracs = [t]
@@ -148,14 +152,14 @@ def rationalize_array(x, tol = 1e-7, reliable = True):
     '''
     y = []
     for v in x:
-        if isinstance(v, (float, sp.Float)):
+        if isinstance(v, (float, Float)):
             if abs(v) < tol:
                 y.append(0)
             else:
                 y.append(rationalize(v, reliable = reliable))
         elif isinstance(v, tuple):
             y.append(v[0] / v[1])
-        elif isinstance(v, sp.Expr) and not isinstance(v, sp.Rational):
+        elif isinstance(v, Expr) and not isinstance(v, Rational):
             v_ = v.as_numer_denom()
             y.append(v_[0] / v_[1])
         else:
@@ -174,7 +178,7 @@ def rationalize_bound(v, direction = 1, roundings = None, compulsory = True):
         If direction = -1, find something < v
         If direction = 0, find anything close to v
     """
-    if isinstance(v, sp.Rational):
+    if isinstance(v, Rational):
         yield v
         return
     if roundings is None:
@@ -202,40 +206,14 @@ def rationalize_bound(v, direction = 1, roundings = None, compulsory = True):
             yield v_
 
 
-def square_perturbation(a, b, times = 4):
-    """
-    Find t such that (a-t)/(b-t) is square, please be sure a/b is not a square
-    """
-    if a > b:
-        z = max(1, int((a / b)**0.5))
-    else:
-        z = max(1, int((b / a)**0.5))
-    z = sp.Rational(z)  # convert to rational
-
-    for i in range(times): # Newton has quadratic convergence, we only try a few times
-        # (a-t)/(b-t) = z^2  =>  t = (a - z^2 b) / (1 - z^2)
-        if i > 0 or z == 1:
-            # easy to see z > sqrt(a/b) (or z > sqrt(b/a))
-            z = (z + a/b/z)/2 if a > b else (z + b/a/z)/2
-        if a > b:
-            t = (a - z*z*b) / (1 - z*z)
-            if t < 0 or b < t:
-                continue
-        else:
-            t = (b - z*z*a) / (1 - z*z)
-            if t < 0 or a < t:
-                continue
-        yield t
-
-
 def cancel_denominator(nums):
     """
     Extract the gcd of numerators and lcm of denominators.
     """
     from functools import reduce
-    nums = list(filter(lambda x: isinstance(x, sp.Rational), nums))
+    nums = list(filter(lambda x: isinstance(x, Rational), nums))
     if len(nums) <= 1:
-        return sp.S(1)
+        return Integer(1)
 
     p = reduce(sp.gcd, [_.as_numer_denom()[0] for _ in nums])
     q = reduce(sp.lcm, [_.as_numer_denom()[1] for _ in nums])
@@ -243,13 +221,12 @@ def cancel_denominator(nums):
     return p / q
 
 
-
 def rationalize_quadratic_curve(
-        curve: sp.Expr,
-        gen: sp.Symbol = sp.Symbol('t'),
-        point: Union[Dict[sp.Symbol, sp.Rational], Tuple[sp.Rational, sp.Rational]] = None,
+        curve: Expr,
+        gen: Symbol = Symbol('t'),
+        point: Union[Dict[Symbol, Rational], Tuple[Rational, Rational]] = None,
         one_point: bool = False
-    ) -> Dict[sp.Symbol, sp.Rational]:
+    ) -> Dict[Symbol, Rational]:
     """
     (EXPERIMENTAL) Rationalize a quadratic curve using the secant method.
 
@@ -261,7 +238,7 @@ def rationalize_quadratic_curve(
     gen : sympy symbol
         The parametrized parameter.
 
-    point : Dict[sp.Symbol, sp.Rational] or Tuple[sp.Rational, sp.Rational]
+    point : Dict[Symbol, Rational] or Tuple[Rational, Rational]
         One of the rational point on the curve for secant method.
         If not given, it is searched automatically.
 
@@ -277,7 +254,7 @@ def rationalize_quadratic_curve(
     """
     from sympy.solvers.diophantine.diophantine import diop_DN
     from sympy.ntheory.factor_ import core
-    x, y = curve.gens if isinstance(curve, sp.Poly) else list(curve.free_symbols)
+    x, y = curve.gens if isinstance(curve, Poly) else list(curve.free_symbols)
     if point is not None:
         if not isinstance(point, dict):
             point = {x: point[0], y: point[1]}
@@ -336,7 +313,7 @@ def rationalize_quadratic_curve(
     return {x: x__, y: y__}
 
 
-def common_region_of_conics(polys: List[sp.Poly], _tol = 1e-10) -> Optional[Tuple[sp.Rational, sp.Rational]]:
+def common_region_of_conics(polys: List[Poly], _tol = 1e-10) -> Optional[Tuple[Rational, Rational]]:
     """
     Find (x, y) such that polys[i](x, y) >= 0 for all i.
     where polys are rational conics of two variables.
@@ -348,28 +325,28 @@ def common_region_of_conics(polys: List[sp.Poly], _tol = 1e-10) -> Optional[Tupl
     for p in polys:
         if p.total_degree() > 0:
             non_const_conics.append(p)
-        elif p.coeff_monomial(sp.S(1)) < 0:
+        elif p.coeff_monomial(Integer(1)) < 0:
             return None
     polys = non_const_conics
 
     if len(polys) == 0:
-        return (sp.S(0), sp.S(0))
+        return (Integer(0), Integer(0))
     assert len(polys[0].gens) == 2, "The conics must be 2D."
     assert all(p.gens == polys[0].gens for p in polys), "The conics must have the same variables."
     x, y = polys[0].gens
 
 
     if len(polys) == 1:
-        polys.append(sp.Poly.from_dict({}, (x, y)))
+        polys.append(Poly.from_dict({}, (x, y)))
 
     def _common_region_of_two_conics(f1, f2):
         # try centers, which are easy to compute
         def _center(f):
             if f.total_degree() == 0:
-                return (sp.S(0), sp.S(0))
+                return (Integer(0), Integer(0))
             sol = sp.solve([f.diff(x), f.diff(y)], [x,y], dict = True)
             def _get_default(k, v):
-                r = k.get(v, sp.S(0))
+                r = k.get(v, Integer(0))
                 r = r.subs(dict(zip(r.free_symbols, [0]*len(r.free_symbols))))
                 return r
             if len(sol) == 1:
@@ -392,19 +369,19 @@ def common_region_of_conics(polys: List[sp.Poly], _tol = 1e-10) -> Optional[Tupl
             a, b, c = [gcd.coeff_monomial(_) for _ in [(1,0),(0,1),(0,0)]]
             # ax + by + c = 0
             if b != 0:
-                yield (sp.S(0), -c/b)
+                yield (Integer(0), -c/b)
             if a != 0:
-                yield (-c/a, sp.S(0))
+                yield (-c/a, Integer(0))
 
         # sometimes f1, f2 intersect at the infinity line, e.g. xy = 1 and xy = 4.
         # we can try out x = 0 and y = 0 and y = x three lines to cut the conics
         if True:
             for y_ in univariate_intervals([f1.subs(x, 0), f2.subs(x, 0)]):
                 if f1(0, y_) >= 0 and f2(0, y_) >= 0:
-                    yield sp.S(0), y_
+                    yield Integer(0), y_
             for x_ in univariate_intervals([f1.subs(y, 0), f2.subs(y, 0)]):
                 if f1(x_, 0) >= 0 and f2(x_, 0) >= 0:
-                    yield x_, sp.S(0)
+                    yield x_, Integer(0)
             for x_ in univariate_intervals([f1.subs(y, x).as_poly(x), f2.subs(y, x).as_poly(x)]):
                 if f1(x_, x_) >= 0 and f2(x_, x_) >= 0:
                     yield x_, x_
@@ -421,7 +398,7 @@ def common_region_of_conics(polys: List[sp.Poly], _tol = 1e-10) -> Optional[Tupl
         for x_ in nroots(res, method='factor', real=True):
             for y_ in nroots(f1.subs(x, x_).as_poly(y), method='factor', real=True):
                 if abs(f1(x_, y_)) < _tol and abs(f2(x_, y_)) < _tol:
-                    if (not isinstance(x_, sp.Rational)) or (not isinstance(y_, sp.Rational)):
+                    if (not isinstance(x_, Rational)) or (not isinstance(y_, Rational)):
                         grad1 = _norm(_grad(f1, x_, y_))
                         grad2 = _norm(_grad(f2, x_, y_))
                         grad_merged = (grad1[0] + grad2[0], grad1[1] + grad2[1])
