@@ -27,24 +27,12 @@ function connectSocket(callback){
     socket.on('preprocess', function(data){
     });
 
-    socket.on('rootangents', function(data){
-        let str = data.rootsinfo;
-        // /n -> <br>
-        let i = 0;
-        while (i < str.length){
-            if (str[i] == '\n'){
-                str = str.slice(0, i) + ' <br> ' + str.slice(i+1, str.length);
-                i += 5;
-            }
-            ++i;
-        }
-        document.getElementById("rootsinfo").innerHTML = str;
-        
-        // str = data.tangents;
-        // if (Array.isArray(str)){
-        //     str = str.join('\n');
-        // }
-        // document.getElementById("input_tangents").value = str;
+    socket.on('findroots', function(data){
+        const roots = data.rootsinfo;
+        const trunc = roots.slice(0, Math.min(5, roots.length));
+        let roots_string = 'Local Minima Approx:<br>' +
+            trunc.map(root => "(" + root.join(", ") + ")").join("<br>");
+        document.getElementById("rootsinfo").innerHTML = roots_string;
     });
 
     socket.on('sos', function(data){

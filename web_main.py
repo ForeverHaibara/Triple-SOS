@@ -1,10 +1,11 @@
-from typing import Tuple, Optional
+from typing import Tuple, List, Dict, Optional
 
 from flask import Flask, render_template, request, jsonify
 from flask_socketio import SocketIO, join_room, leave_room
 from flask_cors import CORS
 
-from sympy import Poly, Symbol, Rational, sympify
+from sympy import Poly, Expr, Symbol, Rational, sympify
+from sympy.combinatorics import PermutationGroup
 
 from triples.utils.text_process import (
     pl, poly_get_factor_form, poly_get_standard_form, degree_of_expr,
@@ -13,10 +14,9 @@ from triples.utils.text_process import (
 from triples.utils import (
     optimize_poly, Root
 )
-from triples.core import Solution
+from triples.core import Solution, sum_of_squares
 from triples.gui.grid import GridRender
 from triples.gui.sos_manager import SOSManager
-from triples.gui.linebreak import recursive_latex_auto_linebreak
 
 class SOS_WEB(Flask):
     def __init__(self, *args, **kwargs):
@@ -51,12 +51,14 @@ def apply_transformations(
     omit_mul = True,
     omit_pow = True,
 ) -> Tuple[Poly, str]:
+    if standardize_text is False:
+        standardize_text = None
 
     if cancel:
         if isinstance(expr, tuple):
             # discard the denominator if required
             if expr[1] != Poly(1, expr[1].gens, domain=expr[1].domain) \
-                    and standardize_text is None:
+                    and (standardize_text is None):
                 # the denominator is not one, and the expression is modified
                 # -> recompute the expression
                 standardize_text = "sort"
@@ -71,19 +73,16 @@ def apply_transformations(
                 standardize_text = "sort"
 
         if dehomogenize is not None and dehomogenize is not False:
-            try:
-                dehomogenize_val = sympify(dehomogenize)
-                if len(dehomogenize_val.free_symbols) == 0:  # dehomogenize is a constant
-                    for i in range(len(poly.gens) - 1, -1, -1):
-                        if poly.degree(i) != 0:
-                            poly = poly.eval(poly.gens[i], dehomogenize_val)
-                            poly = poly.as_poly(*gens, domain=poly.domain)
-                            if standardize_text is None:
-                                standardize_text = "sort"
-                            break
-            except Exception:
-                # Ignore dehomogenization errors
-                pass
+            dehomogenize_val = sympify(dehomogenize)
+            if len(dehomogenize_val.free_symbols) == 0:  # dehomogenize is a constant
+                gens = poly.gens
+                for i in range(len(gens) - 1, -1, -1):
+                    if poly.degree(i) != 0:
+                        poly = poly.eval(gens[i], dehomogenize_val)
+                        poly = poly.as_poly(*gens, domain=poly.domain)
+                        if standardize_text is None:
+                            standardize_text = "sort"
+                        break
         expr = poly
 
     elif isinstance(expr, tuple):
@@ -208,7 +207,7 @@ def preprocess():
 
     sid = req.pop("sid")
 
-    req["poly"] = expr
+    req["expr"] = expr
     socketio.start_background_task(chained_actions, sid, **req)
     return jsonify(
         txt = text if text is not None else req_input,
@@ -221,97 +220,88 @@ def preprocess():
 def chained_actions(sid, **kwargs):
     actions = kwargs.get("actions", [])
     if "findroot" in actions:
-        roots = findroot(sid, **kwargs)
+        roots = _findroots(sid,
+            kwargs["expr"],
+            timestamp = kwargs.get("timestamp", 0),
+        )
+        # Do not push the roots to the args of sum_of_squares,
+        # since the roots are found without constraints.
+
     if "sos" in actions:
-        sum_of_squares(sid, **kwargs)
+        _sum_of_squares(sid,
+            kwargs["expr"],
+            kwargs["ineq_constraints"],
+            kwargs["eq_constraints"],
+            methods = kwargs["methods"],
+            configs = kwargs["configs"],
+            gens = kwargs["gens"],
+            symmetry = kwargs["perm"],
+            timestamp = kwargs.get("timestamp", 0),
+        )
 
 
-def findroot(sid, **kwargs):
-    poly = kwargs['poly']
-    roots = optimize_poly(poly, [], [poly]) \
-        if poly.domain.is_ZZ or poly.domain.is_QQ else []
+def _findroots(sid: int, expr: Poly, *, timestamp: int = 0):
+    poly = expr
+    roots = []
+    if isinstance(poly, Poly) and (poly.domain.is_ZZ or poly.domain.is_QQ):
+        roots = optimize_poly(poly, [], [poly])
     socketio.emit(
-        'rootangents',
-        {
-            'rootsinfo': 'Local Minima Approx:\n' + '\n'.join(
-                [str(tuple(__ if isinstance(__, Rational) else __.n(8) for __ in r))
-                        for r in roots[:min(len(roots), 5)]]),
-            'tangents': [], # deprecated
-            'timestamp': kwargs.get('timestamp', 0)
+        'findroots', {
+            'rootsinfo': [
+                [str(v if isinstance(v, Rational) else v.n(8)) for v in r]
+                    for r in roots
+            ],
+            'timestamp': timestamp,
         },
         to=sid
     )
+    return roots
 
 
-def sum_of_squares(sid, **kwargs):
-    """
-    Perform the sum of square decomposition, and emit the result to the client.
-    Always emit the result to the client, even if the solution is None or an error occurs.
+def parse_constraints_dict(source: Dict[str, str], parser) -> Dict[Expr, Expr]:
+    constraints = {}
+    for key, value in source.items():
+        key, value = key.strip(), value.strip()
+        if len(key) == 0:
+            continue
+        key = parser(key)
+        if len(value) != 0:
+            # we will not use parser here
+            value = sympify(value)
+        else:
+            value = key
+        constraints[key] = value
+    return constraints
 
-    Parameters
-    ----------
-    sid : str
-        The session ID.
-    poly : str
-        The input polynomial.
-    ineq_constraints: dict[str, str]
-        The ineq constraints.
-    eq_constraints: dict[str, str]
-        The eq constraints.
-    methods : dict[str, bool]
-        The methods to use.
-    configs : dict[str, dict]
-        The configurations for each method.
-    roots : list[Root]
-        The roots of the polynomial.
-    perm : PermutationGroup
 
-    Returns
-    ----------
-    latex : str
-        The LaTeX representation of the solution.
-    txt : str
-        The text representation of the solution.
-    formatted : str
-        The formatted representation of the solution.
-    success : bool
-        Whether the solution was found.
-    """
+def _sum_of_squares(sid: int,
+    expr: Expr,
+    ineq_constraints: Dict[str, str],
+    eq_constraints: Dict[str, str],
+    *,
+    methods: List[str],
+    configs: dict,
+    gens: Tuple[Symbol, ...],
+    symmetry: PermutationGroup,
+    timestamp: int = 0,
+):
     try:
-        methods = [key for key, value in kwargs['methods'].items() if value]
-        methods.extend(['Pivoting', 'Reparametrization'])
+        parser = lambda x: pl(x, gens, symmetry, return_type='expr')
+        ineq_constraints = parse_constraints_dict(ineq_constraints, parser)
+        eq_constraints = parse_constraints_dict(eq_constraints, parser)
 
-        gens = kwargs['gens']
-        # ineq_constraints = kwargs['poly'].free_symbols if SOSManager.ALLOW_NONSTANDARD_GENS else gens
-
-        def parse_constraint_dict(source):
-            constraints = {}
-            for key, value in source.items():
-                key, value = key.strip(), value.strip()
-                if len(key) == 0:
-                    continue
-                key = pl(key, gens, kwargs['perm'], return_type='expr')
-                if len(value) != 0:
-                    value = sympify(value)
-                else:
-                    value = key
-                constraints[key] = value
-            return constraints
-
-        ineq_constraints = parse_constraint_dict(kwargs['ineq_constraints'])
-        eq_constraints = parse_constraint_dict(kwargs['eq_constraints'])
-
-        solution = SOSManager.sum_of_squares(
-            kwargs['poly'],
-            ineq_constraints = ineq_constraints,
-            eq_constraints = eq_constraints,
-            gens = gens,
-            symmetry = kwargs['perm'],
+        solution = sum_of_squares(
+            expr,
+            ineq_constraints,
+            eq_constraints,
             methods = methods,
-            configs = kwargs['configs']
+            time_limit = 300.,
+            configs = configs
         )
 
         assert solution is not None, 'No solution found.'
+
+        solution = solution.rewrite_symmetry(gens, symmetry)
     except Exception as e:
         return socketio.emit(
             "sos",
@@ -320,27 +310,24 @@ def sum_of_squares(sid, **kwargs):
                 "txt": "", 
                 "formatted": "", 
                 "success": False,
-                "timestamp": kwargs.get("timestamp", 0)
+                "timestamp": timestamp,
             },
             to=sid
         )
 
-    lhs_expr = Symbol('\\text{LHS}')
     if isinstance(solution, Solution):
         # # remove the aligned environment
-        tex = solution.to_string(mode='latex', lhs_expr=lhs_expr,
+        tex = solution.to_string(mode='latex', lhs_expr=Symbol('\\text{LHS}'),
             together=True, cancel=True, settings={'long_frac_ratio':2})#.replace('aligned', 'align*')
-        tex = recursive_latex_auto_linebreak(tex)
-        tex = '$$%s$$'%tex
 
     return socketio.emit(
         "sos",
         {
             "latex": tex, 
-            "txt": solution.to_string(mode="txt", lhs_expr=lhs_expr),
-            "formatted": solution.to_string(mode="formatted", lhs_expr=lhs_expr),
+            "txt": solution.to_string(mode="txt", lhs_expr=Symbol('LHS')),
+            "formatted": solution.to_string(mode="formatted", lhs_expr=Symbol('LHS')),
             "success": True,
-            "timestamp": kwargs.get("timestamp", 0)
+            "timestamp": timestamp,
         },
         to=sid
     )

@@ -4,23 +4,21 @@ from collections import defaultdict
 # import re
 
 from sympy import Expr, Poly, QQ, RR, Rational, Integer, Float, Symbol
-from sympy import parse_expr, sympify, fraction, cancel, latex
+from sympy import parse_expr, sympify, fraction, latex
 from sympy import symbols as sp_symbols
 from sympy.polys import ring
 from sympy.polys.polyclasses import DMP
-from sympy.combinatorics import (Permutation, PermutationGroup,
-    CyclicGroup, SymmetricGroup, AlternatingGroup, DihedralGroup
-)
+from sympy.combinatorics import PermutationGroup
 from sympy.printing.precedence import precedence_traditional, PRECEDENCE
 
 from .expressions import CyclicSum, CyclicProduct
-from .monomials import poly_reduce_by_symmetry, verify_symmetry
+from .monomials import parse_symmetry, poly_reduce_by_symmetry, verify_symmetry
 
 def cycle_expansion(
     f: str,
     symbol: str = 's',
     gens: Tuple[Symbol, ...] = sp_symbols("a b c"),
-    perm_group: Optional[PermutationGroup] = None
+    symmetry: Union[str, PermutationGroup] = "cyc",
 ) -> str:
     """
     Parameters
@@ -35,16 +33,15 @@ def cycle_expansion(
         Warning : Please add parenthesis yourself before expansion if necessary.
     gens: Tuple[Symbol, ...]
         The generators of the polynomial.
-    perm_group: Optional[PermutationGroup]
-        The permutation group of the expression. If None, it will be cyclic group.
+    symmetry: Union[str, PermutationGroup]
+        The permutation group of the expression. If None, it will be the cyclic group.
 
     Returns
     -------
     str
         A string, the result of the cycle expansion.
     """
-    if perm_group is None:
-        perm_group = CyclicGroup(len(gens))
+    perm_group = parse_symmetry(symmetry, len(gens))
 
     original_names = [ord(_.name) for _ in gens]
     translations = [
@@ -52,24 +49,6 @@ def cycle_expansion(
     ]
     symbol = ' * ' if symbol == 'p' else ' + '
     return symbol.join(f.translate(t) for t in translations)
-
-def _parse_symmetry(symmetry: Union[PermutationGroup, str], n: int) -> PermutationGroup:
-    if isinstance(symmetry, str):
-        maps = {
-            "cyc": CyclicGroup,
-            "sym": SymmetricGroup,
-            "alt": AlternatingGroup,
-            "dih": DihedralGroup,
-            "trivial": lambda n: PermutationGroup(Permutation(list(range(n))))
-        }
-        if symmetry in maps:
-            symmetry = maps[symmetry](n)
-        else:
-            raise ValueError(
-                f"Expected one of {tuple(maps.keys())} as symmetry, but received {symmetry}")
-    elif not isinstance(symmetry, PermutationGroup):
-        raise TypeError("Symmetry should be either PermutationGroup or str.")
-    return symmetry
 
 ##########################################################################
 #
@@ -173,10 +152,10 @@ def _preprocess_text_expansion(poly: str, gens: Tuple[Symbol, ...], perm_group: 
 
 
 def _preprocess_text_completion(
-        poly: str,
-        scientific_notation: bool = False,
-        preserve_patterns: List[str] = ('sqrt',)
-    ) -> str:
+    poly: str,
+    scientific_notation: bool = False,
+    preserve_patterns: List[str] = ('sqrt',)
+) -> str:
     """
     Complete the polynomial with * and ^. E.g.
     1/5a3b2c   ->   1/5*a^3*b^2*c
@@ -348,7 +327,7 @@ def _preprocess_text_to_expr(
     cyclic_prod_func: str = 'p',
     parse_expr_kwargs: Optional[Dict] = None,
 ) -> Expr:
-    symmetry = _parse_symmetry(symmetry, len(gens))
+    symmetry = parse_symmetry(symmetry, len(gens))
 
     if parse_expr_kwargs is None:
         parse_expr_kwargs = {}
@@ -684,6 +663,7 @@ def poly_get_standard_form(
     Examples
     --------
     >>> from sympy.abc import x, y, z, a, b, c
+    >>> from sympy.combinatorics import Permutation, PermutationGroup
     >>> poly_get_standard_form(((x*a+y*b+z*c)**2).as_poly(x,y,z))
     '((a^2)x2+(2*a*b)xy+(2*a*c)xz+(b^2)y2+(2*b*c)yz+(c^2)z2)'
     >>> poly_get_standard_form(((x*a+y*b+z*c)**2).as_poly(x,y,z,a,b,c), PermutationGroup(Permutation([1,2,0,4,5,3])))
@@ -704,7 +684,7 @@ def poly_get_standard_form(
         warn("perm is deprecated, use symmetry instead", DeprecationWarning, stacklevel=2)
         symmetry = perm
 
-    symmetry = _parse_symmetry(symmetry, len(poly.gens))
+    symmetry = parse_symmetry(symmetry, len(poly.gens))
     if _is_cyc is None:
         _is_cyc = verify_symmetry(poly, symmetry)
 
@@ -846,7 +826,7 @@ def poly_get_factor_form(
         warn("perm is deprecated, use symmetry instead", DeprecationWarning, stacklevel=2)
         symmetry = perm
 
-    symmetry = _parse_symmetry(symmetry, len(poly.gens))
+    symmetry = parse_symmetry(symmetry, len(poly.gens))
 
     coeff, factors, cyc_factors = _reduce_factor_list(poly, symmetry)
 

@@ -1,4 +1,4 @@
-from typing import Dict, Set, List, Optional
+from typing import Dict, Set, List, Union, Optional
 
 from sympy import Poly, Expr, Dummy
 from sympy.polys import ZZ, QQ
@@ -55,10 +55,10 @@ class SymmetricSubstitution(TransformNode):
 
 # @sanitize(homogenize=True)
 def SymmetricSOS(
-        poly: Poly,
-        ineq_constraints: Dict[Poly, Expr] = {},
-        eq_constraints: Dict[Poly, Expr] = {},
-    ) -> Optional[Solution]:
+    expr: Expr,
+    ineq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
+    eq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
+) -> Optional[Solution]:
     """
     Solve symmetric polynomial inequalities using special
     changes of variables. The algorithm is powerful but produces
@@ -66,11 +66,11 @@ def SymmetricSOS(
 
     Parameters
     ----------
-    poly: Poly
-        The polynomial to perform SOS on.
-    ineq_constraints: List[Poly]
+    expr: Expr
+        The expression to perform SOS on.
+    ineq_constraints: Union[List[Expr], Dict[Expr, Expr]]
         Inequality constraints to the problem. This assumes g_1(x) >= 0, g_2(x) >= 0, ...
-    eq_constraints: List[Poly]
+    eq_constraints: Union[List[Expr], Dict[Expr, Expr]]
         Equality constraints to the problem. This assumes h_1(x) = 0, h_2(x) = 0, ...
 
     Returns
@@ -88,7 +88,7 @@ def SymmetricSOS(
     """
     # from ..structsos import StructuralSOS
     from ..sdpsos.sdpsos import SDPSOSSolver
-    problem = TransformNode.new_problem(poly, ineq_constraints, eq_constraints)
+    problem = TransformNode.new_problem(expr, ineq_constraints, eq_constraints)
     configs = {
         # TODO: ...
         SolvePolynomial: {'solvers': [SymmetricSubstitution, SDPSOSSolver]},

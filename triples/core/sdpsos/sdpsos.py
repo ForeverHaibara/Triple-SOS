@@ -35,10 +35,10 @@ def _lazy_find_roots(problem, verbose=False):
 
 
 def _get_qmodule_list(poly: Poly, ineq_constraints: List[Tuple[Poly, Expr]],
-        ineq_constraints_with_trivial: bool = True,
-        preordering: str = 'linear-progressive',
-        is_homogeneous: bool = True
-    ) -> Generator[List[Tuple[Poly, Expr]], None, None]:
+    ineq_constraints_with_trivial: bool = True,
+    preordering: str = 'linear-progressive',
+    is_homogeneous: bool = True
+) -> Generator[List[Tuple[Poly, Expr]], None, None]:
     """
     Generate the (generators of the) qmodule for the given problem.
     """
@@ -96,12 +96,12 @@ def _get_qmodule_list(poly: Poly, ineq_constraints: List[Tuple[Poly, Expr]],
 
 
 def _is_infeasible(
-        poly: Poly,
-        qmodule: List[Poly],
-        ideal: List[Poly],
-        degree: int,
-        symmetry: PermutationGroup = None,
-    ) -> bool:
+    poly: Poly,
+    qmodule: List[Poly],
+    ideal: List[Poly],
+    degree: int,
+    symmetry: PermutationGroup = None,
+) -> bool:
     """
     Check if the problem is trivially infeasible. Returns True if infeasible.
     """
@@ -273,19 +273,20 @@ class SDPSOSSolver(ProofNode):
 
 
 def SDPSOS(
-        poly: Poly,
-        ineq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
-        eq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
-        symmetry: Optional[Union[MonomialManager, PermutationGroup]] = None,
-        roots: Optional[List[Root]] = None,
-        ineq_constraints_with_trivial: bool = True,
-        preordering: str = 'linear-progressive',
-        verbose: bool = False,
-        time_limit: float = 3600,
-        solver: Optional[str] = None,
-        allow_numer: int = 0,
-        solve_kwargs: Dict[str, Any] = {},
-    ) -> Optional[SolutionSDP]:
+    expr: Expr,
+    ineq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
+    eq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
+    *,
+    symmetry: Optional[PermutationGroup] = None,
+    roots: Optional[List[Root]] = None,
+    ineq_constraints_with_trivial: bool = True,
+    preordering: str = 'linear-progressive',
+    verbose: bool = False,
+    time_limit: float = 3600.,
+    solver: Optional[str] = None,
+    allow_numer: int = 0,
+    solve_kwargs: Dict[str, Any] = {},
+) -> Optional[SolutionSDP]:
     """
     Solve a constrained polynomial inequality problem by semidefinite programming (SDP).
 
@@ -293,17 +294,14 @@ def SDPSOS(
 
     Parameters
     ----------
-    poly: Poly
-        The polynomial to perform SOS on.
-    ineq_constraints: List[Poly]
+    expr: Expr
+        The expression to perform SOS on.
+    ineq_constraints: Union[List[Expr], Dict[Expr, Expr]]
         Inequality constraints to the problem. This assumes g_1(x) >= 0, g_2(x) >= 0, ...
-        This is used to generate the quadratic module.
-    eq_constraints: List[Poly]
+    eq_constraints: Union[List[Expr], Dict[Expr, Expr]]
         Equality constraints to the problem. This assumes h_1(x) = 0, h_2(x) = 0, ...
-        This is used to generate the ideal (quotient ring).
-    symmetry: PermutationGroup or MonomialManager
-        The symmetry of the polynomial. When it is None, it will be automatically generated.
-        If we want to skip the symmetry generation algorithm, please pass in a MonomialManager object.
+    symmetry: Optional[PermutationGroup]
+        CURRENTLY UNUSED.    
     roots: Optional[List[Root]]
         The roots of the polynomial satisfying constraints. When it is None, it will be automatically generated.
     ineq_constraints_with_trivial: bool
@@ -319,7 +317,7 @@ def SDPSOS(
     allow_numer: int
         Whether to allow numerical solution.
     """
-    problem = ProofNode.new_problem(poly, ineq_constraints, eq_constraints)
+    problem = ProofNode.new_problem(expr, ineq_constraints, eq_constraints)
     problem.set_roots(roots)
     configs = {
         ProofTree: {

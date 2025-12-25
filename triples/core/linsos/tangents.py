@@ -148,10 +148,10 @@ def _get_ineq_constrained_tangents(ineq: Poly, ineq_expr: Expr, roots: List[Root
 
 
 def prepare_tangents(problem: InequalityProblem,
-        qmodule: Optional[Dict[Poly, Expr]] = None,
-        default_tangents = DEFAULT_TANGENTS,
-        additional_tangents: List[Expr] = [],
-    ) -> Dict[Poly, Expr]:
+    qmodule: Optional[Dict[Poly, Expr]] = None,
+    default_tangents = DEFAULT_TANGENTS,
+    additional_tangents: List[Expr] = [],
+) -> Dict[Poly, Expr]:
     """
     Prepare tangents for LinearSOS given a list of roots (equality cases). The tangents should
     vanish in the given roots. The function returns a dictionary of {tangent: tangent_expr}.
@@ -310,11 +310,11 @@ def get_qmodule_list(poly: Poly, ineq_constraints: Dict[Poly, Expr],
 ###################################################################
 
 def prepare_inexact_tangents(problem: InequalityProblem,
-        monomial_manager: MonomialManager = None,
-        all_nonnegative: bool = False,
-        threshold: float = 0.5,
-        max_degree: int = 5
-    ) -> Dict[Poly, Expr]:
+    monomial_manager: MonomialManager = None,
+    all_nonnegative: bool = False,
+    threshold: float = 0.5,
+    max_degree: int = 5
+) -> Dict[Poly, Expr]:
     """
     The function `prepare_tangents` has highlighted the importance of handling the roots.
     However, even if there are no zeros, we need to pay attention to local minima that are very close

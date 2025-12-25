@@ -482,6 +482,7 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
 
 
     function CreateVariables(){
+        // this is currently unused
         const n = sos_variables.names.length; 
         for (let i = 0; i < n; ++i){
             let variable = document.createElement('div');
@@ -497,6 +498,7 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
     }
     CreateVariables();
 </script>
+<script src="static/js/linebreak.js"></script>
 <script src="static/js/visualization.js"></script>
 <script src="static/js/history.js"></script>
 <script src="static/js/on_change.js"></script>
@@ -592,12 +594,15 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
         changeNumOfSOS(sos_work.num + 1);
 
         const input_poly = document.getElementById('input_poly').value;
-        const methods = {
+        let methods = {
             StructuralSOS: document.getElementById("setting_method_use_StructuralSOS").checked,
             LinearSOS: document.getElementById("setting_method_use_LinearSOS").checked,
             SymmetricSOS: document.getElementById("setting_method_use_SymmetricSOS").checked,
             SDPSOS: document.getElementById("setting_method_use_SDPSOS").checked,
-        }
+            Pivoting: true,
+            Reparametrization: true,
+        };
+        methods = Object.entries(methods).filter(([key, value]) => value).map(([key, value]) => key);
         const configs = {
             StructuralSOS:{
                 // real: document.getElementById("setting_method_StructuralSOS_real").checked,
@@ -613,8 +618,13 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
         }
         const constraints = getConstraints();
 
-        let kwargs = {ineq_constraints: constraints.ineq_constraints, eq_constraints: constraints.eq_constraints,
-                methods: methods, configs: configs, actions: ['findroot', 'sos']};
+        let kwargs = {
+            ineq_constraints: constraints.ineq_constraints,
+            eq_constraints: constraints.eq_constraints,
+            methods: methods,
+            configs: configs,
+            actions: ['findroot', 'sos']
+        };
 
         // console.log(kwargs);
 

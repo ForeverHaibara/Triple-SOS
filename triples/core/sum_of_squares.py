@@ -30,19 +30,18 @@ DEFAULT_SAVE_SOLUTION = lambda x: (str(x.solution) if x is not None else '')
 
 
 def sum_of_squares(
-        expr: Expr,
-        ineq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
-        eq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
-        *,
-        roots: Optional[List[Union[Tuple[Expr, ...], Dict[Symbol, Expr]]]] = None,
-        verbose: bool = False,
-        time_limit: float = 3600.,
-        methods: Optional[List[str]] = None,
-        configs: Dict[str, Dict] = {},
-        mode: str = "fast",
-        method_order: Optional[List[str]] = None, # deprecated
-        poly: Optional[Poly] = None, # deprecated
-    ) -> Optional[Solution]:
+    expr: Expr,
+    ineq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
+    eq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
+    *,
+    roots: Optional[List[Union[Tuple[Expr, ...], Dict[Symbol, Expr]]]] = None,
+    verbose: bool = False,
+    time_limit: float = 3600.,
+    methods: Optional[List[str]] = None,
+    configs: Dict[str, Dict] = {},
+    mode: str = "fast",
+    method_order: Optional[List[str]] = None, # deprecated
+) -> Optional[Solution]:
     """
     Main function for sum of square decomposition.
 
@@ -139,9 +138,6 @@ def sum_of_squares(
     Optional[Solution]
         The solution. If no solution is found, None is returned.
     """
-    if poly is not None:
-        warn("poly is deprecated. Use expr instead.", DeprecationWarning, stacklevel=2)
-        expr = poly
 
     problem = ProofNode.new_problem(expr, ineq_constraints, eq_constraints)
     problem.set_roots(roots)

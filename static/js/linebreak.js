@@ -398,10 +398,12 @@ function _exampleLatexAutoLinebreak() {
 
 // -------------------- Exports --------------------
 // If used in module environment (e.g., bundler), export functions:
-if (typeof module !== "undefined" && typeof module.exports !== "undefined") {
-    module.exports = {
-        getAdditiveTerms,
-        wrapWithAlignedIfNeeded,
-        recursiveLatexAutoLinebreak
-    };
-}
+// if (typeof module !== "undefined" && typeof module.exports !== "undefined") {
+//     module.exports = {
+//         getAdditiveTerms,
+//         wrapWithAlignedIfNeeded,
+//         recursiveLatexAutoLinebreak
+//     };
+// }
+
+window.recursiveLatexAutoLinebreak = recursiveLatexAutoLinebreak;

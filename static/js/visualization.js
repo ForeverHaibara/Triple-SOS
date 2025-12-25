@@ -179,8 +179,11 @@ function setSOSResult(data){
         str = '\\quad\\quad\\quad{\\rm Failed}\\quad\\quad\\quad';
     }else{
         const text_length = sos_results.latex.length;
-        str = sos_results.latex.slice(2, text_length-2);
-        if (str.indexOf('aligned') < 0){ // no aligned environment
+        str = sos_results.latex; // .slice(2, text_length-2);
+
+        str = recursiveLatexAutoLinebreak(str);
+
+        if (str.indexOf('{aligned}') < 0){ // no aligned environment
             if (str.indexOf('\\\\') >= 0){
                 // use \begin{aligned} when there is a line break
                 let i = 0;
