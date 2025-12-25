@@ -93,6 +93,157 @@
         margin-bottom: 8px; /* Optional space between button and menu */
     }
 
+    /* Settings Modal Styles */
+    .settings_modal {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 85%;
+        height: 85%;
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        display: flex;
+        overflow: hidden;
+        z-index: 1001;
+    }
+
+    .settings_sidebar {
+        width: 250px;
+        background: #f8f9fa;
+        border-right: 1px solid #e9ecef;
+        padding: 20px 0;
+        overflow-y: auto;
+        box-sizing: border-box;
+    }
+
+    .settings_content {
+        flex: 1;
+        margin: 30px;
+        overflow-y: auto;
+        background: white;
+        box-sizing: border-box;
+    }
+
+    .settings_close {
+        position: absolute;
+        top: 15px;
+        right: 20px;
+        background: none;
+        border: none;
+        font-size: 24px;
+        cursor: pointer;
+        color: #6c757d;
+        z-index: 1002;
+    }
+
+    .settings_close:hover {
+        color: #343a40;
+    }
+
+    .settings_section {
+        margin-bottom: 40px;
+    }
+
+    .settings_section_title {
+        font-size: 24px;
+        font-weight: 600;
+        margin-bottom: 20px;
+        color: #212529;
+        border-bottom: 2px solid #0d6efd;
+        padding-bottom: 10px;
+    }
+
+    .settings_subsection_title {
+        font-size: 18px;
+        font-weight: 500;
+        margin: 25px 0 15px 0;
+        color: #495057;
+    }
+
+    .settings_item {
+        margin-bottom: 20px;
+        padding: 15px;
+        background: #f8f9fa;
+        border-radius: 6px;
+        transition: background-color 0.2s ease;
+    }
+
+    .settings_item:hover {
+        background: #e9ecef;
+    }
+
+    .settings_item_name {
+        font-size: 14px;
+        font-weight: 500;
+        color: #212529;
+        margin-bottom: 5px;
+    }
+
+    .settings_item_description {
+        font-size: 12px;
+        color: #6c757d;
+        margin-bottom: 10px;
+        line-height: 1.4;
+    }
+
+    .settings_item_control {
+        display: flex;
+        align-items: center;
+    }
+
+    .settings_menu_item {
+        display: block;
+        padding: 12px 20px;
+        color: #495057;
+        text-decoration: none;
+        font-size: 14px;
+        transition: all 0.2s ease;
+        cursor: pointer;
+        border: none;
+        background: none;
+        text-align: left;
+        width: 100%;
+    }
+
+    .settings_menu_item:hover {
+        background: #e9ecef;
+        color: #0d6efd;
+    }
+
+    .settings_menu_item.active {
+        background: #0d6efd;
+        color: white;
+        font-weight: 500;
+    }
+
+    .settings_menu_item.subitem {
+        padding-left: 40px;
+        font-size: 13px;
+    }
+
+    .settings_textbox {
+        width: 300px;
+        padding: 6px 12px;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        font-size: 14px;
+        transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+    }
+
+    .settings_textbox:focus {
+        border-color: #86b7fe;
+        outline: 0;
+        box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+    }
+
+    .settings_checkbox {
+        margin-right: 10px;
+        width: 16px;
+        height: 16px;
+    }
+
     </style>
     <!-- <script src="https://requirejs.org/docs/release/2.3.6/minified/require.js"></script> -->
     <!-- <script async src="https://cdn.bootcdn.net/ajax/libs/axios/0.21.1/axios.min.js"></script> -->
@@ -130,18 +281,23 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
         </div> -->
         <hr style="width: 90%; margin-left: 10px; margin-top: 10px; margin-bottom: 5px;">
         <div id="setting_history" style="font-size: 17px;">&nbsp  ·&nbsp Settings</div>
-        <div id="setting_methods" class="customized_scrollbar" style="margin-left: 10px; width:90%; height:80%;">
+        <div style="margin-left: 10px; margin-top: 5px; margin-bottom: 5px;">
+            <button id="open_settings_btn" class="btn btn-sm btn-outline-primary" style="width: 90%; font-size: 12px; padding: 2px;">
+                Advanced Settings
+            </button>
+        </div>
+        <div id="setting_methods" class="customized_scrollbar" style="margin-left: 10px; width:90%; height:70%;">
             <div class="form-check" style="margin-top: 5px">
                 <input class="form-check-input" type="checkbox" value="" id="setting_method_use_StructuralSOS" checked>
                 <label class="form-check-label" for="setting_method_use_StructuralSOS">Use Structural SOS</label>
-                <input type="checkbox" class="collapse-toggle visually-hidden" id="setting_method_StructuralSOS_switch" data-bs-toggle="collapse" data-bs-target="#setting_method_StructuralSOS_menu" width="0">
+                <!-- <input type="checkbox" class="collapse-toggle visually-hidden" id="setting_method_StructuralSOS_switch" data-bs-toggle="collapse" data-bs-target="#setting_method_StructuralSOS_menu" width="0">
                 <label for="setting_method_StructuralSOS_switch" class="collapse-label">
                     <span class="me-2">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-right" viewBox="0 0 16 16">
                         <path fill-rule="evenodd" d="M5.646 4.646a.5.5 0 0 1 .708 0L10 8.293l3.646-3.647a.5.5 0 1 1 .708.708l-4 4a.5.5 0 0 1-.708 0l-4-4a.5.5 0 0 1 0-.708z"/>
                     </svg>
                     </span>
-                </label>
+                </label> -->
                 <!-- <div class="collapse" id="setting_method_StructuralSOS_menu" style="margin-left: 10px; margin-top: 3px; font-size: 13px;">
                     <input class="form-check-input subcheckbox" type="checkbox" value="" id="setting_method_StructuralSOS_real" checked>
                     <label class="form-check-label" for="setting_method_StructuralSOS_real">Real Numbers</label>
@@ -442,6 +598,18 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
 <div id="shadow" hidden="hidden" style="width: 100%; height: 100%; position: absolute; top: 0px; left: 0px; background: rgba(0,0,0,0.59)">
     <div id="shadow_box" hidden="hidden" style="font-size: 15px; background-color: white; width: 80%; height: 80%; top: 10%; left: 10%; position: absolute;
     border: 2px solid blue; border-radius: 5px; text-align: center;"></div>
+    
+    <!-- Settings Modal -->
+    <div id="settings_modal" class="settings_modal" hidden="hidden">
+        <button class="settings_close" id="settings_close">&times;</button>
+        
+        <!-- Settings Sidebar (dynamically generated) -->
+        <div class="settings_sidebar" id="settings_sidebar"></div>
+        
+        <!-- Settings Content (dynamically generated) -->
+        <div class="settings_content" id="settings_content">
+        </div>
+    </div>
 </div>
 </div>
 </body>
@@ -499,6 +667,7 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
     CreateVariables();
 </script>
 <script src="static/js/linebreak.js"></script>
+<script src="static/js/settings.js"></script>
 <script src="static/js/visualization.js"></script>
 <script src="static/js/history.js"></script>
 <script src="static/js/on_change.js"></script>
