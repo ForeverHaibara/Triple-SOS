@@ -7,12 +7,55 @@ var settingsDefinition = {children: {
         name: "Parser Configs",
         id: "parser-configs",
         children: {
+            // parser: {
+            //     name: "Parser",
+            //     description: "Choose the parser to use",
+            //     type: "select",
+            //     defaultValue: "pl",
+            //     options: ["pl", "sympify"],
+            //     settingPath: "parser.parser"
+            // },
+            cyclicSumFunc: {
+                name: "Cyclic Sum Function",
+                description: "Specify the syntax for cyclic sums",
+                type: "text",
+                defaultValue: "s",
+                settingPath: "parser.cyclicSumFunc"
+            },
+            cyclicProdFunc: {
+                name: "Cyclic Product Function",
+                description: "Specify the syntax for cyclic products",
+                type: "text",
+                defaultValue: "p",
+                settingPath: "parser.cyclicProdFunc"
+            },
             preservePatterns: {
                 name: "Preserve Patterns",
                 description: "Specify patterns to preserve during parsing",
                 type: "text",
                 defaultValue: "sqrt",
                 settingPath: "parser.preservePatterns"
+            },
+            lowerCase: {
+                name: "Lower Case",
+                description: "Convert the text to lower case",
+                type: "checkbox",
+                defaultValue: true,
+                settingPath: "parser.lowerCase"
+            },
+            // convertLatex: {
+            //     name: "Convert LaTeX",
+            //     description: "Convert LaTeX expressions including \\frac, etc. This is experimental.",
+            //     type: "checkbox",
+            //     defaultValue: true,
+            //     settingPath: "parser.convertLatex"
+            // },
+            scientificNotation: {
+                name: "Scientific Notation",
+                description: "Interpret numbers in scientific notation",
+                type: "checkbox",
+                defaultValue: false,
+                settingPath: "parser.scientificNotation"
             },
             standardizeText: {
                 name: "Standardize Text",
@@ -40,6 +83,15 @@ var settingsDefinition = {children: {
         name: "SOS Configs",
         id: "sos-configs",
         children: {
+            timeLimit: {
+                name: "Time Limit",
+                description: "Set the time limit for SOS solving in seconds. This will also be limited by the backend.",
+                type: "number",
+                defaultValue: 300.0,
+                min: 0.0,
+                // step: 1.0,
+                settingPath: "sos.timeLimit"
+            },
             structuralSOS: {
                 name: "Structural SOS",
                 id: "structural-sos",
@@ -49,7 +101,7 @@ var settingsDefinition = {children: {
                         description: "Enable Structural SOS method",
                         type: "checkbox",
                         defaultValue: true,
-                        settingPath: "sos.structuralSOS",
+                        settingPath: "sos.structuralSOS.useStructuralSOS",
                         originalCheckboxId: "setting_method_use_StructuralSOS"
                     }
                 }
@@ -63,9 +115,43 @@ var settingsDefinition = {children: {
                         description: "Enable Linear SOS method",
                         type: "checkbox",
                         defaultValue: true,
-                        settingPath: "sos.linearSOS",
+                        settingPath: "sos.linearSOS.useLinearSOS",
                         originalCheckboxId: "setting_method_use_LinearSOS"
-                    }
+                    },
+                    liftDegreeLimit: {
+                        name: "Lift Degree Limit",
+                        description: "Set the maximum lifting degree for Linear SOS",
+                        type: "number",
+                        defaultValue: 4,
+                        min: 0,
+                        step: 1,
+                        settingPath: "sos.linearSOS.liftDegreeLimit"
+                    },
+                    basisLimit: {
+                        name: "Basis Limit",
+                        description: "Set the maximum number of basis vectors for Linear SOS",
+                        type: "number",
+                        defaultValue: 15000,
+                        min: 0,
+                        step: 1,
+                        settingPath: "sos.linearSOS.basisLimit"
+                    },
+                    quadDiffOrder: {
+                        name: "Quadratic Difference Order",
+                        description: "Set the order of quadratic difference for Linear SOS (should be even)",
+                        type: "number",
+                        defaultValue: 8,
+                        min: 0,
+                        step: 2,
+                        settingPath: "sos.linearSOS.quadDiffOrder"
+                    },
+                    augmentTangents: {
+                        name: "Augment Tangents",
+                        description: "Whether to use heuristics to augment tangents in Linear SOS",
+                        type: "checkbox",
+                        defaultValue: true,
+                        settingPath: "sos.linearSOS.augmentTangents"
+                    },
                 }
             },
             sdpSOS: {
@@ -77,8 +163,15 @@ var settingsDefinition = {children: {
                         description: "Enable SDP SOS method",
                         type: "checkbox",
                         defaultValue: true,
-                        settingPath: "sos.sdpSOS",
+                        settingPath: "sos.sdpSOS.useSDPSOS",
                         originalCheckboxId: "setting_method_use_SDPSOS"
+                    },
+                    allowNumer: {
+                        name: "Allow Numerical Solution",
+                        description: "Allow numerical solution in SDP SOS",
+                        type: "checkbox",
+                        defaultValue: false,
+                        settingPath: "sos.sdpSOS.allowNumer"
                     }
                 }
             },
@@ -91,7 +184,7 @@ var settingsDefinition = {children: {
                         description: "Enable Symmetric SOS method",
                         type: "checkbox",
                         defaultValue: true,
-                        settingPath: "sos.symmetricSOS",
+                        settingPath: "sos.symmetricSOS.useSymmetricSOS",
                         originalCheckboxId: "setting_method_use_SymmetricSOS"
                     }
                 }
@@ -102,19 +195,6 @@ var settingsDefinition = {children: {
 
 // Settings data structure with default values - initialized from settingsDefinition
 var settings = {
-    parser: {
-        preservePatterns: "sqrt",
-        standardizeText: {
-            omitMul: true,
-            omitPow: true
-        }
-    },
-    sos: {
-        structuralSOS: true,
-        linearSOS: true,
-        sdpSOS: true,
-        symmetricSOS: true
-    }
 };
 
 // Helper function to generate a unique ID for settings controls
@@ -139,6 +219,38 @@ function createTextControl(setting) {
            '</div>';
 }
 
+// Generate dropdown menu HTML
+function createSelectControl(setting) {
+    var controlId = generateControlId(setting.settingPath);
+    var optionsHtml = '';
+    
+    // Generate options for dropdown
+    for (var i = 0; i < setting.options.length; i++) {
+        var option = setting.options[i];
+        var selected = (option === setting.defaultValue) ? 'selected' : '';
+        optionsHtml += '<option value="' + option + '" ' + selected + '>' + option + '</option>';
+    }
+    
+    return '<div class="settings_item_control">' +
+           '<select id="' + controlId + '" class="settings_textbox">' +
+           optionsHtml +
+           '</select>' +
+           '</div>';
+}
+
+// Generate number input HTML
+function createNumberControl(setting) {
+    var controlId = generateControlId(setting.settingPath);
+    var minAttr = (setting.min !== undefined) ? ' min="' + setting.min + '"' : '';
+    var maxAttr = (setting.max !== undefined) ? ' max="' + setting.max + '"' : '';
+    var stepAttr = (setting.step !== undefined) ? ' step="' + setting.step + '"' : '';
+    
+    return '<div class="settings_item_control">' +
+           '<input type="number" id="' + controlId + '" class="settings_textbox"' +
+           ' value="' + setting.defaultValue + '"' + minAttr + maxAttr + stepAttr + '>' +
+           '</div>';
+}
+
 // Generate HTML for a single setting item
 function createSettingItem(setting) {
     var controlHtml = '';
@@ -149,9 +261,15 @@ function createSettingItem(setting) {
         case 'text':
             controlHtml = createTextControl(setting);
             break;
-        // Add more control types here as needed (select, etc.)
+        case 'select':
+            controlHtml = createSelectControl(setting);
+            break;
+        case 'number':
+            controlHtml = createNumberControl(setting);
+            break;
+        // Add more control types here as needed
     }
-
+    
     return '<div class="settings_item">' +
            '<div class="settings_item_name">' + setting.name + '</div>' +
            '<div class="settings_item_description">' + setting.description + '</div>' +
@@ -255,12 +373,13 @@ function setInitialSettingsValues(definition) {
         var element = document.getElementById(controlId);
 
         if (element) {
-            var value = getSettingValue(definition.settingPath);
-            if (definition.type === 'checkbox') {
-                element.checked = value;
-            } else if (definition.type === 'text') {
-                element.value = value;
-            }
+            // var value = getSettingValue(definition.settingPath);
+            // if (definition.type === 'checkbox') {
+            //     element.checked = value;
+            // } else if (definition.type === 'text') {
+            //     element.value = value;
+            // }
+            updateSetting(definition.settingPath, definition.defaultValue);
         }
     }
 }
@@ -291,7 +410,10 @@ function updateSetting(settingPath, value) {
         if (obj && typeof obj === 'object' && obj.hasOwnProperty(pathParts[i])) {
             obj = obj[pathParts[i]];
         } else {
-            return; // Path doesn't exist
+            // return; // Path doesn't exist
+            // create the missing path
+            obj[pathParts[i]] = {};
+            obj = obj[pathParts[i]];
         }
     }
 
@@ -315,42 +437,70 @@ function setupEventListenersRecursive(definition) {
         }
     } else if (definition.type) {
         // This is a setting item, setup event listener
-        var controlId = generateControlId(definition.settingPath);
-        var element = document.getElementById(controlId);
-
-        if (element) {
-            if (definition.type === 'checkbox') {
-                // Checkbox change event
-                element.addEventListener('change', function() {
-                    var value = this.checked;
-                    updateSetting(definition.settingPath, value);
-                    
-                    // Sync with original checkbox if specified
-                    if (definition.originalCheckboxId) {
-                        var originalCheckbox = document.getElementById(definition.originalCheckboxId);
-                        if (originalCheckbox) {
-                            originalCheckbox.checked = value;
+                var controlId = generateControlId(definition.settingPath);
+                var element = document.getElementById(controlId);
+                
+                if (element) {
+                    if (definition.type === 'checkbox') {
+                        // Checkbox change event
+                        element.addEventListener('change', function() {
+                            var value = this.checked;
+                            updateSetting(definition.settingPath, value);
+                            
+                            // Sync with original checkbox if specified
+                            if (definition.originalCheckboxId) {
+                                var originalCheckbox = document.getElementById(definition.originalCheckboxId);
+                                if (originalCheckbox) {
+                                    originalCheckbox.checked = value;
+                                }
+                            }
+                        });
+                        
+                        // Sync original checkbox changes to this one
+                        if (definition.originalCheckboxId) {
+                            var originalCheckbox = document.getElementById(definition.originalCheckboxId);
+                            if (originalCheckbox) {
+                                originalCheckbox.addEventListener('change', function() {
+                                    element.checked = this.checked;
+                                    updateSetting(definition.settingPath, this.checked);
+                                });
+                            }
                         }
-                    }
-                });
-
-                // Sync original checkbox changes to this one
-                if (definition.originalCheckboxId) {
-                    var originalCheckbox = document.getElementById(definition.originalCheckboxId);
-                    if (originalCheckbox) {
-                        originalCheckbox.addEventListener('change', function() {
-                            element.checked = this.checked;
-                            updateSetting(definition.settingPath, this.checked);
+                    } else if (definition.type === 'text') {
+                        // Text input event
+                        element.addEventListener('change', function() {
+                            updateSetting(definition.settingPath, this.value);
+                        });
+                    } else if (definition.type === 'select') {
+                        // Dropdown change event
+                        element.addEventListener('change', function() {
+                            updateSetting(definition.settingPath, this.value);
+                        });
+                    } else if (definition.type === 'number') {
+                        // Number input event
+                        element.addEventListener('change', function() {
+                            // Convert to number if possible, otherwise use default
+                            var value = parseFloat(this.value);
+                            const thisvalue = value;
+                            if (isNaN(value)) {
+                                value = definition.defaultValue;
+                            }
+                            if (definition.step) {
+                                value = Math.round(value / definition.step) * definition.step;
+                            }
+                            if (value < definition.min) {
+                                value = definition.min;
+                            }
+                            if (value > definition.max) {
+                                value = definition.max;
+                            }
+                            if (thisvalue !== value) {
+                                this.value = value;
+                            }
+                            updateSetting(definition.settingPath, value);
                         });
                     }
                 }
-            } else if (definition.type === 'text') {
-                // Text input event
-                element.addEventListener('input', function() {
-                    updateSetting(definition.settingPath, this.value);
-                });
-            }
-        }
     }
 }
 
@@ -404,6 +554,64 @@ function setupModalEventListeners() {
             closeSettingsModal();
         }
     });
+}
+
+
+// Overwrite the default configs with the user configs
+function getParserConfigs(parser_configs = {}) {
+    const parse_undefined = (x, y) => {return typeof(x) === 'undefined'? y: x;}
+    
+    parser_configs.omit_mul = parse_undefined(
+        parser_configs.omit_mul, settings.parser.standardizeText.omitMul);
+    parser_configs.omit_pow = parse_undefined(
+        parser_configs.omit_pow, settings.parser.standardizeText.omitPow);
+
+    const parser_attrs = {
+        // 'parser': 'parser',
+        'lowerCase': 'lowercase',
+        'cyclicSumFunc': 'cyclic_sum_func',
+        'cyclicProdFunc': 'cyclic_prod_func',
+        'preservePatterns': 'preserve_patterns',
+        'scientificNotation': 'scientific_notation',
+    };
+    for (const [key, value] of Object.entries(parser_attrs)){
+        parser_configs[value] = parse_undefined(parser_configs[value], settings.parser[key]);
+    }
+    return parser_configs;
+}
+
+
+function getSOSConfigs() {
+    const sos = settings.sos;
+    let methods = {
+        StructuralSOS: sos.structuralSOS.useStructuralSOS,
+        LinearSOS: sos.linearSOS.useLinearSOS,
+        SymmetricSOS: sos.symmetricSOS.useSymmetricSOS,
+        SDPSOS: sos.sdpSOS.useSDPSOS,
+        Pivoting: true,
+        Reparametrization: true,
+    };
+    methods = Object.entries(methods).filter(([key, value]) => value).map(([key, value]) => key);
+    const configs = {
+        StructuralSOS:{
+            // real: document.getElementById("setting_method_StructuralSOS_real").checked,
+        },
+        LinearSOS: {
+            lift_degree_limit: sos.linearSOS.liftDegreeLimit,
+            basis_limit: sos.linearSOS.basisLimit,
+            quad_diff_order: sos.linearSOS.quadDiffOrder,
+            augment_tangents: sos.linearSOS.augmentTangents,
+        },
+        SDPSOS: {
+            allow_numer: sos.sdpSOS.allowNumer,
+            // decompose_method: document.getElementById("setting_method_SDPSOS_reduced_decompose").checked?'reduce':'raw',
+        }
+    }
+    return {
+        time_limit: sos.timeLimit,
+        methods: methods,
+        configs: configs,
+    }
 }
 
 // Initialize settings functionality when page loads

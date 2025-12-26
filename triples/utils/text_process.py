@@ -637,6 +637,9 @@ def _get_coeff_str(coeff, MUL = '*') -> str:
 def poly_get_standard_form(
     poly: Poly,
     symmetry: Union[PermutationGroup, str] = "cyc",
+    *,
+    cyclic_sum_func: str = "s",
+    cyclic_prod_func: str = "p",
     omit_mul: bool = True,
     omit_pow: bool = True,
     _is_cyc: Optional[bool] = None,
@@ -652,6 +655,10 @@ def poly_get_standard_form(
     symmetry : Union[PermutationGroup, str]
         The permutation group of the expression. If str, it should be one of
         ["cyc", "sym", "alt", "dih", "trivial"].
+    cyclic_sum_func : str
+        The function name for cyclic sum. Defaults to "s".
+    cyclic_prod_func : str
+        The function name for cyclic product. Defaults to "p".
     omit_mul : bool
         Whether to omit the multiplication sign. Defaults to True.
     omit_pow : bool
@@ -725,7 +732,7 @@ def poly_get_standard_form(
     if s.startswith('+'):
         s = s[1:]
     if _is_cyc and not symmetry.is_trivial:
-        s = 's(%s)'%s
+        s = '%s(%s)'%(cyclic_sum_func, s)
     else:
         s = '(%s)'%s
     return s
@@ -798,6 +805,9 @@ def _reduce_factor_list(poly: Poly, perm_group: PermutationGroup) -> Tuple[Expr,
 def poly_get_factor_form(
     poly: Poly,
     symmetry: Union[PermutationGroup, str] = "cyc",
+    *,
+    cyclic_sum_func: str = "s",
+    cyclic_prod_func: str = "p",
     omit_mul: bool = True,
     omit_pow: bool = True,
     perm = None
@@ -812,7 +822,11 @@ def poly_get_factor_form(
         The polynomial to be factorized.
     symmetry : Union[PermutationGroup, str]
         The permutation group of the expression. If str, it should be one of
-        ["cyc", "sym", "alt", "dih", "trivial"].
+        ["cyc", "sym", "alt", "dih", "trivial"].        
+    cyclic_sum_func : str
+        The function name for cyclic sum. Defaults to "s".
+    cyclic_prod_func : str
+        The function name for cyclic product. Defaults to "p".
     omit_mul : bool
         Whether to omit the multiplication sign. Defaults to True.
     omit_pow : bool
@@ -840,17 +854,21 @@ def poly_get_factor_form(
             if power == 1: return str(base.as_expr())
             return '%s%s%s'%(base.as_expr(), POW, power)
 
-        base = poly_get_standard_form(base, symmetry, omit_mul, omit_pow)
+        base = poly_get_standard_form(base, symmetry,
+            cyclic_sum_func=cyclic_sum_func,
+            cyclic_prod_func=cyclic_prod_func,
+            omit_mul=omit_mul, omit_pow=omit_pow
+        )
         if _is_single_paren(base): pass
-        elif base.startswith('s(') and _is_single_paren(base[1:]): pass
+        elif base.startswith(cyclic_sum_func + '(') and _is_single_paren(base[1:]): pass
         else: base = '(%s)'%base
         if power == 1: return base
         return '%s%s%s'%(base, POW, power)
 
     def get_cyc_pow_string(base: Poly, power: Integer):
         s = get_pow_string(base, power)
-        if s.startswith('('): s = 'p%s'%s
-        else: s = 'p(%s)'%s
+        if s.startswith('('): s = '%s%s'%(cyclic_prod_func, s)
+        else: s = '%s(%s)'%(cyclic_prod_func, s)
         return s
 
     for base, power in factors:
