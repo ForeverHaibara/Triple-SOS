@@ -22,7 +22,7 @@ from sympy.external.importtools import version_tuple
 from sympy.combinatorics import Permutation
 from sympy.polys.rings import PolyElement
 from sympy.polys.fields import FracElement
-from sympy.polys.domains.domain import DomainElement
+from sympy.polys.domains.domainelement import DomainElement
 from sympy.polys.polyerrors import BasePolynomialError
 
 
@@ -173,7 +173,7 @@ def _poly_make_reorder_func(x: Poly, gens: Tuple[Symbol, ...]) -> Callable[[Perm
 
 @_dtype_gens.register(DomainElement)
 def _domainelement_gens(x: DomainElement) -> Tuple[Symbol, ...]:
-    return x.parent().gens
+    return x.parent().symbols
 
 @_dtype_is_zero.register(DomainElement)
 def _domainelement_is_zero(x: DomainElement) -> Optional[bool]:

@@ -525,7 +525,7 @@ function renderCoeffs3D(degree, triangle_vals, all_gens = 'abcd'){
         _3d_vis.positions = positions;
         
         const coeff = document.createElement('p');
-        coeff.innerText = triangle_vals[i];
+        coeff.innerText = typeof(triangle_vals[i])==='undefined'? '': triangle_vals[i];
         coeff.classList.add('coeff-label');
         coeff.style.position = 'absolute';
         coeff.style.color = 'black';

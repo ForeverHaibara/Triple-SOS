@@ -188,6 +188,19 @@ var settingsDefinition = {children: {
                         originalCheckboxId: "setting_method_use_SymmetricSOS"
                     }
                 }
+            },
+            pivoting: {
+                name: "Pivoting",
+                id: "pivoting",
+                children: {
+                    usePivoting: {
+                        name: "Use Pivoting",
+                        description: "Enable pivoting",
+                        type: "checkbox",
+                        defaultValue: true,
+                        settingPath: "sos.pivoting.usePivoting"
+                    }
+                }
             }
         }
     }
@@ -588,7 +601,7 @@ function getSOSConfigs() {
         LinearSOS: sos.linearSOS.useLinearSOS,
         SymmetricSOS: sos.symmetricSOS.useSymmetricSOS,
         SDPSOS: sos.sdpSOS.useSDPSOS,
-        Pivoting: true,
+        Pivoting: sos.pivoting.usePivoting,
         Reparametrization: true,
     };
     methods = Object.entries(methods).filter(([key, value]) => value).map(([key, value]) => key);

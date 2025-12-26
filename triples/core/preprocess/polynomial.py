@@ -18,7 +18,8 @@ class SolvePolynomial(TransformNode):
     """
     default_configs = {
         "sqf": False,
-        "homogenize": True
+        "homogenize": True,
+        "remove_redundancy": True
     }
     def get_polynomial_solvers(self, configs):
         solvers = configs.get('solvers', None)
@@ -58,6 +59,7 @@ class SolvePolynomial(TransformNode):
                 self.finished = True
                 return
 
+            problem = problem.remove_redundancy()
 
             solvers = self.get_polynomial_solvers(configs)
             self.children = [solver(problem) for solver in solvers]
