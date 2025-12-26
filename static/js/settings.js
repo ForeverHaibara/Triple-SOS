@@ -203,6 +203,86 @@ var settingsDefinition = {children: {
                 }
             }
         }
+    },
+    result: {
+        name: "Result Configs",
+        id: "result-configs",
+        children: {
+            rewrite_symmetry: {
+                name: "Rewrite Symmetry",
+                description: "Whether to rewrite all symmetry groups to the input symmetry group.",
+                type: "checkbox",
+                defaultValue: true,
+                settingPath: "result.rewrite_symmetry"
+            },
+            latex: {
+                name: "LaTeX",
+                id: "result-latex",
+                children: {
+                    together: {
+                        name: "LaTeX Together",
+                        description: "Whether to apply 'together' to the solution before conversion to LaTeX.",
+                        type: "checkbox",
+                        defaultValue: true,
+                        settingPath: "result.latex.together"
+                    },
+                    cancel: {
+                        name: "LaTeX Cancel",
+                        description: "Whether to apply 'cancel' to the solution before conversion to LaTeX.",
+                        type: "checkbox",
+                        defaultValue: true,
+                        settingPath: "result.latex.cancel"
+                    },
+                    maxTermsAligned: {
+                        name: "Max Terms Aligned",
+                        description: "The number of terms to trigger line break in the LaTeX output.",
+                        type: "number",
+                        defaultValue: 2,
+                        min: 0,
+                        step: 1,
+                        settingPath: "result.latex.maxTermsAligned"
+                    },
+                    maxLenAligned: {
+                        name: "Max Length Aligned",
+                        description: "The length of a line to trigger line break in the LaTeX output.",
+                        type: "number",
+                        defaultValue: 160,
+                        min: 0,
+                        step: 1,
+                        settingPath: "result.latex.maxLenAligned"
+                    },
+                    maxLineLenInAligned: {
+                        name: "Max Line Length in Aligned",
+                        description: "The length of a line to trigger line break in the aligned environment in the LaTeX output.",
+                        type: "number",
+                        defaultValue: 100,
+                        min: 0,
+                        step: 1,
+                        settingPath: "result.latex.maxLineLenInAligned"
+                    }
+                }
+            },
+            text: {
+                name: "Plain Text",
+                id: "result-text",
+                children: {
+                    together: {
+                        name: "Text Together",
+                        description: "Whether to apply 'together' to the solution before conversion to plain text.",
+                        type: "checkbox",
+                        defaultValue: false,
+                        settingPath: "result.txt.together"
+                    },
+                    cancel: {
+                        name: "Text Cancel",
+                        description: "Whether to apply 'cancel' to the solution before conversion to plain text.",
+                        type: "checkbox",
+                        defaultValue: false,
+                        settingPath: "result.txt.cancel"
+                    }
+                }
+            }
+        }
     }
 }};
 
@@ -301,7 +381,7 @@ function generateSettingsContent(parentNode, definition, level) {
             var headerTag = level === 0 ? 'h2' : 'h3';
             var headerClass = level === 0 ? 'settings_section_title' : 'settings_subsection_title';
 
-            html += '<div id="' + definition.id + '" class="settings_section">' +
+            html += '<div id="settings_section_' + definition.id + '" class="settings_section">' +
                     '<' + headerTag + ' class="' + headerClass + '">' + definition.name + '</' + headerTag + '>';
         }
         // Recursively process children
@@ -330,7 +410,7 @@ function generateSettingsMenu(parentNode, definition, level) {
     // Create menu item for sections and subsections
     if (definition.id) {
         var menuClass = level === 0 ? 'settings_menu_item' : 'settings_menu_item subitem';
-        html += '<button class="' + menuClass + '" onclick="scrollToSection(\'' + definition.id + '\')">' + definition.name + '</button>';
+        html += '<button class="' + menuClass + '" onclick="scrollToSection(\'settings_section_' + definition.id + '\')">' + definition.name + '</button>';
     }
 
     // Recursively process children
@@ -624,6 +704,28 @@ function getSOSConfigs() {
         time_limit: sos.timeLimit,
         methods: methods,
         configs: configs,
+    }
+}
+
+
+function getResultConfigs() {
+    return {
+        rewrite_symmetry: settings.result.rewrite_symmetry,
+        to_string_configs: {
+            latex: {
+                together: settings.result.latex.together,
+                cancel: settings.result.latex.cancel,
+            },
+            txt: {
+                together: settings.result.txt.together,
+                cancel: settings.result.txt.cancel,
+            },
+            formatted: {
+            // use the same settings as txt
+                together: settings.result.txt.together,
+                cancel: settings.result.txt.cancel,
+            },
+        }
     }
 }
 

@@ -155,10 +155,14 @@ function setSOSResult(data){
 
     // write the result to the current page
     sos_results.success = data.success;
-    sos_results.latex = data.latex; 
+    sos_results.latex = '$$'+recursiveLatexAutoLinebreak(data.latex,
+        settings.result.latex.maxTermsAligned,
+        settings.result.latex.maxLenAligned,
+        settings.result.latex.maxLineLenInAligned,
+    )+'$$';
     sos_results.txt   = data.txt;
     sos_results.formatted = data.formatted;
-    document.getElementById('output_result').innerHTML = data[sos_results.show];
+    document.getElementById('output_result').innerHTML = sos_results[sos_results.show];
 
     if (data.success){
         const index = _history_timestamp_to_ind[data.timestamp];
@@ -179,9 +183,9 @@ function setSOSResult(data){
         str = '\\quad\\quad\\quad{\\rm Failed}\\quad\\quad\\quad';
     }else{
         const text_length = sos_results.latex.length;
-        str = sos_results.latex; // .slice(2, text_length-2);
+        str = sos_results.latex.slice(2, text_length-2);
 
-        str = recursiveLatexAutoLinebreak(str);
+        // str = recursiveLatexAutoLinebreak(str);
 
         if (str.indexOf('{aligned}') < 0){ // no aligned environment
             if (str.indexOf('\\\\') >= 0){

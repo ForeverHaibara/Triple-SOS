@@ -161,23 +161,19 @@ def chained_actions(sid, **kwargs):
         eq_constraints = SOSManager.parse_constraints_dict(
             kwargs["eq_constraints"], kwargs["parser"])
 
-        if "sos" in actions:
-            sos_configs = kwargs.get("sos_configs", {})
-            solution = _sum_of_squares(sid,
-                kwargs["expr"],
-                ineq_constraints,
-                eq_constraints,
-                gens = kwargs["gens"],
-                symmetry = kwargs["perm"],
-                timestamp = kwargs.get("timestamp", 0),
-                **{key: sos_configs[key] for key in [
-                    "methods",
-                    "time_limit",
-                    "configs",
-                ] if key in sos_configs
-                }
-            )
-    except Exception:
+        sos_configs = kwargs.get("sos_configs", {})
+        solution = _sum_of_squares(
+            kwargs["expr"],
+            ineq_constraints,
+            eq_constraints,
+            **{key: sos_configs[key] for key in [
+                "methods",
+                "time_limit",
+                "configs",
+            ] if key in sos_configs
+            }
+        )
+    except Exception as e:
         pass
     finally:
         if solution is None:
@@ -192,6 +188,20 @@ def chained_actions(sid, **kwargs):
                 },
                 to=sid
             )
+
+    if solution is not None:
+        result_configs = kwargs.get("result_configs", {})
+        _emit_sos_result(sid,
+            solution,
+            gens = kwargs["gens"],
+            symmetry = kwargs["perm"],
+            timestamp = kwargs.get("timestamp", 0),
+            **{key: result_configs[key] for key in [
+                "rewrite_symmetry",
+                "to_string_configs",
+            ] if key in result_configs
+            }
+        )
 
 
 def _findroots(
@@ -218,19 +228,15 @@ def _findroots(
 
 
 def _sum_of_squares(
-    sid: int,
     expr: Expr,
     ineq_constraints: Dict[Expr, Expr],
     eq_constraints: Dict[Expr, Expr],
     *,
     methods: Optional[List[str]] = None,
     time_limit: float = 300.,
-    configs: dict = {},
-    gens: Tuple[Symbol, ...],
-    symmetry: PermutationGroup,
-    timestamp: int = 0,
-):
-    solution = SOSManager.sum_of_squares(
+    configs: dict = {}
+) -> Optional[Solution]:
+    return SOSManager.sum_of_squares(
         expr,
         ineq_constraints,
         eq_constraints,
@@ -239,27 +245,37 @@ def _sum_of_squares(
         configs = configs
     )
 
-    if solution is None:
-        return None
 
-    solution = solution.rewrite_symmetry(gens, symmetry)
+def _emit_sos_result(
+    sid: int,
+    solution: Solution,
+    *,
+    gens: Tuple[Symbol, ...],
+    symmetry: PermutationGroup,
+    rewrite_symmetry: bool = True,
+    to_string_configs: dict = {},
+    timestamp: int = 0,
+) -> dict:
+    if rewrite_symmetry:
+        solution = solution.rewrite_symmetry(gens, symmetry)
 
-    # # remove the aligned environment
-    tex = solution.to_string(mode='latex', lhs_expr=Symbol('\\text{LHS}'),
-        together=True, cancel=True, settings={'long_frac_ratio':2})#.replace('aligned', 'align*')
+    result = {"success": True, "timestamp": timestamp}
+    for key, value in to_string_configs.items():
+        if not (key in ("latex", "txt", "formatted")):
+            result[key] = ""
+            continue
+        if key == "latex":
+            _value = {
+                'settings': {'long_frac_ratio':2},
+                'lhs_expr': Symbol('\\text{LHS}')
+            }
+        else:
+            _value = {'lhs_expr': Symbol('LHS')}
+        _value.update(value)
+        result[key] = solution.to_string(mode=key, **_value)
+    socketio.emit("sos", result, to=sid)
 
-    socketio.emit(
-        "sos", {
-            "latex": tex, 
-            "txt": solution.to_string(mode="txt", lhs_expr=Symbol('LHS')),
-            "formatted": solution.to_string(mode="formatted", lhs_expr=Symbol('LHS')),
-            "success": True,
-            "timestamp": timestamp,
-        },
-        to=sid
-    )
-
-    return solution
+    return result
 
 
 @app.route('/process/latexcoeffs', methods=['POST'])
