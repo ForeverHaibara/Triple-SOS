@@ -402,9 +402,11 @@ class GridRender():
         """
         try:
             if with_color:
-                grid_value, grid_color = cls._render_grid_color(poly, size=size, value_method=value_method, color_method=color_method)
+                grid_value, grid_color = cls._render_grid_color(
+                    poly, size=size, value_method=value_method, color_method=color_method)
             else:
-                grid_value = cls._render_grid_value(poly, size=size, value_method = value_method)
+                grid_value = cls._render_grid_value(
+                    poly, size=size, value_method = value_method)
                 grid_color = None
 
             return GridPoly(

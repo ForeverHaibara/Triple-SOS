@@ -7,11 +7,12 @@ If 4.44 or >= 5 are not available, 3.44 is also recommended.
 import datetime
 from functools import partial
 from itertools import chain
+from tokenize import TokenError
 from typing import Tuple, List, Dict
 import re
 
 import numpy as np
-from sympy import Symbol, sympify
+from sympy import Poly, Expr, Symbol, sympify
 from sympy.external.importtools import version_tuple
 import gradio as gr
 from PIL import Image
@@ -370,38 +371,41 @@ class GradioInterface():
                 api_name="sum_of_squares"
             )
 
-    def _render_heatmap(self, res: dict):
-        if res.get("grid") is None:
+    def _render_heatmap(self, grid):
+        if grid is None:
             return None
-        image = res["grid"].save_heatmap(backgroundcolor=255)
+        image = grid.save_heatmap(backgroundcolor=255)
         image = np.vstack([np.full((8, image.shape[1], 3), 255, np.uint8), image])
         side_white = np.full((image.shape[0], 4, 3), 255, np.uint8)
         image = np.hstack([side_white, image, side_white])
         image = Image.fromarray(image).resize((300,300), Image.LANCZOS)
         return image
 
-    def _render_coefficient_triangle(self, res: dict) -> str:
+    def _render_coefficient_triangle(self, degree: int, expr: Poly) -> str:
         """
         Render the coefficient triangle HTML for the given polynomial.
 
         Args:
-            res (dict): A dictionary containing the polynomial and other relevant information.
+            degree (int): The degree of the polynomial.
+            expr (Expr): The polynomial expression.
 
         Returns:
             str: The HTML string for the coefficient triangle.
         """
+        if expr is None or not isinstance(expr, Poly):
+            return None
         html = '<div id="coeffs" style="width: 100%; height: 600px; position: absolute;">'
 
-        n = res['degree']
-        coeffs = res['poly'].coeffs()
-        monoms = res['poly'].monoms()
+        n = degree
+        coeffs = expr.coeffs()
+        monoms = expr.monoms()
         monoms.append((-1,-1,0))  # tail flag
 
         l = 100. / (1 + n)
         ulx = (50 - l * n / 2)
         uly = (29 - 13 * n * l / 45)
         fontsize = max(11, int(28-1.5*n))
-        lengthscale = .28 * fontsize / 20.;
+        lengthscale = .28 * fontsize / 20.
         t = 0
         txts = []
         title_parser = lambda chr, deg: '' if deg <= 0 else (chr if deg == 1 else chr + str(deg))
@@ -477,32 +481,51 @@ class GradioInterface():
             constraints = [[gen, "", "≥0"] for gen in gens]
         return btn, constraints
 
-    def set_poly(self, input_text, gens, perm_group, with_poly = False):
+    def set_poly(self,
+        input_text: str,
+        gens: str,
+        perm_group: str,
+    ):
         if isinstance(gens, str):
             gens = tuple([Symbol(g) for g in gens])
-        perm_group = SOSManager.parse_perm_group(perm_group)
-
-        render_triangle = len(gens) == 3
-        render_grid= len(gens) == 3
-
-        res = SOSManager.set_poly(input_text, gens, perm_group,
-            render_triangle = render_triangle,
-            render_grid = render_grid,
-        )
-        if res is None or res.get('poly') is None:
+        if len(gens) != 3:
+            # do not visualize
             return {self.image: None, self.coefficient_triangle: None}
 
-        heatmap = self._render_heatmap(res)
-        triangle = self._render_coefficient_triangle(res) if render_triangle else None
-        res2 = {self.image: heatmap,
-                self.coefficient_triangle: triangle}
+        try:
+            perm_group = SOSManager.parse_perm_group(perm_group)
+            parser = SOSManager.make_parser(gens, perm_group)
 
-        if with_poly:
-            res2['poly'] = res['poly']
-            res2['grid'] = res.get('grid', None)
-        return res2
+            expr = parser(input_text, return_type="expr",
+                    parse_expr_kwargs = {"evaluate": False})
+            if expr is None:
+                return {self.image: None, self.coefficient_triangle: None}
+        except (ValueError, TypeError, SyntaxError, TokenError) as e:
+            raise gr.Error(f"{e.__class__.__name__}: {e}")
 
-    def solve(self, input_text, gens, perm_group, constraints, methods, layout_type=None):
+        frac = parser(expr, return_type="frac")
+        if frac[0] is None:
+            return {self.image: None, self.coefficient_triangle: None}
+
+        degree, triangle, heatmap = SOSManager.render_coeff_triangle_and_heatmap(
+            expr, frac, return_grid=True
+        )
+
+        return {
+            self.image: self._render_heatmap(heatmap),
+            self.coefficient_triangle: \
+                self._render_coefficient_triangle(degree, frac[0])
+        }
+
+
+    def solve(self,
+        input_text,
+        gens,
+        perm_group,
+        constraints,
+        methods,
+        layout_type = None
+    ):
         """Common solving logic for both horizontal and vertical layouts.
 
         Args:
@@ -519,48 +542,49 @@ class GradioInterface():
         # Get polynomial and grid from set_poly
         if isinstance(gens, str):
             gens = tuple([Symbol(g) for g in gens])
-        perm_group = SOSManager.parse_perm_group(perm_group)
+        try:
+            perm_group = SOSManager.parse_perm_group(perm_group)
+            parser = SOSManager.make_parser(gens, perm_group)
 
-        result = self.set_poly(input_text, gens, perm_group, with_poly=True)
+            expr = parser(input_text, return_type="expr",
+                    parse_expr_kwargs = {"evaluate": False})
+        except (ValueError, TypeError, SyntaxError, TokenError) as e:
+            raise gr.Error(f"{e.__class__.__name__}: {e}")
+
         solution = None
-        poly = result.pop('poly', None)
 
-        ineq_constraints = {}
-        eq_constraints = {}
+        render = self.set_poly(input_text, gens, perm_group)
 
-        for constraint in constraints:
-            if len(constraint) != 3:
-                continue
-            if constraint[2] == "≥0":
-                dst = ineq_constraints
-            elif constraint[2] == "=0":
-                dst = eq_constraints
-            else:
-                continue
+        if expr is not None:
+            ineq_constraints = {}
+            eq_constraints = {}
 
-            if (not constraint[0].strip()):
-                # empty row
-                continue
+            for constraint in constraints:
+                if len(constraint) != 3:
+                    continue
+                if constraint[2] == "≥0":
+                    ineq_constraints[constraint[0]] = constraint[1]
+                elif constraint[2] == "=0":
+                    eq_constraints[constraint[0]] = constraint[1]
 
-            expr = pl(constraint[0], gens, perm_group, return_type="expr")
-            if (constraint[1].strip()):
-                dst[expr] = sympify(constraint[1])
-            else:
-                dst[expr] = expr
+            try:
+                ineq_constraints = SOSManager.parse_constraints_dict(ineq_constraints, parser)
+                eq_constraints = SOSManager.parse_constraints_dict(eq_constraints, parser)
+            except (ValueError, TypeError, SyntaxError, TokenError) as e:
+                raise gr.Error(f"{e.__class__.__name__}: {e}")
 
-        if poly is not None:
+        if expr is not None:
             try:
                 # Attempt to find sum of squares
                 solution = SOSManager.sum_of_squares(
-                    poly,
+                    expr,
                     ineq_constraints,
                     eq_constraints,
-                    gens = gens,
-                    symmetry = perm_group,
                     methods=['%sSOS' % method for method in methods] + ['Pivoting', 'Reparametrization'],
                 )
             except Exception as e:
                 pass
+
 
         if solution is not None:
             # Prepare LaTeX output
@@ -581,14 +605,14 @@ class GradioInterface():
 
             return (
                 gradio_latex, tex, solution_txt, solution_formatted,
-                result[self.image], result[self.coefficient_triangle],
+                render[self.image], render[self.coefficient_triangle],
             )
         else:
             # No solution found
             no_solution = "No solution found"
             return (
                 no_solution, no_solution, no_solution, no_solution,
-                result[self.image], result[self.coefficient_triangle],
+                render[self.image], render[self.coefficient_triangle],
             )
 
     def toggle_layout(self, vertical_mode: bool, *args, **kwargs):
@@ -664,6 +688,7 @@ class GradioInterface():
 
 if __name__ == '__main__':
     SOSManager.verbose = False
+    SOSManager.time_limit = 300.0
 
     interface = GradioInterface()
 

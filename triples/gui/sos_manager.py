@@ -2,16 +2,16 @@
 Extra utility functions for graphic user interfaces and deployment.
 """
 from ast import literal_eval
-from functools import partial
+from functools import partial, wraps
 from typing import Tuple, List, Dict, Optional, Any, Union, Callable
 
 from sympy import Expr, Poly, Symbol, sympify
-from sympy.combinatorics import Permutation, PermutationGroup, CyclicGroup
+from sympy.combinatorics import Permutation, PermutationGroup
 
 from .grid import GridRender
 from ..utils.text_process import (
     preprocess_text, poly_get_factor_form, poly_get_standard_form,
-    degree_of_expr, coefficient_triangle, coefficient_triangle_latex
+    degree_of_expr, coefficient_triangle
 )
 from ..core import Solution, sum_of_squares
 from ..core.sum_of_squares import StructuralSOSSolver, LinearSOSSolver, SDPSOSSolver
@@ -34,11 +34,18 @@ class SOSManager:
     # HEATMAP_4VARS_DPI = 18
 
     @classmethod
-    def _default_restrict_input_chars(cls,
+    def _restrict_input(cls,
         text: str
     ) -> bool:
-        is_safe_char = lambda x: x <= 1023 #
-        return isinstance(text, str) and all(is_safe_char(ord(c)) for c in text)
+        if not isinstance(text, str):
+            # we think that this is already converted
+            # and just ignore
+            return True
+        is_safe_char = lambda x: x <= 1023 or (x in (65288,65289))
+        unsafe = [c for c in text if not is_safe_char(ord(c))]
+        if any(unsafe):
+            raise ValueError(f"Input contains unsafe characters {set(unsafe)}.")
+        return True
 
     @classmethod
     def make_parser(cls,
@@ -63,8 +70,8 @@ class SOSManager:
         if isinstance(preserve_patterns, str):
             preserve_patterns = [_.strip() for _ in preserve_patterns.split(',')]
             preserve_patterns = [_ for _ in preserve_patterns if _]
-        # if parser == 'pl':
-        return partial(preprocess_text,
+       
+        func = partial(preprocess_text,
             gens=gens,
             symmetry=symmetry,
             lowercase=lowercase,
@@ -73,6 +80,12 @@ class SOSManager:
             preserve_patterns=preserve_patterns,
             scientific_notation=scientific_notation,
         )
+        @wraps(func)
+        def wrapped_parser(text, *args, **kwargs):
+            if not cls._restrict_input(text):
+                raise ValueError("Input is unsafe.")
+            return func(text, *args, **kwargs)
+        return wrapped_parser
 
     @classmethod
     def apply_transformations(cls,
@@ -150,6 +163,7 @@ class SOSManager:
     def render_coeff_triangle_and_heatmap(cls,
         raw_expr: Expr,
         expr: Union[Poly, Tuple[Poly, Poly]],
+        return_grid: bool = False
     ) -> Tuple[Optional[int], Optional[list], Optional[list]]:
         if isinstance(expr, tuple):
             # discard the denominator if required
@@ -166,10 +180,13 @@ class SOSManager:
         triangle = None
         if len(poly.gens) == 3 or len(poly.gens) == 4:
             triangle = coefficient_triangle(poly, degree)
-            if poly.domain.is_Numerical: 
+            if poly.domain.is_Numerical and poly.is_homogeneous:
                 size = 60 if len(poly.gens) == 3 else 18
                 grid = GridRender.render(poly, size=size, with_color=True)
-                heatmap = grid.grid_color if grid is not None else None
+                if return_grid:
+                    heatmap = grid
+                else:
+                    heatmap = grid.grid_color if grid is not None else None
 
         return degree, triangle, heatmap
 
