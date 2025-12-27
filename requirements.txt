@@ -17,7 +17,7 @@ clarabel
 pillow
 # LaTeX rendering sensitive to the version, recommend >= 4.44 for a bug fix,
 # If 4.44 or >= 5 are not available, 3.44 is also recommended.
-gradio>=4.44
+gradio>=5.0
 
 
 # For flask launch (recommended for individual use):

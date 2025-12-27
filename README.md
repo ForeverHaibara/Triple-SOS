@@ -135,7 +135,7 @@ pip install sympy
 pip install numpy
 pip install scipy
 pip install clarabel
-pip install gradio>=4.44
+pip install gradio>=5.0
 pip install pillow
 ```
 

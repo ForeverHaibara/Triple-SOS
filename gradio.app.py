@@ -1,8 +1,7 @@
 """
 Gradio Interface for Triple-SOS supporting deployment on online platforms.
 
-Gradio LaTeX rendering is sensitive to the version, recommend >= 4.44 for a bug fix,
-If 4.44 or >= 5 are not available, 3.44 is also recommended.
+The current supports gradio >= 5.0.
 """
 import datetime
 from functools import partial
@@ -28,6 +27,10 @@ GRADIO_LATEX_SUPPORTS_ALIGNED = (GRADIO_VERSION[0] == 4 and GRADIO_VERSION[1] in
     or GRADIO_VERSION[0] > 4
 
 LOCK_MARK = chr(128274)
+
+def has_kwarg(func, name) -> bool:
+    # inspect the function signature to check if the keyword argument exists
+    return name in func.__code__.co_varnames
 
 def gradio_markdown() -> gr.Markdown:
     version = GRADIO_VERSION
@@ -232,7 +235,7 @@ class GradioInterface():
         )
         collection['perm_group']['input'] = gr.Textbox(
             label="Permutation Group",
-            value="[[0,1,2],[1,2,0]]",
+            value="[[1,2,0]]",
             max_lines=1,
             interactive=False
         )
@@ -240,16 +243,23 @@ class GradioInterface():
         # Constraints section
         collection['constraints'] = {}
         with gr.Column():
+            extra_kwargs = {}
+            if has_kwarg(gr.Dataframe.__init__, "pinned_columns"):
+                extra_kwargs["pinned_columns"] = 3
+            if has_kwarg(gr.Dataframe.__init__, "static_columns"):
+                extra_kwargs["static_columns"] = [2]
+            if has_kwarg(gr.Dataframe.__init__, "column_count"): # >= 6.0
+                extra_kwargs["column_count"] = (3, "fixed")
+            else:
+                extra_kwargs["col_count"] = (3, "fixed")
+
             collection['constraints']['df'] = gr.Dataframe(
                 value = [["a", "", "≥0"], ["b", "", "≥0"], ["c", "", "≥0"]],
                 headers = ['Constraint', 'Alias', 'Type'],
-                col_count = (3, "fixed"),
                 datatype = "str",
                 type = "array",
-                show_fullscreen_button = False,
                 label = "Constraints",
-                pinned_columns = 3,
-                static_columns = [2]
+                **extra_kwargs
             )
 
             with gr.Row():
@@ -585,8 +595,8 @@ class GradioInterface():
             except Exception as e:
                 pass
 
-
         if solution is not None:
+            solution = solution.rewrite_symmetry(gens, perm_group)
             # Prepare LaTeX output
             lhs_expr = Symbol('\\text{LHS}')
 
