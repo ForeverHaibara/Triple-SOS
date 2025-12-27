@@ -155,6 +155,7 @@ function setSOSResult(data){
 
     // write the result to the current page
     sos_results.success = data.success;
+    sos_results.raw_latex = data.latex;
     sos_results.latex = '$$'+recursiveLatexAutoLinebreak(data.latex,
         settings.result.latex.maxTermsAligned,
         settings.result.latex.maxLenAligned,

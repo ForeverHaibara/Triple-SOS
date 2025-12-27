@@ -718,7 +718,7 @@ def verify_symmetry(polys: Union[List[Poly], Poly], symmetry: Union[str, Permuta
     polys : Union[List[Poly], Poly]
         A list of polynomials or a single polynomial. Must have the same generators.
     symmetry : Union[str, Permutation, PermutationGroup]
-        A permutation or a permutation group to verify. If string, it should be one of 
+        A permutation or a permutation group to verify. If string, it should be one of
         ["cyc", "sym", "alt", "dih", "trivial"].
 
     Returns

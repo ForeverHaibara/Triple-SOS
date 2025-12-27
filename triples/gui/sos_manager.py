@@ -70,7 +70,7 @@ class SOSManager:
         if isinstance(preserve_patterns, str):
             preserve_patterns = [_.strip() for _ in preserve_patterns.split(',')]
             preserve_patterns = [_ for _ in preserve_patterns if _]
-       
+
         func = partial(preprocess_text,
             gens=gens,
             symmetry=symmetry,
@@ -248,7 +248,7 @@ class SOSManager:
         return solution
 
     @classmethod
-    def parse_perm_group(cls, 
+    def parse_perm_group(cls,
         text: Union[str, List[List[int]]]
     ) -> Optional[PermutationGroup]:
         if isinstance(text, str):

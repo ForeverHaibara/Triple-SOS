@@ -17,28 +17,31 @@ var settingsDefinition = {children: {
             // },
             cyclicSumFunc: {
                 name: "Cyclic Sum Function",
-                description: "Specify the syntax for cyclic sums",
+                description: "Specify the syntax for cyclic sums. When it involves uppercases, the \"lowercase\""
+                            + " setting should be also configured.",
                 type: "text",
                 defaultValue: "s",
                 settingPath: "parser.cyclicSumFunc"
             },
             cyclicProdFunc: {
                 name: "Cyclic Product Function",
-                description: "Specify the syntax for cyclic products",
+                description: "Specify the syntax for cyclic products. When it involves uppercases, the \"lowercase\""
+                            + " setting should be also configured.",
                 type: "text",
                 defaultValue: "p",
                 settingPath: "parser.cyclicProdFunc"
             },
             preservePatterns: {
                 name: "Preserve Patterns",
-                description: "Specify patterns to preserve during parsing",
+                description: "Specify patterns to preserve during parsing, separated by commas. E.g., \"sqrt,cbrt\"."
+                            + " Spaces are ignored.",
                 type: "text",
                 defaultValue: "sqrt",
                 settingPath: "parser.preservePatterns"
             },
             lowerCase: {
                 name: "Lower Case",
-                description: "Convert the text to lower case",
+                description: "Whether to convert the text to lower case before parsing.",
                 type: "checkbox",
                 defaultValue: true,
                 settingPath: "parser.lowerCase"
@@ -52,7 +55,8 @@ var settingsDefinition = {children: {
             // },
             scientificNotation: {
                 name: "Scientific Notation",
-                description: "Interpret numbers in scientific notation",
+                description: "Whether to interpret numbers in scientific notation. When enabled, '1e2' will"
+                            + " be interpreted as 100.0 rather than 1*e^2.",
                 type: "checkbox",
                 defaultValue: false,
                 settingPath: "parser.scientificNotation"
@@ -63,14 +67,16 @@ var settingsDefinition = {children: {
                 children: {
                     omitMul: {
                         name: "Omit Mul",
-                        description: "Omit multiplication signs in output",
+                        description: "Whether to omit multiplication signs in output. When enabled, '2/3*a*b' will"
+                                    + " be displayed as '2/3ab'.",
                         type: "checkbox",
                         defaultValue: true,
                         settingPath: "parser.standardizeText.omitMul"
                     },
                     omitPow: {
                         name: "Omit Pow",
-                        description: "Omit power signs in output",
+                        description: "Whether to omit power signs in output. When enabled, 'a^2' will"
+                                    + " be displayed as 'a2'.",
                         type: "checkbox",
                         defaultValue: true,
                         settingPath: "parser.standardizeText.omitPow"
@@ -98,7 +104,7 @@ var settingsDefinition = {children: {
                 children: {
                     useStructuralSOS: {
                         name: "Use Structural SOS",
-                        description: "Enable Structural SOS method",
+                        description: "Enable Structural SOS method.",
                         type: "checkbox",
                         defaultValue: true,
                         settingPath: "sos.structuralSOS.useStructuralSOS",
@@ -112,7 +118,7 @@ var settingsDefinition = {children: {
                 children: {
                     useLinearSOS: {
                         name: "Use Linear SOS",
-                        description: "Enable Linear SOS method",
+                        description: "Enable Linear SOS method.",
                         type: "checkbox",
                         defaultValue: true,
                         settingPath: "sos.linearSOS.useLinearSOS",
@@ -120,7 +126,7 @@ var settingsDefinition = {children: {
                     },
                     liftDegreeLimit: {
                         name: "Lift Degree Limit",
-                        description: "Set the maximum lifting degree for Linear SOS",
+                        description: "Set the maximum degree lifting for Linear SOS.",
                         type: "number",
                         defaultValue: 4,
                         min: 0,
@@ -129,7 +135,7 @@ var settingsDefinition = {children: {
                     },
                     basisLimit: {
                         name: "Basis Limit",
-                        description: "Set the maximum number of basis vectors for Linear SOS",
+                        description: "Set the maximum number of bases for Linear SOS.",
                         type: "number",
                         defaultValue: 15000,
                         min: 0,
@@ -138,7 +144,8 @@ var settingsDefinition = {children: {
                     },
                     quadDiffOrder: {
                         name: "Quadratic Difference Order",
-                        description: "Set the order of quadratic difference for Linear SOS (should be even)",
+                        description: "Set the order of quadratic difference for Linear SOS (should be even). Larger values"
+                            + " will result in larger basis size.",
                         type: "number",
                         defaultValue: 8,
                         min: 0,
@@ -147,7 +154,7 @@ var settingsDefinition = {children: {
                     },
                     augmentTangents: {
                         name: "Augment Tangents",
-                        description: "Whether to use heuristics to augment tangents in Linear SOS",
+                        description: "Whether to use heuristics to augment tangents in Linear SOS.",
                         type: "checkbox",
                         defaultValue: true,
                         settingPath: "sos.linearSOS.augmentTangents"
@@ -160,7 +167,7 @@ var settingsDefinition = {children: {
                 children: {
                     useSDPSOS: {
                         name: "Use SDP SOS",
-                        description: "Enable SDP SOS method",
+                        description: "Enable SDP SOS method.",
                         type: "checkbox",
                         defaultValue: true,
                         settingPath: "sos.sdpSOS.useSDPSOS",
@@ -168,7 +175,8 @@ var settingsDefinition = {children: {
                     },
                     allowNumer: {
                         name: "Allow Numerical Solution",
-                        description: "Allow numerical solution in SDP SOS",
+                        description: "Whether to allow numerical solution in SDP SOS. This returns inexact"
+                                     + " solutions when rationalization failed.",
                         type: "checkbox",
                         defaultValue: false,
                         settingPath: "sos.sdpSOS.allowNumer"
@@ -181,7 +189,7 @@ var settingsDefinition = {children: {
                 children: {
                     useSymmetricSOS: {
                         name: "Use Symmetric SOS",
-                        description: "Enable Symmetric SOS method",
+                        description: "Enable Symmetric SOS method.",
                         type: "checkbox",
                         defaultValue: true,
                         settingPath: "sos.symmetricSOS.useSymmetricSOS",
@@ -195,7 +203,7 @@ var settingsDefinition = {children: {
                 children: {
                     usePivoting: {
                         name: "Use Pivoting",
-                        description: "Enable pivoting",
+                        description: "Enable pivoting.",
                         type: "checkbox",
                         defaultValue: true,
                         settingPath: "sos.pivoting.usePivoting"
@@ -221,14 +229,14 @@ var settingsDefinition = {children: {
                 children: {
                     together: {
                         name: "LaTeX Together",
-                        description: "Whether to apply 'together' to the solution before conversion to LaTeX.",
+                        description: "Whether to apply \"together\" to the solution before conversion to LaTeX.",
                         type: "checkbox",
                         defaultValue: true,
                         settingPath: "result.latex.together"
                     },
                     cancel: {
                         name: "LaTeX Cancel",
-                        description: "Whether to apply 'cancel' to the solution before conversion to LaTeX.",
+                        description: "Whether to apply \"cancel\" to the solution before conversion to LaTeX.",
                         type: "checkbox",
                         defaultValue: true,
                         settingPath: "result.latex.cancel"
@@ -240,7 +248,8 @@ var settingsDefinition = {children: {
                         defaultValue: 2,
                         min: 0,
                         step: 1,
-                        settingPath: "result.latex.maxTermsAligned"
+                        settingPath: "result.latex.maxTermsAligned",
+                        blur: settingsResultLatexUpdate
                     },
                     maxLenAligned: {
                         name: "Max Length Aligned",
@@ -249,7 +258,8 @@ var settingsDefinition = {children: {
                         defaultValue: 160,
                         min: 0,
                         step: 1,
-                        settingPath: "result.latex.maxLenAligned"
+                        settingPath: "result.latex.maxLenAligned",
+                        blur: settingsResultLatexUpdate
                     },
                     maxLineLenInAligned: {
                         name: "Max Line Length in Aligned",
@@ -258,7 +268,8 @@ var settingsDefinition = {children: {
                         defaultValue: 100,
                         min: 0,
                         step: 1,
-                        settingPath: "result.latex.maxLineLenInAligned"
+                        settingPath: "result.latex.maxLineLenInAligned",
+                        blur: settingsResultLatexUpdate
                     }
                 }
             },
@@ -593,6 +604,10 @@ function setupEventListenersRecursive(definition) {
                             updateSetting(definition.settingPath, value);
                         });
                     }
+
+                    if (definition.blur) {
+                        element.addEventListener('blur', definition.blur);
+                    }
                 }
     }
 }
@@ -649,6 +664,16 @@ function setupModalEventListeners() {
     });
 }
 
+
+// refresh latex
+function settingsResultLatexUpdate(){
+    if (sos_results.success){
+        // trigger the latex update
+        results = sos_results;
+        results.latex = results.raw_latex;
+        setSOSResult(results);
+    }
+}
 
 // Overwrite the default configs with the user configs
 function getParserConfigs(parser_configs = {}) {

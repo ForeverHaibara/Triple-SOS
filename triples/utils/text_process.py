@@ -822,7 +822,7 @@ def poly_get_factor_form(
         The polynomial to be factorized.
     symmetry : Union[PermutationGroup, str]
         The permutation group of the expression. If str, it should be one of
-        ["cyc", "sym", "alt", "dih", "trivial"].        
+        ["cyc", "sym", "alt", "dih", "trivial"].
     cyclic_sum_func : str
         The function name for cyclic sum. Defaults to "s".
     cyclic_prod_func : str

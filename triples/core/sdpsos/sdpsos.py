@@ -301,7 +301,7 @@ def SDPSOS(
     eq_constraints: Union[List[Expr], Dict[Expr, Expr]]
         Equality constraints to the problem. This assumes h_1(x) = 0, h_2(x) = 0, ...
     symmetry: Optional[PermutationGroup]
-        CURRENTLY UNUSED.    
+        CURRENTLY UNUSED.
     roots: Optional[List[Root]]
         The roots of the polynomial satisfying constraints. When it is None, it will be automatically generated.
     ineq_constraints_with_trivial: bool
