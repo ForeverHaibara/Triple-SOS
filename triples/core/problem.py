@@ -442,7 +442,7 @@ class InequalityProblem(Generic[T]):
 
         expr_fs = tuple(self._dtype_free_symbols(self.expr))
         rep = find(expr_fs[0]) if len(expr_fs) else None
-        redundancy = {s for s in fs if find(s) != rep}
+        redundancy = {s for s in self.gens if (s not in fs) or (find(s) != rep)}
 
         if not redundancy:
             rm_gens = lambda x: x
