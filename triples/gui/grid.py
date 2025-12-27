@@ -267,12 +267,12 @@ class GridRender():
 
     @classmethod
     def _render_grid_color(cls,
-            poly: Poly,
-            size: int = 60,
-            value_method: str = 'integer_lambdify',
-            color_method: str = 'numpy',
-            power: float = 1./3
-        ) -> Tuple[List[float], List[Tuple[int, int, int]]]:
+        poly: Poly,
+        size: int = 60,
+        value_method: str = 'integer_lambdify',
+        color_method: str = 'numpy',
+        power: float = 1./3
+    ) -> Tuple[List[float], List[Tuple[int, int, int]]]:
         """
         Render the grid by computing the values and setting the grid_val to rgba colors.
 
@@ -364,15 +364,15 @@ class GridRender():
 
     @classmethod
     def render(cls,
-            poly: Poly,
-            size: int = 60,
-            value_method: str = 'integer',
-            color_method: str = 'numpy',
-            with_color: bool = False,
-            handle_error: bool = True,
-        ) -> GridPoly:
+        poly: Poly,
+        size: int = 60,
+        value_method: str = 'integer',
+        color_method: str = 'numpy',
+        with_color: bool = False,
+        handle_error: bool = True,
+    ) -> GridPoly:
         """
-        Render the grid by computing the values and setting the grid_val to rgba colors.
+        Render the grid by computing the values and setting the grid_val to RGBA colors.
 
         Parameters
         ----------
@@ -402,9 +402,11 @@ class GridRender():
         """
         try:
             if with_color:
-                grid_value, grid_color = cls._render_grid_color(poly, size=size, value_method=value_method, color_method=color_method)
+                grid_value, grid_color = cls._render_grid_color(
+                    poly, size=size, value_method=value_method, color_method=color_method)
             else:
-                grid_value = cls._render_grid_value(poly, size=size, value_method = value_method)
+                grid_value = cls._render_grid_value(
+                    poly, size=size, value_method = value_method)
                 grid_color = None
 
             return GridPoly(

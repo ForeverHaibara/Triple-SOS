@@ -1,85 +1,18 @@
-# import inspect
-# import ctypes
-# import threading
+from typing import Tuple, List, Dict, Union, Optional
 
 from flask import Flask, render_template, request, jsonify
 from flask_socketio import SocketIO, join_room, leave_room
 from flask_cors import CORS
 
-import sympy as sp
+from sympy import Poly, Expr, Symbol, Rational
+from sympy.combinatorics import PermutationGroup
 
-from triples.utils import pl, poly_get_factor_form, optimize_poly, Root
+from triples.utils.text_process import pl, coefficient_triangle_latex
+from triples.utils import (
+    optimize_poly, Root
+)
 from triples.core import Solution
-from triples.core.linsos.tangents import prepare_tangents
 from triples.gui.sos_manager import SOSManager
-from triples.gui.linebreak import recursive_latex_auto_linebreak
-
-# def _async_raise(tid, exctype):
-#     '''Raises an exception in the threads with id tid'''
-#     if not inspect.isclass(exctype):
-#         raise TypeError("Only types can be raised (not instances)")
-#     res = ctypes.pythonapi.PyThreadState_SetAsyncExc(ctypes.c_long(tid),
-#                                                      ctypes.py_object(exctype))
-#     if res == 0:
-#         raise ValueError("invalid thread id")
-#     elif res != 1:
-#         # "if it returns a number greater than one, you're in trouble,
-#         # and you should call it again with exc=NULL to revert the effect"
-#         ctypes.pythonapi.PyThreadState_SetAsyncExc(ctypes.c_long(tid), None)
-#         raise SystemError("PyThreadState_SetAsyncExc failed")
-
-# class ThreadWithExc(threading.Thread):
-#     '''A thread class that supports raising an exception in the thread from
-#        another thread.
-#     '''
-#     def _get_my_tid(self):
-#         """determines this (self's) thread id
-
-#         CAREFUL: this function is executed in the context of the caller
-#         thread, to get the identity of the thread represented by this
-#         instance.
-#         """
-#         if not self.is_alive(): # Note: self.isAlive() on older version of Python
-#             raise threading.ThreadError("the thread is not active")
-
-#         # do we have it cached?
-#         if hasattr(self, "_thread_id"):
-#             return self._thread_id
-
-#         # no, look for it in the _active dict
-#         for tid, tobj in threading._active.items():
-#             if tobj is self:
-#                 self._thread_id = tid
-#                 return tid
-
-#         # TODO: in python 2.6, there's a simpler way to do: self.ident
-
-#         raise AssertionError("could not determine the thread's id")
-
-#     def raise_exc(self, exctype):
-#         """Raises the given exception type in the context of this thread.
-
-#         If the thread is busy in a system call (time.sleep(),
-#         socket.accept(), ...), the exception is simply ignored.
-
-#         If you are sure that your exception should terminate the thread,
-#         one way to ensure that it works is:
-
-#             t = ThreadWithExc( ... )
-#             ...
-#             t.raise_exc( SomeException )
-#             while t.isAlive():
-#                 time.sleep( 0.1 )
-#                 t.raise_exc( SomeException )
-
-#         If the exception is to be caught by the thread, you need a way to
-#         check that your thread has caught it.
-
-#         CAREFUL: this function is executed in the context of the
-#         caller thread, to raise an exception in the context of the
-#         thread represented by this instance.
-#         """
-#         _async_raise( self._get_my_tid(), exctype )
 
 class SOS_WEB(Flask):
     def __init__(self, *args, **kwargs):
@@ -101,6 +34,7 @@ def on_disconnect():
     leave_room(sid)
     print('Left Room', sid)
 
+
 @app.route('/process/preprocess', methods=['POST'])
 def preprocess():
     """
@@ -111,11 +45,6 @@ def preprocess():
     ----------
     sid : str
         The session ID.
-    poly : str
-        The input polynomial.
-    standardize_text : str
-        The standardization of the text. If None, the text is not standardized.
-        See `SOSManager.set_poly` for more information.
     actions : list[str]
         Additional actions to perform. Supporting 
 
@@ -131,241 +60,243 @@ def preprocess():
         The heatmap of the polynomial coefficients in RGBA format.
     """
     req = request.get_json()
-    if len(req['poly'].strip()) == 0:
+    req_input = req["poly"]
+    if len(req_input.strip()) == 0:
         return jsonify()
 
-    gens = req.get('gens', 'abc')
-    gens = tuple(sp.Symbol(_) for _ in gens)
-    perm = SOSManager.parse_perm_group(req.get('perm'))
-    req['gens'] = gens
-    req['perm'] = perm
+    gens = tuple(Symbol(_) for _ in req["gens"])
+    perm = SOSManager.parse_perm_group(req["perm"])
+    req["gens"] = gens
+    req["perm"] = perm
+    if len(set(gens)) != len(gens):
+        raise ValueError("Duplicate generators are not allowed.")
+    if perm.degree != len(gens):
+        raise ValueError("The degree of the permutation group"\
+                    + "must be equal to the number of generators.")
 
-    result = SOSManager.set_poly(
-        req['poly'],
-        gens,
-        perm,
-        render_triangle = True if 3 <= len(gens) <= 4 else False,
-        render_grid = True,
-        homogenize = req.get('homogenize', False),
-        dehomogenize = req.get('dehomogenize', None),
-        standardize_text = req.get('standardize_text', None),
-        omit_mul = req.get('omit_mul', True),
-        omit_pow = req.get('omit_pow', True),
+    parser_configs = req["parser_configs"]
+    parser = SOSManager.make_parser(
+        gens, perm,
+        **{key: parser_configs[key] for key in [
+            "lowercase",
+            "cyclic_sum_func",
+            "cyclic_prod_func",
+            "preserve_patterns",
+            "scientific_notation",
+        ] if key in parser_configs
+        }
     )
-    if result is None:
+    req["parser"] = parser
+
+    # Step 1. convert to sympy.Expr
+    raw_expr = None
+    try:
+        raw_expr = parser(req["poly"], return_type="expr",
+                parse_expr_kwargs = {"evaluate": False})
+    except Exception:
+        pass
+    if raw_expr is None:
         return jsonify()
 
-    n = result['degree']
-    txt = result['txt']
-    triangle = result.get('triangle', None)
-    grid = result.get('grid', None)
-    grid_color = grid.grid_color if grid is not None else None
- 
-    sid = req.pop('sid')
-    req.update(result)
-    socketio.start_background_task(findroot, sid, **req)
-    # thread = ThreadWithExc(target=findroot, args=(sid,), kwargs=req)
-    # thread.daemon = True
-    # thread.start()
-    # socketio.sleep(3)
-    # thread.raise_exc(SystemExit)
+    # Step 2. try to convert to a fraction
+    expr = (None, None)
+    try:
+        # This only expands the expr to fraction of polynomials,
+        # and there is no text processing.
+        expr = pl(raw_expr, gens, perm, return_type="frac")
+    except:
+        pass
+    if expr is None or (isinstance(expr, tuple) and expr[0] is None):
+        expr = raw_expr
 
-    return jsonify(n = n, txt = txt, triangle = triangle, heatmap = grid_color)
+    # Step 3. apply transformations as required
+    # return the new text and new expression
+    expr, text = SOSManager.apply_transformations(
+        expr, gens, perm,
+        **{key: parser_configs[key] for key in [
+            "cancel",
+            "homogenize",
+            "dehomogenize",
+            "standardize_text",
+            "cyclic_sum_func",
+            "cyclic_prod_func",
+            "omit_mul",
+            "omit_pow",
+        ] if key in parser_configs
+        }
+    )
 
-def findroot(sid, **kwargs):
-    """
-    Find the root information of the polynomial and emit the result to the client.
+    # Step 4. render the coeff triangle and the heatmap
+    degree, triangle, heatmap = SOSManager.render_coeff_triangle_and_heatmap(raw_expr, expr)
 
-    Parameters
-    ----------
-    sid : str
-        The session ID.
-    poly : str
-        The input polynomial.
-    grid : Grid
-        The grid of the polynomial coefficients. This is passed in
-        internally by the `preprocess` function.
-    tangents : list[str]
-        The tangents to the roots. If provided, the tangents are not recalculated.
-    actions : list[str]
-        Additional actions to perform.
+    sid = req.pop("sid")
 
-    Returns
-    ----------
-    rootsinfo : str
-        The string representation of the roots information.
-    tangents : list[str]
-        The tangents to the roots.    
-    """
-    if 'findroot' in kwargs['actions']:
-        poly = kwargs['poly']
-        roots = optimize_poly(poly, [], [poly]) if poly.domain in (sp.ZZ, sp.QQ) else []
-        tangents = kwargs.get('tangents')
-        if tangents is None:
-            # not having computed tangents, recompute them
-            tangents = [] # root_tangents(poly, [Root(_) for _ in roots])
-            # ineqs = [_.as_poly(poly.gens) for _ in poly.gens]
-            # tangents = prepare_tangents(poly, dict(zip(ineqs, [_.as_expr() for _ in ineqs])) , roots=roots)
-            # tangents = [poly_get_factor_form(_.as_poly(poly.gens)) for _ in tangents]
+    req["expr"] = expr
+    socketio.start_background_task(chained_actions, sid, **req)
+    return jsonify(
+        txt = text if text is not None else req_input,
+        n = degree,
+        triangle = triangle,
+        heatmap = heatmap
+    )
+
+
+def chained_actions(sid, **kwargs):
+    actions = kwargs.get("actions", [])
+    if "findroot" in actions:
+        roots = _findroots(sid,
+            kwargs["expr"],
+            timestamp = kwargs.get("timestamp", 0),
+        )
+        # Do not push the roots to the args of sum_of_squares,
+        # since the roots are found without constraints.
+
+    if not ("sos" in actions):
+        return
+
+    solution = None
+    try:
+        ineq_constraints = SOSManager.parse_constraints_dict(
+            kwargs["ineq_constraints"], kwargs["parser"])
+        eq_constraints = SOSManager.parse_constraints_dict(
+            kwargs["eq_constraints"], kwargs["parser"])
+
+        sos_configs = kwargs.get("sos_configs", {})
+        solution = _sum_of_squares(
+            kwargs["expr"],
+            ineq_constraints,
+            eq_constraints,
+            **{key: sos_configs[key] for key in [
+                "methods",
+                "time_limit",
+                "configs",
+            ] if key in sos_configs
+            }
+        )
+    except Exception as e:
+        pass
+    finally:
+        if solution is None:
+            # tell the client that the SOS terminated
             socketio.emit(
-                'rootangents',
-                {
-                    'rootsinfo': 'Local Minima Approx:\n' + '\n'.join(
-                        [str(tuple(__ if isinstance(__, sp.Rational) else __.n(8) for __ in r))
-                                for r in roots[:min(len(roots), 5)]]),
-                    'tangents': tangents,
-                    'timestamp': kwargs.get('timestamp', 0)
+                "sos", {
+                    "latex": "", 
+                    "txt": "", 
+                    "formatted": "", 
+                    "success": False,
+                    "timestamp": kwargs.get("timestamp", 0),
                 },
                 to=sid
             )
-        elif 'sos' in kwargs['actions']:
-            tangents = []
-            for tg in kwargs['tangents'].split('\n'):
-                if len(tg) > 0:
-                    try:
-                        tg = pl(tg, kwargs['gens'], kwargs['perm'])
-                        if tg is not None:
-                            # and (tg.domain in (sp.ZZ, sp.QQ)):
-                            tg = tg.as_expr()
-                            # tangents.append(RootTangent(tg))
-                            if 'configs' not in kwargs:
-                                kwargs['configs'] = {'LinearSOS': {'tangents': []}}
-                            elif 'LinearSOS' not in kwargs['configs']:
-                                kwargs['configs']['LinearSOS'] = {'tangents': []}
-                            elif 'tangents' not in kwargs['configs']['LinearSOS']:
-                                kwargs['configs']['LinearSOS']['tangents'] = []
-                            kwargs['configs']['LinearSOS']['tangents'].append(tg)
-                            kwargs['configs']['LinearSOS']['roots'] = roots
-                    except Exception as e:
-                        pass
-    if 'sos' in kwargs['actions']:
-        sum_of_squares(sid, **kwargs)
 
-
-def sum_of_squares(sid, **kwargs):
-    """
-    Perform the sum of square decomposition, and emit the result to the client.
-    Always emit the result to the client, even if the solution is None or an error occurs.
-
-    Parameters
-    ----------
-    sid : str
-        The session ID.
-    poly : str
-        The input polynomial.
-    ineq_constraints: dict[str, str]
-        The ineq constraints.
-    eq_constraints: dict[str, str]
-        The eq constraints.
-    methods : dict[str, bool]
-        The methods to use.
-    configs : dict[str, dict]
-        The configurations for each method.
-    roots : list[Root]
-        The roots of the polynomial.
-    perm : PermutationGroup
-
-    Returns
-    ----------
-    latex : str
-        The LaTeX representation of the solution.
-    txt : str
-        The text representation of the solution.
-    formatted : str
-        The formatted representation of the solution.
-    success : bool
-        Whether the solution was found.
-    """
-    try:
-        methods = [key for key, value in kwargs['methods'].items() if value]
-        methods.extend(['Pivoting', 'Reparametrization'])
-
-        gens = kwargs['gens']
-        # ineq_constraints = kwargs['poly'].free_symbols if SOSManager.ALLOW_NONSTANDARD_GENS else gens
-
-        def parse_constraint_dict(source):
-            constraints = {}
-            for key, value in source.items():
-                key, value = key.strip(), value.strip()
-                if len(key) == 0:
-                    continue
-                key = pl(key, gens, kwargs['perm'], return_type='expr')
-                if len(value) != 0:
-                    value = sp.sympify(value)
-                else:
-                    value = key
-                constraints[key] = value
-            return constraints
-
-        ineq_constraints = parse_constraint_dict(kwargs['ineq_constraints'])
-        eq_constraints = parse_constraint_dict(kwargs['eq_constraints'])
-
-        solution = SOSManager.sum_of_squares(
-            kwargs['poly'],
-            ineq_constraints = ineq_constraints,
-            eq_constraints = eq_constraints,
-            gens = gens,
-            symmetry = kwargs['perm'],
-            methods = methods,
-            configs = kwargs['configs']
+    if solution is not None:
+        result_configs = kwargs.get("result_configs", {})
+        _emit_sos_result(sid,
+            solution,
+            gens = kwargs["gens"],
+            symmetry = kwargs["perm"],
+            timestamp = kwargs.get("timestamp", 0),
+            **{key: result_configs[key] for key in [
+                "rewrite_symmetry",
+                "to_string_configs",
+            ] if key in result_configs
+            }
         )
 
-        assert solution is not None, 'No solution found.'
-    except Exception as e:
-        return socketio.emit(
-            'sos',
-            {'latex': '', 'txt': '', 'formatted': '', 'success': False,
-                'timestamp': kwargs.get('timestamp', 0)},
-            to=sid
-        )
 
-    gens = kwargs['poly'].free_symbols if SOSManager.ALLOW_NONSTANDARD_GENS else gens
-    gens = sorted(gens, key=lambda x:x.name)
-    # lhs_expr = sp.Function('F')(*gens) if len(gens) > 0 else 
-    lhs_expr = sp.Symbol('\\text{LHS}')
-    if isinstance(solution, Solution):
-        # # remove the aligned environment
-        tex = solution.to_string(mode='latex', lhs_expr=lhs_expr,
-            together=True, cancel=True, settings={'long_frac_ratio':2})#.replace('aligned', 'align*')
-        tex = recursive_latex_auto_linebreak(tex)
-        tex = '$$%s$$'%tex
-
-    return socketio.emit(
-        'sos',
-        {'latex': tex, 
-        'txt': solution.to_string(mode='txt', lhs_expr=lhs_expr),
-        'formatted': solution.to_string(mode='formatted', lhs_expr=lhs_expr),
-        'success': True, 'timestamp': kwargs.get('timestamp', 0)},
+def _findroots(
+    sid: int,
+    expr: Union[Poly, Tuple[Poly, Poly]],
+    *,
+    timestamp: int = 0,
+):
+    poly = expr
+    roots = []
+    if isinstance(poly, Poly) and (poly.domain.is_ZZ or poly.domain.is_QQ):
+        roots = optimize_poly(poly, [], [poly])
+    socketio.emit(
+        'findroots', {
+            'rootsinfo': [
+                [str(v if isinstance(v, Rational) else v.n(8)) for v in r]
+                    for r in roots
+            ],
+            'timestamp': timestamp,
+        },
         to=sid
     )
+    return roots
+
+
+def _sum_of_squares(
+    expr: Expr,
+    ineq_constraints: Dict[Expr, Expr],
+    eq_constraints: Dict[Expr, Expr],
+    *,
+    methods: Optional[List[str]] = None,
+    time_limit: float = 300.,
+    configs: dict = {}
+) -> Optional[Solution]:
+    return SOSManager.sum_of_squares(
+        expr,
+        ineq_constraints,
+        eq_constraints,
+        methods = methods,
+        time_limit = time_limit,
+        configs = configs
+    )
+
+
+def _emit_sos_result(
+    sid: int,
+    solution: Solution,
+    *,
+    gens: Tuple[Symbol, ...],
+    symmetry: PermutationGroup,
+    rewrite_symmetry: bool = True,
+    to_string_configs: dict = {},
+    timestamp: int = 0,
+) -> dict:
+    if rewrite_symmetry:
+        solution = solution.rewrite_symmetry(gens, symmetry)
+
+    result = {"success": True, "timestamp": timestamp}
+    for key, value in to_string_configs.items():
+        if not (key in ("latex", "txt", "formatted")):
+            result[key] = ""
+            continue
+        if key == "latex":
+            _value = {
+                'settings': {'long_frac_ratio':2},
+                'lhs_expr': Symbol('\\text{LHS}')
+            }
+        else:
+            _value = {'lhs_expr': Symbol('LHS')}
+        _value.update(value)
+        result[key] = solution.to_string(mode=key, **_value)
+    socketio.emit("sos", result, to=sid)
+
+    return result
+
 
 @app.route('/process/latexcoeffs', methods=['POST'])
 def get_latex_coeffs():
-    """
-    Get the LaTeX representation of the coefficient triangle.
-
-    Parameters
-    ----------
-    poly : str
-        The input polynomial.
-    gens : str
-        The generator variables.
-    perm : str
-        The permutation group.
-
-    Returns
-    ----------
-    coeffs : str
-        The LaTeX representation of the coefficients
-    """
     req = request.get_json()
-    poly = req.get('poly', None)
-    if poly is None:
+    parser_configs = req["parser_configs"]
+    parser = SOSManager.make_parser(req["gens"], req["perm"],
+        **{key: parser_configs[key] for key in [
+            "lowercase",
+            "cyclic_sum_func",
+            "cyclic_prod_func",
+            "preserve_patterns",
+            "scientific_notation",
+        ] if key in parser_configs
+        }
+    )
+    poly = parser(req["poly"], return_type='frac')
+    if poly is None or poly[0] is None:
         return None
-    gens = tuple(sp.Symbol(_) for _ in req.get('gens', 'abc'))
-    perm = SOSManager.parse_perm_group(req.get('perm'))
-    coeffs = SOSManager.latex_coeffs(poly, gens, perm,
-                tabular = True, document = True, zeros='\\textcolor{lightgray}')
+    coeffs = coefficient_triangle_latex(poly[0],
+        tabular = True, document = True, zeros='\\textcolor{lightgray}')
     return jsonify(coeffs = coeffs)
 
 
@@ -380,9 +311,12 @@ if __name__ == '__main__':
 
     HOST = '127.0.0.1'
     PORT = 5000
+
     if DEPLOY:
         HOST = '0.0.0.0'
+
         SOSManager.verbose = False
+        SOSManager.time_limit = 300.0
 
     print('=' * 50)
     print('Running the server at http://%s:%d'%(HOST, PORT))    

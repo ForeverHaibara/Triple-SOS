@@ -7,11 +7,13 @@ from sympy import (
     Basic, Expr, Symbol, Dummy, Poly, Integer, Rational, Function, Mul, Pow,
     fraction
 )
+from sympy import true as SympyTrue
 from sympy.combinatorics.perm_groups import Permutation, PermutationGroup
 from sympy.core.symbol import uniquely_named_symbol
 from sympy.core.sympify import sympify, CantSympify
 from sympy.core.function import AppliedUndef
 from sympy.polys.polyerrors import BasePolynomialError
+from sympy.polys.domains.domainelement import DomainElement
 
 from .complexity import ProblemComplexity
 from .dispatch import (
@@ -404,6 +406,76 @@ class InequalityProblem(Generic[T]):
             # TODO: sqf ineqs might exclude some roots here
             problem.roots = self.roots.reorder(problem.gens)
         return problem
+
+    def remove_redundancy(self) -> 'InequalityProblem':
+        """
+        Remove redundant symbols and constraints.
+
+        TODO: This function assumes redundant constraints are feasible
+        in the current. This could change in the future.
+
+        Examples
+        ----------
+        >>> from sympy.abc import a, b, c
+        >>> pro = InequalityProblem(a**4 - 3*a*b**3 + 2*b**4, [a, a - 2*b, c])
+        >>> pro.remove_redundancy().ineq_constraints
+        {a: a, a - 2*b: a - 2*b}
+        >>> pro = InequalityProblem(a - 4, [a - b, b, b**2 - c, c - 16])
+        >>> pro.remove_redundancy().ineq_constraints
+        {a - b: a - b, b: b, b**2 - c: b**2 - c, c - 16: c - 16}
+        """
+        fs = self.free_symbols
+        ufs = {s: s for s in fs}
+        def find(v):
+            u = ufs[v]
+            if u != v:
+                ufs[v] = find(u)
+            return ufs[v]
+        def union(u, v):
+            ufs[find(u)] = find(v)
+        def union_expr(e):
+            efs = tuple(self._dtype_free_symbols(e))
+            for s in efs:
+                # union each group
+                union(s, efs[0])
+        self.reduce(union_expr, any)
+
+        expr_fs = tuple(self._dtype_free_symbols(self.expr))
+        rep = find(expr_fs[0]) if len(expr_fs) else None
+        redundancy = {s for s in self.gens if (s not in fs) or (find(s) != rep)}
+
+        if not redundancy:
+            rm_gens = lambda x: x
+
+        # when the elements are polys / polyelements,
+        # we should also remove the generators
+        elif isinstance(self.expr, Poly):
+            _gens = self.expr.gens
+            rest_inds = [i for i, g in enumerate(_gens)
+                if g not in redundancy]
+            if len(rest_inds) == 0:
+                # maintain at least one generator
+                rest_inds = [0]
+            rest_gens = [_gens[i] for i in rest_inds]
+            mp = lambda k: tuple(k[i] for i in rest_inds)
+            def rm_gens(expr):
+                return Poly({mp(k): v for k, v in expr.rep.to_dict().items()},
+                    *rest_gens, domain = expr.domain)
+        else:
+            # TODO: implement similar logic for PolyElement
+            rm_gens = lambda x: x
+
+        ineqs, eqs = {}, {}
+        for key, value in self.ineq_constraints.items():
+            if all(s in redundancy for s in self._dtype_free_symbols(key)):
+                continue
+            ineqs[rm_gens(key)] = value
+        for key, value in self.eq_constraints.items():
+            if all(s in redundancy for s in self._dtype_free_symbols(key)):
+                continue
+            eqs[rm_gens(key)] = value
+        pro = self.new(rm_gens(self.expr), ineqs, eqs)
+        return pro
 
     def sqr_free(self,
         problem_sqf: bool = False,

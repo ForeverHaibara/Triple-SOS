@@ -38,35 +38,37 @@ class StructuralSOSSolver(ProofNode):
 
 
 def StructuralSOS(
-        poly: Poly,
-        ineq_constraints: Union[List[Poly], Dict[Poly, Expr]] = {},
-        eq_constraints: Union[List[Poly], Dict[Poly, Expr]] = {},
-        verbose: Union[bool, int] = False,
-        raise_exception: bool = False,
-    ) -> Optional[SolutionStructural]:
+    expr: Expr,
+    ineq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
+    eq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
+    *,
+    verbose: Union[bool, int] = False,
+    raise_exception: bool = False,
+) -> Optional[SolutionStructural]:
     """
     A rule-based expert system to solve polynomial inequalities in specific structures.
     Most algorithms run in O(1) or linear time.
 
     Parameters
-    -------
-    poly: Poly
-        The polynomial to perform SOS on.
-    ineq_constraints: List[Poly]
-        Inequality constraints to the problem. This assume g_1(x) >= 0, g_2(x) >= 0, ...
-    eq_constraints: List[Poly]
-        Equality constraints to the problem. This assume h_1(x) = 0, h_2(x) = 0, ...
+    ----------
+    expr: Expr
+        The expression to perform SOS on.
+    ineq_constraints: Union[List[Expr], Dict[Expr, Expr]]
+        Inequality constraints to the problem. This assumes g_1(x) >= 0, g_2(x) >= 0, ...
+    eq_constraints: Union[List[Expr], Dict[Expr, Expr]]
+        Equality constraints to the problem. This assumes h_1(x) = 0, h_2(x) = 0, ...
     verbose: bool
         Whether to print verbose information.
     raise_exception: bool
         Whether to raise exception when an error occurs. Set to True for debug purpose.
+        Experimental.
 
     Returns
     -------
     solution: Solution
 
     """
-    problem = ProofNode.new_problem(poly, ineq_constraints, eq_constraints)
+    problem = ProofNode.new_problem(expr, ineq_constraints, eq_constraints)
     configs = {
         SolvePolynomial: {'solvers': [StructuralSOSSolver]},
         StructuralSOSSolver: {'verbose': verbose, 'raise_exception': raise_exception},

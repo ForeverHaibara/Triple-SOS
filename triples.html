@@ -93,6 +93,158 @@
         margin-bottom: 8px; /* Optional space between button and menu */
     }
 
+    /* Settings Modal Styles */
+    .settings_modal {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 85%;
+        height: 85%;
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        display: flex;
+        overflow: hidden;
+        z-index: 1001;
+    }
+
+    .settings_sidebar {
+        width: 250px;
+        background: #f8f9fa;
+        border-right: 1px solid #e9ecef;
+        padding: 20px 0;
+        overflow-y: auto;
+        box-sizing: border-box;
+    }
+
+    .settings_content {
+        flex: 1;
+        margin: 30px;
+        overflow-y: auto;
+        background: white;
+        box-sizing: border-box;
+    }
+
+    .settings_close {
+        position: absolute;
+        top: 15px;
+        right: 20px;
+        background: none;
+        border: none;
+        font-size: 24px;
+        cursor: pointer;
+        color: #6c757d;
+        z-index: 1002;
+    }
+
+    .settings_close:hover {
+        color: #343a40;
+    }
+
+    .settings_section {
+        margin-bottom: 40px;
+    }
+
+    .settings_section_title {
+        font-size: 24px;
+        font-weight: 600;
+        margin-bottom: 20px;
+        color: #212529;
+        border-bottom: 2px solid #0d6efd;
+        padding-bottom: 10px;
+    }
+
+    .settings_subsection_title {
+        font-size: 18px;
+        font-weight: 500;
+        margin: 25px 0 15px 0;
+        color: #495057;
+    }
+
+    .settings_item {
+        margin-bottom: 20px;
+        padding: 15px;
+        background: #f8f9fa;
+        border-radius: 6px;
+        transition: background-color 0.2s ease;
+    }
+
+    .settings_item:hover {
+        background: #e9ecef;
+    }
+
+    .settings_item_name {
+        font-size: 14px;
+        font-weight: 500;
+        color: #212529;
+        margin-bottom: 5px;
+    }
+
+    .settings_item_description {
+        font-size: 12px;
+        color: #6c757d;
+        margin-bottom: 10px;
+        line-height: 1.4;
+    }
+
+    .settings_item_control {
+        display: flex;
+        align-items: center;
+        font-size: 14px;
+    }
+
+    .settings_menu_item {
+        display: block;
+        padding: 12px 20px;
+        color: #495057;
+        text-decoration: none;
+        font-size: 14px;
+        transition: all 0.2s ease;
+        cursor: pointer;
+        border: none;
+        background: none;
+        text-align: left;
+        width: 100%;
+    }
+
+    .settings_menu_item:hover {
+        background: #e9ecef;
+        color: #0d6efd;
+    }
+
+    .settings_menu_item.active {
+        background: #0d6efd;
+        color: white;
+        font-weight: 500;
+    }
+
+    .settings_menu_item.subitem {
+        padding-left: 40px;
+        font-size: 13px;
+    }
+
+    .settings_textbox {
+        width: 300px;
+        padding: 6px 12px;
+        border: 1px solid #ced4da;
+        border-radius: 4px;
+        font-size: 14px;
+        transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+    }
+
+    .settings_textbox:focus {
+        border-color: #86b7fe;
+        outline: 0;
+        box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+    }
+
+    .settings_checkbox {
+        margin-right: 10px;
+        width: 16px;
+        height: 16px;
+    }
+
     </style>
     <!-- <script src="https://requirejs.org/docs/release/2.3.6/minified/require.js"></script> -->
     <!-- <script async src="https://cdn.bootcdn.net/ajax/libs/axios/0.21.1/axios.min.js"></script> -->
@@ -130,18 +282,23 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
         </div> -->
         <hr style="width: 90%; margin-left: 10px; margin-top: 10px; margin-bottom: 5px;">
         <div id="setting_history" style="font-size: 17px;">&nbsp  ·&nbsp Settings</div>
-        <div id="setting_methods" class="customized_scrollbar" style="margin-left: 10px; width:90%; height:80%;">
+        <div style="margin-left: 10px; margin-top: 5px; margin-bottom: 5px;">
+            <button id="open_settings_btn" class="btn btn-sm btn-outline-primary" style="width: 90%; font-size: 12px; padding: 2px;">
+                Advanced Settings
+            </button>
+        </div>
+        <div id="setting_methods" class="customized_scrollbar" style="margin-left: 10px; width:90%; height:70%;">
             <div class="form-check" style="margin-top: 5px">
                 <input class="form-check-input" type="checkbox" value="" id="setting_method_use_StructuralSOS" checked>
                 <label class="form-check-label" for="setting_method_use_StructuralSOS">Use Structural SOS</label>
-                <input type="checkbox" class="collapse-toggle visually-hidden" id="setting_method_StructuralSOS_switch" data-bs-toggle="collapse" data-bs-target="#setting_method_StructuralSOS_menu" width="0">
+                <!-- <input type="checkbox" class="collapse-toggle visually-hidden" id="setting_method_StructuralSOS_switch" data-bs-toggle="collapse" data-bs-target="#setting_method_StructuralSOS_menu" width="0">
                 <label for="setting_method_StructuralSOS_switch" class="collapse-label">
                     <span class="me-2">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-right" viewBox="0 0 16 16">
                         <path fill-rule="evenodd" d="M5.646 4.646a.5.5 0 0 1 .708 0L10 8.293l3.646-3.647a.5.5 0 1 1 .708.708l-4 4a.5.5 0 0 1-.708 0l-4-4a.5.5 0 0 1 0-.708z"/>
                     </svg>
                     </span>
-                </label>
+                </label> -->
                 <!-- <div class="collapse" id="setting_method_StructuralSOS_menu" style="margin-left: 10px; margin-top: 3px; font-size: 13px;">
                     <input class="form-check-input subcheckbox" type="checkbox" value="" id="setting_method_StructuralSOS_real" checked>
                     <label class="form-check-label" for="setting_method_StructuralSOS_real">Real Numbers</label>
@@ -242,7 +399,7 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
                 <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
             </svg>
         </a>
-        <a target="_blank" href="https://qm.qq.com/cgi-bin/qm/qr?k=8tjgp8Uo2WMqfOIGa7J68rvMMomUvl-s&jump_from=webapi&authKey=CO+CKU8hKPzSNMm1dvgGypGZE6H5TwGjaRxAW6XjtTQT2zy/tZCzvJv9yC4oH10G" style="margin-left: 5px; text-decoration: none;">
+        <a target="_blank" href="https://qm.qq.com/q/zf2j1pbb6a" style="margin-left: 5px; text-decoration: none;">
             <!-- <img border="0" src="//pub.idqqimg.com/wpa/images/group.png" alt="系数阵小课堂" title="系数阵小课堂"> -->
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="rgb(21,46,83)" class="bi bi-tencent-qq" viewBox="0 0 16 16">
                 <path d="M6.048 3.323c.022.277-.13.523-.338.55-.21.026-.397-.176-.419-.453-.022-.277.13-.523.338-.55.21-.026.397.176.42.453Zm2.265-.24c-.603-.146-.894.256-.936.333-.027.048-.008.117.037.15.045.035.092.025.119-.003.361-.39.751-.172.829-.129l.011.007c.053.024.147.028.193-.098.023-.063.017-.11-.006-.142-.016-.023-.089-.08-.247-.118Z"/>
@@ -442,6 +599,18 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
 <div id="shadow" hidden="hidden" style="width: 100%; height: 100%; position: absolute; top: 0px; left: 0px; background: rgba(0,0,0,0.59)">
     <div id="shadow_box" hidden="hidden" style="font-size: 15px; background-color: white; width: 80%; height: 80%; top: 10%; left: 10%; position: absolute;
     border: 2px solid blue; border-radius: 5px; text-align: center;"></div>
+    
+    <!-- Settings Modal -->
+    <div id="settings_modal" class="settings_modal" hidden="hidden">
+        <button class="settings_close" id="settings_close">&times;</button>
+        
+        <!-- Settings Sidebar (dynamically generated) -->
+        <div class="settings_sidebar" id="settings_sidebar"></div>
+        
+        <!-- Settings Content (dynamically generated) -->
+        <div class="settings_content" id="settings_content">
+        </div>
+    </div>
 </div>
 </div>
 </body>
@@ -482,6 +651,7 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
 
 
     function CreateVariables(){
+        // this is currently unused
         const n = sos_variables.names.length; 
         for (let i = 0; i < n; ++i){
             let variable = document.createElement('div');
@@ -497,6 +667,8 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
     }
     CreateVariables();
 </script>
+<script src="static/js/linebreak.js"></script>
+<script src="static/js/settings.js"></script>
 <script src="static/js/visualization.js"></script>
 <script src="static/js/history.js"></script>
 <script src="static/js/on_change.js"></script>
@@ -522,7 +694,7 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
     }
     function preprocessInput(kwargs){
         const input_poly = document.getElementById('input_poly').value.trim();
-        if ((input_poly.length === 0) || (!/^[\x00-\x7F\u03B1-\u03C9]*$/.test(input_poly))) {
+        if ((input_poly.length === 0) || (!/^[\x00-\u03FF]*$/.test(input_poly))) {
             return;
         }
 
@@ -554,8 +726,11 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
 
         let actions = parse_undefined(kwargs.actions, ['findroot']);
         kwargs.actions = actions
-        kwargs.standardize_text  = parse_undefined(kwargs.standardize_text, false);
-        
+
+        kwargs.parser_configs = parse_undefined(kwargs.parser_configs, {});
+        const parser_configs = getParserConfigs(kwargs.parser_configs);
+        parser_configs.standardize_text = parse_undefined(parser_configs.standardize_text, false);
+
         // update the cur_data to kwargs
         Object.entries(cur_data).forEach(([key, value]) => { kwargs[key] = value; });
 
@@ -573,6 +748,7 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
                     return;
                 }
                 res.data.gens = kwargs.gens;
+                // console.log(res.data);
                 renderVisualization(res.data);
                 // write to the record
                 setHistoryByTimestamp(cur_data.timestamp, 'vis', res.data);
@@ -591,29 +767,15 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
         changeNumOfSOS(sos_work.num + 1);
 
         const input_poly = document.getElementById('input_poly').value;
-        const methods = {
-            StructuralSOS: document.getElementById("setting_method_use_StructuralSOS").checked,
-            LinearSOS: document.getElementById("setting_method_use_LinearSOS").checked,
-            SymmetricSOS: document.getElementById("setting_method_use_SymmetricSOS").checked,
-            SDPSOS: document.getElementById("setting_method_use_SDPSOS").checked,
-        }
-        const configs = {
-            StructuralSOS:{
-                // real: document.getElementById("setting_method_StructuralSOS_real").checked,
-            },
-            LinearSOS: {
-                verbose: true,
-            },
-            SDPSOS: {
-                // allow_numer: document.getElementById("setting_method_SDPSOS_allow_numer").checked,
-                verbose: true,
-                // decompose_method: document.getElementById("setting_method_SDPSOS_reduced_decompose").checked?'reduce':'raw',
-            }
-        }
         const constraints = getConstraints();
 
-        let kwargs = {ineq_constraints: constraints.ineq_constraints, eq_constraints: constraints.eq_constraints,
-                methods: methods, configs: configs, actions: ['findroot', 'sos']};
+        let kwargs = {
+            ineq_constraints: constraints.ineq_constraints,
+            eq_constraints: constraints.eq_constraints,
+            sos_configs: getSOSConfigs(),
+            result_configs: getResultConfigs(),
+            actions: ['findroot', 'sos']
+        };
 
         // console.log(kwargs);
 
@@ -667,13 +829,13 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
             preprocessInput();
         }else if (event === 'factor'){
             sos_poly = ''; // reset
-            preprocessInput({standardize_text: 'factor'});
+            preprocessInput({parser_configs: {standardize_text: 'factor'}});
         }else if (event === 'expand'){
             sos_poly = ''; // reset
-            preprocessInput({standardize_text: 'expand'});
+            preprocessInput({parser_configs: {standardize_text: 'expand'}});
         }else if (event === 'expand full'){
             sos_poly = ''; // reset
-            preprocessInput({standardize_text: 'expand', omit_pow: false, omit_mul: false});
+            preprocessInput({parser_configs: {standardize_text: 'expand', omit_pow: false, omit_mul: false}});
         }else if (event === 'abcd2xyzw'){
             const exchanger = (s) => Array.from(s).map(x => {
                 const c = x.charCodeAt(0);
@@ -690,21 +852,21 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
             document.getElementById('constraints_table_body').querySelectorAll('input').forEach((x) => {x.value = exchanger(x.value);});
         }else if (event === 'homogenize'){
             sos_poly = ''; // reset
-            preprocessInput({homogenize: true});
+            preprocessInput({parser_configs: {homogenize: true}});
         }else if (event === 'dehomogenize0'){
             sos_poly = ''; // reset
-            preprocessInput({dehomogenize: 0});
+            preprocessInput({parser_configs: {dehomogenize: 0}});
         }else if (event === 'dehomogenize1'){
             sos_poly = ''; // reset
-            preprocessInput({dehomogenize: 1});
+            preprocessInput({parser_configs: {dehomogenize: 1}});
         }else if (event === 'total derv'){
 
         }else if (event === 'latex_coeffs'){
-            axios.post(host + '/process/latexcoeffs',
-            {
+            axios.post(host + '/process/latexcoeffs', {
                 'poly': sos_poly,
                 'gens': document.getElementById('setting_gens_input').value,
                 'perm': document.getElementById('setting_perm_input').value,
+                'parser_configs': getParserConfigs(),
             }
             ).then(res=>{
                     const str = res.data.coeffs;

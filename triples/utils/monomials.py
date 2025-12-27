@@ -3,15 +3,18 @@ This module provides functions to manipulate the group symmetry of a polynomial,
 and also utilities to compute monomial representations under the group symmetry.
 """
 from collections import defaultdict
-from typing import Dict, List, Tuple, Iterable, Callable, Union, Optional, Any
-
+from typing import (Dict, List, Tuple, Iterable, Callable,
+    Union, Optional, Any, overload, TypeVar
+)
 import numpy as np
 from sympy import Poly, Expr, Symbol, Add, ZZ, QQ
 from sympy.matrices import Matrix, MatrixBase
 from sympy.polys.polyclasses import DMP
 from sympy.polys.rings import PolyElement
 from sympy.polys.domains import Domain
-from sympy.combinatorics import Permutation, PermutationGroup, CyclicGroup, SymmetricGroup
+from sympy.combinatorics import (Permutation, PermutationGroup,
+    CyclicGroup, SymmetricGroup, AlternatingGroup, DihedralGroup
+)
 from ..sdp.arithmetic import rep_matrix_from_list
 
 try:
@@ -687,7 +690,26 @@ def verify_closure(l: List, f: Callable, get_rep: Optional[Callable]=None) -> bo
     return True
 
 
-def verify_symmetry(polys: Union[List[Poly], Poly], perm_group: Union[str, Permutation, PermutationGroup]) -> bool:
+def parse_symmetry(symmetry: Union[PermutationGroup, str], n: int) -> PermutationGroup:
+    if isinstance(symmetry, str):
+        maps = {
+            "cyc": CyclicGroup,
+            "sym": SymmetricGroup,
+            "alt": AlternatingGroup,
+            "dih": DihedralGroup,
+            "trivial": lambda n: PermutationGroup(Permutation(list(range(n))))
+        }
+        if symmetry in maps:
+            symmetry = maps[symmetry](n)
+        else:
+            raise ValueError(
+                f"Expected one of {tuple(maps.keys())} as symmetry, but received {symmetry}")
+    elif not isinstance(symmetry, PermutationGroup):
+        raise TypeError("Symmetry should be either PermutationGroup or str.")
+    return symmetry
+
+
+def verify_symmetry(polys: Union[List[Poly], Poly], symmetry: Union[str, Permutation, PermutationGroup]) -> bool:
     """
     Verify whether the polynomials are symmetric with respect to the permutation group.
 
@@ -695,8 +717,9 @@ def verify_symmetry(polys: Union[List[Poly], Poly], perm_group: Union[str, Permu
     ----------
     polys : Union[List[Poly], Poly]
         A list of polynomials or a single polynomial. Must have the same generators.
-    perm_group : Union[str, Permutation, PermutationGroup]
-        A permutation or a permutation group to verify. If string, it should be one of 'sym' or 'cyc'.
+    symmetry : Union[str, Permutation, PermutationGroup]
+        A permutation or a permutation group to verify. If string, it should be one of
+        ["cyc", "sym", "alt", "dih", "trivial"].
 
     Returns
     ----------
@@ -707,7 +730,7 @@ def verify_symmetry(polys: Union[List[Poly], Poly], perm_group: Union[str, Permu
     ----------
     >>> from sympy.combinatorics import Permutation, PermutationGroup, SymmetricGroup
     >>> from sympy.abc import a, b, c, d
-    >>> verify_symmetry((a*(a-b)*(a-c)+b*(b-c)*(b-a)+c*(c-a)*(c-b)).as_poly(a,b,c), SymmetricGroup(3))
+    >>> verify_symmetry((a*(a-b)*(a-c)+b*(b-c)*(b-a)+c*(c-a)*(c-b)).as_poly(a,b,c), 'sym')
     True
 
     >>> f = lambda x: x.as_poly(a,b,c,d)
@@ -730,21 +753,16 @@ def verify_symmetry(polys: Union[List[Poly], Poly], perm_group: Union[str, Permu
     if len(polys) > 1 and any(p.gens != gens for p in polys):
         raise ValueError("All polynomials should have the same generators.")
 
-    if isinstance(perm_group, str):
-        if perm_group == 'sym':
-            perm_group = SymmetricGroup(len(gens))
-        elif perm_group == 'cyc':
-            perm_group = CyclicGroup(len(gens))
-        else:
-            raise ValueError("The permutation group should be 'sym', 'cyc', or a PermutationGroup object.")
-    if isinstance(perm_group, PermutationGroup):
-        if perm_group.degree != len(gens):
+    if isinstance(symmetry, str):
+        symmetry = parse_symmetry(symmetry, len(gens))
+    if isinstance(symmetry, PermutationGroup):
+        if symmetry.degree != len(gens):
             raise ValueError("The permutation group should have the same degree as the number of generators.")
-        perms = perm_group.generators
-    elif isinstance(perm_group, Permutation):
-        if perm_group.size != len(gens):
+        perms = symmetry.generators
+    elif isinstance(symmetry, Permutation):
+        if symmetry.size != len(gens):
             raise ValueError("The permutation should have the same size as the number of generators.")
-        perms = [perm_group]
+        perms = [symmetry]
 
     get_rep = lambda p: p.rep
     for perm in perms:
@@ -974,11 +992,15 @@ def arraylize_up_to_symmetry(poly: Poly, perm_group: PermutationGroup, degree: O
     return rep_matrix_from_list(queue, shape, domain)
 
 
+ClearPolysInput = TypeVar("T", List[Expr], List[Tuple[Expr, Any]], Dict[Expr, Any])
+@overload
 def clear_polys_by_symmetry(
-        polys: Union[List[Union[Expr, Tuple[Expr, Any]]], Dict[Expr, Any]],
-        symbols: List[Symbol],
-        symmetry: Union[PermutationGroup, MonomialManager],
-    ) -> Union[List[Union[Expr, Tuple[Expr, Any]]], Dict[Expr, Any]]:
+    polys: ClearPolysInput,
+    symbols: Tuple[Symbol, ...],
+    symmetry: Union[PermutationGroup, MonomialManager],
+) -> ClearPolysInput: ...
+
+def clear_polys_by_symmetry(polys, symbols, symmetry):
     """
     Remove duplicate polynomials up to given symmetry. This function
     accepts list or dict inputs and preserves the input structure.
@@ -1043,7 +1065,7 @@ def clear_polys_by_symmetry(
     return collected
 
 
-def poly_reduce_by_symmetry(poly: Poly, perm_group: PermutationGroup) -> Poly:
+def poly_reduce_by_symmetry(poly: Poly, symmetry: Union[str, PermutationGroup]) -> Poly:
     """
     Given a polynomial which is symmetric with respect to the permutation group,
     return a new_poly such that `CyclicSum(new_poly, new_poly.gens, perm_group) == poly`.
@@ -1054,8 +1076,9 @@ def poly_reduce_by_symmetry(poly: Poly, perm_group: PermutationGroup) -> Poly:
     ----------
     poly: Poly
         The polynomial to be reduced.
-    perm_group : PermutationGroup
-        The permutation group to be considered.
+     symmetry: Union[str, PermutationGroup]
+        The permutation group to be considered. If it is a string, it should be one of
+        ["cyc", "sym", "alt", "dih", "trivial"].
 
     Returns
     ----------
@@ -1074,8 +1097,9 @@ def poly_reduce_by_symmetry(poly: Poly, perm_group: PermutationGroup) -> Poly:
     >>> poly_reduce_by_symmetry(p1, CyclicGroup(4))
     Poly(a**2 + a*b + 1/2*a*c, a, b, c, d, domain='QQ')
     """
-    if perm_group is None:
+    if symmetry is None:
         return poly
+    perm_group = parse_symmetry(symmetry, len(poly.gens))
 
     extracted = []
     perm_group_gens = perm_group.generators

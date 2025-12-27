@@ -155,10 +155,15 @@ function setSOSResult(data){
 
     // write the result to the current page
     sos_results.success = data.success;
-    sos_results.latex = data.latex; 
+    sos_results.raw_latex = data.latex;
+    sos_results.latex = '$$'+recursiveLatexAutoLinebreak(data.latex,
+        settings.result.latex.maxTermsAligned,
+        settings.result.latex.maxLenAligned,
+        settings.result.latex.maxLineLenInAligned,
+    )+'$$';
     sos_results.txt   = data.txt;
     sos_results.formatted = data.formatted;
-    document.getElementById('output_result').innerHTML = data[sos_results.show];
+    document.getElementById('output_result').innerHTML = sos_results[sos_results.show];
 
     if (data.success){
         const index = _history_timestamp_to_ind[data.timestamp];
@@ -180,7 +185,10 @@ function setSOSResult(data){
     }else{
         const text_length = sos_results.latex.length;
         str = sos_results.latex.slice(2, text_length-2);
-        if (str.indexOf('aligned') < 0){ // no aligned environment
+
+        // str = recursiveLatexAutoLinebreak(str);
+
+        if (str.indexOf('{aligned}') < 0){ // no aligned environment
             if (str.indexOf('\\\\') >= 0){
                 // use \begin{aligned} when there is a line break
                 let i = 0;
@@ -522,7 +530,7 @@ function renderCoeffs3D(degree, triangle_vals, all_gens = 'abcd'){
         _3d_vis.positions = positions;
         
         const coeff = document.createElement('p');
-        coeff.innerText = triangle_vals[i];
+        coeff.innerText = typeof(triangle_vals[i])==='undefined'? '': triangle_vals[i];
         coeff.classList.add('coeff-label');
         coeff.style.position = 'absolute';
         coeff.style.color = 'black';

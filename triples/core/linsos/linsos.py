@@ -408,42 +408,42 @@ class LinearSOSSolver(ProofNode):
 
 
 def LinearSOS(
-        poly: Poly,
-        ineq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
-        eq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
-        symmetry: Optional[Union[PermutationGroup, MonomialManager]] = None,
-        roots: Optional[List[Root]] = None,
-        tangents: List[Expr] = [],
-        augment_tangents: bool = True,
-        centralize: bool = True,
-        preordering: str = 'quadratic',
-        verbose: bool = False,
-        quad_diff_order: int = 8,
-        basis_limit: int = 15000,
-        lift_degree_limit: int = 4,
-        time_limit: float = 86400.,
-        linprog_options: Dict = LINPROG_OPTIONS,
-        allow_numer: int = 0
-    ) -> Optional[Solution]:
+    expr: Expr,
+    ineq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
+    eq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
+    *,
+    symmetry: Optional[PermutationGroup] = None,
+    roots: Optional[List[Root]] = None,
+    tangents: List[Expr] = [],
+    augment_tangents: bool = True,
+    centralize: bool = True,
+    preordering: str = 'quadratic',
+    verbose: bool = False,
+    quad_diff_order: int = 8,
+    basis_limit: int = 15000,
+    lift_degree_limit: int = 4,
+    time_limit: float = 3600.,
+    linprog_options: Dict = LINPROG_OPTIONS,
+    allow_numer: int = 0
+) -> Optional[Solution]:
     """
     Main function for linear programming SOS.
 
     Parameters
     -----------
-    poly: Poly
-        The polynomial to perform SOS on.
+    expr: Expr
+        The expression to perform SOS on.
     ineq_constraints: Union[List[Expr], Dict[Expr, Expr]]
         Inequality constraints to the problem. This assumes g_1(x) >= 0, g_2(x) >= 0, ...
     eq_constraints: Union[List[Expr], Dict[Expr, Expr]]
         Equality constraints to the problem. This assumes h_1(x) = 0, h_2(x) = 0, ...
-    symmetry: PermutationGroup or MonomialManager
-        The symmetry of the polynomial. When it is None, it will be automatically generated.
-        If we want to skip the symmetry generation algorithm, please pass in a MonomialManager object.
+    symmetry: Optional[PermutationGroup]
+        CURRENTLY UNUSED.
     roots: list
         Equality cases of the inequality. If None, it will be searched automatically. To disable auto
         search, pass in an empty list.
     tangents: list
-        Additional tangents to form the bases. Each tangent is a sympy nonnegative expression.
+        CURRENTLY UNUSED.
     augment_tangents: bool
         Whether to augment the tangents using heuristic methods. Defaults to True.
     preordering: str
@@ -478,7 +478,7 @@ def LinearSOS(
         The solution of the linear programming SOS. When solution is None, it means that the linear
         programming SOS fails.
     """
-    problem = ProofNode.new_problem(poly, ineq_constraints, eq_constraints)
+    problem = ProofNode.new_problem(expr, ineq_constraints, eq_constraints)
     problem.set_roots(roots)
     configs = {
         ProofTree: {
