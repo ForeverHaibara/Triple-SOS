@@ -321,6 +321,9 @@ class LinearSOSSolver(ProofNode):
                 arrays = np.vstack([arrays,
                     np.array([x.as_array_np(expand_cyc=True, symmetry=symmetry) for x in lift_degree_info['basis']])])
 
+                # verbose bases
+                # print('Bases:', ', '.join([str(_.as_expr(poly.gens)) for _ in basis]))
+
                 # sum of coefficients of the multipliers should be 1
                 regularizer = np.zeros(arrays.shape[0])
                 regularizer[-len(lift_degree_info['basis']):] = 1

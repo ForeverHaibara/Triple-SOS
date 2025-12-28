@@ -39,12 +39,12 @@ class LinearBasisMultiplier(LinearBasis):
         return cls(poly, _callable_expr.from_expr(expr, poly.gens, p))
 
 def lift_degree(
-        poly: Poly,
-        ineq_constraints: Dict[Poly, Expr],
-        symmetry: MonomialManager,
-        degree_limit: int = 1000,
-        lift_degree_limit: int = 4
-    ) -> Generator[Dict, None, None]:
+    poly: Poly,
+    ineq_constraints: Dict[Poly, Expr],
+    symmetry: MonomialManager,
+    degree_limit: int = 1000,
+    lift_degree_limit: int = 4
+) -> Generator[Dict, None, None]:
     """
     Hilbert's problem has shown that not every positive polynomial can be written as a sum of squares.
     However, we can write it as sum of rational functions. As a result, we can write

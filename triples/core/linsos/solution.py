@@ -10,14 +10,14 @@ from ...utils import MonomialManager, verify_symmetry
 
 
 def create_linear_sol_from_y_basis(
-        problem: Poly,
-        y: List[Rational],
-        basis: List[LinearBasis],
-        symmetry: MonomialManager,
-        ineq_constraints: Dict[Poly, Expr] = {},
-        eq_constraints: Dict[Poly, Expr] = {},
-        collect: bool = True
-    ) -> Expr:
+    problem: Poly,
+    y: List[Rational],
+    basis: List[LinearBasis],
+    symmetry: MonomialManager,
+    ineq_constraints: Dict[Poly, Expr] = {},
+    eq_constraints: Dict[Poly, Expr] = {},
+    collect: bool = True
+) -> Expr:
     """
     Generate the solution from y and basis by LinearSOS. Collect terms
     automatically if collect is True. Returns a sympy expression.

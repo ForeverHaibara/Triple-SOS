@@ -91,8 +91,14 @@ def _canonicalize(p):
     rep = DMP.from_dict(rep, p.rep.lev, p.rep.dom)
     return Poly.new(rep, *p.gens)
 
-def _get_ineq_constrained_tangents(ineq: Poly, ineq_expr: Expr, roots: List[Root] = [],
-        monomial_manager: MonomialManager = None, num_tangents: int = 5, max_degree: int = 8) -> Dict[Poly, Expr]:
+def _get_ineq_constrained_tangents(
+    ineq: Poly,
+    ineq_expr: Expr,
+    roots: List[Root] = [],
+    monomial_manager: MonomialManager = None,
+    num_tangents: int = 5,
+    max_degree: int = 8
+) -> Dict[Poly, Expr]:
     """
     Compute a dictionary of items `(ineq*poly**2, ineq_expr*expr**2)` such that
     `ineq * poly` vanishes at all given roots. As there are infinitely many polynomials
@@ -147,7 +153,8 @@ def _get_ineq_constrained_tangents(ineq: Poly, ineq_expr: Expr, roots: List[Root
     return tangents
 
 
-def prepare_tangents(problem: InequalityProblem,
+def prepare_tangents(
+        problem: InequalityProblem,
     qmodule: Optional[Dict[Poly, Expr]] = None,
     default_tangents = DEFAULT_TANGENTS,
     additional_tangents: List[Expr] = [],
@@ -231,8 +238,12 @@ def prepare_tangents(problem: InequalityProblem,
     return tangents
 
 
-def get_qmodule_list(poly: Poly, ineq_constraints: Dict[Poly, Expr],
-        all_nonnegative: bool = False, preordering: str = 'quadratic') -> List[Tuple[Poly, Expr]]:
+def get_qmodule_list(
+    poly: Poly,
+    ineq_constraints: Dict[Poly, Expr],
+    all_nonnegative: bool = False,
+    preordering: str = 'quadratic'
+) -> List[Tuple[Poly, Expr]]:
     """
     Extend the generators of the quadratic module given `ineq_constraints` given a
     preordering rule. For instance, if `F >= 0` given assumptions: `G1, ..., Gn >= 0`,
@@ -254,7 +265,7 @@ def get_qmodule_list(poly: Poly, ineq_constraints: Dict[Poly, Expr],
     if not preordering in _ACCEPTED_PREORDERINGS:
         raise ValueError("Invalid preordering method, expected one of %s, received %s." % (str(_ACCEPTED_PREORDERINGS), preordering))
 
-    degree = poly.total_degree()
+    # degree = poly.total_degree()
     poly_one = Poly(1, *poly.gens)
 
     monomials = []
@@ -266,14 +277,14 @@ def get_qmodule_list(poly: Poly, ineq_constraints: Dict[Poly, Expr],
         elif ineq.is_linear:
             linear_ineqs.append((ineq, e))
         elif preordering == 'quadratic' and ineq.is_quadratic:
-            # Although they seem to be nonlinear, but they should be combined
+            # Although they are nonlinear, but they should be combined
             # as linear constraints, so we treat them together.
             linear_ineqs.append((ineq, e))
         else:
             nonlin_ineqs.append((ineq, e))
 
     if all_nonnegative:
-        # In this case we generate basis by LinaerBasisTangent rather than LinearBasisTangentEven
+        # In this case we generate basis by LinearBasisTangent rather than LinearBasisTangentEven
         # we discard all monomials
         pass
     else:
@@ -291,14 +302,14 @@ def get_qmodule_list(poly: Poly, ineq_constraints: Dict[Poly, Expr],
             mul = poly_one
             for c in comb:
                 mul = mul * c[0]
-            d = mul.total_degree()
-            if d > degree:
-                continue
+            # d = mul.total_degree()
+            # if d > degree:
+            #     continue
             mul_expr = Mul(*(c[1] for c in comb))
             for ineq, e in nonlin_ineqs:
-                new_d = d + ineq.total_degree()
-                if new_d <= degree:
-                    qmodule.append((mul * ineq, mul_expr * e))
+                # new_d = d + ineq.total_degree()
+                # if new_d <= degree:
+                qmodule.append((mul * ineq, mul_expr * e))
 
     return qmodule
 
@@ -309,7 +320,8 @@ def get_qmodule_list(poly: Poly, ineq_constraints: Dict[Poly, Expr],
 #
 ###################################################################
 
-def prepare_inexact_tangents(problem: InequalityProblem,
+def prepare_inexact_tangents(
+        problem: InequalityProblem,
     monomial_manager: MonomialManager = None,
     all_nonnegative: bool = False,
     threshold: float = 0.5,

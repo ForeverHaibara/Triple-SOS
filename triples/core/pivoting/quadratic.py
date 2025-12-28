@@ -87,10 +87,13 @@ class PivotQuadratic(ProofNode):
         if lb is None or ub is None:
             # at least one side is infinity -> requires A >= 0
             pro_A = InequalityProblem.new(A, ineqs, eqs)
+            node_A = SolvePolynomial(pro_A)
         elif lb is not None and ub is not None:
             # heuristically test whether A <= 0
             pro_A = InequalityProblem.new(-A, ineqs, eqs)
-        node_A = SolvePolynomial(pro_A)
+            # the inequality ub >= lb might be non-expr,
+            # so we use `CancelDenominator` here
+            node_A = CancelDenominator(pro_A)
         _info["pro_A"] = pro_A
         _info["node_A"] = node_A
 
