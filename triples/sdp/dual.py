@@ -676,8 +676,10 @@ class SDPProblem(TransformableDual):
                     raise ValueError("S must be a list of Matrix or a dict of Matrix.")
                 gens |= set(s.free_symbols)
 
-        gens = list(gens)
-        gens = sorted(gens, key = lambda x: x.name)
+            gens = list(gens)
+            gens = sorted(gens, key = lambda x: x.name)
+        else:
+            gens = list(gens)
 
         x0_and_space = []
         for s in S:

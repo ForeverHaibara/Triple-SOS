@@ -154,7 +154,7 @@ def _get_ineq_constrained_tangents(
 
 
 def prepare_tangents(
-        problem: InequalityProblem,
+    problem: InequalityProblem,
     qmodule: Optional[Dict[Poly, Expr]] = None,
     default_tangents = DEFAULT_TANGENTS,
     additional_tangents: List[Expr] = [],
@@ -241,6 +241,7 @@ def prepare_tangents(
 def get_qmodule_list(
     poly: Poly,
     ineq_constraints: Dict[Poly, Expr],
+    degree: Optional[int] = None,
     all_nonnegative: bool = False,
     preordering: str = 'quadratic'
 ) -> List[Tuple[Poly, Expr]]:
@@ -255,6 +256,8 @@ def get_qmodule_list(
         The target polynomial.
     ineq_constraints : Dict[Poly, Expr]
         The dictionary of inequality constraints.
+    degree: int
+        The degree of the quadratic module should not exceed this degree.
     all_nonnegative : bool, optional
         If True, then all monomials are known to be nonnegative and trivial `ineq_constraints`
         (e.g. a monomial) will be filtered out to reduce the number of generators.
@@ -265,7 +268,8 @@ def get_qmodule_list(
     if not preordering in _ACCEPTED_PREORDERINGS:
         raise ValueError("Invalid preordering method, expected one of %s, received %s." % (str(_ACCEPTED_PREORDERINGS), preordering))
 
-    # degree = poly.total_degree()
+    if degree is None:
+        degree = poly.total_degree()
     poly_one = Poly(1, *poly.gens)
 
     monomials = []
@@ -302,14 +306,14 @@ def get_qmodule_list(
             mul = poly_one
             for c in comb:
                 mul = mul * c[0]
-            # d = mul.total_degree()
-            # if d > degree:
-            #     continue
+            d = mul.total_degree()
+            if d > degree:
+                continue
             mul_expr = Mul(*(c[1] for c in comb))
             for ineq, e in nonlin_ineqs:
-                # new_d = d + ineq.total_degree()
-                # if new_d <= degree:
-                qmodule.append((mul * ineq, mul_expr * e))
+                new_d = d + ineq.total_degree()
+                if new_d <= degree:
+                    qmodule.append((mul * ineq, mul_expr * e))
 
     return qmodule
 
@@ -321,7 +325,7 @@ def get_qmodule_list(
 ###################################################################
 
 def prepare_inexact_tangents(
-        problem: InequalityProblem,
+    problem: InequalityProblem,
     monomial_manager: MonomialManager = None,
     all_nonnegative: bool = False,
     threshold: float = 0.5,

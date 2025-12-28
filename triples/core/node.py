@@ -341,9 +341,9 @@ class ProofTree:
 
 
 def _sum_of_squares(
-        problem: InequalityProblem,
-        configs: dict = {},
-    ):
+    problem: InequalityProblem,
+    configs: dict = {},
+) -> Optional[Solution]:
     start_time = datetime.now()
 
     root = SolveProblem(problem)

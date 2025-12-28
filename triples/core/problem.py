@@ -789,13 +789,13 @@ class InequalityProblem(Generic[T]):
 
 
 def _get_constraints_wrapper(
-        symbols: Tuple[int, ...],
-        ineq_constraints: Dict[T, Expr],
-        eq_constraints: Dict[T, Expr],
-        perm_group: Optional[PermutationGroup]=None,
-        reorder_func: Callable[[T, Permutation], T]=None,
-        free_symbols_func: Callable[[T], Set[Symbol]]=_dtype_free_symbols,
-    ):
+    symbols: Tuple[int, ...],
+    ineq_constraints: Dict[T, Expr],
+    eq_constraints: Dict[T, Expr],
+    perm_group: Optional[PermutationGroup]=None,
+    reorder_func: Callable[[T, Permutation], T]=None,
+    free_symbols_func: Callable[[T], Set[Symbol]]=_dtype_free_symbols,
+):
     if perm_group is None:
         # trivial group
         perm_group = PermutationGroup(Permutation(list(range(len(symbols)))))

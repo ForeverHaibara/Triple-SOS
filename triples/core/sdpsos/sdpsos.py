@@ -99,7 +99,6 @@ def _is_infeasible(
     poly: Poly,
     qmodule: List[Poly],
     ideal: List[Poly],
-    degree: int,
     symmetry: PermutationGroup = None,
 ) -> bool:
     """
@@ -175,88 +174,118 @@ class SDPSOSSolver(ProofNode):
         Whether to allow numerical solution.
     """
     default_configs = {
-        'ineq_constraints_with_trivial': True,
-        'preordering': 'linear-progressive',
-        'verbose': False,
+        'lift_degree_limit': 0,
         'solver': None,
         'allow_numer': 0,
         'solve_kwargs': {},
+        'ineq_constraints_with_trivial': True,
+        'preordering': 'linear-progressive',
+        'verbose': False,
     }
 
     _complexity_models = True
-    def explore(self, configs):
-        if self.state != 0:
-            return
+    _wrapped_problem = None
+    _symmetry: MonomialManager
 
-        poly = self.problem.expr
-
-        symmetry = MonomialManager(len(poly.gens), self.problem.identify_symmetry())
-        problem, cons_restoration = self.problem.wrap_constraints(symmetry.perm_group)
+    def _prepare_qmodule(self, configs) -> Generator:
+        problem = self._wrapped_problem[0]
+        poly = problem.expr
         ineq_constraints = problem.ineq_constraints
         eq_constraints = problem.eq_constraints
-        nvars = len(poly.gens)
-        degree = poly.total_degree()
-        if nvars < 1:
-            self.state = -1
-            self.finished = True
-            return None
+        symmetry = self._symmetry
 
-
-        roots = None
-        verbose = configs['verbose']
-        solver = configs['solver']
-        expected_end_time = perf_counter() + configs['time_limit']
-
-        is_hom = problem.is_homogeneous
-        if not is_hom:
-            degree = max([degree]\
-                + [_.total_degree() for _ in ineq_constraints.keys()]\
-                + [_.total_degree() for _ in eq_constraints.keys()])
-        if not (poly.domain in (ZZ, QQ, RR)):
-            self.state = -1
-            self.finished = True
-            return None
-
-        if verbose:
-            print(f'SDPSOS nvars = {nvars} degree = {degree}')
-            print('Identified Symmetry = %s' % str(symmetry.perm_group).replace('\n', '').replace('  ',''))
-
-        qmodule_list = _get_qmodule_list(poly, ineq_constraints.items(),
-                            ineq_constraints_with_trivial=configs['ineq_constraints_with_trivial'],
-                            preordering=configs['preordering'], is_homogeneous=is_hom)
+        qmodule_list = _get_qmodule_list(
+            poly, ineq_constraints.items(),
+            ineq_constraints_with_trivial=configs['ineq_constraints_with_trivial'],
+            preordering=configs['preordering'],
+            is_homogeneous=self.problem.is_homogeneous
+        )
 
         ideal = list(eq_constraints.keys())
         for qmodule in qmodule_list:
             qmodule_tuples = clear_polys_by_symmetry(qmodule, poly.gens, symmetry)
             qmodule = [e[0] for e in qmodule_tuples]
 
-            if _is_infeasible(poly, qmodule, ideal, degree, symmetry.perm_group):
+            if _is_infeasible(poly, qmodule, ideal, symmetry.perm_group):
                 continue
 
-            if verbose:
+            if configs["verbose"]:
                 print(f"Qmodule = {qmodule}\nIdeal   = {list(eq_constraints.keys())}")
+            yield qmodule_tuples
+
+
+    def _create_lifted_sos_problem(self,
+        qmodule,
+        ideal,
+        symmetry: MonomialManager,
+        degree: int,
+        configs
+    ) -> SOSPoly:
+        poly = self.problem.expr
+
+        roots = _lazy_iter(lambda: _lazy_find_roots(self.problem, configs['verbose']))
+
+        sos_problem = SOSPoly(poly, poly.gens,
+            qmodule = qmodule, ideal = ideal,
+            symmetry = symmetry.perm_group, roots = roots, degree=degree
+        )
+        sdp = sos_problem.construct(
+            verbose=configs['verbose'],
+            time_limit=configs['expected_end_time'] - perf_counter()
+        )
+        # TODO: add a dof0_limit check here to prevent memory explosion (which might kill the program)
+
+        return sos_problem
+
+    def _explore_lift_degree(self, configs):
+        if (self.status < 0) or self.status > configs["lift_degree_limit"]:
+            self.status = -1
+            self.finished = True
+            return
+
+        # Increase the status here to prevent the node getting killed in
+        # the middle (which will not change the status, leading to infinite loop)
+        lift_degree = self.status
+        self.status += 1
+
+        problem = self._wrapped_problem[0]
+        poly = problem.expr
+        ineq_constraints = problem.ineq_constraints
+        eq_constraints = problem.eq_constraints
+
+        verbose = configs["verbose"]
+
+        degree = poly.total_degree() + lift_degree
+
+        ideal = list(eq_constraints.keys())
+        for qmodule_tuples in self._prepare_qmodule(configs):
+            qmodule = [e[0] for e in qmodule_tuples]
             time0 = perf_counter()
             # now we solve the problem
             try:
-                if roots is None:
-                    roots = _lazy_iter(lambda: _lazy_find_roots(problem, verbose))
+                sos_problem = self._create_lifted_sos_problem(
+                    qmodule, ideal,
+                    symmetry=self._symmetry, degree=degree, configs=configs
+                )
 
-                sos_problem = SOSPoly(poly, poly.gens, qmodule = qmodule, ideal = ideal,
-                                        symmetry = symmetry.perm_group, roots = roots, degree=degree)
-                sdp = sos_problem.construct(verbose=verbose, time_limit=expected_end_time - perf_counter())
-                # TODO: add a dof0_limit check here to prevent memory explosion (which might kill the program)
+                sdp_sol = sos_problem.solve(verbose=verbose,
+                    solver=configs["solver"],
+                    time_limit=configs['expected_end_time'] - perf_counter(),
+                    allow_numer=configs['allow_numer'],
+                    kwargs=configs['solve_kwargs']
+                )
 
-                if sos_problem.solve(verbose=verbose, solver=solver,
-                        time_limit=expected_end_time - perf_counter(),
-                        allow_numer=configs['allow_numer'],
-                        kwargs=configs['solve_kwargs']) is not None:
+                if sdp_sol is not None:
                     if verbose:
                         print(f"Time for solving SDP{' ':20s}: {perf_counter() - time0:.6f} seconds. \033[32mSuccess\033[0m.")
-                    solution = sos_problem.as_solution(qmodule=dict(enumerate([e[1] for e in qmodule_tuples])),
-                                                        ideal=dict(enumerate(list(eq_constraints.values())))).solution
+                    solution = sos_problem.as_solution(
+                        qmodule=dict(enumerate([e[1] for e in qmodule_tuples])),
+                        ideal=dict(enumerate(list(eq_constraints.values())))).solution
+                    cons_restoration = self._wrapped_problem[1]
                     solution = cons_restoration(solution)
                     self.problem.solution = solution
                     break
+
             except Exception as e:
                 if verbose:
                     print(f"Time for solving SDP{' ':20s}: {perf_counter() - time0:.6f} seconds. \033[31mFailed with exceptions\033[0m.")
@@ -265,11 +294,48 @@ class SDPSOSSolver(ProofNode):
                     raise e
                 elif isinstance(e, (SDPRationalizeError, MemoryError)):
                     # do not try further
+                    self.status = -1
+                    self.finished = True
                     break
                 continue
 
-        self.state = -1
-        self.finished = True
+        # We add a second check here to prevent 
+        # it triggers a new round of `explore`
+        if self.status >= configs["lift_degree_limit"]:
+            self.status = -1
+            self.finished = True
+            return
+
+        # loop
+        self._explore_lift_degree(configs)
+
+
+    def explore(self, configs):
+        if self.state < 0:
+            return
+
+        configs['expected_end_time'] = perf_counter() + configs['time_limit']
+
+        nvars = len(self.problem.expr.gens)
+        if self.state == 0:
+            poly = self.problem.expr
+            if (not (poly.domain in (ZZ, QQ, RR))) or nvars < 1:
+                self.state = -1
+                self.finished = True
+                return None
+
+            symmetry = MonomialManager(len(poly.gens), self.problem.identify_symmetry())
+            self._symmetry = symmetry
+            self._wrapped_problem = self.problem.wrap_constraints(symmetry.perm_group)
+
+        if configs['verbose']:
+            degree = self.problem.reduce(lambda x: x.total_degree(), max)
+            print(f'SDPSOS nvars = {nvars} degree = {degree}')
+            print('Identified Symmetry = %s' % \
+                  str(self._symmetry.perm_group).replace('\n', '').replace('  ',''))
+
+        # explore lift degree, from degree = 0
+        self._explore_lift_degree(configs)
 
 
 def SDPSOS(

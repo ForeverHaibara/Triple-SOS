@@ -173,13 +173,13 @@ class PolyCombSymmetry:
                 yield inds
 
 def kkt(
-        f: Union[Expr, Poly],
-        ineq_constraints: List[Union[Expr, Poly]] = [],
-        eq_constraints: List[Union[Expr, Poly]] = [],
-        as_poly: bool = True,
-        fj: bool = False,
-        with_self: bool = False
-    ) -> Tuple[List[Poly], Tuple[Tuple[Symbol], Tuple[Symbol], Tuple[Symbol], Tuple[Symbol]]]:
+    f: Union[Expr, Poly],
+    ineq_constraints: List[Union[Expr, Poly]] = [],
+    eq_constraints: List[Union[Expr, Poly]] = [],
+    as_poly: bool = True,
+    fj: bool = False,
+    with_self: bool = False
+) -> Tuple[List[Poly], Tuple[Tuple[Symbol, ...], Tuple[Symbol, ...], Tuple[Symbol, ...], Tuple[Symbol, ...]]]:
     r"""
     Compute the Karush-Kuhn-Tucker system of a function with inequality and equality constraints.
 
