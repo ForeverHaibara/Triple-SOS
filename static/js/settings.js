@@ -173,6 +173,15 @@ var settingsDefinition = {children: {
                         settingPath: "sos.sdpSOS.useSDPSOS",
                         originalCheckboxId: "setting_method_use_SDPSOS"
                     },
+                    liftDegreeLimit: {
+                        name: "Lift Degree Limit",
+                        description: "Set the maximum degree lifting for SDP SOS.",
+                        type: "number",
+                        defaultValue: 0,
+                        min: 0,
+                        step: 1,
+                        settingPath: "sos.sdpSOS.liftDegreeLimit"
+                    },
                     allowNumer: {
                         name: "Allow Numerical Solution",
                         description: "Whether to allow numerical solution in SDP SOS. This returns inexact"
@@ -721,6 +730,7 @@ function getSOSConfigs() {
             augment_tangents: sos.linearSOS.augmentTangents,
         },
         SDPSOS: {
+            lift_degree_limit: sos.sdpSOS.liftDegreeLimit,
             allow_numer: sos.sdpSOS.allowNumer,
             // decompose_method: document.getElementById("setting_method_SDPSOS_reduced_decompose").checked?'reduce':'raw',
         }

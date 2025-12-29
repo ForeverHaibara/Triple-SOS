@@ -270,7 +270,7 @@ def get_qmodule_list(
 
     if degree is None:
         degree = poly.total_degree()
-    poly_one = Poly(1, *poly.gens)
+    poly_one = poly.one
 
     monomials = []
     linear_ineqs = []
