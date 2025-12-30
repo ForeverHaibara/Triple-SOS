@@ -11,7 +11,7 @@ from .solution import SolutionSDP
 from ..preprocess import ProofNode, ProofTree, SolvePolynomial
 from ...utils import MonomialManager, Root, clear_polys_by_symmetry
 from ...sdp import ArithmeticTimeout
-from ...sdp.rationalize import SDPRationalizeError
+from ...sdp.rationalize import SDPRationalizeError, DualRationalizer
 from ...sdp.transforms.linear import SDPLinearTransform
 
 class _lazy_iter:
@@ -204,21 +204,27 @@ class SDPSOSSolver(ProofNode):
     solver: str
         The numerical SDP solver to use. When set to None, it is automatically selected. Default is None.
     allow_numer: int
-        Whether to allow numerical solution.
+        Whether to allow inexact numerical solution. This is useful when it fails to obtain an
+        exact solution by rationalization.
     preordering: str
         The preordering method for extending the generators of the quadratic module. It can be
         'none', 'linear', 'linear-progressive'. Default is 'linear-progressive'.
+    unstable_eig_threshold: float
+        If it fails to rationalize but the smallest eigenvalue of the SDP is larger than
+        `unstable_eig_threshold`, then it considers the problem as numerically unstable
+        and stops further search. Default is -0.1.
     verbose: bool
         Whether to print the progress. Default is False.
     """
     default_configs = {
-        "lift_degree_limit": 0,
+        "lift_degree_limit": 4,
         "dof_limit": 7000,
         "solver": None,
         "allow_numer": 0,
         "solve_kwargs": {},
         "ineq_constraints_with_trivial": True,
         "preordering": "linear-progressive",
+        "unstable_eig_threshold": -0.1,
         "verbose": False,
     }
 
@@ -280,8 +286,8 @@ class SDPSOSSolver(ProofNode):
     ) -> SOSPoly:
         poly = self.problem.expr
 
-        # roots = _lazy_iter(lambda: _lazy_find_roots(self.problem, configs['verbose']))
-        roots = self.problem.find_roots()
+        roots = _lazy_iter(lambda: _lazy_find_roots(self.problem, configs['verbose']))
+        # roots = self.problem.find_roots()
         symmetry = self._symmetry
 
         if poly_qmodule is None:
@@ -316,7 +322,7 @@ class SDPSOSSolver(ProofNode):
 
     def _constrain_poly_qmodule(self, sos: SOSPoly, q1: int, q2: int):
         """
-        Constrain the sum of the diagonals of the poly_qmodule to be one.
+        Constrain the sum of the diagonals of the poly_qmodule to be constant.
         """
         sdp = sos.sdpp
         dof = sdp.dof
@@ -336,7 +342,7 @@ class SDPSOSSolver(ProofNode):
                 # the diagonal element is in the i*(size+1)th row
                 row = row + sdp._x0_and_space[key][1][i*(size+1),:]
 
-        A, b = _vector_complement(row)        
+        A, b = _vector_complement(row)
         sdpp = SDPLinearTransform.apply_from_affine(sdp, A, b)
 
         return sdpp
@@ -368,6 +374,7 @@ class SDPSOSSolver(ProofNode):
             poly_qmodule = [e[0] for e in poly_qmodule_tuples] if poly_qmodule_tuples else None
 
             time0 = perf_counter()
+            sos_problem = None
             # now we solve the problem
             try:
                 sos_problem = self._create_lifted_sos_problem(
@@ -400,13 +407,25 @@ class SDPSOSSolver(ProofNode):
                 if verbose:
                     print(f"Time for solving SDP{' ':20s}: {perf_counter() - time0:.6f} seconds. \033[31mFailed with exceptions\033[0m.")
                     print(f"{e.__class__.__name__}: {e}")
-                if isinstance(e, ArithmeticTimeout):
-                    raise e
-                elif isinstance(e, (SDPRationalizeError, MemoryError)):
+                if isinstance(e, (ArithmeticTimeout, MemoryError)):
                     # do not try further
                     self.status = -1
-                    self.finished = True
+                    self.finished = True                
                     break
+                elif isinstance(e, SDPRationalizeError):
+                    # XXX: this is very heuristic
+                    y = e.y
+                    if y is not None:
+                        dr = DualRationalizer(sos_problem.sdpp)
+                        # y[:-1] to discard the eigenvalue relaxation,
+                        # see source code in SDPProblem.solve
+                        mineig = dr.mineig(y[:-1])
+                        if mineig > configs["unstable_eig_threshold"]:
+                            # we think that it is numerically unstable
+                            self.status = -1
+                            self.finished = True                
+                            break
+
                 continue
 
         # We add a second check here to prevent 
@@ -488,13 +507,14 @@ def SDPSOS(
     *,
     symmetry: Optional[PermutationGroup] = None,
     roots: Optional[List[Root]] = None,
-    lift_degree_limit: int = 0,
+    lift_degree_limit: int = 4,
     dof_limit: int = 7000,
     solver: Optional[str] = None,
     allow_numer: int = 0,
     solve_kwargs: Dict[str, Any] = {},
     ineq_constraints_with_trivial: bool = True,
     preordering: str = 'linear-progressive',
+    unstable_eig_threshold: float = -0.1,
     verbose: bool = False,
     time_limit: float = 3600.,
 ) -> Optional[SolutionSDP]:
@@ -515,21 +535,26 @@ def SDPSOS(
         CURRENTLY UNUSED.
     roots: Optional[List[Root]]
         The roots of the polynomial satisfying constraints. When it is None, it will be automatically generated.
-    solver: str
-        The numerical SDP solver to use. When set to None, it is automatically selected. Default is None.
-    allow_numer: int
-        Whether to allow numerical solution.
     lift_degree_limit: int
         The maximum lift degree to explore.
     dof_limit: int
         The maximum degree of freedom of the SDP. When it exceeds `dof_limit`, 
         the node will be pruned. This prevents crash in external SDP solvers. Default is 7000.
+    solver: str
+        The numerical SDP solver to use. When set to None, it is automatically selected. Default is None.
+    allow_numer: int
+        Whether to allow inexact numerical solution. This is useful when it fails to obtain an
+        exact solution by rationalization.
     ineq_constraints_with_trivial: bool
         Whether to add the trivial inequality constraint 1 >= 0. This is used to generate the
         quadratic module. Default is True.
     preordering: str
         The preordering method for extending the generators of the quadratic module. It can be
         'none', 'linear', 'linear-progressive'. Default is 'linear-progressive'.
+    unstable_eig_threshold: float
+        If it fails to rationalize but the smallest eigenvalue of the SDP is larger than
+        `unstable_eig_threshold`, then it considers the problem as numerically unstable
+        and stops further search. Default is -0.1.
     verbose: bool
         Whether to print the progress. Default is False.
     """
@@ -550,6 +575,7 @@ def SDPSOS(
             "solve_kwargs": solve_kwargs,
             "ineq_constraints_with_trivial": ineq_constraints_with_trivial,
             "preordering": preordering,
+            "unstable_eig_threshold": unstable_eig_threshold,
             "verbose": verbose,
         }
     }

@@ -97,13 +97,17 @@ class ProofNode:
             self.__class__._complexity_models = models
             self._complexity_models = models
         models = self._complexity_models
-        features = self.problem.get_features()
+        features = self._evaluate_complexity_get_features()
         complexity = ProblemComplexity(
             models["time_model"].predict(features),
             models["prob_model"].predict(features),
             models["length_model"].predict(features),
         )
         return complexity
+
+    def _evaluate_complexity_get_features(self):
+        """Return the features to be used for complexity evaluation."""
+        return self.problem.get_features()
 
     def _load_complexity_models(self) -> Dict:
         from importlib import import_module

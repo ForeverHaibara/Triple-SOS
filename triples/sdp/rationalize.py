@@ -3,7 +3,8 @@ from itertools import chain
 from typing import Union, Optional, Tuple, List, Dict, Callable, Generator, Any
 
 import numpy as np
-import sympy as sp
+from sympy import Rational, MatrixBase, nsimplify
+from sympy import MutableDenseMatrix as Matrix
 try:
     from sympy.polys.matrices.exceptions import DMError
 except ImportError:
@@ -15,7 +16,7 @@ from .arithmetic import (
 )
 from .backends import SDPError
 
-Decomp = Dict[str, Tuple[sp.Matrix, sp.Matrix, List[sp.Rational]]]
+Decomp = Dict[str, Tuple[Matrix, Matrix, List[Rational]]]
 
 
 class SDPRationalizeError(SDPError):
@@ -31,13 +32,13 @@ def rationalize(x, rounding = 1e-2, **kwargs):
 
     Parameters
     ----------
-    x : sp.Rational | sp.Float
+    x : Rational | Float
         The number to be rationalized.
     rounding : float
         The rounding threshold.
     """
     rounding = max(rounding, 1e-15)
-    return sp.nsimplify(x, tolerance = rounding, rational = True)
+    return nsimplify(x, tolerance = rounding, rational = True)
 
 
 class DualRationalizer:
@@ -50,7 +51,7 @@ class DualRationalizer:
         self._x0_and_space_numer = None
 
     @property
-    def x0_and_space(self) -> Dict[Any, Tuple[sp.Matrix, sp.Matrix]]:
+    def x0_and_space(self) -> Dict[Any, Tuple[Matrix, Matrix]]:
         return self._sdp._x0_and_space
 
     @property
@@ -79,7 +80,7 @@ class DualRationalizer:
     def mineig(self, y: np.ndarray) -> float:
         return min(self.mineigs(y).values()) if len(self.x0_and_space) else 0.
 
-    def decompose(self, y: sp.Matrix) -> Optional[Tuple[sp.Matrix, Decomp]]:
+    def decompose(self, y: Matrix) -> Optional[Tuple[Matrix, Decomp]]:
         """
         Decompose a vector `y` into a sum of rational numbers.
         """
@@ -93,7 +94,7 @@ class DualRationalizer:
             decomps[key] = (s, U, diag)
         return y, decomps
 
-    def nullspaces_lll(self, y: np.ndarray) -> Dict[Any, sp.Matrix]:
+    def nullspaces_lll(self, y: np.ndarray) -> Dict[Any, Matrix]:
         """
         Infer the nullspaces of PSD matrices by the LLL algorithm, see [1].
 
@@ -107,7 +108,7 @@ class DualRationalizer:
         V = {}
         trunc = self.LLL_TRUNC
         for key, s in S.items():
-            aug = sp.Matrix.hstack(
+            aug = Matrix.hstack(
                 (self.LLL_WEIGHT*s).applyfunc(round), s.eye(s.shape[0]))
             try:
                 v = lll(aug)[:, s.shape[0]:]
@@ -118,12 +119,12 @@ class DualRationalizer:
                         break
                 v = v.T
             except (DMError, ValueError, ZeroDivisionError) as e: # LLL algorithm failed
-                v = sp.Matrix.zeros(s.shape[0], 0)
+                v = Matrix.zeros(s.shape[0], 0)
             V[key] = v
         return V
 
     def rationalize_lll(self, y: np.ndarray,
-            time_limit: Optional[Union[Callable, float]] = None) -> Optional[Tuple[sp.Matrix, Decomp]]:
+            time_limit: Optional[Union[Callable, float]] = None) -> Optional[Tuple[Matrix, Decomp]]:
         time_limit = ArithmeticTimeout.make_checker(time_limit)
 
         V = self.nullspaces_lll(y)
@@ -136,9 +137,10 @@ class DualRationalizer:
             eq_rhs.append(-rhs.T)
             time_limit()
 
-        eq_space = sp.Matrix.vstack(*eq_space)
-        eq_rhs = sp.Matrix.vstack(*eq_rhs)
+        eq_space = Matrix.vstack(*eq_space)
+        eq_rhs = Matrix.vstack(*eq_rhs)
         try:
+            # this is really slow, we will think how to make it faster
             x0, space = solve_undetermined_linear(eq_space, eq_rhs, time_limit = time_limit)
         except ValueError: # Linear system no solution
             return None
@@ -159,7 +161,7 @@ class DualRationalizer:
                 time_limit()
 
     def rationalize(self, y: np.ndarray,
-            time_limit: Optional[Union[Callable, float]] = None) -> Optional[Tuple[sp.Matrix, Decomp]]:
+            time_limit: Optional[Union[Callable, float]] = None) -> Optional[Tuple[Matrix, Decomp]]:
         time_limit = ArithmeticTimeout.make_checker(time_limit)
 
         if not isinstance(y, np.ndarray):
@@ -169,7 +171,7 @@ class DualRationalizer:
         y0 = y.copy()
 
         if y.size == 0:
-            return self.decompose(sp.Matrix.zeros(0, 1))
+            return self.decompose(Matrix.zeros(0, 1))
         # if y.size == 1: # A + xB -> generalized eigenvalue problem
         #     pass
 
@@ -209,18 +211,18 @@ In the future, the following code for rationalization will be deprecated and rem
 class Rationalizer(ABC):
     """TODO: deprecation"""
     @abstractmethod
-    def __call__(self, y: np.ndarray) -> Generator[sp.Matrix, None, None]:
+    def __call__(self, y: np.ndarray) -> Generator[Matrix, None, None]:
         raise NotImplementedError
     def __repr__(self) -> str:
         return f"<{self.__class__.__name__}>"
 
 class IdentityRationalizer(Rationalizer):
-    def __call__(self, y: np.ndarray) -> Generator[sp.Matrix, None, None]:
-        return (sp.Matrix(y),)
+    def __call__(self, y: np.ndarray) -> Generator[Matrix, None, None]:
+        return (Matrix(y),)
 
 class EmptyRationalizer(Rationalizer):
-    def __call__(self, y: np.ndarray) -> Generator[sp.Matrix, None, None]:
-        return (sp.zeros(0, 1),)
+    def __call__(self, y: np.ndarray) -> Generator[Matrix, None, None]:
+        return (Matrix.zeros(0, 1),)
 
 class RationalizeWithMask(Rationalizer):
     """
@@ -235,12 +237,12 @@ class RationalizeWithMask(Rationalizer):
     def __init__(self, zero_tolerance: float = 1e-7):
         self.zero_tolerance = zero_tolerance
 
-    def __call__(self, y: np.ndarray) -> Generator[sp.Matrix, None, None]:
+    def __call__(self, y: np.ndarray) -> Generator[Matrix, None, None]:
         tol = max(1, np.abs(y).max()) * self.zero_tolerance
         y_rational_mask = np.abs(y) > tol
         y_rational = np.where(y_rational_mask, y, 0).flatten().tolist()
         y_rational = [rationalize(v, rounding = abs(v) * 1e-4) for v in y_rational]
-        y_rational = sp.Matrix(y_rational)
+        y_rational = Matrix(y_rational)
         return (y_rational,)
 
 
@@ -256,7 +258,7 @@ class RationalizeSimultaneously(Rationalizer):
     def __init__(self, lcms: List[int] = (1, 1260, 1260**2, 1260**3)):
         self.lcms = lcms
 
-    def __call__(self, y: np.ndarray) -> Generator[sp.Matrix, None, None]:
+    def __call__(self, y: np.ndarray) -> Generator[Matrix, None, None]:
         y = np.array(y).astype(float)
         for lcm in self.lcms:
             y_rational = rep_matrix_from_numpy(np.round(y*lcm).astype(np.int64)) / lcm
@@ -264,9 +266,9 @@ class RationalizeSimultaneously(Rationalizer):
 
 
 def verify_is_pretty(
-        y: Union[List, sp.Matrix],
-        threshold: Optional[Callable] = None
-    ) -> bool:
+    y: Union[List, Matrix],
+    threshold: Optional[Callable] = None
+) -> bool:
     """
     A heuristic method to check whether the rationalization of `y` is pretty.
     Idea: in normal cases, the denominators of `y` should be aligned. For example,
@@ -278,7 +280,7 @@ def verify_is_pretty(
 
     Parameters
     ----------
-    y : Union[List, sp.Matrix]
+    y : Union[List, Matrix]
         The vector to be checked.
     threshold : Optional[Callable]
         The threshold function. It should be a function of y and returns the
@@ -290,27 +292,31 @@ def verify_is_pretty(
         Whether the rationalization of `y` is pretty.
     """
     if len(y) == 0: return True
+
+    # use math.lcm over python int is faster than sympy.lcm
+    from math import lcm as _lcm
+
     lcm = 1
     if threshold is None:
         s = max(36, max(v.q for v in y)) ** 2
     else:
         s = threshold(y)
     for v in y:
-        lcm = sp.lcm(lcm, v.q)
+        lcm = _lcm(lcm, v.q)
         if lcm > s:
             return False
     return True
 
 
 def rationalize_and_decompose(
-        y: Union[np.ndarray, sp.Matrix],
-        mat_func: Callable[[sp.Matrix], Dict[str, sp.Matrix]],
-        projection: Optional[Callable[[sp.Matrix], sp.Matrix]] = None,
-        rationalizers: List[Rationalizer] = [],
-        reg: float = 0,
-        perturb: bool = False,
-        check_pretty: bool = True,
-    ) -> Optional[Tuple[sp.Matrix, Decomp]]:
+    y: Union[np.ndarray, Matrix],
+    mat_func: Callable[[Matrix], Dict[str, Matrix]],
+    projection: Optional[Callable[[Matrix], Matrix]] = None,
+    rationalizers: List[Rationalizer] = [],
+    reg: float = 0,
+    perturb: bool = False,
+    check_pretty: bool = True,
+) -> Optional[Tuple[Matrix, Decomp]]:
     """
     TODO: deprecation
 
@@ -321,10 +327,10 @@ def rationalize_and_decompose(
     ----------
     y : np.ndarray
         The vector to be rationalized.
-    mat_func : Callable[[sp.Matrix], Dict[str, sp.Matrix]]
+    mat_func : Callable[[Matrix], Dict[str, Matrix]]
         Given a rationalized vector `y`, return a dictionary of matrices
         that needs to be PSD.
-    projection : Optional[Callable[[sp.Matrix], sp.Matrix]]
+    projection : Optional[Callable[[Matrix], Matrix]]
         The projection function. If not None, we project `y` to the feasible
         region before checking the PSD property.
     rationalizers : List[Rationalizer]
@@ -343,12 +349,12 @@ def rationalize_and_decompose(
 
     Returns
     -------
-    y, decompositions : Optional[Tuple[sp.Matrix, Dict[str, Tuple[sp.Matrix, sp.Matrix, List[sp.Rational]]]]]
+    y, decompositions : Optional[Tuple[Matrix, Dict[str, Tuple[Matrix, Matrix, List[Rational]]]]]
         If the matrices are positive semidefinite, return the congruence decompositions `y, [(S, U, diag)]`
         So that each `S = U.T * diag(diag) * U` where `U` is upper triangular.
         Otherwise, return None.
     """
-    if isinstance(y, sp.MatrixBase):
+    if isinstance(y, MatrixBase):
         rationalizers = [IdentityRationalizer()]
     if len(y) == 0:
         rationalizers = [EmptyRationalizer()]
@@ -367,7 +373,7 @@ def rationalize_and_decompose(
             decompositions = {}
             for key, S in S_dict.items():
                 if reg != 0:
-                    S = S + reg * sp.eye(S.shape[0])
+                    S = S + reg * Matrix.eye(S.shape[0])
 
                 congruence_decomp = congruence(S, perturb=perturb, upper=False)
                 if congruence_decomp is None:
