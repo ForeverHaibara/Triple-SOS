@@ -350,15 +350,15 @@ class SDPSOSSolver(ProofNode):
 
 
     def _explore_lift_degree(self, configs):
-        if (self.status < 0) or self.status > configs["lift_degree_limit"]:
-            self.status = -1
+        if (self.state < 0) or self.state > configs["lift_degree_limit"]:
+            self.state = -1
             self.finished = True
             return
 
         # Increase the status here to prevent the node getting killed in
         # the middle (which will not change the status, leading to infinite loop)
-        lift_degree = self.status
-        self.status += 1
+        lift_degree = self.state
+        self.state += 1
 
         problem = self._wrapped_problem[0]
         poly = problem.expr
@@ -410,7 +410,7 @@ class SDPSOSSolver(ProofNode):
                     print(f"{e.__class__.__name__}: {e}")
                 if isinstance(e, (ArithmeticTimeout, MemoryError)):
                     # do not try further
-                    self.status = -1
+                    self.state = -1
                     self.finished = True                
                     break
                 elif isinstance(e, SDPRationalizeError):
@@ -423,7 +423,7 @@ class SDPSOSSolver(ProofNode):
                         mineig = dr.mineig(y[:-1])
                         if mineig > configs["unstable_eig_threshold"]:
                             # we think that it is numerically unstable
-                            self.status = -1
+                            self.state = -1
                             self.finished = True                
                             break
 
@@ -431,8 +431,8 @@ class SDPSOSSolver(ProofNode):
 
         # We add a second check here to prevent 
         # it triggers a new round of `explore`
-        if self.status >= configs["lift_degree_limit"]:
-            self.status = -1
+        if self.state >= configs["lift_degree_limit"]:
+            self.state = -1
             self.finished = True
             return
 
