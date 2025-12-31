@@ -43,6 +43,7 @@ def _vector_complement(row: Matrix):
     * b is of shape (n, 1) and `row @ b == 1`.
     """
     from sympy.polys.matrices.domainmatrix import DomainMatrix
+    from sympy.polys.matrices.sdm import SDM
     rep = row._rep.to_field()
     dok = rep.to_dok()
     if len(dok) == 0:
@@ -57,14 +58,16 @@ def _vector_complement(row: Matrix):
 
     n = row.shape[1]
     one = rep.domain.one
-    A = {(i, i): one for i in range(nz)}
-    A.update({(i, i-1): one for i in range(nz+1, n)})
+    A = {i: {i: one} for i in range(nz)}
+    A.update({i: {i - 1: one} for i in range(nz + 1, n)})
+    Anz = {}
     for (_, k), v2 in items[:-1]:
-        A[(nz, k - int(k > nz))] = -v2 / v
-    A = Matrix._fromrep(DomainMatrix.from_dok(A, (n, n-1), rep.domain))
+        Anz[k - int(k > nz)] = -v2 / v
+    A[nz] = Anz
+    A = Matrix._fromrep(DomainMatrix.from_rep(SDM(A, (n, n-1), rep.domain)))
 
-    b = {(nz, 0): one / v}
-    b = Matrix._fromrep(DomainMatrix.from_dok(b, (n, 1), rep.domain))
+    b = {nz: {0: one / v}}
+    b = Matrix._fromrep(DomainMatrix.from_rep(SDM(b, (n, 1), rep.domain)))
     return A, b
 
 
@@ -217,7 +220,7 @@ class SDPSOSSolver(ProofNode):
         Whether to print the progress. Default is False.
     """
     default_configs = {
-        "lift_degree_limit": 4,
+        "lift_degree_limit": 2,
         "dof_limit": 7000,
         "solver": None,
         "allow_numer": 0,
@@ -351,6 +354,7 @@ class SDPSOSSolver(ProofNode):
 
     def _explore_lift_degree(self, configs):
         if (self.state < 0) or self.state > configs["lift_degree_limit"]:
+            # prevent dead loop
             self.state = -1
             self.finished = True
             return
@@ -431,7 +435,8 @@ class SDPSOSSolver(ProofNode):
 
         # We add a second check here to prevent 
         # it triggers a new round of `explore`
-        if self.state >= configs["lift_degree_limit"]:
+        # note that self.state has already increased
+        if self.state > configs["lift_degree_limit"]:
             self.state = -1
             self.finished = True
             return
@@ -508,7 +513,7 @@ def SDPSOS(
     *,
     symmetry: Optional[PermutationGroup] = None,
     roots: Optional[List[Root]] = None,
-    lift_degree_limit: int = 4,
+    lift_degree_limit: int = 2,
     dof_limit: int = 7000,
     solver: Optional[str] = None,
     allow_numer: int = 0,

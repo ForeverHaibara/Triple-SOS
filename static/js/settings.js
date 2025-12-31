@@ -185,7 +185,7 @@ var settingsDefinition = {children: {
                         name: "Lift Degree Limit",
                         description: "Set the maximum degree lifting for SDP SOS.",
                         type: "number",
-                        defaultValue: 4,
+                        defaultValue: 2,
                         min: 0,
                         step: 1,
                         settingPath: "sos.sdpSOS.liftDegreeLimit"
