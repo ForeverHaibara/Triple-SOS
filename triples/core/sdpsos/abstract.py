@@ -226,10 +226,10 @@ class SOSElement:
         return
 
     def construct(self,
-            parameters: Union[List[Symbol], bool] = True,
-            verbose: bool = False,
-            time_limit: Optional[Union[Callable, float]] = None
-        ) -> SDPProblem:
+        parameters: Union[List[Symbol], bool] = True,
+        verbose: bool = False,
+        time_limit: Optional[Union[Callable, float]] = None
+    ) -> SDPProblem:
         """
         Actually construct the SDPProblem instance from the problem data. It
         might take some time for large-scale problems, so it is not initialized
@@ -352,10 +352,10 @@ class AtomSOSElement(SOSElement):
         return eq.insert_prefix(self)
 
     def construct(self,
-            parameters: Union[List[Symbol], bool] = True,
-            verbose: bool = False,
-            time_limit: Optional[Union[Callable, float]] = None,
-        ) -> SDPProblem:
+        parameters: Union[List[Symbol], bool] = True,
+        verbose: bool = False,
+        time_limit: Optional[Union[Callable, float]] = None,
+    ) -> SDPProblem:
         time_limit = ArithmeticTimeout.make_checker(time_limit)
 
         # infer linear parameters if not given
@@ -512,10 +512,10 @@ class JointSOSElement(SOSElement):
             sos._post_construct(verbose=verbose, time_limit=time_limit, **kwargs)
 
     def construct(self,
-            parameters: Union[List[Symbol], bool] = True,
-            verbose: bool = False,
-            time_limit: Optional[Union[Callable, float]] = None
-        ) -> SDPProblem:
+        parameters: Union[List[Symbol], bool] = True,
+        verbose: bool = False,
+        time_limit: Optional[Union[Callable, float]] = None
+    ) -> SDPProblem:
 
         # infer linear parameters if not given
         if parameters is True:

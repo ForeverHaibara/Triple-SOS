@@ -444,19 +444,19 @@ class InequalityProblem(Generic[T]):
         rep = find(expr_fs[0]) if len(expr_fs) else None
         redundancy = {s for s in self.gens if (s not in fs) or (find(s) != rep)}
 
+        rest_inds = tuple([i for i, g in enumerate(self.gens)
+            if g not in redundancy])
+        if len(rest_inds) == 0:
+            # maintain at least one generator
+            rest_inds = (0,)
+        rest_gens = tuple([self.gens[i] for i in rest_inds])
+
         if not redundancy:
             rm_gens = lambda x: x
 
         # when the elements are polys / polyelements,
         # we should also remove the generators
         elif isinstance(self.expr, Poly):
-            _gens = self.expr.gens
-            rest_inds = [i for i, g in enumerate(_gens)
-                if g not in redundancy]
-            if len(rest_inds) == 0:
-                # maintain at least one generator
-                rest_inds = [0]
-            rest_gens = [_gens[i] for i in rest_inds]
             mp = lambda k: tuple(k[i] for i in rest_inds)
             def rm_gens(expr):
                 return Poly({mp(k): v for k, v in expr.rep.to_dict().items()},
@@ -475,6 +475,9 @@ class InequalityProblem(Generic[T]):
                 continue
             eqs[rm_gens(key)] = value
         pro = self.new(rm_gens(self.expr), ineqs, eqs)
+
+        if self.roots is not None:
+            pro.roots = RootList.new(rest_gens, [r[rest_inds] for r in self.roots])
         return pro
 
     def sqr_free(self,
@@ -789,13 +792,13 @@ class InequalityProblem(Generic[T]):
 
 
 def _get_constraints_wrapper(
-        symbols: Tuple[int, ...],
-        ineq_constraints: Dict[T, Expr],
-        eq_constraints: Dict[T, Expr],
-        perm_group: Optional[PermutationGroup]=None,
-        reorder_func: Callable[[T, Permutation], T]=None,
-        free_symbols_func: Callable[[T], Set[Symbol]]=_dtype_free_symbols,
-    ):
+    symbols: Tuple[int, ...],
+    ineq_constraints: Dict[T, Expr],
+    eq_constraints: Dict[T, Expr],
+    perm_group: Optional[PermutationGroup]=None,
+    reorder_func: Callable[[T, Permutation], T]=None,
+    free_symbols_func: Callable[[T], Set[Symbol]]=_dtype_free_symbols,
+):
     if perm_group is None:
         # trivial group
         perm_group = PermutationGroup(Permutation(list(range(len(symbols)))))

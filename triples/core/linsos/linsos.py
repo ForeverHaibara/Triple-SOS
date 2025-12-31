@@ -113,8 +113,13 @@ class LinearSOSSolver(ProofNode):
         problem = (self._transformed_problem if self._transformed_problem is not None else self.problem)
         poly = problem.expr
         ineq_constraints = problem.ineq_constraints
-        qmodule = get_qmodule_list(poly, ineq_constraints,
-            all_nonnegative=configs['all_nonnegative'], preordering=configs['preordering'])
+        qmodule = get_qmodule_list(
+            poly,
+            ineq_constraints,
+            degree=poly.total_degree() + max(0, configs['lift_degree_limit']),
+            all_nonnegative=configs['all_nonnegative'],
+            preordering=configs['preordering']
+        )
         qmodule = clear_polys_by_symmetry(qmodule, poly.gens, configs['symmetry'])
         ArithmeticTimeout.make_checker(configs['time_limit'])()
         return dict(qmodule)
@@ -320,6 +325,9 @@ class LinearSOSSolver(ProofNode):
                 basis += lift_degree_info['basis']
                 arrays = np.vstack([arrays,
                     np.array([x.as_array_np(expand_cyc=True, symmetry=symmetry) for x in lift_degree_info['basis']])])
+
+                # verbose bases
+                # print('Bases:', ', '.join([str(_.as_expr(poly.gens)) for _ in basis]))
 
                 # sum of coefficients of the multipliers should be 1
                 regularizer = np.zeros(arrays.shape[0])

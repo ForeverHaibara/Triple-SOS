@@ -54,12 +54,12 @@ def _add_regularizer(mat: Matrix, num_multipliers: int) -> Matrix:
     return mat
 
 def linear_correction(
-        y: List[float] = [],
-        basis: List[LinearBasis] = [],
-        num_multipliers: int = 1,
-        symmetry: PermutationGroup = PermutationGroup(),
-        zero_tol: float = 1e-6,
-    ) -> Tuple[Matrix, Matrix, bool]:
+    y: List[float] = [],
+    basis: List[LinearBasis] = [],
+    num_multipliers: int = 1,
+    symmetry: PermutationGroup = PermutationGroup(),
+    zero_tol: float = 1e-6,
+) -> Tuple[Matrix, Matrix, bool]:
     """
     Linear programming is a numerical way to solve the SOS problem. However, we require
     the solution to be exact. This function is used to correct the numerical error.

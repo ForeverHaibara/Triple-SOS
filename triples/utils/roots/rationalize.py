@@ -28,11 +28,11 @@ def univariate_intervals(polys: Union[Poly, List[Poly]]) -> Generator[Rational, 
 
 
 def rationalize(
-        v: float,
-        rounding: float = 1e-2,
-        reliable: bool = False,
-        truncate: Optional[int] = 32
-    ) -> Rational:
+    v: float,
+    rounding: float = 1e-2,
+    reliable: bool = False,
+    truncate: Optional[int] = 32
+) -> Rational:
     """
     Approximates a floating number to a reasonable fraction.
 
@@ -222,11 +222,11 @@ def cancel_denominator(nums):
 
 
 def rationalize_quadratic_curve(
-        curve: Expr,
-        gen: Symbol = Symbol('t'),
-        point: Union[Dict[Symbol, Rational], Tuple[Rational, Rational]] = None,
-        one_point: bool = False
-    ) -> Dict[Symbol, Rational]:
+    curve: Expr,
+    gen: Symbol = Symbol('t'),
+    point: Union[Dict[Symbol, Rational], Tuple[Rational, Rational]] = None,
+    one_point: bool = False
+) -> Dict[Symbol, Rational]:
     """
     (EXPERIMENTAL) Rationalize a quadratic curve using the secant method.
 

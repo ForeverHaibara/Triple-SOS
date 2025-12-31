@@ -114,6 +114,11 @@ def lll(x, delta=QQ(3, 4), time_limit=None):
     Adapted from SymPy 1.12 to support SymPy < 1.12.
     """
     time_limit = ArithmeticTimeout.make_checker(time_limit)
+    if x.shape[0] == 0 or x.shape[1] == 0:
+        # Calling .lll() on 0*0 DFM matrix could cause kernel crash:
+        # https://github.com/flintlib/python-flint/issues/351
+        return x.zeros(x.shape[0], x.shape[1])
+
     dM = x._rep.convert_to(ZZ)
     rep = dM.rep
     time_limit()

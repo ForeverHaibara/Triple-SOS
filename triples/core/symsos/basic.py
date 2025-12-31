@@ -46,11 +46,11 @@ class SymmetricTransform():
         return expr.xreplace(inv_dict)
 
     @classmethod
-    def _get_default_constraints(cls, new_symbols: Tuple[Symbol]) -> Tuple[Dict[Poly, Expr], Dict[Poly, Expr]]:
+    def _get_default_constraints(cls, new_symbols: Tuple[Symbol, ...]) -> Tuple[Dict[Poly, Expr], Dict[Poly, Expr]]:
         raise NotImplementedError
 
     @classmethod
-    def get_natural_constraints(cls, symbols: Tuple[Symbol], new_symbols: Tuple[Symbol],
+    def get_natural_constraints(cls, symbols: Tuple[Symbol, ...], new_symbols: Tuple[Symbol, ...],
             problem: InequalityProblem) -> Optional[Tuple[Dict[Poly, Expr], Dict[Poly, Expr]]]:
         """
         Get inequality and equality constraints over the new symbols. By default it calls
@@ -64,7 +64,7 @@ class SymmetricTransform():
         return cls._get_natural_constraints_from_signs(symbols, new_symbols, signs)
 
     @classmethod
-    def _get_natural_constraints_from_signs(cls, symbols: Tuple[Symbol], new_symbols: Tuple[Symbol],
+    def _get_natural_constraints_from_signs(cls, symbols: Tuple[Symbol, ...], new_symbols: Tuple[Symbol, ...],
             signs: Dict[Symbol, Tuple[int, Expr]]) -> Optional[Tuple[Dict[Poly, Expr], Dict[Poly, Expr]]]:
         """
         Get inequality and equality constraints over the new symbols. The method only
@@ -82,7 +82,7 @@ class SymmetricTransform():
         return proved_ineqs, proved_eqs
 
     @classmethod
-    def get_dict(cls, symbols: Tuple[Symbol], new_symbols: Tuple[Symbol]) -> Dict[Symbol, Expr]:
+    def get_dict(cls, symbols: Tuple[Symbol, ...], new_symbols: Tuple[Symbol, ...]) -> Dict[Symbol, Expr]:
         """
         Get the dictionary {new_symbol: expr(old_symbols)}
         that maps old symbols to new symbols.
@@ -90,7 +90,7 @@ class SymmetricTransform():
         raise NotImplementedError
 
     @classmethod
-    def get_inv_dict(cls, symbols: Tuple[Symbol], new_symbols: Tuple[Symbol]) -> Dict[Symbol, Expr]:
+    def get_inv_dict(cls, symbols: Tuple[Symbol, ...], new_symbols: Tuple[Symbol, ...]) -> Dict[Symbol, Expr]:
         """
         Get the dictionary {old_symbol: expr(new_symbols)}
         that maps new symbols back to old symbols.
@@ -98,7 +98,7 @@ class SymmetricTransform():
         raise NotImplementedError
 
     @classmethod
-    def get_constraints(cls, symbols: Tuple[Symbol], new_symbols: Tuple[Symbol], problem: InequalityProblem) \
+    def get_constraints(cls, symbols: Tuple[Symbol, ...], new_symbols: Tuple[Symbol, ...], problem: InequalityProblem) \
             -> Optional[Tuple[Dict[Poly, Expr], Dict[Poly, Expr]]]:
         """
         Get the constraints of a problem after applying the transform.
@@ -122,7 +122,7 @@ class SymmetricTransform():
         return new_ineqs, new_eqs
 
     @classmethod
-    def apply(cls, problem: InequalityProblem, symbols: Tuple[Symbol], new_symbols: Tuple[Symbol]=None) \
+    def apply(cls, problem: InequalityProblem, symbols: Tuple[Symbol, ...], new_symbols: Tuple[Symbol, ...]=None) \
             -> Tuple[InequalityProblem, Callable]:
         """
         Apply the transform on the problem and get the new problem and the restoration function.
@@ -131,9 +131,9 @@ class SymmetricTransform():
         -----------
         problem : InequalityProblem
             The problem to be transformed.
-        symbols : Tuple[Symbol]
+        symbols : Tuple[Symbol, ...]
             The symbols to be transformed.
-        new_symbols : Tuple[Symbol], optional
+        new_symbols : Tuple[Symbol, ...], optional
             The new symbols after transformation.
 
         Returns

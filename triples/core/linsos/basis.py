@@ -413,7 +413,7 @@ def _get_cross_dmps_of_quad_diff(quad_diff_order: int, tangent_dmp: DMP) -> List
     return new_poly_reps
 
 
-def _get_cross_exprs_and_polys_of_quad_diff(symbols: Tuple[Symbol],
+def _get_cross_exprs_and_polys_of_quad_diff(symbols: Tuple[Symbol, ...],
         quad_diff_order: int, tangent: Expr, tangent_p: Poly) -> Tuple[List[Expr], List[PolyElement]]:
     """
     Generate all sympy expressions of the form prod((ai - aj)^2) * tangent and return the polynomials,
@@ -425,7 +425,7 @@ def _get_cross_exprs_and_polys_of_quad_diff(symbols: Tuple[Symbol],
 
     Parameters
     ----------
-    symbols: Tuple[Symbol]
+    symbols: Tuple[Symbol, ...]
         A tuple of symbols.
     quad_diff_order: int
         The maximum degree of the quadratic differences.

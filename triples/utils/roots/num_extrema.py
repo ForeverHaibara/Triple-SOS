@@ -101,7 +101,7 @@ class NumerFunc:
         elif isinstance(u, NumerFunc):
             return NumerFunc(lambda x: u.f(x) - v.f(x), lambda x: u.g(x) - v.g(x))
         else:
-            raise TypeError(f'Cannot subtract NumerFunc from {type(other)}.')
+            raise TypeError(f'Cannot subtract NumerFunc from {type(u)}.')
     def __neg__(self):
         return NumerFunc(lambda x: -self.f(x), lambda x: -self.g(x))
     def __mul__(u, v):
@@ -110,7 +110,7 @@ class NumerFunc:
         elif isinstance(v, NumerFunc):
             return NumerFunc(lambda x: u.f(x) * v.f(x), lambda x: u.g(x) * v.f(x) + u.f(x) * v.g(x))
         else:
-            raise TypeError(f'Cannot multiply {type(other)} with NumerFunc.')
+            raise TypeError(f'Cannot multiply {type(v)} with NumerFunc.')
     def __rmul__(self, other):
         return self.__mul__(other)
     def __truediv__(u, v):
@@ -122,7 +122,7 @@ class NumerFunc:
                 return (u.g(x) * vf - u.f(x) * v.g(x)) / vf**2
             return NumerFunc(lambda x: u.f(x) / v.f(x), new_g)
         else:
-            raise TypeError(f'Cannot divide NumerFunc by {type(other)}.')
+            raise TypeError(f'Cannot divide NumerFunc by {type(v)}.')
     def __rtruediv__(v, u):
         if isinstance(u, (float, int)):
             return NumerFunc(lambda x: u / v.f(x), lambda x: -u / v.f(x)**2 * v.g(x))
@@ -140,7 +140,7 @@ class NumerFunc:
                 return (vf * u.f(x) ** (vf - 1) * u.g(x) + v.g(x) * u.f(x) ** vf * np.log(u.f(x)))
             return NumerFunc(lambda x: u.f(x) ** v.f(x), new_g)
         else:
-            raise TypeError(f'Cannot raise NumerFunc to {type(other)}.')
+            raise TypeError(f'Cannot raise NumerFunc to {type(v)}.')
 
     @classmethod
     def sum(cls, funcs: List['NumerFunc']) -> 'NumerFunc':
@@ -241,11 +241,13 @@ def _update_dict(d1: Dict, d2: Dict) -> Dict:
     return d1
 
 
-def numeric_optimize_skew_symmetry(poly: Union[Expr, Poly], symbols: List[Symbol],
-        perm_group: Union[List[List[int]],Permutation,PermutationGroup],
-        num: int = 5, is_homogeneous: Optional[bool] = None,
-        points: Optional[np.ndarray]=None, optimizer: Optional[Callable]=None,
-    ) -> List[np.ndarray]:
+def numeric_optimize_skew_symmetry(
+    poly: Union[Expr, Poly],
+    symbols: List[Symbol],
+    perm_group: Union[List[List[int]],Permutation,PermutationGroup],
+    num: int = 5, is_homogeneous: Optional[bool] = None,
+    points: Optional[np.ndarray]=None, optimizer: Optional[Callable]=None,
+) -> List[np.ndarray]:
     """
     Numerically optimize a polynomial with no constraints by exploiting the skew-symmetry
     of the polynomial.

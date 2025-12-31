@@ -513,7 +513,7 @@ class Solution(SolutionBase[T]):
         warn("Calling Solution.multiplier will be deprecated. Use Solution.as_fraction()[1] instead.", DeprecationWarning, stacklevel=2)
         return self.as_fraction()[1]
 
-    def rewrite_symmetry(self, symbols: Optional[Tuple[Symbol]]=None, perm_group: Optional[PermutationGroup]=None) -> 'Solution':
+    def rewrite_symmetry(self, symbols: Optional[Tuple[Symbol, ...]]=None, perm_group: Optional[PermutationGroup]=None) -> 'Solution':
         """
         Rewrite the expression heuristically with respect to the given permutation group.
         After rewriting, it is expected all cyclic expressions are expanded or in the given permutation group.
@@ -525,7 +525,7 @@ class Solution(SolutionBase[T]):
 
         Parameters
         ----------
-        symbols : Tuple[Symbol]
+        symbols : Tuple[Symbol, ...]
             The symbols that the permutation group acts on.
         perm_group : PermutationGroup
             Sympy permutation group object. Defaults to the CyclicGroup if not given.

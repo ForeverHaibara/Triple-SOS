@@ -159,6 +159,14 @@ var settingsDefinition = {children: {
                         defaultValue: true,
                         settingPath: "sos.linearSOS.augmentTangents"
                     },
+                    allowNumer: {
+                        name: "Allow Numerical Solution",
+                        description: "Whether to allow numerical solution in Linear SOS. This returns inexact"
+                                     + " solutions when rationalization failed.",
+                        type: "checkbox",
+                        defaultValue: false,
+                        settingPath: "sos.linearSOS.allowNumer"
+                    }
                 }
             },
             sdpSOS: {
@@ -172,6 +180,24 @@ var settingsDefinition = {children: {
                         defaultValue: true,
                         settingPath: "sos.sdpSOS.useSDPSOS",
                         originalCheckboxId: "setting_method_use_SDPSOS"
+                    },
+                    liftDegreeLimit: {
+                        name: "Lift Degree Limit",
+                        description: "Set the maximum degree lifting for SDP SOS.",
+                        type: "number",
+                        defaultValue: 2,
+                        min: 0,
+                        step: 1,
+                        settingPath: "sos.sdpSOS.liftDegreeLimit"
+                    },
+                    unstableEigThreshold: {
+                        name: "Unstable Eigenvalue Threshold",
+                        description: "If it fails to rationalize but the smallest eigenvalue of the SDP"
+                                + " is larger than `unstable_eig_threshold`, then it considers the "
+                                + "problem as numerically unstable and stops further search.",
+                        type: "number",
+                        defaultValue: -0.1,
+                        settingPath: "sos.sdpSOS.unstableEigThreshold"
                     },
                     allowNumer: {
                         name: "Allow Numerical Solution",
@@ -719,8 +745,10 @@ function getSOSConfigs() {
             basis_limit: sos.linearSOS.basisLimit,
             quad_diff_order: sos.linearSOS.quadDiffOrder,
             augment_tangents: sos.linearSOS.augmentTangents,
+            allow_numer: sos.linearSOS.allowNumer,
         },
         SDPSOS: {
+            lift_degree_limit: sos.sdpSOS.liftDegreeLimit,
             allow_numer: sos.sdpSOS.allowNumer,
             // decompose_method: document.getElementById("setting_method_SDPSOS_reduced_decompose").checked?'reduce':'raw',
         }
