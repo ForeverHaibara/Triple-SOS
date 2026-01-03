@@ -28,9 +28,9 @@ SOLVERS_SYMMETRIC_NONHOM = {
 }
 
 def _structural_sos_4vars_symmetric(
-        coeff: Union[Poly, Coeff, Dict],
-        real: int = 1
-    ):
+    coeff: Union[Poly, Coeff, Dict],
+    real: int = 1
+):
     """
     Internal function to solve a 4-var homogeneous symmetric polynomial using structural SOS.
     The function assumes the polynomial is wrt. (a, b, c, d).
@@ -45,9 +45,9 @@ def _structural_sos_4vars_symmetric(
     )
 
 def _structural_sos_4vars_cyclic(
-        coeff: Union[Poly, Coeff, Dict],
-        real: int = 1
-    ):
+    coeff: Union[Poly, Coeff, Dict],
+    real: int = 1
+):
     """
     Internal function to solve a 4-var homogeneous symmetric polynomial using structural SOS.
     The function assumes the polynomial is wrt. (a, b, c, d).
@@ -62,9 +62,9 @@ def _structural_sos_4vars_cyclic(
     )
 
 def _structural_sos_4vars_partial_symmetric(
-        coeff: Union[Poly, Coeff, Dict],
-        real: int = 1
-    ) -> Optional[Expr]:
+    coeff: Union[Poly, Coeff, Dict],
+    real: int = 1
+) -> Optional[Expr]:
     """
     Internal function to solve a 4-var homogeneous partial symmetric polynomial using structural SOS.
     The function assumes the polynomial is wrt. (a, b, c, d). The permutation group is

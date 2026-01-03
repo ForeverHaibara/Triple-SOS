@@ -61,7 +61,7 @@ def _quaternary_cubic_partial_symmetric(coeff: Coeff, real = False):
 
     Examples
     --------
-    :: ineqs = [a,b,c], gens=[a,b,c]
+    :: ineqs = [a,b,c], gens = [a,b,c]
 
     => 4abc+9s(a2)-14s(ab)+4s(a)+4
 

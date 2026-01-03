@@ -71,7 +71,7 @@ def sum_of_squares(
         >>> result.solution.doit() # doctest: +SKIP
         (-a + c)**2/2 + (a - b)**2/2 + (b - c)**2/2
 
-        
+
     ### Constraints
 
     If we want to add constraints for the domain of the variables, we can pass in a list of inequality
