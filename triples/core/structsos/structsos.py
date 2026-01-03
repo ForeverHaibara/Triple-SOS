@@ -9,7 +9,7 @@ from .nvars import sos_struct_nvars_quartic_symmetric
 from .constrained import structural_sos_constrained
 from .sparse import sos_struct_linear, sos_struct_quadratic
 from .ternary import structural_sos_3vars
-from .quarternary import structural_sos_4vars
+from .quaternary import structural_sos_4vars
 from .pivoting import structural_sos_2vars
 from ..preprocess import ProofNode, SolvePolynomial
 

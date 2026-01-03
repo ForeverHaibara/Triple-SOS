@@ -3,11 +3,11 @@ from sympy import Poly, Symbol, Add
 from .utils import Coeff, quadratic_weighting, intervals
 
 
-def quarternary_quartic(coeff, real=True):
-    return _quarternary_quartic_real(coeff, real=real)
+def quaternary_quartic(coeff, real=True):
+    return _quaternary_quartic_real(coeff, real=real)
 
 
-def _quarternary_quartic_fluroite(coeff: Coeff, real=True):
+def _quaternary_quartic_fluroite(coeff: Coeff, real=True):
     """
     This structure gets its name from the mineral fluroite, which is an octahedral crystal.
     It considers cyclic quartic 4-var polynomials with the form:
@@ -54,7 +54,7 @@ def _quarternary_quartic_fluroite(coeff: Coeff, real=True):
             c_abcd * CycSum(a*b*c*d)
         )
 
-def _quarternary_quartic_real(coeff: Coeff, real=True):
+def _quaternary_quartic_real(coeff: Coeff, real=True):
     """
     Solve cyclic quartic 4-var homogeneous polynomials. The idea is to subtract some
 
@@ -67,7 +67,7 @@ def _quarternary_quartic_real(coeff: Coeff, real=True):
     => s(((1-2)(a2-b2)+0(a2-c2)+(1+2)(a2-d2)-1(ab-cd)+6(bc-ad)+8(cd-bc)+2(ac-bd))2) # doctest:+SKIP
     """
     if not any(coeff(_) for _ in ((4,0,0,0),(3,1,0,0),(3,0,1,0),(3,0,0,1))):
-        return _quarternary_quartic_fluroite(coeff, real=real)
+        return _quaternary_quartic_fluroite(coeff, real=real)
 
     c4000, poly1111 = coeff((4,0,0,0)), coeff.poly111()
     if c4000 <= 0 or poly1111 < 0:

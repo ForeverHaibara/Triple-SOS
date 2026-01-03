@@ -4,8 +4,9 @@ from sympy import Poly, Expr, Function
 from sympy.core.symbol import uniquely_named_symbol
 from sympy.combinatorics import PermutationGroup, Permutation
 
-from .cubic import quarternary_cubic_symmetric, _quarternary_cubic_partial_symmetric
-from .quartic import quarternary_quartic
+from .cubic import quaternary_cubic_symmetric, _quaternary_cubic_partial_symmetric
+from .quartic import quaternary_quartic
+from .quintic import quaternary_quintic_symmetric
 
 from ..utils import Coeff, PolynomialNonpositiveError, PolynomialUnsolvableError
 from ..sparse import sos_struct_common, sos_struct_degree_specified_solver
@@ -13,16 +14,17 @@ from ..solution import SolutionStructural
 
 
 SOLVERS_CYCLIC = {
-    4: quarternary_quartic,
+    4: quaternary_quartic,
 }
 
 SOLVERS_SYMMETRIC = {
-    3: quarternary_cubic_symmetric,
-    4: quarternary_quartic,
+    3: quaternary_cubic_symmetric,
+    4: quaternary_quartic,
+    5: quaternary_quintic_symmetric,
 }
 
 SOLVERS_SYMMETRIC_NONHOM = {
-    3: _quarternary_cubic_partial_symmetric,
+    3: _quaternary_cubic_partial_symmetric,
 }
 
 def _structural_sos_4vars_symmetric(

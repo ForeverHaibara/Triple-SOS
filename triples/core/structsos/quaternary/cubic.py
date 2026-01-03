@@ -5,9 +5,9 @@ from ..sparse import sos_struct_quadratic
 from ....utils import CyclicSum as _CyclicSum
 from ....utils import CyclicProduct as _CyclicProduct
 
-def quarternary_cubic_symmetric(coeff: Coeff, real = True):
+def quaternary_cubic_symmetric(coeff: Coeff, real = True):
     """
-    Solve quarternary symmetric cubic polynomials. Symmetry is not checked here.
+    Solve quaternary symmetric cubic polynomials. Symmetry is not checked here.
 
     References
     -----------
@@ -39,7 +39,7 @@ def quarternary_cubic_symmetric(coeff: Coeff, real = True):
 #
 #####################################################################
 
-def _quarternary_cubic_partial_symmetric(coeff: Coeff, real = False):
+def _quaternary_cubic_partial_symmetric(coeff: Coeff, real = False):
     """
     The function is equivalent to solving nonhomogeneous 3-var symmetric cubic polynomials in
     the form of
