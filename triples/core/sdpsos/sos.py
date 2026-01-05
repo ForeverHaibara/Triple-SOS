@@ -18,7 +18,7 @@ CHECK_SYMMETRY = True
 class SOSPoly(AtomSOSElement):
     """
     A class representing a sum-of-squares polynomial given a quadratic module
-    and a ideal, i.e., a polynomial in the following form:
+    and an ideal, i.e., a polynomial in the following form:
 
         F = sum(G[i] * SOS[i] for i in range(len(G))) + sum(H[i] * v[i] for i in range(len(H)))
 
@@ -52,15 +52,15 @@ class SOSPoly(AtomSOSElement):
     Examples
     --------
 
-    ## Proving nonnegativity
+    ### Proving nonnegativity
 
     Here is a simple tutorial on how to prove nonnegativity of a polynomial
-    via sum of squares. Consider the Vasile's inequality:
+    via sum of squares. Consider Vasile's inequality:
 
         (a^2 + b^2 + c^2)^2 - 3*(a^3*b+b^3*c+c^3*a) >= 0.
 
     The inequality holds for all real numbers a, b, c and we want to prove it
-    by sum of squares. To do so, we initialize the SOSPoly and solve it
+    by sum of squares. To do so, initialize the SOSPoly and solve it
     as follows.
 
         >>> from sympy.abc import a, b, c, u, v, w, x, y, z, t
@@ -95,7 +95,7 @@ class SOSPoly(AtomSOSElement):
     passed in as the `qmodule` and `ideal` arguments, respectively.
 
 
-    ### Setting degree truncation and symmetry group
+    ### Setting the degree truncation and the symmetry group
 
     Consider the example: a,b,c >= 0 and abc=1, prove a^2+b^2+c^2-a-b-c>=0. The polynomial is completely
     symmetric with respect to all variables, which can be represented as a sympy SymmetricGroup(3) object.

@@ -1,6 +1,6 @@
 """
-This module contains heuristic, experimental, imcomplete facial reduction algorithm for SDP algorithm
-via computing the equality cases of the original SOS problem.
+This module contains heuristic, experimental, imcomplete facial reduction algorithm
+for SDP via computing the equality cases of the original SOS problem.
 """
 from collections import defaultdict, deque
 from itertools import product
@@ -178,8 +178,12 @@ def _compute_diff_orders(poly: Poly, root: Root, mixed=False, only_binary_roots=
         return orders
 
 
-def _compute_nonvanishing_diff_orders(poly: Poly, root: Root, monomial: Tuple[int, ...],
-                                        only_binary_roots=True) -> List[Tuple[int, ...]]:
+def _compute_nonvanishing_diff_orders(
+    poly: Poly,
+    root: Root,
+    monomial: Tuple[int, ...],
+    only_binary_roots=True
+) -> List[Tuple[int, ...]]:
     """
     Compute the differential orders that the root do not vanish at
     the given quadratic module (monomial). TODO: extend to non-monomial cases
@@ -229,7 +233,13 @@ def _compute_nonvanishing_diff_orders(poly: Poly, root: Root, monomial: Tuple[in
     return handled_zeros
 
 
-def _root_space(root: Root, poly: Poly, qmodule: Poly, codegree: int, basis: MonomialManager) -> Matrix:
+def _root_space(
+    root: Root,
+    poly: Poly,
+    qmodule: Poly,
+    codegree: int,
+    basis: MonomialManager
+) -> Matrix:
     """
     Compute the constrained nullspace spanned by a given root. Consider:
 
@@ -301,11 +311,15 @@ def _findroot_binary(poly: Poly, symmetry: PermutationGroup = None) -> List[Root
     return roots
 
 
-def get_nullspace(poly: Poly, ineq_constraints: Dict[Any, Poly], eq_constraints: Dict[Any, Poly],
-        ineq_bases: Dict[Any, SOSBasis], eq_bases: Dict[Any, SOSBasis],
-        degree: Optional[int]=None, roots: List[Root] = [],
-        perm_group: Optional[PermutationGroup] = None,
-        time_limit: Optional[Union[Callable, float]]=None) -> Dict[Any, Matrix]:
+def get_nullspace(
+    poly: Poly,
+    ineq_constraints: Dict[Any, Poly],
+    eq_constraints: Dict[Any, Poly],
+    ineq_bases: Dict[Any, SOSBasis], eq_bases: Dict[Any, SOSBasis],
+    degree: Optional[int]=None, roots: List[Root] = [],
+    perm_group: Optional[PermutationGroup] = None,
+    time_limit: Optional[Union[Callable, float]]=None
+) -> Dict[Any, Matrix]:
     """
     In the current, all roots must satisfy poly(roots) == 0 and ineq_constraints(roots) >= 0,
     and eq_constraints(roots) == 0, and this property will not be checked.
@@ -343,11 +357,19 @@ def get_nullspace(poly: Poly, ineq_constraints: Dict[Any, Poly], eq_constraints:
 
 
 
-def constrain_root_nullspace(sdp: SDPProblem, poly: Poly, ineq_constraints: Dict, eq_constraints: Dict,
-        ineq_bases: Dict[Any, Any], eq_bases: Dict[Any, Any], degree: int,
-        roots: Optional[List[Root]]=None, symmetry: Optional[PermutationGroup]=None,
-        verbose: bool = False, time_limit: Optional[Union[Callable, float]]=None
-    ) -> Tuple[SDPProblem, List[Root]]:
+def constrain_root_nullspace(
+    sdp: SDPProblem,
+    poly: Poly,
+    ineq_constraints: Dict,
+    eq_constraints: Dict,
+    ineq_bases: Dict[Any, Any],
+    eq_bases: Dict[Any, Any],
+    degree: int,
+    roots: Optional[List[Root]]=None,
+    symmetry: Optional[PermutationGroup]=None,
+    verbose: bool = False,
+    time_limit: Optional[Union[Callable, float]]=None
+) -> Tuple[SDPProblem, List[Root]]:
     """
     Internal helper function to constrain the nullspace of the SDP problem. It will be called
     in `SOSProblem.construct`.

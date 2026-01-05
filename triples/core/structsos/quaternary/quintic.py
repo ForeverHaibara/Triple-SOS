@@ -23,7 +23,7 @@ def _quaternary_quintic_symmetric_hexagon(coeff: Coeff):
     `F(x,1,1,1) >= 0` holds for all `x>=0`.
 
     This condition is sufficient for `F(x,x,1,1) >= 0` and `F(x,1,1,0) >= 0`
-    to hold. And thus the Vlad Timofte's theorem applies.
+    to hold. And thus Vlad Timofte's theorem applies.
 
     Examples
     --------
@@ -76,7 +76,7 @@ def _quaternary_quintic_symmetric_hexagon(coeff: Coeff):
     if c41 == 0:
         return
 
-    # normalize so that c41 = 0
+    # normalize so that c41 = 1
     r = c41r/c41
     z = c41z/c41
 

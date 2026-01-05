@@ -10,18 +10,18 @@ def quaternary_quartic(coeff, real=True):
 def _quaternary_quartic_fluroite(coeff: Coeff, real=True):
     """
     This structure gets its name from the mineral fluroite, which is an octahedral crystal.
-    It considers cyclic quartic 4-var polynomials with the form:
+    It considers cyclic quartic 4-var polynomials in the form:
 
-    s(?a2b2+?a2bc+?a2bd+?a2c2+?a2cd+?abcd) >= 0
+    `s(?a2b2+?a2bc+?a2bd+?a2c2+?a2cd+?abcd) >= 0`
 
     where a, b, c, d are the coefficients of the polynomial.
 
     Observe that
-    s((x(dc-ab+bc-da)+y(dc-ab-bc+da)+z(cd-da)+w/2(ac-bd))2)-s((z(a-c)(b-d)+w(ac-bd))2)/4
-    = ((2x+z)2+4y2)s(a2b2-abcd) = ((2x+z)2/2+2y2)s((ab-cd)2) >= 0,
+    `s((x(dc-ab+bc-da)+y(dc-ab-bc+da)+z(cd-da)+w/2(ac-bd))2)-s((z(a-c)(b-d)+w(ac-bd))2)/4
+    = ((2x+z)2+4y2)s(a2b2-abcd) = ((2x+z)2/2+2y2)s((ab-cd)2) >= 0`,
     we write the polynomial as a linear combination of:
 
-    s(a2b2-abcd), s((?(a-c)(b-d)+?(ac-bd))2), s(?ab-?ac)2
+    `s(a2b2-abcd)`, `s((?(a-c)(b-d)+?(ac-bd))2)`, `s(?ab-?ac)2`
 
     Examples
     ---------
@@ -58,7 +58,7 @@ def _quaternary_quartic_real(coeff: Coeff, real=True):
     """
     Solve cyclic quartic 4-var homogeneous polynomials. The idea is to subtract some
 
-    s(((1-t)(a2-b2)+0(a2-c2)+(1+t)(a2-d2)+x(ab-cd)+y(bc-ad)+z(cd-bc)+w(ac-bd))2)
+    `s(((1-t)(a2-b2)+0(a2-c2)+(1+t)(a2-d2)+x(ab-cd)+y(bc-ad)+z(cd-bc)+w(ac-bd))2)`
 
     so that the rest falls in the case of fluroite. This is heuristic and may not work for all cases.
 

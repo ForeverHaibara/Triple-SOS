@@ -9,7 +9,7 @@ from .utils import (
 
 def sos_struct_nonic(coeff, real = True):
     """
-    Nonic is polynomial of degree 9.
+    Nonics are polynomials of degree 9.
 
     Examples
     --------
@@ -19,8 +19,8 @@ def sos_struct_nonic(coeff, real = True):
 
     => s(a6b3+7a6c3-29a5b2c2+12a4bc4+9a3b3c3) # doctest:+SKIP
 
-    Reference
-    -------
+    References
+    ----------
     [1] https://tieba.baidu.com/p/8457240407
 
     [2] https://tieba.baidu.com/p/7303219331
@@ -48,16 +48,16 @@ def sos_struct_nonic(coeff, real = True):
 
 def _sos_struct_nonic_symmetric_tree(coeff: Coeff):
     """
-    Solve problems with similar structure as s(a3-abc)s(a2+xab)s((a-b)2(a+b-xc)2).
-    See details at _sos_struct_sextic_tree.
+    Solve problems with similar structure as `s(a3-abc)s(a2+xab)s((a-b)2(a+b-xc)2)`.
+    See details at `_sos_struct_sextic_tree`.
 
-    The idea is to subtract (x >= 1):
-    G(x) = s(a3-abc)/2s(a2+xab)s((a-b)2(a+b-xc)2)+(w-x3+3x-1)s(a(ab-c2)2(ac-b2)2)
-    to remove the outer edge so that the rest is a multiple of a^2b^2c^2. Here the coefficient of a^9
-    and a^6b^3 of G(x) are 1 and w respectively.
+    The idea is to subtract `(x >= 1)`:
+    `G(x) = s(a3-abc)/2s(a2+xab)s((a-b)2(a+b-xc)2)+(w-x3+3x-1)s(a(ab-c2)2(ac-b2)2)`
+    to remove the outer edge so that the rest is a multiple of `a^2b^2c^2`. Here the coefficient of `a^9`
+    and `a^6b^3` of `G(x)` are `1` and `w` respectively.
 
-    Note that G'(x) = -3(2x-1)p(a)s(a)2s(a2-ab)2 <= 0. Hence x should be as large as possible, which
-    would be the root of -x^3+3x-1+w == 0.
+    Note that `G'(x) = -3(2x-1)p(a)s(a)2s(a2-ab)2 <= 0`. Hence x should be as large as possible, which
+    would be the root of `-x^3+3x-1+w == 0`.
 
     Examples
     --------
