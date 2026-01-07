@@ -205,7 +205,7 @@ class ProofTree:
 
     default_configs = {
         "mode": "fast",
-        "max_explore": 100,
+        "max_explore": 10000,
         "time_limit": 3600.,
         "select_quick_accept_threshold": 0.01,
     }
