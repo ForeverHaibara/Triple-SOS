@@ -90,11 +90,11 @@ def sum_y_exprs(y: List[Expr], exprs: List[Expr]) -> Expr:
 
 
 def rationalize_func(
-        poly: Union[Poly, Rational],
-        validation: Callable[[Rational], bool],
-        validation_initial: Optional[Callable[[Rational], bool]] = None,
-        direction: int = 0,
-    ) -> Optional[Rational]:
+    poly: Union[Poly, Rational],
+    validation: Callable[[Rational], bool],
+    validation_initial: Optional[Callable[[Rational], bool]] = None,
+    direction: int = 0,
+) -> Optional[Rational]:
     """
     Find a rational number near the roots of poly that satisfies certain conditions.
 

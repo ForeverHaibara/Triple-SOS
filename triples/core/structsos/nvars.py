@@ -1,99 +1,240 @@
-import sympy as sp
+from sympy import Add, factorial
+# from sympy.combinatorics.named_groups import SymmetricGroup
 
-from .utils import quadratic_weighting
+from .utils import Coeff, rationalize_func
 from ...sdp import congruence
-from ...utils import SymmetricSum, verify_symmetry
-from ...utils.roots import common_region_of_conics
+from ...utils import verify_symmetry
 
 def sos_struct_nvars_quartic_symmetric(poly, real=True):
     """
     Solve a homogeneous quartic symmetric polynomial inequality on real numbers for nvars >= 4.
     """
     if poly.total_degree() == 4 and verify_symmetry(poly, "sym"):
-        return _sos_struct_nvars_quartic_symmetric_sdp(poly)
+        return _sos_struct_nvars_quartic_symmetric_sdp(Coeff(poly))
 
 
-def _sos_struct_nvars_quartic_symmetric_sdp(poly):
+def _sos_struct_nvars_quartic_symmetric_sdp(coeff: Coeff):
     """
-    Solve a quartic symmetric polynomial inequality on real numbers for nvars >= 4.
-    This function does not check the degree & symmetry of the polynomial.
+    If a symmetric quartic polynomial is SOS, then it can be written in the form of
+    ```
+        PSD([Σ(a**2), (Σ(a))**2]) + Σ((a-b)**2*(PSD([a+b, Σ(a)]))) + λ * Σ((a-b)**2*(c-d)**2)
+    ```
+    where `Σ` denotes the complete symmetric sum.
 
-    Idea: if the polynomial is SOS, then it can be written as
-    SymmetricSum((a-b)**2 * quad_form1) + quad_form2, where quad_form2 is a quadratic form
-    with respect to SymmetricSum(a**2) and SymmetricSum(a*b). We perform symbolic SDP to find
-    quad_form1 and quad_form2 to be PSD.
+    This is an application of the isotypic decomposition of symmetry-adapted SDPs. Details of
+    SOS symmetric quartics can be found, for example, in [1].
+
+    The form corresponds to an SDP with 3 blocks: `2*2, 2*2, 1*1`. And there are 5 constraints
+    for the entries to match the coefficients. The degree of freedom is `3 + 3 + 1 - 5 = 2`.
+    The function finds `x, y` such that `mat1 >> 0, mat2 >> 0, λ >= 0`.
+
+    ## Computational Details
+
+    The seven bases of the SDP entries are:
+    ```
+    bases = [
+        1/n**2 * CyclicSum(a**2)**2,
+        1/n**3 * CyclicSum(a**2)*CyclicSum(a)**2,
+        1/n**4 * CyclicSum(a)**4,
+        (n-1)/(2*m*n**3)*SymmetricSum((a-b)**2)*CyclicSum(a)**2,
+        (n-1)/(2*m*n**2)*SymmetricSum((a-b)**2*(a+b))*CyclicSum(a),
+        (n-1)/(2*m*n)*SymmetricSum((a-b)**2*(a+b)**2),
+        (n-3)*(n-2)/(4*m*n)*SymmetricSum((a-b)**2*(c-d)**2),
+    ]
+    ```
+    where `m = n!` and `SymmetricSum` has `m` terms.
+
+    The target is to find `m1, m2, m3, m4, m5, m6, m7` such that
+    ```
+    sol = m1*bases[0] + 2*m2*bases[1] + m3*bases[2]
+        + m4*bases[3] + 2*m5*bases[4] + m6*bases[5]
+        + m7*bases[6]
+    ```
+    and `[[m1,m2],[m2,m3]] >> 0`, `[[m4,m5],[m5,m6]] >> 0`, `m7 >= 0`.
+    We let `m4 = x` and `m6 = y` to be the free variables.
+
+    The coefficients of the above bases in the basis of normalized newton sums
+    (p4, p31, p22, p211, p1111) are given by:
+    ```
+    [
+        [0, 0, 1, 0, 0],
+        [0, 0, 0, 1, 0],
+        [0, 0, 0, 0, 1],
+        [0, 0, 0, 1, -1],
+        [0, 1, 0, -1, 0],
+        [1, 0, -1, 0, 0],
+        [-1, 4, (n**2 - 3*n + 3)/(n - 1), -2*n**2/(n - 1), n**2/(n - 1)],
+    ]
+    ```
+
+    Reference
+    ----------
+    [1] Grigoriy Blekherman and Cordian Riener. 2012. Symmetric non-negative forms and
+    sums of squares. Discrete & Computational Geometry 65 (2012): 764-799.
     """
-    n = len(poly.gens)
-    if n <= 3:
-        return
-    m = sp.factorial(n - 2)
-    q1, q3, u = sp.Dummy('q1'), sp.Dummy('q3'), sp.Dummy('u')
-    degrees = [[4],[3,1],[2,2],[2,1,1],[1,1,1,1]]
-    degrees = [_ + [0]*(n - len(_)) for _ in degrees]
-    c4 ,c3, c22, c21, c1 = [poly.coeff_monomial(_) for _ in degrees]
+    n = len(coeff.gens)
+    if n < 4:
+        return None
+    m = int(factorial(n))
 
-    cq = (c4/(n-1) + c3 + c22/2 + (n-2)*(c21/2 + (n-3)*c1/24))/n
-    q2 = cq - q1/(n-1) - q3*(n-1)/4
-    x = (c4 - q1)/(2*m*(n-1))
-    cy = (2*q1 + q3 - c22)/4/m + x
-    y = cy/2 + (n-2)*u/2
-    v = (6*q3 - c1)/48/m
-    cr = ((c3 - 2*q2)/(2*m) + 2*x - cy)/(2*(n-2))
-    r = cr - u/2
+    # convert the polynomial to a linear combination of
+    # normalized newton sums: p4, p31, p22, p211, p1111
+    # and compute the coefficients
+    c4, c31, c22, c211, c1111 = [coeff(_ + (0,)*(n-len(_)))
+        for _ in [(4,), (3, 1), (2, 2), (2, 1, 1), (1, 1, 1, 1)]]
+    m, n = coeff.convert(m), coeff.convert(n)
+    cvec = coeff.as_matrix([[c4, c31, c22, c211, c1111]], (1, 5))
+    mat = coeff.as_matrix([
+        # these are coefficients of symmetric monomial functions
+        # represented in the basis of normalized newton sums
+        [n, 0, 0, 0, 0],
+        [-n, n**2, 0, 0, 0],
+        [-n/2, 0, n**2/2, 0, 0],
+        [n, -n**2, -n**2/2, n**3/2, 0],
+        [-n/4, n**2/3, n**2/8, -n**3/4, n**4/24]
+    ], (5, 5))
+    pvec = cvec * mat
+    p4, p31, p22, p211, p1111 = [coeff.wrap(_) for _ in pvec._rep.to_list_flat()]
 
-    constraints = [
-        u - v,
-        u + (n - 3)*v,
-        x + y,
-        x - y,
-        (u + (n - 3)*v) * (x + y) - 2*(n - 2)*r**2,
-        q1 * q3 - q2**2,
+
+    # for computing the entries of the SDP, see `compute_quad`
+    domain = coeff.domain
+    one = domain.one
+    coeffs = [
+        [0, -one/2, 1, 1, 0, 0, 0],
+        [-(n-2)**2/(n-1), (n**2-2*n+2)/(n-1), -n**2/(n-1), 0, -2, 1, 1],
+        [
+            (n**2*p4 + n*p22 - 3*n*p4 - p22 + 3*p4)/(n - 1),
+            -(2*n**2*p4 - n*p211 - n*p31 - 4*n*p4 + p211 + p31 + 4*p4)/(2*(n - 1)),
+            (n**2*p4 + n*p1111 - p1111)/(n - 1),
+            0,
+            (p31 + 4*p4)/2,
+            0,
+            -p4
+        ]
     ]
 
-    def _create_quad(x, y, u, v, r):
-        mat = [[v for i in range(n)] for j in range(n)]
-        mat[0][0] = mat[1][1] = x
-        mat[1][0] = mat[0][1] = y
-        for i in range(2,n):
-            mat[0][i] = mat[1][i] = mat[i][1] = mat[i][0] = r
-            mat[i][i] = u
-        mat = sp.Matrix(mat)
-        return mat
+    def compute_quad(x, y):
+        """
+        Require `x, y` so that `mat1 >> 0, mat2 >> 0, m7 >= 0`.
 
-    def _get_solution(x, y, u, v, r):
-        a, b = poly.gens[:2]
-        sol = None
-        # fallback to default (not expected to be used)
-        cong = congruence(_create_quad(x, y, u, v, r))
-        if cong is not None:
-            vec = sp.Matrix(list(poly.gens))
-            sol = sum(i * line**2 for i, line in zip(cong[1], cong[0]*vec)).together()
-            sol = SymmetricSum((a-b)**2 * sol, poly.gens)
+        * The feasible set of det(mat1) >= 0 is in the form of
+        `-(x-4*y)**2 + Bx + Cy + D >= 0` (parabola).
+        * The feasible set of det(mat2) >= 0 is in the form of
+        `xy >= (2*y + E)**2` where `y >= 0` (half hyperbola).
+        * The feasible set of m7 >= 0 is in the form of
+        `y >= p4` (half plane).
+        """
+        entries = []
+        for cx, cy, c0 in zip(*coeffs):
+            # all entries computable by x and y
+            entries.append(cx * x + cy * y + c0)
+        m1, m2, m3, m4, m5, m6, m7 = entries
+        mat1 = coeff.as_matrix([[m1, m2], [m2, m3]], (2, 2))
+        mat2 = coeff.as_matrix([[m4, m5], [m5, m6]], (2, 2))
+        return mat1, mat2, m7
+
+    def valid_sol(x, y):
+        x, y = coeff.convert(x), coeff.convert(y)
+        mat1, mat2, m7 = compute_quad(x, y)
+        if m7 < 0:
+            return None
+        cong1 = congruence(mat1)
+        cong2 = congruence(mat2)
+        if cong1 is None or cong2 is None:
+            return None
+        return cong1, cong2, m7
+
+    def make_sol(x, y):
+        valid = valid_sol(x, y)
+        if valid is None:
+            return None
+        cong1, cong2, m7 = valid
+
+        # pg = SymmetricGroup(len(coeff.gens))
+        # SymmetricSum = lambda expr: CyclicSum(expr, coeff.gens, pg, evaluate=False)
+        SymmetricSum = coeff.symmetric_sum
+        a, b, c, d = coeff.gens[:4]
+
+        v = Add(*coeff.gens)
+        sol = [
+            # s * (u[0]/m*SymmetricSum(a**2) + u[1]/m**2*SymmetricSum(a)**2).together()**2
+            #     for u, s in zip(cong1[0].tolist(), cong1[1])
+            s/m**2 * (SymmetricSum((u[0] + u[1]/n)*a**2 + u[1]/n*(n-1)*a*b)).together()**2
+                for u, s in zip(cong1[0].tolist(), cong1[1])
+        ] + [
+            (n-1)/(2*m*n)*s * SymmetricSum((a-b)**2*(u[1]*(a+b) + u[0]/n*v).together()**2)
+                for u, s in zip(cong2[0].tolist(), cong2[1])
+        ] + [
+            (n-3)*(n-2)/(4*m*n)*m7 * SymmetricSum((a-b)**2*(c-d)**2)
+        ]
+        return Add(*sol)
+
+    # Find x, y such that valid_sol(x, y) is not None
+    # naive try:
+    sol = make_sol(0, 0)
+    if sol is not None:
         return sol
-    def _get_solution2(q1, q2, q3):
-        a, b = poly.gens[:2]
-        sol2 = quadratic_weighting(coeff, q1, q2*2, q3,
-                mapping = lambda x: \
-                    SymmetricSum((a**2/(m*(n-1))*x[0] + a*b/(m*2)*x[1]).together(), poly.gens)**2)
-        return sol2
 
-    u_candidates = [2*cr, (2*x-cy)/(n-2), v]
+    if p4 >= 0:
+        # try y == p4 such that m7 == 0
 
-    # the following make constraints[-2]==0, but it is not linear but fractional
-    # u_.candidates.append(-(((n-3)*v*(2*x+cy)-4*(n-2)*cr**2)/((2*x+cy)+4*(n-2)*cr+(n-2)*(n-3)*v)))
+        # det(M2) == 0 and m7 == 0
+        if p4 != 0:
+            sol = make_sol(p31**2/4/p4, p4)
+            if sol is not None:
+                return sol
 
-    for u_ in u_candidates:
-        cons = [_.subs(u, u_).as_poly(q1, q3) for _ in constraints]
-        q1q3 = common_region_of_conics(cons)
-        if q1q3 is not None:
-            q1_, q3_, u_ = q1q3[0], q1q3[1], u_.subs({q1: q1q3[0], q3: q1q3[1]})
-            if not u_.is_finite:
-                continue
-            params = {u: u_, q1: q1_, q3: q3_}
-            params = [_.subs(params) for _ in [x, y, u, v, r, q1, q2, q3]]
-            sol = _get_solution(*params[:5])
-            sol2 = _get_solution2(*params[5:])
-            if sol is not None and sol2 is not None:
-                return sol + sol2
-        # print('Constraints =', [_.subs(params) for _ in constraints], 'PSD =', mat.is_positive_semidefinite)
-    return None
+        # select the symmeric axis of det(M1)
+        sol = make_sol(p211 + 2*p22 + p31 + 2*p4, p4)
+        if sol is not None:
+            return sol
+
+    # let x == (-4*y + p31 + 4*p4)**2/(4*y) and det(M1) >= 0
+    # which is a cubic polynomial >= 0
+
+    a = coeff.gens[0]
+
+    # this is the (numerator of the) determinant of `mat1`
+    # when `x == (-4*y + p31 + 4*p4)**2/(4*y)`
+    det = coeff.from_list([
+        -64*(n - 2)**2*(p1111 + p211 + p22 + p31 + p4),
+        16*(4*n**2*p1111*p4 + 4*n**2*p211*p4 + 4*n**2*p22*p4 + 4*n**2*p31*p4 + 4*n**2*p4**2 \
+            + 4*n*p1111*p22 - 12*n*p1111*p4 - n*p211**2 - 6*n*p211*p31 - 24*n*p211*p4 \
+            - 8*n*p22*p31 - 32*n*p22*p4 - 9*n*p31**2 - 48*n*p31*p4 - 48*n*p4**2 - 4*p1111*p22 \
+            + 12*p1111*p4 + p211**2 + 6*p211*p31 + 24*p211*p4 + 8*p22*p31 + 32*p22*p4 \
+            + 9*p31**2 + 48*p31*p4 + 48*p4**2),
+        8*(n - 1)*(p31 + 4*p4)**2*(p211 + 2*p22 + 3*p31 + 6*p4),
+        -(n - 1)*(p31 + 4*p4)**4
+    ], (a,)).as_poly()
+
+    detdiff = det.diff()
+    detgcd = det.gcd(detdiff)
+    if detgcd.total_degree() == 1:
+        y = detgcd.rep.TC() / detgcd.rep.LC() * -1
+        x = (-4*y + p31 + 4*p4)**2/(4*y)
+        sol = make_sol(x, y)
+        if sol is not None:
+            return sol
+
+    def validate_init(y):
+        if y <= 0 or y <= p4:
+            return False
+        x = (-4*y + p31 + 4*p4)**2/(4*y)
+        x, y = coeff.convert(x), coeff.convert(y)
+        mat1, mat2, m7 = compute_quad(x, y)
+        rep = mat1._rep.rep.to_list()
+        return coeff.convert(rep[0][0]) >= 0 and coeff.convert(rep[1][1]) >= 0
+
+    y = rationalize_func(det,
+        lambda y: y > 0 and (valid_sol((-4*y + p31 + 4*p4)**2/(4*y), y) is not None),
+        validation_initial = validate_init,
+        direction = 1
+    )
+    # TODO: apply the cubic root isolation here
+    if y is None:
+        return None
+    x = (-4*y + p31 + 4*p4)**2/(4*y)
+    sol = make_sol(x, y)
+    if sol is not None:
+        return sol

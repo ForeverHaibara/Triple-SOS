@@ -6,6 +6,7 @@ from sympy.combinatorics import PermutationGroup, Permutation
 
 from .cubic import quaternary_cubic_symmetric, _quaternary_cubic_partial_symmetric
 from .quartic import quaternary_quartic
+from .quartic_symmetric import quaternary_quartic_symmetric
 from .quintic import quaternary_quintic_symmetric
 
 from ..utils import Coeff, PolynomialNonpositiveError, PolynomialUnsolvableError
@@ -19,7 +20,7 @@ SOLVERS_CYCLIC = {
 
 SOLVERS_SYMMETRIC = {
     3: quaternary_cubic_symmetric,
-    4: quaternary_quartic,
+    4: quaternary_quartic_symmetric,
     5: quaternary_quintic_symmetric,
 }
 
