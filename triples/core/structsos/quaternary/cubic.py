@@ -1,4 +1,4 @@
-from sympy import Poly, Add
+from sympy import Add
 
 from .utils import Coeff, rationalize_func
 from ..sparse import sos_struct_quadratic
@@ -7,10 +7,20 @@ from ....utils import CyclicProduct as _CyclicProduct
 
 def quaternary_cubic_symmetric(coeff: Coeff, real = True):
     """
-    Solve quaternary symmetric cubic polynomials. Symmetry is not checked here.
+    Solve quaternary symmetric cubic forms. Symmetry is not checked here.
 
-    References
-    -----------
+    See the code below or [1] for the direct proof.
+
+    Examples
+    --------
+    => s(3a3-2a2(b+c+d)+3bcd)
+
+    => s(a3-a2(b+c+d)+3bcd)
+
+    => s(2a2(b+c+d)-2bcd)
+
+    Reference
+    ---------
     [1] https://tieba.baidu.com/p/9033429329
     """
     a, b, c, d = coeff.gens
