@@ -16,17 +16,19 @@ def sos_struct_quartic(coeff, real = True):
     Solve cyclic quartic problems.
 
     Core theorem:
-    If f(a,b,c) = s(a4 + pa3b + na2b2 + qab3 - (1+p+n+q)a2bc) >= 0 holds for all a,b,c >= 0,
+    If `f(a,b,c) = s(a4 + pa3b + na2b2 + qab3 - (1+p+n+q)a2bc) >= 0` holds for all `a,b,c >= 0`,
     then it must be one of the following two cases:
 
-    A. If [3*(1+n) - (p*p+p*q+q*q)] >= 0, then
+    A. If `[3*(1+n) - (p*p+p*q+q*q)] >= 0`, then
+    ```
         f(a,b,c) = s((a2 - b2 + (p+2*q)/3*(a*c-a*b) - (2*p+q)/3*(b*c-a*b))^2)
                     + (3*(1+n)-(p*p+p*q+q*q))/6 * s(a^2*(b-c)^2)
+    ```
 
-    B. There exists a positive root of the quartic 2*u^4 + p*u^3 - q*u - 2 = 0,
-        such that t = ((2*q+p)*u^2 + 6*u + (2*p+q)) / (2*(u^4 + u^2 + 1)) >= 0
+    B. There exists a positive root of the quartic `2*u^4 + p*u^3 - q*u - 2 = 0`,
+        such that `t = ((2*q+p)*u^2 + 6*u + (2*p+q)) / (2*(u^4 + u^2 + 1)) >= 0`
         and the following polynomial
-            g(a,b,c) = f(a,b,c) - t * s(ab(a-c - u(b-c))^2)
+            `g(a,b,c) = f(a,b,c) - t * s(ab(a-c - u(b-c))^2)`
         must satisfy the condition A.
 
     Examples

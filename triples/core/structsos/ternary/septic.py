@@ -1,5 +1,4 @@
-import sympy as sp
-from sympy import Poly, Symbol, Rational, Float, Add, sqrt
+from sympy import Poly, Rational, Float, Add, sqrt
 
 from .quartic import sos_struct_quartic
 from .septic_symmetric import sos_struct_septic_symmetric
@@ -9,7 +8,7 @@ from .utils import (
     sos_struct_handle_uncentered
 )
 
-def repeated_div(p, q):
+def repeated_div(p: Poly, q: Poly):
     """Compute `p = q**k*r` so that q does not divide r. Return r."""
     div = p.div(q)
     while div[1].is_zero and (not p.is_zero):
@@ -18,7 +17,7 @@ def repeated_div(p, q):
     return p
 
 def _quartic_det(m, p, n, q):
-    return 3*m*(m+n) - (p**2+p*q+q**2)
+    return 3*m*(m + n) - (p**2 + p*q + q**2)
 
 
 def _fast_solve_quartic(coeff: Coeff, m, p, n, q, rem = 0, mul_abc = True):
@@ -56,6 +55,9 @@ def _fast_solve_quartic(coeff: Coeff, m, p, n, q, rem = 0, mul_abc = True):
 
 
 def sos_struct_septic(coeff, real = True):
+    if all(coeff((i,j,k)) == coeff((j,i,k)) for (i,j,k) in ((6,1,0),(5,2,0),(4,3,0),(4,2,1))):
+        return sos_struct_septic_symmetric(coeff, real = real)
+
     if coeff((7,0,0)) == 0 and coeff((6,1,0)) == 0 and coeff((6,0,1)) == 0:
         if coeff((5,2,0)) == 0 and coeff((5,0,2)) == 0:
             # star
@@ -63,9 +65,6 @@ def sos_struct_septic(coeff, real = True):
         else:
             # hexagon
             return _sos_struct_septic_hexagon(coeff)
-
-    if all(coeff((i,j,k)) == coeff((j,i,k)) for (i,j,k) in ((6,1,0),(5,2,0),(4,3,0),(4,2,1))):
-        return sos_struct_septic_symmetric(coeff, real = real)
 
     return None
 
@@ -181,123 +180,148 @@ def _sos_struct_septic_hexagon(coeff: Coeff):
     if coeff((5,1,1)) < 0 and coeff((5,1,1))**2 > coeff((5,2,0)) * coeff((5,0,2)) * 4:
         return None
 
-    a, b, c = coeff.gens
-    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
 
     if coeff((5,2,0)) == coeff((2,5,0)):
         if coeff((5,2,0)) == 0 and coeff((2,5,0)) == 0:
             return _sos_struct_septic_star(coeff)
 
-        # Try some quintic polynomial * s(ab):
-        # s(ab)s(c(a^2-b^2+u(ab-ac)+v(bc-ab))^2) to eliminate the border
-        # See more details in _sos_struct_quintic_hexagon
-
-
-        # Theorem 1.
-        # When Det = 64*p^3-16*p^2*q^2+8*p*q*z^2+32*p*q*z-256*p*q+64*q^3-z^4-24*z^3-192*z^2-512*z >= 0,
-        # we have f(a,b,c) = s(a^4b + pa^3b^2 + qa^2b^3 + ab^4 + za^3bc - (p+q+z+2)a^2b^2c) >= 0.
-
-        # Proof: Take w = z + 8, u = 4(2p^2-qw)/(w^2-4pq), v = 4(2q^2-pw)/(w^2-4pq),
-        # and t = (4pq-w^2)^2/(8(2p+2q+w)(3(p-q)^2+(w-p-q)^2)),
-        # then 1 - t = Det/... >= 0, and we have
-        # f(a,b,c) = t*sum c(a^2-b^2+u(ab-ac)+v(bc-ab))^2 + (1 - t)*sum c(a-b)^4 >= 0.
-
-        coeff410 = coeff((5,2,0))
-
-        p, q, z = [coeff((4,3,0)) / coeff410, coeff((3,4,0)) / coeff410, Symbol('z')]
-        m0, p0, n0, q0 = [coeff((5-i,1+i,1)) for i in range(4)]
-
-        # extract the minimum root, which is the lower bound of z
-        det = 64*p**3 - 16*p**2*q**2 + 8*p*q*z**2 + 32*p*q*z - 256*p*q + 64*q**3 - z**4 - 24*z**3 - 192*z**2 - 512*z
-        det = det.as_poly(z, extension = True)
-        if not coeff.is_rational:
-            # First check if there is exact solution,
-            # in which case after the subtraction, the quartic form is tight.
-            dm, dp, dn, dq = 2*coeff410, (p+z+1)*coeff410, -(z+2)*coeff410, (q+z+1)*coeff410
-            m1, p1, n1, q1 = m0 - dm, p0 - dp, n0 - dn, q0 - dq
-            det2 = (3*m1*(m1+n1) - (p1**2+p1*q1+q1**2)).as_poly(z)
-            # GCD does not work. However, det2 is quadratic, we can solve z directly.
-            for z_ in sp.polys.roots(det2):
-                z_ = sp.sqrtdenest(z_)
-                if z_.is_real and det(z_) == 0:
-                    z = z_
-                    break
-
-        if isinstance(z, Symbol):
-            z = min(nroots(det, method = 'factor', real = True))
-
-        # check whether we succeed if we subtract s(ab)s(a^4b + pa^3b^2 + qa^2b^3 + ab^4 + za^3bc - (p+q+z+2)a^2b^2c)
-        # Theorem 2.
-        # Denote f = a^2-b^2+u(ab-ac)+v(bc-ab)
-        # s(ab)s(cf(a,b,c)^2) - 2abcs(f(a,b,c)^2) = s(c(af(b,c,a)+bf(c,a,b))^2) >= 0
-        # Especially, s(c(a-b)4)s(ab) - 4abcs(a2-ab)2 = s(a(b-c)2(a2-2ab-2ac+3bc)2) >= 0
-
-
-        def _compute_mpnq(z):
-            w = z + 8
-            g, u, v = [w**2-4*p*q, 4*(2*p**2-q*w), 4*(2*q**2-p*w)]
-            denom = 1 / (8*(2*p + 2*q + w)*(3*(p-q)**2 + (w-p-q)**2))
-            dm, dp, dn, dq = [2*coeff410, (p+z+1)*coeff410, -(z+2)*coeff410, (q+z+1)*coeff410]
-
-            # additionally restore 2abcs(f(a,b,c)^2)
-            t1 = 4 * denom * coeff410
-            dm, dp, dn, dq = [dm - t1*g**2, dp - t1*g*(u-2*v), dn - t1*(u**2-u*v+v**2-g**2), dq - t1*g*(v-2*u)]
-
-            # restore 4abcs(a2-ab)2
-            t2 = (1 - g**2 * denom) * coeff410 * 4
-            dm, dp, dn, dq = dm - t2, dp + 2*t2, dn - 3*t2, dq + 2*t2
-
-            m1, p1, n1, q1 = m0 - dm, p0 - dp, n0 - dn, q0 - dq
-            det = (3*m1*(m1+n1) - (p1**2+p1*q1+q1**2))
-            return m1, p1, n1, q1, det
-
-        def _verify(z, check_quintic_det = True):
-            if p == q and z + 8 == p + q:
-                return False
-            if check_quintic_det:
-                det_quintic = 64*p**3 - 16*p**2*q**2 + 8*p*q*z**2 + 32*p*q*z - 256*p*q + 64*q**3 - z**4 - 24*z**3 - 192*z**2 - 512*z
-                if det_quintic < 0:
-                    return False
-            m1, p1, n1, q1, det = _compute_mpnq(z)
-            if m1 > 0 and det >= 0:
-                return True
-            if m1 == 0 and p1 >= 0 and q1 >= 0 and (n1 >= 0 or 4*p1*q1 >= n1**2):
-                return True
-            return False
-
-        # print(_compute_mpnq(z))
-        if _verify(z, check_quintic_det = False):
-            if isinstance(z, Float):
-                for z_ in rationalize_bound(z, direction = 1, compulsory = True):
-                    if _verify(z_):
-                        z = z_
-                        break
-                else:
-                    return None
-
-            m1, p1, n1, q1, det = _compute_mpnq(z)
-            # print('z =', z, '\n(m,p,n,q) =', (m1,p1,n1,q1), '\ndet =', det)
-            w = z + 8
-            g, u, v = [w**2-4*p*q, 4*(2*p**2-q*w), 4*(2*q**2-p*w)]
-            denom = 1 / (8*(2*p + 2*q + w)*(3*(p-q)**2 + (w-p-q)**2))
-            f = lambda a,b,c: g*(a**2-b**2)+u*(a*b-a*c)+v*(b*c-a*b)
-
-            y = [denom * coeff410, (1 - g**2*denom) * coeff410]
-            exprs = [
-                CyclicSum(c*(a*f(b,c,a)+b*f(c,a,b)).expand()**2),
-                CyclicSum(a*(b-c)**2*(a**2-2*a*b-2*a*c+3*b*c)**2)
-            ]
-
-            main_solution = sum_y_exprs(y, exprs)
-            remain_solution = _fast_solve_quartic(coeff, m1, p1, n1, q1, coeff)
-            if remain_solution is not None:
-                return main_solution + remain_solution
+        solution = _sos_struct_septic_hexagon_subtract_quintic(coeff)
+        if solution is not None:
+            return solution
 
     return _sos_struct_septic_hexagon_sdp(coeff)
 
 
 def _sos_struct_septic_star(coeff: Coeff):
     return _sos_struct_septic_star_sdp(coeff)
+
+
+def _sos_struct_septic_hexagon_subtract_quintic(coeff: Coeff):
+    """
+    Solve easy cases of septic hexagons by subtracting a quintic polynomial * s(ab):
+    `s(ab)s(c(a^2-b^2+u(ab-ac)+v(bc-ab))^2)` to eliminate the border
+    See more details in `_sos_struct_quintic_hexagon`
+
+
+    Theorem 1.
+    When `Det = 64*p^3-16*p^2*q^2+8*p*q*z^2+32*p*q*z-256*p*q+64*q^3-z^4-24*z^3-192*z^2-512*z >= 0`,
+    we have `f(a,b,c) = s(a^4b + pa^3b^2 + qa^2b^3 + ab^4 + za^3bc - (p+q+z+2)a^2b^2c) >= 0`.
+
+    Proof: Take `w = z + 8, u = 4(2p^2-qw)/(w^2-4pq), v = 4(2q^2-pw)/(w^2-4pq)`,
+    and `t = (4pq-w^2)^2/(8(2p+2q+w)(3(p-q)^2+(w-p-q)^2))`,
+    then `1 - t = Det/... >= 0`, and we have
+    `f(a,b,c) = t*sum c(a^2-b^2+u(ab-ac)+v(bc-ab))^2 + (1 - t)*sum c(a-b)^4 >= 0`.
+    """
+    coeff410 = coeff((5,2,0))
+    if coeff410 <= 0 or coeff410 != coeff((2,5,0)):
+        return None
+
+    a, b, c = coeff.gens
+    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+
+    p, q = coeff((4,3,0)) / coeff410, coeff((3,4,0)) / coeff410
+    m0, p0, n0, q0 = [coeff((5-i,1+i,1)) for i in range(4)]
+
+    # extract the minimum root, which is the lower bound of z
+    disc = coeff.from_list([
+        -1,
+        -24,
+        8*p*q - 192,
+        32*p*q - 512,
+        64*p**3 - 16*p**2*q**2 - 256*p*q + 64*q**3
+    ], (a,)).as_poly()
+
+    # First check if there is exact solution,
+    # in which case after the subtraction, the quartic form is tight.
+    ring = coeff.domain[a]
+    _z = ring.gens[0]
+    dm, dp, dn, dq = 2, p + _z + 1, -(_z + 2), q + _z + 1
+    dm, dp, dn, dq = [_ * coeff410 for _ in (dm, dp, dn, dq)]
+    m1, p1, n1, q1 = m0 - dm, p0 - dp, n0 - dn, q0 - dq
+    disc2 = 3*m1*(m1 + n1) - (p1**2 + p1*q1 + q1**2)
+    disc2 = Poly.from_dict(disc2.to_dict(), a, domain=coeff.domain)
+
+    # check whether we succeed if we subtract s(ab)s(a^4b + pa^3b^2 + qa^2b^3 + ab^4 + za^3bc - (p+q+z+2)a^2b^2c)
+    # Theorem 2.
+    # Denote f = a^2-b^2+u(ab-ac)+v(bc-ab)
+    # s(ab)s(cf(a,b,c)^2) - 2abcs(f(a,b,c)^2) = s(c(af(b,c,a)+bf(c,a,b))^2) >= 0
+    # Especially, s(c(a-b)4)s(ab) - 4abcs(a2-ab)2 = s(a(b-c)2(a2-2ab-2ac+3bc)2) >= 0
+
+    def _compute_mpnq(z):
+        w = z + 8
+        g, u, v = w**2 - 4*p*q, 4*(2*p**2 - q*w), 4*(2*q**2 - p*w)
+        denom = 1 / (8*(2*p + 2*q + w)*(3*(p - q)**2 + (w - p - q)**2))
+        dm, dp, dn, dq = 2*coeff410, (p+z+1)*coeff410, -(z+2)*coeff410, (q+z+1)*coeff410
+
+        # additionally restore 2abcs(f(a,b,c)^2)
+        t1 = 4 * denom * coeff410
+        dm, dp, dn, dq = dm - t1*g**2, dp - t1*g*(u-2*v), dn - t1*(u**2-u*v+v**2-g**2), dq - t1*g*(v-2*u)
+
+        # restore 4abcs(a2-ab)2
+        t2 = (1 - g**2 * denom) * coeff410 * 4
+        dm, dp, dn, dq = dm - t2, dp + 2*t2, dn - 3*t2, dq + 2*t2
+
+        m1, p1, n1, q1 = m0 - dm, p0 - dp, n0 - dn, q0 - dq
+        disc = (3*m1*(m1 + n1) - (p1**2 + p1*q1 + q1**2))
+        return m1, p1, n1, q1, disc
+
+    def _verify(z, check_quintic_disc = True):
+        if z is None:
+            return False
+        z = coeff.convert(z)
+        if p == q and z + 8 == p + q:
+            return False
+        if check_quintic_disc:
+            disc_quintic = 64*p**3 - 16*p**2*q**2 + 8*p*q*z**2 + 32*p*q*z - 256*p*q \
+                + 64*q**3 - z**4 - 24*z**3 - 192*z**2 - 512*z
+            if disc_quintic < 0:
+                return False
+        m1, p1, n1, q1, disc = _compute_mpnq(z)
+        if m1 > 0 and disc >= 0:
+            return True
+        if m1 == 0 and p1 >= 0 and q1 >= 0 and (n1 >= 0 or 4*p1*q1 >= n1**2):
+            return True
+        return False
+
+    z = None
+    # GCD does not work. However, disc2 is quadratic, we can solve z directly.
+    for factor, mul in disc2.factor_list()[1]:
+        if factor.total_degree() == 1:
+            _z = -coeff.convert(factor.rep.TC() / factor.rep.LC())
+            if _verify(_z):
+                z = _z
+                break
+
+    if z is None:
+        rts = nroots(disc, method = 'factor', real = True)
+        if rts:
+            z = min(rts)
+
+    # print(_compute_mpnq(z))
+    if _verify(z, check_quintic_disc = False):
+        if isinstance(z, Float):
+            for _z in rationalize_bound(z, direction = 1, compulsory = True):
+                if _verify(_z):
+                    z = _z
+                    break
+            else:
+                return None
+
+        z = coeff.convert(z)
+        m1, p1, n1, q1, disc = _compute_mpnq(z)
+        # print('z =', z, '\n(m,p,n,q) =', (m1,p1,n1,q1), '\ndisc =', disc)
+        w = z + 8
+        g, u, v = w**2 - 4*p*q, 4*(2*p**2 - q*w), 4*(2*q**2 - p*w)
+        denom = 1 / (8*(2*p + 2*q + w)*(3*(p - q)**2 + (w - p - q)**2))
+        f = lambda a, b, c: g*(a**2 - b**2) + u*(a*b - a*c) + v*(b*c - a*b)
+
+        main_solution = Add(
+            denom * coeff410 * CyclicSum(c*(a*f(b,c,a) + b*f(c,a,b)).expand()**2),
+            (1 - g**2*denom) * coeff410 * CyclicSum(a*(b-c)**2*(a**2 - 2*a*b - 2*a*c + 3*b*c)**2)
+        )
+        remain_solution = _fast_solve_quartic(coeff, m1, p1, n1, q1, coeff)
+        if remain_solution is not None:
+            return main_solution + remain_solution
 
 
 @sos_struct_handle_uncentered
@@ -362,6 +386,7 @@ def _sos_struct_septic_hexagon_sdp(coeff: Coeff):
 
     success = False
     S_norm = S.l1_norm()
+    u_, v_ = None, None
     for v_ in nroots(res, method='factor', real=True, nonnegative=True):
         for u_ in nroots(R.eval(1, v_), method='factor', real=True, nonnegative=True):
             if u_ * v_ <= 1:
@@ -372,9 +397,9 @@ def _sos_struct_septic_hexagon_sdp(coeff: Coeff):
         if success:
             break
 
+    # print('success:', success, '(u, v) =', (u_, v_))
     if not success:
         return
-    # print('(u, v) =', (u_, v_))
 
     def _get_m01(u, v):
         """
@@ -469,7 +494,7 @@ def _sos_struct_septic_star_sdp(coeff: Coeff):
     """
     Solve `F(a,b,c) = s(ua4b3 + va3b4) + abcf(a,b,c) >= 0` where f is degree 4.
 
-    Assume F(a,b,c) = CyclicSum(a*vec' * M * vec) + a*b*c*g(a,b,c)
+    Assume `F(a,b,c) = CyclicSum(a*vec' * M * vec) + a*b*c*g(a,b,c)`
     where `g` has degree 4, `vec = [(a*c**2-a*b*c), (a*b**2-a*b*c), (b*c**2-a*b*c), (c*b**2-a*b*c)]`
     and
 
