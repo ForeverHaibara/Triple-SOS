@@ -24,6 +24,10 @@ class DomainExpr:
         self._coeff = coeff
 
     @property
+    def coeff(self) -> Coeff:
+        return self._coeff
+
+    @property
     def gens(self) -> Tuple[Symbol, ...]:
         return self._coeff.gens
 

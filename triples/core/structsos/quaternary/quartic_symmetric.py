@@ -89,7 +89,7 @@ def _quaternary_quartic_symmetric_sdp(coeff):
 
     Examples
     --------
-    :: sym = "sym"
+    :: sym = "sym", ineqs = []
 
     => s(2a2-3ab)2
 
@@ -201,7 +201,7 @@ def _quaternary_quartic_symmetric_real_full(coeff: Coeff):
 
     Examples
     --------
-    :: sym = "sym"
+    :: sym = "sym", ineqs = []
 
     => s(a(a-b)(a-c)(a-d))/6 + abcd    # Lax-Lax form when e = 0 [1]
 
