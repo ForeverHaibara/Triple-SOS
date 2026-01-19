@@ -1,7 +1,6 @@
 from sympy import Add
 
 from .utils import Coeff, rationalize_func
-from ..sparse import sos_struct_quadratic
 from ....utils import CyclicSum as _CyclicSum
 from ....utils import CyclicProduct as _CyclicProduct
 
@@ -88,6 +87,7 @@ def _quaternary_cubic_partial_symmetric(coeff: Coeff, real = False):
 
     c100, c000, c200, c110, c111 = [coeff(_) for _ in [(1,0,0,2), (0,0,0,3), (2,0,0,1), (1,1,0,1), (1,1,1,0)]]
     if c111 == 0:
+        from ..nvars.quadratic import sos_struct_quadratic
         return sos_struct_quadratic(coeff)
     elif c111 < 0 or c000 < 0:
         return None

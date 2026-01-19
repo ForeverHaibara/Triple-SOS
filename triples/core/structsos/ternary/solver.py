@@ -39,10 +39,9 @@ SOLVERS_ACYCLIC = {
 def _structural_sos_3vars_cyclic(
     coeff: Union[Poly, Coeff, Dict],
     real: bool = True
-):
+) -> Optional[Expr]:
     """
     Internal function to solve a 3-var homogeneous cyclic polynomial using structural SOS.
-    The function assumes the polynomial is wrt. (a, b, c).
     It does not check the homogeneous / cyclic property of the polynomial to save time.
     """
     if not isinstance(coeff, Coeff):
@@ -58,10 +57,9 @@ def _structural_sos_3vars_cyclic(
 def _structural_sos_3vars_acyclic(
     coeff: Union[Poly, Coeff, Dict],
     real: bool = True
-):
+) -> Optional[Expr]:
     """
     Internal function to solve a 3-var homogeneous acyclic polynomial using structural SOS.
-    The function assumes the polynomial is wrt. (a, b, c).
     It does not check the homogeneous / cyclic property of the polynomial to save time.
     """
     if not isinstance(coeff, Coeff):
@@ -73,11 +71,13 @@ def _structural_sos_3vars_acyclic(
         real=real
     )
 
-def structural_sos_3vars(poly, ineq_constraints: Dict[Poly, Expr] = {}, eq_constraints: Dict[Poly, Expr] = {}) -> Optional[Expr]:
+def structural_sos_3vars(
+    poly,
+    ineq_constraints: Dict[Poly, Expr] = {},
+    eq_constraints: Dict[Poly, Expr] = {}
+) -> Optional[Expr]:
     """
     Main function of structural SOS for 3-var homogeneous polynomials.
-    It first assumes the polynomial has variables (a,b,c), where a,b,c >= 0 and
-    latter substitutes the variables with the original ones.
     """
     if len(poly.gens) != 3: # should not happen
         raise ValueError("structural_sos_3vars only supports 3-var polynomials.")

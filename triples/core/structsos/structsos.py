@@ -3,14 +3,13 @@ from typing import List, Dict, Union, Optional
 from sympy import Poly, Expr, Integer, construct_domain
 from sympy.polys.polyerrors import BasePolynomialError
 
-from .utils import Coeff, has_gen, clear_free_symbols
+from .utils import Coeff, clear_free_symbols
 from .solution import SolutionStructural
-from .nvars import sos_struct_nvars_quartic_symmetric
 from .constrained import structural_sos_constrained
-from .sparse import sos_struct_linear, sos_struct_quadratic
-from .ternary import structural_sos_3vars
-from .quaternary import structural_sos_4vars
-from .pivoting import structural_sos_2vars
+from .pivoting    import structural_sos_2vars
+from .ternary     import structural_sos_3vars
+from .quaternary  import structural_sos_4vars
+from .nvars       import structural_sos_nvars
 from ..preprocess import ProofNode, SolvePolynomial
 
 from ..problem import ProblemComplexity
@@ -116,9 +115,7 @@ def _structural_sos(poly: Poly, ineq_constraints: Dict[Poly, Expr] = {}, eq_cons
         solution = structural_sos_4vars(poly, ineq_constraints, eq_constraints)
 
     if solution is None and nvars > 3:
-        solution = sos_struct_nvars_quartic_symmetric(poly)
-    if solution is None and nvars > 3 and d == 2:
-        solution = sos_struct_quadratic(poly)
+        solution = structural_sos_nvars(poly, ineq_constraints, eq_constraints)
 
     if solution is None:
         solution = structural_sos_constrained(poly, ineq_constraints, eq_constraints)

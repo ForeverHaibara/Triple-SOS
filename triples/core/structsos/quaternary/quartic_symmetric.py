@@ -103,7 +103,7 @@ def _quaternary_quartic_symmetric_sdp(coeff):
 
     => s(26a4+(236-244*sqrt(2))a3b+(373-198*sqrt(2))a2b2+(1444-1036*sqrt(2))a2bc+(297-202*sqrt(2))abcd)
     """
-    from ..nvars import _sos_struct_nvars_quartic_symmetric_sdp
+    from ..nvars.quartic import _sos_struct_nvars_quartic_symmetric_sdp
     return _sos_struct_nvars_quartic_symmetric_sdp(coeff)
 
 

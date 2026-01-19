@@ -1,9 +1,6 @@
 from sympy import Add
-from sympy import MutableDenseMatrix as Matrix
 
-from .utils import (
-    Coeff, CommonExpr, congruence, sum_y_exprs
-)
+from .utils import Coeff, CommonExpr
 from ..utils import congruence_solve
 
 def sos_struct_quadratic(coeff: Coeff, real = True):

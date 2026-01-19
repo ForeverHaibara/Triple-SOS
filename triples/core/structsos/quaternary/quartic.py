@@ -1,4 +1,4 @@
-from sympy import Poly, Symbol, Add
+from sympy import Add
 
 from .utils import Coeff, quadratic_weighting, intervals
 
@@ -14,7 +14,7 @@ def _quaternary_quartic_fluroite(coeff: Coeff, real=True):
 
     `s(?a2b2+?a2bc+?a2bd+?a2c2+?a2cd+?abcd) >= 0`
 
-    where a, b, c, d are the coefficients of the polynomial.
+    where a, b, c, d are the generators of the polynomial.
 
     Observe that
     `s((x(dc-ab+bc-da)+y(dc-ab-bc+da)+z(cd-da)+w/2(ac-bd))2)-s((z(a-c)(b-d)+w(ac-bd))2)/4
@@ -29,7 +29,8 @@ def _quaternary_quartic_fluroite(coeff: Coeff, real=True):
     """
     if any(coeff(_) for _ in ((4,0,0,0),(3,1,0,0),(3,0,1,0),(3,0,0,1))):
         return None
-    c2200, c2110, c2101, c2020, c2011, c1111 = [coeff(_) for _ in ((2,2,0,0),(2,1,1,0),(2,1,0,1),(2,0,2,0),(2,0,1,1),(1,1,1,1))]
+    c2200, c2110, c2101, c2020, c2011, c1111 = [coeff(_)
+        for _ in ((2,2,0,0),(2,1,1,0),(2,1,0,1),(2,0,2,0),(2,0,1,1),(1,1,1,1))]
     c_sum = (c2011 + c2110)/-8 # coeff of s(ab-ac)^2
     c_abcd = coeff.poly111()/4
     w1, w2, w3, w4 = c2200 - c_sum, c2011 + 4*c_sum, c2020 - 4*c_sum, c2101 - 2*c_sum
@@ -64,6 +65,12 @@ def _quaternary_quartic_real(coeff: Coeff, real=True):
 
     Examples
     --------
+    :: ineqs = []
+
+    => s(a4-a3b)
+
+    => 2s(a2)2-5s(a3b)-12abcd
+
     => s(((1-2)(a2-b2)+0(a2-c2)+(1+2)(a2-d2)-1(ab-cd)+6(bc-ad)+8(cd-bc)+2(ac-bd))2) # doctest:+SKIP
     """
     if not any(coeff(_) for _ in ((4,0,0,0),(3,1,0,0),(3,0,1,0),(3,0,0,1))):
@@ -95,22 +102,23 @@ def _quaternary_quartic_real(coeff: Coeff, real=True):
     a, b, c, d = coeff.gens
     CycSum = coeff.cyclic_sum
 
-    t = Symbol("t")
-    c_sq_p0 = Poly(
+    t = a
+    c_sq_p0 = coeff.from_list(
         [c2011 + 2*c2101 + c2110 + 4*c2200 - c3001**2 + c3001 + 2*c3010 - c3100**2 + c3100, 0,
          4*c2011 + 8*c2101 + 4*c2110 + 16*c2200 - 6*c3001**2 + 4*c3001 + 8*c3010 - 6*c3100**2 + 4*c3100 + 16, 0,
-         3*c2011 + 6*c2101 + 3*c2110 + 12*c2200 - 9*c3001**2 + 3*c3001 + 6*c3010 - 9*c3100**2 + 3*c3100 + 16], t)
-    c_sq_p1 = Poly([-4*c3001 + 4*c3100, 0, -12*c3001 + 12*c3100], t)
-    z_p = Poly([c3010*const_z, 0, (3*c3010-8)*const_z], t)
+         3*c2011 + 6*c2101 + 3*c2110 + 12*c2200 - 9*c3001**2 + 3*c3001 + 6*c3010 - 9*c3100**2 + 3*c3100 + 16],
+    (t,)).as_poly()
+    c_sq_p1 = coeff.from_list([-4*c3001 + 4*c3100, 0, -12*c3001 + 12*c3100], (t,)).as_poly()
+    z_p = coeff.from_list([c3010*const_z, 0, (3*c3010-8)*const_z], (t,)).as_poly()
     z_p2 = z_p**2
     c_sq_p = -8*z_p2 + c_sq_p1*z_p + c_sq_p0
-    w1_p = Poly([-c2011/4 - c2101 - c2110/4 - c3001/4 - c3010 - c3100/4, 0,
-        -3*c2011/4 - 3*c2101 - 3*c2110/4 - 3*c3001/4 - 3*c3010 - 3*c3100/4], t) - z_p2
-    w2_p0 = Poly([c2011 - c2110 - c3001 + c3100, 0, 3*c2011 - 3*c2110 - 3*c3001 + 3*c3100], t)
-    w2_p1 = Poly([c3010, 0, 3*c3010 - 8], t)
+    w1_p = coeff.from_list([-c2011/4 - c2101 - c2110/4 - c3001/4 - c3010 - c3100/4, 0,
+        -3*c2011/4 - 3*c2101 - 3*c2110/4 - 3*c3001/4 - 3*c3010 - 3*c3100/4], (t,)).as_poly() - z_p2
+    w2_p0 = coeff.from_list([c2011 - c2110 - c3001 + c3100, 0, 3*c2011 - 3*c2110 - 3*c3001 + 3*c3100], (t,)).as_poly()
+    w2_p1 = coeff.from_list([c3010, 0, 3*c3010 - 8], (t,)).as_poly()
     w2_p = w2_p1 * z_p + w2_p0
-    w3_p = Poly([-c3010**2/4, 0, c2011 + 2*c2020 + c2110 + c3001 - 3*c3010**2/2 + c3100 + 4,
-        0, 3*c2011 + 6*c2020 + 3*c2110 + 3*c3001 - 9*c3010**2/4 + 3*c3100 - 4], t)
+    w3_p = coeff.from_list([-c3010**2/4, 0, c2011 + 2*c2020 + c2110 + c3001 - 3*c3010**2/2 + c3100 + 4,
+        0, 3*c2011 + 6*c2020 + 3*c2110 + 3*c3001 - 9*c3010**2/4 + 3*c3100 - 4], (t,)).as_poly()
 
     # find t such that w3 >= 0 and c_sq >= 0
     for t_ in intervals([w3_p, c_sq_p]):
