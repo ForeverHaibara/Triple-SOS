@@ -22,7 +22,7 @@ def _quartic_det(m, p, n, q):
 
 def _fast_solve_quartic(coeff: Coeff, m, p, n, q, rem = 0, mul_abc = True):
     """
-    Solve s(m*a^5bc + p*a^4b^2c + n*a^3b^3c + q*a^2b^4c + (rem-m-p-n-q)*a^3b^2c^2) >= 0.
+    Solve `s(m*a^5bc + p*a^4b^2c + n*a^3b^3c + q*a^2b^4c + (rem-m-p-n-q)*a^3b^2c^2) >= 0`.
     """
     if isinstance(rem, Poly):
         rem = rem(1,1,1) / 3
@@ -74,8 +74,8 @@ def _sos_struct_septic_biased(coeff: Coeff):
     Solve septic hexagons without s(a5b2) and s(a4b3)
 
     Observations:
-    s(ab4(a-c)2(ab-2ac+c2)2) >= 0 or s(a3(b-c)4(a-b)2) + p(a)s(a2b-2ab2+abc)2 >= 0
-    s(a(a3c-a2bc-a2c2-ab3+3ab2c-abc2-b2c2+bc3)2) + p(a)s(a2b-2ab2+abc)2 >= 0
+    `s(ab4(a-c)2(ab-2ac+c2)2) >= 0` or `s(a3(b-c)4(a-b)2) + p(a)s(a2b-2ab2+abc)2 >= 0`
+    `s(a(a3c-a2bc-a2c2-ab3+3ab2c-abc2-b2c2+bc3)2) + p(a)s(a2b-2ab2+abc)2 >= 0`
 
 
     Examples
@@ -91,8 +91,6 @@ def _sos_struct_septic_biased(coeff: Coeff):
     => s(4a5c2-6a4b2c-12a4bc2+8a4c3-11a3b3c+17a3b2c2) # doctest:+SKIP
 
     => s(a5c2+a4b2c+a4bc2-7a3b3c+4a3b2c2) # doctest:+SKIP
-
-    => s(a3c-a2bc)p(a+b)+9p(a)s(a2b2-a2bc)-6p(a)s(a3b-a2bc) # doctest:+SKIP
     """
     return None # still in development
     if not coeff.is_rational:
@@ -106,47 +104,6 @@ def _sos_struct_septic_biased(coeff: Coeff):
     if coeff((5,2,0)) or coeff((4,3,0)):
         return None
 
-    a, b, c = coeff.gens
-    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
-
-    if coeff((3,4,0)) == coeff((2,5,0)) and coeff((3,4,0)) != 0:
-        coeff34 = coeff((3,4,0))
-        m, p, n, q = coeff((5,1,1)) / coeff34, coeff((4,2,1)) / coeff34 + 2, coeff((3,3,1)) / coeff34, coeff((2,4,1)) / coeff34
-        if m > 0:
-            det = m*(-3*m**2 - 3*m*n - 7*m - 4*n + p**2 + p*q - p + q**2 - 2*q - 3) + p**2
-            if det <= 0:
-                x = -(6*m + p + 2*q + 6)/(3*m + 4)
-                # r = x.as_numer_denom()[1] # cancel the denominator is good
-
-                n2 = n - (x**2 + 4*x + 3)
-                q2 = q + (2*x + 3)
-                u_, v_ = -(p + 2*q2) / 3 / m, -(2*p + q2) / 3 / m
-
-                multiplier = CyclicSum(a)
-                part1 = a**2*c - a*b**2*(x + 2) + a*b*c + b**2*c*(x + 1) - b*c**2
-                part2 = a**3*c - a**2*b**2 - a**2*b*c*(x + 1) - a*b**3 + a*b**2*c*(x + 2) - a*b*c**2 + b**2*c**2
-                part1, part2 = part1.together().as_coeff_Mul(), part2.together().as_coeff_Mul()
-
-                y = [
-                    part1[0]**2,
-                    part2[0]**2 / 2,
-                    m / 2,
-                    (3*(m + n2) - (p**2 + q2**2 + p*q2) / m) / 6,
-                    (m + p + n + q) + coeff((3,2,2)) / coeff34
-                ]
-                y = [_ * coeff34 for _ in y]
-                exprs = [
-                    CyclicSum(a*c*part1[1]**2),
-                    CyclicSum(part2[1]**2),
-                    CyclicSum((a**2-b**2+(u_-v_)*a*b-u_*a*c+v_*b*c)**2) * CyclicSum(a) * CyclicProduct(a),
-                    CyclicSum(a**2*(b-c)**2) * CyclicSum(a) * CyclicProduct(a),
-                    CyclicSum(a)**2 * CyclicProduct(a**2)
-                ]
-                return sum_y_exprs(y, exprs) / multiplier
-
-        elif m == 0 and p >= -2:
-            if p == -2:
-                x = (-q - 3) / 2
     return None
 
 
@@ -167,6 +124,8 @@ def _sos_struct_septic_hexagon(coeff: Coeff):
     => (s(a2(a-b)(a2+ab-5bc))s(a)-s(a(a-b)(a-c))2-3s(ac(a2-bc-(c2-bc)-3/2(ab-bc))2))s(a)
 
     => (1/5(18s(a3(13b2+5c2)(13c2+5a2))-p(13a2+5b2)s(a))-585/64s(a(a2c-b2c-8/3(a2b-abc)+7/4(ab2-abc))2)) # doctest:+SKIP
+
+    => s(a3c-a2bc)p(a+b)+9p(a)s(a2b2-a2bc)-6p(a)s(a3b-a2bc)
     """
 
     if any(coeff(i) for i in ((7,0,0), (6,1,0), (6,0,1))):

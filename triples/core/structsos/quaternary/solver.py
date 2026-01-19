@@ -8,6 +8,7 @@ from .cubic import quaternary_cubic_symmetric, _quaternary_cubic_partial_symmetr
 from .quartic import quaternary_quartic
 from .quartic_symmetric import quaternary_quartic_symmetric
 from .quintic import quaternary_quintic_symmetric
+from .dense_symmetric import quaternary_dense_symmetric
 
 from ..utils import Coeff, PolynomialNonpositiveError, PolynomialUnsolvableError
 from ..sparse import sos_struct_common, sos_struct_degree_specified_solver
@@ -42,6 +43,7 @@ def _structural_sos_4vars_symmetric(
 
     return sos_struct_common(coeff,
         sos_struct_degree_specified_solver(SOLVERS_SYMMETRIC, homogeneous=True),
+        quaternary_dense_symmetric,
         real=real
     )
 

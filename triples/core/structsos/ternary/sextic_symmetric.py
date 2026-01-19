@@ -43,7 +43,7 @@ def _restructure_quartic_polynomial(poly: Poly):
     """
     Write a nonnegative quartic polynomoial in the form of
     ```
-    f(a) = t*(a - 1)**4 + coeff * ((x - 1)*a**2 - (2 - 2*y)*a + (2*x + y - 2))**2 
+    f(a) = t*(a - 1)**4 + coeff * ((x - 1)*a**2 - (2 - 2*y)*a + (2*x + y - 2))**2
             + rem * (a**2 + 2*r*a + r + 2)**2 >= 0.
     ```
 
@@ -975,7 +975,7 @@ def _sos_struct_sextic_iran96_trivial(coeff: Coeff):
     m, p, q, w, z = coeff((5,1,0)), coeff((4,2,0)), coeff((3,3,0)), coeff((4,1,1)), coeff((3,2,1))
     rem = coeff((2,2,2)) + 3*((m + p + z) * 2 + q + w)
 
-    # Easy case 1, solved by schur split    
+    # Easy case 1, solved by schur split
     if m < 0 or rem < 0:
         return None
     elif m == 0:
@@ -1627,7 +1627,7 @@ class _sextic_sym_axis(DomainExpr):
         sol: Optional[Expr]
             The solution.
         flg: int
-            * When flg == 0, it is solved on R. 
+            * When flg == 0, it is solved on R.
             * When flg == 1, it is solved on R+.
             * When flg == 2, it is not solved.
         """
