@@ -1,4 +1,7 @@
+from functools import partial
+
 from .....testing.doctest_parser import run_doctest_examples, discover_functions_from_scope
+from .....utils import preprocess_text
 
 import pytest
 
@@ -20,5 +23,7 @@ def test_doc_structsos_nvars(func):
         solver=solver,
         configs = {
             "return_type": "poly",
+            "parser": partial(
+                preprocess_text, preserve_patterns=("sqrt", "sin", "cos", "pi"))
         }
     )
