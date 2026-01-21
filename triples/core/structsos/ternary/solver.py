@@ -1,6 +1,6 @@
 from typing import Union, Dict, Optional, Any
 
-import sympy as sp
+from sympy import Poly, Expr, Function
 from sympy.core.symbol import uniquely_named_symbol
 
 from .sparse  import sos_struct_sparse, sos_struct_heuristic
@@ -37,12 +37,11 @@ SOLVERS_ACYCLIC = {
 
 
 def _structural_sos_3vars_cyclic(
-        coeff: Union[sp.Poly, Coeff, Dict],
-        real: bool = True
-    ):
+    coeff: Union[Poly, Coeff, Dict],
+    real: bool = True
+) -> Optional[Expr]:
     """
     Internal function to solve a 3-var homogeneous cyclic polynomial using structural SOS.
-    The function assumes the polynomial is wrt. (a, b, c).
     It does not check the homogeneous / cyclic property of the polynomial to save time.
     """
     if not isinstance(coeff, Coeff):
@@ -56,12 +55,11 @@ def _structural_sos_3vars_cyclic(
     )
 
 def _structural_sos_3vars_acyclic(
-        coeff: Union[sp.Poly, Coeff, Dict],
-        real: bool = True
-    ):
+    coeff: Union[Poly, Coeff, Dict],
+    real: bool = True
+) -> Optional[Expr]:
     """
     Internal function to solve a 3-var homogeneous acyclic polynomial using structural SOS.
-    The function assumes the polynomial is wrt. (a, b, c).
     It does not check the homogeneous / cyclic property of the polynomial to save time.
     """
     if not isinstance(coeff, Coeff):
@@ -73,11 +71,13 @@ def _structural_sos_3vars_acyclic(
         real=real
     )
 
-def structural_sos_3vars(poly, ineq_constraints: Dict[sp.Poly, sp.Expr] = {}, eq_constraints: Dict[sp.Poly, sp.Expr] = {}) -> Optional[sp.Expr]:
+def structural_sos_3vars(
+    poly,
+    ineq_constraints: Dict[Poly, Expr] = {},
+    eq_constraints: Dict[Poly, Expr] = {}
+) -> Optional[Expr]:
     """
     Main function of structural SOS for 3-var homogeneous polynomials.
-    It first assumes the polynomial has variables (a,b,c), where a,b,c >= 0 and
-    latter substitutes the variables with the original ones.
     """
     if len(poly.gens) != 3: # should not happen
         raise ValueError("structural_sos_3vars only supports 3-var polynomials.")
@@ -109,7 +109,7 @@ def structural_sos_3vars(poly, ineq_constraints: Dict[sp.Poly, sp.Expr] = {}, eq
     # replace assumed-nonnegative symbols with inequality constraints
     ####################################################################
     func_name = uniquely_named_symbol('G', poly.gens + tuple(ineq_constraints.values()))
-    func = sp.Function(func_name)
+    func = Function(func_name)
     solution = SolutionStructural._extract_nonnegative_exprs(solution, func_name=func_name)
     if solution is None:
         return None

@@ -791,7 +791,7 @@ class Root():
         >>> Root((a, a, 1), domain=EX).uv()
         (1 + 1/a, 1 + 1/a)
 
-        The nontrivial equality case of the Vasile Cirtoaje's inequality
+        The nontrivial equality case of Vasile Cirtoaje's inequality
         has (u, v) = (1, 2).
 
         >>> poly = Poly(49*x**3 - 49*x**2 + 14*x - 1, x)

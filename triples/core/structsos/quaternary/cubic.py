@@ -1,16 +1,25 @@
-from sympy import Poly, Add
+from sympy import Add
 
 from .utils import Coeff, rationalize_func
-from ..sparse import sos_struct_quadratic
 from ....utils import CyclicSum as _CyclicSum
 from ....utils import CyclicProduct as _CyclicProduct
 
-def quarternary_cubic_symmetric(coeff: Coeff, real = True):
+def quaternary_cubic_symmetric(coeff: Coeff, real = True):
     """
-    Solve quarternary symmetric cubic polynomials. Symmetry is not checked here.
+    Solve quaternary symmetric cubic forms. Symmetry is not checked here.
 
-    References
-    -----------
+    See the code below or [1] for the direct proof.
+
+    Examples
+    --------
+    => s(3a3-2a2(b+c+d)+3bcd)
+
+    => s(a3-a2(b+c+d)+3bcd)
+
+    => s(2a2(b+c+d)-2bcd)
+
+    Reference
+    ---------
     [1] https://tieba.baidu.com/p/9033429329
     """
     a, b, c, d = coeff.gens
@@ -39,7 +48,7 @@ def quarternary_cubic_symmetric(coeff: Coeff, real = True):
 #
 #####################################################################
 
-def _quarternary_cubic_partial_symmetric(coeff: Coeff, real = False):
+def _quaternary_cubic_partial_symmetric(coeff: Coeff, real = False):
     """
     The function is equivalent to solving nonhomogeneous 3-var symmetric cubic polynomials in
     the form of
@@ -61,7 +70,7 @@ def _quarternary_cubic_partial_symmetric(coeff: Coeff, real = False):
 
     Examples
     --------
-    :: ineqs = [a,b,c], gens=[a,b,c]
+    :: ineqs = [a,b,c], gens = [a,b,c]
 
     => 4abc+9s(a2)-14s(ab)+4s(a)+4
 
@@ -78,6 +87,7 @@ def _quarternary_cubic_partial_symmetric(coeff: Coeff, real = False):
 
     c100, c000, c200, c110, c111 = [coeff(_) for _ in [(1,0,0,2), (0,0,0,3), (2,0,0,1), (1,1,0,1), (1,1,1,0)]]
     if c111 == 0:
+        from ..nvars.quadratic import sos_struct_quadratic
         return sos_struct_quadratic(coeff)
     elif c111 < 0 or c000 < 0:
         return None

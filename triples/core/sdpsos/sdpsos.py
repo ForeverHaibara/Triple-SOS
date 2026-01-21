@@ -179,7 +179,7 @@ class SDPSOSSolver(ProofNode):
     it is generally difficult or even impossible to round it to a rational solution.
 
     ### Facial Reduction
-    
+
     To handle such cases, we need to compute the low-rank feasible set of the SDP in advance
     and solve the SDP on this subspace. This process is known as facial reduction.
     For example, consider Vasile's inequality `(a^2+b^2+c^2)^2 - 3*(a^3*b+b^3*c+c^3*a) >= 0`.
@@ -202,7 +202,7 @@ class SDPSOSSolver(ProofNode):
     Parameters
     ----------
     dof_limit: int
-        The maximum degree of freedom of the SDP. When it exceeds `dof_limit`, 
+        The maximum degree of freedom of the SDP. When it exceeds `dof_limit`,
         the node will be pruned. This prevents crash in external SDP solvers. Default is 7000.
     solver: str
         The numerical SDP solver to use. When set to None, it is automatically selected. Default is None.
@@ -415,7 +415,7 @@ class SDPSOSSolver(ProofNode):
                 if isinstance(e, (ArithmeticTimeout, MemoryError)):
                     # do not try further
                     self.state = -1
-                    self.finished = True                
+                    self.finished = True
                     break
                 elif isinstance(e, SDPRationalizeError):
                     # XXX: this is very heuristic
@@ -428,12 +428,12 @@ class SDPSOSSolver(ProofNode):
                         if mineig > configs["unstable_eig_threshold"]:
                             # we think that it is numerically unstable
                             self.state = -1
-                            self.finished = True                
+                            self.finished = True
                             break
 
                 continue
 
-        # We add a second check here to prevent 
+        # We add a second check here to prevent
         # it triggers a new round of `explore`
         # note that self.state has already increased
         if self.state > configs["lift_degree_limit"]:
@@ -544,7 +544,7 @@ def SDPSOS(
     lift_degree_limit: int
         The maximum lift degree to explore.
     dof_limit: int
-        The maximum degree of freedom of the SDP. When it exceeds `dof_limit`, 
+        The maximum degree of freedom of the SDP. When it exceeds `dof_limit`,
         the node will be pruned. This prevents crash in external SDP solvers. Default is 7000.
     solver: str
         The numerical SDP solver to use. When set to None, it is automatically selected. Default is None.

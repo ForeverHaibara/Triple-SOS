@@ -188,12 +188,12 @@ def sos_struct_liftfree_for_six(coeff, real=True):
 
     The idea is to first subtract something like:
 
-        s(a^n*b^m*c^m*(a-b)*(a-c)*(u*a + v*(b+c)/2)) + p(a-b)^2*...
+        `s(a^n*b^m*c^m*(a-b)*(a-c)*(u*a + v*(b+c)/2)) + p(a-b)^2*...`
 
     so that the symmetric axis of the remaining part is a multiple of (a-1)^4.
     Then the rest part can be seen as:
 
-        s(...*(a-b)^2*(a-c)^2) + p(a-b)^2*...
+        `s(...*(a-b)^2*(a-c)^2) + p(a-b)^2*...`
 
     which would perhaps be trivially nonnegative if successful.
 
@@ -286,9 +286,9 @@ def _sos_struct_liftfree_for_six_ord4(coeff, div2=None, real=True):
     Solve a high-degree (dense) symmetric inequality where (a-1)^4 is a factor
     of the symmetric axis. Such polynomial can be seen as:
 
-        s(...*(a-b)^2*(a-c)^2) + p(a-b)^2*...
+        `s(...*(a-b)^2*(a-c)^2) + p(a-b)^2*...`
 
-    which would perhaps be trivially nonnegative if successful.
+    which would be trivially nonnegative if successful.
     """
     a, b, c = coeff.gens
     CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product

@@ -357,12 +357,13 @@ def pivoting_quadratic(problem: InequalityProblem, configs: dict) -> list:
     symmetry = configs["symmetry"]
     signs    = configs["signs"]
     ufs, tried_ufs = symmetry_ufs(symmetry), set()
+    ufs = {gen: ufs[i] for i, gen in enumerate(problem.gens)}
 
     ineqs0, eqs0 = problem.ineq_constraints, problem.eq_constraints
     for gen in poly.gens:
         if poly.degree(gen) != 2:
             continue
-        if gen in tried_ufs:
+        if ufs.get(gen, -2) in tried_ufs:
             continue
         tried_ufs.add(ufs.get(gen, -1))
 

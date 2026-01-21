@@ -465,7 +465,7 @@ def solution_checker(solution, expr, ineq_constraints, eq_constraints,
     if solution is None:
         return False
 
-    from sympy import sympify
+    from sympy import sympify, Eq
     expr = sympify(expr).as_expr()
     sol = solution.solution
 
@@ -489,7 +489,7 @@ def solution_checker(solution, expr, ineq_constraints, eq_constraints,
         )
     for sample in samples:
         vals = dict(zip(symbols, sample))
-        if (sol.xreplace(vals) - expr.xreplace(vals)).simplify() != 0:
+        if Eq((sol.xreplace(vals) - expr.xreplace(vals)).simplify(), 0).simplify() != True:
             return False
     return True
 

@@ -1,13 +1,8 @@
-from typing import Callable, Tuple, List, Optional, Union, Dict
+from typing import Callable, Union, Dict
 
-from sympy import Poly, Expr, Symbol, Integer, Mul
-from sympy import MutableDenseMatrix as Matrix
-from sympy.combinatorics import PermutationGroup, CyclicGroup
-from sympy.polys.matrices import DomainMatrix
-from sympy.polys.matrices.ddm import DDM
+from sympy import Poly, Expr, Integer, Mul
 
 from .utils import Coeff, PolynomialUnsolvableError, PolynomialNonpositiveError
-from ...sdp import congruence
 from ...utils import CyclicSum, CyclicProduct
 
 def _null_solver(*args, **kwargs):
@@ -53,77 +48,6 @@ def sos_struct_extract_factors(poly: Union[Poly, Coeff], solver: Callable, real:
     return solver(poly, **kwargs)
 
 
-def sos_struct_linear(poly: Union[Poly, Coeff], **kwargs):
-    """
-    Solve a linear inequality. Supports non-homogeneous polynomials also.
-    """
-    if isinstance(poly, Coeff):
-        poly = poly.as_poly()
-    d = poly.total_degree()
-    if d > 1 or not poly.domain.is_Numerical:
-        return None
-    coeffs = poly.coeffs()
-    if d == 0 and coeffs[0] >= 0:
-        return coeffs[0]
-
-    # d == 1
-    if not all(i >= 0 for i in coeffs):
-        return None
-
-    # explore the symmetry
-    common_coeff = None
-    for gen in poly.gens:
-        v = poly.coeff_monomial(gen)
-        if common_coeff is not None and v != common_coeff:
-            # not symmetric
-            break
-        common_coeff = v
-    else:
-        # the polynomial is symmetric
-        constant = poly.coeff_monomial(1)
-        return common_coeff * CyclicSum(poly.gens[0], poly.gens) + constant
-
-    return poly.as_expr()
-
-
-def sos_struct_quadratic(poly: Poly, **kwargs):
-    """
-    Solve a quadratic inequality on real numbers.
-    """
-    coeff = Coeff(poly)
-    nvars = coeff.nvars
-    mat = [[0 for _ in range(nvars + 1)] for __ in range(nvars + 1)]
-    for k, v in coeff.items():
-        inds = []
-        for i in range(nvars):
-            if k[i] > 2:
-                return None
-            elif k[i] == 2:
-                inds = (i, i)
-                break
-            elif k[i] == 1:
-                if len(inds) == 2:
-                    return None
-                inds.append(i)
-        if len(inds) == 1:
-            inds.append(nvars)
-        elif len(inds) == 0:
-            inds = (nvars, nvars)
-        if inds[0] == inds[1]:
-            mat[inds[0]][inds[0]] = v
-        else:
-            mat[inds[0]][inds[1]] = v/2
-            mat[inds[1]][inds[0]] = v/2
-    mat = Matrix._fromrep(DomainMatrix.from_rep(DDM(mat, (nvars+1,nvars+1), coeff.domain)))
-    res = congruence(mat)
-    if res is None:
-        return None
-    U, S = res
-    gens = poly.gens
-    genvec = Matrix(list(gens) + [1])
-    return sum(S[i] * (U[i, :] * genvec)[0,0]**2 for i in range(nvars + 1))
-
-
 def sos_struct_common(poly: Union[Poly, Coeff], *solvers, **kwargs):
     """
     A method wrapper for multiple solvers.
@@ -159,7 +83,8 @@ def sos_struct_degree_specified_solver(solvers: Dict[int, Callable], homogeneous
     """
     A method wrapper for structural SOS with degree specified solvers.
 
-    When the degree <= 2 and the solver is not provided, it uses the default solvers.
+    When `degree <= 2` and the solver is not provided, it uses the default solvers
+    from `triples.core.structsos.nvars` for general linear and quadratic solvers.
     """
     def _sos_struct_degree_specified_solver(poly: Union[Poly, Coeff], *args, **kwargs):
         if homogeneous and isinstance(poly, Coeff):
@@ -168,10 +93,11 @@ def sos_struct_degree_specified_solver(solvers: Dict[int, Callable], homogeneous
             degree = poly.total_degree()
         solver = solvers.get(degree, None)
         if solver is None:
+            from .nvars import sos_struct_nvars_linear, sos_struct_nvars_quadratic
             if degree == 1:
-                solver = sos_struct_linear
+                solver = sos_struct_nvars_linear
             elif degree == 2:
-                solver = sos_struct_quadratic
+                solver = sos_struct_nvars_quadratic
             else:
                 solver = _null_solver
         return solver(poly, *args, **kwargs)

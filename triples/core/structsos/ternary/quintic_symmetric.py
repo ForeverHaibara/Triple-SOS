@@ -77,6 +77,8 @@ def sos_struct_quintic_symmetric(coeff: Coeff, real = True):
 
     => s(a(b-c)2(b+c-a)2)+s(a3(a-b-c)2) # doctest:+SKIP
 
+    =>  s(16a5-36a4b+20a3b2+20a2b3-36ab4+57a3bc-38a2b2c) # doctest:+SKIP # Harris form
+
     References
     ----------
     [1] https://math.stackexchange.com/questions/3809195/proving-q-fraca3b3c3abbccak-cdot-fracabbccaa

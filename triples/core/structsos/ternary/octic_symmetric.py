@@ -12,11 +12,11 @@ from .utils import (
 def _solve_inverse_quartic(coeff: Coeff, m, p, n, r):
     """
     Solve a symmetric inverse quartic expression fast without callbacks. It only involves
-    monoms inside the triangle (a^4b^4, a^4c^4, b^4c^4). Hence it is equivalent to a
-    quartic with respect to ab, bc and ca.
+    monoms inside the triangle `(a^4b^4, a^4c^4, b^4c^4)`. Hence it is equivalent to a
+    quartic with respect to `ab`, `bc` and `ca`.
 
     Formally, it solves the problem:
-    s(a^4b^4 + p(a^4b^3c+a^4bc^3) + qa^4b^2c^2 + ra^3b^3c^2) >= 0.
+    `s(a^4b^4 + p(a^4b^3c+a^4bc^3) + qa^4b^2c^2 + ra^3b^3c^2) >= 0`.
     """
     a, b, c = coeff.gens
     CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
@@ -97,7 +97,8 @@ def _sos_struct_octic_symmetric_hexagon_sdp(coeff: Coeff):
 
     => s(a2(a-(b+c))2((b-c)2+bc)(a-b)(a-c))
     """
-    c620, c530, c440, c611, c521, c431, c422 = [coeff(_) for _ in ((6,2,0),(5,3,0),(4,4,0),(6,1,1),(5,2,1),(4,3,1),(4,2,2))]
+    c620, c530, c440, c611, c521, c431, c422 = [
+        coeff(_) for _ in ((6,2,0),(5,3,0),(4,4,0),(6,1,1),(5,2,1),(4,3,1),(4,2,2))]
     if (not coeff.is_rational) or c620 <= 0 or coeff.poly111() != 0:
         return None
 

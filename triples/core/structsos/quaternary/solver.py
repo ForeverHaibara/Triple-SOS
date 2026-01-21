@@ -1,11 +1,14 @@
-from typing import Union, Dict, Optional, Any
+from typing import Union, Dict, Optional
 
 from sympy import Poly, Expr, Function
 from sympy.core.symbol import uniquely_named_symbol
 from sympy.combinatorics import PermutationGroup, Permutation
 
-from .cubic import quarternary_cubic_symmetric, _quarternary_cubic_partial_symmetric
-from .quartic import quarternary_quartic
+from .cubic import quaternary_cubic_symmetric, _quaternary_cubic_partial_symmetric
+from .quartic import quaternary_quartic
+from .quartic_symmetric import quaternary_quartic_symmetric
+from .quintic import quaternary_quintic_symmetric
+from .dense_symmetric import quaternary_dense_symmetric
 
 from ..utils import Coeff, PolynomialNonpositiveError, PolynomialUnsolvableError
 from ..sparse import sos_struct_common, sos_struct_degree_specified_solver
@@ -13,25 +16,25 @@ from ..solution import SolutionStructural
 
 
 SOLVERS_CYCLIC = {
-    4: quarternary_quartic,
+    4: quaternary_quartic,
 }
 
 SOLVERS_SYMMETRIC = {
-    3: quarternary_cubic_symmetric,
-    4: quarternary_quartic,
+    3: quaternary_cubic_symmetric,
+    4: quaternary_quartic_symmetric,
+    5: quaternary_quintic_symmetric,
 }
 
 SOLVERS_SYMMETRIC_NONHOM = {
-    3: _quarternary_cubic_partial_symmetric,
+    3: _quaternary_cubic_partial_symmetric,
 }
 
 def _structural_sos_4vars_symmetric(
-        coeff: Union[Poly, Coeff, Dict],
-        real: int = 1
-    ):
+    coeff: Union[Poly, Coeff, Dict],
+    real: int = 1
+) -> Optional[Expr]:
     """
     Internal function to solve a 4-var homogeneous symmetric polynomial using structural SOS.
-    The function assumes the polynomial is wrt. (a, b, c, d).
     It does not check the homogeneous / cyclic property of the polynomial to save time.
     """
     if not isinstance(coeff, Coeff):
@@ -39,16 +42,16 @@ def _structural_sos_4vars_symmetric(
 
     return sos_struct_common(coeff,
         sos_struct_degree_specified_solver(SOLVERS_SYMMETRIC, homogeneous=True),
+        quaternary_dense_symmetric,
         real=real
     )
 
 def _structural_sos_4vars_cyclic(
-        coeff: Union[Poly, Coeff, Dict],
-        real: int = 1
-    ):
+    coeff: Union[Poly, Coeff, Dict],
+    real: int = 1
+) -> Optional[Expr]:
     """
     Internal function to solve a 4-var homogeneous symmetric polynomial using structural SOS.
-    The function assumes the polynomial is wrt. (a, b, c, d).
     It does not check the homogeneous / cyclic property of the polynomial to save time.
     """
     if not isinstance(coeff, Coeff):
@@ -60,13 +63,12 @@ def _structural_sos_4vars_cyclic(
     )
 
 def _structural_sos_4vars_partial_symmetric(
-        coeff: Union[Poly, Coeff, Dict],
-        real: int = 1
-    ) -> Optional[Expr]:
+    coeff: Union[Poly, Coeff, Dict],
+    real: int = 1
+) -> Optional[Expr]:
     """
     Internal function to solve a 4-var homogeneous partial symmetric polynomial using structural SOS.
-    The function assumes the polynomial is wrt. (a, b, c, d). The permutation group is
-    PermutationGroup(Permutation([1,2,0,3]))
+    The function assumes the polynomial has group symmetry `PermutationGroup(Permutation([1,2,0,3]))`
     It is also symmetric with respect to a, b, c if we set d = 1.
     It does not check the homogeneous / cyclic property of the polynomial to save time.
     """
@@ -78,16 +80,18 @@ def _structural_sos_4vars_partial_symmetric(
     )
 
 
-
-def structural_sos_4vars(poly: Poly, ineq_constraints: Dict[Poly, Expr] = {}, eq_constraints: Dict[Poly, Expr] = {}) -> Expr:
+def structural_sos_4vars(
+    poly: Poly,
+    ineq_constraints: Dict[Poly, Expr] = {},
+    eq_constraints: Dict[Poly, Expr] = {}
+) -> Optional[Expr]:
     """
-    Main function of structural SOS for 4-var homogeneous polynomials. It first assumes the polynomial
-    has variables (a,b,c) and latter substitutes the variables with the original ones.
+    Main function of structural SOS for 4-var homogeneous polynomials.
     """
     if len(poly.gens) != 4: # should not happen
-        raise ValueError("structural_sos_3vars only supports 4-var polynomials.")
+        raise ValueError("structural_sos_4vars only supports 4-var polynomials.")
     if not poly.is_homogeneous: # should not happen
-        raise ValueError("structural_sos_3vars only supports homogeneous polynomials.")
+        raise ValueError("structural_sos_4vars only supports homogeneous polynomials.")
 
     coeff = Coeff(poly)
     solution = None
@@ -97,7 +101,8 @@ def structural_sos_4vars(poly: Poly, ineq_constraints: Dict[Poly, Expr] = {}, eq
     elif coeff.is_cyclic():
         func = _structural_sos_4vars_cyclic
     else:
-        if coeff.is_cyclic(PermutationGroup(Permutation([1,2,0,3]), Permutation([1,0,2,3]))):
+        pg = PermutationGroup(Permutation([1,2,0,3]), Permutation([1,0,2,3]))
+        if coeff.is_cyclic(pg):
             func = _structural_sos_4vars_partial_symmetric
 
     try:
