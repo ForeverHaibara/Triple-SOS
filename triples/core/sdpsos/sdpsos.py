@@ -487,7 +487,7 @@ class SDPSOSSolver(ProofNode):
         nvars = len(self.problem.expr.gens)
         if self.state == 0:
             poly = self.problem.expr
-            if (not (poly.domain in (ZZ, QQ, RR))) or nvars < 1:
+            if nvars < 1 or (not self.problem.reduce(lambda p: p.domain in (ZZ, QQ, RR), all)):
                 self.state = -1
                 self.finished = True
                 return None

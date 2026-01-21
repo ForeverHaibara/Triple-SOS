@@ -973,6 +973,14 @@ def arraylize_up_to_symmetry(poly: Poly, perm_group: PermutationGroup, degree: O
 
     perms = list(perm_group.elements)
     queue, queue_len, best_perm = [domain.zero]*shape, 0, perms[0]
+
+    domain = vec._rep.domain
+    key = lambda z: z
+    if domain.is_EX:
+        key = lambda z: z.ex.sort_key()
+    elif domain.is_EXRAW:
+        key = lambda z: z.sort_key()
+
     for perm in perms[1:]:
         for j in range(shape):
             s = v(perm, j)
@@ -980,10 +988,11 @@ def arraylize_up_to_symmetry(poly: Poly, perm_group: PermutationGroup, degree: O
                 # compare the next element
                 queue[j] = v(best_perm, j)
                 queue_len += 1
-            if s > queue[j]:
+            key_s, key_j = key(s), key(queue[j])
+            if key_s > key_j:
                 queue[j], queue_len, best_perm = s, j + 1, perm
                 break
-            elif s < queue[j]:
+            elif key_s < key_j:
                 break
     for j in range(queue_len, shape): # fill the rest
         queue[j] = v(best_perm, j)
@@ -1044,7 +1053,7 @@ def clear_polys_by_symmetry(polys, symbols, symmetry):
         if not isinstance(t, Poly):
             t = Poly(t, symbols)
         rep = arraylize_up_to_symmetry(t, perm_group, symmetry=base, return_type='list')
-        return tuple(rep)
+        return (t.total_degree(),) + tuple(rep)
 
     is_dict = isinstance(polys, dict)
     if is_dict:

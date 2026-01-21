@@ -24,6 +24,12 @@ def dict_inject(x: dict, y: dict) -> dict:
     x.update(y)
     return x
 
+def drop_gen(x: Poly, gen: Symbol) -> Poly:
+    i = x.gens.index(gen)
+    f = lambda m: m[:i] + m[i+1:]
+    dt = {f(m): v for m, v in x.rep.to_dict().items()}
+    return Poly.from_dict(dt, f(x.gens), domain=x.domain)
+
 def _get_linear_symbol_bounds(ineqs: Dict[Poly, Expr], eqs: Dict[Poly, Expr],
     signs: Dict[Symbol, Tuple[Optional[int], Expr]], gen: Symbol):
 
@@ -150,6 +156,7 @@ class PivotQuadratic(ProofNode):
 
     def _explore_state_2(self, configs):
         _info = self._info
+        self.state = -1
         A, B, C = _info["coeffs"]
         ineqs, eqs = _info["ineqs"], _info["eqs"]
         disc = _info["disc"]
@@ -322,10 +329,10 @@ class PivotQuadratic(ProofNode):
                     for _ in margin.rep.all_coeffs()]
 
         # remove constraints involving the generator
-        ineqs = {k.as_poly(other_gens, domain=domain): v
+        ineqs = {drop_gen(k, gen): v
             for k, v in problem.ineq_constraints.items()
                  if gen not in problem._dtype_free_symbols(k)}
-        eqs = {k.as_poly(other_gens, domain=domain): v
+        eqs = {drop_gen(k, gen): v
             for k, v in problem.eq_constraints.items()
                 if gen not in problem._dtype_free_symbols(k)}
 

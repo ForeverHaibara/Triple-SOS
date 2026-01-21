@@ -395,9 +395,15 @@ class InequalityProblem(Generic[T]):
 
         if len(gens) == 0:
             gens = {Symbol('x')}
-        expr = Poly(expr.doit(), *gens)
-        ineq_constraints = dict((Poly(e.doit(), *gens), e2) for e, e2 in ineq_constraints.items())
-        eq_constraints = dict((Poly(e.doit(), *gens), e2) for e, e2 in eq_constraints.items())
+
+        def as_poly(expr):
+            if isinstance(expr, Poly) and expr.gens == gens:
+                return expr
+            return Poly(expr.doit(), *gens)
+
+        expr = as_poly(expr)
+        ineq_constraints = dict((as_poly(e), e2) for e, e2 in ineq_constraints.items())
+        eq_constraints = dict((as_poly(e), e2) for e, e2 in eq_constraints.items())
 
         problem = InequalityProblem(expr, ineq_constraints, eq_constraints)
         problem, _ = problem.sqr_free(problem_sqf=False,

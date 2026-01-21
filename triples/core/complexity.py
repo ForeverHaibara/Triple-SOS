@@ -25,7 +25,7 @@ class ProblemComplexity:
         self.state = state
 
     def __str__(self) -> str:
-        return f"{{time: {self.time:.2f}, prob: {self.prob:.2f}, length: {self.length:.2f}}}"
+        return f"{{time: {self.time:.6f}, prob: {self.prob:.6f}, length: {self.length:.6f}}}"
 
     def __repr__(self) -> str:
         return self.__str__()

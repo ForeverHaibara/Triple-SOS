@@ -160,7 +160,7 @@ def _compute_diff_orders(poly: Poly, root: Root, mixed=False, only_binary_roots=
             for i in range(nvars):
                 # take one more derivative
                 poly2 = poly.diff(gens[i])
-                if poly2.total_degree() and root.eval(poly2) == 0:
+                if poly2.total_degree() > 0 and root.eval(poly2) == 0:
                     new_order = order[:i] + (order[i] + 1,) + order[i+1:]
                     orders.extend(dfs(poly2, new_order))
             return orders
@@ -171,7 +171,7 @@ def _compute_diff_orders(poly: Poly, root: Root, mixed=False, only_binary_roots=
         for i in range(nvars):
             poly2 = poly.diff(gens[i])
             j = 1
-            while poly2.total_degree() and root.eval(poly2) == 0:
+            while poly2.total_degree() > 0 and root.eval(poly2) == 0:
                 orders.append((0,) * i + (j,) + (0,) * (nvars - i - 1))
                 poly2 = poly2.diff(gens[i])
                 j += 1
