@@ -150,6 +150,7 @@ class PivotQuadratic(ProofNode):
 
     def _explore_state_2(self, configs):
         _info = self._info
+        self.state = -1
         A, B, C = _info["coeffs"]
         ineqs, eqs = _info["ineqs"], _info["eqs"]
         disc = _info["disc"]
