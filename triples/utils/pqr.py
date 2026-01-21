@@ -1,15 +1,16 @@
 from typing import Tuple, List, Optional
 
-import sympy as sp
+from sympy import Poly, Expr, Symbol, symmetrize
+from sympy import symbols as sp_symbols
 
-def _get_pqr_symbols(symbols: Optional[List[sp.Symbol]] = None) -> Tuple[sp.Symbol, sp.Symbol, sp.Symbol]:
+def _get_pqr_symbols(symbols: Optional[List[Symbol]] = None) -> Tuple[Symbol, Symbol, Symbol]:
     """Return p,q,r from symbols. If None, create new symbols."""
     if symbols is not None:
         return symbols
     else:
-        return sp.symbols('p q r')
+        return sp_symbols('p q r')
 
-def pqr_sym(poly: sp.Poly, symbols: Optional[List[sp.Symbol]] = None) -> sp.Expr:
+def pqr_sym(poly: Poly, symbols: Optional[List[Symbol]] = None) -> Expr:
     """
     Express a 3-variable symmetric polynomial P in p,q,r form,
     such that P(p,q,r) = f(p,q,r) + (a-b)*(b-c)*(c-a) * g(p,q,r)
@@ -17,17 +18,17 @@ def pqr_sym(poly: sp.Poly, symbols: Optional[List[sp.Symbol]] = None) -> sp.Expr
 
     Parameters
     ----------
-    poly : sp.Poly
+    poly : Poly
         A 3-variable cyclic polynomial.
-    symbols : Optional[List[sp.Symbol]]
+    symbols : Optional[List[Symbol]]
         If None, use p,q,r to stand for the new vars.
         Otherwise, use the given list of symbols.
 
     Returns
     ----------
-    part_sym : sp.Expr
+    part_sym : Expr
         The f(p,q,r) part.
-    part_cyc : sp.Expr
+    part_cyc : Expr
         The g(p,q,r) part.
 
     Examples
@@ -44,7 +45,7 @@ def pqr_sym(poly: sp.Poly, symbols: Optional[List[sp.Symbol]] = None) -> sp.Expr
     if len(poly.gens) != len(symbols):
         raise ValueError("Symbols must match the number of variables in the polynomial.")
 
-    f, g, rule = sp.symmetrize(poly.as_expr(), poly.gens, formal=True)
+    f, g, rule = symmetrize(poly.as_expr(), poly.gens, formal=True)
     if g != 0:
         raise ValueError("The polynomial is not symmetric.")
     replacement = dict(zip([_[0] for _ in rule], symbols))
@@ -52,7 +53,7 @@ def pqr_sym(poly: sp.Poly, symbols: Optional[List[sp.Symbol]] = None) -> sp.Expr
     return f
 
 
-def pqr_cyc(poly: sp.Poly, symbols: Optional[List[sp.Symbol]] = None) -> Tuple[sp.Expr, sp.Expr]:
+def pqr_cyc(poly: Poly, symbols: Optional[List[Symbol]] = None) -> Tuple[Expr, Expr]:
     """
     Express a 3-variable cyclic polynomial P in p,q,r form,
     such that P(p,q,r) = f(p,q,r) + (a-b)*(b-c)*(c-a) * g(p,q,r)
@@ -60,17 +61,17 @@ def pqr_cyc(poly: sp.Poly, symbols: Optional[List[sp.Symbol]] = None) -> Tuple[s
 
     Parameters
     ----------
-    poly : sp.Poly
+    poly : Poly
         A 3-variable cyclic polynomial.
-    symbols : Optional[List[sp.Symbol]]
+    symbols : Optional[List[Symbol]]
         If None, use p,q,r to stand for the new vars.
         Otherwise, use the given list of symbols.
 
     Returns
     ----------
-    part_sym : sp.Expr
+    part_sym : Expr
         The f(p,q,r) part.
-    part_cyc : sp.Expr
+    part_cyc : Expr
         The g(p,q,r) part.
 
     Examples
@@ -84,8 +85,8 @@ def pqr_cyc(poly: sp.Poly, symbols: Optional[List[sp.Symbol]] = None) -> Tuple[s
 
     a, b, c = poly.gens
     p, q, r = _get_pqr_symbols(symbols)
-    f0 = ((poly + sp.Poly.new(poly.reorder(b,a,c).rep,a,b,c))/2).as_poly(a,b,c)
-    f1 = ((poly - sp.Poly.new(poly.reorder(b,a,c).rep,a,b,c))/2).as_poly(a,b,c).div(
+    f0 = ((poly + Poly.new(poly.reorder(b,a,c).rep,a,b,c))/2).as_poly(a,b,c)
+    f1 = ((poly - Poly.new(poly.reorder(b,a,c).rep,a,b,c))/2).as_poly(a,b,c).div(
         ((a-b)*(b-c)*(c-a)).as_poly(a,b,c)
     )
     if not f1[1].is_zero:
@@ -98,20 +99,20 @@ def pqr_cyc(poly: sp.Poly, symbols: Optional[List[sp.Symbol]] = None) -> Tuple[s
     return f0, f1
 
 
-def pqr_ker(symbols: Optional[List[sp.Symbol]] = None) -> sp.Expr:
+def pqr_ker(symbols: Optional[List[Symbol]] = None) -> Expr:
     """
-    Return the pqr representation of ((a-b)*(b-c)*(c-a))^2.
+    Return the pqr representation of `((a-b)*(b-c)*(c-a))^2`.
 
-    It should be -4*p**3*r + p**2*q**2 + 18*p*q*r - 4*q**3 - 27*r**2.
+    It should be `-4*p**3*r + p**2*q**2 + 18*p*q*r - 4*q**3 - 27*r**2`.
     """
     p, q, r = _get_pqr_symbols(symbols)
     return -4*p**3*r + p**2*q**2 + 18*p*q*r - 4*q**3 - 27*r**2
 
-# def pqr_pqrt(a, b, c = 1) -> Tuple[sp.Expr, sp.Expr, sp.Expr, sp.Expr]:
+# def pqr_pqrt(a, b, c = 1) -> Tuple[Expr, Expr, Expr, Expr]:
 #     """
 #     Compute the p,q,r,t with p = 1 given a, b, c.
 #     """
-#     a, b, c = sp.S(a), sp.S(b), sp.S(c)
+#     a, b, c = sympify(a), sympify(b), sympify(c)
 #     w = c + a + b
 #     q = (a*c + a*b + b*c) / w**2
-#     return sp.S(1), q, a*b*c/w**3, sp.sqrt(1-3*q)
+#     return sympify(1), q, a*b*c/w**3, sqrt(1-3*q)

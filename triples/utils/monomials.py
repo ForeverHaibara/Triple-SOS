@@ -1053,7 +1053,7 @@ def clear_polys_by_symmetry(polys, symbols, symmetry):
         if not isinstance(t, Poly):
             t = Poly(t, symbols)
         rep = arraylize_up_to_symmetry(t, perm_group, symmetry=base, return_type='list')
-        return tuple(rep)
+        return (t.total_degree(),) + tuple(rep)
 
     is_dict = isinstance(polys, dict)
     if is_dict:

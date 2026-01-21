@@ -30,7 +30,8 @@ from sympy.polys.polyerrors import BasePolynomialError
 # https://github.com/sympy/sympy/pull/26182
 SYMPY_VERSION_TUPLE = tuple(version_tuple(SYMPY_VERSION))
 if SYMPY_VERSION_TUPLE >= (1, 13):
-    _sqf_list = lambda p: p.sqf_list()
+    # seems to be very slow for algebraic fields
+    _sqf_list = lambda p: p.factor_list() if p.domain.is_AlgebraicField else p.sqf_list()
 else:
     _sqf_list = lambda p: p.factor_list() # it would be slower, but correct
 

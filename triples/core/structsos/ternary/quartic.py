@@ -41,17 +41,19 @@ def sos_struct_quartic(coeff, real = True):
 
 def _sos_struct_quartic_core(coeff: Coeff):
     """
-    Main theorem: For a nondegenerated cylic quartic with zero (1,1,1):
-    f(a,b,c) = s(a4 + pa3b + na2b2 + qab3 - (1+p+n+q)a2bc)
-    If [3*(1+n) - (p*p+p*q+q*q)] >= 0, then
+    Main theorem: For a nondegenerated cyclic quartic with zero `(1,1,1)`:
+    `f(a,b,c) = s(a4 + pa3b + na2b2 + qab3 - (1+p+n+q)a2bc)`
+    If `[3*(1+n) - (p*p+p*q+q*q)] >= 0`, then
+    ```
         f(a,b,c) = s((a2 - b2 + (p+2*q)/3*(a*c-a*b) - (2*p+q)/3*(b*c-a*b))^2)
                     + (3*(1+n)-(p*p+p*q+q*q))/6 * s(a^2*(b-c)^2)
                 >= 0
+    ```
 
     There is a simple extension:
-    f(a,b,c) = s(a4 + pa3b + na2b2 + qab3 + ra2bc)
-    If r > -(1+p+n+q) and 2*m**2 + 2*m*n - m*p - m*q - m*r - p**2 - p*q - q**2 >= 0, then
-        f(a,b,c) - (1+n+p+q+r)/3*s(ab)^2 has zero (1,1,1) and
+    `f(a,b,c) = s(a4 + pa3b + na2b2 + qab3 + ra2bc)`
+    If `r > -(1+p+n+q)` and `2*m**2 + 2*m*n - m*p - m*q - m*r - p**2 - p*q - q**2 >= 0`, then
+        `f(a,b,c) - (1+n+p+q+r)/3*s(ab)^2` has zero `(1,1,1)` and
         satisfies the main theorem.
 
     Examples

@@ -554,7 +554,7 @@ def _sos_struct_sextic_hexagram_symmetric(coeff: Coeff):
     if coeff((3,3,0)) != 0:
         # https://tieba.baidu.com/p/8039371307
         x_, y_, z_ = coeff((4,1,1)) / coeff((3,3,0)), -coeff((3,2,1)) / coeff((3,3,0)), coeff((2,2,2)) / coeff((3,3,0))
-        z0 = x_**2 + x_*y_ + y_**2/3 - y_ + (y_ + 3)**3/(27*x_)
+        z0 = x_**2 + x_*y_ + y_**2/3 - y_ + (y_ + 3)**3/(27*x_) if x_ != 0 else 0
         if x_ > 0 and 3 * x_ + y_ + 3 >= 0 and z_ >= z0:
             ker = 324 * x_ * (27*x_**3 + 27*x_**2*y_ + 81*x_**2 + 9*x_*y_**2 - 189*x_*y_ + 81*x_ + y_**3 + 9*y_**2 + 27*y_ + 27)
             if ker > 0:
