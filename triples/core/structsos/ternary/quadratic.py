@@ -102,12 +102,18 @@ def sos_struct_acyclic_quadratic(coeff: Coeff, real = True):
         return None
 
     # final case: 2 negative, 1 positive
-    psd = M.copy()
+
+    # some low version of sympy does not support modification of
+    # Matrix entries, so we have to cast it to lists
+    psd = M.copy()._rep.rep.to_ddm()
     for i in range(3):
-        if psd[i, (i+1)%3] >= 0:
-            psd[i, (i+1)%3] = (psd[(i+1)%3, (i+2)%3] * psd[(i+2)%3, i%3] / psd[(i+2)%3, (i+2)%3])
-            psd[(i+1)%3, i] = psd[i, (i+1)%3]
-            solution2 = solve_nonnegative(M - psd)
-            solution1 = solve_psd(psd)
+        if psd[(i+2)%3][(i+2)%3] == 0:
+            continue
+        if coeff.convert(psd[i][(i+1)%3]) >= 0:
+            psd[i][(i+1)%3] = (psd[(i+1)%3][(i+2)%3] * psd[(i+2)%3][i%3] / psd[(i+2)%3][(i+2)%3])
+            psd[(i+1)%3][i] = psd[i][(i+1)%3]
+            psd_mat = coeff.as_matrix(psd, (3, 3))
+            solution2 = solve_nonnegative(M - psd_mat)
+            solution1 = solve_psd(psd_mat)
             if solution1 is not None and solution2 is not None:
                 return solution1 + solution2
