@@ -370,6 +370,7 @@ class Solution(SolutionBase[T]):
         Examples
         ---------
         >>> from sympy.abc import a, b, c
+        >>> from triples.utils import CyclicSum
         >>> sol = Solution((a+b+c)*(a*b+b*c+c*a)-9*a*b*c, CyclicSum(a*(b-c)**2, (a,b,c)))
         >>> sol.solution
         Σ(a*(b - c)**2)

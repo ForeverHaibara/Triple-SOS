@@ -4,7 +4,7 @@ from sympy import Poly, Expr, Dummy
 
 from .symmetric import UE3Real, UE3Positive, UE4Real
 from .basic import prove_by_pivoting
-from ..node import ProofNode, TransformNode
+from ..node import TransformNode
 from ..preprocess import SolvePolynomial
 from ..solution import Solution
 from ...utils import verify_symmetry
@@ -56,12 +56,16 @@ def SymmetricSOS(
     expr: Expr,
     ineq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
     eq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
-    verbose: bool = False
+    verbose: bool = False,
+    time_limit: float = 3600.,
 ) -> Optional[Solution]:
     """
     Solve symmetric polynomial inequalities using special
     changes of variables. The algorithm is powerful but produces
     very complicated solutions.
+
+    This SymmetricSOS solver uses SymmetricSubstitution in prior
+    to solve problems.    
 
     Parameters
     ----------
@@ -71,6 +75,12 @@ def SymmetricSOS(
         Inequality constraints to the problem. This assumes g_1(x) >= 0, g_2(x) >= 0, ...
     eq_constraints: Union[List[Expr], Dict[Expr, Expr]]
         Equality constraints to the problem. This assumes h_1(x) = 0, h_2(x) = 0, ...
+    verbose: bool
+        Whether to print information during the solving process. Defaults to False.
+    time_limit: float
+        The time limit (in seconds) for the solver. Defaults to 3600. When the time limit is
+        reached, the solver is killed when it returns to the main loop.
+        However, it might not be killed instantly if it is stuck in an internal function.
 
     Returns
     -----------
@@ -85,7 +95,7 @@ def SymmetricSOS(
 
     [3] https://zhuanlan.zhihu.com/p/20969491385
     """
-    # from ..structsos import StructuralSOS
+    from ..node import ProofTree, ProofNode
     problem = TransformNode.new_problem(expr, ineq_constraints, eq_constraints)
 
     def _explore_symsos(tree, node: ProofNode, configs):
@@ -101,12 +111,15 @@ def SymmetricSOS(
                 if not isinstance(child, SymmetricSubstitution):
                     child.finished = True
 
-    from ..structsos import StructuralSOSSolver
-    from ..sdpsos.sdpsos import SDPSOSSolver
+    # from ..structsos import StructuralSOSSolver
+    # from ..sdpsos.sdpsos import SDPSOSSolver
     configs = {
+        ProofTree: {
+            'time_limit': time_limit,
+        },
         ProofNode: {'verbose': verbose},
         SolvePolynomial: {
-            'solvers': [SymmetricSubstitution, StructuralSOSSolver, SDPSOSSolver],
+            # 'solvers': [SymmetricSubstitution, StructuralSOSSolver, SDPSOSSolver],
             'callback_after_explore': _explore_symsos
         },
     }

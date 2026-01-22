@@ -198,10 +198,18 @@ class UE4Real(SymmetricTransform):
         disc = (a - b)**2*(a - c)**2*(a - d)**2*(b - c)**2*(b - d)**2*(c - d)**2
         y_ = SymmetricSum((a-b)**2*(b-c)**2*(c-a)**2, (a,b,c,d))/6
         w_ = disc * SymmetricSum((a-b)**2,(a,b,c,d))**3 / (4*rr**2)
-        J = -(a*b - 2*a*c + a*d + b*c - 2*b*d + c*d)*(a*b + a*c - 2*a*d - 2*b*c + b*d + c*d)*(2*a*b - a*c - a*d - b*c - b*d + 2*c*d)
+
+        # J = -(a*b - 2*a*c + a*d + b*c - 2*b*d + c*d)*(a*b + a*c - 2*a*d - 2*b*c + b*d + c*d)*(2*a*b - a*c - a*d - b*c - b*d + 2*c*d)
         # z_ = y_ - 4*J
-        ker1 = w_ + 16*J**2
-        z_ = ker1*rr**2 / (8*y_**2)
+        # J = 1/24s((a-b)2(2(a-c)2(b-c)2-3(c-d)4))
+        # ker1 = w_ + 16*J**2
+        # z_ = ker1*rr**2 / (8*y_**2)
+        z_ = 8*SymmetricSum((a-b)**2*(b-c)**2*(c-a)**2*(a+b+c-3*d)**2, (a,b,c,d))\
+            + 3*SymmetricSum((a - b)**2*(c - d)**2*(
+                a**2 - 6*a*b + 2*a*c + 2*a*d + b**2 + 2*b*c + 2*b*d + c**2 - 6*c*d + d**2)**2,
+            (a,b,c,d))
+        z_ = z_ / (6*SymmetricSum((a-b)**2,(a,b,c,d)))
+
         # ker2 = w_*y_**2*z_ / 16 / disc
         x_ = SymmetricSum(a,(a,b,c,d))*SymmetricSum((a-b)**2,(a,b,c,d))*y_/24/rr
 
