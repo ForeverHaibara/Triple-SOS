@@ -2,7 +2,7 @@ from typing import Tuple, Dict, List, Optional, Union, Callable, Any
 from warnings import warn
 
 import numpy as np
-from sympy import Poly, Expr, Symbol, sympify
+from sympy import Poly, Expr, Symbol
 
 from .preprocess import ProofNode, ProofTree, SolvePolynomial
 from .preprocess.reparam import Reparametrization

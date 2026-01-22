@@ -1,19 +1,16 @@
-from functools import wraps
 from typing import (
     Dict, List, Tuple, Set, Optional, Union, Iterable, Callable,
     Any, TypeVar, Generic
 )
 from sympy import (
-    Basic, Expr, Symbol, Dummy, Poly, Integer, Rational, Function, Mul, Pow,
+    Expr, Symbol, Poly, Integer, Function, Mul, Pow,
     fraction
 )
-from sympy import true as SympyTrue
 from sympy.combinatorics.perm_groups import Permutation, PermutationGroup
 from sympy.core.symbol import uniquely_named_symbol
 from sympy.core.sympify import sympify, CantSympify
 from sympy.core.function import AppliedUndef
 from sympy.polys.polyerrors import BasePolynomialError
-from sympy.polys.domains.domainelement import DomainElement
 
 from .complexity import ProblemComplexity
 from .dispatch import (

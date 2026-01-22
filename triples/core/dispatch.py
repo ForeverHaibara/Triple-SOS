@@ -9,13 +9,13 @@ To control the behaviour of `InequalityProblem` on new types, you can either:
 """
 from functools import singledispatch
 from typing import (
-    Dict, List, Tuple, Set, Optional, Union, Iterable, Callable,
-    Any, TypeVar, Generic
+    Dict, List, Tuple, Set, Optional, Union, Callable,
+    Any, TypeVar
 )
 
 from sympy import (
-    Basic, Expr, Symbol, Dummy, Poly, Integer, Rational, Function, Add, Mul, Pow,
-    sympify, signsimp, fraction
+    Expr, Symbol, Dummy, Poly, Integer, Add, Mul,
+    sympify, signsimp
 )
 from sympy import __version__ as SYMPY_VERSION
 from sympy.external.importtools import version_tuple

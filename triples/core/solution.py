@@ -7,14 +7,13 @@ from warnings import warn
 import sympy as sp
 from sympy.core.singleton import S
 from sympy import Poly, Expr, Symbol, Float, Equality, Add, Mul
-from sympy.printing.precedence import precedence_traditional, PRECEDENCE
+from sympy.printing.precedence import precedence_traditional
 from sympy.printing.str import StrPrinter
-from sympy.printing.latex import LatexPrinter
 from sympy.combinatorics import PermutationGroup, Permutation, CyclicGroup
 from sympy.core.relational import Equality
 
 from .problem import InequalityProblem
-from ..utils.expressions.cyclic import is_cyclic_expr, CyclicSum, CyclicProduct, CyclicExpr, rewrite_symmetry
+from ..utils.expressions.cyclic import CyclicProduct, CyclicExpr, rewrite_symmetry
 from ..utils.expressions.psatz import SOSlist, PSatz
 
 

@@ -1,8 +1,9 @@
-import sympy as sp
-from sympy import Poly, Rational, Dummy
+from typing import Tuple
+
+from sympy import Poly, Dummy, Symbol, Rational
 from sympy.combinatorics import AlternatingGroup
 
-from .basic import SymmetricTransform, extract_factor
+from .basic import SymmetricTransform, extract_factor, compose
 from ...utils import CyclicSum, CyclicProduct, SymmetricSum, SymmetricProduct
 
 class UE3Positive(SymmetricTransform):
@@ -29,27 +30,29 @@ class UE3Positive(SymmetricTransform):
 
     References
     ----------
-    [1] 陈胜利.不等式的分拆降维幂方法与可读证明.哈尔滨工业大学出版社,2016.
+    [1] 陈胜利. 不等式的分拆降维幂方法与可读证明.哈尔滨工业大学出版社, 2016.
+
     [2] https://zhuanlan.zhihu.com/p/616532245
     """
     nvars = 3
     symmetry = 'sym'
     @classmethod
-    def _transform_pqr(cls, poly_pqr, original_symbols, new_symbols, return_poly=True):
+    def _transform_pqr(cls, poly_pqr, new_symbols, return_poly=True):
         p, q, r = poly_pqr.gens
-        a, b, c = original_symbols
-        x, y, z = new_symbols
-        degree = 0 if poly_pqr.is_zero else (lambda d:d[0]+2*d[1]+3*d[2])(poly_pqr.monoms()[0])
+        a, b, c = poly_pqr.gens
+        x, y, z = p, q, r
+        degree = 0 if poly_pqr.is_zero else \
+            (lambda d:d[0]+2*d[1]+3*d[2])(poly_pqr.monoms()[0])
 
         # Note that q/p^2 = (...)/(p*w), r/p^3 = (...)/(p*w),
         # we first dehomogenize by setting p = 1
-        poly_qr = poly_pqr.subs(p, 1).as_poly(q, r)
+        poly_qr = poly_pqr.eval(1)
         hom_degree = poly_qr.total_degree()
-        numerator = poly_qr.homogenize(p)(
+        numerator = compose(poly_qr.homogenize(p).reorder(p, q, r),(
+            z*(x + 4*y) + 4*(x + y)**3,
             y * ((x + y)*(4*x + y) + z),
-            x * y**2,
-            z*(x + 4*y) + 4*(x + y)**3
-        )
+            x * y**2
+        ))
         # poly = p**degree * numerator / (p*w)**hom_degree
 
         p_degree = 3*hom_degree - degree # negative degree is acceptable
@@ -59,24 +62,20 @@ class UE3Positive(SymmetricTransform):
         # return numerator / denominator
 
         # numerator can be factored by w (depending on the multiplicity at (1,1,1))
-        numerator = numerator.as_poly(x, y, z)
-        wpoly = ((y - 2*x)**2 + z).as_poly(x, y, z)
+        wpoly = ((y - 2*x)**2 + z).as_poly(x, y, z, domain=numerator.domain)
         extract_w_degree, numerator = extract_factor(numerator, wpoly, [(2, 1, -9)])
         w_degree -= extract_w_degree
 
-        numerator = numerator.as_poly(x, y, z)
-        p0 = CyclicSum(a,(a,b,c))
-        # w0 = CyclicSum(a*(a-b)*(a-c),(a,b,c))*CyclicSum(a*(b-c)**2,(a,b,c))**2 / CyclicProduct(a,(a,b,c))
-        # w0 = (CyclicProduct((a-b)**2,(a,b,c))*p0**3 +
-        #         CyclicProduct(a,(a,b,c))*CyclicProduct((a+b-2*c)**2,(a,b,c)))/CyclicProduct(a,(a,b,c))
-        # _SCHUR = (CyclicSum((b-c)**2*(b+c-a)**2, (a,b,c)) + 2*CyclicSum(b*c*(b-c)**2, (a,b,c)))/2/CyclicSum(a, (a,b,c))
-        # w0 = _SCHUR * CyclicSum(a*(b-c)**2,(a,b,c))**2 / CyclicProduct(a,(a,b,c))
-        w0 = x*y**2 / CyclicProduct(a,(a,b,c))
+        p0 = CyclicSum(a, (a, b, c))
+
+        x, y, z = new_symbols
+        numerator = numerator.new(numerator.rep, x, y, z)
+        w0 = x*y**2 / CyclicProduct(a, (a, b, c))
         denominator = p0**p_degree * w0**w_degree
         if return_poly:
             return numerator, denominator
 
-        numerator = numerator.as_poly(z)
+        numerator = numerator.eject(x, y)
         numerator = sum(coeff.factor() * z**deg for ((deg, ), coeff) in numerator.terms())
         return (numerator / denominator).together()
 
@@ -85,11 +84,13 @@ class UE3Positive(SymmetricTransform):
         a, b, c = symbols
         x, y, z = new_symbols
         # _SCHUR = CyclicSum(a*(a-b)*(a-c), (a,b,c))
-        _SCHUR = (CyclicSum((b-c)**2*(b+c-a)**2, (a,b,c)) + 2*CyclicSum(b*c*(b-c)**2, (a,b,c)))/(2*CyclicSum(a, (a,b,c)))
+        _SCHUR = (CyclicSum((b-c)**2*(b+c-a)**2, (a,b,c)) \
+                  + 2*CyclicSum(b*c*(b-c)**2, (a,b,c)))/(2*CyclicSum(a, (a,b,c)))
         return {
             x: _SCHUR,
             y: CyclicSum(a*(b-c)**2, (a,b,c)),
-            z: CyclicProduct((a-b)**2, (a,b,c)) * CyclicSum(a, (a,b,c))**3 / CyclicProduct(a, (a,b,c)),
+            z: CyclicProduct((a-b)**2, (a,b,c)) * CyclicSum(a, (a,b,c))**3 \
+                / CyclicProduct(a, (a,b,c)),
         }
 
     @classmethod
@@ -130,9 +131,9 @@ class UE3Real(SymmetricTransform):
     nvars = 3
     symmetry = 'sym'
     @classmethod
-    def _transform_pqr(cls, poly_pqr, original_symbols, new_symbols, return_poly=True):
+    def _transform_pqr(cls, poly_pqr, new_symbols, return_poly=True):
         func = _symmetric_real_3vars
-        return func(poly_pqr, original_symbols, new_symbols, return_poly=return_poly)
+        return func(poly_pqr, new_symbols, return_poly=return_poly)
 
     @classmethod
     def get_inv_dict(cls, symbols, new_symbols):
@@ -141,7 +142,7 @@ class UE3Real(SymmetricTransform):
         return {
             x: CyclicSum(a, (a,b,c)) * CyclicSum((a-b)**2, (a,b,c)) / 2,
             y: CyclicProduct(2*a - b - c, (a,b,c)) / 2,
-            z: Rational(27, 4) * CyclicProduct((a-b)**2, (a,b,c))
+            z: 27 * CyclicProduct((a-b)**2, (a,b,c)) / 4
         }
 
     @classmethod
@@ -185,9 +186,9 @@ class UE4Real(SymmetricTransform):
     nvars = 4
     symmetry = 'sym'
     @classmethod
-    def _transform_pqr(cls, poly_pqr, original_symbols, new_symbols, return_poly=True):
+    def _transform_pqr(cls, poly_pqr, new_symbols, return_poly=True):
         func = _symmetric_real_4vars
-        return func(poly_pqr, original_symbols, new_symbols, return_poly=return_poly)
+        return func(poly_pqr, new_symbols, return_poly=return_poly)
 
     @classmethod
     def get_inv_dict(cls, symbols, new_symbols):
@@ -215,21 +216,27 @@ class UE4Real(SymmetricTransform):
             Poly(w, (x,y,z,w)): w
         }, dict()
 
-def _symmetric_real_3vars(poly_pqr, original_symbols, new_symbols, return_poly=True):
+
+def _symmetric_real_3vars(
+    poly_pqr: Poly,
+    new_symbols: Tuple[Symbol, ...],
+    return_poly=True
+):
     p, q, r = poly_pqr.gens
-    a, b, c = original_symbols
-    x, y, z = new_symbols
-    degree = 0 if poly_pqr.is_zero else (lambda d:d[0]+2*d[1]+3*d[2])(poly_pqr.monoms()[0])
+    a, b, c = poly_pqr.gens
+    x, y, z = p, q, r
+    degree = 0 if poly_pqr.is_zero \
+        else (lambda d:d[0]+2*d[1]+3*d[2])(poly_pqr.monoms()[0])
 
     # Note that q/p^2 = (..)/(27x^3), r/p^3 = (..)/(27x^3),
     # we first dehomogenize by setting p = 1
-    poly_qr = poly_pqr.subs(p, 1).as_poly(q, r)
+    poly_qr = poly_pqr.eval(1)
     hom_degree = poly_qr.total_degree()
-    numerator = poly_qr.homogenize(p)(
+    numerator = compose(poly_qr.homogenize(p).reorder(p, q, r), (
+        27*x**3,
         9*x*(x**2 - y**2 - z),
         x**3 + (2*y - 3*x)*(y**2 + z),
-        27*x**3
-    )
+    ))
     # poly = p**degree * numerator / (27*x**3)**hom_degree
 
     p_degree = 3*hom_degree - degree # negative degree is acceptable
@@ -239,46 +246,60 @@ def _symmetric_real_3vars(poly_pqr, original_symbols, new_symbols, return_poly=T
     # return numerator / denominator
 
     # numerator can be factored by x or w^3 (depending on the multiplicity at (1,1,1))
-    numerator = (numerator / 27**hom_degree).as_poly(x, y, z)
+    if not (numerator.domain.is_Composite and numerator.domain.domain.is_Field):
+        numerator = numerator.to_field()
+    numerator = numerator.mul_ground(numerator.domain.one/27**hom_degree)
 
     if not numerator.is_zero:
         min_x_degree = min(numerator.monoms(), key=lambda _:_[0])[0]
         if min_x_degree > 0:
             # x = p*w
-            numerator = Poly(dict(((i-min_x_degree, j, k), v) for (i,j,k), v in numerator.terms()), x, y, z)
+            dt = dict(((i-min_x_degree, j, k), v)
+                            for (i,j,k), v in numerator.rep.terms())
+            numerator = Poly(dt, x, y, z, domain=numerator.domain)
             p_degree -= min_x_degree
             w_degree -= min_x_degree
 
-    wpoly = (y**2 + z).as_poly(x, y, z)
+    wpoly = (y**2 + z).as_poly(x, y, z, domain=numerator.domain)
     extract_w_degree, numerator = extract_factor(numerator, wpoly, [(3, 2, -4)])
     w_degree -= extract_w_degree * 3
 
-    numerator = numerator.as_poly(x, y, z)
-    p0 = CyclicSum(a,(a,b,c))
-    w0 = CyclicSum((a-b)**2,(a,b,c))/2
+    x, y, z = new_symbols
+    numerator = numerator.new(numerator.rep, x, y, z)
+    p0 = CyclicSum(a, (a, b, c))
+    w0 = CyclicSum((a - b)**2, (a, b, c))/2
     denominator = p0**p_degree * w0**w_degree
     if return_poly:
         return numerator, denominator
 
-    numerator = numerator.as_poly(z)
+    numerator = numerator.eject(x, y)
     numerator = sum(coeff.factor() * z**deg for ((deg, ), coeff) in numerator.terms())
     return (numerator / denominator).together()
 
 
-def _symmetric_real_4vars(poly_pqr, original_symbols, new_symbols, return_poly=True):
+def _symmetric_real_4vars(
+    poly_pqr: Poly,
+    new_symbols: Tuple[Symbol, ...],
+    return_poly=True
+):
     p, q, r, s = poly_pqr.gens
-    x, y, z, w = new_symbols
-    a, b, c, d = original_symbols
-    p2, q2, r2, s2 = Dummy("p2"), Dummy("q2"), Dummy("r2"), Dummy("s2")
-    degree = 0 if poly_pqr.is_zero else (lambda _: _[0]+_[1]*2+_[2]*3+_[3]*4)(poly_pqr.monoms()[0])
-    poly_shifted = poly_pqr(p2, 3*p2**2/8 + q2, p2**3/16 + p2*q2/2 + r2, p2**4/256 + p2**2*q2/16 + p2*r2/4 + s2).as_poly(p2, q2, r2, s2)
+    a, b, c, d = poly_pqr.gens
+    degree = 0 if poly_pqr.is_zero else \
+        (lambda _: _[0]+_[1]*2+_[2]*3+_[3]*4)(poly_pqr.monoms()[0])
+    if not (poly_pqr.domain.is_Composite and poly_pqr.domain.domain.is_Field):
+        poly_pqr = poly_pqr.to_field()
+
+    poly_shifted = compose(poly_pqr, (
+        p, 3*p**2/8 + q, p**3/16 + p*q/2 + r, p**4/256 + p**2*q/16 + p*r/4 + s
+    ))
 
     # dehomogenize p2=r2*q2^2*p, s2=q2^2*s (symbols p,q,r,s are reused and are different now)
-    poly_dehom = poly_shifted(r*q**2*p, q, r, q**2*s).as_poly(p, q, r, s)
+    poly_dehom = compose(poly_shifted, (r*q**2*p, q, r, q**2*s))
     q_degree = -((degree * 2) % 3)
     r_degree = -(degree % 2)
     # q^3 -> q, r^2 -> r
-    poly_dehom = Poly(dict(((i,j//3,k//2,l), _) for (i,j,k,l), _ in poly_dehom.terms()), p, q, r, s)
+    dt = dict(((i,j//3,k//2,l), _) for (i,j,k,l), _ in poly_dehom.rep.terms())
+    poly_dehom = Poly(dt, p, q, r, s, domain=poly_dehom.domain)
 
     # Naive implementation:
     # ker1, ker2 = w + (y - z)**2, (27*y**2*z + (w + (y - z)**2)*(8*y + z))
@@ -292,22 +313,25 @@ def _symmetric_real_4vars(poly_pqr, original_symbols, new_symbols, return_poly=T
     # return numerator.factor() / denominator
 
     # fraction-free algorithm
+    hom = Dummy("_p")
     hom_degree = poly_dehom.total_degree()
-    poly_dehom = poly_dehom.homogenize(p2)
-    ker1, ker2 = r2, s2  # any temporary free symbols (defer the substitution of true values)
-    numerator = poly_dehom(
+    poly_dehom = poly_dehom.homogenize(hom)
+    x, y, z, w = p, q, r, s
+    ker1, ker2 = w, hom
+    numerator = compose(poly_dehom, (
         4096*x*ker1**2,
         -y*ker2**2,
         8*y**3*z*ker2,
         -16*y*z*(9*y**2 - ker1)*ker1,
         64*y*ker1*ker2
-    ).as_poly(x, y, z, ker1, ker2)
+    ))
+
     _min_degree = lambda poly, i: 0 if poly.is_zero else min(_[i] for _ in poly.monoms())
     min_degrees = [_min_degree(numerator, i) for i in range(5)]
     numerator = Poly(dict(
         (tuple(mi - mini for mi, mini in zip(m, min_degrees)), _)
-        for m, _ in numerator.terms()
-    ), x, y, z, ker1, ker2).as_poly(ker1, ker2)
+        for m, _ in numerator.rep.terms()
+    ), x, y, z, ker1, ker2, domain=numerator.domain)
 
     # degrees of y, ker1, ker2 in denominator is lifted by homogenization
     # and the degrees are reduced after cancellation
@@ -316,16 +340,20 @@ def _symmetric_real_4vars(poly_pqr, original_symbols, new_symbols, return_poly=T
 
     # substitute the actual value in
     ker1, ker2 = w + (y - z)**2, (8*w*y + w*z + 8*y**3 + 12*y**2*z + 6*y*z**2 + z**3)
-    numerator = numerator(ker1, ker2).as_poly(x, y, z, w)
+    numerator = compose(numerator, (x, y, z, ker1, ker2)).eval(4, 0) # set ker2 == 0
+
     inv_denominator, numerator = numerator.primitive()
     if inv_denominator < 0:
         inv_denominator, numerator = -inv_denominator, -numerator
     denominator = 1/inv_denominator
 
     # try if numerator can be divided by ker1
-    ker1poly = (w + (y - z)**2).as_poly(x,y,z,w)
+    ker1poly = (w + (y - z)**2).as_poly(x, y, z, w, domain=numerator.domain)
     extract_ker1_degree, numerator = extract_factor(numerator, ker1poly, [(5,3,1,-4)])
     rem_degrees[3] -= extract_ker1_degree
+
+    x, y, z, w = new_symbols
+    numerator = numerator.new(numerator.rep, x, y, z, w)
 
     xd, yd, zd, k1d, k2d = rem_degrees
     # Naive implementation:
@@ -339,7 +367,7 @@ def _symmetric_real_4vars(poly_pqr, original_symbols, new_symbols, return_poly=T
     if r_degree % 2 == 1:
         rd = r_degree
         # r2*x == S[a]*S[(a-b)^2]*y/192
-        denominator *= SymmetricSum(a,(a,b,c,d))**rd * SymmetricSum((a-b)**2,(a,b,c,d))**rd / Rational(192)**rd
+        denominator *= SymmetricSum(a, (a,b,c,d))**rd * SymmetricSum((a-b)**2, (a,b,c,d))**rd / Rational(192)**rd
         yd = yd + rd
         xd = xd - rd
         r_degree = 0
@@ -350,14 +378,14 @@ def _symmetric_real_4vars(poly_pqr, original_symbols, new_symbols, return_poly=T
     elif k2d % 2 == 0:
         disc_pow_k2d = CyclicProduct((a-b)**2, (a,b,c,d), AlternatingGroup(4))**(k2d//2)
 
-    denominator *= Rational(2)**(6*hom_degree - 4*k2d)\
+    denominator *= 2**(6*hom_degree - 4*k2d)\
         * x**xd * y**yd * z**zd * w**wd * (w + (y - z)**2)**k1d / disc_pow_k2d
 
-    q2_ = -SymmetricSum((a-b)**2, (a,b,c,d))/32
-    r2_ = (a+b-c-d)*(a+c-d-b)*(a+d-b-c)/8
+    q2 = -SymmetricSum((a-b)**2, (a,b,c,d))/32
+    r2 = (a+b-c-d)*(a+c-d-b)*(a+d-b-c)/8
     if q_degree % 2 == 1: # q2 -> -q2
         numerator = -numerator
-    denominator *= (-q2_)**q_degree * r2_**r_degree
+    denominator *= (-q2)**q_degree * r2**r_degree
 
     if return_poly:
         return numerator, denominator

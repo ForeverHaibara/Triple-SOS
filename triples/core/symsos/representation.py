@@ -1,4 +1,4 @@
-from typing import Tuple, Dict, List, Union
+from typing import Tuple, Dict, List, Union, Optional
 
 from sympy import Poly, Expr, Symbol
 
@@ -17,7 +17,12 @@ def _get_transform_from_method(method: str, nvars: int) -> SymmetricTransform:
     return _METHOD_TO_TRANSFORM[method]
 
 
-def sym_representation(poly: Poly, symbols: List[Symbol], return_poly: bool = False, method: str = 'real') -> Union[Expr, Tuple[Poly, Expr]]:
+def sym_representation(
+    poly: Poly,
+    symbols: Optional[Tuple[Symbol, ...]] = None,
+    return_poly: bool = False,
+    method: str = 'real'
+) -> Union[Expr, Tuple[Poly, Expr]]:
     """
     Represent a polynoimal to the symmetric form.
 
@@ -26,7 +31,7 @@ def sym_representation(poly: Poly, symbols: List[Symbol], return_poly: bool = Fa
 
     Parameters
     ----------
-    symbols : List[Symbol]
+    symbols : Tuple[Symbol, ...]
         List of symbols used in the polynomial representation.
     return_poly : bool, optional
         If False, returns a symbolic expression.
@@ -42,7 +47,7 @@ def sym_representation(poly: Poly, symbols: List[Symbol], return_poly: bool = Fa
 
     Returns
     ----------
-    sympy Expr or (sympy Poly, sympy Expr)
+    (Poly, Expr) or Expr
 
     Examples
     ----------
@@ -54,12 +59,18 @@ def sym_representation(poly: Poly, symbols: List[Symbol], return_poly: bool = Fa
     """
     if not poly.is_homogeneous:
         raise ValueError("The polynomial must be homogeneous.")
-
+    if symbols is None:
+        symbols = poly.gens
     trans = _get_transform_from_method(method, len(poly.gens))
     return trans.transform(poly, symbols, return_poly=return_poly)
 
 
-def sym_representation_inv(expr: Expr, original_symbols: List[Symbol], new_symbols: List[Symbol], method: str = 'real') -> Expr:
+def sym_representation_inv(
+    expr: Expr,
+    original_symbols: Tuple[Symbol, ...],
+    new_symbols: Tuple[Symbol, ...],
+    method: str = 'real'
+) -> Expr:
     """
     Compute the inverse transformation of a symbolic expression based on a specified method.
     This function takes a symbolic expression and reverses a previously applied
@@ -70,9 +81,9 @@ def sym_representation_inv(expr: Expr, original_symbols: List[Symbol], new_symbo
     ----------
     expr : Expr
         The symbolic expression to be inversely transformed.
-    original_symbols : List[Symbol]
+    original_symbols : Tuple[Symbol, ...]
         The list of original symbols in the expression before transformation.
-    new_symbols : List[Symbol]
+    new_symbols : Tuple[Symbol, ...]
         The list of new symbols currently used in the transformed expression.
     method : str, optional
         The transformation method to use. Defaults to 'real'. Must be a valid
@@ -94,8 +105,14 @@ def sym_representation_inv(expr: Expr, original_symbols: List[Symbol], new_symbo
     return trans.inv_transform(expr, original_symbols=original_symbols, new_symbols=new_symbols)
 
 
-def sym_transform(poly: Poly, ineq_constraints: Dict[Poly, Expr], eq_constraints: Dict[Poly, Expr],
-                symbols: List[Symbol], deparametrize: bool = False, method: str = 'real') -> Tuple[Poly, Dict[Poly, Expr], Dict[Poly, Expr], Expr]:
+def sym_transform(
+    poly: Poly,
+    ineq_constraints: Dict[Poly, Expr],
+    eq_constraints: Dict[Poly, Expr],
+    symbols: Tuple[Symbol, ...],
+    deparametrize: bool = False,
+    method: str = 'real'
+) -> Tuple[Poly, Dict[Poly, Expr], Dict[Poly, Expr], Expr]:
     """
     Transform a symmetric inequality problem along with its constraints.
     """
