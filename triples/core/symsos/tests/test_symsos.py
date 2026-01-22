@@ -5,6 +5,7 @@ from ..symsos import SymmetricSubstitution
 from ...problem import InequalityProblem
 from ...node import ProofTree
 from ...structsos import StructuralSOSSolver
+from ...linsos import LinearSOSSolver
 from ...sdpsos import SDPSOSSolver
 from ...preprocess import SolvePolynomial
 from ....utils import SymmetricSum, CyclicSum, CyclicProduct
@@ -55,7 +56,8 @@ def test_pivoting_problems(problem):
     tree = ProofTree(pivot,
         {ProofTree: {'time_limit': 30.0},
          SolvePolynomial: {'solvers': [
-             SymmetricSubstitution, StructuralSOSSolver, SDPSOSSolver]},
+             SymmetricSubstitution, StructuralSOSSolver, LinearSOSSolver, SDPSOSSolver]},
+         LinearSOSSolver: {'basis_limit': 1000},
          SDPSOSSolver: {'lift_degree_limit': 0}
         }
     )

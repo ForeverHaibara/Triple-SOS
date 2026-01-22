@@ -1,6 +1,82 @@
 from typing import Tuple, Optional
 
 from sympy import Poly, Symbol
+from sympy.polys.rings import PolyElement
+from sympy.utilities import subsets
+
+
+def _symmetric_poly(self, n):
+    """
+    Return the elementary symmetric polynomial of degree *n* over
+    this ring's generators.
+    """
+    if n < 0 or n > self.ngens:
+        raise ValueError("Cannot generate symmetric polynomial of order %s for %s" % (n, self.gens))
+    elif not n:
+        return self.one
+    else:
+        poly = self.zero
+        for s in subsets(range(self.ngens), int(n)):
+            monom = tuple(int(i in s) for i in range(self.ngens))
+            poly += self.term_new(monom, self.domain.one)
+        return poly
+
+def _symmetrize(self: PolyElement):
+    """
+    `PolyElement.symmetrize` was added since SymPy 1.12. This
+    function is copied from the SymPy source code for version
+    compatibility.
+    """
+    f = self.copy()
+    ring = f.ring
+    n = ring.ngens
+
+    if not n:
+        return f, ring.zero, []
+
+    polys = [_symmetric_poly(ring, i+1) for i in range(n)]
+
+    poly_powers = {}
+    def get_poly_power(i, n):
+        if (i, n) not in poly_powers:
+            poly_powers[(i, n)] = polys[i]**n
+        return poly_powers[(i, n)]
+
+    indices = list(range(n - 1))
+    weights = list(range(n, 0, -1))
+
+    symmetric = ring.zero
+
+    while f:
+        _height, _monom, _coeff = -1, None, None
+
+        for i, (monom, coeff) in enumerate(f.terms()):
+            if all(monom[i] >= monom[i + 1] for i in indices):
+                height = max(n*m for n, m in zip(weights, monom))
+
+                if height > _height:
+                    _height, _monom, _coeff = height, monom, coeff
+
+        if _height != -1:
+            monom, coeff = _monom, _coeff
+        else:
+            break
+
+        exponents = []
+        for m1, m2 in zip(monom, monom[1:] + (0,)):
+            exponents.append(m1 - m2)
+
+        symmetric += ring.term_new(tuple(exponents), coeff)
+
+        product = coeff
+        for i, n in enumerate(exponents):
+            product *= get_poly_power(i, n)
+        f -= product
+
+    mapping = list(zip(ring.gens, polys))
+
+    return symmetric, f, mapping
+
 
 def _get_pqr_symbols(symbols: Optional[Tuple[Symbol, ...]] = None) -> Tuple[Symbol, Symbol, Symbol]:
     """Return p,q,r from symbols. If None, create new symbols."""
@@ -48,7 +124,7 @@ def pqr_sym(poly: Poly, symbols: Optional[Tuple[Symbol, ...]] = None) -> Poly:
 
     ring = poly.domain[tuple(poly.gens)]
     p = ring(poly.rep.to_dict())
-    f, g, rule = p.symmetrize()
+    f, g, rule = _symmetrize(p)
     if g != 0:
         raise ValueError("The polynomial is not symmetric.")
     # return f.as_expr(*symbols)

@@ -5,6 +5,7 @@ F, G = Function('F'), Function('G')
 
 import pytest
 
+from ..signs import _prove_poly, sign_sos
 from ...problem import InequalityProblem
 
 class InferSignProblems:
@@ -133,3 +134,46 @@ def test_infer_signs(problem):
 def test_infer_signs_empty():
     pro = InequalityProblem(Poly(0, a, b), {}, {})
     assert pro.get_symbol_signs() == {a: (None, None), b: (None, None)}
+
+
+def test_prove_poly_by_signs():
+    cases = [
+        (
+            3*a**3*(2 - b) - b**3*c + 2*c**5/3,
+            {b: (-1, r), a: (1, a), c: (1, u)}
+        ),
+        (
+            3*a*b*(c + 2*a*b**5) + a**4*(b**2 + c**2)/5 - c**3*b + 2*(a**2 + b*c)*b**2,
+            {c: (0, v), a: (None, None)}
+        ),
+        (
+            4*(a**3*b + b*c) + b**2*(c + 2)/3 + (4 - a - b)*(1 - a - b)*(a*b + 2),
+            {a: (-1, u), b: (-1, v), c: (0, r)}
+        ),
+        (
+            a**2 - a*b + b**2,
+            {a: (0, a), b: (0, v), c: (-1, r)}
+        ),
+        (
+            (3*a*(a - b)*(a - 2*b + 3 - c**2)**2*(a**3 - 4*b + 1)**3/4),
+            {a: (1, u), b: (-1, v)}
+        )
+    ]
+    for ind, (poly, signs) in enumerate(cases):
+        need_factor = (ind >= 4)
+        proof = _prove_poly(poly.as_poly(a, b, c), signs, factor=need_factor)
+        assert proof is not None, f"Case {ind}: failed to establish the nonnegativity of {poly} given {signs}."
+
+        # extract nonnegative symbols from "signs"
+        new_signs = {g: (None, None) for g in poly.free_symbols}
+        new_signs.update({e: (1 if s else 0, e) for s, e in signs.values() if s is not None})
+
+        valid_proof = _prove_poly(proof.as_poly(), new_signs, factor=need_factor)
+        assert valid_proof is not None, f"Case {ind}: failed to validate the proof {poly} == {proof} given {new_signs}."
+        assert (valid_proof - proof).expand() == 0, f"Case {ind}: wrong sign_sos solution {proof} != {valid_proof}."
+
+        diff = (poly - proof).xreplace({
+            g: e if s >= 0 else -e for g, (s, e) in signs.items() if s is not None})
+        # diff = diff.xreplace({
+        #     e: 0 for g, (s, e) in signs.items() if s == 0})
+        assert diff.expand() == 0, f"Case {ind}: wrong sign_sos solution {poly} != {proof}."
