@@ -1,5 +1,5 @@
 from sympy.abc import a, b, c, d, e, t, x, y, z
-from sympy import sqrt
+from sympy import Rational
 
 from ..symsos import SymmetricSubstitution
 from ...problem import InequalityProblem
@@ -7,7 +7,7 @@ from ...node import ProofTree
 from ...structsos import StructuralSOSSolver
 from ...sdpsos import SDPSOSSolver
 from ...preprocess import SolvePolynomial
-from ....utils import SymmetricSum, CyclicSum
+from ....utils import SymmetricSum, CyclicSum, CyclicProduct
 
 import pytest
 
@@ -22,6 +22,11 @@ class SymmetricSubstitutionProblems:
     @classmethod
     def problem_u3real(cls):
         return CyclicSum((b-c)**2*(b+c-5*a)**2, (a,b,c))/7, [], []
+
+    @classmethod
+    def problem_u3real_constrained(cls):
+        p0 = CyclicSum(a*(b+c)*(a**2+b**2)*(a**2+c**2), (a,b,c)) - 3*CyclicProduct(a**2+b**2, (a,b,c))/10
+        return p0, [CyclicSum(a*b, (a,b,c))], []
 
     @classmethod
     def problem_u3positive_cubic(cls):

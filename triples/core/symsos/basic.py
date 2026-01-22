@@ -7,6 +7,7 @@ from ...utils import pqr_sym, verify_symmetry
 from ..problem import InequalityProblem
 from ..preprocess import sign_sos
 
+
 class SymmetricTransform():
     """
     Class to store rules of transformations of variables.
@@ -145,9 +146,14 @@ class SymmetricTransform():
             for p, e in old.items():
                 p = p.as_poly(symbols)
                 if not verify_symmetry(p, cls.symmetry):
-                    continue # TODO
+                    # TODO: still it is possible to symmetrize
+                    # if the constraints have their symmetric
+                    # counterparts, but we ignore them in the current
+                    if p.is_monomial:
+                        continue
+                    return None
                 new_p, mul = trans(p)
-                new[new_p] = e * mul
+                new[new_p] = e / mul
         return new_ineqs, new_eqs
 
     @classmethod
