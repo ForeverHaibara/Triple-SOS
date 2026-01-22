@@ -71,13 +71,13 @@ class UE3Positive(SymmetricTransform):
         x, y, z = new_symbols
         numerator = numerator.new(numerator.rep, x, y, z)
         w0 = x*y**2 / CyclicProduct(a, (a, b, c))
-        denominator = p0**p_degree * w0**w_degree
+        inv_denominator = p0**(-p_degree) * w0**(-w_degree)
         if return_poly:
-            return numerator, denominator
+            return numerator, inv_denominator
 
         numerator = numerator.eject(x, y)
         numerator = sum(coeff.factor() * z**deg for ((deg, ), coeff) in numerator.terms())
-        return (numerator / denominator).together()
+        return (numerator * inv_denominator).together()
 
     @classmethod
     def get_inv_dict(cls, symbols, new_symbols):
@@ -268,13 +268,13 @@ def _symmetric_real_3vars(
     numerator = numerator.new(numerator.rep, x, y, z)
     p0 = CyclicSum(a, (a, b, c))
     w0 = CyclicSum((a - b)**2, (a, b, c))/2
-    denominator = p0**p_degree * w0**w_degree
+    inv_denominator = p0**(-p_degree) * w0**(-w_degree)
     if return_poly:
-        return numerator, denominator
+        return numerator, inv_denominator
 
     numerator = numerator.eject(x, y)
     numerator = sum(coeff.factor() * z**deg for ((deg, ), coeff) in numerator.terms())
-    return (numerator / denominator).together()
+    return (numerator * inv_denominator).together()
 
 
 def _symmetric_real_4vars(
@@ -388,5 +388,5 @@ def _symmetric_real_4vars(
     denominator *= (-q2)**q_degree * r2**r_degree
 
     if return_poly:
-        return numerator, denominator
+        return numerator, 1/denominator
     return (numerator.as_expr() / denominator).together()

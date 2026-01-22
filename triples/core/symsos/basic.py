@@ -194,11 +194,11 @@ class SymmetricTransform():
         mul_proof = sign_sos(mul, signs)
         if mul_proof is None:
             return None
-        mul_proof = cls.inv_transform(mul_proof, symbols, new_symbols) / const
+        mul_proof = cls.inv_transform(mul_proof, symbols, new_symbols) * const
 
         # print(new_expr, new_ineqs, new_eqs)
 
-        restoration = lambda x: cls.inv_transform(x, symbols, new_symbols) / mul_proof
+        restoration = lambda x: cls.inv_transform(x, symbols, new_symbols) * mul_proof
         return pro, restoration
 
 
