@@ -111,7 +111,7 @@ class StateAlgebra:
         Get the list of terms of a polynomial in the algebra.
         This is automatically implemented if the polynomial object has the method `.rep.terms()`.
         """
-        return poly.rep.terms()
+        return poly.rep.terms() if (not poly.is_zero) else []
 
     def arraylize(self, poly: Poly, state: bool = False) -> Matrix:
         """
