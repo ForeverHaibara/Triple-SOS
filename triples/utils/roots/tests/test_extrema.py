@@ -8,6 +8,8 @@ class ExtremaProblems():
     def collect(self):
         return {k: getattr(self, k) for k in dir(self) if k.startswith('problem')}
 
+    def problem_doc1(self):
+        return (-(a + 2*b), [a, b], [a**2 + b**2 - 1]), [(1/5**.5, 2/5**.5)]
     def problem_pqr(self):
         return (-x, [a,b,c], [a+b+c-5,a*b+b*c+c*a-3,a*b*c-x]),\
             [(13/3,1/3,1/3,13/27), (1/3,13/3,1/3,13/27), (1/3,1/3,13/3,13/27)]

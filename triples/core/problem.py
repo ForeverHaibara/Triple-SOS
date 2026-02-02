@@ -240,7 +240,7 @@ class InequalityProblem(Generic[T]):
         ret = self._dtype_convert(p, 1)
         sgn = 1 if c > 0 else -1
         e = e / c
-        max_d = Integer(max(1, *(d for q, d in lst)))
+        max_d = Integer(max(0, 1, *(d for q, d in lst))) # avoid only 1 arg when lst is empty
         for q, d in lst:
             ret = ret * q
             e = e * q.as_expr()**(max_d - d)
@@ -555,6 +555,15 @@ class InequalityProblem(Generic[T]):
         self.eq_constraints = dict((e, e2) for e, e2 in eq_constraints.items())
         return self, sqr
 
+    def recompute_constraints(
+        self,
+    ) -> 'InequalityProblem':
+        """
+        Recompute the constraints from the symbol signs.
+        """
+        from .preprocess.signs import recompute_constraints_from_signs
+        return recompute_constraints_from_signs(self)
+
     def homogenize(self, hom: Optional[Symbol]=None) -> Tuple['InequalityProblem', Optional[Symbol]]:
         """
         Try to homogenize the problem.
@@ -772,7 +781,7 @@ class InequalityProblem(Generic[T]):
         ...
         PolynomialError: b**(2/3) contains an element of the set of generators.
         """
-        src_dicts = [{self.expr:1}, self.ineq_constraints, self.eq_constraints]
+        src_dicts = [{self.expr: Integer(1)}, self.ineq_constraints, self.eq_constraints]
         dst_dicts = [{}, {}, {}]
         if isinstance(self.expr, Poly):
             new_symbols = tuple(sorted(list(inv_transform.keys()), key=lambda x:x.name))
@@ -799,10 +808,46 @@ class InequalityProblem(Generic[T]):
         def restore(x: Optional[Expr]) -> Optional[Expr]:
             if x is None:
                 return None
-            return x.xreplace(inv_transform) / next(iter(dst_dicts[0].values()))
+            denom = next(iter(dst_dicts[0].values())).xreplace(inv_transform)
+            return x.xreplace(inv_transform) / denom
         return problem, restore
 
-    def marginalize(self, transform: Dict[Symbol, Expr], diff: Dict[Symbol, Expr]) -> Tuple['InequalityProblem', Callable]:
+    def marginalize(self, transform: Dict[Symbol, Expr], diff: Optional[Dict[Symbol, Expr]]=None) -> Tuple['InequalityProblem', Callable]:
+        """
+        Substitute the variables in the problem with the new substitutions. Currently
+        only work for polynomial problems.
+        
+        Parameters
+        ----------
+        transform : Dict[Symbol, Expr]
+            The new substitutions applied to the variables.
+        diff : Dict[Symbol, Expr]
+            The difference between the old variables and the new substitutions
+            if it is not omitted.
+
+        Returns
+        -------
+        problem : InequalityProblem
+            The new problem with the variables substituted.
+        restore : Callable
+            The function to restore the solution to the original problem.
+
+        Examples
+        --------
+        >>> from sympy.abc import a, b, c
+        >>> pro = InequalityProblem(a*(a-b)*(a-c)+b*(b-c)*(b-a)+c*(c-a)*(c-b), [a,b,c]).polylize()
+        >>> pro2, restore = pro.marginalize({b: c}, {b: b - c})
+        >>> pro2.expr
+        Poly(a**3 - 2*a**2*c + a*c**2, a, c, domain='ZZ')
+        >>> pro2.ineq_constraints
+        {Poly(a, a, c, domain='ZZ'): a, Poly(c, a, c, domain='ZZ'): c}
+        >>> restore(a*(a - c)**2)
+        a*(a - c)**2 - (a - 2*c)*(b - c)**2 - (a**2 - a*c)*(b - c) + (b - c)**3
+        >>> restore(a*(a - c)**2).expand()
+        a**3 - a**2*b - a**2*c - a*b**2 + 3*a*b*c - a*c**2 + b**3 - b**2*c - b*c**2 + c**3
+        """
+        if diff is None:
+            diff = {}
         src_dicts = [{self.expr:1}, self.ineq_constraints, self.eq_constraints]
         dst_dicts = [{}, {}, {}]
 
@@ -840,7 +885,7 @@ class InequalityProblem(Generic[T]):
                     if not any(m):
                         continue
                     difference.append(-c * Mul(
-                        *[diff[g]**m[i] for i, g in enumerate(changed_gens)]))
+                        *[diff.get(g, 0)**m[i] for i, g in enumerate(changed_gens)]))
 
                 # TODO: this can be processed on the domain
                 p = p.TC().as_poly(other_gens)
@@ -858,7 +903,6 @@ class InequalityProblem(Generic[T]):
                 return None
             return (x - expr_add) / expr_mul
         return problem, restore
-
 
 
 def _get_constraints_wrapper(

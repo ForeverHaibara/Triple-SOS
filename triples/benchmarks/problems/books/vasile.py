@@ -348,7 +348,7 @@ class MathematicalInequalitiesVol1(MathematicalInequalities):
         return c4p(1-a+a**2) - ((1+c4p(a))/2)**2, [], []
 
     def problem_vasile_p12096(self):
-        return c4p(a+1/a) - c4s(a)*c4s(1/a), [], [c4p(a)]
+        return c4p(a+1/a) - c4s(a)*c4s(1/a), [c4p(a)], []
 
     def problem_vasile_p12097(self):
         return 16-c4s(a**3), [], [c4s(a)-4, c4s(a**2)-7]

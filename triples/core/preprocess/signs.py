@@ -8,11 +8,14 @@ from ...utils import CyclicExpr
 
 SIGNS_TYPE = Dict[Symbol, Tuple[Optional[int], Expr]]
 
-def is_nonneg_pow(x: Expr) -> bool:
-    if isinstance(x.exp, Rational) and (int(x.exp.numerator) % 2 == 0 or
-            int(x.exp.denominator) % 2 == 0):
+def _is_double_rational(x):
+    if isinstance(x, Rational) and (int(x.numerator) % 2 == 0 or
+            int(x.denominator) % 2 == 0):
         return True
     return False
+
+def is_nonneg_pow(x: Expr) -> bool:
+    return _is_double_rational(x.exp)
 
 def sgn_prod(signs: SIGNS_TYPE) -> Optional[int]:
     if any(s == 0 for s in signs):
@@ -556,3 +559,102 @@ def get_symbol_signs(problem: InequalityProblem) -> Dict[Symbol, Tuple[Optional[
 
     signs = {fs0[i]: signs.get(i, (None, None)) for i in range(len(fs0))}
     return signs
+
+
+def recompute_constraints_from_signs(problem: InequalityProblem) -> InequalityProblem:
+    """
+    Recompute the constraints from the symbol signs.
+
+    Examples
+    --------
+    >>> from sympy.abc import a, b, c, d, u, v, w, x, y, z
+    >>> pro = InequalityProblem(a**3 - b + 1, [a**2 - b**2, a, b, a + 2*b])
+    >>> pro.recompute_constraints().ineq_constraints
+    {a - b: (a**2 - b**2)/(a + b), a: a, b: b}
+    """
+    signs = problem.get_symbol_signs()
+    has_zero = any(s == 0 for s, v in signs.values())
+
+    source = [problem.ineq_constraints, problem.eq_constraints]
+    target = [{}, {}]
+    for tp, src, dst in zip((1, 2), source, target):
+        for p, e in src.items():
+            if isinstance(p, Expr):
+                if p == 0:
+                    continue
+                args = Mul.make_args(p.factor())
+                args = [(a.base, a.exp) if a.is_Pow and a.exp.is_Rational else (a, 1) for a in args]
+            elif isinstance(p, Poly):
+                if p.is_zero:
+                    continue
+                args = p.factor_list_include()
+            else:
+                raise TypeError(f"Unknown type {type(p)}.")
+
+            sgn = 1
+            expr = 1
+            rest_args = []
+            for a, mul in args:
+                # extract the positive part of each arg
+                if isinstance(mul, Rational):
+                    if _is_double_rational(mul):
+                        expr = expr * a**mul
+                        continue
+                    a = a**mul
+                    mul = 1
+                elif mul % 2 == 0:
+                    expr = expr * a.as_expr()**mul
+                    continue
+                s1 = sign_sos(a, signs)
+                if has_zero or s1 is None:
+                    s2 = sign_sos(-a, signs)
+                    if s1 is not None:
+                        # a == 0
+                        sgn = 0
+                        break
+                    if s2 is not None:
+                        sgn *= -1
+                        expr = expr * s2**mul
+                    else: # elif s2 is None:
+                        rest_args.append((a, mul))
+                if s1 is not None:
+                    expr = expr * s1**mul
+
+            if sgn == 0:
+                # 0 >= 0 or 0 == 0 are trivial and should be omitted
+                continue
+
+            # p == sgn * expr * Mul(a**mul for a, mul in rest_args)
+            e2 = e / expr
+            p2 = sgn
+            if len(rest_args) == 0:
+                if tp == 1:
+                    if sgn == 1:
+                        # reduces to the trivial constraint 1 >= 0
+                        # just omit it
+                        continue
+                if isinstance(p, Poly):
+                    # cast to poly
+                    p2 = p.one * sgn
+            else:
+                for a, mul in rest_args:
+                    # TODO: make it square-free
+                    p2 = p2 * a**mul
+            dst[p2] = e2
+
+    is_poly = isinstance(problem.expr, Poly)
+    for g, (s, v) in signs.items():
+        if s is None:
+            continue
+        if is_poly:
+            # cast to poly
+            g = Poly(g, problem.expr.gens)
+        if s == 0:
+            target[1][g] = v
+        elif s == 1:
+            target[0][g] = v
+        elif s == -1:
+            target[0][-g] = v
+
+    problem = problem.copy_new(problem.expr, target[0], target[1])
+    return problem

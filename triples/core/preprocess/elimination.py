@@ -150,6 +150,8 @@ def eliminate_power_constraints(problem: InequalityProblem):
     basis = _rowwise_primitive(basis.T).T
 
     inv_basis = _inv_integer_matrix(basis)
+    # print('basis =', repr(basis))
+    # print('inv_basis =', repr(inv_basis))
     # if not inv_basis._rep.domain.is_ZZ:
     #     return problem, lambda x: x
 
@@ -168,7 +170,8 @@ def eliminate_power_constraints(problem: InequalityProblem):
 
     problem, restore_marginalize = problem.marginalize(
         {g: Integer(1) for g in new_gens[:mat.shape[0]]},
-        {g: g - 1 for g, e in zip(new_gens[:mat.shape[0]], exprs)})
+        {g: (e + 1).together()**p - 1 for g, e, p in zip(
+            new_gens[:mat.shape[0]], exprs, inv_basis.diagonal()[:mat.shape[0]])})
 
     def composed(x):
         y = restore_transform(restore_marginalize(x))

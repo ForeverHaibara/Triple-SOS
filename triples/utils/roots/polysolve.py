@@ -4,8 +4,9 @@ polynomial systems and provides supports for low SymPy versions.
 """
 from typing import List, Tuple, Union
 
-import sympy as sp
-from sympy import Poly, Expr, Integer, Rational, Symbol, RR, QQ, sympify
+from sympy import (Poly, Expr, Integer, Rational, Symbol,
+    RealField, RR, QQ, sympify, solve
+)
 from sympy.polys.polyerrors import BasePolynomialError
 from sympy.polys.polytools import groebner, PurePoly
 from sympy.polys.rootoftools import ComplexRootOf as CRootOf
@@ -73,7 +74,7 @@ class PolyEvalf:
             return poly(*point)
 
         # high dps should be careful with the context domain
-        domain = sp.RealField(dps=n) if n != 15 else RR
+        domain = RealField(dps=n) if n != 15 else RR
         poly = poly.set_domain(domain)
         return poly(*(p.n(n) for p in point))
 
@@ -307,12 +308,12 @@ def _solve_poly_system_2vars_resultant(polys: List[Poly], symbols: List[Symbol])
         return []
 
     x, y = symbols
-    res0 = polys[0].resultant(polys[1]).as_poly(y)
+    res0 = polys[0].resultant(polys[1]) # .as_poly(y)
     for poly in polys[2:]:
         if res0.total_degree() == 0 and (not res0.is_zero):
             return []
-        new_res = polys[0].resultant(poly).as_poly(y)
-        res0 = sp.gcd(res0, new_res)
+        new_res = polys[0].resultant(poly) # .as_poly(y)
+        res0 = res0.gcd(new_res)
 
     roots1 = univar_realroots(res0, y)
     roots = []
@@ -348,7 +349,7 @@ def solve_poly_system_crt(polys: List[Poly], symbols: List[Symbol]) -> List[Tupl
             if filtered is not None and len(filtered) == 0:
                 return [tuple()]
             return []
-        sol = sp.solve(polys, symbols, dict=False)
+        sol = solve(polys, symbols, dict=False)
         sol = [_ for _ in sol if all(v.is_real for v in _)]
         return sol
     if len(symbols) == 0:

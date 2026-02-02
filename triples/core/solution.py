@@ -29,7 +29,7 @@ class Solution(SolutionBase[T]):
     In a Jupyter notebook, it is displayed as a SymPy equation.
 
     >>> from sympy.abc import a
-    >>> from triples.core import sum_of_squares
+    >>> from triples import sum_of_squares
     >>> sol = sum_of_squares(a**2 - 2*a + 1)
     >>> sol # doctest: +SKIP
     Solution(problem = <InequalityProblem of 1 variables, with 0 inequality and 0 equality constraints>,
