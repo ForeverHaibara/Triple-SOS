@@ -67,10 +67,12 @@ def StructuralSOS(
     solution: Solution
 
     """
+    from ..node import ProofTree
     problem = ProofNode.new_problem(expr, ineq_constraints, eq_constraints)
     configs = {
-        SolvePolynomial: {'solvers': [StructuralSOSSolver]},
-        StructuralSOSSolver: {'verbose': verbose, 'raise_exception': raise_exception},
+        ProofTree: {"verbose": verbose},
+        SolvePolynomial: {"solvers": [StructuralSOSSolver]},
+        StructuralSOSSolver: {"verbose": verbose, "raise_exception": raise_exception},
     }
     return problem.sum_of_squares(configs)
 

@@ -115,12 +115,13 @@ def SymmetricSOS(
     # from ..sdpsos.sdpsos import SDPSOSSolver
     configs = {
         ProofTree: {
-            'time_limit': time_limit,
+            "verbose": verbose,
+            "time_limit": time_limit,
         },
-        ProofNode: {'verbose': verbose},
+        ProofNode: {"verbose": verbose},
         SolvePolynomial: {
-            # 'solvers': [SymmetricSubstitution, StructuralSOSSolver, SDPSOSSolver],
-            'callback_after_explore': _explore_symsos
+            # "solvers": [SymmetricSubstitution, StructuralSOSSolver, SDPSOSSolver],
+            "callback_after_explore": _explore_symsos,
         },
     }
     return problem.sum_of_squares(configs)

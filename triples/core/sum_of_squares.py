@@ -159,14 +159,15 @@ def sum_of_squares(
 
     _configs = {
         ProofTree: {
-            'mode': mode,
-            'time_limit': time_limit,
+            "mode": mode,
+            "verbose": verbose,
+            "time_limit": time_limit,
         },
         ProofNode: {
-            'verbose': verbose,
+            "verbose": verbose,
         },
         SolvePolynomial: {
-            'solvers': methods,
+            "solvers": methods,
         },
     }
     _configs.update(configs)

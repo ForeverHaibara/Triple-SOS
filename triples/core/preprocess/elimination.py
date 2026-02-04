@@ -2,6 +2,7 @@ from typing import Tuple, List, Dict, Set, Optional
 
 from sympy import Poly, Expr, Symbol, Integer, Mul, QQ, ZZ
 from sympy import MutableDenseMatrix as Matrix
+from sympy.polys.matrices.sdm import SDM
 
 from ..problem import InequalityProblem
 
@@ -61,12 +62,12 @@ def _rowwise_primitive(A: Matrix) -> Matrix:
     Apply primitive to each row of `A`.
     """
     from sympy.polys.densetools import dup_primitive
-    rows = A._rep.rep.to_dod()
+    rows = A._rep.rep.to_sdm()
     dom = A._rep.domain
     for row, terms in rows.items():
         prim_terms = dup_primitive(list(terms.values()), dom)[1]
         rows[row] = {i: v for i, v in zip(terms.keys(), prim_terms)}
-    return Matrix._fromrep(A._rep.from_dod(rows, A.shape, dom).convert_to(ZZ))
+    return Matrix._fromrep(A._rep.from_rep(SDM(rows, A.shape, dom)).convert_to(ZZ))
 
 
 def _symmetry_adapted_nullspace(A: Matrix) -> Tuple[Matrix, List[List[int]]]:
@@ -103,13 +104,14 @@ def _inv_integer_matrix(X: Matrix) -> Matrix:
     # left * X * right == smith
     # =>  right * smith.pinv() * left * X == I
 
-    diag = smith.rep.diagonal()
+    # on low versions of SymPy, domainmatrices does not have `diagonal()`
+    diag = [smith.rep.getitem(i, i) for i in range(min(smith.rep.shape))]
     if any(v == 0 for v in diag):
         raise ValueError("X should be full rank.")
     if not all(v == 1 for v in diag):
         # cast pinv to QQ
-        pinv = smith.from_dok({(i, i): QQ(1, v) for i, v in enumerate(diag)},
-                (smith.shape[1], smith.shape[0]), QQ)
+        pinv = smith.from_rep(SDM({i: {i: QQ(1, v)} for i, v in enumerate(diag)},
+                (smith.shape[1], smith.shape[0]), QQ))
         left = pinv * left
     return Matrix._fromrep(right * left)
 
@@ -127,7 +129,7 @@ def _get_free_symbols(symbols: Set[Symbol], n: int, prefix: str="x") -> List[Sym
 
 def _get_power_signs(
     A: Matrix,
-    signs: List[int, Tuple[Optional[int], Optional[Expr]]],
+    signs: List[Tuple[int, Tuple[Optional[int], Optional[Expr]]]],
     check_signs: bool = True
 ) -> List[Tuple[Optional[int], Optional[Expr]]]:
     """
@@ -145,7 +147,7 @@ def _get_power_signs(
 
     has_zero = [i for i, (s, e) in enumerate(signs) if s == 0]
 
-    for i, row in A._rep.to_dod().items():
+    for i, row in A._rep.rep.to_sdm().items():
         if check_signs and is_qq:
             # TODO: the positive check should be done on all symbols,
             # e.g., sqrt(a*b) requires only a*b >= 0, not a >= 0 and b >= 0.

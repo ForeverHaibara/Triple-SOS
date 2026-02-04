@@ -208,10 +208,14 @@ class ProofTree:
 
     default_configs = {
         "mode": "fast",
+        "verbose": False,
         "max_explore": 10000,
         "time_limit": 3600.,
         "select_quick_accept_threshold": 0.01,
     }
+
+    # XXX: should also accessed by ProofNodes
+    LOG_WIDTH = 79
 
     def __init__(self, root: ProofNode, configs: Dict = {}):
         self.root = root
@@ -272,7 +276,9 @@ class ProofTree:
         """
         node = self.select()
         cfg = self.get_configs(node)
-        if cfg.get('verbose', False):
+
+        tree_verbose = self.get_configs(self)["verbose"]
+        if tree_verbose:
             path = [node]
             MAX_PATH_LEN = 5
             while path[-1] in self.parents and len(path) < MAX_PATH_LEN:
@@ -340,21 +346,28 @@ class ProofTree:
 
     def solve(self) -> Optional[Expr]:
         # recompute expected end time
-        time_limit = self.get_configs(self)["time_limit"]
+        configs = self.get_configs(self)
+        time_limit = configs["time_limit"]
+        verbose = configs["verbose"]
+        if verbose:
+            print('='*self.LOG_WIDTH)
+
         start_time = perf_counter()
         self._expected_end_time = time_limit + start_time
 
         self.solve_until(lambda self: self.root.finished)
         solution = self.root.problem.solution
 
-        verbose = self.get_configs(self.root).get("verbose", False)
         if verbose:
             elapsed = perf_counter() - start_time
+            print('-' * self.LOG_WIDTH)
             if solution is not None:
-                print("[Success] Solver finds a solution. Time = %.6f seconds."%elapsed)
+                print("\033[32m[Success]\033[0m Solver finds a solution.\nTime = %.6fs"%elapsed)
+            elif elapsed >= time_limit:
+                print("\033[31m[Failure]\033[0m Solver failed to find a solution within the time limit.\nTime = %.6fs"%elapsed)
             else:
-                print("[Failure] Solver failed to find a solution. Time = %.6f seconds."%elapsed)
-
+                print("\033[31m[Failure]\033[0m Solver failed to find a solution.\nTime = %.6fs"%elapsed)
+            print('='*self.LOG_WIDTH)
         return solution
 
 
