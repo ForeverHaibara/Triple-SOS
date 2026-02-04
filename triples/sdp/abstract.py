@@ -4,10 +4,9 @@ from typing import Dict, Tuple, List, Union, Callable, Optional, Any
 
 from numpy import ndarray
 import numpy as np
-from sympy import MatrixBase, Expr, Rational
+from sympy import MatrixBase, Expr, Symbol, Rational
 from sympy.core.relational import Relational
 from sympy.matrices import MutableDenseMatrix as Matrix
-import sympy as sp
 
 from .arithmetic import ArithmeticTimeout, sqrtsize_of_mat, is_empty_matrix, congruence, rep_matrix_from_numpy, rep_matrix_to_numpy
 from .backends import SDPError, SDPTimeoutError, SDPResult
@@ -66,12 +65,12 @@ class SDPProblemBase(ABC):
         return self.__repr__()
 
     @abstractmethod
-    def free_symbols(self) -> List[sp.Symbol]:
+    def free_symbols(self) -> List[Symbol]:
         """
         Return the free symbols of the SDP problem.
         """
 
-    def as_params(self) -> Dict[sp.Symbol, Expr]:
+    def as_params(self) -> Dict[Symbol, Expr]:
         return dict(zip(self.gens, self.y))
 
     def _standardize_mat_dict(self, mat_dict: Dict[Any, Matrix]) -> Dict[Any, Matrix]:
@@ -85,7 +84,7 @@ class SDPProblemBase(ABC):
                 raise ValueError("The values of the matrix dictionary should be sympy MatrixBase.")
             if is_empty_matrix(X):
                 n = self.get_size(key)
-                mat_dict[key] = sp.zeros(n, 0)
+                mat_dict[key] = Matrix.zeros(n, 0)
         return mat_dict
 
     @abstractmethod

@@ -2,6 +2,7 @@ from typing import List, Dict, Union, Tuple, Callable, Optional
 
 from sympy import Expr, Poly, Integer
 
+from .elimination import eliminate_power_constraints
 from ..problem import InequalityProblem
 from ..node import ProofNode, TransformNode
 from ...utils import (
@@ -19,7 +20,9 @@ class SolvePolynomial(TransformNode):
     default_configs = {
         "sqf": False,
         "homogenize": True,
-        "remove_redundancy": True
+        "remove_redundancy": True,
+        "eliminate_power_constraints": True,
+        "irrational_expr": False,
     }
     def get_polynomial_solvers(self, configs):
         solvers = configs.get('solvers', None)
@@ -29,52 +32,74 @@ class SolvePolynomial(TransformNode):
             from ..sdpsos.sdpsos import SDPSOSSolver
             from ..symsos.symsos import SymmetricSubstitution
             from ..pivoting.pivoting import Pivoting
-            from .reparam import Reparametrization
+            # from .reparam import Reparametrization
             solvers = [
                 StructuralSOSSolver,
                 LinearSOSSolver,
                 SDPSOSSolver,
                 SymmetricSubstitution,
-                Reparametrization,
+                # Reparametrization,
                 Pivoting
             ]
         return solvers
 
-    def explore(self, configs):
-        if self.state == 0:
-            problem = self.problem.polylize()
-
-            if configs["homogenize"]:
-                problem, _restoration = reduce_over_quotient_ring(problem)
-            else:
-                _restoration = lambda x: x
-
-            sqf = 1
-            if configs["sqf"]:
-                problem, sqf = problem.sqr_free(problem_sqf=True, ineqs_sqf=False, eqs_sqf=False)
-
-            if problem.expr.total_degree() <= 0 and problem.expr.LC() >= 0:
-                # nonnegative constant to prove
-                self.solution = problem.expr.LC() * sqf**2
-                self.finished = True
-                return
-
-            problem = problem.remove_redundancy()
-
-            solvers = self.get_polynomial_solvers(configs)
-            self.children = [solver(problem) for solver in solvers]
-
-            self.state = -1
-
-            def composed_restoration(x):
-                if x is None:
-                    return None
-                return sqf**2 * _restoration(x)
-
-            self.restorations = {c: composed_restoration for c in self.children}
-
+    def explore(self, configs):        
         if self.state != 0 and len(self.children) == 0:
             # all children failed
+            self.finished = True
+            return
+
+        problem = self.problem.polylize()
+
+        sqf = 1
+        if configs["sqf"]:
+            problem, sqf = problem.sqr_free(problem_sqf=True, ineqs_sqf=False, eqs_sqf=False)
+
+        problem = problem.remove_redundancy()
+
+        power_restore = lambda x: x
+        if configs["eliminate_power_constraints"]:
+            new_problem, new_power_restore = eliminate_power_constraints(problem,
+                irrational_expr=configs["irrational_expr"])
+            if new_problem is problem:
+                # nothing changed
+                pass
+            else:
+                sym0 = problem.identify_symmetry()
+                sym1 = new_problem.identify_symmetry()
+                if sym0.order() <= sym1.order():
+                    problem = new_problem
+                    power_restore = new_power_restore
+                else:
+                    # TODO: the elimination is not good enough
+                    # and we had better preserve both
+                    pass
+
+        if configs["homogenize"]:
+            problem, _restoration = reduce_over_quotient_ring(problem)
+        else:
+            _restoration = lambda x: x
+
+        if problem.expr.total_degree() <= 0 and problem.expr.LC() >= 0:
+            # nonnegative constant to prove
+            self.solution = problem.expr.LC() * sqf**2
+            self.finished = True
+            return
+
+        solvers = self.get_polynomial_solvers(configs)
+        self.children = [solver(problem) for solver in solvers]
+
+        self.state = -1
+
+        def composed_restoration(x):
+            if x is None:
+                return None
+            return sqf**2 * power_restore(_restoration(x))
+
+        self.restorations = {c: composed_restoration for c in self.children}
+
+        if self.state != 0 and len(self.children) == 0:
+            # check one more time if there are no children
             self.finished = True
 
 

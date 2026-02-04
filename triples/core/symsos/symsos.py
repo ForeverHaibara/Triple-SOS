@@ -65,7 +65,7 @@ def SymmetricSOS(
     very complicated solutions.
 
     This SymmetricSOS solver uses SymmetricSubstitution in prior
-    to solve problems.    
+    to solve problems.
 
     Parameters
     ----------

@@ -61,7 +61,7 @@ def test_pivoting_problems(problem):
     pro = InequalityProblem(expr, ineq_constraints, eq_constraints).polylize()
     pivot = Pivoting(pro)
     tree = ProofTree(pivot,
-        {ProofTree: {'time_limit': 30.0},
+        {ProofTree: {'time_limit': 20.0},
          SolvePolynomial: {'solvers': [
              Pivoting, StructuralSOSSolver, LinearSOSSolver]},
          LinearSOSSolver: {'basis_limit': 1000}

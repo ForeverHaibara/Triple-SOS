@@ -41,10 +41,13 @@ class ProofNode:
     _complexity: Optional[ProblemComplexity] = None
     _complexity_models: Optional[Union[Dict, bool]] = None
     def __init__(self,
-        problem: InequalityProblem
+        problem: InequalityProblem, configs: Optional[Dict[str, Any]]=None,
     ):
         self.problem = problem
         self.children = []
+        if configs is not None:
+            self.default_configs = self.default_configs.copy()
+            self.default_configs.update(configs)
 
     def __repr__(self):
         return f"ProofNode.{self.__class__.__name__}({repr(self.problem)}, state={self.state}, children={len(self.children)})"
@@ -338,10 +341,21 @@ class ProofTree:
     def solve(self) -> Optional[Expr]:
         # recompute expected end time
         time_limit = self.get_configs(self)["time_limit"]
-        self._expected_end_time = time_limit + perf_counter()
+        start_time = perf_counter()
+        self._expected_end_time = time_limit + start_time
 
         self.solve_until(lambda self: self.root.finished)
-        return self.root.problem.solution
+        solution = self.root.problem.solution
+
+        verbose = self.get_configs(self.root).get("verbose", False)
+        if verbose:
+            elapsed = perf_counter() - start_time
+            if solution is not None:
+                print("[Success] Solver finds a solution. Time = %.6f seconds."%elapsed)
+            else:
+                print("[Failure] Solver failed to find a solution. Time = %.6f seconds."%elapsed)
+
+        return solution
 
 
 def _sum_of_squares(

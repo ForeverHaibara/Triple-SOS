@@ -33,6 +33,8 @@ class FormulationFailure(Exception):
 
 class ModelingHelper:
     Trigs = {sin, cos, tan, cot, sec, csc}
+    has_radical = False
+    has_trig = False
     def __init__(self, poly: Expr, ineq_constraints: Dict[Expr, Expr], eq_constraints: Dict[Expr, Expr]):
         self.poly = poly
         self.ineq_constraints = ineq_constraints
@@ -86,6 +88,7 @@ class ModelingHelper:
                 return None
 
             z = self.symbol_gen('z')
+            self.has_radical = True
             ineqs = {x.base: x.base, z: x} if q % 2 == 0 else {}
             eqs = {x.base**p - z**q: Integer(0)} if p > 0 else {z**q * x.base**(-p) - Integer(1): Integer(0)}
             return z, ineqs, eqs
@@ -136,6 +139,7 @@ class ModelingHelper:
         self._trigs = self.find(self.Trigs)
         if len(self._trigs) == 0:
             return
+        self.has_trig = True
 
         args = []
         atoms = {}
@@ -320,9 +324,9 @@ class ReformulateAlgebraic(ProofNode):
             if self.problem.roots is not None:
                 new_problem.roots = self.problem.roots.transform(inverse, new_problem.free_symbols)
 
-            self.children = [
-                CancelDenominator(new_problem)
-            ]
+            solver = CancelDenominator(new_problem, {"irrational_expr": helper.has_radical})
+            self.children = [solver]
+
             self.inverse = inverse
             self.state = -1
 

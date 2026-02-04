@@ -816,7 +816,7 @@ class InequalityProblem(Generic[T]):
         """
         Substitute the variables in the problem with the new substitutions. Currently
         only work for polynomial problems.
-        
+
         Parameters
         ----------
         transform : Dict[Symbol, Expr]

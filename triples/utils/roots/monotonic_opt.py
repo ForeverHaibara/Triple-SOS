@@ -2,7 +2,7 @@ from collections import namedtuple
 from typing import List
 
 import numpy as np
-import sympy as sp
+from sympy import Poly
 
 RPAResult = namedtuple('RPAResult', ['x', 'f', 'iterations', 'converged', 'a', 'b'])
 
@@ -356,7 +356,7 @@ def rpa_gmop(f1_and_f2, g_and_h, a, b, tol=1e-5, max_iter=2000, cbv=np.inf, root
 
 
 
-def poly_as_dm(poly: sp.Poly, a=None):
+def poly_as_dm(poly: Poly, a=None):
     """
     Write a polynomial in the form of difference of two monotonic
     increasing functions over x >= a where a is n-dimensional.
@@ -381,15 +381,15 @@ def poly_as_dm(poly: sp.Poly, a=None):
     terms = poly.terms()
     pos = [t for t in terms if t[1] >= 0]
     neg = [t for t in terms if t[1] < 0]
-    f1 = sp.Poly.from_dict(dict(pos), poly.gens, domain=poly.domain)
-    f2 = -sp.Poly.from_dict(dict(neg), poly.gens, domain=poly.domain)
+    f1 = Poly.from_dict(dict(pos), poly.gens, domain=poly.domain)
+    f2 = -Poly.from_dict(dict(neg), poly.gens, domain=poly.domain)
     if a is not None:
         f1 = f1.shift_list([-ai for ai in a])
         f2 = f2.shift_list([-ai for ai in a])
     return f1, f2
 
 
-def rpa_polyopt(f: sp.Poly, ineq_constraints: List[sp.Poly]=[], eq_constraints: List[sp.Poly]=[],
+def rpa_polyopt(f: Poly, ineq_constraints: List[Poly]=[], eq_constraints: List[Poly]=[],
     a=-10., b=10., tol=1e-5, eqtol=1e-2, max_iter=2000, cbv=np.inf, root_solver=_find_sup, verbose=False):
     """
     Globally optimize a constrained multivariate polynomial using the Reverse Polyblock Approximation Algorithm.
@@ -471,7 +471,7 @@ def rpa_polyopt(f: sp.Poly, ineq_constraints: List[sp.Poly]=[], eq_constraints: 
         ineq_constraints.append(eq + eqtol)
         ineq_constraints.append(-eq + eqtol)
     for ineq in ineq_constraints:
-        ineq = sp.Poly(ineq, gens)
+        ineq = Poly(ineq, gens)
         if ineq.degree() <= 0:
             if ineq.LC() < 0:
                 return RPAResult(None, np.inf, 1, True, a, b)
