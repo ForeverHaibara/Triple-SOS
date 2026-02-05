@@ -2,7 +2,7 @@ from typing import Optional, Union, List, Dict, Tuple
 
 import numpy as np
 from sympy import (
-    Poly, Expr, Symbol, Rational, Integer, QQ,
+    Poly, Expr, Symbol, Rational, Integer, QQ, AlgebraicNumber,
     fraction, sympify, nsimplify, factorial, factorint, prod, cos
 )
 from sympy.core import S
@@ -168,7 +168,11 @@ class Root():
                     if content != 1:
                         # See also https://github.com/sympy/sympy/issues/27798
                         setattr(domain.ext, 'minpoly', mp)
-                        domain = domain.__class__(domain.dom, domain.ext)
+                        ext = domain.ext
+                        if isinstance(ext, AlgebraicNumber):
+                            # avoid nested AlgebraicNumbers
+                            ext = ext.as_expr()
+                        domain = domain.__class__(domain.dom, ext)
                         rep = [ANP(r.rep, domain.mod, domain.dom) for r in rep]
                 self.domain, self.rep = domain, rep
             else:

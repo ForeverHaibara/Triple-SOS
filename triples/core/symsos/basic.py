@@ -1,11 +1,12 @@
-from typing import Tuple, Dict, Set, Optional, Callable
+from typing import Tuple, Dict, Set, Union, Optional, Callable
 
-from sympy import Poly, Expr, Dummy, Symbol, Integer, Add
+from sympy import Poly, Expr, Symbol, Integer, Add
 
 from ..structsos.pivoting.bivariate import structural_sos_2vars
 from ...utils import pqr_sym, verify_symmetry
 from ..problem import InequalityProblem
 from ..preprocess import sign_sos
+
 
 class SymmetricTransform():
     """
@@ -27,13 +28,20 @@ class SymmetricTransform():
     symmetry = None
 
     @classmethod
-    def transform(cls, poly, symbols, return_poly=True):
-        pqr_symbols = [Dummy(f"s{i}") for i in range(cls.nvars)]
-        poly_pqr = pqr_sym(poly, pqr_symbols).as_poly(*pqr_symbols)
-        return cls._transform_pqr(poly_pqr, poly.gens, symbols, return_poly=return_poly)
+    def transform(cls,
+        poly: Poly,
+        symbols: Tuple[Symbol, ...],
+        return_poly: bool = True
+    ) -> Union[Poly, Expr]:
+        poly_pqr = pqr_sym(poly)
+        return cls._transform_pqr(poly_pqr, symbols, return_poly=return_poly)
 
     @classmethod
-    def _transform_pqr(cls, poly_pqr, original_symbols, new_symbols, return_poly=True):
+    def _transform_pqr(cls,
+        poly_pqr: Poly,
+        new_symbols: Tuple[Symbol, ...],
+        return_poly: bool = True
+    ) -> Union[Poly, Expr]:
         """
         Apply the transformation on a polynomial of elementary symmetric functions.
         For example, when nvars == 3, the polynomial is represented by pqr.
@@ -41,21 +49,31 @@ class SymmetricTransform():
         raise NotImplementedError
 
     @classmethod
-    def inv_transform(cls, expr, original_symbols, new_symbols):
+    def inv_transform(cls,
+        expr: Expr,
+        original_symbols: Tuple[Symbol, ...],
+        new_symbols: Tuple[Symbol, ...]
+    ) -> Expr:
         inv_dict = cls.get_inv_dict(original_symbols, new_symbols)
         return expr.xreplace(inv_dict)
 
     @classmethod
-    def _get_default_constraints(cls, new_symbols: Tuple[Symbol, ...]) -> Tuple[Dict[Poly, Expr], Dict[Poly, Expr]]:
+    def _get_default_constraints(cls,
+        new_symbols: Tuple[Symbol, ...]
+    ) -> Tuple[Dict[Poly, Expr], Dict[Poly, Expr]]:
         raise NotImplementedError
 
     @classmethod
-    def get_natural_constraints(cls, symbols: Tuple[Symbol, ...], new_symbols: Tuple[Symbol, ...],
-            problem: InequalityProblem) -> Optional[Tuple[Dict[Poly, Expr], Dict[Poly, Expr]]]:
+    def get_natural_constraints(cls,
+        symbols: Tuple[Symbol, ...],
+        new_symbols: Tuple[Symbol, ...],
+        problem: InequalityProblem
+    ) -> Optional[Tuple[Dict[Poly, Expr], Dict[Poly, Expr]]]:
         """
-        Get inequality and equality constraints over the new symbols. By default it calls
-        `_get_natural_constraints_from_signs` method, so the `_get_natural_constraints_from_signs`
-        method should be implemented. For more general cases, this function should be overriden
+        Get inequality and equality constraints over the new symbols.
+        By default it calls the `_get_natural_constraints_from_signs` method,
+        so the `_get_natural_constraints_from_signs`  method should be
+        implemented. For more general cases, this function should be overriden
         to provide proof to the natural constraints over the new symbols.
 
         If it fails to establish the natural constraints, it returns None.
@@ -64,11 +82,14 @@ class SymmetricTransform():
         return cls._get_natural_constraints_from_signs(symbols, new_symbols, signs)
 
     @classmethod
-    def _get_natural_constraints_from_signs(cls, symbols: Tuple[Symbol, ...], new_symbols: Tuple[Symbol, ...],
-            signs: Dict[Symbol, Tuple[int, Expr]]) -> Optional[Tuple[Dict[Poly, Expr], Dict[Poly, Expr]]]:
+    def _get_natural_constraints_from_signs(cls,
+        symbols: Tuple[Symbol, ...],
+        new_symbols: Tuple[Symbol, ...],
+        signs: Dict[Symbol, Tuple[int, Expr]]
+    ) -> Optional[Tuple[Dict[Poly, Expr], Dict[Poly, Expr]]]:
         """
-        Get inequality and equality constraints over the new symbols. The method only
-        depends on the signs of the old symbols.
+        Get inequality and equality constraints over the new symbols.
+        The method only depends on the signs of the old symbols.
         """
         ineqs, eqs = cls._get_default_constraints(new_symbols)
         proved_ineqs, proved_eqs = {}, {}
@@ -82,7 +103,10 @@ class SymmetricTransform():
         return proved_ineqs, proved_eqs
 
     @classmethod
-    def get_dict(cls, symbols: Tuple[Symbol, ...], new_symbols: Tuple[Symbol, ...]) -> Dict[Symbol, Expr]:
+    def get_dict(cls,
+        symbols: Tuple[Symbol, ...],
+        new_symbols: Tuple[Symbol, ...]
+    ) -> Dict[Symbol, Expr]:
         """
         Get the dictionary {new_symbol: expr(old_symbols)}
         that maps old symbols to new symbols.
@@ -90,7 +114,10 @@ class SymmetricTransform():
         raise NotImplementedError
 
     @classmethod
-    def get_inv_dict(cls, symbols: Tuple[Symbol, ...], new_symbols: Tuple[Symbol, ...]) -> Dict[Symbol, Expr]:
+    def get_inv_dict(cls,
+        symbols: Tuple[Symbol, ...],
+        new_symbols: Tuple[Symbol, ...]
+    ) -> Dict[Symbol, Expr]:
         """
         Get the dictionary {old_symbol: expr(new_symbols)}
         that maps new symbols back to old symbols.
@@ -98,8 +125,11 @@ class SymmetricTransform():
         raise NotImplementedError
 
     @classmethod
-    def get_constraints(cls, symbols: Tuple[Symbol, ...], new_symbols: Tuple[Symbol, ...], problem: InequalityProblem) \
-            -> Optional[Tuple[Dict[Poly, Expr], Dict[Poly, Expr]]]:
+    def get_constraints(cls,
+        symbols: Tuple[Symbol, ...],
+        new_symbols: Tuple[Symbol, ...],
+        problem: InequalityProblem
+    ) -> Optional[Tuple[Dict[Poly, Expr], Dict[Poly, Expr]]]:
         """
         Get the constraints of a problem after applying the transform.
         It also applies the transform on the constraints of the problem.
@@ -116,16 +146,25 @@ class SymmetricTransform():
             for p, e in old.items():
                 p = p.as_poly(symbols)
                 if not verify_symmetry(p, cls.symmetry):
-                    continue # TODO
+                    # TODO: still it is possible to symmetrize
+                    # if the constraints have their symmetric
+                    # counterparts, but we ignore them in the current
+                    if p.is_monomial:
+                        continue
+                    return None
                 new_p, mul = trans(p)
-                new[new_p] = e * mul
+                new[new_p] = e / mul
         return new_ineqs, new_eqs
 
     @classmethod
-    def apply(cls, problem: InequalityProblem, symbols: Tuple[Symbol, ...], new_symbols: Tuple[Symbol, ...]=None) \
-            -> Tuple[InequalityProblem, Callable]:
+    def apply(cls,
+        problem: InequalityProblem,
+        symbols: Tuple[Symbol, ...],
+        new_symbols: Tuple[Symbol, ...]=None
+    ) -> Tuple[InequalityProblem, Callable]:
         """
-        Apply the transform on the problem and get the new problem and the restoration function.
+        Apply the transform on the problem and get the
+        new problem and the restoration function.
 
         Parameters
         -----------
@@ -161,25 +200,29 @@ class SymmetricTransform():
         mul_proof = sign_sos(mul, signs)
         if mul_proof is None:
             return None
-        mul_proof = cls.inv_transform(mul_proof, symbols, new_symbols) / const
+        mul_proof = cls.inv_transform(mul_proof, symbols, new_symbols) * const
 
         # print(new_expr, new_ineqs, new_eqs)
 
-        restoration = lambda x: cls.inv_transform(x, symbols, new_symbols) / mul_proof
+        restoration = lambda x: cls.inv_transform(x, symbols, new_symbols) * mul_proof
         return pro, restoration
 
 
 
-def extract_factor(poly, factor, points=[]):
+def extract_factor(
+    poly: Poly,
+    factor: Poly,
+    points: Tuple[Tuple[Expr, ...], ...]=()
+) -> Tuple[int, Poly]:
     """
     Given a polynomial and a factor, compute degree and remainder such
     that `poly = (factor ^ degree) * remainder`.
 
     Parameters
     ----------
-    poly : sympy.Poly
+    poly : Poly
         The polynomial to be factorized.
-    factor : sympy.Poly
+    factor : Poly
         The factor to be extracted.
     points : List[Tuple]
         A list of points such that the factor equals to zero.
@@ -190,7 +233,7 @@ def extract_factor(poly, factor, points=[]):
     -------
     degree : int
         The degree of the factor.
-    remainder : sympy.Poly
+    remainder : Poly
         The remainder of the polynomial after extracting the factor.
     """
     if poly.is_zero:
@@ -200,7 +243,7 @@ def extract_factor(poly, factor, points=[]):
     while True:
         if not all(poly(*point) == 0 for point in points):
             break
-        quotient, remain = divmod(poly, factor)
+        quotient, remain = poly.div(factor)
         if remain.is_zero:
             poly = quotient
             degree += 1
@@ -209,6 +252,17 @@ def extract_factor(poly, factor, points=[]):
 
     return degree, poly
 
+
+def compose(poly: Poly, args: Tuple[Expr, ...]) -> Poly:
+    """
+    Compose a polynomial with a tuple of expressions.
+    """
+    # sympy Poly does not support multivariate composition,
+    # so we cast it to a PolyElement over a ring
+    ring = poly.domain[tuple(poly.gens)]
+    p = ring(poly.rep.to_dict())
+    q = p.compose([(g, a) for g, a in zip(ring.gens, args)])
+    return Poly(q.to_dict(), poly.gens, domain = poly.domain)
 
 
 def prove_by_pivoting(poly: Poly, nonnegative_symbols: Set[Symbol]) -> Optional[Expr]:

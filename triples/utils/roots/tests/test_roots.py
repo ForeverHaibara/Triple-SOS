@@ -1,5 +1,5 @@
-import sympy as sp
-from sympy import sqrt, sin, cos, asin, acos, pi, I, Poly, Rational, CRootOf
+from sympy import Poly, Rational, CRootOf, Eq, Matrix, EX
+from sympy import sqrt, sin, cos, asin, acos, pi, I, __version__
 from sympy.abc import a, b, c, x
 from sympy.combinatorics import SymmetricGroup
 from sympy.polys.matrices.sdm import SDM
@@ -13,14 +13,14 @@ def test_root_hash():
 
 def test_as_vec_and_span():
     # ZZ, QQ, AA, ZZ_I, QQ_I, RR, CC, EX, EXRAW
-    assert sp.Eq(Root((1,1,1)).span(3, diff=(1,0,0)), sp.Matrix([3,2,2,1,1,1,0,0,0,0]))
+    assert Eq(Root((1,1,1)).span(3, diff=(1,0,0)), Matrix([3,2,2,1,1,1,0,0,0,0]))
 
-    assert sp.Eq(Root((3,7,-11,13)).as_vec(2),
-            sp.Matrix([9, 21, -33, 39, 49, -77, 91, 121, -143, 169]))
+    assert Eq(Root((3,7,-11,13)).as_vec(2),
+            Matrix([9, 21, -33, 39, 49, -77, 91, 121, -143, 169]))
     assert Root((3,7,-11,13)).span(2) == Root((3,7,-11,13)).as_vec(2)
 
-    assert sp.Eq(Root((Rational(1,5), Rational(3,7))).as_vec(3),
-        sp.Matrix(list(map(Rational, ('1/125','3/175','9/245','27/343')))))
+    assert Eq(Root((Rational(1,5), Rational(3,7))).as_vec(3),
+        Matrix(list(map(Rational, ('1/125','3/175','9/245','27/343')))))
     assert Root((Rational(1,5), Rational(3,7))).span(3) == Root((Rational(1,5), Rational(3,7))).as_vec(3)
 
     poly = Poly([81, -81, 18, -1], x)
@@ -28,29 +28,29 @@ def test_as_vec_and_span():
     root = Root((r2, r1, r0))
     span = root.span(2)
     assert span.shape == (6, 3) and \
-        not any(span.T * sp.Matrix([1,-3,-2,-1,5,0])) and\
-        not any(span.T * sp.Matrix([0,-2,5,1,-3,-1]))
+        not any(span.T * Matrix([1,-3,-2,-1,5,0])) and\
+        not any(span.T * Matrix([0,-2,5,1,-3,-1]))
     assert abs(root.as_vec(2, numer=True) - [0.5075, 0.1437, 0.06121, 0.04068, 0.01733, 0.007383]).max() < 1e-2
     assert abs(root.as_vec(2, numer=True) - list(root.as_vec(2, numer=False).n(6))).max() < 1e-4
 
-    assert sp.Eq(Root((1 + sqrt(2), 1 - sqrt(2))).span(3),
-            sp.Matrix([[7, 5], [-1, -1], [-1, 1], [7, -5]]))
+    assert Eq(Root((1 + sqrt(2), 1 - sqrt(2))).span(3),
+            Matrix([[7, 5], [-1, -1], [-1, 1], [7, -5]]))
 
-    assert sp.Eq(Root((1,1+2*I,2)).span(2),
-            sp.Matrix(2,6,[1,1,2,-3,2,4,0,2,0,4,4,0]).T)
+    assert Eq(Root((1,1+2*I,2)).span(2),
+            Matrix(2,6,[1,1,2,-3,2,4,0,2,0,4,4,0]).T)
 
-    # assert sp.Eq(Root((Rational(-2,5), 2+sp.I, 3-7*sp.I)).span(2),
+    # assert Eq(Root((Rational(-2,5), 2+I, 3-7*I)).span(2),
 
-    assert sp.Eq(Root((1,1.5,2)).as_vec(2),
-            sp.Matrix([1.0,1.5,2.0,2.25,3.0,4.0]))
+    assert Eq(Root((1,1.5,2)).as_vec(2),
+            Matrix([1.0,1.5,2.0,2.25,3.0,4.0]))
     assert Root((1, 1.5, 2)).span(2) == Root((1, 1.5, 2)).as_vec(2)
 
     assert Root((-7, 1+1j, 2)).span(5, sym=True, hom=False) == Root((-7, 1+1j, 2)).as_vec(5, sym=True, hom=False)
 
-    assert Root((a, a/b)).as_vec(2) == sp.Matrix([a**2, a**2/b, a**2/b**2])
+    assert Root((a, a/b)).as_vec(2) == Matrix([a**2, a**2/b, a**2/b**2])
     assert Root((a, a/b)).span(2) == Root((a, a/b)).as_vec(2)
 
-    assert sp.Eq(Root((1,2,3,4)).span(3, diff=(0,0,0,1), normalize=True) * 4**2*3,
+    assert Eq(Root((1,2,3,4)).span(3, diff=(0,0,0,1), normalize=True) * 4**2*3,
             Root((1,2,3,4)).span(3, diff=(0,0,0,1), normalize=False))
 
     # zero must not in rep
@@ -81,7 +81,7 @@ def test_cyclic_sum():
 def test_uv():
     assert Root((1/sin(pi/9),1/sin(2*pi/9),-1/sin(4*pi/9))).uv() == (0, 1)
     assert Root((sin(4*pi/7)**2, sin(2*pi/7)**2, sin(pi/7)**2)).uv() == (1, 2) # Vasile inequality
-    assert Root((a,a,1), domain=sp.EX).uv() == (1+1/a, 1+1/a)
+    assert Root((a,a,1), domain=EX).uv() == (1+1/a, 1+1/a)
 
     uv = Root((0.8180504-0.4869j,0.,3.14159+2.71828j)).uv()
     assert abs((uv[0]*uv[1] - 1).n(8)) < 1e-6
@@ -98,7 +98,7 @@ def test_uv():
     assert (Root.from_uv(1,2)/Root.from_uv(1,2)[2]).uv() == (1, 2)
 
     # slow
-    if tuple(version_tuple(sp.__version__)) >= (1, 14):
+    if tuple(version_tuple(__version__)) >= (1, 14):
         assert abs(Root.from_uv(Rational(-36,511) + 373*sqrt(2)/511, Rational(114,511) + 437*sqrt(2)/511)[0]\
                 - (9 - 6*2**.5)) < 1e-8
         assert Root.from_uv((2*sqrt(7)+1)/3,(2+sqrt(7))/3).eval(

@@ -17,7 +17,7 @@ import gradio as gr
 from PIL import Image
 
 from triples.utils.text_process import pl, short_constant_parser
-from triples.core import sum_of_squares
+from triples import sum_of_squares
 from triples.gui.sos_manager import SOSManager
 from triples.gui.linebreak import recursive_latex_auto_linebreak
 
@@ -30,13 +30,22 @@ LOCK_MARK = chr(128274)
 
 def has_kwarg(func, name) -> bool:
     # inspect the function signature to check if the keyword argument exists
-    return name in func.__code__.co_varnames
+    # return name in func.__code__.co_varnames
+    import inspect
+    return name in inspect.signature(func).parameters
 
 def gradio_markdown() -> gr.Markdown:
     version = GRADIO_VERSION
     if version >= (4, 0):
         return gr.Markdown(latex_delimiters=[{"left": "$", "right": "$", "display": False}])
     return gr.Markdown()
+
+def show_api(show: bool) -> Dict:
+    if has_kwarg(gr.Button.click, "api_visibility"):
+        if show:
+            return {"api_visibility": "public"}
+        return {"api_visibility": "private"}
+    return {"show_api": bool(show)}
 
 def _convert_to_gradio_latex(content):
     version = GRADIO_VERSION
@@ -207,7 +216,7 @@ class GradioInterface():
                     self.horizontal_container,
                     self.vertical_container
                 ] + flatten_values,
-                show_api=False
+                **show_api(0)
             )
 
             # Setup event handlers for both layouts
@@ -281,14 +290,16 @@ class GradioInterface():
         collection = self.layout[layout]
         with gr.Tabs():
             collection['outputs'] = {}
+            kwarg = {"buttons": ["copy"]} if has_kwarg(gr.TextArea.__init__, "buttons") \
+                else {"show_copy_button": True}
             with gr.Tab("Display"):
                 collection['outputs']['display'] = gradio_markdown()
             with gr.Tab("LaTeX"):
-                collection['outputs']['latex'] = gr.TextArea(label="Result", show_copy_button=True)
+                collection['outputs']['latex'] = gr.TextArea(label="Result", **kwarg)
             with gr.Tab("txt"):
-                collection['outputs']['txt'] = gr.TextArea(label="Result", show_copy_button=True)
+                collection['outputs']['txt'] = gr.TextArea(label="Result", **kwarg)
             with gr.Tab("formatted"):
-                collection['outputs']['formatted'] = gr.TextArea(label="Result", show_copy_button=True)
+                collection['outputs']['formatted'] = gr.TextArea(label="Result", **kwarg)
 
     def _setup_event_handlers(self):
         """Setup event handlers for all new components"""
@@ -301,7 +312,7 @@ class GradioInterface():
             input_box.submit(fn = self.set_poly,
                 inputs = [input_box, gen_input, layout["perm_group"]["input"]],
                 outputs = [self.image, self.coefficient_triangle],
-                show_api=False
+                **show_api(0)
             )
 
             compute_btn = layout["compute_btn"]
@@ -309,14 +320,14 @@ class GradioInterface():
                 inputs = [input_box, gen_input, layout["perm_group"]["input"],
                         layout["constraints"]["df"], layout["methods_btn"]],
                 outputs = list(layout['outputs'].values()) + \
-                [self.image, self.coefficient_triangle], show_api=False)
+                [self.image, self.coefficient_triangle], **show_api(0))
 
             perm_group = layout["perm_group"]
             perm_group["radio"].change(
                 fn=self._toggle_perm_group_input,
                 inputs=[perm_group["radio"], gen_input],
                 outputs=[perm_group["input"]],
-                show_api=False
+                **show_api(0)
             )
 
             positive_toggle = layout["constraints"]["positive_toggle"]
@@ -326,7 +337,7 @@ class GradioInterface():
                     fn=self._configure_generators,
                     inputs=[gen_input, perm_group["radio"], positive_toggle],
                     outputs=[gen_input, perm_group["input"], layout["constraints"]["df"]],
-                    show_api=False
+                    **show_api(0)
                 )
 
 
@@ -345,7 +356,7 @@ class GradioInterface():
                     fn=partial(add_constraint_clicked, prefix=prefix),
                     inputs=tmp["df"],
                     outputs=[tmp["df"], positive_toggle],
-                    show_api=False
+                    **show_api(0)
                 )
 
             clear_btn = tmp["clear"]
@@ -353,14 +364,14 @@ class GradioInterface():
                 fn=lambda: [[], gr.update(value="Positive", variant="secondary")],
                 inputs=[],
                 outputs=[tmp["df"], positive_toggle],
-                show_api=False
+                **show_api(0)
             )
 
             positive_toggle.click(
                 fn=self._toggle_positive,
                 inputs=[positive_toggle, tmp["df"], layout["generators_input"]],
                 outputs=[positive_toggle, tmp["df"]],
-                show_api=False
+                **show_api(0)
             )
 
     def _setup_api(self):

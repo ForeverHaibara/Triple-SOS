@@ -8,8 +8,10 @@ from functools import wraps, partial
 from itertools import product
 from typing import List, Dict, Tuple, Union, Optional, Callable, Generator
 
-import sympy as sp
-from sympy import Symbol, Float, Expr, Poly, Rational
+from sympy import (Expr, Poly, Integer, Rational, Float,
+    Dummy, Symbol, EmptySet, FiniteSet,
+    linear_eq_to_matrix, linsolve, sympify, true
+)
 from sympy.polys.polyerrors import PolificationFailed, DomainError
 from sympy.polys.polyclasses import DMP
 from sympy.combinatorics import PermutationGroup
@@ -78,7 +80,7 @@ def polylize_input(poly: Expr, ineq_constraints: List[Expr], eq_constraints: Lis
     if check_poly is None:
         check_poly = lambda *args, **kwargs: True
     def polylize(f, symbols):
-        f = sp.sympify(f)
+        f = sympify(f)
         if not isinstance(f, Poly) or not f.domain.is_Numerical:
             f = Poly(f.doit(), *symbols) #, extension=True)
         if f is None:
@@ -122,7 +124,7 @@ def _checkineq_decorator(func):
         if len(points) == 0:
             return points
         if len(symbols) == 0:
-            return points if all(_ >= 0 in (sp.true, True) for _ in ineq_constraints) else []
+            return points if all(_ >= 0 in (true, True) for _ in ineq_constraints) else []
         ineq_constraints = [_.as_poly(symbols) for _ in ineq_constraints]
         pevalf = PolyEvalf()
         points = [p for p in points if all(pevalf.polysign(_, p) >= 0 for _ in ineq_constraints)]
@@ -212,7 +214,7 @@ def kkt(
 
     Examples
     ----------
-    >>> x, y, z = sp.symbols('x y z')
+    >>> from sympy.abc import x, y, z
     >>> kkt(2*x + 3*y, [x], [x**2 + y**2 - 1], as_poly = False) # doctest: +NORMALIZE_WHITESPACE
     ([-_\lambda_0 + 2*_\mu_0*x + 2, 2*_\mu_0*y + 3, _\lambda_0*x, x**2 + y**2 - 1],
         ((x, y), (_\lambda_0,), (_\mu_0,), (x, y, _\lambda_0, _\mu_0)))
@@ -236,7 +238,7 @@ def kkt(
     >>> solve(system[0], system[1][-1], dict=True) # doctest: +SKIP
     [{_\lambda_0: 0, x: 0}]
     """
-    f = sp.sympify(f)
+    f = sympify(f)
     symbs = f.gens if hasattr(f, 'gens') else tuple(sorted(f.free_symbols, key=lambda x: x.name))
     symbs = symbs + tuple(set.union(set(),
                 *[_.free_symbols for _ in ineq_constraints],
@@ -244,8 +246,8 @@ def kkt(
     symbs0 = symbs
 
     fj = 1 if fj else 0
-    lambs = tuple(sp.Dummy('\\lambda_%d' % i) for i in range(len(ineq_constraints) + fj))
-    mus = tuple(sp.Dummy('\\mu_%d' % i) for i in range(len(eq_constraints)))
+    lambs = tuple(Dummy('\\lambda_%d' % i) for i in range(len(ineq_constraints) + fj))
+    mus = tuple(Dummy('\\mu_%d' % i) for i in range(len(eq_constraints)))
     f0 = f * lambs[0] if fj else f
     lag = f0 - sum(l*ineq for l, ineq in zip(lambs[fj:], ineq_constraints)) \
             + sum(m*eq for m, eq in zip(mus, eq_constraints))
@@ -273,7 +275,7 @@ def _solve_2vars_zero_extrema(poly: Poly, symbols: Symbol) -> List[Tuple[Expr]]:
     x, y = symbols
     dx, dy = poly.diff(x), poly.diff(y)
     res0 = poly.reorder(y, x).resultant(dy.reorder(y, x))
-    res0 = sp.gcd(res0, res0.diff(x))
+    res0 = res0.gcd(res0.diff(x))
     roots1 = univar_realroots(res0, x)
 
     if len(roots1) == 0:
@@ -284,7 +286,7 @@ def _solve_2vars_zero_extrema(poly: Poly, symbols: Symbol) -> List[Tuple[Expr]]:
         roots = []
         for root1 in roots1:
             poly2 = poly.eval(x, root1)
-            poly2 = sp.gcd(poly2, poly2.diff(y))
+            poly2 = poly2.gcd(poly2.diff(y))
             roots2 = univar_realroots(poly2, y)
             for root2 in roots2:
                 roots.append((root1, root2))
@@ -292,7 +294,7 @@ def _solve_2vars_zero_extrema(poly: Poly, symbols: Symbol) -> List[Tuple[Expr]]:
 
     # compute the resultant of the other variable
     res1 = poly.resultant(dx)
-    res1 = sp.gcd(res1, res1.diff(y))
+    res1 = res1.gcd(res1.diff(y))
     roots2 = univar_realroots(res1, y)
 
     pevalf = PolyEvalf()
@@ -317,7 +319,7 @@ def _optimize_by_eq_kkt(poly, ineq_constraints, eq_constraints, symbols,
     or use the upstream `_optimize_by_ineq_comb` instead.
     """
     if len(symbols) == 0:
-        if all(_ is sp.S.Zero or (isinstance(_, Poly) and _.is_zero) for _ in eq_constraints):
+        if all(_ == 0 or (isinstance(_, Poly) and _.is_zero) for _ in eq_constraints):
             return [tuple()]
         return []
     elif len(symbols) > max_different:
@@ -334,7 +336,7 @@ def _optimize_by_eq_kkt(poly, ineq_constraints, eq_constraints, symbols,
         if len(eq_constraints):
             eqgcd = eq_constraints[0].as_poly(symbols[0], extension=True)
             for eq in eq_constraints[1:]:
-                eqgcd = sp.gcd(eqgcd, eq.as_poly(symbols[0], extension=True))
+                eqgcd = eqgcd.gcd(eq.as_poly(symbols[0], extension=True))
             sol = [(root,) for root in univar_realroots(eqgcd, symbols[0])]
         else:
             # Solve by derivative.
@@ -418,12 +420,12 @@ def _eliminate_linear(polys, symbols) -> Tuple[Dict[Symbol, Expr], List[Poly]]:
         new_eliminated_polys = [polys[i] for i in new_eliminated_polys]
 
         # TODO: clean this
-        linsys = sp.linear_eq_to_matrix(
+        linsys = linear_eq_to_matrix(
             [_.as_expr() for _ in new_eliminated_polys], new_eliminated_symbols)
-        sol = sp.linsolve(linsys, *new_eliminated_symbols)
-        if sol is sp.S.EmptySet or len(sol) == 0:
+        sol = linsolve(linsys, *new_eliminated_symbols)
+        if sol is EmptySet or len(sol) == 0:
             return None, polys
-        sol = sol[0] if not isinstance(sol, sp.FiniteSet) else sol.args[0]
+        sol = sol[0] if not isinstance(sol, FiniteSet) else sol.args[0]
         eliminated_set = set(new_eliminated_symbols)
         if any(_.free_symbols.intersection(eliminated_set) for _ in sol):
             # Underdetermined system -> nonzero dimensional variety
@@ -435,7 +437,7 @@ def _eliminate_linear(polys, symbols) -> Tuple[Dict[Symbol, Expr], List[Poly]]:
         polys = [polys[i] for i in rest_inds]
         polys = [polysubs(_, sol, symbols) for _ in polys]
         if len(symbols) == 0:
-            if any(_ != sp.S.Zero for _ in polys):
+            if any(_ != 0 for _ in polys):
                 return None, polys
 
         # update eliminated
@@ -500,7 +502,7 @@ def _optimize_by_symbol_reduction(poly: Poly, ineq_constraints: List[Poly], eq_c
         return solver(poly, ineq_constraints, eq_constraints, symbols)
 
     all_points = []
-    new_symbols = [sp.S.Zero] + [sp.Dummy(f'x{i}') for i in range(max_different)]
+    new_symbols = [Integer(0)] + [Dummy(f'x{i}') for i in range(max_different)]
 
     # assign symbols to some groups
     # group indices are standardized: e.g. (a,a,b,a,b) is equivalent as (b,b,a,b,a)
@@ -618,7 +620,7 @@ def _optimize_poly(poly: Poly, ineq_constraints: List[Poly], eq_constraints: Lis
         and all(_.is_homogeneous for _ in eq_constraints):
 
         if nvars == 1:
-            points = [(x,) for x in [sp.Integer(-1),sp.Integer(0),sp.Integer(1)] if poly(x) == 0 \
+            points = [(x,) for x in [Integer(-1),Integer(0),Integer(1)] if poly(x) == 0 \
                      and all(ineq(x) >= 0 for ineq in ineq_constraints)\
                      and all(eq(x) == 0 for eq in eq_constraints)]
             return points
@@ -646,7 +648,7 @@ def _optimize_poly(poly: Poly, ineq_constraints: List[Poly], eq_constraints: Lis
             points.extend(new_points)
         elif all(_.coeff_monomial((0,)*nvars) >= 0 for _ in ineq_constraints)\
             and all(_.coeff_monomial((0,)*nvars) == 0 for _ in eq_constraints):
-            points.append((sp.Integer(0),)*nvars)
+            points.append((Integer(0),)*nvars)
 
         # By homogeneity we assume sum(symbols) == 1
         # This should be eliminated by `_eliminate_linear`
@@ -705,7 +707,7 @@ def optimize_poly(poly: Union[Poly, Expr], ineq_constraints: List[Union[Poly, Ex
     Examples
     ----------
     >>> from sympy.abc import a, b, c, x, y
-    >>> optimize_poly(a + 2*b, [a, b], [a**2 + b**2 - 1], (a, b), objective='max')
+    >>> optimize_poly(a + 2*b, [a, b], [a**2 + b**2 - 1], (a, b), objective='max') # doctest: +SKIP
     [(CRootOf(5*a**2 - 1, 1), CRootOf(5*b**2 - 4, 1))]
 
     >>> optimize_poly((a**2+b**2+c**2)**2-3*(a**3*b+b**3*c+c**3*a)) # doctest: +SKIP

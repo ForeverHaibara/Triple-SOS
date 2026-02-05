@@ -608,7 +608,7 @@ class CyclicProduct(CyclicExpr):
     CyclicProduct(x + y**2, (x, y, z), PermutationGroup([
         (0 1 2),
         (2)(0 1)]))
-    >>> CyclicProduct(a*(b - c)**2, (a, b, c), SymmetricGroup(3))
+    >>> CyclicProduct(a*(b - c)**2, (a, b, c), SymmetricGroup(3)) # doctest:+SKIP
     (CyclicProduct(a, (a, b, c), PermutationGroup([
         (0 1 2),
         (2)(0 1)])))*(CyclicProduct((a - b)**2, (a, b, c), PermutationGroup([

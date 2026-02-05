@@ -6,14 +6,176 @@ from sympy.polys.rings import PolyElement
 from ..problem import InequalityProblem
 from ...utils import CyclicExpr
 
-def sign_sos(expr: Expr, signs: Dict[Symbol, Tuple[int, Expr]], factor: bool = False) -> Optional[Expr]:
+SIGNS_TYPE = Dict[Symbol, Tuple[Optional[int], Expr]]
+
+def _is_double_rational(x):
+    if isinstance(x, Rational) and (int(x.numerator) % 2 == 0 or
+            int(x.denominator) % 2 == 0):
+        return True
+    return False
+
+def is_nonneg_pow(x: Expr) -> bool:
+    return _is_double_rational(x.exp)
+
+def sgn_prod(signs: SIGNS_TYPE) -> Optional[int]:
+    if any(s == 0 for s in signs):
+        return 0
+    if any(s is None for s in signs):
+        return None
+    return 1 if sum([1 for s in signs if s < 0]) % 2 == 0 else -1
+
+
+def _prove_poly(poly: Poly, signs: SIGNS_TYPE, factor: bool=False) -> Optional[Expr]:
+    """
+    Helper function to decide the sign of a polynomial.
+
+    Examples
+    --------
+    >>> from sympy.abc import a, b, c, x
+    >>> _prove_poly((3*a**4*b**2 - 4*a**2*b**3).as_poly(a, b), {b: (-1, x)})
+    3*a**4*b**2 + 4*a**2*b**2*x
+    """
+    if factor:
+        const, factors = poly.factor_list()
+        const = _prove_by_recur(const.as_expr(), signs)
+        if const is None:
+            return None
+        proof = [const[0]]
+        for part, mul in factors:
+            if mul % 2 == 0:
+                # TODO: check whether sgn(part) == 0
+                proof.append(part.as_expr()**mul)
+            else:
+                part_proof = _prove_poly(part, signs, factor=False)
+                if part_proof is None:
+                    return None
+                proof.append(part_proof * part.as_expr()**(mul - 1))
+        return Mul(*proof)
+
+
+    if poly.free_symbols_in_domain:
+        poly = poly.inject()
+
+    gens = poly.gens
+    sign_gens = [signs.get(g, (None, None)) for g in gens]
+    sgn = 0
+    sgns = []
+    for monom, coeff in poly.terms():
+        s = sgn_prod([
+            0 if a == 0 else (1 if m % 2 == 0 else a) \
+                for m, (a, e) in zip(monom, sign_gens) if m > 0
+        ])
+        sgns.append(s)
+        if s is None:
+            return None
+        if s == 0:
+            continue
+        if coeff < 0:
+            s = -s
+        if sgn != 0:
+            if s != sgn:
+                # has different signs among all terms
+                return None
+        else:
+            # set sgn = 0 to sgn = s
+            sgn = s
+    if sgn < 0:
+        return None
+
+    terms = []
+    default = lambda e, g: e if e is not None else g
+
+    for s, (monom, coeff) in zip(sgns, poly.terms()):
+        if s != 0:
+            terms.append(Mul(abs(coeff), *[
+                (g**m if m % 2 == 0 else g**(m-1)*default(e, g)) \
+                    for m, g, (a, e) in zip(monom, gens, sign_gens) if m > 0
+            ]))
+        else:
+            terms.append(Mul(coeff, *[
+                (g**m if a != 0 else g**(m-1)*default(e, g)) \
+                    for m, g, (a, e) in zip(monom, gens, sign_gens) if m > 0
+            ]))
+    return Add(*terms)
+
+
+def _prove_by_recur(expr: Expr, signs: SIGNS_TYPE) -> Optional[Tuple[Expr, bool]]:
+    """
+    Returns the proof `new_expr` such that expr == new_expr >= 0 and whether
+    `new_expr` is not `expr`. The second argument tracks whether the expr
+    has changed.
+    """
+    if isinstance(expr, Rational):
+        if expr >= 0:
+            return expr, False
+        return None
+    elif expr.is_Symbol:
+        if signs.get(expr, (0, None))[0] == 1:
+            v = signs[expr][1]
+            return v, v != expr
+        return None
+    elif expr.is_Pow:
+        if is_nonneg_pow(expr):
+            return expr, False
+        sol = _prove_by_recur(expr.base, signs)
+        if sol is not None:
+            v, changed = sol
+            if changed:
+                return v ** expr.exp, True
+            return expr, False
+        return None
+    elif expr.is_Add or expr.is_Mul:
+        nonneg = []
+        for arg in expr.args:
+            nonneg.append(_prove_by_recur(arg, signs))
+            if nonneg[-1] is None:
+                return None
+        changed = any([_[1] for _ in nonneg])
+        if changed:
+            return expr.func(*[_[0] for _ in nonneg]), True
+        return expr, False
+    elif isinstance(expr, CyclicExpr):
+        arg = expr.args[0]
+        mulargs = []
+        if arg.is_Pow:
+            mulargs = [arg]
+        elif arg.is_Mul:
+            mulargs = arg.args
+        def single(x):
+            if x.is_Pow and is_nonneg_pow(x):
+                return True
+            if isinstance(x, Rational) and x >= 0:
+                return True
+            return False
+        if len(mulargs) and all(single(_) for _ in mulargs):
+            return expr, False
+
+        # TODO: make it nicer
+        # NOTE: calling doit(deep=False) to expand is not equivalent to generating
+        # all permutations. E.g.
+        # `CyclicProduct((a-b),(a,b,c,d),AlternatingGroup(4))`
+        # is nonnegative after expanding. However, it is undetermined termwise.
+        sol = _prove_by_recur(expr.doit(deep=False), signs)
+        if sol is not None:
+            return sol[0], True
+        return None
+
+    if len(expr.free_symbols) == 0:
+        # e.g. (sqrt(2) - 1)
+        sgn = (expr >= 0)
+        if sgn in (true, True):
+            return expr, False
+        return None
+
+
+def sign_sos(expr: Union[Expr, Poly], signs: SIGNS_TYPE, factor: bool = False) -> Optional[Expr]:
     """
     Very fast and simple nonnegativity check for a SymPy (commutative, real)
     expression instance given signs of symbols.
 
     Parameters
     ----------
-    expr: Expr
+    expr: Union[Expr, Poly]
         The expression to check.
     signs: Dict[Symbol, Tuple[int, Expr]]
         Signs of symbols stored in the format dict((symbol, (sign, expr))).
@@ -45,93 +207,17 @@ def sign_sos(expr: Expr, signs: Dict[Symbol, Tuple[int, Expr]], factor: bool = F
     >>> sign_sos(a**12 + b**12 + c**12 - 3*a**4*b**4*c**4, signs) is None
     True
     """
+    if isinstance(expr, Poly):
+        return _prove_poly(expr, signs, factor=factor)
 
-    def is_nonneg_pow(x: Expr) -> bool:
-        if isinstance(x.exp, Rational) and (int(x.exp.numerator) % 2 == 0 or
-                int(x.exp.denominator) % 2 == 0):
-            return True
-        return False
-
-    def prove_by_recur(expr: Expr) -> Optional[Tuple[Expr, bool]]:
-        """
-        Returns the proof `new_expr` such that expr == new_expr >= 0 and whether
-        `new_expr` is not `expr`. The second argument tracks whether the expr
-        has changed.
-        """
-        if isinstance(expr, Rational):
-            if expr >= 0:
-                return expr, False
-            return None
-        elif expr.is_Symbol:
-            if signs.get(expr, (0, None))[0] == 1:
-                v = signs[expr][1]
-                return v, v != expr
-            return None
-        elif expr.is_Pow:
-            if is_nonneg_pow(expr):
-                return expr, False
-            sol = prove_by_recur(expr.base)
-            if sol is not None:
-                v, changed = sol
-                if changed:
-                    return v ** expr.exp, True
-                return expr, False
-            return None
-        elif expr.is_Add or expr.is_Mul:
-            nonneg = []
-            for arg in expr.args:
-                nonneg.append(prove_by_recur(arg))
-                if nonneg[-1] is None:
-                    return None
-            changed = any([_[1] for _ in nonneg])
-            if changed:
-                return expr.func(*[_[0] for _ in nonneg]), True
-            return expr, False
-        elif isinstance(expr, CyclicExpr):
-            arg = expr.args[0]
-            mulargs = []
-            if arg.is_Pow:
-                mulargs = [arg]
-            elif arg.is_Mul:
-                mulargs = arg.args
-            def single(x):
-                if x.is_Pow and is_nonneg_pow(x):
-                    return True
-                if isinstance(x, Rational) and x >= 0:
-                    return True
-                return False
-            if len(mulargs) and all(single(_) for _ in mulargs):
-                return expr, False
-
-            # TODO: make it nicer
-            # NOTE: calling doit(deep=False) to expand is not equivalent to generating
-            # all permutations. E.g.
-            # `CyclicProduct((a-b),(a,b,c,d),AlternatingGroup(4))`
-            # is nonnegative after expanding. However, it is undetermined termwise.
-            sol = prove_by_recur(expr.doit(deep=False))
-            if sol is not None:
-                return sol[0], True
-            return None
-
-        if len(expr.free_symbols) == 0:
-            # e.g. (sqrt(2) - 1)
-            sgn = (expr >= 0)
-            if sgn in (true, True):
-                return expr, False
-            return None
-
-    sol = prove_by_recur(expr.as_expr())
+    sol = _prove_by_recur(expr.as_expr(), signs)
     if sol is not None:
         return sol[0]
 
     if factor:
-        if isinstance(expr, Poly):
-            factor_list = expr.factor_list()
-            expr = Mul(factor_list[0],
-                *[k.as_expr()**v for k, v in factor_list[1]])
-        else:
-            expr = expr.as_expr().doit().factor()
-        sol = prove_by_recur(expr)
+        # check once more by factorization
+        expr = expr.as_expr().doit().factor()
+        sol = _prove_by_recur(expr)
         if sol is not None:
             return sol[0]
 
@@ -316,7 +402,7 @@ def _infer_separable_sign(poly: Poly, expr: Expr, s: int,
 
 
 def _get_signs_by_topological_order(ineq_constraints: Dict[Poly, Expr], eq_constraints: Dict[Poly, Expr],
-        signs: Dict[int, Tuple[Optional[int], Expr]]) -> Dict[int, Tuple[Optional[int], Expr]]:
+        signs: SIGNS_TYPE) -> SIGNS_TYPE:
     """
     Algorithm to infer the signs of symbols from constraints by
     repeating the following process:
@@ -342,6 +428,7 @@ def _get_signs_by_topological_order(ineq_constraints: Dict[Poly, Expr], eq_const
     in place to remove constraints that are used or have no
     undetermined symbols.
     * The function modifies the `signs` in place.
+    * The keys of `signs` are indices, not symbols.
 
     Returns
     -------
@@ -411,7 +498,8 @@ def _get_signs_by_topological_order(ineq_constraints: Dict[Poly, Expr], eq_const
         else:
             del eq_constraints[cons[i][0]]
 
-        # print(f'Removing Neighbors[{s_ind}] = {neighbors[s_ind]}: {[cons[i] for i in neighbors[s_ind]]}')
+        # print(f'Removing Neighbors[{s_ind}] = {neighbors[s_ind]}:'
+        #       f' {[cons[i] for i in neighbors[s_ind]]}')
         for j in list(neighbors[s_ind]):
             heap.remove(j, s_ind)
             neighbors[s_ind] = {}
@@ -452,13 +540,13 @@ def get_symbol_signs(problem: InequalityProblem) -> Dict[Symbol, Tuple[Optional[
     {a: (-1, x + 3), b: (-1, a**2 + y), c: (0, v - 2)}
     """
 
-    eq_constraints0, ineq_constraints0 = problem.eq_constraints, problem.ineq_constraints
-    eq_constraints, ineq_constraints = {}, {}
+    eqs0, ineqs0 = problem.eq_constraints, problem.ineq_constraints
+    eqs, ineqs = {}, {}
 
     fs0 = problem.gens
 
     # polylize and make a copy
-    for src, tar in ((eq_constraints0, eq_constraints), (ineq_constraints0, ineq_constraints)):
+    for src, tar in ((eqs0, eqs), (ineqs0, ineqs)):
         for key, val in src.items():
             if (not isinstance(key, Poly)) or (not key.gens == fs0):
                 key = Poly(key, *fs0)
@@ -467,7 +555,106 @@ def get_symbol_signs(problem: InequalityProblem) -> Dict[Symbol, Tuple[Optional[
     signs = {i: (None, None) for i in range(len(fs0))}
 
     # infer signs from constraints
-    signs = _get_signs_by_topological_order(ineq_constraints, eq_constraints, signs)
+    signs = _get_signs_by_topological_order(ineqs, eqs, signs)
 
     signs = {fs0[i]: signs.get(i, (None, None)) for i in range(len(fs0))}
     return signs
+
+
+def recompute_constraints_from_signs(problem: InequalityProblem) -> InequalityProblem:
+    """
+    Recompute the constraints from the symbol signs.
+
+    Examples
+    --------
+    >>> from sympy.abc import a, b, c, d, u, v, w, x, y, z
+    >>> pro = InequalityProblem(a**3 - b + 1, [a**2 - b**2, a, b, a + 2*b])
+    >>> pro.recompute_constraints().ineq_constraints
+    {a - b: (a**2 - b**2)/(a + b), a: a, b: b}
+    """
+    signs = problem.get_symbol_signs()
+    has_zero = any(s == 0 for s, v in signs.values())
+
+    source = [problem.ineq_constraints, problem.eq_constraints]
+    target = [{}, {}]
+    for tp, src, dst in zip((1, 2), source, target):
+        for p, e in src.items():
+            if isinstance(p, Expr):
+                if p == 0:
+                    continue
+                args = Mul.make_args(p.factor())
+                args = [(a.base, a.exp) if a.is_Pow and a.exp.is_Rational else (a, 1) for a in args]
+            elif isinstance(p, Poly):
+                if p.is_zero:
+                    continue
+                args = p.factor_list_include()
+            else:
+                raise TypeError(f"Unknown type {type(p)}.")
+
+            sgn = 1
+            expr = 1
+            rest_args = []
+            for a, mul in args:
+                # extract the positive part of each arg
+                if isinstance(mul, Rational):
+                    if _is_double_rational(mul):
+                        expr = expr * a**mul
+                        continue
+                    a = a**mul
+                    mul = 1
+                elif mul % 2 == 0:
+                    expr = expr * a.as_expr()**mul
+                    continue
+                s1 = sign_sos(a, signs)
+                if has_zero or s1 is None:
+                    s2 = sign_sos(-a, signs)
+                    if s1 is not None:
+                        # a == 0
+                        sgn = 0
+                        break
+                    if s2 is not None:
+                        sgn *= -1
+                        expr = expr * s2**mul
+                    else: # elif s2 is None:
+                        rest_args.append((a, mul))
+                if s1 is not None:
+                    expr = expr * s1**mul
+
+            if sgn == 0:
+                # 0 >= 0 or 0 == 0 are trivial and should be omitted
+                continue
+
+            # p == sgn * expr * Mul(a**mul for a, mul in rest_args)
+            e2 = e / expr
+            p2 = sgn
+            if len(rest_args) == 0:
+                if tp == 1:
+                    if sgn == 1:
+                        # reduces to the trivial constraint 1 >= 0
+                        # just omit it
+                        continue
+                if isinstance(p, Poly):
+                    # cast to poly
+                    p2 = p.one * sgn
+            else:
+                for a, mul in rest_args:
+                    # TODO: make it square-free
+                    p2 = p2 * a**mul
+            dst[p2] = e2
+
+    is_poly = isinstance(problem.expr, Poly)
+    for g, (s, v) in signs.items():
+        if s is None:
+            continue
+        if is_poly:
+            # cast to poly
+            g = Poly(g, problem.expr.gens)
+        if s == 0:
+            target[1][g] = v
+        elif s == 1:
+            target[0][g] = v
+        elif s == -1:
+            target[0][-g] = v
+
+    problem = problem.copy_new(problem.expr, target[0], target[1])
+    return problem

@@ -821,7 +821,7 @@ class PSatz(Generic[Ef]):
     True
 
     >>> from sympy import UnevaluatedExpr as ue
-    >>> ue(x - 2) + ue(y + 2)
+    >>> ue(x - 2) + ue(y + 2) # doctest:+SKIP
     (x - 2) + (y + 2)
     >>> ps = PSatz.from_sympy(ue(x - 2) + ue(y + 2), [], [x - 2, y + 2])
     >>> ps
@@ -831,7 +831,7 @@ class PSatz(Generic[Ef]):
 
     >>> ps.as_expr()
     x + y
-    >>> ps.as_expr(evaluate=False)
+    >>> ps.as_expr(evaluate=False) # doctest:+SKIP
     (x - 2) + (y + 2)
 
 

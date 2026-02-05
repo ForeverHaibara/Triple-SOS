@@ -1,3 +1,7 @@
+"""
+This is still highly experimental. Do not use this.
+"""
+
 from typing import Tuple, Union, List, Callable
 
 from sympy import Poly, Expr, Integer, Mul, Dummy, gcd
@@ -22,8 +26,12 @@ def _perfect_power(x: int, l: int) -> Union[Tuple[Expr, int], bool]:
         return False
     return (z[0], int(z[1]))
 
+
 class Reparametrization(TransformNode):
     """
+    Warning: This is still in development. Avoid using this.
+    See `elimination.py` instead.
+
     Eliminate some of the equality constraints by reparametrizing the variables.
     Helper functions of reparametrization should identify whether
     a multivariate polynomial can be reparametrized (heuristically)
@@ -33,7 +41,7 @@ class Reparametrization(TransformNode):
         'irrational_number': False,
         'irrational_expr': False,
     }
-
+    finished = True
     def explore(self, configs):
         if self.state != 0:
             return

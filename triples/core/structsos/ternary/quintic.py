@@ -1814,44 +1814,44 @@ def _sos_struct_quintic_hexagon(coeff: Coeff):
         # v^2-2u <= q   --->  (u^2-p)^2/4 - 2u <= q
 
         eq = coeff.from_list([1, 0, -2*p, -8, p**2 - 4*q], (a,)).as_poly()
-        u_, v_ = None, None
+        u, v = None, None
 
         for root in eq.ground_roots():
             if isinstance(root, Rational):
-                u_ = root
-                v_ = (u_ ** 2 - p) / 2
-                if -2 * u_ * v_ <= z:
+                u = root
+                v = (u ** 2 - p) / 2
+                if -2 * u * v <= z:
                     break
-                u_, v_ = None, None
-        if (u_ is None or v_ is None) and (not coeff.is_rational):
+                u, v = None, None
+        if (u is None or v is None) and (not coeff.is_rational):
             return None
 
-        if u_ is None:
+        if u is None:
             try:
                 for root in nroots(eq, real=True):
-                    if - root * (root**2 - p) <= z:
+                    if -root * (root**2 - p) <= z:
                         direction = 1 if eq.diff().eval(root) <= 0 else -1
-                        for u_ in rationalize_bound(root, direction, compulsory = True):
-                            if eq(u_) <= 0:
-                                v_ = (u_ ** 2 - p) / 2
-                                if -2 * u_ * v_ <= z:
+                        for u in rationalize_bound(root, direction, compulsory = True):
+                            if eq(u) <= 0:
+                                v = (u ** 2 - p) / 2
+                                if -2 * u * v <= z:
                                     break
                         else:
-                            u_, v_ = None, None
+                            u, v = None, None
             except Exception:
                 pass
 
-        if u_ is not None:
+        if u is not None:
             y = [
                 1,
-                q - (v_ **2 - 2 * u_),
-                (z + 2 * u_ * v_) / 2,
+                q - (v **2 - 2 * u),
+                (z + 2 * u * v) / 2,
                 rem / coeff410
             ]
             if all(_ >= 0 for _ in y):
                 y = [_ * coeff410 for _ in y]
                 exprs = [
-                    CyclicSum(c*(a**2 - b**2 + u_*(a*b-a*c) + v_*(b*c-a*b))**2),
+                    CyclicSum(c*(a**2 - b**2 + u*(a*b-a*c) + v*(b*c-a*b))**2),
                     CyclicSum(a**2*b*(b-c)**2),
                     CyclicProduct(a) * CyclicSum((b-c)**2),
                     CyclicProduct(a) * CyclicSum(a*b)
@@ -1863,86 +1863,90 @@ def _sos_struct_quintic_hexagon(coeff: Coeff):
         return None
 
 
-    if True:
+    if coeff.is_rational:
         # solve trivial case:
         # Try to represent f(a,b,c) in the form
         # xs(c(a^2-b^2+u(ab-ac)+v(bc-ab))^2) + zs(c(a-b)^4) - ys(c(a^2-b^2+u(ab-ac)+v(bc-ab))(a-b)^2)
-        # Then, when y^2 <= 4xz, the result is positive semi-definite.
-        y_ = (coeff((4,1,0)) - coeff((1,4,0))) / 2
-        s_ = (coeff((4,1,0)) + coeff((1,4,0))) / 2 # s = x + z
-        x_ = s_ / 2 + sqrt(coeff((4,1,0)) * coeff((1,4,0))) / 2
+        # Then, when y^2 <= 4xz, the result is positive semidefinite.
+        y = (coeff((4,1,0)) - coeff((1,4,0))) / 2
+        s = (coeff((4,1,0)) + coeff((1,4,0))) / 2 # s = x + z
+        x = s / 2 + sqrt(coeff((4,1,0)) * coeff((1,4,0))) / 2
         g, h = coeff((3,2,0)), coeff((2,3,0))
-        if isinstance(x_, Expr) and not isinstance(x_, Rational):
-            x_ = x_.n(15)
+        if isinstance(x, Expr) and not isinstance(x, Rational):
+            x = x.n(15)
 
         # u^2x - 2vx - vy = g => v = (u^2x - g) / (2x + y)
         # v^2x - 2ux + uy = h
 
 
-        def _compute_uvcoef(u_, x_, y_, s_, g):
+        def _compute_uvcoef(u, x, y, s, g):
             # coef is the coefficient of a^3bc
-            v_ = (u_**2*x_ - g) / (2*x_ + y_)
-            coef = -2*u_*v_*x_ - 2*u_*y_ + 2*v_*y_ - 8*(s_ - x_)
-            return u_, v_, coef
+            u = coeff.convert(u)
+            v = (u**2*x - g) / (2*x + y)
+            coef = -2*u*v*x - 2*u*y + 2*v*y - 8*(s - x)
+            return u, v, coef
 
-        def _solve_uvcoef(x_, y_, g, h, s_):
-            u = Symbol('u')
-            u_, v_ = None, None
-            eq = (x_**3*u**4 - 2*g*x_**2*u**2 + (-8*x_**3 - 4*x_**2*y_ + 2*x_*y_**2 + y_**3)*u + g**2*x_ - 4*h*x_**2 - 4*h*x_*y_ - h*y_**2).as_poly(u)
+        def _solve_uvcoef(x, y, g, h, s):
+            x = coeff.convert(x)
+            eq = coeff.from_list([
+                x**3, 0, -2*g*x**2, (-8*x**3 - 4*x**2*y + 2*x*y**2 + y**3), g**2*x - 4*h*x**2 - 4*h*x*y - h*y**2
+            ], (a,)).as_poly()
 
             roots = nroots(eq, method='factor', real = True, nonnegative = True)
             for root in roots:
-                u_, v_, coef = _compute_uvcoef(root, x_, y_, s_, g)
+                _, v, coef = _compute_uvcoef(root, x, y, s, g)
                 if coef <= coeff((3,1,1)):
-                    return u_, v_, coef
+                    return root, v, coef
 
 
-        params = _solve_uvcoef(x_, y_, g, h, s_)
-        if params is not None and not isinstance(x_, Rational):
+        params = _solve_uvcoef(x, y, g, h, s)
+        if params is not None and not isinstance(x, Rational):
             # perturb x to be slightly smaller
-            for x__ in rationalize_bound(x_, direction = -1, compulsory = True):
-                if x__ < s_ / 2:
+            for x_ in rationalize_bound(x, direction = -1, compulsory = True):
+                if x_ < s / 2:
                     continue
-                params = _solve_uvcoef(x__, y_, g, h, s_)
+                params = _solve_uvcoef(x_, y, g, h, s)
                 if params is not None:
-                    x_ = x__
+                    x = x_
                     break
                 params = None
 
         if params is not None:
             # now that x is rational
-            u_, v_, coef = params
+            u, v, coef = params
 
-            if not isinstance(u_, Rational):
-                # for u__ in rationalize_bound(u_, )
-                direction = -1 if (4*u_*x_**2*(-g + u_**2*x_)/(2*x_ + y_)**2 - 2*x_ + y_) > 0 else 1
-                for u__ in rationalize_bound(u_, direction = direction, compulsory = True):
-                    u__, v_, coef = _compute_uvcoef(u__, x_, y_, s_, g)
-                    if v_**2*x_ - 2*u_*x_ + u_*y_ <= h and coef <= coeff((3,1,1)):
-                        u_ = u__
+            if isinstance(u, Float) and (not coeff.domain.is_RR):
+                direction = -1 if (4*u*x**2*(-g + u**2*x)/(2*x + y)**2 - 2*x + y) > 0 else 1
+                for u_ in rationalize_bound(u, direction = direction, compulsory = True):
+                    u_, v, coef = _compute_uvcoef(u_, x, y, s, g)
+                    if v**2*x - 2*u*x + u*y <= h and coef <= coeff((3,1,1)):
+                        u = u_
                         break
+                else:
+                    u = None
 
-            # print(x_, params, u_, v_, (u_**2*x_ - 2*v_*x_ - v_*y_), (v_**2*x_ - 2*u_*x_ + u_*y_))
-            if isinstance(u_, Rational):
-                z_ = s_ - x_
-                y = [
-                    x_,
-                    z_ - y_**2 / 4 / x_,
-                    g - (u_**2*x_ - 2*v_*x_ - v_*y_),
-                    h - (v_**2*x_ - 2*u_*x_ + u_*y_),
-                    (coeff((3,1,1)) - (-2*u_*v_*x_ - 2*u_*y_ + 2*v_*y_ - 8*(s_ - x_))) / 2,
+            # print(x, params, u, v, (u**2*x - 2*v*x - v*y), (v**2*x - 2*u*x + u*y))
+            if u is not None:
+                u, x = coeff.convert(u), coeff.convert(x)
+                z = s - x
+                _y = [
+                    x,
+                    z - y**2 / 4 / x,
+                    g - (u**2*x - 2*v*x - v*y),
+                    h - (v**2*x - 2*u*x + u*y),
+                    (coeff((3,1,1)) - (-2*u*v*x - 2*u*y + 2*v*y - 8*(s - x))) / 2,
                     rem
                 ]
-                if all(_ >= 0 for _ in y):
+                if all(_ >= 0 for _ in _y):
                     exprs = [
-                        CyclicSum(c*((1-y_/(2*x_))*a**2-(1+y_/(2*x_))*b**2+(y_/x_+u_-v_)*a*b + v_*b*c -u_*a*c)**2),
+                        CyclicSum(c*((1-y/(2*x))*a**2-(1+y/(2*x))*b**2+(y/x+u-v)*a*b + v*b*c -u*a*c)**2),
                         CyclicSum(c*(a-b)**4),
                         CyclicSum(b*c**2*(a-b)**2),
                         CyclicSum(a*c**2*(a-b)**2),
                         CyclicProduct(a) * CyclicSum((a-b)**2),
                         CyclicProduct(a) * CyclicSum(a*b)
                     ]
-                    return sum_y_exprs(y, exprs)
+                    return sum_y_exprs(_y, exprs)
 
 
     return None

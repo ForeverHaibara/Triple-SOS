@@ -464,10 +464,12 @@ def solution_checker(solution, expr, ineq_constraints, eq_constraints,
         *args, **kwargs) -> bool:
     if solution is None:
         return False
+    if hasattr(solution, 'solution'):
+        solution = solution.solution
 
     from sympy import sympify, Eq
     expr = sympify(expr).as_expr()
-    sol = solution.solution
+    sol = solution
 
     fs1 = expr.free_symbols
     fs2 = sol.free_symbols

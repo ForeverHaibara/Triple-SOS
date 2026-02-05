@@ -1,5 +1,4 @@
 from typing import List, Dict, Tuple, Optional
-from functools import partial
 
 from sympy import Poly, Expr, Symbol, Dummy, Mul
 
@@ -146,13 +145,22 @@ class PivotQuadratic(ProofNode):
                 _info["pro_symu"] = pro_symu
                 _info["node_symu"] = node_symu
 
-
+        signs = _info["signs"]
         for key, node in _info.items():
             if key.startswith("node_"):
                 self.children.append(node)
-                if isinstance(node, SolvePolynomial):
+
+                # skip the node if infeasibility detected
+                # TODO: shall the code be moved elsewhere?
+                disprove = sign_sos(-node.problem.expr, signs) if (signs is not None) else None
+                if disprove is not None:
+                    node.finished = True
+                elif isinstance(node, SolvePolynomial):
                     node.default_configs = SolvePolynomial.default_configs.copy()
                     node.default_configs["sqf"] = True
+
+        # update to remove nodes that are disproved
+        self.update()
 
     def _explore_state_2(self, configs):
         _info = self._info
@@ -321,7 +329,7 @@ class PivotQuadratic(ProofNode):
             )
 
     @classmethod
-    def from_problem_gen(cls, problem: InequalityProblem, margin, bounds):
+    def from_problem_gen(cls, problem: InequalityProblem, margin: Poly, bounds, signs=None):
         gen = margin.gen
         other_gens = tuple([g for g in problem.gens if g != gen])
         domain = problem.expr.domain
@@ -349,6 +357,7 @@ class PivotQuadratic(ProofNode):
             "ineqs": ineqs,
             "eqs": eqs,
             "bounds": bounds,
+            "signs": signs,
         }
         return node
 
@@ -387,7 +396,7 @@ def pivoting_quadratic(problem: InequalityProblem, configs: dict) -> list:
         if margin.rep.all_coeffs()[-1].is_zero:
             continue
 
-        lst.append(PivotQuadratic.from_problem_gen(problem, margin, bounds))
+        lst.append(PivotQuadratic.from_problem_gen(problem, margin, bounds, signs=signs))
 
     return lst
 

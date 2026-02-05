@@ -53,7 +53,7 @@ pip install clarabel
 ```
 
 ```py
-from triples.core import sum_of_squares
+from triples import sum_of_squares
 import sympy as sp
 a, b, c, x, y, z = sp.symbols("a b c x y z")
 ```

@@ -11,12 +11,12 @@ def univariate_intervals(polys: Union[Poly, List[Poly]]) -> Generator[Rational, 
 
     Parameters
     ----------
-    polys: sympy.Poly or list of sympy.Poly
+    polys: Poly or list of Poly
         Univariate polynomials to compute intervals for.
 
     Yields
     ----------
-    v: sympy.Rational
+    v: Rational
         Rational points where the signs of polynomials get changed.
     """
     pre = sp.nan

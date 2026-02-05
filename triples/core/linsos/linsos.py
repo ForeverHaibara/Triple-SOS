@@ -490,7 +490,8 @@ def LinearSOS(
     problem.set_roots(roots)
     configs = {
         ProofTree: {
-            'time_limit': time_limit,
+            "verbose": verbose,
+            "time_limit": time_limit,
         },
         SolvePolynomial: {
             'solvers': [LinearSOSSolver],

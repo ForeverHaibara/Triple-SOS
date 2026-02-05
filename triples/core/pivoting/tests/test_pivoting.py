@@ -41,12 +41,6 @@ class PivotingProblems:
         return CyclicSum((a + b - c)*(a - b)**2*(a + b - t*c)**2, (a, b, c)), [a, b, c, 1 - t], []
 
     @classmethod
-    def problem_quadratic_r2(cls):
-        # holds for t <= 3 as well, but t <= 1 will make the
-        # degree-1 coefficient nonnegative
-        return CyclicSum((a + b - c)*(a - b)**2*(a + b - t*c)**2, (a, b, c)), [a, b, c, 1 - t], []
-
-    @classmethod
     def problem_quadratic_l(cls):
         return (4*x*y*z + 9*((x-y)**2+(y-z)**2+(z-x)**2-(x-1)**2-(y-1)**2-(z-1)**2)), [x - 1, y - 1, z - 1], []
 
@@ -67,7 +61,7 @@ def test_pivoting_problems(problem):
     pro = InequalityProblem(expr, ineq_constraints, eq_constraints).polylize()
     pivot = Pivoting(pro)
     tree = ProofTree(pivot,
-        {ProofTree: {'time_limit': 30.0},
+        {ProofTree: {'time_limit': 20.0},
          SolvePolynomial: {'solvers': [
              Pivoting, StructuralSOSSolver, LinearSOSSolver]},
          LinearSOSSolver: {'basis_limit': 1000}

@@ -153,17 +153,17 @@ def _block_iterator(blocks: List[int]) -> Tuple[int, int]:
 
 
 def sdp_ipm(
-        A: List[Union[np.ndarray, sp.Matrix, mp.matrix]],
-        b: Union[np.ndarray, sp.Matrix, mp.matrix],
-        C: Union[np.ndarray, sp.Matrix, mp.matrix],
-        X0: Union[np.ndarray, sp.Matrix, mp.matrix],
-        dtype: Optional[str] = None,
-        rho: float = .5,
-        epsilon: float = 1e-8,
-        max_iter: int = 100,
-        blocks: Optional[List[int]] = None,
-        callback: Optional[Callable[[Dict[str, Any]], Any]] = None
-    ) -> Tuple[Union[np.ndarray, sp.Matrix, mp.matrix], Union[np.ndarray, sp.Matrix, mp.matrix]]:
+    A: List[Union[np.ndarray, sp.Matrix, mp.matrix]],
+    b: Union[np.ndarray, sp.Matrix, mp.matrix],
+    C: Union[np.ndarray, sp.Matrix, mp.matrix],
+    X0: Union[np.ndarray, sp.Matrix, mp.matrix],
+    dtype: Optional[str] = None,
+    rho: float = .5,
+    epsilon: float = 1e-8,
+    max_iter: int = 100,
+    blocks: Optional[List[int]] = None,
+    callback: Optional[Callable[[Dict[str, Any]], Any]] = None
+) -> Tuple[Union[np.ndarray, sp.Matrix, mp.matrix], Union[np.ndarray, sp.Matrix, mp.matrix]]:
     """
     Solve the semidefinite program
 
@@ -343,16 +343,16 @@ def sdp_ipm(
 
 
 def sdp_ipm_feasible(
-        A: List[Union[np.ndarray, sp.Matrix, mp.matrix]],
-        b: Union[np.ndarray, sp.Matrix, mp.matrix],
-        X0: Optional[Union[np.ndarray, sp.Matrix, mp.matrix]] = None,
-        dtype: Optional[str] = None,
-        rho: float = .5,
-        epsilon: float = 1e-8,
-        max_iter: int = 100,
-        blocks: Optional[List[int]] = None,
-        callback: Optional[Callable[[Dict[str, Any]], Any]] = None
-    ) -> Union[np.ndarray, sp.Matrix, mp.matrix]:
+    A: List[Union[np.ndarray, sp.Matrix, mp.matrix]],
+    b: Union[np.ndarray, sp.Matrix, mp.matrix],
+    X0: Optional[Union[np.ndarray, sp.Matrix, mp.matrix]] = None,
+    dtype: Optional[str] = None,
+    rho: float = .5,
+    epsilon: float = 1e-8,
+    max_iter: int = 100,
+    blocks: Optional[List[int]] = None,
+    callback: Optional[Callable[[Dict[str, Any]], Any]] = None
+) -> Union[np.ndarray, sp.Matrix, mp.matrix]:
     """
     Find a feasible point for the semidefinite program
             s.t. <A[i], X> = b[i], i = 1, ..., m
@@ -445,15 +445,15 @@ def sdp_ipm_feasible(
 
 
 def sdp_dual_feasible(
-        C: Union[np.ndarray, sp.Matrix, mp.matrix],
-        A: List[Union[np.ndarray, sp.Matrix, mp.matrix]],
-        dtype: Optional[str] = None,
-        rho = .5,
-        epsilon = 1e-8,
-        max_iter = 100,
-        blocks = None,
-        callback = None
-    ) -> Tuple[Union[np.ndarray, sp.Matrix, mp.matrix], Union[np.ndarray, sp.Matrix, mp.matrix]]:
+    C: Union[np.ndarray, sp.Matrix, mp.matrix],
+    A: List[Union[np.ndarray, sp.Matrix, mp.matrix]],
+    dtype: Optional[str] = None,
+    rho = .5,
+    epsilon = 1e-8,
+    max_iter = 100,
+    blocks = None,
+    callback = None
+) -> Tuple[Union[np.ndarray, sp.Matrix, mp.matrix], Union[np.ndarray, sp.Matrix, mp.matrix]]:
     """
     Solve the dual problem of the SDP feasibility problem
     C + A[0]*x[0] + ... + A[n]*x[n] >= 0.

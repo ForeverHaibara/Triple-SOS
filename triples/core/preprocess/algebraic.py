@@ -15,6 +15,9 @@ class CancelDenominator(ProofNode):
     """
     _numer = None
     _denom = None
+    default_configs = {
+        "irrational_expr": False,
+    }
     def explore(self, configs):
         problem = self.problem
         poly, ineq_constraints, eq_constraints = problem.expr, problem.ineq_constraints, problem.eq_constraints
@@ -47,7 +50,7 @@ class CancelDenominator(ProofNode):
             self._denom = problem.new(denom, new_ineqs, new_eqs)
 
             self.children = [
-                SolveMul(self._denom)
+                SolveMul(self._denom, {"irrational_expr": configs["irrational_expr"]})
             ]
 
             self.state = 1
@@ -57,7 +60,9 @@ class CancelDenominator(ProofNode):
         if self.state == 1:
             if self._denom.solution is not None:
                 self.children = [
-                    SolvePolynomial(self._numer)
+                    SolvePolynomial(self._numer,
+                        # TODO: use configs, instead of "default_configs"
+                        {"irrational_expr": self.default_configs["irrational_expr"]}),
                 ]
                 self.state = -1
             elif len(self.children) == 0 and self._denom.solution is None:
@@ -76,6 +81,9 @@ class SolveMul(ProofNode):
     Prove the nonnegativity of a Mul expression before it is expanded to a
     polynomial. Trivially nonnegative terms in the multiplication are removed from the expression.
     """
+    default_configs = {
+        "irrational_expr": False,
+    }
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.proved = []
@@ -116,7 +124,7 @@ class SolveMul(ProofNode):
             rest = Mul(*[base for base, exp in self.unproved])
             rest_problem = self.new_problem(rest, self.problem.ineq_constraints, self.problem.eq_constraints)
             self.children = [
-                SolvePolynomial(rest_problem)
+                SolvePolynomial(rest_problem, {"irrational_expr": configs["irrational_expr"]})
             ]
             self.state = -1
         else:

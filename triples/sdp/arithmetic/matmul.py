@@ -8,8 +8,7 @@ from time import time
 from typing import List, Tuple, Union, Optional, Callable
 
 from numpy import iinfo as np_iinfo
-from numpy import ndarray, int64, isnan, inf, unique
-import sympy as sp
+from numpy import ndarray, int64, isnan, inf
 from sympy.matrices import MutableDenseMatrix as Matrix
 
 from .matop import (
@@ -107,7 +106,7 @@ def matmul(A: Union[Matrix, ndarray], B: Union[Matrix, ndarray],
 
     return_shape = return_shape or (A.shape[0], B.shape[-1])
     if A.shape[0] == 0 or B.shape[0] == 0 or B.shape[-1] == 0:
-        return sp.zeros(*return_shape)
+        return Matrix.zeros(*return_shape)
     A0, B0 = A, B
 
     def default(A0, B0):
@@ -195,7 +194,7 @@ def matmul_multiple(A: Union[Matrix, ndarray], B: Union[Matrix, ndarray],
     time_limit()
 
     if A.shape[0] == 0 or B.shape[0] == 0 or B.shape[1] == 0:
-        return sp.zeros(A.shape[0], B.shape[0]*B.shape[1])
+        return Matrix.zeros(A.shape[0], B.shape[0]*B.shape[1])
 
     A0, B0 = A, B
     def default(A, B):

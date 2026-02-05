@@ -63,7 +63,7 @@ class PolyRing(CommutativeStateAlgebra):
         return sum(monom)
 
     def terms(self, poly: Poly) -> List[TERM]:
-        return poly.rep.terms()
+        return poly.rep.terms() if (not poly.is_zero) else []
 
     def as_expr(self, poly: Poly) -> Expr:
         return poly.as_expr()

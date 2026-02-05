@@ -81,7 +81,7 @@ def _save_batch(result, dir_path, bench_id):
 def run_bench(benchmarks=BENCHMARKS, save_interval=0):
     platform_info = _get_platform_info()
 
-    from triples.core import sum_of_squares
+    from triples import sum_of_squares
     from datetime import datetime
     os.makedirs("./.benchmarks", exist_ok=True)
 

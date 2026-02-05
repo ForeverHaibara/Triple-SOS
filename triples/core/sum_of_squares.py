@@ -2,7 +2,7 @@ from typing import Tuple, Dict, List, Optional, Union, Callable, Any
 from warnings import warn
 
 import numpy as np
-from sympy import Poly, Expr, Symbol, sympify
+from sympy import Poly, Expr, Symbol
 
 from .preprocess import ProofNode, ProofTree, SolvePolynomial
 from .preprocess.reparam import Reparametrization
@@ -159,14 +159,15 @@ def sum_of_squares(
 
     _configs = {
         ProofTree: {
-            'mode': mode,
-            'time_limit': time_limit,
+            "mode": mode,
+            "verbose": verbose,
+            "time_limit": time_limit,
         },
         ProofNode: {
-            'verbose': verbose,
+            "verbose": verbose,
         },
         SolvePolynomial: {
-            'solvers': methods,
+            "solvers": methods,
         },
     }
     _configs.update(configs)

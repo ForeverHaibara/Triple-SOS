@@ -7,8 +7,7 @@ from functools import partial
 import warnings
 
 import numpy as np
-import sympy as sp
-from sympy import Poly, Expr, Symbol, lambdify, nextprime
+from sympy import Poly, Expr, MatrixBase, Symbol, lambdify, nextprime
 from sympy import __version__ as SYMPY_VERSION
 from sympy.external.importtools import version_tuple
 from sympy.combinatorics import Permutation, PermutationGroup
@@ -189,7 +188,7 @@ class NumerFunc:
             f0 = NumerFunc(lambda x: f(*x), lambda x: np.array([df(*x) for df in fdiff]))
             return f0
 
-        if isinstance(expr, (list, tuple, sp.MatrixBase)):
+        if isinstance(expr, (list, tuple, MatrixBase)):
             fs = [_wrap_single(e, symbols) for e in expr]
             return NumerFunc.vectorize(fs)
         elif isinstance(expr, (Expr, Poly)):

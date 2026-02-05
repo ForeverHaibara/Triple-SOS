@@ -568,6 +568,7 @@ def SDPSOS(
     problem.set_roots(roots)
     configs = {
         ProofTree: {
+            "verbose": verbose,
             "time_limit": time_limit,
         },
         SolvePolynomial: {

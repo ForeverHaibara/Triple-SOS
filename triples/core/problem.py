@@ -1,19 +1,16 @@
-from functools import wraps
 from typing import (
     Dict, List, Tuple, Set, Optional, Union, Iterable, Callable,
     Any, TypeVar, Generic
 )
 from sympy import (
-    Basic, Expr, Symbol, Dummy, Poly, Integer, Rational, Function, Mul, Pow,
+    Expr, Symbol, Poly, Integer, Function, Mul, Add, Pow,
     fraction
 )
-from sympy import true as SympyTrue
 from sympy.combinatorics.perm_groups import Permutation, PermutationGroup
 from sympy.core.symbol import uniquely_named_symbol
 from sympy.core.sympify import sympify, CantSympify
 from sympy.core.function import AppliedUndef
 from sympy.polys.polyerrors import BasePolynomialError
-from sympy.polys.domains.domainelement import DomainElement
 
 from .complexity import ProblemComplexity
 from .dispatch import (
@@ -243,7 +240,7 @@ class InequalityProblem(Generic[T]):
         ret = self._dtype_convert(p, 1)
         sgn = 1 if c > 0 else -1
         e = e / c
-        max_d = Integer(max(1, *(d for q, d in lst)))
+        max_d = Integer(max(0, 1, *(d for q, d in lst))) # avoid only 1 arg when lst is empty
         for q, d in lst:
             ret = ret * q
             e = e * q.as_expr()**(max_d - d)
@@ -558,6 +555,15 @@ class InequalityProblem(Generic[T]):
         self.eq_constraints = dict((e, e2) for e, e2 in eq_constraints.items())
         return self, sqr
 
+    def recompute_constraints(
+        self,
+    ) -> 'InequalityProblem':
+        """
+        Recompute the constraints from the symbol signs.
+        """
+        from .preprocess.signs import recompute_constraints_from_signs
+        return recompute_constraints_from_signs(self)
+
     def homogenize(self, hom: Optional[Symbol]=None) -> Tuple['InequalityProblem', Optional[Symbol]]:
         """
         Try to homogenize the problem.
@@ -758,7 +764,7 @@ class InequalityProblem(Generic[T]):
         (2*x**3*z - 2*x**2*y*z + 2*x*y**3 - 2*x*y**2*z - 2*x*y*z**2 + 2*y*z**3,
          {2*x: F(a), 2*y: F(b), 2*z: F(c)})
 
-        As we find a solution (sympy Expr) to the transformed problem, we use `restore` to
+        After we find a solution (sympy Expr) to the transformed problem, use `restore` to
         transform it back to the original problem.
         >>> sol = (F(a)*F(c)*(x-y)**2 + F(b)*F(a)*(y-z)**2 + F(c)*F(b)*(z-x)**2)/2
         >>> (sol.xreplace({F(a): 2*x, F(b): 2*y, F(c): 2*z}) - new_pro.expr).expand()
@@ -767,8 +773,15 @@ class InequalityProblem(Generic[T]):
         (-a + b)**2*F(a)*F(c)/2 + (a - c)**2*F(b)*F(c)/2 + (-b + c)**2*F(a)*F(b)/2
         >>> (restore(sol).xreplace({F(a):b+c-a, F(b):c+a-b, F(c):a+b-c}) - problem.expr).expand()
         0
+
+        Transformations should be birational if the problem is polynomial.
+        >>> from sympy import cbrt
+        >>> InequalityProblem(a**2).polylize().transform({a: cbrt(b)}, {b: a**3}) # doctest:+SKIP
+        Traceback (most recent call last):
+        ...
+        PolynomialError: b**(2/3) contains an element of the set of generators.
         """
-        src_dicts = [{self.expr:1}, self.ineq_constraints, self.eq_constraints]
+        src_dicts = [{self.expr: Integer(1)}, self.ineq_constraints, self.eq_constraints]
         dst_dicts = [{}, {}, {}]
         if isinstance(self.expr, Poly):
             new_symbols = tuple(sorted(list(inv_transform.keys()), key=lambda x:x.name))
@@ -777,12 +790,15 @@ class InequalityProblem(Generic[T]):
             for p, e in src.items():
                 if isinstance(p, Expr):
                     p = p.xreplace(transform)
-                else:
-                    p, denom_list = _polysubs_frac(p, transform, symbols)
-                    for d, mul in denom_list:
-                        e *= d.as_expr()**(((mul+1)//2)*2)
+                elif isinstance(p, Poly):
+                    factor_list = _polysubs_factor_list(p, transform, symbols)
+                    p = p.one
+                    for d, mul in factor_list:
+                        e *= d.as_expr()**(((-mul+1)//2)*2)
                         if mul % 2 == 1:
                             p = p*d
+                else:
+                    raise TypeError(f"Unknown type {p}.")
                 dst[p] = e
 
         problem = InequalityProblem(next(iter(dst_dicts[0].keys())), dst_dicts[1], dst_dicts[2])
@@ -792,9 +808,101 @@ class InequalityProblem(Generic[T]):
         def restore(x: Optional[Expr]) -> Optional[Expr]:
             if x is None:
                 return None
-            return x.xreplace(inv_transform) / next(iter(dst_dicts[0].values()))
+            denom = next(iter(dst_dicts[0].values())).xreplace(inv_transform)
+            return x.xreplace(inv_transform) / denom
         return problem, restore
 
+    def marginalize(self, transform: Dict[Symbol, Expr], diff: Optional[Dict[Symbol, Expr]]=None) -> Tuple['InequalityProblem', Callable]:
+        """
+        Substitute the variables in the problem with the new substitutions. Currently
+        only work for polynomial problems.
+
+        Parameters
+        ----------
+        transform : Dict[Symbol, Expr]
+            The new substitutions applied to the variables.
+        diff : Dict[Symbol, Expr]
+            The difference between the old variables and the new substitutions
+            if it is not omitted.
+
+        Returns
+        -------
+        problem : InequalityProblem
+            The new problem with the variables substituted.
+        restore : Callable
+            The function to restore the solution to the original problem.
+
+        Examples
+        --------
+        >>> from sympy.abc import a, b, c
+        >>> pro = InequalityProblem(a*(a-b)*(a-c)+b*(b-c)*(b-a)+c*(c-a)*(c-b), [a,b,c]).polylize()
+        >>> pro2, restore = pro.marginalize({b: c}, {b: b - c})
+        >>> pro2.expr
+        Poly(a**3 - 2*a**2*c + a*c**2, a, c, domain='ZZ')
+        >>> pro2.ineq_constraints
+        {Poly(a, a, c, domain='ZZ'): a, Poly(c, a, c, domain='ZZ'): c}
+        >>> restore(a*(a - c)**2)
+        a*(a - c)**2 - (a - 2*c)*(b - c)**2 - (a**2 - a*c)*(b - c) + (b - c)**3
+        >>> restore(a*(a - c)**2).expand()
+        a**3 - a**2*b - a**2*c - a*b**2 + 3*a*b*c - a*c**2 + b**3 - b**2*c - b*c**2 + c**3
+        """
+        if diff is None:
+            diff = {}
+        src_dicts = [{self.expr:1}, self.ineq_constraints, self.eq_constraints]
+        dst_dicts = [{}, {}, {}]
+
+        gens = self.gens
+        changed_gens = [g for g in gens if (g in transform)]
+        other_gens = [g for g in gens if (not g in transform)]
+        shift = {g: g + v for g, v in transform.items()}
+
+        expr_mul = 1
+        expr_add = 0
+        for tp, src, dst in zip((0,1,2), src_dicts, dst_dicts):
+            for p, e in src.items():
+                try:
+                    if not isinstance(p, Poly):
+                        raise BasePolynomialError
+                    factor_list = _polysubs_factor_list(p, shift, gens)
+                except BasePolynomialError:
+                    raise TypeError("Not implemented for non-polynomial problems.")
+
+                p = p.one
+                for d, mul in factor_list:
+                    e *= d.as_expr()**(((-mul+1)//2)*2)
+                    if mul % 2 == 1:
+                        p = p*d
+
+                if tp == 0:
+                    expr_mul = e
+                    e = 0
+
+                # TODO: this can be processed on the domain
+                p = p.as_poly(changed_gens)
+
+                difference = [e]
+                for m, c in p.terms():
+                    if not any(m):
+                        continue
+                    difference.append(-c * Mul(
+                        *[diff.get(g, 0)**m[i] for i, g in enumerate(changed_gens)]))
+
+                # TODO: this can be processed on the domain
+                p = p.TC().as_poly(other_gens)
+                dst[p] = Add(*difference)
+
+                if tp == 0:
+                    expr_add = dst[p]
+
+        problem = InequalityProblem(next(iter(dst_dicts[0].keys())), dst_dicts[1], dst_dicts[2])
+        # if self.roots is not None:
+        #     problem.roots = self.roots.transform({g: g for g in other_gens}, other_gens)
+
+        def restore(x: Optional[Expr]) -> Optional[Expr]:
+            if x is None:
+                return None
+            return (x - expr_add) / expr_mul
+        return problem, restore
 
 
 def _get_constraints_wrapper(
@@ -823,7 +931,7 @@ def _get_constraints_wrapper(
         names = [[f.name for f in e.find(AppliedUndef)] for e in exprs]
         names = [item for sublist in names for item in sublist]
         names = [n[k:] for n in names if n.startswith(name)]
-        digits = [int(n) for n in names if n.isdigit()]
+        digits = [int(n) for n in names if n.isdecimal()]
         return max(digits, default=-1) + 1
 
     def _get_dicts(constraints, name='_G', counter=None):
@@ -858,12 +966,17 @@ def _get_constraints_wrapper(
     return i2g, e2h, g2i, h2e
 
 
-def _polysubs_frac(poly: Poly, transform: Dict[Symbol, Expr], new_gens: List[Symbol]) -> Tuple[Poly, List[Tuple[Poly, int]]]:
+def _polysubs_factor_list(
+    poly: Poly,
+    transform: Dict[Symbol, Expr],
+    new_gens: List[Symbol]
+) -> List[Tuple[Poly, int]]:
     """
     Substitute the variables in the polynomial with a given transform.
-    The result can be written in the form of `new_poly/(Mul(*denom_list) * expr)`
-    where `denom_list` is a list of (sqr-free) polynomials, and `expr` is a square expression.
+    The result can be written in the form of `Mul(*[e**p for e, p in lst])`
+    where `p` are integers (and can be negative).
     """
+    # TODO: work on the domain
     frac = fraction(poly.as_expr().xreplace(transform).together())
     numer = frac[0]
 
@@ -875,5 +988,5 @@ def _polysubs_frac(poly: Poly, transform: Dict[Symbol, Expr], new_gens: List[Sym
         else:
             denom_list[i] = (arg, 1)
     numer = Poly(numer, new_gens)
-    denom_list = [(Poly(d, new_gens), mul) for d, mul in denom_list]
-    return numer, denom_list
+    result = [(numer, 1)] + [(Poly(d, new_gens), -mul) for d, mul in denom_list]
+    return result

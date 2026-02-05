@@ -7,14 +7,13 @@ from warnings import warn
 import sympy as sp
 from sympy.core.singleton import S
 from sympy import Poly, Expr, Symbol, Float, Equality, Add, Mul
-from sympy.printing.precedence import precedence_traditional, PRECEDENCE
+from sympy.printing.precedence import precedence_traditional
 from sympy.printing.str import StrPrinter
-from sympy.printing.latex import LatexPrinter
 from sympy.combinatorics import PermutationGroup, Permutation, CyclicGroup
 from sympy.core.relational import Equality
 
 from .problem import InequalityProblem
-from ..utils.expressions.cyclic import is_cyclic_expr, CyclicSum, CyclicProduct, CyclicExpr, rewrite_symmetry
+from ..utils.expressions.cyclic import CyclicProduct, CyclicExpr, rewrite_symmetry
 from ..utils.expressions.psatz import SOSlist, PSatz
 
 
@@ -30,7 +29,7 @@ class Solution(SolutionBase[T]):
     In a Jupyter notebook, it is displayed as a SymPy equation.
 
     >>> from sympy.abc import a
-    >>> from triples.core import sum_of_squares
+    >>> from triples import sum_of_squares
     >>> sol = sum_of_squares(a**2 - 2*a + 1)
     >>> sol # doctest: +SKIP
     Solution(problem = <InequalityProblem of 1 variables, with 0 inequality and 0 equality constraints>,
@@ -371,6 +370,7 @@ class Solution(SolutionBase[T]):
         Examples
         ---------
         >>> from sympy.abc import a, b, c
+        >>> from triples.utils import CyclicSum
         >>> sol = Solution((a+b+c)*(a*b+b*c+c*a)-9*a*b*c, CyclicSum(a*(b-c)**2, (a,b,c)))
         >>> sol.solution
         Σ(a*(b - c)**2)
