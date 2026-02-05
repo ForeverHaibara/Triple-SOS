@@ -628,7 +628,7 @@ class MathematicalInequalitiesVol1(MathematicalInequalities):
         return c3s(a*sqrt(a)) - 3*(c3s(a*b)-c3p(a))/2, [a,b,c,1-a,1-b,1-c], []
 
     def problem_vasile_p13066(self):
-        return 3*c3s(a*sqrt(a)) + 500*c3p(a)/81 - 5*c3s(a*b), [a,b,c], []
+        return 3*c3s(a*sqrt(a)) + 500*c3p(a)/81 - 5*c3s(a*b), [a,b,c,1-a,1-b,1-c], []
 
     def problem_vasile_p13067(self):
         return c3s(a)-2-c3p(a), [b+c-a,c+a-b,a+b-c], [c3s(a**2)-3]
@@ -724,7 +724,7 @@ class MathematicalInequalitiesVol1(MathematicalInequalities):
         return c3s(a**4-a**2*b**2) - 2*Abs(c3s(a**3*b-a*b**3)), [a,b,c], []
 
     def problem_vasile_p13094(self):
-        return c3s(a**4)-c3p(a)*c3s(a) - 2*sqrt(2)*Abs(a**3*b-a*b**3), [a,b,c], []
+        return c3s(a**4)-c3p(a)*c3s(a) - 2*sqrt(2)*Abs(c3s(a**3*b-a*b**3)), [a,b,c], []
 
     def problem_vasile_p13095(self):
         return c3s((1-a)/(1+a+a**2)), [a+5,b+5,c+5], [c3s(a)-3]
@@ -808,7 +808,7 @@ class MathematicalInequalitiesVol1(MathematicalInequalities):
 
     @mark(mark.skip)
     def problem_vasile_p13116(self):
-        return 5 - c5p(a)*c5s(a**4), [a,b,c,d,e], [c5s(a)-5]
+        return 5 - c5p(a)*c5s(a**4), [a,b,c,d,e], [c5s(a**2)-5]
 
     @mark(mark.skip)
     def problem_vasile_p13117(self):
@@ -996,7 +996,8 @@ class MathematicalInequalitiesVol2(MathematicalInequalities):
         return 3 - c3s(a*(b+c)/(1+b*c)), [a,b,c], [c3s(a**2)-3]
 
     def problem_vasile_p21040(self):
-        return 3 - c3s((a**2+b**2)/(a+b)), [a,b,c], [c3s(a**2)-3]
+        """There is a typo in the book."""
+        return c3s((a**2+b**2)/(a+b)) - 3, [a,b,c], [c3s(a**2)-3]
 
     def problem_vasile_p21041(self):
         return 7*c3s(a)/6 - 2 - c3s(a*b/(a+b)), [a,b,c], [c3s(a**2)-3]
@@ -1038,10 +1039,10 @@ class MathematicalInequalitiesVol2(MathematicalInequalities):
         return 3/c3s(a) - 2/c3s(a*b) - 1/c3s(a**2), [a,b,c], [c3s(1/(a+b)) - Rational(3,2)]
 
     def problem_vasile_p21052_p1(self):
-        return c3s(a/(b+c)) - Rational(51,28), [], [7*c3s(a**2)-11*c3s(a*b)]
+        return c3s(a/(b+c)) - Rational(51,28), [a,b,c], [7*c3s(a**2)-11*c3s(a*b)]
 
     def problem_vasile_p21052_p2(self):
-        return 2 - c3s(a/(b+c)), [], [7*c3s(a**2)-11*c3s(a*b)]
+        return 2 - c3s(a/(b+c)), [a,b,c], [7*c3s(a**2)-11*c3s(a*b)]
 
     def problem_vasile_p21053(self):
         return c3s(1/(a**2+b**2)) - 10/c3s(a)**2, [a,b,c], []
@@ -1185,7 +1186,7 @@ class MathematicalInequalitiesVol2(MathematicalInequalities):
         return c3s((b+c-a)/(b**2-b*c+c**2)) - 2*c3s(a)/c3s(a**2), [b+c-a,c+a-b,a+b-c], []
 
     def problem_vasile_p21090_p2(self):
-        return c3s((a**2-2*b*c)/(b**2-b*c+c**2)), [b+c-a,c+a-b,a+b-c], []
+        return -c3s((a**2-2*b*c)/(b**2-b*c+c**2)), [b+c-a,c+a-b,a+b-c], []
 
     def problem_vasile_p21091(self):
         return Rational(1,3) - c3s(a**2/(5*a**2+(b+c)**2)), [a,b,c], []
@@ -1698,7 +1699,7 @@ class MathematicalInequalitiesVol2(MathematicalInequalities):
         return c3s((a**2-b*c)*sqrt(a**2+4*b*c)), [a,b,c], []
 
     def problem_vasile_p22041(self):
-        return c3s(a**3/(a**3+(b+c)**3)) - 1, [a,b,c], []
+        return c3s(sqrt(a**3/(a**3+(b+c)**3))) - 1, [a,b,c], []
 
     def problem_vasile_p22042(self):
         return sqrt(c3s(a)*c3s(1/a)) - 1 - sqrt(1+sqrt(c3s(a**2)*c3s(1/a**2))), [a,b,c], []
@@ -2182,7 +2183,7 @@ class MathematicalInequalitiesVol3(MathematicalInequalities):
         x_ = 3*a+1/b
         y_ = 3*b+1/c
         z_ = 3*c+1/a
-        return x_*y+y_*z_+z_*x_-48, [a,b,c], [c3s(a)-3]
+        return x_*y_+y_*z_+z_*x_-48, [a,b,c], [c3s(a)-3]
 
     def problem_vasile_p31053(self):
         return c3s((a+1)/b) - 2*c3s(a**2), [a,b,c], [c3s(a)-3]
@@ -2473,7 +2474,7 @@ class MathematicalInequalitiesVol3(MathematicalInequalities):
         return c3s(a**2/(4*a+b**2)) - Rational(3,5), [a,b,c], [c3s(a)-3]
 
     def problem_vasile_p31124(self):
-        return c3s(a)**2/(3*c3s(a*b)) - c3s((a**2+b*c)/(a+b)), [a,b,c], []
+        return c3s(a)**3/(3*c3s(a*b)) - c3s((a**2+b*c)/(a+b)), [a,b,c], []
 
     def problem_vasile_p31125(self):
         return 3*sqrt(2)-c3s(sqrt(a*b**2+b*c**2)), [a,b,c], [c3s(a)-3]
