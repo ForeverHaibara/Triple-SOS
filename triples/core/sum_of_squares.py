@@ -134,7 +134,8 @@ def sum_of_squares(
     mode: str
         Experimental. The mode of the solver. Defaults to 'fast'. Supports 'fast' and 'pretty'.
         If 'pretty', it traverses all methods and selects the most pretty solution.
-
+    method_order: Optional[List[str]]
+        DEPRECATED. Use methods instead.
 
     Returns
     ----------

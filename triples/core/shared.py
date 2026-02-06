@@ -1,3 +1,6 @@
+"""
+To be deprecated. Do not use this file.
+"""
 from typing import Tuple, Dict, List, Union, Optional
 
 import sympy as sp

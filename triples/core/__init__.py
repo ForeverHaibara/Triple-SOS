@@ -6,22 +6,28 @@ from .sum_of_squares import (
     sum_of_squares, sum_of_squares_multiple
 )
 
+from .preprocess import (
+    ReformulateAlgebraic, CancelDenominator, SolveMul, SolvePolynomial
+)
+
 from .linsos import (
-    LinearSOS,
+    LinearSOS, LinearSOSSolver
 )
 
 from .structsos import (
-    StructuralSOS, prove_univariate
+    StructuralSOS, StructuralSOSSolver, prove_univariate
 )
 
 from ..utils import pqr_sym, pqr_cyc, pqr_ker
 
 from .symsos import (
-    SymmetricSOS, sym_representation, sym_representation_inv,
+    SymmetricSOS, SymmetricSubstitution, sym_representation, sym_representation_inv,
+
 )
 
 from .sdpsos import (
-    SDPSOS, SDPProblem, JointSOSElement, SOSPoly, SOHSPoly
+    SDPSOS, SDPSOSSolver, SDPProblem,
+    JointSOSElement, SOSPoly, SOHSPoly, SOSMomentPoly,
 )
 
 __all__ = [
@@ -29,11 +35,11 @@ __all__ = [
     'InequalityProblem',
     'Solution',
     'sum_of_squares', 'sum_of_squares_multiple',
-    'LinearSOS',
-    'StructuralSOS',
-    'prove_univariate',
+    'ReformulateAlgebraic', 'CancelDenominator', 'SolveMul', 'SolvePolynomial',
+    'LinearSOS', 'LinearSOSSolver',
+    'StructuralSOS', 'StructuralSOSSolver', 'prove_univariate',
     'pqr_sym', 'pqr_cyc', 'pqr_ker',
-    'SymmetricSOS', 'sym_representation', 'sym_representation_inv',
-    'SDPSOS', 'SDPProblem', 'JointSOSElement', 'SOSPoly', 'SOHSPoly'
-
+    'SymmetricSOS', 'SymmetricSubstitution', 'sym_representation', 'sym_representation_inv',
+    'SDPSOS', 'SDPSOSSolver', 'SDPProblem',
+    'JointSOSElement', 'SOSPoly', 'SOHSPoly', 'SOSMomentPoly',
 ]

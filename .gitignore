@@ -8,3 +8,7 @@ __pycache__/
 .benchmarks/
 *.log
 .coverage
+
+build/
+dist/
+*.egg-info/

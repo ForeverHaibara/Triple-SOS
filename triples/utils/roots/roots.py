@@ -23,6 +23,7 @@ from ..monomials import generate_monoms
 from ..expressions import EXRAW
 
 try:
+    # https://github.com/sympy/sympy/pull/26806
     setattr(CRootOf, 'is_algebraic', True)
 except Exception:
     pass
