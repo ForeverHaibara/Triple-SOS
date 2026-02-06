@@ -1,5 +1,7 @@
 # Triples
 
+[![PyPI version](https://img.shields.io/pypi/v/triples.svg)](https://pypi.org/project/triples/)
+
 Triples 是由 forever豪3 开发的基于 Python 的 SymPy 库的多项式不等式自动证明程序。其专注于通过配方法生成不等式的可读证明。它同时提供直观的图形界面与代码接口，助力代数不等式的探索。
 
 Triples is an automatic inequality proving software developed by ForeverHaibara, based on the Python SymPy library. It focuses on generating readable proofs of inequalities through sum of squares (SOS). The program offers both a graphical user interface and a code interface to facilitate the exploration of Olympiad-level algebraic inequalities.
@@ -43,13 +45,10 @@ Triples is an automatic inequality proving software developed by ForeverHaibara,
 
 See more in the Jupyter notebook:    [notebooks/examples.ipynb](notebooks/examples.ipynb)
 
-Ensure "triples" is in the directory or the system path.
+Triples has hard dependencies on Python>=3.6, SymPy>=1.9, NumPy, SciPy, and an SDP solver, e.g., Clarabel. It can now be installed via pip:
 
 ```
-pip install sympy
-pip install numpy
-pip install scipy
-pip install clarabel
+pip install triples
 ```
 
 ```py
@@ -60,7 +59,7 @@ a, b, c, x, y, z = sp.symbols("a b c x y z")
 
 ### Sum of Squares
 
-Given a sympy polynomial, the `sum_of_squares` solver  will return a Solution-class object if it succeeds. It returns None if it fails (but it does not mean the polynomial is not a sum of squares or positive semidefinite).
+Given a sympy expression, the `sum_of_squares` solver  will return a Solution-class object if it succeeds. It returns None if it fails (but it does not mean the expression is not a sum of squares or positive semidefinite).
 
 **Example 1** $a,b,c\in\mathbb{R}$, prove:  $\left(a^2+b^2+c^2\right)^2\geq 3\left(a^3b+b^3c+c^3a\right)$.
 
@@ -74,7 +73,7 @@ Given a sympy polynomial, the `sum_of_squares` solver  will return a Solution-cl
 
 <br>
 
-If there are inequality or equality constraints, send them as a list of sympy expressions to `ineq_constraints` and `eq_constraints`.
+If there are inequality or equality constraints, send them as a list of sympy expressions to `ineq_constraints` and `eq_constraints`. (These are the second and third arguments of the `sum_of_squares` function.)
 
 **Example 2** $a,b,c\in\mathbb{R}_+$, prove:  $a(a-b)(a-c)+b(b-c)(b-a)+c(c-a)(c-b)\geq 0$.
 
@@ -105,19 +104,15 @@ x*(Σ(2*F(a) + 13))/6 + Σ(a - b)**2*F(c) + (Σ(a - 1)**2*F(b)*F(c))/6 + 5*(Σ(a
 
 ## 图形化界面 Graphic User Interface
 
-本程序图形化界面有两种启动方式: Flask 与 Gradio.
+本程序图形化界面有两种启动方式: Flask 与 Gradio. 使用图形化界面必须下载完整的仓库, 而非使用 pip 安装.
 
-Two graphical backends are supported: Flask and Gradio.
+Two graphical backends are supported: Flask and Gradio. To use the graphical interface, you need to download the full repository instead of installing via pip.
 
 ### Flask 启动
 
 1. 安装依赖: Install Dependencies
 
 ```
-pip install sympy
-pip install numpy
-pip install scipy
-pip install clarabel
 pip install flask
 pip install flask_cors
 pip install flask_socketio
@@ -131,12 +126,7 @@ pip install flask_socketio
 1. 安装依赖: Install Dependencies
 
 ```
-pip install sympy
-pip install numpy
-pip install scipy
-pip install clarabel
 pip install gradio>=5.0
-pip install pillow
 ```
 
 1. 控制台中运行 `python gradio.app.py` 启动后端. Run `python gradio.app.py` to launch the backend.
