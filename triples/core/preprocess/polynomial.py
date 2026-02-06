@@ -43,7 +43,7 @@ class SolvePolynomial(TransformNode):
             ]
         return solvers
 
-    def explore(self, configs):        
+    def explore(self, configs):
         if self.state != 0 and len(self.children) == 0:
             # all children failed
             self.finished = True

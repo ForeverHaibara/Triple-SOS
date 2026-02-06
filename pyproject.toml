@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "triples"
+version = "0.1.0"
+description = "Automatic sum-of-squares proofs for algebraic inequalities"
+readme = "notebooks/README_pypi.md"
+license = {file = "LICENSE"}
+authors = [
+    {name = "ForeverHaibara", email = "1378855363@qq.com" },
+]
+requires-python = ">=3.6"
+dependencies = [
+    "numpy",
+    "scipy",
+    "sympy>=1.9",
+    "clarabel; python_version >= '3.7'",
+    "cvxopt; python_version < '3.7'",
+]
+keywords = ["sum-of-squares", "SOS", "inequality", "solver", "optimization"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.6",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Mathematics",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/ForeverHaibara/Triple-SOS"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["triples*"]
+
+[tool.setuptools.package-data]
+triples = ["**/*.npz"]
