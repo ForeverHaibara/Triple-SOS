@@ -12,6 +12,7 @@ import re
 
 import numpy as np
 from sympy import Poly, Expr, Symbol, sympify
+from sympy import __version__ as SYMPY_VERSION
 from sympy.external.importtools import version_tuple
 import gradio as gr
 from PIL import Image
@@ -130,7 +131,38 @@ class GradioInterface():
     >https://github.com/ForeverHaibara/Triple-SOS</a>
     <br><br>
     Deployment Date: {datetime.datetime.now().strftime("%Y-%m-%d")} &nbsp;&nbsp;
-    Gradio Version: {gr.__version__}
+    Gradio Version: {gr.__version__} &nbsp;&nbsp; SymPy Version: {SYMPY_VERSION}
+    <hr>
+    <h2>Tutorial</h2>
+    Inputs are parsed by a special function with convenient syntax for cyclic
+    sums and cyclic products.
+    <br><br>
+    <div style="margin-left: 20px;">
+    <ol>
+        <li>Power symbols can be "**", "^", or omitted, e.g., "a2b3"
+        stands for "a^2*b^3".</li>
+        <li>Multiplication symbols can be omitted, e.g., "1/2ab" stands for "1/2*a*b".</li>
+        <li>"s" stands for cyclic sums and "p" for cyclic products. E.g., "s(a)" stands
+        for "a+b+c" and "p(a)" stands for "a*b*c".
+        <br><b>NOTE</b>: "s" and "p" are functions. DO NOT use "s" and "p" as symbols.</li>
+        <li>Configure the the generators and the permutation groups of the cyclic
+        sums and cyclic products on the right.</li>
+        <li>Do not use comparison symbols such as ">", "<", "=", "≥", or "≤".</li>
+        <li>Brackets should be "(" or ")", and other brackets are not allowed.</li>
+    </ol>
+    </div>
+    <br>
+    <b>More instructions:</b>
+    <br><br>
+    <div style="margin-left: 20px;">
+    <ol>
+        <li>When there are 3 generators and the input is homogeneous with respect to the
+        generators, the coefficients and the heatmap are displayed.<br>
+        If not, "sum-of-squares" still works but there is no visualization.</li>
+        <li>Set constraints on the right. The right-hand-side should always be zero. E.g.,
+        "a+b+c<=1" should be written as "1-a-b-c" with type ">=0".</li>
+    </ol>
+    </div>
     </div>
     """
 
