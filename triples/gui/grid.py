@@ -25,7 +25,7 @@ class GridPoly():
         self.grid_value = grid_value
         self.grid_color = grid_color
 
-    def save_heatmap(self, path=None, dpi=None, backgroundcolor=211):
+    def save_heatmap(self, path=None, dpi=None, backgroundcolor=211, alpha=False):
         """
         Save a heatmap to the given path. And return the numpy array of the heatmap.
         Only supports 3-var polynomials.
@@ -38,9 +38,13 @@ class GridPoly():
             The dpi of the saved image.
         backgroundcolor : int
             The background color of the heatmap.
+        alpha: bool
+            Whether to use alpha channel.
         """
         n = self.size
-        x = np.full((n+1,n+1,3), backgroundcolor, dtype='uint8')
+        x = np.full((n+1,n+1,3 if not alpha else 4), backgroundcolor, dtype='uint8')
+        if alpha:
+            x[:, :, 3] = 0
         grid_color = self.grid_color
         # get_color = lambda r,j: grid_color[r*(2*n+3-r)//2+j]
         get_color = lambda r,j: grid_color[(r+j+2)*(r+j+1)//2-j-1]
@@ -55,10 +59,12 @@ class GridPoly():
                 x[i,j+t,0] = color[0]
                 x[i,j+t,1] = color[1]
                 x[i,j+t,2] = color[2]
+            if alpha:
+                x[i,t:n-r+t,3] = 255
 
         if path is not None:
             import matplotlib.pyplot as plt
-            plt.imshow(x,interpolation='nearest')
+            plt.imshow(x, interpolation='nearest')
             plt.axis('off')
             plt.savefig(path, dpi=dpi, bbox_inches ='tight')
             plt.close()
