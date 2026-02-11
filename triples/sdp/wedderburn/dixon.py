@@ -1,6 +1,6 @@
 """
 Implements the Dixon's algorithm for computing the character
-table in Python. Adapted from:
+table in Python. Part of the code is adapted from:
 https://github.com/kalmarek/SymbolicWedderburn.jl.
 """
 
@@ -11,7 +11,13 @@ from sympy import (Poly, Symbol, FiniteField,
     primefactors, ZZ, QQ
 )
 from sympy import MutableDenseMatrix as Matrix
-from sympy.external.gmpy import gcd, sqrt as isqrt
+from sympy.external.gmpy import sqrt as isqrt
+try:
+    from sympy.external.gmpy import gcd, lcm
+except ImportError:
+    from math import gcd
+    from functools import reduce
+    lcm = lambda *args: reduce(lambda x, y: x*y//gcd(x, y), args, 1)
 from sympy.polys.domainmatrix import DomainMatrix
 from sympy.polys.polyclasses import ANP
 from sympy.combinatorics import Permutation, PermutationGroup
@@ -31,7 +37,6 @@ class CMMatrix:
     def shape(self):
         return len(self.cc), len(self.cc)
     def __getitem__(self, idx):
-        """Supports only `cmm[int,int]` or `cmm[slice, slice]`"""
         i, j = idx
         if isinstance(i, int) and isinstance(j, int):
             return self.getitem(i,j)
@@ -58,8 +63,6 @@ class CMMatrix:
         return m[i][j]
 
 def _group_exponent_from_cc(cc: List[Set[Permutation]]) -> int:
-    from sympy.external.gmpy import lcm
-    # TODO: old versions did not have lcm
     orders = [int(next(iter(c)).order()) for c in cc]
     exponent = lcm(*orders)
     return exponent
@@ -120,7 +123,7 @@ def common_esd(Ns: List[CMMatrix], Fp: FiniteField) -> DomainMatrix:
         spaces = refine_spaces(spaces, Ns[i], Fp)
     return DomainMatrix.vstack(*spaces)
 
-def get_inv_map(cc: List[Set[Permutation]]) -> List[int]:
+def _get_invmap(cc: List[Set[Permutation]]) -> List[int]:
     """Compute inv_map[i] = j such that class[i]**-1 == class[j]."""
     inv_map = [0] * len(cc)
     reps = [next(iter(c)) for c in cc]
@@ -132,7 +135,7 @@ def get_inv_map(cc: List[Set[Permutation]]) -> List[int]:
                 break
     return inv_map
 
-def get_powermap(cc: List[Set[Permutation]], exponent: int) -> List[List[int]]:
+def _get_powermap(cc: List[Set[Permutation]], exponent: int) -> List[List[int]]:
     """Compute pm[i][pow] = k such that class[i]**pow == k."""
     n = len(cc)
     pm = [[0] * exponent for _ in range(n)]
@@ -158,7 +161,7 @@ def normalize_fp(cc: List[Set[Permutation]], esd: DomainMatrix):
     cc_sizes = [Fp(len(c)) for c in cc]
     G_order = sum(len(cc[t]) for t in range(len(cc)))
 
-    inv_map = get_inv_map(cc)
+    inv_map = _get_invmap(cc)
     normalized_rows = []
     for row in rows:
         # 1. normalize so the first class is 1
@@ -167,7 +170,7 @@ def normalize_fp(cc: List[Set[Permutation]], esd: DomainMatrix):
 
         # 2. chi(1)^2 * sum |Ci| * row[i] * row[inv_i] = |G|
         dot = sum(cc_sizes[k] * row[k] * row[inv_map[k]] for k in range(n))
-        
+
         # chi1_sq = |G| / dot
         chi1_sq = Fp(G_order) / dot
 
@@ -179,46 +182,6 @@ def normalize_fp(cc: List[Set[Permutation]], esd: DomainMatrix):
         normalized_rows.append([x * chi1 for x in row])
 
     return normalized_rows
-
-
-def _compute_multiplicities(
-    pm: List[List[int]],
-    normalized_rows: List[List[int]],
-    Fp: FiniteField,
-    exponent: int,
-    sort: bool = True
-) -> List[List[int]]:
-    n = len(normalized_rows)
-
-    zeta = Fp(primitive_root(Fp.mod))**(Fp.mod//exponent)
-    inv_zeta = 1/zeta
-    inv_e = 1/Fp(exponent)
-
-    multiplicities = [] # [char_idx][class_idx][root_pow]
-
-    for i in range(n):
-        char_mults = []
-        for j in range(n):
-            class_mults = []
-            # a_k = (1/e) * sum_{l=0}^{e-1} chi(g^l) * zeta^(-kl)
-            for k in range(exponent):
-                val = sum(normalized_rows[i][pm[j][l]] \
-                          * (inv_zeta**(k * l)) for l in range(exponent))
-                class_mults.append(int(val * inv_e))
-            char_mults.append(class_mults)
-        multiplicities.append(char_mults)
-
-    if sort:
-        multiplicities.sort()
-
-        # move the trivial character to the first row
-        for k, row in enumerate(multiplicities):
-            if all(v[0] == 1 and not any(v[1:]) for v in row):
-                multiplicities[0], multiplicities[k] =\
-                    multiplicities[k], multiplicities[0]
-                break
-
-    return multiplicities
 
 
 def dixon_character_table(
@@ -238,33 +201,25 @@ def dixon_character_table(
     esd = common_esd(Ns, Fp)
 
     normalized = normalize_fp(cc, esd)
-    pm = get_powermap(cc, exponent)
+    pm = _get_powermap(cc, exponent)
+
     conductor = _get_global_conductor(normalized, pm, exponent)
+    dm = _lift_to_minimal_field(cc, normalized, pm, conductor, exponent, Fp)
 
-    mults = _compute_multiplicities(pm, normalized, Fp, exponent)
-
-    dom = QQ.cyclotomic_field(exponent, ss=True)
-    mod = dom.mod
-    mults =  [[ANP(rep[::-1], mod, QQ) for rep in row] for row in mults]
-    dm = DomainMatrix(mults, (len(mults), len(mults)), dom)
-
-    if conductor > 1:
-        # TODO: this should be made faster
-        dm = dm.convert_to(QQ.cyclotomic_field(conductor, ss=True))
-    else:
-        dm = dm.convert_to(ZZ)
-
-    tbl = Matrix._fromrep(dm)
-    return tbl
+    return Matrix._fromrep(dm)
 
 
 def _get_global_conductor(normalized_rows, pm: List[List[int]], m: int):
+    """Find the smallest natural number K such that all values
+    of the character table are in the K-th cyclotomic field.
+    """
     n = len(normalized_rows)
     gal_m = [a for a in range(m) if gcd(a, m) == 1]
     p_factors = primefactors(m)[::-1]
 
     for p in p_factors:
         while m % p == 0:
+            # test m//p
             m = m//p
             r = 1 % m
 
@@ -287,3 +242,88 @@ def _get_global_conductor(normalized_rows, pm: List[List[int]], m: int):
                 m = m * p # restore
                 break
     return m
+
+def _lift_to_minimal_field(cc, normalized_rows, pm, K, exponent, Fp):
+    n = len(cc)
+    p = Fp.mod
+
+    if K == 1:
+        # integer character table
+        rows = [None] * n
+        half_p = p // 2
+        for i in range(n):
+            row = [int(v) for v in normalized_rows[i]]
+            rows[i] = [v if v <= half_p else v - p for v in row]
+        rows = _sort_characters(rows, ZZ)
+        return DomainMatrix.from_list(rows, ZZ)
+
+    dom = QQ.cyclotomic_field(K, ss=True)
+
+    x = Fp(primitive_root(p))**((p - 1) // K)
+
+    gal = [a for a in range(K) if gcd(a, K) == 1]
+    phi = len(gal)
+
+    # V[a, i] = (x**a)**i
+    V = []
+    for a in gal:
+        xa = x**a
+        row = [xa**i for i in range(phi)]
+        V.append(row)
+
+    V_mat = DomainMatrix(V, (phi, phi), Fp)
+    try:
+        V_inv = V_mat.inv()
+    except ValueError:
+        raise ValueError(f"{K} is not a conductor.")
+
+    # for a in (Z/K)*, find A in (Z/exp)* that A = a (mod K)
+    gal_lifted = []
+    for a in gal:
+        A = a
+        while gcd(A, exponent) != 1:
+            A += K
+        gal_lifted.append(A)
+
+    half_p = p // 2
+    rows = []
+       
+    for i in range(n):
+        char_row_fp = normalized_rows[i]
+        row_anps = []
+
+        for j in range(n):
+            # [chi(g^A1), chi(g^A2), ...] mod p
+            b_vec_data = []
+            for A in gal_lifted:
+                class_of_gA = pm[j][A % exponent] 
+                b_vec_data.append([char_row_fp[class_of_gA]])
+            
+            b_vec = DomainMatrix(b_vec_data, (phi, 1), Fp)
+
+            # c = V^-1 * b
+            c_vec = (V_inv * b_vec).to_list_flat()
+
+            c_ints = [int(v) for v in c_vec]
+            c_ints = [v if v <= half_p else v - p for v in c_ints]
+
+            row_anps.append(ANP(c_ints[::-1], dom.mod, QQ))
+
+        rows.append(row_anps)
+
+    rows = _sort_characters(rows, dom)
+    return DomainMatrix(rows, (n, n), dom)
+
+
+def _sort_characters(rows, dom):
+    """
+    Sort the character table and move the trivial
+    character to the first row. Done in-place.
+    """
+    one = dom.one
+    rows.sort()
+    for i, row in enumerate(rows):
+        if all(v == one for v in row):
+            rows[0], rows[i] = rows[i], rows[0]
+            break
+    return rows
