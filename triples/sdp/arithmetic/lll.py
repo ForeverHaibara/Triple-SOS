@@ -2,6 +2,7 @@ from typing import Tuple
 from math import floor as mfloor
 
 from sympy.polys.domains import ZZ, QQ
+from sympy.matrices import MutableDenseMatrix as Matrix
 from sympy.polys.matrices.ddm import DDM
 from .matop import ArithmeticTimeout, FLINT_TYPE
 
@@ -63,7 +64,7 @@ def _ddm_lll(x, delta=QQ(3, 4), return_transform=False, time_limit=None):
                 raise DMRankError(linear_dependent_error)
             y_star[i] = [y_star[i][z] - mu[i][j] * y_star[j][z] for z in range(n)]
             time_limit()
-        g_star[i] = dot_rows(y_star, y_star, (i, i))
+        g_star[i] = dot_rows(y_star, y_star, (i, i)) # type: ignore
     while k < m:
         if not mu_small(k, k - 1):
             reduce_row(T, mu, y, (k, k - 1))
@@ -91,7 +92,7 @@ def _ddm_lll(x, delta=QQ(3, 4), return_transform=False, time_limit=None):
                 mu[i][k] = mu[i][k - 1] - nu * xi
                 mu[i][k - 1] = mu[k][k - 1] * mu[i][k] + xi
             if return_transform:
-                T[k], T[k - 1] = T[k - 1], T[k]
+                T[k], T[k - 1] = T[k - 1], T[k] # type: ignore
             k = max(k - 1, 1)
             time_limit()
     # assert all(lovasz_condition(i) for i in range(1, m))
@@ -105,10 +106,7 @@ def ddm_lll(x, delta=QQ(3, 4), time_limit=None):
 def ddm_lll_transform(x, delta=QQ(3, 4), time_limit=None):
     return _ddm_lll(x, delta=delta, return_transform=True, time_limit=time_limit)
 
-def dfm_lll(x):
-    ...
-
-def lll(x, delta=QQ(3, 4), time_limit=None):
+def lll(x: Matrix, delta=QQ(3, 4), time_limit=None):
     """
     Compute the LLL-reduced basis of a given matrix.
     Adapted from SymPy 1.12 to support SymPy < 1.12.
@@ -140,7 +138,7 @@ def lll(x, delta=QQ(3, 4), time_limit=None):
             else:
                 return float(x)
 
-        new_rep = rep.lll(delta=to_float(delta))
+        new_rep = rep.lll(delta=to_float(delta)) # type: ignore
         new_rep = new_rep.tolist()
         if not isinstance(ZZ.one, fmpz):
             new_rep = [[ZZ(int(z)) for z in row] for row in new_rep]

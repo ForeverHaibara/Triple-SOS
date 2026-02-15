@@ -116,10 +116,11 @@ class SDPMatrixTransform(SDPLinearTransform):
     _A = None
     _b = None
     def __init__(self, parent_node, child_node,
-            columnspace: Optional[Dict[Any, Matrix]]=None,
-            nullspace: Optional[Dict[Any, Matrix]]=None,
-            A: Optional[Matrix]=None,
-            b: Optional[Matrix]=None):
+        columnspace: Optional[Dict[Any, Matrix]]=None,
+        nullspace: Optional[Dict[Any, Matrix]]=None,
+        A: Optional[Matrix]=None,
+        b: Optional[Matrix]=None
+    ):
         super().__init__(parent_node, child_node)
         self._columnspace = columnspace
         self._nullspace = nullspace
@@ -277,4 +278,69 @@ class DualMatrixTransform(SDPMatrixTransform):
         new_x0_and_space, A, b = _get_new_params(parent_node._x0_and_space, columnspace, nullspace)
         child_node = parent_node.__class__(new_x0_and_space)
         transform = cls(parent_node, child_node, columnspace=columnspace, nullspace=nullspace, A=A, b=b)
+        return transform.child_node
+
+
+class SDPCongruence(SDPLinearTransform):
+    """
+    Congruence transformation of SDP problems.
+
+    Assume the original problem is in the form of
+
+        S1 = A_10 + y_1 * A_11 + ... + y_n * A_1n >> 0
+        ...
+        Sm = A_m0 + y_1 * A_m1 + ... + y_n * A_mn >> 0.
+
+    Given invertible matrices P1, ..., Pn, it can be
+    written as
+
+        Pi.T * Si * Pi >> 0.
+    """
+    _basis = None
+    _inv_basis = None
+    def __init__(self, parent_node, child_node, basis: Dict[Any, Matrix], inv_basis: Optional[Dict[Any, Matrix]]=None):
+        super().__init__(parent_node, child_node)
+        self._basis = basis
+        self._inv_basis = inv_basis if inv_basis is not None else \
+            {key: basis.inv() for key, basis in basis.items()}
+
+    def propagate_to_parent(self):
+        parent, child = self.parent_node, self.child_node
+        parent.y = child.y
+        inv = self._inv_basis
+        parent.decompositions = {((matmul(inv[key], U) if key in inv else U), S)
+            for key, (U, S) in child.decompositions}
+
+    def propagate_nullspace_to_child(self, nullspace):
+        _inv_basis = self._inv_basis
+        return {key: (matmul(_inv_basis[key], ns) if key in _inv_basis else ns)
+                 for ns, key in nullspace.items()}
+
+    def propagate_affine_to_child(self, A, b):
+        return A, b
+
+    @classmethod
+    def apply(cls, parent_node, basis: Dict[Any, Matrix], time_limit: Optional[Union[Callable, float]]=None):
+        if parent_node.is_primal:
+            raise NotImplementedError
+        return DualSDPCongruence.apply(parent_node, basis=basis, time_limit=time_limit)
+
+
+class DualSDPCongruence(SDPCongruence):
+    @classmethod
+    def apply(cls, parent_node, basis: Dict[Any, Matrix],
+              time_limit: Optional[Union[Callable, float]]=None):
+        new_x0_and_space = {}
+        time_limit = ArithmeticTimeout.make_checker(time_limit)
+
+        for key, (x0, space) in parent_node._x0_and_space.items():
+            if key not in basis:
+                new_x0_and_space[key] = space
+                continue
+            new_space = symmetric_bilinear_multiple(basis[key], space.T, time_limit=time_limit).T
+            new_x0 = symmetric_bilinear(basis[key], x0, is_A_vec = True,
+                        return_shape=x0.shape, time_limit=time_limit)
+            new_x0_and_space[key] = (new_x0, new_space)
+        child = parent_node.__class__(new_x0_and_space, gens=parent_node.gens)
+        transform = cls(parent_node, child, basis)
         return transform.child_node

@@ -4,12 +4,13 @@ arithmetic operations, aiming to provide a more efficient interface to
 using sympy.Rational or numpy for matrix computations.
 """
 
-from time import time
-from typing import List, Tuple, Union, Optional, Callable
+from time import perf_counter
+from typing import List, Tuple, Union, Optional, Callable, overload
 
 from numpy import iinfo as np_iinfo
 from numpy import ndarray, int64, isnan, inf
 from sympy.matrices import MutableDenseMatrix as Matrix
+from sympy import MatrixBase
 
 from .matop import (
     ArithmeticTimeout,
@@ -24,7 +25,16 @@ _INT64_MAX = np_iinfo('int64').max # 9223372036854775807
 _VERBOSE_MATMUL_MULTIPLE = False
 
 
-def matadd(A: Union[Matrix, ndarray], B: Union[Matrix, ndarray]):
+@overload
+def matadd(A: MatrixBase, B: MatrixBase) -> MatrixBase: ...
+@overload
+def matadd(A: ndarray, B: ndarray) -> ndarray: ...
+@overload
+def matadd(A: MatrixBase, B: ndarray) -> MatrixBase: ...
+@overload
+def matadd(A: ndarray, B: MatrixBase) -> MatrixBase: ...
+
+def matadd(A, B):
     """
     Compute A + B with proper data types casting.
     """
@@ -37,9 +47,20 @@ def matadd(A: Union[Matrix, ndarray], B: Union[Matrix, ndarray]):
     return A + B
 
 
-def matmul(A: Union[Matrix, ndarray], B: Union[Matrix, ndarray],
-        return_shape: Optional[Tuple[int, int]] = None,
-        time_limit: Optional[Union[Callable, float]] = None) -> Union[Matrix, ndarray]:
+@overload
+def matmul(A: MatrixBase, B: MatrixBase, return_shape: Optional[Tuple[int, int]] = None,
+        time_limit: Optional[Union[Callable, float]] = None) -> Matrix: ...
+@overload
+def matmul(A: ndarray, B: ndarray, return_shape: Optional[Tuple[int, int]] = None,
+        time_limit: Optional[Union[Callable, float]] = None) -> ndarray: ...
+@overload
+def matmul(A: MatrixBase, B: ndarray, return_shape: Optional[Tuple[int, int]] = None,
+        time_limit: Optional[Union[Callable, float]] = None) -> Matrix: ...
+@overload
+def matmul(A: ndarray, B: MatrixBase, return_shape: Optional[Tuple[int, int]] = None,
+        time_limit: Optional[Union[Callable, float]] = None) -> Matrix: ... 
+
+def matmul(A, B, return_shape=None, time_limit=None):
     """
     Fast, low-level implementation of symbolic matrix multiplication.
     When A and B are both rational matrices, it calls NumPy to compute the result.
@@ -139,8 +160,20 @@ def matmul(A: Union[Matrix, ndarray], B: Union[Matrix, ndarray],
     return C
 
 
-def matmul_multiple(A: Union[Matrix, ndarray], B: Union[Matrix, ndarray],
-        time_limit: Optional[Union[Callable, float]] = None) -> Union[Matrix, ndarray]:
+@overload
+def matmul_multiple(A: MatrixBase, B: MatrixBase,
+    time_limit: Optional[Union[Callable, float]] = None) -> Matrix: ...
+@overload
+def matmul_multiple(A: ndarray, B: ndarray,
+    time_limit: Optional[Union[Callable, float]] = None) -> ndarray: ...
+@overload
+def matmul_multiple(A: MatrixBase, B: ndarray,
+    time_limit: Optional[Union[Callable, float]] = None) -> Matrix: ...
+@overload
+def matmul_multiple(A: ndarray, B: MatrixBase,
+    time_limit: Optional[Union[Callable, float]] = None) -> Matrix: ...
+
+def matmul_multiple(A, B, time_limit=None):
     """
     Perform multiple matrix multiplications. This can be regarded as a 3-dim tensor multiplication.
     Assume A has shape N x (n^2) and B has shape n x m, then the result has shape N x (n*m).
@@ -210,7 +243,7 @@ def matmul_multiple(A: Union[Matrix, ndarray], B: Union[Matrix, ndarray],
         print('MatmulMultiple A B shape =', A.shape, B.shape)
         sparsity = lambda x: len(list(x.iter_values())) / (x.shape[0] * x.shape[1])
         print('>> Sparsity A B =', sparsity(A), sparsity(B))
-        time0 = time()
+        time0 = perf_counter()
 
 
     if not (is_zz_qq_mat(A) and is_zz_qq_mat(B)):
@@ -240,29 +273,43 @@ def matmul_multiple(A: Union[Matrix, ndarray], B: Union[Matrix, ndarray],
     A = A.reshape((N, n, n))
 
     if _VERBOSE_MATMUL_MULTIPLE:
-        print('>> Time for casting to numpy:', time() - time0)
-        time0 = time()
+        print('>> Time for casting to numpy:', perf_counter() - time0)
+        time0 = perf_counter()
 
     C = (A @ B).reshape((N, n*m))
     time_limit()
 
     if _VERBOSE_MATMUL_MULTIPLE:
-        print('>> Time for numpy matmul:', time() - time0) # very fast (can be ignored)
-        time0 = time()
+        print('>> Time for numpy matmul:', perf_counter() - time0) # very fast (can be ignored)
+        time0 = perf_counter()
 
     q1q2 = q1 * q2
     C = rep_matrix_from_numpy(C) * q1q2
 
     if _VERBOSE_MATMUL_MULTIPLE:
-        print('>> Time for casting to sympy:', time() - time0) # < 1 sec over (800*8000)
-        time0 = time()
+        print('>> Time for casting to sympy:', perf_counter() - time0) # < 1 sec over (800*8000)
+        time0 = perf_counter()
 
     return C
 
+@overload
+def symmetric_bilinear(U: MatrixBase, A: MatrixBase, is_A_vec: bool = False,
+    return_shape: Optional[Tuple[int, int]] = None,
+    time_limit: Optional[Union[Callable, float]] = None) -> Matrix: ...
+@overload
+def symmetric_bilinear(U: ndarray, A: ndarray, is_A_vec: bool = False,
+    return_shape: Optional[Tuple[int, int]] = None,
+    time_limit: Optional[Union[Callable, float]] = None) -> ndarray: ...
+@overload
+def symmetric_bilinear(U: MatrixBase, A: ndarray, is_A_vec: bool = False,
+    return_shape: Optional[Tuple[int, int]] = None,
+    time_limit: Optional[Union[Callable, float]] = None) -> Matrix: ...
+@overload
+def symmetric_bilinear(U: ndarray, A: MatrixBase, is_A_vec: bool = False,
+    return_shape: Optional[Tuple[int, int]] = None,
+    time_limit: Optional[Union[Callable, float]] = None) -> Matrix: ...
 
-def symmetric_bilinear(U: Union[Matrix, ndarray], A: Union[Matrix, ndarray], is_A_vec: bool = False,
-        return_shape: Tuple[int, int] = None,
-        time_limit: Optional[Union[Callable, float]] = None) -> Union[Matrix, ndarray]:
+def symmetric_bilinear(U, A, is_A_vec=False, return_shape=None, time_limit=None):
     """
     Compute U.T * A * U efficiently.
     Assume U is n x m, U.T is m x n and A is n x n. The result is m x m.
@@ -321,8 +368,20 @@ def symmetric_bilinear(U: Union[Matrix, ndarray], A: Union[Matrix, ndarray], is_
     return M
 
 
-def symmetric_bilinear_multiple(U: Union[Matrix, ndarray], A: Union[Matrix, ndarray],
-        time_limit: Optional[Union[Callable, float]] = None) -> Union[Matrix, ndarray]:
+@overload
+def symmetric_bilinear_multiple(U: MatrixBase, A: MatrixBase,
+    time_limit: Optional[Union[Callable, float]] = None) -> Matrix: ...
+@overload
+def symmetric_bilinear_multiple(U: ndarray, A: ndarray,
+    time_limit: Optional[Union[Callable, float]] = None) -> ndarray: ...
+@overload
+def symmetric_bilinear_multiple(U: MatrixBase, A: ndarray,
+    time_limit: Optional[Union[Callable, float]] = None) -> Matrix: ...
+@overload
+def symmetric_bilinear_multiple(U: ndarray, A: MatrixBase,
+    time_limit: Optional[Union[Callable, float]] = None) -> Matrix: ...
+
+def symmetric_bilinear_multiple(U, A, time_limit=None):
     """
     Perform multiple symmetric bilinear products.
     Assume U has shape n x m and A has shape N x (n^2), then the result has shape N x m^2.
@@ -388,12 +447,12 @@ def symmetric_bilinear_multiple(U: Union[Matrix, ndarray], A: Union[Matrix, ndar
     time_limit()
 
     if _VERBOSE_MATMUL_MULTIPLE:
-        time0 = time()
+        time0 = perf_counter()
 
     q1q22 = q1 * q2**2
     C = rep_matrix_from_numpy(C) * q1q22
 
     if _VERBOSE_MATMUL_MULTIPLE:
-        print('>> Time for casting to sympy Bilinear:', time() - time0)
+        print('>> Time for casting to sympy Bilinear:', perf_counter() - time0)
 
     return C

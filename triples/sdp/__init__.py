@@ -12,7 +12,7 @@ from .primal import SDPPrimal
 
 from .arithmetic import congruence, ArithmeticTimeout
 from .backends import SDPError, SDPTimeoutError
-from .wedderburn import character_table
+from .wedderburn import character_table, decompose_representation
 
 __all__ = [
     # 'solve_column_separated_linear', 'solve_undetermined_linear',
@@ -20,5 +20,5 @@ __all__ = [
     'SDPProblem', 'SDPPrimal',
     'congruence', 'ArithmeticTimeout',
     'SDPError', 'SDPTimeoutError',
-    'character_table'
+    'character_table', 'decompose_representation',
 ]

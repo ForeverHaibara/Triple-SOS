@@ -111,8 +111,8 @@ def refine_spaces(spaces: List[DomainMatrix], N: CMMatrix, Fp) -> List[DomainMat
 def common_esd(Ns: List[CMMatrix], Fp: FiniteField) -> DomainMatrix:
     """
     Compute the common eigenspace decomposition of a list of CMMatrix
-    over Fp. Returns Z such that Z * N * Z.inv() is diagonal for all
-    N in Ns (over Fp).
+    over Fp. Returns Z such that Z * N * Z.inv() is diagonal over Fp
+    for all N in Ns (assuming Z exists).
     """
     N0 = DomainMatrix.from_list(Ns[0][:, :], Fp)
     spaces = eigenspace_decomposition(N0)
@@ -121,6 +121,9 @@ def common_esd(Ns: List[CMMatrix], Fp: FiniteField) -> DomainMatrix:
         if len(spaces) == n:
             break
         spaces = refine_spaces(spaces, Ns[i], Fp)
+    if len(spaces) != n:
+        # not expected to happen
+        raise ValueError("Failed to compute the common eigenspace decomposition.")
     return DomainMatrix.vstack(*spaces)
 
 def _get_invmap(cc: List[Set[Permutation]]) -> List[int]:
@@ -252,6 +255,7 @@ def _lift_to_minimal_field(cc, normalized_rows, pm, K, exponent, Fp):
         rows = [None] * n
         half_p = p // 2
         for i in range(n):
+            # abs(every entry) <= sqrt(|G|) <= p//2
             row = [int(v) for v in normalized_rows[i]]
             rows[i] = [v if v <= half_p else v - p for v in row]
         rows = _sort_characters(rows, ZZ)

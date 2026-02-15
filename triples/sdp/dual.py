@@ -11,7 +11,7 @@ from .arithmetic import (
     ArithmeticTimeout, solve_undetermined_linear, solve_csr_linear, free_symbols_of_mat,
     rep_matrix_from_dict, rep_matrix_to_numpy, rep_matrix_from_numpy, sqrtsize_of_mat
 )
-from .backends import SDPError, SDPTimeoutError, solve_numerical_dual_sdp
+from .backends import SDPResult, SDPError, SDPTimeoutError, solve_numerical_dual_sdp
 from .rationalize import SDPRationalizeError, DualRationalizer
 from .transforms import TransformableDual
 
@@ -265,12 +265,12 @@ class SDPProblem(TransformableDual):
     is_dual = True
     is_primal = False
 
-    _x0_and_space: Dict[Any, Tuple[Matrix, Matrix]] = None
+    _x0_and_space: Dict[Any, Tuple[Matrix, Matrix]]
 
     def __init__(
         self,
         x0_and_space: Union[Dict[str, Tuple[Matrix, Matrix]], List[Tuple[Matrix, Matrix]]],
-        gens = None
+        gens: Optional[Union[List[Symbol], Tuple[Symbol, ...]]] = None
     ):
         super().__init__()
 
@@ -366,13 +366,13 @@ class SDPProblem(TransformableDual):
         return super().size
 
     @property
-    def free_symbols(self) -> Tuple[Symbol, ...]:
+    def free_symbols(self) -> List[Symbol]:
         """
         The free symbols of the SDP problem, including parameters.
 
         Returns
         ----------
-        free_symbols : Tuple[Symbol, ...]
+        free_symbols : List[Symbol]
             The free symbols of the SDP problem.
 
         Examples
@@ -392,13 +392,13 @@ class SDPProblem(TransformableDual):
         return self._gens + self._free_symbols_in_domain
 
     @property
-    def gens(self) -> Tuple[Symbol, ...]:
+    def gens(self) -> List[Symbol]:
         """
         The variables of the SDP problem.
 
         Returns
         ----------
-        gens : Tuple[Symbol, ...]
+        gens : List[Symbol]
             The variables of the SDP problem.
 
         Examples
@@ -515,7 +515,7 @@ class SDPProblem(TransformableDual):
         if constrain_symmetry:
             sdp = sdp.constrain_symmetry()
             sdp._transforms.clear()
-        return sdp
+        return sdp # type: ignore
 
     @classmethod
     def from_equations(cls, eq: Matrix, rhs: Matrix,
@@ -629,7 +629,8 @@ class SDPProblem(TransformableDual):
                 offset += n**2
         time_limit()
 
-        x0, space = solve_csr_linear(eq, rhs, x0_equal_indices=equal_entries, force_zeros=force_zeros,
+        x0, space = solve_csr_linear(eq, rhs,
+            x0_equal_indices=equal_entries, force_zeros=force_zeros, # type: ignore
             time_limit=time_limit)
         n = sum([_**2 for _ in sizes])
 
@@ -637,7 +638,9 @@ class SDPProblem(TransformableDual):
         return sdp, (x0[n:,:], space[n:,:])
 
     @classmethod
-    def from_matrix(cls, S: Union[Matrix, List[Matrix], Dict[str, Matrix]], gens: Optional[Tuple[Symbol, ...]]=None,
+    def from_matrix(cls,
+        S: Union[Matrix, List[Matrix], Dict[str, Matrix]],
+        gens: Optional[Union[List[Symbol], Tuple[Symbol, ...]]]=None,
     ) -> 'SDPProblem':
         """
         Construct a `SDPProblem` from symbolic symmetric matrices.
@@ -650,7 +653,7 @@ class SDPProblem(TransformableDual):
         S : Union[Matrix, List[Matrix], Dict[str, Matrix]]
             The symmetric matrices that SDP requires to be positive semidefinite.
             Each entry of the matrix should be linear in the free symbols (gens).
-        gens : Optional[Tuple[Symbol, ...]], optional
+        gens : Optional[Union[List[Symbol], Tuple[Symbol, ...]]]
             The free symbols of the matrices, by default None.
             If None, it will be inferred from the matrices and sorted by names.
 
@@ -670,13 +673,13 @@ class SDPProblem(TransformableDual):
             S = [S]
 
         if gens is None:
-            gens = set()
+            gens_set = set()
             for s in S:
                 if not isinstance(s, MatrixBase):
                     raise ValueError("S must be a list of Matrix or a dict of Matrix.")
-                gens |= set(s.free_symbols)
+                gens_set |= set(s.free_symbols)
 
-            gens = list(gens)
+            gens = list(gens_set)
             gens = sorted(gens, key = lambda x: x.name)
         else:
             gens = list(gens)
@@ -691,7 +694,7 @@ class SDPProblem(TransformableDual):
 
         return SDPProblem(x0_and_space, gens=gens)
 
-    def S_from_y(self, y: Optional[Union[Matrix, np.ndarray, Dict]] = None) -> Dict[str, Matrix]:
+    def S_from_y(self, y: Optional[Union[MatrixBase, np.ndarray, Dict]] = None) -> Dict[str, Matrix]:
         m = self.dof
         if y is None:
             y = Matrix(self.gens).reshape(m, 1)
@@ -1138,7 +1141,7 @@ class SDPProblem(TransformableDual):
         """
         original_self = self
         end_time = perf_counter() + time_limit if isinstance(time_limit, (int, float)) else None
-        time_limit = ArithmeticTimeout.make_checker(time_limit)
+        _time_limit = ArithmeticTimeout.make_checker(time_limit)
 
         if solve_child:
             self = self.get_last_child()
@@ -1161,7 +1164,7 @@ class SDPProblem(TransformableDual):
                 # diagonals = Matrix([-int(i%(n+1)==0) for i in range(n**2)])
                 diagonals = -np.eye(n).reshape(n**2, 1)
                 x0_and_space[key] = (x0, np.hstack([rep_matrix_to_numpy(space), diagonals]))
-                time_limit()
+                _time_limit()
             objective = np.zeros(self.dof + 1)
             objective[-1] = -1
             constraints = [(objective, 0, '<'), (objective, -5, '>')]
@@ -1178,13 +1181,14 @@ class SDPProblem(TransformableDual):
             x0_and_space, objective=objective, constraints=constraints,
             solver=solver, return_result=True, **kwargs
         )
+        assert isinstance(sol, SDPResult)
 
         if sol.y is not None and (not sol.infeasible):
             try:
                 y = sol.y[:-1] # discard the eigenvalue relaxation
                 self._ys.append(y)
-                time_limit()
-                solution = self.rationalize(y, verbose=verbose, time_limit=time_limit)
+                _time_limit()
+                solution = self.rationalize(y, verbose=verbose, time_limit=_time_limit)
                 if solution is not None:
                     self.y = solution[0]
                     self.S = dict((key, S[0]) for key, S in solution[1].items())
@@ -1211,7 +1215,7 @@ class SDPProblem(TransformableDual):
     def from_entry_contribution(cls,
         rhs: Matrix,
         psd_size: Dict[Any, int],
-        psd_contribution: Dict[Any, Callable[[int], Tuple[int, Expr]]],
+        psd_contribution: Dict[Any, Callable[[int, int], Tuple[int, Expr]]],
         linear_size: Optional[Dict[Any, int]] = None,
         linear_contribution: Optional[Dict[Any, Callable[[int], Tuple[int, Expr]]]] = None,
         domain = None,
@@ -1282,3 +1286,199 @@ class SDPProblem(TransformableDual):
             linear_space[key] = (x0[offset:offset+s, :], space[offset:offset+s, :])
             offset += s
         return sdp, linear_space
+
+    #########################################################
+    #
+    #                  Transformations
+    #
+    #########################################################
+    def constrain_symmetry(self) -> SDPProblem:
+        """
+        Constrain every matrix to be symmetric. To ensure
+        correctness, this must be called in advance if any
+        matrix is not symmetric.
+
+        Returns
+        -------
+        SDPProblem
+            The transformed SDP problem.
+
+        Examples
+        --------
+        >>> from sympy import Matrix
+        >>> from sympy.abc import x, y, z
+        >>> M1 = Matrix([[x, 1, 0], [x + z, 0, y], [0, 4 - y - z, 3 - y]]) 
+        >>> sdp = SDPProblem.from_matrix({'M1': M1})
+        >>> sdp2 = sdp.constrain_symmetry()
+        >>> sdp2.S_from_y() # doctest: +SKIP
+        {'M1': Matrix([
+         [y_{0} + 1,           1,           0],
+         [        1,           0, y_{0}/2 + 2],
+         [        0, y_{0}/2 + 2, 1 - y_{0}/2]])}
+        """
+        return super().constrain_symmetry()
+
+    def constrain_congruence(self, basis: Dict[Any, Matrix], time_limit = None):
+        """
+        Apply congruence transforms to the matrices in the SDP problem.
+
+        Parameters
+        ----------
+        basis : Dict[Any, Matrix]
+            Basis that new_mat[key] = basis[key].T * mat * basis[key].
+            If a key is missing, basis[key] defaults to the identity matrix.
+
+        Examples
+        --------
+        >>> from sympy import Matrix
+        >>> from sympy.abc import a, b, c
+        >>> M1 = Matrix([[a,b],[b,c]])
+        >>> sdp = SDPProblem.from_matrix({'M1': M1})
+        >>> sdp2 = sdp.constrain_congruence({'M1': Matrix([[1,2],[2,5]])})
+        >>> sdp2.S_from_y() # doctest: +NORMALIZE_WHITESPACE
+        {'M1': Matrix([
+         [   a + 4*b + 4*c,  2*a + 9*b + 10*c],
+         [2*a + 9*b + 10*c, 4*a + 20*b + 25*c]])}
+        """
+        return super().constrain_congruence(basis, time_limit)
+
+    def get_zero_diagonals(self) -> Dict[Any, List[int]]:
+        """
+        Get diagonals that are zero.
+
+        Returns
+        -------
+        Dict[Any, List[int]]
+            A dictionary mapping each key to a list of zero diagonals.
+
+        Examples
+        --------
+        >>> from sympy import Matrix
+        >>> from sympy.abc import x, y
+        >>> M1 = Matrix([[x, y], [y, 0]])
+        >>> M2 = Matrix([[x + 2, 0], [0, x + y]])
+        >>> sdp = SDPProblem.from_matrix({'M1': M1, 'M2': M2})
+        >>> sdp.get_zero_diagonals()
+        {'M1': [1], 'M2': []}
+        """
+        return super().get_zero_diagonals()
+
+    def get_block_structures(self) -> Dict[Any, List[List[int]]]:
+        """
+        Get block structures.
+
+        Returns
+        -------
+        Dict[Any, List[List[int]]]
+            A dictionary mapping each key to a list of block structures.
+
+        Examples
+        --------
+        >>> from sympy import Matrix
+        >>> from sympy.abc import x, y
+        >>> M1 = Matrix([[x, y, 0], [y, 0, 0], [0, 0, 2 - y]])
+        >>> M2 = Matrix([[x, 0], [0, x + y]])
+        >>> sdp = SDPProblem.from_matrix({'M1': M1, 'M2': M2})
+        >>> sdp.get_block_structures()
+        {'M1': [[0, 1], [2]], 'M2': [[0], [1]]}
+        """
+        return super().get_block_structures()
+
+    def constrain_zero_diagonals(self, extractions = None, masks = None, time_limit = None) -> SDPProblem:
+        """
+        Constrain zero diagonals. Proving either `extractions` or `masks` is sufficient.
+        If both are not provided, then the default behavior is to call
+        `get_zero_diagonals` to get the zero diagonals.
+
+        Parameters
+        ----------
+        extractions : Optional[Dict[Any, List[List[int]]]]
+            A dictionary mapping each key to a list of extractions of row indices
+            as non-zero diagonals. If a key is missing, it defaults to extract
+            the whole matrix.
+        masks : Optional[Dict[Any, List[List[int]]]]
+            A dictionary mapping each key to a list of masks of row indices
+            as zero diagonals. If a key is missing, it defaults to mask
+            no diagonals.
+        time_limit : Optional[Union[float, Callable[[], bool]]]
+            The time limit in seconds.
+
+        Returns
+        -------
+        SDPProblem
+            The transformed SDP problem.
+
+        Examples
+        --------
+        >>> from sympy import Matrix
+        >>> from sympy.abc import x, y
+        >>> M1 = Matrix([[x, y, 0], [y, 0, 0], [0, 0, 2 - y]])
+        >>> M2 = Matrix([[x, 0], [0, x + y]])
+        >>> sdp = SDPProblem.from_matrix({'M1': M1, 'M2': M2})
+        >>> sdp2 = sdp.constrain_zero_diagonals()
+        >>> sdp2.S_from_y() # doctest: +SKIP
+        {'M1': Matrix([
+         [y_{0}, 1],
+         [    1, 2]]),
+         'M2': Matrix([
+         [-y_{0},     1],
+         [     1, y_{0}]])}
+        >>> sdp2.size
+        {'M1': 2, 'M2': 2}
+
+        Constraining the diagonal elements to zero will
+        also constrain the whole row to be zero.       
+
+        >>> M1 = Matrix([[x, y, 0], [y, 0, 0], [0, 0, 2 - y]])
+        >>> M2 = Matrix([[2 - x, 1], [1, x + y + 4]])
+        >>> sdp = SDPProblem.from_matrix({'M1': M1, 'M2': M2})
+        >>> sdp3 = sdp.constrain_zero_diagonals(extractions={'M1': [1, 2]})
+        >>> sdp3.S_from_y() # doctest: +NORMALIZE_WHITESPACE
+        {'M1': Matrix([
+         [0, 0],
+         [0, 2]]),
+         'M2': Matrix([
+         [2, 1],
+         [1, 4]])}
+        >>> sdp4 = sdp.constrain_zero_diagonals(masks={'M1': [0, 1]})
+        >>> sdp4.S_from_y() # doctest: +NORMALIZE_WHITESPACE
+        {'M1': Matrix([[2]]),
+         'M2': Matrix([
+         [2, 1],
+         [1, 4]])}
+        """
+        return super().constrain_zero_diagonals(extractions, masks, time_limit)
+
+    def constrain_block_structures(self, blocks = None) -> SDPProblem:
+        """
+        Constrain block structures.
+
+        Parameters
+        ----------
+        blocks : Optional[Dict[Any, List[List[int]]]]
+            A dictionary mapping each key to a list of block structures.
+            If a key is missing, it defaults to have only one block.
+
+        Returns
+        -------
+        SDPProblem
+            The transformed SDP problem.
+
+        Examples
+        --------
+        >>> from sympy import Matrix
+        >>> from sympy.abc import x, y
+        >>> M1 = Matrix([[x, y, 0], [y, 0, 0], [0, 0, 2 - y]])
+        >>> M2 = Matrix([[1 - x, 0], [0, x + y + 1]])
+        >>> sdp = SDPProblem.from_matrix({'M1': M1, 'M2': M2})
+        >>> sdp2 = sdp.constrain_block_structures()
+        >>> sdp2.S_from_y() # doctest: +SKIP
+        {('M1',
+         0): Matrix([
+         [x, y],
+         [y, 0]]),
+         ('M1', 1): Matrix([[2 - y]]),
+         ('M2', 0): Matrix([[1 - x]]),
+         ('M2', 1): Matrix([[x + y + 1]])}
+        """
+        return super().constrain_block_structures(blocks)

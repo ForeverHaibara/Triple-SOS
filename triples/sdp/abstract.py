@@ -25,6 +25,8 @@ class SDPProblemBase(ABC):
     y = None
     S = None
     decompositions = None
+    _transforms: List
+    _x0_and_space: Dict[Any, Tuple[Matrix, Matrix]]
     def __init__(self, *args, **kwargs) -> None:
         # record the numerical solutions
         self._ys = []
@@ -58,6 +60,9 @@ class SDPProblemBase(ABC):
     def size(self) -> Dict[Any, int]:
         return {key: self.get_size(key) for key in self.keys()}
 
+    @property
+    def gens(self) -> List[Symbol]: ...
+
     def __repr__(self) -> str:
         return "<%s dof=%d size=%s>"%(self.__class__.__name__, self.dof, self.size)
 
@@ -71,6 +76,8 @@ class SDPProblemBase(ABC):
         """
 
     def as_params(self) -> Dict[Symbol, Expr]:
+        if self.y is None:
+            raise ValueError("The SDP problem has no solution.")
         return dict(zip(self.gens, self.y))
 
     def _standardize_mat_dict(self, mat_dict: Dict[Any, Matrix]) -> Dict[Any, Matrix]:

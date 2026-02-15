@@ -2,16 +2,16 @@ from typing import Union, Optional, Tuple, List, Dict, Callable, Any
 
 from numpy import ndarray
 import numpy as np
-from sympy import Matrix, MatrixBase, Expr, Symbol, collect
+from sympy import Matrix, MatrixBase, Expr, Symbol, Basic, collect
 from sympy.core.relational import GreaterThan, StrictGreaterThan, LessThan, StrictLessThan, Equality, Relational
 from sympy.solvers.solveset import linear_eq_to_matrix
 
 from .arithmetic import vec2mat, mat2vec, reshape, rep_matrix_to_numpy
 
 def S_from_y(
-        y: Matrix,
-        x0_and_space: Dict[str, Tuple[Matrix, Matrix]]
-    ) -> Dict[str, Matrix]:
+    y: MatrixBase,
+    x0_and_space: Dict[str, Tuple[Matrix, Matrix]]
+) -> Dict[str, Matrix]:
     """
     Return the symmetric matrices S from the vector y.
 
@@ -64,9 +64,9 @@ _RELATIONAL_TO_OPERATOR = {
 
 
 def decompose_matrix(
-        M: Matrix,
-        variables: Optional[List[Symbol]] = None
-    ) -> Tuple[Matrix, Matrix, Matrix]:
+    M: Matrix,
+    variables: Optional[List[Basic]] = None
+) -> Tuple[Matrix, Matrix, Matrix]:
     """
     Decomposes a symbolic matrix into the form vec(M) = x + A @ v
     where x is a constant vector, A is a constant matrix, and v is a vector of variables.
@@ -80,7 +80,7 @@ def decompose_matrix(
     ----------
     M : Matrix
         The matrix to be decomposed.
-    variables : List[Symbol]
+    variables : List[Basic]
         The variables to be used in the decomposition. If None, it uses M.free_symbols.
 
     Returns
@@ -118,7 +118,7 @@ def decompose_matrix(
     """
     if variables is None:
         variables = list(M.free_symbols)
-        variables = sorted(variables, key = lambda x: x.name)
+        variables = sorted(variables, key = str)
     v = Matrix(variables)
 
     # rows, cols = M.shape
@@ -149,11 +149,11 @@ def decompose_matrix(
 
 
 def exprs_to_arrays(
-        exprs: List[Union[Callable, Expr, Relational, Tuple[Matrix, float], Tuple[Matrix, float, str]]],
-        symbols: List[Symbol],
-        locals: Optional[Dict[str, Any]] = None,
-        dtype: Optional[Any] = None
-    ) -> List[Union[Tuple[Matrix, Matrix, str]]]:
+    exprs: List[Union[Callable, Expr, Relational, Tuple[Matrix, float], Tuple[Matrix, float, str]]],
+    symbols: List[Basic],
+    locals: Optional[Dict[str, Any]] = None,
+    dtype: Optional[Any] = None
+) -> List[Tuple[Matrix, Matrix, str]]:
     """
     Convert linear expressions to arrays with respect to the given symbols.
 
@@ -164,7 +164,7 @@ def exprs_to_arrays(
         If it is a Callable, it is first applied on the locals.
         If it is a Expr, it should be linear with respect to the given symbols.
         If it is a Relational, it should be linear with respect to the given symbols.
-    symbols : List[Symbol]
+    symbols : List[Basic]
         The free symbols.
     locals : Optional[Dict[str, Any]]
         The local variables.
@@ -221,7 +221,7 @@ def exprs_to_arrays(
                 raise ValueError("The tuple should be of length 2 or 3.")
         if isinstance(expr, Relational):
             sign, op = _RELATIONAL_TO_OPERATOR[expr.__class__]
-            expr = expr.lhs - expr.rhs if sign == 1 else expr.rhs - expr.lhs
+            expr = expr.lhs - expr.rhs if sign == 1 else expr.rhs - expr.lhs # type: ignore
             c = -c if sign == -1 else c
         if isinstance(expr, (Expr, int, float)):
             vec_list.append(expr)
@@ -321,10 +321,10 @@ def collect_constraints(constraints: List[Tuple[ndarray, ndarray, str]], dof: in
 class IteratorAlignmentError(Exception): ...
 
 def align_iters(
-        iters: List[Union[Any, List[Any]]],
-        default_types: List[Union[List[Any], Callable[[Any], bool]]],
-        raise_exception: bool = False
-    ) -> List[List[Any]]:
+    iters: List[Union[Any, List[Any]]],
+    default_types: List[Union[List[Any], Callable[[Any], bool]]],
+    raise_exception: bool = False
+) -> List[List[Any]]:
     """
     Align the iterators with the default types.
 
@@ -340,8 +340,9 @@ def align_iters(
         If False, use the minimum length of the iterators.
     """
     if len(iters) == 0:
-        return None
-    check_tp = lambda i, tp: (callable(tp) and not isinstance(tp, type) and tp(i)) or isinstance(i, tp)
+        return []
+    check_tp = lambda i, tp: (callable(tp) and not isinstance(tp, type) and tp(i)) \
+        or isinstance(i, tp) # type: ignore
     aligned_iters = []
     for i, tp in zip(iters, default_types):
         if i is None:

@@ -4,9 +4,10 @@ from sympy.matrices import MutableDenseMatrix as Matrix
 from sympy import Symbol
 
 from .transform import SDPTransformation
-from .linear import SDPLinearTransform, SDPMatrixTransform
+from .linear import SDPLinearTransform, SDPMatrixTransform, SDPCongruence
 from .parametric import SDPDeparametrization
 from .polytope import get_zero_diagonals, SDPRowExtraction
+from .diagonalize import get_block_structures, SDPBlockDiagonalization
 from ..abstract import SDPProblemBase
 from ..arithmetic import sqrtsize_of_mat
 
@@ -153,12 +154,25 @@ class TransformableProblem(SDPProblemBase):
         """
         return SDPMatrixTransform.apply(self, nullspace=nullspace, to_child=to_child, time_limit=time_limit)
 
+    def constrain_congruence(self, basis: Dict[Any, Matrix],
+            time_limit: Optional[Union[Callable, float]]=None) -> 'TransformableProblem':
+        """
+        Constrain the congruence of the SDP problem.
+        """
+        return SDPCongruence.apply(self, basis=basis, time_limit=time_limit)
+
     def get_zero_diagonals(self) -> Dict[Any, List[int]]:
         return get_zero_diagonals(self)
+
+    def get_block_structures(self) -> Dict[Any, List[List[int]]]:
+        return get_block_structures(self)
 
     def constrain_zero_diagonals(self, extractions: Optional[Dict[Any, List[int]]]=None, masks: Optional[Dict[Any, List[int]]]=None,
             time_limit: Optional[Union[Callable, float]]=None) -> 'TransformableProblem':
         return SDPRowExtraction.apply(self, extractions=extractions, masks=masks, time_limit=time_limit)
+
+    def constrain_block_structures(self, blocks: Optional[Dict[Any, List[int]]]=None):
+        return SDPBlockDiagonalization.apply(self, blocks=blocks)
 
     def deparametrize(self, symbols: Optional[List[Symbol]]=None) -> 'TransformableProblem':
         return SDPDeparametrization.apply(self, symbols=symbols)
