@@ -709,7 +709,10 @@ def parse_symmetry(symmetry: Union[PermutationGroup, str], n: int) -> Permutatio
     return symmetry
 
 
-def verify_symmetry(polys: Union[List[Poly], Poly], symmetry: Union[str, Permutation, PermutationGroup]) -> bool:
+def verify_symmetry(
+    polys: Union[List[Poly], Poly],
+    symmetry: Union[str, Permutation, PermutationGroup]
+) -> bool:
     """
     Verify whether the polynomials are symmetric with respect to the permutation group.
 
@@ -772,9 +775,14 @@ def verify_symmetry(polys: Union[List[Poly], Poly], symmetry: Union[str, Permuta
     return True
 
 
-def _identify_symmetry_from_blackbox(f: Callable[[Permutation], bool], nvars: int) -> PermutationGroup:
+def _identify_symmetry_from_blackbox(
+    f: Callable[[Permutation], bool],
+    G: Union[PermutationGroup, int]
+) -> PermutationGroup:
     """
     Identify symmetry by calling a black-box function `f` on each permutation.
+    If `G` is integer, then it implies the degree of the permutation.
+    If `G` is a permutation group, then it finds a subgroup of `G`.
     """
     # List a few candidates: symmetric, alternating, cyclic groups...
     def _rotated(n, start=0):
@@ -784,6 +792,13 @@ def _identify_symmetry_from_blackbox(f: Callable[[Permutation], bool], nvars: in
 
     verified = [] # storing permutations that fit the input
     candidates = [] # a list of permutations
+
+    if isinstance(G, int):
+        nvars = G
+        G = SymmetricGroup(nvars)
+    else:
+        nvars = G.degree
+
     if nvars > 1:
         candidates.append(_rotated(nvars))
         if nvars > 2:
@@ -794,7 +809,9 @@ def _identify_symmetry_from_blackbox(f: Callable[[Permutation], bool], nvars: in
             verified.append(perm)
     if len(verified) == 2:
         # reflection + cyclic -> complete symmetric group
-        return PermutationGroup(*verified)
+        # but it should be a subgroup of G, hence return G
+        return G
+    verified = [arg for arg in verified if arg in G]
 
     candidates = []
     # bi-symmetric group etc.
@@ -820,8 +837,9 @@ def _identify_symmetry_from_blackbox(f: Callable[[Permutation], bool], nvars: in
             candidates.append(_reflected(nvars - 1) + [nvars - 1])
             candidates.append([0] + _reflected(nvars - 1, 1))
 
+    is_sym = G._is_sym
     for perm in map(Permutation, candidates):
-        if f(perm):
+        if (is_sym or (perm in G)) and f(perm):
             verified.append(perm)
 
     if len(verified) == 0:
@@ -830,10 +848,14 @@ def _identify_symmetry_from_blackbox(f: Callable[[Permutation], bool], nvars: in
     return PermutationGroup(*verified)
 
 
-def identify_symmetry_from_lists(lst_of_lsts: List[List[Poly]]) -> PermutationGroup:
+def identify_symmetry_from_lists(
+    lst_of_lsts: List[List[Poly]],
+    G: Optional[PermutationGroup]=None
+) -> PermutationGroup:
     """
-    Infer a symmetric group so that each list of (list of polynomials) is symmetric with respect to the rule.
-    It only identifies very common groups like complete symmetric and cyclic groups.
+    Infer a symmetric group so that each list of (list of polynomials)
+    is symmetric with respect to the rule. It only identifies very
+    common groups like complete symmetric and cyclic groups.
 
     TODO: Implement a complete algorithm to identify all symmetric groups.
 
@@ -841,6 +863,9 @@ def identify_symmetry_from_lists(lst_of_lsts: List[List[Poly]]) -> PermutationGr
     ----------
     lst_of_lsts : List[List[Poly]]
         A list of lists of polynomials.
+    G: Optional[PermutationGroup]
+        The permutation group to be used. If provided, the
+        returned group must be a subgroup of G.
 
     Returns
     ----------
@@ -879,22 +904,67 @@ def identify_symmetry_from_lists(lst_of_lsts: List[List[Poly]]) -> PermutationGr
             if p.gens != gens:
                 raise ValueError("All polynomials should have the same generators.")
 
-    nvars = len(gens)
     def verify(perm):
         return all(verify_symmetry(l, perm) for l in lst_of_lsts)
+
+    nvars = len(gens)
+    if G is not None:
+        if nvars != 0 and nvars != G.degree:
+            raise ValueError("The degree of the permutation group must"
+                             " be the same as the number of variables.")
+        if nvars == 0:
+            return G
+        if G.is_trivial:
+            return G
+        return _identify_symmetry_from_blackbox(verify, G)
     return _identify_symmetry_from_blackbox(verify, nvars)
 
 
-def identify_symmetry(poly: Poly) -> PermutationGroup:
+def identify_symmetry(poly: Poly, G: Optional[PermutationGroup]=None) -> PermutationGroup:
     """
     Infer a symmetric group so that the polynomial is symmetric with respect to the rule.
     It only identifies very simple groups like complete symmetric and cyclic groups.
+
+    Parameters
+    ----------
+    poly: Poly
+        The polynomial to be identified.
+    G: Optional[PermutationGroup]
+        The permutation group to be used. If provided, the
+        returned group must be a subgroup of G.
+
+    Returns
+    ----------
+    PermutationGroup
+        The inferred permutation group.
+
+    Examples
+    ----------
+    >>> from sympy.abc import a, b, c, d
+    >>> identify_symmetry((a*b).as_poly(a,b,c,d)) # doctest:+SKIP
+    PermutationGroup([
+     (3)(0 1),
+     (0 1)(2 3)])
+    >>> identify_symmetry((a*b).as_poly(a,b,c,d)).order()
+    4
+
+    >>> from sympy.combinatorics import DihedralGroup
+    >>> identify_symmetry((a*b).as_poly(a,b,c,d), DihedralGroup(4))
+    PermutationGroup([
+     (0 1)(2 3)])
+    >>> identify_symmetry((a*b).as_poly(a,b,c,d), DihedralGroup(4)).order()
+    2
     """
-    return identify_symmetry_from_lists([[poly]])
+    return identify_symmetry_from_lists([[poly]], G)
 
 
-def arraylize_up_to_symmetry(poly: Poly, perm_group: PermutationGroup, degree: Optional[int] = None,
-        return_type: str = 'matrix', **options) -> Union[List, Matrix]:
+def arraylize_up_to_symmetry(
+    poly: Poly,
+    perm_group: PermutationGroup,
+    degree: Optional[int] = None,
+    return_type: str = 'matrix',
+    **options
+) -> Union[List, Matrix]:
     """
     Get the canonical representation of the poly up to given symmetry.
     Two polynomials that are equivalent up to the symmetry should have the same representation.

@@ -84,7 +84,6 @@ class SDPBlockDiagonalization(SDPLinearTransform):
         else:
             y = A @ child.y + b
         parent.y = y
-        parent.S = child.S
         parent.register_y(parent.y, perturb=True)
 
     @classmethod

@@ -8,7 +8,7 @@ from sympy.matrices import MutableDenseMatrix as Matrix
 
 from .transform import SDPTransformation, SDPProblemBase
 from ..arithmetic import (
-    ArithmeticTimeout, is_empty_matrix, vec2mat,
+    ArithmeticTimeout, is_empty_matrix, vec2mat, reshape,
     solve_undetermined_linear, solve_nullspace, solve_columnspace,
     matmul, matadd, matmul_multiple, symmetric_bilinear, symmetric_bilinear_multiple
 )
@@ -308,8 +308,11 @@ class SDPCongruence(SDPLinearTransform):
         parent, child = self.parent_node, self.child_node
         parent.y = child.y
         inv = self._inv_basis
-        parent.decompositions = {((matmul(inv[key], U) if key in inv else U), S)
-            for key, (U, S) in child.decompositions}
+        size = parent.size
+        parent.S = {key: reshape(space @ parent.y + x0, (size[key], size[key]))
+            for key, (x0, space) in parent._x0_and_space.items()}
+        parent.decompositions = {key: ((matmul(inv[key], U) if key in inv else U), S)
+            for key, (U, S) in child.decompositions.items()}
 
     def propagate_nullspace_to_child(self, nullspace):
         _inv_basis = self._inv_basis
@@ -335,7 +338,7 @@ class DualSDPCongruence(SDPCongruence):
 
         for key, (x0, space) in parent_node._x0_and_space.items():
             if key not in basis:
-                new_x0_and_space[key] = space
+                new_x0_and_space[key] = (x0, space)
                 continue
             new_space = symmetric_bilinear_multiple(basis[key], space.T, time_limit=time_limit).T
             new_x0 = symmetric_bilinear(basis[key], x0, is_A_vec = True,

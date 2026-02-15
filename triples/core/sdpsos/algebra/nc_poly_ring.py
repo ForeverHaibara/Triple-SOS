@@ -2,6 +2,7 @@ from itertools import product
 from typing import Dict, List, Optional, Any
 
 from sympy import Poly, Expr, Add, Mul, Symbol
+from sympy.combinatorics.permutations import Permutation
 
 from .state_algebra import StateAlgebra, TERM, MONOM
 from .basis import QmoduleBasis, IdealBasis
@@ -56,9 +57,6 @@ class NCPolyRing(StateAlgebra):
             nvars, degree, hom=is_homogeneous
         )
 
-        if symmetry is not None:
-            raise NotImplementedError
-
     def s(self, term: TERM) -> TERM:
         return term
 
@@ -70,11 +68,13 @@ class NCPolyRing(StateAlgebra):
     def total_degree(self, monom: MONOM) -> int:
         return sum(_[1] for _ in monom) if len(monom) else 0
 
-    def as_expr(self, poly: Poly) -> Expr:
+    def as_expr(self, poly: Poly, state_operator=None) -> Expr:
         if isinstance(poly, PseudoPoly):
             gens = poly.gens
-            return Add(*[Mul(coeff, *[gens[i]**v for i, v in monom]) for monom, coeff in poly.terms()])
-        return poly.as_expr()
+            ret = Add(*[Mul(coeff, *[gens[i]**v for i, v in monom]) for monom, coeff in poly.terms()])
+        else:
+            ret = poly.as_expr()
+        return ret if state_operator is None else state_operator(ret)
 
     def mul(self, term1: TERM, term2: TERM) -> TERM:
         (t1, v1), (t2, v2) = term1, term2
@@ -86,6 +86,10 @@ class NCPolyRing(StateAlgebra):
 
     def adjoint(self, term: TERM) -> TERM:
         return (term[0][::-1], term[1])
+
+    def permute_monom(self, monom: MONOM, perm: Permutation) -> MONOM:
+        arr = perm.array_form
+        return tuple((arr[i], v) for i, v in monom)
 
     def infer_bases(self, poly: Poly, qmodule: Dict[Any, Poly], ideal: Dict[Any, Poly]):
         is_homogeneous = self.is_homogeneous

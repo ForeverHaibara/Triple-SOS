@@ -7,7 +7,7 @@ from scipy.sparse import csr_matrix
 
 from .state_algebra import StateAlgebra, MONOM, TERM
 from ....sdp.arithmetic import rep_matrix_from_dict
-
+from ....utils.monomials import identify_symmetry
 
 class SOSBasis:
     """
@@ -46,13 +46,22 @@ class SOSBasis:
 
 class QmoduleBasis(SOSBasis):
     qmodule: Poly
-    def __init__(self, algebra: StateAlgebra, qmodule: Poly, basis: List[MONOM]=[], dict_basis: Dict[MONOM, int]=None):
+    def __init__(self,
+        algebra: StateAlgebra,
+        qmodule: Poly,
+        basis: List[MONOM]=[],
+        dict_basis: Dict[MONOM, int]=None
+    ):
         self.qmodule = qmodule
         self.algebra = algebra
         self._basis = basis
         self._dict_basis = dict_basis
         if dict_basis is None:
             self._dict_basis = {b: i for i, b in enumerate(basis)}
+
+        self.symmetry = None
+        if algebra.symmetry is not None:
+            self.symmetry = identify_symmetry(qmodule, algebra.symmetry)
 
     def _nc_localizing_mapping(self, domain: Any=None) -> Callable[[int, int], List[TERM]]:
         if domain is None:
@@ -124,13 +133,8 @@ class QmoduleBasis(SOSBasis):
     def get_equal_entries(self) -> List[List[int]]:
         # This might be temporary, in the future there might be more symmetries,
         # e.g. sign symmetries, finite matrix group. And there might be a Wedderburn decomposition.
-        symmetry = self.algebra.symmetry
+        symmetry = self.symmetry
         if symmetry is None:
-            return []
-
-        # TODO: it does not need to be fully symmetric,
-        # partially symmetric is also acceptable
-        if not self.algebra.is_symmetric(self.qmodule):
             return []
 
         pm = self.algebra.permute_monom
@@ -160,18 +164,28 @@ class QmoduleBasis(SOSBasis):
 
 
 class TwoSidedIdealBasis(SOSBasis):
+    # TO BE IMPLEMENTED
     ...
 
 
 class IdealBasis(SOSBasis):
     ideal: Poly
-    def __init__(self, algebra: StateAlgebra, ideal: Poly, basis: List[MONOM]=[], dict_basis: Dict[MONOM, int]=None):
+    def __init__(self,
+        algebra: StateAlgebra,
+        ideal: Poly,
+        basis: List[MONOM]=[],
+        dict_basis: Dict[MONOM, int]=None
+    ):
         self.ideal = ideal
         self.algebra = algebra
         self._basis = basis
         self._dict_basis = dict_basis
         if dict_basis is None:
             self._dict_basis = {b: i for i, b in enumerate(basis)}
+
+        self.symmetry = None
+        if algebra.symmetry is not None:
+            self.symmetry = identify_symmetry(ideal, algebra.symmetry)
 
     def _localizing_mapping(self, domain: Any=None) -> Callable[[int], List[TERM]]:
         # be careful that it should be a two-sided ideal for non-commutative algebra,
@@ -211,13 +225,8 @@ class IdealBasis(SOSBasis):
     def get_equal_entries(self) -> List[List[int]]:
         # This might be temporary, in the future there might be more symmetries,
         # e.g. sign symmetries, finite matrix group. And there might be a Wedderburn decomposition.
-        symmetry = self.algebra.symmetry
+        symmetry = self.symmetry
         if symmetry is None:
-            return []
-
-        # TODO: it does not need to be fully symmetric,
-        # partially symmetric is also acceptable
-        if not self.algebra.is_symmetric(self.ideal):
             return []
 
         pm = self.algebra.permute_monom

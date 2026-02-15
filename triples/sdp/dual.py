@@ -515,7 +515,7 @@ class SDPProblem(TransformableDual):
         if constrain_symmetry:
             sdp = sdp.constrain_symmetry()
             sdp._transforms.clear()
-        return sdp # type: ignore
+        return sdp
 
     @classmethod
     def from_equations(cls, eq: Matrix, rhs: Matrix,

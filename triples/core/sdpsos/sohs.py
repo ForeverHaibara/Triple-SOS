@@ -6,6 +6,8 @@ from .abstract import AtomSOSElement
 from .algebra import NCPolyRing
 from .solution import SolutionSDP
 
+from ...utils import CyclicSum
+
 def DEFAULT_ADJOINT(x):
     if x.is_Mul:
         return x.func(*x.args[::-1])
@@ -85,9 +87,10 @@ class SOHSPoly(AtomSOSElement):
         qmodule: List[Union[Poly, Expr]] = [],
         ideal: List[Union[Poly, Expr]] = [],
         degree: Optional[int] = None,
+        symmetry: Optional[Dict[Symbol, int]] = None,
     ):
         gens = tuple(gens)
-        as_poly = NCPolyRing(len(gens), 0).as_poly
+        as_poly = NCPolyRing(len(gens), 0, symmetry=symmetry).as_poly
         poly = as_poly(poly, gens)
         self.poly = poly
         self.gens = gens
@@ -114,7 +117,8 @@ class SOHSPoly(AtomSOSElement):
             and all(_.is_homogeneous for _ in self._qmodule.values()) \
             and all(_.is_homogeneous for _ in self._ideal.values()) \
             and self.poly.total_degree() == degree
-        self.algebra = NCPolyRing(len(poly.gens), degree=degree, is_homogeneous=is_homogeneous)
+        self.algebra = NCPolyRing(len(poly.gens), degree=degree,
+            is_homogeneous=is_homogeneous, symmetry=symmetry)
 
     def _post_construct(self, verbose: bool = False, **kwargs):
         self.sdp.constrain_zero_diagonals()
@@ -159,6 +163,9 @@ class SOHSPoly(AtomSOSElement):
             #                         if self.algebra.symmetry is not None else (lambda x: x),
             adjoint_operator = adjoint_operator,
         )
+        if self.algebra.symmetry is not None:
+            raise NotImplementedError("Not supported")
+        # solution.expr = self.poly.as_expr()
 
         # overwrite the constraints information in the form of dict((Poly, Expr))
         solution.ineq_constraints = {self._qmodule[key]: expr for key, expr in qmodule.items()}
