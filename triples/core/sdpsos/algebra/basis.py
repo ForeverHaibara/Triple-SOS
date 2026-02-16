@@ -3,6 +3,7 @@ from typing import List, Tuple, Dict, Any, Callable, Optional
 
 from sympy import Expr, Poly, Domain
 from sympy.matrices import MutableDenseMatrix as Matrix
+from sympy.combinatorics import PermutationGroup, Permutation
 from scipy.sparse import csr_matrix
 
 from .state_algebra import StateAlgebra, MONOM, TERM
@@ -16,6 +17,7 @@ class SOSBasis:
     algebra: StateAlgebra
     _dict_basis: Dict[Any, int] # basis: index
     _basis: List[Any]
+    symmetry: Optional[PermutationGroup] = None
 
     def __init__(self, algebra: StateAlgebra, basis: List[Any]):
         self.algebra = algebra
@@ -40,6 +42,21 @@ class SOSBasis:
 
     def get_equal_entries(self) -> List[List[int]]:
         return []
+
+    def get_symmetry_representation(self, **kwargs) -> Tuple[PermutationGroup, Callable]:
+        G = self.symmetry
+
+        if G is None:
+            n = len(self._basis)
+            def func(g: Permutation) -> list:
+                return list(range(n))
+            return PermutationGroup(Permutation(size=1)), func
+
+        def func(g: Permutation) -> list:
+            basis, inv = self._basis, self._dict_basis
+            perm = self.algebra.permute_monom
+            return [inv[perm(b, g)] for b in basis]
+        return G, func
 
     def as_expr(self, coeff, vec, expr=None, adjoint_operator=None, state_operator=None) -> Expr:
         raise NotImplementedError

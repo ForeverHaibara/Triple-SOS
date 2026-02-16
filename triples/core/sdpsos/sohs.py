@@ -120,9 +120,6 @@ class SOHSPoly(AtomSOSElement):
         self.algebra = NCPolyRing(len(poly.gens), degree=degree,
             is_homogeneous=is_homogeneous, symmetry=symmetry)
 
-    def _post_construct(self, verbose: bool = False, **kwargs):
-        self.sdp.constrain_zero_diagonals()
-
     def as_solution(
         self,
         qmodule: Optional[Dict[Any, Expr]] = None,

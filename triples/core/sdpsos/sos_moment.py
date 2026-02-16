@@ -95,9 +95,6 @@ class SOSMomentPoly(AtomSOSElement):
         if state_operator is not None:
             self._state_operator = state_operator
 
-    def _post_construct(self, verbose: bool = False, time_limit: Optional[Union[Callable, float]] = None, **kwargs):
-        self.sdp.constrain_zero_diagonals(time_limit=time_limit)
-
     def as_solution(
         self,
         qmodule: Optional[Dict[Any, Expr]] = None,

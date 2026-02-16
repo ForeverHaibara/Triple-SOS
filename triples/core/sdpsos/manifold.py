@@ -4,7 +4,7 @@ for SDP via computing the equality cases of the original SOS problem.
 """
 from collections import defaultdict, deque
 from itertools import product
-from time import time
+from time import perf_counter
 from typing import Dict, List, Tuple, Union, Optional, Callable, Any
 
 from sympy import Poly, Expr, MatrixBase, prod
@@ -315,8 +315,10 @@ def get_nullspace(
     poly: Poly,
     ineq_constraints: Dict[Any, Poly],
     eq_constraints: Dict[Any, Poly],
-    ineq_bases: Dict[Any, SOSBasis], eq_bases: Dict[Any, SOSBasis],
-    degree: Optional[int]=None, roots: List[Root] = [],
+    ineq_bases: Dict[Any, SOSBasis],
+    eq_bases: Dict[Any, SOSBasis],
+    degree: Optional[int]=None,
+    roots: List[Root] = [],
     perm_group: Optional[PermutationGroup] = None,
     time_limit: Optional[Union[Callable, float]]=None
 ) -> Dict[Any, Matrix]:
@@ -365,6 +367,7 @@ def constrain_root_nullspace(
     ineq_bases: Dict[Any, Any],
     eq_bases: Dict[Any, Any],
     degree: int,
+    *,
     roots: Optional[List[Root]]=None,
     symmetry: Optional[PermutationGroup]=None,
     verbose: bool = False,
@@ -391,7 +394,7 @@ def constrain_root_nullspace(
         return [polylize(rep, *gens) for rep in rep_set]
 
     time_limit = ArithmeticTimeout.make_checker(time_limit)
-    time0 = time()
+    time0 = perf_counter()
     if roots is None:
         # find roots automatically
         all_polys = list(ineq_constraints.values()) + list(eq_constraints.values()) + [poly]
@@ -404,23 +407,23 @@ def constrain_root_nullspace(
             # TODO: clean this
             roots = _findroot_binary(poly)# symmetry=self._symmetry)
         if verbose:
-            print(f"Time for finding roots num = {len(roots):<6d}     : {time() - time0:.6f} seconds.")
-            time0 = time()
+            print(f"Time for finding roots num = {len(roots):<6d}     : {perf_counter() - time0:.6f} seconds.")
+            time0 = perf_counter()
     else:
         roots = [Root(_) if not isinstance(_, Root) else _ for _ in roots]
     time_limit()
 
-    time0 = time()
+    time0 = perf_counter()
     nullspaces = get_nullspace(poly, ineq_constraints, eq_constraints, ineq_bases, eq_bases,
                         degree=degree, roots=roots)
     if verbose:
-        print(f"Time for computing nullspace            : {time() - time0:.6f} seconds.")
-        time0 = time()
+        print(f"Time for computing nullspace            : {perf_counter() - time0:.6f} seconds.")
+        time0 = perf_counter()
 
     new_sdp = sdp.constrain_nullspace(nullspaces, to_child=True, time_limit=time_limit)
 
     if verbose:
-        print(f"Time for constraining nullspace         : {time() - time0:.6f} seconds. Dof = {sdp.get_last_child().dof}")
-        time0 = time()
+        print(f"Time for constraining nullspace         : {perf_counter() - time0:.6f} seconds. Dof = {sdp.get_last_child().dof}")
+        time0 = perf_counter()
 
     return new_sdp, roots

@@ -66,6 +66,8 @@ class SDPLinearTransform(SDPTransformation):
         are the solutions of the parent and child problems respectively.
         """
         U, v = self.get_y_transform_from_child()
+        if U is None and v is None:
+            return A, b
         return matmul(A, U), matadd(matmul(A, v), b)
 
 
@@ -311,13 +313,13 @@ class SDPCongruence(SDPLinearTransform):
         size = parent.size
         parent.S = {key: reshape(space @ parent.y + x0, (size[key], size[key]))
             for key, (x0, space) in parent._x0_and_space.items()}
-        parent.decompositions = {key: ((matmul(inv[key], U) if key in inv else U), S)
+        parent.decompositions = {key: ((matmul(U, inv[key]) if key in inv else U), S)
             for key, (U, S) in child.decompositions.items()}
 
     def propagate_nullspace_to_child(self, nullspace):
-        _inv_basis = self._inv_basis
-        return {key: (matmul(_inv_basis[key], ns) if key in _inv_basis else ns)
-                 for ns, key in nullspace.items()}
+        b = self._inv_basis
+        return {key: ((matmul(b[key], ns) if key in b else ns))
+                 for key, ns in nullspace.items()}
 
     def propagate_affine_to_child(self, A, b):
         return A, b

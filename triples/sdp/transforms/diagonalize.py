@@ -86,6 +86,18 @@ class SDPBlockDiagonalization(SDPLinearTransform):
         parent.y = y
         parent.register_y(parent.y, perturb=True)
 
+    def propagate_nullspace_to_child(self, nullspace):
+        # If sum(v^T*S_i*v for i in blocks) == 0,
+        # then Si*v == 0 for each i in blocks.
+        ns = {}
+        for key, children in self._child_keys.items():
+            if not key in nullspace:
+                continue
+            blocks = self._blocks[key]
+            for b, c in zip(blocks, children):
+                ns[c] = permute_matrix_rows(nullspace[key], b)
+        return ns
+
     @classmethod
     def apply_block_structures(cls, parent_node):
         bs = get_block_structures(parent_node)

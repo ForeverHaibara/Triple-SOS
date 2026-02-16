@@ -1,16 +1,16 @@
 from typing import List, Tuple, Dict, Union, Optional, Callable, Any
-from time import time
 # from warnings import warn
 
 from sympy.combinatorics import PermutationGroup
 from sympy import Poly, Expr, Symbol
-from sympy.matrices import MutableDenseMatrix as Matrix
+from sympy import MutableDenseMatrix as Matrix
 
 from .algebra import PolyRing
 from .abstract import AtomSOSElement, ArithmeticTimeout
 from .manifold import constrain_root_nullspace
 from .solution import SolutionSDP
 from ...utils import CyclicSum, Root
+from ...sdp import decompose_representation
 
 CHECK_SYMMETRY = True
 
@@ -197,7 +197,8 @@ class SOSPoly(AtomSOSElement):
             and all(_.is_homogeneous for _ in self._qmodule.values()) \
             and all(_.is_homogeneous for _ in self._ideal.values()) \
             and self.poly.total_degree() == degree
-        self.algebra = PolyRing(len(gens), degree=degree, symmetry=symmetry, is_homogeneous=is_homogeneous)
+        self.algebra = PolyRing(len(gens), degree=degree,
+            symmetry=symmetry, is_homogeneous=is_homogeneous)
 
         if symmetry is not None and not self.algebra.is_symmetric(poly, symmetry):
             raise ValueError("The polynomial is not symmetric under the given symmetry group.")
@@ -205,17 +206,37 @@ class SOSPoly(AtomSOSElement):
 
         self.roots = roots
 
-    def _post_construct(self, verbose: bool = False, time_limit: Optional[Union[Callable, float]] = None, **kwargs):
+    def _post_construct(self,
+        wedderburn: bool = True,
+        verbose: bool = False,
+        time_limit: Optional[Union[Callable, float]] = None,
+        **kwargs
+    ):
         time_limit = ArithmeticTimeout.make_checker(time_limit)
-        self.sdp.constrain_zero_diagonals(time_limit=time_limit)
+
+        # wedderburn decomposition + constrain zero diagonals
+        super()._post_construct(
+            wedderburn=wedderburn,
+            verbose=verbose,
+            time_limit=time_limit,
+            **kwargs
+        )
 
         insert_prefix = lambda d: {(self, k): v for k, v in d.items()}
 
-        _, roots = constrain_root_nullspace(self.sdp, self.poly,
-            insert_prefix(self._qmodule), insert_prefix(self._ideal),
-            ineq_bases=insert_prefix(self._qmodule_bases), eq_bases=insert_prefix(self._ideal_bases),
-            degree=self.algebra.degree, roots=self.roots, symmetry=self.algebra.symmetry,
-            verbose=verbose, time_limit=time_limit)
+        _, roots = constrain_root_nullspace(
+            self.sdp,
+            self.poly,
+            insert_prefix(self._qmodule),
+            insert_prefix(self._ideal),
+            ineq_bases=insert_prefix(self._qmodule_bases),
+            eq_bases=insert_prefix(self._ideal_bases),
+            degree=self.algebra.degree,
+            roots=self.roots,
+            symmetry=self.algebra.symmetry,
+            verbose=verbose,
+            time_limit=time_limit
+        )
         self.roots = roots
 
     def as_solution(

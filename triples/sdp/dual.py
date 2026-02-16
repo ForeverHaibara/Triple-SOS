@@ -1472,7 +1472,7 @@ class SDPProblem(TransformableDual):
         >>> M2 = Matrix([[1 - x, 0], [0, x + y + 1]])
         >>> sdp = SDPProblem.from_matrix({'M1': M1, 'M2': M2})
         >>> sdp2 = sdp.constrain_block_structures()
-        >>> sdp2.S_from_y() # doctest: +SKIP
+        >>> sdp2.S_from_y() # doctest: +NORMALIZE_WHITESPACE
         {('M1',
          0): Matrix([
          [x, y],

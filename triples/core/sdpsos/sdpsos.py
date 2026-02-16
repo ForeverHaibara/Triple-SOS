@@ -326,7 +326,9 @@ class SDPSOSSolver(ProofNode):
 
     def _constrain_poly_qmodule(self, sos: SOSPoly, q1: int, q2: int):
         """
-        Constrain the sum of the diagonals of the poly_qmodule to be constant.
+        The SDP is homogeneous in each variable when poly_qmodule is not None.
+        This constrains the sum of the diagonals of the matrices associated
+        with the poly_qmodule to be constant.
         """
         sdp = sos.sdpp
         dof = sdp.dof
@@ -335,16 +337,33 @@ class SDPSOSSolver(ProofNode):
             # cannot happen
             raise ValueError("Zero dof")
 
-        keys = [(sos, i) for i in range(q1, q1 + q2)]
+        # keys = [(sos, i) for i in range(q1, q1 + q2)]
+
+        def _is_poly_qmodule_key(key):
+            """
+            Check recursively a tuple whether it startswith
+            (sos, i) where i is in the range [q1, q1 + q2).
+            """
+            if isinstance(key, tuple):
+                if len(key) == 2 and (key[0] is sos) \
+                    and isinstance(key[1], int) and q1 <= key[1] < q1 + q2:
+                    return True
+                if len(key):
+                    return _is_poly_qmodule_key(key[0])
+                return False
+            return False
 
         row = Matrix.zeros(1, dof)
-        for key in keys:
-            if not (key in sdp._x0_and_space):
+        # const = 0
+        for key in sdp._x0_and_space.keys():
+            if not _is_poly_qmodule_key(key):
                 continue
             size = sdp.get_size(key)
+            x0, space = sdp._x0_and_space[key]
             for i in range(size):
                 # the diagonal element is in the i*(size+1)th row
-                row = row + sdp._x0_and_space[key][1][i*(size+1),:]
+                row = row + space[i*(size+1),:]
+                # const += x0[i*(size+1), 0]
 
         A, b = _vector_complement(row)
         sdpp = SDPLinearTransform.apply_from_affine(sdp, A, b)

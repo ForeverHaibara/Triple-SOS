@@ -28,7 +28,7 @@ from sympy.polys.fields import FracElement
 from sympy.polys.rings import PolyElement
 
 if tuple(version_tuple(_SYMPY_VERSION)) >= (1, 13):
-    from sympy.polys.matrices._dfm import DFM
+    from sympy.polys.matrices.dfm import DFM
 
     primitive = lambda self: self.primitive()
 else:
