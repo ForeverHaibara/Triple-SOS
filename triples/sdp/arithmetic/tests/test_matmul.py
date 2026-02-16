@@ -1,10 +1,28 @@
 import numpy as np
 from sympy import Rational, primerange
 from sympy import MutableDenseMatrix as Matrix
-from ..matmul import matmul, matmul_multiple, symmetric_bilinear, symmetric_bilinear_multiple
+from ..matmul import (
+    matlshift, matmul, matmul_multiple, symmetric_bilinear,
+    symmetric_bilinear_multiple, _decompose_int64_to_level_digits
+)
+from ..matop import FLINT_TYPE
 
 def npeq(A, B):
     return A.shape == B.shape and not np.any(A - B)
+
+def test_matlshift():
+    A = Matrix([1, 2**63 - 1, -2**63, 2**64, -2**64, -1234, 12345678901234])
+    func = ['to_sdm', 'to_ddm', 'to_dfm']
+    if not FLINT_TYPE:
+        func = func[:2]
+    for f in func:
+        dm = A._rep
+        if f == 'to_dfm' and (not hasattr(dm.rep, f)):
+            continue
+        B = A._fromrep(dm.from_rep(getattr(dm.rep, f)()))
+        assert matlshift(B, 2) == B * 4
+        assert matlshift(B, 10) == B * 1024
+
 
 def test_matmul():
     # int64 overflow
@@ -119,3 +137,22 @@ def test_symmetric_bilinear_multiple():
     # B = Matrix([[1,2], [5,7], [13,17]])
     C = Matrix.vstack(*[(B.T @ Matrix(_).reshape(3,3) @ B).reshape(1,4) for _ in A.tolist()])
     assert symmetric_bilinear_multiple(B, A) == C
+
+def test_decompose_int64_to_level_digits():
+    seed = np.random.randint(0, 2**31)
+    for level in range(8, 13):
+        np.random.seed(seed)
+        A = [2**63 - 1, -2**63, 2**63 - 2, -2**63 + 1, -2**63 + 2]
+        # generate numbers of different binary length
+        for l in range(1, 64):
+            for t in range(3):
+                s = ''.join([str(np.random.randint(0, 2)) for _ in range(l)])
+                A.append(int(s, 2))
+                A.append(-A[-1])
+        A = np.array(A, dtype=np.int64)
+        B = _decompose_int64_to_level_digits(A, level)
+        assert B[0].shape == A.shape
+        assert all(_.dtype == np.int64 for _ in B), f'wrong seed = {seed}'
+
+        C = [_.astype(object)*2**(level*i) for i,_ in enumerate(B)]
+        assert np.all(sum(C) == A.astype(object)), f'wrong seed = {seed}'

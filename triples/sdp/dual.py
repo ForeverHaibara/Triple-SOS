@@ -1292,7 +1292,7 @@ class SDPProblem(TransformableDual):
     #                  Transformations
     #
     #########################################################
-    def constrain_symmetry(self) -> SDPProblem:
+    def constrain_symmetry(self) -> 'SDPProblem':
         """
         Constrain every matrix to be symmetric. To ensure
         correctness, this must be called in advance if any
@@ -1307,7 +1307,7 @@ class SDPProblem(TransformableDual):
         --------
         >>> from sympy import Matrix
         >>> from sympy.abc import x, y, z
-        >>> M1 = Matrix([[x, 1, 0], [x + z, 0, y], [0, 4 - y - z, 3 - y]]) 
+        >>> M1 = Matrix([[x, 1, 0], [x + z, 0, y], [0, 4 - y - z, 3 - y]])
         >>> sdp = SDPProblem.from_matrix({'M1': M1})
         >>> sdp2 = sdp.constrain_symmetry()
         >>> sdp2.S_from_y() # doctest: +SKIP
@@ -1384,7 +1384,7 @@ class SDPProblem(TransformableDual):
         """
         return super().get_block_structures()
 
-    def constrain_zero_diagonals(self, extractions = None, masks = None, time_limit = None) -> SDPProblem:
+    def constrain_zero_diagonals(self, extractions = None, masks = None, time_limit = None) -> 'SDPProblem':
         """
         Constrain zero diagonals. Proving either `extractions` or `masks` is sufficient.
         If both are not provided, then the default behavior is to call
@@ -1427,7 +1427,7 @@ class SDPProblem(TransformableDual):
         {'M1': 2, 'M2': 2}
 
         Constraining the diagonal elements to zero will
-        also constrain the whole row to be zero.       
+        also constrain the whole row to be zero.
 
         >>> M1 = Matrix([[x, y, 0], [y, 0, 0], [0, 0, 2 - y]])
         >>> M2 = Matrix([[2 - x, 1], [1, x + y + 4]])
@@ -1449,7 +1449,7 @@ class SDPProblem(TransformableDual):
         """
         return super().constrain_zero_diagonals(extractions, masks, time_limit)
 
-    def constrain_block_structures(self, blocks = None) -> SDPProblem:
+    def constrain_block_structures(self, blocks = None) -> 'SDPProblem':
         """
         Constrain block structures.
 

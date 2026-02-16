@@ -291,7 +291,7 @@ def _lift_to_minimal_field(cc, normalized_rows, pm, K, exponent, Fp):
 
     half_p = p // 2
     rows = []
-       
+
     for i in range(n):
         char_row_fp = normalized_rows[i]
         row_anps = []
@@ -300,9 +300,9 @@ def _lift_to_minimal_field(cc, normalized_rows, pm, K, exponent, Fp):
             # [chi(g^A1), chi(g^A2), ...] mod p
             b_vec_data = []
             for A in gal_lifted:
-                class_of_gA = pm[j][A % exponent] 
+                class_of_gA = pm[j][A % exponent]
                 b_vec_data.append([char_row_fp[class_of_gA]])
-            
+
             b_vec = DomainMatrix(b_vec_data, (phi, 1), Fp)
 
             # c = V^-1 * b

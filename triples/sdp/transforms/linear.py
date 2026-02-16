@@ -263,8 +263,8 @@ class DualMatrixTransform(SDPMatrixTransform):
                 if is_empty_matrix(U):
                     continue
                 eq_mat = symmetric_bilinear_multiple(U, space.T, time_limit=time_limit).T
-                new_space = eq_mat * trans_space
-                # new_space = matmul(eq_mat, trans_space)
+                # new_space = eq_mat * trans_space
+                new_space = matmul(eq_mat, trans_space, time_limit=time_limit)
 
                 # Ai0 = vec2mat(x0)
                 # new_x0 = mat2vec(U.T * Ai0 * U) + eq_mat * trans_x0

@@ -949,7 +949,7 @@ def identify_symmetry(poly: Poly, G: Optional[PermutationGroup]=None) -> Permuta
     4
 
     >>> from sympy.combinatorics import DihedralGroup
-    >>> identify_symmetry((a*b).as_poly(a,b,c,d), DihedralGroup(4))
+    >>> identify_symmetry((a*b).as_poly(a,b,c,d), DihedralGroup(4)) # doctest:+NORMALIZE_WHITESPACE
     PermutationGroup([
      (0 1)(2 3)])
     >>> identify_symmetry((a*b).as_poly(a,b,c,d), DihedralGroup(4)).order()

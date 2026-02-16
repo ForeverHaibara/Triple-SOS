@@ -389,6 +389,7 @@ def _cast_list_to_sympy_matrix(rows: int, cols: int, lst: List[int]) -> Matrix:
             sdm[i] = row
     return rep_matrix_from_dict(sdm, (rows, cols), ZZ)
 
+
 def rep_matrix_from_numpy(arr: ndarray) -> RepMatrix:
     """
     Cast a numpy matrix to a sympy RepMatrix by handling dtypes carefully.

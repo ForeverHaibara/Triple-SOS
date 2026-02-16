@@ -330,20 +330,22 @@ def solve_nullspace(A: Matrix) -> Matrix:
     # except ValueError:
     #     return Matrix.zeros(A.rows, 0)
     # return space
-    m = Matrix.hstack(*A.T.nullspace())
-    if is_empty_matrix(m):
-        return A.zeros(A.shape[0], 0)
-    return m
+    # m = Matrix.hstack(*A.T.nullspace())
+    # if is_empty_matrix(m):
+    #     return A.zeros(A.shape[0], 0)
+    # return m
+    return Matrix._fromrep(A._rep.to_field().transpose().nullspace().transpose())
 
 def solve_columnspace(A: Matrix) -> Matrix:
     """
     Compute the column space of a matrix A.
-    If A is full-rank and has shape m x n (m < n), then the column space has shape m x n.
+    If A is full-rank and has shape m x n (m > n), then the column space has shape m x n.
     """
-    m = Matrix.hstack(*A.columnspace())
-    if is_empty_matrix(m):
-        return A.zeros(A.shape[0], 0)
-    return m
+    # m = Matrix.hstack(*A.columnspace())
+    # if is_empty_matrix(m):
+    #     return A.zeros(A.shape[0], 0)
+    # return m
+    return Matrix._fromrep(A._rep.to_field().columnspace())
 
 
 def _is_column_separated(A: Matrix) -> bool:
