@@ -1458,6 +1458,7 @@ class SDPProblem(TransformableDual):
         blocks : Optional[Dict[Any, List[List[int]]]]
             A dictionary mapping each key to a list of block structures.
             If a key is missing, it defaults to have only one block.
+            If not provided, it is automatically computed by `get_block_structures`.
 
         Returns
         -------

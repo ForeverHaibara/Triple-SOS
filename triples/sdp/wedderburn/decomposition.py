@@ -1,7 +1,9 @@
+from typing import List, Callable
+
 from sympy import QQ, totient, mobius
 from sympy import MutableDenseMatrix as Matrix
 from sympy.polys.matrices.domainmatrix import DomainMatrix
-from sympy.combinatorics.perm_groups import PermutationGroup
+from sympy.combinatorics import PermutationGroup, Permutation
 try:
     from sympy.external.gmpy import gcd
 except ImportError:
@@ -22,7 +24,20 @@ def _ramanujan_sum(K: int):
     return ramanujan
 
 
-def decompose_representation(G: PermutationGroup, representation=None):
+def decompose_representation(
+    G: PermutationGroup,
+    representation: Callable[[Permutation], List[int]]=None
+) -> List[Matrix]:
+    """
+    Decompose a permutation representation of G
+    into smaller representations over QQ.
+
+    Returns
+    -------
+    List[Matrix]
+        A list of matrices `Qs`, so that
+        `Q^TAQ = diag([Qi.T * A * Qi for Qi in Qs])`
+    """
     if representation is None:
         representation = lambda g: g.array_form
     n = len(representation(G.identity))

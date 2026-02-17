@@ -3,14 +3,12 @@ from typing import List, Tuple, Dict, Union, Optional, Callable, Any
 
 from sympy.combinatorics import PermutationGroup
 from sympy import Poly, Expr, Symbol
-from sympy import MutableDenseMatrix as Matrix
 
 from .algebra import PolyRing
 from .abstract import AtomSOSElement, ArithmeticTimeout
 from .manifold import constrain_root_nullspace
 from .solution import SolutionSDP
 from ...utils import CyclicSum, Root
-from ...sdp import decompose_representation
 
 CHECK_SYMMETRY = True
 

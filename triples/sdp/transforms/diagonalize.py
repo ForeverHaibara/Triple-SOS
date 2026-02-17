@@ -109,6 +109,7 @@ class SDPBlockDiagonalization(SDPLinearTransform):
         if blocks is None:
             blocks = get_block_structures(parent_node)
         else:
+            raise NotImplementedError("call automatic detection instead")
             blocks = blocks.copy()
             for key, size in parent_node.size:
                 if key not in blocks:

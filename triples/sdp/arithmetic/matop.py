@@ -350,7 +350,7 @@ def is_zz_qq_mat(mat) -> bool:
     """
     return isinstance(mat, RepMatrix) and (mat._rep.domain.is_ZZ or mat._rep.domain.is_QQ)
 
-def is_numerical_mat(mat: Union[ndarray, Matrix]) -> bool:
+def is_numerical_mat(mat: Union[ndarray, spmatrix, Matrix]) -> bool:
     """
     Judge whether a matrix is numerical, including RR, EX(RAW) with Float and numpy arrays.
     """
@@ -360,13 +360,13 @@ def is_numerical_mat(mat: Union[ndarray, Matrix]) -> bool:
             return True
         if (dom.is_EX or dom.is_EXRAW) and mat.has(Float):
             return True
-    elif isinstance(mat, ndarray):
+    elif isinstance(mat, (ndarray, spmatrix)):
         return True
     elif isinstance(mat, MatrixBase) and mat.has(Float):
         return True
     return False
 
-def free_symbols_of_mat(mat: Union[ndarray, Matrix]) -> Set[Basic]:
+def free_symbols_of_mat(mat: Union[ndarray, spmatrix, Matrix]) -> Set[Basic]:
     """
     Get the free symbols of a matrix.
     """

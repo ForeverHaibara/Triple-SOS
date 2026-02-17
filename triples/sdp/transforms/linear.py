@@ -72,22 +72,29 @@ class SDPLinearTransform(SDPTransformation):
 
 
     @classmethod
-    def apply_from_affine(cls, parent_node, A: Matrix, b: Matrix) -> SDPProblemBase:
+    def apply_from_affine(cls, parent_node, A: Matrix, b: Matrix,
+            to_child: bool=True, time_limit: Optional[Union[Callable, float]]=None) -> SDPProblemBase:
+        time_limit = ArithmeticTimeout.make_checker(time_limit)
+        if to_child:
+            A, b = parent_node.propagate_affine_to_child(A, b, recursive=True)
+        time_limit()
         if parent_node.is_dual:
             x0_and_space = {}
             for key, (x0, space) in parent_node._x0_and_space.items():
-                x0_ = x0 + matmul(space, b)
-                space_ = matmul(space, A)
+                x0_ = x0 + matmul(space, b, time_limit=time_limit)
+                space_ = matmul(space, A, time_limit=time_limit)
                 x0_and_space[key] = (x0_, space_)
+                time_limit()
             child_node = parent_node.__class__(x0_and_space)
             transform = cls(parent_node, child_node, A=A, b=b)
             return transform.child_node
         raise NotImplementedError
 
     @classmethod
-    def apply_from_equations(cls, parent_node, eqs: Matrix, rhs: Matrix) -> SDPProblemBase:
+    def apply_from_equations(cls, parent_node, eqs: Matrix, rhs: Matrix,
+            to_child: bool=True, time_limit: Optional[Union[Callable, float]]=None) -> SDPProblemBase:
         b, A = solve_undetermined_linear(eqs, rhs)
-        return cls.apply_from_affine(parent_node, A, b)
+        return cls.apply_from_affine(parent_node, A, b, to_child=to_child)
 
 
 class SDPMatrixTransform(SDPLinearTransform):
@@ -159,7 +166,7 @@ class SDPMatrixTransform(SDPLinearTransform):
 
     @classmethod
     def apply(cls, parent_node, columnspace: Dict[Any, Matrix]=None, nullspace: Dict[Any, Matrix]=None,
-                to_child: bool=True, time_limit: Optional[Union[Callable, float]]=None) -> SDPProblemBase:
+            to_child: bool=True, time_limit: Optional[Union[Callable, float]]=None) -> SDPProblemBase:
         if parent_node.is_dual:
             return DualMatrixTransform.apply(parent_node, columnspace=columnspace, nullspace=nullspace,
                 to_child=to_child, time_limit=time_limit)

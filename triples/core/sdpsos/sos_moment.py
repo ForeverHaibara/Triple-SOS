@@ -17,6 +17,7 @@ class SOSMomentPoly(AtomSOSElement):
     References
     -----------
     [1] Klep, I., Magron, V., & Volčič, J. (2023). Sums of squares certificates for polynomial moment inequalities.
+
     [2] Klep, I., Magron, V., Volčič, J., & Wang, J. (2023). State polynomials: positivity, optimization
         and nonlinear Bell inequalities. Math. Program., 207, 645-691.
 

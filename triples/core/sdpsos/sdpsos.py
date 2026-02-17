@@ -12,7 +12,6 @@ from ..preprocess import ProofNode, ProofTree, SolvePolynomial
 from ...utils import MonomialManager, Root, clear_polys_by_symmetry
 from ...sdp import ArithmeticTimeout
 from ...sdp.rationalize import SDPRationalizeError, DualRationalizer
-from ...sdp.transforms.linear import SDPLinearTransform
 
 class _lazy_iter:
     """A wrapper for recyclable iterators but initialized when first called."""
@@ -176,28 +175,49 @@ class SDPSOSSolver(ProofNode):
     require an accurate, rational solution rather than a numerical one. If the SDP is strictly feasible
     and has strictly positive definite solutions, then a rational solution can be obtained by
     rounding an interior solution. See [1]. However, if the solution is semipositive definite,
-    it is generally difficult or even impossible to round it to a rational solution.
+    it is generally difficult or sometimes impossible to round it to a rational solution. A useful
+    approach is to use the LLL algorithm to detect the nullspace of the semidefinite matrices [2].
 
     ### Facial Reduction
 
-    To handle such cases, we need to compute the low-rank feasible set of the SDP in advance
-    and solve the SDP on this subspace. This process is known as facial reduction.
+    To handle weakly feasible cases, it is necessary to compute the low-rank feasible set of the
+    SDP in advance and solve the SDP on this subspace. This process is known as the facial reduction.
     For example, consider Vasile's inequality `(a^2+b^2+c^2)^2 - 3*(a^3*b+b^3*c+c^3*a) >= 0`.
     Up to scaling, there are four equality cases. If this inequality can be written in the
-    semidefinite form `x'Mx`, then `x'Mx = 0` at these four points. This implies that Mx = 0
+    semidefinite form `x'Mx`, then `x'Mx = 0` at these four points. This implies that `Mx = 0`
     for these four vectors. As a result, the semidefinite matrix `M` lies in a subspace orthogonal
     to these four vectors. We can assume `M = QSQ'`, where `Q` is the nullspace of the four
     vectors`x`, and solve the SDP with respect to `S`. Currently, the low-rank subspace is computed
     heuristically by finding the equality cases of the inequality. Note that SOS that exploits
     term-sparsity through the Newton polytope is also a special case of facial reduction.
 
+    ### Symmetry
+
+    Symmetry is often exploited in SOS problems. Assume the problem `F >= 0` is invariant
+    under the symmetry group `G`. Then it without loss of generality to assume the solution
+    is symmetric under `G`, e.g., `F = Σ_i Σ_{G} qmodule_i * SOS_i` for a constrained SOS
+    problem. For each qmodule, if it is invariant under `H` where `H` is a subgroup of `G`,
+    then it can be assumed that the `SOS_i` is also invariant under `H`. The positive
+    semidefinite matrix `S` associated with `SOS_i` is then commutative with a set of
+    permutation matrices `P_{H}`. Since `P_{H}` is a representation of `H` and can be
+    block-diagonalized via some orthogonal matrix `Q` [3]. Then positive semidefinite `S`
+    is also block-diagonalized by `Q` and this reduces the SDP to smaller blocks.
+
+    
     This class provides a node to solve inequality problems using SDPSOS. For more flexible or
     low-level usage, such as manipulating the Gram matrices, please use `SOSPoly`.
 
-    Reference
+    References
     ----------
     [1] Helfried Peyrl and Pablo A. Parrilo. 2008. Computing sum of squares decompositions with
     rational coefficients. Theor. Comput. Sci. 409, 2 (December, 2008), 269-281.
+
+    [2] David Monniaux. (2010). On using sums-of-squares for exact computations without strict
+    feasibility. hal-00487279.
+
+    [3] Gatermann, K., & Parrilo, P.A. (2002). Symmetry groups, semidefinite programs,
+    and sums of squares. Journal of Pure and Applied Algebra, 192, 95-128.
+
 
     Parameters
     ----------
@@ -366,7 +386,7 @@ class SDPSOSSolver(ProofNode):
                 # const += x0[i*(size+1), 0]
 
         A, b = _vector_complement(row)
-        sdpp = SDPLinearTransform.apply_from_affine(sdp, A, b)
+        sdpp = sdp.constrain_affine(A, b)
 
         return sdpp
 

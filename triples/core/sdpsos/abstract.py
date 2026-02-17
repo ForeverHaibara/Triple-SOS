@@ -438,7 +438,7 @@ class AtomSOSElement(SOSElement):
         self._post_construct(wedderburn=wedderburn, verbose=verbose, time_limit=time_limit)
 
         if verbose:
-            self._sdp.print_graph()
+            self._sdp.print_graph(short=2)
 
         return sdp
 

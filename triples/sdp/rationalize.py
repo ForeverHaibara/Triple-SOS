@@ -101,7 +101,7 @@ class DualRationalizer:
         References
         ----------
         [1] David Monniaux. On using sums-of-squares for exact computations without
-        strict feasibility. 2010. hal-00487279
+        strict feasibility. 2010. hal-00487279.
         """
         y = rep_matrix_from_numpy(y)
         S = self.S_from_y(y)

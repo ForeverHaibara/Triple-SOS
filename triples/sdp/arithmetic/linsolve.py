@@ -13,7 +13,7 @@ try:
 except ImportError:
     from math import gcd
 
-from .matop import ArithmeticTimeout, is_empty_matrix, permute_matrix_rows, rep_matrix_from_dict
+from .matop import ArithmeticTimeout, permute_matrix_rows, rep_matrix_from_dict
 
 _VERBOSE_SOLVE_UNDETERMINED_LINEAR = False
 _VERBOSE_SOLVE_CSR_LINEAR = False

@@ -12,6 +12,7 @@ from numpy import iinfo as np_iinfo
 from numpy import any as np_any
 from numpy import where as np_where
 from sympy.matrices import MutableDenseMatrix as Matrix
+from sympy.matrices.repmatrix import RepMatrix
 from sympy import MatrixBase
 
 from .matop import (
@@ -73,6 +74,8 @@ def matlshift(A: Matrix, B: int) -> Matrix:
     [2, 4],
     [6, 8]])
     """
+    if not isinstance(A, RepMatrix):
+        return A * (2**B)
     rep = A._rep.rep
     dom = rep.domain
     if not dom.is_ZZ:
@@ -521,8 +524,31 @@ def symmetric_bilinear_multiple(U, A, time_limit=None):
         return default(A0, U0)
 
 
-
 def _decompose_int64_to_level_digits(arr: ndarray, level: int) -> List[ndarray]:
+    """
+    Split an int64 array into a list of arrays such that
+    `arr = sum(a[i] * 2**(i*level))`
+
+    Parameters
+    ----------
+    arr: ndarray
+        Array to be decomposed.
+    level: int
+        Level of decomposition.
+    
+    Returns
+    -------
+    List[ndarray]
+        List of arrays such that `arr = sum(a[i] * 2**(i*level))`
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> A = np.random.randint(-2**31, 2**31, size=(4,)).astype(np.int64)*2**31
+    >>> B = _decompose_int64_to_level_digits(A, 16)
+    >>> bool(np.all(A == B[0] + B[1]*2**16 + B[2]*2**32 + B[3]*2**48))
+    True
+    """
     assert arr.dtype == int64
     assert 1 <= level <= 63
     max_total_bits = 64

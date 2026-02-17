@@ -138,6 +138,7 @@ def test_symmetric_bilinear_multiple():
     C = Matrix.vstack(*[(B.T @ Matrix(_).reshape(3,3) @ B).reshape(1,4) for _ in A.tolist()])
     assert symmetric_bilinear_multiple(B, A) == C
 
+
 def test_decompose_int64_to_level_digits():
     seed = np.random.randint(0, 2**31)
     for level in range(8, 13):

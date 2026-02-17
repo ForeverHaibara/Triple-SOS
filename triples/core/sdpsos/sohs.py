@@ -54,7 +54,7 @@ class SOHSPoly(AtomSOSElement):
     Taking the example from the paper "Noncommutative Polynomial Optimization" by
     Bhardwaj, Klep and Margron, Example 3.2. We wish to show
 
-        1+2*X+X**2+X*Y**2+2*Y**2+Y**2*X+Y*X**2*Y+Y**4
+        `1+2*X+X**2+X*Y**2+2*Y**2+Y**2*X+Y*X**2*Y+Y**4`
 
     is positive semidefinite by sum-of-hermitian-squares. Note that X and Y
     are hermitian but noncommutative, e.g., real symmetric matrices. To do so,
