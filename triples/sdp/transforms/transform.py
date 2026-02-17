@@ -12,6 +12,9 @@ class SDPTransformation:
 
     Transformations record how the problems are related and can propagate
     the information (e.g., the solution) of one problem to the other.
+
+    Subclasses of SDPTransformation should implement `apply*` methods for
+    creating the child node, the transform object, and returns the child node.
     """
     parent_node: SDPProblemBase = None
     child_node: SDPProblemBase = None
@@ -20,9 +23,11 @@ class SDPTransformation:
         self.child_node = child_node
         self.parent_node._transforms.append(self)
         self.child_node._transforms.append(self)
+
     def is_parent(self, sdp) -> bool:
         """Check if the given SDP is the parent of the current transformation."""
         return sdp is self.parent_node
+
     def is_child(self, sdp) -> bool:
         """Check if the given SDP is the child of the current transformation."""
         return sdp is self.child_node
@@ -59,12 +64,13 @@ class SDPTransformation:
         are the solutions of the parent and child problems respectively.
         """
         U, v = self.get_y_transform_from_child()
-        return A@U, A@v + b
+        return A @ U, A @ v + b
 
 
     @classmethod
     def apply(cls, parent_node, *args, **kwargs) -> SDPProblemBase:
         raise NotImplementedError
+
 
 class SDPIdentityTransform(SDPTransformation):
     """
@@ -80,13 +86,17 @@ class SDPIdentityTransform(SDPTransformation):
         obj.parent_node = parent_node
         obj.child_node = parent_node
         return obj
+
     def __init__(self, parent_node, *args, **kwargs):
         self.parent_node = parent_node
         self.child_node = parent_node
+
     def is_parent(self, sdp):
         return False
+
     def is_child(self, sdp):
         return False
+
     @classmethod
     def apply(cls, parent_node) -> SDPProblemBase:
         return parent_node

@@ -535,7 +535,7 @@ def _decompose_int64_to_level_digits(arr: ndarray, level: int) -> List[ndarray]:
         Array to be decomposed.
     level: int
         Level of decomposition.
-    
+
     Returns
     -------
     List[ndarray]

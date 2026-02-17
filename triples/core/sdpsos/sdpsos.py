@@ -46,11 +46,6 @@ def _vector_complement(row: Matrix):
     rep = row._rep.to_field()
     dok = rep.to_dok()
     if len(dok) == 0:
-        # row is the zero vector
-        # XXX: this is not expected to happen in the current.
-        # However, if in the future there is block diagonalization,
-        # this could be unsafe. Instead, we shall constrain the SDP
-        # using the chain of transforms.
         raise ValueError("No poly_qmodule key found in child SDP.")
     items = list(dok.items())
     (_, nz), v = items[-1]
@@ -203,7 +198,7 @@ class SDPSOSSolver(ProofNode):
     block-diagonalized via some orthogonal matrix `Q` [3]. Then positive semidefinite `S`
     is also block-diagonalized by `Q` and this reduces the SDP to smaller blocks.
 
-    
+
     This class provides a node to solve inequality problems using SDPSOS. For more flexible or
     low-level usage, such as manipulating the Gram matrices, please use `SOSPoly`.
 

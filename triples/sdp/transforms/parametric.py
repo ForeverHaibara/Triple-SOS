@@ -2,8 +2,7 @@ from typing import List, Optional
 
 from sympy import Matrix, Symbol
 
-from .transform import SDPTransformation
-from .linear import SDPLinearTransform, SDPMatrixTransform
+from .linear import SDPLinearTransform
 from ..utils import decompose_matrix
 from ..arithmetic import free_symbols_of_mat
 

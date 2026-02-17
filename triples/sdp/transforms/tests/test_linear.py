@@ -7,8 +7,9 @@ References
 [1] Permenter F. & Parrilo P.A. (2014), Partial facial reduction: simplified,
     equivalent SDPs via approximations of the PSD cone, Math. Program., 171, 1-54.
 """
+from sympy import symbols, linear_eq_to_matrix
 from sympy import MutableDenseMatrix as Matrix
-from sympy.abc import a, b, c
+from sympy.abc import a, b, c, x, t
 
 from ...dual import SDPProblem
 
@@ -96,3 +97,45 @@ def test_dual_matrix_transform():
         assert sdpp.dof == 0 and sdpp.size == {'A': 2}
         sdp.solve()
         assert sdp.as_params() == {y1: 1, y2: 1, y3: 0}
+
+
+def test_dual_congruence():
+    sdp = fd_example2()
+
+    Q = Matrix.diag(Matrix([[1, 1], [1, 2]]), Matrix([[1, -1], [-1, 2]]))
+    V = Matrix([[1, 0], [1, 0], [0, 1], [0, 1]])
+
+    sdpp = sdp.constrain_congruence({'A': Q})
+    sdppp = sdp.constrain_nullspace({'A': V}, to_child=True)
+    assert sdppp.dof == 0
+
+    sdp.solve()
+    assert sdpp.y == Matrix([1, 1, 0])
+    assert sdp.y == Matrix([1, 1, 0])
+    assert sdpp.S['A'] == Q.T * sdp.S['A'] * Q
+    U, S = sdp.decompositions['A']
+    assert (U.T @ Matrix.diag(*S) @ U == sdp.S['A'])
+
+
+def test_linear_transform_solve_obj():
+    # compute maximum t that `x^6 - 6x + 5 >= t*(x^4 - 4x + 3)`
+    A = Matrix(4, 4, list(symbols('a:z')[:16]))
+    sdp = SDPProblem.from_matrix({'A': A}, gens=symbols('a:z')[:16] + (t,))
+    vec = Matrix([1, x, x**2, x**3])
+
+    poly = (vec.T@ A @ vec)[0, 0].as_poly(x)
+    poly = poly - (x**6 - 6*x + 5 - t*(x**4 - 4*x + 3)).as_poly(x)
+
+    eqs, rhs = linear_eq_to_matrix(poly.coeffs(), sdp.gens)
+
+    sdpp = sdp.constrain_symmetry()
+    assert sdpp.constrain_symmetry() is sdpp
+    sdp.constrain_equations(eqs, rhs, to_child=True)
+    sdp.constrain_nullspace({'A': Matrix.ones(4, 1)}, to_child=True)
+    assert sdp.get_last_child().size == {'A': 3}
+
+    Q = Matrix([[1, 1, 1], [1, 2, 3], [2, 3, 6]]) # det == 2
+    sdp.get_last_child().constrain_congruence({'A': Q})
+
+    sdp.solve_obj(-t)
+    assert abs(sdp.as_params()[t] - 1.5) < 1e-5

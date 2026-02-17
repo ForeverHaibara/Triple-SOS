@@ -9,6 +9,7 @@ from .linear import SDPLinearTransform, SDPMatrixTransform, SDPCongruence
 from .parametric import SDPDeparametrization
 from .polytope import get_zero_diagonals, SDPRowExtraction
 from .diagonalize import get_block_structures, SDPBlockDiagonalization
+from ..arithmetic import is_empty_matrix
 from ..abstract import SDPProblemBase
 
 
@@ -153,7 +154,7 @@ class TransformableProblem(SDPProblemBase):
         args = _propagate_args_to_last(self, 'child', func, recursive, A, b)
         return args
 
-    def constrain_affine(self, A: Matrix, b: Matrix, to_child: bool=False,
+    def constrain_affine(self, A: Matrix, b: Matrix, to_child: bool=True,
             time_limit: Optional[Union[Callable, float]]=None) -> 'TransformableProblem':
         """
         Constrain the affine transformation of the SDP problem.
@@ -161,7 +162,7 @@ class TransformableProblem(SDPProblemBase):
         return SDPLinearTransform.apply_from_affine(self,
             A=A, b=b, to_child=to_child, time_limit=time_limit)
 
-    def constrain_equations(self, eqs: Matrix, rhs: Matrix, to_child: bool=False,
+    def constrain_equations(self, eqs: Matrix, rhs: Matrix, to_child: bool=True,
             time_limit: Optional[Union[Callable, float]]=None) -> 'TransformableProblem':
         """
         Constrain the equations of the SDP problem.
@@ -169,7 +170,7 @@ class TransformableProblem(SDPProblemBase):
         return SDPLinearTransform.apply_from_equations(self,
             eqs=eqs, rhs=rhs, to_child=to_child, time_limit=time_limit)
 
-    def constrain_columnspace(self, columnspace: Dict[Any, Matrix], to_child: bool=False,
+    def constrain_columnspace(self, columnspace: Dict[Any, Matrix], to_child: bool=True,
             time_limit: Optional[Union[Callable, float]]=None) -> 'TransformableProblem':
         """
         Constrain the columnspace of the SDP problem.
@@ -177,7 +178,7 @@ class TransformableProblem(SDPProblemBase):
         return SDPMatrixTransform.apply(self,
             columnspace=columnspace, to_child=to_child, time_limit=time_limit)
 
-    def constrain_nullspace(self, nullspace: Dict[Any, Matrix], to_child: bool=False,
+    def constrain_nullspace(self, nullspace: Dict[Any, Matrix], to_child: bool=True,
             time_limit: Optional[Union[Callable, float]]=None) -> 'TransformableProblem':
         """
         Constrain the nullspace of the SDP problem.
@@ -226,6 +227,9 @@ class TransformableDual(TransformableProblem):
             return self
         eqs = Matrix.vstack(*eqs)
         rhs = Matrix(rhs)
+        if is_empty_matrix(eqs, check_all_zeros=True) and \
+                is_empty_matrix(rhs, check_all_zeros=True):
+            return self
         return SDPLinearTransform.apply_from_equations(self, eqs, rhs)
 
 class TransformablePrimal(TransformableProblem):
