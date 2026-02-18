@@ -3,14 +3,6 @@ from sympy.polys.polyclasses import ANP
 from sympy.combinatorics import (
     Permutation, PermutationGroup, SymmetricGroup, AlternatingGroup
 )
-from sympy.combinatorics.galois import (
-    S1TransitiveSubgroups,
-    S2TransitiveSubgroups,
-    S3TransitiveSubgroups,
-    S4TransitiveSubgroups,
-    S5TransitiveSubgroups,
-    S6TransitiveSubgroups
-)
 
 from ..dixon import dixon_character_table
 
@@ -131,6 +123,17 @@ def _check_generic_character_table(cc, tbl: Matrix, name: str='') -> bool:
 
 
 def test_generic_dixon_character_table():
+    try:
+        from sympy.combinatorics.galois import (
+            S1TransitiveSubgroups,
+            S2TransitiveSubgroups,
+            S3TransitiveSubgroups,
+            S4TransitiveSubgroups,
+            S5TransitiveSubgroups,
+            S6TransitiveSubgroups
+        )
+    except ImportError:
+        return
     classes = [
         S1TransitiveSubgroups,
         S2TransitiveSubgroups,

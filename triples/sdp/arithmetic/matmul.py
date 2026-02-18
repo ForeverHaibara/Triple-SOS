@@ -630,9 +630,12 @@ def _symmetric_bilinear_multiple_by_level(U: ndarray, A: ndarray) -> Matrix:
             continue
         if 2**(3*level) * n**2 * len(C_list) > _INT64_MAX:
             C_list = [rep_matrix_from_numpy(C) for C in C_list]
-            C = sum(C_list[1:], start=C_list[0])
-        else:
-            C = sum(C_list[1:], start=C_list[0])
+
+        # do not use sum(..., start=0) to support Python < 3.8
+        C = C_list[0]
+        for C_ in C_list[1:]:
+            C = C + C_
+        if isinstance(C, ndarray):
             C = rep_matrix_from_numpy(C)
 
         C = matlshift(C, shift)

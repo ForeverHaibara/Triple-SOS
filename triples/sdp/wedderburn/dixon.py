@@ -22,6 +22,26 @@ from sympy.polys.domainmatrix import DomainMatrix
 from sympy.polys.polyclasses import ANP
 from sympy.combinatorics import Permutation, PermutationGroup
 
+from sympy import __version__ as SYMPY_VERSION
+from sympy.external.importtools import version_tuple
+
+if tuple(version_tuple(SYMPY_VERSION)) >= (1, 11):
+    def cyclotomic_field(n: int, alias: str = "zeta"):
+        return QQ.cyclotomic_field(n, ss=True, alias=alias)
+else:
+    def cyclotomic_field(n: int, alias: str = "zeta"):
+        """Implement QQ.cyclotomic_field to supports low
+        versions of SymPy."""
+        from sympy.polys.specialpolys import cyclotomic_poly
+        from sympy.polys.rootoftools import CRootOf
+        from sympy.core.numbers import AlgebraicNumber
+        root = CRootOf(cyclotomic_poly(n, polys=True), -1)
+        alpha = AlgebraicNumber(root, alias=f"{alias}{n}")
+        field = QQ.algebraic_field(alpha)
+        field.ext.alias = Symbol(f"{alias}{n}")
+        return field
+
+
 class CMMatrix:
     """
     Internal class to represent the class multiplication matrix.
@@ -95,7 +115,8 @@ def eigenspace_decomposition(A: DomainMatrix) -> List[DomainMatrix]:
 
 def refine_spaces(spaces: List[DomainMatrix], N: CMMatrix, Fp) -> List[DomainMatrix]:
     new_spaces = []
-    dM = DomainMatrix.from_list(N[:, :], Fp)
+    _N = N[:, :]
+    dM = DomainMatrix([[Fp(v) for v in row] for row in _N], N.shape, Fp)
     for S in spaces:
         if S.shape[0] <= 1:
             new_spaces.append(S)
@@ -114,7 +135,8 @@ def common_esd(Ns: List[CMMatrix], Fp: FiniteField) -> DomainMatrix:
     over Fp. Returns Z such that Z * N * Z.inv() is diagonal over Fp
     for all N in Ns (assuming Z exists).
     """
-    N0 = DomainMatrix.from_list(Ns[0][:, :], Fp)
+    _N = Ns[0][:, :]
+    N0 = DomainMatrix([[Fp(v) for v in row] for row in _N], Ns[0].shape, Fp)
     spaces = eigenspace_decomposition(N0)
     n = len(Ns)
     for i in range(1, n):
@@ -257,11 +279,14 @@ def _lift_to_minimal_field(cc, normalized_rows, pm, K, exponent, Fp):
         for i in range(n):
             # abs(every entry) <= sqrt(|G|) <= p//2
             row = [int(v) for v in normalized_rows[i]]
-            rows[i] = [v if v <= half_p else v - p for v in row]
+            row = [v if v <= half_p else v - p for v in row]
+            row = [ZZ(v) for v in row]
+            rows[i] = row
         rows = _sort_characters(rows, ZZ)
-        return DomainMatrix.from_list(rows, ZZ)
+        return DomainMatrix(rows, (n, n), ZZ)
 
-    dom = QQ.cyclotomic_field(K, ss=True)
+    # dom = QQ.cyclotomic_field(K, ss=True)
+    dom = cyclotomic_field(K)
 
     x = Fp(primitive_root(p))**((p - 1) // K)
 

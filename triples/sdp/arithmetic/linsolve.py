@@ -1,10 +1,11 @@
 from collections import defaultdict
 from time import perf_counter
-from typing import List, Tuple, Dict, Union, Optional, Callable, Any
+from typing import List, Tuple, Dict, Union, Optional, Callable, Any, overload
 
 from numpy import argsort
 from sympy.external.gmpy import MPQ, MPZ # >= 1.9
 from sympy.matrices import MutableDenseMatrix as Matrix
+from sympy.matrices.repmatrix import RepMatrix
 from sympy.polys.domains import ZZ, QQ, EX # EXRAW >= 1.9
 from sympy.polys.matrices.domainmatrix import DomainMatrix # polys.matrices >= 1.8
 from sympy.polys.matrices.sdm import SDM
@@ -336,16 +337,42 @@ def solve_nullspace(A: Matrix) -> Matrix:
     # return m
     return Matrix._fromrep(A._rep.to_field().transpose().nullspace().transpose())
 
-def solve_columnspace(A: Matrix) -> Matrix:
+
+@overload
+def solve_columnspace(A: Matrix) -> Matrix: ...
+@overload
+def solve_columnspace(A: DomainMatrix) -> DomainMatrix: ...
+
+def solve_columnspace(A):
     """
     Compute the column space of a matrix A.
     If A is full-rank and has shape m x n (m > n), then the column space has shape m x n.
     """
-    # m = Matrix.hstack(*A.columnspace())
-    # if is_empty_matrix(m):
-    #     return A.zeros(A.shape[0], 0)
-    # return m
-    return Matrix._fromrep(A._rep.to_field().columnspace())
+    if isinstance(A, RepMatrix):
+        # m = Matrix.hstack(*A.columnspace())
+        # if is_empty_matrix(m):
+        #     return A.zeros(A.shape[0], 0)
+        # return m
+
+        # NOTE: SymPy 1.9 did not have DomainMatrix.columnspace()
+        # (but it has DomainMatrix.nullspace()), so avoid this:
+
+        # return Matrix._fromrep(A._rep.to_field().columnspace())
+
+        # This is an equivalent implementation
+        dM = A._rep.to_field()
+        rref, pivots = dM.rref()
+        rows, cols = dM.shape
+        dM = dM.extract(range(rows), pivots)
+        return Matrix._fromrep(dM)
+    elif isinstance(A, DomainMatrix):
+        dM = A.to_field()
+        rref, pivots = dM.rref()
+        rows, cols = dM.shape
+        dM = dM.extract(range(rows), pivots)
+        return dM
+
+    return A.columnspace()
 
 
 def _is_column_separated(A: Matrix) -> bool:

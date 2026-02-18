@@ -10,7 +10,7 @@ except ImportError:
     from math import gcd
 
 from .character_table import character_table
-
+from ..arithmetic import solve_columnspace
 
 def _ramanujan_sum(K: int):
     """
@@ -46,10 +46,10 @@ def decompose_representation(
     tbl = character_table(G, cc=cc)
 
     # fixed = []
-    # for c in cg:
+    # for c in cc:
     #     r = next(iter(c))
-    #     fixed.append(count_fixed(r, n, representation))
-    # mul = list(tbl.T.LUsolve(Matrix(fixed)))
+    #     fixed.append(sum(i == j for i, j in enumerate(representation(r))))
+    # mul = list(tbl.T.LUsolve(Matrix(fixed)).n(5).applyfunc(round))
 
     dm = tbl._rep
     if dm.domain.is_ZZ:
@@ -65,8 +65,8 @@ def decompose_representation(
     K = int(dom.ext.alias.name.lstrip('zeta')) if dom.is_Algebraic else 1
     ramanujan = _ramanujan_sum(K)
     QQzero = QQ.zero
-    galsum = lambda anp: sum(
-        (r*v for r, v in zip(ramanujan, anp.rep[::-1])), start=QQzero)
+    galsum = lambda anp: QQ(sum(
+        (r*v for r, v in zip(ramanujan, anp.rep[::-1]))))
 
     seen = []
     # perms = []
@@ -94,7 +94,7 @@ def decompose_representation(
             if proj in seen:
                 continue
             seen.append(proj)
-        ns = proj.columnspace()
+        ns = solve_columnspace(proj)
         cols.append(ns)
 
     return [Matrix._fromrep(ns) for ns in cols]

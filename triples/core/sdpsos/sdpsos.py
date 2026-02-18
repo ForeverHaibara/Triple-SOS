@@ -216,6 +216,10 @@ class SDPSOSSolver(ProofNode):
 
     Parameters
     ----------
+    lift_degree_limit: int
+        The maximum lift degree to explore. Default is 2.
+    wedderburn: bool
+        Use wedderburn decomposition. Defaults to True.
     dof_limit: int
         The maximum degree of freedom of the SDP. When it exceeds `dof_limit`,
         the node will be pruned. This prevents crash in external SDP solvers. Default is 7000.
@@ -320,6 +324,7 @@ class SDPSOSSolver(ProofNode):
                 symmetry = symmetry.perm_group, roots = roots, degree=degree
             )
         sdp = sos.construct(
+            wedderburn=configs['wedderburn'],
             verbose=configs['verbose'],
             time_limit=configs['expected_end_time'] - perf_counter()
         )
@@ -548,6 +553,7 @@ def SDPSOS(
     symmetry: Optional[PermutationGroup] = None,
     roots: Optional[List[Root]] = None,
     lift_degree_limit: int = 2,
+    wedderburn: bool = True,
     dof_limit: int = 7000,
     solver: Optional[str] = None,
     allow_numer: int = 0,
@@ -576,7 +582,9 @@ def SDPSOS(
     roots: Optional[List[Root]]
         The roots of the polynomial satisfying constraints. When it is None, it will be automatically generated.
     lift_degree_limit: int
-        The maximum lift degree to explore.
+        The maximum lift degree to explore. Default is 2.
+    wedderburn: bool
+        Use wedderburn decomposition. Defaults to True.
     dof_limit: int
         The maximum degree of freedom of the SDP. When it exceeds `dof_limit`,
         the node will be pruned. This prevents crash in external SDP solvers. Default is 7000.
@@ -610,6 +618,7 @@ def SDPSOS(
         },
         SDPSOSSolver: {
             "lift_degree_limit": lift_degree_limit,
+            "wedderburn": wedderburn,
             "dof_limit": dof_limit,
             "solver": solver,
             "allow_numer": allow_numer,
