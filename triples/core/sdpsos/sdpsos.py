@@ -240,6 +240,7 @@ class SDPSOSSolver(ProofNode):
     """
     default_configs = {
         "lift_degree_limit": 2,
+        "wedderburn": True,
         "dof_limit": 7000,
         "solver": None,
         "allow_numer": 0,
