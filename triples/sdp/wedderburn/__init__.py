@@ -1,4 +1,4 @@
 from .character_table import character_table
-from .decomposition import decompose_representation
+from .decomposition import symmetry_adapted_basis
 
-__all__ = ['character_table', 'decompose_representation']
+__all__ = ['character_table', 'symmetry_adapted_basis']

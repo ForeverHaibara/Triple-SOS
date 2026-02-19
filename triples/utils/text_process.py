@@ -833,7 +833,7 @@ def poly_get_factor_form(
         Whether to omit the power sign. Defaults to True.
     """
     if poly.total_degree() == 0:
-        return poly_get_standard_form(poly, perm, omit_mul, omit_pow)
+        return poly_get_standard_form(poly, perm, omit_mul=omit_mul, omit_pow=omit_pow)
 
     if perm is not None:
         from warnings import warn

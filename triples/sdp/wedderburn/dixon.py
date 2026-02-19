@@ -129,7 +129,7 @@ def refine_spaces(spaces: List[DomainMatrix], N: CMMatrix, Fp) -> List[DomainMat
             new_spaces.append(sub_S * S)
     return new_spaces
 
-def common_esd(Ns: List[CMMatrix], Fp: FiniteField) -> DomainMatrix:
+def common_esd(Ns: List[CMMatrix], Fp: FiniteField, _check_dim: bool=True) -> DomainMatrix:
     """
     Compute the common eigenspace decomposition of a list of CMMatrix
     over Fp. Returns Z such that Z * N * Z.inv() is diagonal over Fp
@@ -143,7 +143,7 @@ def common_esd(Ns: List[CMMatrix], Fp: FiniteField) -> DomainMatrix:
         if len(spaces) == n:
             break
         spaces = refine_spaces(spaces, Ns[i], Fp)
-    if len(spaces) != n:
+    if _check_dim and len(spaces) != n:
         # not expected to happen
         raise ValueError("Failed to compute the common eigenspace decomposition.")
     return DomainMatrix.vstack(*spaces)

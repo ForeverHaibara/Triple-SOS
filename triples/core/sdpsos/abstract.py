@@ -11,7 +11,7 @@ from .algebra import StateAlgebra, SOSBasis
 from ...sdp import SDPProblem
 from ...sdp.arithmetic import ArithmeticTimeout, sqrtsize_of_mat, matmul, matadd, solve_csr_linear, rep_matrix_from_dict
 from ...sdp.utils import exprs_to_arrays, collect_constraints
-from ...sdp.wedderburn import decompose_representation
+from ...sdp.wedderburn import symmetry_adapted_basis
 
 class SOSEquationSystem:
     rhs: Matrix
@@ -336,7 +336,7 @@ class AtomSOSElement(SOSElement):
             sa_bases = {}
             for key, qb in self._qmodule_bases.items():
                 G, act = qb.get_symmetry_representation()
-                dr = decompose_representation(G, act)
+                dr = symmetry_adapted_basis(G, act)
                 if len(dr) > 1:
                     # only decompose when there are at least 2 blocks
                     sa_bases[(self, key)] = Matrix.hstack(*dr)

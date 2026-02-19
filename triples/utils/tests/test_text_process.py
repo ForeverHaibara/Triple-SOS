@@ -1,4 +1,3 @@
-import sympy as sp
 from sympy import Poly, QQ, ZZ, sympify, sqrt, cbrt, Rational, Float, Symbol
 from sympy.abc import a, b, c, d, e, x, y, z
 from sympy.combinatorics import CyclicGroup, SymmetricGroup, DihedralGroup, PermutationGroup, Permutation

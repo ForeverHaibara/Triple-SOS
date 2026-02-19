@@ -24,19 +24,19 @@ def _ramanujan_sum(K: int):
     return ramanujan
 
 
-def decompose_representation(
+def symmetry_adapted_basis(
     G: PermutationGroup,
     representation: Callable[[Permutation], List[int]]=None
 ) -> List[Matrix]:
     """
-    Decompose a permutation representation of G
-    into smaller representations over QQ.
+    Compute the symmetry-adapted basis of the representation of G.
 
     Returns
     -------
     List[Matrix]
         A list of matrices `Qs`, so that
         `Q^TAQ = diag([Qi.T * A * Qi for Qi in Qs])`
+        where A is commutative with the representation matrices.
     """
     if representation is None:
         representation = lambda g: g.array_form
@@ -94,6 +94,9 @@ def decompose_representation(
             if proj in seen:
                 continue
             seen.append(proj)
+
+        # DomainMatrix.columnspace has version compatibility issues
+        # so we use our own version
         ns = solve_columnspace(proj)
         cols.append(ns)
 
