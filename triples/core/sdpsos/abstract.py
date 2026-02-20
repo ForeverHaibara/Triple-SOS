@@ -11,7 +11,7 @@ from .algebra import StateAlgebra, SOSBasis
 from ...sdp import SDPProblem
 from ...sdp.arithmetic import ArithmeticTimeout, sqrtsize_of_mat, matmul, matadd, solve_csr_linear, rep_matrix_from_dict
 from ...sdp.utils import exprs_to_arrays, collect_constraints
-
+from ...sdp.wedderburn import symmetry_adapted_basis
 
 class SOSEquationSystem:
     rhs: Matrix
@@ -227,6 +227,7 @@ class SOSElement:
 
     def construct(self,
         parameters: Union[List[Symbol], bool] = True,
+        wedderburn: bool = True,
         verbose: bool = False,
         time_limit: Optional[Union[Callable, float]] = None
     ) -> SDPProblem:
@@ -244,6 +245,8 @@ class SOSElement:
             All linear parameters in the problem will be converted to variables
             when solving the SDPProblem. If True, all free symbols in the polynomial
             will be used as parameters.
+        wedderburn: bool
+            If True, use Wedderburn decomposition to reduce the size of the SDPProblem.
         verbose: bool
             If True, print the construction process.
         time_limit: Optional[Union[Callable, float]]
@@ -322,6 +325,30 @@ class AtomSOSElement(SOSElement):
         eq = -Matrix.hstack(*[arraylize(coeff) for coeff in coeff_of_params])
         return rhs, eq
 
+    def _post_construct(self,
+        wedderburn: bool = True,
+        verbose = False,
+        time_limit = None,
+        **kwargs
+    ):
+        time_limit = ArithmeticTimeout.make_checker(time_limit)
+        if wedderburn:
+            sa_bases = {}
+            for key, qb in self._qmodule_bases.items():
+                G, act = qb.get_symmetry_representation()
+                dr = symmetry_adapted_basis(G, act)
+                if len(dr) > 1:
+                    # only decompose when there are at least 2 blocks
+                    sa_bases[(self, key)] = Matrix.hstack(*dr)
+
+            if len(sa_bases):
+                self.sdp.constrain_congruence(sa_bases, time_limit=time_limit)
+
+            # print(self.sdpp.get_block_structures())
+            self.sdpp.constrain_block_structures()
+
+        self.sdpp.constrain_zero_diagonals(time_limit=time_limit)
+
 
     def _get_equation_system(self, parameters: List[Symbol]=[], domain=None) -> SOSEquationSystem:
         if self._qmodule_bases is None or self._ideal_bases is None:
@@ -353,6 +380,7 @@ class AtomSOSElement(SOSElement):
 
     def construct(self,
         parameters: Union[List[Symbol], bool] = True,
+        wedderburn: bool = True,
         verbose: bool = False,
         time_limit: Optional[Union[Callable, float]] = None,
     ) -> SDPProblem:
@@ -407,10 +435,10 @@ class AtomSOSElement(SOSElement):
         self._parameters = list(parameters)
         self._parameter_space = (x0[offset:,:], space[offset:,:])
         time_limit()
-        self._post_construct(verbose=verbose, time_limit=time_limit)
+        self._post_construct(wedderburn=wedderburn, verbose=verbose, time_limit=time_limit)
 
         if verbose:
-            self._sdp.print_graph()
+            self._sdp.print_graph(short=2)
 
         return sdp
 
@@ -513,6 +541,7 @@ class JointSOSElement(SOSElement):
 
     def construct(self,
         parameters: Union[List[Symbol], bool] = True,
+        wedderburn: bool = True,
         verbose: bool = False,
         time_limit: Optional[Union[Callable, float]] = None
     ) -> SDPProblem:
@@ -579,7 +608,7 @@ class JointSOSElement(SOSElement):
         for (sos, key), b in eqs.linear_eqs.items():
             sos._ideal_space[key] = (x0[offset:offset+len(b),:], space[offset:offset+len(b),:])
 
-        self._post_construct(verbose=verbose, time_limit=time_limit)
+        self._post_construct(wedderburn=wedderburn, verbose=verbose, time_limit=time_limit)
         if verbose:
             self._sdp.print_graph()
 

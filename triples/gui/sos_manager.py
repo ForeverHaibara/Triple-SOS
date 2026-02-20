@@ -96,6 +96,7 @@ class SOSManager:
         cancel: bool = True,
         homogenize: bool = False,
         dehomogenize: bool = None,
+        total_derv: bool = False,
         standardize_text: Optional[Union[str, bool]] = None,
         cyclic_sum_func: str = "s",
         cyclic_prod_func: str = "p",
@@ -134,6 +135,11 @@ class SOSManager:
                             if standardize_text is None:
                                 standardize_text = "sort"
                             break
+
+            if total_derv:
+                poly = sum(poly.diff(_) for _ in poly.gens)
+                if standardize_text is None:
+                    standardize_text = "sort"
             expr = poly
 
         elif isinstance(expr, tuple):

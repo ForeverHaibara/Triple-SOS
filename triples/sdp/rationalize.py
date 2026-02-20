@@ -43,7 +43,8 @@ def rationalize(x, rounding = 1e-2, **kwargs):
 
 class DualRationalizer:
     LLL_WEIGHT = 10**19
-    LLL_TRUNC  = 500 # TODO
+    LLL_TRUNC  = 2000 # TODO
+    LLL_EIG    = 1e-2 # do not call LLL if block eig > LLL_EIG
     ROUND_DENOMS = (1, 12, 240, 2520, 2304, 2970, 210600, 1260**3)
 
     def __init__(self, sdp):
@@ -101,25 +102,42 @@ class DualRationalizer:
         References
         ----------
         [1] David Monniaux. On using sums-of-squares for exact computations without
-        strict feasibility. 2010. hal-00487279
+        strict feasibility. 2010. hal-00487279.
         """
+        eigvalsh = self.eigvalsh(y)
+
         y = rep_matrix_from_numpy(y)
         S = self.S_from_y(y)
         V = {}
         trunc = self.LLL_TRUNC
         for key, s in S.items():
+            eigs = eigvalsh[key]
+            if len(eigs) == 0:
+                # empty block
+                V[key] = Matrix.zeros(0, 0)
+                continue
+
+            if float(np.min(eigs)) > self.LLL_EIG:
+                # this block is strictly definite -> no need to compute lll
+                V[key] = Matrix.zeros(s.shape[0], 0)
+                continue
+
+            nullrank = int(np.sum(eigs < self.LLL_EIG))
+
             aug = Matrix.hstack(
                 (self.LLL_WEIGHT*s).applyfunc(round), s.eye(s.shape[0]))
             try:
                 v = lll(aug)[:, s.shape[0]:]
                 vrep = v._rep.rep.to_sdm()
-                for row in range(v.shape[0]):
+                v = v[:nullrank, :]
+                for row in range(nullrank):
                     if any(map(lambda x: abs(x) > trunc, vrep.get(row, {}).values())):
                         v = v[:row, :]
                         break
                 v = v.T
             except (DMError, ValueError, ZeroDivisionError) as e: # LLL algorithm failed
                 v = Matrix.zeros(s.shape[0], 0)
+
             V[key] = v
         return V
 

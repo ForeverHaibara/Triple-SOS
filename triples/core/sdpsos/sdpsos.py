@@ -12,7 +12,6 @@ from ..preprocess import ProofNode, ProofTree, SolvePolynomial
 from ...utils import MonomialManager, Root, clear_polys_by_symmetry
 from ...sdp import ArithmeticTimeout
 from ...sdp.rationalize import SDPRationalizeError, DualRationalizer
-from ...sdp.transforms.linear import SDPLinearTransform
 
 class _lazy_iter:
     """A wrapper for recyclable iterators but initialized when first called."""
@@ -47,11 +46,6 @@ def _vector_complement(row: Matrix):
     rep = row._rep.to_field()
     dok = rep.to_dok()
     if len(dok) == 0:
-        # row is the zero vector
-        # XXX: this is not expected to happen in the current.
-        # However, if in the future there is block diagonalization,
-        # this could be unsafe. Instead, we shall constrain the SDP
-        # using the chain of transforms.
         raise ValueError("No poly_qmodule key found in child SDP.")
     items = list(dok.items())
     (_, nz), v = items[-1]
@@ -176,31 +170,56 @@ class SDPSOSSolver(ProofNode):
     require an accurate, rational solution rather than a numerical one. If the SDP is strictly feasible
     and has strictly positive definite solutions, then a rational solution can be obtained by
     rounding an interior solution. See [1]. However, if the solution is semipositive definite,
-    it is generally difficult or even impossible to round it to a rational solution.
+    it is generally difficult or sometimes impossible to round it to a rational solution. A useful
+    approach is to use the LLL algorithm to detect the nullspace of the semidefinite matrices [2].
 
     ### Facial Reduction
 
-    To handle such cases, we need to compute the low-rank feasible set of the SDP in advance
-    and solve the SDP on this subspace. This process is known as facial reduction.
+    To handle weakly feasible cases, it is necessary to compute the low-rank feasible set of the
+    SDP in advance and solve the SDP on this subspace. This process is known as the facial reduction.
     For example, consider Vasile's inequality `(a^2+b^2+c^2)^2 - 3*(a^3*b+b^3*c+c^3*a) >= 0`.
     Up to scaling, there are four equality cases. If this inequality can be written in the
-    semidefinite form `x'Mx`, then `x'Mx = 0` at these four points. This implies that Mx = 0
+    semidefinite form `x'Mx`, then `x'Mx = 0` at these four points. This implies that `Mx = 0`
     for these four vectors. As a result, the semidefinite matrix `M` lies in a subspace orthogonal
     to these four vectors. We can assume `M = QSQ'`, where `Q` is the nullspace of the four
     vectors`x`, and solve the SDP with respect to `S`. Currently, the low-rank subspace is computed
     heuristically by finding the equality cases of the inequality. Note that SOS that exploits
     term-sparsity through the Newton polytope is also a special case of facial reduction.
 
+    ### Symmetry
+
+    Symmetry is often exploited in SOS problems. Assume the problem `F >= 0` is invariant
+    under the symmetry group `G`. Then it without loss of generality to assume the solution
+    is symmetric under `G`, e.g., `F = Σ_i Σ_{G} qmodule_i * SOS_i` for a constrained SOS
+    problem. For each qmodule, if it is invariant under `H` where `H` is a subgroup of `G`,
+    then it can be assumed that the `SOS_i` is also invariant under `H`. The positive
+    semidefinite matrix `S` associated with `SOS_i` is then commutative with a set of
+    permutation matrices `P_{H}`. Since `P_{H}` is a representation of `H` and can be
+    block-diagonalized via some orthogonal matrix `Q` [3]. Then positive semidefinite `S`
+    is also block-diagonalized by `Q` and this reduces the SDP to smaller blocks.
+
+
     This class provides a node to solve inequality problems using SDPSOS. For more flexible or
     low-level usage, such as manipulating the Gram matrices, please use `SOSPoly`.
 
-    Reference
+    References
     ----------
     [1] Helfried Peyrl and Pablo A. Parrilo. 2008. Computing sum of squares decompositions with
     rational coefficients. Theor. Comput. Sci. 409, 2 (December, 2008), 269-281.
 
+    [2] David Monniaux. (2010). On using sums-of-squares for exact computations without strict
+    feasibility. hal-00487279.
+
+    [3] Gatermann, K., & Parrilo, P.A. (2002). Symmetry groups, semidefinite programs,
+    and sums of squares. Journal of Pure and Applied Algebra, 192, 95-128.
+
+
     Parameters
     ----------
+    lift_degree_limit: int
+        The maximum lift degree to explore. Default is 2.
+    wedderburn: bool
+        Use wedderburn decomposition. Defaults to True.
     dof_limit: int
         The maximum degree of freedom of the SDP. When it exceeds `dof_limit`,
         the node will be pruned. This prevents crash in external SDP solvers. Default is 7000.
@@ -221,6 +240,7 @@ class SDPSOSSolver(ProofNode):
     """
     default_configs = {
         "lift_degree_limit": 2,
+        "wedderburn": True,
         "dof_limit": 7000,
         "solver": None,
         "allow_numer": 0,
@@ -305,6 +325,7 @@ class SDPSOSSolver(ProofNode):
                 symmetry = symmetry.perm_group, roots = roots, degree=degree
             )
         sdp = sos.construct(
+            wedderburn=configs['wedderburn'],
             verbose=configs['verbose'],
             time_limit=configs['expected_end_time'] - perf_counter()
         )
@@ -326,7 +347,9 @@ class SDPSOSSolver(ProofNode):
 
     def _constrain_poly_qmodule(self, sos: SOSPoly, q1: int, q2: int):
         """
-        Constrain the sum of the diagonals of the poly_qmodule to be constant.
+        The SDP is homogeneous in each variable when poly_qmodule is not None.
+        This constrains the sum of the diagonals of the matrices associated
+        with the poly_qmodule to be constant.
         """
         sdp = sos.sdpp
         dof = sdp.dof
@@ -335,19 +358,36 @@ class SDPSOSSolver(ProofNode):
             # cannot happen
             raise ValueError("Zero dof")
 
-        keys = [(sos, i) for i in range(q1, q1 + q2)]
+        # keys = [(sos, i) for i in range(q1, q1 + q2)]
+
+        def _is_poly_qmodule_key(key):
+            """
+            Check recursively a tuple whether it startswith
+            (sos, i) where i is in the range [q1, q1 + q2).
+            """
+            if isinstance(key, tuple):
+                if len(key) == 2 and (key[0] is sos) \
+                    and isinstance(key[1], int) and q1 <= key[1] < q1 + q2:
+                    return True
+                if len(key):
+                    return _is_poly_qmodule_key(key[0])
+                return False
+            return False
 
         row = Matrix.zeros(1, dof)
-        for key in keys:
-            if not (key in sdp._x0_and_space):
+        # const = 0
+        for key in sdp._x0_and_space.keys():
+            if not _is_poly_qmodule_key(key):
                 continue
             size = sdp.get_size(key)
+            x0, space = sdp._x0_and_space[key]
             for i in range(size):
                 # the diagonal element is in the i*(size+1)th row
-                row = row + sdp._x0_and_space[key][1][i*(size+1),:]
+                row = row + space[i*(size+1),:]
+                # const += x0[i*(size+1), 0]
 
         A, b = _vector_complement(row)
-        sdpp = SDPLinearTransform.apply_from_affine(sdp, A, b)
+        sdpp = sdp.constrain_affine(A, b)
 
         return sdpp
 
@@ -514,6 +554,7 @@ def SDPSOS(
     symmetry: Optional[PermutationGroup] = None,
     roots: Optional[List[Root]] = None,
     lift_degree_limit: int = 2,
+    wedderburn: bool = True,
     dof_limit: int = 7000,
     solver: Optional[str] = None,
     allow_numer: int = 0,
@@ -542,7 +583,9 @@ def SDPSOS(
     roots: Optional[List[Root]]
         The roots of the polynomial satisfying constraints. When it is None, it will be automatically generated.
     lift_degree_limit: int
-        The maximum lift degree to explore.
+        The maximum lift degree to explore. Default is 2.
+    wedderburn: bool
+        Use wedderburn decomposition. Defaults to True.
     dof_limit: int
         The maximum degree of freedom of the SDP. When it exceeds `dof_limit`,
         the node will be pruned. This prevents crash in external SDP solvers. Default is 7000.
@@ -576,6 +619,7 @@ def SDPSOS(
         },
         SDPSOSSolver: {
             "lift_degree_limit": lift_degree_limit,
+            "wedderburn": wedderburn,
             "dof_limit": dof_limit,
             "solver": solver,
             "allow_numer": allow_numer,

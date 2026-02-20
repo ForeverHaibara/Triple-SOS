@@ -6,7 +6,9 @@ from ..eigens import congruence
 
 def test_congruence():
     hilbert = Matrix([[Rational(1,i+j+1) for j in range(4)] for i in range(4)])
-    U, S = congruence(hilbert)
+    cong = congruence(hilbert)
+    assert cong is not None
+    U, S = cong
     assert U.T @ Matrix.diag(*S) @ U == hilbert
 
     hilbert_perturb = hilbert - Matrix.eye(4) / 1000
@@ -37,6 +39,8 @@ def test_congruence():
     z = exp(2j*pi/3.0)
     A = Matrix([[1,1,1],[1,z,z**2],[1,z**2,z**3]])
     A = A.T.conjugate() @ A
-    U, S = congruence(A)
+    cong = congruence(A)
+    assert cong is not None
+    U, S = cong
     assert U._rep.domain.is_RR and S._rep.domain.is_RR
     assert max((U.T @ Matrix.diag(*S) @ U - A.applyfunc(re)).applyfunc(abs)) < 1e-10

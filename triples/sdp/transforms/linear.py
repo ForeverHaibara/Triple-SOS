@@ -8,7 +8,7 @@ from sympy.matrices import MutableDenseMatrix as Matrix
 
 from .transform import SDPTransformation, SDPProblemBase
 from ..arithmetic import (
-    ArithmeticTimeout, is_empty_matrix, vec2mat,
+    ArithmeticTimeout, is_empty_matrix, vec2mat, reshape,
     solve_undetermined_linear, solve_nullspace, solve_columnspace,
     matmul, matadd, matmul_multiple, symmetric_bilinear, symmetric_bilinear_multiple
 )
@@ -57,35 +57,52 @@ class SDPLinearTransform(SDPTransformation):
         parent.S = child.S
         parent.decompositions = child.decompositions
 
-    def propagate_nullspace_to_child(self, nullspace):
+    def propagate_nullspace_to_child(self, nullspace: Dict[Any, Matrix]) -> Dict[Any, Matrix]:
         return nullspace
 
-    def propagate_affine_to_child(self, A, b) -> Tuple[Matrix, Matrix]:
+    def propagate_affine_to_child(self, A: Matrix, b: Matrix) -> Tuple[Matrix, Matrix]:
         """
         Get `A'`, `b'` such that `A@y + b = A'@y' + b'`, where `y` and `y'`
         are the solutions of the parent and child problems respectively.
         """
         U, v = self.get_y_transform_from_child()
+        if U is None and v is None:
+            return A, b
         return matmul(A, U), matadd(matmul(A, v), b)
 
 
     @classmethod
-    def apply_from_affine(cls, parent_node, A: Matrix, b: Matrix) -> SDPProblemBase:
+    def apply_from_affine(cls, parent_node: SDPProblemBase, A: Matrix, b: Matrix,
+            to_child: bool=True, time_limit: Optional[Union[Callable, float]]=None) -> SDPProblemBase:
+        time_limit = ArithmeticTimeout.make_checker(time_limit)
+        if to_child:
+            # this should use inverse, or converted to from_equations
+            if parent_node.get_last_child() != parent_node:
+                raise NotImplementedError
+            time_limit()
         if parent_node.is_dual:
             x0_and_space = {}
             for key, (x0, space) in parent_node._x0_and_space.items():
-                x0_ = x0 + matmul(space, b)
-                space_ = matmul(space, A)
-                x0_and_space[key] = (x0_, space_)
+                new_x0 = x0 + matmul(space, b, time_limit=time_limit)
+                new_space = matmul(space, A, time_limit=time_limit)
+                x0_and_space[key] = (new_x0, new_space)
+                time_limit()
             child_node = parent_node.__class__(x0_and_space)
             transform = cls(parent_node, child_node, A=A, b=b)
             return transform.child_node
         raise NotImplementedError
 
     @classmethod
-    def apply_from_equations(cls, parent_node, eqs: Matrix, rhs: Matrix) -> SDPProblemBase:
+    def apply_from_equations(cls, parent_node, eqs: Matrix, rhs: Matrix,
+            to_child: bool=True, time_limit: Optional[Union[Callable, float]]=None) -> SDPProblemBase:
+        if to_child:
+            # eqs * y - rhs == new_eqs * y' + new_nrhs
+            eqs, new_nrhs = parent_node.propagate_affine_to_child(eqs, -rhs, recursive=True)
+            parent_node = parent_node.get_last_child()
+            rhs = -new_nrhs
         b, A = solve_undetermined_linear(eqs, rhs)
-        return cls.apply_from_affine(parent_node, A, b)
+        return cls.apply_from_affine(parent_node, A, b,
+            to_child=False, time_limit=time_limit)
 
 
 class SDPMatrixTransform(SDPLinearTransform):
@@ -116,10 +133,11 @@ class SDPMatrixTransform(SDPLinearTransform):
     _A = None
     _b = None
     def __init__(self, parent_node, child_node,
-            columnspace: Optional[Dict[Any, Matrix]]=None,
-            nullspace: Optional[Dict[Any, Matrix]]=None,
-            A: Optional[Matrix]=None,
-            b: Optional[Matrix]=None):
+        columnspace: Optional[Dict[Any, Matrix]]=None,
+        nullspace: Optional[Dict[Any, Matrix]]=None,
+        A: Optional[Matrix]=None,
+        b: Optional[Matrix]=None
+    ):
         super().__init__(parent_node, child_node)
         self._columnspace = columnspace
         self._nullspace = nullspace
@@ -155,8 +173,8 @@ class SDPMatrixTransform(SDPLinearTransform):
         return {key: matmul(columnspace[key].T, nullspace[key]) for key in nullspace.keys()}
 
     @classmethod
-    def apply(cls, parent_node, columnspace: Dict[Any, Matrix]=None, nullspace: Dict[Any, Matrix]=None,
-                to_child: bool=True, time_limit: Optional[Union[Callable, float]]=None) -> SDPProblemBase:
+    def apply(cls, parent_node: SDPProblemBase, columnspace: Dict[Any, Matrix]=None, nullspace: Dict[Any, Matrix]=None,
+            to_child: bool=True, time_limit: Optional[Union[Callable, float]]=None) -> SDPProblemBase:
         if parent_node.is_dual:
             return DualMatrixTransform.apply(parent_node, columnspace=columnspace, nullspace=nullspace,
                 to_child=to_child, time_limit=time_limit)
@@ -192,7 +210,7 @@ class DualMatrixTransform(SDPMatrixTransform):
         (A_i0Vi) + y_1 * (A_i1Vi) + ... + y_n * (A_inVi) = 0.
     """
     @classmethod
-    def apply(cls, parent_node, columnspace: Dict[Any, Matrix]=None, nullspace: Dict[Any, Matrix]=None,
+    def apply(cls, parent_node: SDPProblemBase, columnspace: Dict[Any, Matrix]=None, nullspace: Dict[Any, Matrix]=None,
             to_child: bool=True, time_limit: Optional[Union[Callable, float]]=None) -> SDPProblemBase:
         if not parent_node.is_dual:
             raise ValueError("The parent node should be dual.")
@@ -260,8 +278,8 @@ class DualMatrixTransform(SDPMatrixTransform):
                 if is_empty_matrix(U):
                     continue
                 eq_mat = symmetric_bilinear_multiple(U, space.T, time_limit=time_limit).T
-                new_space = eq_mat * trans_space
-                # new_space = matmul(eq_mat, trans_space)
+                # new_space = eq_mat * trans_space
+                new_space = matmul(eq_mat, trans_space, time_limit=time_limit)
 
                 # Ai0 = vec2mat(x0)
                 # new_x0 = mat2vec(U.T * Ai0 * U) + eq_mat * trans_x0
@@ -277,4 +295,72 @@ class DualMatrixTransform(SDPMatrixTransform):
         new_x0_and_space, A, b = _get_new_params(parent_node._x0_and_space, columnspace, nullspace)
         child_node = parent_node.__class__(new_x0_and_space)
         transform = cls(parent_node, child_node, columnspace=columnspace, nullspace=nullspace, A=A, b=b)
+        return transform.child_node
+
+
+class SDPCongruence(SDPLinearTransform):
+    """
+    Congruence transformation of SDP problems.
+
+    Assume the original problem is in the form of
+
+        S1 = A_10 + y_1 * A_11 + ... + y_n * A_1n >> 0
+        ...
+        Sm = A_m0 + y_1 * A_m1 + ... + y_n * A_mn >> 0.
+
+    Given invertible matrices P1, ..., Pn, it can be
+    written as
+
+        Pi.T * Si * Pi >> 0.
+    """
+    _basis = None
+    _inv_basis = None
+    def __init__(self, parent_node, child_node, basis: Dict[Any, Matrix], inv_basis: Optional[Dict[Any, Matrix]]=None):
+        super().__init__(parent_node, child_node)
+        self._basis = basis
+        self._inv_basis = inv_basis if inv_basis is not None else \
+            {key: basis.inv() for key, basis in basis.items()}
+
+    def propagate_to_parent(self):
+        parent, child = self.parent_node, self.child_node
+        parent.y = child.y
+        inv = self._inv_basis
+        size = parent.size
+        parent.S = {key: reshape(space @ parent.y + x0, (size[key], size[key]))
+            for key, (x0, space) in parent._x0_and_space.items()}
+        parent.decompositions = {key: ((matmul(U, inv[key]) if key in inv else U), S)
+            for key, (U, S) in child.decompositions.items()}
+
+    def propagate_nullspace_to_child(self, nullspace):
+        b = self._inv_basis
+        return {key: ((matmul(b[key], ns) if key in b else ns))
+                 for key, ns in nullspace.items()}
+
+    def propagate_affine_to_child(self, A, b):
+        return A, b
+
+    @classmethod
+    def apply(cls, parent_node: SDPProblemBase, basis: Dict[Any, Matrix], time_limit: Optional[Union[Callable, float]]=None):
+        if parent_node.is_primal:
+            raise NotImplementedError
+        return DualSDPCongruence.apply(parent_node, basis=basis, time_limit=time_limit)
+
+
+class DualSDPCongruence(SDPCongruence):
+    @classmethod
+    def apply(cls, parent_node: SDPProblemBase, basis: Dict[Any, Matrix],
+              time_limit: Optional[Union[Callable, float]]=None):
+        new_x0_and_space = {}
+        time_limit = ArithmeticTimeout.make_checker(time_limit)
+
+        for key, (x0, space) in parent_node._x0_and_space.items():
+            if key not in basis:
+                new_x0_and_space[key] = (x0, space)
+                continue
+            new_space = symmetric_bilinear_multiple(basis[key], space.T, time_limit=time_limit).T
+            new_x0 = symmetric_bilinear(basis[key], x0, is_A_vec = True,
+                        return_shape=x0.shape, time_limit=time_limit)
+            new_x0_and_space[key] = (new_x0, new_space)
+        child = parent_node.__class__(new_x0_and_space, gens=parent_node.gens)
+        transform = cls(parent_node, child, basis)
         return transform.child_node

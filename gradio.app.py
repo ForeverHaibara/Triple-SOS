@@ -9,14 +9,27 @@ from itertools import chain
 from tokenize import TokenError
 from typing import Tuple, List, Dict
 import re
+import warnings
 
-import numpy as np
-from sympy import Poly, Expr, Symbol, sympify
+filter_warnings = [
+    (DeprecationWarning,
+     "The 'show_api' parameter in event listeners will be removed in Gradio 6.0.*"),
+    (DeprecationWarning,
+     "The 'css' parameter in the Blocks constructor will be removed in Gradio 6.0.*")
+]
+for warning_type, pattern in filter_warnings:
+    warnings.filterwarnings(
+        "ignore",
+        category=warning_type,
+        message=pattern
+    )
+
+from sympy import Poly, Symbol
+from sympy import __version__ as SYMPY_VERSION
 from sympy.external.importtools import version_tuple
 import gradio as gr
-from PIL import Image
 
-from triples.utils.text_process import pl, short_constant_parser
+from triples.utils.text_process import short_constant_parser
 from triples import sum_of_squares
 from triples.gui.sos_manager import SOSManager
 from triples.gui.linebreak import recursive_latex_auto_linebreak
@@ -34,17 +47,19 @@ def has_kwarg(func, name) -> bool:
     import inspect
     return name in inspect.signature(func).parameters
 
-def gradio_markdown() -> gr.Markdown:
+def gradio_markdown(**kwargs) -> gr.Markdown:
     version = GRADIO_VERSION
     if version >= (4, 0):
-        return gr.Markdown(latex_delimiters=[{"left": "$", "right": "$", "display": False}])
-    return gr.Markdown()
+        return gr.Markdown(latex_delimiters=[{"left": "$", "right": "$", "display": False}], **kwargs)
+    return gr.Markdown(**kwargs)
 
 def show_api(show: bool) -> Dict:
     if has_kwarg(gr.Button.click, "api_visibility"):
+        # gradio 6.0
         if show:
             return {"api_visibility": "public"}
         return {"api_visibility": "private"}
+    # gradio < 6.0
     return {"show_api": bool(show)}
 
 def _convert_to_gradio_latex(content):
@@ -69,12 +84,12 @@ def _convert_to_gradio_latex(content):
     #     replacement['\\end{aligned}'] = ''
 
     for k,v in replacement.items():
-        content = content.replace(k,v)
+        content = content.replace(k, v)
 
     if version >= (4, 0):
-        content = re.sub('\$(.*?)\$', '$\\ \\1$', content, flags=re.DOTALL)
+        content = re.sub(r'\$(.*?)\$', r'$\ \1$', content, flags=re.DOTALL)
     else:
-        content = re.sub('\$(.*?)\$', '$\\\displaystyle \\1$', content, flags=re.DOTALL)
+        content = re.sub(r'\$(.*?)\$', r'$\displaystyle \1$', content, flags=re.DOTALL)
     return content
 
 def flatten_nested_dicts(dicts: List[dict]) -> Dict[tuple, list]:
@@ -104,6 +119,15 @@ class GradioInterface():
     # Custom CSS for vertical layout styling
     css = """
     #coefficient_triangle{height: 600px;margin-top:-5px}
+    #heatmap{
+        background-color: var(--block-background-fill);
+    }
+    .dark .has-scrollbar{
+        color-scheme: dark;
+    }
+    .dark .has-scrollbar::-webkit-scrollbar-thumb {
+        background-color: var(--neutral-600) !important;
+    }
     .vertical-layout-center {
         display: flex;
         justify-content: center;
@@ -130,7 +154,38 @@ class GradioInterface():
     >https://github.com/ForeverHaibara/Triple-SOS</a>
     <br><br>
     Deployment Date: {datetime.datetime.now().strftime("%Y-%m-%d")} &nbsp;&nbsp;
-    Gradio Version: {gr.__version__}
+    Gradio Version: {gr.__version__} &nbsp;&nbsp; SymPy Version: {SYMPY_VERSION}
+    <hr>
+    <h2>Tutorial</h2>
+    Inputs are parsed by a special function with convenient syntax for cyclic
+    sums and cyclic products.
+    <br><br>
+    <div style="margin-left: 20px;">
+    <ol>
+        <li>Power symbols can be "**", "^", or omitted, e.g., "a2b3"
+        stands for "a^2*b^3".</li>
+        <li>Multiplication symbols can be omitted, e.g., "1/2ab" stands for "1/2*a*b".</li>
+        <li>"s" stands for cyclic sums and "p" for cyclic products. E.g., "s(a)" stands
+        for "a+b+c" and "p(a)" stands for "a*b*c".
+        <br><b>NOTE</b>: "s" and "p" are functions. DO NOT use "s" and "p" as symbols.</li>
+        <li>Configure the the generators and the permutation groups of the cyclic
+        sums and cyclic products on the right.</li>
+        <li>Do not use comparison symbols such as ">", "<", "=", "≥", or "≤".</li>
+        <li>Brackets should be "(" or ")", and other brackets are not allowed.</li>
+    </ol>
+    </div>
+    <br>
+    <b>More instructions:</b>
+    <br><br>
+    <div style="margin-left: 20px;">
+    <ol>
+        <li>When there are 3 generators and the input is homogeneous with respect to the
+        generators, the coefficients and the heatmap are displayed.<br>
+        If not, "sum-of-squares" still works but there is no visualization.</li>
+        <li>Set constraints on the right. The right-hand-side should always be zero. E.g.,
+        "a+b+c<=1" should be written as "1-a-b-c" with type ">=0".</li>
+    </ol>
+    </div>
     </div>
     """
 
@@ -139,7 +194,8 @@ class GradioInterface():
             "horizontal": {},
             "vertical": {},
         }
-        with gr.Blocks(css=self.css) as self.demo:
+        use_css = {"css": self.css} if has_kwarg(gr.Blocks.__init__, "css") else {}
+        with gr.Blocks(**use_css) as self.demo:
             # State variables
             self.vertical_mode = gr.State(value=False)
 
@@ -156,13 +212,14 @@ class GradioInterface():
             with gr.Row(equal_height=False, visible=True) as self.horizontal_container:
                 with gr.Column(scale=5):
                     self.input_box = gr.Textbox(label="Input", placeholder="Input a polynomial like s(a^2)^2-3s(a^3b)", show_label=False, max_lines=1)
-                    self.coefficient_triangle = gr.HTML('<div id="coeffs" style="width: 100%; height: 600px; position: absolute;"></div>', elem_id="coefficient_triangle")
+                    self.coefficient_triangle = gr.HTML('<div id="coeffs" style="width: 100%; height: 600px; position: absolute;"></div>',
+                        elem_id="coefficient_triangle", elem_classes="has-scrollbar")
 
                     self._init_shared_outputs("horizontal")
 
                 with gr.Column(scale=1) as self.right_column:
                     # an image display block (note: gr.Image makes low resolution images, use gr.HTML for better quality)
-                    self.image = gr.Image(show_label = False, height=280, width=280)
+                    self.image = gr.Image(show_label = False, height=280, width=280, elem_id="heatmap")
                     # self.image = gr.HTML('<div id="heatmap" style="width=300; height=300; position:absolute;"></div>', elem_id="heatmap")
                     self.compute_btn = gr.Button("Compute", scale=1, variant="primary")
 
@@ -293,13 +350,15 @@ class GradioInterface():
             kwarg = {"buttons": ["copy"]} if has_kwarg(gr.TextArea.__init__, "buttons") \
                 else {"show_copy_button": True}
             with gr.Tab("Display"):
-                collection['outputs']['display'] = gradio_markdown()
+                collection['outputs']['display'] = gradio_markdown(elem_classes="has-scrollbar")
             with gr.Tab("LaTeX"):
                 collection['outputs']['latex'] = gr.TextArea(label="Result", **kwarg)
             with gr.Tab("txt"):
                 collection['outputs']['txt'] = gr.TextArea(label="Result", **kwarg)
             with gr.Tab("formatted"):
                 collection['outputs']['formatted'] = gr.TextArea(label="Result", **kwarg)
+            # with gr.Tab("expanded"):
+            #     collection['outputs']['expanded'] = gr.TextArea(label="Result", **kwarg)
 
     def _setup_event_handlers(self):
         """Setup event handlers for all new components"""
@@ -395,10 +454,12 @@ class GradioInterface():
     def _render_heatmap(self, grid):
         if grid is None:
             return None
-        image = grid.save_heatmap(backgroundcolor=255)
-        image = np.vstack([np.full((8, image.shape[1], 3), 255, np.uint8), image])
-        side_white = np.full((image.shape[0], 4, 3), 255, np.uint8)
-        image = np.hstack([side_white, image, side_white])
+        from PIL import Image
+        from numpy import vstack, hstack, full, uint8
+        image = grid.save_heatmap(backgroundcolor=255, alpha=True)
+        image = vstack([full((8, image.shape[1], 4), 0, uint8), image])
+        side_white = full((image.shape[0], 4, 4), 0, uint8)
+        image = hstack([side_white, image, side_white])
         image = Image.fromarray(image).resize((300,300), Image.LANCZOS)
         return image
 
@@ -429,7 +490,10 @@ class GradioInterface():
         lengthscale = .28 * fontsize / 20.
         t = 0
         txts = []
-        title_parser = lambda chr, deg: '' if deg <= 0 else (chr if deg == 1 else chr + str(deg))
+        title_parser = lambda chr, deg: '' if chr=='' or deg <= 0 else (chr if deg == 1 else chr + str(deg))
+        A = expr.gens[0].name if len(expr.gens) > 0 else ''
+        B = expr.gens[1].name if len(expr.gens) > 1 else ''
+        C = expr.gens[2].name if len(expr.gens) > 2 else ''
         for i in range(n+1):
             for j in range(i+1):
                 if monoms[t][0] == n - i and monoms[t][1] == i - j:
@@ -439,9 +503,9 @@ class GradioInterface():
                     txt = '0'
                 x = (ulx + l*(2*i-j)/2 - len(txt) * lengthscale - 2*int(len(txt)/4))
                 y = (uly + l*j*13/15)
-                title = title_parser('a',n-i) + title_parser('b',i-j) + title_parser('c',j)
+                title = title_parser(A, n-i) + title_parser(B, i-j) + title_parser(C, j)
                 txt = '<p style="position: absolute; left: %f%%; top: %f%%; font-size: %dpx; color: %s;" title="%s">%s</p>'%(
-                    x, y, fontsize, 'black' if txt != '0' else 'rgb(180,180,180)', title, txt
+                    x, y, fontsize, 'var(--body-text-color)' if txt != '0' else 'rgb(180,180,180)', title, txt
                 )
                 txts.append(txt)
         html = html + '\n'.join(txts) + '</div>'
@@ -587,6 +651,8 @@ class GradioInterface():
                     ineq_constraints[constraint[0]] = constraint[1]
                 elif constraint[2] == "=0":
                     eq_constraints[constraint[0]] = constraint[1]
+                else:
+                    raise gr.Error('Constraint type must be "≥0" or "=0"')
 
             try:
                 ineq_constraints = SOSManager.parse_constraints_dict(ineq_constraints, parser)
@@ -732,4 +798,7 @@ if __name__ == '__main__':
             expose_headers=["*"]
         )
 
-    interface.demo.launch(show_error=True) #, debug=True)
+    use_css = {"css": interface.css} if has_kwarg(interface.demo.launch, "css") else {}
+    interface.demo.launch(show_error=True,
+        **use_css
+    ) #, debug=True)

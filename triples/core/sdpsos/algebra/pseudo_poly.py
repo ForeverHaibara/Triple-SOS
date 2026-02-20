@@ -1,9 +1,10 @@
 from collections import defaultdict
 from typing import List, Any
 
-from sympy import Basic, Poly, Expr, Symbol, Add, Mul, Integer, sympify, EX
+from sympy import Basic, Poly, Expr, Symbol, Add, Mul, Integer, sympify
 from sympy.polys.constructor import construct_domain
 from sympy.matrices.expressions import MatPow
+from sympy.combinatorics.permutations import Permutation
 
 from .state_algebra import StateAlgebra
 
@@ -120,10 +121,20 @@ class PseudoPoly(Basic):
     def state(p1):
         return p1.per(p1.rep.state())
 
+    def reorder(f, *gens):
+        inds = [f.gens.index(gen) for gen in gens]
+        perm = Permutation(inds)
+        algebra = f.algebra
+        func = lambda m: algebra.permute_monom(m, perm)
+        rep = f.rep.__class__(algebra, f.domain,
+            {func(m): c for m, c in f.rep.items()})
+        return f.per(rep)
+
 
 class PseudoSMP(dict):
     algebra: StateAlgebra
     dom: Any
+    _hash = None
     def __init__(self, algebra, domain, init=None):
         super().__init__(init)
         self.algebra = algebra
@@ -258,6 +269,12 @@ class PseudoSMP(dict):
             b *= b
             e //= 2
         return r
+
+    def __hash__(self):
+        _hash = self._hash
+        if _hash is None:
+            self._hash = _hash = hash((self.algebra, self.dom, frozenset(self.items())))
+        return _hash
 
     def state(p1):
         alg = p1.algebra

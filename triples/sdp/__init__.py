@@ -12,6 +12,7 @@ from .primal import SDPPrimal
 
 from .arithmetic import congruence, ArithmeticTimeout
 from .backends import SDPError, SDPTimeoutError
+from .wedderburn import character_table, symmetry_adapted_basis
 
 __all__ = [
     # 'solve_column_separated_linear', 'solve_undetermined_linear',
@@ -19,4 +20,5 @@ __all__ = [
     'SDPProblem', 'SDPPrimal',
     'congruence', 'ArithmeticTimeout',
     'SDPError', 'SDPTimeoutError',
+    'character_table', 'symmetry_adapted_basis',
 ]

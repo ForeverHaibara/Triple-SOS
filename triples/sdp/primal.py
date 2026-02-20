@@ -8,7 +8,7 @@ from sympy import MatrixBase, Symbol, Float, Expr, Dummy
 from sympy.core.relational import Relational
 
 from .arithmetic import ArithmeticTimeout, sqrtsize_of_mat, vec2mat, is_numerical_mat, rep_matrix_from_numpy, rep_matrix_to_numpy
-from .backends import SDPTimeoutError, solve_numerical_primal_sdp
+from .backends import SDPResult, SDPTimeoutError, solve_numerical_primal_sdp
 from .rationalize import RationalizeWithMask, RationalizeSimultaneously
 from .transforms import TransformablePrimal
 from .utils import exprs_to_arrays
@@ -453,7 +453,7 @@ class SDPPrimal(TransformablePrimal):
         """
         original_self = self
         end_time = perf_counter() + time_limit if isinstance(time_limit, (int, float)) else None
-        time_limit = ArithmeticTimeout.make_checker(time_limit)
+        _time_limit = ArithmeticTimeout.make_checker(time_limit)
         if solve_child:
             self = self.get_last_child()
 
@@ -473,7 +473,7 @@ class SDPPrimal(TransformablePrimal):
             spaces.append(diag)
             objective = np.array([0]*self.dof + [-1], dtype=np.float64)
             constraints = [(objective, 5, '<')] # avoid unboundness
-            time_limit()
+            _time_limit()
         except ArithmeticTimeout as e:
             raise SDPTimeoutError.from_kwargs() from e
 
@@ -488,6 +488,7 @@ class SDPPrimal(TransformablePrimal):
             (x0, spaces), objective=objective, constraints=constraints,
             solver=solver, return_result=True, **kwargs
         )
+        assert isinstance(sol, SDPResult)
 
         success = False
         try:
@@ -501,7 +502,7 @@ class SDPPrimal(TransformablePrimal):
                     bias += n**2
 
                 self._ys.append(y)
-                time_limit()
+                _time_limit()
                 solution = self.rationalize(y, verbose=verbose,
                     rationalizers=[RationalizeWithMask(), RationalizeSimultaneously([1,1260,1260**3])])
                 if solution is not None:

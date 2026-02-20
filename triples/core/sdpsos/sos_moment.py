@@ -17,6 +17,7 @@ class SOSMomentPoly(AtomSOSElement):
     References
     -----------
     [1] Klep, I., Magron, V., & Volčič, J. (2023). Sums of squares certificates for polynomial moment inequalities.
+
     [2] Klep, I., Magron, V., Volčič, J., & Wang, J. (2023). State polynomials: positivity, optimization
         and nonlinear Bell inequalities. Math. Program., 207, 645-691.
 
@@ -94,9 +95,6 @@ class SOSMomentPoly(AtomSOSElement):
 
         if state_operator is not None:
             self._state_operator = state_operator
-
-    def _post_construct(self, verbose: bool = False, time_limit: Optional[Union[Callable, float]] = None, **kwargs):
-        self.sdp.constrain_zero_diagonals(time_limit=time_limit)
 
     def as_solution(
         self,

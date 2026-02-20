@@ -1,17 +1,22 @@
-from typing import List, Tuple, Union, Optional
+from typing import List, Tuple, Union, Optional, overload
 
 import numpy as np
 from numpy import ndarray
 from numpy.linalg import eigvalsh, cholesky, eigh, LinAlgError
 
-from sympy import Matrix, MatrixBase, Expr, RR, re, eye, Float
-from sympy.core.singleton import S as singleton
+from sympy import Matrix, MatrixBase, Expr, RR, Integer, Float, re
 from sympy.matrices.repmatrix import RepMatrix
 
 from .matop import rep_matrix_from_list
 
-def congruence(M: Union[Matrix, ndarray], perturb: Union[bool, float]=False,
-    upper: bool=True, signfunc = None) -> Optional[Tuple[Matrix, Matrix]]:
+@overload
+def congruence(M: Matrix, perturb: Union[bool, float]=False,
+    upper: bool=True, signfunc=None) -> Optional[Tuple[Matrix, Matrix]]: ...
+@overload
+def congruence(M: ndarray, perturb: Union[bool, float]=False,
+    upper: bool=True, signfunc = None) -> Optional[Tuple[ndarray, ndarray]]: ...
+
+def congruence(M, perturb=0., upper=True, signfunc=None):
     """
     Compute the decomposition of a positive semidefinite matrix M:
     `M = U.T @ diag(S) @ U` where `S` is stored as a (column) vector.
@@ -139,22 +144,22 @@ def congruence(M: Union[Matrix, ndarray], perturb: Union[bool, float]=False,
         #     M = Matrix._fromrep(M._rep.convert_to(M._rep.domain.get_field()))
         #     U = Matrix._fromrep(U._rep.convert_to(M._rep.domain))
         #     S = Matrix._fromrep(S._rep.convert_to(M._rep.domain))
-        One = singleton.One
+        one = Integer(1)
     else:
         U, S = np.zeros((n,n)), np.zeros(n)
-        One = 1
+        one = 1
     for i in range(n-1):
         sgn = signfunc(M[i,i])
         if sgn > 0:
             S[i] = M[i,i]
             U[i,i+1:] = M[i,i+1:] / (S[i])
-            U[i,i] = One
-            M[i+1:,i+1:] -= U[i:i+1,i+1:].T @ (U[i:i+1,i+1:] * S[i])
+            U[i,i] = one
+            M[i+1:,i+1:] -= U[i:i+1,i+1:].T @ (U[i:i+1,i+1:] * S[i]) # type: ignore
         elif sgn < 0:
             return None
         elif sgn == 0 and any(signfunc(_) != 0 for _ in M[i+1:,i]):
             return None
-    U[-1,-1] = One
+    U[-1,-1] = one
     S[-1] = M[-1,-1]
     if signfunc(S[-1]) < 0:
         return None
@@ -172,7 +177,7 @@ def _congruence_on_exact_domain(M: RepMatrix, signfunc=None) -> Optional[Tuple[R
     by default, they should be converted to AlgebraicFields to accelerate if possible.
     """
     dM = M._rep.to_field()
-    n, domain, M = dM.shape[0], dM.domain, dM.rep.to_list()
+    n, domain, MM = dM.shape[0], dM.domain, dM.rep.to_list()
     one, zero = domain.one, domain.zero
 
     if signfunc is None:
@@ -186,7 +191,7 @@ def _congruence_on_exact_domain(M: RepMatrix, signfunc=None) -> Optional[Tuple[R
     S = [zero] * n
     U = [[zero for _ in range(n)] for __ in range(n)]
     for i in range(n):
-        Mi, Ui = M[i], U[i]
+        Mi, Ui = MM[i], U[i]
         p = Mi[i]
         sgn = _signfunc(p)
         if sgn > 0:
@@ -201,7 +206,7 @@ def _congruence_on_exact_domain(M: RepMatrix, signfunc=None) -> Optional[Tuple[R
             for j in range(i+1, n):
                 Ui[j] = Mi[j] * invp
             for k in range(i+1, n):
-                Mk = M[k]
+                Mk = MM[k]
                 for j in range(k, n):
                     Mk[j] = Mk[j] - Ui[j] * Mi[k] # rank 1 update
         elif sgn < 0:
@@ -217,8 +222,23 @@ def _congruence_on_exact_domain(M: RepMatrix, signfunc=None) -> Optional[Tuple[R
     S = rep_matrix_from_list(S, n, domain)
     return U, S
 
-def _congruence_numerically(M: Union[MatrixBase, ndarray], perturb: Union[bool, float]=0,
-        upper: bool=True) -> Optional[Tuple[Union[Matrix, ndarray], Union[Matrix, ndarray]]]:
+
+def silent_chol(M: ndarray) -> Optional[ndarray]:
+    U = None
+    try:
+        U = cholesky(M)
+    except LinAlgError:
+        pass
+    return U
+
+@overload
+def _congruence_numerically(M: MatrixBase, perturb: Union[bool, float]=0.,
+        upper: bool=True) -> Optional[Tuple[Matrix, Matrix]]: ...
+@overload
+def _congruence_numerically(M: ndarray, perturb: Union[bool, float]=0.,
+        upper: bool=True) -> Optional[Tuple[ndarray, ndarray]]: ...
+
+def _congruence_numerically(M, perturb=0., upper=True):
     """
     Perform congruence decomposition on M if M is numerical. It converts the matrix
     to numpy and calls cholesky or ldl decomposition. If upper=False, it calls eigh.
@@ -239,19 +259,11 @@ def _congruence_numerically(M: Union[MatrixBase, ndarray], perturb: Union[bool, 
             M = np.real(M.astype(complex))
 
     if upper:
-        def silent_chol(M):
-            U = None
-            try:
-                U = cholesky(M)
-            except LinAlgError:
-                pass
-            return U
-
         U = silent_chol(M)
 
         if U is None and (not (perturb is False)):
             if perturb is True:
-                perturb = 1
+                perturb = 1.
             mineig = float(np.min(eigvalsh(M)))
             if mineig < -perturb:
                 return None

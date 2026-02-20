@@ -1,17 +1,20 @@
 from collections import defaultdict
-from math import gcd
-from time import time
-from typing import List, Tuple, Dict, Union, Optional, Callable
+from time import perf_counter
+from typing import List, Tuple, Dict, Union, Optional, Callable, Any, overload
 
 from numpy import argsort
 from sympy.external.gmpy import MPQ, MPZ # >= 1.9
 from sympy.matrices import MutableDenseMatrix as Matrix
 from sympy.matrices.repmatrix import RepMatrix
-from sympy.polys.domains import ZZ, QQ, EX, EXRAW # EXRAW >= 1.9
+from sympy.polys.domains import ZZ, QQ, EX # EXRAW >= 1.9
 from sympy.polys.matrices.domainmatrix import DomainMatrix # polys.matrices >= 1.8
 from sympy.polys.matrices.sdm import SDM
+try:
+    from sympy.external.gmpy import gcd
+except ImportError:
+    from math import gcd
 
-from .matop import ArithmeticTimeout, is_zz_qq_mat, is_empty_matrix, permute_matrix_rows, rep_matrix_from_dict
+from .matop import ArithmeticTimeout, permute_matrix_rows, rep_matrix_from_dict
 
 _VERBOSE_SOLVE_UNDETERMINED_LINEAR = False
 _VERBOSE_SOLVE_CSR_LINEAR = False
@@ -35,11 +38,11 @@ def _restore_from_compressed(mat: Matrix, mapping: Union[List[int], Dict[int, in
     new_mat : Matrix
         The restored matrix.
     """
-    mapping = enumerate(mapping) if isinstance(mapping, list) else mapping.items()
+    _mapping = enumerate(mapping) if isinstance(mapping, list) else mapping.items()
     if rows is None: rows = len(mapping)
     rep = mat._rep.rep.to_sdm()
     new_rep = []
-    for i, j in mapping:
+    for i, j in _mapping:
         repj = rep.get(j)
         if repj:
             new_rep.append((i, repj)) # Shall we make a copy?
@@ -189,36 +192,36 @@ def _row_reduce(M, normalize_last=True, normalize=True, zero_above=True, time_li
     M should be a RepMatrix with domain ZZ or QQ.
     """
     if _VERBOSE_SOLVE_UNDETERMINED_LINEAR:
-        time0 = time()
+        time0 = perf_counter()
 
     sdm = M._rep.to_field().rep
     domain = sdm.domain
     sdm = {k: {k2: i for k2, i in v.items()} for k, v in sdm.to_sdm().items()}
 
     if _VERBOSE_SOLVE_UNDETERMINED_LINEAR:
-        print(">> Time for converting to MPQ:", time() - time0)
-        time0 = time()
+        print(">> Time for converting to MPQ:", perf_counter() - time0)
+        time0 = perf_counter()
 
     mat, pivot_cols, swaps = _row_reduce_dict(sdm, M.shape[0], M.shape[1], domain=domain,
             normalize_last=normalize_last, normalize=normalize, zero_above=zero_above,
             time_limit=time_limit)
 
     if _VERBOSE_SOLVE_UNDETERMINED_LINEAR:
-        print(">> Time for row reduce list:", time() - time0)
-        time0 = time()
+        print(">> Time for row reduce list:", perf_counter() - time0)
+        time0 = perf_counter()
 
     mat = rep_matrix_from_dict(mat, M.shape, M._rep.domain.get_field())
     return mat, pivot_cols, swaps
 
 
-def _rref(M, pivots=True, normalize_last=True, time_limit=None):
+def _rref(M: Matrix, pivots=True, normalize_last=True, time_limit=None) -> Union[Matrix, Tuple[Matrix, Tuple[int, ...]]]:
     """
     See also in sympy.matrices.reductions.rref
     """
     return_pivots = pivots
     if not M._rep.domain.is_Exact:
         return M.rref(pivots=return_pivots, normalize_last=normalize_last)
-
+    mat = M
     if _USE_SDM_RREF_DEN:
         # sdm_rref_den is implemented in sympy since 1.13
         # even if we copy the code of sdm_rref_den,
@@ -241,14 +244,14 @@ def _rref(M, pivots=True, normalize_last=True, time_limit=None):
                             time_limit=time_limit)
 
     if return_pivots:
-        mat = (mat, pivots)
+        return (mat, pivots) # type: ignore
     return mat
 
 
 
 def solve_undetermined_linear(M: Matrix, B: Matrix,
-        time_limit: Optional[Union[Callable, float]] = None
-    ) -> Tuple[Matrix, Matrix]:
+    time_limit: Optional[Union[Callable, float]] = None
+) -> Tuple[Matrix, Matrix]:
     """
     Solve an undetermined linear system Mx = B with LU decomposition.
     See details at sympy.Matrix.gauss_jordan_solve.
@@ -271,18 +274,18 @@ def solve_undetermined_linear(M: Matrix, B: Matrix,
         sparsity = lambda x: len(list(x.iter_values())) / (x.shape[0] * x.shape[1])
         print('SolveUndeterminedLinear', M.shape)
         print('>> Sparsity M =', sparsity(M))
-        time0 = time()
+        time0 = perf_counter()
 
     # solve by reduced row echelon form
     A, pivots = _rref(aug, normalize_last=False, time_limit=time_limit)
 
 
     if _VERBOSE_SOLVE_UNDETERMINED_LINEAR:
-        print(">> Time for rref:", time() - time0) # main bottleneck
-        time0 = time()
+        print(">> Time for rref:", perf_counter() - time0) # main bottleneck
+        time0 = perf_counter()
 
-    A, v      = A[:, :-B_cols], A[:, -B_cols:]
-    pivots    = list(filter(lambda p: p < col, pivots))
+    A, v      = A[:, :-B_cols], A[:, -B_cols:] # type: ignore
+    pivots    = list(filter(lambda p: p < col, pivots)) # type: ignore
     rank      = len(pivots)
 
     # Get index of free symbols (free parameters)
@@ -312,7 +315,7 @@ def solve_undetermined_linear(M: Matrix, B: Matrix,
     #     vt2[permutation[k]] = vt[k]
 
     if _VERBOSE_SOLVE_UNDETERMINED_LINEAR:
-        print(">> Time for undo permutation:", time() - time0,
+        print(">> Time for undo permutation:", perf_counter() - time0,
               'V2, vt2 shape =', V2.shape, vt2.shape)
 
     return vt2, V2
@@ -328,20 +331,48 @@ def solve_nullspace(A: Matrix) -> Matrix:
     # except ValueError:
     #     return Matrix.zeros(A.rows, 0)
     # return space
-    m = Matrix.hstack(*A.T.nullspace())
-    if is_empty_matrix(m):
-        return A.zeros(A.shape[0], 0)
-    return m
+    # m = Matrix.hstack(*A.T.nullspace())
+    # if is_empty_matrix(m):
+    #     return A.zeros(A.shape[0], 0)
+    # return m
+    return Matrix._fromrep(A._rep.to_field().transpose().nullspace().transpose())
 
-def solve_columnspace(A: Matrix) -> Matrix:
+
+@overload
+def solve_columnspace(A: Matrix) -> Matrix: ...
+@overload
+def solve_columnspace(A: DomainMatrix) -> DomainMatrix: ...
+
+def solve_columnspace(A):
     """
     Compute the column space of a matrix A.
-    If A is full-rank and has shape m x n (m < n), then the column space has shape m x n.
+    If A is full-rank and has shape m x n (m > n), then the column space has shape m x n.
     """
-    m = Matrix.hstack(*A.columnspace())
-    if is_empty_matrix(m):
-        return A.zeros(A.shape[0], 0)
-    return m
+    if isinstance(A, RepMatrix):
+        # m = Matrix.hstack(*A.columnspace())
+        # if is_empty_matrix(m):
+        #     return A.zeros(A.shape[0], 0)
+        # return m
+
+        # NOTE: SymPy 1.9 did not have DomainMatrix.columnspace()
+        # (but it has DomainMatrix.nullspace()), so avoid this:
+
+        # return Matrix._fromrep(A._rep.to_field().columnspace())
+
+        # This is an equivalent implementation
+        dM = A._rep.to_field()
+        rref, pivots = dM.rref()
+        rows, cols = dM.shape
+        dM = dM.extract(range(rows), pivots)
+        return Matrix._fromrep(dM)
+    elif isinstance(A, DomainMatrix):
+        dM = A.to_field()
+        rref, pivots = dM.rref()
+        rows, cols = dM.shape
+        dM = dM.extract(range(rows), pivots)
+        return dM
+
+    return A.columnspace()
 
 
 def _is_column_separated(A: Matrix) -> bool:
@@ -381,12 +412,12 @@ def solve_column_separated_linear(A: Matrix, b: Matrix):
     domain = A._rep.domain.unify(b._rep.domain).get_field()
 
     if _VERBOSE_SOLVE_CSR_LINEAR:
-        time0 = time()
+        time0 = perf_counter()
 
     # toK = lambda x: x # domain.from_sympy
     one, zero = domain.one, domain.zero
-    A = A._rep.convert_to(domain).rep.to_sdm() # SDM
-    b = b._rep.convert_to(domain).rep.to_sdm() # SDM
+    A1 = A._rep.convert_to(domain).rep.to_sdm() # SDM
+    b1 = b._rep.convert_to(domain).rep.to_sdm() # SDM
 
     x0 = []
     spaces = []
@@ -396,14 +427,14 @@ def solve_column_separated_linear(A: Matrix, b: Matrix):
         if bi != 0 and bi.get(0, zero) != zero:
             raise ValueError("Linear system has no solution")
 
-    for i in set(range(A.shape[0])) - set(A.keys()):
-        _assert_empty(b, i)
+    for i in set(range(A1.shape[0])) - set(A1.keys()):
+        _assert_empty(b1, i)
 
-    for i, row in A.items():
+    for i, row in A1.items():
         row = list(row.items())
         if len(row):
             head, w = row[0]
-            bi = b.get(i, 0)
+            bi = b1.get(i, 0)
             if bi:
                 bi = bi.get(0, zero)
                 if bi:
@@ -415,14 +446,14 @@ def solve_column_separated_linear(A: Matrix, b: Matrix):
                     spaces.append({head: w2, head2: -w})
 
         else:
-            _assert_empty(b, i)
+            _assert_empty(b1, i)
 
     if _VERBOSE_SOLVE_CSR_LINEAR:
-        print('>> Solve separated system time:', time() - time0) # fast, < 1 sec over (100 x 10000)
-        time0 = time()
+        print('>> Solve separated system time:', perf_counter() - time0) # fast, < 1 sec over (100 x 10000)
+        time0 = perf_counter()
 
     all_cols = []
-    for row in A.values():
+    for row in A1.values():
         all_cols.extend(list(row.keys()))
     all_cols = set(all_cols)
 
@@ -437,17 +468,17 @@ def solve_column_separated_linear(A: Matrix, b: Matrix):
     spaces = rep_matrix_from_dict(spaces, (len(spaces), cols), domain).T
 
     if _VERBOSE_SOLVE_CSR_LINEAR:
-        print('>> Matrix restoration time:', time() - time0, 'space shape =', spaces.shape)
+        print('>> Matrix restoration time:', perf_counter() - time0, 'space shape =', spaces.shape)
 
     return x0, spaces
 
 
 def solve_csr_linear(A: Matrix, b: Matrix,
-        x0_equal_indices: List[List[int]] = [],
-        nonnegative_indices: List[int] = [],
-        force_zeros: Dict[int, List[int]] = {},
-        time_limit: Optional[Union[Callable, float]] = None
-    ):
+    x0_equal_indices: List[Union[List[int], Tuple[int, ...]]] = [],
+    nonnegative_indices: List[int] = [],
+    force_zeros: Dict[int, List[int]] = {},
+    time_limit: Optional[Union[Callable, float]] = None
+):
     """
     Solve a linear system Ax = b where A is stored in SDM (CSR) format.
     Further, we could require some other properties.
@@ -485,7 +516,7 @@ def solve_csr_linear(A: Matrix, b: Matrix,
     cols = A.shape[1]
     if _VERBOSE_SOLVE_CSR_LINEAR:
         print('SolveCsrLinear A shape', A.shape)
-        time0 = time()
+        time0 = perf_counter()
 
     Arep = A._rep.rep.to_sdm()
 
@@ -535,7 +566,7 @@ def solve_csr_linear(A: Matrix, b: Matrix,
     return x0, space
 
 
-def _build_ufs(groups: List[List[int]], n: int) -> Tuple[List[int], Dict[int, List[int]]]:
+def _build_ufs(groups: List[Union[List[int], Tuple[int, ...]]], n: int) -> Tuple[List[int], Dict[int, List[int]]]:
     parent = list(range(n))
     def find(x):
         if parent[x] != x:

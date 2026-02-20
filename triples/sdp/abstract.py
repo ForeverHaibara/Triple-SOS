@@ -8,7 +8,10 @@ from sympy import MatrixBase, Expr, Symbol, Rational
 from sympy.core.relational import Relational
 from sympy.matrices import MutableDenseMatrix as Matrix
 
-from .arithmetic import ArithmeticTimeout, sqrtsize_of_mat, is_empty_matrix, congruence, rep_matrix_from_numpy, rep_matrix_to_numpy
+from .arithmetic import (
+    ArithmeticTimeout, sqrtsize_of_mat, is_empty_matrix,
+    congruence, rep_matrix_from_numpy, rep_matrix_to_numpy
+)
 from .backends import SDPError, SDPTimeoutError, SDPResult
 from .rationalize import rationalize_and_decompose
 from .utils import exprs_to_arrays, collect_constraints
@@ -25,6 +28,8 @@ class SDPProblemBase(ABC):
     y = None
     S = None
     decompositions = None
+    _transforms: List
+    _x0_and_space: Dict[Any, Tuple[Matrix, Matrix]]
     def __init__(self, *args, **kwargs) -> None:
         # record the numerical solutions
         self._ys = []
@@ -58,6 +63,9 @@ class SDPProblemBase(ABC):
     def size(self) -> Dict[Any, int]:
         return {key: self.get_size(key) for key in self.keys()}
 
+    @property
+    def gens(self) -> List[Symbol]: ...
+
     def __repr__(self) -> str:
         return "<%s dof=%d size=%s>"%(self.__class__.__name__, self.dof, self.size)
 
@@ -71,6 +79,8 @@ class SDPProblemBase(ABC):
         """
 
     def as_params(self) -> Dict[Symbol, Expr]:
+        if self.y is None:
+            raise ValueError("The SDP problem has no solution.")
         return dict(zip(self.gens, self.y))
 
     def _standardize_mat_dict(self, mat_dict: Dict[Any, Matrix]) -> Dict[Any, Matrix]:
@@ -146,7 +156,7 @@ class SDPProblemBase(ABC):
         if (not (y2 is y)) and not project:
             # FIXME for numpy array
             raise ValueError("The vector y is not feasible by the equality constraints."
-                             " Use project=True to project the approximated solution to the feasible region.")
+                    " Use project=True to project the approximated solution to the feasible region.")
         y = y2
 
         S = self.S_from_y(y)
@@ -162,14 +172,6 @@ class SDPProblemBase(ABC):
         if propagate_to_parent:
             self.propagate_to_parent(recursive = True)
         return True
-
-    def propagate_to_parent(self, *args, **kwargs) -> None:
-        # this method should be implemented in the TransformMixin
-        ...
-
-    def get_last_child(self) -> 'SDPProblemBase':
-        # this method should be implemented in the TransformMixin
-        return self
 
     def rationalize(self, y: ndarray, verbose = False, **kwargs) -> Optional[Tuple[Matrix, Decomp]]:
         """
@@ -252,7 +254,8 @@ class SDPProblemBase(ABC):
         if end_time is not None and (not ('time_limit' in kwargs)):
             kwargs['time_limit'] = end_time - perf_counter()
 
-        sol = self._solve_numerical_sdp(objective=obj[0], constraints=cons, solver=solver,
+        sol = self._solve_numerical_sdp(objective=obj[0],
+                    constraints=cons, solver=solver,
                     return_result=True, kwargs=kwargs)
         y = sol.y
         if y is not None:
@@ -263,7 +266,8 @@ class SDPProblemBase(ABC):
             if y is not None:
                 y = rep_matrix_from_numpy(y)
                 time_limit()
-                self.register_y(y, project=True, perturb=True, propagate_to_parent=propagate_to_parent)
+                self.register_y(y, project=True, perturb=True,
+                    propagate_to_parent=propagate_to_parent)
                 y = original_self.y
         except ArithmeticTimeout as e:
             raise SDPTimeoutError(sol) from e
@@ -303,3 +307,44 @@ class SDPProblemBase(ABC):
             Whether the problem is solved. If True, the result can be accessed by
             SDPProblem.y and SDPProblem.S and SDPProblem.decompositions.
         """
+
+    #########################################################
+    #
+    #                  Transformations
+    #
+    #########################################################
+
+    # Transformations should be implemented in transforms/transformable.py
+    # Here we only define the interface for type annotations.
+
+    @property
+    def parents(self) -> List['SDPProblemBase']: ...
+    @property
+    def children(self) -> List['SDPProblemBase']: ...
+    def print_graph(self, short: bool = False): ...
+    def get_last_child(self) -> 'SDPProblemBase': ...
+    def clear_parents(self): ...
+    def clear_children(self): ...
+    def common_transform(self, transform: 'SDPProblemBase') -> Any: ...
+    def propagate_to_parent(self, recursive: bool = True): ...
+    def propagate_to_child(self, recursive: bool = True): ...
+    def propagate_nullspace_to_child(self,
+        nullspace: Dict[Any, Matrix], recursive: bool=False) -> Dict[Any, Matrix]: ...
+    def propagate_affine_to_child(self,
+        A: Matrix, b: Matrix, recursive: bool = True) -> Tuple[Matrix, Matrix]: ...
+    def constrain_symmetry(self) -> 'SDPProblemBase': ...
+    def constrain_affine(self,
+        A: Matrix, b: Matrix, to_child: bool = True, time_limit=None) -> 'SDPProblemBase': ...
+    def constrain_equations(self,
+        eqs: Matrix, rhs: Matrix, to_child: bool = True, time_limit=None) -> 'SDPProblemBase': ...
+    def constrain_columnspace(self,
+        columnspace: Dict[Any, Matrix], to_child: bool = True, time_limit=None) -> 'SDPProblemBase': ...
+    def constrain_nullspace(self,
+        nullspace: Dict[Any, Matrix], to_child: bool = True, time_limit=None) -> 'SDPProblemBase': ...
+    def constrain_congruence(self, basis: Dict[Any, Matrix], time_limit=None) -> 'SDPProblemBase': ...
+    def get_zero_diagonals(self) -> Dict[Any, List[int]]: ...
+    def get_block_structures(self) -> Dict[Any, List[List[int]]]: ...
+    def constrain_zero_diagonals(self,
+        extractions = None, masks = None, time_limit=None) -> 'SDPProblemBase': ...
+    def constrain_block_structures(self, blocks = None) -> 'SDPProblemBase': ...
+    def deparametrize(self, symbols: Optional[List[Symbol]]=None) -> 'SDPProblemBase': ...

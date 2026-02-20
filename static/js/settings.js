@@ -190,6 +190,13 @@ var settingsDefinition = {children: {
                         step: 1,
                         settingPath: "sos.sdpSOS.liftDegreeLimit"
                     },
+                    wedderburn: {
+                        name: "Use Wedderburn Decomposition",
+                        description: "Whether to use Wedderburn decomposition in SDP SOS.",
+                        type: "checkbox",
+                        defaultValue: true,
+                        settingPath: "sos.sdpSOS.wedderburn"
+                    },
                     unstableEigThreshold: {
                         name: "Unstable Eigenvalue Threshold",
                         description: "If it fails to rationalize but the smallest eigenvalue of the SDP"
@@ -654,7 +661,7 @@ function closeSettingsModal() {
 function scrollToSection(sectionId) {
     var section = document.getElementById(sectionId);
     if (section) {
-        section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        section.scrollIntoView({ behavior: 'auto', block: 'start' });
     }
 }
 
@@ -749,6 +756,7 @@ function getSOSConfigs() {
         },
         SDPSOS: {
             lift_degree_limit: sos.sdpSOS.liftDegreeLimit,
+            wedderburn: sos.sdpSOS.wedderburn,
             allow_numer: sos.sdpSOS.allowNumer,
             // decompose_method: document.getElementById("setting_method_SDPSOS_reduced_decompose").checked?'reduce':'raw',
         }

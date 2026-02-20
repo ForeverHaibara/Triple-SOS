@@ -1,15 +1,16 @@
 from typing import List, Tuple, Dict, Optional, Union, Callable, Any
+from collections import Counter
 
 from sympy.matrices import MutableDenseMatrix as Matrix
 from sympy import Symbol
 
 from .transform import SDPTransformation
-from .linear import SDPLinearTransform, SDPMatrixTransform
+from .linear import SDPLinearTransform, SDPMatrixTransform, SDPCongruence
 from .parametric import SDPDeparametrization
 from .polytope import get_zero_diagonals, SDPRowExtraction
+from .diagonalize import get_block_structures, SDPBlockDiagonalization
+from ..arithmetic import is_empty_matrix
 from ..abstract import SDPProblemBase
-from ..arithmetic import sqrtsize_of_mat
-
 
 
 def _propagate_args_to_last(self, next_node, func, recursive, *args):
@@ -57,13 +58,26 @@ class TransformableProblem(SDPProblemBase):
         """
         return [transform.child_node for transform in self._transforms if transform.is_parent(self)]
 
-    def print_graph(self) -> None:
+    def print_graph(self, short: int = 0) -> None:
         """
         Print the dependency graph of the SDP problem.
         """
+        def _get_sdp_str(sdp):
+            if int(short) <= 0:
+                sdp_str = sdp.__str__()
+            elif int(short) == 1:
+                size = sorted(list(sdp.size.values()), reverse=True)
+                sdp_str = f"<dof={sdp.dof}, size={size}>"
+            else:
+                cnt = Counter(sdp.size.values())
+                items = sorted(list(cnt.items()), reverse=True)
+                size = [f"{k}²×{v}" if v > 1 else f"{k}²" for k, v in items]
+                sdp_str = f"<dof={sdp.dof}, size=({' + '.join(size)})>"
+            return sdp_str
+
         _MAXLEN = 30
         _PAD = (_MAXLEN - 10) // 2
-        print(" " * _PAD + "SDPProblem" + " " * _PAD + self.__str__())
+        print(" " * _PAD + "SDPProblem" + " " * _PAD + _get_sdp_str(self))
         sdp = self
 
         def _formatter(a):
@@ -75,7 +89,8 @@ class TransformableProblem(SDPProblemBase):
         while len(sdp.children):
             sdp2 = sdp.children[-1]
             transform = sdp.common_transform(sdp2)
-            print(_formatter(transform.__class__.__name__) + " " + sdp2.__str__())
+            sdp_str = _get_sdp_str(sdp2)
+            print(_formatter(transform.__class__.__name__) + " " + sdp_str)
             sdp = sdp2
 
     def get_last_child(self) -> SDPProblemBase:
@@ -139,26 +154,58 @@ class TransformableProblem(SDPProblemBase):
         args = _propagate_args_to_last(self, 'child', func, recursive, A, b)
         return args
 
-    def constrain_columnspace(self, columnspace: Dict[Any, Matrix], to_child: bool=False,
+    def constrain_affine(self, A: Matrix, b: Matrix, to_child: bool=True,
+            time_limit: Optional[Union[Callable, float]]=None) -> 'TransformableProblem':
+        """
+        Constrain the affine transformation of the SDP problem.
+        """
+        return SDPLinearTransform.apply_from_affine(self,
+            A=A, b=b, to_child=to_child, time_limit=time_limit)
+
+    def constrain_equations(self, eqs: Matrix, rhs: Matrix, to_child: bool=True,
+            time_limit: Optional[Union[Callable, float]]=None) -> 'TransformableProblem':
+        """
+        Constrain the equations of the SDP problem.
+        """
+        return SDPLinearTransform.apply_from_equations(self,
+            eqs=eqs, rhs=rhs, to_child=to_child, time_limit=time_limit)
+
+    def constrain_columnspace(self, columnspace: Dict[Any, Matrix], to_child: bool=True,
             time_limit: Optional[Union[Callable, float]]=None) -> 'TransformableProblem':
         """
         Constrain the columnspace of the SDP problem.
         """
-        return SDPMatrixTransform.apply(self, columnspace=columnspace, to_child=to_child, time_limit=time_limit)
+        return SDPMatrixTransform.apply(self,
+            columnspace=columnspace, to_child=to_child, time_limit=time_limit)
 
-    def constrain_nullspace(self, nullspace: Dict[Any, Matrix], to_child: bool=False,
+    def constrain_nullspace(self, nullspace: Dict[Any, Matrix], to_child: bool=True,
             time_limit: Optional[Union[Callable, float]]=None) -> 'TransformableProblem':
         """
         Constrain the nullspace of the SDP problem.
         """
-        return SDPMatrixTransform.apply(self, nullspace=nullspace, to_child=to_child, time_limit=time_limit)
+        return SDPMatrixTransform.apply(self,
+            nullspace=nullspace, to_child=to_child, time_limit=time_limit)
+
+    def constrain_congruence(self, basis: Dict[Any, Matrix],
+            time_limit: Optional[Union[Callable, float]]=None) -> 'TransformableProblem':
+        """
+        Constrain the congruence of the SDP problem.
+        """
+        return SDPCongruence.apply(self, basis=basis, time_limit=time_limit)
 
     def get_zero_diagonals(self) -> Dict[Any, List[int]]:
         return get_zero_diagonals(self)
 
+    def get_block_structures(self) -> Dict[Any, List[List[int]]]:
+        return get_block_structures(self)
+
     def constrain_zero_diagonals(self, extractions: Optional[Dict[Any, List[int]]]=None, masks: Optional[Dict[Any, List[int]]]=None,
             time_limit: Optional[Union[Callable, float]]=None) -> 'TransformableProblem':
-        return SDPRowExtraction.apply(self, extractions=extractions, masks=masks, time_limit=time_limit)
+        return SDPRowExtraction.apply(self,
+            extractions=extractions, masks=masks, time_limit=time_limit)
+
+    def constrain_block_structures(self, blocks: Optional[Dict[Any, List[int]]]=None):
+        return SDPBlockDiagonalization.apply(self, blocks=blocks)
 
     def deparametrize(self, symbols: Optional[List[Symbol]]=None) -> 'TransformableProblem':
         return SDPDeparametrization.apply(self, symbols=symbols)
@@ -180,6 +227,9 @@ class TransformableDual(TransformableProblem):
             return self
         eqs = Matrix.vstack(*eqs)
         rhs = Matrix(rhs)
+        if is_empty_matrix(eqs, check_all_zeros=True) and \
+                is_empty_matrix(rhs, check_all_zeros=True):
+            return self
         return SDPLinearTransform.apply_from_equations(self, eqs, rhs)
 
 class TransformablePrimal(TransformableProblem):

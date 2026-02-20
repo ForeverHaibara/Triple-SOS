@@ -104,11 +104,11 @@ def collect_constraints(constraints: List[Tuple[ndarray, float, str]], dof: int)
 
 
 def create_numerical_dual_sdp(
-        x0_and_space: Union[List[Tuple[Matrix, Matrix]], Dict[Any, Tuple[Matrix, Matrix]]],
-        objective: ndarray,
-        constraints: List[Tuple[ndarray, float, str]] = [],
-        solver: Optional[Union[str, Type[DualBackend]]] = None,
-    ) -> DualBackend:
+    x0_and_space: Union[List[Tuple[Matrix, Matrix]], Dict[Any, Tuple[Matrix, Matrix]]],
+    objective: ndarray,
+    constraints: List[Tuple[ndarray, float, str]] = [],
+    solver: Optional[Union[str, Type[DualBackend]]] = None,
+) -> DualBackend:
     """
     Create a numerical dual SDP problem.
     """
@@ -149,20 +149,20 @@ def create_numerical_dual_sdp(
 
 
 def solve_numerical_dual_sdp(
-        x0_and_space: Union[List[Tuple[Matrix, Matrix]], Dict[Any, Tuple[Matrix, Matrix]]],
-        objective: ndarray,
-        constraints: List[Tuple[ndarray, float, str]] = [],
-        solver: Optional[str] = None,
-        return_result: bool = False,
-        verbose: Union[bool, int] = 0,
-        max_iters: int = 200,
-        time_limit: float = 1e10,
-        tol_fsb_abs: float = 1e-8,
-        tol_fsb_rel: float = 1e-8,
-        tol_gap_abs: float = 1e-8,
-        tol_gap_rel: float = 1e-8,
-        solver_options: Dict[str, Any] = {},
-    ) -> Optional[Union[ndarray, SDPResult]]:
+    x0_and_space: Union[List[Tuple[Matrix, Matrix]], Dict[Any, Tuple[Matrix, Matrix]]],
+    objective: ndarray,
+    constraints: List[Tuple[ndarray, float, str]] = [],
+    solver: Optional[str] = None,
+    return_result: bool = False,
+    verbose: Union[bool, int] = 0,
+    max_iters: int = 200,
+    time_limit: float = 1e10,
+    tol_fsb_abs: float = 1e-8,
+    tol_fsb_rel: float = 1e-8,
+    tol_gap_abs: float = 1e-8,
+    tol_gap_rel: float = 1e-8,
+    solver_options: Dict[str, Any] = {},
+) -> Optional[Union[ndarray, SDPResult]]:
     """
     Solve for y such that all(Mat(x0 + space @ y) >> 0 for x0, space in x0_and_space.values()).
     This is the dual form of SDP problem.
@@ -268,20 +268,20 @@ def _extract_triu(space: ndarray, n: int) -> ndarray:
     return space.T.reshape(n, n, -1)[i, j, :].T
 
 def solve_numerical_primal_sdp(
-        x0_and_space: Tuple[ndarray, Union[List[ndarray], Dict[Any, ndarray]]],
-        objective: ndarray,
-        constraints: List[Tuple[ndarray, float, str]] = [],
-        solver: Optional[str] = None,
-        return_result: bool = False,
-        verbose: Union[bool, int] = 0,
-        max_iters: int = 200,
-        time_limit: float = 1e10,
-        tol_fsb_abs: float = 1e-8,
-        tol_fsb_rel: float = 1e-8,
-        tol_gap_abs: float = 1e-8,
-        tol_gap_rel: float = 1e-8,
-        solver_options: Dict[str, Any] = {},
-    ) -> Optional[ndarray]:
+    x0_and_space: Tuple[ndarray, Union[List[ndarray], Dict[Any, ndarray]]],
+    objective: ndarray,
+    constraints: List[Tuple[ndarray, float, str]] = [],
+    solver: Optional[str] = None,
+    return_result: bool = False,
+    verbose: Union[bool, int] = 0,
+    max_iters: int = 200,
+    time_limit: float = 1e10,
+    tol_fsb_abs: float = 1e-8,
+    tol_fsb_rel: float = 1e-8,
+    tol_gap_abs: float = 1e-8,
+    tol_gap_rel: float = 1e-8,
+    solver_options: Dict[str, Any] = {},
+) -> Optional[ndarray]:
     """
     Solve for x such that Sum(space_i @ Si) = x0.
     This is the primal form of SDP problem.

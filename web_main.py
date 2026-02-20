@@ -117,6 +117,7 @@ def preprocess():
             "cancel",
             "homogenize",
             "dehomogenize",
+            "total_derv",
             "standardize_text",
             "cyclic_sum_func",
             "cyclic_prod_func",

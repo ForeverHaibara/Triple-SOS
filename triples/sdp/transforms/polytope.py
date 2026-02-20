@@ -205,10 +205,15 @@ class DualRowExtraction(SDPRowExtraction):
         if masks is None and extractions is None:
             return cls.apply_zero_diagonals(parent_node)
 
+        if masks is not None:
+            masks = {key: masks.get(key, tuple()) for key in parent_node.keys()}
+        if extractions is not None:
+            extractions = {key: extractions.get(key, tuple(range(n))) for key, n in parent_node.size.items()}
         if extractions is None:
-            extractions = {key: complement(n, masks.get(key, tuple())) for key, n in parent_node.size.items()}
+            extractions = {key: complement(n, masks[key]) for key, n in parent_node.size.items()}
         if masks is None:
-            masks = {key: complement(n, extractions.get(key, tuple())) for key, n in parent_node.size.items()}
+            extractions = {key: extractions.get(key, tuple()) for key in parent_node.keys()}
+            masks = {key: complement(n, extractions[key]) for key, n in parent_node.size.items()}
 
         time_limit = ArithmeticTimeout.make_checker(time_limit)
 
