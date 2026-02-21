@@ -38,13 +38,14 @@ class PolyRing(CommutativeStateAlgebra):
                 m0 = term[0]
                 std_m = m0
                 for p in self.symmetry.elements:
-                    m = tuple(p(m0))
+                    m = tuple([m0[i] for i in p._array_form])
                     if m in self._dict_monoms:
                         cnt += 1
                         std_m = m
                 return (std_m, term[1] * cnt)
             def permute(monom: MONOM) -> List[MONOM]:
-                return [tuple(p(monom)) for p in self.symmetry.elements]
+                # return [tuple(p(monom)) for p in self.symmetry.elements]
+                return [tuple([monom[i] for i in p._array_form]) for p in self.symmetry.elements]
             setattr(self, 's', state)
             setattr(self, 'permute', permute)
 
@@ -52,7 +53,7 @@ class PolyRing(CommutativeStateAlgebra):
         # return term
 
     def permute_monom(self, monom: MONOM, perm: Permutation) -> MONOM:
-        return tuple(perm(monom))
+        return tuple([monom[i] for i in perm._array_form])
 
     def gen_monom(self, i: Optional[int]) -> MONOM:
         if i is None:

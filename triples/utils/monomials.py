@@ -7,7 +7,7 @@ from typing import (Dict, List, Tuple, Iterable, Callable,
     Union, Optional, Any, overload, TypeVar
 )
 import numpy as np
-from sympy import Poly, Expr, Symbol, Add, ZZ, QQ
+from sympy import Poly, Expr, Symbol, Add, ZZ, QQ, factorial, prod
 from sympy.matrices import Matrix, MatrixBase
 from sympy.polys.polyclasses import DMP
 from sympy.polys.rings import PolyElement
@@ -101,6 +101,7 @@ def _poly_rep(poly: Union[Poly, DMP, PolyElement]) -> Tuple[List[Tuple], Domain,
         degree = max(map(sum, poly.keys()), default=0)
         return list(poly.items()), poly.ring.domain, poly.ring.ngens, degree
 
+
 class MonomialManager():
     """
     Class to compute polynomial monomials given the symmetry of variables and homogeneity.
@@ -109,7 +110,13 @@ class MonomialManager():
     nvars: int
     _perm_group: PermutationGroup
     _is_homogeneous: bool
-    def __init__(self, nvars: int, perm_group: Optional[PermutationGroup] = None, is_homogeneous: bool = True) -> None:
+
+    OPTIMIZE_SYMMETRY = False
+    def __init__(self,
+        nvars: int,
+        perm_group: Optional[PermutationGroup] = None,
+        is_homogeneous: bool = True,
+    ) -> None:
         self.nvars = nvars
         self._is_homogeneous = bool(is_homogeneous)
         if isinstance(perm_group, MonomialManager):
@@ -119,6 +126,23 @@ class MonomialManager():
             raise ValueError(f"The degree of the permutation group ({self._perm_group.degree}) does not match the number of variables ({nvars}).")
 
         self._monoms = {}
+
+        if self.OPTIMIZE_SYMMETRY:
+            orbits = self._perm_group.orbits()
+            orbits = [sorted(list(o)) for o in orbits]# if len(o) > 1]
+            order = self._perm_group.order()
+            if prod([factorial(len(m)) for m in orbits]) == order:
+                # internal direct product of symmetric groups
+                def standard_monom(monom: Tuple[int, ...]) -> Tuple[int, ...]:
+                    result = list(monom)
+                    for orbit in orbits:
+                        values = [result[i] for i in orbit]
+                        values.sort(reverse=True)
+                        for i, val in zip(orbit, values):
+                            result[i] = val
+                    return tuple(result)
+
+                setattr(self, 'standard_monom', standard_monom)
 
     def __str__(self) -> str:
         return "MonomialManager(nvars=%d, perm_group=%s, is_homogeneous=%s)" % (
@@ -215,8 +239,12 @@ class MonomialManager():
         """
         Return a copy with the permutation group set to the trivial group.
         """
+        # WARNING: This should be implemented when OPTIMIZE_SYMMETRY is True.
         obj = self.copy()
         obj._perm_group = PermutationGroup(Permutation(list(range(self.nvars))))
+        def standard_monom(monom: Tuple[int, ...]) -> Tuple[int, ...]:
+            return monom
+        setattr(obj, 'standard_monom', standard_monom)
         return obj
 
     def order(self) -> int:
@@ -229,7 +257,7 @@ class MonomialManager():
         """
         Permute the monom according to the permutation group.
         """
-        return [tuple(perm(monom)) for perm in self._perm_group.elements]
+        return [tuple([monom[i] for i in perm._array_form]) for perm in self._perm_group.elements]
 
     def standard_monom(self, monom: Tuple[int, ...]) -> Tuple[int, ...]:
         """
