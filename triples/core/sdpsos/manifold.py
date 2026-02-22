@@ -7,13 +7,13 @@ from itertools import product
 from time import perf_counter
 from typing import Dict, List, Tuple, Union, Optional, Callable, Any
 
-from sympy import Poly, Expr, MatrixBase, prod
+from sympy import Poly, prod
 from sympy.matrices import MutableDenseMatrix as Matrix
 from sympy.combinatorics import PermutationGroup
 
 from .algebra import SOSBasis
 from ...sdp import SDPProblem
-from ...sdp.arithmetic import ArithmeticTimeout, solve_columnspace, rep_matrix_from_list, rep_matrix_to_numpy
+from ...sdp.arithmetic import ArithmeticTimeout, solve_columnspace, rep_matrix_from_list
 from ...utils import optimize_poly, Root, MonomialManager
 from ...utils.roots.roots import _algebraic_extension, _derv
 

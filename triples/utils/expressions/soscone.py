@@ -1,10 +1,10 @@
 from collections.abc import Iterable
 from typing import (
     Tuple, List, Union, Optional, Callable, Iterator,
-    Type, Generic, TypeVar, TYPE_CHECKING
+    Type, Generic, TypeVar
 )
 
-from sympy import Expr, Add, Mul, Integer, Rational, UnevaluatedExpr, sqrt
+from sympy import Expr, Add, Integer, Rational, UnevaluatedExpr, sqrt
 from sympy.core.sympify import CantSympify, sympify
 from sympy.polys.domains.domainelement import DomainElement
 from sympy.polys.polyerrors import CoercionFailed

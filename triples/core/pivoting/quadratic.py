@@ -1,6 +1,6 @@
-from typing import List, Dict, Tuple, Optional
+from typing import Dict, Tuple, Optional
 
-from sympy import Poly, Expr, Symbol, Dummy, Mul
+from sympy import Poly, Expr, Symbol, Dummy
 
 from ..problem import InequalityProblem
 from ..node import ProofNode

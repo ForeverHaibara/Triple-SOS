@@ -1,4 +1,4 @@
-from typing import List, Callable
+from typing import List, Callable, Optional
 
 from sympy import QQ, totient, mobius
 from sympy import MutableDenseMatrix as Matrix
@@ -26,7 +26,7 @@ def _ramanujan_sum(K: int):
 
 def symmetry_adapted_basis(
     G: PermutationGroup,
-    representation: Callable[[Permutation], List[int]]=None
+    representation: Optional[Callable[[Permutation], List[int]]]=None
 ) -> List[Matrix]:
     """
     Compute the symmetry-adapted basis of the representation of G.
@@ -62,7 +62,7 @@ def symmetry_adapted_basis(
     m = len(ctab)
     order = sum(len(c) for c in cc)
 
-    K = int(dom.ext.alias.name.lstrip('zeta')) if dom.is_Algebraic else 1
+    K = int(dom.ext.alias.name.lstrip('zeta')) if dom.is_Algebraic else 1 # type: ignore
     ramanujan = _ramanujan_sum(K)
     QQzero = QQ.zero
     galsum = lambda anp: QQ(sum(

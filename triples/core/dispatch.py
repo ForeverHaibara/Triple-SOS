@@ -9,7 +9,7 @@ To control the behaviour of `InequalityProblem` on new types, you can either:
 """
 from functools import singledispatch
 from typing import (
-    Dict, List, Tuple, Set, Optional, Union, Callable,
+    List, Tuple, Set, Optional, Callable,
     Any, TypeVar
 )
 

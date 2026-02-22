@@ -1,4 +1,4 @@
-from typing import Optional, Union, List, Dict, Tuple
+from typing import Optional, Union, List, Dict, Tuple, Any
 
 import numpy as np
 from sympy import (
@@ -105,7 +105,7 @@ def _derv(n: int, i: int) -> int:
     if i == 1: return n
     if n < i:
         return 0
-    return factorial(n) // factorial(n - i)
+    return int(factorial(n) // factorial(n - i))
 
 def _root_op(f, g, op, broadcast_f=True, broadcast_g=True, field=False):
     """Perform the operation op between two Root instances f and g."""
@@ -157,7 +157,7 @@ class Root():
     [1, 2, -1]
     """
     domain: Domain
-    def __init__(self, root: Tuple[Expr, ...], domain: Optional[Domain]=None, rep: Optional[Tuple[ANP, ...]]=None):
+    def __init__(self, root: Tuple[Any, ...], domain: Optional[Domain]=None, rep: Optional[Tuple[ANP, ...]]=None):
         root = tuple(sympify(r) for r in root)
         self.rep = rep
         self.domain = domain

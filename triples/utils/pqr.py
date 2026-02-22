@@ -63,7 +63,7 @@ def _symmetrize(self: PolyElement):
             break
 
         exponents = []
-        for m1, m2 in zip(monom, monom[1:] + (0,)):
+        for m1, m2 in zip(monom, monom[1:] + (0,)): # type: ignore
             exponents.append(m1 - m2)
 
         symmetric += ring.term_new(tuple(exponents), coeff)
@@ -78,7 +78,7 @@ def _symmetrize(self: PolyElement):
     return symmetric, f, mapping
 
 
-def _get_pqr_symbols(symbols: Optional[Tuple[Symbol, ...]] = None) -> Tuple[Symbol, Symbol, Symbol]:
+def _get_pqr_symbols(symbols: Optional[Tuple[Symbol, Symbol, Symbol]] = None) -> Tuple[Symbol, Symbol, Symbol]:
     """Return p,q,r from symbols. If None, create new symbols."""
     if symbols is not None:
         return symbols
@@ -116,7 +116,7 @@ def pqr_sym(poly: Poly, symbols: Optional[Tuple[Symbol, ...]] = None) -> Poly:
     (a - b)**2*(a - c)**2*(b - c)**2
     """
     if symbols is None:
-        symbols = poly.gens
+        symbols = poly.gens # type: ignore
     elif len(poly.gens) != len(symbols):
         raise ValueError("Symbols must match the number of variables in the polynomial.")
 
@@ -165,7 +165,7 @@ def pqr_cyc(poly: Poly, symbols: Optional[Tuple[Symbol, ...]] = None) -> Tuple[P
         raise ValueError("The polynomial must be a 3-variable polynomial.")
 
     a, b, c = poly.gens
-    if not (poly.domain.is_Composite and poly.domain.domain.is_Field):
+    if not (poly.domain.is_Composite and poly.domain.domain.is_Field): # type: ignore
         poly = poly.to_field()
     half = poly.domain.one/2
     q = Poly.new(poly.reorder(b,a,c).rep,a,b,c)
@@ -183,14 +183,14 @@ def pqr_cyc(poly: Poly, symbols: Optional[Tuple[Symbol, ...]] = None) -> Tuple[P
     return f0, f1
 
 
-def pqr_ker(symbols: Optional[Tuple[Symbol, ...]] = None) -> Poly:
+def pqr_ker(symbols: Optional[Tuple[Symbol, Symbol, Symbol]] = None) -> Poly:
     """
     Return the pqr representation of `((a-b)*(b-c)*(c-a))^2`.
 
     It should be `-4*p**3*r + p**2*q**2 + 18*p*q*r - 4*q**3 - 27*r**2`.
     """
     p, q, r = _get_pqr_symbols(symbols)
-    return (-4*p**3*r + p**2*q**2 + 18*p*q*r - 4*q**3 - 27*r**2).as_poly(p, q, r)
+    return Poly(-4*p**3*r + p**2*q**2 + 18*p*q*r - 4*q**3 - 27*r**2, p, q, r)
 
 # def pqr_pqrt(a, b, c = 1) -> Tuple[Expr, Expr, Expr, Expr]:
 #     """

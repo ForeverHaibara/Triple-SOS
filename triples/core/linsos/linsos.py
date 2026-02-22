@@ -3,7 +3,7 @@ from time import perf_counter
 import warnings
 
 import numpy as np
-from sympy import Poly, Expr, Symbol
+from sympy import Poly, Expr
 from sympy.combinatorics import PermutationGroup
 from sympy.external.importtools import version_tuple
 from scipy import __version__ as _SCIPY_VERSION
@@ -14,6 +14,7 @@ from .correction import linear_correction, odd_basis_to_even
 from .lift import lift_degree
 from .solution import create_linear_sol_from_y_basis
 from ..solution import Solution
+from ..problem import InequalityProblem
 from ..preprocess import ProofNode, ProofTree, SolvePolynomial
 from ..shared import homogenize_expr_list
 from ...sdp.arithmetic import ArithmeticTimeout
@@ -64,8 +65,8 @@ class LinearSOSSolver(ProofNode):
     }
 
 
-    _transformed_problem = None
-    _tangents = None
+    _transformed_problem: Optional[InequalityProblem] = None
+    _tangents: List[Poly]
     _decentralizer = None
     _complexity_models = True
     def _centralize(self, configs):
@@ -77,6 +78,8 @@ class LinearSOSSolver(ProofNode):
         `solution.xreplace(self._decentralizer)`.
         """
         problem = self._transformed_problem
+        if problem is None:
+            return
         if problem.roots is None:
             return
 
@@ -96,9 +99,10 @@ class LinearSOSSolver(ProofNode):
         new_eqs = {ct(k): v.xreplace(centralizer) for k, v in problem.eq_constraints.items()}
         new_roots = [Root(tuple(1 if roots[0][i] != 0 else 0 for i in range(len(gens))))]
         new_tangents = [ct(t) for t in self._tangents]
+        new_tangents = [t for t in new_tangents if t is not None]
 
         self._transformed_problem = self.new_problem(new_poly, new_ineqs, new_eqs)
-        self._transformed_problem.roots = new_roots
+        self._transformed_problem.set_roots(new_roots)
         self._tangents = new_tangents
         self._decentralizer = {gens[i]: gens[i]/roots[0][i] for i in range(len(gens)) if roots[0][i] != 0 and roots[0][i] != 1}
 
@@ -269,8 +273,9 @@ class LinearSOSSolver(ProofNode):
             tangents = homogenize_expr_list(tangents, _homogenizer)
         else:
             # homogeneous polynomial does not accept non-homogeneous tangents
-            tagents_poly = [t.as_poly(poly.gens) for t in tangents]
-            tangents = [t for t, p in zip(tangents, tagents_poly) if len(p.free_symbols_in_domain)==0 and p.is_homogeneous]
+            tagents_poly = [t.as_poly(problem.gens) for t in tangents]
+            tangents = [t for t, p in zip(tangents, tagents_poly) \
+                        if len(p.free_symbols_in_domain)==0 and p.is_homogeneous]
         self._tangents = tangents
 
 

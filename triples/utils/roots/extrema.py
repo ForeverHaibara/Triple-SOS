@@ -12,14 +12,15 @@ from sympy import (Expr, Poly, Integer, Rational, Float,
     Dummy, Symbol, EmptySet, FiniteSet,
     linear_eq_to_matrix, linsolve, sympify, true
 )
+from sympy.combinatorics import PermutationGroup
 from sympy.polys.polyerrors import PolificationFailed, DomainError
 from sympy.polys.polyclasses import DMP
-from sympy.combinatorics import PermutationGroup
 
 from .polysolve import univar_realroots, solve_poly_system_crt, PolyEvalf, _filter_trivial_system
 from .roots import Root
 from .root_list import RootList
 from ..expressions import identify_symmetry_from_lists
+
 
 # Comparison of tuples of sympy Expressions, compatible with sympy <= 1.9
 default_sort_key = lambda x: tuple(_.sort_key() for _ in x) if not isinstance(x, Expr) else x.sort_key()

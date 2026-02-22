@@ -37,6 +37,7 @@ class ProofNode:
     finished = False
     default_configs = {}
 
+    problem: InequalityProblem
     children: List['ProofNode']
     _complexity: Optional[ProblemComplexity] = None
     _complexity_models: Optional[Union[Dict, bool]] = None

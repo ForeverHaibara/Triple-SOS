@@ -7,12 +7,13 @@ from scipy.sparse import coo_matrix
 from sympy import Poly, Expr, Symbol, Mul, Pow, Integer, Basic
 from sympy import symbols as sp_symbols
 from sympy.matrices import MutableDenseMatrix as Matrix
-from sympy.combinatorics import PermutationGroup, Permutation
+from sympy.combinatorics import PermutationGroup
 from sympy.polys.polyclasses import DMP
 from sympy.polys.rings import PolyRing, PolyElement
 
 from ...utils import arraylize_np, arraylize_sp, MonomialManager
 from ...utils.monomials import generate_partitions
+
 
 _VERBOSE_GENERATE_QUAD_DIFF = False
 
@@ -581,7 +582,13 @@ def _count_contribution_of_monoms(A: np.ndarray, v: np.ndarray, M: int) -> np.nd
         return B
 
 @switchable_lru_cache()
-def _get_matrix_of_quad_diff(tangent_dmp: DMP, degree: int, quad_diff_order: int, step: int, symmetry: PermutationGroup) -> np.ndarray:
+def _get_matrix_of_quad_diff(
+    tangent_dmp: DMP,
+    degree: int,
+    quad_diff_order: int,
+    step: int,
+    symmetry: PermutationGroup
+) -> np.ndarray:
     """
     Generate the matrix representation of all bases of the form
 
@@ -646,8 +653,13 @@ def _get_matrix_of_quad_diff(tangent_dmp: DMP, degree: int, quad_diff_order: int
     return mat
 
 
-def _get_matrix_of_lifted_degrees(poly: Union[DMP, Poly, PolyElement], degree_comb_mat: np.ndarray,
-        symmetry: MonomialManager, symmetry_base: MonomialManager, degree: int) -> np.ndarray:
+def _get_matrix_of_lifted_degrees(
+    poly: Union[DMP, Poly, PolyElement],
+    degree_comb_mat: np.ndarray,
+    symmetry: MonomialManager,
+    symmetry_base: MonomialManager,
+    degree: int
+) -> np.ndarray:
     """
     Low-level function to convert bases to matrix representation efficiently.
 

@@ -1,18 +1,23 @@
-from typing import List, Tuple, Dict, Optional
+from typing import List, Tuple, Dict, Union, Optional
 
 import numpy as np
-from sympy import Poly, Expr, Symbol, Rational
+from sympy import Expr, Symbol
 from sympy import MutableDenseMatrix as Matrix
 from sympy.combinatorics import PermutationGroup
 from sympy.polys.matrices import DomainMatrix
 
 from .basis import LinearBasis, LinearBasisTangent, LinearBasisTangentEven
 from ...sdp.arithmetic import reshape
+from ...utils import MonomialManager
 from ...utils.roots.rationalize import rationalize_array
 
 
-def odd_basis_to_even(basis: List[LinearBasis], symbols: Tuple[Symbol, ...],
-        signs: Dict[Symbol, Tuple[Optional[int], Expr]]) -> List[LinearBasis]:
+def odd_basis_to_even(
+    basis: List[LinearBasis],
+    symbols: Tuple[Symbol, ...],
+    signs: Dict[Symbol,
+    Tuple[Optional[int], Expr]]
+) -> List[LinearBasis]:
     mapping = [signs[s][1] if signs[s][0] == 1 else s for s in symbols]
     new_basis = []
     for b in basis:
@@ -24,7 +29,11 @@ def odd_basis_to_even(basis: List[LinearBasis], symbols: Tuple[Symbol, ...],
     return new_basis
 
 
-def _filter_zero_y(y: List[float], basis: List[LinearBasis], num_multipliers: int) -> Tuple[List[float], List[LinearBasis], int]:
+def _filter_zero_y(
+    y: List[float],
+    basis: List[LinearBasis],
+    num_multipliers: int
+) -> Tuple[List[float], List[LinearBasis], int]:
     """
     Filter out the zero coefficients.
     """
@@ -37,7 +46,10 @@ def _filter_zero_y(y: List[float], basis: List[LinearBasis], num_multipliers: in
 
     return reduced_y, reduced_basis, reduced_num
 
-def _basis_as_matrix(basis: List[LinearBasis], symmetry: PermutationGroup) -> Matrix:
+def _basis_as_matrix(
+    basis: List[LinearBasis],
+    symmetry: Union[PermutationGroup, MonomialManager],
+) -> Matrix:
     """
     Extract the array representations of each basis and stack them into a matrix.
     """
@@ -54,10 +66,10 @@ def _add_regularizer(mat: Matrix, num_multipliers: int) -> Matrix:
     return mat
 
 def linear_correction(
-    y: List[float] = [],
-    basis: List[LinearBasis] = [],
-    num_multipliers: int = 1,
-    symmetry: PermutationGroup = PermutationGroup(),
+    y: List[float],
+    basis: List[LinearBasis],
+    num_multipliers: int,
+    symmetry: Union[PermutationGroup, MonomialManager],
     zero_tol: float = 1e-6,
 ) -> Tuple[Matrix, Matrix, bool]:
     """
@@ -76,10 +88,10 @@ def linear_correction(
         The collection of basis.
     num_multipliers: int
         The number of multipliers.
-    symmetry: PermutationGroup
-        Every term will be wrapped by a cyclic sum of symmetryutation group.
-    homogenizer: Optional[Symbol]
-        The homogenizer of the polynomial.
+    symmetry: Union[PermutationGroup, MonomialManager]
+        Every term will be wrapped by a cyclic sum of symmetry.
+    zero_tol: float
+        The tolerance to filter out the zero coefficients.
     """
 
     # first use the continued fraction to approximate the coefficients
@@ -107,7 +119,8 @@ def linear_correction(
             reduced_y = LUsolve(reduced_arrays, target)
 
             if all(_ >= 0 for _ in reduced_y):
-                reduced_y, reduced_basis, num_multipliers = _filter_zero_y(reduced_y, reduced_basis, num_multipliers)
+                reduced_y, reduced_basis, num_multipliers = _filter_zero_y(
+                    reduced_y, reduced_basis, num_multipliers)
                 reduced_arrays = _basis_as_matrix(reduced_basis, symmetry=symmetry)
                 reduced_arrays = _add_regularizer(reduced_arrays, num_multipliers)
                 reduced_y = Matrix(reduced_y)
@@ -119,6 +132,7 @@ def linear_correction(
             is_equal = False
 
     return y, basis, is_equal
+
 
 def LUsolve(A: Matrix, b: Matrix) -> Matrix:
     """

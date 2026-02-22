@@ -4,7 +4,6 @@ from itertools import combinations
 import numpy as np
 from sympy import Poly, Expr, Integer, Mul, RR
 from sympy import MutableDenseMatrix as Matrix
-from sympy.combinatorics import PermutationGroup
 from sympy.polys.polyclasses import DMP
 
 from ..problem import InequalityProblem

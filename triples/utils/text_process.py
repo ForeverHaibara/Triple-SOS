@@ -7,12 +7,12 @@ from sympy import Expr, Poly, QQ, RR, Rational, Integer, Float, Symbol
 from sympy import parse_expr, sympify, fraction, latex
 from sympy import symbols as sp_symbols
 from sympy.polys import ring
-from sympy.polys.polyclasses import DMP
 from sympy.combinatorics import PermutationGroup
-from sympy.printing.precedence import precedence_traditional, PRECEDENCE
+from sympy.printing.precedence import PRECEDENCE
 
 from .expressions import CyclicSum, CyclicProduct
 from .monomials import parse_symmetry, poly_reduce_by_symmetry, verify_symmetry
+
 
 def cycle_expansion(
     f: str,
@@ -277,8 +277,7 @@ def expand_poly(expr: Expr, gens=None) -> Union[Expr, Poly]:
     arg0 = None
     try:
         arg0 = _expandpoly(expr)
-        dmp = DMP.from_dict(arg0.to_dict(), len(gens)-1, dom_ext)
-        arg0 = Poly.new(dmp, *gens)
+        arg0 = Poly.from_dict(arg0.to_dict(), gens, domain=dom_ext)
     except UnhandledExpr:
         arg0 = expr.expand()
     return arg0
@@ -902,7 +901,7 @@ def short_constant_parser(x):
     return txt
 
 
-def coefficient_triangle(poly: Poly, degree: int = None) -> str:
+def coefficient_triangle(poly: Poly, degree: Optional[int] = None) -> str:
     """
     Convert the coefficients of a polynomial to a list.
 
@@ -913,7 +912,7 @@ def coefficient_triangle(poly: Poly, degree: int = None) -> str:
     ----------
     poly : Poly
         The polynomial to convert.
-    degree : int
+    degree : Optional[int]
         The degree of the polynomial. If None, it will be computed.
     """
     if degree is None:
