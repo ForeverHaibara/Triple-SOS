@@ -103,8 +103,13 @@ def lift_degree(
 
 
 
-def _get_multipliers(ineq_constraints: Dict[Poly, Expr], symbols: Tuple[Symbol, ...], n_plus: int,
-                        symmetry: MonomialManager, preordering: str ='linear') -> Dict[Poly, Expr]:
+def _get_multipliers(
+    ineq_constraints: Dict[Poly, Expr],
+    symbols: Tuple[Symbol, ...],
+    n_plus: int,
+    symmetry: MonomialManager,
+    preordering: str ='linear'
+) -> Dict[Poly, Expr]:
     if preordering == 'linear':
         ineq_constraints = [(k, v) for k, v in ineq_constraints.items() if k.is_linear
                             and k.total_degree() == 1]

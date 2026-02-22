@@ -154,7 +154,7 @@ class LinearSOSSolver(ProofNode):
         time_limit()
         return tangents
 
-    def _prepare_basis(self, degree: int, tangents: Dict[Poly, Expr],
+    def _prepare_basis(self, degree: int, tangents: List[Tuple[Poly, Expr]],
             configs: Dict[str, Any]) -> Tuple[List[LinearBasis], np.ndarray]:
         """
         Prepare basis for linear programming.
@@ -163,7 +163,7 @@ class LinearSOSSolver(ProofNode):
         -----------
         degree: int
             The working degree to generate bases.
-        tangents: Dict[Poly, Expr]
+        tangents: List[Tuple[Poly, Expr]]
             Tangents to generate the bases. Each (key, value) pair is the polynomial
             form and the expression form of the tangent.
         configs: Dict[str, Any]
@@ -405,6 +405,9 @@ class LinearSOSSolver(ProofNode):
             elif isinstance(e, MemoryError):
                 if verbose:
                     print(f"Memory error: {e}. LinearSOS aborted.")
+            elif isinstance(e, OverflowError):
+                if verbose:
+                    print(f"Overflow error: {e}. LinearSOS aborted.")
             else:
                 raise e
 

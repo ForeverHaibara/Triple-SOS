@@ -4,7 +4,7 @@ and also utilities to compute monomial representations under the group symmetry.
 """
 from collections import defaultdict
 from typing import (Dict, List, Tuple, Iterable, Callable,
-    Union, Optional, Any, overload, TypeVar
+    Union, Optional, Any, overload
 )
 import numpy as np
 from sympy import Poly, Expr, Symbol, Add, ZZ, QQ, factorial, prod
@@ -396,8 +396,7 @@ class MonomialManager():
                     monom = inv_monoms[i]
                     for monom2 in permute(monom):
                         terms_dict[monom2] = z
-            rep = DMP.from_dict(terms_dict, len(gens)-1, domain)
-            return Poly.new(rep, *gens)
+            return Poly.from_dict(terms_dict, gens, domain=domain)
 
         elif isinstance(array, np.ndarray):
             array = array.tolist()

@@ -11,6 +11,8 @@ from sympy.polys.polyerrors import BasePolynomialError
 from sympy.polys.polytools import groebner, PurePoly
 from sympy.polys.rootoftools import ComplexRootOf as CRootOf
 from sympy.utilities import postfixes
+from sympy.external.importtools import version_tuple
+from sympy import __version__ as SYMPY_VERSION
 from mpmath.libmp.libhyper import NoConvergence
 
 # Comparison of tuples of sympy Expressions, compatible with sympy <= 1.9
@@ -40,6 +42,69 @@ def _filter_trivial_system(polys: List[Poly]) -> Union[List[Poly], None]:
             ordered_inds.append(ind)
     return [polys[ind] for ind in ordered_inds]
 
+
+if version_tuple(SYMPY_VERSION) >= (1, 14):
+    def poly_lift(poly: Poly) -> Poly:
+        return poly.lift()
+
+    def _crootof_realroots_alg(poly: Poly):
+        """Get real roots of a sqf poly on an algebraic field."""
+        return list(set(CRootOf.real_roots(poly, radicals=False)))
+
+else:
+    from collections import Counter
+    from sympy.polys.polyclasses import DMP
+    from sympy.polys.densebasic import dmp_include, dmp_to_dict, dmp_from_dict
+    from sympy.polys.euclidtools import dmp_resultant
+    def dmp_alg_inject(f, u, K):
+        fd = dmp_to_dict(f, u, K)
+        h = {}
+        for f_monom, g in fd.items():
+            for g_monom, c in g.to_dict().items():
+                h[g_monom + f_monom] = c
+        F = dmp_from_dict(h, u + 1, K.dom)
+        return F, u + 1, K.dom
+
+    def dmp_lift(f, u, K):
+        F, v, K2 = dmp_alg_inject(f, u, K)
+        p_a = K.mod.to_list()
+        P_A = dmp_include(p_a, list(range(1, v + 1)), 0, K2)
+        return dmp_resultant(F, P_A, v, K2) # type: ignore
+
+    # poly.lift() had a bug before 1.14:
+    # https://github.com/sympy/sympy/pull/26812
+    def poly_lift(poly: Poly) -> Poly:
+        if not poly.domain.is_AlgebraicField:
+            return poly
+        rep = poly.rep
+        dmp = DMP(dmp_lift(rep.rep, rep.lev, rep.dom), rep.dom.dom, rep.lev)
+        return Poly.new(dmp, *poly.gens)
+
+    def _which_roots(f, candidates, num_roots):
+        fe = f.as_expr()
+        x = f.gens[0]
+        prec = 10
+        candidates = list(Counter(candidates).keys())
+
+        while len(candidates) > num_roots:
+            potential_candidates = []
+            for r in candidates:
+                # If f(r) != 0 then f(r).evalf() gives a float/complex with precision.
+                f_r = fe.xreplace({x: r}).evalf(prec, maxn=2*prec)
+                if abs(f_r)._prec < 2:
+                    potential_candidates.append(r)
+
+            candidates = potential_candidates
+            prec *= 2
+
+        return candidates
+
+    def _crootof_realroots_alg(poly: Poly):
+        rts = poly_lift(poly).real_roots()
+        cnt = poly.count_roots()
+        return _which_roots(poly, rts, cnt)
+
+
 def _get_realroots_sqf(poly: Poly) -> List[Union[Rational, CRootOf]]:
     """
     Low level implementation of poly.real_roots() for square-free polynomials.
@@ -48,13 +113,14 @@ def _get_realroots_sqf(poly: Poly) -> List[Union[Rational, CRootOf]]:
         return []
     if not (poly.domain.is_QQ or poly.domain.is_ZZ):
         # fallback
-        return list(set(CRootOf.real_roots(poly, radicals=False)))
+        return _crootof_realroots_alg(poly)
     if poly.total_degree() == 1:
         return [-poly.coeff_monomial((0,)) / poly.coeff_monomial((1,))]
 
     poly = PurePoly(poly)
     intervals = CRootOf._get_reals_sqf(poly)
     return [CRootOf._new(poly, i) for i in range(len(intervals))]
+
 
 class PolyEvalf:
     """
@@ -82,7 +148,7 @@ class PolyEvalf:
         """Infer the sign of a polynomial at a point numerically."""
         if all(isinstance(_, Rational) for _ in point):
             v = self.polyeval(poly, point)
-            return 1 if v > 0 else (0 if v == 0 else -1)
+            return 0 if v == 0 else (1 if bool(v > 0) else -1)
         def try_dps(dps, tries):
             for i in range(tries):
                 v = self.polyeval(poly, point, n=dps) # .n(dps*2//3, chop=True)
@@ -117,13 +183,17 @@ def univar_realroots(poly: Union[Poly, Expr], symbol: Symbol) -> List[Union[Rati
      CRootOf(x**4 + x**3 + x**2 + x - 1, 0),
      CRootOf(x**4 + x**3 + x**2 + x - 1, 1)]
     """
-    try:
-        poly = Poly(poly, symbol, extension=True)
-    except BasePolynomialError: # CoercionFailed, etc.
+    if isinstance(poly, Poly) and len(poly.gens) == 1 and poly.gens[0] == symbol\
+        and (poly.domain.is_ZZ or poly.domain.is_QQ or poly.domain.is_AlgebraicField):
+        pass
+    else:
         try:
-            poly = Poly(poly, symbol)
-        except BasePolynomialError:
-            pass
+            poly = Poly(poly, symbol, extension=True)
+        except BasePolynomialError: # CoercionFailed, etc.
+            try:
+                poly = Poly(poly, symbol)
+            except BasePolynomialError:
+                pass
     if not isinstance(poly, Poly):
         return []
     if poly.domain.is_Exact and poly.domain.is_Numerical:
@@ -282,7 +352,6 @@ def solve_triangulated_crt(polys: List[Poly], symbols: List[Symbol]) -> List[Tup
     # map back to original symbols
     solutions = [tuple(s[i] for i in original_inds) for s, _ in solutions]
     return solutions
-
 
 
 def _solve_poly_system_2vars_resultant(polys: List[Poly], symbols: List[Symbol]) -> List[Tuple[CRootOf]]:

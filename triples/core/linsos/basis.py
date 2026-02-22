@@ -1,5 +1,5 @@
 from functools import lru_cache, wraps
-from typing import Any, Union, Tuple, List, Dict, Callable, Optional
+from typing import Any, Union, Tuple, List, Callable, Optional
 from time import perf_counter
 
 import numpy as np
@@ -14,7 +14,7 @@ from sympy.polys.rings import PolyRing, PolyElement
 from ...utils import arraylize_np, arraylize_sp, MonomialManager
 from ...utils.monomials import generate_partitions
 
-
+# only for dev purpose
 _VERBOSE_GENERATE_QUAD_DIFF = False
 
 def tuple_sum(t1: Tuple[int, ...], t2: Tuple[int, ...]) -> Tuple[int, ...]:
@@ -149,7 +149,13 @@ class LinearBasisTangent(LinearBasis):
         return obj
 
     @classmethod
-    def generate(cls, tangent: Expr, symbols: Tuple[int, ...], degree: int, tangent_p: Optional[Poly] = None, require_equal: bool = True) -> List['LinearBasisTangent']:
+    def generate(cls,
+        tangent: Expr,
+        symbols: Tuple[int, ...],
+        degree: int,
+        tangent_p: Optional[Poly] = None,
+        require_equal: bool = True
+    ) -> List['LinearBasisTangent']:
         """
         Generate all possible linear bases of the form x1^a1 * x2^a2 * ... * xn^an * tangent
         with total degree == degree or total degree <= degree.
@@ -165,16 +171,23 @@ class LinearBasisTangent(LinearBasis):
         if degree < 0 or degree % step != 0:
             return []
         tangent = _callable_expr.from_expr(tangent, symbols, p=tangent_p)
-        return [LinearBasisTangent.from_callable_expr(tuple(i*step for i in comb), tangent) for comb in \
-                generate_partitions([cls._degree_step] * len(symbols), degree, equal=require_equal, descending=False)]
+        combs = generate_partitions([cls._degree_step] * len(symbols),
+                    degree, equal=require_equal, descending=False)
+        return [LinearBasisTangent.from_callable_expr(
+            tuple(i*step for i in comb), tangent) for comb in combs]
 
     @classmethod
     def generate_quad_diff(cls,
-            tangent: Expr, symbols: Tuple[Symbol, ...], degree: int, symmetry: PermutationGroup,
-            tangent_p: Optional[Poly] = None, quad_diff_order: Union[bool, int] = 8,
-        ) -> Tuple[List['LinearBasisTangent'], np.ndarray]:
+        tangent: Expr,
+        symbols: Tuple[Symbol, ...],
+        degree: int,
+        symmetry: PermutationGroup,
+        tangent_p: Optional[Poly] = None,
+        quad_diff_order: Union[bool, int] = 8,
+    ) -> Tuple[List['LinearBasisTangent'], np.ndarray]:
         """
-        Generate all possible linear bases of the form x1^a1 * x2^a2 * ... * xn^an * (x1-x2)^(2b_12) * ... * (xi-xj)^(2b_ij) * tangent
+        Generate all possible linear bases of the form
+        `x1^a1 * x2^a2 * ... * xn^an * (x1-x2)^(2b_12) * ... * (xi-xj)^(2b_ij) * tangent`
         with total degree == degree.
         Also, return the matrix representation of the bases.
 
@@ -547,8 +560,6 @@ def _get_reduced_indices(symmetry: MonomialManager, symmetry_base: MonomialManag
 
 def _count_contribution_of_monoms(A: np.ndarray, v: np.ndarray, M: int) -> np.ndarray:
     """
-    (Written by Deepseek R1)
-
     Parameters
     -----------
     A : np.ndarray with shape (X, N), each element to be an integer in [0, M)
@@ -592,10 +603,10 @@ def _get_matrix_of_quad_diff(
     """
     Generate the matrix representation of all bases of the form
 
-        x1^a1 * x2^a2 * ... * xn^an * (x1-x2)^(2b_12) * ... * (xi-xj)^(2b_ij) * tangent
+        `x1^a1 * x2^a2 * ... * xn^an * (x1-x2)^(2b_12) * ... * (xi-xj)^(2b_ij) * tangent`
 
-    with total degree == degree and (2b_12 + ... + 2b_ij) <= quad_diff_order and
-    a1 % step == a2 % step == ... == an % step == 0.
+    with `total degree == degree` and `(2b_12 + ... + 2b_ij) <= quad_diff_order` and
+    `a1 % step == a2 % step == ... == an % step == 0`.
 
     This is a low-level and optimized function for generating bases, and is
     cached by lru_cache.
@@ -663,6 +674,9 @@ def _get_matrix_of_lifted_degrees(
     """
     Low-level function to convert bases to matrix representation efficiently.
 
+    For very large systems, this will raise OverflowError / MemoryError when
+    allocating the data and the error is expected to be caught outside the function.
+
     Parameters
     -----------
     poly : Union[DMP, Poly, PolyElement]
@@ -723,9 +737,7 @@ def _get_matrix_of_lifted_degrees(
     target_monoms = np.array(target_monoms, dtype=_DTYPE) @ encoding
 
     # add source monoms with degree_comb_mat
-    # TODO: will the matrix cause MemoryError?
-    source_monoms = np.tile(source_monoms.reshape((1, -1)), (degree_comb_mat.shape[0], 1))
-    new_monoms = source_monoms + degree_comb_mat.reshape((-1, 1))
+    new_monoms = source_monoms.reshape((1, -1)) + degree_comb_mat.reshape((-1, 1))
 
     # map encoding to indices
     inv_target_monoms, multiplicity = _get_reduced_indices(symmetry, symmetry_base, degree)

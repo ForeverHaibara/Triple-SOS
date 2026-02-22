@@ -53,7 +53,7 @@ def polysubs(poly: Poly, subs: Dict[Symbol, Expr], symbols: List[Symbol]) -> Pol
     lev = len(inds) - 1
     coeffs = {k: DMP.from_dict(rep, lev, poly.domain) for k, rep in coeffs.items()}
 
-    subs = [Poly(subs[poly.gens[i]], symbols).rep for i in rest_inds]
+    subs = [Poly(subs[poly.gens[i]], symbols, extension=True).rep for i in rest_inds]
     s = 0
     for monom, coeff in coeffs.items():
         for i, d in enumerate(monom):
@@ -83,7 +83,7 @@ def polylize_input(poly: Expr, ineq_constraints: List[Expr], eq_constraints: Lis
     def polylize(f, symbols):
         f = sympify(f)
         if not isinstance(f, Poly) or not f.domain.is_Numerical:
-            f = Poly(f.doit(), *symbols) #, extension=True)
+            f = Poly(f.doit(), *symbols, extension=True)
         if f is None:
             raise PolificationFailed({}, f, f)
         if not check_poly(f):
@@ -468,7 +468,6 @@ def _restore_solution(points: List[Tuple[Expr]], elim: Dict[Symbol, Expr],
     return points
 
 
-
 def _assign_groups(nvars: int, m: int, include_zero: bool = True):
     l = [0] * nvars
     total = []
@@ -488,8 +487,15 @@ def _assign_groups(nvars: int, m: int, include_zero: bool = True):
     return total
 
 
-def _optimize_by_symbol_reduction(poly: Poly, ineq_constraints: List[Poly], eq_constraints: List[Poly],
-        symbols: Symbol, max_different=2, solver=None, include_zero=True) -> List[Tuple[Expr]]:
+def _optimize_by_symbol_reduction(
+    poly: Poly,
+    ineq_constraints: List[Poly],
+    eq_constraints: List[Poly],
+    symbols: List[Symbol],
+    max_different=2,
+    solver=None,
+    include_zero=True
+) -> List[Tuple[Expr]]:
     """
     Optimize a polynomial by reducing the number of different variables.
     If the current number of different variables exceeds `max_different`,
@@ -525,9 +531,15 @@ def _optimize_by_symbol_reduction(poly: Poly, ineq_constraints: List[Poly], eq_c
     return all_points
 
 
-def _optimize_by_ineq_comb(poly: Poly, ineq_constraints: List[Poly], eq_constraints: List[Poly],
-        symbols: Symbol, eliminate_func=None, solver=None, symmetry: Optional[PermutationGroup]=None
-    ) -> List[Tuple[Expr]]:
+def _optimize_by_ineq_comb(
+    poly: Poly,
+    ineq_constraints: List[Poly],
+    eq_constraints: List[Poly],
+    symbols: List[Symbol],
+    eliminate_func=None,
+    solver=None,
+    symmetry: Optional[PermutationGroup]=None
+) -> List[Tuple[Expr]]:
     """
     Optimize a polynomial with inequality constraints by considering all possible
     combinations of active inequality constraints. After each dicision of active
@@ -601,8 +613,14 @@ def _optimize_by_ineq_comb(poly: Poly, ineq_constraints: List[Poly], eq_constrai
     return all_points
 
 
-def _optimize_poly(poly: Poly, ineq_constraints: List[Poly], eq_constraints: List[Poly], symbols: List[Symbol],
-        max_different: int = 2, symmetry: Optional[PermutationGroup]=None) -> List[Tuple[Expr]]:
+def _optimize_poly(
+    poly: Poly,
+    ineq_constraints: List[Poly],
+    eq_constraints: List[Poly],
+    symbols: List[Symbol],
+    max_different: int = 2,
+    symmetry: Optional[PermutationGroup]=None
+) -> List[Tuple[Expr]]:
     """
     Internal function to optimize a polynomial with inequality and equality constraints.
     """
@@ -661,13 +679,18 @@ def _optimize_poly(poly: Poly, ineq_constraints: List[Poly], eq_constraints: Lis
     )
     points.extend(_optimize_by_ineq_comb(poly, ineq_constraints, eq_constraints, symbols,
         eliminate_func=_eliminate_linear, solver=solver, symmetry=symmetry))
-
     return points
 
 
-def optimize_poly(poly: Union[Poly, Expr], ineq_constraints: List[Union[Poly, Expr]] = [], eq_constraints: List[Union[Poly, Expr]] = [],
-        symbols: List[Symbol] = None, objective: str = 'min', return_type: str = 'tuple', max_different: int = 2
-    ) -> List[Root]:
+def optimize_poly(
+    poly: Union[Poly, Expr],
+    ineq_constraints: List[Union[Poly, Expr]] = [],
+    eq_constraints: List[Union[Poly, Expr]] = [],
+    symbols: List[Symbol] = None,
+    objective: str = 'min',
+    return_type: str = 'tuple',
+    max_different: int = 2
+) -> List[Root]:
     """
     Algebraically optimize a polynomial with given inequality and equality constraints
     using heuristic methods. It uses incomplete algorithm to balance the efficiency

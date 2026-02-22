@@ -2,11 +2,11 @@ from typing import Optional, Union, List, Dict, Tuple, Any
 
 import numpy as np
 from sympy import (
-    Poly, Expr, Symbol, Rational, Integer, QQ, AlgebraicNumber,
+    Poly, Expr, Symbol, Integer, QQ, AlgebraicNumber,
     fraction, sympify, nsimplify, factorial, factorint, prod, cos
 )
 from sympy.core import S
-from sympy.combinatorics import PermutationGroup, Permutation, CyclicGroup
+from sympy.combinatorics import PermutationGroup, CyclicGroup
 from sympy.polys.constructor import construct_domain
 from sympy.polys.domains import Domain
 from sympy.polys.domains.gaussiandomains import GaussianElement

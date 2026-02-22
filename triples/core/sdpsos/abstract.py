@@ -1,9 +1,9 @@
 from collections import OrderedDict
 from typing import List, Tuple, Dict, Any, Callable, Optional, Union
-from time import time, perf_counter
+from time import perf_counter
 
 import numpy as np
-from sympy import Expr, Poly, Symbol, Domain, QQ
+from sympy import Expr, Poly, Symbol
 from sympy.matrices import MutableDenseMatrix as Matrix
 from sympy.core.relational import Relational
 
@@ -396,7 +396,7 @@ class AtomSOSElement(SOSElement):
         ######################################################################
         #                    Form the equation system
         ######################################################################
-        time0 = time()
+        time0 = perf_counter()
         eqs = self._get_equation_system(parameters=parameters)
 
         stack_psd = Matrix.hstack(*eqs.psd_eqs.values())
@@ -404,13 +404,13 @@ class AtomSOSElement(SOSElement):
         rhs = eqs.rhs
 
         if verbose:
-            print(f"Time for building coefficient equations : {time() - time0:.6f} seconds.")
+            print(f"Time for building coefficient equations : {perf_counter() - time0:.6f} seconds.")
         time_limit()
 
         ######################################################################
         #           Solve the equation system to build SDPProblem
         ######################################################################
-        time0 = time()
+        time0 = perf_counter()
         sdp, (x0, space) = SDPProblem.from_equations(A, rhs,
             splits = {key: sqrtsize_of_mat(value.shape[1]) for key, value in eqs.psd_eqs.items()},
             add_force_zeros = True,
@@ -418,7 +418,7 @@ class AtomSOSElement(SOSElement):
             time_limit = time_limit
         )
         if verbose:
-            print(f"Time for solving coefficient equations  : {time() - time0:.6f} seconds. Dof = {sdp.dof}")
+            print(f"Time for solving coefficient equations  : {perf_counter() - time0:.6f} seconds. Dof = {sdp.dof}")
         time_limit()
 
 
@@ -556,7 +556,7 @@ class JointSOSElement(SOSElement):
         ######################################################################
         #                    Form the equation system
         ######################################################################
-        time0 = time()
+        time0 = perf_counter()
         eqs = self._get_equation_system(parameters=parameters)
 
         stack_psd = Matrix.hstack(*eqs.psd_eqs.values())
@@ -564,20 +564,20 @@ class JointSOSElement(SOSElement):
         rhs = eqs.rhs
 
         if verbose:
-            print(f"Time for building coefficient equations : {time() - time0:.6f} seconds.")
+            print(f"Time for building coefficient equations : {perf_counter() - time0:.6f} seconds.")
 
 
         ######################################################################
         #           Solve the equation system to build SDPProblem
         ######################################################################
-        time0 = time()
+        time0 = perf_counter()
         sdp, (x0, space) = SDPProblem.from_equations(A, rhs,
             splits = {key: sqrtsize_of_mat(value.shape[1]) for key, value in eqs.psd_eqs.items()},
             add_force_zeros = True,
             equal_entries = eqs.equal_entries, add_equal_entries = True,
         )
         if verbose:
-            print(f"Time for solving coefficient equations  : {time() - time0:.6f} seconds. Dof = {sdp.dof}")
+            print(f"Time for solving coefficient equations  : {perf_counter() - time0:.6f} seconds. Dof = {sdp.dof}")
 
 
         ######################################################################
