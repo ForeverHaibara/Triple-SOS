@@ -20,19 +20,26 @@ from ..shared import homogenize_expr_list
 from ...sdp.arithmetic import ArithmeticTimeout
 from ...utils import Root, MonomialManager, clear_polys_by_symmetry
 
-
-LINPROG_OPTIONS = {
-    'method': 'highs-ds' if tuple(version_tuple(_SCIPY_VERSION)) >= (1, 6) else 'simplex',
-    'options': {
-        'presolve': False,
+if tuple(version_tuple(_SCIPY_VERSION)) >= (1, 6):
+    LINPROG_OPTIONS = {
+        "method": "highs-ds",
+        "options": {
+            "presolve": False,
+        }
     }
-}
+else:
+    LINPROG_OPTIONS = {
+        "method": "simplex",
+        "options": {
+            "presolve": False,
+        }
+    }
 
-if _SCIPY_VERSION in ('1.15.0','1.15.1','1.15.2'):
-    warnings.warn('SciPy 1.15.0-1.15.2 has a bug in linprog that gets stuck with large scale problems.\n'
-        'Please upgrade to 1.15.3 or higher or downgrade to 1.14.x.\n'
-        'See https://github.com/scipy/scipy/issues/22655 for details.')
 
+if _SCIPY_VERSION in ("1.15.0","1.15.1","1.15.2"):
+    warnings.warn("SciPy 1.15.0-1.15.2 has a bug in linprog that gets stuck with large scale problems.\n"
+        "Please upgrade to 1.15.3 or higher or downgrade to 1.14.x.\n"
+        "See https://github.com/scipy/scipy/issues/22655 for details.")
 
 
 class _basis_limit_exceeded(Exception): ...
@@ -51,17 +58,59 @@ class LinearSOSSolver(ProofNode):
     and tries to find a linear combination of the bases that adds to the target polynomial.
     Linear programming provides a smaller cone than the semidefinite programming (SDP) relaxation,
     but often supports a larger scale of problems.
+
+    Note
+    ----
+    The linear programming solver is based on scipy.optimize.linprog. When scipy version >= 1.6,
+    it uses the highs-ds method, which is a fast and stable solver. When scipy version < 1.6,
+    it uses the simplex method, which is slower and less stable. Update scipy to 1.6 or higher
+    for better performance.
+
+    Parameters
+    ----------
+    basis_limit: int
+        The limit of the basis. When the basis exceeds the limit, the solver stops and returns None.
+        Defaults to 15000.
+    lift_degree_limit: int
+        The maximum degree to lift the polynomial. Defaults to 4.
+    quad_diff_order: int
+        The maximum degree of the form (xi - xj)^(2k)*... in the basis. Defaults to 8.
+    preordering: str
+        The preordering method for extending the basis. It can be 'none', 'linear', 'quadratic' or 'full'.
+        Defaults to 'quadratic'.
+    augment_tangents: bool
+        Whether to augment the tangents using heuristic methods. Defaults to True.
+    centralize: bool
+        Whether to centralize the problem so that there is a root at (1,1,...,1) if possible.
+        This improves stability. Defaults to True.
+    linprog_options: dict
+        Options for scipy.optimize.linprog. Defaultedly use `{'method': 'highs-ds', 'options': {'presolve': False}}`.
+        Note that interiorpoint oftentimes does not provide exact rational solution. Both 'highs-ds' or 'simplex' are
+        recommended, yet the former is slightly faster.
+
+        Moreover, using `presolve == True` has bug solving s((b2-a2+3c2+ab+7bc-5ca)(a2-b2-ab+2bc-ca)2):
+        Assertion failed: abs_value < pivot_tolerance, file ../../scipy/_lib/highs/src/util/HFactor.cpp, line 1474
+        Thus, for stability, we use `presolve == False` by default. However, setting it to True could be slightly faster.
+    linprog_time_limit: float
+        The time limit for linear programming in seconds. Defaults to 300.0. Since the simplex method runs in
+        exponential time in the worst case, this prevents the solver from running too long.
+    allow_numer: int
+        Whether to allow numerical solution. When it is 0, the solution must be exact. When > 0, the solution can be numerical,
+        this might be useful for large scale problems or irrational problems. TODO: Allow tolerance?
+    verbose: bool
+        Whether to print the information of the linear programming problem. Defaults to False.
     """
     default_configs = {
-        'verbose': False,
-        'linprog_options': LINPROG_OPTIONS,
-        'allow_numer': 0,
-        'centralize': True,
-        'augment_tangents': True,
-        'preordering': 'quadratic',
-        'quad_diff_order': 8,
-        'basis_limit': 15000,
-        'lift_degree_limit': 4,
+        "basis_limit": 20000,
+        "lift_degree_limit": 4,
+        "quad_diff_order": 8,
+        "preordering": "quadratic",
+        "augment_tangents": True,
+        "centralize": True,
+        "linprog_options": LINPROG_OPTIONS,
+        "linprog_time_limit": 300.0,
+        "allow_numer": 0,
+        "verbose": False,
     }
 
 
@@ -266,7 +315,7 @@ class LinearSOSSolver(ProofNode):
 
         problem, _homogenizer = self.problem.homogenize()
         self._transformed_problem = problem
-        tangents = []
+        tangents = configs.get('tangents', [])
 
         if _homogenizer is not None:
             # homogenize the tangents
@@ -275,7 +324,7 @@ class LinearSOSSolver(ProofNode):
             # homogeneous polynomial does not accept non-homogeneous tangents
             tagents_poly = [t.as_poly(problem.gens) for t in tangents]
             tangents = [t for t, p in zip(tangents, tagents_poly) \
-                        if len(p.free_symbols_in_domain)==0 and p.is_homogeneous]
+                        if p is not None and len(p.free_symbols_in_domain) == 0 and p.is_homogeneous]
         self._tangents = tangents
 
 
@@ -361,13 +410,19 @@ class LinearSOSSolver(ProofNode):
                         if linprog_options.get('method', '').startswith('highs'):
                             linprog_options = linprog_options.copy()
                             linprog_options['options'] = linprog_options.get('options', {}).copy()
-                            linprog_options['options']['time_limit'] = end_time - perf_counter()
+                            tl = linprog_options['options'].get('time_limit', np.inf)
+                            tl = min([tl, end_time - perf_counter(), configs['linprog_time_limit']])
+                            linprog_options['options']['time_limit'] = tl
 
                         linear_sos = linprog(optimized, A_eq=arrays.T, b_eq=b, **linprog_options)
                     except Exception:
                         pass
                 if linear_sos is None or not linear_sos.success:
                     # lift the degree up and retry
+                    if linear_sos is not None and 'time limit' in linear_sos.message.lower():
+                        if verbose:
+                            print('\tLP time limit reached.')
+                            break
                     if verbose:
                         print('\tLP failed.')
                     continue
@@ -430,20 +485,28 @@ def LinearSOS(
     *,
     symmetry: Optional[PermutationGroup] = None,
     roots: Optional[List[Root]] = None,
-    tangents: List[Expr] = [],
+    tangents: Optional[List[Expr]] = None,
+    basis_limit: int = 20000,
+    lift_degree_limit: int = 4,
+    quad_diff_order: int = 8,
+    preordering: str = 'quadratic',
     augment_tangents: bool = True,
     centralize: bool = True,
-    preordering: str = 'quadratic',
-    verbose: bool = False,
-    quad_diff_order: int = 8,
-    basis_limit: int = 15000,
-    lift_degree_limit: int = 4,
-    time_limit: float = 3600.,
     linprog_options: Dict = LINPROG_OPTIONS,
-    allow_numer: int = 0
+    linprog_time_limit: float = 300.,
+    allow_numer: int = 0,
+    time_limit: float = 3600.,
+    verbose: bool = False,
 ) -> Optional[Solution]:
     """
     Main function for linear programming SOS.
+
+    Note
+    ----
+    The linear programming solver is based on scipy.optimize.linprog. When scipy version >= 1.6,
+    it uses the highs-ds method, which is a fast and stable solver. When scipy version < 1.6,
+    it uses the simplex method, which is slower and less stable. Update scipy to 1.6 or higher
+    for better performance.
 
     Parameters
     -----------
@@ -460,22 +523,21 @@ def LinearSOS(
         search, pass in an empty list.
     tangents: list
         CURRENTLY UNUSED.
-    augment_tangents: bool
-        Whether to augment the tangents using heuristic methods. Defaults to True.
+    basis_limit: int
+        The limit of the basis. When the basis exceeds the limit, the solver stops and returns None.
+        Defaults to 20000.
+    lift_degree_limit: int
+        The maximum degree to lift the polynomial. Defaults to 4.
+    quad_diff_order: int
+        The maximum degree of the form (xi - xj)^(2k)*... in the basis. Defaults to 8.
     preordering: str
         The preordering method for extending the basis. It can be 'none', 'linear', 'quadratic' or 'full'.
         Defaults to 'quadratic'.
-    verbose: bool
-        Whether to print the information of the linear programming problem. Defaults to False.
-    quad_diff_order: int
-        The maximum degree of the form (xi - xj)^(2k)*... in the basis. Defaults to 8.
-    basis_limit: int
-        The limit of the basis. When the basis exceeds the limit, the solver stops and returns None.
-        Defaults to 15000.
-    lift_degree_limit: int
-        The maximum degree to lift the polynomial. Defaults to 4.
-    time_limit: float
-        The time limit in seconds for the solver.
+    augment_tangents: bool
+        Whether to augment the tangents using heuristic methods. Defaults to True.
+    centralize: bool
+        Whether to centralize the problem so that there is a root at (1,1,...,1) if possible.
+        This improves stability. Defaults to True.
     linprog_options: dict
         Options for scipy.optimize.linprog. Defaultedly use `{'method': 'highs-ds', 'options': {'presolve': False}}`.
         Note that interiorpoint oftentimes does not provide exact rational solution. Both 'highs-ds' or 'simplex' are
@@ -484,9 +546,16 @@ def LinearSOS(
         Moreover, using `presolve == True` has bug solving s((b2-a2+3c2+ab+7bc-5ca)(a2-b2-ab+2bc-ca)2):
         Assertion failed: abs_value < pivot_tolerance, file ../../scipy/_lib/highs/src/util/HFactor.cpp, line 1474
         Thus, for stability, we use `presolve == False` by default. However, setting it to True could be slightly faster.
+    linprog_time_limit: float
+        The time limit for linear programming in seconds. Defaults to 300.0. Since the simplex method runs in
+        exponential time in the worst case, this prevents the solver from running too long.
     allow_numer: int
         Whether to allow numerical solution. When it is 0, the solution must be exact. When > 0, the solution can be numerical,
         this might be useful for large scale problems or irrational problems. TODO: Allow tolerance?
+    time_limit: float
+        The time limit in seconds for the solver.
+    verbose: bool
+        Whether to print the information of the linear programming problem. Defaults to False.
 
     Returns
     -------
@@ -502,21 +571,28 @@ def LinearSOS(
             "time_limit": time_limit,
         },
         SolvePolynomial: {
-            'solvers': [LinearSOSSolver],
+            "solvers": [LinearSOSSolver],
         },
         LinearSOSSolver: {
-            'verbose': verbose,
-            'linprog_options': linprog_options,
-            'allow_numer': allow_numer,
-            # 'symmetry': symmetry,
-            # 'roots': roots,
-            # 'tangents': tangents,
-            'augment_tangents': augment_tangents,
-            'centralize': centralize,
-            'preordering': preordering,
-            'quad_diff_order': quad_diff_order,
-            'basis_limit': basis_limit,
-            'lift_degree_limit': lift_degree_limit,
+            # "symmetry": symmetry,
+            # "tangents": tangents,
+            "basis_limit": basis_limit,
+            "lift_degree_limit": lift_degree_limit,
+            "quad_diff_order": quad_diff_order,
+            "preordering": preordering,
+            "augment_tangents": augment_tangents,
+            "centralize": centralize,
+            "linprog_options": linprog_options,
+            "linprog_time_limit": linprog_time_limit,
+            "allow_numer": allow_numer,
+            "verbose": verbose,
         }
     }
+
+    if tangents is not None:
+        configs[LinearSOSSolver]["tangents"] = tangents
+
+        # XXX: is it necessary to disable transformations?
+        # configs[SolvePolynomial]["eliminate_power_constraints"] = False
+
     return problem.sum_of_squares(configs)

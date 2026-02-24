@@ -137,7 +137,7 @@ var settingsDefinition = {children: {
                         name: "Basis Limit",
                         description: "Set the maximum number of bases for Linear SOS.",
                         type: "number",
-                        defaultValue: 15000,
+                        defaultValue: 20000,
                         min: 0,
                         step: 1,
                         settingPath: "sos.linearSOS.basisLimit"
