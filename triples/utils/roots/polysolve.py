@@ -43,7 +43,7 @@ def _filter_trivial_system(polys: List[Poly]) -> Union[List[Poly], None]:
     return [polys[ind] for ind in ordered_inds]
 
 
-if version_tuple(SYMPY_VERSION) >= (1, 14):
+if tuple(version_tuple(SYMPY_VERSION)) >= (1, 14):
     def poly_lift(poly: Poly) -> Poly:
         return poly.lift()
 
