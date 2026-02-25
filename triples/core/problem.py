@@ -384,6 +384,7 @@ class InequalityProblem(Generic[T]):
     def polylize(self,
         ineqs_sqf: bool = True,
         eqs_sqf: bool = True,
+        extension: bool = True,
     ) -> 'InequalityProblem':
         problem = self
         expr, ineq_constraints, eq_constraints = \
@@ -396,7 +397,7 @@ class InequalityProblem(Generic[T]):
         def as_poly(expr):
             if isinstance(expr, Poly) and expr.gens == gens:
                 return expr
-            return Poly(expr.doit(), *gens)
+            return Poly(expr.doit(), *gens, extension=extension)
 
         expr = as_poly(expr)
         ineq_constraints = dict((as_poly(e), e2) for e, e2 in ineq_constraints.items())

@@ -2591,7 +2591,7 @@ class MathematicalInequalitiesVol3(MathematicalInequalities):
         return c4p(a+1/b)-c4s(a)*c4s(1/a), [a-1,b-1,c-1,d-1], []
 
     def problem_vasile_p31155_p2(self):
-        return c4p(a+1/b)-c4s(a)*c4s(1/a), [a,b,c,d], [c4p(a)-1]
+        return -c4p(a+1/b)+c4s(a)*c4s(1/a), [a,b,c,d], [c4p(a)-1]
 
     def problem_vasile_p31156(self):
         return c4s((1+a/(a+b))**2) - 7, [a,b,c,d], []

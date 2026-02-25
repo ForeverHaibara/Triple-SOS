@@ -3,7 +3,7 @@ from time import perf_counter
 import warnings
 
 import numpy as np
-from sympy import Poly, Expr
+from sympy import Poly, Expr, fraction
 from sympy.combinatorics import PermutationGroup
 from sympy.external.importtools import version_tuple
 from scipy import __version__ as _SCIPY_VERSION
@@ -15,8 +15,8 @@ from .lift import lift_degree
 from .solution import create_linear_sol_from_y_basis
 from ..solution import Solution
 from ..problem import InequalityProblem
+from ..dispatch import _dtype_homogenize
 from ..preprocess import ProofNode, ProofTree, SolvePolynomial
-from ..shared import homogenize_expr_list
 from ...sdp.arithmetic import ArithmeticTimeout
 from ...utils import Root, MonomialManager, clear_polys_by_symmetry
 
@@ -37,9 +37,11 @@ else:
 
 
 if _SCIPY_VERSION in ("1.15.0","1.15.1","1.15.2"):
-    warnings.warn("SciPy 1.15.0-1.15.2 has a bug in linprog that gets stuck with large scale problems.\n"
+    warnings.warn(
+        "SciPy 1.15.0-1.15.2 has a bug in linprog that gets stuck with large scale problems.\n"
         "Please upgrade to 1.15.3 or higher or downgrade to 1.14.x.\n"
-        "See https://github.com/scipy/scipy/issues/22655 for details.")
+        "See https://github.com/scipy/scipy/issues/22655 for details."
+    )
 
 
 class _basis_limit_exceeded(Exception): ...
@@ -69,34 +71,37 @@ class LinearSOSSolver(ProofNode):
     Parameters
     ----------
     basis_limit: int
-        The limit of the basis. When the basis exceeds the limit, the solver stops and returns None.
-        Defaults to 15000.
+        The limit of the basis. When the basis exceeds the limit, the solver stops
+        and returns None. Defaults to 20000.
     lift_degree_limit: int
         The maximum degree to lift the polynomial. Defaults to 4.
     quad_diff_order: int
         The maximum degree of the form (xi - xj)^(2k)*... in the basis. Defaults to 8.
     preordering: str
-        The preordering method for extending the basis. It can be 'none', 'linear', 'quadratic' or 'full'.
-        Defaults to 'quadratic'.
+        The preordering method for extending the basis. It can be 'none', 'linear',
+        'quadratic' or 'full'. Defaults to 'quadratic'.
     augment_tangents: bool
         Whether to augment the tangents using heuristic methods. Defaults to True.
     centralize: bool
         Whether to centralize the problem so that there is a root at (1,1,...,1) if possible.
         This improves stability. Defaults to True.
     linprog_options: dict
-        Options for scipy.optimize.linprog. Defaultedly use `{'method': 'highs-ds', 'options': {'presolve': False}}`.
-        Note that interiorpoint oftentimes does not provide exact rational solution. Both 'highs-ds' or 'simplex' are
-        recommended, yet the former is slightly faster.
+        Options for scipy.optimize.linprog. Defaultedly use
+        `{'method': 'highs-ds', 'options': {'presolve': False}}`.
+        Note that interiorpoint oftentimes does not provide exact rational solution. Both
+        'highs-ds' or 'simplex' are recommended, yet the former is slightly faster.
 
-        Moreover, using `presolve == True` has bug solving s((b2-a2+3c2+ab+7bc-5ca)(a2-b2-ab+2bc-ca)2):
-        Assertion failed: abs_value < pivot_tolerance, file ../../scipy/_lib/highs/src/util/HFactor.cpp, line 1474
-        Thus, for stability, we use `presolve == False` by default. However, setting it to True could be slightly faster.
+        Moreover, using `presolve == True` has a bug solving `s((b2-a2+3c2+ab+7bc-5ca)(a2-b2-ab+2bc-ca)2)`:
+        Assertion failed: abs_value < pivot_tolerance, file ../../scipy/_lib/highs/src/util/HFactor.cpp,
+        line 1474. Thus, for stability, we use `presolve == False` by default. However, setting it
+        to True could be slightly faster.
     linprog_time_limit: float
-        The time limit for linear programming in seconds. Defaults to 300.0. Since the simplex method runs in
-        exponential time in the worst case, this prevents the solver from running too long.
+        The time limit for linear programming in seconds. Defaults to 300.0. Since the simplex
+        method runs in exponential time in the worst case, this prevents the solver from running too long.
     allow_numer: int
-        Whether to allow numerical solution. When it is 0, the solution must be exact. When > 0, the solution can be numerical,
-        this might be useful for large scale problems or irrational problems. TODO: Allow tolerance?
+        Whether to allow numerical solution. When it is 0, the solution must be exact.
+        When > 0, the solution can be numerical, this might be useful for large scale problems
+        or irrational problems. TODO: Allow tolerance?
     verbose: bool
         Whether to print the information of the linear programming problem. Defaults to False.
     """
@@ -143,10 +148,10 @@ class LinearSOSSolver(ProofNode):
         centralizer = {gens[i]: roots[0][i]*gens[i] for i in range(len(gens)) if roots[0][i] != 0 and roots[0][i] != 1}
         def ct(x):
             return x.as_expr().xreplace(centralizer).as_poly(gens)
-        new_poly = ct(poly)
-        new_ineqs = {ct(k): v.xreplace(centralizer) for k, v in problem.ineq_constraints.items()}
-        new_eqs = {ct(k): v.xreplace(centralizer) for k, v in problem.eq_constraints.items()}
-        new_roots = [Root(tuple(1 if roots[0][i] != 0 else 0 for i in range(len(gens))))]
+        new_poly     = ct(poly)
+        new_ineqs    = {ct(k): v.xreplace(centralizer) for k, v in problem.ineq_constraints.items()}
+        new_eqs      = {ct(k): v.xreplace(centralizer) for k, v in problem.eq_constraints.items()}
+        new_roots    = [Root(tuple(1 if roots[0][i] != 0 else 0 for i in range(len(gens))))]
         new_tangents = [ct(t) for t in self._tangents]
         new_tangents = [t for t in new_tangents if t is not None]
 
@@ -184,7 +189,7 @@ class LinearSOSSolver(ProofNode):
         ArithmeticTimeout.make_checker(configs['time_limit'])()
         return dict(ideal)
 
-    def _prepare_tangents(self, configs):
+    def _prepare_tangents(self, configs) -> List[Tuple[Poly, Expr]]:
         problem = (self._transformed_problem if self._transformed_problem is not None else self.problem)
         time_limit = ArithmeticTimeout.make_checker(configs['time_limit'])
 
@@ -305,13 +310,13 @@ class LinearSOSSolver(ProofNode):
         time_limit = ArithmeticTimeout.make_checker(time_limit)
 
         if self.problem.roots is None:
-            domain = self.problem.expr.domain
-            if domain.is_QQ or domain.is_ZZ:
-                time1 = perf_counter()
-                roots = self.problem.find_roots()
-                if verbose:
-                    print(f"Time for finding roots num = {len(roots):<6d}     : {perf_counter() - time1:.6f} seconds.")
-                time_limit()
+            # domain = self.problem.expr.domain
+            # if domain.is_QQ or domain.is_ZZ:
+            time1 = perf_counter()
+            roots = self.problem.find_roots()
+            if verbose:
+                print(f"Time for finding roots num = {len(roots):<6d}     : {perf_counter() - time1:.6f} seconds.")
+            time_limit()
 
         problem, _homogenizer = self.problem.homogenize()
         self._transformed_problem = problem
@@ -319,7 +324,7 @@ class LinearSOSSolver(ProofNode):
 
         if _homogenizer is not None:
             # homogenize the tangents
-            tangents = homogenize_expr_list(tangents, _homogenizer)
+            tangents = [fraction(_dtype_homogenize(t, _homogenizer).together())[0] for t in tangents]
         else:
             # homogeneous polynomial does not accept non-homogeneous tangents
             tagents_poly = [t.as_poly(problem.gens) for t in tangents]
@@ -519,39 +524,42 @@ def LinearSOS(
     symmetry: Optional[PermutationGroup]
         CURRENTLY UNUSED.
     roots: list
-        Equality cases of the inequality. If None, it will be searched automatically. To disable auto
-        search, pass in an empty list.
+        Equality cases of the inequality. If None, it will be searched automatically.
+        To disable auto search, pass in an empty list.
     tangents: list
         CURRENTLY UNUSED.
     basis_limit: int
-        The limit of the basis. When the basis exceeds the limit, the solver stops and returns None.
-        Defaults to 20000.
+        The limit of the basis. When the basis exceeds the limit, the solver stops
+        and returns None. Defaults to 20000.
     lift_degree_limit: int
         The maximum degree to lift the polynomial. Defaults to 4.
     quad_diff_order: int
         The maximum degree of the form (xi - xj)^(2k)*... in the basis. Defaults to 8.
     preordering: str
-        The preordering method for extending the basis. It can be 'none', 'linear', 'quadratic' or 'full'.
-        Defaults to 'quadratic'.
+        The preordering method for extending the basis. It can be 'none', 'linear',
+        'quadratic' or 'full'. Defaults to 'quadratic'.
     augment_tangents: bool
         Whether to augment the tangents using heuristic methods. Defaults to True.
     centralize: bool
         Whether to centralize the problem so that there is a root at (1,1,...,1) if possible.
         This improves stability. Defaults to True.
     linprog_options: dict
-        Options for scipy.optimize.linprog. Defaultedly use `{'method': 'highs-ds', 'options': {'presolve': False}}`.
-        Note that interiorpoint oftentimes does not provide exact rational solution. Both 'highs-ds' or 'simplex' are
-        recommended, yet the former is slightly faster.
+        Options for scipy.optimize.linprog. Defaultedly use
+        `{'method': 'highs-ds', 'options': {'presolve': False}}`.
+        Note that interiorpoint oftentimes does not provide exact rational solution. Both
+        'highs-ds' or 'simplex' are recommended, yet the former is slightly faster.
 
-        Moreover, using `presolve == True` has bug solving s((b2-a2+3c2+ab+7bc-5ca)(a2-b2-ab+2bc-ca)2):
-        Assertion failed: abs_value < pivot_tolerance, file ../../scipy/_lib/highs/src/util/HFactor.cpp, line 1474
-        Thus, for stability, we use `presolve == False` by default. However, setting it to True could be slightly faster.
+        Moreover, using `presolve == True` has a bug solving `s((b2-a2+3c2+ab+7bc-5ca)(a2-b2-ab+2bc-ca)2)`:
+        Assertion failed: abs_value < pivot_tolerance, file ../../scipy/_lib/highs/src/util/HFactor.cpp,
+        line 1474. Thus, for stability, we use `presolve == False` by default. However, setting it
+        to True could be slightly faster.
     linprog_time_limit: float
-        The time limit for linear programming in seconds. Defaults to 300.0. Since the simplex method runs in
-        exponential time in the worst case, this prevents the solver from running too long.
+        The time limit for linear programming in seconds. Defaults to 300.0. Since the simplex
+        method runs in exponential time in the worst case, this prevents the solver from running too long.
     allow_numer: int
-        Whether to allow numerical solution. When it is 0, the solution must be exact. When > 0, the solution can be numerical,
-        this might be useful for large scale problems or irrational problems. TODO: Allow tolerance?
+        Whether to allow numerical solution. When it is 0, the solution must be exact.
+        When > 0, the solution can be numerical, this might be useful for large scale problems
+        or irrational problems. TODO: Allow tolerance?
     time_limit: float
         The time limit in seconds for the solver.
     verbose: bool
