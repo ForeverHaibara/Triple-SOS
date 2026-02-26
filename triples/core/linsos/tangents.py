@@ -113,9 +113,12 @@ def _canonicalize(p: Poly) -> Optional[Poly]:
     new_monoms = [tuple(_) for _ in monoms.tolist()]
     rep = dict(zip(new_monoms, p.rep.coeffs()))
     poly = Poly.from_dict(rep, p.gens, domain=p.rep.dom)
-    c, poly = poly.primitive()
-    if poly.LC() < 0:
-        poly = -poly
+
+    # do not canonicalize here because it is numerically unstable
+    # c, poly = poly.primitive()
+    # if poly.LC() < 0:
+    #     poly = -poly
+
     return poly
 
 
@@ -125,6 +128,7 @@ def _get_ineq_constrained_tangents(
     roots: List[Root] = [],
     monomial_manager: MonomialManager = None,
     num_tangents: int = 5,
+    min_degree: int = 3,
     max_degree: int = 8,
     symmetry: Optional[PermutationGroup] = None
 ) -> Dict[Poly, Expr]:
@@ -162,12 +166,15 @@ def _get_ineq_constrained_tangents(
     if ineq.is_monomial and sum(_ != 0 for _ in tuple(ineq.LM())) == 1:
         ineq, ineq_expr = Poly(1, *symbols), Integer(1)
 
+
     if roots:
         for degree in range(1, max_degree):
+            seen = set()
+
             mat = Matrix.hstack(*[r.span(degree) for r in roots])
             ns = _get_sorted_nullspace(monomial_manager, mat, degree)
 
-            if symmetry is not None and (not symmetry.is_trivial):
+            if (symmetry is not None) and ns.shape[1] and (not symmetry.is_trivial):
                 # wedderburn decomposition
                 def action(g):
                     arr = g.array_form
@@ -187,9 +194,18 @@ def _get_ineq_constrained_tangents(
                 poly = _canonicalize(poly)
                 if poly is None or poly.is_zero:
                     continue
+
+                # check whether the primitive form is seen
+                _, poly2 = poly.primitive()
+                if poly2.LC() < 0:
+                    poly2 = -poly2
+                if poly2 in seen:
+                    continue
+                seen.add(poly2)
+
                 tangents[ineq*poly**2] = ineq_expr*poly.as_expr()**2
 
-            if len(tangents) > num_tangents:
+            if degree >= min_degree and len(tangents) > num_tangents:
                 break
 
     if all(not r.is_nontrivial for r in roots):
