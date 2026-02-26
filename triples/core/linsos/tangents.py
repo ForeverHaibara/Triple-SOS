@@ -4,11 +4,13 @@ from itertools import combinations
 import numpy as np
 from sympy import Poly, Expr, Symbol, Integer, Mul, RR
 from sympy import MutableDenseMatrix as Matrix
+from sympy.combinatorics import PermutationGroup
 
 from ..problem import InequalityProblem
-from ...utils import Root, MonomialManager
+from ...utils import Root, MonomialManager, identify_symmetry
 from ...utils.roots.num_extrema import numeric_optimize_skew_symmetry
 from ...sdp.arithmetic import permute_matrix_rows, solve_nullspace
+from ...sdp.wedderburn import symmetry_adapted_basis
 
 DEFAULT_TANGENTS = {
     3: (lambda a, b, c: [
@@ -32,7 +34,7 @@ def _filter_nonnumeric_tangents(tangents: List[Expr], symbols: Tuple[Symbol, ...
         dt[p] = t
     return dt
 
-def _get_sorted_nullspace_by_weights(mat: Matrix, weights: Optional[List[int]]=None) -> List[Matrix]:
+def _get_sorted_nullspace_by_weights(mat: Matrix, weights: Optional[List[int]]=None) -> Matrix:
     """Compute a left nullspace of a matrix by first ordering the rows by weights."""
     if weights is not None:
         inds = np.argsort(weights)
@@ -44,14 +46,15 @@ def _get_sorted_nullspace_by_weights(mat: Matrix, weights: Optional[List[int]]=N
     ns = solve_nullspace(mat)
     if weights is not None:
         ns = permute_matrix_rows(ns, invinds)
-    vecs = [ns[:, i] for i in range(ns.shape[1])]
+
+    # vecs = [ns[:, i] for i in range(ns.shape[1])]
 
     # vecs = mat.T.nullspace()
     # if weights is not None:
     #     vecs = [permute_matrix_rows(v, invinds) for v in vecs]
-    return vecs
+    return ns
 
-def _get_sorted_nullspace(monomial_manager: MonomialManager, mat: Matrix, degree: int) -> List[Matrix]:
+def _get_sorted_nullspace(monomial_manager: MonomialManager, mat: Matrix, degree: int) -> Matrix:
     """
     Compute a list of sympy vectors (column matrices) that are perpendicular to the given matrix
     by heuristic sorting. Recall that the computation of the left nullspace of a matrix depends on
@@ -78,13 +81,21 @@ def _get_sorted_nullspace(monomial_manager: MonomialManager, mat: Matrix, degree
     #     vecs.extend(_get_sorted_nullspace_by_weights(mat, -weights))
     return vecs
 
-def _canonicalize(p):
+def _common_subspace(A: Matrix, B: Matrix) -> Matrix:
+    """
+    Compute the common subspace of two matrices A and B.
+    """
+    R = Matrix.hstack(A, B)
+    N = solve_nullspace(R.T)
+    return A * N[:A.shape[1], :]
+
+def _canonicalize(p: Poly) -> Optional[Poly]:
     """
     Extract trivial factors from a polynomial p. E.g. a*b*(a+b-c) -> a+b-c.
     It helps remove redundant or trivial tangents for forming the LinearSOS bases.
     """
     monoms = np.array(p.monoms(), dtype=int)
-    if monoms.shape[0] <= 1: # monomials, just discard
+    if monoms.shape[0] <= 1: # monomials or constants, just discard
         return None
 
     d = np.min(monoms, axis=0)
@@ -101,7 +112,12 @@ def _canonicalize(p):
         return p
     new_monoms = [tuple(_) for _ in monoms.tolist()]
     rep = dict(zip(new_monoms, p.rep.coeffs()))
-    return Poly.from_dict(rep, p.gens, domain=p.rep.dom)
+    poly = Poly.from_dict(rep, p.gens, domain=p.rep.dom)
+    c, poly = poly.primitive()
+    if poly.LC() < 0:
+        poly = -poly
+    return poly
+
 
 def _get_ineq_constrained_tangents(
     ineq: Poly,
@@ -109,7 +125,8 @@ def _get_ineq_constrained_tangents(
     roots: List[Root] = [],
     monomial_manager: MonomialManager = None,
     num_tangents: int = 5,
-    max_degree: int = 8
+    max_degree: int = 8,
+    symmetry: Optional[PermutationGroup] = None
 ) -> Dict[Poly, Expr]:
     """
     Compute a dictionary of items `(ineq*poly**2, ineq_expr*expr**2)` such that
@@ -135,6 +152,8 @@ def _get_ineq_constrained_tangents(
     -------
     Dict[Poly, Expr]
         A dictionary of items `(ineq*poly**2, ineq_expr*expr**2)`.
+
+    TODO: Handle high-order roots.
     """
     roots = [r for r in roots if r.eval(ineq) != 0]
 
@@ -142,18 +161,34 @@ def _get_ineq_constrained_tangents(
     tangents = {}
     if ineq.is_monomial and sum(_ != 0 for _ in tuple(ineq.LM())) == 1:
         ineq, ineq_expr = Poly(1, *symbols), Integer(1)
+
     if roots:
         for degree in range(1, max_degree):
             mat = Matrix.hstack(*[r.span(degree) for r in roots])
-            vecs = _get_sorted_nullspace(monomial_manager, mat, degree)
-            if not vecs:
-                continue
+            ns = _get_sorted_nullspace(monomial_manager, mat, degree)
 
-            new_polys = [monomial_manager.invarraylize(p, symbols, degree) for p in vecs]
-            # new_polys = [p for p in new_polys if not p.is_monomial]
-            new_polys = [_canonicalize(p) for p in new_polys]
-            new_polys = set([p for p in new_polys if p is not None])
-            tangents.update(dict([(ineq*p**2, ineq_expr*p.as_expr()**2) for p in new_polys]))
+            if symmetry is not None and (not symmetry.is_trivial):
+                # wedderburn decomposition
+                def action(g):
+                    arr = g.array_form
+                    inds = monomial_manager.dict_monoms(degree)
+                    monoms = monomial_manager.inv_monoms(degree)
+                    return [inds[tuple([m[i] for i in arr])] for m in monoms]
+                sa_basis = symmetry_adapted_basis(symmetry, action)
+                new_ns = []
+                for Q in sa_basis:
+                    # restrict the subspace to each symmetric-adapted component
+                    new_ns.append(_common_subspace(Q, ns))
+                ns = Matrix.hstack(ns, *new_ns)
+
+            vecs = [ns[:, i] for i in range(ns.shape[1])]
+            for vec in vecs:
+                poly = monomial_manager.invarraylize(vec, symbols, degree)
+                poly = _canonicalize(poly)
+                if poly is None or poly.is_zero:
+                    continue
+                tangents[ineq*poly**2] = ineq_expr*poly.as_expr()**2
+
             if len(tangents) > num_tangents:
                 break
 
@@ -170,6 +205,7 @@ def prepare_tangents(
     qmodule: Optional[Dict[Poly, Expr]] = None,
     default_tangents = DEFAULT_TANGENTS,
     additional_tangents: List[Expr] = [],
+    wedderburn: bool = True
 ) -> Dict[Poly, Expr]:
     """
     Prepare tangents for LinearSOS given a list of roots (equality cases). The tangents should
@@ -220,6 +256,7 @@ def prepare_tangents(
     TODO: Handle high-order roots.
     """
     poly = problem.expr
+    G = problem.identify_symmetry()
     ineq_constraints = qmodule if qmodule is not None else problem.ineq_constraints
     roots = [r for r in problem.roots if not r.is_zero] if problem.roots is not None else []
 
@@ -243,9 +280,19 @@ def prepare_tangents(
 
     monomial_manager = MonomialManager(len(symbols))
     ineq_constraints = ineq_constraints.items() if isinstance(ineq_constraints, dict) else ineq_constraints
+
+    symm = None
     for ineq, ineq_expr in ineq_constraints:
-        new_tangents = _get_ineq_constrained_tangents(ineq, ineq_expr,
-                roots=roots, monomial_manager=monomial_manager)
+        if wedderburn:
+            symm = identify_symmetry(ineq, G)
+
+        new_tangents = _get_ineq_constrained_tangents(
+            ineq,
+            ineq_expr,
+            roots=roots,
+            monomial_manager=monomial_manager,
+            symmetry=symm
+        )
         tangents.update(new_tangents)
     # print(tangents)
     return tangents
@@ -374,8 +421,6 @@ def prepare_inexact_tangents(
         new_roots = [r for r in new_roots if all(ineq(*r) >= 0 for ineq in ineq_constraints)]
         new_roots = [Root(_, domain=RR) for _ in new_roots] # convert to RR
     except Exception as e: # shall we handle this?
-        if isinstance(e, (KeyboardInterrupt, SystemExit)):
-            raise e
         pass
 
     if len(new_roots) == 0:
@@ -396,12 +441,13 @@ def prepare_inexact_tangents(
             # which generates polynomials that have low values around the root.
             mat = monomial_manager.permute_vec(root.span(degree), degree)
             mat = Matrix.hstack(mat, Matrix.ones(mat.shape[0], 1)) # TODO
-            vecs = _get_sorted_nullspace(monomial_base, mat, degree)
+            ns = _get_sorted_nullspace(monomial_base, mat, degree)
+            vecs = [ns[:, i] for i in range(ns.shape[1])]
             if not vecs:
                 continue
 
-            # Convert numerical polys to rationals
-            vecs = [(vec * (1260/max(vec))).applyfunc(round)/1260 for vec in vecs] # TODO
+            # Convert numerical polys to rationals; TODO: avoid magic numbers
+            vecs = [(vec * (1260/max(vec))).applyfunc(round)/1260 for vec in vecs]
             new_tangents.extend([
                 _canonicalize(monomial_base.invarraylize(p, poly.gens, degree)\
                                  .retract()) for p in vecs])

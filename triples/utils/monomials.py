@@ -218,12 +218,13 @@ class MonomialManager():
         """
         return self._register_monoms(degree)[1]
 
-    def index(self, monom: Tuple[int, ...]) -> Optional[int]:
+    def index(self, monom: Tuple[int, ...], degree: Optional[int] = None) -> Optional[int]:
         """
         Return the index of the monom in the vector representation of the polynomial.
         Note that it is NOT the index of a permutation group.
         """
-        degree = sum(monom)
+        if degree is None:
+            degree = sum(monom)
         return self.dict_monoms(degree).get(self.standard_monom(monom))
 
     def length(self, degree: int) -> int:

@@ -75,6 +75,8 @@ class LinearSOSSolver(ProofNode):
         and returns None. Defaults to 20000.
     lift_degree_limit: int
         The maximum degree to lift the polynomial. Defaults to 4.
+    wedderburn: bool
+        Use wedderburn decomposition. Defaults to True.
     quad_diff_order: int
         The maximum degree of the form (xi - xj)^(2k)*... in the basis. Defaults to 8.
     preordering: str
@@ -108,6 +110,7 @@ class LinearSOSSolver(ProofNode):
     default_configs = {
         "basis_limit": 20000,
         "lift_degree_limit": 4,
+        "wedderburn": True,
         "quad_diff_order": 8,
         "preordering": "quadratic",
         "augment_tangents": True,
@@ -195,7 +198,8 @@ class LinearSOSSolver(ProofNode):
 
         qmodule = configs.get('qmodule', problem.ineq_constraints)
         tangents = list(prepare_tangents(problem, qmodule=qmodule,
-            additional_tangents=configs['tangents']).items())
+            additional_tangents=configs['tangents'],
+            wedderburn=configs['wedderburn']).items())
         time_limit()
 
         if configs['augment_tangents']:
@@ -493,6 +497,7 @@ def LinearSOS(
     tangents: Optional[List[Expr]] = None,
     basis_limit: int = 20000,
     lift_degree_limit: int = 4,
+    wedderburn: bool = True,
     quad_diff_order: int = 8,
     preordering: str = 'quadratic',
     augment_tangents: bool = True,
@@ -533,6 +538,8 @@ def LinearSOS(
         and returns None. Defaults to 20000.
     lift_degree_limit: int
         The maximum degree to lift the polynomial. Defaults to 4.
+    wedderburn: bool
+        Use wedderburn decomposition. Defaults to True.
     quad_diff_order: int
         The maximum degree of the form (xi - xj)^(2k)*... in the basis. Defaults to 8.
     preordering: str
@@ -586,6 +593,7 @@ def LinearSOS(
             # "tangents": tangents,
             "basis_limit": basis_limit,
             "lift_degree_limit": lift_degree_limit,
+            "wedderburn": wedderburn,
             "quad_diff_order": quad_diff_order,
             "preordering": preordering,
             "augment_tangents": augment_tangents,
