@@ -303,7 +303,7 @@ def get_qmodule_list(
             nonlin_ineqs.append((ineq, e))
 
     if all_nonnegative:
-        # In this case we generate basis by LinearBasisTangent 
+        # In this case we generate basis by LinearBasisTangent
         # rather than LinearBasisTangentEven.
         # So we discard all monomials.
         pass
