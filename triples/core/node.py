@@ -125,7 +125,7 @@ class ProofNode:
         models["length_model"] = TreePredictor.load_model(join(path, "models", clsname+"_length_model.npz"))
         _time_func = models["time_model"].get_default_func()
         _length_func = models["length_model"].get_default_func()
-        models["time_model"].func = lambda x: max(float(np.exp(_time_func(x)) - 1.), 1e-14)
+        models["time_model"].func = lambda x: max(float(np.exp(_time_func(x))), 1e-14)
         models["length_model"].func = lambda x: max(float(np.exp(_length_func(x)) - 1.), 1e-14)
         return models
 

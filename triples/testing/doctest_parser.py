@@ -366,8 +366,12 @@ def parse_directive(line: str):
     return result
 
 
-def _collect_doctest_examples_raw(doc: str,
-        set_environ=lambda x: None, parser=lambda *a,**k: (a,k)):
+def _collect_doctest_examples_raw(
+    doc: str,
+    set_environ=lambda x: None,
+    parser=lambda *a,**k: (a,k),
+    skip: bool = True,
+):
     lines = [_.strip() for _ in doc.splitlines()]
     lines = [_ for _ in lines if _.startswith('=>') or _.startswith('::')]
     cases = []
@@ -379,7 +383,7 @@ def _collect_doctest_examples_raw(doc: str,
         # the current is enough
         idx = line.find('#')
         if idx >= 0:
-            if 'doctest:+SKIP' in line[idx:].replace(' ',''):
+            if skip and 'doctest:+SKIP' in line[idx:].replace(' ',''):
                 continue
             line = line[:idx]
 
@@ -392,7 +396,7 @@ def _collect_doctest_examples_raw(doc: str,
     return cases
 
 
-def collect_doctest_examples(doc: str, configs: dict = {}) -> List[Tuple[str, Tuple[tuple, dict]]]:
+def collect_doctest_examples(doc: str, configs: dict = {}, skip: bool = True) -> List[Tuple[str, Tuple[tuple, dict]]]:
     from sympy import Symbol
     from sympy.combinatorics.permutations import Permutation
     from sympy.combinatorics.perm_groups import PermutationGroup
@@ -457,7 +461,7 @@ def collect_doctest_examples(doc: str, configs: dict = {}) -> List[Tuple[str, Tu
         eqs = parse_eqs(eqs, gens, sym, return_type=return_type)
         return (expr, ineqs, eqs), {}
 
-    return _collect_doctest_examples_raw(doc, set_environ, single_parser)
+    return _collect_doctest_examples_raw(doc, set_environ, single_parser, skip=skip)
 
 
 def solution_checker(solution, expr, ineq_constraints, eq_constraints,
