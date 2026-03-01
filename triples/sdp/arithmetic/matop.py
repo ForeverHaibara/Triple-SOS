@@ -154,6 +154,8 @@ def sqrtsize_of_mat(M: Union[Matrix, ndarray, int]) -> int:
     return int(np.round(np.sqrt(size_of_mat(M))))
 
 @overload
+def reshape(A: Matrix, shape: Tuple[int, int]) -> Matrix: ...
+@overload
 def reshape(A: MatrixBase, shape: Tuple[int, int]) -> MatrixBase: ...
 @overload
 def reshape(A: ndarray, shape: Tuple[int, int]) -> ndarray: ...
@@ -589,7 +591,7 @@ def permute_matrix_rows(matrix, permutation):
         return matrix.__class__._fromrep(DomainMatrix.from_rep(new_rep))
 
     elif isinstance(matrix, MatrixBase):
-        new_mat = Matrix.zeros(matrix.shape)
+        new_mat = Matrix.zeros(*matrix.shape)
         for r in range(len(permutation)):
             new_mat[r, :] = matrix[permutation[r], :]
         return new_mat

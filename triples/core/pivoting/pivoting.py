@@ -1,11 +1,8 @@
-from typing import List, Dict
-from ..problem import InequalityProblem
 from ..node import ProofNode
 
 from .quadratic import pivoting_quadratic
 
 class Pivoting(ProofNode):
-    problem: InequalityProblem
     _constraints_wrapper = None
 
     def __init__(self, *args ,**kwargs):

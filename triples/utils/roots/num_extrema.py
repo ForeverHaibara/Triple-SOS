@@ -243,7 +243,7 @@ def _update_dict(d1: Dict, d2: Dict) -> Dict:
 def numeric_optimize_skew_symmetry(
     poly: Union[Expr, Poly],
     symbols: List[Symbol],
-    perm_group: Union[List[List[int]],Permutation,PermutationGroup],
+    perm_group: Union[List[List[int]], Permutation, PermutationGroup],
     num: int = 5, is_homogeneous: Optional[bool] = None,
     points: Optional[np.ndarray]=None, optimizer: Optional[Callable]=None,
 ) -> List[np.ndarray]:
@@ -302,7 +302,7 @@ def numeric_optimize_skew_symmetry(
         raise ValueError("Perm_group must not be empty.")
 
     if is_homogeneous is None:
-        is_homogeneous = poly.is_homogeneous if hasattr(poly, 'is_homogeneous') else False
+        is_homogeneous = poly.is_homogeneous if hasattr(poly, 'is_homogeneous') else False # type: ignore
 
     f = NumerFunc.wrap(poly, symbols)
     if points is None: # generate points using Halton sequence
@@ -360,10 +360,16 @@ def numeric_optimize_skew_symmetry(
     return extrema
 
 
-def _numeric_optimize_shgo(poly: Union[Poly, Expr], ineq_constraints: List[Union[Poly, Expr]], eq_constraints: List[Union[Poly, Expr]],
-        symbols: List[Symbol], free_symbols: List[Symbol]=None, embedding: Dict[Symbol, Expr]=None,
-        restore: bool=True, shgo_kwargs: Dict = {}
-    ) -> OptimizeResult:
+def _numeric_optimize_shgo(
+    poly: Union[Poly, Expr],
+    ineq_constraints: List[Union[Poly, Expr]],
+    eq_constraints: List[Union[Poly, Expr]],
+    symbols: List[Symbol],
+    free_symbols: List[Symbol]=None,
+    embedding: Dict[Symbol, Expr]=None,
+    restore: bool=True,
+    shgo_kwargs: Dict = {}
+) -> OptimizeResult:
     """
     Internal function to numerically optimize a polynomial with given inequality and equality constraints
     by calling scipy.optimize.shgo.
@@ -417,9 +423,13 @@ def _numeric_optimize_shgo(poly: Union[Poly, Expr], ineq_constraints: List[Union
     return result
 
 
-def _numeric_optimize_poly(poly: Poly, ineq_constraints: List[Poly], eq_constraints: List[Poly], symbols: List[Symbol],
-        shgo_kwargs: Dict = {}
-    ) -> OptimizeResult:
+def _numeric_optimize_poly(
+    poly: Poly,
+    ineq_constraints: List[Poly],
+    eq_constraints: List[Poly],
+    symbols: List[Symbol],
+    shgo_kwargs: Dict = {}
+) -> OptimizeResult:
     """
     Internal function to optimize a polynomial with inequality and equality constraints.
     """
@@ -436,9 +446,15 @@ def _numeric_optimize_poly(poly: Poly, ineq_constraints: List[Poly], eq_constrai
     return result
 
 
-def numeric_optimize_poly(poly: Union[Poly, Expr], ineq_constraints: List[Union[Poly, Expr]] = [], eq_constraints: List[Union[Poly, Expr]] = [],
-        symbols: List[Symbol] = None, objective: str = 'min', return_type: str='tuple', shgo_kwargs: Dict = {}
-    ) -> List[Root]:
+def numeric_optimize_poly(
+    poly: Union[Poly, Expr],
+    ineq_constraints: List[Union[Poly, Expr]] = [],
+    eq_constraints: List[Union[Poly, Expr]] = [],
+    symbols: Optional[List[Symbol]] = None,
+    objective: str = 'min',
+    return_type: str='tuple',
+    shgo_kwargs: Dict = {}
+) -> List[Root]:
     """
     Numerically polynomial optimize a polynomial with given inequality and equality constraints
     using heuristic methods. It is HIGHLY EXPERIMENTAL and may be unstable for complicated systems.

@@ -103,8 +103,13 @@ def lift_degree(
 
 
 
-def _get_multipliers(ineq_constraints: Dict[Poly, Expr], symbols: Tuple[Symbol, ...], n_plus: int,
-                        symmetry: MonomialManager, preordering: str ='linear') -> Dict[Poly, Expr]:
+def _get_multipliers(
+    ineq_constraints: Dict[Poly, Expr],
+    symbols: Tuple[Symbol, ...],
+    n_plus: int,
+    symmetry: MonomialManager,
+    preordering: str ='linear'
+) -> Dict[Poly, Expr]:
     if preordering == 'linear':
         ineq_constraints = [(k, v) for k, v in ineq_constraints.items() if k.is_linear
                             and k.total_degree() == 1]
@@ -117,7 +122,8 @@ def _get_multipliers(ineq_constraints: Dict[Poly, Expr], symbols: Tuple[Symbol, 
         multipliers = quadratic_difference(symbols)
         multipliers = [(Poly(e, *symbols), e) for e in multipliers]
         def cross_mul(x):
-            return [(x[i][0] * x[j][0], x[i][1] * x[j][1]) for i in range(len(x)) for j in range(i+1, len(x))]
+            return [(x[i][0] * x[j][0], x[i][1] * x[j][1]) for i in range(len(x)) \
+                    for j in range(i+1, len(x))]
         multipliers.extend(cross_mul(ineq_constraints))
 
     # TODO: this should be more carefully considered???
@@ -134,12 +140,18 @@ def _get_multipliers(ineq_constraints: Dict[Poly, Expr], symbols: Tuple[Symbol, 
             mul_expr = Mul(*(ineq_constraints[i][1]**power[i] for i in range(n_constraints)))
             multipliers.append((mul_poly, mul_expr))
 
+    even_powers = False
     if n_plus > 2 and n_plus % 2 == 0:
+        even_powers = True
+    if n_plus == 2 and len(ineq_constraints) == 0:
+        # each variable is real (no positive assumption)
+        even_powers = True
+
+    if even_powers:
         for power in generate_monoms(len(symbols), n_plus//2)[1]:
             mul_poly = Poly({tuple(p*2 for p in power): 1}, *symbols)
             mul_expr = Mul(*(si**(pi*2) for si, pi in zip(symbols, power)))
             multipliers.append((mul_poly, mul_expr))
 
     multipliers = clear_polys_by_symmetry(multipliers, symbols, symmetry)
-
     return multipliers

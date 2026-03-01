@@ -1,6 +1,11 @@
 """
 To be deprecated. Do not use this file.
 """
+from warnings import warn
+warn("This file is deprecated. Do not use it.",
+     DeprecationWarning,
+     stacklevel=2)
+
 from typing import Tuple, Dict, List, Union, Optional
 
 import sympy as sp

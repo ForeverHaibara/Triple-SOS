@@ -1,6 +1,9 @@
 from itertools import combinations
 from time import perf_counter
-from typing import Union, Optional, List, Tuple, Dict, Callable, Generator, Any
+from typing import (
+    Union, Optional, List, Tuple, Dict, Callable,
+    Generator, Any
+)
 
 from sympy import Poly, Expr, Integer, Mul, ZZ, QQ, RR
 from sympy.combinatorics import PermutationGroup
@@ -12,6 +15,7 @@ from ..preprocess import ProofNode, ProofTree, SolvePolynomial
 from ...utils import MonomialManager, Root, clear_polys_by_symmetry
 from ...sdp import ArithmeticTimeout
 from ...sdp.rationalize import SDPRationalizeError, DualRationalizer
+
 
 class _lazy_iter:
     """A wrapper for recyclable iterators but initialized when first called."""
@@ -134,7 +138,7 @@ def _is_infeasible(
     poly: Poly,
     qmodule: List[Poly],
     ideal: Union[list, dict],
-    perm_group: PermutationGroup = None,
+    perm_group: PermutationGroup,
 ) -> bool:
     """
     Check if the problem is trivially infeasible. Returns True if infeasible.

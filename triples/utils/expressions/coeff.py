@@ -1,12 +1,11 @@
 from typing import Union, Dict, List, Tuple, Optional, Callable, Iterator
 
-from sympy import Poly, Expr, Basic, Symbol, Rational, sympify
+from sympy import Poly, Expr, Basic, Symbol, Rational
 from sympy import MutableDenseMatrix as Matrix
 from sympy.combinatorics import Permutation, PermutationGroup
-from sympy.polys.rings import PolyElement
 from sympy.polys.domains import Domain
+from sympy.polys.rings import PolyElement
 from sympy.polys.matrices import DomainMatrix
-from sympy.polys.matrices.ddm import DDM
 from sympy.polys.polyclasses import DMP
 from sympy.polys.polyerrors import CoercionFailed
 from sympy.utilities.iterables import iterable
@@ -156,8 +155,7 @@ class PartialOrder:
                 z = z.arg
             return self.domain.convert(z)
         rows = [[conv(v) for v in r] for r in rep]
-        ddm = DDM(rows, shape, self.domain)
-        return Matrix._fromrep(DomainMatrix.from_rep(ddm))
+        return Matrix._fromrep(DomainMatrix(rows, shape, self.domain))
 
 
 class Coeff():
@@ -480,7 +478,7 @@ class Coeff():
             z = z + c
         return self.wrap(z)
 
-    def is_cyclic(self, perm_group: Optional[Union[Permutation, List[Permutation], PermutationGroup]] = None) -> bool:
+    def is_cyclic(self, perm_group: Optional[Union[str, Permutation, List[Permutation], PermutationGroup]] = None) -> bool:
         """
         Check whether the coefficients are cyclic with respect to a permutation group.
         If not specified, it assumes to be the cyclic group.
@@ -496,7 +494,7 @@ class Coeff():
             perm_group = "cyc"
         return verify_symmetry(self.as_poly(), perm_group)
 
-    def is_symmetric(self, perm_group: Optional[Union[Permutation, List[Permutation], PermutationGroup]] = None) -> bool:
+    def is_symmetric(self, perm_group: Optional[Union[str, Permutation, List[Permutation], PermutationGroup]] = None) -> bool:
         """
         Check whether the coefficients are symmetric with respect to a permutation group.
         If not specified, it assumes to be the symmetric group. When the perm_group

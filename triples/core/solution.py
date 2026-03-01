@@ -1,7 +1,6 @@
 from collections import defaultdict
-
-from typing import List, Tuple, Dict, Union, Optional, TypeVar, Generic
 import re
+from typing import Tuple, Dict, Union, Optional, TypeVar, Generic
 from warnings import warn
 
 import sympy as sp

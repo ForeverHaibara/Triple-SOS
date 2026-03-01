@@ -1,4 +1,4 @@
-from sympy.abc import a, b, c, d, e, t, x, y, z
+from sympy.abc import a, b, c, d, t, x, y, z
 from sympy import sqrt
 
 from ..pivoting import Pivoting

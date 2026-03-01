@@ -1,8 +1,8 @@
 from typing import List, Tuple, Dict, Union, Optional, Callable, Any
 # from warnings import warn
 
-from sympy.combinatorics import PermutationGroup
 from sympy import Poly, Expr, Symbol
+from sympy.combinatorics import PermutationGroup
 
 from .algebra import PolyRing
 from .abstract import AtomSOSElement, ArithmeticTimeout
@@ -11,7 +11,6 @@ from .solution import SolutionSDP
 from ...utils import CyclicSum, Root
 
 CHECK_SYMMETRY = True
-
 
 class SOSPoly(AtomSOSElement):
     """

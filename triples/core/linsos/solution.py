@@ -1,5 +1,5 @@
 from itertools import combinations
-from typing import List, Tuple, Optional, Union, Dict
+from typing import List, Tuple, Dict
 
 from sympy import count_ops, Poly, Expr, Rational, Symbol, Add, Mul
 import numpy as np
@@ -45,12 +45,18 @@ def create_linear_sol_from_y_basis(
 
 
 def _collect_constraints(
-        y: List[Rational], basis: List[LinearBasis], symbols: List[Symbol], symmetry: MonomialManager,
-        ineq_constraints: Dict[Poly, Expr], eq_constraints: Dict[Poly, Expr], collect: bool = True
-    ) -> Expr:
+    y: List[Rational],
+    basis: List[LinearBasis],
+    symbols: List[Symbol],
+    symmetry: MonomialManager,
+    ineq_constraints: Dict[Poly, Expr],
+    eq_constraints: Dict[Poly, Expr],
+    collect: bool = True
+) -> Expr:
     """
     Collect terms and extract common factors wisely to simplify the expression.
-    For instance, `a*b*(a+b-c)**2 + b*c*(a+b-c)**2` may be simplified to `b*(a+c)*(a+b-c)**2`.
+    For instance, `a*b*(a+b-c)**2 + b*c*(a+b-c)**2` may be simplified
+    to `b*(a+c)*(a+b-c)**2`.
 
     Parameters
     ----------
@@ -122,9 +128,12 @@ def _collect_constraints(
     return (nontangent_part + ineq_part + eq_part) / multiplier
 
 
-
-def _collect_multipliers(y: List[Rational], basis: List[LinearBasis], symbols: List[Symbol],
-        symmetry: MonomialManager) -> Tuple[Expr, List[Rational], List[LinearBasis]]:
+def _collect_multipliers(
+    y: List[Rational],
+    basis: List[LinearBasis],
+    symbols: List[Symbol],
+    symmetry: MonomialManager
+) -> Tuple[Expr, List[Rational], List[LinearBasis]]:
     """
     Separate the multipliers from other parts.
 
@@ -174,8 +183,12 @@ def _collect_multipliers(y: List[Rational], basis: List[LinearBasis], symbols: L
     return multiplier, non_mul_y, non_mul_basis
 
 
-def _collect_eq_constraints(eqs_and_exprs: Dict[Poly, List[Expr]], symbols: List[Symbol],
-        symmetry: MonomialManager, inv_eq_constraints: Dict[Expr, Poly]) -> Expr:
+def _collect_eq_constraints(
+    eqs_and_exprs: Dict[Poly, List[Expr]],
+    symbols: List[Symbol],
+    symmetry: MonomialManager,
+    inv_eq_constraints: Dict[Expr, Poly]
+) -> Expr:
     """
     Collect terms involving equality constraints (vanishing polynomials).
 
@@ -257,8 +270,12 @@ def _solve_binomial_bound(x: int, y: int = 1500, bound: int = 5):
     return bound
 
 
-def _solve_optimal_factor_recursively(A: np.ndarray, c: np.ndarray,
-        nz: int = 5, iter_times: int = 1000) -> List[Tuple[np.ndarray, np.ndarray]]:
+def _solve_optimal_factor_recursively(
+    A: np.ndarray,
+    c: np.ndarray,
+    nz: int = 5,
+    iter_times: int = 1000
+) -> List[Tuple[np.ndarray, np.ndarray]]:
     """
     Call `_solve_optimal_factor` recursively until no factor can be found.
     Return a list of tuples (v, indices) where v represents each factor
@@ -280,8 +297,12 @@ def _solve_optimal_factor_recursively(A: np.ndarray, c: np.ndarray,
     ret.append((np.zeros(A.shape[1], dtype=int), indices)) # remaining
     return ret
 
-def _collect_ineq_constraints(tangents_and_exprs: List[Tuple[Expr, Expr]], symbols: List[Symbol],
-        symmetry: MonomialManager, inv_ineq_constraints: Dict[Poly, Expr]) -> Expr:
+def _collect_ineq_constraints(
+    tangents_and_exprs: List[Tuple[Expr, Expr]],
+    symbols: List[Symbol],
+    symmetry: MonomialManager,
+    inv_ineq_constraints: Dict[Poly, Expr]
+) -> Expr:
     """
     Collect terms involving inequality constraints heuristically.
 

@@ -133,11 +133,18 @@ var settingsDefinition = {children: {
                         step: 1,
                         settingPath: "sos.linearSOS.liftDegreeLimit"
                     },
+                    wedderburn: {
+                        name: "Use Wedderburn Decomposition",
+                        description: "Whether to use Wedderburn decomposition in Linear SOS.",
+                        type: "checkbox",
+                        defaultValue: true,
+                        settingPath: "sos.linearSOS.wedderburn"
+                    },
                     basisLimit: {
                         name: "Basis Limit",
                         description: "Set the maximum number of bases for Linear SOS.",
                         type: "number",
-                        defaultValue: 15000,
+                        defaultValue: 20000,
                         min: 0,
                         step: 1,
                         settingPath: "sos.linearSOS.basisLimit"
@@ -750,6 +757,7 @@ function getSOSConfigs() {
         LinearSOS: {
             lift_degree_limit: sos.linearSOS.liftDegreeLimit,
             basis_limit: sos.linearSOS.basisLimit,
+            wedderburn: sos.linearSOS.wedderburn,
             quad_diff_order: sos.linearSOS.quadDiffOrder,
             augment_tangents: sos.linearSOS.augmentTangents,
             allow_numer: sos.linearSOS.allowNumer,

@@ -4,7 +4,7 @@ and also utilities to compute monomial representations under the group symmetry.
 """
 from collections import defaultdict
 from typing import (Dict, List, Tuple, Iterable, Callable,
-    Union, Optional, Any, overload, TypeVar
+    Union, Optional, Any, overload
 )
 import numpy as np
 from sympy import Poly, Expr, Symbol, Add, ZZ, QQ, factorial, prod
@@ -218,12 +218,13 @@ class MonomialManager():
         """
         return self._register_monoms(degree)[1]
 
-    def index(self, monom: Tuple[int, ...]) -> Optional[int]:
+    def index(self, monom: Tuple[int, ...], degree: Optional[int] = None) -> Optional[int]:
         """
         Return the index of the monom in the vector representation of the polynomial.
         Note that it is NOT the index of a permutation group.
         """
-        degree = sum(monom)
+        if degree is None:
+            degree = sum(monom)
         return self.dict_monoms(degree).get(self.standard_monom(monom))
 
     def length(self, degree: int) -> int:
@@ -396,8 +397,7 @@ class MonomialManager():
                     monom = inv_monoms[i]
                     for monom2 in permute(monom):
                         terms_dict[monom2] = z
-            rep = DMP.from_dict(terms_dict, len(gens)-1, domain)
-            return Poly.new(rep, *gens)
+            return Poly.from_dict(terms_dict, gens, domain=domain)
 
         elif isinstance(array, np.ndarray):
             array = array.tolist()
@@ -454,7 +454,12 @@ def _parse_options(nvars, **options) -> MonomialManager:
     raise ValueError(f"Invalid symmetry type {type(symmetry)}. Expected MonomialManager or PermutationGroup.")
 
 
-def arraylize_np(poly: Union[Poly, DMP, PolyElement], degree: Optional[int] = None, expand_cyc: bool = False, **options) -> np.ndarray:
+def arraylize_np(
+    poly: Union[Poly, DMP, PolyElement],
+    degree: Optional[int] = None,
+    expand_cyc: bool = False,
+    **options
+) -> np.ndarray:
     """
     Convert a sympy polynomial to a numpy vector of coefficients.
     Monomials are sorted in graded lexicographical (grlex) order.
@@ -463,7 +468,6 @@ def arraylize_np(poly: Union[Poly, DMP, PolyElement], degree: Optional[int] = No
     -----------
     poly: Poly
         The sympy polynomial.
-
     expand_cyc: bool
         Whether to compute the cyclic sum of the polynomial given
         the symmetry group.
@@ -485,8 +489,8 @@ def arraylize_np(poly: Union[Poly, DMP, PolyElement], degree: Optional[int] = No
 
     Returns
     ---------
-    vec: Matrix
-        Sympy matrix (vector) that stores the coefficients of the polynomial.
+    vec: np.ndarray
+        Numpy vector that stores the coefficients of the polynomial.
 
     Examples
     ---------
@@ -521,7 +525,12 @@ def arraylize_np(poly: Union[Poly, DMP, PolyElement], degree: Optional[int] = No
     return option.arraylize_np(poly, degree = degree, expand_cyc = expand_cyc)
 
 
-def arraylize_sp(poly: Union[Poly, DMP, PolyElement], degree: Optional[int] = None, expand_cyc: bool = False, **options) -> Matrix:
+def arraylize_sp(
+    poly: Union[Poly, DMP, PolyElement],
+    degree: Optional[int] = None,
+    expand_cyc: bool = False,
+    **options
+) -> Matrix:
     """
     Convert a sympy polynomial to a sympy vector of coefficients.
     Monomials are sorted in graded lexicographical (grlex) order.
@@ -530,7 +539,6 @@ def arraylize_sp(poly: Union[Poly, DMP, PolyElement], degree: Optional[int] = No
     -----------
     poly: Poly
         The sympy polynomial.
-
     expand_cyc: bool
         Whether to compute the cyclic sum of the polynomial given
         the symmetry group.
@@ -739,7 +747,7 @@ def parse_symmetry(symmetry: Union[PermutationGroup, str], n: int) -> Permutatio
 
 def verify_symmetry(
     polys: Union[List[Poly], Poly],
-    symmetry: Union[str, Permutation, PermutationGroup]
+    symmetry: Union[str, Permutation, PermutationGroup, List[Permutation]]
 ) -> bool:
     """
     Verify whether the polynomials are symmetric with respect to the permutation group.
@@ -1099,13 +1107,25 @@ def arraylize_up_to_symmetry(
     return rep_matrix_from_list(queue, shape, domain)
 
 
-ClearPolysInput = TypeVar("T", List[Expr], List[Tuple[Expr, Any]], Dict[Expr, Any])
 @overload
 def clear_polys_by_symmetry(
-    polys: ClearPolysInput,
+    polys: List[Union[Poly, Expr]],
     symbols: Tuple[Symbol, ...],
     symmetry: Union[PermutationGroup, MonomialManager],
-) -> ClearPolysInput: ...
+) -> List[Union[Poly, Expr]]: ...
+@overload
+def clear_polys_by_symmetry(
+    polys: List[Tuple[Union[Poly, Expr], Any]],
+    symbols: Tuple[Symbol, ...],
+    symmetry: Union[PermutationGroup, MonomialManager],
+) -> List[Tuple[Union[Poly, Expr], Any]]: ...
+@overload
+def clear_polys_by_symmetry(
+    polys: Dict[Union[Poly, Expr], Any],
+    symbols: Tuple[Symbol, ...],
+    symmetry: Union[PermutationGroup, MonomialManager],
+) -> Dict[Union[Poly, Expr], Any]: ...
+
 
 def clear_polys_by_symmetry(polys, symbols, symmetry):
     """

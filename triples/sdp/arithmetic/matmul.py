@@ -50,7 +50,7 @@ def matadd(A, B):
         B = rep_matrix_from_numpy(B)
     return A + B
 
-def matlshift(A: Matrix, B: int) -> Matrix:
+def matlshift(A: RepMatrix, B: int) -> RepMatrix:
     """
     Left shift the matrix A by B bits.
 
@@ -86,7 +86,7 @@ def matlshift(A: Matrix, B: int) -> Matrix:
     elif isinstance(rep, DDM):
         rep = DDM([[v << B for v in row] for row in rep], A.shape, dom)
     elif isinstance(rep, DFM):
-        rep = rep.mul(2**B)
+        rep = rep.mul(2**B) # type: ignore
     else:
         rep = rep * (2**B)
     return A._fromrep(A._rep.from_rep(rep))
@@ -577,7 +577,7 @@ def _decompose_int64_to_level_digits(arr: ndarray, level: int) -> List[ndarray]:
     return digits
 
 
-def _symmetric_bilinear_multiple_by_level(U: ndarray, A: ndarray) -> Matrix:
+def _symmetric_bilinear_multiple_by_level(U: ndarray, A: ndarray) -> RepMatrix:
     """
     Perform multiple symmetric bilinear products U^T * Ai * U
     where U and A are numpy int64 matrices.

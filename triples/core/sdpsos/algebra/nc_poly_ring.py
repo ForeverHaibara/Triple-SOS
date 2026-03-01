@@ -1,11 +1,11 @@
 from itertools import product
-from typing import Dict, List, Optional, Any
+from typing import Dict, Optional, Any
 
-from sympy import Poly, Expr, Add, Mul, Symbol
+from sympy import Poly, Expr, Add, Mul
 from sympy.combinatorics.permutations import Permutation
 
 from .state_algebra import StateAlgebra, TERM, MONOM
-from .basis import QmoduleBasis, IdealBasis
+from .basis import QmoduleBasis
 from .pseudo_poly import PseudoPoly
 
 def generate_monoms_nc(nvars, degree, hom=True):
