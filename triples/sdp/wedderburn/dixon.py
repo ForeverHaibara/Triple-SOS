@@ -106,7 +106,7 @@ def eigenspace_decomposition(A: DomainMatrix) -> List[DomainMatrix]:
     charpoly = Poly(A.charpoly(), Symbol('x'), domain=Fp)
     eigens = []
     for z in charpoly.ground_roots():
-        z = Fp(z)
+        z = Fp(int(z)) # MPZ -> int -> Fp
         B = A - A.diag([z] * A.shape[0], Fp)
         basis = B.nullspace()
         basis, pivots = basis.rref()
