@@ -1,11 +1,46 @@
-from typing import Tuple, List
+from typing import Tuple, List, Optional
 
 from sympy import Poly, Expr, Symbol, Add
 
 from .utils import (
-    Coeff, sos_struct_handle_uncentered
+    Coeff, sos_struct_handle_uncentered, sos_struct_reorder_symmetry
 )
 from ..univariate import prove_univariate
+
+
+def _linear_invert(u, v, d: int = 0) -> Optional[Tuple[int, Expr, Expr]]:
+    """
+    Returns n, u2, v2 such that `n, u2, v2 >= 0` and
+    `u2 = u - (u + v)*n` and `v2 = v + (u + v)*n`. If
+    `d` is provided, `n` is chosen to be close to `d`.
+    Returns None if no such solution exists.
+
+    This is equivalent to `-v/(u + v) <= n <= u/(u + v)`.
+
+    Note that `a^(-n) == (-n*a + (n+1))  (mod (a-1)^2)` and   
+    `(u*a + v)*(-n*a + (n+1)) + n*u*(a-1)**2 == (u - (u + v)*n)*a + v + (u + v)*n`,
+    so this implies:
+    `u*a + v == (u2*a + v2)*a**n (mod (a-1)**2)`
+    """
+    s = u + v
+    if s == 0:
+        # if u >= 0 and v >= 0:
+        if u == 0 and v == 0:
+            return d, u, v
+        return None
+    if s < 0 or u < 0:
+        return None
+    if -v <= d * s <= u:
+        n = d
+    elif d * s > u:
+        n = u // s
+    else: # d < -v/(u+v) and v < 0
+        # n = (-v - 1)//s + 1
+        n = -(v // s)
+    u2, v2 = u - s * n, v + s * n
+    if not (n >= 0 and u2 >= 0 and v2 >= 0):
+        return None
+    return n, u2, v2
 
 
 def sos_struct_dense_symmetric(coeff, real=True):
@@ -16,7 +51,6 @@ def sos_struct_dense_symmetric(coeff, real=True):
     if coeff.total_degree() < 8 or not coeff.is_symmetric():
         return None
     return _sos_struct_dense_symmetric(coeff, real)
-
 
 
 def _sos_struct_dense_symmetric(coeff, real=True):
@@ -180,7 +214,7 @@ def _sos_struct_lift_for_six(coeff: Coeff, real=True):
 
 
 @sos_struct_handle_uncentered
-def sos_struct_liftfree_for_six(coeff, real=True):
+def sos_struct_liftfree_for_six(coeff: Coeff, real=True):
     """
     Solve high-degree (dense) symmetric inequalities without
     lifting the degree. This will be tried in prior because
@@ -223,20 +257,12 @@ def sos_struct_liftfree_for_six(coeff, real=True):
     # so that the symmetric axis of the remaining part is a multiple of (a-1)^4
     u, v = div2[1].coeff_monomial((1,)), div2[1].coeff_monomial((0,))
 
-    # note that a^n = (-n*a + (n+1))  (mod (a-1)^2)
-    # we find integer n such that (u*a + v)*(-n*a + (n+1)) + nu(a-1)^2 >= 0
-    # it is equivalent to -v/(u+v) <= n <= u/(u+v)
-    if u + v <= 0 or u < 0:
+    # find n, u2, v2 >= 0 that (u*a + v) == (u2*a + v2)*a**n (mod (a-1)**2)
+    inv = _linear_invert(u, v, (d+1)//3 - 1)
+    if inv is None:
         return None
-    expected = (d+1)//3 - 1
-    if -v <= expected * (u+v) <= u:
-        n = expected
-    elif expected * (u+v) > u:
-        n = u // (u+v)
-    else: # expected < -v/(u+v) and v < 0
-        n = (-v - 1)//(u+v) + 1
-    u2, v2 = u - (u+v)*n, v + (u+v)*n
-    if not (n <= d - 3 and n >= 0 and u2 >= 0 and v2 >= 0):
+    n, u2, v2 = inv
+    if not n <= d - 3:
         return None
 
     m = (d - n - 3) // 2
@@ -281,7 +307,7 @@ def sos_struct_liftfree_for_six(coeff, real=True):
         return subtractor + solution
 
 
-def _sos_struct_liftfree_for_six_ord4(coeff, div2=None, real=True):
+def _sos_struct_liftfree_for_six_ord4(coeff: Coeff, div2=None, real=True):
     """
     Solve a high-degree (dense) symmetric inequality where (a-1)^4 is a factor
     of the symmetric axis. Such polynomial can be seen as:
@@ -315,3 +341,13 @@ def _sos_struct_liftfree_for_six_ord4(coeff, div2=None, real=True):
     sol_diff = _sos_struct_dense_symmetric(coeff.from_poly(diff))
     if sol_diff is not None:
         return CyclicSum(lifted_sym * (a-b)**2*(a-c)**2) + CyclicProduct((a-b)**2) * sol_diff
+
+#####################################################################
+#
+#                              Acyclic
+#
+#####################################################################
+
+@sos_struct_reorder_symmetry(groups=(2, 1))
+def sos_struct_ternary_partial_symmetric(coeff: Coeff):
+    return None

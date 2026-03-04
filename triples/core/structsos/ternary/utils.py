@@ -6,7 +6,7 @@ from sympy import Poly, Expr, Symbol, Add, Mul, Pow
 from sympy.combinatorics import CyclicGroup
 
 from ..utils import (
-    Coeff, DomainExpr,
+    Coeff, DomainExpr, sos_struct_reorder_symmetry,
     radsimp, sum_y_exprs, rationalize_func, quadratic_weighting, zip_longest,
     congruence, congruence_solve,
     StructuralSOSError, PolynomialNonpositiveError, PolynomialUnsolvableError

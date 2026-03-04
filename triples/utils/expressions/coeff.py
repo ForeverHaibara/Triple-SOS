@@ -492,6 +492,7 @@ class Coeff():
         """
         if perm_group is None:
             perm_group = "cyc"
+        # TODO: do not convert it to poly
         return verify_symmetry(self.as_poly(), perm_group)
 
     def is_symmetric(self, perm_group: Optional[Union[str, Permutation, List[Permutation], PermutationGroup]] = None) -> bool:
@@ -512,7 +513,7 @@ class Coeff():
         """
         if perm_group is None:
             perm_group = "sym"
-        return verify_symmetry(self.as_poly(), perm_group)
+        return self.is_cyclic(perm_group)
 
     def reflect(self) -> 'Coeff':
         if self.nvars <= 1:

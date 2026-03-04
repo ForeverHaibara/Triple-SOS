@@ -3,7 +3,8 @@ from sympy import oo as Infinity
 
 from .utils import (
     Coeff, CommonExpr,
-    sum_y_exprs, rationalize_func, quadratic_weighting
+    sum_y_exprs, rationalize_func, quadratic_weighting,
+    sos_struct_reorder_symmetry
 )
 
 def sos_struct_cubic(coeff, real = True):
@@ -354,6 +355,7 @@ def _sos_struct_acyclic_cubic_hexagon(coeff: Coeff):
         return sum(exprs) + (center - sum(zs))*(a*b*c)
 
 
+@sos_struct_reorder_symmetry(groups=(2, 1))
 def _sos_struct_acyclic_cubic_symmetric(coeff: Coeff):
     """
     Solve acyclic cubic polynomials that are symmetric with respect to two variables.
@@ -403,19 +405,8 @@ def _sos_struct_acyclic_cubic_symmetric(coeff: Coeff):
 
     => (81a3-77a2b-135a2c-77ab2+225abc+27ac2+81b3-135b2c+27bc2+27c3)
     """
-    a, b, c = None, None, None
-    if all(coeff((i,j,k)) == coeff((j,i,k)) for (i,j,k) in ((3,0,0),(2,1,0),(2,0,1),(1,0,2))):
-        a, b, c = coeff.gens
-        x0, x1, x2, x3, x4, x5 = [coeff(_) for _ in ((0,0,3),(1,0,2),(2,0,1),(3,0,0),(2,1,0),(1,1,1))]
-    if all(coeff((i,j,k)) == coeff((i,k,j)) for (i,j,k) in ((0,3,0),(0,2,1),(1,2,0),(2,1,0))):
-        a, b, c = coeff.gens
-        a, b, c = b, c, a
-        x0, x1, x2, x3, x4, x5 = [coeff(_) for _ in ((3,0,0),(2,1,0),(1,2,0),(0,3,0),(0,2,1),(1,1,1))]
-    if all(coeff((i,j,k)) == coeff((k,j,i)) for (i,j,k) in ((0,0,3),(1,0,2),(0,1,2),(0,2,1))):
-        a, b, c = coeff.gens
-        a, b, c = c, a, b
-        x0, x1, x2, x3, x4, x5 = [coeff(_) for _ in ((0,3,0),(0,2,1),(0,1,2),(0,0,3),(1,0,2),(1,1,1))]
-
+    a, b, c = coeff.gens
+    x0, x1, x2, x3, x4, x5 = [coeff(_) for _ in ((0,0,3),(1,0,2),(2,0,1),(3,0,0),(2,1,0),(1,1,1))]
 
     if a is None:
         # it is not symmetric
@@ -424,7 +415,7 @@ def _sos_struct_acyclic_cubic_symmetric(coeff: Coeff):
         return None
 
     if x0 == 0:
-        # This is a degeneated case, the symmetric axis and the border are now quadratic.
+        # This is a degenerated case, the symmetric axis and the border are now quadratic.
         if x1 < 0 or x3 < 0:
             return None
         if x3 == 0:

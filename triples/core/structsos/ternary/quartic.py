@@ -5,7 +5,7 @@ from sympy import Poly, Expr, Symbol, Rational, Integer, Float, Add
 from sympy import MutableDenseMatrix as Matrix
 
 from .utils import (
-    Coeff,
+    Coeff, sos_struct_reorder_symmetry,
     congruence, sum_y_exprs, quadratic_weighting,
     nroots, rationalize, rationalize_bound, rationalize_func,
     univariate_intervals, common_region_of_conics
@@ -605,6 +605,7 @@ def sos_struct_acyclic_quartic(coeff, real = True):
     return _sos_struct_acyclic_quartic_real(coeff)
 
 
+@sos_struct_reorder_symmetry(groups=(2, 1))
 def _sos_struct_acyclic_quartic_symmetric(coeff: Coeff, real = True):
     """
     Solve acyclic quartic polynomials that are symmetric with respect to two variables.
@@ -656,18 +657,9 @@ def _sos_struct_acyclic_quartic_symmetric(coeff: Coeff, real = True):
         return
 
     monoms = [(4,0),(3,1),(2,2),(3,0),(2,1),(2,0),(1,0),(1,1),(0,0)]
-    mappings = [(lambda i, j: (i,j,4-i-j)), (lambda i, j: (i,4-i-j,j)), (lambda i, j: (4-i-j,i,j))]
-
     a, b, c = coeff.gens
 
-    symbol_orders = [(a,b,c), (a,c,b), (b,c,a)]
-    for symbol_order, mapping in zip(symbol_orders, mappings):
-        if all(coeff(mapping(i,j)) == coeff(mapping(j,i)) for i,j in ((4,0),(3,1),(3,0),(2,1),(2,0))):
-            break
-    else:
-        return None
-
-    c400, c310, c220, c301, c211, c202, c103, c112, c004 = [coeff(mapping(i, j)) for i, j in monoms]
+    c400, c310, c220, c301, c211, c202, c103, c112, c004 = [coeff((i, j, 4-i-j)) for i, j in monoms]
     w4 = c004
     w3 = 2*c103
     w2 = c112 + 2*c202
@@ -692,7 +684,7 @@ def _sos_struct_acyclic_quartic_symmetric(coeff: Coeff, real = True):
         US2 = congruence(M2)
         if US1 is None or US2 is None:
             return None
-        a, b, c = symbol_order
+        a, b, c = coeff.gens
 
         def _US_vec(US, vec):
             U, S = US
@@ -894,7 +886,7 @@ def _sos_struct_acyclic_quartic_real(coeff: Coeff):
     => (20a4-94a3b-12a3c+171a2b2+28a2bc+4a2c2-151ab3-11ab2c-8abc2+77b4-21b3c+7b2c2) # doctest:+SKIP
     """
     poly = coeff.as_poly()
-    roots = _sos_struct_acyclic_quartic_reaL_findroots(coeff, poly)
+    roots = _sos_struct_acyclic_quartic_real_findroots(coeff, poly)
     if roots is None:
         return None
 
@@ -979,7 +971,8 @@ def _sos_struct_acyclic_quartic_real(coeff: Coeff):
         ])
         return base_mat + addition
 
-def _sos_struct_acyclic_quartic_reaL_findroots(
+
+def _sos_struct_acyclic_quartic_real_findroots(
         coeff: Coeff, poly = None
     ) -> List[Tuple[Tuple[Float, Float, Float], Float, Expr]]:
     """
