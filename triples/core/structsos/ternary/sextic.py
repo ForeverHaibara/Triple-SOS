@@ -45,11 +45,11 @@ def _sos_struct_sextic_hexagram(coeff: Coeff):
 
     Examples
     --------
-    => s(a3b3+7a4bc-29a3b2c+12a3bc2+9a2b2c2) # doctest:+SKIP
+    => s(a3b3+7a4bc-29a3b2c+12a3bc2+9a2b2c2)
 
     => 9s(a3b3)+4s(a4bc)-11abcp(a-b)-37s(a3b2c)+72a2b2c2
 
-    => s(11a4bc+11a3b3+153a3bc2-153a3b2c-22a2b2c2) # doctest:+SKIP
+    => s(11a4bc+11a3b3+153a3bc2-153a3b2c-22a2b2c2)
 
     => s(bc(a2-bc+2(ab-ac)+3(bc-ab))2)
 
@@ -57,6 +57,8 @@ def _sos_struct_sextic_hexagram(coeff: Coeff):
 
     => s(3a4bc+2a3b3+a3bc2-6a2b2c2)
 
+    => s((sqrt(2)+9)a4bc+(4*sqrt(2)+9)a3b3+(-19+3*sqrt(2))a3b2c+(-33*sqrt(2)-12)a3bc2+(13+25*sqrt(2))a2b2c2)
+ 
     => (s(a2c)s(b2c)+25/2p(a2)-27/4s(a2c)p(a))
 
     => s(a2c)s(b2c)+9p(a2)-15*4^(-2/3)p(a)s(a2b)
@@ -310,13 +312,22 @@ def _sos_struct_sextic_hexagram(coeff: Coeff):
             return frac1 / frac2
 
         u_, v_ = None, None
-        for root in nroots(eqv, method = 'factor', real = True, nonnegative = True):
+        eqvdiff = eqv.diff()
+        eqvgcd = eqv.gcd(eqvdiff)
+        if eqvgcd.total_degree() == 1:
+            root = coeff.convert(-eqvgcd.rep.TC() / eqvgcd.rep.LC())
             u_ = compute_u(root)
             if u_ * root > 1:
                 v_ = root
-                break
+            else:
+                u_, v_ = None, None
+        if v_ is None:
+            for root in nroots(eqv, method = 'factor', real = True, nonnegative = True):
+                u_ = compute_u(root)
+                if u_ * root > 1:
+                    v_ = root
+                    break
         if v_ is not None:
-            # now that we have obtained u and v
             # we are sure that f(a,b,c) * s(a) >= coeff((3,3,0)) * s(c(a2c-b2c-w(a2b-abc)+z(ab2-abc))2)
             # where w = (u^2+v)/(uv-1), z = (v^2+u)/(uv-1)
             # so we can subtract the right hand side and apply the quartic theorem
@@ -328,15 +339,16 @@ def _sos_struct_sextic_hexagram(coeff: Coeff):
                 det = 3 * m3 * (m3 + n3) - (p3**2 + p3 * q3 + q3**2)
                 return det, (m3, p3, n3, q3)
             def get_discriminant_uv(u, v):
+                u, v = coeff.convert(u), coeff.convert(v)
                 w, z = (u*u + v) / (u*v - 1), (v*v + u) / (u*v - 1)
                 m2, p2, n2, q2 = 0, r_*(w*w - 2*z), -r_*2*w*z, r_*(z*z - 2*w)
                 return get_discriminant(m2, p2, n2, q2)
 
-
-            det_ = None
-            # print('(u, v) =', (u_, v_))
-            # print('det =', get_discriminant_uv(u_, v_))
-            if get_discriminant_uv(u_, v_)[0] > -coeff.convert(10)**(-14):
+            u0, v0 = coeff.convert(u_), coeff.convert(v_)
+            det_, (m3, p3, n3, q3) = get_discriminant_uv(u0, v0)
+            if det_ == 0:
+                u, v = u0, v0
+            elif det_ > -coeff.convert(10)**(-14):
                 # first check that the result is good
 
                 # do rational approximation for both u and v
@@ -346,9 +358,11 @@ def _sos_struct_sextic_hexagram(coeff: Coeff):
                 ):
                     u, v = coeff.convert(u), coeff.convert(v)
                     det_, (m3, p3, n3, q3) = get_discriminant_uv(u, v)
-                    if isinstance(det_, Rational) and det_ >= 0:
+                    if det_ >= 0:
                         break
                     det_ = None
+            else:
+                det_ = None
 
             if det_ is not None:
                 w, z = (u**2 + v) / (u*v - 1), (v**2 + u) / (u*v - 1)
@@ -448,7 +462,7 @@ def _sos_struct_sextic_rotated_tree(coeff: Coeff):
 
     => s(20a4b2-26a3b2c-29a3bc2+35a2b2c2)
 
-    => s(a2b4+a3b2c-a3bc2-a2b2c2) # doctest:+SKIP
+    => s(a2b4+a3b2c-a3bc2-a2b2c2)
 
     => s(a4b2-14a3b2c+14a3bc2-1a2b2c2)
 
@@ -545,7 +559,7 @@ def _sos_struct_sextic_rotated_tree(coeff: Coeff):
             # Observation:
             # (t^3-3t, -3t(t-1)) and ((1-t)^3-3(1-t), -3(1-t)(1-t-1)) have equal y coordinates
             solution = _solve_regular(1 - t)
-            if solution is None:
+            if solution is not None:
                 return solution
 
     return None

@@ -1,4 +1,4 @@
-from typing import Tuple, List, Optional
+from typing import Tuple, List, Optional, Union
 
 from sympy import Poly, Expr, Symbol, Add
 
@@ -99,8 +99,6 @@ def _sos_struct_trivial_additive(coeff: Coeff, real=True):
     return CyclicSum(Add(*exprs))
 
 
-
-
 def sym_axis(coeff: Coeff, d: int = -1) -> Poly:
     """Compute f(a,1,1)."""
     if d == -1: d = coeff.total_degree()
@@ -110,7 +108,8 @@ def sym_axis(coeff: Coeff, d: int = -1) -> Poly:
     a = coeff.gens[0]
     return coeff.from_list(coeff_list[::-1], gens=(a,)).as_poly()
 
-def _homogenize_sym_axis(coeff: Coeff, sym: Poly, d: int) -> Expr:
+
+def _homogenize_sym_axis(coeff: Union[Coeff, Poly], sym: Poly, d: int) -> Expr:
     """Homogenize f(a,1,1) to f(a,b,c) given degree."""
     a, b, c = coeff.gens
     s = [0]
@@ -350,4 +349,76 @@ def _sos_struct_liftfree_for_six_ord4(coeff: Coeff, div2=None, real=True):
 
 @sos_struct_reorder_symmetry(groups=(2, 1))
 def sos_struct_ternary_partial_symmetric(coeff: Coeff):
-    return None
+    """
+    Solve a homogeneous 3-var inequality `f(a,b,c) >= 0` where
+    `f(a, b, c) == f(b, a, c)`.
+    
+    Examples
+    --------
+    => ((2a+2b+c)c-2ab)2(a+b)+3ab(4((a-b)2+c2)s(a)+8c(ab-c2)-9c2(a+b))
+    """
+    if all(v >= 0 for v in coeff.coeffs()):
+        return coeff.as_poly().as_expr()
+    if coeff.total_degree() <= 1:
+        return None
+
+    a, b, c = coeff.gens
+    poly = coeff.as_poly()
+    axis = poly.eval((1,1))
+    div, rem = axis.div(Poly([1,-2,1], c, domain=axis.domain))
+    if not rem.is_zero:
+        return None
+    div, rem = div.div(Poly([1,-2,1], c, domain=div.domain))
+
+    # subtract something so that the remaining f(a,b,c) has (c-1)**4 | f(1, 1, c)
+    d = coeff.total_degree()
+    inv = _linear_invert(rem.coeff_monomial((1,)), rem.coeff_monomial((0,)),
+                         (d+1)//3 - 1)
+    if inv is None:
+        return None
+    n, u2, v2 = inv
+
+    subtractor = Add()
+    m = (d - n - 3) // 2
+    if m < 0:
+        return None
+    elif (d - n - 3) % 2 == 0:
+        subtractor = a**m*b**m*c**n*(u2*c + v2/2*(a + b))*(2*c - a - b)**2/4
+    else:
+        m = (d - n - 3) // 2
+        subtractor = a**m*b**m*c**n*(u2/2*c*(a + b) + v2*a*b)*(2*c - a - b)**2/4
+
+    remain = poly - subtractor.as_poly(a, b, c, domain=coeff.domain)
+    sol = _sos_struct_ternary_partial_symmetric_ord4(coeff.from_poly(remain))
+    if sol is not None:
+        return subtractor + sol
+
+
+def _sos_struct_ternary_partial_symmetric_ord4(coeff: Coeff):
+    """
+    Solve a homogeneous 3-var inequality `f(a,b,c) >= 0` where
+    `f(a, b, c) == f(b, a, c)` and `(c - 1)**4 | f(1, 1, c)`.
+    """
+    a, b, c = coeff.gens
+    poly = coeff.as_poly()
+    div2, rem2 = poly.eval((1,1)).div(Poly([1, -4, 6, -4, 1], c, domain=poly.domain))
+
+    # print('div2', div2, 'rem2', rem2)
+    if not rem2.is_zero:
+        # not expected to happen
+        return None
+
+    if not all(v >= 0 for v in div2.coeffs()):
+        return None
+
+    d = coeff.total_degree()
+    sym = _homogenize_sym_axis(Poly(0, c, a, b), div2, d - 4)
+    remain2 = poly - (sym*(a - c)**2*(b - c)**2).as_poly(a, b, c, domain=poly.domain)
+    div3, rem3 = remain2.div((a - b).as_poly(a, b, domain=remain2.domain)**2)
+    if not rem3.is_zero:
+        # not expected to happen
+        return None
+
+    sol = sos_struct_ternary_partial_symmetric(coeff.from_poly(div3))
+    if sol is not None:
+        return sym * (a-c)**2*(b-c)**2 + sol * (a-b)**2

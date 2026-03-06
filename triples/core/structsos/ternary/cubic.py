@@ -404,6 +404,8 @@ def _sos_struct_acyclic_cubic_symmetric(coeff: Coeff):
     => 8(a(a-b-c)2+b(b-a-c)2)+4c(c-a-b)2-16abc
 
     => (81a3-77a2b-135a2c-77ab2+225abc+27ac2+81b3-135b2c+27bc2+27c3)
+
+    => (96b3+152b2c+152b2a-288bc2-320bca-288ba2+127c3+121c2a+121ca2+127a3)
     """
     a, b, c = coeff.gens
     x0, x1, x2, x3, x4, x5 = [coeff(_) for _ in ((0,0,3),(1,0,2),(2,0,1),(3,0,0),(2,1,0),(1,1,1))]
