@@ -52,7 +52,7 @@ def fd_example5():
 
 def test_dual_linear_transform():
     sdp = fd_example2()
-    y1, y2, y3 = a, b, c
+    # y1, y2, y3 = a, b, c
 
     # ensure y1 == y2
     for i in range(2):

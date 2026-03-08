@@ -330,8 +330,19 @@ def sdp_ipm(
                                     'or a infeasible system.')
 
         if callback is not None:
-            params = dict(k = k, X = Xk, diff = diff, z = z - diff, M = M, lam = lam,
-                          eig_mean = eig_mean, eig_std = eig_std, beta = beta, v = v, r = r)
+            params = {
+                "k": k,
+                "X": Xk,
+                "diff": diff,
+                "z": z - diff,
+                "M": M,
+                "lam": lam,
+                "eig_mean": eig_mean,
+                "eig_std": eig_std,
+                "beta": beta,
+                "v": v,
+                "r": r,
+            }
             if callback(params) is True:
                 break
 

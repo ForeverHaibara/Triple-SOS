@@ -81,7 +81,7 @@ def _sos_struct_quartic_core(coeff: Coeff):
     c1, c2, c3 = [(p+2*q)/m/3, (p-q)/m/3, -(2*p+q)/m/3]
 
     a, b, c = coeff.gens
-    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+    CyclicSum = coeff.cyclic_sum
     exprs = [
         CyclicSum((a**2 - b**2 + c1*a*c + c2*a*b + c3*b*c)**2),
         CyclicSum(a**2*(b-c)**2),
@@ -236,7 +236,7 @@ def _sos_struct_quartic_biased(coeff: Coeff):
         y = (symmetric(u) / (2*(u**2*(u**2 + 1) + 1)) * m)
         if y >= 0:
             a, b, c = coeff.gens
-            CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+            CyclicSum = coeff.cyclic_sum
             solution = y * CyclicSum((a*b*(a-u*b+(u-1)*c)**2)) + rem * CyclicSum(a**2*b*c)
 
             subs = {(3,1,0): y, (2,2,0): -2*u*y, (1,3,0): u**2*y, (2,1,1): rem - (u-1)**2*y}
@@ -269,7 +269,7 @@ def _sos_struct_quartic_degenerate(coeff: Coeff):
     m, p, n, q, r = coeff((4,0,0)), coeff((3,1,0)), coeff((2,2,0)), coeff((1,3,0)), coeff((2,1,1))
 
     a, b, c = coeff.gens
-    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+    CyclicSum = coeff.cyclic_sum
 
     if m == 0 and p == 0 and q == 0 and n >= 0 and n + r >= 0 and r <= 2*n:
         # in this special case the polynomial is positive for real numbers
@@ -409,7 +409,7 @@ def _sos_struct_quartic_uncentered_real(coeff: Coeff):
         candidates = [w1approx, w2approx, w1, w2]
 
     a, b, c = coeff.gens
-    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+    CyclicSum = coeff.cyclic_sum
 
     for w in candidates:
         if is_valid(w):
@@ -467,7 +467,7 @@ def _sos_struct_quartic_uncentered(coeff: Coeff):
         return _sos_struct_quartic_degenerate(coeff)
 
     a, b, c = coeff.gens
-    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+    CyclicSum = coeff.cyclic_sum
 
     # if we reach here, it means that the inequality does not hold for all real numbers
     # we can subtract as many s(a^2bc) as possible
@@ -723,16 +723,16 @@ def _sos_struct_acyclic_quartic_symmetric(coeff: Coeff, real = True):
             # TODO: consider r00 == r01 == 0 or r01 == r11 == 0 separately
 
         # find (a, b, l) such that det1 >= 0
-        det1 = dict([
+        det1 = [
             ((2, 0, 0), -w4**2),
             ((0, 2, 1), -16*w4),
             ((0, 2, 0), w3**2),
             ((0, 0, 0), w4*(-4*c310 + w0))
-        ])
-        det1 = Poly.from_dict(det1, (a, b, l))
+        ]
+        det1 = Poly.from_dict(dict(det1), (a, b, l))
 
         # find (a, b, l) such that det2 >= 0
-        det2 = dict([
+        det2 = [
             ((2, 0, 1), -32*w4**3),
             ((2, 0, 0), w4**2*(8*w2*w4 - w3**2)),
             ((1, 1, 0), 2*w4*(8*w1*w4**2 - 4*w2*w3*w4 + w3**3)),
@@ -744,8 +744,8 @@ def _sos_struct_acyclic_quartic_symmetric(coeff: Coeff, real = True):
             ((0, 1, 1), -16*w4*(4*c202*w3 - 16*c301*w4 + 2*w1*w4 - w2*w3)),
             ((0, 1, 0), 2*w4*(-16*c202*w1*w4 + 8*c202*w2*w3 - 8*c301*w3**2 + 4*w1*w2*w4 + w1*w3**2 - 2*w2**2*w3)),
             ((0, 0, 0), w4**2*(64*c202*c310 + 256*c202*c400 - 32*c202*w0 - 64*c301**2 + 16*c301*w1 - 16*c310*w2 - 64*c400*w2 + 8*w0*w2 - w1**2))
-        ])
-        det2 = Poly.from_dict(det2, (a, b, l))
+        ]
+        det2 = Poly.from_dict(dict(det2), (a, b, l))
 
         def _get_solution_from_ab(a, b, l):
             r11 = (-2*a*c004*w4 + 2*b*c004*w3 - 4*b*c103*w4 - c112*w4 + 2*c202*w4)/(4*w4)
@@ -796,15 +796,15 @@ def _sos_struct_acyclic_quartic_symmetric(coeff: Coeff, real = True):
         if leading_det < 0:
             return None
         elif leading_det > 0:
-            det1 = dict([
+            det1 = [
                 ((2, 0), -c112 - 2*c202),
                 ((1, 1), 2*(c211 + c301)),
                 ((1, 0), -(c112*c220 - 6*c112*c400 + 2*c202*c220 - 12*c202*c400 - c211**2 + 2*c211*c301 + 3*c301**2)/4),
                 ((0, 2), -c220 - 2*c310 - 2*c400),
                 ((0, 1), -(c211*c310 + 4*c211*c400 - 2*c220*c301 - 3*c301*c310)/2),
                 ((0, 0), (4*c112*c220*c400 - c112*c310**2 - 8*c112*c400**2 + 8*c202*c220*c400 - 2*c202*c310**2 - 16*c202*c400**2 - 4*c211**2*c400 + 4*c211*c301*c310 + 8*c211*c301*c400 - 4*c220*c301**2 - 4*c301**2*c310 + 4*c301**2*c400)/16)
-            ])
-            det1 = Poly.from_dict(det1, (a, b))
+            ]
+            det1 = Poly.from_dict(dict(det1), (a, b))
 
             det2 = (r11*a - b**2).as_poly(a, b)
 
@@ -910,18 +910,18 @@ def _sos_struct_acyclic_quartic_real(coeff: Coeff):
         ]
         return Matrix(M)
 
-    def get_constraints(base_mat, root):
-        a0, b0, c0 = root[0]
-        vec = Matrix([a0**2, b0**2, c0**2, a0*b0, b0*c0, c0*a0])
-        target = -base_mat * vec
-        A = [
-            [1, 0, 0, 0, 0, 0],
-            [a0**2/b0**2, 1, 0, 0, 0, 0],
-            [0, b0**2/c0**2, 1, 0, 0, 0],
-            [-2*a0/b0, 0, c0**2/(a0*b0), 1, 0, 0],
-            [0, -2*b0/c0, -c0/b0, 0, 1, 0],
-            [0, 0, -c0/a0, 0, 0, 1]
-        ]
+    # def get_constraints(base_mat, root):
+    #     a0, b0, c0 = root[0]
+    #     vec = Matrix([a0**2, b0**2, c0**2, a0*b0, b0*c0, c0*a0])
+    #     target = -base_mat * vec
+    #     A = [
+    #         [1, 0, 0, 0, 0, 0],
+    #         [a0**2/b0**2, 1, 0, 0, 0, 0],
+    #         [0, b0**2/c0**2, 1, 0, 0, 0],
+    #         [-2*a0/b0, 0, c0**2/(a0*b0), 1, 0, 0],
+    #         [0, -2*b0/c0, -c0/b0, 0, 1, 0],
+    #         [0, 0, -c0/a0, 0, 0, 1]
+    #     ]
 
     def _as_abc2_vec(expr):
         expr = expr.as_poly(a,b,c)

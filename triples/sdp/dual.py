@@ -31,10 +31,10 @@ def _get_unique_symbols(used_symbols, dof: int, xname: str = 'y'):
     xname : str
         The prefix of the symbol name.
     """
-    used_symbols = set([_.name for _ in used_symbols])
+    used_symbols = {_.name for _ in used_symbols}
     xname = xname + '_{'
     n = len(xname)
-    used_symbols = set(s[n:-1] for s in used_symbols if s.startswith(xname) and s[-1] == '}')
+    used_symbols = {s[n:-1] for s in used_symbols if s.startswith(xname) and s[-1] == '}'}
     digits = '0123456789'
     used_digits = list(map(int, filter(lambda x: all(d in digits for d in x), used_symbols)))
     max_digit = max(used_digits, default=-1) + 1
@@ -1191,8 +1191,8 @@ class SDPProblem(TransformableDual):
                 solution = self.rationalize(y, verbose=verbose, time_limit=_time_limit)
                 if solution is not None:
                     self.y = solution[0]
-                    self.S = dict((key, S[0]) for key, S in solution[1].items())
-                    self.decompositions = dict((key, S[1:]) for key, S in solution[1].items())
+                    self.S = {key: S[0] for key, S in solution[1].items()}
+                    self.decompositions = {key: S[1:] for key, S in solution[1].items()}
                     success = True
                 elif allow_numer:
                     self.register_y(y, perturb=True, propagate_to_parent=propagate_to_parent)
@@ -1273,7 +1273,7 @@ class SDPProblem(TransformableDual):
         total_qmodule = sum(n**2 for n in psd_size.values())
         total_ideal = sum(linear_size.values())
 
-        eq_list = dict((i, dict(row)) for i, row in enumerate(eq_list))
+        eq_list = {i: dict(row) for i, row in enumerate(eq_list)}
         eq_list = rep_matrix_from_dict(eq_list, (rhs.shape[0], total_qmodule+total_ideal), domain)
         x0, space = solve_csr_linear(eq_list, rhs, x0_equal_indices=equal_indices,
                         nonnegative_indices=nonnegative_indices, force_zeros=force_zeros)

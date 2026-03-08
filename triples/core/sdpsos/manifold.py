@@ -89,7 +89,7 @@ class _bilinear():
     def __init__(self, terms: Dict[Tuple[int, ...], set]):
         self.terms = terms
         for m in terms:
-            terms[m] = set(map(lambda uv: self._reg(*uv), terms[m]))
+            terms[m] = {self._reg(*uv) for uv in terms[m]}
 
     def diff(self, i: int) -> '_bilinear':
         def increase_tuple(t, i, v):

@@ -463,7 +463,7 @@ def _prove_univariate_from_mat_Rplus(p: Poly, ctx=None,
             return (res, res.zero) if res is not None else None
 
         zero = ctx.float(0)
-        d = len(real_roots)
+        # d = len(real_roots)
         real_part = [ctx.real(v) for v in ctx.polyfromroots(real_roots)]
         major_part = real_part[::2]   # containing the leading term
         minor_part = real_part[1::2] # not containing the leading term

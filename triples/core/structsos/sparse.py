@@ -41,7 +41,7 @@ def sos_struct_extract_factors(poly: Union[Poly, Coeff], solver: Callable, real:
         new_coeff = coeff_to_poly(new_coeff)
         solution = solver(new_coeff, real = False if (i % 2 == 0) else real, **kwargs)
         if solution is not None:
-            solution = solution.xreplace(dict((s, s**i) for s in symbols))
+            solution = solution.xreplace({s: s**i for s in symbols})
             return solution
         return None
 

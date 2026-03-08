@@ -130,7 +130,7 @@ class DualRationalizer:
                 vrep = v._rep.rep.to_sdm()
                 v = v[:nullrank, :]
                 for row in range(nullrank):
-                    if any(map(lambda x: abs(x) > trunc, vrep.get(row, {}).values())):
+                    if any(abs(x) > trunc for x in vrep.get(row, {}).values()):
                         v = v[:row, :]
                         break
                 v = v.T

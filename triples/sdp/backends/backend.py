@@ -242,7 +242,7 @@ class DualBackend(SDPBackend):
                     break
             lines = lines[i:]
             m = int(lines[0].split()[0])
-            nBlock = int(lines[1].split()[0])
+            # nBlock = int(lines[1].split()[0])
             block_sizes = list(map(abs, map(int, lines[2].strip().split())))
             c_vector = list(map(float, lines[3].strip().split()))
 

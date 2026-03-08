@@ -373,10 +373,10 @@ def _collect_doctest_examples_raw(
     skip: bool = True,
 ):
     lines = [_.strip() for _ in doc.splitlines()]
-    lines = [_ for _ in lines if _.startswith('=>') or _.startswith('::')]
+    lines = [_ for _ in lines if _.startswith(('=>','::'))]
     cases = []
     for line in lines:
-        if not (line.startswith('=>') or line.startswith('::')):
+        if not line.startswith(('=>','::')):
             continue
 
         # Although it can be implemented more carefully,

@@ -17,7 +17,7 @@ class mosek_problem:
     """Internal wrapper for mosek.fusion.Model which also holds the variable `y`."""
     M = None
     y = None
-    def __init__(self, M, x):
+    def __init__(self, M, y):
         self.M = M
         self.y = y
     def solve(self):

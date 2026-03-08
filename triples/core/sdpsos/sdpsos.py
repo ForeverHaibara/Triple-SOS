@@ -328,7 +328,7 @@ class SDPSOSSolver(ProofNode):
                 qmodule = qmodule + poly_qmodule, ideal = ideal,
                 symmetry = symmetry.perm_group, roots = roots, degree=degree
             )
-        sdp = sos.construct(
+        sos.construct(
             wedderburn=configs['wedderburn'],
             verbose=configs['verbose'],
             time_limit=configs['expected_end_time'] - perf_counter()
@@ -410,7 +410,7 @@ class SDPSOSSolver(ProofNode):
 
         problem = self._wrapped_problem[0]
         poly = problem.expr
-        ineq_constraints = problem.ineq_constraints
+        # ineq_constraints = problem.ineq_constraints
         eq_constraints = problem.eq_constraints
 
         verbose = configs["verbose"]

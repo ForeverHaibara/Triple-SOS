@@ -31,10 +31,10 @@ def test_wrap_constraints():
     pro = InequalityProblem(a+b+c, [2*a+b, 2*b+c, 2*c+a])
     pro1 = pro.wrap_constraints()[0]
     assert set(pro1.ineq_constraints) == {2*a + b, 2*b + c, a + 2*c}
-    assert len(set([_.find(Function).pop().func for _ in pro1.ineq_constraints.values()])) == 3
+    assert len({_.find(Function).pop().func for _ in pro1.ineq_constraints.values()}) == 3
     assert [len(_.free_symbols) for _ in pro1.ineq_constraints.values()] == [2, 2, 2]
 
     pro2 = pro.wrap_constraints(CyclicGroup(3))[0]
     assert set(pro2.ineq_constraints) == {2*a + b, 2*b + c, a + 2*c}
-    assert len(set([_.find(Function).pop().func for _ in pro2.ineq_constraints.values()])) == 1
+    assert len({_.find(Function).pop().func for _ in pro2.ineq_constraints.values()}) == 1
     assert [len(_.free_symbols) for _ in pro2.ineq_constraints.values()] == [2, 2, 2]

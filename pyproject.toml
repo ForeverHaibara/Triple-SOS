@@ -68,7 +68,6 @@ lint.select = [
     "TC004",
     "TC005",
     "TRY002",
-    "BLE001", # except Exception or except BaseException
     # "UP006", # pyupgrade - non-pep585-annotation
     # "UP007", # pyupgrade - non-pep604-annotation-union
     # "UP045", # pyupgrade - non-pep604-annotation-optional
@@ -91,4 +90,7 @@ lint.ignore = [
     "F811",
     "FURB110",  # Replace ternary `if` expression with `or` operator
     "FURB187",  # Use of assignment of `reversed` on list `{name}`
+    "BLE001", # except Exception or except BaseException
 ]
+
+exclude = ["triples/benchmarks/run_benchmark.py"]

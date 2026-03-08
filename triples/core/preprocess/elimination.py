@@ -66,7 +66,7 @@ def _rowwise_primitive(A: Matrix) -> Matrix:
     dom = A._rep.domain
     for row, terms in rows.items():
         prim_terms = dup_primitive(list(terms.values()), dom)[1]
-        rows[row] = {i: v for i, v in zip(terms.keys(), prim_terms)}
+        rows[row] = dict(zip(terms.keys(), prim_terms))
     return Matrix._fromrep(A._rep.from_rep(SDM(rows, A.shape, dom)).convert_to(ZZ))
 
 

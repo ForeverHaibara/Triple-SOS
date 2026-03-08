@@ -39,7 +39,7 @@ def _get_zero_diagonals_of_dual(self) -> Dict[Any, List[int]]:
 
 def _get_zero_diagonals_of_primal(self) -> Dict[Any, List[int]]:
     zero_diagonals = {key: set() for key in self.keys()}
-    zero_eqs = set([i for i in range(self._x0.shape[0]) if self._x0[i] == 0])
+    zero_eqs = {i for i in range(self._x0.shape[0]) if self._x0[i] == 0}
     new_zero_found = True
     while new_zero_found:
         new_zero_found = False
@@ -255,4 +255,4 @@ class DualRowExtraction(SDPRowExtraction):
 
         child_node = parent_node.__class__(new_x0_and_space)
         transform = cls(parent_node, child_node, extractions=extractions, A=A, b=b)
-        return child_node
+        return transform.child_node

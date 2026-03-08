@@ -16,8 +16,6 @@ def sos_struct_octic(coeff: Coeff, real = True):
         return None
 
     if not any(coeff(_) for _ in [(6,2,0), (6,1,1), (6,0,2)]):
-        a, b, c = coeff.gens
-        CyclicSum = coeff.cyclic_sum
         # equivalent to degree-7 hexagon when applying (a,b,c) -> (1/a,1/b,1/c)
         poly2 = [((i, j, 7-i-j), coeff((i+j-2,5-i,5-j))) for i in range(5, -1, -1) for j in range(5, -1, -1) if 0 <= 7-i-j <= 5]
         poly2 = coeff.from_dict(dict(poly2))

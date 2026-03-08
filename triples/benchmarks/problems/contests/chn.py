@@ -199,7 +199,8 @@ class CMOProblems(ProblemSet):
 
     @mark(mark.skip)
     def problem_CMO_2007_p1(self):
-        A,B,C = (p,q), (u,v), (x,y)
+        A, B = (p, q), (u, v)
+        # C = (x, y)
         AC = (p*x-q*y, q*x+p*y)
         BC = (u*x-v*y, v*x+u*y)
         norm2 = lambda z: (z[0]**2+z[1]**2)
@@ -472,7 +473,6 @@ class ChinaHighSchoolMathLeague2(ProblemSet):
     def problem_CNHSML_2022A2_p3_lb(self):
         """LP"""
         ai = symbols('a1:10')
-        S = Add(*[Min(ai[i],ai[(i+1)%9])*(i+1) for i in range(9)])
         T = Add(*[Max(ai[i],ai[(i+1)%9])*(i+1) for i in range(9)])
         return T - Rational(36,5), ai, [Add(*ai) - 1]
 

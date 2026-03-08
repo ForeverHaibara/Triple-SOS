@@ -304,7 +304,7 @@ class AtomSOSElement(SOSElement):
             rhs = arraylize(self.poly)
             return rhs, Matrix.zeros(rhs.shape[0], 0)
 
-        domain, gens = self.poly.domain, self.poly.gens
+        gens = self.poly.gens
         poly = self.poly.as_poly(*parameters)
         if poly.total_degree() > 1:
             raise ValueError(f"Unable to handle nonlinear terms {poly.LM()} in the polynomial."

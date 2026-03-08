@@ -358,7 +358,6 @@ class PSatzElement(DomainElement, CantSympify, Generic[Ef]):
         return NotImplemented
 
     def _add(a: 'PSatzElement[Ef]', b: 'PSatzElement[Ef]') -> 'PSatzElement[Ef]':
-        preorder, ideal = a.preorder, a.ideal
         # (p1 + i1)/(p2 + i2) + (p3 + i3)/(p4 + i4)
         p1, i1, p2, i2 = a.numer_preorder, a.numer_ideal, a.denom_preorder, a.denom_ideal
         p3, i3, p4, i4 = b.numer_preorder, b.numer_ideal, b.denom_preorder, b.denom_ideal
@@ -437,7 +436,6 @@ class PSatzElement(DomainElement, CantSympify, Generic[Ef]):
         return self._rmul_ground(_other)
 
     def _mul(a: 'PSatzElement[Ef]', b: 'PSatzElement[Ef]') -> 'PSatzElement[Ef]':
-        preorder, ideal = a.preorder, a.ideal
         # (p1 + i1)/(p2 + i2) * (p3 + i3)/(p4 + i4)
         p1, i1, p2, i2 = a.numer_preorder, a.numer_ideal, a.denom_preorder, a.denom_ideal
         p3, i3, p4, i4 = b.numer_preorder, b.numer_ideal, b.denom_preorder, b.denom_ideal
@@ -446,7 +444,6 @@ class PSatzElement(DomainElement, CantSympify, Generic[Ef]):
         return a.per(p5, i5, p6, i6)
 
     def _mul_ground(a: 'PSatzElement[Ef]', b: Ef) -> 'PSatzElement[Ef]':
-        preorder, ideal = a.preorder, a.ideal
         # (p1 + i1)/(p2 + i2) * b
         p1, i1, p2, i2 = a.numer_preorder, a.numer_ideal, a.denom_preorder, a.denom_ideal
         p3 = {k: v._mul_ground(b) for k, v in p1.items()}
@@ -454,7 +451,6 @@ class PSatzElement(DomainElement, CantSympify, Generic[Ef]):
         return a.per(p3, i3, p2, i2)
 
     def _rmul_ground(a: 'PSatzElement[Ef]', b: Ef) -> 'PSatzElement[Ef]':
-        preorder, ideal = a.preorder, a.ideal
         # b * (p1 + i1)/(p2 + i2)
         p1, i1, p2, i2 = a.numer_preorder, a.numer_ideal, a.denom_preorder, a.denom_ideal
         p3 = {k: v._rmul_ground(b) for k, v in p1.items()}
@@ -505,7 +501,6 @@ class PSatzElement(DomainElement, CantSympify, Generic[Ef]):
         return a._mul(b.inverse())
 
     def _truediv_ground(a: 'PSatzElement[Ef]', b: Ef) -> 'PSatzElement[Ef]':
-        preorder, ideal = a.preorder, a.ideal
         # b * (p1 + i1)/(p2 + i2)
         p1, i1, p2, i2 = a.numer_preorder, a.numer_ideal, a.denom_preorder, a.denom_ideal
         p3 = {k: v._mul_ground(b) for k, v in p2.items()}

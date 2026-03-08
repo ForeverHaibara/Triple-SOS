@@ -225,7 +225,7 @@ def _sos_struct_sextic_hexagram(coeff: Coeff):
                 y3_bound_var = 729*(x - 8)**3*x/1024
                 if y3 < y3_bound_mean and (y3 - y3_bound_mean)**2 == y3_bound_var:
                     # y3, y3_copy, y, y_copy = y3_bound, y3, y3_bound**Rational(1,3), y
-                    y3, y3_copy, y, y_copy = y3, y3, y, y
+                    y3, _, y, y_copy = y3, y3, y, y
 
                     r = (81*x**5 + 2025*x**4 - 21*x**3*y3 + 17658*x**3 - 2406*x**2*y3 + 62370*x**2 - 16*x*y**6 - 10773*x*y3 + 79461*x + 864*y**6 - 18468*y3 + 32805)\
                         /(y*(27*x**5 + 891*x**4 - 16*x**3*y3 + 9558*x**3 - 1112*x**2*y3 + 41742*x**2 - 6336*x*y3 + 78975*x + 384*y**6 - 10044*y3 + 45927))
@@ -707,24 +707,20 @@ def _sos_struct_sextic_hexagon_sdp2(coeff: Coeff):
     # detur3 = det(M) * 27x^3 * z >= 0
     # To make the quad-form PSD, we let detur3, a cubic poly of z with params (x,y), positive.
     # This is done by optimizing the discriminant.
-    detur3 = _get_detur3()
+    # detur3 = _get_detur3()
 
-    if False:
-        # too slow by computing the exact extrema from the resultant
-        from time import time
-        time0 = time()
-        discriminant = detur3.discriminant().as_poly(x, y)
-        discriminant_diffx = discriminant.diff(0)
-        discriminant_diffy = discriminant.diff(1)
-        discriminant_gcd = discriminant.gcd(discriminant_diffx).factor_list()
-        time1 = time()
-        print('Time:', time1 - time0)
-        print('GCD =', discriminant_gcd)
+    # if False:
+    #     # too slow by computing the exact extrema from the resultant
+    #     from time import time
+    #     time0 = time()
+    #     discriminant = detur3.discriminant().as_poly(x, y)
+    #     discriminant_diffx = discriminant.diff(0)
+    #     discriminant_diffy = discriminant.diff(1)
+    #     discriminant_gcd = discriminant.gcd(discriminant_diffx).factor_list()
+    #     time1 = time()
+    #     print('Time:', time1 - time0)
+    #     print('GCD =', discriminant_gcd)
 
-    # Alternative:
-    if True:
-        # first detect whether ...
-        pass
 
 def _sos_struct_sextic_hexagon_to_hexagram(coeff: Coeff):
     """
@@ -803,14 +799,14 @@ def _sos_struct_sextic_hexagon_to_hexagram(coeff: Coeff):
         if not _check_valid(c3):
             c3 = None
     else:
-        eq = coeff.from_list([1, 0, -4*c1*c2], (a,)).as_poly()
+        eq = coeff.from_list([1, 0, -4*c1*c2], (coeff.gens[0],)).as_poly()
         c3 = rationalize_func(eq, _check_valid, validation_initial = lambda x: x >= 0, direction = -1)
 
     if c3 is not None:
         remain_solution = _sos_struct_sextic_hexagram(_compute_subtracted_params(c3, return_func = True))
         if remain_solution is not None:
             a, b, c = coeff.gens
-            CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+            CyclicSum = coeff.cyclic_sum
 
             mapping = lambda x: CyclicSum((x[0]*a**2*b + x[1]*a*b**2 - (x[0]+x[1])*a*b*c).together())**2
             main_solution = quadratic_weighting(coeff, c1, -c3, c2, mapping = mapping)
@@ -859,7 +855,7 @@ def _sos_struct_sextic_full_sdp(coeff: Coeff):
         return None
 
     a, b, c = coeff.gens
-    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+    CyclicSum = coeff.cyclic_sum
 
     # Working on the sympy polynomial ring, which is faster
     ring = coeff.domain[a, b]
@@ -884,8 +880,8 @@ def _sos_struct_sextic_full_sdp(coeff: Coeff):
             (q[1,1]*(a**2*b-a*b*c)+q[1,2]*(a*b**2-a*b*c)),
             (q[2,2]*(a*b**2-a*b*c))
         ]
-        quad_form_sol = map(lambda x: CyclicSum(x.expand().together())**2, quad_form_sol)
-        return sum_y_exprs(ss, list(quad_form_sol))
+        quad_form_sol = [CyclicSum(x.expand().together())**2 for x in quad_form_sol]
+        return sum_y_exprs(ss, quad_form_sol)
 
     # rest form is what the original polynomial subtracts the quadratic form,
     # corresponding to the coefficients of a^4bc, a^3b^2c, a^2b^3c

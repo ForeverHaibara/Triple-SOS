@@ -1088,10 +1088,7 @@ class PolyReader:
             with open(polys, 'r') as f:
                 polys = f.readlines()
 
-        polys = map(
-            lambda x: x.strip() if isinstance(x, str) else x,
-            polys
-        )
+        polys = [x.strip() if isinstance(x, str) else x for x in polys]
 
         polys = list(filter(
             lambda x: (isinstance(x, str) and len(x)) or isinstance(x, Poly),

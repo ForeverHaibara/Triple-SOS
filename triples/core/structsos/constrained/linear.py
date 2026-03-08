@@ -7,7 +7,6 @@ def _eliminate_linear_ineq(poly, var, ineq_constraints, eq_constraints):
     and (f, g, None, 0) if the sign of f cannot be determined.
     NOTE: fsol == f, but in a sum-of-squares form.
     """
-    gens = list(poly.gens)
     k = poly.diff(var).subs(var, 0)
     b = poly.subs(var, 0)
 

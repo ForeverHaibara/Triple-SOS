@@ -59,8 +59,8 @@ class Solution(SolutionBase[T]):
     ):
 
         if not isinstance(problem, InequalityProblem):
-            ineq_constraints = ineq_constraints if ineq_constraints is not None else dict()
-            eq_constraints = eq_constraints if eq_constraints is not None else dict()
+            ineq_constraints = ineq_constraints if ineq_constraints is not None else {}
+            eq_constraints = eq_constraints if eq_constraints is not None else {}
             problem = InequalityProblem(problem, ineq_constraints, eq_constraints)
             problem.solution = solution
         else:
@@ -551,7 +551,7 @@ class Solution(SolutionBase[T]):
             if len(cyc_exprs) <= 1:
                 return self
 
-            perms = set([_.args[1:] for _ in cyc_exprs])
+            perms = {_.args[1:] for _ in cyc_exprs}
             if len(perms) == 1:
                 return self
 

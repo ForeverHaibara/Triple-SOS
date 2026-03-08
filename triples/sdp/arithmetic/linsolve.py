@@ -196,7 +196,7 @@ def _row_reduce(M, normalize_last=True, normalize=True, zero_above=True, time_li
 
     sdm = M._rep.to_field().rep
     domain = sdm.domain
-    sdm = {k: {k2: i for k2, i in v.items()} for k, v in sdm.to_sdm().items()}
+    sdm = {k: dict(v.items()) for k, v in sdm.to_sdm().items()}
 
     if _VERBOSE_SOLVE_UNDETERMINED_LINEAR:
         print(">> Time for converting to MPQ:", perf_counter() - time0)
@@ -516,7 +516,7 @@ def solve_csr_linear(A: Matrix, b: Matrix,
     cols = A.shape[1]
     if _VERBOSE_SOLVE_CSR_LINEAR:
         print('SolveCsrLinear A shape', A.shape)
-        time0 = perf_counter()
+        # time0 = perf_counter()
 
     Arep = A._rep.rep.to_sdm()
 
@@ -553,7 +553,7 @@ def solve_csr_linear(A: Matrix, b: Matrix,
         k = mapping[i]
         if not (k in new_force_zeros):
             new_force_zeros[k] = set()
-        new_force_zeros[k].update(set(mapping[j] for j in force_zeros[i]))
+        new_force_zeros[k].update({mapping[j] for j in force_zeros[i]})
     time_limit()
 
     x0, space = _solve_csr_linear_force_zeros(A2, b,

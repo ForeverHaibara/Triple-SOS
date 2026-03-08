@@ -102,8 +102,8 @@ def _func_perm(func: Callable, expr: Expr,
 def _is_same_dict(d1: dict, d2: dict, simpfunc=signsimp) -> bool:
     if len(d1) != len(d2):
         return False
-    d1 = dict((simpfunc(k), simpfunc(v)) for k, v in d1.items())
-    d2 = dict((simpfunc(k), simpfunc(v)) for k, v in d2.items())
+    d1 = {simpfunc(k): simpfunc(v) for k, v in d1.items()}
+    d2 = {simpfunc(k): simpfunc(v) for k, v in d2.items()}
     for k, v in d1.items():
         if k not in d2 or (not simpfunc(d2[k]) == simpfunc(v)):
             return False
@@ -405,7 +405,7 @@ class CyclicExpr(Expr):
             return _fallback_xreplace(self, rule)
         else:
             # changed vars should be brocasted by the permutation group
-            changed_inds = list(i for i, s in enumerate(symbols) if s in changed_vars)
+            changed_inds = [i for i, s in enumerate(symbols) if s in changed_vars]
             changed_inds = self.perm_group.orbit(changed_inds, action='union')
             unchanged_inds = tuple(i for i in range(len(symbols)) if i not in changed_inds)
 
@@ -553,7 +553,7 @@ class CyclicSum(CyclicExpr):
         if isinstance(expr, Mul):
             cyc_args = []
             uncyc_args = []
-            symbol_degrees = {}
+            # symbol_degrees = {}
 
             for arg in expr.args:
                 if is_cyclic_expr(arg, symbols, perm_group):

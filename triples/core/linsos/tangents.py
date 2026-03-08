@@ -469,7 +469,7 @@ def prepare_inexact_tangents(
                                  .retract()) for p in vecs])
             break
 
-    new_tangents = dict([(t**2, t.as_expr()**2) for t in new_tangents if t is not None])
+    new_tangents = {t**2: t.as_expr()**2 for t in new_tangents if t is not None}
     # print('New tangents:\n', list(new_tangents.values()))
 
     return new_tangents

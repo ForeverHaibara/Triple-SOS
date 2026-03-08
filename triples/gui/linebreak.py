@@ -97,7 +97,7 @@ def get_additive_terms(latex_str):
 
     if terms[0] == "" and len(terms) > 1:
         first_term_candidate = terms[1]
-        if first_term_candidate.startswith('+') or first_term_candidate.startswith('-'):
+        if first_term_candidate.startswith(('+','-')):
             final_terms.append(first_term_candidate)
             start_idx_for_loop = 2
         else:

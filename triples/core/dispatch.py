@@ -187,7 +187,7 @@ def _domainelement_convert(x: DomainElement, y: Any) -> DomainElement:
 
 @_dtype_free_symbols.register(PolyElement)
 def _polyelement_free_symbols(x: PolyElement) -> Set[Symbol]:
-    symbols = set([g for g, d in zip(x.ring.gens, x.degrees()) if d > 0])
+    symbols = {g for g, d in zip(x.ring.gens, x.degrees()) if d > 0}
     domain = x.ring.domain
     if domain.is_Composite:
         for gen in domain.symbols:

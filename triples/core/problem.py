@@ -69,8 +69,8 @@ class InequalityProblem(Generic[T]):
             ineq_constraints = {e: e for e in ineq_constraints}
         if not isinstance(eq_constraints, dict):
             eq_constraints = {e: e for e in eq_constraints}
-        ineq_constraints = dict((_try_sympify(e), _try_sympify(e2).as_expr()) for e, e2 in ineq_constraints.items())
-        eq_constraints = dict((_try_sympify(e), _try_sympify(e2).as_expr()) for e, e2 in eq_constraints.items())
+        ineq_constraints = {_try_sympify(e): _try_sympify(e2).as_expr() for e, e2 in ineq_constraints.items()}
+        eq_constraints = {_try_sympify(e): _try_sympify(e2).as_expr() for e, e2 in eq_constraints.items()}
 
         return cls.new(expr, ineq_constraints, eq_constraints)
 
@@ -400,8 +400,8 @@ class InequalityProblem(Generic[T]):
             return Poly(expr.doit(), *gens, extension=extension)
 
         expr = as_poly(expr)
-        ineq_constraints = dict((as_poly(e), e2) for e, e2 in ineq_constraints.items())
-        eq_constraints = dict((as_poly(e), e2) for e, e2 in eq_constraints.items())
+        ineq_constraints = {as_poly(e): e2 for e, e2 in ineq_constraints.items()}
+        eq_constraints = {as_poly(e): e2 for e, e2 in eq_constraints.items()}
 
         problem = InequalityProblem(expr, ineq_constraints, eq_constraints)
         problem, _ = problem.sqr_free(problem_sqf=False,
@@ -547,13 +547,13 @@ class InequalityProblem(Generic[T]):
         if ineqs_sqf:
             ineq_constraints = dict(self._dtype_std_ineq_constraints(*item)
                 for item in ineq_constraints.items())
-        self.ineq_constraints = dict((e, e2) for e, e2 in ineq_constraints.items())
+        self.ineq_constraints = dict(ineq_constraints.items())
 
         eq_constraints = self.eq_constraints
         if eqs_sqf:
             eq_constraints = dict(self._dtype_std_eq_constraints(*item)
                 for item in eq_constraints.items())
-        self.eq_constraints = dict((e, e2) for e, e2 in eq_constraints.items())
+        self.eq_constraints = dict(eq_constraints.items())
         return self, sqr
 
     def recompute_constraints(
@@ -928,7 +928,7 @@ def _get_constraints_wrapper(
     def _get_counter(name='_G'):
         # avoid duplicate function counters
         k = len(name)
-        exprs = [e for e in ineq_constraints.values()] + [e for e in eq_constraints.values()]
+        exprs = list(ineq_constraints) + list(eq_constraints.values())
         names = [[f.name for f in e.find(AppliedUndef)] for e in exprs]
         names = [item for sublist in names for item in sublist]
         names = [n[k:] for n in names if n.startswith(name)]

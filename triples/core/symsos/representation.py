@@ -146,7 +146,6 @@ def sym_transform(
     for collection, new_collection in ((ineq_constraints, ineq_constraints2),
                                        (eq_constraints, eq_constraints2)):
         for p, value in collection.items():
-            pgens = p.gens
             p = p.as_poly(*poly.gens)
             if not verify_symmetry(p, "sym"):
                 continue

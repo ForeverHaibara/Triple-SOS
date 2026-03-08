@@ -213,7 +213,7 @@ class SDPPrimal(TransformablePrimal):
         """
         if self.dof == 0:
             return Matrix.zeros(self._x0_and_space[0].shape[0], 0)
-        return Matrix.hstack(*[space for space in self._x0_and_space[1].values()])
+        return Matrix.hstack(*list(self._x0_and_space[1].values()))
 
     @classmethod
     def from_full_x0_and_space(
@@ -507,8 +507,8 @@ class SDPPrimal(TransformablePrimal):
                     rationalizers=[RationalizeWithMask(), RationalizeSimultaneously([1,1260,1260**3])])
                 if solution is not None:
                     self.y = solution[0]
-                    self.S = dict((key, S[0]) for key, S in solution[1].items())
-                    self.decompositions = dict((key, S[1:]) for key, S in solution[1].items())
+                    self.S = {key: S[0] for key, S in solution[1].items()}
+                    self.decompositions = {key: S[1:] for key, S in solution[1].items()}
                     success = True
                 elif allow_numer:
                     self.register_y(y, perturb=True, propagate_to_parent=propagate_to_parent)

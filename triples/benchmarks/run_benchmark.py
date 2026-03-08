@@ -82,6 +82,7 @@ def run_bench(benchmarks=BENCHMARKS, save_interval=0):
     platform_info = _get_platform_info()
 
     from triples import sum_of_squares
+    from triples.benchmarks.problems.problem_set import mark
     from datetime import datetime
     os.makedirs("./.benchmarks", exist_ok=True)
 

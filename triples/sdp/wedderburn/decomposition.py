@@ -60,11 +60,11 @@ def symmetry_adapted_basis(
     cols = []
     zero = dom.zero
     m = len(ctab)
-    order = sum(len(c) for c in cc)
+    # order = sum(len(c) for c in cc)
 
     K = int(dom.ext.alias.name.lstrip('zeta')) if dom.is_Algebraic else 1 # type: ignore
     ramanujan = _ramanujan_sum(K)
-    QQzero = QQ.zero
+    # QQzero = QQ.zero
     galsum = lambda anp: QQ(sum(
         (r*v for r, v in zip(ramanujan, anp.rep[::-1]))))
 

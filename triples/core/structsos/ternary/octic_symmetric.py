@@ -2,7 +2,7 @@ import sympy as sp
 from sympy import Poly, Symbol, Integer, Rational, Add, sign
 from sympy import MutableDenseMatrix as Matrix
 
-from .sextic_symmetric import _restructure_quartic_polynomial
+# from .sextic_symmetric import _restructure_quartic_polynomial
 
 from .utils import (
     Coeff, CommonExpr, DomainExpr,
@@ -774,38 +774,38 @@ def _sos_struct_octic_symmetric_quadratic_form(poly, coeff: Coeff):
     """
     return
 
-    a, b, c = coeff.gens
-    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+    # a, b, c = coeff.gens
+    # CyclicSum = coeff.cyclic_sum
 
-    # We require multiplicity 2 at (1,1,0) along the symmetric axis.
-    sym = poly.subs({b:1,c:1}).div(Poly([1,-2,1,0,0], a))
-    if not sym[1].is_zero:
-        return None
+    # # We require multiplicity 2 at (1,1,0) along the symmetric axis.
+    # sym = poly.subs({b:1,c:1}).div(Poly([1,-2,1,0,0], a))
+    # if not sym[1].is_zero:
+    #     return None
 
-    sym_axis = _restructure_quartic_polynomial(sym[0])
-    if sym_axis is None:
-        return None
-    t, coeff0, x, y, rem_coeff, rem_ratio = sym_axis
+    # sym_axis = _restructure_quartic_polynomial(sym[0])
+    # if sym_axis is None:
+    #     return None
+    # t, coeff0, x, y, rem_coeff, rem_ratio = sym_axis
 
-    # ker_coeff is the remaining coefficient of (a-b)^2(b-c)^2(c-a)^2*s(a^2) and (a-b)^2(b-c)^2(c-a)^2*s(ab)
-    # of Poly - (t*s(a2-ab)s(a3-a2b-a2c+abc)2 + coeff0 * F(x,y) + rem * s(a^2(a-b)(a-c))s(a^2+rab)^2)
-    ker_coeff1 = poly.coeff_monomial((6,2,0)) - (2*t + coeff0 * (2*x**2 - 2*x*y - 2*x + y**2 + 1))
-    ker_coeff2 = poly.coeff_monomial((5,3,0)) - (3*t + coeff0 * (-3*x**2 + 2*x*y + 4*x - y**2 - 2))
-    if rem_ratio is sp.oo:
-        # degenerates to s(a^2(a-b)(a-c))s(ab)^2
-        ker_coeff1 -= rem_coeff
-        ker_coeff2 += rem_coeff
-    else:
-        ker_coeff1 -= rem_coeff*(rem_ratio**2 - 2*rem_ratio + 2)
-        ker_coeff2 -= rem_coeff*(-rem_ratio**2 + 2*rem_ratio - 3)
-    ker_coeff = (ker_coeff1, ker_coeff2 + 2*ker_coeff1)
+    # # ker_coeff is the remaining coefficient of (a-b)^2(b-c)^2(c-a)^2*s(a^2) and (a-b)^2(b-c)^2(c-a)^2*s(ab)
+    # # of Poly - (t*s(a2-ab)s(a3-a2b-a2c+abc)2 + coeff0 * F(x,y) + rem * s(a^2(a-b)(a-c))s(a^2+rab)^2)
+    # ker_coeff1 = poly.coeff_monomial((6,2,0)) - (2*t + coeff0 * (2*x**2 - 2*x*y - 2*x + y**2 + 1))
+    # ker_coeff2 = poly.coeff_monomial((5,3,0)) - (3*t + coeff0 * (-3*x**2 + 2*x*y + 4*x - y**2 - 2))
+    # if rem_ratio is sp.oo:
+    #     # degenerates to s(a^2(a-b)(a-c))s(ab)^2
+    #     ker_coeff1 -= rem_coeff
+    #     ker_coeff2 += rem_coeff
+    # else:
+    #     ker_coeff1 -= rem_coeff*(rem_ratio**2 - 2*rem_ratio + 2)
+    #     ker_coeff2 -= rem_coeff*(-rem_ratio**2 + 2*rem_ratio - 3)
+    # ker_coeff = (ker_coeff1, ker_coeff2 + 2*ker_coeff1)
 
-    # print('Coeff =', coeff0, 'ker =', ker_coeff)
-    # print('  (x,y) =', (x, y), 'ker_std =', ker_coeff / coeff0)
+    # # print('Coeff =', coeff0, 'ker =', ker_coeff)
+    # # print('  (x,y) =', (x, y), 'ker_std =', ker_coeff / coeff0)
 
-    return _octic_sym_axis.solve(
-        coeff0, x, y, ker_coeff, t, rem_coeff, rem_ratio
-    )
+    # return _octic_sym_axis.solve(
+    #     coeff0, x, y, ker_coeff, t, rem_coeff, rem_ratio
+    # )
 
 
 class _octic_sym_axis(DomainExpr):
@@ -822,8 +822,8 @@ class _octic_sym_axis(DomainExpr):
     """
 
     def rem_poly(self, rem_coeff, rem_ratio):
-        a, b, c = self.gens
-        CyclicSum, CyclicProduct = self.cyclic_sum, self.cyclic_product
+        a, b, _ = self.gens
+        CyclicSum = self.cyclic_sum
         return rem_coeff * (CyclicSum(a**2 + rem_ratio*a*b)**2 if not rem_ratio is sp.oo else CyclicSum(a*b)**2)
 
     def _wrap_F(self, f_type, f_solver):

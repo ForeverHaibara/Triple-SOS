@@ -199,7 +199,7 @@ def _sos_struct_cubic_nontrivial(coeff: Coeff):
         return None
 
     a, b, c = coeff.gens
-    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+    CyclicSum = coeff.cyclic_sum
     exprs = [
         CyclicSum((a**2 - b**2 + (p_+2*q_)/3*a*c - (2*p_+q_)/3*b*c + (p_- q_)/3*a*b).together()**2),
         CyclicSum(a**2*(b - c)**2),

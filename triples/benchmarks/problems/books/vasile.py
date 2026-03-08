@@ -1889,7 +1889,7 @@ class MathematicalInequalitiesVol2(MathematicalInequalities):
     def problem_vasile_p22088_p3(self):
         p_ = c3s(a)
         q_ = c3s(a*b)
-        w_ = sqrt(p_**2-3*q_)
+        # w_ = sqrt(p_**2-3*q_)
         h_ = sqrt(p_)+sqrt(p_+sqrt(q_))
         return h_ - c3s(sqrt(a+b)), [a,b,c,p_**2-4*q_], []
 

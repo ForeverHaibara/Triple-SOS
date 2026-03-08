@@ -292,7 +292,7 @@ def prove_by_pivoting(poly: Poly, nonnegative_symbols: Set[Symbol]) -> Optional[
             if gen is not None and gen in nonnegative_symbols:
                 ineq_constraints[gen.as_poly(*poly.gens)] = gen
                 # Thought: shall we wrap the generator as a function?
-        sol = structural_sos_2vars(poly, ineq_constraints=ineq_constraints, eq_constraints=dict())
+        sol = structural_sos_2vars(poly, ineq_constraints=ineq_constraints, eq_constraints={})
         if sol is not None and homogenizer is not None:
             sol = sol.xreplace({homogenizer: Integer(1)})
         return sol

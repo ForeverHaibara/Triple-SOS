@@ -236,6 +236,7 @@ class LinearBasisTangent(LinearBasis):
         quad_diff_order = max(0, min(quad_diff_order, degree - tangent_p.total_degree()))
 
         # 2. get cross(quad_diff) * tangent_p
+        time0 = perf_counter()
         cross_exprs_mul_p, cross_polys_mul_p = _get_cross_exprs_and_polys_of_quad_diff(
             symbols, quad_diff_order, tangent, tangent_p
         )
@@ -380,7 +381,7 @@ def _get_cross_dmps_of_quad_diff(quad_diff_order: int, tangent_dmp: DMP) -> List
 
     # polys are the DMPs of (ai - aj)^2 for all i < j
     polys, lst = [None] * ndiff, [0] * nvars
-    cnt, lev, one, negtwo = 0, nvars - 1, domain.one, domain.one * -2
+    cnt, one, negtwo = 0, domain.one, domain.one * -2
     for i in range(nvars):
         for j in range(i+1, nvars):
             coeffs = {}

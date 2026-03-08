@@ -129,7 +129,7 @@ def _prove_by_recur(expr: Expr, signs: SIGNS_TYPE) -> Optional[Tuple[Expr, bool]
             nonneg.append(_prove_by_recur(arg, signs))
             if nonneg[-1] is None:
                 return None
-        changed = any([_[1] for _ in nonneg])
+        changed = any(_[1] for _ in nonneg)
         if changed:
             return expr.func(*[_[0] for _ in nonneg]), True
         return expr, False
@@ -388,8 +388,8 @@ def _infer_separable_sign(poly: Poly, expr: Expr, s: int,
     if r_sign == 0: # division by zero
         return None
 
-    absq = Add(*[x for x in qr[0]])
-    absr = Add(*[x for x in qr[1]])
+    absq = Add(*qr[0])
+    absr = Add(*qr[1])
 
     if q_sign != 0:
         # note that we return the absolute value of gens[s]
@@ -461,7 +461,7 @@ def _get_signs_by_topological_order(ineq_constraints: Dict[Poly, Expr], eq_const
             if not _is_separable(p):
                 continue
             pd = p.degree_list()
-            pfs = set([i for i in range(nvars) if pd[i] > 0 and signs[i][0] is None])
+            pfs = {i for i in range(nvars) if pd[i] > 0 and signs[i][0] is None}
             for s in pfs:
                 neighbors[s].add(cons_cnt)
             cons.append((p, e, cmp))
