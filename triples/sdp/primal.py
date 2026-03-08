@@ -1,10 +1,10 @@
 from time import perf_counter
-from typing import Dict, List, Union, Optional, Tuple, Any, Callable
+from typing import Dict, List, Union, Optional, Tuple, Any
 
 from numpy import ndarray
 import numpy as np
 from sympy import MutableDenseMatrix as Matrix
-from sympy import MatrixBase, Symbol, Float, Expr, Dummy
+from sympy import MatrixBase, Symbol, Expr, Dummy
 from sympy.core.relational import Relational
 
 from .arithmetic import ArithmeticTimeout, sqrtsize_of_mat, vec2mat, is_numerical_mat, rep_matrix_from_numpy, rep_matrix_to_numpy

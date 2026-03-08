@@ -4,7 +4,6 @@ from typing import List, Tuple, Dict, Any, Callable, Optional
 from sympy import Expr, Poly, Domain
 from sympy.matrices import MutableDenseMatrix as Matrix
 from sympy.combinatorics import PermutationGroup, Permutation
-from scipy.sparse import csr_matrix
 
 from .state_algebra import StateAlgebra, MONOM, TERM
 from ....sdp.arithmetic import rep_matrix_from_dict

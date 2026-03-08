@@ -1,7 +1,6 @@
 from typing import List, Dict, Tuple, Union, Set, Optional
 
-from sympy import Expr, Poly, Rational, Integer, Add, Mul, Symbol, true
-from sympy.polys.rings import PolyElement
+from sympy import Expr, Poly, Rational, Add, Mul, Symbol, true
 
 from ..problem import InequalityProblem
 from ...utils import CyclicExpr
@@ -552,7 +551,7 @@ def get_symbol_signs(problem: InequalityProblem) -> Dict[Symbol, Tuple[Optional[
                 key = Poly(key, *fs0)
             tar[key] = val
 
-    signs = {i: (None, None) for i in range(len(fs0))}
+    signs = dict.fromkeys(range(len(fs0)), (None, None))
 
     # infer signs from constraints
     signs = _get_signs_by_topological_order(ineqs, eqs, signs)

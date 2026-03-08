@@ -1,4 +1,4 @@
-from typing import Union, Dict, List, Tuple, Optional, Callable, Iterator
+from typing import Union, List, Tuple, Optional, Callable, Iterator
 
 from sympy import Poly, Expr, Basic, Symbol, Rational
 from sympy import MutableDenseMatrix as Matrix

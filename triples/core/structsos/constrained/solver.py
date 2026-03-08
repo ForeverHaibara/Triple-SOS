@@ -6,7 +6,6 @@ from .linear import elimination_linear
 from .acute import constrained_acute
 
 
-from ..utils import clear_free_symbols, has_gen
 
 _SOLVERS = [
     constrained_acute

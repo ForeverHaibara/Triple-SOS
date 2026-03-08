@@ -62,7 +62,7 @@ class NCPolyRing(StateAlgebra):
 
     def gen_monom(self, i: Optional[int]) -> MONOM:
         if i is None:
-            return tuple()
+            return ()
         return ((i, 1),)
 
     def total_degree(self, monom: MONOM) -> int:

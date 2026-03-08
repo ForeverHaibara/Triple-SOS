@@ -423,7 +423,7 @@ def prepare_inexact_tangents(
     roots = [r for r in problem.roots if not r.is_zero] if problem.roots is not None else []
     if nvars <= 1 or len(eq_constraints) or monomial_manager.is_symmetric \
             or any(r.is_nontrivial for r in roots):
-        return dict()
+        return {}
 
     # parameters for numerical optimization
     perms = [[1,0] + list(range(2, nvars))] # reflection
@@ -436,11 +436,11 @@ def prepare_inexact_tangents(
         new_roots = numeric_optimize_skew_symmetry(poly, poly.gens, perms, num=5)
         new_roots = [r for r in new_roots if all(ineq(*r) >= 0 for ineq in ineq_constraints)]
         new_roots = [Root(_, domain=RR) for _ in new_roots] # convert to RR
-    except Exception as e: # shall we handle this?
+    except Exception: # shall we handle this?
         pass
 
     if len(new_roots) == 0:
-        return dict()
+        return {}
 
     new_tangents = []
     monomial_base = monomial_manager.base()

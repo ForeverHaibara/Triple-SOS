@@ -3,7 +3,7 @@ from typing import Callable, Union, Dict
 from sympy import Poly, Expr, Integer, Mul
 
 from .utils import Coeff, PolynomialUnsolvableError, PolynomialNonpositiveError
-from ...utils import CyclicSum, CyclicProduct
+from ...utils import CyclicProduct
 
 def _null_solver(*args, **kwargs):
     return None

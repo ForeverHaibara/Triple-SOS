@@ -1,12 +1,12 @@
 from collections import defaultdict
 from time import perf_counter
-from typing import List, Tuple, Dict, Union, Optional, Callable, Any, overload
+from typing import List, Tuple, Dict, Union, Optional, Callable, overload
 
 from numpy import argsort
-from sympy.external.gmpy import MPQ, MPZ # >= 1.9
+from sympy.external.gmpy import MPQ # >= 1.9
 from sympy.matrices import MutableDenseMatrix as Matrix
 from sympy.matrices.repmatrix import RepMatrix
-from sympy.polys.domains import ZZ, QQ, EX # EXRAW >= 1.9
+from sympy.polys.domains import QQ # EXRAW >= 1.9
 from sympy.polys.matrices.domainmatrix import DomainMatrix # polys.matrices >= 1.8
 from sympy.polys.matrices.sdm import SDM
 try:

@@ -48,7 +48,7 @@ class DualBackendCVXOPT(DualBackend):
     def _create_problem(self, configs: SolverConfigs=None):
         if configs is None:
             configs = SolverConfigs()
-        from cvxopt import matrix, solvers
+        from cvxopt import matrix
         Gl = matrix(-self.ineq_lhs) if self.ineq_lhs.size > 0 else None
         hl = matrix(-self.ineq_rhs) if self.ineq_rhs.size > 0 else None
         Gs = [matrix(-A) for A in self.As]

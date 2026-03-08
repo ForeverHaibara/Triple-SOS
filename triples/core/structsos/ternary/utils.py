@@ -18,6 +18,18 @@ from ....utils import (
     CyclicExpr, CyclicSum, CyclicProduct
 )
 
+(
+    Coeff, DomainExpr, sos_struct_reorder_symmetry,
+    radsimp, sum_y_exprs, rationalize_func, quadratic_weighting, zip_longest,
+    congruence, congruence_solve,
+    StructuralSOSError, PolynomialNonpositiveError, PolynomialUnsolvableError
+)
+(
+    nroots, rationalize, rationalize_bound, univariate_intervals,
+    cancel_denominator, common_region_of_conics,
+    CyclicExpr, CyclicSum, CyclicProduct
+)
+
 def align_cyclic_group(expr: Optional[Expr], gens: Tuple[Symbol, ...]) -> Expr:
     """
     Replace `CyclicSum(F(a, b, c), (a, c, b))` to `CyclicSum(F(a, b, c), (a, b, c))`.

@@ -1,4 +1,4 @@
-from typing import List, Tuple, Union, Optional, overload
+from typing import Tuple, Union, Optional, overload
 
 import numpy as np
 from numpy import ndarray

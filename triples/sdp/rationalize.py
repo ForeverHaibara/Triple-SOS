@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from itertools import chain
 from typing import Union, Optional, Tuple, List, Dict, Callable, Generator, Any
 
 import numpy as np
@@ -135,7 +134,7 @@ class DualRationalizer:
                         v = v[:row, :]
                         break
                 v = v.T
-            except (DMError, ValueError, ZeroDivisionError) as e: # LLL algorithm failed
+            except (DMError, ValueError, ZeroDivisionError): # LLL algorithm failed
                 v = Matrix.zeros(s.shape[0], 0)
 
             V[key] = v

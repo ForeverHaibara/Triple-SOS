@@ -2,7 +2,7 @@
 This module provides heuristic functions to optimize a polynomial
 with inequality and equality constraints NUMERICALLY.
 """
-from typing import List, Union, Tuple, Dict, Optional, Callable
+from typing import List, Union, Dict, Optional, Callable
 from functools import partial
 import warnings
 
@@ -356,7 +356,7 @@ def numeric_optimize_skew_symmetry(
             x0 = x0[:-1]
         extrema.append(tuple(optimizer(f2, x0, jac=f2.g)))
     if is_homogeneous:
-        extrema = [tuple((*_, 1 - sum(_))) for _ in extrema]
+        extrema = [(*_, 1 - sum(_)) for _ in extrema]
     return extrema
 
 

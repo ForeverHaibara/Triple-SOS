@@ -315,7 +315,7 @@ def quadratic_difference(symbols: Tuple[Symbol, ...]) -> List[Expr]:
     [(a - b)**2, (a - c)**2, (b - c)**2]
     """
     exprs = []
-    symbols = sorted(list(symbols), key=lambda x: x.name)
+    symbols = sorted(symbols, key=lambda x: x.name)
     for i in range(len(symbols)):
         for j in range(i + 1, len(symbols)):
             exprs.append((symbols[i] - symbols[j])**2)
@@ -466,7 +466,7 @@ def _get_cross_exprs_and_polys_of_quad_diff(symbols: Tuple[Symbol, ...],
 
     # Faster implementation
     nvars = len(symbols)
-    # symbols = sorted(list(symbols), key=lambda x: x.name) # sorting makes rep reordered
+    # symbols = sorted(symbols, key=lambda x: x.name) # sorting makes rep reordered
     inds = [(i,j) for i in range(nvars) for j in range(nvars) if i < j]
     powers = generate_partitions([2] * (nvars*(nvars-1)//2), quad_diff_order, descending=False)
 

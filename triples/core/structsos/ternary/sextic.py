@@ -1,4 +1,4 @@
-from sympy import Poly, Expr, Symbol, Rational, Float, Add
+from sympy import Poly, Expr, Rational, Float, Add
 from sympy import MutableDenseMatrix as Matrix
 
 from .cubic import sos_struct_cubic

@@ -1,7 +1,7 @@
 from collections import defaultdict
 from typing import List, Any
 
-from sympy import Basic, Poly, Expr, Symbol, Add, Mul, Integer, sympify
+from sympy import Basic, Poly, Expr, Symbol, Integer, sympify
 from sympy.polys.constructor import construct_domain
 from sympy.matrices.expressions import MatPow
 from sympy.combinatorics.permutations import Permutation

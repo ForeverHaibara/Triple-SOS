@@ -1,4 +1,4 @@
-from typing import List, Dict, Tuple, Union, Set, Callable, Optional
+from typing import Dict, Tuple, Union, Set, Callable, Optional
 
 import sympy as sp
 from sympy import (Expr, Poly, Symbol, Rational, Integer,

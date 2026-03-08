@@ -1,5 +1,5 @@
 from ..problem_set import ProblemSet, mark
-from sympy.abc import a,b,c,d,e,p,q,r,s,u,v,x,y,z,w
+from sympy.abc import a,b,c,d,e,p,q,r,u,v,x,y,z,w
 from sympy import symbols, Rational, Add, Mul, sqrt, cbrt, sin, cos, pi, Abs, Min, Max
 
 class CMOProblems(ProblemSet):

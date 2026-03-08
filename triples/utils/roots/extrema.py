@@ -34,7 +34,6 @@ def polysubs(poly: Poly, subs: Dict[Symbol, Expr], symbols: List[Symbol]) -> Pol
         # TODO: make it faster
         return poly.as_expr().xreplace(subs).expand()
 
-    poly0 = poly
     # poly = poly.as_expr().xreplace(subs)
     # return poly.as_poly(*symbols)
 
@@ -321,7 +320,7 @@ def _optimize_by_eq_kkt(poly, ineq_constraints, eq_constraints, symbols,
     """
     if len(symbols) == 0:
         if all(_ == 0 or (isinstance(_, Poly) and _.is_zero) for _ in eq_constraints):
-            return [tuple()]
+            return [()]
         return []
     elif len(symbols) > max_different:
         return []
@@ -416,8 +415,8 @@ def _eliminate_linear(polys, symbols) -> Tuple[Dict[Symbol, Expr], List[Poly]]:
         else:
             has_eliminated = True
         rest_inds = set(range(len(polys))) - new_eliminated_polys
-        # rest_inds = sorted(list(rest_inds))
-        # new_eliminated_polys = sorted(list(new_eliminated_polys))
+        # rest_inds = sorted(rest_inds)
+        # new_eliminated_polys = sorted(new_eliminated_polys)
         new_eliminated_polys = [polys[i] for i in new_eliminated_polys]
 
         # TODO: clean this

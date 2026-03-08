@@ -66,11 +66,11 @@ class TransformableProblem(SDPProblemBase):
             if int(short) <= 0:
                 sdp_str = sdp.__str__()
             elif int(short) == 1:
-                size = sorted(list(sdp.size.values()), reverse=True)
+                size = sorted(sdp.size.values(), reverse=True)
                 sdp_str = f"<dof={sdp.dof}, size={size}>"
             else:
                 cnt = Counter(sdp.size.values())
-                items = sorted(list(cnt.items()), reverse=True)
+                items = sorted(cnt.items(), reverse=True)
                 size = [f"{k}²×{v}" if v > 1 else f"{k}²" for k, v in items]
                 sdp_str = f"<dof={sdp.dof}, size=({' + '.join(size)})>"
             return sdp_str

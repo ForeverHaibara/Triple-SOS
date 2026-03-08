@@ -1,4 +1,4 @@
-from typing import Tuple, Dict, List, Union, Optional
+from typing import Tuple, Dict, Union, Optional
 
 from sympy import Poly, Expr, Symbol
 
@@ -140,8 +140,8 @@ def sym_transform(
     trans = _get_transform_from_method(method, len(poly.gens))
     numerator, denominator = trans.transform(poly, symbols, return_poly=True)
 
-    ineq_constraints2 = dict()
-    eq_constraints2 = dict()
+    ineq_constraints2 = {}
+    eq_constraints2 = {}
 
     for collection, new_collection in ((ineq_constraints, ineq_constraints2),
                                        (eq_constraints, eq_constraints2)):

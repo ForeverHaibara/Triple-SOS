@@ -1,7 +1,7 @@
 from copy import deepcopy
 
 from .backend import DualBackend
-from .settings import SolverConfigs, SDPError
+from .settings import SolverConfigs
 
 _CVXPY_SOLVER_CONFIGS = {
     'CLARABEL': {

@@ -1,6 +1,6 @@
 from ..problem_set import ProblemSet, mark
-from sympy.abc import a,b,c,d,e,f,k,m,n,p,q,r,s,u,v,x,y,z,w
-from sympy import symbols, prod, Rational, Add, Mul, exp, sqrt, cbrt, sin, cos, pi, Abs, Min, Max
+from sympy.abc import a,b,c,d,e,f,k,m,n,x,y,z
+from sympy import symbols, prod, Rational, Add, Mul, exp, sqrt, cbrt, Abs, Min, Max
 
 CyclicSum = lambda x, y: Add(*[x.xreplace(
     dict(zip(y,[y[(i+j)%len(y)] for j in range(len(y))]))) for i in range(len(y))])

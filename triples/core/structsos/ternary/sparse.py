@@ -173,7 +173,7 @@ class AMGM3(DomainExpr):
     def solve(self, c1, m1, c2, m2):
         """Solve c1*CyclicSum(a**m1[0]*b**m1[1]*c**m1[2]) + c2*CyclicSum(a**m2[0]*b**m2[1]*c**m2[2]) >= 0."""
         a, b, c = self.gens
-        CyclicSum, CyclicProduct = self.cyclic_sum, self.cyclic_product
+        CyclicSum = self.cyclic_sum
 
         if c1 >= 0 and c2 >= 0: # TODO: handle real numbers??
             return c1*CyclicSum(a**m1[0]*b**m1[1]*c**m1[2]) + c2*CyclicSum(a**m2[0]*b**m2[1]*c**m2[2])
@@ -227,7 +227,7 @@ class AMGM3(DomainExpr):
         hand-side can be factored by (a-1)^2*(a+1)^2.
         """
         a, b, c = self.gens
-        CyclicSum, CyclicProduct = self.cyclic_sum, self.cyclic_product
+        CyclicSum = self.cyclic_sum
 
         v1, v2 = p - m1, m2 - p
         if v1.dot(v2) > 0:
@@ -443,7 +443,7 @@ def _separate_product_wrapper(recursion: Callable, coeff: Coeff) -> Callable:
     For instance, if we have CyclicProduct(a) * (CyclicProduct(a)*F(a,b,c) + G(a,b,c)),
     we had better expand it to CyclicProduct(a**2) * F(a,b,c) + CyclicProduct(a) * G(a,b,c).
     """
-    from ....utils import CyclicSum, CyclicProduct
+    from ....utils import CyclicProduct
     a = coeff.gens[0]
     cg = CyclicGroup(len(coeff))
     def _extract_cyclic_prod(x: Expr) -> Tuple[int, Expr]:

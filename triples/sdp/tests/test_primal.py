@@ -1,5 +1,4 @@
 import numpy as np
-import sympy as sp
 from sympy import MutableDenseMatrix as Matrix
 from sympy import Symbol
 

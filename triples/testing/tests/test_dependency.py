@@ -59,7 +59,7 @@ def test_dependency():
                         forbidden_libraries.add((file_path, line_num, imp))
 
     if forbidden_libraries:
-        forbidden_libraries = sorted(list(forbidden_libraries))
+        forbidden_libraries = sorted(forbidden_libraries)
         message = '\n'.join([f"{fp}:line {ln}:import {lib}"%(fp, ln, lib) for fp, ln, lib in forbidden_libraries])
         assert False, (
             f"Forbidden dependencies detected: {message}."

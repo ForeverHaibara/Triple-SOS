@@ -1,4 +1,4 @@
-from sympy import Poly, Symbol, Function, Integer, Rational, Add, sqrt
+from sympy import Poly, Function, Integer, Add, sqrt
 from sympy.polys.polyerrors import CoercionFailed
 
 from ..solution import SolutionStructural
@@ -9,7 +9,7 @@ from ..ternary import (
 )
 from ..ternary.dense_symmetric import sym_axis, _homogenize_sym_proof
 from ..utils import (
-    Coeff, uniquely_named_symbol, rationalize_func, congruence
+    Coeff, uniquely_named_symbol, rationalize_func
 )
 from ..univariate import prove_univariate
 

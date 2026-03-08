@@ -344,7 +344,7 @@ class SDPSOSSolver(ProofNode):
             time0 = perf_counter()
             self._constrain_poly_qmodule(sos, len(qmodule), len(poly_qmodule))
             if configs["verbose"]:
-                print(f"Time to constrain poly_qmodule          :"\
+                print("Time to constrain poly_qmodule          :"\
                       + f" {perf_counter() - time0:.6f} seconds. Dof = {sos.sdpp.dof}")
 
         return sos

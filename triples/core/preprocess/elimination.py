@@ -54,7 +54,7 @@ def _identify_matrix_symmetry(S: Matrix) -> List[List[int]]:
             cluster_dict[root] = []
         cluster_dict[root].append(i)
 
-    clusters = sorted(list(cluster_dict.values()), key=lambda x: min(x))
+    clusters = sorted(cluster_dict.values(), key=lambda x: min(x))
     return clusters
 
 def _rowwise_primitive(A: Matrix) -> Matrix:

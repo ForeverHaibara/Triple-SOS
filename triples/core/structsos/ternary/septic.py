@@ -3,7 +3,7 @@ from sympy import Poly, Rational, Float, Add, sqrt
 from .quartic import sos_struct_quartic
 from .septic_symmetric import sos_struct_septic_symmetric
 from .utils import (
-    Coeff, sum_y_exprs, nroots, rationalize_bound,
+    Coeff, nroots, rationalize_bound,
     zip_longest, align_cyclic_group, congruence_solve,
     sos_struct_handle_uncentered
 )

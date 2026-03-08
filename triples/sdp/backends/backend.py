@@ -6,7 +6,7 @@ from numpy import ndarray
 from .settings import SDPResult, SolverConfigs
 
 class SDPBackend:
-    _dependencies = tuple()
+    _dependencies = ()
 
     status = None
 

@@ -512,7 +512,7 @@ def _sos_struct_quartic_uncentered(coeff: Coeff):
                         # already found
                         continue
                     extrema.append((eqn(root), root))
-        except Exception as e:
+        except Exception:
             pass
 
         if len(extrema) == 0:

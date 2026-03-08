@@ -6,7 +6,6 @@ from .abstract import AtomSOSElement
 from .algebra import NCPolyRing
 from .solution import SolutionSDP
 
-from ...utils import CyclicSum
 
 def DEFAULT_ADJOINT(x):
     if x.is_Mul:

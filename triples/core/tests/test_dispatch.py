@@ -1,7 +1,5 @@
-from sympy.abc import a, b, c, d, u, v, x, y, z
+from sympy.abc import a, b, c, u, v, x, y, z
 from sympy import Poly, Symbol, Rational, ZZ, QQ, ring, field, cbrt, sqrt, asin
-from sympy.polys.rings import PolyElement
-from sympy.polys.fields import FracElement
 
 from ..dispatch import (
     _dtype_is_homogeneous, _dtype_homogenize

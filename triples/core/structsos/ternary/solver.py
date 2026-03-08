@@ -1,4 +1,4 @@
-from typing import Union, Dict, Optional, Any
+from typing import Union, Dict, Optional
 
 from sympy import Poly, Expr, Function
 from sympy.core.symbol import uniquely_named_symbol

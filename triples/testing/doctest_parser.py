@@ -270,7 +270,7 @@ def parse_ident_list_like(s: str) -> Union[List[str], Tuple[str, ...], set]:
         if open_ch == "[":
             return []
         if open_ch == "(":
-            return tuple()
+            return ()
         if open_ch == "{":
             return set()
 

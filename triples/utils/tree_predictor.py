@@ -262,7 +262,7 @@ class TreePredictor:
             scalars = {'intercept', 'method', '__version__'}
             obj = object.__new__(cls)
             for k in attrs:
-                if not k in data:
+                if not (k in data):
                     raise ValueError(f"Missing key: {k} in {filename}")
                 d = data[k]
                 if k in scalars and isinstance(d, np.ndarray):

@@ -513,7 +513,7 @@ def solve_poly_system_crt(polys: List[Poly], symbols: List[Symbol]) -> List[Tupl
         if len(symbols) == 0:
             filtered = _filter_trivial_system(polys)
             if filtered is not None and len(filtered) == 0:
-                return [tuple()]
+                return [()]
             return []
         sol = solve(polys, symbols, dict=False)
         sol = [_ for _ in sol if all(v.is_real for v in _)]
@@ -535,7 +535,7 @@ def solve_poly_system_crt(polys: List[Poly], symbols: List[Symbol]) -> List[Tupl
         return _solve_poly_system_2vars_resultant(polys, symbols)
     try:
         return solve_triangulated_crt(polys, symbols)
-    except (BasePolynomialError, IndexError) as e:
+    except (BasePolynomialError, IndexError):
         # Cannot ltrim ... (due to nonzero dimensional variety)
         return []
     return default(polys, symbols)

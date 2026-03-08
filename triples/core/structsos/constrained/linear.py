@@ -1,4 +1,4 @@
-from sympy import Poly, Dummy, Integer
+from sympy import Poly, Integer
 from sympy.core.symbol import uniquely_named_symbol
 
 def _eliminate_linear_ineq(poly, var, ineq_constraints, eq_constraints):

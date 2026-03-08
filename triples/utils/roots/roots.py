@@ -459,7 +459,7 @@ class Root():
         Wrap it with cache if it is algebraic but not rational.
         """
         if (not self.is_Rational) and self.is_algebraic:
-            self._single_power_cache = dict((key, {}) for key in range(-1, len(self.root)))
+            self._single_power_cache = {key: {} for key in range(-1, len(self.root))}
             def _single_power(i: int, degree: int) -> ANP:
                 """
                 Return self.rep[i] ** degree.
@@ -887,7 +887,7 @@ class Root():
         is_real = (u0.is_real and v0.is_real) in (S.true, True)
 
         domain, (u, v) = construct_domain((u0, v0), extension=True, field=True)
-        one, zero = domain.one, domain.zero
+        one = domain.one
         if u == -one and v == -one: # infinity line
             raise ValueError('Argument uv = (-1, -1) is not well-defined.')
 

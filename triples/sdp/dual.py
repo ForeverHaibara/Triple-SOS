@@ -2,13 +2,13 @@ from time import perf_counter
 from typing import Tuple, List, Dict, Union, Optional, Any, Callable
 
 import numpy as np
-from sympy import Expr, Symbol, Rational, MatrixBase
+from sympy import Expr, Symbol, MatrixBase
 from sympy.core.relational import Relational
 from sympy import MutableDenseMatrix as Matrix
 
 from .abstract import Decomp
 from .arithmetic import (
-    ArithmeticTimeout, solve_undetermined_linear, solve_csr_linear, free_symbols_of_mat,
+    ArithmeticTimeout, solve_csr_linear, free_symbols_of_mat,
     rep_matrix_from_dict, rep_matrix_to_numpy, rep_matrix_from_numpy, sqrtsize_of_mat
 )
 from .backends import SDPResult, SDPError, SDPTimeoutError, solve_numerical_dual_sdp
@@ -298,7 +298,7 @@ class SDPProblem(TransformableDual):
             _free_symbols_in_domain.update(free_symbols_of_mat(x0))
             _free_symbols_in_domain.update(free_symbols_of_mat(space))
 
-        _free_symbols_in_domain = sorted(list(_free_symbols_in_domain), key=lambda x: x.name)
+        _free_symbols_in_domain = sorted(_free_symbols_in_domain, key=lambda x: x.name)
         self._free_symbols_in_domain = _free_symbols_in_domain
 
         if gens is not None:

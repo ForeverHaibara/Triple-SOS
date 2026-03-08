@@ -6,7 +6,7 @@ warn("This file is deprecated. Do not use it.",
      DeprecationWarning,
      stacklevel=2)
 
-from typing import Tuple, Dict, List, Union, Optional
+from typing import Tuple, List, Union, Optional
 
 import sympy as sp
 from sympy import Poly, Expr, Symbol

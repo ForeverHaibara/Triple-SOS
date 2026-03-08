@@ -1,4 +1,4 @@
-from typing import Generator, Dict, Tuple, List, Optional
+from typing import Generator, Dict, Tuple, Optional
 
 from sympy import Poly, Expr, Symbol, Mul
 

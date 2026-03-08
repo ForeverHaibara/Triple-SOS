@@ -268,7 +268,7 @@ def sum_of_squares_multiple(
                 record['status'] = 'success'
                 record['solution'] = solution
                 record['method'] = solution.method
-        except Exception as e:
+        except Exception:
             used_time = time() - t0
             record['status'] = 'error'
             record['solution'] = None

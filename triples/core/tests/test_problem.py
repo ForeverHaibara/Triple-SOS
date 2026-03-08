@@ -1,9 +1,7 @@
-from sympy.abc import a, b, c, d, e, u, v, w, x, y, z
+from sympy.abc import a, b, c, u, v, w, x, y, z
 
 from sympy import Poly, Function, ZZ, ring
 from sympy.combinatorics import CyclicGroup
-from sympy.polys.rings import PolyElement
-from sympy.polys.fields import FracElement
 
 from ..problem import InequalityProblem
 from ..dispatch import _fracelement_init

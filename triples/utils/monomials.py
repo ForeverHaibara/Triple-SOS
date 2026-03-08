@@ -57,7 +57,7 @@ def generate_partitions(d_list: Union[int, List[int]], degree: int,
 
     n = len(d_list)
     if n == 0:
-        return [tuple()]
+        return [()]
 
     powers = []
     i = 0
@@ -129,7 +129,7 @@ class MonomialManager():
 
         if self.OPTIMIZE_SYMMETRY:
             orbits = self._perm_group.orbits()
-            orbits = [sorted(list(o)) for o in orbits]# if len(o) > 1]
+            orbits = [sorted(o) for o in orbits]# if len(o) > 1]
             order = self._perm_group.order()
             if prod([factorial(len(m)) for m in orbits]) == order:
                 # internal direct product of symmetric groups
@@ -363,7 +363,7 @@ class MonomialManager():
         vec = self._arraylize_list(poly, degree = degree, expand_cyc = expand_cyc)
         rep, dom, ngens, _degree = _poly_rep(poly)
         if SDM is not None:
-            sdm = dict((i, {0: v}) for i, v in enumerate(vec) if v)
+            sdm = {i: {0: v} for i, v in enumerate(vec) if v}
             return Matrix._fromrep(DomainMatrix.from_rep(SDM(sdm, (len(vec), 1), dom)))
         else: # sympy <= 1.7
             to_sympy = dom.to_sympy
@@ -384,7 +384,7 @@ class MonomialManager():
             zero = domain.zero
             # be careful to handle column / row vectors
             if rep.shape[0] == 1:
-                rep_list = list(rep.get(0, dict()).items())
+                rep_list = list(rep.get(0, {}).items())
             elif rep.shape[1] == 1:
                 rep_list = [(i, v.get(0, zero)) for i, v in rep.items()]
             elif rep.shape[0] == 0 or rep.shape[1] == 0:

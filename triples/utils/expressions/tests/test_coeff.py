@@ -1,6 +1,6 @@
-from ..coeff import PartialOrderElement, Coeff
+from ..coeff import Coeff
 
-from sympy import Poly, Expr, Rational, ZZ, QQ, RR, EX, E, sqrt
+from sympy import Poly, Expr, ZZ, QQ, RR, EX, E, sqrt
 from sympy.abc import a, b, c
 
 import pytest

@@ -117,7 +117,7 @@ def run_bench(benchmarks=BENCHMARKS, save_interval=0):
         max_problem_name_len = max([len(problem_name) for problem_name in problems.keys()], default=0)
         for i, (problem_name, problem) in enumerate(problems.items(), start=1):
             # (problem_name) (status) (start_time) --- (end_time) [(solved)/(processed)]
-            problem_marks = getattr(problem, 'marks', tuple())
+            problem_marks = getattr(problem, 'marks', ())
             print(problem_name.ljust(max_problem_name_len), end=' ')
             if mark.skip in problem_marks:
                 skipped += 1

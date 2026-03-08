@@ -1,10 +1,8 @@
 from typing import (
-    List, Tuple, Dict, FrozenSet, Union, Optional, Callable,
-    TypeVar, Generic, Iterator
+    List, Tuple, Dict, FrozenSet, Union, Optional, Generic, Iterator
 )
 
-from sympy import Expr, Add, Mul, Rational, Integer, UnevaluatedExpr, fraction, sympify, latex, sqrt, true
-from sympy import Tuple as stuple
+from sympy import Expr, Add, Mul, Integer, UnevaluatedExpr, fraction, sympify
 from sympy.core.sympify import CantSympify, sympify
 from sympy.polys.domains.domainelement import DomainElement
 from sympy.polys.polyerrors import CoercionFailed
@@ -1036,7 +1034,7 @@ class PSatz(Generic[Ef]):
                     *[_.free_symbols for _ in preorder.values()],
                     *[_.free_symbols for _ in ideal.values()]
                 )
-                fs = sorted(list(fs), key=lambda x: x.name)
+                fs = sorted(fs, key=lambda x: x.name)
                 algebra = domain[tuple(fs)]
             else:
                 algebra = domain

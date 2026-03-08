@@ -1,4 +1,4 @@
-from sympy.abc import a, b, c, d, x, y, t
+from sympy.abc import a, b, c, t
 from sympy.combinatorics import SymmetricGroup
 
 import pytest

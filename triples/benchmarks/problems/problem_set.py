@@ -1,4 +1,3 @@
-from functools import wraps
 
 class mark:
     """Mark a problem with hints."""
@@ -65,20 +64,20 @@ class ProblemSet:
         to (dense) polynomials and should be solved by operating on the symbolic tree only.
     """
     @classmethod
-    def collect(cls, include=tuple(), exclude=tuple()):
+    def collect(cls, include=(), exclude=()):
         cands = {k: getattr(cls, k) for k in dir(cls) if k.startswith('problem')}
         include = (include,) if isinstance(include, str) else include
         exclude = (exclude,) if isinstance(exclude, str) else exclude
         for m in include:
             dels = []
             for k, v in cands.items():
-                if m not in getattr(v, 'marks', tuple()):
+                if m not in getattr(v, 'marks', ()):
                     dels.append(k)
             [cands.pop(k) for k in dels]
         for m in exclude:
             dels = []
             for k, v in cands.items():
-                if m in getattr(v, 'marks', tuple()):
+                if m in getattr(v, 'marks', ()):
                     dels.append(k)
             [cands.pop(k) for k in dels]
         return cands

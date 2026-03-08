@@ -127,7 +127,7 @@ def linear_correction(
                 if _is_Ax_equal_to_b(reduced_arrays, reduced_y, target):
                     is_equal = True
                     y, basis = reduced_y, reduced_basis
-        except Exception as e:
+        except Exception:
             # raise e
             is_equal = False
 
@@ -153,7 +153,7 @@ def LUsolve(A: Matrix, b: Matrix) -> Matrix:
         new_domain = A2.domain.unify(b2.domain).get_field()
         A2 = A2.convert_to(new_domain)
         b2 = b2.convert_to(new_domain)
-    except Exception as e:
+    except Exception:
         A2 = None
     if A2 is None: # fallback to default
         return A.LUsolve(b)
@@ -180,7 +180,7 @@ def _is_Ax_equal_to_b(A: Matrix, x: Matrix, b: Matrix) -> bool:
         A2 = A2.convert_to(new_domain)
         x2 = x2.convert_to(new_domain)
         b2 = b2.convert_to(new_domain)
-    except Exception as e:
+    except Exception:
         A2 = None
 
     if A2 is None: # fallback to default

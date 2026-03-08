@@ -4,7 +4,7 @@ from sympy import Poly, Symbol, Rational, Add
 from .sextic_symmetric import _sos_struct_sextic_hexagram_symmetric, _sos_struct_sextic_tree
 from .utils import (
     Coeff, CommonExpr,
-    sum_y_exprs, rationalize_func, inverse_substitution, nroots, align_cyclic_group
+    sum_y_exprs, rationalize_func, inverse_substitution, align_cyclic_group
 )
 
 def sos_struct_nonic(coeff, real = True):

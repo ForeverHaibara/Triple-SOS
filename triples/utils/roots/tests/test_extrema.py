@@ -46,8 +46,8 @@ def test_extrema():
         result = optimize_poly(poly, ineqs, eqs)
         assert len(result) == len(solutions)
 
-        result_dict = set(tuple(_.n(4) for _ in v) for v in result)
-        solution_dict = set(tuple(Float(_).n(4) for _ in v) for v in solutions)
+        result_dict = {tuple(_.n(4) for _ in v) for v in result}
+        solution_dict = {tuple(Float(_).n(4) for _ in v) for v in solutions}
         assert result_dict == solution_dict
 
 def test_extrema_max_different():

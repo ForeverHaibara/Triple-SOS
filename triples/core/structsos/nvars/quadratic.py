@@ -93,7 +93,7 @@ def _identify_matrix_symmetry(S: Matrix) -> List[List[int]]:
             cluster_dict[root] = []
         cluster_dict[root].append(i)
 
-    clusters = sorted(list(cluster_dict.values()), key=lambda x: x[0])
+    clusters = sorted(cluster_dict.values(), key=lambda x: x[0])
     return clusters
 
 def _isotopic_decomposition(S: Matrix, clusters: List[List[int]]):

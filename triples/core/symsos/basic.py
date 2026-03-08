@@ -287,7 +287,7 @@ def prove_by_pivoting(poly: Poly, nonnegative_symbols: Set[Symbol]) -> Optional[
             homogenizer = Symbol('_'+poly.gen.name)
             poly = poly.homogenize(homogenizer)
 
-        ineq_constraints = dict()
+        ineq_constraints = {}
         for gen in poly.gens + (homogenizer,):
             if gen is not None and gen in nonnegative_symbols:
                 ineq_constraints[gen.as_poly(*poly.gens)] = gen

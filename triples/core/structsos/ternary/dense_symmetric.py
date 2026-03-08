@@ -1,6 +1,6 @@
-from typing import Tuple, List, Optional, Union
+from typing import Tuple, Optional, Union
 
-from sympy import Poly, Expr, Symbol, Add
+from sympy import Poly, Expr, Add
 
 from .utils import (
     Coeff, sos_struct_handle_uncentered, sos_struct_reorder_symmetry

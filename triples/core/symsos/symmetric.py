@@ -100,7 +100,7 @@ class UE3Positive(SymmetricTransform):
             Poly(x, (x,y,z)): x,
             Poly(y, (x,y,z)): y,
             Poly(z, (x,y,z)): z
-        }, dict()
+        }, {}
 
 
 class UE3Real(SymmetricTransform):
@@ -148,7 +148,7 @@ class UE3Real(SymmetricTransform):
     @classmethod
     def _get_default_constraints(cls, new_symbols):
         x, y, z = new_symbols
-        return {Poly(z, (x,y,z)): z}, dict()
+        return {Poly(z, (x,y,z)): z}, {}
 
 
 class UE4Real(SymmetricTransform):
@@ -222,7 +222,7 @@ class UE4Real(SymmetricTransform):
             Poly(y, (x,y,z,w)): y,
             Poly(z, (x,y,z,w)): z,
             Poly(w, (x,y,z,w)): w
-        }, dict()
+        }, {}
 
 
 def _symmetric_real_3vars(

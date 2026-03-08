@@ -13,6 +13,9 @@ from ...sdp import congruence
 from ...utils.expressions import Coeff, CyclicSum, CyclicProduct
 from ...utils.roots import nroots, rationalize_bound
 
+# use imports to keep linter happy
+(uniquely_named_symbol, Coeff, CyclicSum, CyclicProduct)
+
 class StructuralSOSError(Exception): ...
 
 class PolynomialUnsolvableError(StructuralSOSError): ...

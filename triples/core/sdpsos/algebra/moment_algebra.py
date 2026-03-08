@@ -1,7 +1,7 @@
 from itertools import combinations
-from typing import List, Dict, Any, Optional, Callable
+from typing import Dict, Any, Optional, Callable
 
-from sympy import Expr, Poly, Symbol, Add, Mul
+from sympy import Expr, Poly, Add, Mul
 
 from .state_algebra import CommutativeStateAlgebra, TERM, MONOM
 from .basis import QmoduleBasis, IdealBasis

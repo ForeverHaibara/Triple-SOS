@@ -353,6 +353,6 @@ def _sort_characters(rows, dom):
     rows.sort()
     for i, row in enumerate(rows):
         if all(v == one for v in row):
-            rows[0], rows[i] = rows[i], rows[0]
+            rows[0], rows[i] = row, rows[0]
             break
     return rows

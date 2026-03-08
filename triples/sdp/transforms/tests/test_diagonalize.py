@@ -15,7 +15,7 @@ def test_diagonalize():
         {'X': [[0], [1], [2, 3]]}
 
     sdpp = sdp.constrain_block_structures()
-    assert sorted(list(sdpp.size.values())) == [1, 1, 2]
+    assert sorted(sdpp.size.values()) == [1, 1, 2]
 
     # test restoration of solution
     y = sdp.solve_obj([10, 20])

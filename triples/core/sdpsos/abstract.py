@@ -9,7 +9,7 @@ from sympy.core.relational import Relational
 
 from .algebra import StateAlgebra, SOSBasis
 from ...sdp import SDPProblem
-from ...sdp.arithmetic import ArithmeticTimeout, sqrtsize_of_mat, matmul, matadd, solve_csr_linear, rep_matrix_from_dict
+from ...sdp.arithmetic import ArithmeticTimeout, sqrtsize_of_mat, matmul, matadd, rep_matrix_from_dict
 from ...sdp.utils import exprs_to_arrays, collect_constraints
 from ...sdp.wedderburn import symmetry_adapted_basis
 

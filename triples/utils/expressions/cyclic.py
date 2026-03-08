@@ -4,11 +4,11 @@ CyclicExpr, CyclicSum and CyclicProduct.
 """
 from importlib import import_module
 from numbers import Number
-from typing import List, Tuple, Union, Callable, Any
+from typing import Tuple, Callable
 from typing import Dict
 
 import sympy as sp # for hijacking default behaviors of sympy
-from sympy import sympify, S, Mul, Add, Pow, Symbol, Poly, Expr, Basic
+from sympy import sympify, S, Mul, Add, Pow, Symbol, Expr, Basic
 from sympy.core.cache import cacheit
 from sympy.core.containers import Dict as SympyDict
 from sympy.core.numbers import zoo, nan
@@ -53,7 +53,7 @@ def _std_seq(p: Tuple, perm_group: PermutationGroup) -> Tuple:
     has minimum lexicographical order.
     """
     if len(p) == 0:
-        return tuple()
+        return ()
     # elif len(perm_group.args) == 1 and \
     #         perm_group.args[0].array_form == list(range(1, len(p))) + [0]:
     #     # inv_p = ...
@@ -73,7 +73,7 @@ def _std_seq(p: Tuple, perm_group: PermutationGroup) -> Tuple:
     return tuple(p[i] for i in p2)
 
 def _std_symbols(symbols: Tuple[Symbol, ...], perm_group: PermutationGroup) -> PermutationGroup:
-    p = sorted(list(range(len(symbols))), key = lambda i: symbols[i].name)
+    p = sorted(range(len(symbols)), key = lambda i: symbols[i].name)
     q = _std_seq(tuple(p), perm_group)
     return tuple(symbols[i] for i in q)
 

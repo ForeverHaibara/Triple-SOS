@@ -5,7 +5,7 @@ from mpmath import mp
 import numpy as np
 from numpy.polynomial.polynomial import polyroots as np_polyroots
 from numpy.polynomial.polynomial import polyfromroots as np_polyfromroots
-from sympy import Poly, Expr, Float, Integer, Symbol, QQ, construct_domain, count_roots
+from sympy import Poly, Expr, Integer, Symbol, QQ, construct_domain, count_roots
 from sympy.core import S
 from sympy.matrices import MutableDenseMatrix as Matrix
 from sympy.polys.matrices.ddm import DDM
