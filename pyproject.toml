@@ -84,11 +84,11 @@ lint.ignore = [
     "E712",  # Comparison to `<BOOL>` should be `cond is <BOOL>`
     # "E713",  # Test for membership should be `not in`
     # "E714",  # Test for object identity should be `is not`
-    "E721",  # Do not compare types, use `isinstance()`
+    # "E721",  # Do not compare types, use `isinstance()`
     "E731",  # Do not assign a `lambda` expression, use a `def`
     "E741",  # Ambiguous variable name: `<VARIABLE>`
     "E743",  # Ambiguous function name: `<FUNCTION>`
-    "F811",
+    "F811",  # Redefinition of unused XXX
     "FURB110",  # Replace ternary `if` expression with `or` operator
     "FURB187",  # Use of assignment of `reversed` on list `{name}`
 ]

@@ -58,7 +58,7 @@ def _sos_struct_sextic_hexagram(coeff: Coeff):
     => s(3a4bc+2a3b3+a3bc2-6a2b2c2)
 
     => s((sqrt(2)+9)a4bc+(4*sqrt(2)+9)a3b3+(-19+3*sqrt(2))a3b2c+(-33*sqrt(2)-12)a3bc2+(13+25*sqrt(2))a2b2c2)
- 
+
     => (s(a2c)s(b2c)+25/2p(a2)-27/4s(a2c)p(a))
 
     => s(a2c)s(b2c)+9p(a2)-15*4^(-2/3)p(a)s(a2b)

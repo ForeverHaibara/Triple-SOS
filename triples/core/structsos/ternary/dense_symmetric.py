@@ -17,7 +17,7 @@ def _linear_invert(u, v, d: int = 0) -> Optional[Tuple[int, Expr, Expr]]:
 
     This is equivalent to `-v/(u + v) <= n <= u/(u + v)`.
 
-    Note that `a^(-n) == (-n*a + (n+1))  (mod (a-1)^2)` and   
+    Note that `a^(-n) == (-n*a + (n+1))  (mod (a-1)^2)` and
     `(u*a + v)*(-n*a + (n+1)) + n*u*(a-1)**2 == (u - (u + v)*n)*a + v + (u + v)*n`,
     so this implies:
     `u*a + v == (u2*a + v2)*a**n (mod (a-1)**2)`
@@ -348,11 +348,11 @@ def _sos_struct_liftfree_for_six_ord4(coeff: Coeff, div2=None, real=True):
 #####################################################################
 
 @sos_struct_reorder_symmetry(groups=(2, 1))
-def sos_struct_ternary_partial_symmetric(coeff: Coeff):
+def sos_struct_ternary_partial_symmetric(coeff: Coeff, real=True):
     """
     Solve a homogeneous 3-var inequality `f(a,b,c) >= 0` where
     `f(a, b, c) == f(b, a, c)`.
-    
+
     Examples
     --------
     => ((2a+2b+c)c-2ab)2(a+b)+3ab(4((a-b)2+c2)s(a)+8c(ab-c2)-9c2(a+b))
