@@ -153,7 +153,7 @@ class SDPProblemBase(ABC):
         if isinstance(y, np.ndarray):
             y = rep_matrix_from_numpy(y.flatten())
         y2 = self.project(y)
-        if (not (y2 is y)) and not project:
+        if (y2 is not y) and not project:
             # FIXME for numpy array
             raise ValueError("The vector y is not feasible by the equality constraints."
                     " Use project=True to project the approximated solution to the feasible region.")

@@ -359,7 +359,7 @@ def _collect_ineq_constraints(
         if r < 0:
             tangents_and_exprs[i] = (one, tangent * expr) # keep everything unchanged
             continue
-        elif not (r is one):
+        elif r is not one:
             tangents_and_exprs[i] = (Mul(*args), r * expr) # move the constant to expr
 
         factors.update(set(args))

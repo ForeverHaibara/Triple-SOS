@@ -385,7 +385,7 @@ class _septic_sym_axis(DomainExpr):
         a, b, c = self.gens
         CyclicSum = self.cyclic_sum
         return rem_coeff * (CyclicSum(a**2 + rem_ratio*a*b)**2 \
-                            if not rem_ratio is Infinity else CyclicSum(a*b)**2)
+                            if rem_ratio is not Infinity else CyclicSum(a*b)**2)
 
     def solve(self, f_coeff, fx, fy, g_coeff, gx, gy, ker_coeff):
         a, b, c = self.gens

@@ -549,7 +549,7 @@ def _sos_struct_acyclic_cubic_symmetric(coeff: Coeff):
     if w is None:
         return None
 
-    w = coeff.convert(w) if not (w is Infinity) else w
+    w = coeff.convert(w) if w is not Infinity else w
     w0 = 2*(5*t**2 - 2*t*z + 2*z**2)/3
     y0 = 4*(-2*t + z)**3/27
     if w is Infinity:

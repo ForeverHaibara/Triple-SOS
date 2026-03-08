@@ -227,7 +227,7 @@ class ProofTree:
     def get_configs(self, node: Union[ProofNode, 'ProofTree']) -> Dict[str, Any]:
         cfg = node.default_configs.copy()
 
-        if not (node is self):
+        if node is not self:
             # compute the time limit dynamically (the remaining time)
             cfg["time_limit"] = min(self._expected_end_time - perf_counter(),
                                     cfg.get("time_limit", float("inf")))

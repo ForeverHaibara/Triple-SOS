@@ -28,7 +28,7 @@ def _propagate_args_to_last(self, next_node, func, recursive, *args):
         start = False
         transform = None
         for _transform in self._transforms[::-1]:
-            if check_transform(_transform, self) and not (get_next(_transform) is self):
+            if check_transform(_transform, self) and get_next(_transform) is not self:
                 transform = _transform
                 break
         if transform is None:

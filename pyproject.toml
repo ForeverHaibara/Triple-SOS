@@ -83,7 +83,7 @@ lint.ignore = [
     # "E702",  # Multiple statements on one line (semicolon)
     "E712",  # Comparison to `<BOOL>` should be `cond is <BOOL>`
     # "E713",  # Test for membership should be `not in`
-    "E714",  # Test for object identity should be `is not`
+    # "E714",  # Test for object identity should be `is not`
     "E721",  # Do not compare types, use `isinstance()`
     "E731",  # Do not assign a `lambda` expression, use a `def`
     "E741",  # Ambiguous variable name: `<VARIABLE>`

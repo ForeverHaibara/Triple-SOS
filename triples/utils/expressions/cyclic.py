@@ -348,7 +348,7 @@ class CyclicExpr(Expr):
 
         def _xreplace_arg0(self, rule, symbols):
             arg0, changed = self.args[0]._xreplace(rule)
-            changed = changed or (not (self.symbols is symbols))
+            changed = changed or (self.symbols is not symbols)
             if not changed:
                 return self, False
             return self.func(arg0, symbols, self.perm_group), changed

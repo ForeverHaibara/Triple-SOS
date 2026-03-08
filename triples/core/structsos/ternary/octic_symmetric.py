@@ -824,7 +824,7 @@ class _octic_sym_axis(DomainExpr):
     def rem_poly(self, rem_coeff, rem_ratio):
         a, b, _ = self.gens
         CyclicSum = self.cyclic_sum
-        return rem_coeff * (CyclicSum(a**2 + rem_ratio*a*b)**2 if not rem_ratio is sp.oo else CyclicSum(a*b)**2)
+        return rem_coeff * (CyclicSum(a**2 + rem_ratio*a*b)**2 if rem_ratio is not sp.oo else CyclicSum(a*b)**2)
 
     def _wrap_F(self, f_type, f_solver):
         if f_type == 0:
