@@ -483,9 +483,9 @@ def numeric_optimize_poly(
     symbols = _infer_symbols(symbols, poly, ineq_constraints, eq_constraints)
     if len(symbols) == 0:
         return []
-    if not (objective in ('min', 'max', 'all')):
+    if objective not in ('min', 'max', 'all'):
         raise ValueError('Objective must be either "min" or "max" or "all".')
-    if not (return_type in ('root', 'tuple', 'dict', 'result')):
+    if return_type not in ('root', 'tuple', 'dict', 'result'):
         raise ValueError('Return type must be either "root" or "tuple" or "dict" or "result".')
 
     poly, ineq_constraints, eq_constraints = polylize_input(

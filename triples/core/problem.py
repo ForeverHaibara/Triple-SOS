@@ -786,7 +786,7 @@ class InequalityProblem(Generic[T]):
         dst_dicts = [{}, {}, {}]
         if isinstance(self.expr, Poly):
             new_symbols = tuple(sorted(inv_transform.keys(), key=lambda x:x.name))
-            symbols = tuple([_ for _ in self.expr.gens if (not _ in transform)]) + new_symbols
+            symbols = tuple([_ for _ in self.expr.gens if (_ not in transform)]) + new_symbols
         for src, dst in zip(src_dicts, dst_dicts):
             for p, e in src.items():
                 if isinstance(p, Expr):
@@ -854,7 +854,7 @@ class InequalityProblem(Generic[T]):
 
         gens = self.gens
         changed_gens = [g for g in gens if (g in transform)]
-        other_gens = [g for g in gens if (not g in transform)]
+        other_gens = [g for g in gens if (g not in transform)]
         shift = {g: g + v for g, v in transform.items()}
 
         expr_mul = 1

@@ -68,6 +68,7 @@ lint.select = [
     "TC004",
     "TC005",
     "TRY002",
+    # "BLE001", # except Exception or except BaseException
     # "UP006", # pyupgrade - non-pep585-annotation
     # "UP007", # pyupgrade - non-pep604-annotation-union
     # "UP045", # pyupgrade - non-pep604-annotation-optional
@@ -79,9 +80,9 @@ lint.ignore = [
     "E402",  # Module level import not at top of file
     "E501",  # Line too long (<LENGTH> > 88 characters)
     "E701",  # Multiple statements on one line (colon)
-    "E702",  # Multiple statements on one line (semicolon)
+    # "E702",  # Multiple statements on one line (semicolon)
     "E712",  # Comparison to `<BOOL>` should be `cond is <BOOL>`
-    "E713",  # Test for membership should be `not in`
+    # "E713",  # Test for membership should be `not in`
     "E714",  # Test for object identity should be `is not`
     "E721",  # Do not compare types, use `isinstance()`
     "E731",  # Do not assign a `lambda` expression, use a `def`
@@ -90,7 +91,6 @@ lint.ignore = [
     "F811",
     "FURB110",  # Replace ternary `if` expression with `or` operator
     "FURB187",  # Use of assignment of `reversed` on list `{name}`
-    "BLE001", # except Exception or except BaseException
 ]
 
 exclude = ["triples/benchmarks/run_benchmark.py"]

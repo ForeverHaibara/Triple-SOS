@@ -81,7 +81,7 @@ def _get_qmodule_list(
     Generate the (generators of the) qmodule for the given problem.
     """
     _ACCEPTED_PREORDERINGS = ['none', 'linear', 'linear-progressive']
-    if not preordering in _ACCEPTED_PREORDERINGS:
+    if preordering not in _ACCEPTED_PREORDERINGS:
         raise ValueError("Invalid preordering method, expected one of %s, received %s." % (str(_ACCEPTED_PREORDERINGS), preordering))
 
     if degree is None:

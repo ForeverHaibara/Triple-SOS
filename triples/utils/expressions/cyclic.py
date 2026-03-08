@@ -388,7 +388,7 @@ class CyclicExpr(Expr):
                 break
         else:
             # check other rules not intersecting self symbols
-            other_rules = [fs(k) | fs(v) for k, v in rule.items() if not k in changed_vars]
+            other_rules = [fs(k) | fs(v) for k, v in rule.items() if k not in changed_vars]
             if not any(_.intersection(self_vars) for _ in other_rules):
                 new_symbols = tuple(rule.get(s, s) for s in self.symbols)
                 if len(set(new_symbols)) == len(new_symbols):

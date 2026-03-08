@@ -269,7 +269,7 @@ def eliminate_power_constraints(
     }
     # print('transform =', transform, '\ninv_transform =', inv_transform)
 
-    new_eqs = {k: e for i, (k, e) in enumerate(eq_constraints.items()) if not i in eq_inds}
+    new_eqs = {k: e for i, (k, e) in enumerate(eq_constraints.items()) if i not in eq_inds}
     problem = problem.copy_new(problem.expr, ineq_constraints, new_eqs)
 
     problem, restore_transform = problem.transform(transform, inv_transform)

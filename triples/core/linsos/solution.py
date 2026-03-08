@@ -108,7 +108,7 @@ def _collect_constraints(
             tangent = base.tangent(symbols)
             has_eq_part = has_eq(tangent)
             if has_eq_part is not None:
-                if not (has_eq_part[0] in eq_part): # not expected to happen
+                if has_eq_part[0] not in eq_part: # not expected to happen
                     eq_part[has_eq_part[0]] = []
                 eq_part[has_eq_part[0]].append(v * has_eq_part[1] * Mul(*[s**p for s, p in zip(symbols, base.powers)]))
             else:

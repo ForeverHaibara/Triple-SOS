@@ -719,7 +719,7 @@ def prove_univariate(poly: Union[Poly, Expr, List], interval: Tuple[Optional[Exp
     full rank and strictly positive definite. Then it is possible to perturb and round
     the Gram matrix to obtain a rational sum-of-squares certificate.
     """
-    if not (return_type in ('expr', 'list', 'soslist')):
+    if return_type not in ('expr', 'list', 'soslist'):
         raise ValueError(f"The return_type must be 'expr', 'list', or 'soslist', but got {return_type}.")
 
     if not isinstance(poly, Poly):

@@ -249,9 +249,9 @@ class SDPProblemBase(ABC):
         cons = [(ineq_lhs, ineq_rhs, '>'), (eq_lhs, eq_rhs, '==')]
 
         kwargs = kwargs.copy()
-        if not ('verbose' in kwargs):
+        if 'verbose' not in kwargs:
             kwargs['verbose'] = verbose
-        if end_time is not None and (not ('time_limit' in kwargs)):
+        if end_time is not None and ('time_limit' not in kwargs):
             kwargs['time_limit'] = end_time - perf_counter()
 
         sol = self._solve_numerical_sdp(objective=obj[0],

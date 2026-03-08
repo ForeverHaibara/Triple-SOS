@@ -551,7 +551,7 @@ def solve_csr_linear(A: Matrix, b: Matrix,
     new_force_zeros = {}
     for i in force_zeros:
         k = mapping[i]
-        if not (k in new_force_zeros):
+        if k not in new_force_zeros:
             new_force_zeros[k] = set()
         new_force_zeros[k].update({mapping[j] for j in force_zeros[i]})
     time_limit()
@@ -639,7 +639,7 @@ def _solve_csr_linear_force_zeros(A, b, nonnegative_indices=[], force_zeros={},
             new_zeros = force_zeros.get(i)
             if new_zeros is not None:
                 for j in new_zeros:
-                    if not (j in all_zero_inds):
+                    if j not in all_zero_inds:
                         zero_inds.add(j)
 
             # remove the corresponding column of A

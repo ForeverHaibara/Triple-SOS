@@ -91,7 +91,7 @@ def _algebraic_extension(vec: List[ANP], domain: Domain) -> Matrix:
             for i in range(1, l + 1): # len(x.rep) = l >= i
                 if rep(x)[-i] == zero:
                     continue
-                if not (row in sdm):
+                if row not in sdm:
                     sdm[row] = {}
                 sdm[row][i-1] = rep(x)[-i]
         sdm = SDM(sdm, (len(vec), len(mod) - 1), QQ)
@@ -905,7 +905,7 @@ class Root():
             poly = Poly.new(DMP([one, -one, sab, -abc], domain, 0), Symbol('x'))
             a, b, c = poly.all_roots(radicals=False) if poly.domain.is_Exact else poly.nroots()
 
-            if not (a in domain):
+            if a not in domain:
                 u, v = domain.to_sympy(u), domain.to_sympy(v)
                 domain = domain.algebraic_field(a) if not domain.is_QQ_I else QQ.algebraic_field(a, S.ImaginaryUnit)
                 u, v, one = domain.convert(u), domain.convert(v), domain.one

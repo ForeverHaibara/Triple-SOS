@@ -341,7 +341,7 @@ def get_qmodule_list(
         The preordering rule, one of 'none', 'linear', 'quadratic', 'full'.
     """
     _ACCEPTED_PREORDERINGS = ['none', 'linear', 'quadratic', 'full']
-    if not preordering in _ACCEPTED_PREORDERINGS:
+    if preordering not in _ACCEPTED_PREORDERINGS:
         raise ValueError("Invalid preordering method, expected one of %s, received %s." \
                          % (str(_ACCEPTED_PREORDERINGS), preordering))
 

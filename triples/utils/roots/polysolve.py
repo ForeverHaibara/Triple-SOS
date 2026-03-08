@@ -37,7 +37,7 @@ def _filter_trivial_system(polys: List[Poly]) -> Union[List[Poly], None]:
                 continue
             elif poly.total_degree() == 0: # inconsistent system
                 return None
-        if not (poly in new_polys):
+        if poly not in new_polys:
             new_polys.add(poly)
             ordered_inds.append(ind)
     return [polys[ind] for ind in ordered_inds]
@@ -437,7 +437,7 @@ def solve_triangulated_crt(polys: List[Poly], symbols: List[Symbol]) -> List[Tup
                 zeros = []
 
             for zero in zeros:
-                if not (zero in dom):
+                if zero not in dom:
                     dom_zero = dom.algebraic_field(zero)
                 else:
                     dom_zero = dom

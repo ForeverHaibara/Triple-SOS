@@ -22,7 +22,7 @@ def _free_symbol(coeff: Coeff):
         for symbol in coeff.domain.symbols:
             gens = gens.union(symbol.free_symbols)
     for s in "efghij":
-        if not (Symbol(s) in gens):
+        if Symbol(s) not in gens:
             return Symbol(s)
     return Dummy("x")
 

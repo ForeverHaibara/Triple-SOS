@@ -163,7 +163,7 @@ class DualBackend(SDPBackend):
             bs = [self._convert_space_to_isometric(b, order=self._opt_isometric) for b in bs]
 
         if self._opt_sparse:
-            if not self._opt_sparse in ('csc', 'csr', 'coo'):
+            if self._opt_sparse not in ('csc', 'csr', 'coo'):
                 raise ValueError('DualBackend._opt_sparse must be one of "csc" or "csr" or "coo".')
             from scipy import sparse
             to_mat = getattr(sparse, self._opt_sparse + '_matrix')

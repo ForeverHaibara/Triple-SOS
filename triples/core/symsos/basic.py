@@ -277,7 +277,7 @@ def prove_by_pivoting(poly: Poly, nonnegative_symbols: Set[Symbol]) -> Optional[
         return None
 
     for gen in poly.gens:
-        if (not gen in nonnegative_symbols) and poly.degree(gen) % 2 == 1:
+        if (gen not in nonnegative_symbols) and poly.degree(gen) % 2 == 1:
             # do not use % 2 != 0 because degree(gen) = -oo if the degree is zero
             return None
 

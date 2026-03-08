@@ -46,7 +46,7 @@ def polysubs(poly: Poly, subs: Dict[Symbol, Expr], symbols: List[Symbol]) -> Pol
     for monom, coeff in poly.rep.terms():
         m1 = marginalize1(monom)
         m2 = marginalize2(monom)
-        if not (m2 in coeffs):
+        if m2 not in coeffs:
             coeffs[m2] = {}
         coeffs[m2][m1] = coeff
     lev = len(inds) - 1
@@ -740,9 +740,9 @@ def optimize_poly(
      (CRootOf(a**3 - 6*a**2 + 5*a - 1, 2), CRootOf(b**3 - 5*b**2 + 6*b - 1, 2), 1)]
     """
     symbols = _infer_symbols(symbols, poly, ineq_constraints, eq_constraints)
-    if not (objective in ('min', 'max', 'all')):
+    if objective not in ('min', 'max', 'all'):
         raise ValueError('Objective must be either "min" or "max" or "all".')
-    if not (return_type in ('root', 'tuple', 'dict')):
+    if return_type not in ('root', 'tuple', 'dict'):
         raise ValueError('Return type must be either "root" or "tuple" or "dict".')
     if len(symbols) == 0:
         return [] if return_type != 'root' else RootList((), [])

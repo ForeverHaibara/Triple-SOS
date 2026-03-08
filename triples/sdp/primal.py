@@ -479,9 +479,9 @@ class SDPPrimal(TransformablePrimal):
 
 
         kwargs = kwargs.copy()
-        if (not ('verbose' in kwargs)) and float(verbose) > 1:
+        if ('verbose' not in kwargs) and float(verbose) > 1:
             kwargs['verbose'] = verbose
-        if end_time is not None and (not ('time_limit' in kwargs)):
+        if end_time is not None and ('time_limit' not in kwargs):
             kwargs['time_limit'] = end_time - perf_counter()
 
         sol = solve_numerical_primal_sdp(

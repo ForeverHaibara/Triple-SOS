@@ -120,7 +120,7 @@ def sos_struct_handle_uncentered(solver: Callable) -> Callable:
         i, j, k = dd3, dd3+(1 if dm3>=2 else 0), dd3+(1 if dm3 else 0)
         dt = dict(poly.terms())
         zero = poly.convert(0)
-        if not ((i,j,k) in dt):
+        if (i,j,k) not in dt:
             dt[(i,j,k)] = zero
             dt[(j,k,i)] = zero
             dt[(k,i,j)] = zero

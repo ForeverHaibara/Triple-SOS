@@ -53,7 +53,7 @@ def test_dependency():
                     if len(imp) == 0:
                         # relative import from current package
                         continue
-                    if not (imp in ALLOWED_LIBS):
+                    if imp not in ALLOWED_LIBS:
                         if imp == "pytest" and file.startswith("test_"):
                             continue
                         forbidden_libraries.add((file_path, line_num, imp))
