@@ -1,11 +1,15 @@
 from typing import Tuple, Optional, Union
 
-from sympy import Poly, Expr, Add
+from sympy import Poly, Expr, Add, QQ, sqrt
+from sympy.polys.polyclasses import ANP
+from sympy.polys.polyerrors import CoercionFailed
+from sympy.combinatorics.named_groups import CyclicGroup
 
 from .utils import (
-    Coeff, sos_struct_handle_uncentered, sos_struct_reorder_symmetry
+    Coeff, sos_struct_handle_uncentered, sos_struct_reorder_symmetry,
 )
 from ..univariate import prove_univariate
+from ....utils import verify_symmetry, poly_reduce_by_symmetry
 
 
 def _linear_invert(u, v, d: int = 0) -> Optional[Tuple[int, Expr, Expr]]:
@@ -180,6 +184,12 @@ def _sos_struct_lift_for_six(coeff: Coeff, real=True):
     # if any(_ < 0 for _ in div[0].coeffs()):
     #     # raise NotImplementedError
     #     return None
+    if d % 2 == 0:
+        factors = div[0].factor_list()[1]
+        if all(m % 2 == 0 for _, m in factors):
+            sol = _sos_struct_complex_factorizable(coeff)
+            if sol is not None:
+                return sol
 
     if all(_ >= 0 for _ in div[0].coeffs()):
         lifted_sym = _homogenize_sym_axis(coeff, div[0], d - 2)
@@ -340,6 +350,128 @@ def _sos_struct_liftfree_for_six_ord4(coeff: Coeff, div2=None, real=True):
     sol_diff = _sos_struct_dense_symmetric(coeff.from_poly(diff))
     if sol_diff is not None:
         return CyclicSum(lifted_sym * (a-b)**2*(a-c)**2) + CyclicProduct((a-b)**2) * sol_diff
+
+
+
+def _conjugate_factor(poly: Poly, conj):
+    const, factors = poly.factor_list()
+    if const < 0:
+        return None
+
+    even_factors = [(f, m//2) for f, m in factors if m % 2 == 0]
+    odd_factors = {f: m for f, m in factors if m % 2 == 1}
+    if len(odd_factors) % 2 == 1:
+        # odd factors must be pairwise conjugate
+        return None
+
+    def conj_poly(x):
+        rep = {m: conj(v) for m, v in x.rep.to_dict().items()}
+        return Poly.from_dict(rep, *x.gens, domain=x.domain)
+
+    for f, mul in odd_factors.items():
+        if mul == 0:
+            # already processed
+            continue
+        conj_f = conj_poly(f)
+        mul2 = odd_factors.get(conj_f, -1)
+        if mul2 != mul:
+            # not conjugate in pairs
+            return None
+        if f == conj_f:
+            # the factor is real but has odd degree
+            return None
+        even_factors.append((f, mul))
+        odd_factors[f] = 0
+        odd_factors[conj_f] = 0
+    return const, even_factors
+
+def _sos_struct_complex_factorizable(coeff: Coeff, test=True):
+    """
+    Solve a cyclic ternary polynomial inequality if it is
+    factorizable over Q[sqrt(-3)].
+
+    Examples
+    --------
+    => s(a2(a-b-c)4(a-b)(a-c))
+
+    => 2/3s(a12-3a11b-3a11c+3a10b2+3a10bc+3a10c2+2a6b6-6a5b5c2)
+
+    => s((a+b)4(a-c)2(b-c)2)-(8+4sqrt(6))s(ab)p(a-b)2
+    """
+    if not coeff.domain.is_Exact: # RR or CC
+        return None
+    d = coeff.total_degree()
+    if d % 2 != 0:
+        return None
+    
+    poly0 = coeff.as_poly().eval((1,))
+    if test:
+        # test whether the poly > 0 for real numbers
+        for point in ((0, -1), (-2, -3)):
+            if poly0(*point) < 0:
+                return None
+
+    dom0 = coeff.domain
+    dom = dom0.unify(QQ.algebraic_field(sqrt(-3)))
+
+    # dehomogenize to factor faster
+    poly = poly0.set_domain(dom)
+
+    # map from ANP to its conjugate
+    if dom0.is_QQ or dom0.is_ZZ:
+        def conj(x):
+            return ANP([-x.rep[0], x.rep[1]], x.mod, x.dom) if len(x.rep) == 2 else x
+    elif dom0.is_Algebraic:
+        z = ANP([1, 0], dom.mod.to_list(), QQ)
+        try:
+            conj_z = dom.convert(dom.to_sympy(z).conjugate())
+        except CoercionFailed:
+            return None
+        def conj(x):
+            s = dom.zero
+            for ci in x.rep:
+                s = conj_z * s + ci
+            return s
+    else:
+        return None
+
+    def conj_poly(x):
+        rep = {m: conj(v) for m, v in x.rep.to_dict().items()}
+        return Poly.from_dict(rep, *x.gens, domain=x.domain)
+
+    if test:
+        # test if the projection is factorizable, so that
+        # we do not waste time on non-factorizable cases
+        for point in (0, 7, -5):
+            if _conjugate_factor(poly.eval((point,)), conj) is None:
+                return None
+
+    factors = _conjugate_factor(poly, conj)
+    if factors is None:
+        return None
+    const, even_factors = factors
+
+    half = poly.one
+    for f, mul in even_factors:
+        half *= f**mul
+    conj_half = conj_poly(half)
+
+    a = coeff.gens[0]
+    CyclicSum = coeff.cyclic_sum
+    real = (half + conj_half).mul_ground(dom.one/2).homogenize(a)
+    imag = (half - conj_half).mul_ground(dom.convert(1/(2*sqrt(-3)))).homogenize(a)
+
+    is_cyclic = coeff.is_cyclic()
+    def sym_sq(p):
+        if verify_symmetry(p, CyclicGroup(3)):
+            return CyclicSum(poly_reduce_by_symmetry(p, CyclicGroup(3)).as_expr())**2
+        if is_cyclic:
+            return CyclicSum(p.as_expr()**2)/3
+        return p.as_expr()**2
+    realsq = sym_sq(real)
+    imagsq = sym_sq(imag)
+
+    return const*realsq + 3*const*imagsq
 
 #####################################################################
 #
