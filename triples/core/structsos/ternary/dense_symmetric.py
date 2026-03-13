@@ -1,15 +1,18 @@
 from typing import Tuple, Optional, Union
 
-from sympy import Poly, Expr, Add, QQ, sqrt
-from sympy.polys.polyclasses import ANP
+from sympy import Poly, Expr, Add, ZZ, QQ, FiniteField, sqrt, prod
+from sympy.polys.polyclasses import ANP, DMP
 from sympy.polys.polyerrors import CoercionFailed
 from sympy.combinatorics.named_groups import CyclicGroup
+from sympy.ntheory import factorint, nextprime, sqrt_mod
+from sympy.utilities import subsets
 
 from .utils import (
     Coeff, sos_struct_handle_uncentered, sos_struct_reorder_symmetry,
 )
 from ..univariate import prove_univariate
 from ....utils import verify_symmetry, poly_reduce_by_symmetry
+from ....utils.polytools import dmp_gf_factor, FLINT_VERSION
 
 
 def _linear_invert(u, v, d: int = 0) -> Optional[Tuple[int, Expr, Expr]]:
@@ -187,7 +190,10 @@ def _sos_struct_lift_for_six(coeff: Coeff, real=True):
     if d % 2 == 0:
         factors = div[0].factor_list()[1]
         if all(m % 2 == 0 for _, m in factors):
-            sol = _sos_struct_complex_factorizable(coeff)
+            # XXX: currently modp factorization is slow
+            # unless flint is installed
+            sol = _sos_struct_complex_factorizable(coeff,
+                    modp=(FLINT_VERSION >= (0, 7, 0)))
             if sol is not None:
                 return sol
 
@@ -352,7 +358,6 @@ def _sos_struct_liftfree_for_six_ord4(coeff: Coeff, div2=None, real=True):
         return CyclicSum(lifted_sym * (a-b)**2*(a-c)**2) + CyclicProduct((a-b)**2) * sol_diff
 
 
-
 def _conjugate_factor(poly: Poly, conj):
     const, factors = poly.factor_list()
     if const < 0:
@@ -385,7 +390,7 @@ def _conjugate_factor(poly: Poly, conj):
         odd_factors[conj_f] = 0
     return const, even_factors
 
-def _sos_struct_complex_factorizable(coeff: Coeff, test=True):
+def _sos_struct_complex_factorizable(coeff: Coeff, test=True, modp=True):
     """
     Solve a cyclic ternary polynomial inequality if it is
     factorizable over Q[sqrt(-3)].
@@ -403,13 +408,16 @@ def _sos_struct_complex_factorizable(coeff: Coeff, test=True):
     d = coeff.total_degree()
     if d % 2 != 0:
         return None
-    
+
     poly0 = coeff.as_poly().eval((1,))
     if test:
         # test whether the poly > 0 for real numbers
         for point in ((0, -1), (-2, -3)):
             if poly0(*point) < 0:
                 return None
+
+    if modp and (coeff.domain.is_QQ or coeff.domain.is_ZZ):
+        return _sos_struct_complex_factorizable_fp(coeff)
 
     dom0 = coeff.domain
     dom = dom0.unify(QQ.algebraic_field(sqrt(-3)))
@@ -457,21 +465,176 @@ def _sos_struct_complex_factorizable(coeff: Coeff, test=True):
     conj_half = conj_poly(half)
 
     a = coeff.gens[0]
-    CyclicSum = coeff.cyclic_sum
     real = (half + conj_half).mul_ground(dom.one/2).homogenize(a)
     imag = (half - conj_half).mul_ground(dom.convert(1/(2*sqrt(-3)))).homogenize(a)
 
+    return _complex_factorizable_from_AB(coeff, real, imag, const)
+
+def _complex_factorizable_from_AB(coeff: Coeff, A: Poly, B: Poly, const, k=3):
+    """
+    Returns `coeff.as_poly() == const*A**2 + 3*const*B**2` in
+    a graceful form.
+    """
     is_cyclic = coeff.is_cyclic()
+    CyclicSum = coeff.cyclic_sum
     def sym_sq(p):
         if verify_symmetry(p, CyclicGroup(3)):
             return CyclicSum(poly_reduce_by_symmetry(p, CyclicGroup(3)).as_expr())**2
         if is_cyclic:
             return CyclicSum(p.as_expr()**2)/3
         return p.as_expr()**2
-    realsq = sym_sq(real)
-    imagsq = sym_sq(imag)
+    sqa = sym_sq(A)
+    sqb = sym_sq(B)
 
-    return const*realsq + 3*const*imagsq
+    return const*sqa + k*const*sqb
+
+
+def _sos_struct_complex_factorizable_fp(coeff: Coeff):
+    """
+    Solve a homogeneous inequality F(a,b,c) = const*(A^2 + 3*B^2) >= 0
+    where const in QQ and (F, A, B) in QQ[a,b,c] by computing on
+    the Fp field. This is faster than computing on Q[sqrt(-3)].
+    """
+    poly = coeff.as_poly()
+    if not (poly.domain.is_QQ or poly.domain.is_ZZ):
+        return None
+    poly = poly.eval((1,))
+    const, factors = poly.factor_list()
+    if const < 0:
+        return None
+
+    const = poly.domain.to_sympy(const)
+
+    A, B = poly.one, poly.zero
+    for factor, m in factors:
+        if m > 0:
+            fpow = factor**(m//2)
+            A, B = A * fpow, B * fpow
+        if m % 2 == 0:
+            continue
+        f = factor.set_domain(ZZ)
+
+        # make the leading term a square
+        lcfactors = factorint(int(f.LC()))
+        mul = int(prod([f for f, m in lcfactors.items() if m % 2 == 1]))
+        if mul != 1:
+            f = f.mul_ground(mul)
+            const = const / mul
+
+        result = _sqf_complex_factorizable_fp(f)
+        if result is None:
+            return None
+        A1, B1 = result
+        A, B = A*A1 + 3*B*B1, A*B1 + B*A1
+    a = coeff.gens[0]
+    A, B = A.homogenize(a), B.homogenize(a)
+    # return const*A.as_expr()**2 + 3*const*B.as_expr()**2
+    return _complex_factorizable_from_AB(coeff, A, B, const)
+
+def _sqf_complex_factorizable_fp(poly: Poly, p: Optional[int]=None):
+    """
+    Express `poly = A**2 + 3*B**2` assuming poly is on ZZ and square-free.
+
+    Note
+    -----
+    * The poly should have domain ZZ.
+    * The leading coefficient should be a square.
+
+    Examples
+    --------
+    >>> from sympy.abc import a, b, c
+
+    Examples
+    --------
+    >>> from sympy.abc import a, b
+    >>> c = 1
+    >>> p1 = (a**2+b**2+c**2)**2 - 3*(a**3*b + b**3*c + c**3*a)
+    >>> p1 = p1.as_poly(a, b)
+    >>> A, B = _sqf_complex_factorizable_fp(p1)
+    >>> (A**2 + 3*B**2 - p1).is_zero
+    True
+    """
+    if poly.is_zero:
+        return poly, poly
+    if not poly.domain.is_ZZ:
+        return None
+    if not ZZ.is_square(poly.rep.LC()):
+        return None
+    d = poly.total_degree()
+    if d % 2 != 0:
+        return None
+
+    u = len(poly.gens) - 1
+
+    if p is None:
+        # mignotte bound is too large (even for ZZ)
+        # from sympy.polys.factortools import dmp_zz_mignotte_bound
+        # bound = dmp_zz_mignotte_bound(f, u, ZZ)
+
+        # we just use a heuristic bound
+        bound = poly.max_norm() * 5 + 10
+
+        p = 2*bound
+        while p % 6 != 1:
+            p = nextprime(p)
+    w = sqrt_mod(-3, p)
+    if w is None:
+        return None
+    K = FiniteField(p)
+    invw = 1/K(w)
+
+    poly_K = poly.set_domain(K)
+    const, factors = dmp_gf_factor(poly_K.rep.to_list(), u, K)
+    if len(factors) % 2 == 1:
+        return None
+    sqrt_const = sqrt_mod(int(const), p)
+    if sqrt_const is None:
+        return None
+
+    factors = [(Poly.new(DMP(factor, K, u), *poly.gens), m) for factor, m in factors]
+    degrees = [f.total_degree()*m for f, m in factors]
+
+    def reconstruct(s):
+        p1 = poly_K.one
+        for i in s:
+            f, m = factors[i]
+            p1 *= f**m
+        return p1
+    def to_zz(p1):
+        half_p = p//2
+        p1 = p1.set_domain(ZZ)
+        dt = {k: v if v <= half_p else v - p
+              for k, v in p1.rep.to_dict().items()}
+        return Poly.from_dict(dt, *poly.gens, domain=ZZ)
+
+    point = [2]
+    while len(point) <= u: # len(point) < len(poly.gens)
+        point.append(nextprime(point[-1]))
+    points = [point]
+
+    inds = list(range(len(factors)))
+    for s in subsets(inds, len(factors)//2):
+        ns = tuple([i for i in range(len(factors)) if i not in s])
+        if s > ns:
+            continue
+        ds = sum(degrees[i] for i in s)
+        if ds * 2 != d:
+            continue
+
+        A = reconstruct(s).mul_ground(sqrt_const)
+        B = reconstruct(ns).mul_ground(sqrt_const)
+        A, B = to_zz((A + B)), to_zz((A - B).mul_ground(invw))
+
+        if any(A(*point)**2 + B(*point)**2*3 != 4*poly(*point)
+               for point in points):
+            # quick check before expensive check
+            continue
+
+        if (A**2 + B**2*3 - 4*poly).is_zero:
+            half = QQ.one/2
+            return A.set_domain(QQ).mul_ground(half),\
+                B.set_domain(QQ).mul_ground(half)
+    return None
 
 #####################################################################
 #
