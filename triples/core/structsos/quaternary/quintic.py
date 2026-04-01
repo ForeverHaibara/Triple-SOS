@@ -4,7 +4,7 @@ from sympy import Add
 
 from .utils import congruence, sum_y_exprs
 
-def quaternary_quintic_symmetric(coeff):
+def quaternary_quintic_symmetric(coeff, real=True):
     """
     Solve quaternary symmetric quintic polynomials. Symmetry is not checked here.
 

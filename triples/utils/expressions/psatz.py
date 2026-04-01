@@ -342,6 +342,12 @@ class PSatzElement(DomainElement, CantSympify, Generic[Ef]):
     def is_in_ideal(self) -> bool:
         return all(v.is_zero for v in self.numer_preorder.values())
 
+    @property
+    def is_denom_free(self) -> bool:
+        return len(self.denom_ideal) == 0\
+         and all((len(k) == 0 and v == v.one) \
+                 or v.is_zero for k, v in self.denom_preorder.items())
+
     def as_expr(self, preorder_alias: Optional[List[Expr]]=None, ideal_alias: Optional[List[Expr]]=None,
             evaluate: bool=True) -> Expr:
         numer = self.psatz_domain._to_expr(self.numer_preorder, self.numer_ideal,
@@ -989,6 +995,14 @@ class PSatz(Generic[Ef]):
     def denom_ideal(self) -> Dict[int, Expr]:
         alg = self.algebra
         return {k: alg.to_sympy(v) for k, v in self.rep.denom_ideal.items()}
+
+    @property
+    def is_in_ideal(self) -> bool:
+        return self.rep.is_in_ideal
+
+    @property
+    def is_denom_free(self) -> bool:
+        return self.rep.is_denom_free
 
     @classmethod
     def from_sympy(cls, arg,
