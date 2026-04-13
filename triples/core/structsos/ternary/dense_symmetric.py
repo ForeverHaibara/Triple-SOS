@@ -643,7 +643,7 @@ def _sqf_complex_factorizable_fp(poly: Poly, p: Optional[int]=None):
 #####################################################################
 
 @sos_struct_reorder_symmetry(groups=(2, 1))
-def sos_struct_ternary_partial_symmetric(coeff: Coeff, real=True):
+def sos_struct_ternary_dense_partial_symmetric(coeff: Coeff, real=True):
     """
     Solve a homogeneous 3-var inequality `f(a,b,c) >= 0` where
     `f(a, b, c) == f(b, a, c)`.
@@ -651,6 +651,8 @@ def sos_struct_ternary_partial_symmetric(coeff: Coeff, real=True):
     Examples
     --------
     => ((2a+2b+c)c-2ab)2(a+b)+3ab(4((a-b)2+c2)s(a)+8c(ab-c2)-9c2(a+b))
+
+    => (a2+b2+2c2)3-4(2abc+(a+b)c2)2
     """
     if all(v >= 0 for v in coeff.coeffs()):
         return coeff.as_poly().as_expr()
@@ -684,12 +686,12 @@ def sos_struct_ternary_partial_symmetric(coeff: Coeff, real=True):
         subtractor = a**m*b**m*c**n*(u2/2*c*(a + b) + v2*a*b)*(2*c - a - b)**2/4
 
     remain = poly - subtractor.as_poly(a, b, c, domain=coeff.domain)
-    sol = _sos_struct_ternary_partial_symmetric_ord4(coeff.from_poly(remain))
+    sol = _sos_struct_ternary_dense_partial_symmetric_ord4(coeff.from_poly(remain))
     if sol is not None:
         return subtractor + sol
 
 
-def _sos_struct_ternary_partial_symmetric_ord4(coeff: Coeff):
+def _sos_struct_ternary_dense_partial_symmetric_ord4(coeff: Coeff):
     """
     Solve a homogeneous 3-var inequality `f(a,b,c) >= 0` where
     `f(a, b, c) == f(b, a, c)` and `(c - 1)**4 | f(1, 1, c)`.
@@ -714,6 +716,7 @@ def _sos_struct_ternary_partial_symmetric_ord4(coeff: Coeff):
         # not expected to happen
         return None
 
-    sol = sos_struct_ternary_partial_symmetric(coeff.from_poly(div3))
+    from .solver import _structural_sos_3vars_acyclic
+    sol = _structural_sos_3vars_acyclic(coeff.from_poly(div3))
     if sol is not None:
         return sym * (a-c)**2*(b-c)**2 + sol * (a-b)**2
