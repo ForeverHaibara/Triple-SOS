@@ -9,6 +9,14 @@ def character_table(G: PermutationGroup, cc: Optional[List[Set[Permutation]]]=No
     """
     Computes the character table of a permutation group,
     the order of rows and columns are not fixed.
+
+    Parameters
+    ----------
+    G: PermutationGroup
+        The permutation group.
+    cc: Optional[List[Set[Permutation]]], optional
+        The conjugacy classes of G.
+        If provided, columns are sorted to match the conjugacy classes.
     """
     if G.is_symmetric:
         return murnaghan_nakayama_character_table(G.degree, cc=cc)

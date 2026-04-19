@@ -59,7 +59,8 @@ def _compute_cmmatrices(cc: Sequence[CC], dom: Domain) -> Generator[DomainMatrix
                         h = rmul(out, g)
                         if h in cc[i]:
                             m[i][t] += 1
-        yield DomainMatrix.from_list(m, dom)
+        m = [[dom(_) for _ in row] for row in m]
+        yield DomainMatrix(m, (n, n), dom)
 
 def _group_exponent_from_cc(cc: Sequence[CC]) -> MPZ:
     orders = [int(next(iter(c)).order()) for c in cc]
@@ -242,7 +243,8 @@ def _lift_to_minimal_field(normalized_rows, pm, k, e, Fp):
         _sort_characters(int_rows, ZZ)
         return DomainMatrix(int_rows, (n, n), ZZ)
 
-    dom = QQ.cyclotomic_field(k, ss=True)
+    # dom = QQ.cyclotomic_field(k, ss=True)
+    dom = cyclotomic_field(k)
 
     x = Fp(primitive_root(p))**((p - 1) // k)
 

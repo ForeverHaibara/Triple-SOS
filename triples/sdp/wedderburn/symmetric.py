@@ -1,8 +1,31 @@
-from typing import List, Set, Optional
+from typing import Tuple, List, Dict, Set, Callable, Optional, Any
+from collections import defaultdict
+from itertools import permutations, product
 
 from sympy import MutableDenseMatrix as Matrix
-from sympy.combinatorics import Permutation
+from sympy.combinatorics.permutations import Permutation, _af_parity
 from sympy.utilities.iterables import ordered_partitions
+
+def sign_of(perm: Tuple[int, ...]) -> int:
+    """
+    Compute the sign of a permutation of 0, 1, ..., n-1.
+
+    Parameters
+    ----------
+    perm: Tuple[int, ...]
+        The permutation to compute the sign of.
+
+    Returns
+    -------
+    int
+        The sign of the permutation.
+
+    Examples
+    --------
+    >>> sign_of((1,2,0,5,4,3))
+    -1
+    """
+    return -1 if _af_parity(perm) % 2 else 1
 
 
 def murnaghan_nakayama_character_table(n: int, cc: Optional[List[Set[Permutation]]]=None) -> Matrix:
@@ -12,8 +35,11 @@ def murnaghan_nakayama_character_table(n: int, cc: Optional[List[Set[Permutation
 
     Parameters
     ----------
-    n : int
+    n: int
         The size of the symmetric group.
+    cc: Optional[List[Set[Permutation]]], optional
+        The conjugacy classes of Sn symmetric group.
+        If provided, columns are sorted to match the conjugacy classes.
 
     Returns
     -------
@@ -153,3 +179,114 @@ def murnaghan_nakayama_character_table(n: int, cc: Optional[List[Set[Permutation
         table = [[row[j] for j in col_order] for row in table]
 
     return Matrix(table)
+
+
+def young_symmetrizers(
+    n: int,
+    action: Optional[Callable[[Tuple[int, ...]], Any]]=None
+) -> Dict[Tuple[int, ...], Dict[Any, int]]:
+    """
+    Compute a dict of young symmetrizers of degree n. The returned dict
+    has partitions as keys and group elements as values.
+    The time and space complexity is at least O(n!).
+
+    Parameters
+    ----------
+    n: int
+        The size of the symmetric group.
+
+    action: Optional[Callable[[Tuple[int, ...]], Any], optional]
+        A homomorphism from Permutations to some hashable values.
+
+    Returns
+    -------
+    Dict[Tuple[int, ...], Dict[Any, int]]
+        A dict of young symmetrizers of degree n.
+
+    Examples
+    --------
+    >>> young_symmetrizers(3) # doctest: +SKIP
+    {(3,): {(0, 1, 2): 1,
+      (0, 2, 1): 1,
+      (1, 0, 2): 1,
+      (1, 2, 0): 1,
+      (2, 0, 1): 1,
+      (2, 1, 0): 1},
+     (2, 1): {(0, 1, 2): 1, (2, 1, 0): -1, (1, 0, 2): 1, (2, 0, 1): -1},
+     (1, 1, 1): {(0, 1, 2): 1,
+      (0, 2, 1): -1,
+      (1, 0, 2): -1,
+      (1, 2, 0): 1,
+      (2, 0, 1): 1,
+      (2, 1, 0): -1}}
+    >>> from sympy.combinatorics import Permutation
+    >>> young_symmetrizers(3, action=Permutation) # doctest: +SKIP
+    {(3,): {Permutation(2): 1,
+      Permutation(1, 2): 1,
+      Permutation(2)(0, 1): 1,
+      Permutation(0, 1, 2): 1,
+      Permutation(0, 2, 1): 1,
+      Permutation(0, 2): 1},
+     (2, 1): {Permutation(2): 1,
+      Permutation(0, 2): -1,
+      Permutation(2)(0, 1): 1,
+      Permutation(0, 2, 1): -1},
+     (1, 1, 1): {Permutation(2): 1,
+      Permutation(1, 2): -1,
+      Permutation(2)(0, 1): -1,
+      Permutation(0, 1, 2): 1,
+      Permutation(0, 2, 1): 1,
+      Permutation(0, 2): -1}}
+    """
+    if action is None:
+        action = lambda x: x
+    if n < 0:
+        raise ValueError("n must be nonnegative")
+    if n == 0:
+        return {(): {action(()): 1}}
+
+    shapes = [tuple(p[::-1]) for p in reversed(list(ordered_partitions(n)))]
+
+    perm_by_len = {0: [()]}
+    sign_by_len = {0: {(): 1}}
+    for k in range(1, n + 1):
+        perms_k = [tuple(p) for p in permutations(range(k))]
+        perm_by_len[k] = perms_k
+        sign_by_len[k] = {p: sign_of(p) for p in perms_k}
+
+    def build_perm(blocks, choice, signed=False):
+        arr = list(range(n))
+        sgn = 1
+        for block, rel in zip(blocks, choice):
+            if signed:
+                sgn *= sign_by_len[len(block)][rel]
+            for pos, idx in zip(block, rel):
+                arr[pos] = block[idx]
+        return tuple(arr), sgn
+
+    out = {}
+    for shape in shapes:
+        rows = []
+        start = 0
+        for ln in shape:
+            rows.append(tuple(range(start, start + ln)))
+            start += ln
+
+        col_blocks = [
+            tuple(row[j] for row in rows if j < len(row))
+            for j in range(shape[0])
+        ]
+
+        col_terms = []
+        for choice in product(*(perm_by_len[len(block)] for block in col_blocks)):
+            col_terms.append(build_perm(col_blocks, choice, signed=True))
+
+        coeffs = defaultdict(int)
+        for choice in product(*(perm_by_len[len(block)] for block in rows)):
+            r, _ = build_perm(rows, choice, signed=False)
+            for c, sgn in col_terms:
+                coeffs[action(tuple(r[i] for i in c))] += sgn
+
+        out[shape] = {k: v for k, v in coeffs.items() if v}
+
+    return out

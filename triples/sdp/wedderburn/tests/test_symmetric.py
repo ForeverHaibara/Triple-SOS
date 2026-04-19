@@ -1,6 +1,8 @@
+from collections import defaultdict
+
 from sympy import factorial
-from sympy.combinatorics import SymmetricGroup
-from ..symmetric import murnaghan_nakayama_character_table
+from sympy.combinatorics import SymmetricGroup, Permutation
+from ..symmetric import murnaghan_nakayama_character_table, young_symmetrizers
 from ..dixon import dixon_character_table
 
 def test_murnaghan_nakayama_character_table():
@@ -20,3 +22,31 @@ def test_murnaghan_nakayama_character_table():
         X = murnaghan_nakayama_character_table(n, cc=cc).tolist()
         Y = dixon_character_table(cc).tolist()
         assert sorted(X) == sorted(Y)
+
+
+def test_young_symmetrizers():
+    def _mul(a, b):
+        d = defaultdict(int)
+        for p, v1 in a.items():
+            for q, v2 in b.items():
+                d[p * q] += v1 * v2
+        return {p: v for p, v in d.items() if v}
+
+    for n in range(1, 6):
+        dims = {}
+        young = list(young_symmetrizers(n, action=Permutation).items())
+        for i in range(len(young)):
+            # idempotent
+            y = young[i][1]
+            y2 = _mul(y, y)
+            c = y2[Permutation(size=n)]
+            dims[young[i][0]] = c
+            assert c != 0 and len(y2) == len(y) and all(y2[k] == c * y[k] for k in y)
+
+            # orthogonality between different shapes
+            for j in range(i+1, len(young)):
+                assert not _mul(y, young[j][1])
+
+        dims = {k:factorial(n)//v for k, v in dims.items()}
+        expected = murnaghan_nakayama_character_table(n)[:, 0]
+        assert sorted(dims.values()) == sorted(expected)
