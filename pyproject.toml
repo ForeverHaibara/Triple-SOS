@@ -91,6 +91,7 @@ lint.ignore = [
     "F811",  # Redefinition of unused XXX
     "FURB110",  # Replace ternary `if` expression with `or` operator
     "FURB187",  # Use of assignment of `reversed` on list `{name}`
+    "FURB188",  # Prefer `str.removeprefix()` over conditionally replacing with slice
 ]
 
 exclude = ["triples/benchmarks/run_benchmark.py"]

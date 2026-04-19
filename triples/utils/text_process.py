@@ -728,7 +728,8 @@ def poly_get_standard_form(
     for monom, coeff in extracted:
         strings.append(get_string(monom, coeff))
     s = ''.join(strings)
-    s = s.removeprefix('+')
+    if s.startswith('+'):
+        s = s[1:]
     if _is_cyc and not symmetry.is_trivial:
         s = '%s(%s)'%(cyclic_sum_func, s)
     else:
@@ -876,7 +877,8 @@ def poly_get_factor_form(
 
     strings = sorted(strings, key = lambda x: (len(x), x))
     s = _get_coeff_str(coeff, MUL) + MUL.join(strings)
-    s = s.removeprefix('+')
+    if s.startswith('+'):
+        s = s[1:]
     return s
 
 

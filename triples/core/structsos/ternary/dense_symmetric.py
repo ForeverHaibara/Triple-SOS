@@ -5,6 +5,7 @@ from sympy.polys.polyclasses import ANP, DMP
 from sympy.polys.polyerrors import CoercionFailed
 from sympy.combinatorics.named_groups import CyclicGroup
 from sympy.ntheory import factorint, nextprime, sqrt_mod
+from sympy.external.gmpy import sqrt as isqrt
 from sympy.utilities import subsets
 
 from .utils import (
@@ -531,6 +532,9 @@ def _sos_struct_complex_factorizable_fp(coeff: Coeff):
     # return const*A.as_expr()**2 + 3*const*B.as_expr()**2
     return _complex_factorizable_from_AB(coeff, A, B, const)
 
+def is_square(x):
+    return isqrt(x)**2 == x
+
 def _sqf_complex_factorizable_fp(poly: Poly, p: Optional[int]=None):
     """
     Express `poly = A**2 + 3*B**2` assuming poly is on ZZ and square-free.
@@ -558,7 +562,7 @@ def _sqf_complex_factorizable_fp(poly: Poly, p: Optional[int]=None):
         return poly, poly
     if not poly.domain.is_ZZ:
         return None
-    if not ZZ.is_square(poly.rep.LC()):
+    if not is_square(poly.rep.LC()):
         return None
     d = poly.total_degree()
     if d % 2 != 0:

@@ -12,7 +12,7 @@ from sympy.polys.densebasic import (
 from sympy.polys.densetools import dmp_ground_monic
 from sympy.polys.densearith import dup_mul, dmp_div
 from sympy.polys.factortools import dup_gf_factor, dmp_trial_division
-from sympy.polys.sqfreetools import _dmp_check_degrees
+# from sympy.polys.sqfreetools import _dmp_check_degrees
 from sympy.utilities import subsets
 
 _IS_GROUND_TYPES_FLINT = False
@@ -343,6 +343,6 @@ def dmp_gf_factor(f, u, K):
 
     result = dmp_trial_division(F, factors, u, K)
 
-    _dmp_check_degrees(F, u, result)
+    # _dmp_check_degrees(F, u, result)
 
     return lc, result
