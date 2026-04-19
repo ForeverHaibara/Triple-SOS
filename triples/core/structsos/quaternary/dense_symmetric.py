@@ -206,12 +206,14 @@ def _quaternary_dense_symmetric_vanish2_liftfree(coeff: Coeff, sym=None):
     that
     `(d-a)*(d-c)*(b-a)*(b-c) + (c-a)*(c-d)*(b-a)*(b-d) = (a-b)**2*(c-d)**2`
 
-    
+
     Examples
     --------
     :: sym = "sym"
 
     => s(1/4a4b4-a4b3c+1/2a4b2c2+a3b3cd-a3b2c2d+1/4a2b2c2d2)
+
+    => s(a2b3(a-b)2(c-d)2)
 
     => s(a6b4c2+a6b4cd-a6b3c3-a6b2c2d2+a5b5c2+a5b5cd-4a5b4c2d-2a5b3c3d+2a5b3c2d2-a4b4c4+2a4b4c3d+a4b4c2d2-a4b3c3d2+a3b3c3d3)
     """
