@@ -532,8 +532,6 @@ def _sos_struct_complex_factorizable_fp(coeff: Coeff):
     # return const*A.as_expr()**2 + 3*const*B.as_expr()**2
     return _complex_factorizable_from_AB(coeff, A, B, const)
 
-def is_square(x):
-    return isqrt(x)**2 == x
 
 def _sqf_complex_factorizable_fp(poly: Poly, p: Optional[int]=None):
     """
@@ -562,6 +560,8 @@ def _sqf_complex_factorizable_fp(poly: Poly, p: Optional[int]=None):
         return poly, poly
     if not poly.domain.is_ZZ:
         return None
+    def is_square(x):
+        return isqrt(x)**2 == x
     if not is_square(poly.rep.LC()):
         return None
     d = poly.total_degree()
@@ -657,6 +657,8 @@ def sos_struct_ternary_dense_partial_symmetric(coeff: Coeff, real=True):
     => ((2a+2b+c)c-2ab)2(a+b)+3ab(4((a-b)2+c2)s(a)+8c(ab-c2)-9c2(a+b))
 
     => (a2+b2+2c2)3-4(2abc+(a+b)c2)2
+
+    => s(a4(a-b)(a-c))+2a4(a-c)2+2b4(b-c)2
     """
     if all(v >= 0 for v in coeff.coeffs()):
         return coeff.as_poly().as_expr()
@@ -671,31 +673,91 @@ def sos_struct_ternary_dense_partial_symmetric(coeff: Coeff, real=True):
         return None
     div, rem = div.div(Poly([1,-2,1], c, domain=div.domain))
 
-    # subtract something so that the remaining f(a,b,c) has (c-1)**4 | f(1, 1, c)
+    subtractors = []
+    factories = [
+        _get_ternary_dense_partial_symmetric_default_subtractor,
+        _get_ternary_dense_partial_symmetric_cubic_subtractor,
+    ]
+    for factory in factories:
+        subtractors.extend(factory(coeff, rem))
+    # print(subtractors)
+    for subtractor in subtractors:
+        remain = poly - subtractor.as_poly(a, b, c, domain=coeff.domain)
+        sol = _ternary_dense_partial_symmetric_ord4(coeff.from_poly(remain))
+        if sol is not None:
+            return subtractor + sol
+
+def _get_ternary_dense_partial_symmetric_default_subtractor(coeff: Coeff, rem: Poly) -> list:
     d = coeff.total_degree()
+    a, b, c = coeff.gens
+
+    # subtract something so that the remaining f(a,b,c) has (c-1)**4 | f(1, 1, c)
     inv = _linear_invert(rem.coeff_monomial((1,)), rem.coeff_monomial((0,)),
                          (d+1)//3 - 1)
     if inv is None:
-        return None
+        return []
     n, u2, v2 = inv
 
     subtractor = Add()
     m = (d - n - 3) // 2
     if m < 0:
-        return None
+        return []
     elif (d - n - 3) % 2 == 0:
         subtractor = a**m*b**m*c**n*(u2*c + v2/2*(a + b))*(2*c - a - b)**2/4
     else:
         m = (d - n - 3) // 2
         subtractor = a**m*b**m*c**n*(u2/2*c*(a + b) + v2*a*b)*(2*c - a - b)**2/4
+    return [subtractor]
 
-    remain = poly - subtractor.as_poly(a, b, c, domain=coeff.domain)
-    sol = _sos_struct_ternary_dense_partial_symmetric_ord4(coeff.from_poly(remain))
-    if sol is not None:
-        return subtractor + sol
+def _get_ternary_dense_partial_symmetric_cubic_subtractor(coeff: Coeff, rem: Poly) -> list:
+    d = coeff.total_degree()
+    if d <= 5:
+        return []
+    zero, one = rem.domain.zero, rem.domain.one
+
+    m = (d - 6 + 1)//3
+    n = d - 6 - 2*m
+    rem_lift = rem * Poly([-n, n + 1], rem.gens[0], domain=rem.domain)
+    rem_lift = rem_lift.div(Poly([1, -2, 1], rem.gens[0], domain=rem.domain))[1]
+    rem_rep = rem_lift.rep.to_list()
+    r2 = rem_rep[-1] if len(rem_rep) else zero
+    r1 = rem_rep[-2] if len(rem_rep) >= 2 else zero
+
+    if coeff.wrap(r1 + r2) <= 0:
+        return []
+
+    def ab_subtractor(u, v, w = zero, t = one):
+        """f(1,0,t) = (df/db)(1,0,t) = 0, f(1,1,c) = (uc**2 + v*c + w)*(c - 1)"""
+        return [
+            -2*t**3*u + 3*t**2*u/2 - 3*t**2*v/2 + t*v - t*w + w/2,
+            2*t**3*u - 3*t**2*u/2 + 3*t**2*v/2 - t*v + t*w - w,
+            (2*t**3*u - 2*t**2*u + 2*t**2*v - 2*t*v + 2*t*w - w)/(2*t),
+            (-2*t**3*u + 2*t**2*u - 2*t**2*v + t*v - t*w + w)/t,
+            -u/2 + v/2,
+            u
+        ]
+
+    def to_expr(lst):
+        a, b, c = coeff.gens
+        c300, c210, c201, c111, c102, c003 = lst
+        return (r1 + r2)*a**m*b**m*c**n*Add(
+            c**3*c003, a**3*c300, b**3*c300,
+            a*c**2*c102, a*b**2*c210, b*c**2*c102,
+            a**2*b*c210, a**2*c*c201, b**2*c*c201, a*b*c*c111
+        ).together()**2
+
+    u, v = r1/2/(r1 + r2), (r1 + 2*r2)/2/(r1 + r2)
+
+    # c*(-v*c + u + 2*v) == u*c + v (mod (c - 1)**2)
+    subtractors = [
+        ab_subtractor(-v, u + 2*v, zero),
+        ab_subtractor(zero, u, v)
+    ]
+    subtractors = [to_expr(lst) for lst in subtractors]
+    return subtractors
 
 
-def _sos_struct_ternary_dense_partial_symmetric_ord4(coeff: Coeff):
+def _ternary_dense_partial_symmetric_ord4(coeff: Coeff):
     """
     Solve a homogeneous 3-var inequality `f(a,b,c) >= 0` where
     `f(a, b, c) == f(b, a, c)` and `(c - 1)**4 | f(1, 1, c)`.
