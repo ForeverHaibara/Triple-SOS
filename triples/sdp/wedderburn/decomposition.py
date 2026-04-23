@@ -10,6 +10,7 @@ except ImportError:
     from math import gcd
 
 from .character_table import character_table
+from .symmetric import symmetry_adapted_basis_sn
 from ..arithmetic import solve_columnspace
 
 def _ramanujan_sum(K: int):
@@ -31,13 +32,40 @@ def symmetry_adapted_basis(
     """
     Compute the symmetry-adapted basis of the representation of G.
 
+    The returned basis is a list of matrices so that
+    `Q^TAQ = diag([Qi.T * A * Qi for Qi in Qs])`
+    holds if A is symmetric and commutative with the representation matrices.
+    The size of each block matches the total dimension (including multiplicity)
+    of an irreducible representation.
+
+    Each Q is not ensured to be an orthogonal matrix.
+
+    Parameters
+    ----------
+    G: PermutationGroup
+        The permutation group.
+    representation: Optional[Callable[[Permutation], List[int]]], optional]
+        A permutation representation of G. If not provided,
+        it uses the default representation.
+
     Returns
     -------
     List[Matrix]
         A list of matrices `Qs`, so that
         `Q^TAQ = diag([Qi.T * A * Qi for Qi in Qs])`
-        where A is commutative with the representation matrices.
+        if A is symmetric and commutative with the representation matrices.
     """
+    if G.is_symmetric:
+        return symmetry_adapted_basis_sn(G.degree, representation)
+    # TODO: test whether it is isomorphic to Sn
+    return _symmetry_adapted_basis(G, representation)
+
+def _symmetry_adapted_basis(
+    G: PermutationGroup,
+    representation: Optional[Callable[[Permutation], List[int]]]=None
+) -> List[Matrix]:
+    """Internal function to compute the symmetry-adapted_basis
+    for a general permutation group G."""
     if representation is None:
         representation = lambda g: g.array_form
     n = len(representation(G.identity))

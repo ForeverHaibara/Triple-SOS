@@ -2,9 +2,13 @@ from typing import Tuple, List, Dict, Set, Callable, Optional, Any
 from collections import defaultdict
 from itertools import permutations, product
 
+from sympy import QQ
 from sympy import MutableDenseMatrix as Matrix
 from sympy.combinatorics.permutations import Permutation, _af_parity
+from sympy.polys.domainmatrix import DomainMatrix
 from sympy.utilities.iterables import ordered_partitions
+
+from .dixon import common_esd
 
 def sign_of(perm: Tuple[int, ...]) -> int:
     """
@@ -159,13 +163,13 @@ def murnaghan_nakayama_character_table(n: int, cc: Optional[List[Set[Permutation
 
         cc_parts = []
         for cls in cc:
-            if not cls:
-                raise ValueError("each conjugacy class set must be nonempty")
+            # if not cls:
+            #     raise ValueError("each conjugacy class set must be nonempty")
             perm = next(iter(cls))
             lengths = [len(c) for c in perm.full_cyclic_form]
             part = tuple(sorted(lengths, reverse=True))
-            if sum(part) != n:
-                raise ValueError("permutations in cc must lie in S_n")
+            # if sum(part) != n:
+            #     raise ValueError("permutations in cc must lie in S_n")
             cc_parts.append(part)
 
         if len(cc_parts) != len(parts):
@@ -289,4 +293,128 @@ def young_symmetrizers(
 
         out[shape] = {k: v for k, v in coeffs.items() if v}
 
+    return out
+
+
+def young_shape_from_contents(contents: Tuple[int, ...]) -> Tuple[int, ...]:
+    """
+    Convert the contents of a young tableaux to its shape. The content
+    of an entry at row-i, col-j is (j - i).
+
+    Parameters
+    ----------
+    contents: Tuple[int, ...]
+        The contents of the young tableaux.
+
+    Returns
+    -------
+    Tuple[int, ...]
+        The shape of the young tableaux.
+
+    Examples
+    --------
+    >>> young_shape_from_contents((0, 1, 2, -1, 0))
+    (3, 2)
+    """
+    shape = []
+    for c in contents:
+        for r, ln in enumerate(shape):
+            if ln - r == c:
+                shape[r] += 1
+                break
+        else:
+            if -len(shape) == c:
+                shape.append(1)
+            else:
+                raise ValueError(f"Invalid content sequence {contents}")
+    return tuple(shape)
+
+
+def symmetry_adapted_basis_sn(
+    n: int,
+    representation: Optional[Callable[[Permutation], List[int]]]=None,
+    reduced: bool = False
+) -> List[Matrix]:
+    """
+    Compute the symmetry-adapted basis of the representation of Sn
+    using the Jucys-Murphy elements.
+
+    The returned basis is a list of matrices so that
+    `Q^TAQ = diag([Qi.T * A * Qi for Qi in Qs])`
+    holds if A is symmetric and commutative with the representation matrices.
+    The size of each block matches the multiplicity of each irreducible
+    representation. The returned matrices are rational.
+
+    Each Q is not ensured to be an orthogonal matrix.
+
+    Parameters
+    ----------
+    n: int
+        The size of the symmetric group.
+    representation: Optional[Callable[[Permutation], List[int]]], optional]
+        A permutation representation of Sn. If not provided,
+        it uses the default representation.
+    reduced: bool, optional
+        If True, returns a reduced list of basis where only one matrix
+        is needed to represent each irreducible representation. Defaults to False.
+
+    Returns
+    -------
+    List[Matrix]
+        A list of matrices `Qs`, so that
+        `Q^TAQ = diag([Qi.T * A * Qi for Qi in Qs])`
+        where A is symmetric and commutative with the representation matrices.
+    """
+    if representation is None:
+        representation = lambda g: g.array_form
+
+    identity = Permutation(size=n)
+    m = len(representation(identity))
+    if m == 0:
+        return []
+    if n <= 1:
+        return [Matrix.eye(m)]
+
+    def rho(key: Tuple[int, ...]) -> DomainMatrix:
+        arr = representation(Permutation(key, size=n))
+        sdm = {arr[j]: {j: QQ.one} for j in range(m)}
+        return DomainMatrix(sdm, (m, m), QQ)
+
+    # jucys-murphy elements
+    jm = []
+    for k in range(1, n):
+        X = DomainMatrix.zeros((m, m), QQ)
+        for j in range(k):
+            X += rho(tuple(Permutation(j, k, size=n).array_form))
+        jm.append(X)
+
+    Z = common_esd(jm, check_dim=False)
+    rows = Z.to_list()
+
+    groups = {}
+    for row in rows:
+        # compute the eigenvalue associated with the row vector
+        # eigenvals of Jucys-Murphy elements are integers
+        nz = next(i for i, a in enumerate(row) if a)
+        row_dm = DomainMatrix([row], (1, m), QQ)
+        sig = tuple(
+            (row_dm * X[:, nz]).to_list()[0][0] / row[nz]
+            for X in jm
+        )
+        groups.setdefault(sig, []).append(row)
+
+    out = []
+    shapes = {}
+    for sig, block_rows in groups.items():
+        shape = young_shape_from_contents((0,) + tuple(int(c) for c in sig))
+        shapes.setdefault(shape, []).append(block_rows)
+
+    shapes = sorted(shapes.items(), key=lambda x: x[0], reverse=True)
+    for shape, block_rows in shapes:
+        for block in block_rows:
+            mat = DomainMatrix(block, (len(block), m), QQ)
+            # mat = _ortho(mat)
+            out.append(mat.to_Matrix().T)
+            if reduced:
+                break
     return out
