@@ -12,7 +12,6 @@ from .picos_sdp import DualBackendPICOS
 from .qics_sdp import DualBackendQICS
 from .sdpap_sdp import DualBackendSDPAP
 
-
 if TYPE_CHECKING:
     from sympy import MutableDenseMatrix as Matrix
     from .settings import SDPResult

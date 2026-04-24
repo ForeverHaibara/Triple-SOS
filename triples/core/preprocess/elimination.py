@@ -4,7 +4,6 @@ from sympy import Poly, Expr, Symbol, Integer, Mul, QQ, ZZ
 from sympy import MutableDenseMatrix as Matrix
 from sympy.polys.matrices.sdm import SDM
 
-
 if TYPE_CHECKING:
     from ..problem import InequalityProblem
 

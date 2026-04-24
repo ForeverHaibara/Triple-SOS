@@ -6,7 +6,6 @@ from sympy.polys.constructor import construct_domain
 from sympy.matrices.expressions import MatPow
 from sympy.combinatorics.permutations import Permutation
 
-
 if TYPE_CHECKING:
     from .state_algebra import StateAlgebra
 
