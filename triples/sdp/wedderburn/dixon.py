@@ -1,4 +1,4 @@
-from typing import List, Set, Union, Sequence, Generator, Iterable
+from typing import List, Set, Union, Sequence, Generator, Iterable, TYPE_CHECKING
 
 from sympy import (FiniteField,
     sqrt_mod, nextprime, primitive_root,
@@ -13,7 +13,6 @@ except ImportError:
     from math import gcd
     from functools import reduce
     lcm = lambda *args: reduce(lambda x, y: x*y//gcd(x, y), args, 1)
-from sympy.polys.domains.domain import Domain
 from sympy.polys.domainmatrix import DomainMatrix
 from sympy.polys.factortools import dup_factor_list_include
 from sympy.polys.polyclasses import ANP
@@ -21,6 +20,9 @@ from sympy.combinatorics import Permutation, PermutationGroup
 
 from sympy import __version__ as SYMPY_VERSION
 from sympy.external.importtools import version_tuple
+
+if TYPE_CHECKING:
+    from sympy.polys.domains.domain import Domain
 
 CC = List[Set[Permutation]]
 
@@ -42,7 +44,7 @@ else:
         return field
 
 
-def _compute_cmmatrices(cc: Sequence[CC], dom: Domain) -> Generator[DomainMatrix, None, None]:
+def _compute_cmmatrices(cc: Sequence[CC], dom: "Domain") -> Generator[DomainMatrix, None, None]:
     n = len(cc)
     rmul = Permutation.rmul_with_af
     for ind in range(n):
@@ -296,7 +298,7 @@ def _lift_to_minimal_field(normalized_rows, pm, k, e, Fp):
     _sort_characters(dM, dom)
     return DomainMatrix(dM, (n, n), dom)
 
-def _sort_characters(rows: List[List], dom: Domain):
+def _sort_characters(rows: List[List], dom: "Domain"):
     """
     Sort the character table and move the trivial
     character to the first row. Done in-place.

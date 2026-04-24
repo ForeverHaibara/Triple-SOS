@@ -1,10 +1,12 @@
-from typing import Union, Tuple, List, Dict, Optional, Any, Callable
+from typing import Union, Tuple, List, Dict, Optional, Any, Callable, TYPE_CHECKING
 
-from sympy import Expr, Poly, Symbol
 
 from .abstract import AtomSOSElement
 from .algebra import NCPolyRing
 from .solution import SolutionSDP
+
+if TYPE_CHECKING:
+    from sympy import Expr, Poly, Symbol
 
 
 def DEFAULT_ADJOINT(x):
@@ -81,12 +83,12 @@ class SOHSPoly(AtomSOSElement):
 
     """
     def __init__(self,
-        poly: Union[Expr, Poly],
-        gens: Tuple[Symbol,...],
-        qmodule: List[Union[Poly, Expr]] = [],
-        ideal: List[Union[Poly, Expr]] = [],
+        poly: Union["Expr", "Poly"],
+        gens: Tuple["Symbol",...],
+        qmodule: List[Union["Poly", "Expr"]] = [],
+        ideal: List[Union["Poly", "Expr"]] = [],
         degree: Optional[int] = None,
-        symmetry: Optional[Dict[Symbol, int]] = None,
+        symmetry: Optional[Dict["Symbol", int]] = None,
     ):
         gens = tuple(gens)
         as_poly = NCPolyRing(len(gens), 0, symmetry=symmetry).as_poly
@@ -121,10 +123,10 @@ class SOHSPoly(AtomSOSElement):
 
     def as_solution(
         self,
-        qmodule: Optional[Dict[Any, Expr]] = None,
-        ideal: Optional[Dict[Any, Expr]] = None,
-        adjoint_operator: Optional[Callable[[Expr], Expr]] = DEFAULT_ADJOINT,
-        trace_operator: Optional[Callable[[Expr], Expr]] = None,
+        qmodule: Optional[Dict[Any, "Expr"]] = None,
+        ideal: Optional[Dict[Any, "Expr"]] = None,
+        adjoint_operator: Optional[Callable[["Expr"], "Expr"]] = DEFAULT_ADJOINT,
+        trace_operator: Optional[Callable[["Expr"], "Expr"]] = None,
     ) -> SolutionSDP:
         """
         Retrieve the solution to the original polynomial.

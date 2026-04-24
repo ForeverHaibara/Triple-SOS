@@ -1,18 +1,20 @@
-from typing import List, Tuple, Any, Dict, Union, Callable, Optional
+from typing import List, Tuple, Any, Dict, Union, Callable, Optional, TYPE_CHECKING
 import ast
 import os
-import types
 import importlib
 import pkgutil
 import inspect
+
+if TYPE_CHECKING:
+    import types
 
 BRACKET_PAIRS = {"(": ")", "[": "]", "{": "}"}
 
 FuncLocator = Tuple[str, str, Callable]
 
 def discover_functions_from_module(
-    module: types.ModuleType,
-    selector: Optional[Callable[[types.ModuleType, str, Callable], bool]] = None
+    module: "types.ModuleType",
+    selector: Optional[Callable[["types.ModuleType", str, Callable], bool]] = None
 ) -> List[FuncLocator]:
     """
     Return a list of (module.__name__, func_name) for functions in `module`
@@ -29,7 +31,7 @@ def discover_functions_from_module(
 
 def discover_functions_from_scope(
     scope: str,
-    selector: Optional[Callable[[types.ModuleType, str], bool]] = None,
+    selector: Optional[Callable[["types.ModuleType", str], bool]] = None,
     *,
     recursive_pkg: bool = True
 ) -> List[FuncLocator]:

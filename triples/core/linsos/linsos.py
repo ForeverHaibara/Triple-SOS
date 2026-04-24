@@ -1,10 +1,9 @@
-from typing import Optional, Tuple, List, Dict, Union, Any
+from typing import Optional, Tuple, List, Dict, Union, Any, TYPE_CHECKING
 from time import perf_counter
 import warnings
 
 import numpy as np
 from sympy import Poly, Expr, fraction
-from sympy.combinatorics import PermutationGroup
 from sympy.external.importtools import version_tuple
 from scipy import __version__ as _SCIPY_VERSION
 
@@ -14,11 +13,14 @@ from .correction import linear_correction, odd_basis_to_even
 from .lift import lift_degree
 from .solution import create_linear_sol_from_y_basis
 from ..solution import Solution
-from ..problem import InequalityProblem
 from ..dispatch import _dtype_homogenize
 from ..preprocess import ProofNode, ProofTree, SolvePolynomial
 from ...sdp.arithmetic import ArithmeticTimeout
 from ...utils import Root, MonomialManager, clear_polys_by_symmetry
+
+if TYPE_CHECKING:
+    from sympy.combinatorics import PermutationGroup
+    from ..problem import InequalityProblem
 
 if tuple(version_tuple(_SCIPY_VERSION)) >= (1, 6):
     LINPROG_OPTIONS = {
@@ -122,7 +124,7 @@ class LinearSOSSolver(ProofNode):
     }
 
 
-    _transformed_problem: Optional[InequalityProblem] = None
+    _transformed_problem: Optional["InequalityProblem"] = None
     _tangents: List[Poly]
     _decentralizer = None
     _complexity_models = True
@@ -492,7 +494,7 @@ def LinearSOS(
     ineq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
     eq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
     *,
-    symmetry: Optional[PermutationGroup] = None,
+    symmetry: Optional["PermutationGroup"] = None,
     roots: Optional[List[Root]] = None,
     tangents: Optional[List[Expr]] = None,
     basis_limit: int = 20000,

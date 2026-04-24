@@ -1,24 +1,26 @@
 from collections import defaultdict
-from typing import List, Tuple, Dict, Any, Callable, Optional
+from typing import List, Tuple, Dict, Any, Callable, Optional, TYPE_CHECKING
 
 from sympy import Expr, Poly, Domain
-from sympy.matrices import MutableDenseMatrix as Matrix
 from sympy.combinatorics import PermutationGroup, Permutation
 
-from .state_algebra import StateAlgebra, MONOM, TERM
 from ....sdp.arithmetic import rep_matrix_from_dict
 from ....utils.monomials import identify_symmetry
+
+if TYPE_CHECKING:
+    from .state_algebra import StateAlgebra, MONOM, TERM
+    from sympy.matrices import MutableDenseMatrix as Matrix
 
 class SOSBasis:
     """
     Customized SOSBasis MUST implement `localizing_matrix`.
     """
-    algebra: StateAlgebra
+    algebra: "StateAlgebra"
     _dict_basis: Dict[Any, int] # basis: index
     _basis: List[Any]
     symmetry: Optional[PermutationGroup] = None
 
-    def __init__(self, algebra: StateAlgebra, basis: List[Any]):
+    def __init__(self, algebra: "StateAlgebra", basis: List[Any]):
         self.algebra = algebra
         self._basis = basis
 
@@ -33,7 +35,7 @@ class SOSBasis:
     def __len__(self):
         return len(self._basis)
 
-    def _localizing_mapping(self, domain: Any) -> Callable[[int, int], Dict[MONOM, Expr]]:
+    def _localizing_mapping(self, domain: Any) -> Callable[[int, int], Dict["MONOM", Expr]]:
         raise NotImplementedError
 
     def localizing_matrix(self, domain: Any):
@@ -63,10 +65,10 @@ class SOSBasis:
 class QmoduleBasis(SOSBasis):
     qmodule: Poly
     def __init__(self,
-        algebra: StateAlgebra,
+        algebra: "StateAlgebra",
         qmodule: Poly,
-        basis: List[MONOM]=[],
-        dict_basis: Dict[MONOM, int]=None
+        basis: List["MONOM"]=[],
+        dict_basis: Dict["MONOM", int]=None
     ):
         self.qmodule = qmodule
         self.algebra = algebra
@@ -79,7 +81,7 @@ class QmoduleBasis(SOSBasis):
         if algebra.symmetry is not None:
             self.symmetry = identify_symmetry(qmodule, algebra.symmetry)
 
-    def _nc_localizing_mapping(self, domain: Any=None) -> Callable[[int, int], List[TERM]]:
+    def _nc_localizing_mapping(self, domain: Any=None) -> Callable[[int, int], List["TERM"]]:
         if domain is None:
             domain = self.qmodule.domain
         algebra = self.algebra
@@ -98,7 +100,7 @@ class QmoduleBasis(SOSBasis):
             return {k: v for k, v in vec.items() if v != zero}
         return _mapping
 
-    def _comm_localizing_mapping(self, domain: Any=None) -> Callable[[int, int], Dict[MONOM, Expr]]:
+    def _comm_localizing_mapping(self, domain: Any=None) -> Callable[[int, int], Dict["MONOM", Expr]]:
         if domain is None:
             domain = self.qmodule.domain
         algebra = self.algebra
@@ -116,12 +118,12 @@ class QmoduleBasis(SOSBasis):
             return {k: v for k, v in vec.items() if v != zero}
         return _mapping
 
-    def _localizing_mapping(self, domain: Any=None) -> Callable[[int, int], Dict[MONOM, Expr]]:
+    def _localizing_mapping(self, domain: Any=None) -> Callable[[int, int], Dict["MONOM", Expr]]:
         if self.is_commutative:
             return self._comm_localizing_mapping(domain)
         return self._nc_localizing_mapping(domain)
 
-    def localizing_matrix(self, domain: Any=None) -> Matrix:
+    def localizing_matrix(self, domain: Any=None) -> "Matrix":
         if domain is None:
             domain = self.qmodule.domain
         mapping = self._localizing_mapping(domain)
@@ -187,10 +189,10 @@ class TwoSidedIdealBasis(SOSBasis):
 class IdealBasis(SOSBasis):
     ideal: Poly
     def __init__(self,
-        algebra: StateAlgebra,
+        algebra: "StateAlgebra",
         ideal: Poly,
-        basis: List[MONOM]=[],
-        dict_basis: Dict[MONOM, int]=None
+        basis: List["MONOM"]=[],
+        dict_basis: Dict["MONOM", int]=None
     ):
         self.ideal = ideal
         self.algebra = algebra
@@ -203,7 +205,7 @@ class IdealBasis(SOSBasis):
         if algebra.symmetry is not None:
             self.symmetry = identify_symmetry(ideal, algebra.symmetry)
 
-    def _localizing_mapping(self, domain: Any=None) -> Callable[[int], List[TERM]]:
+    def _localizing_mapping(self, domain: Any=None) -> Callable[[int], List["TERM"]]:
         # be careful that it should be a two-sided ideal for non-commutative algebra,
         # let's think more about it.
         if domain is None:
@@ -223,7 +225,7 @@ class IdealBasis(SOSBasis):
             return {k: v for k, v in vec.items() if v != zero}
         return _mapping
 
-    def localizing_matrix(self, domain: Any=None) -> Matrix:
+    def localizing_matrix(self, domain: Any=None) -> "Matrix":
         if domain is None:
             domain = self.ideal.domain
         mapping = self._localizing_mapping(domain)

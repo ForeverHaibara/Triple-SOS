@@ -1,14 +1,16 @@
-from typing import List, Dict, Tuple, Callable, Optional
+from typing import List, Dict, Tuple, Callable, Optional, TYPE_CHECKING
 
 from sympy import Expr, Poly
 
 from .elimination import eliminate_power_constraints
-from ..problem import InequalityProblem
 from ..node import TransformNode
 from ...utils import (
     CyclicSum,
     identify_symmetry_from_lists, verify_symmetry, poly_reduce_by_symmetry
 )
+
+if TYPE_CHECKING:
+    from ..problem import InequalityProblem
 
 
 class SolvePolynomial(TransformNode):
@@ -245,7 +247,7 @@ def _bidegree_recover_expr(lst: List[Dict[Poly, Tuple[Poly, int, Poly]]], p1: Po
             d[p] = p1_expr**mul_deg * expr + p2expr(quo)*sgn_expr
     return p1_expr
 
-def _bidegree_attempt(problem: InequalityProblem, eq: Poly) -> Optional[Tuple[InequalityProblem, Callable]]:
+def _bidegree_attempt(problem: "InequalityProblem", eq: Poly) -> Optional[Tuple["InequalityProblem", Callable]]:
     """
     Test whether the constraint `eq` can be use to homogenize the original problem.
 
@@ -291,7 +293,7 @@ def _bidegree_attempt(problem: InequalityProblem, eq: Poly) -> Optional[Tuple[In
     new_problem.roots = problem.roots
     return new_problem, _align_degree_restore
 
-def bidegree_homogenization(problem: InequalityProblem) -> Tuple[InequalityProblem, Callable]:
+def bidegree_homogenization(problem: "InequalityProblem") -> Tuple["InequalityProblem", Callable]:
     for eq in problem.eq_constraints:
         attempt = _bidegree_attempt(problem, eq)
         if attempt is not None:
@@ -299,7 +301,7 @@ def bidegree_homogenization(problem: InequalityProblem) -> Tuple[InequalityProbl
     return problem, lambda x: x
 
 
-def reduce_over_quotient_ring(problem: InequalityProblem):
+def reduce_over_quotient_ring(problem: "InequalityProblem"):
     """
     Perform quotient ring reduction of the problem, including operations like
     homogenization.

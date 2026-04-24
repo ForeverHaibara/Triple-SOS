@@ -1,8 +1,10 @@
-from typing import Tuple, Optional
+from typing import Tuple, Optional, TYPE_CHECKING
 
 from sympy import Poly, Symbol
-from sympy.polys.rings import PolyElement
 from sympy.utilities import subsets
+
+if TYPE_CHECKING:
+    from sympy.polys.rings import PolyElement
 
 
 def _symmetric_poly(self, n):
@@ -21,7 +23,7 @@ def _symmetric_poly(self, n):
             poly += self.term_new(monom, self.domain.one)
         return poly
 
-def _symmetrize(self: PolyElement):
+def _symmetrize(self: "PolyElement"):
     """
     `PolyElement.symmetrize` was added since SymPy 1.12. This
     function is copied from the SymPy source code for version

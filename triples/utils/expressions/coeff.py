@@ -1,9 +1,7 @@
-from typing import Union, List, Tuple, Optional, Callable, Iterator
+from typing import Union, List, Tuple, Optional, Callable, Iterator, TYPE_CHECKING
 
 from sympy import Poly, Expr, Basic, Symbol, Rational
 from sympy import MutableDenseMatrix as Matrix
-from sympy.combinatorics import Permutation, PermutationGroup
-from sympy.polys.domains import Domain
 from sympy.polys.rings import PolyElement
 from sympy.polys.matrices import DomainMatrix
 from sympy.polys.polyclasses import DMP
@@ -13,6 +11,10 @@ from sympy.utilities.iterables import iterable
 from .exraw import EXRAW
 from .cyclic import CyclicSum, CyclicProduct, SymmetricSum, SymmetricProduct
 from ..monomials import verify_symmetry
+
+if TYPE_CHECKING:
+    from sympy.polys.domains import Domain
+    from sympy.combinatorics import Permutation, PermutationGroup
 
 default_prover = lambda x: (x if (x >= 0) else None)
 default_prover_implicit = lambda x: x >= 0
@@ -59,11 +61,11 @@ class PartialOrder:
     >>> po.convert(1) >= po.convert(x**4)
     False
     """
-    domain: Domain
+    domain: 'Domain'
     _prover: Callable[[object], Optional[Expr]]
     _prover_implicit: Callable[[object], Optional[bool]]
     _wrapper: Callable[['PartialOrder', object], object]
-    def __init__(self, domain: Domain, prover=None, prover_implicit=None, wrapper=None):
+    def __init__(self, domain: 'Domain', prover=None, prover_implicit=None, wrapper=None):
         self.domain = domain
         self._prover = prover if prover is not None else default_prover
         self._prover_implicit = prover_implicit if prover_implicit is not None else (lambda x: self._prover(x) is not None)
@@ -97,7 +99,7 @@ class PartialOrder:
         return self.domain.to_sympy(x)
 
     @classmethod
-    def from_domain(cls, domain: Domain) -> 'PartialOrder':
+    def from_domain(cls, domain: 'Domain') -> 'PartialOrder':
         """Create a PartialOrder from a Domain."""
         if domain.is_QQ or domain.is_RR or domain.is_EXRAW or domain.is_RR or domain.is_CC:
             _prover = default_prover
@@ -327,7 +329,7 @@ class Coeff():
         return self.rep.ring
 
     @property
-    def domain(self) -> Domain:
+    def domain(self) -> 'Domain':
         return self.rep.ring.domain
 
     @property
@@ -478,7 +480,7 @@ class Coeff():
             z = z + c
         return self.wrap(z)
 
-    def is_cyclic(self, perm_group: Optional[Union[str, Permutation, List[Permutation], PermutationGroup]] = None) -> bool:
+    def is_cyclic(self, perm_group: Optional[Union[str, 'Permutation', List['Permutation'], 'PermutationGroup']] = None) -> bool:
         """
         Check whether the coefficients are cyclic with respect to a permutation group.
         If not specified, it assumes to be the cyclic group.
@@ -495,7 +497,7 @@ class Coeff():
         # TODO: do not convert it to poly
         return verify_symmetry(self.as_poly(), perm_group)
 
-    def is_symmetric(self, perm_group: Optional[Union[str, Permutation, List[Permutation], PermutationGroup]] = None) -> bool:
+    def is_symmetric(self, perm_group: Optional[Union[str, 'Permutation', List['Permutation'], 'PermutationGroup']] = None) -> bool:
         """
         Check whether the coefficients are symmetric with respect to a permutation group.
         If not specified, it assumes to be the symmetric group. When the perm_group

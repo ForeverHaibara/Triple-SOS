@@ -1,11 +1,10 @@
 from abc import ABC, abstractmethod
 from time import perf_counter
-from typing import Dict, Tuple, List, Union, Optional, Any
+from typing import Dict, Tuple, List, Union, Optional, Any, TYPE_CHECKING
 
 from numpy import ndarray
 import numpy as np
 from sympy import MatrixBase, Expr, Symbol, Rational
-from sympy.core.relational import Relational
 from sympy.matrices import MutableDenseMatrix as Matrix
 
 from .arithmetic import (
@@ -15,6 +14,9 @@ from .arithmetic import (
 from .backends import SDPTimeoutError, SDPResult
 from .rationalize import rationalize_and_decompose
 from .utils import exprs_to_arrays, collect_constraints
+
+if TYPE_CHECKING:
+    from sympy.core.relational import Relational
 
 Decomp = Dict[Any, Tuple[Matrix, Matrix, List[Rational]]]
 
@@ -189,7 +191,7 @@ class SDPProblemBase(ABC):
             print(f'Minimum Eigenvalues = {S_eigen}')
         return rationalize_and_decompose(y, mat_func=self.S_from_y, projection=self.project, **kwargs)
 
-    def exprs_to_arrays(self, exprs: List[Union[Expr, Relational, Tuple[Matrix, float], Tuple[Matrix, float, str]]], dtype=np.float64):
+    def exprs_to_arrays(self, exprs: List[Union[Expr, "Relational", Tuple[Matrix, float], Tuple[Matrix, float, str]]], dtype=np.float64):
         return exprs_to_arrays(exprs, self.gens, dtype=dtype)
 
     @abstractmethod
@@ -206,7 +208,7 @@ class SDPProblemBase(ABC):
 
     def solve_obj(self,
         objective: Union[Matrix, Expr],
-        constraints: List[Union[Relational, Tuple[Matrix, Matrix, str]]] = [],
+        constraints: List[Union["Relational", Tuple[Matrix, Matrix, str]]] = [],
         solver: Optional[str] = None,
         solve_child: bool = True,
         propagate_to_parent: bool = True,

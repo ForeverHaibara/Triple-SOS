@@ -1,9 +1,8 @@
-from typing import List, Tuple, Dict, Union, Optional, Callable, Any
+from typing import List, Tuple, Dict, Union, Optional, Callable, Any, TYPE_CHECKING
 # from warnings import warn
 from time import perf_counter
 
 from sympy import Poly, Expr, Symbol
-from sympy.combinatorics import PermutationGroup
 from sympy import MutableDenseMatrix as Matrix
 
 from .algebra import PolyRing
@@ -11,6 +10,9 @@ from .abstract import AtomSOSElement, ArithmeticTimeout
 from .manifold import get_sos_nullspace, complete_constraints_by_symmetry
 from .solution import SolutionSDP
 from ...utils import CyclicSum, Root
+
+if TYPE_CHECKING:
+    from sympy.combinatorics import PermutationGroup
 
 CHECK_SYMMETRY = True
 
@@ -164,7 +166,7 @@ class SOSPoly(AtomSOSElement):
         qmodule: List[Union[Poly, Expr]] = [],
         ideal: List[Union[Poly, Expr]] = [],
         degree: Optional[int] = None,
-        symmetry: Optional[PermutationGroup] = None,
+        symmetry: Optional["PermutationGroup"] = None,
         roots: Optional[List[Root]] = [],
         # qmodule_bases: Optional[List[Tuple[int, ...]]] = None,
         # ideal_bases: Optional[List[Tuple[int, ...]]] = None,

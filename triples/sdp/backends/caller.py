@@ -1,8 +1,7 @@
-from typing import List, Tuple, Dict, Union, Optional, Any, Type
+from typing import List, Tuple, Dict, Union, Optional, Any, Type, TYPE_CHECKING
 
 import numpy as np
 from numpy import ndarray
-from sympy import MutableDenseMatrix as Matrix
 
 from .backend import DualBackend
 from .clarabel_sdp import DualBackendCLARABEL
@@ -13,7 +12,10 @@ from .picos_sdp import DualBackendPICOS
 from .qics_sdp import DualBackendQICS
 from .sdpap_sdp import DualBackendSDPAP
 
-from .settings import SDPResult
+
+if TYPE_CHECKING:
+    from sympy import MutableDenseMatrix as Matrix
+    from .settings import SDPResult
 # from ..utils import collect_constraints
 
 _DUAL_BACKENDS: Dict[str, DualBackend] = {
@@ -104,7 +106,7 @@ def collect_constraints(constraints: List[Tuple[ndarray, float, str]], dof: int)
 
 
 def create_numerical_dual_sdp(
-    x0_and_space: Union[List[Tuple[Matrix, Matrix]], Dict[Any, Tuple[Matrix, Matrix]]],
+    x0_and_space: Union[List[Tuple['Matrix', 'Matrix']], Dict[Any, Tuple['Matrix', 'Matrix']]],
     objective: ndarray,
     constraints: List[Tuple[ndarray, float, str]] = [],
     solver: Optional[Union[str, Type[DualBackend]]] = None,
@@ -149,7 +151,7 @@ def create_numerical_dual_sdp(
 
 
 def solve_numerical_dual_sdp(
-    x0_and_space: Union[List[Tuple[Matrix, Matrix]], Dict[Any, Tuple[Matrix, Matrix]]],
+    x0_and_space: Union[List[Tuple['Matrix', 'Matrix']], Dict[Any, Tuple['Matrix', 'Matrix']]],
     objective: ndarray,
     constraints: List[Tuple[ndarray, float, str]] = [],
     solver: Optional[str] = None,
@@ -162,7 +164,7 @@ def solve_numerical_dual_sdp(
     tol_gap_abs: float = 1e-8,
     tol_gap_rel: float = 1e-8,
     solver_options: Dict[str, Any] = {},
-) -> Optional[Union[ndarray, SDPResult]]:
+) -> Optional[Union[ndarray, 'SDPResult']]:
     """
     Solve for y such that all(Mat(x0 + space @ y) >> 0 for x0, space in x0_and_space.values()).
     This is the dual form of SDP problem.

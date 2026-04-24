@@ -1,16 +1,18 @@
-from typing import Tuple, List, Dict, Optional
+from typing import Tuple, List, Dict, Optional, TYPE_CHECKING
 from itertools import combinations
 
 import numpy as np
 from sympy import Poly, Expr, Symbol, Integer, Mul, RR
 from sympy import MutableDenseMatrix as Matrix
-from sympy.combinatorics import PermutationGroup
 
-from ..problem import InequalityProblem
 from ...utils import Root, MonomialManager, identify_symmetry
 from ...utils.roots.num_extrema import numeric_optimize_skew_symmetry
 from ...sdp.arithmetic import permute_matrix_rows, solve_nullspace
 from ...sdp.wedderburn import symmetry_adapted_basis
+
+if TYPE_CHECKING:
+    from sympy.combinatorics import PermutationGroup
+    from ..problem import InequalityProblem
 
 DEFAULT_TANGENTS = {
     3: (lambda a, b, c: [
@@ -130,7 +132,7 @@ def _get_ineq_constrained_tangents(
     num_tangents: int = 5,
     min_degree: int = 3,
     max_degree: int = 8,
-    symmetry: Optional[PermutationGroup] = None
+    symmetry: Optional['PermutationGroup'] = None
 ) -> Dict[Poly, Expr]:
     """
     Compute a dictionary of items `(ineq*poly**2, ineq_expr*expr**2)` such that
@@ -217,7 +219,7 @@ def _get_ineq_constrained_tangents(
 
 
 def prepare_tangents(
-    problem: InequalityProblem,
+    problem: 'InequalityProblem',
     qmodule: Optional[Dict[Poly, Expr]] = None,
     default_tangents = DEFAULT_TANGENTS,
     additional_tangents: List[Expr] = [],
@@ -404,7 +406,7 @@ def get_qmodule_list(
 ###################################################################
 
 def prepare_inexact_tangents(
-    problem: InequalityProblem,
+    problem: 'InequalityProblem',
     monomial_manager: MonomialManager = None,
     all_nonnegative: bool = False,
     threshold: float = 0.5,

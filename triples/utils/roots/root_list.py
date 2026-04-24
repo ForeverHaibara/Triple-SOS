@@ -1,14 +1,16 @@
-from typing import Tuple, List, Dict, Union, Optional, Generator
+from typing import Tuple, List, Dict, Union, Optional, Generator, TYPE_CHECKING
 
-from sympy import Expr, Symbol
 
 from .roots import Root
+
+if TYPE_CHECKING:
+    from sympy import Expr, Symbol
 
 class RootList(list):
     """
     A list-like object that stores a list of roots.
     """
-    symbols: Tuple[Symbol, ...]
+    symbols: Tuple["Symbol", ...]
     def __new__(cls, symbols, roots=None):
         roots = roots if roots is not None else []
         if any(len(r) != len(symbols) for r in roots):
@@ -24,7 +26,7 @@ class RootList(list):
         return list(self)
 
     @classmethod
-    def new(cls, symbols: Tuple[Symbol, ...], roots: List[Root]):
+    def new(cls, symbols: Tuple["Symbol", ...], roots: List[Root]):
         """Initialization without sanity checks."""
         obj = list.__new__(cls)
         obj.symbols = symbols
@@ -49,7 +51,7 @@ class RootList(list):
             return RootList.new(self.symbols, item)
         return item
 
-    def to_dicts(self) -> List[Dict[Symbol, Expr]]:
+    def to_dicts(self) -> List[Dict["Symbol", "Expr"]]:
         """
         Convert the RootList to a list of dictionaries.
 
@@ -68,7 +70,7 @@ class RootList(list):
         """
         return [dict(zip(self.symbols, root)) for root in self]
 
-    def reorder(self, new_symbols: Tuple[Union[Symbol, int], ...]) -> 'RootList':
+    def reorder(self, new_symbols: Tuple[Union["Symbol", int], ...]) -> 'RootList':
         """
         Reorder the symbols of the RootList.
 
@@ -126,8 +128,8 @@ class RootList(list):
         """
         return RootList.new(self.symbols, [root.n(*args, **kwargs) for root in self])
 
-    def transform(self, subs: Union[Dict[Symbol, Expr], List[Expr]],
-            new_symbols: Optional[Tuple[Symbol, ...]] = None) -> 'RootList':
+    def transform(self, subs: Union[Dict["Symbol", "Expr"], List["Expr"]],
+            new_symbols: Optional[Tuple["Symbol", ...]] = None) -> 'RootList':
         """
         Transform the RootList by substituting symbols with expressions.
 

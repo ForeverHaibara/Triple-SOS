@@ -1,11 +1,13 @@
-from typing import List, Set, Optional
+from typing import List, Set, Optional, TYPE_CHECKING
 
-from sympy.combinatorics import Permutation, PermutationGroup
 
 from .dixon import dixon_character_table
 from .symmetric import murnaghan_nakayama_character_table
 
-def character_table(G: PermutationGroup, cc: Optional[List[Set[Permutation]]]=None):
+if TYPE_CHECKING:
+    from sympy.combinatorics import Permutation, PermutationGroup
+
+def character_table(G: "PermutationGroup", cc: Optional[List[Set["Permutation"]]]=None):
     """
     Compute the character table of a permutation group.
     The order of rows and columns are not fixed.

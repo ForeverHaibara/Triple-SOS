@@ -1,9 +1,11 @@
-from typing import Any, Tuple
+from typing import Any, Tuple, TYPE_CHECKING
 
 import numpy as np
 
 from .backend import DualBackend
-from .settings import SolverConfigs
+
+if TYPE_CHECKING:
+    from .settings import SolverConfigs
 
 class DualBackendSDPAP(DualBackend):
     """
@@ -37,7 +39,7 @@ class DualBackendSDPAP(DualBackend):
         J = SymCone(f = self.eq_rhs.shape[0], l = self.ineq_rhs.shape[0], s = tuple(self.mat_sizes))
         return A, b, c, K, J
 
-    def _solve(self, configs: SolverConfigs):
+    def _solve(self, configs: 'SolverConfigs'):
         import sdpap
         option = {
             'print': 'display' if configs.verbose else 'no',

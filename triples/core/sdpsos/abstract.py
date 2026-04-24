@@ -1,17 +1,19 @@
 from collections import OrderedDict
-from typing import List, Tuple, Dict, Any, Callable, Optional, Union
+from typing import List, Tuple, Dict, Any, Callable, Optional, Union, TYPE_CHECKING
 from time import perf_counter
 
 import numpy as np
-from sympy import Expr, Poly, Symbol
 from sympy.matrices import MutableDenseMatrix as Matrix
-from sympy.core.relational import Relational
 
-from .algebra import StateAlgebra, SOSBasis
 from ...sdp import SDPProblem
 from ...sdp.arithmetic import ArithmeticTimeout, sqrtsize_of_mat, matmul, matadd, rep_matrix_from_dict
 from ...sdp.utils import exprs_to_arrays, collect_constraints
 from ...sdp.wedderburn import symmetry_adapted_basis
+
+if TYPE_CHECKING:
+    from .algebra import StateAlgebra, SOSBasis
+    from sympy import Expr, Poly, Symbol
+    from sympy.core.relational import Relational
 
 class SOSEquationSystem:
     rhs: Matrix
@@ -114,7 +116,7 @@ class SOSElement:
         """
         return self.sdp.get_last_child() if self.sdp is not None else None
 
-    def as_params(self) -> Dict[Symbol, Expr]:
+    def as_params(self) -> Dict['Symbol', 'Expr']:
         if self._parameters is None or len(self._parameters) == 0:
             return {}
         x0, space = self._parameter_space
@@ -122,8 +124,8 @@ class SOSElement:
         return dict(zip(self._parameters, y))
 
     def solve_obj(self,
-        objective: Union[Expr, Matrix, List],
-        constraints: List[Union[Relational, Expr, Tuple[Matrix, Matrix, str]]] = [],
+        objective: Union['Expr', Matrix, List],
+        constraints: List[Union['Relational', 'Expr', Tuple[Matrix, Matrix, str]]] = [],
         solver: Optional[str] = None,
         verbose: bool = False,
         time_limit: Optional[float] = None,
@@ -180,7 +182,7 @@ class SOSElement:
     def as_solution(self, *args, **kwargs):
         raise NotImplementedError
 
-    def _get_parameters(self) -> List[Symbol]:
+    def _get_parameters(self) -> List['Symbol']:
         """
         Infer all default parameters in the problem. For example, if we assume the polynomial
 
@@ -192,7 +194,7 @@ class SOSElement:
         """
         raise NotImplementedError
 
-    def _get_parameter_eq(self, parameters: List[Symbol]=[]) -> Matrix:
+    def _get_parameter_eq(self, parameters: List['Symbol']=[]) -> Matrix:
         """
         Get how each parameter contributes to the coefficients of the vector representation
         of the polynomial. For example, if we assume the polynomial
@@ -211,7 +213,7 @@ class SOSElement:
         """
         raise NotImplementedError
 
-    def _get_equation_system(self, parameters: List[Symbol]=[], domain=None) -> SOSEquationSystem:
+    def _get_equation_system(self, parameters: List['Symbol']=[], domain=None) -> SOSEquationSystem:
         raise NotImplementedError
 
     def _insert_prefix(self, prefix: Any):
@@ -226,7 +228,7 @@ class SOSElement:
         return
 
     def construct(self,
-        parameters: Union[List[Symbol], bool] = True,
+        parameters: Union[List['Symbol'], bool] = True,
         wedderburn: bool = True,
         verbose: bool = False,
         time_limit: Optional[Union[Callable, float]] = None
@@ -286,18 +288,18 @@ class AtomSOSElement(SOSElement):
     equation system and the system will be solved in `.construct` method to form the SDP
     problem.
     """
-    poly: Poly
-    algebra: StateAlgebra
-    _qmodule_bases: Dict[Any, SOSBasis] = None
-    _ideal_bases: Dict[Any, SOSBasis] = None
-    _qmodule: Dict[Any, Poly] = None
-    _ideal: Dict[Any, Poly] = None
+    poly: 'Poly'
+    algebra: 'StateAlgebra'
+    _qmodule_bases: Dict[Any, 'SOSBasis'] = None
+    _ideal_bases: Dict[Any, 'SOSBasis'] = None
+    _qmodule: Dict[Any, 'Poly'] = None
+    _ideal: Dict[Any, 'Poly'] = None
     _ideal_space: Dict[Any, Tuple[Matrix, Matrix]] = None
 
-    def _get_parameters(self) -> List[Symbol]:
+    def _get_parameters(self) -> List['Symbol']:
         return list(self.poly.free_symbols - set(self.poly.gens))
 
-    def _get_parameter_eq(self, parameters: List[Symbol]=[]) -> Matrix:
+    def _get_parameter_eq(self, parameters: List['Symbol']=[]) -> Matrix:
         arraylize = self.algebra.arraylize
         # no-parameter case should be handled separately
         if len(parameters) == 0:
@@ -350,7 +352,7 @@ class AtomSOSElement(SOSElement):
         self.sdpp.constrain_zero_diagonals(time_limit=time_limit)
 
 
-    def _get_equation_system(self, parameters: List[Symbol]=[], domain=None) -> SOSEquationSystem:
+    def _get_equation_system(self, parameters: List['Symbol']=[], domain=None) -> SOSEquationSystem:
         if self._qmodule_bases is None or self._ideal_bases is None:
             # infer default bases if not given
             self._qmodule_bases, self._ideal_bases = self.algebra.infer_bases(
@@ -379,7 +381,7 @@ class AtomSOSElement(SOSElement):
         return eq.insert_prefix(self)
 
     def construct(self,
-        parameters: Union[List[Symbol], bool] = True,
+        parameters: Union[List['Symbol'], bool] = True,
         wedderburn: bool = True,
         verbose: bool = False,
         time_limit: Optional[Union[Callable, float]] = None,
@@ -514,19 +516,19 @@ class JointSOSElement(SOSElement):
     def __init__(self, sos_elements: List[SOSElement]):
         self.sos_elements = sos_elements
 
-    def _get_parameters(self) -> List[Symbol]:
+    def _get_parameters(self) -> List['Symbol']:
         parameters = set()
         for sos in self.sos_elements:
             parameters.update(set(sos._get_parameters()))
         return list(parameters)
 
-    def _get_parameter_eq(self, parameters: List[Symbol]=[]) -> Matrix:
+    def _get_parameter_eq(self, parameters: List['Symbol']=[]) -> Matrix:
         parameter_eq = []
         for sos in self.sos_elements:
             parameter_eq.append(sos._get_parameter_eq(parameters))
         return Matrix.vstack(*parameter_eq)
 
-    def _get_equation_system(self, parameters: List[Symbol]=[], domain=None) -> SOSEquationSystem:
+    def _get_equation_system(self, parameters: List['Symbol']=[], domain=None) -> SOSEquationSystem:
         eqs = []
         for sos in self.sos_elements:
             eqs.append(sos._get_equation_system(parameters, domain))
@@ -540,7 +542,7 @@ class JointSOSElement(SOSElement):
             sos._post_construct(verbose=verbose, time_limit=time_limit, **kwargs)
 
     def construct(self,
-        parameters: Union[List[Symbol], bool] = True,
+        parameters: Union[List['Symbol'], bool] = True,
         wedderburn: bool = True,
         verbose: bool = False,
         time_limit: Optional[Union[Callable, float]] = None

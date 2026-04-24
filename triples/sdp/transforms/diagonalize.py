@@ -1,11 +1,13 @@
-from typing import Tuple, List, Dict, Any, Optional
+from typing import Tuple, List, Dict, Any, Optional, TYPE_CHECKING
 
 from sympy.matrices.repmatrix import RepMatrix
-from sympy import MutableDenseMatrix as Matrix
 from .transform import SDPIdentityTransform
 from .linear import SDPLinearTransform
 
 from ..arithmetic import permute_matrix_rows
+
+if TYPE_CHECKING:
+    from sympy import MutableDenseMatrix as Matrix
 
 def _get_nonzero_entries_of_dual(self) -> Dict[Any, List[Tuple[int, int]]]:
     nonzero_entries = {}
@@ -69,8 +71,8 @@ class SDPBlockDiagonalization(SDPLinearTransform):
     def __init__(self, parent_node, child_node,
         blocks: Dict[Any, List[int]],
         child_keys: Optional[List[Any]]=None,
-        A: Optional[Matrix]=None,
-        b: Optional[Matrix]=None
+        A: Optional["Matrix"]=None,
+        b: Optional["Matrix"]=None
     ):
         super().__init__(parent_node, child_node, A, b)
         self._blocks = blocks

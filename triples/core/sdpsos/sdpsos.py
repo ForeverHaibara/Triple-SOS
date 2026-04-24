@@ -2,19 +2,21 @@ from itertools import combinations
 from time import perf_counter
 from typing import (
     Union, Optional, List, Tuple, Dict, Callable,
-    Generator, Any
+    Generator, Any, TYPE_CHECKING
 )
 
 from sympy import Poly, Expr, Integer, Mul, ZZ, QQ, RR
-from sympy.combinatorics import PermutationGroup
 from sympy import MutableDenseMatrix as Matrix
 
 from .sos import SOSPoly
-from .solution import SolutionSDP
 from ..preprocess import ProofNode, ProofTree, SolvePolynomial
 from ...utils import MonomialManager, Root, clear_polys_by_symmetry
 from ...sdp import ArithmeticTimeout
 from ...sdp.rationalize import SDPRationalizeError, DualRationalizer
+
+if TYPE_CHECKING:
+    from sympy.combinatorics import PermutationGroup
+    from .solution import SolutionSDP
 
 
 class _lazy_iter:
@@ -138,7 +140,7 @@ def _is_infeasible(
     poly: Poly,
     qmodule: List[Poly],
     ideal: Union[list, dict],
-    perm_group: PermutationGroup,
+    perm_group: "PermutationGroup",
 ) -> bool:
     """
     Check if the problem is trivially infeasible. Returns True if infeasible.
@@ -555,7 +557,7 @@ def SDPSOS(
     ineq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
     eq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
     *,
-    symmetry: Optional[PermutationGroup] = None,
+    symmetry: Optional["PermutationGroup"] = None,
     roots: Optional[List[Root]] = None,
     lift_degree_limit: int = 2,
     wedderburn: bool = True,
@@ -568,7 +570,7 @@ def SDPSOS(
     unstable_eig_threshold: float = -0.1,
     verbose: bool = False,
     time_limit: float = 3600.,
-) -> Optional[SolutionSDP]:
+) -> Optional["SolutionSDP"]:
     """
     Solve a constrained polynomial inequality problem by semidefinite programming (SDP).
 

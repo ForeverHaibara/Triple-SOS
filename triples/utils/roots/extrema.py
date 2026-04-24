@@ -6,13 +6,12 @@ uses a heuristic approach to compute the extrema of the polynomial.
 """
 from functools import wraps, partial
 from itertools import product
-from typing import List, Dict, Tuple, Union, Optional, Callable, Generator
+from typing import List, Dict, Tuple, Union, Optional, Callable, Generator, TYPE_CHECKING
 
 from sympy import (Expr, Poly, Integer, Rational, Float,
     Dummy, Symbol, EmptySet, FiniteSet,
     linear_eq_to_matrix, linsolve, sympify, true
 )
-from sympy.combinatorics import PermutationGroup
 from sympy.polys.polyerrors import PolificationFailed, DomainError
 from sympy.polys.polyclasses import DMP
 
@@ -20,6 +19,9 @@ from .polysolve import univar_realroots, solve_poly_system_crt, PolyEvalf, _filt
 from .roots import Root
 from .root_list import RootList
 from ..expressions import identify_symmetry_from_lists
+
+if TYPE_CHECKING:
+    from sympy.combinatorics import PermutationGroup
 
 
 # Comparison of tuples of sympy Expressions, compatible with sympy <= 1.9
@@ -135,7 +137,7 @@ class PolyCombSymmetry:
     """
     Class to manipulate the combination of a polynomial list given a symmetry group.
     """
-    def __init__(self, polys: List[Poly], symmetry: Optional[PermutationGroup]=None):
+    def __init__(self, polys: List[Poly], symmetry: Optional['PermutationGroup']=None):
         self.polys = polys
         self.symmetry = symmetry
         self.rep = [_.rep for _ in polys]
@@ -537,7 +539,7 @@ def _optimize_by_ineq_comb(
     symbols: List[Symbol],
     eliminate_func=None,
     solver=None,
-    symmetry: Optional[PermutationGroup]=None
+    symmetry: Optional['PermutationGroup']=None
 ) -> List[Tuple[Expr]]:
     """
     Optimize a polynomial with inequality constraints by considering all possible
@@ -618,7 +620,7 @@ def _optimize_poly(
     eq_constraints: List[Poly],
     symbols: List[Symbol],
     max_different: int = 2,
-    symmetry: Optional[PermutationGroup]=None
+    symmetry: Optional['PermutationGroup']=None
 ) -> List[Tuple[Expr]]:
     """
     Internal function to optimize a polynomial with inequality and equality constraints.

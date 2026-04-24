@@ -1,10 +1,12 @@
-from typing import List, Tuple, Dict, Union, Optional, Any
+from typing import List, Tuple, Dict, Union, Optional, Any, TYPE_CHECKING
 
 from sympy import Expr, Poly, Symbol
-from sympy.matrices import MutableDenseMatrix as Matrix
 from sympy.combinatorics import PermutationGroup, Permutation
 
 from ....sdp.arithmetic import rep_matrix_from_dict
+
+if TYPE_CHECKING:
+    from sympy.matrices import MutableDenseMatrix as Matrix
 
 MONOM = Any
 TERM = Tuple[MONOM, Expr]
@@ -113,7 +115,7 @@ class StateAlgebra:
         """
         return poly.rep.terms() if (not poly.is_zero) else []
 
-    def arraylize(self, poly: Poly, state: bool = False) -> Matrix:
+    def arraylize(self, poly: Poly, state: bool = False) -> "Matrix":
         """
         Convert a polynomial to a sympy vector (Matrix). The polynomial
         should lie in the algebra. Monomials outside the (degree-truncated)

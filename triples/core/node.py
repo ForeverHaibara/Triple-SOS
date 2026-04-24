@@ -1,10 +1,9 @@
 from datetime import datetime
 import traceback
 from time import perf_counter
-from typing import Dict, List, Union, Optional, Callable, Any
+from typing import Dict, List, Union, Optional, Callable, Any, TYPE_CHECKING
 import os
 
-from sympy import Expr
 import numpy as np
 
 from .problem import InequalityProblem
@@ -12,6 +11,9 @@ from .complexity import ProblemComplexity
 from .solution import Solution
 from ..utils.tree_predictor import TreePredictor
 from ..sdp import ArithmeticTimeout
+
+if TYPE_CHECKING:
+    from sympy import Expr
 
 class ProofNode:
     """
@@ -135,7 +137,7 @@ class ProofNode:
     def update(self, *args, **kwargs):
         pass
 
-    def _register_solution(self, solution: Optional[Expr]) -> Optional[Expr]:
+    def _register_solution(self, solution: Optional['Expr']) -> Optional['Expr']:
         """
         Default behaviour: reserve the better solution
         """
@@ -345,7 +347,7 @@ class ProofTree:
             if condition(self):
                 break
 
-    def solve(self) -> Optional[Expr]:
+    def solve(self) -> Optional['Expr']:
         # recompute expected end time
         configs = self.get_configs(self)
         time_limit = configs["time_limit"]

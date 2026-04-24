@@ -4,19 +4,21 @@ for SDP via computing the equality cases of the original SOS problem.
 """
 from collections import defaultdict, deque
 from itertools import product
-from typing import Dict, List, Tuple, Union, Optional, Callable, Any
+from typing import Dict, List, Tuple, Union, Optional, Callable, Any, TYPE_CHECKING
 
 from sympy import Poly, prod
 from sympy.matrices import MutableDenseMatrix as Matrix
-from sympy.combinatorics import PermutationGroup
 
 from .algebra import SOSBasis
 from ...sdp.arithmetic import ArithmeticTimeout, solve_columnspace, rep_matrix_from_list
 from ...utils import Root, MonomialManager
 from ...utils.roots.roots import _algebraic_extension, _derv
 
+if TYPE_CHECKING:
+    from sympy.combinatorics import PermutationGroup
 
-def _permute_root(perm_group: PermutationGroup, root: Root) -> List[Root]:
+
+def _permute_root(perm_group: "PermutationGroup", root: Root) -> List[Root]:
     """Permute a Root object efficiently given a permutation group."""
     perms = list(perm_group.elements)
     roots = [None] * len(perms)
@@ -288,7 +290,7 @@ def _root_space(
     return Matrix.zeros(n, 0)
 
 
-def _findroot_binary(poly: Poly, symmetry: PermutationGroup = None) -> List[Root]:
+def _findroot_binary(poly: Poly, symmetry: "PermutationGroup" = None) -> List[Root]:
     """
     Very easy implementation to find binary roots of the polynomial.
     """
@@ -317,7 +319,7 @@ def get_sos_nullspace(
     eq_bases: Dict[Any, SOSBasis],
     degree: Optional[int]=None,
     roots: List[Root] = [],
-    perm_group: Optional[PermutationGroup] = None,
+    perm_group: Optional["PermutationGroup"] = None,
     time_limit: Optional[Union[Callable, float]]=None
 ) -> Dict[Any, Matrix]:
     """

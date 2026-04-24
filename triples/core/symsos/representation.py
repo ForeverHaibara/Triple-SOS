@@ -1,10 +1,12 @@
-from typing import Tuple, Dict, Union, Optional
+from typing import Tuple, Dict, Union, Optional, TYPE_CHECKING
 
-from sympy import Poly, Expr, Symbol
 
-from .basic import SymmetricTransform
 from .symmetric import UE3Real, UE3Positive, UE4Real
 from ...utils import verify_symmetry
+
+if TYPE_CHECKING:
+    from .basic import SymmetricTransform
+    from sympy import Poly, Expr, Symbol
 
 _METHOD_TO_TRANSFORM = {
     3: {
@@ -16,7 +18,7 @@ _METHOD_TO_TRANSFORM = {
     }
 }
 
-def _get_transform_from_method(method: str, nvars: int) -> SymmetricTransform:
+def _get_transform_from_method(method: str, nvars: int) -> 'SymmetricTransform':
     if nvars not in _METHOD_TO_TRANSFORM:
         raise ValueError(f"Unknown method {method} for {nvars} variables.")
     if method not in _METHOD_TO_TRANSFORM[nvars]:
@@ -26,11 +28,11 @@ def _get_transform_from_method(method: str, nvars: int) -> SymmetricTransform:
 
 
 def sym_representation(
-    poly: Poly,
-    symbols: Optional[Tuple[Symbol, ...]] = None,
+    poly: 'Poly',
+    symbols: Optional[Tuple['Symbol', ...]] = None,
     return_poly: bool = True,
     method: str = 'real'
-) -> Union[Expr, Tuple[Poly, Expr]]:
+) -> Union['Expr', Tuple['Poly', 'Expr']]:
     """
     Represent a polynoimal to the symmetric form.
 
@@ -87,11 +89,11 @@ def sym_representation(
 
 
 def sym_representation_inv(
-    expr: Expr,
-    original_symbols: Tuple[Symbol, ...],
-    new_symbols: Tuple[Symbol, ...],
+    expr: 'Expr',
+    original_symbols: Tuple['Symbol', ...],
+    new_symbols: Tuple['Symbol', ...],
     method: str = 'real'
-) -> Expr:
+) -> 'Expr':
     """
     Compute the inverse transformation of a symbolic expression based on a specified method.
     This function takes a symbolic expression and reverses a previously applied
@@ -127,13 +129,13 @@ def sym_representation_inv(
 
 
 def sym_transform(
-    poly: Poly,
-    ineq_constraints: Dict[Poly, Expr],
-    eq_constraints: Dict[Poly, Expr],
-    symbols: Tuple[Symbol, ...],
+    poly: 'Poly',
+    ineq_constraints: Dict['Poly', 'Expr'],
+    eq_constraints: Dict['Poly', 'Expr'],
+    symbols: Tuple['Symbol', ...],
     deparametrize: bool = False,
     method: str = 'real'
-) -> Tuple[Poly, Dict[Poly, Expr], Dict[Poly, Expr], Expr]:
+) -> Tuple['Poly', Dict['Poly', 'Expr'], Dict['Poly', 'Expr'], 'Expr']:
     """
     Transform a symmetric inequality problem along with its constraints.
     """

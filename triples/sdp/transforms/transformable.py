@@ -1,16 +1,18 @@
-from typing import List, Tuple, Dict, Optional, Union, Callable, Any
+from typing import List, Tuple, Dict, Optional, Union, Callable, Any, TYPE_CHECKING
 from collections import Counter
 
 from sympy.matrices import MutableDenseMatrix as Matrix
-from sympy import Symbol
 
-from .transform import SDPTransformation
 from .linear import SDPLinearTransform, SDPMatrixTransform, SDPCongruence
 from .parametric import SDPDeparametrization
 from .polytope import get_zero_diagonals, SDPRowExtraction
 from .diagonalize import get_block_structures, SDPBlockDiagonalization
 from ..arithmetic import is_empty_matrix
 from ..abstract import SDPProblemBase
+
+if TYPE_CHECKING:
+    from .transform import SDPTransformation
+    from sympy import Symbol
 
 
 def _propagate_args_to_last(self, next_node, func, recursive, *args):
@@ -114,7 +116,7 @@ class TransformableProblem(SDPProblemBase):
         """
         self._transforms = [_ for _ in self._transforms if not _.is_parent(self)]
 
-    def common_transform(self, other: SDPProblemBase) -> SDPTransformation:
+    def common_transform(self, other: SDPProblemBase) -> 'SDPTransformation':
         """
         Return the common transformation (linkage) between two SDP problems.
         """
@@ -207,7 +209,7 @@ class TransformableProblem(SDPProblemBase):
     def constrain_block_structures(self, blocks: Optional[Dict[Any, List[int]]]=None):
         return SDPBlockDiagonalization.apply(self, blocks=blocks)
 
-    def deparametrize(self, symbols: Optional[List[Symbol]]=None) -> 'TransformableProblem':
+    def deparametrize(self, symbols: Optional[List['Symbol']]=None) -> 'TransformableProblem':
         return SDPDeparametrization.apply(self, symbols=symbols)
 
 

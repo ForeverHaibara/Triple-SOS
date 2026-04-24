@@ -1,18 +1,20 @@
 from functools import lru_cache, wraps
-from typing import Any, Union, Tuple, List, Callable, Optional
+from typing import Any, Union, Tuple, List, Callable, Optional, TYPE_CHECKING
 from time import perf_counter
 
 import numpy as np
 from scipy.sparse import coo_matrix
 from sympy import Poly, Expr, Symbol, Mul, Pow, Integer, Basic
 from sympy import symbols as sp_symbols
-from sympy.matrices import MutableDenseMatrix as Matrix
-from sympy.combinatorics import PermutationGroup
 from sympy.polys.polyclasses import DMP
 from sympy.polys.rings import PolyRing, PolyElement
 
 from ...utils import arraylize_np, arraylize_sp, MonomialManager
 from ...utils.monomials import generate_partitions
+
+if TYPE_CHECKING:
+    from sympy.combinatorics import PermutationGroup
+    from sympy.matrices import MutableDenseMatrix as Matrix
 
 # only for dev purpose
 _VERBOSE_GENERATE_QUAD_DIFF = False
@@ -90,7 +92,7 @@ class LinearBasis():
         return self.as_poly(self._get_default_symbols()).total_degree()
     def as_array_np(self, **kwargs) -> np.ndarray:
         return arraylize_np(self.as_poly(self._get_default_symbols()), **kwargs)
-    def as_array_sp(self, **kwargs) -> Matrix:
+    def as_array_sp(self, **kwargs) -> 'Matrix':
         return arraylize_sp(self.as_poly(self._get_default_symbols()), **kwargs)
 
 class LinearBasisExpr(LinearBasis):
@@ -181,7 +183,7 @@ class LinearBasisTangent(LinearBasis):
         tangent: Expr,
         symbols: Tuple[Symbol, ...],
         degree: int,
-        symmetry: PermutationGroup,
+        symmetry: 'PermutationGroup',
         tangent_p: Optional[Poly] = None,
         quad_diff_order: Union[bool, int] = 8,
     ) -> Tuple[List['LinearBasisTangent'], np.ndarray]:
@@ -599,7 +601,7 @@ def _get_matrix_of_quad_diff(
     degree: int,
     quad_diff_order: int,
     step: int,
-    symmetry: PermutationGroup
+    symmetry: 'PermutationGroup'
 ) -> np.ndarray:
     """
     Generate the matrix representation of all bases of the form

@@ -1,9 +1,11 @@
-from typing import List, Dict, Tuple, Union, Set, Optional
+from typing import List, Dict, Tuple, Union, Set, Optional, TYPE_CHECKING
 
 from sympy import Expr, Poly, Rational, Add, Mul, Symbol, true
 
-from ..problem import InequalityProblem
 from ...utils import CyclicExpr
+
+if TYPE_CHECKING:
+    from ..problem import InequalityProblem
 
 SIGNS_TYPE = Dict[Symbol, Tuple[Optional[int], Expr]]
 
@@ -506,7 +508,7 @@ def _get_signs_by_topological_order(ineq_constraints: Dict[Poly, Expr], eq_const
     return signs
 
 
-def get_symbol_signs(problem: InequalityProblem) -> Dict[Symbol, Tuple[Optional[int], Expr]]:
+def get_symbol_signs(problem: "InequalityProblem") -> Dict[Symbol, Tuple[Optional[int], Expr]]:
     """
     Infer the signs of each symbol in the problem given inequality
     and equality constraints heuristically. It can also be called
@@ -528,6 +530,7 @@ def get_symbol_signs(problem: InequalityProblem) -> Dict[Symbol, Tuple[Optional[
     Examples
     --------
     >>> from sympy.abc import a, b, c, d, u, v, w, x, y, z
+    >>> from triples.core import InequalityProblem
     >>> pro = InequalityProblem(a, {c/2 - b - 2: x, b - a: y, a - 1: z, d + 2: w}, {})
     >>> pro.get_symbol_signs()
     {a: (1, z + 1), b: (1, y + z + 1), c: (1, 2*x + 2*y + 2*z + 6), d: (None, None)}
@@ -560,13 +563,14 @@ def get_symbol_signs(problem: InequalityProblem) -> Dict[Symbol, Tuple[Optional[
     return signs
 
 
-def recompute_constraints_from_signs(problem: InequalityProblem) -> InequalityProblem:
+def recompute_constraints_from_signs(problem: "InequalityProblem") -> "InequalityProblem":
     """
     Recompute the constraints from the symbol signs.
 
     Examples
     --------
     >>> from sympy.abc import a, b, c, d, u, v, w, x, y, z
+    >>> from triples.core import InequalityProblem
     >>> pro = InequalityProblem(a**3 - b + 1, [a**2 - b**2, a, b, a + 2*b])
     >>> pro.recompute_constraints().ineq_constraints
     {a - b: (a**2 - b**2)/(a + b), a: a, b: b}

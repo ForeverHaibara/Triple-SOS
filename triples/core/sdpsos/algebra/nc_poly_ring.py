@@ -1,12 +1,14 @@
 from itertools import product
-from typing import Dict, Optional, Any
+from typing import Dict, Optional, Any, TYPE_CHECKING
 
 from sympy import Poly, Expr, Add, Mul
-from sympy.combinatorics.permutations import Permutation
 
 from .state_algebra import StateAlgebra, TERM, MONOM
 from .basis import QmoduleBasis
 from .pseudo_poly import PseudoPoly
+
+if TYPE_CHECKING:
+    from sympy.combinatorics.permutations import Permutation
 
 def generate_monoms_nc(nvars, degree, hom=True):
     def generate_monom_nc_hom(nvars, degree):
@@ -87,7 +89,7 @@ class NCPolyRing(StateAlgebra):
     def adjoint(self, term: TERM) -> TERM:
         return (term[0][::-1], term[1])
 
-    def permute_monom(self, monom: MONOM, perm: Permutation) -> MONOM:
+    def permute_monom(self, monom: MONOM, perm: "Permutation") -> MONOM:
         arr = perm.array_form
         return tuple((arr[i], v) for i, v in monom)
 

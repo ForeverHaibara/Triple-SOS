@@ -1,17 +1,19 @@
 from time import perf_counter
-from typing import Dict, List, Union, Optional, Tuple, Any
+from typing import Dict, List, Union, Optional, Tuple, Any, TYPE_CHECKING
 
 from numpy import ndarray
 import numpy as np
 from sympy import MutableDenseMatrix as Matrix
 from sympy import MatrixBase, Symbol, Expr, Dummy
-from sympy.core.relational import Relational
 
 from .arithmetic import ArithmeticTimeout, sqrtsize_of_mat, vec2mat, is_numerical_mat, rep_matrix_from_numpy, rep_matrix_to_numpy
 from .backends import SDPResult, SDPTimeoutError, solve_numerical_primal_sdp
 from .rationalize import RationalizeWithMask, RationalizeSimultaneously
 from .transforms import TransformablePrimal
 from .utils import exprs_to_arrays
+
+if TYPE_CHECKING:
+    from sympy.core.relational import Relational
 
 class SDPPrimal(TransformablePrimal):
     """
@@ -334,7 +336,7 @@ class SDPPrimal(TransformablePrimal):
 
     def solve_obj(self,
         objective: Union[Expr, Matrix, List],
-        constraints: List[Union[Relational, Expr, Tuple[Matrix, Matrix, str]]] = [],
+        constraints: List[Union['Relational', Expr, Tuple[Matrix, Matrix, str]]] = [],
         solver: Optional[str] = None,
         solve_child: bool = True,
         propagate_to_parent: bool = True,

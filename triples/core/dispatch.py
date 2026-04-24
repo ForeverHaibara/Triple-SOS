@@ -10,7 +10,7 @@ To control the behaviour of `InequalityProblem` on new types, you can either:
 from functools import singledispatch
 from typing import (
     List, Tuple, Set, Optional, Callable,
-    Any, TypeVar
+    Any, TypeVar, TYPE_CHECKING
 )
 
 from sympy import (
@@ -19,7 +19,6 @@ from sympy import (
 )
 from sympy import __version__ as SYMPY_VERSION
 from sympy.external.importtools import version_tuple
-from sympy.combinatorics import Permutation
 from sympy.polys.rings import PolyElement
 from sympy.polys.fields import FracElement
 from sympy.polys.domains.domainelement import DomainElement
@@ -47,6 +46,9 @@ else:
         return obj
 
 from ..utils.expressions.exraw import HAS_EXRAW
+
+if TYPE_CHECKING:
+    from sympy.combinatorics import Permutation
 
 T = TypeVar('T')
 
@@ -79,7 +81,7 @@ def _dtype_sqf_list(x: T) -> Tuple[Expr, List[Tuple[T, int]]]:
     return x.sqf_list()
 
 @singledispatch
-def _dtype_make_reorder_func(x: T, gens: Tuple[Symbol, ...]) -> Callable[[Permutation], T]:
+def _dtype_make_reorder_func(x: T, gens: Tuple[Symbol, ...]) -> Callable[['Permutation'], T]:
     """Return a callable `f` such that `f(perm) == x.xreplace(dict(zip(gens, perm(gens))))`."""
     return lambda perm: x.xreplace(dict(zip(gens, perm(gens))))
 
@@ -146,7 +148,7 @@ def _expr_sqf_list(x: Expr) -> Tuple[Expr, List[Tuple[Expr, int]]]:
     return (Integer(1), [(x, 1)])
 
 @_dtype_make_reorder_func.register(Expr)
-def _expr_make_reorder_func(x: Expr, gens: Tuple[Symbol, ...]) -> Callable[[Permutation], T]:
+def _expr_make_reorder_func(x: Expr, gens: Tuple[Symbol, ...]) -> Callable[['Permutation'], T]:
     return lambda perm: signsimp(x.xreplace(dict(zip(gens, perm(gens)))))
 
 
@@ -165,7 +167,7 @@ def _poly_sqf_list(x: Poly) -> Tuple[Expr, List[Tuple[Poly, int]]]:
     return _sqf_list(x)
 
 @_dtype_make_reorder_func.register(Poly)
-def _poly_make_reorder_func(x: Poly, gens: Tuple[Symbol, ...]) -> Callable[[Permutation], T]:
+def _poly_make_reorder_func(x: Poly, gens: Tuple[Symbol, ...]) -> Callable[['Permutation'], T]:
     if x.gens == gens:
         return lambda perm: Poly.new(x.reorder(*perm.__invert__()(gens)).rep, *gens)
     return lambda perm: Poly(x.as_expr().xreplace(dict(zip(gens, perm(gens)))), *gens)

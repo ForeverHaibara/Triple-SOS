@@ -1,4 +1,4 @@
-from typing import Optional, Union, List, Dict, Tuple, Any
+from typing import Optional, Union, List, Dict, Tuple, Any, TYPE_CHECKING
 
 import numpy as np
 from sympy import (
@@ -8,7 +8,6 @@ from sympy import (
 from sympy.core import S
 from sympy.combinatorics import PermutationGroup, CyclicGroup
 from sympy.polys.constructor import construct_domain
-from sympy.polys.domains import Domain
 from sympy.polys.domains.gaussiandomains import GaussianElement
 from sympy.polys.matrices.sdm import SDM
 from sympy.polys.matrices.domainmatrix import DomainMatrix
@@ -21,6 +20,9 @@ from sympy.polys.rootoftools import ComplexRootOf as CRootOf
 # from .rationalize import rationalize
 from ..monomials import generate_monoms
 from ..expressions import EXRAW
+
+if TYPE_CHECKING:
+    from sympy.polys.domains import Domain
 
 try:
     # https://github.com/sympy/sympy/pull/26806
@@ -55,7 +57,7 @@ def _reg_matrix(M: Matrix) -> Matrix:
     newsdm = SDM(newsdm, rep.shape, domain)
     return Matrix._fromrep(DomainMatrix.from_rep(newsdm))
 
-def _algebraic_extension(vec: List[ANP], domain: Domain) -> Matrix:
+def _algebraic_extension(vec: List[ANP], domain: 'Domain') -> Matrix:
     """
     Convert a column vector of algebraic numbers to a matrix of rational numbers.
     """
@@ -156,8 +158,8 @@ class Root():
     >>> root.elementary_polynomials()
     [1, 2, -1]
     """
-    domain: Domain
-    def __init__(self, root: Tuple[Any, ...], domain: Optional[Domain]=None, rep: Optional[Tuple[ANP, ...]]=None):
+    domain: 'Domain'
+    def __init__(self, root: Tuple[Any, ...], domain: Optional['Domain']=None, rep: Optional[Tuple[ANP, ...]]=None):
         root = tuple(sympify(r) for r in root)
         self.rep = rep
         self.domain = domain
@@ -371,7 +373,7 @@ class Root():
         """Wrapper for self.domain.to_sympy()."""
         return self.domain.to_sympy(*args, **kwargs)
 
-    def set_domain(self, domain: Domain) -> 'Root':
+    def set_domain(self, domain: 'Domain') -> 'Root':
         if domain == self.domain:
             return self
         if not self.is_Rational:

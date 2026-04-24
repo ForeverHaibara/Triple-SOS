@@ -53,6 +53,7 @@ lint.select = [
     "I002",  # `import` statement not at top of file
     "C4",
     "E",
+    "W",
     "F",
     "FURB",
     "LOG",
@@ -95,3 +96,6 @@ lint.ignore = [
 ]
 
 exclude = ["triples/benchmarks/run_benchmark.py"]
+
+[tool.ruff.lint.flake8-type-checking]
+quote-annotations = true
