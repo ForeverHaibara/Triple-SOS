@@ -2,7 +2,7 @@ from typing import Union, Optional, Tuple, List, Dict, Callable, Any
 
 from numpy import ndarray
 import numpy as np
-from sympy import Matrix, MatrixBase, Expr, Symbol, Basic, collect
+from sympy import Matrix, MatrixBase, Expr, Basic
 from sympy.core.relational import GreaterThan, StrictGreaterThan, LessThan, StrictLessThan, Equality, Relational
 from sympy.solvers.solveset import linear_eq_to_matrix
 

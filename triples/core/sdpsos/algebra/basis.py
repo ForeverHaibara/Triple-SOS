@@ -4,7 +4,6 @@ from typing import List, Tuple, Dict, Any, Callable, Optional
 from sympy import Expr, Poly, Domain
 from sympy.matrices import MutableDenseMatrix as Matrix
 from sympy.combinatorics import PermutationGroup, Permutation
-from scipy.sparse import csr_matrix
 
 from .state_algebra import StateAlgebra, MONOM, TERM
 from ....sdp.arithmetic import rep_matrix_from_dict
@@ -105,7 +104,7 @@ class QmoduleBasis(SOSBasis):
         algebra = self.algebra
         qmodule = algebra.terms(self.qmodule.set_domain(domain))
         one, zero = domain.one, domain.zero
-        mul, state, adjoint, index = algebra.mul, algebra.s, algebra.adjoint, algebra.index
+        mul, state, _, index = algebra.mul, algebra.s, algebra.adjoint, algebra.index
         basis = self._basis
         def _mapping(i, j):
             vec = defaultdict(lambda : zero)
@@ -129,7 +128,7 @@ class QmoduleBasis(SOSBasis):
         N, n = len(self.algebra), len(self)
 
         if isinstance(domain, Domain):
-            rows = defaultdict(lambda : dict())
+            rows = defaultdict(lambda : {})
             if self.is_commutative:
                 for i in range(n):
                     for t, v in mapping(i, i).items():
@@ -166,7 +165,7 @@ class QmoduleBasis(SOSBasis):
                     continue
 
                 m2 = basis[j]
-                s = set((i*n+j, j*n+i))
+                s = {i*n+j, j*n+i}
                 for p in symmetry.elements:
                     m3, m4 = pm(m1, p), pm(m2, p)
                     i2, j2 = dict_basis.get(m3), dict_basis.get(m4)
@@ -212,7 +211,7 @@ class IdealBasis(SOSBasis):
         algebra = self.algebra
         ideal = algebra.terms(self.ideal.set_domain(domain))
         one, zero = domain.one, domain.zero
-        mul, state, adjoint, index = algebra.mul, algebra.s, algebra.adjoint, algebra.index
+        mul, state, _, index = algebra.mul, algebra.s, algebra.adjoint, algebra.index
         basis = self._basis
         def _mapping(i):
             vec = defaultdict(lambda : zero)
@@ -231,7 +230,7 @@ class IdealBasis(SOSBasis):
         N, n = len(self.algebra), len(self)
 
         if isinstance(domain, Domain):
-            rows = defaultdict(lambda : dict())
+            rows = defaultdict(lambda : {})
             for i in range(n):
                 for t, v in mapping(i).items():
                     rows[t][i] = v

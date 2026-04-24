@@ -100,7 +100,7 @@ class UE3Positive(SymmetricTransform):
             Poly(x, (x,y,z)): x,
             Poly(y, (x,y,z)): y,
             Poly(z, (x,y,z)): z
-        }, dict()
+        }, {}
 
 
 class UE3Real(SymmetricTransform):
@@ -148,7 +148,7 @@ class UE3Real(SymmetricTransform):
     @classmethod
     def _get_default_constraints(cls, new_symbols):
         x, y, z = new_symbols
-        return {Poly(z, (x,y,z)): z}, dict()
+        return {Poly(z, (x,y,z)): z}, {}
 
 
 class UE4Real(SymmetricTransform):
@@ -222,7 +222,7 @@ class UE4Real(SymmetricTransform):
             Poly(y, (x,y,z,w)): y,
             Poly(z, (x,y,z,w)): z,
             Poly(w, (x,y,z,w)): w
-        }, dict()
+        }, {}
 
 
 def _symmetric_real_3vars(
@@ -262,8 +262,8 @@ def _symmetric_real_3vars(
         min_x_degree = min(numerator.monoms(), key=lambda _:_[0])[0]
         if min_x_degree > 0:
             # x = p*w
-            dt = dict(((i-min_x_degree, j, k), v)
-                            for (i,j,k), v in numerator.rep.terms())
+            dt = {(i-min_x_degree, j, k): v
+                            for (i,j,k), v in numerator.rep.terms()}
             numerator = Poly(dt, x, y, z, domain=numerator.domain)
             p_degree -= min_x_degree
             w_degree -= min_x_degree
@@ -306,7 +306,7 @@ def _symmetric_real_4vars(
     q_degree = -((degree * 2) % 3)
     r_degree = -(degree % 2)
     # q^3 -> q, r^2 -> r
-    dt = dict(((i,j//3,k//2,l), _) for (i,j,k,l), _ in poly_dehom.rep.terms())
+    dt = {(i,j//3,k//2,l): _ for (i,j,k,l), _ in poly_dehom.rep.terms()}
     poly_dehom = Poly(dt, p, q, r, s, domain=poly_dehom.domain)
 
     # Naive implementation:
@@ -336,10 +336,10 @@ def _symmetric_real_4vars(
 
     _min_degree = lambda poly, i: 0 if poly.is_zero else min(_[i] for _ in poly.monoms())
     min_degrees = [_min_degree(numerator, i) for i in range(5)]
-    numerator = Poly(dict(
-        (tuple(mi - mini for mi, mini in zip(m, min_degrees)), _)
+    numerator = Poly({
+        tuple(mi - mini for mi, mini in zip(m, min_degrees)): _
         for m, _ in numerator.rep.terms()
-    ), x, y, z, ker1, ker2, domain=numerator.domain)
+    }, x, y, z, ker1, ker2, domain=numerator.domain)
 
     # degrees of y, ker1, ker2 in denominator is lifted by homogenization
     # and the degrees are reduced after cancellation

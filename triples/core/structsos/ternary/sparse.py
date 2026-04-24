@@ -5,7 +5,7 @@ from math import gcd
 from sympy import Poly, Expr, Integer, Rational, Add, Mul
 from sympy.combinatorics import CyclicGroup
 
-from .utils import Coeff, DomainExpr
+from .utils import Coeff, DomainExpr, CyclicSum
 from .dense_symmetric import sos_struct_dense_symmetric
 from .quadratic import sos_struct_quadratic
 from .cubic import sos_struct_cubic
@@ -23,7 +23,7 @@ def sos_struct_sparse(coeff, real = True):
     handled in R.
     """
     a, b, c = coeff.gens
-    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+    CyclicSum = coeff.cyclic_sum
 
     if len(coeff) > 6:
         return None
@@ -126,7 +126,7 @@ class CoeffMonom:
     @classmethod
     def integer_intersection(cls, p1, p2, p3, p4) -> Optional['CoeffMonom']:
         # cls.assert_equal_degrees(p1, p2, p3, p4)
-        (p10, p11, p12), (p20, p21, p22), (p30, p31, p32), (p40, p41, p42) = p1, p2, p3, p4
+        (p10, p11, _), (p20, p21, _), (p30, p31, _), (p40, p41, _) = p1, p2, p3, p4
         det = p10*p31 - p10*p41 - p11*p30 + p11*p40 - p20*p31 + p20*p41 + p21*p30 - p21*p40
         p50 = p10*p21*p30 - p10*p21*p40 - p10*p30*p41 + p10*p31*p40 - p11*p20*p30 + p11*p20*p40 + p20*p30*p41 - p20*p31*p40
         p51 = p10*p21*p31 - p10*p21*p41 - p11*p20*p31 + p11*p20*p41 - p11*p30*p41 + p11*p31*p40 + p21*p30*p41 - p21*p31*p40
@@ -173,7 +173,7 @@ class AMGM3(DomainExpr):
     def solve(self, c1, m1, c2, m2):
         """Solve c1*CyclicSum(a**m1[0]*b**m1[1]*c**m1[2]) + c2*CyclicSum(a**m2[0]*b**m2[1]*c**m2[2]) >= 0."""
         a, b, c = self.gens
-        CyclicSum, CyclicProduct = self.cyclic_sum, self.cyclic_product
+        CyclicSum = self.cyclic_sum
 
         if c1 >= 0 and c2 >= 0: # TODO: handle real numbers??
             return c1*CyclicSum(a**m1[0]*b**m1[1]*c**m1[2]) + c2*CyclicSum(a**m2[0]*b**m2[1]*c**m2[2])
@@ -202,7 +202,7 @@ class AMGM3(DomainExpr):
 
     def _solve_amgm(self, m1: CoeffMonom, m2: CoeffMonom):
         a, b, c = self.gens
-        CyclicSum, CyclicProduct = self.cyclic_sum, self.cyclic_product
+        CyclicSum = self.cyclic_sum
 
         weight = m1.weight(m2)
         m2expr = a**m2[0]*b**m2[1]*c**m2[2]
@@ -227,7 +227,7 @@ class AMGM3(DomainExpr):
         hand-side can be factored by (a-1)^2*(a+1)^2.
         """
         a, b, c = self.gens
-        CyclicSum, CyclicProduct = self.cyclic_sum, self.cyclic_product
+        CyclicSum = self.cyclic_sum
 
         v1, v2 = p - m1, m2 - p
         if v1.dot(v2) > 0:
@@ -405,7 +405,7 @@ def _sos_struct_sparse_amgm(coeff):
     """
     if not len(coeff) <= 6:
         return None
-    monoms = set(CoeffMonom(*m).std() for m in coeff.keys())
+    monoms = {CoeffMonom(*m).std() for m in coeff.keys()}
     monoms = list(monoms)
     if len(monoms) == 1:
         degree = coeff.total_degree()
@@ -443,7 +443,7 @@ def _separate_product_wrapper(recursion: Callable, coeff: Coeff) -> Callable:
     For instance, if we have CyclicProduct(a) * (CyclicProduct(a)*F(a,b,c) + G(a,b,c)),
     we had better expand it to CyclicProduct(a**2) * F(a,b,c) + CyclicProduct(a) * G(a,b,c).
     """
-    from ....utils import CyclicSum, CyclicProduct
+    from ....utils import CyclicProduct
     a = coeff.gens[0]
     cg = CyclicGroup(len(coeff))
     def _extract_cyclic_prod(x: Expr) -> Tuple[int, Expr]:
@@ -697,7 +697,7 @@ def sos_struct_heuristic(coeff: Coeff, real=True):
         return None
 
     a, b, c = coeff.gens
-    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+    CyclicSum = coeff.cyclic_sum
 
     border1, border2 = [], []
     for (i,j,k), v in monoms[::-1]:

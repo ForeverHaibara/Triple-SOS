@@ -1,5 +1,5 @@
 import sympy as sp
-from sympy.abc import a, b, c, x, y, z, t
+from sympy.abc import a, x, t
 from sympy.matrices import MutableDenseMatrix as Matrix
 
 import pytest

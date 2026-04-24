@@ -97,7 +97,7 @@ def get_additive_terms(latex_str):
 
     if terms[0] == "" and len(terms) > 1:
         first_term_candidate = terms[1]
-        if first_term_candidate.startswith('+') or first_term_candidate.startswith('-'):
+        if first_term_candidate.startswith(('+','-')):
             final_terms.append(first_term_candidate)
             start_idx_for_loop = 2
         else:
@@ -295,7 +295,7 @@ if __name__ == '__main__':
     print("\n--- Part 2: wrap_with_aligned_if_needed (with new line length logic) ---")
     expr_to_wrap = "termA+termB+termC+termD+termE+termF+termG"
     print(f"\nInput: '{expr_to_wrap}'")
-    print(f"Wrapped (max_terms=2, max_len=20, max_line_len=15):") # max_terms=2 means 3+ terms trigger align
+    print("Wrapped (max_terms=2, max_len=20, max_line_len=15):") # max_terms=2 means 3+ terms trigger align
     print(wrap_with_aligned_if_needed(expr_to_wrap, max_terms_trigger=2, max_len_trigger=20, max_line_len=15))
     # termA +termB (len approx 6+1+6=13) -> fits
     # termA +termB +termC (len approx 13+1+6=20) -> exceeds 15. Break.
@@ -306,7 +306,7 @@ if __name__ == '__main__':
     # & +termG
 
     print(f"\nInput: '{s_long_sum}' (a+b+c+d+e+f+g+h+i)")
-    print(f"Wrapped (max_terms=2, max_len=5, max_line_len=10):") # triggers align, line length 10
+    print("Wrapped (max_terms=2, max_len=5, max_line_len=10):") # triggers align, line length 10
     print(wrap_with_aligned_if_needed(s_long_sum, max_terms_trigger=2, max_len_trigger=5, max_line_len=10))
     # a (1)
     # a +b (1+1+2=4)
@@ -333,7 +333,7 @@ if __name__ == '__main__':
     # Test with a long expression inside parentheses, requiring internal alignment with line length
     long_paren_expr = "f(x) = (a+b+c+d+e+f+g+h+i+j+k+l+m+n+o+p+q+r) + (s+t+u+v+w) - 2(x+y+z)"
     print(f"\nInput: '{long_paren_expr}'")
-    print(f"Recursively formatted (max_terms_aligned=2, max_len_aligned=30, max_line_len_in_aligned=20):")
+    print("Recursively formatted (max_terms_aligned=2, max_len_aligned=30, max_line_len_in_aligned=20):")
     # First parenthesis content: "a+b+...+r" (18 terms) -> will be wrapped by aligned
     #   Inside that aligned: lines should be <= 20 chars.
     #   a +b +c +d +e +f +g +h +i (9 terms, length ~ 9*2 + 8*1 = 26) -> should break
@@ -345,7 +345,7 @@ if __name__ == '__main__':
     print("-" * 20)
     nested_frac_long_num = "E = \\frac{X_1+X_2+X_3+X_4+X_5+X_6+X_7+X_8+X_9+X_{10}}{k+l+m} + Y"
     print(f"\nInput: '{nested_frac_long_num}'")
-    print(f"Recursively formatted (max_terms_aligned=1, max_len_aligned=10, max_line_len_in_aligned=18):")
+    print("Recursively formatted (max_terms_aligned=1, max_len_aligned=10, max_line_len_in_aligned=18):")
     # Numerator has 10 terms. max_terms_aligned=1 means >=2 terms will trigger aligned.
     # max_line_len_in_aligned=18 for numerator's lines.
     # X_1 +X_2 +X_3 (len ~3+1+3+1+3 = 11)

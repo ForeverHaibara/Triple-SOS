@@ -3,7 +3,7 @@ from sympy import Poly, Rational, Float, Add, sqrt
 from .quartic import sos_struct_quartic
 from .septic_symmetric import sos_struct_septic_symmetric
 from .utils import (
-    Coeff, sum_y_exprs, nroots, rationalize_bound,
+    Coeff, nroots, rationalize_bound,
     zip_longest, align_cyclic_group, congruence_solve,
     sos_struct_handle_uncentered
 )
@@ -176,7 +176,7 @@ def _sos_struct_septic_hexagon_subtract_quintic(coeff: Coeff):
         return None
 
     a, b, c = coeff.gens
-    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+    CyclicSum = coeff.cyclic_sum
 
     p, q = coeff((4,3,0)) / coeff410, coeff((3,4,0)) / coeff410
     m0, p0, n0, q0 = [coeff((5-i,1+i,1)) for i in range(4)]
@@ -312,7 +312,7 @@ def _sos_struct_septic_hexagon_sdp(coeff: Coeff):
         return
 
     a, b, c = coeff.gens
-    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+    CyclicSum = coeff.cyclic_sum
 
     c520, c430, c340, c502, c511, c421, c331, c241 = [
         coeff(_) for _ in [(5,2,0),(4,3,0),(3,4,0),(5,0,2),(5,1,1),(4,2,1),(3,3,1),(2,4,1)]]
@@ -496,7 +496,7 @@ def _sos_struct_septic_star_sdp(coeff: Coeff):
         return
 
     a, b, c = coeff.gens
-    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+    CyclicSum = coeff.cyclic_sum
 
     c520, c430, c340, c502, c511, c421, c331, c241 = [
         coeff(_) for _ in [(5,2,0),(4,3,0),(3,4,0),(5,0,2),(5,1,1),(4,2,1),(3,3,1),(2,4,1)]]

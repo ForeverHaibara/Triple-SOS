@@ -1,4 +1,3 @@
-from typing import List, Dict, Tuple, Union, Optional
 
 from sympy import Expr, Poly, Rational, Integer, Mul, fraction
 

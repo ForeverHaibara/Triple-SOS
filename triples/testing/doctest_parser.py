@@ -270,7 +270,7 @@ def parse_ident_list_like(s: str) -> Union[List[str], Tuple[str, ...], set]:
         if open_ch == "[":
             return []
         if open_ch == "(":
-            return tuple()
+            return ()
         if open_ch == "{":
             return set()
 
@@ -373,10 +373,10 @@ def _collect_doctest_examples_raw(
     skip: bool = True,
 ):
     lines = [_.strip() for _ in doc.splitlines()]
-    lines = [_ for _ in lines if _.startswith('=>') or _.startswith('::')]
+    lines = [_ for _ in lines if _.startswith(('=>','::'))]
     cases = []
     for line in lines:
-        if not (line.startswith('=>') or line.startswith('::')):
+        if not line.startswith(('=>','::')):
             continue
 
         # Although it can be implemented more carefully,

@@ -1,4 +1,4 @@
-from sympy import Poly, Symbol, Function, Integer, Rational, Add, sqrt
+from sympy import Poly, Function, Integer, Add, sqrt
 from sympy.polys.polyerrors import CoercionFailed
 
 from ..solution import SolutionStructural
@@ -9,7 +9,7 @@ from ..ternary import (
 )
 from ..ternary.dense_symmetric import sym_axis, _homogenize_sym_proof
 from ..utils import (
-    Coeff, uniquely_named_symbol, rationalize_func, congruence
+    Coeff, uniquely_named_symbol, rationalize_func
 )
 from ..univariate import prove_univariate
 
@@ -257,7 +257,7 @@ def _constrained_acute_quartic(coeff: Coeff, F):
     Note: s((b2+c2-a2)(a-b)(a-c))*s((2a+b+c)(a-b)(a-c)) = s((2a+b+c)(b2+c2-a2)(a-b)2(a-c)2)
     """
     a, b, c = coeff.gens
-    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+    CyclicSum = coeff.cyclic_sum
 
     # 1. Write it in the form of s((b^2+c^2-a^2)*quadratic)
     c400, c310, c220, c301, c211 = [coeff(_) for _ in [(4,0,0), (3,1,0), (2,2,0), (3,0,1), (2,1,1)]]

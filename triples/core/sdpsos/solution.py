@@ -93,7 +93,7 @@ def _get_ideal_expr(
         vec = _as_expr(_invarraylize(ideal_bases[key], vec, gens), state_operator=state_operator)
         ideal_exprs.append(vec * expr.together())
     if state_operator is not None:
-        ideal_exprs = map(lambda x: state_operator(x), ideal_exprs)
+        ideal_exprs = [state_operator(x) for x in ideal_exprs]
     return Add(*ideal_exprs)
 
 def _get_qmodule_expr(

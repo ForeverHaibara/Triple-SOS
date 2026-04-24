@@ -2,7 +2,7 @@
 This module provides heuristic functions to optimize a polynomial
 with inequality and equality constraints NUMERICALLY.
 """
-from typing import List, Union, Tuple, Dict, Optional, Callable
+from typing import List, Union, Dict, Optional, Callable
 from functools import partial
 import warnings
 
@@ -356,7 +356,7 @@ def numeric_optimize_skew_symmetry(
             x0 = x0[:-1]
         extrema.append(tuple(optimizer(f2, x0, jac=f2.g)))
     if is_homogeneous:
-        extrema = [tuple((*_, 1 - sum(_))) for _ in extrema]
+        extrema = [(*_, 1 - sum(_)) for _ in extrema]
     return extrema
 
 
@@ -483,9 +483,9 @@ def numeric_optimize_poly(
     symbols = _infer_symbols(symbols, poly, ineq_constraints, eq_constraints)
     if len(symbols) == 0:
         return []
-    if not (objective in ('min', 'max', 'all')):
+    if objective not in ('min', 'max', 'all'):
         raise ValueError('Objective must be either "min" or "max" or "all".')
-    if not (return_type in ('root', 'tuple', 'dict', 'result')):
+    if return_type not in ('root', 'tuple', 'dict', 'result'):
         raise ValueError('Return type must be either "root" or "tuple" or "dict" or "result".')
 
     poly, ineq_constraints, eq_constraints = polylize_input(

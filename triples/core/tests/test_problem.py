@@ -1,9 +1,7 @@
-from sympy.abc import a, b, c, d, e, u, v, w, x, y, z
+from sympy.abc import a, b, c, u, v, w, x, y, z
 
 from sympy import Poly, Function, ZZ, ring
 from sympy.combinatorics import CyclicGroup
-from sympy.polys.rings import PolyElement
-from sympy.polys.fields import FracElement
 
 from ..problem import InequalityProblem
 from ..dispatch import _fracelement_init
@@ -33,10 +31,10 @@ def test_wrap_constraints():
     pro = InequalityProblem(a+b+c, [2*a+b, 2*b+c, 2*c+a])
     pro1 = pro.wrap_constraints()[0]
     assert set(pro1.ineq_constraints) == {2*a + b, 2*b + c, a + 2*c}
-    assert len(set([_.find(Function).pop().func for _ in pro1.ineq_constraints.values()])) == 3
+    assert len({_.find(Function).pop().func for _ in pro1.ineq_constraints.values()}) == 3
     assert [len(_.free_symbols) for _ in pro1.ineq_constraints.values()] == [2, 2, 2]
 
     pro2 = pro.wrap_constraints(CyclicGroup(3))[0]
     assert set(pro2.ineq_constraints) == {2*a + b, 2*b + c, a + 2*c}
-    assert len(set([_.find(Function).pop().func for _ in pro2.ineq_constraints.values()])) == 1
+    assert len({_.find(Function).pop().func for _ in pro2.ineq_constraints.values()}) == 1
     assert [len(_.free_symbols) for _ in pro2.ineq_constraints.values()] == [2, 2, 2]

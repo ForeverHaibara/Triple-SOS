@@ -79,7 +79,7 @@ def _preprocess_text_delatex(poly: str, funcs: Dict[str, Tuple[str, int]]) -> st
 
     if '' in funcs:
         funcs.pop('')
-    funckeys = sorted(list(funcs), key=lambda x: -len(x))
+    funckeys = sorted(funcs, key=lambda x: -len(x))
     def _match_pattern(poly, i):
         for pattern in funckeys:
             if len(poly) >= i + len(pattern) and poly[i:i+len(pattern)] == pattern:
@@ -174,7 +174,7 @@ def _preprocess_text_completion(
         preserve_patterns.add('e')
     if '' in preserve_patterns:
         preserve_patterns.remove('') # will cause infinite loop
-    preserve_patterns = sorted(list(preserve_patterns), key=lambda x: -len(x))
+    preserve_patterns = sorted(preserve_patterns, key=lambda x: -len(x))
     def _pattern_match(poly, i):
         lenp = len(poly)
         for pattern in preserve_patterns:
@@ -215,7 +215,7 @@ def expand_poly(expr: Expr, gens=None) -> Union[Expr, Poly]:
     class UnhandledExpr(Exception):
         pass
     expr = sympify(expr)
-    symbols = tuple(sorted(list(expr.free_symbols), key=lambda x:x.name))
+    symbols = tuple(sorted(expr.free_symbols, key=lambda x:x.name))
     other_symbols = []
     if gens is None:
         gens = symbols
@@ -520,7 +520,7 @@ def preprocess_text(
                 return poly0
             elif return_type == 'frac':
                 return poly0, Poly(1, gens, domain = poly0.domain)
-    except Exception as e:
+    except Exception:
         pass
 
     if return_type == 'frac':
@@ -540,7 +540,7 @@ def preprocess_text(
                     one = Poly(1, gens, domain = div0.domain)
                     return div0, one
             return poly0, poly1
-        except Exception as e:
+        except Exception:
             return None, None
 
     return None
@@ -768,8 +768,8 @@ def _reduce_factor_list(poly: Poly, perm_group: PermutationGroup) -> Tuple[Expr,
      [(Poly(c, a, b, c, domain='ZZ'), 3), (Poly(b - c, a, b, c, domain='ZZ'), 6)])
     """
     coeff, factors = poly.factor_list()
-    pow_dict = dict((p, power) for p, power in factors)
-    rep_dict = dict((p.rep, p) for p, _ in factors)
+    pow_dict = dict(factors) # {p: power for p, power in factors}
+    rep_dict = {p.rep: p for p, _ in factors}
     cyc_factors = []
     for base, power in factors:
         subdict = defaultdict(int)
@@ -877,7 +877,8 @@ def poly_get_factor_form(
 
     strings = sorted(strings, key = lambda x: (len(x), x))
     s = _get_coeff_str(coeff, MUL) + MUL.join(strings)
-    if s.startswith('+'): s = s[1:]
+    if s.startswith('+'):
+        s = s[1:]
     return s
 
 
@@ -960,10 +961,11 @@ def coefficient_triangle_latex(poly, tabular: bool = True, document: bool = True
     if poly is None:
         return ''
     if isinstance(poly, str):
-        poly_str = poly
+        # poly_str = poly
         poly = pl(poly)
     else:
-        poly_str = 'f(%s)'%','.join([str(_) for _ in poly.gens])
+        # poly_str = 'f(%s)'%','.join([str(_) for _ in poly.gens])
+        pass
 
     zero_wrapper = lambda x: x
     if zeros is not None and len(zeros):
@@ -1088,10 +1090,7 @@ class PolyReader:
             with open(polys, 'r') as f:
                 polys = f.readlines()
 
-        polys = map(
-            lambda x: x.strip() if isinstance(x, str) else x,
-            polys
-        )
+        polys = [x.strip() if isinstance(x, str) else x for x in polys]
 
         polys = list(filter(
             lambda x: (isinstance(x, str) and len(x)) or isinstance(x, Poly),

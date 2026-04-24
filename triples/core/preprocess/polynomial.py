@@ -1,10 +1,10 @@
-from typing import List, Dict, Union, Tuple, Callable, Optional
+from typing import List, Dict, Tuple, Callable, Optional
 
-from sympy import Expr, Poly, Integer
+from sympy import Expr, Poly
 
 from .elimination import eliminate_power_constraints
 from ..problem import InequalityProblem
-from ..node import ProofNode, TransformNode
+from ..node import TransformNode
 from ...utils import (
     CyclicSum,
     identify_symmetry_from_lists, verify_symmetry, poly_reduce_by_symmetry
@@ -96,7 +96,7 @@ class SolvePolynomial(TransformNode):
                 return None
             return sqf**2 * power_restore(_restoration(x))
 
-        self.restorations = {c: composed_restoration for c in self.children}
+        self.restorations = dict.fromkeys(self.children, composed_restoration)
 
         if self.state != 0 and len(self.children) == 0:
             # check one more time if there are no children
@@ -194,7 +194,7 @@ def _align_degree(p: Poly, p1: Poly, p2: Poly, accept_odd_degree: bool = False) 
         else:
             terms[d].append((m, c))
     # p = sum(d * polys[d] for d in terms)
-    keys = sorted(list(terms.keys()))
+    keys = sorted(terms.keys())
     for i in range(len(keys)-1):
         if (keys[i+1]-keys[i])%ddiff != 0:
             return None

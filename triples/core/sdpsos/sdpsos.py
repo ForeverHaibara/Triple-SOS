@@ -81,7 +81,7 @@ def _get_qmodule_list(
     Generate the (generators of the) qmodule for the given problem.
     """
     _ACCEPTED_PREORDERINGS = ['none', 'linear', 'linear-progressive']
-    if not preordering in _ACCEPTED_PREORDERINGS:
+    if preordering not in _ACCEPTED_PREORDERINGS:
         raise ValueError("Invalid preordering method, expected one of %s, received %s." % (str(_ACCEPTED_PREORDERINGS), preordering))
 
     if degree is None:
@@ -328,7 +328,7 @@ class SDPSOSSolver(ProofNode):
                 qmodule = qmodule + poly_qmodule, ideal = ideal,
                 symmetry = symmetry.perm_group, roots = roots, degree=degree
             )
-        sdp = sos.construct(
+        sos.construct(
             wedderburn=configs['wedderburn'],
             verbose=configs['verbose'],
             time_limit=configs['expected_end_time'] - perf_counter()
@@ -344,7 +344,7 @@ class SDPSOSSolver(ProofNode):
             time0 = perf_counter()
             self._constrain_poly_qmodule(sos, len(qmodule), len(poly_qmodule))
             if configs["verbose"]:
-                print(f"Time to constrain poly_qmodule          :"\
+                print("Time to constrain poly_qmodule          :"\
                       + f" {perf_counter() - time0:.6f} seconds. Dof = {sos.sdpp.dof}")
 
         return sos
@@ -410,7 +410,7 @@ class SDPSOSSolver(ProofNode):
 
         problem = self._wrapped_problem[0]
         poly = problem.expr
-        ineq_constraints = problem.ineq_constraints
+        # ineq_constraints = problem.ineq_constraints
         eq_constraints = problem.eq_constraints
 
         verbose = configs["verbose"]

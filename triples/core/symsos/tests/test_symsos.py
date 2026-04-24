@@ -1,5 +1,4 @@
-from sympy.abc import a, b, c, d, e, t, x, y, z
-from sympy import Rational
+from sympy.abc import a, b, c, d
 
 from ..symsos import SymmetricSubstitution
 from ...problem import InequalityProblem

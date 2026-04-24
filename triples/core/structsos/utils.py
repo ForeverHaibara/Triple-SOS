@@ -1,15 +1,20 @@
 from typing import Union, Tuple, List, Dict, Callable, Optional
+from functools import wraps
 
 from sympy import (
     Poly, Expr, Symbol, Integer, Rational, MatrixBase, Add,
     QQ, ZZ, sympify, fraction
 )
 from sympy import MutableDenseMatrix as Matrix
+from sympy.combinatorics import Permutation
 from sympy.core.symbol import uniquely_named_symbol
 
 from ...sdp import congruence
 from ...utils.expressions import Coeff, CyclicSum, CyclicProduct
 from ...utils.roots import nroots, rationalize_bound
+
+# use imports to keep linter happy
+(uniquely_named_symbol, Coeff, CyclicSum, CyclicProduct)
 
 class StructuralSOSError(Exception): ...
 
@@ -36,6 +41,12 @@ class DomainExpr:
 
     def cyclic_product(self, expr) -> Expr:
         return self._coeff.cyclic_product(expr)
+
+def ufsfind(ufs: dict, x):
+    if ufs[x] == x:
+        return x
+    ufs[x] = ufsfind(ufs, ufs[x])
+    return ufs[x]
 
 
 def radsimp(expr: Union[Expr, List[Expr]]) -> Expr:
@@ -207,6 +218,7 @@ def zip_longest(*args):
                     return
         yield tuple(lasts)
 
+
 def has_gen(gen: Symbol, *args):
     """
     Test whether a symbol is involved in a (list of) polynomial(s).
@@ -222,38 +234,133 @@ def clear_free_symbols(poly: Poly, ineq_constraints: Dict[Poly, Expr] = {}, eq_c
     we can remove the symbol "a" from the constraints. But we cannot remove the symbol "y"
     even though it is not in the polynomial, as it is correlated with "x".
     """
-    # Construct the "correlation" graph of the free symbols: symbols that are path-connected to free
-    # vars in the polynomial are considered as active symbols.
-    gens = poly.gens
-    ufs = dict((gen, gen) for i, gen in enumerate(gens))
-    def ufsfind(x):
-        if ufs[x] == x:
-            return x
-        ufs[x] = ufsfind(ufs[x])
-        return ufs[x]
-    def ufsunion(p):
-        v = p.free_symbols
-        if len(v):
-            x0 = v.pop()
-            y0 = ufsfind(x0)
-            for x in v:
-                ufs[ufsfind(x)] = y0
-    ufsunion(poly)
-    for p in ineq_constraints:
-        ufsunion(p)
-    for p in eq_constraints:
-        ufsunion(p)
+    from ..problem import InequalityProblem
+    pro = InequalityProblem(poly, ineq_constraints, eq_constraints)
+    pro.remove_redundancy()
+    return pro.expr, pro.ineq_constraints, pro.eq_constraints
 
-    # Using .free_symbols is not the same as .gens. Because free_symbols exclude 0-degree gens.
-    active_gens = set(ufsfind(gen) for gen in poly.free_symbols)
-    active_gens = [x for x in gens if ufsfind(x) in active_gens]
-    if len(active_gens) == 0:
-        active_gens = (gens[0],) # the polynomial is a constant, but we need a gen to create a poly
+    # # Construct the "correlation" graph of the free symbols: symbols that are path-connected to free
+    # # vars in the polynomial are considered as active symbols.
+    # gens = poly.gens
+    # ufs = dict((gen, gen) for i, gen in enumerate(gens))
+    # def ufsunion(ufs: dict, p):
+    #     v = p.free_symbols
+    #     if len(v):
+    #         x0 = v.pop()
+    #         y0 = ufsfind(ufs, x0)
+    #         for x in v:
+    #             ufs[ufsfind(ufs, x)] = y0
+    # ufsunion(ufs, poly)
+    # for p in ineq_constraints:
+    #     ufsunion(ufs, p)
+    # for p in eq_constraints:
+    #     ufsunion(ufs, p)
 
-    def is_active(p):
-        return len(p.free_symbols.intersection(active_gens))
+    # # Using .free_symbols is not the same as .gens. Because free_symbols exclude 0-degree gens.
+    # active_gens = set(ufsfind(ufs, gen) for gen in poly.free_symbols)
+    # active_gens = [x for x in gens if ufsfind(ufs, x) in active_gens]
+    # if len(active_gens) == 0:
+    #     active_gens = (gens[0],) # the polynomial is a constant, but we need a gen to create a poly
 
-    poly = poly.as_poly(active_gens)
-    ineq_constraints = {p.as_poly(active_gens): e for p, e in ineq_constraints.items() if is_active(p)}
-    eq_constraints = {p.as_poly(active_gens): e for p, e in eq_constraints.items() if is_active(p)}
-    return poly, ineq_constraints, eq_constraints
+    # def is_active(p):
+    #     return len(p.free_symbols.intersection(active_gens))
+
+    # poly = poly.as_poly(active_gens)
+    # ineq_constraints = {p.as_poly(active_gens): e for p, e in ineq_constraints.items() if is_active(p)}
+    # eq_constraints = {p.as_poly(active_gens): e for p, e in eq_constraints.items() if is_active(p)}
+    # return poly, ineq_constraints, eq_constraints
+
+
+def block_partition(blocks: List[int], groups: Tuple[int, ...]) -> List[int]:
+    """
+    Returns a vector `c` such that
+    `blocks[k] == sum(groups[i] for i in range(m) if c[i] == k)`
+
+    Examples
+    --------
+    >>> block_partition((2, 4), (1, 2, 3))
+    [1, 0, 1]
+    """
+    if sum(blocks) != sum(groups):
+        raise ValueError("No solution: sum mismatch")
+
+    n, m = len(blocks), len(groups)
+    sorted_groups = sorted(((groups[i], i) for i in range(m)), key=lambda x: (-x[0], x[1]))
+
+    remaining = list(blocks)
+    result = [0] * m
+
+    def backtrack(index: int) -> bool:
+        if index == m:
+            return True
+        val, original_idx = sorted_groups[index]
+        for k in range(n):
+            if remaining[k] >= val:
+                if k > 0 and remaining[k] == remaining[k-1]:
+                    continue
+                remaining[k] -= val
+                result[original_idx] = k
+                if backtrack(index + 1):
+                    return True
+                remaining[k] += val
+        return False
+    if not backtrack(0):
+        raise ValueError("No valid partition found")
+    return result
+
+
+def sos_struct_reorder_symmetry(groups: Tuple[int, ...]) -> Callable:
+    """
+    Decorator for the solver function to reorder the generators
+    so that they are in the given symmetry.
+
+    Parameters
+    ----------
+    groups : Tuple[int, ...]
+        The degree of each symmetric group. E.g., when there are four variables
+        and `groups = (3, 1)`, it makes the resulting polynomial symmetric with
+        respect to the first three variables and then calls the solver.
+    """
+    def wrapper(solver: Callable) -> Callable:
+        @wraps(solver)
+        def _wrapped_solver(poly: Union[Poly, Coeff], *args, need_reorder=True, **kwargs):
+            if not need_reorder:
+                return solver(poly, *args, **kwargs)
+
+            coeff = poly
+            if isinstance(poly, Coeff):
+                pass
+            elif isinstance(poly, Poly):
+                coeff = Coeff(poly)
+            else:
+                raise TypeError("Unsupported polynomial type. Expected Coeff or Poly, but received %s." % type(poly))
+
+            n = len(poly.gens)
+            ufs = {i: i for i in range(n)}
+            for i in range(n):
+                for j in range(i+1, n):
+                    if ufsfind(ufs, i) == ufsfind(ufs, j):
+                        continue
+                    if coeff.is_symmetric(Permutation(size=n)(i, j)):
+                        ufs[ufsfind(ufs, j)] = ufsfind(ufs, i)
+
+            blocks = {i: [] for i in range(n) if ufsfind(ufs, i) == i}
+            for i in range(n):
+                blocks[ufsfind(ufs, i)].append(i)
+            blocks = list(blocks.values())
+            ufs_size = [len(b) for b in blocks]
+
+            partition = []
+            try:
+                partition = block_partition(ufs_size, groups)
+            except ValueError:
+                return None
+
+            inds = []
+            for g, p in zip(groups, partition):
+                inds.extend(blocks[p][:g])
+                blocks[p] = blocks[p][g:]
+            new_coeff = coeff.reorder(inds)
+            return solver(new_coeff, *args, **kwargs)
+        return _wrapped_solver
+    return wrapper

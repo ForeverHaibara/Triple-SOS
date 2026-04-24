@@ -13,7 +13,7 @@ from .picos_sdp import DualBackendPICOS
 from .qics_sdp import DualBackendQICS
 from .sdpap_sdp import DualBackendSDPAP
 
-from .settings import SDPError, SDPResult
+from .settings import SDPResult
 # from ..utils import collect_constraints
 
 _DUAL_BACKENDS: Dict[str, DualBackend] = {

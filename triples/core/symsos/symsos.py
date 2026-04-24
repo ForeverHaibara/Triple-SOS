@@ -1,9 +1,8 @@
 from typing import Dict, List, Union, Optional
 
-from sympy import Poly, Expr, Dummy
+from sympy import Expr, Dummy
 
 from .symmetric import UE3Real, UE3Positive, UE4Real
-from .basic import prove_by_pivoting
 from ..node import TransformNode
 from ..preprocess import SolvePolynomial
 from ..solution import Solution

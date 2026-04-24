@@ -1,12 +1,14 @@
 from typing import List, Tuple, Dict, Union, Optional, Callable, Any
 # from warnings import warn
+from time import perf_counter
 
 from sympy import Poly, Expr, Symbol
 from sympy.combinatorics import PermutationGroup
+from sympy import MutableDenseMatrix as Matrix
 
 from .algebra import PolyRing
 from .abstract import AtomSOSElement, ArithmeticTimeout
-from .manifold import constrain_root_nullspace
+from .manifold import get_sos_nullspace, complete_constraints_by_symmetry
 from .solution import SolutionSDP
 from ...utils import CyclicSum, Root
 
@@ -203,6 +205,73 @@ class SOSPoly(AtomSOSElement):
 
         self.roots = roots
 
+    def find_roots(self,
+        verbose: bool = False,
+        time_limit: Optional[Union[Callable, float]] = None
+    ) -> List[Root]:
+        """
+        Heuristically find the roots of the problem. See
+        more details in the documentation of `optimize_poly`.
+        """
+        if self.roots is not None:
+            self.roots = [Root(r) if not isinstance(r, Root) else r for r in self.roots]
+            return self.roots
+        time_limit = ArithmeticTimeout.make_checker(time_limit)
+        time0 = perf_counter()
+
+        from ...utils.roots import optimize_poly
+        poly = self.poly
+        symmetry = self.algebra.symmetry
+        ineqs = list(self._qmodule.values())
+        eqs = list(self._ideal.values())
+        all_polys = ineqs + eqs + [poly]
+        roots = []
+        if all(p.domain.is_ZZ or p.domain.is_QQ for p in all_polys):
+            ineqs = complete_constraints_by_symmetry(ineqs, symmetry)
+            eqs   = complete_constraints_by_symmetry(eqs, symmetry)
+            roots = optimize_poly(poly, ineqs, eqs + [poly], return_type='root')
+            time_limit()
+        # else:
+        #     roots = _findroot_binary(poly)# symmetry=self._symmetry)
+        if verbose:
+            print(f"Time for finding roots num = {len(roots):<6d}     : {perf_counter() - time0:.6f} seconds.")
+            time0 = perf_counter()
+        self.roots = roots
+        return roots
+
+    def get_nullspace(self,
+        roots: Optional[List[Root]] = None,
+        verbose: bool = False,
+        time_limit: Optional[Union[Callable, float]] = None
+    ) -> Dict[Any, Matrix]:
+        """
+        Compute the nullspaces of the matrices from the equality cases.
+        """
+        time_limit = ArithmeticTimeout.make_checker(time_limit)
+        if roots is None:
+            roots = self.find_roots(verbose=verbose, time_limit=time_limit)
+        else:
+            roots = [Root(r) for r in roots]
+
+        insert_prefix = lambda d: {(self, k): v for k, v in d.items()}
+
+        time0 = perf_counter()
+        ns = get_sos_nullspace(
+            self.poly,
+            insert_prefix(self._qmodule),
+            insert_prefix(self._ideal),
+            ineq_bases=insert_prefix(self._qmodule_bases),
+            eq_bases=insert_prefix(self._ideal_bases),
+            degree=self.algebra.degree,
+            roots=roots,
+            perm_group=self.algebra.symmetry,
+            time_limit=time_limit
+        )
+        if verbose:
+            print(f"Time for computing nullspace            : {perf_counter() - time0:.6f} seconds.")
+            time0 = perf_counter()
+        return ns
+
     def _post_construct(self,
         wedderburn: bool = True,
         verbose: bool = False,
@@ -219,22 +288,17 @@ class SOSPoly(AtomSOSElement):
             **kwargs
         )
 
-        insert_prefix = lambda d: {(self, k): v for k, v in d.items()}
+        ns = self.get_nullspace(verbose=verbose, time_limit=time_limit)
 
-        _, roots = constrain_root_nullspace(
-            self.sdp,
-            self.poly,
-            insert_prefix(self._qmodule),
-            insert_prefix(self._ideal),
-            ineq_bases=insert_prefix(self._qmodule_bases),
-            eq_bases=insert_prefix(self._ideal_bases),
-            degree=self.algebra.degree,
-            roots=self.roots,
-            symmetry=self.algebra.symmetry,
-            verbose=verbose,
-            time_limit=time_limit
-        )
-        self.roots = roots
+        time0 = perf_counter()
+        new_sdp = self.sdp.constrain_nullspace(ns, to_child=True, time_limit=time_limit)
+
+        if verbose:
+            print(f"Time for constraining nullspace         : {perf_counter() - time0:.6f} seconds."
+                   f" Dof = {self.sdp.get_last_child().dof}")
+
+        return new_sdp
+
 
     def as_solution(
         self,

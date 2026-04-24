@@ -1,8 +1,6 @@
-from functools import reduce
-from typing import Dict, Optional, Callable
+from typing import Optional, Callable
 
 import sympy as sp
-from sympy.core.singleton import S
 
 from ..solution import Solution
 from ...utils import CyclicSum, CyclicProduct
@@ -86,7 +84,8 @@ class SolutionStructural(Solution):
                     elif isinstance(base, sp.Mul) and all(is_pow2(_) for _ in base.args):
                         return arg
                     # ensure each arg is nonnegative by expanding
-                    each_args = [dfs(_) for _ in arg.doit(deep=False).args]
+                    each_arg = [dfs(_) for _ in arg.doit(deep=False).args]
+                    assert len(each_arg) >= 0
                     return arg.func(dfs(base), *arg.args[1:])
             return arg
 

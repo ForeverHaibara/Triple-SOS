@@ -1,4 +1,4 @@
-from sympy import Poly, Expr, Symbol, Rational, Float, Add
+from sympy import Poly, Expr, Rational, Float, Add
 from sympy import MutableDenseMatrix as Matrix
 
 from .cubic import sos_struct_cubic
@@ -45,17 +45,19 @@ def _sos_struct_sextic_hexagram(coeff: Coeff):
 
     Examples
     --------
-    => s(a3b3+7a4bc-29a3b2c+12a3bc2+9a2b2c2) # doctest:+SKIP
+    => s(a3b3+7a4bc-29a3b2c+12a3bc2+9a2b2c2)
 
     => 9s(a3b3)+4s(a4bc)-11abcp(a-b)-37s(a3b2c)+72a2b2c2
 
-    => s(11a4bc+11a3b3+153a3bc2-153a3b2c-22a2b2c2) # doctest:+SKIP
+    => s(11a4bc+11a3b3+153a3bc2-153a3b2c-22a2b2c2)
 
     => s(bc(a2-bc+2(ab-ac)+3(bc-ab))2)
 
     => s(ab(ab-4ac+5bc-2c2)2)
 
     => s(3a4bc+2a3b3+a3bc2-6a2b2c2)
+
+    => s((sqrt(2)+9)a4bc+(4*sqrt(2)+9)a3b3+(-19+3*sqrt(2))a3b2c+(-33*sqrt(2)-12)a3bc2+(13+25*sqrt(2))a2b2c2)
 
     => (s(a2c)s(b2c)+25/2p(a2)-27/4s(a2c)p(a))
 
@@ -223,7 +225,7 @@ def _sos_struct_sextic_hexagram(coeff: Coeff):
                 y3_bound_var = 729*(x - 8)**3*x/1024
                 if y3 < y3_bound_mean and (y3 - y3_bound_mean)**2 == y3_bound_var:
                     # y3, y3_copy, y, y_copy = y3_bound, y3, y3_bound**Rational(1,3), y
-                    y3, y3_copy, y, y_copy = y3, y3, y, y
+                    y3, _, y, y_copy = y3, y3, y, y
 
                     r = (81*x**5 + 2025*x**4 - 21*x**3*y3 + 17658*x**3 - 2406*x**2*y3 + 62370*x**2 - 16*x*y**6 - 10773*x*y3 + 79461*x + 864*y**6 - 18468*y3 + 32805)\
                         /(y*(27*x**5 + 891*x**4 - 16*x**3*y3 + 9558*x**3 - 1112*x**2*y3 + 41742*x**2 - 6336*x*y3 + 78975*x + 384*y**6 - 10044*y3 + 45927))
@@ -310,13 +312,22 @@ def _sos_struct_sextic_hexagram(coeff: Coeff):
             return frac1 / frac2
 
         u_, v_ = None, None
-        for root in nroots(eqv, method = 'factor', real = True, nonnegative = True):
+        eqvdiff = eqv.diff()
+        eqvgcd = eqv.gcd(eqvdiff)
+        if eqvgcd.total_degree() == 1:
+            root = coeff.convert(-eqvgcd.rep.TC() / eqvgcd.rep.LC())
             u_ = compute_u(root)
             if u_ * root > 1:
                 v_ = root
-                break
+            else:
+                u_, v_ = None, None
+        if v_ is None:
+            for root in nroots(eqv, method = 'factor', real = True, nonnegative = True):
+                u_ = compute_u(root)
+                if u_ * root > 1:
+                    v_ = root
+                    break
         if v_ is not None:
-            # now that we have obtained u and v
             # we are sure that f(a,b,c) * s(a) >= coeff((3,3,0)) * s(c(a2c-b2c-w(a2b-abc)+z(ab2-abc))2)
             # where w = (u^2+v)/(uv-1), z = (v^2+u)/(uv-1)
             # so we can subtract the right hand side and apply the quartic theorem
@@ -328,15 +339,16 @@ def _sos_struct_sextic_hexagram(coeff: Coeff):
                 det = 3 * m3 * (m3 + n3) - (p3**2 + p3 * q3 + q3**2)
                 return det, (m3, p3, n3, q3)
             def get_discriminant_uv(u, v):
+                u, v = coeff.convert(u), coeff.convert(v)
                 w, z = (u*u + v) / (u*v - 1), (v*v + u) / (u*v - 1)
                 m2, p2, n2, q2 = 0, r_*(w*w - 2*z), -r_*2*w*z, r_*(z*z - 2*w)
                 return get_discriminant(m2, p2, n2, q2)
 
-
-            det_ = None
-            # print('(u, v) =', (u_, v_))
-            # print('det =', get_discriminant_uv(u_, v_))
-            if get_discriminant_uv(u_, v_)[0] > -coeff.convert(10)**(-14):
+            u0, v0 = coeff.convert(u_), coeff.convert(v_)
+            det_, (m3, p3, n3, q3) = get_discriminant_uv(u0, v0)
+            if det_ == 0:
+                u, v = u0, v0
+            elif det_ > -coeff.convert(10)**(-14):
                 # first check that the result is good
 
                 # do rational approximation for both u and v
@@ -346,9 +358,11 @@ def _sos_struct_sextic_hexagram(coeff: Coeff):
                 ):
                     u, v = coeff.convert(u), coeff.convert(v)
                     det_, (m3, p3, n3, q3) = get_discriminant_uv(u, v)
-                    if isinstance(det_, Rational) and det_ >= 0:
+                    if det_ >= 0:
                         break
                     det_ = None
+            else:
+                det_ = None
 
             if det_ is not None:
                 w, z = (u**2 + v) / (u*v - 1), (v**2 + u) / (u*v - 1)
@@ -448,7 +462,7 @@ def _sos_struct_sextic_rotated_tree(coeff: Coeff):
 
     => s(20a4b2-26a3b2c-29a3bc2+35a2b2c2)
 
-    => s(a2b4+a3b2c-a3bc2-a2b2c2) # doctest:+SKIP
+    => s(a2b4+a3b2c-a3bc2-a2b2c2)
 
     => s(a4b2-14a3b2c+14a3bc2-1a2b2c2)
 
@@ -545,7 +559,7 @@ def _sos_struct_sextic_rotated_tree(coeff: Coeff):
             # Observation:
             # (t^3-3t, -3t(t-1)) and ((1-t)^3-3(1-t), -3(1-t)(1-t-1)) have equal y coordinates
             solution = _solve_regular(1 - t)
-            if solution is None:
+            if solution is not None:
                 return solution
 
     return None
@@ -693,24 +707,20 @@ def _sos_struct_sextic_hexagon_sdp2(coeff: Coeff):
     # detur3 = det(M) * 27x^3 * z >= 0
     # To make the quad-form PSD, we let detur3, a cubic poly of z with params (x,y), positive.
     # This is done by optimizing the discriminant.
-    detur3 = _get_detur3()
+    # detur3 = _get_detur3()
 
-    if False:
-        # too slow by computing the exact extrema from the resultant
-        from time import time
-        time0 = time()
-        discriminant = detur3.discriminant().as_poly(x, y)
-        discriminant_diffx = discriminant.diff(0)
-        discriminant_diffy = discriminant.diff(1)
-        discriminant_gcd = discriminant.gcd(discriminant_diffx).factor_list()
-        time1 = time()
-        print('Time:', time1 - time0)
-        print('GCD =', discriminant_gcd)
+    # if False:
+    #     # too slow by computing the exact extrema from the resultant
+    #     from time import time
+    #     time0 = time()
+    #     discriminant = detur3.discriminant().as_poly(x, y)
+    #     discriminant_diffx = discriminant.diff(0)
+    #     discriminant_diffy = discriminant.diff(1)
+    #     discriminant_gcd = discriminant.gcd(discriminant_diffx).factor_list()
+    #     time1 = time()
+    #     print('Time:', time1 - time0)
+    #     print('GCD =', discriminant_gcd)
 
-    # Alternative:
-    if True:
-        # first detect whether ...
-        pass
 
 def _sos_struct_sextic_hexagon_to_hexagram(coeff: Coeff):
     """
@@ -789,14 +799,14 @@ def _sos_struct_sextic_hexagon_to_hexagram(coeff: Coeff):
         if not _check_valid(c3):
             c3 = None
     else:
-        eq = coeff.from_list([1, 0, -4*c1*c2], (a,)).as_poly()
+        eq = coeff.from_list([1, 0, -4*c1*c2], (coeff.gens[0],)).as_poly()
         c3 = rationalize_func(eq, _check_valid, validation_initial = lambda x: x >= 0, direction = -1)
 
     if c3 is not None:
         remain_solution = _sos_struct_sextic_hexagram(_compute_subtracted_params(c3, return_func = True))
         if remain_solution is not None:
             a, b, c = coeff.gens
-            CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+            CyclicSum = coeff.cyclic_sum
 
             mapping = lambda x: CyclicSum((x[0]*a**2*b + x[1]*a*b**2 - (x[0]+x[1])*a*b*c).together())**2
             main_solution = quadratic_weighting(coeff, c1, -c3, c2, mapping = mapping)
@@ -845,7 +855,7 @@ def _sos_struct_sextic_full_sdp(coeff: Coeff):
         return None
 
     a, b, c = coeff.gens
-    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+    CyclicSum = coeff.cyclic_sum
 
     # Working on the sympy polynomial ring, which is faster
     ring = coeff.domain[a, b]
@@ -870,8 +880,8 @@ def _sos_struct_sextic_full_sdp(coeff: Coeff):
             (q[1,1]*(a**2*b-a*b*c)+q[1,2]*(a*b**2-a*b*c)),
             (q[2,2]*(a*b**2-a*b*c))
         ]
-        quad_form_sol = map(lambda x: CyclicSum(x.expand().together())**2, quad_form_sol)
-        return sum_y_exprs(ss, list(quad_form_sol))
+        quad_form_sol = [CyclicSum(x.expand().together())**2 for x in quad_form_sol]
+        return sum_y_exprs(ss, quad_form_sol)
 
     # rest form is what the original polynomial subtracts the quadratic form,
     # corresponding to the coefficients of a^4bc, a^3b^2c, a^2b^3c

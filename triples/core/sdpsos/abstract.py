@@ -9,7 +9,7 @@ from sympy.core.relational import Relational
 
 from .algebra import StateAlgebra, SOSBasis
 from ...sdp import SDPProblem
-from ...sdp.arithmetic import ArithmeticTimeout, sqrtsize_of_mat, matmul, matadd, solve_csr_linear, rep_matrix_from_dict
+from ...sdp.arithmetic import ArithmeticTimeout, sqrtsize_of_mat, matmul, matadd, rep_matrix_from_dict
 from ...sdp.utils import exprs_to_arrays, collect_constraints
 from ...sdp.wedderburn import symmetry_adapted_basis
 
@@ -304,7 +304,7 @@ class AtomSOSElement(SOSElement):
             rhs = arraylize(self.poly)
             return rhs, Matrix.zeros(rhs.shape[0], 0)
 
-        domain, gens = self.poly.domain, self.poly.gens
+        gens = self.poly.gens
         poly = self.poly.as_poly(*parameters)
         if poly.total_degree() > 1:
             raise ValueError(f"Unable to handle nonlinear terms {poly.LM()} in the polynomial."

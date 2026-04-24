@@ -5,7 +5,7 @@ from mpmath import mp
 import numpy as np
 from numpy.polynomial.polynomial import polyroots as np_polyroots
 from numpy.polynomial.polynomial import polyfromroots as np_polyfromroots
-from sympy import Poly, Expr, Float, Integer, Symbol, QQ, construct_domain, count_roots
+from sympy import Poly, Expr, Integer, Symbol, QQ, construct_domain, count_roots
 from sympy.core import S
 from sympy.matrices import MutableDenseMatrix as Matrix
 from sympy.polys.matrices.ddm import DDM
@@ -463,7 +463,7 @@ def _prove_univariate_from_mat_Rplus(p: Poly, ctx=None,
             return (res, res.zero) if res is not None else None
 
         zero = ctx.float(0)
-        d = len(real_roots)
+        # d = len(real_roots)
         real_part = [ctx.real(v) for v in ctx.polyfromroots(real_roots)]
         major_part = real_part[::2]   # containing the leading term
         minor_part = real_part[1::2] # not containing the leading term
@@ -719,7 +719,7 @@ def prove_univariate(poly: Union[Poly, Expr, List], interval: Tuple[Optional[Exp
     full rank and strictly positive definite. Then it is possible to perturb and round
     the Gram matrix to obtain a rational sum-of-squares certificate.
     """
-    if not (return_type in ('expr', 'list', 'soslist')):
+    if return_type not in ('expr', 'list', 'soslist'):
         raise ValueError(f"The return_type must be 'expr', 'list', or 'soslist', but got {return_type}.")
 
     if not isinstance(poly, Poly):

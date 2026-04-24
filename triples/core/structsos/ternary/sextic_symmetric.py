@@ -511,7 +511,7 @@ def _sos_struct_sextic_hexagram_symmetric(coeff: Coeff):
     if coeff((4,1,1)) != 0:
         x_ = coeff((3,3,0)) / coeff((4,1,1))
         y_ = coeff((3,2,1)) / coeff((4,1,1))
-        w_ = coeff((2,2,2)) / coeff((4,1,1))
+        # w_ = coeff((2,2,2)) / coeff((4,1,1))
         if x_ >= ((1 + x_ + y_)**2):
             # apply theorem 1
             # use vieta jumping, a point inside the parabola is a linear combination
@@ -1446,7 +1446,7 @@ class _sextic_sym_axis(DomainExpr):
         F(x,y) * s(mutiplier[0]*a^2 + multiplier[1]*a*b) = p1 + s(c1*a^2 + c2*a*b) * p(a-b)^2
         """
         a, b, c = self.gens
-        CyclicSum, CyclicProduct = self.cyclic_sum, self.cyclic_product
+        CyclicSum = self.cyclic_sum
         # p1 = 2 * (CyclicSum(a**2 - b*c)*CyclicSum(x*a**2 + y*a*b) - CyclicSum(a**4 - a**2*b*c))**2
         # s((x-1)a4+(y-x)a3(b+c)+(2x-y)a2b2-(x+y-1)a2bc)
         p1 = 2 * CyclicSum(a**2*((x-1)*a**2 + (y-x)*a*b + (y-x)*a*c \
@@ -1467,7 +1467,7 @@ class _sextic_sym_axis(DomainExpr):
         F(x,y) * s(mutiplier[0]*a^2 + multiplier[1]*a*b) = p1 + s(c1*a^2 + c2*a*b) * p(a-b)^2
         """
         a, b, c = self.gens
-        CyclicSum, CyclicProduct = self.cyclic_sum, self.cyclic_product
+        CyclicSum = self.cyclic_sum
         z = [-(2*x + y - 2)/(2*(x - 1)), (x + 2*y - 3)/(2*(x - 1))][z_type]
         def _compute_h_c1_c2(z):
             """
@@ -1546,7 +1546,7 @@ class _sextic_sym_axis(DomainExpr):
             return None
 
         a, b, c = self.gens
-        CyclicSum, CyclicProduct = self.cyclic_sum, self.cyclic_product
+        CyclicSum = self.cyclic_sum
         def _compute_h_c1_c2(z):
             h1 = 3*a**2*(x - 1)*w + 3*a*(b + c)*(x**2 + 2*x*y - 4*x + y**2 - 3*y + 3) \
                 + b*c*(3*x*y + 3*y**2 - 9*y + 4)
@@ -1566,9 +1566,9 @@ class _sextic_sym_axis(DomainExpr):
 
     def rem_poly(self, rem_coeff, rem_ratio):
         a, b, c = self.gens
-        CyclicSum, CyclicProduct = self.cyclic_sum, self.cyclic_product
+        CyclicSum = self.cyclic_sum
         return rem_coeff * (CyclicSum(a**2 + rem_ratio*a*b)**2 \
-                            if not rem_ratio is Infinity else CyclicSum(a*b)**2)
+                            if rem_ratio is not Infinity else CyclicSum(a*b)**2)
 
     def _rem_regular(self, t_coeff, rem_coeff, rem_ratio, multiplier):
         """
@@ -1638,7 +1638,7 @@ class _sextic_sym_axis(DomainExpr):
         c2 = c12 + c22 + multiplier[1]*ker_coeff
 
         a, b, c = self.gens
-        CyclicSum, CyclicProduct = self.cyclic_sum, self.cyclic_product
+        CyclicProduct = self.cyclic_product
         multiplier_func = CommonExpr.quadratic(multiplier[0], multiplier[1], (a,b,c))
 
         if c1 >= 0 and c1 + c2 >= 0:
@@ -1906,14 +1906,14 @@ def _sos_struct_sextic_symmetric_ultimate(coeff: Coeff, real = True):
 
     => s(414a6-1470a5b-1470a5c+979a4b2+5864a4bc+979a4c2+644a3b3-5584a3b2c-5584a3bc2+5228a2b2c2) # doctest:+SKIP
     """
-    coeff6 = coeff((6,0,0))
+    # coeff6 = coeff((6,0,0))
     x0, x1, x2, x3, x4, x5 = [coeff(_) for _ in [(6,0,0),(5,1,0),(4,2,0),(3,3,0),(4,1,1),(3,2,1)]]
     rem = 3*(x0 + x3 + x4) + 6*(x1 + x2 + x5) + coeff((2,2,2))
 
     poly = None
 
     a, b, c = coeff.gens
-    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+    CyclicSum = coeff.cyclic_sum
 
     # try trivial cases
     if True:

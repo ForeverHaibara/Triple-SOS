@@ -53,13 +53,13 @@ def test_dependency():
                     if len(imp) == 0:
                         # relative import from current package
                         continue
-                    if not (imp in ALLOWED_LIBS):
+                    if imp not in ALLOWED_LIBS:
                         if imp == "pytest" and file.startswith("test_"):
                             continue
                         forbidden_libraries.add((file_path, line_num, imp))
 
     if forbidden_libraries:
-        forbidden_libraries = sorted(list(forbidden_libraries))
+        forbidden_libraries = sorted(forbidden_libraries)
         message = '\n'.join([f"{fp}:line {ln}:import {lib}"%(fp, ln, lib) for fp, ln, lib in forbidden_libraries])
         assert False, (
             f"Forbidden dependencies detected: {message}."

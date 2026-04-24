@@ -91,7 +91,7 @@ class SDPBlockDiagonalization(SDPLinearTransform):
         # then Si*v == 0 for each i in blocks.
         ns = {}
         for key, children in self._child_keys.items():
-            if not key in nullspace:
+            if key not in nullspace:
                 continue
             blocks = self._blocks[key]
             for b, c in zip(blocks, children):

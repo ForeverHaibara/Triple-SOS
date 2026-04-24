@@ -34,7 +34,6 @@ def polysubs(poly: Poly, subs: Dict[Symbol, Expr], symbols: List[Symbol]) -> Pol
         # TODO: make it faster
         return poly.as_expr().xreplace(subs).expand()
 
-    poly0 = poly
     # poly = poly.as_expr().xreplace(subs)
     # return poly.as_poly(*symbols)
 
@@ -47,7 +46,7 @@ def polysubs(poly: Poly, subs: Dict[Symbol, Expr], symbols: List[Symbol]) -> Pol
     for monom, coeff in poly.rep.terms():
         m1 = marginalize1(monom)
         m2 = marginalize2(monom)
-        if not (m2 in coeffs):
+        if m2 not in coeffs:
             coeffs[m2] = {}
         coeffs[m2][m1] = coeff
     lev = len(inds) - 1
@@ -321,7 +320,7 @@ def _optimize_by_eq_kkt(poly, ineq_constraints, eq_constraints, symbols,
     """
     if len(symbols) == 0:
         if all(_ == 0 or (isinstance(_, Poly) and _.is_zero) for _ in eq_constraints):
-            return [tuple()]
+            return [()]
         return []
     elif len(symbols) > max_different:
         return []
@@ -416,8 +415,8 @@ def _eliminate_linear(polys, symbols) -> Tuple[Dict[Symbol, Expr], List[Poly]]:
         else:
             has_eliminated = True
         rest_inds = set(range(len(polys))) - new_eliminated_polys
-        # rest_inds = sorted(list(rest_inds))
-        # new_eliminated_polys = sorted(list(new_eliminated_polys))
+        # rest_inds = sorted(rest_inds)
+        # new_eliminated_polys = sorted(new_eliminated_polys)
         new_eliminated_polys = [polys[i] for i in new_eliminated_polys]
 
         # TODO: clean this
@@ -741,9 +740,9 @@ def optimize_poly(
      (CRootOf(a**3 - 6*a**2 + 5*a - 1, 2), CRootOf(b**3 - 5*b**2 + 6*b - 1, 2), 1)]
     """
     symbols = _infer_symbols(symbols, poly, ineq_constraints, eq_constraints)
-    if not (objective in ('min', 'max', 'all')):
+    if objective not in ('min', 'max', 'all'):
         raise ValueError('Objective must be either "min" or "max" or "all".')
-    if not (return_type in ('root', 'tuple', 'dict')):
+    if return_type not in ('root', 'tuple', 'dict'):
         raise ValueError('Return type must be either "root" or "tuple" or "dict".')
     if len(symbols) == 0:
         return [] if return_type != 'root' else RootList((), [])

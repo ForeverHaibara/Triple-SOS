@@ -3,6 +3,6 @@ from .univariate import prove_univariate
 from .solution import SolutionStructural
 
 __all__ = [
-    'StructuralSOS', 'StructuralSOSSolver',
+    'StructuralSOS', 'StructuralSOSSolver', '_structural_sos',
     'prove_univariate', 'SolutionStructural'
 ]

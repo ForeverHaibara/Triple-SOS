@@ -1,6 +1,6 @@
 from ..problem_set import ProblemSet, mark
-from sympy.abc import a,b,c,d,e,p,q,r,s,x,y,z,w
-from sympy import symbols, Rational, Add, sqrt, cbrt, sin, cos, pi, Abs, Min, Max
+from sympy.abc import a,b,c,d,e,f,p,q,r,s,x,y,z
+from sympy import symbols, Rational, Add, sqrt, cbrt, sin, pi, Abs, Min, Max
 
 class IMOProblems(ProblemSet):
     @mark(mark.noimpl, mark.geom)

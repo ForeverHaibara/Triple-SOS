@@ -98,7 +98,7 @@ def _solve_sa2minusab_mul_cubic(coeff: Coeff, x, y, mul = 1):
     When `(x, y)` is not on the curve, it would be a linear combination of two points on the curve.
     """
     a, b, c = coeff.gens
-    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+    CyclicSum = coeff.cyclic_sum
     if x >= 0 and y >= 0:
         cubic_poly = coeff.from_dict({(3,0,0): 1, (2,1,0): x, (1,2,0): y, (1,1,1): -3*(x+y+1)})
         return Rational(1,2) * mul * CyclicSum((a-b)**2) * sos_struct_cubic(cubic_poly)
@@ -268,7 +268,7 @@ def _sos_struct_quintic_full(coeff: Coeff):
         return None
 
     a, b, c = coeff.gens
-    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+    CyclicSum = coeff.cyclic_sum
 
     # method 1
     solution = _solve_trivial_quintic_full(coeff)
@@ -725,8 +725,7 @@ def _sos_struct_quintic_windmill(coeff: Coeff):
         sol = _sos_struct_quintic_windmill(coeff.reflect())
         return align_cyclic_group(sol, coeff.gens)
 
-    a, b, c = coeff.gens
-    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+    a = coeff.gens[0]
 
     # now we assume coeff((4,1,0)) == 0
     if coeff((1,4,0)) < 0:
@@ -1090,7 +1089,7 @@ def _sos_struct_quintic_windmill_quadratic(coeff: Coeff):
     """
 
     # Case A.
-    c1, c2, c3, c4 = coeff((1,4,0)), None, coeff((3,2,0)), Integer(0)
+    c1, c2, c3 = coeff((1,4,0)), None, coeff((3,2,0))
     c320, c230, c311, c221 = [coeff(_) for _ in [(3,2,0),(2,3,0),(3,1,1),(2,2,1)]]
 
     # Constraints on c2:

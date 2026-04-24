@@ -1,10 +1,10 @@
 from time import perf_counter
-from typing import Dict, List, Union, Optional, Tuple, Any, Callable
+from typing import Dict, List, Union, Optional, Tuple, Any
 
 from numpy import ndarray
 import numpy as np
 from sympy import MutableDenseMatrix as Matrix
-from sympy import MatrixBase, Symbol, Float, Expr, Dummy
+from sympy import MatrixBase, Symbol, Expr, Dummy
 from sympy.core.relational import Relational
 
 from .arithmetic import ArithmeticTimeout, sqrtsize_of_mat, vec2mat, is_numerical_mat, rep_matrix_from_numpy, rep_matrix_to_numpy
@@ -213,7 +213,7 @@ class SDPPrimal(TransformablePrimal):
         """
         if self.dof == 0:
             return Matrix.zeros(self._x0_and_space[0].shape[0], 0)
-        return Matrix.hstack(*[space for space in self._x0_and_space[1].values()])
+        return Matrix.hstack(*list(self._x0_and_space[1].values()))
 
     @classmethod
     def from_full_x0_and_space(
@@ -479,9 +479,9 @@ class SDPPrimal(TransformablePrimal):
 
 
         kwargs = kwargs.copy()
-        if (not ('verbose' in kwargs)) and float(verbose) > 1:
+        if ('verbose' not in kwargs) and float(verbose) > 1:
             kwargs['verbose'] = verbose
-        if end_time is not None and (not ('time_limit' in kwargs)):
+        if end_time is not None and ('time_limit' not in kwargs):
             kwargs['time_limit'] = end_time - perf_counter()
 
         sol = solve_numerical_primal_sdp(
@@ -507,8 +507,8 @@ class SDPPrimal(TransformablePrimal):
                     rationalizers=[RationalizeWithMask(), RationalizeSimultaneously([1,1260,1260**3])])
                 if solution is not None:
                     self.y = solution[0]
-                    self.S = dict((key, S[0]) for key, S in solution[1].items())
-                    self.decompositions = dict((key, S[1:]) for key, S in solution[1].items())
+                    self.S = {key: S[0] for key, S in solution[1].items()}
+                    self.decompositions = {key: S[1:] for key, S in solution[1].items()}
                     success = True
                 elif allow_numer:
                     self.register_y(y, perturb=True, propagate_to_parent=propagate_to_parent)

@@ -6,7 +6,7 @@ from numpy import ndarray
 from .settings import SDPResult, SolverConfigs
 
 class SDPBackend:
-    _dependencies = tuple()
+    _dependencies = ()
 
     status = None
 
@@ -163,7 +163,7 @@ class DualBackend(SDPBackend):
             bs = [self._convert_space_to_isometric(b, order=self._opt_isometric) for b in bs]
 
         if self._opt_sparse:
-            if not self._opt_sparse in ('csc', 'csr', 'coo'):
+            if self._opt_sparse not in ('csc', 'csr', 'coo'):
                 raise ValueError('DualBackend._opt_sparse must be one of "csc" or "csr" or "coo".')
             from scipy import sparse
             to_mat = getattr(sparse, self._opt_sparse + '_matrix')
@@ -242,7 +242,7 @@ class DualBackend(SDPBackend):
                     break
             lines = lines[i:]
             m = int(lines[0].split()[0])
-            nBlock = int(lines[1].split()[0])
+            # nBlock = int(lines[1].split()[0])
             block_sizes = list(map(abs, map(int, lines[2].strip().split())))
             c_vector = list(map(float, lines[3].strip().split()))
 

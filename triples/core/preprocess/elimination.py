@@ -54,7 +54,7 @@ def _identify_matrix_symmetry(S: Matrix) -> List[List[int]]:
             cluster_dict[root] = []
         cluster_dict[root].append(i)
 
-    clusters = sorted(list(cluster_dict.values()), key=lambda x: min(x))
+    clusters = sorted(cluster_dict.values(), key=lambda x: min(x))
     return clusters
 
 def _rowwise_primitive(A: Matrix) -> Matrix:
@@ -66,7 +66,7 @@ def _rowwise_primitive(A: Matrix) -> Matrix:
     dom = A._rep.domain
     for row, terms in rows.items():
         prim_terms = dup_primitive(list(terms.values()), dom)[1]
-        rows[row] = {i: v for i, v in zip(terms.keys(), prim_terms)}
+        rows[row] = dict(zip(terms.keys(), prim_terms))
     return Matrix._fromrep(A._rep.from_rep(SDM(rows, A.shape, dom)).convert_to(ZZ))
 
 
@@ -269,7 +269,7 @@ def eliminate_power_constraints(
     }
     # print('transform =', transform, '\ninv_transform =', inv_transform)
 
-    new_eqs = {k: e for i, (k, e) in enumerate(eq_constraints.items()) if not i in eq_inds}
+    new_eqs = {k: e for i, (k, e) in enumerate(eq_constraints.items()) if i not in eq_inds}
     problem = problem.copy_new(problem.expr, ineq_constraints, new_eqs)
 
     problem, restore_transform = problem.transform(transform, inv_transform)

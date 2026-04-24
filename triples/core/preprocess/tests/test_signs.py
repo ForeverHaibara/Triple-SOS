@@ -1,11 +1,11 @@
-from sympy.abc import a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t,u,v,w,x,y,z
+from sympy.abc import a,b,c,d,e,f,g,h,r,u,v,w,x,y,z
 from sympy import Poly, Function, Rational, fraction
 
 F, G = Function('F'), Function('G')
 
 import pytest
 
-from ..signs import _prove_poly, sign_sos
+from ..signs import _prove_poly
 from ...problem import InequalityProblem
 
 class InferSignProblems:
@@ -165,7 +165,7 @@ def test_prove_poly_by_signs():
         assert proof is not None, f"Case {ind}: failed to establish the nonnegativity of {poly} given {signs}."
 
         # extract nonnegative symbols from "signs"
-        new_signs = {g: (None, None) for g in poly.free_symbols}
+        new_signs = dict.fromkeys(poly.free_symbols, (None, None))
         new_signs.update({e: (1 if s else 0, e) for s, e in signs.values() if s is not None})
 
         valid_proof = _prove_poly(proof.as_poly(), new_signs, factor=need_factor)

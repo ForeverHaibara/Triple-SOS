@@ -1,4 +1,3 @@
-import numpy as np
 from sympy import MutableDenseMatrix as Matrix
 from sympy import Rational, primerange, re, exp, pi
 

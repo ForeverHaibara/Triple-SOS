@@ -1,6 +1,6 @@
 from ..problem_set import ProblemSet, mark
-from sympy.abc import a,b,c,d,e,f,k,m,n,p,q,r,s,u,v,x,y,z,w
-from sympy import symbols, prod, Rational, Add, Mul, exp, sqrt, cbrt, sin, cos, pi, Abs, Min, Max
+from sympy.abc import a,b,c,d,e,f,k,m,n,x,y,z
+from sympy import symbols, prod, Rational, Add, Mul, exp, sqrt, cbrt, Abs, Min, Max
 
 CyclicSum = lambda x, y: Add(*[x.xreplace(
     dict(zip(y,[y[(i+j)%len(y)] for j in range(len(y))]))) for i in range(len(y))])
@@ -1889,7 +1889,7 @@ class MathematicalInequalitiesVol2(MathematicalInequalities):
     def problem_vasile_p22088_p3(self):
         p_ = c3s(a)
         q_ = c3s(a*b)
-        w_ = sqrt(p_**2-3*q_)
+        # w_ = sqrt(p_**2-3*q_)
         h_ = sqrt(p_)+sqrt(p_+sqrt(q_))
         return h_ - c3s(sqrt(a+b)), [a,b,c,p_**2-4*q_], []
 

@@ -4,7 +4,6 @@ for SDP via computing the equality cases of the original SOS problem.
 """
 from collections import defaultdict, deque
 from itertools import product
-from time import perf_counter
 from typing import Dict, List, Tuple, Union, Optional, Callable, Any
 
 from sympy import Poly, prod
@@ -12,9 +11,8 @@ from sympy.matrices import MutableDenseMatrix as Matrix
 from sympy.combinatorics import PermutationGroup
 
 from .algebra import SOSBasis
-from ...sdp import SDPProblem
 from ...sdp.arithmetic import ArithmeticTimeout, solve_columnspace, rep_matrix_from_list
-from ...utils import optimize_poly, Root, MonomialManager
+from ...utils import Root, MonomialManager
 from ...utils.roots.roots import _algebraic_extension, _derv
 
 
@@ -89,7 +87,7 @@ class _bilinear():
     def __init__(self, terms: Dict[Tuple[int, ...], set]):
         self.terms = terms
         for m in terms:
-            terms[m] = set(map(lambda uv: self._reg(*uv), terms[m]))
+            terms[m] = {self._reg(*uv) for uv in terms[m]}
 
     def diff(self, i: int) -> '_bilinear':
         def increase_tuple(t, i, v):
@@ -311,7 +309,7 @@ def _findroot_binary(poly: Poly, symmetry: PermutationGroup = None) -> List[Root
     return roots
 
 
-def get_nullspace(
+def get_sos_nullspace(
     poly: Poly,
     ineq_constraints: Dict[Any, Poly],
     eq_constraints: Dict[Any, Poly],
@@ -358,72 +356,21 @@ def get_nullspace(
     return nullspaces
 
 
-
-def constrain_root_nullspace(
-    sdp: SDPProblem,
-    poly: Poly,
-    ineq_constraints: Dict,
-    eq_constraints: Dict,
-    ineq_bases: Dict[Any, Any],
-    eq_bases: Dict[Any, Any],
-    degree: int,
-    *,
-    roots: Optional[List[Root]]=None,
-    symmetry: Optional[PermutationGroup]=None,
-    verbose: bool = False,
-    time_limit: Optional[Union[Callable, float]]=None
-) -> Tuple[SDPProblem, List[Root]]:
+def complete_constraints_by_symmetry(polys: List[Poly], symmetry=None):
     """
-    Internal helper function to constrain the nullspace of the SDP problem. It will be called
-    in `SOSProblem.construct`.
+    Complete the constraints in the orbit of the symmetry group.
+    Returns a list of polynomials.
     """
-    def _symmetry_expand(polys):
-        """Add in the permuted polynomoials given a symmetry group."""
-        if symmetry is None or len(polys) == 0 or symmetry.is_trivial:
-            return list(polys)
-        rep_set = set()
-        polylize, gens = polys[0].__class__.new, polys[0].gens
-        for poly in polys:
-            rep = poly.rep
-            rep_set.add(rep)
-            for perm in symmetry.elements:
-                reorder = poly.reorder(*perm(gens)).rep
-                if rep == reorder:
-                    continue
-                rep_set.add(reorder)
-        return [polylize(rep, *gens) for rep in rep_set]
-
-    time_limit = ArithmeticTimeout.make_checker(time_limit)
-    time0 = perf_counter()
-    if roots is None:
-        # find roots automatically
-        all_polys = list(ineq_constraints.values()) + list(eq_constraints.values()) + [poly]
-        if all(p.domain.is_ZZ or p.domain.is_QQ for p in all_polys):
-            ineqs = _symmetry_expand(list(ineq_constraints.values()))
-            eqs   = _symmetry_expand(list(eq_constraints.values()))
-            roots = optimize_poly(poly, ineqs, eqs + [poly], return_type='root')
-            time_limit()
-        else:
-            # TODO: clean this
-            roots = _findroot_binary(poly)# symmetry=self._symmetry)
-        if verbose:
-            print(f"Time for finding roots num = {len(roots):<6d}     : {perf_counter() - time0:.6f} seconds.")
-            time0 = perf_counter()
-    else:
-        roots = [Root(_) if not isinstance(_, Root) else _ for _ in roots]
-    time_limit()
-
-    time0 = perf_counter()
-    nullspaces = get_nullspace(poly, ineq_constraints, eq_constraints, ineq_bases, eq_bases,
-                        degree=degree, roots=roots)
-    if verbose:
-        print(f"Time for computing nullspace            : {perf_counter() - time0:.6f} seconds.")
-        time0 = perf_counter()
-
-    new_sdp = sdp.constrain_nullspace(nullspaces, to_child=True, time_limit=time_limit)
-
-    if verbose:
-        print(f"Time for constraining nullspace         : {perf_counter() - time0:.6f} seconds. Dof = {sdp.get_last_child().dof}")
-        time0 = perf_counter()
-
-    return new_sdp, roots
+    if symmetry is None or len(polys) == 0 or symmetry.is_trivial:
+        return list(polys)
+    rep_set = set()
+    polylize, gens = polys[0].__class__.new, polys[0].gens
+    for poly in polys:
+        rep = poly.rep
+        rep_set.add(rep)
+        for perm in symmetry.elements:
+            reorder = poly.reorder(*perm(gens)).rep
+            if rep == reorder:
+                continue
+            rep_set.add(reorder)
+    return [polylize(rep, *gens) for rep in rep_set]

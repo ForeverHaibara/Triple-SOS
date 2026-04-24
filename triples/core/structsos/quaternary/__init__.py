@@ -3,4 +3,8 @@ from .quartic import quaternary_quartic
 
 from .solver import structural_sos_4vars
 
-__all__ = ['structural_sos_4vars']
+__all__ = [
+    'quaternary_cubic_symmetric',
+    'quaternary_quartic',
+    'structural_sos_4vars'
+]

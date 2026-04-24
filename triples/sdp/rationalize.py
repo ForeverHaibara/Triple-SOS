@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from itertools import chain
 from typing import Union, Optional, Tuple, List, Dict, Callable, Generator, Any
 
 import numpy as np
@@ -131,11 +130,11 @@ class DualRationalizer:
                 vrep = v._rep.rep.to_sdm()
                 v = v[:nullrank, :]
                 for row in range(nullrank):
-                    if any(map(lambda x: abs(x) > trunc, vrep.get(row, {}).values())):
+                    if any(abs(x) > trunc for x in vrep.get(row, {}).values()):
                         v = v[:row, :]
                         break
                 v = v.T
-            except (DMError, ValueError, ZeroDivisionError) as e: # LLL algorithm failed
+            except (DMError, ValueError, ZeroDivisionError): # LLL algorithm failed
                 v = Matrix.zeros(s.shape[0], 0)
 
             V[key] = v

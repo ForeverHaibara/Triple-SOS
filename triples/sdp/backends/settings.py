@@ -221,7 +221,7 @@ class SolverConfigs:
     tol_gap_rel = 1e-8
     tol_fsb_abs = 1e-8
     tol_fsb_rel = 1e-8
-    solver_options = dict()
+    solver_options = {}
     _KEYS = ('verbose', 'max_iters', 'time_limit', 'tol_gap_abs', 'tol_gap_rel', 'tol_fsb_abs', 'tol_fsb_rel', 'solver_options')
     def __init__(self, **kwargs):
         for key in self._KEYS:

@@ -1,10 +1,8 @@
 import numpy as np
 import sympy as sp
 
-from ..caller import (_DUAL_BACKENDS, solve_numerical_dual_sdp, solve_numerical_primal_sdp,
-    DualBackendCVXOPT, DualBackendCLARABEL, DualBackendQICS, DualBackendSDPAP
+from ..caller import (_DUAL_BACKENDS, solve_numerical_dual_sdp, solve_numerical_primal_sdp
 )
-from ..settings import SDPError
 
 SOLVERS = _DUAL_BACKENDS
 # SOLVERS = {'qics': DualBackendQICS}
@@ -103,7 +101,7 @@ class SDPDualProblems:
 
     @classmethod
     def problem_empty0(cls):
-        x0_and_space = dict()
+        x0_and_space = {}
         return (x0_and_space, [], []), 0.
 
     @classmethod
@@ -162,7 +160,7 @@ class SDPPrimalProblems:
 
         new_x0 = objective
         new_obj = []
-        new_space = dict()
+        new_space = {}
         for key, (x0, space) in x0_and_space.items():
             new_obj.append(np.array(x0).astype(float).flatten())
             new_space[key] = np.array(space).astype(float).T
@@ -191,26 +189,26 @@ class SDPPrimalProblems:
 
     @classmethod
     def problem_empty0(cls):
-        x0_and_space = ([], dict())
+        x0_and_space = ([], {})
         return (x0_and_space, [], []), 0.
 
     @classmethod
     def problem_empty1(cls):
-        x0_and_space = ([], dict())
+        x0_and_space = ([], {})
         return (x0_and_space, [],
                     [(np.ones((2,0)), [1,-1e-15], '<'),
                     (np.ones((1,0)), [1e-15], '=')]), 0.
 
     @classmethod
     def problem_empty2(cls):
-        x0_and_space = ([], dict())
+        x0_and_space = ([], {})
         return (x0_and_space, [],
                     [(np.ones((2,0)), [1,-1e-15], '<'),
                     (np.ones((1,0)), [1e-2], '=')]), None
 
     @classmethod
     def problem_empty3(cls):
-        x0_and_space = ([], dict())
+        x0_and_space = ([], {})
         return (x0_and_space, [],
                     [(np.ones((2,0)), [1,-1e-15], '<'),
                     (np.ones((1,0)), [1e-15], '='),

@@ -464,7 +464,7 @@ class LinearSOSSolver(ProofNode):
                     print(f"Basis limit {configs['basis_limit']} exceeded. LinearSOS aborted.")
             elif isinstance(e, ArithmeticTimeout):
                 if verbose:
-                    print(f"Arithmetic timeout. LinearSOS aborted.")
+                    print("Arithmetic timeout. LinearSOS aborted.")
                 raise e
             elif isinstance(e, MemoryError):
                 if verbose:

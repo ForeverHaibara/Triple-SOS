@@ -1,10 +1,8 @@
 from typing import (
-    List, Tuple, Dict, FrozenSet, Union, Optional, Callable,
-    TypeVar, Generic, Iterator
+    List, Tuple, Dict, FrozenSet, Union, Optional, Generic, Iterator
 )
 
-from sympy import Expr, Add, Mul, Rational, Integer, UnevaluatedExpr, fraction, sympify, latex, sqrt, true
-from sympy import Tuple as stuple
+from sympy import Expr, Add, Mul, Integer, UnevaluatedExpr, fraction, sympify
 from sympy.core.sympify import CantSympify, sympify
 from sympy.polys.domains.domainelement import DomainElement
 from sympy.polys.polyerrors import CoercionFailed
@@ -344,6 +342,12 @@ class PSatzElement(DomainElement, CantSympify, Generic[Ef]):
     def is_in_ideal(self) -> bool:
         return all(v.is_zero for v in self.numer_preorder.values())
 
+    @property
+    def is_denom_free(self) -> bool:
+        return len(self.denom_ideal) == 0\
+         and all((len(k) == 0 and v == v.one) \
+                 or v.is_zero for k, v in self.denom_preorder.items())
+
     def as_expr(self, preorder_alias: Optional[List[Expr]]=None, ideal_alias: Optional[List[Expr]]=None,
             evaluate: bool=True) -> Expr:
         numer = self.psatz_domain._to_expr(self.numer_preorder, self.numer_ideal,
@@ -360,7 +364,6 @@ class PSatzElement(DomainElement, CantSympify, Generic[Ef]):
         return NotImplemented
 
     def _add(a: 'PSatzElement[Ef]', b: 'PSatzElement[Ef]') -> 'PSatzElement[Ef]':
-        preorder, ideal = a.preorder, a.ideal
         # (p1 + i1)/(p2 + i2) + (p3 + i3)/(p4 + i4)
         p1, i1, p2, i2 = a.numer_preorder, a.numer_ideal, a.denom_preorder, a.denom_ideal
         p3, i3, p4, i4 = b.numer_preorder, b.numer_ideal, b.denom_preorder, b.denom_ideal
@@ -439,7 +442,6 @@ class PSatzElement(DomainElement, CantSympify, Generic[Ef]):
         return self._rmul_ground(_other)
 
     def _mul(a: 'PSatzElement[Ef]', b: 'PSatzElement[Ef]') -> 'PSatzElement[Ef]':
-        preorder, ideal = a.preorder, a.ideal
         # (p1 + i1)/(p2 + i2) * (p3 + i3)/(p4 + i4)
         p1, i1, p2, i2 = a.numer_preorder, a.numer_ideal, a.denom_preorder, a.denom_ideal
         p3, i3, p4, i4 = b.numer_preorder, b.numer_ideal, b.denom_preorder, b.denom_ideal
@@ -448,7 +450,6 @@ class PSatzElement(DomainElement, CantSympify, Generic[Ef]):
         return a.per(p5, i5, p6, i6)
 
     def _mul_ground(a: 'PSatzElement[Ef]', b: Ef) -> 'PSatzElement[Ef]':
-        preorder, ideal = a.preorder, a.ideal
         # (p1 + i1)/(p2 + i2) * b
         p1, i1, p2, i2 = a.numer_preorder, a.numer_ideal, a.denom_preorder, a.denom_ideal
         p3 = {k: v._mul_ground(b) for k, v in p1.items()}
@@ -456,7 +457,6 @@ class PSatzElement(DomainElement, CantSympify, Generic[Ef]):
         return a.per(p3, i3, p2, i2)
 
     def _rmul_ground(a: 'PSatzElement[Ef]', b: Ef) -> 'PSatzElement[Ef]':
-        preorder, ideal = a.preorder, a.ideal
         # b * (p1 + i1)/(p2 + i2)
         p1, i1, p2, i2 = a.numer_preorder, a.numer_ideal, a.denom_preorder, a.denom_ideal
         p3 = {k: v._rmul_ground(b) for k, v in p1.items()}
@@ -507,7 +507,6 @@ class PSatzElement(DomainElement, CantSympify, Generic[Ef]):
         return a._mul(b.inverse())
 
     def _truediv_ground(a: 'PSatzElement[Ef]', b: Ef) -> 'PSatzElement[Ef]':
-        preorder, ideal = a.preorder, a.ideal
         # b * (p1 + i1)/(p2 + i2)
         p1, i1, p2, i2 = a.numer_preorder, a.numer_ideal, a.denom_preorder, a.denom_ideal
         p3 = {k: v._mul_ground(b) for k, v in p2.items()}
@@ -997,6 +996,14 @@ class PSatz(Generic[Ef]):
         alg = self.algebra
         return {k: alg.to_sympy(v) for k, v in self.rep.denom_ideal.items()}
 
+    @property
+    def is_in_ideal(self) -> bool:
+        return self.rep.is_in_ideal
+
+    @property
+    def is_denom_free(self) -> bool:
+        return self.rep.is_denom_free
+
     @classmethod
     def from_sympy(cls, arg,
         preorder: Optional[Union[List[Expr], Dict[Expr, Expr]]]=None,
@@ -1036,7 +1043,7 @@ class PSatz(Generic[Ef]):
                     *[_.free_symbols for _ in preorder.values()],
                     *[_.free_symbols for _ in ideal.values()]
                 )
-                fs = sorted(list(fs), key=lambda x: x.name)
+                fs = sorted(fs, key=lambda x: x.name)
                 algebra = domain[tuple(fs)]
             else:
                 algebra = domain

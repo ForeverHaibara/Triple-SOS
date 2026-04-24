@@ -4,7 +4,7 @@ from sympy import Add
 
 from .utils import congruence, sum_y_exprs
 
-def quaternary_quintic_symmetric(coeff):
+def quaternary_quintic_symmetric(coeff, real=True):
     """
     Solve quaternary symmetric quintic polynomials. Symmetry is not checked here.
 
@@ -398,7 +398,7 @@ def _quaternary_quintic_symmetric_c3axis(coeff: Coeff):
         (c221 + c311 + 2*c32 + 2*c41 + c5)/8,
         (c2111 + 3*c221 + 3*c311 + 3*c32 + 3*c41 + c5)/6
     ]
-    if not all([_ >= 0 for _ in y]):
+    if not all(_ >= 0 for _ in y):
         return None
 
     ker = _quaternary_quintic_symmetric_c3axis_t(t, coeff, c5)
@@ -435,7 +435,7 @@ def _quaternary_quintic_symmetric_surface(coeff: Coeff):
         (c221 + c311 + 2*c32 + 2*c41 + c5)/8,
         (c2111 + 3*c221 + 3*c311 + 3*c32 + 3*c41 + c5)/6
     ]
-    if not all([_ >= 0 for _ in y]):
+    if not all(_ >= 0 for _ in y):
         return None
 
     ker = _quaternary_quintic_symmetric_surface_t(t, coeff, c5)

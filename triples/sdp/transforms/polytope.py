@@ -39,7 +39,7 @@ def _get_zero_diagonals_of_dual(self) -> Dict[Any, List[int]]:
 
 def _get_zero_diagonals_of_primal(self) -> Dict[Any, List[int]]:
     zero_diagonals = {key: set() for key in self.keys()}
-    zero_eqs = set([i for i in range(self._x0.shape[0]) if self._x0[i] == 0])
+    zero_eqs = {i for i in range(self._x0.shape[0]) if self._x0[i] == 0}
     new_zero_found = True
     while new_zero_found:
         new_zero_found = False
@@ -171,7 +171,7 @@ class SDPRowExtraction(SDPMatrixTransform):
         mats = {key: child.y.zeros(m, m) for key, m in parent.size.items()}
         y = child.y.zeros(parent.dof, 1)
         y_offset = 0
-        decomps = {key: None for key in parent.size.keys()}
+        decomps = dict.fromkeys(parent.size.keys())
         for key, m in parent.size.items():
             extraction = self._extractions[key]
 
@@ -206,13 +206,13 @@ class DualRowExtraction(SDPRowExtraction):
             return cls.apply_zero_diagonals(parent_node)
 
         if masks is not None:
-            masks = {key: masks.get(key, tuple()) for key in parent_node.keys()}
+            masks = {key: masks.get(key, ()) for key in parent_node.keys()}
         if extractions is not None:
             extractions = {key: extractions.get(key, tuple(range(n))) for key, n in parent_node.size.items()}
         if extractions is None:
             extractions = {key: complement(n, masks[key]) for key, n in parent_node.size.items()}
         if masks is None:
-            extractions = {key: extractions.get(key, tuple()) for key in parent_node.keys()}
+            extractions = {key: extractions.get(key, ()) for key in parent_node.keys()}
             masks = {key: complement(n, extractions[key]) for key, n in parent_node.size.items()}
 
         time_limit = ArithmeticTimeout.make_checker(time_limit)
@@ -255,4 +255,4 @@ class DualRowExtraction(SDPRowExtraction):
 
         child_node = parent_node.__class__(new_x0_and_space)
         transform = cls(parent_node, child_node, extractions=extractions, A=A, b=b)
-        return child_node
+        return transform.child_node

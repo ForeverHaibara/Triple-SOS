@@ -4,11 +4,11 @@ CyclicExpr, CyclicSum and CyclicProduct.
 """
 from importlib import import_module
 from numbers import Number
-from typing import List, Tuple, Union, Callable, Any
+from typing import Tuple, Callable
 from typing import Dict
 
 import sympy as sp # for hijacking default behaviors of sympy
-from sympy import sympify, S, Mul, Add, Pow, Symbol, Poly, Expr, Basic
+from sympy import sympify, S, Mul, Add, Pow, Symbol, Expr, Basic
 from sympy.core.cache import cacheit
 from sympy.core.containers import Dict as SympyDict
 from sympy.core.numbers import zoo, nan
@@ -53,7 +53,7 @@ def _std_seq(p: Tuple, perm_group: PermutationGroup) -> Tuple:
     has minimum lexicographical order.
     """
     if len(p) == 0:
-        return tuple()
+        return ()
     # elif len(perm_group.args) == 1 and \
     #         perm_group.args[0].array_form == list(range(1, len(p))) + [0]:
     #     # inv_p = ...
@@ -73,7 +73,7 @@ def _std_seq(p: Tuple, perm_group: PermutationGroup) -> Tuple:
     return tuple(p[i] for i in p2)
 
 def _std_symbols(symbols: Tuple[Symbol, ...], perm_group: PermutationGroup) -> PermutationGroup:
-    p = sorted(list(range(len(symbols))), key = lambda i: symbols[i].name)
+    p = sorted(range(len(symbols)), key = lambda i: symbols[i].name)
     q = _std_seq(tuple(p), perm_group)
     return tuple(symbols[i] for i in q)
 
@@ -102,8 +102,8 @@ def _func_perm(func: Callable, expr: Expr,
 def _is_same_dict(d1: dict, d2: dict, simpfunc=signsimp) -> bool:
     if len(d1) != len(d2):
         return False
-    d1 = dict((simpfunc(k), simpfunc(v)) for k, v in d1.items())
-    d2 = dict((simpfunc(k), simpfunc(v)) for k, v in d2.items())
+    d1 = {simpfunc(k): simpfunc(v) for k, v in d1.items()}
+    d2 = {simpfunc(k): simpfunc(v) for k, v in d2.items()}
     for k, v in d1.items():
         if k not in d2 or (not simpfunc(d2[k]) == simpfunc(v)):
             return False
@@ -348,7 +348,7 @@ class CyclicExpr(Expr):
 
         def _xreplace_arg0(self, rule, symbols):
             arg0, changed = self.args[0]._xreplace(rule)
-            changed = changed or (not (self.symbols is symbols))
+            changed = changed or (self.symbols is not symbols)
             if not changed:
                 return self, False
             return self.func(arg0, symbols, self.perm_group), changed
@@ -388,7 +388,7 @@ class CyclicExpr(Expr):
                 break
         else:
             # check other rules not intersecting self symbols
-            other_rules = [fs(k) | fs(v) for k, v in rule.items() if not k in changed_vars]
+            other_rules = [fs(k) | fs(v) for k, v in rule.items() if k not in changed_vars]
             if not any(_.intersection(self_vars) for _ in other_rules):
                 new_symbols = tuple(rule.get(s, s) for s in self.symbols)
                 if len(set(new_symbols)) == len(new_symbols):
@@ -405,7 +405,7 @@ class CyclicExpr(Expr):
             return _fallback_xreplace(self, rule)
         else:
             # changed vars should be brocasted by the permutation group
-            changed_inds = list(i for i, s in enumerate(symbols) if s in changed_vars)
+            changed_inds = [i for i, s in enumerate(symbols) if s in changed_vars]
             changed_inds = self.perm_group.orbit(changed_inds, action='union')
             unchanged_inds = tuple(i for i in range(len(symbols)) if i not in changed_inds)
 
@@ -553,7 +553,7 @@ class CyclicSum(CyclicExpr):
         if isinstance(expr, Mul):
             cyc_args = []
             uncyc_args = []
-            symbol_degrees = {}
+            # symbol_degrees = {}
 
             for arg in expr.args:
                 if is_cyclic_expr(arg, symbols, perm_group):

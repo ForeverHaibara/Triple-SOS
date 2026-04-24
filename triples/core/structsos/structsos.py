@@ -3,7 +3,7 @@ from typing import List, Dict, Union, Optional
 from sympy import Poly, Expr, Integer, construct_domain
 from sympy.polys.polyerrors import BasePolynomialError
 
-from .utils import Coeff, clear_free_symbols
+from .utils import clear_free_symbols
 from .solution import SolutionStructural
 from .constrained import structural_sos_constrained
 from .pivoting    import structural_sos_2vars

@@ -38,8 +38,8 @@ def test_cyclic_sum_doit():
     perm_group =  PermutationGroup(Permutation([1,2,5,0,6,3,4]), Permutation([0,1,2,5,4,3,6]))
     val1 = CyclicSum(F(z,x,a,c,d,b,y), (x,d,y,c,z,a,b), perm_group)
     set1 = set(val1.doit().args)
-    set2 = set([F(z,x,a,c,d,b,y).xreplace(dict(zip(
-        (x,d,y,c,z,a,b), g((x,d,y,c,z,a,b))))) for g in perm_group.generate()])
+    set2 = {F(z,x,a,c,d,b,y).xreplace(dict(zip(
+        (x,d,y,c,z,a,b), g((x,d,y,c,z,a,b))))) for g in perm_group.generate()}
     assert set1 == set2
 
     val1 = CyclicSum(F(z,x,a,c,d,b,y), (x,d,y,c,z,a,b), SymmetricGroup(7))
@@ -60,7 +60,7 @@ def test_cyclic_sum_random_xreplace():
                 val = CyclicSum(func, symbols, perm_group)
 
                 subset = set(choices(symbols, k = randint(1, min(n, 4))))
-                subset = dict((s, 7 + i) for i, s in enumerate(subset))
+                subset = {s: 7 + i for i, s in enumerate(subset)}
                 assert _compare_replacement(val, subset), '%s(%s).xreplace(%s)'%(val.func, val.args, subset)
 
 def test_cyclic_sum_xreplace_preserve_structure():

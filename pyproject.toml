@@ -45,3 +45,53 @@ include = ["triples*"]
 
 [tool.setuptools.package-data]
 triples = ["**/*.npz"]
+
+[tool.ruff]
+# from SymPy
+lint.select = [
+    "B015",  # Useless comparison: a == b rather than a = b.
+    "I002",  # `import` statement not at top of file
+    "C4",
+    "E",
+    "F",
+    "FURB",
+    "LOG",
+    "PIE810",
+    "PLE",
+    "PLR1736",
+    "PLW0602", # Global statement used but no assignment
+    "SIM101",
+    "SLOT",
+    "TC001",
+    "TC002",
+    "TC003",
+    "TC004",
+    "TC005",
+    "TRY002",
+    # "BLE001", # except Exception or except BaseException
+    # "UP006", # pyupgrade - non-pep585-annotation
+    # "UP007", # pyupgrade - non-pep604-annotation-union
+    # "UP045", # pyupgrade - non-pep604-annotation-optional
+]
+
+# Ignore rules that currently fail on the SymPy codebase
+lint.ignore = [
+    "E401",  # Multiple imports on one line
+    "E402",  # Module level import not at top of file
+    "E501",  # Line too long (<LENGTH> > 88 characters)
+    "E701",  # Multiple statements on one line (colon)
+    # "E702",  # Multiple statements on one line (semicolon)
+    "E712",  # Comparison to `<BOOL>` should be `cond is <BOOL>`
+    # "E713",  # Test for membership should be `not in`
+    # "E714",  # Test for object identity should be `is not`
+    # "E721",  # Do not compare types, use `isinstance()`
+    "E731",  # Do not assign a `lambda` expression, use a `def`
+    "E741",  # Ambiguous variable name: `<VARIABLE>`
+    "E743",  # Ambiguous function name: `<FUNCTION>`
+    "F811",  # Redefinition of unused XXX
+    "FURB110",  # Replace ternary `if` expression with `or` operator
+    "FURB187",  # Use of assignment of `reversed` on list `{name}`
+    "FURB188",  # Prefer `str.removeprefix()` over conditionally replacing with slice
+]
+
+exclude = ["triples/benchmarks/run_benchmark.py"]

@@ -15,12 +15,12 @@ import numpy as np
 from numpy import ndarray
 from scipy.sparse import spmatrix, csr_matrix
 from sympy import __version__ as _SYMPY_VERSION
-from sympy.external.gmpy import MPQ, MPZ # >= 1.9
+from sympy.external.gmpy import MPZ # >= 1.9
 from sympy.external.importtools import version_tuple
-from sympy import Symbol, Float, MatrixBase, Basic
+from sympy import Float, MatrixBase, Basic
 from sympy.matrices import MutableDenseMatrix as Matrix
 from sympy.matrices.repmatrix import RepMatrix
-from sympy.polys.domains import Domain, ZZ, QQ, RR, CC # EXRAW >= 1.9
+from sympy.polys.domains import Domain, ZZ, RR, CC # EXRAW >= 1.9
 from sympy.polys.matrices.domainmatrix import DomainMatrix # polys.matrices >= 1.8
 from sympy.polys.matrices.ddm import DDM
 from sympy.polys.matrices.sdm import SDM
@@ -52,7 +52,7 @@ try:
     from flint import fmpq, fmpz
     FLINT_TYPE = (fmpq, fmpz)
 except ImportError:
-    FLINT_TYPE = tuple()
+    FLINT_TYPE = ()
 
 class ArithmeticTimeout(Exception):
     @classmethod

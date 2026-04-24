@@ -1,6 +1,6 @@
 import numpy as np
 import sympy as sp
-from sympy.abc import a,b,c,d,x,y,z,w
+from sympy.abc import a,b,c,x,y,z,w
 
 from ..num_extrema import NumerFunc
 

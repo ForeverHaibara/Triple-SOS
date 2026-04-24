@@ -1,12 +1,12 @@
 from collections import defaultdict
 from time import perf_counter
-from typing import List, Tuple, Dict, Union, Optional, Callable, Any, overload
+from typing import List, Tuple, Dict, Union, Optional, Callable, overload
 
 from numpy import argsort
-from sympy.external.gmpy import MPQ, MPZ # >= 1.9
+from sympy.external.gmpy import MPQ # >= 1.9
 from sympy.matrices import MutableDenseMatrix as Matrix
 from sympy.matrices.repmatrix import RepMatrix
-from sympy.polys.domains import ZZ, QQ, EX # EXRAW >= 1.9
+from sympy.polys.domains import QQ # EXRAW >= 1.9
 from sympy.polys.matrices.domainmatrix import DomainMatrix # polys.matrices >= 1.8
 from sympy.polys.matrices.sdm import SDM
 try:
@@ -196,7 +196,7 @@ def _row_reduce(M, normalize_last=True, normalize=True, zero_above=True, time_li
 
     sdm = M._rep.to_field().rep
     domain = sdm.domain
-    sdm = {k: {k2: i for k2, i in v.items()} for k, v in sdm.to_sdm().items()}
+    sdm = {k: dict(v.items()) for k, v in sdm.to_sdm().items()}
 
     if _VERBOSE_SOLVE_UNDETERMINED_LINEAR:
         print(">> Time for converting to MPQ:", perf_counter() - time0)
@@ -516,7 +516,7 @@ def solve_csr_linear(A: Matrix, b: Matrix,
     cols = A.shape[1]
     if _VERBOSE_SOLVE_CSR_LINEAR:
         print('SolveCsrLinear A shape', A.shape)
-        time0 = perf_counter()
+        # time0 = perf_counter()
 
     Arep = A._rep.rep.to_sdm()
 
@@ -551,9 +551,9 @@ def solve_csr_linear(A: Matrix, b: Matrix,
     new_force_zeros = {}
     for i in force_zeros:
         k = mapping[i]
-        if not (k in new_force_zeros):
+        if k not in new_force_zeros:
             new_force_zeros[k] = set()
-        new_force_zeros[k].update(set(mapping[j] for j in force_zeros[i]))
+        new_force_zeros[k].update({mapping[j] for j in force_zeros[i]})
     time_limit()
 
     x0, space = _solve_csr_linear_force_zeros(A2, b,
@@ -639,7 +639,7 @@ def _solve_csr_linear_force_zeros(A, b, nonnegative_indices=[], force_zeros={},
             new_zeros = force_zeros.get(i)
             if new_zeros is not None:
                 for j in new_zeros:
-                    if not (j in all_zero_inds):
+                    if j not in all_zero_inds:
                         zero_inds.add(j)
 
             # remove the corresponding column of A

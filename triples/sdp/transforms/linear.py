@@ -2,7 +2,7 @@
 This module contains basic linear transformations of SDP problems.
 """
 
-from typing import List, Tuple, Dict, Union, Optional, Callable, Any
+from typing import Tuple, Dict, Union, Optional, Callable, Any
 
 from sympy.matrices import MutableDenseMatrix as Matrix
 

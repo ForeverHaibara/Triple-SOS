@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from time import perf_counter
-from typing import Dict, Tuple, List, Union, Callable, Optional, Any
+from typing import Dict, Tuple, List, Union, Optional, Any
 
 from numpy import ndarray
 import numpy as np
@@ -12,7 +12,7 @@ from .arithmetic import (
     ArithmeticTimeout, sqrtsize_of_mat, is_empty_matrix,
     congruence, rep_matrix_from_numpy, rep_matrix_to_numpy
 )
-from .backends import SDPError, SDPTimeoutError, SDPResult
+from .backends import SDPTimeoutError, SDPResult
 from .rationalize import rationalize_and_decompose
 from .utils import exprs_to_arrays, collect_constraints
 
@@ -153,7 +153,7 @@ class SDPProblemBase(ABC):
         if isinstance(y, np.ndarray):
             y = rep_matrix_from_numpy(y.flatten())
         y2 = self.project(y)
-        if (not (y2 is y)) and not project:
+        if (y2 is not y) and not project:
             # FIXME for numpy array
             raise ValueError("The vector y is not feasible by the equality constraints."
                     " Use project=True to project the approximated solution to the feasible region.")
@@ -249,9 +249,9 @@ class SDPProblemBase(ABC):
         cons = [(ineq_lhs, ineq_rhs, '>'), (eq_lhs, eq_rhs, '==')]
 
         kwargs = kwargs.copy()
-        if not ('verbose' in kwargs):
+        if 'verbose' not in kwargs:
             kwargs['verbose'] = verbose
-        if end_time is not None and (not ('time_limit' in kwargs)):
+        if end_time is not None and ('time_limit' not in kwargs):
             kwargs['time_limit'] = end_time - perf_counter()
 
         sol = self._solve_numerical_sdp(objective=obj[0],

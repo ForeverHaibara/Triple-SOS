@@ -221,10 +221,9 @@ def sum_of_squares_multiple(
         The results as a pandas DataFrame.
     """
     from time import time
+    from importlib.util import find_spec
 
-    try:
-        import pandas as pd
-    except ImportError:
+    if find_spec("pandas") is None:
         raise ImportError('Please install pandas to use this function.')
 
     if 'ignore_errors' not in poly_reader_configs:
@@ -268,7 +267,7 @@ def sum_of_squares_multiple(
                 record['status'] = 'success'
                 record['solution'] = solution
                 record['method'] = solution.method
-        except Exception as e:
+        except Exception:
             used_time = time() - t0
             record['status'] = 'error'
             record['solution'] = None

@@ -1,4 +1,4 @@
-from typing import Generator, Dict, Tuple, List, Optional
+from typing import Generator, Dict, Tuple, Optional
 
 from sympy import Poly, Expr, Symbol, Mul
 
@@ -84,7 +84,6 @@ def lift_degree(
             The degree of h(a,b,c).
     """
     n = poly.total_degree()
-    nvars = len(poly.gens)
     symbols = poly.gens
     n_plus = 0
 

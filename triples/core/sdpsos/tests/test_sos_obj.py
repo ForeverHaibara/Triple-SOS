@@ -1,4 +1,4 @@
-from sympy.abc import a, b, c, d, x, y, t
+from sympy.abc import a, b, c, t
 from sympy.combinatorics import SymmetricGroup
 
 import pytest
@@ -38,6 +38,6 @@ class SOSObjProblems:
     ids=SOSObjProblems.collect().keys())
 def test_sos_obj(problem, tol=1e-5):
     sdp, obj, constraints, val = problem()
-    y = sdp.solve_obj(obj, constraints=constraints)
+    sdp.solve_obj(obj, constraints=constraints)
     val2 = obj.xreplace(sdp.as_params())
     assert abs(val - val2) < tol

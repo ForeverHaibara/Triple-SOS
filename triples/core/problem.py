@@ -69,8 +69,8 @@ class InequalityProblem(Generic[T]):
             ineq_constraints = {e: e for e in ineq_constraints}
         if not isinstance(eq_constraints, dict):
             eq_constraints = {e: e for e in eq_constraints}
-        ineq_constraints = dict((_try_sympify(e), _try_sympify(e2).as_expr()) for e, e2 in ineq_constraints.items())
-        eq_constraints = dict((_try_sympify(e), _try_sympify(e2).as_expr()) for e, e2 in eq_constraints.items())
+        ineq_constraints = {_try_sympify(e): _try_sympify(e2).as_expr() for e, e2 in ineq_constraints.items()}
+        eq_constraints = {_try_sympify(e): _try_sympify(e2).as_expr() for e, e2 in eq_constraints.items()}
 
         return cls.new(expr, ineq_constraints, eq_constraints)
 
@@ -90,14 +90,14 @@ class InequalityProblem(Generic[T]):
     def __str__(self) -> str:
         ss = [f"[Problem] Prove that:\n    {self.expr} >= 0"]
         if len(self.ineq_constraints):
-            ss.append(f"given inequality constraints:")
+            ss.append("given inequality constraints:")
             for p, e in self.ineq_constraints.items():
                 ss.append(f"    {p} >= 0" + (f"    ({e})" if p.as_expr() != e else ""))
         else:
             ss.append("given no inequality constraints,")
 
         if len(self.eq_constraints):
-            ss.append(f"and equality constraints:")
+            ss.append("and equality constraints:")
             for p, e in self.eq_constraints.items():
                 ss.append(f"    {p} == 0" + (f"    ({e})" if e != 0 and p.as_expr() != e else ""))
         else:
@@ -124,7 +124,7 @@ class InequalityProblem(Generic[T]):
         ands = ["&" if self.REPR_LATEX_ALIGN_AT == i else "" for i in range(4)]
         ss = [f"**Problem** Prove that:\n\n{delim_l}{latex(self.expr)} \\geq 0{delim_r}"]
         if len(self.ineq_constraints):
-            ss.append(f"given inequality constraints:")
+            ss.append("given inequality constraints:")
             ss.append(delim_l + "\\begin{aligned}" + "\\\\\n ".join([
                 f"{ands[0]} {latex(p)} {ands[1]}\\geq 0" + \
                         (f"{ands[2]} \\qquad {ands[3]} ({latex(e)})" if p.as_expr() != e else "")
@@ -134,7 +134,7 @@ class InequalityProblem(Generic[T]):
             ss.append("given no inequality constraints,")
 
         if len(self.eq_constraints):
-            ss.append(f"and equality constraints:")
+            ss.append("and equality constraints:")
             ss.append(delim_l + "\\begin{aligned}" + "\\\\\n ".join([
                 f"{ands[0]} {latex(p)} {ands[1]}= 0" + \
                         (f"{ands[2]} \\qquad {ands[3]} ({latex(e)})" if p.as_expr() != e else "")
@@ -281,7 +281,7 @@ class InequalityProblem(Generic[T]):
         """
         poly_gens = self._dtype_gens(self.expr)
         other_syms = self.free_symbols - set(poly_gens)
-        other_syms = sorted(list(other_syms), key=lambda x: x.name)
+        other_syms = sorted(other_syms, key=lambda x: x.name)
         return poly_gens + tuple(other_syms)
 
     def extract_constraints(self, symbols: Union[Symbol, List[Symbol]]) \
@@ -400,8 +400,8 @@ class InequalityProblem(Generic[T]):
             return Poly(expr.doit(), *gens, extension=extension)
 
         expr = as_poly(expr)
-        ineq_constraints = dict((as_poly(e), e2) for e, e2 in ineq_constraints.items())
-        eq_constraints = dict((as_poly(e), e2) for e, e2 in eq_constraints.items())
+        ineq_constraints = {as_poly(e): e2 for e, e2 in ineq_constraints.items()}
+        eq_constraints = {as_poly(e): e2 for e, e2 in eq_constraints.items()}
 
         problem = InequalityProblem(expr, ineq_constraints, eq_constraints)
         problem, _ = problem.sqr_free(problem_sqf=False,
@@ -547,13 +547,13 @@ class InequalityProblem(Generic[T]):
         if ineqs_sqf:
             ineq_constraints = dict(self._dtype_std_ineq_constraints(*item)
                 for item in ineq_constraints.items())
-        self.ineq_constraints = dict((e, e2) for e, e2 in ineq_constraints.items())
+        self.ineq_constraints = dict(ineq_constraints.items())
 
         eq_constraints = self.eq_constraints
         if eqs_sqf:
             eq_constraints = dict(self._dtype_std_eq_constraints(*item)
                 for item in eq_constraints.items())
-        self.eq_constraints = dict((e, e2) for e, e2 in eq_constraints.items())
+        self.eq_constraints = dict(eq_constraints.items())
         return self, sqr
 
     def recompute_constraints(
@@ -785,8 +785,8 @@ class InequalityProblem(Generic[T]):
         src_dicts = [{self.expr: Integer(1)}, self.ineq_constraints, self.eq_constraints]
         dst_dicts = [{}, {}, {}]
         if isinstance(self.expr, Poly):
-            new_symbols = tuple(sorted(list(inv_transform.keys()), key=lambda x:x.name))
-            symbols = tuple([_ for _ in self.expr.gens if (not _ in transform)]) + new_symbols
+            new_symbols = tuple(sorted(inv_transform.keys(), key=lambda x:x.name))
+            symbols = tuple([_ for _ in self.expr.gens if (_ not in transform)]) + new_symbols
         for src, dst in zip(src_dicts, dst_dicts):
             for p, e in src.items():
                 if isinstance(p, Expr):
@@ -854,7 +854,7 @@ class InequalityProblem(Generic[T]):
 
         gens = self.gens
         changed_gens = [g for g in gens if (g in transform)]
-        other_gens = [g for g in gens if (not g in transform)]
+        other_gens = [g for g in gens if (g not in transform)]
         shift = {g: g + v for g, v in transform.items()}
 
         expr_mul = 1
@@ -928,7 +928,7 @@ def _get_constraints_wrapper(
     def _get_counter(name='_G'):
         # avoid duplicate function counters
         k = len(name)
-        exprs = [e for e in ineq_constraints.values()] + [e for e in eq_constraints.values()]
+        exprs = list(ineq_constraints) + list(eq_constraints.values())
         names = [[f.name for f in e.find(AppliedUndef)] for e in exprs]
         names = [item for sublist in names for item in sublist]
         names = [n[k:] for n in names if n.startswith(name)]
@@ -936,8 +936,8 @@ def _get_constraints_wrapper(
         return max(digits, default=-1) + 1
 
     def _get_dicts(constraints, name='_G', counter=None):
-        dt = dict()
-        inv = dict()
+        dt = {}
+        inv = {}
         # rep_dict = dict((p, v) for p, v in constraints.items())
         rep_dict = constraints
         if counter is None:

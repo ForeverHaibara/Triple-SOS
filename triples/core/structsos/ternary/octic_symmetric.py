@@ -1,8 +1,8 @@
 import sympy as sp
-from sympy import Poly, Symbol, Rational, Add
+from sympy import Poly, Symbol, Integer, Rational, Add, sign
 from sympy import MutableDenseMatrix as Matrix
 
-from .sextic_symmetric import _restructure_quartic_polynomial
+# from .sextic_symmetric import _restructure_quartic_polynomial
 
 from .utils import (
     Coeff, CommonExpr, DomainExpr,
@@ -24,7 +24,7 @@ def _solve_inverse_quartic(coeff: Coeff, m, p, n, r):
         if m != 0 and (n - ((p / m)**2 - 1) * m) >= 0:
             y = [
                 m / 2,
-                (n - ((p / m)**2 - 1) * m) / 2 if m != 0 else sp.S(0),
+                (n - ((p / m)**2 - 1) * m) / 2 if m != 0 else Integer(0),
                 m + 2*p + n + r
             ]
             exprs = [
@@ -118,7 +118,7 @@ def _sos_struct_octic_symmetric_hexagon_sdp(coeff: Coeff):
         return Poly.from_list(_M, gen)
 
     def stack_quad_form(M00t, M01t, M02t, M22t):
-        return sp.Matrix([
+        return Matrix([
             [M00t, M01t, M02t],
             [M01t, M00t, M02t],
             [M02t, M02t, M22t]
@@ -213,7 +213,7 @@ def _sos_struct_octic_symmetric_hexagon_sdp(coeff: Coeff):
 
 
         def _is_valid(t):
-            return sp.sign(det(t)) * sp.sign(t) * sp.sign(t+1) >= 0 and M00t(t) >= abs(M01t(t))
+            return sign(det(t)) * sign(t) * sign(t+1) >= 0 and M00t(t) >= abs(M01t(t))
 
         # det is a 6-degree polynomial with respect to t
         t = rationalize_func(det.diff(), _is_valid)
@@ -230,16 +230,16 @@ def _sos_struct_octic_symmetric_hexagon_sdp(coeff: Coeff):
             if p4 != 0:
                 x_ = -w2/w1/(t+1)*(p4 + 9*t*w1*w2)/p4
                 r = p4**2/(162*t**2*w2**2*w4)
-                u210 = sp.S(1)
+                u210 = Integer(1)
                 u201 = x_ * t
                 u102 = 2 + w2/w1 + x_
                 u111 = u111_/(w1*(t + 1)*p4)
             else:
                 x_ = -w2/w1/(t+1)*(p4 + 9*t*w1*w2)
                 r = x_**2/(162*t**2*w2**2*w4)
-                u210 = sp.S(0)
+                u210 = Integer(0)
                 u201 = t
-                u102 = sp.S(1)
+                u102 = Integer(1)
                 u111 = u111_/(-w2*(p4 + 9*t*w1*w2))
         else:
             # take limit t -> -1
@@ -251,7 +251,7 @@ def _sos_struct_octic_symmetric_hexagon_sdp(coeff: Coeff):
             M22t = (81*c440*w1 + 27*c440*w2 - 81*c611*w1 - 27*c611*w2 + 18*w1**2 - 12*w1*w2 - 7*w2**2)/(27*(3*w1 + w2))
             u111 = -(-9*w1*w2 - 2*w2**2)/(3*w1*w2)
 
-            u210 = sp.S(1)
+            u210 = Integer(1)
             u201 = x_ * t
             u102 = 2 + w2/w1 + x_
 
@@ -306,13 +306,13 @@ def _sos_struct_octic_symmetric_hexagon_sdp(coeff: Coeff):
 
 
         def _is_valid(t):
-            return t != 0 and sp.sign(det(t)) * sp.sign(t) >= 0 and M00t(t) >= abs(M01t(t))
+            return t != 0 and sign(det(t)) * sign(t) >= 0 and M00t(t) >= abs(M01t(t))
 
         t = rationalize_func(det.diff(), _is_valid)
         if t is None:
             return None
 
-        u210 = sp.S(1)
+        u210 = Integer(1)
         u201 = t
         u102 = -(t + 1)*(3*t*w2 - t*w4 + 2*w4)/(3*t*w2 - t*w4 - w4)
         u111 = -(3*t**2*w2 - t**2*w4 - 3*t*w2 + 3*t*w4 - 5*w4)/(3*t*w2 - t*w4 - w4)
@@ -344,7 +344,7 @@ def _sos_struct_octic_symmetric_hexagon_sdp(coeff: Coeff):
         The constraints then converts to.
         """
         def _compute_params(x, y):
-            u210 = sp.S(1)
+            u210 = Integer(1)
             u201 = y
             u102 = x / (-w1) - y - 1
 
@@ -491,8 +491,8 @@ def _sos_struct_octic_symmetric_hexagon_sdp(coeff: Coeff):
 
         if c611 + 2*c620 == 0:
             # r = 0 is a must by the constraint M00 + M01 >= 0 and r >= 0.
-            r = sp.S(0)
-            u111, u102, u201 = sp.S(0), sp.S(0), sp.S(0)
+            r = Integer(0)
+            u111, u102, u201 = Integer(0), Integer(0), Integer(0)
             M00t = c620
             M01t = -c620
             M02t = c530/2
@@ -507,13 +507,13 @@ def _sos_struct_octic_symmetric_hexagon_sdp(coeff: Coeff):
             r = (2*c620 + c611)/2
             M00t = -(c611 + c620)
             M01t = -M00t
-            M02t = sp.S(0)
+            M02t = Integer(0)
             M22t = w5 / (c611 + 2*c620)
 
-        u210 = sp.S(1)
+        u210 = Integer(1)
         if c611 + 2*c620 != 0:
             u102 = -c530/(c611 + 2*c620)
-            u201 = sp.S(0)
+            u201 = Integer(0)
             u111 = -2*u102 - 1
         quad_form = stack_quad_form(M00t, M01t, M02t, M22t)
         return u210, u102, u201, u111, r, quad_form
@@ -573,7 +573,7 @@ def _sos_struct_octic_symmetric_hexagon(coeff: Coeff):
             # use xs((a-b)2((a2b+a2c+ab2-ac2+b2c-bc2)+y(ac2+bc2-2abc))2)+p(a-b)2s(za2+wab)
             # this enables nontrivial equality cases on the symmetric axis
             x_ = (2*c1 + c3)/8
-            y_ = -2*(2*c1 + c2 + c3 + c4)/(2*c1 + c3) if 2*c1 + c3 != 0 else sp.S(0)
+            y_ = -2*(2*c1 + c2 + c3 + c4)/(2*c1 + c3) if 2*c1 + c3 != 0 else Integer(0)
             z_ = (2*c1 - c3)/4
             w_ = (10*c1 + 6*c2 + c3 + 2*c4)/4
             if x_ >= 0 and z_ >= 0 and z_ + w_ >= 0:
@@ -670,15 +670,15 @@ def _sos_struct_octic_symmetric_hexagram(coeff: Coeff):
             h = (u_ - y_*t)/(t**2*x_ - v_)/2
             c2 = v_ - x_*t**2
             c3 = (2*t**3*x_**3 + 2*t*u_*x_*y_ - 2*t*v_*x_**2 - u_**2*x_ - v_*y_**2)/(x_*(v_ - t**2*x_)) + balance
-            c4 = sp.S(0)
+            c4 = Integer(0)
             break
         if bound_ == 0:
             # more special, v = xt^2
             # f = x(a^2 + r1*a(b+c) + t*bc)^2 + (u - ty)abc(b+c)
             #    + (z - y^2/(4x))a^2(b-c)^2 + (balance - (2*t*x**2 + y**2)/x) * a^2bc
             # WLOG z = y^2/(4x)
-            h = sp.S(0)
-            c2 = sp.S(0)
+            h = Integer(0)
+            c2 = Integer(0)
             c3 = balance - (2*t_*x_**2 + y_**2) / x_
             c4 = u_ - t_ * y_
 
@@ -753,8 +753,6 @@ def _sos_struct_octic_symmetric_hexagram(coeff: Coeff):
             return sum_y_exprs(y, exprs) / multiplier
 
 
-
-
 def _sos_struct_octic_symmetric_quadratic_form(poly, coeff: Coeff):
     """
     Let F0 = s(a2(s(a2+ab)-bc)2(a-b)(a-c)).
@@ -776,38 +774,38 @@ def _sos_struct_octic_symmetric_quadratic_form(poly, coeff: Coeff):
     """
     return
 
-    a, b, c = coeff.gens
-    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+    # a, b, c = coeff.gens
+    # CyclicSum = coeff.cyclic_sum
 
-    # We require multiplicity 2 at (1,1,0) along the symmetric axis.
-    sym = poly.subs({b:1,c:1}).div(Poly([1,-2,1,0,0], a))
-    if not sym[1].is_zero:
-        return None
+    # # We require multiplicity 2 at (1,1,0) along the symmetric axis.
+    # sym = poly.subs({b:1,c:1}).div(Poly([1,-2,1,0,0], a))
+    # if not sym[1].is_zero:
+    #     return None
 
-    sym_axis = _restructure_quartic_polynomial(sym[0])
-    if sym_axis is None:
-        return None
-    t, coeff0, x, y, rem_coeff, rem_ratio = sym_axis
+    # sym_axis = _restructure_quartic_polynomial(sym[0])
+    # if sym_axis is None:
+    #     return None
+    # t, coeff0, x, y, rem_coeff, rem_ratio = sym_axis
 
-    # ker_coeff is the remaining coefficient of (a-b)^2(b-c)^2(c-a)^2*s(a^2) and (a-b)^2(b-c)^2(c-a)^2*s(ab)
-    # of Poly - (t*s(a2-ab)s(a3-a2b-a2c+abc)2 + coeff0 * F(x,y) + rem * s(a^2(a-b)(a-c))s(a^2+rab)^2)
-    ker_coeff1 = poly.coeff_monomial((6,2,0)) - (2*t + coeff0 * (2*x**2 - 2*x*y - 2*x + y**2 + 1))
-    ker_coeff2 = poly.coeff_monomial((5,3,0)) - (3*t + coeff0 * (-3*x**2 + 2*x*y + 4*x - y**2 - 2))
-    if rem_ratio is sp.oo:
-        # degenerates to s(a^2(a-b)(a-c))s(ab)^2
-        ker_coeff1 -= rem_coeff
-        ker_coeff2 += rem_coeff
-    else:
-        ker_coeff1 -= rem_coeff*(rem_ratio**2 - 2*rem_ratio + 2)
-        ker_coeff2 -= rem_coeff*(-rem_ratio**2 + 2*rem_ratio - 3)
-    ker_coeff = (ker_coeff1, ker_coeff2 + 2*ker_coeff1)
+    # # ker_coeff is the remaining coefficient of (a-b)^2(b-c)^2(c-a)^2*s(a^2) and (a-b)^2(b-c)^2(c-a)^2*s(ab)
+    # # of Poly - (t*s(a2-ab)s(a3-a2b-a2c+abc)2 + coeff0 * F(x,y) + rem * s(a^2(a-b)(a-c))s(a^2+rab)^2)
+    # ker_coeff1 = poly.coeff_monomial((6,2,0)) - (2*t + coeff0 * (2*x**2 - 2*x*y - 2*x + y**2 + 1))
+    # ker_coeff2 = poly.coeff_monomial((5,3,0)) - (3*t + coeff0 * (-3*x**2 + 2*x*y + 4*x - y**2 - 2))
+    # if rem_ratio is sp.oo:
+    #     # degenerates to s(a^2(a-b)(a-c))s(ab)^2
+    #     ker_coeff1 -= rem_coeff
+    #     ker_coeff2 += rem_coeff
+    # else:
+    #     ker_coeff1 -= rem_coeff*(rem_ratio**2 - 2*rem_ratio + 2)
+    #     ker_coeff2 -= rem_coeff*(-rem_ratio**2 + 2*rem_ratio - 3)
+    # ker_coeff = (ker_coeff1, ker_coeff2 + 2*ker_coeff1)
 
-    # print('Coeff =', coeff0, 'ker =', ker_coeff)
-    # print('  (x,y) =', (x, y), 'ker_std =', ker_coeff / coeff0)
+    # # print('Coeff =', coeff0, 'ker =', ker_coeff)
+    # # print('  (x,y) =', (x, y), 'ker_std =', ker_coeff / coeff0)
 
-    return _octic_sym_axis.solve(
-        coeff0, x, y, ker_coeff, t, rem_coeff, rem_ratio
-    )
+    # return _octic_sym_axis.solve(
+    #     coeff0, x, y, ker_coeff, t, rem_coeff, rem_ratio
+    # )
 
 
 class _octic_sym_axis(DomainExpr):
@@ -824,9 +822,9 @@ class _octic_sym_axis(DomainExpr):
     """
 
     def rem_poly(self, rem_coeff, rem_ratio):
-        a, b, c = self.gens
-        CyclicSum, CyclicProduct = self.cyclic_sum, self.cyclic_product
-        return rem_coeff * (CyclicSum(a**2 + rem_ratio*a*b)**2 if not rem_ratio is sp.oo else CyclicSum(a*b)**2)
+        a, b, _ = self.gens
+        CyclicSum = self.cyclic_sum
+        return rem_coeff * (CyclicSum(a**2 + rem_ratio*a*b)**2 if rem_ratio is not sp.oo else CyclicSum(a*b)**2)
 
     def _wrap_F(self, f_type, f_solver):
         if f_type == 0:

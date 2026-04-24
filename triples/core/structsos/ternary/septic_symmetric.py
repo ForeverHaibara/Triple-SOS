@@ -68,7 +68,7 @@ def _sos_struct_septic_symmetric_quadratic_form(coeff: Coeff):
     => 3s(a)p(2a2+b2+c2)-4s(b(2a2+b2+c2)(2c2+a2+b2))s(a2)-10p(a-b)2s(a) # doctest:+SKIP
     """
     a, b, c = coeff.gens
-    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+    CyclicSum = coeff.cyclic_sum
 
     poly = coeff.as_poly()
     sym = poly.eval((1,1)).div(coeff.from_list([1, -2, 1], (c,)).as_poly())
@@ -171,7 +171,7 @@ class _septic_sym_axis(DomainExpr):
         `F_{x,y} = 1/9 * s(a(a-b)^2(a-c)^2(3*(x-1)*a-(3*x-1)*(b+c)/2)^2) + (x-1)(9x-13)/12 * s(a) * p(a-b)^2`
         """
         a, b, c = self.gens
-        CyclicSum, CyclicProduct = self.cyclic_sum, self.cyclic_product
+        CyclicSum = self.cyclic_sum
 
         if 3*(x + y) == 5:
             p1 = (3*(x - 1)*a - (3*x-1)/2*b - (3*x-1)/2*c).together()
@@ -296,7 +296,7 @@ class _septic_sym_axis(DomainExpr):
         `G(x, y) = CyclicSum(a*(b-c)**2*p1**2)`
         """
         a, b, c = self.gens
-        CyclicSum, CyclicProduct = self.cyclic_sum, self.cyclic_product
+        CyclicSum = self.cyclic_sum
 
         # w = y - 2
         # p1 = a**2*(w + x - y + 1) + a*b*(-w + 2*y - 2) + a*c*(-w + 2*y - 2) + b**2*(x - 1) + b*c*w + c**2*(x - 1)
@@ -383,9 +383,9 @@ class _septic_sym_axis(DomainExpr):
 
     def rem_poly(self, rem_coeff, rem_ratio):
         a, b, c = self.gens
-        CyclicSum, CyclicProduct = self.cyclic_sum, self.cyclic_product
+        CyclicSum = self.cyclic_sum
         return rem_coeff * (CyclicSum(a**2 + rem_ratio*a*b)**2 \
-                            if not rem_ratio is Infinity else CyclicSum(a*b)**2)
+                            if rem_ratio is not Infinity else CyclicSum(a*b)**2)
 
     def solve(self, f_coeff, fx, fy, g_coeff, gx, gy, ker_coeff):
         a, b, c = self.gens

@@ -277,7 +277,7 @@ def prove_by_pivoting(poly: Poly, nonnegative_symbols: Set[Symbol]) -> Optional[
         return None
 
     for gen in poly.gens:
-        if (not gen in nonnegative_symbols) and poly.degree(gen) % 2 == 1:
+        if (gen not in nonnegative_symbols) and poly.degree(gen) % 2 == 1:
             # do not use % 2 != 0 because degree(gen) = -oo if the degree is zero
             return None
 
@@ -287,12 +287,12 @@ def prove_by_pivoting(poly: Poly, nonnegative_symbols: Set[Symbol]) -> Optional[
             homogenizer = Symbol('_'+poly.gen.name)
             poly = poly.homogenize(homogenizer)
 
-        ineq_constraints = dict()
+        ineq_constraints = {}
         for gen in poly.gens + (homogenizer,):
             if gen is not None and gen in nonnegative_symbols:
                 ineq_constraints[gen.as_poly(*poly.gens)] = gen
                 # Thought: shall we wrap the generator as a function?
-        sol = structural_sos_2vars(poly, ineq_constraints=ineq_constraints, eq_constraints=dict())
+        sol = structural_sos_2vars(poly, ineq_constraints=ineq_constraints, eq_constraints={})
         if sol is not None and homogenizer is not None:
             sol = sol.xreplace({homogenizer: Integer(1)})
         return sol

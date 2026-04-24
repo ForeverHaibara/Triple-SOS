@@ -1,7 +1,7 @@
 from copy import deepcopy
 
 from .backend import DualBackend
-from .settings import SolverConfigs, SDPError
+from .settings import SolverConfigs
 
 _CVXPY_SOLVER_CONFIGS = {
     'CLARABEL': {
@@ -128,7 +128,7 @@ class DualBackendCVXPY(DualBackend):
         from cvxpy import settings as s
         problem = self._create_problem()
         solver_options = update_solver_options(problem, configs.solver_options, configs)
-        obj = problem.solve(verbose=bool(configs.verbose), **solver_options)
+        _ = problem.solve(verbose=bool(configs.verbose), **solver_options)
 
         for var in problem.variables():
             if var.name() == 'y':

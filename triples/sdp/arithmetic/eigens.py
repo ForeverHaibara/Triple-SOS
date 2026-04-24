@@ -1,4 +1,4 @@
-from typing import List, Tuple, Union, Optional, overload
+from typing import Tuple, Union, Optional, overload
 
 import numpy as np
 from numpy import ndarray
@@ -261,7 +261,7 @@ def _congruence_numerically(M, perturb=0., upper=True):
     if upper:
         U = silent_chol(M)
 
-        if U is None and (not (perturb is False)):
+        if U is None and (perturb is not False):
             if perturb is True:
                 perturb = 1.
             mineig = float(np.min(eigvalsh(M)))

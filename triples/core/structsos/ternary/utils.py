@@ -6,13 +6,25 @@ from sympy import Poly, Expr, Symbol, Add, Mul, Pow
 from sympy.combinatorics import CyclicGroup
 
 from ..utils import (
-    Coeff, DomainExpr,
+    Coeff, DomainExpr, sos_struct_reorder_symmetry,
     radsimp, sum_y_exprs, rationalize_func, quadratic_weighting, zip_longest,
     congruence, congruence_solve,
     StructuralSOSError, PolynomialNonpositiveError, PolynomialUnsolvableError
 )
 
 from ....utils import (
+    nroots, rationalize, rationalize_bound, univariate_intervals,
+    cancel_denominator, common_region_of_conics,
+    CyclicExpr, CyclicSum, CyclicProduct
+)
+
+(
+    Coeff, DomainExpr, sos_struct_reorder_symmetry,
+    radsimp, sum_y_exprs, rationalize_func, quadratic_weighting, zip_longest,
+    congruence, congruence_solve,
+    StructuralSOSError, PolynomialNonpositiveError, PolynomialUnsolvableError
+)
+(
     nroots, rationalize, rationalize_bound, univariate_intervals,
     cancel_denominator, common_region_of_conics,
     CyclicExpr, CyclicSum, CyclicProduct
@@ -108,7 +120,7 @@ def sos_struct_handle_uncentered(solver: Callable) -> Callable:
         i, j, k = dd3, dd3+(1 if dm3>=2 else 0), dd3+(1 if dm3 else 0)
         dt = dict(poly.terms())
         zero = poly.convert(0)
-        if not ((i,j,k) in dt):
+        if (i,j,k) not in dt:
             dt[(i,j,k)] = zero
             dt[(j,k,i)] = zero
             dt[(k,i,j)] = zero

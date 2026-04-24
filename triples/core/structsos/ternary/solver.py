@@ -1,9 +1,10 @@
-from typing import Union, Dict, Optional, Any
+from typing import Union, Dict, Optional
 
 from sympy import Poly, Expr, Function
 from sympy.core.symbol import uniquely_named_symbol
 
 from .sparse  import sos_struct_sparse, sos_struct_heuristic
+from .dense_symmetric import sos_struct_ternary_dense_partial_symmetric
 from .quadratic import sos_struct_quadratic, sos_struct_acyclic_quadratic
 from .cubic   import sos_struct_cubic, sos_struct_acyclic_cubic
 from .quartic import sos_struct_quartic, sos_struct_acyclic_quartic
@@ -68,6 +69,7 @@ def _structural_sos_3vars_acyclic(
     return sos_struct_common(coeff,
         sos_struct_acyclic_sparse,
         sos_struct_degree_specified_solver(SOLVERS_ACYCLIC, homogeneous=True),
+        sos_struct_ternary_dense_partial_symmetric,
         real=real
     )
 

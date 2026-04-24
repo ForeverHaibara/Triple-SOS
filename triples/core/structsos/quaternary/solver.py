@@ -1,6 +1,6 @@
 from typing import Union, Dict, Optional
 
-from sympy import Poly, Expr, Function
+from sympy import Poly, Expr, Function, Mul
 from sympy.core.symbol import uniquely_named_symbol
 from sympy.combinatorics import PermutationGroup, Permutation
 
@@ -8,7 +8,7 @@ from .cubic import quaternary_cubic_symmetric, _quaternary_cubic_partial_symmetr
 from .quartic import quaternary_quartic
 from .quartic_symmetric import quaternary_quartic_symmetric
 from .quintic import quaternary_quintic_symmetric
-from .dense_symmetric import quaternary_dense_symmetric
+from .dense_symmetric import quaternary_dense_symmetric, quaternary_dense_dihedral
 
 from ..utils import Coeff, PolynomialNonpositiveError, PolynomialUnsolvableError
 from ..sparse import sos_struct_common, sos_struct_degree_specified_solver
@@ -51,7 +51,7 @@ def _structural_sos_4vars_cyclic(
     real: int = 1
 ) -> Optional[Expr]:
     """
-    Internal function to solve a 4-var homogeneous symmetric polynomial using structural SOS.
+    Internal function to solve a 4-var homogeneous cyclic polynomial using structural SOS.
     It does not check the homogeneous / cyclic property of the polynomial to save time.
     """
     if not isinstance(coeff, Coeff):
@@ -79,6 +79,53 @@ def _structural_sos_4vars_partial_symmetric(
         real=real
     )
 
+def _structural_sos_4vars_dihedral(
+    coeff: Union[Poly, Coeff, Dict],
+    real: int = 1
+) -> Optional[Expr]:
+    """
+    Internal function to solve a 4-var homogeneous dihedral polynomial using structural SOS.
+    It does not check the homogeneous / dihedral property of the polynomial to save time.
+
+    The permutation group is assumed to be [[2,3,0,1], [1,0,2,3]].
+    """
+    if not isinstance(coeff, Coeff):
+        coeff = Coeff(coeff)
+    if coeff.total_degree() <= 2:
+        from ..nvars.quadratic import sos_struct_nvars_quadratic
+        sol = sos_struct_nvars_quadratic(coeff)
+        if sol is not None:
+            return sol
+
+    poly = coeff.as_poly()
+    const, factors = poly.factor_list()
+
+    if const < 0:
+        return None
+
+    factor_sols = [const]
+    dih = PermutationGroup(Permutation([2,3,0,1]), Permutation([1,0,2,3]))
+    for factor, mul in factors:
+        if mul % 2 == 1:
+            factor_coeff = Coeff(factor)
+            if not factor_coeff.is_cyclic(dih):
+                # factors of a D4-symmetric polynomial might not
+                # still be cyclic under D4
+                # e.g. a*b*c*d
+                wrap = factor_coeff.wrap
+                if all(wrap(z) >= 0 for z in factor_coeff.coeffs()):
+                    factor_sols.append(factor.as_expr() ** mul)
+                    continue
+                return None
+            sol = quaternary_dense_dihedral(factor_coeff)
+            if sol is None:
+                return None
+            factor_sols.append(sol ** mul)
+        else:
+            factor_sols.append(factor.as_expr() ** mul)
+
+    return Mul(*factor_sols)
+
 
 def structural_sos_4vars(
     poly: Poly,
@@ -104,6 +151,11 @@ def structural_sos_4vars(
         pg = PermutationGroup(Permutation([1,2,0,3]), Permutation([1,0,2,3]))
         if coeff.is_cyclic(pg):
             func = _structural_sos_4vars_partial_symmetric
+
+        # TODO: dihedral belongs to cyclic
+        pg = PermutationGroup(Permutation([2,3,0,1]), Permutation([1,0,2,3]))
+        if coeff.is_cyclic(pg):
+            func = _structural_sos_4vars_dihedral
 
     try:
         if func is not None:

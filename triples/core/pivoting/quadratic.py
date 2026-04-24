@@ -78,7 +78,6 @@ class PivotQuadratic(ProofNode):
             return self._explore_state_2(configs)
 
     def _explore_state_0(self, configs):
-        problem = self.problem
         self.state = 1
 
         _info = self._info

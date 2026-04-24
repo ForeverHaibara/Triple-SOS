@@ -222,7 +222,7 @@ def rpa_monotonic(f, g, h, a, b, tol=1e-5, max_iter=2000, cbv=np.inf, root_solve
                     print('New bounds:', a, b)
 
         # Step 5: Split z_k into new vertices and add them to T
-        fz_k = f(z_k)
+        # fz_k = f(z_k)
         for i in range(n):
             if z_k[i] == x_k[i]:
                 # No change in the coordinate, skip.
@@ -347,7 +347,8 @@ def rpa_gmop(f1_and_f2, g_and_h, a, b, tol=1e-5, max_iter=2000, cbv=np.inf, root
 
     # Extract the solution
     if result.x is not None:
-        x, t, u = result.x[:n], result.x[n], result.x[n+1]
+        # x, t, u = result.x[:n], result.x[n], result.x[n+1]
+        x = result.x[:n]
         f = f1(x) - f2(x) # more accurate than F(x_t_u)
     else:
         x, f = None, np.inf
