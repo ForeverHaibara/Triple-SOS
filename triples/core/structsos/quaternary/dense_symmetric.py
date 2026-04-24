@@ -1,11 +1,15 @@
-from typing import Tuple, Optional
+from typing import Tuple, Optional, TYPE_CHECKING
 
-from sympy import Poly, Symbol, Add
+from sympy import Poly, Add
 from sympy.combinatorics import PermutationGroup, Permutation
 
-from .utils import Coeff, CyclicSum, sos_struct_reorder_symmetry
+from .utils import CyclicSum, sos_struct_reorder_symmetry
 from ..univariate import prove_univariate
 from ....utils import poly_reduce_by_symmetry, arraylize_sp, invarraylize
+
+if TYPE_CHECKING:
+    from .utils import Coeff
+    from sympy import Symbol
 
 def _sym_sum_poly(poly: Poly) -> Poly:
     """Compute the symmetric sum of a polynomial efficiently."""
@@ -15,7 +19,7 @@ def _sym_sum_poly(poly: Poly) -> Poly:
 
 def _lift_sym_axis_to_D4_part1(
     poly: Poly,
-    gens: Tuple[Symbol, Symbol],
+    gens: Tuple["Symbol", "Symbol"],
     degree: int
 ) -> Optional[Poly]:
     """
@@ -69,7 +73,7 @@ def _lift_sym_axis_to_D4_part1(
 
 def _lift_sym_axis_to_D4(
     poly: Poly,
-    gens: Tuple[Symbol, Symbol],
+    gens: Tuple["Symbol", "Symbol"],
     degree: int,
     mod_poly: Optional[Poly] = None
 ):
@@ -109,17 +113,17 @@ def _lift_sym_axis_to_D4(
     return mod_poly + rest1 + rest2
 
 
-def quaternary_dense_symmetric(coeff: Coeff, real=True):
+def quaternary_dense_symmetric(coeff: "Coeff", real=True):
     if coeff.total_degree() <= 4:
         # should not be handled here
         return None
     return _quaternary_dense_symmetric(coeff, real=real)
 
-def _quaternary_dense_symmetric(coeff: Coeff, real=True):
+def _quaternary_dense_symmetric(coeff: "Coeff", real=True):
     return _quaternary_dense_symmetric_vanish2(coeff)
 
 
-def _quaternary_dense_symmetric_vanish2(coeff: Coeff):
+def _quaternary_dense_symmetric_vanish2(coeff: "Coeff"):
     """
     Solve symmetric quaternary inequalities with
     `(a-1)**2*(b-1)**2 | F(a,b,1,1)`.
@@ -198,7 +202,7 @@ def _quaternary_dense_symmetric_vanish2(coeff: Coeff):
     return sol
 
 
-def _quaternary_dense_symmetric_vanish2_liftfree(coeff: Coeff, sym=None):
+def _quaternary_dense_symmetric_vanish2_liftfree(coeff: "Coeff", sym=None):
     """
     Solve symmetric quaternary inequalities with
     `(a-1)**2*(b-1)**2 | F(a,b,1,1)`.
@@ -271,10 +275,10 @@ def _quaternary_dense_symmetric_vanish2_liftfree(coeff: Coeff, sym=None):
 #####################################################################
 
 @sos_struct_reorder_symmetry(groups=(2, 2))
-def quaternary_dense_dihedral(coeff: Coeff):
+def quaternary_dense_dihedral(coeff: "Coeff"):
     return _quaternary_dense_dihedral_by_level(coeff)
 
-def _quaternary_dense_dihedral_by_level(coeff: Coeff):
+def _quaternary_dense_dihedral_by_level(coeff: "Coeff"):
     """
     Solve a 4-var homogeneous dihedral inequality
     by writing it as `Σ f(a,b)*c**r*d**s` where
@@ -307,7 +311,7 @@ def _quaternary_dense_dihedral_by_level(coeff: Coeff):
         return _nng_fallback()
 
     level_proof = {}
-    def hom_proof(proof, gen: Symbol, degree: int):
+    def hom_proof(proof, gen: "Symbol", degree: int):
         """
         Restore the solution from the homogenized proof.
         """

@@ -9,7 +9,7 @@ from itertools import product
 from typing import List, Dict, Tuple, Union, Optional, Callable, Generator, TYPE_CHECKING
 
 from sympy import (Expr, Poly, Integer, Rational, Float,
-    Dummy, Symbol, EmptySet, FiniteSet,
+    Dummy, EmptySet, FiniteSet,
     linear_eq_to_matrix, linsolve, sympify, true
 )
 from sympy.polys.polyerrors import PolificationFailed, DomainError
@@ -21,13 +21,15 @@ from .root_list import RootList
 from ..expressions import identify_symmetry_from_lists
 
 if TYPE_CHECKING:
+    from sympy import (Symbol
+    )
     from sympy.combinatorics import PermutationGroup
 
 
 # Comparison of tuples of sympy Expressions, compatible with sympy <= 1.9
 default_sort_key = lambda x: tuple(_.sort_key() for _ in x) if not isinstance(x, Expr) else x.sort_key()
 
-def polysubs(poly: Poly, subs: Dict[Symbol, Expr], symbols: List[Symbol]) -> Poly:
+def polysubs(poly: Poly, subs: Dict['Symbol', Expr], symbols: List['Symbol']) -> Poly:
     """Substitutes the symbols in a polynomial with the given values and
     makes it a polynomial in the given symbols."""
     if len(subs) == 0:
@@ -64,7 +66,7 @@ def polysubs(poly: Poly, subs: Dict[Symbol, Expr], symbols: List[Symbol]) -> Pol
     return Poly.new(s, *symbols)
 
 
-def _infer_symbols(symbols: Optional[List[Symbol]], poly: Poly, *constraint_lists: List[Poly]) -> List[Symbol]:
+def _infer_symbols(symbols: Optional[List['Symbol']], poly: Poly, *constraint_lists: List[Poly]) -> List['Symbol']:
     """Infer the symbols from the polynomial and constraints."""
     if symbols is None:
         if isinstance(poly, Poly):
@@ -76,7 +78,7 @@ def _infer_symbols(symbols: Optional[List[Symbol]], poly: Poly, *constraint_list
             symbols = sorted(symbols, key=lambda x: x.name)
     return symbols
 
-def polylize_input(poly: Expr, ineq_constraints: List[Expr], eq_constraints: List[Expr], symbols: List[Symbol],
+def polylize_input(poly: Expr, ineq_constraints: List[Expr], eq_constraints: List[Expr], symbols: List['Symbol'],
         check_poly: Callable=None) -> Tuple[Poly, List[Poly], List[Poly]]:
     """Convert input expressions to sympy polynomial instances."""
     if check_poly is None:
@@ -183,7 +185,7 @@ def kkt(
     as_poly: bool = True,
     fj: bool = False,
     with_self: bool = False
-) -> Tuple[List[Poly], Tuple[Tuple[Symbol, ...], Tuple[Symbol, ...], Tuple[Symbol, ...], Tuple[Symbol, ...]]]:
+) -> Tuple[List[Poly], Tuple[Tuple['Symbol', ...], Tuple['Symbol', ...], Tuple['Symbol', ...], Tuple['Symbol', ...]]]:
     r"""
     Compute the Karush-Kuhn-Tucker system of a function with inequality and equality constraints.
 
@@ -268,7 +270,7 @@ def kkt(
 
 
 
-def _solve_2vars_zero_extrema(poly: Poly, symbols: Symbol) -> List[Tuple[Expr]]:
+def _solve_2vars_zero_extrema(poly: Poly, symbols: 'Symbol') -> List[Tuple[Expr]]:
     """
     Solve the system poly = poly.diff(x) = poly.diff(y) = 0 via resultants.
     It exploits the fact that the roots have multiplicity 2 and finds them
@@ -382,7 +384,7 @@ def _optimize_by_eq_kkt(poly, ineq_constraints, eq_constraints, symbols,
     sol = [tuple(_[i] for i in symbinds) for _ in sol]
     return sol
 
-def _eliminate_linear(polys, symbols) -> Tuple[Dict[Symbol, Expr], List[Poly]]:
+def _eliminate_linear(polys, symbols) -> Tuple[Dict['Symbol', Expr], List[Poly]]:
     """Eliminate linear symbols in the eq_constraints."""
     has_eliminated = True
     eliminated = {}
@@ -449,8 +451,8 @@ def _eliminate_linear(polys, symbols) -> Tuple[Dict[Symbol, Expr], List[Poly]]:
 
     return eliminated, polys
 
-def _restore_solution(points: List[Tuple[Expr]], elim: Dict[Symbol, Expr],
-        symbols: List[Symbol], symbols2: List[Symbol]) -> List[Tuple[Expr]]:
+def _restore_solution(points: List[Tuple[Expr]], elim: Dict['Symbol', Expr],
+        symbols: List['Symbol'], symbols2: List['Symbol']) -> List[Tuple[Expr]]:
     """
     After solving the reduced system, restore the eliminated variables.
     """
@@ -492,7 +494,7 @@ def _optimize_by_symbol_reduction(
     poly: Poly,
     ineq_constraints: List[Poly],
     eq_constraints: List[Poly],
-    symbols: List[Symbol],
+    symbols: List['Symbol'],
     max_different=2,
     solver=None,
     include_zero=True
@@ -536,7 +538,7 @@ def _optimize_by_ineq_comb(
     poly: Poly,
     ineq_constraints: List[Poly],
     eq_constraints: List[Poly],
-    symbols: List[Symbol],
+    symbols: List['Symbol'],
     eliminate_func=None,
     solver=None,
     symmetry: Optional['PermutationGroup']=None
@@ -618,7 +620,7 @@ def _optimize_poly(
     poly: Poly,
     ineq_constraints: List[Poly],
     eq_constraints: List[Poly],
-    symbols: List[Symbol],
+    symbols: List['Symbol'],
     max_different: int = 2,
     symmetry: Optional['PermutationGroup']=None
 ) -> List[Tuple[Expr]]:
@@ -687,7 +689,7 @@ def optimize_poly(
     poly: Union[Poly, Expr],
     ineq_constraints: List[Union[Poly, Expr]] = [],
     eq_constraints: List[Union[Poly, Expr]] = [],
-    symbols: List[Symbol] = None,
+    symbols: List['Symbol'] = None,
     objective: str = 'min',
     return_type: str = 'tuple',
     max_different: int = 2

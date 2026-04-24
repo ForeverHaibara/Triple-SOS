@@ -5,11 +5,17 @@ from sympy import MutableDenseMatrix as Matrix
 # from .sextic_symmetric import _restructure_quartic_polynomial
 
 from .utils import (
-    Coeff, CommonExpr, DomainExpr,
+    CommonExpr, DomainExpr,
     quadratic_weighting, sum_y_exprs, rationalize_func
 )
+from typing import TYPE_CHECKING
 
-def _solve_inverse_quartic(coeff: Coeff, m, p, n, r):
+if TYPE_CHECKING:
+    from .utils import (
+        Coeff
+    )
+
+def _solve_inverse_quartic(coeff: 'Coeff', m, p, n, r):
     """
     Solve a symmetric inverse quartic expression fast without callbacks. It only involves
     monoms inside the triangle `(a^4b^4, a^4c^4, b^4c^4)`. Hence it is equivalent to a
@@ -65,7 +71,7 @@ def sos_struct_octic_symmetric(coeff, real=True):
     if coeff((8,0,0)) != 0:
         return _sos_struct_octic_symmetric_quadratic_form(coeff.as_poly(), coeff)
 
-def _sos_struct_octic_symmetric_hexagon_sdp(coeff: Coeff):
+def _sos_struct_octic_symmetric_hexagon_sdp(coeff: 'Coeff'):
     """
     Solve symmetric hexagons for real numbers by subtracting r * s((a-b)^2(ab(a+b)+xc(a^2+b^2)+..)^2)
     so that the remaining part is a quadratic form with respect to
@@ -530,7 +536,7 @@ def _sos_struct_octic_symmetric_hexagon_sdp(coeff: Coeff):
             return _sol_to_result(_degenerated_hessian_degen_w1())
 
 
-def _sos_struct_octic_symmetric_hexagon(coeff: Coeff):
+def _sos_struct_octic_symmetric_hexagon(coeff: 'Coeff'):
     """
     Try to solve symmetric octic hexagon, without terms a^8, a^7b and a^7c.
 
@@ -596,7 +602,7 @@ def _sos_struct_octic_symmetric_hexagon(coeff: Coeff):
     return None
 
 
-def _sos_struct_octic_symmetric_hexagram(coeff: Coeff):
+def _sos_struct_octic_symmetric_hexagram(coeff: 'Coeff'):
     """
     Solve octic symmetric hexagram, where all terms are inside the triangle (a^6bc,...) and (a^4b^4,...).
 
@@ -753,7 +759,7 @@ def _sos_struct_octic_symmetric_hexagram(coeff: Coeff):
             return sum_y_exprs(y, exprs) / multiplier
 
 
-def _sos_struct_octic_symmetric_quadratic_form(poly, coeff: Coeff):
+def _sos_struct_octic_symmetric_quadratic_form(poly, coeff: 'Coeff'):
     """
     Let F0 = s(a2(s(a2+ab)-bc)2(a-b)(a-c)).
     Then we have

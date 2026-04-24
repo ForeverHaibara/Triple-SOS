@@ -1,6 +1,10 @@
-from ....utils import Coeff, CyclicSum
+from ....utils import CyclicSum
+from typing import TYPE_CHECKING
 
-def sos_struct_nvars_linear(coeff: Coeff, **kwargs):
+if TYPE_CHECKING:
+    from ....utils import Coeff
+
+def sos_struct_nvars_linear(coeff: "Coeff", **kwargs):
     """
     Solve a linear inequality. Supports non-homogeneous polynomials also.
 

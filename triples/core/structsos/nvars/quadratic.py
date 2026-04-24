@@ -1,15 +1,19 @@
-from typing import List, Optional
+from typing import List, Optional, TYPE_CHECKING
 
-from sympy import Expr, Add, factorial
+from sympy import Add, factorial
 from sympy import MutableDenseMatrix as Matrix
 from sympy.polys.matrices.domainmatrix import DomainMatrix
 from sympy.polys.matrices.ddm import DDM
 from sympy.combinatorics import SymmetricGroup
 
 from ....sdp import congruence
-from ....utils import Coeff, CyclicSum
+from ....utils import CyclicSum
 
-def make_mat_from_coeff(coeff: Coeff) -> Optional[Matrix]:
+if TYPE_CHECKING:
+    from ....utils import Coeff
+    from sympy import Expr
+
+def make_mat_from_coeff(coeff: "Coeff") -> Optional[Matrix]:
     nvars = len(coeff.gens)
     zero = coeff.domain.zero
     mat = [[zero for _ in range(nvars)] for __ in range(nvars)]
@@ -148,7 +152,7 @@ def _isotopic_decomposition(S: Matrix, clusters: List[List[int]]):
 
     return M, c
 
-def _isotopic_congruence(S: Matrix, vec: List[Expr]) -> Optional[Expr]:
+def _isotopic_congruence(S: Matrix, vec: List["Expr"]) -> Optional["Expr"]:
     """
     Given a PSD matrix `S` and a vector, compute a nice SOS
     decomposition of `vec.T * S * vec` by exploiting its symmetric clusters.
@@ -189,7 +193,7 @@ def _isotopic_congruence(S: Matrix, vec: List[Expr]) -> Optional[Expr]:
     return Add(*cross, *fluct)
 
 
-def sos_struct_nvars_quadratic(coeff: Coeff, **kwargs):
+def sos_struct_nvars_quadratic(coeff: "Coeff", **kwargs):
     """
     Solve a quadratic inequality on real numbers. Coeff
     must be homogeneous.
@@ -204,7 +208,7 @@ def sos_struct_nvars_quadratic(coeff: Coeff, **kwargs):
 
 
 def sos_struct_nvars_quadratic_real(
-    coeff: Coeff, mat: Optional[Matrix]=None, **kwargs
+    coeff: "Coeff", mat: Optional[Matrix]=None, **kwargs
 ):
     """
     Solve a (homogeneous) quadratic form over real numbers by
@@ -230,7 +234,7 @@ def sos_struct_nvars_quadratic_real(
 
 
 def sos_struct_nvars_quadratic_copositive(
-    coeff: Coeff, mat: Optional[Matrix]=None, **kwargs
+    coeff: "Coeff", mat: Optional[Matrix]=None, **kwargs
 ):
     """TODO: Implement copositive cases, e.g., Motzkin-Straus theorem."""
     return None

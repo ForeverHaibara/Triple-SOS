@@ -6,7 +6,6 @@ from sympy import (FiniteField,
 )
 from sympy import MutableDenseMatrix as Matrix
 from sympy.external.gmpy import sqrt as isqrt
-from sympy.external.gmpy import MPZ
 try:
     from sympy.external.gmpy import gcd, lcm
 except ImportError:
@@ -22,6 +21,7 @@ from sympy import __version__ as SYMPY_VERSION
 from sympy.external.importtools import version_tuple
 
 if TYPE_CHECKING:
+    from sympy.external.gmpy import MPZ
     from sympy.polys.domains.domain import Domain
 
 CC = List[Set[Permutation]]
@@ -64,12 +64,12 @@ def _compute_cmmatrices(cc: Sequence[CC], dom: "Domain") -> Generator[DomainMatr
         m = [[dom(_) for _ in row] for row in m]
         yield DomainMatrix(m, (n, n), dom)
 
-def _group_exponent_from_cc(cc: Sequence[CC]) -> MPZ:
+def _group_exponent_from_cc(cc: Sequence[CC]) -> "MPZ":
     orders = [int(next(iter(c)).order()) for c in cc]
     exponent = lcm(*orders)
     return exponent
 
-def dixon_prime(order: Union[int, MPZ], exponent: Union[int, MPZ]) -> Union[int, MPZ]:
+def dixon_prime(order: Union[int, "MPZ"], exponent: Union[int, "MPZ"]) -> Union[int, "MPZ"]:
     """Find a prime p so that p > 2*sqrt(order) and p%exponent == 1."""
     if order == 1:
         # trivial group => exponent == 1
@@ -144,7 +144,7 @@ def _get_invmap(cc: Sequence[CC]) -> List[int]:
                 break
     return inv_map
 
-def _get_powermap(cc: Sequence[CC], exponent: Union[int, MPZ]) -> List[List[int]]:
+def _get_powermap(cc: Sequence[CC], exponent: Union[int, "MPZ"]) -> List[List[int]]:
     """Compute pm[i][pow] = k such that class[i]**pow == k."""
     n = len(cc)
     pm = [[-1] * exponent for _ in range(n)]
@@ -194,7 +194,7 @@ def normalize_fp(cc: Sequence[CC], esd: DomainMatrix) -> List[List]:
     return normalized_rows
 
 
-def _get_global_conductor(rows: List[List], pm: List[List[int]], m: Union[int, MPZ]) -> Union[int, MPZ]:
+def _get_global_conductor(rows: List[List], pm: List[List[int]], m: Union[int, "MPZ"]) -> Union[int, "MPZ"]:
     """
     Find the smallest natural number k such that all values of the
     character table can be embedded in the k-th cyclotomic field.

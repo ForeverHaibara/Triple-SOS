@@ -1,7 +1,7 @@
-from typing import Dict, Tuple, Union, Set, Callable, Optional
+from typing import Dict, Tuple, Union, Set, Callable, Optional, TYPE_CHECKING
 
 import sympy as sp
-from sympy import (Expr, Poly, Symbol, Rational, Integer,
+from sympy import (Poly, Symbol, Rational, Integer,
     Min, Max, Abs, Pow,
     sin, cos, tan, cot, sec, csc,
 )
@@ -9,6 +9,10 @@ from sympy.utilities.iterables import iterable
 
 from .algebraic import CancelDenominator
 from ..node import ProofNode
+
+if TYPE_CHECKING:
+    from sympy import (Expr,
+    )
 
 class _unique_symbol_generator:
     def __init__(self, symbols: Tuple[Symbol,...]):
@@ -35,7 +39,7 @@ class ModelingHelper:
     Trigs = {sin, cos, tan, cot, sec, csc}
     has_radical = False
     has_trig = False
-    def __init__(self, poly: Expr, ineq_constraints: Dict[Expr, Expr], eq_constraints: Dict[Expr, Expr]):
+    def __init__(self, poly: 'Expr', ineq_constraints: Dict['Expr', 'Expr'], eq_constraints: Dict['Expr', 'Expr']):
         self.poly = poly
         self.ineq_constraints = ineq_constraints
         self.eq_constraints = eq_constraints
@@ -228,7 +232,7 @@ class ModelingHelper:
     def _replace_csc(self, expr: csc):
         return Integer(1) / self._trigs_real_and_imag[expr][1], {}, {}, {}
 
-    def replace_expr(self, expr: Expr, rule: Optional[Dict]=None):
+    def replace_expr(self, expr: 'Expr', rule: Optional[Dict]=None):
         if isinstance(expr, Poly):
             return expr, {}, {}, {}
         if rule is None:

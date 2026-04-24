@@ -1,12 +1,13 @@
 from collections import defaultdict
 from typing import List, Any, TYPE_CHECKING
 
-from sympy import Basic, Poly, Expr, Symbol, Integer, sympify
+from sympy import Basic, Integer, sympify
 from sympy.polys.constructor import construct_domain
 from sympy.matrices.expressions import MatPow
 from sympy.combinatorics.permutations import Permutation
 
 if TYPE_CHECKING:
+    from sympy import Poly, Expr, Symbol
     from .state_algebra import StateAlgebra
 
 class PseudoPoly(Basic):
@@ -293,8 +294,8 @@ class PseudoSMP(dict):
         return p1.per(p)
 
 
-def convert_expr_to_pseudo_poly(algebra: 'StateAlgebra', expr: Expr, gens: List[Symbol],
-        state_operator=None, **domain_kwargs) -> Poly:
+def convert_expr_to_pseudo_poly(algebra: 'StateAlgebra', expr: 'Expr', gens: List['Symbol'],
+        state_operator=None, **domain_kwargs) -> 'Poly':
 
     expr = sympify(expr)
     gens_dict = {v: i for i, v in enumerate(gens)}

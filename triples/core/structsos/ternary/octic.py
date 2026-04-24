@@ -1,9 +1,13 @@
 from .octic_symmetric import sos_struct_octic_symmetric
 
-from .utils import Coeff, inverse_substitution
+from .utils import inverse_substitution
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .utils import Coeff
 
 
-def sos_struct_octic(coeff: Coeff, real = True):
+def sos_struct_octic(coeff: "Coeff", real = True):
     # first try symmetric case
     solution = sos_struct_octic_symmetric(coeff, real=real)
     if solution is not None:

@@ -2,12 +2,12 @@
 This module provides heuristic functions to optimize a polynomial
 with inequality and equality constraints NUMERICALLY.
 """
-from typing import List, Union, Dict, Optional, Callable
+from typing import List, Union, Dict, Optional, Callable, TYPE_CHECKING
 from functools import partial
 import warnings
 
 import numpy as np
-from sympy import Poly, Expr, MatrixBase, Symbol, lambdify, nextprime
+from sympy import Poly, Expr, MatrixBase, lambdify, nextprime
 from sympy import __version__ as SYMPY_VERSION
 from sympy.external.importtools import version_tuple
 from sympy.combinatorics import Permutation, PermutationGroup
@@ -19,6 +19,9 @@ class OptimizeResult: # this is only for type hint
 from .extrema import _infer_symbols, polylize_input
 from .roots import Root
 from .root_list import RootList
+
+if TYPE_CHECKING:
+    from sympy import Symbol
 
 DEFAULT_SHGO_KWARGS = { # default values
     'n': 256,
@@ -163,7 +166,7 @@ class NumerFunc:
         return NumerFunc(lambda x: self.f(func(x)), lambda x: func.g(x) @ self.g(func(x)))
 
     @classmethod
-    def wrap(cls, expr: Union[Expr, List[Expr]], symbols: List[Symbol]) -> 'NumerFunc':
+    def wrap(cls, expr: Union[Expr, List[Expr]], symbols: List['Symbol']) -> 'NumerFunc':
         """
         Convert sympy expressions to numerical functions.
 
@@ -242,7 +245,7 @@ def _update_dict(d1: Dict, d2: Dict) -> Dict:
 
 def numeric_optimize_skew_symmetry(
     poly: Union[Expr, Poly],
-    symbols: List[Symbol],
+    symbols: List['Symbol'],
     perm_group: Union[List[List[int]], Permutation, PermutationGroup],
     num: int = 5, is_homogeneous: Optional[bool] = None,
     points: Optional[np.ndarray]=None, optimizer: Optional[Callable]=None,
@@ -364,9 +367,9 @@ def _numeric_optimize_shgo(
     poly: Union[Poly, Expr],
     ineq_constraints: List[Union[Poly, Expr]],
     eq_constraints: List[Union[Poly, Expr]],
-    symbols: List[Symbol],
-    free_symbols: List[Symbol]=None,
-    embedding: Dict[Symbol, Expr]=None,
+    symbols: List['Symbol'],
+    free_symbols: List['Symbol']=None,
+    embedding: Dict['Symbol', Expr]=None,
     restore: bool=True,
     shgo_kwargs: Dict = {}
 ) -> OptimizeResult:
@@ -427,7 +430,7 @@ def _numeric_optimize_poly(
     poly: Poly,
     ineq_constraints: List[Poly],
     eq_constraints: List[Poly],
-    symbols: List[Symbol],
+    symbols: List['Symbol'],
     shgo_kwargs: Dict = {}
 ) -> OptimizeResult:
     """
@@ -450,7 +453,7 @@ def numeric_optimize_poly(
     poly: Union[Poly, Expr],
     ineq_constraints: List[Union[Poly, Expr]] = [],
     eq_constraints: List[Union[Poly, Expr]] = [],
-    symbols: Optional[List[Symbol]] = None,
+    symbols: Optional[List['Symbol']] = None,
     objective: str = 'min',
     return_type: str='tuple',
     shgo_kwargs: Dict = {}

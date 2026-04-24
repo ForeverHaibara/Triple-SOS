@@ -2,7 +2,7 @@ from typing import Tuple, List, Dict, Optional, TYPE_CHECKING
 from itertools import combinations
 
 import numpy as np
-from sympy import Poly, Expr, Symbol, Integer, Mul, RR
+from sympy import Poly, Integer, Mul, RR
 from sympy import MutableDenseMatrix as Matrix
 
 from ...utils import Root, MonomialManager, identify_symmetry
@@ -11,6 +11,7 @@ from ...sdp.arithmetic import permute_matrix_rows, solve_nullspace
 from ...sdp.wedderburn import symmetry_adapted_basis
 
 if TYPE_CHECKING:
+    from sympy import Expr, Symbol
     from sympy.combinatorics import PermutationGroup
     from ..problem import InequalityProblem
 
@@ -26,7 +27,7 @@ DEFAULT_TANGENTS = {
 }
 
 
-def _filter_nonnumeric_tangents(tangents: List[Expr], symbols: Tuple[Symbol, ...]) -> Dict[Poly, Expr]:
+def _filter_nonnumeric_tangents(tangents: List['Expr'], symbols: Tuple['Symbol', ...]) -> Dict[Poly, 'Expr']:
     """Filter out non-numeric tangents."""
     dt = {}
     for t in tangents:
@@ -126,14 +127,14 @@ def _canonicalize(p: Poly) -> Optional[Poly]:
 
 def _get_ineq_constrained_tangents(
     ineq: Poly,
-    ineq_expr: Expr,
+    ineq_expr: 'Expr',
     roots: List[Root] = [],
     monomial_manager: MonomialManager = None,
     num_tangents: int = 5,
     min_degree: int = 3,
     max_degree: int = 8,
     symmetry: Optional['PermutationGroup'] = None
-) -> Dict[Poly, Expr]:
+) -> Dict[Poly, 'Expr']:
     """
     Compute a dictionary of items `(ineq*poly**2, ineq_expr*expr**2)` such that
     `ineq * poly` vanishes at all given roots. As there are infinitely many polynomials
@@ -220,11 +221,11 @@ def _get_ineq_constrained_tangents(
 
 def prepare_tangents(
     problem: 'InequalityProblem',
-    qmodule: Optional[Dict[Poly, Expr]] = None,
+    qmodule: Optional[Dict[Poly, 'Expr']] = None,
     default_tangents = DEFAULT_TANGENTS,
-    additional_tangents: List[Expr] = [],
+    additional_tangents: List['Expr'] = [],
     wedderburn: bool = True
-) -> Dict[Poly, Expr]:
+) -> Dict[Poly, 'Expr']:
     """
     Prepare tangents for LinearSOS given a list of roots (equality cases). The tangents should
     vanish in the given roots. The function returns a dictionary of {tangent: tangent_expr}.
@@ -318,11 +319,11 @@ def prepare_tangents(
 
 def get_qmodule_list(
     poly: Poly,
-    ineq_constraints: Dict[Poly, Expr],
+    ineq_constraints: Dict[Poly, 'Expr'],
     degree: Optional[int] = None,
     all_nonnegative: bool = False,
     preordering: str = 'quadratic'
-) -> List[Tuple[Poly, Expr]]:
+) -> List[Tuple[Poly, 'Expr']]:
     """
     Extend the generators of the quadratic module given `ineq_constraints` given a
     preordering rule. For instance, if `F >= 0` given assumptions: `G1, ..., Gn >= 0`,
@@ -411,7 +412,7 @@ def prepare_inexact_tangents(
     all_nonnegative: bool = False,
     threshold: float = 0.5,
     max_degree: int = 5
-) -> Dict[Poly, Expr]:
+) -> Dict[Poly, 'Expr']:
     """
     The function `prepare_tangents` has highlighted the importance of handling
     the roots. However, even if there are no zeros, we need to pay attention

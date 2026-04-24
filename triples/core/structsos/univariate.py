@@ -1,4 +1,4 @@
-from contextlib import AbstractContextManager, contextmanager
+from contextlib import contextmanager
 from typing import Tuple, List, Optional, Union, TYPE_CHECKING
 
 from mpmath import mp
@@ -16,6 +16,7 @@ from ...sdp import congruence
 from ...utils import SOSCone, SOSElement, SOSlist
 
 if TYPE_CHECKING:
+    from contextlib import AbstractContextManager
     from sympy.polys.rings import PolyElement
 
 T = float
@@ -63,7 +64,7 @@ class CTX():
     def is_real(self, x: C) -> bool:
         imag = self.imag(x)
         return not (imag > 0 or imag < 0)
-    def withdps(self, dps: int) -> AbstractContextManager:
+    def withdps(self, dps: int) -> "AbstractContextManager":
         """
         Create a context manager that sets the global precision to `dps`.
         This is called before all arithmetics.

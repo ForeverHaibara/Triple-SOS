@@ -2,17 +2,21 @@
 This is still highly experimental. Do not use this.
 """
 
-from typing import Tuple, Union, List, Callable
+from typing import Tuple, Union, List, Callable, TYPE_CHECKING
 
-from sympy import Poly, Expr, Integer, Mul, Dummy, gcd
+from sympy import Integer, Mul, Dummy, gcd
 
-from ..node import ProofNode, TransformNode
+from ..node import TransformNode
 
-def _solver(problem) -> ProofNode:
+if TYPE_CHECKING:
+    from ..node import ProofNode
+    from sympy import Poly, Expr
+
+def _solver(problem) -> 'ProofNode':
     from .polynomial import SolvePolynomial
     return SolvePolynomial(problem)
 
-def _perfect_power(x: int, l: int) -> Union[Tuple[Expr, int], bool]:
+def _perfect_power(x: int, l: int) -> Union[Tuple['Expr', int], bool]:
     l = int(l)
     if l == 1:
         return (x, l)
@@ -48,7 +52,7 @@ class Reparametrization(TransformNode):
 
         def make_restoration(restorations: List[Callable]) -> Callable:
             restorations_ = restorations.copy()
-            def restoration(x: Expr) -> Expr:
+            def restoration(x: 'Expr') -> 'Expr':
                 for r in restorations_[::-1]:
                     x = r(x)
                 return x
@@ -83,7 +87,7 @@ class Reparametrization(TransformNode):
 
         self.state = -1
 
-def _reparam_power(eq: Poly, configs):
+def _reparam_power(eq: 'Poly', configs):
     """
     Equality in the types of
         `C * prod(linear)^n = prod(linear)^m`

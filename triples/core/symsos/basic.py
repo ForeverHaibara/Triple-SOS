@@ -1,11 +1,14 @@
-from typing import Tuple, Dict, Set, Union, Optional, Callable
+from typing import Tuple, Dict, Set, Union, Optional, Callable, TYPE_CHECKING
 
-from sympy import Poly, Expr, Symbol, Integer, Add
+from sympy import Poly, Symbol, Integer, Add
 
 from ..structsos.pivoting.bivariate import structural_sos_2vars
 from ...utils import pqr_sym, verify_symmetry
 from ..problem import InequalityProblem
 from ..preprocess import sign_sos
+
+if TYPE_CHECKING:
+    from sympy import Expr
 
 
 class SymmetricTransform():
@@ -32,7 +35,7 @@ class SymmetricTransform():
         poly: Poly,
         symbols: Tuple[Symbol, ...],
         return_poly: bool = True
-    ) -> Union[Poly, Expr]:
+    ) -> Union[Poly, 'Expr']:
         poly_pqr = pqr_sym(poly)
         return cls._transform_pqr(poly_pqr, symbols, return_poly=return_poly)
 
@@ -41,7 +44,7 @@ class SymmetricTransform():
         poly_pqr: Poly,
         new_symbols: Tuple[Symbol, ...],
         return_poly: bool = True
-    ) -> Union[Poly, Expr]:
+    ) -> Union[Poly, 'Expr']:
         """
         Apply the transformation on a polynomial of elementary symmetric functions.
         For example, when nvars == 3, the polynomial is represented by pqr.
@@ -50,17 +53,17 @@ class SymmetricTransform():
 
     @classmethod
     def inv_transform(cls,
-        expr: Expr,
+        expr: 'Expr',
         original_symbols: Tuple[Symbol, ...],
         new_symbols: Tuple[Symbol, ...]
-    ) -> Expr:
+    ) -> 'Expr':
         inv_dict = cls.get_inv_dict(original_symbols, new_symbols)
         return expr.xreplace(inv_dict)
 
     @classmethod
     def _get_default_constraints(cls,
         new_symbols: Tuple[Symbol, ...]
-    ) -> Tuple[Dict[Poly, Expr], Dict[Poly, Expr]]:
+    ) -> Tuple[Dict[Poly, 'Expr'], Dict[Poly, 'Expr']]:
         raise NotImplementedError
 
     @classmethod
@@ -68,7 +71,7 @@ class SymmetricTransform():
         symbols: Tuple[Symbol, ...],
         new_symbols: Tuple[Symbol, ...],
         problem: InequalityProblem
-    ) -> Optional[Tuple[Dict[Poly, Expr], Dict[Poly, Expr]]]:
+    ) -> Optional[Tuple[Dict[Poly, 'Expr'], Dict[Poly, 'Expr']]]:
         """
         Get inequality and equality constraints over the new symbols.
         By default it calls the `_get_natural_constraints_from_signs` method,
@@ -85,8 +88,8 @@ class SymmetricTransform():
     def _get_natural_constraints_from_signs(cls,
         symbols: Tuple[Symbol, ...],
         new_symbols: Tuple[Symbol, ...],
-        signs: Dict[Symbol, Tuple[int, Expr]]
-    ) -> Optional[Tuple[Dict[Poly, Expr], Dict[Poly, Expr]]]:
+        signs: Dict[Symbol, Tuple[int, 'Expr']]
+    ) -> Optional[Tuple[Dict[Poly, 'Expr'], Dict[Poly, 'Expr']]]:
         """
         Get inequality and equality constraints over the new symbols.
         The method only depends on the signs of the old symbols.
@@ -106,7 +109,7 @@ class SymmetricTransform():
     def get_dict(cls,
         symbols: Tuple[Symbol, ...],
         new_symbols: Tuple[Symbol, ...]
-    ) -> Dict[Symbol, Expr]:
+    ) -> Dict[Symbol, 'Expr']:
         """
         Get the dictionary {new_symbol: expr(old_symbols)}
         that maps old symbols to new symbols.
@@ -117,7 +120,7 @@ class SymmetricTransform():
     def get_inv_dict(cls,
         symbols: Tuple[Symbol, ...],
         new_symbols: Tuple[Symbol, ...]
-    ) -> Dict[Symbol, Expr]:
+    ) -> Dict[Symbol, 'Expr']:
         """
         Get the dictionary {old_symbol: expr(new_symbols)}
         that maps new symbols back to old symbols.
@@ -129,7 +132,7 @@ class SymmetricTransform():
         symbols: Tuple[Symbol, ...],
         new_symbols: Tuple[Symbol, ...],
         problem: InequalityProblem
-    ) -> Optional[Tuple[Dict[Poly, Expr], Dict[Poly, Expr]]]:
+    ) -> Optional[Tuple[Dict[Poly, 'Expr'], Dict[Poly, 'Expr']]]:
         """
         Get the constraints of a problem after applying the transform.
         It also applies the transform on the constraints of the problem.
@@ -212,7 +215,7 @@ class SymmetricTransform():
 def extract_factor(
     poly: Poly,
     factor: Poly,
-    points: Tuple[Tuple[Expr, ...], ...]=()
+    points: Tuple[Tuple['Expr', ...], ...]=()
 ) -> Tuple[int, Poly]:
     """
     Given a polynomial and a factor, compute degree and remainder such
@@ -253,7 +256,7 @@ def extract_factor(
     return degree, poly
 
 
-def compose(poly: Poly, args: Tuple[Expr, ...]) -> Poly:
+def compose(poly: Poly, args: Tuple['Expr', ...]) -> Poly:
     """
     Compose a polynomial with a tuple of expressions.
     """
@@ -265,7 +268,7 @@ def compose(poly: Poly, args: Tuple[Expr, ...]) -> Poly:
     return Poly(q.to_dict(), poly.gens, domain = poly.domain)
 
 
-def prove_by_pivoting(poly: Poly, nonnegative_symbols: Set[Symbol]) -> Optional[Expr]:
+def prove_by_pivoting(poly: Poly, nonnegative_symbols: Set[Symbol]) -> Optional['Expr']:
     """
     This function is only for internal use and does not have stable API.
     It will be integrated into the StructuralSOS in the future.

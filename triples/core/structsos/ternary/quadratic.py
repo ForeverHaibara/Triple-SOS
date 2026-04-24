@@ -1,9 +1,13 @@
 from sympy import Add
 
-from .utils import Coeff, CommonExpr
+from .utils import CommonExpr
 from ..utils import congruence_solve
+from typing import TYPE_CHECKING
 
-def sos_struct_quadratic(coeff: Coeff, real = True):
+if TYPE_CHECKING:
+    from .utils import Coeff
+
+def sos_struct_quadratic(coeff: "Coeff", real = True):
     """
     Solve cyclic quadratic problems.
     It must be in the form CyclicSum(a**2 + x*a*b) where x >= -1.
@@ -18,7 +22,7 @@ def sos_struct_quadratic(coeff: Coeff, real = True):
     return CommonExpr.quadratic(coeff((2,0,0)), coeff((1,1,0)), coeff.gens)
 
 
-def sos_struct_acyclic_quadratic(coeff: Coeff, real = True):
+def sos_struct_acyclic_quadratic(coeff: "Coeff", real = True):
     """
     Solve quadratic acyclic 3-var polynomial inequalities.
 

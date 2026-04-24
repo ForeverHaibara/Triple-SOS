@@ -9,7 +9,7 @@ basic matrix operations.
 
 from collections import defaultdict
 from time import perf_counter
-from typing import List, Dict, Tuple, Union, Optional, Callable, Set, Any, overload
+from typing import List, Dict, Tuple, Union, Optional, Callable, Set, Any, overload, TYPE_CHECKING
 
 import numpy as np
 from numpy import ndarray
@@ -17,15 +17,19 @@ from scipy.sparse import spmatrix, csr_matrix
 from sympy import __version__ as _SYMPY_VERSION
 from sympy.external.gmpy import MPZ # >= 1.9
 from sympy.external.importtools import version_tuple
-from sympy import Float, MatrixBase, Basic
+from sympy import Float, MatrixBase
 from sympy.matrices import MutableDenseMatrix as Matrix
 from sympy.matrices.repmatrix import RepMatrix
-from sympy.polys.domains import Domain, ZZ, RR, CC # EXRAW >= 1.9
+from sympy.polys.domains import ZZ, RR, CC # EXRAW >= 1.9
 from sympy.polys.matrices.domainmatrix import DomainMatrix # polys.matrices >= 1.8
 from sympy.polys.matrices.ddm import DDM
 from sympy.polys.matrices.sdm import SDM
 from sympy.polys.fields import FracElement
 from sympy.polys.rings import PolyElement
+
+if TYPE_CHECKING:
+    from sympy import Basic
+    from sympy.polys.domains import Domain
 
 if tuple(version_tuple(_SYMPY_VERSION)) >= (1, 13):
     from sympy.polys.matrices.dfm import DFM
@@ -255,7 +259,7 @@ def mat2vec(M):
         return M.flatten()
     return reshape(M, (size_of_mat(M), 1))
 
-def rep_matrix_from_dict(x: Dict[int, Dict[int, Any]], shape: Tuple[int, int], domain: Domain) -> Matrix:
+def rep_matrix_from_dict(x: Dict[int, Dict[int, Any]], shape: Tuple[int, int], domain: 'Domain') -> Matrix:
     """
     Create a SymPy RepMatrix from a dictionary of domain elements.
 
@@ -281,7 +285,7 @@ def rep_matrix_from_dict(x: Dict[int, Dict[int, Any]], shape: Tuple[int, int], d
     """
     return Matrix._fromrep(DomainMatrix.from_rep(SDM(x, shape, domain)))
 
-def rep_matrix_from_list(x: Union[List, List[List]], shape: Union[int, Tuple[int, int]], domain: Domain) -> Matrix:
+def rep_matrix_from_list(x: Union[List, List[List]], shape: Union[int, Tuple[int, int]], domain: 'Domain') -> Matrix:
     """
     Create a SymPy RepMatrix from a list of domain elements.
 
@@ -368,7 +372,7 @@ def is_numerical_mat(mat: Union[ndarray, spmatrix, Matrix]) -> bool:
         return True
     return False
 
-def free_symbols_of_mat(mat: Union[ndarray, spmatrix, Matrix]) -> Set[Basic]:
+def free_symbols_of_mat(mat: Union[ndarray, spmatrix, Matrix]) -> Set['Basic']:
     """
     Get the free symbols of a matrix.
     """

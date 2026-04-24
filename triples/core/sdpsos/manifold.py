@@ -6,7 +6,7 @@ from collections import defaultdict, deque
 from itertools import product
 from typing import Dict, List, Tuple, Union, Optional, Callable, Any, TYPE_CHECKING
 
-from sympy import Poly, prod
+from sympy import prod
 from sympy.matrices import MutableDenseMatrix as Matrix
 
 from .algebra import SOSBasis
@@ -15,6 +15,7 @@ from ...utils import Root, MonomialManager
 from ...utils.roots.roots import _algebraic_extension, _derv
 
 if TYPE_CHECKING:
+    from sympy import Poly
     from sympy.combinatorics import PermutationGroup
 
 
@@ -120,7 +121,7 @@ class _bilinear():
         return self.__str__()
 
 
-def _compute_diff_orders(poly: Poly, root: Root, mixed=False, only_binary_roots=True) -> List[Tuple[int, ...]]:
+def _compute_diff_orders(poly: "Poly", root: Root, mixed=False, only_binary_roots=True) -> List[Tuple[int, ...]]:
     """
     Compute tuples (a1, ..., an) such that d^a1/dx1^a1 ... d^an/dxn^an f = 0 at the root.
     The root object is assumed to be indeed a root of the polynomial, which will not be checked.
@@ -155,7 +156,7 @@ def _compute_diff_orders(poly: Poly, root: Root, mixed=False, only_binary_roots=
         return [(0,) * nvars]
 
     if mixed:
-        def dfs(poly: Poly, order: Tuple[int, ...]) -> List[Tuple[int, ...]]:
+        def dfs(poly: "Poly", order: Tuple[int, ...]) -> List[Tuple[int, ...]]:
             orders = [order]
             for i in range(nvars):
                 # take one more derivative
@@ -179,7 +180,7 @@ def _compute_diff_orders(poly: Poly, root: Root, mixed=False, only_binary_roots=
 
 
 def _compute_nonvanishing_diff_orders(
-    poly: Poly,
+    poly: "Poly",
     root: Root,
     monomial: Tuple[int, ...],
     only_binary_roots=True
@@ -235,8 +236,8 @@ def _compute_nonvanishing_diff_orders(
 
 def _root_space(
     root: Root,
-    poly: Poly,
-    qmodule: Poly,
+    poly: "Poly",
+    qmodule: "Poly",
     codegree: int,
     basis: MonomialManager
 ) -> Matrix:
@@ -290,7 +291,7 @@ def _root_space(
     return Matrix.zeros(n, 0)
 
 
-def _findroot_binary(poly: Poly, symmetry: "PermutationGroup" = None) -> List[Root]:
+def _findroot_binary(poly: "Poly", symmetry: "PermutationGroup" = None) -> List[Root]:
     """
     Very easy implementation to find binary roots of the polynomial.
     """
@@ -312,9 +313,9 @@ def _findroot_binary(poly: Poly, symmetry: "PermutationGroup" = None) -> List[Ro
 
 
 def get_sos_nullspace(
-    poly: Poly,
-    ineq_constraints: Dict[Any, Poly],
-    eq_constraints: Dict[Any, Poly],
+    poly: "Poly",
+    ineq_constraints: Dict[Any, "Poly"],
+    eq_constraints: Dict[Any, "Poly"],
     ineq_bases: Dict[Any, SOSBasis],
     eq_bases: Dict[Any, SOSBasis],
     degree: Optional[int]=None,
@@ -358,7 +359,7 @@ def get_sos_nullspace(
     return nullspaces
 
 
-def complete_constraints_by_symmetry(polys: List[Poly], symmetry=None):
+def complete_constraints_by_symmetry(polys: List["Poly"], symmetry=None):
     """
     Complete the constraints in the orbit of the symmetry group.
     Returns a list of polynomials.

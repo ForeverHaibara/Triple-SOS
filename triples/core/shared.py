@@ -6,13 +6,16 @@ warn("This file is deprecated. Do not use it.",
      DeprecationWarning,
      stacklevel=2)
 
-from typing import Tuple, List, Union, Optional
+from typing import Tuple, List, Union, Optional, TYPE_CHECKING
 
 import sympy as sp
-from sympy import Poly, Expr, Symbol
+from sympy import Poly, Expr
 from sympy.core.symbol import uniquely_named_symbol
 
-def homogenize(poly: Poly, t: Optional[Symbol] = None) -> Tuple[Poly, Symbol]:
+if TYPE_CHECKING:
+    from sympy import Symbol
+
+def homogenize(poly: Poly, t: Optional["Symbol"] = None) -> Tuple[Poly, "Symbol"]:
     """
     Automatically homogenize a polynomial if it is not homogeneous.
 
@@ -42,7 +45,7 @@ def homogenize(poly: Poly, t: Optional[Symbol] = None) -> Tuple[Poly, Symbol]:
     return poly, homogenizer
 
 
-def homogenize_expr_list(expr_list: List[Union[Expr, Poly]], homogenizer: Symbol) -> List[Expr]:
+def homogenize_expr_list(expr_list: List[Union[Expr, Poly]], homogenizer: "Symbol") -> List[Expr]:
     """
     Homogenize a list of sympy expressions or polynomials.
     """

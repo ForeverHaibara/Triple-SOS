@@ -3,11 +3,11 @@ from time import perf_counter
 import warnings
 
 import numpy as np
-from sympy import Poly, Expr, fraction
+from sympy import fraction
 from sympy.external.importtools import version_tuple
 from scipy import __version__ as _SCIPY_VERSION
 
-from .basis import LinearBasis, LinearBasisTangent, LinearBasisTangentEven
+from .basis import LinearBasisTangent, LinearBasisTangentEven
 from .tangents import prepare_tangents, prepare_inexact_tangents, get_qmodule_list
 from .correction import linear_correction, odd_basis_to_even
 from .lift import lift_degree
@@ -19,6 +19,8 @@ from ...sdp.arithmetic import ArithmeticTimeout
 from ...utils import Root, MonomialManager, clear_polys_by_symmetry
 
 if TYPE_CHECKING:
+    from sympy import Poly, Expr
+    from .basis import LinearBasis
     from sympy.combinatorics import PermutationGroup
     from ..problem import InequalityProblem
 
@@ -125,7 +127,7 @@ class LinearSOSSolver(ProofNode):
 
 
     _transformed_problem: Optional["InequalityProblem"] = None
-    _tangents: List[Poly]
+    _tangents: List["Poly"]
     _decentralizer = None
     _complexity_models = True
     def _centralize(self, configs):
@@ -172,7 +174,7 @@ class LinearSOSSolver(ProofNode):
             # print('Equalities   :', new_eqs)
             # print('Roots        :', new_roots)
 
-    def _prepare_qmodule(self, configs: Dict[str, Any]) -> Dict[Poly, Expr]:
+    def _prepare_qmodule(self, configs: Dict[str, Any]) -> Dict["Poly", "Expr"]:
         problem = (self._transformed_problem if self._transformed_problem is not None else self.problem)
         poly = problem.expr
         ineq_constraints = problem.ineq_constraints
@@ -187,14 +189,14 @@ class LinearSOSSolver(ProofNode):
         ArithmeticTimeout.make_checker(configs['time_limit'])()
         return dict(qmodule)
 
-    def _prepare_ideal(self, configs: Dict[str, Any]) -> Dict[Poly, Expr]:
+    def _prepare_ideal(self, configs: Dict[str, Any]) -> Dict["Poly", "Expr"]:
         problem = (self._transformed_problem if self._transformed_problem is not None else self.problem)
         eq_constraints = list(problem.eq_constraints.items())
         ideal = clear_polys_by_symmetry(eq_constraints, problem.expr.gens, configs['symmetry'])
         ArithmeticTimeout.make_checker(configs['time_limit'])()
         return dict(ideal)
 
-    def _prepare_tangents(self, configs) -> List[Tuple[Poly, Expr]]:
+    def _prepare_tangents(self, configs) -> List[Tuple["Poly", "Expr"]]:
         problem = (self._transformed_problem if self._transformed_problem is not None else self.problem)
         time_limit = ArithmeticTimeout.make_checker(configs['time_limit'])
 
@@ -214,8 +216,8 @@ class LinearSOSSolver(ProofNode):
         time_limit()
         return tangents
 
-    def _prepare_basis(self, degree: int, tangents: List[Tuple[Poly, Expr]],
-            configs: Dict[str, Any]) -> Tuple[List[LinearBasis], np.ndarray]:
+    def _prepare_basis(self, degree: int, tangents: List[Tuple["Poly", "Expr"]],
+            configs: Dict[str, Any]) -> Tuple[List["LinearBasis"], np.ndarray]:
         """
         Prepare basis for linear programming.
 
@@ -490,13 +492,13 @@ class LinearSOSSolver(ProofNode):
 
 
 def LinearSOS(
-    expr: Expr,
-    ineq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
-    eq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
+    expr: "Expr",
+    ineq_constraints: Union[List["Expr"], Dict["Expr", "Expr"]] = {},
+    eq_constraints: Union[List["Expr"], Dict["Expr", "Expr"]] = {},
     *,
     symmetry: Optional["PermutationGroup"] = None,
     roots: Optional[List[Root]] = None,
-    tangents: Optional[List[Expr]] = None,
+    tangents: Optional[List["Expr"]] = None,
     basis_limit: int = 20000,
     lift_degree_limit: int = 4,
     wedderburn: bool = True,

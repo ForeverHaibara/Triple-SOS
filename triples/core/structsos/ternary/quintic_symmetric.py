@@ -2,11 +2,17 @@ from sympy import Integer, Rational, Float, Add
 
 from .quartic import sos_struct_quartic
 from .utils import (
-    Coeff, CommonExpr,
+    CommonExpr,
     sum_y_exprs, nroots, rationalize, rationalize_bound
 )
+from typing import TYPE_CHECKING
 
-def sos_struct_quintic_symmetric(coeff: Coeff, real = True):
+if TYPE_CHECKING:
+    from .utils import (
+        Coeff
+    )
+
+def sos_struct_quintic_symmetric(coeff: 'Coeff', real = True):
     """
     The function solves symmetric quintic problems with `s(a^5)` term in an
     incomplete attempt.
@@ -293,7 +299,7 @@ def sos_struct_quintic_symmetric(coeff: Coeff, real = True):
     return None
 
 
-def _sos_struct_quintic_symmetric_sdp(coeff: Coeff):
+def _sos_struct_quintic_symmetric_sdp(coeff: 'Coeff'):
     """
     Try subtracting some `s(a(a2-xab-xac-yb2-yc2+(2x+2y-1)bc)2)` so that
     the rest is positive. See criterion at `_sos_struct_quintic_symmetric_hexagon`.
@@ -381,7 +387,7 @@ def _sos_struct_quintic_symmetric_sdp(coeff: Coeff):
             return solution
 
 
-def _sos_struct_quintic_symmetric_final(coeff: Coeff):
+def _sos_struct_quintic_symmetric_final(coeff: 'Coeff'):
     """
     Note that (u,v) should be over the following curve: (t >= 3 and z <= -3)
     ```
@@ -578,7 +584,7 @@ def _sos_struct_quintic_symmetric_final(coeff: Coeff):
             return sum_y_exprs(y, exprs) / multiplier
 
 
-def _sos_struct_quintic_symmetric_border(coeff: Coeff):
+def _sos_struct_quintic_symmetric_border(coeff: 'Coeff'):
     """
     Solve symmetric quintic inequalities with one root on the border.
     The coefficient should satisfy `u = (z**2 + 2*z + 5)/4`.
@@ -658,7 +664,7 @@ def _sos_struct_quintic_symmetric_border(coeff: Coeff):
     return solution / multiplier
 
 
-def _sos_struct_quintic_symmetric_hexagon(coeff: Coeff):
+def _sos_struct_quintic_symmetric_hexagon(coeff: 'Coeff'):
     """
     Prove symmetric quintic without s(a5).
     TODO: It should also handle cases when (1,1,1) is not a root in the future.

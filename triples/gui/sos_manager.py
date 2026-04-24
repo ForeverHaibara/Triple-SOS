@@ -3,9 +3,9 @@ Extra utility functions for graphic user interfaces and deployment.
 """
 from ast import literal_eval
 from functools import partial, wraps
-from typing import Tuple, List, Dict, Optional, Any, Union, Callable
+from typing import Tuple, List, Dict, Optional, Any, Union, Callable, TYPE_CHECKING
 
-from sympy import Expr, Poly, Symbol, sympify
+from sympy import Poly, Symbol, sympify
 from sympy.combinatorics import Permutation, PermutationGroup
 
 from .grid import GridRender
@@ -13,8 +13,12 @@ from ..utils.text_process import (
     preprocess_text, poly_get_factor_form, poly_get_standard_form,
     degree_of_expr, coefficient_triangle
 )
-from ..core import Solution, sum_of_squares
+from ..core import sum_of_squares
 from ..core.sum_of_squares import StructuralSOSSolver, LinearSOSSolver, SDPSOSSolver
+
+if TYPE_CHECKING:
+    from sympy import Expr
+    from ..core import Solution
 
 
 class SOSManager:
@@ -167,7 +171,7 @@ class SOSManager:
 
     @classmethod
     def render_coeff_triangle_and_heatmap(cls,
-        raw_expr: Expr,
+        raw_expr: "Expr",
         expr: Union[Poly, Tuple[Poly, Poly]],
         return_grid: bool = False
     ) -> Tuple[Optional[int], Optional[list], Optional[list]]:
@@ -199,8 +203,8 @@ class SOSManager:
     @classmethod
     def parse_constraints_dict(cls,
         source: Dict[str, str],
-        parser: Callable[[str], Expr]
-    ) -> Dict[Expr, Expr]:
+        parser: Callable[[str], "Expr"]
+    ) -> Dict["Expr", "Expr"]:
         constraints = {}
         for key, value in source.items():
             key, value = key.strip(), value.strip()
@@ -217,13 +221,13 @@ class SOSManager:
 
     @classmethod
     def sum_of_squares(cls,
-        expr: Expr,
-        ineq_constraints: Dict[Expr, Expr] = {},
-        eq_constraints: Dict[Expr, Expr] = {},
+        expr: "Expr",
+        ineq_constraints: Dict["Expr", "Expr"] = {},
+        eq_constraints: Dict["Expr", "Expr"] = {},
         time_limit: Optional[float] = time_limit,
         methods: Optional[List[str]] = None,
         configs: Dict[str, Any] = configs
-    ) -> Optional[Solution]:
+    ) -> Optional["Solution"]:
         if expr is None:
             return None
 

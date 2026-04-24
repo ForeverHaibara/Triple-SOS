@@ -1,9 +1,11 @@
-from typing import List, Dict, Any
+from typing import List, Dict, Any, TYPE_CHECKING
 
 import numpy as np
-from numpy import ndarray
 
 from .settings import SDPResult, SolverConfigs
+
+if TYPE_CHECKING:
+    from numpy import ndarray
 
 class SDPBackend:
     _dependencies = ()
@@ -135,8 +137,8 @@ class DualBackend(SDPBackend):
     _opt_eq_to_ineq = True
 
 
-    def __init__(self, As: List[ndarray], bs: List[ndarray], ineq_lhs: ndarray, ineq_rhs: ndarray,
-                    eq_lhs: ndarray, eq_rhs: ndarray, c: ndarray):
+    def __init__(self, As: List['ndarray'], bs: List['ndarray'], ineq_lhs: 'ndarray', ineq_rhs: 'ndarray',
+                    eq_lhs: 'ndarray', eq_rhs: 'ndarray', c: 'ndarray'):
         dof = c.shape[0]
 
         # store a copy of the original inputs

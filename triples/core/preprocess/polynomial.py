@@ -1,6 +1,6 @@
 from typing import List, Dict, Tuple, Callable, Optional, TYPE_CHECKING
 
-from sympy import Expr, Poly
+from sympy import Poly
 
 from .elimination import eliminate_power_constraints
 from ..node import TransformNode
@@ -10,6 +10,7 @@ from ...utils import (
 )
 
 if TYPE_CHECKING:
+    from sympy import Expr
     from ..problem import InequalityProblem
 
 
@@ -220,7 +221,7 @@ def _align_degree(p: Poly, p1: Poly, p2: Poly, accept_odd_degree: bool = False) 
     # print(p, '- (hom) ->', q, muldeg, divrem[0])
     return q, muldeg, divrem[0]
 
-def _bidegree_recover_expr(lst: List[Dict[Poly, Tuple[Poly, int, Poly]]], p1: Poly, sgn_expr: Expr) -> Expr:
+def _bidegree_recover_expr(lst: List[Dict[Poly, Tuple[Poly, int, Poly]]], p1: Poly, sgn_expr: "Expr") -> "Expr":
     """
     Utility function for bidegree homogenization.
     Recover the original expressions from homogenization info, each represented
@@ -235,7 +236,7 @@ def _bidegree_recover_expr(lst: List[Dict[Poly, Tuple[Poly, int, Poly]]], p1: Po
     if symmetry.is_trivial:
         symmetry = None
 
-    def p2expr(p: Poly) -> Expr:
+    def p2expr(p: Poly) -> "Expr":
         # convert a polynomial to expr wisely by exploting the symmetry
         if (symmetry is not None) and verify_symmetry(p, symmetry):
             p = poly_reduce_by_symmetry(p, symmetry)

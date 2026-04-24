@@ -1,6 +1,6 @@
-from typing import Dict, Tuple, Optional
+from typing import Dict, Tuple, Optional, TYPE_CHECKING
 
-from sympy import Poly, Expr, Symbol, Dummy
+from sympy import Poly, Dummy
 
 from ..problem import InequalityProblem
 from ..node import ProofNode
@@ -9,6 +9,9 @@ from ..preprocess.algebraic import CancelDenominator
 from ..preprocess.signs import sign_sos
 
 from ...utils import PSatz
+
+if TYPE_CHECKING:
+    from sympy import Expr, Symbol
 
 def symmetry_ufs(symmetry) -> dict:
     orbits = symmetry.orbits()
@@ -23,14 +26,14 @@ def dict_inject(x: dict, y: dict) -> dict:
     x.update(y)
     return x
 
-def drop_gen(x: Poly, gen: Symbol) -> Poly:
+def drop_gen(x: Poly, gen: "Symbol") -> Poly:
     i = x.gens.index(gen)
     f = lambda m: m[:i] + m[i+1:]
     dt = {f(m): v for m, v in x.rep.to_dict().items()}
     return Poly.from_dict(dt, f(x.gens), domain=x.domain)
 
-def _get_linear_symbol_bounds(ineqs: Dict[Poly, Expr], eqs: Dict[Poly, Expr],
-    signs: Dict[Symbol, Tuple[Optional[int], Expr]], gen: Symbol):
+def _get_linear_symbol_bounds(ineqs: Dict[Poly, "Expr"], eqs: Dict[Poly, "Expr"],
+    signs: Dict["Symbol", Tuple[Optional[int], "Expr"]], gen: "Symbol"):
 
     lb, lb_expr = None, None
     ub, ub_expr = None, None

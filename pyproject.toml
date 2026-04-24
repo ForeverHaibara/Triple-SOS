@@ -99,3 +99,4 @@ exclude = ["triples/benchmarks/run_benchmark.py"]
 
 [tool.ruff.lint.flake8-type-checking]
 quote-annotations = true
+strict = true

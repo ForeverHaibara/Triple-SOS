@@ -1,10 +1,13 @@
-from typing import Tuple
+from typing import Tuple, TYPE_CHECKING
 
-from sympy import Poly, Dummy, Symbol, Rational
+from sympy import Poly, Dummy, Rational
 from sympy.combinatorics import AlternatingGroup
 
 from .basic import SymmetricTransform, extract_factor, compose
 from ...utils import CyclicSum, CyclicProduct, SymmetricSum, SymmetricProduct
+
+if TYPE_CHECKING:
+    from sympy import Symbol
 
 class UE3Positive(SymmetricTransform):
     """
@@ -227,7 +230,7 @@ class UE4Real(SymmetricTransform):
 
 def _symmetric_real_3vars(
     poly_pqr: Poly,
-    new_symbols: Tuple[Symbol, ...],
+    new_symbols: Tuple['Symbol', ...],
     return_poly=True
 ):
     p, q, r = poly_pqr.gens
@@ -287,7 +290,7 @@ def _symmetric_real_3vars(
 
 def _symmetric_real_4vars(
     poly_pqr: Poly,
-    new_symbols: Tuple[Symbol, ...],
+    new_symbols: Tuple['Symbol', ...],
     return_poly=True
 ):
     p, q, r, s = poly_pqr.gens

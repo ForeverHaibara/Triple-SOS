@@ -6,7 +6,7 @@ from sympy import (
     fraction, sympify, nsimplify, factorial, factorint, prod, cos
 )
 from sympy.core import S
-from sympy.combinatorics import PermutationGroup, CyclicGroup
+from sympy.combinatorics import CyclicGroup
 from sympy.polys.constructor import construct_domain
 from sympy.polys.domains.gaussiandomains import GaussianElement
 from sympy.polys.matrices.sdm import SDM
@@ -22,6 +22,7 @@ from ..monomials import generate_monoms
 from ..expressions import EXRAW
 
 if TYPE_CHECKING:
+    from sympy.combinatorics import PermutationGroup
     from sympy.polys.domains import Domain
 
 try:
@@ -618,7 +619,7 @@ class Root():
             s = self.to_sympy(s)
         return s
 
-    def cyclic_sum(self, monom: Tuple[int, ...], perm_group: Optional[PermutationGroup] = None,
+    def cyclic_sum(self, monom: Tuple[int, ...], perm_group: Optional['PermutationGroup'] = None,
             standardize: bool = False, to_sympy: bool = True) -> Expr:
         """
         Compute the cyclic sum of the root over a monomial.

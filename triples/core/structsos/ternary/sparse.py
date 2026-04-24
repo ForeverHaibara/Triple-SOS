@@ -1,16 +1,20 @@
 from itertools import permutations, combinations
-from typing import List, Tuple, Dict, Callable, Optional
+from typing import List, Tuple, Dict, Callable, Optional, TYPE_CHECKING
 from math import gcd
 
-from sympy import Poly, Expr, Integer, Rational, Add, Mul
+from sympy import Poly, Expr, Integer, Add, Mul
 from sympy.combinatorics import CyclicGroup
 
-from .utils import Coeff, DomainExpr, CyclicSum
+from .utils import DomainExpr, CyclicSum
 from .dense_symmetric import sos_struct_dense_symmetric
 from .quadratic import sos_struct_quadratic
 from .cubic import sos_struct_cubic
 from .quartic import sos_struct_quartic
 from ..univariate import prove_univariate
+
+if TYPE_CHECKING:
+    from .utils import Coeff
+    from sympy import Rational
 
 def sos_struct_sparse(coeff, real = True):
     """
@@ -139,7 +143,7 @@ class CoeffMonom:
         d = sum(args[0]) if cls is CoeffMonom else sum(cls)
         if not all(sum(i) == d for i in args): raise ValueError("Monomials must have the same degree.")
         return True
-    def weight(self, point) -> Dict['CoeffMonom', Rational]:
+    def weight(self, point) -> Dict['CoeffMonom', 'Rational']:
         self.assert_equal_degree(point)
         x, y, z = point
         u, v, w = self.monom
@@ -437,7 +441,7 @@ def _acc_dict(items: List[Tuple]) -> Dict:
     d = {k: v for k,v in d.items() if v != 0}
     return d
 
-def _separate_product_wrapper(recursion: Callable, coeff: Coeff) -> Callable:
+def _separate_product_wrapper(recursion: Callable, coeff: 'Coeff') -> Callable:
     """
     A wrapper of recursion function to avoid nested CyclicProduct(a).
     For instance, if we have CyclicProduct(a) * (CyclicProduct(a)*F(a,b,c) + G(a,b,c)),
@@ -470,7 +474,7 @@ def _separate_product_wrapper(recursion: Callable, coeff: Coeff) -> Callable:
             return d, Mul(*rs)
         return 0, x
 
-    def _new_recursion(x: Coeff, **kwargs) -> Optional[Expr]:
+    def _new_recursion(x: 'Coeff', **kwargs) -> Optional[Expr]:
         x = recursion(x, **kwargs)
         if x is None:
             return x
@@ -490,7 +494,7 @@ class Pnrms(DomainExpr):
     """
     Represent s(a^n(b^r-c^r)) * s(a^m(b^s-c^s)).
     """
-    def coeff(self, n, r, m, s, v = 1) -> Coeff:
+    def coeff(self, n, r, m, s, v = 1) -> 'Coeff':
         return self._coeff.from_dict(_acc_dict([
             ((r + s, m + n, 0), v), ((r + s, 0, m + n), v), ((m + n, r + s, 0), v), ((m + n, 0, r + s), v),
             ((0, r + s, m + n), v), ((0, m + n, r + s), v), ((m + r, n + s, 0), -v), ((m + r, 0, n + s), -v),
@@ -570,7 +574,7 @@ class Hnmr(DomainExpr):
     When n <= 0 or n + r >= m, we have H(n,m,r) >= 0.
     """
 
-    def coeff(self, n, m, r, v = 1) -> Coeff:
+    def coeff(self, n, m, r, v = 1) -> 'Coeff':
         if n >= 0:
             coeffs = [
                 ((m, n + 2*r, 0), v), ((m, 0, n + 2*r), v), ((n + 2*r, m, 0), v), ((n + 2*r, 0, m), v),
@@ -660,7 +664,7 @@ class Hnmr(DomainExpr):
 
 
 
-def sos_struct_heuristic(coeff: Coeff, real=True):
+def sos_struct_heuristic(coeff: 'Coeff', real=True):
     """
     Solve high-degree but sparse inequalities by heuristic method.
     It subtracts some structures from the inequality and calls

@@ -2,8 +2,7 @@ from typing import List, Tuple, Dict, Union, Optional, Callable, Any, TYPE_CHECK
 # from warnings import warn
 from time import perf_counter
 
-from sympy import Poly, Expr, Symbol
-from sympy import MutableDenseMatrix as Matrix
+from sympy import Poly
 
 from .algebra import PolyRing
 from .abstract import AtomSOSElement, ArithmeticTimeout
@@ -12,6 +11,8 @@ from .solution import SolutionSDP
 from ...utils import CyclicSum, Root
 
 if TYPE_CHECKING:
+    from sympy import MutableDenseMatrix as Matrix
+    from sympy import Expr, Symbol
     from sympy.combinatorics import PermutationGroup
 
 CHECK_SYMMETRY = True
@@ -157,14 +158,14 @@ class SOSPoly(AtomSOSElement):
     # could be unsafe, and results in unexpected behaviors.
     ##########################################################
 
-    gens: Tuple[Symbol,...]
+    gens: Tuple["Symbol",...]
     roots: List[Root]
 
     def __init__(self,
-        poly: Union[Expr, Poly],
-        gens: Tuple[Symbol,...],
-        qmodule: List[Union[Poly, Expr]] = [],
-        ideal: List[Union[Poly, Expr]] = [],
+        poly: Union["Expr", Poly],
+        gens: Tuple["Symbol",...],
+        qmodule: List[Union[Poly, "Expr"]] = [],
+        ideal: List[Union[Poly, "Expr"]] = [],
         degree: Optional[int] = None,
         symmetry: Optional["PermutationGroup"] = None,
         roots: Optional[List[Root]] = [],
@@ -245,7 +246,7 @@ class SOSPoly(AtomSOSElement):
         roots: Optional[List[Root]] = None,
         verbose: bool = False,
         time_limit: Optional[Union[Callable, float]] = None
-    ) -> Dict[Any, Matrix]:
+    ) -> Dict[Any, "Matrix"]:
         """
         Compute the nullspaces of the matrices from the equality cases.
         """
@@ -304,10 +305,10 @@ class SOSPoly(AtomSOSElement):
 
     def as_solution(
         self,
-        qmodule: Optional[Dict[Any, Expr]] = None,
-        ideal: Optional[Dict[Any, Expr]] = None,
-        adjoint_operator: Optional[Callable[[Expr], Expr]] = None,
-        trace_operator: Optional[Callable[[Expr], Expr]] = None,
+        qmodule: Optional[Dict[Any, "Expr"]] = None,
+        ideal: Optional[Dict[Any, "Expr"]] = None,
+        adjoint_operator: Optional[Callable[["Expr"], "Expr"]] = None,
+        trace_operator: Optional[Callable[["Expr"], "Expr"]] = None,
     ) -> SolutionSDP:
         """
         Retrieve the solution to the original polynomial.

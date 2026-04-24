@@ -1,13 +1,14 @@
 from collections import defaultdict
 from typing import List, Tuple, Dict, Any, Callable, Optional, TYPE_CHECKING
 
-from sympy import Expr, Poly, Domain
+from sympy import Domain
 from sympy.combinatorics import PermutationGroup, Permutation
 
 from ....sdp.arithmetic import rep_matrix_from_dict
 from ....utils.monomials import identify_symmetry
 
 if TYPE_CHECKING:
+    from sympy import Expr, Poly
     from .state_algebra import StateAlgebra, MONOM, TERM
     from sympy.matrices import MutableDenseMatrix as Matrix
 
@@ -35,7 +36,7 @@ class SOSBasis:
     def __len__(self):
         return len(self._basis)
 
-    def _localizing_mapping(self, domain: Any) -> Callable[[int, int], Dict["MONOM", Expr]]:
+    def _localizing_mapping(self, domain: Any) -> Callable[[int, int], Dict["MONOM", "Expr"]]:
         raise NotImplementedError
 
     def localizing_matrix(self, domain: Any):
@@ -59,14 +60,14 @@ class SOSBasis:
             return [inv[perm(b, g)] for b in basis]
         return G, func
 
-    def as_expr(self, coeff, vec, expr=None, adjoint_operator=None, state_operator=None) -> Expr:
+    def as_expr(self, coeff, vec, expr=None, adjoint_operator=None, state_operator=None) -> "Expr":
         raise NotImplementedError
 
 class QmoduleBasis(SOSBasis):
-    qmodule: Poly
+    qmodule: "Poly"
     def __init__(self,
         algebra: "StateAlgebra",
-        qmodule: Poly,
+        qmodule: "Poly",
         basis: List["MONOM"]=[],
         dict_basis: Dict["MONOM", int]=None
     ):
@@ -100,7 +101,7 @@ class QmoduleBasis(SOSBasis):
             return {k: v for k, v in vec.items() if v != zero}
         return _mapping
 
-    def _comm_localizing_mapping(self, domain: Any=None) -> Callable[[int, int], Dict["MONOM", Expr]]:
+    def _comm_localizing_mapping(self, domain: Any=None) -> Callable[[int, int], Dict["MONOM", "Expr"]]:
         if domain is None:
             domain = self.qmodule.domain
         algebra = self.algebra
@@ -118,7 +119,7 @@ class QmoduleBasis(SOSBasis):
             return {k: v for k, v in vec.items() if v != zero}
         return _mapping
 
-    def _localizing_mapping(self, domain: Any=None) -> Callable[[int, int], Dict["MONOM", Expr]]:
+    def _localizing_mapping(self, domain: Any=None) -> Callable[[int, int], Dict["MONOM", "Expr"]]:
         if self.is_commutative:
             return self._comm_localizing_mapping(domain)
         return self._nc_localizing_mapping(domain)
@@ -177,7 +178,7 @@ class QmoduleBasis(SOSBasis):
                 equal_entries.append(list(s))
         return equal_entries
 
-    def as_expr(self, coeff, vec, expr=None, adjoint_operator=None, state_operator=None) -> Expr:
+    def as_expr(self, coeff, vec, expr=None, adjoint_operator=None, state_operator=None) -> "Expr":
         raise NotImplementedError
 
 
@@ -187,10 +188,10 @@ class TwoSidedIdealBasis(SOSBasis):
 
 
 class IdealBasis(SOSBasis):
-    ideal: Poly
+    ideal: "Poly"
     def __init__(self,
         algebra: "StateAlgebra",
-        ideal: Poly,
+        ideal: "Poly",
         basis: List["MONOM"]=[],
         dict_basis: Dict["MONOM", int]=None
     ):

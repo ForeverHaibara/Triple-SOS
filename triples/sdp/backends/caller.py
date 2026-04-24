@@ -1,7 +1,6 @@
 from typing import List, Tuple, Dict, Union, Optional, Any, Type, TYPE_CHECKING
 
 import numpy as np
-from numpy import ndarray
 
 from .backend import DualBackend
 from .clarabel_sdp import DualBackendCLARABEL
@@ -13,6 +12,7 @@ from .qics_sdp import DualBackendQICS
 from .sdpap_sdp import DualBackendSDPAP
 
 if TYPE_CHECKING:
+    from numpy import ndarray
     from sympy import MutableDenseMatrix as Matrix
     from .settings import SDPResult
 # from ..utils import collect_constraints
@@ -64,8 +64,8 @@ _STANDARDIZED_OPERATORS = {
     '__geq__': '__ge__',
 }
 
-def collect_constraints(constraints: List[Tuple[ndarray, float, str]], dof: int)\
-        -> Tuple[ndarray, ndarray, ndarray, ndarray]:
+def collect_constraints(constraints: List[Tuple['ndarray', float, str]], dof: int)\
+        -> Tuple['ndarray', 'ndarray', 'ndarray', 'ndarray']:
     """
     Collect constraints and separate them into inequality and equality constraints.
     """
@@ -106,8 +106,8 @@ def collect_constraints(constraints: List[Tuple[ndarray, float, str]], dof: int)
 
 def create_numerical_dual_sdp(
     x0_and_space: Union[List[Tuple['Matrix', 'Matrix']], Dict[Any, Tuple['Matrix', 'Matrix']]],
-    objective: ndarray,
-    constraints: List[Tuple[ndarray, float, str]] = [],
+    objective: 'ndarray',
+    constraints: List[Tuple['ndarray', float, str]] = [],
     solver: Optional[Union[str, Type[DualBackend]]] = None,
 ) -> DualBackend:
     """
@@ -151,8 +151,8 @@ def create_numerical_dual_sdp(
 
 def solve_numerical_dual_sdp(
     x0_and_space: Union[List[Tuple['Matrix', 'Matrix']], Dict[Any, Tuple['Matrix', 'Matrix']]],
-    objective: ndarray,
-    constraints: List[Tuple[ndarray, float, str]] = [],
+    objective: 'ndarray',
+    constraints: List[Tuple['ndarray', float, str]] = [],
     solver: Optional[str] = None,
     return_result: bool = False,
     verbose: Union[bool, int] = 0,
@@ -163,7 +163,7 @@ def solve_numerical_dual_sdp(
     tol_gap_abs: float = 1e-8,
     tol_gap_rel: float = 1e-8,
     solver_options: Dict[str, Any] = {},
-) -> Optional[Union[ndarray, 'SDPResult']]:
+) -> Optional[Union['ndarray', 'SDPResult']]:
     """
     Solve for y such that all(Mat(x0 + space @ y) >> 0 for x0, space in x0_and_space.values()).
     This is the dual form of SDP problem.
@@ -249,7 +249,7 @@ def solve_numerical_dual_sdp(
 #     return backend
 
 
-def _fill_space(space: ndarray, n: int, bias: int) -> ndarray:
+def _fill_space(space: 'ndarray', n: int, bias: int) -> 'ndarray':
     """Set space[k(i,j), bias+i*n+j] = space[k(i,j), bias+j*n+i] = 1 for 0 <= i <= j < n
     where space has n*(n+1)//2 rows and k(i,j) is the index of (i,j) in the sorted set (0 <= i <= j < n).
     The modification is in-place.
@@ -262,16 +262,16 @@ def _fill_space(space: ndarray, n: int, bias: int) -> ndarray:
     space[rows2, cols] = 1
     return space
 
-def _extract_triu(space: ndarray, n: int) -> ndarray:
+def _extract_triu(space: 'ndarray', n: int) -> 'ndarray':
     """Assume space has shape m x N where N = n**2. Return a matrix of shape m * (n*(n+1)//2)
     where each column is the upper triangular part of the corresponding column of space."""
     i, j = np.triu_indices(n)
     return space.T.reshape(n, n, -1)[i, j, :].T
 
 def solve_numerical_primal_sdp(
-    x0_and_space: Tuple[ndarray, Union[List[ndarray], Dict[Any, ndarray]]],
-    objective: ndarray,
-    constraints: List[Tuple[ndarray, float, str]] = [],
+    x0_and_space: Tuple['ndarray', Union[List['ndarray'], Dict[Any, 'ndarray']]],
+    objective: 'ndarray',
+    constraints: List[Tuple['ndarray', float, str]] = [],
     solver: Optional[str] = None,
     return_result: bool = False,
     verbose: Union[bool, int] = 0,
@@ -282,7 +282,7 @@ def solve_numerical_primal_sdp(
     tol_gap_abs: float = 1e-8,
     tol_gap_rel: float = 1e-8,
     solver_options: Dict[str, Any] = {},
-) -> Optional[ndarray]:
+) -> Optional['ndarray']:
     """
     Solve for x such that Sum(space_i @ Si) = x0.
     This is the primal form of SDP problem.

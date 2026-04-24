@@ -1,11 +1,11 @@
 from collections import defaultdict
 import re
-from typing import Tuple, Dict, Union, Optional, TypeVar, Generic
+from typing import Tuple, Dict, Union, Optional, TypeVar, Generic, TYPE_CHECKING
 from warnings import warn
 
 import sympy as sp
 from sympy.core.singleton import S
-from sympy import Poly, Expr, Symbol, Float, Equality, Add, Mul
+from sympy import Poly, Symbol, Float, Equality, Add, Mul
 from sympy.printing.precedence import precedence_traditional
 from sympy.printing.str import StrPrinter
 from sympy.combinatorics import PermutationGroup, Permutation, CyclicGroup
@@ -14,6 +14,9 @@ from sympy.core.relational import Equality
 from .problem import InequalityProblem
 from ..utils.expressions.cyclic import CyclicProduct, CyclicExpr, rewrite_symmetry
 from ..utils.expressions.psatz import SOSlist, PSatz
+
+if TYPE_CHECKING:
+    from sympy import Expr
 
 
 T = TypeVar('T')
@@ -52,9 +55,9 @@ class Solution(SolutionBase[T]):
     method = ''
     def __init__(self,
         problem: Optional[Union[InequalityProblem[T], T]]=None,
-        solution: Optional[Expr]=None,
-        ineq_constraints: Optional[Dict[T, Expr]]=None,
-        eq_constraints: Optional[Dict[T, Expr]]=None,
+        solution: Optional['Expr']=None,
+        ineq_constraints: Optional[Dict[T, 'Expr']]=None,
+        eq_constraints: Optional[Dict[T, 'Expr']]=None,
         is_equal: Optional[bool]=None
     ):
 
@@ -80,11 +83,11 @@ class Solution(SolutionBase[T]):
         return self.problem.expr
 
     @property
-    def ineq_constraints(self) -> Dict[T, Expr]:
+    def ineq_constraints(self) -> Dict[T, 'Expr']:
         return self.problem.ineq_constraints
 
     @property
-    def eq_constraints(self) -> Dict[T, Expr]:
+    def eq_constraints(self) -> Dict[T, 'Expr']:
         return self.problem.eq_constraints
 
     @expr.setter
@@ -93,12 +96,12 @@ class Solution(SolutionBase[T]):
         self.problem.expr = value
 
     @ineq_constraints.setter
-    def ineq_constraints(self, value: Dict[T, Expr]):
+    def ineq_constraints(self, value: Dict[T, 'Expr']):
         """Bypass immutability: directly overwrite the problem inequality constraints; use with care."""
         self.problem.ineq_constraints = value
 
     @eq_constraints.setter
-    def eq_constraints(self, value: Dict[T, Expr]):
+    def eq_constraints(self, value: Dict[T, 'Expr']):
         """Bypass immutability: directly overwrite the problem equality constraints; use with care."""
         self.problem.eq_constraints = value
 
@@ -432,7 +435,7 @@ class Solution(SolutionBase[T]):
         self.solution = self.solution.evalf(*args, **kwargs)
         return self
 
-    def as_expr(self, *args, **kwargs) -> Expr:
+    def as_expr(self, *args, **kwargs) -> 'Expr':
         """
         Return the solution as an expression. It is equivalent to .solution.
         """
@@ -591,7 +594,7 @@ def _arg_sqr_core(arg):
 
 
 
-def _print_str(expr: Expr, cyclic_sum_name = 'Σ', cyclic_product_name = '∏',
+def _print_str(expr: 'Expr', cyclic_sum_name = 'Σ', cyclic_product_name = '∏',
                with_cyclic_parens = False, settings=None):
     """Advanced printing to handle cyclic expressions."""
     settings = {} if settings is None else settings
@@ -609,7 +612,7 @@ def _print_str(expr: Expr, cyclic_sum_name = 'Σ', cyclic_product_name = '∏',
     setattr(printer, '_print_CyclicProduct', lambda expr: _print_CyclicProduct(expr))
     return printer.doprint(expr)
 
-def _print_latex(expr: Expr, settings=None):
+def _print_latex(expr: 'Expr', settings=None):
     # if 'long_frac_ratio' not in settings:
     #     settings['long_frac_ratio'] = 2
     settings = {} if settings is None else settings

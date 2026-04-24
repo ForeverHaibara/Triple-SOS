@@ -1,12 +1,16 @@
 from itertools import combinations
-from typing import Dict, Any, Optional, Callable
+from typing import Dict, Any, Optional, Callable, TYPE_CHECKING
 
-from sympy import Expr, Poly, Add, Mul
+from sympy import Add, Mul
 
-from .state_algebra import CommutativeStateAlgebra, TERM, MONOM
+from .state_algebra import CommutativeStateAlgebra
 from .basis import QmoduleBasis, IdealBasis
 
 from ....utils.monomials import generate_partitions
+
+if TYPE_CHECKING:
+    from .state_algebra import TERM, MONOM
+    from sympy import Expr, Poly
 
 def generate_monoms_mm(nvars, degree, num_moments, hom=True, standard_monom=None):
     monoms = generate_partitions(nvars, degree, equal=False, descending=True)
@@ -94,15 +98,15 @@ class MixedMomentAlgebra(CommutativeStateAlgebra):
         self._dict_monoms, self._inv_monoms = generate_monoms_mm(
             nvars, degree, num_moments, hom=is_homogeneous, standard_monom=standard_monom)
 
-    def gen_monom(self, i: Optional[int]) -> MONOM:
+    def gen_monom(self, i: Optional[int]) -> "MONOM":
         if i is None:
             return ((0,) * self.nvars,)
         return ((0,) * i + (1,) + (0,) * (self.nvars - i - 1),)
 
-    def total_degree(self, monom: MONOM) -> int:
+    def total_degree(self, monom: "MONOM") -> int:
         return sum(monom[0]) + sum([sum(m) * mul for m, mul in monom[1:]])
 
-    def s(self, term: TERM) -> TERM:
+    def s(self, term: "TERM") -> "TERM":
         m, c = term
         m0 = self.standard_monom(m[0])
         for i in range(1, len(m)):
@@ -112,7 +116,7 @@ class MixedMomentAlgebra(CommutativeStateAlgebra):
                 return ((0,) * len(m0),) + m[1:i] + ((m0, 1),) + m[i:], c
         return ((0,) * len(m0),) + m[1:] + ((m0, 1),), c
 
-    def as_expr(self, poly: Poly, state_operator: Optional[Callable[[Expr], Expr]]=None) -> Expr:
+    def as_expr(self, poly: "Poly", state_operator: Optional[Callable[["Expr"], "Expr"]]=None) -> "Expr":
         """Convert a polynomial in this algebra to sympy Expr."""
         if state_operator is None:
             state_operator = lambda x: x
@@ -121,7 +125,7 @@ class MixedMomentAlgebra(CommutativeStateAlgebra):
         med = lambda md: state_operator(me(md[0]))**md[1]
         return Add(*[Mul(c, me(m[0]), *[med(_) for _ in m[1:]]) for m, c in poly.terms()])
 
-    def mul(self, term1: TERM, term2: TERM) -> TERM:
+    def mul(self, term1: "TERM", term2: "TERM") -> "TERM":
         m1, c1 = term1
         m2, c2 = term2
         m01, m02 = m1[0], m2[0]
@@ -149,7 +153,7 @@ class MixedMomentAlgebra(CommutativeStateAlgebra):
             concat = concat + m2[p2:]
         return (m0,) + concat, c1 * c2
 
-    def infer_bases(self, poly: Poly, qmodule: Dict[Any, Poly], ideal: Dict[Any, Poly]):
+    def infer_bases(self, poly: "Poly", qmodule: Dict[Any, "Poly"], ideal: Dict[Any, "Poly"]):
         is_homogeneous = self.is_homogeneous
         degree = self.degree
 

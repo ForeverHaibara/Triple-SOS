@@ -2,20 +2,22 @@ from abc import ABC, abstractmethod
 from time import perf_counter
 from typing import Dict, Tuple, List, Union, Optional, Any, TYPE_CHECKING
 
-from numpy import ndarray
 import numpy as np
-from sympy import MatrixBase, Expr, Symbol, Rational
+from sympy import MatrixBase, Rational
 from sympy.matrices import MutableDenseMatrix as Matrix
 
 from .arithmetic import (
     ArithmeticTimeout, sqrtsize_of_mat, is_empty_matrix,
     congruence, rep_matrix_from_numpy, rep_matrix_to_numpy
 )
-from .backends import SDPTimeoutError, SDPResult
+from .backends import SDPTimeoutError
 from .rationalize import rationalize_and_decompose
 from .utils import exprs_to_arrays, collect_constraints
 
 if TYPE_CHECKING:
+    from sympy import Expr, Symbol
+    from numpy import ndarray
+    from .backends import SDPResult
     from sympy.core.relational import Relational
 
 Decomp = Dict[Any, Tuple[Matrix, Matrix, List[Rational]]]
@@ -66,7 +68,7 @@ class SDPProblemBase(ABC):
         return {key: self.get_size(key) for key in self.keys()}
 
     @property
-    def gens(self) -> List[Symbol]: ...
+    def gens(self) -> List["Symbol"]: ...
 
     def __repr__(self) -> str:
         return "<%s dof=%d size=%s>"%(self.__class__.__name__, self.dof, self.size)
@@ -75,12 +77,12 @@ class SDPProblemBase(ABC):
         return self.__repr__()
 
     @abstractmethod
-    def free_symbols(self) -> List[Symbol]:
+    def free_symbols(self) -> List["Symbol"]:
         """
         Return the free symbols of the SDP problem.
         """
 
-    def as_params(self) -> Dict[Symbol, Expr]:
+    def as_params(self) -> Dict["Symbol", "Expr"]:
         if self.y is None:
             raise ValueError("The SDP problem has no solution.")
         return dict(zip(self.gens, self.y))
@@ -100,7 +102,7 @@ class SDPProblemBase(ABC):
         return mat_dict
 
     @abstractmethod
-    def S_from_y(self, y: Optional[Union[Matrix, ndarray, Dict]] = None) -> Dict[Any, Matrix]:
+    def S_from_y(self, y: Optional[Union[Matrix, "ndarray", Dict]] = None) -> Dict[Any, Matrix]:
 
         """
         Given y, compute the symmetric matrices. This is useful when we want to see the
@@ -126,7 +128,7 @@ class SDPProblemBase(ABC):
         return y
 
     def register_y(self,
-        y: Union[Matrix, ndarray, Dict],
+        y: Union[Matrix, "ndarray", Dict],
         project: bool = True,
         perturb: bool = False,
         propagate_to_parent: bool = True
@@ -175,7 +177,7 @@ class SDPProblemBase(ABC):
             self.propagate_to_parent(recursive = True)
         return True
 
-    def rationalize(self, y: ndarray, verbose = False, **kwargs) -> Optional[Tuple[Matrix, Decomp]]:
+    def rationalize(self, y: "ndarray", verbose = False, **kwargs) -> Optional[Tuple[Matrix, Decomp]]:
         """
         Rationalize a NumPy vector `y`. If verbose == True, display the numerical eigenvalues
         before rationalization.
@@ -191,7 +193,7 @@ class SDPProblemBase(ABC):
             print(f'Minimum Eigenvalues = {S_eigen}')
         return rationalize_and_decompose(y, mat_func=self.S_from_y, projection=self.project, **kwargs)
 
-    def exprs_to_arrays(self, exprs: List[Union[Expr, "Relational", Tuple[Matrix, float], Tuple[Matrix, float, str]]], dtype=np.float64):
+    def exprs_to_arrays(self, exprs: List[Union["Expr", "Relational", Tuple[Matrix, float], Tuple[Matrix, float, str]]], dtype=np.float64):
         return exprs_to_arrays(exprs, self.gens, dtype=dtype)
 
     @abstractmethod
@@ -201,13 +203,13 @@ class SDPProblemBase(ABC):
         solver: Optional[str] = None,
         return_result: bool = False,
         kwargs: Dict[Any, Any] = {}
-    ) -> Optional[Union[ndarray, SDPResult]]:
+    ) -> Optional[Union["ndarray", "SDPResult"]]:
         """
         Internal interface to solve a single numerical SDP by calling backends.
         """
 
     def solve_obj(self,
-        objective: Union[Matrix, Expr],
+        objective: Union[Matrix, "Expr"],
         constraints: List[Union["Relational", Tuple[Matrix, Matrix, str]]] = [],
         solver: Optional[str] = None,
         solve_child: bool = True,
@@ -349,4 +351,4 @@ class SDPProblemBase(ABC):
     def constrain_zero_diagonals(self,
         extractions = None, masks = None, time_limit=None) -> 'SDPProblemBase': ...
     def constrain_block_structures(self, blocks = None) -> 'SDPProblemBase': ...
-    def deparametrize(self, symbols: Optional[List[Symbol]]=None) -> 'SDPProblemBase': ...
+    def deparametrize(self, symbols: Optional[List["Symbol"]]=None) -> 'SDPProblemBase': ...

@@ -1,8 +1,12 @@
-from sympy import Poly, Symbol, Dummy, Rational, Add, re
+from sympy import Symbol, Dummy, Rational, Add, re
 
 from .utils import Coeff, congruence
+from typing import TYPE_CHECKING
 
-def compute_sym2(poly: Poly) -> Poly:
+if TYPE_CHECKING:
+    from sympy import Poly
+
+def compute_sym2(poly: "Poly") -> "Poly":
     """Compute poly(1,1,d,d)"""
     # TODO: move it elsewhere
     margin = poly.eval((1,1))

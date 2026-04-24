@@ -1,23 +1,28 @@
 from itertools import combinations
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, TYPE_CHECKING
 
-from sympy import count_ops, Poly, Expr, Rational, Symbol, Add, Mul
+from sympy import count_ops, Rational, Add, Mul
 import numpy as np
 
-from .basis import LinearBasis, LinearBasisTangent
+from .basis import LinearBasisTangent
 from .lift import LinearBasisMultiplier
-from ...utils import MonomialManager, verify_symmetry
+from ...utils import verify_symmetry
+
+if TYPE_CHECKING:
+    from ...utils import MonomialManager
+    from .basis import LinearBasis
+    from sympy import Poly, Expr, Symbol
 
 
 def create_linear_sol_from_y_basis(
-    problem: Poly,
+    problem: "Poly",
     y: List[Rational],
-    basis: List[LinearBasis],
-    symmetry: MonomialManager,
-    ineq_constraints: Dict[Poly, Expr] = {},
-    eq_constraints: Dict[Poly, Expr] = {},
+    basis: List["LinearBasis"],
+    symmetry: "MonomialManager",
+    ineq_constraints: Dict["Poly", "Expr"] = {},
+    eq_constraints: Dict["Poly", "Expr"] = {},
     collect: bool = True
-) -> Expr:
+) -> "Expr":
     """
     Generate the solution from y and basis by LinearSOS. Collect terms
     automatically if collect is True. Returns a sympy expression.
@@ -46,13 +51,13 @@ def create_linear_sol_from_y_basis(
 
 def _collect_constraints(
     y: List[Rational],
-    basis: List[LinearBasis],
-    symbols: List[Symbol],
-    symmetry: MonomialManager,
-    ineq_constraints: Dict[Poly, Expr],
-    eq_constraints: Dict[Poly, Expr],
+    basis: List["LinearBasis"],
+    symbols: List["Symbol"],
+    symmetry: "MonomialManager",
+    ineq_constraints: Dict["Poly", "Expr"],
+    eq_constraints: Dict["Poly", "Expr"],
     collect: bool = True
-) -> Expr:
+) -> "Expr":
     """
     Collect terms and extract common factors wisely to simplify the expression.
     For instance, `a*b*(a+b-c)**2 + b*c*(a+b-c)**2` may be simplified
@@ -130,10 +135,10 @@ def _collect_constraints(
 
 def _collect_multipliers(
     y: List[Rational],
-    basis: List[LinearBasis],
-    symbols: List[Symbol],
-    symmetry: MonomialManager
-) -> Tuple[Expr, List[Rational], List[LinearBasis]]:
+    basis: List["LinearBasis"],
+    symbols: List["Symbol"],
+    symmetry: "MonomialManager"
+) -> Tuple["Expr", List[Rational], List["LinearBasis"]]:
     """
     Separate the multipliers from other parts.
 
@@ -184,11 +189,11 @@ def _collect_multipliers(
 
 
 def _collect_eq_constraints(
-    eqs_and_exprs: Dict[Poly, List[Expr]],
-    symbols: List[Symbol],
-    symmetry: MonomialManager,
-    inv_eq_constraints: Dict[Expr, Poly]
-) -> Expr:
+    eqs_and_exprs: Dict["Poly", List["Expr"]],
+    symbols: List["Symbol"],
+    symmetry: "MonomialManager",
+    inv_eq_constraints: Dict["Expr", "Poly"]
+) -> "Expr":
     """
     Collect terms involving equality constraints (vanishing polynomials).
 
@@ -298,11 +303,11 @@ def _solve_optimal_factor_recursively(
     return ret
 
 def _collect_ineq_constraints(
-    tangents_and_exprs: List[Tuple[Expr, Expr]],
-    symbols: List[Symbol],
-    symmetry: MonomialManager,
-    inv_ineq_constraints: Dict[Poly, Expr]
-) -> Expr:
+    tangents_and_exprs: List[Tuple["Expr", "Expr"]],
+    symbols: List["Symbol"],
+    symmetry: "MonomialManager",
+    inv_ineq_constraints: Dict["Poly", "Expr"]
+) -> "Expr":
     """
     Collect terms involving inequality constraints heuristically.
 

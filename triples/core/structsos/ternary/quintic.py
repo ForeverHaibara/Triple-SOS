@@ -1,4 +1,4 @@
-from typing import Tuple, List, Optional
+from typing import Tuple, List, Optional, TYPE_CHECKING
 
 from sympy import Poly, Expr, Symbol, Integer, Rational, Float, Add, sqrt, im
 import numpy as np
@@ -8,10 +8,14 @@ from .quartic import sos_struct_quartic
 from .quintic_symmetric import sos_struct_quintic_symmetric
 from ..univariate import prove_univariate
 from .utils import (
-    Coeff,
     sum_y_exprs, nroots, rationalize, rationalize_bound, rationalize_func,
     zip_longest, quadratic_weighting, align_cyclic_group
 )
+
+if TYPE_CHECKING:
+    from .utils import (
+        Coeff
+    )
 
 def _verify_border_nonnegative(border):
     """Verify whether a polynomial >= 0 over R+."""
@@ -29,7 +33,7 @@ def _verify_border_nonnegative(border):
     return True
 
 
-def _prove_quintic_from_border(coeff: Coeff, border: Poly) -> Optional[List[Expr]]:
+def _prove_quintic_from_border(coeff: 'Coeff', border: Poly) -> Optional[List[Expr]]:
     """
     Let f(a,b,c) be a septic (degree-7) cyclic polynomial without a^7 term.
     Then B(x) = f(x,1,0) / x is quintic. Assume that B(x) >= 0 (x >= 0).
@@ -78,7 +82,7 @@ def sos_struct_quintic(coeff, real = True):
     return None
 
 
-def _solve_sa2minusab_mul_cubic(coeff: Coeff, x, y, mul = 1):
+def _solve_sa2minusab_mul_cubic(coeff: 'Coeff', x, y, mul = 1):
     """
     Solve `mul * s(a^2-ab)s(a^3 + xa^2b + yab^2 - (x+y+1)abc) >= 0`.
 
@@ -135,7 +139,7 @@ def _solve_sa2minusab_mul_cubic(coeff: Coeff, x, y, mul = 1):
 #
 #########################################################
 
-def _solve_uvxy(coeff: Coeff):
+def _solve_uvxy(coeff: 'Coeff'):
     """
     Given quintic polynomial F(a,b,c), we can enhance it by finding maximum t such that
     F(a,b,c) - tabcs(a^2-ab) >= 0.
@@ -210,7 +214,7 @@ def _solve_uvxy(coeff: Coeff):
     return u, v, x, y
 
 
-def _sos_struct_quintic_full(coeff: Coeff):
+def _sos_struct_quintic_full(coeff: 'Coeff'):
     """
     Try to solve quintic with nonzero a^5 coefficient by subtracting something.
 
@@ -324,7 +328,7 @@ def _sos_struct_quintic_full(coeff: Coeff):
     return _solve_quintic_full_final(coeff, (u_, v_))
 
 
-def _solve_trivial_quintic_full(coeff: Coeff):
+def _solve_trivial_quintic_full(coeff: 'Coeff'):
     """
     Method 1: Try subtracting s(a^2-ab)s(a^3 + xa^2b + yab^2 - (x+y+1)abc)
     where x, y are to be determined, so that the remaining polynomial
@@ -385,7 +389,7 @@ def _solve_trivial_quintic_full(coeff: Coeff):
 
 
 
-def _build_quintic_full_solution(coeff: Coeff, mul: Rational, params: List[Rational],
+def _build_quintic_full_solution(coeff: 'Coeff', mul: Rational, params: List[Rational],
         border_proof: List[Expr], mpnq: Tuple[Rational, ...]):
     from ....utils.monomials import invarraylize
     a, b, c = coeff.gens
@@ -469,7 +473,7 @@ def _solve_flip_sgn_eqs(eqs, border, criterion) -> Optional[Tuple[List[float], F
     return None
 
 
-def _solve_quintic_full_final(coeff: Coeff, uv = None):
+def _solve_quintic_full_final(coeff: 'Coeff', uv = None):
     """
     Given quintic `F(a,b,c)`. We denote `B(x) = F(x,1,0) >= 0` be its border.
     Assume `F(a,b,c) * sum(a^2 + zab) = sum a*V(a,b,c)^2 + abc*sum R(a,b,c)`.
@@ -656,7 +660,7 @@ def _solve_quintic_full_final(coeff: Coeff, uv = None):
 #
 #########################################################
 
-def _sos_struct_quintic_windmill(coeff: Coeff):
+def _sos_struct_quintic_windmill(coeff: 'Coeff'):
     """
     Give solution to s(a3b2+?a2b3+?ab4+?a3bc+?a2b2c) >= 0,
 
@@ -864,7 +868,7 @@ def _sos_struct_quintic_windmill(coeff: Coeff):
     return None
 
 
-def _sos_struct_quintic_windmill_degenerated(coeff: Coeff):
+def _sos_struct_quintic_windmill_degenerated(coeff: 'Coeff'):
     """
     coeff((4,1,0)) == coeff((1,4,0)) == 0
     now if we change variables a -> 1/a, b -> 1/b, c -> 1/c, it will be quartic
@@ -899,7 +903,7 @@ def _sos_struct_quintic_windmill_degenerated(coeff: Coeff):
         return sum_y_exprs(y, exprs)
 
 
-def _sos_struct_quintic_windmill_trivial(coeff: Coeff):
+def _sos_struct_quintic_windmill_trivial(coeff: 'Coeff'):
     """
     Solve very simple cases without lifting the degree using several ideas.
     """
@@ -1025,7 +1029,7 @@ def _sos_struct_quintic_windmill_trivial(coeff: Coeff):
                     return sum_y_exprs(y, exprs) + rem
 
 
-def _sos_struct_quintic_windmill_trivial2(coeff: Coeff):
+def _sos_struct_quintic_windmill_trivial2(coeff: 'Coeff'):
     """
     Try subtracting `s(c(a2-ab-u(ac-ab)+v(bc-ab))2)`
     and the rest does not have `s(ab^4)` term.
@@ -1077,7 +1081,7 @@ def _sos_struct_quintic_windmill_trivial2(coeff: Coeff):
                     + c140 * CyclicSum(c*(a**2+(u-v-1)*a*b-u*a*c+v*b*c)**2)
 
 
-def _sos_struct_quintic_windmill_quadratic(coeff: Coeff):
+def _sos_struct_quintic_windmill_quadratic(coeff: 'Coeff'):
     """
     First try whether we can handle neat cases.
     Theorem 1.1:
@@ -1163,7 +1167,7 @@ def _sos_struct_quintic_windmill_quadratic(coeff: Coeff):
             return (2*c1*CyclicSum(a*(a-b)**2*(w*a*b-(2+2*w)*b*c+w*c**2+a*c+b**2)**2) + solution * multiplier) / multiplier
 
 
-def _sos_struct_quintic_windmill_uv(coeff: Coeff, u, v):
+def _sos_struct_quintic_windmill_uv(coeff: 'Coeff', u, v):
     """
     Given (u,v), solve the inequality
     `f(a,b,c) = s((b-a+(2u-1)c)(a^2-b^2+u(ab-ac)+v(bc-ab))^2) >= 0`.
@@ -1314,7 +1318,7 @@ def _sos_struct_quintic_windmill_uv(coeff: Coeff, u, v):
                 return multiplier, sum_y_exprs(y, exprs)
 
 
-def _sos_struct_quintic_windmill_border(coeff: Coeff):
+def _sos_struct_quintic_windmill_border(coeff: 'Coeff'):
     """
     Case Special. when y_ < 0 and y_^2 = 4x_, then there is a root on the border
     then perturbation has no chance,
@@ -1382,7 +1386,7 @@ def _sos_struct_quintic_windmill_border(coeff: Coeff):
         return sum_y_exprs(y, exprs) / multiplier
 
 
-def _sos_struct_quintic_uncentered(coeff: Coeff):
+def _sos_struct_quintic_uncentered(coeff: 'Coeff'):
     """
     Give the solution to s(ab4+?a2b3-?a3bc+?a2b2c) >= 0,
     which might have equality not at (1,1,1) but elsewhere.
@@ -1613,7 +1617,7 @@ def _sos_struct_quintic_uncentered(coeff: Coeff):
     return None
 
 
-def _sos_struct_quintic_windmill_special(coeff: Coeff):
+def _sos_struct_quintic_windmill_special(coeff: 'Coeff'):
     """
     Give the solution to `s(ab4-a2b2c) >= wabcs(a2-ab)`
     here optimal `w = 3.581412179607289955451719993913205662648` is the root of `x**3-8*x**2+39*x-83`
@@ -1691,7 +1695,7 @@ def _sos_struct_quintic_windmill_special(coeff: Coeff):
     return None
 
 
-def _solve_quintic_hexagon_pqz(coeff: Coeff, p, q, z, mul = 1):
+def _solve_quintic_hexagon_pqz(coeff: 'Coeff', p, q, z, mul = 1):
     """
     When `Det = 64*p^3-16*p^2*q^2+8*p*q*z^2+32*p*q*z-256*p*q+64*q^3-z^4-24*z^3-192*z^2-512*z >= 0`,
     we have `f(a,b,c) = s(a^4b + pa^3b^2 + qa^2b^3 + ab^4 + za^3bc - (p+q+z+2)a^2b^2c) >= 0`.
@@ -1743,7 +1747,7 @@ def _solve_quintic_hexagon_pqz(coeff: Coeff, p, q, z, mul = 1):
 #
 #########################################################
 
-def _sos_struct_quintic_hexagon(coeff: Coeff):
+def _sos_struct_quintic_hexagon(coeff: 'Coeff'):
     """
     Try solving quintics without s(a^5).
 

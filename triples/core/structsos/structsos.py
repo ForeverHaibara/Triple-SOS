@@ -1,6 +1,6 @@
 from typing import List, Dict, Union, Optional, TYPE_CHECKING
 
-from sympy import Poly, Expr, Integer, construct_domain
+from sympy import Integer, construct_domain
 from sympy.polys.polyerrors import BasePolynomialError
 
 from .utils import clear_free_symbols
@@ -15,6 +15,7 @@ from ..problem import ProblemComplexity
 from ..solution import Solution
 
 if TYPE_CHECKING:
+    from sympy import Poly, Expr
     from .solution import SolutionStructural
 
 class StructuralSOSSolver(ProofNode):
@@ -39,9 +40,9 @@ class StructuralSOSSolver(ProofNode):
 
 
 def StructuralSOS(
-    expr: Expr,
-    ineq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
-    eq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
+    expr: "Expr",
+    ineq_constraints: Union[List["Expr"], Dict["Expr", "Expr"]] = {},
+    eq_constraints: Union[List["Expr"], Dict["Expr", "Expr"]] = {},
     *,
     verbose: Union[bool, int] = False,
     raise_exception: bool = False,
@@ -79,7 +80,7 @@ def StructuralSOS(
     return problem.sum_of_squares(configs)
 
 
-def _structural_sos(poly: Poly, ineq_constraints: Dict[Poly, Expr] = {}, eq_constraints: Dict[Poly, Expr] = {}) -> Expr:
+def _structural_sos(poly: "Poly", ineq_constraints: Dict["Poly", "Expr"] = {}, eq_constraints: Dict["Poly", "Expr"] = {}) -> "Expr":
     """
     Internal function of StructuralSOS, returns a sympy expression only.
     The polynomial must be homogeneous. TODO: remove the homogeneous requirement?

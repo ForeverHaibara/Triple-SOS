@@ -1,11 +1,14 @@
 from functools import partial
-from typing import Union, Tuple, List, Dict, Optional, Any, Callable
+from typing import Union, Tuple, List, Dict, Optional, Any, Callable, TYPE_CHECKING
 
-from sympy import Expr, Poly, Symbol, Function
+from sympy import Function
 
 from .abstract import AtomSOSElement
 from .algebra import MixedMomentAlgebra
 from .solution import SolutionSDP
+
+if TYPE_CHECKING:
+    from sympy import Expr, Poly, Symbol
 
 class SOSMomentPoly(AtomSOSElement):
     """
@@ -42,15 +45,15 @@ class SOSMomentPoly(AtomSOSElement):
     """
     _state_operator = Function('\\Sigma')
     def __init__(self,
-        poly: Union[Expr, Poly],
-        gens: Tuple[Symbol,...],
-        qmodule: List[Union[Poly, Expr]] = [],
-        ideal: List[Union[Poly, Expr]] = [],
+        poly: Union['Expr', 'Poly'],
+        gens: Tuple['Symbol',...],
+        qmodule: List[Union['Poly', 'Expr']] = [],
+        ideal: List[Union['Poly', 'Expr']] = [],
         nvars: Optional[int] = None,
         degree: Optional[int] = None,
         num_moments: Optional[int] = None,
         standard_monom: Optional[Callable[[Tuple], Tuple]] = None,
-        state_operator: Optional[Callable[[Expr], Expr]] = None,
+        state_operator: Optional[Callable[['Expr'], 'Expr']] = None,
     ):
         gens = tuple(gens)
         as_poly = partial(MixedMomentAlgebra(len(gens), 0, 0, standard_monom=standard_monom).as_poly,
@@ -98,9 +101,9 @@ class SOSMomentPoly(AtomSOSElement):
 
     def as_solution(
         self,
-        qmodule: Optional[Dict[Any, Expr]] = None,
-        ideal: Optional[Dict[Any, Expr]] = None,
-        state_operator: Optional[Callable[[Expr], Expr]] = None,
+        qmodule: Optional[Dict[Any, 'Expr']] = None,
+        ideal: Optional[Dict[Any, 'Expr']] = None,
+        state_operator: Optional[Callable[['Expr'], 'Expr']] = None,
     ) -> SolutionSDP:
         """
         Retrieve the solution to the original polynomial.
