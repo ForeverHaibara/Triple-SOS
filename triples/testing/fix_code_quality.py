@@ -1,6 +1,13 @@
+from typing import Tuple, List
+
 import os
 import shutil
+
 def fix_code_quality(path):
+    fixers = [
+        _remove_trailing_whitespace,
+        _append_blank_lines,
+    ]
     for root, dirs, files in os.walk(path):
         for file in files:
             if file.endswith(".py"):
@@ -10,16 +17,32 @@ def fix_code_quality(path):
                         lines = f.readlines()
                 except Exception:
                     print(f"Error reading {file_path}")
+                changed = False
+                for func in fixers:
+                    lines, new_changed = func(lines)
+                    changed |= new_changed
+                if not changed:
                     continue
-                new_lines = []
-                for line in lines:
-                    new_lines.append(line.rstrip() + "\n")
-                # remove trailing blank lines
-                while new_lines and new_lines[-1] == "\n":
-                    new_lines.pop()
-                with open(file_path, "w", encoding="utf-8") as f:
-                    f.writelines(new_lines)
+                try:
+                    with open(file_path, "w", encoding="utf-8") as f:
+                        f.writelines(lines)
+                except Exception:
+                    print(f"Error writing {file_path}")
+                    continue
 
+def _remove_trailing_whitespace(lines: List[str]) -> Tuple[List[str], bool]:
+    if not lines:
+        return lines, False
+    if (not any(line.endswith(" \n") for line in lines)) and not lines[-1].endswith(" "):
+        return lines, False
+    return [line.rstrip() + "\n" for line in lines], True
+
+def _append_blank_lines(lines: List[str]) -> Tuple[List[str], bool]:
+    flg = False
+    while lines and lines[-1] == "\n":
+        lines.pop()
+        flg = True
+    return lines, flg
 
 def remove_pycache(path):
     for root, dirs, files in os.walk(path):
@@ -39,7 +62,7 @@ def fix_code_quality_main():
 
     option = input("Enter your choice: ")
     if option == "1":
-        print(f"This will remove trailing whitespace & add blank lines to all files in {path}.")
+        print(f"This will fix the code quality of all Python files in {path}.")
         func = fix_code_quality
     elif option == "2":
         print(f"This will remove all __pycache__ and .pytest_cache directories in {path}.")
