@@ -250,6 +250,8 @@ class SOSPoly(AtomSOSElement):
         time_limit = ArithmeticTimeout.make_checker(time_limit)
         if roots is None:
             roots = self.find_roots(verbose=verbose, time_limit=time_limit)
+        else:
+            roots = [Root(r) for r in roots]
 
         insert_prefix = lambda d: {(self, k): v for k, v in d.items()}
 
