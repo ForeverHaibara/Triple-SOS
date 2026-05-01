@@ -3,9 +3,15 @@ from sympy import Poly, Symbol, Rational, Add
 
 from .sextic_symmetric import _sos_struct_sextic_hexagram_symmetric, _sos_struct_sextic_tree
 from .utils import (
-    Coeff, CommonExpr,
+    CommonExpr,
     sum_y_exprs, rationalize_func, inverse_substitution, align_cyclic_group
 )
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .utils import (
+        Coeff
+    )
 
 def sos_struct_nonic(coeff, real = True):
     """
@@ -46,7 +52,7 @@ def sos_struct_nonic(coeff, real = True):
     return None
 
 
-def _sos_struct_nonic_symmetric_tree(coeff: Coeff):
+def _sos_struct_nonic_symmetric_tree(coeff: 'Coeff'):
     """
     Solve problems with similar structure as `s(a3-abc)s(a2+xab)s((a-b)2(a+b-xc)2)`.
     See details at `_sos_struct_sextic_tree`.
@@ -136,7 +142,7 @@ def _sos_struct_nonic_symmetric_tree(coeff: Coeff):
     return None
 
 
-def _sos_struct_nonic_hexagon_symmetric(coeff: Coeff):
+def _sos_struct_nonic_hexagon_symmetric(coeff: 'Coeff'):
     """
     Solve problems like s(a6b3+a3b6) + p(a)(...).
 
@@ -222,7 +228,7 @@ def _sos_struct_nonic_hexagon_symmetric(coeff: Coeff):
         return solution + rest_solution
 
 
-def _sos_struct_nonic_hexagram_symmetric(coeff: Coeff):
+def _sos_struct_nonic_hexagram_symmetric(coeff: 'Coeff'):
     """
     Observe that
     f(a,b,c) = s(c5(a-b)4) + x^2s(a2b2c(a-b)4) - 2xp(a)s(3a4b2-4a4bc+3a4c2-4a3b3+2a2b2c2) >= 0
@@ -353,7 +359,7 @@ def _sos_struct_nonic_hexagram_symmetric(coeff: Coeff):
     return solution
 
 
-def _sos_struct_nonic_gear(coeff: Coeff):
+def _sos_struct_nonic_gear(coeff: 'Coeff'):
     """
     Solve problems like
     s(ac^2(a-b)^4(b-c)^2)-5p(a-b)^2p(a) >= 0

@@ -1,8 +1,8 @@
-from typing import Tuple, Callable, Optional, Union
+from typing import Tuple, Callable, Optional, Union, TYPE_CHECKING
 from functools import wraps
 
 import sympy as sp
-from sympy import Poly, Expr, Symbol, Add, Mul, Pow
+from sympy import Poly, Add, Mul, Pow
 from sympy.combinatorics import CyclicGroup
 
 from ..utils import (
@@ -18,6 +18,9 @@ from ....utils import (
     CyclicExpr, CyclicSum, CyclicProduct
 )
 
+if TYPE_CHECKING:
+    from sympy import Expr, Symbol
+
 (
     Coeff, DomainExpr, sos_struct_reorder_symmetry,
     radsimp, sum_y_exprs, rationalize_func, quadratic_weighting, zip_longest,
@@ -30,7 +33,7 @@ from ....utils import (
     CyclicExpr, CyclicSum, CyclicProduct
 )
 
-def align_cyclic_group(expr: Optional[Expr], gens: Tuple[Symbol, ...]) -> Expr:
+def align_cyclic_group(expr: Optional["Expr"], gens: Tuple["Symbol", ...]) -> "Expr":
     """
     Replace `CyclicSum(F(a, b, c), (a, c, b))` to `CyclicSum(F(a, b, c), (a, b, c))`.
     Note that this does not change the value of the expression.
@@ -52,7 +55,7 @@ def align_cyclic_group(expr: Optional[Expr], gens: Tuple[Symbol, ...]) -> Expr:
     return _recur(expr)
 
 
-def inverse_substitution(coeff: Coeff, expr: Expr, factor_degree: int = 0) -> Expr:
+def inverse_substitution(coeff: Coeff, expr: "Expr", factor_degree: int = 0) -> "Expr":
     """
     Substitute a <- b * c, b <- c * a, c <- a * b into expr.
     Then the function extract the common factor of the expression, usually (abc)^k.

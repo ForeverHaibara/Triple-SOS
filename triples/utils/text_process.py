@@ -1,24 +1,27 @@
-from typing import Union, List, Tuple, Optional, Dict
+from typing import Union, List, Tuple, Optional, Dict, TYPE_CHECKING
 from functools import partial
 from collections import defaultdict
 # import re
 
-from sympy import Expr, Poly, QQ, RR, Rational, Integer, Float, Symbol
+from sympy import Expr, Poly, QQ, RR, Rational, Integer, Float
 from sympy import parse_expr, sympify, fraction, latex
 from sympy import symbols as sp_symbols
 from sympy.polys import ring
-from sympy.combinatorics import PermutationGroup
 from sympy.printing.precedence import PRECEDENCE
 
 from .expressions import CyclicSum, CyclicProduct
 from .monomials import parse_symmetry, poly_reduce_by_symmetry, verify_symmetry
 
+if TYPE_CHECKING:
+    from sympy import Symbol
+    from sympy.combinatorics import PermutationGroup
+
 
 def cycle_expansion(
     f: str,
     symbol: str = 's',
-    gens: Tuple[Symbol, ...] = sp_symbols("a b c"),
-    symmetry: Union[str, PermutationGroup] = "cyc",
+    gens: Tuple['Symbol', ...] = sp_symbols("a b c"),
+    symmetry: Union[str, 'PermutationGroup'] = "cyc",
 ) -> str:
     """
     Parameters
@@ -119,7 +122,7 @@ def _preprocess_text_delatex(poly: str, funcs: Dict[str, Tuple[str, int]]) -> st
     return poly
 
 
-def _preprocess_text_expansion(poly: str, gens: Tuple[Symbol, ...], perm_group: PermutationGroup) -> str:
+def _preprocess_text_expansion(poly: str, gens: Tuple['Symbol', ...], perm_group: 'PermutationGroup') -> str:
     """
     Expand the polynomial with cycle expansion.
 
@@ -285,8 +288,8 @@ def expand_poly(expr: Expr, gens=None) -> Union[Expr, Poly]:
 
 def _preprocess_text_to_text(
     text: str,
-    gens: Tuple[Symbol, ...] = sp_symbols("a b c"),
-    symmetry: Union[PermutationGroup, str] = "cyc",
+    gens: Tuple['Symbol', ...] = sp_symbols("a b c"),
+    symmetry: Union['PermutationGroup', str] = "cyc",
     *,
     cyclic_sum_func: str = 's',
     cyclic_prod_func: str = 'p',
@@ -319,8 +322,8 @@ def _preprocess_text_to_text(
 
 def _preprocess_text_to_expr(
     text: str,
-    gens: Tuple[Symbol, ...] = sp_symbols("a b c"),
-    symmetry: Union[PermutationGroup, str] = "cyc",
+    gens: Tuple['Symbol', ...] = sp_symbols("a b c"),
+    symmetry: Union['PermutationGroup', str] = "cyc",
     *,
     cyclic_sum_func: str = 's',
     cyclic_prod_func: str = 'p',
@@ -349,8 +352,8 @@ def _preprocess_text_to_expr(
 
 def preprocess_text(
     text: Union[str, Expr],
-    gens: Tuple[Symbol, ...] = sp_symbols("a b c"),
-    symmetry: Union[PermutationGroup, str] = "cyc",
+    gens: Tuple['Symbol', ...] = sp_symbols("a b c"),
+    symmetry: Union['PermutationGroup', str] = "cyc",
     return_type: str = "poly",
     *,
     cyclic_sum_func: str = 's',
@@ -557,7 +560,7 @@ pl = preprocess_text
 pl.__doc__ = preprocess_text.__doc__
 
 
-def degree_of_expr(expr: Expr, gens: Optional[Tuple[Symbol, ...]] = None) -> int:
+def degree_of_expr(expr: Expr, gens: Optional[Tuple['Symbol', ...]] = None) -> int:
     """
     Estimate the degree of an expression with respect to the given generators.
 
@@ -635,7 +638,7 @@ def _get_coeff_str(coeff, MUL = '*') -> str:
 
 def poly_get_standard_form(
     poly: Poly,
-    symmetry: Union[PermutationGroup, str] = "cyc",
+    symmetry: Union['PermutationGroup', str] = "cyc",
     *,
     cyclic_sum_func: str = "s",
     cyclic_prod_func: str = "p",
@@ -737,7 +740,7 @@ def poly_get_standard_form(
     return s
 
 
-def _reduce_factor_list(poly: Poly, perm_group: PermutationGroup) -> Tuple[Expr, List[Tuple[Poly, int]], List[Tuple[Poly, int]]]:
+def _reduce_factor_list(poly: Poly, perm_group: 'PermutationGroup') -> Tuple[Expr, List[Tuple[Poly, int]], List[Tuple[Poly, int]]]:
     """
     Reduce the factor list of a polynomial with respect to a permutation group.
 
@@ -803,7 +806,7 @@ def _reduce_factor_list(poly: Poly, perm_group: PermutationGroup) -> Tuple[Expr,
 
 def poly_get_factor_form(
     poly: Poly,
-    symmetry: Union[PermutationGroup, str] = "cyc",
+    symmetry: Union['PermutationGroup', str] = "cyc",
     *,
     cyclic_sum_func: str = "s",
     cyclic_prod_func: str = "p",
@@ -1053,8 +1056,8 @@ class PolyReader:
     """
     def __init__(self,
         polys: Union[List[Union[Poly, str]], str],
-        gens: Tuple[Symbol, ...] = sp_symbols("a b c"),
-        symmetry: Union[PermutationGroup, str] = "cyc",
+        gens: Tuple['Symbol', ...] = sp_symbols("a b c"),
+        symmetry: Union['PermutationGroup', str] = "cyc",
         ignore_errors: bool = False,
         **kwargs
     ):

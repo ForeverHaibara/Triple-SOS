@@ -1,10 +1,12 @@
-from typing import Tuple, List, Set, Optional
+from typing import Tuple, List, Set, Optional, TYPE_CHECKING
 
-from sympy import Poly, Expr, Symbol, Integer, Mul, QQ, ZZ
+from sympy import Poly, Symbol, Integer, Mul, QQ, ZZ
 from sympy import MutableDenseMatrix as Matrix
 from sympy.polys.matrices.sdm import SDM
 
-from ..problem import InequalityProblem
+if TYPE_CHECKING:
+    from sympy import Expr
+    from ..problem import InequalityProblem
 
 def _identify_matrix_symmetry(S: Matrix) -> List[List[int]]:
     """
@@ -129,9 +131,9 @@ def _get_free_symbols(symbols: Set[Symbol], n: int, prefix: str="x") -> List[Sym
 
 def _get_power_signs(
     A: Matrix,
-    signs: List[Tuple[int, Tuple[Optional[int], Optional[Expr]]]],
+    signs: List[Tuple[int, Tuple[Optional[int], Optional["Expr"]]]],
     check_signs: bool = True
-) -> List[Tuple[Optional[int], Optional[Expr]]]:
+) -> List[Tuple[Optional[int], Optional["Expr"]]]:
     """
     Infer the signs of new generators defined by
     ```
@@ -187,7 +189,7 @@ def _get_power_signs(
 
 
 def eliminate_power_constraints(
-    problem: InequalityProblem,
+    problem: "InequalityProblem",
     irrational_expr: bool = True,
     check_signs: bool = True,
     recompute_constraints: bool = True,

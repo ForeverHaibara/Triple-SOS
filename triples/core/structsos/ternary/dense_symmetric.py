@@ -1,6 +1,6 @@
-from typing import Tuple, Optional, Union
+from typing import Tuple, Optional, Union, TYPE_CHECKING
 
-from sympy import Poly, Expr, Add, ZZ, QQ, FiniteField, sqrt, prod
+from sympy import Poly, Add, ZZ, QQ, FiniteField, sqrt, prod
 from sympy.polys.polyclasses import ANP, DMP
 from sympy.polys.polyerrors import CoercionFailed
 from sympy.combinatorics.named_groups import CyclicGroup
@@ -9,14 +9,20 @@ from sympy.external.gmpy import sqrt as isqrt
 from sympy.utilities import subsets
 
 from .utils import (
-    Coeff, sos_struct_handle_uncentered, sos_struct_reorder_symmetry,
+    sos_struct_handle_uncentered, sos_struct_reorder_symmetry,
 )
 from ..univariate import prove_univariate
 from ....utils import verify_symmetry, poly_reduce_by_symmetry
 from ....utils.polytools import dmp_gf_factor, FLINT_VERSION
 
+if TYPE_CHECKING:
+    from .utils import (
+        Coeff,
+    )
+    from sympy import Expr
 
-def _linear_invert(u, v, d: int = 0) -> Optional[Tuple[int, Expr, Expr]]:
+
+def _linear_invert(u, v, d: int = 0) -> Optional[Tuple[int, 'Expr', 'Expr']]:
     """
     Returns n, u2, v2 such that `n, u2, v2 >= 0` and
     `u2 = u - (u + v)*n` and `v2 = v + (u + v)*n`. If
@@ -82,7 +88,7 @@ def _sos_struct_dense_symmetric(coeff, real=True):
             return solution
 
 
-def _sos_struct_trivial_additive(coeff: Coeff, real=True):
+def _sos_struct_trivial_additive(coeff: 'Coeff', real=True):
     """
     Solve trivial cyclic inequalities with nonnegative coefficients.
     """
@@ -107,7 +113,7 @@ def _sos_struct_trivial_additive(coeff: Coeff, real=True):
     return CyclicSum(Add(*exprs))
 
 
-def sym_axis(coeff: Coeff, d: int = -1) -> Poly:
+def sym_axis(coeff: 'Coeff', d: int = -1) -> Poly:
     """Compute f(a,1,1)."""
     if d == -1: d = coeff.total_degree()
     coeff_list = [0] * (d+1)
@@ -117,7 +123,7 @@ def sym_axis(coeff: Coeff, d: int = -1) -> Poly:
     return coeff.from_list(coeff_list[::-1], gens=(a,)).as_poly()
 
 
-def _homogenize_sym_axis(coeff: Union[Coeff, Poly], sym: Poly, d: int) -> Expr:
+def _homogenize_sym_axis(coeff: Union['Coeff', Poly], sym: Poly, d: int) -> 'Expr':
     """Homogenize f(a,1,1) to f(a,b,c) given degree."""
     a, b, c = coeff.gens
     s = [0]
@@ -130,7 +136,7 @@ def _homogenize_sym_axis(coeff: Union[Coeff, Poly], sym: Poly, d: int) -> Expr:
             s.append(v/2 * a**m * b**k * c**(k+1))
     return Add(*s)
 
-def _homogenize_sym_proof(coeff: Coeff, sym_proof, d: int) -> Expr:
+def _homogenize_sym_proof(coeff: 'Coeff', sym_proof, d: int) -> 'Expr':
     """Homogenize the result from prove_univariate."""
     a, b, c = coeff.gens
     exprs = []
@@ -152,7 +158,7 @@ def _homogenize_sym_proof(coeff: Coeff, sym_proof, d: int) -> Expr:
 
 
 @sos_struct_handle_uncentered
-def _sos_struct_lift_for_six(coeff: Coeff, real=True):
+def _sos_struct_lift_for_six(coeff: 'Coeff', real=True):
     """
     Solve high-degree (dense) symmetric inequalities by the method
     of lifting the degree for six. Idea: define f(a,1,1) to be the
@@ -208,7 +214,7 @@ def _sos_struct_lift_for_six(coeff: Coeff, real=True):
         # print(lifted_sym)
 
 
-    def compute_diff(coeff: Coeff, sym2, mul, tail) -> Coeff:
+    def compute_diff(coeff: 'Coeff', sym2, mul, tail) -> 'Coeff':
         poly = coeff.as_poly() * mul.as_poly(a, b, c, domain=coeff.domain)
         diff = poly - CyclicSum(sym2 * tail).as_poly(a, b, c, domain=coeff.domain)
         diff = diff.div(CyclicProduct((a-b)**2).as_poly(a, b, c, domain=coeff.domain))
@@ -230,7 +236,7 @@ def _sos_struct_lift_for_six(coeff: Coeff, real=True):
 
 
 @sos_struct_handle_uncentered
-def sos_struct_liftfree_for_six(coeff: Coeff, real=True):
+def sos_struct_liftfree_for_six(coeff: 'Coeff', real=True):
     """
     Solve high-degree (dense) symmetric inequalities without
     lifting the degree. This will be tried in prior because
@@ -323,7 +329,7 @@ def sos_struct_liftfree_for_six(coeff: Coeff, real=True):
         return subtractor + solution
 
 
-def _sos_struct_liftfree_for_six_ord4(coeff: Coeff, div2=None, real=True):
+def _sos_struct_liftfree_for_six_ord4(coeff: 'Coeff', div2=None, real=True):
     """
     Solve a high-degree (dense) symmetric inequality where (a-1)^4 is a factor
     of the symmetric axis. Such polynomial can be seen as:
@@ -391,7 +397,7 @@ def _conjugate_factor(poly: Poly, conj):
         odd_factors[conj_f] = 0
     return const, even_factors
 
-def _sos_struct_complex_factorizable(coeff: Coeff, test=True, modp=True):
+def _sos_struct_complex_factorizable(coeff: 'Coeff', test=True, modp=True):
     """
     Solve a cyclic ternary polynomial inequality if it is
     factorizable over Q[sqrt(-3)].
@@ -471,7 +477,7 @@ def _sos_struct_complex_factorizable(coeff: Coeff, test=True, modp=True):
 
     return _complex_factorizable_from_AB(coeff, real, imag, const)
 
-def _complex_factorizable_from_AB(coeff: Coeff, A: Poly, B: Poly, const, k=3):
+def _complex_factorizable_from_AB(coeff: 'Coeff', A: Poly, B: Poly, const, k=3):
     """
     Returns `coeff.as_poly() == const*A**2 + 3*const*B**2` in
     a graceful form.
@@ -490,7 +496,7 @@ def _complex_factorizable_from_AB(coeff: Coeff, A: Poly, B: Poly, const, k=3):
     return const*sqa + k*const*sqb
 
 
-def _sos_struct_complex_factorizable_fp(coeff: Coeff):
+def _sos_struct_complex_factorizable_fp(coeff: 'Coeff'):
     """
     Solve a homogeneous inequality F(a,b,c) = const*(A^2 + 3*B^2) >= 0
     where const in QQ and (F, A, B) in QQ[a,b,c] by computing on
@@ -647,7 +653,7 @@ def _sqf_complex_factorizable_fp(poly: Poly, p: Optional[int]=None):
 #####################################################################
 
 @sos_struct_reorder_symmetry(groups=(2, 1))
-def sos_struct_ternary_dense_partial_symmetric(coeff: Coeff, real=True):
+def sos_struct_ternary_dense_partial_symmetric(coeff: 'Coeff', real=True):
     """
     Solve a homogeneous 3-var inequality `f(a,b,c) >= 0` where
     `f(a, b, c) == f(b, a, c)`.
@@ -687,7 +693,7 @@ def sos_struct_ternary_dense_partial_symmetric(coeff: Coeff, real=True):
         if sol is not None:
             return subtractor + sol
 
-def _get_ternary_dense_partial_symmetric_default_subtractor(coeff: Coeff, rem: Poly) -> list:
+def _get_ternary_dense_partial_symmetric_default_subtractor(coeff: 'Coeff', rem: Poly) -> list:
     d = coeff.total_degree()
     a, b, c = coeff.gens
 
@@ -709,7 +715,7 @@ def _get_ternary_dense_partial_symmetric_default_subtractor(coeff: Coeff, rem: P
         subtractor = a**m*b**m*c**n*(u2/2*c*(a + b) + v2*a*b)*(2*c - a - b)**2/4
     return [subtractor]
 
-def _get_ternary_dense_partial_symmetric_cubic_subtractor(coeff: Coeff, rem: Poly) -> list:
+def _get_ternary_dense_partial_symmetric_cubic_subtractor(coeff: 'Coeff', rem: Poly) -> list:
     d = coeff.total_degree()
     if d <= 5:
         return []
@@ -757,7 +763,7 @@ def _get_ternary_dense_partial_symmetric_cubic_subtractor(coeff: Coeff, rem: Pol
     return subtractors
 
 
-def _ternary_dense_partial_symmetric_ord4(coeff: Coeff):
+def _ternary_dense_partial_symmetric_ord4(coeff: 'Coeff'):
     """
     Solve a homogeneous 3-var inequality `f(a,b,c) >= 0` where
     `f(a, b, c) == f(b, a, c)` and `(c - 1)**4 | f(1, 1, c)`.

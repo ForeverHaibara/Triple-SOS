@@ -1,8 +1,11 @@
-from .utils import Coeff
 
 from sympy import Add
 
 from .utils import congruence, sum_y_exprs
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .utils import Coeff
 
 def quaternary_quintic_symmetric(coeff, real=True):
     """
@@ -63,7 +66,7 @@ def quaternary_quintic_symmetric(coeff, real=True):
         return _quaternary_quintic_symmetric_surface(coeff)
 
 
-def _quaternary_quintic_symmetric_hexagon(coeff: Coeff):
+def _quaternary_quintic_symmetric_hexagon(coeff: "Coeff"):
     """
     Suppose a quaternary symmetric quintic `F` has zero coefficient at `a^5`,
     and that `F(1,1,1,1)=0`. Then it is nonnegative if and only if
@@ -126,7 +129,7 @@ def _quaternary_quintic_symmetric_hexagon(coeff: Coeff):
         )
 
 
-def _quaternary_quintic_symmetric_c3axis_t(t, coeff: Coeff, c5 = 1):
+def _quaternary_quintic_symmetric_c3axis_t(t, coeff: "Coeff", c5 = 1):
     """
     Given `-2/sqrt(3) <= t <= `, solve the symmetric quintic inequality:
 
@@ -232,7 +235,7 @@ def _quaternary_quintic_symmetric_c3axis_t(t, coeff: Coeff, c5 = 1):
             return sol
 
 
-def _quaternary_quintic_symmetric_surface_t(t, coeff: Coeff, c5 = 1):
+def _quaternary_quintic_symmetric_surface_t(t, coeff: "Coeff", c5 = 1):
     """
     Given `-3 <= t <= -2/sqrt(3)`, solve the symmetric quintic inequality:
 
@@ -380,7 +383,7 @@ def _quaternary_quintic_symmetric_surface_t(t, coeff: Coeff, c5 = 1):
             return sol
 
 
-def _quaternary_quintic_symmetric_c3axis(coeff: Coeff):
+def _quaternary_quintic_symmetric_c3axis(coeff: "Coeff"):
     c5, c41, c32, c311, c221, c2111 = [coeff(_) for _ in
         [(5,0,0,0), (4,1,0,0), (3,2,0,0), (3,1,1,0), (2,2,1,0), (2,1,1,1)]]
     if c5 == 0:
@@ -417,7 +420,7 @@ def _quaternary_quintic_symmetric_c3axis(coeff: Coeff):
     return sum_y_exprs(y, exprs) + ker
 
 
-def _quaternary_quintic_symmetric_surface(coeff: Coeff):
+def _quaternary_quintic_symmetric_surface(coeff: "Coeff"):
     c5, c41, c32, c311, c221, c2111 = [coeff(_) for _ in
         [(5,0,0,0), (4,1,0,0), (3,2,0,0), (3,1,1,0), (2,2,1,0), (2,1,1,1)]]
     if c5 == 0:

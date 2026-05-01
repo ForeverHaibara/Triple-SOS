@@ -4,12 +4,18 @@ from sympy import Poly, Add
 from sympy import oo as Infinity
 
 from .utils import (
-    Coeff, CommonExpr, DomainExpr, quadratic_weighting, rationalize_func
+    CommonExpr, DomainExpr, quadratic_weighting, rationalize_func
 )
 from .cubic import _sos_struct_cubic_symmetric
 from .quartic import sos_struct_quartic
 from .sextic_symmetric import _restructure_quartic_polynomial
 from ..univariate import prove_univariate
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .utils import (
+        Coeff
+    )
 
 
 def sos_struct_septic_symmetric(coeff, real=False):
@@ -27,7 +33,7 @@ def sos_struct_septic_symmetric(coeff, real=False):
     return _sos_struct_septic_symmetric_quadratic_form(coeff)
 
 
-def _sos_struct_septic_symmetric_quadratic_form(coeff: Coeff):
+def _sos_struct_septic_symmetric_quadratic_form(coeff: 'Coeff'):
     """
     Let `F0 = s(a7+a6b+a6c+a5bc-2a4b3-2a4c3)` and `G0 = s((b+c)(a2+a(b+c)+2bc)2(a-b)(a-c))`.
     Let `f(a,b,c) = g(a,b,c) = s(xa^2+yab)`.
@@ -428,7 +434,7 @@ class _septic_sym_axis(DomainExpr):
                     )
 
 
-def _sos_struct_septic_symmetric_hexagon(coeff: Coeff):
+def _sos_struct_septic_symmetric_hexagon(coeff: 'Coeff'):
     """
     Solve septic hexagons without s(a7), s(a6b) by
     subtracting some `(a-b)**2*(b-c)**2*(c-a)**2*(a+b+c)` so that it does not contain

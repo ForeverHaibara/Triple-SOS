@@ -1,7 +1,10 @@
 from copy import deepcopy
 
 from .backend import DualBackend
-from .settings import SolverConfigs
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .settings import SolverConfigs
 
 _CVXPY_SOLVER_CONFIGS = {
     'CLARABEL': {
@@ -44,7 +47,7 @@ _CVXPY_SOLVER_CONFIGS = {
     }
 }
 
-def update_solver_options(problem, solver_options, configs: SolverConfigs):
+def update_solver_options(problem, solver_options, configs: 'SolverConfigs'):
     solver_options = deepcopy(solver_options)
 
     solver = solver_options.get('solver')
@@ -124,7 +127,7 @@ class DualBackendCVXPY(DualBackend):
 
         return problem
 
-    def _solve(self, configs: SolverConfigs):
+    def _solve(self, configs: 'SolverConfigs'):
         from cvxpy import settings as s
         problem = self._create_problem()
         solver_options = update_solver_options(problem, configs.solver_options, configs)

@@ -1,9 +1,8 @@
-from typing import List, Callable, Optional
+from typing import List, Callable, Optional, TYPE_CHECKING
 
 from sympy import QQ, totient, mobius
 from sympy import MutableDenseMatrix as Matrix
 from sympy.polys.matrices.domainmatrix import DomainMatrix
-from sympy.combinatorics import PermutationGroup, Permutation
 try:
     from sympy.external.gmpy import gcd
 except ImportError:
@@ -12,6 +11,9 @@ except ImportError:
 from .character_table import character_table
 from .symmetric import symmetry_adapted_basis_sn
 from ..arithmetic import solve_columnspace
+
+if TYPE_CHECKING:
+    from sympy.combinatorics import PermutationGroup, Permutation
 
 def _ramanujan_sum(K: int):
     """
@@ -26,8 +28,8 @@ def _ramanujan_sum(K: int):
 
 
 def symmetry_adapted_basis(
-    G: PermutationGroup,
-    representation: Optional[Callable[[Permutation], List[int]]]=None
+    G: 'PermutationGroup',
+    representation: Optional[Callable[['Permutation'], List[int]]]=None
 ) -> List[Matrix]:
     """
     Compute the symmetry-adapted basis of the representation of G.
@@ -61,8 +63,8 @@ def symmetry_adapted_basis(
     return _symmetry_adapted_basis(G, representation)
 
 def _symmetry_adapted_basis(
-    G: PermutationGroup,
-    representation: Optional[Callable[[Permutation], List[int]]]=None
+    G: 'PermutationGroup',
+    representation: Optional[Callable[['Permutation'], List[int]]]=None
 ) -> List[Matrix]:
     """Internal function to compute the symmetry-adapted_basis
     for a general permutation group G."""

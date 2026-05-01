@@ -1,12 +1,10 @@
 from time import perf_counter
-from typing import Tuple, List, Dict, Union, Optional, Any, Callable
+from typing import Tuple, List, Dict, Union, Optional, Any, Callable, TYPE_CHECKING
 
 import numpy as np
-from sympy import Expr, Symbol, MatrixBase
-from sympy.core.relational import Relational
+from sympy import Symbol, MatrixBase
 from sympy import MutableDenseMatrix as Matrix
 
-from .abstract import Decomp
 from .arithmetic import (
     ArithmeticTimeout, solve_csr_linear, free_symbols_of_mat,
     rep_matrix_from_dict, rep_matrix_to_numpy, rep_matrix_from_numpy, sqrtsize_of_mat
@@ -16,6 +14,11 @@ from .rationalize import SDPRationalizeError, DualRationalizer
 from .transforms import TransformableDual
 
 from .utils import S_from_y, decompose_matrix
+
+if TYPE_CHECKING:
+    from sympy import Expr
+    from .abstract import Decomp
+    from sympy.core.relational import Relational
 
 
 def _get_unique_symbols(used_symbols, dof: int, xname: str = 'y'):
@@ -714,7 +717,7 @@ class SDPProblem(TransformableDual):
 
         return S_from_y(y, self._x0_and_space)
 
-    def as_params(self) -> Dict[Symbol, Expr]:
+    def as_params(self) -> Dict[Symbol, 'Expr']:
         """
         Return the dictionary of free symbols and their values after solving the SDP.
 
@@ -738,7 +741,7 @@ class SDPProblem(TransformableDual):
         return super().as_params()
 
     def rationalize(self, y: np.ndarray, verbose: bool = False,
-            time_limit: Optional[Union[Callable, float]] = None, **kwargs) -> Optional[Tuple[Matrix, Decomp]]:
+            time_limit: Optional[Union[Callable, float]] = None, **kwargs) -> Optional[Tuple[Matrix, 'Decomp']]:
         """
         Rationalize a NumPy vector `y`. If verbose == True, display the numerical eigenvalues
         before rationalization.
@@ -768,8 +771,8 @@ class SDPProblem(TransformableDual):
         )
 
     def solve_obj(self,
-        objective: Union[Expr, Matrix, List],
-        constraints: List[Union[Relational, Expr, Tuple[Matrix, Matrix, str]]] = [],
+        objective: Union['Expr', Matrix, List],
+        constraints: List[Union['Relational', 'Expr', Tuple[Matrix, Matrix, str]]] = [],
         solver: Optional[str] = None,
         solve_child: bool = True,
         propagate_to_parent: bool = True,
@@ -1215,9 +1218,9 @@ class SDPProblem(TransformableDual):
     def from_entry_contribution(cls,
         rhs: Matrix,
         psd_size: Dict[Any, int],
-        psd_contribution: Dict[Any, Callable[[int, int], Tuple[int, Expr]]],
+        psd_contribution: Dict[Any, Callable[[int, int], Tuple[int, 'Expr']]],
         linear_size: Optional[Dict[Any, int]] = None,
-        linear_contribution: Optional[Dict[Any, Callable[[int], Tuple[int, Expr]]]] = None,
+        linear_contribution: Optional[Dict[Any, Callable[[int], Tuple[int, 'Expr']]]] = None,
         domain = None,
         equal_indices: List[Tuple[int, int]] = [],
     ) -> Tuple['SDPProblem', Dict[Any, Tuple[Matrix, Matrix]]]:

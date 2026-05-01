@@ -1,16 +1,20 @@
 from functools import partial
-from typing import List, Tuple, Dict, Optional, Callable, Any, Union
+from typing import List, Tuple, Dict, Optional, Callable, Any, Union, TYPE_CHECKING
 
 import numpy as np
-from sympy import Poly, Expr, Symbol, Integer, Add, Mul
-from sympy.matrices import MutableDenseMatrix as Matrix
+from sympy import Poly, Expr, Integer, Add, Mul
 
-from .algebra import SOSBasis, PolyRing, PseudoSMP, PseudoPoly
+from .algebra import PolyRing, PseudoSMP, PseudoPoly
 from ..solution import Solution
-from ...utils import MonomialManager
 from ...sdp.arithmetic import is_numerical_mat
 
-def _invarraylize(basis: SOSBasis, vec: Matrix, gens: Tuple[Symbol, ...]) -> Poly:
+if TYPE_CHECKING:
+    from .algebra import SOSBasis
+    from sympy import Symbol
+    from sympy.matrices import MutableDenseMatrix as Matrix
+    from ...utils import MonomialManager
+
+def _invarraylize(basis: 'SOSBasis', vec: 'Matrix', gens: Tuple['Symbol', ...]) -> Poly:
     b = basis._basis
     vec = vec._rep.rep
     rep = {b[i]: v[0] for i, v in vec.items() if v.get(0)}
@@ -42,12 +46,12 @@ class SolutionSDP(Solution):
     @classmethod
     def from_decompositions(self,
         poly: Poly,
-        decompositions: Dict[Any, Tuple[Matrix, Matrix]],
-        eqspace: Dict[Any, Matrix],
+        decompositions: Dict[Any, Tuple['Matrix', 'Matrix']],
+        eqspace: Dict[Any, 'Matrix'],
         qmodule: Dict[Any, Expr],
-        qmodule_bases: Dict[Any, MonomialManager],
+        qmodule_bases: Dict[Any, 'MonomialManager'],
         ideal: Dict[Any, Expr],
-        ideal_bases: Dict[Any, MonomialManager],
+        ideal_bases: Dict[Any, 'MonomialManager'],
         adjoint_operator: Optional[Callable[[Expr], Expr]] = None,
         state_operator: Optional[Callable[[Expr], Expr]] = None,
     ) -> 'SolutionSDP':
@@ -80,10 +84,10 @@ class SolutionSDP(Solution):
         )
 
 def _get_ideal_expr(
-    eqspace: Dict[Any, Matrix],
-    gens: List[Symbol],
+    eqspace: Dict[Any, 'Matrix'],
+    gens: List['Symbol'],
     ideal: Dict[Any, Expr],
-    ideal_bases: Dict[Any, MonomialManager],
+    ideal_bases: Dict[Any, 'MonomialManager'],
     adjoint_operator: Optional[Callable[[Expr], Expr]] = None,
     state_operator: Optional[Callable[[Expr], Expr]] = None,
 ):
@@ -97,10 +101,10 @@ def _get_ideal_expr(
     return Add(*ideal_exprs)
 
 def _get_qmodule_expr(
-    decompositions: Dict[Any, Tuple[Matrix, Matrix]],
-    gens: List[Symbol],
+    decompositions: Dict[Any, Tuple['Matrix', 'Matrix']],
+    gens: List['Symbol'],
     qmodule: Optional[Dict[Any, Expr]],
-    qmodule_bases: Optional[Dict[Any, MonomialManager]],
+    qmodule_bases: Optional[Dict[Any, 'MonomialManager']],
     adjoint_operator: Optional[Callable[[Expr], Expr]] = None,
     state_operator: Optional[Callable[[Expr], Expr]] = None,
     simplify_poly: Optional[Callable] = None,

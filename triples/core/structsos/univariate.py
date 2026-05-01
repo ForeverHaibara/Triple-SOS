@@ -1,5 +1,5 @@
-from contextlib import AbstractContextManager, contextmanager
-from typing import Tuple, List, Optional, Union
+from contextlib import contextmanager
+from typing import Tuple, List, Optional, Union, TYPE_CHECKING
 
 from mpmath import mp
 import numpy as np
@@ -11,10 +11,13 @@ from sympy.matrices import MutableDenseMatrix as Matrix
 from sympy.polys.matrices.ddm import DDM
 from sympy.polys.matrices.domainmatrix import DomainMatrix
 from sympy.polys.polyerrors import MultivariatePolynomialError
-from sympy.polys.rings import PolyElement
 
 from ...sdp import congruence
 from ...utils import SOSCone, SOSElement, SOSlist
+
+if TYPE_CHECKING:
+    from contextlib import AbstractContextManager
+    from sympy.polys.rings import PolyElement
 
 T = float
 C = complex
@@ -61,7 +64,7 @@ class CTX():
     def is_real(self, x: C) -> bool:
         imag = self.imag(x)
         return not (imag > 0 or imag < 0)
-    def withdps(self, dps: int) -> AbstractContextManager:
+    def withdps(self, dps: int) -> "AbstractContextManager":
         """
         Create a context manager that sets the global precision to `dps`.
         This is called before all arithmetics.
@@ -780,7 +783,7 @@ def prove_univariate(poly: Union[Poly, Expr, List], interval: Tuple[Optional[Exp
             new_vec = [v if i % 2 == 1 else -v for i, v in enumerate(vec, start=len(vec)%2)]
             return from_list(new_vec)
 
-        def neg2(f: PolyElement) -> PolyElement:
+        def neg2(f: "PolyElement") -> "PolyElement":
             """Compute f(-x) where type(f) == PolyElement"""
             new_rep = {(k,): v if k % 2 == 0 else -v for (k,), v in f.items()}
             return f.ring.from_dict(new_rep)
@@ -803,7 +806,7 @@ def prove_univariate(poly: Union[Poly, Expr, List], interval: Tuple[Optional[Exp
             return f.transform(numer, denom)
 
         if not poly.is_zero:
-            def inv_trans(f: PolyElement, k: int = d//2) -> PolyElement:
+            def inv_trans(f: "PolyElement", k: int = d//2) -> "PolyElement":
                 """Compute f((x - l)/(r - x)) / (y + 1)**(k) where type(f) == PolyElement
                 Note that 1/(y + 1) = (r - x)/(r - l)
                 """

@@ -1,8 +1,8 @@
-from typing import Tuple, Dict, Any
+from typing import Tuple, Dict, Any, TYPE_CHECKING
 
-from sympy.matrices import Matrix
-
-from ..abstract import SDPProblemBase
+if TYPE_CHECKING:
+    from ..abstract import SDPProblemBase
+    from sympy.matrices import Matrix
 
 class SDPTransformation:
     """
@@ -16,8 +16,8 @@ class SDPTransformation:
     Subclasses of SDPTransformation should implement `apply*` methods for
     creating the child node, the transform object, and returns the child node.
     """
-    parent_node: SDPProblemBase = None
-    child_node: SDPProblemBase = None
+    parent_node: "SDPProblemBase" = None
+    child_node: "SDPProblemBase" = None
     def __init__(self, parent_node, child_node, *args, **kwargs):
         self.parent_node = parent_node
         self.child_node = child_node
@@ -32,7 +32,7 @@ class SDPTransformation:
         """Check if the given SDP is the child of the current transformation."""
         return sdp is self.child_node
 
-    def get_y_transform_from_child(self) -> Tuple[Matrix, Matrix]:
+    def get_y_transform_from_child(self) -> Tuple["Matrix", "Matrix"]:
         """If `y = A@y' + b`, where `y` and `y'` are the solutions of the parent and child problems respectively,
         return `A` and `b`."""
         raise NotImplementedError
@@ -55,10 +55,10 @@ class SDPTransformation:
         """
         raise NotImplementedError
 
-    def propagate_nullspace_to_child(self, nullspace: Dict[Any, Matrix]) -> Dict[Any, Matrix]:
+    def propagate_nullspace_to_child(self, nullspace: Dict[Any, "Matrix"]) -> Dict[Any, "Matrix"]:
         raise NotImplementedError
 
-    def propagate_affine_to_child(self, A, b) -> Tuple[Matrix, Matrix]:
+    def propagate_affine_to_child(self, A, b) -> Tuple["Matrix", "Matrix"]:
         """
         Get `A'`, `b'` such that `A@y + b = A'@y' + b'`, where `y` and `y'`
         are the solutions of the parent and child problems respectively.
@@ -68,7 +68,7 @@ class SDPTransformation:
 
 
     @classmethod
-    def apply(cls, parent_node, *args, **kwargs) -> SDPProblemBase:
+    def apply(cls, parent_node, *args, **kwargs) -> "SDPProblemBase":
         raise NotImplementedError
 
 
@@ -98,5 +98,5 @@ class SDPIdentityTransform(SDPTransformation):
         return False
 
     @classmethod
-    def apply(cls, parent_node) -> SDPProblemBase:
+    def apply(cls, parent_node) -> "SDPProblemBase":
         return parent_node

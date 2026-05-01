@@ -1,17 +1,22 @@
-from typing import Union, Tuple, List, Dict, Callable, Optional
+from typing import Union, Tuple, List, Dict, Callable, Optional, TYPE_CHECKING
 from functools import wraps
 
 from sympy import (
-    Poly, Expr, Symbol, Integer, Rational, MatrixBase, Add,
+    Poly, Expr, Integer, Rational, MatrixBase, Add,
     QQ, ZZ, sympify, fraction
 )
-from sympy import MutableDenseMatrix as Matrix
 from sympy.combinatorics import Permutation
 from sympy.core.symbol import uniquely_named_symbol
 
 from ...sdp import congruence
 from ...utils.expressions import Coeff, CyclicSum, CyclicProduct
 from ...utils.roots import nroots, rationalize_bound
+
+if TYPE_CHECKING:
+    from sympy import MutableDenseMatrix as Matrix
+    from sympy import (
+        Symbol
+    )
 
 # use imports to keep linter happy
 (uniquely_named_symbol, Coeff, CyclicSum, CyclicProduct)
@@ -33,7 +38,7 @@ class DomainExpr:
         return self._coeff
 
     @property
-    def gens(self) -> Tuple[Symbol, ...]:
+    def gens(self) -> Tuple['Symbol', ...]:
         return self._coeff.gens
 
     def cyclic_sum(self, expr) -> Expr:
@@ -166,7 +171,7 @@ def rationalize_func(
                     return t_
 
 
-def congruence_solve(M: Matrix, mapping = Union[List, Callable]) -> Optional[Expr]:
+def congruence_solve(M: 'Matrix', mapping = Union[List, Callable]) -> Optional[Expr]:
     cong = congruence(M)
     if cong is None:
         return None
@@ -219,7 +224,7 @@ def zip_longest(*args):
         yield tuple(lasts)
 
 
-def has_gen(gen: Symbol, *args):
+def has_gen(gen: 'Symbol', *args):
     """
     Test whether a symbol is involved in a (list of) polynomial(s).
     """

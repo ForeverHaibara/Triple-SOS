@@ -1,11 +1,16 @@
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Optional, Any, TYPE_CHECKING
 
-from sympy import Expr, Poly, Symbol
-from sympy.combinatorics import PermutationGroup, Permutation
+from sympy import Poly
+from sympy.combinatorics import PermutationGroup
 
-from .state_algebra import CommutativeStateAlgebra, TERM, MONOM
+from .state_algebra import CommutativeStateAlgebra
 from .basis import QmoduleBasis, IdealBasis
 from ....utils import generate_monoms
+
+if TYPE_CHECKING:
+    from .state_algebra import TERM, MONOM
+    from sympy.combinatorics import Permutation
+    from sympy import Expr, Symbol
 
 class PolyRing(CommutativeStateAlgebra):
     """
@@ -33,7 +38,7 @@ class PolyRing(CommutativeStateAlgebra):
             if not isinstance(symmetry, PermutationGroup):
                 raise TypeError(f"Symmetry should be a PermutationGroup or None, but got {type(symmetry)}.")
 
-            def state(term: TERM) -> TERM:
+            def state(term: 'TERM') -> 'TERM':
                 cnt = 0
                 m0 = term[0]
                 std_m = m0
@@ -43,7 +48,7 @@ class PolyRing(CommutativeStateAlgebra):
                         cnt += 1
                         std_m = m
                 return (std_m, term[1] * cnt)
-            def permute(monom: MONOM) -> List[MONOM]:
+            def permute(monom: 'MONOM') -> List['MONOM']:
                 # return [tuple(p(monom)) for p in self.symmetry.elements]
                 return [tuple([monom[i] for i in p._array_form]) for p in self.symmetry.elements]
             setattr(self, 's', state)
@@ -52,27 +57,27 @@ class PolyRing(CommutativeStateAlgebra):
     # def s(self, term: TERM) -> TERM:
         # return term
 
-    def permute_monom(self, monom: MONOM, perm: Permutation) -> MONOM:
+    def permute_monom(self, monom: 'MONOM', perm: 'Permutation') -> 'MONOM':
         return tuple([monom[i] for i in perm._array_form])
 
-    def gen_monom(self, i: Optional[int]) -> MONOM:
+    def gen_monom(self, i: Optional[int]) -> 'MONOM':
         if i is None:
             return (0,) * self.nvars
         return (0,) * i + (1,) + (0,) * (self.nvars - i - 1)
 
-    def total_degree(self, monom: MONOM) -> int:
+    def total_degree(self, monom: 'MONOM') -> int:
         return sum(monom)
 
-    def terms(self, poly: Poly) -> List[TERM]:
+    def terms(self, poly: Poly) -> List['TERM']:
         return poly.rep.terms() if (not poly.is_zero) else []
 
-    def as_expr(self, poly: Poly) -> Expr:
+    def as_expr(self, poly: Poly) -> 'Expr':
         return poly.as_expr()
 
-    def as_poly(self, expr: Expr, gens: List[Symbol], **kwargs) -> Poly:
+    def as_poly(self, expr: 'Expr', gens: List['Symbol'], **kwargs) -> Poly:
         return Poly(expr, *gens, **kwargs)
 
-    def mul(self, term1: TERM, term2: TERM) -> TERM:
+    def mul(self, term1: 'TERM', term2: 'TERM') -> 'TERM':
         (t1, v1), (t2, v2) = term1, term2
         return (tuple(t1[i] + t2[i] for i in range(len(t1))), v1 * v2)
 

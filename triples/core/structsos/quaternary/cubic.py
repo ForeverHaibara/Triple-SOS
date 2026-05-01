@@ -1,10 +1,14 @@
 from sympy import Add
 
-from .utils import Coeff, rationalize_func
+from .utils import rationalize_func
 from ....utils import CyclicSum as _CyclicSum
 from ....utils import CyclicProduct as _CyclicProduct
+from typing import TYPE_CHECKING
 
-def quaternary_cubic_symmetric(coeff: Coeff, real = True):
+if TYPE_CHECKING:
+    from .utils import Coeff
+
+def quaternary_cubic_symmetric(coeff: "Coeff", real = True):
     """
     Solve quaternary symmetric cubic forms. Symmetry is not checked here.
 
@@ -48,7 +52,7 @@ def quaternary_cubic_symmetric(coeff: Coeff, real = True):
 #
 #####################################################################
 
-def _quaternary_cubic_partial_symmetric(coeff: Coeff, real = False):
+def _quaternary_cubic_partial_symmetric(coeff: "Coeff", real = False):
     """
     The function is equivalent to solving nonhomogeneous 3-var symmetric cubic polynomials in
     the form of

@@ -1,8 +1,7 @@
-from typing import Tuple, Dict, List, Optional, Union, Callable, Any
+from typing import Tuple, Dict, List, Optional, Union, Callable, Any, TYPE_CHECKING
 from warnings import warn
 
 import numpy as np
-from sympy import Poly, Expr, Symbol
 
 from .preprocess import ProofNode, ProofTree, SolvePolynomial
 from .preprocess.reparam import Reparametrization
@@ -12,8 +11,11 @@ from .structsos.structsos import StructuralSOSSolver
 from .symsos import SymmetricSubstitution
 from .sdpsos.sdpsos import SDPSOSSolver
 
-from .solution import Solution
 from ..utils import PolyReader
+
+if TYPE_CHECKING:
+    from .solution import Solution
+    from sympy import Poly, Expr, Symbol
 
 NAME_TO_METHOD = {
     'StructuralSOS': StructuralSOSSolver,
@@ -30,18 +32,18 @@ DEFAULT_SAVE_SOLUTION = lambda x: (str(x.solution) if x is not None else '')
 
 
 def sum_of_squares(
-    expr: Expr,
-    ineq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
-    eq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
+    expr: 'Expr',
+    ineq_constraints: Union[List['Expr'], Dict['Expr', 'Expr']] = {},
+    eq_constraints: Union[List['Expr'], Dict['Expr', 'Expr']] = {},
     *,
-    roots: Optional[List[Union[Tuple[Expr, ...], Dict[Symbol, Expr]]]] = None,
+    roots: Optional[List[Union[Tuple['Expr', ...], Dict['Symbol', 'Expr']]]] = None,
     verbose: bool = False,
     time_limit: float = 3600.,
     methods: Optional[List[str]] = None,
     configs: Dict[str, Dict] = {},
     mode: str = "fast",
     method_order: Optional[List[str]] = None, # deprecated
-) -> Optional[Solution]:
+) -> Optional['Solution']:
     """
     Main function for sum-of-squares decomposition.
 
@@ -176,12 +178,12 @@ def sum_of_squares(
 
 
 def sum_of_squares_multiple(
-    polys: Union[List[Union[Poly, str]], str],
-    ineq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
-    eq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
+    polys: Union[List[Union['Poly', str]], str],
+    ineq_constraints: Union[List['Expr'], Dict['Expr', 'Expr']] = {},
+    eq_constraints: Union[List['Expr'], Dict['Expr', 'Expr']] = {},
     poly_reader_configs: Dict[str, Any] = {},
     save_result: Union[bool, str] = True,
-    save_solution_method: Callable[[Optional[Solution]], str] = DEFAULT_SAVE_SOLUTION,
+    save_solution_method: Callable[[Optional['Solution']], str] = DEFAULT_SAVE_SOLUTION,
     verbose_progress: bool = True,
     **sos_kwargs
 ):
@@ -282,7 +284,7 @@ def sum_of_squares_multiple(
 def _process_records(
     records: List[Dict],
     save_result: Union[bool, str] = True,
-    save_solution_method: Callable[[Optional[Solution]], str] = DEFAULT_SAVE_SOLUTION,
+    save_solution_method: Callable[[Optional['Solution']], str] = DEFAULT_SAVE_SOLUTION,
     source: Optional[str] = None
 ) -> Any:
     """

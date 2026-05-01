@@ -1,10 +1,9 @@
-from typing import List, Dict, Union, Optional
+from typing import List, Dict, Union, Optional, TYPE_CHECKING
 
-from sympy import Poly, Expr, Integer, construct_domain
+from sympy import Integer, construct_domain
 from sympy.polys.polyerrors import BasePolynomialError
 
 from .utils import clear_free_symbols
-from .solution import SolutionStructural
 from .constrained import structural_sos_constrained
 from .pivoting    import structural_sos_2vars
 from .ternary     import structural_sos_3vars
@@ -14,6 +13,10 @@ from ..preprocess import ProofNode, SolvePolynomial
 
 from ..problem import ProblemComplexity
 from ..solution import Solution
+
+if TYPE_CHECKING:
+    from sympy import Poly, Expr
+    from .solution import SolutionStructural
 
 class StructuralSOSSolver(ProofNode):
     def explore(self, configs):
@@ -37,13 +40,13 @@ class StructuralSOSSolver(ProofNode):
 
 
 def StructuralSOS(
-    expr: Expr,
-    ineq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
-    eq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
+    expr: "Expr",
+    ineq_constraints: Union[List["Expr"], Dict["Expr", "Expr"]] = {},
+    eq_constraints: Union[List["Expr"], Dict["Expr", "Expr"]] = {},
     *,
     verbose: Union[bool, int] = False,
     raise_exception: bool = False,
-) -> Optional[SolutionStructural]:
+) -> Optional["SolutionStructural"]:
     """
     A rule-based expert system to solve polynomial inequalities in specific structures.
     Most algorithms run in O(1) or linear time.
@@ -77,7 +80,7 @@ def StructuralSOS(
     return problem.sum_of_squares(configs)
 
 
-def _structural_sos(poly: Poly, ineq_constraints: Dict[Poly, Expr] = {}, eq_constraints: Dict[Poly, Expr] = {}) -> Expr:
+def _structural_sos(poly: "Poly", ineq_constraints: Dict["Poly", "Expr"] = {}, eq_constraints: Dict["Poly", "Expr"] = {}) -> "Expr":
     """
     Internal function of StructuralSOS, returns a sympy expression only.
     The polynomial must be homogeneous. TODO: remove the homogeneous requirement?

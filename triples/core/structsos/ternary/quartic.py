@@ -1,15 +1,21 @@
-from typing import Tuple, List
+from typing import Tuple, List, TYPE_CHECKING
 
 import sympy as sp
-from sympy import Poly, Expr, Symbol, Rational, Integer, Float, Add
+from sympy import Poly, Symbol, Rational, Integer, Float, Add
 from sympy import MutableDenseMatrix as Matrix
 
 from .utils import (
-    Coeff, sos_struct_reorder_symmetry,
+    sos_struct_reorder_symmetry,
     congruence, sum_y_exprs, quadratic_weighting,
     nroots, rationalize, rationalize_bound, rationalize_func,
     univariate_intervals, common_region_of_conics
 )
+
+if TYPE_CHECKING:
+    from .utils import (
+        Coeff
+    )
+    from sympy import Expr
 
 def sos_struct_quartic(coeff, real = True):
     """
@@ -39,7 +45,7 @@ def sos_struct_quartic(coeff, real = True):
     """
     return  _sos_struct_quartic_uncentered(coeff)
 
-def _sos_struct_quartic_core(coeff: Coeff):
+def _sos_struct_quartic_core(coeff: 'Coeff'):
     """
     Main theorem: For a nondegenerated cyclic quartic with zero `(1,1,1)`:
     `f(a,b,c) = s(a4 + pa3b + na2b2 + qab3 - (1+p+n+q)a2bc)`
@@ -91,7 +97,7 @@ def _sos_struct_quartic_core(coeff: Coeff):
     return sum_y_exprs(y, exprs)
 
 
-def _sos_struct_quartic_quadratic_border(coeff: Coeff):
+def _sos_struct_quartic_quadratic_border(coeff: 'Coeff'):
     """
     Solve `s(a4 - 2t(a3b - ab3) + (t^2 - 2)(a2b2 - a2bc) - a2bc) >= 0`
     in the field of coeff by lifting the degree. The inequality
@@ -138,7 +144,7 @@ def _sos_struct_quartic_quadratic_border(coeff: Coeff):
     return None
 
 
-def _sos_struct_quartic_biased(coeff: Coeff):
+def _sos_struct_quartic_biased(coeff: 'Coeff'):
     """
     Theorem:
     If `f(a,b,c) = s(a4 + pa3b + na2b2 + qab3 - (1+p+n+q)a2bc) >= 0` holds for all `a,b,c >= 0`,
@@ -248,7 +254,7 @@ def _sos_struct_quartic_biased(coeff: Coeff):
     return None
 
 
-def _sos_struct_quartic_degenerate(coeff: Coeff):
+def _sos_struct_quartic_degenerate(coeff: 'Coeff'):
     """
     Given the solution to f(a,b,c) = s(pa3b + na2b2 + qab3 + ra2bc) >= 0.
     Note that the coefficient of a^4 is zero in this case.
@@ -295,7 +301,7 @@ def _sos_struct_quartic_degenerate(coeff: Coeff):
     return None
 
 
-def _sos_struct_quartic_uncentered_real(coeff: Coeff):
+def _sos_struct_quartic_uncentered_real(coeff: 'Coeff'):
     """
     Solve cyclic quartic problems which do not necessarily have zeros at (1,1,1) on
     the real number field.
@@ -431,7 +437,7 @@ def _sos_struct_quartic_uncentered_real(coeff: Coeff):
     return None
 
 
-def _sos_struct_quartic_uncentered(coeff: Coeff):
+def _sos_struct_quartic_uncentered(coeff: 'Coeff'):
     """
     Solve general cyclic quartic problems on positive orthant.
     It also tries to solve the problem on the real number field if possible.
@@ -606,7 +612,7 @@ def sos_struct_acyclic_quartic(coeff, real = True):
 
 
 @sos_struct_reorder_symmetry(groups=(2, 1))
-def _sos_struct_acyclic_quartic_symmetric(coeff: Coeff, real = True):
+def _sos_struct_acyclic_quartic_symmetric(coeff: 'Coeff', real = True):
     """
     Solve acyclic quartic polynomials that are symmetric with respect to two variables.
     If it is nonnegative over R, it must be sum of squares by Hilbert's 17th problem, we can write it in
@@ -861,7 +867,7 @@ class _quadratic_minimization():
         roots = [((self.symmetric_axis(r), r), v) for r, v in candidates if v == minimum]
         return roots
 
-def _sos_struct_acyclic_quartic_real(coeff: Coeff):
+def _sos_struct_acyclic_quartic_real(coeff: 'Coeff'):
     """
     Solve acyclic quartic problems over a,b,c in R.
 
@@ -973,8 +979,8 @@ def _sos_struct_acyclic_quartic_real(coeff: Coeff):
 
 
 def _sos_struct_acyclic_quartic_real_findroots(
-        coeff: Coeff, poly = None
-    ) -> List[Tuple[Tuple[Float, Float, Float], Float, Expr]]:
+        coeff: 'Coeff', poly = None
+    ) -> List[Tuple[Tuple[Float, Float, Float], Float, 'Expr']]:
     """
     Subtract some polynomials from the original polynomial so that the remaining polynomial
     has at least three roots over R.

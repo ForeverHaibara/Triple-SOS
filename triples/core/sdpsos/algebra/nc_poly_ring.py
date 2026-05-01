@@ -1,12 +1,16 @@
 from itertools import product
-from typing import Dict, Optional, Any
+from typing import Dict, Optional, Any, TYPE_CHECKING
 
-from sympy import Poly, Expr, Add, Mul
-from sympy.combinatorics.permutations import Permutation
+from sympy import Add, Mul
 
-from .state_algebra import StateAlgebra, TERM, MONOM
+from .state_algebra import StateAlgebra
 from .basis import QmoduleBasis
 from .pseudo_poly import PseudoPoly
+
+if TYPE_CHECKING:
+    from .state_algebra import TERM, MONOM
+    from sympy import Poly, Expr
+    from sympy.combinatorics.permutations import Permutation
 
 def generate_monoms_nc(nvars, degree, hom=True):
     def generate_monom_nc_hom(nvars, degree):
@@ -57,18 +61,18 @@ class NCPolyRing(StateAlgebra):
             nvars, degree, hom=is_homogeneous
         )
 
-    def s(self, term: TERM) -> TERM:
+    def s(self, term: "TERM") -> "TERM":
         return term
 
-    def gen_monom(self, i: Optional[int]) -> MONOM:
+    def gen_monom(self, i: Optional[int]) -> "MONOM":
         if i is None:
             return ()
         return ((i, 1),)
 
-    def total_degree(self, monom: MONOM) -> int:
+    def total_degree(self, monom: "MONOM") -> int:
         return sum(_[1] for _ in monom) if len(monom) else 0
 
-    def as_expr(self, poly: Poly, state_operator=None) -> Expr:
+    def as_expr(self, poly: "Poly", state_operator=None) -> "Expr":
         if isinstance(poly, PseudoPoly):
             gens = poly.gens
             ret = Add(*[Mul(coeff, *[gens[i]**v for i, v in monom]) for monom, coeff in poly.terms()])
@@ -76,7 +80,7 @@ class NCPolyRing(StateAlgebra):
             ret = poly.as_expr()
         return ret if state_operator is None else state_operator(ret)
 
-    def mul(self, term1: TERM, term2: TERM) -> TERM:
+    def mul(self, term1: "TERM", term2: "TERM") -> "TERM":
         (t1, v1), (t2, v2) = term1, term2
         if len(t1) and len(t2) and t1[-1][0] == t2[0][0]: # same alphabet
             t = t1[:-1] + ((t1[-1][0], t1[-1][1] + t2[0][1]),) + t2[1:]
@@ -84,14 +88,14 @@ class NCPolyRing(StateAlgebra):
             t = t1 + t2 # tuple concat
         return (t, v1 * v2)
 
-    def adjoint(self, term: TERM) -> TERM:
+    def adjoint(self, term: "TERM") -> "TERM":
         return (term[0][::-1], term[1])
 
-    def permute_monom(self, monom: MONOM, perm: Permutation) -> MONOM:
+    def permute_monom(self, monom: "MONOM", perm: "Permutation") -> "MONOM":
         arr = perm.array_form
         return tuple((arr[i], v) for i, v in monom)
 
-    def infer_bases(self, poly: Poly, qmodule: Dict[Any, Poly], ideal: Dict[Any, Poly]):
+    def infer_bases(self, poly: "Poly", qmodule: Dict[Any, "Poly"], ideal: Dict[Any, "Poly"]):
         is_homogeneous = self.is_homogeneous
         degree = self.degree
         if len(ideal):

@@ -1,10 +1,10 @@
 from collections.abc import Iterable
 from typing import (
     Tuple, List, Union, Optional, Callable, Iterator,
-    Type, Generic, TypeVar
+    Type, Generic, TypeVar, TYPE_CHECKING
 )
 
-from sympy import Expr, Add, Integer, Rational, UnevaluatedExpr, sqrt
+from sympy import Add, Integer, Rational, UnevaluatedExpr, sqrt
 from sympy.core.sympify import CantSympify, sympify
 from sympy.polys.domains.domainelement import DomainElement
 from sympy.polys.polyerrors import CoercionFailed
@@ -17,6 +17,9 @@ from .exraw import EXRAW
 # XXX: move it elsewhere
 # from sympy.polys.domains.domain import Ef, FieldElement # SymPy >= 1.15
 from sympy.polys.domains.domain import Domain as _Domain
+
+if TYPE_CHECKING:
+    from sympy import Expr
 class FieldElement: ...
 Ef = TypeVar('Ef', bound=FieldElement)
 class Domain(_Domain, Generic[Ef]): ...
@@ -211,7 +214,7 @@ class SOSElement(DomainElement, CantSympify, Generic[Ef]):
             return self.algebra.zero
         return sum([c * v**2 for c, v in self]) # type: ignore
 
-    def as_expr(self) -> Expr:
+    def as_expr(self) -> 'Expr':
         dom, alg = self.domain, self.algebra
         return Add(*[dom.to_sympy(c) * alg.to_sympy(v)**2 for c, v in self]) # type: ignore
 
@@ -558,15 +561,15 @@ class SOSlist(Generic[Ef]):
     def __iter__(self):
         return iter(self.rep)
 
-    def coeffs(self) -> List[Expr]:
+    def coeffs(self) -> List['Expr']:
         dom = self.domain
         return [dom.to_sympy(c) for c in self.rep.coeffs()]
 
-    def values(self) -> List[Expr]:
+    def values(self) -> List['Expr']:
         alg = self.algebra
         return [alg.to_sympy(v) for v in self.rep.values()]
 
-    def items(self) -> List[Tuple[Expr, Expr]]:
+    def items(self) -> List[Tuple['Expr', 'Expr']]:
         dom = self.domain
         alg = self.algebra
         return [(dom.to_sympy(c), alg.to_sympy(v)) for c, v in self.rep.items()]
@@ -589,10 +592,10 @@ class SOSlist(Generic[Ef]):
         return self.new(self.cone.one)
 
     @property
-    def expr(self) -> Expr:
+    def expr(self) -> 'Expr':
         return self.as_expr()
 
-    def as_expr(self) -> Expr:
+    def as_expr(self) -> 'Expr':
         return self.rep.as_expr()
 
     @classmethod
@@ -650,7 +653,7 @@ class SOSlist(Generic[Ef]):
     def inverse(self) -> 'SOSlist[Ef]':
         return self.new(self.rep.inverse())
 
-    def mul_sqr(self, x: Expr) -> 'SOSlist[Ef]':
+    def mul_sqr(self, x: 'Expr') -> 'SOSlist[Ef]':
         """
         Compute self * expr**2
 
@@ -686,7 +689,7 @@ class SOSlist(Generic[Ef]):
         """
         return self.new(self.rep.primitive())
 
-    def applyfunc(self, func: Callable[[Expr], Expr]) -> 'SOSlist':
+    def applyfunc(self, func: Callable[['Expr'], 'Expr']) -> 'SOSlist':
         return self.new(EXRAWSOSCone.from_list([(c, func(v)) for c, v in self.items()])) # type: ignore
 
     def normalize(self) -> 'SOSlist':

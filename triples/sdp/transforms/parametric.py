@@ -1,10 +1,13 @@
-from typing import List, Optional
+from typing import List, Optional, TYPE_CHECKING
 
-from sympy import Matrix, Symbol
+from sympy import Matrix
 
 from .linear import SDPLinearTransform
 from ..utils import decompose_matrix
 from ..arithmetic import free_symbols_of_mat
+
+if TYPE_CHECKING:
+    from sympy import Symbol
 
 class SDPDeparametrization(SDPLinearTransform):
     @classmethod
@@ -17,7 +20,7 @@ class SDPDeparametrization(SDPLinearTransform):
 
 class DualDeparametrization(SDPDeparametrization):
     @classmethod
-    def apply(cls, parent_node, symbols: Optional[List[Symbol]]=None):
+    def apply(cls, parent_node, symbols: Optional[List['Symbol']]=None):
         if parent_node.is_primal:
             raise TypeError('Problem should be a SDPProblemBase object.')
 

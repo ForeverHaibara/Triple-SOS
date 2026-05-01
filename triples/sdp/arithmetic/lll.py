@@ -1,10 +1,12 @@
-from typing import Tuple
+from typing import Tuple, TYPE_CHECKING
 from math import floor as mfloor
 
 from sympy.polys.domains import ZZ, QQ
-from sympy.matrices import MutableDenseMatrix as Matrix
 from sympy.polys.matrices.ddm import DDM
 from .matop import ArithmeticTimeout, FLINT_TYPE
+
+if TYPE_CHECKING:
+    from sympy.matrices import MutableDenseMatrix as Matrix
 
 try:
     from sympy.polys.matrices.exceptions import DMRankError, DMShapeError, DMValueError, DMDomainError
@@ -106,7 +108,7 @@ def ddm_lll(x, delta=QQ(3, 4), time_limit=None):
 def ddm_lll_transform(x, delta=QQ(3, 4), time_limit=None):
     return _ddm_lll(x, delta=delta, return_transform=True, time_limit=time_limit)
 
-def lll(x: Matrix, delta=QQ(3, 4), time_limit=None):
+def lll(x: "Matrix", delta=QQ(3, 4), time_limit=None):
     """
     Compute the LLL-reduced basis of a given matrix.
     Adapted from SymPy 1.12 to support SymPy < 1.12.

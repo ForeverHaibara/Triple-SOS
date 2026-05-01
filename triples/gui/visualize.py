@@ -1,13 +1,16 @@
-from typing import List, Tuple, Union
+from typing import List, Tuple, Union, TYPE_CHECKING
 
-from sympy import MutableDenseMatrix as Matrix
-from sympy import Expr, Symbol, Integer, GreaterThan, lambdify
+from sympy import Symbol, Integer, GreaterThan, lambdify
 from sympy import true as sympy_true
 from numpy import linspace, meshgrid
 
 from ..utils.text_process import wrap_desmos
 
-def show_dets(M: Matrix):
+if TYPE_CHECKING:
+    from sympy import Expr
+    from sympy import MutableDenseMatrix as Matrix
+
+def show_dets(M: "Matrix"):
     """
     Display the determinants of the leading principal submatrices of a matrix
     in a Desmos graph.
@@ -33,7 +36,7 @@ def show_dets(M: Matrix):
 
 
 def plot_contour(
-        f: Expr,
+        f: "Expr",
         xrange: Tuple[Union[int, float], Union[int, float]] = (-5, 5),
         yrange: Tuple[Union[int, float], Union[int, float]] = (-5, 5),
         figsize: Tuple[int, int] = (10, 7),
@@ -73,7 +76,7 @@ def plot_contour(
 
 
 def plot_f(
-        f: Expr,
+        f: "Expr",
         gens: List[Symbol],
         xrange: Tuple[Union[int, float], Union[int, float]] = (-5, 5),
         yrange: Tuple[Union[int, float], Union[int, float]] = (-5, 5),

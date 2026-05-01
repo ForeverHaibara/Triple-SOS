@@ -1,8 +1,8 @@
 from typing import (
-    List, Tuple, Dict, FrozenSet, Union, Optional, Generic, Iterator
+    List, Tuple, Dict, FrozenSet, Union, Optional, Generic, Iterator, TYPE_CHECKING
 )
 
-from sympy import Expr, Add, Mul, Integer, UnevaluatedExpr, fraction, sympify
+from sympy import Add, Mul, Integer, UnevaluatedExpr, fraction, sympify
 from sympy.core.sympify import CantSympify, sympify
 from sympy.polys.domains.domainelement import DomainElement
 from sympy.polys.polyerrors import CoercionFailed
@@ -10,7 +10,11 @@ from sympy.polys.polyerrors import CoercionFailed
 from .cyclic import CyclicExpr
 from .exraw import HAS_EXRAW
 from .soscone import EXRAWSOSCone, SOSCone, SOSElement, SOSlist
-from .soscone import Ef, TExpr, Domain # for type annotations
+from .soscone import Ef # for type annotations
+
+if TYPE_CHECKING:
+    from .soscone import TExpr, Domain
+    from sympy import Expr
 
 
 def _pretty_print(psatz_elem, func=str):
@@ -29,7 +33,7 @@ def _pretty_print(psatz_elem, func=str):
             s = s[1:] # strip the leading "*"
         return s
 
-    def _ideal_term(ind: int, v: TExpr) -> str:
+    def _ideal_term(ind: int, v: "TExpr") -> str:
         return f"({func(ideal[ind])})*({func(v)})"
 
     def _pretty(p, i) -> str:
@@ -51,9 +55,9 @@ def _pretty_print(psatz_elem, func=str):
 
 class PSatzDomain(Generic[Ef]):
     cone: SOSCone[Ef]
-    preorder: List[TExpr[Ef]]
-    ideal: List[TExpr[Ef]]
-    def __init__(self, cone: SOSCone[Ef], preorder: List[TExpr[Ef]] = [], ideal: List[TExpr[Ef]] = []):
+    preorder: List["TExpr[Ef]"]
+    ideal: List["TExpr[Ef]"]
+    def __init__(self, cone: SOSCone[Ef], preorder: List["TExpr[Ef]"] = [], ideal: List["TExpr[Ef]"] = []):
         self.cone = cone
         self.preorder = preorder
         self.ideal = ideal
@@ -71,41 +75,41 @@ class PSatzDomain(Generic[Ef]):
         return self.cone == other.cone and self.preorder == other.preorder and self.ideal == other.ideal
 
     @property
-    def algebra(self) -> Domain[TExpr[Ef]]:
+    def algebra(self) -> "Domain[TExpr[Ef]]":
         return self.cone.algebra
 
     @property
-    def domain(self) -> Domain[Ef]:
+    def domain(self) -> "Domain[Ef]":
         return self.cone.domain
 
     @property
-    def onezero(self) -> Tuple[Dict[FrozenSet[int], SOSElement[Ef]], Dict[int, TExpr[Ef]]]:
+    def onezero(self) -> Tuple[Dict[FrozenSet[int], SOSElement[Ef]], Dict[int, "TExpr[Ef]"]]:
         return (self.one.denom_preorder, self.one.denom_ideal)
 
-    def preorder_term(self, monom: Iterator[int]) -> TExpr[Ef]:
+    def preorder_term(self, monom: Iterator[int]) -> "TExpr[Ef]":
         z = self.algebra.one
         for i in monom:
             z = z * self.preorder[i]
         return z
 
-    def preorder_term_expr(self, monom: Iterator[int], preorder_alias: Optional[List[Expr]]=None, evaluate: bool=True) -> Expr:
+    def preorder_term_expr(self, monom: Iterator[int], preorder_alias: Optional[List["Expr"]]=None, evaluate: bool=True) -> "Expr":
         if preorder_alias is not None:
             return Mul(*[preorder_alias[i] for i in monom])
         alg = self.algebra
         _eval = (lambda x: x) if evaluate else UnevaluatedExpr
         return Mul(*[_eval(alg.to_sympy(self.preorder[i])) for i in monom])
 
-    def ideal_term(self, ind: int) -> TExpr[Ef]:
+    def ideal_term(self, ind: int) -> "TExpr[Ef]":
         return self.ideal[ind]
 
-    def ideal_term_expr(self, ind: int, ideal_alias: Optional[List[Expr]]=None, evaluate: bool=True) -> Expr:
+    def ideal_term_expr(self, ind: int, ideal_alias: Optional[List["Expr"]]=None, evaluate: bool=True) -> "Expr":
         if ideal_alias is not None:
             return ideal_alias[ind]
         alg = self.algebra
         _eval = (lambda x: x) if evaluate else UnevaluatedExpr
         return _eval(alg.to_sympy(self.ideal[ind]))
 
-    def _to_algebra(self, preorder: Dict[FrozenSet[int], SOSElement[Ef]], ideal: Dict[int, TExpr[Ef]]) -> TExpr[Ef]:
+    def _to_algebra(self, preorder: Dict[FrozenSet[int], SOSElement[Ef]], ideal: Dict[int, "TExpr[Ef]"]) -> "TExpr[Ef]":
         z = self.algebra.zero
         for m, v in preorder.items():
             z += self.preorder_term(m) * v.to_algebra()
@@ -113,8 +117,8 @@ class PSatzDomain(Generic[Ef]):
             z += self.ideal[m] * v
         return z
 
-    def _to_expr(self, preorder: Dict[FrozenSet[int], SOSElement[Ef]], ideal: Dict[int, TExpr[Ef]],
-            preorder_alias: Optional[List[Expr]]=None, ideal_alias: Optional[List[Expr]]=None, evaluate: bool=True) -> Expr:
+    def _to_expr(self, preorder: Dict[FrozenSet[int], SOSElement[Ef]], ideal: Dict[int, "TExpr[Ef]"],
+            preorder_alias: Optional[List["Expr"]]=None, ideal_alias: Optional[List["Expr"]]=None, evaluate: bool=True) -> "Expr":
         alg = self.algebra
         return Add(
             *[self.preorder_term_expr(k, preorder_alias, evaluate) * v.as_expr() for k, v in preorder.items()],
@@ -142,8 +146,8 @@ class PSatzDomain(Generic[Ef]):
         return PSatzElement.new(self, {frozenset(): element}, self.zero.numer_ideal, *self.onezero)
 
     def from_sympy(self, expr: object,
-        preorder_alias: Optional[Union[List[TExpr[Ef]], Dict[List[TExpr[Ef]], int]]]=None,
-        ideal_alias: Optional[Union[List[TExpr[Ef]], Dict[List[TExpr[Ef]], int]]]=None
+        preorder_alias: Optional[Union[List["TExpr[Ef]"], Dict[List["TExpr[Ef]"], int]]]=None,
+        ideal_alias: Optional[Union[List["TExpr[Ef]"], Dict[List["TExpr[Ef]"], int]]]=None
     ) -> Optional['PSatzElement']:
         expr = sympify(expr)
         alg = self.algebra
@@ -250,14 +254,14 @@ class PSatzDomain(Generic[Ef]):
 class PSatzElement(DomainElement, CantSympify, Generic[Ef]):
     psatz_domain: PSatzDomain[Ef]
     numer_preorder: Dict[FrozenSet[int], SOSElement[Ef]]
-    numer_ideal: Dict[int, TExpr[Ef]]
+    numer_ideal: Dict[int, "TExpr[Ef]"]
     denom_preorder: Dict[FrozenSet[int], SOSElement[Ef]]
-    denom_ideal: Dict[int, TExpr[Ef]]
+    denom_ideal: Dict[int, "TExpr[Ef]"]
     def __new__(cls, psatz_domain: PSatzDomain[Ef],
         numer_preorder: Optional[Dict[FrozenSet[int], SOSElement]]=None,
-        numer_ideal: Optional[Dict[int, TExpr[Ef]]]=None,
+        numer_ideal: Optional[Dict[int, "TExpr[Ef]"]]=None,
         denom_preorder: Optional[Dict[FrozenSet[int], SOSElement]]=None,
-        denom_ideal: Optional[Dict[int, TExpr[Ef]]]=None
+        denom_ideal: Optional[Dict[int, "TExpr[Ef]"]]=None
     ):
         numer_preorder = numer_preorder or psatz_domain.zero.numer_preorder
         numer_ideal = numer_ideal or psatz_domain.zero.numer_ideal
@@ -293,11 +297,11 @@ class PSatzElement(DomainElement, CantSympify, Generic[Ef]):
         return self.as_expr()._repr_latex_()
 
     @property
-    def preorder(self) -> Dict[FrozenSet[int], TExpr[Ef]]:
+    def preorder(self) -> Dict[FrozenSet[int], "TExpr[Ef]"]:
         return self.psatz_domain.preorder
 
     @property
-    def ideal(self) -> Dict[int, TExpr[Ef]]:
+    def ideal(self) -> Dict[int, "TExpr[Ef]"]:
         return self.psatz_domain.ideal
 
     @property
@@ -305,11 +309,11 @@ class PSatzElement(DomainElement, CantSympify, Generic[Ef]):
         return self.psatz_domain.cone
 
     @property
-    def algebra(self) -> Domain[TExpr[Ef]]:
+    def algebra(self) -> "Domain[TExpr[Ef]]":
         return self.psatz_domain.algebra
 
     @property
-    def domain(self) -> Domain[Ef]:
+    def domain(self) -> "Domain[Ef]":
         return self.psatz_domain.domain
 
     @property
@@ -327,15 +331,15 @@ class PSatzElement(DomainElement, CantSympify, Generic[Ef]):
         return self.psatz_domain.one
 
     @property
-    def onezero(self) -> Tuple[Dict[FrozenSet[int], SOSElement[Ef]], Dict[int, TExpr[Ef]]]:
+    def onezero(self) -> Tuple[Dict[FrozenSet[int], SOSElement[Ef]], Dict[int, "TExpr[Ef]"]]:
         return self.psatz_domain.onezero
 
     @property
-    def numerator(self) -> TExpr[Ef]:
+    def numerator(self) -> "TExpr[Ef]":
         return self.psatz_domain._to_algebra(self.numer_preorder, self.numer_ideal)
 
     @property
-    def denominator(self) -> TExpr[Ef]:
+    def denominator(self) -> "TExpr[Ef]":
         return self.psatz_domain._to_algebra(self.denom_preorder, self.denom_ideal)
 
     @property
@@ -348,8 +352,8 @@ class PSatzElement(DomainElement, CantSympify, Generic[Ef]):
          and all((len(k) == 0 and v == v.one) \
                  or v.is_zero for k, v in self.denom_preorder.items())
 
-    def as_expr(self, preorder_alias: Optional[List[Expr]]=None, ideal_alias: Optional[List[Expr]]=None,
-            evaluate: bool=True) -> Expr:
+    def as_expr(self, preorder_alias: Optional[List["Expr"]]=None, ideal_alias: Optional[List["Expr"]]=None,
+            evaluate: bool=True) -> "Expr":
         numer = self.psatz_domain._to_expr(self.numer_preorder, self.numer_ideal,
             preorder_alias, ideal_alias, evaluate=evaluate)
         denom = self.psatz_domain._to_expr(self.denom_preorder, self.denom_ideal,
@@ -561,7 +565,7 @@ class PSatzElement(DomainElement, CantSympify, Generic[Ef]):
 
         return self.per(p1, i1, p2, i2)
 
-    def mul_sqr(self, numer: Optional[TExpr[Ef]] = None, denom: Optional[TExpr[Ef]] = None) -> 'PSatzElement[Ef]':
+    def mul_sqr(self, numer: Optional["TExpr[Ef]"] = None, denom: Optional["TExpr[Ef]"] = None) -> 'PSatzElement[Ef]':
         p1, i1, p2, i2 = self.numer_preorder, self.numer_ideal, self.denom_preorder, self.denom_ideal
         if numer is not None:
             if self.algebra.is_zero(numer):
@@ -594,7 +598,7 @@ class PSatzElement(DomainElement, CantSympify, Generic[Ef]):
         return ps1, ps2, ps3, ps4
 
     def join(a: 'PSatzElement[Ef]', b: 'PSatzElement[Ef]', ind: int,
-            numer: Optional[TExpr[Ef]] = None, denom: Optional[TExpr[Ef]] = None) -> 'PSatzElement[Ef]':
+            numer: Optional["TExpr[Ef]"] = None, denom: Optional["TExpr[Ef]"] = None) -> 'PSatzElement[Ef]':
         """
         Join two PSatzs to eliminate the `ind`-th preorder generator. The `ind`-th
         preorder generator of two PSatzs should imply opposite values.
@@ -892,11 +896,11 @@ class PSatz(Generic[Ef]):
 
     rep: PSatzElement[Ef]
     def __new__(cls, arg,
-        preorder: Optional[Union[List[Expr], Dict[Expr, Expr]]]=None,
-        ideal: Optional[Union[List[Expr], Dict[Expr, Expr]]]=None,
+        preorder: Optional[Union[List["Expr"], Dict["Expr", "Expr"]]]=None,
+        ideal: Optional[Union[List["Expr"], Dict["Expr", "Expr"]]]=None,
         cone: Optional[SOSCone]=None,
-        algebra: Optional[Domain[TExpr[Ef]]]=None,
-        domain: Optional[Domain[Ef]]=None
+        algebra: Optional["Domain[TExpr[Ef]]"]=None,
+        domain: Optional["Domain[Ef]"]=None
     ):
         if isinstance(arg, PSatz):
             return arg
@@ -914,12 +918,12 @@ class PSatz(Generic[Ef]):
         return self.rep.psatz_domain
 
     @property
-    def preorder(self) -> List[Expr]:
+    def preorder(self) -> List["Expr"]:
         alg = self.algebra
         return [alg.to_sympy(v) for v in self.psatz_domain.preorder]
 
     @property
-    def ideal(self) -> List[Expr]:
+    def ideal(self) -> List["Expr"]:
         alg = self.algebra
         return [alg.to_sympy(v) for v in self.psatz_domain.ideal]
 
@@ -928,11 +932,11 @@ class PSatz(Generic[Ef]):
         return self.psatz_domain.cone
 
     @property
-    def algebra(self) -> Domain[TExpr[Ef]]:
+    def algebra(self) -> "Domain[TExpr[Ef]]":
         return self.psatz_domain.algebra
 
     @property
-    def domain(self) -> Domain[Ef]:
+    def domain(self) -> "Domain[Ef]":
         return self.psatz_domain.domain
 
     @classmethod
@@ -971,11 +975,11 @@ class PSatz(Generic[Ef]):
         return self.new(self.rep.one)
 
     @property
-    def expr(self) -> Expr:
+    def expr(self) -> "Expr":
         return self.as_expr()
 
-    def as_expr(self, preorder_alias: Optional[List[Expr]]=None, ideal_alias: Optional[List[Expr]]=None,
-            evaluate: bool=True) -> Expr:
+    def as_expr(self, preorder_alias: Optional[List["Expr"]]=None, ideal_alias: Optional[List["Expr"]]=None,
+            evaluate: bool=True) -> "Expr":
         return self.rep.as_expr(preorder_alias=preorder_alias, ideal_alias=ideal_alias, evaluate=evaluate)
 
     @property
@@ -983,7 +987,7 @@ class PSatz(Generic[Ef]):
         return {k: SOSlist.new(v) for k, v in self.rep.numer_preorder.items()}
 
     @property
-    def numer_ideal(self) -> Dict[int, Expr]:
+    def numer_ideal(self) -> Dict[int, "Expr"]:
         alg = self.algebra
         return {k: alg.to_sympy(v) for k, v in self.rep.numer_ideal.items()}
 
@@ -992,7 +996,7 @@ class PSatz(Generic[Ef]):
         return {k: SOSlist.new(v) for k, v in self.rep.denom_preorder.items()}
 
     @property
-    def denom_ideal(self) -> Dict[int, Expr]:
+    def denom_ideal(self) -> Dict[int, "Expr"]:
         alg = self.algebra
         return {k: alg.to_sympy(v) for k, v in self.rep.denom_ideal.items()}
 
@@ -1006,11 +1010,11 @@ class PSatz(Generic[Ef]):
 
     @classmethod
     def from_sympy(cls, arg,
-        preorder: Optional[Union[List[Expr], Dict[Expr, Expr]]]=None,
-        ideal: Optional[Union[List[Expr], Dict[Expr, Expr]]]=None,
+        preorder: Optional[Union[List["Expr"], Dict["Expr", "Expr"]]]=None,
+        ideal: Optional[Union[List["Expr"], Dict["Expr", "Expr"]]]=None,
         cone: Optional[SOSCone]=None,
-        algebra: Optional[Domain[TExpr[Ef]]]=None,
-        domain: Optional[Domain[Ef]]=None
+        algebra: Optional["Domain[TExpr[Ef]]"]=None,
+        domain: Optional["Domain[Ef]"]=None
     ) -> Optional['PSatz']:
         # construction from sympy expressions
         arg = sympify(arg)
@@ -1114,7 +1118,7 @@ class PSatz(Generic[Ef]):
     def inverse(self) -> 'PSatz[Ef]':
         return self.new(self.rep.inverse())
 
-    def mul_sqr(self, numer: Optional[Expr]=None, denom: Optional[Expr]=None, frac: bool=True) -> 'PSatz[Ef]':
+    def mul_sqr(self, numer: Optional["Expr"]=None, denom: Optional["Expr"]=None, frac: bool=True) -> 'PSatz[Ef]':
         if frac and denom is None and numer is not None:
             numer, denom = fraction(sympify(numer).as_expr().doit().together())
         _numer = self.algebra.from_sympy(numer) if numer is not None else numer
@@ -1125,7 +1129,7 @@ class PSatz(Generic[Ef]):
         return tuple([self.new(_) for _ in self.rep.marginalize(ind, pop=pop)])
 
     def join(self, other: 'PSatz[Ef]', ind: int,
-            numer: Optional[Expr]=None, denom: Optional[Expr]=None, frac: bool=True) -> 'PSatz[Ef]':
+            numer: Optional["Expr"]=None, denom: Optional["Expr"]=None, frac: bool=True) -> 'PSatz[Ef]':
         """
         Join two PSatzs to eliminate the `ind`-th preorder generator. The `ind`-th
         preorder generator of two PSatzs should imply opposite values.

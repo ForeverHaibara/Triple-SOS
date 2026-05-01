@@ -1,9 +1,13 @@
-from typing import Generator, Dict, Tuple, Optional
+from typing import Generator, Dict, Tuple, Optional, TYPE_CHECKING
 
-from sympy import Poly, Expr, Symbol, Mul
+from sympy import Poly, Mul
 
 from .basis import LinearBasis, quadratic_difference, _callable_expr
-from ...utils import MonomialManager, generate_monoms, clear_polys_by_symmetry
+from ...utils import generate_monoms, clear_polys_by_symmetry
+
+if TYPE_CHECKING:
+    from ...utils import MonomialManager
+    from sympy import Expr, Symbol
 
 
 class LinearBasisMultiplier(LinearBasis):
@@ -23,7 +27,7 @@ class LinearBasisMultiplier(LinearBasis):
         self.poly = poly
         self._tangent = multiplier
     @property
-    def multiplier(self) -> Expr:
+    def multiplier(self) -> 'Expr':
         return self._tangent(self.poly.gens)
     def nvars(self) -> int:
         return len(self.poly.gens)
@@ -31,17 +35,17 @@ class LinearBasisMultiplier(LinearBasis):
         poly = (self.poly * (-self._tangent(self.poly.gens, poly=True)))
         poly.gens = symbols
         return poly
-    def as_expr(self, symbols) -> Expr:
+    def as_expr(self, symbols) -> 'Expr':
         return (self.poly.as_expr() * self.multiplier).xreplace(dict(zip(self.poly.gens, symbols)))
 
     @classmethod
-    def from_expr(cls, poly: Poly, expr: Expr, p: Optional[Poly] = None) -> 'LinearBasisMultiplier':
+    def from_expr(cls, poly: Poly, expr: 'Expr', p: Optional[Poly] = None) -> 'LinearBasisMultiplier':
         return cls(poly, _callable_expr.from_expr(expr, poly.gens, p))
 
 def lift_degree(
     poly: Poly,
-    ineq_constraints: Dict[Poly, Expr],
-    symmetry: MonomialManager,
+    ineq_constraints: Dict[Poly, 'Expr'],
+    symmetry: 'MonomialManager',
     degree_limit: int = 1000,
     lift_degree_limit: int = 4
 ) -> Generator[Dict, None, None]:
@@ -103,12 +107,12 @@ def lift_degree(
 
 
 def _get_multipliers(
-    ineq_constraints: Dict[Poly, Expr],
-    symbols: Tuple[Symbol, ...],
+    ineq_constraints: Dict[Poly, 'Expr'],
+    symbols: Tuple['Symbol', ...],
     n_plus: int,
-    symmetry: MonomialManager,
+    symmetry: 'MonomialManager',
     preordering: str ='linear'
-) -> Dict[Poly, Expr]:
+) -> Dict[Poly, 'Expr']:
     if preordering == 'linear':
         ineq_constraints = [(k, v) for k, v in ineq_constraints.items() if k.is_linear
                             and k.total_degree() == 1]

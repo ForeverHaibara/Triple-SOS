@@ -1,7 +1,10 @@
 import numpy as np
 
 from .backend import DualBackend
-from .settings import SolverConfigs
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .settings import SolverConfigs
 
 class DualBackendPICOS(DualBackend):
     """
@@ -24,7 +27,7 @@ class DualBackendPICOS(DualBackend):
     _opt_ineq_to_1d = False
     _opt_eq_to_ineq = False
 
-    def _create_problem(self, configs: SolverConfigs=None):
+    def _create_problem(self, configs: 'SolverConfigs'=None):
         from picos import Problem, RealVariable, SymmetricVariable
         problem = Problem()
         y = RealVariable('y', shape = self.dof)
@@ -52,7 +55,7 @@ class DualBackendPICOS(DualBackend):
             problem.options['rel_ipm_opt_tol'] = configs.tol_gap_rel
         return problem
 
-    def _solve(self, configs: SolverConfigs):
+    def _solve(self, configs: 'SolverConfigs'):
         from picos.modeling import Strategy
         from picos.modeling.solution import (
             SS_OPTIMAL, SS_INFEASIBLE, SS_PREMATURE, SS_FAILURE,

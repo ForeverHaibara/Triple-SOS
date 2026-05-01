@@ -2,19 +2,23 @@ from itertools import combinations
 from time import perf_counter
 from typing import (
     Union, Optional, List, Tuple, Dict, Callable,
-    Generator, Any
+    Generator, Any, TYPE_CHECKING
 )
 
-from sympy import Poly, Expr, Integer, Mul, ZZ, QQ, RR
-from sympy.combinatorics import PermutationGroup
+from sympy import Integer, Mul, ZZ, QQ, RR
 from sympy import MutableDenseMatrix as Matrix
 
 from .sos import SOSPoly
-from .solution import SolutionSDP
 from ..preprocess import ProofNode, ProofTree, SolvePolynomial
-from ...utils import MonomialManager, Root, clear_polys_by_symmetry
+from ...utils import MonomialManager, clear_polys_by_symmetry
 from ...sdp import ArithmeticTimeout
 from ...sdp.rationalize import SDPRationalizeError, DualRationalizer
+
+if TYPE_CHECKING:
+    from sympy import Poly, Expr
+    from ...utils import Root
+    from sympy.combinatorics import PermutationGroup
+    from .solution import SolutionSDP
 
 
 class _lazy_iter:
@@ -70,13 +74,13 @@ def _vector_complement(row: Matrix):
 
 
 def _get_qmodule_list(
-    poly: Poly,
-    ineq_constraints: List[Tuple[Poly, Expr]],
+    poly: "Poly",
+    ineq_constraints: List[Tuple["Poly", "Expr"]],
     degree: Optional[int] = None,
     ineq_constraints_with_trivial: bool = True,
     preordering: str = "linear-progressive",
     is_homogeneous: bool = True
-) -> Generator[List[Tuple[Poly, Expr]], None, None]:
+) -> Generator[List[Tuple["Poly", "Expr"]], None, None]:
     """
     Generate the (generators of the) qmodule for the given problem.
     """
@@ -135,10 +139,10 @@ def _get_qmodule_list(
 
 
 def _is_infeasible(
-    poly: Poly,
-    qmodule: List[Poly],
+    poly: "Poly",
+    qmodule: List["Poly"],
     ideal: Union[list, dict],
-    perm_group: PermutationGroup,
+    perm_group: "PermutationGroup",
 ) -> bool:
     """
     Check if the problem is trivially infeasible. Returns True if infeasible.
@@ -306,9 +310,9 @@ class SDPSOSSolver(ProofNode):
 
 
     def _create_lifted_sos_problem(self,
-        qmodule: List[Poly],
-        ideal: List[Poly],
-        poly_qmodule: Optional[List[Poly]] = None,
+        qmodule: List["Poly"],
+        ideal: List["Poly"],
+        poly_qmodule: Optional[List["Poly"]] = None,
         degree: int = 0,
         configs: dict = {},
     ) -> SOSPoly:
@@ -490,9 +494,9 @@ class SDPSOSSolver(ProofNode):
 
     def _as_solution(self,
         sos: SOSPoly,
-        qmodule: Dict[int, Expr],
-        ideal: Dict[int, Expr],
-        poly_qmodule: Optional[Dict[int, Expr]] = None,
+        qmodule: Dict[int, "Expr"],
+        ideal: Dict[int, "Expr"],
+        poly_qmodule: Optional[Dict[int, "Expr"]] = None,
         configs: dict = {}
     ):
         def inject_zeros(d, keys):
@@ -551,12 +555,12 @@ class SDPSOSSolver(ProofNode):
 
 
 def SDPSOS(
-    expr: Expr,
-    ineq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
-    eq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
+    expr: "Expr",
+    ineq_constraints: Union[List["Expr"], Dict["Expr", "Expr"]] = {},
+    eq_constraints: Union[List["Expr"], Dict["Expr", "Expr"]] = {},
     *,
-    symmetry: Optional[PermutationGroup] = None,
-    roots: Optional[List[Root]] = None,
+    symmetry: Optional["PermutationGroup"] = None,
+    roots: Optional[List["Root"]] = None,
     lift_degree_limit: int = 2,
     wedderburn: bool = True,
     dof_limit: int = 7000,
@@ -568,7 +572,7 @@ def SDPSOS(
     unstable_eig_threshold: float = -0.1,
     verbose: bool = False,
     time_limit: float = 3600.,
-) -> Optional[SolutionSDP]:
+) -> Optional["SolutionSDP"]:
     """
     Solve a constrained polynomial inequality problem by semidefinite programming (SDP).
 

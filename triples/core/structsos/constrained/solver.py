@@ -1,9 +1,11 @@
-from typing import Dict, Optional, Tuple, Callable
+from typing import Dict, Optional, Tuple, Callable, TYPE_CHECKING
 
-from sympy import Poly, Expr
 
 from .linear import elimination_linear
 from .acute import constrained_acute
+
+if TYPE_CHECKING:
+    from sympy import Poly, Expr
 
 
 
@@ -12,8 +14,8 @@ _SOLVERS = [
 ]
 
 def structural_sos_constrained(
-    poly: Poly, ineq_constraints: Dict[Poly, Expr] = {}, eq_constraints: Dict[Poly, Expr] = {}
-) -> Optional[Expr]:
+    poly: "Poly", ineq_constraints: Dict["Poly", "Expr"] = {}, eq_constraints: Dict["Poly", "Expr"] = {}
+) -> Optional["Expr"]:
     """
     Solve general constrained polynomial inequalities by synthetic heuristics.
     """
@@ -27,8 +29,8 @@ def structural_sos_constrained(
 
 
 def structural_sos_constraints_elimination(
-    poly: Poly, ineq_constraints: Dict[Poly, Expr], eq_constraints: Dict[Poly, Expr]
-) -> Tuple[Poly, Dict[Poly, Expr], Dict[Poly, Expr], Callable]:
+    poly: "Poly", ineq_constraints: Dict["Poly", "Expr"], eq_constraints: Dict["Poly", "Expr"]
+) -> Tuple["Poly", Dict["Poly", "Expr"], Dict["Poly", "Expr"], Callable]:
     restore = lambda x: x
     funcs = [
         elimination_linear

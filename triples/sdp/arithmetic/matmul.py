@@ -5,7 +5,7 @@ using sympy.Rational or numpy for matrix computations.
 """
 
 from time import perf_counter
-from typing import List, Tuple, Union, Optional, Callable, overload
+from typing import List, Tuple, Union, Optional, Callable, overload, TYPE_CHECKING
 
 from numpy import ndarray, int64, isnan, inf
 from numpy import iinfo as np_iinfo
@@ -13,7 +13,6 @@ from numpy import any as np_any
 from numpy import where as np_where
 from sympy.matrices import MutableDenseMatrix as Matrix
 from sympy.matrices.repmatrix import RepMatrix
-from sympy import MatrixBase
 
 from .matop import (
     ArithmeticTimeout,
@@ -21,6 +20,9 @@ from .matop import (
     is_zz_qq_mat, vec2mat, reshape, primitive,
     rep_matrix_to_numpy, rep_matrix_from_numpy
 )
+
+if TYPE_CHECKING:
+    from sympy import MatrixBase
 
 _INT32_MAX = np_iinfo('int32').max # 2147483647
 _INT64_MAX = np_iinfo('int64').max # 9223372036854775807
@@ -30,13 +32,13 @@ _VERBOSE_MATMUL_MULTIPLE = False
 _IS_STANDARD_INT64 = (_INT64_MAX == 9223372036854775807)
 
 @overload
-def matadd(A: MatrixBase, B: MatrixBase) -> MatrixBase: ...
+def matadd(A: 'MatrixBase', B: 'MatrixBase') -> 'MatrixBase': ...
 @overload
 def matadd(A: ndarray, B: ndarray) -> ndarray: ...
 @overload
-def matadd(A: MatrixBase, B: ndarray) -> MatrixBase: ...
+def matadd(A: 'MatrixBase', B: ndarray) -> 'MatrixBase': ...
 @overload
-def matadd(A: ndarray, B: MatrixBase) -> MatrixBase: ...
+def matadd(A: ndarray, B: 'MatrixBase') -> 'MatrixBase': ...
 
 def matadd(A, B):
     """
@@ -93,16 +95,16 @@ def matlshift(A: RepMatrix, B: int) -> RepMatrix:
 
 
 @overload
-def matmul(A: MatrixBase, B: MatrixBase, return_shape: Optional[Tuple[int, int]] = None,
+def matmul(A: 'MatrixBase', B: 'MatrixBase', return_shape: Optional[Tuple[int, int]] = None,
         time_limit: Optional[Union[Callable, float]] = None) -> Matrix: ...
 @overload
 def matmul(A: ndarray, B: ndarray, return_shape: Optional[Tuple[int, int]] = None,
         time_limit: Optional[Union[Callable, float]] = None) -> ndarray: ...
 @overload
-def matmul(A: MatrixBase, B: ndarray, return_shape: Optional[Tuple[int, int]] = None,
+def matmul(A: 'MatrixBase', B: ndarray, return_shape: Optional[Tuple[int, int]] = None,
         time_limit: Optional[Union[Callable, float]] = None) -> Matrix: ...
 @overload
-def matmul(A: ndarray, B: MatrixBase, return_shape: Optional[Tuple[int, int]] = None,
+def matmul(A: ndarray, B: 'MatrixBase', return_shape: Optional[Tuple[int, int]] = None,
         time_limit: Optional[Union[Callable, float]] = None) -> Matrix: ...
 
 def matmul(A, B, return_shape=None, time_limit=None):
@@ -208,16 +210,16 @@ def matmul(A, B, return_shape=None, time_limit=None):
 
 
 @overload
-def matmul_multiple(A: MatrixBase, B: MatrixBase,
+def matmul_multiple(A: 'MatrixBase', B: 'MatrixBase',
     time_limit: Optional[Union[Callable, float]] = None) -> Matrix: ...
 @overload
 def matmul_multiple(A: ndarray, B: ndarray,
     time_limit: Optional[Union[Callable, float]] = None) -> ndarray: ...
 @overload
-def matmul_multiple(A: MatrixBase, B: ndarray,
+def matmul_multiple(A: 'MatrixBase', B: ndarray,
     time_limit: Optional[Union[Callable, float]] = None) -> Matrix: ...
 @overload
-def matmul_multiple(A: ndarray, B: MatrixBase,
+def matmul_multiple(A: ndarray, B: 'MatrixBase',
     time_limit: Optional[Union[Callable, float]] = None) -> Matrix: ...
 
 def matmul_multiple(A, B, time_limit=None):
@@ -341,7 +343,7 @@ def matmul_multiple(A, B, time_limit=None):
     return C
 
 @overload
-def symmetric_bilinear(U: MatrixBase, A: MatrixBase, is_A_vec: bool = False,
+def symmetric_bilinear(U: 'MatrixBase', A: 'MatrixBase', is_A_vec: bool = False,
     return_shape: Optional[Tuple[int, int]] = None,
     time_limit: Optional[Union[Callable, float]] = None) -> Matrix: ...
 @overload
@@ -349,11 +351,11 @@ def symmetric_bilinear(U: ndarray, A: ndarray, is_A_vec: bool = False,
     return_shape: Optional[Tuple[int, int]] = None,
     time_limit: Optional[Union[Callable, float]] = None) -> ndarray: ...
 @overload
-def symmetric_bilinear(U: MatrixBase, A: ndarray, is_A_vec: bool = False,
+def symmetric_bilinear(U: 'MatrixBase', A: ndarray, is_A_vec: bool = False,
     return_shape: Optional[Tuple[int, int]] = None,
     time_limit: Optional[Union[Callable, float]] = None) -> Matrix: ...
 @overload
-def symmetric_bilinear(U: ndarray, A: MatrixBase, is_A_vec: bool = False,
+def symmetric_bilinear(U: ndarray, A: 'MatrixBase', is_A_vec: bool = False,
     return_shape: Optional[Tuple[int, int]] = None,
     time_limit: Optional[Union[Callable, float]] = None) -> Matrix: ...
 
@@ -417,16 +419,16 @@ def symmetric_bilinear(U, A, is_A_vec=False, return_shape=None, time_limit=None)
 
 
 @overload
-def symmetric_bilinear_multiple(U: MatrixBase, A: MatrixBase,
+def symmetric_bilinear_multiple(U: 'MatrixBase', A: 'MatrixBase',
     time_limit: Optional[Union[Callable, float]] = None) -> Matrix: ...
 @overload
 def symmetric_bilinear_multiple(U: ndarray, A: ndarray,
     time_limit: Optional[Union[Callable, float]] = None) -> ndarray: ...
 @overload
-def symmetric_bilinear_multiple(U: MatrixBase, A: ndarray,
+def symmetric_bilinear_multiple(U: 'MatrixBase', A: ndarray,
     time_limit: Optional[Union[Callable, float]] = None) -> Matrix: ...
 @overload
-def symmetric_bilinear_multiple(U: ndarray, A: MatrixBase,
+def symmetric_bilinear_multiple(U: ndarray, A: 'MatrixBase',
     time_limit: Optional[Union[Callable, float]] = None) -> Matrix: ...
 
 def symmetric_bilinear_multiple(U, A, time_limit=None):

@@ -1,6 +1,6 @@
-from typing import Union, Dict, Optional
+from typing import Union, Dict, Optional, TYPE_CHECKING
 
-from sympy import Poly, Expr, Function
+from sympy import Function
 from sympy.core.symbol import uniquely_named_symbol
 
 from .sparse  import sos_struct_sparse, sos_struct_heuristic
@@ -18,6 +18,9 @@ from .acyclic import sos_struct_acyclic_sparse
 from ..utils import Coeff, PolynomialNonpositiveError, PolynomialUnsolvableError
 from ..sparse import sos_struct_common, sos_struct_degree_specified_solver
 from ..solution import SolutionStructural
+
+if TYPE_CHECKING:
+    from sympy import Poly, Expr
 
 SOLVERS = {
     2: sos_struct_quadratic,
@@ -38,9 +41,9 @@ SOLVERS_ACYCLIC = {
 
 
 def _structural_sos_3vars_cyclic(
-    coeff: Union[Poly, Coeff, Dict],
+    coeff: Union["Poly", Coeff, Dict],
     real: bool = True
-) -> Optional[Expr]:
+) -> Optional["Expr"]:
     """
     Internal function to solve a 3-var homogeneous cyclic polynomial using structural SOS.
     It does not check the homogeneous / cyclic property of the polynomial to save time.
@@ -56,9 +59,9 @@ def _structural_sos_3vars_cyclic(
     )
 
 def _structural_sos_3vars_acyclic(
-    coeff: Union[Poly, Coeff, Dict],
+    coeff: Union["Poly", Coeff, Dict],
     real: bool = True
-) -> Optional[Expr]:
+) -> Optional["Expr"]:
     """
     Internal function to solve a 3-var homogeneous acyclic polynomial using structural SOS.
     It does not check the homogeneous / cyclic property of the polynomial to save time.
@@ -75,9 +78,9 @@ def _structural_sos_3vars_acyclic(
 
 def structural_sos_3vars(
     poly,
-    ineq_constraints: Dict[Poly, Expr] = {},
-    eq_constraints: Dict[Poly, Expr] = {}
-) -> Optional[Expr]:
+    ineq_constraints: Dict["Poly", "Expr"] = {},
+    eq_constraints: Dict["Poly", "Expr"] = {}
+) -> Optional["Expr"]:
     """
     Main function of structural SOS for 3-var homogeneous polynomials.
     """

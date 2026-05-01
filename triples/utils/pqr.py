@@ -1,8 +1,11 @@
-from typing import Tuple, Optional
+from typing import Tuple, Optional, TYPE_CHECKING
 
-from sympy import Poly, Symbol
-from sympy.polys.rings import PolyElement
+from sympy import Poly
 from sympy.utilities import subsets
+
+if TYPE_CHECKING:
+    from sympy import Symbol
+    from sympy.polys.rings import PolyElement
 
 
 def _symmetric_poly(self, n):
@@ -21,7 +24,7 @@ def _symmetric_poly(self, n):
             poly += self.term_new(monom, self.domain.one)
         return poly
 
-def _symmetrize(self: PolyElement):
+def _symmetrize(self: "PolyElement"):
     """
     `PolyElement.symmetrize` was added since SymPy 1.12. This
     function is copied from the SymPy source code for version
@@ -78,7 +81,7 @@ def _symmetrize(self: PolyElement):
     return symmetric, f, mapping
 
 
-def _get_pqr_symbols(symbols: Optional[Tuple[Symbol, Symbol, Symbol]] = None) -> Tuple[Symbol, Symbol, Symbol]:
+def _get_pqr_symbols(symbols: Optional[Tuple["Symbol", "Symbol", "Symbol"]] = None) -> Tuple["Symbol", "Symbol", "Symbol"]:
     """Return p,q,r from symbols. If None, create new symbols."""
     if symbols is not None:
         return symbols
@@ -86,7 +89,7 @@ def _get_pqr_symbols(symbols: Optional[Tuple[Symbol, Symbol, Symbol]] = None) ->
         from sympy import symbols as sp_symbols
         return sp_symbols('p q r')
 
-def pqr_sym(poly: Poly, symbols: Optional[Tuple[Symbol, ...]] = None) -> Poly:
+def pqr_sym(poly: Poly, symbols: Optional[Tuple["Symbol", ...]] = None) -> Poly:
     """
     Express an n-variable symmetric polynomial in its
     elementary symmetric polynomials.
@@ -132,7 +135,7 @@ def pqr_sym(poly: Poly, symbols: Optional[Tuple[Symbol, ...]] = None) -> Poly:
     return Poly.from_dict(f.to_dict(), symbols, domain = poly.domain)
 
 
-def pqr_cyc(poly: Poly, symbols: Optional[Tuple[Symbol, ...]] = None) -> Tuple[Poly, Poly]:
+def pqr_cyc(poly: Poly, symbols: Optional[Tuple["Symbol", ...]] = None) -> Tuple[Poly, Poly]:
     """
     Express a 3-variable cyclic polynomial P in p,q,r form,
     such that P(p,q,r) = f(p,q,r) + (a-b)*(b-c)*(c-a) * g(p,q,r)
@@ -183,7 +186,7 @@ def pqr_cyc(poly: Poly, symbols: Optional[Tuple[Symbol, ...]] = None) -> Tuple[P
     return f0, f1
 
 
-def pqr_ker(symbols: Optional[Tuple[Symbol, Symbol, Symbol]] = None) -> Poly:
+def pqr_ker(symbols: Optional[Tuple["Symbol", "Symbol", "Symbol"]] = None) -> Poly:
     """
     Return the pqr representation of `((a-b)*(b-c)*(c-a))^2`.
 

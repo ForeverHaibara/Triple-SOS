@@ -2,10 +2,9 @@
 This module provides customized / optimized functions to solve
 polynomial systems and provides supports for low SymPy versions.
 """
-from typing import List, Tuple, Union
+from typing import List, Tuple, Union, TYPE_CHECKING
 
-from sympy import (Poly, Expr, Integer, Rational, Symbol,
-    RealField, RR, QQ, sympify, solve
+from sympy import (Poly, Expr, Integer, Rational, RealField, RR, QQ, sympify, solve
 )
 from sympy.polys.polyerrors import BasePolynomialError
 from sympy.polys.polytools import groebner, PurePoly
@@ -14,6 +13,10 @@ from sympy.utilities import postfixes
 from mpmath.libmp.libhyper import NoConvergence
 
 from ..polytools import crootof_realroots_alg
+
+if TYPE_CHECKING:
+    from sympy import (Symbol
+    )
 
 # Comparison of tuples of sympy Expressions, compatible with sympy <= 1.9
 default_sort_key = lambda x: tuple(_.sort_key() for _ in x) if not isinstance(x, Expr) else x.sort_key()
@@ -97,7 +100,7 @@ class PolyEvalf:
             return 0
         return try_dps(self.dps, max_tries)
 
-def univar_realroots(poly: Union[Poly, Expr], symbol: Symbol) -> List[Union[Rational, CRootOf]]: #, max_degree: int = 30):
+def univar_realroots(poly: Union[Poly, Expr], symbol: 'Symbol') -> List[Union[Rational, CRootOf]]: #, max_degree: int = 30):
     """
     Get real roots of a univariate polynomial without multiplicity.
 
@@ -198,7 +201,7 @@ def nroots(poly, method = 'numpy', real = False, nonnegative = False):
 
     return roots
 
-def heuristic_groebner_order(polys: List[Poly], symbols: List[Symbol]) -> List[Symbol]:
+def heuristic_groebner_order(polys: List[Poly], symbols: List['Symbol']) -> List['Symbol']:
     """
     Get a heuristic order of symbols for Groebner basis computation.
     Linear variables are sorted before nonlinear variables.
@@ -232,7 +235,7 @@ def heuristic_groebner_order(polys: List[Poly], symbols: List[Symbol]) -> List[S
 
     return tuple(linear_vars_sorted + nonlinear_vars_sorted)
 
-def solve_triangulated_crt(polys: List[Poly], symbols: List[Symbol]) -> List[Tuple[CRootOf]]:
+def solve_triangulated_crt(polys: List[Poly], symbols: List['Symbol']) -> List[Tuple[CRootOf]]:
     """
     Solve a polynomial system by triangulating the Groebner basis.
 
@@ -292,7 +295,7 @@ def solve_triangulated_crt(polys: List[Poly], symbols: List[Symbol]) -> List[Tup
     return solutions
 
 
-def _solve_poly_system_2vars_resultant(polys: List[Poly], symbols: List[Symbol]) -> List[Tuple[CRootOf]]:
+def _solve_poly_system_2vars_resultant(polys: List[Poly], symbols: List['Symbol']) -> List[Tuple[CRootOf]]:
     """
     Solve a polynomial system with two variables and at least two equations
     via the resultant method.
@@ -342,7 +345,7 @@ def _solve_poly_system_2vars_resultant(polys: List[Poly], symbols: List[Symbol])
     return roots
 
 
-def solve_poly_system_crt(polys: List[Poly], symbols: List[Symbol]) -> List[Tuple[CRootOf]]:
+def solve_poly_system_crt(polys: List[Poly], symbols: List['Symbol']) -> List[Tuple[CRootOf]]:
     """
     Main function to solve the REAL ROOTS of a polynomial system. It tries to use the optimized
     `solve_triangulated_crt` first, but falls back to default sympy `solve` if failed.

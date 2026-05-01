@@ -8,11 +8,17 @@ from .sextic_symmetric import (
     sos_struct_sextic_symmetric_ultimate
 )
 from .utils import (
-    Coeff, CommonExpr,
+    CommonExpr,
     sum_y_exprs, nroots, rationalize_bound, rationalize_func,
     quadratic_weighting, inverse_substitution, congruence,
     zip_longest, align_cyclic_group
 )
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .utils import (
+        Coeff
+    )
 
 def sos_struct_sextic(coeff, real = True):
     if coeff((5,1,0)) == coeff((1,5,0)) and coeff((4,2,0)) == coeff((2,4,0)) and coeff((3,2,1)) == coeff((3,1,2)):
@@ -27,7 +33,7 @@ def sos_struct_sextic(coeff, real = True):
     return None
 
 
-def _sos_struct_sextic_hexagram(coeff: Coeff):
+def _sos_struct_sextic_hexagram(coeff: 'Coeff'):
     """
     Solve s(a3b3+xa4bc+ya3b2c+za2b3c+wa2b2c2) >= 0. The structure is known as hexagrams.
     Typically we multiply `s(a)` to solve it.
@@ -387,7 +393,7 @@ def _sos_struct_sextic_hexagram(coeff: Coeff):
     return None
 
 
-def _sos_struct_sextic_hexagon(coeff: Coeff, real = True):
+def _sos_struct_sextic_hexagon(coeff: 'Coeff', real = True):
     """
     Solve hexagon s(a4b2+xa2b4+ya3b3+za4bc+wa3b2c+ua2b3c+...a2b2c2)
 
@@ -448,7 +454,7 @@ def _sos_struct_sextic_hexagon(coeff: Coeff, real = True):
             return solution
 
 
-def _sos_struct_sextic_rotated_tree(coeff: Coeff):
+def _sos_struct_sextic_rotated_tree(coeff: 'Coeff'):
     """
     Solve s(a2b4+ua3b2c+va3bc2-(1+u+v)a2b2c2) >= 0.
     Note that this structure is a rotated version of the symmetric tree.
@@ -602,7 +608,7 @@ def _sos_struct_sextic_hexagon_full(coeff):
 
 
 
-def _sos_struct_sextic_hexagon_sdp(coeff: Coeff):
+def _sos_struct_sextic_hexagon_sdp(coeff: 'Coeff'):
     """
     This function is a special case of _sos_struct_sextic_full_sdp
     when coefficients of s(a^6), s(a^5b), s(a^5c) are zero.
@@ -657,7 +663,7 @@ def _sos_struct_sextic_hexagon_sdp(coeff: Coeff):
         return quad_form_sol + solution + poly111 * CyclicProduct(a**2)
 
 
-def _sos_struct_sextic_hexagon_sdp2(coeff: Coeff):
+def _sos_struct_sextic_hexagon_sdp2(coeff: 'Coeff'):
     """
     This function is a generalization of `_sos_struct_sextic_hexagon_sdp`
     that performs sum-of-squares on the octic `f_2(a,b,c) = f(a,b,c) * s(a^2-ab)`.
@@ -722,7 +728,7 @@ def _sos_struct_sextic_hexagon_sdp2(coeff: Coeff):
     #     print('GCD =', discriminant_gcd)
 
 
-def _sos_struct_sextic_hexagon_to_hexagram(coeff: Coeff):
+def _sos_struct_sextic_hexagon_to_hexagram(coeff: 'Coeff'):
     """
     Solve hexagons by subtracting some `s(c1(a^2b-abc) - c2(ab^2-abc))^2`
     so that the remaing part is a hexagram.
@@ -813,7 +819,7 @@ def _sos_struct_sextic_hexagon_to_hexagram(coeff: Coeff):
             return main_solution + remain_solution
 
 
-def _sos_struct_sextic_full_sdp(coeff: Coeff):
+def _sos_struct_sextic_full_sdp(coeff: 'Coeff'):
     """
     Heuristically solve full sextics with the method of unknown coefficients.
     Idea: Let `f(a,b,c) = a^3-b^3+ua^2b+vb^2c-(u+v)ac^2+xab^2+ya^2c-(x+y)bc^2`.

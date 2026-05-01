@@ -1,12 +1,15 @@
-from typing import Dict, List, Union, Optional
+from typing import Dict, List, Union, Optional, TYPE_CHECKING
 
-from sympy import Expr, Dummy
+from sympy import Dummy
 
 from .symmetric import UE3Real, UE3Positive, UE4Real
 from ..node import TransformNode
 from ..preprocess import SolvePolynomial
-from ..solution import Solution
 from ...utils import verify_symmetry
+
+if TYPE_CHECKING:
+    from sympy import Expr
+    from ..solution import Solution
 
 
 class SymmetricSubstitution(TransformNode):
@@ -52,12 +55,12 @@ class SymmetricSubstitution(TransformNode):
 
 # @sanitize(homogenize=True)
 def SymmetricSOS(
-    expr: Expr,
-    ineq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
-    eq_constraints: Union[List[Expr], Dict[Expr, Expr]] = {},
+    expr: 'Expr',
+    ineq_constraints: Union[List['Expr'], Dict['Expr', 'Expr']] = {},
+    eq_constraints: Union[List['Expr'], Dict['Expr', 'Expr']] = {},
     verbose: bool = False,
     time_limit: float = 3600.,
-) -> Optional[Solution]:
+) -> Optional['Solution']:
     """
     Solve symmetric polynomial inequalities using special
     changes of variables. The algorithm is powerful but produces

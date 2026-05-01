@@ -2,16 +2,19 @@
 This module contains basic linear transformations of SDP problems.
 """
 
-from typing import Tuple, Dict, Union, Optional, Callable, Any
+from typing import Tuple, Dict, Union, Optional, Callable, Any, TYPE_CHECKING
 
 from sympy.matrices import MutableDenseMatrix as Matrix
 
-from .transform import SDPTransformation, SDPProblemBase
+from .transform import SDPTransformation
 from ..arithmetic import (
     ArithmeticTimeout, is_empty_matrix, vec2mat, reshape,
     solve_undetermined_linear, solve_nullspace, solve_columnspace,
     matmul, matadd, matmul_multiple, symmetric_bilinear, symmetric_bilinear_multiple
 )
+
+if TYPE_CHECKING:
+    from ..abstract import SDPProblemBase
 
 
 class SDPLinearTransform(SDPTransformation):
@@ -72,8 +75,8 @@ class SDPLinearTransform(SDPTransformation):
 
 
     @classmethod
-    def apply_from_affine(cls, parent_node: SDPProblemBase, A: Matrix, b: Matrix,
-            to_child: bool=True, time_limit: Optional[Union[Callable, float]]=None) -> SDPProblemBase:
+    def apply_from_affine(cls, parent_node: "SDPProblemBase", A: Matrix, b: Matrix,
+            to_child: bool=True, time_limit: Optional[Union[Callable, float]]=None) -> "SDPProblemBase":
         time_limit = ArithmeticTimeout.make_checker(time_limit)
         if to_child:
             # this should use inverse, or converted to from_equations
@@ -94,7 +97,7 @@ class SDPLinearTransform(SDPTransformation):
 
     @classmethod
     def apply_from_equations(cls, parent_node, eqs: Matrix, rhs: Matrix,
-            to_child: bool=True, time_limit: Optional[Union[Callable, float]]=None) -> SDPProblemBase:
+            to_child: bool=True, time_limit: Optional[Union[Callable, float]]=None) -> "SDPProblemBase":
         if to_child:
             # eqs * y - rhs == new_eqs * y' + new_nrhs
             eqs, new_nrhs = parent_node.propagate_affine_to_child(eqs, -rhs, recursive=True)
@@ -173,8 +176,8 @@ class SDPMatrixTransform(SDPLinearTransform):
         return {key: matmul(columnspace[key].T, nullspace[key]) for key in nullspace.keys()}
 
     @classmethod
-    def apply(cls, parent_node: SDPProblemBase, columnspace: Dict[Any, Matrix]=None, nullspace: Dict[Any, Matrix]=None,
-            to_child: bool=True, time_limit: Optional[Union[Callable, float]]=None) -> SDPProblemBase:
+    def apply(cls, parent_node: "SDPProblemBase", columnspace: Dict[Any, Matrix]=None, nullspace: Dict[Any, Matrix]=None,
+            to_child: bool=True, time_limit: Optional[Union[Callable, float]]=None) -> "SDPProblemBase":
         if parent_node.is_dual:
             return DualMatrixTransform.apply(parent_node, columnspace=columnspace, nullspace=nullspace,
                 to_child=to_child, time_limit=time_limit)
@@ -210,8 +213,8 @@ class DualMatrixTransform(SDPMatrixTransform):
         (A_i0Vi) + y_1 * (A_i1Vi) + ... + y_n * (A_inVi) = 0.
     """
     @classmethod
-    def apply(cls, parent_node: SDPProblemBase, columnspace: Dict[Any, Matrix]=None, nullspace: Dict[Any, Matrix]=None,
-            to_child: bool=True, time_limit: Optional[Union[Callable, float]]=None) -> SDPProblemBase:
+    def apply(cls, parent_node: "SDPProblemBase", columnspace: Dict[Any, Matrix]=None, nullspace: Dict[Any, Matrix]=None,
+            to_child: bool=True, time_limit: Optional[Union[Callable, float]]=None) -> "SDPProblemBase":
         if not parent_node.is_dual:
             raise ValueError("The parent node should be dual.")
         if columnspace is None and nullspace is None:
@@ -340,7 +343,7 @@ class SDPCongruence(SDPLinearTransform):
         return A, b
 
     @classmethod
-    def apply(cls, parent_node: SDPProblemBase, basis: Dict[Any, Matrix], time_limit: Optional[Union[Callable, float]]=None):
+    def apply(cls, parent_node: "SDPProblemBase", basis: Dict[Any, Matrix], time_limit: Optional[Union[Callable, float]]=None):
         if parent_node.is_primal:
             raise NotImplementedError
         return DualSDPCongruence.apply(parent_node, basis=basis, time_limit=time_limit)
@@ -348,7 +351,7 @@ class SDPCongruence(SDPLinearTransform):
 
 class DualSDPCongruence(SDPCongruence):
     @classmethod
-    def apply(cls, parent_node: SDPProblemBase, basis: Dict[Any, Matrix],
+    def apply(cls, parent_node: "SDPProblemBase", basis: Dict[Any, Matrix],
               time_limit: Optional[Union[Callable, float]]=None):
         new_x0_and_space = {}
         time_limit = ArithmeticTimeout.make_checker(time_limit)

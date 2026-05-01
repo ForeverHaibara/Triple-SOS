@@ -5,10 +5,10 @@ CyclicExpr, CyclicSum and CyclicProduct.
 from importlib import import_module
 from numbers import Number
 from typing import Tuple, Callable
-from typing import Dict
+from typing import Dict, TYPE_CHECKING
 
 import sympy as sp # for hijacking default behaviors of sympy
-from sympy import sympify, S, Mul, Add, Pow, Symbol, Expr, Basic
+from sympy import sympify, S, Mul, Add, Pow, Symbol, Expr
 from sympy.core.cache import cacheit
 from sympy.core.containers import Dict as SympyDict
 from sympy.core.numbers import zoo, nan
@@ -20,6 +20,9 @@ from sympy.printing.str import StrPrinter
 from sympy.printing.precedence import precedence_traditional, PRECEDENCE
 from sympy.simplify import signsimp
 from sympy import __version__ as SYMPY_VERSION
+
+if TYPE_CHECKING:
+    from sympy import Basic
 
 HIJACK_SYMPY = True
 
@@ -82,7 +85,7 @@ def _replace_symbols(expr: Expr, replace_dict: Dict[Symbol, Symbol]) -> Expr:
     This function operates directly on the tree structure of the expression,
     and does not rely on sympy `subs`, `xreplace`, or `replace` methods.
     """
-    def _replace(e: Basic) -> Basic:
+    def _replace(e: 'Basic') -> 'Basic':
         if isinstance(e, Symbol):
             return replace_dict.get(e, e)
         if e.is_Atom:

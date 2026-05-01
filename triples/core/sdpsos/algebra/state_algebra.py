@@ -1,10 +1,13 @@
-from typing import List, Tuple, Dict, Union, Optional, Any
+from typing import List, Tuple, Dict, Union, Optional, Any, TYPE_CHECKING
 
-from sympy import Expr, Poly, Symbol
-from sympy.matrices import MutableDenseMatrix as Matrix
+from sympy import Expr
 from sympy.combinatorics import PermutationGroup, Permutation
 
 from ....sdp.arithmetic import rep_matrix_from_dict
+
+if TYPE_CHECKING:
+    from sympy import Poly, Symbol
+    from sympy.matrices import MutableDenseMatrix as Matrix
 
 MONOM = Any
 TERM = Tuple[MONOM, Expr]
@@ -83,7 +86,7 @@ class StateAlgebra:
         pm = self.permute_monom
         return [pm(monom, p) for p in self.symmetry.elements]
 
-    def is_symmetric(self, poly: Poly, perm: Optional[Union[Permutation, PermutationGroup]]=None) -> bool:
+    def is_symmetric(self, poly: "Poly", perm: Optional[Union[Permutation, PermutationGroup]]=None) -> bool:
         """
         Decide whether a polynomial is symmetric with respect to a permutation
         or a permutation group in the algebra.
@@ -106,14 +109,14 @@ class StateAlgebra:
         """Apply the state operator on a term."""
         raise NotImplementedError
 
-    def terms(self, poly: Poly) -> List[TERM]:
+    def terms(self, poly: "Poly") -> List[TERM]:
         """
         Get the list of terms of a polynomial in the algebra.
         This is automatically implemented if the polynomial object has the method `.rep.terms()`.
         """
         return poly.rep.terms() if (not poly.is_zero) else []
 
-    def arraylize(self, poly: Poly, state: bool = False) -> Matrix:
+    def arraylize(self, poly: "Poly", state: bool = False) -> "Matrix":
         """
         Convert a polynomial to a sympy vector (Matrix). The polynomial
         should lie in the algebra. Monomials outside the (degree-truncated)
@@ -127,11 +130,11 @@ class StateAlgebra:
             vec[ind] = {0: coeff}
         return rep_matrix_from_dict(vec, (len(self), 1), poly.domain)
 
-    def as_expr(self, poly: Poly, **kwargs) -> Expr:
+    def as_expr(self, poly: "Poly", **kwargs) -> Expr:
         """Convert a polynomial in this algebra to sympy Expr."""
         raise NotImplementedError
 
-    def as_poly(self, expr: Expr, gens: List[Symbol], **kwargs) -> Poly:
+    def as_poly(self, expr: Expr, gens: List["Symbol"], **kwargs) -> "Poly":
         """Convert a sympy Expr to a polynomial in this algebra."""
         from .pseudo_poly import convert_expr_to_pseudo_poly
         return convert_expr_to_pseudo_poly(self, expr, gens, **kwargs)
@@ -147,7 +150,7 @@ class StateAlgebra:
         """
         raise NotImplementedError
 
-    def infer_bases(self, poly: Poly, qmodule: Dict[Any, Poly], ideal: Dict[Any, Poly],
+    def infer_bases(self, poly: "Poly", qmodule: Dict[Any, "Poly"], ideal: Dict[Any, "Poly"],
             **kwargs) -> Tuple[Dict[Any, Any], Dict[Any, Any]]:
         """
         Get default bases for an SOS problem given the polynomial, qmodule and ideal.

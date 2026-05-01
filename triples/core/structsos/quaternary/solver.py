@@ -1,6 +1,6 @@
-from typing import Union, Dict, Optional
+from typing import Union, Dict, Optional, TYPE_CHECKING
 
-from sympy import Poly, Expr, Function, Mul
+from sympy import Function, Mul
 from sympy.core.symbol import uniquely_named_symbol
 from sympy.combinatorics import PermutationGroup, Permutation
 
@@ -13,6 +13,9 @@ from .dense_symmetric import quaternary_dense_symmetric, quaternary_dense_dihedr
 from ..utils import Coeff, PolynomialNonpositiveError, PolynomialUnsolvableError
 from ..sparse import sos_struct_common, sos_struct_degree_specified_solver
 from ..solution import SolutionStructural
+
+if TYPE_CHECKING:
+    from sympy import Poly, Expr
 
 
 SOLVERS_CYCLIC = {
@@ -30,9 +33,9 @@ SOLVERS_SYMMETRIC_NONHOM = {
 }
 
 def _structural_sos_4vars_symmetric(
-    coeff: Union[Poly, Coeff, Dict],
+    coeff: Union["Poly", Coeff, Dict],
     real: int = 1
-) -> Optional[Expr]:
+) -> Optional["Expr"]:
     """
     Internal function to solve a 4-var homogeneous symmetric polynomial using structural SOS.
     It does not check the homogeneous / cyclic property of the polynomial to save time.
@@ -47,9 +50,9 @@ def _structural_sos_4vars_symmetric(
     )
 
 def _structural_sos_4vars_cyclic(
-    coeff: Union[Poly, Coeff, Dict],
+    coeff: Union["Poly", Coeff, Dict],
     real: int = 1
-) -> Optional[Expr]:
+) -> Optional["Expr"]:
     """
     Internal function to solve a 4-var homogeneous cyclic polynomial using structural SOS.
     It does not check the homogeneous / cyclic property of the polynomial to save time.
@@ -63,9 +66,9 @@ def _structural_sos_4vars_cyclic(
     )
 
 def _structural_sos_4vars_partial_symmetric(
-    coeff: Union[Poly, Coeff, Dict],
+    coeff: Union["Poly", Coeff, Dict],
     real: int = 1
-) -> Optional[Expr]:
+) -> Optional["Expr"]:
     """
     Internal function to solve a 4-var homogeneous partial symmetric polynomial using structural SOS.
     The function assumes the polynomial has group symmetry `PermutationGroup(Permutation([1,2,0,3]))`
@@ -80,9 +83,9 @@ def _structural_sos_4vars_partial_symmetric(
     )
 
 def _structural_sos_4vars_dihedral(
-    coeff: Union[Poly, Coeff, Dict],
+    coeff: Union["Poly", Coeff, Dict],
     real: int = 1
-) -> Optional[Expr]:
+) -> Optional["Expr"]:
     """
     Internal function to solve a 4-var homogeneous dihedral polynomial using structural SOS.
     It does not check the homogeneous / dihedral property of the polynomial to save time.
@@ -128,10 +131,10 @@ def _structural_sos_4vars_dihedral(
 
 
 def structural_sos_4vars(
-    poly: Poly,
-    ineq_constraints: Dict[Poly, Expr] = {},
-    eq_constraints: Dict[Poly, Expr] = {}
-) -> Optional[Expr]:
+    poly: "Poly",
+    ineq_constraints: Dict["Poly", "Expr"] = {},
+    eq_constraints: Dict["Poly", "Expr"] = {}
+) -> Optional["Expr"]:
     """
     Main function of structural SOS for 4-var homogeneous polynomials.
     """

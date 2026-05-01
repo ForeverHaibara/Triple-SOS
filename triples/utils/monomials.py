@@ -4,18 +4,21 @@ and also utilities to compute monomial representations under the group symmetry.
 """
 from collections import defaultdict
 from typing import (Dict, List, Tuple, Iterable, Callable,
-    Union, Optional, Any, overload
+    Union, Optional, Any, overload, TYPE_CHECKING
 )
 import numpy as np
-from sympy import Poly, Expr, Symbol, Add, ZZ, QQ, factorial, prod
+from sympy import Poly, Add, ZZ, QQ, factorial, prod
 from sympy.matrices import Matrix, MatrixBase
 from sympy.polys.polyclasses import DMP
 from sympy.polys.rings import PolyElement
-from sympy.polys.domains import Domain
 from sympy.combinatorics import (Permutation, PermutationGroup,
     CyclicGroup, SymmetricGroup, AlternatingGroup, DihedralGroup
 )
 from ..sdp.arithmetic import rep_matrix_from_list
+
+if TYPE_CHECKING:
+    from sympy import Expr, Symbol
+    from sympy.polys.domains import Domain
 
 try:
     from sympy.polys.matrices.sdm import SDM
@@ -91,7 +94,7 @@ def generate_partitions(d_list: Union[int, List[int]], degree: int,
     return powers[::-1] if descending else powers
 
 
-def _poly_rep(poly: Union[Poly, DMP, PolyElement]) -> Tuple[List[Tuple], Domain, int, int]:
+def _poly_rep(poly: Union[Poly, DMP, PolyElement]) -> Tuple[List[Tuple], 'Domain', int, int]:
     """Return [(monom, coeff)], domain, ngens, degree"""
     if isinstance(poly, Poly):
         poly = poly.rep
@@ -370,7 +373,7 @@ class MonomialManager():
             vec = [to_sympy(v) for v in vec]
             return Matrix(vec)
 
-    def invarraylize(self, array: Union[List, np.ndarray, Matrix], gens: List[Symbol], degree: int) -> Poly:
+    def invarraylize(self, array: Union[List, np.ndarray, Matrix], gens: List['Symbol'], degree: int) -> Poly:
         """
         Reverse the arraylize_np function to get the polynomial from its vector representation.
         """
@@ -406,7 +409,7 @@ class MonomialManager():
                 terms_dict[monom2] = coeff
         return Poly(terms_dict, gens)
 
-    def cyclic_sum(self, expr: Expr, gens: List[Symbol]) -> Expr:
+    def cyclic_sum(self, expr: 'Expr', gens: List['Symbol']) -> 'Expr':
         """
         Sum up a given expression according to the permutation group.
 
@@ -596,7 +599,7 @@ def arraylize_sp(
     return option.arraylize_sp(poly, degree = degree, expand_cyc = expand_cyc)
 
 
-def invarraylize(array: Union[List, np.ndarray, Matrix], gens: List[Symbol], degree: int, **options) -> Poly:
+def invarraylize(array: Union[List, np.ndarray, Matrix], gens: List['Symbol'], degree: int, **options) -> Poly:
     """
     Convert a vector representation of polynomial back to the sympy polynomial.
     Monomials are sorted in graded lexicographical (grlex) order.
@@ -1109,22 +1112,22 @@ def arraylize_up_to_symmetry(
 
 @overload
 def clear_polys_by_symmetry(
-    polys: List[Union[Poly, Expr]],
-    symbols: Tuple[Symbol, ...],
+    polys: List[Union[Poly, 'Expr']],
+    symbols: Tuple['Symbol', ...],
     symmetry: Union[PermutationGroup, MonomialManager],
-) -> List[Union[Poly, Expr]]: ...
+) -> List[Union[Poly, 'Expr']]: ...
 @overload
 def clear_polys_by_symmetry(
-    polys: List[Tuple[Union[Poly, Expr], Any]],
-    symbols: Tuple[Symbol, ...],
+    polys: List[Tuple[Union[Poly, 'Expr'], Any]],
+    symbols: Tuple['Symbol', ...],
     symmetry: Union[PermutationGroup, MonomialManager],
-) -> List[Tuple[Union[Poly, Expr], Any]]: ...
+) -> List[Tuple[Union[Poly, 'Expr'], Any]]: ...
 @overload
 def clear_polys_by_symmetry(
-    polys: Dict[Union[Poly, Expr], Any],
-    symbols: Tuple[Symbol, ...],
+    polys: Dict[Union[Poly, 'Expr'], Any],
+    symbols: Tuple['Symbol', ...],
     symmetry: Union[PermutationGroup, MonomialManager],
-) -> Dict[Union[Poly, Expr], Any]: ...
+) -> Dict[Union[Poly, 'Expr'], Any]: ...
 
 
 def clear_polys_by_symmetry(polys, symbols, symmetry):

@@ -1,12 +1,15 @@
-from typing import Union, Optional, Tuple, List, Dict, Callable, Any
+from typing import Union, Optional, Tuple, List, Dict, Callable, Any, TYPE_CHECKING
 
 from numpy import ndarray
 import numpy as np
-from sympy import Matrix, MatrixBase, Expr, Basic
+from sympy import Matrix, MatrixBase, Expr
 from sympy.core.relational import GreaterThan, StrictGreaterThan, LessThan, StrictLessThan, Equality, Relational
 from sympy.solvers.solveset import linear_eq_to_matrix
 
 from .arithmetic import vec2mat, mat2vec, reshape, rep_matrix_to_numpy
+
+if TYPE_CHECKING:
+    from sympy import Basic
 
 def S_from_y(
     y: MatrixBase,
@@ -65,7 +68,7 @@ _RELATIONAL_TO_OPERATOR = {
 
 def decompose_matrix(
     M: Matrix,
-    variables: Optional[List[Basic]] = None
+    variables: Optional[List['Basic']] = None
 ) -> Tuple[Matrix, Matrix, Matrix]:
     """
     Decomposes a symbolic matrix into the form vec(M) = x + A @ v
@@ -150,7 +153,7 @@ def decompose_matrix(
 
 def exprs_to_arrays(
     exprs: List[Union[Callable, Expr, Relational, Tuple[Matrix, float], Tuple[Matrix, float, str]]],
-    symbols: List[Basic],
+    symbols: List['Basic'],
     locals: Optional[Dict[str, Any]] = None,
     dtype: Optional[Any] = None
 ) -> List[Tuple[Matrix, Matrix, str]]:

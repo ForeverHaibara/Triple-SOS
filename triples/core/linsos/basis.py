@@ -1,18 +1,21 @@
 from functools import lru_cache, wraps
-from typing import Any, Union, Tuple, List, Callable, Optional
+from typing import Any, Union, Tuple, List, Callable, Optional, TYPE_CHECKING
 from time import perf_counter
 
 import numpy as np
 from scipy.sparse import coo_matrix
-from sympy import Poly, Expr, Symbol, Mul, Pow, Integer, Basic
+from sympy import Poly, Mul, Pow, Integer, Basic
 from sympy import symbols as sp_symbols
-from sympy.matrices import MutableDenseMatrix as Matrix
-from sympy.combinatorics import PermutationGroup
 from sympy.polys.polyclasses import DMP
 from sympy.polys.rings import PolyRing, PolyElement
 
 from ...utils import arraylize_np, arraylize_sp, MonomialManager
 from ...utils.monomials import generate_partitions
+
+if TYPE_CHECKING:
+    from sympy import Expr, Symbol
+    from sympy.combinatorics import PermutationGroup
+    from sympy.matrices import MutableDenseMatrix as Matrix
 
 # only for dev purpose
 _VERBOSE_GENERATE_QUAD_DIFF = False
@@ -40,13 +43,13 @@ class _callable_expr():
 
     """
     __slots__ = ['_func']
-    def __init__(self, func: Callable[[Tuple[Symbol, ...], Any], Expr]):
+    def __init__(self, func: Callable[[Tuple['Symbol', ...], Any], 'Expr']):
         self._func = func
-    def __call__(self, symbols: Tuple[Symbol, ...], *args, **kwargs) -> Expr:
+    def __call__(self, symbols: Tuple['Symbol', ...], *args, **kwargs) -> 'Expr':
         return self._func(symbols, *args, **kwargs)
 
     @classmethod
-    def from_expr(cls, expr: Expr, symbols: Tuple[Symbol, ...], p: Optional[Poly] = None) -> '_callable_expr':
+    def from_expr(cls, expr: 'Expr', symbols: Tuple['Symbol', ...], p: Optional[Poly] = None) -> '_callable_expr':
         if p is None:
             def func(s, poly=False):
                 e = expr.xreplace(dict(zip(symbols, s)))
@@ -69,7 +72,7 @@ class _callable_expr():
 
         return cls(func)
 
-    def default(self, nvars: int) -> Expr:
+    def default(self, nvars: int) -> 'Expr':
         """
         Get the defaulted value of the expression given nvars.
         """
@@ -80,9 +83,9 @@ class _callable_expr():
 class LinearBasis():
     def nvars(self) -> int:
         raise NotImplementedError
-    def _get_default_symbols(self) -> Tuple[Symbol, ...]:
+    def _get_default_symbols(self) -> Tuple['Symbol', ...]:
         return tuple(sp_symbols(f'x:{self.nvars()}'))
-    def as_expr(self, symbols) -> Expr:
+    def as_expr(self, symbols) -> 'Expr':
         raise NotImplementedError
     def as_poly(self, symbols) -> Poly:
         return self.as_expr(symbols).doit().as_poly(symbols)
@@ -90,23 +93,23 @@ class LinearBasis():
         return self.as_poly(self._get_default_symbols()).total_degree()
     def as_array_np(self, **kwargs) -> np.ndarray:
         return arraylize_np(self.as_poly(self._get_default_symbols()), **kwargs)
-    def as_array_sp(self, **kwargs) -> Matrix:
+    def as_array_sp(self, **kwargs) -> 'Matrix':
         return arraylize_sp(self.as_poly(self._get_default_symbols()), **kwargs)
 
 class LinearBasisExpr(LinearBasis):
     __slots__ = ['_expr', '_symbols']
-    def __init__(self, expr: Expr, symbols: Tuple[int, ...]):
+    def __init__(self, expr: 'Expr', symbols: Tuple[int, ...]):
         self._expr = expr.as_expr()
         self._symbols = symbols
     def nvars(self) -> int:
         return len(self._symbols)
-    def as_expr(self, symbols) -> Expr:
+    def as_expr(self, symbols) -> 'Expr':
         return self._expr.xreplace(dict(zip(self._symbols, symbols)))
 
 class LinearBasisTangent(LinearBasis):
     _degree_step = 1
     __slots__ = ['_powers', '_tangent']
-    def __init__(self, powers: Tuple[int, ...], tangent: Expr, symbols: Tuple[Symbol, ...]):
+    def __init__(self, powers: Tuple[int, ...], tangent: 'Expr', symbols: Tuple['Symbol', ...]):
         self._powers = powers
         self._tangent = _callable_expr.from_expr(tangent, symbols)
     @property
@@ -117,7 +120,7 @@ class LinearBasisTangent(LinearBasis):
         return self._tangent
     def nvars(self) -> int:
         return len(self._powers)
-    def as_expr(self, symbols) -> Expr:
+    def as_expr(self, symbols) -> 'Expr':
         return Mul(*(x**i for x, i in zip(symbols, self._powers))) * self._tangent(symbols).as_expr()
     def as_poly(self, symbols) -> Poly:
         return Poly.from_dict({self._powers: 1}, symbols) * self._tangent(symbols, poly=True)
@@ -125,7 +128,7 @@ class LinearBasisTangent(LinearBasis):
         return self.__class__.from_callable_expr(self._powers, lambda *args, **kwargs: -self._tangent(*args, **kwargs).as_expr())
     def __len__(self) -> int:
         return 1
-    def to_even(self, symbols: List[Expr]) -> 'LinearBasisTangentEven':
+    def to_even(self, symbols: List['Expr']) -> 'LinearBasisTangentEven':
         """
         Convert the linear basis to an even basis.
         """
@@ -150,7 +153,7 @@ class LinearBasisTangent(LinearBasis):
 
     @classmethod
     def generate(cls,
-        tangent: Expr,
+        tangent: 'Expr',
         symbols: Tuple[int, ...],
         degree: int,
         tangent_p: Optional[Poly] = None,
@@ -178,10 +181,10 @@ class LinearBasisTangent(LinearBasis):
 
     @classmethod
     def generate_quad_diff(cls,
-        tangent: Expr,
-        symbols: Tuple[Symbol, ...],
+        tangent: 'Expr',
+        symbols: Tuple['Symbol', ...],
         degree: int,
-        symmetry: PermutationGroup,
+        symmetry: 'PermutationGroup',
         tangent_p: Optional[Poly] = None,
         quad_diff_order: Union[bool, int] = 8,
     ) -> Tuple[List['LinearBasisTangent'], np.ndarray]:
@@ -269,7 +272,7 @@ class LinearBasisTangentEven(LinearBasisTangent):
     _degree_step = 2
 
 
-def cross_exprs(exprs: List[Expr], symbols: Tuple[Symbol, ...], degree: int) -> List[Expr]:
+def cross_exprs(exprs: List['Expr'], symbols: Tuple['Symbol', ...], degree: int) -> List['Expr']:
     """
     Given expressions f1, f2, ..., fn,
     generate all expressions of the form f1^a1 * f2^a2 * ... * fn^an
@@ -305,7 +308,7 @@ def cross_exprs(exprs: List[Expr], symbols: Tuple[Symbol, ...], degree: int) -> 
 
     return new_exprs
 
-def quadratic_difference(symbols: Tuple[Symbol, ...]) -> List[Expr]:
+def quadratic_difference(symbols: Tuple['Symbol', ...]) -> List['Expr']:
     """
     Generate all expressions of the form (ai - aj)^2
 
@@ -428,8 +431,8 @@ def _get_cross_dmps_of_quad_diff(quad_diff_order: int, tangent_dmp: DMP) -> List
     return new_poly_reps
 
 
-def _get_cross_exprs_and_polys_of_quad_diff(symbols: Tuple[Symbol, ...],
-        quad_diff_order: int, tangent: Expr, tangent_p: Poly) -> Tuple[List[Expr], List[PolyElement]]:
+def _get_cross_exprs_and_polys_of_quad_diff(symbols: Tuple['Symbol', ...],
+        quad_diff_order: int, tangent: 'Expr', tangent_p: Poly) -> Tuple[List['Expr'], List[PolyElement]]:
     """
     Generate all sympy expressions of the form prod((ai - aj)^2) * tangent and return the polynomials,
     the degree of prod((ai - aj)^2) is bounded by quad_diff_order.
@@ -599,7 +602,7 @@ def _get_matrix_of_quad_diff(
     degree: int,
     quad_diff_order: int,
     step: int,
-    symmetry: PermutationGroup
+    symmetry: 'PermutationGroup'
 ) -> np.ndarray:
     """
     Generate the matrix representation of all bases of the form

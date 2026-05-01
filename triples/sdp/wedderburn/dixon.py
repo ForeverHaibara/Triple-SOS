@@ -1,4 +1,4 @@
-from typing import List, Set, Union, Sequence, Generator, Iterable
+from typing import List, Set, Union, Sequence, Generator, Iterable, TYPE_CHECKING
 
 from sympy import (FiniteField,
     sqrt_mod, nextprime, primitive_root,
@@ -6,14 +6,12 @@ from sympy import (FiniteField,
 )
 from sympy import MutableDenseMatrix as Matrix
 from sympy.external.gmpy import sqrt as isqrt
-from sympy.external.gmpy import MPZ
 try:
     from sympy.external.gmpy import gcd, lcm
 except ImportError:
     from math import gcd
     from functools import reduce
     lcm = lambda *args: reduce(lambda x, y: x*y//gcd(x, y), args, 1)
-from sympy.polys.domains.domain import Domain
 from sympy.polys.domainmatrix import DomainMatrix
 from sympy.polys.factortools import dup_factor_list_include
 from sympy.polys.polyclasses import ANP
@@ -21,6 +19,10 @@ from sympy.combinatorics import Permutation, PermutationGroup
 
 from sympy import __version__ as SYMPY_VERSION
 from sympy.external.importtools import version_tuple
+
+if TYPE_CHECKING:
+    from sympy.external.gmpy import MPZ
+    from sympy.polys.domains.domain import Domain
 
 CC = List[Set[Permutation]]
 
@@ -42,7 +44,7 @@ else:
         return field
 
 
-def _compute_cmmatrices(cc: Sequence[CC], dom: Domain) -> Generator[DomainMatrix, None, None]:
+def _compute_cmmatrices(cc: Sequence[CC], dom: "Domain") -> Generator[DomainMatrix, None, None]:
     n = len(cc)
     rmul = Permutation.rmul_with_af
     for ind in range(n):
@@ -62,12 +64,12 @@ def _compute_cmmatrices(cc: Sequence[CC], dom: Domain) -> Generator[DomainMatrix
         m = [[dom(_) for _ in row] for row in m]
         yield DomainMatrix(m, (n, n), dom)
 
-def _group_exponent_from_cc(cc: Sequence[CC]) -> MPZ:
+def _group_exponent_from_cc(cc: Sequence[CC]) -> "MPZ":
     orders = [int(next(iter(c)).order()) for c in cc]
     exponent = lcm(*orders)
     return exponent
 
-def dixon_prime(order: Union[int, MPZ], exponent: Union[int, MPZ]) -> Union[int, MPZ]:
+def dixon_prime(order: Union[int, "MPZ"], exponent: Union[int, "MPZ"]) -> Union[int, "MPZ"]:
     """Find a prime p so that p > 2*sqrt(order) and p%exponent == 1."""
     if order == 1:
         # trivial group => exponent == 1
@@ -142,7 +144,7 @@ def _get_invmap(cc: Sequence[CC]) -> List[int]:
                 break
     return inv_map
 
-def _get_powermap(cc: Sequence[CC], exponent: Union[int, MPZ]) -> List[List[int]]:
+def _get_powermap(cc: Sequence[CC], exponent: Union[int, "MPZ"]) -> List[List[int]]:
     """Compute pm[i][pow] = k such that class[i]**pow == k."""
     n = len(cc)
     pm = [[-1] * exponent for _ in range(n)]
@@ -192,7 +194,7 @@ def normalize_fp(cc: Sequence[CC], esd: DomainMatrix) -> List[List]:
     return normalized_rows
 
 
-def _get_global_conductor(rows: List[List], pm: List[List[int]], m: Union[int, MPZ]) -> Union[int, MPZ]:
+def _get_global_conductor(rows: List[List], pm: List[List[int]], m: Union[int, "MPZ"]) -> Union[int, "MPZ"]:
     """
     Find the smallest natural number k such that all values of the
     character table can be embedded in the k-th cyclotomic field.
@@ -296,7 +298,7 @@ def _lift_to_minimal_field(normalized_rows, pm, k, e, Fp):
     _sort_characters(dM, dom)
     return DomainMatrix(dM, (n, n), dom)
 
-def _sort_characters(rows: List[List], dom: Domain):
+def _sort_characters(rows: List[List], dom: "Domain"):
     """
     Sort the character table and move the trivial
     character to the first row. Done in-place.
