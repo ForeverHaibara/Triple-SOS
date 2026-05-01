@@ -4,7 +4,7 @@ from .core import sum_of_squares, StructuralSOS, LinearSOS, SDPSOS, SOSPoly
 
 from .sdp import SDPProblem, congruence
 
-__version__ = "0.2.0.dev"
+__version__ = "0.2.0"
 
 __all__ = [
     '__version__',
