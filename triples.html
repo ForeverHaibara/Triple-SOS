@@ -379,9 +379,21 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
                 </div>
             </div>
             <div class="col-2">
+                <div class="dropdown_item">
                 <div class="form-check form-check-inline">
-                  <input class="form-check-input" type="radio" name="setting_perm" id="setting_perm_custom" value="custom" onclick="setPermChange()">
-                  <label class="form-check-label" for="customRadio">Custom</label>
+                  <!-- <label class="form-check-label" for="customRadio">Custom</label> -->
+
+                    <input class="form-check-input" type="radio" name="setting_perm" id="setting_perm_custom" value="custom" onclick="setPermChange()">    
+                    <label class="form-check-label" for="customRadio">Custom</label>
+                    <div class="submenu" style="color:black; bottom: 100%; font-size: 12px; border-radius: 5px; text-align: left; min-width: 150px;">
+                        <hr style="margin:7px;">
+                        <div class="hover_text" style="padding-left: 18px; height: 16px;" onclick="setPermChange(name='Cyc(n-1) x C1')">Cyc(n-1) x C1</div><hr style="margin:7px;">
+                        <div class="hover_text" style="padding-left: 18px; height: 16px;" onclick="setPermChange(name='Sym(n-1) x S1')">Sym(n-1) x S1</div><hr style="margin:7px;">
+                        <div class="hover_text" style="padding-left: 18px; height: 16px;" onclick="setPermChange(name='Sym(n/2) x Sym(n/2)')">Sym(n/2) x Sym(n/2)</div><hr style="margin:7px;">
+                        <div class="hover_text" style="padding-left: 18px; height: 16px;" onclick="setPermChange(name='Sym(n/2) w S2')">Sym(n/2) ≀ S2</div><hr style="margin:7px;">
+                        <div class="hover_text" style="padding-left: 18px; height: 16px;" onclick="setPermChange(name='Trivial')">Trivial</div><hr style="margin:7px;">
+                    </div>
+                </div>
                 </div>
             </div>
         </div>
@@ -558,13 +570,22 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
                  <!-- class="d-flex gap-1 mt-1"> -->
                 <div class="dropdown_item">
                     <button class="btn btn-xs btn-outline-primary" style="padding: 0.1rem 0.3rem; font-size: 9px; height: 22px;" onclick="constraintsAddRow('≥0')">+ Inequality</button>
-                    <div class="submenu" style="color:black; font-size: 12px; border-radius: 5px; text-align: left; min-width: 150px;">
+                    <div class="submenu" style="color:black; font-size: 12px; border-radius: 5px; text-align: left; min-width: 160px;">
                         <hr style="margin:7px;">
-                        <div class="hover_text" style="padding-left: 20px; height: 16px;" onclick="constraintsAddTools('triangle', '≥0')">Triangle</div><hr style="margin:7px;">
-                        <div class="hover_text" style="padding-left: 20px; height: 16px;" onclick="constraintsAddTools('acute triangle', '≥0')">Acute Triangle</div><hr style="margin:7px;">
+                        <div class="hover_text" style="padding-left: 15px; height: 16px;" onclick="constraintsAddTools('triangle', '≥0')">Triangle</div><hr style="margin:7px;">
+                        <div class="hover_text" style="padding-left: 15px; height: 16px;" onclick="constraintsAddTools('acute triangle', '≥0')">Acute Triangle</div><hr style="margin:7px;">
+                        <div class="hover_text" style="padding-left: 15px; height: 16px;" onclick="constraintsAddTools('ascending vars', '≥0')">Ascending Variables</div><hr style="margin:7px;">
+                        <div class="hover_text" style="padding-left: 15px; height: 16px;" onclick="constraintsAddTools('descending vars', '≥0')">Descending Variables</div><hr style="margin:7px;">
                     </div>
                 </div>
-                <button class="btn btn-xs btn-outline-secondary" style="padding: 0.1rem 0.3rem; font-size: 9px; height: 22px;" onclick="constraintsAddRow('=0')">+ Equality</button>
+                
+                <div class="dropdown_item">
+                    <button class="btn btn-xs btn-outline-secondary" style="padding: 0.1rem 0.3rem; font-size: 9px; height: 22px;" onclick="constraintsAddRow('=0')">+ Equality</button>
+                    <div class="submenu" style="color:black; font-size: 12px; border-radius: 5px; text-align: left; min-width: 160px;">
+                        <hr style="margin:7px;">
+                        <div class="hover_text" style="padding-left: 15px; height: 16px;" onclick="constraintsAddTools('tan sum arctan = 0', '=0')">tan(Σarctan) = 0</div><hr style="margin:7px;">
+                    </div>
+                </div>
                 <button class="btn btn-xs btn-outline-success" id="constraints-lock" style="padding: 0.1rem 0.3rem; font-size: 9px; height: 22px;
                 --bs-btn-hover-bg: var(--bs-btn-bg);  --bs-btn-hover-border-color: var(--bs-btn-border-color); --bs-btn-hover-color: var(--bs-btn-color);" onclick="constraintsToggleLock()">
                     <svg id="lockIcon"  xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" class="bi bi-lock" viewBox="0 0 16 16">

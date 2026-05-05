@@ -13,28 +13,246 @@ function changeNumOfSOS(num){
     }
 }
 
-function setPermChange(){
+
+function isValidPermutationList(n, s) {
+    let pos = 0;
+
+    const skipSpaces = () => {
+        while (pos < s.length && s[pos] === ' ') pos++;
+    };
+
+    const peek = () => {
+        skipSpaces();
+        return pos < s.length ? s[pos] : null;
+    };
+
+    const consume = (ch) => {
+        skipSpaces();
+        if (pos < s.length && s[pos] === ch) {
+            pos++;
+            return true;
+        }
+        return false;
+    };
+
+    const parseNumber = () => {
+        skipSpaces();
+        if (pos >= s.length || s[pos] < '0' || s[pos] > '9') return null;
+        let num = 0;
+        while (pos < s.length && s[pos] >= '0' && s[pos] <= '9') {
+            num = num * 10 + (s.charCodeAt(pos) - 48);
+            pos++;
+        }
+        return num;
+    };
+
+    // parse a non-empty inner list like [0,1,2]
+    const parseInnerList = () => {
+        if (!consume('[')) return null;
+        const nums = [];
+        skipSpaces();
+        if (consume(']')) return nums;           // empty inner list []
+        while (true) {
+            const num = parseNumber();
+            if (num === null) return null;
+            nums.push(num);
+            skipSpaces();
+            if (consume(']')) break;
+            if (!consume(',')) return null;
+            skipSpaces();
+            if (consume(']')) break;             // trailing comma
+        }
+        return nums;
+    };
+
+    // parse the outermost list
+    const parseOuter = () => {
+        if (!consume('[')) return null;
+        const lists = [];
+        skipSpaces();
+        if (consume(']')) return lists;          // empty outer list []
+        while (true) {
+            const inner = parseInnerList();
+            if (inner === null) return null;
+            lists.push(inner);
+            skipSpaces();
+            if (consume(']')) break;
+            if (!consume(',')) return null;
+            skipSpaces();
+            if (consume(']')) break;             // trailing comma
+        }
+        return lists;
+    };
+
+    const result = parseOuter();
+    if (result === null) return false;
+
+    // no extra characters after the top-level list
+    skipSpaces();
+    if (pos !== s.length) return false;
+
+    // validate every inner list as a permutation of 0..n-1
+    for (const arr of result) {
+        if (arr.length !== n) return false;
+        const seen = new Array(n).fill(false);
+        for (const x of arr) {
+            if (x < 0 || x >= n || seen[x]) return false;
+            seen[x] = true;
+        }
+    }
+    return true;
+}
+
+
+function getPermGroupList(nvars, name = ''){
+    /*
+    Return a list of permutations according to nvars and name.
+    */
+    name = name ? name.toLowerCase() : '';
+
+    const id = Array.from({length: nvars}, (_, i) => i);
+
+    const isIdentity = (perm) => perm.every((v, i) => v === i);
+
+    const normalizePerms = (...perms) => {
+        const seen = new Set();
+        const ans = [];
+        for (const perm of perms){
+            const key = perm.join(',');
+            if (!seen.has(key)){
+                seen.add(key);
+                ans.push(perm);
+            }
+        }
+        if (ans.length > 1){
+            const nontrivial = ans.filter(perm => !isIdentity(perm));
+            if (nontrivial.length > 0){
+                return nontrivial;
+            }
+        }
+        return ans;
+    };
+
+    const cycle = (m, offset = 0) => {
+        const a = Array.from({length: nvars}, (_, i) => i);
+        if (m > 1){
+            for (let i = 0; i < m - 1; i++){
+                a[offset + i] = offset + i + 1;
+            }
+            a[offset + m - 1] = offset;
+        }
+        return a;
+    };
+
+    const transposition = (i, j) => {
+        const a = Array.from({length: nvars}, (_, k) => k);
+        if (0 <= i && i < nvars && 0 <= j && j < nvars && i !== j){
+            a[i] = j;
+            a[j] = i;
+        }
+        return a;
+    };
+
+    const blockSwap = (m) => {
+        const a = Array.from({length: nvars}, (_, i) => i);
+        for (let i = 0; i < m; i++){
+            a[i] = i + m;
+            a[i + m] = i;
+        }
+        return a;
+    };
+
+    if (name === 'cyc'){
+        return normalizePerms(cycle(nvars));
+    }else if (name === 'sym'){
+        if (nvars <= 1){
+            return normalizePerms(id);
+        }
+        return normalizePerms(cycle(nvars), transposition(0, 1));
+    }else if (name === 'cyc(n-1) x c1'){
+        return normalizePerms(cycle(Math.max(0, nvars - 1)));
+    }else if (name === 'sym(n-1) x s1'){
+        const m = Math.max(0, nvars - 1);
+        if (m <= 1){
+            return normalizePerms(id);
+        }
+        return normalizePerms(cycle(m), transposition(0, 1));
+    }else if (name === 'sym(n/2) x sym(n/2)'){
+        const fixed = nvars % 2;
+        const active = nvars - fixed;
+        if (active < 2){
+            return normalizePerms(id);
+        }
+        const m = active / 2;
+        if (m <= 1){
+            return normalizePerms(id);
+        }
+        return normalizePerms(
+            cycle(m, 0),
+            transposition(0, 1),
+            cycle(m, m),
+            transposition(m, m + 1)
+        );
+    }else if (name === 'sym(n/2) w s2'){
+        const fixed = nvars % 2;
+        const active = nvars - fixed;
+        if (active < 2){
+            return normalizePerms(id);
+        }
+        const m = active / 2;
+        if (m <= 0){
+            return normalizePerms(id);
+        }
+        return normalizePerms(
+            cycle(m, 0),
+            transposition(0, 1),
+            blockSwap(m)
+        );
+    }else if (name === 'trivial'){
+        return normalizePerms(id);
+    }
+
+    return null;
+}
+
+
+function setPermChange(name = ''){
     /*
     Change the permutation group.
     */
+    name = name ? name.toLowerCase() : '';
+    if (name){
+        const customCheckbox = document.querySelector('input[name="setting_perm"][value="custom"]');
+        if (customCheckbox){
+            customCheckbox.checked = true;
+        }
+    }
+
     const x = document.querySelector('input[name="setting_perm"]:checked').value;
     const p = document.getElementById('setting_perm_input');
     const nvars = document.getElementById('setting_gens_input').value.length;
-    if (x === 'cyc'){
+
+    const toText = (perms) => `[${perms.map(a => `[${a}]`).join(',')}]`;
+
+    if (x === 'cyc' || x === 'sym'){
         p.disabled = true;
-        p.value = `[[${Array.from({length: nvars}, (_, i) => (i+1) % nvars)}]]`;
-    }else if (x === 'sym'){
-        p.disabled = true;
-        let array1 = Array.from({length: nvars}, (_, i) => (i+1) % nvars);
-        if (nvars <= 2){ p.value = `[[${array1}]]`; return; }
-        let array2 = Array.from({length: nvars}, (_, i) => i % nvars);
-        array2[0] = 1;
-        array2[1] = 0;
-        p.value = `[[${array1}],[${array2}]]`;
+        const perms = getPermGroupList(nvars, x);
+        p.value = toText(perms);
     }else if (x === 'custom'){
         p.disabled = false;
+        if (name){
+            const perms = getPermGroupList(nvars, name);
+            if (perms !== null){
+                p.value = toText(perms);
+            }
+        }
+        if ((!name) && (!isValidPermutationList(nvars, p.value))){
+            // p is not a valid permutation group, set it to the trivial group
+            p.value = toText(getPermGroupList(nvars, 'trivial'));
+        }
     }
 }
+
 
 function setGeneratorsChange(event) {
     /*
@@ -173,6 +391,29 @@ function constraintsToggleLock() {
 }
 constraintsToggleLock(); // initialization
 
+
+function oddAltElementarySym(gens) {
+    const e = [["1"]];
+    for (const x of gens) {
+        for (let k = e.length - 1; k >= 0; --k) {
+            if (!e[k]) continue;
+            const nxt = e[k + 1] || (e[k + 1] = []);
+            for (const m of e[k]) nxt.push(m === "1" ? x : m + "*" + x);
+        }
+    }
+
+    const terms = [];
+    for (let k = 1; k < e.length; k += 2) {
+        const sign = (k % 4 === 1) ? 1 : -1;
+        for (const m of e[k]) terms.push((sign > 0 ? "+" : "-") + m);
+    }
+
+    if (terms.length === 0) return "0";
+    let s = terms.join("");
+    return s[0] === "+" ? s.slice(1) : s;
+}
+
+
 function constraintsAddTools(name, type){
     const gens = document.getElementById('setting_gens_input').value.split('');
     const n = gens.length;
@@ -199,6 +440,20 @@ function constraintsAddTools(name, type){
                         const sumPart = otherElements.join('+');
                         return `${sumPart}-${gens[i]}^2`;
                     });
+                }
+            }else if (name === 'ascending vars'){
+                if (n > 1){
+                    return Array.from({length: n - 1}, (_, i) => gens[i+1] + '-' + gens[i]);
+                }
+            }else if (name === 'descending vars'){
+                if (n > 1){
+                    return Array.from({length: n - 1}, (_, i) => gens[i] + '-' + gens[i+1]);
+                }
+            }
+        }else if (type === '=0'){
+            if (name === 'tan sum arctan = 0'){
+                if (n > 0){
+                    return [oddAltElementarySym(gens)];
                 }
             }
         }
