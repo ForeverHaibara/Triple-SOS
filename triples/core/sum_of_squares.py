@@ -5,6 +5,7 @@ import numpy as np
 
 from .preprocess import ProofNode, ProofTree, SolvePolynomial
 from .preprocess.reparam import Reparametrization
+from .preprocess.modeling import ReformulateAlgebraic
 from .linsos.linsos import LinearSOSSolver
 from .pivoting.pivoting import Pivoting
 from .structsos.structsos import StructuralSOSSolver
@@ -42,6 +43,7 @@ def sum_of_squares(
     methods: Optional[List[str]] = None,
     configs: Dict[str, Dict] = {},
     mode: str = "fast",
+    assumptions: bool = False,
     method_order: Optional[List[str]] = None, # deprecated
 ) -> Optional['Solution']:
     """
@@ -99,9 +101,9 @@ def sum_of_squares(
 
     ### Assumptions
 
-    In the current, all SymPy symbol assumptions are ignored and symbols are treated as
+    Currently, all SymPy symbol assumptions are ignored by default and symbols are treated as
     real variables. To claim nonnegativity of symbols, just add them to `ineq_constraints`.
-    Integer or noncommutative symbol assumptions are not supported in the current either:
+    Another option is to set `assumptions=True` to use the assumptions of SymPy symbols.
 
         >>> from sympy import Symbol
         >>> _x = Symbol("x", positive=True)
@@ -109,7 +111,17 @@ def sum_of_squares(
         True
         >>> sum_of_squares(_x**2 + 3*_x + 1, [_x]) is not None
         True
+        >>> sum_of_squares(_x**2 + 3*_x + 1, assumptions=True) is not None
+        True
 
+    With `assumptions=True`, all variables are treated as complex variables unless they are assumed
+    to be real.
+
+        >>> sum_of_squares(abs(x**2-x+1)**2*4 - 1, [], [abs(x+1)**2 - 4],
+        ... assumptions=True).solution # doctest: +SKIP
+        (4*re(x) - 3)**2*(839*re(x) + 284)**2/1912920 + 7*(4*re(x) - 3)**2*im(x)**2/15
+        + 312*(4*re(x) - 3)**2/839 + (Abs(x + 1)**2 - 4)*(-2*re(x)**2 + re(x) + 22*im(x)**2/15 + 1)
+        + (16*re(x)**2 - 11*re(x) + 76*im(x)**2 - 72)**2/2280
 
     Parameters
     ----------
@@ -136,6 +148,8 @@ def sum_of_squares(
     mode: str
         Experimental. The mode of the solver. Defaults to 'fast'. Supports 'fast' and 'pretty'.
         If 'pretty', it traverses all methods and selects the most pretty solution.
+    assumptions: bool
+        Whether to use the assumptions of SymPy symbols. Defaults to False.
     method_order: Optional[List[str]]
         DEPRECATED. Use methods instead.
 
@@ -168,6 +182,9 @@ def sum_of_squares(
         },
         ProofNode: {
             "verbose": verbose,
+        },
+        ReformulateAlgebraic: {
+            "assumptions": assumptions,
         },
         SolvePolynomial: {
             "solvers": methods,
