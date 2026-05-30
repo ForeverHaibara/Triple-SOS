@@ -444,7 +444,8 @@ class SDPSOSSolver(ProofNode):
 
                 if sdp_sol is not None:
                     if verbose:
-                        print(f"Time for solving SDP{' ':20s}: {perf_counter() - time0:.6f} seconds. \033[32mSuccess\033[0m.")
+                        print(f"Time for solving SDP{' ':20s}: {perf_counter() - time0:.6f}"
+                              f" seconds. \033[32mSuccess\033[0m.")
                     self._as_solution(
                         sos_problem,
                         qmodule=dict(enumerate([e[1] for e in qmodule_tuples])),
@@ -458,7 +459,8 @@ class SDPSOSSolver(ProofNode):
 
             except Exception as e:
                 if verbose:
-                    print(f"Time for solving SDP{' ':20s}: {perf_counter() - time0:.6f} seconds. \033[31mFailed with exceptions\033[0m.")
+                    print(f"Time for solving SDP{' ':20s}: {perf_counter() - time0:.6f}"
+                           f" seconds. \033[31mFailed with exceptions\033[0m.")
                     print(f"{e.__class__.__name__}: {e}")
                 if isinstance(e, (ArithmeticTimeout, MemoryError)):
                     # do not try further

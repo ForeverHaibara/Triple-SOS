@@ -190,7 +190,11 @@ def sum_of_squares(
             "solvers": methods,
         },
     }
-    _configs.update(configs)
+    for key in configs:
+        if key in _configs:
+            _configs[key].update(configs[key])
+        else:
+            _configs[key] = configs[key]
     return problem.sum_of_squares(_configs)
 
 

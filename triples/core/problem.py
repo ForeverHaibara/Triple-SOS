@@ -41,8 +41,8 @@ class InequalityProblem(Generic[T]):
     ineq_constraints: Dict[T, Expr]
     eq_constraints: Dict[T, Expr]
 
-    _is_commutative = True
-    _is_polynomial = False
+    # _is_commutative = True
+    # _is_polynomial = False
 
     counter_examples: Optional[RootList] = None
     solution: Optional[Expr] = None
@@ -330,8 +330,12 @@ class InequalityProblem(Generic[T]):
         return ineqs[1], eqs[1], ineqs[0], eqs[0]
 
     @property
+    def is_commutative(self) -> bool:
+        return self.reduce(lambda e: e.is_commutative, all)
+
+    @property
     def is_polynomial(self) -> bool:
-        return bool(self._is_polynomial)
+        return self.reduce(lambda e: isinstance(e, Poly), all)
 
     @property
     def is_of_type(self, dtype) -> bool:

@@ -8,6 +8,7 @@ from sympy import I as ImaginaryUnit
 from sympy.utilities.iterables import iterable
 
 from .algebraic import CancelDenominator
+from .noncommutative import SolveNCPSD
 from ..node import ProofNode
 
 if TYPE_CHECKING:
@@ -315,16 +316,24 @@ class ModelingHelper:
             if not hasattr(s, "assumptions0"):
                 continue
             assump = s.assumptions0
-            if any(assump.get(g) for g in zero):
-                problem.eq_constraints[s] = s
-            elif not assump.get("real"):
-                self.has_complex = True
-                trans[s] = re(s) + im(s) * ImaginaryUnit
+            if assump.get("commutative"):
+                if any(assump.get(g) for g in zero):
+                    problem.eq_constraints[s] = s
+                elif not assump.get("real"):
+                    self.has_complex = True
+                    trans[s] = re(s) + im(s) * ImaginaryUnit
+                else:
+                    if any(assump.get(g) for g in pos):
+                        problem.ineq_constraints[s] = s
+                    if any(assump.get(g) for g in neg):
+                        problem.ineq_constraints[-s] = -s
             else:
-                if any(assump.get(g) for g in pos):
-                    problem.ineq_constraints[s] = s
-                if any(assump.get(g) for g in neg):
-                    problem.ineq_constraints[-s] = -s
+                # noncommutative
+                if any(assump.get(g) for g in zero):
+                    problem.eq_constraints[s] = s
+                elif not assump.get("hermitian"):
+                    self.has_complex = True
+                    trans[s] = re(s) + im(s) * ImaginaryUnit
 
         if self.has_complex:
             # real and imag parts are zeros, respectively
@@ -396,12 +405,13 @@ class ReformulateAlgebraic(ProofNode):
         "assumptions": False,
     }
 
-
+    modeling_helper = None
     def explore(self, configs):
         if self.state != 0:
             return
 
         helper = ModelingHelper(self.problem)
+        self.modeling_helper = helper
         new_expr, new_ineqs, new_eqs, inverse = helper.formulate(configs)
 
         # print('Problem Reformulation')
@@ -411,11 +421,16 @@ class ReformulateAlgebraic(ProofNode):
         # print(f'Replacement  : {inverse}')
 
         new_problem = self.new_problem(new_expr, new_ineqs, new_eqs)
+
         fs = new_problem.free_symbols
         if self.problem.roots is not None:
             new_problem.roots = self.problem.roots.transform(inverse, fs)
 
-        solver = CancelDenominator(new_problem, {"irrational_expr": helper.has_radical})
+        if new_problem.is_commutative:
+            solver = CancelDenominator(new_problem, {"irrational_expr": helper.has_radical})
+        else:
+            solver = SolveNCPSD(new_problem)
+
         self.children = [solver]
 
         self.inverse = inverse
