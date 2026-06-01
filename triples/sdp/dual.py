@@ -1389,7 +1389,7 @@ class SDPProblem(TransformableDual):
 
     def constrain_zero_diagonals(self, extractions = None, masks = None, time_limit = None) -> 'SDPProblem':
         """
-        Constrain zero diagonals. Proving either `extractions` or `masks` is sufficient.
+        Constrain zero diagonals. Providing either `extractions` or `masks` is sufficient.
         If both are not provided, then the default behavior is to call
         `get_zero_diagonals` to get the zero diagonals.
 

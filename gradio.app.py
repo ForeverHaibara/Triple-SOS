@@ -663,11 +663,14 @@ class GradioInterface():
         if expr is not None:
             try:
                 # Attempt to find sum of squares
+                methods = ['%sSOS' % method for method in methods] + ['Pivoting', 'Reparametrization']
+                if "SDPSOS" in methods:
+                    methods.append("QCQP")
                 solution = SOSManager.sum_of_squares(
                     expr,
                     ineq_constraints,
                     eq_constraints,
-                    methods=['%sSOS' % method for method in methods] + ['Pivoting', 'Reparametrization'],
+                    methods=methods
                 )
             except Exception as e:
                 pass

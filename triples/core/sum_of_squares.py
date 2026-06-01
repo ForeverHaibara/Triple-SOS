@@ -6,6 +6,7 @@ import numpy as np
 from .preprocess import ProofNode, ProofTree, SolvePolynomial
 from .preprocess.reparam import Reparametrization
 from .preprocess.modeling import ReformulateAlgebraic
+from .preprocess.qcqp import QCQPSolver
 from .linsos.linsos import LinearSOSSolver
 from .pivoting.pivoting import Pivoting
 from .structsos.structsos import StructuralSOSSolver
@@ -22,6 +23,7 @@ NAME_TO_METHOD = {
     'StructuralSOS': StructuralSOSSolver,
     'LinearSOS': LinearSOSSolver,
     'SDPSOS': SDPSOSSolver,
+    'QCQP': QCQPSolver,
     'SymmetricSOS': SymmetricSubstitution,
     'Pivoting': Pivoting,
     'Reparametrization': Reparametrization,
