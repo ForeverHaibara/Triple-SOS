@@ -7,7 +7,7 @@ using sympy.Rational or numpy for matrix computations.
 from time import perf_counter
 from typing import List, Tuple, Union, Optional, Callable, overload, TYPE_CHECKING
 
-from numpy import ndarray, int64, isnan, inf
+from numpy import ndarray, int64, isnan, inf, kron
 from numpy import iinfo as np_iinfo
 from numpy import any as np_any
 from numpy import where as np_where
@@ -650,3 +650,54 @@ def _symmetric_bilinear_multiple_by_level(U: ndarray, A: ndarray) -> RepMatrix:
         return Matrix.zeros(N, m**2)
 
     return result
+
+
+@overload
+def kronecker_product(A: 'MatrixBase', B: 'MatrixBase') -> Matrix: ...
+@overload
+def kronecker_product(A: ndarray, B: ndarray) -> ndarray: ...
+@overload
+def kronecker_product(A: 'MatrixBase', B: ndarray) -> Matrix: ...
+@overload
+def kronecker_product(A: ndarray, B: 'MatrixBase') -> Matrix: ...
+
+
+def kronecker_product(A, B):
+    """
+    Compute the kronecker product of two matrices A and B.
+
+    Examples
+    --------
+    >>> from sympy import Matrix
+    >>> kronecker_product(Matrix([[1,2],[3,4]]), Matrix([[0,5],[6,7]]))
+    Matrix([
+    [ 0,  5,  0, 10],
+    [ 6,  7, 12, 14],
+    [ 0, 15,  0, 20],
+    [18, 21, 24, 28]])
+    """
+    if isinstance(A, ndarray) and isinstance(B, ndarray):
+        return kron(A, B)
+    if isinstance(A, ndarray):
+        A = rep_matrix_from_numpy(A)
+    if isinstance(B, ndarray):
+        B = rep_matrix_from_numpy(B)
+
+    a = A._rep.rep.to_sdm()
+    b = B._rep.rep.to_sdm()
+
+    dom = a.domain.unify(b.domain)
+    if dom != a.domain:
+        a = a.convert_to(dom)
+    if dom != b.domain:
+        b = b.convert_to(dom)
+
+    mat = {}
+    x, y = b.shape
+    for i1, row in a.items():
+        for j1, v in row.items():
+            for i2, row2 in b.items():
+                for j2, v2 in row2.items():
+                    mat.setdefault(i1*x+i2, {})[j1*y+j2] = v * v2
+    sdm = SDM(mat, (a.shape[0]*x, a.shape[1]*y), dom)
+    return Matrix._fromrep(A._rep.from_rep(sdm))
