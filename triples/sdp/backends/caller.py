@@ -1,6 +1,7 @@
 from typing import List, Tuple, Dict, Union, Optional, Any, Type, TYPE_CHECKING
 
 import numpy as np
+from scipy import sparse
 
 from .backend import DualBackend
 from .clarabel_sdp import DualBackendCLARABEL
@@ -64,12 +65,54 @@ _STANDARDIZED_OPERATORS = {
     '__geq__': '__ge__',
 }
 
-def collect_constraints(constraints: List[Tuple['ndarray', float, str]], dof: int)\
+class _SparseInputBackend(DualBackend):
+    _opt_sparse = 'csr'
+
+
+def _vstack(mats):
+    if any(sparse.issparse(mat) for mat in mats):
+        return sparse.vstack(mats, format='csr')
+    return np.vstack(mats)
+
+
+def _hstack(mats):
+    if any(sparse.issparse(mat) for mat in mats):
+        return sparse.hstack(mats, format='csr')
+    return np.hstack(mats)
+
+
+def _as_sparse_matrix(mat):
+    if sparse.issparse(mat):
+        return mat.astype(np.float64, copy=False).tocsr()
+    return sparse.csr_matrix(np.array(mat).astype(np.float64))
+
+
+def _sparse_zero(rows, cols):
+    return sparse.csr_matrix((rows, cols), dtype=np.float64)
+
+
+def _dense_vector(vec):
+    if sparse.issparse(vec):
+        vec = vec.toarray()
+    return np.array(vec).astype(np.float64).flatten()
+
+
+def _reshape_primal_space(space, rows):
+    space = _as_sparse_matrix(space)
+    if rows > 0:
+        return space.reshape((rows, -1)).tocsr()
+    cols = space.shape[1] if space.shape[0] == 0 else space.shape[0] * space.shape[1]
+    return space.reshape((0, cols)).tocsr()
+
+
+def collect_constraints(constraints: List[Tuple['ndarray', float, str]], dof: int,
+        backend: Type[DualBackend] = DualBackend)\
         -> Tuple['ndarray', 'ndarray', 'ndarray', 'ndarray']:
     """
     Collect constraints and separate them into inequality and equality constraints.
     """
-    as_array = DualBackend.as_array # TODO
+    as_matrix = backend.as_matrix
+    as_vector = backend.as_vector
 
     ineq_lhs, ineq_rhs = [], []
     eq_lhs, eq_rhs = [], []
@@ -78,10 +121,10 @@ def collect_constraints(constraints: List[Tuple['ndarray', float, str]], dof: in
         if isinstance(rhs, (float, int)) or not hasattr(rhs, '__len__'):
             rhs = [rhs]
 
-        constraint = as_array(constraint)
+        constraint = as_matrix(constraint)
         if len(constraint.shape) == 1:
             constraint = constraint.reshape(1, dof)
-        rhs = as_array(rhs).flatten()
+        rhs = as_vector(rhs)
 
         if op == '__le__':
             constraint, rhs, op = -constraint, -rhs, '__ge__'
@@ -93,14 +136,14 @@ def collect_constraints(constraints: List[Tuple['ndarray', float, str]], dof: in
             eq_rhs.append(rhs)
 
     if len(ineq_lhs):
-        ineq_lhs, ineq_rhs = np.vstack(ineq_lhs), np.concatenate(ineq_rhs)
+        ineq_lhs, ineq_rhs = _vstack(ineq_lhs), np.concatenate(ineq_rhs)
     else:
-        ineq_lhs, ineq_rhs = np.zeros((0, dof)), np.zeros((0,))
+        ineq_lhs, ineq_rhs = as_matrix(np.zeros((0, dof))), np.zeros((0,))
 
     if len(eq_lhs):
-        eq_lhs, eq_rhs = np.vstack(eq_lhs), np.concatenate(eq_rhs)
+        eq_lhs, eq_rhs = _vstack(eq_lhs), np.concatenate(eq_rhs)
     else:
-        eq_lhs, eq_rhs = np.zeros((0, dof)), np.zeros((0,))
+        eq_lhs, eq_rhs = as_matrix(np.zeros((0, dof))), np.zeros((0,))
     return ineq_lhs, ineq_rhs, eq_lhs, eq_rhs
 
 
@@ -134,17 +177,18 @@ def create_numerical_dual_sdp(
     elif isinstance(x0_and_space, dict):
         x0_and_space = list(x0_and_space.values())
 
-    as_array = backend.as_array
+    as_matrix = backend.as_matrix
+    as_vector = backend.as_vector
 
-    x0_and_space = [(as_array(x0).flatten(), as_array(space)) for x0, space in x0_and_space]
+    x0_and_space = [(as_vector(x0), as_matrix(space)) for x0, space in x0_and_space]
     x0_and_space = [(x0, space) for x0, space in x0_and_space if x0.shape[0] > 0]
 
     As = [space for x0, space in x0_and_space]
     bs = [x0 for x0, space in x0_and_space]
 
-    c = as_array(objective).flatten()
+    c = as_vector(objective)
 
-    ineq_lhs, ineq_rhs, eq_lhs, eq_rhs = collect_constraints(constraints, c.size)
+    ineq_lhs, ineq_rhs, eq_lhs, eq_rhs = collect_constraints(constraints, c.size, backend=backend)
     backend = backend(As, bs, ineq_lhs, ineq_rhs, eq_lhs, eq_rhs, c)
     return backend
 
@@ -262,11 +306,46 @@ def _fill_space(space: 'ndarray', n: int, bias: int) -> 'ndarray':
     space[rows2, cols] = 1
     return space
 
+
+def _fill_space_sparse(n: int, bias: int, dof: int):
+    i, j = np.triu_indices(n)
+    cols = np.arange(bias, bias + n*(n+1)//2)
+    rows = i*n + j
+    data = np.ones((len(rows),), dtype=np.float64)
+    offdiag = i != j
+    if np.any(offdiag):
+        rows = np.concatenate((rows, j[offdiag]*n + i[offdiag]))
+        cols = np.concatenate((cols, cols[offdiag]))
+        data = np.concatenate((data, np.ones((int(np.sum(offdiag)),), dtype=np.float64)))
+    return sparse.csr_matrix((data, (rows, cols)), shape=(n**2, dof), dtype=np.float64)
+
+
 def _extract_triu(space: 'ndarray', n: int) -> 'ndarray':
     """Assume space has shape m x N where N = n**2. Return a matrix of shape m * (n*(n+1)//2)
     where each column is the upper triangular part of the corresponding column of space."""
     i, j = np.triu_indices(n)
+    if sparse.issparse(space):
+        return space[:, i*n + j]
     return space.T.reshape(n, n, -1)[i, j, :].T
+
+
+def _symmetry_column_weights(sizes):
+    weights = []
+    for n in sizes:
+        block = np.full((n**2,), 2., dtype=np.float64)
+        block[np.arange(0, n**2, n+1)] = 1.
+        weights.append(block)
+    if len(weights):
+        return np.concatenate(weights)
+    return np.zeros((0,), dtype=np.float64)
+
+
+def _scale_columns(mat, weights):
+    if mat.shape[1] == 0:
+        return mat
+    if sparse.issparse(mat):
+        return mat.dot(sparse.diags(weights, format='csr')).tocsr()
+    return mat * weights
 
 def solve_numerical_primal_sdp(
     x0_and_space: Tuple['ndarray', Union[List['ndarray'], Dict[Any, 'ndarray']]],
@@ -323,14 +402,13 @@ def solve_numerical_primal_sdp(
     elif isinstance(spaces, dict):
         spaces = list(spaces.values())
 
-    asarray = backend.as_array
-    x0 = asarray(x0).flatten()
-    objective = asarray(objective).flatten()
+    x0 = _dense_vector(x0)
+    objective = _dense_vector(objective)
 
     if x0.size > 0:
-        spaces = [asarray(space).reshape(x0.size, -1) for space in spaces]
+        spaces = [_reshape_primal_space(space, x0.size) for space in spaces]
     else:
-        spaces = [asarray(space).reshape(0, space.size) for space in spaces]
+        spaces = [_reshape_primal_space(space, 0) for space in spaces]
     spaces = [space.copy() for space in spaces if space.shape[1] > 0]
 
     # Formulate the dual form (but not lagrangian dual) by creating
@@ -339,39 +417,35 @@ def solve_numerical_primal_sdp(
     sizes = [int(round(np.sqrt(space.shape[1]))) for space in spaces]
     dof = sum(n*(n+1)//2 for n in sizes)
 
-    ineq_lhs, ineq_rhs, eq_lhs, eq_rhs = collect_constraints(constraints, objective.size)
-    As = [np.zeros((n**2, dof), dtype=np.float64) for n in sizes]
+    ineq_lhs, ineq_rhs, eq_lhs, eq_rhs = collect_constraints(constraints, objective.size,
+                                                             backend=_SparseInputBackend)
+    As = [_fill_space_sparse(n, bias, dof) for n, bias in zip(sizes, np.cumsum([0] + [n*(n+1)//2 for n in sizes[:-1]]))]
     bs = [np.zeros((n**2,)) for n in sizes]
-    bias = 0
-    for i, n in enumerate(sizes):
-        _fill_space(As[i], n, bias)
-        bias += n*(n+1)//2
 
     def _extract_triu_multiple(mat):
-        target = np.zeros((mat.shape[0], dof), dtype=np.float64)
+        if dof == 0:
+            return _sparse_zero(mat.shape[0], 0)
+        parts = []
         bias, bias2 = 0, 0
         for n in sizes:
             space = _extract_triu(mat[:, bias2:bias2+n**2], n)
-            target[:, bias:bias+n*(n+1)//2] = space
+            parts.append(space)
             bias += n*(n+1)//2
             bias2 += n**2
-        return target
+        return _hstack(parts)
 
 
     # constraints at off-diagonals are doubled since only the upper triangular
     # contributes to the sum
-    bias = 0
-    for space, n in zip(spaces, sizes):
-        space[:, np.arange(0, n**2, n+1)] /= 2.
-        space *= 2.
-        for mat in (objective, ineq_lhs, eq_lhs):
-            mat[..., bias:bias+n**2][..., np.arange(0, n**2, n+1)] /= 2.
-            mat[..., bias:bias+n**2] *= 2.
-        bias += n**2
+    weights = _symmetry_column_weights(sizes)
+    spaces = [_scale_columns(space, _symmetry_column_weights([n])) for space, n in zip(spaces, sizes)]
+    objective_mat = _scale_columns(_as_sparse_matrix(objective.reshape(1, objective.size)), weights)
+    ineq_lhs = _scale_columns(ineq_lhs, weights)
+    eq_lhs = _scale_columns(eq_lhs, weights)
 
-    c = _extract_triu_multiple(objective.reshape(1, objective.size)).flatten()
-    eq_lhs = np.vstack([eq_lhs, np.hstack(spaces) if len(spaces)
-                                 else np.zeros((x0.shape[0],0), dtype=np.float64)])
+    c = _dense_vector(_extract_triu_multiple(objective_mat))
+    eq_lhs = sparse.vstack([eq_lhs, _hstack(spaces) if len(spaces)
+                            else _sparse_zero(x0.shape[0], 0)], format='csr')
     eq_rhs = np.concatenate([eq_rhs, x0])
 
     ineq_lhs = _extract_triu_multiple(ineq_lhs)

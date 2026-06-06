@@ -1,7 +1,7 @@
 from .matop import (
     ArithmeticTimeout, is_empty_matrix, size_of_mat, sqrtsize_of_mat, vec2mat, mat2vec, reshape,
     is_zz_qq_mat, is_numerical_mat, free_symbols_of_mat,
-    rep_matrix_from_dict, rep_matrix_from_list, rep_matrix_from_numpy, rep_matrix_to_numpy,
+    rep_matrix_from_dict, rep_matrix_from_list, rep_matrix_from_numpy, rep_matrix_to_numpy, rep_matrix_to_scipy,
     primitive, permute_matrix_rows
 )
 
@@ -21,7 +21,7 @@ from .lll import lll
 __all__ = [
     'ArithmeticTimeout', 'is_empty_matrix','size_of_mat','sqrtsize_of_mat','vec2mat','mat2vec','reshape','primitive','permute_matrix_rows',
     'is_zz_qq_mat','is_numerical_mat','free_symbols_of_mat',
-    'rep_matrix_from_dict','rep_matrix_from_list', 'rep_matrix_from_numpy', 'rep_matrix_to_numpy',
+    'rep_matrix_from_dict','rep_matrix_from_list', 'rep_matrix_from_numpy', 'rep_matrix_to_numpy', 'rep_matrix_to_scipy',
     'matadd', 'matmul', 'matmul_multiple', 'symmetric_bilinear', 'symmetric_bilinear_multiple',
     'kronecker_product',
     'congruence',

@@ -500,7 +500,7 @@ def _rep_matrix_to_data(M, dtype: Any = np.float64) -> Optional[Tuple[List, List
         return data_list, row_indices, col_indices
     return None
 
-def rep_matrix_to_numpy(M: Union[MatrixBase, DomainMatrix, ndarray], dtype: Any = np.float64) -> ndarray:
+def rep_matrix_to_numpy(M: Union[MatrixBase, DomainMatrix, ndarray, spmatrix], dtype: Any = np.float64) -> ndarray:
     """
     Cast a sympy RepMatrix to a numpy matrix efficiently.
 
@@ -511,6 +511,12 @@ def rep_matrix_to_numpy(M: Union[MatrixBase, DomainMatrix, ndarray], dtype: Any 
     dtype : numpy.dtype
         The dtype of the numpy matrix. Default is np.float64.
     """
+    dtype = np.dtype(dtype)
+    if isinstance(M, ndarray):
+        return M.astype(dtype, copy=False)
+    if isinstance(M, spmatrix):
+        return M.toarray().astype(dtype, copy=False)
+
     result = _rep_matrix_to_data(M, dtype)
     if result is None:
         # fallback to default constructor
@@ -521,7 +527,7 @@ def rep_matrix_to_numpy(M: Union[MatrixBase, DomainMatrix, ndarray], dtype: Any 
     arr[row_indices, col_indices] = data_list
     return arr
 
-def rep_matrix_to_scipy(M: Union[MatrixBase, DomainMatrix, ndarray], dtype = np.float64) -> spmatrix:
+def rep_matrix_to_scipy(M: Union[MatrixBase, DomainMatrix, ndarray, spmatrix], dtype = np.float64) -> spmatrix:
     """
     Cast a sympy RepMatrix to a scipy sparse matrix efficiently.
 
@@ -532,6 +538,12 @@ def rep_matrix_to_scipy(M: Union[MatrixBase, DomainMatrix, ndarray], dtype = np.
     dtype : numpy.dtype
         The dtype of the numpy matrix. Default is np.float64.
     """
+    dtype = np.dtype(dtype)
+    if isinstance(M, spmatrix):
+        return M.astype(dtype, copy=False)
+    if isinstance(M, ndarray):
+        return csr_matrix(M.astype(dtype, copy=False))
+
     result = _rep_matrix_to_data(M, dtype)
     if result is None:
         # fallback to default constructor

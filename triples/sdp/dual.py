@@ -7,7 +7,7 @@ from sympy import MutableDenseMatrix as Matrix
 
 from .arithmetic import (
     ArithmeticTimeout, solve_csr_linear, free_symbols_of_mat,
-    rep_matrix_from_dict, rep_matrix_to_numpy, rep_matrix_from_numpy, sqrtsize_of_mat
+    rep_matrix_from_dict, rep_matrix_to_numpy, rep_matrix_to_scipy, rep_matrix_from_numpy, sqrtsize_of_mat
 )
 from .backends import SDPResult, SDPError, SDPTimeoutError, solve_numerical_dual_sdp
 from .rationalize import SDPRationalizeError, DualRationalizer
@@ -764,7 +764,7 @@ class SDPProblem(TransformableDual):
         kwargs: Dict[str, Any] = {}
     ) -> Optional[np.ndarray]:
         return solve_numerical_dual_sdp(
-            {key: (rep_matrix_to_numpy(x0), rep_matrix_to_numpy(space))
+            {key: (rep_matrix_to_numpy(x0).flatten(), rep_matrix_to_scipy(space))
                 for key, (x0, space) in self._x0_and_space.items()},
             objective=objective, constraints=constraints,
             solver=solver, return_result=return_result, **kwargs
