@@ -1,14 +1,19 @@
 import numpy as np
+from scipy import sparse
 from sympy import Rational, primerange
 from sympy import MutableDenseMatrix as Matrix
 from ..matmul import (
-    matlshift, matmul, matmul_multiple, symmetric_bilinear,
-    symmetric_bilinear_multiple, _decompose_int64_to_level_digits
+    kronecker_product, matadd, matlshift, matmul, matmul_multiple,
+    symmetric_bilinear, symmetric_bilinear_multiple,
+    _decompose_int64_to_level_digits
 )
 from ..matop import FLINT_TYPE
 
 def npeq(A, B):
     return A.shape == B.shape and not np.any(A - B)
+
+def sparse_dense(A):
+    return A.toarray() if sparse.issparse(A) else np.asarray(A)
 
 def test_matlshift():
     A = Matrix([1, 2**63 - 1, -2**63, 2**64, -2**64, -1234, 12345678901234])
@@ -70,6 +75,28 @@ def test_matmul():
     assert C2._rep.domain.is_RR and max((C2 - 2*(B @ A).reshape(4,1)/21).applyfunc(abs)) < 1e-10
 
 
+def test_sparse_matadd_and_matmul():
+    A = sparse.csr_matrix([[0., 2., 0.], [3., 0., 4.]])
+    B = sparse.csr_matrix([[5., 0.], [0., 7.], [11., 0.]])
+    D = np.array([[1., 2.], [3., 4.], [5., 6.]])
+
+    C1 = matmul(A, B)
+    C2 = matmul(D.T, B)
+    S = matadd(A, sparse.csr_matrix([[1., 0., -2.], [0., 5., 0.]]))
+
+    assert sparse.issparse(C1)
+    assert np.allclose(C1.toarray(), A.toarray() @ B.toarray())
+    assert np.allclose(sparse_dense(C2), D.T @ B.toarray())
+    assert sparse.issparse(S)
+    assert np.allclose(S.toarray(), np.array([[1., 2., -2.], [3., 5., 4.]]))
+
+    A = sparse.csr_matrix([[0, 2, 0], [3, 0, 4]])
+    B = Matrix([[5], [7], [11]])
+    C = matmul(A, B)
+    assert C == Matrix([[14], [59]])
+    assert C._rep.domain.is_ZZ
+
+
 def test_matmul_multiple():
     # test empty products
     assert matmul_multiple(Matrix.zeros(5, 0), Matrix.zeros(0, 3)) == Matrix.zeros(5, 0)
@@ -91,6 +118,24 @@ def test_matmul_multiple():
     B = (2**50*B+Matrix.ones(*B.shape))/3
     C = Matrix.vstack(*[((2**50*Matrix(_).reshape(3,3)+Matrix.ones(3,3))/7 @ B).reshape(1,6) for _ in A])
     assert matmul_multiple((2**50*Matrix(A)+Matrix.ones(4,9))/7, B) == C
+
+    # test sparsity
+    A = sparse.csr_matrix([
+        [1., 0., 2., 0.],
+        [0., -3., 0., 4.],
+        [5., 0., 0., 6.],
+    ])
+    B = sparse.csr_matrix([[7., 0., 11.], [0., 13., 17.]])
+    expected = (A.toarray().reshape(3, 2, 2) @ B.toarray()).reshape(3, 6)
+
+    for n in range(4):
+        A1 = A if n//2 else A.toarray()
+        B1 = B if n%2 else B.toarray()
+        C = matmul_multiple(A1, B1)
+        assert not isinstance(C, Matrix)
+        if sparse.issparse(A1) and sparse.issparse(B1):
+            assert sparse.issparse(C)
+        assert np.allclose(sparse_dense(C), expected)
 
 
 def test_symmetric_bilinear():
@@ -115,6 +160,20 @@ def test_symmetric_bilinear():
     assert symmetric_bilinear(U, A)._rep.domain.is_RR
     assert symmetric_bilinear(U, A, return_shape=(4,1))._rep.domain.is_RR
 
+    # test sparsity
+    U = sparse.csr_matrix([[1., 0.], [2., -1.], [0., 3.]])
+    A = sparse.csr_matrix([[5., 0., 7.], [0., 11., 0.], [13., 0., 17.]])
+    expected = U.toarray().T @ A.toarray() @ U.toarray()
+
+    for n in range(4):
+        U1 = U if n//2 else U.toarray()
+        A1 = A if n%2 else A.toarray()
+        C = symmetric_bilinear(U1, A1)
+        assert not isinstance(C, Matrix)
+        if sparse.issparse(U1) and sparse.issparse(A1):
+            assert sparse.issparse(C)
+        assert np.allclose(sparse_dense(C), expected)
+
 
 def test_symmetric_bilinear_multiple():
     # test empty products
@@ -137,6 +196,33 @@ def test_symmetric_bilinear_multiple():
     # B = Matrix([[1,2], [5,7], [13,17]])
     C = Matrix.vstack(*[(B.T @ Matrix(_).reshape(3,3) @ B).reshape(1,4) for _ in A.tolist()])
     assert symmetric_bilinear_multiple(B, A) == C
+
+    # test sparsity
+    U = sparse.csr_matrix([[1., 0.], [2., -1.], [0., 3.]])
+    A = sparse.csr_matrix([
+        [5., 0., 7., 0., 11., 0., 13., 0., 17.],
+        [0., 19., 0., 23., 0., 29., 0., 31., 0.],
+    ])
+    expected = (U.toarray().T @ A.toarray().reshape(2, 3, 3) @ U.toarray()).reshape(2, 4)
+
+    for n in range(4):
+        U1 = U if n//2 else U.toarray()
+        A1 = A if n%2 else A.toarray()
+        C = symmetric_bilinear_multiple(U1, A1)
+        assert not isinstance(C, Matrix)
+        if sparse.issparse(U1) and sparse.issparse(A1):
+            assert sparse.issparse(C)
+        assert np.allclose(sparse_dense(C), expected)
+
+
+def test_kronecker_product():
+    A = sparse.csr_matrix([[1., 0.], [2., 3.]])
+    B = np.array([[0., 5.], [7., 0.]])
+
+    K = kronecker_product(A, B)
+
+    assert sparse.issparse(K)
+    assert np.allclose(K.toarray(), np.kron(A.toarray(), B))
 
 
 def test_decompose_int64_to_level_digits():

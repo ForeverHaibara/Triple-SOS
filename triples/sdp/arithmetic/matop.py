@@ -163,6 +163,8 @@ def reshape(A: Matrix, shape: Tuple[int, int]) -> Matrix: ...
 def reshape(A: MatrixBase, shape: Tuple[int, int]) -> MatrixBase: ...
 @overload
 def reshape(A: ndarray, shape: Tuple[int, int]) -> ndarray: ...
+@overload
+def reshape(A: spmatrix, shape: Tuple[int, int]) -> spmatrix: ...
 
 def reshape(A, shape):
     """
@@ -211,6 +213,8 @@ def reshape(A, shape):
 def vec2mat(v: MatrixBase) -> MatrixBase: ...
 @overload
 def vec2mat(v: ndarray) -> ndarray: ...
+@overload
+def vec2mat(v: spmatrix) -> spmatrix: ...
 
 def vec2mat(v):
     """
@@ -238,6 +242,8 @@ def vec2mat(v):
 def mat2vec(M: Matrix) -> Matrix: ...
 @overload
 def mat2vec(M: ndarray) -> ndarray: ...
+@overload
+def mat2vec(M: spmatrix) -> spmatrix: ...
 
 def mat2vec(M):
     """
@@ -258,6 +264,7 @@ def mat2vec(M):
     if isinstance(M, ndarray):
         return M.flatten()
     return reshape(M, (size_of_mat(M), 1))
+
 
 def rep_matrix_from_dict(x: Dict[int, Dict[int, Any]], shape: Tuple[int, int], domain: 'Domain') -> Matrix:
     """
@@ -395,14 +402,26 @@ def _cast_list_to_sympy_matrix(rows: int, cols: int, lst: List[int]) -> Matrix:
             sdm[i] = row
     return rep_matrix_from_dict(sdm, (rows, cols), ZZ)
 
+def _csr_to_dict_of_dict(csr_mat: spmatrix) -> Dict[int, Dict[int, Any]]:
+    """Convert a CSR matrix to a dictionary of dictionaries. Internal."""
+    # csr_mat = csr_mat.tocsr()
+    dod = {}
+    for row in range(csr_mat.shape[0]):
+        start = csr_mat.indptr[row]
+        end = csr_mat.indptr[row + 1]
+        cols = csr_mat.indices[start:end].tolist()
+        values = csr_mat.data[start:end].tolist()
+        if len(cols):  # Only include rows with non-zero elements
+            dod[row] = dict(zip(cols, values))
+    return dod
 
-def rep_matrix_from_numpy(arr: ndarray) -> RepMatrix:
+def rep_matrix_from_numpy(arr: Union[ndarray, spmatrix]) -> RepMatrix:
     """
     Cast a numpy matrix to a sympy RepMatrix by handling dtypes carefully.
 
     Parameters
     ----------
-    arr : ndarray
+    arr : ndarray or spmatrix
         The numpy matrix to be casted, can be either 1D or 2D.
 
     Examples
@@ -420,23 +439,40 @@ def rep_matrix_from_numpy(arr: ndarray) -> RepMatrix:
     >>> M._rep.domain
     RR
     """
-    if np.issubdtype(arr.dtype, np.integer):
+    if isinstance(arr, Matrix):
+        return arr
+    if isinstance(arr, ndarray) and np.issubdtype(arr.dtype, np.integer):
         shape = arr.shape if len(arr.shape) == 2 else (arr.shape[0], 1)
         return _cast_list_to_sympy_matrix(shape[0], shape[1], arr.flatten().tolist())
 
     conv = None
-    if np.issubdtype(arr.dtype, np.floating):
+    domain = RR
+    if np.issubdtype(arr.dtype, np.integer):
+        domain = ZZ
+        conv = lambda x: MPZ(int(x))
+    elif np.issubdtype(arr.dtype, np.floating):
+        domain = RR
         conv = RR.convert
     elif np.issubdtype(arr.dtype, np.complexfloating):
+        domain = CC
         conv = CC.convert
+
     if conv is not None:
-        if len(arr.shape) == 2:
-            lst = [[conv(_) for _ in row] for row in arr.tolist()]
-            return rep_matrix_from_list(lst, arr.shape, RR)
-        else:
-            lst = [conv(_) for _ in arr.tolist()]
-            return rep_matrix_from_list(lst, arr.shape[0], RR)
+        if isinstance(arr, ndarray):
+            if len(arr.shape) == 2:
+                lst = [[conv(_) for _ in row] for row in arr.tolist()]
+                return rep_matrix_from_list(lst, arr.shape, domain)
+            else:
+                lst = [conv(_) for _ in arr.tolist()]
+                return rep_matrix_from_list(lst, arr.shape[0], domain)
+        elif isinstance(arr, spmatrix):
+            dt = _csr_to_dict_of_dict(arr.tocsr())
+            dt = {r: {c: conv(v) for c, v in dt[r].items()} for r in dt}
+            return rep_matrix_from_dict(dt, arr.shape, domain)
+
     # fallback to default constructor
+    if isinstance(arr, spmatrix):
+        arr = arr.toarray()
     return Matrix(arr.tolist())
 
 
