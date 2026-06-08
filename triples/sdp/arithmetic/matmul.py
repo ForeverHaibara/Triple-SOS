@@ -260,14 +260,14 @@ def matmul(A, B, return_shape=None, time_limit=None):
     try:
         q1, q2, _MAXA, _MAXB = 0, 0, 0, 0
         q1, A = primitive(A._rep)
-        A = rep_matrix_to_numpy(A, dtype=int64)
+        A = rep_matrix_to_scipy(A, dtype=int64)
         _MAXA = abs(A).max()
         if isnan(_MAXA) or _MAXA == inf or _MAXA > _INT64_MAX:
             raise OverflowError
         time_limit()
 
         q2, B = primitive(B._rep)
-        B = rep_matrix_to_numpy(B, dtype=int64)
+        B = rep_matrix_to_scipy(B, dtype=int64)
         _MAXB = abs(B).max()
         if isnan(_MAXB) or _MAXB == inf or _MAXB > _INT64_MAX or int(_MAXA) * int(_MAXB) * B.shape[0] > _INT64_MAX:
             raise OverflowError
