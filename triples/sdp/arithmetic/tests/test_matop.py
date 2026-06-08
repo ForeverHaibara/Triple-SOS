@@ -1,7 +1,8 @@
 import numpy as np
 from scipy import sparse
 from sympy import MutableDenseMatrix as Matrix
-from sympy import Rational
+from sympy import Poly, RR, QQ
+from sympy.abc import z
 
 from ..matop import (
     FLINT_TYPE, is_zz_qq_mat, permute_matrix_rows,
@@ -30,37 +31,49 @@ def test_permute_matrix_rows():
             assert (M_p.n(15) - Matrix.vstack(*[M[i, :] for i in p])).is_zero_matrix, f"func={func}"
 
 
-def test_rep_matrix_to_scipy_sparse_rep_matrix():
-    M = Matrix.zeros(7, 9)
-    M[1, 3] = Rational(2, 5)
-    M[4, 0] = -3
-    M[6, 8] = Rational(7, 11)
+def test_rep_matrix_to_numpy_scipy():
+    mats = [
+        Matrix([[1,2,3],[4,0,0],[0,8,-9]]),
+        Matrix([[1,2,3],[4,0,0],[0,8,-9]]) / 7,
+        Matrix._fromrep(Matrix([[1,2.23,3.45],[4,0,0],[0,-8.231,9.6]])\
+                        ._rep.convert_to(RR)),
+    ]
+    for mat in mats:
+        expected = np.array(mat.n().tolist(), dtype=np.float64)
 
-    S = rep_matrix_to_scipy(M)
+        # also cast to composite domains
+        dMs = [
+            mat._rep,
+            mat._rep.convert_to(mat._rep.domain[z]),
+            # mat._rep.convert_to(mat._rep.domain[z].get_field())
+        ]
+        for dM in dMs:
+            mat = Matrix._fromrep(dM)
+            A = rep_matrix_to_numpy(mat)
+            B = rep_matrix_to_scipy(mat)
 
-    assert sparse.isspmatrix_csr(S)
-    assert S.shape == M.shape
-    assert S.nnz == 3
-    assert np.allclose(S.toarray(), rep_matrix_to_numpy(M))
-
-
-def test_rep_matrix_to_scipy_passthrough_and_dtype():
-    S0 = sparse.coo_matrix(([1, -2, 3], ([0, 2, 2], [1, 0, 3])), shape=(4, 5))
-
-    S = rep_matrix_to_scipy(S0, dtype=np.float32)
-    A = rep_matrix_to_numpy(S, dtype=np.float64)
-
-    assert sparse.issparse(S)
-    assert S.dtype == np.float32
-    assert A.dtype == np.float64
-    assert np.allclose(A, S0.toarray())
+            assert np.allclose(A, expected)
+            assert np.allclose(B.toarray(), expected)
+            assert sparse.isspmatrix_csr(B)
+            assert B.nnz == 6
 
 
-def test_rep_matrix_to_numpy_keeps_vector_dense():
+    # 1d vector
     v = np.array([1, 0, -2, 5], dtype=np.int64)
-
     out = rep_matrix_to_numpy(v, dtype=np.int64)
-
     assert isinstance(out, np.ndarray)
     assert out.shape == (4,)
-    assert np.array_equal(out, v)
+    assert out.tolist() == v.tolist()
+
+    # real algebraic fields
+    r = Poly(z**3 - 4*z + 1, z).all_roots()[1]
+    alg = QQ.algebraic_field(r)
+    mat = Matrix([[r, 1/r, 0], [0, 3*r**2 - r/3 + 2, (r - 4*r**2)/5]])
+    mat = Matrix._fromrep(mat._rep.convert_to(alg))
+    A = rep_matrix_to_numpy(mat)
+    B = rep_matrix_to_scipy(mat)
+    expected = np.array(mat.n().tolist(), dtype=np.float64)
+    assert np.allclose(A, expected)
+    assert np.allclose(B.toarray(), expected)
+    assert sparse.isspmatrix_csr(B)
+    assert B.nnz == 4

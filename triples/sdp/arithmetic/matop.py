@@ -20,12 +20,10 @@ from sympy.external.importtools import version_tuple
 from sympy import Float, MatrixBase
 from sympy.matrices import MutableDenseMatrix as Matrix
 from sympy.matrices.repmatrix import RepMatrix
-from sympy.polys.domains import ZZ, RR, CC # EXRAW >= 1.9
+from sympy.polys.domains import ZZ, QQ, RR, CC # EXRAW >= 1.9
 from sympy.polys.matrices.domainmatrix import DomainMatrix # polys.matrices >= 1.8
 from sympy.polys.matrices.ddm import DDM
 from sympy.polys.matrices.sdm import SDM
-from sympy.polys.fields import FracElement
-from sympy.polys.rings import PolyElement
 
 if TYPE_CHECKING:
     from sympy import Basic
@@ -491,7 +489,8 @@ def _rep_matrix_to_data(M, dtype: Any = np.float64) -> Optional[Tuple[List, List
         # for domains like QQ[x], QQ(x), elements cannot be converted
         # directly to int/float/complex, and should be carefully handled
         wrapper = lambda f: f
-        if isinstance(dM.domain.one, PolyElement):
+        dom = dM.domain
+        if dom.is_PolynomialRing:
             def wrapper(f):
                 def _f(x):
                     lt = x.LT
@@ -499,7 +498,7 @@ def _rep_matrix_to_data(M, dtype: Any = np.float64) -> Optional[Tuple[List, List
                         raise TypeError('Cannot convert PolyElement.')
                     return f(lt[1])
                 return _f
-        elif isinstance(dM.domain.one, FracElement):
+        elif dom.is_FractionField:
             def wrapper(f):
                 def _f(x):
                     x1, x2 = x.numer, x.denom
@@ -508,12 +507,20 @@ def _rep_matrix_to_data(M, dtype: Any = np.float64) -> Optional[Tuple[List, List
                         raise TypeError('Cannot convert FracElement.')
                     return f(lt1[1]) / f(lt2[1])
                 return _f
+        elif dom.is_AlgebraicField:
+            gen = dom.ext.n()
+            gen_pow = [gen**i for i in range(len(dom.mod.to_list()) - 1)]
+            def wrapper(f):
+                def _f(x):
+                    return f(sum(c * v for c, v in zip(x.rep[::-1], gen_pow)))
+                return _f
 
         if np.issubdtype(dtype, np.integer):
             f = wrapper(lambda x: x.__int__())
         elif np.issubdtype(dtype, np.floating):
-            if isinstance(dM.domain.one, FLINT_TYPE):
-                f = lambda x: x.numerator.__int__() / x.denominator.__int__()
+            if isinstance(dom.one, FLINT_TYPE) or\
+                (dom.is_Composite and isinstance(dom.domain.one, FLINT_TYPE)):
+                f = wrapper(lambda x: x.numerator.__int__() / x.denominator.__int__())
             else:
                 f = wrapper(lambda x: x.__float__())
         elif np.issubdtype(dtype, np.complexfloating):
