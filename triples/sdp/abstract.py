@@ -189,8 +189,16 @@ class SDPProblemBase(ABC):
         if verbose:
             S = self.S_from_y(y)
             S_numer = [rep_matrix_to_numpy(mat) for mat in S.values()]
-            S_eigen = [np.min(np.linalg.eigvalsh(mat)) if mat.size else 0 for mat in S_numer]
-            print(f'Minimum Eigenvalues = {S_eigen}')
+            S_eigen = [(np.min(np.linalg.eigvalsh(mat)), key)
+                       for key, mat in zip(S.keys(), S_numer) if mat.size]
+            # print(f'Minimum Eigenvalues = {S_eigen}')
+            if len(S_eigen):
+                eigens = sorted(S_eigen, key=lambda x: x[0])
+                leading_eigens = {k: v for v, k in eigens[:10]}
+                eigens = np.array([e for e, k in eigens])
+                print("-" * 60)
+                print(f"Minimum Eigenvalues = {leading_eigens}")
+                print(f"Eigens min/mean/max = {float(np.min(eigens)), float(np.mean(eigens)), float(np.max(eigens))}")
         return rationalize_and_decompose(y, mat_func=self.S_from_y, projection=self.project, **kwargs)
 
     def exprs_to_arrays(self, exprs: List[Union["Expr", "Relational", Tuple[Matrix, float], Tuple[Matrix, float, str]]], dtype=np.float64):

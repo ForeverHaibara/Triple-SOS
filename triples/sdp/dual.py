@@ -752,8 +752,14 @@ class SDPProblem(TransformableDual):
             return None
         f = DualRationalizer(self)
         if verbose:
-            S_eigen = list(f.mineigs(y).values())
-            print(f'Minimum Eigenvalues = {S_eigen}')
+            S_eigen = [(v, k) for k, v in f.mineigs(y).items()]
+            if len(S_eigen):
+                eigens = sorted(S_eigen, key=lambda x: x[0])
+                leading_eigens = {k: v for v, k in eigens[:10]}
+                eigens = np.array([e for e, k in eigens])
+                print("-" * 60)
+                print(f"Minimum Eigenvalues = {leading_eigens}")
+                print(f"Eigens min/mean/max = {float(np.min(eigens)), float(np.mean(eigens)), float(np.max(eigens))}")
         return f.rationalize(y, time_limit=time_limit)
 
     def _solve_numerical_sdp(self,
