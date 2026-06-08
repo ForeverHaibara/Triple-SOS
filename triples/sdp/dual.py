@@ -752,7 +752,8 @@ class SDPProblem(TransformableDual):
             return None
         f = DualRationalizer(self)
         if verbose:
-            S_eigen = [(v, k) for k, v in f.mineigs(y).items()]
+            size = self.size
+            S_eigen = [(v, k) for k, v in f.mineigs(y).items() if size[k]]
             if len(S_eigen):
                 eigens = sorted(S_eigen, key=lambda x: x[0])
                 leading_eigens = {k: v for v, k in eigens[:10]}

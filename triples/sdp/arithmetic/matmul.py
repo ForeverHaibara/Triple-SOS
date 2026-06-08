@@ -7,8 +7,7 @@ using sympy.Rational or numpy for matrix computations.
 from time import perf_counter
 from typing import List, Tuple, Union, Optional, Callable, overload, TYPE_CHECKING
 
-import numpy as np
-from numpy import ndarray, int64, isnan, inf, kron
+from numpy import ndarray, int64, isnan, inf, kron, result_type
 from numpy import iinfo as np_iinfo
 from numpy import any as np_any
 from numpy import where as np_where
@@ -21,7 +20,7 @@ from .matop import (
     ArithmeticTimeout,
     SDM, DDM, DFM,
     is_zz_qq_mat, vec2mat, reshape, primitive,
-    rep_matrix_to_numpy, rep_matrix_from_numpy
+    rep_matrix_to_numpy, rep_matrix_to_scipy, rep_matrix_from_numpy
 )
 
 if TYPE_CHECKING:
@@ -41,10 +40,32 @@ def _is_sparse_matrix(A) -> bool:
 def _is_numeric_matrix(A) -> bool:
     return isinstance(A, (ndarray, spmatrix))
 
-def _as_csr(A):
+def _as_csr(A: Union[ndarray, spmatrix]) -> csr_matrix:
     if _is_sparse_matrix(A):
         return A.tocsr()
     return csr_matrix(A)
+
+def _sparse_abs_max(A: spmatrix):
+    return abs(A.data).max() if A.nnz > 0 else 0
+
+def _sparse_max_row_nnz(A: spmatrix):
+    A = _as_csr(A)
+    if A.shape[0] == 0:
+        return 0
+    return int((A.indptr[1:] - A.indptr[:-1]).max())
+
+def _matmul_multiple_dense_cost(N, n, m):
+    return N * n * n * m
+
+def _matmul_multiple_sparse_cost(A, B, n):
+    return n * B.nnz + A.nnz * _sparse_max_row_nnz(B)
+
+def _symmetric_bilinear_dense_cost(N, n, m):
+    return N * n * n * m + N * n * m * m
+
+def _symmetric_bilinear_sparse_cost(A: spmatrix, U: spmatrix):
+    row_nnz = _sparse_max_row_nnz(U)
+    return U.nnz * U.nnz + A.nnz * row_nnz * row_nnz
 
 
 @overload
@@ -262,6 +283,20 @@ def matmul(A, B, return_shape=None, time_limit=None):
     return C
 
 
+def _matmul_multiple_spmatrix(A, B):
+    N, n = A.shape[0], B.shape[0]
+    m = B.shape[1]
+    dtype = result_type(A.dtype, B.dtype)
+    if N == 0 or n == 0 or m == 0:
+        return csr_matrix((N, n*m), dtype=dtype)
+    A = _as_csr(A)
+    B = _as_csr(B)
+    if A.nnz == 0 or B.nnz == 0:
+        return csr_matrix((N, n*m), dtype=dtype)
+    kr = sparse_kron(sparse_eye(n, format='csr', dtype=dtype),
+                            B, format='csr')
+    return A @ kr
+
 @overload
 def matmul_multiple(A: 'MatrixBase', B: 'MatrixBase',
     time_limit: Optional[Union[Callable, float]] = None) -> Matrix: ...
@@ -336,13 +371,9 @@ def matmul_multiple(A, B, time_limit=None):
     if isinstance(A, ndarray) and isinstance(B, ndarray):
         N, n = A.shape[0], B.shape[0]
         return (A.reshape(N, n, n) @ B).reshape(N, n*B.shape[1])
-    if (_is_sparse_matrix(A) or _is_sparse_matrix(B)) and _is_numeric_matrix(A) and _is_numeric_matrix(B):
-        N, n = A.shape[0], B.shape[0]
-        if N == 0 or n == 0 or B.shape[1] == 0:
-            return csr_matrix((N, n*B.shape[1]), dtype=np.float64)
-        transform = sparse_kron(sparse_eye(n, format='csr', dtype=np.float64),
-                                _as_csr(B), format='csr')
-        return _as_csr(A) @ transform
+    if (_is_sparse_matrix(A) or _is_sparse_matrix(B)) \
+            and _is_numeric_matrix(A) and _is_numeric_matrix(B):
+        return _matmul_multiple_spmatrix(A, B)
     time_limit = ArithmeticTimeout.make_checker(time_limit)
     A = rep_matrix_from_numpy(A)
     B = rep_matrix_from_numpy(B)
@@ -377,15 +408,15 @@ def matmul_multiple(A, B, time_limit=None):
 
     try:
         q1, A = primitive(A._rep)
-        A = rep_matrix_to_numpy(A, dtype=int64)
-        _MAXA = abs(A).max()
+        A = rep_matrix_to_scipy(A, dtype=int64)
+        _MAXA = _sparse_abs_max(A)
         if isnan(_MAXA) or _MAXA == inf or _MAXA > _INT64_MAX:
             raise OverflowError
         time_limit()
 
         q2, B = primitive(B._rep)
-        B = rep_matrix_to_numpy(B, dtype=int64)
-        _MAXB = abs(B).max()
+        B = rep_matrix_to_scipy(B, dtype=int64)
+        _MAXB = _sparse_abs_max(B)
         if isnan(_MAXB) or _MAXB == inf or _MAXB > _INT64_MAX \
                 or int(_MAXA) * int(_MAXB) * n > _INT64_MAX:
             raise OverflowError
@@ -393,17 +424,22 @@ def matmul_multiple(A, B, time_limit=None):
     except OverflowError:
         return default(A0, B0)
 
-    A = A.reshape((N, n, n))
+    use_sparse = _matmul_multiple_sparse_cost(A, B, n) < _matmul_multiple_dense_cost(N, n, m)
 
     if _VERBOSE_MATMUL_MULTIPLE:
-        print('>> Time for casting to numpy:', perf_counter() - time0)
+        print('>> Time for casting to sparse:', perf_counter() - time0)
         time0 = perf_counter()
 
-    C = (A @ B).reshape((N, n*m))
+    if use_sparse:
+        C = _matmul_multiple_spmatrix(A, B)
+    else:
+        A = A.toarray().reshape((N, n, n))
+        B = B.toarray()
+        C = (A @ B).reshape((N, n*m))
     time_limit()
 
     if _VERBOSE_MATMUL_MULTIPLE:
-        print('>> Time for numpy matmul:', perf_counter() - time0) # very fast (can be ignored)
+        print('>> Time for %s matmul:' % ('sparse' if use_sparse else 'numpy'), perf_counter() - time0)
         time0 = perf_counter()
 
     q1q2 = q1 * q2
@@ -414,6 +450,19 @@ def matmul_multiple(A, B, time_limit=None):
         time0 = perf_counter()
 
     return C
+
+
+def _symmetric_bilinear_multiple_spmatrix(U, A):
+    N, n = A.shape[0], U.shape[0]
+    m = U.shape[1]
+    dtype = result_type(U.dtype, A.dtype)
+    if N == 0 or n == 0 or m == 0:
+        return csr_matrix((N, m**2), dtype=dtype)
+    U = _as_csr(U)
+    if U.nnz == 0:
+        return csr_matrix((N, m**2), dtype=dtype)
+    transform = sparse_kron(U, U, format='csr')
+    return _as_csr(A) @ transform
 
 @overload
 def symmetric_bilinear(U: 'MatrixBase', A: 'MatrixBase', is_A_vec: bool = False,
@@ -554,14 +603,9 @@ def symmetric_bilinear_multiple(U, A, time_limit=None):
     if isinstance(A, ndarray) and isinstance(U, ndarray):
         N, n = A.shape[0], U.shape[0]
         return (U.T @ A.reshape(N, n, n) @ U).reshape(N, U.shape[1]**2)
-    if (_is_sparse_matrix(A) or _is_sparse_matrix(U)) and _is_numeric_matrix(A) and _is_numeric_matrix(U):
-        N, n = A.shape[0], U.shape[0]
-        m = U.shape[1]
-        if N == 0 or n == 0 or m == 0:
-            return csr_matrix((N, m**2), dtype=np.float64)
-        U_sparse = _as_csr(U)
-        transform = sparse_kron(U_sparse, U_sparse, format='csr')
-        return _as_csr(A) @ transform
+    if (_is_sparse_matrix(A) or _is_sparse_matrix(U)) \
+            and _is_numeric_matrix(A) and _is_numeric_matrix(U):
+        return _symmetric_bilinear_multiple_spmatrix(U, A)
     time_limit = ArithmeticTimeout.make_checker(time_limit)
     A = rep_matrix_from_numpy(A)
     U = rep_matrix_from_numpy(U)
@@ -597,15 +641,15 @@ def symmetric_bilinear_multiple(U, A, time_limit=None):
     try:
         q1, q2, _MAXA, _MAXU = 0, 0, 0, 0
         q1, A = primitive(A._rep)
-        A = rep_matrix_to_numpy(A, dtype=int64)
-        _MAXA = abs(A).max()
+        A = rep_matrix_to_scipy(A, dtype=int64)
+        _MAXA = _sparse_abs_max(A)
         if isnan(_MAXA) or _MAXA == inf or _MAXA > _INT64_MAX:
             raise OverflowError
         time_limit()
 
         q2, U = primitive(U._rep)
-        U = rep_matrix_to_numpy(U, dtype=int64)
-        _MAXU = abs(U).max()
+        U = rep_matrix_to_scipy(U, dtype=int64)
+        _MAXU = _sparse_abs_max(U)
         if isnan(_MAXU) or _MAXU == inf or _MAXU > _INT64_MAX:
             raise OverflowError
         time_limit()
@@ -614,17 +658,24 @@ def symmetric_bilinear_multiple(U, A, time_limit=None):
         if _VERBOSE_MATMUL_MULTIPLE:
             time0 = perf_counter()
         if int(_MAXA) * int(_MAXU)**2 * n**2 <= _INT64_MAX:
-            # direct numpy multiplication
-
-            A = A.reshape((N, n, n))
-            C = (U.T @ A @ U).reshape((N, m**2))
+            use_sparse = _symmetric_bilinear_sparse_cost(A, U) \
+                < _symmetric_bilinear_dense_cost(N, n, m)
+            if use_sparse:
+                C = _symmetric_bilinear_multiple_spmatrix(U, A)
+            else:
+                A = A.toarray().reshape((N, n, n))
+                U = U.toarray()
+                C = (U.T @ A @ U).reshape((N, m**2))
             time_limit()
             C = rep_matrix_from_numpy(C)
 
             if _VERBOSE_MATMUL_MULTIPLE:
                 print(f">> Time for symmetric bilinear multiple {U.shape}.T * {A.shape} * {U.shape}"\
+                      + f" ({'sparse' if use_sparse else 'numpy'})"\
                       + f", time = {perf_counter() - time0}")
         else:
+            A = A.toarray()
+            U = U.toarray()
             C = _symmetric_bilinear_multiple_by_level(U, A)
             if _VERBOSE_MATMUL_MULTIPLE:
                 print(f">> Time for symmetric bilinear multiple {U.shape}.T * {A.shape} * {U.shape} (L)"\

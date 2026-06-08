@@ -1,3 +1,5 @@
+import sys
+
 import numpy as np
 from scipy import sparse
 from sympy import Rational, primerange
@@ -138,6 +140,35 @@ def test_matmul_multiple():
         assert np.allclose(sparse_dense(C), expected)
 
 
+def test_matmul_multiple_sympy_sparse_dispatch(monkeypatch):
+    module = sys.modules[matmul_multiple.__module__]
+    A = Matrix([
+        [0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, -2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        [7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    ])
+    B = Matrix([[0, 11], [13, 0], [0, 0], [-17, 0]])
+    expected = Matrix.vstack(*[(Matrix(_).reshape(4, 4) @ B).reshape(1, 8) for _ in A.tolist()])
+
+    def unexpected_dense_conversion(M, dtype=np.float64):
+        raise AssertionError('sparse dispatch should not densify SymPy inputs')
+
+    func = getattr(module, 'rep_matrix_to_numpy')
+    monkeypatch.setattr(module, 'rep_matrix_to_numpy', unexpected_dense_conversion)
+    assert matmul_multiple(A, B) == expected
+    monkeypatch.setattr(module, 'rep_matrix_to_numpy', func)
+
+    A = Matrix([[1, 2, 3, 4], [5, 6, 7, 8]])
+    B = Matrix([[9, 10], [11, 12]])
+    expected = Matrix.vstack(*[(Matrix(_).reshape(2, 2) @ B).reshape(1, 4) for _ in A.tolist()])
+
+    def unexpected_sparse_kernel(A, B):
+        raise AssertionError('dense dispatch should not call sparse kernel')
+
+    monkeypatch.setattr(module, '_matmul_multiple_spmatrix', unexpected_sparse_kernel)
+    assert matmul_multiple(A, B) == expected
+
+
 def test_symmetric_bilinear():
     # test empty products
     assert symmetric_bilinear(Matrix.zeros(3, 0), Matrix.ones(3, 3)) == Matrix.zeros(0, 0)
@@ -213,6 +244,22 @@ def test_symmetric_bilinear_multiple():
         if sparse.issparse(U1) and sparse.issparse(A1):
             assert sparse.issparse(C)
         assert np.allclose(sparse_dense(C), expected)
+
+
+def test_symmetric_bilinear_multiple_sympy_sparse_dispatch(monkeypatch):
+    module = sys.modules[symmetric_bilinear_multiple.__module__]
+    U = Matrix([[3, 0], [0, 0], [0, 0], [0, -5]])
+    A = Matrix([
+        [7, 0, 0, 0, 0, 0, -8, 0, 2, 0, 6, 0, 0, 0, 0, 11],
+        [0, 0, 0, 13, 0, 0, 0, 0, 0, 0, 3, 4, 0, 0, 0, 0],
+    ])
+    expected = Matrix.vstack(*[(U.T @ Matrix(_).reshape(4, 4) @ U).reshape(1, 4) for _ in A.tolist()])
+
+    def unexpected_dense_conversion(M, dtype=np.float64):
+        raise AssertionError('sparse dispatch should not densify SymPy inputs')
+
+    monkeypatch.setattr(module, 'rep_matrix_to_numpy', unexpected_dense_conversion)
+    assert symmetric_bilinear_multiple(U, A) == expected
 
 
 def test_kronecker_product():

@@ -20,7 +20,7 @@ from sympy.external.importtools import version_tuple
 from sympy import Float, MatrixBase
 from sympy.matrices import MutableDenseMatrix as Matrix
 from sympy.matrices.repmatrix import RepMatrix
-from sympy.polys.domains import ZZ, QQ, RR, CC # EXRAW >= 1.9
+from sympy.polys.domains import ZZ, RR, CC # EXRAW >= 1.9
 from sympy.polys.matrices.domainmatrix import DomainMatrix # polys.matrices >= 1.8
 from sympy.polys.matrices.ddm import DDM
 from sympy.polys.matrices.sdm import SDM
