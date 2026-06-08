@@ -20,7 +20,7 @@ from .matop import (
     ArithmeticTimeout,
     SDM, DDM, DFM,
     is_zz_qq_mat, vec2mat, reshape, primitive,
-    rep_matrix_to_numpy, rep_matrix_to_scipy, rep_matrix_from_numpy
+    rep_matrix_to_scipy, rep_matrix_from_numpy
 )
 
 if TYPE_CHECKING:
