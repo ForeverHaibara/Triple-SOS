@@ -272,7 +272,7 @@ def matmul(A, B, return_shape=None, time_limit=None):
         if isnan(_MAXB) or _MAXB == inf or _MAXB > _INT64_MAX or int(_MAXA) * int(_MAXB) * B.shape[0] > _INT64_MAX:
             raise OverflowError
         time_limit()
-    except OverflowError:
+    except (OverflowError, TypeError):
         # print(f'Default {A0.shape} * {B0.shape}, q1 = {q1}, q2 = {q2}, MAXA = {_MAXA}, MAXB = {_MAXB}')
         return default(A0, B0)
 
@@ -421,7 +421,7 @@ def matmul_multiple(A, B, time_limit=None):
                 or int(_MAXA) * int(_MAXB) * n > _INT64_MAX:
             raise OverflowError
         time_limit()
-    except OverflowError:
+    except (OverflowError, TypeError):
         return default(A0, B0)
 
     use_sparse = _matmul_multiple_sparse_cost(A, B, n) < _matmul_multiple_dense_cost(N, n, m)
@@ -685,7 +685,7 @@ def symmetric_bilinear_multiple(U, A, time_limit=None):
         C = C * q1q22
 
         return C
-    except OverflowError:
+    except (OverflowError, TypeError):
         # print(f"Default {U0.shape}.T * {A0.shape} * {U0.shape}"\
         #       + f", q1 = {q1}, q2 = {q2}, MAXA = {_MAXA}, MAXU = {_MAXU}")
         return default(A0, U0)
