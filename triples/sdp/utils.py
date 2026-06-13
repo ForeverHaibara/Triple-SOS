@@ -6,7 +6,7 @@ from sympy import Matrix, MatrixBase, Expr
 from sympy.core.relational import GreaterThan, StrictGreaterThan, LessThan, StrictLessThan, Equality, Relational
 from sympy.solvers.solveset import linear_eq_to_matrix
 
-from .arithmetic import vec2mat, mat2vec, reshape, rep_matrix_to_numpy
+from .arithmetic import vec2mat, mat2vec, reshape, rep_matrix_to_numpy, matadd, matmul
 
 if TYPE_CHECKING:
     from sympy import Basic
@@ -39,7 +39,8 @@ def S_from_y(
 
     S_dict = {}
     for key, (x0, space) in x0_and_space.items():
-        vecS = x0 + space * y
+        # vecS = x0 + space * y
+        vecS = matadd(x0, matmul(space, y))
         S = vec2mat(vecS)
         S_dict[key] = S
     return S_dict

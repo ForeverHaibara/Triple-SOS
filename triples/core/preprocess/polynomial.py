@@ -30,6 +30,7 @@ class SolvePolynomial(TransformNode):
     def get_polynomial_solvers(self, configs):
         solvers = configs.get('solvers', None)
         if solvers is None:
+            from .qcqp import QCQPSolver
             from ..structsos.structsos import StructuralSOSSolver
             from ..linsos.linsos import LinearSOSSolver
             from ..sdpsos.sdpsos import SDPSOSSolver
@@ -38,6 +39,7 @@ class SolvePolynomial(TransformNode):
             # from .reparam import Reparametrization
             solvers = [
                 StructuralSOSSolver,
+                QCQPSolver,
                 LinearSOSSolver,
                 SDPSOSSolver,
                 SymmetricSubstitution,

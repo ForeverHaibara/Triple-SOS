@@ -24,8 +24,6 @@ from sympy.polys.domains import ZZ, RR, CC # EXRAW >= 1.9
 from sympy.polys.matrices.domainmatrix import DomainMatrix # polys.matrices >= 1.8
 from sympy.polys.matrices.ddm import DDM
 from sympy.polys.matrices.sdm import SDM
-from sympy.polys.fields import FracElement
-from sympy.polys.rings import PolyElement
 
 if TYPE_CHECKING:
     from sympy import Basic
@@ -163,6 +161,8 @@ def reshape(A: Matrix, shape: Tuple[int, int]) -> Matrix: ...
 def reshape(A: MatrixBase, shape: Tuple[int, int]) -> MatrixBase: ...
 @overload
 def reshape(A: ndarray, shape: Tuple[int, int]) -> ndarray: ...
+@overload
+def reshape(A: spmatrix, shape: Tuple[int, int]) -> spmatrix: ...
 
 def reshape(A, shape):
     """
@@ -211,6 +211,8 @@ def reshape(A, shape):
 def vec2mat(v: MatrixBase) -> MatrixBase: ...
 @overload
 def vec2mat(v: ndarray) -> ndarray: ...
+@overload
+def vec2mat(v: spmatrix) -> spmatrix: ...
 
 def vec2mat(v):
     """
@@ -238,6 +240,8 @@ def vec2mat(v):
 def mat2vec(M: Matrix) -> Matrix: ...
 @overload
 def mat2vec(M: ndarray) -> ndarray: ...
+@overload
+def mat2vec(M: spmatrix) -> spmatrix: ...
 
 def mat2vec(M):
     """
@@ -258,6 +262,7 @@ def mat2vec(M):
     if isinstance(M, ndarray):
         return M.flatten()
     return reshape(M, (size_of_mat(M), 1))
+
 
 def rep_matrix_from_dict(x: Dict[int, Dict[int, Any]], shape: Tuple[int, int], domain: 'Domain') -> Matrix:
     """
@@ -395,14 +400,26 @@ def _cast_list_to_sympy_matrix(rows: int, cols: int, lst: List[int]) -> Matrix:
             sdm[i] = row
     return rep_matrix_from_dict(sdm, (rows, cols), ZZ)
 
+def _csr_to_dict_of_dict(csr_mat: spmatrix) -> Dict[int, Dict[int, Any]]:
+    """Convert a CSR matrix to a dictionary of dictionaries. Internal."""
+    # csr_mat = csr_mat.tocsr()
+    dod = {}
+    for row in range(csr_mat.shape[0]):
+        start = csr_mat.indptr[row]
+        end = csr_mat.indptr[row + 1]
+        cols = csr_mat.indices[start:end].tolist()
+        values = csr_mat.data[start:end].tolist()
+        if len(cols):  # Only include rows with non-zero elements
+            dod[row] = dict(zip(cols, values))
+    return dod
 
-def rep_matrix_from_numpy(arr: ndarray) -> RepMatrix:
+def rep_matrix_from_numpy(arr: Union[ndarray, spmatrix]) -> RepMatrix:
     """
     Cast a numpy matrix to a sympy RepMatrix by handling dtypes carefully.
 
     Parameters
     ----------
-    arr : ndarray
+    arr : ndarray or spmatrix
         The numpy matrix to be casted, can be either 1D or 2D.
 
     Examples
@@ -420,23 +437,40 @@ def rep_matrix_from_numpy(arr: ndarray) -> RepMatrix:
     >>> M._rep.domain
     RR
     """
-    if np.issubdtype(arr.dtype, np.integer):
+    if isinstance(arr, Matrix):
+        return arr
+    if isinstance(arr, ndarray) and np.issubdtype(arr.dtype, np.integer):
         shape = arr.shape if len(arr.shape) == 2 else (arr.shape[0], 1)
         return _cast_list_to_sympy_matrix(shape[0], shape[1], arr.flatten().tolist())
 
     conv = None
-    if np.issubdtype(arr.dtype, np.floating):
+    domain = RR
+    if np.issubdtype(arr.dtype, np.integer):
+        domain = ZZ
+        conv = lambda x: MPZ(int(x))
+    elif np.issubdtype(arr.dtype, np.floating):
+        domain = RR
         conv = RR.convert
     elif np.issubdtype(arr.dtype, np.complexfloating):
+        domain = CC
         conv = CC.convert
+
     if conv is not None:
-        if len(arr.shape) == 2:
-            lst = [[conv(_) for _ in row] for row in arr.tolist()]
-            return rep_matrix_from_list(lst, arr.shape, RR)
-        else:
-            lst = [conv(_) for _ in arr.tolist()]
-            return rep_matrix_from_list(lst, arr.shape[0], RR)
+        if isinstance(arr, ndarray):
+            if len(arr.shape) == 2:
+                lst = [[conv(_) for _ in row] for row in arr.tolist()]
+                return rep_matrix_from_list(lst, arr.shape, domain)
+            else:
+                lst = [conv(_) for _ in arr.tolist()]
+                return rep_matrix_from_list(lst, arr.shape[0], domain)
+        elif isinstance(arr, spmatrix):
+            dt = _csr_to_dict_of_dict(arr.tocsr())
+            dt = {r: {c: conv(v) for c, v in dt[r].items()} for r in dt}
+            return rep_matrix_from_dict(dt, arr.shape, domain)
+
     # fallback to default constructor
+    if isinstance(arr, spmatrix):
+        arr = arr.toarray()
     return Matrix(arr.tolist())
 
 
@@ -455,7 +489,8 @@ def _rep_matrix_to_data(M, dtype: Any = np.float64) -> Optional[Tuple[List, List
         # for domains like QQ[x], QQ(x), elements cannot be converted
         # directly to int/float/complex, and should be carefully handled
         wrapper = lambda f: f
-        if isinstance(dM.domain.one, PolyElement):
+        dom = dM.domain
+        if dom.is_PolynomialRing:
             def wrapper(f):
                 def _f(x):
                     lt = x.LT
@@ -463,7 +498,7 @@ def _rep_matrix_to_data(M, dtype: Any = np.float64) -> Optional[Tuple[List, List
                         raise TypeError('Cannot convert PolyElement.')
                     return f(lt[1])
                 return _f
-        elif isinstance(dM.domain.one, FracElement):
+        elif dom.is_FractionField:
             def wrapper(f):
                 def _f(x):
                     x1, x2 = x.numer, x.denom
@@ -472,12 +507,20 @@ def _rep_matrix_to_data(M, dtype: Any = np.float64) -> Optional[Tuple[List, List
                         raise TypeError('Cannot convert FracElement.')
                     return f(lt1[1]) / f(lt2[1])
                 return _f
+        elif dom.is_AlgebraicField:
+            gen = dom.ext.n()
+            gen_pow = [gen**i for i in range(len(dom.mod.to_list()) - 1)]
+            def wrapper(f):
+                def _f(x):
+                    return f(sum(c * v for c, v in zip(x.rep[::-1], gen_pow)))
+                return _f
 
         if np.issubdtype(dtype, np.integer):
             f = wrapper(lambda x: x.__int__())
         elif np.issubdtype(dtype, np.floating):
-            if isinstance(dM.domain.one, FLINT_TYPE):
-                f = lambda x: x.numerator.__int__() / x.denominator.__int__()
+            if isinstance(dom.one, FLINT_TYPE) or\
+                (dom.is_Composite and isinstance(dom.domain.one, FLINT_TYPE)):
+                f = wrapper(lambda x: x.numerator.__int__() / x.denominator.__int__())
             else:
                 f = wrapper(lambda x: x.__float__())
         elif np.issubdtype(dtype, np.complexfloating):
@@ -500,7 +543,7 @@ def _rep_matrix_to_data(M, dtype: Any = np.float64) -> Optional[Tuple[List, List
         return data_list, row_indices, col_indices
     return None
 
-def rep_matrix_to_numpy(M: Union[MatrixBase, DomainMatrix, ndarray], dtype: Any = np.float64) -> ndarray:
+def rep_matrix_to_numpy(M: Union[MatrixBase, DomainMatrix, ndarray, spmatrix], dtype: Any = np.float64) -> ndarray:
     """
     Cast a sympy RepMatrix to a numpy matrix efficiently.
 
@@ -511,6 +554,12 @@ def rep_matrix_to_numpy(M: Union[MatrixBase, DomainMatrix, ndarray], dtype: Any 
     dtype : numpy.dtype
         The dtype of the numpy matrix. Default is np.float64.
     """
+    dtype = np.dtype(dtype)
+    if isinstance(M, ndarray):
+        return M.astype(dtype, copy=False)
+    if isinstance(M, spmatrix):
+        return M.toarray().astype(dtype, copy=False)
+
     result = _rep_matrix_to_data(M, dtype)
     if result is None:
         # fallback to default constructor
@@ -521,7 +570,7 @@ def rep_matrix_to_numpy(M: Union[MatrixBase, DomainMatrix, ndarray], dtype: Any 
     arr[row_indices, col_indices] = data_list
     return arr
 
-def rep_matrix_to_scipy(M: Union[MatrixBase, DomainMatrix, ndarray], dtype = np.float64) -> spmatrix:
+def rep_matrix_to_scipy(M: Union[MatrixBase, DomainMatrix, ndarray, spmatrix], dtype = np.float64) -> spmatrix:
     """
     Cast a sympy RepMatrix to a scipy sparse matrix efficiently.
 
@@ -532,6 +581,12 @@ def rep_matrix_to_scipy(M: Union[MatrixBase, DomainMatrix, ndarray], dtype = np.
     dtype : numpy.dtype
         The dtype of the numpy matrix. Default is np.float64.
     """
+    dtype = np.dtype(dtype)
+    if isinstance(M, spmatrix):
+        return M.astype(dtype, copy=False)
+    if isinstance(M, ndarray):
+        return csr_matrix(M.astype(dtype, copy=False))
+
     result = _rep_matrix_to_data(M, dtype)
     if result is None:
         # fallback to default constructor

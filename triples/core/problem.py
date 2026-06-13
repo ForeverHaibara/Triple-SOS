@@ -1,6 +1,6 @@
 from typing import (
     Dict, List, Tuple, Set, Optional, Union, Iterable, Callable,
-    Any, TypeVar, Generic
+    Any, TypeVar, Generic, TYPE_CHECKING
 )
 from sympy import (
     Expr, Symbol, Poly, Integer, Function, Mul, Add, Pow,
@@ -22,6 +22,8 @@ from ..utils.monomials import (
     verify_closure, _identify_symmetry_from_blackbox
 )
 
+if TYPE_CHECKING:
+    from .preprocess.qcqp import QCQP
 
 class NonPolynomialError(BasePolynomialError):
     pass
@@ -41,8 +43,8 @@ class InequalityProblem(Generic[T]):
     ineq_constraints: Dict[T, Expr]
     eq_constraints: Dict[T, Expr]
 
-    _is_commutative = True
-    _is_polynomial = False
+    # _is_commutative = True
+    # _is_polynomial = False
 
     counter_examples: Optional[RootList] = None
     solution: Optional[Expr] = None
@@ -330,10 +332,21 @@ class InequalityProblem(Generic[T]):
         return ineqs[1], eqs[1], ineqs[0], eqs[0]
 
     @property
-    def is_polynomial(self) -> bool:
-        return bool(self._is_polynomial)
+    def is_commutative(self) -> bool:
+        return self.reduce(lambda e: e.is_commutative, all)
 
     @property
+    def is_polynomial(self) -> bool:
+        return self.reduce(lambda e: isinstance(e, Poly), all)
+
+    @property
+    def is_convex(self) -> Optional[bool]:
+        return None
+
+    @property
+    def is_homogeneous(self) -> bool:
+        return self.reduce(lambda e: self._dtype_is_homogeneous(e), all)
+
     def is_of_type(self, dtype) -> bool:
         return self.reduce(lambda e: isinstance(e, dtype), all)
 
@@ -377,14 +390,12 @@ class InequalityProblem(Generic[T]):
         from .node import _sum_of_squares
         return _sum_of_squares(self, configs)
 
-    @property
-    def is_homogeneous(self) -> bool:
-        return self.reduce(lambda e: self._dtype_is_homogeneous(e), all)
-
     def polylize(self,
         ineqs_sqf: bool = True,
         eqs_sqf: bool = True,
+        field: bool = False,
         extension: bool = True,
+        unify: bool = False,
     ) -> 'InequalityProblem':
         problem = self
         expr, ineq_constraints, eq_constraints = \
@@ -396,8 +407,10 @@ class InequalityProblem(Generic[T]):
 
         def as_poly(expr):
             if isinstance(expr, Poly) and expr.gens == gens:
+                if field:
+                    expr = expr.to_field()
                 return expr
-            return Poly(expr.doit(), *gens, extension=extension)
+            return Poly(expr.doit(), *gens, extension=extension, field=field)
 
         expr = as_poly(expr)
         ineq_constraints = {as_poly(e): e2 for e, e2 in ineq_constraints.items()}
@@ -406,6 +419,18 @@ class InequalityProblem(Generic[T]):
         problem = InequalityProblem(expr, ineq_constraints, eq_constraints)
         problem, _ = problem.sqr_free(problem_sqf=False,
             ineqs_sqf=ineqs_sqf, eqs_sqf=eqs_sqf, inplace=True)
+
+        if unify:
+            doms = problem.reduce(lambda e: e.domain, list)
+            dom = doms[0]
+            for dom1 in doms[1:]:
+                dom = dom.unify(dom1)
+            problem.expr = problem.expr.set_domain(dom)
+            problem.ineq_constraints = {e.set_domain(dom): e2
+                for e, e2 in problem.ineq_constraints.items()}
+            problem.eq_constraints = {e.set_domain(dom): e2
+                for e, e2 in problem.eq_constraints.items()}
+
         if self.roots is not None:
             # TODO: sqf ineqs might exclude some roots here
             problem.roots = self.roots.reorder(problem.gens)
@@ -904,6 +929,14 @@ class InequalityProblem(Generic[T]):
                 return None
             return (x - expr_add) / expr_mul
         return problem, restore
+
+    def formulate_qcqp(self) -> Optional[Tuple["QCQP", Callable]]:
+        """
+        Try to formulate self as a QCQP instance. If success,
+        it returns the QCQP instance and the restoration function.
+        """
+        from .preprocess.qcqp import formulate_qcqp
+        return formulate_qcqp(self)
 
 
 def _get_constraints_wrapper(

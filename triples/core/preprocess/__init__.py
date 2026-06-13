@@ -8,6 +8,7 @@ from .features import get_features
 from .modeling import ReformulateAlgebraic
 from .algebraic import CancelDenominator, SolveMul
 from .polynomial import SolvePolynomial
+from .qcqp import QCQPSolver
 from .reparam import Reparametrization
 from .signs import sign_sos, get_symbol_signs
 
@@ -17,6 +18,7 @@ __all__ = [
     'ReformulateAlgebraic',
     'CancelDenominator', 'SolveMul',
     'SolvePolynomial',
+    'QCQPSolver',
     'Reparametrization',
     'sign_sos', 'get_symbol_signs',
 ]

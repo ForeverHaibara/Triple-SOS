@@ -1,11 +1,14 @@
 from .matop import (
     ArithmeticTimeout, is_empty_matrix, size_of_mat, sqrtsize_of_mat, vec2mat, mat2vec, reshape,
     is_zz_qq_mat, is_numerical_mat, free_symbols_of_mat,
-    rep_matrix_from_dict, rep_matrix_from_list, rep_matrix_from_numpy, rep_matrix_to_numpy,
+    rep_matrix_from_dict, rep_matrix_from_list, rep_matrix_from_numpy, rep_matrix_to_numpy, rep_matrix_to_scipy,
     primitive, permute_matrix_rows
 )
 
-from .matmul import matadd, matmul, matmul_multiple, symmetric_bilinear, symmetric_bilinear_multiple
+from .matmul import (
+    matadd, matmul, matmul_multiple, symmetric_bilinear, symmetric_bilinear_multiple,
+    kronecker_product
+)
 
 from .eigens import congruence
 
@@ -18,8 +21,9 @@ from .lll import lll
 __all__ = [
     'ArithmeticTimeout', 'is_empty_matrix','size_of_mat','sqrtsize_of_mat','vec2mat','mat2vec','reshape','primitive','permute_matrix_rows',
     'is_zz_qq_mat','is_numerical_mat','free_symbols_of_mat',
-    'rep_matrix_from_dict','rep_matrix_from_list', 'rep_matrix_from_numpy', 'rep_matrix_to_numpy',
+    'rep_matrix_from_dict','rep_matrix_from_list', 'rep_matrix_from_numpy', 'rep_matrix_to_numpy', 'rep_matrix_to_scipy',
     'matadd', 'matmul', 'matmul_multiple', 'symmetric_bilinear', 'symmetric_bilinear_multiple',
+    'kronecker_product',
     'congruence',
     'solve_undetermined_linear','solve_nullspace','solve_columnspace','solve_csr_linear','solve_column_separated_linear',
     'lll'

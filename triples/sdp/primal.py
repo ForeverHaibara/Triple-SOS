@@ -6,7 +6,10 @@ import numpy as np
 from sympy import MutableDenseMatrix as Matrix
 from sympy import MatrixBase, Symbol, Dummy
 
-from .arithmetic import ArithmeticTimeout, sqrtsize_of_mat, vec2mat, is_numerical_mat, rep_matrix_from_numpy, rep_matrix_to_numpy
+from .arithmetic import (
+    ArithmeticTimeout, sqrtsize_of_mat, vec2mat, is_numerical_mat,
+    rep_matrix_from_numpy, rep_matrix_to_numpy, rep_matrix_to_scipy
+)
 from .backends import SDPResult, SDPTimeoutError, solve_numerical_primal_sdp
 from .rationalize import RationalizeWithMask, RationalizeSimultaneously
 from .transforms import TransformablePrimal
@@ -466,13 +469,13 @@ class SDPPrimal(TransformablePrimal):
         # add a relaxation variable on the diagonal to maximize the eigenvalue
         # sum(tr(AiSi)) = a => sum(tr(Ai(Xi + x*I))) = a where Si = Xi + xI
         try:
-            spaces = [rep_matrix_to_numpy(_) for _ in spaces]
+            spaces = [rep_matrix_to_scipy(_) for _ in spaces]
             diag = np.zeros((x0.shape[0], ), dtype=np.float64)
             for space in spaces:
                 n = sqrtsize_of_mat(space.shape[1])
 
                 # get the contribution of diagonals, i.e. traces
-                diag += space[:,np.arange(0,n**2,n+1)].sum(axis = 1)
+                diag += np.asarray(space[:,np.arange(0,n**2,n+1)].sum(axis = 1)).flatten()
             spaces.append(diag)
             objective = np.array([0]*self.dof + [-1], dtype=np.float64)
             constraints = [(objective, 5, '<')] # avoid unboundness

@@ -7,7 +7,7 @@ from sympy import MutableDenseMatrix as Matrix
 
 from .arithmetic import (
     ArithmeticTimeout, solve_csr_linear, free_symbols_of_mat,
-    rep_matrix_from_dict, rep_matrix_to_numpy, rep_matrix_from_numpy, sqrtsize_of_mat
+    rep_matrix_from_dict, rep_matrix_to_numpy, rep_matrix_to_scipy, rep_matrix_from_numpy, sqrtsize_of_mat
 )
 from .backends import SDPResult, SDPError, SDPTimeoutError, solve_numerical_dual_sdp
 from .rationalize import SDPRationalizeError, DualRationalizer
@@ -752,8 +752,15 @@ class SDPProblem(TransformableDual):
             return None
         f = DualRationalizer(self)
         if verbose:
-            S_eigen = list(f.mineigs(y).values())
-            print(f'Minimum Eigenvalues = {S_eigen}')
+            size = self.size
+            S_eigen = [(v, k) for k, v in f.mineigs(y).items() if size[k]]
+            if len(S_eigen):
+                eigens = sorted(S_eigen, key=lambda x: x[0])
+                leading_eigens = {k: v for v, k in eigens[:10]}
+                eigens = np.array([e for e, k in eigens])
+                print("-" * 60)
+                print(f"Minimum Eigenvalues = {leading_eigens}")
+                print(f"Eigens min/mean/max = {float(np.min(eigens)), float(np.mean(eigens)), float(np.max(eigens))}")
         return f.rationalize(y, time_limit=time_limit)
 
     def _solve_numerical_sdp(self,
@@ -764,7 +771,7 @@ class SDPProblem(TransformableDual):
         kwargs: Dict[str, Any] = {}
     ) -> Optional[np.ndarray]:
         return solve_numerical_dual_sdp(
-            {key: (rep_matrix_to_numpy(x0), rep_matrix_to_numpy(space))
+            {key: (rep_matrix_to_numpy(x0).flatten(), rep_matrix_to_scipy(space))
                 for key, (x0, space) in self._x0_and_space.items()},
             objective=objective, constraints=constraints,
             solver=solver, return_result=return_result, **kwargs
@@ -1389,7 +1396,7 @@ class SDPProblem(TransformableDual):
 
     def constrain_zero_diagonals(self, extractions = None, masks = None, time_limit = None) -> 'SDPProblem':
         """
-        Constrain zero diagonals. Proving either `extractions` or `masks` is sufficient.
+        Constrain zero diagonals. Providing either `extractions` or `masks` is sufficient.
         If both are not provided, then the default behavior is to call
         `get_zero_diagonals` to get the zero diagonals.
 

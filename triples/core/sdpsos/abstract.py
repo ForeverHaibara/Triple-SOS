@@ -149,10 +149,10 @@ class SOSElement:
 
         # ineq_lhs * (x0 + space * y) >= ineq_rhs
         obj      = matmul(obj, space)
-        ineq_lhs = matmul(ineq_lhs, space)
         ineq_rhs = matadd(ineq_rhs, -matmul(ineq_lhs, x0))
-        eq_lhs   = matmul(eq_lhs, space)
+        ineq_lhs = matmul(ineq_lhs, space)
         eq_rhs   = matadd(eq_rhs, -matmul(eq_lhs, x0))
+        eq_lhs   = matmul(eq_lhs, space)
         time_limit()
         return self.sdp.solve_obj(obj, [(ineq_lhs, ineq_rhs, '>'), (eq_lhs, eq_rhs, '==')],
                 solver=solver, verbose=verbose, time_limit=rest_time, kwargs=kwargs)

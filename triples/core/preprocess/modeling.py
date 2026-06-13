@@ -1,31 +1,32 @@
 from typing import Dict, Tuple, Union, Set, Callable, Optional, TYPE_CHECKING
 
-import sympy as sp
 from sympy import (Poly, Symbol, Rational, Integer,
-    Min, Max, Abs, Pow,
+    Min, Max, Abs, Add, Pow, prod, gcd, lcm, re, im,
     sin, cos, tan, cot, sec, csc,
 )
+from sympy import I as ImaginaryUnit
 from sympy.utilities.iterables import iterable
 
 from .algebraic import CancelDenominator
+from .noncommutative import SolveNCPSD
 from ..node import ProofNode
 
 if TYPE_CHECKING:
-    from sympy import (Expr,
-    )
+    from sympy import Expr
+    from ..problem import InequalityProblem
 
 class _unique_symbol_generator:
     def __init__(self, symbols: Tuple[Symbol,...]):
         self.symbols = set(symbols)
         self.symbol_indices = {}
-    def __call__(self, prefix: str = 's') -> Symbol:
+    def __call__(self, prefix: str = 's', **assumptions) -> Symbol:
         i = self.symbol_indices.get(prefix, 0) + 1
         while True:
             if prefix + str(i) in self.symbols:
                 i += 1
             else:
                 self.symbol_indices[prefix] = i
-                s = Symbol(prefix + str(i))
+                s = Symbol(prefix + str(i), **assumptions)
                 self.symbols.add(s)
                 return s
 
@@ -37,29 +38,36 @@ class FormulationFailure(Exception):
 
 class ModelingHelper:
     Trigs = {sin, cos, tan, cot, sec, csc}
+    has_complex = False
     has_radical = False
     has_trig = False
-    def __init__(self, poly: 'Expr', ineq_constraints: Dict['Expr', 'Expr'], eq_constraints: Dict['Expr', 'Expr']):
-        self.poly = poly
-        self.ineq_constraints = ineq_constraints
-        self.eq_constraints = eq_constraints
-
-
-        self.symbols = set(poly.free_symbols).union(
-            *[ineq.free_symbols for ineq in ineq_constraints.keys()],
-            *[ineq.free_symbols for ineq in ineq_constraints.values()],
-            *[eq.free_symbols for eq in eq_constraints.keys()],
-            *[eq.free_symbols for eq in eq_constraints.values()]
-        )
+    def __init__(self, problem: "InequalityProblem"):
+        self.problem = problem
         self.symbol_gen = _unique_symbol_generator(self.symbols)
 
         self._prepare_replace_trigs()
 
+    @property
+    def poly(self):
+        return self.problem.expr
+
+    @property
+    def ineq_constraints(self):
+        return self.problem.ineq_constraints
+
+    @property
+    def eq_constraints(self):
+        return self.problem.eq_constraints
+
+    @property
+    def symbols(self):
+        return self.problem.free_symbols
+
     def __iter__(self):
-        return iter([self.poly] + list(self.ineq_constraints) + list(self.eq_constraints))
+        return iter([self.problem.expr] + list(self.ineq_constraints) + list(self.eq_constraints))
 
     def __len__(self):
-        return len(self.poly) + len(self.ineq_constraints) + len(self.eq_constraints)
+        return 1 + len(self.ineq_constraints) + len(self.eq_constraints)
 
     def find(self, classes: Union[Callable, Set]):
         collection = []
@@ -97,8 +105,7 @@ class ModelingHelper:
             eqs = {x.base**p - z**q: Integer(0)} if p > 0 else {z**q * x.base**(-p) - Integer(1): Integer(0)}
             return z, ineqs, eqs
 
-        else:
-            raise FormulationFailure
+        raise FormulationFailure
 
     def _replace_Min(self, x: Min):
         if len(x.args) == 0:
@@ -107,7 +114,7 @@ class ModelingHelper:
             return x, {}, {}
         z = self.symbol_gen('Min')
         ineqs = {i - z: i - x for i in x.args}
-        eqs = {sp.prod(i - z for i in x.args): Integer(0)}
+        eqs = {prod(i - z for i in x.args): Integer(0)}
         return z, ineqs, eqs
 
     def _replace_Max(self, x: Max):
@@ -117,7 +124,7 @@ class ModelingHelper:
             return x, {}, {}
         z = self.symbol_gen('Max')
         ineqs = {z - i: x - i for i in x.args}
-        eqs = {sp.prod(z - i for i in x.args): Integer(0)}
+        eqs = {prod(z - i for i in x.args): Integer(0)}
         return z, ineqs, eqs
 
     def _replace_Abs(self, x: Abs):
@@ -136,6 +143,8 @@ class ModelingHelper:
             cot: self._replace_cot,
             sec: self._replace_sec,
             csc: self._replace_csc,
+            re: self._replace_re,
+            im: self._replace_im,
         }
 
     def _prepare_replace_trigs(self):
@@ -149,7 +158,7 @@ class ModelingHelper:
         atoms = {}
         for x in self._trigs:
             x_args = []
-            for arg in sp.Add.make_args(x.args[0].expand()):
+            for arg in Add.make_args(x.args[0].expand()):
                 arg = arg.as_content_primitive()
                 if arg[1].could_extract_minus_sign():
                     arg = -arg[0], -arg[1]
@@ -160,8 +169,8 @@ class ModelingHelper:
                         atoms[arg[1]] = arg[0]
                     else:
                         coeff = atoms[arg[1]]
-                        atoms[arg[1]] = sp.gcd(arg[0].numerator, coeff.numerator) \
-                                        / sp.lcm(arg[0].denominator, coeff.denominator)
+                        atoms[arg[1]] = gcd(arg[0].numerator, coeff.numerator) \
+                                        / lcm(arg[0].denominator, coeff.denominator)
             args.append(x_args)
 
         cosines = {atom: self.symbol_gen('cos') for atom in atoms}
@@ -232,6 +241,26 @@ class ModelingHelper:
     def _replace_csc(self, expr: csc):
         return Integer(1) / self._trigs_real_and_imag[expr][1], {}, {}, {}
 
+
+    def _prepare_replace_complexes(self):
+        self._complexes = {}
+        if not self.has_complex:
+            return
+        args = set(self.find((re, im)))
+        self._complexes = {}
+        for expr in args:
+            s = expr.args[0]
+            if not s.is_Symbol:
+                continue
+            s2 = self.symbol_gen(s.name + f'_{expr.__class__}', real=True)
+            self._complexes[expr] = s2
+
+    def _replace_re(self, expr: re):
+        return self._complexes[expr], {}, {}, {}
+
+    def _replace_im(self, expr: im):
+        return self._complexes[expr], {}, {}, {}
+
     def replace_expr(self, expr: 'Expr', rule: Optional[Dict]=None):
         if isinstance(expr, Poly):
             return expr, {}, {}, {}
@@ -264,14 +293,74 @@ class ModelingHelper:
         expr, has_changed = _recur_replace(expr)
         return expr, ineqs, eqs, inverse
 
-    def formulate(self):
+    def inject_assumptions(self, configs):
+        if not configs["assumptions"]:
+            return
+        problem = self.problem.copy()
+        fs = problem.free_symbols
+        pos = [
+            "positive",
+            "nonnegative",
+            "extended_positive",
+            "extended_nonnegative",
+        ]
+        neg = [
+            "negative",
+            "nonpositive",
+            "extended_negative",
+            "extended_nonpositive",
+        ]
+        zero = ["zero"]
+        trans = {}
+        for s in fs:
+            if not hasattr(s, "assumptions0"):
+                continue
+            assump = s.assumptions0
+            if assump.get("commutative"):
+                if any(assump.get(g) for g in zero):
+                    problem.eq_constraints[s] = s
+                elif not assump.get("real"):
+                    self.has_complex = True
+                    trans[s] = re(s) + im(s) * ImaginaryUnit
+                else:
+                    if any(assump.get(g) for g in pos):
+                        problem.ineq_constraints[s] = s
+                    if any(assump.get(g) for g in neg):
+                        problem.ineq_constraints[-s] = -s
+            else:
+                # noncommutative
+                if any(assump.get(g) for g in zero):
+                    problem.eq_constraints[s] = s
+                elif not assump.get("hermitian"):
+                    self.has_complex = True
+                    trans[s] = re(s) + im(s) * ImaginaryUnit
+
+        if self.has_complex:
+            # real and imag parts are zeros, respectively
+            eqs = {re(k): re(v) for k, v in problem.eq_constraints.items()}
+            eqs.update({im(k): im(v) for k, v in problem.eq_constraints.items()})
+            problem.eq_constraints = eqs
+        if trans:
+            problem, _ = problem.transform(trans, {})
+        self.problem = problem
+
+    def formulate(self, configs):
         # get all expressions that need to be replaced
+        self.inject_assumptions(configs)
+
         new_ineqs = {}
         new_eqs = {}
         inverse = {}
 
+        # complexes
+        self._prepare_replace_complexes()
+        if self.has_complex:
+            for s, s2 in self._complexes.items():
+                inverse[s2] = s
+
         # trignometric
-        if len(self._trigs) > 0:
+        if self._trigs:
+            inverse_trigs = {}
             for key in self._trigs_var_cosine.keys():
                 c, s = self._trigs_var_cosine[key], self._trigs_var_sine[key]
                 new_eqs[c**2 + s**2 - Integer(1)] = Integer(0)
@@ -283,9 +372,9 @@ class ModelingHelper:
                 new_ineqs[Integer(1) - c] = (sin(key)**2 + (cos(key) - 1)**2)/2
                 new_ineqs[Integer(1) + s] = (cos(key)**2 + (sin(key) + 1)**2)/2
                 new_ineqs[Integer(1) - s] = (cos(key)**2 + (sin(key) - 1)**2)/2
-                inverse[c] = cos(key)
-                inverse[s] = sin(key)
-
+                inverse_trigs[c] = cos(key)
+                inverse_trigs[s] = sin(key)
+            inverse.update({k: v.xreplace(inverse) for k, v in inverse_trigs.items()})
 
         rule = self._get_replacement_rule()
         new_poly, ineqs, eqs, inv = self.replace_expr(self.poly, rule)
@@ -311,28 +400,41 @@ class ModelingHelper:
 
 class ReformulateAlgebraic(ProofNode):
     inverse = None
+
+    default_configs = {
+        "assumptions": False,
+    }
+
+    modeling_helper = None
     def explore(self, configs):
-        if self.state == 0:
-            problem = self.problem
-            expr, ineq_constraints, eq_constraints = problem.expr, problem.ineq_constraints, problem.eq_constraints
-            helper = ModelingHelper(expr, ineq_constraints, eq_constraints)
-            new_expr, new_ineqs, new_eqs, inverse = helper.formulate()
+        if self.state != 0:
+            return
 
-            # print('Problem Reformulation')
-            # print(f'Goal         : {new_expr}')
-            # print(f'Inequalities : {new_ineqs}')
-            # print(f'Equalities   : {new_eqs}')
-            # print(f'Replacement  : {inverse}')
+        helper = ModelingHelper(self.problem)
+        self.modeling_helper = helper
+        new_expr, new_ineqs, new_eqs, inverse = helper.formulate(configs)
 
-            new_problem = self.new_problem(new_expr, new_ineqs, new_eqs)
-            if self.problem.roots is not None:
-                new_problem.roots = self.problem.roots.transform(inverse, new_problem.free_symbols)
+        # print('Problem Reformulation')
+        # print(f'Goal         : {new_expr}')
+        # print(f'Inequalities : {new_ineqs}')
+        # print(f'Equalities   : {new_eqs}')
+        # print(f'Replacement  : {inverse}')
 
+        new_problem = self.new_problem(new_expr, new_ineqs, new_eqs)
+
+        fs = new_problem.free_symbols
+        if self.problem.roots is not None:
+            new_problem.roots = self.problem.roots.transform(inverse, fs)
+
+        if new_problem.is_commutative:
             solver = CancelDenominator(new_problem, {"irrational_expr": helper.has_radical})
-            self.children = [solver]
+        else:
+            solver = SolveNCPSD(new_problem)
 
-            self.inverse = inverse
-            self.state = -1
+        self.children = [solver]
+
+        self.inverse = inverse
+        self.state = -1
 
 
     def update(self, *args, **kwargs):

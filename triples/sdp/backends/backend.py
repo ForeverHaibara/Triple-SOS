@@ -1,6 +1,7 @@
 from typing import List, Dict, Any, TYPE_CHECKING
 
 import numpy as np
+from scipy import sparse
 
 from .settings import SDPResult, SolverConfigs
 
@@ -24,6 +25,33 @@ class SDPBackend:
     @classmethod
     def as_array(cls, x):
         return np.array(x).astype(np.float64)
+
+    @classmethod
+    def as_vector(cls, x):
+        if sparse.issparse(x):
+            x = x.toarray()
+        return np.array(x).astype(np.float64).flatten()
+
+    @classmethod
+    def as_matrix(cls, x):
+        if getattr(cls, '_opt_sparse', False):
+            fmt = getattr(cls, '_opt_sparse', None)
+            if sparse.issparse(x):
+                mat = x.astype(np.float64, copy=False)
+            else:
+                mat = sparse.csr_matrix(np.array(x).astype(np.float64))
+            if fmt in ('csc', 'csr', 'coo'):
+                return getattr(mat, 'to' + fmt)()
+            return mat
+        if sparse.issparse(x):
+            return x.toarray().astype(np.float64, copy=False)
+        return np.array(x).astype(np.float64)
+
+    @staticmethod
+    def _as_dense(x):
+        if sparse.issparse(x):
+            return x.toarray()
+        return np.asarray(x)
 
     def is_feasible(self, x, tol_fsb_abs: float = 1e-8, tol_fsb_rel: float = 1e-8) -> bool:
         """
@@ -74,10 +102,6 @@ class SDPBackend:
 
         n = int(round(np.sqrt(space.shape[0])))
 
-        # multiply 2**.5 on off-diagonal entries
-        space = space * (2**.5)
-        space[np.arange(0,n**2,n+1), :] *= 2**-.5
-
         # extract the upper triangular part
         if order == 'row': # row major
             rows = np.array([i*n+j for i in range(n) for j in range(n) if i <= j])
@@ -85,7 +109,16 @@ class SDPBackend:
             rows = np.array([i*n+j for j in range(n) for i in range(n) if i <= j])
         else:
             raise ValueError('Order should be one of "row" or "col".')
-        upper = space[rows, :]
+
+        # multiply 2**.5 on off-diagonal entries
+        if sparse.issparse(space):
+            weights = np.full((space.shape[0],), 2**.5, dtype=np.float64)
+            weights[np.arange(0,n**2,n+1)] *= 2**-.5
+            upper = sparse.diags(weights).dot(space)[rows, :]
+        else:
+            space = space * (2**.5)
+            space[np.arange(0,n**2,n+1), :] *= 2**-.5
+            upper = space[rows, :]
 
         if ndims == 1: # flatten to vector
             upper = upper.flatten()
@@ -139,6 +172,13 @@ class DualBackend(SDPBackend):
 
     def __init__(self, As: List['ndarray'], bs: List['ndarray'], ineq_lhs: 'ndarray', ineq_rhs: 'ndarray',
                     eq_lhs: 'ndarray', eq_rhs: 'ndarray', c: 'ndarray'):
+        As = [self.as_matrix(A) for A in As]
+        bs = [self.as_vector(b) for b in bs]
+        ineq_lhs = self.as_matrix(ineq_lhs)
+        ineq_rhs = self.as_vector(ineq_rhs)
+        eq_lhs = self.as_matrix(eq_lhs)
+        eq_rhs = self.as_vector(eq_rhs)
+        c = self.as_vector(c)
         dof = c.shape[0]
 
         # store a copy of the original inputs
@@ -150,15 +190,16 @@ class DualBackend(SDPBackend):
         self._eq_rhs   = eq_rhs
 
         if self._opt_eq_to_ineq:
-            ineq_lhs = np.vstack((ineq_lhs, eq_lhs, -eq_lhs))
+            ineq_lhs = sparse.vstack((ineq_lhs, eq_lhs, -eq_lhs)) if any(sparse.issparse(_) for _ in (ineq_lhs, eq_lhs))\
+                else np.vstack((ineq_lhs, eq_lhs, -eq_lhs))
             ineq_rhs = np.concatenate((ineq_rhs, eq_rhs, -eq_rhs))
-            eq_lhs, eq_rhs = np.zeros((0, dof)), np.zeros((0,))
+            eq_lhs, eq_rhs = self.as_matrix(np.zeros((0, dof))), np.zeros((0,))
 
         if self._opt_ineq_to_1d:
             As.extend([ineq_lhs[i:i+1,:] for i in range(ineq_lhs.shape[0])])
             ineq_rhs = -ineq_rhs
             bs.extend([ineq_rhs[i:i+1] for i in range(ineq_rhs.shape[0])])
-            ineq_lhs, ineq_rhs = np.zeros((0, dof)), np.zeros((0,))
+            ineq_lhs, ineq_rhs = self.as_matrix(np.zeros((0, dof))), np.zeros((0,))
 
         if self._opt_isometric:
             As = [self._convert_space_to_isometric(A, order=self._opt_isometric) for A in As]
@@ -167,7 +208,6 @@ class DualBackend(SDPBackend):
         if self._opt_sparse:
             if self._opt_sparse not in ('csc', 'csr', 'coo'):
                 raise ValueError('DualBackend._opt_sparse must be one of "csc" or "csr" or "coo".')
-            from scipy import sparse
             to_mat = getattr(sparse, self._opt_sparse + '_matrix')
             As = [to_mat(A) for A in As]
             ineq_lhs = to_mat(ineq_lhs)
@@ -195,12 +235,12 @@ class DualBackend(SDPBackend):
 
     def is_feasible(self, x, tol_fsb_abs: float = 1e-8, tol_fsb_rel: float = 1e-8) -> bool:
         if self._ineq_lhs.shape[0] > 0:
-            v = self._ineq_lhs @ x - self._ineq_rhs
+            v = np.asarray(self._ineq_lhs @ x - self._ineq_rhs).flatten()
             minv = np.min(v)
             if minv < -tol_fsb_abs or minv < -tol_fsb_rel * max(1, np.max(np.abs(v))):
                 return False
         if self._eq_lhs.shape[0] > 0:
-            v = np.abs(self._eq_lhs @ x - self._eq_rhs)
+            v = np.abs(np.asarray(self._eq_lhs @ x - self._eq_rhs).flatten())
             maxv = np.max(v)
             if maxv > tol_fsb_abs: # and
                 return False
@@ -208,7 +248,7 @@ class DualBackend(SDPBackend):
             if n <= 0:
                 continue
             mat = A @ x + b
-            mat = mat.reshape(n, n)
+            mat = np.asarray(mat).reshape(n, n)
             eigs = np.linalg.eigvalsh(mat)
             min_eig, max_eig = np.min(eigs), np.max(eigs)
             if min_eig < -tol_fsb_abs and min_eig < -tol_fsb_rel * max(1, abs(max_eig)):
