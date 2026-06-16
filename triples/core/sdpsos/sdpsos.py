@@ -300,7 +300,8 @@ class SDPSOSSolver(ProofNode):
 
             if configs["verbose"]:
                 print(f"Lift Degree = {lift_degree}")
-                print(f"Qmodule = {qmodule}\nIdeal   = {list(eq_constraints.keys())}")
+                print(f"Qmodule = {[p.as_expr() for p in qmodule]}\n"
+                      f"Ideal   = {[p.as_expr() for p in eq_constraints]}")
 
             poly_qmodule_tuples = None
             if poly_qmodule:
