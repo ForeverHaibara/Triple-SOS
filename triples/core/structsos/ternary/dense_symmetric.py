@@ -666,7 +666,8 @@ def sos_struct_ternary_dense_partial_symmetric(coeff: 'Coeff', real=True):
 
     => s(a4(a-b)(a-c))+2a4(a-c)2+2b4(b-c)2
     """
-    if all(v >= 0 for v in coeff.coeffs()):
+    wrap = coeff.wrap
+    if all(wrap(v) >= 0 for v in coeff.coeffs()):
         return coeff.as_poly().as_expr()
     if coeff.total_degree() <= 1:
         return None
