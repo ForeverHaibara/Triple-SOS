@@ -292,7 +292,8 @@ class QCQPSolver(ProofNode):
 
         y = None
         try:
-            sdp.print_graph(short=2)
+            if configs["verbose"]:
+                sdp.print_graph(short=2)
             y = sdp.solve(
                 verbose=configs["verbose"],
                 solver=configs["solver"],
