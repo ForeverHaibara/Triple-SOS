@@ -8,7 +8,7 @@ from ...utils import CyclicProduct
 def _null_solver(*args, **kwargs):
     return None
 
-def sos_struct_extract_factors(poly: Union[Poly, Coeff], solver: Callable, real: bool = True, **kwargs):
+def structsos_extract_factors(poly: Union[Poly, Coeff], solver: Callable, real: bool = True, **kwargs):
     """
     Wrap a solver to handle factorizable polynomials in advance.
 
@@ -48,7 +48,7 @@ def sos_struct_extract_factors(poly: Union[Poly, Coeff], solver: Callable, real:
     return solver(poly, **kwargs)
 
 
-def sos_struct_common(poly: Union[Poly, Coeff], *solvers, **kwargs):
+def structsos_common(poly: Union[Poly, Coeff], *solvers, **kwargs):
     """
     A method wrapper for multiple solvers.
     """
@@ -75,30 +75,30 @@ def sos_struct_common(poly: Union[Poly, Coeff], *solvers, **kwargs):
 
     # cancel abc
 
-    return sos_struct_extract_factors(poly, _wrapped_solver, **kwargs)
+    return structsos_extract_factors(poly, _wrapped_solver, **kwargs)
 
 
 
-def sos_struct_degree_specified_solver(solvers: Dict[int, Callable], homogeneous: bool = False) -> Callable:
+def structsos_degree_specified_solver(solvers: Dict[int, Callable], homogeneous: bool = False) -> Callable:
     """
     A method wrapper for structural SOS with degree specified solvers.
 
     When `degree <= 2` and the solver is not provided, it uses the default solvers
     from `triples.core.structsos.nvars` for general linear and quadratic solvers.
     """
-    def _sos_struct_degree_specified_solver(poly: Union[Poly, Coeff], *args, **kwargs):
+    def _structsos_degree_specified_solver(poly: Union[Poly, Coeff], *args, **kwargs):
         if homogeneous and isinstance(poly, Coeff):
             degree = poly.total_degree()
         else:
             degree = poly.total_degree()
         solver = solvers.get(degree, None)
         if solver is None:
-            from .nvars import sos_struct_nvars_linear, sos_struct_nvars_quadratic
+            from .nvars import structsos_nvars_linear, structsos_nvars_quadratic
             if degree == 1:
-                solver = sos_struct_nvars_linear
+                solver = structsos_nvars_linear
             elif degree == 2:
-                solver = sos_struct_nvars_quadratic
+                solver = structsos_nvars_quadratic
             else:
                 solver = _null_solver
         return solver(poly, *args, **kwargs)
-    return _sos_struct_degree_specified_solver
+    return _structsos_degree_specified_solver

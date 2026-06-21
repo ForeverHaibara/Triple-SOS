@@ -19,10 +19,10 @@ def structural_sos_2vars(poly, ineq_constraints, eq_constraints):
         if multiplicity % 2 == 0:
             sols.append(factor.as_expr() ** multiplicity)
             continue
-        sol = _sos_struct_bivariate_linear_ineq(factor, ineq_constraints, eq_constraints)
+        sol = _structsos_bivariate_linear_ineq(factor, ineq_constraints, eq_constraints)
         if sol is None:
             sgn = -sgn
-            sol = _sos_struct_bivariate_linear_ineq(-factor, ineq_constraints, eq_constraints)
+            sol = _structsos_bivariate_linear_ineq(-factor, ineq_constraints, eq_constraints)
         if sol is None:
             return None
         sols.append(sol ** multiplicity)
@@ -114,7 +114,7 @@ class HalfspaceIntersection2D():
         return list(zip(self.normals, self.exprs))
 
 
-def _sos_struct_bivariate_linear_ineq(poly, ineq_constraints, eq_constraints):
+def _structsos_bivariate_linear_ineq(poly, ineq_constraints, eq_constraints):
     hs = HalfspaceIntersection2D()
 
     for ineq, e in ineq_constraints.items():

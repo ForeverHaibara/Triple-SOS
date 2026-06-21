@@ -6,8 +6,8 @@ from sympy import oo as Infinity
 from .utils import (
     CommonExpr, DomainExpr, quadratic_weighting, rationalize_func
 )
-from .cubic import _sos_struct_cubic_symmetric
-from .quartic import sos_struct_quartic
+from .cubic import _structsos_cubic_symmetric
+from .quartic import structsos_quartic
 from .sextic_symmetric import _restructure_quartic_polynomial
 from ..univariate import prove_univariate
 from typing import TYPE_CHECKING
@@ -18,22 +18,22 @@ if TYPE_CHECKING:
     )
 
 
-def sos_struct_septic_symmetric(coeff, real=False):
+def structsos_septic_symmetric(coeff, real=False):
     if not all(coeff((i,j,k)) == coeff((j,i,k)) for (i,j,k) in ((6,1,0),(5,2,0),(4,3,0),(4,2,1))):
         return None
 
-    from .dense_symmetric import sos_struct_liftfree_for_six
-    solution = sos_struct_liftfree_for_six(coeff)
+    from .dense_symmetric import structsos_liftfree_for_six
+    solution = structsos_liftfree_for_six(coeff)
     if solution is not None:
         return solution
 
     if coeff((7,0,0)) == 0 and coeff((6,1,0)) == 0:
-        return _sos_struct_septic_symmetric_hexagon(coeff)
+        return _structsos_septic_symmetric_hexagon(coeff)
 
-    return _sos_struct_septic_symmetric_quadratic_form(coeff)
+    return _structsos_septic_symmetric_quadratic_form(coeff)
 
 
-def _sos_struct_septic_symmetric_quadratic_form(coeff: 'Coeff'):
+def _structsos_septic_symmetric_quadratic_form(coeff: 'Coeff'):
     """
     Let `F0 = s(a7+a6b+a6c+a5bc-2a4b3-2a4c3)` and `G0 = s((b+c)(a2+a(b+c)+2bc)2(a-b)(a-c))`.
     Let `f(a,b,c) = g(a,b,c) = s(xa^2+yab)`.
@@ -47,7 +47,7 @@ def _sos_struct_septic_symmetric_quadratic_form(coeff: 'Coeff'):
     For more general septic symmetric polynomials, we first decompose its symmetric axis
     into several `F_{x,y}, G_{x,y}` and then combine them together.
 
-    For a more primary case of degree 6, see `_sos_struct_sextic_symmetric_quadratic_form`.
+    For a more primary case of degree 6, see `_structsos_sextic_symmetric_quadratic_form`.
 
     Examples
     --------
@@ -278,7 +278,7 @@ class _septic_sym_axis(DomainExpr):
                     det2 * CyclicProduct((a-b)**2) * CyclicSum(a) * CyclicProduct(a)
                 )
                 # multiplier = CyclicSum(a*(a-b)*(a-c) + u*a*(b-c)**2)
-                multiplier = _sos_struct_cubic_symmetric(
+                multiplier = _structsos_cubic_symmetric(
                     self._coeff.from_dict({(3,0,0):1, (2,1,0): u-1, (1,2,0): u-1, (1,1,1):3-6*u}))
                 return sol / multiplier, ker_coeff
         return None, 0
@@ -434,14 +434,14 @@ class _septic_sym_axis(DomainExpr):
                     )
 
 
-def _sos_struct_septic_symmetric_hexagon(coeff: 'Coeff'):
+def _structsos_septic_symmetric_hexagon(coeff: 'Coeff'):
     """
     Solve septic hexagons without s(a7), s(a6b) by
     subtracting some `(a-b)**2*(b-c)**2*(c-a)**2*(a+b+c)` so that it does not contain
     s(a5b2). Then it subtracts some `s(a*(b-c)**2*(a*b + a*c - t*b*c)**2)` so that
     the remaining quartic is nonnegative.
 
-    This is also the symmetric case of `sos_struct_septic_star_sdp`.
+    This is also the symmetric case of `structsos_septic_star_sdp`.
 
     Examples
     --------
@@ -508,7 +508,7 @@ def _sos_struct_septic_symmetric_hexagon(coeff: 'Coeff'):
         (4,0,0): c4, (3,1,0): c31, (2,2,0): c22, (3,0,1): c31,
         (1,3,0): c31, (2,1,1): c211,
     })
-    quartic_sol = sos_struct_quartic(quartic, real=False)
+    quartic_sol = structsos_quartic(quartic, real=False)
     if quartic_sol is None:
         return None
 

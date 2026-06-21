@@ -1,11 +1,11 @@
 from sympy import Poly, Expr, Rational, Float, Add
 from sympy import MutableDenseMatrix as Matrix
 
-from .cubic import sos_struct_cubic
+from .cubic import structsos_cubic
 from .sextic_symmetric import (
-    _sos_struct_sextic_hexagon_symmetric,
-    _sos_struct_sextic_hexagram_symmetric,
-    sos_struct_sextic_symmetric_ultimate
+    _structsos_sextic_hexagon_symmetric,
+    _structsos_sextic_hexagram_symmetric,
+    structsos_sextic_symmetric_ultimate
 )
 from .utils import (
     CommonExpr,
@@ -20,20 +20,20 @@ if TYPE_CHECKING:
         Coeff
     )
 
-def sos_struct_sextic(coeff, real = True):
+def structsos_sextic(coeff, real = True):
     if coeff((5,1,0)) == coeff((1,5,0)) and coeff((4,2,0)) == coeff((2,4,0)) and coeff((3,2,1)) == coeff((3,1,2)):
-        return sos_struct_sextic_symmetric_ultimate(coeff, real = real)
+        return structsos_sextic_symmetric_ultimate(coeff, real = real)
 
     if coeff((6,0,0)) == 0 and coeff((5,1,0)) == 0 and coeff((5,0,1)) == 0:
-        return _sos_struct_sextic_hexagon(coeff, real = real)
+        return _structsos_sextic_hexagon(coeff, real = real)
 
     if coeff((6,0,0)) != 0:
-        return _sos_struct_sextic_full_sdp(coeff)
+        return _structsos_sextic_full_sdp(coeff)
 
     return None
 
 
-def _sos_struct_sextic_hexagram(coeff: 'Coeff'):
+def _structsos_sextic_hexagram(coeff: 'Coeff'):
     """
     Solve s(a3b3+xa4bc+ya3b2c+za2b3c+wa2b2c2) >= 0. The structure is known as hexagrams.
     Typically we multiply `s(a)` to solve it.
@@ -87,14 +87,14 @@ def _sos_struct_sextic_hexagram(coeff: 'Coeff'):
     if coeff((3,3,0)) == 0:
         # degenerates to cubic
         new_coeffs_ = {(3,0,0): coeff((4,1,1)), (2,1,0): coeff((3,2,1)), (1,2,0): coeff((2,3,1)), (1,1,1): coeff((2,2,2))}
-        solution = sos_struct_cubic(coeff.from_dict(new_coeffs_))
+        solution = structsos_cubic(coeff.from_dict(new_coeffs_))
         if solution is not None:
             return solution * CyclicProduct(a)
         return None
     if coeff((4,1,1)) == 0:
         # degenerates to inverse cubic
         new_coeffs_ = {(3,0,0): coeff((3,3,0)), (2,1,0): coeff((2,3,1)), (1,2,0): coeff((3,2,1)), (1,1,1): coeff((2,2,2))}
-        solution = sos_struct_cubic(coeff.from_dict(new_coeffs_))
+        solution = structsos_cubic(coeff.from_dict(new_coeffs_))
         if solution is not None:
             solution = inverse_substitution(coeff, solution, factor_degree = 0)
         return solution
@@ -102,7 +102,7 @@ def _sos_struct_sextic_hexagram(coeff: 'Coeff'):
 
     if coeff((3,2,1)) == coeff((2,3,1)):
         # call symmetric solution in priority
-        solution = _sos_struct_sextic_hexagram_symmetric(coeff)
+        solution = _structsos_sextic_hexagram_symmetric(coeff)
         if solution is not None:
             return solution
 
@@ -393,7 +393,7 @@ def _sos_struct_sextic_hexagram(coeff: 'Coeff'):
     return None
 
 
-def _sos_struct_sextic_hexagon(coeff: 'Coeff', real = True):
+def _structsos_sextic_hexagon(coeff: 'Coeff', real = True):
     """
     Solve hexagon s(a4b2+xa2b4+ya3b3+za4bc+wa3b2c+ua2b3c+...a2b2c2)
 
@@ -419,13 +419,13 @@ def _sos_struct_sextic_hexagon(coeff: 'Coeff', real = True):
     if coeff((4,2,0)) == coeff((4,0,2)) and coeff((3,2,1)) == coeff((2,3,1)):
         # symmetric
         # this case must be handled before (?)
-        return _sos_struct_sextic_hexagon_symmetric(coeff)
+        return _structsos_sextic_hexagon_symmetric(coeff)
 
     if coeff((4,2,0)) == 0 or coeff((4,0,2)) == 0:
         if coeff((4,2,0)) == 0 and coeff((4,0,2)) == 0:
-            return _sos_struct_sextic_hexagram(coeff)
+            return _structsos_sextic_hexagram(coeff)
         if coeff((3,3,0)) == 0 and coeff((4,1,1)) == 0:
-            return _sos_struct_sextic_rotated_tree(coeff)
+            return _structsos_sextic_rotated_tree(coeff)
 
     c420, c240, c330, c411 = [coeff(_) for _ in ((4,2,0),(2,4,0),(3,3,0),(4,1,1))]
     # The hexagon might be positive over a,b,c in R.
@@ -435,18 +435,18 @@ def _sos_struct_sextic_hexagon(coeff: 'Coeff', real = True):
     if can_be_real:
         if real:
             solvers = [
-                _sos_struct_sextic_hexagon_sdp,
-                _sos_struct_sextic_hexagon_sdp2,
-                _sos_struct_sextic_hexagon_to_hexagram
+                _structsos_sextic_hexagon_sdp,
+                _structsos_sextic_hexagon_sdp2,
+                _structsos_sextic_hexagon_to_hexagram
             ]
         else:
             solvers = [
-                _sos_struct_sextic_hexagon_sdp,
-                _sos_struct_sextic_hexagon_to_hexagram,
-                _sos_struct_sextic_hexagon_sdp2,
+                _structsos_sextic_hexagon_sdp,
+                _structsos_sextic_hexagon_to_hexagram,
+                _structsos_sextic_hexagon_sdp2,
             ]
     else:
-        solvers = [_sos_struct_sextic_hexagon_to_hexagram]
+        solvers = [_structsos_sextic_hexagon_to_hexagram]
 
     for solver in solvers:
         solution = solver(coeff)
@@ -454,11 +454,11 @@ def _sos_struct_sextic_hexagon(coeff: 'Coeff', real = True):
             return solution
 
 
-def _sos_struct_sextic_rotated_tree(coeff: 'Coeff'):
+def _structsos_sextic_rotated_tree(coeff: 'Coeff'):
     """
     Solve s(a2b4+ua3b2c+va3bc2-(1+u+v)a2b2c2) >= 0.
     Note that this structure is a rotated version of the symmetric tree.
-    See `_sos_struct_sextic_tree` for details.
+    See `_structsos_sextic_tree` for details.
 
     Examples
     --------
@@ -479,7 +479,7 @@ def _sos_struct_sextic_rotated_tree(coeff: 'Coeff'):
 
     if coeff((4,2,0)) != 0:
         # reflect the polynomial so that coeff((4,2,0)) == 0
-        sol = _sos_struct_sextic_rotated_tree(coeff.reflect())
+        sol = _structsos_sextic_rotated_tree(coeff.reflect())
         return align_cyclic_group(sol, coeff.gens)
 
     a, b, c = coeff.gens
@@ -571,7 +571,7 @@ def _sos_struct_sextic_rotated_tree(coeff: 'Coeff'):
     return None
 
 
-def _sos_struct_sextic_hexagon_full(coeff):
+def _structsos_sextic_hexagon_full(coeff):
     """
     Still in development
 
@@ -608,14 +608,14 @@ def _sos_struct_sextic_hexagon_full(coeff):
 
 
 
-def _sos_struct_sextic_hexagon_sdp(coeff: 'Coeff'):
+def _structsos_sextic_hexagon_sdp(coeff: 'Coeff'):
     """
-    This function is a special case of _sos_struct_sextic_full_sdp
+    This function is a special case of _structsos_sextic_full_sdp
     when coefficients of s(a^6), s(a^5b), s(a^5c) are zero.
 
     We subtract some s((a2b-ac2-x(a2b-b2c)+y(a2c-ab2))^2) so that
     the rest of the polynomial is a quadratic form with respect to
-    s(a^2b-abc) and s(ab^2-abc). See further details at _sos_struct_sextic_full.
+    s(a^2b-abc) and s(ab^2-abc). See further details at _structsos_sextic_full.
 
     The case is degenerated and actually there is no degree of freedom.
 
@@ -663,9 +663,9 @@ def _sos_struct_sextic_hexagon_sdp(coeff: 'Coeff'):
         return quad_form_sol + solution + poly111 * CyclicProduct(a**2)
 
 
-def _sos_struct_sextic_hexagon_sdp2(coeff: 'Coeff'):
+def _structsos_sextic_hexagon_sdp2(coeff: 'Coeff'):
     """
-    This function is a generalization of `_sos_struct_sextic_hexagon_sdp`
+    This function is a generalization of `_structsos_sextic_hexagon_sdp`
     that performs sum-of-squares on the octic `f_2(a,b,c) = f(a,b,c) * s(a^2-ab)`.
 
     """
@@ -728,7 +728,7 @@ def _sos_struct_sextic_hexagon_sdp2(coeff: 'Coeff'):
     #     print('GCD =', discriminant_gcd)
 
 
-def _sos_struct_sextic_hexagon_to_hexagram(coeff: 'Coeff'):
+def _structsos_sextic_hexagon_to_hexagram(coeff: 'Coeff'):
     """
     Solve hexagons by subtracting some `s(c1(a^2b-abc) - c2(ab^2-abc))^2`
     so that the remaing part is a hexagram.
@@ -809,7 +809,7 @@ def _sos_struct_sextic_hexagon_to_hexagram(coeff: 'Coeff'):
         c3 = rationalize_func(eq, _check_valid, validation_initial = lambda x: x >= 0, direction = -1)
 
     if c3 is not None:
-        remain_solution = _sos_struct_sextic_hexagram(_compute_subtracted_params(c3, return_func = True))
+        remain_solution = _structsos_sextic_hexagram(_compute_subtracted_params(c3, return_func = True))
         if remain_solution is not None:
             a, b, c = coeff.gens
             CyclicSum = coeff.cyclic_sum
@@ -819,7 +819,7 @@ def _sos_struct_sextic_hexagon_to_hexagram(coeff: 'Coeff'):
             return main_solution + remain_solution
 
 
-def _sos_struct_sextic_full_sdp(coeff: 'Coeff'):
+def _structsos_sextic_full_sdp(coeff: 'Coeff'):
     """
     Heuristically solve full sextics with the method of unknown coefficients.
     Idea: Let `f(a,b,c) = a^3-b^3+ua^2b+vb^2c-(u+v)ac^2+xab^2+ya^2c-(x+y)bc^2`.

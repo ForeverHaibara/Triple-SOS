@@ -314,7 +314,7 @@ def block_partition(blocks: List[int], groups: Tuple[int, ...]) -> List[int]:
     return result
 
 
-def sos_struct_reorder_symmetry(groups: Tuple[int, ...]) -> Callable:
+def structsos_reorder_symmetry(groups: Tuple[int, ...]) -> Callable:
     """
     Decorator for the solver function to reorder the generators
     so that they are in the given symmetry.

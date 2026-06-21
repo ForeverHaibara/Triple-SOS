@@ -3,7 +3,7 @@ from typing import Tuple, Optional, TYPE_CHECKING
 from sympy import Poly, Add
 from sympy.combinatorics import PermutationGroup, Permutation
 
-from .utils import CyclicSum, sos_struct_reorder_symmetry
+from .utils import CyclicSum, structsos_reorder_symmetry
 from ..univariate import prove_univariate
 from ....utils import poly_reduce_by_symmetry, arraylize_sp, invarraylize
 
@@ -274,7 +274,7 @@ def _quaternary_dense_symmetric_vanish2_liftfree(coeff: "Coeff", sym=None):
 #
 #####################################################################
 
-@sos_struct_reorder_symmetry(groups=(2, 2))
+@structsos_reorder_symmetry(groups=(2, 2))
 def quaternary_dense_dihedral(coeff: "Coeff"):
     return _quaternary_dense_dihedral_by_level(coeff)
 

@@ -193,7 +193,7 @@ def _isotopic_congruence(S: Matrix, vec: List["Expr"]) -> Optional["Expr"]:
     return Add(*cross, *fluct)
 
 
-def sos_struct_nvars_quadratic(coeff: "Coeff", **kwargs):
+def structsos_nvars_quadratic(coeff: "Coeff", **kwargs):
     """
     Solve a quadratic inequality on real numbers. Coeff
     must be homogeneous.
@@ -201,13 +201,13 @@ def sos_struct_nvars_quadratic(coeff: "Coeff", **kwargs):
     mat = make_mat_from_coeff(coeff)
     if mat is None:
         return None
-    solution = sos_struct_nvars_quadratic_real(coeff, mat)
+    solution = structsos_nvars_quadratic_real(coeff, mat)
     if solution is not None:
         return solution
-    return sos_struct_nvars_quadratic_copositive(coeff, mat)
+    return structsos_nvars_quadratic_copositive(coeff, mat)
 
 
-def sos_struct_nvars_quadratic_real(
+def structsos_nvars_quadratic_real(
     coeff: "Coeff", mat: Optional[Matrix]=None, **kwargs
 ):
     """
@@ -233,7 +233,7 @@ def sos_struct_nvars_quadratic_real(
     return _isotopic_congruence(mat, coeff.gens)
 
 
-def sos_struct_nvars_quadratic_copositive(
+def structsos_nvars_quadratic_copositive(
     coeff: "Coeff", mat: Optional[Matrix]=None, **kwargs
 ):
     """TODO: Implement copositive cases, e.g., Motzkin-Straus theorem."""

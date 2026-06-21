@@ -3,8 +3,8 @@ from typing import Union, Dict, Optional, TYPE_CHECKING
 from sympy import Function
 from sympy.core.symbol import uniquely_named_symbol
 
-from .quartic import sos_struct_nvars_quartic_symmetric
-from ..sparse import sos_struct_common, sos_struct_degree_specified_solver
+from .quartic import structsos_nvars_quartic_symmetric
+from ..sparse import structsos_common, structsos_degree_specified_solver
 from ..solution import SolutionStructural
 from ....utils import Coeff
 
@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from sympy import Poly, Expr
 
 SOLVERS_SYMMETRIC = {
-    4: sos_struct_nvars_quartic_symmetric,
+    4: structsos_nvars_quartic_symmetric,
 }
 
 def _structural_sos_nvars_symmetric(
@@ -26,8 +26,8 @@ def _structural_sos_nvars_symmetric(
     if not isinstance(coeff, Coeff):
         coeff = Coeff(coeff)
 
-    return sos_struct_common(coeff,
-        sos_struct_degree_specified_solver(SOLVERS_SYMMETRIC, homogeneous=True),
+    return structsos_common(coeff,
+        structsos_degree_specified_solver(SOLVERS_SYMMETRIC, homogeneous=True),
         real=real
     )
 
@@ -37,8 +37,8 @@ def _structural_sos_nvars_general(
 ) -> Optional["Expr"]:
     if not isinstance(coeff, Coeff):
         coeff = Coeff(coeff)
-    return sos_struct_common(coeff,
-        sos_struct_degree_specified_solver({}, homogeneous=True),
+    return structsos_common(coeff,
+        structsos_degree_specified_solver({}, homogeneous=True),
         real=real
     )
 

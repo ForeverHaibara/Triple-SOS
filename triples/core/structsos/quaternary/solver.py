@@ -11,7 +11,7 @@ from .quintic import quaternary_quintic_symmetric
 from .dense_symmetric import quaternary_dense_symmetric, quaternary_dense_dihedral
 
 from ..utils import Coeff, PolynomialNonpositiveError, PolynomialUnsolvableError
-from ..sparse import sos_struct_common, sos_struct_degree_specified_solver
+from ..sparse import structsos_common, structsos_degree_specified_solver
 from ..solution import SolutionStructural
 
 if TYPE_CHECKING:
@@ -43,8 +43,8 @@ def _structural_sos_4vars_symmetric(
     if not isinstance(coeff, Coeff):
         coeff = Coeff(coeff)
 
-    return sos_struct_common(coeff,
-        sos_struct_degree_specified_solver(SOLVERS_SYMMETRIC, homogeneous=True),
+    return structsos_common(coeff,
+        structsos_degree_specified_solver(SOLVERS_SYMMETRIC, homogeneous=True),
         quaternary_dense_symmetric,
         real=real
     )
@@ -60,8 +60,8 @@ def _structural_sos_4vars_cyclic(
     if not isinstance(coeff, Coeff):
         coeff = Coeff(coeff)
 
-    return sos_struct_common(coeff,
-        sos_struct_degree_specified_solver(SOLVERS_CYCLIC, homogeneous=True),
+    return structsos_common(coeff,
+        structsos_degree_specified_solver(SOLVERS_CYCLIC, homogeneous=True),
         real=real
     )
 
@@ -77,8 +77,8 @@ def _structural_sos_4vars_partial_symmetric(
     """
     if not isinstance(coeff, Coeff):
         coeff = Coeff(coeff)
-    return sos_struct_common(coeff,
-        sos_struct_degree_specified_solver(SOLVERS_SYMMETRIC_NONHOM, homogeneous=True),
+    return structsos_common(coeff,
+        structsos_degree_specified_solver(SOLVERS_SYMMETRIC_NONHOM, homogeneous=True),
         real=real
     )
 
@@ -95,8 +95,8 @@ def _structural_sos_4vars_dihedral(
     if not isinstance(coeff, Coeff):
         coeff = Coeff(coeff)
     if coeff.total_degree() <= 2:
-        from ..nvars.quadratic import sos_struct_nvars_quadratic
-        sol = sos_struct_nvars_quadratic(coeff)
+        from ..nvars.quadratic import structsos_nvars_quadratic
+        sol = structsos_nvars_quadratic(coeff)
         if sol is not None:
             return sol
 

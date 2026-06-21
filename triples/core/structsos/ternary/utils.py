@@ -6,7 +6,7 @@ from sympy import Poly, Add, Mul, Pow
 from sympy.combinatorics import CyclicGroup
 
 from ..utils import (
-    Coeff, DomainExpr, sos_struct_reorder_symmetry,
+    Coeff, DomainExpr, structsos_reorder_symmetry,
     radsimp, sum_y_exprs, rationalize_func, quadratic_weighting, zip_longest,
     congruence, congruence_solve,
     StructuralSOSError, PolynomialNonpositiveError, PolynomialUnsolvableError
@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from sympy import Expr, Symbol
 
 (
-    Coeff, DomainExpr, sos_struct_reorder_symmetry,
+    Coeff, DomainExpr, structsos_reorder_symmetry,
     radsimp, sum_y_exprs, rationalize_func, quadratic_weighting, zip_longest,
     congruence, congruence_solve,
     StructuralSOSError, PolynomialNonpositiveError, PolynomialUnsolvableError
@@ -98,7 +98,7 @@ def inverse_substitution(coeff: Coeff, expr: "Expr", factor_degree: int = 0) -> 
     return expr
 
 
-def sos_struct_handle_uncentered(solver: Callable) -> Callable:
+def structsos_handle_uncentered(solver: Callable) -> Callable:
     """
     A decorator for structural SOS with uncentered polynomial handling.
     It only supports cyclic polynomials.

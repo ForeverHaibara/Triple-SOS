@@ -1,6 +1,6 @@
 from sympy import Integer, Rational, Float, Add
 
-from .quartic import sos_struct_quartic
+from .quartic import structsos_quartic
 from .utils import (
     CommonExpr,
     sum_y_exprs, nroots, rationalize, rationalize_bound
@@ -12,7 +12,7 @@ if TYPE_CHECKING:
         Coeff
     )
 
-def sos_struct_quintic_symmetric(coeff: 'Coeff', real = True):
+def structsos_quintic_symmetric(coeff: 'Coeff', real = True):
     """
     The function solves symmetric quintic problems with `s(a^5)` term in an
     incomplete attempt.
@@ -93,10 +93,10 @@ def sos_struct_quintic_symmetric(coeff: 'Coeff', real = True):
         return None
 
     if coeff((5,0,0)) == 0:
-        return _sos_struct_quintic_symmetric_hexagon(coeff)
+        return _structsos_quintic_symmetric_hexagon(coeff)
 
     # try simple case where we do not lift the degree
-    solution = _sos_struct_quintic_symmetric_sdp(coeff)
+    solution = _structsos_quintic_symmetric_sdp(coeff)
     if solution is not None:
         return solution
 
@@ -292,17 +292,17 @@ def sos_struct_quintic_symmetric(coeff: 'Coeff', real = True):
                 return sum_y_exprs(y, exprs) / multiplier
 
         if du == 0:
-            return _sos_struct_quintic_symmetric_border(coeff)
-        return _sos_struct_quintic_symmetric_final(coeff)
+            return _structsos_quintic_symmetric_border(coeff)
+        return _structsos_quintic_symmetric_final(coeff)
 
 
     return None
 
 
-def _sos_struct_quintic_symmetric_sdp(coeff: 'Coeff'):
+def _structsos_quintic_symmetric_sdp(coeff: 'Coeff'):
     """
     Try subtracting some `s(a(a2-xab-xac-yb2-yc2+(2x+2y-1)bc)2)` so that
-    the rest is positive. See criterion at `_sos_struct_quintic_symmetric_hexagon`.
+    the rest is positive. See criterion at `_structsos_quintic_symmetric_hexagon`.
 
     This solver does not attempt to lift the degree of the polynomial and can only
     solve inequalities that are SOS without degree lifting.
@@ -377,7 +377,7 @@ def _sos_struct_quintic_symmetric_sdp(coeff: 'Coeff'):
             (3,1,1): m*v2,
             (2,2,1): (coeff((2,2,1)) + m*(4*x**2 - 4*x*y - 6*y**2 + 4*y - 1))
         }
-        solution = _sos_struct_quintic_symmetric_hexagon(coeff.from_dict(_new_coeffs))
+        solution = _structsos_quintic_symmetric_hexagon(coeff.from_dict(_new_coeffs))
         if solution is not None:
             CyclicSum = coeff.cyclic_sum
             m, x, y = [coeff.to_sympy(_) for _ in [m, x, y]]
@@ -387,7 +387,7 @@ def _sos_struct_quintic_symmetric_sdp(coeff: 'Coeff'):
             return solution
 
 
-def _sos_struct_quintic_symmetric_final(coeff: 'Coeff'):
+def _structsos_quintic_symmetric_final(coeff: 'Coeff'):
     """
     Note that (u,v) should be over the following curve: (t >= 3 and z <= -3)
     ```
@@ -411,7 +411,7 @@ def _sos_struct_quintic_symmetric_final(coeff: 'Coeff'):
     du = u - (z**2 + 2*z + 5)/4 # ensure the border is positive
     if du == 0:
         # Case a. there is a root on the border
-        return _sos_struct_quintic_symmetric_border(coeff)
+        return _structsos_quintic_symmetric_border(coeff)
 
     a, b, c = coeff.gens
     CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
@@ -584,7 +584,7 @@ def _sos_struct_quintic_symmetric_final(coeff: 'Coeff'):
             return sum_y_exprs(y, exprs) / multiplier
 
 
-def _sos_struct_quintic_symmetric_border(coeff: 'Coeff'):
+def _structsos_quintic_symmetric_border(coeff: 'Coeff'):
     """
     Solve symmetric quintic inequalities with one root on the border.
     The coefficient should satisfy `u = (z**2 + 2*z + 5)/4`.
@@ -657,14 +657,14 @@ def _sos_struct_quintic_symmetric_border(coeff: 'Coeff'):
     quartic = {
         (4,0,0): m_, (3,1,0): p_, (2,2,0): n_, (1,3,0): p_, (3,0,1): p_, (2,1,1): -m_-p_*2-n_
     }
-    quartic_solution = sos_struct_quartic(coeff.from_dict(quartic), None)
+    quartic_solution = structsos_quartic(coeff.from_dict(quartic), None)
     if quartic_solution is None: # not expected to happen
         return None
     solution = main_solution + (quartic_solution + rem * CyclicSum(a*b) * multiplier) * CyclicProduct(a)
     return solution / multiplier
 
 
-def _sos_struct_quintic_symmetric_hexagon(coeff: 'Coeff'):
+def _structsos_quintic_symmetric_hexagon(coeff: 'Coeff'):
     """
     Prove symmetric quintic without s(a5).
     TODO: It should also handle cases when (1,1,1) is not a root in the future.

@@ -1,6 +1,6 @@
 
 
-def sos_struct_acyclic_sparse(coeff, real = True):
+def structsos_acyclic_sparse(coeff, real = True):
     """
     Solve acyclic 3-var polynomial inequalities.
     """

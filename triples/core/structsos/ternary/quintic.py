@@ -3,9 +3,9 @@ from typing import Tuple, List, Optional, TYPE_CHECKING
 from sympy import Poly, Expr, Symbol, Integer, Rational, Float, Add, sqrt, im
 import numpy as np
 
-from .cubic import sos_struct_cubic
-from .quartic import sos_struct_quartic
-from .quintic_symmetric import sos_struct_quintic_symmetric
+from .cubic import structsos_cubic
+from .quartic import structsos_quartic
+from .quintic_symmetric import structsos_quintic_symmetric
 from ..univariate import prove_univariate
 from .utils import (
     sum_y_exprs, nroots, rationalize, rationalize_bound, rationalize_func,
@@ -66,19 +66,19 @@ def _prove_quintic_from_border(coeff: 'Coeff', border: Poly) -> Optional[List[Ex
 
 
 
-def sos_struct_quintic(coeff, real = True):
+def structsos_quintic(coeff, real = True):
     """
     Solve quintic inequalities.
     """
 
     # first try symmetric solution
     if coeff((4,1,0)) == coeff((1,4,0)) and coeff((3,2,0)) == coeff((2,3,0)):
-        return sos_struct_quintic_symmetric(coeff)
+        return structsos_quintic_symmetric(coeff)
 
     if coeff((5,0,0)) == 0:
-        return _sos_struct_quintic_hexagon(coeff)
+        return _structsos_quintic_hexagon(coeff)
     else:
-        return _sos_struct_quintic_full(coeff)
+        return _structsos_quintic_full(coeff)
     return None
 
 
@@ -105,7 +105,7 @@ def _solve_sa2minusab_mul_cubic(coeff: 'Coeff', x, y, mul = 1):
     CyclicSum = coeff.cyclic_sum
     if x >= 0 and y >= 0:
         cubic_poly = coeff.from_dict({(3,0,0): 1, (2,1,0): x, (1,2,0): y, (1,1,1): -3*(x+y+1)})
-        return Rational(1,2) * mul * CyclicSum((a-b)**2) * sos_struct_cubic(cubic_poly)
+        return Rational(1,2) * mul * CyclicSum((a-b)**2) * structsos_cubic(cubic_poly)
 
     def _solve_t(t):
         return (1/t**2) * CyclicSum(a*(t*a - (t-1)*b - c)**2*(t*b - (t-1)*c - a)**2)
@@ -214,7 +214,7 @@ def _solve_uvxy(coeff: 'Coeff'):
     return u, v, x, y
 
 
-def _sos_struct_quintic_full(coeff: 'Coeff'):
+def _structsos_quintic_full(coeff: 'Coeff'):
     """
     Try to solve quintic with nonzero a^5 coefficient by subtracting something.
 
@@ -310,7 +310,7 @@ def _sos_struct_quintic_full(coeff: 'Coeff'):
                     (3,1,1): (z - (2*u**2*x - 2*u**2 + 2*u*v*x - 2*u*v*y + 2*u*v - 2*v**2*x)) * m,
                     (2,2,1): (w - (-u**2*y - 2*u*v*x + 2*u*v*y - 4*u*x + 2*u*y + 2*u + 2*v**2*x - v**2*y - v**2 + 2*v*y + 2*x - 2*y)) * m,
                 }
-                solution = _sos_struct_quintic_hexagon(coeff.from_dict(_new_coeffs))
+                solution = _structsos_quintic_hexagon(coeff.from_dict(_new_coeffs))
                 if solution is not None:
                     xu, xv = x*u, x*v
                     solution = m * CyclicSum(
@@ -342,7 +342,7 @@ def _solve_trivial_quintic_full(coeff: 'Coeff'):
     In most ideal case, the remaining poly should have discriminant == 0,
     and we can solve for the exact minimum t that ensures the remaining polynomial
     nonnegative.
-    See more details at _sos_struct_quintic_hexagon.
+    See more details at _structsos_quintic_hexagon.
     """
     coeff500 = coeff((5,0,0))
     x0, y0 = coeff((4,1,0)) / coeff500 + 1, coeff((1,4,0)) / coeff500 + 1
@@ -381,7 +381,7 @@ def _solve_trivial_quintic_full(coeff: 'Coeff'):
             (3,1,1): z0 - 8*t0,
             (2,2,1): -(-6*t0+p+q+z0) + coeff.poly111() / 3 / coeff500
         }
-        p2 = _sos_struct_quintic_hexagon(coeff.from_dict(hexagon_coeffs))
+        p2 = _structsos_quintic_hexagon(coeff.from_dict(hexagon_coeffs))
 
         if p2 is not None:
             return p1 + coeff500 * p2
@@ -413,7 +413,7 @@ def _build_quintic_full_solution(coeff: 'Coeff', mul: Rational, params: List[Rat
     quartic_coeffs = {
         (4,0,0): m, (3,1,0): p, (2,2,0): n, (1,3,0): q, (2,1,1): -(m+p+n+q)
     }
-    rest = sos_struct_quartic(coeff.from_dict(quartic_coeffs), None)
+    rest = structsos_quartic(coeff.from_dict(quartic_coeffs), None)
     rest += coeff.poly111() * (1 + mul) * CyclicSum(a**2*b*c)
     rest = coeff500 * CyclicProduct(a) * rest
     return (coeff500 * sol_main + coeff500 * border_proof + rest) / multiplier
@@ -660,7 +660,7 @@ def _solve_quintic_full_final(coeff: 'Coeff', uv = None):
 #
 #########################################################
 
-def _sos_struct_quintic_windmill(coeff: 'Coeff'):
+def _structsos_quintic_windmill(coeff: 'Coeff'):
     """
     Give solution to s(a3b2+?a2b3+?ab4+?a3bc+?a2b2c) >= 0,
 
@@ -726,7 +726,7 @@ def _sos_struct_quintic_windmill(coeff: 'Coeff'):
 
     if coeff((4,1,0)) != 0:
         # reflect the polynomial so that coeff((4,1,0)) == 0
-        sol = _sos_struct_quintic_windmill(coeff.reflect())
+        sol = _structsos_quintic_windmill(coeff.reflect())
         return align_cyclic_group(sol, coeff.gens)
 
     a = coeff.gens[0]
@@ -735,21 +735,21 @@ def _sos_struct_quintic_windmill(coeff: 'Coeff'):
     if coeff((1,4,0)) < 0:
         return None
     elif coeff((1,4,0)) == 0:
-        return _sos_struct_quintic_windmill_degenerated(coeff)
+        return _structsos_quintic_windmill_degenerated(coeff)
 
     c320 = coeff((3,2,0))
     if c320 == 0:
         if coeff((2,3,0)) >= 0:
-            solution = _sos_struct_quintic_uncentered(coeff)
+            solution = _structsos_quintic_uncentered(coeff)
         return solution
     elif c320 < 0:
         return None
 
 
     _solvers = [
-        _sos_struct_quintic_windmill_trivial,
-        _sos_struct_quintic_windmill_trivial2,
-        _sos_struct_quintic_windmill_quadratic # now we have to lift the degree
+        _structsos_quintic_windmill_trivial,
+        _structsos_quintic_windmill_trivial2,
+        _structsos_quintic_windmill_quadratic # now we have to lift the degree
     ]
     for _solver in _solvers:
         solution = _solver(coeff)
@@ -842,12 +842,12 @@ def _sos_struct_quintic_windmill(coeff: 'Coeff'):
                 v_ = _compute_v(u_)
 
         else:
-            return _sos_struct_quintic_windmill_border(coeff)
+            return _structsos_quintic_windmill_border(coeff)
 
 
     # Now we call the solver to solve the problem at (u, v).
     u, v = u_, v_
-    main_solution = _sos_struct_quintic_windmill_uv(coeff, u, v)
+    main_solution = _structsos_quintic_windmill_uv(coeff, u, v)
 
     if main_solution is not None:
         multiplier, main_solution = main_solution
@@ -860,7 +860,7 @@ def _sos_struct_quintic_windmill(coeff: 'Coeff'):
             (2,2,1): coeff((2,2,1)) / c320 - (-u**3 + 2*u**2*v + 2*u**2 - u*v**2 + u*v - 4*u + v**2 + 1) / denom
         }
 
-        rest_solution = _sos_struct_quintic_windmill(coeff.from_dict(_new_coeffs))
+        rest_solution = _structsos_quintic_windmill(coeff.from_dict(_new_coeffs))
         if rest_solution is not None:
             ker = c320 / 2 / denom
             return (ker * main_solution + c320 * multiplier * rest_solution) / multiplier
@@ -868,7 +868,7 @@ def _sos_struct_quintic_windmill(coeff: 'Coeff'):
     return None
 
 
-def _sos_struct_quintic_windmill_degenerated(coeff: 'Coeff'):
+def _structsos_quintic_windmill_degenerated(coeff: 'Coeff'):
     """
     coeff((4,1,0)) == coeff((1,4,0)) == 0
     now if we change variables a -> 1/a, b -> 1/b, c -> 1/c, it will be quartic
@@ -903,7 +903,7 @@ def _sos_struct_quintic_windmill_degenerated(coeff: 'Coeff'):
         return sum_y_exprs(y, exprs)
 
 
-def _sos_struct_quintic_windmill_trivial(coeff: 'Coeff'):
+def _structsos_quintic_windmill_trivial(coeff: 'Coeff'):
     """
     Solve very simple cases without lifting the degree using several ideas.
     """
@@ -1029,7 +1029,7 @@ def _sos_struct_quintic_windmill_trivial(coeff: 'Coeff'):
                     return sum_y_exprs(y, exprs) + rem
 
 
-def _sos_struct_quintic_windmill_trivial2(coeff: 'Coeff'):
+def _structsos_quintic_windmill_trivial2(coeff: 'Coeff'):
     """
     Try subtracting `s(c(a2-ab-u(ac-ab)+v(bc-ab))2)`
     and the rest does not have `s(ab^4)` term.
@@ -1073,7 +1073,7 @@ def _sos_struct_quintic_windmill_trivial2(coeff: 'Coeff'):
                 (3,1,1): 2*u*v - 2*u + 2*v + z + 2,
                 (2,2,1): coeff((2,2,1)) / c140 + ((u - v)**2 - 2*v - 1)
             }
-            solution = _sos_struct_quintic_windmill(coeff.from_dict(_new_coeffs))
+            solution = _structsos_quintic_windmill(coeff.from_dict(_new_coeffs))
             if solution is not None:
                 a, b, c = coeff.gens
                 CyclicSum = coeff.cyclic_sum
@@ -1081,7 +1081,7 @@ def _sos_struct_quintic_windmill_trivial2(coeff: 'Coeff'):
                     + c140 * CyclicSum(c*(a**2+(u-v-1)*a*b-u*a*c+v*b*c)**2)
 
 
-def _sos_struct_quintic_windmill_quadratic(coeff: 'Coeff'):
+def _structsos_quintic_windmill_quadratic(coeff: 'Coeff'):
     """
     First try whether we can handle neat cases.
     Theorem 1.1:
@@ -1162,12 +1162,12 @@ def _sos_struct_quintic_windmill_quadratic(coeff: 'Coeff'):
             (2,2,1): c221 - c1*(2 - w**2),
         }
 
-        solution = _sos_struct_quintic_windmill(coeff.from_dict(_new_coeffs))
+        solution = _structsos_quintic_windmill(coeff.from_dict(_new_coeffs))
         if solution is not None:
             return (2*c1*CyclicSum(a*(a-b)**2*(w*a*b-(2+2*w)*b*c+w*c**2+a*c+b**2)**2) + solution * multiplier) / multiplier
 
 
-def _sos_struct_quintic_windmill_uv(coeff: 'Coeff', u, v):
+def _structsos_quintic_windmill_uv(coeff: 'Coeff', u, v):
     """
     Given (u,v), solve the inequality
     `f(a,b,c) = s((b-a+(2u-1)c)(a^2-b^2+u(ab-ac)+v(bc-ab))^2) >= 0`.
@@ -1318,7 +1318,7 @@ def _sos_struct_quintic_windmill_uv(coeff: 'Coeff', u, v):
                 return multiplier, sum_y_exprs(y, exprs)
 
 
-def _sos_struct_quintic_windmill_border(coeff: 'Coeff'):
+def _structsos_quintic_windmill_border(coeff: 'Coeff'):
     """
     Case Special. when y_ < 0 and y_^2 = 4x_, then there is a root on the border
     then perturbation has no chance,
@@ -1386,7 +1386,7 @@ def _sos_struct_quintic_windmill_border(coeff: 'Coeff'):
         return sum_y_exprs(y, exprs) / multiplier
 
 
-def _sos_struct_quintic_uncentered(coeff: 'Coeff'):
+def _structsos_quintic_uncentered(coeff: 'Coeff'):
     """
     Give the solution to s(ab4+?a2b3-?a3bc+?a2b2c) >= 0,
     which might have equality not at (1,1,1) but elsewhere.
@@ -1417,7 +1417,7 @@ def _sos_struct_quintic_uncentered(coeff: 'Coeff'):
     if rem < 0:
         return None
     if rem == 0 and coeff((2,3,0)) == 0:
-        return _sos_struct_quintic_windmill_special(coeff)
+        return _structsos_quintic_windmill_special(coeff)
 
     u, v = Symbol('u'), Symbol('v')
     t = coeff((1,4,0))
@@ -1617,7 +1617,7 @@ def _sos_struct_quintic_uncentered(coeff: 'Coeff'):
     return None
 
 
-def _sos_struct_quintic_windmill_special(coeff: 'Coeff'):
+def _structsos_quintic_windmill_special(coeff: 'Coeff'):
     """
     Give the solution to `s(ab4-a2b2c) >= wabcs(a2-ab)`
     here optimal `w = 3.581412179607289955451719993913205662648` is the root of `x**3-8*x**2+39*x-83`
@@ -1747,7 +1747,7 @@ def _solve_quintic_hexagon_pqz(coeff: 'Coeff', p, q, z, mul = 1):
 #
 #########################################################
 
-def _sos_struct_quintic_hexagon(coeff: 'Coeff'):
+def _structsos_quintic_hexagon(coeff: 'Coeff'):
     """
     Try solving quintics without s(a^5).
 
@@ -1789,7 +1789,7 @@ def _sos_struct_quintic_hexagon(coeff: 'Coeff'):
     if coeff((5,0,0)) != 0 or coeff((4,1,0)) < 0 or coeff((1,4,0)) < 0:
         return None
     if coeff((4,1,0)) == 0 or coeff((1,4,0)) == 0:
-        return _sos_struct_quintic_windmill(coeff)
+        return _structsos_quintic_windmill(coeff)
 
     rem = sum(coeff(_) for _ in [(4,1,0),(3,2,0),(2,3,0),(1,4,0),(3,1,1),(2,2,1)])
     if rem < 0:

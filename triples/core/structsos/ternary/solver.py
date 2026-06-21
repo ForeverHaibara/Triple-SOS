@@ -3,40 +3,40 @@ from typing import Union, Dict, Optional, TYPE_CHECKING
 from sympy import Function
 from sympy.core.symbol import uniquely_named_symbol
 
-from .sparse  import sos_struct_sparse, sos_struct_heuristic
-from .dense_symmetric import sos_struct_ternary_dense_partial_symmetric
-from .quadratic import sos_struct_quadratic, sos_struct_acyclic_quadratic
-from .cubic   import sos_struct_cubic, sos_struct_acyclic_cubic
-from .quartic import sos_struct_quartic, sos_struct_acyclic_quartic
-from .quintic import sos_struct_quintic
-from .sextic  import sos_struct_sextic
-from .septic  import sos_struct_septic
-from .octic   import sos_struct_octic
-from .nonic   import sos_struct_nonic
-from .acyclic import sos_struct_acyclic_sparse
+from .sparse  import structsos_sparse, structsos_heuristic
+from .dense_symmetric import structsos_ternary_dense_partial_symmetric
+from .quadratic import structsos_quadratic, structsos_acyclic_quadratic
+from .cubic   import structsos_cubic, structsos_acyclic_cubic
+from .quartic import structsos_quartic, structsos_acyclic_quartic
+from .quintic import structsos_quintic
+from .sextic  import structsos_sextic
+from .septic  import structsos_septic
+from .octic   import structsos_octic
+from .nonic   import structsos_nonic
+from .acyclic import structsos_acyclic_sparse
 
 from ..utils import Coeff, PolynomialNonpositiveError, PolynomialUnsolvableError
-from ..sparse import sos_struct_common, sos_struct_degree_specified_solver
+from ..sparse import structsos_common, structsos_degree_specified_solver
 from ..solution import SolutionStructural
 
 if TYPE_CHECKING:
     from sympy import Poly, Expr
 
 SOLVERS = {
-    2: sos_struct_quadratic,
-    3: sos_struct_cubic,
-    4: sos_struct_quartic,
-    5: sos_struct_quintic,
-    6: sos_struct_sextic,
-    7: sos_struct_septic,
-    8: sos_struct_octic,
-    9: sos_struct_nonic,
+    2: structsos_quadratic,
+    3: structsos_cubic,
+    4: structsos_quartic,
+    5: structsos_quintic,
+    6: structsos_sextic,
+    7: structsos_septic,
+    8: structsos_octic,
+    9: structsos_nonic,
 }
 
 SOLVERS_ACYCLIC = {
-    2: sos_struct_acyclic_quadratic,
-    3: sos_struct_acyclic_cubic,
-    4: sos_struct_acyclic_quartic
+    2: structsos_acyclic_quadratic,
+    3: structsos_acyclic_cubic,
+    4: structsos_acyclic_quartic
 }
 
 
@@ -51,10 +51,10 @@ def _structural_sos_3vars_cyclic(
     if not isinstance(coeff, Coeff):
         coeff = Coeff(coeff)
 
-    return sos_struct_common(coeff,
-        sos_struct_sparse,
-        sos_struct_degree_specified_solver(SOLVERS, homogeneous=True),
-        sos_struct_heuristic,
+    return structsos_common(coeff,
+        structsos_sparse,
+        structsos_degree_specified_solver(SOLVERS, homogeneous=True),
+        structsos_heuristic,
         real=real
     )
 
@@ -69,10 +69,10 @@ def _structural_sos_3vars_acyclic(
     if not isinstance(coeff, Coeff):
         coeff = Coeff(coeff)
 
-    return sos_struct_common(coeff,
-        sos_struct_acyclic_sparse,
-        sos_struct_degree_specified_solver(SOLVERS_ACYCLIC, homogeneous=True),
-        sos_struct_ternary_dense_partial_symmetric,
+    return structsos_common(coeff,
+        structsos_acyclic_sparse,
+        structsos_degree_specified_solver(SOLVERS_ACYCLIC, homogeneous=True),
+        structsos_ternary_dense_partial_symmetric,
         real=real
     )
 

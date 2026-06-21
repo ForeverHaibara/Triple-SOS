@@ -4,8 +4,8 @@ from sympy.polys.polyerrors import CoercionFailed
 from ..solution import SolutionStructural
 from ..ternary.utils import CommonExpr
 from ..ternary import (
-    sos_struct_acyclic_quadratic, sos_struct_quartic,
-    sos_struct_cubic, sos_struct_sextic
+    structsos_acyclic_quadratic, structsos_quartic,
+    structsos_cubic, structsos_sextic
 )
 from ..ternary.dense_symmetric import sym_axis, _homogenize_sym_proof
 from ..utils import (
@@ -117,7 +117,7 @@ def _constrained_acute_cubic(coeff: Coeff, F):
         return None if sol is None else sol / CyclicSum(a)
 
     if c300 >= 0:
-        return sos_struct_cubic(coeff)
+        return structsos_cubic(coeff)
     x, y = (c210/-c300), (c111/-c300)
 
     def _solve_trivial(t):
@@ -156,7 +156,7 @@ def _constrained_acute_cubic(coeff: Coeff, F):
         ker2 = CyclicSum((a**2+b**2-c**2)*(c**2+a**2-b**2)*(b-c)**2) + 1/(t - 1)**2/4*CyclicSum((b+c-(2*t-2)*a)*(a-b)*(a-c))**2
         rem = (original * multiplier - ker2).doit().as_poly(a,b,c)
         # print(t, rem)
-        rem_sol = sos_struct_sextic(Coeff(rem))
+        rem_sol = structsos_sextic(Coeff(rem))
         if rem_sol is not None:
             return (rem_sol + ker)/multiplier
 
@@ -274,7 +274,7 @@ def _constrained_acute_quartic(coeff: Coeff, F):
             quad = Coeff({
                 (2,0,0): va2, (1,1,0): vab, (1,0,1): vac, (0,2,0): vb2, (0,1,1): vbc, (0,0,2): vc2
             }, is_rational=coeff.is_rational)
-            sol = sos_struct_acyclic_quadratic(quad)
+            sol = structsos_acyclic_quadratic(quad)
             if sol is not None:
                 return CyclicSum(F(a)*sol)
 
@@ -314,7 +314,7 @@ def _constrained_acute_quartic(coeff: Coeff, F):
         new_coeff = Coeff(
             coeff.as_poly(a,b,c) - x*CyclicSum((b**2+c**2-a**2)*(a-b)*(a-c)).as_poly(a,b,c)
         )
-        sol = sos_struct_quartic(new_coeff)
+        sol = structsos_quartic(new_coeff)
         if sol is not None:
             return sol + 2*x*CyclicSum(F(a)*(2*a+b+c)*(a-b)**2*(a-c)**2)/(CyclicSum(a*(b+c-2*a)**2)+CyclicSum(a*(b-c)**2))
 

@@ -1,35 +1,35 @@
-from .sparse  import sos_struct_sparse, sos_struct_heuristic
-from .dense_symmetric import sos_struct_dense_symmetric, sos_struct_liftfree_for_six
-from .quadratic import sos_struct_quadratic, sos_struct_acyclic_quadratic
-from .cubic   import sos_struct_cubic, sos_struct_acyclic_cubic
-from .quartic import sos_struct_quartic, sos_struct_acyclic_quartic
-from .quintic import sos_struct_quintic
-from .sextic  import sos_struct_sextic
-from .septic  import sos_struct_septic
-from .octic   import sos_struct_octic
-from .nonic   import sos_struct_nonic
-from .acyclic import sos_struct_acyclic_sparse
+from .sparse  import structsos_sparse, structsos_heuristic
+from .dense_symmetric import structsos_dense_symmetric, structsos_liftfree_for_six
+from .quadratic import structsos_quadratic, structsos_acyclic_quadratic
+from .cubic   import structsos_cubic, structsos_acyclic_cubic
+from .quartic import structsos_quartic, structsos_acyclic_quartic
+from .quintic import structsos_quintic
+from .sextic  import structsos_sextic
+from .septic  import structsos_septic
+from .octic   import structsos_octic
+from .nonic   import structsos_nonic
+from .acyclic import structsos_acyclic_sparse
 
 from .solver import structural_sos_3vars, _structural_sos_3vars_cyclic, _structural_sos_3vars_acyclic
 
 
 __all__ = [
-    'sos_struct_sparse',
-    'sos_struct_heuristic',
-    'sos_struct_dense_symmetric',
-    'sos_struct_liftfree_for_six',
-    'sos_struct_quadratic',
-    'sos_struct_acyclic_quadratic',
-    'sos_struct_cubic',
-    'sos_struct_acyclic_cubic',
-    'sos_struct_quartic',
-    'sos_struct_acyclic_quartic',
-    'sos_struct_quintic',
-    'sos_struct_sextic',
-    'sos_struct_septic',
-    'sos_struct_octic',
-    'sos_struct_nonic',
-    'sos_struct_acyclic_sparse',
+    'structsos_sparse',
+    'structsos_heuristic',
+    'structsos_dense_symmetric',
+    'structsos_liftfree_for_six',
+    'structsos_quadratic',
+    'structsos_acyclic_quadratic',
+    'structsos_cubic',
+    'structsos_acyclic_cubic',
+    'structsos_quartic',
+    'structsos_acyclic_quartic',
+    'structsos_quintic',
+    'structsos_sextic',
+    'structsos_septic',
+    'structsos_octic',
+    'structsos_nonic',
+    'structsos_acyclic_sparse',
     'structural_sos_3vars',
     '_structural_sos_3vars_cyclic',
     '_structural_sos_3vars_acyclic'

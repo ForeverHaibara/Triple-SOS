@@ -5,15 +5,15 @@ from ..utils import Coeff, rationalize_func
 from ....sdp import congruence
 from ....utils import verify_symmetry
 
-def sos_struct_nvars_quartic_symmetric(poly, real=True):
+def structsos_nvars_quartic_symmetric(poly, real=True):
     """
     Solve a homogeneous quartic symmetric polynomial inequality on real numbers for nvars >= 4.
     """
     if poly.total_degree() == 4 and verify_symmetry(poly, "sym"):
-        return _sos_struct_nvars_quartic_symmetric_sdp(Coeff(poly))
+        return _structsos_nvars_quartic_symmetric_sdp(Coeff(poly))
 
 
-def _sos_struct_nvars_quartic_symmetric_sdp(coeff: Coeff):
+def _structsos_nvars_quartic_symmetric_sdp(coeff: Coeff):
     """
     If a symmetric quartic polynomial is SOS, then it can be written in the form of
     ```

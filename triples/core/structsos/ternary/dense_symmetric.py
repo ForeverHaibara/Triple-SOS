@@ -9,7 +9,7 @@ from sympy.external.gmpy import sqrt as isqrt
 from sympy.utilities import subsets
 
 from .utils import (
-    sos_struct_handle_uncentered, sos_struct_reorder_symmetry,
+    structsos_handle_uncentered, structsos_reorder_symmetry,
 )
 from ..univariate import prove_univariate
 from ....utils import verify_symmetry, poly_reduce_by_symmetry
@@ -57,30 +57,30 @@ def _linear_invert(u, v, d: int = 0) -> Optional[Tuple[int, 'Expr', 'Expr']]:
     return n, u2, v2
 
 
-def sos_struct_dense_symmetric(coeff, real=True):
+def structsos_dense_symmetric(coeff, real=True):
     """
     Solve dense 3-var symmetric inequalities.
     Triggered only when the degree is at least 8 and the polynomial is symmetric.
     """
     if coeff.total_degree() < 8 or not coeff.is_symmetric():
         return None
-    return _sos_struct_dense_symmetric(coeff, real)
+    return _structsos_dense_symmetric(coeff, real)
 
 
-def _sos_struct_dense_symmetric(coeff, real=True):
+def _structsos_dense_symmetric(coeff, real=True):
     """
     Solve dense 3-var symmetric inequalities. This function
     does not check the symmetry of the input polynomial, so it
     should only be called when the symmetry is guaranteed.
     """
     d = coeff.total_degree()
-    methods = [_sos_struct_trivial_additive]
+    methods = [_structsos_trivial_additive]
     if d < 8:
         from .solver import _structural_sos_3vars_cyclic
         methods.append(_structural_sos_3vars_cyclic)
     else:
-        methods.append(sos_struct_liftfree_for_six)
-        methods.append(_sos_struct_lift_for_six)
+        methods.append(structsos_liftfree_for_six)
+        methods.append(_structsos_lift_for_six)
 
     for method in methods:
         solution = method(coeff, real=real)
@@ -88,7 +88,7 @@ def _sos_struct_dense_symmetric(coeff, real=True):
             return solution
 
 
-def _sos_struct_trivial_additive(coeff: 'Coeff', real=True):
+def _structsos_trivial_additive(coeff: 'Coeff', real=True):
     """
     Solve trivial cyclic inequalities with nonnegative coefficients.
     """
@@ -157,8 +157,8 @@ def _homogenize_sym_proof(coeff: 'Coeff', sym_proof, d: int) -> 'Expr':
     return Add(*exprs)
 
 
-@sos_struct_handle_uncentered
-def _sos_struct_lift_for_six(coeff: 'Coeff', real=True):
+@structsos_handle_uncentered
+def _structsos_lift_for_six(coeff: 'Coeff', real=True):
     """
     Solve high-degree (dense) symmetric inequalities by the method
     of lifting the degree for six. Idea: define f(a,1,1) to be the
@@ -199,7 +199,7 @@ def _sos_struct_lift_for_six(coeff: 'Coeff', real=True):
         if all(m % 2 == 0 for _, m in factors):
             # XXX: currently modp factorization is slow
             # unless flint is installed
-            sol = _sos_struct_complex_factorizable(coeff,
+            sol = _structsos_complex_factorizable(coeff,
                     modp=(FLINT_VERSION >= (0, 7, 0)))
             if sol is not None:
                 return sol
@@ -227,7 +227,7 @@ def _sos_struct_lift_for_six(coeff: 'Coeff', real=True):
     for mul, tail in multipliers:
         diff = compute_diff(coeff, lifted_sym, mul, tail)
         # print(diff.as_poly((a,b,c)).as_expr())
-        sol_diff = _sos_struct_dense_symmetric(diff)
+        sol_diff = _structsos_dense_symmetric(diff)
         if sol_diff is not None:
             return Add(
                 CyclicSum(lifted_sym * tail),
@@ -235,8 +235,8 @@ def _sos_struct_lift_for_six(coeff: 'Coeff', real=True):
             ) / mul
 
 
-@sos_struct_handle_uncentered
-def sos_struct_liftfree_for_six(coeff: 'Coeff', real=True):
+@structsos_handle_uncentered
+def structsos_liftfree_for_six(coeff: 'Coeff', real=True):
     """
     Solve high-degree (dense) symmetric inequalities without
     lifting the degree. This will be tried in prior because
@@ -273,7 +273,7 @@ def sos_struct_liftfree_for_six(coeff: 'Coeff', real=True):
 
     div2 = div[0].div(Poly([1,-2,1], a, domain=sym.domain))
     if div2[1].is_zero:
-        return _sos_struct_liftfree_for_six_ord4(coeff, div2[0], real=real)
+        return _structsos_liftfree_for_six_ord4(coeff, div2[0], real=real)
 
     # subtract some s(a^n*b^m*c^m*(a-b)*(a-c)*(a + (b+c))) + p(a-b)^2*...
     # so that the symmetric axis of the remaining part is a multiple of (a-1)^4
@@ -324,12 +324,12 @@ def sos_struct_liftfree_for_six(coeff: 'Coeff', real=True):
         # subtract s(a^n*b^m*c^m*(u2*a*(b+c)/2 + v2*b*c)*(a-b)*(a-c)) + p(a-b)^2*...
         subtractor = u2 * _subtractor2(n+1, m) + v2 * _subtractor1(n, m+1)
     rem_poly = coeff - coeff.from_poly(subtractor.doit().as_poly(a,b,c,domain=coeff.domain))
-    solution = _sos_struct_liftfree_for_six_ord4(rem_poly, real=real)
+    solution = _structsos_liftfree_for_six_ord4(rem_poly, real=real)
     if solution is not None:
         return subtractor + solution
 
 
-def _sos_struct_liftfree_for_six_ord4(coeff: 'Coeff', div2=None, real=True):
+def _structsos_liftfree_for_six_ord4(coeff: 'Coeff', div2=None, real=True):
     """
     Solve a high-degree (dense) symmetric inequality where (a-1)^4 is a factor
     of the symmetric axis. Such polynomial can be seen as:
@@ -360,7 +360,7 @@ def _sos_struct_liftfree_for_six_ord4(coeff: 'Coeff', div2=None, real=True):
     poly = coeff.as_poly()
     diff = poly - CyclicSum((a-b)**2*(a-c)**2*lifted_sym).doit().as_poly(a, b, c, domain=coeff.domain)
     diff = diff.div(CyclicProduct((a-b)**2).doit().as_poly(a, b, c, domain=coeff.domain))[0]
-    sol_diff = _sos_struct_dense_symmetric(coeff.from_poly(diff))
+    sol_diff = _structsos_dense_symmetric(coeff.from_poly(diff))
     if sol_diff is not None:
         return CyclicSum(lifted_sym * (a-b)**2*(a-c)**2) + CyclicProduct((a-b)**2) * sol_diff
 
@@ -397,7 +397,7 @@ def _conjugate_factor(poly: Poly, conj):
         odd_factors[conj_f] = 0
     return const, even_factors
 
-def _sos_struct_complex_factorizable(coeff: 'Coeff', test=True, modp=True):
+def _structsos_complex_factorizable(coeff: 'Coeff', test=True, modp=True):
     """
     Solve a cyclic ternary polynomial inequality if it is
     factorizable over Q[sqrt(-3)].
@@ -424,7 +424,7 @@ def _sos_struct_complex_factorizable(coeff: 'Coeff', test=True, modp=True):
                 return None
 
     if modp and (coeff.domain.is_QQ or coeff.domain.is_ZZ):
-        return _sos_struct_complex_factorizable_fp(coeff)
+        return _structsos_complex_factorizable_fp(coeff)
 
     dom0 = coeff.domain
     dom = dom0.unify(QQ.algebraic_field(sqrt(-3)))
@@ -496,7 +496,7 @@ def _complex_factorizable_from_AB(coeff: 'Coeff', A: Poly, B: Poly, const, k=3):
     return const*sqa + k*const*sqb
 
 
-def _sos_struct_complex_factorizable_fp(coeff: 'Coeff'):
+def _structsos_complex_factorizable_fp(coeff: 'Coeff'):
     """
     Solve a homogeneous inequality F(a,b,c) = const*(A^2 + 3*B^2) >= 0
     where const in QQ and (F, A, B) in QQ[a,b,c] by computing on
@@ -652,8 +652,8 @@ def _sqf_complex_factorizable_fp(poly: Poly, p: Optional[int]=None):
 #
 #####################################################################
 
-@sos_struct_reorder_symmetry(groups=(2, 1))
-def sos_struct_ternary_dense_partial_symmetric(coeff: 'Coeff', real=True):
+@structsos_reorder_symmetry(groups=(2, 1))
+def structsos_ternary_dense_partial_symmetric(coeff: 'Coeff', real=True):
     """
     Solve a homogeneous 3-var inequality `f(a,b,c) >= 0` where
     `f(a, b, c) == f(b, a, c)`.

@@ -56,7 +56,7 @@ def _solve_inverse_quartic(coeff: 'Coeff', m, p, n, r):
             return sum_y_exprs(y, exprs)
 
 
-def sos_struct_octic_symmetric(coeff, real=True):
+def structsos_octic_symmetric(coeff, real=True):
     if not all(coeff((i,j,k)) == coeff((j,i,k)) for (i,j,k) in ((7,1,0),(6,2,0),(5,3,0),(5,2,1),(4,3,1))):
         return
 
@@ -65,13 +65,13 @@ def sos_struct_octic_symmetric(coeff, real=True):
 
     if coeff((8,0,0)) == 0 and coeff((7,1,0)) == 0:
         if coeff((6,2,0)) == 0 and coeff((5,3,0)) == 0:
-            return _sos_struct_octic_symmetric_hexagram(coeff)
-        return _sos_struct_octic_symmetric_hexagon(coeff)
+            return _structsos_octic_symmetric_hexagram(coeff)
+        return _structsos_octic_symmetric_hexagon(coeff)
 
     if coeff((8,0,0)) != 0:
-        return _sos_struct_octic_symmetric_quadratic_form(coeff.as_poly(), coeff)
+        return _structsos_octic_symmetric_quadratic_form(coeff.as_poly(), coeff)
 
-def _sos_struct_octic_symmetric_hexagon_sdp(coeff: 'Coeff'):
+def _structsos_octic_symmetric_hexagon_sdp(coeff: 'Coeff'):
     """
     Solve symmetric hexagons for real numbers by subtracting r * s((a-b)^2(ab(a+b)+xc(a^2+b^2)+..)^2)
     so that the remaining part is a quadratic form with respect to
@@ -87,7 +87,7 @@ def _sos_struct_octic_symmetric_hexagon_sdp(coeff: 'Coeff'):
     The first and the third can be reduced to M00 - M01 >= 0 and M00 + M01 >= 0.
     The second automatically holds as long as M00 + M01 > 0 STRICTLY with the fourth.
 
-    See similar methods in _sos_struct_sextic_full_sdp.
+    See similar methods in _structsos_sextic_full_sdp.
 
     TODO: 1. Handle w1 == 0. 2. Handle c620 +- 2c611 == 0.
 
@@ -536,7 +536,7 @@ def _sos_struct_octic_symmetric_hexagon_sdp(coeff: 'Coeff'):
             return _sol_to_result(_degenerated_hessian_degen_w1())
 
 
-def _sos_struct_octic_symmetric_hexagon(coeff: 'Coeff'):
+def _structsos_octic_symmetric_hexagon(coeff: 'Coeff'):
     """
     Try to solve symmetric octic hexagon, without terms a^8, a^7b and a^7c.
 
@@ -547,7 +547,7 @@ def _sos_struct_octic_symmetric_hexagon(coeff: 'Coeff'):
     if c1 < 0 or 2*c1 + c3 < 0:
         return None
 
-    solution = _sos_struct_octic_symmetric_hexagon_sdp(coeff)
+    solution = _structsos_octic_symmetric_hexagon_sdp(coeff)
     if solution is not None:
         return solution
 
@@ -597,12 +597,12 @@ def _sos_struct_octic_symmetric_hexagon(coeff: 'Coeff'):
 
 
     if coeff((6,2,0)) == 0 and coeff((5,3,0)) == 0:
-        return _sos_struct_octic_symmetric_hexagram(coeff)
+        return _structsos_octic_symmetric_hexagram(coeff)
 
     return None
 
 
-def _sos_struct_octic_symmetric_hexagram(coeff: 'Coeff'):
+def _structsos_octic_symmetric_hexagram(coeff: 'Coeff'):
     """
     Solve octic symmetric hexagram, where all terms are inside the triangle (a^6bc,...) and (a^4b^4,...).
 
@@ -759,7 +759,7 @@ def _sos_struct_octic_symmetric_hexagram(coeff: 'Coeff'):
             return sum_y_exprs(y, exprs) / multiplier
 
 
-def _sos_struct_octic_symmetric_quadratic_form(poly, coeff: 'Coeff'):
+def _structsos_octic_symmetric_quadratic_form(poly, coeff: 'Coeff'):
     """
     Let F0 = s(a2(s(a2+ab)-bc)2(a-b)(a-c)).
     Then we have
@@ -770,7 +770,7 @@ def _sos_struct_octic_symmetric_quadratic_form(poly, coeff: 'Coeff'):
     For more general septic symmetric polynomials, we can first decompose its symmetric axis
     into several F_{x,y} and then combine them together.
 
-    For a more primary case, see `_sos_struct_sextic_symmetric_quadratic_form`.
+    For a more primary case, see `_structsos_sextic_symmetric_quadratic_form`.
 
     Examples
     --------

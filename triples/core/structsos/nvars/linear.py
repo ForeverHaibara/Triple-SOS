@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from ....utils import Coeff
 
-def sos_struct_nvars_linear(coeff: "Coeff", **kwargs):
+def structsos_nvars_linear(coeff: "Coeff", **kwargs):
     """
     Solve a linear inequality. Supports non-homogeneous polynomials also.
 

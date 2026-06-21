@@ -1,11 +1,11 @@
 from sympy import Poly, Rational, Float, Add, sqrt
 
-from .quartic import sos_struct_quartic
-from .septic_symmetric import sos_struct_septic_symmetric
+from .quartic import structsos_quartic
+from .septic_symmetric import structsos_septic_symmetric
 from .utils import (
     Coeff, nroots, rationalize_bound,
     zip_longest, align_cyclic_group, congruence_solve,
-    sos_struct_handle_uncentered
+    structsos_handle_uncentered
 )
 
 def repeated_div(p: Poly, q: Poly):
@@ -48,28 +48,28 @@ def _fast_solve_quartic(coeff: Coeff, m, p, n, q, rem = 0, mul_abc = True):
     coeffs_ = {
         (4,0,0): m, (3,1,0): p, (2,2,0): n, (1,3,0): q, (2,1,1): (rem - m - p - n - q)
     }
-    solution = sos_struct_quartic(coeff.from_dict(coeffs_), None)
+    solution = structsos_quartic(coeff.from_dict(coeffs_), None)
     if mul_abc and solution is not None:
         solution = solution * CyclicProduct(a)
     return solution
 
 
-def sos_struct_septic(coeff, real = True):
+def structsos_septic(coeff, real = True):
     if all(coeff((i,j,k)) == coeff((j,i,k)) for (i,j,k) in ((6,1,0),(5,2,0),(4,3,0),(4,2,1))):
-        return sos_struct_septic_symmetric(coeff, real = real)
+        return structsos_septic_symmetric(coeff, real = real)
 
     if coeff((7,0,0)) == 0 and coeff((6,1,0)) == 0 and coeff((6,0,1)) == 0:
         if coeff((5,2,0)) == 0 and coeff((5,0,2)) == 0:
             # star
-            return _sos_struct_septic_star(coeff)
+            return _structsos_septic_star(coeff)
         else:
             # hexagon
-            return _sos_struct_septic_hexagon(coeff)
+            return _structsos_septic_hexagon(coeff)
 
     return None
 
 
-def _sos_struct_septic_biased(coeff: Coeff):
+def _structsos_septic_biased(coeff: Coeff):
     """
     Solve septic hexagons without s(a5b2) and s(a4b3)
 
@@ -98,7 +98,7 @@ def _sos_struct_septic_biased(coeff: Coeff):
 
     if coeff((5,2,0)) or coeff((4,3,0)):
         # reflect the polynomial so that coeff((5,2,0)) == 0
-        sol = _sos_struct_septic_biased(coeff.reflect())
+        sol = _structsos_septic_biased(coeff.reflect())
         return align_cyclic_group(sol, coeff.gens)
 
     if coeff((5,2,0)) or coeff((4,3,0)):
@@ -107,7 +107,7 @@ def _sos_struct_septic_biased(coeff: Coeff):
     return None
 
 
-def _sos_struct_septic_hexagon(coeff: Coeff):
+def _structsos_septic_hexagon(coeff: Coeff):
     """
     Solve septic without s(a7), s(a6b), s(a6c).
 
@@ -132,7 +132,7 @@ def _sos_struct_septic_hexagon(coeff: Coeff):
         return None
 
     if (coeff((5,2,0)) == 0 and coeff((4,3,0)) == 0) or (coeff((3,4,0)) == 0 and coeff((2,5,0)) == 0):
-        solution = _sos_struct_septic_biased(coeff)
+        solution = _structsos_septic_biased(coeff)
         if solution is not None:
             return solution
 
@@ -142,24 +142,24 @@ def _sos_struct_septic_hexagon(coeff: Coeff):
 
     if coeff((5,2,0)) == coeff((2,5,0)):
         if coeff((5,2,0)) == 0 and coeff((2,5,0)) == 0:
-            return _sos_struct_septic_star(coeff)
+            return _structsos_septic_star(coeff)
 
-        solution = _sos_struct_septic_hexagon_subtract_quintic(coeff)
+        solution = _structsos_septic_hexagon_subtract_quintic(coeff)
         if solution is not None:
             return solution
 
-    return _sos_struct_septic_hexagon_sdp(coeff)
+    return _structsos_septic_hexagon_sdp(coeff)
 
 
-def _sos_struct_septic_star(coeff: Coeff):
-    return _sos_struct_septic_star_sdp(coeff)
+def _structsos_septic_star(coeff: Coeff):
+    return _structsos_septic_star_sdp(coeff)
 
 
-def _sos_struct_septic_hexagon_subtract_quintic(coeff: Coeff):
+def _structsos_septic_hexagon_subtract_quintic(coeff: Coeff):
     """
     Solve easy cases of septic hexagons by subtracting a quintic polynomial * s(ab):
     `s(ab)s(c(a^2-b^2+u(ab-ac)+v(bc-ab))^2)` to eliminate the border
-    See more details in `_sos_struct_quintic_hexagon`
+    See more details in `_structsos_quintic_hexagon`
 
 
     Theorem 1.
@@ -283,8 +283,8 @@ def _sos_struct_septic_hexagon_subtract_quintic(coeff: Coeff):
             return main_solution + remain_solution
 
 
-@sos_struct_handle_uncentered
-def _sos_struct_septic_hexagon_sdp(coeff: Coeff):
+@structsos_handle_uncentered
+def _structsos_septic_hexagon_sdp(coeff: Coeff):
     """
     Assume `F(a,b,c) = CyclicSum(a * vec' * M * vec) + a*b*c*g` where `g`
     has degree 4,
@@ -448,8 +448,8 @@ def _sos_struct_septic_hexagon_sdp(coeff: Coeff):
             return sol
 
 
-@sos_struct_handle_uncentered
-def _sos_struct_septic_star_sdp(coeff: Coeff):
+@structsos_handle_uncentered
+def _structsos_septic_star_sdp(coeff: Coeff):
     """
     Solve `F(a,b,c) = s(ua4b3 + va3b4) + abcf(a,b,c) >= 0` where f is degree 4.
 
