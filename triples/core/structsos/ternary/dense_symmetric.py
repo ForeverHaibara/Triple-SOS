@@ -16,9 +16,7 @@ from ....utils import verify_symmetry, poly_reduce_by_symmetry
 from ....utils.polytools import dmp_gf_factor, FLINT_VERSION
 
 if TYPE_CHECKING:
-    from .utils import (
-        Coeff,
-    )
+    from .utils import Coeff
     from sympy import Expr
 
 

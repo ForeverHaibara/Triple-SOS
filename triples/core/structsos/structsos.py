@@ -17,13 +17,14 @@ from ..solution import Solution
 if TYPE_CHECKING:
     from sympy import Poly, Expr
     from .solution import SolutionStructural
+    from ..problem import InequalityProblem
 
 class StructuralSOSSolver(ProofNode):
     def explore(self, configs):
         if self.state == 0:
             problem, _homogenizer = self.problem.homogenize()
 
-            solution = _structural_sos(problem.expr, problem.ineq_constraints, problem.eq_constraints)
+            solution = _structural_sos(problem)
 
             if solution is not None:
                 if _homogenizer is not None:
@@ -80,11 +81,15 @@ def StructuralSOS(
     return problem.sum_of_squares(configs)
 
 
-def _structural_sos(poly: "Poly", ineq_constraints: Dict["Poly", "Expr"] = {}, eq_constraints: Dict["Poly", "Expr"] = {}) -> "Expr":
+def _structural_sos(problem: "InequalityProblem") -> "Expr":
     """
     Internal function of StructuralSOS, returns a sympy expression only.
     The polynomial must be homogeneous. TODO: remove the homogeneous requirement?
     """
+    poly: "Poly" = problem.expr
+    ineq_constraints = problem.ineq_constraints
+    eq_constraints = problem.eq_constraints
+
     if poly.is_zero:
         return Integer(0)
     d = poly.total_degree()
@@ -113,14 +118,14 @@ def _structural_sos(poly: "Poly", ineq_constraints: Dict["Poly", "Expr"] = {}, e
     solution = None
     if nvars == 2:
         # homogeneous bivariate
-        solution = structural_sos_2vars(poly, ineq_constraints, eq_constraints)
+        solution = structural_sos_2vars(problem)
     elif nvars == 3:
-        solution = structural_sos_3vars(poly, ineq_constraints, eq_constraints)
+        solution = structural_sos_3vars(problem)
     elif nvars == 4:
-        solution = structural_sos_4vars(poly, ineq_constraints, eq_constraints)
+        solution = structural_sos_4vars(problem)
 
     if solution is None and nvars > 3:
-        solution = structural_sos_nvars(poly, ineq_constraints, eq_constraints)
+        solution = structural_sos_nvars(problem)
 
     if solution is None:
         solution = structural_sos_constrained(poly, ineq_constraints, eq_constraints)

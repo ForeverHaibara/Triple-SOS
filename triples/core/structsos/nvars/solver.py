@@ -10,6 +10,7 @@ from ....utils import Coeff
 
 if TYPE_CHECKING:
     from sympy import Poly, Expr
+    from ...problem import InequalityProblem
 
 SOLVERS_SYMMETRIC = {
     4: structsos_nvars_quartic_symmetric,
@@ -44,15 +45,25 @@ def _structural_sos_nvars_general(
 
 
 def structural_sos_nvars(
-    poly: "Poly",
-    ineq_constraints: Dict["Poly", "Expr"] = {},
-    eq_constraints: Dict["Poly", "Expr"] = {}
+    problem: "InequalityProblem"
 ) -> Optional["Expr"]:
     """
     Main function of structural SOS for n-var homogeneous polynomials.
     """
+    poly: "Poly" = problem.expr
+    ineq_constraints = problem.ineq_constraints
+    # eq_constraints = problem.eq_constraints
+
     if not poly.is_homogeneous: # should not happen
         raise ValueError("structural_sos_nvars only supports homogeneous polynomials.")
+
+    signs = problem.get_symbol_signs()
+    is_pos = lambda x: (x is not None) and x >= 0
+    r_plus = all(is_pos(signs.get(x, (-1, -1))[0]) for x in poly.gens)
+
+    if (not r_plus) and poly.total_degree() % 2 == 1:
+        # TODO: try to disprove the problem
+        return None
 
     coeff = Coeff(poly)
     solution = None
@@ -76,10 +87,7 @@ def structural_sos_nvars(
     if solution is None:
         return None
 
-    replacement = {}
-    for k, v in ineq_constraints.items():
-        if len(k.free_symbols) == 1 and k.is_monomial and k.LC() >= 0:
-            replacement[func(k.free_symbols.pop())] = v/k.LC()
+    replacement = {func(x): v for x, (sgn, v) in signs.items() if is_pos(sgn)}
     solution = solution.xreplace(replacement)
 
     if solution.has(func):

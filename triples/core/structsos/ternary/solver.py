@@ -21,6 +21,7 @@ from ..solution import SolutionStructural
 
 if TYPE_CHECKING:
     from sympy import Poly, Expr
+    from ...problem import InequalityProblem
 
 SOLVERS = {
     2: structsos_quadratic,
@@ -76,14 +77,17 @@ def _structural_sos_3vars_acyclic(
         real=real
     )
 
+
 def structural_sos_3vars(
-    poly,
-    ineq_constraints: Dict["Poly", "Expr"] = {},
-    eq_constraints: Dict["Poly", "Expr"] = {}
+    problem: "InequalityProblem"
 ) -> Optional["Expr"]:
     """
     Main function of structural SOS for 3-var homogeneous polynomials.
     """
+    poly: "Poly" = problem.expr
+    ineq_constraints = problem.ineq_constraints
+    # eq_constraints = problem.eq_constraints
+
     if len(poly.gens) != 3: # should not happen
         raise ValueError("structural_sos_3vars only supports 3-var polynomials.")
 
@@ -91,15 +95,20 @@ def structural_sos_3vars(
     if not is_hom: # should not happen
         raise ValueError("structural_sos_3vars only supports homogeneous polynomials.")
 
+    # check whether the variables are in the nonnegative orthant
+    signs = problem.get_symbol_signs()
+    is_pos = lambda x: (x is not None) and x >= 0
+    r_plus = all(is_pos(signs.get(x, (-1, -1))[0]) for x in poly.gens)
+
+    if (not r_plus) and poly.total_degree() % 2 == 1:
+        # TODO: try to disprove the problem
+        return None
+
+
     coeff_poly = Coeff(poly)
     is_cyc = coeff_poly.is_cyclic()
-    if len(ineq_constraints) == 0 and len(eq_constraints) == 0 and poly.total_degree() % 2 == 1:
-        return
-
-    if is_cyc:
-        func = _structural_sos_3vars_cyclic
-    else:
-        func = _structural_sos_3vars_acyclic
+    func = _structural_sos_3vars_cyclic if is_cyc\
+        else _structural_sos_3vars_acyclic
 
     try:
         solution = func(coeff_poly, real = 1)
@@ -119,10 +128,7 @@ def structural_sos_3vars(
     if solution is None:
         return None
 
-    replacement = {}
-    for k, v in ineq_constraints.items():
-        if len(k.free_symbols) == 1 and k.is_monomial and k.LC() >= 0:
-            replacement[func(k.free_symbols.pop())] = v/k.LC()
+    replacement = {func(x): v for x, (sgn, v) in signs.items() if is_pos(sgn)}
     solution = solution.xreplace(replacement)
 
     if solution.has(func):

@@ -16,6 +16,7 @@ from ..solution import SolutionStructural
 
 if TYPE_CHECKING:
     from sympy import Poly, Expr
+    from ...problem import InequalityProblem
 
 
 SOLVERS_CYCLIC = {
@@ -131,17 +132,28 @@ def _structural_sos_4vars_dihedral(
 
 
 def structural_sos_4vars(
-    poly: "Poly",
-    ineq_constraints: Dict["Poly", "Expr"] = {},
-    eq_constraints: Dict["Poly", "Expr"] = {}
+    problem: "InequalityProblem"
 ) -> Optional["Expr"]:
     """
     Main function of structural SOS for 4-var homogeneous polynomials.
     """
+    poly: "Poly" = problem.expr
+    ineq_constraints = problem.ineq_constraints
+    # eq_constraints = problem.eq_constraints
+
     if len(poly.gens) != 4: # should not happen
         raise ValueError("structural_sos_4vars only supports 4-var polynomials.")
     if not poly.is_homogeneous: # should not happen
         raise ValueError("structural_sos_4vars only supports homogeneous polynomials.")
+
+    # check whether the variables are in the nonnegative orthant
+    signs = problem.get_symbol_signs()
+    is_pos = lambda x: (x is not None) and x >= 0
+    r_plus = all(is_pos(signs.get(x, (-1, -1))[0]) for x in poly.gens)
+
+    if (not r_plus) and poly.total_degree() % 2 == 1:
+        # TODO: try to disprove the problem
+        return None
 
     coeff = Coeff(poly)
     solution = None
@@ -178,10 +190,7 @@ def structural_sos_4vars(
     if solution is None:
         return None
 
-    replacement = {}
-    for k, v in ineq_constraints.items():
-        if len(k.free_symbols) == 1 and k.is_monomial and k.LC() >= 0:
-            replacement[func(k.free_symbols.pop())] = v/k.LC()
+    replacement = {func(x): v for x, (sgn, v) in signs.items() if is_pos(sgn)}
     solution = solution.xreplace(replacement)
 
     if solution.has(func):
