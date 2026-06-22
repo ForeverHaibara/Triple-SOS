@@ -5,7 +5,7 @@ from sympy.core.symbol import uniquely_named_symbol
 
 from .quartic import structsos_nvars_quartic_symmetric
 from ..sparse import structsos_common, structsos_degree_specified_solver
-from ..solution import SolutionStructural
+from ...solution import extract_undetermined_exprs
 from ....utils import Coeff
 
 if TYPE_CHECKING:
@@ -83,7 +83,7 @@ def structural_sos_nvars(
     ####################################################################
     func_name = uniquely_named_symbol('G', poly.gens + tuple(ineq_constraints.values()))
     func = Function(func_name)
-    solution = SolutionStructural._extract_nonnegative_exprs(solution, func_name=func_name)
+    solution = extract_undetermined_exprs(solution, func)
     if solution is None:
         return None
 

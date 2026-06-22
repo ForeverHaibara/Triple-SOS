@@ -1,9 +1,8 @@
 from typing import List, Dict, Union, Optional, TYPE_CHECKING
 
-from sympy import Integer, construct_domain
+from sympy import construct_domain
 from sympy.polys.polyerrors import BasePolynomialError
 
-from .utils import clear_free_symbols
 from .constrained import structural_sos_constrained
 from .pivoting    import structural_sos_2vars
 from .ternary     import structural_sos_3vars
@@ -16,7 +15,6 @@ from ..solution import Solution
 
 if TYPE_CHECKING:
     from sympy import Poly, Expr
-    from .solution import SolutionStructural
     from ..problem import InequalityProblem
 
 class StructuralSOSSolver(ProofNode):
@@ -47,7 +45,7 @@ def StructuralSOS(
     *,
     verbose: Union[bool, int] = False,
     raise_exception: bool = False,
-) -> Optional["SolutionStructural"]:
+) -> Optional["Solution"]:
     """
     A rule-based expert system to solve polynomial inequalities in specific structures.
     Most algorithms run in O(1) or linear time.
@@ -86,12 +84,15 @@ def _structural_sos(problem: "InequalityProblem") -> "Expr":
     Internal function of StructuralSOS, returns a sympy expression only.
     The polynomial must be homogeneous. TODO: remove the homogeneous requirement?
     """
+    problem = problem.remove_redundancy()
+
     poly: "Poly" = problem.expr
     ineq_constraints = problem.ineq_constraints
     eq_constraints = problem.eq_constraints
 
     if poly.is_zero:
-        return Integer(0)
+        return poly.as_expr()
+
     d = poly.total_degree()
     nvars = len(poly.gens)
     if poly.is_monomial:
@@ -99,8 +100,6 @@ def _structural_sos(problem: "InequalityProblem") -> "Expr":
             # since the poly is homogeneous, it must be a monomial
             return poly.as_expr()
         return None
-
-    poly, ineq_constraints, eq_constraints = clear_free_symbols(poly, ineq_constraints, eq_constraints)
 
     if poly.domain.is_EX or poly.domain.is_EXRAW:
         # cast the polynomial to an extended domain

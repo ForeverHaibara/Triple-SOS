@@ -17,7 +17,7 @@ from .acyclic import structsos_acyclic_sparse
 
 from ..utils import Coeff, PolynomialNonpositiveError, PolynomialUnsolvableError
 from ..sparse import structsos_common, structsos_degree_specified_solver
-from ..solution import SolutionStructural
+from ...solution import extract_undetermined_exprs
 
 if TYPE_CHECKING:
     from sympy import Poly, Expr
@@ -124,7 +124,7 @@ def structural_sos_3vars(
     ####################################################################
     func_name = uniquely_named_symbol('G', poly.gens + tuple(ineq_constraints.values()))
     func = Function(func_name)
-    solution = SolutionStructural._extract_nonnegative_exprs(solution, func_name=func_name)
+    solution = extract_undetermined_exprs(solution, func)
     if solution is None:
         return None
 

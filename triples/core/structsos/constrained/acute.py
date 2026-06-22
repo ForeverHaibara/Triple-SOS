@@ -1,7 +1,6 @@
 from sympy import Poly, Function, Integer, Add, sqrt
 from sympy.polys.polyerrors import CoercionFailed
 
-from ..solution import SolutionStructural
 from ..ternary.utils import CommonExpr
 from ..ternary import (
     structsos_acyclic_quadratic, structsos_quartic,
@@ -12,6 +11,7 @@ from ..utils import (
     Coeff, uniquely_named_symbol, rationalize_func
 )
 from ..univariate import prove_univariate
+from ...solution import extract_undetermined_exprs
 
 def constrained_acute(poly, ineq_constraints, eq_constraints):
     gens = poly.gens
@@ -51,7 +51,7 @@ def constrained_acute(poly, ineq_constraints, eq_constraints):
             return None
 
     extra_checker = lambda x: x if isinstance(x, F) else None
-    solution = SolutionStructural._extract_nonnegative_exprs(solution, func_name=Gname, extra_checker=extra_checker)
+    solution = extract_undetermined_exprs(solution, G, extra_checker=extra_checker)
 
     if solution is None:
         return None

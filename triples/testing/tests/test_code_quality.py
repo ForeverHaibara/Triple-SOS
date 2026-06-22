@@ -1,3 +1,8 @@
+def _project_path():
+    from os.path import dirname, abspath
+    return dirname(dirname(dirname(abspath(__file__))))
+
+
 def test_dependency():
     """
     Test to ensure all import statements in .py files under a target directory only use allowed libraries.
@@ -7,7 +12,7 @@ def test_dependency():
     import os
 
     # path to the parent directory
-    base_path = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    base_path = _project_path()
 
     # modules to be checked
     modules = ["utils", "core", "sdp"]
@@ -64,3 +69,29 @@ def test_dependency():
         assert False, (
             f"Forbidden dependencies detected: {message}."
         )
+
+
+def test_ruff():
+    """
+    Execute ruff on the project.
+    """
+    import subprocess
+
+    # Get the project root directory
+    project_root = _project_path()
+
+    try:
+        # Run ruff on the project
+        result = subprocess.run(
+            ["ruff", "check", project_root],
+            capture_output=True,
+            text=True
+        )
+    except FileNotFoundError:
+        # pytest.skip("Ruff is not installed in the environment")
+        return
+
+    # Assert that ruff passes without errors
+    assert result.returncode == 0, (
+        f"Ruff found issues:\n{result.stdout}\n{result.stderr}"
+    )
