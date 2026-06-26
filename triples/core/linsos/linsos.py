@@ -203,13 +203,17 @@ class LinearSOSSolver(ProofNode):
         qmodule = configs.get('qmodule', problem.ineq_constraints)
         tangents = list(prepare_tangents(problem, qmodule=qmodule,
             additional_tangents=configs['tangents'],
-            wedderburn=configs['wedderburn']).items())
+            wedderburn=configs['wedderburn'],
+            time_limit=time_limit
+        ).items())
         time_limit()
 
         if configs['augment_tangents']:
             tangents += list(prepare_inexact_tangents(problem,
                 monomial_manager=configs['symmetry'],
-                all_nonnegative=configs['all_nonnegative']).items())
+                all_nonnegative=configs['all_nonnegative'],
+                time_limit=time_limit
+            ).items())
             time_limit()
 
         tangents = clear_polys_by_symmetry(tangents, problem.expr.gens, configs['symmetry'])

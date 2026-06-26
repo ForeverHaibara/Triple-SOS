@@ -1,4 +1,4 @@
-from typing import Tuple, List, Dict, Optional, TYPE_CHECKING
+from typing import Tuple, List, Dict, Callable, Optional, TYPE_CHECKING
 from itertools import combinations
 
 import numpy as np
@@ -7,7 +7,7 @@ from sympy import MutableDenseMatrix as Matrix
 
 from ...utils import Root, MonomialManager, identify_symmetry
 from ...utils.roots.num_extrema import numeric_optimize_skew_symmetry
-from ...sdp.arithmetic import permute_matrix_rows, solve_nullspace
+from ...sdp.arithmetic import permute_matrix_rows, solve_nullspace, ArithmeticTimeout
 from ...sdp.wedderburn import symmetry_adapted_basis
 
 if TYPE_CHECKING:
@@ -192,6 +192,7 @@ def _get_ineq_constrained_tangents(
                 ns = Matrix.hstack(ns, *new_ns)
 
             vecs = [ns[:, i] for i in range(ns.shape[1])]
+
             for vec in vecs:
                 poly = monomial_manager.invarraylize(vec, symbols, degree)
                 poly = _canonicalize(poly)
@@ -224,7 +225,8 @@ def prepare_tangents(
     qmodule: Optional[Dict[Poly, 'Expr']] = None,
     default_tangents = DEFAULT_TANGENTS,
     additional_tangents: List['Expr'] = [],
-    wedderburn: bool = True
+    wedderburn: bool = True,
+    time_limit: Optional[Callable] = None,
 ) -> Dict[Poly, 'Expr']:
     """
     Prepare tangents for LinearSOS given a list of roots (equality cases). The tangents should
@@ -274,6 +276,8 @@ def prepare_tangents(
 
     TODO: Handle high-order roots.
     """
+    time_limit = ArithmeticTimeout.make_checker(time_limit)
+
     poly = problem.expr
     G = problem.identify_symmetry()
     ineq_constraints = qmodule if qmodule is not None else problem.ineq_constraints
@@ -291,6 +295,8 @@ def prepare_tangents(
 
         if len(symbols) in default_tangents:
             tangents.extend(default_tangents[len(symbols)](*symbols))
+
+    time_limit()
 
     tangents = _filter_nonnumeric_tangents(tangents, symbols)
 
@@ -313,6 +319,7 @@ def prepare_tangents(
             symmetry=symm
         )
         tangents.update(new_tangents)
+        time_limit()
     # print(tangents)
     return tangents
 
@@ -411,7 +418,8 @@ def prepare_inexact_tangents(
     monomial_manager: MonomialManager = None,
     all_nonnegative: bool = False,
     threshold: float = 0.5,
-    max_degree: int = 5
+    max_degree: int = 5,
+    time_limit: Optional[Callable] = None,
 ) -> Dict[Poly, 'Expr']:
     """
     The function `prepare_tangents` has highlighted the importance of handling
@@ -419,6 +427,8 @@ def prepare_inexact_tangents(
     to local minima that are very close to zeros. They can be handled by a
     slight numerical perturbation that makes them numerical zeros.
     """
+    time_limit = ArithmeticTimeout.make_checker(time_limit)
+
     poly = problem.expr
     ineq_constraints = problem.ineq_constraints
     eq_constraints = problem.eq_constraints
@@ -432,6 +442,8 @@ def prepare_inexact_tangents(
     perms = [[1,0] + list(range(2, nvars))] # reflection
     if nvars >= 3:
         perms.append(list(range(1, nvars)) + [0])
+
+    time_limit()
 
     new_roots = []
     try:
@@ -471,6 +483,8 @@ def prepare_inexact_tangents(
                 _canonicalize(monomial_base.invarraylize(p, poly.gens, degree)\
                                  .retract()) for p in vecs])
             break
+            time_limit()
+        time_limit()
 
     new_tangents = {t**2: t.as_expr()**2 for t in new_tangents if t is not None}
     # print('New tangents:\n', list(new_tangents.values()))
