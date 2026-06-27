@@ -140,7 +140,6 @@ def _get_ineq_constrained_tangents(
     `(ineq*poly**2, ineq_expr*expr**2)` such that `ineq * poly` vanishes
     at all given roots. As there are infinitely many polynomials
     that satisfy this condition, the function heuristically picks a few.
-    All these dictionaries are merged together.
 
     Parameters
     ----------
@@ -161,42 +160,53 @@ def _get_ineq_constrained_tangents(
     """
     time_limit = ArithmeticTimeout.make_checker(time_limit)
 
-    # Preprocess each ineq: filter roots and check monomial status
+    # Preprocess each ineq: filter roots by index and check monomial status
     processed = []
     for ineq, ineq_expr, symm in ineq_items:
-        filtered_roots = [r for r in roots if r.eval(ineq) != 0]
+        root_inds = tuple(i for i, r in enumerate(roots) if r.eval(ineq) != 0)
         is_monomial = ineq.is_monomial and sum(_ != 0 for _ in tuple(ineq.LM())) == 1
-        processed.append((ineq, ineq_expr, symm, filtered_roots, is_monomial))
+        processed.append((ineq, ineq_expr, symm, root_inds, is_monomial))
 
-    # Group by (filtered_roots, symmetry) to share nullspace computation
+    # Group by (root_inds, symmetry) to share nullspace computation
     groups = []
-    for idx, (ineq, ineq_expr, symm, filtered_roots, is_monomial) in enumerate(processed):
+    for idx, (ineq, ineq_expr, symm, root_inds, is_monomial) in enumerate(processed):
         found = False
         for group in groups:
             ref_idx = group[0][0]
-            _, _, ref_symm, ref_roots, _ = processed[ref_idx]
-            if filtered_roots == ref_roots and symm == ref_symm:
-                group.append((idx, ineq, ineq_expr, filtered_roots, is_monomial))
+            _, _, ref_symm, ref_root_inds, _ = processed[ref_idx]
+            if root_inds == ref_root_inds and symm == ref_symm:
+                group.append((idx, ineq, ineq_expr, root_inds, is_monomial))
                 found = True
                 break
         if not found:
-            groups.append([(idx, ineq, ineq_expr, filtered_roots, is_monomial)])
+            groups.append([(idx, ineq, ineq_expr, root_inds, is_monomial)])
 
     results = [{} for _ in ineq_items]
 
+    # Local cache for root spans: (root_index, degree) -> span result
+    span_cache: Dict[Tuple[int, int], Matrix] = {}
+
     for group_items in groups:
         # Extract common data from first item in group
-        _, _, _, group_roots, _ = group_items[0]
+        _, _, _, group_root_inds, _ = group_items[0]
         _, _, group_symm, _, _ = processed[group_items[0][0]]
 
         all_polys = []
         seen_polys = set()
 
-        if group_roots:
+        if group_root_inds:
             for degree in range(1, max_degree):
                 time_limit()
 
-                mat = Matrix.hstack(*[r.span(degree) for r in group_roots])
+                # Gather spans for all roots in this group, using cache
+                group_spans = []
+                for ri in group_root_inds:
+                    key = (ri, degree)
+                    if key not in span_cache:
+                        span_cache[key] = roots[ri].span(degree)
+                    group_spans.append(span_cache[key])
+
+                mat = Matrix.hstack(*group_spans)
                 ns = _get_sorted_nullspace(monomial_manager, mat, degree)
 
                 if (group_symm is not None) and ns.shape[1] and (not group_symm.is_trivial):
@@ -233,16 +243,20 @@ def _get_ineq_constrained_tangents(
                 if degree >= min_degree and len(all_polys) > num_tangents:
                     break
 
+        time_limit()
+
         # Generate tangents for each ineq in the group using shared polys
-        for idx, ineq, ineq_expr, filtered_roots, is_monomial in group_items:
+        for idx, ineq, ineq_expr, root_inds, is_monomial in group_items:
             use_ineq = Poly(1, *symbols) if is_monomial else ineq
             use_expr = Integer(1) if is_monomial else ineq_expr
 
             for poly in all_polys:
                 results[idx][use_ineq * poly**2] = use_expr * poly.as_expr()**2
 
-            if all(not r.is_nontrivial for r in filtered_roots):
+            if all(not roots[ri].is_nontrivial for ri in root_inds):
                 results[idx][use_ineq] = use_expr
+
+            time_limit()
 
     return results
 
