@@ -110,26 +110,6 @@ class LinearSOSSolver(ProofNode):
         or irrational problems. TODO: Allow tolerance?
     verbose: bool
         Whether to print the information of the linear programming problem. Defaults to False.
-
-    Examples
-    --------
-    LinearSOS uses linear programming to solve inequality problems.
-
-    >>> from sympy.abc import a, b, c
-    >>> sol = LinearSOS(a**5*(a-b)+b**5*(b-c)+c**5*(c-a), [a,b,c])
-    >>> sol.solution # doctest: +SKIP
-    (Σ(a**2*(a**2 - b*c)**2))/6 + (Σ((a - c)**2*(6*a**3*c + 6*a**2*c**2
-     + 3*a**2*(a - b)**2 + (a - b)**2*(b - c)**2)))/18 + 2*(Σ(a**2*(a - b)**2*(a**2 + a*b)))/3
-
-    The parameter `lift_degree_limit` controls the maximum lift degree to explore.
-
-    >>> sol = LinearSOS(3 - (a+b+c)**2, [a**2-1, b**2-1, c**2-1], [a+b+c+1/a+1/b+1/c],
-    ... lift_degree_limit=6)
-    >>> sol.solution # doctest: +SKIP
-    (a*b*c*(a + b + c + 1/c + 1/b + 1/a)*(Σ(-3*a*b*c**2 + 3*a*b - 2))
-     + 3*(Σ((a**2 + 1)*(b**2 - 1)*(c**2 - 1))))/(Σ(a**2*b**2*c**2 + 1))
-
-    LinearSOS has complexity issues for high-dimensional problems.
     """
     default_configs = {
         "basis_limit": 20000,
@@ -607,6 +587,27 @@ def LinearSOS(
     solution: Optional[Solution]
         The solution of the linear programming SOS. When solution is None, it means that the linear
         programming SOS fails.
+
+    Examples
+    --------
+    LinearSOS uses linear programming to solve inequality problems.
+
+    >>> from triples import LinearSOS
+    >>> from sympy.abc import a, b, c
+    >>> sol = LinearSOS(a**5*(a-b)+b**5*(b-c)+c**5*(c-a), [a,b,c])
+    >>> sol.solution # doctest: +SKIP
+    (Σ(a**2*(a**2 - b*c)**2))/6 + (Σ((a - c)**2*(6*a**3*c + 6*a**2*c**2
+     + 3*a**2*(a - b)**2 + (a - b)**2*(b - c)**2)))/18 + 2*(Σ(a**2*(a - b)**2*(a**2 + a*b)))/3
+
+    The parameter `lift_degree_limit` controls the maximum lift degree to explore.
+
+    >>> sol = LinearSOS(3 - (a+b+c)**2, [a**2-1, b**2-1, c**2-1], [a+b+c+1/a+1/b+1/c],
+    ... lift_degree_limit=6)
+    >>> sol.solution # doctest: +SKIP
+    (a*b*c*(a + b + c + 1/c + 1/b + 1/a)*(Σ(-3*a*b*c**2 + 3*a*b - 2))
+     + 3*(Σ((a**2 + 1)*(b**2 - 1)*(c**2 - 1))))/(Σ(a**2*b**2*c**2 + 1))
+
+    LinearSOS has complexity issues for high-dimensional problems.
     """
     problem = ProofNode.new_problem(expr, ineq_constraints, eq_constraints)
     problem.set_roots(roots)

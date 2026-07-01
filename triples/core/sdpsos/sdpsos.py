@@ -629,6 +629,7 @@ def SDPSOS(
     --------
     SDPSOS solves inequalities by semidefinite programming (SDP).
 
+    >>> from triples import SDPSOS
     >>> from sympy.abc import a, b, c, d, e, x, y, z
     >>> sol = SDPSOS(a**3*(a-b)+b**3*(b-c)+c**3*(c-a))
     >>> sol.solution # doctest: +SKIP
