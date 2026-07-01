@@ -68,6 +68,41 @@ def StructuralSOS(
     -------
     solution: Solution
 
+    Examples
+    --------
+    StructuralSOS uses an expert system to solve inequalities in specific structures. Many
+    classical Olympiad-level ternary symmetric or cyclic inequalities are supported.
+
+    >>> from triples import StructuralSOS, CyclicSum
+    >>> from sympy.abc import a, b, c
+    >>> sol = StructuralSOS(a**4*(a-b)*(a-c)+b**4*(b-c)*(b-a)+c**4*(c-a)*(c-b)
+    ... -5*(a-b)**2*(b-c)**2*(c-a)**2, [a,b,c])
+    >>> sol.solution # doctest:+SKIP
+    4*((Σ(a**2*(a - b)*(a - c)))**2/4 + (Σ(a**2*(b - c)**2*(a**2 - 2*a*b - 2*a*c + b**2 + 2*b*c + c**2)**2))/8
+    + (Σ(a*b*(a - b)**2*(a**2 - 2*a*b + 2*a*c + b**2 + 2*b*c - 3*c**2)**2))/4)/(Σ(a**2))
+
+    StructuralSOS uses very fast (but incomplete) algorithms, and extends to high-degree
+    or high-dimensional problems in some cases.
+
+    >>> sol = StructuralSOS(a**30*(a-b)*(a-c)+b**30*(b-c)*(b-a)+c**30*(c-a)*(c-b), [a,b,c])
+    >>> sol is not None
+    True
+    >>> sol.time # doctest:+SKIP
+    0.191594
+
+    Sometimes StructuralSOS better handles problems with ill-conditioned or irrational
+    coefficients than other numerical algorithms.
+
+    >>> from sympy import sqrt
+    >>> sol = StructuralSOS(CyclicSum(a**3-a**2*b + (sqrt(13+16*sqrt(2))-1)/2*a*b*(b-a),
+    ... (a,b,c)), [a,b,c])
+    >>> sol.solution # doctest:+SKIP
+    (2*(∏(a))*(Σ((a - b)**2)) + (Σ(a*(14*b**2 + b*(-a + c)*(-3*sqrt(13 + 16*sqrt(2))
+    + 7 + sqrt(2)*sqrt(13 + 16*sqrt(2)) + 7*sqrt(2)) - 14*c**2 + c*(a - b)*(
+    -sqrt(2)*sqrt(13 + 16*sqrt(2)) + 7 + 7*sqrt(2) + 3*sqrt(13 + 16*sqrt(2))))**2))/98)/(2*(Σ(a*b)))
+
+    However, StructuralSOS is not a complete solver and it does not solve general inequality
+    problems. It only provides a quick check to see whether a problem can be easily solved.
     """
     from ..node import ProofTree
     problem = ProofNode.new_problem(expr, ineq_constraints, eq_constraints)

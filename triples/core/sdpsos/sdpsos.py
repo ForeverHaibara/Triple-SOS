@@ -227,7 +227,7 @@ class SDPSOSSolver(ProofNode):
     lift_degree_limit: int
         The maximum lift degree to explore. Default is 2.
     wedderburn: bool
-        Use wedderburn decomposition. Defaults to True.
+        Whether to use the wedderburn decomposition. Defaults to True.
     dof_limit: int
         The maximum degree of freedom of the SDP. When it exceeds `dof_limit`,
         the node will be pruned. This prevents crash in external SDP solvers. Default is 7000.
@@ -596,7 +596,7 @@ def SDPSOS(
     lift_degree_limit: int
         The maximum lift degree to explore. Default is 2.
     wedderburn: bool
-        Use wedderburn decomposition. Defaults to True.
+        Whether to use the wedderburn decomposition. Defaults to True.
     dof_limit: int
         The maximum degree of freedom of the SDP. When it exceeds `dof_limit`,
         the node will be pruned. This prevents crash in external SDP solvers. Default is 7000.
@@ -605,6 +605,8 @@ def SDPSOS(
     allow_numer: int
         Whether to allow inexact numerical solution. This is useful when it fails to obtain an
         exact solution by rationalization.
+    solve_kwargs: Dict[str, Any]
+        Extra keyword arguments to pass to the SDP solver.
     ineq_constraints_with_trivial: bool
         Whether to add the trivial inequality constraint 1 >= 0. This is used to generate the
         quadratic module. Default is True.
@@ -616,7 +618,49 @@ def SDPSOS(
         `unstable_eig_threshold`, then it considers the problem as numerically unstable
         and stops further search. Default is -0.1.
     verbose: bool
-        Whether to print the progress. Default is False.
+        Whether to print the progress. If verbose >= 2, it also prints the
+        SDP solver progress. Default is False.
+    time_limit: float
+        The time limit (in seconds) for the solver. Defaults to 3600. When the time limit is
+        reached, the solver is killed when it returns to the main loop.
+        However, it might not be killed instantly if it is stuck in an internal function.
+
+    Examples
+    --------
+    SDPSOS solves inequalities by semidefinite programming (SDP).
+
+    >>> from sympy.abc import a, b, c, d, e, x, y, z
+    >>> sol = SDPSOS(a**3*(a-b)+b**3*(b-c)+c**3*(c-a))
+    >>> sol.solution # doctest: +SKIP
+    (Σ((a - b)**2*(a + b)**2))/8 + (Σ((2*a*b - a*c - b*c)**2))/60 + (Σ((a**2 - a*b - b**2 + b*c)**2))/12
+    + (Σ((-5*a**2 + 2*a*b - 4*a*c - 5*b**2 + 2*b*c + 10*c**2)**2))/360
+    + (Σ((a**2 - a*b - a*c + b**2 - b*c + c**2)**2))/18
+
+    Not all nonnegative forms are SOS of polynomials. The parameter `lift_degree_limit`
+    controls the maximum lift degree to explore.
+
+    >>> sol = SDPSOS((x**2 + y**2 - 3*z**2)*x**2*y**2 + z**6, lift_degree_limit=0)
+    >>> sol is None # because Motzkin's form is not SOS
+    True
+    >>> sol = SDPSOS((x**2 + y**2 - 3*z**2)*x**2*y**2 + z**6, lift_degree_limit=2)
+    >>> sol is not None
+    True
+    >>> sol.solution.doit().together() # doctest: +SKIP
+    (x**2*y**2*(-x + y)**2*(x + y)**2 + x**2*y**2*(x - y)**2*(x + y)**2
+    + 14*x**2*y**2*(x**2 + y**2 - 2*z**2)**2 + 4*z**2*(-x + y)**2*(x*y + z**2)**2
+    + 4*z**2*(x - y)**2*(x*y + z**2)**2 + 8*z**2*(x + y)**2*(x*y - z**2)**2
+    + 8*(x*y - z**2)**2*(x*y + z**2)**2)/(4*(2*z**2 + (-x + y)**2 + (x - y)**2 + 2*(x + y)**2))
+
+
+    ### Specifying Roots
+
+    Currently SDPSOS first identifies the equality cases to apply facial reduction
+    and then solves the problem. However, in some cases, this could be slow or cause
+    numerical instability. To skip the process, pass in `roots = []` (an empty list).
+
+    >>> sol = SDPSOS((a+b+c+d+e)**2-4*(a*b+b*c+c*d+d*e+e*a), [a,b,c,d,e], roots=[])
+    >>> sol.solution # doctest: +SKIP
+    (Σ(a*(a - b + c + d - e)**2) + 4*(Σ(a*b*d)))/(Σ(a))
     """
     problem = ProofNode.new_problem(expr, ineq_constraints, eq_constraints)
     problem.set_roots(roots)

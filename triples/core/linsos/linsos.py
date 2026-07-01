@@ -80,7 +80,7 @@ class LinearSOSSolver(ProofNode):
     lift_degree_limit: int
         The maximum degree to lift the polynomial. Defaults to 4.
     wedderburn: bool
-        Use wedderburn decomposition. Defaults to True.
+        Whether to use the wedderburn decomposition. Defaults to True.
     quad_diff_order: int
         The maximum degree of the form (xi - xj)^(2k)*... in the basis. Defaults to 8.
     preordering: str
@@ -110,6 +110,26 @@ class LinearSOSSolver(ProofNode):
         or irrational problems. TODO: Allow tolerance?
     verbose: bool
         Whether to print the information of the linear programming problem. Defaults to False.
+
+    Examples
+    --------
+    LinearSOS uses linear programming to solve inequality problems.
+
+    >>> from sympy.abc import a, b, c
+    >>> sol = LinearSOS(a**5*(a-b)+b**5*(b-c)+c**5*(c-a), [a,b,c])
+    >>> sol.solution # doctest: +SKIP
+    (Σ(a**2*(a**2 - b*c)**2))/6 + (Σ((a - c)**2*(6*a**3*c + 6*a**2*c**2
+     + 3*a**2*(a - b)**2 + (a - b)**2*(b - c)**2)))/18 + 2*(Σ(a**2*(a - b)**2*(a**2 + a*b)))/3
+
+    The parameter `lift_degree_limit` controls the maximum lift degree to explore.
+
+    >>> sol = LinearSOS(3 - (a+b+c)**2, [a**2-1, b**2-1, c**2-1], [a+b+c+1/a+1/b+1/c],
+    ... lift_degree_limit=6)
+    >>> sol.solution # doctest: +SKIP
+    (a*b*c*(a + b + c + 1/c + 1/b + 1/a)*(Σ(-3*a*b*c**2 + 3*a*b - 2))
+     + 3*(Σ((a**2 + 1)*(b**2 - 1)*(c**2 - 1))))/(Σ(a**2*b**2*c**2 + 1))
+
+    LinearSOS has complexity issues for high-dimensional problems.
     """
     default_configs = {
         "basis_limit": 20000,
@@ -513,8 +533,8 @@ def LinearSOS(
     linprog_options: Dict = LINPROG_OPTIONS,
     linprog_time_limit: float = 300.,
     allow_numer: int = 0,
-    time_limit: float = 3600.,
     verbose: bool = False,
+    time_limit: float = 3600.,
 ) -> Optional[Solution]:
     """
     Main function for linear programming SOS.
@@ -547,7 +567,7 @@ def LinearSOS(
     lift_degree_limit: int
         The maximum degree to lift the polynomial. Defaults to 4.
     wedderburn: bool
-        Use wedderburn decomposition. Defaults to True.
+        Whether to use the wedderburn decomposition. Defaults to True.
     quad_diff_order: int
         The maximum degree of the form (xi - xj)^(2k)*... in the basis. Defaults to 8.
     preordering: str
@@ -576,7 +596,9 @@ def LinearSOS(
         When > 0, the solution can be numerical, this might be useful for large scale problems
         or irrational problems. TODO: Allow tolerance?
     time_limit: float
-        The time limit in seconds for the solver.
+        The time limit (in seconds) for the solver. Defaults to 3600. When the time limit is
+        reached, the solver is killed when it returns to the main loop.
+        However, it might not be killed instantly if it is stuck in an internal function.
     verbose: bool
         Whether to print the information of the linear programming problem. Defaults to False.
 
