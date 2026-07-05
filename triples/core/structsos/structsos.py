@@ -162,6 +162,6 @@ def _structural_sos(problem: "InequalityProblem") -> "Expr":
         solution = structural_sos_nvars(problem)
 
     if solution is None:
-        solution = structural_sos_constrained(poly, ineq_constraints, eq_constraints)
+        solution = structural_sos_constrained(problem)
 
     return solution

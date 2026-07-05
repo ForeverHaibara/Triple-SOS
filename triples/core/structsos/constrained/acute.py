@@ -13,7 +13,11 @@ from ..utils import (
 from ..univariate import prove_univariate
 from ...solution import extract_undetermined_exprs
 
-def constrained_acute(poly, ineq_constraints, eq_constraints):
+def constrained_acute(problem):
+    poly = problem.expr
+    ineq_constraints = problem.ineq_constraints
+    eq_constraints = problem.eq_constraints
+
     gens = poly.gens
     if len(gens) != 3:
         return None
@@ -57,14 +61,14 @@ def constrained_acute(poly, ineq_constraints, eq_constraints):
         return None
 
     replacement = {F(a): cons[0], F(b): cons[1], F(c): cons[2]}
-    for k, v in ineq_constraints.items():
-        if len(k.free_symbols) == 1 and k.is_monomial and k.LC() >= 0:
-            replacement[G(k.free_symbols.pop())] = v/k.LC()
+    signs = problem.get_symbol_signs()
+    is_pos = lambda x: (x is not None) and x >= 0
+    replacement.update({G(x): v for x, (sgn, v) in signs.items() if is_pos(sgn)})
+
     solution = solution.xreplace(replacement)
     if solution.has(F) or solution.has(G):
         return None
     return solution
-
 
 
 def _constrained_acute_quadratic(coeff: Coeff, F):
