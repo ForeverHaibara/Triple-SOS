@@ -657,7 +657,7 @@ def _structsos_quintic_symmetric_border(coeff: 'Coeff'):
     quartic = {
         (4,0,0): m_, (3,1,0): p_, (2,2,0): n_, (1,3,0): p_, (3,0,1): p_, (2,1,1): -m_-p_*2-n_
     }
-    quartic_solution = structsos_quartic(coeff.from_dict(quartic), None)
+    quartic_solution = structsos_quartic(coeff.from_dict(quartic))
     if quartic_solution is None: # not expected to happen
         return None
     solution = main_solution + (quartic_solution + rem * CyclicSum(a*b) * multiplier) * CyclicProduct(a)

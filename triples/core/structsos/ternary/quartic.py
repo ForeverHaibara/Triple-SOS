@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     )
     from sympy import Expr
 
-def structsos_quartic(coeff, real = True):
+def structsos_quartic(coeff, real = 1):
     """
     Solve cyclic quartic problems.
 
@@ -43,7 +43,7 @@ def structsos_quartic(coeff, real = True):
 
     => 4s(a)s(2a3-a2b-a2c)
     """
-    return  _structsos_quartic_uncentered(coeff)
+    return  _structsos_quartic_uncentered(coeff, real=real)
 
 def _structsos_quartic_core(coeff: 'Coeff'):
     """
@@ -437,7 +437,7 @@ def _structsos_quartic_uncentered_real(coeff: 'Coeff'):
     return None
 
 
-def _structsos_quartic_uncentered(coeff: 'Coeff'):
+def _structsos_quartic_uncentered(coeff: 'Coeff', real = 1):
     """
     Solve general cyclic quartic problems on positive orthant.
     It also tries to solve the problem on the real number field if possible.
@@ -477,6 +477,8 @@ def _structsos_quartic_uncentered(coeff: 'Coeff'):
 
     # if we reach here, it means that the inequality does not hold for all real numbers
     # we can subtract as many s(a^2bc) as possible
+    if int(real) >= 2:
+        return None
     if 3*m*(m + n) - (p**2 + p*q + q**2) >= 0:
         # Case 1. 3m(m+n) - (p^2+pq+q^2) >= 0,
         # then it is directly handled by the core function after subtracting enough s(a^2bc)

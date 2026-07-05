@@ -2086,7 +2086,7 @@ def _structsos_sextic_symmetric_ultimate_1root(coeff: 'Coeff', poly, roots, real
                     .as_poly(a,b,c, domain=poly.domain).mul_ground(coeff6)
                 solution = _structsos_sextic_iran96(coeff.from_poly(poly2), real = real)
                 if solution is not None:
-                    if x_ == Rational(3,2):
+                    if 2*x_ == 3:
                         solution += coeff6 / 4 * CyclicProduct((a+b-2*c)**2)
                     elif x_ == 1:
                         solution += coeff6 * CyclicSum(a*(a-b)*(a-c))**2
@@ -2181,7 +2181,7 @@ def _structsos_sextic_symmetric_ultimate_1root(coeff: 'Coeff', poly, roots, real
                 ((2, 1, 1), 2*z0*z1 + 2*z0*z2 + z1**2 + 2*z1*z2 + 3*z2**2 + 2*z2*z3)
             ]
 
-            quartic_solution = structsos_quartic(coeff.from_dict(dict(quartic)), None)
+            quartic_solution = structsos_quartic(coeff.from_dict(dict(quartic)))
             if quartic_solution is not None:
                 multiplier = CommonExpr.quadratic(2*(2*z0 + z3), 2*(z1 + 2*z2), (a,b,c))
                 p1 = quartic_solution * CyclicSum((a-b)**2*(a+b-x_*c)**2)

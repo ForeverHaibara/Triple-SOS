@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from .utils import Coeff
     from sympy import Rational
 
-def structsos_sparse(coeff, real = True):
+def structsos_sparse(coeff, real=1):
     """
     Solver to very sparse inequalities like AM-GM.
 
@@ -47,7 +47,7 @@ def structsos_sparse(coeff, real = True):
         elif degree == 4:
             # quartic should be handled by _structsos_quartic
             # because it presents proof for real numbers
-            return structsos_quartic(coeff, None)
+            return structsos_quartic(coeff, real=real)
 
     if len(coeff) <= 6:
         return _structsos_sparse_amgm(coeff)

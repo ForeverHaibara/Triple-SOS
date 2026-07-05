@@ -48,7 +48,7 @@ def _fast_solve_quartic(coeff: Coeff, m, p, n, q, rem = 0, mul_abc = True):
     coeffs_ = {
         (4,0,0): m, (3,1,0): p, (2,2,0): n, (1,3,0): q, (2,1,1): (rem - m - p - n - q)
     }
-    solution = structsos_quartic(coeff.from_dict(coeffs_), None)
+    solution = structsos_quartic(coeff.from_dict(coeffs_))
     if mul_abc and solution is not None:
         solution = solution * CyclicProduct(a)
     return solution

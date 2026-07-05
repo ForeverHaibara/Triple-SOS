@@ -43,11 +43,21 @@ SOLVERS_ACYCLIC = {
 
 def _structural_sos_3vars_cyclic(
     coeff: Union["Poly", Coeff, Dict],
-    real: bool = True
+    real: int = 1
 ) -> Optional["Expr"]:
     """
-    Internal function to solve a 3-var homogeneous cyclic polynomial using structural SOS.
-    It does not check the homogeneous / cyclic property of the polynomial to save time.
+    Internal function to solve a 3-var homogeneous cyclic polynomial 
+    using structural SOS. It does not check the homogeneous / cyclic
+    property of the polynomial to save time.
+
+    Parameters
+    ----------
+    coeff : Union["Poly", Coeff, Dict]
+        The polynomial to solve.
+    real : int, optional
+        If 2, it demands only solutions with variables in R.
+        If 1, it demands solutions with variables in R in prior.
+        If 0, it demands solutions with variables in R+.
     """
     if not isinstance(coeff, Coeff):
         coeff = Coeff(coeff)
@@ -61,11 +71,21 @@ def _structural_sos_3vars_cyclic(
 
 def _structural_sos_3vars_acyclic(
     coeff: Union["Poly", Coeff, Dict],
-    real: bool = True
+    real: int = 1
 ) -> Optional["Expr"]:
     """
-    Internal function to solve a 3-var homogeneous acyclic polynomial using structural SOS.
-    It does not check the homogeneous / cyclic property of the polynomial to save time.
+    Internal function to solve a 3-var homogeneous acyclic polynomial 
+    using structural SOS. It does not check the homogeneous / cyclic
+    property of the polynomial to save time.
+
+    Parameters
+    ----------
+    coeff : Union["Poly", Coeff, Dict]
+        The polynomial to solve.
+    real : int, optional
+        If 2, it demands only solutions with variables in R.
+        If 1, it demands solutions with variables in R in prior.
+        If 0, it demands solutions with variables in R+.
     """
     if not isinstance(coeff, Coeff):
         coeff = Coeff(coeff)
@@ -111,7 +131,8 @@ def structural_sos_3vars(
         else _structural_sos_3vars_acyclic
 
     try:
-        solution = func(coeff_poly, real = 1)
+        param_real = 1 if r_plus else 2
+        solution = func(coeff_poly, real = 2)
     except (PolynomialNonpositiveError, PolynomialUnsolvableError):
         return None
 

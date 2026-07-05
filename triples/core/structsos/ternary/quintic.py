@@ -413,7 +413,7 @@ def _build_quintic_full_solution(coeff: 'Coeff', mul: Rational, params: List[Rat
     quartic_coeffs = {
         (4,0,0): m, (3,1,0): p, (2,2,0): n, (1,3,0): q, (2,1,1): -(m+p+n+q)
     }
-    rest = structsos_quartic(coeff.from_dict(quartic_coeffs), None)
+    rest = structsos_quartic(coeff.from_dict(quartic_coeffs))
     rest += coeff.poly111() * (1 + mul) * CyclicSum(a**2*b*c)
     rest = coeff500 * CyclicProduct(a) * rest
     return (coeff500 * sol_main + coeff500 * border_proof + rest) / multiplier
