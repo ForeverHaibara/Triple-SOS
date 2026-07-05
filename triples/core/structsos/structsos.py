@@ -122,8 +122,8 @@ def _structural_sos(problem: "InequalityProblem") -> "Expr":
     problem = problem.remove_redundancy()
 
     poly: "Poly" = problem.expr
-    ineq_constraints = problem.ineq_constraints
-    eq_constraints = problem.eq_constraints
+    # ineq_constraints = problem.ineq_constraints
+    # eq_constraints = problem.eq_constraints
 
     if poly.is_zero:
         return poly.as_expr()
