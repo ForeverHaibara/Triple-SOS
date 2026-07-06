@@ -140,7 +140,7 @@ def structural_sos_3vars(
         dom = next(iter(linear_ineqs)).domain.get_field()
         for ineq in linear_ineqs:
             dom = dom.unify(ineq.domain)
-        linear_ineqs = {ineq.set_domain(dom) for ineq in linear_ineqs}
+        linear_ineqs = {ineq.set_domain(dom): v for ineq, v in linear_ineqs.items()}
         dod = {i: {m.index(1): v for m, v in ineq.rep.terms()}
                for i, ineq in enumerate(linear_ineqs)}
         mat = rep_matrix_from_dict(dod, (len(dod), nvars), dom)
@@ -159,11 +159,26 @@ def structural_sos_3vars(
                         mat2 = permute_matrix_rows(mat, [0, 2, 1])
                         if _is_cyclic_mat(mat2):
                             mat = mat2
+                            ll = list(linear_ineqs.items())
+                            ll[1], ll[2] = ll[2], ll[1]
+                            linear_ineqs = dict(ll)
 
                     inv_mat = mat._fromrep(mat._rep.inv())
-                    # TODO: try not to change the variable first
-                    dot = lambda i, j: sum(ik * jk for ik, jk in zip(i, j))
+                    dot = lambda u, v: sum(uk * vk for uk, vk in zip(u, v))
 
+                    # try not to change the variables first
+                    new_ineqs = {}
+                    if all(entry >= 0 for entry in inv_mat):
+                        # this implies a, b, c >= 0
+                        new_ineqs = {g.as_poly(gens): dot(row, linear_ineqs.values())
+                                     for g, row in zip(gens, inv_mat.tolist())}
+                    new_problem = problem.new(poly, new_ineqs)
+                    solution = structural_sos_3vars(new_problem)
+                    if solution is not None:
+                        return solution
+
+
+                    # change the variables
                     new_problem, restore = problem.transform(
                         {g: dot(row, gens) for g, row in zip(gens, inv_mat.tolist())},
                         {g: dot(row, gens) for g, row in zip(gens, mat.tolist())}
