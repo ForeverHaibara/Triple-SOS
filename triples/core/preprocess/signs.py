@@ -205,6 +205,7 @@ def sign_sos(expr: Union[Expr, Poly], signs: SIGNS_TYPE, factor: bool = False) -
 
     Note that the function bases on heuristics,
     and may fail on expressions that are nonnegative.
+
     >>> sign_sos(a**12 + b**12 + c**12 - 3*a**4*b**4*c**4, signs) is None
     True
     """

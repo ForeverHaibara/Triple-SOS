@@ -1,6 +1,8 @@
 """
 Compatibility & enhancement tools for SymPy polys module.
 """
+from typing import Tuple
+
 from sympy import Poly, ZZ
 from sympy import __version__ as _SYMPY_VERSION
 try:
@@ -653,3 +655,62 @@ def dmp_gf_kron(f, u, K):
     # _dmp_check_degrees(F, u, result)
 
     return lc, result
+
+
+###############################################################################
+#
+#                                 Resultants
+#
+###############################################################################
+
+def resultant_bezout(f, g, x, reduced=False) -> Tuple[Poly, Poly, Poly]:
+    """
+    Return u, v, res such that `u * f + v * g == res`
+    where `res` is the resultant of `f` and `g` in variable `x`.
+
+    If `reduced=True`, it tries to remove the gcd part.
+    """
+    f, g = f.as_poly(x), g.as_poly(x)
+
+    f: Poly
+    g: Poly
+    f, g = f.unify(g)
+
+    r0, r1 = f, g
+    u0, v0 = f.one, f.zero
+    u1, v1 = f.zero, f.one
+
+    while r1.degree() > 0:
+        d = max(0, r0.degree()) - max(0, r1.degree())
+        if d < 0:
+            r0, r1 = r1, r0
+            u0, u1 = u1, u0
+            v0, v1 = v1, v0
+            d = -d
+
+        lc = r1.LC()
+        mult = lc**(d + 1)
+
+        # mult * r0 = q * r1 + r2
+        q, r2 = r0.pdiv(r1)
+
+        u2 = u0.mul_ground(mult) - q * u1
+        v2 = v0.mul_ground(mult) - q * v1
+        r0, r1 = r1, r2
+        u0, u1 = u1, u2
+        v0, v1 = v1, v2
+
+    if r1.is_zero:
+        return r1, r1, r1
+
+    if not reduced:
+        res = f.resultant(g)
+        C = r1.quo(res)
+    else:
+        uvgcd = u1.gcd(v1)
+        C, __, res = uvgcd.cofactors(r1)
+
+    u = u1.quo(C)
+    v = v1.quo(C)
+
+    return u, v, res

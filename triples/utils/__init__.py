@@ -24,6 +24,7 @@ from .roots import (
     cancel_denominator,
 )
 
+from .polytools import resultant_bezout
 
 __all__ = [
     'MonomialManager', 'generate_monoms', 'generate_partitions', 'arraylize_np', 'arraylize_sp', 'invarraylize',
@@ -37,5 +38,6 @@ __all__ = [
     'Root', 'RootList', 'univar_realroots', 'kkt', 'optimize_poly', 'numeric_optimize_poly', 'numeric_optimize_skew_symmetry',
     'nroots', 'univariate_intervals', 'rationalize', 'rationalize_array', 'rationalize_bound',
     'rationalize_quadratic_curve', 'common_region_of_conics',
-    'cancel_denominator'
+    'cancel_denominator',
+    'resultant_bezout'
 ]
