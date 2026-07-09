@@ -4,6 +4,7 @@ from sympy import Poly
 
 from .elimination import eliminate_power_constraints
 from ..node import TransformNode
+from ..solution import Solution
 from ...utils import (
     CyclicSum,
     identify_symmetry_from_lists, verify_symmetry, poly_reduce_by_symmetry,
@@ -117,11 +118,20 @@ class SolvePolynomial(TransformNode):
 #########################################################
 
 
+def p2expr(p: Poly, symmetry = None) -> "Expr":
+    """Convert a polynomial to expr wisely by leveraging the symmetry."""
+    if (symmetry is not None) and verify_symmetry(p, symmetry):
+        p = poly_reduce_by_symmetry(p, symmetry)
+        return CyclicSum(p.as_expr(), p.gens, symmetry)
+    return p.as_expr()
+
+
 def eliminate_constraint(
     problem: "InequalityProblem",
     constraint: Poly,
     gen_index: int,
     remove_redundancy: bool = True,
+    symmetry = None,
 ) -> Optional[Tuple["InequalityProblem", Callable]]:
 
     ineqs, eqs = problem.ineq_constraints, problem.eq_constraints
@@ -166,19 +176,21 @@ def eliminate_constraint(
 
                 return None
 
+            U = p2expr(U.as_poly(gens), symmetry)
+            V = p2expr(V.as_poly(gens), symmetry)
             if tp <= 1:
-                u_proof = sign_sos(U.as_expr(), signs)
+                u_proof = sign_sos(U, signs)
                 if u_proof is None:
                     U, V, res = -U, -V, -res
-                    u_proof = sign_sos(U.as_expr(), signs)
+                    u_proof = sign_sos(U, signs)
                     if u_proof is None:
                         # the sign of U is not determined
                         return None
             else:
-                u_proof = U.as_expr()#poly_reduce_by_symmetry(U, symm)
+                u_proof = U
 
             if not is_eq: # constraint is ineq
-                v_proof = sign_sos(V.as_expr(), signs)
+                v_proof = sign_sos(V, signs)
                 if v_proof is None:
                     if tp <= 1:
                         # U >= 0 but we cannot prove V >= 0
@@ -186,12 +198,12 @@ def eliminate_constraint(
                 else:
                     U, V, res = -U, -V, -res
                     u_proof = -u_proof
-                    v_proof = sign_sos(V.as_expr(), signs)
+                    v_proof = sign_sos(V, signs)
                     if v_proof is None:
                         # the sign of V is not determined
                         return None
             else:
-                v_proof = V.as_expr()#poly_reduce_by_symmetry(V, symm)
+                v_proof = V
 
 
             # now that we have U*F + V*constraint == res
@@ -341,16 +353,10 @@ def _bidegree_recover_expr(lst: List[Dict[Poly, Tuple[Poly, int, Poly]]], p1: Po
     if symmetry.is_trivial:
         symmetry = None
 
-    def p2expr(p: Poly) -> "Expr":
-        # convert a polynomial to expr wisely by exploting the symmetry
-        if (symmetry is not None) and verify_symmetry(p, symmetry):
-            p = poly_reduce_by_symmetry(p, symmetry)
-            return CyclicSum(p.as_expr(), p.gens, symmetry)
-        return p.as_expr()
-    p1_expr = p2expr(p1)
+    p1_expr = p2expr(p1, symmetry)
     for d in lst:
         for p, (mul_deg, expr, quo) in d.items():
-            d[p] = p1_expr**mul_deg * expr + p2expr(quo)*sgn_expr
+            d[p] = p1_expr**mul_deg * expr + p2expr(quo, symmetry)*sgn_expr
     return p1_expr
 
 def _bidegree_attempt(problem: "InequalityProblem", eq: Poly) -> Optional[Tuple["InequalityProblem", Callable]]:
@@ -472,13 +478,16 @@ def _try_resultant_elimination_in(
     for src in srcs:
         for con in src:
             if is_bidegree_in(con, gen_index):
-                attempt = eliminate_constraint(problem, con, gen_index, **kwargs)
+                attempt = eliminate_constraint(
+                    problem, con, gen_index, **kwargs)
                 if attempt is not None:
                     return attempt
     return None
 
 
-def resultant_elimination(problem: "InequalityProblem") -> Tuple["InequalityProblem", Callable]:
+def resultant_elimination(
+    problem: "InequalityProblem"
+) -> Tuple["InequalityProblem", Callable]:
     """
     Heuristic elimination of variables using the method of resultant.
     """
@@ -490,10 +499,12 @@ def resultant_elimination(problem: "InequalityProblem") -> Tuple["InequalityProb
 
     if not problem.is_homogeneous:
         problem_hom, hom = problem.homogenize()
-
-        attempt = _try_resultant_elimination_in(problem_hom, -1)
+        symmetry = problem_hom.identify_symmetry()
+        attempt = _try_resultant_elimination_in(
+            problem_hom, -1, symmetry=symmetry)
         if attempt is not None:
-            restorations.append(lambda x: x.xreplace({hom: 1}) if x is not None else x)
+            restorations.append(
+                lambda x: Solution.dehomogenize(x, hom) if x is not None else x)
             problem = attempt[0]
             restorations.append(attempt[1])
 
@@ -505,7 +516,8 @@ def resultant_elimination(problem: "InequalityProblem") -> Tuple["InequalityProb
         for orbit in orbits:
             if len(orbit) == 1:
                 # it is standalone and has no symmetry
-                attempt = _try_resultant_elimination_in(problem, next(iter(orbit)))
+                attempt = _try_resultant_elimination_in(
+                    problem, next(iter(orbit)), symmetry=symmetry)
                 if attempt is not None:
                     problem = attempt[0]
                     restorations.append(attempt[1])
