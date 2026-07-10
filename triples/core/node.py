@@ -43,6 +43,9 @@ class ProofNode:
     children: List['ProofNode']
     _complexity: Optional[ProblemComplexity] = None
     _complexity_models: Optional[Union[Dict, bool]] = None
+
+    skip_enter_verbose = -1
+
     def __init__(self,
         problem: InequalityProblem, configs: Optional[Dict[str, Any]]=None,
     ):
@@ -197,6 +200,8 @@ class TransformNode(ProofNode):
 
 
 class SolveProblem(ProofNode):
+    skip_enter_verbose = 1
+
     def explore(self, configs):
         if self.state == 0:
             from .preprocess.modeling import ReformulateAlgebraic
@@ -280,13 +285,14 @@ class ProofTree:
         node = self.select()
         cfg = self.get_configs(node)
 
-        tree_verbose = self.get_configs(self)["verbose"]
-        if tree_verbose:
-            path = [node]
-            MAX_PATH_LEN = 5
-            while path[-1] in self.parents and len(path) < MAX_PATH_LEN:
-                path.append(self.parents[path[-1]])
-            print(f'Exploring ... {" -> ".join([_.__class__.__name__ for _ in path[::-1]])}')
+        if node.state >= node.skip_enter_verbose:
+            tree_verbose = self.get_configs(self)["verbose"]
+            if tree_verbose:
+                path = [node]
+                MAX_PATH_LEN = 5
+                while path[-1] in self.parents and len(path) < MAX_PATH_LEN:
+                    path.append(self.parents[path[-1]])
+                print(f'Exploring ... {" >> ".join([_.__class__.__name__ for _ in path[::-1]])}')
 
         if cfg.get("callback_before_explore"):
             cfg["callback_before_explore"](self, node, cfg)
@@ -302,6 +308,7 @@ class ProofTree:
             else:
                 # kill this node
                 node.finished = True
+
                 if cfg.get("raise_exception", False):
                     raise e
                 if cfg.get("verbose", False):

@@ -28,6 +28,7 @@ class SolvePolynomial(TransformNode):
         "remove_redundancy": True,
         "eliminate_power_constraints": True,
         "irrational_expr": False,
+        "verbose": False,
     }
     def get_polynomial_solvers(self, configs):
         solvers = configs.get('solvers', None)
@@ -84,7 +85,8 @@ class SolvePolynomial(TransformNode):
 
         if configs["homogenize"]:
             # problem, _restoration = reduce_over_quotient_ring(problem)
-            problem, _restoration = resultant_elimination(problem)
+            problem, _restoration = resultant_elimination(
+                problem, verbose=configs["verbose"])
         else:
             _restoration = lambda x: x
 
@@ -93,6 +95,13 @@ class SolvePolynomial(TransformNode):
             self.solution = problem.expr.LC() * sqf**2
             self.finished = True
             return
+
+        if configs["verbose"]:
+            print(f"Processed problem at id {id(problem)}:\n"
+                f"Vars        = {len(problem.gens)}\n"
+                f"Degree      = {problem.expr.total_degree()}\n"
+                f"Constraints = {len(problem.ineq_constraints)} ineqs +"
+                f" {len(problem.eq_constraints)} eqs")
 
         solvers = self.get_polynomial_solvers(configs)
         self.children = [solver(problem) for solver in solvers]
@@ -143,9 +152,9 @@ def eliminate_constraint(
 
     from .signs import sign_sos
     signs = problem.get_symbol_signs()
-    # symm = problem.identify_symmetry()
 
     gens = problem.gens
+    _p2expr = lambda p: p2expr(p.as_poly(gens), symmetry)
     srcs = [(0, {-problem.expr: 0}), (1, ineqs), (2, eqs)]
     dst = [{}, {}, {}]
 
@@ -173,24 +182,22 @@ def eliminate_constraint(
                     if is_eq or (len(lc_expr.free_symbols) == 0 and lc_expr >= 0):
                         problem.solution = lc_expr * value
                         return problem, lambda x: x
-
                 return None
 
-            U = p2expr(U.as_poly(gens), symmetry)
-            V = p2expr(V.as_poly(gens), symmetry)
+            u_proof = _p2expr(U)
             if tp <= 1:
-                u_proof = sign_sos(U, signs)
+                u_proof = sign_sos(u_proof, signs)
                 if u_proof is None:
                     U, V, res = -U, -V, -res
-                    u_proof = sign_sos(U, signs)
+                    u_proof = sign_sos(_p2expr(U), signs)
                     if u_proof is None:
                         # the sign of U is not determined
                         return None
-            else:
-                u_proof = U
 
+
+            v_proof = _p2expr(V)
             if not is_eq: # constraint is ineq
-                v_proof = sign_sos(V, signs)
+                v_proof = sign_sos(v_proof, signs)
                 if v_proof is None:
                     if tp <= 1:
                         # U >= 0 but we cannot prove V >= 0
@@ -198,12 +205,10 @@ def eliminate_constraint(
                 else:
                     U, V, res = -U, -V, -res
                     u_proof = -u_proof
-                    v_proof = sign_sos(V, signs)
+                    v_proof = sign_sos(_p2expr(V), signs)
                     if v_proof is None:
                         # the sign of V is not determined
                         return None
-            else:
-                v_proof = V
 
 
             # now that we have U*F + V*constraint == res
@@ -486,7 +491,8 @@ def _try_resultant_elimination_in(
 
 
 def resultant_elimination(
-    problem: "InequalityProblem"
+    problem: "InequalityProblem",
+    verbose: int = 0,
 ) -> Tuple["InequalityProblem", Callable]:
     """
     Heuristic elimination of variables using the method of resultant.
@@ -496,6 +502,7 @@ def resultant_elimination(
         return problem, lambda x: x
 
     restorations = []
+    eliminated_vars = []
 
     if not problem.is_homogeneous:
         problem_hom, hom = problem.homogenize()
@@ -507,6 +514,7 @@ def resultant_elimination(
                 lambda x: Solution.dehomogenize(x, hom) if x is not None else x)
             problem = attempt[0]
             restorations.append(attempt[1])
+            eliminated_vars.append(hom)
 
     found = True
     while found and len(problem.gens):
@@ -516,13 +524,18 @@ def resultant_elimination(
         for orbit in orbits:
             if len(orbit) == 1:
                 # it is standalone and has no symmetry
+                ind = next(iter(orbit))
                 attempt = _try_resultant_elimination_in(
-                    problem, next(iter(orbit)), symmetry=symmetry)
+                    problem, ind, symmetry=symmetry)
                 if attempt is not None:
+                    eliminated_vars.append(problem.gens[ind])
                     problem = attempt[0]
                     restorations.append(attempt[1])
                     found = True
                     break
+
+    if eliminated_vars and verbose:
+        print("Resultant Elimination:", eliminated_vars)
 
     def restoration(sol):
         if sol is None:
