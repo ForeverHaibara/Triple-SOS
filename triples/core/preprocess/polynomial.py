@@ -115,4 +115,3 @@ class SolvePolynomial(TransformNode):
         if self.state != 0 and len(self.children) == 0:
             # check one more time if there are no children
             self.finished = True
-

@@ -358,14 +358,42 @@ def eliminate_var_by_constraint(
 
     from .signs import sign_sos
     signs = problem.get_symbol_signs()
+    solver = lambda x: sign_sos(x, signs)
 
     gens = problem.gens
+    gen_index = (gen_index + len(gens))%len(gens)
     _p2expr = lambda p: p2expr(p.as_poly(gens), symmetry)
     srcs = [(0, {-problem.expr: 0}), (1, ineqs), (2, eqs)]
     dst = [{}, {}, {}]
 
+    has_trivial_cons = False
+
     new_expr = problem.expr
     restoration = lambda x: x
+
+    #############################################
+    # For fast check whether it is valid on the
+    # marginalized problem, which avoids computing
+    # a large resultant directly
+    #############################################
+    point = [[2,3,5][i%3] for i in range(len(gens))]
+    reordered_gens = tuple(gens[:gen_index]) + tuple(gens[gen_index+1:]) + (gens[gen_index],)
+    for i, g in enumerate(reordered_gens):
+        sgn = signs[g][0]
+        if sgn is None or sgn <= 0:
+            point[i] = -point[i]
+        elif sgn is not None and sgn == 0:
+            point[i] = 0
+
+    def _eval(f: Poly, point):
+        f = f.reorder(*reordered_gens)
+        f = f.eval(tuple(point)[:len(gens) - 2])
+        const, f = f.primitive()
+        if const < 0:
+            f = -f
+        return f
+    #############################################
+
     for tp, src in srcs:
         for F, value in src.items():
             if F.degree(gen_index) <= 0:
@@ -375,8 +403,59 @@ def eliminate_var_by_constraint(
             if tp != 0 and F == constraint:
                 continue
 
+
+            def _certificate_coeffs(U, V, res, p2expr=_p2expr, solver=solver):
+                """
+                Automatically selects the sign and tries to establish
+                `U*F + V*constraint == res`
+                """
+                u_proof = p2expr(U)
+                if tp <= 1:
+                    u_proof = solver(u_proof)
+                    if u_proof is None:
+                        U, V, res = -U, -V, -res
+                        u_proof = solver(p2expr(U))
+                        if u_proof is None:
+                            # the sign of U is not determined
+                            return None
+
+
+                v_proof = p2expr(V)
+                if not is_eq: # constraint is ineq
+                    v_proof = solver(v_proof)
+                    if v_proof is None:
+                        if tp <= 1:
+                            # U >= 0 but we cannot prove V >= 0
+                            return None
+                        else:
+                            U, V, res = -U, -V, -res
+                            u_proof = -u_proof
+                            v_proof = solver(p2expr(V))
+                            if v_proof is None:
+                                # the sign of V is not determined
+                                return None
+                return U, V, res, u_proof, v_proof
+
+
+            #############################################
+            # Fast check whether it is valid on the
+            # marginalized problem, which avoids computing
+            # a large resultant directly
+            #############################################
+            if len(gens) >= 3 and (not (is_eq and tp == 2)):
+                F2 = _eval(F, point)
+                constraint2 = _eval(constraint, point)
+                U2, V2, res2 = resultant_bezout(F2, constraint2, gens[gen_index], reduced=True)
+                cert = _certificate_coeffs(U2, V2, res2, p2expr=lambda x: x.as_expr())
+                # print(f"Fast check U2 = {U2}; V2 = {V2};\ncert = {cert}")
+                if cert is None:
+                    # failed to prove U2, V2 >= 0
+                    return None
+            #############################################
+
+
             # U*F + V*constraint == res
-            U, V, res = resultant_bezout(F, constraint, gens[gen_index])
+            U, V, res = resultant_bezout(F, constraint, gens[gen_index], reduced=True)
 
             if tp == 0 and U.is_zero:
                 # it should be handled differently because
@@ -390,32 +469,12 @@ def eliminate_var_by_constraint(
                         return problem, lambda x: x
                 return None
 
-            u_proof = _p2expr(U)
-            if tp <= 1:
-                u_proof = sign_sos(u_proof, signs)
-                if u_proof is None:
-                    U, V, res = -U, -V, -res
-                    u_proof = sign_sos(_p2expr(U), signs)
-                    if u_proof is None:
-                        # the sign of U is not determined
-                        return None
-
-
-            v_proof = _p2expr(V)
-            if not is_eq: # constraint is ineq
-                v_proof = sign_sos(v_proof, signs)
-                if v_proof is None:
-                    if tp <= 1:
-                        # U >= 0 but we cannot prove V >= 0
-                        return None
-                else:
-                    U, V, res = -U, -V, -res
-                    u_proof = -u_proof
-                    v_proof = sign_sos(_p2expr(V), signs)
-                    if v_proof is None:
-                        # the sign of V is not determined
-                        return None
-
+            cert = _certificate_coeffs(U, V, res)
+            # print(f'U = {U};\nV = {V};\nres = {res};\ncert = {cert}')
+            if cert is None:
+                # failed to prove U, V >= 0
+                return None
+            U, V, res, u_proof, v_proof = cert
 
             # now that we have U*F + V*constraint == res
             # and also U, V >= 0
@@ -432,12 +491,50 @@ def eliminate_var_by_constraint(
             else:
                 # res == U*F + V*constraint >= 0
                 dst_tp = 2 if is_eq and tp == 2 else 1
-                dst[dst_tp][res] = u_proof*value + v_proof*constraint_expr
+
+                if sign_sos(res.as_expr(), signs) is None:
+                    # if not None, then res >= 0 is trivial and should not
+                    # be pushed into constraints
+                    dst[dst_tp][res] = u_proof*value + v_proof*constraint_expr
+                else:
+                    has_trivial_cons = True
 
     new_problem = problem.copy_new(new_expr, dst[1], dst[2])
     if remove_redundancy:
         new_problem = new_problem.remove_redundancy()
+
+    if has_trivial_cons:
+        new_problem = _inject_problem_signs(new_problem, signs)
+
     return new_problem, restoration
+
+
+def _inject_problem_signs(problem: "InequalityProblem", signs):
+    """
+    Check whether the problem recovers the signs. If not,
+    inject the signs into the problem.
+    """
+    new_signs = problem.get_symbol_signs()
+    need_update = False
+    new_ineqs, new_eqs = {}, {}
+    for s in problem.gens:
+        if new_signs[s][0] is None and signs[s][0] is not None:
+            need_update = True
+            sgn, val = signs[s]
+            poly = Poly(s, problem.gens)
+            if sgn == 0:
+                new_eqs[poly] = val
+            else:
+                if sgn < 0:
+                    poly = -poly
+                new_ineqs[poly] = val
+
+    if need_update:
+        new_ineqs.update(problem.ineq_constraints)
+        new_eqs.update(problem.eq_constraints)
+        problem = problem.copy_new(
+            problem.expr, new_ineqs, new_eqs)
+    return problem
 
 
 def is_binomial_in(poly: Poly, gen_index: int) -> bool:
@@ -511,6 +608,11 @@ def resultant_elimination(
             problem = attempt[0]
             restorations.append(attempt[1])
             eliminated_vars.append(hom)
+
+    if all(_.total_degree() <= 1 for _ in problem.eq_constraints)\
+        and all(_.total_degree() <= 1 for _ in problem.ineq_constraints):
+        # linear programming -> needs no transformation
+        eliminate_binomial_constraints = False
 
     if eliminate_binomial_constraints:
         found = True

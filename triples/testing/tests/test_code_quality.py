@@ -95,3 +95,25 @@ def test_ruff():
     assert result.returncode == 0, (
         f"Ruff found issues:\n{result.stdout}\n{result.stderr}"
     )
+
+
+def test_eof_newline():
+    # ruff does not check W391 in the stable version
+    # so we use the manual check
+    from os import walk
+    from os.path import join, relpath
+    lib_path = _project_path()
+    for root, dirs, files in walk(lib_path):
+        for file in files:
+            if file.endswith(".py"):
+                file_path = join(root, file)
+                try:
+                    with open(file_path, "r", encoding="utf-8") as f:
+                        lines = f.read()
+                except Exception:
+                    # print(f"Error reading {file_path}")
+                    continue
+                assert not lines.endswith("\n\n"),\
+                    f"EOF multiple newlines found in {
+                        join("triples", relpath(file_path, lib_path))
+                    }"

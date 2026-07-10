@@ -670,7 +670,17 @@ def resultant_bezout(f, g, x, reduced=False) -> Tuple[Poly, Poly, Poly]:
 
     If `reduced=True`, it tries to remove the gcd part.
     """
-    f, g = f.as_poly(x), g.as_poly(x)
+    def marginalize(p, x):
+        if not (isinstance(p, Poly) and x in p.gens and (not p.domain.is_EX)):
+            return p.as_poly(x)
+        if len(p.gens) == 1:
+            # p is univariate and p.gen == x
+            return p
+        gens = [s for s in p.gens if s != x] + [x]
+        p = p.reorder(*gens)
+        p = p.eject(*p.gens[:-1])
+        return p
+    f, g = marginalize(f, x), marginalize(g, x)
 
     f: Poly
     g: Poly
