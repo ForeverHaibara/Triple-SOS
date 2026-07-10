@@ -717,7 +717,7 @@ def resultant_bezout(f, g, x, reduced=False) -> Tuple[Poly, Poly, Poly]:
         res = f.resultant(g)
         C = r1.quo(res)
     else:
-        uvgcd = u1.gcd(v1)
+        uvgcd = marginalize(u1.inject().gcd(v1.inject()), x)
         C, __, res = uvgcd.cofactors(r1)
 
     u = u1.quo(C)
