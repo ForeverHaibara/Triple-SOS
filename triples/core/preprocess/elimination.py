@@ -609,9 +609,9 @@ def resultant_elimination(
             restorations.append(attempt[1])
             eliminated_vars.append(hom)
 
-    if all(_.total_degree() <= 1 for _ in problem.eq_constraints)\
-        and all(_.total_degree() <= 1 for _ in problem.ineq_constraints):
-        # linear programming -> needs no transformation
+    if all(_.is_monomial for _ in problem.eq_constraints)\
+        and all(_.is_monomial for _ in problem.ineq_constraints):
+        # needs no transformation
         eliminate_binomial_constraints = False
 
     if eliminate_binomial_constraints:
