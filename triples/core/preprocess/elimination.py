@@ -1,12 +1,19 @@
-from typing import Tuple, List, Set, Optional, TYPE_CHECKING
+from typing import Tuple, List, Set, Optional, Callable, TYPE_CHECKING
 
 from sympy import Poly, Symbol, Integer, Mul, QQ, ZZ
 from sympy import MutableDenseMatrix as Matrix
 from sympy.polys.matrices.sdm import SDM
 
+from ..solution import Solution
+from ...utils import (
+    CyclicSum, verify_symmetry, poly_reduce_by_symmetry,
+    resultant_bezout
+)
+
 if TYPE_CHECKING:
     from sympy import Expr
     from ..problem import InequalityProblem
+
 
 def _identify_matrix_symmetry(S: Matrix) -> List[List[int]]:
     """
@@ -308,3 +315,229 @@ def eliminate_power_constraints(
                 new_gens[:mat.shape[0]], exprs, inv_basis.diagonal()[:mat.shape[0]])})
 
     return problem, composed
+
+
+
+#########################################################
+#
+#                       Resultant
+#
+#########################################################
+
+
+def p2expr(p: Poly, symmetry = None) -> "Expr":
+    """Convert a polynomial to expr wisely by leveraging the symmetry."""
+    if (symmetry is not None) and verify_symmetry(p, symmetry):
+        p = poly_reduce_by_symmetry(p, symmetry)
+        return CyclicSum(p.as_expr(), p.gens, symmetry)
+    return p.as_expr()
+
+
+def eliminate_var_by_constraint(
+    problem: "InequalityProblem",
+    constraint: Poly,
+    gen_index: int,
+    remove_redundancy: bool = True,
+    symmetry = None,
+) -> Optional[Tuple["InequalityProblem", Callable]]:
+    """
+    Eliminate a variable using a constraint by the method
+    of resultant.
+
+    For each expression `F` in the problem, it computes
+        `U*F + V*constraint == Resultant(F, constraint, gen)`
+    to try eliminating the variable `gen`.
+    """
+
+    ineqs, eqs = problem.ineq_constraints, problem.eq_constraints
+    is_eq = constraint in eqs
+    if (not is_eq) and (constraint not in ineqs):
+        return None
+
+    constraint_expr = eqs[constraint] if is_eq else ineqs[constraint]
+
+    from .signs import sign_sos
+    signs = problem.get_symbol_signs()
+
+    gens = problem.gens
+    _p2expr = lambda p: p2expr(p.as_poly(gens), symmetry)
+    srcs = [(0, {-problem.expr: 0}), (1, ineqs), (2, eqs)]
+    dst = [{}, {}, {}]
+
+    new_expr = problem.expr
+    restoration = lambda x: x
+    for tp, src in srcs:
+        for F, value in src.items():
+            if F.degree(gen_index) <= 0:
+                dst[tp][F] = value
+                continue
+
+            if tp != 0 and F == constraint:
+                continue
+
+            # U*F + V*constraint == res
+            U, V, res = resultant_bezout(F, constraint, gens[gen_index])
+
+            if tp == 0 and U.is_zero:
+                # it should be handled differently because
+                # U*F vanishes
+                lc, rem = F.div(constraint)
+                if rem.is_zero:
+                    # F is a multiple of constraint
+                    lc_expr = lc.as_expr()
+                    if is_eq or (len(lc_expr.free_symbols) == 0 and lc_expr >= 0):
+                        problem.solution = lc_expr * value
+                        return problem, lambda x: x
+                return None
+
+            u_proof = _p2expr(U)
+            if tp <= 1:
+                u_proof = sign_sos(u_proof, signs)
+                if u_proof is None:
+                    U, V, res = -U, -V, -res
+                    u_proof = sign_sos(_p2expr(U), signs)
+                    if u_proof is None:
+                        # the sign of U is not determined
+                        return None
+
+
+            v_proof = _p2expr(V)
+            if not is_eq: # constraint is ineq
+                v_proof = sign_sos(v_proof, signs)
+                if v_proof is None:
+                    if tp <= 1:
+                        # U >= 0 but we cannot prove V >= 0
+                        return None
+                else:
+                    U, V, res = -U, -V, -res
+                    u_proof = -u_proof
+                    v_proof = sign_sos(_p2expr(V), signs)
+                    if v_proof is None:
+                        # the sign of V is not determined
+                        return None
+
+
+            # now that we have U*F + V*constraint == res
+            # and also U, V >= 0
+            res = res.as_poly(gens)
+            if tp == 0:
+                # expr = -F = (-res + V*constraint)/U
+                # hence we shall prove -res >= 0 to imply expr >= 0
+                new_expr = -res
+                u0_proof, v0_proof = u_proof, v_proof
+                def restoration(x):
+                    if x is None: return None
+                    return (x + v0_proof*constraint_expr)/u0_proof
+
+            else:
+                # res == U*F + V*constraint >= 0
+                dst_tp = 2 if is_eq and tp == 2 else 1
+                dst[dst_tp][res] = u_proof*value + v_proof*constraint_expr
+
+    new_problem = problem.copy_new(new_expr, dst[1], dst[2])
+    if remove_redundancy:
+        new_problem = new_problem.remove_redundancy()
+    return new_problem, restoration
+
+
+def is_binomial_in(poly: Poly, gen_index: int) -> bool:
+    """
+    Check if the polynomial is binomial in the variable
+    at the given index.
+
+    Examples
+    --------
+    >>> from sympy.abc import a, b, c, d, e
+    >>> p = ((a**2+a*b**2+3*c**2*(d + 1)-3)*e).as_poly(a,b,c,d,e)
+    >>> [is_binomial_in(p, i) for i in range(5)]
+    [False, True, True, True, False]
+    """
+    a, b = -1, -1
+    for m in poly.monoms():
+        d = m[gen_index]
+        if a == -1:
+            a = d
+        elif d == a:
+            pass
+        elif b == -1:
+            b = d
+        elif d == b:
+            pass
+        else:
+            return False
+    return (a != -1) and (b != -1)
+
+
+def _try_resultant_elimination_in(
+    problem: "InequalityProblem",
+    gen_index: int,
+    **kwargs,
+) -> Optional[Tuple["InequalityProblem", Callable]]:
+    srcs = [problem.eq_constraints, problem.ineq_constraints]
+    for src in srcs:
+        for con in src:
+            if is_binomial_in(con, gen_index):
+                attempt = eliminate_var_by_constraint(
+                    problem, con, gen_index, **kwargs)
+                if attempt is not None:
+                    return attempt
+    return None
+
+
+def resultant_elimination(
+    problem: "InequalityProblem",
+    homogenize: bool = True,
+    eliminate_binomial_constraints: bool = True,
+    verbose: int = 0,
+) -> Tuple["InequalityProblem", Callable]:
+    """
+    Heuristic elimination of variables using the method of resultant.
+    """
+    ineqs, eqs = problem.ineq_constraints, problem.eq_constraints
+    if (not ineqs) and (not eqs):
+        return problem, lambda x: x
+
+    restorations = []
+    eliminated_vars = []
+
+    if homogenize and not problem.is_homogeneous:
+        problem_hom, hom = problem.homogenize()
+        symmetry = problem_hom.identify_symmetry()
+        attempt = _try_resultant_elimination_in(
+            problem_hom, -1, symmetry=symmetry)
+        if attempt is not None:
+            restorations.append(
+                lambda x: Solution.dehomogenize(x, hom))
+            problem = attempt[0]
+            restorations.append(attempt[1])
+            eliminated_vars.append(hom)
+
+    if eliminate_binomial_constraints:
+        found = True
+        while found and len(problem.gens):
+            found = False
+            symmetry = problem.identify_symmetry()
+            orbits = symmetry.orbits()
+            for orbit in orbits:
+                if len(orbit) == 1:
+                    # it is standalone and has no symmetry
+                    ind = next(iter(orbit))
+                    attempt = _try_resultant_elimination_in(
+                        problem, ind, symmetry=symmetry)
+                    if attempt is not None:
+                        eliminated_vars.append(problem.gens[ind])
+                        problem = attempt[0]
+                        restorations.append(attempt[1])
+                        found = True
+                        break
+
+    if eliminated_vars and verbose:
+        print("Resultant Elimination:", eliminated_vars)
+
+    def restoration(sol):
+        if sol is None:
+            return None
+        for rs in restorations[::-1]:
+            sol = rs(sol)
+        return sol
+    return problem, restoration

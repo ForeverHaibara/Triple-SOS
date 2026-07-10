@@ -1,32 +1,20 @@
-from typing import List, Dict, Tuple, Callable, Optional, TYPE_CHECKING
-
-from sympy import Poly
-
-from .elimination import eliminate_power_constraints
+from .elimination import eliminate_power_constraints, resultant_elimination
 from ..node import TransformNode
-from ..solution import Solution
-from ...utils import (
-    CyclicSum,
-    identify_symmetry_from_lists, verify_symmetry, poly_reduce_by_symmetry,
-    resultant_bezout
-)
-
-if TYPE_CHECKING:
-    from sympy import Expr
-    from ..problem import InequalityProblem
 
 
 class SolvePolynomial(TransformNode):
     """
-    Solve a dense polynomial inequality. The target expression and its constraints
-    are all converted and stored as sympy (dense) Poly class. However, the process
-    of converting expressions to dense polynomials is inefficient for very large inputs.
+    Solve a dense polynomial inequality. The target expression
+    and its constraints are all converted and stored as sympy (dense)
+    Poly class. However, the process of converting expressions to dense
+    polynomials is inefficient for very large inputs.
     """
     default_configs = {
         "sqf": False,
         "homogenize": True,
         "remove_redundancy": True,
         "eliminate_power_constraints": True,
+        "eliminate_binomial_constraints": True,
         "irrational_expr": False,
         "verbose": False,
     }
@@ -61,14 +49,17 @@ class SolvePolynomial(TransformNode):
 
         sqf = 1
         if configs["sqf"]:
-            problem, sqf = problem.sqr_free(problem_sqf=True, ineqs_sqf=False, eqs_sqf=False)
+            problem, sqf = problem.sqr_free(
+                problem_sqf=True, ineqs_sqf=False, eqs_sqf=False)
 
         problem = problem.remove_redundancy()
 
         power_restore = lambda x: x
         if configs["eliminate_power_constraints"]:
-            new_problem, new_power_restore = eliminate_power_constraints(problem,
-                irrational_expr=configs["irrational_expr"])
+            new_problem, new_power_restore = eliminate_power_constraints(
+                problem,
+                irrational_expr=configs["irrational_expr"]
+            )
             if new_problem is problem:
                 # nothing changed
                 pass
@@ -83,12 +74,18 @@ class SolvePolynomial(TransformNode):
                     # and we had better preserve both
                     pass
 
-        if configs["homogenize"]:
-            # problem, _restoration = reduce_over_quotient_ring(problem)
-            problem, _restoration = resultant_elimination(
-                problem, verbose=configs["verbose"])
-        else:
-            _restoration = lambda x: x
+        problem, res_restore = resultant_elimination(
+            problem,
+            **{
+                key: configs[key]
+                for key in [
+                    "homogenize",
+                    "eliminate_binomial_constraints",
+                    "verbose",
+                ]
+            }
+        )
+
 
         if problem.expr.total_degree() <= 0 and problem.expr.LC() >= 0:
             # nonnegative constant to prove
@@ -111,7 +108,7 @@ class SolvePolynomial(TransformNode):
         def composed_restoration(x):
             if x is None:
                 return None
-            return sqf**2 * power_restore(_restoration(x))
+            return sqf**2 * power_restore(res_restore(x))
 
         self.restorations = dict.fromkeys(self.children, composed_restoration)
 
@@ -119,428 +116,3 @@ class SolvePolynomial(TransformNode):
             # check one more time if there are no children
             self.finished = True
 
-
-#########################################################
-#
-#                Bidegree Homogenization
-#
-#########################################################
-
-
-def p2expr(p: Poly, symmetry = None) -> "Expr":
-    """Convert a polynomial to expr wisely by leveraging the symmetry."""
-    if (symmetry is not None) and verify_symmetry(p, symmetry):
-        p = poly_reduce_by_symmetry(p, symmetry)
-        return CyclicSum(p.as_expr(), p.gens, symmetry)
-    return p.as_expr()
-
-
-def eliminate_constraint(
-    problem: "InequalityProblem",
-    constraint: Poly,
-    gen_index: int,
-    remove_redundancy: bool = True,
-    symmetry = None,
-) -> Optional[Tuple["InequalityProblem", Callable]]:
-
-    ineqs, eqs = problem.ineq_constraints, problem.eq_constraints
-    is_eq = constraint in eqs
-    if (not is_eq) and (constraint not in ineqs):
-        return None
-
-    constraint_expr = eqs[constraint] if is_eq else ineqs[constraint]
-
-    from .signs import sign_sos
-    signs = problem.get_symbol_signs()
-
-    gens = problem.gens
-    _p2expr = lambda p: p2expr(p.as_poly(gens), symmetry)
-    srcs = [(0, {-problem.expr: 0}), (1, ineqs), (2, eqs)]
-    dst = [{}, {}, {}]
-
-    new_expr = problem.expr
-    restoration = lambda x: x
-    for tp, src in srcs:
-        for F, value in src.items():
-            if F.degree(gen_index) <= 0:
-                dst[tp][F] = value
-                continue
-
-            if tp != 0 and F == constraint:
-                continue
-
-            # U*F + V*constraint == res
-            U, V, res = resultant_bezout(F, constraint, gens[gen_index])
-
-            if tp == 0 and U.is_zero:
-                # it should be handled differently because
-                # U*F vanishes
-                lc, rem = F.div(constraint)
-                if rem.is_zero:
-                    # F is a multiple of constraint
-                    lc_expr = lc.as_expr()
-                    if is_eq or (len(lc_expr.free_symbols) == 0 and lc_expr >= 0):
-                        problem.solution = lc_expr * value
-                        return problem, lambda x: x
-                return None
-
-            u_proof = _p2expr(U)
-            if tp <= 1:
-                u_proof = sign_sos(u_proof, signs)
-                if u_proof is None:
-                    U, V, res = -U, -V, -res
-                    u_proof = sign_sos(_p2expr(U), signs)
-                    if u_proof is None:
-                        # the sign of U is not determined
-                        return None
-
-
-            v_proof = _p2expr(V)
-            if not is_eq: # constraint is ineq
-                v_proof = sign_sos(v_proof, signs)
-                if v_proof is None:
-                    if tp <= 1:
-                        # U >= 0 but we cannot prove V >= 0
-                        return None
-                else:
-                    U, V, res = -U, -V, -res
-                    u_proof = -u_proof
-                    v_proof = sign_sos(_p2expr(V), signs)
-                    if v_proof is None:
-                        # the sign of V is not determined
-                        return None
-
-
-            # now that we have U*F + V*constraint == res
-            # and also U, V >= 0
-            res = res.as_poly(gens)
-            if tp == 0:
-                # expr = -F = (-res + V*constraint)/U
-                # hence we shall prove -res >= 0 to imply expr >= 0
-                new_expr = -res
-                u0_proof, v0_proof = u_proof, v_proof
-                def restoration(x):
-                    if x is None: return None
-                    return (x + v0_proof*constraint_expr)/u0_proof
-
-            else:
-                # res == U*F + V*constraint >= 0
-                dst_tp = 2 if is_eq and tp == 2 else 1
-                dst[dst_tp][res] = u_proof*value + v_proof*constraint_expr
-
-    new_problem = problem.copy_new(new_expr, dst[1], dst[2])
-    if remove_redundancy:
-        new_problem = new_problem.remove_redundancy()
-    return new_problem, restoration
-
-
-def _is_bidegree(p: Poly) -> Optional[Tuple[Poly, Poly, int]]:
-    """Check whether a multivariate polynomial has two different degrees.
-    Returns l1, l2, sgn such that p = sgn * (l2 - l1). Also,
-    l1, l2 are homogeneous, deg(l1) < deg(l2) and l1.LC() > 0. Returns
-    None if p does not have the property.
-
-    Examples
-    ---------
-    >>> from sympy.abc import a, b, c
-    >>> _is_bidegree((a**2 + b**2 + c**2).as_poly(a,b,c)) is None
-    True
-    >>> _is_bidegree((2 - 3*(a+b+c) - a*b*c).as_poly(a,b,c)) is None
-    True
-    >>> _is_bidegree((3*(a+b+c) - a*b*c).as_poly(a,b,c))
-    (Poly(3*a + 3*b + 3*c, a, b, c, domain='ZZ'), Poly(a*b*c, a, b, c, domain='ZZ'), -1)
-    >>> _is_bidegree((-3*(a+b+c) + a*b*c).as_poly(a,b,c))
-    (Poly(3*a + 3*b + 3*c, a, b, c, domain='ZZ'), Poly(a*b*c, a, b, c, domain='ZZ'), 1)
-    """
-    terms = {}
-    for m, c in p.terms():
-        d = sum(m)
-        if d not in terms:
-            if len(terms) == 2:
-                return None
-            terms[d] = [(m, c)]
-        else:
-            terms[d].append((m, c))
-    if len(terms) != 2:
-        return None
-    d1, l1 = terms.popitem()
-    d2, l2 = terms.popitem()
-    if d1 > d2:
-        d1, d2 = d2, d1
-        l1, l2 = l2, l1
-    # d1 < d2
-    l1 = Poly(dict(l1), p.gens, domain=p.domain)
-    l2 = Poly(dict(l2), p.gens, domain=p.domain)
-    if l1.LC() < 0:
-        l1 = -l1
-        sgn = 1
-    else:
-        l2 = -l2
-        sgn = -1
-    return l1, l2, sgn
-
-def _align_degree(p: Poly, p1: Poly, p2: Poly, accept_odd_degree: bool = False) -> Optional[Tuple[Poly, int, Poly]]:
-    """
-    Homogenize p given p1 == p2 and deg(p1) < deg(p2).
-    Returns q, d, x such that q = p1**d * p + x(p2 - p1) where q, x are polynomials
-    and q is homogeneous. Returns None if it fails.
-
-    Parameters
-    ----------
-    p: Poly
-        The polynomial to be homogenized.
-    p1: Poly
-        The first polynomial in the alignment.
-    p2: Poly
-        The second polynomial in the alignment.
-    accept_odd_degree: bool
-        If False, d is forced to be even.
-
-    Examples
-    --------
-    >>> from sympy.abc import a, b, c
-    >>> from sympy import Poly
-    >>> p, p1, p2 = Poly(a**2+b**2+c**2 - 3, (a,b,c)), Poly(3, (a,b,c)), Poly(a+b+c, (a,b,c))
-    >>> q, d, x = _align_degree(p, p1, p2); (q, d, x) # doctest: +NORMALIZE_WHITESPACE
-    (Poly(6*a**2 - 6*a*b - 6*a*c + 6*b**2 - 6*b*c + 6*c**2, a, b, c, domain='ZZ'),
-    2,
-    Poly(-3*a - 3*b - 3*c - 9, a, b, c, domain='ZZ'))
-    >>> (q - (p1**d * p + x*(p2 - p1)))
-    Poly(0, a, b, c, domain='ZZ')
-    """
-    ddiff = p2.total_degree() - p1.total_degree()
-    if ddiff == 0:
-        return None
-    terms = {}
-    for m, c in p.terms():
-        d = sum(m)
-        if d not in terms:
-            terms[d] = [(m, c)]
-        else:
-            terms[d].append((m, c))
-    # p = sum(d * polys[d] for d in terms)
-    keys = sorted(terms.keys())
-    for i in range(len(keys)-1):
-        if (keys[i+1]-keys[i])%ddiff != 0:
-            return None
-    muldeg = (keys[-1] - keys[0])//ddiff
-    if muldeg == 0:
-        # nothing to do
-        return p, 0, Poly({}, p.gens, domain=p.domain)
-    if (not accept_odd_degree) and muldeg % 2 != 0:
-        # d is not even, might multiply a negative term
-        return None
-    polys = [Poly(dict(terms[d]), p.gens, domain=p.domain) for d in keys]
-    q = Poly({}, p.gens, domain=p.domain)
-    for d, poly in zip(keys, polys):
-        codeg = (keys[-1] - d)//ddiff
-        # poly -> poly * p2**codeg * p1**muldeg
-        q += poly * p2**codeg * p1**(muldeg - codeg)
-        # x += poly * (p2**codeg - p1**codeg)/(p2 - p1) * p1**(muldeg - codeg)
-    divrem = (q - p1**muldeg*p).div(p2 - p1)
-    if not divrem[1].is_zero:
-        return None
-    # print(p, '- (hom) ->', q, muldeg, divrem[0])
-    return q, muldeg, divrem[0]
-
-def _bidegree_recover_expr(lst: List[Dict[Poly, Tuple[Poly, int, Poly]]], p1: Poly, sgn_expr: "Expr") -> "Expr":
-    """
-    Utility function for bidegree homogenization.
-    Recover the original expressions from homogenization info, each represented
-    by a tuple (mul_deg, expr, quo). After recovery, it would be:
-
-        `p1.as_expr()**mul_deg * expr + sgn_expr * quo.as_expr()`
-
-    The modification is done in-place. Returns only the expression
-    form of `p1`.
-    """
-    symmetry = identify_symmetry_from_lists([list(d.keys()) for d in lst])
-    if symmetry.is_trivial:
-        symmetry = None
-
-    p1_expr = p2expr(p1, symmetry)
-    for d in lst:
-        for p, (mul_deg, expr, quo) in d.items():
-            d[p] = p1_expr**mul_deg * expr + p2expr(quo, symmetry)*sgn_expr
-    return p1_expr
-
-def _bidegree_attempt(problem: "InequalityProblem", eq: Poly) -> Optional[Tuple["InequalityProblem", Callable]]:
-    """
-    Test whether the constraint `eq` can be use to homogenize the original problem.
-
-    If yes, returns a new problem and a function to recover the solution.
-    """
-    poly, ineq_constraints, eq_constraints = problem.expr, problem.ineq_constraints, problem.eq_constraints
-
-    bideg = _is_bidegree(eq)
-    if bideg is None:
-        return None
-    p1, p2, sgn = bideg
-
-    accept_odd = True if (p1.total_degree() == 0 and p1.LC() > 0) else False
-    # print(f'Bidegree: {eq} == 0  <=>  {p1} == {p2}')
-
-    # handle them universally
-    dicts = [{poly: 0}, ineq_constraints, eq_constraints]
-    new_dicts = [{}, {}, {}]
-
-    for dict_i, src in enumerate(dicts):
-        dst = new_dicts[dict_i]
-        for key, expr in src.items():
-            if dict_i == 2 and key == eq:
-                continue
-            alignment = _align_degree(key, p1, p2, accept_odd_degree=accept_odd)
-            if alignment is None:
-                return None
-            # to avoid wasting time, we only store the homogenization info here
-            new_poly, mul_deg, quo = alignment
-            dst[new_poly] = (mul_deg, expr, quo)
-
-    # All polynomials are homogenized,
-    # now we restore the homogenization info (tuples) to exprs.
-    mul_deg = next(iter(new_dicts[0].values()))[0]
-    eq_expr = eq_constraints[eq]
-    p1_expr = _bidegree_recover_expr(new_dicts, p1, sgn * eq_expr)
-
-    new_poly, expr_shift = next(iter(new_dicts[0].items()))
-    def _align_degree_restore(x):
-        """Recover z such that `(p1_expr**mul_deg * z + expr_shift) == x`"""
-        return (x - expr_shift) / p1_expr**mul_deg
-    new_problem = problem.new(new_poly, new_dicts[1], new_dicts[2])
-    new_problem.roots = problem.roots
-    return new_problem, _align_degree_restore
-
-def bidegree_homogenization(problem: "InequalityProblem") -> Tuple["InequalityProblem", Callable]:
-    for eq in problem.eq_constraints:
-        attempt = _bidegree_attempt(problem, eq)
-        if attempt is not None:
-            return attempt
-    return problem, lambda x: x
-
-
-def reduce_over_quotient_ring(problem: "InequalityProblem"):
-    """
-    Perform quotient ring reduction of the problem, including operations like
-    homogenization.
-
-    Given equality constraint f(x) = g(x) where f,g are nonzero homogeneous polynomials
-    and deg(f) = deg(g), we obtain 1 = (f(x)/g(x)) and can be used for homogenization.
-
-    TODO:
-    1. Eliminate linear equality constraints, e.g. a+2b=3
-    2. Eliminate linear inequality constraints, e.g. b+c-a, c+a-b, a+b-c>=0
-    """
-    restorations = []
-    ################################################################
-    #           Homogenize the polynomial and constraints
-    ################################################################
-    if problem.is_homogeneous:
-        # nothing to do
-        return problem, lambda x: x
-
-    ################################################################
-    #         Homogenize using bidegree constraints
-    ################################################################
-
-    problem, restore = bidegree_homogenization(problem)
-    restorations.append(restore)
-
-    if len(restorations) == 0:
-        restorations.append(lambda x: x)
-    def restoration(sol):
-        if sol is None:
-            return None
-        for rs in restorations[::-1]:
-            sol = rs(sol)
-        return sol
-
-    return problem, restoration
-
-
-def is_bidegree_in(poly: Poly, gen_index: int) -> bool:
-    a, b = -1, -1
-    for m in poly.monoms():
-        d = m[gen_index]
-        if a == -1:
-            a = d
-        elif d == a:
-            pass
-        elif b == -1:
-            b = d
-        elif d == b:
-            pass
-        else:
-            return False
-    return (a != -1) and (b != -1)
-
-
-def _try_resultant_elimination_in(
-    problem: "InequalityProblem",
-    gen_index: int,
-    **kwargs,
-) -> Optional[Tuple["InequalityProblem", Callable]]:
-    srcs = [problem.eq_constraints, problem.ineq_constraints]
-    for src in srcs:
-        for con in src:
-            if is_bidegree_in(con, gen_index):
-                attempt = eliminate_constraint(
-                    problem, con, gen_index, **kwargs)
-                if attempt is not None:
-                    return attempt
-    return None
-
-
-def resultant_elimination(
-    problem: "InequalityProblem",
-    verbose: int = 0,
-) -> Tuple["InequalityProblem", Callable]:
-    """
-    Heuristic elimination of variables using the method of resultant.
-    """
-    ineqs, eqs = problem.ineq_constraints, problem.eq_constraints
-    if (not ineqs) and (not eqs):
-        return problem, lambda x: x
-
-    restorations = []
-    eliminated_vars = []
-
-    if not problem.is_homogeneous:
-        problem_hom, hom = problem.homogenize()
-        symmetry = problem_hom.identify_symmetry()
-        attempt = _try_resultant_elimination_in(
-            problem_hom, -1, symmetry=symmetry)
-        if attempt is not None:
-            restorations.append(
-                lambda x: Solution.dehomogenize(x, hom) if x is not None else x)
-            problem = attempt[0]
-            restorations.append(attempt[1])
-            eliminated_vars.append(hom)
-
-    found = True
-    while found and len(problem.gens):
-        found = False
-        symmetry = problem.identify_symmetry()
-        orbits = symmetry.orbits()
-        for orbit in orbits:
-            if len(orbit) == 1:
-                # it is standalone and has no symmetry
-                ind = next(iter(orbit))
-                attempt = _try_resultant_elimination_in(
-                    problem, ind, symmetry=symmetry)
-                if attempt is not None:
-                    eliminated_vars.append(problem.gens[ind])
-                    problem = attempt[0]
-                    restorations.append(attempt[1])
-                    found = True
-                    break
-
-    if eliminated_vars and verbose:
-        print("Resultant Elimination:", eliminated_vars)
-
-    def restoration(sol):
-        if sol is None:
-            return None
-        for rs in restorations[::-1]:
-            sol = rs(sol)
-        return sol
-    return problem, restoration

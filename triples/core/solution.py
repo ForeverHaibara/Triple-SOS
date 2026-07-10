@@ -446,6 +446,8 @@ class Solution(SolutionBase[T]):
         """
         if homogenizer is None:
             return self
+        if self is None:
+            return self
 
         expr = self
         if isinstance(self, Solution):
