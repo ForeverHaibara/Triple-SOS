@@ -114,6 +114,4 @@ def test_eof_newline():
                     # print(f"Error reading {file_path}")
                     continue
                 assert not lines.endswith("\n\n"),\
-                    f"EOF multiple newlines found in {
-                        join("triples", relpath(file_path, lib_path))
-                    }"
+                    f"EOF multiple newlines found in {join('triples', relpath(file_path, lib_path))}"
