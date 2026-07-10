@@ -568,14 +568,18 @@ def is_binomial_in(poly: Poly, gen_index: int) -> bool:
 def _try_resultant_elimination_in(
     problem: "InequalityProblem",
     gen_index: int,
+    symmetry = None,
     **kwargs,
 ) -> Optional[Tuple["InequalityProblem", Callable]]:
     srcs = [problem.eq_constraints, problem.ineq_constraints]
     for src in srcs:
         for con in src:
             if is_binomial_in(con, gen_index):
+                if symmetry is not None and not verify_symmetry(con, symmetry):
+                    # breaks symmetry, skip it
+                    continue
                 attempt = eliminate_var_by_constraint(
-                    problem, con, gen_index, **kwargs)
+                    problem, con, gen_index, symmetry=symmetry, **kwargs)
                 if attempt is not None:
                     return attempt
     return None
