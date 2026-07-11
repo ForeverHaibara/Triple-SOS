@@ -2632,7 +2632,7 @@ class MathematicalInequalitiesVol3(MathematicalInequalities):
     def problem_vasile_p31172_p1(self):
         return (sqrt(5)-1)/4 - c5s(a*b)/c5s(a**2), [], [c5s(a)]
 
-    def problem_vasile_p31172_p1(self):
+    def problem_vasile_p31172_p2(self):
         return (sqrt(5)+1)/4 + c5s(a*b)/c5s(a**2), [], [c5s(a)]
 
     def problem_vasile_p31173(self):

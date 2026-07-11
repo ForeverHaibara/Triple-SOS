@@ -77,15 +77,22 @@ def test_ruff():
     """
     import subprocess
 
+    from platform import python_version_tuple
+
     # Get the project root directory
     project_root = _project_path()
 
     try:
+        if int(python_version_tuple()[0]) >= 3 and\
+           int(python_version_tuple()[1]) >= 7:
+            kwargs = {"capture_output": True, "text": True}
+        else:
+            kwargs = {}
+
         # Run ruff on the project
         result = subprocess.run(
             ["ruff", "check", project_root],
-            capture_output=True,
-            text=True
+            **kwargs
         )
     except FileNotFoundError:
         # pytest.skip("Ruff is not installed in the environment")

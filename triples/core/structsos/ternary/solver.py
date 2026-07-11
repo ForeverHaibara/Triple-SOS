@@ -144,9 +144,14 @@ def structural_sos_3vars(
         dod = {i: {m.index(1): v for m, v in ineq.rep.terms()}
                for i, ineq in enumerate(linear_ineqs)}
         mat = rep_matrix_from_dict(dod, (len(dod), nvars), dom)
-        if mat._rep.rank() == nvars:
+
+        if len(mat._rep.to_field().rref()[1]) == nvars:
+            # use rref rather DomainMatrix.rank for version compatibility
+
             if mat.shape[0] == nvars:
-                if mat._rep.nnz() == nvars:
+                if len(mat._rep.to_dok()) == nvars:
+                    # use to_dok rather nnz for version compatibility
+
                     # permutation matrix
                     # TODO: flip the sign of the entries so
                     # that all entries are nonnegative
