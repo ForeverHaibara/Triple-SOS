@@ -19,7 +19,8 @@ from .dispatch import (
 )
 from ..utils import optimize_poly, Root, RootList
 from ..utils.monomials import (
-    verify_closure, _identify_symmetry_from_blackbox
+    verify_closure, _identify_symmetry_from_blackbox,
+    identify_symmetry_from_lists
 )
 
 if TYPE_CHECKING:
@@ -662,6 +663,10 @@ class InequalityProblem(Generic[T]):
         >>> pro.gens
         (a, b, c)
         """
+        if self.is_polynomial:
+            return identify_symmetry_from_lists(
+                [[self.expr], list(self.ineq_constraints), list(self.eq_constraints)]
+            )
         gens = self.gens
         reorder_funcs = self.reduce(lambda x: (x, self._dtype_make_reorder_func(x, gens)), dict)
         ls = [[self.expr], list(self.ineq_constraints), list(self.eq_constraints)]

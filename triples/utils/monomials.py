@@ -2,7 +2,7 @@
 This module provides functions to manipulate the group symmetry of a polynomial,
 and also utilities to compute monomial representations under the group symmetry.
 """
-from collections import defaultdict
+from collections import defaultdict, deque
 from typing import (Dict, List, Tuple, Iterable, Callable,
     Union, Optional, Any, overload, TYPE_CHECKING
 )
@@ -887,16 +887,226 @@ def _identify_symmetry_from_blackbox(
     return PermutationGroup(*verified)
 
 
+def _identify_symmetry_by_polynomial_action(
+    lst_of_lsts: List[List[Poly]],
+    G: PermutationGroup,
+    max_orbit: int = 4096,
+) -> PermutationGroup:
+    """Find the common setwise stabilizer of polynomial lists.
+
+    The action of a permutation on a polynomial list is represented by the
+    underlying monomial dictionaries.  This avoids constructing SymPy
+    expressions during the orbit-stabilizer computation.
+    """
+    nvars = G.degree
+
+    def poly_key(poly):
+        rep = poly.rep
+        return rep.dom, tuple(sorted(rep.to_dict().items()))
+
+    initial = []
+    for polys in lst_of_lsts:
+        keys = []
+        for poly in polys:
+            key = poly_key(poly)
+            keys.append(key)
+        initial.append(frozenset(keys))
+    initial = tuple(initial)
+
+    transform_cache = {}
+
+    def transform_key(key, permutation):
+        permutation = tuple(permutation)
+        cache_key = (key, permutation)
+        transformed = transform_cache.get(cache_key)
+        if transformed is None:
+            domain, terms = key
+            transformed = (domain, tuple(sorted(
+                (tuple(monomial[i] for i in permutation), coeff)
+                for monomial, coeff in terms
+            )))
+            transform_cache[cache_key] = transformed
+        return transformed
+
+    def transform_state(state, permutation):
+        permutation = permutation.array_form
+        return tuple(frozenset(
+            transform_key(key, permutation) for key in polys
+        ) for polys in state)
+
+    generators = list(G.generators)
+    if all(transform_state(initial, permutation) == initial
+           for permutation in generators):
+        return G
+
+    # Schreier's lemma reconstructs a generating set for the stabilizer from
+    # a breadth-first orbit and its chosen transporters.
+    orbit = {initial: Permutation(list(range(nvars)))}
+    queue = deque([initial])
+    edges = []
+    while queue:
+        state = queue.popleft()
+        transporter = orbit[state]
+        for permutation in generators:
+            next_state = transform_state(state, permutation)
+            next_transporter = permutation * transporter
+            if next_state not in orbit:
+                if len(orbit) >= max_orbit:
+                    return _identify_symmetry_by_backtracking(
+                        lst_of_lsts, G
+                    )
+                orbit[next_state] = next_transporter
+                queue.append(next_state)
+            edges.append((transporter, permutation, orbit[next_state]))
+
+    stabilizer_generators = [
+        ~next_transporter * permutation * transporter
+        for transporter, permutation, next_transporter in edges
+    ]
+    if not stabilizer_generators:
+        stabilizer_generators = [Permutation(list(range(nvars)))]
+    return PermutationGroup(*stabilizer_generators)
+
+
+def _identify_symmetry_by_backtracking(
+    lst_of_lsts: List[List[Poly]],
+    G: PermutationGroup,
+) -> PermutationGroup:
+    """Exact fallback based on invariant projections of polynomial lists."""
+    nvars = G.degree
+
+    def poly_key(poly):
+        rep = poly.rep
+        return rep.dom, tuple(sorted(rep.to_dict().items()))
+
+    poly_terms = {}
+    lists = []
+    for polys in lst_of_lsts:
+        keys = set()
+        for poly in polys:
+            key = poly_key(poly)
+            poly_terms[key] = key[1]
+            keys.add(key)
+        lists.append(tuple(keys))
+
+    projection_cache = {}
+
+    def projection(key, indices):
+        indices = tuple(indices)
+        cache_key = (key, indices)
+        result = projection_cache.get(cache_key)
+        if result is not None:
+            return result
+        values = {}
+        for monomial, coeff in poly_terms[key]:
+            projected = tuple(monomial[i] for i in indices)
+            values[projected] = values.get(projected, 0) + coeff
+        result = tuple(sorted(
+            (monomial, coeff) for monomial, coeff in values.items()
+            if coeff != 0
+        ))
+        projection_cache[cache_key] = result
+        return result
+
+    def profile(variable):
+        return tuple(sorted(
+            (projection(key, (variable,)) for key in polys),
+            key=repr
+        ) for polys in lists)
+
+    variable_profiles = [profile(i) for i in range(nvars)]
+    candidates = [
+        [i for i in range(nvars) if variable_profiles[i] == variable_profiles[j]]
+        for j in range(nvars)
+    ]
+
+    pair_profiles = {}
+    for i in range(nvars):
+        for j in range(nvars):
+            pair_profiles[i, j] = tuple(sorted(
+                (projection(key, (i, j)) for key in polys),
+                key=repr
+            ) for polys in lists)
+
+    def partial_match(targets, sources):
+        for polys in lists:
+            source_counts = defaultdict(int)
+            target_counts = defaultdict(int)
+            for key in polys:
+                source_counts[projection(key, sources)] += 1
+                target_counts[projection(key, targets)] += 1
+            if source_counts != target_counts:
+                return False
+        return True
+
+    identity = Permutation(list(range(nvars)))
+    initial = tuple(frozenset(polys) for polys in lists)
+
+    def transformed_key(key, permutation):
+        return (
+            key[0],
+            tuple(sorted(
+                (tuple(monomial[i] for i in permutation.array_form), coeff)
+                for monomial, coeff in key[1]
+            ))
+        )
+
+    def is_valid(permutation):
+        transformed = tuple(frozenset(
+            transformed_key(key, permutation) for key in polys
+        ) for polys in initial)
+        return transformed == initial
+
+    subgroup_generators = []
+    for permutation in getattr(G, 'strong_gens', G.generators):
+        if is_valid(permutation):
+            subgroup_generators.append(permutation)
+    subgroup = PermutationGroup(*(subgroup_generators or [identity]))
+
+    order = sorted(range(nvars), key=lambda i: (len(candidates[i]), i))
+    mapping = [None] * nvars
+    used = set()
+
+    def visit(level, targets):
+        if level == nvars:
+            permutation = Permutation(mapping[:])
+            if permutation in G and is_valid(permutation) and permutation not in subgroup:
+                subgroup_generators.append(permutation)
+                visit.subgroup = PermutationGroup(*subgroup_generators)
+            return
+
+        target = order[level]
+        for source in candidates[target]:
+            if source in used:
+                continue
+            if any(
+                pair_profiles[source, mapping[other]] != pair_profiles[target, other]
+                for other in targets
+            ):
+                continue
+            mapping[target] = source
+            new_targets = targets + [target]
+            if partial_match(new_targets, [mapping[i] for i in new_targets]):
+                used.add(source)
+                visit(level + 1, new_targets)
+                used.remove(source)
+            mapping[target] = None
+
+    visit.subgroup = subgroup
+    visit(0, [])
+    return visit.subgroup
+
+
 def identify_symmetry_from_lists(
     lst_of_lsts: List[List[Poly]],
     G: Optional[PermutationGroup]=None
 ) -> PermutationGroup:
     """
-    Infer a symmetric group so that each list of (list of polynomials)
-    is symmetric with respect to the rule. It only identifies very
-    common groups like complete symmetric and cyclic groups.
+    Infer the common setwise stabilizer of the polynomial lists.
 
-    TODO: Implement a complete algorithm to identify all symmetric groups.
+    The result is the largest subgroup of ``G`` for which every input list
+    is closed under the induced variable permutation action.  If ``G`` is
+    omitted, the ambient group is the full symmetric group.
 
     Parameters
     ----------
@@ -943,20 +1153,17 @@ def identify_symmetry_from_lists(
             if p.gens != gens:
                 raise ValueError("All polynomials should have the same generators.")
 
-    def verify(perm):
-        return all(verify_symmetry(l, perm) for l in lst_of_lsts)
-
     nvars = len(gens)
-    if G is not None:
-        if nvars != 0 and nvars != G.degree:
-            raise ValueError("The degree of the permutation group must"
-                             " be the same as the number of variables.")
-        if nvars == 0:
-            return G
-        if G.is_trivial:
-            return G
-        return _identify_symmetry_from_blackbox(verify, G)
-    return _identify_symmetry_from_blackbox(verify, nvars)
+    if G is None and nvars == 0:
+        return PermutationGroup(Permutation([]))
+    if G is None:
+        G = SymmetricGroup(nvars)
+    elif nvars != 0 and nvars != G.degree:
+        raise ValueError("The degree of the permutation group must"
+                         " be the same as the number of variables.")
+    if nvars == 0 or G.is_trivial:
+        return G
+    return _identify_symmetry_by_polynomial_action(lst_of_lsts, G)
 
 
 def identify_symmetry(poly: Poly, G: Optional[PermutationGroup]=None) -> PermutationGroup:
