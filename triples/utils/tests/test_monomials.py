@@ -1,7 +1,11 @@
 from sympy import symbols
-from sympy.combinatorics import CyclicGroup, DihedralGroup
+from sympy.combinatorics import CyclicGroup, DihedralGroup, SymmetricGroup
 
-from ..monomials import identify_symmetry_from_lists, verify_symmetry
+from ..monomials import (
+    _identify_symmetry_from_action,
+    identify_symmetry_from_lists,
+    verify_symmetry,
+)
 
 
 def test_identify_symmetry_from_lists():
@@ -57,3 +61,20 @@ def test_identify_symmetry_from_lists():
 
     assert identify_symmetry_from_lists(polys, DihedralGroup(4)).order() == 2
     assert identify_symmetry_from_lists(polys, CyclicGroup(4)).order() == 1
+
+
+def test_identify_symmetry_from_action():
+    objects = [[
+        (1, 2, 3),
+        (2, 3, 1),
+        (3, 1, 2),
+    ]]
+
+    def action(obj, permutation):
+        return tuple(obj[permutation(i)] for i in range(3))
+
+    symmetry = _identify_symmetry_from_action(
+        objects, SymmetricGroup(3), action
+    )
+
+    assert symmetry.order() == 3

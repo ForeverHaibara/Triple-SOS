@@ -814,122 +814,60 @@ def verify_symmetry(
     return True
 
 
-def _identify_symmetry_from_blackbox(
-    f: Callable[[Permutation], bool],
-    G: Union[PermutationGroup, int]
-) -> PermutationGroup:
-    """
-    Identify symmetry by calling a black-box function `f` on each permutation.
-    If `G` is integer, then it implies the degree of the permutation.
-    If `G` is a permutation group, then it finds a subgroup of `G`.
-    """
-    # List a few candidates: symmetric, alternating, cyclic groups...
-    def _rotated(n, start=0):
-        return list(range(start+1, n+start)) + [start]
-    def _reflected(n, start=0):
-        return [start+1, start] + list(range(start+2, n+start))
-
-    verified = [] # storing permutations that fit the input
-    candidates = [] # a list of permutations
-
-    if isinstance(G, int):
-        nvars = G
-        G = SymmetricGroup(nvars)
-    else:
-        nvars = G.degree
-
-    if nvars > 1:
-        candidates.append(_rotated(nvars))
-        if nvars > 2:
-            candidates.append(_reflected(nvars))
-
-    for perm in map(Permutation, candidates):
-        if f(perm):
-            verified.append(perm)
-    if len(verified) == 2:
-        # reflection + cyclic -> complete symmetric group
-        # but it should be a subgroup of G, hence return G
-        return G
-    verified = [arg for arg in verified if arg in G]
-
-    candidates = []
-    # bi-symmetric group etc.
-    if nvars > 3:
-        half = nvars // 2
-        p1 = _rotated(half) + _rotated(half, half)
-        p2 = _reflected(half) + _reflected(half, half)
-        p3 = list(range(half,half*2)) + list(range(half))
-        if nvars % 2 == 1:
-            for p in [p1, p2, p3]:
-                p.append(nvars - 1)
-                candidates.append(p)
-                p = [0] + [_ + 1 for _ in p[:-1]]
-                candidates.append(p)
-        else:
-            for p in [p1, p2, p3]:
-                candidates.append(p)
-
-    if nvars > 2:
-        candidates.append(_rotated(nvars - 1) + [nvars - 1])
-        candidates.append([0] + _rotated(nvars - 1, 1))
-        if nvars > 3:
-            candidates.append(_reflected(nvars - 1) + [nvars - 1])
-            candidates.append([0] + _reflected(nvars - 1, 1))
-
-    is_sym = G._is_sym
-    for perm in map(Permutation, candidates):
-        if (is_sym or (perm in G)) and f(perm):
-            verified.append(perm)
-
-    if len(verified) == 0:
-        verified.append(Permutation(list(range(nvars))))
-
-    return PermutationGroup(*verified)
-
-
-def _identify_symmetry_by_polynomial_action(
-    lst_of_lsts: List[List[Poly]],
+def _identify_symmetry_from_action(
+    lst_of_lsts: List[List[Any]],
     G: PermutationGroup,
+    action: Callable[[Any, Permutation], Any],
+    get_key: Optional[Callable[[Any], Any]]=None,
+    get_projection: Optional[Callable[[Any, Tuple[int, ...]], Any]]=None,
     max_orbit: int = 4096,
 ) -> PermutationGroup:
-    """Find the common setwise stabilizer of polynomial lists.
+    """Find the common setwise stabilizer of lists of acted-on objects.
 
-    The action of a permutation on a polynomial list is represented by the
-    underlying monomial dictionaries.  This avoids constructing SymPy
-    expressions during the orbit-stabilizer computation.
+    ``action`` is a left action compatible with permutation multiplication.
+    ``get_key`` returns a hashable canonical object representation. If
+    ``get_projection`` is supplied, it is used by the exact fallback when
+    the object orbit is large.
     """
     nvars = G.degree
 
-    def poly_key(poly):
-        rep = poly.rep
-        return rep.dom, tuple(sorted(rep.to_dict().items()))
+    if get_key is None:
+        get_key = lambda x: x
 
     initial = []
     for polys in lst_of_lsts:
         keys = []
-        for poly in polys:
-            key = poly_key(poly)
-            keys.append(key)
+        for obj in polys:
+            keys.append(get_key(obj))
         initial.append(frozenset(keys))
     initial = tuple(initial)
+
+    objects = {}
+    for polys in lst_of_lsts:
+        for obj in polys:
+            objects[get_key(obj)] = obj
+
+    def get_object(key, permutation):
+        if key not in objects:
+            raise ValueError(
+                "The action produced an object whose key was not seen "
+                "before. Provide an action closed on the object type."
+            )
+        return action(objects[key], permutation)
 
     transform_cache = {}
 
     def transform_key(key, permutation):
-        permutation = tuple(permutation)
-        cache_key = (key, permutation)
+        cache_key = (key, tuple(permutation.array_form))
         transformed = transform_cache.get(cache_key)
         if transformed is None:
-            domain, terms = key
-            transformed = (domain, tuple(sorted(
-                (tuple(monomial[i] for i in permutation), coeff)
-                for monomial, coeff in terms
-            )))
+            transformed_object = get_object(key, permutation)
+            transformed = get_key(transformed_object)
+            objects[transformed] = transformed_object
             transform_cache[cache_key] = transformed
         return transformed
 
     def transform_state(state, permutation):
-        permutation = permutation.array_form
         return tuple(frozenset(
             transform_key(key, permutation) for key in polys
         ) for polys in state)
@@ -952,9 +890,13 @@ def _identify_symmetry_by_polynomial_action(
             next_transporter = permutation * transporter
             if next_state not in orbit:
                 if len(orbit) >= max_orbit:
-                    return _identify_symmetry_by_backtracking(
-                        lst_of_lsts, G
-                    )
+                    if get_projection is not None:
+                        return _identify_symmetry_by_action_backtracking(
+                            lst_of_lsts, G, action, get_key, get_projection
+                        )
+                    # Without projections there is no general shortcut for
+                    # a black-box action; keep the exact orbit computation
+                    # rather than enumerating every element of S_n.
                 orbit[next_state] = next_transporter
                 queue.append(next_state)
             edges.append((transporter, permutation, orbit[next_state]))
@@ -968,24 +910,23 @@ def _identify_symmetry_by_polynomial_action(
     return PermutationGroup(*stabilizer_generators)
 
 
-def _identify_symmetry_by_backtracking(
-    lst_of_lsts: List[List[Poly]],
+def _identify_symmetry_by_action_backtracking(
+    lst_of_lsts: List[List[Any]],
     G: PermutationGroup,
+    action: Callable[[Any, Permutation], Any],
+    get_key: Callable[[Any], Any],
+    get_projection: Callable[[Any, Tuple[int, ...]], Any],
 ) -> PermutationGroup:
-    """Exact fallback based on invariant projections of polynomial lists."""
+    """Find the stabilizer by exact projection-guided backtracking."""
     nvars = G.degree
 
-    def poly_key(poly):
-        rep = poly.rep
-        return rep.dom, tuple(sorted(rep.to_dict().items()))
-
-    poly_terms = {}
+    objects = {}
     lists = []
     for polys in lst_of_lsts:
         keys = set()
-        for poly in polys:
-            key = poly_key(poly)
-            poly_terms[key] = key[1]
+        for obj in polys:
+            key = get_key(obj)
+            objects[key] = obj
             keys.add(key)
         lists.append(tuple(keys))
 
@@ -997,14 +938,7 @@ def _identify_symmetry_by_backtracking(
         result = projection_cache.get(cache_key)
         if result is not None:
             return result
-        values = {}
-        for monomial, coeff in poly_terms[key]:
-            projected = tuple(monomial[i] for i in indices)
-            values[projected] = values.get(projected, 0) + coeff
-        result = tuple(sorted(
-            (monomial, coeff) for monomial, coeff in values.items()
-            if coeff != 0
-        ))
+        result = get_projection(objects[key], indices)
         projection_cache[cache_key] = result
         return result
 
@@ -1042,18 +976,9 @@ def _identify_symmetry_by_backtracking(
     identity = Permutation(list(range(nvars)))
     initial = tuple(frozenset(polys) for polys in lists)
 
-    def transformed_key(key, permutation):
-        return (
-            key[0],
-            tuple(sorted(
-                (tuple(monomial[i] for i in permutation.array_form), coeff)
-                for monomial, coeff in key[1]
-            ))
-        )
-
     def is_valid(permutation):
         transformed = tuple(frozenset(
-            transformed_key(key, permutation) for key in polys
+            get_key(action(objects[key], permutation)) for key in polys
         ) for polys in initial)
         return transformed == initial
 
@@ -1129,17 +1054,13 @@ def identify_symmetry_from_lists(
     True
 
     >>> identify_symmetry_from_lists([[(a+b+c-3).as_poly(a,b,c)],
-    ... [(2*a+b).as_poly(a,b,c), (2*b+c).as_poly(a,b,c), (2*c+a).as_poly(a,b,c)]])
-    PermutationGroup([
-        (0 1 2)])
+    ... [(2*a+b).as_poly(a,b,c), (2*b+c).as_poly(a,b,c), (2*c+a).as_poly(a,b,c)]]).is_cyclic
+    True
 
     See Also
     ----------
     identify_symmetry
 
-    Reference
-    ----------
-    [1] https://cs.stackexchange.com/questions/64335/how-to-find-the-symmetry-group-of-a-polynomial
     """
     gens = ()
     for l in lst_of_lsts:
@@ -1163,7 +1084,34 @@ def identify_symmetry_from_lists(
                          " be the same as the number of variables.")
     if nvars == 0 or G.is_trivial:
         return G
-    return _identify_symmetry_by_polynomial_action(lst_of_lsts, G)
+    def poly_key(poly):
+        rep = poly.rep
+        return rep.dom, tuple(sorted(rep.to_dict().items()))
+
+    def action(poly, permutation):
+        domain, terms = poly
+        terms = tuple(sorted(
+            (tuple(monomial[permutation(i)] for i in range(len(monomial))), coeff)
+            for monomial, coeff in terms
+        ))
+        return domain, terms
+
+    def get_projection(poly, indices):
+        _, source_terms = poly
+        terms = {}
+        for monomial, coeff in source_terms:
+            projected = tuple(monomial[i] for i in indices)
+            terms[projected] = terms.get(projected, 0) + coeff
+        return tuple(sorted(
+            (monomial, coeff) for monomial, coeff in terms.items()
+            if coeff != 0
+        ))
+
+    keyed_lists = [[poly_key(poly) for poly in polys] for polys in lst_of_lsts]
+    return _identify_symmetry_from_action(
+        keyed_lists, G, action, get_key=lambda x: x,
+        get_projection=get_projection
+    )
 
 
 def identify_symmetry(poly: Poly, G: Optional[PermutationGroup]=None) -> PermutationGroup:

@@ -6,6 +6,7 @@ from sympy import (
     Expr, Symbol, Poly, Integer, Function, Mul, Add, Pow,
     fraction
 )
+from sympy.combinatorics.named_groups import SymmetricGroup
 from sympy.combinatorics.perm_groups import Permutation, PermutationGroup
 from sympy.core.symbol import uniquely_named_symbol
 from sympy.core.sympify import sympify, CantSympify
@@ -19,7 +20,7 @@ from .dispatch import (
 )
 from ..utils import optimize_poly, Root, RootList
 from ..utils.monomials import (
-    verify_closure, _identify_symmetry_from_blackbox,
+    _identify_symmetry_from_action,
     identify_symmetry_from_lists
 )
 
@@ -657,24 +658,26 @@ class InequalityProblem(Generic[T]):
         ----------
         >>> from sympy.abc import a, b, c
         >>> pro = InequalityProblem(a**2*b+b**2*c+c**2*a-3, [a-1, b-1, c-1])
-        >>> pro.identify_symmetry()
-        PermutationGroup([
-            (0 1 2)])
+        >>> pro.identify_symmetry().is_cyclic
+        True
         >>> pro.gens
         (a, b, c)
         """
+        ls = [[self.expr], list(self.ineq_constraints), list(self.eq_constraints)]
+
         if self.is_polynomial:
-            return identify_symmetry_from_lists(
-                [[self.expr], list(self.ineq_constraints), list(self.eq_constraints)]
-            )
+            return identify_symmetry_from_lists(ls)
+
         gens = self.gens
         reorder_funcs = self.reduce(lambda x: (x, self._dtype_make_reorder_func(x, gens)), dict)
-        ls = [[self.expr], list(self.ineq_constraints), list(self.eq_constraints)]
-        def verify_func(perm: Permutation) -> bool:
-            # TODO: we can use int-index for reorder_funcs and ls
-            reorder = lambda x: reorder_funcs[x](perm)
-            return all(verify_closure(l, reorder) for l in ls)
-        return _identify_symmetry_from_blackbox(verify_func, len(gens))
+        def action(x, perm):
+            f = reorder_funcs.get(x)
+            if f is None:
+                f = self._dtype_make_reorder_func(x, gens)
+            return f(perm)
+        return _identify_symmetry_from_action(
+            ls, SymmetricGroup(len(gens)), action
+        )
 
     def wrap_constraints(self, symmetry: Optional[PermutationGroup]=None) -> Tuple['InequalityProblem', Callable]:
         """
