@@ -620,7 +620,8 @@ def resultant_elimination(
 
     if eliminate_binomial_constraints:
         found = True
-        while found and len(problem.gens):
+        ngens = len(problem.gens)
+        while found and ngens:
             found = False
             symmetry = problem.identify_symmetry()
             orbits = symmetry.orbits()
@@ -634,8 +635,14 @@ def resultant_elimination(
                         eliminated_vars.append(problem.gens[ind])
                         problem = attempt[0]
                         restorations.append(attempt[1])
-                        found = True
-                        break
+
+                        if len(problem.gens) < ngens:
+                            ngens = len(problem.gens)
+                            found = True
+                            break
+                        else:
+                            found = False
+                            break
 
     if eliminated_vars and verbose:
         print("Resultant Elimination:", eliminated_vars)
