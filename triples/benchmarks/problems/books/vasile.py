@@ -739,7 +739,6 @@ class MathematicalInequalitiesVol1(MathematicalInequalities):
     def problem_vasile_p13098(self):
         return c4p(a-1) - (x-1)**4, [a,b,c,d], [c4s(1/a**2) - 4/x**2]
 
-    @mark(mark.skip)
     def problem_vasile_p13099(self):
         return c4p((1+a**3)/(1+a**2)) - (1+c4p(a))/2, [a,b,c,d], []
 
@@ -806,15 +805,12 @@ class MathematicalInequalitiesVol1(MathematicalInequalities):
     def problem_vasile_p13115(self):
         return 31*c5s(a**2)-150-c5s(a**4), [a,b,c,d,e], [c5s(a)-5]
 
-    @mark(mark.skip)
     def problem_vasile_p13116(self):
         return 5 - c5p(a)*c5s(a**4), [a,b,c,d,e], [c5s(a**2)-5]
 
-    @mark(mark.skip)
     def problem_vasile_p13117(self):
         return c5s(1/a) + 20/c5s(a**2) - 9, [a,b,c,d,e], [c5s(a)-5]
 
-    @mark(mark.skip)
     def problem_vasile_p13118(self):
         return c5p(a+1/a) + 68 - 4*c5s(a)*c5s(1/a), [a-1,b-1,c-1,d-1,e-1], []
 
@@ -1005,11 +1001,9 @@ class MathematicalInequalitiesVol2(MathematicalInequalities):
     def problem_vasile_p21042_p1(self):
         return Rational(3,2) - c3s(1/(3-a*b)), [a,b,c], [c3s(a**2)-3]
 
-    @mark(mark.skip)
     def problem_vasile_p21042_p2(self):
         return 3/(sqrt(6)-1) - c3s(1/(sqrt(6)-a*b)), [a,b,c], [c3s(a**2)-3]
 
-    @mark(mark.skip)
     def problem_vasile_p21043(self):
         return c3s(1/(1+a**5)) - Rational(3,2), [a,b,c], [c3s(a**2)-3]
 
@@ -1122,7 +1116,6 @@ class MathematicalInequalitiesVol2(MathematicalInequalities):
     def problem_vasile_p21071(self):
         return c3s((a*b+(k-1)*b*c+c*a)/(b**2+k*b*c+c**2)) - 3*(k+1)/(k+2), [a,b,c,k+2], []
 
-    @mark(mark.skip)
     def problem_vasile_p21072(self):
         return 3/(k+2) - c3s((3*b*c-a*(b+c))/(b**2+k*b*c+c**2)), [a,b,c,k+2], []
 
@@ -1153,11 +1146,9 @@ class MathematicalInequalitiesVol2(MathematicalInequalities):
     def problem_vasile_p21081(self):
         return c3s((2*a**2+5*b*c)/(b+c)**2) - Rational(21,4), [a,b,c], []
 
-    @mark(mark.skip)
     def problem_vasile_p21082(self):
         return c3s((2*a**2+(2*k+1)*b*c)/(b**2+k*b*c+c**2)) - 3*(2*k+3)/(k+2), [a,b,c,k+2], []
 
-    @mark(mark.skip)
     def problem_vasile_p21083(self):
         return 3/(k+2) - c3s((3*b*c-2*a**2)/(b**2+k*b*c+c**2)), [a,b,c,k+2], []
 
@@ -1170,11 +1161,9 @@ class MathematicalInequalitiesVol2(MathematicalInequalities):
     def problem_vasile_p21086(self):
         return c3s((a**2+64*b*c)/(b+c)**2) - 18, [a,b,c], []
 
-    @mark(mark.skip)
     def problem_vasile_p21087(self):
         return c3s((a**2*(b+c)+k*a*b*c)/(b**2+k*b*c+c**2)) - c3s(a), [a,b,c,k+1], []
 
-    @mark(mark.skip)
     def problem_vasile_p21088(self):
         return c3s((a**3+(k+1)*a*b*c)/(b**2+k*b*c+c**2)) - c3s(a), [a,b,c,k+Rational(3,2)], []
 
@@ -1194,15 +1183,12 @@ class MathematicalInequalitiesVol2(MathematicalInequalities):
     def problem_vasile_p21092(self):
         return c3s((b**2+c**2-a**2)/(2*a**2+(b+c)**2)) - Rational(1,2), [a,b,c], []
 
-    @mark(mark.skip)
     def problem_vasile_p21093(self):
         return 3/k - c3s((3*a**2-2*b*c)/(k*a**2+(b-c)**2)), [a,b,c,k], []
 
-    @mark(mark.skip)
     def problem_vasile_p21094_p1(self):
         return c3s(a/(a**2+k*b*c)) - 9/c3s(a)/(1+k), [a,b,c,k-3-sqrt(7)], []
 
-    @mark(mark.skip)
     def problem_vasile_p21094_p2(self):
         return c3s(a/(k*a**2+b*c)) - 9/c3s(a)/(1+k), [a,b,c,k-3-sqrt(7)], []
 
@@ -1281,11 +1267,9 @@ class MathematicalInequalitiesVol2(MathematicalInequalities):
     def problem_vasile_p21114(self):
         return 9/c3s(a*b)/2 - c3s(1/(b**2+c**2)), [b+c-a,c+a-b,a+b-c], []
 
-    @mark(mark.skip)
     def problem_vasile_p21115_p1(self):
         return Abs(c3s((a+b)/(a-b))) - 5, [b+c-a,c+a-b,a+b-c], []
 
-    @mark(mark.skip)
     def problem_vasile_p21115_p2(self):
         return Abs(c3s((a**2+b**2)/(a**2-b**2))) - 3, [b+c-a,c+a-b,a+b-c], []
 
@@ -1298,7 +1282,6 @@ class MathematicalInequalitiesVol2(MathematicalInequalities):
     def problem_vasile_p21118(self):
         return c3s((a*(b+c)-2*b*c)/((b+c)*(3*a+b+c))), [a,b,c], []
 
-    @mark(mark.skip)
     def problem_vasile_p21119(self):
         return c3s((a**5-a**2)/(a**5+b**2+c**2)), [a,b,c,c3s(a**2)-3], []
 
@@ -2335,7 +2318,6 @@ class MathematicalInequalitiesVol3(MathematicalInequalities):
     def problem_vasile_p31087_p2(self):
         return c3s(1/a/sqrt(a+8*b)) - sqrt(1/c3p(a)), [a,b,c], []
 
-    @mark(mark.skip)
     def problem_vasile_p31088(self):
         return sqrt(c3s(a)/3) - c3s(a/sqrt(5*a+4*b)), [a,b,c], []
 
@@ -2613,7 +2595,6 @@ class MathematicalInequalitiesVol3(MathematicalInequalities):
     def problem_vasile_p31160(self):
         return c4p(1+2*a/(b+c)) - 9, [a,b,c,d] ,[]
 
-    @mark(mark.skip)
     def problem_vasile_p31161(self):
         return c4p(1+k*a/(b+c)) - (1+k)**2, [a,b,c,d,k], []
 
@@ -2651,7 +2632,7 @@ class MathematicalInequalitiesVol3(MathematicalInequalities):
     def problem_vasile_p31172_p1(self):
         return (sqrt(5)-1)/4 - c5s(a*b)/c5s(a**2), [], [c5s(a)]
 
-    def problem_vasile_p31172_p1(self):
+    def problem_vasile_p31172_p2(self):
         return (sqrt(5)+1)/4 + c5s(a*b)/c5s(a**2), [], [c5s(a)]
 
     def problem_vasile_p31173(self):
@@ -3033,7 +3014,6 @@ class MathematicalInequalitiesVol3(MathematicalInequalities):
         return x + y + z - sqrt(4*(a + b + c + sqrt(a*b) + sqrt(b*c) + sqrt(c*a)) + 3*(a*b*c)**Rational(1,3)), [a,b,c,x,y,z],\
             [a/(y*z) + b/(z*x) + c/(x*y) - 1]
 
-    @mark(mark.skip)
     def problem_vasile_p32080_p2(self):
         return x + y + z - (sqrt(a + b) + sqrt(b + c) + sqrt(c + a)), [a,b,c,x,y,z], [a/(y*z) + b/(z*x) + c/(x*y) - 1]
 

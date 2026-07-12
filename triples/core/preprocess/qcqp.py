@@ -15,6 +15,7 @@ from ...sdp import SDPProblem
 if TYPE_CHECKING:
     from sympy import Poly
 
+
 class QCQP(InequalityProblem):
     """
     Quadratic Constrained Quadratic Program (QCQP). Representing
@@ -192,13 +193,22 @@ class QCQPSolver(ProofNode):
                 return
             problem, restoration = result
 
-
             self.wrapped_problem = problem
             self.restoration = restoration
             self.state = 1
-            return
+
+            # continue
+            # return
 
         if self.state == 1:
+            if configs["verbose"]:
+                relaxation = "SDP+RLT+McCormick" if configs["mccormick"] else "SDP+RLT"
+                print(f"Solving as a QCQP using {relaxation}......\n"
+                      f"Shape       = {self.wrapped_problem.P0.shape}\n"
+                      f"Vars        = {len(self.wrapped_problem.gens)}\n"
+                      f"Constraints = {len(self.wrapped_problem.P_ineqs)} ineqs +"
+                      f" {len(self.wrapped_problem.P_eqs)} eqs")
+
             self.state += 1
 
             solution = self.solve_dual(configs, mccormick=configs["mccormick"])
@@ -282,6 +292,8 @@ class QCQPSolver(ProofNode):
 
         y = None
         try:
+            if configs["verbose"]:
+                sdp.print_graph(short=2)
             y = sdp.solve(
                 verbose=configs["verbose"],
                 solver=configs["solver"],
@@ -303,9 +315,15 @@ class QCQPSolver(ProofNode):
         eqs = problem.eq_constraints.values()
 
 
+        def uneval_mul(args):
+            if any(v == 0 for v in args):
+                return 0
+            args = [v for v in args if v != 1]
+            return Mul(*args, evaluate=False)
+
         args = [d * row**2 for d, row in zip(D, U * x) if d != 0 and row != 0]\
-            + [(-lam) * val for lam, val in zip(y[:len(ineqs)], ineqs) if lam != 0 and val != 0]\
-            + [(-mu) * val for mu, val in zip(y[len(ineqs):len(ineqs)+len(eqs)], eqs) if mu != 0 and val != 0]
+            + [uneval_mul([-lam, val]) for lam, val in zip(y[:len(ineqs)], ineqs)]\
+            + [uneval_mul([-mu, val]) for mu, val in zip(y[len(ineqs):len(ineqs)+len(eqs)], eqs)]
 
         if mccormick:
             cons = [v for m, v in zip(problem.P_ineqs, problem.ineq_constraints.values())
@@ -313,9 +331,8 @@ class QCQPSolver(ProofNode):
             r = len(cons)
             inds = [i*r + j for i in range(r) for j in range(i+1, r)]
             args.extend([
-                Mul(-lam, cons[i%r], cons[i//r], evaluate=False) for i, lam in zip(inds, y[len(ineqs)+len(eqs):])
-                    if lam != 0 and cons[i%r] != 0 and cons[i//r] != 0
+                uneval_mul([-lam, cons[i%r], cons[i//r]]) for i, lam in zip(inds, y[len(ineqs)+len(eqs):])
             ])
 
-        sol = Add(*args, evaluate=False)
+        sol = Add(*[a for a in args if a != 0], evaluate=False)
         return sol

@@ -1,4 +1,4 @@
-from typing import Tuple, List, Dict, Optional, TYPE_CHECKING
+from typing import Tuple, List, Dict, Callable, Optional, TYPE_CHECKING
 from itertools import combinations
 
 import numpy as np
@@ -7,7 +7,7 @@ from sympy import MutableDenseMatrix as Matrix
 
 from ...utils import Root, MonomialManager, identify_symmetry
 from ...utils.roots.num_extrema import numeric_optimize_skew_symmetry
-from ...sdp.arithmetic import permute_matrix_rows, solve_nullspace
+from ...sdp.arithmetic import permute_matrix_rows, solve_nullspace, ArithmeticTimeout
 from ...sdp.wedderburn import symmetry_adapted_basis
 
 if TYPE_CHECKING:
@@ -126,18 +126,19 @@ def _canonicalize(p: Poly) -> Optional[Poly]:
 
 
 def _get_ineq_constrained_tangents(
-    ineq: Poly,
-    ineq_expr: 'Expr',
-    roots: List[Root] = [],
-    monomial_manager: MonomialManager = None,
+    ineq_items: List[Tuple[Poly, 'Expr', Optional['PermutationGroup']]],
+    roots: List[Root],
+    monomial_manager: MonomialManager,
+    symbols: Tuple['Symbol', ...],
     num_tangents: int = 5,
     min_degree: int = 3,
     max_degree: int = 8,
-    symmetry: Optional['PermutationGroup'] = None
-) -> Dict[Poly, 'Expr']:
+    time_limit: Optional[Callable] = None,
+) -> List[Dict[Poly, 'Expr']]:
     """
-    Compute a dictionary of items `(ineq*poly**2, ineq_expr*expr**2)` such that
-    `ineq * poly` vanishes at all given roots. As there are infinitely many polynomials
+    For each inequality constraint in ineq_items, compute a dictionary of items
+    `(ineq*poly**2, ineq_expr*expr**2)` such that `ineq * poly` vanishes
+    at all given roots. As there are infinitely many polynomials
     that satisfy this condition, the function heuristically picks a few.
 
     Parameters
@@ -152,71 +153,112 @@ def _get_ineq_constrained_tangents(
         The monomial manager object for generating monomials.
     num_tangents : int
         Tangents are generated in a loop until it reaches the expected number of tangents.
+    min_degree : int
+        The loop does not break if min_degree is not met.
     max_degree : int
         Tangents are generated in a loop until it reaches the maximum degree.
-
-    Returns
-    -------
-    Dict[Poly, Expr]
-        A dictionary of items `(ineq*poly**2, ineq_expr*expr**2)`.
-
-    TODO: Handle high-order roots.
     """
-    roots = [r for r in roots if r.eval(ineq) != 0]
+    time_limit = ArithmeticTimeout.make_checker(time_limit)
 
-    symbols = ineq.gens
-    tangents = {}
-    if ineq.is_monomial and sum(_ != 0 for _ in tuple(ineq.LM())) == 1:
-        ineq, ineq_expr = Poly(1, *symbols), Integer(1)
+    # Preprocess each ineq: filter roots by index and check monomial status
+    processed = []
+    for ineq, ineq_expr, symm in ineq_items:
+        root_inds = tuple(i for i, r in enumerate(roots) if r.eval(ineq) != 0)
+        is_monomial = ineq.is_monomial and sum(_ != 0 for _ in tuple(ineq.LM())) == 1
+        processed.append((ineq, ineq_expr, symm, root_inds, is_monomial))
 
-
-    if roots:
-        for degree in range(1, max_degree):
-            seen = set()
-
-            mat = Matrix.hstack(*[r.span(degree) for r in roots])
-            ns = _get_sorted_nullspace(monomial_manager, mat, degree)
-
-            if (symmetry is not None) and ns.shape[1] and (not symmetry.is_trivial):
-                # wedderburn decomposition
-                def action(g):
-                    arr = g.array_form
-                    inds = monomial_manager.dict_monoms(degree)
-                    monoms = monomial_manager.inv_monoms(degree)
-                    return [inds[tuple([m[i] for i in arr])] for m in monoms]
-                sa_basis = symmetry_adapted_basis(symmetry, action)
-                new_ns = []
-                for Q in sa_basis:
-                    # restrict the subspace to each symmetric-adapted component
-                    new_ns.append(_common_subspace(Q, ns))
-                ns = Matrix.hstack(ns, *new_ns)
-
-            vecs = [ns[:, i] for i in range(ns.shape[1])]
-            for vec in vecs:
-                poly = monomial_manager.invarraylize(vec, symbols, degree)
-                poly = _canonicalize(poly)
-                if poly is None or poly.is_zero:
-                    continue
-
-                # check whether the primitive form is seen
-                _, poly2 = poly.primitive()
-                if poly2.LC() < 0:
-                    poly2 = -poly2
-                if poly2 in seen:
-                    continue
-                seen.add(poly2)
-
-                tangents[ineq*poly**2] = ineq_expr*poly.as_expr()**2
-
-            if degree >= min_degree and len(tangents) > num_tangents:
+    # Group by (root_inds, symmetry) to share nullspace computation
+    groups = []
+    for idx, (ineq, ineq_expr, symm, root_inds, is_monomial) in enumerate(processed):
+        found = False
+        for group in groups:
+            ref_idx = group[0][0]
+            _, _, ref_symm, ref_root_inds, _ = processed[ref_idx]
+            if root_inds == ref_root_inds and symm == ref_symm:
+                group.append((idx, ineq, ineq_expr, root_inds, is_monomial))
+                found = True
                 break
+        if not found:
+            groups.append([(idx, ineq, ineq_expr, root_inds, is_monomial)])
 
-    if all(not r.is_nontrivial for r in roots):
-        tangents[ineq] = ineq_expr
+    results = [{} for _ in ineq_items]
 
-    # print('Roots of', ineq_expr, ':', roots)
-    # print('Tangents of', ineq_expr, ':', [e for t, e in tangents.items()])
-    return tangents
+    # Local cache for root spans: (root_index, degree) -> span result
+    span_cache: Dict[Tuple[int, int], Matrix] = {}
+
+    for group_items in groups:
+        # Extract common data from first item in group
+        _, _, _, group_root_inds, _ = group_items[0]
+        _, _, group_symm, _, _ = processed[group_items[0][0]]
+
+        all_polys = []
+        seen_polys = set()
+
+        if group_root_inds:
+            for degree in range(1, max_degree):
+                time_limit()
+
+                # Gather spans for all roots in this group, using cache
+                group_spans = []
+                for ri in group_root_inds:
+                    key = (ri, degree)
+                    if key not in span_cache:
+                        span_cache[key] = roots[ri].span(degree)
+                    group_spans.append(span_cache[key])
+
+                mat = Matrix.hstack(*group_spans)
+                ns = _get_sorted_nullspace(monomial_manager, mat, degree)
+
+                if (group_symm is not None) and ns.shape[1] and (not group_symm.is_trivial):
+                    # wedderburn decomposition
+                    def action(g):
+                        arr = g.array_form
+                        inds = monomial_manager.dict_monoms(degree)
+                        monoms = monomial_manager.inv_monoms(degree)
+                        return [inds[tuple([m[i] for i in arr])] for m in monoms]
+                    sa_basis = symmetry_adapted_basis(group_symm, action)
+                    new_ns = []
+                    for Q in sa_basis:
+                        # restrict the subspace to each symmetric-adapted component
+                        new_ns.append(_common_subspace(Q, ns))
+                    ns = Matrix.hstack(ns, *new_ns)
+
+                vecs = [ns[:, i] for i in range(ns.shape[1])]
+
+                for vec in vecs:
+                    poly = monomial_manager.invarraylize(vec, symbols, degree)
+                    poly = _canonicalize(poly)
+                    if poly is None or poly.is_zero:
+                        continue
+
+                    # check whether the primitive form is seen
+                    _, poly2 = poly.primitive()
+                    if poly2.LC() < 0:
+                        poly2 = -poly2
+                    if poly2 in seen_polys:
+                        continue
+                    seen_polys.add(poly2)
+                    all_polys.append(poly)
+
+                if degree >= min_degree and len(all_polys) > num_tangents:
+                    break
+
+        time_limit()
+
+        # Generate tangents for each ineq in the group using shared polys
+        for idx, ineq, ineq_expr, root_inds, is_monomial in group_items:
+            use_ineq = Poly(1, *symbols) if is_monomial else ineq
+            use_expr = Integer(1) if is_monomial else ineq_expr
+
+            for poly in all_polys:
+                results[idx][use_ineq * poly**2] = use_expr * poly.as_expr()**2
+
+            if all(not roots[ri].is_nontrivial for ri in root_inds):
+                results[idx][use_ineq] = use_expr
+
+            time_limit()
+
+    return results
 
 
 def prepare_tangents(
@@ -224,7 +266,8 @@ def prepare_tangents(
     qmodule: Optional[Dict[Poly, 'Expr']] = None,
     default_tangents = DEFAULT_TANGENTS,
     additional_tangents: List['Expr'] = [],
-    wedderburn: bool = True
+    wedderburn: bool = True,
+    time_limit: Optional[Callable] = None,
 ) -> Dict[Poly, 'Expr']:
     """
     Prepare tangents for LinearSOS given a list of roots (equality cases). The tangents should
@@ -274,6 +317,8 @@ def prepare_tangents(
 
     TODO: Handle high-order roots.
     """
+    time_limit = ArithmeticTimeout.make_checker(time_limit)
+
     poly = problem.expr
     G = problem.identify_symmetry()
     ineq_constraints = qmodule if qmodule is not None else problem.ineq_constraints
@@ -292,6 +337,8 @@ def prepare_tangents(
         if len(symbols) in default_tangents:
             tangents.extend(default_tangents[len(symbols)](*symbols))
 
+    time_limit()
+
     tangents = _filter_nonnumeric_tangents(tangents, symbols)
 
     # remove very trivial roots
@@ -300,19 +347,25 @@ def prepare_tangents(
     monomial_manager = MonomialManager(len(symbols))
     ineq_constraints = ineq_constraints.items() if isinstance(ineq_constraints, dict) else ineq_constraints
 
-    symm = None
+    ineq_items = []
     for ineq, ineq_expr in ineq_constraints:
         if wedderburn:
             symm = identify_symmetry(ineq, G)
+        else:
+            symm = None
+        ineq_items.append((ineq, ineq_expr, symm))
 
-        new_tangents = _get_ineq_constrained_tangents(
-            ineq,
-            ineq_expr,
-            roots=roots,
-            monomial_manager=monomial_manager,
-            symmetry=symm
-        )
+    results = _get_ineq_constrained_tangents(
+        ineq_items,
+        roots=roots,
+        monomial_manager=monomial_manager,
+        symbols=symbols,
+        time_limit=time_limit,
+    )
+
+    for new_tangents in results:
         tangents.update(new_tangents)
+        time_limit()
     # print(tangents)
     return tangents
 
@@ -411,7 +464,8 @@ def prepare_inexact_tangents(
     monomial_manager: MonomialManager = None,
     all_nonnegative: bool = False,
     threshold: float = 0.5,
-    max_degree: int = 5
+    max_degree: int = 5,
+    time_limit: Optional[Callable] = None,
 ) -> Dict[Poly, 'Expr']:
     """
     The function `prepare_tangents` has highlighted the importance of handling
@@ -419,6 +473,8 @@ def prepare_inexact_tangents(
     to local minima that are very close to zeros. They can be handled by a
     slight numerical perturbation that makes them numerical zeros.
     """
+    time_limit = ArithmeticTimeout.make_checker(time_limit)
+
     poly = problem.expr
     ineq_constraints = problem.ineq_constraints
     eq_constraints = problem.eq_constraints
@@ -432,6 +488,8 @@ def prepare_inexact_tangents(
     perms = [[1,0] + list(range(2, nvars))] # reflection
     if nvars >= 3:
         perms.append(list(range(1, nvars)) + [0])
+
+    time_limit()
 
     new_roots = []
     try:
@@ -471,6 +529,8 @@ def prepare_inexact_tangents(
                 _canonicalize(monomial_base.invarraylize(p, poly.gens, degree)\
                                  .retract()) for p in vecs])
             break
+            time_limit()
+        time_limit()
 
     new_tangents = {t**2: t.as_expr()**2 for t in new_tangents if t is not None}
     # print('New tangents:\n', list(new_tangents.values()))

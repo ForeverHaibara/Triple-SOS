@@ -1,7 +1,7 @@
 import sympy as sp
 from sympy import Poly, Symbol, Rational, Add
 
-from .sextic_symmetric import _sos_struct_sextic_hexagram_symmetric, _sos_struct_sextic_tree
+from .sextic_symmetric import _structsos_sextic_hexagram_symmetric, _structsos_sextic_tree
 from .utils import (
     CommonExpr,
     sum_y_exprs, rationalize_func, inverse_substitution, align_cyclic_group
@@ -13,7 +13,7 @@ if TYPE_CHECKING:
         Coeff
     )
 
-def sos_struct_nonic(coeff, real = True):
+def structsos_nonic(coeff, real = True):
     """
     Nonics are polynomials of degree 9.
 
@@ -34,28 +34,28 @@ def sos_struct_nonic(coeff, real = True):
     if not any(coeff(_) for _ in ((9,0,0),(8,1,0),(7,2,0),(2,7,0),(7,1,1))):
         if not any(coeff(_) for _ in ((6,3,0),(3,6,0),(1,8,0))):
             if all(coeff((i,j,k)) == coeff((j,i,k)) for (i,j,k) in ((5,4,0),(6,2,1),(5,3,1),(4,3,2))):
-                return _sos_struct_nonic_hexagram_symmetric(coeff)
+                return _structsos_nonic_hexagram_symmetric(coeff)
             if (coeff((5,4,0)) == 0 and coeff((6,1,2)) == 0) or (coeff((4,5,0)) == 0 and coeff((6,2,1)) == 0):
-                return _sos_struct_nonic_gear(coeff)
+                return _structsos_nonic_gear(coeff)
 
         if not any(coeff(_) for _ in ((6,2,1),(2,6,1),(5,4,0),(4,5,0))):
             if all(coeff((i,j,k)) == coeff((j,i,k)) for (i,j,k) in ((6,0,3),(5,3,1),(4,3,2))):
-                return _sos_struct_nonic_hexagon_symmetric(coeff)
+                return _structsos_nonic_hexagon_symmetric(coeff)
 
     if not any(coeff(_) for _ in
         ((8,1,0),(7,2,0),(5,4,0),(5,0,4),(8,0,1),(7,0,2),
          (6,2,1),(6,1,2),(5,3,1),(5,1,3),(4,3,2),(4,2,3))
     ):
         if coeff((9,0,0)) > 0 and all(coeff((i,j,k)) == coeff((j,i,k)) for (i,j,k) in ((9,0,0),(6,3,0))):
-            return _sos_struct_nonic_symmetric_tree(coeff)
+            return _structsos_nonic_symmetric_tree(coeff)
 
     return None
 
 
-def _sos_struct_nonic_symmetric_tree(coeff: 'Coeff'):
+def _structsos_nonic_symmetric_tree(coeff: 'Coeff'):
     """
     Solve problems with similar structure as `s(a3-abc)s(a2+xab)s((a-b)2(a+b-xc)2)`.
-    See details at `_sos_struct_sextic_tree`.
+    See details at `_structsos_sextic_tree`.
 
     The idea is to subtract `(x >= 1)`:
     `G(x) = s(a3-abc)/2s(a2+xab)s((a-b)2(a+b-xc)2)+(w-x3+3x-1)s(a(ab-c2)2(ac-b2)2)`
@@ -135,14 +135,14 @@ def _sos_struct_nonic_symmetric_tree(coeff: 'Coeff'):
             (6,0,0): c6_, (3,3,0): c33_, (4,1,1): c411_,
             (2,2,2): (-c6_-c33_-c411_)*3 + poly111
         }
-        tree_solution = _sos_struct_sextic_tree(coeff.from_dict(tree_coeffs))
+        tree_solution = _structsos_sextic_tree(coeff.from_dict(tree_coeffs))
         if tree_solution is not None:
             return solution + tree_solution * CyclicProduct(a)
 
     return None
 
 
-def _sos_struct_nonic_hexagon_symmetric(coeff: 'Coeff'):
+def _structsos_nonic_hexagon_symmetric(coeff: 'Coeff'):
     """
     Solve problems like s(a6b3+a3b6) + p(a)(...).
 
@@ -176,7 +176,7 @@ def _sos_struct_nonic_hexagon_symmetric(coeff: 'Coeff'):
                     (4,1,1): c411_, (3,3,0): c33_, (3,2,1): c321_, (2,3,1): c321_,
                     (2,2,2): (-c411_-c33_-c321_*2)*3 + coeff.poly111()
                 }
-                hexagram_solution = _sos_struct_sextic_hexagram_symmetric(coeff.from_dict(hexagram_coeffs_))
+                hexagram_solution = _structsos_sextic_hexagram_symmetric(coeff.from_dict(hexagram_coeffs_))
                 if hexagram_solution is not None:
                     return solution + CyclicProduct(a) * hexagram_solution
 
@@ -228,7 +228,7 @@ def _sos_struct_nonic_hexagon_symmetric(coeff: 'Coeff'):
         return solution + rest_solution
 
 
-def _sos_struct_nonic_hexagram_symmetric(coeff: 'Coeff'):
+def _structsos_nonic_hexagram_symmetric(coeff: 'Coeff'):
     """
     Observe that
     f(a,b,c) = s(c5(a-b)4) + x^2s(a2b2c(a-b)4) - 2xp(a)s(3a4b2-4a4bc+3a4c2-4a3b3+2a2b2c2) >= 0
@@ -280,7 +280,7 @@ def _sos_struct_nonic_hexagram_symmetric(coeff: 'Coeff'):
 
     def _compute_hexagram_discriminant(z):
         # We will check whether the hexagram is positive by discriminant
-        # For details see _sos_struct_sextic_hexagram_symmetric
+        # For details see _structsos_sextic_hexagram_symmetric
 
         w, c4_, c5_, c6_ = _compute_hexagram_coeffs(z)
         if w < 0 or c4_ < 0 or c5_ < 0:
@@ -314,7 +314,7 @@ def _sos_struct_nonic_hexagram_symmetric(coeff: 'Coeff'):
         (3,1,2): c6_,
         (2,2,2): c7_,
     }
-    hexagram = _sos_struct_sextic_hexagram_symmetric(coeff.from_dict(hexgram_coeffs_))
+    hexagram = _structsos_sextic_hexagram_symmetric(coeff.from_dict(hexgram_coeffs_))
     if hexagram is None:
         return None
 
@@ -359,7 +359,7 @@ def _sos_struct_nonic_hexagram_symmetric(coeff: 'Coeff'):
     return solution
 
 
-def _sos_struct_nonic_gear(coeff: 'Coeff'):
+def _structsos_nonic_gear(coeff: 'Coeff'):
     """
     Solve problems like
     s(ac^2(a-b)^4(b-c)^2)-5p(a-b)^2p(a) >= 0
@@ -381,7 +381,7 @@ def _sos_struct_nonic_gear(coeff: 'Coeff'):
 
     if not (coeff((5,4,0)) == 0 and coeff((6,1,2)) == 0):
         # reflect the polynomial
-        sol = _sos_struct_nonic_gear(coeff.reflect())
+        sol = _structsos_nonic_gear(coeff.reflect())
         return align_cyclic_group(sol, coeff.gens)
 
     if coeff((4,5,0)) == 0 or coeff((6,2,1)) == 0:
@@ -486,7 +486,7 @@ def _sos_struct_nonic_gear(coeff: 'Coeff'):
                 (4,1,1): c41_, (3,3,0): c33_, (3,2,1): c32_, (2,3,1): c32_, (3,1,2): c32_,
                 (2,2,2): (-c41_-c33_-c32_*2)*3 + coeff.poly111()/c1
             }
-            hexagram_solution = _sos_struct_sextic_hexagram_symmetric(coeff.from_dict(hexagram_coeffs_))
+            hexagram_solution = _structsos_sextic_hexagram_symmetric(coeff.from_dict(hexagram_coeffs_))
             if hexagram_solution is not None:
                 def _get_ker(z, vertex, as_coeff_Mul = True):
                     u, v, x = vertex[0]

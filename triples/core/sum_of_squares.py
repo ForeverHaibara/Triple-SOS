@@ -55,6 +55,7 @@ def sum_of_squares(
     ----------
     The function relies on SymPy for symbolic computation. First, import necessary items:
 
+        >>> from triples import sum_of_squares
         >>> from sympy.abc import x, y, a, b, c
         >>> from sympy import Expr, Function
 
@@ -101,7 +102,7 @@ def sum_of_squares(
         Σ(x - y)**2*G(z)
 
 
-    ### Assumptions
+    ### Assumptions (newly added in 0.2.0.dev)
 
     Currently, all SymPy symbol assumptions are ignored by default and symbols are treated as
     real variables. To claim nonnegativity of symbols, just add them to `ineq_constraints`.

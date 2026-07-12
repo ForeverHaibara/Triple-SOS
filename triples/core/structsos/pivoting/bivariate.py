@@ -1,9 +1,17 @@
-import sympy as sp
+from typing import Optional, TYPE_CHECKING
+
+from sympy import Poly, Add, Mul, signsimp, together
+from sympy.core import S as Singleton
 from sympy.core.symbol import uniquely_named_symbol
 
 from ..univariate import prove_univariate
 
-def structural_sos_2vars(poly, ineq_constraints, eq_constraints):
+if TYPE_CHECKING:
+    from sympy import Expr
+    from ...problem import InequalityProblem
+
+
+def structural_sos_2vars(problem: "InequalityProblem") -> Optional["Expr"]:
     """
     Solve bivariate homogeneous polynomial inequality. This is equivalent
     to univariate case after dehomogenization.
@@ -12,6 +20,10 @@ def structural_sos_2vars(poly, ineq_constraints, eq_constraints):
     is a convex cone with vertex at the origin on the XY plane. The boundary
     of the cone is linear.
     """
+    poly: "Poly" = problem.expr
+    ineq_constraints = problem.ineq_constraints
+    eq_constraints = problem.eq_constraints
+
     sgn, factors = poly.factor_list()
 
     sols = []
@@ -19,10 +31,10 @@ def structural_sos_2vars(poly, ineq_constraints, eq_constraints):
         if multiplicity % 2 == 0:
             sols.append(factor.as_expr() ** multiplicity)
             continue
-        sol = _sos_struct_bivariate_linear_ineq(factor, ineq_constraints, eq_constraints)
+        sol = _structsos_bivariate_linear_ineq(factor, ineq_constraints, eq_constraints)
         if sol is None:
             sgn = -sgn
-            sol = _sos_struct_bivariate_linear_ineq(-factor, ineq_constraints, eq_constraints)
+            sol = _structsos_bivariate_linear_ineq(-factor, ineq_constraints, eq_constraints)
         if sol is None:
             return None
         sols.append(sol ** multiplicity)
@@ -30,7 +42,7 @@ def structural_sos_2vars(poly, ineq_constraints, eq_constraints):
     if sgn < 0:
         return None
 
-    return sgn * sp.Mul(*sols)
+    return sgn * Mul(*sols)
 
 
 class HalfspaceIntersection2D():
@@ -114,7 +126,7 @@ class HalfspaceIntersection2D():
         return list(zip(self.normals, self.exprs))
 
 
-def _sos_struct_bivariate_linear_ineq(poly, ineq_constraints, eq_constraints):
+def _structsos_bivariate_linear_ineq(poly, ineq_constraints, eq_constraints):
     hs = HalfspaceIntersection2D()
 
     for ineq, e in ineq_constraints.items():
@@ -130,25 +142,25 @@ def _sos_struct_bivariate_linear_ineq(poly, ineq_constraints, eq_constraints):
     d = poly.homogeneous_order()
 
     def _hom_sos(sos_list, d, numer, denom):
-        numer = sp.signsimp(numer)
-        denom = sp.signsimp(denom)
+        numer = signsimp(numer)
+        denom = signsimp(denom)
         def map_poly(p):
             d2 = p.total_degree()
             all_coeffs = [p.coeff_monomial((d2-i, )) for i in range(d2+1)]
-            expr = sp.Add(*(c*numer**(d2-i)*denom**i for i, c in enumerate(all_coeffs))).expand()
-            expr = sp.signsimp(expr.together())
+            expr = Add(*(c*numer**(d2-i)*denom**i for i, c in enumerate(all_coeffs))).expand()
+            expr = signsimp(expr.together())
             expr = expr**2 * denom**((d//2-d2)*2)
             return expr
         coeffs = [c for c, p in sos_list]
         polys = [map_poly(p) for c, p in sos_list]
-        return sp.Add(*(c*p for c, p in zip(coeffs, polys)))
+        return Add(*(c*p for c, p in zip(coeffs, polys)))
 
     bound = hs.as_bounds()
     if len(bound) == 0:
         if d % 2 != 0:
             return None
         all_coeffs = [poly.coeff_monomial((d-i, i)) for i in range(d+1)]
-        sol = prove_univariate(sp.Poly(all_coeffs, a), (-sp.oo, sp.oo))
+        sol = prove_univariate(Poly(all_coeffs, a), (-Singleton.Infinity, Singleton.Infinity))
         if sol is None:
             return None
         sol = (sol.xreplace({a: a/b}) * b**d).together()
@@ -160,10 +172,10 @@ def _sos_struct_bivariate_linear_ineq(poly, ineq_constraints, eq_constraints):
         (u, v), expr = bound[0]
         y = uniquely_named_symbol('y', (a, b, *expr.free_symbols))
         poly2 = poly.subs({a: (u - v*y)/(u**2 + v**2), b: (v + u*y)/(u**2 + v**2)}).as_poly(y)
-        sol = prove_univariate(poly2, (-sp.oo, sp.oo), return_type='list')
+        sol = prove_univariate(poly2, (-Singleton.Infinity, Singleton.Infinity), return_type='list')
         if sol is None:
             return None
-        ubva, uavb = sp.signsimp(sp.together(u*b - v*a)), sp.signsimp(sp.together(u*a + v*b))
+        ubva, uavb = signsimp(together(u*b - v*a)), signsimp(together(u*a + v*b))
         if d % 2 == 0:
             sol = _hom_sos(sol[0][1], d, ubva, uavb)
         else:
@@ -177,13 +189,13 @@ def _sos_struct_bivariate_linear_ineq(poly, ineq_constraints, eq_constraints):
         (w, z), expr2 = bound[1]
         y = uniquely_named_symbol('y', (a, b, *expr1.free_symbols, *expr2.free_symbols))
         poly2 = poly.subs({a: (v*y - z)/(v*w - u*z), b: (u*y - w)/(u*z - v*w)}).as_poly(y)
-        sol = prove_univariate(poly2, (0, sp.oo), return_type='list')
+        sol = prove_univariate(poly2, (0, Singleton.Infinity), return_type='list')
         if sol is None:
             return None
-        wazb, uavb = sp.signsimp(sp.together(w*a + z*b)), sp.signsimp(sp.together(u*a + v*b))
+        wazb, uavb = signsimp(together(w*a + z*b)), signsimp(together(u*a + v*b))
 
-        # p1 = sp.Add(*(c*p.as_expr()**2 for c, p in zip(*sol[0][1:])))
-        # p2 = sp.Add(*(c*p.as_expr()**2 for c, p in zip(*sol[1][1:])))
+        # p1 = Add(*(c*p.as_expr()**2 for c, p in zip(*sol[0][1:])))
+        # p2 = Add(*(c*p.as_expr()**2 for c, p in zip(*sol[1][1:])))
         # if d % 2 == 1:
         #     sol = (expr1 * p1 + expr2 * p2).subs(y, wazb/uavb).together() * uavb**(d-1)
         # elif d >= 2:

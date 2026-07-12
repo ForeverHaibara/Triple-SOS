@@ -17,6 +17,9 @@ class CancelDenominator(ProofNode):
     default_configs = {
         "irrational_expr": False,
     }
+
+    skip_enter_verbose = 1
+
     def explore(self, configs):
         problem = self.problem
         poly, ineq_constraints, eq_constraints = problem.expr, problem.ineq_constraints, problem.eq_constraints

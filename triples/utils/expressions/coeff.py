@@ -535,8 +535,8 @@ class Coeff():
 
     def cancel_abc(self) -> Tuple[Tuple[int, ...], 'Coeff']:
         """
-        Assume poly = a^i*b^j*c^k * poly2.
-        Return ((i,j,k), Coeff(poly2)).
+        Assume `poly = a^i*b^j*c^k * poly2`.
+        Return `((i,j,k), Coeff(poly2))`.
         """
         if self.is_zero:
             return ((0,) * self.nvars, self)
@@ -556,9 +556,9 @@ class Coeff():
 
     def cancel_k(self) -> Tuple[int, 'Coeff']:
         """
-        Assume poly = Sum_{uvw}(x_{uvw} * a^{d*u} * b^{d*v} * c^{d*w}).
-        Write poly2 = Sum_{uvw}(x_{uvw} * a^{u} * b^{v} * c^{w}).
-        Return (d, Coeff(poly2))
+        Assume `poly = Sum_{uvw}(x_{uvw} * a^{d*u} * b^{d*v} * c^{d*w})`.
+        Write `poly2 = Sum_{uvw}(x_{uvw} * a^{u} * b^{v} * c^{w})`.
+        Return `(d, Coeff(poly2))`
         """
         from math import gcd
         monoms = self.monoms()

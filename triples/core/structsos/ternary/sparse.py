@@ -6,17 +6,17 @@ from sympy import Poly, Expr, Integer, Add, Mul
 from sympy.combinatorics import CyclicGroup
 
 from .utils import DomainExpr, CyclicSum
-from .dense_symmetric import sos_struct_dense_symmetric
-from .quadratic import sos_struct_quadratic
-from .cubic import sos_struct_cubic
-from .quartic import sos_struct_quartic
+from .dense_symmetric import structsos_dense_symmetric
+from .quadratic import structsos_quadratic
+from .cubic import structsos_cubic
+from .quartic import structsos_quartic
 from ..univariate import prove_univariate
 
 if TYPE_CHECKING:
     from .utils import Coeff
     from sympy import Rational
 
-def sos_struct_sparse(coeff, real = True):
+def structsos_sparse(coeff, real=1):
     """
     Solver to very sparse inequalities like AM-GM.
 
@@ -41,16 +41,16 @@ def sos_struct_sparse(coeff, real = True):
             v = coeff((1,0,0))
             return v * CyclicSum(a) if v >= 0 else None
         elif degree == 2:
-            return sos_struct_quadratic(coeff)
+            return structsos_quadratic(coeff)
         elif degree == 3:
-            return sos_struct_cubic(coeff)
+            return structsos_cubic(coeff)
         elif degree == 4:
-            # quartic should be handled by _sos_struct_quartic
+            # quartic should be handled by _structsos_quartic
             # because it presents proof for real numbers
-            return sos_struct_quartic(coeff, None)
+            return structsos_quartic(coeff, real=real)
 
     if len(coeff) <= 6:
-        return _sos_struct_sparse_amgm(coeff)
+        return _structsos_sparse_amgm(coeff)
 
 
 
@@ -393,7 +393,7 @@ class AMGM3(DomainExpr):
             if sol1 is not None and sol2 is not None:
                 return sol1 + sol2
 
-def _sos_struct_sparse_amgm(coeff):
+def _structsos_sparse_amgm(coeff):
     """
     Solve
     sum coeff(large) * a^u*b^v*c^w + sum coeff(small) * a^x*b^y*c^z >= 0
@@ -664,7 +664,7 @@ class Hnmr(DomainExpr):
 
 
 
-def sos_struct_heuristic(coeff: 'Coeff', real=True):
+def structsos_heuristic(coeff: 'Coeff', real=True):
     """
     Solve high-degree but sparse inequalities by heuristic method.
     It subtracts some structures from the inequality and calls
@@ -684,7 +684,7 @@ def sos_struct_heuristic(coeff: 'Coeff', real=True):
     if degree <= 6:
         return None
     if True:
-        solution = sos_struct_dense_symmetric(coeff, real = real)
+        solution = structsos_dense_symmetric(coeff, real = real)
         if solution is not None:
             return solution
 

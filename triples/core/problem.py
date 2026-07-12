@@ -6,6 +6,7 @@ from sympy import (
     Expr, Symbol, Poly, Integer, Function, Mul, Add, Pow,
     fraction
 )
+from sympy.combinatorics.named_groups import SymmetricGroup
 from sympy.combinatorics.perm_groups import Permutation, PermutationGroup
 from sympy.core.symbol import uniquely_named_symbol
 from sympy.core.sympify import sympify, CantSympify
@@ -19,7 +20,8 @@ from .dispatch import (
 )
 from ..utils import optimize_poly, Root, RootList
 from ..utils.monomials import (
-    verify_closure, _identify_symmetry_from_blackbox
+    _identify_symmetry_from_action,
+    identify_symmetry_from_lists
 )
 
 if TYPE_CHECKING:
@@ -656,20 +658,26 @@ class InequalityProblem(Generic[T]):
         ----------
         >>> from sympy.abc import a, b, c
         >>> pro = InequalityProblem(a**2*b+b**2*c+c**2*a-3, [a-1, b-1, c-1])
-        >>> pro.identify_symmetry()
-        PermutationGroup([
-            (0 1 2)])
+        >>> pro.identify_symmetry().is_cyclic
+        True
         >>> pro.gens
         (a, b, c)
         """
+        ls = [[self.expr], list(self.ineq_constraints), list(self.eq_constraints)]
+
+        if self.is_polynomial:
+            return identify_symmetry_from_lists(ls)
+
         gens = self.gens
         reorder_funcs = self.reduce(lambda x: (x, self._dtype_make_reorder_func(x, gens)), dict)
-        ls = [[self.expr], list(self.ineq_constraints), list(self.eq_constraints)]
-        def verify_func(perm: Permutation) -> bool:
-            # TODO: we can use int-index for reorder_funcs and ls
-            reorder = lambda x: reorder_funcs[x](perm)
-            return all(verify_closure(l, reorder) for l in ls)
-        return _identify_symmetry_from_blackbox(verify_func, len(gens))
+        def action(x, perm):
+            f = reorder_funcs.get(x)
+            if f is None:
+                f = self._dtype_make_reorder_func(x, gens)
+            return f(perm)
+        return _identify_symmetry_from_action(
+            ls, SymmetricGroup(len(gens)), action
+        )
 
     def wrap_constraints(self, symmetry: Optional[PermutationGroup]=None) -> Tuple['InequalityProblem', Callable]:
         """
@@ -773,7 +781,10 @@ class InequalityProblem(Generic[T]):
         self.roots = roots
         return self.roots
 
-    def transform(self, transform: Dict[Symbol, Expr], inv_transform: Dict[Symbol, Expr]) -> Tuple['InequalityProblem', Callable]:
+    def transform(self,
+        transform: Dict[Symbol, Expr],
+        inv_transform: Dict[Symbol, Expr]
+    ) -> Tuple['InequalityProblem', Callable]:
         """
 
 
@@ -788,15 +799,15 @@ class InequalityProblem(Generic[T]):
         >>> new_pro, restore = problem.transform({a:y+z,b:z+x,c:x+y}, {x:(b+c-a)/2,y:(c+a-b)/2, z:(a+b-c)/2})
         >>> new_pro.expr.expand(), new_pro.ineq_constraints # doctest: +NORMALIZE_WHITESPACE
         (2*x**3*z - 2*x**2*y*z + 2*x*y**3 - 2*x*y**2*z - 2*x*y*z**2 + 2*y*z**3,
-         {2*x: F(a), 2*y: F(b), 2*z: F(c)})
+         {2*x: F(y + z), 2*y: F(x + z), 2*z: F(x + y)})
 
         After we find a solution (sympy Expr) to the transformed problem, use `restore` to
         transform it back to the original problem.
-        >>> sol = (F(a)*F(c)*(x-y)**2 + F(b)*F(a)*(y-z)**2 + F(c)*F(b)*(z-x)**2)/2
-        >>> (sol.xreplace({F(a): 2*x, F(b): 2*y, F(c): 2*z}) - new_pro.expr).expand()
+        >>> sol = (-x + z)**2*F(x + y)*F(x + z)/2 + (x - y)**2*F(x + y)*F(y + z)/2 + (y - z)**2*F(x + z)*F(y + z)/2
+        >>> (sol.xreplace({F(y + z): 2*x, F(x + z): 2*y, F(x + y): 2*z}) - new_pro.expr).expand()
         0
         >>> restore(sol) # doctest: +SKIP
-        (-a + b)**2*F(a)*F(c)/2 + (a - c)**2*F(b)*F(c)/2 + (-b + c)**2*F(a)*F(b)/2
+        (-a + b)**2*F(a)*F(b)/2 + (a - c)**2*F(a)*F(c)/2 + (-b + c)**2*F(b)*F(c)/2
         >>> (restore(sol).xreplace({F(a):b+c-a, F(b):c+a-b, F(c):a+b-c}) - problem.expr).expand()
         0
 
@@ -814,6 +825,7 @@ class InequalityProblem(Generic[T]):
             symbols = tuple([_ for _ in self.expr.gens if (_ not in transform)]) + new_symbols
         for src, dst in zip(src_dicts, dst_dicts):
             for p, e in src.items():
+                e = e.xreplace(transform)
                 if isinstance(p, Expr):
                     p = p.xreplace(transform)
                 elif isinstance(p, Poly):
@@ -835,7 +847,8 @@ class InequalityProblem(Generic[T]):
             if x is None:
                 return None
             denom = next(iter(dst_dicts[0].values())).xreplace(inv_transform)
-            return x.xreplace(inv_transform) / denom
+            numer = x.xreplace(inv_transform)
+            return numer / denom
         return problem, restore
 
     def marginalize(self, transform: Dict[Symbol, Expr], diff: Optional[Dict[Symbol, Expr]]=None) -> Tuple['InequalityProblem', Callable]:

@@ -5,7 +5,7 @@ from sympy import Poly, Symbol, Rational, Integer, Float, Add
 from sympy import MutableDenseMatrix as Matrix
 
 from .utils import (
-    sos_struct_reorder_symmetry,
+    structsos_reorder_symmetry,
     congruence, sum_y_exprs, quadratic_weighting,
     nroots, rationalize, rationalize_bound, rationalize_func,
     univariate_intervals, common_region_of_conics
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     )
     from sympy import Expr
 
-def sos_struct_quartic(coeff, real = True):
+def structsos_quartic(coeff, real = 1):
     """
     Solve cyclic quartic problems.
 
@@ -43,9 +43,9 @@ def sos_struct_quartic(coeff, real = True):
 
     => 4s(a)s(2a3-a2b-a2c)
     """
-    return  _sos_struct_quartic_uncentered(coeff)
+    return  _structsos_quartic_uncentered(coeff, real=real)
 
-def _sos_struct_quartic_core(coeff: 'Coeff'):
+def _structsos_quartic_core(coeff: 'Coeff'):
     """
     Main theorem: For a nondegenerated cyclic quartic with zero `(1,1,1)`:
     `f(a,b,c) = s(a4 + pa3b + na2b2 + qab3 - (1+p+n+q)a2bc)`
@@ -76,7 +76,7 @@ def _sos_struct_quartic_core(coeff: 'Coeff'):
     """
     m, p, n, q, r = [coeff((4,0,0)), coeff((3,1,0)), coeff((2,2,0)), coeff((1,3,0)), coeff((2,1,1))]
     if m == 0:
-        return _sos_struct_quartic_degenerate(coeff)
+        return _structsos_quartic_degenerate(coeff)
     rem = (m + n + p + q + r)/3
     n2 = n - rem # coefficient of a^2b^2 after subtracting rem*s(ab)^2
     det = (3*m*(m + n2) - (p**2 + p*q + q**2)) # discriminant after subtracting rem*s(ab)^2
@@ -97,7 +97,7 @@ def _sos_struct_quartic_core(coeff: 'Coeff'):
     return sum_y_exprs(y, exprs)
 
 
-def _sos_struct_quartic_quadratic_border(coeff: 'Coeff'):
+def _structsos_quartic_quadratic_border(coeff: 'Coeff'):
     """
     Solve `s(a4 - 2t(a3b - ab3) + (t^2 - 2)(a2b2 - a2bc) - a2bc) >= 0`
     in the field of coeff by lifting the degree. The inequality
@@ -144,7 +144,7 @@ def _sos_struct_quartic_quadratic_border(coeff: 'Coeff'):
     return None
 
 
-def _sos_struct_quartic_biased(coeff: 'Coeff'):
+def _structsos_quartic_biased(coeff: 'Coeff'):
     """
     Theorem:
     If `f(a,b,c) = s(a4 + pa3b + na2b2 + qab3 - (1+p+n+q)a2bc) >= 0` holds for all `a,b,c >= 0`,
@@ -174,7 +174,7 @@ def _sos_struct_quartic_biased(coeff: 'Coeff'):
 
     if p == -q:
         # handle some special case in advance
-        solution = _sos_struct_quartic_quadratic_border(coeff)
+        solution = _structsos_quartic_quadratic_border(coeff)
         if solution is not None:
             return solution
 
@@ -247,14 +247,14 @@ def _sos_struct_quartic_biased(coeff: 'Coeff'):
 
             subs = {(3,1,0): y, (2,2,0): -2*u*y, (1,3,0): u**2*y, (2,1,1): rem - (u-1)**2*y}
             new_coeff = coeff - coeff.from_dict(subs)
-            new_solution = _sos_struct_quartic_core(new_coeff)
+            new_solution = _structsos_quartic_core(new_coeff)
             if new_solution is not None:
                 return solution + new_solution
 
     return None
 
 
-def _sos_struct_quartic_degenerate(coeff: 'Coeff'):
+def _structsos_quartic_degenerate(coeff: 'Coeff'):
     """
     Given the solution to f(a,b,c) = s(pa3b + na2b2 + qab3 + ra2bc) >= 0.
     Note that the coefficient of a^4 is zero in this case.
@@ -301,7 +301,7 @@ def _sos_struct_quartic_degenerate(coeff: 'Coeff'):
     return None
 
 
-def _sos_struct_quartic_uncentered_real(coeff: 'Coeff'):
+def _structsos_quartic_uncentered_real(coeff: 'Coeff'):
     """
     Solve cyclic quartic problems which do not necessarily have zeros at (1,1,1) on
     the real number field.
@@ -328,7 +328,7 @@ def _sos_struct_quartic_uncentered_real(coeff: 'Coeff'):
     and that `m2 >= 0`. The latter is equivalent to `9*(1 - w)^2 - s` >= 0.
 
     When the leading coefficient of eq is nonpositive, it can be shown that we can
-    subtract `(..)*CyclicSum(a*b)^2` instead and it should be handled by the `_sos_struct_quartic_core` function.
+    subtract `(..)*CyclicSum(a*b)^2` instead and it should be handled by the `_structsos_quartic_core` function.
     So we only need to assume the leading coefficient of the cubic is strictly positive.
 
     Noting that `eq(1) = 2*s^2 >= 0`, `eq(1 - sqrt(9/s)) <= 0` and `eq(1 + sqrt(9/s)) >= 0` (the latter
@@ -369,7 +369,7 @@ def _sos_struct_quartic_uncentered_real(coeff: 'Coeff'):
     m, p, n, q, r = [coeff((4,0,0)), coeff((3,1,0)), coeff((2,2,0)), coeff((1,3,0)), coeff((2,1,1))]
     if m == 0:
         if p == 0 and q == 0 and n >= 0 and n + r >= 0 and r <= 2*n:
-            return _sos_struct_quartic_degenerate(coeff)
+            return _structsos_quartic_degenerate(coeff)
         return None # not nonnegative on R
     elif m < 0:
         return None
@@ -392,7 +392,7 @@ def _sos_struct_quartic_uncentered_real(coeff: 'Coeff'):
 
     if a3 <= 0 or s == 0:
         # this is equivalent to 2*m**2 + 2*m*n - m*p - m*q - m*r - p**2 - p*q - q**2 >= 0
-        return _sos_struct_quartic_core(coeff)
+        return _structsos_quartic_core(coeff)
 
     def is_valid(w):
         return sp.sign(eq(w)) * sp.sign(w - 1) <= 0 and (9*(1 - w)**2 - s) >= 0
@@ -428,7 +428,7 @@ def _sos_struct_quartic_uncentered_real(coeff: 'Coeff'):
                     (2,2,0): w**2+2, (1,3,0): -2*w, (2,1,1): 2*w*(w-1)})
             new_coeff = coeff - z * subs
 
-            new_solution = _sos_struct_quartic_core(new_coeff)
+            new_solution = _structsos_quartic_core(new_coeff)
             if new_solution is not None:
                 return solution + new_solution
 
@@ -437,7 +437,7 @@ def _sos_struct_quartic_uncentered_real(coeff: 'Coeff'):
     return None
 
 
-def _sos_struct_quartic_uncentered(coeff: 'Coeff'):
+def _structsos_quartic_uncentered(coeff: 'Coeff', real = 1):
     """
     Solve general cyclic quartic problems on positive orthant.
     It also tries to solve the problem on the real number field if possible.
@@ -461,7 +461,7 @@ def _sos_struct_quartic_uncentered(coeff: 'Coeff'):
 
     [2] https://tieba.baidu.com/p/8241977884
     """
-    solution = _sos_struct_quartic_uncentered_real(coeff)
+    solution = _structsos_quartic_uncentered_real(coeff)
     if solution is not None:
         return solution
 
@@ -470,24 +470,26 @@ def _sos_struct_quartic_uncentered(coeff: 'Coeff'):
     if not (m >= 0 and rem >= 0):
         return None
     if m == 0:
-        return _sos_struct_quartic_degenerate(coeff)
+        return _structsos_quartic_degenerate(coeff)
 
     a, b, c = coeff.gens
     CyclicSum = coeff.cyclic_sum
 
     # if we reach here, it means that the inequality does not hold for all real numbers
     # we can subtract as many s(a^2bc) as possible
+    if int(real) >= 2:
+        return None
     if 3*m*(m + n) - (p**2 + p*q + q**2) >= 0:
         # Case 1. 3m(m+n) - (p^2+pq+q^2) >= 0,
         # then it is directly handled by the core function after subtracting enough s(a^2bc)
         # (so that the remaining polynomial has zero at (1,1,1))
         new_coeff = coeff.from_dict({(4,0,0):m, (3,1,0):p, (2,2,0):n, (1,3,0):q, (2,1,1):-(m+p+n+q)})
-        return _sos_struct_quartic_core(new_coeff) + rem * CyclicSum(a**2*b*c)
+        return _structsos_quartic_core(new_coeff) + rem * CyclicSum(a**2*b*c)
 
     # assume the inequality holds, then on the border it must >= 0
     if 2*p + q >= 0 or 2*q + p >= 0 or (2*p+q)*(2*q+p) - 9*m**2 <= 0:
         # then it falls to the biased case
-        return _sos_struct_quartic_biased(coeff)
+        return _structsos_quartic_biased(coeff)
 
     # standardize
     p, n, q, r = [p/m, n/m, q/m, r/m]
@@ -576,7 +578,7 @@ def _sos_struct_quartic_uncentered(coeff: 'Coeff'):
             x_ = coeff.convert(x_)
             new_coeffs_ = {(4,0,0): coeff((4,0,0)), (3,1,0): coeff((3,1,0)),
                         (2,2,0): coeff((2,2,0)), (1,3,0): coeff((1,3,0)), (2,1,1): x_ * m}
-            solution = _sos_struct_quartic_uncentered_real(coeff.from_dict(new_coeffs_))
+            solution = _structsos_quartic_uncentered_real(coeff.from_dict(new_coeffs_))
             if solution is not None:
                 solution += ((r - x_) * m) * CyclicSum(a**2*b*c)
                 return solution
@@ -603,16 +605,16 @@ def _sos_struct_quartic_uncentered(coeff: 'Coeff'):
 #
 #####################################################################
 
-def sos_struct_acyclic_quartic(coeff, real = True):
+def structsos_acyclic_quartic(coeff, real = True):
     """
     Solve acyclic quartic problems.
     """
-    return _sos_struct_acyclic_quartic_symmetric(coeff)
-    return _sos_struct_acyclic_quartic_real(coeff)
+    return _structsos_acyclic_quartic_symmetric(coeff)
+    return _structsos_acyclic_quartic_real(coeff)
 
 
-@sos_struct_reorder_symmetry(groups=(2, 1))
-def _sos_struct_acyclic_quartic_symmetric(coeff: 'Coeff', real = True):
+@structsos_reorder_symmetry(groups=(2, 1))
+def _structsos_acyclic_quartic_symmetric(coeff: 'Coeff', real = True):
     """
     Solve acyclic quartic polynomials that are symmetric with respect to two variables.
     If it is nonnegative over R, it must be sum of squares by Hilbert's 17th problem, we can write it in
@@ -867,7 +869,7 @@ class _quadratic_minimization():
         roots = [((self.symmetric_axis(r), r), v) for r, v in candidates if v == minimum]
         return roots
 
-def _sos_struct_acyclic_quartic_real(coeff: 'Coeff'):
+def _structsos_acyclic_quartic_real(coeff: 'Coeff'):
     """
     Solve acyclic quartic problems over a,b,c in R.
 
@@ -892,7 +894,7 @@ def _sos_struct_acyclic_quartic_real(coeff: 'Coeff'):
     => (20a4-94a3b-12a3c+171a2b2+28a2bc+4a2c2-151ab3-11ab2c-8abc2+77b4-21b3c+7b2c2) # doctest:+SKIP
     """
     poly = coeff.as_poly()
-    roots = _sos_struct_acyclic_quartic_real_findroots(coeff, poly)
+    roots = _structsos_acyclic_quartic_real_findroots(coeff, poly)
     if roots is None:
         return None
 
@@ -978,7 +980,7 @@ def _sos_struct_acyclic_quartic_real(coeff: 'Coeff'):
         return base_mat + addition
 
 
-def _sos_struct_acyclic_quartic_real_findroots(
+def _structsos_acyclic_quartic_real_findroots(
         coeff: 'Coeff', poly = None
     ) -> List[Tuple[Tuple[Float, Float, Float], Float, 'Expr']]:
     """

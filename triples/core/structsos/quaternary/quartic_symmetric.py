@@ -89,7 +89,7 @@ def _quaternary_quartic_symmetric_sdp(coeff):
     `F(1,1,1,1) = 0`, then it is sum of squares.
 
     Sum-of-squares symmetric quartic forms are handled
-    generally in `_sos_struct_nvars_quartic_symmetric_sdp`.
+    generally in `_structsos_nvars_quartic_symmetric_sdp`.
 
     Examples
     --------
@@ -107,8 +107,8 @@ def _quaternary_quartic_symmetric_sdp(coeff):
 
     => s(26a4+(236-244*sqrt(2))a3b+(373-198*sqrt(2))a2b2+(1444-1036*sqrt(2))a2bc+(297-202*sqrt(2))abcd)
     """
-    from ..nvars.quartic import _sos_struct_nvars_quartic_symmetric_sdp
-    return _sos_struct_nvars_quartic_symmetric_sdp(coeff)
+    from ..nvars.quartic import _structsos_nvars_quartic_symmetric_sdp
+    return _structsos_nvars_quartic_symmetric_sdp(coeff)
 
 
 def _compute_44_sym_real_full_mat(coeff: Coeff, m11, m33, m, r):

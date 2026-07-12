@@ -405,6 +405,8 @@ class ReformulateAlgebraic(ProofNode):
         "assumptions": False,
     }
 
+    skip_enter_verbose = 1
+
     modeling_helper = None
     def explore(self, configs):
         if self.state != 0:

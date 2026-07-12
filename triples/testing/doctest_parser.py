@@ -466,16 +466,28 @@ def collect_doctest_examples(doc: str, configs: dict = {}, skip: bool = True) ->
     return _collect_doctest_examples_raw(doc, set_environ, single_parser, skip=skip)
 
 
-def solution_checker(solution, expr, ineq_constraints, eq_constraints,
-        *args, **kwargs) -> bool:
+def solution_checker(solution, expr=None, ineq_constraints=None, eq_constraints=None,
+        **kwargs) -> bool:
     if solution is None:
         return False
     if hasattr(solution, 'solution'):
+        expr = solution.expr if expr is None else expr
+        ineq_constraints = solution.ineq_constraints \
+            if ineq_constraints is None else ineq_constraints
+        eq_constraints = solution.eq_constraints \
+            if eq_constraints is None else eq_constraints
         solution = solution.solution
 
     from sympy import sympify, Eq
     expr = sympify(expr).as_expr()
     sol = solution
+
+    if isinstance(ineq_constraints, dict):
+        sol = sol.xreplace({v: k.as_expr()
+                for k, v in ineq_constraints.items() if v != k.as_expr()})
+    if isinstance(eq_constraints, dict):
+        sol = sol.xreplace({v: k.as_expr()
+                for k, v in eq_constraints.items() if v != k.as_expr()})
 
     fs1 = expr.free_symbols
     fs2 = sol.free_symbols

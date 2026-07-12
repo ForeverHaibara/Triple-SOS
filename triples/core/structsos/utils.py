@@ -14,9 +14,7 @@ from ...utils.roots import nroots, rationalize_bound
 
 if TYPE_CHECKING:
     from sympy import MutableDenseMatrix as Matrix
-    from sympy import (
-        Symbol
-    )
+    from sympy import Symbol
 
 # use imports to keep linter happy
 (uniquely_named_symbol, Coeff, CyclicSum, CyclicProduct)
@@ -240,40 +238,12 @@ def clear_free_symbols(poly: Poly, ineq_constraints: Dict[Poly, Expr] = {}, eq_c
     even though it is not in the polynomial, as it is correlated with "x".
     """
     from ..problem import InequalityProblem
+    from warnings import warn
+    warn("clear_free_symbols is deprecated. Please use remove_redundancy instead.",
+         stacklevel=2, category=DeprecationWarning)
     pro = InequalityProblem(poly, ineq_constraints, eq_constraints)
     pro.remove_redundancy()
     return pro.expr, pro.ineq_constraints, pro.eq_constraints
-
-    # # Construct the "correlation" graph of the free symbols: symbols that are path-connected to free
-    # # vars in the polynomial are considered as active symbols.
-    # gens = poly.gens
-    # ufs = dict((gen, gen) for i, gen in enumerate(gens))
-    # def ufsunion(ufs: dict, p):
-    #     v = p.free_symbols
-    #     if len(v):
-    #         x0 = v.pop()
-    #         y0 = ufsfind(ufs, x0)
-    #         for x in v:
-    #             ufs[ufsfind(ufs, x)] = y0
-    # ufsunion(ufs, poly)
-    # for p in ineq_constraints:
-    #     ufsunion(ufs, p)
-    # for p in eq_constraints:
-    #     ufsunion(ufs, p)
-
-    # # Using .free_symbols is not the same as .gens. Because free_symbols exclude 0-degree gens.
-    # active_gens = set(ufsfind(ufs, gen) for gen in poly.free_symbols)
-    # active_gens = [x for x in gens if ufsfind(ufs, x) in active_gens]
-    # if len(active_gens) == 0:
-    #     active_gens = (gens[0],) # the polynomial is a constant, but we need a gen to create a poly
-
-    # def is_active(p):
-    #     return len(p.free_symbols.intersection(active_gens))
-
-    # poly = poly.as_poly(active_gens)
-    # ineq_constraints = {p.as_poly(active_gens): e for p, e in ineq_constraints.items() if is_active(p)}
-    # eq_constraints = {p.as_poly(active_gens): e for p, e in eq_constraints.items() if is_active(p)}
-    # return poly, ineq_constraints, eq_constraints
 
 
 def block_partition(blocks: List[int], groups: Tuple[int, ...]) -> List[int]:
@@ -314,7 +284,7 @@ def block_partition(blocks: List[int], groups: Tuple[int, ...]) -> List[int]:
     return result
 
 
-def sos_struct_reorder_symmetry(groups: Tuple[int, ...]) -> Callable:
+def structsos_reorder_symmetry(groups: Tuple[int, ...]) -> Callable:
     """
     Decorator for the solver function to reorder the generators
     so that they are in the given symmetry.

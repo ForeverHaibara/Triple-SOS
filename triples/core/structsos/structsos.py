@@ -1,9 +1,8 @@
 from typing import List, Dict, Union, Optional, TYPE_CHECKING
 
-from sympy import Integer, construct_domain
+from sympy import construct_domain
 from sympy.polys.polyerrors import BasePolynomialError
 
-from .utils import clear_free_symbols
 from .constrained import structural_sos_constrained
 from .pivoting    import structural_sos_2vars
 from .ternary     import structural_sos_3vars
@@ -16,14 +15,14 @@ from ..solution import Solution
 
 if TYPE_CHECKING:
     from sympy import Poly, Expr
-    from .solution import SolutionStructural
+    from ..problem import InequalityProblem
 
 class StructuralSOSSolver(ProofNode):
     def explore(self, configs):
         if self.state == 0:
             problem, _homogenizer = self.problem.homogenize()
 
-            solution = _structural_sos(problem.expr, problem.ineq_constraints, problem.eq_constraints)
+            solution = _structural_sos(problem)
 
             if solution is not None:
                 if _homogenizer is not None:
@@ -46,7 +45,7 @@ def StructuralSOS(
     *,
     verbose: Union[bool, int] = False,
     raise_exception: bool = False,
-) -> Optional["SolutionStructural"]:
+) -> Optional["Solution"]:
     """
     A rule-based expert system to solve polynomial inequalities in specific structures.
     Most algorithms run in O(1) or linear time.
@@ -69,6 +68,41 @@ def StructuralSOS(
     -------
     solution: Solution
 
+    Examples
+    --------
+    StructuralSOS uses an expert system to solve inequalities in specific structures. Many
+    classical Olympiad-level ternary symmetric or cyclic inequalities are supported.
+
+    >>> from triples import StructuralSOS, CyclicSum
+    >>> from sympy.abc import a, b, c
+    >>> sol = StructuralSOS(a**4*(a-b)*(a-c)+b**4*(b-c)*(b-a)+c**4*(c-a)*(c-b)
+    ... -5*(a-b)**2*(b-c)**2*(c-a)**2, [a,b,c])
+    >>> sol.solution # doctest:+SKIP
+    4*((Σ(a**2*(a - b)*(a - c)))**2/4 + (Σ(a**2*(b - c)**2*(a**2 - 2*a*b - 2*a*c + b**2 + 2*b*c + c**2)**2))/8
+    + (Σ(a*b*(a - b)**2*(a**2 - 2*a*b + 2*a*c + b**2 + 2*b*c - 3*c**2)**2))/4)/(Σ(a**2))
+
+    StructuralSOS uses very fast (but incomplete) algorithms, and extends to high-degree
+    or high-dimensional problems in some cases.
+
+    >>> sol = StructuralSOS(a**30*(a-b)*(a-c)+b**30*(b-c)*(b-a)+c**30*(c-a)*(c-b), [a,b,c])
+    >>> sol is not None
+    True
+    >>> sol.time # doctest:+SKIP
+    0.191594
+
+    Sometimes StructuralSOS better handles problems with ill-conditioned or irrational
+    coefficients than other numerical algorithms.
+
+    >>> from sympy import sqrt
+    >>> sol = StructuralSOS(CyclicSum(a**3-a**2*b + (sqrt(13+16*sqrt(2))-1)/2*a*b*(b-a),
+    ... (a,b,c)), [a,b,c])
+    >>> sol.solution # doctest:+SKIP
+    (2*(∏(a))*(Σ((a - b)**2)) + (Σ(a*(14*b**2 + b*(-a + c)*(-3*sqrt(13 + 16*sqrt(2))
+    + 7 + sqrt(2)*sqrt(13 + 16*sqrt(2)) + 7*sqrt(2)) - 14*c**2 + c*(a - b)*(
+    -sqrt(2)*sqrt(13 + 16*sqrt(2)) + 7 + 7*sqrt(2) + 3*sqrt(13 + 16*sqrt(2))))**2))/98)/(2*(Σ(a*b)))
+
+    However, StructuralSOS is not a complete solver and it does not solve general inequality
+    problems. It only provides a quick check to see whether a problem can be easily solved.
     """
     from ..node import ProofTree
     problem = ProofNode.new_problem(expr, ineq_constraints, eq_constraints)
@@ -80,13 +114,20 @@ def StructuralSOS(
     return problem.sum_of_squares(configs)
 
 
-def _structural_sos(poly: "Poly", ineq_constraints: Dict["Poly", "Expr"] = {}, eq_constraints: Dict["Poly", "Expr"] = {}) -> "Expr":
+def _structural_sos(problem: "InequalityProblem") -> "Expr":
     """
     Internal function of StructuralSOS, returns a sympy expression only.
     The polynomial must be homogeneous. TODO: remove the homogeneous requirement?
     """
+    problem = problem.remove_redundancy()
+
+    poly: "Poly" = problem.expr
+    # ineq_constraints = problem.ineq_constraints
+    # eq_constraints = problem.eq_constraints
+
     if poly.is_zero:
-        return Integer(0)
+        return poly.as_expr()
+
     d = poly.total_degree()
     nvars = len(poly.gens)
     if poly.is_monomial:
@@ -94,8 +135,6 @@ def _structural_sos(poly: "Poly", ineq_constraints: Dict["Poly", "Expr"] = {}, e
             # since the poly is homogeneous, it must be a monomial
             return poly.as_expr()
         return None
-
-    poly, ineq_constraints, eq_constraints = clear_free_symbols(poly, ineq_constraints, eq_constraints)
 
     if poly.domain.is_EX or poly.domain.is_EXRAW:
         # cast the polynomial to an extended domain
@@ -113,16 +152,16 @@ def _structural_sos(poly: "Poly", ineq_constraints: Dict["Poly", "Expr"] = {}, e
     solution = None
     if nvars == 2:
         # homogeneous bivariate
-        solution = structural_sos_2vars(poly, ineq_constraints, eq_constraints)
+        solution = structural_sos_2vars(problem)
     elif nvars == 3:
-        solution = structural_sos_3vars(poly, ineq_constraints, eq_constraints)
+        solution = structural_sos_3vars(problem)
     elif nvars == 4:
-        solution = structural_sos_4vars(poly, ineq_constraints, eq_constraints)
+        solution = structural_sos_4vars(problem)
 
     if solution is None and nvars > 3:
-        solution = structural_sos_nvars(poly, ineq_constraints, eq_constraints)
+        solution = structural_sos_nvars(problem)
 
     if solution is None:
-        solution = structural_sos_constrained(poly, ineq_constraints, eq_constraints)
+        solution = structural_sos_constrained(problem)
 
     return solution

@@ -4,37 +4,35 @@ from sympy import oo as Infinity
 from .utils import (
     CommonExpr,
     sum_y_exprs, rationalize_func, quadratic_weighting,
-    sos_struct_reorder_symmetry
+    structsos_reorder_symmetry
 )
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .utils import (
-        Coeff
-    )
+    from .utils import Coeff
 
-def sos_struct_cubic(coeff, real = True):
+def structsos_cubic(coeff, real = True):
     """
     Solve cyclic cubic polynomials.
 
     This function supports irrational coefficients.
     """
     if coeff((2,1,0)) == coeff((1,2,0)):
-        return _sos_struct_cubic_symmetric(coeff)
+        return _structsos_cubic_symmetric(coeff)
     if coeff((3,0,0)) == 0:
-        return _sos_struct_cubic_degenerate(coeff)
+        return _structsos_cubic_degenerate(coeff)
 
     if not coeff.is_rational:
-        return _sos_struct_cubic_nontrivial_irrational(coeff)
+        return _structsos_cubic_nontrivial_irrational(coeff)
 
-    solution = _sos_struct_cubic_parabola(coeff)
+    solution = _structsos_cubic_parabola(coeff)
     if solution is not None:
         return solution
 
-    return _sos_struct_cubic_nontrivial(coeff)
+    return _structsos_cubic_nontrivial(coeff)
 
 
-def _sos_struct_cubic_symmetric(coeff: "Coeff"):
+def _structsos_cubic_symmetric(coeff: "Coeff"):
     """
     Cubic symmetric inequality can be handled with Schur.
     """
@@ -73,7 +71,7 @@ def _sos_struct_cubic_symmetric(coeff: "Coeff"):
     return None
 
 
-def _sos_struct_cubic_degenerate(coeff: "Coeff"):
+def _structsos_cubic_degenerate(coeff: "Coeff"):
     a, b, c = coeff.gens
     CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
 
@@ -89,7 +87,7 @@ def _sos_struct_cubic_degenerate(coeff: "Coeff"):
              + rem * CyclicProduct(a)
 
 
-def _sos_struct_cubic_parabola(coeff: "Coeff"):
+def _structsos_cubic_parabola(coeff: "Coeff"):
     """
     Although we can always multiply s(a) to convert the problem to a quartic one,
     sometimes the cubic inequality does not need to higher the degree.
@@ -140,7 +138,7 @@ def _sos_struct_cubic_parabola(coeff: "Coeff"):
     return None
 
 
-def _sos_struct_cubic_nontrivial(coeff: "Coeff"):
+def _structsos_cubic_nontrivial(coeff: "Coeff"):
     """
     Solve nontrivial cyclic cubic polynomial by multiplying s(a).
 
@@ -215,7 +213,7 @@ def _sos_struct_cubic_nontrivial(coeff: "Coeff"):
     return sum_y_exprs(y, exprs) / CyclicSum(a)
 
 
-def _sos_struct_cubic_nontrivial_irrational(coeff: "Coeff"):
+def _structsos_cubic_nontrivial_irrational(coeff: "Coeff"):
     """
     Use ultimate theorem for cubic to handle general cases, including irrational coefficients.
 
@@ -292,7 +290,7 @@ def _sos_struct_cubic_nontrivial_irrational(coeff: "Coeff"):
 #
 #####################################################################
 
-def sos_struct_acyclic_cubic(coeff, real = True):
+def structsos_acyclic_cubic(coeff, real = True):
     """
     Solve acyclic cubic polynomials.
 
@@ -302,17 +300,17 @@ def sos_struct_acyclic_cubic(coeff, real = True):
     the two gives four intersections, a contradiction to degree 3. Tightest cubic
     polynomials can have one zero in the interior and three zeros on the borders.
     """
-    solution = _sos_struct_acyclic_cubic_symmetric(coeff)
+    solution = _structsos_acyclic_cubic_symmetric(coeff)
     if solution is not None:
         return solution
 
-    solution = _sos_struct_acyclic_cubic_hexagon(coeff)
+    solution = _structsos_acyclic_cubic_hexagon(coeff)
     if solution is not None:
         return solution
 
 
 
-def _sos_struct_acyclic_cubic_hexagon(coeff: "Coeff"):
+def _structsos_acyclic_cubic_hexagon(coeff: "Coeff"):
     """
     Solve acyclic cubics in the form of
     ?a^2b+?ab^2+?ac^2+?bc^2+?a^2c+?b^2c >= ??abc.
@@ -361,8 +359,8 @@ def _sos_struct_acyclic_cubic_hexagon(coeff: "Coeff"):
         return sum(exprs) + (center - sum(zs))*(a*b*c)
 
 
-@sos_struct_reorder_symmetry(groups=(2, 1))
-def _sos_struct_acyclic_cubic_symmetric(coeff: "Coeff"):
+@structsos_reorder_symmetry(groups=(2, 1))
+def _structsos_acyclic_cubic_symmetric(coeff: "Coeff"):
     """
     Solve acyclic cubic polynomials that are symmetric with respect to two variables.
 

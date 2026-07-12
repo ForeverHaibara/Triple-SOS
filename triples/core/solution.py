@@ -1,23 +1,22 @@
 from collections import defaultdict
-import re
-from typing import Tuple, Dict, Union, Optional, TypeVar, Generic, TYPE_CHECKING
+from re import sub as re_sub
+from typing import Tuple, Dict, Union, Optional, TypeVar, Generic
 from warnings import warn
 
 import sympy as sp
 from sympy.core.singleton import S
-from sympy import Poly, Symbol, Float, Equality, Add, Mul
+from sympy import (
+    Poly, Expr, Symbol, Integer, Rational, Float,
+    Equality, Add, Mul, Pow
+)
 from sympy.printing.precedence import precedence_traditional
 from sympy.printing.str import StrPrinter
 from sympy.combinatorics import PermutationGroup, Permutation, CyclicGroup
 from sympy.core.relational import Equality
 
 from .problem import InequalityProblem
-from ..utils.expressions.cyclic import CyclicProduct, CyclicExpr, rewrite_symmetry
+from ..utils.expressions.cyclic import CyclicSum, CyclicProduct, CyclicExpr, rewrite_symmetry
 from ..utils.expressions.psatz import SOSlist, PSatz
-
-if TYPE_CHECKING:
-    from sympy import Expr
-
 
 T = TypeVar('T')
 
@@ -55,9 +54,9 @@ class Solution(SolutionBase[T]):
     method = ''
     def __init__(self,
         problem: Optional[Union[InequalityProblem[T], T]]=None,
-        solution: Optional['Expr']=None,
-        ineq_constraints: Optional[Dict[T, 'Expr']]=None,
-        eq_constraints: Optional[Dict[T, 'Expr']]=None,
+        solution: Optional[Expr]=None,
+        ineq_constraints: Optional[Dict[T, Expr]]=None,
+        eq_constraints: Optional[Dict[T, Expr]]=None,
         is_equal: Optional[bool]=None
     ):
 
@@ -83,11 +82,11 @@ class Solution(SolutionBase[T]):
         return self.problem.expr
 
     @property
-    def ineq_constraints(self) -> Dict[T, 'Expr']:
+    def ineq_constraints(self) -> Dict[T, Expr]:
         return self.problem.ineq_constraints
 
     @property
-    def eq_constraints(self) -> Dict[T, 'Expr']:
+    def eq_constraints(self) -> Dict[T, Expr]:
         return self.problem.eq_constraints
 
     @expr.setter
@@ -96,12 +95,12 @@ class Solution(SolutionBase[T]):
         self.problem.expr = value
 
     @ineq_constraints.setter
-    def ineq_constraints(self, value: Dict[T, 'Expr']):
+    def ineq_constraints(self, value: Dict[T, Expr]):
         """Bypass immutability: directly overwrite the problem inequality constraints; use with care."""
         self.problem.ineq_constraints = value
 
     @eq_constraints.setter
-    def eq_constraints(self, value: Dict[T, 'Expr']):
+    def eq_constraints(self, value: Dict[T, Expr]):
         """Bypass immutability: directly overwrite the problem equality constraints; use with care."""
         self.problem.eq_constraints = value
 
@@ -294,7 +293,7 @@ class Solution(SolutionBase[T]):
             if mode == 'txt':
                 def _convert_superscript(s):
                     pow_trans = str.maketrans('0123456789', '⁰¹²³⁴⁵⁶⁷⁸⁹')
-                    return re.sub(r'\^(\d+)', lambda m: m.group(1).translate(pow_trans), s)
+                    return re_sub(r'\^(\d+)', lambda m: m.group(1).translate(pow_trans), s)
                 to_str = lambda x: _convert_superscript(_to_str(x).replace('*',''))
             else:
                 to_str = lambda x: _to_str(x)
@@ -435,7 +434,7 @@ class Solution(SolutionBase[T]):
         self.solution = self.solution.evalf(*args, **kwargs)
         return self
 
-    def as_expr(self, *args, **kwargs) -> 'Expr':
+    def as_expr(self, *args, **kwargs) -> Expr:
         """
         Return the solution as an expression. It is equivalent to .solution.
         """
@@ -446,6 +445,8 @@ class Solution(SolutionBase[T]):
         Dehomogenize the solution. Used internally.
         """
         if homogenizer is None:
+            return self
+        if self is None:
             return self
 
         expr = self
@@ -594,7 +595,7 @@ def _arg_sqr_core(arg):
 
 
 
-def _print_str(expr: 'Expr', cyclic_sum_name = 'Σ', cyclic_product_name = '∏',
+def _print_str(expr: Expr, cyclic_sum_name = 'Σ', cyclic_product_name = '∏',
                with_cyclic_parens = False, settings=None):
     """Advanced printing to handle cyclic expressions."""
     settings = {} if settings is None else settings
@@ -612,8 +613,103 @@ def _print_str(expr: 'Expr', cyclic_sum_name = 'Σ', cyclic_product_name = '∏'
     setattr(printer, '_print_CyclicProduct', lambda expr: _print_CyclicProduct(expr))
     return printer.doprint(expr)
 
-def _print_latex(expr: 'Expr', settings=None):
+def _print_latex(expr: Expr, settings=None):
     # if 'long_frac_ratio' not in settings:
     #     settings['long_frac_ratio'] = 2
     settings = {} if settings is None else settings
     return sp.latex(expr, **settings)
+
+
+class _rewriting_exception(Exception): ...
+
+def extract_undetermined_exprs(expr: Expr, F, extra_checker=None) -> Optional[Expr]:
+    """
+    Extract sign-undetermined subexpressions from the given expression
+    and rewrite them with the given function.
+
+    Parameters
+    ----------
+    expr : Expr
+        The input expression.
+    F : Function
+        The function or callable to apply to the undetermined expressions.
+    extra_checker : Callable[[Expr], Optional[Union[bool, Expr]]] | dict | set
+        Optional callable to check if a subexpression is to be parsed.
+        Defaults to None.
+
+    Returns
+    -------
+    Expr
+        The rewritten expression.
+
+    Examples
+    --------
+    >>> from sympy.abc import a,b,c
+    >>> from sympy import Function
+    >>> F = Function('F')
+    >>> extract_undetermined_exprs((a + (b-c)**2*(a**2 + 3))/(b**3 + a), F)
+    ((a**2 + 3)*(b - c)**2 + F(a))/(b**2*F(b) + F(a))
+    """
+    if extra_checker is not None:
+        if isinstance(extra_checker, (set, dict)):
+            _container = extra_checker
+            extra_checker = lambda x: x in _container
+        if not callable(extra_checker):
+            raise TypeError("extra_checker must be a callable or a dict/set.")
+
+    def is_pow2(x):
+        if isinstance(x, Pow):
+            if isinstance(x.exp, Rational) and (x.exp.p % 2 == 0 or x.exp.q % 2 == 0):
+                return True
+        elif len(x.free_symbols) == 0 and x >= 0:
+            return True
+        return False
+
+    def dfs(x):
+        if extra_checker is not None:
+            z = extra_checker(x)
+            if z is not None and (z is not False):
+                return F(x) if z is True else z
+        if isinstance(x, Expr):
+            if len(x.free_symbols) == 0:
+                # constants might be sp.Add, etc., e.g. 1+sqrt(2)
+                # however, using .is_constant() is very slow
+                if x < 0:
+                    raise _rewriting_exception
+                elif x >= 0:
+                    return x
+            if isinstance(x, Symbol):
+                return F(x)
+            elif isinstance(x, (Add, Mul)):
+                return x.func(*(dfs(_) for _ in x.args))
+            elif isinstance(x, Pow):
+                base, exp = x.as_base_exp()
+                if isinstance(exp, Integer):
+                    if exp % 2 == 0:
+                        return x
+                    elif exp == -1:
+                        return 1 / dfs(base)
+                    elif exp > 0:
+                        return dfs(base)*Pow(base, exp - 1, evaluate=False)
+                    else:
+                        return Pow(base, exp + 1, evaluate=False) / dfs(base)
+                elif isinstance(base, Rational):
+                    if exp.p % 2 == 0:
+                        return x
+                return dfs(base)**exp
+            elif isinstance(x, (CyclicSum, CyclicProduct)):
+                base = x.args[0]
+
+                if is_pow2(base): # easy case where we do not need to expand
+                    return x
+                elif isinstance(base, Mul) and all(is_pow2(_) for _ in base.args):
+                    return x
+                # ensure each arg is nonnegative by expanding
+                each_arg = [dfs(_) for _ in x.doit(deep=False).args]
+                assert len(each_arg) >= 0
+                return x.func(dfs(base), *x.args[1:])
+        return x
+    try:
+        return dfs(expr)
+    except _rewriting_exception:
+        return None

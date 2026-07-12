@@ -5,9 +5,9 @@ from sympy import Poly, Expr, Symbol, Integer, Rational, Add
 from sympy import oo as Infinity
 from sympy.polys.polyerrors import CoercionFailed
 
-from .quartic import sos_struct_quartic
+from .quartic import structsos_quartic
 from .utils import (
-    DomainExpr, CommonExpr, sos_struct_handle_uncentered,
+    DomainExpr, CommonExpr, structsos_handle_uncentered,
     sum_y_exprs, nroots, rationalize_func, quadratic_weighting
 )
 from ..univariate import prove_univariate
@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 #####################################################################
 
 
-def sos_struct_sextic_symmetric_ultimate(coeff, real = True):
+def structsos_sextic_symmetric_ultimate(coeff, real = True):
     """
     Solve symmetric sextics.
     """
@@ -35,14 +35,14 @@ def sos_struct_sextic_symmetric_ultimate(coeff, real = True):
         return None
     elif coeff6 == 0:
         # degenerated
-        return _sos_struct_sextic_iran96(coeff, real = real)
+        return _structsos_sextic_iran96(coeff, real = real)
     elif coeff6 < 0:
         return None
 
     if coeff((5,1,0)) == 0 and coeff((4,2,0)) == 0 and coeff((3,2,1)) == 0 and coeff6 != 0:
-        return _sos_struct_sextic_tree(coeff)
+        return _structsos_sextic_tree(coeff)
 
-    return _sos_struct_sextic_symmetric_ultimate(coeff, real = real)
+    return _structsos_sextic_symmetric_ultimate(coeff, real = real)
 
 
 def _restructure_quartic_polynomial(poly: Poly):
@@ -117,7 +117,7 @@ def _restructure_quartic_polynomial(poly: Poly):
     return t, s, x, y, rem, r
 
 
-def _sos_struct_sextic_hexagon_symmetric_sdp(coeff: 'Coeff'):
+def _structsos_sextic_hexagon_symmetric_sdp(coeff: 'Coeff'):
     """
     Solve symmetric hexagons on real numbers without raising the degree.
     The idea is to subtract some CyclicSum(f(a,b,c)**2) so that the remainder
@@ -137,7 +137,7 @@ def _sos_struct_sextic_hexagon_symmetric_sdp(coeff: 'Coeff'):
     where l22 = poly(1,1,1) > 0. To ensure det >= 0, we find u that maximizes the Schur complement:
     u = argmax {l22 - [M02, M02] * [M00, M01; M01, M00]^-1 * [M02, M02]}
 
-    See similar methods at _sos_struct_sextic_hexagon_sdp and _sos_struct_octic_symmetric_hexagon_sdp.
+    See similar methods at _structsos_sextic_hexagon_sdp and _structsos_octic_symmetric_hexagon_sdp.
     """
     a, b, c = coeff.gens
     CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
@@ -234,7 +234,7 @@ def _sos_struct_sextic_hexagon_symmetric_sdp(coeff: 'Coeff'):
     return _compute_sol(u)
 
 
-def _sos_struct_sextic_hexagon_symmetric(coeff: 'Coeff', real = False):
+def _structsos_sextic_hexagon_symmetric(coeff: 'Coeff', real = False):
     """
     Solve symmetric hexagons without `a^6, a^5b` terms.
     Although we can subtract `p(a-b)^2` to make the polynomial a positive hexagram on R+,
@@ -307,7 +307,7 @@ def _sos_struct_sextic_hexagon_symmetric(coeff: 'Coeff', real = False):
     """
     if coeff((4,2,0)) <= 0:
         if coeff((4,2,0)) == 0:
-            return _sos_struct_sextic_hexagram_symmetric(coeff)
+            return _structsos_sextic_hexagram_symmetric(coeff)
         return None
 
     rem = (coeff((4,2,0)) + coeff((3,2,1))) * 6 + (coeff((3,3,0)) + coeff((4,1,1))) * 3 + coeff((2,2,2))
@@ -316,7 +316,7 @@ def _sos_struct_sextic_hexagon_symmetric(coeff: 'Coeff', real = False):
 
     # although subtracting p(a-b)2 always succeeds,
     # we can handle cases for real numbers and cases where raising the degree is not necessary
-    solution = _sos_struct_sextic_hexagon_symmetric_sdp(coeff)
+    solution = _structsos_sextic_hexagon_symmetric_sdp(coeff)
     if solution is not None:
         return solution
 
@@ -444,14 +444,14 @@ def _sos_struct_sextic_hexagon_symmetric(coeff: 'Coeff', real = False):
             (2,2,2): coeff((2,2,2)) + 6 * t
         }
 
-        solution = _sos_struct_sextic_hexagram_symmetric(coeff.from_dict(new_coeffs_))
+        solution = _structsos_sextic_hexagram_symmetric(coeff.from_dict(new_coeffs_))
         if solution is not None:
             return solution + coeff((4,2,0)) * CyclicProduct((a-b)**2)
 
     return None
 
 
-def _sos_struct_sextic_hexagram_symmetric(coeff: 'Coeff'):
+def _structsos_sextic_hexagram_symmetric(coeff: 'Coeff'):
     """
     Solve s(a3b3+xa4bc+ya3b2c+ya2b3c+wa2b2c2) >= 0
 
@@ -597,7 +597,7 @@ def _sos_struct_sextic_hexagram_symmetric(coeff: 'Coeff'):
     return None
 
 
-def _sos_struct_sextic_tree(coeff: 'Coeff'):
+def _structsos_sextic_tree(coeff: 'Coeff'):
     """
     Solve s(a6 + ua3b3 + va4bc - (1+u+v)a2b2c2) >= 0
 
@@ -700,7 +700,7 @@ def _sos_struct_sextic_tree(coeff: 'Coeff'):
     return None
 
 
-def _sos_struct_sextic_symmetric_schur_split(coeff: 'Coeff', real = False):
+def _structsos_sextic_symmetric_schur_split(coeff: 'Coeff', real = False):
     """
     Try solving sextics by rewriting them as sum of squares of Schur polynomials.
 
@@ -804,13 +804,13 @@ def _sos_struct_sextic_symmetric_schur_split(coeff: 'Coeff', real = False):
     # lifted_coeff = coeff * (a+b+c).as_poly(a,b,c, domain=coeff.domain)
     lifted_coeff = coeff * coeff.from_dict({(1,0,0):1,(0,1,0):1,(0,0,1):1}).as_poly()
 
-    from .dense_symmetric import sos_struct_liftfree_for_six
-    solution = sos_struct_liftfree_for_six(lifted_coeff)
+    from .dense_symmetric import structsos_liftfree_for_six
+    solution = structsos_liftfree_for_six(lifted_coeff)
     if solution is not None:
         return solution / CyclicSum(a)
 
 
-def _sos_struct_sextic_iran96(coeff: 'Coeff', real = False):
+def _structsos_sextic_iran96(coeff: 'Coeff', real = False):
     """
     Solve `s(a5b+ab5-x(a4b2+a2b4)+ya3b3-za4bc+w(a3b2c+a2b3c)+..a2b2c2) >= 0`
 
@@ -900,10 +900,10 @@ def _sos_struct_sextic_iran96(coeff: 'Coeff', real = False):
         return None
     elif c51 == 0:
         # only perform sum of squares for real numbers when explicitly inquired
-        return _sos_struct_sextic_hexagon_symmetric(coeff, real = real)
+        return _structsos_sextic_hexagon_symmetric(coeff, real = real)
 
     # solve easy cases
-    solution = _sos_struct_sextic_iran96_trivial(coeff)
+    solution = _structsos_sextic_iran96_trivial(coeff)
     if solution is not None:
         return solution
 
@@ -973,7 +973,7 @@ def _sos_struct_sextic_iran96(coeff: 'Coeff', real = False):
     ) / sa
 
 
-def _sos_struct_sextic_iran96_trivial(coeff: 'Coeff'):
+def _structsos_sextic_iran96_trivial(coeff: 'Coeff'):
     """
     Solve easy cases of Iran96 type inequalities where degree
     lifting is not needed.
@@ -986,9 +986,9 @@ def _sos_struct_sextic_iran96_trivial(coeff: 'Coeff'):
         return None
     elif m == 0:
         # only perform sum of squares for real numbers when explicitly inquired
-        return _sos_struct_sextic_hexagon_symmetric(coeff)
+        return _structsos_sextic_hexagon_symmetric(coeff)
 
-    solution = _sos_struct_sextic_symmetric_schur_split(coeff)
+    solution = _structsos_sextic_symmetric_schur_split(coeff)
     if solution is not None:
         return solution
 
@@ -1133,7 +1133,7 @@ def _sos_struct_sextic_iran96_trivial(coeff: 'Coeff'):
                 return sum_y_exprs(y, exprs)
 
 
-def _sos_struct_sextic_symmetric_full_sdp(coeff: 'Coeff'):
+def _structsos_sextic_symmetric_full_sdp(coeff: 'Coeff'):
     """
     Assume `f(1,1,1) = 0`. Represent `f` as
     ```
@@ -1292,7 +1292,7 @@ def _sos_struct_sextic_symmetric_full_sdp(coeff: 'Coeff'):
         return _get_solution(u0)
 
 
-def _sos_struct_sextic_symmetric_quadratic_form(poly, coeff: 'Coeff'):
+def _structsos_sextic_symmetric_quadratic_form(poly, coeff: 'Coeff'):
     """
     Theorem:
     Let `F0 = s(a^6+a^5b+a^5c+a^4bc-2a^3b^2c-2a^3bc^2)` and `f(a,b,c) = s(xa^2 + yab)`.
@@ -1875,8 +1875,8 @@ class _sextic_sym_axis(DomainExpr):
             return solutions[0]
 
 
-@sos_struct_handle_uncentered
-def _sos_struct_sextic_symmetric_ultimate(coeff: 'Coeff', real = True):
+@structsos_handle_uncentered
+def _structsos_sextic_symmetric_ultimate(coeff: 'Coeff', real = True):
     """
     Handle nondegenerated symmetric sextic polynomial inequalities.
 
@@ -1951,14 +1951,14 @@ def _sos_struct_sextic_symmetric_ultimate(coeff: 'Coeff', real = True):
                     n * (a**2*b**2 + b**2*c**2 + c**2*a**2) +
                     (u - m - 2*p - n) * (a**2*b*c + b**2*c*a + c**2*a*b)
                 ).as_poly(a,b,c, domain=coeff.domain)
-                solution = sos_struct_quartic(coeff.from_poly(poly_div_quad))
+                solution = structsos_quartic(coeff.from_poly(poly_div_quad))
                 if solution is not None:
                     solution = Rational(1,2) * CyclicSum((a-b)**2) * solution
                     return solution
                 return None
 
         # try full sdp
-        solution = _sos_struct_sextic_symmetric_full_sdp(coeff)
+        solution = _structsos_sextic_symmetric_full_sdp(coeff)
         if solution is not None:
             return solution
 
@@ -1967,14 +1967,14 @@ def _sos_struct_sextic_symmetric_ultimate(coeff: 'Coeff', real = True):
         poly = coeff.as_poly()
         if coeff.is_rational:
             try:
-                solution = _sos_struct_sextic_symmetric_quadratic_form(poly, coeff)
+                solution = _structsos_sextic_symmetric_quadratic_form(poly, coeff)
                 if solution is not None:
                     return solution
             except Exception as e:
                 raise e
                 pass
 
-    solution = _sos_struct_sextic_symmetric_schur_split(coeff, real = real)
+    solution = _structsos_sextic_symmetric_schur_split(coeff, real = real)
     if solution is not None:
         return solution
 
@@ -2026,13 +2026,13 @@ def _sos_struct_sextic_symmetric_ultimate(coeff: 'Coeff', real = True):
     sum_of_roots = sum((len(_) > 0) for _ in roots)
 
     if sum_of_roots == 1:
-        return _sos_struct_sextic_symmetric_ultimate_1root(coeff, poly, roots, real = real)
+        return _structsos_sextic_symmetric_ultimate_1root(coeff, poly, roots, real = real)
     elif sum_of_roots == 2:
-        return _sos_struct_sextic_symmetric_ultimate_2roots(coeff, poly, roots)
+        return _structsos_sextic_symmetric_ultimate_2roots(coeff, poly, roots)
 
     return None
 
-def _sos_struct_sextic_symmetric_ultimate_1root(coeff: 'Coeff', poly, roots, real = True):
+def _structsos_sextic_symmetric_ultimate_1root(coeff: 'Coeff', poly, roots, real = True):
     """
     Examples
     -------
@@ -2084,9 +2084,9 @@ def _sos_struct_sextic_symmetric_ultimate_1root(coeff: 'Coeff', poly, roots, rea
             if coeff((5,1,0)) >= -2 * x_:
                 poly2 = poly - ((a**3+b**3+c**3-3*a*b*c-x_*(a*a*(b+c)+b*b*(c+a)+c*c*(a+b)-6*a*b*c))**2)\
                     .as_poly(a,b,c, domain=poly.domain).mul_ground(coeff6)
-                solution = _sos_struct_sextic_iran96(coeff.from_poly(poly2), real = real)
+                solution = _structsos_sextic_iran96(coeff.from_poly(poly2), real = real)
                 if solution is not None:
-                    if x_ == Rational(3,2):
+                    if 2*x_ == 3:
                         solution += coeff6 / 4 * CyclicProduct((a+b-2*c)**2)
                     elif x_ == 1:
                         solution += coeff6 * CyclicSum(a*(a-b)*(a-c))**2
@@ -2181,7 +2181,7 @@ def _sos_struct_sextic_symmetric_ultimate_1root(coeff: 'Coeff', poly, roots, rea
                 ((2, 1, 1), 2*z0*z1 + 2*z0*z2 + z1**2 + 2*z1*z2 + 3*z2**2 + 2*z2*z3)
             ]
 
-            quartic_solution = sos_struct_quartic(coeff.from_dict(dict(quartic)), None)
+            quartic_solution = structsos_quartic(coeff.from_dict(dict(quartic)))
             if quartic_solution is not None:
                 multiplier = CommonExpr.quadratic(2*(2*z0 + z3), 2*(z1 + 2*z2), (a,b,c))
                 p1 = quartic_solution * CyclicSum((a-b)**2*(a+b-x_*c)**2)
@@ -2193,7 +2193,7 @@ def _sos_struct_sextic_symmetric_ultimate_1root(coeff: 'Coeff', poly, roots, rea
     return None
 
 
-def _sos_struct_sextic_symmetric_ultimate_2roots(coeff: 'Coeff', poly, roots):
+def _structsos_sextic_symmetric_ultimate_2roots(coeff: 'Coeff', poly, roots):
     """
 
     Examples
@@ -2297,7 +2297,7 @@ def _sos_struct_sextic_symmetric_ultimate_2roots(coeff: 'Coeff', poly, roots):
 
         if diffpoly is not None:
             new_poly = poly - diffpoly.mul_ground(coeff6)
-            rest_solution = _sos_struct_sextic_iran96(coeff.from_poly(new_poly))
+            rest_solution = _structsos_sextic_iran96(coeff.from_poly(new_poly))
             if rest_solution is not None:
                 return (solution + rest_solution).together()
 

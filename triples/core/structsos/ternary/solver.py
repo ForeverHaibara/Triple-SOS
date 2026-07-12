@@ -3,106 +3,217 @@ from typing import Union, Dict, Optional, TYPE_CHECKING
 from sympy import Function
 from sympy.core.symbol import uniquely_named_symbol
 
-from .sparse  import sos_struct_sparse, sos_struct_heuristic
-from .dense_symmetric import sos_struct_ternary_dense_partial_symmetric
-from .quadratic import sos_struct_quadratic, sos_struct_acyclic_quadratic
-from .cubic   import sos_struct_cubic, sos_struct_acyclic_cubic
-from .quartic import sos_struct_quartic, sos_struct_acyclic_quartic
-from .quintic import sos_struct_quintic
-from .sextic  import sos_struct_sextic
-from .septic  import sos_struct_septic
-from .octic   import sos_struct_octic
-from .nonic   import sos_struct_nonic
-from .acyclic import sos_struct_acyclic_sparse
+from .sparse  import structsos_sparse, structsos_heuristic
+from .dense_symmetric import structsos_ternary_dense_partial_symmetric
+from .quadratic import structsos_quadratic, structsos_acyclic_quadratic
+from .cubic   import structsos_cubic, structsos_acyclic_cubic
+from .quartic import structsos_quartic, structsos_acyclic_quartic
+from .quintic import structsos_quintic
+from .sextic  import structsos_sextic
+from .septic  import structsos_septic
+from .octic   import structsos_octic
+from .nonic   import structsos_nonic
+from .acyclic import structsos_acyclic_sparse
 
 from ..utils import Coeff, PolynomialNonpositiveError, PolynomialUnsolvableError
-from ..sparse import sos_struct_common, sos_struct_degree_specified_solver
-from ..solution import SolutionStructural
+from ..sparse import structsos_common, structsos_degree_specified_solver
+from ...solution import extract_undetermined_exprs
+from ....sdp.arithmetic import rep_matrix_from_dict, permute_matrix_rows
 
 if TYPE_CHECKING:
     from sympy import Poly, Expr
+    from ...problem import InequalityProblem
 
 SOLVERS = {
-    2: sos_struct_quadratic,
-    3: sos_struct_cubic,
-    4: sos_struct_quartic,
-    5: sos_struct_quintic,
-    6: sos_struct_sextic,
-    7: sos_struct_septic,
-    8: sos_struct_octic,
-    9: sos_struct_nonic,
+    2: structsos_quadratic,
+    3: structsos_cubic,
+    4: structsos_quartic,
+    5: structsos_quintic,
+    6: structsos_sextic,
+    7: structsos_septic,
+    8: structsos_octic,
+    9: structsos_nonic,
 }
 
 SOLVERS_ACYCLIC = {
-    2: sos_struct_acyclic_quadratic,
-    3: sos_struct_acyclic_cubic,
-    4: sos_struct_acyclic_quartic
+    2: structsos_acyclic_quadratic,
+    3: structsos_acyclic_cubic,
+    4: structsos_acyclic_quartic
 }
+
+
+def _is_cyclic_mat(M):
+    if M.shape[0] != M.shape[1]:
+        return False
+    ddm = M._rep.rep.to_ddm()
+    n = M.shape[0]
+    for i in range(n):
+        for j in range(n):
+            if ddm[i][j] != ddm[(i+1)%n][(j+1)%n]:
+                return False
+    return True
 
 
 def _structural_sos_3vars_cyclic(
     coeff: Union["Poly", Coeff, Dict],
-    real: bool = True
+    real: int = 1
 ) -> Optional["Expr"]:
     """
-    Internal function to solve a 3-var homogeneous cyclic polynomial using structural SOS.
-    It does not check the homogeneous / cyclic property of the polynomial to save time.
+    Internal function to solve a 3-var homogeneous cyclic polynomial
+    using structural SOS. It does not check the homogeneous / cyclic
+    property of the polynomial to save time.
+
+    Parameters
+    ----------
+    coeff : Union["Poly", Coeff, Dict]
+        The polynomial to solve.
+    real : int, optional
+        If 2, it demands only solutions with variables in R.
+        If 1, it demands solutions with variables in R in prior.
+        If 0, it demands solutions with variables in R+.
     """
     if not isinstance(coeff, Coeff):
         coeff = Coeff(coeff)
 
-    return sos_struct_common(coeff,
-        sos_struct_sparse,
-        sos_struct_degree_specified_solver(SOLVERS, homogeneous=True),
-        sos_struct_heuristic,
+    return structsos_common(coeff,
+        structsos_sparse,
+        structsos_degree_specified_solver(SOLVERS, homogeneous=True),
+        structsos_heuristic,
         real=real
     )
 
 def _structural_sos_3vars_acyclic(
     coeff: Union["Poly", Coeff, Dict],
-    real: bool = True
+    real: int = 1
 ) -> Optional["Expr"]:
     """
-    Internal function to solve a 3-var homogeneous acyclic polynomial using structural SOS.
-    It does not check the homogeneous / cyclic property of the polynomial to save time.
+    Internal function to solve a 3-var homogeneous acyclic polynomial
+    using structural SOS. It does not check the homogeneous / cyclic
+    property of the polynomial to save time.
+
+    Parameters
+    ----------
+    coeff : Union["Poly", Coeff, Dict]
+        The polynomial to solve.
+    real : int, optional
+        If 2, it demands only solutions with variables in R.
+        If 1, it demands solutions with variables in R in prior.
+        If 0, it demands solutions with variables in R+.
     """
     if not isinstance(coeff, Coeff):
         coeff = Coeff(coeff)
 
-    return sos_struct_common(coeff,
-        sos_struct_acyclic_sparse,
-        sos_struct_degree_specified_solver(SOLVERS_ACYCLIC, homogeneous=True),
-        sos_struct_ternary_dense_partial_symmetric,
+    return structsos_common(coeff,
+        structsos_acyclic_sparse,
+        structsos_degree_specified_solver(SOLVERS_ACYCLIC, homogeneous=True),
+        structsos_ternary_dense_partial_symmetric,
         real=real
     )
 
+
 def structural_sos_3vars(
-    poly,
-    ineq_constraints: Dict["Poly", "Expr"] = {},
-    eq_constraints: Dict["Poly", "Expr"] = {}
+    problem: "InequalityProblem"
 ) -> Optional["Expr"]:
     """
     Main function of structural SOS for 3-var homogeneous polynomials.
     """
-    if len(poly.gens) != 3: # should not happen
-        raise ValueError("structural_sos_3vars only supports 3-var polynomials.")
+    poly: "Poly" = problem.expr
+    gens = problem.gens
+    ineq_constraints = problem.ineq_constraints
+    # eq_constraints = problem.eq_constraints
+
+    if len(gens) != 3: # should not happen
+        return None
+    if poly.domain.is_EX or poly.domain.is_EXRAW:
+        return None
 
     is_hom = poly.is_homogeneous
     if not is_hom: # should not happen
-        raise ValueError("structural_sos_3vars only supports homogeneous polynomials.")
+        return None
+
+
+    # get linear constraints and stack them as a matrix
+    nvars = len(gens) # == 3
+    linear_ineqs: Dict["Poly", "Expr"] = {k: v for k, v in ineq_constraints.items()
+                    if k.total_degree() == 1 and k.coeff_monomial((0,)*nvars) == 0}
+    if linear_ineqs:
+        dom = next(iter(linear_ineqs)).domain.get_field()
+        for ineq in linear_ineqs:
+            dom = dom.unify(ineq.domain)
+        linear_ineqs = {ineq.set_domain(dom): v for ineq, v in linear_ineqs.items()}
+        dod = {i: {m.index(1): v for m, v in ineq.rep.terms()}
+               for i, ineq in enumerate(linear_ineqs)}
+        mat = rep_matrix_from_dict(dod, (len(dod), nvars), dom)
+
+        if len(mat._rep.to_field().rref()[1]) == nvars:
+            # use rref rather DomainMatrix.rank for version compatibility
+
+            if mat.shape[0] == nvars:
+                if len(mat._rep.to_dok()) == nvars:
+                    # use to_dok rather nnz for version compatibility
+
+                    # permutation matrix
+                    # TODO: flip the sign of the entries so
+                    # that all entries are nonnegative
+                    pass
+                else:
+                    # change the variables
+
+                    # try to rearrange the matrix so that it is cyclic
+                    if not _is_cyclic_mat(mat):
+                        mat2 = permute_matrix_rows(mat, [0, 2, 1])
+                        if _is_cyclic_mat(mat2):
+                            mat = mat2
+                            ll = list(linear_ineqs.items())
+                            ll[1], ll[2] = ll[2], ll[1]
+                            linear_ineqs = dict(ll)
+
+                    inv_mat = mat._fromrep(mat._rep.inv())
+                    dot = lambda u, v: sum(uk * vk for uk, vk in zip(u, v))
+
+                    # try not to change the variables first
+                    new_ineqs = {}
+                    if all(entry >= 0 for entry in inv_mat):
+                        # this implies a, b, c >= 0
+                        new_ineqs = {g.as_poly(gens): dot(row, linear_ineqs.values())
+                                     for g, row in zip(gens, inv_mat.tolist())}
+                    new_problem = problem.new(poly, new_ineqs)
+                    solution = structural_sos_3vars(new_problem)
+                    if solution is not None:
+                        return solution
+
+
+                    # change the variables
+                    new_problem, restore = problem.transform(
+                        {g: dot(row, gens) for g, row in zip(gens, inv_mat.tolist())},
+                        {g: dot(row, gens) for g, row in zip(gens, mat.tolist())}
+                    )
+                    new_problem = new_problem.remove_redundancy().polylize()
+                    return restore(structural_sos_3vars(new_problem))
+            else:
+                # TODO: handle the case when mat.shape[0] > 3:
+                # e.g., use LP to determine the active linear constraints
+                pass
+
+
+    # check whether the variables are in the nonnegative orthant
+    signs = problem.get_symbol_signs()
+    is_pos = lambda x: (x is not None) and x >= 0
+    r_plus = all(is_pos(signs.get(x, (-1, -1))[0]) for x in poly.gens)
+
+    if (not r_plus) and poly.total_degree() % 2 == 1:
+        # TODO: try to disprove the problem
+        return None
+
 
     coeff_poly = Coeff(poly)
     is_cyc = coeff_poly.is_cyclic()
-    if len(ineq_constraints) == 0 and len(eq_constraints) == 0 and poly.total_degree() % 2 == 1:
-        return
-
-    if is_cyc:
-        func = _structural_sos_3vars_cyclic
-    else:
-        func = _structural_sos_3vars_acyclic
+    func = _structural_sos_3vars_cyclic if is_cyc\
+        else _structural_sos_3vars_acyclic
 
     try:
-        solution = func(coeff_poly, real = 1)
+        param_real = 1 if r_plus else 2
+        solution = func(coeff_poly, real = param_real)
     except (PolynomialNonpositiveError, PolynomialUnsolvableError):
         return None
 
@@ -115,14 +226,11 @@ def structural_sos_3vars(
     ####################################################################
     func_name = uniquely_named_symbol('G', poly.gens + tuple(ineq_constraints.values()))
     func = Function(func_name)
-    solution = SolutionStructural._extract_nonnegative_exprs(solution, func_name=func_name)
+    solution = extract_undetermined_exprs(solution, func)
     if solution is None:
         return None
 
-    replacement = {}
-    for k, v in ineq_constraints.items():
-        if len(k.free_symbols) == 1 and k.is_monomial and k.LC() >= 0:
-            replacement[func(k.free_symbols.pop())] = v/k.LC()
+    replacement = {func(x): v for x, (sgn, v) in signs.items() if is_pos(sgn)}
     solution = solution.xreplace(replacement)
 
     if solution.has(func):

@@ -106,6 +106,8 @@ def _prove_by_recur(expr: Expr, signs: SIGNS_TYPE) -> Optional[Tuple[Expr, bool]
     `new_expr` is not `expr`. The second argument tracks whether the expr
     has changed.
     """
+    from ...utils.expressions.cyclic import _replace_symbols
+
     if isinstance(expr, Rational):
         if expr >= 0:
             return expr, False
@@ -156,10 +158,21 @@ def _prove_by_recur(expr: Expr, signs: SIGNS_TYPE) -> Optional[Tuple[Expr, bool]
         # all permutations. E.g.
         # `CyclicProduct((a-b),(a,b,c,d),AlternatingGroup(4))`
         # is nonnegative after expanding. However, it is undetermined termwise.
-        sol = _prove_by_recur(expr.doit(deep=False), signs)
-        if sol is not None:
-            return sol[0], True
-        return None
+
+        sub_exprs = []
+        for translation in CyclicExpr._generate_all_translations(
+            expr.args[1], expr.args[2]):
+            trans = _replace_symbols(expr.args[0], translation)
+            sub_result = _prove_by_recur(trans, signs)
+            if sub_result is None:
+                return None
+            sub_exprs.append((sub_result[0], trans))
+
+        if all(v1 == v2 for v1, v2 in sub_exprs):
+            # nothing changed
+            return expr, True
+        sol = expr.base_func(*[v1 for v1, v2 in sub_exprs])
+        return sol, True
 
     if len(expr.free_symbols) == 0:
         # e.g. (sqrt(2) - 1)
@@ -205,6 +218,7 @@ def sign_sos(expr: Union[Expr, Poly], signs: SIGNS_TYPE, factor: bool = False) -
 
     Note that the function bases on heuristics,
     and may fail on expressions that are nonnegative.
+
     >>> sign_sos(a**12 + b**12 + c**12 - 3*a**4*b**4*c**4, signs) is None
     True
     """
