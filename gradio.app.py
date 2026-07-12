@@ -665,7 +665,7 @@ class GradioInterface():
                 # Attempt to find sum of squares
                 methods = ['%sSOS' % method for method in methods] + ['Pivoting', 'Reparametrization']
                 if "SDPSOS" in methods:
-                    methods.append("QCQP")
+                    methods.append("ProgSOS")
                 solution = SOSManager.sum_of_squares(
                     expr,
                     ineq_constraints,
