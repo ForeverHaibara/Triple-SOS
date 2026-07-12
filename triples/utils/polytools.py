@@ -37,7 +37,7 @@ from sympy.polys.euclidtools import (
 from sympy.polys.factortools import (
     dup_gf_factor, dmp_trial_division, dmp_zz_diophantine
 )
-from sympy.polys.polyerrors import EvaluationFailed, ExtraneousFactors
+from sympy.polys.polyerrors import EvaluationFailed, ExtraneousFactors, DomainError
 from sympy.polys.polyutils import _sort_factors
 from sympy.polys.sqfreetools import dup_gf_sqf_list, dup_sqf_p
 # from sympy.polys.sqfreetools import _dmp_check_degrees
@@ -717,7 +717,10 @@ def resultant_bezout(f, g, x, reduced=False) -> Tuple[Poly, Poly, Poly]:
         res = f.resultant(g)
         C = r1.quo(res)
     else:
-        uvgcd = marginalize(u1.inject().gcd(v1.inject()), x)
+        try:
+            uvgcd = marginalize(u1.inject().gcd(v1.inject()), x)
+        except DomainError:
+            uvgcd = u1.gcd(v1)
         C, __, res = uvgcd.cofactors(r1)
 
     u = u1.quo(C)
