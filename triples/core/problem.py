@@ -25,7 +25,7 @@ from ..utils.monomials import (
 )
 
 if TYPE_CHECKING:
-    from .preprocess.qcqp import QCQP
+    from .progsos.qcqp import QCQP
 
 class NonPolynomialError(BasePolynomialError):
     pass
@@ -948,7 +948,7 @@ class InequalityProblem(Generic[T]):
         Try to formulate self as a QCQP instance. If success,
         it returns the QCQP instance and the restoration function.
         """
-        from .preprocess.qcqp import formulate_qcqp
+        from .progsos.qcqp import formulate_qcqp
         return formulate_qcqp(self)
 
 

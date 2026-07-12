@@ -6,7 +6,7 @@ import numpy as np
 from .preprocess import ProofNode, ProofTree, SolvePolynomial
 from .preprocess.reparam import Reparametrization
 from .preprocess.modeling import ReformulateAlgebraic
-from .preprocess.qcqp import QCQPSolver
+from .progsos.qcqp import QCQPSolver
 from .linsos.linsos import LinearSOSSolver
 from .pivoting.pivoting import Pivoting
 from .structsos.structsos import StructuralSOSSolver
