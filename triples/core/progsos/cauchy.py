@@ -1,149 +1,189 @@
-from typing import Any, Dict, List, Tuple
+from typing import List, Tuple, TYPE_CHECKING
 
-from sympy import Matrix
+from sympy import MutableDenseMatrix as Matrix
+from sympy import QQ
+from sympy.polys.matrices.domainmatrix import DomainMatrix
+from sympy.polys.matrices.sdm import SDM
 
 from ...sdp import SDPProblem
 
-
-_Affine = Tuple[Any, Dict[int, Any]]
-
-
-def _add(lhs: _Affine, rhs: _Affine) -> _Affine:
-    constant = lhs[0] + rhs[0]
-    coefficients = dict(lhs[1])
-    for index, coefficient in rhs[1].items():
-        coefficients[index] = coefficients.get(index, 0) + coefficient
-        if coefficients[index] == 0:
-            del coefficients[index]
-    return constant, coefficients
-
-
-def _scale(coefficient: Any, value: _Affine) -> _Affine:
-    if coefficient == 0:
-        return 0, {}
-    return value[0] * coefficient, {
-        index: coefficient * value_ for index, value_ in value[1].items()
-    }
-
-
-def _linear_form(coefficients: List[Any], variables: List[_Affine]) -> _Affine:
-    value = (0, {})
-    for coefficient, variable in zip(coefficients, variables):
-        value = _add(value, _scale(coefficient, variable))
-    return value
-
-
-def _split_counts(counts: Tuple[int, ...], total: int) -> Tuple[Tuple[int, ...], ...]:
-    """Split dyadic multiplicities into two equal-sized children."""
-    if max(counts) == total:
-        return ()
-
-    child1 = [0] * len(counts)
-    child2 = [2 * count for count in counts]
-    bit = total
-    while bit:
-        for index, count in enumerate(child2):
-            if count >= bit:
-                child2[index] -= bit
-                child1[index] += bit
-            if sum(child1) == total:
-                return tuple(child1), tuple(child2)
-        bit //= 2
-    raise ValueError("Unable to decompose the power cone")
+if TYPE_CHECKING:
+    from sympy.polys.domains import Domain
 
 
 class _SDPBuilder:
-    """Collect affine scalar and rotated second-order cone constraints."""
-
-    def __init__(self, nvars: int):
-        self.variables = [(0, {index: 1}) for index in range(nvars)]
+    """Build homogeneous linear, rotated SOC, and power-cone constraints."""
+    def __init__(self, nvars: int, size: int = 2147483647):
+        self._nvars = nvars
         self._dof = nvars
-        self._blocks = []
+        self._linear_blocks = []
+        self._soc_blocks = []
+        self._size = size
 
-    def new_variable(self) -> _Affine:
-        variable = (0, {self._dof: 1})
+    def new_variable(self) -> int:
+        """Reserve and return the index of one auxiliary variable."""
+        variable = self._dof
         self._dof += 1
+        if self._dof >= self._size:
+            raise MemoryError("Number of variables exceeds size")
         return variable
 
-    def add_linear(self, value: _Affine) -> None:
-        self._blocks.append((value,))
+    def _variable(self, i: int, domain: "Domain" = QQ) -> "SDM":
+        return SDM.new({i: {0: domain.one}}, (self._size, 1), domain)
 
-    def add_rotated_soc(self, left: _Affine, middle: _Affine, right: _Affine) -> None:
-        # [[left, middle], [middle, right]] >> 0.
-        self._blocks.append((left, middle, right))
+    def add_linear(self, form: "SDM") -> None:
+        """Add the homogeneous scalar constraint ``form @ y >= 0``."""
+        self._linear_blocks.append(form)
 
-    def matrices(self) -> List[Tuple[Matrix, Matrix]]:
-        matrices = []
-        for block in self._blocks:
-            if len(block) == 1:
-                value = block[0]
-                matrices.append((
-                    Matrix([value[0]]),
-                    Matrix([[value[1].get(index, 0) for index in range(self._dof)]])
-                ))
-            else:
-                left, middle, right = block
-                matrices.append((
-                    Matrix([left[0], middle[0], middle[0], right[0]]),
-                    Matrix([
-                        [left[1].get(index, 0) for index in range(self._dof)],
-                        [middle[1].get(index, 0) for index in range(self._dof)],
-                        [middle[1].get(index, 0) for index in range(self._dof)],
-                        [right[1].get(index, 0) for index in range(self._dof)],
-                    ])
-                ))
-        return matrices
+    def add_rotated_soc(self, left: "SDM", middle: "SDM", right: "SDM") -> None:
+        """Add ``[[left, middle], [middle, right]] >> 0``."""
+        self._soc_blocks.append((left, middle, right))
 
-    def build(self) -> SDPProblem:
-        return SDPProblem(self.matrices())
+    def add_power_cone(
+        self,
+        value: "SDM",
+        scale_index: int,
+        base: "SDM",
+        power: int
+    ) -> None:
+        """
+        Add ``value**power <= scale * base**(power - 1)``.
 
+        The constraint is represented by a dyadic binary tree of rotated
+        second-order cones. The sign and domain constraints are added here so
+        callers only need to provide the three homogeneous linear forms.
+        """
+        if power < 2:
+            raise ValueError("The power of a power cone must be at least 2")
 
-def _add_power_cone(
-    builder: _SDPBuilder,
-    value: _Affine,
-    scale: _Affine,
-    base: _Affine,
-    power: int,
-) -> None:
-    """Add ``value**power <= scale * base**(power - 1)``."""
-    total = 1
-    while total < power:
-        total *= 2
+        if power == 2:
+            self.add_rotated_soc(self._variable(scale_index), value, base)
+            return
 
-    if power == 2:
-        builder.add_rotated_soc(scale, value, base)
-        return
+        total = 1
+        while total < power:
+            total *= 2
 
-    target = builder.new_variable()
-    builder.add_linear(target)
-    builder.add_linear(_add(target, _scale(-1, value)))
-    if power % 2 == 0:
-        builder.add_linear(_add(target, value))
+        target = self.new_variable()
+        target_form = self._variable(target)
+        self.add_linear(target_form)
+        self.add_linear(target_form - value)
+        if power % 2 == 0:
+            self.add_linear(target_form + value)
 
-    # The dyadic weights are (1 / p, (p - 1) / p, (q - p) / q),
-    # where q is the next power of two. The last weight pads the tree.
-    root = (1, power - 1, total - power)
-    leaves = (scale, base, target)
-    nodes = {root: target}
-    pending = [root]
+        root = (1, power - 1, total - power)
+        leaves = (
+            self._variable(scale_index),
+            base,
+            target_form,
+        )
+        nodes = {root: target_form}
+        pending = [root]
 
-    while pending:
-        counts = pending.pop()
-        children = _split_counts(counts, total)
-        if not children:
-            continue
+        while pending:
+            counts = pending.pop()
+            children = self._split_counts(counts, total)
+            if not children:
+                continue
 
-        child_nodes = []
-        for child in children:
-            if child not in nodes:
-                if max(child) == total:
-                    nodes[child] = leaves[child.index(total)]
-                else:
-                    nodes[child] = builder.new_variable()
-                    pending.append(child)
-            child_nodes.append(nodes[child])
+            child_forms = []
+            for child in children:
+                if child not in nodes:
+                    if max(child) == total:
+                        nodes[child] = leaves[child.index(total)]
+                    else:
+                        nodes[child] = self._variable(self.new_variable())
+                        pending.append(child)
+                child_forms.append(nodes[child])
 
-        builder.add_rotated_soc(child_nodes[0], nodes[counts], child_nodes[1])
+            self.add_rotated_soc(child_forms[0], nodes[counts], child_forms[1])
+
+    def add_weighted_pnorm_cone(
+        self,
+        A: Matrix,
+        weight: Matrix,
+        affine: Matrix,
+        power: int
+    ) -> None:
+        """
+        Add ``<weight, (A @ x)**power> <= <affine, x>**power``.
+
+        All forms are homogeneous in the original variables. For ``power >=
+        2``, one power cone is added for every nonzero weight, together with
+        their weighted epigraph sum. The linear case is handled directly.
+        """
+        if power < 1:
+            raise ValueError("Each p must be an integer greater than or equal to 1")
+        power = int(power)
+
+        if weight.shape != (A.rows, 1):
+            raise ValueError("The shape of weight must be (A.rows, 1)")
+        if affine.shape != (self._nvars, 1):
+            raise ValueError("The shape of affine must be (A.cols, 1)")
+
+        Arep = A._rep.rep.to_sdm()
+        values = [Arep.get(i, {}) for i in range(Arep.shape[0])]
+        values = [Arep.new({0: row} if row else {},
+                      (1, self._size), Arep.domain).transpose()
+                      for row in values]
+
+        sdm = affine._rep.rep.to_sdm()
+        aff = sdm.new(dict(sdm), (self._size, 1), sdm.domain)
+
+        if power == 1:
+            for w, v in zip(weight, values):
+                if w:
+                    aff -= w * v
+            self.add_linear(aff)
+            return
+
+        self.add_linear(aff.copy())
+        scales = []
+        for i, value in enumerate(values):
+            if weight[i] == 0:
+                continue
+            scale = self.new_variable()
+            self.add_power_cone(value, scale, aff, power)
+            scales.append((weight[i], self._variable(scale)))
+        for w, v in scales:
+            aff -= w * v
+        self.add_linear(aff)
+
+    @staticmethod
+    def _split_counts(counts: Tuple[int, ...], total: int) -> Tuple[Tuple[int, ...], ...]:
+        """Split dyadic multiplicities into two equal-sized children."""
+        if max(counts) == total:
+            return ()
+
+        child1 = [0] * len(counts)
+        child2 = [2 * count for count in counts]
+        bit = total
+        while bit:
+            for index, count in enumerate(child2):
+                if count >= bit:
+                    child2[index] -= bit
+                    child1[index] += bit
+                if sum(child1) == total:
+                    return tuple(child1), tuple(child2)
+            bit //= 2
+        raise ValueError("Unable to decompose the power cone")
+
+    def get_x0_and_space(self) -> List[Tuple[Matrix, Matrix]]:
+        """Return the low-level ``(x0, space)`` blocks for ``SDPProblem``."""
+        blocks = []
+        def to_mat(sdm: "SDM") -> Matrix:
+            sdm = sdm.new(dict(sdm), (self._dof, 1), sdm.domain).transpose()
+            return Matrix._fromrep(DomainMatrix.from_rep(sdm))
+
+        for form in self._linear_blocks:
+            blocks.append((Matrix.zeros(1, 1), to_mat(form)))
+        for left, middle, right in self._soc_blocks:
+            l, m, r = to_mat(left), to_mat(middle), to_mat(right)
+            blocks.append((
+                Matrix.zeros(4, 1),
+                Matrix.vstack(l, m, m, r)
+            ))
+        return blocks
 
 
 def norm_cone_prog_problem(
@@ -163,42 +203,8 @@ def norm_cone_prog_problem(
     if not As:
         return SDPProblem({})
 
-    nvars = As[0].cols
-    if any(A.cols != nvars for A in As):
-        raise ValueError("All A matrices must have the same number of columns")
-
-    builder = _SDPBuilder(nvars)
+    builder = _SDPBuilder(As[0].shape[1])
     for A, weight, affine, power in zip(As, weights, affines, ps):
-        if power < 1:
-            raise ValueError("Each p must be an integer greater than or equal to 1")
-        power = int(power)
+        builder.add_weighted_pnorm_cone(A, weight, affine, power)
 
-        if weight.shape != (A.rows, 1):
-            raise ValueError("The shape of weight must be (A.rows, 1)")
-        if affine.shape != (nvars, 1):
-            raise ValueError("The shape of affine must be (A.cols, 1)")
-
-        values = [
-            _linear_form([A[i, j] for j in range(nvars)], builder.variables)
-            for i in range(A.rows)
-        ]
-        base = _linear_form(list(affine), builder.variables)
-
-        if power == 1:
-            lhs = (0, {})
-            for coefficient, value in zip(weight, values):
-                lhs = _add(lhs, _scale(coefficient, value))
-            builder.add_linear(_add(base, _scale(-1, lhs)))
-            continue
-
-        builder.add_linear(base)
-        weighted_scale = (0, {})
-        for coefficient, value in zip(weight, values):
-            if coefficient == 0:
-                continue
-            scale = builder.new_variable()
-            _add_power_cone(builder, value, scale, base, power)
-            weighted_scale = _add(weighted_scale, _scale(coefficient, scale))
-        builder.add_linear(_add(base, _scale(-1, weighted_scale)))
-
-    return builder.build()
+    return SDPProblem(builder.get_x0_and_space())

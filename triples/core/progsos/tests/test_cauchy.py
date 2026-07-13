@@ -21,3 +21,16 @@ def test_norm_cone_prog_problem_solve():
 
 def test_norm_cone_prog_problem_empty():
     assert norm_cone_prog_problem([], [], [], []).dof == 0
+
+
+def test_norm_cone_prog_problem_linear_and_power_tree():
+    A = sp.Matrix([[1, 0], [0, 1]])
+    weight = sp.Matrix([1, 1])
+    affine = sp.Matrix([1, 1])
+
+    linear = norm_cone_prog_problem([A], [weight], [affine], [1])
+    cubic = norm_cone_prog_problem([A], [weight], [affine], [3])
+
+    assert linear.dof == 2
+    assert cubic.dof > linear.dof
+    assert cubic.gens[:2] == linear.gens
