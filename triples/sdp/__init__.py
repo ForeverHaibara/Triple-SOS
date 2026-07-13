@@ -9,6 +9,7 @@
 
 from .dual import SDPProblem
 from .primal import SDPPrimal
+from .cone import ConeSDPBuilder
 
 from .arithmetic import congruence, ArithmeticTimeout
 from .backends import SDPError, SDPTimeoutError
@@ -18,6 +19,8 @@ __all__ = [
     # 'solve_column_separated_linear', 'solve_undetermined_linear',
     # 'matmul', 'matmul_multiple', 'symmetric_bilinear', 'symmetric_bilinear_multiple',
     'SDPProblem', 'SDPPrimal',
+    'ConeSDPBuilder',
+
     'congruence', 'ArithmeticTimeout',
     'SDPError', 'SDPTimeoutError',
     'character_table', 'symmetry_adapted_basis', 'young_symmetrizers'

@@ -1,18 +1,18 @@
-from typing import List, Tuple, TYPE_CHECKING
+from typing import List, Tuple, Optional, TYPE_CHECKING
 
 from sympy import MutableDenseMatrix as Matrix
 from sympy import QQ
 from sympy.polys.matrices.domainmatrix import DomainMatrix
 from sympy.polys.matrices.sdm import SDM
 
-from ...sdp import SDPProblem
+from .dual import SDPProblem
 
 if TYPE_CHECKING:
     from sympy.polys.domains import Domain
 
 
-class _SDPBuilder:
-    """Build homogeneous linear, rotated SOC, and power-cone constraints."""
+class ConeSDPBuilder:
+    """Helper class to build SDPProblem from cone constraints."""
     def __init__(self, nvars: int, size: int = 2147483647):
         self._nvars = nvars
         self._dof = nvars
@@ -23,20 +23,26 @@ class _SDPBuilder:
     def new_variable(self) -> int:
         """Reserve and return the index of one auxiliary variable."""
         variable = self._dof
-        self._dof += 1
         if self._dof >= self._size:
             raise MemoryError("Number of variables exceeds size")
+        self._dof += 1
         return variable
 
     def _variable(self, i: int, domain: "Domain" = QQ) -> "SDM":
-        return SDM.new({i: {0: domain.one}}, (self._size, 1), domain)
+        return SDM.new({0: {i: domain.one}}, (1, self._size), domain)
 
     def add_linear(self, form: "SDM") -> None:
-        """Add the homogeneous scalar constraint ``form @ y >= 0``."""
+        """
+        Add the homogeneous scalar constraint ``form @ y >= 0``.
+        Stored as a row vector in the SDM format.
+        """
         self._linear_blocks.append(form)
 
     def add_rotated_soc(self, left: "SDM", middle: "SDM", right: "SDM") -> None:
-        """Add ``[[left, middle], [middle, right]] >> 0``."""
+        """
+        Add ``[[left, middle], [middle, right]] >> 0``.
+        Stored as three row vectors in the SDM format.
+        """
         self._soc_blocks.append((left, middle, right))
 
     def add_power_cone(
@@ -47,12 +53,14 @@ class _SDPBuilder:
         power: int
     ) -> None:
         """
-        Add ``value**power <= scale * base**(power - 1)``.
+        Add ``|value|**power <= scale * base**(power - 1)``.
 
         The constraint is represented by a dyadic binary tree of rotated
         second-order cones. The sign and domain constraints are added here so
         callers only need to provide the three homogeneous linear forms.
         """
+        power = int(power)
+
         if power < 2:
             raise ValueError("The power of a power cone must be at least 2")
 
@@ -64,20 +72,17 @@ class _SDPBuilder:
         while total < power:
             total *= 2
 
-        target = self.new_variable()
-        target_form = self._variable(target)
-        self.add_linear(target_form)
-        self.add_linear(target_form - value)
-        if power % 2 == 0:
-            self.add_linear(target_form + value)
+        abs_form = self._variable(self.new_variable())
+        self.add_linear(abs_form - value)
+        self.add_linear(abs_form + value)
 
         root = (1, power - 1, total - power)
         leaves = (
             self._variable(scale_index),
             base,
-            target_form,
+            abs_form,
         )
-        nodes = {root: target_form}
+        nodes = {root: abs_form}
         pending = [root]
 
         while pending:
@@ -96,57 +101,61 @@ class _SDPBuilder:
                         pending.append(child)
                 child_forms.append(nodes[child])
 
+            # child[0]*child[1] >= nodes[counts]**2
             self.add_rotated_soc(child_forms[0], nodes[counts], child_forms[1])
 
-    def add_weighted_pnorm_cone(
+    def add_pnorm_cone(
         self,
         A: Matrix,
-        weight: Matrix,
         affine: Matrix,
-        power: int
+        p: int,
+        weight: Optional[Matrix] = None,
     ) -> None:
         """
-        Add ``<weight, (A @ x)**power> <= <affine, x>**power``.
+        Add ``(<weight, |A @ x|**p>)^(1/p) <= <affine, x>``. If `weight`
+        is not provided, then the weight is taken to be 1.
 
-        All forms are homogeneous in the original variables. For ``power >=
-        2``, one power cone is added for every nonzero weight, together with
+        All forms are homogeneous in the original variables. For ``p >=
+        2``, one p-norm cone is added for every nonzero weight, together with
         their weighted epigraph sum. The linear case is handled directly.
         """
-        if power < 1:
+        if p < 1:
             raise ValueError("Each p must be an integer greater than or equal to 1")
-        power = int(power)
 
-        if weight.shape != (A.rows, 1):
-            raise ValueError("The shape of weight must be (A.rows, 1)")
-        if affine.shape != (self._nvars, 1):
-            raise ValueError("The shape of affine must be (A.cols, 1)")
+        if weight is not None:
+            ws = weight._rep.rep.to_sdm().transpose()
+            if not ws:
+                return
+        else:
+            dom = A._rep.rep.domain
+            ws = SDM({0: {i: dom.one} for i in range(A.shape[0])},
+                     (1, self._size), dom)
 
         Arep = A._rep.rep.to_sdm()
-        values = [Arep.get(i, {}) for i in range(Arep.shape[0])]
-        values = [Arep.new({0: row} if row else {},
-                      (1, self._size), Arep.domain).transpose()
-                      for row in values]
+        aff = affine._rep.rep.to_sdm().transpose()
+        aff = aff.new(dict(aff), (1, self._size), aff.domain)
 
-        sdm = affine._rep.rep.to_sdm()
-        aff = sdm.new(dict(sdm), (self._size, 1), sdm.domain)
+        dom = Arep.domain.unify(aff.domain).unify(ws.domain)
+        Arep = Arep.convert_to(dom)
+        aff = aff.convert_to(dom)
+        ws = ws.convert_to(dom).get(0, {})
 
-        if power == 1:
-            for w, v in zip(weight, values):
-                if w:
-                    aff -= w * v
+        rows = [Arep.get(i, {}) for i in ws]
+        rows = [Arep.new({0: row} if row else {}, (1, self._size), dom)
+                    for row in rows]
+
+        if p == 1:
+            for ind, v in zip(ws, rows):
+                aff -= v.mul(ws[ind])
             self.add_linear(aff)
             return
 
-        self.add_linear(aff.copy())
-        scales = []
-        for i, value in enumerate(values):
-            if weight[i] == 0:
-                continue
+        affcopy = aff.copy()
+        for ind, v in zip(ws, rows):
             scale = self.new_variable()
-            self.add_power_cone(value, scale, aff, power)
-            scales.append((weight[i], self._variable(scale)))
-        for w, v in scales:
-            aff -= w * v
+            self.add_power_cone(v, scale, affcopy, p)
+            aff -= self._variable(scale, domain=dom).mul(ws[ind])
+
         self.add_linear(aff)
 
     @staticmethod
@@ -172,7 +181,7 @@ class _SDPBuilder:
         """Return the low-level ``(x0, space)`` blocks for ``SDPProblem``."""
         blocks = []
         def to_mat(sdm: "SDM") -> Matrix:
-            sdm = sdm.new(dict(sdm), (self._dof, 1), sdm.domain).transpose()
+            sdm = sdm.new(dict(sdm), (1, self._dof), sdm.domain)
             return Matrix._fromrep(DomainMatrix.from_rep(sdm))
 
         for form in self._linear_blocks:
@@ -185,26 +194,6 @@ class _SDPBuilder:
             ))
         return blocks
 
-
-def norm_cone_prog_problem(
-    As: List[Matrix],
-    weights: List[Matrix],
-    affines: List[Matrix],
-    ps: List[int]
-) -> SDPProblem:
-    """
-    Model ``<weight, (A @ x)**p> <= <affine, x>**p`` as an SDP.
-
-    Powers in ``(A @ x)**p`` are entrywise. The original variables are the
-    first generators of the returned ``SDPProblem``.
-    """
-    if not len(As) == len(weights) == len(affines) == len(ps):
-        raise ValueError("As, weights, affines, and ps must have the same length")
-    if not As:
-        return SDPProblem({})
-
-    builder = _SDPBuilder(As[0].shape[1])
-    for A, weight, affine, power in zip(As, weights, affines, ps):
-        builder.add_weighted_pnorm_cone(A, weight, affine, power)
-
-    return SDPProblem(builder.get_x0_and_space())
+    def build(self) -> SDPProblem:
+        """Build the SDPProblem from the constraints."""
+        return SDPProblem(self.get_x0_and_space())
