@@ -55,6 +55,46 @@ except ImportError: # sympy <= 1.8 or no flint installed
 SYMPY_VERSION = tuple(version_tuple(_SYMPY_VERSION))
 FLINT_VERSION = tuple(version_tuple(_FLINT_VERSION))
 
+
+def marginalize(p, *args) -> Poly:
+    """
+    Marginalize a polynomial with respect to given variables.
+    It tries to preserve the domain of the polynomial.
+
+    Examples
+    --------
+    >>> from sympy import Poly, symbols, sqrt
+    >>> x, y, z = symbols('x y z')
+    >>> p = Poly(x**3*(2 + y**3 + y**2) + y**2, x, y)
+    >>> marginalize(p, y)
+    Poly(x**3*y**3 + (x**3 + 1)*y**2 + 2*x**3, y, domain='ZZ[x]')
+
+    >>> p = Poly(sqrt(2)*x*y + y + sqrt(2)*x*z, x, y, z, extension=True)
+    >>> p.as_poly(x) # doctest:+SKIP
+    Poly((sqrt(2)*y + sqrt(2)*z)*x + y, x, domain='EX')
+    >>> marginalize(p, x)
+    Poly((sqrt(2)*y + sqrt(2)*z)*x + y, x, domain='QQ<sqrt(2)>[y,z]')
+    """
+    if not isinstance(p, Poly):
+        return Poly(p, *args)
+    if p.gens == args:
+        return p
+    if p.domain.is_EX or p.domain.is_EXRAW:
+        # EX or EXRAW does not have the eject method
+        return p.as_poly(*args)
+
+    argset = set(args)
+    gens = [s for s in p.gens if s not in argset]
+    p = p.reorder(*gens, *args)
+    p = p.eject(*gens)
+    return p
+
+###############################################################################
+#
+#                    Polynomial Real Root Isolation
+#
+###############################################################################
+
 if SYMPY_VERSION >= (1, 14):
     def poly_lift(poly: Poly) -> Poly:
         return poly.lift()
@@ -219,7 +259,7 @@ else:
 
 ###############################################################################
 #
-#          Polynomial Factorization over Finite Fields
+#                Polynomial Factorization over Finite Fields
 #
 ###############################################################################
 
@@ -670,16 +710,6 @@ def resultant_bezout(f, g, x, reduced=False) -> Tuple[Poly, Poly, Poly]:
 
     If `reduced=True`, it tries to remove the gcd part.
     """
-    def marginalize(p, x):
-        if not (isinstance(p, Poly) and x in p.gens and (not p.domain.is_EX)):
-            return p.as_poly(x)
-        if len(p.gens) == 1:
-            # p is univariate and p.gen == x
-            return p
-        gens = [s for s in p.gens if s != x] + [x]
-        p = p.reorder(*gens)
-        p = p.eject(*p.gens[:-1])
-        return p
     f, g = marginalize(f, x), marginalize(g, x)
 
     f: Poly

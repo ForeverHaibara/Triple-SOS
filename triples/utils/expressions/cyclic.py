@@ -476,12 +476,14 @@ class CyclicSum(CyclicExpr):
     >>> CyclicExpr.PRINT_FULL = True
 
     Every CyclicSum object is defined by an expression, a tuple of symbols, and a permutation group.
+
     >>> expr = CyclicSum(a*(b-c)**2, (a, b, c), PermutationGroup(Permutation([1,2,0]))); expr
     CyclicSum(a*(b - c)**2, (a, b, c), PermutationGroup([
         (0 1 2)]))
 
     Sums are simplified by choosing the lexicographically smallest representation of the summand
     and checking nested symmetries.
+
     >>> CyclicSum(z*y**2, (x, y, z), SymmetricGroup(3)) # doctest:+SKIP
     CyclicSum(x*y**2, (x, y, z), PermutationGroup([
         (0 1 2),
@@ -496,15 +498,18 @@ class CyclicSum(CyclicExpr):
     24
 
     SymPy expressions containing cyclic sums can be expanded by calling doit().
+
     >>> expr.doit()
     a*(b - c)**2 + b*(-a + c)**2 + c*(a - b)**2
 
     When the permutation group is not specified, it is assumed to be the cyclic group.
+
     >>> CyclicSum(a*(b-c+d)**2, (a, b, c, d)).doit()
     a*(b - c + d)**2 + b*(a + c - d)**2 + c*(-a + b + d)**2 + d*(a - b + c)**2
 
     When neither the symbols nor the permutation group is specified, it assumes
     the cyclic sum is with respect to (a, b, c) and the cyclic group.
+
     >>> CyclicSum(a**3*b**2*c).doit()
     a**3*b**2*c + a**2*b*c**3 + a*b**3*c**2
 

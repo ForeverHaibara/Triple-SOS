@@ -223,6 +223,12 @@ def _polyelement_is_homogeneous(x: PolyElement) -> bool:
     d = sum(monoms[0])
     return all(sum(m) == d for m in monoms)
 
+@_dtype_make_reorder_func.register(PolyElement)
+def _polyelement_make_reorder_func(x: PolyElement, gens: Tuple['Symbol', ...]) -> Callable[['Permutation'], T]:
+    def reorder(perm):
+        inv = perm.__invert__()._array_form
+        return x.new({tuple(m[i] for i in inv): v for m, v in x.items()})
+    return reorder
 
 
 @_dtype_free_symbols.register(FracElement)
@@ -242,3 +248,9 @@ def _fracelement_is_homogeneous(x: FracElement) -> bool:
 def _fracelement_homogenize(x: FracElement, s: 'Symbol') -> FracElement:
     numer, denom = _polyelement_homogenize(x.numer, s), _polyelement_homogenize(x.denom, s)
     return _fracelement_init(numer.ring.to_field(), *numer.cancel(denom))
+
+@_dtype_make_reorder_func.register(FracElement)
+def _fracelement_make_reorder_func(x: FracElement, gens: Tuple['Symbol', ...]) -> Callable[['Permutation'], T]:
+    rn = _polyelement_make_reorder_func(x.numer, gens)
+    rd = _polyelement_make_reorder_func(x.denom, gens)
+    return lambda perm: _fracelement_init(x.numer.ring.to_field(), *rn(perm).cancel(rd(perm)))

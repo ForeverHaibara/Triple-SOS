@@ -1,8 +1,9 @@
 from sympy.abc import a, b, c, u, v, x, y, z
 from sympy import Poly, Symbol, Rational, ZZ, QQ, ring, field, cbrt, sqrt, asin
+from sympy.combinatorics.permutations import Permutation
 
 from ..dispatch import (
-    _dtype_is_homogeneous, _dtype_homogenize
+    _dtype_is_homogeneous, _dtype_homogenize, _dtype_make_reorder_func
 )
 
 def test_dispatch_names():
@@ -87,3 +88,18 @@ def test_homogenize():
     for before, after in exprs:
         z = _dtype_homogenize(before, s)
         assert z == after, f"{before} homogenized to {z}, but expected {after}"
+
+
+def test_make_reorder_func():
+    rng = ring((a,b,c), QQ)[0]
+    fld = field((a,b,c), ZZ)[0]
+    exprs = [
+        (a**2*b + 2*b*c + 3, b**2*c + 2*c*a + 3),
+        (Poly(a**2*b + 2*b*c + 3, (a, b, c)), Poly(b**2*c + 2*c*a + 3, (a, b, c))),
+        (rng(a**2*b + 2*b*c + 3), rng(b**2*c + 2*c*a + 3)),
+        (fld((a**2*b + 2*b*c + 3)/(b*c - 2*a)), fld((b**2*c + 2*c*a + 3)/(c*a - 2*b))),
+    ]
+    for before, after in exprs:
+        func = _dtype_make_reorder_func(before, (a, b, c))
+        z = func(Permutation([1, 2, 0]))
+        assert z == after, f"{before} reordered to {z}, but expected {after}"

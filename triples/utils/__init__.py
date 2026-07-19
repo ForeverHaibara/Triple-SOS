@@ -24,7 +24,7 @@ from .roots import (
     cancel_denominator,
 )
 
-from .polytools import resultant_bezout
+from .polytools import marginalize, resultant_bezout
 
 __all__ = [
     'MonomialManager', 'generate_monoms', 'generate_partitions', 'arraylize_np', 'arraylize_sp', 'invarraylize',
@@ -39,5 +39,5 @@ __all__ = [
     'nroots', 'univariate_intervals', 'rationalize', 'rationalize_array', 'rationalize_bound',
     'rationalize_quadratic_curve', 'common_region_of_conics',
     'cancel_denominator',
-    'resultant_bezout'
+    'marginalize', 'resultant_bezout'
 ]
