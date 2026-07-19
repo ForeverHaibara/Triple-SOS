@@ -409,6 +409,12 @@ class MonomialManager():
                 terms_dict[monom2] = coeff
         return Poly(terms_dict, gens)
 
+    def _orbit_size(self, degree: int) -> List[int]:
+        """
+        Compute the orbit size of each monomial.
+        """
+        ...
+
     def cyclic_sum(self, expr: 'Expr', gens: List['Symbol']) -> 'Expr':
         """
         Sum up a given expression according to the permutation group.

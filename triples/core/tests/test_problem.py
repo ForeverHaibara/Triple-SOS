@@ -1,7 +1,7 @@
 from sympy.abc import a, b, c, u, v, w, x, y, z
 
 from sympy import Poly, Function, ZZ, ring
-from sympy.combinatorics import CyclicGroup
+from sympy.combinatorics import CyclicGroup, PermutationGroup, Permutation
 
 from ..problem import InequalityProblem
 from ..dispatch import _fracelement_init
@@ -38,3 +38,10 @@ def test_wrap_constraints():
     assert set(pro2.ineq_constraints) == {2*a + b, 2*b + c, a + 2*c}
     assert len({_.find(Function).pop().func for _ in pro2.ineq_constraints.values()}) == 1
     assert [len(_.free_symbols) for _ in pro2.ineq_constraints.values()] == [2, 2, 2]
+
+
+def test_identify_symmetry():
+    G = PermutationGroup(Permutation([0,2,1]))
+    pro = InequalityProblem(a**4 + a**3*b + a**3*c + a**2*b*c)
+    assert pro.identify_symmetry().equals(G)
+    assert pro.polylize().identify_symmetry().equals(G)

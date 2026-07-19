@@ -674,7 +674,7 @@ class InequalityProblem(Generic[T]):
             f = reorder_funcs.get(x)
             if f is None:
                 f = self._dtype_make_reorder_func(x, gens)
-            return f(perm)
+            return f(~perm)
         return _identify_symmetry_from_action(
             ls, SymmetricGroup(len(gens)), action
         )

@@ -16,7 +16,7 @@ from ...sdp import ConeSDPBuilder
 
 if TYPE_CHECKING:
     from sympy import Poly, Expr, Symbol
-    from sympy.combinatorics.permutations import PermutationGroup
+    from sympy.combinatorics.perm_groups import PermutationGroup
 
 
 def _get_symbols_constrained_once(problem) -> List[Tuple["Symbol", "Poly", "Expr", int]]:
@@ -176,28 +176,32 @@ class CauchySolver(TransformNode):
             return
 
         def action(x, perm):
-            return _dtype_make_reorder_func(x, gens)(perm)
+            return _dtype_make_reorder_func(x, gens)(~perm)
 
         data = [x for x, _ in self.std_form["lhs"]]
         G = SymmetricGroup(len(gens))
         G = _identify_symmetry_from_action(
             [data, [self.std_form["rhs"][0]]], G, action)
 
-        # TODO: check homogeneity of the problem
+        # TODO: check if the problem is homogeneous
         hom = True
 
         # collect expressions by symmetry
         modules = _clear_elements_by_symmetry(data, G, action)
         rhs = self.std_form["rhs"][0]
         mg = MonomialManager(len(gens), G, is_homogeneous=hom)
-        dofs = [len(mg.inv_monoms(degree))] * len(modules)
-        dof = sum(dofs)
+  
+        symms = [_identify_symmetry_from_action([[module]], G, action) for module in modules]
+        print([_.order() for _ in symms])
+        mgs = [MonomialManager(len(gens), symms[i], is_homogeneous=hom) for i in range(len(modules))]
+        dofs = [len(mg.inv_monoms(degree)) for mg in mgs]
         stabs = [mg.arraylize_sp(mg.invarraylize([1] * dof, gens, degree),
-                                 degree, expand_cyc=True) for dof in dofs]
+                                 degree, expand_cyc=True) for mg, dof in zip(mgs, dofs)]
+        dof = sum(dofs)
 
         def _eval_in(f, x):
             if isinstance(f, PolyElement):
-                return int(f.evaluate(list(enumerate(x))))
+                return f.parent().dom.to_sympy(f.evaluate(list(enumerate(x))))
             elif isinstance(f, FracElement):
                 return _eval_in(f.numer, x) / _eval_in(f.denom, x)
 
@@ -215,22 +219,23 @@ class CauchySolver(TransformNode):
                 for p in G.elements:
                     x2 = [x[i] for i in p._array_form]
                     mv = _eval_in(module, x2)
-                    rt = Root(x2).as_vec(degree, symmetry=mg)
+                    rt = Root(x2).as_vec(degree, symmetry=mgs[i])
                     aff = aff + mv * rt
                     ws.append(rhsx**2 * mv**2)
                     trans.append(rt.multiply_elementwise(stabs[i]))
-                affs.append(aff)
+                affs.append(aff.multiply_elementwise(stabs[i]))
 
                 A = Matrix.hstack(*trans).T
                 As.append(A)
 
             aff = Matrix.vstack(*affs)
-            A = Matrix.hstack(*As)
+            A = Matrix.diag(*As)
             builder.add_pnorm_cone(A, aff, 3, Matrix(ws))
+            # print((A, aff, 3, Matrix(ws)),'\n\n')
 
         points = mg.inv_monoms(12)
         for x in points:
-            sample([_ + 1 for _ in x])
+            sample([_ + 0 for _ in x])
         sdp = builder.build()
 
         sdp._x0_and_space['z'] = (Matrix([[-1]]), Matrix([1]*dof+[0]*(sdp.dof-dof)).T)
