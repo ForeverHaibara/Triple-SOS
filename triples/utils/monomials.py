@@ -409,11 +409,76 @@ class MonomialManager():
                 terms_dict[monom2] = coeff
         return Poly(terms_dict, gens)
 
+    def ufs_monoms(self, degree: int) -> Dict[Tuple[int, ...], Tuple[int, ...]]:
+        """
+        Compute the UFS of monomials.
+        """
+        perm_group_gens = self.perm_group.generators
+
+        iv = self.base().inv_monoms(degree)
+        ufs = {}
+        # monomials invariant under the permutation group is recorded in ufs
+        def ufs_find(x):
+            v = ufs.get(x, x)
+            if v == x:
+                return x
+            w = ufs_find(v)
+            ufs[x] = w
+            return w
+        ufs = {i: i for i in range(len(iv))}
+
+        for m1 in iv:
+            for p in perm_group_gens:
+                m2 = tuple([m1[i] for i in p._array_form])
+                f1, f2 = ufs_find(m1), ufs_find(m2)
+                # merge to the maximum
+                if f1 > f2:
+                    ufs[f2] = f1
+                else:
+                    ufs[f1] = f2
+
+        std = self.dict_monoms(degree)
+        mapping = {}
+        for m in std:
+            mapping[ufs_find(m)] = m
+        return {m: mapping[ufs_find(m)] for m in iv}
+
+
     def _orbit_size(self, degree: int) -> List[int]:
         """
         Compute the orbit size of each monomial.
         """
-        ...
+        dt = self.dict_monoms(degree)
+        cnt = [0] * len(dt)
+        for m in self.ufs_monoms(degree).values():
+            cnt[dt[m]] += 1
+        return cnt
+
+    def orbit_size(self, degree: int) -> Matrix:
+        """
+        Compute the orbit size of each monomial.
+        """
+        return Matrix(self._orbit_size(degree))
+
+    def stabilizer_size(self, degree: int) -> Matrix:
+        order = self.perm_group.order()
+        return Matrix([order//i for i in self._orbit_size(degree)])
+
+    def proj_matrix(self, degree: int) -> Matrix:
+        """
+        Compute the matrix that maps the monomials from base to the
+        symmetry-reduced basis.
+        """
+        dt = self.dict_monoms(degree)
+        ufs = {k: dt[v] for k, v in self.ufs_monoms(degree).items()}
+        inds = sorted(ufs.items(), reverse=True)
+        mat = {}
+        for i, (_, v) in enumerate(inds):
+            row = mat.setdefault(v, {})
+            row[i] = ZZ.one
+
+        return Matrix._fromrep(DomainMatrix.from_rep(SDM(mat, (len(dt), len(inds)), ZZ)))
+
 
     def cyclic_sum(self, expr: 'Expr', gens: List['Symbol']) -> 'Expr':
         """
@@ -1390,42 +1455,20 @@ def poly_reduce_by_symmetry(poly: Poly, symmetry: Union[str, PermutationGroup]) 
     """
     if symmetry is None:
         return poly
-    perm_group = parse_symmetry(symmetry, len(poly.gens))
+    G = parse_symmetry(symmetry, len(poly.gens))
 
-    extracted = []
-    perm_group_gens = perm_group.generators
-    perm_order = perm_group.order()
-    ufs = {}
-    # monomials invariant under the permutation group is recorded in ufs
-    def ufs_find(monom):
-        v = ufs.get(monom, monom)
-        if v == monom:
-            return monom
-        w = ufs_find(v)
-        ufs[monom] = w
-        return w
-    for m1, coeff in poly.terms():
-        for p in perm_group_gens:
-            m2 = tuple(p(m1))
-            f1, f2 = ufs_find(m1), ufs_find(m2)
-            # merge to the maximum
-            if f1 > f2:
-                ufs[f2] = f1
-            else:
-                ufs[f1] = f2
+    if G.is_trivial:
+        return poly
 
-    ufs_size = defaultdict(int)
-    for m in ufs.keys():
-        ufs_size[ufs_find(m)] += 1
+    hom = poly.is_homogeneous
+    degree = poly.total_degree()
 
-    def get_order(monom):
-        # get the multiplicity of the monomials given the permutation group
-        # i.e. how many permutations make it invariant
-        return perm_order // ufs_size[ufs_find(monom)]
+    mg = MonomialManager(len(poly.gens), G, is_homogeneous=hom)
+    stab = mg.stabilizer_size(degree)
 
-    # only reserve the keys for ufs[monom] == monom
-    for monom, coeff in poly.terms():
-        if ufs_find(monom) == monom:
-            order = get_order(monom)
-            extracted.append((monom, coeff/order))
-    return Poly(dict(extracted), poly.gens)
+    dom = poly.domain.unify(QQ)
+    poly = poly.set_domain(dom)
+    arr = mg._arraylize_list(poly)
+
+    dt = {k: v / s for k, v, s in zip(mg.inv_monoms(degree), arr, stab)}
+    return poly.from_dict(dt, *poly.gens, domain=dom)
