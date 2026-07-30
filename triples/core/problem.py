@@ -288,7 +288,7 @@ class InequalityProblem(Generic[T]):
         other_syms = sorted(other_syms, key=lambda x: x.name)
         return poly_gens + tuple(other_syms)
 
-    def extract_constraints(self, symbols: Union[Symbol, List[Symbol]]) \
+    def separate_constraints(self, symbols: Union[Symbol, List[Symbol]]) \
             -> Tuple[Dict[T, Expr], Dict[T, Expr], Dict[T, Expr], Dict[T, Expr]]:
         """
         Split constraints into those that contain given symbols and those that do not.
@@ -308,12 +308,12 @@ class InequalityProblem(Generic[T]):
         ----------
         >>> from sympy.abc import a, b, c
         >>> problem = InequalityProblem(a*b, [a, b, a*b, b+c], [a-1, b+c-1])
-        >>> problem.extract_constraints(a) # doctest: +NORMALIZE_WHITESPACE
+        >>> problem.separate_constraints(a) # doctest: +NORMALIZE_WHITESPACE
         ({a: a, a*b: a*b},
          {a - 1: a - 1},
          {b: b, b + c: b + c},
          {b + c - 1: b + c - 1})
-        >>> problem.extract_constraints([b, c]) # doctest: +NORMALIZE_WHITESPACE
+        >>> problem.separate_constraints([b, c]) # doctest: +NORMALIZE_WHITESPACE
         ({b: b, a*b: a*b, b + c: b + c},
          {b + c - 1: b + c - 1},
          {a: a},

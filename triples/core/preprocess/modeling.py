@@ -403,6 +403,7 @@ class ReformulateAlgebraic(ProofNode):
 
     default_configs = {
         "assumptions": False,
+        "recompute_constraints": True,
     }
 
     skip_enter_verbose = 1
@@ -427,6 +428,9 @@ class ReformulateAlgebraic(ProofNode):
         fs = new_problem.free_symbols
         if self.problem.roots is not None:
             new_problem.roots = self.problem.roots.transform(inverse, fs)
+
+        if configs["recompute_constraints"]:
+            new_problem = new_problem.recompute_constraints()
 
         if new_problem.is_commutative:
             solver = CancelDenominator(new_problem, {"irrational_expr": helper.has_radical})
