@@ -144,7 +144,6 @@ def _cauchy_ge_residual(a: list, b: list, r: int = 2,
                             sum(b[i]**(k-t)*b[j]**t for t in range(k+1))
                             for i in range(n) for j in range(i+1, n))
         s.append(v)
-    print('A=', A, 'AB=', AB, 's=', s)
     return Add(*s)
 
 
