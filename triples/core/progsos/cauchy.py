@@ -1,6 +1,6 @@
-from typing import List, Dict, Tuple, Optional, Any, TYPE_CHECKING
+from typing import List, Dict, Tuple, Optional, Union, Any, TYPE_CHECKING
 
-from sympy import Poly, Rational, Add
+from sympy import Rational, Add
 from sympy.combinatorics.named_groups import SymmetricGroup
 from sympy.polys.rings import PolyElement
 from sympy.polys.fields import FracElement
@@ -19,7 +19,7 @@ from ..problem import InequalityProblem
 from ...sdp import ConeSDPBuilder
 
 if TYPE_CHECKING:
-    from sympy import Expr, Symbol
+    from sympy import Expr, Poly, Symbol
     from sympy.combinatorics.perm_groups import PermutationGroup
 
     # from ..problem import InequalityProblem
@@ -66,7 +66,7 @@ def _get_symbols_constrained_once(
     return {k: v for k, v in res.items() if v[0] is not None}
 
 
-def _get_symbol_radical(poly: Poly, i: int) -> Tuple[Any, int]:
+def _get_symbol_radical(poly: "Poly", i: int) -> Tuple[Any, int]:
     """
     Given `poly == 0`, infer `x**r = expr`
     where `x` is the `i`-th generator.
@@ -119,18 +119,32 @@ def _eval_in(f, x):
         return _eval_in(f.numer, x) / _eval_in(f.denom, x)
 
 
-def _cauchy_ge_residual(a: list, b: list, r: int = 2):
+def _cauchy_ge_residual(a: list, b: list, r: int = 2,
+    A = None, AB = None
+):
+    """
+    Prove that
+    ```
+    (sum a[i])**r * sum (a[i] * b[i]**(r+1)) - (sum (a[i]*b[i]))**(r+1)
+    ```
+    is nonnegative by direct sum-of-squares.
+    """
     n = len(a)
     if n != len(b):
         raise ValueError("a and b must have the same length")
+
     s = []
-    A = sum(a)
-    S = sum(ai * bi for ai, bi in zip(a, b))
-    for i in range(n):
-        for j in range(i+1, n):
-            T = sum(A**k*S**(r-1-k)*sum(
-                b[i]**(k-t)*b[j]**t for t in range(k+1)) for k in range(r))
-            s.append(a[i]*a[j]*(b[i] - b[j])**2*T)
+    if A is None:
+        A = sum(a)
+    if AB is None:
+        AB = sum(ai * bi for ai, bi in zip(a, b))
+    for k in range(r):
+        prefix = A**k*AB**(r-1-k)
+        v = prefix * sum(a[i]*a[j]*(b[i] - b[j])**2*
+                            sum(b[i]**(k-t)*b[j]**t for t in range(k+1))
+                            for i in range(n) for j in range(i+1, n))
+        s.append(v)
+    print('A=', A, 'AB=', AB, 's=', s)
     return Add(*s)
 
 
@@ -228,8 +242,7 @@ def as_radical_problem(problem: InequalityProblem) -> Optional[RadicalProblem]:
 
     # check it is linear with respect to the symbols
     # TODO:
-    # 1. relax it to monomials / quadratic forms
-    # 2. remove nuisance symbols
+    # 1. remove nuisance symbols
     expr: "Poly" = problem.expr
 
     if not all(i[2] == 1 for i in info.values()):
@@ -267,7 +280,7 @@ def as_radical_problem(problem: InequalityProblem) -> Optional[RadicalProblem]:
 
     new_problem._terms = terms
     new_problem.canonicalize_terms()
-    
+
     new_problem.auxiliary_symbols = aux
 
     return new_problem
@@ -276,6 +289,8 @@ def as_radical_problem(problem: InequalityProblem) -> Optional[RadicalProblem]:
 class CauchySolver(TransformNode):
     """
     Try to solve a problem using Cauchy-Schwarz inequality.
+
+    Highly Experimental. DO NOT USE.
     """
     default_configs = {
         "lift_degree_limit": 4,
@@ -317,22 +332,24 @@ class CauchySolver(TransformNode):
 
     @staticmethod
     def construct_cauchy_ge_sdp(
-        poly,
-        gens,
-        modules,
-        degree = 1,
-        symmetry=None,
+        poly: Union[PolyElement, FracElement],
+        gens: List["Symbol"],
+        modules: List[PolyElement],
+        lhs_power: int = 2,
+        degree: int = 1,
+        symmetry: Optional["PermutationGroup"] = None
     ):
         nvars = len(gens)
-        hom = True 
+        hom = True # TODO: check this
         mg0 = MonomialManager(nvars, symmetry, is_homogeneous=hom)
         mg0base = mg0.base()
-  
-        p = 2
+
+        p = lhs_power
         def action(x, perm):
             return _dtype_make_reorder_func(x, gens)(~perm)
 
-        symms = [_identify_symmetry_from_action([[module]], symmetry, action) for module in modules]
+        symms = [_identify_symmetry_from_action(
+            [[module]], symmetry, action) for module in modules]
         mgs = [MonomialManager(nvars, symm,
                                is_homogeneous=hom) for symm in symms]
         projs = [mg.proj_matrix(degree) for mg in mgs]
@@ -369,7 +386,7 @@ class CauchySolver(TransformNode):
 
         points = mg0.inv_monoms(12) # TODO: no magic number
         for x in points:
-            sample([_ for _ in x])
+            sample(list(x))
 
         sdp = builder.build()
         return sdp, mgs
@@ -420,7 +437,6 @@ class CauchySolver(TransformNode):
                 v = v * l**p
             return v
 
-        # TODO: compute the prod of each term
         data = [prod(term) for term in lhs]
         G = SymmetricGroup(len(gens))
         G = _identify_symmetry_from_action(
@@ -499,18 +515,28 @@ class CauchySolver(TransformNode):
             if not G.is_trivial:
                 multiplier = CyclicSum(multiplier, gens, G)
 
-            # a_list = [m.parent().to_sympy(m) for m in modules]
-            # b_list = [mul.as_expr() for mul in muls]
             a_list, b_list = [], []
             exp = Rational(1, lhs_power)
-            for perm in G.elements:
-                for m, mul in zip(modules, muls):
-                    m = action(m, perm)
-                    mul = action(mul, perm)
+
+            A_list, B_list = [], []
+
+            for m, mul in zip(modules, muls):
+                A_list.append((m.parent().to_sympy(m))**exp)
+                B_list.append(mul.as_expr() * (m.parent().to_sympy(m))**exp)
+                m0, mul0 = m, mul
+                for perm in G.elements:
+                    m = action(m0, perm)
+                    mul = action(mul0, perm)
                     a_list.append((m.parent().to_sympy(m))**exp)
                     b_list.append(mul.as_expr() * (m.parent().to_sympy(m))**exp)
 
-            res = _cauchy_ge_residual(a_list, b_list, r=lhs_power)
+            if not G.is_trivial:
+                A = CyclicSum(sum(A_list), gens, G)
+                AB = CyclicSum(sum(ai * bi for ai, bi in zip(A_list, B_list)), gens, G)
+            else:
+                A, AB = sum(A_list), sum(ai * bi for ai, bi in zip(A_list, B_list))
+
+            res = _cauchy_ge_residual(a_list, b_list, r=lhs_power, A=A, AB=AB)
             return (x + res) / ((lhs + rhs) * multiplier)
 
         return new_problem, restore

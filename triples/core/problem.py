@@ -18,7 +18,7 @@ from .dispatch import (
     _dtype_free_symbols, _dtype_gens, _dtype_is_zero, _dtype_convert,
     _dtype_is_homogeneous, _dtype_homogenize, _dtype_sqf_list, _dtype_make_reorder_func
 )
-from ..utils import optimize_poly, Root, RootList
+from ..utils import optimize_poly, Root, RootList, marginalize
 from ..utils.monomials import (
     _identify_symmetry_from_action,
     identify_symmetry_from_lists
@@ -916,8 +916,7 @@ class InequalityProblem(Generic[T]):
                     expr_mul = e
                     e = 0
 
-                # TODO: this can be processed on the domain
-                p = p.as_poly(changed_gens)
+                p = marginalize(p, *changed_gens)
 
                 difference = [e]
                 for m, c in p.terms():
