@@ -18,10 +18,13 @@ from .dispatch import (
     _dtype_free_symbols, _dtype_gens, _dtype_is_zero, _dtype_convert,
     _dtype_is_homogeneous, _dtype_homogenize, _dtype_sqf_list, _dtype_make_reorder_func
 )
-from ..utils import optimize_poly, Root, RootList, marginalize
+from ..utils import (
+    optimize_poly, Root, RootList, marginalize, CyclicSum
+)
 from ..utils.monomials import (
     _identify_symmetry_from_action,
-    identify_symmetry_from_lists
+    identify_symmetry_from_lists,
+    verify_symmetry, poly_reduce_by_symmetry
 )
 
 if TYPE_CHECKING:
@@ -811,6 +814,7 @@ class InequalityProblem(Generic[T]):
 
         After we find a solution (sympy Expr) to the transformed problem, use `restore` to
         transform it back to the original problem.
+
         >>> sol = (-x + z)**2*F(x + y)*F(x + z)/2 + (x - y)**2*F(
         ... x + y)*F(y + z)/2 + (y - z)**2*F(x + z)*F(y + z)/2
         >>> (sol.xreplace({F(y + z): 2*x, F(x + z): 2*y, F(x + y): 2*z}) - new_pro.expr).expand()
@@ -821,6 +825,7 @@ class InequalityProblem(Generic[T]):
         0
 
         Transformations should be birational if the problem is polynomial.
+
         >>> from sympy import cbrt
         >>> InequalityProblem(a**2).polylize().transform({a: cbrt(b)}, {b: a**3}) # doctest:+SKIP
         Traceback (most recent call last):
@@ -829,9 +834,12 @@ class InequalityProblem(Generic[T]):
         """
         src_dicts = [{self.expr: Integer(1)}, self.ineq_constraints, self.eq_constraints]
         dst_dicts = [{}, {}, {}]
+        one = 1
         if isinstance(self.expr, Poly):
             new_symbols = tuple(sorted(inv_transform.keys(), key=lambda x:x.name))
             symbols = tuple([_ for _ in self.expr.gens if (_ not in transform)]) + new_symbols
+            one = Poly(1, *symbols)
+
         for src, dst in zip(src_dicts, dst_dicts):
             for p, e in src.items():
                 e = e.xreplace(transform)
@@ -839,7 +847,7 @@ class InequalityProblem(Generic[T]):
                     p = p.xreplace(transform)
                 elif isinstance(p, Poly):
                     factor_list = _polysubs_factor_list(p, transform, symbols)
-                    p = p.one
+                    p = one
                     for d, mul in factor_list:
                         e *= d.as_expr()**(((-mul+1)//2)*2)
                         if mul % 2 == 1:
@@ -904,9 +912,22 @@ class InequalityProblem(Generic[T]):
         dst_dicts = [{}, {}, {}]
 
         gens = self.gens
-        changed_gens = [g for g in gens if (g in transform)]
-        other_gens = [g for g in gens if (g not in transform)]
+        changed_inds = [i for i, g in enumerate(gens) if g in transform]
+        changed_gens = [gens[i] for i in changed_inds]
+        other_inds = [i for i in range(len(gens)) if i not in changed_inds]
+        other_gens = [gens[i] for i in other_inds]
         shift = {g: g + v for g, v in transform.items()}
+
+        G = self.identify_symmetry()
+        H = G.pointwise_stabilizer(changed_inds)
+        other_inds_dt = {i: j for j, i in enumerate(other_inds)}
+
+        def proj_perm(p):
+            arr = p._array_form
+            return p.__class__([other_inds_dt[i] for i in arr
+                                if i in other_inds_dt])
+        H = H.__class__(*[proj_perm(p) for p in H.args])
+
 
         expr_mul = 1
         expr_add = 0
@@ -929,13 +950,27 @@ class InequalityProblem(Generic[T]):
                     expr_mul = e
                     e = 0
 
+
+                is_cyc = (not H.is_trivial) and verify_symmetry(p, G)
+                wrap = lambda f: f
+
                 p = marginalize(p, *changed_gens)
+                if is_cyc:
+                    def wrap(f):
+                        f2 = poly_reduce_by_symmetry(f.as_poly(other_gens), H)
+                        return CyclicSum(f2.as_expr(), other_gens, H)
+
 
                 difference = [e]
                 for m, c in p.terms():
                     if not any(m):
                         continue
-                    difference.append(-c * Mul(
+                    if any(m[i] != 0 and diff.get(g, 0) == 0
+                           for i, g in enumerate(changed_gens)):
+                        # this term is zero
+                        continue
+
+                    difference.append(wrap(-c) * Mul(
                         *[diff.get(g, 0)**m[i] for i, g in enumerate(changed_gens)]))
 
                 # TODO: this can be processed on the domain

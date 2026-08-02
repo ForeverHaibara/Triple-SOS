@@ -66,20 +66,43 @@ def _identify_matrix_symmetry(S: Matrix) -> List[List[int]]:
     clusters = sorted(cluster_dict.values(), key=lambda x: min(x))
     return clusters
 
-def _rowwise_primitive(A: Matrix) -> Matrix:
+def _rowwise_primitive(A: Matrix) -> Tuple[List, Matrix]:
     """
     Apply primitive to each row of `A`.
     """
     from sympy.polys.densetools import dup_primitive
     rows = A._rep.rep.to_sdm()
     dom = A._rep.domain
+    prims = []
     for row, terms in rows.items():
-        prim_terms = dup_primitive(list(terms.values()), dom)[1]
+        t, prim_terms = dup_primitive(list(terms.values()), dom)
         rows[row] = dict(zip(terms.keys(), prim_terms))
-    return Matrix._fromrep(A._rep.from_rep(SDM(rows, A.shape, dom)).convert_to(ZZ))
+        prims.append(t)
+    return prims, Matrix._fromrep(A._rep.from_rep(SDM(rows, A.shape, dom)).convert_to(ZZ))
 
 
 def _symmetry_adapted_nullspace(A: Matrix) -> Tuple[Matrix, List[List[int]]]:
+    """
+    Explanation
+    -----------
+    >>> from sympy import Matrix
+    >>> _symmetry_adapted_nullspace(Matrix([[1,1,1,-3]]))
+    (Matrix([
+     [   0,   1,   0,   0],
+     [   0,   0,   1,   0],
+     [   0,   0,   0,   1],
+     [-1/3, 1/3, 1/3, 1/3]]),
+     [[0, 1, 2], [3]])
+
+    This means that, if `a + b + c - 3d == 0`, then we shall
+    apply the transform
+    `(a, b, c, d) = (y, z, w, -x/3 + y/3 + z/3 + w/3)`
+    and then set `x == 0`.
+
+    Note that although the feasibility set is 3-dimensional,
+    we still need to use a 4-dimensional transformation so
+    that the transformation is bijective.
+    """
     m, n = A.shape
     A = (-Matrix.eye(m, m)).row_join(A)
 
@@ -88,14 +111,15 @@ def _symmetry_adapted_nullspace(A: Matrix) -> Tuple[Matrix, List[List[int]]]:
 
     # rearrange indices by clustered symmetry
     clusters = _identify_matrix_symmetry(P[m:, m:])
-    concatenated_clusters = list(range(m)) + [i+m for group in clusters for i in group]
-    P = P[concatenated_clusters, concatenated_clusters]
+    concat_clusters = list(range(m)) + [i+m for group in clusters for i in group]
+    P = P[concat_clusters, concat_clusters]
 
     basis, pivots = P.rref()
     rank = max(pivots) + 1
     basis = basis[:rank, m:].T
 
     return basis, clusters
+
 
 def _inv_integer_matrix(X: Matrix) -> Matrix:
     """
@@ -126,6 +150,9 @@ def _inv_integer_matrix(X: Matrix) -> Matrix:
 
 
 def _get_free_symbols(symbols: Set[Symbol], n: int, prefix: str="x") -> List[Symbol]:
+    """
+    Generate free symbols independent of `symbols`.
+    """
     counter = 0
     m = len(prefix)
     for symbol in symbols:
@@ -205,6 +232,17 @@ def eliminate_power_constraints(
     """
     Eliminate power-type equality constraints from the problem.
 
+    The procedure is as follows.
+
+    1. Extract all power-type (binomial) constraints from the problem
+    and rewrite them as `(monomial) == 1`.
+    
+    2. Find a symmetry-adapted transformation for the variables so that
+    it satisfies the extracted constraints and is bijective. See also
+    :func:`_symmetry_adapted_nullspace`.
+
+    3. Apply the transformation and then set `g` to 1.
+
     Parameters
     ----------
     problem : InequalityProblem
@@ -225,6 +263,8 @@ def eliminate_power_constraints(
     ineq_constraints = problem.ineq_constraints
     eq_constraints   = problem.eq_constraints
 
+    # 1. Extract all power-type (binomial) constraints from the problem
+    # and rewrite them as `(monomial) == 1`.
     mat = []
     exprs = []
     eq_inds = set()
@@ -245,10 +285,18 @@ def eliminate_power_constraints(
         return problem, lambda x: x
     mat = Matrix(mat)
 
+    # The constraints are given by
+    # `prod(gens[j]**row[j] for j in range(len(gens))) == 1`
+
+
+    # 2. Find a symmetry-adapted transformation for the variables so that
+    # it satisfies the extracted constraints and is bijective.
     basis, clusters = _symmetry_adapted_nullspace(mat)
 
-    # use an integer basis
-    basis = _rowwise_primitive(basis.T).T
+    # We should use rational transforms,
+    # so we should make powers integral.
+    scale, basis = _rowwise_primitive(basis.T)
+    basis = basis.T
 
     try:
         inv_basis = _inv_integer_matrix(basis)
@@ -259,6 +307,7 @@ def eliminate_power_constraints(
     if (not irrational_expr) and (not inv_basis._rep.domain.is_ZZ):
         return problem, lambda x: x
 
+    # 2.5 Infer the signs of new symbols
     gens = problem.gens
     signs = problem.get_symbol_signs()
     ind_signs = [signs[gens[i]] for i in range(len(gens))]
@@ -296,10 +345,12 @@ def eliminate_power_constraints(
         elif s < 0:
             problem.ineq_constraints[-g] = e
 
+    # 3. Set the leading "mat.shape[0]" new generators to 1
     problem, restore_marginalize = problem.marginalize(
         {g: Integer(1) for g in new_gens[:mat.shape[0]]},
         {g: (e + 1).together()**p - 1 for g, e, p in zip(
-            new_gens[:mat.shape[0]], exprs, inv_basis.diagonal()[:mat.shape[0]])})
+            new_gens[:mat.shape[0]], exprs, scale)}
+    )
 
     if recompute_constraints:
         problem = problem.recompute_constraints()
@@ -311,8 +362,8 @@ def eliminate_power_constraints(
         if y is None:
             return None
         return y.xreplace(
-            {g: (e + 1).together()**p for g, e, p in zip(
-                new_gens[:mat.shape[0]], exprs, inv_basis.diagonal()[:mat.shape[0]])})
+            {g: (e + 1).together()**p - 1 for g, e, p in zip(
+                new_gens[:mat.shape[0]], exprs, scale)})
 
     return problem, composed
 
