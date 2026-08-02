@@ -64,17 +64,17 @@ class InequalityProblem(Generic[T]):
         ineq_constraints: Union[Dict[T, Expr], Iterable[T]] = {},
         eq_constraints: Union[Dict[T, Expr], Iterable[T]] = {}
     ):
-        def _try_sympify(expr):
+        def _symp(expr):
             if isinstance(expr, CantSympify):
                 return expr
             return sympify(expr)
-        expr = _try_sympify(expr)
+        expr = _symp(expr)
         if not isinstance(ineq_constraints, dict):
             ineq_constraints = {e: e for e in ineq_constraints}
         if not isinstance(eq_constraints, dict):
             eq_constraints = {e: e for e in eq_constraints}
-        ineq_constraints = {_try_sympify(e): _try_sympify(e2).as_expr() for e, e2 in ineq_constraints.items()}
-        eq_constraints = {_try_sympify(e): _try_sympify(e2).as_expr() for e, e2 in eq_constraints.items()}
+        ineq_constraints = {_symp(e): _symp(e2).as_expr() for e, e2 in ineq_constraints.items()}
+        eq_constraints = {_symp(e): _symp(e2).as_expr() for e, e2 in eq_constraints.items()}
 
         return cls.new(expr, ineq_constraints, eq_constraints)
 
@@ -120,7 +120,8 @@ class InequalityProblem(Generic[T]):
             proved = " (Solved)"
         elif self.counter_examples is not None:
             proved = " (Disproved)"
-        return f'<InequalityProblem of {nvars} variables{poly_info}, with {ineqs} inequality and {eqs} equality constraints{proved}>'
+        return f'<InequalityProblem of {nvars} variables{poly_info},' +\
+            f' with {ineqs} inequality and {eqs} equality constraints{proved}>'
 
     def _repr_latex_(self):
         from sympy import latex
@@ -708,7 +709,8 @@ class InequalityProblem(Generic[T]):
         We can define the solution with G0 and H0 and restore it using the restoration function.
         However, restoration expands the brackets and might break the sum-of-squares structure.
 
-        >>> G0, H0 = list(newpro.ineq_constraints.values())[0], list(newpro.eq_constraints.values())[0]
+        >>> G0 = list(newpro.ineq_constraints.values())[0]
+        >>> H0 = list(newpro.eq_constraints.values())[0]
         >>> sol = G0 - H0/2 + x**2/2 + (y-1)**2/2; sol
         x**2/2 + (y - 1)**2/2 + _G0(x, y) - _H0(x, y)/2
         >>> restore(sol)
@@ -749,8 +751,10 @@ class InequalityProblem(Generic[T]):
             return self.roots
         from sympy.polys.polyerrors import DomainError
         try:
-            roots = optimize_poly(self.expr, list(self.ineq_constraints), [self.expr] + list(self.eq_constraints),
-                        self.gens, return_type='root')
+            roots = optimize_poly(self.expr,
+                    list(self.ineq_constraints),
+                    [self.expr] + list(self.eq_constraints),
+                    self.gens, return_type='root')
         except DomainError:
             roots = RootList(self.gens, [])
         self.roots = roots
@@ -777,11 +781,13 @@ class InequalityProblem(Generic[T]):
             else:
                 raise TypeError(f"Cannot convert {roots} to RootList.")
         elif self.gens != roots.symbols:
-            raise ValueError(f"RootList symbols {roots.symbols} do not match the problem generators {self.gens}.")
+            raise ValueError(f"RootList symbols {roots.symbols} " + \
+                             f"do not match the problem generators {self.gens}.")
         self.roots = roots
         return self.roots
 
-    def transform(self,
+    def transform(
+        self,
         transform: Dict[Symbol, Expr],
         inv_transform: Dict[Symbol, Expr]
     ) -> Tuple['InequalityProblem', Callable]:
@@ -795,15 +801,18 @@ class InequalityProblem(Generic[T]):
         >>> from sympy.abc import a, b, c, x, y, z
         >>> from sympy import Function
         >>> F = Function('F')
-        >>> problem = InequalityProblem(a**2*b*(a-b)+b**2*c*(b-c)+c**2*a*(c-a),{b+c-a:F(a),c+a-b:F(b),a+b-c:F(c)})
-        >>> new_pro, restore = problem.transform({a:y+z,b:z+x,c:x+y}, {x:(b+c-a)/2,y:(c+a-b)/2, z:(a+b-c)/2})
+        >>> problem = InequalityProblem(a**2*b*(a-b)+b**2*c*(b-c)+c**2*a*(c-a),
+        ... {b+c-a:F(a),c+a-b:F(b),a+b-c:F(c)})
+        >>> new_pro, restore = problem.transform({a:y+z,b:z+x,c:x+y},
+        ... {x:(b+c-a)/2,y:(c+a-b)/2, z:(a+b-c)/2})
         >>> new_pro.expr.expand(), new_pro.ineq_constraints # doctest: +NORMALIZE_WHITESPACE
         (2*x**3*z - 2*x**2*y*z + 2*x*y**3 - 2*x*y**2*z - 2*x*y*z**2 + 2*y*z**3,
          {2*x: F(y + z), 2*y: F(x + z), 2*z: F(x + y)})
 
         After we find a solution (sympy Expr) to the transformed problem, use `restore` to
         transform it back to the original problem.
-        >>> sol = (-x + z)**2*F(x + y)*F(x + z)/2 + (x - y)**2*F(x + y)*F(y + z)/2 + (y - z)**2*F(x + z)*F(y + z)/2
+        >>> sol = (-x + z)**2*F(x + y)*F(x + z)/2 + (x - y)**2*F(
+        ... x + y)*F(y + z)/2 + (y - z)**2*F(x + z)*F(y + z)/2
         >>> (sol.xreplace({F(y + z): 2*x, F(x + z): 2*y, F(x + y): 2*z}) - new_pro.expr).expand()
         0
         >>> restore(sol) # doctest: +SKIP
@@ -851,7 +860,11 @@ class InequalityProblem(Generic[T]):
             return numer / denom
         return problem, restore
 
-    def marginalize(self, transform: Dict[Symbol, Expr], diff: Optional[Dict[Symbol, Expr]]=None) -> Tuple['InequalityProblem', Callable]:
+    def marginalize(
+        self,
+        transform: Dict[Symbol, Expr],
+        diff: Optional[Dict[Symbol, Expr]]=None
+    ) -> Tuple['InequalityProblem', Callable]:
         """
         Substitute the variables in the problem with the new substitutions. Currently
         only work for polynomial problems.

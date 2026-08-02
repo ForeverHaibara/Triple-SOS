@@ -1,12 +1,11 @@
 from typing import List, Dict, Tuple, Optional, Iterator, Union, Any, TYPE_CHECKING
 
-from sympy import Rational, Mul, Add, QQ
-from sympy.core import S as Singleton
+from sympy import Rational, Mul, Add, Dummy, QQ
 from sympy.combinatorics.named_groups import SymmetricGroup
 from sympy.polys.domains.domain import Domain
 from sympy.polys.domains.domainelement import DomainElement
 from sympy.polys.rings import PolyElement
-from sympy.polys.fields import FracField, FracElement
+from sympy.polys.fields import FracElement
 from sympy import MutableDenseMatrix as Matrix
 from sympy.external.gmpy import lcm
 
@@ -26,6 +25,7 @@ if TYPE_CHECKING:
     from sympy.combinatorics.perm_groups import PermutationGroup
     from sympy.external.gmpy import MPQ
     from sympy.polys.rings import PolyRing
+    from sympy.polys.fields import FracField
     # from ..problem import InequalityProblem
 
 
@@ -38,6 +38,15 @@ def rem_deg(a: int, b: int) -> int:
     r = a % b
     return b - r if r else r
 
+
+def increment_poly(f: "Poly") -> "Poly":
+    """
+    Returns `f(a1 + x1, ..., an + xn) - f(a1, ..., an)`
+    as a polynomial in (2n) variables.
+    """
+    new_gens = [Dummy('_%s'%g) for g in f.gens]
+    p = f.as_expr().xreplace({g: (g + d) for g, d in zip(f.gens, new_gens)})
+    return p.as_poly(*f.gens, *new_gens, domain = f.domain)
 
 def _get_symbols_constrained_once(
     problem: "InequalityProblem"
@@ -168,9 +177,9 @@ def _cauchy_ge_residual(a: list, b: list, r: int = 2,
 
 
 class RadicalMonomDomain(Domain):
-    dom: Union["PolyRing", FracField]
+    dom: Union["PolyRing", "FracField"]
     exp_dom: Domain = QQ
-    def __init__(self, dom: Union["PolyRing", FracField], exp_dom: Domain = QQ):
+    def __init__(self, dom: Union["PolyRing", "FracField"], exp_dom: Domain = QQ):
         self.dom = dom
         self.exp_dom = exp_dom
 
@@ -186,7 +195,7 @@ class RadicalMonomDomain(Domain):
         return f"RadicalMonomDomain({self.dom}, {self.exp_dom})"
 
 
-class RadicalMonomial(DomainElement, tuple):
+class RadicalMonomial(DomainElement):
     """
     Represents `prod([f**v for f, v in self])` where `f` are
     polynomial or rational functions, and `v` are rational numbers.
@@ -195,16 +204,45 @@ class RadicalMonomial(DomainElement, tuple):
 
     Used internally.
     """
+    __slots__ = ("args", "domain")
+
+    args: Tuple[Tuple[Union[PolyElement, FracElement], "MPQ"]]
     domain: RadicalMonomDomain
-    def __new__(cls, arg, domain: RadicalMonomDomain):
-        arg = RadicalMonomial._canonicalize(domain, arg)
-        obj = super().__new__(cls, arg)
-        # super(tuple, obj).__init__(arg)
-        obj.domain = domain
-        return obj
+
+    def __init__(self, args, domain):
+        args = RadicalMonomial._canonicalize(domain, args)
+        self.args = tuple(args)
+        self.domain = domain
+
+    def __hash__(self):
+        return hash(self.args)
+
+    def __eq__(self, other):
+        if not isinstance(other, RadicalMonomial):
+            return NotImplemented
+        return self.args == other.args
+
+    def __str__(self):
+        return str(self.args)
+
+    def __repr__(self):
+        return repr(self.args)
+
+    def __len__(self):
+        return len(self.args)
+
+    def __bool__(self):
+        return bool(self.args)
+
+    def __getitem__(self, i):
+        return self.args[i]
+
+    def __contains__(self, item):
+        return item in self.args
+
 
     @staticmethod
-    def _canonicalize(domain, arg):
+    def _canonicalize(domain, args):
         def check(x, r):
             if isinstance(x, (PolyElement, FracElement)):
                 if x == x.parent().one:
@@ -213,18 +251,22 @@ class RadicalMonomial(DomainElement, tuple):
 
         dt = {}
         is_field = domain.dom.is_Field
-        for f, r in arg:
+        for f, r in args:
             p, q = int(r.numerator), int(r.denominator)
             if p == 0:
                 continue
             if (not is_field) and (p < 0):
                 p, q = -p, -q
-            # TODO: separate powers
-            dt[QQ(1, q)] = dt.get(QQ(1, q), 1) * f**p
-        arg = [(v, k) for k, v in sorted(dt.items()) if check(v, k)]
-        if not arg:
-            arg = [(domain.dom.one, domain.exp_dom.one)]
-        return arg
+
+            # dt[QQ(1, q)] = dt.get(QQ(1, q), 1) * f**p
+            dt[QQ(p, q)] = dt.get(QQ(p, q), 1) * f
+        args = [(v, k) for k, v in sorted(dt.items()) if check(v, k)]
+        if not args:
+            args = [(domain.dom.one, domain.exp_dom.one)]
+        return args
+
+    def __iter__(self) -> Iterator[Tuple[Union[PolyElement, FracElement], "MPQ"]]:
+        return iter(self.args)
 
 
     @classmethod
@@ -234,34 +276,31 @@ class RadicalMonomial(DomainElement, tuple):
     def per(self, arg):
         return self.new(arg, self.domain)
 
-    def __iter__(self) -> Iterator[Tuple[Union[PolyElement, FracElement], "MPQ"]]:
-        return super().__iter__()
-
     def __neg__(self):
         negone = (-self.domain.dom.one, self.domain.exp_dom.one)
         return RadicalMonomial(self + (negone,), self.domain)
 
     def __mul__(self, other):
         if isinstance(other, RadicalMonomial):
-            return RadicalMonomial(self + other, self.domain)
+            return RadicalMonomial(self.args + other.args, self.domain)
         x = self.domain.dom(other)
         if x == self.domain.dom.one:
             return self
         if x == self.domain.dom.zero:
             return self.domain.zero
-        return RadicalMonomial(self + ((x, self.domain.exp_dom.one),), self.domain)
+        return RadicalMonomial(self.args + ((x, self.domain.exp_dom.one),), self.domain)
 
     __rmul__ = __mul__
 
     def __truediv__(self, other):
         if isinstance(other, RadicalMonomial):
-            return RadicalMonomial(self - other, self.domain)
+            return RadicalMonomial(self.args + (-other.args), self.domain)
         x = self.domain.dom(other)
         if x == self.domain.dom.one:
             return self
         if x == self.domain.dom.zero:
             return self.domain.zero
-        return RadicalMonomial(self + ((x, -self.domain.exp_dom.one),), self.domain)
+        return RadicalMonomial(self.args + ((x, -self.domain.exp_dom.one),), self.domain)
 
     def __pow__(self, exp):
         return self.per([(f, p*exp) for f, p in self])
@@ -314,21 +353,43 @@ class RadicalMonomial(DomainElement, tuple):
         return [(int(d) + rem_deg(int(d), n))//n for _, d in self]
 
     def to_rem_element(self, n: int):
+        if not self:
+            return self.domain.dom.zero
         x = self.domain.dom.one
         for (f, _), d in zip(self, self.rem_degrees(n)):
             x = x * f**d
         return x
 
     def to_quo_element(self, n: int):
+        if not self:
+            return self.domain.dom.zero
         x = self.domain.dom.one
         for (f, _), d in zip(self, self.quo_degrees(n)):
             x = x * f**d
         return x
 
     def to_sympy(self):
+        if not self:
+            return Rational(0)
         to_sp = self.domain.dom.to_sympy
         exp_to_sp = self.domain.exp_dom.to_sympy
         return Mul(*[to_sp(f)**exp_to_sp(p) for f, p in self])
+
+    def to_rem_sympy(self, n: int):
+        if not self:
+            return Rational(0)
+        to_sp = self.domain.dom.to_sympy
+        exp_to_sp = self.domain.exp_dom.to_sympy
+        ds = self.rem_degrees(n)
+        return Mul(*[to_sp(f)**exp_to_sp(p) for (f, _), p in zip(self, ds)])
+
+    def to_quo_sympy(self, n: int):
+        if not self:
+            return Rational(0)
+        to_sp = self.domain.dom.to_sympy
+        exp_to_sp = self.domain.exp_dom.to_sympy
+        ds = self.quo_degrees(n)
+        return Mul(*[to_sp(f)**exp_to_sp(p) for (f, _), p in zip(self, ds)])
 
     @property
     def is_power_positive(self):
@@ -525,10 +586,9 @@ class CauchySolver(TransformNode):
 
 
         modules = [m.to_ring() for m in modules]
-        print('modules=', modules, modules[0].domain.dom )
+
         module_rem_degs = [m.rem_degrees(lhs_power + 1) for m in modules]
         module_quo_degs = [m.quo_degrees(lhs_power + 1) for m in modules]
-        print('modules rem degs=', module_rem_degs )
 
         nvars = len(gens)
         hom = True # TODO: check this
@@ -551,8 +611,6 @@ class CauchySolver(TransformNode):
 
         builder = ConeSDPBuilder(sum(dofs))
 
-        nans = (Singleton.NaN, Singleton.Infinity,
-                Singleton.NegativeInfinity, Singleton.ComplexInfinity)
         def sample(x):
             affs = []
             ws = []
@@ -642,7 +700,7 @@ class CauchySolver(TransformNode):
         G = _identify_symmetry_from_action(
             [lhs, [rhs]], G, action)
         # TODO: check multiplicity
-        
+
         # collect expressions by symmetry
         modules, stabs = _clear_elements_by_symmetry(lhs, G, action)
         modules: List[RadicalMonomial]
@@ -713,8 +771,8 @@ class CauchySolver(TransformNode):
             lhs = (self.problem.expr + rhs).as_expr()
             rhs = rhs.as_expr()
             multiplier = sum([
-                to_poly(module.to_rem_element(lhs_power + 1)).as_expr()\
-                    *mul.as_expr()**(lhs_power+1)
+                module.to_rem_sympy(lhs_power + 1)\
+                    *mul.as_expr()**(lhs_power + 1)
                         for mul, module in zip(muls, modules)])
             if not G.is_trivial:
                 multiplier = CyclicSum(multiplier, gens, G)
@@ -723,16 +781,26 @@ class CauchySolver(TransformNode):
             exp = Rational(1, lhs_power)
 
             A_list, B_list = [], []
+            # TODO: use original symbols, not radicals
+            def compute_b(m: RadicalMonomial):
+                # m.to_rem_sympy(lhs_power + 1) / m.to_sympy()**exp)**Rational(1, lhs_power+1)
+                rems = m.rem_degrees(lhs_power + 1)
+                ds = [(r - exp*d)/(lhs_power + 1) for r, (_, d) in zip(rems, m)]
+                val = Rational(1)
+                to_sp = m.domain.dom.to_sympy
+                for (f, _), d in zip(m, ds):
+                    val *= to_sp(f)**d
+                return val
 
             for m, mul in zip(modules, muls):
                 A_list.append((m.to_sympy())**exp)
-                B_list.append(mul.as_expr() * (m.to_sympy())**exp)
+                B_list.append(mul.as_expr() * compute_b(m))
                 m0, mul0 = m, mul
                 for perm in G.elements:
                     m = action(m0, perm)
                     mul = action(mul0, perm)
                     a_list.append((m.to_sympy())**exp)
-                    b_list.append(mul.as_expr() * (m.to_sympy())**exp)
+                    b_list.append(mul.as_expr() * compute_b(m))
 
             if not G.is_trivial:
                 A = CyclicSum(sum(A_list), gens, G)
