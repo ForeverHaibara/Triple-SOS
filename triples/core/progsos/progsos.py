@@ -1,5 +1,5 @@
 from .qcqp import QCQPSolver
-from .cauchy import CauchySolver
+# from .cauchy import CauchySolver
 from ..node import ProofNode
 from ..problem import ProblemComplexity
 
@@ -15,7 +15,7 @@ class ProgSOSSolver(ProofNode):
         if self.state == 0:
             self.children = [
                 QCQPSolver(self.problem),
-                CauchySolver(self.problem)
+                # CauchySolver(self.problem)
             ]
             self.state = -1
 

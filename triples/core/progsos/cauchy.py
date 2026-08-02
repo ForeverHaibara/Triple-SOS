@@ -46,7 +46,14 @@ def increment_poly(f: "Poly") -> "Poly":
     """
     new_gens = [Dummy('_%s'%g) for g in f.gens]
     p = f.as_expr().xreplace({g: (g + d) for g, d in zip(f.gens, new_gens)})
-    return p.as_poly(*f.gens, *new_gens, domain = f.domain)
+    q = p.as_poly(*f.gens, *new_gens, domain = f.domain)
+    n = len(f.gens)
+    tail = (0,)*n
+    f = f.from_dict({
+        m + tail: c for m, c in f.rep.terms()
+    }, *q.gens, domain=f.domain)
+    return q - f
+
 
 def _get_symbols_constrained_once(
     problem: "InequalityProblem"
@@ -474,6 +481,9 @@ def as_radical_problem(problem: InequalityProblem) -> Optional[RadicalProblem]:
     if not all(i[2] == 1 for i in info.values()):
         # only handle equality constraints now
         return None
+    if not all(i[1] == 0 for i in info.values()):
+        # requires only zero constraints now
+        return None
 
 
     elim = list(info.keys())
@@ -721,6 +731,9 @@ class CauchySolver(TransformNode):
         # add a nonhomogeneous constraint
         sdp._x0_and_space['z'] = (
             Matrix([[-1]]), Matrix([1]*dof+[0]*(sdp.dof-dof)).T)
+
+        if verbose:
+            sdp.print_graph(short = 2)
 
         val = None
         try:
