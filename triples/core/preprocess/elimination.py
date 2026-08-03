@@ -236,7 +236,7 @@ def eliminate_power_constraints(
 
     1. Extract all power-type (binomial) constraints from the problem
     and rewrite them as `(monomial) == 1`.
-    
+
     2. Find a symmetry-adapted transformation for the variables so that
     it satisfies the extracted constraints and is bijective. See also
     :func:`_symmetry_adapted_nullspace`.
