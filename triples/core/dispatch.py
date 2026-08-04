@@ -10,11 +10,11 @@ To control the behaviour of `InequalityProblem` on new types, you can either:
 from functools import singledispatch
 from typing import (
     List, Tuple, Set, Optional, Callable,
-    Any, TypeVar, TYPE_CHECKING
+    Any, TYPE_CHECKING, cast
 )
 
 from sympy import (
-    Expr, Dummy, Poly, Integer, Add, Mul,
+    Expr, Dummy, Poly, Integer, Add, Mul, Pow,
     sympify, signsimp
 )
 from sympy import __version__ as SYMPY_VERSION
@@ -35,15 +35,17 @@ else:
     _sqf_list = lambda p: p.factor_list() # it would be slower, but correct
 
 if SYMPY_VERSION_TUPLE >= (1, 14):
-    _polyelement_init = PolyElement
-    _fracelement_init = FracElement
+    _polyelement_init = cast(Callable[..., Any], PolyElement)
+    _fracelement_init = cast(Callable[..., Any], FracElement)
 else:
-    def _polyelement_init(ring, init):
+    def _polyelement_init_legacy(ring, init):
         return ring.zero.new(init)
-    def _fracelement_init(field, numer, denom):
+    def _fracelement_init_legacy(field, numer, denom):
         obj = object.__new__(FracElement)
         obj.field, obj.numer, obj.denom = field, numer, denom
         return obj
+    _polyelement_init = _polyelement_init_legacy
+    _fracelement_init = _fracelement_init_legacy
 
 from ..utils.expressions.exraw import HAS_EXRAW
 
@@ -53,38 +55,36 @@ if TYPE_CHECKING:
     )
     from sympy.combinatorics import Permutation
 
-T = TypeVar('T')
-
 @singledispatch
-def _dtype_free_symbols(x: T) -> Set['Symbol']:
+def _dtype_free_symbols(x: Any) -> Set['Symbol']:
     return x.free_symbols
 
 @singledispatch
-def _dtype_gens(x: T) -> Tuple['Symbol', ...]:
+def _dtype_gens(x: Any) -> Tuple['Symbol', ...]:
     return x.gens
 
 @singledispatch
-def _dtype_is_zero(x: T) -> Optional[bool]:
+def _dtype_is_zero(x: Any) -> Optional[bool]:
     return x.is_zero
 
 @singledispatch
-def _dtype_convert(x: T, y: Any) -> T:
+def _dtype_convert(x: Any, y: Any) -> Any:
     return x.convert(y)
 
 @singledispatch
-def _dtype_homogenize(x: T, s: 'Symbol') -> T:
+def _dtype_homogenize(x: Any, s: 'Symbol') -> Any:
     return x.homogenize(s)
 
 @singledispatch
-def _dtype_is_homogeneous(x: T) -> Optional[bool]:
+def _dtype_is_homogeneous(x: Any) -> Optional[bool]:
     return x.is_homogeneous
 
 @singledispatch
-def _dtype_sqf_list(x: T) -> Tuple[Expr, List[Tuple[T, int]]]:
+def _dtype_sqf_list(x: Any) -> Tuple[Expr, List[Tuple[Any, int]]]:
     return x.sqf_list()
 
 @singledispatch
-def _dtype_make_reorder_func(x: T, gens: Tuple['Symbol', ...]) -> Callable[['Permutation'], T]:
+def _dtype_make_reorder_func(x: Any, gens: Tuple['Symbol', ...]) -> Callable[['Permutation'], Any]:
     """Return a callable `f` such that `f(perm) == x.xreplace(dict(zip(gens, perm(gens))))`."""
     return lambda perm: x.xreplace(dict(zip(gens, perm(gens))))
 
@@ -114,14 +114,14 @@ def _expr_homogenize(x: Expr, s: 'Symbol') -> Expr:
             for a in xargs:
                 if a == s:
                     power += 1
-                elif a.is_Pow and a.base == s:
+                elif isinstance(a, Pow) and a.base == s:
                     power += a.exp
                 else:
                     other_args.append(a)
             return (power, Mul(*other_args))
         return (0, x)
 
-    def extract(x: Add) -> Add:
+    def extract(x: Add) -> Expr:
         """Collect all terms of an Add expression by the power of s."""
         args = Add.make_args(x)
         ex = [extract_mul(a) for a in args]
@@ -144,15 +144,21 @@ def _expr_is_homogeneous(x: Expr) -> Optional[bool]:
 @_dtype_sqf_list.register(Expr)
 def _expr_sqf_list(x: Expr) -> Tuple[Expr, List[Tuple[Expr, int]]]:
     if x.is_Mul:
-        return (Integer(1), [(a, 1) if not (a.is_Pow and a.exp.is_Rational)
-            else (a.base**(Integer(1)/a.exp.q), int(a.exp.p)) for a in x.args])
-    if x.is_Pow and x.exp.is_Rational:
+        factors = []
+        for arg in x.args:
+            a = cast(Expr, arg)
+            if isinstance(a, Pow) and a.exp.is_Rational:
+                factors.append((a.base**(Integer(1)/a.exp.q), int(a.exp.p)))
+            else:
+                factors.append((a, 1))
+        return Integer(1), factors
+    if isinstance(x, Pow) and x.exp.is_Rational:
         return (Integer(1), [(x.base**(Integer(1)/x.exp.q), int(x.exp.p))])
     return (Integer(1), [(x, 1)])
 
 @_dtype_make_reorder_func.register(Expr)
-def _expr_make_reorder_func(x: Expr, gens: Tuple['Symbol', ...]) -> Callable[['Permutation'], T]:
-    return lambda perm: signsimp(x.xreplace(dict(zip(gens, perm(gens)))))
+def _expr_make_reorder_func(x: Expr, gens: Tuple['Symbol', ...]) -> Callable[['Permutation'], Expr]:
+    return lambda perm: cast(Expr, signsimp(x.xreplace(dict(zip(gens, perm(gens))))))
 
 
 
@@ -170,7 +176,7 @@ def _poly_sqf_list(x: Poly) -> Tuple[Expr, List[Tuple[Poly, int]]]:
     return _sqf_list(x)
 
 @_dtype_make_reorder_func.register(Poly)
-def _poly_make_reorder_func(x: Poly, gens: Tuple['Symbol', ...]) -> Callable[['Permutation'], T]:
+def _poly_make_reorder_func(x: Poly, gens: Tuple['Symbol', ...]) -> Callable[['Permutation'], Poly]:
     if x.gens == gens:
         return lambda perm: Poly.new(x.reorder(*perm.__invert__()(gens)).rep, *gens)
     return lambda perm: Poly(x.as_expr().xreplace(dict(zip(gens, perm(gens)))), *gens)
@@ -195,15 +201,15 @@ def _polyelement_free_symbols(x: PolyElement) -> Set['Symbol']:
     symbols = {g for g, d in zip(x.ring.gens, x.degrees()) if d > 0}
     domain = x.ring.domain
     if domain.is_Composite:
-        for gen in domain.symbols:
-            symbols |= gen.free_symbols
+        for gen in cast(Any, domain).symbols:
+            symbols |= cast(Any, gen).free_symbols
     elif domain.is_EX:
         for coeff in x.coeffs():
             symbols |= coeff.ex.free_symbols
     elif HAS_EXRAW and domain.is_EXRAW:
         for coeff in x.coeffs():
             symbols |= coeff.free_symbols
-    return symbols
+    return cast(Set['Symbol'], symbols)
 
 
 @_dtype_homogenize.register(PolyElement)
@@ -224,7 +230,7 @@ def _polyelement_is_homogeneous(x: PolyElement) -> bool:
     return all(sum(m) == d for m in monoms)
 
 @_dtype_make_reorder_func.register(PolyElement)
-def _polyelement_make_reorder_func(x: PolyElement, gens: Tuple['Symbol', ...]) -> Callable[['Permutation'], T]:
+def _polyelement_make_reorder_func(x: PolyElement, gens: Tuple['Symbol', ...]) -> Callable[['Permutation'], PolyElement]:
     def reorder(perm):
         inv = perm.__invert__()._array_form
         return x.new({tuple(m[i] for i in inv): v for m, v in x.items()})
@@ -250,7 +256,7 @@ def _fracelement_homogenize(x: FracElement, s: 'Symbol') -> FracElement:
     return _fracelement_init(numer.ring.to_field(), *numer.cancel(denom))
 
 @_dtype_make_reorder_func.register(FracElement)
-def _fracelement_make_reorder_func(x: FracElement, gens: Tuple['Symbol', ...]) -> Callable[['Permutation'], T]:
+def _fracelement_make_reorder_func(x: FracElement, gens: Tuple['Symbol', ...]) -> Callable[['Permutation'], FracElement]:
     rn = _polyelement_make_reorder_func(x.numer, gens)
     rd = _polyelement_make_reorder_func(x.denom, gens)
     return lambda perm: _fracelement_init(x.numer.ring.to_field(), *rn(perm).cancel(rd(perm)))
