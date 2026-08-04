@@ -1,6 +1,6 @@
 from typing import (
     Dict, List, Tuple, Set, Optional, Union, Iterable, Callable,
-    Any, TypeVar, Generic, TYPE_CHECKING, cast
+    Any, TypeVar, Generic, TYPE_CHECKING, cast, Mapping, Sequence
 )
 from sympy import (
     Expr, Symbol, Poly, Integer, Function, Mul, Add, Pow,
@@ -93,7 +93,7 @@ class InequalityProblem(Generic[T]):
         expr: T,
         ineq_constraints: Dict[T, Expr] = {},
         eq_constraints: Dict[T, Expr] = {}
-    ) -> 'InequalityProblem':
+    ) -> 'InequalityProblem[T]':
         """Initialization of objects without sanity checks."""
         obj = object.__new__(cls)
         obj.expr = expr
@@ -166,7 +166,7 @@ class InequalityProblem(Generic[T]):
         expr: T,
         ineq_constraints: Dict[T, Expr] = {},
         eq_constraints: Dict[T, Expr] = {}
-    ) -> 'InequalityProblem':
+    ) -> 'InequalityProblem[T]':
         """
         Return a new InequalityProblem
         with the given `expr`, `ineq_constraints` and `eq_constraints`
@@ -180,7 +180,7 @@ class InequalityProblem(Generic[T]):
         problem.roots = self.roots.copy() if self.roots is not None else None
         return problem
 
-    def copy(self) -> 'InequalityProblem':
+    def copy(self) -> 'InequalityProblem[T]':
         return self.copy_new(self.expr,
             self.ineq_constraints.copy(), self.eq_constraints.copy())
 
@@ -410,7 +410,7 @@ class InequalityProblem(Generic[T]):
         field: bool = False,
         extension: bool = True,
         unify: bool = False,
-    ) -> 'InequalityProblem':
+    ) -> 'InequalityProblem[Poly]':
         problem = self
         expr, ineq_constraints, eq_constraints = \
             problem.expr, problem.ineq_constraints.copy(), problem.eq_constraints.copy()
@@ -448,7 +448,7 @@ class InequalityProblem(Generic[T]):
         if self.roots is not None:
             # TODO: sqf ineqs might exclude some roots here
             problem.roots = self.roots.reorder(problem.gens)
-        return problem
+        return cast('InequalityProblem[Poly]', problem)
 
     def remove_redundancy(self) -> 'InequalityProblem':
         """
@@ -767,16 +767,22 @@ class InequalityProblem(Generic[T]):
         from sympy.polys.polyerrors import DomainError
         try:
             roots = cast(RootList, optimize_poly(
-                    cast(Any, self.expr),
-                    cast(List[Any], list(self.ineq_constraints)),
-                    cast(List[Any], [self.expr] + list(self.eq_constraints)),
+                    cast(Union[Poly, Expr], self.expr),
+                    cast(List[Union[Poly, Expr]], list(self.ineq_constraints)),
+                    cast(List[Union[Poly, Expr]], [self.expr] + list(self.eq_constraints)),
                     list(self.gens), return_type='root'))
         except DomainError:
             roots = RootList(self.gens, [])
         self.roots = roots
         return self.roots
 
-    def set_roots(self, roots: Optional[Any]) -> Optional[RootList]:
+    def set_roots(
+        self,
+        roots: Optional[Union[
+            RootList,
+            Sequence[Union[Mapping[Symbol, Any], Root, Sequence[Any]]]
+        ]]
+    ) -> Optional[RootList]:
         """
         Safely set the roots of the problem. Accepts
         multiple input types (None or list of tuples or list of dicts).
@@ -784,10 +790,10 @@ class InequalityProblem(Generic[T]):
         if roots is None:
             return None
         if not isinstance(roots, RootList):
-            if isinstance(roots, (list, tuple)):
+            if isinstance(roots, Sequence):
                 _roots = []  # type: List[Any]
                 for r in roots:
-                    if isinstance(r, dict):
+                    if isinstance(r, Mapping):
                         _roots.append(tuple([r[g] for g in self.gens]))
                     elif isinstance(r, Root):
                         _roots.append(r)

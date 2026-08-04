@@ -1,14 +1,20 @@
 """
 Compatibility & enhancement tools for SymPy polys module.
 """
-from typing import Tuple
+from typing import Any, Callable, Dict, Tuple, cast
 
 from sympy import Poly, ZZ
 from sympy import __version__ as _SYMPY_VERSION
 try:
-    from sympy.core.random import _randint
+    from sympy.core.random import _randint as _sympy_randint
 except ImportError:
-    def _randint(seed):
+    _sympy_randint = cast(Any, None)
+
+
+def _randint(seed: Any) -> Callable[[int, int], int]:
+    if _sympy_randint is not None:
+        return _sympy_randint(seed)
+    else:
         import random as _random
         rng = _random.Random()
         rng.seed(seed)
@@ -131,7 +137,7 @@ else:
         F, v, K2 = dmp_alg_inject(f, u, K)
         p_a = K.mod.to_list()
         P_A = dmp_include(p_a, list(range(1, v + 1)), 0, K2)
-        return dmp_resultant(F, P_A, v, K2) # type: ignore
+        return dmp_resultant(F, P_A, v, K2)
 
     # poly.lift() had a bug before 1.14:
     # https://github.com/sympy/sympy/pull/26812
@@ -139,7 +145,8 @@ else:
         if not poly.domain.is_AlgebraicField:
             return poly
         rep = poly.rep
-        dmp = DMP(dmp_lift(rep.rep, rep.lev, rep.dom), rep.dom.dom, rep.lev)
+        dmp = DMP(dmp_lift(rep.rep, rep.lev, rep.dom),
+                  getattr(rep.dom, 'dom'), rep.lev)
         return Poly.new(dmp, *poly.gens)
 
     # https://github.com/sympy/sympy/pull/26813
@@ -326,10 +333,10 @@ def dmp_gf_sqf_list(f, u, K, all = False):
 def _dmp_gf_factor_flint(f, u, K):
     if K.mod < 2**64:
         from flint import nmod_mpoly_ctx
-        ctx_func = nmod_mpoly_ctx
+        ctx_func = cast(Any, nmod_mpoly_ctx)
     else:
         from flint import fmpz_mod_mpoly_ctx
-        ctx_func = fmpz_mod_mpoly_ctx
+        ctx_func = cast(Any, fmpz_mod_mpoly_ctx)
     ctx = ctx_func.get([chr(i) for i in range(65, 65 + u + 1)], K.mod)
     dt = {k: int(v) for k, v in dmp_to_dict(f, u, K).items()}
     p = ctx.from_dict(dt)
@@ -483,10 +490,10 @@ def dmp_gf_wang(f, u, K, seed=None):
 
         H = [dmp_convert(h, 0, K, ZZ) for h in H]
         fz = dmp_convert(f1, u, K, ZZ)
-        A = [ZZ(int(a)) for a in A]
+        A_int = [ZZ(int(a)) for a in A]
         LC = [dmp_convert(g, u - 1, K, ZZ) for g in LC]
 
-        hensel = dmp_gf_wang_hensel_lifting(fz, H, LC, A, p, u, ZZ)
+        hensel = dmp_gf_wang_hensel_lifting(fz, H, LC, A_int, p, u, ZZ)
         hensel = [dmp_convert(h, u, ZZ, K) for h in hensel]
 
         result = []
@@ -611,7 +618,8 @@ def dmp_gf_kron(f, u, K):
         return tuple(expv)
 
     def _to_univariate(g):
-        G = {(_encode(e),): v for e, v in dmp_to_dict(g, u, K).items()}
+        G = cast(Dict[Tuple[int, ...], Any],
+                 {(_encode(e),): v for e, v in dmp_to_dict(g, u, K).items()})
         return dmp_from_dict(G, 0, K)
 
     def _from_univariate(g):
@@ -703,7 +711,8 @@ def dmp_gf_kron(f, u, K):
 #
 ###############################################################################
 
-def resultant_bezout(f, g, x, reduced=False) -> Tuple[Poly, Poly, Poly]:
+def resultant_bezout(f: Poly, g: Poly, x: Any,
+                    reduced: bool = False) -> Tuple[Poly, Poly, Poly]:
     """
     Return u, v, res such that `u * f + v * g == res`
     where `res` is the resultant of `f` and `g` in variable `x`.
@@ -712,8 +721,6 @@ def resultant_bezout(f, g, x, reduced=False) -> Tuple[Poly, Poly, Poly]:
     """
     f, g = marginalize(f, x), marginalize(g, x)
 
-    f: Poly
-    g: Poly
     f, g = f.unify(g)
 
     r0, r1 = f, g
@@ -721,7 +728,7 @@ def resultant_bezout(f, g, x, reduced=False) -> Tuple[Poly, Poly, Poly]:
     u1, v1 = f.zero, f.one
 
     while r1.degree() > 0:
-        d = max(0, r0.degree()) - max(0, r1.degree())
+        d = max(0, int(r0.degree())) - max(0, int(r1.degree()))
         if d < 0:
             r0, r1 = r1, r0
             u0, u1 = u1, u0
