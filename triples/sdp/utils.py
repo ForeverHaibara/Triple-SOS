@@ -1,4 +1,4 @@
-from typing import Union, Optional, Tuple, List, Dict, Callable, Any, TYPE_CHECKING
+from typing import Union, Optional, Tuple, List, Dict, Callable, Any, TYPE_CHECKING, cast
 
 from numpy import ndarray
 import numpy as np
@@ -37,12 +37,12 @@ def S_from_y(
     if not isinstance(y, MatrixBase):
         y = Matrix(y)
 
-    S_dict = {}
+    S_dict: Dict[str, Matrix] = {}
     for key, (x0, space) in x0_and_space.items():
         # vecS = x0 + space * y
         vecS = matadd(x0, matmul(space, y))
         S = vec2mat(vecS)
-        S_dict[key] = S
+        S_dict[key] = cast(Matrix, S)
     return S_dict
 
 
@@ -210,30 +210,39 @@ def exprs_to_arrays(
     op_list = []
     vec_list = []
     index_list = []
-    result = [None for _ in range(len(exprs))]
+    result: List[Any] = [None for _ in range(len(exprs))]
     nvars = len(symbols)
     for i, expr in enumerate(exprs):
-        c, op = 0, None
+        expr = cast(Any, expr)
+        c: Any = 0
+        op: Optional[str] = None
+        expr_value: Any
         if callable(expr):
-            expr = expr(locals)
+            expr_value = expr(locals)
+        else:
+            expr_value = expr
         if isinstance(expr, tuple):
             if len(expr) == 3:
-                expr, c, op = expr
+                expr_value, c, op = expr
             elif len(expr) == 2:
-                expr, c = expr
+                expr_value, c = expr
             else:
                 raise ValueError("The tuple should be of length 2 or 3.")
+        expr = cast(Any, expr_value)
         if isinstance(expr, Relational):
             sign, op = _RELATIONAL_TO_OPERATOR[expr.__class__]
-            expr = expr.lhs - expr.rhs if sign == 1 else expr.rhs - expr.lhs # type: ignore
+            lhs = cast(Expr, expr.lhs)
+            rhs = cast(Expr, expr.rhs)
+            expr = lhs - rhs if sign == 1 else rhs - lhs
             c = -c if sign == -1 else c
         if isinstance(expr, (Expr, int, float)):
             vec_list.append(expr)
             op_list.append(op)
             index_list.append(i)
         elif isinstance(expr, (list, ndarray, MatrixBase)):
+            matrix_expr: Any = expr
             if isinstance(expr, list):
-                expr = Matrix(expr) if len(expr) else Matrix.zeros(0, nvars)
+                matrix_expr = Matrix(expr) if len(expr) else Matrix.zeros(0, nvars)
             if isinstance(c, list):
                 c = Matrix(c) if len(c) else Matrix.zeros(0, 1)
             if op is not None:
@@ -242,10 +251,13 @@ def exprs_to_arrays(
                 else:
                     raise ValueError(f"The operator {op} at line {i} is not supported.")
                 if sign == -1:
-                    expr, c = -expr, -c
-                result[i] = (expr, c, op)
+                    matrix_expr = cast(Any, -cast(Any, matrix_expr))
+                    c = -c
+                else:
+                    matrix_expr = matrix_expr
+                result[i] = (matrix_expr, c, op)
             else:
-                result[i] = (expr, c)
+                result[i] = (matrix_expr, c)
         else:
             raise ValueError(f"The expression {type(expr)} at line {i} is not supported.")
 
@@ -259,23 +271,24 @@ def exprs_to_arrays(
             result[i] = (A[j,:], -const[j])
 
     for i in range(len(result)):
-        expr, c = result[i][0], result[i][1]
-        if not isinstance(c, (ndarray, MatrixBase)):
-            c = Matrix([c])
-        elif isinstance(c, ndarray):
-            c = c.flatten()
-        if isinstance(expr, ndarray):
-            expr = expr.reshape(c.shape[0], nvars)
-        elif isinstance(expr, MatrixBase):
-            if expr.shape[0] == nvars and expr.shape[1] == 1: # column vec
-                expr = reshape(expr, (c.shape[0], nvars))
-            if expr.shape[1] != nvars:
-                raise ValueError(f"Invalid shape of expr matrix, expected (*,{nvars}), but got {expr.shape}.")
+        result_expr: Any = result[i][0]
+        result_c: Any = result[i][1]
+        if not isinstance(result_c, (ndarray, MatrixBase)):
+            result_c = Matrix([result_c])
+        elif isinstance(result_c, ndarray):
+            result_c = result_c.flatten()
+        if isinstance(result_expr, ndarray):
+            result_expr = result_expr.reshape(result_c.shape[0], nvars)
+        elif isinstance(result_expr, MatrixBase):
+            if result_expr.shape[0] == nvars and result_expr.shape[1] == 1: # column vec
+                result_expr = reshape(result_expr, (result_c.shape[0], nvars))
+            if result_expr.shape[1] != nvars:
+                raise ValueError(f"Invalid shape of expr matrix, expected (*,{nvars}), but got {result_expr.shape}.")
             # expr = expr.reshape(expr.shape[0]*expr.shape[1]//nvars, nvars)
         if len(result[i]) == 3:
-            result[i] = (expr, c, result[i][2])
+            result[i] = (result_expr, result_c, result[i][2])
         elif len(result[i]) == 2:
-            result[i] = (expr, c, '==')
+            result[i] = (result_expr, result_c, '==')
         else:
             raise ValueError(f"Invalid length of result tuple, expected 2 or 3, but got {len(result[i])} at line {i}.")
 
@@ -287,12 +300,11 @@ def exprs_to_arrays(
             # else:
             #     result[i] = (f(result[i][0]), f(result[i][1]).flatten())
 
-    return result
+    return cast(List[Tuple[Matrix, Matrix, str]], result)
 
 
 def collect_constraints(constraints: List[Tuple[ndarray, ndarray, str]], dof: int) -> Tuple[ndarray, ndarray, ndarray, ndarray]:
-    ineq_lhs, ineq_rhs = [], []
-    eq_lhs, eq_rhs = [], []
+    ineq_lhs, ineq_rhs, eq_lhs, eq_rhs = [], [], [], []
     for lhs, rhs, op in constraints:
         if op in ('>', '>='):
             ineq_lhs.append(lhs)
@@ -307,19 +319,19 @@ def collect_constraints(constraints: List[Tuple[ndarray, ndarray, str]], dof: in
             raise ValueError(f"Unknown operator {op}.")
 
     if len(ineq_lhs):
-        ineq_lhs = np.vstack(ineq_lhs)
-        ineq_rhs = np.concatenate(ineq_rhs)
+        ineq_lhs_arr = np.vstack(ineq_lhs)
+        ineq_rhs_arr = np.concatenate(ineq_rhs)
     else:
-        ineq_lhs = np.zeros((0, dof))
-        ineq_rhs = np.zeros((0,))
+        ineq_lhs_arr = np.zeros((0, dof))
+        ineq_rhs_arr = np.zeros((0,))
 
     if len(eq_lhs):
-        eq_lhs = np.vstack(eq_lhs)
-        eq_rhs = np.concatenate(eq_rhs)
+        eq_lhs_arr = np.vstack(eq_lhs)
+        eq_rhs_arr = np.concatenate(eq_rhs)
     else:
-        eq_lhs = np.zeros((0, dof))
-        eq_rhs = np.zeros((0,))
-    return ineq_lhs, ineq_rhs, eq_lhs, eq_rhs
+        eq_lhs_arr = np.zeros((0, dof))
+        eq_rhs_arr = np.zeros((0,))
+    return ineq_lhs_arr, ineq_rhs_arr, eq_lhs_arr, eq_rhs_arr
 
 
 class IteratorAlignmentError(Exception): ...
@@ -346,8 +358,8 @@ def align_iters(
     if len(iters) == 0:
         return []
     check_tp = lambda i, tp: (callable(tp) and not isinstance(tp, type) and tp(i)) \
-        or isinstance(i, tp) # type: ignore
-    aligned_iters = []
+        or isinstance(i, tp)
+    aligned_iters: List[List[Any]] = []
     for i, tp in zip(iters, default_types):
         if i is None:
             aligned_iters.append([])

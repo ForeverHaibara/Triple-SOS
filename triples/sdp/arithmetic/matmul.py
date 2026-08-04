@@ -5,7 +5,7 @@ using sympy.Rational or numpy for matrix computations.
 """
 
 from time import perf_counter
-from typing import List, Tuple, Union, Optional, Callable, overload, TYPE_CHECKING
+from typing import Any, List, Tuple, Union, Optional, Callable, TYPE_CHECKING, cast
 
 from numpy import ndarray, int64, isnan, inf, kron, result_type
 from numpy import iinfo as np_iinfo
@@ -33,6 +33,8 @@ _INT64_MAX = np_iinfo('int64').max # 9223372036854775807
 _VERBOSE_MATMUL_MULTIPLE = False
 _IS_STANDARD_INT64 = (_INT64_MAX == 9223372036854775807)
 
+MatrixLike = Union['MatrixBase', ndarray, spmatrix]
+
 
 def _is_sparse_matrix(A) -> bool:
     return isinstance(A, spmatrix)
@@ -41,7 +43,7 @@ def _is_numeric_matrix(A) -> bool:
     return isinstance(A, (ndarray, spmatrix))
 
 def _as_csr(A: Union[ndarray, spmatrix]) -> csr_matrix:
-    if _is_sparse_matrix(A):
+    if isinstance(A, spmatrix):
         return A.tocsr()
     return csr_matrix(A)
 
@@ -68,26 +70,7 @@ def _symmetric_bilinear_sparse_cost(A: spmatrix, U: spmatrix):
     return U.nnz * U.nnz + A.nnz * row_nnz * row_nnz
 
 
-@overload
-def matadd(A: 'MatrixBase', B: 'MatrixBase') -> 'MatrixBase': ...
-@overload
-def matadd(A: ndarray, B: ndarray) -> ndarray: ...
-@overload
-def matadd(A: spmatrix, B: spmatrix) -> spmatrix: ...
-@overload
-def matadd(A: spmatrix, B: ndarray) -> spmatrix: ...
-@overload
-def matadd(A: ndarray, B: spmatrix) -> spmatrix: ...
-@overload
-def matadd(A: 'MatrixBase', B: ndarray) -> 'MatrixBase': ...
-@overload
-def matadd(A: ndarray, B: 'MatrixBase') -> 'MatrixBase': ...
-@overload
-def matadd(A: 'MatrixBase', B: spmatrix) -> 'MatrixBase': ...
-@overload
-def matadd(A: spmatrix, B: 'MatrixBase') -> 'MatrixBase': ...
-
-def matadd(A, B):
+def matadd(A: MatrixLike, B: MatrixLike) -> MatrixLike:
     """
     Compute A + B with proper data types casting.
     """
@@ -129,7 +112,7 @@ def matlshift(A: RepMatrix, B: int) -> RepMatrix:
     if not isinstance(A, RepMatrix):
         return A * (2**B)
     rep = A._rep.rep
-    dom = rep.domain
+    dom = cast(Any, rep).domain
     if not dom.is_ZZ:
         return A * (2**B)
     if isinstance(rep, SDM):
@@ -138,41 +121,18 @@ def matlshift(A: RepMatrix, B: int) -> RepMatrix:
     elif isinstance(rep, DDM):
         rep = DDM([[v << B for v in row] for row in rep], A.shape, dom)
     elif isinstance(rep, DFM):
-        rep = rep.mul(2**B) # type: ignore
+        rep = rep.mul(2**B)
     else:
         rep = rep * (2**B)
     return A._fromrep(A._rep.from_rep(rep))
 
 
-@overload
-def matmul(A: 'MatrixBase', B: 'MatrixBase', return_shape: Optional[Tuple[int, int]] = None,
-        time_limit: Optional[Union[Callable, float]] = None) -> Matrix: ...
-@overload
-def matmul(A: ndarray, B: ndarray, return_shape: Optional[Tuple[int, int]] = None,
-        time_limit: Optional[Union[Callable, float]] = None) -> ndarray: ...
-@overload
-def matmul(A: spmatrix, B: spmatrix, return_shape: Optional[Tuple[int, int]] = None,
-        time_limit: Optional[Union[Callable, float]] = None) -> spmatrix: ...
-@overload
-def matmul(A: spmatrix, B: ndarray, return_shape: Optional[Tuple[int, int]] = None,
-        time_limit: Optional[Union[Callable, float]] = None) -> ndarray: ...
-@overload
-def matmul(A: ndarray, B: spmatrix, return_shape: Optional[Tuple[int, int]] = None,
-        time_limit: Optional[Union[Callable, float]] = None) -> ndarray: ...
-@overload
-def matmul(A: 'MatrixBase', B: ndarray, return_shape: Optional[Tuple[int, int]] = None,
-        time_limit: Optional[Union[Callable, float]] = None) -> Matrix: ...
-@overload
-def matmul(A: ndarray, B: 'MatrixBase', return_shape: Optional[Tuple[int, int]] = None,
-        time_limit: Optional[Union[Callable, float]] = None) -> Matrix: ...
-@overload
-def matmul(A: 'MatrixBase', B: spmatrix, return_shape: Optional[Tuple[int, int]] = None,
-        time_limit: Optional[Union[Callable, float]] = None) -> Matrix: ...
-@overload
-def matmul(A: spmatrix, B: 'MatrixBase', return_shape: Optional[Tuple[int, int]] = None,
-        time_limit: Optional[Union[Callable, float]] = None) -> Matrix: ...
-
-def matmul(A, B, return_shape=None, time_limit=None):
+def matmul(
+    A: MatrixLike,
+    B: MatrixLike,
+    return_shape: Optional[Tuple[int, int]] = None,
+    time_limit: Optional[Union[Callable, float]] = None,
+) -> MatrixLike:
     """
     Fast, low-level implementation of symbolic matrix multiplication.
     When A and B are both rational matrices, it calls NumPy to compute the result.
@@ -297,35 +257,11 @@ def _matmul_multiple_spmatrix(A, B):
                             B, format='csr')
     return A @ kr
 
-@overload
-def matmul_multiple(A: 'MatrixBase', B: 'MatrixBase',
-    time_limit: Optional[Union[Callable, float]] = None) -> Matrix: ...
-@overload
-def matmul_multiple(A: ndarray, B: ndarray,
-    time_limit: Optional[Union[Callable, float]] = None) -> ndarray: ...
-@overload
-def matmul_multiple(A: spmatrix, B: spmatrix,
-    time_limit: Optional[Union[Callable, float]] = None) -> spmatrix: ...
-@overload
-def matmul_multiple(A: spmatrix, B: ndarray,
-    time_limit: Optional[Union[Callable, float]] = None) -> spmatrix: ...
-@overload
-def matmul_multiple(A: ndarray, B: spmatrix,
-    time_limit: Optional[Union[Callable, float]] = None) -> spmatrix: ...
-@overload
-def matmul_multiple(A: 'MatrixBase', B: ndarray,
-    time_limit: Optional[Union[Callable, float]] = None) -> Matrix: ...
-@overload
-def matmul_multiple(A: ndarray, B: 'MatrixBase',
-    time_limit: Optional[Union[Callable, float]] = None) -> Matrix: ...
-@overload
-def matmul_multiple(A: 'MatrixBase', B: spmatrix,
-    time_limit: Optional[Union[Callable, float]] = None) -> Matrix: ...
-@overload
-def matmul_multiple(A: spmatrix, B: 'MatrixBase',
-    time_limit: Optional[Union[Callable, float]] = None) -> Matrix: ...
-
-def matmul_multiple(A, B, time_limit=None):
+def matmul_multiple(
+    A: MatrixLike,
+    B: MatrixLike,
+    time_limit: Optional[Union[Callable, float]] = None,
+) -> MatrixLike:
     """
     Perform multiple matrix multiplications. This can be regarded as a 3-dim tensor multiplication.
     Assume A has shape N x (n^2) and B has shape n x m, then the result has shape N x (n*m).
@@ -384,13 +320,12 @@ def matmul_multiple(A, B, time_limit=None):
 
     A0, B0 = A, B
     def default(A, B):
-        eq_mat = []
+        eq_rows: List[Matrix] = []
         for i in range(A.shape[0]):
             Aij = vec2mat(A[i,:])
             eq = matmul(Aij, B, return_shape = (1, Aij.shape[0]*B.shape[1]), time_limit=time_limit)
-            eq_mat.append(eq)
-        eq_mat = Matrix.vstack(*eq_mat)
-        return eq_mat
+            eq_rows.append(cast(Matrix, eq))
+        return Matrix.vstack(*eq_rows)
 
     if _VERBOSE_MATMUL_MULTIPLE:
         print('MatmulMultiple A B shape =', A.shape, B.shape)
@@ -464,44 +399,13 @@ def _symmetric_bilinear_multiple_spmatrix(U, A):
     transform = sparse_kron(U, U, format='csr')
     return _as_csr(A) @ transform
 
-@overload
-def symmetric_bilinear(U: 'MatrixBase', A: 'MatrixBase', is_A_vec: bool = False,
+def symmetric_bilinear(
+    U: MatrixLike,
+    A: MatrixLike,
+    is_A_vec: bool = False,
     return_shape: Optional[Tuple[int, int]] = None,
-    time_limit: Optional[Union[Callable, float]] = None) -> Matrix: ...
-@overload
-def symmetric_bilinear(U: ndarray, A: ndarray, is_A_vec: bool = False,
-    return_shape: Optional[Tuple[int, int]] = None,
-    time_limit: Optional[Union[Callable, float]] = None) -> ndarray: ...
-@overload
-def symmetric_bilinear(U: spmatrix, A: spmatrix, is_A_vec: bool = False,
-    return_shape: Optional[Tuple[int, int]] = None,
-    time_limit: Optional[Union[Callable, float]] = None) -> spmatrix: ...
-@overload
-def symmetric_bilinear(U: spmatrix, A: ndarray, is_A_vec: bool = False,
-    return_shape: Optional[Tuple[int, int]] = None,
-    time_limit: Optional[Union[Callable, float]] = None) -> ndarray: ...
-@overload
-def symmetric_bilinear(U: ndarray, A: spmatrix, is_A_vec: bool = False,
-    return_shape: Optional[Tuple[int, int]] = None,
-    time_limit: Optional[Union[Callable, float]] = None) -> ndarray: ...
-@overload
-def symmetric_bilinear(U: 'MatrixBase', A: ndarray, is_A_vec: bool = False,
-    return_shape: Optional[Tuple[int, int]] = None,
-    time_limit: Optional[Union[Callable, float]] = None) -> Matrix: ...
-@overload
-def symmetric_bilinear(U: ndarray, A: 'MatrixBase', is_A_vec: bool = False,
-    return_shape: Optional[Tuple[int, int]] = None,
-    time_limit: Optional[Union[Callable, float]] = None) -> Matrix: ...
-@overload
-def symmetric_bilinear(U: 'MatrixBase', A: spmatrix, is_A_vec: bool = False,
-    return_shape: Optional[Tuple[int, int]] = None,
-    time_limit: Optional[Union[Callable, float]] = None) -> Matrix: ...
-@overload
-def symmetric_bilinear(U: spmatrix, A: 'MatrixBase', is_A_vec: bool = False,
-    return_shape: Optional[Tuple[int, int]] = None,
-    time_limit: Optional[Union[Callable, float]] = None) -> Matrix: ...
-
-def symmetric_bilinear(U, A, is_A_vec=False, return_shape=None, time_limit=None):
+    time_limit: Optional[Union[Callable, float]] = None,
+) -> MatrixLike:
     """
     Compute U.T * A * U efficiently.
     Assume U is n x m, U.T is m x n and A is n x n. The result is m x m.
@@ -560,35 +464,11 @@ def symmetric_bilinear(U, A, is_A_vec=False, return_shape=None, time_limit=None)
     return M
 
 
-@overload
-def symmetric_bilinear_multiple(U: 'MatrixBase', A: 'MatrixBase',
-    time_limit: Optional[Union[Callable, float]] = None) -> Matrix: ...
-@overload
-def symmetric_bilinear_multiple(U: ndarray, A: ndarray,
-    time_limit: Optional[Union[Callable, float]] = None) -> ndarray: ...
-@overload
-def symmetric_bilinear_multiple(U: spmatrix, A: spmatrix,
-    time_limit: Optional[Union[Callable, float]] = None) -> spmatrix: ...
-@overload
-def symmetric_bilinear_multiple(U: spmatrix, A: ndarray,
-    time_limit: Optional[Union[Callable, float]] = None) -> spmatrix: ...
-@overload
-def symmetric_bilinear_multiple(U: ndarray, A: spmatrix,
-    time_limit: Optional[Union[Callable, float]] = None) -> spmatrix: ...
-@overload
-def symmetric_bilinear_multiple(U: 'MatrixBase', A: ndarray,
-    time_limit: Optional[Union[Callable, float]] = None) -> Matrix: ...
-@overload
-def symmetric_bilinear_multiple(U: ndarray, A: 'MatrixBase',
-    time_limit: Optional[Union[Callable, float]] = None) -> Matrix: ...
-@overload
-def symmetric_bilinear_multiple(U: 'MatrixBase', A: spmatrix,
-    time_limit: Optional[Union[Callable, float]] = None) -> Matrix: ...
-@overload
-def symmetric_bilinear_multiple(U: spmatrix, A: 'MatrixBase',
-    time_limit: Optional[Union[Callable, float]] = None) -> Matrix: ...
-
-def symmetric_bilinear_multiple(U, A, time_limit=None):
+def symmetric_bilinear_multiple(
+    U: MatrixLike,
+    A: MatrixLike,
+    time_limit: Optional[Union[Callable, float]] = None,
+) -> MatrixLike:
     """
     Perform multiple symmetric bilinear products U^T * Ai * U.
     Assume U has shape n x m and A has shape N x (n^2), then the result has shape N x m^2.
@@ -616,14 +496,14 @@ def symmetric_bilinear_multiple(U, A, time_limit=None):
     def default(A, U):
         if _VERBOSE_MATMUL_MULTIPLE:
             time0 = perf_counter()
-        eq_mat = [0] * A.shape[0]
+        eq_rows: List[Matrix] = [Matrix.zeros(0, 0)] * A.shape[0]
         for i in range(A.shape[0]):
             # Aij = vec2mat(space[i,:])
             # eq = U.T * Aij * U
             eq = symmetric_bilinear(U, A[i,:], is_A_vec = True,
                     return_shape = (1, U.shape[1]**2), time_limit = time_limit)
-            eq_mat[i] = eq
-        eq_mat = Matrix.vstack(*eq_mat)
+            eq_rows[i] = cast(Matrix, eq)
+        eq_mat = Matrix.vstack(*eq_rows)
         if _VERBOSE_MATMUL_MULTIPLE:
             print(f">>> Default Symmetric Bilinear {U.shape}.T * {A.shape} * {U.shape}"\
                   + f", time = {perf_counter() - time0}")
@@ -772,13 +652,19 @@ def _symmetric_bilinear_multiple_by_level(U: ndarray, A: ndarray) -> RepMatrix:
     levels_u = [level_u*i for i in range(63//level_u + 1)]
     levels_a = [level_a*i for i in range(63//level_a + 1)]
 
-    parts_u = _decompose_int64_to_level_digits(U, level_u)
-    parts_a = _decompose_int64_to_level_digits(A, level_a)
+    parts_u_raw = _decompose_int64_to_level_digits(U, level_u)
+    parts_a_raw = _decompose_int64_to_level_digits(A, level_a)
 
-    parts_u = [(u if np_any(u) else None) for u in parts_u]
-    parts_a = [(a if np_any(a) else None) for a in parts_a]
+    parts_u: List[Optional[ndarray]] = [
+        u if np_any(u) else None for u in parts_u_raw
+    ]
+    parts_a: List[Optional[ndarray]] = [
+        a if np_any(a) else None for a in parts_a_raw
+    ]
 
-    shifts = [[] for _ in range(2*max(levels_u) + max(levels_a) + 1)]
+    shifts: List[List[MatrixLike]] = [
+        [] for _ in range(2*max(levels_u) + max(levels_a) + 1)
+    ]
     for lu1, u1 in zip(levels_u, parts_u):
         if u1 is None:
             continue
@@ -796,11 +682,15 @@ def _symmetric_bilinear_multiple_by_level(U: ndarray, A: ndarray) -> RepMatrix:
         if not C_list:
             continue
         if 2**(3*level) * n**2 * len(C_list) > _INT64_MAX:
-            C_list = [rep_matrix_from_numpy(C) for C in C_list]
+            C_list_converted: List[MatrixLike] = [
+                rep_matrix_from_numpy(C) for C in C_list
+            ]
+        else:
+            C_list_converted = cast(List[MatrixLike], C_list)
 
         # do not use sum(..., start=0) to support Python < 3.8
-        C = C_list[0]
-        for C_ in C_list[1:]:
+        C = C_list_converted[0]
+        for C_ in C_list_converted[1:]:
             C = C + C_
         if isinstance(C, ndarray):
             C = rep_matrix_from_numpy(C)
@@ -817,26 +707,7 @@ def _symmetric_bilinear_multiple_by_level(U: ndarray, A: ndarray) -> RepMatrix:
     return result
 
 
-@overload
-def kronecker_product(A: 'MatrixBase', B: 'MatrixBase') -> Matrix: ...
-@overload
-def kronecker_product(A: ndarray, B: ndarray) -> ndarray: ...
-@overload
-def kronecker_product(A: spmatrix, B: spmatrix) -> spmatrix: ...
-@overload
-def kronecker_product(A: spmatrix, B: ndarray) -> spmatrix: ...
-@overload
-def kronecker_product(A: ndarray, B: spmatrix) -> spmatrix: ...
-@overload
-def kronecker_product(A: 'MatrixBase', B: ndarray) -> Matrix: ...
-@overload
-def kronecker_product(A: ndarray, B: 'MatrixBase') -> Matrix: ...
-@overload
-def kronecker_product(A: 'MatrixBase', B: spmatrix) -> Matrix: ...
-@overload
-def kronecker_product(A: spmatrix, B: 'MatrixBase') -> Matrix: ...
-
-def kronecker_product(A, B):
+def kronecker_product(A: MatrixLike, B: MatrixLike) -> MatrixLike:
     """
     Compute the kronecker product of two matrices A and B.
 
@@ -866,7 +737,7 @@ def kronecker_product(A, B):
     if dom != b.domain:
         b = b.convert_to(dom)
 
-    mat = {}
+    mat: dict = {}
     x, y = b.shape
     for i1, row in a.items():
         for j1, v in row.items():
