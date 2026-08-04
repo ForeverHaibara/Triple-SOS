@@ -430,25 +430,26 @@ class InequalityProblem(Generic[T]):
         ineq_constraints = {as_poly(e): e2 for e, e2 in ineq_constraints.items()}
         eq_constraints = {as_poly(e): e2 for e, e2 in eq_constraints.items()}
 
-        problem = InequalityProblem(expr, ineq_constraints, eq_constraints)
-        problem, _ = problem.sqr_free(problem_sqf=False,
+        new_problem = InequalityProblem(expr, ineq_constraints, eq_constraints)
+        new_problem, _ = new_problem.sqr_free(problem_sqf=False,
             ineqs_sqf=ineqs_sqf, eqs_sqf=eqs_sqf, inplace=True)
 
         if unify:
-            doms = problem.reduce(lambda e: cast(Any, e).domain, list)
+            doms = new_problem.reduce(lambda e: e.domain, list)
             dom = doms[0]
             for dom1 in doms[1:]:
                 dom = dom.unify(dom1)
-            problem.expr = cast(T, cast(Any, problem.expr).set_domain(dom))
-            problem.ineq_constraints = {cast(T, cast(Any, e).set_domain(dom)): e2
-                for e, e2 in problem.ineq_constraints.items()}
-            problem.eq_constraints = {cast(T, cast(Any, e).set_domain(dom)): e2
-                for e, e2 in problem.eq_constraints.items()}
+            new_problem.expr = new_problem.expr.set_domain(dom)
+            new_problem.ineq_constraints = {e.set_domain(dom): e2
+                for e, e2 in new_problem.ineq_constraints.items()}
+            new_problem.eq_constraints = {e.set_domain(dom): e2
+                for e, e2 in new_problem.eq_constraints.items()}
 
         if self.roots is not None:
             # TODO: sqf ineqs might exclude some roots here
-            problem.roots = self.roots.reorder(problem.gens)
-        return cast('InequalityProblem[Poly]', problem)
+            new_problem.roots = self.roots.reorder(new_problem.gens)
+
+        return cast('InequalityProblem[Poly]', new_problem)
 
     def remove_redundancy(self) -> 'InequalityProblem':
         """
@@ -528,7 +529,7 @@ class InequalityProblem(Generic[T]):
         ineqs_sqf: bool = True,
         eqs_sqf: bool = True,
         inplace: bool = False,
-    ) -> Tuple['InequalityProblem', Expr]:
+    ) -> Tuple['InequalityProblem[T]', Expr]:
         """
         Try to make the problem square-free.
 

@@ -10,7 +10,7 @@ basic matrix operations.
 from collections import defaultdict
 from time import perf_counter
 from typing import (List, Dict, Tuple, Union, Optional, Callable, Set,
-                    Any, TYPE_CHECKING)
+                    Any, TYPE_CHECKING, TypeVar)
 
 import numpy as np
 from numpy import ndarray
@@ -18,7 +18,8 @@ from scipy.sparse import spmatrix, csr_matrix
 from sympy import __version__ as _SYMPY_VERSION
 from sympy.external.gmpy import MPZ # >= 1.9
 from sympy.external.importtools import version_tuple
-from sympy import Float, MatrixBase
+from sympy import Float
+from sympy.matrices.matrixbase import MatrixBase
 from sympy.matrices import MutableDenseMatrix as Matrix
 from sympy.matrices.repmatrix import RepMatrix
 from sympy.polys.domains import ZZ, RR, CC # EXRAW >= 1.9
@@ -59,6 +60,7 @@ except ImportError:
 
 
 MatrixLike = Union[MatrixBase, ndarray, spmatrix]
+MatrixT = TypeVar('MatrixT', MatrixBase, ndarray, spmatrix)
 
 
 class ArithmeticTimeout(Exception):
@@ -160,9 +162,7 @@ def sqrtsize_of_mat(M: Union[MatrixLike, int]) -> int:
         return int(np.round(np.sqrt(M)))
     return int(np.round(np.sqrt(size_of_mat(M))))
 
-def reshape(
-    A: MatrixLike, shape: Tuple[int, int]
-) -> MatrixLike:
+def reshape(A: MatrixT, shape: Tuple[int, int]) -> MatrixT:
     """
     Reshape a matrix to a new shape. This function maintains the domain
     of SymPy RepMatrix for low SymPy versions.
@@ -190,7 +190,7 @@ def reshape(
     """
     if A.shape == shape:
         return A
-    if isinstance(A, Matrix):
+    if isinstance(A, RepMatrix):
         rep = A._rep.rep
         n, m = A.shape
         n2, m2 = shape
@@ -201,11 +201,15 @@ def reshape(
             if i not in dt_by_row:
                 dt_by_row[i] = {}
             dt_by_row[i][j] = v
-        return rep_matrix_from_dict(dt_by_row, shape, A._rep.domain)
+        return A._fromrep(DomainMatrix.from_rep(
+            SDM(dt_by_row, shape, A._rep.domain)
+        ))
+    if isinstance(A, spmatrix):
+        return A.__class__(A.reshape(shape))
     return A.reshape(*shape)
 
 
-def vec2mat(v: MatrixLike) -> MatrixLike:
+def vec2mat(v: MatrixT) -> MatrixT:
     """
     Convert a vector to a symmetric matrix.
 
@@ -227,7 +231,7 @@ def vec2mat(v: MatrixLike) -> MatrixLike:
     n = sqrtsize_of_mat(v)
     return reshape(v, (n, n))
 
-def mat2vec(M: MatrixLike) -> MatrixLike:
+def mat2vec(M: MatrixT) -> MatrixT:
     """
     Convert a matrix to a vector.
 
@@ -582,8 +586,8 @@ def rep_matrix_to_scipy(M: Union[MatrixLike, DomainMatrix], dtype = np.float64) 
 
 
 def permute_matrix_rows(
-    matrix: MatrixLike, permutation: List[int]
-) -> MatrixLike:
+    matrix: MatrixT, permutation: List[int]
+) -> MatrixT:
     """
     Fast operation of matrix[permutation].
 
@@ -604,38 +608,41 @@ def permute_matrix_rows(
     [1, 2, 3],
     [1, 2, 3]])
     """
-    rep = matrix._rep.rep if isinstance(matrix, RepMatrix) else None
     shape = (len(permutation), matrix.shape[1])
 
+    if isinstance(matrix, RepMatrix):
+        rep = matrix._rep.rep
+        if isinstance(rep, SDM):
+            new_rep = {}
+            for r in range(len(permutation)):
+                v = rep.get(permutation[r], None)
+                if v is not None:
+                    new_rep[r] = v #.copy()
+            return matrix._fromrep(DomainMatrix.from_rep(
+                SDM(new_rep, shape, rep.domain)
+            ))
 
-    if isinstance(rep, SDM):
-        new_rep = {}
-        for r in range(len(permutation)):
-            v = rep.get(permutation[r], None)
-            if v is not None:
-                new_rep[r] = v #.copy()
-        return rep_matrix_from_dict(new_rep, shape, rep.domain)
+        elif isinstance(rep, DDM):
+            new_rep_rows: List[Any] = [None for _ in range(len(permutation))]
+            for r in range(len(permutation)):
+                new_rep_rows[r] = rep[permutation[r]]#[:]
+            ddm_rep = DDM(new_rep_rows, shape, rep.domain)
+            return matrix._fromrep(DomainMatrix.from_rep(ddm_rep))
 
-    elif isinstance(rep, DDM):
-        new_rep_rows: List[Any] = [None for _ in range(len(permutation))]
-        for r in range(len(permutation)):
-            new_rep_rows[r] = rep[permutation[r]]#[:]
-        ddm_rep = DDM(new_rep_rows, shape, rep.domain)
-        return Matrix._fromrep(DomainMatrix.from_rep(ddm_rep))
+        elif isinstance(rep, DFM):
+            rep2 = rep.rep.tolist() # type: ignore
+            domain = rep.domain # type: ignore
+            new_rep_rows_dfm: List[Any] = [None for _ in range(len(permutation))]
+            for r in range(len(permutation)):
+                new_rep_rows_dfm[r] = rep2[permutation[r]]
+            dfm_rep = DFM(new_rep_rows_dfm, shape, domain)
+            return matrix._fromrep(DomainMatrix.from_rep(dfm_rep))
 
-    elif isinstance(rep, DFM):
-        rep2 = rep.rep.tolist() # type: ignore
-        domain = rep.domain # type: ignore
-        new_rep_rows_dfm: List[Any] = [None for _ in range(len(permutation))]
-        for r in range(len(permutation)):
-            new_rep_rows_dfm[r] = rep2[permutation[r]]
-        dfm_rep = DFM(new_rep_rows_dfm, shape, domain)
-        return Matrix._fromrep(DomainMatrix.from_rep(dfm_rep))
+    if isinstance(matrix, MatrixBase):
+        rows = [matrix[permutation[r], :] for r in range(len(permutation))]
+        return matrix.vstack(*rows)
 
-    elif isinstance(matrix, MatrixBase):
-        new_mat = Matrix.zeros(*matrix.shape)
-        for r in range(len(permutation)):
-            new_mat[r, :] = matrix[permutation[r], :]
-        return new_mat
+    if isinstance(matrix, spmatrix):
+        return matrix.__class__(matrix.tocsr()[permutation])
 
     return matrix[permutation]

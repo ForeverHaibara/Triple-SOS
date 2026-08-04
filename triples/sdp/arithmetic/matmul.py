@@ -326,7 +326,7 @@ def matmul_multiple(
             eq = matmul(Aij, B, return_shape = (1, Aij.shape[0]*B.shape[1]),
                         time_limit=time_limit)
             eq_rows.append(eq)
-        return Matrix.vstack(*eq_rows) # type: ignore
+        return Matrix.vstack(*eq_rows)
 
     if _VERBOSE_MATMUL_MULTIPLE:
         print('MatmulMultiple A B shape =', A.shape, B.shape)
@@ -504,7 +504,7 @@ def symmetric_bilinear_multiple(
             eq = symmetric_bilinear(U, A[i,:], is_A_vec = True,
                     return_shape = (1, U.shape[1]**2), time_limit = time_limit)
             eq_rows[i] = eq
-        eq_mat = Matrix.vstack(*eq_rows) # type: ignore
+        eq_mat = Matrix.vstack(*eq_rows)
         if _VERBOSE_MATMUL_MULTIPLE:
             print(f">>> Default Symmetric Bilinear {U.shape}.T * {A.shape} * {U.shape}"\
                   + f", time = {perf_counter() - time0}")

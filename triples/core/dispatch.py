@@ -201,8 +201,8 @@ def _polyelement_free_symbols(x: PolyElement) -> Set['Symbol']:
     symbols = {g for g, d in zip(x.ring.gens, x.degrees()) if d > 0}
     domain = x.ring.domain
     if domain.is_Composite:
-        for gen in cast(Any, domain).symbols:
-            symbols |= cast(Any, gen).free_symbols
+        for gen in domain.symbols: # type: ignore
+            symbols |= gen.free_symbols
     elif domain.is_EX:
         for coeff in x.coeffs():
             symbols |= coeff.ex.free_symbols
