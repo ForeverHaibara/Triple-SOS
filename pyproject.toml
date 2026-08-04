@@ -46,6 +46,44 @@ include = ["triples*"]
 [tool.setuptools.package-data]
 triples = ["**/*.npz"]
 
+[tool.mypy]
+# mypy 2.3 no longer supports Python 3.6 as a checking target.  Keep the
+# source annotations Python 3.6-compatible while using the oldest target
+# supported by the installed checker.
+python_version = "3.10"
+files = ["triples/core", "triples/utils", "triples/sdp"]
+exclude = "(^|/)(benchmarks|gui|testing|tests)(/|$)"
+show_error_codes = true
+warn_unused_ignores = true
+check_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = [
+    "scipy",
+    "scipy.*",
+    "mpmath",
+    "mpmath.*",
+    "pandas",
+    "pandas.*",
+    "tqdm",
+    "tqdm.*",
+    "clarabel",
+    "clarabel.*",
+    "cvxopt",
+    "cvxopt.*",
+    "cvxpy",
+    "cvxpy.*",
+    "mosek",
+    "mosek.*",
+    "picos",
+    "picos.*",
+    "qics",
+    "qics.*",
+    "sdpap",
+    "sdpap.*",
+]
+ignore_missing_imports = true
+
 [tool.ruff]
 # from SymPy
 lint.select = [
