@@ -5,7 +5,7 @@ using sympy.Rational or numpy for matrix computations.
 """
 
 from time import perf_counter
-from typing import Any, List, Tuple, Union, Optional, Callable, TYPE_CHECKING, cast
+from typing import List, Tuple, Union, Optional, Callable, TYPE_CHECKING
 
 from numpy import ndarray, int64, isnan, inf, kron, result_type
 from numpy import iinfo as np_iinfo
@@ -112,7 +112,7 @@ def matlshift(A: RepMatrix, B: int) -> RepMatrix:
     if not isinstance(A, RepMatrix):
         return A * (2**B)
     rep = A._rep.rep
-    dom = cast(Any, rep).domain
+    dom = A._rep.domain
     if not dom.is_ZZ:
         return A * (2**B)
     if isinstance(rep, SDM):
@@ -198,7 +198,7 @@ def matmul(
         else:
             C = A @ B
         if return_shape is not None:
-            C = reshape(C, return_shape)
+            return reshape(C, return_shape)
         return C
 
     time_limit = ArithmeticTimeout.make_checker(time_limit)
@@ -319,13 +319,14 @@ def matmul_multiple(
         return Matrix.zeros(A.shape[0], B.shape[0]*B.shape[1])
 
     A0, B0 = A, B
-    def default(A, B):
-        eq_rows: List[Matrix] = []
+    def default(A: Matrix, B: Matrix):
+        eq_rows = []
         for i in range(A.shape[0]):
             Aij = vec2mat(A[i,:])
-            eq = matmul(Aij, B, return_shape = (1, Aij.shape[0]*B.shape[1]), time_limit=time_limit)
-            eq_rows.append(cast(Matrix, eq))
-        return Matrix.vstack(*eq_rows)
+            eq = matmul(Aij, B, return_shape = (1, Aij.shape[0]*B.shape[1]),
+                        time_limit=time_limit)
+            eq_rows.append(eq)
+        return Matrix.vstack(*eq_rows) # type: ignore
 
     if _VERBOSE_MATMUL_MULTIPLE:
         print('MatmulMultiple A B shape =', A.shape, B.shape)
@@ -493,17 +494,17 @@ def symmetric_bilinear_multiple(
     time_limit()
 
     A0, U0 = A, U
-    def default(A, U):
+    def default(A: Matrix, U: Matrix):
         if _VERBOSE_MATMUL_MULTIPLE:
             time0 = perf_counter()
-        eq_rows: List[Matrix] = [Matrix.zeros(0, 0)] * A.shape[0]
+        eq_rows: List[MatrixLike] = [Matrix.zeros(0, 0)] * A.shape[0]
         for i in range(A.shape[0]):
             # Aij = vec2mat(space[i,:])
             # eq = U.T * Aij * U
             eq = symmetric_bilinear(U, A[i,:], is_A_vec = True,
                     return_shape = (1, U.shape[1]**2), time_limit = time_limit)
-            eq_rows[i] = cast(Matrix, eq)
-        eq_mat = Matrix.vstack(*eq_rows)
+            eq_rows[i] = eq
+        eq_mat = Matrix.vstack(*eq_rows) # type: ignore
         if _VERBOSE_MATMUL_MULTIPLE:
             print(f">>> Default Symmetric Bilinear {U.shape}.T * {A.shape} * {U.shape}"\
                   + f", time = {perf_counter() - time0}")
@@ -686,7 +687,7 @@ def _symmetric_bilinear_multiple_by_level(U: ndarray, A: ndarray) -> RepMatrix:
                 rep_matrix_from_numpy(C) for C in C_list
             ]
         else:
-            C_list_converted = cast(List[MatrixLike], C_list)
+            C_list_converted = C_list
 
         # do not use sum(..., start=0) to support Python < 3.8
         C = C_list_converted[0]

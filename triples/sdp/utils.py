@@ -1,20 +1,26 @@
-from typing import Union, Optional, Tuple, List, Dict, Callable, Any, TYPE_CHECKING, cast
+from typing import Union, Optional, Tuple, List, Dict, Callable, Any, TYPE_CHECKING
 
 from numpy import ndarray
 import numpy as np
-from sympy import Matrix, MatrixBase, Expr
-from sympy.core.relational import GreaterThan, StrictGreaterThan, LessThan, StrictLessThan, Equality, Relational
+from sympy.matrices.dense import MutableDenseMatrix as Matrix
+from sympy import MatrixBase, Expr
+from sympy.core.relational import (
+    GreaterThan, StrictGreaterThan, LessThan,
+    StrictLessThan, Equality, Relational
+)
 from sympy.solvers.solveset import linear_eq_to_matrix
 
-from .arithmetic import vec2mat, mat2vec, reshape, rep_matrix_to_numpy, matadd, matmul
+from .arithmetic import vec2mat, mat2vec, reshape, rep_matrix_to_numpy
+from .arithmetic.matmul import matadd, matmul
 
 if TYPE_CHECKING:
     from sympy import Basic
 
+
 def S_from_y(
     y: MatrixBase,
     x0_and_space: Dict[str, Tuple[Matrix, Matrix]]
-) -> Dict[str, Matrix]:
+) -> Dict[str, MatrixBase]:
     """
     Return the symmetric matrices S from the vector y.
 
@@ -37,12 +43,12 @@ def S_from_y(
     if not isinstance(y, MatrixBase):
         y = Matrix(y)
 
-    S_dict: Dict[str, Matrix] = {}
+    S_dict: Dict[str, MatrixBase] = {}
     for key, (x0, space) in x0_and_space.items():
         # vecS = x0 + space * y
         vecS = matadd(x0, matmul(space, y))
         S = vec2mat(vecS)
-        S_dict[key] = cast(Matrix, S)
+        S_dict[key] = S
     return S_dict
 
 
@@ -213,27 +219,28 @@ def exprs_to_arrays(
     result: List[Any] = [None for _ in range(len(exprs))]
     nvars = len(symbols)
     for i, expr in enumerate(exprs):
-        expr = cast(Any, expr)
+        raw_expr: Any = expr
         c: Any = 0
         op: Optional[str] = None
         expr_value: Any
-        if callable(expr):
-            expr_value = expr(locals)
+        if callable(raw_expr):
+            expr_value = raw_expr(locals)
         else:
-            expr_value = expr
-        if isinstance(expr, tuple):
-            if len(expr) == 3:
-                expr_value, c, op = expr
-            elif len(expr) == 2:
-                expr_value, c = expr
+            expr_value = raw_expr
+        if isinstance(expr_value, tuple):
+            if len(expr_value) == 3:
+                expr_value, c, op = expr_value
+            elif len(expr_value) == 2:
+                expr_value, c = expr_value
             else:
                 raise ValueError("The tuple should be of length 2 or 3.")
-        expr = cast(Any, expr_value)
+        expr = expr_value
         if isinstance(expr, Relational):
             sign, op = _RELATIONAL_TO_OPERATOR[expr.__class__]
-            lhs = cast(Expr, expr.lhs)
-            rhs = cast(Expr, expr.rhs)
-            expr = lhs - rhs if sign == 1 else rhs - lhs
+            if sign == 1:
+                expr = expr.lhs - expr.rhs
+            else:
+                expr = expr.rhs - expr.lhs
             c = -c if sign == -1 else c
         if isinstance(expr, (Expr, int, float)):
             vec_list.append(expr)
@@ -251,10 +258,8 @@ def exprs_to_arrays(
                 else:
                     raise ValueError(f"The operator {op} at line {i} is not supported.")
                 if sign == -1:
-                    matrix_expr = cast(Any, -cast(Any, matrix_expr))
+                    matrix_expr = -matrix_expr
                     c = -c
-                else:
-                    matrix_expr = matrix_expr
                 result[i] = (matrix_expr, c, op)
             else:
                 result[i] = (matrix_expr, c)
@@ -300,7 +305,7 @@ def exprs_to_arrays(
             # else:
             #     result[i] = (f(result[i][0]), f(result[i][1]).flatten())
 
-    return cast(List[Tuple[Matrix, Matrix, str]], result)
+    return result
 
 
 def collect_constraints(constraints: List[Tuple[ndarray, ndarray, str]], dof: int) -> Tuple[ndarray, ndarray, ndarray, ndarray]:
