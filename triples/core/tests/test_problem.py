@@ -41,7 +41,9 @@ def test_wrap_constraints():
 
 
 def test_identify_symmetry():
+    def equal(G1, G2):
+        return set(G1.elements) == set(G2.elements)
     G = PermutationGroup(Permutation([0,2,1]))
     pro = InequalityProblem(a**4 + a**3*b + a**3*c + a**2*b*c)
-    assert pro.identify_symmetry().equals(G)
-    assert pro.polylize().identify_symmetry().equals(G)
+    assert equal(pro.identify_symmetry(), G)
+    assert equal(pro.polylize().identify_symmetry(), G)

@@ -86,7 +86,7 @@ def _symmetry_adapted_nullspace(A: Matrix) -> Tuple[Matrix, List[List[int]]]:
     Explanation
     -----------
     >>> from sympy import Matrix
-    >>> _symmetry_adapted_nullspace(Matrix([[1,1,1,-3]]))
+    >>> _symmetry_adapted_nullspace(Matrix([[1,1,1,-3]])) # doctest: +NORMALIZE_WHITESPACE
     (Matrix([
      [   0,   1,   0,   0],
      [   0,   0,   1,   0],

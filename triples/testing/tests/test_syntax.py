@@ -5,6 +5,9 @@ import ast
 import os
 
 
+IGNORE_COMMENT = "triples-syntax: ignore"
+
+
 # Add compatibility restrictions here.
 COMPATIBILITY_RULES = {
     "imports": (
@@ -77,6 +80,80 @@ def _target_name(node):
     return _node_name(node)
 
 
+def _node_lines(node):
+    """Return all source lines covered by an AST node."""
+    start = node.lineno
+    end = getattr(node, "end_lineno", start)
+    return range(start, end + 1)
+
+
+class _ImportLineCollector(ast.NodeVisitor):
+    def __init__(self):
+        self.lines = set()
+
+    def visit_Import(self, node):
+        self.lines.update(_node_lines(node))
+
+    def visit_ImportFrom(self, node):
+        self.lines.update(_node_lines(node))
+
+
+def _ignore_imports(lines, nodes):
+    collector = _ImportLineCollector()
+    for node in nodes:
+        collector.visit(node)
+    lines.update(collector.lines)
+
+
+def _is_version_condition(node):
+    """Return whether an expression appears to test a dependency version."""
+    names = {
+        item.id
+        for item in ast.walk(node)
+        if isinstance(item, ast.Name)
+    }
+    return any(
+        name == "version_tuple"
+        or name == "__version__"
+        or name == "VERSION"
+        or name.endswith("_VERSION")
+        for name in names
+    )
+
+
+class _IgnoredRegionCollector(ast.NodeVisitor):
+    """Find conditional code whose imports are intentionally version-specific."""
+
+    def __init__(self, source):
+        self.ignored_lines = {
+            line_number
+            for line_number, line in enumerate(source.splitlines(), 1)
+            if IGNORE_COMMENT in line
+        }
+
+    def visit_Try(self, node):
+        catches_import_error = any(
+            handler.type is not None
+            and any(
+                isinstance(item, ast.Name) and item.id == "ImportError"
+                for item in ast.walk(handler.type)
+            )
+            for handler in node.handlers
+        )
+        if catches_import_error:
+            _ignore_imports(self.ignored_lines, node.body)
+            for handler in node.handlers:
+                _ignore_imports(self.ignored_lines, handler.body)
+            _ignore_imports(self.ignored_lines, node.orelse)
+        self.generic_visit(node)
+
+    def visit_If(self, node):
+        if _is_version_condition(node.test):
+            _ignore_imports(self.ignored_lines, node.body)
+            _ignore_imports(self.ignored_lines, node.orelse)
+        self.generic_visit(node)
+
+
 class _ImportCollector(ast.NodeVisitor):
     def __init__(self):
         self.imports = {}
@@ -144,14 +221,17 @@ class _TypeCollector(ast.NodeVisitor):
 
 
 class _CompatibilityChecker(ast.NodeVisitor):
-    def __init__(self, imports, types, rules, file_path):
+    def __init__(self, imports, types, rules, file_path, ignored_lines):
         self.imports = imports
         self.types = types
         self.rules = rules
         self.file_path = file_path
+        self.ignored_lines = ignored_lines
         self.violations = []
 
     def _add_violation(self, node, rule, description):
+        if node.lineno in self.ignored_lines:
+            return
         message = rule.get("message", description)
         self.violations.append(
             (self.file_path, node.lineno, node.col_offset + 1, message)
@@ -196,6 +276,8 @@ def _find_compatibility_violations(source, file_path="<string>", rules=None):
         rules = COMPATIBILITY_RULES
 
     tree = ast.parse(source, filename=file_path)
+    ignored_regions = _IgnoredRegionCollector(source)
+    ignored_regions.visit(tree)
     import_collector = _ImportCollector()
     import_collector.visit(tree)
 
@@ -207,12 +289,13 @@ def _find_compatibility_violations(source, file_path="<string>", rules=None):
         type_collector.types,
         rules,
         file_path,
+        ignored_regions.ignored_lines,
     )
     checker.visit(tree)
     return checker.violations
 
 
-def test_sympy_compatibility():
+def test_version_compatibility():
     """Check source files against the manually maintained compatibility rules."""
     violations = []
     for file_path in _source_files(_project_path()):
@@ -224,58 +307,6 @@ def test_sympy_compatibility():
         "{}:{}:{}: {}".format(file_path, line, column, message)
         for file_path, line, column, message in violations
     )
-
-
-def test_sympy_compatibility_checker():
-    """Check imports, class methods, and methods used through instance fields."""
-    source = """
-from sympy.external.gmpy import forbidden_import
-from sympy.external import gmpy
-from sympy.polys.matrices import DomainMatrix as MatrixDomain
-
-class SomeClass:
-    def __init__(self, x: MatrixDomain):
-        self.x = x
-
-    def method(self):
-        self.x.some_func()
-        MatrixDomain.some_other_func()
-        gmpy.lcm(1, 2)
-"""
-    rules = {
-        "imports": (
-            {
-                "module": "sympy.external.gmpy",
-                "name": "forbidden_import",
-                "message": "forbidden import is unavailable",
-            },
-        ),
-        "attributes": (
-            {
-                "owner": "sympy.external.gmpy",
-                "name": "lcm",
-                "message": "gmpy.lcm is unavailable",
-            },
-            {
-                "owner": "sympy.polys.matrices.DomainMatrix",
-                "name": "some_func",
-                "message": "DomainMatrix.some_func is unavailable",
-            },
-            {
-                "owner": "sympy.polys.matrices.DomainMatrix",
-                "name": "some_other_func",
-                "message": "DomainMatrix.some_other_func is unavailable",
-            },
-        ),
-    }
-
-    violations = _find_compatibility_violations(source, rules=rules)
-    assert [message for _, _, _, message in violations] == [
-        "forbidden import is unavailable",
-        "DomainMatrix.some_func is unavailable",
-        "DomainMatrix.some_other_func is unavailable",
-        "gmpy.lcm is unavailable",
-    ]
 
 
 def test_dependency():

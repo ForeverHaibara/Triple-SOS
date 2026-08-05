@@ -7,7 +7,12 @@ from sympy.polys.domains.domainelement import DomainElement
 from sympy.polys.rings import PolyElement
 from sympy.polys.fields import FracElement
 from sympy import MutableDenseMatrix as Matrix
-from sympy.external.gmpy import lcm
+try:
+    from sympy.external.gmpy import lcm
+except ImportError:
+    from math import gcd
+    from functools import reduce
+    lcm = lambda *args: reduce(lambda x, y: x*y//gcd(x, y), args, 1)
 
 from ..node import TransformNode
 from ..dispatch import _dtype_make_reorder_func
