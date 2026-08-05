@@ -19,7 +19,7 @@ from sympy import __version__ as _SYMPY_VERSION
 from sympy.external.gmpy import MPZ # >= 1.9
 from sympy.external.importtools import version_tuple
 from sympy import Float
-from sympy.matrices.matrixbase import MatrixBase
+from sympy.matrices import MatrixBase
 from sympy.matrices import MutableDenseMatrix as Matrix
 from sympy.matrices.repmatrix import RepMatrix
 from sympy.polys.domains import ZZ, RR, CC # EXRAW >= 1.9
