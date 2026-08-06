@@ -8,23 +8,18 @@ from typing import (Dict, List, Tuple, Iterable, Callable,
 )
 import numpy as np
 from sympy import Poly, Add, ZZ, QQ, factorial, prod
-from sympy.matrices import Matrix, MatrixBase
+from sympy.matrices import Matrix
 from sympy.polys.polyclasses import DMP
 from sympy.polys.rings import PolyElement
 from sympy.combinatorics import (Permutation, PermutationGroup,
     CyclicGroup, SymmetricGroup, AlternatingGroup, DihedralGroup
 )
-from ..sdp.arithmetic import rep_matrix_from_list
+from ..sdp.arithmetic import rep_matrix_from_list, rep_matrix_from_dict
 
 if TYPE_CHECKING:
     from sympy import Expr, Symbol
     from sympy.polys.domains import Domain
 
-try:
-    from sympy.polys.matrices.sdm import SDM
-    from sympy.polys.matrices import DomainMatrix
-except ImportError: # sympy <= 1.7
-    SDM = None
 
 try:
     from sympy.external.gmpy import GROUND_TYPES
@@ -32,8 +27,13 @@ try:
 except ImportError: # sympy <= 1.8 or no flint installed
     _IS_GROUND_TYPES_FLINT = False
 
-def generate_partitions(d_list: Union[int, List[int]], degree: int,
-        equal: bool = False, descending: bool = True) -> List[Tuple[int, ...]]:
+
+def generate_partitions(
+    d_list: Union[int, List[int]],
+    degree: int,
+    equal: bool = False,
+    descending: bool = True
+) -> List[Tuple[int, ...]]:
     """
     Generate all tuples (a0,a1,...,an) such that n = len(d_list) and sum(ai*di) <= degree.
     If equal is True, then it requires sum(ai*di) == degree.
@@ -255,7 +255,7 @@ class MonomialManager():
         """
         Return the order of the permutation group.
         """
-        return self._perm_group.order()
+        return int(self._perm_group.order())
 
     def permute(self, monom: Tuple[int, ...]) -> List[Tuple[int, ...]]:
         """
@@ -310,7 +310,7 @@ class MonomialManager():
             v, m = rep[i][0], inv_monoms[i]
             for ind, j in enumerate(map(f, self.permute(m))):
                 sdm[j][ind] = v
-        return Matrix._fromrep(DomainMatrix.from_rep(SDM(sdm, (vec.shape[0], self.order()), rep.domain)))
+        return rep_matrix_from_dict(sdm, (vec.shape[0], self.order()), rep.domain)
 
 
     # def _standard_monom(self, monom: Tuple[int, ...]) -> Tuple[int, ...]:
@@ -365,13 +365,8 @@ class MonomialManager():
         """
         vec = self._arraylize_list(poly, degree = degree, expand_cyc = expand_cyc)
         rep, dom, ngens, _degree = _poly_rep(poly)
-        if SDM is not None:
-            sdm = {i: {0: v} for i, v in enumerate(vec) if v}
-            return Matrix._fromrep(DomainMatrix.from_rep(SDM(sdm, (len(vec), 1), dom)))
-        else: # sympy <= 1.7
-            to_sympy = dom.to_sympy
-            vec = [to_sympy(v) for v in vec]
-            return Matrix(vec)
+        sdm = {i: {0: v} for i, v in enumerate(vec) if v}
+        return rep_matrix_from_dict(sdm, (len(vec), 1), dom)
 
     def invarraylize(self, array: Union[List, np.ndarray, Matrix], gens: List['Symbol'], degree: int) -> Poly:
         """
@@ -381,7 +376,7 @@ class MonomialManager():
         inv_monoms = self.inv_monoms(degree)
         terms_dict = {}
         permute = self.permute if (not self.is_trivial) else lambda x: (x,)
-        if SDM is not None and isinstance(array, MatrixBase):
+        if isinstance(array, Matrix):
             rep = array._rep.rep.to_sdm()
             domain = rep.domain
             zero = domain.zero
@@ -425,7 +420,7 @@ class MonomialManager():
             w = ufs_find(v)
             ufs[x] = w
             return w
-        ufs = {i: i for i in range(len(iv))}
+        # ufs = {i: i for i in range(len(iv))}
 
         for m1 in iv:
             for p in perm_group_gens:
@@ -477,7 +472,7 @@ class MonomialManager():
             row = mat.setdefault(v, {})
             row[i] = ZZ.one
 
-        return Matrix._fromrep(DomainMatrix.from_rep(SDM(mat, (len(dt), len(inds)), ZZ)))
+        return rep_matrix_from_dict(mat, (len(dt), len(inds)), ZZ)
 
 
     def cyclic_sum(self, expr: 'Expr', gens: List['Symbol']) -> 'Expr':
@@ -525,7 +520,8 @@ def _parse_options(nvars, **options) -> MonomialManager:
     if isinstance(symmetry, PermutationGroup):
         return MonomialManager.from_perm_group(symmetry, is_homogeneous = hom)
 
-    raise ValueError(f"Invalid symmetry type {type(symmetry)}. Expected MonomialManager or PermutationGroup.")
+    raise ValueError(f"Invalid symmetry type {type(symmetry)}."\
+                     + " Expected MonomialManager or PermutationGroup.")
 
 
 def arraylize_np(
@@ -572,7 +568,8 @@ def arraylize_np(
     >>> print(arraylize_np(((a-b)**2+(b-c)**2+(c-a)**2).as_poly(a,b,c)))
     [ 2. -2. -2.  2. -2.  2.]
 
-    >>> print(arraylize_np(((a**2+b**2+c**2)**2-3*(a**3*b+b**3*c+c**3*a)).as_poly(a,b,c), cyc = True))
+    >>> print(arraylize_np(((a**2+b**2+c**2)**2-3*(a**3*b+b**3*c+c**3*a)
+    ... ).as_poly(a,b,c), cyc = True))
     [ 1. -3.  0.  2.  0.]
 
     >>> print(arraylize_np((a*b*c).as_poly(a,b,c), sym = True))
@@ -643,7 +640,8 @@ def arraylize_sp(
     >>> print(arraylize_sp(((a-b)**2+(b-c)**2+(c-a)**2).as_poly(a,b,c)))
     Matrix([[2], [-2], [-2], [2], [-2], [2]])
 
-    >>> print(arraylize_sp(((a**2+b**2+c**2)**2-3*(a**3*b+b**3*c+c**3*a)).as_poly(a,b,c), cyc = True))
+    >>> print(arraylize_sp(((a**2+b**2+c**2)**2-3*(a**3*b+b**3*c+c**3*a)
+    ... ).as_poly(a,b,c), cyc = True))
     Matrix([[1], [-3], [0], [2], [0]])
 
     >>> print(arraylize_sp((a*b*c).as_poly(a,b,c), sym = True))
@@ -670,7 +668,12 @@ def arraylize_sp(
     return option.arraylize_sp(poly, degree = degree, expand_cyc = expand_cyc)
 
 
-def invarraylize(array: Union[List, np.ndarray, Matrix], gens: List['Symbol'], degree: int, **options) -> Poly:
+def invarraylize(
+    array: Union[List, np.ndarray, Matrix],
+    gens: List['Symbol'],
+    degree: int,
+    **options
+) -> Poly:
     """
     Convert a vector representation of polynomial back to the sympy polynomial.
     Monomials are sorted in graded lexicographical (grlex) order.
@@ -810,13 +813,13 @@ def parse_symmetry(symmetry: Union[PermutationGroup, str], n: int) -> Permutatio
             "trivial": lambda n: PermutationGroup(Permutation(list(range(n))))
         }
         if symmetry in maps:
-            symmetry = maps[symmetry](n)
+            return maps[symmetry](n)
         else:
             raise ValueError(
                 f"Expected one of {tuple(maps.keys())} as symmetry, but received {symmetry}")
-    elif not isinstance(symmetry, PermutationGroup):
-        raise TypeError("Symmetry should be either PermutationGroup or str.")
-    return symmetry
+    elif isinstance(symmetry, PermutationGroup):
+        return symmetry
+    raise TypeError("Symmetry should be either PermutationGroup or str.")
 
 
 def verify_symmetry(
@@ -1455,6 +1458,9 @@ def poly_reduce_by_symmetry(poly: Poly, symmetry: Union[str, PermutationGroup]) 
     """
     if symmetry is None:
         return poly
+    if poly.is_zero:
+        return poly
+
     G = parse_symmetry(symmetry, len(poly.gens))
 
     if G.is_trivial:

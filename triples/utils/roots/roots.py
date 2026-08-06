@@ -1097,7 +1097,7 @@ class Root():
         return Root(sorted_roots)
 
     def transform(self, symbols: List[Symbol], subs: Union[Dict[Symbol, Expr], List[Expr]],
-            new_symbols: Optional[List[Symbol]]=None) -> 'Root':
+            new_symbols: Optional[List[Any]]=None) -> 'Root':
         """
         Transform the root to a new root.
 

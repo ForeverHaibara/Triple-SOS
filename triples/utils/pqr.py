@@ -1,10 +1,10 @@
-from typing import Tuple, Optional, TYPE_CHECKING, cast
+from typing import Tuple, Optional, TYPE_CHECKING
 
-from sympy import Poly
+from sympy import Poly, QQ
 from sympy.utilities import subsets
 
 if TYPE_CHECKING:
-    from sympy import Symbol
+    from sympy import Expr, Symbol
     from sympy.polys.rings import PolyElement
 
 
@@ -51,7 +51,7 @@ def _symmetrize(self: "PolyElement"):
     symmetric = ring.zero
 
     while f:
-        _height, _monom, _coeff = -1, None, None
+        _height, _monom, _coeff = -1, (), None
 
         for i, (monom, coeff) in enumerate(f.terms()):
             if all(monom[i] >= monom[i + 1] for i in indices):
@@ -61,7 +61,7 @@ def _symmetrize(self: "PolyElement"):
                     _height, _monom, _coeff = height, monom, coeff
 
         if _height != -1:
-            monom = cast(Tuple[int, ...], _monom)
+            monom = _monom
             coeff = _coeff
         else:
             break
@@ -90,7 +90,7 @@ def _get_pqr_symbols(symbols: Optional[Tuple["Symbol", "Symbol", "Symbol"]] = No
         from sympy import symbols as sp_symbols
         return sp_symbols('p q r')
 
-def pqr_sym(poly: Poly, symbols: Optional[Tuple["Symbol", ...]] = None) -> Poly:
+def pqr_sym(poly: Poly, symbols: Optional[Tuple["Expr", ...]] = None) -> Poly:
     """
     Express an n-variable symmetric polynomial in its
     elementary symmetric polynomials.
@@ -120,7 +120,7 @@ def pqr_sym(poly: Poly, symbols: Optional[Tuple["Symbol", ...]] = None) -> Poly:
     (a - b)**2*(a - c)**2*(b - c)**2
     """
     if symbols is None:
-        symbols = cast(Tuple['Symbol', ...], poly.gens)
+        symbols = poly.gens
     elif len(poly.gens) != len(symbols):
         raise ValueError("Symbols must match the number of variables in the polynomial.")
 
@@ -169,7 +169,8 @@ def pqr_cyc(poly: Poly, symbols: Optional[Tuple["Symbol", ...]] = None) -> Tuple
         raise ValueError("The polynomial must be a 3-variable polynomial.")
 
     a, b, c = poly.gens
-    if not (poly.domain.is_Composite and getattr(poly.domain.domain, 'is_Field', False)):
+    dom = poly.domain.unify(QQ)
+    if dom != poly.domain:
         poly = poly.to_field()
     half = poly.domain.one/2
     q = Poly.new(poly.reorder(b,a,c).rep,a,b,c)

@@ -7,7 +7,8 @@ from sympy import (
     fraction
 )
 from sympy.combinatorics.named_groups import SymmetricGroup
-from sympy.combinatorics.perm_groups import Permutation, PermutationGroup
+from sympy.combinatorics.permutations import Permutation
+from sympy.combinatorics.perm_groups import PermutationGroup
 from sympy.core.symbol import uniquely_named_symbol
 from sympy.core.sympify import sympify, CantSympify
 from sympy.core.function import AppliedUndef
@@ -451,7 +452,7 @@ class InequalityProblem(Generic[T]):
 
         return cast('InequalityProblem[Poly]', new_problem)
 
-    def remove_redundancy(self) -> 'InequalityProblem':
+    def remove_redundancy(self) -> 'InequalityProblem[T]':
         """
         Remove redundant symbols and constraints.
 
@@ -678,9 +679,9 @@ class InequalityProblem(Generic[T]):
         >>> pro.gens
         (a, b, c)
         """
-        ls = [[cast(Poly, self.expr)],
-              [cast(Poly, p) for p in self.ineq_constraints],
-              [cast(Poly, p) for p in self.eq_constraints]]
+        ls = [self.expr,
+              list(self.ineq_constraints),
+              list(self.eq_constraints)]
 
         if self.is_polynomial:
             return identify_symmetry_from_lists(ls)
@@ -767,11 +768,13 @@ class InequalityProblem(Generic[T]):
             return self.roots
         from sympy.polys.polyerrors import DomainError
         try:
-            roots = cast(RootList, optimize_poly(
-                    cast(Union[Poly, Expr], self.expr),
-                    cast(List[Union[Poly, Expr]], list(self.ineq_constraints)),
-                    cast(List[Union[Poly, Expr]], [self.expr] + list(self.eq_constraints)),
-                    list(self.gens), return_type='root'))
+            roots = optimize_poly(
+                self.expr, # type: ignore
+                list(self.ineq_constraints), # type: ignore
+                [self.expr] + list(self.eq_constraints), # type: ignore
+                self.gens, # type: ignore
+                return_type='root'
+            ) # type: ignore
         except DomainError:
             roots = RootList(self.gens, [])
         self.roots = roots

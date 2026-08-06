@@ -1,5 +1,5 @@
 from typing import (
-    Any, Dict, Iterator, List, Optional, Tuple, TYPE_CHECKING, Union, cast
+    Any, Dict, List, Tuple, Iterator, Union, Optional, TYPE_CHECKING
 )
 
 
@@ -36,7 +36,7 @@ class RootList(list):
         return obj
 
     def copy(self) -> 'RootList':
-        return RootList(self.symbols, list.copy(self))
+        return RootList(self.symbols, list.copy(self)) # type: ignore
 
     def __str__(self) -> str:
         return self.__repr__()
@@ -46,7 +46,7 @@ class RootList(list):
 
     def __iter__(self) -> Iterator[Root]:
         for item in list.__iter__(self):
-            yield cast(Root, item)
+            yield item # type: ignore
 
     def __getitem__(self, i: Any) -> Union[Root, 'RootList']:  # type: ignore[override]
         item = list.__getitem__(self, i)
@@ -101,8 +101,7 @@ class RootList(list):
         """
         inds = [symbol if isinstance(symbol, int) else self.symbols.index(symbol)
                 for symbol in new_symbols]
-        new_symbols = cast(Tuple["Symbol", ...],
-                           tuple([self.symbols[i] for i in inds]))
+        new_symbols = tuple([self.symbols[i] for i in inds])
         return RootList.new(new_symbols, [root[inds] for root in self])
 
     def n(self, *args, **kwargs) -> 'RootList':
@@ -160,17 +159,16 @@ class RootList(list):
         >>> roots.transform([sqrt(a), sqrt(b), (a+b)/c], (x, y, z))
         RootList((x, y, z), [(1, sqrt(2), 1), (2, sqrt(5), 3/2)])
         """
-        keys = cast(Any, new_symbols)
         if isinstance(subs, list):
             if new_symbols is None:
                 raise ValueError("new_symbols must be specified when subs is a list.")
             elif len(new_symbols) != len(subs):
                 raise ValueError(f"new_symbols must have the same length as subs, but got {len(new_symbols)} != {len(subs)}.")
             keys = list(range(len(subs)))
-        if new_symbols is None:
-            new_symbols = cast(Tuple["Symbol", ...],
-                               tuple(cast(Dict["Symbol", "Expr"], subs).keys()))
         else:
-            new_symbols = tuple(new_symbols)
-        return RootList.new(new_symbols,
-            [root.transform(list(self.symbols), subs, cast(Any, keys)) for root in self])
+            if new_symbols is None:
+                new_symbols = tuple(subs.keys())
+            keys = list(new_symbols)
+
+        return RootList.new(tuple(new_symbols),
+            [root.transform(list(self.symbols), subs, keys) for root in self])

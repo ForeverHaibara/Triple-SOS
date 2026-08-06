@@ -87,7 +87,7 @@ def smith_normal_decomp(m):
     rows, cols = shape = m.shape
     m = m.to_list()
 
-    invs, s, t = _smith_normal_decomp(m, domain, shape=shape, full=True)
+    invs, s, t = _smith_normal_decomp(m, domain, shape=shape, full=True) # type: ignore
     smf = DomainMatrix.diag(invs, domain, shape).to_dense()
 
     s = DomainMatrix(s, domain=domain, shape=(rows, rows))
