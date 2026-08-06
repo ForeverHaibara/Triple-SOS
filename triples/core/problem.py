@@ -679,7 +679,7 @@ class InequalityProblem(Generic[T]):
         >>> pro.gens
         (a, b, c)
         """
-        ls = [self.expr,
+        ls = [[self.expr],
               list(self.ineq_constraints),
               list(self.eq_constraints)]
 

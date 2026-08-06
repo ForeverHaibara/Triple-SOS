@@ -40,7 +40,7 @@ def sum_of_squares(
     eq_constraints: Union[List['Expr'], Dict['Expr', 'Expr']] = {},
     *,
     roots: Optional[List[Union[Tuple['Expr', ...], Dict['Symbol', 'Expr']]]] = None,
-    verbose: bool = False,
+    verbose: Union[bool, int] = 0,
     time_limit: float = 3600.,
     methods: Optional[List[str]] = None,
     configs: Dict[str, Dict] = {},
