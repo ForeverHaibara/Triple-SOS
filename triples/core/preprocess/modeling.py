@@ -41,10 +41,11 @@ class ModelingHelper:
     has_complex = False
     has_radical = False
     has_trig = False
+    _pows = None
     def __init__(self, problem: "InequalityProblem"):
         self.problem = problem
         self.symbol_gen = _unique_symbol_generator(self.symbols)
-
+        self._pows = {}
         self._prepare_replace_trigs()
 
     @property
@@ -95,15 +96,19 @@ class ModelingHelper:
         elif len(x.base.free_symbols) == 0 and len(x.exp.free_symbols) == 0:
             return None
         elif isinstance(x.exp, Rational):
-            p, q = x.exp.numerator, x.exp.denominator
-            if q == 1:
-                return None
+            if (x.base, x.exp) in self._pows:
+                return self._pows[(x.base, x.exp)]
+            else:
+                p, q = x.exp.numerator, x.exp.denominator
+                if q == 1:
+                    return None
 
-            z = self.symbol_gen('z')
-            self.has_radical = True
-            ineqs = {x.base: x.base, z: x} if q % 2 == 0 else {}
-            eqs = {x.base**p - z**q: Integer(0)} if p > 0 else {z**q * x.base**(-p) - Integer(1): Integer(0)}
-            return z, ineqs, eqs
+                z = self.symbol_gen('z')
+                self.has_radical = True
+                ineqs = {x.base: x.base, z: x} if q % 2 == 0 else {}
+                eqs = {x.base**p - z**q: Integer(0)} if p > 0 else {z**q * x.base**(-p) - Integer(1): Integer(0)}
+                self._pows[(x.base, x.exp)] = (z, ineqs, eqs)
+                return z, ineqs, eqs
 
         raise FormulationFailure
 

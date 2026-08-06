@@ -16,9 +16,9 @@ from ...sdp.rationalize import SDPRationalizeError, DualRationalizer
 
 if TYPE_CHECKING:
     from sympy import Poly, Expr
-    from ...utils import Root
     from sympy.combinatorics import PermutationGroup
     from .solution import SolutionSDP
+    from ...utils import Root
 
 
 class _lazy_iter:

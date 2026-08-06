@@ -140,7 +140,7 @@ def _structsos_sextic_hexagram(coeff: 'Coeff'):
             x, rest = _compute_x_rest(v)
             p1 = ((c2 - c1*v**2) * CommonExpr.schur(3, (a,b,c)) \
                     + (rest*c1) * CyclicSum(a*(b-c)**2)).together().as_coeff_Mul()
-            y = [
+            _y = [
                 c1,
                 p1[0],
                 rem
@@ -150,7 +150,7 @@ def _structsos_sextic_hexagram(coeff: 'Coeff'):
                 CyclicProduct(a) * p1[1],
                 CyclicProduct(a**2)
             ]
-            return sum_y_exprs(y, exprs)
+            return sum_y_exprs(_y, exprs)
 
     if rem > 0 and coeff((4,1,1)) == coeff((3,3,0)):
         # Sometimes we have this type of problem, corresponding theorem 2.
