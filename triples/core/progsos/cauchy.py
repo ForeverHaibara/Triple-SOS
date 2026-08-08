@@ -15,15 +15,18 @@ except ImportError:
     lcm = lambda *args: reduce(lambda x, y: x*y//gcd(x, y), args, 1)
 
 from ..node import TransformNode
-from ..dispatch import _dtype_make_reorder_func
+from ..dispatch import (
+    _dtype_make_reorder_func, _dtype_is_homogeneous
+)
 from ..preprocess.signs import sign_sos
 from ..preprocess.polynomial import SolvePolynomial
+from ..problem import InequalityProblem
+from ..complexity import ProblemComplexity
 from ...utils.polytools import marginalize
 from ...utils.monomials import _identify_symmetry_from_action, MonomialManager
 from ...utils.roots import Root
 from ...utils.expressions import CyclicSum
-from ..problem import InequalityProblem
-from ...sdp import ConeSDPBuilder
+from ...sdp import ConeSDPBuilder, ArithmeticTimeout
 
 if TYPE_CHECKING:
     from sympy import Expr, Poly, Symbol
@@ -58,6 +61,16 @@ def increment_poly(f: "Poly") -> "Poly":
         m + tail: c for m, c in f.rep.terms()
     }, *q.gens, domain=f.domain)
     return q - f
+
+
+def _total_degree(f) -> int:
+    if not f:
+        return 0
+    if isinstance(f, PolyElement):
+        return max(map(sum, f.itermonoms()))
+    elif isinstance(f, FracElement):
+        return _total_degree(f.numer) - _total_degree(f.denom)
+    return f.total_degree()
 
 
 def _get_symbols_constrained_once(
@@ -334,15 +347,7 @@ class RadicalMonomial(DomainElement):
     def total_degree(self) -> "MPQ":
         if not self:
             return self.domain.exp_dom.zero
-        def d(f) -> int:
-            if not f:
-                return 0
-            if isinstance(f, PolyElement):
-                return max(map(sum, f.itermonoms()))
-            elif isinstance(f, FracElement):
-                return d(f.numer) - d(f.denom)
-            return f.total_degree()
-        return sum(d(f) * r for f, r in self)
+        return sum(_total_degree(f) * r for f, r in self)
 
     def to_ring(self):
         """
@@ -407,6 +412,10 @@ class RadicalMonomial(DomainElement):
     def is_power_positive(self):
         return all(p > 0 for f, p in self)
 
+    @property
+    def is_homogeneous(self):
+        return all(_dtype_is_homogeneous(f) for f, p in self)
+
 
 class RadicalProblem(InequalityProblem):
     """
@@ -417,7 +426,7 @@ class RadicalProblem(InequalityProblem):
     where `p_ij` are rational numbers, and `f_{ij}`
     are polynomial or rational functions.
     """
-    _terms: List[RadicalMonomial]
+    _terms: Dict[RadicalMonomial, "Expr"]
     _separated_terms: Optional[Dict[Optional[int], List[RadicalMonomial]]] = None
 
     auxiliary_symbols: Dict["Symbol", Tuple["Poly", "Expr", int]]
@@ -476,6 +485,12 @@ def as_radical_problem(problem: InequalityProblem) -> Optional[RadicalProblem]:
     if len(info) == len(problem.gens):
         # all symbols are constrained once -> degenerated
         return None
+
+    # check if all symbols are nonnegative
+    signs = problem.get_symbol_signs()
+    if not all(signs.get(s, (0, 0))[0] == 1 for s in info.keys()):
+        return None
+
     aux = info
 
     # check it is linear with respect to the symbols
@@ -514,13 +529,16 @@ def as_radical_problem(problem: InequalityProblem) -> Optional[RadicalProblem]:
     for monom, coeff in expr.rep.terms():
         term = [(coeff, QQ(1)), *((v, QQ(d, r))
                     for d, (v, r) in zip(monom, rads.values()))]
-        terms.append(term)
+        alias = dom.to_sympy(coeff)
+        alias = Mul(alias, *[g**i for g, i in zip(expr.gens, monom)])
+        terms.append((term, alias))
 
     new_problem = RadicalProblem.new(
         problem.expr, problem.ineq_constraints, problem.eq_constraints)
 
     rdom = RadicalMonomDomain(dom, QQ)
-    new_problem._terms = [RadicalMonomial(term, rdom) for term in terms]
+    new_problem._terms = {RadicalMonomial(term, rdom): alias
+                                for term, alias in terms}
 
     new_problem.auxiliary_symbols = aux
 
@@ -531,10 +549,14 @@ class CauchySolver(TransformNode):
     """
     Try to solve a problem using Cauchy-Schwarz inequality.
 
-    Highly Experimental. DO NOT USE.
+    The solution of this function involves radicals. Only
+    use it when `irrational_expr` is True.
+
+    Highly Experimental. Use with caution.
     """
     default_configs = {
         "lift_degree_limit": 4,
+        "sample_density": 12,
     }
     radical_problem: Optional[RadicalProblem] = None
     def explore(self, configs):
@@ -542,9 +564,9 @@ class CauchySolver(TransformNode):
             self.state = 1
             self.radical_problem = self.get_standard_form()
 
-        if self.radical_problem is None:
-            self.state = -1
-            self.finished = True
+            if self.radical_problem is None:
+                self.state = -1
+                self.finished = True
             return
 
         if self.state == 1:
@@ -561,6 +583,11 @@ class CauchySolver(TransformNode):
 
         self.state = -1
 
+    def _evaluate_complexity(self) -> ProblemComplexity:
+        # Fast in most cases
+        if self.state == 0:
+            return ProblemComplexity(0.01, 1.)
+        return ProblemComplexity(5., .9)
 
     def get_standard_form(self):
         """
@@ -578,7 +605,8 @@ class CauchySolver(TransformNode):
         modules: List[RadicalMonomial],
         lhs_power: int = 2,
         degree: int = 1,
-        symmetry: Optional["PermutationGroup"] = None
+        symmetry: Optional["PermutationGroup"] = None,
+        configs: Optional[Dict[str, Any]] = None,
     ):
         """
         Given modules `F1`, ..., `Fn`, try to find polynomials
@@ -606,7 +634,18 @@ class CauchySolver(TransformNode):
         module_quo_degs = [m.quo_degrees(lhs_power + 1) for m in modules]
 
         nvars = len(gens)
-        hom = True # TODO: check this
+
+        hom = _dtype_is_homogeneous(poly) and all(
+            m.is_homogeneous for m in modules)
+        if not hom:
+            # not implemented
+            return None
+        if hom:
+            poly_degree = _total_degree(poly)
+            if not all(m.total_degree() == poly_degree for m in modules):
+                # the degree does not match
+                return None
+
         mg0 = MonomialManager(nvars, symmetry, is_homogeneous=hom)
         mg0base = mg0.base()
 
@@ -639,6 +678,7 @@ class CauchySolver(TransformNode):
                     x2 = [x[j] for j in perm._array_form]
                     mv = [_eval_in(t, x2) for t, _ in module]
                     if any(t == 0 and d < 0 for t, d in zip(mv, module_rem_degs[i])):
+                        # prevent division by zero
                         return
 
                     qmv = 1 # product of mv
@@ -663,9 +703,11 @@ class CauchySolver(TransformNode):
             aff = Matrix.vstack(*affs)
             A = Matrix.diag(*As)
             ws = Matrix(ws)
+            # normalize for numerical stability
             builder.add_pnorm_cone(A, aff/10**2, p + 1, ws/10**(2*(p+1)))
 
-        points = mg0.inv_monoms(12) # TODO: no magic number
+        sample_density = configs.get("sample_density", 12)
+        points = mg0.inv_monoms(sample_density)
         for x in points:
             sample(list(x))
 
@@ -675,7 +717,9 @@ class CauchySolver(TransformNode):
 
     def solve_cauchy_ge(self, configs: dict = {}):
         """
-        Solve `Σ (...)^r >= (...)^s`
+        Solve `Σ (...)**(1/lhs_power) >= RHS**rhs_power`.
+
+        See also `construct_cauchy_ge_sdp`.
         """
         verbose = configs.get("verbose", False)
         degree = 2
@@ -719,16 +763,21 @@ class CauchySolver(TransformNode):
         # collect expressions by symmetry
         modules, stabs = _clear_elements_by_symmetry(lhs, G, action)
         modules: List[RadicalMonomial]
-        modules = [module / stab**lhs_power for module, stab in zip(modules, stabs)]
+
+        modules = [m / s**lhs_power for m, s in zip(modules, stabs)]
         modules = [m.to_ring() for m in modules]
         if verbose:
             print("Identified Symmetry = %s" % \
                     str(G).replace('\n', '').replace('  ',''))
             print("Modules   =", modules, "\nStability =", stabs)
 
-        sdp, mgs = self.construct_cauchy_ge_sdp(
-            rhs, gens, modules, degree=degree, symmetry=G
+        result = self.construct_cauchy_ge_sdp(
+            rhs, gens, modules, degree=degree, symmetry=G,
+            configs=configs
         )
+        if result is not None:
+            sdp, mgs = result
+
         codegrees = [degree] * len(modules) # TODO
         dofs = [len(mg.inv_monoms(d)) for mg, d in zip(mgs, codegrees)]
         dof = sum(dofs)
@@ -746,11 +795,14 @@ class CauchySolver(TransformNode):
         except Exception as e:
             if verbose:
                 print(e)
+                if isinstance(e, ArithmeticTimeout):
+                    self.finished = True
+                    return
             if hasattr(e, 'y') and e.y is not None:
                 val = Matrix(e.y[:dof])
 
         if verbose:
-            print(val)
+            print("Found a numerical solution...")
 
         if val is None:
             return None
@@ -781,25 +833,48 @@ class CauchySolver(TransformNode):
         new_problem = self.problem.new(
             new_expr.as_poly(self.problem.gens), ineqs, eqs).remove_redundancy()
 
-        rhs0 = rhs
+        restore = self.get_restoration_ge(
+            rhs, gens, modules, muls, lhs_power, symmetry=G
+        )
+        return new_problem, restore
+
+    def get_restoration_ge(
+        self,
+        poly,
+        gens: List["Symbol"],
+        modules: List[RadicalMonomial],
+        multipliers: List["Poly"],
+        lhs_power: int = 2,
+        symmetry: Optional["PermutationGroup"] = None,
+    ):
+        G = symmetry
+        def to_poly(x):
+            # return Poly.from_dict(dict(x), *gens, domain=x.parent().dom)
+            return x.parent().to_sympy(x).as_poly(gens)
+
+        def action(x, perm):
+            if isinstance(x, RadicalMonomial):
+                return x.per([(action(v, perm), r) for v, r in x])
+            return _dtype_make_reorder_func(x, gens)(~perm)
+
         def restore(x):
             if x is None:
                 return None
-            rhs = to_poly(rhs0)
+            rhs = to_poly(poly)
             lhs = (self.problem.expr + rhs).as_expr()
             rhs = rhs.as_expr()
             multiplier = sum([
                 module.to_rem_sympy(lhs_power + 1)\
                     *mul.as_expr()**(lhs_power + 1)
-                        for mul, module in zip(muls, modules)])
-            if not G.is_trivial:
+                        for mul, module in zip(multipliers, modules)])
+            if (G is not None) and not G.is_trivial:
                 multiplier = CyclicSum(multiplier, gens, G)
 
             a_list, b_list = [], []
             exp = Rational(1, lhs_power)
 
             A_list, B_list = [], []
-            # TODO: use original symbols, not radicals
+
             def compute_b(m: RadicalMonomial):
                 # m.to_rem_sympy(lhs_power + 1) / m.to_sympy()**exp)**Rational(1, lhs_power+1)
                 rems = m.rem_degrees(lhs_power + 1)
@@ -810,7 +885,7 @@ class CauchySolver(TransformNode):
                     val *= to_sp(f)**d
                 return val
 
-            for m, mul in zip(modules, muls):
+            for m, mul in zip(modules, multipliers):
                 A_list.append((m.to_sympy())**exp)
                 B_list.append(mul.as_expr() * compute_b(m))
                 m0, mul0 = m, mul
@@ -820,7 +895,7 @@ class CauchySolver(TransformNode):
                     a_list.append((m.to_sympy())**exp)
                     b_list.append(mul.as_expr() * compute_b(m))
 
-            if not G.is_trivial:
+            if (G is not None) and not G.is_trivial:
                 A = CyclicSum(sum(A_list), gens, G)
                 AB = CyclicSum(sum(ai * bi for ai, bi in zip(A_list, B_list)), gens, G)
             else:
@@ -829,4 +904,4 @@ class CauchySolver(TransformNode):
             res = _cauchy_ge_residual(a_list, b_list, r=lhs_power, A=A, AB=AB)
             return (x + res) / ((lhs + rhs) * multiplier)
 
-        return new_problem, restore
+        return restore

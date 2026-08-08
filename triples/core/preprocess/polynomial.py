@@ -1,5 +1,9 @@
+from typing import List, TYPE_CHECKING
 from .elimination import eliminate_power_constraints, resultant_elimination
 from ..node import TransformNode
+
+if TYPE_CHECKING:
+    from ..node import ProofNode
 
 
 class SolvePolynomial(TransformNode):
@@ -18,7 +22,7 @@ class SolvePolynomial(TransformNode):
         "irrational_expr": False,
         "verbose": False,
     }
-    def get_polynomial_solvers(self, configs):
+    def get_polynomial_solvers(self, configs) -> List["ProofNode"]:
         solvers = configs.get('solvers', None)
         if solvers is None:
             from ..progsos.progsos import ProgSOSSolver
@@ -101,7 +105,12 @@ class SolvePolynomial(TransformNode):
                 f" {len(problem.eq_constraints)} eqs")
 
         solvers = self.get_polynomial_solvers(configs)
-        self.children = [solver(problem) for solver in solvers]
+        self.children = [
+            solver(problem,
+                {"irrational_expr":configs["irrational_expr"]} \
+                if "irrational_expr" in solver.default_configs else None
+            ) for solver in solvers
+        ]
 
         self.state = -1
 

@@ -11,12 +11,16 @@ class ProgSOSSolver(ProofNode):
     This solver differs from `StructuralSOSSolver` in that it
     uses optimization-based (numerical) methods to solve the problem.
     """
+    default_configs = {
+        "irrational_expr": False,
+    }
     def explore(self, configs):
         if self.state == 0:
             self.children = [
                 QCQPSolver(self.problem),
-                # CauchySolver(self.problem)
             ]
+            # if configs["irrational_expr"]:
+            #     self.children.append(CauchySolver(self.problem))
             self.state = -1
 
     def _evaluate_complexity(self) -> ProblemComplexity:
