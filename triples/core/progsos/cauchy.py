@@ -1,4 +1,5 @@
 from typing import List, Dict, Tuple, Optional, Iterator, Union, Any, TYPE_CHECKING
+from time import perf_counter
 
 from sympy import Rational, Mul, Add, Dummy, QQ
 from sympy.combinatorics.named_groups import SymmetricGroup
@@ -140,24 +141,28 @@ def _get_symbol_radical(poly: "Poly", i: int) -> Tuple[Any, int]:
 
 
 def _clear_elements_by_symmetry(elems, G: "PermutationGroup", action) -> Tuple[list, list]:
-    seen = set()
-    ret = []
-    stabs = []
-    for e in elems:
-        if e in seen:
-            continue
-
-        stab = 0
-        seen.add(e)
+    from collections import Counter
+    counter = Counter(elems)
+    order = int(G.order())
+    reps, stabs = [], []
+    while counter:
+        k, num = next(iter(counter.items()))
+        orbit = {k}
+        reps.append(k)
         for perm in G.elements:
-            v = action(e, perm)
-            if v == e:
-                stab += 1
-            else:
-                seen.add(v)
-        ret.append(e)
-        stabs.append(stab)
-    return ret, stabs
+            v = action(k, perm)
+            orbit.add(v)
+
+        for e in orbit:
+            # check all elements in the orbit
+            # has the same multiplicity
+            if counter.get(e, 0) != num:
+                raise ValueError(f"Element {e} has multiplicity"
+                            f" {counter.get(e, 0)} instead of {num}")
+            del counter[e]
+        stabs.append(order // len(orbit)) # size of stabilizer
+
+    return reps, stabs
 
 
 def _eval_in(f, x):
@@ -539,7 +544,7 @@ def as_radical_problem(problem: InequalityProblem) -> Optional[RadicalProblem]:
     rdom = RadicalMonomDomain(dom, QQ)
     new_problem._terms = {RadicalMonomial(term, rdom): alias
                                 for term, alias in terms}
-
+    # TODO: it should collect the terms
     new_problem.auxiliary_symbols = aux
 
     return new_problem
@@ -599,11 +604,11 @@ class CauchySolver(TransformNode):
         return as_radical_problem(self.problem)
 
     @staticmethod
-    def construct_cauchy_ge_sdp(
+    def construct_cauchy_sdp_ge(
         poly: Union[PolyElement, FracElement],
         gens: List["Symbol"],
         modules: List[RadicalMonomial],
-        lhs_power: int = 2,
+        lhs_power: int,
         degree: int = 1,
         symmetry: Optional["PermutationGroup"] = None,
         configs: Optional[Dict[str, Any]] = None,
@@ -637,9 +642,9 @@ class CauchySolver(TransformNode):
 
         hom = _dtype_is_homogeneous(poly) and all(
             m.is_homogeneous for m in modules)
-        if not hom:
-            # not implemented
-            return None
+        # if not hom:
+        #     # not implemented
+        #     return None
         if hom:
             poly_degree = _total_degree(poly)
             if not all(m.total_degree() == poly_degree for m in modules):
@@ -719,9 +724,11 @@ class CauchySolver(TransformNode):
         """
         Solve `Σ (...)**(1/lhs_power) >= RHS**rhs_power`.
 
-        See also `construct_cauchy_ge_sdp`.
+        See also `construct_cauchy_sdp_ge`.
         """
         verbose = configs.get("verbose", False)
+        start_time = perf_counter()
+
         degree = 2
         elim_vars = list(self.radical_problem.auxiliary_symbols.keys())
         gens = [g for g in self.problem.gens if g not in elim_vars]
@@ -758,7 +765,6 @@ class CauchySolver(TransformNode):
         G = SymmetricGroup(len(gens))
         G = _identify_symmetry_from_action(
             [lhs, [rhs]], G, action)
-        # TODO: check multiplicity
 
         # collect expressions by symmetry
         modules, stabs = _clear_elements_by_symmetry(lhs, G, action)
@@ -771,9 +777,9 @@ class CauchySolver(TransformNode):
                     str(G).replace('\n', '').replace('  ',''))
             print("Modules   =", modules, "\nStability =", stabs)
 
-        result = self.construct_cauchy_ge_sdp(
-            rhs, gens, modules, degree=degree, symmetry=G,
-            configs=configs
+        result = self.construct_cauchy_sdp_ge(
+            rhs, gens, modules, lhs_power,
+            degree=degree, symmetry=G, configs=configs
         )
         if result is not None:
             sdp, mgs = result
@@ -789,15 +795,29 @@ class CauchySolver(TransformNode):
         if verbose:
             sdp.print_graph(short = 2)
 
+        if configs.get("time_limit") is not None:
+            time_limit = configs["time_limit"] - (perf_counter() - start_time)
+            if time_limit < 0:
+                self.finished = True
+                return
+
+        if sdp.dof == 0: # can it happen?
+            self.finished = True
+            return
+
         val = None
         try:
-            val = sdp.solve_obj([0]*sdp.dof)[:dof,:]
+            val = sdp.solve_obj(
+                [0]*sdp.dof,
+                time_limit=time_limit,
+                verbose=True if float(verbose) > 2 else False
+            )[:dof,:]
         except Exception as e:
             if verbose:
                 print(e)
-                if isinstance(e, ArithmeticTimeout):
-                    self.finished = True
-                    return
+            if isinstance(e, ArithmeticTimeout):
+                self.finished = True
+                return
             if hasattr(e, 'y') and e.y is not None:
                 val = Matrix(e.y[:dof])
 
@@ -810,43 +830,102 @@ class CauchySolver(TransformNode):
         if val.is_zero_matrix:
             return None
 
-        def cyc_sum(x):
-            x1 = x.zero
-            for perm in G.elements:
-                x1 = x1 + action(x, perm)
-            return x1
-        def to_poly(x):
-            # return Poly.from_dict(dict(x), *gens, domain=x.parent().dom)
-            return x.parent().to_sympy(x).as_poly(gens)
-        muls = []
-        cnt = 0
-        for mg, dof, codgree in zip(mgs, dofs, codegrees):
-            muls.append(mg.invarraylize(val[cnt:cnt+dof, :], gens, codgree))
-            cnt += dof
+        # TODO: project to equality cases
+        multipliers = self.get_multipliers_ge(
+            val, gens, mgs, dofs, degree
+        )
 
-        pow_of_sum = cyc_sum(sum([
-            mul * to_poly(module.to_quo_element(lhs_power + 1)) for mul, module in zip(muls, modules)]))**(lhs_power + 1)
-        sum_of_pow = to_poly(rhs)**lhs_power * cyc_sum(sum([
-            to_poly(module.to_rem_element(lhs_power + 1))*mul**(lhs_power+1) for mul, module in zip(muls, modules)]))
-        new_expr = pow_of_sum - sum_of_pow
-        _, __, ineqs, eqs = self.problem.separate_constraints(elim_vars)
-        new_problem = self.problem.new(
-            new_expr.as_poly(self.problem.gens), ineqs, eqs).remove_redundancy()
+        new_problem = self.get_new_problem_ge(
+            self.problem, rhs, gens, elim_vars, modules, multipliers,
+            lhs_power, symmetry=G
+        )
 
         restore = self.get_restoration_ge(
-            rhs, gens, modules, muls, lhs_power, symmetry=G
+            self.problem, rhs, gens, modules, multipliers,
+            lhs_power, symmetry=G
         )
         return new_problem, restore
 
+
+    @staticmethod
+    def get_multipliers_ge(
+        y,
+        gens: List["Symbol"],
+        mgs: List[MonomialManager],
+        dofs: List[int],
+        degree: int,
+    ):
+        codegrees = [degree] * len(mgs)
+        muls = []
+        cnt = 0
+        for mg, dof, codgree in zip(mgs, dofs, codegrees):
+            muls.append(mg.invarraylize(y[cnt:cnt+dof, :], gens, codgree))
+            cnt += dof
+        return muls
+
+
+    @staticmethod
+    def get_new_problem_ge(
+        problem: InequalityProblem,
+        poly: PolyElement,
+        gens: List["Symbol"],
+        elim_gens: List["Symbol"],
+        modules: List[RadicalMonomial],
+        multipliers: List["Poly"],
+        lhs_power: int,
+        rhs_power: int = 1,
+        symmetry: Optional["PermutationGroup"] = None,
+    ):
+        assert rhs_power == 1
+
+        def action(x, perm):
+            if isinstance(x, RadicalMonomial):
+                return x.per([(action(v, perm), r) for v, r in x])
+            return _dtype_make_reorder_func(x, gens)(~perm)
+
+        def cyc_sum(x):
+            x1 = x.zero
+            if symmetry is not None:
+                for perm in symmetry.elements:
+                    x1 = x1 + action(x, perm)
+            return x1
+
+        def to_poly(x):
+            # return Poly.from_dict(dict(x), *gens, domain=x.parent().dom)
+            return x.parent().to_sympy(x).as_poly(gens)
+
+        fg_terms = [
+           g * to_poly(f.to_quo_element(lhs_power + 1)) for g, f in zip(multipliers, modules)
+        ]
+        pow_of_sum = cyc_sum(sum(fg_terms))**(lhs_power + 1)
+
+        f_pow_g_pow_terms = [
+            to_poly(f.to_rem_element(lhs_power + 1)) * g**(lhs_power + 1)
+                for g, f in zip(multipliers, modules)
+        ]
+        sum_of_pow = to_poly(poly)**lhs_power * cyc_sum(sum(f_pow_g_pow_terms))
+        new_expr = pow_of_sum - sum_of_pow
+        _, __, ineqs, eqs = problem.separate_constraints(elim_gens)
+        new_problem = problem.new(
+            new_expr.as_poly(problem.gens), ineqs, eqs).remove_redundancy()
+
+        return new_problem
+
+
+    @staticmethod
     def get_restoration_ge(
-        self,
+        problem,
         poly,
         gens: List["Symbol"],
         modules: List[RadicalMonomial],
         multipliers: List["Poly"],
-        lhs_power: int = 2,
+        lhs_power: int,
         symmetry: Optional["PermutationGroup"] = None,
     ):
+        """
+        Get the function that restores the solution
+        from the transformed problem to the original problem.
+        """
         G = symmetry
         def to_poly(x):
             # return Poly.from_dict(dict(x), *gens, domain=x.parent().dom)
@@ -857,11 +936,11 @@ class CauchySolver(TransformNode):
                 return x.per([(action(v, perm), r) for v, r in x])
             return _dtype_make_reorder_func(x, gens)(~perm)
 
-        def restore(x):
+        def restore(x: Optional["Expr"]) -> Optional["Expr"]:
             if x is None:
                 return None
             rhs = to_poly(poly)
-            lhs = (self.problem.expr + rhs).as_expr()
+            lhs = (problem.expr + rhs).as_expr()
             rhs = rhs.as_expr()
             multiplier = sum([
                 module.to_rem_sympy(lhs_power + 1)\
