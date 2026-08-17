@@ -14,7 +14,7 @@ from typing import (List, Dict, Tuple, Union, Optional, Callable, Set,
 
 import numpy as np
 from numpy import ndarray
-from scipy.sparse import spmatrix, csr_matrix
+from scipy import __version__ as _SCIPY_VERSION
 from sympy import __version__ as _SYMPY_VERSION
 from sympy.external.gmpy import MPZ # >= 1.9
 from sympy.external.importtools import version_tuple
@@ -27,9 +27,13 @@ from sympy.polys.matrices.domainmatrix import DomainMatrix # polys.matrices >= 1
 from sympy.polys.matrices.ddm import DDM
 from sympy.polys.matrices.sdm import SDM
 
-if TYPE_CHECKING:
-    from sympy import Basic
-    from sympy.polys.domains import Domain
+USE_SCIPY_ARRAY = tuple(version_tuple(_SCIPY_VERSION)) >= (1, 15)
+if USE_SCIPY_ARRAY:
+    from scipy.sparse import csr_array
+    from scipy.sparse import sparray
+else:
+    from scipy.sparse import csr_matrix as csr_array
+    from scipy.sparse import spmatrix as sparray
 
 if tuple(version_tuple(_SYMPY_VERSION)) >= (1, 13):
     from sympy.polys.matrices.dfm import DFM
@@ -59,8 +63,12 @@ except ImportError:
     FLINT_TYPE = ()
 
 
-MatrixLike = Union[MatrixBase, ndarray, spmatrix]
-MatrixT = TypeVar('MatrixT', MatrixBase, ndarray, spmatrix)
+if TYPE_CHECKING:
+    from sympy import Basic
+    from sympy.polys.domains import Domain
+
+MatrixLike = Union[MatrixBase, ndarray, sparray]
+MatrixT = TypeVar('MatrixT', MatrixBase, ndarray, sparray)
 
 
 class ArithmeticTimeout(Exception):
@@ -204,7 +212,7 @@ def reshape(A: MatrixT, shape: Tuple[int, int]) -> MatrixT:
         return A._fromrep(DomainMatrix.from_rep(
             SDM(dt_by_row, shape, A._rep.domain)
         ))
-    if isinstance(A, spmatrix):
+    if isinstance(A, sparray):
         return A.__class__(A.reshape(shape))
     return A.reshape(*shape)
 
@@ -359,7 +367,7 @@ def is_numerical_mat(mat: MatrixLike) -> bool:
             return True
         if (dom.is_EX or dom.is_EXRAW) and mat.has(Float):
             return True
-    elif isinstance(mat, (ndarray, spmatrix)):
+    elif isinstance(mat, (ndarray, sparray)):
         return True
     elif isinstance(mat, MatrixBase) and mat.has(Float):
         return True
@@ -388,7 +396,7 @@ def _cast_list_to_sympy_matrix(rows: int, cols: int, lst: List[int]) -> Matrix:
             sdm[i] = row
     return rep_matrix_from_dict(sdm, (rows, cols), ZZ)
 
-def _csr_to_dict_of_dict(csr_mat: spmatrix) -> Dict[int, Dict[int, Any]]:
+def _csr_to_dict_of_dict(csr_mat: sparray) -> Dict[int, Dict[int, Any]]:
     """Convert a CSR matrix to a dictionary of dictionaries. Internal."""
     # csr_mat = csr_mat.tocsr()
     dod = {}
@@ -401,13 +409,13 @@ def _csr_to_dict_of_dict(csr_mat: spmatrix) -> Dict[int, Dict[int, Any]]:
             dod[row] = dict(zip(cols, values))
     return dod
 
-def rep_matrix_from_numpy(arr: Union[ndarray, spmatrix]) -> Matrix:
+def rep_matrix_from_numpy(arr: Union[ndarray, sparray]) -> Matrix:
     """
     Cast a numpy matrix to a sympy Matrix by handling dtypes carefully.
 
     Parameters
     ----------
-    arr : ndarray or spmatrix
+    arr : ndarray or sparray
         The numpy matrix to be casted, can be either 1D or 2D.
 
     Examples
@@ -451,13 +459,13 @@ def rep_matrix_from_numpy(arr: Union[ndarray, spmatrix]) -> Matrix:
             else:
                 values = [conv(_) for _ in arr.tolist()]
                 return rep_matrix_from_list(values, arr.shape[0], domain)
-        elif isinstance(arr, spmatrix):
+        elif isinstance(arr, sparray):
             dt = _csr_to_dict_of_dict(arr.tocsr())
             dt = {r: {c: conv(v) for c, v in dt[r].items()} for r in dt}
             return rep_matrix_from_dict(dt, arr.shape, domain)
 
     # fallback to default constructor
-    if isinstance(arr, spmatrix):
+    if isinstance(arr, sparray):
         arr = arr.toarray()
     return Matrix(arr.tolist())
 
@@ -545,7 +553,7 @@ def rep_matrix_to_numpy(M: Union[MatrixLike, DomainMatrix], dtype: Any = np.floa
     dtype = np.dtype(dtype)
     if isinstance(M, ndarray):
         return M.astype(dtype, copy=False)
-    if isinstance(M, spmatrix):
+    if isinstance(M, sparray):
         return M.toarray().astype(dtype, copy=False)
 
     result = _rep_matrix_to_data(M, dtype)
@@ -558,7 +566,7 @@ def rep_matrix_to_numpy(M: Union[MatrixLike, DomainMatrix], dtype: Any = np.floa
     arr[row_indices, col_indices] = data_list
     return arr
 
-def rep_matrix_to_scipy(M: Union[MatrixLike, DomainMatrix], dtype = np.float64) -> spmatrix:
+def rep_matrix_to_scipy(M: Union[MatrixLike, DomainMatrix], dtype = np.float64) -> sparray:
     """
     Cast a sympy RepMatrix to a scipy sparse matrix efficiently.
 
@@ -570,18 +578,18 @@ def rep_matrix_to_scipy(M: Union[MatrixLike, DomainMatrix], dtype = np.float64) 
         The dtype of the numpy matrix. Default is np.float64.
     """
     dtype = np.dtype(dtype)
-    if isinstance(M, spmatrix):
+    if isinstance(M, sparray):
         return M.astype(dtype, copy=False)
     if isinstance(M, ndarray):
-        return csr_matrix(M.astype(dtype, copy=False))
+        return csr_array(M.astype(dtype, copy=False))
 
     result = _rep_matrix_to_data(M, dtype)
     if result is None:
         # fallback to default constructor
-        return csr_matrix(np.array(M).astype(dtype))
+        return csr_array(np.array(M).astype(dtype))
 
     data_list, row_indices, col_indices = result
-    arr = csr_matrix((data_list, (row_indices, col_indices)), shape=M.shape, dtype=dtype)
+    arr = csr_array((data_list, (row_indices, col_indices)), shape=M.shape, dtype=dtype)
     return arr
 
 
@@ -642,7 +650,7 @@ def permute_matrix_rows(
         rows = [matrix[permutation[r], :] for r in range(len(permutation))]
         return matrix.vstack(*rows)
 
-    if isinstance(matrix, spmatrix):
+    if isinstance(matrix, sparray):
         return matrix.__class__(matrix.tocsr()[permutation])
 
     return matrix[permutation]

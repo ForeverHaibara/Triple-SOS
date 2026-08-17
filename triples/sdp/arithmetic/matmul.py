@@ -11,10 +11,16 @@ from numpy import ndarray, int64, isnan, inf, kron, result_type
 from numpy import iinfo as np_iinfo
 from numpy import any as np_any
 from numpy import where as np_where
-from scipy.sparse import spmatrix, csr_matrix, eye as sparse_eye
-from scipy.sparse import kron as sparse_kron
+from scipy.sparse import issparse, kron as sparse_kron
 from sympy.matrices import MutableDenseMatrix as Matrix
 from sympy.matrices.repmatrix import RepMatrix
+
+from .matop import USE_SCIPY_ARRAY, csr_array, sparray
+
+if USE_SCIPY_ARRAY:
+    from scipy.sparse import eye_array as sparse_eye
+else:
+    from scipy.sparse import eye as sparse_eye
 
 from .matop import (
     ArithmeticTimeout,
@@ -33,24 +39,24 @@ _INT64_MAX = np_iinfo('int64').max # 9223372036854775807
 _VERBOSE_MATMUL_MULTIPLE = False
 _IS_STANDARD_INT64 = (_INT64_MAX == 9223372036854775807)
 
-MatrixLike = Union['MatrixBase', ndarray, spmatrix]
+MatrixLike = Union['MatrixBase', ndarray, sparray]
 
 
-def _is_sparse_matrix(A) -> bool:
-    return isinstance(A, spmatrix)
+def _is_scipy_sparse(A) -> bool:
+    return issparse(A)
 
 def _is_numeric_matrix(A) -> bool:
-    return isinstance(A, (ndarray, spmatrix))
+    return isinstance(A, ndarray) or issparse(A)
 
-def _as_csr(A: Union[ndarray, spmatrix]) -> csr_matrix:
-    if isinstance(A, spmatrix):
+def _as_csr(A: Union[ndarray, sparray]) -> csr_array:
+    if issparse(A):
         return A.tocsr()
-    return csr_matrix(A)
+    return csr_array(A)
 
-def _sparse_abs_max(A: spmatrix):
+def _sparse_abs_max(A: sparray):
     return abs(A.data).max() if A.nnz > 0 else 0
 
-def _sparse_max_row_nnz(A: spmatrix):
+def _sparse_max_row_nnz(A: sparray):
     A = _as_csr(A)
     if A.shape[0] == 0:
         return 0
@@ -65,7 +71,7 @@ def _matmul_multiple_sparse_cost(A, B, n):
 def _symmetric_bilinear_dense_cost(N, n, m):
     return N * n * n * m + N * n * m * m
 
-def _symmetric_bilinear_sparse_cost(A: spmatrix, U: spmatrix):
+def _symmetric_bilinear_sparse_cost(A: sparray, U: sparray):
     row_nnz = _sparse_max_row_nnz(U)
     return U.nnz * U.nnz + A.nnz * row_nnz * row_nnz
 
@@ -76,9 +82,9 @@ def matadd(A: MatrixLike, B: MatrixLike) -> MatrixLike:
     """
     if isinstance(A, ndarray) and isinstance(B, ndarray):
         return A + B
-    if _is_sparse_matrix(A) or _is_sparse_matrix(B):
+    if _is_scipy_sparse(A) or _is_scipy_sparse(B):
         if _is_numeric_matrix(A) and _is_numeric_matrix(B):
-            if _is_sparse_matrix(A) and _is_sparse_matrix(B):
+            if _is_scipy_sparse(A) and _is_scipy_sparse(B):
                 return A + B
             return _as_csr(A) + _as_csr(B)
     A = rep_matrix_from_numpy(A)
@@ -190,10 +196,10 @@ def matmul(
         if return_shape is not None:
             C = C.reshape(return_shape)
         return C
-    if (_is_sparse_matrix(A) or _is_sparse_matrix(B)) and _is_numeric_matrix(A) and _is_numeric_matrix(B):
-        if _is_sparse_matrix(A):
+    if (_is_scipy_sparse(A) or _is_scipy_sparse(B)) and _is_numeric_matrix(A) and _is_numeric_matrix(B):
+        if _is_scipy_sparse(A):
             C = A @ B
-        elif _is_sparse_matrix(B):
+        elif _is_scipy_sparse(B):
             C = (B.T @ A.T).T
         else:
             C = A @ B
@@ -243,16 +249,16 @@ def matmul(
     return C
 
 
-def _matmul_multiple_spmatrix(A, B):
+def _matmul_multiple_sparray(A, B):
     N, n = A.shape[0], B.shape[0]
     m = B.shape[1]
     dtype = result_type(A.dtype, B.dtype)
     if N == 0 or n == 0 or m == 0:
-        return csr_matrix((N, n*m), dtype=dtype)
+        return csr_array((N, n*m), dtype=dtype)
     A = _as_csr(A)
     B = _as_csr(B)
     if A.nnz == 0 or B.nnz == 0:
-        return csr_matrix((N, n*m), dtype=dtype)
+        return csr_array((N, n*m), dtype=dtype)
     kr = sparse_kron(sparse_eye(n, format='csr', dtype=dtype),
                             B, format='csr')
     return A @ kr
@@ -307,9 +313,9 @@ def matmul_multiple(
     if isinstance(A, ndarray) and isinstance(B, ndarray):
         N, n = A.shape[0], B.shape[0]
         return (A.reshape(N, n, n) @ B).reshape(N, n*B.shape[1])
-    if (_is_sparse_matrix(A) or _is_sparse_matrix(B)) \
+    if (_is_scipy_sparse(A) or _is_scipy_sparse(B)) \
             and _is_numeric_matrix(A) and _is_numeric_matrix(B):
-        return _matmul_multiple_spmatrix(A, B)
+        return _matmul_multiple_sparray(A, B)
     time_limit = ArithmeticTimeout.make_checker(time_limit)
     A = rep_matrix_from_numpy(A)
     B = rep_matrix_from_numpy(B)
@@ -367,7 +373,7 @@ def matmul_multiple(
         time0 = perf_counter()
 
     if use_sparse:
-        C = _matmul_multiple_spmatrix(A, B)
+        C = _matmul_multiple_sparray(A, B)
     else:
         A = A.toarray().reshape((N, n, n))
         B = B.toarray()
@@ -388,15 +394,15 @@ def matmul_multiple(
     return C
 
 
-def _symmetric_bilinear_multiple_spmatrix(U, A):
+def _symmetric_bilinear_multiple_sparray(U, A):
     N, n = A.shape[0], U.shape[0]
     m = U.shape[1]
     dtype = result_type(U.dtype, A.dtype)
     if N == 0 or n == 0 or m == 0:
-        return csr_matrix((N, m**2), dtype=dtype)
+        return csr_array((N, m**2), dtype=dtype)
     U = _as_csr(U)
     if U.nnz == 0:
-        return csr_matrix((N, m**2), dtype=dtype)
+        return csr_array((N, m**2), dtype=dtype)
     transform = sparse_kron(U, U, format='csr')
     return _as_csr(A) @ transform
 
@@ -484,9 +490,9 @@ def symmetric_bilinear_multiple(
     if isinstance(A, ndarray) and isinstance(U, ndarray):
         N, n = A.shape[0], U.shape[0]
         return (U.T @ A.reshape(N, n, n) @ U).reshape(N, U.shape[1]**2)
-    if (_is_sparse_matrix(A) or _is_sparse_matrix(U)) \
+    if (_is_scipy_sparse(A) or _is_scipy_sparse(U)) \
             and _is_numeric_matrix(A) and _is_numeric_matrix(U):
-        return _symmetric_bilinear_multiple_spmatrix(U, A)
+        return _symmetric_bilinear_multiple_sparray(U, A)
     time_limit = ArithmeticTimeout.make_checker(time_limit)
     A = rep_matrix_from_numpy(A)
     U = rep_matrix_from_numpy(U)
@@ -542,7 +548,7 @@ def symmetric_bilinear_multiple(
             use_sparse = _symmetric_bilinear_sparse_cost(A, U) \
                 < _symmetric_bilinear_dense_cost(N, n, m)
             if use_sparse:
-                C = _symmetric_bilinear_multiple_spmatrix(U, A)
+                C = _symmetric_bilinear_multiple_sparray(U, A)
             else:
                 A = A.toarray().reshape((N, n, n))
                 U = U.toarray()
@@ -724,7 +730,7 @@ def kronecker_product(A: MatrixLike, B: MatrixLike) -> MatrixLike:
     """
     if isinstance(A, ndarray) and isinstance(B, ndarray):
         return kron(A, B)
-    if (_is_sparse_matrix(A) or _is_sparse_matrix(B)) and _is_numeric_matrix(A) and _is_numeric_matrix(B):
+    if (_is_scipy_sparse(A) or _is_scipy_sparse(B)) and _is_numeric_matrix(A) and _is_numeric_matrix(B):
         return sparse_kron(_as_csr(A), _as_csr(B), format='csr')
     A = rep_matrix_from_numpy(A)
     B = rep_matrix_from_numpy(B)

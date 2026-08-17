@@ -11,6 +11,12 @@ from .mosek_sdp import DualBackendMOSEK
 from .picos_sdp import DualBackendPICOS
 from .qics_sdp import DualBackendQICS
 from .sdpap_sdp import DualBackendSDPAP
+from ..arithmetic.matop import USE_SCIPY_ARRAY, csr_array
+
+if USE_SCIPY_ARRAY:
+    from scipy.sparse import diags_array
+else:
+    from scipy.sparse import diags as diags_array
 
 if TYPE_CHECKING:
     from numpy import ndarray
@@ -84,11 +90,11 @@ def _hstack(mats):
 def _as_sparse_matrix(mat):
     if sparse.issparse(mat):
         return mat.astype(np.float64, copy=False).tocsr()
-    return sparse.csr_matrix(np.array(mat).astype(np.float64))
+    return csr_array(np.array(mat).astype(np.float64))
 
 
 def _sparse_zero(rows, cols):
-    return sparse.csr_matrix((rows, cols), dtype=np.float64)
+    return csr_array((rows, cols), dtype=np.float64)
 
 
 def _dense_vector(vec):
@@ -317,7 +323,7 @@ def _fill_space_sparse(n: int, bias: int, dof: int):
         rows = np.concatenate((rows, j[offdiag]*n + i[offdiag]))
         cols = np.concatenate((cols, cols[offdiag]))
         data = np.concatenate((data, np.ones((int(np.sum(offdiag)),), dtype=np.float64)))
-    return sparse.csr_matrix((data, (rows, cols)), shape=(n**2, dof), dtype=np.float64)
+    return csr_array((data, (rows, cols)), shape=(n**2, dof), dtype=np.float64)
 
 
 def _extract_triu(space: 'ndarray', n: int) -> 'ndarray':
@@ -344,7 +350,7 @@ def _scale_columns(mat, weights):
     if mat.shape[1] == 0:
         return mat
     if sparse.issparse(mat):
-        return mat.dot(sparse.diags(weights, format='csr')).tocsr()
+        return mat.dot(diags_array(weights, format='csr')).tocsr()
     return mat * weights
 
 def solve_numerical_primal_sdp(

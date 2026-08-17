@@ -1,10 +1,11 @@
 import numpy as np
-from scipy import sparse
+from scipy.sparse import issparse
 import sympy as sp
 
 from ..backend import DualBackend
 from ..caller import (_DUAL_BACKENDS, solve_numerical_dual_sdp, solve_numerical_primal_sdp
 )
+from ...arithmetic.matop import csr_array
 
 SOLVERS = _DUAL_BACKENDS
 # SOLVERS = {'qics': DualBackendQICS}
@@ -311,14 +312,14 @@ class _SparseEqToIneqBackend(_CaptureSparseBackend):
 
 
 def test_sparse_backend_standardization_and_feasibility():
-    A = sparse.csr_matrix(np.array([[1., 0.], [0., 0.], [0., 0.], [0., 1.]]))
+    A = csr_array(np.array([[1., 0.], [0., 0.], [0., 0.], [0., 1.]]))
     b = np.array([1., 0., 0., 1.])
-    ineq_lhs = sparse.csr_matrix(np.array([[1., 0.]]))
+    ineq_lhs = csr_array(np.array([[1., 0.]]))
 
-    backend = _CaptureSparseBackend([A], [b], ineq_lhs, [0.], sparse.csr_matrix((0, 2)), [], [1., 2.])
+    backend = _CaptureSparseBackend([A], [b], ineq_lhs, [0.], csr_array((0, 2)), [], [1., 2.])
 
-    assert sparse.isspmatrix_csr(backend.As[0])
-    assert sparse.isspmatrix_csr(backend.ineq_lhs)
+    assert issparse(backend.As[0])
+    assert issparse(backend.ineq_lhs)
     assert isinstance(backend.bs[0], np.ndarray)
     assert backend.is_feasible(np.array([0., 0.]))
     assert not backend.is_feasible(np.array([-2., 0.]))
@@ -330,20 +331,20 @@ def test_sparse_isometric_matches_dense_isometric():
     empty = np.zeros((0, 2))
 
     dense_backend = _DenseIsometricBackend([A], [b], empty, [], empty, [], [1., 2.])
-    sparse_backend = _SparseIsometricBackend([sparse.csr_matrix(A)], [b], sparse.csr_matrix(empty), [], sparse.csr_matrix(empty), [], [1., 2.])
+    sparse_backend = _SparseIsometricBackend([csr_array(A)], [b], csr_array(empty), [], csr_array(empty), [], [1., 2.])
 
-    assert sparse.isspmatrix_csr(sparse_backend.As[0])
+    assert issparse(sparse_backend.As[0])
     assert np.allclose(sparse_backend.As[0].toarray(), dense_backend.As[0])
     assert np.allclose(sparse_backend.bs[0], dense_backend.bs[0])
 
 
 def test_sparse_eq_to_ineq_standardization():
-    eq_lhs = sparse.csr_matrix(np.array([[1., -1.]]))
+    eq_lhs = csr_array(np.array([[1., -1.]]))
     eq_rhs = np.array([3.])
 
-    backend = _SparseEqToIneqBackend([], [], sparse.csr_matrix((0, 2)), [], eq_lhs, eq_rhs, [1., 2.])
+    backend = _SparseEqToIneqBackend([], [], csr_array((0, 2)), [], eq_lhs, eq_rhs, [1., 2.])
 
-    assert sparse.isspmatrix_csr(backend.ineq_lhs)
+    assert issparse(backend.ineq_lhs)
     assert backend.ineq_lhs.shape == (2, 2)
     assert np.allclose(backend.ineq_lhs.toarray(), np.array([[1., -1.], [-1., 1.]]))
     assert np.allclose(backend.ineq_rhs, np.array([3., -3.]))
@@ -352,14 +353,14 @@ def test_sparse_eq_to_ineq_standardization():
 
 def test_primal_sparse_reformulation_matches_dense_expected():
     x0 = np.array([19., 23.])
-    space = sparse.csr_matrix(np.array([[1., 2., 3., 4.], [0., 5., 0., 6.]]))
+    space = csr_array(np.array([[1., 2., 3., 4.], [0., 5., 0., 6.]]))
     objective = np.array([7., 11., 13., 17.])
 
     solve_numerical_primal_sdp((x0, {'S': space}), objective,
         solver=_CaptureSparseBackend, return_result=True)
     backend = _CaptureSparseBackend.last
 
-    assert sparse.isspmatrix_csr(backend.As[0])
+    assert issparse(backend.As[0])
     assert np.allclose(backend.As[0].toarray(),
         np.array([[1., 0., 0.], [0., 1., 0.], [0., 1., 0.], [0., 0., 1.]]))
     assert np.allclose(backend.eq_lhs.toarray(), np.array([[1., 4., 4.], [0., 10., 6.]]))

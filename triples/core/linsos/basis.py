@@ -3,7 +3,6 @@ from typing import Any, Union, Tuple, List, Callable, Optional, TYPE_CHECKING
 from time import perf_counter
 
 import numpy as np
-from scipy.sparse import coo_matrix
 from sympy import Poly, Mul, Pow, Integer, Basic
 from sympy import symbols as sp_symbols
 from sympy.polys.polyclasses import DMP
@@ -11,6 +10,12 @@ from sympy.polys.rings import PolyRing, PolyElement
 
 from ...utils import arraylize_np, arraylize_sp, MonomialManager
 from ...utils.monomials import generate_partitions
+from ...sdp.arithmetic.matop import USE_SCIPY_ARRAY
+
+if USE_SCIPY_ARRAY:
+    from scipy.sparse import coo_array
+else:
+    from scipy.sparse import coo_matrix as coo_array
 
 if TYPE_CHECKING:
     from sympy import Expr, Symbol
@@ -586,7 +591,7 @@ def _count_contribution_of_monoms(A: np.ndarray, v: np.ndarray, M: int) -> np.nd
         cols = A.ravel()                   # column coors [A[0,0],A[0,1],...,A[1,0],...]
         data = np.tile(v, X)               # values [v[0],v[1],...,v[0],v[1],...]
 
-        return coo_matrix((data, (rows, cols)), shape=(X, M)).toarray()
+        return coo_array((data, (rows, cols)), shape=(X, M)).toarray()
     else:
         B = np.zeros((X, M), dtype=v.dtype)
 

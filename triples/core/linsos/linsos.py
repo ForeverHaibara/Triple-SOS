@@ -20,8 +20,8 @@ from ...utils import Root, MonomialManager, clear_polys_by_symmetry
 
 if TYPE_CHECKING:
     from sympy import Poly, Expr
-    from .basis import LinearBasis
     from sympy.combinatorics import PermutationGroup
+    from .basis import LinearBasis
     from ..problem import InequalityProblem
 
 if tuple(version_tuple(_SCIPY_VERSION)) >= (1, 6):

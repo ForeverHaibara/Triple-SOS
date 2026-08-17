@@ -1,9 +1,16 @@
 from typing import List, Dict, Any, TYPE_CHECKING
 
 import numpy as np
+from scipy.sparse import issparse
 from scipy import sparse
 
 from .settings import SDPResult, SolverConfigs
+from ..arithmetic.matop import USE_SCIPY_ARRAY, csr_array
+
+if USE_SCIPY_ARRAY:
+    from scipy.sparse import diags_array
+else:
+    from scipy.sparse import diags as diags_array
 
 if TYPE_CHECKING:
     from numpy import ndarray
@@ -28,7 +35,7 @@ class SDPBackend:
 
     @classmethod
     def as_vector(cls, x):
-        if sparse.issparse(x):
+        if issparse(x):
             x = x.toarray()
         return np.array(x).astype(np.float64).flatten()
 
@@ -36,20 +43,23 @@ class SDPBackend:
     def as_matrix(cls, x):
         if getattr(cls, '_opt_sparse', False):
             fmt = getattr(cls, '_opt_sparse', None)
-            if sparse.issparse(x):
+            if issparse(x):
                 mat = x.astype(np.float64, copy=False)
             else:
-                mat = sparse.csr_matrix(np.array(x).astype(np.float64))
+                mat = csr_array(np.array(x).astype(np.float64))
+            if len(mat.shape) == 1:
+                # convert it to 2D
+                mat = mat.reshape(1, mat.shape[0])
             if fmt in ('csc', 'csr', 'coo'):
                 return getattr(mat, 'to' + fmt)()
             return mat
-        if sparse.issparse(x):
+        if issparse(x):
             return x.toarray().astype(np.float64, copy=False)
         return np.array(x).astype(np.float64)
 
     @staticmethod
     def _as_dense(x):
-        if sparse.issparse(x):
+        if issparse(x):
             return x.toarray()
         return np.asarray(x)
 
@@ -111,10 +121,10 @@ class SDPBackend:
             raise ValueError('Order should be one of "row" or "col".')
 
         # multiply 2**.5 on off-diagonal entries
-        if sparse.issparse(space):
+        if issparse(space):
             weights = np.full((space.shape[0],), 2**.5, dtype=np.float64)
             weights[np.arange(0,n**2,n+1)] *= 2**-.5
-            upper = sparse.diags(weights).dot(space)[rows, :]
+            upper = diags_array(weights).dot(space)[rows, :]
         else:
             space = space * (2**.5)
             space[np.arange(0,n**2,n+1), :] *= 2**-.5
@@ -190,7 +200,7 @@ class DualBackend(SDPBackend):
         self._eq_rhs   = eq_rhs
 
         if self._opt_eq_to_ineq:
-            ineq_lhs = sparse.vstack((ineq_lhs, eq_lhs, -eq_lhs)) if any(sparse.issparse(_) for _ in (ineq_lhs, eq_lhs))\
+            ineq_lhs = sparse.vstack((ineq_lhs, eq_lhs, -eq_lhs)) if any(issparse(_) for _ in (ineq_lhs, eq_lhs))\
                 else np.vstack((ineq_lhs, eq_lhs, -eq_lhs))
             ineq_rhs = np.concatenate((ineq_rhs, eq_rhs, -eq_rhs))
             eq_lhs, eq_rhs = self.as_matrix(np.zeros((0, dof))), np.zeros((0,))
@@ -208,7 +218,7 @@ class DualBackend(SDPBackend):
         if self._opt_sparse:
             if self._opt_sparse not in ('csc', 'csr', 'coo'):
                 raise ValueError('DualBackend._opt_sparse must be one of "csc" or "csr" or "coo".')
-            to_mat = getattr(sparse, self._opt_sparse + '_matrix')
+            to_mat = getattr(sparse, self._opt_sparse + ('_array' if USE_SCIPY_ARRAY else '_matrix'))
             As = [to_mat(A) for A in As]
             ineq_lhs = to_mat(ineq_lhs)
             eq_lhs = to_mat(eq_lhs)
