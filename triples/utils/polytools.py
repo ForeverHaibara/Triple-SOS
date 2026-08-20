@@ -103,6 +103,8 @@ def marginalize(p, *args) -> Poly:
 
 if SYMPY_VERSION >= (1, 14):
     def poly_lift(poly: Poly) -> Poly:
+        if not poly.domain.is_AlgebraicField:
+            return poly
         return poly.lift()
 
     def crootof_realroots_alg(poly: Poly):

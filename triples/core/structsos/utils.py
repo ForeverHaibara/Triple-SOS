@@ -3,7 +3,7 @@ from functools import wraps
 
 from sympy import (
     Poly, Expr, Integer, Rational, MatrixBase, Add,
-    QQ, ZZ, sympify, fraction
+    QQ, ZZ, RR, sympify, fraction
 )
 from sympy.combinatorics import Permutation
 from sympy.core.symbol import uniquely_named_symbol
@@ -11,10 +11,12 @@ from sympy.core.symbol import uniquely_named_symbol
 from ...sdp import congruence
 from ...utils.expressions import Coeff, CyclicSum, CyclicProduct
 from ...utils.roots import nroots, rationalize_bound
+from ...utils.polytools import poly_lift
 
 if TYPE_CHECKING:
     from sympy import MutableDenseMatrix as Matrix
     from sympy import Symbol
+    from sympy.polys.domains import Domain
 
 # use imports to keep linter happy
 (uniquely_named_symbol, Coeff, CyclicSum, CyclicProduct)
@@ -105,6 +107,71 @@ def sum_y_exprs(y: List[Expr], exprs: List[Expr]) -> Expr:
         x, f = (v * expr).radsimp(symbolic=False).together().as_coeff_Mul()
         return radsimp(x) * f
     return sum(_mul(*args) for args in zip(y, exprs))
+
+
+def common_region_of_curves(polys: List[Poly], domain: "Domain"):
+    """
+    Find a point in the domain so that poly(x, y) >= 0 holds for all
+    given polynomials.
+    """
+    if len(polys) != 2 and any(len(p.gens) != 2 for p in polys):
+        # current implementation only works for 2 polynomials
+        raise ValueError("common_region_of_curves() takes 2 bivariate polynomials")
+    if not domain.is_Field:
+        raise ValueError("domain must be a field")
+
+    def _convert(x):
+        return domain.convert(x)
+
+    if not domain.is_RR:
+        q_polys = [f.set_domain(domain) for f in polys]
+    else:
+        # RR does not support resultants -> convert to QQ first
+        q_polys = [f.set_domain(RR).set_domain(QQ)
+                        if not f.domain.is_QQ or not f.domain.is_ZZ
+                    else f.to_field() for f in polys]
+    discs = [p.discriminant() for p in q_polys]
+
+    p1, p2 = q_polys[0], q_polys[1]
+    disc1, disc2 = discs
+    res = p1.resultant(p2)
+
+    from sympy import intervals
+    def _intervals(fs: List[Poly]):
+        if all(_.total_degree() <= 0 for _ in fs):
+            yield domain.zero
+            return
+
+        # important to check ground roots first
+        # because ground roots might not be in the interval
+        for f in fs:
+            for g, _ in f.factor_list()[1]:
+                if g.total_degree() == 1:
+                    v = -g.rep.monic().TC()
+                    yield v
+        if domain.is_AlgebraicField:
+            fs = [poly_lift(f) for f in fs]
+        x2 = domain.zero
+        for (x1, x2), _ in intervals(fs):
+            yield domain.convert(x1)
+        yield domain.convert(x2)
+
+    def test_y(y):
+        _fx = [p.rep.eval(y, 1) for p in q_polys]
+        fx = [Poly.new(f, *p.gens[:-1]) for f, p in zip(_fx, q_polys)]
+        for x in _intervals(fx):
+            point = test_x(x, y)
+            if point is not None:
+                return point
+
+    def test_x(x, y):
+        if all(p.domain.to_sympy(p.rep.eval(x).eval(y)) >= 0 for p in q_polys):
+            return tuple(_convert(i) for i in (x, y))
+
+    for y in _intervals([disc1, disc2, res]):
+        point = test_y(y)
+        if point is not None:
+            return point
 
 
 def rationalize_func(

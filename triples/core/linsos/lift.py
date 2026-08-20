@@ -6,8 +6,8 @@ from .basis import LinearBasis, quadratic_difference, _callable_expr
 from ...utils import generate_monoms, clear_polys_by_symmetry
 
 if TYPE_CHECKING:
-    from ...utils import MonomialManager
     from sympy import Expr, Symbol
+    from ...utils import MonomialManager
 
 
 class LinearBasisMultiplier(LinearBasis):

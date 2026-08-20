@@ -692,6 +692,7 @@ def structsos_ternary_dense_partial_symmetric(coeff: 'Coeff', real=True):
         if sol is not None:
             return subtractor + sol
 
+
 def _get_ternary_dense_partial_symmetric_default_subtractor(coeff: 'Coeff', rem: Poly) -> list:
     d = coeff.total_degree()
     a, b, c = coeff.gens
@@ -713,6 +714,7 @@ def _get_ternary_dense_partial_symmetric_default_subtractor(coeff: 'Coeff', rem:
         m = (d - n - 3) // 2
         subtractor = a**m*b**m*c**n*(u2/2*c*(a + b) + v2*a*b)*(2*c - a - b)**2/4
     return [subtractor]
+
 
 def _get_ternary_dense_partial_symmetric_cubic_subtractor(coeff: 'Coeff', rem: Poly) -> list:
     d = coeff.total_degree()

@@ -13,6 +13,7 @@ from ..preprocess import ProofNode, ProofTree, SolvePolynomial
 from ...utils import MonomialManager, clear_polys_by_symmetry
 from ...sdp import ArithmeticTimeout
 from ...sdp.rationalize import SDPRationalizeError, DualRationalizer
+from ...sdp.arithmetic import rep_matrix_from_dict
 
 if TYPE_CHECKING:
     from sympy import Poly, Expr
@@ -49,8 +50,6 @@ def _vector_complement(row: Matrix):
     * A is of shape (n, n - 1), full rank, SPARSE, and `row @ A == 0`.
     * b is of shape (n, 1) and `row @ b == 1`.
     """
-    from sympy.polys.matrices.domainmatrix import DomainMatrix
-    from sympy.polys.matrices.sdm import SDM
     rep = row._rep.to_field()
     dok = rep.to_dok()
     if len(dok) == 0:
@@ -66,10 +65,10 @@ def _vector_complement(row: Matrix):
     for (_, k), v2 in items[:-1]:
         Anz[k - int(k > nz)] = -v2 / v
     A[nz] = Anz
-    A = Matrix._fromrep(DomainMatrix.from_rep(SDM(A, (n, n-1), rep.domain)))
+    A = rep_matrix_from_dict(A, (n, n-1), rep.domain)
 
     b = {nz: {0: one / v}}
-    b = Matrix._fromrep(DomainMatrix.from_rep(SDM(b, (n, 1), rep.domain)))
+    b = rep_matrix_from_dict(b, (n, 1), rep.domain)
     return A, b
 
 

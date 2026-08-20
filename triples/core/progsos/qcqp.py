@@ -2,12 +2,11 @@ from typing import Tuple, List, Optional, Any, TYPE_CHECKING
 
 from sympy import Add, Mul, QQ
 from sympy import MutableDenseMatrix as Matrix
-from sympy.polys.matrices.domainmatrix import DomainMatrix
-from sympy.polys.matrices.sdm import SDM
 
 from ..problem import InequalityProblem, ProblemComplexity
 from ..node import ProofNode
 from ...sdp.arithmetic import (
+    rep_matrix_from_dict,
     congruence, reshape, kronecker_product, permute_matrix_rows
 )
 from ...sdp import SDPProblem
@@ -68,14 +67,12 @@ class QCQP(InequalityProblem):
             dt = sdm.get(n, {})
             dt = {k: v * two if k != n else v for k, v in dt.items()}
             dt2 = {0: dt} if dt else {}
-            sdm = SDM(dt2, (1, n + 1), sdm.domain)
-            return Matrix._fromrep(DomainMatrix.from_rep(sdm))
+            return rep_matrix_from_dict(dt2, (1, n + 1), sdm.domain)
         ineqs = self.P_ineqs
         inds = self.get_linear_ineq_indices()
 
         if len(inds) == 0:
-            sdm = SDM({}, (0, n + 1), self.P0._rep.domain)
-            return Matrix._fromrep(DomainMatrix.from_rep(sdm))
+            return rep_matrix_from_dict({}, (0, n + 1), self.P0._rep.domain)
 
         return Matrix.vstack(*[extract(ineqs[i]) for i in inds])
 
@@ -144,8 +141,7 @@ def formulate_qcqp(problem: InequalityProblem) -> Optional[Tuple[QCQP, Any]]:
                 v = v/2
                 mat.setdefault(b, {})[a] = v
             mat.setdefault(a, {})[b] = v
-        return Matrix._fromrep(DomainMatrix.from_rep(
-            SDM(mat, (n + 1, n + 1), dom)))
+        return rep_matrix_from_dict(mat, (n + 1, n + 1), dom)
 
     P0 = build_mat(problem.expr)
     P_ineqs = [build_mat(ineq) for ineq in problem.ineq_constraints]
@@ -266,8 +262,8 @@ class QCQPSolver(ProofNode):
 
         # lambda <= 0 constraints
         def neg_onehot(i):
-            sdm = SDM({0: {i: -QQ.one}}, (1, dof), QQ)
-            return Matrix._fromrep(DomainMatrix.from_rep(sdm))
+            return rep_matrix_from_dict({0: {i: -QQ.one}}, (1, dof), QQ)
+
         zero_mat = Matrix.zeros(1, 1)
 
         x0_and_space = [(x0, space)] + [
