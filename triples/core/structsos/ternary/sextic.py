@@ -74,9 +74,11 @@ def _structsos_sextic_hexagram(coeff: 'Coeff'):
 
     => (s(a2c)s(b2c)+200/9p(a2)-19*18^(1/3)/6s(a2c)p(a))
 
-    Reference
-    ---------
-    [1] https://www.zhihu.com/question/619911891
+    References
+    ----------
+    [1] https://www.zhihu.com/question/2038737989736593104/answer/2043385168942167226
+
+    [2] https://www.zhihu.com/question/619911891
     """
     if coeff((3,3,0)) < 0 or coeff((4,1,1)) < 0:
         return None
@@ -307,7 +309,7 @@ def _structsos_sextic_hexagram(coeff: 'Coeff'):
             -12*x + 2*y**2 - 6*y + 9
         ]
         def compute_u(v):
-            frac1, frac2 = 0, 0
+            frac1, frac2 = coeff.domain.zero, coeff.domain.zero
             for i in coeffsu1:
                 frac1 *= v
                 frac1 += i
@@ -316,23 +318,17 @@ def _structsos_sextic_hexagram(coeff: 'Coeff'):
                 frac2 += i
             return frac1 / frac2
 
-        u_, v_ = None, None
-        eqvdiff = eqv.diff()
-        eqvgcd = eqv.gcd(eqvdiff)
-        if eqvgcd.total_degree() == 1:
-            root = coeff.convert(-eqvgcd.rep.TC() / eqvgcd.rep.LC())
-            u_ = compute_u(root)
-            if u_ * root > 1:
-                v_ = root
-            else:
-                u_, v_ = None, None
-        if v_ is None:
-            for root in nroots(eqv, method = 'factor', real = True, nonnegative = True):
-                u_ = compute_u(root)
-                if u_ * root > 1:
-                    v_ = root
-                    break
-        if v_ is not None:
+        u0, v0 = None, None
+        eqv_roots = nroots(eqv, method = 'factor', real = True, nonnegative = True, ground=True)
+        for root in eqv_roots:
+            u0 = compute_u(root)
+            if u0 * root > 1:
+                v0 = root
+                break
+        else:
+            u0, v0 = None, None
+
+        if v0 is not None:
             # we are sure that f(a,b,c) * s(a) >= coeff((3,3,0)) * s(c(a2c-b2c-w(a2b-abc)+z(ab2-abc))2)
             # where w = (u^2+v)/(uv-1), z = (v^2+u)/(uv-1)
             # so we can subtract the right hand side and apply the quartic theorem
@@ -349,7 +345,6 @@ def _structsos_sextic_hexagram(coeff: 'Coeff'):
                 m2, p2, n2, q2 = 0, r_*(w*w - 2*z), -r_*2*w*z, r_*(z*z - 2*w)
                 return get_discriminant(m2, p2, n2, q2)
 
-            u0, v0 = coeff.convert(u_), coeff.convert(v_)
             det_, (m3, p3, n3, q3) = get_discriminant_uv(u0, v0)
             if det_ == 0:
                 u, v = u0, v0
@@ -357,9 +352,11 @@ def _structsos_sextic_hexagram(coeff: 'Coeff'):
                 # first check that the result is good
 
                 # do rational approximation for both u and v
+                u_numer = coeff.to_sympy(u0).n(15)
+                v_numer = coeff.to_sympy(v0).n(15)
                 for u, v in zip(
-                    rationalize_bound(u_, direction = 0, compulsory = True),
-                    rationalize_bound(v_, direction = 0, compulsory = True)
+                    rationalize_bound(u_numer, direction = 0, compulsory = True),
+                    rationalize_bound(v_numer, direction = 0, compulsory = True)
                 ):
                     u, v = coeff.convert(u), coeff.convert(v)
                     det_, (m3, p3, n3, q3) = get_discriminant_uv(u, v)

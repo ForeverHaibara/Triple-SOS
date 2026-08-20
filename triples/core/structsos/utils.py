@@ -137,7 +137,7 @@ def rationalize_func(
     direction: int = 0,
 ) -> Optional[Rational]:
     """
-    Find a rational number near the roots of poly that satisfies certain conditions.
+    Find a rational number near the roots of `poly` that satisfies certain conditions.
 
     Parameters
     ----------

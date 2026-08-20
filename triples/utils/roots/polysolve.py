@@ -154,7 +154,14 @@ def univar_realroots(poly: Union[Poly, Expr], symbol: 'Symbol') -> List[Union[Ra
             pass
     return []
 
-def nroots(poly, method = 'numpy', real = False, nonnegative = False):
+
+def nroots(
+    poly: Poly,
+    method = 'factor',
+    real = False,
+    nonnegative = False,
+    ground = False,
+) -> list:
     """
     Wrapper function to find the numerical roots of a sympy polynomial.
     Note that sympy nroots is not stable when the polynomial has multiplicative roots,
@@ -165,12 +172,17 @@ def nroots(poly, method = 'numpy', real = False, nonnegative = False):
     poly : sympy.Poly
         The polynomial to be solved.
     method : str, optional
-        The method to be used. 'numpy' uses numpy.roots, 'sympy' uses sympy.nroots.
+        The method to be used. 'numpy' uses numpy.roots, 'sympy' uses sympy.nroots,
+        'factor' factorizes the poly first.
     real : bool, optional
         Whether to only return real roots.
     nonnegative : bool, optional
         Whether to only return nonnegative roots.
+    ground : bool, optional
+        Whether to cast the roots to the domain.
     """
+    domain = poly.domain
+
     from mpmath.libmp import NoConvergence
     roots = []
     if method == 'numpy':
@@ -186,7 +198,10 @@ def nroots(poly, method = 'numpy', real = False, nonnegative = False):
         roots = []
         for part, mul in poly.factor_list()[1]:
             if part.degree() == 1:
-                roots_rational.append(-part.TC() / part.LC())
+                if ground:
+                    roots_rational.append(-part.rep.TC() / part.rep.LC())
+                else:
+                    roots_rational.append(-part.TC() / part.LC())
             else:
                 try:
                     roots.extend(part.nroots())
@@ -194,10 +209,17 @@ def nroots(poly, method = 'numpy', real = False, nonnegative = False):
                     pass
         roots = roots_rational + roots
 
+    def to_sp(x):
+        if domain.of_type(x):
+            return domain.to_sympy(x)
+        return x
+
     if real:
-        roots = [_ for _ in roots if _.is_real]
+        roots = [r for r in roots if to_sp(r).is_real]
     if nonnegative:
-        roots = [_ for _ in roots if _.is_nonnegative]
+        roots = [r for r in roots if to_sp(r).is_nonnegative]
+    if ground:
+        roots = [domain.convert(r) for r in roots]
 
     return roots
 
