@@ -11,9 +11,7 @@ from .utils import (
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .utils import (
-        Coeff
-    )
+    from .utils import Coeff
 
 def _solve_inverse_quartic(coeff: 'Coeff', m, p, n, r):
     """

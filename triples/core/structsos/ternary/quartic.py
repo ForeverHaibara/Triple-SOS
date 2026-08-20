@@ -18,10 +18,8 @@ from ....utils import pqr_sym
 #     return common_region_of_conics(x)
 
 if TYPE_CHECKING:
-    from .utils import (
-        Coeff
-    )
     from sympy import Expr
+    from .utils import Coeff
 
 
 def composite_coeff(poly: Poly, monom: Tuple[int, ...]):

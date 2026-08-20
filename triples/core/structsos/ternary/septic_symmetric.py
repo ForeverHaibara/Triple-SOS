@@ -13,9 +13,7 @@ from ..univariate import prove_univariate
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .utils import (
-        Coeff
-    )
+    from .utils import Coeff
 
 
 def structsos_septic_symmetric(coeff, real=False):

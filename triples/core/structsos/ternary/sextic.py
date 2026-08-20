@@ -16,9 +16,8 @@ from .utils import (
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .utils import (
-        Coeff
-    )
+    from .utils import Coeff
+
 
 def structsos_sextic(coeff, real = True):
     if coeff((5,1,0)) == coeff((1,5,0)) and coeff((4,2,0)) == coeff((2,4,0)) and coeff((3,2,1)) == coeff((3,1,2)):

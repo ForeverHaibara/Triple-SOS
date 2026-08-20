@@ -13,9 +13,7 @@ from .utils import (
 )
 
 if TYPE_CHECKING:
-    from .utils import (
-        Coeff
-    )
+    from .utils import Coeff
 
 def _verify_border_nonnegative(border):
     """Verify whether a polynomial >= 0 over R+."""
