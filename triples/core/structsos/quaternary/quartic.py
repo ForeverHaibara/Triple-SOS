@@ -125,7 +125,7 @@ def _quaternary_quartic_real(coeff: "Coeff", real=True):
         0, 3*c2011 + 6*c2020 + 3*c2110 + 3*c3001 - 9*c3010**2/4 + 3*c3100 - 4], (t,)).as_poly()
 
     # find t such that w3 >= 0 and c_sq >= 0
-    for t_ in intervals([w3_p, c_sq_p]):
+    for t_ in intervals([w3_p, c_sq_p], coeff.domain):
         # print(t_, w3_p(t_), c_sq_p(t_))
         if w3_p(t_) >= 0 and c_sq_p(t_) >= 0:
             break

@@ -2,7 +2,7 @@ from sympy import Integer, Rational, Float, Add
 
 from .quartic import structsos_quartic
 from .utils import (
-    CommonExpr,
+    CommonExpr, intervals,
     sum_y_exprs, nroots, rationalize, rationalize_bound
 )
 from typing import TYPE_CHECKING
@@ -339,34 +339,10 @@ def _structsos_quintic_symmetric_sdp(coeff: 'Coeff'):
         y = _criterion(x)
 
     if y is None:
-        if coeff.is_rational:
-            # only rational polynomials are supported by intervals()
-            det = det1 * det2
-            intervals = det.intervals()
-            if len(intervals):
-                for interval in intervals[:-1]:
-                    x = interval[0][1]
-                    x = coeff.convert(x)
-                    y = _criterion(x)
-                    if y is not None:
-                        break
-                else:
-                    y = None
-        else: # not coeff.is_rational
-            for x in nroots(det1, method = 'sympy', real = True, nonnegative = True):
-                y = _criterion(x)
-                if y is not None:
-                    y = None
-                    direction = 1 if det1.diff()(x) <= 0 else -1
-                    for x_ in rationalize_bound(x, direction = direction, compulsory = True):
-                        x_ = coeff.convert(x_)
-                        y_ = _criterion(x_)
-                        if y_ is not None:
-                            x, y = x_, y_
-                            break
-                if y is not None:
-                    break
-                y = None
+        for x in intervals([det1, det2], coeff.domain):
+            y = _criterion(x)
+            if y is not None:
+                break
 
     if y is not None:
         u2 = u - x**2 - 2*x*y + 2*y

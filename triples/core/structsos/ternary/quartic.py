@@ -8,7 +8,7 @@ from .utils import (
     structsos_reorder_symmetry,
     congruence, sum_y_exprs, quadratic_weighting,
     nroots, rationalize, rationalize_bound, rationalize_func,
-    univariate_intervals
+    intervals,
 )
 from ..utils import common_region_of_curves
 from ..univariate import prove_univariate
@@ -805,7 +805,7 @@ def _structsos_acyclic_quartic_symmetric(coeff: 'Coeff', real = True):
                     - 2*c202**2*c220 + 4*c202**2*c400 - c202*c211**2 + 4*c202*c211*c301 - 3*c202*c301**2)/8,
                 _get_quad_forms(0, 0, 0, 0)[0].det()
             ], l, domain = coeff.domain)
-            for l1 in univariate_intervals([Poly([1, 0], l), leading_det, det1]):
+            for l1 in intervals([Poly([1, 0], l), leading_det, det1], coeff.domain):
                 if l1 >= 0 and leading_det(l1) <= 0 and det1(l1) >= 0:
                     solution = _get_solution(0, 0, 0, l1)
                     if solution is not None:

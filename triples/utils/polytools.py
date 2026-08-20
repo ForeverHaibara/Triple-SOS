@@ -1,16 +1,15 @@
 """
 Compatibility & enhancement tools for SymPy polys module.
 """
-from typing import Any, Callable, Dict, Tuple, cast
+from typing import Any, Callable, Dict, Tuple, List, cast, TYPE_CHECKING
 
-from sympy import Poly, ZZ
+from sympy import Poly, ZZ, QQ
 from sympy import __version__ as _SYMPY_VERSION
+
 try:
     from sympy.core.random import _randint as _sympy_randint
 except ImportError:
     _sympy_randint = cast(Any, None)
-
-
 def _randint(seed: Any) -> Callable[[int, int], int]:
     if _sympy_randint is not None:
         return _sympy_randint(seed)
@@ -19,8 +18,10 @@ def _randint(seed: Any) -> Callable[[int, int], int]:
         rng = _random.Random()
         rng.seed(seed)
         return rng.randint
+
 from sympy.external.importtools import version_tuple
 from sympy.polys.rootoftools import ComplexRootOf as CRootOf
+from sympy.polys.rootisolation import dup_isolate_real_roots_list
 from sympy.polys.densebasic import (
     dmp_from_dict, dmp_to_dict, dmp_zero_p, dmp_degree_in,
     dmp_degree, dmp_degree_list, dmp_ground_LC, dmp_convert,
@@ -60,6 +61,10 @@ except ImportError: # sympy <= 1.8 or no flint installed
 
 SYMPY_VERSION = tuple(version_tuple(_SYMPY_VERSION))
 FLINT_VERSION = tuple(version_tuple(_FLINT_VERSION))
+
+
+if TYPE_CHECKING:
+    from sympy.polys.domains import Domain
 
 
 def marginalize(p, *args) -> Poly:
@@ -265,6 +270,48 @@ else:
         rts = poly_lift(poly).real_roots()
         cnt = count_real_roots(poly)
         return _which_roots(poly, rts, cnt)
+
+
+def intervals(polys: List[Poly], domain: "Domain") -> list:
+    """
+    Compute a list of points (in the domain) where the signs
+    of the polynomials change. The function also supports
+    algebraic fields or RR. The points are not sorted.
+    """
+    if not domain.is_Field:
+        raise DomainError("domain must be a field")
+
+    if all(_.total_degree() <= 0 for _ in polys):
+        # every polynomial is constant
+        return [domain.zero]
+
+    ls = []
+    polys = [f.set_domain(domain) for f in polys]
+    if domain.is_RR:
+        # RR does not support exact arithmetic
+        # and we cast them to QQ
+        polys = [f.set_domain(QQ) for f in polys]
+
+    # important to check ground roots first
+    # because ground roots might not be in the interval
+    for f in polys:
+        for g, _ in f.factor_list()[1]:
+            if g.total_degree() == 1:
+                v = -g.rep.monic().TC()
+                ls.append(v)
+
+    if domain.is_AlgebraicField:
+        polys = [poly_lift(f) for f in polys]
+
+    dups = [_.rep.to_list() for _ in polys]
+    x2 = domain.zero
+    _intervals = dup_isolate_real_roots_list(dups, QQ)
+    for (x1, x2), _ in _intervals:
+        ls.append(x1)
+    if _intervals:
+        ls.append(x2)
+    return [domain.convert(x) for x in ls]
+
 
 ###############################################################################
 #

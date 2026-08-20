@@ -7,16 +7,14 @@ from sympy.polys.polyerrors import CoercionFailed
 
 from .quartic import structsos_quartic
 from .utils import (
-    DomainExpr, CommonExpr, structsos_handle_uncentered,
+    DomainExpr, CommonExpr, structsos_handle_uncentered, intervals,
     sum_y_exprs, nroots, rationalize_func, quadratic_weighting
 )
 from ..univariate import prove_univariate
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .utils import (
-        Coeff
-    )
+    from .utils import Coeff
 
 #####################################################################
 #
@@ -1522,10 +1520,9 @@ class _sextic_sym_axis(DomainExpr):
         f_gcd = f1.gcd(f2)
         if f_gcd.degree() == 1:
             return -f_gcd.coeff_monomial((0,)) / f_gcd.coeff_monomial((1,))
-        for (z1, z2), _ in sp.polys.intervals(f1 * f2):
-            for z_ in (z1, z2):
-                if f1.eval(z_) >= 0 and f2.eval(z_) >= 0:
-                    return z_
+        for z_ in intervals([f1, f2], f1.domain):
+            if f1.eval(z_) >= 0 and f2.eval(z_) >= 0:
+                return z_
         return -x + 3*y/2 - 1
 
     def _F_alternative(self, x, y, z = 0):

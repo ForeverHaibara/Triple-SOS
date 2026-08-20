@@ -1,11 +1,13 @@
-from typing import Optional, Tuple, List, Dict, Union, Generator
+from typing import Optional, Tuple, List, Dict, Union
+from warnings import warn
 
 import sympy as sp
 from sympy import Poly, Expr, Symbol, Rational, Integer, Float, sympify
 
 from .polysolve import nroots
+from ..polytools import intervals
 
-def univariate_intervals(polys: Union[Poly, List[Poly]]) -> Generator[Rational, None, None]:
+def univariate_intervals(polys: Union[Poly, List[Poly]]) -> List[Rational]:
     """
     Compute rational points where polys have sign changes.
 
@@ -19,12 +21,20 @@ def univariate_intervals(polys: Union[Poly, List[Poly]]) -> Generator[Rational, 
     v: Rational
         Rational points where the signs of polynomials get changed.
     """
-    pre = sp.nan
-    for ij in sp.intervals(polys):
-        for v in ij[0]:
-            if pre != v:
-                pre = v
-                yield v
+    warn("univariate_intervals is deprecated, use triples.utils.polytools.intervals instead.",
+         category=DeprecationWarning, stacklevel=2)
+    if isinstance(polys, Poly):
+        polys = [polys]
+    if not polys:
+        return [Rational(0)]
+    dom = polys[0]
+    for p in polys:
+        dom = dom.unify(p.domain)
+    ls = intervals(polys, dom)
+    ls = [dom.to_sympy(x) for x in ls]
+    if dom.is_RR:
+        return [Rational(x) for x in ls]
+    return [x for x in ls if isinstance(x, Rational)]
 
 
 def rationalize(
@@ -317,6 +327,8 @@ def common_region_of_conics(polys: List[Poly], _tol = 1e-10) -> Optional[Tuple[R
     """
     Find (x, y) such that polys[i](x, y) >= 0 for all i.
     where polys are rational conics of two variables.
+
+    Highly experimental. DO NOT USE.
     """
     # assert len(polys) > 0, "At least one conic is required."
 

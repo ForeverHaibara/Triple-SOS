@@ -2,8 +2,8 @@ from typing import Union, Tuple, List, Dict, Callable, Optional, TYPE_CHECKING
 from functools import wraps
 
 from sympy import (
-    Poly, Expr, Integer, Rational, MatrixBase, Add,
-    QQ, ZZ, RR, sympify, fraction
+    Poly, Expr, Rational, MatrixBase, Add,
+    QQ, RR, sympify, fraction
 )
 from sympy.combinatorics import Permutation
 from sympy.core.symbol import uniquely_named_symbol
@@ -11,7 +11,7 @@ from sympy.core.symbol import uniquely_named_symbol
 from ...sdp import congruence
 from ...utils.expressions import Coeff, CyclicSum, CyclicProduct
 from ...utils.roots import nroots, rationalize_bound
-from ...utils.polytools import poly_lift
+from ...utils.polytools import intervals
 
 if TYPE_CHECKING:
     from sympy import MutableDenseMatrix as Matrix
@@ -73,30 +73,6 @@ def radsimp(expr: Union[Expr, List[Expr]]) -> Expr:
     expr = (numer*n).expand()/d
     return expr
 
-def intervals(polys: List[Poly]) -> List[Expr]:
-    """
-    Return points where the polynomials change their signs.
-    When one of the polynomials is not in QQ or ZZ, return [].
-    If no signs are changed, return [0].
-    """
-    if len(polys) == 0:
-        return [Integer(0)]
-    if any(_.domain not in [QQ, ZZ] for _ in polys):
-        return []
-    ret = []
-    pre = None
-    from sympy import intervals as _intervals
-    for (l,r), mul in _intervals(polys):
-        if l != pre:
-            ret.append(l)
-            pre = l
-        if r != pre:
-            ret.append(r)
-            pre = r
-    if len(ret):
-        return ret
-    return [Integer(0)]
-
 
 def sum_y_exprs(y: List[Expr], exprs: List[Expr]) -> Expr:
     """
@@ -136,30 +112,10 @@ def common_region_of_curves(polys: List[Poly], domain: "Domain"):
     disc1, disc2 = discs
     res = p1.resultant(p2)
 
-    from sympy import intervals
-    def _intervals(fs: List[Poly]):
-        if all(_.total_degree() <= 0 for _ in fs):
-            yield domain.zero
-            return
-
-        # important to check ground roots first
-        # because ground roots might not be in the interval
-        for f in fs:
-            for g, _ in f.factor_list()[1]:
-                if g.total_degree() == 1:
-                    v = -g.rep.monic().TC()
-                    yield v
-        if domain.is_AlgebraicField:
-            fs = [poly_lift(f) for f in fs]
-        x2 = domain.zero
-        for (x1, x2), _ in intervals(fs):
-            yield domain.convert(x1)
-        yield domain.convert(x2)
-
     def test_y(y):
         _fx = [p.rep.eval(y, 1) for p in q_polys]
         fx = [Poly.new(f, *p.gens[:-1]) for f, p in zip(_fx, q_polys)]
-        for x in _intervals(fx):
+        for x in intervals(fx, domain):
             point = test_x(x, y)
             if point is not None:
                 return point
@@ -168,7 +124,7 @@ def common_region_of_curves(polys: List[Poly], domain: "Domain"):
         if all(p.domain.to_sympy(p.rep.eval(x).eval(y)) >= 0 for p in q_polys):
             return tuple(_convert(i) for i in (x, y))
 
-    for y in _intervals([disc1, disc2, res]):
+    for y in intervals([disc1, disc2, res], domain):
         point = test_y(y)
         if point is not None:
             return point
