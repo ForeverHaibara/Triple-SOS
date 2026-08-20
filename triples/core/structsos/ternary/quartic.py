@@ -14,9 +14,6 @@ from ..univariate import prove_univariate
 from ....utils import pqr_sym
 from ....sdp.arithmetic import rep_matrix_from_list
 
-# def common_region_of_curves(x, r):
-#     return common_region_of_conics(x)
-
 if TYPE_CHECKING:
     from sympy import Expr
     from .utils import Coeff

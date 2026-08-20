@@ -14,7 +14,7 @@ from ..utils import (
 
 from ....utils import (
     nroots, rationalize, rationalize_bound,
-    cancel_denominator, common_region_of_conics,
+    cancel_denominator,
     CyclicExpr, CyclicSum, CyclicProduct
 )
 
@@ -29,7 +29,7 @@ if TYPE_CHECKING:
 )
 (
     nroots, rationalize, rationalize_bound, intervals,
-    cancel_denominator, common_region_of_conics,
+    cancel_denominator,
     CyclicExpr, CyclicSum, CyclicProduct
 )
 

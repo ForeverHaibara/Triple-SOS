@@ -20,8 +20,7 @@ from .expressions import (
 from .roots import (
     Root, RootList, univar_realroots, nroots, kkt, optimize_poly, numeric_optimize_poly, numeric_optimize_skew_symmetry,
     univariate_intervals, rationalize, rationalize_array, rationalize_bound,
-    rationalize_quadratic_curve, common_region_of_conics,
-    cancel_denominator,
+    rationalize_quadratic_curve, cancel_denominator,
 )
 
 from .polytools import marginalize, resultant_bezout
@@ -37,7 +36,7 @@ __all__ = [
     'pqr_sym', 'pqr_cyc', 'pqr_ker',
     'Root', 'RootList', 'univar_realroots', 'kkt', 'optimize_poly', 'numeric_optimize_poly', 'numeric_optimize_skew_symmetry',
     'nroots', 'univariate_intervals', 'rationalize', 'rationalize_array', 'rationalize_bound',
-    'rationalize_quadratic_curve', 'common_region_of_conics',
+    'rationalize_quadratic_curve',
     'cancel_denominator',
     'marginalize', 'resultant_bezout'
 ]

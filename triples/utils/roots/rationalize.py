@@ -328,7 +328,7 @@ def common_region_of_conics(polys: List[Poly], _tol = 1e-10) -> Optional[Tuple[R
     Find (x, y) such that polys[i](x, y) >= 0 for all i.
     where polys are rational conics of two variables.
 
-    Highly experimental. DO NOT USE.
+    DEPRECATED. DO NOT USE.
     """
     # assert len(polys) > 0, "At least one conic is required."
 
