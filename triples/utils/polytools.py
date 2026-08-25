@@ -96,9 +96,30 @@ def marginalize(p, *args) -> Poly:
 
     argset = set(args)
     gens = [s for s in p.gens if s not in argset]
-    p = p.reorder(*gens, *args)
-    p = p.eject(*gens)
-    return p
+    if p.domain.is_Numerical:
+        p = p.reorder(*gens, *args)
+        return p.eject(*gens)
+    elif p.domain.is_Composite:
+        # does not support eject
+        K = p.domain
+        K2 = K.inject(*gens)
+        dom_gens = K2.gens[-len(gens):]
+        inds = tuple(p.gens.index(a) for a in args)
+        cinds = tuple(i for i in range(len(p.gens)) if p.gens[i] not in argset)
+        dt = {}
+        for m, v in p.rep.to_dict().items():
+            w = K2.convert_from(v, K)
+            n = tuple(m[i] for i in inds)
+            for g, j in zip(dom_gens, cinds):
+                w = w * g**m[j]
+
+            if n not in dt:
+                dt[n] = w
+            else:
+                dt[n] += w
+        return Poly(dt, *args, domain=K2)
+
+    return p.as_poly(*args)
 
 ###############################################################################
 #

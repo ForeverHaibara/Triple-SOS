@@ -1,11 +1,30 @@
-from sympy import FiniteField as FF
+from sympy import Poly, FF, QQ, ZZ, symbols
 from sympy.polys import ring
 
-from ..polytools import dmp_gf_factor
+from ..polytools import dmp_gf_factor, marginalize
+
+
+def test_marginalize():
+    # test composite domains
+    x, y, a, b, c = symbols("x y a b c")
+    p1 = Poly(3*x*(a + b + c)**2 - x*y*(a + 3*c)**2/2, a, b, c)
+    q1 = marginalize(p1, c, a)
+    assert q1 == Poly(p1.as_expr(), c, a, domain=QQ[x, y, b])
+    q1 = marginalize(p1, c,)
+    assert q1 == Poly(p1.as_expr(), c, domain=QQ[x, y, a, b])
+
+    p2 = Poly((a + c*y)**2 / (x + y) - b*(x**2 + y)*(a + b)/(x + 3*y**2), a, b, c,
+              domain=ZZ[x, y].get_field())
+    q2 = marginalize(p2, c, a)
+    assert q2 == Poly(p2.as_expr(), c, a, domain=ZZ[x, y, b].get_field())
+    q2 = marginalize(p2, c,)
+    assert q2 == Poly(p2.as_expr(), c, domain=ZZ[x, y, a, b].get_field())
+
 
 def _R_dmp_factor_list(f):
     c, factors = dmp_gf_factor(f.to_dense(), f.ring.ngens - 1, f.ring.domain)
     return (c, [(f.ring.from_dense(g), k) for g, k in factors])
+
 
 def test_dmp_gf_factor():
     R, x, y = ring("x,y", FF(2))
