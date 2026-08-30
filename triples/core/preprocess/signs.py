@@ -662,6 +662,13 @@ def recompute_constraints_from_signs(problem: "InequalityProblem") -> "Inequalit
                 for a, mul in rest_args:
                     # TODO: make it square-free
                     p2 = p2 * a**mul
+
+            if isinstance(p, Poly):
+                if not isinstance(p2, Poly):
+                    # cast to poly
+                    p2 = Poly(p2, p.gens)
+            elif isinstance(p2, int):
+                p2 = Rational(p2)
             dst[p2] = e2
 
     is_poly = isinstance(problem.expr, Poly)
