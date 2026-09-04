@@ -9,9 +9,9 @@ from .lift import LinearBasisMultiplier
 from ...utils import verify_symmetry
 
 if TYPE_CHECKING:
-    from ...utils import MonomialManager
-    from .basis import LinearBasis
     from sympy import Poly, Expr, Symbol
+    from .basis import LinearBasis
+    from ...utils import MonomialManager
 
 
 def create_linear_sol_from_y_basis(
@@ -110,12 +110,13 @@ def _collect_constraints(
 
     for v, base in zip(y, basis):
         if isinstance(base, LinearBasisTangent):
-            tangent = base.tangent(symbols)
+            tangent = base.tangent
             has_eq_part = has_eq(tangent)
             if has_eq_part is not None:
                 if has_eq_part[0] not in eq_part: # not expected to happen
                     eq_part[has_eq_part[0]] = []
-                eq_part[has_eq_part[0]].append(v * has_eq_part[1] * Mul(*[s**p for s, p in zip(symbols, base.powers)]))
+                eq_part[has_eq_part[0]].append(
+                    v * has_eq_part[1] * Mul(*[s**p for s, p in zip(symbols, base.powers)]))
             else:
                 ineq_part.append((tangent, v * Mul(*[s**p for s, p in zip(symbols, base.powers)])))
         else:

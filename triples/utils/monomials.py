@@ -591,7 +591,12 @@ def arraylize_np(
     ----------
     arraylize_sp, invarraylize, generate_monoms
     """
-    nvars = (poly.rep if isinstance(poly, Poly) else poly).lev + 1
+    if isinstance(poly, Poly):
+        nvars = len(poly.gens)
+    elif isinstance(poly, PolyElement):
+        nvars = len(poly.parent().symbols)
+    else:
+        nvars = poly.lev + 1
     option = _parse_options(nvars, **options)
     return option.arraylize_np(poly, degree = degree, expand_cyc = expand_cyc)
 
@@ -663,7 +668,12 @@ def arraylize_sp(
     ----------
     arraylize_np, invarraylize, generate_monoms
     """
-    nvars = (poly.rep if isinstance(poly, Poly) else poly).lev + 1
+    if isinstance(poly, Poly):
+        nvars = len(poly.gens)
+    elif isinstance(poly, PolyElement):
+        nvars = len(poly.parent().symbols)
+    else:
+        nvars = poly.lev + 1
     option = _parse_options(nvars, **options)
     return option.arraylize_sp(poly, degree = degree, expand_cyc = expand_cyc)
 

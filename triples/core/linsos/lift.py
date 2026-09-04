@@ -2,7 +2,7 @@ from typing import Generator, Dict, Tuple, Optional, TYPE_CHECKING
 
 from sympy import Poly, Mul
 
-from .basis import LinearBasis, quadratic_difference, _callable_expr
+from .basis import LinearBasis, quadratic_difference
 from ...utils import generate_monoms, clear_polys_by_symmetry
 
 if TYPE_CHECKING:
@@ -23,24 +23,32 @@ class LinearBasisMultiplier(LinearBasis):
     This converts the problem to a usual linear programming by adding the basis
     CyclicSum(-a**2)*f and CyclicSum(-a*b)*f to the linear programming.
     """
-    def __init__(self, poly: Poly, multiplier: _callable_expr):
+    def __init__(self, poly: Poly, multiplier: 'Expr', p: Optional[Poly] = None):
         self.poly = poly
         self._tangent = multiplier
+        if p is not None:
+            self.as_poly = lambda symbols: poly * -p
+    @property
+    def tangent(self) -> 'Expr':
+        return self._tangent
     @property
     def multiplier(self) -> 'Expr':
-        return self._tangent(self.poly.gens)
-    def nvars(self) -> int:
-        return len(self.poly.gens)
+        return self._tangent
     def as_poly(self, symbols) -> Poly:
-        poly = (self.poly * (-self._tangent(self.poly.gens, poly=True)))
+        poly = (self.poly * (-self._tangent).doit().as_poly(self.poly.gens))
         poly.gens = symbols
         return poly
     def as_expr(self, symbols) -> 'Expr':
-        return (self.poly.as_expr() * self.multiplier).xreplace(dict(zip(self.poly.gens, symbols)))
+        return (self.poly.as_expr() * self._tangent).xreplace(dict(zip(self.poly.gens, symbols)))
+
+    def nvars(self) -> int:
+        return len(self.poly.gens)
+    def _get_default_symbols(self) -> Tuple[int, ...]:
+        return self.poly.gens
 
     @classmethod
     def from_expr(cls, poly: Poly, expr: 'Expr', p: Optional[Poly] = None) -> 'LinearBasisMultiplier':
-        return cls(poly, _callable_expr.from_expr(expr, poly.gens, p))
+        return cls(poly, expr, p)
 
 def lift_degree(
     poly: Poly,
