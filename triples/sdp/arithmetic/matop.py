@@ -286,6 +286,7 @@ def rep_matrix_from_dict(x: Dict[int, Dict[int, Any]], shape: Tuple[int, int], d
     """
     return Matrix._fromrep(DomainMatrix.from_rep(SDM(x, shape, domain)))
 
+
 def rep_matrix_from_list(x: Union[List, List[List]], shape: Union[int, Tuple[int, int]], domain: 'Domain') -> Matrix:
     """
     Create a SymPy RepMatrix from a list of domain elements.

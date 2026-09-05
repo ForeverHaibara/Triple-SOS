@@ -1,4 +1,4 @@
-from sympy import Poly, Rational, CRootOf, Eq, Matrix, EX
+from sympy import Poly, Rational, CRootOf, Eq, Matrix, EX, QQ
 from sympy import sqrt, sin, cos, asin, acos, pi, I, __version__
 from sympy.abc import a, b, c, x
 from sympy.combinatorics import SymmetricGroup
@@ -36,6 +36,11 @@ def test_as_vec_and_span():
 
     assert Eq(Root((1 + sqrt(2), 1 - sqrt(2))).span(3),
             Matrix([[7, 5], [-1, -1], [-1, 1], [7, -5]]))
+
+    base = QQ.algebraic_field(sqrt(2))
+    field = QQ.algebraic_field(sqrt(2), sqrt(3))
+    root = Root((sqrt(3), sqrt(2) + sqrt(3)), domain=field)
+    assert Eq(root.span(1, domain=base), Matrix([[-sqrt(2), 1], [0, 1]]))
 
     assert Eq(Root((1,1+2*I,2)).span(2),
             Matrix(2,6,[1,1,2,-3,2,4,0,2,0,4,4,0]).T)

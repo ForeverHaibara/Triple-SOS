@@ -8,8 +8,8 @@ from sympy import (
 from sympy.core import S
 from sympy.combinatorics import CyclicGroup
 from sympy.polys.constructor import construct_domain
+from sympy.polys.matrices import DomainMatrix
 from sympy.polys.polyerrors import DomainError, BasePolynomialError
-from sympy.polys.polyclasses import ANP
 from sympy.polys.rootoftools import ComplexRootOf as CRootOf
 
 from ..monomials import generate_monoms
@@ -19,6 +19,7 @@ from ...sdp.arithmetic import rep_matrix_from_dict
 if TYPE_CHECKING:
     from sympy.combinatorics import PermutationGroup
     from sympy.polys.domains import Domain
+    from sympy.polys.polyclasses import ANP
     from sympy.matrices import MutableDenseMatrix as Matrix
 
 try:
@@ -55,7 +56,7 @@ def _reg_matrix(M: 'Matrix') -> 'Matrix':
 
 
 def _algebraic_field_coeffs(
-    vec: List[ANP],
+    vec: List['ANP'],
     domain: 'Domain',
     base: 'Domain' = QQ
 ) -> 'Matrix':
@@ -114,11 +115,80 @@ def _algebraic_field_coeffs(
                 sdm[row][i-1] = x[-i]
         return rep_matrix_from_dict(sdm, (len(vec), len(mod) - 1), QQ)
 
-    # Fails to convert to a matrix of rational numbers,
-    # we just return the original vector
-    zero = domain.zero
-    sdm = {i: {0: x} for i, x in enumerate(vec) if x != zero}
-    return rep_matrix_from_dict(sdm, (len(vec), 1), domain)
+    if not (domain.is_AlgebraicField and base.is_AlgebraicField):
+        raise DomainError(
+            f"base {base} is only supported for algebraic field domains"
+        )
+
+    # If the two domains are equal, no basis change is needed.
+    if domain == base:
+        zero = domain.zero
+        sdm = {i: {0: x} for i, x in enumerate(vec) if x != zero}
+        return rep_matrix_from_dict(sdm, (len(vec), 1), base)
+
+
+    domain_degree = len(mod) - 1
+    base_degree = len(base.mod.to_list()) - 1
+    if domain_degree % base_degree:
+        raise DomainError(f"base {base} is not a subfield of domain {domain}")
+
+    # The powers of the primitive elements form a QQ-basis of each field.
+    # Convert the base generator only once; all subsequent operations stay at
+    # the low-level 'ANP'/DomainElement layer.
+    extension_degree = domain_degree // base_degree
+    alpha = domain.unit
+    try:
+        beta = domain.convert_from(base.unit, base)
+    except Exception as exc:
+        raise DomainError(f"base {base} is not a subfield of domain {domain}") from exc
+
+    ground = domain.dom
+    alpha_powers = [domain.one]
+    beta_powers = [domain.one]
+    for _ in range(1, extension_degree):
+        alpha_powers.append(alpha_powers[-1] * alpha)
+    for _ in range(1, base_degree):
+        beta_powers.append(beta_powers[-1] * beta)
+
+    columns = []
+    for alpha_power in alpha_powers:
+        for beta_power in beta_powers:
+            element = alpha_power * beta_power
+            coeffs = list(reversed(element.rep))
+            coeffs.extend([ground.zero] * (domain_degree - len(coeffs)))
+            columns.append(coeffs)
+
+    transform = DomainMatrix(
+        [[columns[col][row] for col in range(domain_degree)]
+         for row in range(domain_degree)],
+        (domain_degree, domain_degree),
+        ground,
+    )
+    try:
+        inv = transform.inv().to_list()
+    except Exception as exc:
+        raise DomainError(f"base {base} is not a subfield of domain {domain}") from exc
+
+    zero = ground.zero
+
+    sdm = {}
+    for row, element in enumerate(vec):
+        coeffs = list(reversed(element.rep))
+        coeffs.extend([zero] * (domain_degree - len(coeffs)))
+        row_sdm = {}
+        for col in range(extension_degree):
+            start = col * base_degree
+            values = [
+                sum(ai * bi for ai, bi in zip(coeffs, inv[index]))
+                    for index in range(start+base_degree-1, start-1, -1)
+            ]
+
+            w = base.new(values)
+            if w:
+                row_sdm[col] = w
+        if row_sdm:
+            sdm[row] = row_sdm
+    return rep_matrix_from_dict(sdm, (len(vec), extension_degree), base)
 
 
 def _derv(n: int, i: int) -> int:
@@ -180,7 +250,7 @@ class Root():
     [1, 2, -1]
     """
     domain: 'Domain'
-    def __init__(self, root: Tuple[Any, ...], domain: Optional['Domain']=None, rep: Optional[Tuple[ANP, ...]]=None):
+    def __init__(self, root: Tuple[Any, ...], domain: Optional['Domain']=None, rep: Optional[Tuple['ANP', ...]]=None):
         root = tuple(sympify(r) for r in root)
         self.rep = rep
         self.domain = domain
@@ -197,7 +267,7 @@ class Root():
                             # avoid nested AlgebraicNumbers
                             ext = ext.as_expr()
                         domain = domain.__class__(domain.dom, ext)
-                        rep = [ANP(r.rep, domain.mod, domain.dom) for r in rep]
+                        rep = [domain.new(r.rep) for r in rep]
                 self.domain, self.rep = domain, rep
             else:
                 # do not rely on whether the default symbolic domain is EX or EXRAW
@@ -386,7 +456,7 @@ class Root():
         root = tuple(r.n(*args, **kwargs) for r in self.root)
         return Root(root)
 
-    def from_sympy(self, *args, **kwargs) -> ANP:
+    def from_sympy(self, *args, **kwargs) -> 'ANP':
         """Wrapper for self.domain.from_sympy()."""
         return self.domain.from_sympy(*args, **kwargs)
 
@@ -471,9 +541,9 @@ class Root():
             symbols = expr.free_symbols
         return expr.xreplace(dict(zip(symbols, self.root)))
 
-    def _single_power_monomial(self, monomial: Tuple[int, ...]) -> ANP:
+    def _single_power_monomial(self, monomial: Tuple[int, ...]) -> 'ANP':
         """Compute r[0]**monomial[0] * r[1]**monomial[1] * ...
-        and return the result as a low-level ANP object."""
+        and return the result as a low-level 'ANP' object."""
         return prod([self._single_power(i, p) for i, p in enumerate(monomial)])
 
     def _make_single_power_cached_func(self):
@@ -483,7 +553,7 @@ class Root():
         """
         if (not self.is_Rational) and self.is_algebraic:
             self._single_power_cache = {key: {} for key in range(-1, len(self.root))}
-            def _single_power(i: int, degree: int) -> ANP:
+            def _single_power(i: int, degree: int) -> 'ANP':
                 """
                 Return self.rep[i] ** degree.
                 """
@@ -568,9 +638,9 @@ class Root():
         return vec
 
     def span(self, n: int, diff: Optional[Tuple[int, ...]] = None,
-             normalize: bool = False, **options) -> 'Matrix':
+             normalize: bool = False, domain: 'Domain' = QQ, **options) -> 'Matrix':
         """
-        Compute the rational span of the Root.as_vec(n, diff, **options).
+        Compute the span over ``domain`` of the Root.as_vec(n, diff, **options).
         It degenerates to `as_vec` if the root is not algebraic.
 
         Parameters
@@ -582,6 +652,9 @@ class Root():
         normalize : bool
             Whether to normalize the span so that the largest entry in each column is 1.
             Valid only if the root is algebraic.
+        domain : Domain
+            The base domain for the span. It must be ``QQ`` or a subfield of
+            the root's algebraic domain.
         options : dict
             Other options for the function `generate_monoms`.
 
@@ -597,7 +670,7 @@ class Root():
         Matrix([[9, 0], [3, 3], [3, 0], [3, 2], [1, 1], [1, 0]])
 
         Note the difference between `span` and `as_vec`: `span` converts
-        algebraic vectors to a matrix of rational numbers.
+        algebraic vectors to a matrix over the requested base domain.
 
         >>> print(Root((3, 1 + sqrt(2), 1)).as_vec(2))
         Matrix([[9], [3 + 3*sqrt(2)], [3], [2*sqrt(2) + 3], [1 + sqrt(2)], [1]])
@@ -611,21 +684,29 @@ class Root():
 
         >>> print(Root((3, 1 + sqrt(2), 1)).span(2, hom=False))
         Matrix([[9, 0], [3, 3], [3, 0], [3, 0], [3, 2], [1, 1], [1, 1], [1, 0], [1, 0], [1, 0]])
+
+        A proper algebraic subfield can be used as the base domain.
+
+        >>> from sympy import QQ
+        >>> base = QQ.algebraic_field(sqrt(2))
+        >>> field = QQ.algebraic_field(sqrt(2), sqrt(3))
+        >>> print(Root((sqrt(3), sqrt(2) + sqrt(3)), domain=field).span(1, domain=base))
+        Matrix([[-sqrt(2), 1], [0, 1]])
         """
         vec = self.as_vec(n, diff, numer=False, **options)
 
         if self.is_algebraic and not self.is_Rational:
-            vec = vec._rep.rep.to_list_flat()
-            M = _algebraic_field_coeffs(vec, self.domain)
+            lst = vec._rep.rep.to_list_flat()
+            M = _algebraic_field_coeffs(lst, self.domain, domain)
         else:
             M = vec
         if normalize and self.is_algebraic:
             M = _reg_matrix(M)
         return M
 
-    def _subs_poly_rep(self, poly: Poly, to_sympy: bool=False) -> Union[ANP, Expr]:
+    def _subs_poly_rep(self, poly: Poly, to_sympy: bool=False) -> Union['ANP', Expr]:
         """
-        Substitute the root into a polynomial. This returns an ANP object,
+        Substitute the root into a polynomial. This returns an 'ANP' object,
         which is different from the general method self.eval(poly). This
         function is only available for RootAlgebraic class.
         """
