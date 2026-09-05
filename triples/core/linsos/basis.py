@@ -4,7 +4,6 @@ from time import perf_counter
 
 import numpy as np
 from sympy import Poly, Mul, Pow, Integer
-from sympy import symbols as sp_symbols
 from sympy.polys.rings import PolyRing, PolyElement
 
 from ...utils import arraylize_np, arraylize_sp, MonomialManager
@@ -30,26 +29,22 @@ def tuple_sum(t1: Tuple[int, ...], t2: Tuple[int, ...]) -> Tuple[int, ...]:
 
 
 class LinearBasis():
-    def as_expr(self, symbols) -> 'Expr':
+    def as_expr(self) -> 'Expr':
         raise NotImplementedError
-    def as_poly(self, symbols) -> Poly:
-        return self.as_expr(symbols).doit().as_poly(symbols)
-    def as_polyelement(self, symbols) -> 'PolyElement':
-        poly = self.as_poly(symbols)
+    def as_poly(self) -> Poly:
+        return self.as_expr().doit().as_poly()
+    def as_polyelement(self) -> 'PolyElement':
+        poly = self.as_poly()
         dom = poly.domain
         rng = dom.__getitem__(poly.gens).ring
         return PolyElement(rng, poly.rep.to_dict())
-    def as_array_np(self, symbols=None, **kwargs) -> np.ndarray:
-        return arraylize_np(self.as_polyelement(symbols), **kwargs)
-    def as_array_sp(self, symbols=None, **kwargs) -> 'Matrix':
-        return arraylize_sp(self.as_polyelement(symbols), **kwargs)
+    def as_array_np(self, **kwargs) -> np.ndarray:
+        return arraylize_np(self.as_polyelement(), **kwargs)
+    def as_array_sp(self, **kwargs) -> 'Matrix':
+        return arraylize_sp(self.as_polyelement(), **kwargs)
 
-    def nvars(self) -> int:
-        raise NotImplementedError
-    def _get_default_symbols(self) -> Tuple['Symbol', ...]:
-        return tuple(sp_symbols(f'x:{self.nvars()}'))
     def degree(self) -> int:
-        return self.as_poly(self._get_default_symbols()).total_degree()
+        return self.as_poly().total_degree()
 
 
 class LinearBasisTangent(LinearBasis):
@@ -69,18 +64,18 @@ class LinearBasisTangent(LinearBasis):
     @property
     def tangent(self) -> 'Expr':
         return self._tangent
-    def as_expr(self, symbols) -> 'Expr':
+
+    def as_expr(self) -> 'Expr':
+        symbols = self.rep.parent().symbols
         return Mul(*(x**i for x, i in zip(symbols, self._powers))) * self._tangent
-    def as_polyelement(self, symbols) -> 'PolyElement':
+    def as_polyelement(self) -> 'PolyElement':
         rep = self.rep
         rep = PolyElement(rep.parent().ring, {self._powers: rep.parent().domain.one}) * rep
         return rep
-    def as_poly(self, symbols) -> Poly:
-        rep = self.as_polyelement(symbols)
+    def as_poly(self) -> Poly:
+        rep = self.as_polyelement()
         return Poly.from_dict(rep, rep.parent().symbols)
 
-    def nvars(self) -> int:
-        return len(self._powers)
 
     @classmethod
     def from_poly(cls, powers: Tuple[int, ...], poly: Poly, tangent: Optional['Expr']=None) -> 'LinearBasisTangent':
@@ -183,7 +178,7 @@ class LinearBasisTangent(LinearBasis):
         >>> [_.__class__.__name__ for _ in [bases[0], mat]]
         ['LinearBasisTangent', 'ndarray']
 
-        >>> (bases[8].as_expr((a,b,c)), mat[8])
+        >>> (bases[8].as_expr(), mat[8])
         ((a - b)**2*F(a, b, c), array([ 2., -2., -2.,  0.,  2.]))
         """
         # 1. standardize the input
@@ -311,6 +306,7 @@ class SwitchableWrapper:
         self.cached_func.cache_clear()
     def clear_cache(self):
         self.cache_clear()
+
 
 @switchable_lru_cache()
 def _get_cross_smps_of_quad_diff(

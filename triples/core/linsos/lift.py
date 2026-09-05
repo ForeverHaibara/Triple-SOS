@@ -37,19 +37,13 @@ class LinearBasisMultiplier(LinearBasis):
     def multiplier(self) -> 'Expr':
         return self._tangent
 
-    def as_polyelement(self, symbols) -> 'PolyElement':
+    def as_polyelement(self) -> 'PolyElement':
         return self.poly * -self.rep
-    def as_poly(self, symbols) -> Poly:
-        rep = self.as_polyelement(symbols)
+    def as_poly(self) -> Poly:
+        rep = self.as_polyelement()
         return Poly.from_dict(rep, rep.parent().symbols)
-    def as_expr(self, symbols) -> 'Expr':
-        return (self.poly.as_expr() * (-self._tangent)).xreplace(
-            dict(zip(self.poly.parent().symbols, symbols)))
-
-    def nvars(self) -> int:
-        return len(self.poly.parent().symbols)
-    def _get_default_symbols(self) -> Tuple['Symbol', ...]:
-        return self.poly.parent().symbols
+    def as_expr(self) -> 'Expr':
+        return (self.poly.as_expr() * (-self._tangent))
 
 
 def lift_degree(

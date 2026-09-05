@@ -88,7 +88,7 @@ def _collect_constraints(
     inv_eq_constraints = {v: k for k, v in eq_constraints.items()}
     if (not collect) or (len(inv_ineq_constraints) < len(ineq_constraints)) or (len(inv_eq_constraints) < len(eq_constraints)):
         # unsafe and is not expected to happen
-        return Add(*[symmetry.cyclic_sum(v * base.as_expr(symbols), symbols) for v, base in zip(y, basis)]) / multiplier
+        return Add(*[symmetry.cyclic_sum(v * base.as_expr(), symbols) for v, base in zip(y, basis)]) / multiplier
 
     nontangent_part = []
     ineq_part = []
@@ -120,7 +120,7 @@ def _collect_constraints(
             else:
                 ineq_part.append((tangent, v * Mul(*[s**p for s, p in zip(symbols, base.powers)])))
         else:
-            nontangent_part.append(symmetry.cyclic_sum(v * base.as_expr(symbols), symbols))
+            nontangent_part.append(symmetry.cyclic_sum(v * base.as_expr(), symbols))
 
     # Nontangent part: sum them up
     nontangent_part = Add(*nontangent_part)
