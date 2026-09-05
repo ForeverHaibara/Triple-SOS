@@ -9,17 +9,14 @@ from sympy.core import S
 from sympy.combinatorics import CyclicGroup
 from sympy.polys.constructor import construct_domain
 from sympy.polys.domains.gaussiandomains import GaussianElement
-from sympy.polys.matrices.sdm import SDM
-from sympy.polys.matrices.domainmatrix import DomainMatrix
 from sympy.matrices import MutableDenseMatrix as Matrix
 from sympy.polys.polyerrors import BasePolynomialError
-# from sympy.polys.numberfields.subfield import primitive_element
-from sympy.polys.polyclasses import DMP, ANP
+from sympy.polys.polyclasses import ANP
 from sympy.polys.rootoftools import ComplexRootOf as CRootOf
 
-# from .rationalize import rationalize
 from ..monomials import generate_monoms
 from ..expressions import EXRAW
+from ...sdp.arithmetic import rep_matrix_from_dict
 
 if TYPE_CHECKING:
     from sympy.combinatorics import PermutationGroup
@@ -55,22 +52,23 @@ def _reg_matrix(M: Matrix) -> Matrix:
 
     colmax = {col: one / val for col, val in colmax.items()}
     newsdm = {r: {col: val * colmax[col] for col, val in row.items()} for r, row in rep.items()}
-    newsdm = SDM(newsdm, rep.shape, domain)
-    return Matrix._fromrep(DomainMatrix.from_rep(newsdm))
+    return rep_matrix_from_dict(newsdm, rep.shape, domain)
+
 
 def _algebraic_extension(vec: List[ANP], domain: 'Domain') -> Matrix:
     """
     Convert a column vector of algebraic numbers to a matrix of rational numbers.
+
+    Given a vector `v` of algebraic numbers. Then each entry `v_i`
+    is in the form of `a_{i,0} + a_{i,1}x + ... + a_{i,n-1}x^{n-1}` where `x`
+    is the generator of the algebraic number field.
+
+    Let `c` be any vector that `c.T v = 0` and `c` is on the rational number
+    field. Then `c` must be orthogonal to each `[a_{0,k}, ..., a_{m,k}]` for
+    `k = 0,1,...,n-1`. The function returns the matrix of `c`.
     """
     if len(vec) == 0:
         return Matrix(0, 0, [])
-
-    def default(vec, domain):
-        # Fails to convert to a matrix of rational numbers:
-        # return the original vector as a matrix.
-        zero = domain.zero
-        sdm = SDM({i: {0: x} for i, x in enumerate(vec) if x != zero}, (len(vec), 1), domain)
-        return sdm
 
     rep, mod, sdm = None, None, None
     if domain.is_QQ_I or domain.is_ZZ_I:
@@ -97,11 +95,14 @@ def _algebraic_extension(vec: List[ANP], domain: 'Domain') -> Matrix:
                 if row not in sdm:
                     sdm[row] = {}
                 sdm[row][i-1] = rep(x)[-i]
-        sdm = SDM(sdm, (len(vec), len(mod) - 1), QQ)
-    else:
-        sdm = default(vec, domain)
+        return rep_matrix_from_dict(sdm, (len(vec), len(mod) - 1), QQ)
 
-    return Matrix._fromrep(DomainMatrix.from_rep(sdm))
+    # Fails to convert to a matrix of rational numbers,
+    # we just return the original vector
+    zero = domain.zero
+    sdm = {i: {0: x} for i, x in enumerate(vec) if x != zero}
+    return rep_matrix_from_dict(sdm, (len(vec), 1), domain)
+
 
 def _derv(n: int, i: int) -> int:
     """Compute n! / (n-i)!."""
@@ -109,6 +110,7 @@ def _derv(n: int, i: int) -> int:
     if n < i:
         return 0
     return int(factorial(n) // factorial(n - i))
+
 
 def _root_op(f, g, op, broadcast_f=True, broadcast_g=True, field=False):
     """Perform the operation op between two Root instances f and g."""
@@ -136,6 +138,7 @@ def _root_op(f, g, op, broadcast_f=True, broadcast_g=True, field=False):
     root = [getattr(a, op)(b) for a, b in zip(f.root, g.root)]
     rep = [getattr(a, op)(b) for a, b in zip(f.rep, g.rep)]
     return Root(root, domain=domain, rep=rep)
+
 
 class Root():
     """
@@ -541,8 +544,8 @@ class Root():
                     vec[ind] = int(prod(dervs)) * _single_power(powers)
 
         zero = self.domain.zero
-        sdm = SDM({i: {0: x} for i, x in enumerate(vec) if x != zero}, (len(vec), 1), self.domain)
-        vec = Matrix._fromrep(DomainMatrix.from_rep(sdm))
+        sdm = {i: {0: x} for i, x in enumerate(vec) if x != zero}
+        vec = rep_matrix_from_dict(sdm, (len(vec), 1), self.domain)
         if numer:
             vec = np.array(vec).astype(np.float64).flatten()
         return vec
@@ -755,7 +758,7 @@ class Root():
         signed_sigmas = [x if i % 2 == 0 else -x for i, x in enumerate(sigmas)]
         if x is None:
             x = Symbol('x')
-        poly = Poly.new(DMP(signed_sigmas, domain, 0), x)
+        poly = Poly.from_list(signed_sigmas, x, domain=domain)
         return poly
 
     def uv(self, to_sympy = True):
@@ -905,7 +908,7 @@ class Root():
             sab = (u + v - 1) * invker
             abc = (u*v - 1) * invker**2
 
-            poly = Poly.new(DMP([one, -one, sab, -abc], domain, 0), Symbol('x'))
+            poly = Poly.from_list([one, -one, sab, -abc], Symbol('x'), domain=domain)
             a, b, c = poly.all_roots(radicals=False) if poly.domain.is_Exact else poly.nroots()
 
             if a not in domain:
