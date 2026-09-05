@@ -3,7 +3,7 @@ from time import perf_counter
 import warnings
 
 import numpy as np
-from sympy import fraction
+from sympy import fraction, QQ
 from sympy.external.importtools import version_tuple
 from scipy import __version__ as _SCIPY_VERSION
 
@@ -204,6 +204,7 @@ class LinearSOSSolver(ProofNode):
         tangents = list(prepare_tangents(problem, qmodule=qmodule,
             additional_tangents=configs['tangents'],
             wedderburn=configs['wedderburn'],
+            domain=configs['domain'],
             time_limit=time_limit
         ).items())
         time_limit()
@@ -363,6 +364,9 @@ class LinearSOSSolver(ProofNode):
         ####################################################################
         symbol_signs = problem.get_symbol_signs()
         all_nonnegative = all(s is not None and s > 0 for s, e in symbol_signs.values())
+        domain = problem.expr.domain.get_field()
+        if domain.is_RR:
+            domain = QQ
 
         internal_configs = configs.copy()
         internal_configs.update({
@@ -370,6 +374,7 @@ class LinearSOSSolver(ProofNode):
             'symmetry': symmetry,
             'time_limit': time_limit,
             'tangents': self._tangents,
+            'domain': domain,
         })
 
         internal_configs['qmodule'] = self._prepare_qmodule(internal_configs)

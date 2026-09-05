@@ -24,3 +24,15 @@ def test_linsos_tangents():
             tangents=[(sqrt(41)*x - 5)**2, (sqrt(41)*y - 4)**2], basis_limit=2000)
     assert sol is not None
     solution_checker(sol, p3, [a,b,c], [])
+
+
+def test_linsos_domain():
+    p1 = sqrt(41) - 5*x - 4*y
+    sol = LinearSOS(p1, [], [x**2 + y**2 - 1])
+    assert sol is not None
+    solution_checker(sol, p1, [a,b,c], [])
+
+    p2 = 1 + 3*sqrt(2) - (x-y)
+    sol = LinearSOS(p2, [], {x**2+y**2-4*x-2*y-4: a})
+    assert sol is not None
+    solution_checker(sol, p2, [], {x**2+y**2-4*x-2*y-4: a})

@@ -5,13 +5,13 @@ from sympy import MutableDenseMatrix as Matrix
 from sympy.polys.matrices import DomainMatrix
 
 from .basis import LinearBasisTangent, LinearBasisTangentEven
-from ...sdp.arithmetic import reshape
+from ...sdp.arithmetic import reshape, rep_matrix_from_dict
 from ...utils.roots.rationalize import rationalize_array
 
 if TYPE_CHECKING:
-    from .basis import LinearBasis
     from sympy import Expr, Symbol
     from sympy.combinatorics import PermutationGroup
+    from .basis import LinearBasis
     from ...utils import MonomialManager
 
 
@@ -134,7 +134,6 @@ def linear_correction(
                     is_equal = True
                     y, basis = reduced_y, reduced_basis
         except Exception:
-            # raise e
             is_equal = False
 
     return y, basis, is_equal
@@ -165,8 +164,27 @@ def LUsolve(A: Matrix, b: Matrix) -> Matrix:
         return A.LUsolve(b)
 
     x = A2.lu_solve(b2)
-    x = x.to_Matrix()
-    return x
+    return x.to_Matrix()
+
+    # solve by rref
+    n = A2.shape[1]
+
+    C = DomainMatrix.hstack(A2, b2)
+    rref, pivots = C.rref()
+    if pivots and pivots[-1] == n:
+        # no solution
+        raise ValueError("No solution exists.")
+
+    zero = C.domain.zero
+    sdm = rref.rep.to_sdm()
+
+    x = [zero] * n
+    for row, pivot in enumerate(pivots):
+        x[pivot] = sdm[row].get(n, zero)
+
+    mat = {i: {0: v} for i, v in enumerate(x) if v}
+    return rep_matrix_from_dict(mat, (n, 1), C.domain)
+
 
 def _is_Ax_equal_to_b(A: Matrix, x: Matrix, b: Matrix) -> bool:
     """
