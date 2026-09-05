@@ -9,7 +9,8 @@ def structsos_nvars_quartic_symmetric(poly, real=True):
     """
     Solve a homogeneous quartic symmetric polynomial inequality on real numbers for nvars >= 4.
     """
-    if poly.total_degree() == 4 and verify_symmetry(poly, "sym"):
+    is_sym = poly.is_symmetric() if isinstance(poly, Coeff) else verify_symmetry(poly, "sym")
+    if is_sym and poly.total_degree() == 4:
         return _structsos_nvars_quartic_symmetric_sdp(Coeff(poly))
 
 
