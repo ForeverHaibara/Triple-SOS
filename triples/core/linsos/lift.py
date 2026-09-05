@@ -1,6 +1,7 @@
-from typing import Generator, Dict, Tuple, Optional, TYPE_CHECKING
+from typing import Generator, Dict, Tuple, TYPE_CHECKING
 
 from sympy import Poly, Mul
+from sympy.polys.rings import PolyElement
 
 from .basis import LinearBasis, quadratic_difference
 from ...utils import generate_monoms, clear_polys_by_symmetry
@@ -23,32 +24,33 @@ class LinearBasisMultiplier(LinearBasis):
     This converts the problem to a usual linear programming by adding the basis
     CyclicSum(-a**2)*f and CyclicSum(-a*b)*f to the linear programming.
     """
-    def __init__(self, poly: Poly, multiplier: 'Expr', p: Optional[Poly] = None):
+    __slots__ = ('poly', 'rep', '_tangent')
+    def __init__(self, poly: 'PolyElement', rep: 'PolyElement', multiplier: 'Expr'):
         self.poly = poly
+        self.rep = rep
         self._tangent = multiplier
-        if p is not None:
-            self.as_poly = lambda symbols: poly * -p
+
     @property
     def tangent(self) -> 'Expr':
         return self._tangent
     @property
     def multiplier(self) -> 'Expr':
         return self._tangent
+
+    def as_polyelement(self, symbols) -> 'PolyElement':
+        return self.poly * -self.rep
     def as_poly(self, symbols) -> Poly:
-        poly = (self.poly * (-self._tangent).doit().as_poly(self.poly.gens))
-        poly.gens = symbols
-        return poly
+        rep = self.as_polyelement(symbols)
+        return Poly.from_dict(rep, rep.parent().symbols)
     def as_expr(self, symbols) -> 'Expr':
-        return (self.poly.as_expr() * self._tangent).xreplace(dict(zip(self.poly.gens, symbols)))
+        return (self.poly.as_expr() * (-self._tangent)).xreplace(
+            dict(zip(self.poly.parent().symbols, symbols)))
 
     def nvars(self) -> int:
-        return len(self.poly.gens)
-    def _get_default_symbols(self) -> Tuple[int, ...]:
-        return self.poly.gens
+        return len(self.poly.parent().symbols)
+    def _get_default_symbols(self) -> Tuple['Symbol', ...]:
+        return self.poly.parent().symbols
 
-    @classmethod
-    def from_expr(cls, poly: Poly, expr: 'Expr', p: Optional[Poly] = None) -> 'LinearBasisMultiplier':
-        return cls(poly, expr, p)
 
 def lift_degree(
     poly: Poly,
@@ -101,9 +103,19 @@ def lift_degree(
 
     while n + n_plus <= degree_limit and n_plus <= lift_degree_limit:
         multipliers = _get_multipliers(ineq_constraints, symbols, n_plus, symmetry=symmetry)
-        basis = [LinearBasisMultiplier.from_expr(poly, e, p) for p, e in multipliers]
 
-        if len(basis) > 0:
+        if multipliers:
+            doms = {p.domain for p, e in multipliers}
+            dom = poly.domain
+            for d in doms:
+                dom = dom.unify(d)
+            ring = dom.__getitem__(poly.gens).ring
+
+            smp = PolyElement(ring, poly.set_domain(dom).rep.to_dict())
+            mults = [(PolyElement(ring, p.set_domain(dom).rep.to_dict()), e)
+                        for p, e in multipliers]
+
+            basis = [LinearBasisMultiplier(smp, p, e) for p, e in mults]
             yield {
                 'basis': basis,
                 'degree': n + n_plus,

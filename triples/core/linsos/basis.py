@@ -34,6 +34,15 @@ class LinearBasis():
         raise NotImplementedError
     def as_poly(self, symbols) -> Poly:
         return self.as_expr(symbols).doit().as_poly(symbols)
+    def as_polyelement(self, symbols) -> 'PolyElement':
+        poly = self.as_poly(symbols)
+        dom = poly.domain
+        rng = dom.__getitem__(poly.gens).ring
+        return PolyElement(rng, poly.rep.to_dict())
+    def as_array_np(self, symbols=None, **kwargs) -> np.ndarray:
+        return arraylize_np(self.as_polyelement(symbols), **kwargs)
+    def as_array_sp(self, symbols=None, **kwargs) -> 'Matrix':
+        return arraylize_sp(self.as_polyelement(symbols), **kwargs)
 
     def nvars(self) -> int:
         raise NotImplementedError
@@ -41,12 +50,6 @@ class LinearBasis():
         return tuple(sp_symbols(f'x:{self.nvars()}'))
     def degree(self) -> int:
         return self.as_poly(self._get_default_symbols()).total_degree()
-    def as_array_np(self, symbols=None, **kwargs) -> np.ndarray:
-        symbols = symbols or self._get_default_symbols()
-        return arraylize_np(self.as_poly(symbols), **kwargs)
-    def as_array_sp(self, symbols=None, **kwargs) -> 'Matrix':
-        symbols = symbols or self._get_default_symbols()
-        return arraylize_sp(self.as_poly(symbols), **kwargs)
 
 
 class LinearBasisTangent(LinearBasis):
@@ -66,8 +69,6 @@ class LinearBasisTangent(LinearBasis):
     @property
     def tangent(self) -> 'Expr':
         return self._tangent
-    def nvars(self) -> int:
-        return len(self._powers)
     def as_expr(self, symbols) -> 'Expr':
         return Mul(*(x**i for x, i in zip(symbols, self._powers))) * self._tangent
     def as_polyelement(self, symbols) -> 'PolyElement':
@@ -77,10 +78,9 @@ class LinearBasisTangent(LinearBasis):
     def as_poly(self, symbols) -> Poly:
         rep = self.as_polyelement(symbols)
         return Poly.from_dict(rep, rep.parent().symbols)
-    def as_array_np(self, symbols=None, **kwargs) -> np.ndarray:
-        return arraylize_np(self.as_polyelement(symbols), **kwargs)
-    def as_array_sp(self, symbols=None, **kwargs) -> 'Matrix':
-        return arraylize_sp(self.as_polyelement(symbols), **kwargs)
+
+    def nvars(self) -> int:
+        return len(self._powers)
 
     @classmethod
     def from_poly(cls, powers: Tuple[int, ...], poly: Poly, tangent: Optional['Expr']=None) -> 'LinearBasisTangent':
