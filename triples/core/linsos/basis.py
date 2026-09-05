@@ -4,7 +4,7 @@ from time import perf_counter
 
 import numpy as np
 from sympy import Poly, Mul, Pow, Integer
-from sympy.polys.rings import PolyRing, PolyElement
+from sympy.polys.rings import PolyElement
 
 from ...utils import arraylize_np, arraylize_sp, MonomialManager
 from ...utils.monomials import generate_partitions
@@ -18,7 +18,6 @@ else:
 if TYPE_CHECKING:
     from sympy import Expr, Symbol
     from sympy.combinatorics import PermutationGroup
-    from sympy.polys.polyclasses import DMP
     from sympy.matrices import MutableDenseMatrix as Matrix
 
 # only for dev purpose
@@ -48,13 +47,19 @@ class LinearBasis():
 
 
 class LinearBasisTangent(LinearBasis):
-    _degree_step = 1
+    _degree_step = 1 # class variable
+
     __slots__ = ['_powers', 'rep', '_tangent']
+
+    _powers: Tuple[int, ...]
+    rep: 'PolyElement'
+    _tangent: 'Expr'
+
     def __init__(self, powers: Tuple[int, ...], rep: 'PolyElement', tangent: Optional['Expr']=None):
         self._powers = powers
         self.rep = rep
         if tangent is not None:
-            self._tangent = tangent#_callable_expr.from_expr(tangent, symbols)
+            self._tangent = tangent
         else:
             self._tangent = rep.parent().to_sympy(rep)
 
@@ -82,8 +87,6 @@ class LinearBasisTangent(LinearBasis):
         rep = poly
         if isinstance(poly, Poly):
             dom = poly.domain
-            if not (dom.is_EX or dom.is_EXRAW):
-                dom = dom.__getitem__(poly.gens)
             rep = PolyElement(dom.ring, poly.rep.to_dict())
         return cls(powers, rep, tangent)
 
@@ -91,6 +94,7 @@ class LinearBasisTangent(LinearBasis):
         return self.__class__(self._powers, -self.rep, -self._tangent)
     def __len__(self) -> int:
         return 1
+
     def to_even(self, symbols: List['Expr']) -> 'LinearBasisTangentEven':
         """
         Convert the linear basis to an even basis.
@@ -211,7 +215,8 @@ class LinearBasisTangent(LinearBasis):
             time0 = perf_counter()
 
         # 4. Convert polys to the numpy matrix representation.
-        mat = _get_matrix_of_quad_diff(tangent_p, degree, quad_diff_order, cls._degree_step, symmetry)
+        mat = _get_matrix_of_quad_diff(
+            tangent_p, degree, quad_diff_order, cls._degree_step, symmetry)
 
         return basis, mat
 
@@ -311,7 +316,7 @@ class SwitchableWrapper:
 @switchable_lru_cache()
 def _get_cross_smps_of_quad_diff(
     quad_diff_order: int,
-    tangent_dmp: 'DMP'
+    tangent: Poly
 ) -> List[PolyElement]:
     """
     Compute the DMP of polynomials of the form prod((ai - aj)^2) * tangent.
@@ -324,18 +329,17 @@ def _get_cross_smps_of_quad_diff(
     ----------
     quad_diff_order: int
         The maximum degree of the quadratic differences.
-    tangent_dmp: DMP
-        The sympy polynomial representation (DMP object) of the tangent.
+    tangent: Poly
+        The sympy polynomial object of the tangent.
     """
-    tangent_dmp = tangent_dmp.rep if isinstance(tangent_dmp, Poly) else tangent_dmp
-    nvars = tangent_dmp.lev + 1
+    nvars = len(tangent.gens)
     ndiff = nvars * (nvars - 1) // 2
     powers = generate_partitions([2] * ndiff, quad_diff_order, descending=False)
-    domain = tangent_dmp.dom
+    domain = tangent.domain
 
-    rng = PolyRing(f'x:{nvars}', domain)
+    rng = domain.__getitem__(tangent.gens).ring
     rng_zero = rng.zero
-    smp = rng_zero.new(tangent_dmp.to_dict())
+    smp = rng_zero.new(tangent.rep.to_dict())
 
     # polys are the DMPs of (ai - aj)^2 for all i < j
     polys, lst = [None] * ndiff, [0] * nvars
@@ -439,7 +443,7 @@ def _get_cross_exprs_and_polys_of_quad_diff(
                 for (i,j), p in zip(inds, power))) for power in powers
     ]
 
-    dmps = _get_cross_smps_of_quad_diff(quad_diff_order, tangent_p.rep)
+    dmps = _get_cross_smps_of_quad_diff(quad_diff_order, tangent_p)
 
     # _new_func, _new_func_arg = Basic.__new__, Poly
     # polys = [_new_func(_new_func_arg) for _ in range(len(exprs))]
@@ -561,7 +565,7 @@ def _count_contribution_of_monoms(A: np.ndarray, v: np.ndarray, M: int) -> np.nd
 
 @switchable_lru_cache()
 def _get_matrix_of_quad_diff(
-    tangent_dmp: 'DMP',
+    tangent: Poly,
     degree: int,
     quad_diff_order: int,
     step: int,
@@ -596,7 +600,7 @@ def _get_matrix_of_quad_diff(
     np.ndarray
         The matrix representation of the bases.
     """
-    polys = _get_cross_smps_of_quad_diff(quad_diff_order, tangent_dmp)
+    polys = _get_cross_smps_of_quad_diff(quad_diff_order, tangent)
     if len(polys) == 0:
         return np.array([], dtype='float')
     if _VERBOSE_GENERATE_QUAD_DIFF:
@@ -632,7 +636,7 @@ def _get_matrix_of_quad_diff(
 
 
 def _get_matrix_of_lifted_degrees(
-    poly: Union['DMP', Poly, PolyElement],
+    poly: Union[Poly, PolyElement],
     degree_comb_mat: np.ndarray,
     symmetry: MonomialManager,
     symmetry_base: MonomialManager,
@@ -666,7 +670,7 @@ def _get_matrix_of_lifted_degrees(
         nvars = poly.ring.ngens
         deg = lambda p: max(map(sum, p.keys()), default=0)
     else:
-        nvars = (poly.rep if isinstance(poly, Poly) else poly).lev + 1
+        nvars = poly.rep.lev + 1
         deg = lambda p: p.total_degree()
 
     # # This a naive implementation

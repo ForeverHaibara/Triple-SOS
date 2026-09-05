@@ -25,6 +25,11 @@ class LinearBasisMultiplier(LinearBasis):
     CyclicSum(-a**2)*f and CyclicSum(-a*b)*f to the linear programming.
     """
     __slots__ = ('poly', 'rep', '_tangent')
+
+    poly: 'PolyElement'
+    rep: 'PolyElement'
+    _tangent: 'Expr'
+
     def __init__(self, poly: 'PolyElement', rep: 'PolyElement', multiplier: 'Expr'):
         self.poly = poly
         self.rep = rep
