@@ -2,15 +2,13 @@ from typing import Optional, Union, List, Dict, Tuple, Any, TYPE_CHECKING
 
 import numpy as np
 from sympy import (
-    Poly, Expr, Symbol, Integer, QQ, AlgebraicNumber,
+    Poly, Expr, Symbol, Integer, QQ, RR, AlgebraicNumber,
     fraction, sympify, nsimplify, factorial, factorint, prod, cos
 )
 from sympy.core import S
 from sympy.combinatorics import CyclicGroup
 from sympy.polys.constructor import construct_domain
-from sympy.polys.domains.gaussiandomains import GaussianElement
-from sympy.matrices import MutableDenseMatrix as Matrix
-from sympy.polys.polyerrors import BasePolynomialError
+from sympy.polys.polyerrors import DomainError, BasePolynomialError
 from sympy.polys.polyclasses import ANP
 from sympy.polys.rootoftools import ComplexRootOf as CRootOf
 
@@ -21,6 +19,7 @@ from ...sdp.arithmetic import rep_matrix_from_dict
 if TYPE_CHECKING:
     from sympy.combinatorics import PermutationGroup
     from sympy.polys.domains import Domain
+    from sympy.matrices import MutableDenseMatrix as Matrix
 
 try:
     # https://github.com/sympy/sympy/pull/26806
@@ -29,7 +28,7 @@ except Exception:
     pass
 
 
-def _reg_matrix(M: Matrix) -> Matrix:
+def _reg_matrix(M: 'Matrix') -> 'Matrix':
     """Normalize so that the largest entry in each column is 1"""
     rep = M._rep.rep.to_sdm()
     domain = rep.domain
@@ -55,46 +54,64 @@ def _reg_matrix(M: Matrix) -> Matrix:
     return rep_matrix_from_dict(newsdm, rep.shape, domain)
 
 
-def _algebraic_extension(vec: List[ANP], domain: 'Domain') -> Matrix:
+def _algebraic_field_coeffs(
+    vec: List[ANP],
+    domain: 'Domain',
+    base: 'Domain' = QQ
+) -> 'Matrix':
     """
-    Convert a column vector of algebraic numbers to a matrix of rational numbers.
+    Convert a vector of algebraic numbers to a matrix over a subfield.
 
-    Given a vector `v` of algebraic numbers. Then each entry `v_i`
-    is in the form of `a_{i,0} + a_{i,1}x + ... + a_{i,n-1}x^{n-1}` where `x`
-    is the generator of the algebraic number field.
+    Let ``L`` be the algebraic number field represented by ``domain`` and
+    let ``K`` be the algebraic number field represented by ``base``, with
+    ``K`` a subfield of ``L``. Each entry ``v_i`` of ``vec`` is regarded as
+    an element of ``L``.
 
-    Let `c` be any vector that `c.T v = 0` and `c` is on the rational number
-    field. Then `c` must be orthogonal to each `[a_{0,k}, ..., a_{m,k}]` for
-    `k = 0,1,...,n-1`. The function returns the matrix of `c`.
+    The returned matrix ``A`` satisfies
+
+        c.T * v = 0,  c in K**len(vec)
+
+    if and only if
+
+        A.T * c = 0.
+
+    In particular, if ``K = QQ`` and ``x`` is the generator of ``L``, then
+    ``A`` consists of the coefficient vectors obtained by writing each
+    entry of ``v`` in the QQ-basis
+
+        1, x, ..., x**(n - 1).
+
+    If ``K`` is a proper subfield of ``L``, the entries are instead expanded
+    in a K-basis of ``L``.
     """
     if len(vec) == 0:
-        return Matrix(0, 0, [])
+        return rep_matrix_from_dict({}, (0, 0), base)
 
-    rep, mod, sdm = None, None, None
-    if domain.is_QQ_I or domain.is_ZZ_I:
-        mod = domain.mod if hasattr(domain, 'mod') else \
-            [domain.dom.one, domain.dom.zero, domain.dom.one] # version compatibility
-    elif (not domain.is_QQ) and (not domain.is_ZZ) and hasattr(domain, 'mod'):
-        mod = domain.mod
+    if domain.is_AlgebraicField:
+        mod = domain.mod.to_list()
+        reps = [x.rep for x in vec]
+    elif domain.is_QQ_I or domain.is_ZZ_I:
+        mod = [domain.dom.one, domain.dom.zero, domain.dom.one] # version compatibility
+        reps = [(x.y, x.x) for x in vec]
+    elif domain.is_CC:
+        mod = [RR.one, RR.zero, RR.one]
+        reps = [(x.imag, x.real) for x in vec]
+    else:
+        raise DomainError(f"domain {domain} not supported")
 
-    if hasattr(vec[0], 'rep'):
-        rep = lambda z: z.rep
-    elif isinstance(vec[0], GaussianElement):
-        rep = lambda z: (z.y, z.x)
+    sdm = {}
 
-    if mod is not None and rep is not None:
-        mod = mod.to_list() if hasattr(mod, 'to_list') else mod
+    if base.is_QQ:
         zero = 0
 
-        sdm = {}
-        for row, x in enumerate(vec):
-            l = len(rep(x))
+        for row, x in enumerate(reps):
+            l = len(x)
             for i in range(1, l + 1): # len(x.rep) = l >= i
-                if rep(x)[-i] == zero:
+                if x[-i] == zero:
                     continue
                 if row not in sdm:
                     sdm[row] = {}
-                sdm[row][i-1] = rep(x)[-i]
+                sdm[row][i-1] = x[-i]
         return rep_matrix_from_dict(sdm, (len(vec), len(mod) - 1), QQ)
 
     # Fails to convert to a matrix of rational numbers,
@@ -484,7 +501,7 @@ class Root():
 
     def as_vec(self, n: int, diff: Optional[Tuple[int, ...]] = None,
         numer: bool = False, **options
-    ) -> Union[Matrix, np.ndarray]:
+    ) -> Union['Matrix', np.ndarray]:
         """
         Evaluate the root at monomials of degree n.
 
@@ -551,7 +568,7 @@ class Root():
         return vec
 
     def span(self, n: int, diff: Optional[Tuple[int, ...]] = None,
-             normalize: bool = False, **options) -> Matrix:
+             normalize: bool = False, **options) -> 'Matrix':
         """
         Compute the rational span of the Root.as_vec(n, diff, **options).
         It degenerates to `as_vec` if the root is not algebraic.
@@ -599,7 +616,7 @@ class Root():
 
         if self.is_algebraic and not self.is_Rational:
             vec = vec._rep.rep.to_list_flat()
-            M = _algebraic_extension(vec, self.domain)
+            M = _algebraic_field_coeffs(vec, self.domain)
         else:
             M = vec
         if normalize and self.is_algebraic:
