@@ -407,6 +407,8 @@ def _structsos_complex_factorizable(coeff: 'Coeff', test=True, modp=True):
     => 2/3s(a12-3a11b-3a11c+3a10b2+3a10bc+3a10c2+2a6b6-6a5b5c2)
 
     => s((a+b)4(a-c)2(b-c)2)-(8+4sqrt(6))s(ab)p(a-b)2
+
+    => (s(a4(a-3/2(b+c))2(a-b)(a-c))+1/64p(a-b)2s(83a2-59ab))s(a2-ab)
     """
     if not coeff.domain.is_Exact: # RR or CC
         return None
@@ -530,7 +532,9 @@ def _structsos_complex_factorizable_fp(coeff: 'Coeff'):
         if result is None:
             return None
         A1, B1 = result
-        A, B = A*A1 + 3*B*B1, A*B1 + B*A1
+        # Multiply (A + sqrt(-3) B) by (A1 + sqrt(-3) B1).
+        # The real part has a minus sign because (sqrt(-3))**2 == -3.
+        A, B = A*A1 - 3*B*B1, A*B1 + B*A1
     a = coeff.gens[0]
     A, B = A.homogenize(a), B.homogenize(a)
     # return const*A.as_expr()**2 + 3*const*B.as_expr()**2
