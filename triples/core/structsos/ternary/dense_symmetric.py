@@ -533,7 +533,6 @@ def _structsos_complex_factorizable_fp(coeff: 'Coeff'):
             return None
         A1, B1 = result
         # Multiply (A + sqrt(-3) B) by (A1 + sqrt(-3) B1).
-        # The real part has a minus sign because (sqrt(-3))**2 == -3.
         A, B = A*A1 - 3*B*B1, A*B1 + B*A1
     a = coeff.gens[0]
     A, B = A.homogenize(a), B.homogenize(a)

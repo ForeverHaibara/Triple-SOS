@@ -6,12 +6,13 @@ from sympy import MutableDenseMatrix as Matrix
 
 from .utils import (
     CommonExpr, DomainExpr,
-    quadratic_weighting, sum_y_exprs, rationalize_func
+    quadratic_weighting, sum_y_exprs, rationalize_func, intervals
 )
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .utils import Coeff
+
 
 def _solve_inverse_quartic(coeff: 'Coeff', m, p, n, r):
     """
@@ -54,9 +55,41 @@ def _solve_inverse_quartic(coeff: 'Coeff', m, p, n, r):
             return sum_y_exprs(y, exprs)
 
 
+def _roots_4_2(f: Poly):
+    """
+    Return `(a, b)` if `f = C*(x-a)**4*(x-b)**2`, else None.
+    The implementation avoids factorization or gcd.
+    """
+    if not f.degree() == 6:
+        return None
+    A5, A4, A3, A2, A1, A0 = f.monic().rep.to_list()[1:]
+
+    D = 5*A5**2 - 12*A4
+    if D == 0:
+        a = -A5/6
+        return (a, a) if (A5, A4, A3, A2, A1, A0) == (
+            -6*a, 15*a*a, -20*a**3, 15*a**4, -6*a**5, a**6) else None
+
+    a = (18*A3 - 10*A5*A4 + 5*A5**3/2) / D
+    b = -A5/2 - 2*a
+
+    return (a, b) if (A5, A4, A3, A2, A1, A0) == (
+        -4*a - 2*b,
+        6*a**2 + 8*a*b + b**2,
+        -4*a**3 - 12*a**2*b - 4*a*b**2,
+        a**4 + 8*a**3*b + 6*a**2*b**2,
+        -2*a**4*b - 4*a**3*b**2,
+        a**4*b**2
+    ) else None
+
+
 def structsos_octic_symmetric(coeff, real=True):
     if not all(coeff((i,j,k)) == coeff((j,i,k)) for (i,j,k) in ((7,1,0),(6,2,0),(5,3,0),(5,2,1),(4,3,1))):
         return
+
+    solution = _structsos_octic_symmetric_quadruple_axis(coeff)
+    if solution is not None:
+        return solution
 
     if not coeff.is_rational:
         return
@@ -68,6 +101,7 @@ def structsos_octic_symmetric(coeff, real=True):
 
     if coeff((8,0,0)) != 0:
         return _structsos_octic_symmetric_quadratic_form(coeff.as_poly(), coeff)
+
 
 def _structsos_octic_symmetric_hexagon_sdp(coeff: 'Coeff'):
     """
@@ -757,11 +791,198 @@ def _structsos_octic_symmetric_hexagram(coeff: 'Coeff'):
             return sum_y_exprs(y, exprs) / multiplier
 
 
+def _structsos_octic_symmetric_quadruple_axis(coeff: 'Coeff'):
+    """
+    Solve the symmetric octic inequality
+    ```
+    F(a,b,c) = s(a**4*(a-t/2*(b+c))*(a-b)*(a-c)) + p(a-b)**2*(x*s(a**2-a*b)+y*s(a)**2)
+    ```
+    and the more general form
+    ```
+    F_z(a,b,c) = F(a,b,c).xreplace({a:a-z/2*(b+c),b:b-z/2*(a+c),c:c-z/2*(a+b)}})
+    ```
+    The symmetric axis of `F_z` is `(a - z)**4*(a + (t*z-2*t-2*z)/(t*z+2))**2*(a - 1)**2`,
+    which has a quadruple root and also a double root.
+
+    To solve the problem, a linear transform is applied so that without loss of generality
+    we assume `z = 0`.
+
+    Examples
+    --------
+    :: ineqs = []
+
+    => 6s(a6(a-b)(a-c))-p(a-b)2(3s(a2)+s(a)2)
+
+    => s(a4(sqrt(4/3)a-b-c)2(a-b)(a-c))
+
+    => (3s(a4(a-b-c)2(a-b)(a-c))+p(a-b)2s(a)2)+4p(a-b)2s(14a2-17ab)
+
+    => s(a2(3a-2b-2c)4(a-b)(a-c))
+
+    => s(a8-4a7b-4a7c+33a6b2-44a6bc+33a6c2-96a5b3+84a5b2c+84a5bc2-96a5c3+132a4b4-36a4b3c-183a4b2c2-36a4bc3+132a3b3c2)
+    """
+    a, b, c = coeff.gens
+    poly = coeff.as_poly()
+
+    # First, solve for z and t from the symmetric axis of F_z(a,b,c)
+    axis = poly.eval((1,1))
+    axis, rem = axis.div(coeff.from_list([1, -2, 1], (c,)).as_poly())
+    if not rem.is_zero:
+        return
+
+    zw = _roots_4_2(axis)
+    if zw is None:
+        return
+    z, w = zw
+
+    if w*z + z - 2 == 0:
+        return
+
+    t = 2*(-w + z)/(w*z + z - 2)
+    if t == 1:
+        return
+
+    axis_lc = axis.rep.LC()
+
+    # Slow version:
+    # compute (poly - ...) = p(a-b)**2 * (x*s(a**2-a*b) + y*s(a)**2)
+    # by polynomial division
+
+    # rem = poly - pl(f' s((a-({z})*(b+c)/2)**4*(a - ({w})*(b+c)/2)**2*(a-b)*(a-c))').mul_ground(axis_lc)
+    # factor, rem = rem.div(pl('p(a-b)2'))
+    # if not rem.is_zero:
+    #     return
+    # factor_rep = factor.rep.to_dict()
+    # x = factor_rep.get((2,0,0), factor.domain.zero)
+    # y = factor_rep.get((1,1,0), factor.domain.zero)
+    # x, y = (2*x - y)/3, (x + y)/3
+
+    # Fast version: compute x and y by evaluation at (0,1,-1) and (0,1,2)
+    margin = poly.eval((0,1)).rep
+    x = (margin.eval(-1) - (w + 2)**2*(z + 2)**4/16*axis_lc)/12
+    val = 729*w**2*z**4/32 - (1 - w)**2*(1 - z)**4 + 2*(2 - w/2)**2*(2 - z/2)**4
+    y = (margin.eval(2) - val*axis_lc - 12*x)/36
+
+    t, w, z, x, y = [coeff.wrap(i) for i in (t, w, z, x, y)]
+    if z + 2 == 0 or t*z + 2 == 0:
+        return
+
+    lc = coeff.wrap(axis_lc/((z + 2)**2*(t*z + 2)**2/16))
+    if lc < 0:
+        return
+    x, y = x/(lc*(z + 2)**6/64), y/(lc*(z + 2)**6/64)
+    x, y = x/((z + 2)**2/4), y/(z - 1)**2
+
+    # From here we have
+    # poly == lc * F.xreplace({a:a-z/2*(b+c),b:b-z/2*(a+c),c:c-z/2*(a+b)}}) where
+    # F == (s(a**4*(a - t/2*(b+c))**2*(a-b)*(a-c)) + p(a-b)**2*(x*s(a**2-a*b) + y*s(a)**2))
+
+    if x < -(t + 2)**2/12:
+        # F(1,-1,0) < 0 => not nonnegative
+        return
+
+    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+    def _get_solution_parabola(t, y, z = 0):
+        if t == 2:
+            assert 3*y == 1
+            return (z + 2)**2/8 * CyclicSum((a-b)**2) * CyclicProduct((z + 1)*a - b - c)**2
+        # else:
+        dt = {
+            (0,0,3): -12*y*z**3 - 72*y*z**2 - 144*y*z - 96*y - 6*z**3*t**2 + 32*z**3*t - 36*z**3 + 12*z**2*t**2 \
+                        - 24*z**2 + 24*z*t**2 - 48*z*t + 48*z + 16*t,
+            (0,1,2): 18*y*z**3 + 108*y*z**2 + 216*y*z + 144*y - 15*z**3*t**2 + 48*z**3*t - 42*z**3 + 6*z**2*t**2 \
+                        - 48*z**2*t + 36*z**2 - 12*z*t**2 - 48*z*t + 72*z - 24*t**2 + 48*t - 48,
+            (0,2,1): -6*y*z**3 - 36*y*z**2 - 72*y*z - 48*y - 3*z**3*t**2 + 16*z**3*t - 18*z**3 + 30*z**2*t**2 \
+                        - 48*z**2*t - 12*z**2 + 12*z*t**2 + 48*z*t - 120*z + 24*t**2 - 16*t - 48,
+            (0,3,0): -24*z*t**2 + 48*z*t - 48*t + 96,
+            (1,0,2): 18*y*z**3 + 108*y*z**2 + 216*y*z + 144*y - 15*z**3*t**2 + 48*z**3*t - 42*z**3 + 6*z**2*t**2 \
+                - 48*z**2*t + 36*z**2 - 12*z*t**2 - 48*z*t + 72*z - 24*t**2 + 48*t - 48,
+            (1,1,1): -24*y*z**3 - 144*y*z**2 - 288*y*z - 192*y - 12*z**3*t**2 + 16*z**3*t + 24*z**3 + 24*z**2*t**2 \
+                        - 144*z**2*t + 240*z**2 - 48*z*t**2 + 96*z*t + 96*z + 32*t,
+            (1,2,0): 6*y*z**3 + 36*y*z**2 + 72*y*z + 48*y + 3*z**3*t**2 - 16*z**3*t + 18*z**3 + 18*z**2*t**2 \
+                        - 48*z**2*t + 12*z**2 - 36*z*t**2 + 144*z*t - 168*z + 24*t**2 - 80*t + 48,
+        }
+        for m, v in dt.copy().items():
+            dt[(m[1], m[0], m[2])] = v
+        p1 = coeff.from_dict(dt)
+        return CyclicSum(p1.as_poly().expr.together()**2*(a-b)**2) * ((z + 2)**2 / 256 / 72 / (t - 2)**2)
+
+    def _get_solution_cubic(t, u, z = 0):
+        dt = {
+            (0,0,4): -4*z**3*t + 2*z**3*u + 12*z**3 + 12*z**2*t + 6*z**2*u + 12*z**2 + 6*z*t + 12*z + 4*t - 8*u,
+            (0,1,3): -10*z**3*t - z**3*u + 6*z**3 + 12*z**2*t - 3*z**2*u - 42*z**2 - 30*z*t - 24*z - 8*t + 4*u - 12,
+            (0,2,2): -2*z**3*t - 2*z**3*u + 12*z**3 + 24*z**2*t - 6*z**2*u + 24*z**2 + 12*z*t + 60*z + 20*t + 8*u + 12,
+            (0,3,1): -2*z**3*t + z**3*u + 6*z**3 - 12*z**2*t + 3*z**2*u + 6*z**2 - 6*z*t - 48*z - 16*t - 4*u - 36,
+            (0,4,0): 18*z*t + 36,
+            (1,1,2): -2*z**3*t - 2*z**3*u - 24*z**3 + 24*z**2*t - 6*z**2*u - 84*z**2 - 42*z*t + 60*z + 20*t + 8*u + 48,
+            (1,2,1): 10*z**3*t + 4*z**3*u - 12*z**3 - 12*z**2*t + 12*z**2*u + 24*z**2 - 6*z*t + 24*z + 8*t - 16*u - 36,
+            (1,3,0): 2*z**3*t - z**3*u - 6*z**3 - 24*z**2*t - 3*z**2*u - 6*z**2 + 6*z*t - 60*z - 20*t + 4*u,
+            (2,2,0): 10*z**3*t - 2*z**3*u - 12*z**2*t - 6*z**2*u + 60*z**2 + 48*z*t + 24*z + 8*t + 8*u + 24
+        }
+        for m, v in dt.copy().items():
+            dt[(m[1], m[0], m[2])] = v
+        p1 = coeff.from_dict(dt)
+        p2 = CyclicSum((
+            (2*t*z**2 - 4*t*z + 2*t - u*z**2 - 4*u*z - 4*u - 6*z**2 - 12*z - 18)*a**2\
+                + (4*t*z**2 - 8*t*z + 4*t + u*z**2 + 4*u*z + 4*u + 24*z + 12)*a*b
+        ).together())**2
+        return (CyclicSum(p1.as_poly().expr.together()**2*(a-b)**2) * ((z + 2)**2 / 64 / 81)\
+            + ((z + 2)**4*(u - 2)/864/(t - 1))*CyclicProduct((a-b)**2)*p2)/CyclicSum((a-b)**2)
+
+    x_para_l = -(t + 2)**2/12
+    y_para_l = (t**2 - 2)/6
+
+    if y >= y_para_l:
+        x2 = (z + 2)**8/512*lc * (x - x_para_l)
+        y2 = (z + 2)**6/64*lc * (z - 1)**2 *(y - y_para_l)
+        return lc * _get_solution_parabola(t, y_para_l, z) \
+            + x2*CyclicProduct((a-b)**2)*CyclicSum((a-b)**2)\
+            + y2*CyclicProduct((a-b)**2)*CyclicSum(a)**2
+
+    if t != 2:
+        x_para = (3*y - 1)*(-t**2 + 3*y + 3)/(3*(t - 2)**2)
+        if x >= x_para:
+            x2 = (z + 2)**8/512*lc * (x - x_para)
+            return lc * _get_solution_parabola(t, y, z) \
+                + x2*CyclicProduct((a-b)**2)*CyclicSum((a-b)**2)
+
+    x_para_r = (t + 2)**2*(2*t - 5)*(2*t**2 - 2*t - 3)/(12*(t - 1)**4)
+    y_para_r = -(2*t**3 - 7*t**2 - 4*t + 18)/(6*(t - 1)**2)
+    x_cubic_l = (t + 2)**2*(t**4 - 4*t**3 + 2*t**2 + 4*t + 15)/(12*(t - 1)**4)
+    y_cubic_l = -(t**4 - 4*t**3 + 2*t**2 - 8*t + 36)/(12*(t - 1)**2)
+    u_cubic_l = 2 + (t - 4)**2/(2*(t - 1))
+
+    if x_para_r != x_cubic_l and x_para_r <= x and x <= x_cubic_l:
+        w = (x_cubic_l - x)/(x_cubic_l - x_para_r)
+        y_comb = y_para_r * w + y_cubic_l * (1 - w)
+        if y >= y_comb:
+            y2 = (z + 2)**6/64*lc * (z - 1)**2*(y - y_comb)
+            return lc * w * _get_solution_parabola(t, y_para_r, z) \
+                + lc * (1 - w) * _get_solution_cubic(t, u_cubic_l, z)\
+                + y2 * CyclicProduct((a-b)**2)*CyclicSum(a)**2
+        else:
+            return
+
+    if x >= x_cubic_l:
+        eq1 = coeff.from_list([16, 96, 0, 7*t**3 + 21*t**2 - 108*t*x + 108*x - 540], (a,)).as_poly()
+        eq2 = coeff.from_list([1, 0, t**2/2 + 9*y - 9], (a,)).as_poly()
+        for u in intervals([eq1, eq2], coeff.domain):
+            if (u - 2)*(t - 1) >= 0:
+                x1 = (7*t**3 + 21*t**2 + 16*u**3 + 96*u**2 - 540)/(108*t - 108)
+                y1 = -t**2/18 - u**2/9 + 1
+                if x >= x1 and y >= y1:
+                    x2 = (z + 2)**8/512*lc * (x - x1)
+                    y2 = (z + 2)**6/64*lc * (z - 1)**2 *(y - y1)
+                    return lc * _get_solution_cubic(t, u, z) \
+                        + x2 * CyclicProduct((a-b)**2)*CyclicSum((a-b)**2)\
+                        + y2 * CyclicProduct((a-b)**2)*CyclicSum(a)**2
+
+
 def _structsos_octic_symmetric_quadratic_form(poly, coeff: 'Coeff'):
     """
     Let F0 = s(a2(s(a2+ab)-bc)2(a-b)(a-c)).
     Then we have
-    F_{x,y} = F0 - 2s(a2(s(a2+ab)-bc)(a-b)(a-c))f(a,b,c) + s(a2(a-b)(a-c))f(a,b,c)^2 >= 0
+    `F_{x,y} = F0 - 2s(a2(s(a2+ab)-bc)(a-b)(a-c))f(a,b,c) + s(a2(a-b)(a-c))f(a,b,c)^2 >= 0`
 
     See proof at class _octic_sym_axis.
     Such F_{x,y}, G_{x,y} has the property that the symmetric axis is a multiple of a^2 * (a-1)^2 * (...)^2.
@@ -773,8 +994,6 @@ def _structsos_octic_symmetric_quadratic_form(poly, coeff: 'Coeff'):
     Examples
     --------
     => s(a2(a-b)(a-c))s(a2-ab)2-p(a-b)2s(3/2a2) # doctest:+SKIP
-
-    => s(a6(a-b)(a-c))-p(a-b)2(1/2s(a2)+1/6s(a)2)
     """
     return
 
