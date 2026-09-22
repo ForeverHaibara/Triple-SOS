@@ -61,6 +61,9 @@ def _solve_inverse_quartic(coeff: 'Coeff', m, p, n, r):
 
 
 def _sqrt_f6(f):
+    """
+    Compute the squareroot of a degree 6 polynomial.
+    """
     if f.degree() != 6:
         return None
 
@@ -70,6 +73,20 @@ def _sqrt_f6(f):
     v = (A4 - u**2) / 2
     w = (A3 - 2*u*v) / 2
     return (u, v, w) if (A2, A1, A0) == (v*v + 2*u*w, 2*v*w, w**2) else None
+
+
+def _poly_from_list(values, gen):
+    """Build a univariate polynomial from coefficients in descending order."""
+    return Poly.from_list(values, gen)
+
+
+def _build_quad_form3(m00, m01, m02, m22):
+    """Build the symmetric 3-by-3 matrix from parameters."""
+    return Matrix([
+        [m00, m01, m02],
+        [m01, m00, m02],
+        [m02, m02, m22],
+    ])
 
 
 def structsos_octic_symmetric(coeff, real=True):
@@ -92,21 +109,7 @@ def structsos_octic_symmetric(coeff, real=True):
         return _structsos_octic_symmetric_quadratic_form(coeff.as_poly(), coeff)
 
 
-def _poly_from_list(values, gen):
-    """Build a univariate polynomial from coefficients in descending order."""
-    return Poly.from_list(values, gen)
-
-
-def _octic_symmetric_stack_quad_form(m00, m01, m02, m22):
-    """Build the symmetric 3-by-3 matrix used by the octic hexagon solver."""
-    return Matrix([
-        [m00, m01, m02],
-        [m01, m00, m02],
-        [m02, m02, m22],
-    ])
-
-
-def _octic_symmetric_quad_form_solution(coeff, quad_form):
+def _octic_symmetric_hexagon_quad_form_solution(coeff, quad_form):
     """Convert an octic symmetric quadratic form into a structural SOS."""
     a, b, c = coeff.gens
     cyclic_sum, cyclic_product = coeff.cyclic_sum, coeff.cyclic_product
@@ -188,7 +191,7 @@ def _structsos_octic_symmetric_hexagon_sdp(coeff: 'Coeff'):
         if sol is None:
             return None
         u210, u102, u201, u111, r, quad_form = sol
-        quad_form_sol = _octic_symmetric_quad_form_solution(coeff, quad_form)
+        quad_form_sol = _octic_symmetric_hexagon_quad_form_solution(coeff, quad_form)
         if r >= 0 and quad_form_sol is not None:
             ker = (a-b)*(u102*c**2*(b+a) + u210*(a*b*(a+b)-c**3) + u201*c*(a**2+b**2+c**2) + u111*a*b*c).expand().together()
             return r * CyclicSum(ker**2) + quad_form_sol
@@ -282,7 +285,7 @@ def _structsos_octic_symmetric_hexagon_sdp(coeff: 'Coeff'):
             u201 = x_ * t
             u102 = 2 + w2/w1 + x_
 
-        quad_form = _octic_symmetric_stack_quad_form(M00t, M01t, M02t, M22t)
+        quad_form = _build_quad_form3(M00t, M01t, M02t, M22t)
         # print('PARAMS =', t, u102, u201, u111, r, quad_form)
         return u210, u102, u201, u111, r, quad_form
 
@@ -346,7 +349,7 @@ def _structsos_octic_symmetric_hexagon_sdp(coeff: 'Coeff'):
         reg = 162*t**2*w4
         r = (3*t*w2 - t*w4 - w4)**2 / reg
         M00t, M01t, M02t, M22t = [f(t)/reg for f in (M00t, M01t, M02t, M22t)]
-        quad_form = _octic_symmetric_stack_quad_form(M00t, M01t, M02t, M22t)
+        quad_form = _build_quad_form3(M00t, M01t, M02t, M22t)
         return u210, u102, u201, u111, r, quad_form
 
 
@@ -383,7 +386,7 @@ def _structsos_octic_symmetric_hexagon_sdp(coeff: 'Coeff'):
             M01t = (3*c611*u102*u201/2 + 3*c611*u201**2/2 + 3*c611*u201/2 - u201**2*w1/2 + 2*u201*w1 - w1/2)/reg
             M02t = (3*c530*u102*u201/2 + 3*c530*u201**2/2 + 3*c530*u201/2 + u102*u201*w1 - u102*w1/2)/reg
             M22t = (3*c440*u102*u201 + 3*c440*u201**2 + 3*c440*u201 - 3*c611*u102*u201 - 3*c611*u201**2 - 3*c611*u201 + u102**2*w1 + 3*u201**2*w1 - 6*u201*w1)/reg
-            quad_form = _octic_symmetric_stack_quad_form(M00t, M01t, M02t, M22t)
+            quad_form = _build_quad_form3(M00t, M01t, M02t, M22t)
             if quad_form.is_positive_semidefinite:
                 return u210, u102, u201, u111, r, quad_form
 
@@ -542,7 +545,7 @@ def _structsos_octic_symmetric_hexagon_sdp(coeff: 'Coeff'):
             u102 = -c530/(c611 + 2*c620)
             u201 = Integer(0)
             u111 = -2*u102 - 1
-        quad_form = _octic_symmetric_stack_quad_form(M00t, M01t, M02t, M22t)
+        quad_form = _build_quad_form3(M00t, M01t, M02t, M22t)
         return u210, u102, u201, u111, r, quad_form
 
     if w4 > 0:
