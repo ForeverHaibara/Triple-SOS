@@ -1,17 +1,14 @@
-from typing import Union, Tuple, List, Dict, Callable, Optional, TYPE_CHECKING
 from functools import wraps
+from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Tuple, Union
 
-from sympy import (
-    Poly, Expr, Rational, MatrixBase, Add,
-    QQ, RR, sympify, fraction
-)
+from sympy import QQ, RR, Add, Expr, MatrixBase, Poly, Rational, fraction, sympify
 from sympy.combinatorics import Permutation
 from sympy.core.symbol import uniquely_named_symbol
 
 from ...sdp import congruence
-from ...utils.expressions import Coeff, CyclicSum, CyclicProduct
-from ...utils.roots import nroots, rationalize_bound
+from ...utils.expressions import Coeff, CyclicProduct, CyclicSum
 from ...utils.polytools import intervals
+from ...utils.roots import nroots, rationalize_bound
 
 if TYPE_CHECKING:
     from sympy import MutableDenseMatrix as Matrix
@@ -260,8 +257,9 @@ def clear_free_symbols(poly: Poly, ineq_constraints: Dict[Poly, Expr] = {}, eq_c
     we can remove the symbol "a" from the constraints. But we cannot remove the symbol "y"
     even though it is not in the polynomial, as it is correlated with "x".
     """
-    from ..problem import InequalityProblem
     from warnings import warn
+
+    from ..problem import InequalityProblem
     warn("clear_free_symbols is deprecated. Please use remove_redundancy instead.",
          stacklevel=2, category=DeprecationWarning)
     pro = InequalityProblem(poly, ineq_constraints, eq_constraints)

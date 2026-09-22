@@ -1,11 +1,11 @@
-from typing import Tuple, Callable, Optional, Union, TYPE_CHECKING
 from functools import wraps
+from typing import TYPE_CHECKING, Callable, Optional, Tuple, Union
 
 import sympy as sp
-from sympy import Poly, Add, Mul, Pow
+from sympy import Add, Mul, Poly, Pow
 from sympy.combinatorics import CyclicGroup
 
-from ....utils.expressions import Coeff, CyclicExpr, CyclicSum, CyclicProduct
+from ....utils.expressions import Coeff, CyclicExpr, CyclicProduct, CyclicSum
 
 if TYPE_CHECKING:
     from sympy import Expr, Symbol

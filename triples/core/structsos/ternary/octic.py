@@ -1,7 +1,7 @@
-from .octic_symmetric import structsos_octic_symmetric
-
-from .utils import inverse_substitution
 from typing import TYPE_CHECKING
+
+from .octic_symmetric import structsos_octic_symmetric
+from .utils import inverse_substitution
 
 if TYPE_CHECKING:
     from ....utils.expressions import Coeff

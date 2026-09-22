@@ -1,22 +1,23 @@
-from typing import Tuple, Optional, Union, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional, Tuple, Union
 
-from sympy import Poly, Add, ZZ, QQ, FiniteField, sqrt, prod
+from sympy import QQ, ZZ, Add, FiniteField, Poly, prod, sqrt
+from sympy.combinatorics.named_groups import CyclicGroup
+from sympy.external.gmpy import sqrt as isqrt
+from sympy.ntheory import factorint, nextprime, sqrt_mod
 from sympy.polys.polyclasses import ANP, DMP
 from sympy.polys.polyerrors import CoercionFailed
-from sympy.combinatorics.named_groups import CyclicGroup
-from sympy.ntheory import factorint, nextprime, sqrt_mod
-from sympy.external.gmpy import sqrt as isqrt
 from sympy.utilities import subsets
 
 from .utils import structsos_handle_uncentered
-from ..utils import structsos_reorder_symmetry
 from ..univariate import prove_univariate
-from ....utils.monomials import verify_symmetry, poly_reduce_by_symmetry
-from ....utils.polytools import dmp_gf_factor, FLINT_VERSION
+from ..utils import structsos_reorder_symmetry
+from ....utils.monomials import poly_reduce_by_symmetry, verify_symmetry
+from ....utils.polytools import FLINT_VERSION, dmp_gf_factor
 
 if TYPE_CHECKING:
-    from ....utils.expressions import Coeff
     from sympy import Expr
+
+    from ....utils.expressions import Coeff
 
 
 def _linear_invert(u, v, d: int = 0) -> Optional[Tuple[int, 'Expr', 'Expr']]:

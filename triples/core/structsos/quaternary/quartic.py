@@ -1,7 +1,8 @@
+from typing import TYPE_CHECKING
+
 from sympy import Add
 
-from ..utils import quadratic_weighting, intervals
-from typing import TYPE_CHECKING
+from ..utils import intervals, quadratic_weighting
 
 if TYPE_CHECKING:
     from ....utils.expressions import Coeff

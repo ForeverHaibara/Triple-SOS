@@ -1,19 +1,23 @@
-from sympy import Poly, Expr, Rational, Float, Add
+from typing import TYPE_CHECKING
+
+from sympy import Add, Expr, Float, Poly, Rational
 from sympy import MutableDenseMatrix as Matrix
 
 from .cubic import structsos_cubic
 from .sextic_symmetric import (
     _structsos_sextic_hexagon_symmetric,
     _structsos_sextic_hexagram_symmetric,
-    structsos_sextic_symmetric_ultimate
+    structsos_sextic_symmetric_ultimate,
 )
-from .utils import CommonExpr, inverse_substitution, align_cyclic_group
+from .utils import CommonExpr, align_cyclic_group, inverse_substitution
 from ..utils import (
-    sum_y_exprs, rationalize_func, quadratic_weighting, congruence,
+    congruence,
+    quadratic_weighting,
+    rationalize_func,
+    sum_y_exprs,
     zip_longest,
 )
 from ....utils.roots import nroots, rationalize_bound
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ....utils.expressions import Coeff

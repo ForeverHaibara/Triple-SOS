@@ -1,17 +1,18 @@
-from typing import List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, List, Optional
 
 from sympy import Add, factorial
 from sympy import MutableDenseMatrix as Matrix
-from sympy.polys.matrices.domainmatrix import DomainMatrix
-from sympy.polys.matrices.ddm import DDM
 from sympy.combinatorics import SymmetricGroup
+from sympy.polys.matrices.ddm import DDM
+from sympy.polys.matrices.domainmatrix import DomainMatrix
 
 from ....sdp import congruence
 from ....utils.expressions import CyclicSum
 
 if TYPE_CHECKING:
-    from ....utils.expressions import Coeff
     from sympy import Expr
+
+    from ....utils.expressions import Coeff
 
 def make_mat_from_coeff(coeff: "Coeff") -> Optional[Matrix]:
     nvars = len(coeff.gens)

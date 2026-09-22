@@ -1,8 +1,9 @@
 
+from typing import TYPE_CHECKING
+
 from sympy import Add
 
 from ..utils import congruence, sum_y_exprs
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ....utils.expressions import Coeff

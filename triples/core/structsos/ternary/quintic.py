@@ -1,14 +1,14 @@
-from typing import Tuple, List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, List, Optional, Tuple
 
-from sympy import Poly, Expr, Symbol, Integer, Rational, Float, Add, sqrt, im
 import numpy as np
+from sympy import Add, Expr, Float, Integer, Poly, Rational, Symbol, im, sqrt
 
 from .cubic import structsos_cubic
 from .quartic import structsos_quartic
 from .quintic_symmetric import structsos_quintic_symmetric
-from ..univariate import prove_univariate
 from .utils import align_cyclic_group
-from ..utils import sum_y_exprs, rationalize_func, zip_longest, quadratic_weighting
+from ..univariate import prove_univariate
+from ..utils import quadratic_weighting, rationalize_func, sum_y_exprs, zip_longest
 from ....utils.roots import nroots, rationalize, rationalize_bound
 
 if TYPE_CHECKING:

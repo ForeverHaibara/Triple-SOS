@@ -1,20 +1,26 @@
-from typing import Tuple, List, TYPE_CHECKING
+from typing import TYPE_CHECKING, List, Tuple
 
-from sympy import Poly, Integer, Float, Add, nsimplify, sign as sp_sign
+from sympy import Add, Float, Integer, Poly, nsimplify
 from sympy import MutableDenseMatrix as Matrix
+from sympy import sign as sp_sign
 
-from ..utils import (
-    common_region_of_curves, structsos_reorder_symmetry,
-    congruence, sum_y_exprs, quadratic_weighting, rationalize_func,
-    intervals,
-)
-from ....utils.roots import nroots, rationalize_bound
 from ..univariate import prove_univariate
-from ....utils.pqr import pqr_sym
+from ..utils import (
+    common_region_of_curves,
+    congruence,
+    intervals,
+    quadratic_weighting,
+    rationalize_func,
+    structsos_reorder_symmetry,
+    sum_y_exprs,
+)
 from ....sdp.arithmetic import rep_matrix_from_list
+from ....utils.pqr import pqr_sym
+from ....utils.roots import nroots, rationalize_bound
 
 if TYPE_CHECKING:
     from sympy import Expr
+
     from ....utils.expressions import Coeff
 
 

@@ -1,4 +1,4 @@
-from typing import Union, Dict, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict, Optional, Union
 
 from sympy import Function
 from sympy.core.symbol import uniquely_named_symbol
@@ -9,7 +9,8 @@ from ...solution import extract_undetermined_exprs
 from ....utils.expressions import Coeff
 
 if TYPE_CHECKING:
-    from sympy import Poly, Expr
+    from sympy import Expr, Poly
+
     from ...problem import InequalityProblem
 
 SOLVERS_SYMMETRIC = {

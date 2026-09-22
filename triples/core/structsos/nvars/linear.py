@@ -1,5 +1,6 @@
-from ....utils.expressions import CyclicSum
 from typing import TYPE_CHECKING
+
+from ....utils.expressions import CyclicSum
 
 if TYPE_CHECKING:
     from ....utils.expressions import Coeff

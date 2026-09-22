@@ -1,13 +1,19 @@
 from typing import TYPE_CHECKING
 
 import sympy as sp
-from sympy import Poly, Symbol, Integer, Rational, Add, sign
+from sympy import Add, Integer, Poly, Rational, Symbol, sign
 from sympy import MutableDenseMatrix as Matrix
 
 # from .sextic_symmetric import _restructure_quartic_polynomial
 from .quartic import structsos_quartic
 from .utils import CommonExpr
-from ..utils import DomainExpr, quadratic_weighting, sum_y_exprs, rationalize_func, intervals
+from ..utils import (
+    DomainExpr,
+    intervals,
+    quadratic_weighting,
+    rationalize_func,
+    sum_y_exprs,
+)
 
 if TYPE_CHECKING:
     from ....utils.expressions import Coeff

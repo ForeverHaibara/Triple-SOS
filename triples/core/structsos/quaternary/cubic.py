@@ -1,9 +1,10 @@
+from typing import TYPE_CHECKING
+
 from sympy import Add
 
 from ..utils import rationalize_func
-from ....utils.expressions import CyclicSum as _CyclicSum
 from ....utils.expressions import CyclicProduct as _CyclicProduct
-from typing import TYPE_CHECKING
+from ....utils.expressions import CyclicSum as _CyclicSum
 
 if TYPE_CHECKING:
     from ....utils.expressions import Coeff

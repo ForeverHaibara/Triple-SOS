@@ -3,12 +3,13 @@ from warnings import warn
 warn("SolutionStructural is deprecated, please use Solution instead.",
      stacklevel=2, category=DeprecationWarning)
 
-from typing import Optional, Callable
+from typing import Callable, Optional
 
-from sympy import Expr, Symbol, Add, Mul, Pow, Integer, Rational, Function
+from sympy import Add, Expr, Function, Integer, Mul, Pow, Rational, Symbol
 
 from ..solution import Solution
-from ...utils.expressions import CyclicSum, CyclicProduct
+from ...utils.expressions import CyclicProduct, CyclicSum
+
 
 class _rewriting_exception(Exception): ...
 

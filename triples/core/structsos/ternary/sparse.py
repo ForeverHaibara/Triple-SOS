@@ -1,21 +1,22 @@
-from itertools import permutations, combinations
-from typing import List, Tuple, Dict, Callable, Optional, TYPE_CHECKING
+from itertools import combinations, permutations
 from math import gcd
+from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Tuple
 
-from sympy import Poly, Expr, Integer, Add, Mul
+from sympy import Add, Expr, Integer, Mul, Poly
 from sympy.combinatorics import CyclicGroup
 
-from ..utils import DomainExpr
-from ....utils.expressions import CyclicSum
+from .cubic import structsos_cubic
 from .dense_symmetric import structsos_dense_symmetric
 from .quadratic import structsos_quadratic
-from .cubic import structsos_cubic
 from .quartic import structsos_quartic
 from ..univariate import prove_univariate
+from ..utils import DomainExpr
+from ....utils.expressions import CyclicSum
 
 if TYPE_CHECKING:
-    from ....utils.expressions import Coeff
     from sympy import Rational
+
+    from ....utils.expressions import Coeff
 
 def structsos_sparse(coeff, real=1):
     """

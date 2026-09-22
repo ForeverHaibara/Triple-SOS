@@ -1,16 +1,17 @@
-from typing import Tuple, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional, Tuple
 
-from sympy import Poly, Add
-from sympy.combinatorics import PermutationGroup, Permutation
+from sympy import Add, Poly
+from sympy.combinatorics import Permutation, PermutationGroup
 
+from ..univariate import prove_univariate
 from ..utils import structsos_reorder_symmetry
 from ....utils.expressions import CyclicSum
-from ..univariate import prove_univariate
-from ....utils.monomials import poly_reduce_by_symmetry, arraylize_sp, invarraylize
+from ....utils.monomials import arraylize_sp, invarraylize, poly_reduce_by_symmetry
 
 if TYPE_CHECKING:
-    from ....utils.expressions import Coeff
     from sympy import Symbol
+
+    from ....utils.expressions import Coeff
 
 def _sym_sum_poly(poly: Poly) -> Poly:
     """Compute the symmetric sum of a polynomial efficiently."""

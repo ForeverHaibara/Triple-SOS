@@ -1,16 +1,22 @@
 from functools import partial
+from typing import TYPE_CHECKING
 
 import sympy as sp
-from sympy import Poly, Expr, Symbol, Integer, Rational, Add
+from sympy import Add, Expr, Integer, Poly, Rational, Symbol
 from sympy import oo as Infinity
 from sympy.polys.polyerrors import CoercionFailed
 
 from .quartic import structsos_quartic
 from .utils import CommonExpr, structsos_handle_uncentered
-from ..utils import DomainExpr, intervals, sum_y_exprs, rationalize_func, quadratic_weighting
-from ....utils.roots import nroots
 from ..univariate import prove_univariate
-from typing import TYPE_CHECKING
+from ..utils import (
+    DomainExpr,
+    intervals,
+    quadratic_weighting,
+    rationalize_func,
+    sum_y_exprs,
+)
+from ....utils.roots import nroots
 
 if TYPE_CHECKING:
     from ....utils.expressions import Coeff

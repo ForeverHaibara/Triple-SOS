@@ -1,9 +1,10 @@
-from typing import Callable, Union, Dict
+from typing import Callable, Dict, Union
 
-from sympy import Poly, Expr, Integer, Mul
+from sympy import Expr, Integer, Mul, Poly
 
-from .utils import PolynomialUnsolvableError, PolynomialNonpositiveError
+from .utils import PolynomialNonpositiveError, PolynomialUnsolvableError
 from ...utils.expressions import Coeff, CyclicProduct
+
 
 def _null_solver(*args, **kwargs):
     return None

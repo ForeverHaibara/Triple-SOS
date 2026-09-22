@@ -16,10 +16,10 @@ from .nonic   import structsos_nonic
 from .acyclic import structsos_acyclic_sparse
 
 from ..utils import PolynomialNonpositiveError, PolynomialUnsolvableError
-from ....utils.expressions import Coeff
 from ..sparse import structsos_common, structsos_degree_specified_solver
 from ...solution import extract_undetermined_exprs
 from ....sdp.arithmetic import rep_matrix_from_dict, permute_matrix_rows
+from ....utils.expressions import Coeff
 
 if TYPE_CHECKING:
     from sympy import Poly, Expr

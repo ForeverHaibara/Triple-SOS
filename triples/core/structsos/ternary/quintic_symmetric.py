@@ -1,10 +1,11 @@
-from sympy import Integer, Rational, Float, Add
+from typing import TYPE_CHECKING
+
+from sympy import Add, Float, Integer, Rational
 
 from .quartic import structsos_quartic
 from .utils import CommonExpr
-from ..utils import intervals, sum_y_exprs, rationalize_bound
+from ..utils import intervals, rationalize_bound, sum_y_exprs
 from ....utils.roots import nroots, rationalize
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ....utils.expressions import Coeff

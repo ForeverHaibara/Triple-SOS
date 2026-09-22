@@ -1,13 +1,14 @@
-from .....testing.doctest_parser import run_doctest_examples, discover_functions_from_scope
-
+import pytest
 from sympy import Function
 from sympy.abc import a, b, c, u, v, w
 
 from ...structsos import StructuralSOS
-from .....utils import pl, CyclicSum
-from .....testing.doctest_parser import solution_checker
-
-import pytest
+from .....testing.doctest_parser import (
+    discover_functions_from_scope,
+    run_doctest_examples,
+    solution_checker,
+)
+from .....utils import CyclicSum, pl
 
 ternary_funcs = discover_functions_from_scope("triples.core.structsos.ternary")
 
