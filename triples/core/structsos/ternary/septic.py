@@ -1,6 +1,6 @@
 from sympy import Add, Float, Poly, Rational, sqrt
 
-from .quartic import structsos_quartic
+from .quartic import structsos_quartic_param
 from .septic_symmetric import structsos_septic_symmetric
 from .utils import align_cyclic_group, structsos_handle_uncentered
 from ..utils import congruence_solve, zip_longest
@@ -45,10 +45,7 @@ def _fast_solve_quartic(coeff: Coeff, m, p, n, q, rem = 0, mul_abc = True):
             ]).as_coeff_Mul()
             return solution[0] * CyclicProduct(a) * solution[1]
 
-    coeffs_ = {
-        (4,0,0): m, (3,1,0): p, (2,2,0): n, (1,3,0): q, (2,1,1): (rem - m - p - n - q)
-    }
-    solution = structsos_quartic(coeff.from_dict(coeffs_))
+    solution = structsos_quartic_param(coeff, m, p, n, q, rem - m - p - n - q)
     if mul_abc and solution is not None:
         solution = solution * CyclicProduct(a)
     return solution

@@ -5,7 +5,7 @@ from sympy import Add, Integer, Poly, Rational, Symbol, sign
 from sympy import MutableDenseMatrix as Matrix
 
 # from .sextic_symmetric import _restructure_quartic_polynomial
-from .quartic import structsos_quartic
+from .quartic import structsos_quartic_param
 from .utils import CommonExpr
 from ..utils import (
     DomainExpr,
@@ -1097,9 +1097,7 @@ def _solve_octic_symmetric_sqr_axis_cubic(coeff: 'Coeff', u, v, w, z):
     if part2 is None:
         return
 
-    mul = structsos_quartic(coeff.from_dict({
-        (4,0,0): 1, (3,1,0): m, (2,2,0): l, (3,0,1): m,
-        (2,1,1): -(2*m+l+1), (1,3,0): m}))
+    mul = structsos_quartic_param(coeff, 1, m, l, m, -(2*m + l + 1))
     if mul is None:
         return None
 

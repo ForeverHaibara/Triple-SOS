@@ -6,7 +6,7 @@ from sympy import Add, Expr, Integer, Poly, Rational, Symbol
 from sympy import oo as Infinity
 from sympy.polys.polyerrors import CoercionFailed
 
-from .quartic import structsos_quartic
+from .quartic import structsos_quartic_param
 from .utils import CommonExpr, structsos_handle_uncentered
 from ..univariate import prove_univariate
 from ..utils import (
@@ -1947,13 +1947,9 @@ def _structsos_sextic_symmetric_ultimate(coeff: 'Coeff', real = True):
         if v == 0:
             if w == 0:
                 # is a multiple of s(a^2-ab) -> degenerates to quartic
-                poly_div_quad = (
-                    m * (a**4 + b**4 + c**4) +
-                    p * (a**3*(b+c) + b**3*(c+a) + c**3*(a+b)) +
-                    n * (a**2*b**2 + b**2*c**2 + c**2*a**2) +
-                    (u - m - 2*p - n) * (a**2*b*c + b**2*c*a + c**2*a*b)
-                ).as_poly(a,b,c, domain=coeff.domain)
-                solution = structsos_quartic(coeff.from_poly(poly_div_quad))
+                solution = structsos_quartic_param(
+                    coeff, m, p, n, p, u - m - 2*p - n
+                )
                 if solution is not None:
                     solution = Rational(1,2) * CyclicSum((a-b)**2) * solution
                     return solution
@@ -2175,15 +2171,14 @@ def _structsos_sextic_symmetric_ultimate_1root(coeff: 'Coeff', poly, roots, real
 
         if 2*z0 + z3 >= 0 and 2*z0 + z3 + z1 + 2*z2 >= 0:
             # Apply SOS theorem
-            quartic = [
-                ((4, 0, 0), z0**2 + 2*z0*z3),
-                ((3, 1, 0), z0*z1 + 3*z0*z2 + z1*z3 + z2*z3),
-                ((1, 3, 0), z0*z1 + 3*z0*z2 + z1*z3 + z2*z3),
-                ((2, 2, 0), 3*z0**2 + 2*z0*z3 + 2*z1*z2 + z2**2 + z3**2),
-                ((2, 1, 1), 2*z0*z1 + 2*z0*z2 + z1**2 + 2*z1*z2 + 3*z2**2 + 2*z2*z3)
-            ]
-
-            quartic_solution = structsos_quartic(coeff.from_dict(dict(quartic)))
+            quartic_solution = structsos_quartic_param(
+                coeff,
+                z0**2 + 2*z0*z3,
+                z0*z1 + 3*z0*z2 + z1*z3 + z2*z3,
+                3*z0**2 + 2*z0*z3 + 2*z1*z2 + z2**2 + z3**2,
+                z0*z1 + 3*z0*z2 + z1*z3 + z2*z3,
+                2*z0*z1 + 2*z0*z2 + z1**2 + 2*z1*z2 + 3*z2**2 + 2*z2*z3,
+            )
             if quartic_solution is not None:
                 multiplier = CommonExpr.quadratic(2*(2*z0 + z3), 2*(z1 + 2*z2), (a,b,c))
                 p1 = quartic_solution * CyclicSum((a-b)**2*(a+b-x_*c)**2)

@@ -2,7 +2,7 @@ from typing import TYPE_CHECKING
 
 from sympy import Add, Float, Integer, Rational
 
-from .quartic import structsos_quartic
+from .quartic import structsos_quartic_param
 from .utils import CommonExpr
 from ..utils import intervals, rationalize_bound, sum_y_exprs
 from ....utils.roots import nroots, rationalize
@@ -629,10 +629,9 @@ def _structsos_quintic_symmetric_border(coeff: 'Coeff'):
 
     m_, p_, n_ = _compute_mpnq_discriminant(x, y)[0]
     m_, p_, n_ = m*m_, m*p_, m*n_
-    quartic = {
-        (4,0,0): m_, (3,1,0): p_, (2,2,0): n_, (1,3,0): p_, (3,0,1): p_, (2,1,1): -m_-p_*2-n_
-    }
-    quartic_solution = structsos_quartic(coeff.from_dict(quartic))
+    quartic_solution = structsos_quartic_param(
+        coeff, m_, p_, n_, p_, -m_ - 2*p_ - n_
+    )
     if quartic_solution is None: # not expected to happen
         return None
     solution = main_solution + (quartic_solution + rem * CyclicSum(a*b) * multiplier) * CyclicProduct(a)

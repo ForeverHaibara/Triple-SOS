@@ -65,6 +65,27 @@ def structsos_quartic(coeff, real = 1):
     """
     return  _structsos_quartic_uncentered(coeff, real=real)
 
+
+def structsos_quartic_param(coeff: 'Coeff', m, p, n, q, r=None, real=1):
+    """
+    Convenient function to solve
+    ```
+    s(m*a**4 + p*a**3*b + n*a**2*b**2 + q*a*b**3 + r*a**2*b*c) >= 0
+    ```
+    The parameter "coeff" is only used for domain information.
+    """
+    if r is None:
+        r = -(m + p + n + q)
+    new_coeff = coeff.from_dict({
+        (4,0,0): m,
+        (3,1,0): p,
+        (2,2,0): n,
+        (1,3,0): q,
+        (2,1,1): r,
+    })
+    return _structsos_quartic_uncentered(new_coeff, real=real)
+
+
 def _structsos_quartic_core(coeff: 'Coeff'):
     """
     Main theorem: For a nondegenerated cyclic quartic with zero `(1,1,1)`:

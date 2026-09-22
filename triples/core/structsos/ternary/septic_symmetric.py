@@ -5,7 +5,7 @@ from sympy import Add, Poly
 from sympy import oo as Infinity
 
 from .cubic import _structsos_cubic_symmetric
-from .quartic import structsos_quartic
+from .quartic import structsos_quartic_param
 from .sextic_symmetric import _restructure_quartic_polynomial
 from .utils import CommonExpr
 from ..univariate import prove_univariate
@@ -501,11 +501,9 @@ def _structsos_septic_symmetric_hexagon(coeff: 'Coeff'):
     c22 = c331 + 2*c43*t**2 + 2*c52*t**2 - 2*c52
     c211 = c322 - 4*c43*t + 2*c43 - 4*c52*t + 4*c52
 
-    quartic = coeff.from_dict({
-        (4,0,0): c4, (3,1,0): c31, (2,2,0): c22, (3,0,1): c31,
-        (1,3,0): c31, (2,1,1): c211,
-    })
-    quartic_sol = structsos_quartic(quartic, real=False)
+    quartic_sol = structsos_quartic_param(
+        coeff, c4, c31, c22, c31, c211, real=False
+    )
     if quartic_sol is None:
         return None
 

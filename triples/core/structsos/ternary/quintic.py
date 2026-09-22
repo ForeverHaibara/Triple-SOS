@@ -4,7 +4,7 @@ import numpy as np
 from sympy import Add, Expr, Float, Integer, Poly, Rational, Symbol, im, sqrt
 
 from .cubic import structsos_cubic
-from .quartic import structsos_quartic
+from .quartic import structsos_quartic_param
 from .quintic_symmetric import structsos_quintic_symmetric
 from .utils import align_cyclic_group
 from ..univariate import prove_univariate
@@ -403,10 +403,7 @@ def _build_quintic_full_solution(coeff: 'Coeff', mul: Rational, params: List[Rat
     border_proof_split_b = Add(*border_proof_split_b)
     border_proof = CyclicSum(a*b*border_proof_split_a) + CyclicSum(a*b*border_proof_split_b)
 
-    quartic_coeffs = {
-        (4,0,0): m, (3,1,0): p, (2,2,0): n, (1,3,0): q, (2,1,1): -(m+p+n+q)
-    }
-    rest = structsos_quartic(coeff.from_dict(quartic_coeffs))
+    rest = structsos_quartic_param(coeff, m, p, n, q)
     rest += coeff.poly111() * (1 + mul) * CyclicSum(a**2*b*c)
     rest = coeff500 * CyclicProduct(a) * rest
     return (coeff500 * sol_main + coeff500 * border_proof + rest) / multiplier
