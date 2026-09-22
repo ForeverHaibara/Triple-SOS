@@ -7,16 +7,16 @@ from .sextic_symmetric import (
     _structsos_sextic_hexagram_symmetric,
     structsos_sextic_symmetric_ultimate
 )
-from .utils import (
-    CommonExpr,
-    sum_y_exprs, nroots, rationalize_bound, rationalize_func,
-    quadratic_weighting, inverse_substitution, congruence,
-    zip_longest, align_cyclic_group
+from .utils import CommonExpr, inverse_substitution, align_cyclic_group
+from ..utils import (
+    sum_y_exprs, rationalize_func, quadratic_weighting, congruence,
+    zip_longest,
 )
+from ....utils.roots import nroots, rationalize_bound
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .utils import Coeff
+    from ....utils.expressions import Coeff
 
 
 def structsos_sextic(coeff, real = True):

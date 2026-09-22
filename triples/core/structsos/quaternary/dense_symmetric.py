@@ -3,12 +3,13 @@ from typing import Tuple, Optional, TYPE_CHECKING
 from sympy import Poly, Add
 from sympy.combinatorics import PermutationGroup, Permutation
 
-from .utils import CyclicSum, structsos_reorder_symmetry
+from ..utils import structsos_reorder_symmetry
+from ....utils.expressions import CyclicSum
 from ..univariate import prove_univariate
-from ....utils import poly_reduce_by_symmetry, arraylize_sp, invarraylize
+from ....utils.monomials import poly_reduce_by_symmetry, arraylize_sp, invarraylize
 
 if TYPE_CHECKING:
-    from .utils import Coeff
+    from ....utils.expressions import Coeff
     from sympy import Symbol
 
 def _sym_sum_poly(poly: Poly) -> Poly:

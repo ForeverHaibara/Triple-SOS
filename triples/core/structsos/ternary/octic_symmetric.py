@@ -6,13 +6,11 @@ from sympy import MutableDenseMatrix as Matrix
 
 # from .sextic_symmetric import _restructure_quartic_polynomial
 from .quartic import structsos_quartic
-from .utils import (
-    CommonExpr, DomainExpr,
-    quadratic_weighting, sum_y_exprs, rationalize_func, intervals
-)
+from .utils import CommonExpr
+from ..utils import DomainExpr, quadratic_weighting, sum_y_exprs, rationalize_func, intervals
 
 if TYPE_CHECKING:
-    from .utils import Coeff
+    from ....utils.expressions import Coeff
 
 
 def _solve_inverse_quartic(coeff: 'Coeff', m, p, n, r):

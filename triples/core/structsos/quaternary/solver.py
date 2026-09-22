@@ -10,7 +10,8 @@ from .quartic_symmetric import quaternary_quartic_symmetric
 from .quintic import quaternary_quintic_symmetric
 from .dense_symmetric import quaternary_dense_symmetric, quaternary_dense_dihedral
 
-from ..utils import Coeff, PolynomialNonpositiveError, PolynomialUnsolvableError
+from ..utils import PolynomialNonpositiveError, PolynomialUnsolvableError
+from ....utils.expressions import Coeff
 from ..sparse import structsos_common, structsos_degree_specified_solver
 from ...solution import extract_undetermined_exprs
 

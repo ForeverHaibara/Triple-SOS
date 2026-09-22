@@ -3,9 +3,8 @@ from functools import partial
 from sympy import Poly, Add
 from sympy import oo as Infinity
 
-from .utils import (
-    CommonExpr, DomainExpr, quadratic_weighting, rationalize_func
-)
+from .utils import CommonExpr
+from ..utils import DomainExpr, quadratic_weighting, rationalize_func
 from .cubic import _structsos_cubic_symmetric
 from .quartic import structsos_quartic
 from .sextic_symmetric import _restructure_quartic_polynomial
@@ -13,7 +12,7 @@ from ..univariate import prove_univariate
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .utils import Coeff
+    from ....utils.expressions import Coeff
 
 
 def structsos_septic_symmetric(coeff, real=False):

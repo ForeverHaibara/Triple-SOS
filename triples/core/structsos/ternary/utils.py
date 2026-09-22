@@ -5,33 +5,10 @@ import sympy as sp
 from sympy import Poly, Add, Mul, Pow
 from sympy.combinatorics import CyclicGroup
 
-from ..utils import (
-    Coeff, DomainExpr, structsos_reorder_symmetry, intervals,
-    radsimp, sum_y_exprs, rationalize_func, quadratic_weighting, zip_longest,
-    congruence, congruence_solve,
-    StructuralSOSError, PolynomialNonpositiveError, PolynomialUnsolvableError
-)
-
-from ....utils import (
-    nroots, rationalize, rationalize_bound,
-    cancel_denominator,
-    CyclicExpr, CyclicSum, CyclicProduct
-)
+from ....utils.expressions import Coeff, CyclicExpr, CyclicSum, CyclicProduct
 
 if TYPE_CHECKING:
     from sympy import Expr, Symbol
-
-(
-    Coeff, DomainExpr, structsos_reorder_symmetry,
-    radsimp, sum_y_exprs, rationalize_func, quadratic_weighting, zip_longest,
-    congruence, congruence_solve,
-    StructuralSOSError, PolynomialNonpositiveError, PolynomialUnsolvableError
-)
-(
-    nroots, rationalize, rationalize_bound, intervals,
-    cancel_denominator,
-    CyclicExpr, CyclicSum, CyclicProduct
-)
 
 def align_cyclic_group(expr: Optional["Expr"], gens: Tuple["Symbol", ...]) -> "Expr":
     """

@@ -1,12 +1,12 @@
 from sympy import Add
 
-from .utils import rationalize_func
-from ....utils import CyclicSum as _CyclicSum
-from ....utils import CyclicProduct as _CyclicProduct
+from ..utils import rationalize_func
+from ....utils.expressions import CyclicSum as _CyclicSum
+from ....utils.expressions import CyclicProduct as _CyclicProduct
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .utils import Coeff
+    from ....utils.expressions import Coeff
 
 def quaternary_cubic_symmetric(coeff: "Coeff", real = True):
     """

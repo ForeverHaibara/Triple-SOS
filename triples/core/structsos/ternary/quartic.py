@@ -3,20 +3,19 @@ from typing import Tuple, List, TYPE_CHECKING
 from sympy import Poly, Integer, Float, Add, nsimplify, sign as sp_sign
 from sympy import MutableDenseMatrix as Matrix
 
-from .utils import (
-    structsos_reorder_symmetry,
-    congruence, sum_y_exprs, quadratic_weighting,
-    nroots, rationalize_bound, rationalize_func,
+from ..utils import (
+    common_region_of_curves, structsos_reorder_symmetry,
+    congruence, sum_y_exprs, quadratic_weighting, rationalize_func,
     intervals,
 )
-from ..utils import common_region_of_curves
+from ....utils.roots import nroots, rationalize_bound
 from ..univariate import prove_univariate
-from ....utils import pqr_sym
+from ....utils.pqr import pqr_sym
 from ....sdp.arithmetic import rep_matrix_from_list
 
 if TYPE_CHECKING:
     from sympy import Expr
-    from .utils import Coeff
+    from ....utils.expressions import Coeff
 
 
 def composite_coeff(poly: Poly, monom: Tuple[int, ...]):

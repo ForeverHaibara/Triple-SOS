@@ -1,8 +1,8 @@
-from ....utils import CyclicSum
+from ....utils.expressions import CyclicSum
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ....utils import Coeff
+    from ....utils.expressions import Coeff
 
 def structsos_nvars_linear(coeff: "Coeff", **kwargs):
     """

@@ -7,13 +7,12 @@ from .cubic import structsos_cubic
 from .quartic import structsos_quartic
 from .quintic_symmetric import structsos_quintic_symmetric
 from ..univariate import prove_univariate
-from .utils import (
-    sum_y_exprs, nroots, rationalize, rationalize_bound, rationalize_func,
-    zip_longest, quadratic_weighting, align_cyclic_group
-)
+from .utils import align_cyclic_group
+from ..utils import sum_y_exprs, rationalize_func, zip_longest, quadratic_weighting
+from ....utils.roots import nroots, rationalize, rationalize_bound
 
 if TYPE_CHECKING:
-    from .utils import Coeff
+    from ....utils.expressions import Coeff
 
 def _verify_border_nonnegative(border):
     """Verify whether a polynomial >= 0 over R+."""

@@ -8,15 +8,14 @@ from sympy.ntheory import factorint, nextprime, sqrt_mod
 from sympy.external.gmpy import sqrt as isqrt
 from sympy.utilities import subsets
 
-from .utils import (
-    structsos_handle_uncentered, structsos_reorder_symmetry,
-)
+from .utils import structsos_handle_uncentered
+from ..utils import structsos_reorder_symmetry
 from ..univariate import prove_univariate
-from ....utils import verify_symmetry, poly_reduce_by_symmetry
+from ....utils.monomials import verify_symmetry, poly_reduce_by_symmetry
 from ....utils.polytools import dmp_gf_factor, FLINT_VERSION
 
 if TYPE_CHECKING:
-    from .utils import Coeff
+    from ....utils.expressions import Coeff
     from sympy import Expr
 
 

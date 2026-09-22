@@ -8,7 +8,7 @@ from typing import Optional, Callable
 from sympy import Expr, Symbol, Add, Mul, Pow, Integer, Rational, Function
 
 from ..solution import Solution
-from ...utils import CyclicSum, CyclicProduct
+from ...utils.expressions import CyclicSum, CyclicProduct
 
 class _rewriting_exception(Exception): ...
 

@@ -2,8 +2,8 @@ from typing import Callable, Union, Dict
 
 from sympy import Poly, Expr, Integer, Mul
 
-from .utils import Coeff, PolynomialUnsolvableError, PolynomialNonpositiveError
-from ...utils import CyclicProduct
+from .utils import PolynomialUnsolvableError, PolynomialNonpositiveError
+from ...utils.expressions import Coeff, CyclicProduct
 
 def _null_solver(*args, **kwargs):
     return None

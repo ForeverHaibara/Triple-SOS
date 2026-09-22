@@ -1,15 +1,15 @@
 from sympy import Rational, sqrt
 from sympy import oo as Infinity
 
-from .utils import (
-    CommonExpr,
+from .utils import CommonExpr
+from ..utils import (
     sum_y_exprs, rationalize_func, quadratic_weighting,
-    structsos_reorder_symmetry
+    structsos_reorder_symmetry,
 )
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .utils import Coeff
+    from ....utils.expressions import Coeff
 
 def structsos_cubic(coeff, real = True):
     """

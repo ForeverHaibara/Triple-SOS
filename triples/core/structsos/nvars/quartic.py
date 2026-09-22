@@ -1,9 +1,10 @@
 from sympy import Add, factorial
 # from sympy.combinatorics.named_groups import SymmetricGroup
 
-from ..utils import Coeff, rationalize_func
+from ..utils import rationalize_func
 from ....sdp import congruence
-from ....utils import verify_symmetry
+from ....utils.expressions import Coeff
+from ....utils.monomials import verify_symmetry
 
 def structsos_nvars_quartic_symmetric(poly, real=True):
     """

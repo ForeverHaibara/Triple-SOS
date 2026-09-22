@@ -1,19 +1,19 @@
 from sympy import Add
 
-from .utils import quadratic_weighting, intervals
+from ..utils import quadratic_weighting, intervals
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .utils import Coeff
+    from ....utils.expressions import Coeff
 
 
 def quaternary_quartic(coeff, real=True):
     return _quaternary_quartic_real(coeff, real=real)
 
 
-def _quaternary_quartic_fluroite(coeff: "Coeff", real=True):
+def _quaternary_quartic_fluorite(coeff: "Coeff", real=True):
     """
-    This structure gets its name from the mineral fluroite, which is an octahedral crystal.
+    This structure gets its name from the mineral fluorite, which is an octahedral crystal.
     It considers cyclic quartic 4-var polynomials in the form:
 
     `s(?a2b2+?a2bc+?a2bd+?a2c2+?a2cd+?abcd) >= 0`
@@ -65,7 +65,7 @@ def _quaternary_quartic_real(coeff: "Coeff", real=True):
 
     `s(((1-t)(a2-b2)+0(a2-c2)+(1+t)(a2-d2)+x(ab-cd)+y(bc-ad)+z(cd-bc)+w(ac-bd))2)`
 
-    so that the rest falls in the case of fluroite. This is heuristic and may not work for all cases.
+    so that the rest falls in the case of fluorite. This is heuristic and may not work for all cases.
 
     Examples
     --------
@@ -78,7 +78,7 @@ def _quaternary_quartic_real(coeff: "Coeff", real=True):
     => s(((1-2)(a2-b2)+0(a2-c2)+(1+2)(a2-d2)-1(ab-cd)+6(bc-ad)+8(cd-bc)+2(ac-bd))2) # doctest:+SKIP
     """
     if not any(coeff(_) for _ in ((4,0,0,0),(3,1,0,0),(3,0,1,0),(3,0,0,1))):
-        return _quaternary_quartic_fluroite(coeff, real=real)
+        return _quaternary_quartic_fluorite(coeff, real=real)
 
     c4000, poly1111 = coeff((4,0,0,0)), coeff.poly111()
     if c4000 <= 0 or poly1111 < 0:

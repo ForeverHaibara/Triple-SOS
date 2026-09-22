@@ -4,7 +4,7 @@ from .utils import inverse_substitution
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .utils import Coeff
+    from ....utils.expressions import Coeff
 
 
 def structsos_octic(coeff: "Coeff", real = True):

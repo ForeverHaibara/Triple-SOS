@@ -5,7 +5,8 @@ from math import gcd
 from sympy import Poly, Expr, Integer, Add, Mul
 from sympy.combinatorics import CyclicGroup
 
-from .utils import DomainExpr, CyclicSum
+from ..utils import DomainExpr
+from ....utils.expressions import CyclicSum
 from .dense_symmetric import structsos_dense_symmetric
 from .quadratic import structsos_quadratic
 from .cubic import structsos_cubic
@@ -13,7 +14,7 @@ from .quartic import structsos_quartic
 from ..univariate import prove_univariate
 
 if TYPE_CHECKING:
-    from .utils import Coeff
+    from ....utils.expressions import Coeff
     from sympy import Rational
 
 def structsos_sparse(coeff, real=1):
@@ -447,7 +448,7 @@ def _separate_product_wrapper(recursion: Callable, coeff: 'Coeff') -> Callable:
     For instance, if we have CyclicProduct(a) * (CyclicProduct(a)*F(a,b,c) + G(a,b,c)),
     we had better expand it to CyclicProduct(a**2) * F(a,b,c) + CyclicProduct(a) * G(a,b,c).
     """
-    from ....utils import CyclicProduct
+    from ....utils.expressions import CyclicProduct
     a = coeff.gens[0]
     cg = CyclicGroup(len(coeff))
     def _extract_cyclic_prod(x: Expr) -> Tuple[int, Expr]:

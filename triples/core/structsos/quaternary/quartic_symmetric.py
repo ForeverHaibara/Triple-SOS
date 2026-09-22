@@ -1,6 +1,7 @@
 from sympy import Symbol, Dummy, Rational, Add, re
 
-from .utils import Coeff, congruence
+from ..utils import congruence
+from ....utils.expressions import Coeff
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:

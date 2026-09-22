@@ -2,11 +2,10 @@ from sympy import Poly, Rational, Float, Add, sqrt
 
 from .quartic import structsos_quartic
 from .septic_symmetric import structsos_septic_symmetric
-from .utils import (
-    Coeff, nroots, rationalize_bound,
-    zip_longest, align_cyclic_group, congruence_solve,
-    structsos_handle_uncentered
-)
+from .utils import align_cyclic_group, structsos_handle_uncentered
+from ..utils import zip_longest, congruence_solve
+from ....utils.expressions import Coeff
+from ....utils.roots import nroots, rationalize_bound
 
 def repeated_div(p: Poly, q: Poly):
     """Compute `p = q**k*r` so that q does not divide r. Return r."""

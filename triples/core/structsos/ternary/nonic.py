@@ -2,14 +2,12 @@ import sympy as sp
 from sympy import Poly, Symbol, Rational, Add
 
 from .sextic_symmetric import _structsos_sextic_hexagram_symmetric, _structsos_sextic_tree
-from .utils import (
-    CommonExpr,
-    sum_y_exprs, rationalize_func, inverse_substitution, align_cyclic_group
-)
+from .utils import CommonExpr, inverse_substitution, align_cyclic_group
+from ..utils import sum_y_exprs, rationalize_func
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .utils import Coeff
+    from ....utils.expressions import Coeff
 
 def structsos_nonic(coeff, real = True):
     """

@@ -7,9 +7,9 @@ from ..ternary import (
     structsos_cubic, structsos_sextic
 )
 from ..ternary.dense_symmetric import sym_axis, _homogenize_sym_proof
-from ..utils import (
-    Coeff, uniquely_named_symbol, rationalize_func
-)
+from ..utils import rationalize_func
+from ....utils.expressions import Coeff
+from sympy.core.symbol import uniquely_named_symbol
 from ..univariate import prove_univariate
 from ...solution import extract_undetermined_exprs
 

@@ -1,11 +1,11 @@
 
 from sympy import Add
 
-from .utils import congruence, sum_y_exprs
+from ..utils import congruence, sum_y_exprs
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .utils import Coeff
+    from ....utils.expressions import Coeff
 
 def quaternary_quintic_symmetric(coeff, real=True):
     """

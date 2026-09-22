@@ -1,14 +1,13 @@
 from sympy import Integer, Rational, Float, Add
 
 from .quartic import structsos_quartic
-from .utils import (
-    CommonExpr, intervals,
-    sum_y_exprs, nroots, rationalize, rationalize_bound
-)
+from .utils import CommonExpr
+from ..utils import intervals, sum_y_exprs, rationalize_bound
+from ....utils.roots import nroots, rationalize
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .utils import Coeff
+    from ....utils.expressions import Coeff
 
 
 def structsos_quintic_symmetric(coeff: 'Coeff', real = True):

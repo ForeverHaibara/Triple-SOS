@@ -6,15 +6,14 @@ from sympy import oo as Infinity
 from sympy.polys.polyerrors import CoercionFailed
 
 from .quartic import structsos_quartic
-from .utils import (
-    DomainExpr, CommonExpr, structsos_handle_uncentered, intervals,
-    sum_y_exprs, nroots, rationalize_func, quadratic_weighting
-)
+from .utils import CommonExpr, structsos_handle_uncentered
+from ..utils import DomainExpr, intervals, sum_y_exprs, rationalize_func, quadratic_weighting
+from ....utils.roots import nroots
 from ..univariate import prove_univariate
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .utils import Coeff
+    from ....utils.expressions import Coeff
 
 #####################################################################
 #
