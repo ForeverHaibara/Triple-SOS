@@ -844,32 +844,10 @@ def _structsos_octic_symmetric_sqr_axis(coeff: 'Coeff'):
 
     CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
 
-    def _get_solution_parabola(y):
-        if u - w - 2 == 0:
-            # u = w + 2, but x == x_para_l
-            assert y == (u - 4)**2/12
-            return CyclicSum((a-b)**2)*CyclicSum(
-                (2*a**3-u*a**2*b-u*a**2*c+2*(u+v)/3*a*b*c).together())**2/2
-
-        dt = {
-            (0, 0, 3): -4*u*w - 4*u + 2*w**2 + 20*w + 24*y,
-            (0, 1, 2): 6*u**2 - 12*u*w - 12*u + 9*w**2 - 36*y + 12,
-            (0, 2, 1): -6*u**2 + 4*u*w + 4*u + w**2 + 16*w + 12*y + 12,
-            (0, 3, 0): 12*u - 12*w - 24,
-            (1, 1, 1): 12*u*v + 4*u*w - 8*u - 12*v*w - 24*v - 8*w**2 + 16*w + 48*y,
-            (1, 2, 0): -6*u**2 + 8*u*w + 20*u - w**2 - 16*w - 12*y - 12,
-            (2, 0, 1): -6*u**2 + 4*u*w + 4*u + w**2 + 16*w + 12*y + 12,
-            (3, 0, 0): 12*u - 12*w - 24
-        }
-        for m, k in dt.copy().items():
-            dt[(m[1], m[0], m[2])] = k
-        p1 = coeff.from_dict(dt)
-        return CyclicSum(p1.as_poly().expr.together()**2*(a-b)**2) / (288*(u - w - 2)**2)
-
     if y >= y_para_l:
         x2 = lc/2 * (x - x_para_l)
         y2 = lc *(y - y_para_l)
-        return lc * _get_solution_parabola(y_para_l) \
+        return lc * _solve_octic_symmetric_sqr_axis_parabola(coeff, u, v, w, y_para_l) \
             + x2 * CyclicProduct((a-b)**2)*CyclicSum((a-b)**2)\
             + y2 * CyclicProduct((a-b)**2)*CyclicSum(a)**2
 
@@ -877,13 +855,8 @@ def _structsos_octic_symmetric_sqr_axis(coeff: 'Coeff'):
         x_para = (-w**2 + 4*w + 12*y - 4)*(-4*u**2 + 4*u*w - w**2 + 12*w + 12*y + 12)/(48*(u - w - 2)**2)
         if x >= x_para:
             x2 = lc/2 * (x - x_para)
-            return lc * _get_solution_parabola(y) \
+            return lc * _solve_octic_symmetric_sqr_axis_parabola(coeff, u, v, w, y) \
                 + x2 * CyclicProduct((a-b)**2)*CyclicSum((a-b)**2)
-
-
-    def _get_solution_cubic(z):
-        return _solve_octic_symmetric_sqr_axis_cubic(coeff, u, v, w, z)
-
 
     eq0 = coeff.from_list([2, v + w - 4], (a,)).as_poly()
     x_cubic = eq0 * coeff.from_list([1, 4 - v - w], (a,)).as_poly()**2
@@ -898,7 +871,7 @@ def _structsos_octic_symmetric_sqr_axis(coeff: 'Coeff'):
         x1 = coeff.wrap(x_cubic.rep.eval(z))
         y1 = coeff.wrap(y_cubic.rep.eval(z))
         if x >= x1 and y >= y1:
-            cb = _get_solution_cubic(z)
+            cb = _solve_octic_symmetric_sqr_axis_cubic(coeff, u, v, w, z)
             if cb is not None:
                 return lc * cb\
                 + (lc * (x - x1))/2 * CyclicProduct((a-b)**2)*CyclicSum((a-b)**2)\
@@ -928,13 +901,54 @@ def _structsos_octic_symmetric_sqr_axis(coeff: 'Coeff'):
                 y_comb = weight*ya + (1 - weight)*yb
 
                 if y >= y_comb:
-                    cb = _get_solution_cubic(z)
+                    cb = _solve_octic_symmetric_sqr_axis_cubic(coeff, u, v, w, z)
 
                     if cb is not None:
-                        return (lc * weight) * _get_solution_parabola(ya)\
+                        return (lc * weight) * _solve_octic_symmetric_sqr_axis_parabola(
+                            coeff, u, v, w, ya
+                        )\
                             + (lc * (1 - weight)) * cb\
                             + (lc * (y - y_comb)) * CyclicProduct((a-b)**2)*CyclicSum(a)**2
     return
+
+
+
+def _solve_octic_symmetric_sqr_axis_parabola(coeff: 'Coeff', u, v, w, y):
+
+    """
+    Solve the symmetric octic inequality
+    ```
+    F(a,b,c) = s((a**3-u/2*a**2*(b+c)+v*a*b*c-w/2*b*c*(b+c))**2*(a-b)*(a-c)) + p(a-b)**2*(x*s(a**2-a*b)+y*s(a)**2)
+    ```
+    where `(x, y)` lies on the parabola
+    ```
+    x = (-w**2 + 4*w + 12*y - 4)*(-4*u**2 + 4*u*w - w**2 + 12*w + 12*y + 12)/(48*(u - w - 2)**2)
+    ```
+    """
+    a, b, c = coeff.gens
+    CyclicSum = coeff.cyclic_sum
+    if u - w - 2 == 0:
+        # u = w + 2, but x == x_para_l
+        assert y == (u - 4)**2/12
+        return CyclicSum((a - b)**2) * CyclicSum(
+            (2*a**3 - u*a**2*b - u*a**2*c + 2*(u + v)/3*a*b*c).together()
+        )**2/2
+
+    dt = {
+        (0, 0, 3): -4*u*w - 4*u + 2*w**2 + 20*w + 24*y,
+        (0, 1, 2): 6*u**2 - 12*u*w - 12*u + 9*w**2 - 36*y + 12,
+        (0, 2, 1): -6*u**2 + 4*u*w + 4*u + w**2 + 16*w + 12*y + 12,
+        (0, 3, 0): 12*u - 12*w - 24,
+        (1, 1, 1): 12*u*v + 4*u*w - 8*u - 12*v*w - 24*v - 8*w**2 + 16*w + 48*y,
+        (1, 2, 0): -6*u**2 + 8*u*w + 20*u - w**2 - 16*w - 12*y - 12,
+        (2, 0, 1): -6*u**2 + 4*u*w + 4*u + w**2 + 16*w + 12*y + 12,
+        (3, 0, 0): 12*u - 12*w - 24,
+    }
+    for monom, value in dt.copy().items():
+        dt[(monom[1], monom[0], monom[2])] = value
+    poly = coeff.from_dict(dt)
+    return CyclicSum(poly.as_poly().expr.together()**2*(a - b)**2) \
+        / (288*(u - w - 2)**2)
 
 
 def _solve_octic_symmetric_sqr_axis_cubic(coeff: 'Coeff', u, v, w, z):

@@ -90,6 +90,12 @@ def _structsos_cubic_degenerate(coeff: "Coeff"):
              + rem * CyclicProduct(a)
 
 
+def _solve_cubic_parabola_point(coeff: "Coeff", t):
+    """Return the parabola formula at parameter ``t``."""
+    a, b, c = coeff.gens
+    return coeff.cyclic_sum(a * (a + t*b - (t + 1)*c)**2)
+
+
 def _structsos_cubic_parabola(coeff: "Coeff"):
     """
     Although we can always multiply s(a) to convert the problem to a quartic one,
@@ -123,7 +129,9 @@ def _structsos_cubic_parabola(coeff: "Coeff"):
         if -2 <= q <= 22:
             w1 = (q - 22) / (-24) * m
             w2 = m - w1
-            return w1 * CyclicSum(a*(a - c)**2) + w2 * CyclicSum(a*(a - 4*b + 3*c)**2) + rem * CyclicProduct(a)
+            return w1 * _solve_cubic_parabola_point(coeff, 0) \
+                + w2 * _solve_cubic_parabola_point(coeff, 3) \
+                + rem * CyclicProduct(a)
 
     else:
         x2 = (13*p**2 + 22*p*q + 18*p + q**2 - 18*q - 27)/(p - q - 3)**2
@@ -136,7 +144,9 @@ def _structsos_cubic_parabola(coeff: "Coeff"):
             return None
 
         t = 2*(p + 2*q + 3)/(p - q - 3)
-        return w1 * CyclicSum(a*(a - c)**2) + w2 * CyclicSum(a*(a + t*b - (t+1)*c)**2) + rem * CyclicProduct(a)
+        return w1 * _solve_cubic_parabola_point(coeff, 0) \
+            + w2 * _solve_cubic_parabola_point(coeff, t) \
+            + rem * CyclicProduct(a)
 
     return None
 
@@ -362,6 +372,23 @@ def _structsos_acyclic_cubic_hexagon(coeff: "Coeff"):
         return sum(exprs) + (center - sum(zs))*(a*b*c)
 
 
+def _solve_acyclic_cubic_symmetric_point(coeff: "Coeff", t, z, w):
+    """Return the acyclic cubic point formula for ``(t, z, w)``."""
+    a, b, c = coeff.gens
+    if w is Infinity:
+        sym_c = (z - 2*t) / 3
+        p1 = z*(t*a + t*b - c)**2*(a - b)**2 \
+            + ((16*z - 32*t)/3) * a*b * (sym_c/2*(a + b) - c)**2
+    else:
+        sym_c = (-2*t*w + w*z - 9)/(3*w)
+        p1 = z*(t*a + t*b - c)**2*(a - b)**2 \
+            + ((-8*t*w + 4*w*z - 9)*4/(3*w)) \
+            * a*b * (sym_c/2*(a + b) - c)**2
+    p2 = c * (a*(t*a + (sym_c - t)*b - c)**2 \
+              + b*(t*b + (sym_c - t)*a - c)**2)
+    return (p1 + p2)/(a + b)
+
+
 @structsos_reorder_symmetry(groups=(2, 1))
 def _structsos_acyclic_cubic_symmetric(coeff: "Coeff"):
     """
@@ -528,16 +555,6 @@ def _structsos_acyclic_cubic_symmetric(coeff: "Coeff"):
 
         return rationalize_func(eqw1, _check_valid, direction = 1)
 
-    def _solve_tzw(t, z, w):
-        if w is Infinity:
-            sym_c = (z - 2*t)/3
-            p1 = z*(t*a+t*b-c)**2*(a-b)**2 + ((16*z-32*t)/3)*a*b*(sym_c/2 *(a+b) - c)**2
-        else:
-            sym_c = (-2*t*w + w*z - 9)/(3*w)
-            p1 = z*(t*a+t*b-c)**2*(a-b)**2 + ((-8*t*w+4*w*z-9)*4/(3*w))*a*b*(sym_c/2 *(a+b) - c)**2
-        p2 = c*(a*(t*a+(sym_c-t)*b-c)**2 + b*(t*b+(sym_c-t)*a-c)**2)
-        return (p1 + p2)/(a + b)
-
     tz = _determine_tz(x0, x1, x2, x3)
     # print('tz =' , tz)
     if tz is None:
@@ -573,7 +590,7 @@ def _structsos_acyclic_cubic_symmetric(coeff: "Coeff"):
     if all(_ >= 0 for _ in y):
         p1 = (y[0]*(a+b) + y[1]*c).together() * (a-b)**2
         p2 = (y[2]*(a+b) + y[3]*c).together() * a*b
-        p3 = x0 * _solve_tzw(t, z, w)
+        p3 = x0 * _solve_acyclic_cubic_symmetric_point(coeff, t, z, w)
         return p1 + p2 + p3
 
     return None

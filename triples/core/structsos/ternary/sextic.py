@@ -483,7 +483,7 @@ def _structsos_sextic_rotated_tree(coeff: 'Coeff'):
         return align_cyclic_group(sol, coeff.gens)
 
     a, b, c = coeff.gens
-    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+    CyclicProduct = coeff.cyclic_product
 
     coeff6 = coeff((2,4,0))
     rem = (coeff6 + coeff((3,1,2)) + coeff((3,2,1))) * 3 + coeff((2,2,2))
@@ -494,31 +494,13 @@ def _structsos_sextic_rotated_tree(coeff: 'Coeff'):
     if u < -2:
         return None
 
-    def _solve_point(t):
-        # t >= -1
-        if t == 2 or t == -1:
-            return CyclicSum(a**2*c - a*b*c)**2
-        if t == 1:
-            return CyclicSum(a**2*(a**2 + 2*a*b)*(b**2 - a*c)**2) / CyclicSum(a)**2
-        exprs = [
-            CyclicSum(a) * CyclicSum(a**2*c*(a**2*c-t*a*b**2-t*b*c**2+(t*t-1)*b**2*c-t*(t-2)*a*b*c)**2),
-            CyclicProduct(a**2) * CyclicSum(((t-1)*a-b)**2*(a+(t-1)*b-t*c)**2),
-            CyclicProduct(a) * CyclicSum(c*((t-1)*a-b)**2*(t*a*b-a*c-(t-1)*b*c)**2)
-        ]
-        expr = exprs[0] + (t+1)/2*exprs[1] + (t+1)*exprs[2]
-        if t >= 0:
-            multiplier = CyclicSum(a) * CyclicSum(a*b*(b + t*(t+1)/3*c).together())
-        else:
-            multiplier = CyclicSum(a**2*(a*c + (t**2+t+2)*b*c + (b-c)**2/2).together())
-        return expr / multiplier
-
     def _solve_regular(t):
         # Proof given by the theorem.
         s1, s2 = (u - (t**3 - 3*t)), (v + 3*t*(t - 1))
         if t >= -1 and s1 >= 0 and s2 >= 0:
             y = [coeff6, coeff6*s1, coeff6*s2, rem]
             exprs = [
-                _solve_point(t),
+                _solve_sextic_rotated_tree_point(coeff, t),
                 CyclicProduct(a) * CommonExpr.amgm((2,1,0),(1,1,1), (a,b,c)),
                 CyclicProduct(a) * CommonExpr.amgm((2,0,1),(1,1,1), (a,b,c)),
                 CyclicProduct(a**2)
@@ -556,8 +538,8 @@ def _structsos_sextic_rotated_tree(coeff: 'Coeff'):
             # w2 = -(v + 6)**3/(27*(u - 2)*(u + v + 4))
             if 0 <= w1 <= 1:
                 return Add(
-                    (coeff6 * w1) * _solve_point(2),
-                    (coeff6 * w2) * _solve_point(t),
+                    (coeff6 * w1) * _solve_sextic_rotated_tree_point(coeff, 2),
+                    (coeff6 * w2) * _solve_sextic_rotated_tree_point(coeff, t),
                     rem * CyclicProduct(a**2)
                 )
 
@@ -569,6 +551,53 @@ def _structsos_sextic_rotated_tree(coeff: 'Coeff'):
                 return solution
 
     return None
+
+
+def _solve_sextic_rotated_tree_point(coeff: 'Coeff', t):
+    """
+    Solve
+    ```
+    s(a**4*c**2+(t**3-3*t)*a**3*b**2*c+(-3*t**2+3*t)*a**3*b*c**2+(-t**3+3*t**2-1)*a**2*b**2*c**2)
+    ```
+    when `t >= -1`.
+
+    Its cubic discriminant with respect to `t` is
+    ```
+    -27*p(a)**2*p(a**2 - b*c)**2*s(a**2*c - a*b*c)**2
+    ```
+    """
+    a, b, c = coeff.gens
+    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+
+    if t == 2 or t == -1:
+        return CyclicSum(a**2*c - a*b*c)**2
+    if t == 1:
+        return CyclicSum(a**2*(a**2 + 2*a*b)*(b**2 - a*c)**2) / CyclicSum(a)**2
+    if t < -1:
+        return None
+
+    squares = [
+        CyclicSum(a) * CyclicSum(
+            a**2*c*(a**2*c - t*a*b**2 - t*b*c**2
+                    + (t*t - 1)*b**2*c - t*(t - 2)*a*b*c)**2
+        ),
+        CyclicProduct(a**2) * CyclicSum(
+            ((t - 1)*a - b)**2 * (a + (t - 1)*b - t*c)**2
+        ),
+        CyclicProduct(a) * CyclicSum(
+            c*((t - 1)*a - b)**2 * (t*a*b - a*c - (t - 1)*b*c)**2
+        ),
+    ]
+    solution = squares[0] + (t + 1)/2*squares[1] + (t + 1)*squares[2]
+    if t >= 0:
+        multiplier = CyclicSum(a) * CyclicSum(
+            a*b*(b + t*(t + 1)/3*c).together()
+        )
+    else:
+        multiplier = CyclicSum(
+            a**2*(a*c + (t*t + t + 2)*b*c + (b - c)**2/2).together()
+        )
+    return solution / multiplier
 
 
 def _structsos_sextic_hexagon_full(coeff):

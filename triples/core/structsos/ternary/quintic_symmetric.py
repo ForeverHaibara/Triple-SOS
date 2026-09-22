@@ -109,25 +109,6 @@ def structsos_quintic_symmetric(coeff: 'Coeff', real = True):
     CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
 
 
-    def _get_solution_t(t):
-        """Solve `1/2*s((a+b-c)(a-b)2(a+b-tc)2)s(a2-ab)`"""
-        if not (t >= -1 and t <= 3):
-            return None
-        return CyclicSum(a*(a+(1-t)/2*(b+c))**2*(a-b)**2*(a-c)**2)\
-            + (3-t)*(t+1)/4 * CyclicSum(a) * CyclicProduct((a-b)**2)
-
-    def _get_solution_tz(t, z):
-        """Solve `1/2*s((a+b+(2z-1+2t)c)(a-b)2(a+b-tc)2)s(a2-ab)`"""
-        w = 2*z - 1 + 2*t
-        if w >= 0:
-            return CyclicSum((a-b)**2) * CyclicSum((a+b+w*c)*(a-b)**2*(a+b-t*c)**2)/4
-        if w >= -1:
-            if not (t >= -1 and t <= 3):
-                return None
-            return _get_solution_t(t) \
-                + (w + 1)/4 * CyclicSum((a-b)**2) * CyclicSum(c*(a-b)**2*(a+b-t*c)**2)
-        return None
-
     # real start below
     if z >= -1:
         # Assume s((a+b+(2z-1+2t)c)(a-b)2(a+b-tc)2)/2 <= poly / coeff((5,0,0))
@@ -192,8 +173,8 @@ def structsos_quintic_symmetric(coeff: 'Coeff', real = True):
             # lift the degree
             # we must have t1 = (1 - 2z) / 3 <= 1
 
-            sol1 = _get_solution_tz(t1, z)
-            sol2 = _get_solution_tz(t2, z)
+            sol1 = _solve_quintic_symmetric_lifted_tz(coeff, t1, z)
+            sol2 = _solve_quintic_symmetric_lifted_tz(coeff, t2, z)
 
             if sol1 is None or sol2 is None:
                 return None
@@ -218,7 +199,7 @@ def structsos_quintic_symmetric(coeff: 'Coeff', real = True):
         if True:
             # trivial case, where (u,v) is over the asymptotic line from (-1-z, z^2)
             # which is a linear combination of s((a+b-c)(a-b)2(a+b+zc)2), s(a3(b-c)2) and abcs(a2-ab)
-            sol1 = _get_solution_t(-z)
+            sol1 = _solve_quintic_symmetric_lifted(coeff, -z)
             y = [
                 (u + z + 1) * m / 2,
                 (v - z**2 + 2*(u + z + 1)) * m / 4,
@@ -255,8 +236,8 @@ def structsos_quintic_symmetric(coeff: 'Coeff', real = True):
             return None
 
         multiplier = CyclicSum((a - b)**2)/2
-        sol1 = _get_solution_tz(t1, z)
-        sol2 = _get_solution_tz(t2, z)
+        sol1 = _solve_quintic_symmetric_lifted_tz(coeff, t1, z)
+        sol2 = _solve_quintic_symmetric_lifted_tz(coeff, t2, z)
         sol3 = multiplier * CyclicSum(a**3*(b-c)**2)
         if sol1 is None or sol2 is None:
             return None
@@ -295,6 +276,36 @@ def structsos_quintic_symmetric(coeff: 'Coeff', real = True):
         return _structsos_quintic_symmetric_final(coeff)
 
 
+    return None
+
+
+def _solve_quintic_symmetric_lifted(coeff: 'Coeff', t):
+    """Return the singular-cubic point formula at parameter ``t``."""
+    if not -1 <= t <= 3:
+        return None
+
+    a, b, c = coeff.gens
+    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+    return CyclicSum(a*(a + (1 - t)/2*(b + c))**2*(a - b)**2*(a - c)**2) \
+        + (3 - t)*(t + 1)/4 * CyclicSum(a) * CyclicProduct((a - b)**2)
+
+
+def _solve_quintic_symmetric_lifted_tz(coeff: 'Coeff', t, z):
+    """Return the singular-cubic point formula at parameters ``(t, z)``."""
+    a, b, c = coeff.gens
+    CyclicSum = coeff.cyclic_sum
+    w = 2*z - 1 + 2*t
+    if w >= 0:
+        return CyclicSum((a - b)**2) * CyclicSum(
+            (a + b + w*c)*(a - b)**2*(a + b - t*c)**2
+        ) / 4
+    if w >= -1:
+        solution = _solve_quintic_symmetric_lifted(coeff, t)
+        if solution is None:
+            return None
+        return solution + (w + 1)/4 * CyclicSum((a - b)**2) * CyclicSum(
+            c*(a - b)**2*(a + b - t*c)**2
+        )
     return None
 
 
@@ -638,6 +649,12 @@ def _structsos_quintic_symmetric_border(coeff: 'Coeff'):
     return solution / multiplier
 
 
+def _solve_quintic_symmetric_hexagon_point(coeff: 'Coeff', t):
+    """Return the first hexagon parabola formula at parameter ``t``."""
+    a, b, c = coeff.gens
+    return coeff.cyclic_sum(a*(b - c)**2*(b + c - t*a)**2)
+
+
 def _structsos_quintic_symmetric_hexagon(coeff: 'Coeff'):
     """
     Prove symmetric quintic without s(a5).
@@ -731,7 +748,7 @@ def _structsos_quintic_symmetric_hexagon(coeff: 'Coeff'):
             ]
             exprs = [
                 CyclicSum(a*(b-c)**4), # s(a(b-c)2(b+c-2a)2) == s(a(b-c)4)
-                CyclicSum(a*(b-c)**2*(b+c-t2*a)**2),
+                _solve_quintic_symmetric_hexagon_point(coeff, t2),
                 CyclicProduct(a) * CyclicSum(a*b)
             ]
             return sum_y_exprs(y, exprs)

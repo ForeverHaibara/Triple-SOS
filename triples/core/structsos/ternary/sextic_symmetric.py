@@ -454,6 +454,42 @@ def _structsos_sextic_hexagon_symmetric(coeff: 'Coeff', real = False):
     return None
 
 
+def _solve_sextic_hexagram_symmetric_point(coeff: 'Coeff', x, y):
+    """Return the two low-rank hexagram square forms at ``(x, y)``."""
+    a, b, c = coeff.gens
+    CyclicSum = coeff.cyclic_sum
+
+    phi2 = 36*x**2 + 15*x*y - 117*x + y**2 + 6*y + 9
+    phi1 = 9*x**2 + 6*x*y - 117*x + y**2 + 15*y + 36
+    c11, c12, c13, c14, c15, c16, c17, c18 = [
+        -9*x**2 - 3*x*y + 18*x,
+        -9*x**2 + 9*x + y**2 - 9,
+        9*x**2 + 3*x*y - 3*y - 9,
+        -18*x + 3*y + 9,
+        -9*x**2 - 3*x*y + 18*x,
+        9*x**2 + 3*x*y - 3*y - 9,
+        9*x**2 - 9*x - y**2 + 9,
+        -18*x + 3*y + 9,
+    ]
+    c21, c22, c23, c24, c25, c26, c27, c28 = [
+        -3*phi1*x,
+        -3*phi1*x + phi1*y + 3*phi1 - 3*phi2,
+        -3*phi1*x + phi1*y + 3*phi1
+            + 3*phi2*x + phi2*y - 3*phi2,
+        -3*phi2,
+        -3*phi1*x,
+        -3*phi1*x + phi1*y + 3*phi1
+            + 3*phi2*x + phi2*y - 3*phi2,
+        -3*phi1*x + 3*phi2*x + phi2*y - 3*phi2,
+        -3*phi2,
+    ]
+    form1 = c11*a**3*b + c12*a**2*b**2 + c13*a**2*b*c + c14*a**2*c**2 \
+        + c15*a*b**3 + c16*a*b**2*c + c17*a*b*c**2 + c18*b**2*c**2
+    form2 = c21*a**3*b + c22*a**2*b**2 + c23*a**2*b*c + c24*a**2*c**2 \
+        + c25*a*b**3 + c26*a*b**2*c + c27*a*b*c**2 + c28*b**2*c**2
+    return CyclicSum(c*form1**2), CyclicSum(c*form2**2)
+
+
 def _structsos_sextic_hexagram_symmetric(coeff: 'Coeff'):
     """
     Solve s(a3b3+xa4bc+ya3b2c+ya2b3c+wa2b2c2) >= 0
@@ -570,34 +606,33 @@ def _structsos_sextic_hexagram_symmetric(coeff: 'Coeff'):
                 w1 = (-(9*x_**2 + 6*x_*y_ - 306*x_ + y_**2 + 6*y_ + 9) / ker)
                 if w1 > 0:
                     w2 = 1 / ker
-                    phi2 = 36*x_**2 + 15*x_*y_ - 117*x_ + y_**2 + 6*y_ + 9
-                    phi1 = 9*x_**2 + 6*x_*y_ - 117*x_ + y_**2 + 15*y_ + 36
-
                     multiplier = CyclicSum(a) * CyclicSum(a*b)
                     y = [w1, w2, z_ - z0]
                     y = [(_ * coeff((3,3,0))) for _ in y]
 
-                    c11, c12, c13, c14, c15, c16, c17, c18 = [
-                        -9*x_**2-3*x_*y_+18*x_, -9*x_**2+9*x_+y_**2-9, 9*x_**2+3*x_*y_-3*y_-9, -18*x_+3*y_+9,
-                        -9*x_**2-3*x_*y_+18*x_, 9*x_**2+3*x_*y_-3*y_-9, 9*x_**2-9*x_-y_**2+9, -18*x_+3*y_+9
-                    ]
-                    c21, c22, c23, c24, c25, c26, c27, c28 = [
-                        -3*phi1*x_, -3*phi1*x_+phi1*y_+3*phi1-3*phi2,
-                        -3*phi1*x_+phi1*y_+3*phi1+3*phi2*x_+phi2*y_-3*phi2,
-                        -3*phi2, -3*phi1*x_,
-                        -3*phi1*x_+phi1*y_+3*phi1+3*phi2*x_+phi2*y_-3*phi2,
-                        -3*phi1*x_+3*phi2*x_+phi2*y_-3*phi2, -3*phi2
-                    ]
                     exprs = [
-                        CyclicSum(c*(c11*a**3*b + c12*a**2*b**2 + c13*a**2*b*c + c14*a**2*c**2 \
-                                     + c15*a*b**3 + c16*a*b**2*c + c17*a*b*c**2 + c18*b**2*c**2)**2),
-                        CyclicSum(c*(c21*a**3*b + c22*a**2*b**2 + c23*a**2*b*c + c24*a**2*c**2 \
-                                     + c25*a*b**3 + c26*a*b**2*c + c27*a*b*c**2 + c28*b**2*c**2)**2),
+                        *_solve_sextic_hexagram_symmetric_point(coeff, x_, y_),
                         multiplier * CyclicProduct(a**2)
                     ]
 
                     return sum_y_exprs(y, exprs) / multiplier
     return None
+
+
+def _solve_sextic_tree_point(coeff: 'Coeff', t):
+    """Return the symmetric-tree point formula at parameter ``t``."""
+    a, b, c = coeff.gens
+    CyclicSum = coeff.cyclic_sum
+    if t == 2 or t == -1:
+        return Rational(1, 2) * CyclicSum(a)**2 * CyclicSum((b - c)**4)
+
+    if isinstance(t, int):
+        num, den = t, 1
+    else:
+        num, den = coeff.to_sympy(t).as_numer_denom()
+    return (1/(2*den**3)) * CommonExpr.quadratic(
+        den, num, (a, b, c)
+    ) * coeff.cyclic_sum((a - b)**2*(den*a + den*b - num*c)**2)
 
 
 def _structsos_sextic_tree(coeff: 'Coeff'):
@@ -646,23 +681,13 @@ def _structsos_sextic_tree(coeff: 'Coeff'):
     if u < -2:
         return None
 
-    def _solve_point(t):
-        # t >= -1
-        if t == 2 or t == -1:
-            return Rational(1,2) * CyclicSum(a)**2 * CyclicSum((b-c)**4)
-        if isinstance(t, int):
-            q, p = t, 1
-        else:
-            q, p = coeff.to_sympy(t).as_numer_denom()
-        return (1/(2*p**3)) * CommonExpr.quadratic(p, q, (a,b,c)) * CyclicSum((a-b)**2*(p*a+p*b-q*c)**2)
-
     def _solve_regular(t):
         # Proof given by the theorem.
         s1, s2 = (u - (t**3 - 3*t)), (v + 3*t*(t - 1))
         if t >= -1 and s1 >= 0 and s2 >= 0:
             y = [coeff6, coeff6*s1/2, coeff6*s2/2, rem]
             exprs = [
-                _solve_point(t),
+                _solve_sextic_tree_point(coeff, t),
                 CyclicSum(a*b) * CyclicSum(a**2*(b-c)**2),
                 CyclicSum(a) * CyclicSum((a-b)**2) * CyclicProduct(a),
                 CyclicProduct(a**2)
@@ -685,8 +710,8 @@ def _structsos_sextic_tree(coeff: 'Coeff'):
             # w2 = -(v + 6)**3/(27*(u - 2)*(u + v + 4))
             if 0 <= w1 <= 1:
                 return Add(
-                    (coeff6 * w1) * _solve_point(2),
-                    (coeff6 * w2) * _solve_point(t),
+                    (coeff6 * w1) * _solve_sextic_tree_point(coeff, 2),
+                    (coeff6 * w2) * _solve_sextic_tree_point(coeff, t),
                     rem * CyclicProduct(a**2)
                 )
 
