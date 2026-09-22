@@ -454,52 +454,16 @@ def _structsos_sextic_hexagon_symmetric(coeff: 'Coeff', real = False):
     return None
 
 
-def _solve_sextic_hexagram_symmetric_point(coeff: 'Coeff', x, y):
-    """Return the two low-rank hexagram square forms at ``(x, y)``."""
-    a, b, c = coeff.gens
-    CyclicSum = coeff.cyclic_sum
-
-    phi2 = 36*x**2 + 15*x*y - 117*x + y**2 + 6*y + 9
-    phi1 = 9*x**2 + 6*x*y - 117*x + y**2 + 15*y + 36
-    c11, c12, c13, c14, c15, c16, c17, c18 = [
-        -9*x**2 - 3*x*y + 18*x,
-        -9*x**2 + 9*x + y**2 - 9,
-        9*x**2 + 3*x*y - 3*y - 9,
-        -18*x + 3*y + 9,
-        -9*x**2 - 3*x*y + 18*x,
-        9*x**2 + 3*x*y - 3*y - 9,
-        9*x**2 - 9*x - y**2 + 9,
-        -18*x + 3*y + 9,
-    ]
-    c21, c22, c23, c24, c25, c26, c27, c28 = [
-        -3*phi1*x,
-        -3*phi1*x + phi1*y + 3*phi1 - 3*phi2,
-        -3*phi1*x + phi1*y + 3*phi1
-            + 3*phi2*x + phi2*y - 3*phi2,
-        -3*phi2,
-        -3*phi1*x,
-        -3*phi1*x + phi1*y + 3*phi1
-            + 3*phi2*x + phi2*y - 3*phi2,
-        -3*phi1*x + 3*phi2*x + phi2*y - 3*phi2,
-        -3*phi2,
-    ]
-    form1 = c11*a**3*b + c12*a**2*b**2 + c13*a**2*b*c + c14*a**2*c**2 \
-        + c15*a*b**3 + c16*a*b**2*c + c17*a*b*c**2 + c18*b**2*c**2
-    form2 = c21*a**3*b + c22*a**2*b**2 + c23*a**2*b*c + c24*a**2*c**2 \
-        + c25*a*b**3 + c26*a*b**2*c + c27*a*b*c**2 + c28*b**2*c**2
-    return CyclicSum(c*form1**2), CyclicSum(c*form2**2)
-
-
 def _structsos_sextic_hexagram_symmetric(coeff: 'Coeff'):
     """
-    Solve s(a3b3+xa4bc+ya3b2c+ya2b3c+wa2b2c2) >= 0
+    Solve `s(a3b3+xa4bc+ya3b2c+ya2b3c+wa2b2c2) >= 0`
 
     Theorem 1: For real number u,
-        f(a,b,c) = s(a4bc+(u-1)^2*a3b3-(u^2-u+1)*a2b2c(a+b)+u^2*a2b2c2) >= 0
+        `f(a,b,c) = s(a4bc+(u-1)^2*a3b3-(u^2-u+1)*a2b2c(a+b)+u^2*a2b2c2) >= 0`
     Because
-        f(a,b,c) * 2s(a) = abcs((b-c)^2(b+c-ua)^2)+2s(a(b-c)^2((1-u)(ab+ac)+bcu)^2) >= 0
-    As a consequence, if (x, y) lies in the parametric curve ((u-1)^2, -(u^2-u+1)),
-    which is parabola x >= (1+x+y)^2
+        `f(a,b,c) * 2s(a) = abcs((b-c)^2(b+c-ua)^2)+2s(a(b-c)^2((1-u)(ab+ac)+bcu)^2) >= 0`
+    As a consequence, if `(x, y)` lies in the parametric curve `((u-1)^2, -(u^2-u+1))`,
+    which is parabola `x >= (1+x+y)^2`
     then it is positive.
 
     Examples
@@ -524,7 +488,8 @@ def _structsos_sextic_hexagram_symmetric(coeff: 'Coeff'):
     ----------
     [1] https://tieba.baidu.com/p/8039371307
     """
-    if coeff((3,3,0)) < 0 or coeff((4,1,1)) < 0:
+    lc = coeff((3,3,0))
+    if lc < 0 or coeff((4,1,1)) < 0:
         return None
 
     a, b, c = coeff.gens
@@ -535,15 +500,15 @@ def _structsos_sextic_hexagram_symmetric(coeff: 'Coeff'):
         # For s(a3b3+xa4bc+ya3b2c+ya2b3c+wa2b2c2) with 1+x+2y+w = 0,
         # it covers the case: y + min(x,1) + x + 1 >= 0
 
-        x_ = min(coeff((3,3,0)), coeff((4,1,1)))
-        y = [
-            x_,
-            coeff((3,3,0)) - x_,
-            coeff((4,1,1)) - x_,
-            coeff((3,2,1)) + x_ + (coeff((3,3,0))) + (coeff((4,1,1))),
-            (coeff((3,3,0)) + coeff((4,1,1)) + coeff((3,2,1)) * 2) * 3 + coeff((2,2,2))
+        x = min(lc, coeff((4,1,1)))
+        _y = [
+            x,
+            lc - x,
+            coeff((4,1,1)) - x,
+            coeff((3,2,1)) + x + (lc) + (coeff((4,1,1))),
+            (lc + coeff((4,1,1)) + coeff((3,2,1)) * 2) * 3 + coeff((2,2,2))
         ]
-        if all(_ >= 0 for _ in y):
+        if all(_ >= 0 for _ in _y):
             exprs = [
                 CyclicSum(a*b*(a-c)**2*(b-c)**2),
                 CommonExpr.schurinv(6, (a,b,c)),
@@ -551,20 +516,20 @@ def _structsos_sextic_hexagram_symmetric(coeff: 'Coeff'):
                 CyclicSum(a*(b-c)**2) * CyclicProduct(a),
                 CyclicProduct(a**2)
             ]
-            return sum_y_exprs(y, exprs)
+            return sum_y_exprs(_y, exprs)
 
     if coeff((4,1,1)) != 0:
-        x_ = coeff((3,3,0)) / coeff((4,1,1))
-        y_ = coeff((3,2,1)) / coeff((4,1,1))
+        x = lc / coeff((4,1,1))
+        y = coeff((3,2,1)) / coeff((4,1,1))
         # w_ = coeff((2,2,2)) / coeff((4,1,1))
-        if x_ >= ((1 + x_ + y_)**2):
+        if x >= ((1 + x + y)**2):
             # apply theorem 1
             # use vieta jumping, a point inside the parabola is a linear combination
             # of u = 1 and u = (y + 1) / (x + y + 1)
-            u_ = ((y_ + 1) / (x_ + y_ + 1))
+            u_ = ((y + 1) / (x + y + 1))
 
             # weights of linear combination
-            w2 = x_ / (u_ - 1)**2
+            w2 = x / (u_ - 1)**2
             w1 = 1 - w2
 
             # NOTE: the case x + y + 1 == 0 has been handled in the trivial case
@@ -572,18 +537,18 @@ def _structsos_sextic_hexagram_symmetric(coeff: 'Coeff'):
             # abcs((b-c)2(b+c-ua)2)+2s(a(b-c)2((1-u)(ab+ac)+bcu)2)
             r = coeff.to_sympy(u_).as_numer_denom()[1] # cancel the denominator is good
 
-            y = [
+            _y = [
                 w1 / 2,
                 w1,
                 w2 / r**2 / 2,
                 w2 / r**2,
-                ((coeff((3,3,0)) + coeff((4,1,1)) + coeff((3,2,1)) * 2) + coeff((2,2,2)) / 3) / coeff((4,1,1)) * 3
+                ((lc + coeff((4,1,1)) + coeff((3,2,1)) * 2) + coeff((2,2,2)) / 3) / coeff((4,1,1)) * 3
             ]
-            if any(_ < 0 for _ in y):
-                y = None
+            if any(_ < 0 for _ in _y):
+                _y = None
             else:
                 multiplier = CyclicSum(a)
-                y = [(_ * coeff((4,1,1))) for _ in y]
+                _y = [(_ * coeff((4,1,1))) for _ in _y]
                 exprs = [
                     CyclicSum((b-c)**2*(b+c-a)**2) * CyclicProduct(a),
                     CyclicSum(b*c*(b-c)**2) * CyclicProduct(a),
@@ -592,47 +557,72 @@ def _structsos_sextic_hexagram_symmetric(coeff: 'Coeff'):
                     CyclicSum(a) * CyclicProduct(a**2)
                 ]
                 # print(y, exprs)
-                return sum_y_exprs(y, exprs) / multiplier
+                return sum_y_exprs(_y, exprs) / multiplier
 
 
 
-    if coeff((3,3,0)) != 0:
+    if lc != 0:
         # https://tieba.baidu.com/p/8039371307
-        x_, y_, z_ = coeff((4,1,1)) / coeff((3,3,0)), -coeff((3,2,1)) / coeff((3,3,0)), coeff((2,2,2)) / coeff((3,3,0))
-        z0 = x_**2 + x_*y_ + y_**2/3 - y_ + (y_ + 3)**3/(27*x_) if x_ != 0 else 0
-        if x_ > 0 and 3 * x_ + y_ + 3 >= 0 and z_ >= z0:
-            ker = 324 * x_ * (27*x_**3 + 27*x_**2*y_ + 81*x_**2 + 9*x_*y_**2 - 189*x_*y_ + 81*x_ + y_**3 + 9*y_**2 + 27*y_ + 27)
-            if ker > 0:
-                w1 = (-(9*x_**2 + 6*x_*y_ - 306*x_ + y_**2 + 6*y_ + 9) / ker)
-                if w1 > 0:
-                    w2 = 1 / ker
-                    multiplier = CyclicSum(a) * CyclicSum(a*b)
-                    y = [w1, w2, z_ - z0]
-                    y = [(_ * coeff((3,3,0))) for _ in y]
+        x, y, z = coeff((4,1,1)) / lc, -coeff((3,2,1)) / lc, coeff((2,2,2)) / lc
+        z0 = x**2 + x*y + y**2/3 - y + (y + 3)**3/(27*x) if x != 0 else 0
+        if x != 0 and z >= z0:
+            res = _solve_sextic_hexagram_symmetric_uncentered_point(coeff, x, y)
+            if res is not None:
+                return lc*res + lc*(z - z0) * CyclicProduct(a**2)
 
-                    exprs = [
-                        *_solve_sextic_hexagram_symmetric_point(coeff, x_, y_),
-                        multiplier * CyclicProduct(a**2)
-                    ]
-
-                    return sum_y_exprs(y, exprs) / multiplier
     return None
 
 
-def _solve_sextic_tree_point(coeff: 'Coeff', t):
-    """Return the symmetric-tree point formula at parameter ``t``."""
+def _solve_sextic_hexagram_symmetric_uncentered_point(coeff: 'Coeff', x, y):
+    """
+    Solve `s(a3b3+xa4bc+ya3b2c+ya2b3c+wa2b2c2) >= 0`
+    where `z == (y+3)**2/(27*x) + x**2 + x*y - y + y**2/3`
+    """
     a, b, c = coeff.gens
     CyclicSum = coeff.cyclic_sum
-    if t == 2 or t == -1:
-        return Rational(1, 2) * CyclicSum(a)**2 * CyclicSum((b - c)**4)
 
-    if isinstance(t, int):
-        num, den = t, 1
-    else:
-        num, den = coeff.to_sympy(t).as_numer_denom()
-    return (1/(2*den**3)) * CommonExpr.quadratic(
-        den, num, (a, b, c)
-    ) * coeff.cyclic_sum((a - b)**2*(den*a + den*b - num*c)**2)
+    ker = 324*x*(27*x**3 + 27*x**2*y + 81*x**2 + 9*x*y**2 - 189*x*y + 81*x + y**3 + 9*y**2 + 27*y + 27)
+    if ker < 0:
+        return
+    w1 = (-(9*x**2 + 6*x*y - 306*x + y**2 + 6*y + 9) / ker)
+    w2 = 1/ker
+    if w1 < 0:
+        return
+
+    phi1 = 9*x**2 + 6*x*y - 117*x + y**2 + 15*y + 36
+    phi2 = 36*x**2 + 15*x*y - 117*x + y**2 + 6*y + 9
+
+    c11, c12, c13, c14, c15, c16, c17, c18 = [
+        -9*x**2 - 3*x*y + 18*x,
+        -9*x**2 + 9*x + y**2 - 9,
+        9*x**2 + 3*x*y - 3*y - 9,
+        -18*x + 3*y + 9,
+        -9*x**2 - 3*x*y + 18*x,
+        9*x**2 + 3*x*y - 3*y - 9,
+        9*x**2 - 9*x - y**2 + 9,
+        -18*x + 3*y + 9,
+    ]
+    c21, c22, c23, c24, c25, c26, c27, c28 = [
+        -3*phi1*x,
+        -3*phi1*x + phi1*y + 3*phi1 - 3*phi2,
+        -3*phi1*x + phi1*y + 3*phi1
+            + 3*phi2*x + phi2*y - 3*phi2,
+        -3*phi2,
+        -3*phi1*x,
+        -3*phi1*x + phi1*y + 3*phi1
+            + 3*phi2*x + phi2*y - 3*phi2,
+        -3*phi1*x + 3*phi2*x + phi2*y - 3*phi2,
+        -3*phi2,
+    ]
+
+    form1 = c11*a**3*b + c12*a**2*b**2 + c13*a**2*b*c + c14*a**2*c**2 \
+        + c15*a*b**3 + c16*a*b**2*c + c17*a*b*c**2 + c18*b**2*c**2
+    form2 = c21*a**3*b + c22*a**2*b**2 + c23*a**2*b*c + c24*a**2*c**2 \
+        + c25*a*b**3 + c26*a*b**2*c + c27*a*b*c**2 + c28*b**2*c**2
+
+    multiplier = CyclicSum(a) * CyclicSum(a*b)
+
+    return (w1 * CyclicSum(c*form1.together()**2) + w2 * CyclicSum(c*form2.together()**2)) / multiplier
 
 
 def _structsos_sextic_tree(coeff: 'Coeff'):
@@ -726,6 +716,22 @@ def _structsos_sextic_tree(coeff: 'Coeff'):
             return solution
 
     return None
+
+
+def _solve_sextic_tree_point(coeff: 'Coeff', t):
+    """Return the symmetric-tree point formula at parameter ``t``."""
+    a, b, c = coeff.gens
+    CyclicSum = coeff.cyclic_sum
+    if t == 2 or t == -1:
+        return Rational(1, 2) * CyclicSum(a)**2 * CyclicSum((b - c)**4)
+
+    if isinstance(t, int):
+        num, den = t, 1
+    else:
+        num, den = coeff.to_sympy(t).as_numer_denom()
+    return (1/(2*den**3)) * CommonExpr.quadratic(
+        den, num, (a, b, c)
+    ) * coeff.cyclic_sum((a - b)**2*(den*a + den*b - num*c)**2)
 
 
 def _structsos_sextic_symmetric_schur_split(coeff: 'Coeff', real = False):
