@@ -815,6 +815,53 @@ def _structsos_sextic_hexagon_to_hexagram(coeff: 'Coeff'):
             return main_solution + remain_solution
 
 
+def _sextic_full_quad_form_solution(coeff, quad_form):
+    """Convert the cyclic cubic Gram form into a structural SOS expression."""
+    cong = congruence(quad_form)
+    if cong is None:
+        return None
+    q, weights = cong
+    a, b, c = coeff.gens
+    cyclic_sum = coeff.cyclic_sum
+    forms = [
+        q[0, 0] * (a**3 - a*b*c) + q[0, 1] * (a**2*b - a*b*c) + q[0, 2] * (a*b**2 - a*b*c),
+        q[1, 1] * (a**2*b - a*b*c) + q[1, 2] * (a*b**2 - a*b*c),
+        q[2, 2] * (a*b**2 - a*b*c),
+    ]
+    squares = [cyclic_sum(form.expand().together())**2 for form in forms]
+    return sum_y_exprs(weights, squares)
+
+
+def _evaluate_lower_triangular_form(form, x0, y0):
+    """Evaluate and symmetrize a lower-triangular polynomial matrix."""
+    evaluated = [row[:] for row in form]
+    if not (x0 is None and y0 is None):
+        for i in range(len(evaluated)):
+            for j in range(i + 1):
+                evaluated[i][j] = evaluated[i][j](x0, y0)
+    for i in range(len(evaluated)):
+        for j in range(i, len(evaluated)):
+            evaluated[i][j] = evaluated[j][i]
+    return evaluated
+
+
+def _lower_triangular_form_det(form, x0, y0, size=3):
+    """Return a leading principal determinant of a lower-triangular form."""
+    matrix = _evaluate_lower_triangular_form(
+        [row[:size] for row in form[:size]], x0, y0)
+    if size == 3:
+        return matrix[0][0] * matrix[1][1] * matrix[2][2] \
+            + 2 * matrix[1][0] * matrix[2][1] * matrix[2][0] \
+            - matrix[0][0] * matrix[2][1]**2 \
+            - matrix[2][2] * matrix[1][0]**2 \
+            - matrix[1][1] * matrix[2][0]**2
+    if size == 2:
+        return matrix[0][0] * matrix[1][1] - matrix[1][0]**2
+    if size == 1:
+        return matrix[0][0]
+    return None
+
+
 def _structsos_sextic_full_sdp(coeff: 'Coeff'):
     """
     Heuristically solve full sextics with the method of unknown coefficients.
@@ -872,19 +919,6 @@ def _structsos_sextic_full_sdp(coeff: 'Coeff'):
     # ]
 
 
-    def _compute_quad_form_sol(quad_form):
-        cong = congruence(quad_form)
-        if cong is None:
-            return None
-        q, ss = cong
-        quad_form_sol = [
-            (q[0,0]*(a**3-a*b*c)+q[0,1]*(a**2*b-a*b*c)+q[0,2]*(a*b**2-a*b*c)),
-            (q[1,1]*(a**2*b-a*b*c)+q[1,2]*(a*b**2-a*b*c)),
-            (q[2,2]*(a*b**2-a*b*c))
-        ]
-        quad_form_sol = [CyclicSum(x.expand().together())**2 for x in quad_form_sol]
-        return sum_y_exprs(ss, quad_form_sol)
-
     # rest form is what the original polynomial subtracts the quadratic form,
     # corresponding to the coefficients of a^4bc, a^3b^2c, a^2b^3c
     rest_form = [
@@ -899,7 +933,7 @@ def _structsos_sextic_full_sdp(coeff: 'Coeff'):
             [c51/2, c42-c15, c33/2-c60],
             [c15/2, c33/2-c60, c24-c51]
         ])
-        quad_form_sol = _compute_quad_form_sol(quad_form)
+        quad_form_sol = _sextic_full_quad_form_solution(coeff, quad_form)
         return quad_form_sol
 
 
@@ -939,32 +973,10 @@ def _structsos_sextic_full_sdp(coeff: 'Coeff'):
         [c15/2*z - r*(y-x), (c33/2-c60)*z - r*(2*u*x - 2*u*y - 2*v*x - 4*v*y - 6)/2, (c24-c51)*z - r*(-6*u + 2*x**2 + 2*x*y + 2*y**2)]
     ]
 
-    def quad_form_eval(q, x0, y0):
-        q = [row.copy() for row in q]
-        if not (x0 is None and y0 is None):
-            for i in range(len(q)):
-                for j in range(i+1):
-                    q[i][j] = q[i][j](x0, y0)
-        for i in range(len(q)):
-            for j in range(i, len(q)):
-                q[i][j] = q[j][i]
-        return q
-
-    def quad_form_det(x0, y0, n = 3):
-        q = quad_form_eval([row[:n] for row in quad_form[:n]], x0, y0)
-        if n == 3:
-            # it is a six-degree polynomial with respect to x0, y0
-            return q[0][0]*q[1][1]*q[2][2] + 2*q[1][0]*q[2][1]*q[2][0] \
-                - q[0][0]*q[2][1]**2 - q[2][2]*q[1][0]**2 - q[1][1]*q[2][0]**2
-        elif n == 2:
-            return q[0][0]*q[1][1]-q[1][0]**2
-        elif n == 1:
-            return q[0][0]
-
     # optimize the determinant of the quad_form by taking partial derivatives
     success = False
     for n_ in (3,):
-        det = quad_form_det(None, None, n_)
+        det = _lower_triangular_form_det(quad_form, None, None, n_)
         # XXX: when domain is not ZZ or QQ, det is wrapped and does not support dict(det)
         det = Poly(dict(det), a, b, domain=ring.domain)
         res = det.diff(0).resultant(det.diff(1))
@@ -972,7 +984,8 @@ def _structsos_sextic_full_sdp(coeff: 'Coeff'):
             det2 = det.eval(b, y_).as_poly(a)
             for x_ in nroots(det2.diff(a), method='factor', real=True):
                 # PolyElement supports auto convertsion from floats for __call__
-                if det2(x_) >= 0 and quad_form_det(x_, y_, 1) >= 0 and quad_form_det(x_, y_, 2) >= 0:
+                if det2(x_) >= 0 and _lower_triangular_form_det(quad_form, x_, y_, 1) >= 0 and \
+                        _lower_triangular_form_det(quad_form, x_, y_, 2) >= 0:
                     # print((x_, y_))
                     success = True
                     break
@@ -992,15 +1005,15 @@ def _structsos_sextic_full_sdp(coeff: 'Coeff'):
             rationalize_bound(x_, direction = 0, compulsory = True),
             rationalize_bound(y_, direction = 0, compulsory = True),
         ):
-            if all(quad_form_det(x__, y__, i) >= 0 for i in range(1,4)):
+            if all(_lower_triangular_form_det(quad_form, x__, y__, i) >= 0 for i in range(1,4)):
                 x_, y_ = x__, y__
                 break
         else:
             return None
 
     u_, v_, z_ = u(x_, y_), v(x_, y_), z(x_, y_)
-    quad_form = Matrix(quad_form_eval(quad_form, x_, y_)) / z_
-    quad_form_sol = _compute_quad_form_sol(quad_form)
+    quad_form = Matrix(_evaluate_lower_triangular_form(quad_form, x_, y_)) / z_
+    quad_form_sol = _sextic_full_quad_form_solution(coeff, quad_form)
     if quad_form_sol is None:
         return None
 

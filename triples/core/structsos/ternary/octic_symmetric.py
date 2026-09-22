@@ -86,6 +86,51 @@ def structsos_octic_symmetric(coeff, real=True):
         return _structsos_octic_symmetric_quadratic_form(coeff.as_poly(), coeff)
 
 
+def _poly_from_list(values, gen):
+    """Build a univariate polynomial from coefficients in descending order."""
+    return Poly.from_list(values, gen)
+
+
+def _octic_symmetric_stack_quad_form(m00, m01, m02, m22):
+    """Build the symmetric 3-by-3 matrix used by the octic hexagon solver."""
+    return Matrix([
+        [m00, m01, m02],
+        [m01, m00, m02],
+        [m02, m02, m22],
+    ])
+
+
+def _octic_symmetric_quad_form_solution(coeff, quad_form):
+    """Convert an octic symmetric quadratic form into a structural SOS."""
+    a, b, c = coeff.gens
+    cyclic_sum, cyclic_product = coeff.cyclic_sum, coeff.cyclic_product
+    first = (quad_form[0, 0] - quad_form[0, 1]) / 2 \
+        * cyclic_sum(a)**2 * cyclic_product((a - b)**2)
+
+    def mapping(vector):
+        x, y = vector
+        if x == 1 and y == 2:
+            return cyclic_sum(a)**2 * cyclic_sum(a * (b - c)**2)**2
+        if x == 1 and y == -2:
+            return cyclic_sum(a * b * (a - b)**2)**2
+        if x == 0 and y == 1:
+            return cyclic_sum(a**2 * (b - c)**2)**2 / 4
+        p1 = a**3*b + a*b**3 - a**2*b*c - a*b**2*c
+        p2 = a**2*b**2 - a*b*c**2
+        return cyclic_sum((x*p1 + y*p2).expand().together())**2
+
+    second = quadratic_weighting(
+        coeff,
+        (quad_form[0, 0] + quad_form[0, 1]) / 2,
+        quad_form[0, 2] * 2,
+        quad_form[2, 2],
+        mapping=mapping,
+    )
+    if second is None:
+        return None
+    return first + second
+
+
 def _structsos_octic_symmetric_hexagon_sdp(coeff: 'Coeff'):
     """
     Solve symmetric hexagons for real numbers by subtracting r * s((a-b)^2(ab(a+b)+xc(a^2+b^2)+..)^2)
@@ -131,58 +176,13 @@ def _structsos_octic_symmetric_hexagon_sdp(coeff: 'Coeff'):
         return None
 
     a, b, c = coeff.gens
-    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
-
-    def polylize(_M, gen = Symbol('t')):
-        # n = len(_M) - 1
-        # return lambda t: sum(_M[i] * t**(n-i) for i in range(n+1))
-        return Poly.from_list(_M, gen)
-
-    def stack_quad_form(M00t, M01t, M02t, M22t):
-        return Matrix([
-            [M00t, M01t, M02t],
-            [M01t, M00t, M02t],
-            [M02t, M02t, M22t]
-        ])
-
-    def _compute_quad_form_sol(quad_form):
-        """
-        Solve v' * M * v where v = [s(a^3b-a^2bc), s(a^3c-a^2bc), s(a^2b^2-a^2bc)]
-        while M is in the following form.
-        [[M00, M01, M02]
-        [M01, M00, M02]
-        [M02, M02, M22]]
-        """
-        s1 = (quad_form[0,0] - quad_form[0,1])/2 * CyclicSum(a)**2 * CyclicProduct((a-b)**2)
-
-        def mapping(_vec):
-            x, y = _vec
-            # return s(x(a3b+ab3-2a2bc)+y(a2b2-a2bc))^2
-            if x == 1 and y == 2:
-                return CyclicSum(a)**2 * CyclicSum(a*(b-c)**2)**2
-            elif x == 1 and y == -2:
-                return CyclicSum(a*b*(a-b)**2)**2
-            elif x == 0 and y == 1:
-                return CyclicSum(a**2*(b-c)**2)**2 / 4
-            p1 = a**3*b + a*b**3 - a**2*b*c - a*b**2*c
-            p2 = a**2*b**2 - a*b*c**2
-            return CyclicSum((x*p1 + y*p2).expand().together())**2
-
-        s2 = quadratic_weighting(coeff,
-            (quad_form[0,0] + quad_form[0,1])/2,
-            quad_form[0,2] * 2,
-            quad_form[2,2],
-            mapping = mapping
-        )
-        if s2 is None: return None
-
-        return s1 + s2
+    CyclicSum = coeff.cyclic_sum
 
     def _sol_to_result(sol):
         if sol is None:
             return None
         u210, u102, u201, u111, r, quad_form = sol
-        quad_form_sol = _compute_quad_form_sol(quad_form)
+        quad_form_sol = _octic_symmetric_quad_form_solution(coeff, quad_form)
         if r >= 0 and quad_form_sol is not None:
             ker = (a-b)*(u102*c**2*(b+a) + u210*(a*b*(a+b)-c**3) + u201*c*(a**2+b**2+c**2) + u111*a*b*c).expand().together()
             return r * CyclicSum(ker**2) + quad_form_sol
@@ -229,7 +229,7 @@ def _structsos_octic_symmetric_hexagon_sdp(coeff: 'Coeff'):
             -4*w1**4*w4**2
         ]
 
-        M00t, M01t, M02t, M22t = [polylize(_, t) for _ in (_M00, _M01, _M02, _M22)]
+        M00t, M01t, M02t, M22t = [_poly_from_list(_, t) for _ in (_M00, _M01, _M02, _M22)]
         det = (M22t * (M00t + M01t) - 2*M02t**2).div((t*(t+1)).as_poly(t))[0]
 
 
@@ -276,7 +276,7 @@ def _structsos_octic_symmetric_hexagon_sdp(coeff: 'Coeff'):
             u201 = x_ * t
             u102 = 2 + w2/w1 + x_
 
-        quad_form = stack_quad_form(M00t, M01t, M02t, M22t)
+        quad_form = _octic_symmetric_stack_quad_form(M00t, M01t, M02t, M22t)
         # print('PARAMS =', t, u102, u201, u111, r, quad_form)
         return u210, u102, u201, u111, r, quad_form
 
@@ -322,7 +322,7 @@ def _structsos_octic_symmetric_hexagon_sdp(coeff: 'Coeff'):
             -8*w4**2
         ]
 
-        M00t, M01t, M02t, M22t = [polylize(_, t) for _ in (_M00, _M01, _M02, _M22)]
+        M00t, M01t, M02t, M22t = [_poly_from_list(_, t) for _ in (_M00, _M01, _M02, _M22)]
         det = (M22t * (M00t + M01t) - 2*M02t**2).div((t).as_poly(t))[0]
 
 
@@ -340,7 +340,7 @@ def _structsos_octic_symmetric_hexagon_sdp(coeff: 'Coeff'):
         reg = 162*t**2*w4
         r = (3*t*w2 - t*w4 - w4)**2 / reg
         M00t, M01t, M02t, M22t = [f(t)/reg for f in (M00t, M01t, M02t, M22t)]
-        quad_form = stack_quad_form(M00t, M01t, M02t, M22t)
+        quad_form = _octic_symmetric_stack_quad_form(M00t, M01t, M02t, M22t)
         return u210, u102, u201, u111, r, quad_form
 
 
@@ -377,7 +377,7 @@ def _structsos_octic_symmetric_hexagon_sdp(coeff: 'Coeff'):
             M01t = (3*c611*u102*u201/2 + 3*c611*u201**2/2 + 3*c611*u201/2 - u201**2*w1/2 + 2*u201*w1 - w1/2)/reg
             M02t = (3*c530*u102*u201/2 + 3*c530*u201**2/2 + 3*c530*u201/2 + u102*u201*w1 - u102*w1/2)/reg
             M22t = (3*c440*u102*u201 + 3*c440*u201**2 + 3*c440*u201 - 3*c611*u102*u201 - 3*c611*u201**2 - 3*c611*u201 + u102**2*w1 + 3*u201**2*w1 - 6*u201*w1)/reg
-            quad_form = stack_quad_form(M00t, M01t, M02t, M22t)
+            quad_form = _octic_symmetric_stack_quad_form(M00t, M01t, M02t, M22t)
             if quad_form.is_positive_semidefinite:
                 return u210, u102, u201, u111, r, quad_form
 
@@ -404,9 +404,9 @@ def _structsos_octic_symmetric_hexagon_sdp(coeff: 'Coeff'):
                 0,
                 0
             ]
-            func_z_sym = polylize(_func_z_sym, y)
+            func_z_sym = _poly_from_list(_func_z_sym, y)
             func_z_sym_lb = func_z_sym - (w1**2 / (2*c620 - c611) * (y-1)**2).as_poly(y)
-            func_z_det = polylize(_func_z_det, y)
+            func_z_det = _poly_from_list(_func_z_det, y)
             _func_z_det_det = _func_z_det[1]**2 - 4*_func_z_det[0]*_func_z_det[2]
 
             # print('RHS =', sp.latex((func_z_sym.as_expr() + sp.sqrt(func_z_det.as_expr())).subs(y,Symbol('x'))))
@@ -441,7 +441,7 @@ def _structsos_octic_symmetric_hexagon_sdp(coeff: 'Coeff'):
             if y_ is None and func_z_det.degree() == 4:
                 # finally: check the boundary func_z_det >= 0
                 a0, b0, c0, _, __ = func_z_det.all_coeffs()
-                y_ = rationalize_func(polylize([a0, b0, c0], y), _is_valid, direction = 1)
+                y_ = rationalize_func(_poly_from_list([a0, b0, c0], y), _is_valid, direction = 1)
 
             if y_ is not None:
                 z_ = max(
@@ -471,7 +471,7 @@ def _structsos_octic_symmetric_hexagon_sdp(coeff: 'Coeff'):
                 w1*(3*c530 - 3*c611 - 6*c620 + w1)/2,
                 -w1**2/2
             ]
-            eq1, eq2 = polylize(_eq1, y), polylize(_eq2, y)
+            eq1, eq2 = _poly_from_list(_eq1, y), _poly_from_list(_eq2, y)
 
             def _is_valid(y):
                 return eq1(y) >= 0 and eq2(y) >= 0
@@ -536,7 +536,7 @@ def _structsos_octic_symmetric_hexagon_sdp(coeff: 'Coeff'):
             u102 = -c530/(c611 + 2*c620)
             u201 = Integer(0)
             u111 = -2*u102 - 1
-        quad_form = stack_quad_form(M00t, M01t, M02t, M22t)
+        quad_form = _octic_symmetric_stack_quad_form(M00t, M01t, M02t, M22t)
         return u210, u102, u201, u111, r, quad_form
 
     if w4 > 0:

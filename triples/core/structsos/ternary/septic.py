@@ -282,6 +282,18 @@ def _structsos_septic_hexagon_subtract_quintic(coeff: Coeff):
             return main_solution + remain_solution
 
 
+def _find_septic_hexagon_sdp_parameters(R, S, T, resultant):
+    """Find nonnegative ``(u, v)`` satisfying the hexagon SDP conditions."""
+    s_norm = S.l1_norm()
+    for v in nroots(resultant, method='factor', real=True, nonnegative=True):
+        for u in nroots(R.eval(1, v), method='factor', real=True, nonnegative=True):
+            if u * v <= 1:
+                continue
+            if T.eval((u, v)) >= 0 and abs(S.eval((u, v))) <= s_norm * 1e-7:
+                return u, v
+    return None
+
+
 @structsos_handle_uncentered
 def _structsos_septic_hexagon_sdp(coeff: Coeff):
     """
@@ -338,26 +350,13 @@ def _structsos_septic_hexagon_sdp(coeff: Coeff):
         (4, 2): c502 - c511, (5, 1): -c502}
     R, S, T = [coeff.from_dict(_, (a, b)).as_poly() for _ in [R,S,T]]
 
-    res = R.resultant(S)
     divisor = coeff.from_list([1, -1, 1], (b,)).as_poly()
-    res = repeated_div(res, divisor)
+    res = repeated_div(R.resultant(S), divisor)
 
-    success = False
-    S_norm = S.l1_norm()
-    u_, v_ = None, None
-    for v_ in nroots(res, method='factor', real=True, nonnegative=True):
-        for u_ in nroots(R.eval(1, v_), method='factor', real=True, nonnegative=True):
-            if u_ * v_ <= 1:
-                continue
-            if T.eval((u_, v_)) >= 0 and abs(S.eval((u_, v_))) <= S_norm*1e-7:
-                success = True
-                break
-        if success:
-            break
-
-    # print('success:', success, '(u, v) =', (u_, v_))
-    if not success:
+    uv = _find_septic_hexagon_sdp_parameters(R, S, T, res)
+    if uv is None:
         return
+    u_, v_ = uv
 
     def _get_m01(u, v):
         """
