@@ -1,6 +1,7 @@
 from typing import List, Dict, Tuple, Union, Set, Optional, TYPE_CHECKING
 
 from sympy import Expr, Poly, Rational, Add, Mul, Symbol, true
+from sympy.polys.polyerrors import BasePolynomialError
 
 from ...utils import CyclicExpr
 
@@ -564,9 +565,13 @@ def get_symbol_signs(problem: "InequalityProblem") -> Dict[Symbol, Tuple[Optiona
     # polylize and make a copy
     for src, tar in ((eqs0, eqs), (ineqs0, ineqs)):
         for key, val in src.items():
-            if (not isinstance(key, Poly)) or (not key.gens == fs0):
-                key = Poly(key, *fs0)
-            tar[key] = val
+            try:
+                if (not isinstance(key, Poly)) or (not key.gens == fs0):
+                    key = Poly(key, *fs0)
+                tar[key] = val
+            except BasePolynomialError:
+                # not polynomial -> ignore
+                pass
 
     signs = dict.fromkeys(range(len(fs0)), (None, None))
 
@@ -657,6 +662,13 @@ def recompute_constraints_from_signs(problem: "InequalityProblem") -> "Inequalit
                 for a, mul in rest_args:
                     # TODO: make it square-free
                     p2 = p2 * a**mul
+
+            if isinstance(p, Poly):
+                if not isinstance(p2, Poly):
+                    # cast to poly
+                    p2 = Poly(p2, p.gens)
+            elif isinstance(p2, int):
+                p2 = Rational(p2)
             dst[p2] = e2
 
     is_poly = isinstance(problem.expr, Poly)

@@ -1,5 +1,6 @@
-from sympy import Poly, Integer
+from sympy import Integer, Poly
 from sympy.core.symbol import uniquely_named_symbol
+
 
 def _eliminate_linear_ineq(poly, var, ineq_constraints, eq_constraints):
     """

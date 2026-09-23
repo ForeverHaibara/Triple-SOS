@@ -87,7 +87,7 @@ def smith_normal_decomp(m):
     rows, cols = shape = m.shape
     m = m.to_list()
 
-    invs, s, t = _smith_normal_decomp(m, domain, shape=shape, full=True)
+    invs, s, t = _smith_normal_decomp(m, domain, shape=shape, full=True) # type: ignore
     smf = DomainMatrix.diag(invs, domain, shape).to_dense()
 
     s = DomainMatrix(s, domain=domain, shape=(rows, rows))
@@ -247,15 +247,16 @@ def _smith_normal_decomp(m, domain, shape, full):
                 result[i] = d
             else:
                 break
+        result_tuple = tuple(result)
     else:
         if full:
             if rows > 1:
                 s = s[1:] + [s[0]]
             if cols > 1:
                 t = [row[1:] + [row[0]] for row in t]
-        result = invs + (m[0][0],)
+        result_tuple = invs + (m[0][0],)
 
     if full:
-        return tuple(result), s, t
+        return result_tuple, s, t
     else:
-        return tuple(result)
+        return result_tuple

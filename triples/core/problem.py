@@ -1,13 +1,14 @@
 from typing import (
     Dict, List, Tuple, Set, Optional, Union, Iterable, Callable,
-    Any, TypeVar, Generic, TYPE_CHECKING
+    Any, TypeVar, Generic, TYPE_CHECKING, cast, Mapping, Sequence
 )
 from sympy import (
     Expr, Symbol, Poly, Integer, Function, Mul, Add, Pow,
     fraction
 )
 from sympy.combinatorics.named_groups import SymmetricGroup
-from sympy.combinatorics.perm_groups import Permutation, PermutationGroup
+from sympy.combinatorics.permutations import Permutation
+from sympy.combinatorics.perm_groups import PermutationGroup
 from sympy.core.symbol import uniquely_named_symbol
 from sympy.core.sympify import sympify, CantSympify
 from sympy.core.function import AppliedUndef
@@ -18,19 +19,29 @@ from .dispatch import (
     _dtype_free_symbols, _dtype_gens, _dtype_is_zero, _dtype_convert,
     _dtype_is_homogeneous, _dtype_homogenize, _dtype_sqf_list, _dtype_make_reorder_func
 )
-from ..utils import optimize_poly, Root, RootList
+from ..utils import (
+    optimize_poly, Root, RootList, marginalize, CyclicSum
+)
 from ..utils.monomials import (
     _identify_symmetry_from_action,
-    identify_symmetry_from_lists
+    identify_symmetry_from_lists,
+    verify_symmetry, poly_reduce_by_symmetry
 )
 
 if TYPE_CHECKING:
-    from .preprocess.qcqp import QCQP
+    from .progsos.qcqp import QCQP
 
 class NonPolynomialError(BasePolynomialError):
     pass
 
 T = TypeVar('T')
+
+
+def _as_expr(value: Any) -> Expr:
+    """Convert a supported polynomial-like value to a SymPy expression."""
+    if isinstance(value, Expr):
+        return value
+    return cast(Expr, value.as_expr())
 
 
 class InequalityProblem(Generic[T]):
@@ -64,17 +75,17 @@ class InequalityProblem(Generic[T]):
         ineq_constraints: Union[Dict[T, Expr], Iterable[T]] = {},
         eq_constraints: Union[Dict[T, Expr], Iterable[T]] = {}
     ):
-        def _try_sympify(expr):
+        def _symp(expr):
             if isinstance(expr, CantSympify):
                 return expr
             return sympify(expr)
-        expr = _try_sympify(expr)
+        expr = _symp(expr)
         if not isinstance(ineq_constraints, dict):
             ineq_constraints = {e: e for e in ineq_constraints}
         if not isinstance(eq_constraints, dict):
             eq_constraints = {e: e for e in eq_constraints}
-        ineq_constraints = {_try_sympify(e): _try_sympify(e2).as_expr() for e, e2 in ineq_constraints.items()}
-        eq_constraints = {_try_sympify(e): _try_sympify(e2).as_expr() for e, e2 in eq_constraints.items()}
+        ineq_constraints = {_symp(e): _symp(e2).as_expr() for e, e2 in ineq_constraints.items()}
+        eq_constraints = {_symp(e): _symp(e2).as_expr() for e, e2 in eq_constraints.items()}
 
         return cls.new(expr, ineq_constraints, eq_constraints)
 
@@ -83,7 +94,7 @@ class InequalityProblem(Generic[T]):
         expr: T,
         ineq_constraints: Dict[T, Expr] = {},
         eq_constraints: Dict[T, Expr] = {}
-    ) -> 'InequalityProblem':
+    ) -> 'InequalityProblem[T]':
         """Initialization of objects without sanity checks."""
         obj = object.__new__(cls)
         obj.expr = expr
@@ -96,14 +107,14 @@ class InequalityProblem(Generic[T]):
         if len(self.ineq_constraints):
             ss.append("given inequality constraints:")
             for p, e in self.ineq_constraints.items():
-                ss.append(f"    {p} >= 0" + (f"    ({e})" if p.as_expr() != e else ""))
+                ss.append(f"    {p} >= 0" + (f"    ({e})" if _as_expr(p) != e else ""))
         else:
             ss.append("given no inequality constraints,")
 
         if len(self.eq_constraints):
             ss.append("and equality constraints:")
             for p, e in self.eq_constraints.items():
-                ss.append(f"    {p} == 0" + (f"    ({e})" if e != 0 and p.as_expr() != e else ""))
+                ss.append(f"    {p} == 0" + (f"    ({e})" if e != 0 and _as_expr(p) != e else ""))
         else:
             ss.append("and no equality constraints.")
 
@@ -120,7 +131,8 @@ class InequalityProblem(Generic[T]):
             proved = " (Solved)"
         elif self.counter_examples is not None:
             proved = " (Disproved)"
-        return f'<InequalityProblem of {nvars} variables{poly_info}, with {ineqs} inequality and {eqs} equality constraints{proved}>'
+        return f'<InequalityProblem of {nvars} variables{poly_info},' +\
+            f' with {ineqs} inequality and {eqs} equality constraints{proved}>'
 
     def _repr_latex_(self):
         from sympy import latex
@@ -131,7 +143,7 @@ class InequalityProblem(Generic[T]):
             ss.append("given inequality constraints:")
             ss.append(delim_l + "\\begin{aligned}" + "\\\\\n ".join([
                 f"{ands[0]} {latex(p)} {ands[1]}\\geq 0" + \
-                        (f"{ands[2]} \\qquad {ands[3]} ({latex(e)})" if p.as_expr() != e else "")
+                        (f"{ands[2]} \\qquad {ands[3]} ({latex(e)})" if _as_expr(p) != e else "")
                     for p, e in self.ineq_constraints.items()
             ]) + "\\end{aligned}" + delim_r)
         else:
@@ -141,7 +153,7 @@ class InequalityProblem(Generic[T]):
             ss.append("and equality constraints:")
             ss.append(delim_l + "\\begin{aligned}" + "\\\\\n ".join([
                 f"{ands[0]} {latex(p)} {ands[1]}= 0" + \
-                        (f"{ands[2]} \\qquad {ands[3]} ({latex(e)})" if p.as_expr() != e else "")
+                        (f"{ands[2]} \\qquad {ands[3]} ({latex(e)})" if _as_expr(p) != e else "")
                     for p, e in self.eq_constraints.items()
             ]) + "\\end{aligned}" + delim_r)
         else:
@@ -155,13 +167,13 @@ class InequalityProblem(Generic[T]):
         expr: T,
         ineq_constraints: Dict[T, Expr] = {},
         eq_constraints: Dict[T, Expr] = {}
-    ) -> 'InequalityProblem':
+    ) -> 'InequalityProblem[T]':
         """
         Return a new InequalityProblem
         with the given `expr`, `ineq_constraints` and `eq_constraints`
         while other attributes are copied from self.
         """
-        problem = self.new(0, {}, {})
+        problem = self.new(cast(T, 0), {}, {})
         problem.__dict__.update({k: v for k, v in self.__dict__.items() if k != "__weakref__"})
         problem.expr = expr
         problem.ineq_constraints = ineq_constraints
@@ -169,7 +181,7 @@ class InequalityProblem(Generic[T]):
         problem.roots = self.roots.copy() if self.roots is not None else None
         return problem
 
-    def copy(self) -> 'InequalityProblem':
+    def copy(self) -> 'InequalityProblem[T]':
         return self.copy_new(self.expr,
             self.ineq_constraints.copy(), self.eq_constraints.copy())
 
@@ -227,33 +239,33 @@ class InequalityProblem(Generic[T]):
     def _dtype_std_ineq_constraints(self, p: T, e: Expr) -> Tuple[T, Expr]:
         if self._dtype_is_zero(p): return p, e
         c, lst = self._dtype_sqf_list(p)
-        ret = self._dtype_convert(p, 1)
+        ret: Any = self._dtype_convert(p, 1)
         sgn = 1 if c > 0 else -1
         e = e / (c if sgn > 0 else -c)
         for q, d in lst:
             if d % 2 == 1:
                 ret = ret * q
-            e = e / q.as_expr()**(d - d%2)
+            e = e / _as_expr(q)**(d - d%2)
         if sgn == -1:
             ret = ret.__neg__()
-        return ret, e
+        return cast(T, ret), e
 
     def _dtype_std_eq_constraints(self, p: T, e: Expr) -> Tuple[T, Expr]:
         if self._dtype_is_zero(p): return p, e
         c, lst = self._dtype_sqf_list(p)
-        ret = self._dtype_convert(p, 1)
+        ret: Any = self._dtype_convert(p, 1)
         sgn = 1 if c > 0 else -1
         e = e / c
         max_d = Integer(max(0, 1, *(d for q, d in lst))) # avoid only 1 arg when lst is empty
         for q, d in lst:
             ret = ret * q
-            e = e * q.as_expr()**(max_d - d)
+            e = e * _as_expr(q)**(max_d - d)
         if max_d != 1:
             e = Pow(e, 1/max_d, evaluate=False)
         if sgn == -1:
             e = e.__neg__()
             ret = ret.__neg__()
-        return ret, e
+        return cast(T, ret), e
 
     def _dtype_make_reorder_func(self, x: T, gens: Tuple[Symbol, ...]) -> Callable[[Permutation], T]:
         return _dtype_make_reorder_func(x, gens)
@@ -285,10 +297,10 @@ class InequalityProblem(Generic[T]):
         """
         poly_gens = self._dtype_gens(self.expr)
         other_syms = self.free_symbols - set(poly_gens)
-        other_syms = sorted(other_syms, key=lambda x: x.name)
-        return poly_gens + tuple(other_syms)
+        sorted_syms = sorted(other_syms, key=lambda x: x.name)
+        return poly_gens + tuple(sorted_syms)
 
-    def extract_constraints(self, symbols: Union[Symbol, List[Symbol]]) \
+    def separate_constraints(self, symbols: Union[Symbol, List[Symbol]]) \
             -> Tuple[Dict[T, Expr], Dict[T, Expr], Dict[T, Expr], Dict[T, Expr]]:
         """
         Split constraints into those that contain given symbols and those that do not.
@@ -308,12 +320,12 @@ class InequalityProblem(Generic[T]):
         ----------
         >>> from sympy.abc import a, b, c
         >>> problem = InequalityProblem(a*b, [a, b, a*b, b+c], [a-1, b+c-1])
-        >>> problem.extract_constraints(a) # doctest: +NORMALIZE_WHITESPACE
+        >>> problem.separate_constraints(a) # doctest: +NORMALIZE_WHITESPACE
         ({a: a, a*b: a*b},
          {a - 1: a - 1},
          {b: b, b + c: b + c},
          {b + c - 1: b + c - 1})
-        >>> problem.extract_constraints([b, c]) # doctest: +NORMALIZE_WHITESPACE
+        >>> problem.separate_constraints([b, c]) # doctest: +NORMALIZE_WHITESPACE
         ({b: b, a*b: a*b, b + c: b + c},
          {b + c - 1: b + c - 1},
          {a: a},
@@ -321,12 +333,13 @@ class InequalityProblem(Generic[T]):
         """
         # TODO: supports symbol-like expressions, e.g. Function, MatrixSymbol
         if isinstance(symbols, Symbol):
-            symbols = {symbols}
-        symbols = set(symbols)
+            symbol_set = {symbols}
+        else:
+            symbol_set = set(symbols)
 
-        ineqs = [{}, {}]
-        eqs = [{}, {}]
-        has_any = lambda f: bool(f.free_symbols & symbols)
+        ineqs = [{}, {}]  # type: List[Dict[T, Expr]]
+        eqs = [{}, {}]  # type: List[Dict[T, Expr]]
+        has_any = lambda f: bool(self._dtype_free_symbols(f) & symbol_set)
         for src, dst in [(self.ineq_constraints, ineqs), (self.eq_constraints, eqs)]:
             for p, e in src.items():
                 dst[int(has_any(p))][p] = e
@@ -335,7 +348,7 @@ class InequalityProblem(Generic[T]):
 
     @property
     def is_commutative(self) -> bool:
-        return self.reduce(lambda e: e.is_commutative, all)
+        return self.reduce(lambda e: cast(Any, e).is_commutative, all)
 
     @property
     def is_polynomial(self) -> bool:
@@ -398,14 +411,14 @@ class InequalityProblem(Generic[T]):
         field: bool = False,
         extension: bool = True,
         unify: bool = False,
-    ) -> 'InequalityProblem':
+    ) -> 'InequalityProblem[Poly]':
         problem = self
         expr, ineq_constraints, eq_constraints = \
             problem.expr, problem.ineq_constraints.copy(), problem.eq_constraints.copy()
         gens = self.gens
 
         if len(gens) == 0:
-            gens = {Symbol('x')}
+            gens = (Symbol('x'),)
 
         def as_poly(expr):
             if isinstance(expr, Poly) and expr.gens == gens:
@@ -418,27 +431,28 @@ class InequalityProblem(Generic[T]):
         ineq_constraints = {as_poly(e): e2 for e, e2 in ineq_constraints.items()}
         eq_constraints = {as_poly(e): e2 for e, e2 in eq_constraints.items()}
 
-        problem = InequalityProblem(expr, ineq_constraints, eq_constraints)
-        problem, _ = problem.sqr_free(problem_sqf=False,
+        new_problem = InequalityProblem(expr, ineq_constraints, eq_constraints)
+        new_problem, _ = new_problem.sqr_free(problem_sqf=False,
             ineqs_sqf=ineqs_sqf, eqs_sqf=eqs_sqf, inplace=True)
 
         if unify:
-            doms = problem.reduce(lambda e: e.domain, list)
+            doms = new_problem.reduce(lambda e: e.domain, list)
             dom = doms[0]
             for dom1 in doms[1:]:
                 dom = dom.unify(dom1)
-            problem.expr = problem.expr.set_domain(dom)
-            problem.ineq_constraints = {e.set_domain(dom): e2
-                for e, e2 in problem.ineq_constraints.items()}
-            problem.eq_constraints = {e.set_domain(dom): e2
-                for e, e2 in problem.eq_constraints.items()}
+            new_problem.expr = new_problem.expr.set_domain(dom)
+            new_problem.ineq_constraints = {e.set_domain(dom): e2
+                for e, e2 in new_problem.ineq_constraints.items()}
+            new_problem.eq_constraints = {e.set_domain(dom): e2
+                for e, e2 in new_problem.eq_constraints.items()}
 
         if self.roots is not None:
             # TODO: sqf ineqs might exclude some roots here
-            problem.roots = self.roots.reorder(problem.gens)
-        return problem
+            new_problem.roots = self.roots.reorder(new_problem.gens)
 
-    def remove_redundancy(self) -> 'InequalityProblem':
+        return cast('InequalityProblem[Poly]', new_problem)
+
+    def remove_redundancy(self) -> 'InequalityProblem[T]':
         """
         Remove redundant symbols and constraints.
 
@@ -516,7 +530,7 @@ class InequalityProblem(Generic[T]):
         ineqs_sqf: bool = True,
         eqs_sqf: bool = True,
         inplace: bool = False,
-    ) -> Tuple['InequalityProblem', Expr]:
+    ) -> Tuple['InequalityProblem[T]', Expr]:
         """
         Try to make the problem square-free.
 
@@ -564,9 +578,9 @@ class InequalityProblem(Generic[T]):
             sqr = []
             sqf = self._dtype_convert(self.expr, c)
             for p, d in lst:
-                sqr.append(p.as_expr()**(d//2))
+                sqr.append(_as_expr(p)**(d//2))
                 if d % 2 == 1:
-                    sqf = sqf*p
+                    sqf = cast(Any, sqf) * p
             sqr = Mul(*sqr)
             self.expr = sqf
 
@@ -641,8 +655,10 @@ class InequalityProblem(Generic[T]):
 
         new_problem = self.copy_new(expr, ineqs, eqs)
         if self.roots is not None:
-            new_problem.roots = RootList.new(self.roots.symbols + (hom,),
-                [Root(r.root + (Integer(1),), r.domain, r.rep + (r.domain.one,)) for r in self.roots])
+            root_symbols = cast(Tuple[Symbol, ...], self.roots.symbols)
+            new_problem.roots = RootList.new(root_symbols + (hom,),
+                [Root(r.root + (Integer(1),), r.domain,
+                      cast(Any, r.rep) + (r.domain.one,)) for r in self.roots])
         return new_problem, hom
 
     def identify_symmetry(self) -> PermutationGroup:
@@ -663,7 +679,9 @@ class InequalityProblem(Generic[T]):
         >>> pro.gens
         (a, b, c)
         """
-        ls = [[self.expr], list(self.ineq_constraints), list(self.eq_constraints)]
+        ls = [[self.expr],
+              list(self.ineq_constraints),
+              list(self.eq_constraints)]
 
         if self.is_polynomial:
             return identify_symmetry_from_lists(ls)
@@ -674,7 +692,7 @@ class InequalityProblem(Generic[T]):
             f = reorder_funcs.get(x)
             if f is None:
                 f = self._dtype_make_reorder_func(x, gens)
-            return f(perm)
+            return f(~perm)
         return _identify_symmetry_from_action(
             ls, SymmetricGroup(len(gens)), action
         )
@@ -708,7 +726,8 @@ class InequalityProblem(Generic[T]):
         We can define the solution with G0 and H0 and restore it using the restoration function.
         However, restoration expands the brackets and might break the sum-of-squares structure.
 
-        >>> G0, H0 = list(newpro.ineq_constraints.values())[0], list(newpro.eq_constraints.values())[0]
+        >>> G0 = list(newpro.ineq_constraints.values())[0]
+        >>> H0 = list(newpro.eq_constraints.values())[0]
         >>> sol = G0 - H0/2 + x**2/2 + (y-1)**2/2; sol
         x**2/2 + (y - 1)**2/2 + _G0(x, y) - _H0(x, y)/2
         >>> restore(sol)
@@ -749,39 +768,54 @@ class InequalityProblem(Generic[T]):
             return self.roots
         from sympy.polys.polyerrors import DomainError
         try:
-            roots = optimize_poly(self.expr, list(self.ineq_constraints), [self.expr] + list(self.eq_constraints),
-                        self.gens, return_type='root')
+            roots = optimize_poly(
+                self.expr, # type: ignore
+                list(self.ineq_constraints), # type: ignore
+                [self.expr] + list(self.eq_constraints), # type: ignore
+                self.gens, # type: ignore
+                return_type='root'
+            ) # type: ignore
         except DomainError:
             roots = RootList(self.gens, [])
         self.roots = roots
         return self.roots
 
-    def set_roots(self, roots) -> RootList:
+    def set_roots(
+        self,
+        roots: Optional[Union[
+            RootList,
+            Sequence[Union[Mapping[Symbol, Any], Root, Sequence[Any]]]
+        ]]
+    ) -> Optional[RootList]:
         """
         Safely set the roots of the problem. Accepts
         multiple input types (None or list of tuples or list of dicts).
         """
         if roots is None:
-            return
+            return None
         if not isinstance(roots, RootList):
-            if isinstance(roots, (list, tuple)):
-                _roots = []
+            if isinstance(roots, Sequence):
+                _roots = []  # type: List[Any]
                 for r in roots:
-                    if isinstance(r, dict):
+                    if isinstance(r, Mapping):
                         _roots.append(tuple([r[g] for g in self.gens]))
-                    elif isinstance(r, (tuple, Root, list)):
+                    elif isinstance(r, Root):
                         _roots.append(r)
+                    elif isinstance(r, (tuple, list)):
+                        _roots.append(tuple(r))
                     else:
                         raise TypeError(f"Cannot convert {r} to Root.")
                 roots = RootList(self.gens, _roots)
             else:
                 raise TypeError(f"Cannot convert {roots} to RootList.")
         elif self.gens != roots.symbols:
-            raise ValueError(f"RootList symbols {roots.symbols} do not match the problem generators {self.gens}.")
+            raise ValueError(f"RootList symbols {roots.symbols} " + \
+                             f"do not match the problem generators {self.gens}.")
         self.roots = roots
         return self.roots
 
-    def transform(self,
+    def transform(
+        self,
         transform: Dict[Symbol, Expr],
         inv_transform: Dict[Symbol, Expr]
     ) -> Tuple['InequalityProblem', Callable]:
@@ -795,15 +829,19 @@ class InequalityProblem(Generic[T]):
         >>> from sympy.abc import a, b, c, x, y, z
         >>> from sympy import Function
         >>> F = Function('F')
-        >>> problem = InequalityProblem(a**2*b*(a-b)+b**2*c*(b-c)+c**2*a*(c-a),{b+c-a:F(a),c+a-b:F(b),a+b-c:F(c)})
-        >>> new_pro, restore = problem.transform({a:y+z,b:z+x,c:x+y}, {x:(b+c-a)/2,y:(c+a-b)/2, z:(a+b-c)/2})
+        >>> problem = InequalityProblem(a**2*b*(a-b)+b**2*c*(b-c)+c**2*a*(c-a),
+        ... {b+c-a:F(a),c+a-b:F(b),a+b-c:F(c)})
+        >>> new_pro, restore = problem.transform({a:y+z,b:z+x,c:x+y},
+        ... {x:(b+c-a)/2,y:(c+a-b)/2, z:(a+b-c)/2})
         >>> new_pro.expr.expand(), new_pro.ineq_constraints # doctest: +NORMALIZE_WHITESPACE
         (2*x**3*z - 2*x**2*y*z + 2*x*y**3 - 2*x*y**2*z - 2*x*y*z**2 + 2*y*z**3,
          {2*x: F(y + z), 2*y: F(x + z), 2*z: F(x + y)})
 
         After we find a solution (sympy Expr) to the transformed problem, use `restore` to
         transform it back to the original problem.
-        >>> sol = (-x + z)**2*F(x + y)*F(x + z)/2 + (x - y)**2*F(x + y)*F(y + z)/2 + (y - z)**2*F(x + z)*F(y + z)/2
+
+        >>> sol = (-x + z)**2*F(x + y)*F(x + z)/2 + (x - y)**2*F(
+        ... x + y)*F(y + z)/2 + (y - z)**2*F(x + z)*F(y + z)/2
         >>> (sol.xreplace({F(y + z): 2*x, F(x + z): 2*y, F(x + y): 2*z}) - new_pro.expr).expand()
         0
         >>> restore(sol) # doctest: +SKIP
@@ -812,17 +850,22 @@ class InequalityProblem(Generic[T]):
         0
 
         Transformations should be birational if the problem is polynomial.
+
         >>> from sympy import cbrt
         >>> InequalityProblem(a**2).polylize().transform({a: cbrt(b)}, {b: a**3}) # doctest:+SKIP
         Traceback (most recent call last):
         ...
         PolynomialError: b**(2/3) contains an element of the set of generators.
         """
-        src_dicts = [{self.expr: Integer(1)}, self.ineq_constraints, self.eq_constraints]
-        dst_dicts = [{}, {}, {}]
+        src_dicts = [{self.expr: Integer(1)}, self.ineq_constraints, self.eq_constraints]  # type: List[Dict[Any, Any]]
+        dst_dicts = [{}, {}, {}]  # type: List[Dict[Any, Any]]
+        one = 1
+        symbols = []  # type: List[Symbol]
         if isinstance(self.expr, Poly):
             new_symbols = tuple(sorted(inv_transform.keys(), key=lambda x:x.name))
-            symbols = tuple([_ for _ in self.expr.gens if (_ not in transform)]) + new_symbols
+            symbols[:] = [cast(Symbol, _) for _ in self.expr.gens if (_ not in transform)] + list(new_symbols)
+            one = Poly(1, *symbols)
+
         for src, dst in zip(src_dicts, dst_dicts):
             for p, e in src.items():
                 e = e.xreplace(transform)
@@ -830,7 +873,7 @@ class InequalityProblem(Generic[T]):
                     p = p.xreplace(transform)
                 elif isinstance(p, Poly):
                     factor_list = _polysubs_factor_list(p, transform, symbols)
-                    p = p.one
+                    p = cast(Any, one)
                     for d, mul in factor_list:
                         e *= d.as_expr()**(((-mul+1)//2)*2)
                         if mul % 2 == 1:
@@ -851,7 +894,11 @@ class InequalityProblem(Generic[T]):
             return numer / denom
         return problem, restore
 
-    def marginalize(self, transform: Dict[Symbol, Expr], diff: Optional[Dict[Symbol, Expr]]=None) -> Tuple['InequalityProblem', Callable]:
+    def marginalize(
+        self,
+        transform: Dict[Symbol, Expr],
+        diff: Optional[Dict[Symbol, Expr]]=None
+    ) -> Tuple['InequalityProblem', Callable]:
         """
         Substitute the variables in the problem with the new substitutions. Currently
         only work for polynomial problems.
@@ -887,13 +934,26 @@ class InequalityProblem(Generic[T]):
         """
         if diff is None:
             diff = {}
-        src_dicts = [{self.expr:1}, self.ineq_constraints, self.eq_constraints]
-        dst_dicts = [{}, {}, {}]
+        src_dicts = [{self.expr:1}, self.ineq_constraints, self.eq_constraints]  # type: List[Dict[Any, Any]]
+        dst_dicts = [{}, {}, {}]  # type: List[Dict[Any, Any]]
 
         gens = self.gens
-        changed_gens = [g for g in gens if (g in transform)]
-        other_gens = [g for g in gens if (g not in transform)]
+        changed_inds = [i for i, g in enumerate(gens) if g in transform]
+        changed_gens = [gens[i] for i in changed_inds]
+        other_inds = [i for i in range(len(gens)) if i not in changed_inds]
+        other_gens = [gens[i] for i in other_inds]
         shift = {g: g + v for g, v in transform.items()}
+
+        G = self.identify_symmetry()
+        H = G.pointwise_stabilizer(changed_inds)
+        other_inds_dt = {i: j for j, i in enumerate(other_inds)}
+
+        def proj_perm(p):
+            arr = p._array_form
+            return p.__class__([other_inds_dt[i] for i in arr
+                                if i in other_inds_dt])
+        H = H.__class__(*[proj_perm(p) for p in H.args])
+
 
         expr_mul = 1
         expr_add = 0
@@ -902,7 +962,7 @@ class InequalityProblem(Generic[T]):
                 try:
                     if not isinstance(p, Poly):
                         raise BasePolynomialError
-                    factor_list = _polysubs_factor_list(p, shift, gens)
+                    factor_list = _polysubs_factor_list(p, shift, list(gens))
                 except BasePolynomialError:
                     raise TypeError("Not implemented for non-polynomial problems.")
 
@@ -916,14 +976,27 @@ class InequalityProblem(Generic[T]):
                     expr_mul = e
                     e = 0
 
-                # TODO: this can be processed on the domain
-                p = p.as_poly(changed_gens)
+
+                is_cyc = (not H.is_trivial) and verify_symmetry(p, G)
+                wrap = lambda f: f
+
+                p = marginalize(p, *changed_gens)
+                if is_cyc:
+                    def wrap(f):
+                        f2 = poly_reduce_by_symmetry(f.as_poly(other_gens), H)
+                        return CyclicSum(f2.as_expr(), other_gens, H)
+
 
                 difference = [e]
                 for m, c in p.terms():
                     if not any(m):
                         continue
-                    difference.append(-c * Mul(
+                    if any(m[i] != 0 and diff.get(g, 0) == 0
+                           for i, g in enumerate(changed_gens)):
+                        # this term is zero
+                        continue
+
+                    difference.append(wrap(-c) * Mul(
                         *[diff.get(g, 0)**m[i] for i, g in enumerate(changed_gens)]))
 
                 # TODO: this can be processed on the domain
@@ -948,16 +1021,16 @@ class InequalityProblem(Generic[T]):
         Try to formulate self as a QCQP instance. If success,
         it returns the QCQP instance and the restoration function.
         """
-        from .preprocess.qcqp import formulate_qcqp
+        from .progsos.qcqp import formulate_qcqp
         return formulate_qcqp(self)
 
 
 def _get_constraints_wrapper(
-    symbols: Tuple[int, ...],
+    symbols: Tuple[Symbol, ...],
     ineq_constraints: Dict[T, Expr],
     eq_constraints: Dict[T, Expr],
     perm_group: Optional[PermutationGroup]=None,
-    reorder_func: Callable[[T, Permutation], T]=None,
+    reorder_func: Optional[Callable[[T, Permutation], T]]=None,
     free_symbols_func: Callable[[T], Set[Symbol]]=_dtype_free_symbols,
 ):
     if perm_group is None:
@@ -975,8 +1048,7 @@ def _get_constraints_wrapper(
         # avoid duplicate function counters
         k = len(name)
         exprs = list(ineq_constraints) + list(eq_constraints.values())
-        names = [[f.name for f in e.find(AppliedUndef)] for e in exprs]
-        names = [item for sublist in names for item in sublist]
+        names = [f.name for e in exprs for f in _as_expr(e).find(AppliedUndef)]
         names = [n[k:] for n in names if n.startswith(name)]
         digits = [int(n) for n in names if n.isdecimal()]
         return max(digits, default=-1) + 1
@@ -1028,12 +1100,12 @@ def _polysubs_factor_list(
     numer = frac[0]
 
     denom = Mul.make_args(frac[1])
-    denom_list = [0] * len(denom)
-    for i, arg in enumerate(denom):
-        if arg.is_Pow:
-            denom_list[i] = (arg.base, arg.exp)
+    denom_list = []
+    for arg in denom:
+        if isinstance(arg, Pow):
+            denom_list.append((arg.base, arg.exp))
         else:
-            denom_list[i] = (arg, 1)
+            denom_list.append((arg, 1))
     numer = Poly(numer, new_gens)
     result = [(numer, 1)] + [(Poly(d, new_gens), -mul) for d, mul in denom_list]
     return result

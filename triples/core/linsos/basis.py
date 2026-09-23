@@ -1,16 +1,19 @@
 from functools import lru_cache, wraps
-from typing import Any, Union, Tuple, List, Callable, Optional, TYPE_CHECKING
+from typing import Union, Tuple, List, Optional, TYPE_CHECKING
 from time import perf_counter
 
 import numpy as np
-from scipy.sparse import coo_matrix
-from sympy import Poly, Mul, Pow, Integer, Basic
-from sympy import symbols as sp_symbols
-from sympy.polys.polyclasses import DMP
-from sympy.polys.rings import PolyRing, PolyElement
+from sympy import Poly, Mul, Pow, Integer
+from sympy.polys.rings import PolyElement
 
 from ...utils import arraylize_np, arraylize_sp, MonomialManager
 from ...utils.monomials import generate_partitions
+from ...sdp.arithmetic.matop import USE_SCIPY_ARRAY
+
+if USE_SCIPY_ARRAY:
+    from scipy.sparse import coo_array
+else:
+    from scipy.sparse import coo_matrix as coo_array
 
 if TYPE_CHECKING:
     from sympy import Expr, Symbol
@@ -23,133 +26,88 @@ _VERBOSE_GENERATE_QUAD_DIFF = False
 def tuple_sum(t1: Tuple[int, ...], t2: Tuple[int, ...]) -> Tuple[int, ...]:
     return tuple(x + y for x, y in zip(t1, t2))
 
-class _callable_expr():
-    """
-    Callable expression is a wrapper of sympy expression that can be called with symbols,
-    it is more like a function. It accepts an addition kwarg poly=True/False.
-
-    Example
-    ========
-    >>> from sympy.abc import a, b, c, x, y
-    >>> from sympy import Function
-    >>> _callable_expr.from_expr(a**3*b**2, (a,b))((x,y))
-    x**3*y**2
-
-    >>> e = _callable_expr.from_expr(Function("F")(a,b,c), (a,b,c), (a**3+b**3+c**3).as_poly(a,b,c))
-    >>> e((a,b,c))
-    F(a, b, c)
-    >>> e((a,b,c), poly=True)
-    Poly(a**3 + b**3 + c**3, a, b, c, domain='ZZ')
-
-    """
-    __slots__ = ['_func']
-    def __init__(self, func: Callable[[Tuple['Symbol', ...], Any], 'Expr']):
-        self._func = func
-    def __call__(self, symbols: Tuple['Symbol', ...], *args, **kwargs) -> 'Expr':
-        return self._func(symbols, *args, **kwargs)
-
-    @classmethod
-    def from_expr(cls, expr: 'Expr', symbols: Tuple['Symbol', ...], p: Optional[Poly] = None) -> '_callable_expr':
-        if p is None:
-            def func(s, poly=False):
-                e = expr.xreplace(dict(zip(symbols, s)))
-                if poly: e = e.as_poly(s)
-                return e
-        else:
-            def func(s, poly=False):
-                if not poly:
-                    return expr.xreplace(dict(zip(symbols, s)))
-                # new_p = p.as_expr().xreplace(dict(zip(symbols, s))).as_poly(s)
-                new_p = Basic.__new__(Poly)
-                new_p.gens = tuple(s)
-                if isinstance(p, PolyElement):
-                    new_p.rep = DMP.from_dict(dict(p), len(new_p.gens) - 1, p.ring.domain)
-                elif isinstance(p, Poly):
-                    new_p.rep = p.rep
-                elif isinstance(p, DMP):
-                    new_p.rep = p
-                return new_p
-
-        return cls(func)
-
-    def default(self, nvars: int) -> 'Expr':
-        """
-        Get the defaulted value of the expression given nvars.
-        """
-        symbols = sp_symbols(f'x:{nvars}')
-        return self._func(symbols)
-
 
 class LinearBasis():
-    def nvars(self) -> int:
+    def as_expr(self) -> 'Expr':
         raise NotImplementedError
-    def _get_default_symbols(self) -> Tuple['Symbol', ...]:
-        return tuple(sp_symbols(f'x:{self.nvars()}'))
-    def as_expr(self, symbols) -> 'Expr':
-        raise NotImplementedError
-    def as_poly(self, symbols) -> Poly:
-        return self.as_expr(symbols).doit().as_poly(symbols)
-    def degree(self) -> int:
-        return self.as_poly(self._get_default_symbols()).total_degree()
+    def as_poly(self) -> Poly:
+        return self.as_expr().doit().as_poly()
+    def as_polyelement(self) -> 'PolyElement':
+        poly = self.as_poly()
+        dom = poly.domain
+        rng = dom.__getitem__(poly.gens).ring
+        return rng.dtype(poly.rep.to_dict())
     def as_array_np(self, **kwargs) -> np.ndarray:
-        return arraylize_np(self.as_poly(self._get_default_symbols()), **kwargs)
+        return arraylize_np(self.as_polyelement(), **kwargs)
     def as_array_sp(self, **kwargs) -> 'Matrix':
-        return arraylize_sp(self.as_poly(self._get_default_symbols()), **kwargs)
+        return arraylize_sp(self.as_polyelement(), **kwargs)
 
-class LinearBasisExpr(LinearBasis):
-    __slots__ = ['_expr', '_symbols']
-    def __init__(self, expr: 'Expr', symbols: Tuple[int, ...]):
-        self._expr = expr.as_expr()
-        self._symbols = symbols
-    def nvars(self) -> int:
-        return len(self._symbols)
-    def as_expr(self, symbols) -> 'Expr':
-        return self._expr.xreplace(dict(zip(self._symbols, symbols)))
+    def degree(self) -> int:
+        return self.as_poly().total_degree()
+
 
 class LinearBasisTangent(LinearBasis):
-    _degree_step = 1
-    __slots__ = ['_powers', '_tangent']
-    def __init__(self, powers: Tuple[int, ...], tangent: 'Expr', symbols: Tuple['Symbol', ...]):
+    _degree_step = 1 # class variable
+
+    __slots__ = ['_powers', 'rep', '_tangent']
+
+    _powers: Tuple[int, ...]
+    rep: 'PolyElement'
+    _tangent: 'Expr'
+
+    def __init__(self, powers: Tuple[int, ...], rep: 'PolyElement', tangent: Optional['Expr']=None):
         self._powers = powers
-        self._tangent = _callable_expr.from_expr(tangent, symbols)
+        self.rep = rep
+        if tangent is not None:
+            self._tangent = tangent
+        else:
+            self._tangent = rep.parent().to_sympy(rep)
+
     @property
     def powers(self) -> Tuple[int, ...]:
         return self._powers
     @property
-    def tangent(self) -> _callable_expr:
+    def tangent(self) -> 'Expr':
         return self._tangent
-    def nvars(self) -> int:
-        return len(self._powers)
-    def as_expr(self, symbols) -> 'Expr':
-        return Mul(*(x**i for x, i in zip(symbols, self._powers))) * self._tangent(symbols).as_expr()
-    def as_poly(self, symbols) -> Poly:
-        return Poly.from_dict({self._powers: 1}, symbols) * self._tangent(symbols, poly=True)
+
+    def as_expr(self) -> 'Expr':
+        symbols = self.rep.parent().symbols
+        return Mul(*(x**i for x, i in zip(symbols, self._powers))) * self._tangent
+    def as_polyelement(self) -> 'PolyElement':
+        rep = self.rep
+        ring = rep.parent().ring
+        rep = ring.dtype({self._powers: rep.parent().domain.one}) * rep
+        return rep
+    def as_poly(self) -> Poly:
+        rep = self.as_polyelement()
+        return Poly.from_dict(rep, rep.parent().symbols)
+
+
+    @classmethod
+    def from_poly(cls, powers: Tuple[int, ...], poly: Poly, tangent: Optional['Expr']=None) -> 'LinearBasisTangent':
+        rep = poly
+        if isinstance(poly, Poly):
+            dom = poly.domain
+            rep = dom.ring.dtype(poly.rep.to_dict())
+        return cls(powers, rep, tangent)
+
     def __neg__(self) -> 'LinearBasisTangent':
-        return self.__class__.from_callable_expr(self._powers, lambda *args, **kwargs: -self._tangent(*args, **kwargs).as_expr())
+        return self.__class__(self._powers, -self.rep, -self._tangent)
     def __len__(self) -> int:
         return 1
+
     def to_even(self, symbols: List['Expr']) -> 'LinearBasisTangentEven':
         """
         Convert the linear basis to an even basis.
         """
         rem_powers = tuple(d % 2 for d in self._powers)
         even_powers = tuple(d - r for d, r in zip(self._powers, rem_powers))
-        def _new_tangent(s, poly=False):
-            if poly: return self._tangent(s, poly=True)
-            monom = Mul(*(symbols[i] for i, d in enumerate(rem_powers) if d))
-            return self._tangent(s, poly=False).as_expr() * monom
-        return LinearBasisTangentEven.from_callable_expr(even_powers, _callable_expr(_new_tangent))
-
-    @classmethod
-    def from_callable_expr(cls, powers: Tuple[int, ...], tangent: _callable_expr) -> 'LinearBasisTangent':
-        """
-        Create a LinearBasisTangent from powers and a callable expression. This is intended for
-        internal use only.
-        """
-        obj = cls.__new__(cls)
-        obj._powers = powers
-        obj._tangent = tangent
-        return obj
+        monom = Mul(*(symbols[i] for i, d in enumerate(rem_powers) if d))
+        rep = self.rep
+        ring = rep.parent().ring
+        rep = ring.dtype({rem_powers: rep.parent().domain.one}) * rep
+        new_tangent = self._tangent * monom
+        return LinearBasisTangentEven(even_powers, rep, new_tangent)
 
     @classmethod
     def generate(cls,
@@ -173,11 +131,10 @@ class LinearBasisTangent(LinearBasis):
         step = cls._degree_step
         if degree < 0 or degree % step != 0:
             return []
-        tangent = _callable_expr.from_expr(tangent, symbols, p=tangent_p)
         combs = generate_partitions([cls._degree_step] * len(symbols),
                     degree, equal=require_equal, descending=False)
-        return [LinearBasisTangent.from_callable_expr(
-            tuple(i*step for i in comb), tangent) for comb in combs]
+        return [LinearBasisTangent.from_poly(
+            tuple(i*step for i in comb), tangent_p, tangent) for comb in combs]
 
     @classmethod
     def generate_quad_diff(cls,
@@ -227,7 +184,7 @@ class LinearBasisTangent(LinearBasis):
         >>> [_.__class__.__name__ for _ in [bases[0], mat]]
         ['LinearBasisTangent', 'ndarray']
 
-        >>> (bases[8].as_expr((a,b,c)), mat[8])
+        >>> (bases[8].as_expr(), mat[8])
         ((a - b)**2*F(a, b, c), array([ 2., -2., -2.,  0.,  2.]))
         """
         # 1. standardize the input
@@ -260,7 +217,8 @@ class LinearBasisTangent(LinearBasis):
             time0 = perf_counter()
 
         # 4. Convert polys to the numpy matrix representation.
-        mat = _get_matrix_of_quad_diff(tangent_p, degree, quad_diff_order, cls._degree_step, symmetry)
+        mat = _get_matrix_of_quad_diff(
+            tangent_p, degree, quad_diff_order, cls._degree_step, symmetry)
 
         return basis, mat
 
@@ -356,8 +314,12 @@ class SwitchableWrapper:
     def clear_cache(self):
         self.cache_clear()
 
+
 @switchable_lru_cache()
-def _get_cross_dmps_of_quad_diff(quad_diff_order: int, tangent_dmp: DMP) -> List[PolyElement]:
+def _get_cross_smps_of_quad_diff(
+    quad_diff_order: int,
+    tangent: Poly
+) -> List[PolyElement]:
     """
     Compute the DMP of polynomials of the form prod((ai - aj)^2) * tangent.
 
@@ -369,18 +331,17 @@ def _get_cross_dmps_of_quad_diff(quad_diff_order: int, tangent_dmp: DMP) -> List
     ----------
     quad_diff_order: int
         The maximum degree of the quadratic differences.
-    tangent_dmp: DMP
-        The sympy polynomial representation (DMP object) of the tangent.
+    tangent: Poly
+        The sympy polynomial object of the tangent.
     """
-    tangent_dmp = tangent_dmp.rep if isinstance(tangent_dmp, Poly) else tangent_dmp
-    nvars = tangent_dmp.lev + 1
+    nvars = len(tangent.gens)
     ndiff = nvars * (nvars - 1) // 2
     powers = generate_partitions([2] * ndiff, quad_diff_order, descending=False)
-    domain = tangent_dmp.dom
+    domain = tangent.domain
 
-    rng = PolyRing(f'x:{nvars}', domain)
+    rng = domain.__getitem__(tangent.gens).ring
     rng_zero = rng.zero
-    smp = rng_zero.new(tangent_dmp.to_dict())
+    smp = rng_zero.new(tangent.rep.to_dict())
 
     # polys are the DMPs of (ai - aj)^2 for all i < j
     polys, lst = [None] * ndiff, [0] * nvars
@@ -431,8 +392,12 @@ def _get_cross_dmps_of_quad_diff(quad_diff_order: int, tangent_dmp: DMP) -> List
     return new_poly_reps
 
 
-def _get_cross_exprs_and_polys_of_quad_diff(symbols: Tuple['Symbol', ...],
-        quad_diff_order: int, tangent: 'Expr', tangent_p: Poly) -> Tuple[List['Expr'], List[PolyElement]]:
+def _get_cross_exprs_and_polys_of_quad_diff(
+    symbols: Tuple['Symbol', ...],
+    quad_diff_order: int,
+    tangent: 'Expr',
+    tangent_p: Poly
+) -> Tuple[List['Expr'], List[PolyElement]]:
     """
     Generate all sympy expressions of the form prod((ai - aj)^2) * tangent and return the polynomials,
     the degree of prod((ai - aj)^2) is bounded by quad_diff_order.
@@ -480,7 +445,7 @@ def _get_cross_exprs_and_polys_of_quad_diff(symbols: Tuple['Symbol', ...],
                 for (i,j), p in zip(inds, power))) for power in powers
     ]
 
-    dmps = _get_cross_dmps_of_quad_diff(quad_diff_order, tangent_p.rep)
+    dmps = _get_cross_smps_of_quad_diff(quad_diff_order, tangent_p)
 
     # _new_func, _new_func_arg = Basic.__new__, Poly
     # polys = [_new_func(_new_func_arg) for _ in range(len(exprs))]
@@ -513,7 +478,11 @@ def _compute_sym_multiplicity(arr: np.ndarray, need_sort: bool = True) -> np.nda
 
 
 @switchable_lru_cache()
-def _get_reduced_indices(symmetry: MonomialManager, symmetry_base: MonomialManager, degree: int) -> Tuple[np.ndarray, np.ndarray]:
+def _get_reduced_indices(
+    symmetry: MonomialManager,
+    symmetry_base: MonomialManager,
+    degree: int
+) -> Tuple[np.ndarray, np.ndarray]:
     """
     Get the indices of monomials after being reduced by symmetry.
 
@@ -586,7 +555,7 @@ def _count_contribution_of_monoms(A: np.ndarray, v: np.ndarray, M: int) -> np.nd
         cols = A.ravel()                   # column coors [A[0,0],A[0,1],...,A[1,0],...]
         data = np.tile(v, X)               # values [v[0],v[1],...,v[0],v[1],...]
 
-        return coo_matrix((data, (rows, cols)), shape=(X, M)).toarray()
+        return coo_array((data, (rows, cols)), shape=(X, M)).toarray()
     else:
         B = np.zeros((X, M), dtype=v.dtype)
 
@@ -598,7 +567,7 @@ def _count_contribution_of_monoms(A: np.ndarray, v: np.ndarray, M: int) -> np.nd
 
 @switchable_lru_cache()
 def _get_matrix_of_quad_diff(
-    tangent_dmp: DMP,
+    tangent: Poly,
     degree: int,
     quad_diff_order: int,
     step: int,
@@ -633,7 +602,7 @@ def _get_matrix_of_quad_diff(
     np.ndarray
         The matrix representation of the bases.
     """
-    polys = _get_cross_dmps_of_quad_diff(quad_diff_order, tangent_dmp)
+    polys = _get_cross_smps_of_quad_diff(quad_diff_order, tangent)
     if len(polys) == 0:
         return np.array([], dtype='float')
     if _VERBOSE_GENERATE_QUAD_DIFF:
@@ -669,7 +638,7 @@ def _get_matrix_of_quad_diff(
 
 
 def _get_matrix_of_lifted_degrees(
-    poly: Union[DMP, Poly, PolyElement],
+    poly: Union[Poly, PolyElement],
     degree_comb_mat: np.ndarray,
     symmetry: MonomialManager,
     symmetry_base: MonomialManager,
@@ -703,7 +672,7 @@ def _get_matrix_of_lifted_degrees(
         nvars = poly.ring.ngens
         deg = lambda p: max(map(sum, p.keys()), default=0)
     else:
-        nvars = (poly.rep if isinstance(poly, Poly) else poly).lev + 1
+        nvars = poly.rep.lev + 1
         deg = lambda p: p.total_degree()
 
     # # This a naive implementation

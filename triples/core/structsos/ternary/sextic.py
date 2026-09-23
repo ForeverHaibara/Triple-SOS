@@ -1,24 +1,27 @@
-from sympy import Poly, Expr, Rational, Float, Add
+from typing import TYPE_CHECKING
+
+from sympy import Add, Expr, Float, Poly, Rational
 from sympy import MutableDenseMatrix as Matrix
 
 from .cubic import structsos_cubic
 from .sextic_symmetric import (
     _structsos_sextic_hexagon_symmetric,
     _structsos_sextic_hexagram_symmetric,
-    structsos_sextic_symmetric_ultimate
+    structsos_sextic_symmetric_ultimate,
 )
-from .utils import (
-    CommonExpr,
-    sum_y_exprs, nroots, rationalize_bound, rationalize_func,
-    quadratic_weighting, inverse_substitution, congruence,
-    zip_longest, align_cyclic_group
+from .utils import CommonExpr, align_cyclic_group, inverse_substitution
+from ..utils import (
+    congruence,
+    quadratic_weighting,
+    rationalize_func,
+    sum_y_exprs,
+    zip_longest,
 )
-from typing import TYPE_CHECKING
+from ....utils.roots import nroots, rationalize_bound
 
 if TYPE_CHECKING:
-    from .utils import (
-        Coeff
-    )
+    from ....utils.expressions import Coeff
+
 
 def structsos_sextic(coeff, real = True):
     if coeff((5,1,0)) == coeff((1,5,0)) and coeff((4,2,0)) == coeff((2,4,0)) and coeff((3,2,1)) == coeff((3,1,2)):
@@ -75,9 +78,11 @@ def _structsos_sextic_hexagram(coeff: 'Coeff'):
 
     => (s(a2c)s(b2c)+200/9p(a2)-19*18^(1/3)/6s(a2c)p(a))
 
-    Reference
-    ---------
-    [1] https://www.zhihu.com/question/619911891
+    References
+    ----------
+    [1] https://www.zhihu.com/question/2038737989736593104/answer/2043385168942167226
+
+    [2] https://www.zhihu.com/question/619911891
     """
     if coeff((3,3,0)) < 0 or coeff((4,1,1)) < 0:
         return None
@@ -140,7 +145,7 @@ def _structsos_sextic_hexagram(coeff: 'Coeff'):
             x, rest = _compute_x_rest(v)
             p1 = ((c2 - c1*v**2) * CommonExpr.schur(3, (a,b,c)) \
                     + (rest*c1) * CyclicSum(a*(b-c)**2)).together().as_coeff_Mul()
-            y = [
+            _y = [
                 c1,
                 p1[0],
                 rem
@@ -150,7 +155,7 @@ def _structsos_sextic_hexagram(coeff: 'Coeff'):
                 CyclicProduct(a) * p1[1],
                 CyclicProduct(a**2)
             ]
-            return sum_y_exprs(y, exprs)
+            return sum_y_exprs(_y, exprs)
 
     if rem > 0 and coeff((4,1,1)) == coeff((3,3,0)):
         # Sometimes we have this type of problem, corresponding theorem 2.
@@ -308,7 +313,7 @@ def _structsos_sextic_hexagram(coeff: 'Coeff'):
             -12*x + 2*y**2 - 6*y + 9
         ]
         def compute_u(v):
-            frac1, frac2 = 0, 0
+            frac1, frac2 = coeff.domain.zero, coeff.domain.zero
             for i in coeffsu1:
                 frac1 *= v
                 frac1 += i
@@ -317,23 +322,17 @@ def _structsos_sextic_hexagram(coeff: 'Coeff'):
                 frac2 += i
             return frac1 / frac2
 
-        u_, v_ = None, None
-        eqvdiff = eqv.diff()
-        eqvgcd = eqv.gcd(eqvdiff)
-        if eqvgcd.total_degree() == 1:
-            root = coeff.convert(-eqvgcd.rep.TC() / eqvgcd.rep.LC())
-            u_ = compute_u(root)
-            if u_ * root > 1:
-                v_ = root
-            else:
-                u_, v_ = None, None
-        if v_ is None:
-            for root in nroots(eqv, method = 'factor', real = True, nonnegative = True):
-                u_ = compute_u(root)
-                if u_ * root > 1:
-                    v_ = root
-                    break
-        if v_ is not None:
+        u0, v0 = None, None
+        eqv_roots = nroots(eqv, method = 'factor', real = True, nonnegative = True, ground=True)
+        for root in eqv_roots:
+            u0 = compute_u(root)
+            if u0 * root > 1:
+                v0 = root
+                break
+        else:
+            u0, v0 = None, None
+
+        if v0 is not None:
             # we are sure that f(a,b,c) * s(a) >= coeff((3,3,0)) * s(c(a2c-b2c-w(a2b-abc)+z(ab2-abc))2)
             # where w = (u^2+v)/(uv-1), z = (v^2+u)/(uv-1)
             # so we can subtract the right hand side and apply the quartic theorem
@@ -350,7 +349,6 @@ def _structsos_sextic_hexagram(coeff: 'Coeff'):
                 m2, p2, n2, q2 = 0, r_*(w*w - 2*z), -r_*2*w*z, r_*(z*z - 2*w)
                 return get_discriminant(m2, p2, n2, q2)
 
-            u0, v0 = coeff.convert(u_), coeff.convert(v_)
             det_, (m3, p3, n3, q3) = get_discriminant_uv(u0, v0)
             if det_ == 0:
                 u, v = u0, v0
@@ -358,9 +356,11 @@ def _structsos_sextic_hexagram(coeff: 'Coeff'):
                 # first check that the result is good
 
                 # do rational approximation for both u and v
+                u_numer = coeff.to_sympy(u0).n(15)
+                v_numer = coeff.to_sympy(v0).n(15)
                 for u, v in zip(
-                    rationalize_bound(u_, direction = 0, compulsory = True),
-                    rationalize_bound(v_, direction = 0, compulsory = True)
+                    rationalize_bound(u_numer, direction = 0, compulsory = True),
+                    rationalize_bound(v_numer, direction = 0, compulsory = True)
                 ):
                     u, v = coeff.convert(u), coeff.convert(v)
                     det_, (m3, p3, n3, q3) = get_discriminant_uv(u, v)
@@ -483,7 +483,7 @@ def _structsos_sextic_rotated_tree(coeff: 'Coeff'):
         return align_cyclic_group(sol, coeff.gens)
 
     a, b, c = coeff.gens
-    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+    CyclicProduct = coeff.cyclic_product
 
     coeff6 = coeff((2,4,0))
     rem = (coeff6 + coeff((3,1,2)) + coeff((3,2,1))) * 3 + coeff((2,2,2))
@@ -494,31 +494,13 @@ def _structsos_sextic_rotated_tree(coeff: 'Coeff'):
     if u < -2:
         return None
 
-    def _solve_point(t):
-        # t >= -1
-        if t == 2 or t == -1:
-            return CyclicSum(a**2*c - a*b*c)**2
-        if t == 1:
-            return CyclicSum(a**2*(a**2 + 2*a*b)*(b**2 - a*c)**2) / CyclicSum(a)**2
-        exprs = [
-            CyclicSum(a) * CyclicSum(a**2*c*(a**2*c-t*a*b**2-t*b*c**2+(t*t-1)*b**2*c-t*(t-2)*a*b*c)**2),
-            CyclicProduct(a**2) * CyclicSum(((t-1)*a-b)**2*(a+(t-1)*b-t*c)**2),
-            CyclicProduct(a) * CyclicSum(c*((t-1)*a-b)**2*(t*a*b-a*c-(t-1)*b*c)**2)
-        ]
-        expr = exprs[0] + (t+1)/2*exprs[1] + (t+1)*exprs[2]
-        if t >= 0:
-            multiplier = CyclicSum(a) * CyclicSum(a*b*(b + t*(t+1)/3*c).together())
-        else:
-            multiplier = CyclicSum(a**2*(a*c + (t**2+t+2)*b*c + (b-c)**2/2).together())
-        return expr / multiplier
-
     def _solve_regular(t):
         # Proof given by the theorem.
         s1, s2 = (u - (t**3 - 3*t)), (v + 3*t*(t - 1))
         if t >= -1 and s1 >= 0 and s2 >= 0:
             y = [coeff6, coeff6*s1, coeff6*s2, rem]
             exprs = [
-                _solve_point(t),
+                _solve_sextic_rotated_tree_point(coeff, t),
                 CyclicProduct(a) * CommonExpr.amgm((2,1,0),(1,1,1), (a,b,c)),
                 CyclicProduct(a) * CommonExpr.amgm((2,0,1),(1,1,1), (a,b,c)),
                 CyclicProduct(a**2)
@@ -556,8 +538,8 @@ def _structsos_sextic_rotated_tree(coeff: 'Coeff'):
             # w2 = -(v + 6)**3/(27*(u - 2)*(u + v + 4))
             if 0 <= w1 <= 1:
                 return Add(
-                    (coeff6 * w1) * _solve_point(2),
-                    (coeff6 * w2) * _solve_point(t),
+                    (coeff6 * w1) * _solve_sextic_rotated_tree_point(coeff, 2),
+                    (coeff6 * w2) * _solve_sextic_rotated_tree_point(coeff, t),
                     rem * CyclicProduct(a**2)
                 )
 
@@ -569,6 +551,53 @@ def _structsos_sextic_rotated_tree(coeff: 'Coeff'):
                 return solution
 
     return None
+
+
+def _solve_sextic_rotated_tree_point(coeff: 'Coeff', t):
+    """
+    Solve
+    ```
+    s(a**4*c**2+(t**3-3*t)*a**3*b**2*c+(-3*t**2+3*t)*a**3*b*c**2+(-t**3+3*t**2-1)*a**2*b**2*c**2)
+    ```
+    when `t >= -1`.
+
+    Its cubic discriminant with respect to `t` is
+    ```
+    -27*p(a)**2*p(a**2 - b*c)**2*s(a**2*c - a*b*c)**2
+    ```
+    """
+    a, b, c = coeff.gens
+    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+
+    if t == 2 or t == -1:
+        return CyclicSum(a**2*c - a*b*c)**2
+    if t == 1:
+        return CyclicSum(a**2*(a**2 + 2*a*b)*(b**2 - a*c)**2) / CyclicSum(a)**2
+    if t < -1:
+        return None
+
+    squares = [
+        CyclicSum(a) * CyclicSum(
+            a**2*c*(a**2*c - t*a*b**2 - t*b*c**2
+                    + (t*t - 1)*b**2*c - t*(t - 2)*a*b*c)**2
+        ),
+        CyclicProduct(a**2) * CyclicSum(
+            ((t - 1)*a - b)**2 * (a + (t - 1)*b - t*c)**2
+        ),
+        CyclicProduct(a) * CyclicSum(
+            c*((t - 1)*a - b)**2 * (t*a*b - a*c - (t - 1)*b*c)**2
+        ),
+    ]
+    solution = squares[0] + (t + 1)/2*squares[1] + (t + 1)*squares[2]
+    if t >= 0:
+        multiplier = CyclicSum(a) * CyclicSum(
+            a*b*(b + t*(t + 1)/3*c).together()
+        )
+    else:
+        multiplier = CyclicSum(
+            a**2*(a*c + (t*t + t + 2)*b*c + (b - c)**2/2).together()
+        )
+    return solution / multiplier
 
 
 def _structsos_sextic_hexagon_full(coeff):
@@ -819,6 +848,53 @@ def _structsos_sextic_hexagon_to_hexagram(coeff: 'Coeff'):
             return main_solution + remain_solution
 
 
+def _sextic_full_quad_form_solution(coeff, quad_form):
+    """Convert the cyclic cubic Gram form into a structural SOS expression."""
+    cong = congruence(quad_form)
+    if cong is None:
+        return None
+    q, weights = cong
+    a, b, c = coeff.gens
+    cyclic_sum = coeff.cyclic_sum
+    forms = [
+        q[0, 0] * (a**3 - a*b*c) + q[0, 1] * (a**2*b - a*b*c) + q[0, 2] * (a*b**2 - a*b*c),
+        q[1, 1] * (a**2*b - a*b*c) + q[1, 2] * (a*b**2 - a*b*c),
+        q[2, 2] * (a*b**2 - a*b*c),
+    ]
+    squares = [cyclic_sum(form.expand().together())**2 for form in forms]
+    return sum_y_exprs(weights, squares)
+
+
+def _evaluate_lower_triangular_form(form, x0, y0):
+    """Evaluate and symmetrize a lower-triangular polynomial matrix."""
+    evaluated = [row[:] for row in form]
+    if not (x0 is None and y0 is None):
+        for i in range(len(evaluated)):
+            for j in range(i + 1):
+                evaluated[i][j] = evaluated[i][j](x0, y0)
+    for i in range(len(evaluated)):
+        for j in range(i, len(evaluated)):
+            evaluated[i][j] = evaluated[j][i]
+    return evaluated
+
+
+def _lower_triangular_form_det(form, x0, y0, size=3):
+    """Return a leading principal determinant of a lower-triangular form."""
+    matrix = _evaluate_lower_triangular_form(
+        [row[:size] for row in form[:size]], x0, y0)
+    if size == 3:
+        return matrix[0][0] * matrix[1][1] * matrix[2][2] \
+            + 2 * matrix[1][0] * matrix[2][1] * matrix[2][0] \
+            - matrix[0][0] * matrix[2][1]**2 \
+            - matrix[2][2] * matrix[1][0]**2 \
+            - matrix[1][1] * matrix[2][0]**2
+    if size == 2:
+        return matrix[0][0] * matrix[1][1] - matrix[1][0]**2
+    if size == 1:
+        return matrix[0][0]
+    return None
+
+
 def _structsos_sextic_full_sdp(coeff: 'Coeff'):
     """
     Heuristically solve full sextics with the method of unknown coefficients.
@@ -876,19 +952,6 @@ def _structsos_sextic_full_sdp(coeff: 'Coeff'):
     # ]
 
 
-    def _compute_quad_form_sol(quad_form):
-        cong = congruence(quad_form)
-        if cong is None:
-            return None
-        q, ss = cong
-        quad_form_sol = [
-            (q[0,0]*(a**3-a*b*c)+q[0,1]*(a**2*b-a*b*c)+q[0,2]*(a*b**2-a*b*c)),
-            (q[1,1]*(a**2*b-a*b*c)+q[1,2]*(a*b**2-a*b*c)),
-            (q[2,2]*(a*b**2-a*b*c))
-        ]
-        quad_form_sol = [CyclicSum(x.expand().together())**2 for x in quad_form_sol]
-        return sum_y_exprs(ss, quad_form_sol)
-
     # rest form is what the original polynomial subtracts the quadratic form,
     # corresponding to the coefficients of a^4bc, a^3b^2c, a^2b^3c
     rest_form = [
@@ -903,7 +966,7 @@ def _structsos_sextic_full_sdp(coeff: 'Coeff'):
             [c51/2, c42-c15, c33/2-c60],
             [c15/2, c33/2-c60, c24-c51]
         ])
-        quad_form_sol = _compute_quad_form_sol(quad_form)
+        quad_form_sol = _sextic_full_quad_form_solution(coeff, quad_form)
         return quad_form_sol
 
 
@@ -943,32 +1006,10 @@ def _structsos_sextic_full_sdp(coeff: 'Coeff'):
         [c15/2*z - r*(y-x), (c33/2-c60)*z - r*(2*u*x - 2*u*y - 2*v*x - 4*v*y - 6)/2, (c24-c51)*z - r*(-6*u + 2*x**2 + 2*x*y + 2*y**2)]
     ]
 
-    def quad_form_eval(q, x0, y0):
-        q = [row.copy() for row in q]
-        if not (x0 is None and y0 is None):
-            for i in range(len(q)):
-                for j in range(i+1):
-                    q[i][j] = q[i][j](x0, y0)
-        for i in range(len(q)):
-            for j in range(i, len(q)):
-                q[i][j] = q[j][i]
-        return q
-
-    def quad_form_det(x0, y0, n = 3):
-        q = quad_form_eval([row[:n] for row in quad_form[:n]], x0, y0)
-        if n == 3:
-            # it is a six-degree polynomial with respect to x0, y0
-            return q[0][0]*q[1][1]*q[2][2] + 2*q[1][0]*q[2][1]*q[2][0] \
-                - q[0][0]*q[2][1]**2 - q[2][2]*q[1][0]**2 - q[1][1]*q[2][0]**2
-        elif n == 2:
-            return q[0][0]*q[1][1]-q[1][0]**2
-        elif n == 1:
-            return q[0][0]
-
     # optimize the determinant of the quad_form by taking partial derivatives
     success = False
     for n_ in (3,):
-        det = quad_form_det(None, None, n_)
+        det = _lower_triangular_form_det(quad_form, None, None, n_)
         # XXX: when domain is not ZZ or QQ, det is wrapped and does not support dict(det)
         det = Poly(dict(det), a, b, domain=ring.domain)
         res = det.diff(0).resultant(det.diff(1))
@@ -976,7 +1017,8 @@ def _structsos_sextic_full_sdp(coeff: 'Coeff'):
             det2 = det.eval(b, y_).as_poly(a)
             for x_ in nroots(det2.diff(a), method='factor', real=True):
                 # PolyElement supports auto convertsion from floats for __call__
-                if det2(x_) >= 0 and quad_form_det(x_, y_, 1) >= 0 and quad_form_det(x_, y_, 2) >= 0:
+                if det2(x_) >= 0 and _lower_triangular_form_det(quad_form, x_, y_, 1) >= 0 and \
+                        _lower_triangular_form_det(quad_form, x_, y_, 2) >= 0:
                     # print((x_, y_))
                     success = True
                     break
@@ -996,15 +1038,15 @@ def _structsos_sextic_full_sdp(coeff: 'Coeff'):
             rationalize_bound(x_, direction = 0, compulsory = True),
             rationalize_bound(y_, direction = 0, compulsory = True),
         ):
-            if all(quad_form_det(x__, y__, i) >= 0 for i in range(1,4)):
+            if all(_lower_triangular_form_det(quad_form, x__, y__, i) >= 0 for i in range(1,4)):
                 x_, y_ = x__, y__
                 break
         else:
             return None
 
     u_, v_, z_ = u(x_, y_), v(x_, y_), z(x_, y_)
-    quad_form = Matrix(quad_form_eval(quad_form, x_, y_)) / z_
-    quad_form_sol = _compute_quad_form_sol(quad_form)
+    quad_form = Matrix(_evaluate_lower_triangular_form(quad_form, x_, y_)) / z_
+    quad_form_sol = _sextic_full_quad_form_solution(coeff, quad_form)
     if quad_form_sol is None:
         return None
 

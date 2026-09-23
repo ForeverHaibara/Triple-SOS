@@ -15,10 +15,11 @@ from .rationalize import rationalize_and_decompose
 from .utils import exprs_to_arrays, collect_constraints
 
 if TYPE_CHECKING:
-    from sympy import Expr, Symbol
     from numpy import ndarray
-    from .backends import SDPResult
+    from sympy import Expr, Symbol
     from sympy.core.relational import Relational
+
+    from .backends import SDPResult
 
 Decomp = Dict[Any, Tuple[Matrix, Matrix, List[Rational]]]
 

@@ -1,20 +1,19 @@
-from typing import Union, Tuple, List, Dict, Callable, Optional, TYPE_CHECKING
 from functools import wraps
+from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Tuple, Union
 
-from sympy import (
-    Poly, Expr, Integer, Rational, MatrixBase, Add,
-    QQ, ZZ, sympify, fraction
-)
+from sympy import QQ, RR, Add, Expr, MatrixBase, Poly, Rational, fraction, sympify
 from sympy.combinatorics import Permutation
 from sympy.core.symbol import uniquely_named_symbol
 
 from ...sdp import congruence
-from ...utils.expressions import Coeff, CyclicSum, CyclicProduct
+from ...utils.expressions import Coeff, CyclicProduct, CyclicSum
+from ...utils.polytools import intervals
 from ...utils.roots import nroots, rationalize_bound
 
 if TYPE_CHECKING:
     from sympy import MutableDenseMatrix as Matrix
     from sympy import Symbol
+    from sympy.polys.domains import Domain
 
 # use imports to keep linter happy
 (uniquely_named_symbol, Coeff, CyclicSum, CyclicProduct)
@@ -71,30 +70,6 @@ def radsimp(expr: Union[Expr, List[Expr]]) -> Expr:
     expr = (numer*n).expand()/d
     return expr
 
-def intervals(polys: List[Poly]) -> List[Expr]:
-    """
-    Return points where the polynomials change their signs.
-    When one of the polynomials is not in QQ or ZZ, return [].
-    If no signs are changed, return [0].
-    """
-    if len(polys) == 0:
-        return [Integer(0)]
-    if any(_.domain not in [QQ, ZZ] for _ in polys):
-        return []
-    ret = []
-    pre = None
-    from sympy import intervals as _intervals
-    for (l,r), mul in _intervals(polys):
-        if l != pre:
-            ret.append(l)
-            pre = l
-        if r != pre:
-            ret.append(r)
-            pre = r
-    if len(ret):
-        return ret
-    return [Integer(0)]
-
 
 def sum_y_exprs(y: List[Expr], exprs: List[Expr]) -> Expr:
     """
@@ -107,6 +82,51 @@ def sum_y_exprs(y: List[Expr], exprs: List[Expr]) -> Expr:
     return sum(_mul(*args) for args in zip(y, exprs))
 
 
+def common_region_of_curves(polys: List[Poly], domain: "Domain"):
+    """
+    Find a point in the domain so that poly(x, y) >= 0 holds for all
+    given polynomials.
+    """
+    if len(polys) != 2 and any(len(p.gens) != 2 for p in polys):
+        # current implementation only works for 2 polynomials
+        raise ValueError("common_region_of_curves() takes 2 bivariate polynomials")
+    if not domain.is_Field:
+        raise ValueError("domain must be a field")
+
+    def _convert(x):
+        return domain.convert(x)
+
+    if not domain.is_RR:
+        q_polys = [f.set_domain(domain) for f in polys]
+    else:
+        # RR does not support resultants -> convert to QQ first
+        q_polys = [f.set_domain(RR).set_domain(QQ)
+                        if not f.domain.is_QQ or not f.domain.is_ZZ
+                    else f.to_field() for f in polys]
+    discs = [p.discriminant() for p in q_polys]
+
+    p1, p2 = q_polys[0], q_polys[1]
+    disc1, disc2 = discs
+    res = p1.resultant(p2)
+
+    def test_y(y):
+        _fx = [p.rep.eval(y, 1) for p in q_polys]
+        fx = [Poly.new(f, *p.gens[:-1]) for f, p in zip(_fx, q_polys)]
+        for x in intervals(fx, domain):
+            point = test_x(x, y)
+            if point is not None:
+                return point
+
+    def test_x(x, y):
+        if all(p.domain.to_sympy(p.rep.eval(x).eval(y)) >= 0 for p in q_polys):
+            return tuple(_convert(i) for i in (x, y))
+
+    for y in intervals([disc1, disc2, res], domain):
+        point = test_y(y)
+        if point is not None:
+            return point
+
+
 def rationalize_func(
     poly: Union[Poly, Rational],
     validation: Callable[[Rational], bool],
@@ -114,7 +134,7 @@ def rationalize_func(
     direction: int = 0,
 ) -> Optional[Rational]:
     """
-    Find a rational number near the roots of poly that satisfies certain conditions.
+    Find a rational number near the roots of `poly` that satisfies certain conditions.
 
     Parameters
     ----------
@@ -237,8 +257,9 @@ def clear_free_symbols(poly: Poly, ineq_constraints: Dict[Poly, Expr] = {}, eq_c
     we can remove the symbol "a" from the constraints. But we cannot remove the symbol "y"
     even though it is not in the polynomial, as it is correlated with "x".
     """
-    from ..problem import InequalityProblem
     from warnings import warn
+
+    from ..problem import InequalityProblem
     warn("clear_free_symbols is deprecated. Please use remove_redundancy instead.",
          stacklevel=2, category=DeprecationWarning)
     pro = InequalityProblem(poly, ineq_constraints, eq_constraints)

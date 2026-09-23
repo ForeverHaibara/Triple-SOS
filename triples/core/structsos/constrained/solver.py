@@ -1,9 +1,10 @@
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from .acute import constrained_acute
 
 if TYPE_CHECKING:
     from sympy import Expr
+
     from ...problem import InequalityProblem
 
 

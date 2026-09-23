@@ -1,11 +1,12 @@
+from typing import TYPE_CHECKING
+
 from sympy import Add
 
 from .utils import CommonExpr
 from ..utils import congruence_solve
-from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .utils import Coeff
+    from ....utils.expressions import Coeff
 
 def structsos_quadratic(coeff: "Coeff", real = True):
     """

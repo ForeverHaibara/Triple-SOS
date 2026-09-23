@@ -9,7 +9,14 @@ from ..matmul import (
     symmetric_bilinear, symmetric_bilinear_multiple,
     _decompose_int64_to_level_digits
 )
-from ..matop import FLINT_TYPE
+from ..matop import FLINT_TYPE, USE_SCIPY_ARRAY
+
+
+if USE_SCIPY_ARRAY:
+    csr_array = sparse.csr_array
+else:
+    csr_array = sparse.csr_matrix
+
 
 def npeq(A, B):
     return A.shape == B.shape and not np.any(A - B)
@@ -78,13 +85,13 @@ def test_matmul():
 
 
 def test_sparse_matadd_and_matmul():
-    A = sparse.csr_matrix([[0., 2., 0.], [3., 0., 4.]])
-    B = sparse.csr_matrix([[5., 0.], [0., 7.], [11., 0.]])
+    A = csr_array([[0., 2., 0.], [3., 0., 4.]])
+    B = csr_array([[5., 0.], [0., 7.], [11., 0.]])
     D = np.array([[1., 2.], [3., 4.], [5., 6.]])
 
     C1 = matmul(A, B)
     C2 = matmul(D.T, B)
-    S = matadd(A, sparse.csr_matrix([[1., 0., -2.], [0., 5., 0.]]))
+    S = matadd(A, csr_array([[1., 0., -2.], [0., 5., 0.]]))
 
     assert sparse.issparse(C1)
     assert np.allclose(C1.toarray(), A.toarray() @ B.toarray())
@@ -92,7 +99,7 @@ def test_sparse_matadd_and_matmul():
     assert sparse.issparse(S)
     assert np.allclose(S.toarray(), np.array([[1., 2., -2.], [3., 5., 4.]]))
 
-    A = sparse.csr_matrix([[0, 2, 0], [3, 0, 4]])
+    A = csr_array([[0, 2, 0], [3, 0, 4]])
     B = Matrix([[5], [7], [11]])
     C = matmul(A, B)
     assert C == Matrix([[14], [59]])
@@ -122,12 +129,12 @@ def test_matmul_multiple():
     assert matmul_multiple((2**50*Matrix(A)+Matrix.ones(4,9))/7, B) == C
 
     # test sparsity
-    A = sparse.csr_matrix([
+    A = csr_array([
         [1., 0., 2., 0.],
         [0., -3., 0., 4.],
         [5., 0., 0., 6.],
     ])
-    B = sparse.csr_matrix([[7., 0., 11.], [0., 13., 17.]])
+    B = csr_array([[7., 0., 11.], [0., 13., 17.]])
     expected = (A.toarray().reshape(3, 2, 2) @ B.toarray()).reshape(3, 6)
 
     for n in range(4):
@@ -165,7 +172,7 @@ def test_matmul_multiple_sympy_sparse_dispatch(monkeypatch):
     def unexpected_sparse_kernel(A, B):
         raise AssertionError('dense dispatch should not call sparse kernel')
 
-    monkeypatch.setattr(module, '_matmul_multiple_spmatrix', unexpected_sparse_kernel)
+    monkeypatch.setattr(module, '_matmul_multiple_sparray', unexpected_sparse_kernel)
     assert matmul_multiple(A, B) == expected
 
 
@@ -192,8 +199,8 @@ def test_symmetric_bilinear():
     assert symmetric_bilinear(U, A, return_shape=(4,1))._rep.domain.is_RR
 
     # test sparsity
-    U = sparse.csr_matrix([[1., 0.], [2., -1.], [0., 3.]])
-    A = sparse.csr_matrix([[5., 0., 7.], [0., 11., 0.], [13., 0., 17.]])
+    U = csr_array([[1., 0.], [2., -1.], [0., 3.]])
+    A = csr_array([[5., 0., 7.], [0., 11., 0.], [13., 0., 17.]])
     expected = U.toarray().T @ A.toarray() @ U.toarray()
 
     for n in range(4):
@@ -229,8 +236,8 @@ def test_symmetric_bilinear_multiple():
     assert symmetric_bilinear_multiple(B, A) == C
 
     # test sparsity
-    U = sparse.csr_matrix([[1., 0.], [2., -1.], [0., 3.]])
-    A = sparse.csr_matrix([
+    U = csr_array([[1., 0.], [2., -1.], [0., 3.]])
+    A = csr_array([
         [5., 0., 7., 0., 11., 0., 13., 0., 17.],
         [0., 19., 0., 23., 0., 29., 0., 31., 0.],
     ])
@@ -263,7 +270,7 @@ def test_symmetric_bilinear_multiple_sympy_sparse_dispatch(monkeypatch):
     pass
 
 def test_kronecker_product():
-    A = sparse.csr_matrix([[1., 0.], [2., 3.]])
+    A = csr_array([[1., 0.], [2., 3.]])
     B = np.array([[0., 5.], [7., 0.]])
 
     K = kronecker_product(A, B)

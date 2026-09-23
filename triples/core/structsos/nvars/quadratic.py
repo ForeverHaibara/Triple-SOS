@@ -1,17 +1,18 @@
-from typing import List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, List, Optional
 
 from sympy import Add, factorial
 from sympy import MutableDenseMatrix as Matrix
-from sympy.polys.matrices.domainmatrix import DomainMatrix
-from sympy.polys.matrices.ddm import DDM
 from sympy.combinatorics import SymmetricGroup
+from sympy.polys.matrices.ddm import DDM
+from sympy.polys.matrices.domainmatrix import DomainMatrix
 
 from ....sdp import congruence
-from ....utils import CyclicSum
+from ....utils.expressions import CyclicSum
 
 if TYPE_CHECKING:
-    from ....utils import Coeff
     from sympy import Expr
+
+    from ....utils.expressions import Coeff
 
 def make_mat_from_coeff(coeff: "Coeff") -> Optional[Matrix]:
     nvars = len(coeff.gens)
@@ -130,7 +131,7 @@ def _isotopic_decomposition(S: Matrix, clusters: List[List[int]]):
             p, q = cluster_i[0], cluster_i[1]
             val_diag = _S(p, p)
             val_off = _S(p, q)
-            # fomula: c = (a - b) / d
+            # formula: c = (a - b) / d
             c[i] = (val_diag - val_off) / d_i
         else:
             # c[i] = 0

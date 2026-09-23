@@ -174,7 +174,7 @@ class TransformNode(ProofNode):
     _default_complexity = (1., 1.)
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.restorations = {}
+        self.restorations: Dict[InequalityProblem, Callable] = {}
 
     def _evaluate_complexity(self) -> ProblemComplexity:
         if self.state == 0:

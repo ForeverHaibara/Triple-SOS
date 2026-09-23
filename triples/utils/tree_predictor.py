@@ -1,3 +1,5 @@
+from typing import Any, Callable, Dict, List, Optional, Sequence
+
 import numpy as np
 
 class TreePredictor:
@@ -18,10 +20,17 @@ class TreePredictor:
     __float_type = float
     func = None
     op = None
-    def __init__(self, branches=None, thresholds=None, features=None, method='', intercept=0):
+    def __init__(
+        self,
+        branches: Optional[np.ndarray] = None,
+        thresholds: Optional[np.ndarray] = None,
+        features: Optional[Sequence[str]] = None,
+        method: str = '',
+        intercept: float = 0,
+    ):
         self.branches = branches
         self.thresholds = thresholds
-        self.features = features if features is not None else []
+        self.features = list(features) if features is not None else []
         self.method = method
         self.intercept = intercept
         self.__version__ = TreePredictor.__version__
@@ -41,12 +50,13 @@ class TreePredictor:
         return f'<TreePredictor(method = "{self.method}", n_estimators = {self.n_estimators})>'
 
     @property
-    def _float_type(self):
-        if hasattr(self.thresholds, 'dtype'):
-            return self.thresholds.dtype.type
+    def _float_type(self) -> Callable[[Any], Any]:
+        thresholds = self.thresholds
+        if thresholds is not None:
+            return thresholds.dtype.type
         return self.__float_type
 
-    def get_default_func(self, func=None):
+    def get_default_func(self, func: Optional[Callable] = None) -> Callable:
         if func is not None:
             return func
         if self.func is not None:
@@ -62,7 +72,7 @@ class TreePredictor:
             return lambda x: float(sum(x)/len(x) + self.intercept_)
         return lambda x: float(sum(x) + self.intercept_)
 
-    def get_default_op(self, op=None):
+    def get_default_op(self, op: Optional[Callable] = None) -> Callable:
         if op is not None:
             return op
         if self.op is not None:
@@ -73,7 +83,12 @@ class TreePredictor:
             op = lambda v, t: v <= t
         return op
 
-    def predict(self, x: dict, op=None, func=None):
+    def predict(
+        self,
+        x: Dict[str, Any],
+        op: Optional[Callable] = None,
+        func: Optional[Callable] = None,
+    ) -> Any:
         """
         Predict the output for a single sample.
 
@@ -95,15 +110,19 @@ class TreePredictor:
         float :
             The predicted output.
         """
-        preds = [0]*self.n_estimators
+        preds: List[Any] = [0]*self.n_estimators
         float_type = self._float_type
-        x = [float_type(x.get(feature, None)) for feature in self.features]
+        values = [float_type(x.get(feature, None)) for feature in self.features]
         op = self.get_default_op(op)
         for i in range(self.n_estimators):
             k = 0
-            branches, thresholds = self.branches[i], self.thresholds[i]
+            branches_array = self.branches
+            thresholds_array = self.thresholds
+            if branches_array is None or thresholds_array is None:
+                raise ValueError('Tree arrays are not initialized.')
+            branches, thresholds = branches_array[i], thresholds_array[i]
             while branches[k] >= 0:
-                v = x[branches[k]]
+                v = values[branches[k]]
                 if v is not None and op(v, thresholds[k]):
                     k = 2*k + 1
                 else:
@@ -112,7 +131,7 @@ class TreePredictor:
         func = self.get_default_func(func)
         return func(preds)
 
-    def __call__(self, x: dict, *args, **kwargs):
+    def __call__(self, x: Dict[str, Any], *args, **kwargs) -> Any:
         return self.predict(x, *args, **kwargs)
 
     @classmethod
@@ -133,9 +152,12 @@ class TreePredictor:
         """
         lines = s.split('\n')
         n_trees = -1
-        feature_inds = {}
+        feature_inds: Dict[str, int] = {}
         varind, threshold = -1, 0.
-        trees, nodeids, branches, thresholds = [], [], [], []
+        tree_numbers: List[int] = []
+        node_ids: List[int] = []
+        branch_values: List[int] = []
+        threshold_values: List[float] = []
         nodemap = {0: 0}
 
         for line in lines:
@@ -174,31 +196,31 @@ class TreePredictor:
             else:
                 raise ValueError(f'Unknown line: {line}')
 
-            trees.append(n_trees)
-            nodeids.append(nodeid)
-            branches.append(varind)
-            thresholds.append(threshold)
+            tree_numbers.append(n_trees)
+            node_ids.append(nodeid)
+            branch_values.append(varind)
+            threshold_values.append(threshold)
 
-        trees = np.array(trees, dtype=int)
-        nodeids = np.array(nodeids, dtype=int)
-        _branches = np.array(branches, dtype=int)
-        _thresholds = np.array(thresholds, dtype=np.float32)
+        trees = np.array(tree_numbers, dtype=int)
+        nodeids = np.array(node_ids, dtype=int)
+        _branches = np.array(branch_values, dtype=int)
+        _thresholds = np.array(threshold_values, dtype=np.float32)
 
         n_trees = np.max(trees) + 1
         nodes = np.max(nodeids) + 1
-        branches = np.full((n_trees * nodes,), -1, dtype=int)
-        thresholds = np.zeros((n_trees * nodes,), dtype=np.float32)
+        branch_array: np.ndarray = np.full((n_trees * nodes,), -1, dtype=int)
+        threshold_array: np.ndarray = np.zeros((n_trees * nodes,), dtype=np.float32)
         inds = trees * nodes + nodeids
 
-        branches[inds] = _branches
-        thresholds[inds] = _thresholds
-        branches = branches.reshape((n_trees, nodes))
-        thresholds = thresholds.reshape((n_trees, nodes))
+        branch_array[inds] = _branches
+        threshold_array[inds] = _thresholds
+        branches = branch_array.reshape((n_trees, nodes))
+        thresholds = threshold_array.reshape((n_trees, nodes))
 
-        features = [None] * len(feature_inds)
+        features: List[Optional[str]] = [None] * len(feature_inds)
         for k, v in feature_inds.items():
             features[v] = k
-        obj = cls(branches, thresholds, features)
+        obj = cls(branches, thresholds, [f for f in features if f is not None])
         return obj
 
     @classmethod
@@ -208,7 +230,8 @@ class TreePredictor:
         length = max([len(e.tree_.children_left) for e in skl_model.estimators_], default=0)
         nodemap = [0] * length
         nodeinv = [0] * length
-        branches, thresholds = [None] * skl_model.n_estimators, [None] * skl_model.n_estimators
+        branch_arrays: List[np.ndarray] = []
+        threshold_arrays: List[np.ndarray] = []
         flatten = (lambda x: x[:,0,1].flatten()) if 'Classifier' in method else (lambda x: x.flatten())
         for n_tree, estimator in enumerate(skl_model.estimators_):
             tree = estimator.tree_
@@ -230,10 +253,10 @@ class TreePredictor:
                         if 2*i + 2 < length:
                             nodeinv[2*i+2] = k
 
-            branches[n_tree] = branch[nodeinv]
-            thresholds[n_tree] = threshold[nodeinv]
-        branches = np.vstack(branches, dtype=int)
-        thresholds = np.vstack(thresholds, dtype=np.float64)
+            branch_arrays.append(branch[nodeinv])
+            threshold_arrays.append(threshold[nodeinv])
+        branches = np.vstack(branch_arrays, dtype=int)
+        thresholds = np.vstack(threshold_arrays, dtype=np.float64)
         features = skl_model.feature_names_in_.tolist()
         obj = cls(branches, thresholds, features, method=method)
         return obj

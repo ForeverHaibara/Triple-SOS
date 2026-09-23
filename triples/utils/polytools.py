@@ -1,20 +1,27 @@
 """
 Compatibility & enhancement tools for SymPy polys module.
 """
-from typing import Tuple
+from typing import Any, Callable, Dict, Tuple, List, cast, TYPE_CHECKING
 
-from sympy import Poly, ZZ
+from sympy import Poly, ZZ, QQ
 from sympy import __version__ as _SYMPY_VERSION
+
 try:
-    from sympy.core.random import _randint
+    from sympy.core.random import _randint as _sympy_randint
 except ImportError:
-    def _randint(seed):
+    _sympy_randint = cast(Any, None)
+def _randint(seed: Any) -> Callable[[int, int], int]:
+    if _sympy_randint is not None:
+        return _sympy_randint(seed)
+    else:
         import random as _random
         rng = _random.Random()
         rng.seed(seed)
         return rng.randint
+
 from sympy.external.importtools import version_tuple
 from sympy.polys.rootoftools import ComplexRootOf as CRootOf
+from sympy.polys.rootisolation import dup_isolate_real_roots_list
 from sympy.polys.densebasic import (
     dmp_from_dict, dmp_to_dict, dmp_zero_p, dmp_degree_in,
     dmp_degree, dmp_degree_list, dmp_ground_LC, dmp_convert,
@@ -55,8 +62,75 @@ except ImportError: # sympy <= 1.8 or no flint installed
 SYMPY_VERSION = tuple(version_tuple(_SYMPY_VERSION))
 FLINT_VERSION = tuple(version_tuple(_FLINT_VERSION))
 
+
+if TYPE_CHECKING:
+    from sympy.polys.domains import Domain
+
+
+def marginalize(p, *args) -> Poly:
+    """
+    Marginalize a polynomial with respect to given variables.
+    It tries to preserve the domain of the polynomial.
+
+    Examples
+    --------
+    >>> from sympy import Poly, symbols, sqrt
+    >>> x, y, z = symbols('x y z')
+    >>> p = Poly(x**3*(2 + y**3 + y**2) + y**2, x, y)
+    >>> marginalize(p, y)
+    Poly(x**3*y**3 + (x**3 + 1)*y**2 + 2*x**3, y, domain='ZZ[x]')
+
+    >>> p = Poly(sqrt(2)*x*y + y + sqrt(2)*x*z, x, y, z, extension=True)
+    >>> p.as_poly(x) # doctest:+SKIP
+    Poly((sqrt(2)*y + sqrt(2)*z)*x + y, x, domain='EX')
+    >>> marginalize(p, x)
+    Poly((sqrt(2)*y + sqrt(2)*z)*x + y, x, domain='QQ<sqrt(2)>[y,z]')
+    """
+    if not isinstance(p, Poly):
+        return Poly(p, *args)
+    if p.gens == args:
+        return p
+    if p.domain.is_EX or p.domain.is_EXRAW:
+        # EX or EXRAW does not have the eject method
+        return p.as_poly(*args)
+
+    argset = set(args)
+    gens = [s for s in p.gens if s not in argset]
+    if p.domain.is_Numerical:
+        p = p.reorder(*gens, *args)
+        return p.eject(*gens)
+    elif p.domain.is_Composite:
+        # does not support eject
+        K = p.domain
+        K2 = K.inject(*gens)
+        dom_gens = K2.gens[-len(gens):]
+        inds = tuple(p.gens.index(a) for a in args)
+        cinds = tuple(i for i in range(len(p.gens)) if p.gens[i] not in argset)
+        dt = {}
+        for m, v in p.rep.to_dict().items():
+            w = K2.convert_from(v, K)
+            n = tuple(m[i] for i in inds)
+            for g, j in zip(dom_gens, cinds):
+                w = w * g**m[j]
+
+            if n not in dt:
+                dt[n] = w
+            else:
+                dt[n] += w
+        return Poly(dt, *args, domain=K2)
+
+    return p.as_poly(*args)
+
+###############################################################################
+#
+#                    Polynomial Real Root Isolation
+#
+###############################################################################
+
 if SYMPY_VERSION >= (1, 14):
     def poly_lift(poly: Poly) -> Poly:
+        if not poly.domain.is_AlgebraicField:
+            return poly
         return poly.lift()
 
     def crootof_realroots_alg(poly: Poly):
@@ -91,7 +165,7 @@ else:
         F, v, K2 = dmp_alg_inject(f, u, K)
         p_a = K.mod.to_list()
         P_A = dmp_include(p_a, list(range(1, v + 1)), 0, K2)
-        return dmp_resultant(F, P_A, v, K2) # type: ignore
+        return dmp_resultant(F, P_A, v, K2)
 
     # poly.lift() had a bug before 1.14:
     # https://github.com/sympy/sympy/pull/26812
@@ -99,7 +173,8 @@ else:
         if not poly.domain.is_AlgebraicField:
             return poly
         rep = poly.rep
-        dmp = DMP(dmp_lift(rep.rep, rep.lev, rep.dom), rep.dom.dom, rep.lev)
+        dmp = DMP(dmp_lift(rep.rep, rep.lev, rep.dom),
+                  getattr(rep.dom, 'dom'), rep.lev)
         return Poly.new(dmp, *poly.gens)
 
     # https://github.com/sympy/sympy/pull/26813
@@ -217,9 +292,51 @@ else:
         cnt = count_real_roots(poly)
         return _which_roots(poly, rts, cnt)
 
+
+def intervals(polys: List[Poly], domain: "Domain") -> list:
+    """
+    Compute a list of points (in the domain) where the signs
+    of the polynomials change. The function also supports
+    algebraic fields or RR. The points are not sorted.
+    """
+    if not domain.is_Field:
+        raise DomainError("domain must be a field")
+
+    if all(_.total_degree() <= 0 for _ in polys):
+        # every polynomial is constant
+        return [domain.zero]
+
+    ls = []
+    polys = [f.set_domain(domain) for f in polys]
+    if domain.is_RR:
+        # RR does not support exact arithmetic
+        # and we cast them to QQ
+        polys = [f.set_domain(QQ) for f in polys]
+
+    # important to check ground roots first
+    # because ground roots might not be in the interval
+    for f in polys:
+        for g, _ in f.factor_list()[1]:
+            if g.total_degree() == 1:
+                v = -g.rep.monic().TC()
+                ls.append(v)
+
+    if domain.is_AlgebraicField:
+        polys = [poly_lift(f) for f in polys]
+
+    dups = [_.rep.to_list() for _ in polys]
+    x2 = domain.zero
+    _intervals = dup_isolate_real_roots_list(dups, QQ)
+    for (x1, x2), _ in _intervals:
+        ls.append(x1)
+    if _intervals:
+        ls.append(x2)
+    return [domain.convert(x) for x in ls]
+
+
 ###############################################################################
 #
-#          Polynomial Factorization over Finite Fields
+#                Polynomial Factorization over Finite Fields
 #
 ###############################################################################
 
@@ -286,10 +403,10 @@ def dmp_gf_sqf_list(f, u, K, all = False):
 def _dmp_gf_factor_flint(f, u, K):
     if K.mod < 2**64:
         from flint import nmod_mpoly_ctx
-        ctx_func = nmod_mpoly_ctx
+        ctx_func = cast(Any, nmod_mpoly_ctx)
     else:
         from flint import fmpz_mod_mpoly_ctx
-        ctx_func = fmpz_mod_mpoly_ctx
+        ctx_func = cast(Any, fmpz_mod_mpoly_ctx)
     ctx = ctx_func.get([chr(i) for i in range(65, 65 + u + 1)], K.mod)
     dt = {k: int(v) for k, v in dmp_to_dict(f, u, K).items()}
     p = ctx.from_dict(dt)
@@ -443,10 +560,10 @@ def dmp_gf_wang(f, u, K, seed=None):
 
         H = [dmp_convert(h, 0, K, ZZ) for h in H]
         fz = dmp_convert(f1, u, K, ZZ)
-        A = [ZZ(int(a)) for a in A]
+        A_int = [ZZ(int(a)) for a in A]
         LC = [dmp_convert(g, u - 1, K, ZZ) for g in LC]
 
-        hensel = dmp_gf_wang_hensel_lifting(fz, H, LC, A, p, u, ZZ)
+        hensel = dmp_gf_wang_hensel_lifting(fz, H, LC, A_int, p, u, ZZ)
         hensel = [dmp_convert(h, u, ZZ, K) for h in hensel]
 
         result = []
@@ -571,7 +688,8 @@ def dmp_gf_kron(f, u, K):
         return tuple(expv)
 
     def _to_univariate(g):
-        G = {(_encode(e),): v for e, v in dmp_to_dict(g, u, K).items()}
+        G = cast(Dict[Tuple[int, ...], Any],
+                 {(_encode(e),): v for e, v in dmp_to_dict(g, u, K).items()})
         return dmp_from_dict(G, 0, K)
 
     def _from_univariate(g):
@@ -663,27 +781,16 @@ def dmp_gf_kron(f, u, K):
 #
 ###############################################################################
 
-def resultant_bezout(f, g, x, reduced=False) -> Tuple[Poly, Poly, Poly]:
+def resultant_bezout(f: Poly, g: Poly, x: Any,
+                    reduced: bool = False) -> Tuple[Poly, Poly, Poly]:
     """
     Return u, v, res such that `u * f + v * g == res`
     where `res` is the resultant of `f` and `g` in variable `x`.
 
     If `reduced=True`, it tries to remove the gcd part.
     """
-    def marginalize(p, x):
-        if not (isinstance(p, Poly) and x in p.gens and (not p.domain.is_EX)):
-            return p.as_poly(x)
-        if len(p.gens) == 1:
-            # p is univariate and p.gen == x
-            return p
-        gens = [s for s in p.gens if s != x] + [x]
-        p = p.reorder(*gens)
-        p = p.eject(*p.gens[:-1])
-        return p
     f, g = marginalize(f, x), marginalize(g, x)
 
-    f: Poly
-    g: Poly
     f, g = f.unify(g)
 
     r0, r1 = f, g
@@ -691,7 +798,7 @@ def resultant_bezout(f, g, x, reduced=False) -> Tuple[Poly, Poly, Poly]:
     u1, v1 = f.zero, f.one
 
     while r1.degree() > 0:
-        d = max(0, r0.degree()) - max(0, r1.degree())
+        d = max(0, int(r0.degree())) - max(0, int(r1.degree()))
         if d < 0:
             r0, r1 = r1, r0
             u0, u1 = u1, u0

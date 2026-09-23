@@ -7,8 +7,8 @@ except ImportError:
 
 from typing import List, Tuple
 
-from sympy import Poly, Symbol, Float, lambdify
 import numpy as np
+from sympy import Poly, Symbol, Float, lambdify
 # from sympy.plotting.experimental_lambdify import vectorized_lambdify
 
 from ..utils import Root, generate_monoms

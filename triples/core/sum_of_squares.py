@@ -6,7 +6,7 @@ import numpy as np
 from .preprocess import ProofNode, ProofTree, SolvePolynomial
 from .preprocess.reparam import Reparametrization
 from .preprocess.modeling import ReformulateAlgebraic
-from .preprocess.qcqp import QCQPSolver
+from .progsos.progsos import ProgSOSSolver
 from .linsos.linsos import LinearSOSSolver
 from .pivoting.pivoting import Pivoting
 from .structsos.structsos import StructuralSOSSolver
@@ -16,14 +16,15 @@ from .sdpsos.sdpsos import SDPSOSSolver
 from ..utils import PolyReader
 
 if TYPE_CHECKING:
-    from .solution import Solution
     from sympy import Poly, Expr, Symbol
+
+    from .solution import Solution
 
 NAME_TO_METHOD = {
     'StructuralSOS': StructuralSOSSolver,
     'LinearSOS': LinearSOSSolver,
     'SDPSOS': SDPSOSSolver,
-    'QCQP': QCQPSolver,
+    'ProgSOSSolver': ProgSOSSolver,
     'SymmetricSOS': SymmetricSubstitution,
     'Pivoting': Pivoting,
     'Reparametrization': Reparametrization,
@@ -40,7 +41,7 @@ def sum_of_squares(
     eq_constraints: Union[List['Expr'], Dict['Expr', 'Expr']] = {},
     *,
     roots: Optional[List[Union[Tuple['Expr', ...], Dict['Symbol', 'Expr']]]] = None,
-    verbose: bool = False,
+    verbose: Union[bool, int] = 0,
     time_limit: float = 3600.,
     methods: Optional[List[str]] = None,
     configs: Dict[str, Dict] = {},

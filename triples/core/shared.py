@@ -15,7 +15,7 @@ from sympy.core.symbol import uniquely_named_symbol
 if TYPE_CHECKING:
     from sympy import Symbol
 
-def homogenize(poly: Poly, t: Optional["Symbol"] = None) -> Tuple[Poly, "Symbol"]:
+def homogenize(poly: Poly, t: Optional["Symbol"] = None) -> Tuple[Poly, Optional["Symbol"]]:
     """
     Automatically homogenize a polynomial if it is not homogeneous.
 

@@ -1,37 +1,14 @@
-from typing import Tuple, Callable, Optional, Union, TYPE_CHECKING
 from functools import wraps
+from typing import TYPE_CHECKING, Callable, Optional, Tuple, Union
 
 import sympy as sp
-from sympy import Poly, Add, Mul, Pow
+from sympy import Add, Mul, Poly, Pow
 from sympy.combinatorics import CyclicGroup
 
-from ..utils import (
-    Coeff, DomainExpr, structsos_reorder_symmetry,
-    radsimp, sum_y_exprs, rationalize_func, quadratic_weighting, zip_longest,
-    congruence, congruence_solve,
-    StructuralSOSError, PolynomialNonpositiveError, PolynomialUnsolvableError
-)
-
-from ....utils import (
-    nroots, rationalize, rationalize_bound, univariate_intervals,
-    cancel_denominator, common_region_of_conics,
-    CyclicExpr, CyclicSum, CyclicProduct
-)
+from ....utils.expressions import Coeff, CyclicExpr, CyclicProduct, CyclicSum
 
 if TYPE_CHECKING:
     from sympy import Expr, Symbol
-
-(
-    Coeff, DomainExpr, structsos_reorder_symmetry,
-    radsimp, sum_y_exprs, rationalize_func, quadratic_weighting, zip_longest,
-    congruence, congruence_solve,
-    StructuralSOSError, PolynomialNonpositiveError, PolynomialUnsolvableError
-)
-(
-    nroots, rationalize, rationalize_bound, univariate_intervals,
-    cancel_denominator, common_region_of_conics,
-    CyclicExpr, CyclicSum, CyclicProduct
-)
 
 def align_cyclic_group(expr: Optional["Expr"], gens: Tuple["Symbol", ...]) -> "Expr":
     """

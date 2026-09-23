@@ -1,4 +1,4 @@
-from typing import Union, Dict, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict, Optional, Union
 
 from sympy import Function
 from sympy.core.symbol import uniquely_named_symbol
@@ -6,10 +6,11 @@ from sympy.core.symbol import uniquely_named_symbol
 from .quartic import structsos_nvars_quartic_symmetric
 from ..sparse import structsos_common, structsos_degree_specified_solver
 from ...solution import extract_undetermined_exprs
-from ....utils import Coeff
+from ....utils.expressions import Coeff
 
 if TYPE_CHECKING:
-    from sympy import Poly, Expr
+    from sympy import Expr, Poly
+
     from ...problem import InequalityProblem
 
 SOLVERS_SYMMETRIC = {

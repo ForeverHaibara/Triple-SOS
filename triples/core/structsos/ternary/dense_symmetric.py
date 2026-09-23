@@ -1,23 +1,23 @@
-from typing import Tuple, Optional, Union, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional, Tuple, Union
 
-from sympy import Poly, Add, ZZ, QQ, FiniteField, sqrt, prod
+from sympy import QQ, ZZ, Add, FiniteField, Poly, prod, sqrt
+from sympy.combinatorics.named_groups import CyclicGroup
+from sympy.external.gmpy import sqrt as isqrt
+from sympy.ntheory import factorint, nextprime, sqrt_mod
 from sympy.polys.polyclasses import ANP, DMP
 from sympy.polys.polyerrors import CoercionFailed
-from sympy.combinatorics.named_groups import CyclicGroup
-from sympy.ntheory import factorint, nextprime, sqrt_mod
-from sympy.external.gmpy import sqrt as isqrt
 from sympy.utilities import subsets
 
-from .utils import (
-    structsos_handle_uncentered, structsos_reorder_symmetry,
-)
+from .utils import structsos_handle_uncentered
 from ..univariate import prove_univariate
-from ....utils import verify_symmetry, poly_reduce_by_symmetry
-from ....utils.polytools import dmp_gf_factor, FLINT_VERSION
+from ..utils import structsos_reorder_symmetry
+from ....utils.monomials import poly_reduce_by_symmetry, verify_symmetry
+from ....utils.polytools import FLINT_VERSION, dmp_gf_factor
 
 if TYPE_CHECKING:
-    from .utils import Coeff
     from sympy import Expr
+
+    from ....utils.expressions import Coeff
 
 
 def _linear_invert(u, v, d: int = 0) -> Optional[Tuple[int, 'Expr', 'Expr']]:
@@ -407,6 +407,8 @@ def _structsos_complex_factorizable(coeff: 'Coeff', test=True, modp=True):
     => 2/3s(a12-3a11b-3a11c+3a10b2+3a10bc+3a10c2+2a6b6-6a5b5c2)
 
     => s((a+b)4(a-c)2(b-c)2)-(8+4sqrt(6))s(ab)p(a-b)2
+
+    => (s(a4(a-3/2(b+c))2(a-b)(a-c))+1/64p(a-b)2s(83a2-59ab))s(a2-ab)
     """
     if not coeff.domain.is_Exact: # RR or CC
         return None
@@ -530,7 +532,8 @@ def _structsos_complex_factorizable_fp(coeff: 'Coeff'):
         if result is None:
             return None
         A1, B1 = result
-        A, B = A*A1 + 3*B*B1, A*B1 + B*A1
+        # Multiply (A + sqrt(-3) B) by (A1 + sqrt(-3) B1).
+        A, B = A*A1 - 3*B*B1, A*B1 + B*A1
     a = coeff.gens[0]
     A, B = A.homogenize(a), B.homogenize(a)
     # return const*A.as_expr()**2 + 3*const*B.as_expr()**2
@@ -692,6 +695,7 @@ def structsos_ternary_dense_partial_symmetric(coeff: 'Coeff', real=True):
         if sol is not None:
             return subtractor + sol
 
+
 def _get_ternary_dense_partial_symmetric_default_subtractor(coeff: 'Coeff', rem: Poly) -> list:
     d = coeff.total_degree()
     a, b, c = coeff.gens
@@ -713,6 +717,7 @@ def _get_ternary_dense_partial_symmetric_default_subtractor(coeff: 'Coeff', rem:
         m = (d - n - 3) // 2
         subtractor = a**m*b**m*c**n*(u2/2*c*(a + b) + v2*a*b)*(2*c - a - b)**2/4
     return [subtractor]
+
 
 def _get_ternary_dense_partial_symmetric_cubic_subtractor(coeff: 'Coeff', rem: Poly) -> list:
     d = coeff.total_degree()

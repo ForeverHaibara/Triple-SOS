@@ -1,15 +1,18 @@
 from sympy import Add, factorial
-# from sympy.combinatorics.named_groups import SymmetricGroup
 
-from ..utils import Coeff, rationalize_func
+# from sympy.combinatorics.named_groups import SymmetricGroup
+from ..utils import rationalize_func
 from ....sdp import congruence
-from ....utils import verify_symmetry
+from ....utils.expressions import Coeff
+from ....utils.monomials import verify_symmetry
+
 
 def structsos_nvars_quartic_symmetric(poly, real=True):
     """
     Solve a homogeneous quartic symmetric polynomial inequality on real numbers for nvars >= 4.
     """
-    if poly.total_degree() == 4 and verify_symmetry(poly, "sym"):
+    is_sym = poly.is_symmetric() if isinstance(poly, Coeff) else verify_symmetry(poly, "sym")
+    if is_sym and poly.total_degree() == 4:
         return _structsos_nvars_quartic_symmetric_sdp(Coeff(poly))
 
 

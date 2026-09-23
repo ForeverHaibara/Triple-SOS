@@ -54,7 +54,7 @@ def test_rep_matrix_to_numpy_scipy():
 
             assert np.allclose(A, expected)
             assert np.allclose(B.toarray(), expected)
-            assert sparse.isspmatrix_csr(B)
+            assert sparse.issparse(B)
             assert B.nnz == 6
 
 
@@ -75,5 +75,5 @@ def test_rep_matrix_to_numpy_scipy():
     expected = np.array(mat.n().tolist(), dtype=np.float64)
     assert np.allclose(A, expected)
     assert np.allclose(B.toarray(), expected)
-    assert sparse.isspmatrix_csr(B)
+    assert sparse.issparse(B)
     assert B.nnz == 4

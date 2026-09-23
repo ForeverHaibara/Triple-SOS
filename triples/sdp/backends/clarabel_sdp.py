@@ -3,6 +3,9 @@ import numpy as np
 from .backend import DualBackend
 from .settings import SolverConfigs
 
+from ..arithmetic.matop import csr_array
+
+
 class DualBackendCLARABEL(DualBackend):
     """
     Clarabel backend for SDP problems.
@@ -26,7 +29,7 @@ class DualBackendCLARABEL(DualBackend):
     def _get_PqAbcones(self):
         from scipy import sparse
         from clarabel import PSDTriangleConeT, ZeroConeT, NonnegativeConeT
-        P = sparse.csc_matrix((self.dof, self.dof)) # zero matrix
+        P = csr_array((self.dof, self.dof)).tocsc() # zero matrix
         q = self.c
         A = sparse.vstack([-A for A in self.As] + [-self.ineq_lhs] + [self.eq_lhs], format='csc')
         b = np.concatenate(self.bs + [-self.ineq_rhs] + [self.eq_rhs])

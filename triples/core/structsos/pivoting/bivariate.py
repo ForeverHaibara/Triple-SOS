@@ -1,6 +1,6 @@
-from typing import Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
-from sympy import Poly, Add, Mul, signsimp, together
+from sympy import Add, Mul, Poly, signsimp, together
 from sympy.core import S as Singleton
 from sympy.core.symbol import uniquely_named_symbol
 
@@ -8,6 +8,7 @@ from ..univariate import prove_univariate
 
 if TYPE_CHECKING:
     from sympy import Expr
+
     from ...problem import InequalityProblem
 
 

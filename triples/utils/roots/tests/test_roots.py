@@ -1,4 +1,4 @@
-from sympy import Poly, Rational, CRootOf, Eq, Matrix, EX
+from sympy import Poly, Rational, CRootOf, Eq, Matrix, EX, QQ
 from sympy import sqrt, sin, cos, asin, acos, pi, I, __version__
 from sympy.abc import a, b, c, x
 from sympy.combinatorics import SymmetricGroup
@@ -10,6 +10,7 @@ from ..roots import Root
 
 def test_root_hash():
     assert Root((sqrt(2)+1, 2)) in {Root(((3+2*sqrt(2))/(1+sqrt(2)), 2))}
+
 
 def test_as_vec_and_span():
     # ZZ, QQ, AA, ZZ_I, QQ_I, RR, CC, EX, EXRAW
@@ -36,6 +37,11 @@ def test_as_vec_and_span():
     assert Eq(Root((1 + sqrt(2), 1 - sqrt(2))).span(3),
             Matrix([[7, 5], [-1, -1], [-1, 1], [7, -5]]))
 
+    base = QQ.algebraic_field(sqrt(2))
+    field = QQ.algebraic_field(sqrt(2), sqrt(3))
+    root = Root((sqrt(3), sqrt(2) + sqrt(3)), domain=field)
+    assert Eq(root.span(1, domain=base), Matrix([[-sqrt(2), 1], [0, 1]]))
+
     assert Eq(Root((1,1+2*I,2)).span(2),
             Matrix(2,6,[1,1,2,-3,2,4,0,2,0,4,4,0]).T)
 
@@ -61,9 +67,11 @@ def test_as_vec_and_span():
             zero = rep.domain.zero
             assert all(all(v != zero for v in row.values()) for row in rep.values())
 
+
 def test_eval():
     assert Root((1,0,1)).eval(Poly(2*a/3,a,b,c)) == Rational(2,3)
     assert abs(Root((1,0,1)).eval(Poly(2/3*a,a,b,c)) - 2/3) < 1e-10
+
 
 def test_cyclic_sum():
     assert Root((sqrt(2),)).cyclic_sum((5,)) == 4*sqrt(2)
@@ -77,6 +85,7 @@ def test_cyclic_sum():
     assert raises(ZeroDivisionError, lambda: Root((1,0,Rational(2,5))).cyclic_sum((-1,2,3)))
 
     assert Root((4, sqrt(2)-1, 7-3*sqrt(2), -1)).cyclic_sum((3,0,1,2), SymmetricGroup(4)) == -41142+28924*sqrt(2)
+
 
 def test_uv():
     assert Root((1/sin(pi/9),1/sin(2*pi/9),-1/sin(4*pi/9))).uv() == (0, 1)
@@ -104,6 +113,7 @@ def test_uv():
         assert Root.from_uv((2*sqrt(7)+1)/3,(2+sqrt(7))/3).eval(
             Poly(a**3 + a**2*b - a*b**2 - 3*a*c**2 - b**3 + 2*b**2*c + b*c**2, a, b, c)) == 0
 
+
 def test_as_trig():
     root37 = Root.from_uv(3, 7)
     root37_trig = root37.as_trig()
@@ -116,6 +126,7 @@ def test_as_trig():
     assert rootn1n2 != rootn1n2_trig and sum(abs(_) for _ in (rootn1n2_trig.n(8) - rootn1n2.n(8))) < 1e-6\
         and (rootn1n2_trig[0].has(sin) or rootn1n2_trig[0].has(cos))\
         and not (rootn1n2_trig[0].has(asin) or rootn1n2_trig[0].has(acos))
+
 
 def test_approximate():
     root = Root.from_uv(3, 7)

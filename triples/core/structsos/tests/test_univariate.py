@@ -1,7 +1,8 @@
+from sympy import E, Poly, Rational, prod, sqrt, sympify
+from sympy.abc import x, y
+
 from ..univariate import prove_univariate
 
-from sympy import Poly, Rational, sympify, sqrt, prod, E
-from sympy.abc import x, y
 
 def test_univariate_correctness():
     # real

@@ -11,8 +11,9 @@ from ..arithmetic import is_empty_matrix
 from ..abstract import SDPProblemBase
 
 if TYPE_CHECKING:
-    from .transform import SDPTransformation
     from sympy import Symbol
+
+    from .transform import SDPTransformation
 
 
 def _propagate_args_to_last(self, next_node, func, recursive, *args):

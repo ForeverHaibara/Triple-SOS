@@ -1,10 +1,10 @@
-from .octic_symmetric import structsos_octic_symmetric
-
-from .utils import inverse_substitution
 from typing import TYPE_CHECKING
 
+from .octic_symmetric import structsos_octic_symmetric
+from .utils import inverse_substitution
+
 if TYPE_CHECKING:
-    from .utils import Coeff
+    from ....utils.expressions import Coeff
 
 
 def structsos_octic(coeff: "Coeff", real = True):

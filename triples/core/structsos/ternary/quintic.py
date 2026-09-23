@@ -1,21 +1,18 @@
-from typing import Tuple, List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, List, Optional, Tuple
 
-from sympy import Poly, Expr, Symbol, Integer, Rational, Float, Add, sqrt, im
 import numpy as np
+from sympy import Add, Expr, Float, Integer, Poly, Rational, Symbol, im, sqrt
 
 from .cubic import structsos_cubic
-from .quartic import structsos_quartic
+from .quartic import structsos_quartic_param
 from .quintic_symmetric import structsos_quintic_symmetric
+from .utils import align_cyclic_group
 from ..univariate import prove_univariate
-from .utils import (
-    sum_y_exprs, nroots, rationalize, rationalize_bound, rationalize_func,
-    zip_longest, quadratic_weighting, align_cyclic_group
-)
+from ..utils import quadratic_weighting, rationalize_func, sum_y_exprs, zip_longest
+from ....utils.roots import nroots, rationalize, rationalize_bound
 
 if TYPE_CHECKING:
-    from .utils import (
-        Coeff
-    )
+    from ....utils.expressions import Coeff
 
 def _verify_border_nonnegative(border):
     """Verify whether a polynomial >= 0 over R+."""
@@ -77,9 +74,7 @@ def structsos_quintic(coeff, real = True):
 
     if coeff((5,0,0)) == 0:
         return _structsos_quintic_hexagon(coeff)
-    else:
-        return _structsos_quintic_full(coeff)
-    return None
+    return _structsos_quintic_full(coeff)
 
 
 def _solve_sa2minusab_mul_cubic(coeff: 'Coeff', x, y, mul = 1):
@@ -179,26 +174,10 @@ def _solve_uvxy(coeff: 'Coeff'):
     eq1 = coeff.from_rep(eq1p).as_poly()
     eq2 = coeff.from_rep(eq2p).as_poly()
 
-    success = False
-    u, v, u_, v_ = 0, 0, 0, 0
-    if True:
-        v_eq = eq1.resultant(eq2)
-        method = 'factor' # if is_rational else 'numpy'
-        roots = sorted(nroots(v_eq, method = method, real = True, nonnegative = True))#[::-1]
-        for v_ in roots:
-            u_eq = eq1.eval(1, v_)
-            roots_u = nroots(u_eq, method = method, real = True, nonnegative = True)
-            for u_ in roots_u:
-                if abs(u_ - v_) > 1e-5 and abs(u_ + v_ - 1) > 1e-5 and \
-                        abs(eq2.eval((u_, v_))) < 1e-3 and u_ * v_ >= 1:
-                    success = True
-                    u, v = u_, v_
-                    break
-            if success:
-                break
-
-    if not success:
+    uv = _find_quintic_uv_root(eq1, eq2)
+    if uv is None:
         return None
+    u, v = uv
 
     if u + v - 1 == 0 or u**2 + 2*u - v**2 - 2*v == 0:
         return None
@@ -212,6 +191,20 @@ def _solve_uvxy(coeff: 'Coeff'):
     # if z < coeff((3,1,1)) / m - 1e-5:
     #     return None
     return u, v, x, y
+
+
+def _find_quintic_uv_root(eq1, eq2):
+    """Find a numerical nonnegative ``(u, v)`` candidate for ``eq1 == eq2 == 0``."""
+    v_eq = eq1.resultant(eq2)
+    roots = sorted(nroots(v_eq, method='factor', real=True, nonnegative=True))
+    for v in roots:
+        u_eq = eq1.eval(1, v)
+        for u in nroots(u_eq, method='factor', real=True, nonnegative=True):
+            if abs(u - v) <= 1e-5 or abs(u + v - 1) <= 1e-5:
+                continue
+            if abs(eq2.eval((u, v))) < 1e-3 and u * v >= 1:
+                return u, v
+    return None
 
 
 def _structsos_quintic_full(coeff: 'Coeff'):
@@ -410,10 +403,7 @@ def _build_quintic_full_solution(coeff: 'Coeff', mul: Rational, params: List[Rat
     border_proof_split_b = Add(*border_proof_split_b)
     border_proof = CyclicSum(a*b*border_proof_split_a) + CyclicSum(a*b*border_proof_split_b)
 
-    quartic_coeffs = {
-        (4,0,0): m, (3,1,0): p, (2,2,0): n, (1,3,0): q, (2,1,1): -(m+p+n+q)
-    }
-    rest = structsos_quartic(coeff.from_dict(quartic_coeffs))
+    rest = structsos_quartic_param(coeff, m, p, n, q)
     rest += coeff.poly111() * (1 + mul) * CyclicSum(a**2*b*c)
     rest = coeff500 * CyclicProduct(a) * rest
     return (coeff500 * sol_main + coeff500 * border_proof + rest) / multiplier

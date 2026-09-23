@@ -1,17 +1,20 @@
-from sympy import Poly, Function, Integer, Add, sqrt
+from sympy import Add, Function, Integer, Poly, sqrt
+from sympy.core.symbol import uniquely_named_symbol
 from sympy.polys.polyerrors import CoercionFailed
 
-from ..ternary.utils import CommonExpr
 from ..ternary import (
-    structsos_acyclic_quadratic, structsos_quartic,
-    structsos_cubic, structsos_sextic
+    structsos_acyclic_quadratic,
+    structsos_cubic,
+    structsos_quartic,
+    structsos_sextic,
 )
-from ..ternary.dense_symmetric import sym_axis, _homogenize_sym_proof
-from ..utils import (
-    Coeff, uniquely_named_symbol, rationalize_func
-)
+from ..ternary.dense_symmetric import _homogenize_sym_proof, sym_axis
+from ..ternary.utils import CommonExpr
 from ..univariate import prove_univariate
+from ..utils import rationalize_func
 from ...solution import extract_undetermined_exprs
+from ....utils.expressions import Coeff
+
 
 def constrained_acute(problem):
     poly = problem.expr

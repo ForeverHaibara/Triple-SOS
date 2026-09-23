@@ -12,7 +12,7 @@ from sympy.matrices import MutableDenseMatrix as Matrix
 from .algebra import SOSBasis
 from ...sdp.arithmetic import ArithmeticTimeout, solve_columnspace, rep_matrix_from_list
 from ...utils import Root, MonomialManager
-from ...utils.roots.roots import _algebraic_extension, _derv
+from ...utils.roots.roots import _algebraic_field_coeffs, _derv
 
 if TYPE_CHECKING:
     from sympy import Poly
@@ -55,7 +55,7 @@ def _root_span(root: Root, basis: Any, degree: int = 0, diff: Tuple[int,...] = N
                     vec[ind] = int(prod(dervs)) * _single_power(powers)
 
         if not root.is_Rational:
-            vec = _algebraic_extension(vec, root.domain)
+            vec = _algebraic_field_coeffs(vec, root.domain)
         else:
             vec = rep_matrix_from_list(vec, len(vec), domain=root.domain)
         return vec

@@ -1,17 +1,17 @@
-import sympy as sp
-from sympy import Poly, Symbol, Rational, Add
-
-from .sextic_symmetric import _structsos_sextic_hexagram_symmetric, _structsos_sextic_tree
-from .utils import (
-    CommonExpr,
-    sum_y_exprs, rationalize_func, inverse_substitution, align_cyclic_group
-)
 from typing import TYPE_CHECKING
 
+import sympy as sp
+from sympy import Add, Poly, Rational, Symbol
+
+from .sextic_symmetric import (
+    _structsos_sextic_hexagram_symmetric,
+    _structsos_sextic_tree,
+)
+from .utils import CommonExpr, align_cyclic_group, inverse_substitution
+from ..utils import rationalize_func, sum_y_exprs
+
 if TYPE_CHECKING:
-    from .utils import (
-        Coeff
-    )
+    from ....utils.expressions import Coeff
 
 def structsos_nonic(coeff, real = True):
     """

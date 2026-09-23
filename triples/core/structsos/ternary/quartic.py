@@ -1,21 +1,41 @@
-from typing import Tuple, List, TYPE_CHECKING
+from typing import TYPE_CHECKING, List, Tuple
 
-import sympy as sp
-from sympy import Poly, Symbol, Rational, Integer, Float, Add
+from sympy import Add, Float, Integer, Poly, nsimplify
 from sympy import MutableDenseMatrix as Matrix
+from sympy import sign as sp_sign
 
-from .utils import (
+from ..univariate import prove_univariate
+from ..utils import (
+    common_region_of_curves,
+    congruence,
+    intervals,
+    quadratic_weighting,
+    rationalize_func,
     structsos_reorder_symmetry,
-    congruence, sum_y_exprs, quadratic_weighting,
-    nroots, rationalize, rationalize_bound, rationalize_func,
-    univariate_intervals, common_region_of_conics
+    sum_y_exprs,
 )
+from ....sdp.arithmetic import rep_matrix_from_list
+from ....utils.pqr import pqr_sym
+from ....utils.roots import nroots, rationalize_bound
 
 if TYPE_CHECKING:
-    from .utils import (
-        Coeff
-    )
     from sympy import Expr
+
+    from ....utils.expressions import Coeff
+
+
+def composite_coeff(poly: Poly, monom: Tuple[int, ...]):
+    """
+    Given a polynomial on a composite domain, e.g., K[x][y],
+    get the coefficient of the monomial and return it
+    as a polynomial."""
+    if not poly.domain.is_Composite:
+        raise ValueError("poly.domain must be composite")
+    dt = poly.rep.to_dict()
+    dm = dt.get(monom, poly.domain.zero)
+    return Poly(dm.to_dict(), *poly.domain.symbols,
+                domain=poly.domain.domain)
+
 
 def structsos_quartic(coeff, real = 1):
     """
@@ -44,6 +64,27 @@ def structsos_quartic(coeff, real = 1):
     => 4s(a)s(2a3-a2b-a2c)
     """
     return  _structsos_quartic_uncentered(coeff, real=real)
+
+
+def structsos_quartic_param(coeff: 'Coeff', m, p, n, q, r=None, real=1):
+    """
+    Convenient function to solve
+    ```
+    s(m*a**4 + p*a**3*b + n*a**2*b**2 + q*a*b**3 + r*a**2*b*c) >= 0
+    ```
+    The parameter "coeff" is only used for domain information.
+    """
+    if r is None:
+        r = -(m + p + n + q)
+    new_coeff = coeff.from_dict({
+        (4,0,0): m,
+        (3,1,0): p,
+        (2,2,0): n,
+        (1,3,0): q,
+        (2,1,1): r,
+    })
+    return _structsos_quartic_uncentered(new_coeff, real=real)
+
 
 def _structsos_quartic_core(coeff: 'Coeff'):
     """
@@ -395,7 +436,8 @@ def _structsos_quartic_uncentered_real(coeff: 'Coeff'):
         return _structsos_quartic_core(coeff)
 
     def is_valid(w):
-        return sp.sign(eq(w)) * sp.sign(w - 1) <= 0 and (9*(1 - w)**2 - s) >= 0
+        # w is wrapped by Coeff and supports sign comparison
+        return sp_sign(eq(w)) * sp_sign(w - 1) <= 0 and (9*(1 - w)**2 - s) >= 0
 
     denom = 3*a1*a3 - a2**2
     if denom == 0:
@@ -410,8 +452,8 @@ def _structsos_quartic_uncentered_real(coeff: 'Coeff'):
         # because it may avoid large numerators and denominators
         w1n = coeff.to_sympy(w1).n(10)
         w2n = coeff.to_sympy(w2).n(10)
-        w1approx = sp.nsimplify(w1n, tolerance=3e-2, rational=True)
-        w2approx = sp.nsimplify(w2n, tolerance=3e-2, rational=True)
+        w1approx = nsimplify(w1n, tolerance=3e-2, rational=True)
+        w2approx = nsimplify(w2n, tolerance=3e-2, rational=True)
         candidates = [w1approx, w2approx, w1, w2]
 
     a, b, c = coeff.gens
@@ -439,7 +481,7 @@ def _structsos_quartic_uncentered_real(coeff: 'Coeff'):
 
 def _structsos_quartic_uncentered(coeff: 'Coeff', real = 1):
     """
-    Solve general cyclic quartic problems on positive orthant.
+    Solve general cyclic quartic problems on the positive orthant.
     It also tries to solve the problem on the real number field if possible.
 
     Idea: subtract enough CyclicSum(a^2*b*c) so that the
@@ -493,6 +535,7 @@ def _structsos_quartic_uncentered(coeff: 'Coeff', real = 1):
 
     # standardize
     p, n, q, r = [p/m, n/m, q/m, r/m]
+    is_exact = False
 
     # now that we assume 2p + q < 0 and 2q + p < 0 and (2p+q)(2q+p) > 9
     # first we compute minimum bound for n on the border
@@ -505,27 +548,13 @@ def _structsos_quartic_uncentered(coeff: 'Coeff', real = 1):
     else:
         eqx = coeff.from_list([2, p, 0, -q, -2], (coeff.gens[0],)).as_poly()
         eqn = lambda x: -(x**2 + 1/x**2 + p*x + q/x)
-        extrema = []
-        for root in sp.polys.roots(eqx, cubics = False, quartics = False):
-            if root.is_real and root > 0:
-                if isinstance(root, Rational):
-                    extrema.append((eqn(root), root))
-                else: # quadratic root
-                    extrema.append((eqn(root.n(15)), root.n(15)))
-
-        try:
-            for root in sp.polys.nroots(eqx):
-                if root.is_real and root > 0:
-                    if any(abs(_[1] - root) < 1e-13 for _ in extrema):
-                        # already found
-                        continue
-                    extrema.append((eqn(root), root))
-        except Exception:
-            pass
+        roots = nroots(eqx, real=True, nonnegative=True, ground=True)
+        extrema = [(eqn(root), root) for root in roots if root != 0]
 
         if len(extrema) == 0:
             return None
-        n_, _ = max(extrema)
+        n_, r_ = max(extrema, key=coeff.wrap)
+        is_exact = eqx.rep.eval(r_) == 0
 
     # then we compute x such that
     # s(ma4+pa3b+na2b2+qab3) + xs(a2bc) >= 0 is "tight"
@@ -536,7 +565,6 @@ def _structsos_quartic_uncentered(coeff: 'Coeff', real = 1):
         else:
             x_ = (9*(p + 2)**2 / 4)
     else:
-        u = Symbol('u')
         det_coeffs = [
             1,
             -3*(p*q + 14*p + 14*q - 20),
@@ -550,16 +578,12 @@ def _structsos_quartic_uncentered(coeff: 'Coeff', real = 1):
                 + 86*q**3 + 114*q**2 - 278*q - 388),
             81*(n_ + 2*p + 2*q + 5)**3*(-3*n_ + p**2 + p*q + q**2 - 3)
         ]
-        det = Poly(det_coeffs, u)
+        det = Poly(det_coeffs, a, domain=coeff.domain)
 
-        if isinstance(n_, Rational):
-            for root, mul in sp.polys.roots(det, cubics = False, quartics = False).items():
-                if mul == 2 and root.is_real and root > 0:
-                    if isinstance(root, Rational):
-                        x_ = root
-                    else:
-                        x_ = root.n(15)
-                    break
+        if is_exact:
+            detgcd = det.gcd(det.diff())
+            if detgcd.total_degree() == 1:
+                x_ = - detgcd.rep.TC() / detgcd.rep.LC()
 
         else:
             # do not compute the root here because it is not numerically stable
@@ -617,29 +641,32 @@ def structsos_acyclic_quartic(coeff, real = True):
 def _structsos_acyclic_quartic_symmetric(coeff: 'Coeff', real = True):
     """
     Solve acyclic quartic polynomials that are symmetric with respect to two variables.
-    If it is nonnegative over R, it must be sum of squares by Hilbert's 17th problem, we can write it in
-    the form of: (assume f(a,b,c) = f(b,a,c) by symmetriciy)
-    f(a,b,c) = p1' * M1 * p1 + (a-b)^2 * p2' * M2 * p2
-    where p1 = [c**2, c*(a+b), a*b, (a-b)**2]', p2 = [a+b, c]
+    If it is nonnegative over R, it must be sum of squares by Hilbert's 17th problem, we can write
+    it in the form of: (assume `f(a,b,c) = f(b,a,c)` by symmetry)
+    `f(a,b,c) = p1' * M1 * p1 + (a-b)^2 * p2' * M2 * p2`
+    where `p1 = [c**2, c*(a+b), a*b, (a-b)**2]'`, `p2 = [a+b, c]`
 
-    and M1 = Matrix([
+    and
+    ```
+    M1 = Matrix([
         [c004, c103/2, c112/2 + c202 - 2*l, c202/2 - l/2 - r11/2],
         [c103/2, l, c211/2 + c301/2, c301/2 - r01],
         [c112/2 + c202 - 2*l, c211/2 + c301/2, c220 + 2*c310 + 2*c400, c310/2 + 2*c400 - 2*r00],
         [c202/2 - l/2 - r11/2, c301/2 - r01, c310/2 + 2*c400 - 2*r00, c400 - r00]
     ])
-    and M2 = Matrix([[r00, r01], [r01, r11]]).
-    Here l, r00, r01, r11 are four variables. Select them properly so that M1 and M2 are PSD.
+    ```
+    and `M2 = Matrix([[r00, r01], [r01, r11]])`.
+    Here `l, r00, r01, r11` are four variables. Select them properly so that M1 and M2 are PSD.
 
-    Denote f(1,1,c) = w4*c**4 + w3*c**3 + w2*c**2 + w1*c + w0,
-    then M1[:-1,:-1].det() * (-4) == leading_det = ... (please refer to the code).
+    Denote `f(1,1,c) = w4*c**4 + w3*c**3 + w2*c**2 + w1*c + w0`
+    then `M1[:-1,:-1].det() * (-4) == leading_det = ...` (please refer to the code).
 
-    Choose l such that leading_det == 0 or slightly negative, assume
-    vec = [(a-b*w3/w4)/4, b, 1/4].T and M[:,-1] = M[:-1,:-1] * vec.
-    Here a and b are new parameters, they determine the values of r00, r01, r11.
-    To make sure that M1 >= 0, we require det1 = M[-1,-1] - vec.T * M[:-1,:-1] * vec >= 0.
-    Also, det2 = r00*r11 - r01**2 >= 0.
-    The constraints det1 >= 0 and det2 >= 0 are both quadratic with respect to a and b.
+    Choose l such that `leading_det == 0` or is slightly negative, and assume
+    `vec = [(a-b*w3/w4)/4, b, 1/4].T` and `M[:,-1] = M[:-1,:-1] * vec`.
+    Here a and b are new parameters, which determine the values of `r00, r01, r11`.
+    To make sure that `M1 >= 0`, we require `det1 = M[-1,-1] - vec.T * M[:-1,:-1] * vec >= 0`,
+    Also, `det2 = r00*r11 - r01**2 >= 0`.
+    The constraints `det1 >= 0` and `det2 >= 0` are both quadratic with respect to a and b.
 
     Examples
     --------
@@ -657,15 +684,74 @@ def _structsos_acyclic_quartic_symmetric(coeff: 'Coeff', real = True):
 
     => (b2-2ba+c2-2ca)2 +(b2+c2-5a2)2 +2(bc-a2)2
 
-    => (ab+c2)(a+b-3c)2+s(a2-3ab)2/4 # doctest:+SKIP
+    => 2s(a)4 - s(a)2s(ab) + s(ab)2/3
+
+    => (ab+c2)(a+b-3c)2+s(a2-3ab)2/4
 
     => (3339a4-5949a3b-2469a3c+9288a2b2-243a2bc+1159a2c2-5949ab3-243ab2c+278abc2-262ac3+3339b4-2469b3c+1159b2c2-262bc3+38c4) # doctest:+SKIP
     """
+    a, b, c = coeff.gens
+
+    # first try the substitution p = a + b, q = a*b, c = 1
+    # and view it as a quadratic polynomial in q
+    # p**2 >= 4*q
+    poly = pqr_sym(coeff.as_poly().eval(2, 1))
+    poly = poly.eject(a)
+
+    def lift(p: Poly, n: int = 2) -> "Expr":
+        return Add(*[v * (a+b)**i*c**(n-i) for (i,), v in p.terms()])
+
+    def lift_proof(proof, n: int = 2):
+        terms = []
+        ls = proof[0][1]
+        for cf, term in ls:
+            terms.append(cf * lift(term, n).expand() ** 2)
+        return Add(*terms)
+
+    def _solve_pure_sym(poly: Poly):
+        # when poly >= 0 holds for all q and the constraint p**2 >= 4*q
+        # is not required
+        lc = poly.coeff_monomial((2,))
+        mid = composite_coeff(poly, (1,))
+        if lc == 0 and mid.is_zero:
+            tc = composite_coeff(poly, (0,))
+            proof = prove_univariate(-tc, return_type='list')
+            if proof is not None:
+                return lift_proof(proof, 2)
+            return
+        if lc <= 0:
+            return None
+
+        disc = poly.discriminant()
+
+        proof = prove_univariate(-disc, return_type='list')
+        if proof is not None:
+            disc_proof = lift_proof(proof)
+            mid = lift(mid, 2)
+            return disc_proof/(4*lc) + 1/lc * (lc*a*b + mid/2).expand().together()**2
+
+    solution = _solve_pure_sym(poly)
+    if solution is not None:
+        return solution
+
+    mid = composite_coeff(poly, (1,))
+    lc_lift = Poly([poly.coeff_monomial((2,)), 0, 0], a, domain=coeff.domain)
+    rem = (2*mid + lc_lift).mul_ground(mid.domain.one/-8) # K[a]
+    rem_proof = prove_univariate(rem, return_type='list')
+
+    if rem_proof is not None:
+        rem_part = (a - b)**2 * lift_proof(rem_proof, 1)
+        rem_poly = rem.as_poly(b, domain=poly.domain)
+        boundary = (a**2 - 4*b).as_poly(b, domain=poly.domain)
+
+        solution = _solve_pure_sym(poly - boundary*rem_poly)
+        if solution is not None:
+            return rem_part + solution
+
     if not coeff.is_rational:
         return
 
     monoms = [(4,0),(3,1),(2,2),(3,0),(2,1),(2,0),(1,0),(1,1),(0,0)]
-    a, b, c = coeff.gens
 
     c400, c310, c220, c301, c211, c202, c103, c112, c004 = [coeff((i, j, 4-i-j)) for i, j in monoms]
     w4 = c004
@@ -677,13 +763,14 @@ def _structsos_acyclic_quartic_symmetric(coeff: 'Coeff', real = True):
         return # not implemented
 
     def _get_quad_forms(r00, r01, r11, l):
-        M1 = Matrix([
+        r00, r01, r11, l = [coeff.convert(i) for i in (r00, r01, r11, l)]
+        M1 = rep_matrix_from_list([
             [c004, c103/2, c112/2 + c202 - 2*l, c202/2 - l/2 - r11/2],
             [c103/2, l, c211/2 + c301/2, c301/2 - r01],
             [c112/2 + c202 - 2*l, c211/2 + c301/2, c220 + 2*c310 + 2*c400, c310/2 + 2*c400 - 2*r00],
             [c202/2 - l/2 - r11/2, c301/2 - r01, c310/2 + 2*c400 - 2*r00, c400 - r00]
-        ])
-        M2 = Matrix([[r00, r01], [r01, r11]])
+        ], (4, 4), coeff.domain)
+        M2 = rep_matrix_from_list([[r00, r01], [r01, r11]], (2, 2), coeff.domain)
         return M1, M2
 
     def _get_solution(r00, r01, r11, l):
@@ -707,12 +794,11 @@ def _structsos_acyclic_quartic_symmetric(coeff: 'Coeff', real = True):
         })
         return solution
 
-
-    a, b, l = sp.symbols('a b l') # l == l11
+    l = c
     if w4 > 0:
         # find (a, b, l) such that leading_det == -4*M1[:-1,:-1].det() <= 0
-        leading_det = Poly([16, -8*w2, -4*w0*w4 + w1*w3 + w2**2, (w0*w3**2 + w1**2*w4 - w1*w2*w3)/4], l)
-
+        leading_det = Poly([16, -8*w2, -4*w0*w4 + w1*w3 + w2**2, (w0*w3**2 + w1**2*w4 - w1*w2*w3)/4], l,
+                           domain = coeff.domain)
         if True:
             # first try r00 == r01 == r11 == 0
             det1 = Poly([
@@ -721,11 +807,11 @@ def _structsos_acyclic_quartic_symmetric(coeff: 'Coeff', real = True):
                 (8*c004*c220*c400 - 2*c004*c310**2 - 16*c004*c400**2 + c103*c211*c310 - 4*c103*c211*c400 - 2*c103*c220*c301 \
                     + c103*c301*c310 + 8*c103*c301*c400 - 2*c112**2*c400 + 2*c112*c202*c310 + c112*c211*c301 - 3*c112*c301**2 \
                     - 2*c202**2*c220 + 4*c202**2*c400 - c202*c211**2 + 4*c202*c211*c301 - 3*c202*c301**2)/8,
-                _get_quad_forms(Integer(0), Integer(0), Integer(0), Integer(0))[0].det()
-            ], l)
-            for l1 in univariate_intervals([Poly([1, 0], l), leading_det, det1]):
+                _get_quad_forms(0, 0, 0, 0)[0].det()
+            ], l, domain = coeff.domain)
+            for l1 in intervals([Poly([1, 0], l), leading_det, det1], coeff.domain):
                 if l1 >= 0 and leading_det(l1) <= 0 and det1(l1) >= 0:
-                    solution = _get_solution(Integer(0), Integer(0), Integer(0), l1)
+                    solution = _get_solution(0, 0, 0, l1)
                     if solution is not None:
                         return solution
             # TODO: consider r00 == r01 == 0 or r01 == r11 == 0 separately
@@ -737,7 +823,7 @@ def _structsos_acyclic_quartic_symmetric(coeff: 'Coeff', real = True):
             ((0, 2, 0), w3**2),
             ((0, 0, 0), w4*(-4*c310 + w0))
         ]
-        det1 = Poly.from_dict(dict(det1), (a, b, l))
+        det1 = Poly.from_dict(dict(det1), (a, b, l), domain = coeff.domain)
 
         # find (a, b, l) such that det2 >= 0
         det2 = [
@@ -753,7 +839,7 @@ def _structsos_acyclic_quartic_symmetric(coeff: 'Coeff', real = True):
             ((0, 1, 0), 2*w4*(-16*c202*w1*w4 + 8*c202*w2*w3 - 8*c301*w3**2 + 4*w1*w2*w4 + w1*w3**2 - 2*w2**2*w3)),
             ((0, 0, 0), w4**2*(64*c202*c310 + 256*c202*c400 - 32*c202*w0 - 64*c301**2 + 16*c301*w1 - 16*c310*w2 - 64*c400*w2 + 8*w0*w2 - w1**2))
         ]
-        det2 = Poly.from_dict(dict(det2), (a, b, l))
+        det2 = Poly.from_dict(dict(det2), (a, b, l), domain = coeff.domain)
 
         def _get_solution_from_ab(a, b, l):
             r11 = (-2*a*c004*w4 + 2*b*c004*w3 - 4*b*c103*w4 - c112*w4 + 2*c202*w4)/(4*w4)
@@ -762,13 +848,13 @@ def _structsos_acyclic_quartic_symmetric(coeff: 'Coeff', real = True):
             return _get_solution(r00, r01, r11, l)
 
 
-        for l0 in nroots(leading_det, method='factor', real=True, nonnegative=True):
+        for l0 in nroots(leading_det, real=True, nonnegative=True, ground=True):
             if c004*l0 - c103**2/4 < 0: # M1[:2,:2].det()
                 continue
-            l1 = l0 if isinstance(l0, Rational) else rationalize(l0, rounding=1e-15)
-            # we need l11 to be rational to trigger common_region_of_conics
-            f1, f2 = det1.subs(l, l1), det2.subs(l, l1)
-            point = common_region_of_conics([f1, f2])
+            is_exact = leading_det.rep.eval(l0, 0) == leading_det.zero
+
+            f1, f2 = det1.eval(2, l0), det2.eval(2, l0)
+            point = common_region_of_curves([f1, f2], f1.domain)
             # print(sp.latex(sp.GreaterThan(f1.subs({a:Symbol('x'), b:Symbol('y')}).as_expr(), 0)))
             # print(sp.latex(sp.GreaterThan(f2.subs({a:Symbol('x'), b:Symbol('y')}).as_expr(), 0)))
             # print(sp.latex(sp.GreaterThan(((-2*a*c004*w4 + 2*b*c004*w3 - 4*b*c103*w4 - c112*w4 + 2*c202*w4)/(4*w4)).subs({a:Symbol('x'), b:Symbol('y')}).as_expr(), 0)))
@@ -776,16 +862,17 @@ def _structsos_acyclic_quartic_symmetric(coeff: 'Coeff', real = True):
             # print('\n')
             if point is not None:
                 # print(_get_solution_from_ab(*point, l1))
-                if isinstance(l0, Rational):
+                if is_exact:
                     solution = _get_solution_from_ab(*point, l0)
                     if solution is not None:
                         return solution
 
                 grad = leading_det.diff(l)(l0)
-                for l1 in rationalize_bound(l0, direction=1 if grad < 0 else -1, compulsory=True):
+                l0_numer = coeff.domain.to_sympy(l0).n(15)
+                for l1 in rationalize_bound(l0_numer, direction=1 if grad < 0 else -1, compulsory=True):
                     if leading_det(l1) <= 0:
-                        f1, f2 = det1.subs(l, l1), det2.subs(l, l1)
-                        point = common_region_of_conics([f1, f2])
+                        f1, f2 = det1.eval(2, l1), det2.eval(2, l1)
+                        point = common_region_of_curves([f1, f2], f1.domain)
                         if point is not None:
                             solution = _get_solution_from_ab(*point, l1)
                             if solution is not None:
@@ -812,21 +899,22 @@ def _structsos_acyclic_quartic_symmetric(coeff: 'Coeff', real = True):
                 ((0, 1), -(c211*c310 + 4*c211*c400 - 2*c220*c301 - 3*c301*c310)/2),
                 ((0, 0), (4*c112*c220*c400 - c112*c310**2 - 8*c112*c400**2 + 8*c202*c220*c400 - 2*c202*c310**2 - 16*c202*c400**2 - 4*c211**2*c400 + 4*c211*c301*c310 + 8*c211*c301*c400 - 4*c220*c301**2 - 4*c301**2*c310 + 4*c301**2*c400)/16)
             ]
-            det1 = Poly.from_dict(dict(det1), (a, b))
+            det1 = Poly.from_dict(dict(det1), (a, b), domain = coeff.domain)
 
-            det2 = (r11*a - b**2).as_poly(a, b)
+            det2 = (r11*a - b**2).as_poly(a, b, domain = coeff.domain)
 
-            point = common_region_of_conics([det1, det2])
+            point = common_region_of_curves([det1, det2], det1.domain)
             if point is not None:
                 return _get_solution(*point, r11, l1)
         else: # leading_det == 0:
-            det1 = Poly([-c112 - 2*c202, c211 + c301, -c310], a).as_poly(a, b)
+
+            det1 = Poly([-c112 - 2*c202, c211 + c301, -c310], a).as_poly(a, b, domain = coeff.domain)
             det2 = Poly([
                 -(c112 + 2*c202)**2,
                 c112*c211 + 5*c112*c301 - 2*c202*c211 + 6*c202*c301,
                 -c112*c310 - 4*c112*c400 + 2*c202*c310 + 8*c202*c400 - 4*c301**2
-            ], a).as_poly(a, b)
-            point = common_region_of_conics([det1, det2])
+            ], a).as_poly(a, b, domain = coeff.domain)
+            point = common_region_of_curves([det1, det2], det1.domain)
             if point is not None:
                 def _get_solution_from_a(a):
                     r00 = -(a*c211 + a*c301 - c310 - 4*c400)/4
@@ -857,11 +945,12 @@ class _quadratic_minimization():
         a, b, c = self.a, self.b, self.c
         return 4*c.diff(*args)*a**2 - 2*b*b.diff(*args)*a + b**2*a.diff(*args)
     def extrema_2d(self, *args):
+        from sympy import zoo
         roots = nroots(self._diff_of_extrema(*args), method='factor', real = True)
         candidates = []
         for root in roots:
             v = self.extrema(root)
-            if v is not sp.zoo:
+            if v is not zoo:
                 candidates.append((root, v))
         if len(candidates) == 0:
             return []
@@ -938,7 +1027,8 @@ def _structsos_acyclic_quartic_real(coeff: 'Coeff'):
 
     def solve_numer_params_from_roots(poly, roots):
         # first apply transform
-        x, y = sp.symbols('x y')
+        from sympy import symbols
+        x, y = symbols('x y')
         Rmat = Matrix([list(r) for r, _, __ in roots]).T
         Rinv = Rmat.inv()
         trans = lambda x, y, z: list(Rmat * Matrix([x, y, z]))
@@ -981,8 +1071,8 @@ def _structsos_acyclic_quartic_real(coeff: 'Coeff'):
 
 
 def _structsos_acyclic_quartic_real_findroots(
-        coeff: 'Coeff', poly = None
-    ) -> List[Tuple[Tuple[Float, Float, Float], Float, 'Expr']]:
+    coeff: 'Coeff', poly = None
+) -> List[Tuple[Tuple[Float, Float, Float], Float, 'Expr']]:
     """
     Subtract some polynomials from the original polynomial so that the remaining polynomial
     has at least three roots over R.
@@ -1023,7 +1113,7 @@ def _structsos_acyclic_quartic_real_findroots(
         poly2 = poly.subs(c, 1)
         diff1 = poly2.diff(a)
         diff2 = poly2.diff(b)
-        res = sp.polys.resultant(diff1, diff2, a)
+        res = diff1.resultant(diff2)
         broots = nroots(res.as_poly(b), real = True, method = 'factor')
         candidates = []
         for b_ in broots:
@@ -1047,7 +1137,8 @@ def _structsos_acyclic_quartic_real_findroots(
         Then we w = sup{g(x,y)/x^2/root[2]^2}. However, we can show that g(x,y)/x^2 is a
         quadratic polynomial with respect to x.
         """
-        x, y = sp.symbols('x y')
+        from sympy import symbols
+        x, y = symbols('x y')
         root, value, sub1 = root
         trans = lambda x, y, z: (x + root[0], x*y + root[1], root[2])
         poly2 = poly - value * sub1**2
@@ -1084,9 +1175,10 @@ def _structsos_acyclic_quartic_real_findroots(
         y = (b*root1[2] - c*root1[1]) / (root2[1]*root1[2] - root2[2]*root1[1])
         z = (c*root2[1] - b*root2[2]) / (root2[1]*root1[2] - root2[2]*root1[1])
         """
+        from sympy import symbols
         root1, value1, sub1 = root1
         root2, value2, sub2 = root2
-        x, y = sp.symbols('x y')
+        x, y = symbols('x y')
         poly2 = poly - value1*sub1**2 - value2*sub2**2
         trans = lambda x, y, z: (x + root2[0]*y + root1[0]*z, root2[1]*y + root1[1]*z, root2[2]*y + root1[2]*z)
         poly2 = poly2(*trans(x, y, 1)).as_poly(y)

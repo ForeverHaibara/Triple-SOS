@@ -1,16 +1,15 @@
-from sympy import Integer, Rational, Float, Add
-
-from .quartic import structsos_quartic
-from .utils import (
-    CommonExpr,
-    sum_y_exprs, nroots, rationalize, rationalize_bound
-)
 from typing import TYPE_CHECKING
 
+from sympy import Add, Float, Integer, Rational
+
+from .quartic import structsos_quartic_param
+from .utils import CommonExpr
+from ..utils import intervals, rationalize_bound, sum_y_exprs
+from ....utils.roots import nroots, rationalize
+
 if TYPE_CHECKING:
-    from .utils import (
-        Coeff
-    )
+    from ....utils.expressions import Coeff
+
 
 def structsos_quintic_symmetric(coeff: 'Coeff', real = True):
     """
@@ -110,25 +109,6 @@ def structsos_quintic_symmetric(coeff: 'Coeff', real = True):
     CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
 
 
-    def _get_solution_t(t):
-        """Solve `1/2*s((a+b-c)(a-b)2(a+b-tc)2)s(a2-ab)`"""
-        if not (t >= -1 and t <= 3):
-            return None
-        return CyclicSum(a*(a+(1-t)/2*(b+c))**2*(a-b)**2*(a-c)**2)\
-            + (3-t)*(t+1)/4 * CyclicSum(a) * CyclicProduct((a-b)**2)
-
-    def _get_solution_tz(t, z):
-        """Solve `1/2*s((a+b+(2z-1+2t)c)(a-b)2(a+b-tc)2)s(a2-ab)`"""
-        w = 2*z - 1 + 2*t
-        if w >= 0:
-            return CyclicSum((a-b)**2) * CyclicSum((a+b+w*c)*(a-b)**2*(a+b-t*c)**2)/4
-        if w >= -1:
-            if not (t >= -1 and t <= 3):
-                return None
-            return _get_solution_t(t) \
-                + (w + 1)/4 * CyclicSum((a-b)**2) * CyclicSum(c*(a-b)**2*(a+b-t*c)**2)
-        return None
-
     # real start below
     if z >= -1:
         # Assume s((a+b+(2z-1+2t)c)(a-b)2(a+b-tc)2)/2 <= poly / coeff((5,0,0))
@@ -193,8 +173,8 @@ def structsos_quintic_symmetric(coeff: 'Coeff', real = True):
             # lift the degree
             # we must have t1 = (1 - 2z) / 3 <= 1
 
-            sol1 = _get_solution_tz(t1, z)
-            sol2 = _get_solution_tz(t2, z)
+            sol1 = _solve_quintic_symmetric_lifted_tz(coeff, t1, z)
+            sol2 = _solve_quintic_symmetric_lifted_tz(coeff, t2, z)
 
             if sol1 is None or sol2 is None:
                 return None
@@ -219,7 +199,7 @@ def structsos_quintic_symmetric(coeff: 'Coeff', real = True):
         if True:
             # trivial case, where (u,v) is over the asymptotic line from (-1-z, z^2)
             # which is a linear combination of s((a+b-c)(a-b)2(a+b+zc)2), s(a3(b-c)2) and abcs(a2-ab)
-            sol1 = _get_solution_t(-z)
+            sol1 = _solve_quintic_symmetric_lifted(coeff, -z)
             y = [
                 (u + z + 1) * m / 2,
                 (v - z**2 + 2*(u + z + 1)) * m / 4,
@@ -256,8 +236,8 @@ def structsos_quintic_symmetric(coeff: 'Coeff', real = True):
             return None
 
         multiplier = CyclicSum((a - b)**2)/2
-        sol1 = _get_solution_tz(t1, z)
-        sol2 = _get_solution_tz(t2, z)
+        sol1 = _solve_quintic_symmetric_lifted_tz(coeff, t1, z)
+        sol2 = _solve_quintic_symmetric_lifted_tz(coeff, t2, z)
         sol3 = multiplier * CyclicSum(a**3*(b-c)**2)
         if sol1 is None or sol2 is None:
             return None
@@ -296,6 +276,36 @@ def structsos_quintic_symmetric(coeff: 'Coeff', real = True):
         return _structsos_quintic_symmetric_final(coeff)
 
 
+    return None
+
+
+def _solve_quintic_symmetric_lifted(coeff: 'Coeff', t):
+    """Return the singular-cubic point formula at parameter ``t``."""
+    if not -1 <= t <= 3:
+        return None
+
+    a, b, c = coeff.gens
+    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+    return CyclicSum(a*(a + (1 - t)/2*(b + c))**2*(a - b)**2*(a - c)**2) \
+        + (3 - t)*(t + 1)/4 * CyclicSum(a) * CyclicProduct((a - b)**2)
+
+
+def _solve_quintic_symmetric_lifted_tz(coeff: 'Coeff', t, z):
+    """Return the singular-cubic point formula at parameters ``(t, z)``."""
+    a, b, c = coeff.gens
+    CyclicSum = coeff.cyclic_sum
+    w = 2*z - 1 + 2*t
+    if w >= 0:
+        return CyclicSum((a - b)**2) * CyclicSum(
+            (a + b + w*c)*(a - b)**2*(a + b - t*c)**2
+        ) / 4
+    if w >= -1:
+        solution = _solve_quintic_symmetric_lifted(coeff, t)
+        if solution is None:
+            return None
+        return solution + (w + 1)/4 * CyclicSum((a - b)**2) * CyclicSum(
+            c*(a - b)**2*(a + b - t*c)**2
+        )
     return None
 
 
@@ -339,34 +349,10 @@ def _structsos_quintic_symmetric_sdp(coeff: 'Coeff'):
         y = _criterion(x)
 
     if y is None:
-        if coeff.is_rational:
-            # only rational polynomials are supported by intervals()
-            det = det1 * det2
-            intervals = det.intervals()
-            if len(intervals):
-                for interval in intervals[:-1]:
-                    x = interval[0][1]
-                    x = coeff.convert(x)
-                    y = _criterion(x)
-                    if y is not None:
-                        break
-                else:
-                    y = None
-        else: # not coeff.is_rational
-            for x in nroots(det1, method = 'sympy', real = True, nonnegative = True):
-                y = _criterion(x)
-                if y is not None:
-                    y = None
-                    direction = 1 if det1.diff()(x) <= 0 else -1
-                    for x_ in rationalize_bound(x, direction = direction, compulsory = True):
-                        x_ = coeff.convert(x_)
-                        y_ = _criterion(x_)
-                        if y_ is not None:
-                            x, y = x_, y_
-                            break
-                if y is not None:
-                    break
-                y = None
+        for x in intervals([det1, det2], coeff.domain):
+            y = _criterion(x)
+            if y is not None:
+                break
 
     if y is not None:
         u2 = u - x**2 - 2*x*y + 2*y
@@ -654,14 +640,19 @@ def _structsos_quintic_symmetric_border(coeff: 'Coeff'):
 
     m_, p_, n_ = _compute_mpnq_discriminant(x, y)[0]
     m_, p_, n_ = m*m_, m*p_, m*n_
-    quartic = {
-        (4,0,0): m_, (3,1,0): p_, (2,2,0): n_, (1,3,0): p_, (3,0,1): p_, (2,1,1): -m_-p_*2-n_
-    }
-    quartic_solution = structsos_quartic(coeff.from_dict(quartic))
+    quartic_solution = structsos_quartic_param(
+        coeff, m_, p_, n_, p_, -m_ - 2*p_ - n_
+    )
     if quartic_solution is None: # not expected to happen
         return None
     solution = main_solution + (quartic_solution + rem * CyclicSum(a*b) * multiplier) * CyclicProduct(a)
     return solution / multiplier
+
+
+def _solve_quintic_symmetric_hexagon_point(coeff: 'Coeff', t):
+    """Return the first hexagon parabola formula at parameter ``t``."""
+    a, b, c = coeff.gens
+    return coeff.cyclic_sum(a*(b - c)**2*(b + c - t*a)**2)
 
 
 def _structsos_quintic_symmetric_hexagon(coeff: 'Coeff'):
@@ -757,7 +748,7 @@ def _structsos_quintic_symmetric_hexagon(coeff: 'Coeff'):
             ]
             exprs = [
                 CyclicSum(a*(b-c)**4), # s(a(b-c)2(b+c-2a)2) == s(a(b-c)4)
-                CyclicSum(a*(b-c)**2*(b+c-t2*a)**2),
+                _solve_quintic_symmetric_hexagon_point(coeff, t2),
                 CyclicProduct(a) * CyclicSum(a*b)
             ]
             return sum_y_exprs(y, exprs)

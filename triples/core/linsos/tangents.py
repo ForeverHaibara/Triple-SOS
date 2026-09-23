@@ -2,7 +2,7 @@ from typing import Tuple, List, Dict, Callable, Optional, TYPE_CHECKING
 from itertools import combinations
 
 import numpy as np
-from sympy import Poly, Integer, Mul, RR
+from sympy import Poly, Integer, Mul, QQ, RR
 from sympy import MutableDenseMatrix as Matrix
 
 from ...utils import Root, MonomialManager, identify_symmetry
@@ -13,7 +13,9 @@ from ...sdp.wedderburn import symmetry_adapted_basis
 if TYPE_CHECKING:
     from sympy import Expr, Symbol
     from sympy.combinatorics import PermutationGroup
+    from sympy.polys.domains import Domain
     from ..problem import InequalityProblem
+
 
 DEFAULT_TANGENTS = {
     3: (lambda a, b, c: [
@@ -37,6 +39,7 @@ def _filter_nonnumeric_tangents(tangents: List['Expr'], symbols: Tuple['Symbol',
         dt[p] = t
     return dt
 
+
 def _get_sorted_nullspace_by_weights(mat: Matrix, weights: Optional[List[int]]=None) -> Matrix:
     """Compute a left nullspace of a matrix by first ordering the rows by weights."""
     if weights is not None:
@@ -56,6 +59,7 @@ def _get_sorted_nullspace_by_weights(mat: Matrix, weights: Optional[List[int]]=N
     # if weights is not None:
     #     vecs = [permute_matrix_rows(v, invinds) for v in vecs]
     return ns
+
 
 def _get_sorted_nullspace(monomial_manager: MonomialManager, mat: Matrix, degree: int) -> Matrix:
     """
@@ -84,6 +88,7 @@ def _get_sorted_nullspace(monomial_manager: MonomialManager, mat: Matrix, degree
     #     vecs.extend(_get_sorted_nullspace_by_weights(mat, -weights))
     return vecs
 
+
 def _common_subspace(A: Matrix, B: Matrix) -> Matrix:
     """
     Compute the common subspace of two matrices A and B.
@@ -91,6 +96,7 @@ def _common_subspace(A: Matrix, B: Matrix) -> Matrix:
     R = Matrix.hstack(A, B)
     N = solve_nullspace(R.T)
     return A * N[:A.shape[1], :]
+
 
 def _canonicalize(p: Poly) -> Optional[Poly]:
     """
@@ -133,10 +139,11 @@ def _get_ineq_constrained_tangents(
     num_tangents: int = 5,
     min_degree: int = 3,
     max_degree: int = 8,
+    domain: 'Domain' = QQ,
     time_limit: Optional[Callable] = None,
 ) -> List[Dict[Poly, 'Expr']]:
     """
-    For each inequality constraint in ineq_items, compute a dictionary of items
+    For each inequality constraint in `ineq_items`, compute a dictionary of items
     `(ineq*poly**2, ineq_expr*expr**2)` such that `ineq * poly` vanishes
     at all given roots. As there are infinitely many polynomials
     that satisfy this condition, the function heuristically picks a few.
@@ -157,6 +164,8 @@ def _get_ineq_constrained_tangents(
         The loop does not break if min_degree is not met.
     max_degree : int
         Tangents are generated in a loop until it reaches the maximum degree.
+    domain: Domain
+        The basis is computed in the given domain.
     """
     time_limit = ArithmeticTimeout.make_checker(time_limit)
 
@@ -203,7 +212,7 @@ def _get_ineq_constrained_tangents(
                 for ri in group_root_inds:
                     key = (ri, degree)
                     if key not in span_cache:
-                        span_cache[key] = roots[ri].span(degree)
+                        span_cache[key] = roots[ri].span(degree, domain=domain)
                     group_spans.append(span_cache[key])
 
                 mat = Matrix.hstack(*group_spans)
@@ -267,6 +276,7 @@ def prepare_tangents(
     default_tangents = DEFAULT_TANGENTS,
     additional_tangents: List['Expr'] = [],
     wedderburn: bool = True,
+    domain: 'Domain' = QQ,
     time_limit: Optional[Callable] = None,
 ) -> Dict[Poly, 'Expr']:
     """
@@ -360,6 +370,7 @@ def prepare_tangents(
         roots=roots,
         monomial_manager=monomial_manager,
         symbols=symbols,
+        domain=domain,
         time_limit=time_limit,
     )
 

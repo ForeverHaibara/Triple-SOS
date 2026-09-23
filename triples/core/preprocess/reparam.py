@@ -9,8 +9,8 @@ from sympy import Integer, Mul, Dummy, gcd
 from ..node import TransformNode
 
 if TYPE_CHECKING:
-    from ..node import ProofNode
     from sympy import Poly, Expr
+    from ..node import ProofNode
 
 def _solver(problem) -> 'ProofNode':
     from .polynomial import SolvePolynomial

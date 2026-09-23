@@ -1,4 +1,6 @@
-from typing import Tuple, List, Dict, Union, Optional, Generator, TYPE_CHECKING
+from typing import (
+    Any, Dict, List, Tuple, Iterator, Union, Optional, TYPE_CHECKING
+)
 
 
 from .roots import Root
@@ -34,7 +36,7 @@ class RootList(list):
         return obj
 
     def copy(self) -> 'RootList':
-        return RootList(self.symbols, list.copy(self))
+        return RootList(self.symbols, list.copy(self)) # type: ignore
 
     def __str__(self) -> str:
         return self.__repr__()
@@ -42,11 +44,12 @@ class RootList(list):
     def __repr__(self) -> str:
         return f"RootList({self.symbols!r}, {super().__repr__()})"
 
-    def __iter__(self) -> Generator[Root, None, None]:
-        return super().__iter__()
+    def __iter__(self) -> Iterator[Root]:
+        for item in list.__iter__(self):
+            yield item # type: ignore
 
-    def __getitem__(self, i) -> Union[Root, 'RootList']:
-        item = super().__getitem__(i)
+    def __getitem__(self, i: Any) -> Union[Root, 'RootList']:  # type: ignore[override]
+        item = list.__getitem__(self, i)
         if isinstance(item, list):
             return RootList.new(self.symbols, item)
         return item
@@ -68,7 +71,7 @@ class RootList(list):
         >>> roots.to_dicts()
         [{a: 1, b: 2, c: 3}, {a: 4, b: 5, c: 6}]
         """
-        return [dict(zip(self.symbols, root)) for root in self]
+        return [dict(zip(self.symbols, root.root)) for root in self]
 
     def reorder(self, new_symbols: Tuple[Union["Symbol", int], ...]) -> 'RootList':
         """
@@ -156,13 +159,16 @@ class RootList(list):
         >>> roots.transform([sqrt(a), sqrt(b), (a+b)/c], (x, y, z))
         RootList((x, y, z), [(1, sqrt(2), 1), (2, sqrt(5), 3/2)])
         """
-        keys = new_symbols
         if isinstance(subs, list):
             if new_symbols is None:
                 raise ValueError("new_symbols must be specified when subs is a list.")
             elif len(new_symbols) != len(subs):
                 raise ValueError(f"new_symbols must have the same length as subs, but got {len(new_symbols)} != {len(subs)}.")
             keys = list(range(len(subs)))
-        new_symbols = tuple(new_symbols if new_symbols is not None else subs.keys())
-        return RootList.new(new_symbols,
-            [root.transform(self.symbols, subs, keys) for root in self])
+        else:
+            if new_symbols is None:
+                new_symbols = tuple(subs.keys())
+            keys = list(new_symbols)
+
+        return RootList.new(tuple(new_symbols),
+            [root.transform(list(self.symbols), subs, keys) for root in self])

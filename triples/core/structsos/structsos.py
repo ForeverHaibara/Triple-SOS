@@ -1,20 +1,20 @@
-from typing import List, Dict, Union, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict, List, Optional, Union
 
 from sympy import construct_domain
 from sympy.polys.polyerrors import BasePolynomialError
 
 from .constrained import structural_sos_constrained
-from .pivoting    import structural_sos_2vars
-from .ternary     import structural_sos_3vars
-from .quaternary  import structural_sos_4vars
-from .nvars       import structural_sos_nvars
+from .nvars import structural_sos_nvars
+from .pivoting import structural_sos_2vars
+from .quaternary import structural_sos_4vars
+from .ternary import structural_sos_3vars
 from ..preprocess import ProofNode, SolvePolynomial
-
 from ..problem import ProblemComplexity
 from ..solution import Solution
 
 if TYPE_CHECKING:
-    from sympy import Poly, Expr
+    from sympy import Expr, Poly
+
     from ..problem import InequalityProblem
 
 class StructuralSOSSolver(ProofNode):

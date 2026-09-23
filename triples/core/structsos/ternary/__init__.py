@@ -1,17 +1,19 @@
-from .sparse  import structsos_sparse, structsos_heuristic
-from .dense_symmetric import structsos_dense_symmetric, structsos_liftfree_for_six
-from .quadratic import structsos_quadratic, structsos_acyclic_quadratic
-from .cubic   import structsos_cubic, structsos_acyclic_cubic
-from .quartic import structsos_quartic, structsos_acyclic_quartic
-from .quintic import structsos_quintic
-from .sextic  import structsos_sextic
-from .septic  import structsos_septic
-from .octic   import structsos_octic
-from .nonic   import structsos_nonic
 from .acyclic import structsos_acyclic_sparse
-
-from .solver import structural_sos_3vars, _structural_sos_3vars_cyclic, _structural_sos_3vars_acyclic
-
+from .cubic import structsos_acyclic_cubic, structsos_cubic
+from .dense_symmetric import structsos_dense_symmetric, structsos_liftfree_for_six
+from .nonic import structsos_nonic
+from .octic import structsos_octic
+from .quadratic import structsos_acyclic_quadratic, structsos_quadratic
+from .quartic import structsos_acyclic_quartic, structsos_quartic, structsos_quartic_param
+from .quintic import structsos_quintic
+from .septic import structsos_septic
+from .sextic import structsos_sextic
+from .solver import (
+    _structural_sos_3vars_acyclic,
+    _structural_sos_3vars_cyclic,
+    structural_sos_3vars,
+)
+from .sparse import structsos_heuristic, structsos_sparse
 
 __all__ = [
     'structsos_sparse',
@@ -23,6 +25,7 @@ __all__ = [
     'structsos_cubic',
     'structsos_acyclic_cubic',
     'structsos_quartic',
+    'structsos_quartic_param',
     'structsos_acyclic_quartic',
     'structsos_quintic',
     'structsos_sextic',

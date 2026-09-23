@@ -184,8 +184,9 @@ def rpa_monotonic(f, g, h, a, b, tol=1e-5, max_iter=2000, cbv=np.inf, root_solve
 
     [3] H. Tuy, "Robust Solution of Nonconvex Global Optimization Problems", Journal of Global Optimization, 2005.
     """
-    array = lambda x: np.array(x, dtype='float') if x is not None else None
-    a, b, x_best, cbv = array(a).copy(), array(b).copy(), None, cbv + tol
+    a = np.array(a, dtype='float')
+    b = np.array(b, dtype='float')
+    x_best, cbv = None, cbv + tol
     n = a.size
 
     if g(a) > 0 or h(b) < 0 or f(a) > cbv - tol:

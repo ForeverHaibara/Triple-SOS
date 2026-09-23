@@ -1,21 +1,23 @@
-from typing import Union, Dict, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict, Optional, Union
 
 from sympy import Function, Mul
+from sympy.combinatorics import Permutation, PermutationGroup
 from sympy.core.symbol import uniquely_named_symbol
-from sympy.combinatorics import PermutationGroup, Permutation
 
-from .cubic import quaternary_cubic_symmetric, _quaternary_cubic_partial_symmetric
+from .cubic import _quaternary_cubic_partial_symmetric, quaternary_cubic_symmetric
+from .dense_symmetric import quaternary_dense_dihedral, quaternary_dense_symmetric
 from .quartic import quaternary_quartic
 from .quartic_symmetric import quaternary_quartic_symmetric
 from .quintic import quaternary_quintic_symmetric
-from .dense_symmetric import quaternary_dense_symmetric, quaternary_dense_dihedral
-
-from ..utils import Coeff, PolynomialNonpositiveError, PolynomialUnsolvableError
 from ..sparse import structsos_common, structsos_degree_specified_solver
+
+from ..utils import PolynomialNonpositiveError, PolynomialUnsolvableError
 from ...solution import extract_undetermined_exprs
+from ....utils.expressions import Coeff
 
 if TYPE_CHECKING:
-    from sympy import Poly, Expr
+    from sympy import Expr, Poly
+
     from ...problem import InequalityProblem
 
 

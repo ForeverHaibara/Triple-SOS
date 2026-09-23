@@ -23,11 +23,15 @@ class PowerEliminationProblems:
 
     @classmethod
     def problem_amgm2(cls):
-        return a**2 + b**2 + c**2 - 3, [a,b,c], [a*b*c-1]
+        return 4*(a**2 + b**2 + c**2) - 3, [a,b,c], [8*a*b*c-1]
 
     @classmethod
     def problem_vasile(cls):
         return (a+b+c)**2 - 3*(a*x+b*y+c*z), [a,b,c,x,y,z], [x**2-a*b, y**2-b*c, z**2-c*a]
+
+    @classmethod
+    def problem_const1(cls):
+        return (a + b + c)**2 - 3*x*(a*b + b*c + c*a), [a, b, c], [x - 1]
 
 
 @pytest.mark.slow
@@ -42,7 +46,10 @@ def test_power_elimination(problem):
     tree = ProofTree(SolvePolynomial(new_pro),
         {ProofTree: {'time_limit': 20.0},
          SolvePolynomial: {'solvers': [
-             StructuralSOSSolver, LinearSOSSolver]},
+             StructuralSOSSolver, LinearSOSSolver],
+             'homogenize': False,
+             'eliminate_binomial_constraints': False,
+             },
          LinearSOSSolver: {'basis_limit': 1000}
         #  SDPSOSSolver: {'lift_degree_limit': 0}
         }

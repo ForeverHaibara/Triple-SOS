@@ -1,11 +1,11 @@
 from contextlib import contextmanager
-from typing import Tuple, List, Optional, Union, TYPE_CHECKING
+from typing import TYPE_CHECKING, List, Optional, Tuple, Union
 
-from mpmath import mp
 import numpy as np
-from numpy.polynomial.polynomial import polyroots as np_polyroots
+from mpmath import mp
 from numpy.polynomial.polynomial import polyfromroots as np_polyfromroots
-from sympy import Poly, Expr, Integer, Symbol, QQ, construct_domain, count_roots
+from numpy.polynomial.polynomial import polyroots as np_polyroots
+from sympy import QQ, Expr, Integer, Poly, Symbol, construct_domain, count_roots
 from sympy.core import S
 from sympy.matrices import MutableDenseMatrix as Matrix
 from sympy.polys.matrices.ddm import DDM
@@ -17,6 +17,7 @@ from ...utils import SOSCone, SOSElement, SOSlist
 
 if TYPE_CHECKING:
     from contextlib import AbstractContextManager
+
     from sympy.polys.rings import PolyElement
 
 T = float
@@ -365,7 +366,7 @@ class MpmathCTX(CTX):
 
 
 try:
-    from flint import arb, acb, arb_poly, arb_mat, acb_poly
+    from flint import acb, acb_poly, arb, arb_mat, arb_poly
     from flint import ctx as flint_ctx
     class FlintCTX(CTX):
         def float(self, x):

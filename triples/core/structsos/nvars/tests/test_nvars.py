@@ -1,9 +1,12 @@
 from functools import partial
 
-from .....testing.doctest_parser import run_doctest_examples, discover_functions_from_scope
-from .....utils import preprocess_text
-
 import pytest
+
+from .....testing.doctest_parser import (
+    discover_functions_from_scope,
+    run_doctest_examples,
+)
+from .....utils import preprocess_text
 
 nvars_funcs = discover_functions_from_scope("triples.core.structsos.nvars")
 

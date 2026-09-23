@@ -1,8 +1,10 @@
-from .....testing.doctest_parser import run_doctest_examples, discover_functions_from_scope
-
+import pytest
 from sympy.abc import a, b, c, d
 
-import pytest
+from .....testing.doctest_parser import (
+    discover_functions_from_scope,
+    run_doctest_examples,
+)
 
 quaternary_funcs = discover_functions_from_scope("triples.core.structsos.quaternary")
 

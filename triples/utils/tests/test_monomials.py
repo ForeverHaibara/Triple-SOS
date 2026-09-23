@@ -1,10 +1,11 @@
-from sympy import symbols
+from sympy import symbols, sqrt, Rational
 from sympy.combinatorics import CyclicGroup, DihedralGroup, SymmetricGroup
 
 from ..monomials import (
     _identify_symmetry_from_action,
     identify_symmetry_from_lists,
     verify_symmetry,
+    poly_reduce_by_symmetry,
 )
 
 
@@ -78,3 +79,29 @@ def test_identify_symmetry_from_action():
     )
 
     assert symmetry.order() == 3
+
+
+def test_poly_reduce_by_symmetry():
+    # test the function preserves the domain
+    a, b, c, x = symbols("a b c x")
+    poly = (a**2*(a-sqrt(2)*b)*(a-sqrt(2)*c)+b**2*(b-sqrt(2)*c)*(b-sqrt(2)*a)
+            +c**2*(c-sqrt(2)*a)*(c-sqrt(2)*b)).as_poly(a, b, c, extension=True)
+    p1 = poly_reduce_by_symmetry(poly, CyclicGroup(3))
+    assert p1.domain == poly.domain
+    p1 = p1.as_expr()
+    p1cyc = p1 + p1.xreplace({a:b,b:c,c:a}) + p1.xreplace({a:c,b:a,c:b})
+    assert (poly - p1cyc.as_poly(a, b, c, domain=poly.domain)).is_zero
+
+    # test polynomial ring
+    poly = (a**4*(b-x*c)**2 + b**4*(c-x*a)**2 + c**4*(a-x*b)**2).as_poly(a, b, c, extension=True)
+    p1 = poly_reduce_by_symmetry(poly, CyclicGroup(3))
+    assert p1.domain.is_PolynomialRing or p1.domain.is_FractionField
+    p1cyc = p1 + p1.xreplace({a:b,b:c,c:a}) + p1.xreplace({a:c,b:a,c:b})
+    assert (poly - p1cyc.as_poly(a, b, c, domain=poly.domain)).is_zero
+
+    poly = (a**6+b**6+c**6+3*a**2*b**2*c**2).as_poly(a, b, c)
+    assert (poly_reduce_by_symmetry(poly, CyclicGroup(3)) - (a**6 + a**2*b**2*c**2).as_poly(a, b, c)).is_zero
+
+    poly = (a**3+b**3+c**3+3*a**2*b**2*c**2+2).as_poly(a, b, c)
+    assert (poly_reduce_by_symmetry(poly, CyclicGroup(3)) \
+            - (a**3 + a**2*b**2*c**2 + Rational(2,3)).as_poly(a, b, c)).is_zero

@@ -9,9 +9,9 @@ from .lift import LinearBasisMultiplier
 from ...utils import verify_symmetry
 
 if TYPE_CHECKING:
-    from ...utils import MonomialManager
-    from .basis import LinearBasis
     from sympy import Poly, Expr, Symbol
+    from .basis import LinearBasis
+    from ...utils import MonomialManager
 
 
 def create_linear_sol_from_y_basis(
@@ -88,7 +88,7 @@ def _collect_constraints(
     inv_eq_constraints = {v: k for k, v in eq_constraints.items()}
     if (not collect) or (len(inv_ineq_constraints) < len(ineq_constraints)) or (len(inv_eq_constraints) < len(eq_constraints)):
         # unsafe and is not expected to happen
-        return Add(*[symmetry.cyclic_sum(v * base.as_expr(symbols), symbols) for v, base in zip(y, basis)]) / multiplier
+        return Add(*[symmetry.cyclic_sum(v * base.as_expr(), symbols) for v, base in zip(y, basis)]) / multiplier
 
     nontangent_part = []
     ineq_part = []
@@ -110,16 +110,17 @@ def _collect_constraints(
 
     for v, base in zip(y, basis):
         if isinstance(base, LinearBasisTangent):
-            tangent = base.tangent(symbols)
+            tangent = base.tangent
             has_eq_part = has_eq(tangent)
             if has_eq_part is not None:
                 if has_eq_part[0] not in eq_part: # not expected to happen
                     eq_part[has_eq_part[0]] = []
-                eq_part[has_eq_part[0]].append(v * has_eq_part[1] * Mul(*[s**p for s, p in zip(symbols, base.powers)]))
+                eq_part[has_eq_part[0]].append(
+                    v * has_eq_part[1] * Mul(*[s**p for s, p in zip(symbols, base.powers)]))
             else:
                 ineq_part.append((tangent, v * Mul(*[s**p for s, p in zip(symbols, base.powers)])))
         else:
-            nontangent_part.append(symmetry.cyclic_sum(v * base.as_expr(symbols), symbols))
+            nontangent_part.append(symmetry.cyclic_sum(v * base.as_expr(), symbols))
 
     # Nontangent part: sum them up
     nontangent_part = Add(*nontangent_part)

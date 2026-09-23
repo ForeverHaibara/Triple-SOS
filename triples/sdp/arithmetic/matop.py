@@ -9,15 +9,17 @@ basic matrix operations.
 
 from collections import defaultdict
 from time import perf_counter
-from typing import List, Dict, Tuple, Union, Optional, Callable, Set, Any, overload, TYPE_CHECKING
+from typing import (List, Dict, Tuple, Union, Optional, Callable, Set,
+                    Any, TYPE_CHECKING, TypeVar)
 
 import numpy as np
 from numpy import ndarray
-from scipy.sparse import spmatrix, csr_matrix
+from scipy import __version__ as _SCIPY_VERSION
 from sympy import __version__ as _SYMPY_VERSION
 from sympy.external.gmpy import MPZ # >= 1.9
 from sympy.external.importtools import version_tuple
-from sympy import Float, MatrixBase
+from sympy import Float
+from sympy.matrices import MatrixBase
 from sympy.matrices import MutableDenseMatrix as Matrix
 from sympy.matrices.repmatrix import RepMatrix
 from sympy.polys.domains import ZZ, RR, CC # EXRAW >= 1.9
@@ -25,9 +27,13 @@ from sympy.polys.matrices.domainmatrix import DomainMatrix # polys.matrices >= 1
 from sympy.polys.matrices.ddm import DDM
 from sympy.polys.matrices.sdm import SDM
 
-if TYPE_CHECKING:
-    from sympy import Basic
-    from sympy.polys.domains import Domain
+USE_SCIPY_ARRAY = tuple(version_tuple(_SCIPY_VERSION)) >= (1, 15)
+if USE_SCIPY_ARRAY:
+    from scipy.sparse import csr_array
+    from scipy.sparse import sparray
+else:
+    from scipy.sparse import csr_matrix as csr_array
+    from scipy.sparse import spmatrix as sparray
 
 if tuple(version_tuple(_SYMPY_VERSION)) >= (1, 13):
     from sympy.polys.matrices.dfm import DFM
@@ -35,7 +41,7 @@ if tuple(version_tuple(_SYMPY_VERSION)) >= (1, 13):
     primitive = lambda self: self.primitive()
 else:
     class _DFM_dummy: ...
-    DFM = _DFM_dummy
+    DFM = _DFM_dummy # type: ignore
 
     from sympy.polys.densetools import dup_primitive
 
@@ -44,7 +50,7 @@ else:
         dok = self.rep.to_dok()
         elements, data = list(dok.values()), list(dok.keys())
         content, prims = dup_primitive(elements, K)
-        sdm = defaultdict(dict)
+        sdm: Dict[int, Dict[int, Any]] = defaultdict(dict)
         for (i, j), v in zip(data, prims):
             sdm[i][j] = v
         M_primitive = self.from_rep(SDM(sdm, self.shape, K))
@@ -52,9 +58,18 @@ else:
 
 try:
     from flint import fmpq, fmpz
-    FLINT_TYPE = (fmpq, fmpz)
+    FLINT_TYPE: Any = (fmpq, fmpz)
 except ImportError:
     FLINT_TYPE = ()
+
+
+if TYPE_CHECKING:
+    from sympy import Basic
+    from sympy.polys.domains import Domain
+
+MatrixLike = Union[MatrixBase, ndarray, sparray]
+MatrixT = TypeVar('MatrixT', MatrixBase, ndarray, sparray)
+
 
 class ArithmeticTimeout(Exception):
     @classmethod
@@ -111,7 +126,7 @@ def is_empty_matrix(M: Union[Matrix, ndarray], check_all_zeros: bool = False) ->
         return not any(M)
     return False
 
-def size_of_mat(M: Union[Matrix, ndarray]) -> int:
+def size_of_mat(M: MatrixLike) -> int:
     """
     Return the size of a matrix.
 
@@ -133,7 +148,7 @@ def size_of_mat(M: Union[Matrix, ndarray]) -> int:
         return 0
     return int(np.prod(M.shape))
 
-def sqrtsize_of_mat(M: Union[Matrix, ndarray, int]) -> int:
+def sqrtsize_of_mat(M: Union[MatrixLike, int]) -> int:
     """
     Return the int square root of the size of a matrix. This is
     helpful to infer the size of a symmetric matrix from its vector form.
@@ -155,16 +170,7 @@ def sqrtsize_of_mat(M: Union[Matrix, ndarray, int]) -> int:
         return int(np.round(np.sqrt(M)))
     return int(np.round(np.sqrt(size_of_mat(M))))
 
-@overload
-def reshape(A: Matrix, shape: Tuple[int, int]) -> Matrix: ...
-@overload
-def reshape(A: MatrixBase, shape: Tuple[int, int]) -> MatrixBase: ...
-@overload
-def reshape(A: ndarray, shape: Tuple[int, int]) -> ndarray: ...
-@overload
-def reshape(A: spmatrix, shape: Tuple[int, int]) -> spmatrix: ...
-
-def reshape(A, shape):
+def reshape(A: MatrixT, shape: Tuple[int, int]) -> MatrixT:
     """
     Reshape a matrix to a new shape. This function maintains the domain
     of SymPy RepMatrix for low SymPy versions.
@@ -198,23 +204,20 @@ def reshape(A, shape):
         n2, m2 = shape
         f = lambda row, col: divmod(row*m + col, m2)
         dt = {f(i, j): v for (i, j), v in rep.to_dok().items()}
-        dt_by_row = {}
+        dt_by_row: Dict[int, Dict[int, Any]] = {}
         for (i, j), v in dt.items():
             if i not in dt_by_row:
                 dt_by_row[i] = {}
             dt_by_row[i][j] = v
-        return rep_matrix_from_dict(dt_by_row, shape, rep.domain)
+        return A._fromrep(DomainMatrix.from_rep(
+            SDM(dt_by_row, shape, A._rep.domain)
+        ))
+    if isinstance(A, sparray):
+        return A.__class__(A.reshape(shape))
     return A.reshape(*shape)
 
 
-@overload
-def vec2mat(v: MatrixBase) -> MatrixBase: ...
-@overload
-def vec2mat(v: ndarray) -> ndarray: ...
-@overload
-def vec2mat(v: spmatrix) -> spmatrix: ...
-
-def vec2mat(v):
+def vec2mat(v: MatrixT) -> MatrixT:
     """
     Convert a vector to a symmetric matrix.
 
@@ -236,14 +239,7 @@ def vec2mat(v):
     n = sqrtsize_of_mat(v)
     return reshape(v, (n, n))
 
-@overload
-def mat2vec(M: Matrix) -> Matrix: ...
-@overload
-def mat2vec(M: ndarray) -> ndarray: ...
-@overload
-def mat2vec(M: spmatrix) -> spmatrix: ...
-
-def mat2vec(M):
+def mat2vec(M: MatrixT) -> MatrixT:
     """
     Convert a matrix to a vector.
 
@@ -289,6 +285,7 @@ def rep_matrix_from_dict(x: Dict[int, Dict[int, Any]], shape: Tuple[int, int], d
     [  0,   0]])
     """
     return Matrix._fromrep(DomainMatrix.from_rep(SDM(x, shape, domain)))
+
 
 def rep_matrix_from_list(x: Union[List, List[List]], shape: Union[int, Tuple[int, int]], domain: 'Domain') -> Matrix:
     """
@@ -361,7 +358,7 @@ def is_zz_qq_mat(mat) -> bool:
     """
     return isinstance(mat, RepMatrix) and (mat._rep.domain.is_ZZ or mat._rep.domain.is_QQ)
 
-def is_numerical_mat(mat: Union[ndarray, spmatrix, Matrix]) -> bool:
+def is_numerical_mat(mat: MatrixLike) -> bool:
     """
     Judge whether a matrix is numerical, including RR, EX(RAW) with Float and numpy arrays.
     """
@@ -371,13 +368,13 @@ def is_numerical_mat(mat: Union[ndarray, spmatrix, Matrix]) -> bool:
             return True
         if (dom.is_EX or dom.is_EXRAW) and mat.has(Float):
             return True
-    elif isinstance(mat, (ndarray, spmatrix)):
+    elif isinstance(mat, (ndarray, sparray)):
         return True
     elif isinstance(mat, MatrixBase) and mat.has(Float):
         return True
     return False
 
-def free_symbols_of_mat(mat: Union[ndarray, spmatrix, Matrix]) -> Set['Basic']:
+def free_symbols_of_mat(mat: MatrixLike) -> Set['Basic']:
     """
     Get the free symbols of a matrix.
     """
@@ -400,7 +397,7 @@ def _cast_list_to_sympy_matrix(rows: int, cols: int, lst: List[int]) -> Matrix:
             sdm[i] = row
     return rep_matrix_from_dict(sdm, (rows, cols), ZZ)
 
-def _csr_to_dict_of_dict(csr_mat: spmatrix) -> Dict[int, Dict[int, Any]]:
+def _csr_to_dict_of_dict(csr_mat: sparray) -> Dict[int, Dict[int, Any]]:
     """Convert a CSR matrix to a dictionary of dictionaries. Internal."""
     # csr_mat = csr_mat.tocsr()
     dod = {}
@@ -413,13 +410,13 @@ def _csr_to_dict_of_dict(csr_mat: spmatrix) -> Dict[int, Dict[int, Any]]:
             dod[row] = dict(zip(cols, values))
     return dod
 
-def rep_matrix_from_numpy(arr: Union[ndarray, spmatrix]) -> RepMatrix:
+def rep_matrix_from_numpy(arr: Union[ndarray, sparray]) -> Matrix:
     """
-    Cast a numpy matrix to a sympy RepMatrix by handling dtypes carefully.
+    Cast a numpy matrix to a sympy Matrix by handling dtypes carefully.
 
     Parameters
     ----------
-    arr : ndarray or spmatrix
+    arr : ndarray or sparray
         The numpy matrix to be casted, can be either 1D or 2D.
 
     Examples
@@ -443,8 +440,8 @@ def rep_matrix_from_numpy(arr: Union[ndarray, spmatrix]) -> RepMatrix:
         shape = arr.shape if len(arr.shape) == 2 else (arr.shape[0], 1)
         return _cast_list_to_sympy_matrix(shape[0], shape[1], arr.flatten().tolist())
 
-    conv = None
-    domain = RR
+    conv: Optional[Callable[[Any], Any]] = None
+    domain: Any = RR
     if np.issubdtype(arr.dtype, np.integer):
         domain = ZZ
         conv = lambda x: MPZ(int(x))
@@ -461,15 +458,15 @@ def rep_matrix_from_numpy(arr: Union[ndarray, spmatrix]) -> RepMatrix:
                 lst = [[conv(_) for _ in row] for row in arr.tolist()]
                 return rep_matrix_from_list(lst, arr.shape, domain)
             else:
-                lst = [conv(_) for _ in arr.tolist()]
-                return rep_matrix_from_list(lst, arr.shape[0], domain)
-        elif isinstance(arr, spmatrix):
+                values = [conv(_) for _ in arr.tolist()]
+                return rep_matrix_from_list(values, arr.shape[0], domain)
+        elif isinstance(arr, sparray):
             dt = _csr_to_dict_of_dict(arr.tocsr())
             dt = {r: {c: conv(v) for c, v in dt[r].items()} for r in dt}
             return rep_matrix_from_dict(dt, arr.shape, domain)
 
     # fallback to default constructor
-    if isinstance(arr, spmatrix):
+    if isinstance(arr, sparray):
         arr = arr.toarray()
     return Matrix(arr.tolist())
 
@@ -508,8 +505,8 @@ def _rep_matrix_to_data(M, dtype: Any = np.float64) -> Optional[Tuple[List, List
                     return f(lt1[1]) / f(lt2[1])
                 return _f
         elif dom.is_AlgebraicField:
-            gen = dom.ext.n()
-            gen_pow = [gen**i for i in range(len(dom.mod.to_list()) - 1)]
+            gen = dom.ext.n() # type: ignore
+            gen_pow = [gen**i for i in range(len(dom.mod.to_list()) - 1)] # type: ignore
             def wrapper(f):
                 def _f(x):
                     return f(sum(c * v for c, v in zip(x.rep[::-1], gen_pow)))
@@ -519,7 +516,7 @@ def _rep_matrix_to_data(M, dtype: Any = np.float64) -> Optional[Tuple[List, List
             f = wrapper(lambda x: x.__int__())
         elif np.issubdtype(dtype, np.floating):
             if isinstance(dom.one, FLINT_TYPE) or\
-                (dom.is_Composite and isinstance(dom.domain.one, FLINT_TYPE)):
+                (dom.is_Composite and isinstance(dom.domain.one, FLINT_TYPE)): # type: ignore
                 f = wrapper(lambda x: x.numerator.__int__() / x.denominator.__int__())
             else:
                 f = wrapper(lambda x: x.__float__())
@@ -543,7 +540,7 @@ def _rep_matrix_to_data(M, dtype: Any = np.float64) -> Optional[Tuple[List, List
         return data_list, row_indices, col_indices
     return None
 
-def rep_matrix_to_numpy(M: Union[MatrixBase, DomainMatrix, ndarray, spmatrix], dtype: Any = np.float64) -> ndarray:
+def rep_matrix_to_numpy(M: Union[MatrixLike, DomainMatrix], dtype: Any = np.float64) -> ndarray:
     """
     Cast a sympy RepMatrix to a numpy matrix efficiently.
 
@@ -557,7 +554,7 @@ def rep_matrix_to_numpy(M: Union[MatrixBase, DomainMatrix, ndarray, spmatrix], d
     dtype = np.dtype(dtype)
     if isinstance(M, ndarray):
         return M.astype(dtype, copy=False)
-    if isinstance(M, spmatrix):
+    if isinstance(M, sparray):
         return M.toarray().astype(dtype, copy=False)
 
     result = _rep_matrix_to_data(M, dtype)
@@ -570,7 +567,7 @@ def rep_matrix_to_numpy(M: Union[MatrixBase, DomainMatrix, ndarray, spmatrix], d
     arr[row_indices, col_indices] = data_list
     return arr
 
-def rep_matrix_to_scipy(M: Union[MatrixBase, DomainMatrix, ndarray, spmatrix], dtype = np.float64) -> spmatrix:
+def rep_matrix_to_scipy(M: Union[MatrixLike, DomainMatrix], dtype = np.float64) -> sparray:
     """
     Cast a sympy RepMatrix to a scipy sparse matrix efficiently.
 
@@ -582,27 +579,24 @@ def rep_matrix_to_scipy(M: Union[MatrixBase, DomainMatrix, ndarray, spmatrix], d
         The dtype of the numpy matrix. Default is np.float64.
     """
     dtype = np.dtype(dtype)
-    if isinstance(M, spmatrix):
+    if isinstance(M, sparray):
         return M.astype(dtype, copy=False)
     if isinstance(M, ndarray):
-        return csr_matrix(M.astype(dtype, copy=False))
+        return csr_array(M.astype(dtype, copy=False))
 
     result = _rep_matrix_to_data(M, dtype)
     if result is None:
         # fallback to default constructor
-        return csr_matrix(np.array(M).astype(dtype))
+        return csr_array(np.array(M).astype(dtype))
 
     data_list, row_indices, col_indices = result
-    arr = csr_matrix((data_list, (row_indices, col_indices)), shape=M.shape, dtype=dtype)
+    arr = csr_array((data_list, (row_indices, col_indices)), shape=M.shape, dtype=dtype)
     return arr
 
 
-@overload
-def permute_matrix_rows(matrix: Matrix, permutation: List[int]) -> Matrix: ...
-@overload
-def permute_matrix_rows(matrix: ndarray, permutation: List[int]) -> ndarray: ...
-
-def permute_matrix_rows(matrix, permutation):
+def permute_matrix_rows(
+    matrix: MatrixT, permutation: List[int]
+) -> MatrixT:
     """
     Fast operation of matrix[permutation].
 
@@ -623,36 +617,41 @@ def permute_matrix_rows(matrix, permutation):
     [1, 2, 3],
     [1, 2, 3]])
     """
-    rep = matrix._rep.rep if isinstance(matrix, RepMatrix) else None
     shape = (len(permutation), matrix.shape[1])
 
-    if isinstance(rep, SDM):
-        new_rep = {}
-        for r in range(len(permutation)):
-            v = rep.get(permutation[r], None)
-            if v is not None:
-                new_rep[r] = v #.copy()
-        return rep_matrix_from_dict(new_rep, shape, rep.domain)
+    if isinstance(matrix, RepMatrix):
+        rep = matrix._rep.rep
+        if isinstance(rep, SDM):
+            new_rep = {}
+            for r in range(len(permutation)):
+                v = rep.get(permutation[r], None)
+                if v is not None:
+                    new_rep[r] = v #.copy()
+            return matrix._fromrep(DomainMatrix.from_rep(
+                SDM(new_rep, shape, rep.domain)
+            ))
 
-    elif isinstance(rep, DDM):
-        new_rep = [None for _ in range(len(permutation))]
-        for r in range(len(permutation)):
-            new_rep[r] = rep[permutation[r]]#[:]
-        new_rep = DDM(new_rep, shape, rep.domain)
-        return matrix.__class__._fromrep(DomainMatrix.from_rep(new_rep))
+        elif isinstance(rep, DDM):
+            new_rep_rows: List[Any] = [None for _ in range(len(permutation))]
+            for r in range(len(permutation)):
+                new_rep_rows[r] = rep[permutation[r]]#[:]
+            ddm_rep = DDM(new_rep_rows, shape, rep.domain)
+            return matrix._fromrep(DomainMatrix.from_rep(ddm_rep))
 
-    elif isinstance(rep, DFM):
-        new_rep = [None for _ in range(len(permutation))] # type: ignore
-        rep2 = rep.rep.tolist() # type: ignore
-        for r in range(len(permutation)): # type: ignore
-            new_rep[r] = rep2[permutation[r]]
-        new_rep = DFM(new_rep, shape, rep.domain) # type: ignore
-        return matrix.__class__._fromrep(DomainMatrix.from_rep(new_rep))
+        elif isinstance(rep, DFM):
+            rep2 = rep.rep.tolist() # type: ignore
+            domain = rep.domain # type: ignore
+            new_rep_rows_dfm: List[Any] = [None for _ in range(len(permutation))]
+            for r in range(len(permutation)):
+                new_rep_rows_dfm[r] = rep2[permutation[r]]
+            dfm_rep = DFM(new_rep_rows_dfm, shape, domain)
+            return matrix._fromrep(DomainMatrix.from_rep(dfm_rep))
 
-    elif isinstance(matrix, MatrixBase):
-        new_mat = Matrix.zeros(*matrix.shape)
-        for r in range(len(permutation)):
-            new_mat[r, :] = matrix[permutation[r], :]
-        return new_mat
+    if isinstance(matrix, MatrixBase):
+        rows = [matrix[permutation[r], :] for r in range(len(permutation))]
+        return matrix.vstack(*rows)
+
+    if isinstance(matrix, sparray):
+        return matrix.__class__(matrix.tocsr()[permutation])
 
     return matrix[permutation]
