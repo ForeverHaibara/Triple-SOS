@@ -17,9 +17,9 @@ from .utils import S_from_y, decompose_matrix
 
 if TYPE_CHECKING:
     from sympy import Expr
-    from .abstract import Decomp
     from sympy.core.relational import Relational
 
+    from .abstract import Decomp
 
 def _get_unique_symbols(used_symbols, dof: int, xname: str = 'y'):
     """

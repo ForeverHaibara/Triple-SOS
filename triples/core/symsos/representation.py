@@ -5,8 +5,8 @@ from .symmetric import UE3Real, UE3Positive, UE4Real
 from ...utils import verify_symmetry
 
 if TYPE_CHECKING:
-    from .basic import SymmetricTransform
     from sympy import Poly, Expr, Symbol
+    from .basic import SymmetricTransform
 
 _METHOD_TO_TRANSFORM = {
     3: {

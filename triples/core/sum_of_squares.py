@@ -16,8 +16,9 @@ from .sdpsos.sdpsos import SDPSOSSolver
 from ..utils import PolyReader
 
 if TYPE_CHECKING:
-    from .solution import Solution
     from sympy import Poly, Expr, Symbol
+
+    from .solution import Solution
 
 NAME_TO_METHOD = {
     'StructuralSOS': StructuralSOSSolver,

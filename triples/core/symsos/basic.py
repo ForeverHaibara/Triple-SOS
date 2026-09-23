@@ -3,9 +3,9 @@ from typing import Tuple, Dict, Set, Union, Optional, Callable, TYPE_CHECKING
 from sympy import Poly, Symbol, Integer, Add
 
 from ..structsos.pivoting.bivariate import structural_sos_2vars
-from ...utils import pqr_sym, verify_symmetry
 from ..problem import InequalityProblem
 from ..preprocess import sign_sos
+from ...utils import pqr_sym, verify_symmetry
 
 if TYPE_CHECKING:
     from sympy import Expr

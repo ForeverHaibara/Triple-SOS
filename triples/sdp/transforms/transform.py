@@ -1,8 +1,9 @@
 from typing import Tuple, Dict, Any, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ..abstract import SDPProblemBase
     from sympy.matrices import Matrix
+
+    from ..abstract import SDPProblemBase
 
 class SDPTransformation:
     """
