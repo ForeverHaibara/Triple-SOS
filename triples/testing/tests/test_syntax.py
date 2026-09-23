@@ -29,6 +29,12 @@ COMPATIBILITY_RULES = {
             "message": "from_list is not available in SymPy 1.9",
         },
     ),
+    "calls": (
+        {
+            "function": "sympy.polys.rings.PolyElement",
+            "message": "construct PolyElement with ring.dtype(data) for SymPy 1.10 compatibility",
+        },
+    ),
 }
 
 
@@ -269,6 +275,17 @@ class _CompatibilityChecker(ast.NodeVisitor):
                     )
         self.generic_visit(node)
 
+    def visit_Call(self, node):
+        function = _resolve_name(node.func, self.imports)
+        for rule in self.rules.get("calls", ()):
+            if function == rule["function"]:
+                self._add_violation(
+                    node,
+                    rule,
+                    "forbidden call to {}".format(function),
+                )
+        self.generic_visit(node)
+
 
 def _find_compatibility_violations(source, file_path="<string>", rules=None):
     """Find configured SymPy compatibility violations in Python source."""
@@ -307,6 +324,19 @@ def test_version_compatibility():
         "{}:{}:{}: {}".format(file_path, line, column, message)
         for file_path, line, column, message in violations
     )
+
+
+def test_poly_element_constructor_compatibility_rule():
+    """Require the ring-bound factory for PolyElement construction."""
+    sources = (
+        "from sympy.polys.rings import PolyElement\nPolyElement(ring, data)",
+        "from sympy.polys.rings import PolyElement as PE\nPE(ring, data)",
+        "import sympy.polys.rings as rings\nrings.PolyElement(ring, data)",
+    )
+    for source in sources:
+        violations = _find_compatibility_violations(source)
+        assert len(violations) == 1
+        assert "ring.dtype(data)" in violations[0][3]
 
 
 def test_dependency():

@@ -36,7 +36,7 @@ class LinearBasis():
         poly = self.as_poly()
         dom = poly.domain
         rng = dom.__getitem__(poly.gens).ring
-        return PolyElement(rng, poly.rep.to_dict())
+        return rng.dtype(poly.rep.to_dict())
     def as_array_np(self, **kwargs) -> np.ndarray:
         return arraylize_np(self.as_polyelement(), **kwargs)
     def as_array_sp(self, **kwargs) -> 'Matrix':
@@ -75,7 +75,8 @@ class LinearBasisTangent(LinearBasis):
         return Mul(*(x**i for x, i in zip(symbols, self._powers))) * self._tangent
     def as_polyelement(self) -> 'PolyElement':
         rep = self.rep
-        rep = PolyElement(rep.parent().ring, {self._powers: rep.parent().domain.one}) * rep
+        ring = rep.parent().ring
+        rep = ring.dtype({self._powers: rep.parent().domain.one}) * rep
         return rep
     def as_poly(self) -> Poly:
         rep = self.as_polyelement()
@@ -87,7 +88,7 @@ class LinearBasisTangent(LinearBasis):
         rep = poly
         if isinstance(poly, Poly):
             dom = poly.domain
-            rep = PolyElement(dom.ring, poly.rep.to_dict())
+            rep = dom.ring.dtype(poly.rep.to_dict())
         return cls(powers, rep, tangent)
 
     def __neg__(self) -> 'LinearBasisTangent':
@@ -103,7 +104,8 @@ class LinearBasisTangent(LinearBasis):
         even_powers = tuple(d - r for d, r in zip(self._powers, rem_powers))
         monom = Mul(*(symbols[i] for i, d in enumerate(rem_powers) if d))
         rep = self.rep
-        rep = PolyElement(rep.parent().ring, {rem_powers: rep.parent().domain.one}) * rep
+        ring = rep.parent().ring
+        rep = ring.dtype({rem_powers: rep.parent().domain.one}) * rep
         new_tangent = self._tangent * monom
         return LinearBasisTangentEven(even_powers, rep, new_tangent)
 

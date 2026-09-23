@@ -1,12 +1,12 @@
 from typing import Generator, Dict, Tuple, TYPE_CHECKING
 
 from sympy import Poly, Mul
-from sympy.polys.rings import PolyElement
 
 from .basis import LinearBasis, quadratic_difference
 from ...utils import generate_monoms, clear_polys_by_symmetry
 
 if TYPE_CHECKING:
+    from sympy.polys.rings import PolyElement
     from sympy import Expr, Symbol
     from ...utils import MonomialManager
 
@@ -110,8 +110,8 @@ def lift_degree(
                 dom = dom.unify(d)
             ring = dom.__getitem__(poly.gens).ring
 
-            smp = PolyElement(ring, poly.set_domain(dom).rep.to_dict())
-            mults = [(PolyElement(ring, p.set_domain(dom).rep.to_dict()), e)
+            smp = ring.dtype(poly.set_domain(dom).rep.to_dict())
+            mults = [(ring.dtype(p.set_domain(dom).rep.to_dict()), e)
                         for p, e in multipliers]
 
             basis = [LinearBasisMultiplier(smp, p, e) for p, e in mults]
