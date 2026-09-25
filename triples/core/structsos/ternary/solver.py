@@ -15,6 +15,8 @@ from .octic   import structsos_octic
 from .nonic   import structsos_nonic
 from .acyclic import structsos_acyclic_sparse
 
+from .acute import structsos_acute
+
 from ..utils import PolynomialNonpositiveError, PolynomialUnsolvableError
 from ..sparse import structsos_common, structsos_degree_specified_solver
 from ...solution import extract_undetermined_exprs
@@ -41,6 +43,10 @@ SOLVERS_ACYCLIC = {
     3: structsos_acyclic_cubic,
     4: structsos_acyclic_quartic
 }
+
+SOLVERS_CONSTRAINED = [
+    structsos_acute,
+]
 
 
 def _is_cyclic_mat(M):
@@ -121,7 +127,7 @@ def structural_sos_3vars(
     poly: "Poly" = problem.expr
     gens = problem.gens
     ineq_constraints = problem.ineq_constraints
-    # eq_constraints = problem.eq_constraints
+    eq_constraints = problem.eq_constraints
 
     if len(gens) != 3: # should not happen
         return None
@@ -218,24 +224,29 @@ def structural_sos_3vars(
     except (PolynomialNonpositiveError, PolynomialUnsolvableError):
         return None
 
-    if solution is None:
-        return None
+    if solution is not None:
+
+        ####################################################################
+        # replace assumed-nonnegative symbols with inequality constraints
+        ####################################################################
+        func_name = uniquely_named_symbol('G', poly.gens + tuple(ineq_constraints.values()))
+        func = Function(func_name)
+        solution = extract_undetermined_exprs(solution, func)
+        if solution is None:
+            return None
+
+        replacement = {func(x): v for x, (sgn, v) in signs.items() if is_pos(sgn)}
+        solution = solution.xreplace(replacement)
+
+        if solution.has(func):
+            # unhandled nonnegative symbols -> not a valid solution
+            return None
+
+        return solution
 
 
-    ####################################################################
-    # replace assumed-nonnegative symbols with inequality constraints
-    ####################################################################
-    func_name = uniquely_named_symbol('G', poly.gens + tuple(ineq_constraints.values()))
-    func = Function(func_name)
-    solution = extract_undetermined_exprs(solution, func)
-    if solution is None:
-        return None
-
-    replacement = {func(x): v for x, (sgn, v) in signs.items() if is_pos(sgn)}
-    solution = solution.xreplace(replacement)
-
-    if solution.has(func):
-        # unhandled nonnegative symbols -> not a valid solution
-        return None
-
-    return solution
+    if len(ineq_constraints) or len(eq_constraints):
+        for solver in SOLVERS_CONSTRAINED:
+            solution = solver(problem)
+            if solution is not None:
+                return solution
