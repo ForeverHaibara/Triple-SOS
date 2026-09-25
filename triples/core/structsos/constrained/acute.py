@@ -1,3 +1,5 @@
+from typing import TYPE_CHECKING
+
 from sympy import Add, Function, Integer, Poly, sqrt
 from sympy.core.symbol import uniquely_named_symbol
 from sympy.polys.polyerrors import CoercionFailed
@@ -15,8 +17,11 @@ from ..utils import rationalize_func
 from ...solution import extract_undetermined_exprs
 from ....utils.expressions import Coeff
 
+if TYPE_CHECKING:
+    from ...problem import InequalityProblem
 
-def constrained_acute(problem):
+
+def constrained_acute(problem: "InequalityProblem[Poly]"):
     poly = problem.expr
     ineq_constraints = problem.ineq_constraints
     eq_constraints = problem.eq_constraints

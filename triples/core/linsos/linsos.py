@@ -125,8 +125,8 @@ class LinearSOSSolver(ProofNode):
         "verbose": False,
     }
 
-
-    _transformed_problem: Optional["InequalityProblem"] = None
+    problem: "InequalityProblem[Poly]"
+    _transformed_problem: Optional["InequalityProblem[Poly]"] = None
     _tangents: List["Poly"]
     _decentralizer = None
     _complexity_models = True

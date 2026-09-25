@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from sympy import Poly, Expr
     from sympy.combinatorics import PermutationGroup
     from .solution import SolutionSDP
+    from ..problem import InequalityProblem
     from ...utils import Root
 
 
@@ -258,9 +259,10 @@ class SDPSOSSolver(ProofNode):
         "verbose": False,
     }
 
-    _complexity_models = True
-    _wrapped_problem = None
+    problem: "InequalityProblem[Poly]"
+    _wrapped_problem: Tuple["InequalityProblem[Poly]", Any]
     _symmetry: MonomialManager
+    _complexity_models = True
 
     def _prepare_qmodule(self, lift_degree: int, configs) -> Generator:
         from ..structsos.utils import zip_longest
