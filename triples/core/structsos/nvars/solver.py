@@ -1,7 +1,6 @@
 from typing import TYPE_CHECKING, Dict, Optional, Union
 
 from sympy import Function
-from sympy.core.symbol import uniquely_named_symbol
 
 from .quartic import structsos_nvars_quartic_symmetric
 from ..sparse import structsos_common, structsos_degree_specified_solver
@@ -82,7 +81,7 @@ def structural_sos_nvars(
     ####################################################################
     # replace assumed-nonnegative symbols with inequality constraints
     ####################################################################
-    func_name = uniquely_named_symbol('G', poly.gens + tuple(ineq_constraints.values()))
+    func_name = problem.uniquely_named_symbol('G')
     func = Function(func_name)
     solution = extract_undetermined_exprs(solution, func)
     if solution is None:

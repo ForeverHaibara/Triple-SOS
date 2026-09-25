@@ -3,8 +3,7 @@ from typing import (
     Any, TypeVar, Generic, TYPE_CHECKING, cast, Mapping, Sequence
 )
 from sympy import (
-    Expr, Symbol, Poly, Integer, Function, Mul, Add, Pow,
-    fraction
+    Expr, Symbol, Poly, Integer, Function, Mul, Add, Pow, fraction
 )
 from sympy.combinatorics.named_groups import SymmetricGroup
 from sympy.combinatorics.permutations import Permutation
@@ -299,6 +298,16 @@ class InequalityProblem(Generic[T]):
         other_syms = self.free_symbols - set(poly_gens)
         sorted_syms = sorted(other_syms, key=lambda x: x.name)
         return poly_gens + tuple(sorted_syms)
+
+    def uniquely_named_symbol(self, xname: str, **kwargs) -> Symbol:
+        """
+        Returns a symbol with the given name which should not
+        conflict with any symbol in the problem.
+        """
+        scope = list(self.gens)
+        scope.extend(self.ineq_constraints.values())
+        scope.extend(self.eq_constraints.values())
+        return uniquely_named_symbol(xname, scope, **kwargs)
 
     def separate_constraints(self, symbols: Union[Symbol, List[Symbol]]) \
             -> Tuple[Dict[T, Expr], Dict[T, Expr], Dict[T, Expr], Dict[T, Expr]]:
@@ -646,7 +655,7 @@ class InequalityProblem(Generic[T]):
         if hom is None and self.is_homogeneous:
             return self, None
         if hom is None:
-            hom = uniquely_named_symbol("1", self.gens, real=True, positive=True, modify=lambda x: "_"+x)
+            hom = self.uniquely_named_symbol("1", real=True, positive=True, modify=lambda x: "_"+x)
         _homogenize = self._dtype_homogenize
         expr = _homogenize(self.expr, hom)
         ineqs = {_homogenize(e, hom): v for e, v in self.ineq_constraints.items()}

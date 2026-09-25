@@ -2,7 +2,6 @@ from typing import TYPE_CHECKING, Dict, Optional, Union
 
 from sympy import Function, Mul
 from sympy.combinatorics import Permutation, PermutationGroup
-from sympy.core.symbol import uniquely_named_symbol
 
 from .cubic import _quaternary_cubic_partial_symmetric, quaternary_cubic_symmetric
 from .dense_symmetric import quaternary_dense_dihedral, quaternary_dense_symmetric
@@ -186,7 +185,7 @@ def structural_sos_4vars(
     ####################################################################
     # replace assumed-nonnegative symbols with inequality constraints
     ####################################################################
-    func_name = uniquely_named_symbol('G', poly.gens + tuple(ineq_constraints.values()))
+    func_name = problem.uniquely_named_symbol('G')
     func = Function(func_name)
     solution = extract_undetermined_exprs(solution, func)
     if solution is None:

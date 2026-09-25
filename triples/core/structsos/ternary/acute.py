@@ -1,7 +1,6 @@
 from typing import TYPE_CHECKING
 
 from sympy import Add, Function, Integer, Poly, sqrt
-from sympy.core.symbol import uniquely_named_symbol
 from sympy.polys.polyerrors import CoercionFailed
 
 from ..ternary import (
@@ -42,8 +41,8 @@ def structsos_acute(problem: "InequalityProblem[Poly]"):
     if not poly.is_homogeneous or not coeff.is_cyclic():
         return None
 
-    Fname = uniquely_named_symbol("_F", gens + tuple(ineq_constraints.values()))
-    Gname = uniquely_named_symbol("_G", gens + tuple(ineq_constraints.values()))
+    Fname = problem.uniquely_named_symbol("_F")
+    Gname = problem.uniquely_named_symbol("_G")
     F, G = Function(Fname), Function(Gname)
 
     if coeff.is_symmetric():

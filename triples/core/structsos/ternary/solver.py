@@ -1,7 +1,6 @@
 from typing import Union, Dict, Optional, TYPE_CHECKING
 
 from sympy import Function
-from sympy.core.symbol import uniquely_named_symbol
 
 from .sparse  import structsos_sparse, structsos_heuristic
 from .dense_symmetric import structsos_ternary_dense_partial_symmetric
@@ -229,7 +228,7 @@ def structural_sos_3vars(
         ####################################################################
         # replace assumed-nonnegative symbols with inequality constraints
         ####################################################################
-        func_name = uniquely_named_symbol('G', poly.gens + tuple(ineq_constraints.values()))
+        func_name = problem.uniquely_named_symbol('G')
         func = Function(func_name)
         solution = extract_undetermined_exprs(solution, func)
         if solution is None:
