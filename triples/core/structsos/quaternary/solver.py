@@ -139,8 +139,6 @@ def structural_sos_4vars(
     Main function of structural SOS for 4-var homogeneous polynomials.
     """
     poly: "Poly" = problem.expr
-    ineq_constraints = problem.ineq_constraints
-    # eq_constraints = problem.eq_constraints
 
     if len(poly.gens) != 4: # should not happen
         raise ValueError("structural_sos_4vars only supports 4-var polynomials.")

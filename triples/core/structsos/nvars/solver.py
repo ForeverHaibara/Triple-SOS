@@ -51,8 +51,6 @@ def structural_sos_nvars(
     Main function of structural SOS for n-var homogeneous polynomials.
     """
     poly: "Poly" = problem.expr
-    ineq_constraints = problem.ineq_constraints
-    # eq_constraints = problem.eq_constraints
 
     if not poly.is_homogeneous: # should not happen
         raise ValueError("structural_sos_nvars only supports homogeneous polynomials.")
