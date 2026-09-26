@@ -85,7 +85,21 @@ def _dtype_sqf_list(x: Any) -> Tuple[Expr, List[Tuple[Any, int]]]:
 
 @singledispatch
 def _dtype_make_reorder_func(x: Any, gens: Tuple['Symbol', ...]) -> Callable[['Permutation'], Any]:
-    """Return a callable `f` such that `f(perm) == x.xreplace(dict(zip(gens, perm(gens))))`."""
+    """
+    Return a callable `f` such that `f(perm) == x.xreplace(dict(zip(gens, perm(gens))))`.
+
+    Unlike `Poly.reorder`, this function changes the value of `x`.
+
+    Examples
+    --------
+    >>> from sympy.abc import a, b, c
+    >>> from sympy.combinatorics import Permutation
+    >>> x = (a+2*b+3*c).as_poly(a,b,c)
+    >>> x.reorder(b,c,a)
+    Poly(2*b + 3*c + a, b, c, a, domain='ZZ')
+    >>> _dtype_make_reorder_func(x, (a,b,c))(Permutation([1,2,0]))
+    Poly(3*a + b + 2*c, a, b, c, domain='ZZ')
+    """
     return lambda perm: x.xreplace(dict(zip(gens, perm(gens))))
 
 

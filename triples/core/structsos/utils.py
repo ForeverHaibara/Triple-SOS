@@ -1,10 +1,11 @@
 from functools import wraps
-from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Tuple, Union, Any
 
 from sympy import QQ, RR, Add, Expr, MatrixBase, Poly, Rational, fraction, sympify
 from sympy.combinatorics import Permutation
 from sympy.core.symbol import uniquely_named_symbol
 
+from ..problem import InequalityProblem
 from ...sdp import congruence
 from ...utils.expressions import Coeff, CyclicProduct, CyclicSum
 from ...utils.polytools import intervals
@@ -14,6 +15,7 @@ if TYPE_CHECKING:
     from sympy import MutableDenseMatrix as Matrix
     from sympy import Symbol
     from sympy.polys.domains import Domain
+
 
 # use imports to keep linter happy
 (uniquely_named_symbol, Coeff, CyclicSum, CyclicProduct)
@@ -305,6 +307,41 @@ def block_partition(blocks: List[int], groups: Tuple[int, ...]) -> List[int]:
     return result
 
 
+def _reorder_helper(
+    obj: Union[Poly, Coeff, "InequalityProblem[Poly]"]
+) -> Tuple[Callable[[Permutation], bool], Callable[[List[int]], Any]]:
+    """
+    Given an object, returns two functions that:
+    1. checks whether it is symmetric with respect to a permutation;
+    2. reorders the generators with respect to a permutation.
+    """
+    if isinstance(obj, Poly):
+        cf = Coeff(obj)
+        return cf.is_symmetric, cf.reorder
+    elif isinstance(obj, Coeff):
+        return obj.is_symmetric, obj.reorder
+    elif isinstance(obj, InequalityProblem):
+        G = obj.identify_symmetry()
+        is_sym = lambda perm: perm in G
+        gens = obj.gens
+        def reorder(perm: List[int]):
+            new_gens = [gens[i] for i in perm]
+            expr = obj.expr.reorder(*new_gens)
+            ineqs, eqs = {}, {}
+            for k, v in obj.ineq_constraints.items():
+                ineqs[k.reorder(*new_gens)] = v
+            for k, v in obj.eq_constraints.items():
+                eqs[k.reorder(*new_gens)] = v
+            pro = obj.copy_new(expr, ineqs, eqs)
+            if pro.roots is not None:
+                pro.roots = pro.roots.reorder(tuple(perm))
+            return pro
+        return is_sym, reorder
+
+    raise TypeError("Unsupported object type. Expected"
+        "Poly, Coeff, or InequalityProblem[Poly], but received %s." % type(obj))
+
+
 def structsos_reorder_symmetry(groups: Tuple[int, ...]) -> Callable:
     """
     Decorator for the solver function to reorder the generators
@@ -323,13 +360,7 @@ def structsos_reorder_symmetry(groups: Tuple[int, ...]) -> Callable:
             if not need_reorder:
                 return solver(poly, *args, **kwargs)
 
-            coeff = poly
-            if isinstance(poly, Coeff):
-                pass
-            elif isinstance(poly, Poly):
-                coeff = Coeff(poly)
-            else:
-                raise TypeError("Unsupported polynomial type. Expected Coeff or Poly, but received %s." % type(poly))
+            is_sym, reorder = _reorder_helper(poly)
 
             n = len(poly.gens)
             ufs = {i: i for i in range(n)}
@@ -337,7 +368,7 @@ def structsos_reorder_symmetry(groups: Tuple[int, ...]) -> Callable:
                 for j in range(i+1, n):
                     if ufsfind(ufs, i) == ufsfind(ufs, j):
                         continue
-                    if coeff.is_symmetric(Permutation(size=n)(i, j)):
+                    if is_sym(Permutation(size=n)(i, j)):
                         ufs[ufsfind(ufs, j)] = ufsfind(ufs, i)
 
             blocks = {i: [] for i in range(n) if ufsfind(ufs, i) == i}
@@ -356,7 +387,7 @@ def structsos_reorder_symmetry(groups: Tuple[int, ...]) -> Callable:
             for g, p in zip(groups, partition):
                 inds.extend(blocks[p][:g])
                 blocks[p] = blocks[p][g:]
-            new_coeff = coeff.reorder(inds)
+            new_coeff = reorder(inds)
             return solver(new_coeff, *args, **kwargs)
         return _wrapped_solver
     return wrapper

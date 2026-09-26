@@ -182,3 +182,10 @@ def _quaternary_cubic_partial_symmetric(coeff: "Coeff", real = False):
         (c111 * res) * d**3,
         (c111 * c1/2) * CyclicSum((a-b)**2)*d
     )
+
+#####################################################################
+#
+#               "Nonhomogeneous" from 3-vars + Constrained
+#
+#####################################################################
+
