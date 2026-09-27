@@ -13,7 +13,7 @@ from .dense_symmetric import _homogenize_sym_proof, sym_axis
 from .utils import CommonExpr
 from ..univariate import prove_univariate
 from ..utils import rationalize_func
-from ...solution import extract_undetermined_exprs
+from ...preprocess.signs import sign_sos
 from ....utils.expressions import Coeff
 
 if TYPE_CHECKING:
@@ -42,8 +42,7 @@ def structsos_acute(problem: "InequalityProblem[Poly]"):
         return None
 
     Fname = problem.uniquely_named_symbol("_F")
-    Gname = problem.uniquely_named_symbol("_G")
-    F, G = Function(Fname), Function(Gname)
+    F = Function(Fname)
 
     if coeff.is_symmetric():
         solution = _constrained_acute_dense_symmetric(coeff, F)
@@ -61,20 +60,10 @@ def structsos_acute(problem: "InequalityProblem[Poly]"):
         if solution is None:
             return None
 
-    extra_checker = lambda x: x if isinstance(x, F) else None
-    solution = extract_undetermined_exprs(solution, G, extra_checker=extra_checker)
-
-    if solution is None:
-        return None
-
-    replacement = {F(a): cons[0], F(b): cons[1], F(c): cons[2]}
     signs = problem.get_symbol_signs()
-    is_pos = lambda x: (x is not None) and x >= 0
-    replacement.update({G(x): v for x, (sgn, v) in signs.items() if is_pos(sgn)})
+    signs.update({F(a): (1, cons[0]), F(b): (1, cons[1]), F(c): (1, cons[2])})
 
-    solution = solution.xreplace(replacement)
-    if solution.has(F) or solution.has(G):
-        return None
+    solution = sign_sos(solution, signs)
     return solution
 
 

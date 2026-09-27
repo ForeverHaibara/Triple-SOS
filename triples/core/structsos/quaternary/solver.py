@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING, Dict, Optional, Union
 
-from sympy import Function, Mul
+from sympy import Mul
 from sympy.combinatorics import Permutation, PermutationGroup
 
 from .cubic import _quaternary_cubic_partial_symmetric, quaternary_cubic_symmetric
@@ -11,7 +11,7 @@ from .quintic import quaternary_quintic_symmetric
 from ..sparse import structsos_common, structsos_degree_specified_solver
 
 from ..utils import PolynomialNonpositiveError, PolynomialUnsolvableError
-from ...solution import extract_undetermined_exprs
+from ...preprocess.signs import sign_sos
 from ....utils.expressions import Coeff
 
 if TYPE_CHECKING:
@@ -183,17 +183,5 @@ def structural_sos_4vars(
     ####################################################################
     # replace assumed-nonnegative symbols with inequality constraints
     ####################################################################
-    func_name = problem.uniquely_named_symbol('G')
-    func = Function(func_name)
-    solution = extract_undetermined_exprs(solution, func)
-    if solution is None:
-        return None
-
-    replacement = {func(x): v for x, (sgn, v) in signs.items() if is_pos(sgn)}
-    solution = solution.xreplace(replacement)
-
-    if solution.has(func):
-        # unhandled nonnegative symbols -> not a valid solution
-        return None
-
+    solution = sign_sos(solution, signs)
     return solution

@@ -1,7 +1,5 @@
 from typing import Union, Dict, Optional, TYPE_CHECKING
 
-from sympy import Function
-
 from .sparse  import structsos_sparse, structsos_heuristic
 from .dense_symmetric import structsos_ternary_dense_partial_symmetric
 from .quadratic import structsos_quadratic, structsos_acyclic_quadratic
@@ -228,23 +226,7 @@ def structural_sos_3vars(
         ####################################################################
         # replace assumed-nonnegative symbols with inequality constraints
         ####################################################################
-        func_name = problem.uniquely_named_symbol('G')
-        func = Function(func_name)
-
-        a, b, c = poly.gens
-        solution = sign_sos(solution,
-            {a: (1, func(a)), b: (1, func(b)), c: (1, func(c))})
-        if solution is None:
-            return None
-
-        replacement = {func(x): v for x, (sgn, v) in signs.items() if is_pos(sgn)}
-        solution = solution.xreplace(replacement)
-
-        if solution.has(func):
-            # unhandled nonnegative symbols -> not a valid solution
-            return None
-
-        return solution
+        return sign_sos(solution, signs)
 
 
     if len(ineq_constraints) or len(eq_constraints):

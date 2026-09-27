@@ -3,13 +3,13 @@ from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Tuple, Union, 
 
 from sympy import (
     QQ, RR, Add, Expr, MatrixBase, Poly,
-    Function, Rational, fraction, sympify
+    Rational, fraction, sympify
 )
 from sympy.combinatorics import Permutation
 from sympy.core.symbol import uniquely_named_symbol
 
 from ..problem import InequalityProblem
-from ..solution import extract_undetermined_exprs
+from ..preprocess.signs import sign_sos
 from ...sdp import congruence
 from ...utils.expressions import Coeff, CyclicProduct, CyclicSum
 from ...utils.polytools import intervals
@@ -421,25 +421,15 @@ def structsos_constrained(
             con = con.set_domain(dom)
 
             F = problem.uniquely_named_symbol('_F')
-            G = Function(problem.uniquely_named_symbol('_G'))
             sol = solver(Coeff(poly), Coeff(con), F, tp=tp, **kwargs)
             if sol is None:
                 return None
 
-            replacement = {G(F): con_v}
+            signs = {F: (1, con_v)}
             if positive:
-                signs = problem.get_symbol_signs()
-                is_pos = lambda x: (x is not None) and x >= 0
-                replacement.update(
-                    {G(x): v for x, (sgn, v) in signs.items() if is_pos(sgn)})
+                signs.update(problem.get_symbol_signs())
 
-            sol = extract_undetermined_exprs(sol, G)
-            if sol is None:
-                return None
-            sol = sol.xreplace(replacement)
-            if sol.has(F) or sol.has(G):
-                return None
-            return sol
+            return sign_sos(sol, signs)
 
         return _wrapped_solver
     return wrapper

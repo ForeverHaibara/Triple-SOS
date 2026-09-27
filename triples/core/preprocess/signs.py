@@ -151,12 +151,6 @@ def _prove_by_recur(expr: Expr, signs: "SIGNS_TYPE", cache=None) -> Optional[Tup
         if s is not None and s >= 0:
             return v, v != expr
         return None
-    elif len(expr.free_symbols) == 0:
-        # e.g. (sqrt(2) - 1)
-        sgn = (expr >= 0)
-        if sgn in (true, True):
-            return expr, False
-        return None
     elif expr.is_Pow:
         if is_nonneg_pow(expr):
             return expr, False
@@ -166,17 +160,18 @@ def _prove_by_recur(expr: Expr, signs: "SIGNS_TYPE", cache=None) -> Optional[Tup
             if changed:
                 return v ** expr.exp, True
             return expr, False
-        return None
     elif expr.is_Add or expr.is_Mul:
         nonneg = []
         for arg in expr.args:
             nonneg.append(_prove_by_recur(arg, signs, cache=cache))
             if nonneg[-1] is None:
-                return None
-        changed = any(_[1] for _ in nonneg)
-        if changed:
-            return expr.func(*[_[0] for _ in nonneg]), True
-        return expr, False
+                break
+        else:
+            changed = any(_[1] for _ in nonneg)
+            if changed:
+                return expr.func(*[_[0] for _ in nonneg]), True
+            else:
+                return expr, False
     elif isinstance(expr, CyclicExpr):
         arg = expr.args[0]
         mulargs = []
@@ -184,12 +179,14 @@ def _prove_by_recur(expr: Expr, signs: "SIGNS_TYPE", cache=None) -> Optional[Tup
             mulargs = [arg]
         elif arg.is_Mul:
             mulargs = arg.args
+
         def single(x):
             if x.is_Pow and is_nonneg_pow(x):
                 return True
             if isinstance(x, Rational) and x >= 0:
                 return True
             return False
+
         if len(mulargs) and all(single(_) for _ in mulargs):
             return expr, False
 
@@ -218,6 +215,17 @@ def _prove_by_recur(expr: Expr, signs: "SIGNS_TYPE", cache=None) -> Optional[Tup
 
         sol = expr.base_func(*[v1 for v1, v2 in sub_exprs])
         return sol, True
+
+    if len(expr.free_symbols) == 0:
+        # e.g. (sqrt(2) - 1)
+        sgn = (expr >= 0)
+        if sgn in (true, True):
+            return expr, False
+
+    s, v = signs.get(expr, (-2, None))
+    if s is not None and s >= 0:
+        return v, v != expr
+    return None
 
 
 def sign_sos(expr: Union[Expr, Poly], signs: "SIGNS_TYPE", factor: bool = False) -> Optional[Expr]:
