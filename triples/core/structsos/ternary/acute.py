@@ -60,6 +60,9 @@ def structsos_acute(problem: "InequalityProblem[Poly]"):
         if solution is None:
             return None
 
+    if solution is None:
+        return None
+
     signs = problem.get_symbol_signs()
     signs.update({F(a): (1, cons[0]), F(b): (1, cons[1]), F(c): (1, cons[2])})
 

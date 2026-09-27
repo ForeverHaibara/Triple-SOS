@@ -401,6 +401,8 @@ class Coeff():
             args = self.gens
         elif len(args) == 1 and isinstance(args[0], tuple):
             args = args[0]
+        elif all(isinstance(s, Symbol) for s in args):
+            pass
         else:
             raise TypeError("Unknown type args")
         dmp = DMP.from_dict(dict(self.rep), len(self.gens)-1, self.domain)
