@@ -2,12 +2,17 @@ from typing import TYPE_CHECKING
 
 from sympy import Add
 
-from ..utils import rationalize_func
+from ..utils import structsos_reorder_symmetry, structsos_constrained
+from ..utils import rationalize_func, nroots
 from ....utils.expressions import CyclicProduct as _CyclicProduct
 from ....utils.expressions import CyclicSum as _CyclicSum
 
 if TYPE_CHECKING:
+    from sympy import Poly, Expr
+
+    from ...problem import InequalityProblem
     from ....utils.expressions import Coeff
+
 
 def quaternary_cubic_symmetric(coeff: "Coeff", real = True):
     """
@@ -189,3 +194,95 @@ def _quaternary_cubic_partial_symmetric(coeff: "Coeff", real = False):
 #
 #####################################################################
 
+
+@structsos_reorder_symmetry((3, 1))
+def quaternary_cubic_partial_constrained(problem: "InequalityProblem[Poly]"):
+    if problem.expr.total_degree() > 3:
+        return None
+    return _quaternary_cubic_partial_constrained_2(problem)
+
+def _is_valid(p: "Poly"):
+    """
+    Check whether a polynomial is in the form of
+    `x1*(a^2+b^2+c^2)+x2*(a*b+b*c+c*a)+x3*d^2=0`
+    """
+    if p.total_degree() != 2:
+        return False
+    for c in p.monoms():
+        if not (sum(c[:3]) == 2 or c[3] == 2):
+            return False
+    return True
+
+@structsos_constrained(_is_valid)
+def _quaternary_cubic_partial_constrained_2(
+    coeff: 'Coeff', con: 'Coeff', F: 'Expr', tp=0
+):
+    for monom in coeff.monoms():
+        if not (sum(monom[:3]) <= 1 or monom == (1,1,1,0)):
+            return None
+
+    c2 = con((2,0,0,0))
+    c1 = con((1,1,0,0))
+    con_lc = (2*c2 - c1)/3
+    if tp == 1 and con_lc < 0:
+        c1, c2, con_lc = -c1, -c2, -con_lc
+        con = -con
+        F = -F
+    if con_lc <= 0:
+        return None
+    x = (c1 + c2)/(2*c2 - c1)
+    D = -con((0,0,0,2))/con_lc
+
+    lc = coeff((1,1,1,0))
+    if lc == 0 or x == -1:
+        return None
+    k = coeff((1,0,0,2))/lc
+    rem = coeff((0,0,0,2))/lc
+
+    a, b, c, d = coeff.gens
+    eqv = coeff.from_list([
+        9*(4*x + 1), 0, -4*D*x - 4*D + 18*k, 0, 9*k**2
+    ], (a,)).as_poly()
+
+    for v in nroots(eqv, ground=True, real=True):
+        if eqv.rep.eval(v) == 0:
+            # exact
+            if v == 0:
+                return None
+            u = -(3*k + 4*v**2*x + v**2)/(2*v*(x + 1))
+            if u != v:
+                break
+    else:
+        return None
+
+    const = -u*v**2 + v*(u + 2*v)*(2*u*x + 2*u + 4*v*x + v)/3
+    rem = rem - const
+
+    CyclicSum = lambda x: _CyclicSum(x, (a, b, c))
+
+    t = u*x + u + 8*v*x + 2*v
+    E = (v - u)*t - D*x
+    M = t - (x+1)*(2*u*x + 2*u + 4*v*x + v)
+    delta = (4*x*E**2 - D*M**2)/(v - u)
+    if x == 0 or D == 0 or E == 0:
+        return None
+
+    _y = [
+        lc/(54*d*(v - u)**2),
+        lc*t/(2*D),
+        (lc*x*E/((v-u)*D)),
+        lc*delta/(4*x*E),
+        -lc*(u*x + u + 8*v*x + 2*v)/D,
+    ]
+    if any(coeff.wrap(i) < 0 for i in _y[:-1]):
+        return None
+
+    sol1 = _y[0] * CyclicSum((a-b)**2*(a+b-2*c + (v-u)*d)**2)
+    sol2 = Add(
+        _y[1]*CyclicSum((a-b)**2),
+        _y[2]*(CyclicSum(a) + D*M/(2*x*E)*d)**2,
+        _y[3] * d**2,
+        _y[4]/con_lc * F,
+    )
+
+    return sol1 + (CyclicSum(a) - (u + 2*v)*d)**2/(27*d)*sol2

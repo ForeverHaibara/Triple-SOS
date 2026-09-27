@@ -1,11 +1,15 @@
 from functools import wraps
 from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Tuple, Union, Any
 
-from sympy import QQ, RR, Add, Expr, MatrixBase, Poly, Rational, fraction, sympify
+from sympy import (
+    QQ, RR, Add, Expr, MatrixBase, Poly,
+    Function, Rational, fraction, sympify
+)
 from sympy.combinatorics import Permutation
 from sympy.core.symbol import uniquely_named_symbol
 
 from ..problem import InequalityProblem
+from ..solution import extract_undetermined_exprs
 from ...sdp import congruence
 from ...utils.expressions import Coeff, CyclicProduct, CyclicSum
 from ...utils.polytools import intervals
@@ -389,5 +393,53 @@ def structsos_reorder_symmetry(groups: Tuple[int, ...]) -> Callable:
                 blocks[p] = blocks[p][g:]
             new_coeff = reorder(inds)
             return solver(new_coeff, *args, **kwargs)
+        return _wrapped_solver
+    return wrapper
+
+
+def structsos_constrained(
+    checker: Callable[[Poly], bool],
+    positive=True
+) -> Callable:
+    def wrapper(solver: Callable) -> Callable:
+        @wraps(solver)
+        def _wrapped_solver(problem: InequalityProblem[Poly], **kwargs):
+            tp = -1
+            for k, v in problem.eq_constraints.items():
+                if checker(k):
+                    con, con_v, tp = k, v, 1
+                    break
+            for k, v in problem.ineq_constraints.items():
+                if checker(k):
+                    con, con_v, tp = k, v, 0
+                    break
+            if tp == -1:
+                return None
+
+            dom = problem.expr.domain.unify(con.domain)
+            poly = problem.expr.set_domain(dom)
+            con = con.set_domain(dom)
+
+            F = problem.uniquely_named_symbol('_F')
+            G = Function(problem.uniquely_named_symbol('_G'))
+            sol = solver(Coeff(poly), Coeff(con), F, tp=tp, **kwargs)
+            if sol is None:
+                return None
+
+            replacement = {G(F): con_v}
+            if positive:
+                signs = problem.get_symbol_signs()
+                is_pos = lambda x: (x is not None) and x >= 0
+                replacement.update(
+                    {G(x): v for x, (sgn, v) in signs.items() if is_pos(sgn)})
+
+            sol = extract_undetermined_exprs(sol, G)
+            if sol is None:
+                return None
+            sol = sol.xreplace(replacement)
+            if sol.has(F) or sol.has(G):
+                return None
+            return sol
+
         return _wrapped_solver
     return wrapper

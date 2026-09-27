@@ -1,14 +1,17 @@
 from typing import List, Dict, Tuple, Union, Set, Optional, TYPE_CHECKING
 
-from sympy import Expr, Poly, Rational, Add, Mul, Symbol, true
+from sympy import Expr, Poly, Rational, Add, Mul, true
 from sympy.polys.polyerrors import BasePolynomialError
 
-from ...utils import CyclicExpr
+from ...utils.expressions import CyclicExpr
 
 if TYPE_CHECKING:
+    from sympy.combinatorics.perm_groups import PermutationGroup
+    from sympy import Symbol
+
     from ..problem import InequalityProblem
 
-SIGNS_TYPE = Dict[Symbol, Tuple[Optional[int], Expr]]
+    SIGNS_TYPE = Dict["Symbol", Tuple[Optional[int], Expr]]
 
 def _is_double_rational(x):
     if isinstance(x, Rational) and (int(x.numerator) % 2 == 0 or
@@ -19,7 +22,7 @@ def _is_double_rational(x):
 def is_nonneg_pow(x: Expr) -> bool:
     return _is_double_rational(x.exp)
 
-def sgn_prod(signs: SIGNS_TYPE) -> Optional[int]:
+def sgn_prod(signs: "SIGNS_TYPE") -> Optional[int]:
     if any(s == 0 for s in signs):
         return 0
     if any(s is None for s in signs):
@@ -27,7 +30,7 @@ def sgn_prod(signs: SIGNS_TYPE) -> Optional[int]:
     return 1 if sum([1 for s in signs if s < 0]) % 2 == 0 else -1
 
 
-def _prove_poly(poly: Poly, signs: SIGNS_TYPE, factor: bool=False) -> Optional[Expr]:
+def _prove_poly(poly: Poly, signs: "SIGNS_TYPE", factor: bool=False) -> Optional[Expr]:
     """
     Helper function to decide the sign of a polynomial.
 
@@ -101,27 +104,63 @@ def _prove_poly(poly: Poly, signs: SIGNS_TYPE, factor: bool=False) -> Optional[E
     return Add(*terms)
 
 
-def _prove_by_recur(expr: Expr, signs: SIGNS_TYPE) -> Optional[Tuple[Expr, bool]]:
+def _is_perm_invariant_signs(
+    signs: "SIGNS_TYPE", symbols: Tuple["Symbol"], perm_group: "PermutationGroup", cache: dict
+) -> bool:
     """
-    Returns the proof `new_expr` such that expr == new_expr >= 0 and whether
-    `new_expr` is not `expr`. The second argument tracks whether the expr
-    has changed.
+    Check if the signs are perm-invariant.
+    """
+    symbols = tuple(symbols)
+    if (symbols, perm_group) in cache:
+        return cache[(symbols, perm_group)]
+
+    sgns = [signs.get(i, (-2, None))[0] for i in symbols]
+    sgns = [s if s is not None else -2 for s in sgns]
+    for perm in perm_group.generators:
+        for i, j in enumerate(perm._array_form):
+            if sgns[i] != sgns[j]:
+                cache[(symbols, perm_group)] = False
+                return cache[(symbols, perm_group)]
+
+    dt = {k: v for k, (s, v) in signs.items() if v is not None}
+    from ...utils.expressions.cyclic import _is_perm_invariant_dict
+    if not _is_perm_invariant_dict(symbols, perm_group, dt):
+        cache[(symbols, perm_group)] = False
+        return cache[(symbols, perm_group)]
+
+    cache[(symbols, perm_group)] = True
+    return cache[(symbols, perm_group)]
+
+
+def _prove_by_recur(expr: Expr, signs: "SIGNS_TYPE", cache=None) -> Optional[Tuple[Expr, bool]]:
+    """
+    Returns arguments:
+    1. The proof `new_expr` such that `expr == new_expr`.
+    2. Whether the `expr` has changed.
     """
     from ...utils.expressions.cyclic import _replace_symbols
 
     if isinstance(expr, Rational):
-        if expr >= 0:
+        if expr > 0:
+            return expr, False
+        elif expr == 0:
             return expr, False
         return None
     elif expr.is_Symbol:
-        if signs.get(expr, (0, None))[0] == 1:
-            v = signs[expr][1]
+        s, v = signs.get(expr, (-2, expr))
+        if s is not None and s >= 0:
             return v, v != expr
+        return None
+    elif len(expr.free_symbols) == 0:
+        # e.g. (sqrt(2) - 1)
+        sgn = (expr >= 0)
+        if sgn in (true, True):
+            return expr, False
         return None
     elif expr.is_Pow:
         if is_nonneg_pow(expr):
             return expr, False
-        sol = _prove_by_recur(expr.base, signs)
+        sol = _prove_by_recur(expr.base, signs, cache=cache)
         if sol is not None:
             v, changed = sol
             if changed:
@@ -131,7 +170,7 @@ def _prove_by_recur(expr: Expr, signs: SIGNS_TYPE) -> Optional[Tuple[Expr, bool]
     elif expr.is_Add or expr.is_Mul:
         nonneg = []
         for arg in expr.args:
-            nonneg.append(_prove_by_recur(arg, signs))
+            nonneg.append(_prove_by_recur(arg, signs, cache=cache))
             if nonneg[-1] is None:
                 return None
         changed = any(_[1] for _ in nonneg)
@@ -154,7 +193,6 @@ def _prove_by_recur(expr: Expr, signs: SIGNS_TYPE) -> Optional[Tuple[Expr, bool]
         if len(mulargs) and all(single(_) for _ in mulargs):
             return expr, False
 
-        # TODO: make it nicer
         # NOTE: calling doit(deep=False) to expand is not equivalent to generating
         # all permutations. E.g.
         # `CyclicProduct((a-b),(a,b,c,d),AlternatingGroup(4))`
@@ -164,7 +202,7 @@ def _prove_by_recur(expr: Expr, signs: SIGNS_TYPE) -> Optional[Tuple[Expr, bool]
         for translation in CyclicExpr._generate_all_translations(
             expr.args[1], expr.args[2]):
             trans = _replace_symbols(expr.args[0], translation)
-            sub_result = _prove_by_recur(trans, signs)
+            sub_result = _prove_by_recur(trans, signs, cache=cache)
             if sub_result is None:
                 return None
             sub_exprs.append((sub_result[0], trans))
@@ -172,18 +210,17 @@ def _prove_by_recur(expr: Expr, signs: SIGNS_TYPE) -> Optional[Tuple[Expr, bool]
         if all(v1 == v2 for v1, v2 in sub_exprs):
             # nothing changed
             return expr, True
+
+        if cache is not None and _is_perm_invariant_signs(
+                signs, expr.args[1], expr.args[2], cache=cache):
+            return expr.func(sub_exprs[0][0], expr.args[1], expr.args[2]), True
+
+
         sol = expr.base_func(*[v1 for v1, v2 in sub_exprs])
         return sol, True
 
-    if len(expr.free_symbols) == 0:
-        # e.g. (sqrt(2) - 1)
-        sgn = (expr >= 0)
-        if sgn in (true, True):
-            return expr, False
-        return None
 
-
-def sign_sos(expr: Union[Expr, Poly], signs: SIGNS_TYPE, factor: bool = False) -> Optional[Expr]:
+def sign_sos(expr: Union[Expr, Poly], signs: "SIGNS_TYPE", factor: bool = False) -> Optional[Expr]:
     """
     Very fast and simple nonnegativity check for a SymPy (commutative, real)
     expression instance given signs of symbols.
@@ -226,14 +263,15 @@ def sign_sos(expr: Union[Expr, Poly], signs: SIGNS_TYPE, factor: bool = False) -
     if isinstance(expr, Poly):
         return _prove_poly(expr, signs, factor=factor)
 
-    sol = _prove_by_recur(expr.as_expr(), signs)
+    cache = {}
+    sol = _prove_by_recur(expr.as_expr(), signs, cache=cache)
     if sol is not None:
         return sol[0]
 
     if factor:
         # check once more by factorization
         expr = expr.as_expr().doit().factor()
-        sol = _prove_by_recur(expr)
+        sol = _prove_by_recur(expr, signs, cache=cache)
         if sol is not None:
             return sol[0]
 
@@ -418,7 +456,7 @@ def _infer_separable_sign(poly: Poly, expr: Expr, s: int,
 
 
 def _get_signs_by_topological_order(ineq_constraints: Dict[Poly, Expr], eq_constraints: Dict[Poly, Expr],
-        signs: SIGNS_TYPE) -> SIGNS_TYPE:
+        signs: "SIGNS_TYPE") -> "SIGNS_TYPE":
     """
     Algorithm to infer the signs of symbols from constraints by
     repeating the following process:
@@ -523,7 +561,7 @@ def _get_signs_by_topological_order(ineq_constraints: Dict[Poly, Expr], eq_const
     return signs
 
 
-def get_symbol_signs(problem: "InequalityProblem") -> Dict[Symbol, Tuple[Optional[int], Expr]]:
+def get_symbol_signs(problem: "InequalityProblem") -> Dict["Symbol", Tuple[Optional[int], Expr]]:
     """
     Infer the signs of each symbol in the problem given inequality
     and equality constraints heuristically. It can also be called

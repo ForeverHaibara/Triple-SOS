@@ -18,7 +18,7 @@ from .acute import structsos_acute
 
 from ..utils import PolynomialNonpositiveError, PolynomialUnsolvableError
 from ..sparse import structsos_common, structsos_degree_specified_solver
-from ...solution import extract_undetermined_exprs
+from ...preprocess.signs import sign_sos
 from ....sdp.arithmetic import rep_matrix_from_dict, permute_matrix_rows
 from ....utils.expressions import Coeff
 
@@ -230,7 +230,10 @@ def structural_sos_3vars(
         ####################################################################
         func_name = problem.uniquely_named_symbol('G')
         func = Function(func_name)
-        solution = extract_undetermined_exprs(solution, func)
+
+        a, b, c = poly.gens
+        solution = sign_sos(solution,
+            {a: (1, func(a)), b: (1, func(b)), c: (1, func(c))})
         if solution is None:
             return None
 

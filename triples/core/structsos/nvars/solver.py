@@ -81,7 +81,9 @@ def structural_sos_nvars(
     ####################################################################
     func_name = problem.uniquely_named_symbol('G')
     func = Function(func_name)
+
     solution = extract_undetermined_exprs(solution, func)
+
     if solution is None:
         return None
 
