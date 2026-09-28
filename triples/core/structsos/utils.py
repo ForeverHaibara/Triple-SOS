@@ -404,16 +404,16 @@ def structsos_constrained(
     def wrapper(solver: Callable) -> Callable:
         @wraps(solver)
         def _wrapped_solver(problem: InequalityProblem[Poly], **kwargs):
-            tp = -1
+            sign = -1
             for k, v in problem.eq_constraints.items():
                 if checker(k):
-                    con, con_v, tp = k, v, 1
+                    con, con_v, sign = k, v, 0
                     break
             for k, v in problem.ineq_constraints.items():
                 if checker(k):
-                    con, con_v, tp = k, v, 0
+                    con, con_v, sign = k, v, 1
                     break
-            if tp == -1:
+            if sign == -1:
                 return None
 
             dom = problem.expr.domain.unify(con.domain)
@@ -421,11 +421,11 @@ def structsos_constrained(
             con = con.set_domain(dom)
 
             F = problem.uniquely_named_symbol('_F')
-            sol = solver(Coeff(poly), Coeff(con), F, tp=tp, **kwargs)
+            sol = solver(Coeff(poly), Coeff(con), F, sign=sign, **kwargs)
             if sol is None:
                 return None
 
-            signs = {F: (1, con_v)}
+            signs = {F: (sign, con_v)}
             if positive:
                 signs.update(problem.get_symbol_signs())
 

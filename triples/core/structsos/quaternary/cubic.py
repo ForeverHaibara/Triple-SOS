@@ -201,7 +201,7 @@ def quaternary_cubic_partial_constrained(problem: "InequalityProblem[Poly]"):
         return None
     return _quaternary_cubic_partial_constrained_2(problem)
 
-def _is_valid(p: "Poly"):
+def _is_sym3_quadratic(p: "Poly"):
     """
     Check whether a polynomial is in the form of
     `x1*(a^2+b^2+c^2)+x2*(a*b+b*c+c*a)+x3*d^2=0`
@@ -213,9 +213,9 @@ def _is_valid(p: "Poly"):
             return False
     return True
 
-@structsos_constrained(_is_valid)
+@structsos_constrained(_is_sym3_quadratic)
 def _quaternary_cubic_partial_constrained_2(
-    coeff: 'Coeff', con: 'Coeff', F: 'Expr', tp=0
+    coeff: 'Coeff', con: 'Coeff', F: 'Expr', sign: int = 0
 ):
     for monom in coeff.monoms():
         if not (sum(monom[:3]) <= 1 or monom == (1,1,1,0)):
@@ -223,8 +223,8 @@ def _quaternary_cubic_partial_constrained_2(
 
     c2 = con((2,0,0,0))
     c1 = con((1,1,0,0))
-    con_lc = (2*c2 - c1)/3
-    if tp == 1 and con_lc < 0:
+    con_lc = coeff.wrap((2*c2 - c1)/3)
+    if sign == 0 and con_lc < 0:
         c1, c2, con_lc = -c1, -c2, -con_lc
         con = -con
         F = -F
@@ -233,11 +233,11 @@ def _quaternary_cubic_partial_constrained_2(
     x = (c1 + c2)/(2*c2 - c1)
     D = -con((0,0,0,2))/con_lc
 
-    lc = coeff((1,1,1,0))
+    lc = coeff.wrap(coeff((1,1,1,0)))
     if lc == 0 or x == -1:
         return None
     k = coeff((1,0,0,2))/lc
-    rem = coeff((0,0,0,2))/lc
+    rem = coeff((0,0,0,3))/lc
 
     a, b, c, d = coeff.gens
     eqv = coeff.from_list([
@@ -257,6 +257,8 @@ def _quaternary_cubic_partial_constrained_2(
 
     const = -u*v**2 + v*(u + 2*v)*(2*u*x + 2*u + 4*v*x + v)/3
     rem = rem - const
+    if lc * rem < 0:
+        return
 
     CyclicSum = lambda x: _CyclicSum(x, (a, b, c))
 
@@ -268,21 +270,34 @@ def _quaternary_cubic_partial_constrained_2(
         return None
 
     _y = [
-        lc/(54*d*(v - u)**2),
+        lc/(54*(v - u)),
         lc*t/(2*D),
         (lc*x*E/((v-u)*D)),
         lc*delta/(4*x*E),
-        -lc*(u*x + u + 8*v*x + 2*v)/D,
     ]
-    if any(coeff.wrap(i) < 0 for i in _y[:-1]):
+
+    if any(i < 0 for i in _y[:4]):
         return None
 
-    sol1 = _y[0] * CyclicSum((a-b)**2*(a+b-2*c + (v-u)*d)**2)
+    sol1 = _y[0]/d * CyclicSum((a-b)**2*(a+b-2*c + (v-u)*d)**2)
     sol2 = Add(
         _y[1]*CyclicSum((a-b)**2),
         _y[2]*(CyclicSum(a) + D*M/(2*x*E)*d)**2,
         _y[3] * d**2,
-        _y[4]/con_lc * F,
     )
+    sol2 = (CyclicSum(a) - (u + 2*v)*d)**2/(27*d)*sol2
 
-    return sol1 + (CyclicSum(a) - (u + 2*v)*d)**2/(27*d)*sol2
+    if sign != 0:
+        # not implemented
+        return None
+
+    f2 = u**2*x**2 + u**2*x + 4*u*v*x**2 + u*v*x + 3*u*v + 4*v**2*x**2 - 11*v**2*x - 3*v**2
+    f11 = 2*u**2*x**2 + 5*u**2*x + 3*u**2 + 8*u*v*x**2 + 14*u*v*x + 8*v**2*x**2 - 10*v**2*x - 3*v**2
+    f1 = (u - v)*(u**2*x + u**2 - 8*u*v*x - 14*u*v - 20*v**2*x - 5*v**2)
+    f0 = (-u**4*x**2 - 2*u**4*x - u**4 - 8*u**3*v*x**2 + 5*u**3*v*x + 13*u**3*v \
+        - 24*u**2*v**2*x**2 + 33*u**2*v**2*x - 6*u**2*v**2 - 32*u*v**3*x**2 \
+        + 8*u*v**3*x + 4*u*v**3 - 16*v**4*x**2 - 44*v**4*x - 10*v**4)/3
+    f0, f1, f11, f2 = [coeff.wrap(i) for i in [f0, f1, f11, f2]]
+    sol3 = lc/con_lc/(27*(v-u)*D*d) * CyclicSum(f2*a**2 + f11*a*b + f1*a*d + f0*d**2).together() * F
+
+    return sol1 + sol2 + sol3 + (lc*rem)*d**3
