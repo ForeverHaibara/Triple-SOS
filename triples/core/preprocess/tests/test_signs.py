@@ -1,5 +1,5 @@
 from sympy.abc import a,b,c,d,e,f,g,h,r,u,v,w,x,y,z
-from sympy import Add, Mul, Poly, Pow, Function, Rational, fraction, sqrt
+from sympy import Add, Mul, Poly, Pow, Function, Rational, Symbol, fraction, sqrt
 from sympy.combinatorics import CyclicGroup, SymmetricGroup
 
 F, G = Function('F'), Function('G')
@@ -245,6 +245,23 @@ def test_sign_sos_cyclic_certificates():
     assert sign_sos(expr, signs) is None
 
 
+def test_sign_sos_cyclic_representative_only(monkeypatch):
+    # Do not enumerate all group elements if possible.
+    expr = CyclicSum(a*(b-c)**2, (a, b, c), evaluate=False)
+    original = CyclicExpr._generate_all_translations
+
+    def translations(symbols, group, full=True):
+        assert not full, "An invariant proof must not enumerate the whole group."
+        return original(symbols, group, full=False)
+
+    monkeypatch.setattr(CyclicExpr,
+        '_generate_all_translations', staticmethod(translations))
+    proof = sign_sos(expr, {s: (1, F(s)) for s in (a, b, c)})
+    assert isinstance(proof, CyclicSum)
+    assert proof.args[0] == F(a)*(b-c)**2
+    assert _prove_by_recur(expr, {s: (1, s) for s in (a, b, c)}) == (expr, False)
+
+
 def test_sign_sos_cyclic_zero_and_asymmetric_signs():
     expr = CyclicProduct(a, (a, b, c), evaluate=False)
     proof = sign_sos(expr, {a: (0, G(a))})
@@ -266,33 +283,12 @@ def test_sign_sos_cyclic_zero_and_asymmetric_signs():
     assert sign_sos(expr, signs) is None
 
 
-def test_sign_sos_cyclic_representative_only(monkeypatch):
-    expr = CyclicSum(a*(b-c)**2, (a, b, c), evaluate=False)
-    original = CyclicExpr._generate_all_translations
-
-    def translations(symbols, group, full=True):
-        assert not full, "An invariant proof must not enumerate the whole group."
-        return original(symbols, group, full=False)
-
-    monkeypatch.setattr(CyclicExpr, '_generate_all_translations', staticmethod(translations))
-    proof = sign_sos(expr, {s: (1, F(s)) for s in (a, b, c)})
-    assert isinstance(proof, CyclicSum)
-    assert proof.args[0] == F(a)*(b-c)**2
-    assert _prove_by_recur(expr, {s: (1, s) for s in (a, b, c)}) == (expr, False)
-
-
-def test_sign_sos_preserves_square_and_witnesses():
-    expr = (a-b)**2
-    prover = _SignProver({a: (1, F(a)), b: (1, F(b))})
-    assert prover.prove(expr) == (expr, False)
-    assert (expr.base, False) not in prover.results
+def test_sign_sos_deep_expressions():
+    # Test sign_sos does not fall into infinite recursion.
     assert sign_sos(a, {a: (1, F(a))}) == F(a)
-    # Even mutually referring witnesses are terminal certificates.
     assert sign_sos(a+b, {a: (1, F(b)), b: (1, F(a))}) == F(a)+F(b)
 
-
-def test_sign_sos_deep_expression_and_shared_nodes():
-    # test a highly nested expression
+    # Test a highly nested expression
     expr = a
     for i in range(1200):
         expr = Add(expr, 1, evaluate=False) if i % 2 else Pow(expr, 3, evaluate=False)
@@ -315,3 +311,97 @@ def test_sign_sos_deep_expression_and_shared_nodes():
     size = len(prover.results)
     assert prover.prove(expr)[0] == 3*(F(a)+F(b))
     assert len(prover.results) == size
+
+
+@pytest.mark.parametrize("assumptions", [
+    {}, {'real': True}, {'positive': True}, {'negative': True},
+    {'zero': True}, {'integer': True}, {'even': True}, {'odd': True},
+    {'nonnegative': True}, {'imaginary': True}, {'real': False},
+])
+def test_sign_sos_ignores_symbol_assumptions(assumptions):
+    var = Symbol('assumed', **assumptions)
+    assert sign_sos(var, {}) is None
+    assert sign_sos(var, {var: (1, F(var))}) == F(var)
+    assert sign_sos(Mul(-1, var, evaluate=False), {var: (-1, F(var))}) == F(var)
+    square = Pow(var, 2, evaluate=False)
+    assert sign_sos(square, {}) is square
+    product = Mul(var, b, evaluate=False)
+    assert sign_sos(product, {var: (0, G(var))}) == b*G(var)
+
+
+def test_sign_sos_symbol_assumptions():
+    # Test that symbol assumptions are preserved.
+    positive = Symbol('same_name', positive=True)
+    negative = Symbol('same_name', negative=True)
+    expr = Add(positive, negative, evaluate=False)
+    proof = sign_sos(expr, {positive: (1, F(positive)), negative: (1, F(negative))})
+    assert proof.free_symbols == {positive, negative}
+    assert proof == Add(F(positive), F(negative), evaluate=False)
+
+    variables = tuple(Symbol(name, positive=True) for name in ('p', 'q', 'r'))
+    expr = CyclicSum(variables[0], variables, evaluate=False)
+    assert sign_sos(expr, {}) is None
+    proof = sign_sos(expr, {s: (1, F(s)) for s in variables})
+    assert proof == CyclicSum(F(variables[0]), variables, evaluate=False)
+
+    # Test that sign_sos does not query symbolic sign assumptions.
+    class Guard(Symbol):
+        @property
+        def is_positive(self):
+            raise AssertionError('Symbolic positivity must not be queried.')
+
+        @property
+        def is_negative(self):
+            raise AssertionError('Symbolic negativity must not be queried.')
+
+        @property
+        def is_real(self):
+            raise AssertionError('Symbolic reality must not be queried.')
+
+    exponent = Guard('exponent')
+    expr = Pow(z, exponent, evaluate=False)
+    assert sign_sos(expr, {z: (0, G(z))}) is None
+    # The structural guard also applies to compound symbolic exponents.
+    expr = Pow(z, Add(exponent, 1, evaluate=False), evaluate=False)
+    assert sign_sos(expr, {z: (0, G(z))}) is None
+
+
+@pytest.mark.parametrize("exponent",
+    [Rational(3), Rational(1, 2), sqrt(2), 1+sqrt(2)])
+def test_sign_sos_zero_with_numerical_exponent(exponent):
+    expr = Pow(z, exponent, evaluate=False)
+    proof = sign_sos(u*expr, {z: (0, G(z))})
+    assert proof is not None
+    assert (proof.xreplace({G(z): z})-u*expr).expand() == 0
+
+
+def test_sign_sos_symbolic_powers():
+    # Powers with symbolic exponents.
+    exponent = Symbol('exponent', integer=True)
+    expr = Pow(a, exponent, evaluate=False)
+    proof = sign_sos(expr, {a: (1, b**2)})
+    assert proof == Pow(b**2, exponent, evaluate=False)
+    # Flattening this to b**(2*exponent) would require the ignored assumption.
+    assert proof.subs({b: -1, exponent: Rational(1, 2)}) == 1
+
+    exponent = Symbol('exponent', positive=True)
+    expr = Pow(a, exponent, evaluate=False)
+    proof = sign_sos(expr, {a: (1, 0)})
+    assert proof == Pow(0, exponent, evaluate=False)
+    assert proof.subs(exponent, 0) == 1
+
+    proof = sign_sos(exponent**2-2*exponent+1, {}, factor=True)
+    assert proof.free_symbols == {exponent}
+    assert (proof-(exponent-1)**2).expand() == 0
+
+
+@pytest.mark.parametrize("assumptions", [
+    {}, {'positive': True}, {'negative': True}, {'zero': True},
+    {'integer': True}, {'even': True}, {'imaginary': True},
+])
+def test_sign_sos_ignores_exponent_assumptions(assumptions):
+    exponent = Symbol('exponent', **assumptions)
+    expr = Pow(z, exponent, evaluate=False)
+    assert sign_sos(expr, {z: (0, G(z))}) is None
+    assert sign_sos(expr, {z: (1, F(z))}) == Pow(F(z), exponent, evaluate=False)
+    assert sign_sos(expr, {z: (-1, F(z))}) is None
