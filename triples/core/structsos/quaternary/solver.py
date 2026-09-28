@@ -3,7 +3,8 @@ from typing import TYPE_CHECKING, Dict, Optional, Union
 from sympy import Mul
 from sympy.combinatorics import Permutation, PermutationGroup
 
-from .cubic import _quaternary_cubic_partial_symmetric, quaternary_cubic_symmetric
+from .cubic import (_quaternary_cubic_partial_symmetric, quaternary_cubic_symmetric,
+                    quaternary_cubic_partial_constrained)
 from .dense_symmetric import quaternary_dense_dihedral, quaternary_dense_symmetric
 from .quartic import quaternary_quartic
 from .quartic_symmetric import quaternary_quartic_symmetric
@@ -32,6 +33,10 @@ SOLVERS_SYMMETRIC = {
 
 SOLVERS_SYMMETRIC_NONHOM = {
     3: _quaternary_cubic_partial_symmetric,
+}
+
+SOLVERS_CONSTRAINED = {
+    3: quaternary_cubic_partial_constrained,
 }
 
 def _structural_sos_4vars_symmetric(
@@ -150,38 +155,40 @@ def structural_sos_4vars(
     is_pos = lambda x: (x is not None) and x >= 0
     r_plus = all(is_pos(signs.get(x, (-1, -1))[0]) for x in poly.gens)
 
-    if (not r_plus) and poly.total_degree() % 2 == 1:
-        # TODO: try to disprove the problem
-        return None
+    if r_plus or poly.total_degree() % 2 == 0:
+        coeff = Coeff(poly)
+        solution = None
+        func = None
+        if coeff.is_symmetric():
+            func = _structural_sos_4vars_symmetric
+        elif coeff.is_cyclic():
+            func = _structural_sos_4vars_cyclic
+        else:
+            pg = PermutationGroup(Permutation([1,2,0,3]), Permutation([1,0,2,3]))
+            if coeff.is_cyclic(pg):
+                func = _structural_sos_4vars_partial_symmetric
 
-    coeff = Coeff(poly)
-    solution = None
-    func = None
-    if coeff.is_symmetric():
-        func = _structural_sos_4vars_symmetric
-    elif coeff.is_cyclic():
-        func = _structural_sos_4vars_cyclic
-    else:
-        pg = PermutationGroup(Permutation([1,2,0,3]), Permutation([1,0,2,3]))
-        if coeff.is_cyclic(pg):
-            func = _structural_sos_4vars_partial_symmetric
+            # TODO: dihedral belongs to cyclic
+            pg = PermutationGroup(Permutation([2,3,0,1]), Permutation([1,0,2,3]))
+            if coeff.is_cyclic(pg):
+                func = _structural_sos_4vars_dihedral
 
-        # TODO: dihedral belongs to cyclic
-        pg = PermutationGroup(Permutation([2,3,0,1]), Permutation([1,0,2,3]))
-        if coeff.is_cyclic(pg):
-            func = _structural_sos_4vars_dihedral
+        try:
+            if func is not None:
+                solution = func(coeff, real = 1)
+        except (PolynomialNonpositiveError, PolynomialUnsolvableError):
+            return None
 
-    try:
+        if solution is not None:
+            ####################################################################
+            # replace assumed-nonnegative symbols with inequality constraints
+            ####################################################################
+            solution = sign_sos(solution, signs)
+            return solution
+
+    if len(problem.ineq_constraints) or len(problem.eq_constraints):
+        func = SOLVERS_CONSTRAINED.get(poly.total_degree(), None)
         if func is not None:
-            solution = func(coeff, real = 1)
-    except (PolynomialNonpositiveError, PolynomialUnsolvableError):
-        return None
-
-    if solution is None:
-        return None
-
-    ####################################################################
-    # replace assumed-nonnegative symbols with inequality constraints
-    ####################################################################
-    solution = sign_sos(solution, signs)
-    return solution
+            solution = func(problem)
+            if solution is not None:
+                return solution

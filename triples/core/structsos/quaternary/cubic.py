@@ -217,6 +217,30 @@ def _is_sym3_quadratic(p: "Poly"):
 def _quaternary_cubic_partial_constrained_2(
     coeff: 'Coeff', con: 'Coeff', F: 'Expr', sign: int = 0
 ):
+    """
+    Solve `lc*(a*b*c + k*(a+b+c) + const) >= 0`
+    with constraint `(a**2+b**2+c**2-a*b-b*c-c*a)+x*(a+b+c)**2 = D`.
+
+    Examples
+    --------
+    :: ineqs = [], gens = [a,b,c]
+
+    :: eqs = [s(a2)-2]
+    => 2 + p(a) - s(a)
+    => 2 - p(a) + s(a)
+
+    :: eqs = [s(37a2-16ab-111)]
+    => 15abc - 14s(a) + 102
+
+    :: eqs = [2c2-a2-b2-d2]
+    -> abd+2c3 -(a+b+d)c2 + 1/3
+
+    :: eqs = [s(125a2+(16sqrt(79)-82)ab)-(129+48sqrt(79))]
+    => abc-(89+7sqrt(79))/48s(a)+(73+7sqrt(79))/16
+
+    :: eqs = [s(343a2+(72sqrt(58)-118)ab)-27(25+8sqrt(58))]
+    => 16abc-(76+9sqrt(58))s(a)+(212+27sqrt(58))
+    """
     for monom in coeff.monoms():
         if not (sum(monom[:3]) <= 1 or monom == (1,1,1,0)):
             return None
@@ -245,15 +269,18 @@ def _quaternary_cubic_partial_constrained_2(
     ], (a,)).as_poly()
 
     for v in nroots(eqv, ground=True, real=True):
-        if eqv.rep.eval(v) == 0:
+        if eqv.rep.eval(v) == eqv.domain.zero:
             # exact
             if v == 0:
                 return None
             u = -(3*k + 4*v**2*x + v**2)/(2*v*(x + 1))
-            if u != v:
+
+            if lc*(v - u) > 0:
                 break
     else:
         return None
+
+    # print('(x, d, u, v) =', (x, d, u, v))
 
     const = -u*v**2 + v*(u + 2*v)*(2*u*x + 2*u + 4*v*x + v)/3
     rem = rem - const
@@ -275,7 +302,7 @@ def _quaternary_cubic_partial_constrained_2(
         (lc*x*E/((v-u)*D)),
         lc*delta/(4*x*E),
     ]
-
+    # print('_y =', _y)
     if any(i < 0 for i in _y[:4]):
         return None
 
