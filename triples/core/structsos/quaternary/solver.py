@@ -9,9 +9,10 @@ from .dense_symmetric import quaternary_dense_dihedral, quaternary_dense_symmetr
 from .quartic import quaternary_quartic
 from .quartic_symmetric import quaternary_quartic_symmetric
 from .quintic import quaternary_quintic_symmetric
-from ..sparse import structsos_common, structsos_degree_specified_solver
+from ..nvars.linear import structsos_nvars_linear
+from ..nvars.quadratic import structsos_nvars_quadratic
 
-from ..utils import PolynomialNonpositiveError, PolynomialUnsolvableError
+from ..utils import PolynomialNonpositiveError, PolynomialUnsolvableError, structsos_extract_factors
 from ...preprocess.signs import sign_sos
 from ....utils.expressions import Coeff
 
@@ -22,16 +23,22 @@ if TYPE_CHECKING:
 
 
 SOLVERS_CYCLIC = {
+    1: structsos_nvars_linear,
+    2: structsos_nvars_quadratic,
     4: quaternary_quartic,
 }
 
 SOLVERS_SYMMETRIC = {
+    1: structsos_nvars_linear,
+    2: structsos_nvars_quadratic,
     3: quaternary_cubic_symmetric,
     4: quaternary_quartic_symmetric,
     5: quaternary_quintic_symmetric,
 }
 
 SOLVERS_SYMMETRIC_NONHOM = {
+    1: structsos_nvars_linear,
+    2: structsos_nvars_quadratic,
     3: _quaternary_cubic_partial_symmetric,
 }
 
@@ -39,6 +46,7 @@ SOLVERS_CONSTRAINED = {
     3: quaternary_cubic_partial_constrained,
 }
 
+@structsos_extract_factors
 def _structural_sos_4vars_symmetric(
     coeff: Union["Poly", Coeff, Dict],
     real: int = 1
@@ -50,12 +58,23 @@ def _structural_sos_4vars_symmetric(
     if not isinstance(coeff, Coeff):
         coeff = Coeff(coeff)
 
-    return structsos_common(coeff,
-        structsos_degree_specified_solver(SOLVERS_SYMMETRIC, homogeneous=True),
-        quaternary_dense_symmetric,
-        real=real
-    )
+    degree = coeff.total_degree()
+    if degree % 2 == 1 and real >= 2:
+        return None
 
+    solvers = [
+        SOLVERS_SYMMETRIC.get(degree),
+        quaternary_dense_symmetric,
+    ]
+    for solver in solvers:
+        if solver is None:
+            continue
+        solution = solver(coeff, real=real)
+        if solution is not None:
+            return solution
+
+
+@structsos_extract_factors
 def _structural_sos_4vars_cyclic(
     coeff: Union["Poly", Coeff, Dict],
     real: int = 1
@@ -67,11 +86,15 @@ def _structural_sos_4vars_cyclic(
     if not isinstance(coeff, Coeff):
         coeff = Coeff(coeff)
 
-    return structsos_common(coeff,
-        structsos_degree_specified_solver(SOLVERS_CYCLIC, homogeneous=True),
-        real=real
-    )
+    degree = coeff.total_degree()
+    if degree % 2 == 1 and real >= 2:
+        return None
 
+    solver = SOLVERS_CYCLIC.get(degree)
+    if solver is not None:
+        return solver(coeff, real=real)
+
+@structsos_extract_factors
 def _structural_sos_4vars_partial_symmetric(
     coeff: Union["Poly", Coeff, Dict],
     real: int = 1
@@ -84,10 +107,13 @@ def _structural_sos_4vars_partial_symmetric(
     """
     if not isinstance(coeff, Coeff):
         coeff = Coeff(coeff)
-    return structsos_common(coeff,
-        structsos_degree_specified_solver(SOLVERS_SYMMETRIC_NONHOM, homogeneous=True),
-        real=real
-    )
+    degree = coeff.total_degree()
+    if degree % 2 == 1 and real >= 2:
+        return None
+
+    solver = SOLVERS_SYMMETRIC_NONHOM.get(degree)
+    if solver is not None:
+        return solver(coeff, real=real)
 
 def _structural_sos_4vars_dihedral(
     coeff: Union["Poly", Coeff, Dict],
@@ -102,7 +128,6 @@ def _structural_sos_4vars_dihedral(
     if not isinstance(coeff, Coeff):
         coeff = Coeff(coeff)
     if coeff.total_degree() <= 2:
-        from ..nvars.quadratic import structsos_nvars_quadratic
         sol = structsos_nvars_quadratic(coeff)
         if sol is not None:
             return sol

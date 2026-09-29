@@ -2,7 +2,7 @@ from functools import wraps
 from typing import TYPE_CHECKING, Callable, List, Optional, Tuple, Union, Any
 
 from sympy import (
-    QQ, RR, Add, Expr, MatrixBase, Poly,
+    QQ, RR, Add, Expr, Integer, MatrixBase, Mul, Poly,
     Rational, fraction, sympify
 )
 from sympy.combinatorics import Permutation
@@ -284,6 +284,50 @@ def block_partition(blocks: List[int], groups: Tuple[int, ...]) -> List[int]:
     if not backtrack(0):
         raise ValueError("No valid partition found")
     return result
+
+
+def structsos_extract_factors(solver: Callable) -> Callable:
+    """
+    Decorate a solver to extract monomial factors or common powers first.
+
+    For a monomial times f, solve f and multiply the result by the monomial.
+    For f(a^k, b^k, ...), solve f and substitute the powers back into the result.
+    Preserve Poly inputs; convert other inputs to Coeff. The wrapped solver
+    receives real=0 for an odd monomial factor, and at most real=1 for an
+    even power substitution. Only one reduction is applied per call.
+    """
+    @wraps(solver)
+    def _wrapped_solver(coeff, real: int = 1, **kwargs):
+        poly = coeff
+        coeff = poly if isinstance(poly, Coeff) else Coeff(poly)
+        symbols = coeff.gens
+        multiplier = Integer(1)
+        replacements = {}
+
+        monom, new_coeff = coeff.cancel_abc()
+        if any(i > 0 for i in monom):
+            if not all(i % 2 == 0 for i in monom):
+                real = min(int(real), 1)
+            if len(symbols) > 2 and all(i == monom[0] for i in monom):
+                multiplier = CyclicProduct(symbols[0]**monom[0], symbols)
+            else:
+                multiplier = Mul(*[s**i for s, i in zip(symbols, monom)])
+
+        i, new_coeff = new_coeff.cancel_k()
+        if i > 1:
+            real = min(int(real), 1) if i % 2 == 0 else real
+            replacements = {s: s**i for s in symbols}
+
+        if isinstance(poly, Poly):
+            new_coeff = poly if new_coeff is coeff else new_coeff.as_poly(*symbols)
+        solution = solver(new_coeff, real=real, **kwargs)
+        if solution is None:
+            return None
+        if not isinstance(solution, Expr):
+            solution = solution + Integer(0)
+        return multiplier * solution.xreplace(replacements)
+
+    return _wrapped_solver
 
 
 def _reorder_helper(

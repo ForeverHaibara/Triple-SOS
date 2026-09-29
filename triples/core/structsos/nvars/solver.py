@@ -1,7 +1,9 @@
 from typing import TYPE_CHECKING, Dict, Optional, Union
 
+from .linear import structsos_nvars_linear
+from .quadratic import structsos_nvars_quadratic
 from .quartic import structsos_nvars_quartic_symmetric
-from ..sparse import structsos_common, structsos_degree_specified_solver
+from ..utils import structsos_extract_factors
 from ...preprocess.signs import sign_sos
 from ....utils.expressions import Coeff
 
@@ -10,10 +12,17 @@ if TYPE_CHECKING:
 
     from ...problem import InequalityProblem
 
+SOLVERS = {
+    1: structsos_nvars_linear,
+    2: structsos_nvars_quadratic,
+}
+
 SOLVERS_SYMMETRIC = {
+    **SOLVERS,
     4: structsos_nvars_quartic_symmetric,
 }
 
+@structsos_extract_factors
 def _structural_sos_nvars_symmetric(
     coeff: Union["Poly", Coeff, Dict],
     real: int = 1
@@ -25,21 +34,28 @@ def _structural_sos_nvars_symmetric(
     if not isinstance(coeff, Coeff):
         coeff = Coeff(coeff)
 
-    return structsos_common(coeff,
-        structsos_degree_specified_solver(SOLVERS_SYMMETRIC, homogeneous=True),
-        real=real
-    )
+    degree = coeff.total_degree()
+    if degree % 2 == 1 and real >= 2:
+        return None
 
+    solver = SOLVERS_SYMMETRIC.get(degree)
+    if solver is not None:
+        return solver(coeff, real=real)
+
+@structsos_extract_factors
 def _structural_sos_nvars_general(
     coeff: Union["Poly", Coeff, Dict],
     real: int = 1
 ) -> Optional["Expr"]:
     if not isinstance(coeff, Coeff):
         coeff = Coeff(coeff)
-    return structsos_common(coeff,
-        structsos_degree_specified_solver({}, homogeneous=True),
-        real=real
-    )
+    degree = coeff.total_degree()
+    if degree % 2 == 1 and real >= 2:
+        return None
+
+    solver = SOLVERS.get(degree)
+    if solver is not None:
+        return solver(coeff, real=real)
 
 
 def structural_sos_nvars(

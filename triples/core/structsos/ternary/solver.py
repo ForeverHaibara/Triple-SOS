@@ -14,8 +14,8 @@ from .acyclic import structsos_acyclic_sparse
 
 from .acute import structsos_acute
 
-from ..utils import PolynomialNonpositiveError, PolynomialUnsolvableError
-from ..sparse import structsos_common, structsos_degree_specified_solver
+from ..nvars.linear import structsos_nvars_linear
+from ..utils import PolynomialNonpositiveError, PolynomialUnsolvableError, structsos_extract_factors
 from ...preprocess.signs import sign_sos
 from ....sdp.arithmetic import rep_matrix_from_dict, permute_matrix_rows
 from ....utils.expressions import Coeff
@@ -25,6 +25,7 @@ if TYPE_CHECKING:
     from ...problem import InequalityProblem
 
 SOLVERS = {
+    1: structsos_nvars_linear,
     2: structsos_quadratic,
     3: structsos_cubic,
     4: structsos_quartic,
@@ -36,6 +37,7 @@ SOLVERS = {
 }
 
 SOLVERS_ACYCLIC = {
+    1: structsos_nvars_linear,
     2: structsos_acyclic_quadratic,
     3: structsos_acyclic_cubic,
     4: structsos_acyclic_quartic
@@ -58,6 +60,7 @@ def _is_cyclic_mat(M):
     return True
 
 
+@structsos_extract_factors
 def _structural_sos_3vars_cyclic(
     coeff: Union["Poly", Coeff, Dict],
     real: int = 1
@@ -79,13 +82,24 @@ def _structural_sos_3vars_cyclic(
     if not isinstance(coeff, Coeff):
         coeff = Coeff(coeff)
 
-    return structsos_common(coeff,
-        structsos_sparse,
-        structsos_degree_specified_solver(SOLVERS, homogeneous=True),
-        structsos_heuristic,
-        real=real
-    )
+    degree = coeff.total_degree()
+    if degree % 2 == 1 and real >= 2:
+        return None
 
+    solvers = [
+        structsos_sparse,
+        SOLVERS.get(degree),
+        structsos_heuristic,
+    ]
+    for solver in solvers:
+        if solver is None:
+            continue
+        solution = solver(coeff, real=real)
+        if solution is not None:
+            return solution
+
+
+@structsos_extract_factors
 def _structural_sos_3vars_acyclic(
     coeff: Union["Poly", Coeff, Dict],
     real: int = 1
@@ -107,12 +121,21 @@ def _structural_sos_3vars_acyclic(
     if not isinstance(coeff, Coeff):
         coeff = Coeff(coeff)
 
-    return structsos_common(coeff,
+    degree = coeff.total_degree()
+    if degree % 2 == 1 and real >= 2:
+        return None
+
+    solvers = [
         structsos_acyclic_sparse,
-        structsos_degree_specified_solver(SOLVERS_ACYCLIC, homogeneous=True),
+        SOLVERS_ACYCLIC.get(degree),
         structsos_ternary_dense_partial_symmetric,
-        real=real
-    )
+    ]
+    for solver in solvers:
+        if solver is None:
+            continue
+        solution = solver(coeff, real=real)
+        if solution is not None:
+            return solution
 
 
 def structural_sos_3vars(
