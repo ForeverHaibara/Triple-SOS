@@ -294,7 +294,7 @@ def structsos_extract_factors(solver: Callable) -> Callable:
     For f(a^k, b^k, ...), solve f and substitute the powers back into the result.
     Preserve Poly inputs; convert other inputs to Coeff. The wrapped solver
     receives real=0 for an odd monomial factor, and at most real=1 for an
-    even power substitution. Only one reduction is applied per call.
+    even power substitution.
     """
     @wraps(solver)
     def _wrapped_solver(coeff, real: int = 1, **kwargs):

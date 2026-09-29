@@ -94,6 +94,7 @@ def _structural_sos_4vars_cyclic(
     if solver is not None:
         return solver(coeff, real=real)
 
+
 @structsos_extract_factors
 def _structural_sos_4vars_partial_symmetric(
     coeff: Union["Poly", Coeff, Dict],
@@ -114,6 +115,7 @@ def _structural_sos_4vars_partial_symmetric(
     solver = SOLVERS_SYMMETRIC_NONHOM.get(degree)
     if solver is not None:
         return solver(coeff, real=real)
+
 
 def _structural_sos_4vars_dihedral(
     coeff: Union["Poly", Coeff, Dict],
