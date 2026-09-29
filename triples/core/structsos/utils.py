@@ -1,5 +1,5 @@
 from functools import wraps
-from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Tuple, Union, Any
+from typing import TYPE_CHECKING, Callable, List, Optional, Tuple, Union, Any
 
 from sympy import (
     QQ, RR, Add, Expr, MatrixBase, Poly,
@@ -246,31 +246,6 @@ def zip_longest(*args):
                 if all(stops):
                     return
         yield tuple(lasts)
-
-
-def has_gen(gen: 'Symbol', *args):
-    """
-    Test whether a symbol is involved in a (list of) polynomial(s).
-    """
-    to_iter = lambda x: (x,) if isinstance(x, Poly) else x
-    return any(any(gen in p.free_symbols for p in arg) for arg in map(to_iter, args))
-
-
-def clear_free_symbols(poly: Poly, ineq_constraints: Dict[Poly, Expr] = {}, eq_constraints: Dict[Poly, Expr] = {}) -> Tuple[Poly, Dict[Poly, Expr], Dict[Poly, Expr]]:
-    """
-    Clear nuisance free symbols from the polynomial and constraints.
-    For example, if we want to solve x>=4 with constraints x>=y, x*y>=4, y>=0, a>=0. Then
-    we can remove the symbol "a" from the constraints. But we cannot remove the symbol "y"
-    even though it is not in the polynomial, as it is correlated with "x".
-    """
-    from warnings import warn
-
-    from ..problem import InequalityProblem
-    warn("clear_free_symbols is deprecated. Please use remove_redundancy instead.",
-         stacklevel=2, category=DeprecationWarning)
-    pro = InequalityProblem(poly, ineq_constraints, eq_constraints)
-    pro.remove_redundancy()
-    return pro.expr, pro.ineq_constraints, pro.eq_constraints
 
 
 def block_partition(blocks: List[int], groups: Tuple[int, ...]) -> List[int]:
