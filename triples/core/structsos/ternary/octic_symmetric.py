@@ -14,6 +14,7 @@ from ..utils import (
     rationalize_func,
     sum_y_exprs,
 )
+from ....utils.polytools import poly_sqrt
 
 if TYPE_CHECKING:
     from ....utils.expressions import Coeff
@@ -815,12 +816,12 @@ def _structsos_octic_symmetric_sqr_axis(coeff: 'Coeff'):
     poly = coeff.as_poly()
     axis = poly.eval((1,1))
     axis, rem = axis.div(coeff.from_list([1, -2, 1], (c,)).as_poly())
-    if not rem.is_zero:
+    if axis.degree() != 6 or (not rem.is_zero):
         return
-    _sqrt = _sqrt_f6(axis)
+    _sqrt = poly_sqrt(axis)
     if _sqrt is None:
         return
-    u, v, w = _sqrt
+    _, u, v, w = _sqrt[1].monic().rep.to_list()
     u, w = -u, -w
     lc = axis.rep.LC()
     if u - v + w - 1 == 0:

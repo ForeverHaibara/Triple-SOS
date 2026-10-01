@@ -55,7 +55,7 @@ def _linear_invert(u, v, d: int = 0) -> Optional[Tuple[int, 'Expr', 'Expr']]:
     return n, u2, v2
 
 
-def structsos_dense_symmetric(coeff, real=True):
+def structsos_dense_symmetric(coeff, real=1):
     """
     Solve dense 3-var symmetric inequalities.
     Triggered only when the degree is at least 8 and the polynomial is symmetric.
@@ -65,7 +65,7 @@ def structsos_dense_symmetric(coeff, real=True):
     return _structsos_dense_symmetric(coeff, real)
 
 
-def _structsos_dense_symmetric(coeff, real=True):
+def _structsos_dense_symmetric(coeff, real=1):
     """
     Solve dense 3-var symmetric inequalities. This function
     does not check the symmetry of the input polynomial, so it
@@ -86,7 +86,7 @@ def _structsos_dense_symmetric(coeff, real=True):
             return solution
 
 
-def _structsos_trivial_additive(coeff: 'Coeff', real=True):
+def _structsos_trivial_additive(coeff: 'Coeff', real=1):
     """
     Solve trivial cyclic inequalities with nonnegative coefficients.
     """
@@ -157,7 +157,7 @@ def _homogenize_sym_proof(coeff: 'Coeff', sym_proof, d: int) -> 'Expr':
 
 
 @structsos_handle_uncentered
-def _structsos_lifted_vr(coeff: 'Coeff', real=2):
+def _structsos_lifted_vr(coeff: 'Coeff', real=1):
     """
     Vandermonde Reduction (VR).
 
@@ -236,8 +236,33 @@ def _structsos_lifted_vr(coeff: 'Coeff', real=2):
             ) / mul
 
 
+def _structsos_lifted_vr_sqr_axis(coeff: 'Coeff', real=1):
+    """
+    Solve high-degree (dense) symmetric inequalities
+    where the symmetric axis is a square.
+    """
+    d = coeff.total_degree()
+    axis = sym_axis(coeff, d)
+    a, b, c = coeff.gens
+    axis, rem = axis.div(coeff.from_list([1,-2,1], (a,)).as_poly())
+    if not rem.is_zero:
+        return None
+
+    lc, factors = axis.factor_list()
+    if lc < 0 or any(m % 2 != 0 for _, m in factors):
+        return None
+
+    sqrt_axis = axis.one
+    for p, m in factors:
+        sqrt_axis *= p**(m//2)
+
+    lifted = _homogenize_sym_axis(coeff, sqrt_axis, (d - 2)//2)
+
+    # multiplier = []
+
+
 @structsos_handle_uncentered
-def structsos_liftfree_vr(coeff: 'Coeff', real=True):
+def structsos_liftfree_vr(coeff: 'Coeff', real=1):
     """
     Solve high-degree (dense) symmetric inequalities without
     lifting the degree. This will be tried in prior because
@@ -330,7 +355,7 @@ def structsos_liftfree_vr(coeff: 'Coeff', real=True):
         return subtractor + solution
 
 
-def _structsos_liftfree_vr_ord4(coeff: 'Coeff', div2=None, real=True):
+def _structsos_liftfree_vr_ord4(coeff: 'Coeff', div2=None, real=1):
     """
     Solve a high-degree (dense) symmetric inequality where (a-1)^4 is a factor
     of the symmetric axis. Such polynomial can be seen as:
@@ -657,7 +682,7 @@ def _sqf_complex_factorizable_fp(poly: Poly, p: Optional[int]=None):
 #####################################################################
 
 @structsos_reorder_symmetry(groups=(2, 1))
-def structsos_ternary_dense_partial_symmetric(coeff: 'Coeff', real=True):
+def structsos_ternary_dense_partial_symmetric(coeff: 'Coeff', real=1):
     """
     Solve a homogeneous 3-var inequality `f(a,b,c) >= 0` where
     `f(a, b, c) == f(b, a, c)`.

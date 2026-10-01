@@ -44,7 +44,8 @@ from sympy.polys.euclidtools import (
 from sympy.polys.factortools import (
     dup_gf_factor, dmp_trial_division, dmp_zz_diophantine
 )
-from sympy.polys.polyerrors import EvaluationFailed, ExtraneousFactors, DomainError
+from sympy.polys.polyerrors import (EvaluationFailed, ExtraneousFactors,
+                                    DomainError, CoercionFailed)
 from sympy.polys.polyutils import _sort_factors
 from sympy.polys.sqfreetools import dup_gf_sqf_list, dup_sqf_p
 # from sympy.polys.sqfreetools import _dmp_check_degrees
@@ -773,6 +774,75 @@ def dmp_gf_kron(f, u, K):
     # _dmp_check_degrees(F, u, result)
 
     return lc, result
+
+
+def poly_sqrt(f: Poly, check: bool = True):
+    """
+    Return `(lc, g)` if `f == lc * g**2`. `f` must be univariate.
+    The coefficient `lc` and also `g` must be in the domain of `f`.
+    Return `None` if no such `lc` and `g` exist.
+
+    Examples
+    --------
+    >>> from sympy import Poly
+    >>> from sympy.abc import x
+    >>> poly_sqrt(Poly(3*x**2 + x + 1)**2)
+    (1, Poly(3*x**2 + x + 1, x, domain='ZZ'))
+
+    >>> poly_sqrt(Poly('5/6', x, domain='QQ'))
+    (5/6, Poly(1, x, domain='QQ'))
+
+    >>> poly_sqrt(Poly('sqrt(2)*x^4+2*sqrt(2)*x^3+(-2+sqrt(2))*x^2-2*x+sqrt(2)/2',
+    ... x, extension=True)) # doctest:+NORMALIZE_WHITESPACE
+    (ANP([1, 0], [1, 0, -2], QQ),
+     Poly(x**2 + x - sqrt(2)/2, x, domain='QQ<sqrt(2)>'))
+    """
+    if f.is_zero:
+        return f.domain.zero, f
+
+    gens = ()
+    lc = f.rep.LC()
+    L = f.domain
+
+    if len(f.gens) != 1:
+        gens = f.gens
+        f = marginalize(f, f.gens[0])
+
+    f = f.monic()
+    a = f.rep.to_list()
+    if (len(a) - 1) % 2:
+        return None
+
+    m, K = (len(a) - 1) // 2, f.domain
+    half = K.one / (K.one + K.one)
+    b = [K.one]
+    for k in range(1, m + 1):
+        s = K.zero
+        for i in range(1, (k + 1) // 2):
+            s += b[i] * b[k - i]
+        s += s
+        if k % 2 == 0:
+            s += b[k // 2] * b[k // 2]
+        b.append((a[k] - s) * half)
+
+    g = Poly.from_list(b, *f.gens, domain=K)
+
+    if check and g**2 != f:
+        return None
+
+    if L != K:
+        s, g = g.primitive()
+        try:
+            lc = L.convert_from(K.convert_from(lc, L) * s**2, K)
+            g = g.set_domain(L)
+        except (CoercionFailed, DomainError):
+            return None
+
+    if gens:
+        g = g.inject()
+        g = marginalize(g, *gens)
+
+    return lc, g
 
 
 ###############################################################################
