@@ -77,8 +77,8 @@ def _structsos_dense_symmetric(coeff, real=True):
         from .solver import _structural_sos_3vars_cyclic
         methods.append(_structural_sos_3vars_cyclic)
     else:
-        methods.append(structsos_liftfree_for_six)
-        methods.append(_structsos_lift_for_six)
+        methods.append(structsos_liftfree_vr)
+        methods.append(_structsos_lifted_vr)
 
     for method in methods:
         solution = method(coeff, real=real)
@@ -134,6 +134,7 @@ def _homogenize_sym_axis(coeff: Union['Coeff', Poly], sym: Poly, d: int) -> 'Exp
             s.append(v/2 * a**m * b**k * c**(k+1))
     return Add(*s)
 
+
 def _homogenize_sym_proof(coeff: 'Coeff', sym_proof, d: int) -> 'Expr':
     """Homogenize the result from prove_univariate."""
     a, b, c = coeff.gens
@@ -156,16 +157,18 @@ def _homogenize_sym_proof(coeff: 'Coeff', sym_proof, d: int) -> 'Expr':
 
 
 @structsos_handle_uncentered
-def _structsos_lift_for_six(coeff: 'Coeff', real=True):
+def _structsos_lifted_vr(coeff: 'Coeff', real=2):
     """
+    Vandermonde Reduction (VR).
+
     Solve high-degree (dense) symmetric inequalities by the method
-    of lifting the degree for six. Idea: define f(a,1,1) to be the
+    of lifting the degree for six. Idea: define `f(a,1,1)` to be the
     symmetric axis of the polynomial. If two tenary homogeneous symmetric polynomials
-    have equal symmetric axis, then their difference is a multiple of (a-b)^2*(b-c)^2*(c-a)^2.
+    have equal symmetric axis, then their difference is a multiple of `(a-b)^2*(b-c)^2*(c-a)^2`
 
     We can subtract a nonnegative polynomial with equal symmetric axis and then
-    divide the rest by (a-b)^2*(b-c)^2*(c-a)^2 to reduce the degree of the problem.
-    We can repeat this process until the degree is small enough.
+    divide the rest by `(a-b)^2*(b-c)^2*(c-a)^2` to reduce the degree of the problem.
+    We can repeat this process until the degree is low enough.
 
     Examples
     --------
@@ -234,7 +237,7 @@ def _structsos_lift_for_six(coeff: 'Coeff', real=True):
 
 
 @structsos_handle_uncentered
-def structsos_liftfree_for_six(coeff: 'Coeff', real=True):
+def structsos_liftfree_vr(coeff: 'Coeff', real=True):
     """
     Solve high-degree (dense) symmetric inequalities without
     lifting the degree. This will be tried in prior because
@@ -271,7 +274,7 @@ def structsos_liftfree_for_six(coeff: 'Coeff', real=True):
 
     div2 = div[0].div(Poly([1,-2,1], a, domain=sym.domain))
     if div2[1].is_zero:
-        return _structsos_liftfree_for_six_ord4(coeff, div2[0], real=real)
+        return _structsos_liftfree_vr_ord4(coeff, div2[0], real=real)
 
     # subtract some s(a^n*b^m*c^m*(a-b)*(a-c)*(a + (b+c))) + p(a-b)^2*...
     # so that the symmetric axis of the remaining part is a multiple of (a-1)^4
@@ -322,12 +325,12 @@ def structsos_liftfree_for_six(coeff: 'Coeff', real=True):
         # subtract s(a^n*b^m*c^m*(u2*a*(b+c)/2 + v2*b*c)*(a-b)*(a-c)) + p(a-b)^2*...
         subtractor = u2 * _subtractor2(n+1, m) + v2 * _subtractor1(n, m+1)
     rem_poly = coeff - coeff.from_poly(subtractor.doit().as_poly(a,b,c,domain=coeff.domain))
-    solution = _structsos_liftfree_for_six_ord4(rem_poly, real=real)
+    solution = _structsos_liftfree_vr_ord4(rem_poly, real=real)
     if solution is not None:
         return subtractor + solution
 
 
-def _structsos_liftfree_for_six_ord4(coeff: 'Coeff', div2=None, real=True):
+def _structsos_liftfree_vr_ord4(coeff: 'Coeff', div2=None, real=True):
     """
     Solve a high-degree (dense) symmetric inequality where (a-1)^4 is a factor
     of the symmetric axis. Such polynomial can be seen as:

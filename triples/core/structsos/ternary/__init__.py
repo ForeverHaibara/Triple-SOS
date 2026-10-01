@@ -1,6 +1,6 @@
 from .acyclic import structsos_acyclic_sparse
 from .cubic import structsos_acyclic_cubic, structsos_cubic
-from .dense_symmetric import structsos_dense_symmetric, structsos_liftfree_for_six
+from .dense_symmetric import structsos_dense_symmetric, structsos_liftfree_vr
 from .nonic import structsos_nonic
 from .octic import structsos_octic
 from .quadratic import structsos_acyclic_quadratic, structsos_quadratic
@@ -19,7 +19,7 @@ __all__ = [
     'structsos_sparse',
     'structsos_heuristic',
     'structsos_dense_symmetric',
-    'structsos_liftfree_for_six',
+    'structsos_liftfree_vr',
     'structsos_quadratic',
     'structsos_acyclic_quadratic',
     'structsos_cubic',

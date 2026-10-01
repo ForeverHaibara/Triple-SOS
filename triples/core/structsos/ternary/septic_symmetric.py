@@ -19,8 +19,8 @@ def structsos_septic_symmetric(coeff, real=False):
     if not all(coeff((i,j,k)) == coeff((j,i,k)) for (i,j,k) in ((6,1,0),(5,2,0),(4,3,0),(4,2,1))):
         return None
 
-    from .dense_symmetric import structsos_liftfree_for_six
-    solution = structsos_liftfree_for_six(coeff)
+    from .dense_symmetric import structsos_liftfree_vr
+    solution = structsos_liftfree_vr(coeff)
     if solution is not None:
         return solution
 

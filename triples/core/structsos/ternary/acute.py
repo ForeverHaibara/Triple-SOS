@@ -361,10 +361,10 @@ def _constrained_acute_dense_symmetric(coeff: Coeff, F):
         solution = _constrained_acute_trivial_uncentered(coeff, F)
         if solution is not None:
             return solution
-    return _constrained_acute_lift_for_six(coeff, F)
+    return _constrained_acute_lifted_vr(coeff, F)
 
 
-def _constrained_acute_lift_for_six(coeff: Coeff, F):
+def _constrained_acute_lifted_vr(coeff: Coeff, F):
     a, b, c = coeff.gens
     CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
 

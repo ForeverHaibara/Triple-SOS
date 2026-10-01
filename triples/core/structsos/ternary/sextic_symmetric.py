@@ -838,8 +838,8 @@ def _structsos_sextic_symmetric_schur_split(coeff: 'Coeff', real = False):
     # lifted_coeff = coeff * (a+b+c).as_poly(a,b,c, domain=coeff.domain)
     lifted_coeff = coeff * coeff.from_dict({(1,0,0):1,(0,1,0):1,(0,0,1):1}).as_poly()
 
-    from .dense_symmetric import structsos_liftfree_for_six
-    solution = structsos_liftfree_for_six(lifted_coeff)
+    from .dense_symmetric import structsos_liftfree_vr
+    solution = structsos_liftfree_vr(lifted_coeff)
     if solution is not None:
         return solution / CyclicSum(a)
 
