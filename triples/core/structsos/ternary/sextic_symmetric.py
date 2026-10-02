@@ -941,6 +941,11 @@ def _structsos_sextic_iran96(coeff: 'Coeff', real = False):
     if solution is not None:
         return solution
 
+    if rem > 0:
+        solution = _structsos_sextic_iran96_uncentered(coeff)
+        if solution is not None:
+            return solution
+
     a, b, c = coeff.gens
     CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
 
@@ -1005,6 +1010,132 @@ def _structsos_sextic_iran96(coeff: 'Coeff', real = False):
         c51*(B - (u**2 - 2*C/u if u != 0 else 0)) * pa * sa * CyclicSum(a*(b-c)**2),
         rem * sa * CyclicProduct(a**2)
     ) / sa
+
+
+def _sextic_iran96_uncentered_low(coeff, t):
+    """
+    Solve `(s(ab)s(a2-2ab)2 + tp(a)s(a)s(a2-2ab) + t2p(a2))*s(a2+6ab) >= 0`
+    when `t >= 0`.
+    """
+    a, b, c = coeff.gens
+    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+    return Add(
+        CyclicSum(a*b)*CyclicSum((a**3-a**2*b-a*b**2+(2*t/3-2)*a*b*c).together())**2,
+        t*CyclicSum(a)*CyclicProduct(a)*CyclicSum(a**2-2*b*c)**2,
+        CyclicSum((2*a**3*b-4*a**2*b**2+2*a*b**3+(t-6)*a*b*c**2).together())**2
+    )
+
+
+def _sextic_iran96_uncentered_mid(coeff, t):
+    """
+    Solve `(s(ab)s(a2-2ab)2 + tp(a)s(a)s(a2-2ab) + (8t-16)p(a2))*s(a) >= 0`
+    when `4 <= t <= 11`.
+    """
+    a, b, c = coeff.gens
+    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+    if 4 <= t <= 8:
+        return Add(
+            (t-4)/4*CyclicSum(a*(b-c)**2*(b+c-a)**4),
+            (2-t/4)*CyclicSum(a*(b+c-a)**2*(b**2+c**2-2*b*c-a*b-a*c)**2),
+            CyclicProduct(a)*CyclicSum(a**2-2*b*c)**2
+        )
+    if 8 <= t <= 11:
+        # -s(a(b-c)2(b+c-a)4)-p(a)((11-t)/3s(a2-2ab)2+(4t-32)/3(s(a2(a-b)(a-c))))
+        return Add(
+            CyclicSum(a*(b-c)**2*(b+c-a)**4),
+            (11-t)/3*CyclicProduct(a)*CyclicSum(a**2-2*b*c)**2,
+            2*(t-8)/3*CyclicProduct(a)*CyclicSum((b-c)**2*(b+c-a)**2)
+        )
+
+
+def _structsos_sextic_iran96_uncentered(coeff: 'Coeff'):
+    """
+    Try to solve Iran96 type inequalities without the equality case
+    at (1,1,1).
+
+    Examples
+    --------
+    => 3/2s(ab)s(a2-2ab)2 + 1/2s(a2(b+c)+abc)p(a)
+
+    => 9s(ab)s(a2-2ab)2+3p(a)s(a)s(a2-2ab)+p(a2)
+
+    => 5s(ab(a-b)4)-s(a)3p(a)+40p(a2)  # doctest:+SKIP
+
+    => 4s(a5b+a5c-4a4b2-a4bc-4a4c2+6a3b3+8/3a2b2c2)
+
+    => 2s(ab)s(a2-2ab)2+15p(a)s(a)s(a2-2ab)+89p(a2)+p(a)s(a(b-c)2)/12
+
+    =? 2s(ab)s(a2-2ab)2+21p(a)s(a)s(a2-2ab)+(136)p(a2)+p(a)s(a(b-c)2)/12
+
+    => s(12a5b+12a5c-47a4b2-58a4bc-47a4c2+74a3b3+54a3b2c+54a3bc2+58/3a2b2c2)
+    """
+    a51, a42, a33 = coeff((5,1,0)), coeff((4,2,0)), coeff((3,3,0))
+    c_disc = a42 + 4*a51
+    c_tri = a33 + 2*a42 + 2*a51
+
+    if a51 <= 0 or c_disc < 0 or c_tri < 0:
+        return None
+
+    a411, a321, a222 = coeff((4,1,1)), coeff((3,2,1)), coeff((2,2,2))
+    x = (a411 + 2*c_disc)/a51
+    y = (a321 - 2*c_disc + c_tri)/a51
+
+    if x < -7 or (x + y) < -1:
+        return None
+
+    rem = (a222 + 6*c_disc - 3*c_tri)/a51 + 6*(x + y + 1)
+    if x >= -3:
+        pass
+
+    t = x + 7 # >= 0
+
+    a, b, c = coeff.gens
+    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+
+    if 4 <= t <= 11 and rem >= 2*t - 4:
+        lifted_tri = Add(
+            CyclicProduct(a)*CyclicSum(a**2*(b-c)**2)/2,
+            CyclicSum(a*(b-c)**2*(a*b+a*c-b*c)**2),
+        )
+        lifted = Add(
+            a51*_sextic_iran96_uncentered_mid(coeff, t),
+            c_tri * lifted_tri
+        )/CyclicSum(a)
+        return Add(
+            c_disc * CyclicProduct((a-b)**2),
+            lifted,
+            a51*(x + y + 1)*CyclicSum(a*(b-c)**2)*CyclicProduct(a),
+            a51*(rem - (2*t - 4)) * CyclicProduct(a**2)
+        )
+
+    if t == 0 and rem >= 12:
+        tri = Add(
+            CyclicProduct(a)*CyclicSum(a**2*(b-c)**2)/2,
+            CyclicSum(a*(b-c)**2*(a*b+a*c-b*c)**2),
+        )/CyclicSum(a)
+        return Add(
+            c_disc * CyclicProduct((a-b)**2),
+            c_tri * tri,
+            a51*CyclicSum(a*b)*CyclicSum(a**2-2*b*c)**2,
+            a51*(x + y + 1)*CyclicSum(a*(b-c)**2)*CyclicProduct(a),
+            a51*(rem - 12) * CyclicProduct(a**2)
+        )
+
+    if t >= 0 and rem >= t**2 - 6*t + 12:
+        lifted_tri = Add(
+            CyclicSum(a*(3*a+b+c)*(b-c)**2*(a*b+a*c-b*c)**2),
+            CyclicSum((10*c**2+a*b)*c*(a-b)**2)*CyclicProduct(a)/2
+        )
+        lifted = Add(
+            a51*_sextic_iran96_uncentered_low(coeff, t),
+            c_tri * lifted_tri
+        )/CyclicSum(a**2+6*b*c)
+        return Add(
+            c_disc * CyclicProduct((a-b)**2),
+            lifted,
+            a51*(x + y + 1)*CyclicSum(a*(b-c)**2)*CyclicProduct(a),
+            a51*(rem - (t**2-6*t+12)) * CyclicProduct(a**2)
+        )
 
 
 def _structsos_sextic_iran96_trivial(coeff: 'Coeff'):

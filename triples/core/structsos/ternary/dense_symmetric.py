@@ -256,7 +256,7 @@ def _structsos_lifted_vr_sqr_axis(coeff: 'Coeff', real=1):
     for p, m in factors:
         sqrt_axis *= p**(m//2)
 
-    lifted = _homogenize_sym_axis(coeff, sqrt_axis, (d - 2)//2)
+    # lifted = _homogenize_sym_axis(coeff, sqrt_axis, (d - 2)//2)
 
     # multiplier = []
 
