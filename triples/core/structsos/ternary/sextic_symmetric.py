@@ -1034,23 +1034,23 @@ def _structsos_sextic_iran96_trivial(coeff: 'Coeff'):
         # a^4bc and a^3b^3 are equal
 
         if True:
-            x_ = ((q - w) / (2 * m) + 1)/2
-            y = [
+            x = ((q - w) / (2 * m) + 1)/2
+            _y = [
                 m,
                 p,
                 q + 2 * m + 2 * p,
-                z - m*x_*(x_ + 2) - 2*p + 3*(q + 2*m + 2*p),
+                z - m*x*(x + 2) - 2*p + 3*(q + 2*m + 2*p),
                 rem
             ]
-            if all(_ >= 0 for _ in y):
+            if all(_ >= 0 for _ in _y):
                 exprs = [
-                    CyclicSum(a*b*(a-b)**2*(a+b-x_*c)**2),
+                    CyclicSum(a*b*(a-b)**2*(a+b-x*c)**2),
                     CyclicProduct((a-b)**2),
                     CyclicSum(a*b*(a-c)**2*(b-c)**2),
                     CyclicSum(a*(b-c)**2) * CyclicProduct(a),
                     CyclicProduct(a**2)
                 ]
-                return sum_y_exprs(y, exprs)
+                return sum_y_exprs(_y, exprs)
 
 
         # Easy case 3, when we do not need to lift the degree
@@ -1062,29 +1062,29 @@ def _structsos_sextic_iran96_trivial(coeff: 'Coeff'):
         # which is equivalent to
         # u >= -(w + 2p) / 4m
         # u^2 - 2u <= (w + z) / m
-        u_ = -(w + 2*p)/4/m
+        u = -(w + 2*p)/4/m
         q2 = 2*(m + p) + q
-        if u_ < 1:
-            u_ = 1
-        w2 = w + 2 * p + 4 * u_ * m
+        if u < 1:
+            u = 1
+        w2 = w + 2 * p + 4 * u * m
 
-        if 2*q2 + w2 + min(2*q2, w2) + (z - 2*p - (u_**2 + 2*u_)*m) < 0:
-            u_ = None
+        if 2*q2 + w2 + min(2*q2, w2) + (z - 2*p - (u**2 + 2*u)*m) < 0:
+            u = None
 
-        if u_ is not None:
-            y = [
+        if u is not None:
+            _y = [
                 m,
                 p,
                 min(w2, q2),
                 q2 - min(w2, q2),
                 w2 - min(w2, q2),
-                z - u_ * (u_ + 2) * m - 2*p + (w2 + q2 - 2 * min(w2, q2)),
+                z - u * (u + 2) * m - 2*p + (w2 + q2 - 2 * min(w2, q2)),
                 rem
             ]
 
-            if all(_ >= 0 for _ in y):
+            if all(_ >= 0 for _ in _y):
                 exprs = [
-                    CyclicSum(a*b*(a-b)**2*(a+b-u_*c)**2),
+                    CyclicSum(a*b*(a-b)**2*(a+b-u*c)**2),
                     CyclicProduct((a-b)**2),
                     CyclicSum(a*b*(a-c)**2*(b-c)**2),
                     CommonExpr.schurinv(6, (a,b,c)),
@@ -1092,30 +1092,30 @@ def _structsos_sextic_iran96_trivial(coeff: 'Coeff'):
                     CyclicSum(a*(b-c)**2) * CyclicProduct(a),
                     CyclicProduct(a**2)
                 ]
-                return sum_y_exprs(y, exprs)
+                return sum_y_exprs(_y, exprs)
 
 
     if True:
         # Case 4. the border is tight.
         y_hex = q - p**2/4/m - 2*m
         if y_hex >= 0:
-            x_ = p / m / 4
-            y = [
+            x = p / m / 4
+            _y = [
                 m,
                 y_hex,
-                w - m*(4 - 4*x_) - y_hex,
-                z + w + m*(3*x_**2 + 2*x_) + 2*y_hex,
+                w - m*(4 - 4*x) - y_hex,
+                z + w + m*(3*x**2 + 2*x) + 2*y_hex,
                 rem
             ]
-            if all(_ >= 0 for _ in y):
+            if all(_ >= 0 for _ in _y):
                 exprs = [
-                    CyclicSum(a*b*(a**2+b**2-2*c**2+2*x_*a*b-x_*a*c-x_*b*c)**2),
+                    CyclicSum(a*b*(a**2+b**2-2*c**2+2*x*a*b-x*a*c-x*b*c)**2),
                     CyclicSum(a*b*(a-c)**2*(b-c)**2),
                     CommonExpr.schur(3, (a,b,c)) * CyclicProduct(a),
                     CyclicSum(a*(b-c)**2) * CyclicProduct(a),
                     CyclicProduct(a**2)
                 ]
-                return sum_y_exprs(y, exprs)
+                return sum_y_exprs(_y, exprs)
 
     if coeff.is_rational:
         # Easy case 5, when we can extract some s(ab) * quartic
@@ -1126,37 +1126,37 @@ def _structsos_sextic_iran96_trivial(coeff: 'Coeff'):
         # 3m(m+q-v+2u) >= 3(p-u)^2               => v <= m+q-(p-u)^2/m+2u
         # -m - 2*p + 4*u - v + w >= 0            => v <= 4u+w-m-2p
         # -p + u + 2*v + w + z >= 0              => v >= (-u+p-w-z)/2
-        u_ = -(-2*m - 5*p + 3*w + z)/9
-        v_ = (-u_ + p - w - z)/2
-        if u_ >= 0 and v_ >= 0:
+        u = -(-2*m - 5*p + 3*w + z)/9
+        v = (-u + p - w - z)/2
+        if u >= 0 and v >= 0:
             pass
-        elif u_ >= 0 and v_ < 0:
-            u_ = (2*p+m-w) / 4
-        elif u_ < 0:
-            u_ = 0
-            v_ = max(0, (-u_+p-w-z)/2)
+        elif u >= 0 and v < 0:
+            u = (2*p+m-w) / 4
+        elif u < 0:
+            u = 0
+            v = max(0, (-u+p-w-z)/2)
 
-        tmp = m + q - (p-u_)**2/m + 2*u_
-        if v_ <= tmp:
+        tmp = m + q - (p-u)**2/m + 2*u
+        if v <= tmp:
             pass
-        elif m + p >= u_: # symmetric axis of the parabola >= u_
-            u_ = m + p
-            v_ = max(0, (-u_+p-w-z)/2)
+        elif m + p >= u: # symmetric axis of the parabola >= u
+            u = m + p
+            v = max(0, (-u+p-w-z)/2)
 
-        if u_ >= 0 and 0 <= v_ <= tmp and v_ <= 4*u_+w-m-2*p and v_ >= (-u_+p-w-z)/2:
-            y = [
+        if u >= 0 and 0 <= v <= tmp and v <= 4*u+w-m-2*p and v >= (-u+p-w-z)/2:
+            _y = [
                 m / 2,
-                (tmp - v_)/2,
-                u_,
-                v_,
-                -m - 2*p + 4*u_ - v_ + w,
-                -p + u_ + 2*v_ + w + z,
+                (tmp - v)/2,
+                u,
+                v,
+                -m - 2*p + 4*u - v + w,
+                -p + u + 2*v + w + z,
                 rem
             ]
 
-            if all(_ >= 0 for _ in y):
+            if all(_ >= 0 for _ in _y):
                 exprs = [
-                    CyclicSum(a*b) * CyclicSum((a-b)**2*(a+b-(-p+u_)/m*c)**2),
+                    CyclicSum(a*b) * CyclicSum((a-b)**2*(a+b-(-p+u)/m*c)**2),
                     CyclicSum(a*b) * CyclicSum(a**2*(b-c)**2),
                     CyclicProduct((a-b)**2),
                     CyclicSum(a*b*(a-c)**2*(b-c)**2),
@@ -1164,7 +1164,7 @@ def _structsos_sextic_iran96_trivial(coeff: 'Coeff'):
                     CyclicSum(a*(b-c)**2) * CyclicProduct(a),
                     CyclicProduct(a**2)
                 ]
-                return sum_y_exprs(y, exprs)
+                return sum_y_exprs(_y, exprs)
 
 
 def _structsos_sextic_symmetric_full_sdp(coeff: 'Coeff'):
