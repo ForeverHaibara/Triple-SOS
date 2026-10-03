@@ -52,6 +52,8 @@ def structsos_quintic_symmetric(coeff: 'Coeff', real = True):
 
     => s(a5-1/2ab(a3+b3)+5a2b2(a+b)-10a2b2c-22abc(a2-ab))
 
+    => s(a2-ab)s(a3+5a2b+5a2c-11abc) # doctest:+SKIP
+
     => s((a+b-c)(a-b)2(a+b-1/2c)2)
 
     => s((a+b+10c)(a-b)2(a+b-5c)2)+s((a+b)(a-b)2(a+b-3c)2)

@@ -11,8 +11,10 @@ from sympy.utilities import subsets
 from .utils import structsos_handle_uncentered
 from ..univariate import prove_univariate
 from ..utils import structsos_reorder_symmetry
-from ....utils.monomials import poly_reduce_by_symmetry, verify_symmetry
-from ....utils.polytools import FLINT_VERSION, dmp_gf_factor
+from ....utils.monomials import (
+    poly_reduce_by_symmetry, verify_symmetry, arraylize_sp, invarraylize
+)
+from ....utils.polytools import FLINT_VERSION, dmp_gf_factor, poly_sqrt
 
 if TYPE_CHECKING:
     from sympy import Expr
@@ -53,6 +55,56 @@ def _linear_invert(u, v, d: int = 0) -> Optional[Tuple[int, 'Expr', 'Expr']]:
     if not (n >= 0 and u2 >= 0 and v2 >= 0):
         return None
     return n, u2, v2
+
+
+def sym_axis(coeff: 'Coeff', d: int = -1) -> Poly:
+    """Compute f(a,1,1)."""
+    if d == -1: d = coeff.total_degree()
+    coeff_list = [0] * (d+1)
+    for m, v in coeff.items():
+        coeff_list[m[0]] += v
+    a = coeff.gens[0]
+    return coeff.from_list(coeff_list[::-1], gens=(a,)).as_poly()
+
+
+def _homogenize_sym_axis(coeff: Union['Coeff', Poly], sym: Poly, d: int) -> 'Expr':
+    """Homogenize f(a,1,1) to f(a,b,c) given degree."""
+    a, b, c = coeff.gens
+    s = [0]
+    for (m,), v in sym.terms():
+        k, r = divmod(d-m, 2)
+        if r == 0:
+            s.append(v * a**m * b**k * c**k)
+        else:
+            s.append(v/2 * a**m * b**(k+1) * c**k)
+            s.append(v/2 * a**m * b**k * c**(k+1))
+    return Add(*s)
+
+
+def _homogenize_sym_proof(coeff: 'Coeff', sym_proof, d: int) -> 'Expr':
+    """Homogenize the result from prove_univariate."""
+    a, b, c = coeff.gens
+    exprs = []
+    for i in range(len(sym_proof)):
+        leading = sym_proof[i][0]
+        ld = leading.as_poly(a).degree()
+        part_expr = []
+        for k, v in sym_proof[i][1]:
+            v2 = _homogenize_sym_axis(coeff, v, v.degree())
+            rd = (d - ld - v.degree()*2) // 2
+            part_expr.append(k * v2**2 * b**rd * c**rd)
+        part_expr = Add(*part_expr)
+        if (d - ld) % 2 == 1:
+            part_expr = part_expr * leading * (b + c) / 2
+        else:
+            part_expr = part_expr * leading
+        exprs.append(part_expr)
+    return Add(*exprs)
+
+def _cyc_sum_poly(poly: "Poly") -> "Poly":
+    """Compute the cyclic sum of a polynomial efficiently."""
+    rep = arraylize_sp(poly, expand_cyc=True, cyc=True)
+    return invarraylize(rep, poly.gens, degree=poly.total_degree(), cyc=True)
 
 
 def structsos_dense_symmetric(coeff, real=1):
@@ -109,51 +161,6 @@ def _structsos_trivial_additive(coeff: 'Coeff', real=1):
             exprs.append(v/3 * a**d * b**d * c**d)
 
     return CyclicSum(Add(*exprs))
-
-
-def sym_axis(coeff: 'Coeff', d: int = -1) -> Poly:
-    """Compute f(a,1,1)."""
-    if d == -1: d = coeff.total_degree()
-    coeff_list = [0] * (d+1)
-    for m, v in coeff.items():
-        coeff_list[m[0]] += v
-    a = coeff.gens[0]
-    return coeff.from_list(coeff_list[::-1], gens=(a,)).as_poly()
-
-
-def _homogenize_sym_axis(coeff: Union['Coeff', Poly], sym: Poly, d: int) -> 'Expr':
-    """Homogenize f(a,1,1) to f(a,b,c) given degree."""
-    a, b, c = coeff.gens
-    s = [0]
-    for (m,), v in sym.terms():
-        k, r = divmod(d-m, 2)
-        if r == 0:
-            s.append(v * a**m * b**k * c**k)
-        else:
-            s.append(v/2 * a**m * b**(k+1) * c**k)
-            s.append(v/2 * a**m * b**k * c**(k+1))
-    return Add(*s)
-
-
-def _homogenize_sym_proof(coeff: 'Coeff', sym_proof, d: int) -> 'Expr':
-    """Homogenize the result from prove_univariate."""
-    a, b, c = coeff.gens
-    exprs = []
-    for i in range(len(sym_proof)):
-        leading = sym_proof[i][0]
-        ld = leading.as_poly(a).degree()
-        part_expr = []
-        for k, v in sym_proof[i][1]:
-            v2 = _homogenize_sym_axis(coeff, v, v.degree())
-            rd = (d - ld - v.degree()*2) // 2
-            part_expr.append(k * v2**2 * b**rd * c**rd)
-        part_expr = Add(*part_expr)
-        if (d - ld) % 2 == 1:
-            part_expr = part_expr * leading * (b + c) / 2
-        else:
-            part_expr = part_expr * leading
-        exprs.append(part_expr)
-    return Add(*exprs)
 
 
 @structsos_handle_uncentered
@@ -214,6 +221,10 @@ def _structsos_lifted_vr(coeff: 'Coeff', real=1):
         lifted_sym = _homogenize_sym_proof(coeff, sym_proof, d - 2)
         # print(lifted_sym)
 
+    # attempt the special case in advance
+    solution = _structsos_lifted_vr_sqr_axis(coeff, real=real)
+    if solution is not None:
+        return solution
 
     def compute_diff(coeff: 'Coeff', sym2, mul, tail) -> 'Coeff':
         poly = coeff.as_poly() * mul.as_poly(a, b, c, domain=coeff.domain)
@@ -248,17 +259,96 @@ def _structsos_lifted_vr_sqr_axis(coeff: 'Coeff', real=1):
     if not rem.is_zero:
         return None
 
-    lc, factors = axis.factor_list()
-    if lc < 0 or any(m % 2 != 0 for _, m in factors):
+    _sqrt = poly_sqrt(axis)
+    if _sqrt is None:
+        return None
+    lc, sqrt_axis = _sqrt
+    lc = coeff.wrap(lc)
+    if lc < 0:
         return None
 
-    sqrt_axis = axis.one
-    for p, m in factors:
-        sqrt_axis *= p**(m//2)
+    lifted = _homogenize_sym_axis(coeff, sqrt_axis, (d - 2)//2)
 
-    # lifted = _homogenize_sym_axis(coeff, sqrt_axis, (d - 2)//2)
+    a, b, c = coeff.gens
+    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
 
-    # multiplier = []
+    K = coeff.domain
+    disc = ((a-b)*(b-c)*(c-a)).as_poly(a,b,c, domain=K)**2
+
+    poly = coeff.as_poly()
+    multiplier = CyclicSum((a-b)**2).as_poly(a,b,c, domain=K)
+    tail = ((a - b)*(a - c)).as_poly(a,b,c, domain=K)
+    subtractor = _cyc_sum_poly(lifted * tail)**2
+    quo, rem = (poly * multiplier - subtractor.mul_ground(2*lc)).div(disc)
+    if not rem.is_zero:
+        # should not happen
+        return None
+
+    solution = _structsos_dense_symmetric(coeff.from_poly(quo))
+    if solution is not None:
+        return Add(
+            2*lc * CyclicSum(lifted.as_expr().together()*(a-b)*(a-c))**2,
+            CyclicProduct((a-b)**2) * solution
+        )/(CyclicSum((a-b)**2))
+
+    if d >= 10 and d % 2 == 0:
+        axis1, axis2 = quo(1,1), _cyc_sum_poly(lifted * tail)(1,1)
+        if (not axis1.is_zero) and (not axis2.is_zero):
+            (em1, ec1), (em2, ec2) = axis1.rep.terms()[-1], axis2.rep.terms()[-1]
+            if em1 == em2 and ec2 != axis2.domain.zero:
+                corr = ec1/(4*lc*ec2)
+                if d == 10:
+                    correction = poly.zero + 1
+                else:
+                    correction = CyclicSum(a**(d//2 - 5)*b**(d//2 - 5)).as_poly(a,b,c, domain=K)
+                subtractor = (_cyc_sum_poly(lifted*tail) + correction.mul_ground(corr)*disc)**2
+                quo, rem = (poly * multiplier - subtractor.mul_ground(2*lc)).div(disc)
+                if rem.is_zero:
+                    solution = _structsos_dense_symmetric(coeff.from_poly(quo))
+                    if solution is not None:
+                        return Add(
+                            2*lc * (
+                                CyclicSum(lifted.as_expr().together()*(a-b)*(a-c))\
+                                + corr*CyclicProduct((a-b)**2)*CyclicSum(a**(d//2 - 5)*b**(d//2 - 5))
+                            )**2,
+                            CyclicProduct((a-b)**2) * solution
+                        )/(CyclicSum((a-b)**2))
+
+
+    lifted = _homogenize_sym_axis(coeff, sqrt_axis, d//2)
+    multiplier = CyclicSum(a**2*(b-c)**2).as_poly(a,b,c, domain=K)
+    subtractor = _cyc_sum_poly(lifted * tail)**2
+    quo, rem = (poly * multiplier - subtractor.mul_ground(2*lc)).div(disc)
+    if not rem.is_zero:
+        # should not happen
+        return None
+    solution = _structsos_dense_symmetric(coeff.from_poly(quo))
+    if solution is not None:
+        return Add(
+            2*lc * CyclicSum(lifted.as_expr().together()*(a-b)*(a-c))**2,
+            CyclicProduct((a-b)**2) * solution
+        )/(CyclicSum(a**2*(b-c)**2))
+
+
+    # subtractor2 = _cyc_sum_poly((lifted * tail)**2)
+    # quo2, rem2 = (poly * multiplier - subtractor2.mul_ground(2*lc)).div(disc)
+    # if not rem2.is_zero:
+    #     # should not happen
+    #     return None
+    # axis1, axis2 = quo(1,1), quo2(1,1)
+    # if (not axis1.is_zero) and (not axis2.is_zero):
+    #     (em1, ec1), (em2, ec2) = axis1.terms()[-1], axis2.terms()[-1]
+    #     if em1 == em2 and ec1 != ec2:
+    #         const = -ec2/(ec1 - ec2)
+    #         if 0 <= const <= 1:
+    #             solution = _structsos_dense_symmetric(
+    #                 coeff.from_poly(quo.mul_ground(const) + quo2.mul_ground(1-const)))
+    #             if solution is not None:
+    #                 return Add(
+    #                     2*lc*const * CyclicSum(lifted.as_expr().together()*(a-b)*(a-c))**2,
+    #                     2*lc*(1-const) * CyclicSum(lifted.as_expr().together()*(a-b)*(a-c))**2,
+    #                     CyclicProduct((a-b)**2) * solution
+    #                 )/(CyclicSum(a**2*(b-c)**2))
 
 
 @structsos_handle_uncentered
