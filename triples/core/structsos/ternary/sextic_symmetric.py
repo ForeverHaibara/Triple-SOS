@@ -2178,12 +2178,24 @@ def _structsos_sextic_symmetric_sos_theorem(coeff: 'Coeff', real=1):
     ax, rem = ax.div(ax.from_list([1, -2, 1], ax.gens[0], domain=ax.domain))
     if not rem.is_zero:
         return
+    if ax.is_zero:
+        return
+
+    # remove trailing zeros
+    ax_list = ax.rep.to_list()
+    zero = ax.domain.zero
+    while ax_list and ax_list[-1] == zero:
+        ax_list.pop()
+    ax = ax.from_list(ax_list, (ax.gens[0],), domain=ax.domain)
 
     ax_gcd = ax.gcd(ax.diff())
     if ax_gcd.degree() == 1:
         x = -(ax_gcd.rep.TC() / ax_gcd.rep.LC())
         x = coeff.convert(x + 1)
     else:
+        return None
+    if x**2 == 1:
+        # will cause division by zero
         return None
 
     # try SOS theorem

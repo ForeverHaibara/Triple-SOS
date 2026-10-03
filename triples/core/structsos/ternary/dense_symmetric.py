@@ -251,6 +251,14 @@ def _structsos_lifted_vr_sqr_axis(coeff: 'Coeff', real=1):
     """
     Solve high-degree (dense) symmetric inequalities
     where the symmetric axis is a square.
+
+    Examples
+    --------
+    => s(a4(2a2-bc)2(a-b)(a-c))
+
+    => s(a2(a2-b2-c2)2(a-b)(a-c))
+
+    => s(b3c3(a-b)(a-c)(a(b+c)+b2+c2)2)
     """
     d = coeff.total_degree()
     axis = sym_axis(coeff, d)
@@ -291,31 +299,31 @@ def _structsos_lifted_vr_sqr_axis(coeff: 'Coeff', real=1):
             CyclicProduct((a-b)**2) * solution
         )/(CyclicSum((a-b)**2))
 
-    if d >= 10 and d % 2 == 0:
-        axis1, axis2 = quo(1,1), _cyc_sum_poly(lifted * tail)(1,1)
-        if (not axis1.is_zero) and (not axis2.is_zero):
-            (em1, ec1), (em2, ec2) = axis1.rep.terms()[-1], axis2.rep.terms()[-1]
-            if em1 == em2 and ec2 != axis2.domain.zero:
-                corr = ec1/(4*lc*ec2)
-                if d == 10:
-                    correction = K.to_sympy(K.one)
-                else:
-                    d2 = (d//2 - 5)
-                    correction = CyclicSum(a**(d2//2)*b**(d2//2)*((a+b)/2)**(d2%2))
-                subtractor = (_cyc_sum_poly(lifted*tail) \
-                    + correction.doit().as_poly(a,b,c,domain=K).mul_ground(corr)*disc)**2
+    # if d >= 10 and d % 2 == 0:
+    #     axis1, axis2 = quo(1,1), _cyc_sum_poly(lifted * tail)(1,1)
+    #     if (not axis1.is_zero) and (not axis2.is_zero):
+    #         (em1, ec1), (em2, ec2) = axis1.rep.terms()[-1], axis2.rep.terms()[-1]
+    #         if em1 == em2 and ec2 != axis2.domain.zero:
+    #             corr = ec1/(4*lc*ec2)
+    #             if d == 10:
+    #                 correction = K.to_sympy(K.one)
+    #             else:
+    #                 d2 = (d//2 - 5)
+    #                 correction = CyclicSum(a**(d2//2)*b**(d2//2)*((a+b)/2)**(d2%2))
+    #             subtractor = (_cyc_sum_poly(lifted*tail) \
+    #                 + correction.doit().as_poly(a,b,c,domain=K).mul_ground(corr)*disc)**2
 
-                quo, rem = (poly * multiplier - subtractor.mul_ground(2*lc)).div(disc)
-                if rem.is_zero:
-                    solution = _structsos_dense_symmetric(coeff.from_poly(quo))
-                    if solution is not None:
-                        return Add(
-                            2*lc * (
-                                CyclicSum(lifted.as_expr().together()*(a-b)*(a-c))\
-                                + corr*CyclicProduct((a-b)**2)*correction
-                            )**2,
-                            CyclicProduct((a-b)**2) * solution
-                        )/(CyclicSum((a-b)**2))
+    #             quo, rem = (poly * multiplier - subtractor.mul_ground(2*lc)).div(disc)
+    #             if rem.is_zero:
+    #                 solution = _structsos_dense_symmetric(coeff.from_poly(quo))
+    #                 if solution is not None:
+    #                     return Add(
+    #                         2*lc * (
+    #                             CyclicSum(lifted.as_expr().together()*(a-b)*(a-c))\
+    #                             + corr*CyclicProduct((a-b)**2)*correction
+    #                         )**2,
+    #                         CyclicProduct((a-b)**2) * solution
+    #                     )/(CyclicSum((a-b)**2))
 
 
     lifted = _homogenize_sym_axis(coeff, sqrt_axis, d//2)
