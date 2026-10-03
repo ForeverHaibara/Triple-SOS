@@ -56,7 +56,7 @@ def _restructure_quartic_polynomial(poly: Poly):
             + rem * (a**2 + 2*r*a + r + 2)**2 >= 0.
     ```
 
-    This is useful when performing sum-of-square targetting the symmetric axis. Say,
+    This is useful when performing sum-of-squares targetting the symmetric axis. Say,
     we define a mapping, from 3-var symmetric nonnegative polynomials with zeros at (1,1,1), to its symmetric axis:
     Mapping M: `F(a,b,c) |-> F(a,1,1) / (a-1)^2`.
 
@@ -2078,68 +2078,39 @@ def _structsos_sextic_symmetric_ultimate(coeff: 'Coeff', real = True):
     """
     # coeff6 = coeff((6,0,0))
     x0, x1, x2, x3, x4, x5 = [coeff(_) for _ in [(6,0,0),(5,1,0),(4,2,0),(3,3,0),(4,1,1),(3,2,1)]]
-    rem = 3*(x0 + x3 + x4) + 6*(x1 + x2 + x5) + coeff((2,2,2))
-
-    poly = None
 
     a, b, c = coeff.gens
-    CyclicSum = coeff.cyclic_sum
 
     # try trivial cases
-    if True:
-        # write in the form of
-        # s(a2-ab)s(m(a^4-a^2bc)+p(a^3b+ab^3-2a^2bc)+n(a^2b^2-a^2bc) + ua^2bc) + vp(a)s(a(b-c)^2) + wp(a-b)^2
-        if rem != 0:
-            # do not try
-            return None
-
-        m, p, n, u, v, w = [
-            x0,
-            x0 + x1,
-            -2*x0 + 2*x2 + x3,
-            8*x0 + 6*x1 - x3 + x4,
-            -6*x0 - 2*x1 + 4*x2 + 3*x3 + x5,
-            2*x0 + x1 - x2 - x3
-        ]
-
-        if (3*u + 2*v) < 0:
-            # this implies that the value on the symmetric axis is negative around (1,1,1)
-            return None
-
-        if v == 0:
-            if w == 0:
-                # is a multiple of s(a^2-ab) -> degenerates to quartic
-                solution = structsos_quartic_param(
-                    coeff, m, p, n, p, u - m - 2*p - n
-                )
-                if solution is not None:
-                    solution = Rational(1,2) * CyclicSum((a-b)**2) * solution
-                    return solution
-                return None
-
-        # try full sdp
-        solution = _structsos_sextic_symmetric_full_sdp(coeff)
-        if solution is not None:
-            return solution
-
-        # try neat cases
-        # note that this might also handle cases for real numbers
-        poly = coeff.as_poly()
-        if coeff.is_rational:
-            try:
-                solution = _structsos_sextic_symmetric_quadratic_form(poly, coeff)
-                if solution is not None:
-                    return solution
-            except Exception as e:
-                raise e
-                pass
-
-    solution = _structsos_sextic_symmetric_schur_split(coeff, real = real)
+    solution = _structsos_sextic_symmetric_sa2mab_multiple(coeff)
     if solution is not None:
         return solution
 
-    # roots detection
-    u, v, w, x, z = sp.symbols('u v w x z')
+
+    # try full sdp
+    solution = _structsos_sextic_symmetric_full_sdp(coeff)
+    if solution is not None:
+        return solution
+
+    # try neat cases
+    # note that this might also handle cases for real numbers
+    poly = coeff.as_poly()
+    if coeff.is_rational:
+        try:
+            solution = _structsos_sextic_symmetric_quadratic_form(poly, coeff)
+            if solution is not None:
+                return solution
+        except Exception as e:
+            raise e
+            pass
+
+    solution = _structsos_sextic_symmetric_schur_split(coeff, real=real)
+    if solution is not None:
+        return solution
+
+    solution = _structsos_sextic_symmetric_sos_theorem(coeff, real=real)
+    if solution is not None:
+        return solution
 
     # Detect Roots
     roots = [[], [], []]
@@ -2192,10 +2163,153 @@ def _structsos_sextic_symmetric_ultimate(coeff: 'Coeff', real = True):
 
     return None
 
+
+
+def _structsos_sextic_symmetric_sa2mab_multiple(coeff: 'Coeff', real=1):
+    """
+    Solve degenerated symmetric sextic polynomials in the
+    form of `s(a**2-a*b)*(quartic)`.
+    """
+    x0, x1, x2, x3, x4, x5 = [coeff(_) for _ in [(6,0,0),(5,1,0),(4,2,0),(3,3,0),(4,1,1),(3,2,1)]]
+    rem = 3*(x0 + x3 + x4) + 6*(x1 + x2 + x5) + coeff((2,2,2))
+
+    if x0 <= 0 or rem != 0:
+        return
+
+    a, b, c = coeff.gens
+    CyclicSum = coeff.cyclic_sum
+
+    m, p, n, u, v, w = [
+        x0,
+        x0 + x1,
+        -2*x0 + 2*x2 + x3,
+        8*x0 + 6*x1 - x3 + x4,
+        -6*x0 - 2*x1 + 4*x2 + 3*x3 + x5,
+        2*x0 + x1 - x2 - x3
+    ]
+
+    if (3*u + 2*v) < 0:
+        # this implies that the value on the symmetric axis is negative around (1,1,1)
+        return None
+
+    if v != 0 or w != 0:
+        return None
+
+    # is a multiple of s(a^2-ab) -> degenerates to quartic
+    solution = structsos_quartic_param(
+        coeff, m, p, n, p, u - m - 2*p - n
+    )
+
+    if solution is not None:
+        return Rational(1,2) * CyclicSum((a-b)**2) * solution
+
+
+def _structsos_sextic_symmetric_sos_theorem(coeff: 'Coeff', real=1):
+    """
+    When there is a root on the symmetric axis,
+    the polynomial can be written in the form of
+    `s((z0(a^2+b^2) + z1ab + z2c(a+b) + z3c^2)(a-b)^2(a+b-xc)^2)`.
+
+    First try sum-of-squares for real numbers if available.
+    Suppose
+    ```
+    2*F(a,b,c) = 2*sum(f(a,b,c)^2)
+      = sum((f(a,b,c)^2 + f(b,a,c)^2))
+      = 2/3*(sum(f))^2 + 1/3*sum((f(a,b,c) - f(b,c,a))^2) + 1/3*sum((f(b,a,c) - f(a,c,b))^2)
+      = 2/3*(sum(f))^2 + 1/3*sum((f(a,b,c)+f(b,a,c)-f(a,c,b)-f(b,c,a))^2)
+             + 1/3*sum((f(a,b,c)-f(b,a,c)+f(a,c,b)-f(b,c,a))^2)
+    ```
+
+    1. Here the leading term sum f has only two degrees of freedom:
+    `sum (f) ~ p(a-b)` or `s((b-c)^2(b+c-xa))`.
+
+    2. The second term is symmetric w.r.t. `a,b,c` and also covers equalities at `(x-1,1,1)`
+    and its permutations. Also, `s((a-b) * cubic) == 0` by assumption. The form should be
+    `s((a3+b3-2c3+u(a2b+ab2-a2c-b2c)+v(a2b+ab2-ac2-bc2))2)` where u = -vx - x^2 + x - 1`.
+
+    3. The last can be divided by `(a-b)^2`.
+    The quadratic polynomial must be symmetric w.r.t. `a,b` and also cover equalities at
+    `(x-1,1,1)`.
+    Also, `s((a-b) * quadratic) == 0` by assumption. The form should be
+    `s((a-b)2(a2+b2-c(a+b)+ucs(a)+vs(ab))2)` where u = (-2*v*x + v - x**2 + 3*x - 2)/(x + 1)`.
+
+    Note commonly-used identities:
+    `s((a-c)(b-c)(a-b)^2(a+b-xc)^2)` = (x+1)^2 * p(a-b)^2`
+
+    Examples
+    --------
+    => s((b2+c2+5bc-a2/2)(b-c)2(b+c-4a)2)
+
+    => s(a)/3s(a5)+(21+9sqrt(5))/2abc(abc-s(a)3/27)-abcs(a)3/9
+    """
+    ax = coeff.as_poly()(1,1)
+    ax, rem = ax.div(ax.from_list([1, -2, 1], ax.gens[0], domain=ax.domain))
+    if not rem.is_zero:
+        return
+
+    ax_gcd = ax.gcd(ax.diff())
+    if ax_gcd.degree() == 1:
+        x = -(ax_gcd.rep.TC() / ax_gcd.rep.LC())
+        x = coeff.convert(x + 1)
+    else:
+        return None
+
+    # try SOS theorem
+    x0, x1, x2, x3 = [coeff((6-i, i, 0)) for i in range(4)]
+
+    denom = 1 / (2*x**4 - 4*x**2 + 2)
+    z0 = x0/2
+    z1 = (2*x0*x**5 - 4*x0*x**3 - 2*x0*x + 2*x1*x**4 - 6*x1*x**2 - 4*x2*x - x3*x**2 - x3) * denom
+    z2 = (4*x0*x + 2*x1*x**2 + 2*x1 + 4*x2*x + x3*x**2 + x3) * denom
+    z3 = (-x0*x**4 + 4*x0*x**2 + x0 + 4*x1*x + 2*x2*x**2 + 2*x2 + 2*x3*x) * denom
+
+    a, b, c = coeff.gens
+    CyclicSum = coeff.cyclic_sum
+
+    p1 = None
+    if z3 > 0 or (z2 == 0 and z3 == 0):
+        if z3 > 0:
+            ratio = -z2 / (2*z3)
+            r1 = z0 - z2**2/4/z3
+            r2 = z1 + 2*r1 - 2*(z0 - r1)
+        else:
+            r1, r2 = z0, z1 + 2*z0
+        if r1 >= 0 and r2 >= 0:
+            p1 = z3*(c-ratio*a-ratio*b)**2 if z3 > 0 else Integer(0)
+            if r2 > 4*r1:
+                p1 += r1*(a-b)**2 + r2*a*b
+            else:
+                p1 += (r1 - r2/4) * (a-b)**2 + r2/4 * (a+b)**2
+    elif 2*z0 + z1 >= 0 and z2 >= 0 and z3 >= 0:
+        p1 = z0*(a-b)**2 + (2*z0+z1)*a*b + z2*c*(a+b) + z3*c**2
+
+    if p1 is not None:
+        p1 = p1.together().as_coeff_Mul()
+        return p1[0] * CyclicSum(p1[1] * (a-b)**2 * (a+b-x*c)**2)
+
+    if 2*z0 + z3 >= 0 and 2*z0 + z3 + z1 + 2*z2 >= 0:
+        # Apply SOS theorem
+        quartic_solution = structsos_quartic_param(
+            coeff,
+            z0**2 + 2*z0*z3,
+            z0*z1 + 3*z0*z2 + z1*z3 + z2*z3,
+            3*z0**2 + 2*z0*z3 + 2*z1*z2 + z2**2 + z3**2,
+            z0*z1 + 3*z0*z2 + z1*z3 + z2*z3,
+            2*z0*z1 + 2*z0*z2 + z1**2 + 2*z1*z2 + 3*z2**2 + 2*z2*z3,
+            real=real
+        )
+        if quartic_solution is not None:
+            multiplier = CommonExpr.quadratic(2*(2*z0 + z3), 2*(z1 + 2*z2), (a,b,c))
+            p1 = quartic_solution * CyclicSum((a-b)**2*(a+b-x*c)**2)
+            func = lambda a,b,c: (z0*(a**2+b**2) + z1*a*b + z2*c*(a+b) + z3*c**2)*(a-b)*(a+b-x*c)
+            p2 = CyclicSum((func(b,c,a) - func(c,a,b)).expand()**2)
+            return (p1 + p2) / multiplier
+
+
 def _structsos_sextic_symmetric_ultimate_1root(coeff: 'Coeff', poly, roots, real = True):
     """
     Examples
-    -------
+    --------
     Case A.
 
     => s(a2)3-27(abc)2-27p((a-b)2)
@@ -2207,12 +2321,6 @@ def _structsos_sextic_symmetric_ultimate_1root(coeff: 'Coeff', poly, roots, real
     => 4s(a4(a-b)(a-c))+s(a(a-b)(a-c))2
 
     => 3s(a/3)6-s(ab)s(a/3)4-(69+11sqrt(33))/648p(a-b)2
-
-    Case B.
-
-    => s((b2+c2+5bc-a2/2)(b-c)2(b+c-4a)2)
-
-    => s(a)/3s(a5)+(21+9sqrt(5))/2abc(abc-s(a)3/27)-abcs(a)3/9
 
     Reference
     -------
@@ -2258,96 +2366,6 @@ def _structsos_sextic_symmetric_ultimate_1root(coeff: 'Coeff', poly, roots, real
             # until the symmetric axis is touched
             # # the subtractor = (a-1)^4 * (2(x-1)a - 1)^2 on the symmetric axis a == b and c == 1
             # sym = poly.subs(c,1).subs(b,a).factor() / (a - 1)**4 / (2*(x-1)*a - 1)**2
-
-    elif len(roots[1]):
-        # symmetric axis
-        if len(roots[1]) == 1 and roots[1][0] != 0:
-            x_ = roots[1][0] + 1
-        else:
-            return None
-        if coeff.is_rational:
-            if isinstance(x_, Expr) and (not isinstance(x_, Rational)):
-                return None
-            x_ = coeff.convert(x_)
-        else:
-            try:
-                x_ = coeff.convert(x_)
-            except CoercionFailed:
-                return None
-        # try SOS theorem
-        x0, x1, x2, x3 = [coeff((6-i, i, 0)) for i in range(4)]
-
-        denom = 1 / (2*x_**4 - 4*x_**2 + 2)
-        z0 = x0/2
-        z1 = (2*x0*x_**5 - 4*x0*x_**3 - 2*x0*x_ + 2*x1*x_**4 - 6*x1*x_**2 - 4*x2*x_ - x3*x_**2 - x3) * denom
-        z2 = (4*x0*x_ + 2*x1*x_**2 + 2*x1 + 4*x2*x_ + x3*x_**2 + x3) * denom
-        z3 = (-x0*x_**4 + 4*x0*x_**2 + x0 + 4*x1*x_ + 2*x2*x_**2 + 2*x2 + 2*x3*x_) * denom
-
-        z0, z1, z2, z3 = [z0, z1, z2, z3]
-
-        # Then the polynomial can be written in the form of
-        # s((z0(a^2+b^2) + z1ab + z2c(a+b) + z3c^2)(a-b)^2(a+b-xc)^2).
-
-        # First try sum-of-square for real numbers if available.
-        # Suppose 2F(a,b,c) = 2sum f(a,b,c)^2
-        #   = sum (f(a,b,c)^2 + f(b,a,c)^2)
-        #   = 2/3*(sum f)^2 + 1/3*sum (f(a,b,c) - f(b,c,a))^2 + 1/3*sum (f(b,a,c) - f(a,c,b))^2
-        #   = 2/3*(sum f)^2 + 1/3*sum (f(a,b,c)+f(b,a,c)-f(a,c,b)-f(b,c,a))^2
-        #          + 1/3*sum (f(a,b,c)-f(b,a,c)+f(a,c,b)-f(b,c,a))^2
-
-        # 1. Here the leading term sum f has only two degrees of freedom:
-        # sum f ~ p(a-b) or s((b-c)^2(b+c-xa))
-
-        # 2. The second term is symmetric w.r.t. a,b,c and also covers equalities at (x-1,1,1)
-        # and its permutations. Also, s((a-b) * cubic) == 0 by assumption. The form should be
-        # s((a3+b3-2c3+u(a2b+ab2-a2c-b2c)+v(a2b+ab2-ac2-bc2))2) where u = -vx - x^2 + x - 1.
-
-        # 3. The last can be divided by (a-b)^2. So it is sum (a-b)^2 * quadratic^2.
-        # The quadratic polynomial must be symmetric w.r.t. a,b and also cover equalities at
-        # (x-1,1,1). Also, s((a-b) * quadratic) == 0 by assumption. The form should be
-        # s((a-b)2(a2+b2-c(a+b)+ucs(a)+vs(ab))2) where u = (-2*v*x + v - x**2 + 3*x - 2)/(x + 1).
-
-        # Note commonly-used identities:
-        # s((a-c)(b-c)(a-b)^2(a+b-xc)^2) = (x+1)^2 * p(a-b)^2
-        # print('(z0, z1, z2, z3) =', (z0, z1, z2, z3))
-        p1 = None
-        if z3 > 0 or (z2 == 0 and z3 == 0):
-            if z3 > 0:
-                ratio = -z2 / (2*z3)
-                r1 = z0 - z2**2/4/z3
-                r2 = z1 + 2*r1 - 2*(z0 - r1)
-            else:
-                r1, r2 = z0, z1 + 2*z0
-            if r1 >= 0 and r2 >= 0:
-                p1 = z3*(c-ratio*a-ratio*b)**2 if z3 > 0 else Integer(0)
-                if r2 > 4*r1:
-                    p1 += r1*(a-b)**2 + r2*a*b
-                else:
-                    p1 += (r1 - r2/4) * (a-b)**2 + r2/4 * (a+b)**2
-        elif 2*z0 + z1 >= 0 and z2 >= 0 and z3 >= 0:
-            p1 = z0*(a-b)**2 + (2*z0+z1)*a*b + z2*c*(a+b) + z3*c**2
-
-        if p1 is not None:
-            p1 = p1.together().as_coeff_Mul()
-            return p1[0] * CyclicSum(p1[1] * (a-b)**2 * (a+b-x_*c)**2)
-
-        if 2*z0 + z3 >= 0 and 2*z0 + z3 + z1 + 2*z2 >= 0:
-            # Apply SOS theorem
-            quartic_solution = structsos_quartic_param(
-                coeff,
-                z0**2 + 2*z0*z3,
-                z0*z1 + 3*z0*z2 + z1*z3 + z2*z3,
-                3*z0**2 + 2*z0*z3 + 2*z1*z2 + z2**2 + z3**2,
-                z0*z1 + 3*z0*z2 + z1*z3 + z2*z3,
-                2*z0*z1 + 2*z0*z2 + z1**2 + 2*z1*z2 + 3*z2**2 + 2*z2*z3,
-            )
-            if quartic_solution is not None:
-                multiplier = CommonExpr.quadratic(2*(2*z0 + z3), 2*(z1 + 2*z2), (a,b,c))
-                p1 = quartic_solution * CyclicSum((a-b)**2*(a+b-x_*c)**2)
-                func = lambda a,b,c: (z0*(a**2+b**2) + z1*a*b + z2*c*(a+b) + z3*c**2)*(a-b)*(a+b-x_*c)
-                p2 = CyclicSum((func(b,c,a) - func(c,a,b)).expand()**2)
-                return (p1 + p2) / multiplier
-
 
     return None
 

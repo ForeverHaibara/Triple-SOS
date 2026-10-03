@@ -115,7 +115,7 @@ def structsos_handle_uncentered(solver: Callable) -> Callable:
 
         new_coeff = coeff - coeff.from_poly(subtractor_poly)
 
-        if coeff.wrap(new_coeff.rep.LC()) < 0:
+        if coeff.wrap(new_coeff.rep.LC) < 0:
             return None
 
         solution = solver(new_coeff, *args, **kwargs)
