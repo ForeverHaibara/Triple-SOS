@@ -14,6 +14,7 @@ from ..monomials import verify_symmetry
 
 if TYPE_CHECKING:
     from sympy.polys.domains import Domain
+    from sympy.polys.domains.domainelement import DomainElement
     from sympy.combinatorics import Permutation, PermutationGroup
 
 default_prover = lambda x: (x if (x >= 0) else None)
@@ -81,17 +82,26 @@ class PartialOrder:
             x = x.arg
         return self._prover_implicit(x)
 
-    def wrap(self, x):
+    def wrap(self, x: 'DomainElement') -> 'PartialOrderElement':
+        """
+        Wrap a DomainElement to PartialOrderElement.
+        If `x` is not a DomainElement, use `self.convert`.
+        """
         if isinstance(x, PartialOrderElement):
             return x
         return self._wrapper(self, x)
 
-    def convert(self, x) -> object:
+    def convert(self, x, wrap=True) -> Union['DomainElement','PartialOrderElement']:
+        """
+        Convert any element.
+        If `wrap` is True, wrap the result in PartialOrderElement.
+        """
         if isinstance(x, PartialOrderElement):
             if self.domain.of_type(x.arg):
                 return x
             x = x.arg
-        return self.wrap(self.domain.convert(x))
+        z = self.domain.convert(x)
+        return self.wrap(z) if wrap else z
 
     def to_sympy(self, x) -> Expr:
         if isinstance(x, PartialOrderElement):
@@ -304,14 +314,19 @@ class Coeff():
     def prove_implicit(self, x) -> Optional[bool]:
         return self._partial_order.prove_implicit(x)
 
-    def wrap(self, x):
+    def wrap(self, x: 'DomainElement') -> 'PartialOrderElement':
+        """
+        Wrap a DomainElement in PartialOrderElement.
+        If `x` is not a DomainElement, use `self.convert`.
+        """
         return self._partial_order.wrap(x)
 
-    def convert(self, x, wrap=True):
-        z = self._partial_order.convert(x)
-        if wrap:
-            z = self.wrap(z)
-        return z
+    def convert(self, x, wrap=True) -> Union['DomainElement', 'PartialOrderElement']:
+        """
+        Convert any element.
+        If `wrap` is True, wrap the result in PartialOrderElement.
+        """
+        return self._partial_order.convert(x, wrap=wrap)
 
     def to_sympy(self, x) -> Expr:
         return self._partial_order.to_sympy(x)
