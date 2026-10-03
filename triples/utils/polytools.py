@@ -332,7 +332,18 @@ def intervals(polys: List[Poly], domain: "Domain") -> list:
         ls.append(x1)
     if _intervals:
         ls.append(x2)
-    return [domain.convert(x) for x in ls]
+
+    # remove duplicates and preserve order
+    # NOTE: do not use list(dict.fromkeys(ls))
+    # for compatibility with Python 3.6
+    seen = set()
+    result = []
+    for x in ls:
+        v = domain.convert(x)
+        if v not in seen:
+            seen.add(v)
+            result.append(v)
+    return result
 
 
 ###############################################################################

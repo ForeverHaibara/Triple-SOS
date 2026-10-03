@@ -2,9 +2,8 @@ from functools import partial
 from typing import TYPE_CHECKING
 
 import sympy as sp
-from sympy import Add, Expr, Integer, Poly, Rational, Symbol
+from sympy import Add, Integer, Rational, Symbol
 from sympy import oo as Infinity
-from sympy.polys.polyerrors import CoercionFailed
 
 from .quartic import structsos_quartic_param
 from .utils import CommonExpr, structsos_handle_uncentered
@@ -19,6 +18,8 @@ from ..utils import (
 from ....utils.roots import nroots
 
 if TYPE_CHECKING:
+    from sympy import Poly
+
     from ....utils.expressions import Coeff
 
 #####################################################################
@@ -48,7 +49,7 @@ def structsos_sextic_symmetric_ultimate(coeff, real = True):
     return _structsos_sextic_symmetric_ultimate(coeff, real=real)
 
 
-def _restructure_quartic_polynomial(poly: Poly):
+def _restructure_quartic_polynomial(poly: 'Poly'):
     """
     Write a nonnegative quartic polynomoial in the form of
     ```
@@ -1457,7 +1458,7 @@ def _structsos_sextic_symmetric_full_sdp(coeff: 'Coeff'):
         return _get_solution(u0)
 
 
-def _structsos_sextic_symmetric_quadratic_form(poly, coeff: 'Coeff'):
+def _structsos_sextic_symmetric_quadratic_form(coeff: 'Coeff'):
     """
     Theorem:
     Let `F0 = s(a^6+a^5b+a^5c+a^4bc-2a^3b^2c-2a^3bc^2)` and `f(a,b,c) = s(xa^2 + yab)`.
@@ -1523,7 +1524,8 @@ def _structsos_sextic_symmetric_quadratic_form(poly, coeff: 'Coeff'):
     [2] https://tieba.baidu.com/p/8261574122
     """
     a, b, c = coeff.gens
-    sym = poly.eval((1,1)).div(coeff.from_list([1, -2, 1], (c,)).as_poly())
+    poly = coeff.as_poly()
+    sym = poly(1,1).div(coeff.from_list([1, -2, 1], (c,)).as_poly())
     if not sym[1].is_zero:
         return None
 
@@ -2076,93 +2078,23 @@ def _structsos_sextic_symmetric_ultimate(coeff: 'Coeff', real = True):
 
     => s(414a6-1470a5b-1470a5c+979a4b2+5864a4bc+979a4c2+644a3b3-5584a3b2c-5584a3bc2+5228a2b2c2) # doctest:+SKIP
     """
-    # coeff6 = coeff((6,0,0))
-    x0, x1, x2, x3, x4, x5 = [coeff(_) for _ in [(6,0,0),(5,1,0),(4,2,0),(3,3,0),(4,1,1),(3,2,1)]]
 
-    a, b, c = coeff.gens
+    solvers = [
+        _structsos_sextic_symmetric_sa2mab_multiple,
+        _structsos_sextic_symmetric_full_sdp,
+        _structsos_sextic_symmetric_quadratic_form,
+        _structsos_sextic_symmetric_schur_split,
+        _structsos_sextic_symmetric_sos_theorem,
+        _structsos_sextic_symmetric_subtraction,
+    ]
 
-    # try trivial cases
-    solution = _structsos_sextic_symmetric_sa2mab_multiple(coeff)
-    if solution is not None:
-        return solution
+    if not coeff.is_rational:
+        solvers.pop(2)
 
-
-    # try full sdp
-    solution = _structsos_sextic_symmetric_full_sdp(coeff)
-    if solution is not None:
-        return solution
-
-    # try neat cases
-    # note that this might also handle cases for real numbers
-    poly = coeff.as_poly()
-    if coeff.is_rational:
-        try:
-            solution = _structsos_sextic_symmetric_quadratic_form(poly, coeff)
-            if solution is not None:
-                return solution
-        except Exception as e:
-            raise e
-            pass
-
-    solution = _structsos_sextic_symmetric_schur_split(coeff, real=real)
-    if solution is not None:
-        return solution
-
-    solution = _structsos_sextic_symmetric_sos_theorem(coeff, real=real)
-    if solution is not None:
-        return solution
-
-    # Detect Roots
-    roots = [[], [], []]
-
-    # Case A. border
-    # rather record the true pair of roots (x and 1/x), we compute x + 1/x to avoid radicals
-    eq = coeff.from_list([x0, x1, x2 - 3*x0, x3 - 2*x1], gens=(a,)).as_poly()
-    # eq is the equation of x + 1/x.
-    eqdiff = eq.diff()
-    eq_gcd = eq.gcd(eqdiff)
-    if 0 < eq_gcd.degree() <= 3:
-        for r in sp.polys.roots(eq_gcd, cubics = False):
-            if r.is_real and r >= 2:
-                roots[0].append(r)
-
-    # Case B. symmetric axis
-    eq = poly.eval(c,1).eval(b,1).div(Poly([1,-2,1], a, domain=coeff.domain))
-    if not eq[1].is_zero:
-        return None
-    eq = eq[0]
-    eqdiff = eq.diff()
-    eq_gcd = eq.gcd(eqdiff)
-    if eq_gcd.degree() == 1:
-        r = coeff.convert(-eq_gcd.rep.TC() / eq_gcd.rep.LC())
-        if r >= 0:
-            roots[1].append(r)
-    elif eq_gcd.degree() == 2:
-        # TODO: consider cases when eq_gcd is factorizable
-        for r in sp.polys.roots(eq_gcd, cubics = False):
-            if r.is_real and r >= 0:
-                roots[1].append(r)
-    elif eq_gcd.degree() == 3 and eq.degree() == 4:
-        # this means that there exists roots with multiplicity 4
-        eq_gcd = eq.div(eq_gcd)[0]
-        r = coeff.convert(-eq_gcd.rep.TC() / eq_gcd.rep.LC())
-        if r >= 0:
-            roots[1].append(r)
-            roots[1].append(r)
-
-    # Case C.
-    # TO BE IMPLEMENTED
-
-    # print('Roots Info = ', roots)
-    sum_of_roots = sum((len(_) > 0) for _ in roots)
-
-    if sum_of_roots == 1:
-        return _structsos_sextic_symmetric_ultimate_1root(coeff, poly, roots, real = real)
-    elif sum_of_roots == 2:
-        return _structsos_sextic_symmetric_ultimate_2roots(coeff, poly, roots)
-
-    return None
-
+    for solver in solvers:
+        solution = solver(coeff)
+        if solution is not None:
+            return solution
 
 
 def _structsos_sextic_symmetric_sa2mab_multiple(coeff: 'Coeff', real=1):
@@ -2306,180 +2238,58 @@ def _structsos_sextic_symmetric_sos_theorem(coeff: 'Coeff', real=1):
             return (p1 + p2) / multiplier
 
 
-def _structsos_sextic_symmetric_ultimate_1root(coeff: 'Coeff', poly, roots, real = True):
+def _structsos_sextic_symmetric_subtraction(coeff: 'Coeff', real=1):
     """
-    Examples
-    --------
-    Case A.
-
-    => s(a2)3-27(abc)2-27p((a-b)2)
-
-    => s(a2/3)3-a2b2c2-p(a-b)2
-
-    => s(4a6-a3b3-3a2b2c2)-63p(a-b)2
-
-    => 4s(a4(a-b)(a-c))+s(a(a-b)(a-c))2
-
-    => 3s(a/3)6-s(ab)s(a/3)4-(69+11sqrt(33))/648p(a-b)2
-
-    Reference
-    -------
-    [1] https://artofproblemsolving.com/community/c6t29440f6h3147050_zhihu_and_kuing
+    Try to subtract `s(a**3-a*b*c-x*a*(b-c)**2)**2`
+    and call the iran96 solver.
     """
-    coeff6 = coeff((6,0,0))
     a, b, c = coeff.gens
-    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+    a6, a51, a42, a411, a33, a321 = [coeff(i) for i in
+        [(6,0,0),(5,1,0),(4,2,0),(4,1,1),(3,3,0),(3,2,1)]]
+    if a6 == 0:
+        return
 
-    if len(roots[0]):
-        # border
-        # be careful that we use r + 1/r == roots[0][0]
-        if len(roots[0]) == 1 and roots[0][0] != 2:
-            # Case A.
-            # subtract some s(a3-abc-x(a2b+ab2-2abc))2
-            x_ = roots[0][0] - 1
-            if coeff.is_rational:
-                if isinstance(x_, Expr) and (not isinstance(x_, Rational)):
-                    return None
-                x_ = coeff.convert(x_)
-            else:
-                try:
-                    x_ = coeff.convert(x_)
-                except CoercionFailed:
-                    return None
+    ax = [
+        [4*a6, 2*a51],
+        [-4*a6, 0, a411 + 2*a42 + 4*a51 + 6*a6],
+        [8*a6, -12*a6, 2*a321 + 2*a33 + 2*a411 + 4*a42 + 6*a51 + 8*a6],
+        [-4*a6, 8*a6, a33 + 2*a42 + 2*a51 - 2*a6]
+    ]
+    A, B, C, D = [coeff.from_list(row, (a,)).as_poly() for row in ax]
+    axis = -27*A**2*D**2 + 18*A*B*C*D - 4*A*C**3 - 4*B**3*D + B**2*C**2
+    border = coeff.from_list([a6**2,
+            12*a6**2,
+            -2*a42*a6 + 8*a51*a6 + 36*a6**2,
+            -8*a33*a6 + 4*a42*a6 + 32*a51*a6 + 16*a6**2,
+            -4*a33*a51 + a42**2 + 8*a51**2 + 8*a51*a6], (a,)).as_poly()
 
-            # 1. try subtracting all the s(a6)
-            # e.g. s(a2/3)3-a2b2c2-p(a-b)2
-            if coeff((5,1,0)) >= -2 * x_:
-                poly2 = poly - ((a**3+b**3+c**3-3*a*b*c-x_*(a*a*(b+c)+b*b*(c+a)+c*c*(a+b)-6*a*b*c))**2)\
-                    .as_poly(a,b,c, domain=poly.domain).mul_ground(coeff6)
-                solution = _structsos_sextic_iran96(coeff.from_poly(poly2), real = real)
-                if solution is not None:
-                    if 2*x_ == 3:
-                        solution += coeff6 / 4 * CyclicProduct((a+b-2*c)**2)
-                    elif x_ == 1:
-                        solution += coeff6 * CyclicSum(a*(a-b)*(a-c))**2
-                    else:
-                        solution += coeff6 * CyclicSum(a**3-x_*a**2*(b+c)+(2*x_-1)*a*b*c)**2
+    def eval(p, x):
+        return coeff.convert(p.rep.eval(x))
 
-                    return solution
+    for x in intervals([axis, border, D], coeff.domain):
+        # use a rough check before trying to prove it
+        if not (eval(A, x) >= 0 and eval(D, x) >= 0 and \
+                (eval(axis, x) <= 0 or (eval(B, x) >= 0 and eval(C, x) >= 0))):
+            continue
 
-            # until the symmetric axis is touched
-            # # the subtractor = (a-1)^4 * (2(x-1)a - 1)^2 on the symmetric axis a == b and c == 1
-            # sym = poly.subs(c,1).subs(b,a).factor() / (a - 1)**4 / (2*(x-1)*a - 1)**2
-
-    return None
-
-
-def _structsos_sextic_symmetric_ultimate_2roots(coeff: 'Coeff', poly, roots):
-    """
-
-    Examples
-    --------
-    Case (A+B)
-
-    => s((a-b-c)4a-abc(3a-b-c)2)s(a)-(s(ab(a2-b2+3(ab-ac)+3(bc-ab))2)-4p(a-b)2)
-
-    => s(4a6-6(a5b+a5c)-12(a4b2+a4c2)+37a4bc+28a3b3-31(a3b2c+a3bc2)+29a2b2c2)
-
-    => s(a4(a-b)(a-c)) - 5p(a-b)2
-
-
-    References
-    ----------
-    [1] Vasile, Mathematical Inequalities Volume 1 - Symmetric Polynomial Inequalities. 3.78
-
-    [2] https://artofproblemsolving.com/community/c6t243f6h3013463_symmetric_inequality
-
-    [3] https://tieba.baidu.com/p/8261574122
-    """
-    coeff6 = coeff((6,0,0))
-
-    a, b, c = coeff.gens
-    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
-
-    if len(roots[2]) == 0:
-        diffpoly = None
-        # Case (A + B)
-        if not (len(roots[0]) == 1 and roots[0][0] == 2):
-            # just try
-            x_ = roots[0][0] - 1
-            if isinstance(x_, Expr) and not isinstance(x_, Rational):
-                return None
-            solution = CyclicSum(a**3-x_*a**2*(b+c)+(2*x_-1)*a*b*c)**2
-            diffpoly = solution.doit().as_poly(a,b,c, domain=coeff.domain)
-            solution *= coeff6
-
-        elif 1 <= len(roots[1]) <= 2: # roots[0][0] == 2:
-            # find the nontrivial root (other than 0) on the symmetric axis
-            if len(roots[1]) == 2 and (roots[1][0] == 0 or roots[1][1] == 0):
-                x = roots[1][0] + roots[1][1] # note that one of the roots is 0
-            elif len(roots[1]) == 1:
-                x = roots[1][0]
-            if x > 4:
-                return None
-
-            # Theorem: when x <= 4
-            # f(a,b,c) = s(a6-(x+1)(a5b+a5c)+(4x-5)(a4b2+a4c2)+(x2-4x+11)a4bc
-            #               -2(3x-5)a3b3+(-x2+5x-10)(a3b2c+a3bc2)+(x2-6x+10)a2b2c2)
-            #          = s(a2(a-b)(a-c)(a-xb)(a-xc)) + (3x-5)p(a-b)^2 >= 0
-            # Proof: when 1 <= x <= 4,
-            # we have f(a,b,c)s(a2+(x-2)ab) = (4-x)(x-1)/2s(a2(b-c)2((a-b-c)2-xbc)2)
-            #               + s(a2-ab)((2x-x2)abc-p(a+b-c))2
-            #        when x < 1,
-            # we have f(a,b,c)s(a2b2-a2bc) = 1/2abcs(a(a-b)(a-c))s((b-c)2(b+c-(x+1)a)2)
-            #               + p(a-b)2(s(a2(a-b)(a-c)) + (2-x)s(ab(a-b)2) + 6(1-x)s(a2bc))
-
-            get_diffpoly = lambda x: (a**6+(-x-1)*a**5*b+(-x-1)*a**5*c+(4*x-5)*a**4*b**2+(x**2-4*x+11)*a**4*b*c\
-                +(4*x-5)*a**4*c**2+(10-6*x)*a**3*b**3+(-x**2+5*x-10)*a**3*b**2*c+(-x**2+5*x-10)*a**3*b*c**2\
-                +(10-6*x)*a**3*c**3+(4*x-5)*a**2*b**4+(-x**2+5*x-10)*a**2*b**3*c+(3*x**2-18*x+30)*a**2*b**2*c**2\
-                +(-x**2+5*x-10)*a**2*b*c**3+(4*x-5)*a**2*c**4+(-x-1)*a*b**5+(x**2-4*x+11)*a*b**4*c+(-x**2+5*x-10)*a*b**3*c**2\
-                +(-x**2+5*x-10)*a*b**2*c**3+(x**2-4*x+11)*a*b*c**4+(-x-1)*a*c**5+b**6+(-x-1)*b**5*c+(4*x-5)*b**4*c**2\
-                +(10-6*x)*b**3*c**3+(4*x-5)*b**2*c**4+(-x-1)*b*c**5+c**6).as_poly(a,b,c, domain=coeff.domain)
-
-            if x == 4:
-                # easy case, no need to lift the degree
-                solution = coeff6 / 2 * CyclicSum((a-b)**2) * CyclicSum(a**2-2*b*c)**2
-                diffpoly = solution.doit().as_poly(a,b,c, domain=coeff.domain)
-            elif x == 1:
-                solution = coeff6 * CyclicSum(a*(a-b)*(a-c)) ** 2
-                diffpoly = solution.doit().as_poly(a,b,c, domain=coeff.domain)
-            elif x > 1:
-                diffpoly = get_diffpoly(x)
-                multiplier = CommonExpr.quadratic(1, x - 2, (a,b,c))
-                solution = (4-x)*(x-1) / 2 * coeff6 * CyclicSum(a**2*(b-c)**2*(a**2+b**2+c**2-2*a*b-2*a*c+(2-x)*b*c)**2) \
-                    + coeff6 / 2 * CyclicSum((b-c)**2) * (((2*x-x**2)*a*b*c-CyclicProduct(a+b-c)))**2
-                solution = solution / multiplier
-            elif x < 1:
-                if x <= 0:
-                    # x < 0 is no stronger than x == 0
-                    # x == 0 corresponds to the case s(a4(a-b)(a-c)) - 5p(a-b)2
-                    diffpoly = ((a**4*(a-b)*(a-c)+b**4*(b-c)*(b-a)+c**4*(c-a)*(c-b)) \
-                                    - 5 * ((a-b)*(b-c)*(c-a))**2).as_poly(a,b,c, domain=coeff.domain)
-                    x = 0
-                else:
-                    diffpoly = get_diffpoly(x)
-
-                multiplier = CyclicSum(a**2*(b-c)**2)
-                pp = coeff6*CyclicSum((a-b)**2*(a+b-c)**2) \
-                    + 2*(2 - x)*coeff6*CyclicSum(a*b*(a-b)**2) \
-                    + 12*(1-x)*coeff6*CyclicSum(a**2*b*c)
-                pp = sp.together(pp).as_coeff_Mul()
-                y = [coeff6, pp[0]]
-                exprs = [
-                    CommonExpr.schur(3, (a,b,c)) * CyclicProduct(a) * CyclicSum((b-c)**2*(b+c-(x+1)*a)**2),
-                    CyclicProduct((a-b)**2) * pp[1]
-                ]
-                solution = sum_y_exprs(y, exprs) / multiplier
-
-
-        if diffpoly is not None:
-            new_poly = poly - diffpoly.mul_ground(coeff6)
-            rest_solution = _structsos_sextic_iran96(coeff.from_poly(new_poly))
-            if rest_solution is not None:
-                return (solution + rest_solution).together()
-
-    elif roots[0] is None:
-        # Case (B + C)
-        pass
-
-    return None
+        dt = {
+            (3, 0, 0): 1,
+            (2, 1, 0): -x,
+            (2, 0, 1): -x,
+            (1, 2, 0): -x,
+            (1, 1, 1): 6*x - 3,
+            (1, 0, 2): -x,
+            (0, 3, 0): 1,
+            (0, 2, 1): -x,
+            (0, 1, 2): -x,
+            (0, 0, 3): 1
+        }
+        subtractor = coeff.from_poly(
+            (coeff.from_dict(dt).as_poly()**2).mul_ground(a6))
+        solution = _structsos_sextic_iran96(coeff - subtractor, real=real)
+        if solution is not None:
+            CyclicSum = coeff.cyclic_sum
+            x = coeff.convert(x)
+            return solution + Add(
+                a6 * CyclicSum(a*(a**2 - x*a*b - x*a*c + (2*x - 1)*b*c).together())**2
+            )
