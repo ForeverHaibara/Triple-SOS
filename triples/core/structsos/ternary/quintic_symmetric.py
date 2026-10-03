@@ -52,7 +52,7 @@ def structsos_quintic_symmetric(coeff: 'Coeff', real = True):
 
     => s(a5-1/2ab(a3+b3)+5a2b2(a+b)-10a2b2c-22abc(a2-ab))
 
-    => s(a2-ab)s(a3+5a2b+5a2c-11abc) # doctest:+SKIP
+    => s(a2-ab)s(a3+5a2b+5a2c-11abc)
 
     => s((a+b-c)(a-b)2(a+b-1/2c)2)
 
@@ -324,9 +324,12 @@ def _structsos_quintic_symmetric_sdp(coeff: 'Coeff'):
 
     def _criterion(x):
         denom = 2*(-4*u - v + 4*x**2 - 8*x - 8*z - 4)
-        if denom == 0:
-            return None
-        y = (-(x - 1)*(-2*u - v + 4*x**2 - 12*x - 8*z - 2) / denom)
+        if denom != 0:
+            y = (-(x - 1)*(-2*u - v + 4*x**2 - 12*x - 8*z - 2) / denom)
+        else:
+            # degenerated cases occur, e.g., when u == 1 and x == 1
+            # find any y such that 2x + z >= y**2
+            y = 0
         z2 = 2*x - y**2 + z
         if z2 < 0:
             return None
@@ -343,36 +346,30 @@ def _structsos_quintic_symmetric_sdp(coeff: 'Coeff'):
     det2 = coeff.from_list([6, -12, -4*u - v - 8*z - 2], gens=(a,)).as_poly()
 
     x, y = None, None
-    # first check whether there exists common roots
-    det_gcd = det1.gcd(det1.diff())
-    if det_gcd.degree() == 1:
-        x = -det_gcd.rep.TC() / det_gcd.rep.LC()
-        x = coeff.convert(x)
+    for x in intervals([det1, det2], coeff.domain):
         y = _criterion(x)
+        if y is not None:
+            break
 
     if y is None:
-        for x in intervals([det1, det2], coeff.domain):
-            y = _criterion(x)
-            if y is not None:
-                break
+        return
 
-    if y is not None:
-        u2 = u - x**2 - 2*x*y + 2*y
-        v2 = v - 2*x**2 + 8*x*y - 4*x + 8*y**2 - 8*y + 2
-        _new_coeffs = {
-            (4,1,0): m*(2*x-y**2+z), (1,4,0): m*(2*x-y**2+z),
-            (3,2,0): m*u2, (2,3,0): m*u2,
-            (3,1,1): m*v2,
-            (2,2,1): (coeff((2,2,1)) + m*(4*x**2 - 4*x*y - 6*y**2 + 4*y - 1))
-        }
-        solution = _structsos_quintic_symmetric_hexagon(coeff.from_dict(_new_coeffs))
-        if solution is not None:
-            CyclicSum = coeff.cyclic_sum
-            m, x, y = [coeff.to_sympy(_) for _ in [m, x, y]]
-            solution = solution + m * CyclicSum(
-                a*(a**2 - x*a*b - x*a*c - y*b**2 - y*c**2 + (2*x + 2*y - 1)*b*c)**2
-            )
-            return solution
+    u2 = u - x**2 - 2*x*y + 2*y
+    v2 = v - 2*x**2 + 8*x*y - 4*x + 8*y**2 - 8*y + 2
+    _new_coeffs = {
+        (4,1,0): m*(2*x-y**2+z), (1,4,0): m*(2*x-y**2+z),
+        (3,2,0): m*u2, (2,3,0): m*u2,
+        (3,1,1): m*v2,
+        (2,2,1): (coeff((2,2,1)) + m*(4*x**2 - 4*x*y - 6*y**2 + 4*y - 1))
+    }
+    solution = _structsos_quintic_symmetric_hexagon(coeff.from_dict(_new_coeffs))
+    if solution is not None:
+        CyclicSum = coeff.cyclic_sum
+        m, x, y = [coeff.to_sympy(_) for _ in [m, x, y]]
+        solution = solution + m * CyclicSum(
+            a*(a**2 - x*a*b - x*a*c - y*b**2 - y*c**2 + (2*x + 2*y - 1)*b*c)**2
+        )
+        return solution
 
 
 def _structsos_quintic_symmetric_final(coeff: 'Coeff'):
