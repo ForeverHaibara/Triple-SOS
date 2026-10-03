@@ -77,47 +77,50 @@ def inverse_substitution(coeff: Coeff, expr: "Expr", factor_degree: int = 0) -> 
 
 def structsos_handle_uncentered(solver: Callable) -> Callable:
     """
-    A decorator for structural SOS with uncentered polynomial handling.
+    A decorator for structural ternary SOS with uncentered polynomial handling.
     It only supports cyclic polynomials.
     """
     @wraps(solver)
     def _wrapped_solver(poly: Union[Poly, Coeff], *args, **kwargs):
         bias = 0
-        coeff = poly
         if isinstance(poly, Coeff):
-            pass
+            coeff = poly
         elif isinstance(poly, Poly):
             coeff = Coeff(poly)
         else:
             raise TypeError("Unsupported polynomial type. Expected Coeff or Poly, but received %s." % type(poly))
-        bias = coeff.poly111()
+
+        ax = coeff.as_poly()(1,1)
+        bias = coeff.convert(ax.rep.eval(1))
         if bias < 0:
             # raise PolynomialNonpositiveError#("The polynomial is nonpositive.")
             return None
 
-        d = poly.total_degree()
+        d = coeff.total_degree()
         dd3, dm3 = divmod(d,3)
         i, j, k = dd3, dd3+(1 if dm3>=2 else 0), dd3+(1 if dm3 else 0)
-        dt = dict(poly.terms())
-        zero = poly.convert(0)
-        if (i,j,k) not in dt:
-            dt[(i,j,k)] = zero
-            dt[(j,k,i)] = zero
-            dt[(k,i,j)] = zero
-        # be careful with the operator precedence
-        dt[(i,j,k)] = -bias/3 + dt[(i,j,k)]
-        dt[(j,k,i)] = -bias/3 + dt[(j,k,i)]
-        dt[(k,i,j)] = -bias/3 + dt[(k,i,j)]
 
-        new_poly = coeff.from_dict(dt)
-        solution = solver(new_poly, *args, **kwargs)
+        a, b, c = coeff.gens
+        K = coeff.domain
+        CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+
+        # subtractors must be normalized: s(1,1,1) == 1
+        if dm3 == 0:
+            subtractor = CyclicProduct(a**i)
+        else:
+            subtractor = CyclicSum(a**i*b**j*c**k)/3
+
+        subtractor_poly = subtractor.doit().as_poly(
+            a,b,c, domain=K).mul_ground(bias)
+
+        new_coeff = coeff - coeff.from_poly(subtractor_poly)
+
+        if coeff.wrap(new_coeff.rep.LC()) < 0:
+            return None
+
+        solution = solver(new_coeff, *args, **kwargs)
         if solution is not None:
-            a, b, c = coeff.gens
-            CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
-            if dm3 == 0:
-                solution += bias * CyclicProduct(a**i)
-            else:
-                solution += bias/3 * CyclicSum(a**i*b**j*c**k)
+            solution += bias * subtractor
         return solution
     return _wrapped_solver
 

@@ -38,14 +38,14 @@ def structsos_sextic_symmetric_ultimate(coeff, real = True):
         return None
     elif coeff6 == 0:
         # degenerated
-        return _structsos_sextic_iran96(coeff, real = real)
+        return _structsos_sextic_iran96(coeff, real=real)
     elif coeff6 < 0:
         return None
 
     if coeff((5,1,0)) == 0 and coeff((4,2,0)) == 0 and coeff((3,2,1)) == 0 and coeff6 != 0:
         return _structsos_sextic_tree(coeff)
 
-    return _structsos_sextic_symmetric_ultimate(coeff, real = real)
+    return _structsos_sextic_symmetric_ultimate(coeff, real=real)
 
 
 def _restructure_quartic_polynomial(poly: Poly):

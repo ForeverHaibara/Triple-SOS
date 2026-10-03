@@ -186,7 +186,7 @@ def _structsos_lifted_vr(coeff: 'Coeff', real=1):
     => s(a2)s((s(ab)2+a2bc)(b2+ac)(c2+ab))-p(a2+bc)*3s(a3b+a3c+3a2bc)
     """
     d = coeff.total_degree()
-    if d < 8:
+    if d < 1:
         return None
 
     a, b, c = coeff.gens
@@ -298,10 +298,13 @@ def _structsos_lifted_vr_sqr_axis(coeff: 'Coeff', real=1):
             if em1 == em2 and ec2 != axis2.domain.zero:
                 corr = ec1/(4*lc*ec2)
                 if d == 10:
-                    correction = poly.zero + 1
+                    correction = K.to_sympy(K.one)
                 else:
-                    correction = CyclicSum(a**(d//2 - 5)*b**(d//2 - 5)).as_poly(a,b,c, domain=K)
-                subtractor = (_cyc_sum_poly(lifted*tail) + correction.mul_ground(corr)*disc)**2
+                    d2 = (d//2 - 5)
+                    correction = CyclicSum(a**(d2//2)*b**(d2//2)*((a+b)/2)**(d2%2))
+                subtractor = (_cyc_sum_poly(lifted*tail) \
+                    + correction.doit().as_poly(a,b,c,domain=K).mul_ground(corr)*disc)**2
+
                 quo, rem = (poly * multiplier - subtractor.mul_ground(2*lc)).div(disc)
                 if rem.is_zero:
                     solution = _structsos_dense_symmetric(coeff.from_poly(quo))
@@ -309,7 +312,7 @@ def _structsos_lifted_vr_sqr_axis(coeff: 'Coeff', real=1):
                         return Add(
                             2*lc * (
                                 CyclicSum(lifted.as_expr().together()*(a-b)*(a-c))\
-                                + corr*CyclicProduct((a-b)**2)*CyclicSum(a**(d//2 - 5)*b**(d//2 - 5))
+                                + corr*CyclicProduct((a-b)**2)*correction
                             )**2,
                             CyclicProduct((a-b)**2) * solution
                         )/(CyclicSum((a-b)**2))
