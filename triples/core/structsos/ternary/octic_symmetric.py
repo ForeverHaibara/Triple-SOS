@@ -1,13 +1,11 @@
 from typing import TYPE_CHECKING
 
-from sympy import Add, Integer, Poly, Rational, Symbol, sign
+from sympy import Add, Integer, Poly, Symbol, sign
 from sympy import MutableDenseMatrix as Matrix
-from sympy import oo as Infinity
 
 # from .sextic_symmetric import _restructure_quartic_polynomial
 from .quartic import structsos_quartic_param
 from ..utils import (
-    DomainExpr,
     intervals,
     quadratic_weighting,
     rationalize_func,
@@ -60,21 +58,6 @@ def _solve_inverse_quartic(coeff: 'Coeff', m, p, n, r):
             return sum_y_exprs(y, exprs)
 
 
-def _sqrt_f6(f):
-    """
-    Compute the squareroot of a degree 6 polynomial.
-    """
-    if f.degree() != 6:
-        return None
-
-    _, A5, A4, A3, A2, A1, A0 = f.monic().rep.to_list()
-
-    u = A5 / 2
-    v = (A4 - u**2) / 2
-    w = (A3 - 2*u*v) / 2
-    return (u, v, w) if (A2, A1, A0) == (v*v + 2*u*w, 2*v*w, w**2) else None
-
-
 def _poly_from_list(values, gen):
     """Build a univariate polynomial from coefficients in descending order."""
     return Poly.from_list(values, gen)
@@ -104,9 +87,6 @@ def structsos_octic_symmetric(coeff, real=True):
         if coeff((6,2,0)) == 0 and coeff((5,3,0)) == 0:
             return _structsos_octic_symmetric_hexagram(coeff)
         return _structsos_octic_symmetric_hexagon(coeff)
-
-    if coeff((8,0,0)) != 0:
-        return _structsos_octic_symmetric_quadratic_form(coeff.as_poly(), coeff)
 
 
 def _octic_symmetric_hexagon_quad_form_solution(coeff, quad_form):
@@ -683,6 +663,8 @@ def _structsos_octic_symmetric_sqr_axis(coeff: 'Coeff'):
     => s((a-b)(a-c)(a-2b)(a-2c)(a-3b)(a-3c)(a-4b)(a-4c))
 
     => (4(s((a3-5/4a2(b+c)+abc)2(a-b)(a-c))+p(a-b)2(-17/48s(a2-ab)+7/24s(a)2)))
+
+    => s(a2(a-b)(a-c))s(a2-ab)2-p(a-b)2s(3/2a2) # doctest:+SKIP
     """
     if coeff((8,0,0)) <= 0:
         return
@@ -787,7 +769,6 @@ def _structsos_octic_symmetric_sqr_axis(coeff: 'Coeff'):
     return
 
 
-
 def _solve_octic_symmetric_sqr_axis_parabola(coeff: 'Coeff', u, v, w, y):
 
     """
@@ -830,7 +811,8 @@ def _solve_octic_symmetric_sqr_axis_cubic(coeff: 'Coeff', u, v, w, z):
     """
     Solve the symmetric octic inequality
     ```
-    F(a,b,c) = s((a**3-u/2*a**2*(b+c)+v*a*b*c-w/2*b*c*(b+c))**2*(a-b)*(a-c)) + p(a-b)**2*(x*s(a**2-a*b)+y*s(a)**2)
+    F(a,b,c) = s((a**3-u/2*a**2*(b+c)+v*a*b*c-w/2*b*c*(b+c))**2*(a-b)*(a-c))
+        + p(a-b)**2*(x*s(a**2-a*b)+y*s(a)**2)
     ```
     where `(x, y)` lies on a cubic curve parametrized by
     ```
@@ -991,109 +973,3 @@ def _solve_octic_symmetric_sqr_axis_cubic(coeff: 'Coeff', u, v, w, z):
         return None
 
     return (part1 + part2)/mul
-
-
-def _structsos_octic_symmetric_quadratic_form(poly, coeff: 'Coeff'):
-    """
-    Let F0 = s(a2(s(a2+ab)-bc)2(a-b)(a-c)).
-    Then we have
-    `F_{x,y} = F0 - 2s(a2(s(a2+ab)-bc)(a-b)(a-c))f(a,b,c) + s(a2(a-b)(a-c))f(a,b,c)^2 >= 0`
-
-    See proof at class _octic_sym_axis.
-    Such F_{x,y}, G_{x,y} has the property that the symmetric axis is a multiple of a^2 * (a-1)^2 * (...)^2.
-    For more general septic symmetric polynomials, we can first decompose its symmetric axis
-    into several F_{x,y} and then combine them together.
-
-    For a more primary case, see `_structsos_sextic_symmetric_quadratic_form`.
-
-    Examples
-    --------
-    => s(a2(a-b)(a-c))s(a2-ab)2-p(a-b)2s(3/2a2) # doctest:+SKIP
-    """
-    return
-
-    # a, b, c = coeff.gens
-    # CyclicSum = coeff.cyclic_sum
-
-    # # We require multiplicity 2 at (1,1,0) along the symmetric axis.
-    # sym = poly.subs({b:1,c:1}).div(Poly([1,-2,1,0,0], a))
-    # if not sym[1].is_zero:
-    #     return None
-
-    # sym_axis = _restructure_quartic_polynomial(sym[0])
-    # if sym_axis is None:
-    #     return None
-    # t, coeff0, x, y, rem_coeff, rem_ratio = sym_axis
-
-    # # ker_coeff is the remaining coefficient of (a-b)^2(b-c)^2(c-a)^2*s(a^2) and (a-b)^2(b-c)^2(c-a)^2*s(ab)
-    # # of Poly - (t*s(a2-ab)s(a3-a2b-a2c+abc)2 + coeff0 * F(x,y) + rem * s(a^2(a-b)(a-c))s(a^2+rab)^2)
-    # ker_coeff1 = poly.coeff_monomial((6,2,0)) - (2*t + coeff0 * (2*x**2 - 2*x*y - 2*x + y**2 + 1))
-    # ker_coeff2 = poly.coeff_monomial((5,3,0)) - (3*t + coeff0 * (-3*x**2 + 2*x*y + 4*x - y**2 - 2))
-    # if rem_ratio is sp.oo:
-    #     # degenerates to s(a^2(a-b)(a-c))s(ab)^2
-    #     ker_coeff1 -= rem_coeff
-    #     ker_coeff2 += rem_coeff
-    # else:
-    #     ker_coeff1 -= rem_coeff*(rem_ratio**2 - 2*rem_ratio + 2)
-    #     ker_coeff2 -= rem_coeff*(-rem_ratio**2 + 2*rem_ratio - 3)
-    # ker_coeff = (ker_coeff1, ker_coeff2 + 2*ker_coeff1)
-
-    # # print('Coeff =', coeff0, 'ker =', ker_coeff)
-    # # print('  (x,y) =', (x, y), 'ker_std =', ker_coeff / coeff0)
-
-    # return _octic_sym_axis.solve(
-    #     coeff0, x, y, ker_coeff, t, rem_coeff, rem_ratio
-    # )
-
-
-class _octic_sym_axis(DomainExpr):
-    """
-    Let F0 = s(a^2(s(a^2+ab)-bc)^2(a-b)(a-c)) and f(a,b,c) = s(xa^2 + yab).
-    Define
-    F_{x,y}(a,b,c) = F0 - 2s(a^2(s(a^2+ab)-bc)(a-b)(a-c))f(a,b,c) + s(a^2(a-b)(a-c))f(a,b,c)^2.
-
-    Then F_{x,y} >= 0 because
-    F_{x,y} * s(a^2(a-b)(a-c)) = (s(a^2(s(a^2+ab)-bc)(a-b)(a-c)) - s(a^2(a-b)(a-c))f(a,b,c))^2 + 3p(a^2)p(a-b)^2
-
-    The class provides different methods to solve F_{x,y}(a,b,c) >= 0. There are also
-    two types of solvers.
-    """
-
-    def rem_poly(self, rem_coeff, rem_ratio):
-        a, b, _ = self.gens
-        CyclicSum = self.cyclic_sum
-        return rem_coeff * (CyclicSum(a**2 + rem_ratio*a*b)**2 if rem_ratio is not Infinity else CyclicSum(a*b)**2)
-
-    def _wrap_F(self, f_type, f_solver):
-        if f_type == 0:
-            def _F(self, x, y, coeff0, ker_coeff, t_coeff, rem_coeff, rem_ratio):
-                solution, flg = f_solver(x, y) #, ker_coeff/coeff0)
-                if solution is not None:
-                    a, b, c = self.gens
-                    CyclicSum, CyclicProduct = self.cyclic_sum, self.cyclic_product
-                    solution = Add(
-                        coeff0 * solution,
-                        t_coeff/2 * CyclicProduct((a-b)**2) * CyclicSum(a*(a-b)*(a-c))**2,
-                        Rational(1,2) * CyclicSum((b-c)**2*(b+c-a)**2) * self.rem_poly(rem_coeff, rem_ratio)
-                    )
-                return solution, flg
-        return _F
-
-    def solve(self, coeff0, x, y, ker_coeff, t_coeff, rem_coeff, rem_ratio):
-        SOLVERS = [
-            # type, func
-            # (0, self._F_regular),
-        ]
-        solutions = []
-
-        for (solver_type, solver) in SOLVERS:
-            f = self._wrap_F(solver_type, solver)
-            solution, flg = f(x, y, coeff0, ker_coeff, t_coeff, rem_coeff, rem_ratio)
-            # print(solver, solution, flg)
-            if flg == 0:
-                return solution
-            elif flg == 1:
-               solutions.append(solution)
-
-        if len(solutions) > 0:
-            return solutions[0]
