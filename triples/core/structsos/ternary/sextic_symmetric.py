@@ -1505,6 +1505,8 @@ def _structsos_sextic_symmetric_quadratic_form(coeff: 'Coeff'):
 
     => s(a2(a-b)(a-c)(a-5b)(a-5c))+s(a2(a-b)(a-c)(a-3b)(a-3c))+15p(a-b)2
 
+    => s(a4(a-b)(a-c))-5p(a-b)2
+
     :: ineqs = []
 
     => s(a2(a-b)(a-c)(3a-2b)(3a-2c))+15p(a-b)2
@@ -2253,7 +2255,24 @@ def _structsos_sextic_symmetric_sos_theorem(coeff: 'Coeff', real=1):
 def _structsos_sextic_symmetric_subtraction(coeff: 'Coeff', real=1):
     """
     Try to subtract `s(a**3-a*b*c-x*a*(b-c)**2)**2`
-    and call the iran96 solver.
+    and call the iran96 solver. The parameter `x` is determined
+    by computing the discriminant of the axis and the border.
+
+    Examples
+    --------
+    => s(a2)3-27(abc)2-27p((a-b)2)
+
+    => s(a2/3)3-a2b2c2-p(a-b)2
+
+    => s(4a6-a3b3-3a2b2c2)-63p(a-b)2
+
+    => 4s(a4(a-b)(a-c))+s(a(a-b)(a-c))2
+
+    => 3s(a/3)6-s(ab)s(a/3)4-(69+11sqrt(33))/648p(a-b)2
+
+    => s((a-b-c)4a-abc(3a-b-c)2)s(a)-(s(ab(a2-b2+3(ab-ac)+3(bc-ab))2)-4p(a-b)2)
+
+    => s(4a6-6(a5b+a5c)-12(a4b2+a4c2)+37a4bc+28a3b3-31(a3b2c+a3bc2)+29a2b2c2)
     """
     a, b, c = coeff.gens
     a6, a51, a42, a411, a33, a321 = [coeff(i) for i in
@@ -2268,6 +2287,8 @@ def _structsos_sextic_symmetric_subtraction(coeff: 'Coeff', real=1):
         [-4*a6, 8*a6, a33 + 2*a42 + 2*a51 - 2*a6]
     ]
     A, B, C, D = [coeff.from_list(row, (a,)).as_poly() for row in ax]
+
+    # the discriminant of the axis and the border
     axis = -27*A**2*D**2 + 18*A*B*C*D - 4*A*C**3 - 4*B**3*D + B**2*C**2
     border = coeff.from_list([a6**2,
             12*a6**2,
