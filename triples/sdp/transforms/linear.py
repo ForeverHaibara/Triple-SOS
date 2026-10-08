@@ -265,13 +265,14 @@ class DualMatrixTransform(SDPMatrixTransform):
 
                 Ai0 = vec2mat(x0)
                 # new_x0 = list(Ai0 * V)
-                new_x0 = list(matmul(Ai0, V, time_limit=time_limit))
-                x0_list.extend(new_x0)
+                new_x0 = reshape(matmul(Ai0, V, time_limit=time_limit), (Ai0.rows*V.cols, 1))
+                x0_list.append(new_x0)
                 time_limit()
 
             # eq * y + x0 = 0 => y = trans_x0 + trans_space * z
             eq_list = Matrix.vstack(*eq_list)
-            x0_list = Matrix(x0_list)
+            # Stack matrices directly to preserve algebraic domains for exact reduction.
+            x0_list = Matrix.vstack(*x0_list)
             trans_x0, trans_space = solve_undetermined_linear(eq_list, -x0_list, time_limit=time_limit)
 
             # Sum(Ui' * Aij * Ui * (trans_x0 + trans_space * z)[j]) >> 0
