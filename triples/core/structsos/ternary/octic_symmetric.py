@@ -5,6 +5,8 @@ from sympy import MutableDenseMatrix as Matrix
 
 # from .sextic_symmetric import _restructure_quartic_polynomial
 from .quartic import structsos_quartic_param
+from .quintic_symmetric import structsos_quintic_symmetric
+from .utils import structsos_handle_uncentered
 from ..utils import (
     intervals,
     quadratic_weighting,
@@ -58,6 +60,24 @@ def _solve_inverse_quartic(coeff: 'Coeff', m, p, n, r):
             return sum_y_exprs(y, exprs)
 
 
+def _structsos_octic_symmetric_solve_quintic(coeff: 'Coeff'):
+    """
+    Call the quintic solver if the octic is a multiple of `a*b*c`.
+    """
+    dt = {}
+    for (i,j,k), v in coeff.terms():
+        if i>=1 and j>=1 and k>=1:
+            dt[(i-1,j-1,k-1)] = v
+        else:
+            return None
+    new_coeff = coeff.from_dict(dt)
+    solution = structsos_quintic_symmetric(new_coeff)
+    if solution is not None:
+        a = coeff.gens[0]
+        return solution * coeff.cyclic_product(a)
+    return None
+
+
 def _poly_from_list(values, gen):
     """Build a univariate polynomial from coefficients in descending order."""
     return Poly.from_list(values, gen)
@@ -80,12 +100,15 @@ def structsos_octic_symmetric(coeff, real=True):
     if solution is not None:
         return solution
 
-    if not coeff.is_rational:
-        return
-
     if coeff((8,0,0)) == 0 and coeff((7,1,0)) == 0:
         if coeff((6,2,0)) == 0 and coeff((5,3,0)) == 0:
+            if coeff((4,4,0)) == 0:
+                return _structsos_octic_symmetric_solve_quintic(coeff)
             return _structsos_octic_symmetric_hexagram(coeff)
+
+        if not coeff.is_rational:
+            return
+
         return _structsos_octic_symmetric_hexagon(coeff)
 
 
@@ -606,13 +629,19 @@ def _structsos_octic_symmetric_hexagon(coeff: 'Coeff'):
     return None
 
 
+@structsos_handle_uncentered
 def _structsos_octic_symmetric_hexagram(coeff: 'Coeff'):
     """
     Solve octic symmetric hexagram, where all terms are inside the triangle
     `(a^6bc,...)` and `(a^4b^4,...)`.
 
-    NOTE: The functionality is now covered by `dense_symmetric._structsos_lifted_vr`.
-    It is here only for providing test examples.
+    It first tries to subtract some `s(a**2*(b-c)**2*(a*b+a*c-(t+1)*b*c)**2)`
+    so that `coeff((4,4,0))` vanishes, and the remaining polynomial has
+    nonnegative symmetric axis. The range of `t` is determined by computing
+    the discriminant of the (quartic) symmetric axis.
+
+    If it fails, it calls `_structsos_lifted_vr` and lifts the degree
+    of the polynomial.
 
     Examples
     --------
@@ -626,7 +655,9 @@ def _structsos_octic_symmetric_hexagram(coeff: 'Coeff'):
 
     => 24s((a+b-c)(a-b)2(a+b-3c)2)p(a)+s(a2b2(ab-ac)(ab-bc))
 
-    => 256p(a)s((64a+(b+c))(a+b-59/16c)(a+c-59/16b)(a-b)(a-c))+s(a2b2(ab-bc)(ab-ca)) # doctest:+SKIP
+    => p(a)s((3b+3c-a)(b-c)2(b+c-(sqrt(2)+2)a)2)+4s(a2(b-c)2(ab+ac-sqrt(2)bc)2)
+
+    => 256p(a)s((64a+(b+c))(a+b-59/16c)(a+c-59/16b)(a-b)(a-c))+s(a2b2(ab-bc)(ab-ca))
 
     => s(bc(a-b)(a-c)(a-2b)(a-2c)(a-3b)(a-3c))
 
@@ -634,6 +665,70 @@ def _structsos_octic_symmetric_hexagram(coeff: 'Coeff'):
 
     => s(a4)s(a4)-3abcs(a5)-s((a2-bc)4)
     """
+    if coeff((4,4,0)) == 0:
+        if coeff((6,1,1)) >= 0:
+            return _structsos_octic_symmetric_solve_quintic(coeff)
+    if coeff((4,4,0)) <= 0 or coeff((6,1,1)) <= 0:
+        return
+
+    axis = coeff.as_poly()(1,1)
+
+    axis, rem = axis.div(axis.from_list([1, -2, 1], axis.gens[0], domain=axis.domain))
+    if not rem.is_zero:
+        return
+    if axis.degree() != 4:
+        return
+
+    lc = axis.LC()
+    lc2 = coeff((4,4,0))/lc
+    axis = axis.monic()
+
+    _, a3, a2, a1, a0 = axis.rep.to_list()
+
+    B, C, D, E = [
+        axis.from_list(l, axis.gens[0], domain=axis.domain)
+            for l in [[a3], [-lc2, 0, a2], [2*lc2, a1], [-lc2 + a0]]
+    ]
+    A = 1
+    I = C**2 - 3*B*D + 12*A*E
+    J = 72*A*C*E + 9*B*C*D - 27*A*D**2 - 27*B**2*E - 2*C**3
+    disc = 4*I**3 - J**2
+
+    gen = axis.from_list([1, 0], axis.gens[0], domain=axis.domain)
+
+    for t in intervals([disc, gen], domain=disc.domain):
+        if coeff.wrap(t) >= 0:
+            # s(a2(b-c)2(b+c-(t+1)a)2)
+            subtraction = {
+                (4, 4, 0): 1,
+                (4, 3, 1): -t - 1,
+                (4, 2, 2): t**2 + 2*t,
+                (4, 1, 3): -t - 1,
+                (4, 0, 4): 1,
+                (3, 4, 1): -t - 1,
+                (3, 3, 2): 1 - t**2,
+                (3, 2, 3): 1 - t**2,
+                (3, 1, 4): -t - 1,
+                (2, 4, 2): t**2 + 2*t,
+                (2, 3, 3): 1 - t**2,
+                (2, 2, 4): t**2 + 2*t,
+                (1, 4, 3): -t - 1,
+                (1, 3, 4): -t - 1,
+                (0, 4, 4): 1
+            }
+            subtraction = coeff.from_dict(subtraction) * coeff((4,4,0))
+            remain = coeff - subtraction
+
+            solution = _structsos_octic_symmetric_solve_quintic(remain)
+            if solution is not None:
+                a, b, c = coeff.gens
+                t = coeff.wrap(t)
+                return solution + coeff((4,4,0))/2 * coeff.cyclic_sum(
+                    a**2*(b-c)**2*(a*b+a*c-(t+1)*b*c)**2)
+
+    # fallback to dense symmetric solver
+    # if the above method fails
+
     from .dense_symmetric import _structsos_lifted_vr
     return _structsos_lifted_vr(coeff)
 
