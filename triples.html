@@ -245,6 +245,19 @@
         height: 16px;
     }
 
+    #backend_modal .modal-content {
+        border-radius: 8px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        font-size: 14px;
+    }
+
+    #backend_command {
+        font-family: monospace;
+        font-size: 12px;
+        resize: none;
+        background: #f8f9fa;
+    }
+
     </style>
     <!-- <script src="https://requirejs.org/docs/release/2.3.6/minified/require.js"></script> -->
     <!-- <script async src="https://cdn.bootcdn.net/ajax/libs/axios/0.21.1/axios.min.js"></script> -->
@@ -524,6 +537,9 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
     <div id="heatmap_area" style="width: 90%; height: 40%; margin-top: -0.5%; margin-left: 5%; position:relative;">
         <div id="heatmap" style="width: 100%; height: 100%; top: 0; left: 0; position:absolute;">
         </div>
+        <button id="backend_status" type="button" class="btn btn-sm btn-link text-secondary" style="bottom: 1%; left: 0; position: absolute; font-size: 10px; padding: 2px; text-align: left; max-width: calc(100% - 48px);" aria-live="polite">
+            Backend: x
+        </button>
         <!-- <button onclick="HeatmapScreenShot()" style="position:a">Take Screenshot</button> -->
         <button type="button" class="btn btn-outline-primary" id="heatmap_screenshot_button" onclick="HeatmapScreenShot();" style="bottom:5%;right:0;position:absolute;">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-save" viewBox="0 0 16 16">
@@ -634,6 +650,42 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
     </div>
 </div>
 </div>
+    <!-- Backend startup help is also available when this file is opened directly. -->
+    <div class="modal fade" id="backend_modal" tabindex="-1" aria-labelledby="backend_title" aria-describedby="backend_message" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="backend_title">Start the backend?</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-secondary mb-2">Backend address: <span id="backend_address"></span></p>
+                    <div id="backend_local_help">
+                        <p>This operation needs the local Python backend. Your browser cannot launch local programs directly.</p>
+                        <div class="settings_item mb-3">
+                            <label for="backend_platform" class="settings_item_name">Start with</label>
+                            <select id="backend_platform" class="form-select form-select-sm mb-3">
+                                <option value="windows">Windows / PowerShell</option>
+                                <option value="posix">macOS or Linux / Terminal</option>
+                            </select>
+                            <p class="settings_item_description">Open <span id="backend_terminal">Terminal</span> in the Triple-SOS folder, activate your Python environment if needed, then run:</p>
+                            <label for="backend_command" class="visually-hidden">Backend startup command</label>
+                            <textarea id="backend_command" class="form-control mb-2" rows="3" readonly spellcheck="false"></textarea>
+                            <button type="button" class="btn btn-sm btn-outline-primary" id="backend_copy">Copy start command</button>
+                            <p class="settings_item_description mt-2 mb-0">Keep the terminal open. To stop the backend, press Ctrl+C there. Python, flask, flask_cors and flask_socketio must be installed in that environment.</p>
+                        </div>
+                    </div>
+                    <p id="backend_remote_help" hidden>The configured backend is on another server. Contact its operator or check the backend address and your connection.</p>
+                    <p id="backend_message" class="text-secondary mb-0" role="status" aria-live="polite"></p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="backend_dismiss_session">Don't ask again this session</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-sm btn-outline-primary" id="backend_check">Check connection</button>
+                </div>
+            </div>
+        </div>
+    </div>
 </body>
 
 <script>
@@ -693,6 +745,7 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
 <script src="static/js/visualization.js"></script>
 <script src="static/js/history.js"></script>
 <script src="static/js/on_change.js"></script>
+<script src="static/js/backend.js"></script>
 <script src="static/js/socket.js"></script>
 <script>
     function getConstraints(kwargs){
@@ -761,11 +814,13 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
                 return changeNumOfSOS(0);
             }
             kwargs.sid = socket.id;
+            if (actions.includes('sos')) changeNumOfSOS(sos_work.num + 1);
             
             sos_poly = input_poly;
             axios.post(host + '/process/preprocess', kwargs
             ).then(res => {
                 if (Object.keys(res.data).length === 0){
+                    if (actions.includes('sos')) changeNumOfSOS(sos_work.num - 1);
                     return;
                 }
                 res.data.gens = kwargs.gens;
@@ -774,10 +829,8 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
                 // write to the record
                 setHistoryByTimestamp(cur_data.timestamp, 'vis', res.data);
             }).catch(error => {
-                // console.log(axios.isAxiosError(error), error.message);
-                if (axios.isAxiosError(error) && (error.message === 'Network Error')) {
-                    changeNumOfSOS(0);
-                }
+                if (actions.includes('sos')) changeNumOfSOS(sos_work.num - 1);
+                handleBackendError(error);
             });
         });
     };
@@ -785,7 +838,6 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
     
     function SumOfSquares(){
         document.getElementById("sumofsquares").blur();
-        changeNumOfSOS(sos_work.num + 1);
 
         const input_poly = document.getElementById('input_poly').value;
         const constraints = getConstraints();
@@ -909,7 +961,7 @@ style="width: 100%;height: 100%;max-width: 1280px;max-height: 720px;position: ab
                         document.body.removeChild(hint);
                     }, 1000);
                 }
-            );
+            ).catch(handleBackendError);
         }
     }
 
