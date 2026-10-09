@@ -140,23 +140,32 @@ test('failed connections discard stale callbacks and show only one dialog', () =
     page.sockets[2].fire('connect');
     assert.equal(page.run('calls'), 0);
     assert.match(page.element('backend_message').textContent, /^Connected/);
+    assert.ok(page.element('backend_message').classList.contains('text-success'));
+    assert.ok(page.element('backend_message').classList.contains('fw-semibold'));
+    assert.ok(!page.element('backend_message').classList.contains('text-secondary'));
+    page.run('setBackendMessage("Still unable to connect.")');
+    assert.ok(!page.element('backend_message').classList.contains('text-success'));
+    assert.ok(!page.element('backend_message').classList.contains('fw-semibold'));
+    assert.ok(page.element('backend_message').classList.contains('text-secondary'));
     page.run('backend_modal.hide()');
     assert.equal(page.intervals.size, 0);
     page.run('connectSocket(() => calls++)');
     assert.equal(page.run('calls'), 1);
 });
 
-test('session suppression survives reloads and manual help still works', () => {
+test('prompt suppression resets on reload and manual help still works', () => {
     const page = frontend();
     page.run('showBackendPrompt()');
     page.element('backend_dismiss_session').fire('click');
     assert.equal(page.intervals.size, 0);
     page.run('showBackendPrompt()');
     assert.ok(!page.element('backend_modal').classList.contains('show'));
+    page.element('backend_status').fire('click');
+    assert.ok(page.element('backend_modal').classList.contains('show'));
+    // Ignore preferences stored by older versions of the frontend.
+    page.storage.set('triples_backend_prompt_disabled', 'true');
     const reloaded = frontend({storage: page.storage});
     reloaded.run('showBackendPrompt()');
-    assert.ok(!reloaded.element('backend_modal').classList.contains('show'));
-    reloaded.element('backend_status').fire('click');
     assert.ok(reloaded.element('backend_modal').classList.contains('show'));
 });
 
@@ -216,5 +225,5 @@ test('disconnecting during SOS clears the counter and permits a fresh connection
     assert.ok(page.sockets[0].closed);
     assert.ok(page.element('backend_modal').classList.contains('show'));
     page.sockets[1].fire('connect');
-    assert.match(page.element('backend_status').textContent, /connected$/);
+    assert.ok(page.element('backend_status').classList.contains('text-success'));
 });

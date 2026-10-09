@@ -3,13 +3,8 @@ const backend_modal = new bootstrap.Modal(backend_modal_element);
 const backend_status = document.getElementById('backend_status');
 const backend_message = document.getElementById('backend_message');
 let backend_poll = null;
+// Suppress automatic prompts only until this page is refreshed.
 let backend_prompt_disabled = false;
-
-try {
-    backend_prompt_disabled = sessionStorage.getItem('triples_backend_prompt_disabled') === 'true';
-} catch (error) {
-    // File URLs may not have access to session storage. Keep an in-memory fallback.
-}
 
 function isLocalBackend(){
     return ['localhost', '127.0.0.1', '[::1]'].includes(new URL(host).hostname);
@@ -58,6 +53,13 @@ function setBackendStatus(status){
     backend_status.title = 'Open backend connection and startup help';
 }
 
+function setBackendMessage(message, connected = false){
+    backend_message.textContent = message;
+    backend_message.classList.toggle('text-success', connected);
+    backend_message.classList.toggle('fw-semibold', connected);
+    backend_message.classList.toggle('text-secondary', !connected);
+}
+
 function showBackendPrompt(force = false){
     if (backend_prompt_disabled && !force) return;
     if (backend_modal_element.classList.contains('show')) return;
@@ -65,9 +67,9 @@ function showBackendPrompt(force = false){
     document.getElementById('backend_local_help').hidden = !isLocalBackend();
     document.getElementById('backend_remote_help').hidden = isLocalBackend();
     document.getElementById('backend_address').textContent = host;
-    backend_message.textContent = isLocalBackend() ?
+    setBackendMessage(isLocalBackend() ?
         'The backend could not be reached. If it is running, check browser permissions for local network access.' :
-        'The backend could not be reached. Check the server address and your connection.';
+        'The backend could not be reached. Check the server address and your connection.');
     backend_modal.show();
 }
 
@@ -76,12 +78,12 @@ function checkBackendConnection(){
     check.disabled = true;
     connectSocket(() => {
         check.disabled = false;
-        backend_message.textContent = 'Connected. Close this dialog and retry your operation.';
+        setBackendMessage('Connected. Close this dialog and retry your operation.', true);
     }, () => {
         check.disabled = false;
-        backend_message.textContent = isLocalBackend() ?
+        setBackendMessage(isLocalBackend() ?
             'Still unable to connect. Start the backend and allow local network access if your browser asks. This dialog will check again automatically.' :
-            'Still unable to connect. Check your connection or contact the server operator. This dialog will check again automatically.';
+            'Still unable to connect. Check your connection or contact the server operator. This dialog will check again automatically.');
     });
 }
 
@@ -89,12 +91,12 @@ async function copyBackendCommand(){
     const command = document.getElementById('backend_command');
     try {
         await navigator.clipboard.writeText(command.value);
-        backend_message.textContent = 'Command copied. Paste it into ' + document.getElementById('backend_terminal').textContent + ' and press Enter.';
+        setBackendMessage('Command copied. Paste it into ' + document.getElementById('backend_terminal').textContent + ' and press Enter.');
     } catch (error) {
         // Clipboard permissions vary for file URLs; leave the command selected for manual copying.
         command.focus();
         command.select();
-        backend_message.textContent = 'Select and copy the command, then paste it into your terminal and press Enter.';
+        setBackendMessage('Select and copy the command, then paste it into your terminal and press Enter.');
     }
 }
 
@@ -120,11 +122,6 @@ document.getElementById('backend_check').addEventListener('click', checkBackendC
 backend_status.addEventListener('click', () => showBackendPrompt(true));
 document.getElementById('backend_dismiss_session').addEventListener('click', () => {
     backend_prompt_disabled = true;
-    try {
-        sessionStorage.setItem('triples_backend_prompt_disabled', 'true');
-    } catch (error) {
-        // The preference still applies to the current page if storage is unavailable.
-    }
     backend_modal.hide();
 });
 backend_modal_element.addEventListener('shown.bs.modal', () => {
