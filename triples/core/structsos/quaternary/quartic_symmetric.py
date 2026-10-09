@@ -32,6 +32,7 @@ def _free_symbol(coeff: Coeff):
             return Symbol(s)
     return Dummy("x")
 
+
 def quaternary_quartic_symmetric(coeff, real=True):
     """
     ## Real Variables
