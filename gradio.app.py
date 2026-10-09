@@ -375,13 +375,20 @@ class GradioInterface():
             )
 
             compute_btn = layout["compute_btn"]
-            compute_btn.click(fn = partial(self.solve, layout_type=layout_type),
+            perm_group = layout["perm_group"]
+            positive_toggle = layout["constraints"]["positive_toggle"]
+            # Synchronize generator-dependent inputs before collecting solver inputs.
+            compute_btn.click(
+                fn=self._configure_generators,
+                inputs=[gen_input, perm_group["radio"], positive_toggle],
+                outputs=[gen_input, perm_group["input"], layout["constraints"]["df"]],
+                **show_api(0)
+            ).then(fn = partial(self.solve, layout_type=layout_type),
                 inputs = [input_box, gen_input, layout["perm_group"]["input"],
                         layout["constraints"]["df"], layout["methods_btn"]],
                 outputs = list(layout['outputs'].values()) + \
                 [self.image, self.coefficient_triangle], **show_api(0))
 
-            perm_group = layout["perm_group"]
             perm_group["radio"].change(
                 fn=self._toggle_perm_group_input,
                 inputs=[perm_group["radio"], gen_input],
@@ -389,7 +396,6 @@ class GradioInterface():
                 **show_api(0)
             )
 
-            positive_toggle = layout["constraints"]["positive_toggle"]
             for event in (gen_input.blur, gen_input.submit):
                 # gen_input.change will update too frequently, so we use blur/submit instead
                 event(
