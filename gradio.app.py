@@ -673,7 +673,7 @@ class GradioInterface():
                     methods=methods
                 )
             except Exception as e:
-                pass
+                raise gr.Error(f"{e.__class__.__name__}: {e}")
 
         if solution is not None:
             solution = solution.rewrite_symmetry(gens, perm_group)

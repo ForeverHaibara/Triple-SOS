@@ -24,7 +24,7 @@ NAME_TO_METHOD = {
     'StructuralSOS': StructuralSOSSolver,
     'LinearSOS': LinearSOSSolver,
     'SDPSOS': SDPSOSSolver,
-    'ProgSOSSolver': ProgSOSSolver,
+    'ProgSOS': ProgSOSSolver,
     'SymmetricSOS': SymmetricSubstitution,
     'Pivoting': Pivoting,
     'Reparametrization': Reparametrization,
@@ -174,7 +174,7 @@ def sum_of_squares(
         _methods = [NAME_TO_METHOD[_] for _ in methods if _ in NAME_TO_METHOD\
                     or isinstance(_, ProofNode)]
         if len(_methods) != len(methods):
-            diff = set(methods) - set(_methods)
+            diff = set(methods) - set(NAME_TO_METHOD)
             raise ValueError(f"Methods {diff} are not supported.")
         methods = _methods
 
