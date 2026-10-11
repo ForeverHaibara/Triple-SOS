@@ -7,7 +7,7 @@ from sympy import sign as sp_sign
 
 from ..univariate import prove_univariate
 from ..utils import (
-    congruence,
+    congruence_solve,
     intervals,
     quadratic_weighting,
     rationalize_func,
@@ -841,17 +841,25 @@ def _structsos_acyclic_quartic_symmetric(coeff: 'Coeff', real = True):
                 if solution is not None:
                     return solution
         rows1, rows2 = gram_rows(params)
-        us1 = congruence(coeff.as_matrix(rows1, (4, 4)))
-        if us1 is None:
+
+        def mapping1(vec):
+            a1, a2, a3, a4 = vec
+            return ((a1 + a4)*a**2 + (2*a1 - 2*a4)*a*b \
+                    + a2*a*c + (a1 + a4)*b**2 + a2*b*c + a3*c**2).together()**2
+
+        sol1 = congruence_solve(coeff.as_matrix(rows1, (4, 4)),
+                mapping=mapping1)
+        if sol1 is None:
             return None
-        us2 = congruence(coeff.as_matrix(rows2, (2, 2)))
-        if us2 is None:
+        sol2 = congruence_solve(coeff.as_matrix(rows2, (2, 2)),
+                mapping=[a+b, c])
+        if sol2 is None:
             return None
-        result = []
-        for (u, weights), vec in ((us1, Matrix([(a+b)**2, (a+b)*c, c**2, (a-b)**2])),
-                                  (us2, Matrix([(a+b)*(a-b), c*(a-b)]))):
-            result.extend(w*t.together()**2 for w, t in zip(weights, u*vec) if w != 0)
-        return Add(*result)
+        if sol2.is_Add:
+            sol2 = Add(*((a-b)**2*arg.together() for arg in sol2.args))
+        else:
+            sol2 = (a-b)**2*sol2.together()
+        return sol1 + sol2
 
     def transform(p, degree, direction):
         """
