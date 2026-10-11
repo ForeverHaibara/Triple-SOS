@@ -618,7 +618,7 @@ def structsos_acyclic_quartic(coeff, real = True):
     """
     Solve acyclic quartic problems.
     """
-    return _structsos_acyclic_quartic_symmetric(coeff)
+    return _structsos_acyclic_quartic_symmetric_real(coeff)
     return _structsos_acyclic_quartic_real(coeff)
 
 
@@ -686,7 +686,7 @@ def _gram_polys(matrices0, matrices1, gen, domain):
 
 
 @structsos_reorder_symmetry(groups=(2, 1))
-def _structsos_acyclic_quartic_symmetric(coeff: 'Coeff', real = True):
+def _structsos_acyclic_quartic_symmetric_real(coeff: 'Coeff', real = True):
     """
     Solve real ternary quartics symmetric in two variables.
 
