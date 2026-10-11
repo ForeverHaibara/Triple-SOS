@@ -796,7 +796,8 @@ def _structsos_acyclic_quartic_symmetric_real(coeff: 'Coeff', real = True):
         proof = binary_proof(P)
         if proof is not None:
             qproof = quadratic_weighting(coeff, q2, q1, q0, mapping=[a+b, c])
-            return coeff.wrap(A)*(a-b)**4 + (a-b)**2*qproof + proof
+            if qproof is not None:
+                return coeff.wrap(A)*(a-b)**4 + (a-b)**2*qproof + proof
     if A == zero:
         return None
     D = P.mul_ground(4*A) - Q**2

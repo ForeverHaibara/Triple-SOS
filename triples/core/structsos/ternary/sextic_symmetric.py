@@ -5,7 +5,10 @@ import sympy as sp
 from sympy import Add, Integer, Rational, Symbol
 from sympy import oo as Infinity
 
-from .quartic import structsos_quartic_param
+from .quartic import (
+    _structsos_acyclic_quartic_symmetric_real,
+    structsos_quartic_param,
+)
 from .utils import CommonExpr, structsos_handle_uncentered
 from ..univariate import prove_univariate
 from ..utils import (
@@ -16,6 +19,9 @@ from ..utils import (
     sum_y_exprs,
 )
 from ....utils.roots import nroots
+from ....utils import (
+    verify_symmetry, poly_reduce_by_symmetry, CyclicSum as _CyclicSum
+)
 
 if TYPE_CHECKING:
     from sympy import Poly
@@ -1345,6 +1351,8 @@ def _structsos_sextic_symmetric_full_sdp(coeff: 'Coeff'):
 
     => s(a2-ab)3+p(a-b)2+4p(a+b-2c)2
 
+    => s(409a6-1293a5b-1293a5c+651a4b2+5331a4bc+651a4c2+818a3b3-5190a3b2c-5190a3bc2+5106a2b2c2)
+
     Reference
     ----------
     [1] https://github.com/duong-db/paramSOS
@@ -1456,6 +1464,92 @@ def _structsos_sextic_symmetric_full_sdp(coeff: 'Coeff'):
     u0 = rationalize_func(detu, _validation, direction = 1)
     if u0 is not None:
         return _get_solution(u0)
+
+
+def _structsos_sextic_symmetric_lifted_sdp(coeff: 'Coeff'):
+    """
+    Prove a centered symmetric sextic by lifting a real ternary quartic SOS.
+
+    coeff represents a homogeneous symmetric sextic `f` with `f(1,1,1)=0`.
+    Define the cubic forms `X=s(ab**2-abc)`, `Y=s(a**2*b-abc)`,
+    `Z=s(a**3-abc)`, and the nonnegative quadratic form `U=s(a**2-ab)`.
+    For `x=X/Z` and `y=Y/Z`, set
+    `H=9*x**2-9*x*y+9*y**2-3*(x+y)+1`. The normalized invariants are
+    `q/p**2=(1-H)/3` and `r/p**3=(1-(3*x+3*y+1)*H)/27`,
+    where `p=a+b+c`, `q=ab+bc+ca` and `r=abc`.
+
+    Centering removes the constant term in `H`, so `f/p**6` is `H` times
+    a quartic. Compute its homogeneous coefficients directly, in the
+    original coefficient domain, and solve it with the real quartic solver.
+    The resulting quartic `g` is symmetric in its first two variables and
+    satisfies `g(X,Y,Z)=U**3*f`. Return its lifted SOS divided by `U**3`,
+    or None if the quartic solver cannot certify it. On `U=0` all three
+    original variables are equal and `f=0` by the centering assumption.
+
+    Examples
+    ----------
+    :: ineqs = []
+
+    => s(38a6-148a5b-148a5c+225a4b2+392a4bc+225a4c2-210a3b3-320a3b2c-320a3bc2+266a2b2c2)
+
+    => s(414a6-1470a5b-1470a5c+979a4b2+5864a4bc+979a4c2+644a3b3-5584a3b2c-5584a3bc2+5228a2b2c2)
+    """
+    if not coeff.rep:
+        return Integer(0)
+    zero = coeff.domain.zero
+    c600, c510, c420, c330, c411, c321, c222 = [
+        coeff.rep.get(m, zero) for m in
+        [(6,0,0), (5,1,0), (4,2,0), (3,3,0), (4,1,1), (3,2,1), (2,2,2)]]
+    if 3*(c600+c330+c411) + 6*(c510+c420+c321) + c222 != zero:
+        return None
+    if coeff.wrap(-c330 + 2*c420 - 2*c510 + 2*c600) < 0: # f(1,-1,0) < 0
+        return None
+
+    quartic = {
+        (4,0,0): 6*c600-7*c510+5*c420-3*c330-c321,
+        (3,1,0): -12*c600+11*c510-13*c420+6*c330-c321,
+        (2,2,0): 18*c600-18*c510+18*c420-9*c330,
+        (3,0,1): -8*c600+6*c510-3*c420+c330-c411,
+        (2,1,1): c510+c420+c321,
+        (2,0,2): 9*c600-4*c510+c420,
+        (1,1,2): c411-3*c600,
+        (1,0,3): c510-3*c600,
+        (0,0,4): c600,
+    }
+    quartic.update({(j,i,k): v for (i,j,k), v in list(quartic.items())})
+    solution = _structsos_acyclic_quartic_symmetric_real(
+        coeff.from_dict(quartic)*8, need_reorder=False) # scaled
+    if solution is None:
+        return None
+
+    a, b, c = coeff.gens
+    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+    X = CyclicSum(a*b**2-a*b*c)
+    Y = CyclicSum(a**2*b-a*b*c)
+    Z = CyclicSum(a**3-a*b*c)
+    U = CyclicSum((a-b)**2) # scaled
+    solution = solution.xreplace({
+        a+b: CyclicSum(a*(b-c)**2),
+        (a-b)**2: CyclicProduct((a-b)**2),
+        a-b: (a-b)*(b-c)*(c-a),
+        a: X, b: Y, c: Z,
+    })/U**3
+
+    def expand_square(expr):
+        base, power = expr.args
+        if power % 2 == 0 and base.has(_CyclicSum):
+            poly = base.as_poly(a,b,c, domain=coeff.domain)
+            if verify_symmetry(poly, "sym"):
+                poly_r = poly_reduce_by_symmetry(poly, "cyc")
+                return CyclicSum(poly_r.as_expr())**power
+        return expr
+
+    if coeff.is_rational or coeff.domain.is_RR:
+        solution = solution.replace(
+            lambda expr: expr.is_Pow and expr.args[1] == 2,
+            expand_square
+        )
+    return solution
 
 
 def _structsos_sextic_symmetric_quadratic_form(coeff: 'Coeff'):
@@ -2072,26 +2166,21 @@ def _structsos_sextic_symmetric_ultimate(coeff: 'Coeff', real = True):
 
     => s(a6-a2b2c2)+s(a3b3-a4bc)-12s(a4b2+a4c2-2a2b2c2)+22s(a3b3-a2b2c2)+14s(a2b+ab2-2abc)abc-2p(a-b)2 # doctest:+SKIP
 
-    Case C.
-
-    => s(409a6-1293a5b-1293a5c+651a4b2+5331a4bc+651a4c2+818a3b3-5190a3b2c-5190a3bc2+5106a2b2c2) # doctest:+SKIP
-
-    => s(38a6-148a5b-148a5c+225a4b2+392a4bc+225a4c2-210a3b3-320a3b2c-320a3bc2+266a2b2c2) # doctest:+SKIP
-
-    => s(414a6-1470a5b-1470a5c+979a4b2+5864a4bc+979a4c2+644a3b3-5584a3b2c-5584a3bc2+5228a2b2c2) # doctest:+SKIP
     """
-
     solvers = [
         _structsos_sextic_symmetric_sa2mab_multiple,
         _structsos_sextic_symmetric_full_sdp,
         _structsos_sextic_symmetric_quadratic_form,
         _structsos_sextic_symmetric_schur_split,
         _structsos_sextic_symmetric_sos_theorem,
-        _structsos_sextic_symmetric_subtraction,
+        _structsos_sextic_symmetric_lifted_sdp,
     ]
 
+    if int(real) <= 1:
+        solvers.append(_structsos_sextic_symmetric_subtraction)
+
     if not coeff.is_rational:
-        solvers.pop(2)
+        solvers.remove(_structsos_sextic_symmetric_quadratic_form)
 
     for solver in solvers:
         solution = solver(coeff)
