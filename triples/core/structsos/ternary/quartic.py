@@ -4,7 +4,6 @@ from typing import TYPE_CHECKING, List, Tuple
 from sympy import Add, Float, Integer, Poly, nsimplify
 from sympy import MutableDenseMatrix as Matrix
 from sympy import sign as sp_sign
-from sympy.polys.matrices import DomainMatrix
 
 from ..univariate import prove_univariate
 from ..utils import (
@@ -623,6 +622,69 @@ def structsos_acyclic_quartic(coeff, real = True):
     return _structsos_acyclic_quartic_real(coeff)
 
 
+def _gram_polys(matrices0, matrices1, gen, domain):
+    """
+    Return the nonzero principal minors of affine symmetric matrix blocks.
+
+    ``matrices0`` and ``matrices1`` are matching lists of square matrices,
+    represented as rows of elements in ``domain``. They specify the blocks
+    at parameter values 0 and 1. Each block is interpolated as
+    ``M(t) = M0 + t*(M1-M0)``, where ``t`` is represented by ``gen``.
+
+    The returned univariate ``Poly`` objects retain the coefficient domain.
+    All blocks are PSD at a real parameter value iff every returned
+    polynomial is nonnegative there. Identically zero minors are omitted;
+    nonzero constants and duplicate minors are retained. This constructs
+    the inequalities only; it does not search for a feasible parameter.
+
+    Division-free Laplace expansion is suitable for the small Gram blocks
+    here and avoids exact polynomial division, which can fail over RR.
+
+    Examples
+    --------
+    The matrix [[t, 1], [1, t]] is PSD exactly when t >= 1.
+
+    >>> from sympy import QQ, symbols
+    >>> t = symbols('t')
+    >>> m0 = [[QQ.zero, QQ.one], [QQ.one, QQ.zero]]
+    >>> m1 = [[QQ.one, QQ.one], [QQ.one, QQ.one]]
+    >>> polys = _gram_polys([m0], [m1], t, QQ)
+    >>> [p.as_expr() for p in polys]
+    [t, t, t**2 - 1]
+    >>> all(p.rep.eval(QQ(2)) >= 0 for p in polys)
+    True
+    >>> all(p.rep.eval(QQ(0)) >= 0 for p in polys)
+    False
+    >>> _gram_polys([[[QQ.zero]]], [[[QQ.zero]]], t, QQ)
+    []
+    >>> [p.as_expr() for p in _gram_polys([[[QQ(-1)]]], [[[QQ(-1)]]], t, QQ)]
+    [-1]
+    """
+    ring = domain.poly_ring(gen)
+    t = ring.gens[0]
+
+    def determinant(rows):
+        """Compute a nonempty square determinant without division."""
+        if len(rows) == 1:
+            return rows[0][0]
+        return sum(((-1)**j*rows[0][j]*determinant([
+            row[:j]+row[j+1:] for row in rows[1:]])
+            for j in range(len(rows))), ring.zero)
+
+    polys = []
+    for rows0, rows1 in zip(matrices0, matrices1):
+        n = len(rows0)
+        rows = [[ring.convert(v, domain) + t*ring.convert(w-v, domain)
+                 for v, w in zip(row0, row1)]
+                for row0, row1 in zip(rows0, rows1)]
+        for size in range(1, n+1):
+            for inds in combinations(range(n), size):
+                det = determinant([[rows[i][j] for j in inds] for i in inds])
+                if det:
+                    polys.append(Poly.from_dict(dict(det), (gen,), domain=domain))
+    return polys
+
+
 @structsos_reorder_symmetry(groups=(2, 1))
 def _structsos_acyclic_quartic_symmetric(coeff: 'Coeff', real = True):
     """
@@ -712,10 +774,16 @@ def _structsos_acyclic_quartic_symmetric(coeff: 'Coeff', real = True):
         return None
 
     def lift(p, x, y, degree):
+        """Homogenize the univariate p to y**degree*p(x/y)."""
         return Add(*[coeff.wrap(v)*x**i*y**(degree-i)
                      for (i,), v in p.rep.to_dict().items()])
 
     def binary_proof(p):
+        """
+        Lift a univariate SOS for p to a binary quartic SOS in a+b and c.
+
+        p has degree at most four. Return None if prove_univariate fails.
+        """
         proof = prove_univariate(p, return_type='list')
         if proof is not None:
             return Add(*[coeff.convert(w)*lift(term, a+b, c, 2)**2
@@ -739,6 +807,13 @@ def _structsos_acyclic_quartic_symmetric(coeff: 'Coeff', real = True):
     p4, p3, p2, p1, p0 = [P.rep.nth(i) for i in (4, 3, 2, 1, 0)]
 
     def gram_rows(params):
+        """
+        Build both original Gram blocks from the four free domain elements.
+
+        params = [l, h, k, j] specifies the even block entries at
+        (0,2), (0,3), (1,3), (2,3). All other entries are determined by
+        the original P, Q and A, so every choice represents the same F.
+        """
         l, h, k, j = params
         return [
             [p4, p3/2, l, h],
@@ -748,6 +823,15 @@ def _structsos_acyclic_quartic_symmetric(coeff: 'Coeff', real = True):
         ], [[q2-2*h, q1/2-k], [q1/2-k, q0-2*j]]
 
     def finish(params, round_params=False):
+        """
+        Certify the original F and construct its SOS from Gram parameters.
+
+        params contains the four free entries in the original basis, as
+        domain elements. If round_params is True, first try small-denominator
+        approximations. Each trial rebuilds both blocks from the original
+        coefficients and must pass congruence. Return None if neither the
+        rounded parameters nor the supplied parameters produce PSD blocks.
+        """
         if round_params:
             numer = [coeff.to_sympy(v).n(15) for v in params]
             for rounding in (.1, .01, .0001, 1e-6, 1e-8):
@@ -769,62 +853,60 @@ def _structsos_acyclic_quartic_symmetric(coeff: 'Coeff', real = True):
             result.extend(w*t.together()**2 for w, t in zip(weights, u*vec) if w != 0)
         return Add(*result)
 
-    def gram_polys(params0, params1):
-        # Principal minors of a one-parameter Gram family, computed
-        # over the polynomial ring without symbolic Expr arithmetic.
-        # Laplace expansion avoids exact polynomial division over RR.
-        def determinant(rows):
-            if len(rows) == 1:
-                return rows[0][0]
-            return sum(((-1)**j*rows[0][j]*determinant([
-                row[:j]+row[j+1:] for row in rows[1:]])
-                for j in range(len(rows))), ring.zero)
-
-        ring = domain.poly_ring(a)
-        t = ring.gens[0]
-        params = [ring.convert(v, domain) + t*ring.convert(w-v, domain)
-                  for v, w in zip(params0, params1)]
-        polys = []
-        for rows in gram_rows(params):
-            n = len(rows)
-            rows = [[v if ring.of_type(v) else ring.convert(v, domain)
-                     for v in row] for row in rows]
-            for size in range(1, n+1):
-                for inds in combinations(range(n), size):
-                    det = determinant([[rows[i][j] for j in inds] for i in inds])
-                    if det:
-                        polys.append(Poly.from_dict(dict(det), (a,), domain=domain))
-        return polys
-
     def transform(p, degree, direction):
+        """
+        Move the direction (direction, 1) to (X, Y) = (1, 0).
+
+        p is the dehomogenized binary form of homogeneous degree degree.
+        Substitute x = direction*X+Y, y = X and return its polynomial
+        at Y = 1. direction=None denotes (1,0) and leaves p unchanged.
+        """
         if direction is None: # the projective direction (1, 0)
             return p
         shifted = p.shift(direction)
         return poly([shifted.rep.nth(i) for i in range(degree+1)])
 
     def restore(rows, direction):
-        # Only these four entries are free in the original Gram family.
-        # Adding a multiple of (x**2+y**2+z**2)**2 changes its fixed
-        # diagonal entries, so the boundary parameters can be reused.
+        """
+        Recover the four original Gram parameters after a binary change of basis.
+
+        rows is a symmetric Gram matrix on [X**2, X*Y, Y**2, z**2],
+        with domain-element entries. For a finite direction, X=y and
+        Y=x-direction*y. Compute only the four needed entries of the
+        corresponding congruence, without constructing another matrix.
+        direction=None means the basis is already the original one.
+
+        Adding a multiple of (x**2+y**2+z**2)**2 only changes fixed
+        diagonal entries, so its four free parameters can be reused.
+        """
         if direction is not None:
             s = direction
-            trans = DomainMatrix([
-                [zero, zero, one, zero], [zero, one, -s, zero],
-                [one, -2*s, s**2, zero], [zero, zero, zero, one]
-            ], (4, 4), domain)
-            mat = DomainMatrix(rows, (4, 4), domain)
-            rows = (trans.transpose()*mat*trans).to_list()
+            return [rows[2][0]-s*rows[2][1]+s**2*rows[2][2],
+                    rows[2][3], rows[1][3]-2*s*rows[2][3],
+                    rows[0][3]-s*rows[1][3]+s**2*rows[2][3]]
         return [rows[0][2], rows[0][3], rows[1][3], rows[2][3]]
 
     def off_plane(pg, qg, ag, direction, t, round_params=False):
-        # The even squares span [z**2-t*x**2, x*y, y**2]. Restore
-        # the original Gram coefficients even for approximate zeros.
+        """
+        Propose and certify an SOS using an off-plane zero of a boundary form.
+
+        pg, qg, ag describe G = ag*z**4+qg(x,y)*z**2+pg(x,y).
+        direction specifies the binary direction (direction,1), or (1,0)
+        when None; t > 0 is z**2 at the normalized zero. These data may
+        be approximate. In the transformed coordinates the even squares
+        span [z**2-t*X**2, X*Y, Y**2], leaving one parameter k.
+
+        Restore the original Gram family, use its principal minors to
+        choose k, then certify the original F. round_params controls the
+        optional rationalization in finish; the returned SOS is for F.
+        """
         pp = transform(pg, 4, direction)
         qq = transform(qg, 2, direction)
         v = qq.rep.nth(1)/2
         B, C, E = pp.rep.nth(2), pp.rep.nth(1)/2, pp.rep.nth(0)
 
         def params(k):
+            """Restore the free entries when k couples z**2-t*X**2 to Y**2."""
             return restore([
                 [ag*t**2, -t*v, -t*k, -ag*t],
                 [-t*v, B+2*t*k, C, v],
@@ -833,7 +915,7 @@ def _structsos_acyclic_quartic_symmetric(coeff: 'Coeff', real = True):
             ], direction)
 
         params0, params1 = params(zero), params(one)
-        polys = gram_polys(params0, params1)
+        polys = _gram_polys(gram_rows(params0), gram_rows(params1), a, domain)
         candidates = [zero, qq.rep.nth(0)/2] + intervals(polys, domain)
         for k in candidates:
             if all(ge(p.rep.eval(k)) for p in polys):
@@ -842,6 +924,19 @@ def _structsos_acyclic_quartic_symmetric(coeff: 'Coeff', real = True):
                     return solution
 
     def plane(pg, qg, ag, direction, round_params=False):
+        """
+        Propose and certify an SOS using a zero on the symmetry plane z=0.
+
+        pg, qg, ag describe the same boundary form as in off_plane.
+        direction denotes (direction,1), or (1,0) when None. After
+        transformation, the even squares span [X*Y, Y**2, z**2].
+        Their Gram block is [[p,s,h],[s,r,k],[h,k,ag]] and the odd
+        block is [[u,v-h],[v-h,w-2*k]]. Schur complements eliminate k,
+        leaving inequalities of degree at most four in h. Zero p or u
+        is handled before division. Approximate zeros only propose
+        parameters; finish validates the original F, with optional
+        rationalization controlled by round_params.
+        """
         pp = transform(pg, 4, direction)
         qq = transform(qg, 2, direction)
         p, s, r = pp.rep.nth(2), pp.rep.nth(1)/2, pp.rep.nth(0)
@@ -850,6 +945,7 @@ def _structsos_acyclic_quartic_symmetric(coeff: 'Coeff', real = True):
             return None
 
         def result(h, k):
+            """Restore the two reduced even-block entries and certify F."""
             return finish(restore([
                 [zero, zero, zero, zero], [zero, p, s, h],
                 [zero, s, r, k], [zero, h, k, ag]
@@ -905,7 +1001,7 @@ def _structsos_acyclic_quartic_symmetric(coeff: 'Coeff', real = True):
         h2, h1, h0 = [H.rep.nth(i) for i in (2, 1, 0)]
         params0 = [multiplier*h2*h0, zero, zero, zero]
         params1 = [params0[0], h2, h1, h0]
-        polys = gram_polys(params0, params1)
+        polys = _gram_polys(gram_rows(params0), gram_rows(params1), a, domain)
         for theta in [zero] + intervals(polys, domain):
             if all(ge(p.rep.eval(theta)) for p in polys):
                 solution = finish([params0[0], theta*h2, theta*h1, theta*h0])
@@ -946,7 +1042,9 @@ def _structsos_acyclic_quartic_symmetric(coeff: 'Coeff', real = True):
         numer, denom = 2*p-q*r, 2*A*r-q
         if gt(numer) and gt(denom):
             t = numer/denom
-            value = (4*A*p-q**2)/(4*(A*r**2-q*r+p))
+            # 4*(A*r**2-q*r+p) = 2*(r*denom+numer) > 0.
+            # The latter avoids cancellation to zero in an inexact domain.
+            value = (4*A*p-q**2)/(2*(r*denom+numer))
             candidates.append((value, s, t))
 
     candidates.sort(key=lambda x: coeff.wrap(x[0]))
