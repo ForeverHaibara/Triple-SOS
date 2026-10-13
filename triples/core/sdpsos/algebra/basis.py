@@ -63,7 +63,7 @@ class SOSBasis:
     def as_expr(self, coeff, vec, expr=None, adjoint_operator=None, state_operator=None) -> "Expr":
         raise NotImplementedError
 
-class QmoduleBasis(SOSBasis):
+class QModuleBasis(SOSBasis):
     qmodule: "Poly"
     def __init__(self,
         algebra: "StateAlgebra",

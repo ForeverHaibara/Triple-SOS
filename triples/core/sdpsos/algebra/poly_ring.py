@@ -4,7 +4,7 @@ from sympy import Poly
 from sympy.combinatorics import PermutationGroup
 
 from .state_algebra import CommutativeStateAlgebra
-from .basis import QmoduleBasis, IdealBasis
+from .basis import QModuleBasis, IdealBasis
 from ....utils import generate_monoms
 
 if TYPE_CHECKING:
@@ -89,14 +89,14 @@ class PolyRing(CommutativeStateAlgebra):
         for key, q in qmodule.items():
             d = q.total_degree()
             if is_homogeneous and ((degree - d)%2 != 0 or (not q.is_homogeneous)):
-                qmodule_bases[key] = QmoduleBasis(self, q, basis=[])
+                qmodule_bases[key] = QModuleBasis(self, q, basis=[])
                 continue
             if d > degree:
-                qmodule_bases[key] = QmoduleBasis(self, q, basis=[])
+                qmodule_bases[key] = QModuleBasis(self, q, basis=[])
                 continue
             dict_basis, basis = generate_monoms(
                 self.nvars, (degree - d)//2, hom=is_homogeneous)
-            qmodule_bases[key] = QmoduleBasis(self, q, basis=basis, dict_basis=dict_basis)
+            qmodule_bases[key] = QModuleBasis(self, q, basis=basis, dict_basis=dict_basis)
 
         ideal_bases = {}
         for key, i in ideal.items():

@@ -1,4 +1,4 @@
-from .basis import SOSBasis, QmoduleBasis, IdealBasis
+from .basis import SOSBasis, QModuleBasis, IdealBasis
 
 from .pseudo_poly import PseudoPoly, PseudoSMP
 
@@ -11,7 +11,7 @@ from .nc_poly_ring import NCPolyRing
 from .moment_algebra import MixedMomentAlgebra
 
 __all__ = [
-    'SOSBasis', 'QmoduleBasis', 'IdealBasis', 'PseudoPoly', 'PseudoSMP',
+    'SOSBasis', 'QModuleBasis', 'IdealBasis', 'PseudoPoly', 'PseudoSMP',
     'StateAlgebra', 'CommutativeStateAlgebra',
     'PolyRing', 'NCPolyRing', 'MixedMomentAlgebra'
 ]

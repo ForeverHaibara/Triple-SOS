@@ -4,7 +4,7 @@ from typing import Dict, Any, Optional, Callable, TYPE_CHECKING
 from sympy import Add, Mul
 
 from .state_algebra import CommutativeStateAlgebra
-from .basis import QmoduleBasis, IdealBasis
+from .basis import QModuleBasis, IdealBasis
 
 from ....utils.monomials import generate_partitions
 
@@ -164,10 +164,10 @@ class MixedMomentAlgebra(CommutativeStateAlgebra):
         for key, q in qmodule.items():
             d = q.total_degree()
             if is_homogeneous and ((degree - d)%2 != 0 or (not q.is_homogeneous)):
-                qmodule_bases[key] = QmoduleBasis(self, q, basis=[])
+                qmodule_bases[key] = QModuleBasis(self, q, basis=[])
                 continue
             if d > degree:
-                qmodule_bases[key] = QmoduleBasis(self, q, basis=[])
+                qmodule_bases[key] = QModuleBasis(self, q, basis=[])
                 continue
             m = nm(q)
             if self.num_moments - 1 - m < 0:
@@ -175,7 +175,7 @@ class MixedMomentAlgebra(CommutativeStateAlgebra):
             dict_basis, basis = generate_monoms_mm(
                 self.nvars, (degree - d)//2, num_moments=(self.num_moments - 1 - m)//2, hom=is_homogeneous,
                 standard_monom=self.standard_monom)
-            qmodule_bases[key] = QmoduleBasis(self, q, basis=basis, dict_basis=dict_basis)
+            qmodule_bases[key] = QModuleBasis(self, q, basis=basis, dict_basis=dict_basis)
 
         ideal_bases = {}
         for key, i in ideal.items():

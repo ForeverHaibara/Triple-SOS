@@ -11,8 +11,7 @@ from ...sdp.arithmetic import is_numerical_mat
 if TYPE_CHECKING:
     from sympy import Symbol
     from sympy.matrices import MutableDenseMatrix as Matrix
-    from .algebra import SOSBasis
-    from ...utils import MonomialManager
+    from .algebra import SOSBasis, QModuleBasis, IdealBasis
 
 
 def _invarraylize(basis: 'SOSBasis', vec: 'Matrix', gens: Tuple['Symbol', ...]) -> Poly:
@@ -41,11 +40,13 @@ def sdp_solution_from_decomps(
     decompositions: Dict[Any, Tuple['Matrix', 'Matrix']],
     eqspace: Dict[Any, 'Matrix'],
     qmodule: Dict[Any, Expr],
-    qmodule_bases: Dict[Any, 'MonomialManager'],
+    qmodule_bases: Dict[Any, 'QModuleBasis'],
     ideal: Dict[Any, Expr],
-    ideal_bases: Dict[Any, 'MonomialManager'],
+    ideal_bases: Dict[Any, 'IdealBasis'],
+    *,
     adjoint_operator: Optional[Callable[[Expr], Expr]] = None,
     state_operator: Optional[Callable[[Expr], Expr]] = None,
+    remove_redundancy: Union[bool, int] = True,
 ) -> 'Solution':
     """
     Create SDP solution from decompositions.
@@ -57,6 +58,7 @@ def sdp_solution_from_decomps(
         qmodule_bases=qmodule_bases,
         adjoint_operator=adjoint_operator,
         state_operator=state_operator,
+        remove_redundancy=remove_redundancy,
     )
 
     ideal_expr = _get_ideal_expr(
@@ -80,7 +82,8 @@ def _get_ideal_expr(
     eqspace: Dict[Any, 'Matrix'],
     gens: List['Symbol'],
     ideal: Dict[Any, Expr],
-    ideal_bases: Dict[Any, 'MonomialManager'],
+    ideal_bases: Dict[Any, 'IdealBasis'],
+    *,
     adjoint_operator: Optional[Callable[[Expr], Expr]] = None,
     state_operator: Optional[Callable[[Expr], Expr]] = None,
 ):
@@ -93,14 +96,45 @@ def _get_ideal_expr(
         ideal_exprs = [state_operator(x) for x in ideal_exprs]
     return Add(*ideal_exprs)
 
-def _get_qmodule_expr(
-    decompositions: Dict[Any, Tuple['Matrix', 'Matrix']],
-    gens: List['Symbol'],
-    qmodule: Optional[Dict[Any, Expr]],
-    qmodule_bases: Optional[Dict[Any, 'MonomialManager']],
+
+def compute_cyc_sum_of_squares(
+    coeff,
+    q_module: Expr,
+    poly: Poly,
+    *,
     adjoint_operator: Optional[Callable[[Expr], Expr]] = None,
     state_operator: Optional[Callable[[Expr], Expr]] = None,
     simplify_poly: Optional[Callable] = None,
+) -> Expr:
+    """
+    Computes cyclic_sum(coeff * q_module * poly.as_expr()**2),
+    and returns a pretty expression.
+    """
+    # if isinstance(expr, Add):
+    #     expr = sp.UnevaluatedExpr(expr)
+    q_primitive = q_module.primitive()
+    coeff, q = coeff * q_primitive[0], _as_expr(q_primitive[1], state_operator=state_operator)
+    c, expr = simplify_poly(poly)
+    coeff = coeff * c**2
+
+    if adjoint_operator is not None:
+        expr = adjoint_operator(expr) * (q + adjoint_operator(q)) * expr
+        coeff = coeff/2 # since we have doubled the "q"
+    else:
+        expr = Mul(expr, q, expr)
+    return coeff * state_operator(expr) if state_operator is not None else coeff * expr
+
+
+def _get_qmodule_expr(
+    decompositions: Dict[Any, Tuple['Matrix', 'Matrix']],
+    gens: List['Symbol'],
+    qmodule: Dict[Any, Expr],
+    qmodule_bases: Dict[Any, 'QModuleBasis'],
+    *,
+    adjoint_operator: Optional[Callable[[Expr], Expr]] = None,
+    state_operator: Optional[Callable[[Expr], Expr]] = None,
+    simplify_poly: Optional[Callable] = None,
+    remove_redundancy: Union[bool, int] = True,
 ) -> Expr:
     """
     Convert a {key: (U, S)} dictionary to sum of squares.
@@ -111,36 +145,30 @@ def _get_qmodule_expr(
         else:
             simplify_poly = partial(_default_simplify_poly, state_operator=state_operator)
 
-    def compute_cyc_sum_of_squares(coeff, q_module: Expr, poly: Poly) -> Expr:
-        """Computes cyclic_sum(coeff * q_module * poly.as_expr()**2),
-        and returns a pretty expression."""
-        # if isinstance(expr, Add):
-        #     expr = sp.UnevaluatedExpr(expr)
-        q_primitive = q_module.primitive()
-        coeff, q = coeff * q_primitive[0], _as_expr(q_primitive[1], state_operator=state_operator)
-        c, expr = simplify_poly(poly)
-        coeff = coeff * c**2
-
-        if adjoint_operator is not None:
-            expr = adjoint_operator(expr) * (q + adjoint_operator(q)) * expr
-            coeff = coeff/2 # since we have doubled the "q"
-        else:
-            expr = Mul(expr, q, expr)
-        return coeff * state_operator(expr) if state_operator is not None else coeff * expr
-
     exprs = []
     for key, (U, S) in decompositions.items():
         expr = qmodule[key]
         # vecs = [qmodule_bases[key].invarraylize(U[i,:], gens, codeg) for i in range(U.shape[0])]
         vecs = [_invarraylize(qmodule_bases[key], U[i,:].T, gens) for i in range(U.shape[0])]
-        vecs = [compute_cyc_sum_of_squares(S[i], expr, vecs[i]) for i in range(U.shape[0])]
+        vecs = [
+            compute_cyc_sum_of_squares(
+                S[i], expr, vecs[i],
+                adjoint_operator=adjoint_operator,
+                state_operator=state_operator,
+                simplify_poly=simplify_poly,
+            )
+            for i in range(U.shape[0])
+        ]
         exprs.extend(vecs)
 
     return Add(*exprs)
 
-def _default_simplify_poly(poly: Poly, bound: int=10000,
-        state_operator: Optional[Callable[[Expr], Expr]] = None) -> Tuple[Expr, Expr]:
 
+def _default_simplify_poly(
+    poly: Poly,
+    bound: int=10000,
+    state_operator: Optional[Callable[[Expr], Expr]] = None
+) -> Tuple[Expr, Expr]:
     """
     Simplify the polynomial. Return c, expr such that poly = c * expr.
     Using factorization would be extremely slow sometimes, e.g. in the case
