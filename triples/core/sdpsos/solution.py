@@ -9,10 +9,11 @@ from ..solution import Solution
 from ...sdp.arithmetic import is_numerical_mat
 
 if TYPE_CHECKING:
-    from .algebra import SOSBasis
     from sympy import Symbol
     from sympy.matrices import MutableDenseMatrix as Matrix
+    from .algebra import SOSBasis
     from ...utils import MonomialManager
+
 
 def _invarraylize(basis: 'SOSBasis', vec: 'Matrix', gens: Tuple['Symbol', ...]) -> Poly:
     b = basis._basis
@@ -24,6 +25,7 @@ def _invarraylize(basis: 'SOSBasis', vec: 'Matrix', gens: Tuple['Symbol', ...]) 
         rep = PseudoSMP.from_dict(rep, len(gens)-1, vec.domain, algebra=basis.algebra)
         return PseudoPoly.new(rep, *gens)
 
+
 def _as_expr(poly: Union[Poly, PseudoPoly], state_operator: Optional[Callable[[Expr], Expr]] = None) -> Expr:
     if state_operator is None:
         return poly.as_expr()
@@ -34,54 +36,45 @@ def _as_expr(poly: Union[Poly, PseudoPoly], state_operator: Optional[Callable[[E
     return poly.as_expr(state_operator=state_operator)
 
 
-class SolutionSDP(Solution):
-    method = 'SDPSOS'
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+def sdp_solution_from_decomps(
+    poly: Poly,
+    decompositions: Dict[Any, Tuple['Matrix', 'Matrix']],
+    eqspace: Dict[Any, 'Matrix'],
+    qmodule: Dict[Any, Expr],
+    qmodule_bases: Dict[Any, 'MonomialManager'],
+    ideal: Dict[Any, Expr],
+    ideal_bases: Dict[Any, 'MonomialManager'],
+    adjoint_operator: Optional[Callable[[Expr], Expr]] = None,
+    state_operator: Optional[Callable[[Expr], Expr]] = None,
+) -> 'Solution':
+    """
+    Create SDP solution from decompositions.
+    """
 
-    # @property
-    # def is_equal(self):
-    #     return True
+    qmodule_expr = _get_qmodule_expr(
+        decompositions, poly.gens,
+        qmodule=qmodule,
+        qmodule_bases=qmodule_bases,
+        adjoint_operator=adjoint_operator,
+        state_operator=state_operator,
+    )
 
-    @classmethod
-    def from_decompositions(self,
-        poly: Poly,
-        decompositions: Dict[Any, Tuple['Matrix', 'Matrix']],
-        eqspace: Dict[Any, 'Matrix'],
-        qmodule: Dict[Any, Expr],
-        qmodule_bases: Dict[Any, 'MonomialManager'],
-        ideal: Dict[Any, Expr],
-        ideal_bases: Dict[Any, 'MonomialManager'],
-        adjoint_operator: Optional[Callable[[Expr], Expr]] = None,
-        state_operator: Optional[Callable[[Expr], Expr]] = None,
-    ) -> 'SolutionSDP':
-        """
-        Create SDP solution from decompositions.
-        """
+    ideal_expr = _get_ideal_expr(
+        eqspace, poly.gens,
+        ideal=ideal,
+        ideal_bases=ideal_bases,
+        adjoint_operator=adjoint_operator,
+        state_operator=state_operator,
+    )
 
-        qmodule_expr = _get_qmodule_expr(
-            decompositions, poly.gens,
-            qmodule=qmodule,
-            qmodule_bases=qmodule_bases,
-            adjoint_operator=adjoint_operator,
-            state_operator=state_operator,
-        )
+    is_equal = not _is_numerical(decompositions, eqspace)
 
-        ideal_expr = _get_ideal_expr(
-            eqspace, poly.gens,
-            ideal=ideal,
-            ideal_bases=ideal_bases,
-            adjoint_operator=adjoint_operator,
-            state_operator=state_operator,
-        )
+    return Solution(
+        problem = _as_expr(poly, state_operator=state_operator) if state_operator is not None else poly,
+        solution = Add(qmodule_expr, ideal_expr),
+        is_equal = is_equal,
+    )
 
-        is_equal = not _is_numerical(decompositions, eqspace)
-
-        return SolutionSDP(
-            problem = _as_expr(poly, state_operator=state_operator) if state_operator is not None else poly,
-            solution = Add(qmodule_expr, ideal_expr),
-            is_equal = is_equal,
-        )
 
 def _get_ideal_expr(
     eqspace: Dict[Any, 'Matrix'],

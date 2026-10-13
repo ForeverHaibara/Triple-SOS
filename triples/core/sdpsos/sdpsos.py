@@ -18,8 +18,8 @@ from ...sdp.arithmetic import rep_matrix_from_dict
 if TYPE_CHECKING:
     from sympy import Poly, Expr
     from sympy.combinatorics import PermutationGroup
-    from .solution import SolutionSDP
     from ..problem import InequalityProblem
+    from ..solution import Solution
     from ...utils import Root
 
 
@@ -581,7 +581,7 @@ def SDPSOS(
     normalize: bool = True,
     verbose: bool = False,
     time_limit: float = 3600.,
-) -> Optional["SolutionSDP"]:
+) -> Optional["Solution"]:
     """
     Solve a constrained polynomial inequality problem by semidefinite programming (SDP).
 
