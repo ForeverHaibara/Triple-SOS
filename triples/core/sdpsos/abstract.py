@@ -164,6 +164,7 @@ class SOSElement:
         verbose: bool = False,
         time_limit: Optional[float] = None,
         allow_numer: int = 0,
+        normalize: bool = True,
         kwargs: Dict[Any, Any] = {},
     ) -> Optional[Matrix]:
         """
@@ -177,7 +178,8 @@ class SOSElement:
         rest_time = end_time - perf_counter() if end_time is not None else time_limit
         return self.sdp.solve(solver=solver, solve_child=solve_child,
                 propagate_to_parent=propagate_to_parent, verbose=verbose,
-                time_limit=rest_time, allow_numer=allow_numer, kwargs=kwargs)
+                time_limit=rest_time, allow_numer=allow_numer,
+                normalize=normalize, kwargs=kwargs)
 
     def as_solution(self, *args, **kwargs):
         raise NotImplementedError
