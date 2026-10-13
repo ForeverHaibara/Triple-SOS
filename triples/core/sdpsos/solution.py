@@ -10,11 +10,19 @@ from ...sdp.arithmetic import is_numerical_mat
 
 if TYPE_CHECKING:
     from sympy import Symbol
+    from sympy.combinatorics.perm_groups import PermutationGroup
     from sympy.matrices import MutableDenseMatrix as Matrix
     from .algebra import SOSBasis, QModuleBasis, IdealBasis
 
 
-def _invarraylize(basis: 'SOSBasis', vec: 'Matrix', gens: Tuple['Symbol', ...]) -> Poly:
+def _invarraylize(
+    basis: 'SOSBasis',
+    vec: 'Matrix',
+    gens: Tuple['Symbol', ...]
+) -> Union[Poly, PseudoPoly]:
+    """
+    Transform a vector to the polynomial form given a basis.
+    """
     b = basis._basis
     vec = vec._rep.rep
     rep = {b[i]: v[0] for i, v in vec.items() if v.get(0)}
@@ -33,6 +41,80 @@ def _as_expr(poly: Union[Poly, PseudoPoly], state_operator: Optional[Callable[[E
     elif isinstance(poly, Expr):
         return poly
     return poly.as_expr(state_operator=state_operator)
+
+
+def _is_numerical(decompositions, eqspace):
+    for U, S in decompositions.values():
+        if is_numerical_mat(U) or is_numerical_mat(S):
+            return True
+    for U in eqspace.values():
+        if is_numerical_mat(U):
+            return True
+    return False
+
+
+def cyc_sum_poly(
+    poly: Poly,
+    perm_group: "PermutationGroup"
+) -> Poly:
+    """
+    Compute `sum_{g in G} g(poly)` efficiently.
+    """
+    terms = poly.rep.to_dict()
+    domain = poly.domain
+
+    group_order = perm_group.order()
+
+    generators = perm_group.generators
+
+    def act_exp(alpha, g):
+        beta = [0] * len(alpha)
+        for gi, a in zip(g._array_form, alpha):
+            beta[gi] = a
+        return tuple(beta)
+
+    def orbit(alpha):
+        seen = {alpha}
+        stack = [alpha]
+
+        while stack:
+            a = stack.pop()
+
+            for g in generators:
+                b = act_exp(a, g)
+
+                if b not in seen:
+                    seen.add(b)
+                    stack.append(b)
+
+        return seen
+
+    result = {}
+    visited = set()
+
+    for alpha in terms:
+        if alpha in visited:
+            continue
+
+        orb = orbit(alpha)
+        visited.update(orb)
+
+        if not orb:
+            continue
+
+        c = sum((terms.get(beta, domain.zero) for beta in orb))
+
+        if not c:
+            continue
+
+        # orbit-stabilizer
+        stab_size = group_order // len(orb)
+        c *= stab_size
+
+        for beta in orb:
+            result[beta] = c
+
+    return poly.__class__.from_dict(result, poly.gens, domain=domain)
 
 
 def sdp_solution_from_decomps(
@@ -150,14 +232,27 @@ def _get_qmodule_expr(
         expr = qmodule[key]
         # vecs = [qmodule_bases[key].invarraylize(U[i,:], gens, codeg) for i in range(U.shape[0])]
         vecs = [_invarraylize(qmodule_bases[key], U[i,:].T, gens) for i in range(U.shape[0])]
+
+        if not vecs:
+            continue
+
+        if remove_redundancy and isinstance(vecs[0], Poly):
+            vecs, S = qmodule_remove_redundancy(
+                qmodule_bases[key].qmodule,
+                vecs,
+                list(S),
+                symmetry=qmodule_bases[key].symmetry,
+                level=int(remove_redundancy),
+            )
+
         vecs = [
             compute_cyc_sum_of_squares(
-                S[i], expr, vecs[i],
+                si, expr, veci,
                 adjoint_operator=adjoint_operator,
                 state_operator=state_operator,
                 simplify_poly=simplify_poly,
             )
-            for i in range(U.shape[0])
+            for si, veci in zip(S, vecs)
         ]
         exprs.extend(vecs)
 
@@ -215,11 +310,53 @@ def _default_simplify_poly(
     return c, m * p
 
 
-def _is_numerical(decompositions, eqspace):
-    for U, S in decompositions.values():
-        if is_numerical_mat(U) or is_numerical_mat(S):
-            return True
-    for U in eqspace.values():
-        if is_numerical_mat(U):
-            return True
-    return False
+def qmodule_remove_redundancy(
+    qmodule: Poly,
+    polys: List[Poly],
+    weights: List[Expr],
+    symmetry: Optional["PermutationGroup"] = None,
+    level: int = 1,
+) -> Tuple[List[Poly], List[Expr]]:
+    """
+    Sometimes `Σ(qmodule * weights[i] * polys[i] ** 2)`
+    have duplicate terms up to a constant factor due
+    to the symmetry sum.
+
+    Returns a reduced `(polys, weights)`
+    such that the total sum is equal to the original one.
+    """
+    if len(polys) != len(weights):
+        raise ValueError("len(polys) != len(weights)")
+
+    level = int(level)
+    if level <= 0:
+        return polys, weights
+    if symmetry is None or symmetry.is_trivial:
+        return polys, weights
+
+    summations = [
+        cyc_sum_poly(qmodule*polys[i]**2, symmetry)
+            for i in range(len(polys))
+    ]
+    lcs = [s.LC() for s in summations]
+    reps = [
+        tuple(sorted(s.monic().rep.to_dict().items(),
+                       key=lambda x: x[0])) for s in summations
+    ]
+
+    seen = {}
+    new_weights = [0] * len(reps)
+    for i in range(len(reps)):
+        rep = reps[i]
+        lc = lcs[i]
+        if lc == 0:
+            continue
+        if rep not in seen:
+            seen[rep] = i
+
+        j = seen[rep]
+        new_weights[j] += weights[i]*lc
+
+    new_polys = [poly for w, poly in zip(new_weights, polys) if w]
+    new_weights = [w/lc for w, lc in zip(new_weights, lcs) if w]
+    return new_polys, new_weights

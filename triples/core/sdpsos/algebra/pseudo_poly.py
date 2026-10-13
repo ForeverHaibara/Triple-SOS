@@ -14,6 +14,8 @@ class PseudoPoly(Basic):
     """
     Polynomials on general algebra. It provides some interfaces similar to :class:`sympy.Poly`.
     """
+    rep: "PseudoSMP"
+
     @classmethod
     def new(cls, rep, *gens):
         """Construct :class:`Poly` instance from raw representation. """
@@ -42,6 +44,10 @@ class PseudoPoly(Basic):
     def set_domain(f, dom):
         rep = f.rep.convert(dom)
         return f.new(rep, *f.gens)
+    def to_field(f):
+        if not f.domain.is_Field:
+            return f.set_domain(f.domain.get_field())
+
     @property
     def is_zero(f):
         return f.rep.is_zero
@@ -70,7 +76,14 @@ class PseudoPoly(Basic):
     def primitive(f):
         cont, result = f.rep.primitive()
         return f.rep.dom.to_sympy(cont), f.per(result)
-
+    def monic(f):
+        f = f.to_field()
+        return f.per(f.rep.monic())
+    def LC(f):
+        if f.is_zero:
+            return f.rep.dom.zero
+        lt = max(f.rep.keys())
+        return f.rep[lt]
 
     def __hash__(self):
         return super().__hash__()
@@ -149,6 +162,8 @@ class PseudoSMP(dict):
     def per(f, rep):
         return f.__class__(f.algebra, f.dom, rep)
 
+    def to_dict(self):
+        return dict(self)
     def terms(self, order=None):
         return list(self.items())
     def coeffs(self, order=None):
@@ -183,6 +198,12 @@ class PseudoSMP(dict):
         rep = _quo_ground(list(f.values()), c, f.dom)
         return c, f.per({k: v for k, v in zip(f.keys(), rep) if v})
 
+    def monic(f):
+        if not f:
+            return f
+        lc = max(f.keys())
+        val = f[lc]
+        return f.per({m: v/val for m, v in f.items()})
 
     @property
     def is_zero(f):
