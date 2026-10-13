@@ -550,6 +550,13 @@ def eliminate_var_by_constraint(
                 else:
                     has_trivial_cons = True
 
+    proj_con = _project_constraint(constraint, gens, gen_index,
+            is_eq=is_eq, solver=solver, p2expr=p2expr, constraint_expr=constraint_expr)
+    if proj_con is not None:
+        dst[1][proj_con[0]] = proj_con[1]
+    else:
+        has_trivial_cons = True
+
     new_problem = problem.copy_new(new_expr, dst[1], dst[2])
     if remove_redundancy:
         new_problem = new_problem.remove_redundancy()
@@ -558,6 +565,50 @@ def eliminate_var_by_constraint(
         new_problem = _inject_problem_signs(new_problem, signs)
 
     return new_problem, restoration
+
+
+def _project_constraint(
+    constraint: Poly,
+    gens: Tuple[Symbol, ...],
+    gen_index: int,
+    is_eq: bool = True,
+    solver: Optional[Callable[["Expr"], "Expr"]] = None,
+    p2expr: Optional[Callable[[Poly], "Expr"]] = None,
+    constraint_expr: Optional["Expr"] = None,
+) -> Optional[Tuple[Poly, "Expr"]]:
+    """
+    Compute the implicit constraint of `exists x, s.t. f(x,Y) >= 0`
+    by projecting onto `Y`.
+
+    It is now implemented for binomial constraints only.
+
+    TODO: use a more structured approach.
+    """
+    if p2expr is None:
+        p2expr = lambda x: x.as_expr()
+    if constraint_expr is None:
+        constraint_expr = p2expr(constraint)
+
+    # A binomial A*g**(2*k) + B == 0 also implies -A*B >= 0.
+    # This real-root condition is lost if we only eliminate the explicit
+    # constraints. Its certificate is (A*g**k)**2 - A*constraint.
+    # For an inequality the same implication requires -A >= 0.
+    # A positive lowest power must be excluded: g == 0 would then be a
+    # feasible branch without any restriction on A and B.
+    degree = constraint.degree(gen_index)
+    if degree % 2 == 0 and is_binomial_in(constraint, gen_index):
+        power = (gens[gen_index]**degree).as_poly(gens, domain=constraint.domain)
+        leading, constant = constraint.div(power)
+        if constant.degree(gen_index) == 0:
+            leading_expr = p2expr(leading)
+            coeff_proof = -leading_expr if is_eq else solver(-leading_expr)
+            if coeff_proof is not None:
+                content, inferred = (-leading*constant).primitive()
+                proof = ((leading_expr*gens[gen_index]**(degree//2))**2
+                         + coeff_proof*constraint_expr)/content
+                if solver(inferred) is None:
+                    return inferred, proof
+    return None
 
 
 def _inject_problem_signs(problem: "InequalityProblem", signs):
