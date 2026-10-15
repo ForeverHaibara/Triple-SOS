@@ -92,7 +92,8 @@ class NCPolyRing(StateAlgebra):
         return (term[0][::-1], term[1])
 
     def permute_monom(self, monom: "MONOM", perm: "Permutation") -> "MONOM":
-        arr = perm.array_form
+        # As with exponent tuples, perm specifies the new generator order.
+        arr = (~perm).array_form
         return tuple((arr[i], v) for i, v in monom)
 
     def infer_bases(self, poly: "Poly", qmodule: Dict[Any, "Poly"], ideal: Dict[Any, "Poly"]):

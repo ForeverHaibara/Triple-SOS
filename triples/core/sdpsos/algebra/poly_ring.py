@@ -1,6 +1,6 @@
 from typing import List, Dict, Optional, Any, TYPE_CHECKING
 
-from sympy import Poly
+from sympy import Add, Mul, Poly
 from sympy.combinatorics import PermutationGroup
 
 from .state_algebra import CommutativeStateAlgebra
@@ -72,7 +72,10 @@ class PolyRing(CommutativeStateAlgebra):
         return poly.rep.terms() if (not poly.is_zero) else []
 
     def as_expr(self, poly: Poly) -> 'Expr':
-        return poly.as_expr()
+        if isinstance(poly, Poly):
+            return poly.as_expr()
+        return Add(*[coeff * Mul(*[gen**power for gen, power in zip(poly.gens, monom)])
+            for monom, coeff in poly.terms()])
 
     def as_poly(self, expr: 'Expr', gens: List['Symbol'], **kwargs) -> Poly:
         return Poly(expr, *gens, **kwargs)
