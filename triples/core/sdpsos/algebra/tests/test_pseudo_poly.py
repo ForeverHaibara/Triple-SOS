@@ -4,12 +4,12 @@ from sympy import (
     EX, QQ, RR, ZZ, Float, Function, Integer, MatrixSymbol, Poly, Rational,
     S, expand, pi, sin, sqrt, symbols,
 )
+from sympy.combinatorics import Permutation, PermutationGroup, SymmetricGroup
 from sympy.polys.polyerrors import ExactQuotientFailed, GeneratorsError, PolynomialError
 
-from triples.core.sdpsos.algebra import MixedMomentAlgebra, NCPolyRing, PolyRing
-from triples.core.sdpsos.algebra.pseudo_poly import (
-    PseudoPoly, PseudoSMP, convert_expr_to_pseudo_poly,
-)
+from ..pseudo_poly import PseudoPoly, PseudoSMP, convert_expr_to_pseudo_poly
+from ...algebra import IdealBasis, MixedMomentAlgebra, NCPolyRing, PolyRing, QModuleBasis
+from ...manifold import complete_constraints_by_symmetry
 
 
 @pytest.fixture(params=['commutative', 'noncommutative', 'moments'])
@@ -24,6 +24,11 @@ def algebra_gens(request):
     else:
         algebra = MixedMomentAlgebra(3, 3, 2, is_homogeneous=False)
     return algebra, gens
+
+
+def _assert_domain_elements(poly):
+    assert poly.rep.dom == poly.domain
+    assert all(poly.domain.of_type(coeff) for coeff in poly.rep.values())
 
 
 def test_pseudo_smp(algebra_gens):
@@ -190,7 +195,10 @@ def test_convert_expr_to_pseudo_poly(algebra_gens):
     x, y, _ = gens
 
     def convert(expr, **kwargs):
-        return convert_expr_to_pseudo_poly(algebra, expr, gens, **kwargs)
+        # convert expr to PseudoPoly and assert domain elements
+        conv = convert_expr_to_pseudo_poly(algebra, expr, gens, **kwargs)
+        _assert_domain_elements(conv)
+        return conv
 
     for expr in (0, 1, -3, Rational(2, 3), Float('1.25'), pi, sqrt(2), x, x*y*x, (x + y + 1)**3):
         p = convert(expr)
@@ -206,6 +214,8 @@ def test_convert_expr_to_pseudo_poly(algebra_gens):
     assert convert(sqrt(2)*x, extension=True).domain == QQ.algebraic_field(sqrt(2))
     assert convert(x, domain=QQ).domain == QQ
     assert convert(x, domain=QQ).rep[algebra.gen_monom(0)] == QQ.one
+    assert convert(x**3 + y*x*y - 2*x*y).as_expr() == x**3 + y*x*y - 2*x*y
+    assert convert(x**3 + y*x*y - 2*y*x).as_expr() == x**3 + y*x*y - 2*y*x
 
     t = symbols('t')
     for expr in (t*x + t**2, x/t, sin(t)*x, sqrt(t)*x):
@@ -215,27 +225,6 @@ def test_convert_expr_to_pseudo_poly(algebra_gens):
     for expr in (x**-1, sqrt(x), x**t, sin(x), 1/(x + 1)):
         with pytest.raises(PolynomialError):
             convert(expr)
-
-
-@pytest.mark.parametrize('noncommutative', [False, True])
-def test_pseudo_poly_reorder(noncommutative):
-    gens = symbols('x y z', commutative=not noncommutative)
-    x, y, z = gens
-    algebra = NCPolyRing(3, 3) if noncommutative else PolyRing(3, 3)
-    p = convert_expr_to_pseudo_poly(algebra, x**2*y + 2*y*z + 3*x, gens)
-    for reordered_gens in ((y, x, z), (y, z, x), (z, x, y)):
-        reordered = p.reorder(*reordered_gens)
-        expected = convert_expr_to_pseudo_poly(algebra, p.as_expr(), reordered_gens)
-        assert reordered.gens == reordered_gens
-        assert reordered.rep == expected.rep
-        assert reordered.as_expr() == p.as_expr()
-        assert reordered.algebra is algebra and reordered.domain == p.domain
-        assert reordered.reorder(*gens) == p
-    assert p.reorder() == p
-    assert p.reorder(z, x, y).reorder() == p
-    for invalid_gens in ((x, y), (x, x, z), (x, y, symbols('t'))):
-        with pytest.raises(GeneratorsError):
-            p.reorder(*invalid_gens)
 
 
 def test_convert_noncommutative_and_matrix_powers():
@@ -252,35 +241,103 @@ def test_convert_noncommutative_and_matrix_powers():
         algebra.as_poly(a**-1, (a, b))
 
 
-def test_mixed_moments_and_state_collisions():
-    x, y = symbols('x y')
-    state = Function('s')
-    algebra = MixedMomentAlgebra(2, 3, 3, is_homogeneous=False)
+def test_pseudo_poly_reorder(algebra_gens):
+    algebra, gens = algebra_gens
+    x, y, z = gens
+    p = convert_expr_to_pseudo_poly(algebra, x**2*y + 2*y*z + 3*x, gens)
+    for reordered_gens in ((y, x, z), (y, z, x), (z, x, y)):
+        # test PseudoPoly.reorder does not change the value
+        # of the expression directly
+        reordered = p.reorder(*reordered_gens)
+        expected = convert_expr_to_pseudo_poly(algebra, p.as_expr(), reordered_gens)
+        assert reordered.gens == reordered_gens
+        assert reordered.rep == expected.rep
+        assert reordered.as_expr() == p.as_expr()
+        assert reordered.algebra is algebra and reordered.domain == p.domain
+        assert reordered.reorder(*gens) == p
+    assert p.reorder() == p
+    assert p.reorder(z, x, y).reorder() == p
+    for invalid_gens in ((x, y), (x, x, z), (x, y, symbols('t'))):
+        with pytest.raises(GeneratorsError):
+            p.reorder(*invalid_gens)
 
-    def convert(expr):
-        return algebra.as_poly(expr, (x, y), state_operator=state)
+    if isinstance(algebra, MixedMomentAlgebra):
+        state = Function('s')
+        expr = x*state(y)*state(x*z)**2 + state(x)*state(y*z)
+        p = algebra.as_poly(expr, gens, state_operator=state)
+        for reordered_gens in ((y, z, x), (z, x, y)):
+            reordered = p.reorder(*reordered_gens)
+            expected = algebra.as_poly(expr, reordered_gens, state_operator=state)
+            assert reordered == expected
+            assert reordered.as_expr(state_operator=state) == expr
+            assert reordered.reorder(*gens) == p
 
-    expr = x*state(x*y) + 2*state(x)**2*state(y) + state(1)
-    p = convert(expr)
-    assert p.as_expr(state_operator=state) == expr
-    assert p.total_degree() == 3 and not p.is_homogeneous
-    assert convert(state(x + y)).as_expr(state_operator=state) == state(x) + state(y)
-    assert convert(state(x*state(y))).as_expr(state_operator=state) == state(x)*state(y)
-    assert convert(state(state(x))).as_expr(state_operator=state) == state(1)*state(x)
-    assert convert(state(0)).is_zero
-    assert convert(x*state(x)).state().as_expr(state_operator=state) == state(x)**2
-    product = convert(state(x)*state(y)) * convert(state(x) + state(x*y))
-    assert expand(product.as_expr(state_operator=state)) == expand(state(x)*state(y)*(state(x) + state(x*y)))
 
-    # Identifying moments under x <-> y must collect and cancel coefficients.
-    symmetric = MixedMomentAlgebra(2, 2, 2, is_homogeneous=False,
-        standard_monom=lambda monom: tuple(sorted(monom)))
-    q = symmetric.as_poly(x + 2*y, (x, y)).state()
-    assert q.rep == {((0, 0), ((0, 1), 1)): ZZ(3)}
-    assert symmetric.as_poly(x - y, (x, y)).state().is_zero
+def test_sos_basis_symmetry(algebra_gens):
+    algebra, gens = algebra_gens
+    x, y, z = gens
+    cycle = Permutation([1, 2, 0])
+    swap = Permutation([1, 0, 2])
+    group = SymmetricGroup(3)
+    if isinstance(algebra, (PolyRing, NCPolyRing)):
+        algebra = type(algebra)(3, 3, is_homogeneous=False, symmetry=group)
+    else:
+        algebra.symmetry = group
+    constant = convert_expr_to_pseudo_poly(algebra, S.One, gens)
+    monoms = [algebra.gen_monom(i) for i in range(3)]
+    assert set(algebra.permute(monoms[0])) == set(monoms)
+    basis = QModuleBasis(algebra, constant, monoms)
+    symmetry, action = basis.get_symmetry_representation()
+    assert symmetry.order() == 6
+    assert action(cycle) == [2, 0, 1]
+    assert action(cycle * swap) == [action(cycle)[i] for i in action(swap)]
+    assert {frozenset(entries) for entries in basis.get_equal_entries()} == {
+        frozenset((0, 4, 8)), frozenset((1, 2, 3, 5, 6, 7)),
+    }
+
+    p = convert_expr_to_pseudo_poly(algebra, x**2*y + 2*y*z, gens)
+    cyclic_group = PermutationGroup(cycle)
+    orbit = complete_constraints_by_symmetry([p], cyclic_group)
+    expected_exprs = (x**2*y + 2*y*z, z**2*x + 2*x*y, y**2*z + 2*z*x)
+    assert set(orbit) == {
+        convert_expr_to_pseudo_poly(algebra, expr, gens) for expr in expected_exprs
+    }
+    assert len(complete_constraints_by_symmetry(orbit, cyclic_group)) == 3
+    assert complete_constraints_by_symmetry([], group) == []
+    assert complete_constraints_by_symmetry([p]) == [p]
+    if isinstance(algebra, PolyRing):
+        native = Poly(p.as_expr(), *gens)
+        assert {poly.as_expr() for poly in complete_constraints_by_symmetry([native], cyclic_group)} == {
+            expand(expr) for expr in expected_exprs
+        }
+
+    symmetric_poly = convert_expr_to_pseudo_poly(algebra, x + y + z, gens)
+    asymmetric_poly = convert_expr_to_pseudo_poly(algebra, x + y, gens)
+    assert algebra.is_symmetric(symmetric_poly, group)
+    assert not algebra.is_symmetric(asymmetric_poly, cycle)
+    for basis_class in (QModuleBasis, IdealBasis):
+        assert basis_class(algebra, symmetric_poly, monoms).symmetry.order() == 6
+        partial_basis = basis_class(algebra, asymmetric_poly, monoms)
+        assert partial_basis.symmetry.order() == 2
+        assert partial_basis.symmetry.contains(swap)
+        if basis_class is IdealBasis:
+            assert {frozenset(entries) for entries in partial_basis.get_equal_entries()} == {
+                frozenset((0, 1)), frozenset((2,)),
+            }
+
+    if isinstance(algebra, MixedMomentAlgebra):
+        state = Function('s')
+        p = algebra.as_poly(x*state(y), gens, state_operator=state)
+        orbit = complete_constraints_by_symmetry([p], cyclic_group)
+        assert {poly.as_expr(state_operator=state) for poly in orbit} == {
+            x*state(y), z*state(x), y*state(z),
+        }
+        partial = algebra.as_poly(state(x) + state(y), gens, state_operator=state)
+        assert QModuleBasis(algebra, partial, monoms).symmetry.order() == 2
 
 
 def test_commutative_arithmetic_matches_sympy():
+    # test PseudoPoly behaves as Poly
     x, y = symbols('x y')
     algebra = PolyRing(2, 4, is_homogeneous=False)
     exprs = (0, Rational(2, 3), x - 2*y + 1, (x + y)**2, 2*x**3 - y**2)

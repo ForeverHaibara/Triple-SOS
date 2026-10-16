@@ -9,7 +9,7 @@ from typing import Dict, List, Tuple, Union, Optional, Callable, Any, TYPE_CHECK
 from sympy import prod
 from sympy.matrices import MutableDenseMatrix as Matrix
 
-from .algebra import SOSBasis
+from .algebra import PseudoPoly, SOSBasis
 from ...sdp.arithmetic import ArithmeticTimeout, solve_columnspace, rep_matrix_from_list
 from ...utils import Root, MonomialManager
 from ...utils.roots.roots import _algebraic_field_coeffs, _derv
@@ -25,7 +25,9 @@ def _permute_root(perm_group: "PermutationGroup", root: Root) -> List[Root]:
     roots = [None] * len(perms)
     root0, rep, domain = root.root, root.rep, root.domain
     for i, perm in enumerate(perms):
-        roots[i] = Root(perm(root0), domain=domain, rep=perm(rep))
+        arr = perm._array_form
+        roots[i] = Root(tuple(root0[j] for j in arr), domain=domain,
+            rep=tuple(rep[j] for j in arr))
     return roots
 
 def _is_binary_root(root: Root) -> bool:
@@ -359,7 +361,7 @@ def get_sos_nullspace(
     return nullspaces
 
 
-def complete_constraints_by_symmetry(polys: List["Poly"], symmetry=None):
+def complete_constraints_by_symmetry(polys: List[Union["Poly", "PseudoPoly"]], symmetry=None):
     """
     Complete the constraints in the orbit of the symmetry group.
     Returns a list of polynomials.
@@ -371,8 +373,12 @@ def complete_constraints_by_symmetry(polys: List["Poly"], symmetry=None):
     for poly in polys:
         rep = poly.rep
         rep_set.add(rep)
+        pm = poly.algebra.permute_monom if isinstance(poly, PseudoPoly) else None
         for perm in symmetry.elements:
-            reorder = poly.reorder(*perm(gens)).rep
+            if pm is not None:
+                reorder = rep.per({pm(m, perm): c for m, c in rep.items()})
+            else:
+                reorder = poly.reorder(*[gens[i] for i in perm._array_form]).rep
             if rep == reorder:
                 continue
             rep_set.add(reorder)

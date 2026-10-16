@@ -4,13 +4,14 @@ from typing import List, Tuple, Dict, Any, Callable, Optional, TYPE_CHECKING
 from sympy import Domain
 from sympy.combinatorics import PermutationGroup, Permutation
 
+from .pseudo_poly import PseudoPoly
 from ....sdp.arithmetic import rep_matrix_from_dict
 from ....utils.monomials import identify_symmetry
 
 if TYPE_CHECKING:
     from sympy import Expr, Poly
-    from .state_algebra import StateAlgebra, MONOM, TERM
     from sympy.matrices import MutableDenseMatrix as Matrix
+    from .state_algebra import StateAlgebra, MONOM, TERM
 
 class SOSBasis:
     """
@@ -45,6 +46,17 @@ class SOSBasis:
     def get_equal_entries(self) -> List[List[int]]:
         return []
 
+    def _identify_symmetry(self, poly: "Poly") -> Optional[PermutationGroup]:
+        algebra, group = self.algebra, self.algebra.symmetry
+        if group is None:
+            return None
+        if isinstance(poly, PseudoPoly):
+            # The ordinary polynomial helper assumes flat exponent tuples.
+            if all(algebra.is_symmetric(poly, p) for p in group.generators):
+                return group
+            return group.subgroup_search(lambda p: algebra.is_symmetric(poly, p))
+        return identify_symmetry(poly, group)
+
     def get_symmetry_representation(self, **kwargs) -> Tuple[PermutationGroup, Callable]:
         G = self.symmetry
 
@@ -78,9 +90,7 @@ class QModuleBasis(SOSBasis):
         if dict_basis is None:
             self._dict_basis = {b: i for i, b in enumerate(basis)}
 
-        self.symmetry = None
-        if algebra.symmetry is not None:
-            self.symmetry = identify_symmetry(qmodule, algebra.symmetry)
+        self.symmetry = self._identify_symmetry(qmodule)
 
     def _nc_localizing_mapping(self, domain: Any=None) -> Callable[[int, int], List["TERM"]]:
         if domain is None:
@@ -202,9 +212,7 @@ class IdealBasis(SOSBasis):
         if dict_basis is None:
             self._dict_basis = {b: i for i, b in enumerate(basis)}
 
-        self.symmetry = None
-        if algebra.symmetry is not None:
-            self.symmetry = identify_symmetry(ideal, algebra.symmetry)
+        self.symmetry = self._identify_symmetry(ideal)
 
     def _localizing_mapping(self, domain: Any=None) -> Callable[[int], List["TERM"]]:
         # be careful that it should be a two-sided ideal for non-commutative algebra,

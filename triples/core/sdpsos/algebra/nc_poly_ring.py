@@ -8,9 +8,10 @@ from .basis import QModuleBasis
 from .pseudo_poly import PseudoPoly
 
 if TYPE_CHECKING:
-    from .state_algebra import TERM, MONOM
     from sympy import Poly, Expr
     from sympy.combinatorics.permutations import Permutation
+    from .state_algebra import TERM, MONOM
+
 
 def generate_monoms_nc(nvars, degree, hom=True):
     def generate_monom_nc_hom(nvars, degree):
@@ -92,9 +93,12 @@ class NCPolyRing(StateAlgebra):
         return (term[0][::-1], term[1])
 
     def permute_monom(self, monom: "MONOM", perm: "Permutation") -> "MONOM":
-        # As with exponent tuples, perm specifies the new generator order.
-        arr = (~perm).array_form
-        return tuple((arr[i], v) for i, v in monom)
+        # Exponents are pulled back by perm, so word indices use its inverse.
+        arr = perm._array_form
+        inverse = [0] * len(arr)
+        for i, j in enumerate(arr):
+            inverse[j] = i
+        return tuple((inverse[i], v) for i, v in monom)
 
     def infer_bases(self, poly: "Poly", qmodule: Dict[Any, "Poly"], ideal: Dict[Any, "Poly"]):
         is_homogeneous = self.is_homogeneous

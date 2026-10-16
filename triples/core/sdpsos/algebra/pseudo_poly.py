@@ -141,6 +141,7 @@ class PseudoPoly(Basic):
         return p1.per(p1.rep.state())
 
     def reorder(f, *gens):
+        """Change generator order while preserving the represented expression."""
         if not gens:
             gens = tuple(sorted(f.gens, key=default_sort_key))
         if len(gens) != len(f.gens) or set(gens) != set(f.gens):
@@ -333,7 +334,8 @@ def convert_expr_to_pseudo_poly(algebra: 'StateAlgebra', expr: 'Expr', gens: Lis
     expr = sympify(expr)
     gens_dict = {v: i for i, v in enumerate(gens)}
 
-    # domain = EX
+    # Collect symbolic coefficients first. from_dict infers the final domain
+    # and converts every coefficient to a domain element before returning.
     class _domain_cls:
         one = Integer(1)
         zero = Integer(0)
