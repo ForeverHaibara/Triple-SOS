@@ -2,6 +2,7 @@ from itertools import product
 from typing import Dict, Optional, Any, TYPE_CHECKING
 
 from sympy import Add, Mul
+from sympy.matrices.expressions import MatrixExpr, Identity as MatIdentity
 
 from .state_algebra import StateAlgebra
 from .basis import QModuleBasis
@@ -47,7 +48,8 @@ class NCPolyRing(StateAlgebra):
     Basic noncommutative polynomial ring (free algebra). A monomial
     `a1**d1*a2**d2*...*an**dn` is represented by `((a1, d1), (a2, d2), ..., (an, dn))`.
     Here `a1, a2, ..., an` are hermitian variables and might include duplicated variables.
-    However, it is important that `a_{i}!=a_{i+1}`. The degrees `d1, ..., dn` are nonnegative integers.
+    However, it is important that `a_{i}!=a_{i+1}`. The degrees
+    `d1, ..., dn` are nonnegative integers.
 
     To allow inverses like `a^{-1}`, one must add `a1^{-1}` to the variables
     and define the relation `a*a^{-1}=a^{-1}*a=1`.
@@ -76,7 +78,16 @@ class NCPolyRing(StateAlgebra):
     def as_expr(self, poly: "Poly", state_operator=None) -> "Expr":
         if isinstance(poly, PseudoPoly):
             gens = poly.gens
-            ret = Add(*[Mul(coeff, *[gens[i]**v for i, v in monom]) for monom, coeff in poly.terms()])
+
+            identity = 1
+            for g in gens:
+                if isinstance(g, MatrixExpr):
+                    identity = MatIdentity(g.shape[0])
+
+            # always cast the type by multiplying with identity
+            terms = [Mul(coeff, identity, *[gens[i]**v for i, v in monom])
+                     for monom, coeff in poly.terms()]
+            ret = Add(*terms)
         else:
             ret = poly.as_expr()
         return ret if state_operator is None else state_operator(ret)

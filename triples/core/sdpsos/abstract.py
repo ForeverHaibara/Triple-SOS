@@ -11,9 +11,10 @@ from ...sdp.utils import exprs_to_arrays, collect_constraints
 from ...sdp.wedderburn import symmetry_adapted_basis
 
 if TYPE_CHECKING:
-    from .algebra import StateAlgebra, SOSBasis
     from sympy import Expr, Poly, Symbol
     from sympy.core.relational import Relational
+    from .algebra import StateAlgebra, SOSBasis
+
 
 class SOSEquationSystem:
     rhs: Matrix

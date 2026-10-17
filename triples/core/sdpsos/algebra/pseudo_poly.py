@@ -6,7 +6,7 @@ from sympy import Basic, Integer, default_sort_key, sympify
 from sympy.polys.constructor import construct_domain
 from sympy.polys.polyerrors import GeneratorsError, PolynomialError
 from sympy.polys.polyoptions import Domain as DomainOption
-from sympy.matrices.expressions import MatPow
+from sympy.matrices.expressions import MatrixExpr, MatPow, Identity as MatIdentity
 from sympy.combinatorics.permutations import Permutation
 
 if TYPE_CHECKING:
@@ -323,8 +323,13 @@ class PseudoSMP(dict):
         return p1.per(p)
 
 
-def convert_expr_to_pseudo_poly(algebra: 'StateAlgebra', expr: 'Expr', gens: List['Symbol'],
-        state_operator=None, **domain_kwargs) -> PseudoPoly:
+def convert_expr_to_pseudo_poly(
+    algebra: 'StateAlgebra',
+    expr: 'Expr',
+    gens: List['Symbol'],
+    state_operator=None,
+    **domain_kwargs
+) -> PseudoPoly:
     """Expand an expression using the algebra's multiplication and state rules.
 
     Expressions independent of the generators are treated as coefficients.
@@ -334,11 +339,20 @@ def convert_expr_to_pseudo_poly(algebra: 'StateAlgebra', expr: 'Expr', gens: Lis
     expr = sympify(expr)
     gens_dict = {v: i for i, v in enumerate(gens)}
 
+
     # Collect symbolic coefficients first. from_dict infers the final domain
     # and converts every coefficient to a domain element before returning.
-    class _domain_cls:
-        one = Integer(1)
-        zero = Integer(0)
+    if not isinstance(expr, MatrixExpr):
+        class _domain_cls:
+            one = Integer(1)
+            zero = Integer(0)
+    else:
+        # MatrixExpr does not allow addition with scalars.
+        # We assume the dimension is aligned.
+        n = expr.shape[0]
+        class _domain_cls:
+            one = MatIdentity(n)
+            zero = MatIdentity(n) - MatIdentity(n)
     domain = _domain_cls
 
     def _recur_build(x) -> PseudoSMP:
@@ -368,4 +382,8 @@ def convert_expr_to_pseudo_poly(algebra: 'StateAlgebra', expr: 'Expr', gens: Lis
         raise PolynomialError("%s is not polynomial in the given generators." % x)
 
     smp = _recur_build(expr)
+
+    if isinstance(expr, MatrixExpr):
+        smp = {k: v.xreplace({domain.one: 1}) for k, v in smp.items()}
+
     return PseudoPoly.from_dict(smp, *gens, algebra=algebra, **domain_kwargs)

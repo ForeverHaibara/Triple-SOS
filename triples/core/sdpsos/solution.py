@@ -189,8 +189,8 @@ def compute_cyc_sum_of_squares(
     simplify_poly: Optional[Callable] = None,
 ) -> Expr:
     """
-    Computes cyclic_sum(coeff * q_module * poly.as_expr()**2),
-    and returns a pretty expression.
+    Compute cyclic_sum(coeff * q_module * poly.as_expr()**2),
+    and return a pretty expression.
     """
     # if isinstance(expr, Add):
     #     expr = sp.UnevaluatedExpr(expr)

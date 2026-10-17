@@ -8,9 +8,10 @@ from .basis import QModuleBasis, IdealBasis
 from ....utils import generate_monoms
 
 if TYPE_CHECKING:
-    from .state_algebra import TERM, MONOM
     from sympy.combinatorics import Permutation
     from sympy import Expr, Symbol
+    from .state_algebra import TERM, MONOM
+
 
 class PolyRing(CommutativeStateAlgebra):
     """
