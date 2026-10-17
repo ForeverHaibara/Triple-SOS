@@ -13,6 +13,7 @@ if TYPE_CHECKING:
 
     from ....utils.expressions import Coeff
 
+
 def _sym_sum_poly(poly: Poly) -> Poly:
     """Compute the symmetric sum of a polynomial efficiently."""
     rep = arraylize_sp(poly, expand_cyc=True, sym=True)
@@ -73,6 +74,7 @@ def _lift_sym_axis_to_D4_part1(
     q2 = Poly(q, poly.gens + gens, domain=poly.domain)
     return q2
 
+
 def _lift_sym_axis_to_D4(
     poly: Poly,
     gens: Tuple["Symbol", "Symbol"],
@@ -119,10 +121,37 @@ def quaternary_dense_symmetric(coeff: "Coeff", real=True):
     if coeff.total_degree() <= 4:
         # should not be handled here
         return None
-    return _quaternary_dense_symmetric(coeff, real=real)
+    return _quaternary_dense_symmetric_vr(coeff, real=real)
 
-def _quaternary_dense_symmetric(coeff: "Coeff", real=True):
+
+def _quaternary_dense_symmetric_vr(coeff: "Coeff", real=True):
+    """
+    Vandermonde Reduction method (VR).
+
+    See also in :mod:`triples.core.structsos.ternary.dense_symmetric`.
+    """
     return _quaternary_dense_symmetric_vanish2(coeff)
+
+
+def _quaternary_symmetric_recur(coeff: "Coeff", real=True):
+    """
+    Call the main solver to solve a quaternary symmetric inequality.
+    """
+    # avoid cyclic import
+    from .solver import _structural_sos_4vars_symmetric
+    d = coeff.total_degree()
+    if d <= 6:
+        # this maybe helpful to yield solution on R
+        sol = _structural_sos_4vars_symmetric(coeff, real=real)
+        if sol is not None:
+            return sol
+
+    wrap = coeff.wrap
+    if all(wrap(_) >= 0 for _ in coeff.rep.coeffs()):
+        const, poly = poly_reduce_by_symmetry(coeff.as_poly(), "sym").primitive()
+        return const * coeff.symmetric_sum(poly.as_expr())
+
+    return None
 
 
 def _quaternary_dense_symmetric_vanish2(coeff: "Coeff"):
@@ -189,12 +218,12 @@ def _quaternary_dense_symmetric_vanish2(coeff: "Coeff"):
         # not expected to happen
         return None
     # print(f'rest = {rest}\nrem = {rem}')
-    if any(wrap(_) < 0 for _ in rest.rep.coeffs()):
-        return None
 
     SymmetricSum = coeff.symmetric_sum
-    const, rest2 = poly_reduce_by_symmetry(rest, "sym").primitive()
-    rest_expr = const * SymmetricSum(rest2.as_expr())
+    rest_expr = _quaternary_symmetric_recur(coeff.from_poly(rest))
+    if rest_expr is None:
+        return None
+
     disc = ((a - c)**2*(b - c)**2*(a - d)**2*(b - d)**2*(c - d)**2*(a - b)**2)
 
     const, alt = alt.primitive()
@@ -207,10 +236,22 @@ def _quaternary_dense_symmetric_vanish2(coeff: "Coeff"):
 def _quaternary_dense_symmetric_vanish2_liftfree(coeff: "Coeff", sym=None):
     """
     Solve symmetric quaternary inequalities with
-    `(a-1)**2*(b-1)**2 | F(a,b,1,1)`.
-    without lifting the degree. This is done by noting
-    that
-    `(d-a)*(d-c)*(b-a)*(b-c) + (c-a)*(c-d)*(b-a)*(b-d) = (a-b)**2*(c-d)**2`
+    `(a-1)**2*(b-1)**2 | F(a,b,1,1)` without lifting the degree.
+
+    It first writes `F` in the form of
+    ```
+    Σ (G(a,b,c,d)*(a-c)*(a-d)*(b-c)*(b-d))
+    ```
+    and then rewrites it as
+    ```
+    Σ (H(a,b,c,d)*(a-b)**2*(c-d)**2)
+    ```
+    using the identity
+    ```
+    (d-a)*(d-c)*(b-a)*(b-c) + (c-a)*(c-d)*(b-a)*(b-d) = (a-b)**2*(c-d)**2
+    ```
+
+    If `H` has nonnegative coefficients, then `F` is nonnegative.
 
 
     Examples
@@ -232,7 +273,6 @@ def _quaternary_dense_symmetric_vanish2_liftfree(coeff: "Coeff", sym=None):
         sym, rem = margin.div(((c-1)*(d-1)).as_poly(c,d, domain=poly.domain)**2)
         if not rem.is_zero:
             return None
-    wrap = coeff.wrap
 
     # F = SymmetricSum(D(a,b,c,d)*(a-c)*(a-d)*(b-c)*(b-d))/8 (mod discriminant)
     dih = _lift_sym_axis_to_D4(sym, (a, b), coeff.total_degree() - 4)
@@ -258,7 +298,8 @@ def _quaternary_dense_symmetric_vanish2_liftfree(coeff: "Coeff", sym=None):
         # not expected to happen
         return None
     # print(f'rest = {rest}\nrem = {rem}')
-    if any(wrap(_) < 0 for _ in rest.rep.coeffs()):
+    rest_expr = _quaternary_symmetric_recur(coeff.from_poly(rest))
+    if rest_expr is None:
         return None
 
     disc = 0
@@ -266,8 +307,6 @@ def _quaternary_dense_symmetric_vanish2_liftfree(coeff: "Coeff", sym=None):
         disc = ((a - c)**2*(b - c)**2*(a - d)**2*(b - d)**2*(c - d)**2*(a - b)**2)
 
     SymmetricSum = coeff.symmetric_sum
-    const, rest2 = poly_reduce_by_symmetry(rest, "sym").primitive()
-    rest_expr = const * SymmetricSum(rest2.as_expr())
     return SymmetricSum(dih_sol * (a-b)**2*(c-d)**2)/16 + disc * rest_expr/16
 
 #####################################################################
