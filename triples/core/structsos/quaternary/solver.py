@@ -14,7 +14,8 @@ from ..nvars.quadratic import structsos_nvars_quadratic
 
 from ..utils import PolynomialNonpositiveError, PolynomialUnsolvableError, structsos_extract_factors
 from ...preprocess.signs import sign_sos
-from ....utils.expressions import Coeff
+from ....utils.expressions import Coeff, CyclicSum
+from ....utils.monomials import poly_reduce_by_symmetry
 
 if TYPE_CHECKING:
     from sympy import Expr, Poly
@@ -135,13 +136,27 @@ def _structural_sos_4vars_dihedral(
             return sol
 
     poly = coeff.as_poly()
+    if poly.LC() < 0:
+        return None
+
+    dih = PermutationGroup(Permutation([2,3,0,1]), Permutation([1,0,2,3]))
+
+    # There is no degree-aware solver for dihedral polynomials currently.
+
+    # Test trivial case before factorization
+    wrap = coeff.wrap
+    if all(wrap(z) >= 0 for z in coeff.coeffs()):
+        reduced = poly_reduce_by_symmetry(poly, dih)
+        return CyclicSum(reduced.as_expr().together(), poly.gens, dih)
+
+
     const, factors = poly.factor_list()
 
     if const < 0:
         return None
 
+    # Call the general dihedral solver
     factor_sols = [const]
-    dih = PermutationGroup(Permutation([2,3,0,1]), Permutation([1,0,2,3]))
     for factor, mul in factors:
         if mul % 2 == 1:
             factor_coeff = Coeff(factor)

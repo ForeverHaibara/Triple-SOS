@@ -319,6 +319,7 @@ def _quaternary_dense_symmetric_vanish2_liftfree(coeff: "Coeff", sym=None):
 def quaternary_dense_dihedral(coeff: "Coeff"):
     return _quaternary_dense_dihedral_by_level(coeff)
 
+
 def _quaternary_dense_dihedral_by_level(coeff: "Coeff"):
     """
     Solve a 4-var homogeneous dihedral inequality
