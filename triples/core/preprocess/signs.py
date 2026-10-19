@@ -964,5 +964,26 @@ def recompute_constraints_from_signs(problem: "InequalityProblem") -> "Inequalit
         elif s == -1:
             target[0][-g] = v
 
+    changed = any(s not in target[0] for s in problem.ineq_constraints)\
+        or any(s not in target[1] for s in problem.eq_constraints)
+    if not changed:
+        # Every old constraint is contained in the new constraints
+        # -> no need to use the new constraints
+        return problem
+
     problem = problem.copy_new(problem.expr, target[0], target[1])
     return problem
+
+
+# def get_constraint_basis(
+#     ineq_constraints: Union[Any, Expr],
+#     eq_constraints: Union[Any, Expr]
+# ) -> Tuple[Dict[Any, Expr], Dict[Any, Expr]]:
+#     """
+#     Get a basis of the constraints that
+#     recover the constraints.
+#     """
+#     def to_monoms(p: Union[Poly, Expr]):
+#         if isinstance(p, Poly):
+#             return p.terms()
+#     raise NotImplementedError
