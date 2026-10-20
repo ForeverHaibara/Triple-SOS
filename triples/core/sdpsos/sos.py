@@ -7,13 +7,14 @@ from sympy import Poly
 from .algebra import PolyRing
 from .abstract import AtomSOSElement, ArithmeticTimeout
 from .manifold import get_sos_nullspace, complete_constraints_by_symmetry
-from .solution import SolutionSDP
+from .solution import sdp_solution_from_decomps
 from ...utils import CyclicSum, Root
 
 if TYPE_CHECKING:
     from sympy import MutableDenseMatrix as Matrix
     from sympy import Expr, Symbol
     from sympy.combinatorics import PermutationGroup
+    from ..solution import Solution
 
 CHECK_SYMMETRY = True
 
@@ -309,7 +310,7 @@ class SOSPoly(AtomSOSElement):
         ideal: Optional[Dict[Any, "Expr"]] = None,
         adjoint_operator: Optional[Callable[["Expr"], "Expr"]] = None,
         trace_operator: Optional[Callable[["Expr"], "Expr"]] = None,
-    ) -> SolutionSDP:
+    ) -> "Solution":
         """
         Retrieve the solution to the original polynomial.
 
@@ -334,7 +335,7 @@ class SOSPoly(AtomSOSElement):
 
         eqspace = {eq: x + space * self.sdp.y for eq, (x, space) in self._ideal_space.items()}
 
-        solution = SolutionSDP.from_decompositions(self.poly, decomp, eqspace,
+        solution = sdp_solution_from_decomps(self.poly, decomp, eqspace,
             qmodule          = qmodule,
             qmodule_bases    = self._qmodule_bases,
             ideal            = ideal,

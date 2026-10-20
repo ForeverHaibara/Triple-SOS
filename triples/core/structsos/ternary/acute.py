@@ -1,5 +1,6 @@
+from typing import TYPE_CHECKING
+
 from sympy import Add, Function, Integer, Poly, sqrt
-from sympy.core.symbol import uniquely_named_symbol
 from sympy.polys.polyerrors import CoercionFailed
 
 from ..ternary import (
@@ -8,15 +9,18 @@ from ..ternary import (
     structsos_quartic,
     structsos_sextic,
 )
-from ..ternary.dense_symmetric import _homogenize_sym_proof, sym_axis
-from ..ternary.utils import CommonExpr
+from .dense_symmetric import _homogenize_sym_proof, sym_axis
+from .utils import CommonExpr
 from ..univariate import prove_univariate
 from ..utils import rationalize_func
-from ...solution import extract_undetermined_exprs
+from ...preprocess.signs import sign_sos
 from ....utils.expressions import Coeff
 
+if TYPE_CHECKING:
+    from ...problem import InequalityProblem
 
-def constrained_acute(problem):
+
+def structsos_acute(problem: "InequalityProblem[Poly]"):
     poly = problem.expr
     ineq_constraints = problem.ineq_constraints
     eq_constraints = problem.eq_constraints
@@ -37,9 +41,8 @@ def constrained_acute(problem):
     if not poly.is_homogeneous or not coeff.is_cyclic():
         return None
 
-    Fname = uniquely_named_symbol("_F", gens + tuple(ineq_constraints.values()))
-    Gname = uniquely_named_symbol("_G", gens + tuple(ineq_constraints.values()))
-    F, G = Function(Fname), Function(Gname)
+    Fname = problem.uniquely_named_symbol("_F")
+    F = Function(Fname)
 
     if coeff.is_symmetric():
         solution = _constrained_acute_dense_symmetric(coeff, F)
@@ -57,20 +60,13 @@ def constrained_acute(problem):
         if solution is None:
             return None
 
-    extra_checker = lambda x: x if isinstance(x, F) else None
-    solution = extract_undetermined_exprs(solution, G, extra_checker=extra_checker)
-
     if solution is None:
         return None
 
-    replacement = {F(a): cons[0], F(b): cons[1], F(c): cons[2]}
     signs = problem.get_symbol_signs()
-    is_pos = lambda x: (x is not None) and x >= 0
-    replacement.update({G(x): v for x, (sgn, v) in signs.items() if is_pos(sgn)})
+    signs.update({F(a): (1, cons[0]), F(b): (1, cons[1]), F(c): (1, cons[2])})
 
-    solution = solution.xreplace(replacement)
-    if solution.has(F) or solution.has(G):
-        return None
+    solution = sign_sos(solution, signs)
     return solution
 
 
@@ -365,10 +361,10 @@ def _constrained_acute_dense_symmetric(coeff: Coeff, F):
         solution = _constrained_acute_trivial_uncentered(coeff, F)
         if solution is not None:
             return solution
-    return _constrained_acute_lift_for_six(coeff, F)
+    return _constrained_acute_lifted_vr(coeff, F)
 
 
-def _constrained_acute_lift_for_six(coeff: Coeff, F):
+def _constrained_acute_lifted_vr(coeff: Coeff, F):
     a, b, c = coeff.gens
     CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
 

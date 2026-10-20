@@ -8,6 +8,7 @@ from sympy.polys.matrices.domainmatrix import DomainMatrix
 
 from ....sdp import congruence
 from ....utils.expressions import CyclicSum
+from ....utils.monomials import identify_symmetry, poly_reduce_by_symmetry
 
 if TYPE_CHECKING:
     from sympy import Expr
@@ -237,5 +238,30 @@ def structsos_nvars_quadratic_real(
 def structsos_nvars_quadratic_copositive(
     coeff: "Coeff", mat: Optional[Matrix]=None, **kwargs
 ):
-    """TODO: Implement copositive cases, e.g., Motzkin-Straus theorem."""
+    """
+    TODO: Implement more copositive cases, e.g., Motzkin-Straus theorem.
+
+    Examples
+    --------
+    :: ineqs = [a,b,c,d,e,f], gens = [a,b,c,d,e,f]
+
+    => s(2a2+5/3ac)
+
+    => sqrt(2)s(a)2-s(a2)
+
+    => (2b2+3d2+5ea+4bc+6f+3/5c2+2)
+
+    => s(ab)/4
+    """
+    wrap = coeff.wrap
+    n = len(coeff.gens)
+    if n < 2:
+        return None
+
+    if all(wrap(v) >= 0 for v in coeff.rep.values()):
+        poly = coeff.as_poly()
+        G = identify_symmetry(poly)
+        reduced = poly_reduce_by_symmetry(poly, G)
+        return CyclicSum(reduced.as_expr().together(), coeff.gens, G)
+
     return None

@@ -56,7 +56,8 @@ class SolvePolynomial(TransformNode):
             problem, sqf = problem.sqr_free(
                 problem_sqf=True, ineqs_sqf=False, eqs_sqf=False)
 
-        problem = problem.remove_redundancy()
+        if configs["remove_redundancy"]:
+            problem = problem.remove_redundancy()
 
         power_restore = lambda x: x
         if configs["eliminate_power_constraints"]:

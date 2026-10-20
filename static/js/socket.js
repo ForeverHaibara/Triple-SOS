@@ -1,26 +1,44 @@
 let socket = null;
-let socket_connecting = false;
-function connectSocket(callback){
-    if (socket !== null){
+let socket_callbacks = [];
+function connectSocket(callback, onError = showBackendPrompt){
+    if (socket !== null && socket.connected){
         if (typeof callback === 'function') {
             callback();
         }
         return;
     }
-    socket = io(host, {reconnectionAttempts: 3});
-    // socket.connect(host);
-    socket.on('connect_error', function(){
+    socket_callbacks.push({callback: callback, onError: onError});
+    if (socket !== null) return;
+    setBackendStatus('connecting');
+    // Keep one connection attempt and discard its callbacks after the first result.
+    socket = io(host, {reconnection: false, timeout: 4000, forceNew: true});
+    const connecting_socket = socket;
+    function discardSocket(){
+        connecting_socket.removeAllListeners();
+        connecting_socket.disconnect();
         socket = null;
+    }
+    socket.on('connect_error', function(){
+        discardSocket();
         changeNumOfSOS(0);
+        setBackendStatus('offline');
+        const callbacks = socket_callbacks;
+        socket_callbacks = [];
+        callbacks.forEach(item => item.onError());
     });
     socket.on('connect', ()=>{
-        if (typeof callback === 'function') {
-            callback();
-        }
+        setBackendStatus('connected');
+        const callbacks = socket_callbacks;
+        socket_callbacks = [];
+        callbacks.forEach(item => {
+            if (typeof item.callback === 'function') item.callback();
+        });
     });
     socket.on('disconnect', function(){
-        socket = null;
+        discardSocket();
         sos_poly = '';
+        setBackendStatus('offline');
+        if (sos_work.num > 0) showBackendPrompt();
         changeNumOfSOS(0);
     });
 

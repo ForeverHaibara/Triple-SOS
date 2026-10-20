@@ -32,6 +32,7 @@ def _free_symbol(coeff: Coeff):
             return Symbol(s)
     return Dummy("x")
 
+
 def quaternary_quartic_symmetric(coeff, real=True):
     """
     ## Real Variables
@@ -69,6 +70,7 @@ def quaternary_quartic_symmetric(coeff, real=True):
         return sol
     return _quaternary_quartic_symmetric_positive_centered(coeff)
 
+
 def _quaternary_quartic_symmetric_real(coeff):
     """
     Solve quaternary symmetric quartic forms by first
@@ -81,6 +83,7 @@ def _quaternary_quartic_symmetric_real(coeff):
 
     sol = _quaternary_quartic_symmetric_real_full(coeff)
     return sol
+
 
 def _quaternary_quartic_symmetric_sdp(coeff):
     """
@@ -463,9 +466,10 @@ def _quaternary_quartic_symmetric_positive_centered(coeff: Coeff):
     """
     c4, c31, c22, c211, c1111 = [coeff(_) for _ in
         [(4,0,0,0),(3,1,0,0),(2,2,0,0),(2,1,1,0),(1,1,1,1)]]
-    if c4 <= 0:
-        # c4 == 0 is not yet implemented
+    if c4 < 0:
         return None
+    if c4 == 0:
+        return _quaternary_quartic_symmetric_positive_degenerated(coeff)
 
     # subtract poly1111 * abcd to assume F(1,1,1,1) = 0
     poly1111 = c1111 + 12*c211 + 6*c22 + 12*c31 + 4*c4
@@ -592,3 +596,43 @@ def _quaternary_quartic_symmetric_positive_centered(coeff: Coeff):
         sq2/12 * SymmetricSum(c*d*(a-b)**2),
         poly1111/24 * SymmetricSum(a*b*c*d),
     )
+
+
+def _quaternary_quartic_symmetric_positive_degenerated(coeff: Coeff):
+    """
+    Solve quarternary symmetric quartic forms on R+ with
+    zero `a**4` coefficient by computing a linear combination
+    of `Σ(a*b*(a-b)**2)`, `Σ((a-b)**2*(c-d)**2)`,
+    `Σ(ab(c-d)2)`, and `Σ(a*b*c*d)`.
+
+    Examples
+    --------
+    :: sym = "sym"
+
+    => s(6a2bc-abcd)
+
+    => s(4a2b2-8a2bc+97/24abcd)
+
+    => s(a3b+a2b2-2a2bc)
+
+    => s(10a3b+9a2b2-26a2bc+8abcd)
+    """
+    c4, c31, c22, c211, c1111 = [coeff(_) for _ in
+    [(4,0,0,0),(3,1,0,0),(2,2,0,0),(2,1,1,0),(1,1,1,1)]]
+    if c4 != 0:
+        return None
+
+    x = c31/4
+    y = (c22 + 2*c31)/16
+    z = (c211 + c22 + 2*c31)/4
+    w = (c1111 + 12*c211 + 6*c22 + 12*c31)/24
+
+    if x >= 0 and y >= 0 and z >= 0 and w >= 0:
+        a, b, c, d = coeff.gens
+        SymmetricSum = coeff.symmetric_sum
+        return Add(
+            x*SymmetricSum(a*b*(a-b)**2),
+            y*SymmetricSum((a-b)**2*(c-d)**2),
+            z*SymmetricSum(a*b*(c-d)**2),
+            w*SymmetricSum(a*b*c*d)
+        )

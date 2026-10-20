@@ -76,7 +76,15 @@ class StateAlgebra:
         raise NotImplementedError
 
     def permute_monom(self, monom: MONOM, perm: Permutation) -> MONOM:
-        """Permute a monomial given a permutation over the generators."""
+        """Apply a permutation directly to a monomial's exponent coordinates.
+
+        For commutative exponent tuples this is ``tuple(perm(monom))``, or
+        equivalently ``tuple(monom[i] for i in perm._array_form)``. For example,
+        the permutation ``[1, 2, 0]`` sends ``(2, 3, 5)`` to ``(3, 5, 2)``.
+        Other monomial representations must implement the same action on
+        generator multiplicities, preserving word order and moment factors.
+        The permutation must have the same size as the number of generators.
+        """
         raise NotImplementedError
 
     def permute(self, monom: MONOM) -> List[MONOM]:

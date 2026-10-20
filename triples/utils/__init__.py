@@ -23,7 +23,7 @@ from .roots import (
     rationalize_quadratic_curve, cancel_denominator,
 )
 
-from .polytools import marginalize, resultant_bezout
+from .polytools import marginalize, poly_sqrt, resultant_bezout
 
 __all__ = [
     'MonomialManager', 'generate_monoms', 'generate_partitions', 'arraylize_np', 'arraylize_sp', 'invarraylize',
@@ -38,5 +38,5 @@ __all__ = [
     'nroots', 'univariate_intervals', 'rationalize', 'rationalize_array', 'rationalize_bound',
     'rationalize_quadratic_curve',
     'cancel_denominator',
-    'marginalize', 'resultant_bezout'
+    'marginalize', 'poly_sqrt', 'resultant_bezout'
 ]

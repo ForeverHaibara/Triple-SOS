@@ -981,6 +981,7 @@ class SDPProblem(TransformableDual):
         verbose: bool = False,
         time_limit: Optional[float] = None,
         allow_numer: int = 0,
+        normalize: bool = True,
         kwargs: Dict[Any, Any] = {}
     ) -> Optional[Matrix]:
         """
@@ -1173,7 +1174,15 @@ class SDPProblem(TransformableDual):
                 n = size[key]
                 # diagonals = Matrix([-int(i%(n+1)==0) for i in range(n**2)])
                 diagonals = -np.eye(n).reshape(n**2, 1)
-                x0_and_space[key] = (x0, np.hstack([rep_matrix_to_numpy(space), diagonals]))
+                np_space = rep_matrix_to_numpy(space)
+                np_x0 = rep_matrix_to_numpy(x0)
+                if normalize:
+                    if np_x0.size and np_space.size:
+                        mean = (np.abs(np_x0).mean() + np.abs(np_space).mean() + 1e-2)/6
+                        np_space = np_space / mean
+                        np_x0 = np_x0 / mean
+
+                x0_and_space[key] = (np_x0, np.hstack([np_space, diagonals]))
                 _time_limit()
             objective = np.zeros(self.dof + 1)
             objective[-1] = -1

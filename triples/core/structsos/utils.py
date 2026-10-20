@@ -1,10 +1,24 @@
-from functools import wraps
-from typing import TYPE_CHECKING, Callable, Dict, List, Optional, Tuple, Union
+"""
+This module contains utility functions for Structural SOS.
 
-from sympy import QQ, RR, Add, Expr, MatrixBase, Poly, Rational, fraction, sympify
+Solver decorators:
+* structsos_extract_factors
+* structsos_reorder_symmetry
+* structsos_constrained
+"""
+
+from functools import wraps
+from typing import TYPE_CHECKING, Callable, List, Optional, Tuple, Union, Any
+
+from sympy import (
+    QQ, RR, Add, Expr, Integer, MatrixBase, Mul, Poly,
+    Rational, fraction, sympify
+)
 from sympy.combinatorics import Permutation
 from sympy.core.symbol import uniquely_named_symbol
 
+from ..problem import InequalityProblem
+from ..preprocess.signs import sign_sos
 from ...sdp import congruence
 from ...utils.expressions import Coeff, CyclicProduct, CyclicSum
 from ...utils.polytools import intervals
@@ -14,6 +28,7 @@ if TYPE_CHECKING:
     from sympy import MutableDenseMatrix as Matrix
     from sympy import Symbol
     from sympy.polys.domains import Domain
+
 
 # use imports to keep linter happy
 (uniquely_named_symbol, Coeff, CyclicSum, CyclicProduct)
@@ -43,6 +58,7 @@ class DomainExpr:
 
     def cyclic_product(self, expr) -> Expr:
         return self._coeff.cyclic_product(expr)
+
 
 def ufsfind(ufs: dict, x):
     if ufs[x] == x:
@@ -242,31 +258,6 @@ def zip_longest(*args):
         yield tuple(lasts)
 
 
-def has_gen(gen: 'Symbol', *args):
-    """
-    Test whether a symbol is involved in a (list of) polynomial(s).
-    """
-    to_iter = lambda x: (x,) if isinstance(x, Poly) else x
-    return any(any(gen in p.free_symbols for p in arg) for arg in map(to_iter, args))
-
-
-def clear_free_symbols(poly: Poly, ineq_constraints: Dict[Poly, Expr] = {}, eq_constraints: Dict[Poly, Expr] = {}) -> Tuple[Poly, Dict[Poly, Expr], Dict[Poly, Expr]]:
-    """
-    Clear nuisance free symbols from the polynomial and constraints.
-    For example, if we want to solve x>=4 with constraints x>=y, x*y>=4, y>=0, a>=0. Then
-    we can remove the symbol "a" from the constraints. But we cannot remove the symbol "y"
-    even though it is not in the polynomial, as it is correlated with "x".
-    """
-    from warnings import warn
-
-    from ..problem import InequalityProblem
-    warn("clear_free_symbols is deprecated. Please use remove_redundancy instead.",
-         stacklevel=2, category=DeprecationWarning)
-    pro = InequalityProblem(poly, ineq_constraints, eq_constraints)
-    pro.remove_redundancy()
-    return pro.expr, pro.ineq_constraints, pro.eq_constraints
-
-
 def block_partition(blocks: List[int], groups: Tuple[int, ...]) -> List[int]:
     """
     Returns a vector `c` such that
@@ -305,6 +296,92 @@ def block_partition(blocks: List[int], groups: Tuple[int, ...]) -> List[int]:
     return result
 
 
+###########################################################################
+#
+#                          Solver Decorators
+#
+###########################################################################
+
+
+def structsos_extract_factors(solver: Callable) -> Callable:
+    """
+    Decorate a solver to extract monomial factors or common powers first.
+
+    For a monomial times f, solve f and multiply the result by the monomial.
+    For f(a^k, b^k, ...), solve f and substitute the powers back into the result.
+    Preserve Poly inputs; convert other inputs to Coeff. The wrapped solver
+    receives real=0 for an odd monomial factor, and at most real=1 for an
+    even power substitution.
+    """
+    @wraps(solver)
+    def _wrapped_solver(coeff, real: int = 1, **kwargs):
+        poly = coeff
+        coeff = poly if isinstance(poly, Coeff) else Coeff(poly)
+        symbols = coeff.gens
+        multiplier = Integer(1)
+        replacements = {}
+
+        monom, new_coeff = coeff.cancel_abc()
+        if any(i > 0 for i in monom):
+            if not all(i % 2 == 0 for i in monom):
+                real = min(int(real), 1)
+            if len(symbols) > 2 and all(i == monom[0] for i in monom):
+                multiplier = CyclicProduct(symbols[0]**monom[0], symbols)
+            else:
+                multiplier = Mul(*[s**i for s, i in zip(symbols, monom)])
+
+        i, new_coeff = new_coeff.cancel_k()
+        if i > 1:
+            real = min(int(real), 1) if i % 2 == 0 else real
+            replacements = {s: s**i for s in symbols}
+
+        if isinstance(poly, Poly):
+            new_coeff = poly if new_coeff is coeff else new_coeff.as_poly(*symbols)
+        solution = solver(new_coeff, real=real, **kwargs)
+        if solution is None:
+            return None
+        if not isinstance(solution, Expr):
+            solution = solution + Integer(0)
+        return multiplier * solution.xreplace(replacements)
+
+    return _wrapped_solver
+
+
+def _reorder_helper(
+    obj: Union[Poly, Coeff, "InequalityProblem[Poly]"]
+) -> Tuple[Callable[[Permutation], bool], Callable[[List[int]], Any]]:
+    """
+    Given an object, returns two functions that:
+    1. checks whether it is symmetric with respect to a permutation;
+    2. reorders the generators with respect to a permutation.
+    """
+    if isinstance(obj, Poly):
+        cf = Coeff(obj)
+        return cf.is_symmetric, cf.reorder
+    elif isinstance(obj, Coeff):
+        return obj.is_symmetric, obj.reorder
+    elif isinstance(obj, InequalityProblem):
+        G = obj.identify_symmetry()
+        is_sym = lambda perm: perm in G
+        gens = obj.gens
+        def reorder(perm: List[int]):
+            new_gens = [gens[i] for i in perm]
+            expr = obj.expr.reorder(*new_gens)
+            ineqs, eqs = {}, {}
+            for k, v in obj.ineq_constraints.items():
+                ineqs[k.reorder(*new_gens)] = v
+            for k, v in obj.eq_constraints.items():
+                eqs[k.reorder(*new_gens)] = v
+            pro = obj.copy_new(expr, ineqs, eqs)
+            if pro.roots is not None:
+                pro.roots = pro.roots.reorder(tuple(perm))
+            return pro
+        return is_sym, reorder
+
+    raise TypeError("Unsupported object type. Expected"
+        "Poly, Coeff, or InequalityProblem[Poly], but received %s." % type(obj))
+
+
 def structsos_reorder_symmetry(groups: Tuple[int, ...]) -> Callable:
     """
     Decorator for the solver function to reorder the generators
@@ -323,13 +400,7 @@ def structsos_reorder_symmetry(groups: Tuple[int, ...]) -> Callable:
             if not need_reorder:
                 return solver(poly, *args, **kwargs)
 
-            coeff = poly
-            if isinstance(poly, Coeff):
-                pass
-            elif isinstance(poly, Poly):
-                coeff = Coeff(poly)
-            else:
-                raise TypeError("Unsupported polynomial type. Expected Coeff or Poly, but received %s." % type(poly))
+            is_sym, reorder = _reorder_helper(poly)
 
             n = len(poly.gens)
             ufs = {i: i for i in range(n)}
@@ -337,7 +408,7 @@ def structsos_reorder_symmetry(groups: Tuple[int, ...]) -> Callable:
                 for j in range(i+1, n):
                     if ufsfind(ufs, i) == ufsfind(ufs, j):
                         continue
-                    if coeff.is_symmetric(Permutation(size=n)(i, j)):
+                    if is_sym(Permutation(size=n)(i, j)):
                         ufs[ufsfind(ufs, j)] = ufsfind(ufs, i)
 
             blocks = {i: [] for i in range(n) if ufsfind(ufs, i) == i}
@@ -356,7 +427,51 @@ def structsos_reorder_symmetry(groups: Tuple[int, ...]) -> Callable:
             for g, p in zip(groups, partition):
                 inds.extend(blocks[p][:g])
                 blocks[p] = blocks[p][g:]
-            new_coeff = coeff.reorder(inds)
+            new_coeff = reorder(inds)
             return solver(new_coeff, *args, **kwargs)
+        return _wrapped_solver
+    return wrapper
+
+
+def structsos_constrained(
+    checker: Callable[[Poly], bool],
+    positive=True
+) -> Callable:
+    """
+    Automatically extract a constraint from the problem
+    and feed the solver with `solver(poly, con, F, sign=sign, **kwargs)`.
+
+    If `positive=True`, then the solution is verified on the nonnegative orthant R+.
+    """
+    def wrapper(solver: Callable) -> Callable:
+        @wraps(solver)
+        def _wrapped_solver(problem: InequalityProblem[Poly], **kwargs):
+            sign = -1
+            for k, v in problem.eq_constraints.items():
+                if checker(k):
+                    con, con_v, sign = k, v, 0
+                    break
+            for k, v in problem.ineq_constraints.items():
+                if checker(k):
+                    con, con_v, sign = k, v, 1
+                    break
+            if sign == -1:
+                return None
+
+            dom = problem.expr.domain.unify(con.domain)
+            poly = problem.expr.set_domain(dom)
+            con = con.set_domain(dom)
+
+            F = problem.uniquely_named_symbol('_F')
+            sol = solver(Coeff(poly), Coeff(con), F, sign=sign, **kwargs)
+            if sol is None:
+                return None
+
+            signs = {F: (sign, con_v)}
+            if positive:
+                signs.update(problem.get_symbol_signs())
+
+            return sign_sos(sol, signs)
+
         return _wrapped_solver
     return wrapper

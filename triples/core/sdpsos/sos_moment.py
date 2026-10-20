@@ -5,10 +5,11 @@ from sympy import Function
 
 from .abstract import AtomSOSElement
 from .algebra import MixedMomentAlgebra
-from .solution import SolutionSDP
+from .solution import sdp_solution_from_decomps
 
 if TYPE_CHECKING:
     from sympy import Expr, Poly, Symbol
+    from ..solution import Solution
 
 class SOSMomentPoly(AtomSOSElement):
     """
@@ -104,7 +105,7 @@ class SOSMomentPoly(AtomSOSElement):
         qmodule: Optional[Dict[Any, 'Expr']] = None,
         ideal: Optional[Dict[Any, 'Expr']] = None,
         state_operator: Optional[Callable[['Expr'], 'Expr']] = None,
-    ) -> SolutionSDP:
+    ) -> "Solution":
         """
         Retrieve the solution to the original polynomial.
 
@@ -132,7 +133,7 @@ class SOSMomentPoly(AtomSOSElement):
         if state_operator is None:
             state_operator = self._state_operator
 
-        solution = SolutionSDP.from_decompositions(self.poly, decomp, eqspace,
+        solution = sdp_solution_from_decomps(self.poly, decomp, eqspace,
             qmodule          = qmodule,
             qmodule_bases    = self._qmodule_bases,
             ideal            = ideal,

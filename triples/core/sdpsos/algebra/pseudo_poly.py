@@ -1,22 +1,27 @@
 from collections import defaultdict
+from operator import index
 from typing import List, Any, TYPE_CHECKING
 
-from sympy import Basic, Integer, sympify
+from sympy import Basic, Integer, default_sort_key, sympify
 from sympy.polys.constructor import construct_domain
-from sympy.matrices.expressions import MatPow
+from sympy.polys.polyerrors import GeneratorsError, PolynomialError
+from sympy.polys.polyoptions import Domain as DomainOption
+from sympy.matrices.expressions import MatrixExpr, MatPow, Identity as MatIdentity
 from sympy.combinatorics.permutations import Permutation
 
 if TYPE_CHECKING:
-    from sympy import Poly, Expr, Symbol
+    from sympy import Expr, Symbol
     from .state_algebra import StateAlgebra
 
 class PseudoPoly(Basic):
     """
     Polynomials on general algebra. It provides some interfaces similar to :class:`sympy.Poly`.
     """
+    rep: "PseudoSMP"
+
     @classmethod
     def new(cls, rep, *gens):
-        """Construct :class:`Poly` instance from raw representation. """
+        """Construct a polynomial from its raw representation and generators."""
         obj = Basic.__new__(cls)
         obj.rep = rep
         obj.gens = gens
@@ -42,6 +47,11 @@ class PseudoPoly(Basic):
     def set_domain(f, dom):
         rep = f.rep.convert(dom)
         return f.new(rep, *f.gens)
+    def to_field(f):
+        if not f.domain.is_Field:
+            return f.set_domain(f.domain.get_field())
+        return f
+
     @property
     def is_zero(f):
         return f.rep.is_zero
@@ -62,7 +72,7 @@ class PseudoPoly(Basic):
     def terms(f, order=None):
         return [(m, f.rep.dom.to_sympy(c)) for m, c in f.rep.terms(order=order)]
     def coeffs(f, order=None):
-        return [f.rep.dom.to_sympy(c) for m, c in f.rep.coeffs(order=order)]
+        return [f.rep.dom.to_sympy(c) for c in f.rep.coeffs(order=order)]
     def monoms(f, order=None):
         return f.rep.monoms(order=order)
     def as_expr(f, **kwargs):
@@ -70,10 +80,17 @@ class PseudoPoly(Basic):
     def primitive(f):
         cont, result = f.rep.primitive()
         return f.rep.dom.to_sympy(cont), f.per(result)
+    def monic(f):
+        f = f.to_field()
+        return f.per(f.rep.monic())
+    def LC(f):
+        if f.is_zero:
+            return f.rep.dom.to_sympy(f.rep.dom.zero)
+        lt = max(f.rep.keys())
+        return f.rep.dom.to_sympy(f.rep[lt])
 
-
-    def __hash__(self):
-        return super().__hash__()
+    def _hashable_content(self):
+        return (self.rep, self.gens, self.algebra, self.domain)
     @property
     def free_symbols(self):
         symbols = set(self.gens)
@@ -100,15 +117,15 @@ class PseudoPoly(Basic):
 
     @classmethod
     def from_dict(cls, rep, *gens, **kwargs):
-        domain = kwargs.get('domain', None)
         algebra = kwargs.pop('algebra', None)
+        domain = kwargs.pop('domain', None)
         if domain is None:
             domain, rep = construct_domain(rep, **kwargs)
         else:
-            for monom, coeff in rep.items():
-                rep[monom] = domain.convert(coeff)
+            domain = DomainOption.preprocess(domain)
+            rep = {monom: domain.convert(coeff) for monom, coeff in rep.items()}
 
-        return cls.new(PseudoSMP(algebra, domain, rep), *gens, algebra=algebra)
+        return cls.new(PseudoSMP(algebra, domain, rep), *gens)
 
     def __add__(p1, p2):
         return p1.per(p1.rep + p2.rep)
@@ -124,13 +141,18 @@ class PseudoPoly(Basic):
         return p1.per(p1.rep.state())
 
     def reorder(f, *gens):
+        """Change generator order while preserving the represented expression."""
+        if not gens:
+            gens = tuple(sorted(f.gens, key=default_sort_key))
+        if len(gens) != len(f.gens) or set(gens) != set(f.gens):
+            raise GeneratorsError("Generators must be a permutation of the original generators.")
         inds = [f.gens.index(gen) for gen in gens]
         perm = Permutation(inds)
         algebra = f.algebra
         func = lambda m: algebra.permute_monom(m, perm)
         rep = f.rep.__class__(algebra, f.domain,
             {func(m): c for m, c in f.rep.items()})
-        return f.per(rep)
+        return f.per(rep, gens=gens)
 
 
 class PseudoSMP(dict):
@@ -138,7 +160,8 @@ class PseudoSMP(dict):
     dom: Any
     _hash = None
     def __init__(self, algebra, domain, init=None):
-        super().__init__(init)
+        # A sparse representation must not retain zero coefficients.
+        super().__init__({monom: coeff for monom, coeff in dict(init or {}).items() if coeff})
         self.algebra = algebra
         self.dom = domain
 
@@ -149,6 +172,8 @@ class PseudoSMP(dict):
     def per(f, rep):
         return f.__class__(f.algebra, f.dom, rep)
 
+    def to_dict(self):
+        return dict(self)
     def terms(self, order=None):
         return list(self.items())
     def coeffs(self, order=None):
@@ -161,11 +186,7 @@ class PseudoSMP(dict):
 
     def primitive(f):
         def _quo_ground(f, c, K):
-            if not f: return f
-            if K.is_Field:
-                return [ K.quo(cf, c) for cf in f ]
-            else:
-                return [ cf // c for cf in f ]
+            return [K.exquo(cf, c) for cf in f]
         def _content(f, K):
             if not f:
                 return K.zero
@@ -183,6 +204,12 @@ class PseudoSMP(dict):
         rep = _quo_ground(list(f.values()), c, f.dom)
         return c, f.per({k: v for k, v in zip(f.keys(), rep) if v})
 
+    def monic(f):
+        if not f:
+            return f
+        lc = max(f.keys())
+        val = f[lc]
+        return f.per({m: f.dom.exquo(v, val) for m, v in f.items()})
 
     @property
     def is_zero(f):
@@ -261,6 +288,7 @@ class PseudoSMP(dict):
         return p1.per(p)
 
     def __pow__(p1, n):
+        n = index(n)
         if n < 0:
             raise ValueError("Pseudo-polynomials do not support negative exponents.")
         r = p1.one
@@ -275,7 +303,8 @@ class PseudoSMP(dict):
     def __hash__(self):
         _hash = self._hash
         if _hash is None:
-            self._hash = _hash = hash((self.algebra, self.dom, frozenset(self.items())))
+            # Equality is inherited from dict and compares only the terms.
+            self._hash = _hash = hash(frozenset(self.items()))
         return _hash
 
     def state(p1):
@@ -294,25 +323,48 @@ class PseudoSMP(dict):
         return p1.per(p)
 
 
-def convert_expr_to_pseudo_poly(algebra: 'StateAlgebra', expr: 'Expr', gens: List['Symbol'],
-        state_operator=None, **domain_kwargs) -> 'Poly':
+def convert_expr_to_pseudo_poly(
+    algebra: 'StateAlgebra',
+    expr: 'Expr',
+    gens: List['Symbol'],
+    state_operator=None,
+    **domain_kwargs
+) -> PseudoPoly:
+    """Expand an expression using the algebra's multiplication and state rules.
+
+    Expressions independent of the generators are treated as coefficients.
+    Domain options are passed to :meth:`PseudoPoly.from_dict`.
+    """
 
     expr = sympify(expr)
     gens_dict = {v: i for i, v in enumerate(gens)}
 
-    # domain = EX
-    class _domain_cls:
-        one = Integer(1)
-        zero = Integer(0)
+
+    # Collect symbolic coefficients first. from_dict infers the final domain
+    # and converts every coefficient to a domain element before returning.
+    if not isinstance(expr, MatrixExpr):
+        class _domain_cls:
+            one = Integer(1)
+            zero = Integer(0)
+    else:
+        # MatrixExpr does not allow addition with scalars.
+        # We assume the dimension is aligned.
+        n = expr.shape[0]
+        class _domain_cls:
+            one = MatIdentity(n)
+            zero = MatIdentity(n) - MatIdentity(n)
     domain = _domain_cls
 
     def _recur_build(x) -> PseudoSMP:
-        if x.is_Integer or x.is_Rational or x.is_Float:
-            return PseudoSMP(algebra, domain, {algebra.gen_monom(None): x})
-
         i = gens_dict.get(x, None)
         if i is not None:
             return PseudoSMP(algebra, domain, {algebra.gen_monom(i): domain.one})
+        elif state_operator is not None and isinstance(x, state_operator):
+            return _recur_build(x.args[0]).state()
+        elif not x.has(*gens) and (state_operator is None or not x.has(state_operator)):
+            # Coefficients may contain parameters, radicals, or non-polynomial
+            # functions, provided they are independent of the generators.
+            return PseudoSMP(algebra, domain, {algebra.gen_monom(None): x})
         elif x.is_Add or x.is_Mul:
             args = [_recur_build(arg) for arg in x.args]
             arg0 = args[0]
@@ -326,15 +378,12 @@ def convert_expr_to_pseudo_poly(algebra: 'StateAlgebra', expr: 'Expr', gens: Lis
         elif x.is_Pow or isinstance(x, MatPow):
             if x.exp.is_Integer and x.exp >= 0:
                 return _recur_build(x.args[0]) ** x.args[1]
-            raise ValueError
-        elif state_operator is not None and isinstance(x, state_operator):
-            return _recur_build(x.args[0]).state()
 
-        if len(x.free_symbols) == 0:
-            return PseudoSMP(algebra, domain, {algebra.gen_monom(None): x})
+        raise PolynomialError("%s is not polynomial in the given generators." % x)
 
     smp = _recur_build(expr)
-    monoms, coeffs = smp.monoms(), smp.coeffs()
-    domain, coeffs = construct_domain(coeffs, **domain_kwargs)
-    rep = PseudoSMP(algebra, domain, dict(zip(monoms, coeffs)))
-    return PseudoPoly.new(rep, *gens)
+
+    if isinstance(expr, MatrixExpr):
+        smp = {k: v.xreplace({domain.one: 1}) for k, v in smp.items()}
+
+    return PseudoPoly.from_dict(smp, *gens, algebra=algebra, **domain_kwargs)

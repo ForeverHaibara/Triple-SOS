@@ -225,7 +225,141 @@ function setSOSResult(data){
 Below contains 3d visualization for 4var polynomials
 */
 const LABELMARGIN = 20;
-const COLLIDE_SCALE = 1.01;
+const HULL_EPSILON = 1e-7;
+
+function _computeConvexHull3D(points){
+    /* Incrementally build an oriented hull, including lower-dimensional supports. */
+    if (points.length < 2){
+        return {points, faces: [], edges: []};
+    }
+    const farthest = distance => {
+        let index = 0, maximum = -1;
+        points.forEach((point, i) => {
+            const value = distance(point);
+            if (value > maximum){
+                index = i;
+                maximum = value;
+            }
+        });
+        return index;
+    };
+    const a = farthest(point => point.distanceToSquared(points[0]));
+    const b = farthest(point => point.distanceToSquared(points[a]));
+    const axis = points[b].clone().sub(points[a]);
+    if (axis.length() < HULL_EPSILON){
+        return {points: [points[a]], faces: [], edges: []};
+    }
+    axis.normalize();
+    const c = farthest(point => point.clone().sub(points[a]).cross(axis).lengthSq());
+    const normal = points[b].clone().sub(points[a]).cross(points[c].clone().sub(points[a]));
+    if (points[c].clone().sub(points[a]).cross(axis).length() < HULL_EPSILON){
+        return {points, faces: [], edges: [[a, b]]};
+    }
+    normal.normalize();
+    const d = farthest(point => Math.abs(normal.dot(point.clone().sub(points[a]))));
+    if (Math.abs(normal.dot(points[d].clone().sub(points[a]))) < HULL_EPSILON){
+        // Project onto the support plane and use a monotone chain for its perimeter.
+        const up = normal.clone().cross(axis);
+        const projected = points.map((point, i) => ({i, x: point.dot(axis), y: point.dot(up)}));
+        projected.sort((p, q) => p.x - q.x || p.y - q.y);
+        const turn = (p, q, r) => (q.x-p.x)*(r.y-p.y) - (q.y-p.y)*(r.x-p.x);
+        const chain = ordered => {
+            const result = [];
+            ordered.forEach(point => {
+                while (result.length > 1 && turn(result[result.length-2], result[result.length-1], point) <= HULL_EPSILON){
+                    result.pop();
+                }
+                result.push(point);
+            });
+            result.pop();
+            return result;
+        };
+        const perimeter = chain(projected).concat(chain(projected.slice().reverse())).map(point => point.i);
+        const faces = [];
+        for (let i = 1; i+1 < perimeter.length; ++i){
+            faces.push([perimeter[0], perimeter[i], perimeter[i+1]]);
+        }
+        const edges = perimeter.map((index, i) => [index, perimeter[(i+1)%perimeter.length]]);
+        return {points, faces, edges};
+    }
+
+    const inside = new THREE.Vector3().add(points[a]).add(points[b]).add(points[c]).add(points[d]).multiplyScalar(0.25);
+    const makeFace = (i, j, k) => {
+        const normal = points[j].clone().sub(points[i]).cross(points[k].clone().sub(points[i])).normalize();
+        if (normal.dot(inside.clone().sub(points[i])) > 0){
+            [j, k] = [k, j];
+            normal.negate();
+        }
+        return {indices: [i, j, k], normal, offset: normal.dot(points[i])};
+    };
+    let faces = [makeFace(a, b, c), makeFace(a, b, d), makeFace(a, c, d), makeFace(b, c, d)];
+    points.forEach((point, index) => {
+        const visible = faces.filter(face => face.normal.dot(point) - face.offset > HULL_EPSILON);
+        if (visible.length === 0){
+            return;
+        }
+        const horizon = new Map();
+        visible.forEach(face => {
+            face.indices.forEach((i, j) => {
+                const k = face.indices[(j+1)%3];
+                const key = Math.min(i, k) + ',' + Math.max(i, k);
+                if (horizon.has(key)){
+                    horizon.delete(key);
+                }else{
+                    horizon.set(key, [i, k]);
+                }
+            });
+        });
+        const removed = new Set(visible);
+        faces = faces.filter(face => !removed.has(face));
+        horizon.forEach(([i, j]) => faces.push(makeFace(i, j, index)));
+    });
+    // Omit triangulation diagonals between coplanar faces from the wireframe.
+    const adjacency = new Map();
+    faces.forEach(face => {
+        face.indices.forEach((i, j) => {
+            const k = face.indices[(j+1)%3];
+            const key = Math.min(i, k) + ',' + Math.max(i, k);
+            if (adjacency.has(key)){
+                const edge = adjacency.get(key);
+                edge.visible = edge.normal.dot(face.normal) < 1 - HULL_EPSILON;
+            }else{
+                adjacency.set(key, {indices: [i, k], normal: face.normal, visible: true});
+            }
+        });
+    });
+    return {points, faces: faces.map(face => face.indices),
+        edges: Array.from(adjacency.values()).filter(edge => edge.visible).map(edge => edge.indices)};
+}
+
+function set3DGeometry(){
+    if (!_3d_vis.tetrav.length){
+        return;
+    }
+    const hull = document.getElementById('config_3D_Geometry').value === 'hull' ? _3d_vis.hull : _3d_vis.outerHull;
+    const mesh = _3d_vis.tetrahedron;
+    const geometry = new THREE.BufferGeometry().setFromPoints(hull.points);
+    geometry.setIndex(hull.faces.flat());
+    mesh.geometry.dispose();
+    mesh.geometry = geometry;
+    if (_3d_vis.outline){
+        mesh.remove(_3d_vis.outline);
+        _3d_vis.outline.geometry.dispose();
+        _3d_vis.outline.material.dispose();
+    }
+    const vertices = hull.points.length === 1 ? hull.points : hull.edges.flatMap(edge => edge.map(index => hull.points[index]));
+    const outlineGeometry = new THREE.BufferGeometry().setFromPoints(vertices);
+    const outline = hull.points.length === 1 ? new THREE.Points(
+        outlineGeometry,
+        new THREE.PointsMaterial({color: 0x000000, size: 4, sizeAttenuation: false, transparent: true, opacity: 0.2})
+    ) : new THREE.LineSegments(outlineGeometry,
+        new THREE.LineBasicMaterial({color: 0x000000, transparent: true, opacity: 0.2}));
+    mesh.add(outline);
+    _3d_vis.outline = outline;
+    if (_3d_vis.in3d){
+        updateTextPositions();
+    }
+}
 
 function _generateMonoms(nvars, degree) {
     /* Generate all monomials of degree `degree` in `nvars` variables. Sorted in decreasing order. */
@@ -270,29 +404,9 @@ function init3DVisualization(){// Get the div element
 
     // Add a tetrahedron or other objects to the scene
     const geometry = new THREE.BufferGeometry();
-    const vertices = new Float32Array([
-        1, 1, 1,   // Vertex 0
-        -1, -1, 1, // Vertex 1
-        -1, 1, -1, // Vertex 2
-        1, -1, -1  // Vertex 3
-    ]);
-    const indices = new Uint16Array([0, 1, 2, 0, 1, 3, 0, 2, 3, 1, 2, 3]);
-    geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3));
-    geometry.setIndex(new THREE.BufferAttribute(indices, 1));
-    
-    // const material = new THREE.MeshBasicMaterial({
-    //     color: 0x0077ff, 
-    //     wireframe: true, 
-    //     opacity: 1, 
-    //     side: THREE.DoubleSide
-    // });
     const material = new THREE.MeshBasicMaterial({
-        color: 0x000000,     //
-        transparent: true,   // Allow translucency
-        wireframe: true, 
-        opacity: 0.2,        // Set opacity for a light, translucent effect
-        // shininess: 10,       // Add slight shininess to give it a glowing effect
-        side: THREE.DoubleSide // Make it visible from both sides
+        visible: false, // Keep the surface available for raycasting; render only its edges.
+        side: THREE.DoubleSide
     });
     const tetrahedron = new THREE.Mesh(geometry, material);
     tetrahedron.visible = false;
@@ -314,6 +428,9 @@ function init3DVisualization(){// Get the div element
         [-1, 1, -1],
         [1, -1, -1]
     ];
+    _3d_vis.outerHull = _computeConvexHull3D(_3d_vis.tetrav.map(point => new THREE.Vector3(...point)));
+    _3d_vis.hull = {points: [], faces: [], edges: []};
+    set3DGeometry();
 
     // _initDashlinesPlugin(); // enable/disable dashed lines
     _init3DHeatmap();
@@ -460,7 +577,6 @@ function updateTextPositions() {
         return;
     }
     const coeffs_view = VIEW3DPARENT;
-    const tetrav = _3d_vis.tetrav;
     const camera = _3d_vis.camera;
     camera.updateMatrixWorld(); // Ensure the camera's world matrix is updated
     _3d_vis.cameraViewProjectionMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
@@ -498,25 +614,23 @@ function updateTextPositions() {
         else{
             textElement.style.display = 'block';
         
-            const ray = new THREE.Vector3(pos.x*COLLIDE_SCALE,pos.y*COLLIDE_SCALE,pos.z*COLLIDE_SCALE).sub(cameraPos).normalize();
+            const ray = pos.clone().sub(cameraPos).normalize();
             raycaster.set(camera.position, ray);
-            const intersections = raycaster.intersectObject(tetrahedron);
-            const isInside = intersections.length > 0 && intersections[0].distance < cameraPos.distanceTo(
-                new THREE.Vector3(pos.x*COLLIDE_SCALE,pos.y*COLLIDE_SCALE,pos.z*COLLIDE_SCALE));
-            textElement.style.opacity = isInside ? 0.2 : 1; // Fully opaque if inside, semi-transparent if not
+            const intersections = raycaster.intersectObject(tetrahedron, false);
+            // Ignore hits at the label itself, including boundaries of off-center hulls.
+            const isOccluded = intersections.length > 0 && intersections[0].distance < cameraPos.distanceTo(pos) - HULL_EPSILON*10;
+            textElement.style.opacity = isOccluded ? 0.2 : 1;
         }
     });
 }
 
 function renderCoeffs3D(degree, triangle_vals, all_gens = 'abcd'){
     // First render the coefficient triangle
-    if (degree === 0){
-        return;
-    }
     const coeffs_view = VIEW3DPARENT;
     let positions = [];
+    const support = [];
     const tetrav = _3d_vis.tetrav;
-    const inv_degree = 1./degree;
+    const inv_degree = degree === 0 ? 0 : 1./degree;
     const titleparser = (chr, deg) => { 
         return deg <= 0? '': (deg==1? chr: chr+deg);
     }
@@ -527,7 +641,9 @@ function renderCoeffs3D(degree, triangle_vals, all_gens = 'abcd'){
             (monom[0]*tetrav[0][2] + monom[1]*tetrav[1][2] + monom[2]*tetrav[2][2] + monom[3]*tetrav[3][2])*inv_degree
         );
         positions.push(pos);
-        _3d_vis.positions = positions;
+        if (triangle_vals[i] !== undefined && triangle_vals[i] !== '' && triangle_vals[i] !== '0'){
+            support.push(pos);
+        }
         
         const coeff = document.createElement('p');
         coeff.innerText = typeof(triangle_vals[i])==='undefined'? '': triangle_vals[i];
@@ -550,7 +666,10 @@ function renderCoeffs3D(degree, triangle_vals, all_gens = 'abcd'){
         coeffs_view.appendChild(coeff);
         sos_coeffs.push(coeff);
     });
+    _3d_vis.positions = positions;
+    _3d_vis.hull = _computeConvexHull3D(support);
     _3d_vis.in3d = true;
+    set3DGeometry();
 }
 
 function renderHeatmap3D(heatmap){

@@ -77,7 +77,7 @@ def linear_correction(
     num_multipliers: int,
     symmetry: Union["PermutationGroup", "MonomialManager"],
     zero_tol: float = 1e-6,
-) -> Tuple[Matrix, Matrix, bool]:
+) -> Tuple[Matrix, List["LinearBasis"], bool]:
     """
     Linear programming is a numerical way to solve the SOS problem. However, we require
     the solution to be exact. This function is used to correct the numerical error.

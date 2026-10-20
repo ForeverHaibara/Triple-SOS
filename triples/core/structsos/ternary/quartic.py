@@ -1,3 +1,4 @@
+from itertools import combinations
 from typing import TYPE_CHECKING, List, Tuple
 
 from sympy import Add, Float, Integer, Poly, nsimplify
@@ -6,35 +7,19 @@ from sympy import sign as sp_sign
 
 from ..univariate import prove_univariate
 from ..utils import (
-    common_region_of_curves,
-    congruence,
+    congruence_solve,
     intervals,
     quadratic_weighting,
     rationalize_func,
     structsos_reorder_symmetry,
     sum_y_exprs,
 )
-from ....sdp.arithmetic import rep_matrix_from_list
-from ....utils.pqr import pqr_sym
 from ....utils.roots import nroots, rationalize_bound
 
 if TYPE_CHECKING:
     from sympy import Expr
 
     from ....utils.expressions import Coeff
-
-
-def composite_coeff(poly: Poly, monom: Tuple[int, ...]):
-    """
-    Given a polynomial on a composite domain, e.g., K[x][y],
-    get the coefficient of the monomial and return it
-    as a polynomial."""
-    if not poly.domain.is_Composite:
-        raise ValueError("poly.domain must be composite")
-    dt = poly.rep.to_dict()
-    dm = dt.get(monom, poly.domain.zero)
-    return Poly(dm.to_dict(), *poly.domain.symbols,
-                domain=poly.domain.domain)
 
 
 def structsos_quartic(coeff, real = 1):
@@ -633,43 +618,96 @@ def structsos_acyclic_quartic(coeff, real = True):
     """
     Solve acyclic quartic problems.
     """
-    return _structsos_acyclic_quartic_symmetric(coeff)
+    return _structsos_acyclic_quartic_symmetric_real(coeff)
     return _structsos_acyclic_quartic_real(coeff)
 
 
-@structsos_reorder_symmetry(groups=(2, 1))
-def _structsos_acyclic_quartic_symmetric(coeff: 'Coeff', real = True):
+def _gram_polys(matrices0, matrices1, gen, domain):
     """
-    Solve acyclic quartic polynomials that are symmetric with respect to two variables.
-    If it is nonnegative over R, it must be sum of squares by Hilbert's 17th problem, we can write
-    it in the form of: (assume `f(a,b,c) = f(b,a,c)` by symmetry)
-    `f(a,b,c) = p1' * M1 * p1 + (a-b)^2 * p2' * M2 * p2`
-    where `p1 = [c**2, c*(a+b), a*b, (a-b)**2]'`, `p2 = [a+b, c]`
+    Return the nonzero principal minors of affine symmetric matrix blocks.
 
-    and
-    ```
-    M1 = Matrix([
-        [c004, c103/2, c112/2 + c202 - 2*l, c202/2 - l/2 - r11/2],
-        [c103/2, l, c211/2 + c301/2, c301/2 - r01],
-        [c112/2 + c202 - 2*l, c211/2 + c301/2, c220 + 2*c310 + 2*c400, c310/2 + 2*c400 - 2*r00],
-        [c202/2 - l/2 - r11/2, c301/2 - r01, c310/2 + 2*c400 - 2*r00, c400 - r00]
-    ])
-    ```
-    and `M2 = Matrix([[r00, r01], [r01, r11]])`.
-    Here `l, r00, r01, r11` are four variables. Select them properly so that M1 and M2 are PSD.
+    ``matrices0`` and ``matrices1`` are matching lists of square matrices,
+    represented as rows of elements in ``domain``. They specify the blocks
+    at parameter values 0 and 1. Each block is interpolated as
+    ``M(t) = M0 + t*(M1-M0)``, where ``t`` is represented by ``gen``.
 
-    Denote `f(1,1,c) = w4*c**4 + w3*c**3 + w2*c**2 + w1*c + w0`
-    then `M1[:-1,:-1].det() * (-4) == leading_det = ...` (please refer to the code).
+    The returned univariate ``Poly`` objects retain the coefficient domain.
+    All blocks are PSD at a real parameter value iff every returned
+    polynomial is nonnegative there. Identically zero minors are omitted;
+    nonzero constants and duplicate minors are retained. This constructs
+    the inequalities only; it does not search for a feasible parameter.
 
-    Choose l such that `leading_det == 0` or is slightly negative, and assume
-    `vec = [(a-b*w3/w4)/4, b, 1/4].T` and `M[:,-1] = M[:-1,:-1] * vec`.
-    Here a and b are new parameters, which determine the values of `r00, r01, r11`.
-    To make sure that `M1 >= 0`, we require `det1 = M[-1,-1] - vec.T * M[:-1,:-1] * vec >= 0`,
-    Also, `det2 = r00*r11 - r01**2 >= 0`.
-    The constraints `det1 >= 0` and `det2 >= 0` are both quadratic with respect to a and b.
+    Division-free Laplace expansion is suitable for the small Gram blocks
+    here and avoids exact polynomial division, which can fail over RR.
 
     Examples
     --------
+    The matrix [[t, 1], [1, t]] is PSD exactly when t >= 1.
+
+    >>> from sympy import QQ, symbols
+    >>> t = symbols('t')
+    >>> m0 = [[QQ.zero, QQ.one], [QQ.one, QQ.zero]]
+    >>> m1 = [[QQ.one, QQ.one], [QQ.one, QQ.one]]
+    >>> polys = _gram_polys([m0], [m1], t, QQ)
+    >>> [p.as_expr() for p in polys]
+    [t, t, t**2 - 1]
+    >>> all(p.rep.eval(QQ(2)) >= 0 for p in polys)
+    True
+    >>> all(p.rep.eval(QQ(0)) >= 0 for p in polys)
+    False
+    >>> _gram_polys([[[QQ.zero]]], [[[QQ.zero]]], t, QQ)
+    []
+    >>> [p.as_expr() for p in _gram_polys([[[QQ(-1)]]], [[[QQ(-1)]]], t, QQ)]
+    [-1]
+    """
+    ring = domain.poly_ring(gen)
+    t = ring.gens[0]
+
+    def determinant(rows):
+        """Compute a nonempty square determinant without division."""
+        if len(rows) == 1:
+            return rows[0][0]
+        return sum(((-1)**j*rows[0][j]*determinant([
+            row[:j]+row[j+1:] for row in rows[1:]])
+            for j in range(len(rows))), ring.zero)
+
+    polys = []
+    for rows0, rows1 in zip(matrices0, matrices1):
+        n = len(rows0)
+        rows = [[ring.convert(v, domain) + t*ring.convert(w-v, domain)
+                 for v, w in zip(row0, row1)]
+                for row0, row1 in zip(rows0, rows1)]
+        for size in range(1, n+1):
+            for inds in combinations(range(n), size):
+                det = determinant([[rows[i][j] for j in inds] for i in inds])
+                if det:
+                    polys.append(Poly.from_dict(dict(det), (gen,), domain=domain))
+    return polys
+
+
+@structsos_reorder_symmetry(groups=(2, 1))
+def _structsos_acyclic_quartic_symmetric_real(coeff: 'Coeff', real = True):
+    """
+    Solve real ternary quartics symmetric in two variables.
+
+    Set `x = a+b, y = c, z = a-b` and write
+    `F = A*z**4 + Q(x,y)*z**2 + P(x,y)`. Symmetry splits its Gram
+    matrix into blocks on `[x**2, x*y, y**2, z**2]` and `[x*z, y*z]`.
+    A real zero forces every square to vanish there. An off-plane
+    zero leaves one Gram parameter; a plane zero leaves two, one of
+    which can be eliminated by Schur complements.
+
+    For positive definite forms, minimize `F/(x**2+y**2+z**2)**2` to
+    find an approximate boundary form. The critical equations have
+    degree at most six. All roots and Gram parameters stay in the
+    coefficient domain. Numerical boundary data only propose Gram
+    parameters: the original coefficients restore the exact identity,
+    and both restored blocks must pass congruence before returning.
+
+    Examples
+    --------
+    :: ineqs = []
+
     => (b-c)2(b+c-3a)2+(a-c)2(a+c-3b)2+1/4(a+b-3/2c)2(a+b-3c)2
 
     => 2(c-a)2(c+a-4b)2+7/2(c-a)2(c+a-b)2+s(c2-5ca)2
@@ -688,239 +726,365 @@ def _structsos_acyclic_quartic_symmetric(coeff: 'Coeff', real = True):
 
     => (ab+c2)(a+b-3c)2+s(a2-3ab)2/4
 
-    => (3339a4-5949a3b-2469a3c+9288a2b2-243a2bc+1159a2c2-5949ab3-243ab2c+278abc2-262ac3+3339b4-2469b3c+1159b2c2-262bc3+38c4) # doctest:+SKIP
+    => (3339a4-5949a3b-2469a3c+9288a2b2-243a2bc+1159a2c2-5949ab3-243ab2c+278abc2-262ac3+3339b4-2469b3c+1159b2c2-262bc3+38c4)
+
+    => c4
+
+    => (a-b)2((a+b)2+c2)
+
+    => ((a+b)c+c2+(a-b)2)2+(a-b)2c2
+
+    => 9c4+(a-b)4+(a-b)2((a+b)2+4(a+b)c+2c2)
+
+    => c2(2(a+b)2+2(a+b)c+3c2)+(a-b)2(2(a+b)c+10c2)+(a-b)4
+
+    => ((a-b)2-(a+b)2+(a+b)c)2+c2(a+b+c)2+10(a-b)2c2
+
+    => ((a+b)2-2c2+(a-b)2)2+(a-b)2(3(a+b)2+c2)
+
+    => ((a-b)2-(a+b)2+(a+b)c)2+c2(a+b+c)2+10(a-b)2c2+((a+b)2+c2+(a-b)2)2/1000
+
+    => ((a+b)2-2c2+(a-b)2)2+(a-b)2(3(a+b)2+c2)+((a+b)2+c2+(a-b)2)2/1000
+
+    => 9c4+(a-b)4+(a-b)2((a+b)2+4(a+b)c+2c2)+((a+b)2+c2+(a-b)2)2/1000
+
+    => sqrt(2)*(a-b)4+c2((a+b)2+4(a+b)c+5c2)+(a-b)2((a+b)2+2(a+b)c)
+
+    => ((a-b)2-(a+b)2+(a+b)c)2+c2(a+b+c)2+10(a-b)2c2+sqrt(2)c4+((a+b)2+c2+(a-b)2)2/1000
     """
+
     a, b, c = coeff.gens
+    domain = coeff.domain
+    zero, one = domain.zero, domain.one
+    cv = lambda v: coeff.convert(v, wrap=False)
+    ge = lambda v: coeff.wrap(v) >= 0
+    gt = lambda v: coeff.wrap(v) > 0
+    poly = lambda cs: coeff.from_list(cs, (a,)).as_poly()
 
-    # first try the substitution p = a + b, q = a*b, c = 1
-    # and view it as a quadratic polynomial in q
-    # p**2 >= 4*q
-    poly = pqr_sym(coeff.as_poly().eval(2, 1))
-    poly = poly.eject(a)
+    monoms = [(4,0,0), (3,1,0), (2,2,0), (3,0,1), (2,1,1),
+              (2,0,2), (1,0,3), (1,1,2), (0,0,4)]
+    c400, c310, c220, c301, c211, c202, c103, c112, c004 = [
+        coeff.rep.get(m, zero) for m in monoms]
+    A = (2*c400 - 2*c310 + c220)/16
+    P = poly([(2*c400 + 2*c310 + c220)/16, (c301 + c211)/4,
+              (2*c202 + c112)/4, c103, c004])
+    Q = poly([(6*c400 - c220)/8, (3*c301 - c211)/4,
+              (2*c202 - c112)/4])
+    if not ge(A):
+        return None
 
-    def lift(p: Poly, n: int = 2) -> "Expr":
-        return Add(*[v * (a+b)**i*c**(n-i) for (i,), v in p.terms()])
+    def lift(p, x, y, degree):
+        """Homogenize the univariate p to y**degree*p(x/y)."""
+        return Add(*[coeff.wrap(v)*x**i*y**(degree-i)
+                     for (i,), v in p.rep.to_dict().items()])
 
-    def lift_proof(proof, n: int = 2):
-        terms = []
-        ls = proof[0][1]
-        for cf, term in ls:
-            terms.append(cf * lift(term, n).expand() ** 2)
-        return Add(*terms)
+    def binary_proof(p):
+        """
+        Lift a univariate SOS for p to a binary quartic SOS in a+b and c.
 
-    def _solve_pure_sym(poly: Poly):
-        # when poly >= 0 holds for all q and the constraint p**2 >= 4*q
-        # is not required
-        lc = poly.coeff_monomial((2,))
-        mid = composite_coeff(poly, (1,))
-        if lc == 0 and mid.is_zero:
-            tc = composite_coeff(poly, (0,))
-            proof = prove_univariate(-tc, return_type='list')
-            if proof is not None:
-                return lift_proof(proof, 2)
-            return
-        if lc <= 0:
-            return None
-
-        disc = poly.discriminant()
-
-        proof = prove_univariate(-disc, return_type='list')
+        p has degree at most four. Return None if prove_univariate fails.
+        """
+        proof = prove_univariate(p, return_type='list')
         if proof is not None:
-            disc_proof = lift_proof(proof)
-            mid = lift(mid, 2)
-            return disc_proof/(4*lc) + 1/lc * (lc*a*b + mid/2).expand().together()**2
+            return Add(*[coeff.convert(w)*lift(term, a+b, c, 2)**2
+                         for w, term in proof[0][1]])
 
-    solution = _solve_pure_sym(poly)
-    if solution is not None:
-        return solution
+    # These two fast paths also handle zero leading coefficients and
+    # zeros whose directions are not in the coefficient domain.
+    q2, q1, q0 = [Q.rep.nth(i) for i in (2, 1, 0)]
+    if ge(q2) and ge(q0) and ge(4*q2*q0 - q1**2):
+        proof = binary_proof(P)
+        if proof is not None:
+            qproof = quadratic_weighting(coeff, q2, q1, q0, mapping=[a+b, c])
+            if qproof is not None:
+                return coeff.wrap(A)*(a-b)**4 + (a-b)**2*qproof + proof
+    if A == zero:
+        return None
+    D = P.mul_ground(4*A) - Q**2
+    proof = binary_proof(D)
+    if proof is not None:
+        return coeff.wrap(A)*((a-b)**2 + lift(Q, a+b, c, 2)/(2*coeff.wrap(A)))**2 + proof/(4*coeff.wrap(A))
 
-    mid = composite_coeff(poly, (1,))
-    lc_lift = Poly([poly.coeff_monomial((2,)), 0, 0], a, domain=coeff.domain)
-    rem = (2*mid + lc_lift).mul_ground(mid.domain.one/-8) # K[a]
-    rem_proof = prove_univariate(rem, return_type='list')
+    p4, p3, p2, p1, p0 = [P.rep.nth(i) for i in (4, 3, 2, 1, 0)]
 
-    if rem_proof is not None:
-        rem_part = (a - b)**2 * lift_proof(rem_proof, 1)
-        rem_poly = rem.as_poly(b, domain=poly.domain)
-        boundary = (a**2 - 4*b).as_poly(b, domain=poly.domain)
+    def gram_rows(params):
+        """
+        Build both original Gram blocks from the four free domain elements.
 
-        solution = _solve_pure_sym(poly - boundary*rem_poly)
-        if solution is not None:
-            return rem_part + solution
+        params = [l, h, k, j] specifies the even block entries at
+        (0,2), (0,3), (1,3), (2,3). All other entries are determined by
+        the original P, Q and A, so every choice represents the same F.
+        """
+        l, h, k, j = params
+        return [
+            [p4, p3/2, l, h],
+            [p3/2, p2-2*l, p1/2, k],
+            [l, p1/2, p0, j],
+            [h, k, j, A]
+        ], [[q2-2*h, q1/2-k], [q1/2-k, q0-2*j]]
 
-    if not coeff.is_rational:
-        return
+    def finish(params, round_params=False):
+        """
+        Certify the original F and construct its SOS from Gram parameters.
 
-    monoms = [(4,0),(3,1),(2,2),(3,0),(2,1),(2,0),(1,0),(1,1),(0,0)]
+        params contains the four free entries in the original basis, as
+        domain elements. If round_params is True, first try small-denominator
+        approximations. Each trial rebuilds both blocks from the original
+        coefficients and must pass congruence. Return None if neither the
+        rounded parameters nor the supplied parameters produce PSD blocks.
+        """
+        if round_params:
+            numer = [coeff.to_sympy(v).n(15) for v in params]
+            for rounding in (.1, .01, .0001, 1e-6, 1e-8):
+                rounded = [cv(next(rationalize_bound(v, direction=0,
+                    roundings=(rounding,), compulsory=False))) for v in numer]
+                solution = finish(rounded)
+                if solution is not None:
+                    return solution
+        rows1, rows2 = gram_rows(params)
 
-    c400, c310, c220, c301, c211, c202, c103, c112, c004 = [coeff((i, j, 4-i-j)) for i, j in monoms]
-    w4 = c004
-    w3 = 2*c103
-    w2 = c112 + 2*c202
-    w1 = 2*c211 + 2*c301
-    w0 = c220 + 2*c310 + 2*c400
-    if w4 < 0:
-        return # not implemented
+        def mapping1(vec):
+            a1, a2, a3, a4 = vec
+            return ((a1 + a4)*a**2 + (2*a1 - 2*a4)*a*b \
+                    + a2*a*c + (a1 + a4)*b**2 + a2*b*c + a3*c**2).together()**2
 
-    def _get_quad_forms(r00, r01, r11, l):
-        r00, r01, r11, l = [coeff.convert(i) for i in (r00, r01, r11, l)]
-        M1 = rep_matrix_from_list([
-            [c004, c103/2, c112/2 + c202 - 2*l, c202/2 - l/2 - r11/2],
-            [c103/2, l, c211/2 + c301/2, c301/2 - r01],
-            [c112/2 + c202 - 2*l, c211/2 + c301/2, c220 + 2*c310 + 2*c400, c310/2 + 2*c400 - 2*r00],
-            [c202/2 - l/2 - r11/2, c301/2 - r01, c310/2 + 2*c400 - 2*r00, c400 - r00]
-        ], (4, 4), coeff.domain)
-        M2 = rep_matrix_from_list([[r00, r01], [r01, r11]], (2, 2), coeff.domain)
-        return M1, M2
-
-    def _get_solution(r00, r01, r11, l):
-        M1, M2 = _get_quad_forms(r00, r01, r11, l)
-        US1 = congruence(M1)
-        US2 = congruence(M2)
-        if US1 is None or US2 is None:
+        sol1 = congruence_solve(coeff.as_matrix(rows1, (4, 4)),
+                mapping=mapping1)
+        if sol1 is None:
             return None
-        a, b, c = coeff.gens
+        sol2 = congruence_solve(coeff.as_matrix(rows2, (2, 2)),
+                mapping=[a+b, c])
+        if sol2 is None:
+            return None
+        if sol2.is_Add:
+            sol2 = Add(*((a-b)**2*arg.together() for arg in sol2.args))
+        else:
+            sol2 = (a-b)**2*sol2.together()
+        return sol1 + sol2
 
-        def _US_vec(US, vec):
-            U, S = US
-            return Add(*[s*v.together()**2 for s, v in zip(S, U*vec)])
-        solution = Add(
-            _US_vec(US1, Matrix([c**2, c*a+c*b, a*b, a**2-2*a*b+b**2])),
-            (a-b)**2 * _US_vec(US2, Matrix([a+b, c]))
-        )
-        solution = solution.subs({
-            (a**2 + 2*a*b + b**2)**2: (a + b)**4,
-            (a**2 - 2*a*b + b**2)**2: (a - b)**4
-        })
-        return solution
+    def transform(p, degree, direction):
+        """
+        Move the direction (direction, 1) to (X, Y) = (1, 0).
 
-    l = c
-    if w4 > 0:
-        # find (a, b, l) such that leading_det == -4*M1[:-1,:-1].det() <= 0
-        leading_det = Poly([16, -8*w2, -4*w0*w4 + w1*w3 + w2**2, (w0*w3**2 + w1**2*w4 - w1*w2*w3)/4], l,
-                           domain = coeff.domain)
-        if True:
-            # first try r00 == r01 == r11 == 0
-            det1 = Poly([
-                -(c220 - 2*c310 + 2*c400)/4,
-                -(4*c112*c310 - 16*c112*c400 - 8*c202*c220 + 8*c202*c310 + 16*c202*c400 - c211**2 + 6*c211*c301 - 9*c301**2)/16,
-                (8*c004*c220*c400 - 2*c004*c310**2 - 16*c004*c400**2 + c103*c211*c310 - 4*c103*c211*c400 - 2*c103*c220*c301 \
-                    + c103*c301*c310 + 8*c103*c301*c400 - 2*c112**2*c400 + 2*c112*c202*c310 + c112*c211*c301 - 3*c112*c301**2 \
-                    - 2*c202**2*c220 + 4*c202**2*c400 - c202*c211**2 + 4*c202*c211*c301 - 3*c202*c301**2)/8,
-                _get_quad_forms(0, 0, 0, 0)[0].det()
-            ], l, domain = coeff.domain)
-            for l1 in intervals([Poly([1, 0], l), leading_det, det1], coeff.domain):
-                if l1 >= 0 and leading_det(l1) <= 0 and det1(l1) >= 0:
-                    solution = _get_solution(0, 0, 0, l1)
-                    if solution is not None:
-                        return solution
-            # TODO: consider r00 == r01 == 0 or r01 == r11 == 0 separately
+        p is the dehomogenized binary form of homogeneous degree degree.
+        Substitute x = direction*X+Y, y = X and return its polynomial
+        at Y = 1. direction=None denotes (1,0) and leaves p unchanged.
+        """
+        if direction is None: # the projective direction (1, 0)
+            return p
+        shifted = p.shift(direction)
+        return poly([shifted.rep.nth(i) for i in range(degree+1)])
 
-        # find (a, b, l) such that det1 >= 0
-        det1 = [
-            ((2, 0, 0), -w4**2),
-            ((0, 2, 1), -16*w4),
-            ((0, 2, 0), w3**2),
-            ((0, 0, 0), w4*(-4*c310 + w0))
-        ]
-        det1 = Poly.from_dict(dict(det1), (a, b, l), domain = coeff.domain)
+    def restore(rows, direction):
+        """
+        Recover the four original Gram parameters after a binary change of basis.
 
-        # find (a, b, l) such that det2 >= 0
-        det2 = [
-            ((2, 0, 1), -32*w4**3),
-            ((2, 0, 0), w4**2*(8*w2*w4 - w3**2)),
-            ((1, 1, 0), 2*w4*(8*w1*w4**2 - 4*w2*w3*w4 + w3**3)),
-            ((1, 0, 1), -16*w4**2*(-4*c202 + w2)),
-            ((1, 0, 0), 2*w4**2*(-8*c202*w2 + 8*c301*w3 - 16*c310*w4 - 64*c400*w4 + 8*w0*w4 - w1*w3 + 2*w2**2)),
-            ((0, 2, 2), -256*w4**2),
-            ((0, 2, 1), 32*w3**2*w4),
-            ((0, 2, 0), -w3**4),
-            ((0, 1, 1), -16*w4*(4*c202*w3 - 16*c301*w4 + 2*w1*w4 - w2*w3)),
-            ((0, 1, 0), 2*w4*(-16*c202*w1*w4 + 8*c202*w2*w3 - 8*c301*w3**2 + 4*w1*w2*w4 + w1*w3**2 - 2*w2**2*w3)),
-            ((0, 0, 0), w4**2*(64*c202*c310 + 256*c202*c400 - 32*c202*w0 - 64*c301**2 + 16*c301*w1 - 16*c310*w2 - 64*c400*w2 + 8*w0*w2 - w1**2))
-        ]
-        det2 = Poly.from_dict(dict(det2), (a, b, l), domain = coeff.domain)
+        rows is a symmetric Gram matrix on [X**2, X*Y, Y**2, z**2],
+        with domain-element entries. For a finite direction, X=y and
+        Y=x-direction*y. Compute only the four needed entries of the
+        corresponding congruence, without constructing another matrix.
+        direction=None means the basis is already the original one.
 
-        def _get_solution_from_ab(a, b, l):
-            r11 = (-2*a*c004*w4 + 2*b*c004*w3 - 4*b*c103*w4 - c112*w4 + 2*c202*w4)/(4*w4)
-            r01 = (-a*c103*w4 + b*c103*w3 - 8*b*l*w4 - c211*w4 + 3*c301*w4)/(8*w4)
-            r00 = (-a*c112*w4 - 2*a*c202*w4 + 4*a*l*w4 + b*c112*w3 + 2*b*c202*w3 - 4*b*c211*w4 - 4*b*c301*w4 - 4*b*l*w3 - 2*c220*w4 + 12*c400*w4)/(16*w4)
-            return _get_solution(r00, r01, r11, l)
+        Adding a multiple of (x**2+y**2+z**2)**2 only changes fixed
+        diagonal entries, so its four free parameters can be reused.
+        """
+        if direction is not None:
+            s = direction
+            return [rows[2][0]-s*rows[2][1]+s**2*rows[2][2],
+                    rows[2][3], rows[1][3]-2*s*rows[2][3],
+                    rows[0][3]-s*rows[1][3]+s**2*rows[2][3]]
+        return [rows[0][2], rows[0][3], rows[1][3], rows[2][3]]
 
+    def off_plane(pg, qg, ag, direction, t, round_params=False):
+        """
+        Propose and certify an SOS using an off-plane zero of a boundary form.
 
-        for l0 in nroots(leading_det, real=True, nonnegative=True, ground=True):
-            if c004*l0 - c103**2/4 < 0: # M1[:2,:2].det()
+        pg, qg, ag describe G = ag*z**4+qg(x,y)*z**2+pg(x,y).
+        direction specifies the binary direction (direction,1), or (1,0)
+        when None; t > 0 is z**2 at the normalized zero. These data may
+        be approximate. In the transformed coordinates the even squares
+        span [z**2-t*X**2, X*Y, Y**2], leaving one parameter k.
+
+        Restore the original Gram family, use its principal minors to
+        choose k, then certify the original F. round_params controls the
+        optional rationalization in finish; the returned SOS is for F.
+        """
+        pp = transform(pg, 4, direction)
+        qq = transform(qg, 2, direction)
+        v = qq.rep.nth(1)/2
+        B, C, E = pp.rep.nth(2), pp.rep.nth(1)/2, pp.rep.nth(0)
+
+        def params(k):
+            """Restore the free entries when k couples z**2-t*X**2 to Y**2."""
+            return restore([
+                [ag*t**2, -t*v, -t*k, -ag*t],
+                [-t*v, B+2*t*k, C, v],
+                [-t*k, C, E, k],
+                [-ag*t, v, k, ag]
+            ], direction)
+
+        params0, params1 = params(zero), params(one)
+        polys = _gram_polys(gram_rows(params0), gram_rows(params1), a, domain)
+        candidates = [zero, qq.rep.nth(0)/2] + intervals(polys, domain)
+        for k in candidates:
+            if all(ge(p.rep.eval(k)) for p in polys):
+                solution = finish(params(k), round_params)
+                if solution is not None:
+                    return solution
+
+    def plane(pg, qg, ag, direction, round_params=False):
+        """
+        Propose and certify an SOS using a zero on the symmetry plane z=0.
+
+        pg, qg, ag describe the same boundary form as in off_plane.
+        direction denotes (direction,1), or (1,0) when None. After
+        transformation, the even squares span [X*Y, Y**2, z**2].
+        Their Gram block is [[p,s,h],[s,r,k],[h,k,ag]] and the odd
+        block is [[u,v-h],[v-h,w-2*k]]. Schur complements eliminate k,
+        leaving inequalities of degree at most four in h. Zero p or u
+        is handled before division. Approximate zeros only propose
+        parameters; finish validates the original F, with optional
+        rationalization controlled by round_params.
+        """
+        pp = transform(pg, 4, direction)
+        qq = transform(qg, 2, direction)
+        p, s, r = pp.rep.nth(2), pp.rep.nth(1)/2, pp.rep.nth(0)
+        u, v, w = qq.rep.nth(2), qq.rep.nth(1)/2, qq.rep.nth(0)
+        if not all(ge(x) for x in (p, r, u, ag)):
+            return None
+
+        def result(h, k):
+            """Restore the two reduced even-block entries and certify F."""
+            return finish(restore([
+                [zero, zero, zero, zero], [zero, p, s, h],
+                [zero, s, r, k], [zero, h, k, ag]
+            ], direction), round_params)
+
+        if p == zero:
+            if s != zero:
+                return None
+            if u == zero:
+                if v != zero:
+                    return None
+                upper = w/2
+            else:
+                upper = w/2 - v**2/(2*u)
+            k = zero if ge(upper) else upper
+            if ge(r*ag-k**2):
+                return result(zero, k)
+            return None
+
+        alpha = r-s**2/p
+        if not ge(alpha):
+            return None
+        if u == zero:
+            beta = ag-v**2/p
+            center = s*v/p
+            k = center if ge(w/2-center) else w/2
+            if ge(beta) and ge(alpha*beta-(k-center)**2):
+                return result(v, k)
+            return None
+
+        beta = poly([-one/p, zero, ag])
+        upper = poly([-one/(2*u), v/u, w/2-v**2/(2*u)])
+        center = poly([s/p, zero])
+        gap = upper-center
+        det = beta.mul_ground(alpha)-gap**2
+        # Schur complements give |k-center|**2 <= alpha*beta and
+        # k <= upper. Their intersection is nonempty iff beta >= 0
+        # and (gap >= 0 or alpha*beta-gap**2 >= 0).
+        for h in [zero, v] + intervals([beta, gap, det], domain):
+            if ge(beta.rep.eval(h)) and (ge(gap.rep.eval(h)) or ge(det.rep.eval(h))):
+                center_h, upper_h = center.rep.eval(h), upper.rep.eval(h)
+                k = center_h if ge(upper_h-center_h) else upper_h
+                solution = result(h, k)
+                if solution is not None:
+                    return solution
+
+    # For P = multiplier*H**2, first try even squares in span(H, z**2).
+    # This is forced when H has a conjugate pair of real plane zeros.
+    multiplier, factors = P.factor_list()
+    if len(factors) == 1 and factors[0][0].degree() == 2 and factors[0][1] == 2:
+        H = factors[0][0]
+        multiplier = cv(multiplier)
+        h2, h1, h0 = [H.rep.nth(i) for i in (2, 1, 0)]
+        params0 = [multiplier*h2*h0, zero, zero, zero]
+        params1 = [params0[0], h2, h1, h0]
+        polys = _gram_polys(gram_rows(params0), gram_rows(params1), a, domain)
+        for theta in [zero] + intervals(polys, domain):
+            if all(ge(p.rep.eval(theta)) for p in polys):
+                solution = finish([params0[0], theta*h2, theta*h1, theta*h0])
+                if solution is not None:
+                    return solution
+
+    # Exact ground roots are tried first. Approximations never bypass
+    # the final PSD checks or change the polynomial being certified.
+    for s in [None] + nroots(P, real=True, ground=True):
+        value = p4 if s is None else P.rep.eval(s)
+        if value == zero:
+            solution = plane(P, Q, A, s)
+            if solution is not None:
+                return solution
+    for s in [None] + nroots(D, real=True, ground=True):
+        value = D.rep.nth(4) if s is None else D.rep.eval(s)
+        q = q2 if s is None else Q.rep.eval(s)
+        if value == zero and not ge(q):
+            solution = off_plane(P, Q, A, s, -q/(2*A))
+            if solution is not None:
+                return solution
+
+    norm = poly([one, zero, one])
+    E = norm**2
+    stationary_plane = P.diff()*norm - P*norm.diff().mul_ground(2*one)
+    denominator = E.mul_ground(A) + P - Q*norm
+    stationary_mixed = D.diff()*denominator - D*denominator.diff()
+    candidates = [(A, None, None)]
+
+    for s in [None, zero] + nroots(stationary_plane, real=True, ground=True):
+        r = one if s is None else one+s**2
+        p = p4 if s is None else P.rep.eval(s)
+        candidates.append((p/r**2, s, zero))
+    for s in [None, zero] + nroots(stationary_mixed, real=True, ground=True):
+        r = one if s is None else one+s**2
+        p = p4 if s is None else P.rep.eval(s)
+        q = q2 if s is None else Q.rep.eval(s)
+        numer, denom = 2*p-q*r, 2*A*r-q
+        if gt(numer) and gt(denom):
+            t = numer/denom
+            # 4*(A*r**2-q*r+p) = 2*(r*denom+numer) > 0.
+            # The latter avoids cancellation to zero in an inexact domain.
+            value = (4*A*p-q**2)/(2*(r*denom+numer))
+            candidates.append((value, s, t))
+
+    candidates.sort(key=lambda x: coeff.wrap(x[0]))
+    if not gt(candidates[0][0]):
+        return None
+
+    # Lowering the approximate minimum gives the reduced plane blocks
+    # some slack. Try simple fractions first, then closer approximations.
+    minimum = candidates[0][0]
+    minimum_numer = coeff.to_sympy(minimum).n(15)
+    shifts = [cv(v) for v in rationalize_bound(minimum_numer, direction=-1)
+              if gt(cv(v))]
+    shifts.extend(minimum*(one-one/denom) for denom in (100, 10000, 100000000))
+    for shift in shifts:
+        pg = P-E.mul_ground(shift)
+        qg = Q-norm.mul_ground(2*shift)
+        ag = A-shift
+        if not ge(ag):
+            continue
+        for _, s, t in candidates:
+            if t is None:
                 continue
-            is_exact = leading_det.rep.eval(l0, 0) == leading_det.zero
-
-            f1, f2 = det1.eval(2, l0), det2.eval(2, l0)
-            point = common_region_of_curves([f1, f2], f1.domain)
-            # print(sp.latex(sp.GreaterThan(f1.subs({a:Symbol('x'), b:Symbol('y')}).as_expr(), 0)))
-            # print(sp.latex(sp.GreaterThan(f2.subs({a:Symbol('x'), b:Symbol('y')}).as_expr(), 0)))
-            # print(sp.latex(sp.GreaterThan(((-2*a*c004*w4 + 2*b*c004*w3 - 4*b*c103*w4 - c112*w4 + 2*c202*w4)/(4*w4)).subs({a:Symbol('x'), b:Symbol('y')}).as_expr(), 0)))
-            # print(leading_det(l1))
-            # print('\n')
-            if point is not None:
-                # print(_get_solution_from_ab(*point, l1))
-                if is_exact:
-                    solution = _get_solution_from_ab(*point, l0)
-                    if solution is not None:
-                        return solution
-
-                grad = leading_det.diff(l)(l0)
-                l0_numer = coeff.domain.to_sympy(l0).n(15)
-                for l1 in rationalize_bound(l0_numer, direction=1 if grad < 0 else -1, compulsory=True):
-                    if leading_det(l1) <= 0:
-                        f1, f2 = det1.eval(2, l1), det2.eval(2, l1)
-                        point = common_region_of_curves([f1, f2], f1.domain)
-                        if point is not None:
-                            solution = _get_solution_from_ab(*point, l1)
-                            if solution is not None:
-                                return solution
-
-    else: # elif w4 == 0:
-        if c103 != 0: # not positive semidefinite on R
-            return None
-
-        l1 = c112/4 + c202/2
-        r11 = -c112/4 + c202/2
-        if l1 < 0 or r11 < 0:
-            return None
-
-        leading_det = (c112 + 2*c202)*(c220 + 2*c310 + 2*c400) - (c211 + c301)**2
-        if leading_det < 0:
-            return None
-        elif leading_det > 0:
-            det1 = [
-                ((2, 0), -c112 - 2*c202),
-                ((1, 1), 2*(c211 + c301)),
-                ((1, 0), -(c112*c220 - 6*c112*c400 + 2*c202*c220 - 12*c202*c400 - c211**2 + 2*c211*c301 + 3*c301**2)/4),
-                ((0, 2), -c220 - 2*c310 - 2*c400),
-                ((0, 1), -(c211*c310 + 4*c211*c400 - 2*c220*c301 - 3*c301*c310)/2),
-                ((0, 0), (4*c112*c220*c400 - c112*c310**2 - 8*c112*c400**2 + 8*c202*c220*c400 - 2*c202*c310**2 - 16*c202*c400**2 - 4*c211**2*c400 + 4*c211*c301*c310 + 8*c211*c301*c400 - 4*c220*c301**2 - 4*c301**2*c310 + 4*c301**2*c400)/16)
-            ]
-            det1 = Poly.from_dict(dict(det1), (a, b), domain = coeff.domain)
-
-            det2 = (r11*a - b**2).as_poly(a, b, domain = coeff.domain)
-
-            point = common_region_of_curves([det1, det2], det1.domain)
-            if point is not None:
-                return _get_solution(*point, r11, l1)
-        else: # leading_det == 0:
-
-            det1 = Poly([-c112 - 2*c202, c211 + c301, -c310], a).as_poly(a, b, domain = coeff.domain)
-            det2 = Poly([
-                -(c112 + 2*c202)**2,
-                c112*c211 + 5*c112*c301 - 2*c202*c211 + 6*c202*c301,
-                -c112*c310 - 4*c112*c400 + 2*c202*c310 + 8*c202*c400 - 4*c301**2
-            ], a).as_poly(a, b, domain = coeff.domain)
-            point = common_region_of_curves([det1, det2], det1.domain)
-            if point is not None:
-                def _get_solution_from_a(a):
-                    r00 = -(a*c211 + a*c301 - c310 - 4*c400)/4
-                    r01 = -(a*c112 + 2*a*c202 - 2*c301)/4
-                    return _get_solution(r00, r01, r11, l1)
-                return _get_solution_from_a(point[0])
+            # A shift at a different stationary value is only a heuristic;
+            # finish() still restores and certifies the original form.
+            if t == zero:
+                solution = plane(pg, qg, ag, s, round_params=True)
+            else:
+                solution = off_plane(pg, qg, ag, s, t, round_params=True)
+            if solution is not None:
+                return solution
+    return None
 
 
 

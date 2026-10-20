@@ -2,12 +2,17 @@ from typing import TYPE_CHECKING
 
 from sympy import Add
 
-from ..utils import rationalize_func
+from ..utils import structsos_reorder_symmetry, structsos_constrained
+from ..utils import rationalize_func, nroots
 from ....utils.expressions import CyclicProduct as _CyclicProduct
 from ....utils.expressions import CyclicSum as _CyclicSum
 
 if TYPE_CHECKING:
+    from sympy import Poly, Expr
+
+    from ...problem import InequalityProblem
     from ....utils.expressions import Coeff
+
 
 def quaternary_cubic_symmetric(coeff: "Coeff", real = True):
     """
@@ -182,3 +187,144 @@ def _quaternary_cubic_partial_symmetric(coeff: "Coeff", real = False):
         (c111 * res) * d**3,
         (c111 * c1/2) * CyclicSum((a-b)**2)*d
     )
+
+#####################################################################
+#
+#               "Nonhomogeneous" from 3-vars + Constrained
+#
+#####################################################################
+
+
+@structsos_reorder_symmetry((3, 1))
+def quaternary_cubic_partial_constrained(problem: "InequalityProblem[Poly]"):
+    if problem.expr.total_degree() > 3:
+        return None
+    return _quaternary_cubic_partial_constrained_2(problem)
+
+def _is_sym3_quadratic(p: "Poly"):
+    """
+    Check whether a polynomial is in the form of
+    `x1*(a^2+b^2+c^2)+x2*(a*b+b*c+c*a)+x3*d^2=0`
+    """
+    if p.total_degree() != 2:
+        return False
+    for c in p.monoms():
+        if not (sum(c[:3]) == 2 or c[3] == 2):
+            return False
+    return True
+
+@structsos_constrained(_is_sym3_quadratic)
+def _quaternary_cubic_partial_constrained_2(
+    coeff: 'Coeff', con: 'Coeff', F: 'Expr', sign: int = 0
+):
+    """
+    Solve `lc*(a*b*c + k*(a+b+c) + const) >= 0`
+    with constraint `(a**2+b**2+c**2-a*b-b*c-c*a)+x*(a+b+c)**2 = D`.
+
+    Examples
+    --------
+    :: ineqs = [], gens = [a,b,c]
+
+    :: eqs = [s(a2)-2]
+    => 2 + p(a) - s(a)
+    => 2 - p(a) + s(a)
+
+    :: eqs = [s(37a2-16ab-111)]
+    => 15abc - 14s(a) + 102
+
+    :: eqs = [2c2-a2-b2-d2]
+    -> abd+2c3 -(a+b+d)c2 + 1/3
+
+    :: eqs = [s(125a2+(16sqrt(79)-82)ab)-(129+48sqrt(79))]
+    => abc-(89+7sqrt(79))/48s(a)+(73+7sqrt(79))/16
+
+    :: eqs = [s(343a2+(72sqrt(58)-118)ab)-27(25+8sqrt(58))]
+    => 16abc-(76+9sqrt(58))s(a)+(212+27sqrt(58))
+    """
+    for monom in coeff.monoms():
+        if not (sum(monom[:3]) <= 1 or monom == (1,1,1,0)):
+            return None
+
+    c2 = con((2,0,0,0))
+    c1 = con((1,1,0,0))
+    con_lc = coeff.wrap((2*c2 - c1)/3)
+    if sign == 0 and con_lc < 0:
+        c1, c2, con_lc = -c1, -c2, -con_lc
+        con = -con
+        F = -F
+    if con_lc <= 0:
+        return None
+    x = (c1 + c2)/(2*c2 - c1)
+    D = -con((0,0,0,2))/con_lc
+
+    lc = coeff.wrap(coeff((1,1,1,0)))
+    if lc == 0 or x == -1:
+        return None
+    k = coeff((1,0,0,2))/lc
+    rem = coeff((0,0,0,3))/lc
+
+    a, b, c, d = coeff.gens
+    eqv = coeff.from_list([
+        9*(4*x + 1), 0, -4*D*x - 4*D + 18*k, 0, 9*k**2
+    ], (a,)).as_poly()
+
+    for v in nroots(eqv, ground=True, real=True):
+        if eqv.rep.eval(v) == eqv.domain.zero:
+            # exact
+            if v == 0:
+                return None
+            u = -(3*k + 4*v**2*x + v**2)/(2*v*(x + 1))
+
+            if lc*(v - u) > 0:
+                break
+    else:
+        return None
+
+    # print('(x, d, u, v) =', (x, d, u, v))
+
+    const = -u*v**2 + v*(u + 2*v)*(2*u*x + 2*u + 4*v*x + v)/3
+    rem = rem - const
+    if lc * rem < 0:
+        return
+
+    CyclicSum = lambda x: _CyclicSum(x, (a, b, c))
+
+    t = u*x + u + 8*v*x + 2*v
+    E = (v - u)*t - D*x
+    M = t - (x+1)*(2*u*x + 2*u + 4*v*x + v)
+    delta = (4*x*E**2 - D*M**2)/(v - u)
+    if x == 0 or D == 0 or E == 0:
+        return None
+
+    _y = [
+        lc/(54*(v - u)),
+        lc*t/(2*D),
+        (lc*x*E/((v-u)*D)),
+        lc*delta/(4*x*E),
+    ]
+    # print('_y =', _y)
+    if any(i < 0 for i in _y[:4]):
+        return None
+
+    sol1 = _y[0]/d * CyclicSum((a-b)**2*(a+b-2*c + (v-u)*d)**2)
+    sol2 = Add(
+        _y[1]*CyclicSum((a-b)**2),
+        _y[2]*(CyclicSum(a) + D*M/(2*x*E)*d)**2,
+        _y[3] * d**2,
+    )
+    sol2 = (CyclicSum(a) - (u + 2*v)*d)**2/(27*d)*sol2
+
+    if sign != 0:
+        # not implemented
+        return None
+
+    f2 = u**2*x**2 + u**2*x + 4*u*v*x**2 + u*v*x + 3*u*v + 4*v**2*x**2 - 11*v**2*x - 3*v**2
+    f11 = 2*u**2*x**2 + 5*u**2*x + 3*u**2 + 8*u*v*x**2 + 14*u*v*x + 8*v**2*x**2 - 10*v**2*x - 3*v**2
+    f1 = (u - v)*(u**2*x + u**2 - 8*u*v*x - 14*u*v - 20*v**2*x - 5*v**2)
+    f0 = (-u**4*x**2 - 2*u**4*x - u**4 - 8*u**3*v*x**2 + 5*u**3*v*x + 13*u**3*v \
+        - 24*u**2*v**2*x**2 + 33*u**2*v**2*x - 6*u**2*v**2 - 32*u*v**3*x**2 \
+        + 8*u*v**3*x + 4*u*v**3 - 16*v**4*x**2 - 44*v**4*x - 10*v**4)/3
+    f0, f1, f11, f2 = [coeff.wrap(i) for i in [f0, f1, f11, f2]]
+    sol3 = lc/con_lc/(27*(v-u)*D*d) * CyclicSum(f2*a**2 + f11*a*b + f1*a*d + f0*d**2).together() * F
+
+    return sol1 + sol2 + sol3 + (lc*rem)*d**3

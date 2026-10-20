@@ -9,12 +9,20 @@ from ..solution import Solution
 from ...sdp.arithmetic import is_numerical_mat
 
 if TYPE_CHECKING:
-    from .algebra import SOSBasis
     from sympy import Symbol
+    from sympy.combinatorics.perm_groups import PermutationGroup
     from sympy.matrices import MutableDenseMatrix as Matrix
-    from ...utils import MonomialManager
+    from .algebra import SOSBasis, QModuleBasis, IdealBasis
 
-def _invarraylize(basis: 'SOSBasis', vec: 'Matrix', gens: Tuple['Symbol', ...]) -> Poly:
+
+def _invarraylize(
+    basis: 'SOSBasis',
+    vec: 'Matrix',
+    gens: Tuple['Symbol', ...]
+) -> Union[Poly, PseudoPoly]:
+    """
+    Transform a vector to the polynomial form given a basis.
+    """
     b = basis._basis
     vec = vec._rep.rep
     rep = {b[i]: v[0] for i, v in vec.items() if v.get(0)}
@@ -23,6 +31,7 @@ def _invarraylize(basis: 'SOSBasis', vec: 'Matrix', gens: Tuple['Symbol', ...]) 
     else:
         rep = PseudoSMP.from_dict(rep, len(gens)-1, vec.domain, algebra=basis.algebra)
         return PseudoPoly.new(rep, *gens)
+
 
 def _as_expr(poly: Union[Poly, PseudoPoly], state_operator: Optional[Callable[[Expr], Expr]] = None) -> Expr:
     if state_operator is None:
@@ -34,60 +43,129 @@ def _as_expr(poly: Union[Poly, PseudoPoly], state_operator: Optional[Callable[[E
     return poly.as_expr(state_operator=state_operator)
 
 
-class SolutionSDP(Solution):
-    method = 'SDPSOS'
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+def _is_numerical(decompositions, eqspace):
+    for U, S in decompositions.values():
+        if is_numerical_mat(U) or is_numerical_mat(S):
+            return True
+    for U in eqspace.values():
+        if is_numerical_mat(U):
+            return True
+    return False
 
-    # @property
-    # def is_equal(self):
-    #     return True
 
-    @classmethod
-    def from_decompositions(self,
-        poly: Poly,
-        decompositions: Dict[Any, Tuple['Matrix', 'Matrix']],
-        eqspace: Dict[Any, 'Matrix'],
-        qmodule: Dict[Any, Expr],
-        qmodule_bases: Dict[Any, 'MonomialManager'],
-        ideal: Dict[Any, Expr],
-        ideal_bases: Dict[Any, 'MonomialManager'],
-        adjoint_operator: Optional[Callable[[Expr], Expr]] = None,
-        state_operator: Optional[Callable[[Expr], Expr]] = None,
-    ) -> 'SolutionSDP':
-        """
-        Create SDP solution from decompositions.
-        """
+def cyc_sum_poly(
+    poly: Poly,
+    perm_group: "PermutationGroup"
+) -> Poly:
+    """
+    Compute `sum_{g in G} g(poly)` efficiently.
+    """
+    terms = poly.rep.to_dict()
+    domain = poly.domain
 
-        qmodule_expr = _get_qmodule_expr(
-            decompositions, poly.gens,
-            qmodule=qmodule,
-            qmodule_bases=qmodule_bases,
-            adjoint_operator=adjoint_operator,
-            state_operator=state_operator,
-        )
+    group_order = perm_group.order()
 
-        ideal_expr = _get_ideal_expr(
-            eqspace, poly.gens,
-            ideal=ideal,
-            ideal_bases=ideal_bases,
-            adjoint_operator=adjoint_operator,
-            state_operator=state_operator,
-        )
+    generators = perm_group.generators
 
-        is_equal = not _is_numerical(decompositions, eqspace)
+    def act_exp(alpha, g):
+        beta = [0] * len(alpha)
+        for gi, a in zip(g._array_form, alpha):
+            beta[gi] = a
+        return tuple(beta)
 
-        return SolutionSDP(
-            problem = _as_expr(poly, state_operator=state_operator) if state_operator is not None else poly,
-            solution = Add(qmodule_expr, ideal_expr),
-            is_equal = is_equal,
-        )
+    def orbit(alpha):
+        seen = {alpha}
+        stack = [alpha]
+
+        while stack:
+            a = stack.pop()
+
+            for g in generators:
+                b = act_exp(a, g)
+
+                if b not in seen:
+                    seen.add(b)
+                    stack.append(b)
+
+        return seen
+
+    result = {}
+    visited = set()
+
+    for alpha in terms:
+        if alpha in visited:
+            continue
+
+        orb = orbit(alpha)
+        visited.update(orb)
+
+        if not orb:
+            continue
+
+        c = sum((terms.get(beta, domain.zero) for beta in orb))
+
+        if not c:
+            continue
+
+        # orbit-stabilizer
+        stab_size = group_order // len(orb)
+        c *= stab_size
+
+        for beta in orb:
+            result[beta] = c
+
+    return poly.__class__.from_dict(result, poly.gens, domain=domain)
+
+
+def sdp_solution_from_decomps(
+    poly: Poly,
+    decompositions: Dict[Any, Tuple['Matrix', 'Matrix']],
+    eqspace: Dict[Any, 'Matrix'],
+    qmodule: Dict[Any, Expr],
+    qmodule_bases: Dict[Any, 'QModuleBasis'],
+    ideal: Dict[Any, Expr],
+    ideal_bases: Dict[Any, 'IdealBasis'],
+    *,
+    adjoint_operator: Optional[Callable[[Expr], Expr]] = None,
+    state_operator: Optional[Callable[[Expr], Expr]] = None,
+    remove_redundancy: Union[bool, int] = True,
+) -> 'Solution':
+    """
+    Create SDP solution from decompositions.
+    """
+
+    qmodule_expr = _get_qmodule_expr(
+        decompositions, poly.gens,
+        qmodule=qmodule,
+        qmodule_bases=qmodule_bases,
+        adjoint_operator=adjoint_operator,
+        state_operator=state_operator,
+        remove_redundancy=remove_redundancy,
+    )
+
+    ideal_expr = _get_ideal_expr(
+        eqspace, poly.gens,
+        ideal=ideal,
+        ideal_bases=ideal_bases,
+        adjoint_operator=adjoint_operator,
+        state_operator=state_operator,
+    )
+
+    is_equal = not _is_numerical(decompositions, eqspace)
+
+    return Solution(
+        problem = _as_expr(poly, state_operator=state_operator) if state_operator is not None else poly,
+        solution = Add(qmodule_expr, ideal_expr),
+        is_equal = is_equal,
+    )
+
 
 def _get_ideal_expr(
     eqspace: Dict[Any, 'Matrix'],
     gens: List['Symbol'],
     ideal: Dict[Any, Expr],
-    ideal_bases: Dict[Any, 'MonomialManager'],
+    ideal_bases: Dict[Any, 'IdealBasis'],
+    *,
     adjoint_operator: Optional[Callable[[Expr], Expr]] = None,
     state_operator: Optional[Callable[[Expr], Expr]] = None,
 ):
@@ -100,14 +178,45 @@ def _get_ideal_expr(
         ideal_exprs = [state_operator(x) for x in ideal_exprs]
     return Add(*ideal_exprs)
 
-def _get_qmodule_expr(
-    decompositions: Dict[Any, Tuple['Matrix', 'Matrix']],
-    gens: List['Symbol'],
-    qmodule: Optional[Dict[Any, Expr]],
-    qmodule_bases: Optional[Dict[Any, 'MonomialManager']],
+
+def compute_cyc_sum_of_squares(
+    coeff,
+    q_module: Expr,
+    poly: Poly,
+    *,
     adjoint_operator: Optional[Callable[[Expr], Expr]] = None,
     state_operator: Optional[Callable[[Expr], Expr]] = None,
     simplify_poly: Optional[Callable] = None,
+) -> Expr:
+    """
+    Compute cyclic_sum(coeff * q_module * poly.as_expr()**2),
+    and return a pretty expression.
+    """
+    # if isinstance(expr, Add):
+    #     expr = sp.UnevaluatedExpr(expr)
+    q_primitive = q_module.primitive()
+    coeff, q = coeff * q_primitive[0], _as_expr(q_primitive[1], state_operator=state_operator)
+    c, expr = simplify_poly(poly)
+    coeff = coeff * c**2
+
+    if adjoint_operator is not None:
+        expr = adjoint_operator(expr) * (q + adjoint_operator(q)) * expr
+        coeff = coeff/2 # since we have doubled the "q"
+    else:
+        expr = Mul(expr, q, expr)
+    return coeff * state_operator(expr) if state_operator is not None else coeff * expr
+
+
+def _get_qmodule_expr(
+    decompositions: Dict[Any, Tuple['Matrix', 'Matrix']],
+    gens: List['Symbol'],
+    qmodule: Dict[Any, Expr],
+    qmodule_bases: Dict[Any, 'QModuleBasis'],
+    *,
+    adjoint_operator: Optional[Callable[[Expr], Expr]] = None,
+    state_operator: Optional[Callable[[Expr], Expr]] = None,
+    simplify_poly: Optional[Callable] = None,
+    remove_redundancy: Union[bool, int] = True,
 ) -> Expr:
     """
     Convert a {key: (U, S)} dictionary to sum of squares.
@@ -118,36 +227,43 @@ def _get_qmodule_expr(
         else:
             simplify_poly = partial(_default_simplify_poly, state_operator=state_operator)
 
-    def compute_cyc_sum_of_squares(coeff, q_module: Expr, poly: Poly) -> Expr:
-        """Computes cyclic_sum(coeff * q_module * poly.as_expr()**2),
-        and returns a pretty expression."""
-        # if isinstance(expr, Add):
-        #     expr = sp.UnevaluatedExpr(expr)
-        q_primitive = q_module.primitive()
-        coeff, q = coeff * q_primitive[0], _as_expr(q_primitive[1], state_operator=state_operator)
-        c, expr = simplify_poly(poly)
-        coeff = coeff * c**2
-
-        if adjoint_operator is not None:
-            expr = adjoint_operator(expr) * (q + adjoint_operator(q)) * expr
-            coeff = coeff/2 # since we have doubled the "q"
-        else:
-            expr = Mul(expr, q, expr)
-        return coeff * state_operator(expr) if state_operator is not None else coeff * expr
-
     exprs = []
     for key, (U, S) in decompositions.items():
         expr = qmodule[key]
         # vecs = [qmodule_bases[key].invarraylize(U[i,:], gens, codeg) for i in range(U.shape[0])]
         vecs = [_invarraylize(qmodule_bases[key], U[i,:].T, gens) for i in range(U.shape[0])]
-        vecs = [compute_cyc_sum_of_squares(S[i], expr, vecs[i]) for i in range(U.shape[0])]
+
+        if not vecs:
+            continue
+
+        if remove_redundancy and isinstance(vecs[0], Poly):
+            vecs, S = qmodule_remove_redundancy(
+                qmodule_bases[key].qmodule,
+                vecs,
+                list(S),
+                symmetry=qmodule_bases[key].symmetry,
+                level=int(remove_redundancy),
+            )
+
+        vecs = [
+            compute_cyc_sum_of_squares(
+                si, expr, veci,
+                adjoint_operator=adjoint_operator,
+                state_operator=state_operator,
+                simplify_poly=simplify_poly,
+            )
+            for si, veci in zip(S, vecs)
+        ]
         exprs.extend(vecs)
 
     return Add(*exprs)
 
-def _default_simplify_poly(poly: Poly, bound: int=10000,
-        state_operator: Optional[Callable[[Expr], Expr]] = None) -> Tuple[Expr, Expr]:
 
+def _default_simplify_poly(
+    poly: Poly,
+    bound: int=10000,
+    state_operator: Optional[Callable[[Expr], Expr]] = None
+) -> Tuple[Expr, Expr]:
     """
     Simplify the polynomial. Return c, expr such that poly = c * expr.
     Using factorization would be extremely slow sometimes, e.g. in the case
@@ -194,11 +310,53 @@ def _default_simplify_poly(poly: Poly, bound: int=10000,
     return c, m * p
 
 
-def _is_numerical(decompositions, eqspace):
-    for U, S in decompositions.values():
-        if is_numerical_mat(U) or is_numerical_mat(S):
-            return True
-    for U in eqspace.values():
-        if is_numerical_mat(U):
-            return True
-    return False
+def qmodule_remove_redundancy(
+    qmodule: Poly,
+    polys: List[Poly],
+    weights: List[Expr],
+    symmetry: Optional["PermutationGroup"] = None,
+    level: int = 1,
+) -> Tuple[List[Poly], List[Expr]]:
+    """
+    Sometimes `Σ(qmodule * weights[i] * polys[i] ** 2)`
+    have duplicate terms up to a constant factor due
+    to the symmetry sum.
+
+    Returns a reduced `(polys, weights)`
+    such that the total sum is equal to the original one.
+    """
+    if len(polys) != len(weights):
+        raise ValueError("len(polys) != len(weights)")
+
+    level = int(level)
+    if level <= 0:
+        return polys, weights
+    if symmetry is None or symmetry.is_trivial:
+        return polys, weights
+
+    summations = [
+        cyc_sum_poly(qmodule*polys[i]**2, symmetry)
+            for i in range(len(polys))
+    ]
+    lcs = [s.LC() for s in summations]
+    reps = [
+        tuple(sorted(s.monic().rep.to_dict().items(),
+                       key=lambda x: x[0])) for s in summations
+    ]
+
+    seen = {}
+    new_weights = [0] * len(reps)
+    for i in range(len(reps)):
+        rep = reps[i]
+        lc = lcs[i]
+        if lc == 0:
+            continue
+        if rep not in seen:
+            seen[rep] = i
+
+        j = seen[rep]
+        new_weights[j] += weights[i]*lc
+
+    new_polys = [poly for w, poly in zip(new_weights, polys) if w]
+    new_weights = [w/lc for w, lc in zip(new_weights, lcs) if w]
+    return new_polys, new_weights

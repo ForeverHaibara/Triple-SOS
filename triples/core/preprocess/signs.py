@@ -1,14 +1,21 @@
 from typing import List, Dict, Tuple, Union, Set, Optional, TYPE_CHECKING
 
-from sympy import Expr, Poly, Rational, Add, Mul, Symbol, true
+from sympy import Expr, Poly, Rational, Add, Mul, Pow
 from sympy.polys.polyerrors import BasePolynomialError
 
-from ...utils import CyclicExpr
+from ...utils.expressions import CyclicExpr
 
 if TYPE_CHECKING:
+    from typing import Callable, Generator, Sequence
+    from sympy.combinatorics.perm_groups import PermutationGroup
+    from sympy import Basic, Symbol
+
     from ..problem import InequalityProblem
 
-SIGNS_TYPE = Dict[Symbol, Tuple[Optional[int], Expr]]
+    SIGNS_TYPE = Dict["Symbol", Tuple[Optional[int], Expr]]
+    _SignResult = Tuple[Optional[int], Optional[Expr]]
+    # Generator[yielded child query, received child result, final result].
+    _SignSteps = Generator[Tuple[Expr, bool], _SignResult, _SignResult]
 
 def _is_double_rational(x):
     if isinstance(x, Rational) and (int(x.numerator) % 2 == 0 or
@@ -19,7 +26,7 @@ def _is_double_rational(x):
 def is_nonneg_pow(x: Expr) -> bool:
     return _is_double_rational(x.exp)
 
-def sgn_prod(signs: SIGNS_TYPE) -> Optional[int]:
+def sgn_prod(signs: "SIGNS_TYPE") -> Optional[int]:
     if any(s == 0 for s in signs):
         return 0
     if any(s is None for s in signs):
@@ -27,7 +34,7 @@ def sgn_prod(signs: SIGNS_TYPE) -> Optional[int]:
     return 1 if sum([1 for s in signs if s < 0]) % 2 == 0 else -1
 
 
-def _prove_poly(poly: Poly, signs: SIGNS_TYPE, factor: bool=False) -> Optional[Expr]:
+def _prove_poly(poly: Poly, signs: "SIGNS_TYPE", factor: bool=False) -> Optional[Expr]:
     """
     Helper function to decide the sign of a polynomial.
 
@@ -101,89 +108,359 @@ def _prove_poly(poly: Poly, signs: SIGNS_TYPE, factor: bool=False) -> Optional[E
     return Add(*terms)
 
 
-def _prove_by_recur(expr: Expr, signs: SIGNS_TYPE) -> Optional[Tuple[Expr, bool]]:
+def _is_perm_invariant_signs(
+    signs: "SIGNS_TYPE", symbols: Tuple["Symbol"], perm_group: "PermutationGroup", cache: dict
+) -> bool:
     """
-    Returns the proof `new_expr` such that expr == new_expr >= 0 and whether
-    `new_expr` is not `expr`. The second argument tracks whether the expr
-    has changed.
+    Check if the signs are perm-invariant.
     """
-    from ...utils.expressions.cyclic import _replace_symbols
+    symbols = tuple(symbols)
+    if (symbols, perm_group) in cache:
+        return cache[(symbols, perm_group)]
 
-    if isinstance(expr, Rational):
-        if expr >= 0:
-            return expr, False
+    from ...utils.expressions.cyclic import _is_perm_invariant_dict
+    directions = {k: s for k, (s, v) in signs.items() if s is not None}
+    witnesses = {k: (v if v is not None else (-k if s == -1 else k))
+        for k, (s, v) in signs.items() if s is not None}
+    invariant = (_is_perm_invariant_dict(symbols, perm_group, directions)
+        and _is_perm_invariant_dict(symbols, perm_group, witnesses))
+    cache[(symbols, perm_group)] = invariant
+    return invariant
+
+
+class _SignProver:
+    """Infer signs without recursively walking the expression tree.
+
+    Results are ``(sign, proof)``, where sign is 1 (nonnegative), -1
+    (nonpositive), 0 (zero), or None (unknown). Unlike entries in ``signs``,
+    every successful proof represents the expression itself, including its
+    sign. Zero proofs retain the equality witnesses rather than becoming 0.
+
+    Each call owns its caches. Generator methods request child results from
+    an explicit stack; they never recursively evaluate children or revisit
+    the supplied witnesses. A separate zero query refines cheap sign results
+    such as squares only when their vanishing is needed.
+
+    Sign rules interpret symbols as real and use only ``signs`` for their
+    directions. SymPy sign predicates are queried only on numerical constants.
+    Symbols are not replaced; ordinary SymPy construction and the optional
+    factor fallback retain their usual evaluation behavior.
+
+    The generators are resumable computations, not collections of proofs.
+    For example, ``result = yield (base, False)`` pauses a power's computation
+    to request the sign of its base. ``_evaluate`` resolves that request, then
+    sends the child result back to this assignment. Returning from a generator
+    finishes the current node. This preserves local variables without building
+    a Python recursion chain or writing a separate state machine for each rule.
+    """
+
+    _UNKNOWN = (None, None)
+
+    def __init__(self, signs: "SIGNS_TYPE", symmetry_cache: Optional[dict] = None) -> None:
+        """Initialize one proof session from ``signs`` and an optional cache.
+
+        ``signs`` supplies directions and absolute-value or zero witnesses.
+        ``symmetry_cache`` may share permutation checks with another attempt
+        using the same signs. All other caches are private to this instance.
+        """
+        self.signs = signs
+        self.results = {}
+        self.symmetry_cache = {} if symmetry_cache is None else symmetry_cache
+
+    def prove(self, expr: Expr) -> Optional[Tuple[Expr, bool]]:
+        """Prove ``expr >= 0`` using only the supplied sign information.
+
+        ``expr`` is a commutative expression interpreted over the reals on
+        its domain. Return its certificate and a changed flag, or None if
+        inference fails. Supplied witnesses are never recursively proved.
+        """
+        result = self._evaluate(expr, False)
+        if result[0] is None or result[0] == -1:
+            result = self._evaluate(expr, True)
+        if result[0] is not None:
+            return result[1], result[1] != expr
         return None
-    elif expr.is_Symbol:
-        if signs.get(expr, (0, None))[0] == 1:
-            v = signs[expr][1]
-            return v, v != expr
-        return None
-    elif expr.is_Pow:
-        if is_nonneg_pow(expr):
-            return expr, False
-        sol = _prove_by_recur(expr.base, signs)
-        if sol is not None:
-            v, changed = sol
-            if changed:
-                return v ** expr.exp, True
-            return expr, False
-        return None
-    elif expr.is_Add or expr.is_Mul:
-        nonneg = []
-        for arg in expr.args:
-            nonneg.append(_prove_by_recur(arg, signs))
-            if nonneg[-1] is None:
-                return None
-        changed = any(_[1] for _ in nonneg)
-        if changed:
-            return expr.func(*[_[0] for _ in nonneg]), True
-        return expr, False
-    elif isinstance(expr, CyclicExpr):
-        arg = expr.args[0]
-        mulargs = []
-        if arg.is_Pow:
-            mulargs = [arg]
-        elif arg.is_Mul:
-            mulargs = arg.args
-        def single(x):
-            if x.is_Pow and is_nonneg_pow(x):
-                return True
-            if isinstance(x, Rational) and x >= 0:
-                return True
+
+    def _evaluate(self, expr: Expr, zero: bool) -> "_SignResult":
+        """Resolve a query for ``expr`` using a stack and memoized results.
+
+        ``zero=False`` requests any known sign; ``zero=True`` requests a zero
+        certificate only. Child queries are sent to suspended generators,
+        so expression depth does not consume the Python call stack.
+        """
+        key = (expr, zero)
+        if key in self.results:
+            return self.results[key]
+        stack = [(key, self._infer(expr, zero))]
+        # send(None) starts a new generator. Later sends resume a suspended
+        # generator with the result of the child it last requested.
+        result = None
+        while stack:
+            key, worker = stack[-1]
+            try:
+                child = worker.send(result)
+            except StopIteration as finished:
+                # A generator's `return value` arrives as StopIteration.value.
+                # Pop this node; the next iteration sends its result to its parent.
+                result = finished.value
+                self.results[key] = result
+                stack.pop()
+            else:
+                if child in self.results:
+                    # Resume the same parent immediately with a cached result.
+                    result = self.results[child]
+                else:
+                    # Leave the parent suspended and start its child on our stack.
+                    stack.append((child, self._infer(*child)))
+                    result = None
+        return result
+
+    def _infer(self, expr: Expr, zero: bool) -> "_SignSteps":
+        """Dispatch a query for ``expr`` and yield its needed child queries.
+
+        ``zero`` selects zero-only inference instead of general sign inference.
+        Direct entries in ``signs`` are trusted. SymPy's sign assumptions are
+        consulted only for numerical constants, never symbolic expressions.
+        """
+        sign, witness = self.signs.get(expr, self._UNKNOWN)
+        if sign is not None and (not zero or sign == 0):
+            proof = expr if witness is None else (-witness if sign == -1 else witness)
+            return sign, proof
+        if isinstance(expr, Rational):
+            if expr == 0:
+                return 0, expr
+            return self._UNKNOWN if zero else (1 if expr > 0 else -1, expr)
+        if expr.is_Symbol:
+            return self._UNKNOWN
+
+        # yield from forwards requests to this node's rule. Rules yield child
+        # queries to _evaluate instead of recursively calling _infer on them.
+        if expr.is_Pow:
+            result = yield from self._infer_power(expr, zero)
+        elif expr.is_Add or expr.is_Mul:
+            result = yield from self._infer_terms(expr, expr.args, expr.func, zero)
+        elif isinstance(expr, CyclicExpr):
+            result = yield from self._infer_cyclic(expr, zero)
+        else:
+            result = self._UNKNOWN
+
+        if result[0] is None:
+            sign = self._constant_sign(expr)
+            if sign is not None and (not zero or sign == 0):
+                return sign, expr
+        return result
+
+    @staticmethod
+    def _is_number(expr: "Basic") -> bool:
+        """Check whether ``expr`` is numerical without hashing or caching nodes.
+
+        A symbol is never numerical, regardless of its assumptions. Arithmetic
+        nodes are inspected iteratively; non-arithmetic nodes use is_number
+        only after their arguments have passed the numerical check. Stop at
+        the first nonnumerical child. The iterator stack uses O(depth) space,
+        including for wide expressions with many distinct radical constants.
+        """
+        if expr.is_Symbol:
             return False
-        if len(mulargs) and all(single(_) for _ in mulargs):
-            return expr, False
+        if not expr.args:
+            return bool(expr.is_number)
+        stack = [(expr, iter(expr.args))]
+        while stack:
+            node, children = stack[-1]
+            try:
+                child = next(children)
+            except StopIteration:
+                if not (node.is_Add or node.is_Mul or node.is_Pow or node.is_number):
+                    return False
+                stack.pop()
+            else:
+                if child.is_Symbol:
+                    return False
+                if child.args:
+                    stack.append((child, iter(child.args)))
+                elif not child.is_number:
+                    return False
+        return True
 
-        # TODO: make it nicer
-        # NOTE: calling doit(deep=False) to expand is not equivalent to generating
-        # all permutations. E.g.
-        # `CyclicProduct((a-b),(a,b,c,d),AlternatingGroup(4))`
-        # is nonnegative after expanding. However, it is undetermined termwise.
+    def _constant_sign(self, expr: Expr) -> Optional[int]:
+        """Return the strict sign of a numerical ``expr``, or None if unknown.
 
-        sub_exprs = []
-        for translation in CyclicExpr._generate_all_translations(
-            expr.args[1], expr.args[2]):
-            trans = _replace_symbols(expr.args[0], translation)
-            sub_result = _prove_by_recur(trans, signs)
-            if sub_result is None:
-                return None
-            sub_exprs.append((sub_result[0], trans))
-
-        if all(v1 == v2 for v1, v2 in sub_exprs):
-            # nothing changed
-            return expr, True
-        sol = expr.base_func(*[v1 for v1, v2 in sub_exprs])
-        return sol, True
-
-    if len(expr.free_symbols) == 0:
-        # e.g. (sqrt(2) - 1)
-        sgn = (expr >= 0)
-        if sgn in (true, True):
-            return expr, False
+        Rational constants use direct comparisons. Other numerical constants
+        may invoke SymPy's assumptions. Symbolic expressions are rejected
+        structurally, without querying their sign assumptions. This helper
+        keeps no separate cache of constants or their subexpressions.
+        """
+        if isinstance(expr, Rational):
+            return 0 if expr == 0 else (1 if expr > 0 else -1)
+        if self._is_number(expr) and expr.is_finite is not False:
+            if expr.is_zero is True:
+                return 0
+            if expr.is_positive is True:
+                return 1
+            if expr.is_negative is True:
+                return -1
         return None
 
+    def _infer_power(self, expr: Expr, zero: bool) -> "_SignSteps":
+        """Infer a sign for the power ``expr`` on its real domain.
 
-def sign_sos(expr: Union[Expr, Poly], signs: SIGNS_TYPE, factor: bool = False) -> Optional[Expr]:
+        ``zero=True`` requires a zero base and a strictly positive numerical
+        exponent. General inference keeps even powers cheap and propagates
+        the base's direction for literal integer exponents. Symbolic exponent
+        assumptions, including positivity and integrality, are ignored.
+        """
+        base, exponent = expr.args
+        if zero:
+            if self._constant_sign(exponent) != 1:
+                return self._UNKNOWN
+            sign, proof = yield (base, True)
+            if sign != 0:
+                return self._UNKNOWN
+            if proof == base:
+                return 0, expr
+            if exponent.is_Integer:
+                return 0, base**(exponent - 1)*proof
+            return 0, proof**exponent
+
+        # Do not turn an explicitly zero denominator into a certificate.
+        if (self.signs.get(base, self._UNKNOWN)[0] == 0
+                and self._constant_sign(exponent) == -1):
+            return self._UNKNOWN
+        if is_nonneg_pow(expr):
+            return 1, expr
+        sign, proof = yield (base, False)
+        if sign is None:
+            return self._UNKNOWN
+        if sign == 0:
+            if self._constant_sign(exponent) != 1:
+                return self._UNKNOWN
+        elif sign == -1:
+            # SymPy's fractional powers use the principal complex branch.
+            if not exponent.is_Integer:
+                return self._UNKNOWN
+            sign = -1 if exponent % 2 else 1
+        if proof == base:
+            return sign, expr
+        if exponent.is_Integer and exponent > 0:
+            return sign, base**(exponent - 1)*proof
+        if not exponent.is_Number:
+            # Keep symbolic powers intact; an exponent's integer/positive
+            # assumptions must not flatten nested powers or eliminate 0**x.
+            return sign, Pow(proof, exponent, evaluate=False)
+        return sign, proof**exponent
+
+    def _combine(self, expr: Expr, args: "Sequence[Expr]",
+            results: "Sequence[_SignResult]", operation: "Callable") -> "_SignResult":
+        """Combine child ``results`` aligned with ``args`` using Add or Mul.
+
+        ``expr`` is the original node, reused if no child needs rewriting.
+        ``operation`` is Add or Mul, including the underlying operation of
+        a cyclic node. Zero factors retain all their equality witnesses.
+        """
+        signs = [result[0] for result in results]
+        if operation is Mul:
+            sign = sgn_prod(signs)
+            if sign == 0:
+                # Replace all zero factors, without choosing an asymmetric anchor.
+                proofs = [proof if s == 0 else arg
+                    for arg, (s, proof) in zip(args, results)]
+            else:
+                proofs = [result[1] for result in results]
+        else:
+            directions = set(signs) - {0}
+            if None in directions or len(directions) > 1:
+                return self._UNKNOWN
+            sign = next(iter(directions)) if directions else 0
+            proofs = [result[1] for result in results]
+        if sign is None:
+            return self._UNKNOWN
+        if all(proof == arg for arg, proof in zip(args, proofs)):
+            return sign, expr
+        return sign, operation(*proofs)
+
+    def _infer_terms(self, expr: Expr, args: "Sequence[Expr]",
+            operation: "Callable", zero: bool) -> "_SignSteps":
+        """Infer a sum or product ``expr`` from its ordered child ``args``.
+
+        ``operation`` is Add or Mul. ``zero`` requests only vanishing; otherwise
+        unresolved signs are refined with zero queries before giving up.
+        For a cyclic expression, ``args`` contains its translated terms.
+        """
+        results = []
+        for arg in args:
+            # This yields a request, not a proof. _evaluate sends the child's
+            # (sign, proof) back, then execution continues with results.append.
+            result = yield (arg, zero)
+            results.append(result)
+            if zero and operation is Add and result[0] != 0:
+                return self._UNKNOWN
+        result = self._combine(expr, args, results, operation)
+        if not zero and result[0] is None:
+            # Unknown factors may be annihilated, and conflicting summands
+            # may vanish. Failure to prove zero never means nonzero.
+            for i, arg in enumerate(args):
+                if results[i][0] != 0:
+                    refined = yield (arg, True)
+                    if refined[0] == 0:
+                        results[i] = refined
+            result = self._combine(expr, args, results, operation)
+        return result
+
+    @staticmethod
+    def _intrinsic_nonnegative(expr: Expr) -> bool:
+        """Recognize ``expr`` as a product of nonnegative rationals and powers.
+
+        This structural shortcut does not inspect bases or symbol assumptions.
+        It allows a cyclic node to succeed without enumerating its group.
+        """
+        args = expr.args if expr.is_Mul else (expr,)
+        return all((arg.is_Pow and is_nonneg_pow(arg))
+            or (isinstance(arg, Rational) and arg >= 0) for arg in args)
+
+    def _infer_cyclic(self, expr: CyclicExpr, zero: bool) -> "_SignSteps":
+        """Infer the cyclic sum or product ``expr``, retaining its symmetry.
+
+        ``zero`` selects zero-only inference. With an invariant sign mapping,
+        only the representative is queried; otherwise all translated terms
+        are combined. Reconstruction avoids cyclic canonicalization costs.
+        """
+        from ...utils.expressions.cyclic import _replace_symbols
+
+        arg, symbols, group = expr.args
+        if not zero and self._intrinsic_nonnegative(arg):
+            return 1, expr
+        if _is_perm_invariant_signs(self.signs, symbols, group, self.symmetry_cache):
+            sign, proof = yield (arg, zero)
+            if sign is None:
+                return self._UNKNOWN
+            if sign == -1:
+                # Pull the common sign outside the wrapper. The product has
+                # one factor per group element, including repeated orbit terms.
+                direction = -1 if expr.base_func is Add else (-1)**group.order()
+                return direction, direction*expr.func(-proof, symbols, group, evaluate=False)
+            if proof == arg:
+                return sign, expr
+            return sign, expr.func(proof, symbols, group, evaluate=False)
+
+        # NOTE: checking the args is not equivalent to checking
+        # the expanded expressions. For example,
+        # CyclicProduct((a-b), (a,b,c,d), AlternatingGroup(4))
+        # is nonnegative, but sign-undetermined termwise.
+
+        # Stream group elements rather than materializing group.elements.
+        args = tuple(_replace_symbols(arg, dict(zip(symbols, perm(symbols))))
+            for perm in group.generate())
+        return (yield from self._infer_terms(expr, args, expr.base_func, zero))
+
+
+def _prove_by_recur(expr: Expr, signs: "SIGNS_TYPE", cache=None) -> Optional[Tuple[Expr, bool]]:
+    """Return a nonnegative certificate and whether it differs from ``expr``."""
+    if cache is not None and 'prover' in cache:
+        return cache['prover'].prove(expr)
+    return _SignProver(signs, symmetry_cache=cache).prove(expr)
+
+
+def sign_sos(expr: Union[Expr, Poly], signs: "SIGNS_TYPE", factor: bool = False) -> Optional[Expr]:
     """
     Very fast and simple nonnegativity check for a SymPy (commutative, real)
     expression instance given signs of symbols.
@@ -226,14 +503,16 @@ def sign_sos(expr: Union[Expr, Poly], signs: SIGNS_TYPE, factor: bool = False) -
     if isinstance(expr, Poly):
         return _prove_poly(expr, signs, factor=factor)
 
-    sol = _prove_by_recur(expr.as_expr(), signs)
+    # Share completed sign queries and symmetry checks with the factor retry.
+    cache = {'prover': _SignProver(signs)}
+    sol = _prove_by_recur(expr.as_expr(), signs, cache=cache)
     if sol is not None:
         return sol[0]
 
     if factor:
         # check once more by factorization
         expr = expr.as_expr().doit().factor()
-        sol = _prove_by_recur(expr)
+        sol = _prove_by_recur(expr, signs, cache=cache)
         if sol is not None:
             return sol[0]
 
@@ -418,7 +697,7 @@ def _infer_separable_sign(poly: Poly, expr: Expr, s: int,
 
 
 def _get_signs_by_topological_order(ineq_constraints: Dict[Poly, Expr], eq_constraints: Dict[Poly, Expr],
-        signs: SIGNS_TYPE) -> SIGNS_TYPE:
+        signs: "SIGNS_TYPE") -> "SIGNS_TYPE":
     """
     Algorithm to infer the signs of symbols from constraints by
     repeating the following process:
@@ -523,7 +802,7 @@ def _get_signs_by_topological_order(ineq_constraints: Dict[Poly, Expr], eq_const
     return signs
 
 
-def get_symbol_signs(problem: "InequalityProblem") -> Dict[Symbol, Tuple[Optional[int], Expr]]:
+def get_symbol_signs(problem: "InequalityProblem") -> Dict["Symbol", Tuple[Optional[int], Expr]]:
     """
     Infer the signs of each symbol in the problem given inequality
     and equality constraints heuristically. It can also be called
@@ -685,5 +964,26 @@ def recompute_constraints_from_signs(problem: "InequalityProblem") -> "Inequalit
         elif s == -1:
             target[0][-g] = v
 
+    changed = any(s not in target[0] for s in problem.ineq_constraints)\
+        or any(s not in target[1] for s in problem.eq_constraints)
+    if not changed:
+        # Every old constraint is contained in the new constraints
+        # -> no need to use the new constraints
+        return problem
+
     problem = problem.copy_new(problem.expr, target[0], target[1])
     return problem
+
+
+# def get_constraint_basis(
+#     ineq_constraints: Union[Any, Expr],
+#     eq_constraints: Union[Any, Expr]
+# ) -> Tuple[Dict[Any, Expr], Dict[Any, Expr]]:
+#     """
+#     Get a basis of the constraints that
+#     recover the constraints.
+#     """
+#     def to_monoms(p: Union[Poly, Expr]):
+#         if isinstance(p, Poly):
+#             return p.terms()
+#     raise NotImplementedError

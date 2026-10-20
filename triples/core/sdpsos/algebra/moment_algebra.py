@@ -4,13 +4,14 @@ from typing import Dict, Any, Optional, Callable, TYPE_CHECKING
 from sympy import Add, Mul
 
 from .state_algebra import CommutativeStateAlgebra
-from .basis import QmoduleBasis, IdealBasis
+from .basis import QModuleBasis, IdealBasis
 
 from ....utils.monomials import generate_partitions
 
 if TYPE_CHECKING:
-    from .state_algebra import TERM, MONOM
     from sympy import Expr, Poly
+    from sympy.combinatorics import Permutation
+    from .state_algebra import TERM, MONOM
 
 def generate_monoms_mm(nvars, degree, num_moments, hom=True, standard_monom=None):
     monoms = generate_partitions(nvars, degree, equal=False, descending=True)
@@ -85,6 +86,11 @@ class MixedMomentAlgebra(CommutativeStateAlgebra):
     ```
 
     Note that the `Σ x**m0` should be inserted to the correct position in implementation.
+
+
+    The `standard_monom` function is used to standardize a pure moment. For example,
+    if `Σ` is the complete symmetric sum over the variables, then `Σ(a*b**3*c**2) = Σ(a**3*b**2*c)`.
+    The `standard_monom` should be provided to normalize the moments to a standard form.
     """
     def __init__(self, nvars, degree, num_moments, is_homogeneous=True, standard_monom=None):
         self.nvars = nvars
@@ -105,6 +111,15 @@ class MixedMomentAlgebra(CommutativeStateAlgebra):
 
     def total_degree(self, monom: "MONOM") -> int:
         return sum(monom[0]) + sum([sum(m) * mul for m, mul in monom[1:]])
+
+    def permute_monom(self, monom: "MONOM", perm: "Permutation") -> "MONOM":
+        arr = perm._array_form
+        m0 = tuple(monom[0][i] for i in arr)
+        moments = {}
+        for m, power in monom[1:]:
+            m = self.standard_monom(tuple(m[i] for i in arr))
+            moments[m] = moments.get(m, 0) + power
+        return (m0,) + tuple(sorted(moments.items()))
 
     def s(self, term: "TERM") -> "TERM":
         m, c = term
@@ -164,10 +179,10 @@ class MixedMomentAlgebra(CommutativeStateAlgebra):
         for key, q in qmodule.items():
             d = q.total_degree()
             if is_homogeneous and ((degree - d)%2 != 0 or (not q.is_homogeneous)):
-                qmodule_bases[key] = QmoduleBasis(self, q, basis=[])
+                qmodule_bases[key] = QModuleBasis(self, q, basis=[])
                 continue
             if d > degree:
-                qmodule_bases[key] = QmoduleBasis(self, q, basis=[])
+                qmodule_bases[key] = QModuleBasis(self, q, basis=[])
                 continue
             m = nm(q)
             if self.num_moments - 1 - m < 0:
@@ -175,7 +190,7 @@ class MixedMomentAlgebra(CommutativeStateAlgebra):
             dict_basis, basis = generate_monoms_mm(
                 self.nvars, (degree - d)//2, num_moments=(self.num_moments - 1 - m)//2, hom=is_homogeneous,
                 standard_monom=self.standard_monom)
-            qmodule_bases[key] = QmoduleBasis(self, q, basis=basis, dict_basis=dict_basis)
+            qmodule_bases[key] = QModuleBasis(self, q, basis=basis, dict_basis=dict_basis)
 
         ideal_bases = {}
         for key, i in ideal.items():

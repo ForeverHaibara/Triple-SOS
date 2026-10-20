@@ -3,7 +3,6 @@ from typing import TYPE_CHECKING, Dict, List, Optional, Union
 from sympy import construct_domain
 from sympy.polys.polyerrors import BasePolynomialError
 
-from .constrained import structural_sos_constrained
 from .nvars import structural_sos_nvars
 from .pivoting import structural_sos_2vars
 from .quaternary import structural_sos_4vars
@@ -16,6 +15,7 @@ if TYPE_CHECKING:
     from sympy import Expr, Poly
 
     from ..problem import InequalityProblem
+
 
 class StructuralSOSSolver(ProofNode):
     def explore(self, configs):
@@ -161,7 +161,7 @@ def _structural_sos(problem: "InequalityProblem") -> "Expr":
     if solution is None and nvars > 3:
         solution = structural_sos_nvars(problem)
 
-    if solution is None:
-        solution = structural_sos_constrained(problem)
+    # if solution is None:
+    #     solution = structural_sos_constrained(problem)
 
     return solution

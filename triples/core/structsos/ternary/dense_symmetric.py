@@ -11,8 +11,10 @@ from sympy.utilities import subsets
 from .utils import structsos_handle_uncentered
 from ..univariate import prove_univariate
 from ..utils import structsos_reorder_symmetry
-from ....utils.monomials import poly_reduce_by_symmetry, verify_symmetry
-from ....utils.polytools import FLINT_VERSION, dmp_gf_factor
+from ....utils.monomials import (
+    poly_reduce_by_symmetry, verify_symmetry, arraylize_sp, invarraylize
+)
+from ....utils.polytools import FLINT_VERSION, dmp_gf_factor, poly_sqrt
 
 if TYPE_CHECKING:
     from sympy import Expr
@@ -55,7 +57,57 @@ def _linear_invert(u, v, d: int = 0) -> Optional[Tuple[int, 'Expr', 'Expr']]:
     return n, u2, v2
 
 
-def structsos_dense_symmetric(coeff, real=True):
+def sym_axis(coeff: 'Coeff', d: int = -1) -> Poly:
+    """Compute f(a,1,1)."""
+    if d == -1: d = coeff.total_degree()
+    coeff_list = [0] * (d+1)
+    for m, v in coeff.items():
+        coeff_list[m[0]] += v
+    a = coeff.gens[0]
+    return coeff.from_list(coeff_list[::-1], gens=(a,)).as_poly()
+
+
+def _homogenize_sym_axis(coeff: Union['Coeff', Poly], sym: Poly, d: int) -> 'Expr':
+    """Homogenize f(a,1,1) to f(a,b,c) given degree."""
+    a, b, c = coeff.gens
+    s = [0]
+    for (m,), v in sym.terms():
+        k, r = divmod(d-m, 2)
+        if r == 0:
+            s.append(v * a**m * b**k * c**k)
+        else:
+            s.append(v/2 * a**m * b**(k+1) * c**k)
+            s.append(v/2 * a**m * b**k * c**(k+1))
+    return Add(*s)
+
+
+def _homogenize_sym_proof(coeff: 'Coeff', sym_proof, d: int) -> 'Expr':
+    """Homogenize the result from prove_univariate."""
+    a, b, c = coeff.gens
+    exprs = []
+    for i in range(len(sym_proof)):
+        leading = sym_proof[i][0]
+        ld = leading.as_poly(a).degree()
+        part_expr = []
+        for k, v in sym_proof[i][1]:
+            v2 = _homogenize_sym_axis(coeff, v, v.degree())
+            rd = (d - ld - v.degree()*2) // 2
+            part_expr.append(k * v2**2 * b**rd * c**rd)
+        part_expr = Add(*part_expr)
+        if (d - ld) % 2 == 1:
+            part_expr = part_expr * leading * (b + c) / 2
+        else:
+            part_expr = part_expr * leading
+        exprs.append(part_expr)
+    return Add(*exprs)
+
+def _cyc_sum_poly(poly: "Poly") -> "Poly":
+    """Compute the cyclic sum of a polynomial efficiently."""
+    rep = arraylize_sp(poly, expand_cyc=True, cyc=True)
+    return invarraylize(rep, poly.gens, degree=poly.total_degree(), cyc=True)
+
+
+def structsos_dense_symmetric(coeff, real=1):
     """
     Solve dense 3-var symmetric inequalities.
     Triggered only when the degree is at least 8 and the polynomial is symmetric.
@@ -65,7 +117,7 @@ def structsos_dense_symmetric(coeff, real=True):
     return _structsos_dense_symmetric(coeff, real)
 
 
-def _structsos_dense_symmetric(coeff, real=True):
+def _structsos_dense_symmetric(coeff, real=1):
     """
     Solve dense 3-var symmetric inequalities. This function
     does not check the symmetry of the input polynomial, so it
@@ -77,8 +129,8 @@ def _structsos_dense_symmetric(coeff, real=True):
         from .solver import _structural_sos_3vars_cyclic
         methods.append(_structural_sos_3vars_cyclic)
     else:
-        methods.append(structsos_liftfree_for_six)
-        methods.append(_structsos_lift_for_six)
+        methods.append(structsos_liftfree_vr)
+        methods.append(_structsos_lifted_vr)
 
     for method in methods:
         solution = method(coeff, real=real)
@@ -86,7 +138,7 @@ def _structsos_dense_symmetric(coeff, real=True):
             return solution
 
 
-def _structsos_trivial_additive(coeff: 'Coeff', real=True):
+def _structsos_trivial_additive(coeff: 'Coeff', real=1):
     """
     Solve trivial cyclic inequalities with nonnegative coefficients.
     """
@@ -111,61 +163,19 @@ def _structsos_trivial_additive(coeff: 'Coeff', real=True):
     return CyclicSum(Add(*exprs))
 
 
-def sym_axis(coeff: 'Coeff', d: int = -1) -> Poly:
-    """Compute f(a,1,1)."""
-    if d == -1: d = coeff.total_degree()
-    coeff_list = [0] * (d+1)
-    for m, v in coeff.items():
-        coeff_list[m[0]] += v
-    a = coeff.gens[0]
-    return coeff.from_list(coeff_list[::-1], gens=(a,)).as_poly()
-
-
-def _homogenize_sym_axis(coeff: Union['Coeff', Poly], sym: Poly, d: int) -> 'Expr':
-    """Homogenize f(a,1,1) to f(a,b,c) given degree."""
-    a, b, c = coeff.gens
-    s = [0]
-    for (m,), v in sym.terms():
-        k, r = divmod(d-m, 2)
-        if r == 0:
-            s.append(v * a**m * b**k * c**k)
-        else:
-            s.append(v/2 * a**m * b**(k+1) * c**k)
-            s.append(v/2 * a**m * b**k * c**(k+1))
-    return Add(*s)
-
-def _homogenize_sym_proof(coeff: 'Coeff', sym_proof, d: int) -> 'Expr':
-    """Homogenize the result from prove_univariate."""
-    a, b, c = coeff.gens
-    exprs = []
-    for i in range(len(sym_proof)):
-        leading = sym_proof[i][0]
-        ld = leading.as_poly(a).degree()
-        part_expr = []
-        for k, v in sym_proof[i][1]:
-            v2 = _homogenize_sym_axis(coeff, v, v.degree())
-            rd = (d - ld - v.degree()*2) // 2
-            part_expr.append(k * v2**2 * b**rd * c**rd)
-        part_expr = Add(*part_expr)
-        if (d - ld) % 2 == 1:
-            part_expr = part_expr * leading * (b + c) / 2
-        else:
-            part_expr = part_expr * leading
-        exprs.append(part_expr)
-    return Add(*exprs)
-
-
 @structsos_handle_uncentered
-def _structsos_lift_for_six(coeff: 'Coeff', real=True):
+def _structsos_lifted_vr(coeff: 'Coeff', real=1):
     """
+    Vandermonde Reduction (VR).
+
     Solve high-degree (dense) symmetric inequalities by the method
-    of lifting the degree for six. Idea: define f(a,1,1) to be the
+    of lifting the degree for six. Idea: define `f(a,1,1)` to be the
     symmetric axis of the polynomial. If two tenary homogeneous symmetric polynomials
-    have equal symmetric axis, then their difference is a multiple of (a-b)^2*(b-c)^2*(c-a)^2.
+    have equal symmetric axis, then their difference is a multiple of `(a-b)^2*(b-c)^2*(c-a)^2`
 
     We can subtract a nonnegative polynomial with equal symmetric axis and then
-    divide the rest by (a-b)^2*(b-c)^2*(c-a)^2 to reduce the degree of the problem.
-    We can repeat this process until the degree is small enough.
+    divide the rest by `(a-b)^2*(b-c)^2*(c-a)^2` to reduce the degree of the problem.
+    We can repeat this process until the degree is low enough.
 
     Examples
     --------
@@ -176,7 +186,7 @@ def _structsos_lift_for_six(coeff: 'Coeff', real=True):
     => s(a2)s((s(ab)2+a2bc)(b2+ac)(c2+ab))-p(a2+bc)*3s(a3b+a3c+3a2bc)
     """
     d = coeff.total_degree()
-    if d < 8:
+    if d < 1:
         return None
 
     a, b, c = coeff.gens
@@ -211,6 +221,10 @@ def _structsos_lift_for_six(coeff: 'Coeff', real=True):
         lifted_sym = _homogenize_sym_proof(coeff, sym_proof, d - 2)
         # print(lifted_sym)
 
+    # attempt the special case in advance
+    solution = _structsos_lifted_vr_sqr_axis(coeff, real=real)
+    if solution is not None:
+        return solution
 
     def compute_diff(coeff: 'Coeff', sym2, mul, tail) -> 'Coeff':
         poly = coeff.as_poly() * mul.as_poly(a, b, c, domain=coeff.domain)
@@ -233,8 +247,123 @@ def _structsos_lift_for_six(coeff: 'Coeff', real=True):
             ) / mul
 
 
+def _structsos_lifted_vr_sqr_axis(coeff: 'Coeff', real=1):
+    """
+    Solve high-degree (dense) symmetric inequalities
+    where the symmetric axis is a square.
+
+    Examples
+    --------
+    => s(a4(2a2-bc)2(a-b)(a-c))
+
+    => s(a2(a2-b2-c2)2(a-b)(a-c))
+
+    => s(b3c3(a-b)(a-c)(a(b+c)+b2+c2)2)
+    """
+    d = coeff.total_degree()
+    axis = sym_axis(coeff, d)
+    a, b, c = coeff.gens
+    axis, rem = axis.div(coeff.from_list([1,-2,1], (a,)).as_poly())
+    if not rem.is_zero:
+        return None
+
+    _sqrt = poly_sqrt(axis)
+    if _sqrt is None:
+        return None
+    lc, sqrt_axis = _sqrt
+    lc = coeff.wrap(lc)
+    if lc < 0:
+        return None
+
+    lifted = _homogenize_sym_axis(coeff, sqrt_axis, (d - 2)//2)
+
+    a, b, c = coeff.gens
+    CyclicSum, CyclicProduct = coeff.cyclic_sum, coeff.cyclic_product
+
+    K = coeff.domain
+    disc = ((a-b)*(b-c)*(c-a)).as_poly(a,b,c, domain=K)**2
+
+    poly = coeff.as_poly()
+    multiplier = CyclicSum((a-b)**2).as_poly(a,b,c, domain=K)
+    tail = ((a - b)*(a - c)).as_poly(a,b,c, domain=K)
+    subtractor = _cyc_sum_poly(lifted * tail)**2
+    quo, rem = (poly * multiplier - subtractor.mul_ground(2*lc)).div(disc)
+    if not rem.is_zero:
+        # should not happen
+        return None
+
+    solution = _structsos_dense_symmetric(coeff.from_poly(quo))
+    if solution is not None:
+        return Add(
+            2*lc * CyclicSum(lifted.as_expr().together()*(a-b)*(a-c))**2,
+            CyclicProduct((a-b)**2) * solution
+        )/(CyclicSum((a-b)**2))
+
+    # if d >= 10 and d % 2 == 0:
+    #     axis1, axis2 = quo(1,1), _cyc_sum_poly(lifted * tail)(1,1)
+    #     if (not axis1.is_zero) and (not axis2.is_zero):
+    #         (em1, ec1), (em2, ec2) = axis1.rep.terms()[-1], axis2.rep.terms()[-1]
+    #         if em1 == em2 and ec2 != axis2.domain.zero:
+    #             corr = ec1/(4*lc*ec2)
+    #             if d == 10:
+    #                 correction = K.to_sympy(K.one)
+    #             else:
+    #                 d2 = (d//2 - 5)
+    #                 correction = CyclicSum(a**(d2//2)*b**(d2//2)*((a+b)/2)**(d2%2))
+    #             subtractor = (_cyc_sum_poly(lifted*tail) \
+    #                 + correction.doit().as_poly(a,b,c,domain=K).mul_ground(corr)*disc)**2
+
+    #             quo, rem = (poly * multiplier - subtractor.mul_ground(2*lc)).div(disc)
+    #             if rem.is_zero:
+    #                 solution = _structsos_dense_symmetric(coeff.from_poly(quo))
+    #                 if solution is not None:
+    #                     return Add(
+    #                         2*lc * (
+    #                             CyclicSum(lifted.as_expr().together()*(a-b)*(a-c))\
+    #                             + corr*CyclicProduct((a-b)**2)*correction
+    #                         )**2,
+    #                         CyclicProduct((a-b)**2) * solution
+    #                     )/(CyclicSum((a-b)**2))
+
+
+    lifted = _homogenize_sym_axis(coeff, sqrt_axis, d//2)
+    multiplier = CyclicSum(a**2*(b-c)**2).as_poly(a,b,c, domain=K)
+    subtractor = _cyc_sum_poly(lifted * tail)**2
+    quo, rem = (poly * multiplier - subtractor.mul_ground(2*lc)).div(disc)
+    if not rem.is_zero:
+        # should not happen
+        return None
+    solution = _structsos_dense_symmetric(coeff.from_poly(quo))
+    if solution is not None:
+        return Add(
+            2*lc * CyclicSum(lifted.as_expr().together()*(a-b)*(a-c))**2,
+            CyclicProduct((a-b)**2) * solution
+        )/(CyclicSum(a**2*(b-c)**2))
+
+
+    # subtractor2 = _cyc_sum_poly((lifted * tail)**2)
+    # quo2, rem2 = (poly * multiplier - subtractor2.mul_ground(2*lc)).div(disc)
+    # if not rem2.is_zero:
+    #     # should not happen
+    #     return None
+    # axis1, axis2 = quo(1,1), quo2(1,1)
+    # if (not axis1.is_zero) and (not axis2.is_zero):
+    #     (em1, ec1), (em2, ec2) = axis1.terms()[-1], axis2.terms()[-1]
+    #     if em1 == em2 and ec1 != ec2:
+    #         const = -ec2/(ec1 - ec2)
+    #         if 0 <= const <= 1:
+    #             solution = _structsos_dense_symmetric(
+    #                 coeff.from_poly(quo.mul_ground(const) + quo2.mul_ground(1-const)))
+    #             if solution is not None:
+    #                 return Add(
+    #                     2*lc*const * CyclicSum(lifted.as_expr().together()*(a-b)*(a-c))**2,
+    #                     2*lc*(1-const) * CyclicSum(lifted.as_expr().together()*(a-b)*(a-c))**2,
+    #                     CyclicProduct((a-b)**2) * solution
+    #                 )/(CyclicSum(a**2*(b-c)**2))
+
+
 @structsos_handle_uncentered
-def structsos_liftfree_for_six(coeff: 'Coeff', real=True):
+def structsos_liftfree_vr(coeff: 'Coeff', real=1):
     """
     Solve high-degree (dense) symmetric inequalities without
     lifting the degree. This will be tried in prior because
@@ -271,7 +400,7 @@ def structsos_liftfree_for_six(coeff: 'Coeff', real=True):
 
     div2 = div[0].div(Poly([1,-2,1], a, domain=sym.domain))
     if div2[1].is_zero:
-        return _structsos_liftfree_for_six_ord4(coeff, div2[0], real=real)
+        return _structsos_liftfree_vr_ord4(coeff, div2[0], real=real)
 
     # subtract some s(a^n*b^m*c^m*(a-b)*(a-c)*(a + (b+c))) + p(a-b)^2*...
     # so that the symmetric axis of the remaining part is a multiple of (a-1)^4
@@ -322,12 +451,12 @@ def structsos_liftfree_for_six(coeff: 'Coeff', real=True):
         # subtract s(a^n*b^m*c^m*(u2*a*(b+c)/2 + v2*b*c)*(a-b)*(a-c)) + p(a-b)^2*...
         subtractor = u2 * _subtractor2(n+1, m) + v2 * _subtractor1(n, m+1)
     rem_poly = coeff - coeff.from_poly(subtractor.doit().as_poly(a,b,c,domain=coeff.domain))
-    solution = _structsos_liftfree_for_six_ord4(rem_poly, real=real)
+    solution = _structsos_liftfree_vr_ord4(rem_poly, real=real)
     if solution is not None:
         return subtractor + solution
 
 
-def _structsos_liftfree_for_six_ord4(coeff: 'Coeff', div2=None, real=True):
+def _structsos_liftfree_vr_ord4(coeff: 'Coeff', div2=None, real=1):
     """
     Solve a high-degree (dense) symmetric inequality where (a-1)^4 is a factor
     of the symmetric axis. Such polynomial can be seen as:
@@ -654,7 +783,7 @@ def _sqf_complex_factorizable_fp(poly: Poly, p: Optional[int]=None):
 #####################################################################
 
 @structsos_reorder_symmetry(groups=(2, 1))
-def structsos_ternary_dense_partial_symmetric(coeff: 'Coeff', real=True):
+def structsos_ternary_dense_partial_symmetric(coeff: 'Coeff', real=1):
     """
     Solve a homogeneous 3-var inequality `f(a,b,c) >= 0` where
     `f(a, b, c) == f(b, a, c)`.

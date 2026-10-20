@@ -2,15 +2,17 @@ from itertools import product
 from typing import Dict, Optional, Any, TYPE_CHECKING
 
 from sympy import Add, Mul
+from sympy.matrices.expressions import MatrixExpr, Identity as MatIdentity
 
 from .state_algebra import StateAlgebra
-from .basis import QmoduleBasis
+from .basis import QModuleBasis
 from .pseudo_poly import PseudoPoly
 
 if TYPE_CHECKING:
-    from .state_algebra import TERM, MONOM
     from sympy import Poly, Expr
     from sympy.combinatorics.permutations import Permutation
+    from .state_algebra import TERM, MONOM
+
 
 def generate_monoms_nc(nvars, degree, hom=True):
     def generate_monom_nc_hom(nvars, degree):
@@ -46,7 +48,8 @@ class NCPolyRing(StateAlgebra):
     Basic noncommutative polynomial ring (free algebra). A monomial
     `a1**d1*a2**d2*...*an**dn` is represented by `((a1, d1), (a2, d2), ..., (an, dn))`.
     Here `a1, a2, ..., an` are hermitian variables and might include duplicated variables.
-    However, it is important that `a_{i}!=a_{i+1}`. The degrees `d1, ..., dn` are nonnegative integers.
+    However, it is important that `a_{i}!=a_{i+1}`. The degrees
+    `d1, ..., dn` are nonnegative integers.
 
     To allow inverses like `a^{-1}`, one must add `a1^{-1}` to the variables
     and define the relation `a*a^{-1}=a^{-1}*a=1`.
@@ -75,7 +78,16 @@ class NCPolyRing(StateAlgebra):
     def as_expr(self, poly: "Poly", state_operator=None) -> "Expr":
         if isinstance(poly, PseudoPoly):
             gens = poly.gens
-            ret = Add(*[Mul(coeff, *[gens[i]**v for i, v in monom]) for monom, coeff in poly.terms()])
+
+            identity = 1
+            for g in gens:
+                if isinstance(g, MatrixExpr):
+                    identity = MatIdentity(g.shape[0])
+
+            # always cast the type by multiplying with identity
+            terms = [Mul(coeff, identity, *[gens[i]**v for i, v in monom])
+                     for monom, coeff in poly.terms()]
+            ret = Add(*terms)
         else:
             ret = poly.as_expr()
         return ret if state_operator is None else state_operator(ret)
@@ -92,8 +104,12 @@ class NCPolyRing(StateAlgebra):
         return (term[0][::-1], term[1])
 
     def permute_monom(self, monom: "MONOM", perm: "Permutation") -> "MONOM":
-        arr = perm.array_form
-        return tuple((arr[i], v) for i, v in monom)
+        # Exponents are pulled back by perm, so word indices use its inverse.
+        arr = perm._array_form
+        inverse = [0] * len(arr)
+        for i, j in enumerate(arr):
+            inverse[j] = i
+        return tuple((inverse[i], v) for i, v in monom)
 
     def infer_bases(self, poly: "Poly", qmodule: Dict[Any, "Poly"], ideal: Dict[Any, "Poly"]):
         is_homogeneous = self.is_homogeneous
@@ -105,14 +121,14 @@ class NCPolyRing(StateAlgebra):
         for key, q in qmodule.items():
             d = q.total_degree()
             if is_homogeneous and ((degree - d)%2 != 0 or (not q.is_homogeneous)):
-                qmodule_bases[key] = QmoduleBasis(self, q, basis=[])
+                qmodule_bases[key] = QModuleBasis(self, q, basis=[])
                 continue
             if d > degree:
-                qmodule_bases[key] = QmoduleBasis(self, q, basis=[])
+                qmodule_bases[key] = QModuleBasis(self, q, basis=[])
                 continue
             dict_basis, basis = generate_monoms_nc(
                 self.nvars, (degree - d)//2, hom=is_homogeneous)
-            qmodule_bases[key] = QmoduleBasis(self, q, basis=basis, dict_basis=dict_basis)
+            qmodule_bases[key] = QModuleBasis(self, q, basis=basis, dict_basis=dict_basis)
 
         ideal_bases = {}
         # for key, i in ideal.items():

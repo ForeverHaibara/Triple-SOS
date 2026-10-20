@@ -1,7 +1,7 @@
-from typing import Union, Dict, Optional, TYPE_CHECKING
+from typing import Union, Dict, Tuple, Optional, TYPE_CHECKING
 
-from sympy import Function
-from sympy.core.symbol import uniquely_named_symbol
+from sympy import QQ
+from sympy.polys.polyerrors import BasePolynomialError
 
 from .sparse  import structsos_sparse, structsos_heuristic
 from .dense_symmetric import structsos_ternary_dense_partial_symmetric
@@ -15,17 +15,24 @@ from .octic   import structsos_octic
 from .nonic   import structsos_nonic
 from .acyclic import structsos_acyclic_sparse
 
-from ..utils import PolynomialNonpositiveError, PolynomialUnsolvableError
-from ..sparse import structsos_common, structsos_degree_specified_solver
-from ...solution import extract_undetermined_exprs
+from .acute import structsos_acute
+
+from ..nvars.linear import structsos_nvars_linear
+from ..utils import PolynomialNonpositiveError, PolynomialUnsolvableError, structsos_extract_factors
+from ...preprocess.signs import sign_sos
 from ....sdp.arithmetic import rep_matrix_from_dict, permute_matrix_rows
 from ....utils.expressions import Coeff
 
 if TYPE_CHECKING:
-    from sympy import Poly, Expr
+    from sympy import Poly, Expr, Symbol
+    from sympy.polys.domains import Domain
+    from sympy import MutableDenseMatrix as Matrix
+
     from ...problem import InequalityProblem
 
+
 SOLVERS = {
+    1: structsos_nvars_linear,
     2: structsos_quadratic,
     3: structsos_cubic,
     4: structsos_quartic,
@@ -37,13 +44,18 @@ SOLVERS = {
 }
 
 SOLVERS_ACYCLIC = {
+    1: structsos_nvars_linear,
     2: structsos_acyclic_quadratic,
     3: structsos_acyclic_cubic,
     4: structsos_acyclic_quartic
 }
 
+SOLVERS_CONSTRAINED = [
+    structsos_acute,
+]
 
-def _is_cyclic_mat(M):
+
+def _is_cyclic_mat(M: "Matrix") -> bool:
     if M.shape[0] != M.shape[1]:
         return False
     ddm = M._rep.rep.to_ddm()
@@ -55,6 +67,39 @@ def _is_cyclic_mat(M):
     return True
 
 
+def _expand_squares(
+    expr: Optional["Expr"],
+    gens: Optional[Tuple["Symbol", ...]] = None,
+    domain: Optional["Domain"] = None,
+) -> Optional["Expr"]:
+    """
+    Wisely expand the terms of a nested expression.
+    """
+    if expr is None:
+        return None
+    if domain is None:
+        domain = QQ
+
+    def replace(x: "Expr") -> "Expr":
+        if not x.is_Pow:
+            return x
+        if x.exp % 2 != 0:
+            return x
+        base = x.base
+        if not base.is_Add:
+            return x
+        if base.is_polynomial(gens):
+            try:
+                base = domain.to_sympy(domain.from_sympy(base))
+            except (BasePolynomialError, ValueError):
+                base = base.expand()
+        return base**x.exp
+
+    return expr.replace(lambda x: x.is_Pow and\
+        x.exp%2==0 and x.base.is_Add, replace)
+
+
+@structsos_extract_factors
 def _structural_sos_3vars_cyclic(
     coeff: Union["Poly", Coeff, Dict],
     real: int = 1
@@ -76,13 +121,24 @@ def _structural_sos_3vars_cyclic(
     if not isinstance(coeff, Coeff):
         coeff = Coeff(coeff)
 
-    return structsos_common(coeff,
-        structsos_sparse,
-        structsos_degree_specified_solver(SOLVERS, homogeneous=True),
-        structsos_heuristic,
-        real=real
-    )
+    degree = coeff.total_degree()
+    if degree % 2 == 1 and real >= 2:
+        return None
 
+    solvers = [
+        structsos_sparse,
+        SOLVERS.get(degree),
+        structsos_heuristic,
+    ]
+    for solver in solvers:
+        if solver is None:
+            continue
+        solution = solver(coeff, real=real)
+        if solution is not None:
+            return solution
+
+
+@structsos_extract_factors
 def _structural_sos_3vars_acyclic(
     coeff: Union["Poly", Coeff, Dict],
     real: int = 1
@@ -104,12 +160,21 @@ def _structural_sos_3vars_acyclic(
     if not isinstance(coeff, Coeff):
         coeff = Coeff(coeff)
 
-    return structsos_common(coeff,
+    degree = coeff.total_degree()
+    if degree % 2 == 1 and real >= 2:
+        return None
+
+    solvers = [
         structsos_acyclic_sparse,
-        structsos_degree_specified_solver(SOLVERS_ACYCLIC, homogeneous=True),
+        SOLVERS_ACYCLIC.get(degree),
         structsos_ternary_dense_partial_symmetric,
-        real=real
-    )
+    ]
+    for solver in solvers:
+        if solver is None:
+            continue
+        solution = solver(coeff, real=real)
+        if solution is not None:
+            return solution
 
 
 def structural_sos_3vars(
@@ -121,7 +186,7 @@ def structural_sos_3vars(
     poly: "Poly" = problem.expr
     gens = problem.gens
     ineq_constraints = problem.ineq_constraints
-    # eq_constraints = problem.eq_constraints
+    eq_constraints = problem.eq_constraints
 
     if len(gens) != 3: # should not happen
         return None
@@ -169,28 +234,35 @@ def structural_sos_3vars(
                             ll[1], ll[2] = ll[2], ll[1]
                             linear_ineqs = dict(ll)
 
-                    inv_mat = mat._fromrep(mat._rep.inv())
-                    dot = lambda u, v: sum(uk * vk for uk, vk in zip(u, v))
+                    if mat._rep.rep.det() != mat._rep.domain.zero:
+                        inv_mat = mat._fromrep(mat._rep.inv())
+                        dot = lambda u, v: sum(uk * vk for uk, vk in zip(u, v))
 
-                    # try not to change the variables first
-                    new_ineqs = {}
-                    if all(entry >= 0 for entry in inv_mat):
-                        # this implies a, b, c >= 0
-                        new_ineqs = {g.as_poly(gens): dot(row, linear_ineqs.values())
-                                     for g, row in zip(gens, inv_mat.tolist())}
-                    new_problem = problem.new(poly, new_ineqs)
-                    solution = structural_sos_3vars(new_problem)
-                    if solution is not None:
+                        # try not to change the variables first
+                        new_ineqs = {}
+                        if all(entry >= 0 for entry in inv_mat):
+                            # this implies a, b, c >= 0
+                            new_ineqs = {g.as_poly(gens): dot(row, linear_ineqs.values())
+                                        for g, row in zip(gens, inv_mat.tolist())}
+                        new_problem = problem.new(poly, new_ineqs)
+                        solution = structural_sos_3vars(new_problem)
+                        if solution is not None:
+                            return solution
+
+
+                        # change the variables
+                        new_problem, restore = problem.transform(
+                            {g: dot(row, gens) for g, row in zip(gens, inv_mat.tolist())},
+                            {g: dot(row, gens) for g, row in zip(gens, mat.tolist())}
+                        )
+                        new_problem = new_problem.remove_redundancy().polylize()
+                        solution = restore(structural_sos_3vars(new_problem))
+
+                        if solution is not None:
+                            if all(con.is_polynomial(gens) for con in problem.ineq_constraints.values()):
+                                solution = _expand_squares(
+                                    solution, gens, domain=poly.domain.unify(dom))
                         return solution
-
-
-                    # change the variables
-                    new_problem, restore = problem.transform(
-                        {g: dot(row, gens) for g, row in zip(gens, inv_mat.tolist())},
-                        {g: dot(row, gens) for g, row in zip(gens, mat.tolist())}
-                    )
-                    new_problem = new_problem.remove_redundancy().polylize()
-                    return restore(structural_sos_3vars(new_problem))
             else:
                 # TODO: handle the case when mat.shape[0] > 3:
                 # e.g., use LP to determine the active linear constraints
@@ -218,24 +290,16 @@ def structural_sos_3vars(
     except (PolynomialNonpositiveError, PolynomialUnsolvableError):
         return None
 
-    if solution is None:
-        return None
+    if solution is not None:
+
+        ####################################################################
+        # replace assumed-nonnegative symbols with inequality constraints
+        ####################################################################
+        return sign_sos(solution, signs)
 
 
-    ####################################################################
-    # replace assumed-nonnegative symbols with inequality constraints
-    ####################################################################
-    func_name = uniquely_named_symbol('G', poly.gens + tuple(ineq_constraints.values()))
-    func = Function(func_name)
-    solution = extract_undetermined_exprs(solution, func)
-    if solution is None:
-        return None
-
-    replacement = {func(x): v for x, (sgn, v) in signs.items() if is_pos(sgn)}
-    solution = solution.xreplace(replacement)
-
-    if solution.has(func):
-        # unhandled nonnegative symbols -> not a valid solution
-        return None
-
-    return solution
+    if len(ineq_constraints) or len(eq_constraints):
+        for solver in SOLVERS_CONSTRAINED:
+            solution = solver(problem)
+            if solution is not None:
+                return solution

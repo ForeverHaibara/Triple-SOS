@@ -18,7 +18,8 @@ from ...sdp.arithmetic import rep_matrix_from_dict
 if TYPE_CHECKING:
     from sympy import Poly, Expr
     from sympy.combinatorics import PermutationGroup
-    from .solution import SolutionSDP
+    from ..problem import InequalityProblem
+    from ..solution import Solution
     from ...utils import Root
 
 
@@ -242,6 +243,8 @@ class SDPSOSSolver(ProofNode):
         If it fails to rationalize but the smallest eigenvalue of the SDP is larger than
         `unstable_eig_threshold`, then it considers the problem as numerically unstable
         and stops further search. Default is -0.1.
+    normalize: bool
+        Use automatic normalization before solving SDP. Default is True.
     verbose: bool
         Whether to print the progress. Default is False.
     """
@@ -255,12 +258,14 @@ class SDPSOSSolver(ProofNode):
         "ineq_constraints_with_trivial": True,
         "preordering": "linear-progressive",
         "unstable_eig_threshold": -0.1,
+        "normalize": True,
         "verbose": False,
     }
 
-    _complexity_models = True
-    _wrapped_problem = None
+    problem: "InequalityProblem[Poly]"
+    _wrapped_problem: Tuple["InequalityProblem[Poly]", Any]
     _symmetry: MonomialManager
+    _complexity_models = True
 
     def _prepare_qmodule(self, lift_degree: int, configs) -> Generator:
         from ..structsos.utils import zip_longest
@@ -439,6 +444,7 @@ class SDPSOSSolver(ProofNode):
                     solver=configs["solver"],
                     time_limit=configs['expected_end_time'] - perf_counter(),
                     allow_numer=configs['allow_numer'],
+                    normalize=configs['normalize'],
                     kwargs=configs['solve_kwargs']
                 )
 
@@ -572,9 +578,10 @@ def SDPSOS(
     ineq_constraints_with_trivial: bool = True,
     preordering: str = 'linear-progressive',
     unstable_eig_threshold: float = -0.1,
+    normalize: bool = True,
     verbose: bool = False,
     time_limit: float = 3600.,
-) -> Optional["SolutionSDP"]:
+) -> Optional["Solution"]:
     """
     Solve a constrained polynomial inequality problem by semidefinite programming (SDP).
 
@@ -616,6 +623,8 @@ def SDPSOS(
         If it fails to rationalize but the smallest eigenvalue of the SDP is larger than
         `unstable_eig_threshold`, then it considers the problem as numerically unstable
         and stops further search. Default is -0.1.
+    normalize: bool
+        Use automatic normalization before solving SDP. Default is True.
     verbose: bool
         Whether to print the progress. If verbose >= 2, it also prints the
         SDP solver progress. Default is False.
@@ -681,6 +690,7 @@ def SDPSOS(
             "solve_kwargs": solve_kwargs,
             "ineq_constraints_with_trivial": ineq_constraints_with_trivial,
             "preordering": preordering,
+            "normalize": normalize,
             "unstable_eig_threshold": unstable_eig_threshold,
             "verbose": verbose,
         }

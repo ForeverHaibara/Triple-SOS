@@ -1,7 +1,8 @@
-from sympy import Poly, FF, QQ, ZZ, symbols
+from sympy import Poly, FF, QQ, ZZ, symbols, sqrt
 from sympy.polys import ring
+from sympy.polys.polyclasses import ANP
 
-from ..polytools import dmp_gf_factor, marginalize
+from ..polytools import dmp_gf_factor, marginalize, poly_sqrt
 
 
 def test_marginalize():
@@ -82,3 +83,15 @@ def test_dmp_gf_factor():
         g *= h**k
 
     assert g == f
+
+
+def test_poly_sqrt():
+    x = symbols("x")
+    lc, poly = poly_sqrt(Poly('5/6', x, domain='QQ'))
+    assert lc == QQ(5, 6) # this might display as MPQ(5, 6), so we avoid doctest
+    assert poly == Poly(1, x, domain='QQ')
+
+    lc, poly = poly_sqrt(Poly('sqrt(2)*x^4+2*sqrt(2)*x^3+(-2+sqrt(2))*x^2-2*x+sqrt(2)/2',
+                            x, extension=True))
+    assert lc == ANP([QQ(1), QQ(0)], [QQ(1), QQ(0), QQ(-2)], QQ)
+    assert poly ==  Poly(x**2 + x - sqrt(2)/2, x, domain=QQ.algebraic_field(sqrt(2)))

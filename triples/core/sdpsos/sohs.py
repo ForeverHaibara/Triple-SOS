@@ -3,10 +3,11 @@ from typing import Union, Tuple, List, Dict, Optional, Any, Callable, TYPE_CHECK
 
 from .abstract import AtomSOSElement
 from .algebra import NCPolyRing
-from .solution import SolutionSDP
+from .solution import sdp_solution_from_decomps
 
 if TYPE_CHECKING:
     from sympy import Expr, Poly, Symbol
+    from ..solution import Solution
 
 
 def DEFAULT_ADJOINT(x):
@@ -127,7 +128,7 @@ class SOHSPoly(AtomSOSElement):
         ideal: Optional[Dict[Any, "Expr"]] = None,
         adjoint_operator: Optional[Callable[["Expr"], "Expr"]] = DEFAULT_ADJOINT,
         trace_operator: Optional[Callable[["Expr"], "Expr"]] = None,
-    ) -> SolutionSDP:
+    ) -> "Solution":
         """
         Retrieve the solution to the original polynomial.
 
@@ -152,7 +153,7 @@ class SOHSPoly(AtomSOSElement):
 
         eqspace = {eq: x + space * self.sdp.y for eq, (x, space) in self._ideal_space.items()}
 
-        solution = SolutionSDP.from_decompositions(self.poly, decomp, eqspace,
+        solution = sdp_solution_from_decomps(self.poly, decomp, eqspace,
             qmodule          = qmodule,
             qmodule_bases    = self._qmodule_bases,
             ideal            = ideal,
