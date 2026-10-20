@@ -240,10 +240,8 @@ def _get_ineq_constrained_tangents(
                     if poly is None or poly.is_zero:
                         continue
 
-                    # check whether the primitive form is seen
-                    _, poly2 = poly.primitive()
-                    if poly2.LC() < 0:
-                        poly2 = -poly2
+                    # check whether the polynomial is seen
+                    poly2 = poly.monic()
                     if poly2 in seen_polys:
                         continue
                     seen_polys.add(poly2)
