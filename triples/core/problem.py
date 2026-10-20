@@ -421,6 +421,32 @@ class InequalityProblem(Generic[T]):
         extension: bool = True,
         unify: bool = False,
     ) -> 'InequalityProblem[Poly]':
+        """
+        Convert the problem to polynomial form.
+
+        Parameters
+        ----------
+        ineqs_sqf: bool, optional
+            Whether to square-free the inequality constraints. Default is True.
+            NOTE: This might change the leading coefficient of expressions
+            and break the symmetry.
+        eqs_sqf: bool, optional
+            Whether to square-free the equality constraints. Default is True.
+            NOTE: This might change the leading coefficient of expressions
+            and break the symmetry.
+        field: bool, optional
+            Whether to convert the problem to a field. Default is False.
+        extension: bool, optional
+            Whether to extend the domain of the problem. Default is True.
+        unify: bool, optional
+            Whether to unify the domain of the problem. Default is False.
+
+        Returns
+        ----------
+        InequalityProblem[Poly]
+            The problem in polynomial form.
+
+        """
         problem = self
         expr, ineq_constraints, eq_constraints = \
             problem.expr, problem.ineq_constraints.copy(), problem.eq_constraints.copy()

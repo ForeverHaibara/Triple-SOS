@@ -16,6 +16,7 @@ if TYPE_CHECKING:
 
     from ..problem import InequalityProblem
 
+
 class StructuralSOSSolver(ProofNode):
     def explore(self, configs):
         if self.state == 0:

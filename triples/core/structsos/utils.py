@@ -1,3 +1,12 @@
+"""
+This module contains utility functions for Structural SOS.
+
+Solver decorators:
+* structsos_extract_factors
+* structsos_reorder_symmetry
+* structsos_constrained
+"""
+
 from functools import wraps
 from typing import TYPE_CHECKING, Callable, List, Optional, Tuple, Union, Any
 
@@ -49,6 +58,7 @@ class DomainExpr:
 
     def cyclic_product(self, expr) -> Expr:
         return self._coeff.cyclic_product(expr)
+
 
 def ufsfind(ufs: dict, x):
     if ufs[x] == x:
@@ -286,6 +296,13 @@ def block_partition(blocks: List[int], groups: Tuple[int, ...]) -> List[int]:
     return result
 
 
+###########################################################################
+#
+#                          Solver Decorators
+#
+###########################################################################
+
+
 def structsos_extract_factors(solver: Callable) -> Callable:
     """
     Decorate a solver to extract monomial factors or common powers first.
@@ -420,6 +437,12 @@ def structsos_constrained(
     checker: Callable[[Poly], bool],
     positive=True
 ) -> Callable:
+    """
+    Automatically extract a constraint from the problem
+    and feed the solver with `solver(poly, con, F, sign=sign, **kwargs)`.
+
+    If `positive=True`, then the solution is verified on the nonnegative orthant R+.
+    """
     def wrapper(solver: Callable) -> Callable:
         @wraps(solver)
         def _wrapped_solver(problem: InequalityProblem[Poly], **kwargs):
