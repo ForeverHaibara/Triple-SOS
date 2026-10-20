@@ -103,7 +103,7 @@ def sum_of_squares(
         Σ(x - y)**2*G(z)
 
 
-    ### Assumptions (newly added in 0.2.0.dev)
+    ### Assumptions
 
     Currently, all SymPy symbol assumptions are ignored by default and symbols are treated as
     real variables. To claim nonnegativity of symbols, just add them to `ineq_constraints`.

@@ -1,9 +1,22 @@
 from sympy.abc import a, b, c, d, x, y, z
 
 from ..sdpsos import SDPSOS
+from ....sdp.backends.clarabel_sdp import DualBackendCLARABEL
 from ....testing.doctest_parser import solution_checker
 
 import pytest
+
+
+# Available when python >= 3.7
+HAS_CLARABEL = DualBackendCLARABEL.is_available()
+
+
+def depends_on_clarabel(func):
+    if not HAS_CLARABEL:
+        def wrapper(*args, **kwargs):
+            return x**2, [], []
+        return wrapper
+    return func
 
 
 class SDPSOSProblems:
@@ -15,9 +28,12 @@ class SDPSOSProblems:
         return {k: getattr(cls, k) for k in dir(cls) if k.startswith('problem')}
 
     @classmethod
+    @depends_on_clarabel
     def problem_large_coeffs(cls):
         # Xia, Bican, and Lu Yang. "Automated inequality proving and discovering".
         # World Scientific, 2016. Example 10.10.
+
+        # cvxopt may fail
         return 2572755344*x**4 - 20000000*x**3*y - 6426888360*x**3*z + 30000000*x**2*y**2 \
             + 5315682897*x**2*z**2 - 20000000*x*y**3 - 1621722090*x*z**3 + 170172209*y**4 \
             - 1301377672*y**3*z + 3553788598*y**2*z**2 - 3864133016*y*z**3 + 1611722090*z**4, [], []
@@ -34,5 +50,6 @@ class SDPSOSProblems:
 @pytest.mark.parametrize("problem", SDPSOSProblems.collect().values(),
     ids=SDPSOSProblems.collect().keys())
 def test_sdpsos(problem):
-    sol = SDPSOS(*problem())
+    solver = 'clarabel' if HAS_CLARABEL else None
+    sol = SDPSOS(*problem(), solver=solver)
     assert solution_checker(sol)

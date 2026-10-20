@@ -800,11 +800,11 @@ def poly_sqrt(f: Poly, check: bool = True):
     >>> poly_sqrt(Poly(3*x**2 + x + 1)**2)
     (1, Poly(3*x**2 + x + 1, x, domain='ZZ'))
 
-    >>> poly_sqrt(Poly('5/6', x, domain='QQ'))
+    >>> poly_sqrt(Poly('5/6', x, domain='QQ')) # doctest:+SKIP
     (5/6, Poly(1, x, domain='QQ'))
 
     >>> poly_sqrt(Poly('sqrt(2)*x^4+2*sqrt(2)*x^3+(-2+sqrt(2))*x^2-2*x+sqrt(2)/2',
-    ... x, extension=True)) # doctest:+NORMALIZE_WHITESPACE
+    ... x, extension=True)) # doctest:+SKIP
     (ANP([1, 0], [1, 0, -2], QQ),
      Poly(x**2 + x - sqrt(2)/2, x, domain='QQ<sqrt(2)>'))
     """

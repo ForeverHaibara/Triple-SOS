@@ -16,4 +16,4 @@ def test_noncommutative():
     poly = I+2*X+X**2+X*Y**2+2*Y**2+Y**2*X+Y*X**2*Y+Y**4
     sol = sum_of_squares(poly)
     assert sol is not None
-    assert (sol.solution - poly).expand() == I - I # Matrix zero
+    assert (sol.solution - poly).expand().doit() == I - I # Matrix zero
