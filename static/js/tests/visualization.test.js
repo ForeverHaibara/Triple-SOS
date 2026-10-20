@@ -160,6 +160,28 @@ test('planar surfaces occlude labels behind them but keep their own labels opaqu
     assert.ok(hits[0].distance < camera.distanceTo(new THREE.Vector3(2,0,-1)));
 });
 
+test('a monomial hull keeps a small pixel-sized marker when zooming or rotating', () => {
+    const app = frontend();
+    const monoms = app.run('_generateMonoms(4, 5)');
+    for (const monom of [[5,0,0,0], [1,1,2,1]]){
+        const index = monoms.findIndex(point => point.every((value, i) => value === monom[i]));
+        app.render(5, Array.from(monoms, (_, i) => i === index ? '-7' : '0'));
+        const state = app.run('_3d_vis');
+        assert.equal(state.outline.geometry.attributes.position.count, 1);
+        assert.ok(new THREE.Vector3().fromBufferAttribute(state.outline.geometry.attributes.position, 0)
+            .distanceTo(state.positions[index]) < 1e-6);
+        assert.equal(state.outline.material.size, 4);
+        assert.equal(state.outline.material.sizeAttenuation, false);
+        for (const camera of [[0,0,3], [0,0,8], [5,0,0], [0,0,-5]]){
+            state.camera.position.set(...camera);
+            state.camera.lookAt(0,0,0);
+            app.run('updateTextPositions()');
+            assert.equal(app.context.sos_coeffs[index].style.display, 'block');
+            assert.equal(app.context.sos_coeffs[index].style.opacity, 1);
+        }
+    }
+});
+
 test('new data, constants, zero polynomials and 2D transitions preserve the selected mode', () => {
     const app = frontend();
     app.render(1, ['1','1','1','1']);

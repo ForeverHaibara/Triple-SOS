@@ -351,7 +351,7 @@ function set3DGeometry(){
     const outlineGeometry = new THREE.BufferGeometry().setFromPoints(vertices);
     const outline = hull.points.length === 1 ? new THREE.Points(
         outlineGeometry,
-        new THREE.PointsMaterial({color: 0x000000, size: 4, transparent: true, opacity: 0.2})
+        new THREE.PointsMaterial({color: 0x000000, size: 4, sizeAttenuation: false, transparent: true, opacity: 0.2})
     ) : new THREE.LineSegments(outlineGeometry,
         new THREE.LineBasicMaterial({color: 0x000000, transparent: true, opacity: 0.2}));
     mesh.add(outline);
