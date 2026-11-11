@@ -82,13 +82,9 @@ class DualBackendCLARABEL(DualBackend):
                 continue
             blocks, offset = [], 0
             for n in self.mat_sizes:
-                mat = np.zeros((n, n))
-                for j in range(n):
-                    for i in range(j + 1):
-                        value = vector[offset] / (1. if i == j else np.sqrt(2.))
-                        mat[i, j] = mat[j, i] = value
-                        offset += 1
-                blocks.append(mat)
+                end = offset + n*(n+1)//2
+                blocks.append(self._matrix_from_isometric(vector[offset:end], n, 'col'))
+                offset = end
             result[name] = blocks
 
         if status in (s.Solved, s.AlmostSolved):

@@ -7,6 +7,7 @@ import pytest
 
 from ..backends import SDPError
 from ..dual import SDPProblem
+from ..rationalize import SDPRationalizeError
 
 class DualObjProblems:
     """
@@ -70,3 +71,20 @@ def test_dual_numerical_history():
         assert np.allclose(restored, np.array(matrices[key], dtype=float), atol=1e-6)
     dual = [matrix/scale for matrix, (_, scale) in zip(result.dual, attempt.block_scales)]
     assert abs(np.trace(dual[0]) - dual[1][0, 0]) < 1e-6
+
+
+def test_dual_recovers_on_an_exposed_face():
+    pytest.importorskip('clarabel')
+    p = sp.Rational(1, 13)
+    a, b, c = sp.symbols('a b c')
+    pencil = Matrix([[1, a-p, b-p], [a-p, b-p, c-p], [b-p, c-p, 0]])
+    T = Matrix([[1, 1, 0], [0, 1, 1], [1, 0, 1]])
+    sdp = SDPProblem.from_matrix(T.T * pencil * T)
+    options = {'solver': 'clarabel', 'normalize': False, 'kwargs': {'max_iters': 5}}
+
+    with pytest.raises(SDPRationalizeError):
+        sdp.solve(recovery_rounds=0, **options)
+
+    assert sdp.solve(**options) == Matrix([p, p, p])
+    assert sdp.S[0] == T.T * sp.diag(1, 0, 0) * T
+    assert sdp.get_last_child() is sdp

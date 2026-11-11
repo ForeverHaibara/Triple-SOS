@@ -975,6 +975,69 @@ class SDPProblem(TransformableDual):
             verbose=verbose, time_limit=time_limit, kwargs=kwargs
         )
 
+    def _recover_on_exposed_face(self,
+        attempt: SDPNumericalResult,
+        *,
+        remaining_time: Callable[[], Optional[float]],
+        solver: Optional[str],
+        verbose: bool,
+        normalize: bool,
+        kwargs: Dict[Any, Any],
+        recovery_rounds: int
+    ) -> Optional[Tuple[Matrix, 'Decomp']]:
+        """Retry on a certified face and verify the lifted solution in this SDP.
+
+        remaining_time checks the overall deadline and returns the seconds
+        available for another numerical solve, or None for no solver limit.
+        The temporary reduction is local to this retry. Return None if there
+        is no certified direction or the retry cannot recover a solution.
+        """
+        def check_time() -> None:
+            remaining_time()
+
+        dual = attempt.result.dual
+        if dual is None:
+            return None
+        rationalizer = DualRationalizer(self)
+        nullspace = rationalizer.exposed_nullspace(
+            {key: Z for (key, _), Z in zip(attempt.block_scales, dual)},
+            time_limit=check_time)
+        if not nullspace:
+            return None
+
+        # Build the reduction on a temporary root so a failed retry leaves
+        # the caller's transform graph intact.
+        trial = SDPProblem(self._x0_and_space, gens=self.gens)
+        try:
+            child = trial.constrain_nullspace(nullspace, to_child=False, time_limit=check_time)
+        except ValueError:
+            return None
+        A, b = trial.common_transform(child).get_y_transform_from_child()
+        if verbose:
+            print(f"Retry SDP on an exposed face: blocks {list(child.size.values())}, dof {child.dof}")
+        if child.size:
+            retry_kwargs = kwargs.copy()
+            retry_kwargs['max_iters'] = min(kwargs.get('max_iters', 200), 30)
+            remaining = remaining_time()
+            if remaining is not None:
+                if remaining <= 0:
+                    return None
+                retry_kwargs['time_limit'] = remaining
+            try:
+                y = child.solve(solver=solver, solve_child=False, propagate_to_parent=False,
+                    verbose=verbose, time_limit=check_time, normalize=normalize,
+                    kwargs=retry_kwargs, recovery_rounds=recovery_rounds-1)
+            except SDPTimeoutError:
+                raise
+            except SDPError:
+                return None
+            if y is None:
+                return None
+        else:
+            y = Matrix.zeros(A.cols, 1)
+        remaining_time()
+        return rationalizer.decompose(A @ y + b)
+
     def solve(self,
         solver: Optional[str] = None,
         solve_child: bool = True,
@@ -983,7 +1046,9 @@ class SDPProblem(TransformableDual):
         time_limit: Optional[float] = None,
         allow_numer: int = 0,
         normalize: bool = True,
-        kwargs: Dict[Any, Any] = {}
+        kwargs: Dict[Any, Any] = {},
+        *,
+        recovery_rounds: int = 2,
     ) -> Optional[Matrix]:
         """
         Solve a feasible SDP problem. If the SDPProblem is rational,
@@ -1018,6 +1083,10 @@ class SDPProblem(TransformableDual):
         allow_numer : bool
             Whether to allow inexact, numerical feasible solutions. This is useful when the
             SDP is weakly feasible and no rational solution is found successfully.
+
+        recovery_rounds : int
+            Maximum number of retries on exactly certified faces after
+            rationalization fails. Set to zero to disable these retries.
 
         kwargs : Dict
             Extra kwargs passed to `sdp.backends.solve_numerical_dual_sdp`. Accepted kwargs keys:
@@ -1160,7 +1229,7 @@ class SDPProblem(TransformableDual):
         if self.dof == 0:
             y = Matrix.zeros(0, 1)
             try:
-                self.register_y(y)
+                self.register_y(y, propagate_to_parent=propagate_to_parent)
                 return original_self.y
             except ValueError:
                 raise SDPError.from_kwargs(infeasible=True)
@@ -1201,6 +1270,17 @@ class SDPProblem(TransformableDual):
         if end_time is not None and ('time_limit' not in kwargs):
             kwargs['time_limit'] = end_time - perf_counter()
 
+        backend_limit = kwargs.get('time_limit')
+        backend_end_time = perf_counter() + backend_limit if backend_limit is not None else None
+        if end_time is not None:
+            backend_end_time = end_time if backend_end_time is None else min(end_time, backend_end_time)
+
+        def remaining_time() -> Optional[float]:
+            _time_limit()
+            if backend_end_time is not None:
+                return backend_end_time - perf_counter()
+            return None
+
         sol = solve_numerical_dual_sdp(
             x0_and_space, objective=objective, constraints=constraints,
             solver=solver, return_result=True, **kwargs
@@ -1214,6 +1294,10 @@ class SDPProblem(TransformableDual):
             try:
                 _time_limit()
                 solution = self.rationalize(y, verbose=verbose, time_limit=_time_limit)
+                if solution is None and recovery_rounds > 0:
+                    solution = self._recover_on_exposed_face(attempt,
+                        remaining_time=remaining_time, solver=solver, verbose=verbose,
+                        normalize=normalize, kwargs=kwargs, recovery_rounds=recovery_rounds)
                 if solution is not None:
                     self.y = solution[0]
                     self.S = {key: S[0] for key, S in solution[1].items()}

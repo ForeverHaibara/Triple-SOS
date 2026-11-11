@@ -88,14 +88,14 @@ class SDPBackend:
         raise NotImplementedError
 
     def solve(self,
-            verbose: int = SolverConfigs.verbose,
-            max_iters: int = SolverConfigs.max_iters,
-            tol_gap_abs: float = SolverConfigs.tol_gap_abs,
-            tol_gap_rel: float = SolverConfigs.tol_gap_rel,
-            tol_fsb_abs: float = SolverConfigs.tol_fsb_abs,
-            tol_fsb_rel: float = SolverConfigs.tol_fsb_rel,
-            solver_options: dict = SolverConfigs.solver_options,
-        ) -> SDPResult:
+        verbose: int = SolverConfigs.verbose,
+        max_iters: int = SolverConfigs.max_iters,
+        tol_gap_abs: float = SolverConfigs.tol_gap_abs,
+        tol_gap_rel: float = SolverConfigs.tol_gap_rel,
+        tol_fsb_abs: float = SolverConfigs.tol_fsb_abs,
+        tol_fsb_rel: float = SolverConfigs.tol_fsb_rel,
+        solver_options: dict = SolverConfigs.solver_options,
+    ) -> SDPResult:
         """
         Solve the SDP problem. The output must be a numpy array of shape `(dof,)`. If the solver
         occurs errors like infeasibility or unboundedness, the status of `self` should be set
@@ -133,6 +133,19 @@ class SDPBackend:
         if ndims == 1: # flatten to vector
             upper = upper.flatten()
         return upper
+
+    @staticmethod
+    def _matrix_from_isometric(vector, n: int, order: str) -> np.ndarray:
+        """Unpack a symmetric matrix with square-root-of-two scaling."""
+        if order == 'row':
+            i, j = np.triu_indices(n)
+        else: # column-major upper triangle
+            j, i = np.tril_indices(n)
+        values = np.asarray(vector, dtype=float).flatten()
+        values[i != j] /= np.sqrt(2.)
+        mat = np.zeros((n, n))
+        mat[i, j] = mat[j, i] = values
+        return mat
 
 
 class DualBackend(SDPBackend):

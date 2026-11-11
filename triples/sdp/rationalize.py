@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from fractions import Fraction
 from typing import Union, Optional, Tuple, List, Dict, Callable, Generator, Any
 
 import numpy as np
@@ -11,7 +12,8 @@ except ImportError:
 
 from .arithmetic import (
     ArithmeticTimeout, matadd, matmul, matmul_multiple, solve_undetermined_linear,
-    sqrtsize_of_mat, congruence, rep_matrix_from_numpy, rep_matrix_to_numpy, lll
+    sqrtsize_of_mat, congruence, rep_matrix_from_numpy, rep_matrix_to_numpy, lll,
+    is_zz_qq_mat,
 )
 from .backends import SDPError
 
@@ -82,7 +84,7 @@ class DualRationalizer:
 
     def decompose(self, y: Matrix) -> Optional[Tuple[Matrix, Decomp]]:
         """
-        Decompose a vector `y` into a sum of rational numbers.
+        Decompose a vector `y` into rational sum of squares.
         """
         decomps = {}
         S = self.S_from_y(y)
@@ -93,6 +95,44 @@ class DualRationalizer:
             U, diag = decomp
             decomps[key] = (s, U, diag)
         return y, decomps
+
+    def exposed_nullspace(self,
+        dual: Dict[Any, Optional[np.ndarray]],
+        time_limit: Optional[Union[Callable, float]] = None,
+    ) -> Dict[Any, Matrix]:
+        """Find a rational v for which v.T * S(y) * v vanishes identically."""
+        check_time = ArithmeticTimeout.make_checker(time_limit)
+        if not all(is_zz_qq_mat(m) for pair in self.x0_and_space.values() for m in pair):
+            return {}
+        for key, Z in dual.items():
+            check_time()
+            x0, space = self.x0_and_space[key]
+            n = sqrtsize_of_mat(x0.rows)
+            if Z is None or Z.shape != (n, n) or not np.isfinite(Z).all():
+                continue
+            try:
+                eigenvalues, vectors = np.linalg.eigh(Z)
+            except np.linalg.LinAlgError:
+                continue
+            seen = set()
+            for i in range(n-1, max(-1, n-3), -1):
+                if eigenvalues[i] <= 0:
+                    break
+                u = vectors[:, i]
+                u = u / u[np.argmax(np.abs(u))]
+                for bound in (1, 4, 16, 64):
+                    check_time()
+                    fractions = tuple(Fraction(float(a)).limit_denominator(bound) for a in u)
+                    if fractions in seen:
+                        continue
+                    seen.add(fractions)
+                    v = Matrix([Rational(a.numerator, a.denominator) for a in fractions])
+                    row = (v * v.T).reshape(1, n*n)
+                    # For PSD S, the identity implies S(y) * v = 0.
+                    if (matmul(row, x0, time_limit=check_time).is_zero_matrix
+                            and matmul(row, space, time_limit=check_time).is_zero_matrix):
+                        return {key: v}
+        return {}
 
     def nullspaces_lll(self, y: np.ndarray) -> Dict[Any, Matrix]:
         """
