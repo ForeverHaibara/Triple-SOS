@@ -19,6 +19,7 @@ class DualBackendQICS(DualBackend):
     Adapted from contributor 数学规划-试验最优化.
     """
     _dependencies = ('qics',)
+    _solver_name = 'qics'
 
     _opt_ineq_to_1d = False
     _opt_eq_to_ineq = False
@@ -52,11 +53,23 @@ class DualBackendQICS(DualBackend):
     def _solve(self, configs: SolverConfigs) -> dict:
         problem = self._create_problem(configs)
         info = problem.solve()
-        y = info['x_opt'].flatten()
+        y = info.get('x_opt')
+        if y is not None:
+            y = np.asarray(y).flatten()
 
-        result = {'y': y}
         status = info['sol_status']
         status2 = info['exit_status']
+        result = {
+            'y': y, 'status': status2, 'info': info,
+            'iterations': info.get('num_iter'), 'solve_time': info.get('solve_time'),
+            'primal_residual': info.get('p_feas'), 'dual_residual': info.get('d_feas'),
+        }
+        offset = int(len(self.ineq_lhs) > 0)
+        for name, key in (('dual', 'z_opt'), ('slack', 's_opt')):
+            vector = info.get(key)
+            if vector is not None:
+                result[name] = [np.array(vector[offset+i][0], dtype=float, copy=True)
+                                for i in range(len(self.As))]
 
         if status in ('optimal', 'near_optimal'):
             result['optimal'] = True
@@ -68,7 +81,7 @@ class DualBackendQICS(DualBackend):
                 result['unbounded'] = True
             result['inf_or_unb'] = True
 
-        if status2 in ('max_iter', 'max_time', 'slow_progress'):
+        if status.startswith('near_') or status2 in ('max_iter', 'max_time', 'slow_progress'):
             result['inaccurate'] = True
         if status2 in ('step_failure',):
             result['error'] = True

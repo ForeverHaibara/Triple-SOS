@@ -23,6 +23,7 @@ class DualBackendPICOS(DualBackend):
     [1] https://picos-api.gitlab.io/picos/index.html
     """
     _dependencies = ('picos',)
+    _solver_name = 'picos'
 
     _opt_ineq_to_1d = False
     _opt_eq_to_ineq = False
@@ -71,7 +72,12 @@ class DualBackendPICOS(DualBackend):
                 y = [y]
             y = np.array(y, dtype=float).flatten()
 
-        result = {'y': y}
+        result = {
+            'y': y, 'status': solution.primalStatus,
+            'solve_time': solution.searchTime,
+            'info': {'solver': solution.solver, 'problem_status': solution.problemStatus,
+                     'dual_status': solution.dualStatus, 'solution_info': solution.info},
+        }
 
         # PICOS have multiple status APIs, and I am not sure which to use.
         # Note that some unbounded problems will be claimed wrongly as primal infeasible

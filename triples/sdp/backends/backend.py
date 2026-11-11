@@ -1,4 +1,4 @@
-from typing import List, Dict, Any, TYPE_CHECKING
+from typing import List, Dict, Any, Optional, TYPE_CHECKING
 
 import numpy as np
 from scipy.sparse import issparse
@@ -178,6 +178,7 @@ class DualBackend(SDPBackend):
     _opt_sparse     = False
     _opt_ineq_to_1d = True
     _opt_eq_to_ineq = True
+    _solver_name: Optional[str] = None
 
 
     def __init__(self, As: List['ndarray'], bs: List['ndarray'], ineq_lhs: 'ndarray', ineq_rhs: 'ndarray',
@@ -273,9 +274,11 @@ class DualBackend(SDPBackend):
             # so we shall handle it separately.
             x = np.zeros((self.dof,), dtype=np.float64)
             if self.is_feasible(x, tol_fsb_abs=configs.tol_fsb_abs, tol_fsb_rel=configs.tol_fsb_rel):
-                return SDPResult(y=x, optimal=True)
-            return SDPResult(infeasible=True)
-        return SDPResult(**self._solve(configs))
+                return SDPResult(y=x, optimal=True, solver=self._solver_name)
+            return SDPResult(infeasible=True, solver=self._solver_name)
+        result = self._solve(configs)
+        result.setdefault('solver', self._solver_name)
+        return SDPResult(**result)
 
 
     @classmethod

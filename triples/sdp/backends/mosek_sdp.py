@@ -39,6 +39,7 @@ class DualBackendMOSEK(DualBackend):
     [3] https://docs.mosek.com/latest/pythonfusion/tutorial-sdo-shared.html#doc-tutorial-sdo
     """
     _dependencies = ('mosek',)
+    _solver_name = 'mosek'
 
     _opt_isometric  = 'row'
     _opt_ineq_to_1d = False
@@ -110,6 +111,9 @@ class DualBackendMOSEK(DualBackend):
 
             ss = M.getProblemStatus()
             ps = M.getPrimalSolutionStatus()
+            result['status'] = str(ps)
+            result['info'] = {'problem_status': str(ss),
+                              'dual_status': str(M.getDualSolutionStatus())}
             if ps == SolutionStatus.Optimal:
                 result['optimal'] = True
             elif ss == ProblemStatus.PrimalInfeasible:

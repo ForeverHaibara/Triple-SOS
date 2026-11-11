@@ -5,6 +5,7 @@ import numpy as np
 from sympy import Symbol, MatrixBase
 from sympy import MutableDenseMatrix as Matrix
 
+from .abstract import SDPNumericalResult, _get_numerical_y
 from .arithmetic import (
     ArithmeticTimeout, solve_csr_linear, free_symbols_of_mat,
     rep_matrix_from_dict, rep_matrix_to_numpy, rep_matrix_to_scipy, rep_matrix_from_numpy, sqrtsize_of_mat
@@ -1169,6 +1170,7 @@ class SDPProblem(TransformableDual):
 
         try:
             x0_and_space = {}
+            block_scales = []
             size = self.size
             for key, (x0, space) in self._x0_and_space.items():
                 n = size[key]
@@ -1176,12 +1178,15 @@ class SDPProblem(TransformableDual):
                 diagonals = -np.eye(n).reshape(n**2, 1)
                 np_space = rep_matrix_to_numpy(space)
                 np_x0 = rep_matrix_to_numpy(x0)
+                mean = 1.
                 if normalize:
                     if np_x0.size and np_space.size:
                         mean = (np.abs(np_x0).mean() + np.abs(np_space).mean() + 1e-2)/6
                         np_space = np_space / mean
                         np_x0 = np_x0 / mean
 
+                if n > 0:
+                    block_scales.append((key, float(mean)))
                 x0_and_space[key] = (np_x0, np.hstack([np_space, diagonals]))
                 _time_limit()
             objective = np.zeros(self.dof + 1)
@@ -1201,11 +1206,12 @@ class SDPProblem(TransformableDual):
             solver=solver, return_result=True, **kwargs
         )
         assert isinstance(sol, SDPResult)
+        attempt = SDPNumericalResult(sol, 1, tuple(block_scales))
+        self._numerical_results.append(attempt)
+        y = _get_numerical_y(attempt)
 
-        if sol.y is not None and (not sol.infeasible):
+        if y is not None:
             try:
-                y = sol.y[:-1] # discard the eigenvalue relaxation
-                self._ys.append(y)
                 _time_limit()
                 solution = self.rationalize(y, verbose=verbose, time_limit=_time_limit)
                 if solution is not None:

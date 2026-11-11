@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 
@@ -38,10 +38,30 @@ class SDPResult:
             True if the solver encounters an unexpected internal error, e.g. wrong
             input types, etc. Cases of infeasibility, unboundedness will not trigger
             this flag.
+        solver, status: Optional[str]
+            Backend name and its original termination status.
+        dual, slack: Optional[List[np.ndarray]]
+            Dual PSD matrices and primal PSD slacks, in backend block order.
+            These are numerical iterates, not certificates. Unavailable blocks
+            may be None. Linear-cone data, if available, is stored in `info`.
+        iterations, solve_time, primal_residual, dual_residual: Optional
+            Solver-reported iteration count, time in seconds and residuals.
+            Residual definitions depend on the backend.
+        info: Dict[str, Any]
+            Additional backend-specific solution data. Its presence does not
+            change the meaning of the status flags.
 
     """
 
     y : Optional[np.ndarray] = None
+    solver: Optional[str] = None
+    status: Optional[str] = None
+    dual: Optional[List[Optional[np.ndarray]]] = None
+    slack: Optional[List[Optional[np.ndarray]]] = None
+    iterations: Optional[int] = None
+    solve_time: Optional[float] = None
+    primal_residual: Optional[float] = None
+    dual_residual: Optional[float] = None
 
     optimal    = False
     infeasible = False
@@ -51,6 +71,7 @@ class SDPResult:
     error      = False
 
     def __init__(self, **kwargs):
+        self.info: Dict[str, Any] = {}
         for key, value in kwargs.items():
             setattr(self, key, value)
 

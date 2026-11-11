@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from time import perf_counter
-from typing import Dict, Tuple, List, Union, Optional, Any, TYPE_CHECKING
+from typing import Dict, Tuple, List, Union, Optional, Any, Iterable, NamedTuple, TYPE_CHECKING
 
 import numpy as np
 from sympy import MatrixBase, Rational
@@ -24,6 +24,41 @@ if TYPE_CHECKING:
 Decomp = Dict[Any, Tuple[Matrix, Matrix, List[Rational]]]
 
 
+class SDPNumericalResult(NamedTuple):
+    """A backend result together with the problem's numerical formulation.
+
+    relaxed counts the auxiliary variables appended to result.y.
+    For a relaxed dual pencil, block_scales contains (key, divisor) pairs
+    in solver order. The current eigenvalue relaxation has slack
+    S(y)/divisor - t*I, where t is the first appended variable.
+    """
+    result: 'SDPResult'
+    relaxed: int
+    block_scales: Tuple[Tuple[Any, float], ...]
+
+
+def _get_numerical_y(attempt: SDPNumericalResult,
+        primal_sizes: Optional[Iterable[int]] = None) -> Optional['ndarray']:
+    y = attempt.result.y
+    if y is None or not attempt.relaxed:
+        return y
+    if attempt.result.infeasible:
+        return None
+
+    split = len(y) - attempt.relaxed
+    if primal_sizes is None:
+        return y[:split]
+
+    # The first auxiliary variable shifts the diagonal of each primal block.
+    # Only used in primal forms of SDPs.
+    restored = y[:split].copy()
+    offset = 0
+    for n in primal_sizes:
+        restored[offset:offset+n**2:n+1] += y[split]
+        offset += n**2
+    return restored
+
+
 class SDPProblemBase(ABC):
     """
     Common class for SDP problems in both primal and dual forms.
@@ -36,8 +71,28 @@ class SDPProblemBase(ABC):
     _transforms: List
     _x0_and_space: Dict[Any, Tuple[Matrix, Matrix]]
     def __init__(self, *args, **kwargs) -> None:
-        # record the numerical solutions
-        self._ys = []
+        self._numerical_results: List[SDPNumericalResult] = []
+
+    @property
+    def numerical_results(self) -> Tuple[SDPNumericalResult, ...]:
+        """
+        Numerical attempts made at this node, including unsuccessful attempts.
+        Results are recorded before rationalization and parent propagation.
+        A feasibility solve may append an eigenvalue relaxation to `result.y`.
+        Results from transformed child problems belong to the child node.
+        """
+        return tuple(self._numerical_results)
+
+    @property
+    def _ys(self) -> List['ndarray']:
+        """Numerical iterates in the original coordinates of this node."""
+        ys = []
+        primal_sizes = self.size.values() if self.is_primal else None
+        for attempt in self._numerical_results:
+            y = _get_numerical_y(attempt, primal_sizes)
+            if y is not None:
+                ys.append(y.copy())
+        return ys
 
     def _init_space(self, arg: Union[list, Dict], argname: str) -> Dict[Any, Matrix]:
         """
@@ -270,9 +325,8 @@ class SDPProblemBase(ABC):
         sol = self._solve_numerical_sdp(objective=obj[0],
                     constraints=cons, solver=solver,
                     return_result=True, kwargs=kwargs)
+        self._numerical_results.append(SDPNumericalResult(sol, 0, ()))
         y = sol.y
-        if y is not None:
-            self._ys.append(y)
         sol.raises()
 
         try:

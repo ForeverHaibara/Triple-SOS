@@ -6,6 +6,7 @@ import numpy as np
 from sympy import MutableDenseMatrix as Matrix
 from sympy import MatrixBase, Symbol, Dummy
 
+from .abstract import SDPNumericalResult, _get_numerical_y
 from .arithmetic import (
     ArithmeticTimeout, sqrtsize_of_mat, vec2mat, is_numerical_mat,
     rep_matrix_from_numpy, rep_matrix_to_numpy, rep_matrix_to_scipy
@@ -495,19 +496,13 @@ class SDPPrimal(TransformablePrimal):
             solver=solver, return_result=True, **kwargs
         )
         assert isinstance(sol, SDPResult)
+        attempt = SDPNumericalResult(sol, 1, ())
+        self._numerical_results.append(attempt)
 
         success = False
         try:
-            if sol.y is not None and (not sol.infeasible):
-                y, eig = sol.y[:-1], sol.y[-1] # discard the eigenvalue relaxation
-
-                # restore matrices by adding the eigenvalue relaxation
-                bias = 0
-                for n in self.size.values():
-                    y[bias: bias+n**2][np.arange(0,n**2,n+1)] += eig
-                    bias += n**2
-
-                self._ys.append(y)
+            y = _get_numerical_y(attempt, self.size.values())
+            if y is not None:
                 _time_limit()
                 solution = self.rationalize(y, verbose=verbose,
                     rationalizers=[RationalizeWithMask(), RationalizeSimultaneously([1,1260,1260**3])])

@@ -1,5 +1,7 @@
 from copy import deepcopy
 
+import numpy as np
+
 from .backend import DualBackend
 from typing import TYPE_CHECKING
 
@@ -103,6 +105,7 @@ class DualBackendCVXPY(DualBackend):
     [2] https://www.cvxpy.org/tutorial/solvers/index.html
     """
     _dependencies = ('cvxpy',)
+    _solver_name = 'cvxpy'
 
     _opt_ineq_to_1d = False
     _opt_eq_to_ineq = False
@@ -133,12 +136,26 @@ class DualBackendCVXPY(DualBackend):
         solver_options = update_solver_options(problem, configs.solver_options, configs)
         _ = problem.solve(verbose=bool(configs.verbose), **solver_options)
 
+        y = None
         for var in problem.variables():
             if var.name() == 'y':
                 y = var.value
         if y is not None:
             y = y.flatten()
-        result = {'y': y}
+        stats = problem.solver_stats
+        result = {
+            'y': y, 'status': problem.status,
+            'iterations': stats.num_iters, 'solve_time': stats.solve_time,
+            'info': {'solver_name': stats.solver_name, 'extra_stats': stats.extra_stats},
+        }
+        result['dual'] = [None if problem.constraints[2*i+1].dual_value is None else
+                          np.array(problem.constraints[2*i+1].dual_value, dtype=float)
+                          for i in range(len(self.As))]
+        variables = {var.name(): var for var in problem.variables()}
+        result['slack'] = [None if variables[f'S_{i}'].value is None else
+                           np.array(variables[f'S_{i}'].value, dtype=float)
+                           for i in range(len(self.As))]
+        result['info']['constraint_duals'] = [con.dual_value for con in problem.constraints]
 
         if problem.status in (s.OPTIMAL, s.OPTIMAL_INACCURATE):
             result['optimal'] = True
