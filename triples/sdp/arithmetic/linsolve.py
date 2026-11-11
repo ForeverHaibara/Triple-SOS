@@ -1,20 +1,27 @@
 from collections import defaultdict
 from time import perf_counter
-from typing import List, Tuple, Dict, Union, Optional, Callable, overload
+from typing import List, Tuple, Dict, Union, Optional, Callable, Iterable, Iterator, overload
 
+import numpy as np
 from numpy import argsort
+from scipy.linalg import qr
 from sympy.external.gmpy import MPQ # >= 1.9
 from sympy.matrices import MutableDenseMatrix as Matrix
 from sympy.matrices.repmatrix import RepMatrix
 from sympy.polys.domains import QQ # EXRAW >= 1.9
+from sympy.polys.matrices.ddm import DDM
 from sympy.polys.matrices.domainmatrix import DomainMatrix # polys.matrices >= 1.8
+from sympy.polys.matrices.exceptions import DMNonInvertibleMatrixError
 from sympy.polys.matrices.sdm import SDM
 try:
     from sympy.external.gmpy import gcd
 except ImportError:
     from math import gcd
 
-from .matop import ArithmeticTimeout, permute_matrix_rows, rep_matrix_from_dict
+from .matop import (
+    ArithmeticTimeout, is_zz_qq_mat, permute_matrix_rows,
+    rep_matrix_from_dict, rep_matrix_from_list, rep_matrix_to_numpy,
+)
 
 _VERBOSE_SOLVE_UNDETERMINED_LINEAR = False
 _VERBOSE_SOLVE_CSR_LINEAR = False
@@ -247,6 +254,94 @@ def _rref(M: Matrix, pivots=True, normalize_last=True, time_limit=None) -> Union
         return (mat, pivots) # type: ignore
     return mat
 
+
+def recover_affine_candidates(
+    M: Matrix, b: Matrix, y: np.ndarray,
+    denominators: Iterable[int],
+    time_limit: Optional[Union[Callable, float]] = None
+) -> Iterator[Matrix]:
+    """Yield rational points of the affine space {x : M*x = b} near y.
+
+    Choose row indices R and pivot coordinates P by numerical rank-revealing
+    QR, and let F be the complement of P. For each denominator d, fix
+    x[F] = round(d*y[F])/d and solve
+    M[R,P]*x[P] = b[R] - M[R,F]*x[F] over QQ. Yield x only if M*x = b
+    holds exactly on all rows. Closeness is enforced only on F.
+    """
+    if not (is_zz_qq_mat(M) and is_zz_qq_mat(b)):
+        return
+    if not M.rows or not M.cols or not np.isfinite(y).all():
+        return
+    if isinstance(M._rep.rep, SDM) and _is_column_separated(M):
+        return
+
+    check_time = ArithmeticTimeout.make_checker(time_limit)
+    numeric = rep_matrix_to_numpy(M)
+    if not np.isfinite(numeric).all():
+        return
+    R, columns = qr(numeric, mode='r', pivoting=True, check_finite=False)
+    diagonal = np.abs(np.diag(R))
+    tol = diagonal[0] * max(M.shape) * np.finfo(float).eps
+    rank = int(np.count_nonzero(diagonal > tol))
+    check_time()
+    if not rank:
+        return
+    dependent = columns[:rank].tolist()
+    free = sorted(columns[rank:].tolist())
+    _, rows = qr(numeric[:, dependent].T, mode='r', pivoting=True, check_finite=False)
+    rows = rows[:rank].tolist()
+    check_time()
+
+    free_values = []
+    seen = set()
+    for denominator in denominators:
+        check_time()
+        rounded = y[free] * denominator
+        if not np.isfinite(rounded).all():
+            continue
+        values = tuple(QQ(round(float(v)), denominator) for v in rounded)
+        if values in seen:
+            continue
+        seen.add(values)
+        free_values.append(values)
+    if not free_values:
+        return
+
+    # Solve the few right-hand sides together to share the elimination.
+    exact = M._rep.to_field()
+    rhs = b._rep.to_field()
+    pivot = exact.extract(rows, dependent).to_dense()
+    free_block = exact.extract(rows, free).to_dense()
+    count = len(free_values)
+    fixed = DomainMatrix([list(v) for v in zip(*free_values)], (len(free), count), QQ)
+    pivot_rhs = rhs.extract(rows, [0]*count).to_dense() - free_block.matmul(fixed)
+    check_time()
+    try:
+        if isinstance(pivot.rep, DDM) and hasattr(pivot, 'solve_den'):
+            # Defer division in the Python matrix backend to limit growth
+            # of intermediate fractions.
+            numerator, denominator = pivot.solve_den(pivot_rhs)
+            solution = numerator.scalarmul(QQ.one / denominator)
+        else:
+            solution = pivot.lu_solve(pivot_rhs)
+    except DMNonInvertibleMatrixError:
+        return
+    solved = solution.rep.to_list()
+    check_time()
+
+    rhs = rhs.to_dense() if exact.rep.fmt == 'dense' else rhs.to_sparse()
+    for k, values in enumerate(free_values):
+        candidate = [QQ.zero] * M.cols
+        for j, value in zip(free, values):
+            candidate[j] = value
+        for i, j in enumerate(dependent):
+            candidate[j] = solved[i][k]
+        mat = rep_matrix_from_list(candidate, M.cols, QQ)
+        rep = mat._rep.to_dense() if exact.rep.fmt == 'dense' else mat._rep
+        valid = exact.matmul(rep) == rhs
+        check_time()
+        if valid:
+            yield mat
 
 
 def solve_undetermined_linear(M: Matrix, B: Matrix,

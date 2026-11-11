@@ -1,8 +1,12 @@
+import numpy as np
+from sympy import Rational
 from sympy.matrices import MutableDenseMatrix as Matrix
 
 from ..linsolve import (
-    solve_csr_linear, solve_column_separated_linear, solve_undetermined_linear
+    solve_csr_linear, solve_column_separated_linear, solve_undetermined_linear,
+    recover_affine_candidates
 )
+
 
 def test_solve_csr_linear():
     A = Matrix([[0,1,3,0,0,2], [1,0,-1,0,0,3], [0,0,2,3,4,5], [0,0,0,5,7,0]])
@@ -60,3 +64,17 @@ def test_solve_column_separated_linear():
     v2, M2 = solve_undetermined_linear(A, b)
     assert (v2 - v).is_zero_matrix
     assert (M2 - M).is_zero_matrix
+
+
+def test_recover_affine_candidates():
+    A = Matrix([[1, 1, 1], [2, 1, 3], [3, 2, 4]])
+    expected = Matrix([Rational(1, 12)] * 3)
+    b = A * expected
+    y = np.full(3, 1/12)
+    candidates = list(recover_affine_candidates(A, b, y, [1, 12]))
+    assert len(candidates) == 2
+    assert all(A * candidate == b for candidate in candidates)
+    assert candidates[-1] == expected
+
+    b[0] += 1
+    assert not list(recover_affine_candidates(A, b, y, [12]))

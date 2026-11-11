@@ -16,6 +16,7 @@ from .arithmetic import (
     is_zz_qq_mat,
 )
 from .backends import SDPError
+from .arithmetic.linsolve import recover_affine_candidates
 
 Decomp = Dict[str, Tuple[Matrix, Matrix, List[Rational]]]
 
@@ -196,8 +197,14 @@ class DualRationalizer:
 
         eq_space = Matrix.vstack(*eq_space)
         eq_rhs = Matrix.vstack(*eq_rhs)
+        for candidate in recover_affine_candidates(
+                eq_space, eq_rhs, y, self.ROUND_DENOMS[:3], time_limit=time_limit):
+            result = self.decompose(candidate)
+            if result is not None:
+                return result
+            time_limit()
+
         try:
-            # this is really slow, we will think how to make it faster
             x0, space = solve_undetermined_linear(eq_space, eq_rhs, time_limit = time_limit)
         except ValueError: # Linear system no solution
             return None
