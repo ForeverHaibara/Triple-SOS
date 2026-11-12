@@ -239,10 +239,9 @@ class SDPSOSSolver(ProofNode):
     preordering: str
         The preordering method for extending the generators of the quadratic module. It can be
         'none', 'linear', 'linear-progressive'. Default is 'linear-progressive'.
-    unstable_eig_threshold: float
-        If it fails to rationalize but the smallest eigenvalue of the SDP is larger than
-        `unstable_eig_threshold`, then it considers the problem as numerically unstable
-        and stops further search. Default is -0.1.
+    unstable_eig_threshold: Optional[float]
+        Optional early stop after rationalization failure if the smallest
+        eigenvalue exceeds this threshold. By default, continue the search.
     normalize: bool
         Use automatic normalization before solving SDP. Default is True.
     verbose: bool
@@ -257,7 +256,7 @@ class SDPSOSSolver(ProofNode):
         "solve_kwargs": {},
         "ineq_constraints_with_trivial": True,
         "preordering": "linear-progressive",
-        "unstable_eig_threshold": -0.1,
+        "unstable_eig_threshold": None,
         "normalize": True,
         "verbose": False,
     }
@@ -423,6 +422,7 @@ class SDPSOSSolver(ProofNode):
         eq_constraints = problem.eq_constraints
 
         verbose = configs["verbose"]
+        unstable_eig_threshold = configs["unstable_eig_threshold"]
 
         degree = poly.total_degree() + lift_degree
 
@@ -473,15 +473,15 @@ class SDPSOSSolver(ProofNode):
                     self.state = -1
                     self.finished = True
                     break
-                elif isinstance(e, SDPRationalizeError):
-                    # XXX: this is very heuristic
+                elif (unstable_eig_threshold is not None and sos_problem is not None
+                      and isinstance(e, SDPRationalizeError)):
                     y = e.y
                     if y is not None:
                         dr = DualRationalizer(sos_problem.sdpp)
                         # y[:-1] to discard the eigenvalue relaxation,
                         # see source code in SDPProblem.solve
                         mineig = dr.mineig(y[:-1])
-                        if mineig > configs["unstable_eig_threshold"]:
+                        if mineig > unstable_eig_threshold:
                             # we think that it is numerically unstable
                             self.state = -1
                             self.finished = True
@@ -577,7 +577,7 @@ def SDPSOS(
     solve_kwargs: Dict[str, Any] = {},
     ineq_constraints_with_trivial: bool = True,
     preordering: str = 'linear-progressive',
-    unstable_eig_threshold: float = -0.1,
+    unstable_eig_threshold: Optional[float] = None,
     normalize: bool = True,
     verbose: bool = False,
     time_limit: float = 3600.,
@@ -619,10 +619,9 @@ def SDPSOS(
     preordering: str
         The preordering method for extending the generators of the quadratic module. It can be
         'none', 'linear', 'linear-progressive'. Default is 'linear-progressive'.
-    unstable_eig_threshold: float
-        If it fails to rationalize but the smallest eigenvalue of the SDP is larger than
-        `unstable_eig_threshold`, then it considers the problem as numerically unstable
-        and stops further search. Default is -0.1.
+    unstable_eig_threshold: Optional[float]
+        Optional early stop after rationalization failure if the smallest
+        eigenvalue exceeds this threshold. By default, continue the search.
     normalize: bool
         Use automatic normalization before solving SDP. Default is True.
     verbose: bool

@@ -16,6 +16,18 @@ if TYPE_CHECKING:
     from .transform import SDPTransformation
 
 
+def _format_sdp_summary(sdp: SDPProblemBase, short: int) -> str:
+    if short <= 0:
+        return str(sdp)
+    if short == 1:
+        sizes = sorted(sdp.size.values(), reverse=True)
+        return f"<dof={sdp.dof}, size={sizes}>"
+    counts = Counter(sdp.size.values())
+    terms = [f"{size}²×{count}" if count > 1 else f"{size}²"
+             for size, count in sorted(counts.items(), reverse=True)]
+    return f"<dof={sdp.dof}, size=({' + '.join(terms)})>"
+
+
 def _propagate_args_to_last(self, next_node, func, recursive, *args):
     if next_node == 'child':
         get_next = lambda x: x.child_node
@@ -65,22 +77,10 @@ class TransformableProblem(SDPProblemBase):
         """
         Print the dependency graph of the SDP problem.
         """
-        def _get_sdp_str(sdp):
-            if int(short) <= 0:
-                sdp_str = sdp.__str__()
-            elif int(short) == 1:
-                size = sorted(sdp.size.values(), reverse=True)
-                sdp_str = f"<dof={sdp.dof}, size={size}>"
-            else:
-                cnt = Counter(sdp.size.values())
-                items = sorted(cnt.items(), reverse=True)
-                size = [f"{k}²×{v}" if v > 1 else f"{k}²" for k, v in items]
-                sdp_str = f"<dof={sdp.dof}, size=({' + '.join(size)})>"
-            return sdp_str
-
+        short = int(short)
         _MAXLEN = 30
         _PAD = (_MAXLEN - 10) // 2
-        print(" " * _PAD + "SDPProblem" + " " * _PAD + _get_sdp_str(self))
+        print(" " * _PAD + "SDPProblem" + " " * _PAD + _format_sdp_summary(self, short))
         sdp = self
 
         def _formatter(a):
@@ -92,7 +92,7 @@ class TransformableProblem(SDPProblemBase):
         while len(sdp.children):
             sdp2 = sdp.children[-1]
             transform = sdp.common_transform(sdp2)
-            sdp_str = _get_sdp_str(sdp2)
+            sdp_str = _format_sdp_summary(sdp2, short)
             print(_formatter(transform.__class__.__name__) + " " + sdp_str)
             sdp = sdp2
 

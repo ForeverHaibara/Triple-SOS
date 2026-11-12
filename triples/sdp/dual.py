@@ -14,9 +14,11 @@ from .arithmetic import (
 )
 from .arithmetic.linsolve import _is_column_separated, recover_affine_candidates
 from .backends import SDPResult, SDPError, SDPTimeoutError, solve_numerical_dual_sdp
+from .facial import find_joint_exposing_nullspace
 from .rationalize import SDPRationalizeError, DualRationalizer
 from .transforms import TransformableDual
 from .transforms.linear import _extract_principal_block, _nullspace_equations
+from .transforms.transformable import _format_sdp_summary
 
 from .utils import S_from_y, decompose_matrix
 
@@ -1093,13 +1095,12 @@ class SDPProblem(TransformableDual):
         def check_time() -> None:
             remaining_time()
 
-        dual = attempt.result.dual
-        if dual is None:
-            return None
         rationalizer = DualRationalizer(self)
-        nullspace = rationalizer.exposed_nullspace(
-            {key: Z for (key, _), Z in zip(attempt.block_scales, dual)},
-            time_limit=check_time)
+        dual = attempt.result.dual
+        nullspace = {} if dual is None else rationalizer.exposed_nullspace(
+            {key: Z for (key, _), Z in zip(attempt.block_scales, dual)}, time_limit=check_time)
+        if not nullspace:
+            nullspace = find_joint_exposing_nullspace(self._x0_and_space, remaining_time)
         if not nullspace:
             return None
 
@@ -1125,7 +1126,7 @@ class SDPProblem(TransformableDual):
             return None
         A, b = trial.common_transform(child).get_y_transform_from_child()
         if verbose:
-            print(f"Retry SDP on an exposed face: blocks {list(child.size.values())}, dof {child.dof}")
+            print(f"Retry SDP on an exposed face: {_format_sdp_summary(child, short=2)}")
         if child.size:
             remaining = remaining_time()
             if remaining is not None:
@@ -1196,7 +1197,9 @@ class SDPProblem(TransformableDual):
 
         recovery_rounds : int
             Maximum number of retries on exactly certified faces after
-            rationalization fails. Set to zero to disable these retries.
+            the numerical solve fails to yield a rational solution. The
+            search can use dual directions and joint diagonal/DD certificates.
+            Set to zero to disable these retries.
 
         recovery_with_equalities : bool
             Try an experimental numerical solve with explicit face equations
@@ -1349,8 +1352,6 @@ class SDPProblem(TransformableDual):
                 raise SDPError.from_kwargs(infeasible=True)
             return False
 
-        success = False
-
         try:
             x0_and_space, block_scales = _prepare_feasibility_blocks(
                 self._x0_and_space, normalize, _time_limit)
@@ -1386,35 +1387,32 @@ class SDPProblem(TransformableDual):
         self._numerical_results.append(attempt)
         y = _get_numerical_y(attempt)
 
-        if y is not None:
-            try:
-                _time_limit()
-                solution = self.rationalize(y, verbose=verbose, time_limit=_time_limit)
-                if solution is None and recovery_rounds > 0:
-                    solution = self._recover_on_exposed_face(attempt,
-                        remaining_time=remaining_time, solver=solver, verbose=verbose,
-                        normalize=normalize, kwargs=kwargs, recovery_rounds=recovery_rounds,
-                        recovery_with_equalities=recovery_with_equalities)
-                if solution is not None:
-                    self.y = solution[0]
-                    self.S = {key: S[0] for key, S in solution[1].items()}
-                    self.decompositions = {key: S[1:] for key, S in solution[1].items()}
-                    success = True
-                elif allow_numer:
-                    self.register_y(y, perturb=True, propagate_to_parent=propagate_to_parent)
-                    success = True
-            except ArithmeticTimeout as e:
-                raise SDPTimeoutError(sol) from e
-
-            if not success:
+        try:
+            _time_limit()
+            solution = None if y is None else self.rationalize(y, verbose=verbose, time_limit=_time_limit)
+            if solution is None and recovery_rounds > 0:
+                solution = self._recover_on_exposed_face(attempt,
+                    remaining_time=remaining_time, solver=solver, verbose=verbose,
+                    normalize=normalize, kwargs=kwargs, recovery_rounds=recovery_rounds,
+                    recovery_with_equalities=recovery_with_equalities)
+            if solution is not None:
+                self.y = solution[0]
+                self.S = {key: S[0] for key, S in solution[1].items()}
+                self.decompositions = {key: S[1:] for key, S in solution[1].items()}
+            elif y is None:
+                sol.raises()
+                return None
+            elif allow_numer:
+                self.register_y(y, perturb=True, propagate_to_parent=False)
+            else:
                 raise SDPRationalizeError(sol)
-        else: # infeasible
-            sol.raises()
+        except ArithmeticTimeout as e:
+            raise SDPTimeoutError(sol) from e
 
         if propagate_to_parent:
             self.propagate_to_parent(recursive=True)
 
-        return original_self.y if success else None
+        return original_self.y
 
 
     @classmethod

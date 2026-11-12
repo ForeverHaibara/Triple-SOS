@@ -45,6 +45,11 @@ class SDPSOSProblems:
         return a*(a-b)*(a-c)*(a-d)+b*(b-c)*(b-d)*(b-a)\
             +c*(c-d)*(c-a)*(c-b)+d*(d-a)*(d-b)*(d-c)+a*b*c*d, [], []
 
+    @classmethod
+    def problem_joint_face_recovery(cls):
+        # vasile 32012
+        return 4 - a*b**2*c**3, [a, b, c, b-a, c-b], [a*b + b*c + c*a - 3]
+
 
 @pytest.mark.slow
 @pytest.mark.parametrize("problem", SDPSOSProblems.collect().values(),
