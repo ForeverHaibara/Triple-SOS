@@ -2,17 +2,21 @@ from time import perf_counter
 from typing import Tuple, List, Dict, Union, Optional, Any, Callable, TYPE_CHECKING
 
 import numpy as np
+from scipy.linalg import qr
 from sympy import Symbol, MatrixBase
 from sympy import MutableDenseMatrix as Matrix
 
 from .abstract import SDPNumericalResult, _get_numerical_y
 from .arithmetic import (
     ArithmeticTimeout, solve_csr_linear, free_symbols_of_mat,
-    rep_matrix_from_dict, rep_matrix_to_numpy, rep_matrix_to_scipy, rep_matrix_from_numpy, sqrtsize_of_mat
+    rep_matrix_from_dict, rep_matrix_to_numpy, rep_matrix_to_scipy, rep_matrix_from_numpy, sqrtsize_of_mat,
+    principal_basis,
 )
+from .arithmetic.linsolve import _is_column_separated, recover_affine_candidates
 from .backends import SDPResult, SDPError, SDPTimeoutError, solve_numerical_dual_sdp
 from .rationalize import SDPRationalizeError, DualRationalizer
 from .transforms import TransformableDual
+from .transforms.linear import _extract_principal_block, _nullspace_equations
 
 from .utils import S_from_y, decompose_matrix
 
@@ -43,6 +47,27 @@ def _get_unique_symbols(used_symbols, dof: int, xname: str = 'y'):
     used_digits = list(map(int, filter(lambda x: all(d in digits for d in x), used_symbols)))
     max_digit = max(used_digits, default=-1) + 1
     return [Symbol(xname + str(i) + '}') for i in range(max_digit, max_digit + dof)]
+
+
+def _prepare_feasibility_blocks(blocks: Dict[Any, Tuple[Matrix, Matrix]],
+        normalize: bool, check_time: Callable[[], None]
+) -> Tuple[Dict[Any, Tuple[np.ndarray, np.ndarray]], Tuple[Tuple[Any, float], ...]]:
+    """Convert affine PSD blocks to numerical blocks with an appended margin."""
+    numerical, scales = {}, []
+    for key, (x0, space) in blocks.items():
+        n = sqrtsize_of_mat(x0.rows)
+        offset = rep_matrix_to_numpy(x0)
+        coefficients = rep_matrix_to_numpy(space)
+        scale = 1.
+        if normalize and offset.size and coefficients.size:
+            scale = (np.abs(offset).mean() + np.abs(coefficients).mean() + 1e-2)/6
+            offset = offset / scale
+            coefficients = coefficients / scale
+        if n:
+            scales.append((key, float(scale)))
+        numerical[key] = (offset, np.hstack([coefficients, -np.eye(n).reshape(n*n, 1)]))
+        check_time()
+    return numerical, tuple(scales)
 
 
 class SDPProblem(TransformableDual):
@@ -975,6 +1000,78 @@ class SDPProblem(TransformableDual):
             verbose=verbose, time_limit=time_limit, kwargs=kwargs
         )
 
+    def _solve_face_with_equalities(self,
+        nullspace: Dict[Any, Matrix],
+        *,
+        remaining_time: Callable[[], Optional[float]],
+        solver: Optional[str],
+        normalize: bool, kwargs: Dict[Any, Any]
+    ) -> Optional[Tuple[Matrix, 'Decomp']]:
+        """Probe a face in the original parameter coordinates, then verify over QQ."""
+        def check_time() -> None:
+            remaining_time()
+
+        eqs, rhs = _nullspace_equations(self._x0_and_space, nullspace, check_time)
+        if _is_column_separated(eqs):
+            return None # The exact parameterization already has a sparse fast path.
+        lhs = rep_matrix_to_numpy(eqs)
+        target = rep_matrix_to_numpy(rhs).flatten()
+        if not (np.isfinite(lhs).all() and np.isfinite(target).all()):
+            return None
+        scales = np.max(np.abs(lhs), axis=1)
+        scales[scales == 0] = 1
+        lhs /= scales[:, None]
+        target /= scales
+        if not np.isfinite(target).all():
+            return None
+
+        # Submit numerically independent rows. All exact rows are checked
+        # later by recover_affine_candidates.
+        triangular, pivots = qr(lhs.T, mode='r', pivoting=True, check_finite=False)
+        diagonal = np.abs(np.diag(triangular))
+        rank = np.count_nonzero(diagonal > diagonal[0]*max(lhs.shape)*np.finfo(float).eps)
+        check_time()
+        if rank == 0:
+            return None
+        rows = sorted(pivots[:rank])
+        equality = np.hstack([lhs[rows], np.zeros((rank, 1))])
+
+        blocks = self._x0_and_space.copy()
+        for key, V in nullspace.items():
+            indices, _ = principal_basis(V)
+            blocks[key] = _extract_principal_block(*blocks[key], indices)
+            check_time()
+        if not any(x0.rows for x0, _ in blocks.values()):
+            return None
+        numerical, _ = _prepare_feasibility_blocks(blocks, normalize, check_time=check_time)
+        objective = np.zeros(self.dof+1)
+        objective[-1] = -1
+        constraints = [(equality, target[rows], '=='), (objective, 0, '<'), (objective, -5, '>')]
+        options = kwargs.copy()
+        remaining = remaining_time()
+        if remaining is not None:
+            if remaining <= 0:
+                return None
+            options['time_limit'] = remaining
+        try:
+            result = solve_numerical_dual_sdp(numerical, objective, constraints=constraints,
+                solver=solver, return_result=True, **options)
+        except SDPTimeoutError:
+            raise
+        except (SDPError, ValueError, np.linalg.LinAlgError):
+            return None
+        check_time()
+        if result.y is None or result.inf_or_unb:
+            return None
+        rationalizer = DualRationalizer(self)
+        for y in recover_affine_candidates(eqs, rhs, result.y[:-1], rationalizer.ROUND_DENOMS,
+                time_limit=check_time):
+            certificate = rationalizer.decompose(y)
+            check_time()
+            if certificate is not None:
+                return certificate
+        return None
+
     def _recover_on_exposed_face(self,
         attempt: SDPNumericalResult,
         *,
@@ -983,7 +1080,8 @@ class SDPProblem(TransformableDual):
         verbose: bool,
         normalize: bool,
         kwargs: Dict[Any, Any],
-        recovery_rounds: int
+        recovery_rounds: int,
+        recovery_with_equalities: bool,
     ) -> Optional[Tuple[Matrix, 'Decomp']]:
         """Retry on a certified face and verify the lifted solution in this SDP.
 
@@ -1005,6 +1103,19 @@ class SDPProblem(TransformableDual):
         if not nullspace:
             return None
 
+        retry_kwargs = kwargs.copy()
+        retry_kwargs['max_iters'] = min(kwargs.get('max_iters', 200), 30)
+        if recovery_with_equalities:
+            # try to solve with face equations
+            # without explicitly forming the child node
+            solution = self._solve_face_with_equalities(
+                nullspace, remaining_time=remaining_time,
+                solver=solver, normalize=normalize, kwargs=retry_kwargs)
+            if solution is not None:
+                if verbose:
+                    print("Recovered SDP with explicit face equations")
+                return solution
+
         # Build the reduction on a temporary root so a failed retry leaves
         # the caller's transform graph intact.
         trial = SDPProblem(self._x0_and_space, gens=self.gens)
@@ -1016,8 +1127,6 @@ class SDPProblem(TransformableDual):
         if verbose:
             print(f"Retry SDP on an exposed face: blocks {list(child.size.values())}, dof {child.dof}")
         if child.size:
-            retry_kwargs = kwargs.copy()
-            retry_kwargs['max_iters'] = min(kwargs.get('max_iters', 200), 30)
             remaining = remaining_time()
             if remaining is not None:
                 if remaining <= 0:
@@ -1026,7 +1135,8 @@ class SDPProblem(TransformableDual):
             try:
                 y = child.solve(solver=solver, solve_child=False, propagate_to_parent=False,
                     verbose=verbose, time_limit=check_time, normalize=normalize,
-                    kwargs=retry_kwargs, recovery_rounds=recovery_rounds-1)
+                    kwargs=retry_kwargs, recovery_rounds=recovery_rounds-1,
+                    recovery_with_equalities=recovery_with_equalities)
             except SDPTimeoutError:
                 raise
             except SDPError:
@@ -1047,8 +1157,8 @@ class SDPProblem(TransformableDual):
         allow_numer: int = 0,
         normalize: bool = True,
         kwargs: Dict[Any, Any] = {},
-        *,
         recovery_rounds: int = 2,
+        recovery_with_equalities: bool = False,
     ) -> Optional[Matrix]:
         """
         Solve a feasible SDP problem. If the SDPProblem is rational,
@@ -1087,6 +1197,10 @@ class SDPProblem(TransformableDual):
         recovery_rounds : int
             Maximum number of retries on exactly certified faces after
             rationalization fails. Set to zero to disable these retries.
+
+        recovery_with_equalities : bool
+            Try an experimental numerical solve with explicit face equations
+            before constructing the exact affine parameterization in each retry.
 
         kwargs : Dict
             Extra kwargs passed to `sdp.backends.solve_numerical_dual_sdp`. Accepted kwargs keys:
@@ -1238,26 +1352,8 @@ class SDPProblem(TransformableDual):
         success = False
 
         try:
-            x0_and_space = {}
-            block_scales = []
-            size = self.size
-            for key, (x0, space) in self._x0_and_space.items():
-                n = size[key]
-                # diagonals = Matrix([-int(i%(n+1)==0) for i in range(n**2)])
-                diagonals = -np.eye(n).reshape(n**2, 1)
-                np_space = rep_matrix_to_numpy(space)
-                np_x0 = rep_matrix_to_numpy(x0)
-                mean = 1.
-                if normalize:
-                    if np_x0.size and np_space.size:
-                        mean = (np.abs(np_x0).mean() + np.abs(np_space).mean() + 1e-2)/6
-                        np_space = np_space / mean
-                        np_x0 = np_x0 / mean
-
-                if n > 0:
-                    block_scales.append((key, float(mean)))
-                x0_and_space[key] = (np_x0, np.hstack([np_space, diagonals]))
-                _time_limit()
+            x0_and_space, block_scales = _prepare_feasibility_blocks(
+                self._x0_and_space, normalize, _time_limit)
             objective = np.zeros(self.dof + 1)
             objective[-1] = -1
             constraints = [(objective, 0, '<'), (objective, -5, '>')]
@@ -1286,7 +1382,7 @@ class SDPProblem(TransformableDual):
             solver=solver, return_result=True, **kwargs
         )
         assert isinstance(sol, SDPResult)
-        attempt = SDPNumericalResult(sol, 1, tuple(block_scales))
+        attempt = SDPNumericalResult(sol, 1, block_scales)
         self._numerical_results.append(attempt)
         y = _get_numerical_y(attempt)
 
@@ -1297,7 +1393,8 @@ class SDPProblem(TransformableDual):
                 if solution is None and recovery_rounds > 0:
                     solution = self._recover_on_exposed_face(attempt,
                         remaining_time=remaining_time, solver=solver, verbose=verbose,
-                        normalize=normalize, kwargs=kwargs, recovery_rounds=recovery_rounds)
+                        normalize=normalize, kwargs=kwargs, recovery_rounds=recovery_rounds,
+                        recovery_with_equalities=recovery_with_equalities)
                 if solution is not None:
                     self.y = solution[0]
                     self.S = {key: S[0] for key, S in solution[1].items()}

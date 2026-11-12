@@ -2,7 +2,7 @@
 This module contains basic linear transformations of SDP problems.
 """
 
-from typing import Tuple, Dict, Union, Optional, Callable, Any, TYPE_CHECKING
+from typing import Tuple, List, Dict, Union, Optional, Callable, Any, TYPE_CHECKING
 
 from sympy.matrices import MutableDenseMatrix as Matrix
 
@@ -11,7 +11,7 @@ from ..arithmetic import (
     ArithmeticTimeout, is_empty_matrix, vec2mat, reshape,
     solve_undetermined_linear, solve_nullspace, solve_columnspace,
     matmul, matadd, matmul_multiple, symmetric_bilinear, symmetric_bilinear_multiple,
-    principal_basis
+    principal_basis, sqrtsize_of_mat
 )
 
 if TYPE_CHECKING:
@@ -188,6 +188,24 @@ class SDPMatrixTransform(SDPLinearTransform):
         raise NotImplementedError
 
 
+def _nullspace_equations(blocks, nullspace, time_limit=None):
+    """Build E and f for `S(y)*V = 0`, written as `E*y = f`."""
+    eqs, rhs = [], []
+    for key, V in nullspace.items():
+        x0, space = blocks[key]
+        eqs.append(matmul_multiple(space.T, V, time_limit=time_limit).T)
+        rhs.append(reshape(matmul(vec2mat(x0), V, time_limit=time_limit), (V.rows*V.cols, 1)))
+        if time_limit is not None:
+            time_limit()
+    return Matrix.vstack(*eqs), -Matrix.vstack(*rhs)
+
+
+def _extract_principal_block(x0: Matrix, space: Matrix, indices: List[int]) -> Tuple[Matrix, Matrix]:
+    n = sqrtsize_of_mat(x0.rows)
+    entries = [i*n+j for i in indices for j in indices]
+    return x0.extract(entries, [0]), space.extract(entries, range(space.cols))
+
+
 class DualMatrixTransform(SDPMatrixTransform):
     """Impose S(y) * V = 0 and restrict PSD to the orthogonal complement of V.
 
@@ -241,13 +259,8 @@ class DualMatrixTransform(SDPMatrixTransform):
             columnspace = {key: columnspace[key] for key in nullspace}
 
         # Solve S(y) * V = 0 for the affine map y = A * z + b.
-        eqs, rhs = [], []
-        for key, V in nullspace.items():
-            x0, space = blocks[key]
-            eqs.append(matmul_multiple(space.T, V, time_limit=time_limit).T)
-            rhs.append(reshape(matmul(vec2mat(x0), V, time_limit=time_limit), (V.rows*V.cols, 1)))
-            time_limit()
-        b, A = solve_undetermined_linear(Matrix.vstack(*eqs), -Matrix.vstack(*rhs), time_limit=time_limit)
+        eqs, rhs = _nullspace_equations(blocks, nullspace, time_limit)
+        b, A = solve_undetermined_linear(eqs, rhs, time_limit=time_limit)
 
         new_x0_and_space = {}
         for key, (x0, space) in blocks.items():
@@ -256,10 +269,7 @@ class DualMatrixTransform(SDPMatrixTransform):
                 indices = extractions[key]
                 if not indices:
                     continue
-                n = nullspace[key].rows
-                entries = [i*n+j for i in indices for j in indices]
-                x0 = x0.extract(entries, [0])
-                space = space.extract(entries, range(space.cols))
+                x0, space = _extract_principal_block(x0, space, indices)
             elif key in columnspace:
                 U = columnspace[key]
                 if is_empty_matrix(U):
