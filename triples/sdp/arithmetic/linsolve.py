@@ -789,3 +789,30 @@ def _solve_csr_linear_force_zeros(A, b, nonnegative_indices=[], force_zeros={},
         x0 = _restore_from_compressed(x0, mapping, rows=A.shape[1])
         space = _restore_from_compressed(space, mapping, rows=A.shape[1])
     return x0, space
+
+
+
+def principal_basis(V: Matrix) -> Tuple[List[int], Matrix]:
+    """Return J and the basis W of ker(V.T) with W[J, :] = I.
+
+    Examples
+    --------
+    >>> J, W = principal_basis(Matrix([1, 2, -1]))
+    >>> J, W.tolist()
+    ([1, 2], [[-2, 1], [1, 0], [0, 1]])
+    >>> Matrix([[1, 2, -1]]) * W
+    Matrix([[0, 0]])
+    """
+    reduced, pivots = V._rep.to_field().transpose().rref()
+    domain = reduced.domain
+    pivot_set = set(pivots)
+    indices = [i for i in range(V.rows) if i not in pivot_set]
+    columns = {i: j for j, i in enumerate(indices)}
+    rows = {i: {j: domain.one} for i, j in columns.items()}
+    reduced_rows = reduced.rep.to_sdm()
+    for row, pivot in enumerate(pivots):
+        coefficients = {columns[i]: -value for i, value in reduced_rows[row].items()
+                        if i in columns}
+        if coefficients:
+            rows[pivot] = coefficients
+    return indices, rep_matrix_from_dict(rows, (V.rows, len(indices)), domain)

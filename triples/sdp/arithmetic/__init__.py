@@ -13,7 +13,8 @@ from .matmul import (
 from .eigens import congruence
 
 from .linsolve import (
-    solve_undetermined_linear, solve_nullspace, solve_columnspace, solve_csr_linear, solve_column_separated_linear
+    solve_undetermined_linear, solve_nullspace, solve_columnspace,
+    solve_csr_linear, solve_column_separated_linear, principal_basis
 )
 
 from .lll import lll
@@ -25,6 +26,7 @@ __all__ = [
     'matadd', 'matmul', 'matmul_multiple', 'symmetric_bilinear', 'symmetric_bilinear_multiple',
     'kronecker_product',
     'congruence',
-    'solve_undetermined_linear','solve_nullspace','solve_columnspace','solve_csr_linear','solve_column_separated_linear',
+    'solve_undetermined_linear', 'solve_nullspace', 'solve_columnspace',
+    'solve_csr_linear', 'solve_column_separated_linear', 'principal_basis',
     'lll'
 ]
