@@ -1,19 +1,25 @@
 """Search for exact facial reduction certificates in sparse PSD subcones."""
 
-from typing import Any, Callable, Dict, List, NamedTuple, Optional, Sequence, Tuple
+from fractions import Fraction
+from math import gcd
+from typing import Any, Callable, Dict, Iterator, List, NamedTuple, Optional, Sequence, Tuple, cast
 
 import numpy as np
 from scipy import __version__ as _SCIPY_VERSION
+from scipy.linalg import qr
 from scipy.optimize import linprog
 from sympy import MutableDenseMatrix as Matrix
 from sympy.external.importtools import version_tuple
 
 from .arithmetic import (
-    ArithmeticTimeout, is_zz_qq_mat, rep_matrix_to_numpy, solve_undetermined_linear,
+    ArithmeticTimeout, is_zz_qq_mat, matmul, rep_matrix_to_numpy, solve_undetermined_linear,
     sqrtsize_of_mat,
 )
 
 _HAS_HIGHS = tuple(version_tuple(_SCIPY_VERSION)) >= (1, 6)
+_MAX_SUPPORT = 128
+# Dense directions can also make the subsequent exact reduction expensive.
+_MAX_SPECTRAL_COEFFICIENTS = 128_000
 
 
 class _Direction(NamedTuple):
@@ -78,26 +84,82 @@ def _verify_support(
         forms.append(offset.row_join(linear))
         remaining_time()
 
+    vectors: Dict[Any, List[Matrix]] = {}
+    for index in _positive_support(forms, remaining_time):
+        key, i, j, sign = directions[index]
+        vector = Matrix.zeros(sizes[key], 1)
+        vector[i] = 1
+        if sign:
+            vector[j] = sign
+        vectors.setdefault(key, []).append(vector)
+    return {key: Matrix.hstack(*basis) for key, basis in vectors.items()}
+
+
+def _positive_support(
+    forms: Sequence[Matrix],
+    remaining_time: Callable[[], Optional[float]],
+) -> List[int]:
+    """Return the positive indices of a normalized QQ dependence, if verified."""
     equations = Matrix.vstack(*forms).T.col_join(Matrix.ones(1, len(forms)))
     rhs = Matrix.zeros(equations.rows, 1)
     rhs[-1] = 1
     try:
         weights, _ = solve_undetermined_linear(equations, rhs, time_limit=remaining_time)
     except ValueError:
-        return {}
+        return []
     values = [row[0] for row in weights.tolist()]
     if any(weight.is_nonnegative is not True for weight in values) or equations * weights != rhs:
-        return {}
+        return []
+    return [i for i, weight in enumerate(values) if weight.is_positive]
 
-    vectors: Dict[Any, List[Matrix]] = {}
-    for (key, i, j, sign), weight in zip(directions, values):
-        if weight.is_positive:
-            vector = Matrix.zeros(sizes[key], 1)
-            vector[i] = 1
-            if sign:
-                vector[j] = sign
-            vectors.setdefault(key, []).append(vector)
-    return {key: Matrix.hstack(*basis) for key, basis in vectors.items()}
+
+def _candidate_supports(
+    coefficients: np.ndarray,
+    objective: np.ndarray,
+    remaining_time: Callable[[], Optional[float]],
+) -> Iterator[np.ndarray]:
+    """Propose small supports with nonnegative weights using a numerical LP."""
+    if not np.isfinite(coefficients).all():
+        return
+    # Positive column and row scaling preserves the possible supports.
+    for axis in (0, 1):
+        scale = np.max(np.abs(coefficients), axis=axis, keepdims=True)
+        scale[scale == 0] = 1
+        coefficients /= scale
+    remaining = remaining_time()
+    if remaining is not None and remaining <= 0:
+        return
+    budget = min(0.25, remaining) if remaining is not None else 0.25
+    callback = None
+    if _HAS_HIGHS:
+        method = 'highs'
+        options = {'time_limit': budget, 'primal_feasibility_tolerance': 1e-9}
+    else:
+        method = 'simplex'
+        options = {'tol': 1e-9, 'maxiter': 1000}
+        check_lp_time = ArithmeticTimeout.make_checker(budget)
+
+        def callback(_):
+            check_lp_time()
+
+    width, count = coefficients.shape
+    try:
+        result = linprog(objective, A_eq=np.vstack([coefficients, np.ones(count)]),
+            b_eq=np.r_[np.zeros(width), 1.], bounds=(0, None), method=method,
+            options=options, callback=callback)
+    except ArithmeticTimeout:
+        remaining_time()
+        return
+    remaining_time()
+    if result.success:
+        support = np.flatnonzero(result.x > 1e-10)
+        if 0 < len(support) <= _MAX_SUPPORT:
+            yield support
+        if not _HAS_HIGHS:
+            # Simplex can leave small positive weights outside the true support.
+            trimmed = support[result.x[support] > 1e-8]
+            if 0 < len(trimmed) <= _MAX_SUPPORT and len(trimmed) != len(support):
+                yield trimmed
 
 
 def find_joint_exposing_nullspace(
@@ -129,50 +191,139 @@ def find_joint_exposing_nullspace(
         if remaining is not None and remaining <= 0:
             break
         coefficients, directions = _direction_columns(blocks, sizes, pairs, remaining_time)
-        if not np.isfinite(coefficients).all():
+        for indices in _candidate_supports(coefficients, np.zeros(count), remaining_time):
+            nullspace = _verify_support(blocks, sizes, [directions[i] for i in indices], remaining_time)
+            if nullspace:
+                return nullspace
+    return {}
+
+
+def _round_vector(vector: np.ndarray, bound: int) -> Tuple[int, ...]:
+    """Round a chart vector and clear denominators, up to sign and scale."""
+    fractions = [Fraction(float(v)).limit_denominator(bound) for v in vector]
+    common = 1
+    for f in fractions:
+        common = common * f.denominator // gcd(common, f.denominator)
+    integers = [f.numerator * (common // f.denominator) for f in fractions]
+    divisor = 0
+    for i in integers:
+        divisor = gcd(divisor, i)
+    if not divisor:
+        return ()
+    if next(i for i in integers if i) < 0:
+        divisor = -divisor
+    return tuple(i // divisor for i in integers)
+
+
+def _spectral_directions(
+    matrix: np.ndarray,
+    remaining_time: Callable[[], Optional[float]],
+) -> List[Tuple[Tuple[int, ...], float]]:
+    """Choose a few short directions near the numerical nullspace of a block."""
+    if not np.isfinite(matrix).all():
+        return []
+    if matrix.shape == (1, 1):
+        # A scalar has no spectral gap. It can still be required to balance
+        # an affine form from another block in the joint certificate.
+        return [((1,), float(matrix[0, 0] != 0))]
+    try:
+        eigs, vectors = np.linalg.eigh(matrix)
+    except np.linalg.LinAlgError:
+        return []
+    n = len(eigs)
+    order = np.argsort(np.abs(eigs))
+    scale = max(np.abs(eigs).max(), 1e-30)
+    near_zero = np.count_nonzero(np.abs(eigs) <= 0.015 * scale)
+    if not near_zero:
+        return []
+    matrix = matrix / scale
+    candidates: Dict[Tuple[int, ...], float] = {}
+
+    def add(direction: Tuple[int, ...]) -> None:
+        if not direction or direction in candidates or max(map(abs, direction)) > 2048:
+            return
+        v = np.asarray(direction, dtype=float)
+        residual = float(np.linalg.norm(matrix @ v) / np.linalg.norm(v))
+        if residual < 0.012:
+            candidates[direction] = residual
+
+    # Diagonal atoms can complement dense directions in the same certificate.
+    for i in range(n):
+        add(tuple(int(j == i) for j in range(n)))
+    for rank in range(1, min(n, near_zero + 1)):
+        remaining_time()
+        W = vectors[:, order[:rank]]
+        _, _, pivots = qr(W.T, mode='economic', pivoting=True)
+        try:
+            chart = np.linalg.solve(W[pivots[:rank]].T, W.T)
+        except np.linalg.LinAlgError:
             continue
-        # Positive column and row scaling preserves the support search.
-        for axis in (0, 1):
-            scale = np.max(np.abs(coefficients), axis=axis, keepdims=True)
-            scale[scale == 0] = 1
-            coefficients /= scale
+        for v in chart:
+            if np.isfinite(v).all():
+                for bound in (1, 2, 4, 8, 16, 32, 64):
+                    add(_round_vector(v, bound))
+    return sorted(candidates.items(), key=lambda pair: pair[1])[:32]
+
+
+def find_spectral_exposing_nullspace(
+    blocks: Dict[Any, Tuple[Matrix, Matrix]],
+    y: np.ndarray,
+    remaining_time: Callable[[], Optional[float]],
+) -> Dict[Any, Matrix]:
+    """Search for a joint exposure using rounded charts of near-zero eigenspaces.
+
+    The numerical point only proposes directions. A verified nonnegative
+    dependence must hold in the original QQ pencil, including its constant
+    term, before any direction can restrict the feasible set.
+    """
+    if not np.isfinite(y).all():
+        return {}
+    # Bound work spent on dense coefficient arrays and chart enumeration.
+    sizes = {k: sqrtsize_of_mat(a.rows) for k, (a, _) in blocks.items() if a.rows}
+    sizes = {k: n for k, n in sizes.items() if n <= 24}
+    if not sizes or not all(is_zz_qq_mat(m) for k in sizes for m in blocks[k]):
+        return {}
+    width = y.size + 1
+    if sum(n*n for n in sizes.values()) * width > _MAX_SPECTRAL_COEFFICIENTS:
+        return {}
+
+    directions: List[Tuple[Any, Tuple[int, ...]]] = []
+    costs: List[float] = []
+    columns = []
+    for key, n in sizes.items():
         remaining = remaining_time()
         if remaining is not None and remaining <= 0:
-            break
-        budget = min(0.25, remaining) if remaining is not None else 0.25
-        callback = None
-        if _HAS_HIGHS:
-            method = 'highs'
-            options = {'time_limit': budget, 'primal_feasibility_tolerance': 1e-9}
-        else:
-            method = 'simplex'
-            options = {'tol': 1e-9, 'maxiter': 1000}
-            check_lp_time = ArithmeticTimeout.make_checker(budget)
+            return {}
+        a, A = blocks[key]
+        pencil = rep_matrix_to_numpy(a.row_join(A))
+        if not np.isfinite(pencil).all():
+            continue
+        with np.errstate(over='ignore', invalid='ignore'):
+            matrix = (pencil[:, 0] + pencil[:, 1:] @ y).reshape(n, n)
+        for vector, residual in _spectral_directions(matrix, remaining_time):
+            v = np.asarray(vector, dtype=float)
+            with np.errstate(over='ignore', invalid='ignore'):
+                columns.append(np.outer(v, v).reshape(-1) @ pencil)
+            directions.append((key, vector))
+            costs.append(residual)
+    if not directions:
+        return {}
 
-            def callback(_):
-                check_lp_time()
-
-        try:
-            result = linprog(np.zeros(count),
-                A_eq=np.vstack([coefficients, np.ones(count)]),
-                b_eq=np.r_[np.zeros(width), 1.], bounds=(0, None), method=method,
-                options=options, callback=callback)
-        except ArithmeticTimeout:
+    for indices in _candidate_supports(np.asarray(columns).T, np.asarray(costs), remaining_time):
+        forms: List[Matrix] = []
+        vectors: List[Tuple[Any, Matrix]] = []
+        for index in indices:
+            key, vector = directions[index]
+            direction = Matrix(vector)
+            a, A = blocks[key]
+            weights = (direction * direction.T).reshape(1, a.rows)
+            forms.append(cast(Matrix, matmul(weights, a.row_join(A), time_limit=remaining_time)))
+            vectors.append((key, direction))
             remaining_time()
-            break
-        remaining_time()
-        if result.success:
-            support = np.flatnonzero(result.x > 1e-10)
-            supports = [support]
-            if not _HAS_HIGHS:
-                # Simplex can leave small positive weights outside the true support.
-                trimmed = support[result.x[support] > 1e-8]
-                if len(trimmed) != len(support):
-                    supports.append(trimmed)
-            for indices in supports:
-                if not 0 < len(indices) <= 128:
-                    continue
-                nullspace = _verify_support(blocks, sizes, [directions[i] for i in indices], remaining_time)
-                if nullspace:
-                    return nullspace
+        nullspace: Dict[Any, List[Matrix]] = {}
+        for index in _positive_support(forms, remaining_time):
+            key, direction = vectors[index]
+            nullspace.setdefault(key, []).append(direction)
+        if nullspace:
+            return {key: Matrix.hstack(*basis) for key, basis in nullspace.items()}
     return {}

@@ -14,7 +14,7 @@ from .arithmetic import (
 )
 from .arithmetic.linsolve import _is_column_separated, recover_affine_candidates
 from .backends import SDPResult, SDPError, SDPTimeoutError, solve_numerical_dual_sdp
-from .facial import find_joint_exposing_nullspace
+from .facial import find_joint_exposing_nullspace, find_spectral_exposing_nullspace
 from .rationalize import SDPRationalizeError, DualRationalizer
 from .transforms import TransformableDual
 from .transforms.linear import _extract_principal_block, _nullspace_equations
@@ -1081,9 +1081,9 @@ class SDPProblem(TransformableDual):
         solver: Optional[str],
         verbose: bool,
         normalize: bool,
-        kwargs: Dict[Any, Any],
         recovery_rounds: int,
         recovery_with_equalities: bool,
+        kwargs: Dict[Any, Any],
     ) -> Optional[Tuple[Matrix, 'Decomp']]:
         """Retry on a certified face and verify the lifted solution in this SDP.
 
@@ -1101,6 +1101,10 @@ class SDPProblem(TransformableDual):
             {key: Z for (key, _), Z in zip(attempt.block_scales, dual)}, time_limit=check_time)
         if not nullspace:
             nullspace = find_joint_exposing_nullspace(self._x0_and_space, remaining_time)
+        if not nullspace:
+            approximate_y = _get_numerical_y(attempt)
+            if approximate_y is not None:
+                nullspace = find_spectral_exposing_nullspace(self._x0_and_space, approximate_y, remaining_time)
         if not nullspace:
             return None
 
@@ -1136,8 +1140,9 @@ class SDPProblem(TransformableDual):
             try:
                 y = child.solve(solver=solver, solve_child=False, propagate_to_parent=False,
                     verbose=verbose, time_limit=check_time, normalize=normalize,
-                    kwargs=retry_kwargs, recovery_rounds=recovery_rounds-1,
-                    recovery_with_equalities=recovery_with_equalities)
+                    recovery_rounds=recovery_rounds-1,
+                    recovery_with_equalities=recovery_with_equalities,
+                    kwargs=retry_kwargs)
             except SDPTimeoutError:
                 raise
             except SDPError:
@@ -1157,9 +1162,9 @@ class SDPProblem(TransformableDual):
         time_limit: Optional[float] = None,
         allow_numer: int = 0,
         normalize: bool = True,
-        kwargs: Dict[Any, Any] = {},
         recovery_rounds: int = 2,
         recovery_with_equalities: bool = False,
+        kwargs: Dict[Any, Any] = {},
     ) -> Optional[Matrix]:
         """
         Solve a feasible SDP problem. If the SDPProblem is rational,

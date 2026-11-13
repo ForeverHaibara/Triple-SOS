@@ -1,4 +1,4 @@
-from sympy.abc import a, b, c, d, x, y, z
+from sympy.abc import a, b, c, d, r, s, x, y, z
 
 from ..sdpsos import SDPSOS
 from ....sdp.backends.clarabel_sdp import DualBackendCLARABEL
@@ -49,6 +49,11 @@ class SDPSOSProblems:
     def problem_joint_face_recovery(cls):
         # vasile 32012
         return 4 - a*b**2*c**3, [a, b, c, b-a, c-b], [a*b + b*c + c*a - 3]
+
+    @classmethod
+    def problem_spectral_face_recovery(cls):
+        g, h = r**2 - 2, s**2 - 2
+        return g*h*(r**2 - 1)*(s**2 - 1) + (r*s + r + s + 2)**2, [g, h, g*h], []
 
 
 @pytest.mark.slow
