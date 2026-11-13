@@ -12,6 +12,7 @@ from numpy import iinfo as np_iinfo
 from numpy import any as np_any
 from numpy import where as np_where
 from scipy.sparse import issparse, kron as sparse_kron
+from sympy.external.gmpy import GROUND_TYPES
 from sympy.matrices import MutableDenseMatrix as Matrix
 from sympy.matrices.repmatrix import RepMatrix
 
@@ -133,6 +134,34 @@ def matlshift(A: RepMatrix, B: int) -> RepMatrix:
     return A._fromrep(A._rep.from_rep(rep))
 
 
+def _matmul_dense_rational(
+    A: RepMatrix,
+    B: RepMatrix,
+    time_limit: Callable[[], None]
+) -> Optional[RepMatrix]:
+    """
+    Try native dense multiplication for moderately large rational products.
+    Triggered only when flint is available.
+    """
+    m, k = A.shape
+    n = B.shape[1]
+    # Keep integer, small, thin and very sparse products on the int64 path.
+    # Bound the number of entries materialized even if the result fills in.
+    if (GROUND_TYPES != 'flint' or not (A._rep.domain.is_QQ or B._rep.domain.is_QQ) or
+            min(m, k, n) < 16 or m*n < 4096 or m*k + k*n + m*n > 1_000_000 or
+            A._rep.nnz()*8 < m*k or B._rep.nnz() < 2*n):
+        return None
+    left, right = A._rep.unify(B._rep)
+    left = left.to_dense()
+    if not isinstance(left.rep, DFM):
+        return None
+    right = right.to_dense()
+    time_limit()
+    result = left.matmul(right).to_sparse()
+    time_limit()
+    return Matrix._fromrep(result)
+
+
 def matmul(
     A: MatrixLike,
     B: MatrixLike,
@@ -223,6 +252,12 @@ def matmul(
     if not (is_zz_qq_mat(A) and is_zz_qq_mat(B)):
         return default(A0, B0)
 
+    # Repeatedly finding a common denominator can cost more than the product,
+    # particularly when applying a rational change of coordinates to Gram blocks.
+    dense = _matmul_dense_rational(A0, B0, time_limit=time_limit)
+    if dense is not None:
+        return reshape(dense, return_shape)
+
     try:
         q1, q2, _MAXA, _MAXB = 0, 0, 0, 0
         q1, A = primitive(A._rep)
@@ -239,7 +274,6 @@ def matmul(
             raise OverflowError
         time_limit()
     except (OverflowError, TypeError):
-        # print(f'Default {A0.shape} * {B0.shape}, q1 = {q1}, q2 = {q2}, MAXA = {_MAXA}, MAXB = {_MAXB}')
         return default(A0, B0)
 
     q1q2 = q1 * q2
