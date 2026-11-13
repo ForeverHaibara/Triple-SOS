@@ -275,11 +275,9 @@ class SOSPoly(AtomSOSElement):
             insert_prefix(self._qmodule),
             insert_prefix(self._ideal),
             ineq_bases=insert_prefix(self._qmodule_bases),
-            eq_bases=insert_prefix(self._ideal_bases),
-            degree=self.algebra.degree,
             roots=roots,
             perm_group=self.algebra.symmetry,
-            time_limit=time_limit
+            time_limit=time_limit,
         )
         if verbose:
             print(f"Time for computing nullspace            : {perf_counter() - time0:.6f} seconds.")

@@ -2,295 +2,174 @@
 This module contains heuristic, experimental, imcomplete facial reduction algorithm
 for SDP via computing the equality cases of the original SOS problem.
 """
-from collections import defaultdict, deque
-from itertools import product
-from typing import Dict, List, Tuple, Union, Optional, Callable, Any, TYPE_CHECKING
-
-from sympy import prod
+from collections import defaultdict
+from itertools import islice, product
+from typing import (
+    Dict, Iterable, Iterator, List, Mapping, Sequence, Tuple,
+    Union, Optional, Callable, Any, TYPE_CHECKING
+)
+from sympy import QQ
+from sympy.external.gmpy import MPQ
 from sympy.matrices import MutableDenseMatrix as Matrix
+from sympy.polys.rings import ring
 
-from .algebra import PseudoPoly, SOSBasis
-from ...sdp.arithmetic import ArithmeticTimeout, solve_columnspace, rep_matrix_from_list
+from .algebra import PseudoPoly
+from ...sdp.arithmetic import ArithmeticTimeout, rep_matrix_from_list
 from ...utils import Root, MonomialManager
-from ...utils.roots.roots import _algebraic_field_coeffs, _derv
+from ...utils.roots.roots import _algebraic_field_coeffs
 
 if TYPE_CHECKING:
     from sympy import Poly
     from sympy.combinatorics import PermutationGroup
+    from sympy.polys.rings import PolyElement
+
+    from .algebra import SOSBasis
 
 
-def _permute_root(perm_group: "PermutationGroup", root: Root) -> List[Root]:
-    """Permute a Root object efficiently given a permutation group."""
-    perms = list(perm_group.elements)
-    roots = [None] * len(perms)
-    root0, rep, domain = root.root, root.rep, root.domain
-    for i, perm in enumerate(perms):
-        arr = perm._array_form
-        roots[i] = Root(tuple(root0[j] for j in arr), domain=domain,
-            rep=tuple(rep[j] for j in arr))
-    return roots
-
-def _is_binary_root(root: Root) -> bool:
-    # return isinstance(root, RootRational) and len(set(root.root)) <= 2
-    return root.is_Rational and len(set(root.root)) <= 2
-
-def _root_span(root: Root, basis: Any, degree: int = 0, diff: Tuple[int,...] = None) -> Matrix:
-    if isinstance(basis, MonomialManager):
-        return root.span(degree, diff, symmetry=basis)
-    elif isinstance(basis, SOSBasis):
-        monoms = basis._basis # should be a list of tuple
-
-        vec = [None] * len(monoms)
-        _single_power = root._single_power_monomial
-
-        zero = root.domain.zero
-        if diff is None:
-            for ind, monom in enumerate(monoms):
-                vec[ind] = _single_power(monom)
-        else:
-            for ind, monom in enumerate(monoms):
-                if any(order_m < order_diff for order_m, order_diff in zip(monom, diff)):
-                    vec[ind] = zero
-                else:
-                    dervs = [_derv(order_m, order_diff) for order_m, order_diff in zip(monom, diff)]
-                    powers = [order_m - order_diff for order_m, order_diff in zip(monom, diff)]
-                    vec[ind] = int(prod(dervs)) * _single_power(powers)
-
-        if not root.is_Rational:
-            vec = _algebraic_field_coeffs(vec, root.domain)
-        else:
-            vec = rep_matrix_from_list(vec, len(vec), domain=root.domain)
-        return vec
+_Monomial = Tuple[int, ...]
+_Coefficients = Mapping[_Monomial, MPQ]
+_GramBlock = Tuple[Any, _Coefficients, Sequence[_Monomial]]
 
 
-    raise TypeError(f"Unknown basis type {type(basis)}")
+def _order(poly: "PolyElement") -> int:
+    """Return the order at zero of a nonzero univariate ring element."""
+    return min(poly)[0]
 
 
-class _bilinear():
+def _parametrization_jets(
+    target: _Coefficients,
+    equalities: Sequence[_Coefficients],
+    blocks: Sequence[_GramBlock],
+    parametrization: Sequence["PolyElement"],
+    permutations: Sequence[Sequence[int]] = (),
+) -> Iterator[Tuple[Any, Tuple[MPQ, ...]]]:
+    """Derive kernel coefficients until opposite leading terms can cancel.
+
+    The coordinates are polynomials in a common univariate ring over QQ,
+    with the base point at parameter zero. A nonzero Gram term has leading
+    order d + 2*j and the sign of its
+    weight, where d is the weight order and j is its first surviving basis
+    coefficient after applying a square root of the Gram matrix.
     """
-    Represent Sum(m * u' * M * v) where M >> 0 and m is a monomial,
-    represented by a tuple of orders. u and v are also tuples,
-    recording the differential orders of the variables.
+    ring = parametrization[0].ring
+    cache: Dict[_Monomial, PolyElement] = {}
 
-    For example, for 3-var poly, a * v' * M * v is
+    def monomial(powers: _Monomial) -> "PolyElement":
+        if powers not in cache:
+            value = ring.one
+            for x, e in zip(parametrization, powers):
+                if e:
+                    value *= x**e
+            cache[powers] = value
+        return cache[powers]
 
-        _bilinear({(1, 0, 0): {(0, 0, 0), (0, 0, 0)}})
+    def restrict(poly: _Coefficients, perm: Sequence[int] = ()) -> "PolyElement":
+        return sum((c * monomial(tuple(m[i] for i in perm) if perm else m)
+                    for m, c in poly.items()), ring.zero)
 
-    Taking the differential with respect to the first variable, we get
-    the new poly v' * M * v + 2a * v' * M * (dv/da). It has two different terms
-    and is represented by
+    if any(restrict(h) for h in equalities):
+        return
+    rhs = restrict(target)
+    rhs_order = _order(rhs) if rhs else float('inf')
+    # Restrict each orbit term separately: an invariant SOS sum can contain
+    # weights of both signs even when its representative is positive.
+    terms = []
+    for key, weight, basis in blocks:
+        seen = set()
+        for perm in permutations or ((),):
+            g = restrict(weight, perm)
+            if not g:
+                continue
+            d = _order(g)
+            if d >= rhs_order:
+                continue
+            monoms = tuple(tuple(m[i] for i in perm) if perm else m for m in basis)
+            signature = (d, g[(d,)] > 0, monoms)
+            if signature not in seen:
+                seen.add(signature)
+                terms.append((key, *signature))
 
-        _bilinear({(0, 0, 0): {(0, 0, 0), (0, 0, 0)}, (1, 0, 0): {(0, 0, 0), (1, 0, 0)}})
+    # The target is a fixed term on the other side. Work strictly below its
+    # first nonzero order, where its coefficients cannot participate.
+    if not terms:
+        return
+    by_order = defaultdict(list)
+    for key, d, positive, monoms in terms:
+        evaluated = [monomial(m) for m in monoms]
+        count = max((max(p)[0] for p in evaluated if p), default=-1) + 1
+        if rhs:
+            count = min(count, (int(rhs_order)-d+1)//2)
+        for j in range(count):
+            column = tuple(p.get((j,), QQ.zero) for p in evaluated)
+            if any(column):
+                by_order[d+2*j].append((key, positive, column))
 
-    Identical terms are merged, coefficients are not stored.
-    """
-    __slots__ = ('terms',)
-    @classmethod
-    def _reg(cls, u, v):
-        return (u, v) if u < v else (v, u)
-
-    def __init__(self, terms: Dict[Tuple[int, ...], set]):
-        self.terms = terms
-        for m in terms:
-            terms[m] = {self._reg(*uv) for uv in terms[m]}
-
-    def diff(self, i: int) -> '_bilinear':
-        def increase_tuple(t, i, v):
-            return t[:i] + (t[i]+v,) + t[i+1:]
-        _reg = self._reg
-        new_terms = defaultdict(set)
-        for m, uvs in self.terms.items():
-            if m[i]:
-                m2 = increase_tuple(m, i, -1)
-                new_terms[m2] |= uvs
-            for u, v in uvs:
-                u2 = increase_tuple(u, i, 1)
-                v2 = increase_tuple(v, i, 1)
-                new_terms[m].add(_reg(u2, v))
-                new_terms[m].add(_reg(u, v2))
-        return _bilinear(new_terms)
-
-    def diff_monoimal(self, m: Tuple[int, ...]) -> '_bilinear':
-        b = self
-        for i in range(len(m)):
-            for times in range(m[i]):
-                b = b.diff(i)
-        return b
-
-    def __str__(self) -> str:
-        return f'_bilinear({str(self.terms)})'
-    def __repr__(self) -> str:
-        return self.__str__()
-
-
-def _compute_diff_orders(poly: "Poly", root: Root, mixed=False, only_binary_roots=True) -> List[Tuple[int, ...]]:
-    """
-    Compute tuples (a1, ..., an) such that d^a1/dx1^a1 ... d^an/dxn^an f = 0 at the root.
-    The root object is assumed to be indeed a root of the polynomial, which will not be checked.
-
-    Parameters
-    ----------
-    poly : Poly
-        The polynomial to compute the differential orders for.
-    root : Root
-        The root to compute the differential orders for.
-    mixed : bool
-        If False, only differentiate with respect to one variable at a time.
-        If True, differentiate with respect to all variables at the same time. However,
-        it is not correct to use mixed=True.
-    only_binary_roots : bool
-        If True, only "binary" roots are computed. This is incomplete but
-        is fast and sufficient for most cases.
-
-    Examples
-    --------
-    >>> from sympy.abc import a, b, c
-    >>> from triples.utils import pl
-    >>> _compute_diff_orders((a**3*(a-b)*(a-c)+b**3*(b-c)*(b-a)+c**3*(c-a)*(c-b)).as_poly(a,b,c), Root((1,1,0)))
-    [(0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1), (0, 0, 2)]
-
-    >>> _compute_diff_orders(pl('16p(2a-b-c)2-27p(a)s((a-b)2(13a-5b-17c))'), Root((1,2,0)), only_binary_roots=False)
-    [(0, 0, 0), (1, 0, 0), (0, 1, 0), (0, 0, 1)]
-    """
-    gens = poly.gens
-    nvars = len(gens)
-    if (only_binary_roots and not _is_binary_root(root)):
-        return [(0,) * nvars]
-
-    if mixed:
-        def dfs(poly: "Poly", order: Tuple[int, ...]) -> List[Tuple[int, ...]]:
-            orders = [order]
-            for i in range(nvars):
-                # take one more derivative
-                poly2 = poly.diff(gens[i])
-                if poly2.total_degree() > 0 and root.eval(poly2) == 0:
-                    new_order = order[:i] + (order[i] + 1,) + order[i+1:]
-                    orders.extend(dfs(poly2, new_order))
-            return orders
-        return dfs(poly, (0,) * nvars)
-
-    else:
-        orders = [(0,) * nvars]
-        for i in range(nvars):
-            poly2 = poly.diff(gens[i])
-            j = 1
-            while poly2.total_degree() > 0 and root.eval(poly2) == 0:
-                orders.append((0,) * i + (j,) + (0,) * (nvars - i - 1))
-                poly2 = poly2.diff(gens[i])
-                j += 1
-        return orders
+    # Once cancellation is possible, later coefficients of surviving terms
+    # may have either sign. Only the lower orders give a kernel certificate.
+    for order in sorted(by_order):
+        layer = by_order[order]
+        if len({positive for _, positive, _ in layer}) == 2:
+            return
+        for key, _, column in layer:
+            yield key, column
 
 
-def _compute_nonvanishing_diff_orders(
-    poly: "Poly",
-    root: Root,
-    monomial: Tuple[int, ...],
-    only_binary_roots=True
-) -> List[Tuple[int, ...]]:
-    """
-    Compute the differential orders that the root do not vanish at
-    the given quadratic module (monomial). TODO: extend to non-monomial cases
-    """
-    orders = _compute_diff_orders(poly, root, only_binary_roots=only_binary_roots)
-    # if len(orders) <= 0 or (len(orders) == 1 and not any(orders[0])):
-    #     return orders
-    nvars = len(poly.gens)
-    b0 = _bilinear({monomial: [((0,)*nvars, (0,)*nvars)]})
+def _collect_line_jets(
+    target: "Poly",
+    inequalities: Mapping[Any, "Poly"],
+    bases: Mapping[Any, "SOSBasis"],
+    ideal: Iterable["Poly"],
+    *,
+    roots: Sequence[Root],
+    symmetry: Optional["PermutationGroup"],
+    check_time: Callable[[], None]
+) -> Dict[Any, Dict[Tuple[MPQ, ...], None]]:
+    nvars = len(target.gens)
+    if nvars > 4 or not roots:
+        return {}
+    equalities = complete_constraints_by_symmetry(list(ideal), symmetry)
+    if not all(p.domain.is_ZZ or p.domain.is_QQ for p in [
+            target, *inequalities.values(), *equalities]):
+        return {}
 
-    def _make_vanish_checker(root):
-        nonzeros = [1 if _ != 0 else 0 for _ in root.root]
-        if all(nonzeros):
-            nonvanish = lambda _nonzeros: True
-        else:
-            def nonvanish(monomial):
-                return all(i != 0 for i, j in zip(nonzeros, monomial) if j != 0)
-        return nonvanish
-    nonvanish = _make_vanish_checker(root)
+    def coefficients(poly: "Poly") -> _Coefficients:
+        return poly.set_domain(QQ).rep.to_dict()
 
-    sets = []
-    for m in orders:
-        b = b0.diff_monoimal(m)
-        for key in filter(nonvanish, b.terms):
-            sets.append(b.terms[key])
-
-    zeros = deque([(-1,) * nvars]) # starting sentinel
-    handled_zeros = set()
-    while len(zeros):
-        zero = zeros.popleft()
-        if zero in handled_zeros:
+    _, t = ring('t', QQ)
+    target_coeffs = coefficients(target)
+    eq_coeffs = [coefficients(p) for p in equalities]
+    blocks = [(k, coefficients(p), bases[k]._basis)
+              for k, p in inequalities.items() if len(bases[k])]
+    permutations = ([tuple(p(i) if i < p.size else i for i in range(nvars))
+                     for p in symmetry.elements] if symmetry is not None else [])
+    columns: Dict[Any, Dict[Tuple[MPQ, ...], None]] = defaultdict(dict)
+    points = dict.fromkeys(
+        tuple(QQ.convert(p, root.domain) for p in root.rep)
+        for root in roots if root.is_Rational and root.rep is not None)
+    directions = list(product((-1, 0, 1), repeat=nvars))
+    for point in islice(points, 12):
+        check_time()
+        if target.eval(dict(zip(target.gens, map(QQ.to_sympy, point)))) != 0:
             continue
-        for set_ in sets:
-            for i, j in list(set_):
-                if i == zero or j == zero:
-                    # one of the vectors of the bilinear form is proven to vanish
-                    # and we no longer needs to consider this term
-                    set_.remove((i, j))
-            if len(set_) == 1:
-                p = set_.pop()
-                if p[0] == p[1]:
-                    # in this case the bilinear form is PSD and it vanishes at this derivative
-                    # this imposes a nullspace constraint on the PSD matrix
-                    zeros.append(p[0])
-        if zero[0] != -1:
-            handled_zeros.add(zero)
-    return handled_zeros
+        stabilizer = [p for p in permutations if tuple(point[i] for i in p) == point]
+        for direction in directions:
+            # The line test already uses the full orbit of every Gram term.
+            if any(tuple(direction[i] for i in p) < direction for p in stabilizer):
+                continue
+            check_time()
+            parametrization = tuple(p + v*t for p, v in zip(point, direction))
+            for key, vector in _parametrization_jets(
+                    target_coeffs, eq_coeffs, blocks, parametrization, permutations):
+                columns[key][vector] = None
+    return columns
 
 
-def _root_space(
-    root: Root,
-    poly: "Poly",
-    qmodule: "Poly",
-    codegree: int,
-    basis: MonomialManager
-) -> Matrix:
-    """
-    Compute the constrained nullspace spanned by a given root. Consider:
-
-        `poly = CyclicSum(qmodule * SOS) + SOS_OTHERS`
-
-    where the poly vanishes at the given root. If the qmodule does not vanish,
-    then the associated SOS term must vanish.
-
-    For normal case, it is simply the span of the root. However, things become
-    nontrivial if the derivative is also zero. Imagine
-    f = a * (x'Mx) and f|_r = 0, (df/da)|_r = 0 where r = (a,b,c) and x = [a^3,a^2b,...].
-    When M >> 0 and a == 0, we still require Mx = 0 because
-    (df/da) = (x'Mx) + a * ((dx/da)'Mx + x'M(dx/da)) = x'Mx.
-    """
-    spans = []
-
-    if qmodule.is_monomial and not qmodule.is_zero and all(_ != 0 for _ in root.root):
-        vanish = lambda _: False
-    else:
-        vanish = lambda r: r.eval(qmodule) == 0
-
-    if qmodule.is_zero:
-        pass
-    elif root.is_Rational and qmodule.is_monomial:
-        # also compute high order dervs
-        monomial = tuple(qmodule.monoms()[0])
-        orders = _compute_nonvanishing_diff_orders(poly, root, monomial)
-        for order in orders:
-            # spans.append(root.span(codegree, order, symmetry=basis))
-            spans.append(_root_span(root, basis, codegree, order))
-    else:
-        # this is an incomplete (but fast) implementation
-        # we do not consider higher order derivatives
-        # TODO: consider higher order nonvanishing derivatives for irrational roots
-        if not vanish(root):
-            # spans.append(root.span(codegree, symmetry=basis))
-            spans.append(_root_span(root, basis, codegree))
-
-        # for j, permed_root in enumerate(_permute_root(perm_group, root)):
-        #     if not vanish(permed_root):
-        #         for i in range(span.shape[1]):
-        #             span2 = symmetry.permute_vec(span[:,i], codegree)[:,j]
-        #             spans.append(span2)
-
-    if len(spans):
-        return Matrix.hstack(*spans)
-    n = len(basis.inv_monoms(codegree)) if isinstance(basis, MonomialManager) else len(basis)
-    return Matrix.zeros(n, 0)
+def _root_span(root: Root, basis: "SOSBasis") -> Matrix:
+    """Evaluate the basis and extract rational coefficient vectors."""
+    values = [root._single_power_monomial(monom) for monom in basis._basis]
+    if root.is_Rational:
+        return rep_matrix_from_list(values, len(values), domain=root.domain)
+    return _algebraic_field_coeffs(values, root.domain)
 
 
 def _findroot_binary(poly: "Poly", symmetry: "PermutationGroup" = None) -> List[Root]:
@@ -318,46 +197,57 @@ def get_sos_nullspace(
     poly: "Poly",
     ineq_constraints: Dict[Any, "Poly"],
     eq_constraints: Dict[Any, "Poly"],
-    ineq_bases: Dict[Any, SOSBasis],
-    eq_bases: Dict[Any, SOSBasis],
-    degree: Optional[int]=None,
-    roots: List[Root] = [],
+    ineq_bases: Dict[Any, "SOSBasis"],
+    *,
+    roots: Sequence[Root] = (),
     perm_group: Optional["PermutationGroup"] = None,
-    time_limit: Optional[Union[Callable, float]]=None
+    time_limit: Optional[Union[Callable, float]]=None,
 ) -> Dict[Any, Matrix]:
-    """
-    In the current, all roots must satisfy poly(roots) == 0 and ineq_constraints(roots) >= 0,
-    and eq_constraints(roots) == 0, and this property will not be checked.
-    """
-    if degree is None:
-        degree = poly.total_degree()
-    # for root in roots:
-    #     is_feasible = True
-    #     for permed_root in _permute_root(perm_group, root):
-    #         if any(permed_root.eval(ineq) < 0 for ineq in ineq_constraints) or\
-    #                 any(permed_root.eval(eq) != 0 for eq in eq_constraints):
-    #             is_feasible = False
-    #             break
-    #     # print('root =', permed_root, 'is_feasible =', is_feasible)
-    #     if not is_feasible:
-    #         continue
+    """Derive Gram kernels from the identity at candidate zeros and lines.
 
+    Point evaluation also supports algebraic roots. Rational lines on the
+    ideal give further directions from the leading orders of the Gram terms.
+    """
     time_limit = ArithmeticTimeout.make_checker(time_limit)
+    if not roots:
+        return {}
+    jets = _collect_line_jets(
+        poly, ineq_constraints, ineq_bases,
+        eq_constraints.values(),
+        roots=roots, symmetry=perm_group, check_time=time_limit
+    )
+
+    # A zero of the target alone does not justify point kernels when
+    # nonzero weights of opposite signs can cancel.
+    inequalities = complete_constraints_by_symmetry(
+        [g for k, g in ineq_constraints.items() if len(ineq_bases[k])], perm_group)
+    equalities = complete_constraints_by_symmetry(
+        list(eq_constraints.values()), perm_group)
+    point_roots = []
+    for root in roots:
+        time_limit()
+        if not (root.is_Rational or root.domain.is_AlgebraicField):
+            continue
+        if root.eval(poly) != 0 or any(root.eval(h) != 0 for h in equalities):
+            continue
+        values = [root.eval(g) for g in inequalities]
+        if (all(v.is_nonnegative is True for v in values)
+                or all(v.is_nonpositive is True for v in values)):
+            point_roots.append(root)
+
     nullspaces = {}
-
-    for key, ineq in ineq_constraints.items():
-        spans = []
-        for root in roots:
-            span = _root_space(root, poly, qmodule=ineq,
-                        codegree=(degree-ineq.total_degree())//2, basis=ineq_bases[key])
+    for key, weight in ineq_constraints.items():
+        basis = ineq_bases[key]
+        if not len(basis):
+            continue
+        columns = dict.fromkeys(tuple(map(QQ.to_sympy, col)) for col in jets.get(key, {}))
+        for root in point_roots:
             time_limit()
-            if span.shape[1] > 0:
-                spans.append(solve_columnspace(span))
-            time_limit()
-
-        if len(spans):
-            nullspaces[key] = Matrix.hstack(*spans)
-
+            if root.eval(weight) != 0:
+                span = _root_span(root, basis)
+                columns.update(dict.fromkeys(tuple(col) for col in span.T.tolist() if any(col)))
+        if columns:
+            nullspaces[key] = Matrix(list(columns)).T
     return nullspaces
 
 

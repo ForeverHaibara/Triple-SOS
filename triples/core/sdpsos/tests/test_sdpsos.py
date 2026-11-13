@@ -61,6 +61,12 @@ class SDPSOSProblems:
         return pl('s(a4(a-b)(a-c))-5p(a-b)2'), [a,b,c], [], {'lift_degree_limit': 2}
 
     @classmethod
+    def problem_schur6_enhanced_scaled(cls):
+        return pl('s(a4(a-b)(a-c))-5p(a-b)2').as_expr().xreplace({
+            b: 2*b, c: 3*c
+        }), [a,b,c], [], {'lift_degree_limit': 2}
+
+    @classmethod
     def problem_isosceles_right(cls):
         return pl('s(a3(a-b)(a-c)(a2-b2-c2)2)'), [a,b,c], [], {'lift_degree_limit': 2}
 
