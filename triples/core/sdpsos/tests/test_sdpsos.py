@@ -3,6 +3,7 @@ from sympy.abc import a, b, c, d, r, s, x, y, z
 from ..sdpsos import SDPSOS
 from ....sdp.backends.clarabel_sdp import DualBackendCLARABEL
 from ....testing.doctest_parser import solution_checker
+from ....utils import pl
 
 import pytest
 
@@ -55,11 +56,28 @@ class SDPSOSProblems:
         g, h = r**2 - 2, s**2 - 2
         return g*h*(r**2 - 1)*(s**2 - 1) + (r*s + r + s + 2)**2, [g, h, g*h], []
 
+    @classmethod
+    def problem_schur6_enhanced(cls):
+        return pl('s(a4(a-b)(a-c))-5p(a-b)2'), [a,b,c], [], {'lift_degree_limit': 2}
+
+    @classmethod
+    def problem_isosceles_right(cls):
+        return pl('s(a3(a-b)(a-c)(a2-b2-c2)2)'), [a,b,c], [], {'lift_degree_limit': 2}
+
+    @classmethod
+    def problem_symmetric_quaternary_degree6(cls):
+        return pl('s(((((a+b-c)(a+b-d)-2ab)2+2(ab)2)-(a+b-c-d)2(c-d)2)(a-b)2)',
+            (a, b, c, d), 'sym'), [], [], {'lift_degree_limit': 4}
+
 
 @pytest.mark.slow
 @pytest.mark.parametrize("problem", SDPSOSProblems.collect().values(),
     ids=SDPSOSProblems.collect().keys())
 def test_sdpsos(problem):
     solver = 'clarabel' if HAS_CLARABEL else None
-    sol = SDPSOS(*problem(), solver=solver)
+    data = problem()
+    kwargs = {}
+    if len(data) >= 4:
+        data, kwargs = data[:3], data[3]
+    sol = SDPSOS(*data, solver=solver, **kwargs)
     assert solution_checker(sol)

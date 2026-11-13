@@ -5,6 +5,21 @@ from ..sos import SOSPoly
 import pytest
 
 
+@pytest.mark.parametrize('ideal, homogeneous, degrees', [
+    ([x-y], True, {2}),
+    ([x-y], None, {0, 1, 2}),
+    ([x-y-1], False, {0, 1, 2}),
+])
+def test_sos_zero_target_basis(ideal, homogeneous, degrees):
+    sos = SOSPoly(0, (x, y), qmodule=[1, -x**2], ideal=ideal,
+                  degree=4, is_homogeneous=homogeneous)
+    equations = sos._get_equation_system()
+    assert {sum(m) for m in sos._qmodule_bases[0]._basis} == degrees
+    assert {sum(m) for m in sos._ideal_bases[0]._basis} == (
+        {3} if homogeneous else {0, 1, 2, 3})
+    assert equations.rhs.is_zero_matrix
+
+
 def test_sos_recovery_with_face_equalities(capsys):
     pytest.importorskip('clarabel')
     f = ((x-z)**2 + (y-z)**2) * (x**2 + y**2 + z**2) / 13

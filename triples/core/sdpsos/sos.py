@@ -50,6 +50,10 @@ class SOSPoly(AtomSOSElement):
         respectively. The roots are used for reducing the degree of freedom of the SDPProblem
         by facial reduction. If `roots=None`, it applies a heuristic approach to find some
         roots automatically, but it might be slow. Defaults to an empty list.
+    is_homogeneous: Optional[bool]
+        Use bases of a single degree. By default this is inferred from the
+        target and generators. An explicit True also permits a zero target
+        at the declared degree, as in the identity for rational SOS.
 
 
     Examples
@@ -168,10 +172,12 @@ class SOSPoly(AtomSOSElement):
         qmodule: List[Union[Poly, "Expr"]] = [],
         ideal: List[Union[Poly, "Expr"]] = [],
         degree: Optional[int] = None,
+        *,
         symmetry: Optional["PermutationGroup"] = None,
         roots: Optional[List[Root]] = [],
         # qmodule_bases: Optional[List[Tuple[int, ...]]] = None,
         # ideal_bases: Optional[List[Tuple[int, ...]]] = None,
+        is_homogeneous: Optional[bool] = None,
     ):
         gens = tuple(gens)
         poly = Poly(poly, gens)
@@ -196,10 +202,14 @@ class SOSPoly(AtomSOSElement):
             if degree < 0 or degree < self.poly.total_degree():
                 raise ValueError("The degree should be nonnegative and no smaller than the total degree of the polynomial.")
 
-        is_homogeneous = self.poly.is_homogeneous \
+        homogeneous_data = self.poly.is_homogeneous \
             and all(_.is_homogeneous for _ in self._qmodule.values()) \
-            and all(_.is_homogeneous for _ in self._ideal.values()) \
-            and self.poly.total_degree() == degree
+            and all(_.is_homogeneous for _ in self._ideal.values())
+        target_degree_matches = self.poly.total_degree() == degree
+        if is_homogeneous is None:
+            is_homogeneous = homogeneous_data and target_degree_matches
+        elif is_homogeneous and not (homogeneous_data and (target_degree_matches or self.poly.is_zero)):
+            raise ValueError("Homogeneous bases require homogeneous generators and a target of the declared degree.")
         self.algebra = PolyRing(len(gens), degree=degree,
             symmetry=symmetry, is_homogeneous=is_homogeneous)
 

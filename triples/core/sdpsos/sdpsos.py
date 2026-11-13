@@ -334,7 +334,9 @@ class SDPSOSSolver(ProofNode):
         else:
             sos = SOSPoly(poly.zero, poly.gens,
                 qmodule = qmodule + poly_qmodule, ideal = ideal,
-                symmetry = symmetry.perm_group, roots = roots, degree=degree
+                symmetry = symmetry.perm_group, roots = roots, degree=degree,
+                # The zero target represents N - F*D, whose degree is known here.
+                is_homogeneous=self.problem.is_homogeneous,
             )
         sos.construct(
             wedderburn=configs['wedderburn'],
