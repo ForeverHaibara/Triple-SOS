@@ -1,19 +1,21 @@
-from typing import List, Tuple, Dict, Union, Optional, Callable, Any, TYPE_CHECKING
+from typing import List, Sequence, Tuple, Dict, Union, Optional, Callable, Any, TYPE_CHECKING
 # from warnings import warn
 from time import perf_counter
 
-from sympy import Poly
+from sympy import MutableDenseMatrix as Matrix, Poly
 
 from .algebra import PolyRing
 from .abstract import AtomSOSElement, ArithmeticTimeout
-from .manifold import get_sos_nullspace, complete_constraints_by_symmetry
+from .manifold import get_sos_jet_data, scan_jet_layers, complete_constraints_by_symmetry
 from .solution import sdp_solution_from_decomps
 from ...utils import CyclicSum, Root
+from ...sdp.facial import find_direction_exposing_nullspace
 
 if TYPE_CHECKING:
-    from sympy import MutableDenseMatrix as Matrix
     from sympy import Expr, Symbol
     from sympy.combinatorics import PermutationGroup
+
+    from .manifold import _Jet, _JetLayers
     from ..solution import Solution
 
 CHECK_SYMMETRY = True
@@ -54,6 +56,9 @@ class SOSPoly(AtomSOSElement):
         Use bases of a single degree. By default this is inferred from the
         target and generators. An explicit True also permits a zero target
         at the declared degree, as in the identity for rational SOS.
+    jet_recovery_rounds: int
+        Maximum number of joint exposure searches at mixed orders.
+        Zero keeps only the deductions from orders of a single sign.
 
 
     Examples
@@ -178,6 +183,7 @@ class SOSPoly(AtomSOSElement):
         # qmodule_bases: Optional[List[Tuple[int, ...]]] = None,
         # ideal_bases: Optional[List[Tuple[int, ...]]] = None,
         is_homogeneous: Optional[bool] = None,
+        jet_recovery_rounds: int = 3,
     ):
         gens = tuple(gens)
         poly = Poly(poly, gens)
@@ -218,6 +224,7 @@ class SOSPoly(AtomSOSElement):
 
 
         self.roots = roots
+        self._jet_recovery_rounds = max(0, jet_recovery_rounds)
 
     def find_roots(self,
         verbose: bool = False,
@@ -261,6 +268,22 @@ class SOSPoly(AtomSOSElement):
         """
         Compute the nullspaces of the matrices from the equality cases.
         """
+        check_time = ArithmeticTimeout.make_checker(time_limit)
+        points, lines = self._get_jet_data(roots, verbose, check_time)
+        columns = {key: dict.fromkeys(map(tuple, matrix.T.tolist()))
+                   for key, matrix in points.items()}
+        for line in lines:
+            check_time()
+            for mixed, (key, vector) in scan_jet_layers(line, lambda _: True):
+                if not mixed:
+                    columns.setdefault(key, {})[vector] = None
+        return {key: Matrix(list(vectors)).T for key, vectors in columns.items()}
+
+    def _get_jet_data(self,
+        roots: Optional[List[Root]],
+        verbose: bool,
+        time_limit: Optional[Union[Callable, float]],
+    ) -> Tuple[Dict[Any, Matrix], List["_JetLayers"]]:
         time_limit = ArithmeticTimeout.make_checker(time_limit)
         if roots is None:
             roots = self.find_roots(verbose=verbose, time_limit=time_limit)
@@ -270,7 +293,7 @@ class SOSPoly(AtomSOSElement):
         insert_prefix = lambda d: {(self, k): v for k, v in d.items()}
 
         time0 = perf_counter()
-        ns = get_sos_nullspace(
+        data = get_sos_jet_data(
             self.poly,
             insert_prefix(self._qmodule),
             insert_prefix(self._ideal),
@@ -282,7 +305,76 @@ class SOSPoly(AtomSOSElement):
         if verbose:
             print(f"Time for computing nullspace            : {perf_counter() - time0:.6f} seconds.")
             time0 = perf_counter()
-        return ns
+        return data
+
+    def _reduce_jet_faces(self, lines: Sequence["_JetLayers"], check_time: Callable[[], None]):
+        """Revisit mixed orders after each verified reduction of the Gram cone."""
+        node = self.sdpp
+        if not lines:
+            return node
+
+        columns: Dict[Any, Dict[Tuple, int]] = {}
+        for line in lines:
+            for layer in line:
+                for key, _, vector in layer:
+                    indices = columns.setdefault(key, {})
+                    indices.setdefault(vector, len(indices))
+        vectors = {}
+        owners = {}
+        for key, indices in columns.items():
+            check_time()
+            projected = self.sdp.propagate_nullspace_to_child(
+                {key: Matrix(list(indices)).T}, recursive=True)
+            vectors.update(projected)
+            owners.update(dict.fromkeys(projected, key))
+
+        def images(jet: "_Jet"):
+            source, vector = jet
+            index = columns[source][vector]
+            return [(key, tuple(col)) for key, matrix in blocks.get(source, ())
+                    for col in [matrix[:, index]] if not col.is_zero_matrix]
+
+        remaining_rounds = self._jet_recovery_rounds
+        while vectors:
+            check_time()
+            blocks: Dict[Any, List[Tuple[Any, Matrix]]] = {}
+            for key, matrix in vectors.items():
+                blocks.setdefault(owners[key], []).append((key, matrix))
+            kernels: Dict[Any, Dict[Tuple, None]] = {}
+            candidates: Dict[Tuple[Any, Tuple], None] = {}
+            projected_jets: Dict["_Jet", List[Tuple[Any, Tuple]]] = {}
+
+            def active(jet: "_Jet") -> bool:
+                if jet not in projected_jets:
+                    projected_jets[jet] = images(jet)
+                return bool(projected_jets[jet])
+
+            for line in lines:
+                check_time()
+                for mixed, jet in scan_jet_layers(line, active):
+                    for key, vector in projected_jets[jet]:
+                        if mixed:
+                            if len(candidates) < 128:
+                                candidates[key, vector] = None
+                        else:
+                            kernels.setdefault(key, {})[vector] = None
+            if kernels:
+                nullspace = {key: Matrix(list(cols)).T for key, cols in kernels.items()}
+            elif remaining_rounds > 0 and candidates:
+                remaining_rounds -= 1
+                nullspace = find_direction_exposing_nullspace(
+                    node._x0_and_space, [(key, Matrix(v)) for key, v in candidates], check_time)
+            else:
+                break
+            if not nullspace:
+                break
+            child = node.constrain_nullspace(nullspace, to_child=False, time_limit=check_time)
+            if sum(child.size.values()) >= sum(node.size.values()):
+                break
+            vectors = node.propagate_nullspace_to_child(vectors)
+            node = child
+        return node
+
 
     def _post_construct(self,
         wedderburn: bool = True,
@@ -300,10 +392,11 @@ class SOSPoly(AtomSOSElement):
             **kwargs
         )
 
-        ns = self.get_nullspace(verbose=verbose, time_limit=time_limit)
+        ns, lines = self._get_jet_data(None, verbose, time_limit)
 
         time0 = perf_counter()
-        new_sdp = self.sdp.constrain_nullspace(ns, to_child=True, time_limit=time_limit)
+        self.sdp.constrain_nullspace(ns, to_child=True, time_limit=time_limit)
+        new_sdp = self._reduce_jet_faces(lines, time_limit)
 
         if verbose:
             print(f"Time for constraining nullspace         : {perf_counter() - time0:.6f} seconds."

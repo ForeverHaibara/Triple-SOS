@@ -29,6 +29,9 @@ if TYPE_CHECKING:
 _Monomial = Tuple[int, ...]
 _Coefficients = Mapping[_Monomial, MPQ]
 _GramBlock = Tuple[Any, _Coefficients, Sequence[_Monomial]]
+_Jet = Tuple[Any, Tuple[MPQ, ...]]
+_SignedJet = Tuple[Any, bool, Tuple[MPQ, ...]]
+_JetLayers = Tuple[Tuple[_SignedJet, ...], ...]
 
 
 def _order(poly: "PolyElement") -> int:
@@ -42,14 +45,13 @@ def _parametrization_jets(
     blocks: Sequence[_GramBlock],
     parametrization: Sequence["PolyElement"],
     permutations: Sequence[Sequence[int]] = (),
-) -> Iterator[Tuple[Any, Tuple[MPQ, ...]]]:
-    """Derive kernel coefficients until opposite leading terms can cancel.
+) -> _JetLayers:
+    """Prepare successive orders of the Gram terms on one parametrization.
 
     The coordinates are polynomials in a common univariate ring over QQ,
     with the base point at parameter zero. A nonzero Gram term has leading
-    order d + 2*j and the sign of its
-    weight, where d is the weight order and j is its first surviving basis
-    coefficient after applying a square root of the Gram matrix.
+    order d + 2*j and the sign of its weight. Here d is the weight order,
+    and j is the first basis coefficient outside the Gram kernel.
     """
     ring = parametrization[0].ring
     cache: Dict[_Monomial, PolyElement] = {}
@@ -68,7 +70,7 @@ def _parametrization_jets(
                     for m, c in poly.items()), ring.zero)
 
     if any(restrict(h) for h in equalities):
-        return
+        return ()
     rhs = restrict(target)
     rhs_order = _order(rhs) if rhs else float('inf')
     # Restrict each orbit term separately: an invariant SOS sum can contain
@@ -92,7 +94,7 @@ def _parametrization_jets(
     # The target is a fixed term on the other side. Work strictly below its
     # first nonzero order, where its coefficients cannot participate.
     if not terms:
-        return
+        return ()
     by_order = defaultdict(list)
     for key, d, positive, monoms in terms:
         evaluated = [monomial(m) for m in monoms]
@@ -104,14 +106,19 @@ def _parametrization_jets(
             if any(column):
                 by_order[d+2*j].append((key, positive, column))
 
-    # Once cancellation is possible, later coefficients of surviving terms
-    # may have either sign. Only the lower orders give a kernel certificate.
-    for order in sorted(by_order):
-        layer = by_order[order]
-        if len({positive for _, positive, _ in layer}) == 2:
-            return
-        for key, _, column in layer:
-            yield key, column
+    return tuple(tuple(by_order[order]) for order in sorted(by_order))
+
+
+def scan_jet_layers(layers: _JetLayers, survives: Callable[[_Jet], bool]) -> Iterator[Tuple[bool, _Jet]]:
+    """Yield proven directions and the first layer that can still cancel."""
+    for layer in layers:
+        active = [(key, positive, column) for key, positive, column in layer
+                  if survives((key, column))]
+        mixed = len({positive for _, positive, _ in active}) == 2
+        for key, _, column in active:
+            yield mixed, (key, column)
+        if mixed:
+            break
 
 
 def _collect_line_jets(
@@ -122,15 +129,15 @@ def _collect_line_jets(
     *,
     roots: Sequence[Root],
     symmetry: Optional["PermutationGroup"],
-    check_time: Callable[[], None]
-) -> Dict[Any, Dict[Tuple[MPQ, ...], None]]:
+    check_time: Callable[[], None],
+) -> List[_JetLayers]:
     nvars = len(target.gens)
     if nvars > 4 or not roots:
-        return {}
+        return []
     equalities = complete_constraints_by_symmetry(list(ideal), symmetry)
     if not all(p.domain.is_ZZ or p.domain.is_QQ for p in [
             target, *inequalities.values(), *equalities]):
-        return {}
+        return []
 
     def coefficients(poly: "Poly") -> _Coefficients:
         return poly.set_domain(QQ).rep.to_dict()
@@ -142,7 +149,7 @@ def _collect_line_jets(
               for k, p in inequalities.items() if len(bases[k])]
     permutations = ([tuple(p(i) if i < p.size else i for i in range(nvars))
                      for p in symmetry.elements] if symmetry is not None else [])
-    columns: Dict[Any, Dict[Tuple[MPQ, ...], None]] = defaultdict(dict)
+    lines: Dict[_JetLayers, None] = {}
     points = dict.fromkeys(
         tuple(QQ.convert(p, root.domain) for p in root.rep)
         for root in roots if root.is_Rational and root.rep is not None)
@@ -158,10 +165,11 @@ def _collect_line_jets(
                 continue
             check_time()
             parametrization = tuple(p + v*t for p, v in zip(point, direction))
-            for key, vector in _parametrization_jets(
-                    target_coeffs, eq_coeffs, blocks, parametrization, permutations):
-                columns[key][vector] = None
-    return columns
+            layers = _parametrization_jets(
+                target_coeffs, eq_coeffs, blocks, parametrization, permutations)
+            if layers:
+                lines[layers] = None
+    return list(lines)
 
 
 def _root_span(root: Root, basis: "SOSBasis") -> Matrix:
@@ -193,7 +201,7 @@ def _findroot_binary(poly: "Poly", symmetry: "PermutationGroup" = None) -> List[
     return roots
 
 
-def get_sos_nullspace(
+def get_sos_jet_data(
     poly: "Poly",
     ineq_constraints: Dict[Any, "Poly"],
     eq_constraints: Dict[Any, "Poly"],
@@ -202,16 +210,16 @@ def get_sos_nullspace(
     roots: Sequence[Root] = (),
     perm_group: Optional["PermutationGroup"] = None,
     time_limit: Optional[Union[Callable, float]]=None,
-) -> Dict[Any, Matrix]:
-    """Derive Gram kernels from the identity at candidate zeros and lines.
+) -> Tuple[Dict[Any, Matrix], List[_JetLayers]]:
+    """Return point kernels and the ordered Gram coefficients along each line.
 
-    Point evaluation also supports algebraic roots. Rational lines on the
-    ideal give further directions from the leading orders of the Gram terms.
+    Point evaluation also supports algebraic roots. The line data can be
+    rescanned after imposing kernels without expanding the polynomials again.
     """
     time_limit = ArithmeticTimeout.make_checker(time_limit)
     if not roots:
-        return {}
-    jets = _collect_line_jets(
+        return {}, []
+    lines = _collect_line_jets(
         poly, ineq_constraints, ineq_bases,
         eq_constraints.values(),
         roots=roots, symmetry=perm_group, check_time=time_limit
@@ -240,7 +248,7 @@ def get_sos_nullspace(
         basis = ineq_bases[key]
         if not len(basis):
             continue
-        columns = dict.fromkeys(tuple(map(QQ.to_sympy, col)) for col in jets.get(key, {}))
+        columns: Dict[Tuple, None] = {}
         for root in point_roots:
             time_limit()
             if root.eval(weight) != 0:
@@ -248,7 +256,7 @@ def get_sos_nullspace(
                 columns.update(dict.fromkeys(tuple(col) for col in span.T.tolist() if any(col)))
         if columns:
             nullspaces[key] = Matrix(list(columns)).T
-    return nullspaces
+    return nullspaces, lines
 
 
 def complete_constraints_by_symmetry(polys: List[Union["Poly", "PseudoPoly"]], symmetry=None):

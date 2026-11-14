@@ -287,9 +287,8 @@ def find_spectral_exposing_nullspace(
     if sum(n*n for n in sizes.values()) * width > _MAX_SPECTRAL_COEFFICIENTS:
         return {}
 
-    directions: List[Tuple[Any, Tuple[int, ...]]] = []
-    costs: List[float] = []
-    columns = []
+    directions = []
+    pencils = {}
     for key, n in sizes.items():
         remaining = remaining_time()
         if remaining is not None and remaining <= 0:
@@ -301,20 +300,57 @@ def find_spectral_exposing_nullspace(
         with np.errstate(over='ignore', invalid='ignore'):
             matrix = (pencil[:, 0] + pencil[:, 1:] @ y).reshape(n, n)
         for vector, residual in _spectral_directions(matrix, remaining_time):
-            v = np.asarray(vector, dtype=float)
-            with np.errstate(over='ignore', invalid='ignore'):
-                columns.append(np.outer(v, v).reshape(-1) @ pencil)
-            directions.append((key, vector))
-            costs.append(residual)
+            directions.append((key, Matrix(vector), residual))
+        pencils[key] = pencil
+    return _expose_directions(blocks, directions, pencils, remaining_time)
+
+
+def find_direction_exposing_nullspace(
+    blocks: Dict[Any, Tuple[Matrix, Matrix]],
+    directions: Sequence[Tuple[Any, Matrix]],
+    remaining_time: Callable[[], Optional[float]],
+) -> Dict[Any, Matrix]:
+    """Try a bounded list of rational directions against the full affine pencil."""
+    if not directions or len(directions) > _MAX_SUPPORT:
+        return {}
+    keys = dict.fromkeys(k for k, _ in directions)
+    if any(k not in blocks or v.shape != (sqrtsize_of_mat(blocks[k][0].rows), 1)
+           or not is_zz_qq_mat(v) for k, v in directions):
+        return {}
+    if (sum(blocks[k][0].rows * (1 + blocks[k][1].cols) for k in keys)
+            > _MAX_SPECTRAL_COEFFICIENTS):
+        return {}
+    if not all(is_zz_qq_mat(m) for k in keys for m in blocks[k]):
+        return {}
+    pencils = {}
+    for k in keys:
+        remaining_time()
+        a, A = blocks[k]
+        pencils[k] = rep_matrix_to_numpy(a.row_join(A))
+    return _expose_directions(blocks, [(k, v, 0.) for k, v in directions],
+                              pencils, remaining_time)
+
+
+def _expose_directions(
+    blocks: Dict[Any, Tuple[Matrix, Matrix]],
+    directions: Sequence[Tuple[Any, Matrix, float]],
+    pencils: Dict[Any, np.ndarray],
+    remaining_time: Callable[[], Optional[float]],
+) -> Dict[Any, Matrix]:
     if not directions:
         return {}
-
+    columns, costs = [], []
+    for key, vector, cost in directions:
+        v = rep_matrix_to_numpy(vector).ravel()
+        with np.errstate(over='ignore', invalid='ignore'):
+            columns.append(np.outer(v, v).reshape(-1) @ pencils[key])
+        costs.append(cost)
+        remaining_time()
     for indices in _candidate_supports(np.asarray(columns).T, np.asarray(costs), remaining_time):
         forms: List[Matrix] = []
         vectors: List[Tuple[Any, Matrix]] = []
         for index in indices:
-            key, vector = directions[index]
-            direction = Matrix(vector)
+            key, direction, _ = directions[index]
             a, A = blocks[key]
             weights = (direction * direction.T).reshape(1, a.rows)
             forms.append(cast(Matrix, matmul(weights, a.row_join(A), time_limit=remaining_time)))
