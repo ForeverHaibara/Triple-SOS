@@ -1,5 +1,6 @@
 """Search for exact exposing certificates in PSD subcones."""
 
+import warnings
 from fractions import Fraction
 from itertools import chain
 from math import gcd
@@ -7,6 +8,7 @@ from typing import (
     Any, Dict, Iterator, List, Mapping,
     NamedTuple, Optional, Sequence, Tuple, cast, TYPE_CHECKING
 )
+
 import numpy as np
 from scipy import __version__ as _SCIPY_VERSION
 from scipy.linalg import qr
@@ -163,9 +165,11 @@ def _lp_supports(
     try:
         if _HAS_HIGHS:
             options['time_limit'] = check_lp_time.remaining()
-        result = linprog(objective, A_eq=np.vstack([coefficients, np.ones(count)]),
-            b_eq=np.r_[np.zeros(width), 1.], bounds=(0, None), method=method,
-            options=options, callback=callback)
+        with warnings.catch_warnings(record=True):
+            warnings.simplefilter('once')
+            result = linprog(objective, A_eq=np.vstack([coefficients, np.ones(count)]),
+                b_eq=np.r_[np.zeros(width), 1.], bounds=(0, None), method=method,
+                options=options, callback=callback)
     except ArithmeticTimeout:
         check_time()
         return
