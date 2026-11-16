@@ -11,8 +11,13 @@ from sympy.matrices.repmatrix import RepMatrix
 from sympy.polys.domains import QQ # EXRAW >= 1.9
 from sympy.polys.matrices.ddm import DDM
 from sympy.polys.matrices.domainmatrix import DomainMatrix # polys.matrices >= 1.8
-from sympy.polys.matrices.exceptions import DMNonInvertibleMatrixError
 from sympy.polys.matrices.sdm import SDM
+try:
+    from sympy.polys.matrices.exceptions import DMNonInvertibleMatrixError
+except ImportError:
+    # SymPy 1.9 re-exports the exception used by the DomainMatrix LU solver here.
+    from sympy.polys.matrices.exceptions import NonInvertibleMatrixError as DMNonInvertibleMatrixError
+
 try:
     from sympy.external.gmpy import gcd
 except ImportError:

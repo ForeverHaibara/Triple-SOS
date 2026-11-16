@@ -78,3 +78,9 @@ def test_recover_affine_candidates():
 
     b[0] += 1
     assert not list(recover_affine_candidates(A, b, y, [12]))
+
+    # Rounding subnormal entries makes this exact rank-one matrix appear
+    # full rank to QR. The exact solve must discard the singular pivot.
+    singular = Rational(8, 5 * 2**1074) * Matrix([[1, 2], [2, 4]])
+    assert not list(recover_affine_candidates(
+        singular, Matrix.zeros(2, 1), np.zeros(2), [1]))

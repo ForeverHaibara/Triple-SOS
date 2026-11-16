@@ -20,7 +20,12 @@ COMPATIBILITY_RULES = {
             "module": "sympy.matrices.matrixbase",
             "name": "MatrixBase",
             "message": "sympy.matrices.matrixbase is not available in SymPy 1.9",
-        }
+        },
+        {
+            "module": "sympy.polys.matrices.exceptions",
+            "name": "DMNonInvertibleMatrixError",
+            "message": "DMNonInvertibleMatrixError is not available in SymPy 1.9",
+        },
     ),
     "attributes": (
         {
