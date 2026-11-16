@@ -1,5 +1,5 @@
 from time import perf_counter
-from typing import Tuple, List, Dict, Union, Optional, Any, Callable, TYPE_CHECKING
+from typing import Tuple, List, Dict, Union, Optional, Any, Callable, NamedTuple, Sequence, TYPE_CHECKING
 
 import numpy as np
 from scipy.linalg import qr
@@ -70,6 +70,23 @@ def _prepare_feasibility_blocks(blocks: Dict[Any, Tuple[Matrix, Matrix]],
         numerical[key] = (offset, np.hstack([coefficients, -np.eye(n).reshape(n*n, 1)]))
         check_time()
     return numerical, tuple(scales)
+
+
+class _FeasibilityModel(NamedTuple):
+    objective: np.ndarray
+    constraints: List[Tuple[np.ndarray, float, str]]
+
+
+def _feasibility_models(dof: int, relaxation: float) -> List[_FeasibilityModel]:
+    objective = np.zeros(dof + 1)
+    objective[-1] = -1
+    models = [_FeasibilityModel(objective, [(objective, 0, '<'), (objective, -5, '>')])]
+    if relaxation > 0:
+        # The last variable is t, so this equality imposes -t = relaxation.
+        models.append(_FeasibilityModel(
+            np.zeros_like(objective),
+            [(objective, relaxation, '==')]))
+    return models
 
 
 class SDPProblem(TransformableDual):
@@ -1075,7 +1092,7 @@ class SDPProblem(TransformableDual):
         return None
 
     def _recover_on_exposed_face(self,
-        attempt: SDPNumericalResult,
+        attempts: Sequence[SDPNumericalResult],
         *,
         remaining_time: Callable[[], Optional[float]],
         solver: Optional[str],
@@ -1096,11 +1113,17 @@ class SDPProblem(TransformableDual):
         def check_time() -> None:
             remaining_time()
 
-        nullspace = find_exposing_nullspace(
-            self._x0_and_space, y=_get_numerical_y(attempt), dual=attempt.dual_blocks,
-            remaining_time=remaining_time,
-        )
-        if not nullspace:
+        # Check the newest hints first and run the hint-independent search once.
+        for index in reversed(range(len(attempts))):
+            hint = attempts[index]
+            nullspace = find_exposing_nullspace(
+                self._x0_and_space, y=_get_numerical_y(hint), dual=hint.dual_blocks,
+                coordinate_level=0 if index else 2,
+                remaining_time=remaining_time,
+            )
+            if nullspace:
+                break
+        else:
             return None
 
         retry_kwargs = kwargs.copy()
@@ -1150,18 +1173,97 @@ class SDPProblem(TransformableDual):
         remaining_time()
         return DualRationalizer(self).decompose(A @ y + b)
 
+    def _solve_feasibility_models(
+        self,
+        blocks: Dict[Any, Tuple[np.ndarray, np.ndarray]],
+        block_scales: Tuple[Tuple[Any, float], ...],
+        models: Sequence[_FeasibilityModel],
+        *,
+        time_limit: Callable[[], None],
+        remaining_time: Callable[[], Optional[float]],
+        solver: Optional[str],
+        verbose: bool,
+        certify_infeasibility: bool,
+        kwargs: Dict[Any, Any],
+    ) -> Tuple[List[SDPNumericalResult], Optional[Tuple[Matrix, 'Decomp']]]:
+        """Try numerical formulations and certify their results against this pencil."""
+        attempts: List[SDPNumericalResult] = []
+        for index, model in enumerate(models):
+            options = kwargs
+            check_attempt_time: Callable[[], Optional[float]] = time_limit
+            attempt_remaining_time = remaining_time
+            if index:
+                previous = attempts[-1].result
+                if previous.inf_or_unb or not (previous.inaccurate or previous.error):
+                    break
+                available = remaining_time()
+                budget = 30. if available is None else min(30., available / 2)
+                if budget <= 0:
+                    break
+                options = dict(kwargs, time_limit=budget)
+                deadline = perf_counter() + budget
+
+                def check_budget() -> float:
+                    remaining = remaining_time()
+                    left = deadline - perf_counter()
+                    if left <= 0:
+                        raise ArithmeticTimeout()
+                    return left if remaining is None else min(left, remaining)
+
+                check_attempt_time = attempt_remaining_time = check_budget
+
+            try:
+                result = solve_numerical_dual_sdp(
+                    blocks, objective=model.objective, constraints=model.constraints,
+                    solver=solver, return_result=True, **options,
+                )
+                assert isinstance(result, SDPResult)
+                attempt = SDPNumericalResult(result, 1, block_scales)
+                attempts.append(attempt)
+                self._numerical_results.append(attempt)
+                check_attempt_time()
+                y = _get_numerical_y(attempt)
+
+                if y is not None and np.isfinite(y).all():
+                    solution = self.rationalize(y, verbose=verbose, time_limit=check_attempt_time)
+                    if solution is not None:
+                        return attempts, solution
+
+                if (certify_infeasibility and result.dual is not None
+                        and (result.inf_or_unb or result.error)):
+                    separator = DualRationalizer(self).rationalize_infeasibility(
+                        attempt.dual_blocks, remaining_time=attempt_remaining_time,
+                    )
+                    if separator is not None:
+                        certificate, decompositions = separator
+                        raise SDPInfeasibleError(result, self, certificate, decompositions)
+            except SDPInfeasibleError:
+                raise
+            except ArithmeticTimeout as e:
+                if not index:
+                    if attempts and not isinstance(e, SDPTimeoutError):
+                        raise SDPTimeoutError(attempts[-1].result) from e
+                    raise
+                remaining_time()
+            except SDPError:
+                if not index:
+                    raise
+                remaining_time()
+        return attempts, None
+
     def solve(self,
         solver: Optional[str] = None,
+        *,
         solve_child: bool = True,
         propagate_to_parent: bool = True,
         verbose: bool = False,
         time_limit: Optional[float] = None,
         allow_numer: int = 0,
         normalize: bool = True,
+        retry_relaxation: float = 0.,
         recovery_rounds: int = 2,
         recovery_with_equalities: bool = False,
         kwargs: Dict[Any, Any] = {},
-        *,
         certify_infeasibility: bool = True,
     ) -> Optional[Matrix]:
         """
@@ -1198,26 +1300,34 @@ class SDPProblem(TransformableDual):
             Whether to allow inexact, numerical feasible solutions. This is useful when the
             SDP is weakly feasible and no rational solution is found successfully.
 
+        normalize : bool
+            Whether to normalize the SDP. Defaults to True.
+
+        retry_relaxation : float
+            Positive amount of PSD relaxation for one numerical probe after an
+            inaccurate or erroneous solve yields no rational certificate.
+            The probe fixes the margin to -retry_relaxation and uses at most
+            half the remaining time, capped at 30 seconds. Its iterate is
+            only used to search for an exact solution of the original SDP.
+            Set to zero to disable the probe (default).
+
         recovery_rounds : int
-            Maximum number of retries on exactly certified faces after
-            the numerical solve fails to yield a rational solution. The
-            search can use dual directions and joint diagonal/DD certificates.
-            Set to zero to disable these retries.
+            Maximum number of retries on exactly certified faces after the
+            numerical solve fails to yield a rational solution. Set to zero
+            to disable these retries.
 
         recovery_with_equalities : bool
             Try an experimental numerical solve with explicit face equations
             before constructing the exact affine parameterization in each retry.
 
         kwargs : Dict
-            Extra kwargs passed to `sdp.backends.solve_numerical_dual_sdp`. Accepted kwargs keys:
-            `verbose`, `max_iters`, `tol_gap_abs`, `tol_gap_rel`, `tol_fsb_abs`, `tol_fsb_rel`, `solver_options`,
-            etc.
+            Extra kwargs passed to `sdp.backends.solve_numerical_dual_sdp`, such
+            as tolerances, iteration limits, and backend solver options.
 
         certify_infeasibility : bool
             Try to recover an exact rational separator when a failed numerical
             solve supplies dual blocks. If verified, raise SDPInfeasibleError.
-            Set to False to skip this search, including in facial reduction
-            retries. Defaults to True.
+            Defaults to True, including in facial reduction retries.
 
         Returns
         ----------
@@ -1346,6 +1456,8 @@ class SDPProblem(TransformableDual):
             [             2.0, 1.41421356161294],
             [1.41421356161294,              1.0]])}
         """
+        if not np.isfinite(retry_relaxation) or retry_relaxation < 0:
+            raise ValueError("retry_relaxation must be finite and nonnegative")
         original_self = self
         end_time = perf_counter() + time_limit if isinstance(time_limit, (int, float)) else None
         _time_limit = ArithmeticTimeout.make_checker(time_limit=time_limit)
@@ -1364,9 +1476,7 @@ class SDPProblem(TransformableDual):
         try:
             x0_and_space, block_scales = _prepare_feasibility_blocks(
                 self._x0_and_space, normalize, check_time=_time_limit)
-            objective = np.zeros(self.dof + 1)
-            objective[-1] = -1
-            constraints = [(objective, 0, '<'), (objective, -5, '>')]
+            models = _feasibility_models(self.dof, retry_relaxation)
         except ArithmeticTimeout as e:
             raise SDPTimeoutError.from_kwargs() from e
 
@@ -1387,31 +1497,23 @@ class SDPProblem(TransformableDual):
                 return backend_end_time - perf_counter()
             return None
 
-        sol = solve_numerical_dual_sdp(
-            x0_and_space, objective=objective, constraints=constraints,
-            solver=solver, return_result=True, **kwargs
-        )
-        assert isinstance(sol, SDPResult)
-        attempt = SDPNumericalResult(sol, 1, block_scales)
-        self._numerical_results.append(attempt)
-        y = _get_numerical_y(attempt)
-
+        sol = None
         try:
-            _time_limit()
-            solution = None if y is None else self.rationalize(y, verbose=verbose, time_limit=_time_limit)
-            if (certify_infeasibility and solution is None and sol.dual is not None
-                    and (sol.inf_or_unb or sol.error)):
-                separator = DualRationalizer(self).rationalize_infeasibility(
-                    attempt.dual_blocks, remaining_time=remaining_time)
-                if separator is not None:
-                    certificate, decompositions = separator
-                    raise SDPInfeasibleError(sol, self, certificate, decompositions)
+            attempts, solution = self._solve_feasibility_models(
+                x0_and_space, block_scales, models, time_limit=_time_limit,
+                remaining_time=remaining_time, solver=solver, verbose=verbose,
+                certify_infeasibility=certify_infeasibility, kwargs=kwargs,
+            )
+            initial = attempts[0]
+            sol = initial.result
+            y = _get_numerical_y(initial)
             if solution is None and recovery_rounds > 0:
-                solution = self._recover_on_exposed_face(attempt,
+                solution = self._recover_on_exposed_face(attempts,
                     remaining_time=remaining_time, solver=solver, verbose=verbose,
                     normalize=normalize, kwargs=kwargs, recovery_rounds=recovery_rounds,
                     recovery_with_equalities=recovery_with_equalities,
                     certify_infeasibility=certify_infeasibility)
+
             if solution is not None:
                 self.y = solution[0]
                 self.S = {key: S[0] for key, S in solution[1].items()}
@@ -1423,7 +1525,11 @@ class SDPProblem(TransformableDual):
                 self.register_y(y, perturb=True, propagate_to_parent=False)
             else:
                 raise SDPRationalizeError(sol)
+        except SDPTimeoutError:
+            raise
         except ArithmeticTimeout as e:
+            if sol is None:
+                raise SDPTimeoutError.from_kwargs() from e
             raise SDPTimeoutError(sol) from e
 
         if propagate_to_parent:

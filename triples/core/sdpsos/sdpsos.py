@@ -244,6 +244,9 @@ class SDPSOSSolver(ProofNode):
         eigenvalue exceeds this threshold. By default, continue the search.
     normalize: bool
         Use automatic normalization before solving SDP. Default is True.
+    retry_relaxation: float
+        Positive amount of PSD relaxation for a numerical retry after a stalled
+        solve. The candidate is verified against the original SDP. Default is 0.
     recovery_rounds: int
         Maximum number of retries on certified faces per SDP. Use 0 to disable
         these retries. Default is 2.
@@ -261,6 +264,7 @@ class SDPSOSSolver(ProofNode):
         "preordering": "linear-progressive",
         "unstable_eig_threshold": None,
         "normalize": True,
+        "retry_relaxation": 0.,
         "recovery_rounds": 2,
         "verbose": False,
     }
@@ -451,6 +455,7 @@ class SDPSOSSolver(ProofNode):
                     time_limit=configs['expected_end_time'] - perf_counter(),
                     allow_numer=configs['allow_numer'],
                     normalize=configs['normalize'],
+                    retry_relaxation=configs['retry_relaxation'],
                     recovery_rounds=configs['recovery_rounds'],
                     kwargs=configs['solve_kwargs']
                 )
@@ -586,6 +591,7 @@ def SDPSOS(
     preordering: str = 'linear-progressive',
     unstable_eig_threshold: Optional[float] = None,
     normalize: bool = True,
+    retry_relaxation: float = 0.,
     recovery_rounds: int = 2,
     verbose: bool = False,
     time_limit: float = 3600.,
@@ -624,6 +630,9 @@ def SDPSOS(
     recovery_rounds: int
         Maximum number of retries on certified faces per SDP. Use 0 to disable
         these retries. Default is 2.
+    retry_relaxation: float
+        Positive amount of PSD relaxation for a bounded numerical retry after
+        an inaccurate or failed solve. Default is 0 (disabled).
     ineq_constraints_with_trivial: bool
         Whether to add the trivial inequality constraint 1 >= 0. This is used to generate the
         quadratic module. Default is True.
@@ -701,6 +710,7 @@ def SDPSOS(
             "ineq_constraints_with_trivial": ineq_constraints_with_trivial,
             "preordering": preordering,
             "normalize": normalize,
+            "retry_relaxation": retry_relaxation,
             "recovery_rounds": recovery_rounds,
             "unstable_eig_threshold": unstable_eig_threshold,
             "verbose": verbose,

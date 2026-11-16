@@ -169,6 +169,7 @@ class SOSElement:
         normalize: bool = True,
         kwargs: Dict[Any, Any] = {},
         recovery_rounds: int = 2,
+        retry_relaxation: float = 0.,
         recovery_with_equalities: bool = False
     ) -> Optional[Matrix]:
         """
@@ -185,6 +186,7 @@ class SOSElement:
                 time_limit=rest_time, allow_numer=allow_numer,
                 normalize=normalize, kwargs=kwargs,
                 recovery_rounds=recovery_rounds,
+                retry_relaxation=retry_relaxation,
                 recovery_with_equalities=recovery_with_equalities)
 
     def as_solution(self, *args, **kwargs):

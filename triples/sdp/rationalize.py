@@ -104,7 +104,9 @@ class DualRationalizer:
             decomps[key] = (s, U, diag)
         return y, decomps
 
-    def nullspaces_lll(self, y: np.ndarray) -> Dict[Any, Matrix]:
+    def nullspaces_lll(
+        self, y: np.ndarray, *, time_limit: Optional[Union[Callable, float]] = None,
+    ) -> Dict[Any, Matrix]:
         """
         Infer the nullspaces of PSD matrices by the LLL algorithm, see [1].
 
@@ -113,6 +115,8 @@ class DualRationalizer:
         [1] David Monniaux. On using sums-of-squares for exact computations without
         strict feasibility. 2010. hal-00487279.
         """
+        check_time = ArithmeticTimeout.make_checker(time_limit=time_limit)
+        check_time()
         eigvalsh = self.eigvalsh(y)
 
         y = rep_matrix_from_numpy(y)
@@ -120,6 +124,7 @@ class DualRationalizer:
         V = {}
         trunc = self.LLL_TRUNC
         for key, s in S.items():
+            check_time()
             eigs = eigvalsh[key]
             if len(eigs) == 0:
                 # empty block
@@ -148,13 +153,14 @@ class DualRationalizer:
                 v = Matrix.zeros(s.shape[0], 0)
 
             V[key] = v
+        check_time()
         return V
 
     def rationalize_lll(self, y: np.ndarray,
             *, time_limit: Optional[Union[Callable, float]] = None) -> Optional[Tuple[Matrix, Decomp]]:
         time_limit = ArithmeticTimeout.make_checker(time_limit=time_limit)
 
-        V = self.nullspaces_lll(y)
+        V = self.nullspaces_lll(y, time_limit=time_limit)
         eq_space = []
         eq_rhs = []
         for key, (x0, space) in self.x0_and_space.items():
