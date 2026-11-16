@@ -1,5 +1,7 @@
-from typing import Tuple, List, Dict, Union, Optional, Any, Callable, NamedTuple, Sequence, TYPE_CHECKING
-
+from typing import (
+    Tuple, List, Dict, Union, Optional, Any,
+    Callable, NamedTuple, Sequence, TYPE_CHECKING
+)
 import numpy as np
 from scipy.linalg import qr
 from sympy import Symbol, MatrixBase
@@ -8,11 +10,15 @@ from sympy import MutableDenseMatrix as Matrix
 from .abstract import SDPNumericalResult, _get_numerical_y
 from .arithmetic import (
     ArithmeticTimeout, solve_csr_linear, free_symbols_of_mat,
-    rep_matrix_from_dict, rep_matrix_to_numpy, rep_matrix_to_scipy, rep_matrix_from_numpy, sqrtsize_of_mat,
+    rep_matrix_from_dict, rep_matrix_to_numpy, rep_matrix_to_scipy,
+    rep_matrix_from_numpy, sqrtsize_of_mat,
     principal_basis,
 )
 from .arithmetic.linsolve import _is_column_separated, recover_affine_candidates
-from .backends import SDPResult, SDPError, SDPInfeasibleError, SDPTimeoutError, solve_numerical_dual_sdp
+from .backends import (
+    SDPResult, SDPError, SDPInfeasibleError, SDPTimeoutError,
+    solve_numerical_dual_sdp
+)
 from .facial import find_exposing_nullspace
 from .rationalize import SDPRationalizeError, DualRationalizer
 from .transforms import TransformableDual
@@ -26,7 +32,7 @@ if TYPE_CHECKING:
     from sympy.core.relational import Relational
 
     from .abstract import Decomp
-    from .arithmetic import TimeChecker, TimeLimit
+    from .arithmetic import TimeLimit
 
 def _get_unique_symbols(used_symbols, dof: int, xname: str = 'y'):
     """
@@ -51,10 +57,15 @@ def _get_unique_symbols(used_symbols, dof: int, xname: str = 'y'):
     return [Symbol(xname + str(i) + '}') for i in range(max_digit, max_digit + dof)]
 
 
-def _prepare_feasibility_blocks(blocks: Dict[Any, Tuple[Matrix, Matrix]],
-        normalize: bool, *, check_time: 'TimeChecker'
+def _prepare_feasibility_blocks(
+    blocks: Dict[Any, Tuple[Matrix, Matrix]],
+    *,
+    normalize: bool = True,
+    time_limit: 'TimeLimit' = None
 ) -> Tuple[Dict[Any, Tuple[np.ndarray, np.ndarray]], Tuple[Tuple[Any, float], ...]]:
     """Convert affine PSD blocks to numerical blocks with an appended margin."""
+    check_time = ArithmeticTimeout.make_checker(time_limit)
+
     numerical, scales = {}, []
     for key, (x0, space) in blocks.items():
         n = sqrtsize_of_mat(x0.rows)
@@ -1022,11 +1033,14 @@ class SDPProblem(TransformableDual):
     def _solve_face_with_equalities(self,
         nullspace: Dict[Any, Matrix],
         *,
-        check_time: 'TimeChecker',
-        solver: Optional[str],
-        normalize: bool, kwargs: Dict[Any, Any]
+        time_limit: 'TimeLimit' = None,
+        solver: Optional[str] = None,
+        normalize: bool = True,
+        kwargs: Dict[Any, Any] = {}
     ) -> Optional[Tuple[Matrix, 'Decomp']]:
         """Probe a face in the original parameter coordinates, then verify over QQ."""
+        check_time = ArithmeticTimeout.make_checker(time_limit)
+
         eqs, rhs = _nullspace_equations(self._x0_and_space, nullspace, time_limit=check_time)
         if _is_column_separated(eqs):
             return None # The exact parameterization already has a sparse fast path.
@@ -1059,7 +1073,8 @@ class SDPProblem(TransformableDual):
             check_time()
         if not any(x0.rows for x0, _ in blocks.values()):
             return None
-        numerical, _ = _prepare_feasibility_blocks(blocks, normalize, check_time=check_time)
+        numerical, _ = _prepare_feasibility_blocks(blocks,
+            normalize=normalize, time_limit=time_limit)
         objective = np.zeros(self.dof+1)
         objective[-1] = -1
         constraints = [(equality, target[rows], '=='), (objective, 0, '<'), (objective, -5, '>')]
@@ -1091,20 +1106,22 @@ class SDPProblem(TransformableDual):
     def _recover_on_exposed_face(self,
         attempts: Sequence[SDPNumericalResult],
         *,
-        check_time: 'TimeChecker',
-        solver: Optional[str],
-        verbose: bool,
-        normalize: bool,
-        recovery_rounds: int,
-        recovery_with_equalities: bool,
-        certify_infeasibility: bool,
-        kwargs: Dict[Any, Any],
+        time_limit: 'TimeLimit' = None,
+        solver: Optional[str] = None,
+        verbose: bool = True,
+        normalize: bool = True,
+        recovery_rounds: int = 2,
+        recovery_with_equalities: bool = True,
+        certify_infeasibility: bool = True,
+        kwargs: Dict[Any, Any] = {}
     ) -> Optional[Tuple[Matrix, 'Decomp']]:
         """Retry on a certified face and verify the lifted solution in this SDP.
 
         The temporary reduction is local to this retry. Return None if there
         is no certified direction or the retry cannot recover a solution.
         """
+        check_time = ArithmeticTimeout.make_checker(time_limit)
+
         # Check the newest hints first and run the hint-independent search once.
         for index in reversed(range(len(attempts))):
             hint = attempts[index]
@@ -1124,7 +1141,7 @@ class SDPProblem(TransformableDual):
             # try to solve with face equations
             # without explicitly forming the child node
             solution = self._solve_face_with_equalities(
-                nullspace, check_time=check_time,
+                nullspace, time_limit=check_time,
                 solver=solver, normalize=normalize, kwargs=retry_kwargs)
             if solution is not None:
                 if verbose:
@@ -1171,14 +1188,17 @@ class SDPProblem(TransformableDual):
         block_scales: Tuple[Tuple[Any, float], ...],
         models: Sequence[_FeasibilityModel],
         *,
-        check_time: 'TimeChecker',
-        check_recovery_time: 'TimeChecker',
-        solver: Optional[str],
-        verbose: bool,
-        certify_infeasibility: bool,
-        kwargs: Dict[Any, Any],
+        time_limit: 'TimeLimit' = None,
+        recovery_time_limit: 'TimeLimit' = None,
+        solver: Optional[str] = None,
+        verbose: bool = True,
+        certify_infeasibility: bool = True,
+        kwargs: Dict[Any, Any] = {}
     ) -> Tuple[List[SDPNumericalResult], Optional[Tuple[Matrix, 'Decomp']]]:
         """Try numerical formulations and certify their results against this pencil."""
+        check_time = ArithmeticTimeout.make_checker(time_limit)
+        check_recovery_time = ArithmeticTimeout.make_checker(recovery_time_limit)
+
         attempts: List[SDPNumericalResult] = []
         for index, model in enumerate(models):
             options = kwargs
@@ -1457,7 +1477,7 @@ class SDPProblem(TransformableDual):
 
         try:
             x0_and_space, block_scales = _prepare_feasibility_blocks(
-                self._x0_and_space, normalize, check_time=check_time)
+                self._x0_and_space, normalize=normalize, time_limit=check_time)
             models = _feasibility_models(self.dof, retry_relaxation)
         except ArithmeticTimeout as e:
             raise SDPTimeoutError.from_kwargs() from e
@@ -1478,8 +1498,8 @@ class SDPProblem(TransformableDual):
                 check_recovery_time = check_time.with_limit(kwargs['time_limit'], enforce=False)
 
             attempts, solution = self._solve_feasibility_models(
-                x0_and_space, block_scales, models, check_time=check_time,
-                check_recovery_time=check_recovery_time, solver=solver, verbose=verbose,
+                x0_and_space, block_scales, models, time_limit=time_limit,
+                recovery_time_limit=check_recovery_time, solver=solver, verbose=verbose,
                 certify_infeasibility=certify_infeasibility, kwargs=kwargs,
             )
             initial = attempts[0]
@@ -1487,7 +1507,7 @@ class SDPProblem(TransformableDual):
             y = _get_numerical_y(initial)
             if solution is None and recovery_rounds > 0:
                 solution = self._recover_on_exposed_face(attempts,
-                    check_time=check_recovery_time, solver=solver, verbose=verbose,
+                    time_limit=check_recovery_time, solver=solver, verbose=verbose,
                     normalize=normalize, kwargs=kwargs, recovery_rounds=recovery_rounds,
                     recovery_with_equalities=recovery_with_equalities,
                     certify_infeasibility=certify_infeasibility)

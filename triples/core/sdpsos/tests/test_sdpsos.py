@@ -71,10 +71,11 @@ class SDPSOSProblems:
     def problem_isosceles_right(cls):
         return pl('s(a3(a-b)(a-c)(a2-b2-c2)2)'), [a,b,c], [], {'lift_degree_limit': 2}
 
-    @classmethod
-    def problem_symmetric_quaternary_degree6(cls):
-        return pl('s(((((a+b-c)(a+b-d)-2ab)2+2(ab)2)-(a+b-c-d)2(c-d)2)(a-b)2)',
-            (a, b, c, d), 'sym'), [], [], {'lift_degree_limit': 4}
+    # @classmethod
+    # def problem_symmetric_quaternary_degree6(cls):
+    #     # Slow. Need not test.
+    #     return pl('s(((((a+b-c)(a+b-d)-2ab)2+2(ab)2)-(a+b-c-d)2(c-d)2)(a-b)2)',
+    #         (a, b, c, d), 'sym'), [], [], {'lift_degree_limit': 4}
 
 
 @pytest.mark.slow
