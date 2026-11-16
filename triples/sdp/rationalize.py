@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
-from fractions import Fraction
-from typing import Union, Optional, Tuple, List, Dict, Callable, Generator, Any
+from time import perf_counter
+from typing import Union, Optional, Tuple, List, Dict, Callable, Generator, Any, Mapping
 
 import numpy as np
 from sympy import Rational, MatrixBase, nsimplify
@@ -17,8 +17,13 @@ from .arithmetic import (
 )
 from .backends import SDPError
 from .arithmetic.linsolve import recover_affine_candidates
+from .facial import (
+    _MAX_SPECTRAL_COEFFICIENTS, _direction_supports, _nonnegative_weights,
+    _rounded_positive_eigendirections,
+)
 
-Decomp = Dict[str, Tuple[Matrix, Matrix, List[Rational]]]
+Decomp = Dict[Any, Tuple[Matrix, Matrix, List[Rational]]]
+InfeasibilityCertificate = Dict[Any, Matrix]
 
 
 class SDPRationalizeError(SDPError):
@@ -44,6 +49,8 @@ def rationalize(x, rounding = 1e-2, **kwargs):
 
 
 class DualRationalizer:
+    """Recover exact certificates from numerical iterates of an affine PSD problem."""
+
     LLL_WEIGHT = 10**19
     LLL_TRUNC  = 2000 # TODO
     LLL_EIG    = 1e-2 # do not call LLL if block eig > LLL_EIG
@@ -97,44 +104,6 @@ class DualRationalizer:
             decomps[key] = (s, U, diag)
         return y, decomps
 
-    def exposed_nullspace(self,
-        dual: Dict[Any, Optional[np.ndarray]],
-        time_limit: Optional[Union[Callable, float]] = None,
-    ) -> Dict[Any, Matrix]:
-        """Find a rational v for which v.T * S(y) * v vanishes identically."""
-        check_time = ArithmeticTimeout.make_checker(time_limit)
-        if not all(is_zz_qq_mat(m) for pair in self.x0_and_space.values() for m in pair):
-            return {}
-        for key, Z in dual.items():
-            check_time()
-            x0, space = self.x0_and_space[key]
-            n = sqrtsize_of_mat(x0.rows)
-            if Z is None or Z.shape != (n, n) or not np.isfinite(Z).all():
-                continue
-            try:
-                eigenvalues, vectors = np.linalg.eigh(Z)
-            except np.linalg.LinAlgError:
-                continue
-            seen = set()
-            for i in range(n-1, max(-1, n-3), -1):
-                if eigenvalues[i] <= 0:
-                    break
-                u = vectors[:, i]
-                u = u / u[np.argmax(np.abs(u))]
-                for bound in (1, 4, 16, 64):
-                    check_time()
-                    fractions = tuple(Fraction(float(a)).limit_denominator(bound) for a in u)
-                    if fractions in seen:
-                        continue
-                    seen.add(fractions)
-                    v = Matrix([Rational(a.numerator, a.denominator) for a in fractions])
-                    row = (v * v.T).reshape(1, n*n)
-                    # For PSD S, the identity implies S(y) * v = 0.
-                    if (matmul(row, x0, time_limit=check_time).is_zero_matrix
-                            and matmul(row, space, time_limit=check_time).is_zero_matrix):
-                        return {key: v}
-        return {}
-
     def nullspaces_lll(self, y: np.ndarray) -> Dict[Any, Matrix]:
         """
         Infer the nullspaces of PSD matrices by the LLL algorithm, see [1].
@@ -182,8 +151,8 @@ class DualRationalizer:
         return V
 
     def rationalize_lll(self, y: np.ndarray,
-            time_limit: Optional[Union[Callable, float]] = None) -> Optional[Tuple[Matrix, Decomp]]:
-        time_limit = ArithmeticTimeout.make_checker(time_limit)
+            *, time_limit: Optional[Union[Callable, float]] = None) -> Optional[Tuple[Matrix, Decomp]]:
+        time_limit = ArithmeticTimeout.make_checker(time_limit=time_limit)
 
         V = self.nullspaces_lll(y)
         eq_space = []
@@ -224,9 +193,13 @@ class DualRationalizer:
                     return result
                 time_limit()
 
-    def rationalize(self, y: np.ndarray,
-            time_limit: Optional[Union[Callable, float]] = None) -> Optional[Tuple[Matrix, Decomp]]:
-        time_limit = ArithmeticTimeout.make_checker(time_limit)
+    def rationalize(self,
+        y: np.ndarray,
+        *,
+        time_limit: Optional[Union[Callable, float]] = None
+    ) -> Optional[Tuple[Matrix, Decomp]]:
+        """Recover rational feasible parameters and PSD decompositions, or return None."""
+        time_limit = ArithmeticTimeout.make_checker(time_limit=time_limit)
 
         if not isinstance(y, np.ndarray):
             y = rep_matrix_to_numpy(y)
@@ -257,6 +230,87 @@ class DualRationalizer:
             if result is not None:
                 return result
 
+        return None
+
+    def rationalize_infeasibility(
+        self,
+        dual: Mapping[Any, Optional[np.ndarray]],
+        *,
+        remaining_time: Optional[Callable[[], Optional[float]]] = None,
+    ) -> Optional[Tuple[InfeasibilityCertificate, Decomp]]:
+        """Recover a rational strong infeasibility certificate, or return None.
+
+        Return the PSD blocks Z with sum <Z_k, S_k(y)> = -1, and their
+        decompositions (Z_k, U, D) with Z_k = U.T @ diag(D) @ U.
+        The rows of U are the recovered rank-one directions. Omitted
+        blocks are zero.
+        """
+        blocks = self.x0_and_space
+        keys = [k for k, z in dual.items()
+                if k in blocks and z is not None and z.ndim == 2 and 0 < z.shape[0] <= 24]
+        if (sum(a.rows * (1 + A.cols) for a, A in (blocks[k] for k in keys))
+                > _MAX_SPECTRAL_COEFFICIENTS):
+            return None
+
+        deadline = perf_counter() + 0.5
+
+        def probe_time() -> float:
+            remaining = remaining_time() if remaining_time is not None else None
+            budget = deadline - perf_counter()
+            if remaining is not None:
+                budget = min(budget, remaining)
+            if budget <= 0:
+                raise ArithmeticTimeout()
+            return budget
+
+        try:
+            pencils = {}
+            directions: List[Tuple[Any, Matrix, float]] = []
+            for key in keys:
+                probe_time()
+                a, A = blocks[key]
+                z = dual[key]
+                n = sqrtsize_of_mat(a.rows)
+                if (z is None or z.shape != (n, n) or not np.isfinite(z).all()
+                        or not (is_zz_qq_mat(a) and is_zz_qq_mat(A))):
+                    continue
+                atoms = list(_rounded_positive_eigendirections(
+                    z, bounds=(4, 16, 64, 256), eigenvalue_rtol=1e-5, remaining_time=probe_time,
+                ))
+                if len(directions) + len(atoms) > 512:
+                    return None
+                if atoms:
+                    pencils[key] = rep_matrix_to_numpy(a.row_join(A))
+                    directions.extend((key, Matrix(v), 0.) for v in atoms)
+
+            for terms in _direction_supports(
+                blocks, directions, pencils, remaining_time=probe_time, objective_row=0,
+            ):
+                equations = Matrix.vstack(*(term.form for term in terms)).T
+                rhs = Matrix.zeros(equations.rows, 1)
+                rhs[0] = -1
+                weights = _nonnegative_weights(equations, rhs, remaining_time=probe_time)
+                if weights is None:
+                    continue
+                certificate: InfeasibilityCertificate = {}
+                atoms_by_key: Dict[Any, List[Tuple[Matrix, Rational]]] = {}
+                for (key, v, _), (w,) in zip(terms, weights.tolist()):
+                    if w:
+                        atoms_by_key.setdefault(key, []).append((v.T, w))
+                decomps: Decomp = {}
+                for key, atoms in atoms_by_key.items():
+                    probe_time()
+                    rows, diag = zip(*atoms)
+                    U = Matrix.vstack(*rows)
+                    Z = U.T @ Matrix.diag(*diag) @ U
+                    certificate[key] = Z
+                    decomps[key] = (Z, U, list(diag))
+                probe_time()
+                return certificate, decomps
+        except ArithmeticTimeout:
+            # A local search may time out without exhausting the solve deadline.
+            if remaining_time is not None:
+                remaining_time()
         return None
 
 

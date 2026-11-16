@@ -9,7 +9,7 @@ from .abstract import AtomSOSElement, ArithmeticTimeout
 from .manifold import get_sos_jet_data, scan_jet_layers, complete_constraints_by_symmetry
 from .solution import sdp_solution_from_decomps
 from ...utils import CyclicSum, Root
-from ...sdp.facial import find_direction_exposing_nullspace
+from ...sdp.facial import find_exposing_nullspace
 
 if TYPE_CHECKING:
     from sympy import Expr, Symbol
@@ -362,8 +362,9 @@ class SOSPoly(AtomSOSElement):
                 nullspace = {key: Matrix(list(cols)).T for key, cols in kernels.items()}
             elif remaining_rounds > 0 and candidates:
                 remaining_rounds -= 1
-                nullspace = find_direction_exposing_nullspace(
-                    node._x0_and_space, [(key, Matrix(v)) for key, v in candidates], check_time)
+                nullspace = find_exposing_nullspace(
+                    node._x0_and_space, directions=[(key, Matrix(v)) for key, v in candidates],
+                    coordinate_level=0, remaining_time=check_time)
             else:
                 break
             if not nullspace:

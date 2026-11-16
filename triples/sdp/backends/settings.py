@@ -1,8 +1,13 @@
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, TYPE_CHECKING
 
 import numpy as np
 
 from ..arithmetic import ArithmeticTimeout
+
+if TYPE_CHECKING:
+    from sympy import Matrix
+    from ..dual import SDPProblem
+    from ..rationalize import Decomp
 
 class SDPResult:
     """
@@ -175,6 +180,19 @@ class SDPError(Exception):
 class SDPTimeoutError(SDPError, ArithmeticTimeout):
     """Raised when the SDP solver terminates due to time limit."""
     pass
+
+
+class SDPInfeasibleError(SDPError):
+    """Exact PSD separator and its per-block (Z, U, D) decompositions."""
+
+    def __init__(self, result: SDPResult, problem: "SDPProblem",
+                 certificate: Dict[Any, "Matrix"], decompositions: "Decomp"):
+        super().__init__(SDPResult(infeasible=True, solver=result.solver, status=result.status))
+        self.backend_result = result
+        self.problem = problem
+        self.certificate = certificate
+        self.decompositions = decompositions
+        self.args = ("SDP is infeasible (verified rational separator).",)
 
 
 # class SDPProblemError(SDPError):

@@ -36,6 +36,13 @@ class SDPNumericalResult(NamedTuple):
     relaxed: int
     block_scales: Tuple[Tuple[Any, float], ...]
 
+    @property
+    def dual_blocks(self) -> Dict[Any, Optional['ndarray']]:
+        """Backend dual blocks indexed by pencil key, in the backend's scaling."""
+        if self.result.dual is None:
+            return {}
+        return {key: Z for (key, _), Z in zip(self.block_scales, self.result.dual)}
+
 
 def _get_numerical_y(attempt: SDPNumericalResult,
         primal_sizes: Optional[Iterable[int]] = None) -> Optional['ndarray']:

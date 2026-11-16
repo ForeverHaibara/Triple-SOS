@@ -1,9 +1,12 @@
-"""Search for exact facial reduction certificates in sparse PSD subcones."""
+"""Search for exact exposing certificates in PSD subcones."""
 
 from fractions import Fraction
+from itertools import chain
 from math import gcd
-from typing import Any, Callable, Dict, Iterator, List, NamedTuple, Optional, Sequence, Tuple, cast
-
+from typing import (
+    Any, Callable, Dict, Iterator, List, Mapping,
+    NamedTuple, Optional, Sequence, Tuple, cast
+)
 import numpy as np
 from scipy import __version__ as _SCIPY_VERSION
 from scipy.linalg import qr
@@ -12,14 +15,20 @@ from sympy import MutableDenseMatrix as Matrix
 from sympy.external.importtools import version_tuple
 
 from .arithmetic import (
-    ArithmeticTimeout, is_zz_qq_mat, matmul, rep_matrix_to_numpy, solve_undetermined_linear,
-    sqrtsize_of_mat,
+    ArithmeticTimeout, is_zz_qq_mat, matmul, rep_matrix_to_numpy,
+    solve_undetermined_linear, sqrtsize_of_mat,
 )
 
 _HAS_HIGHS = tuple(version_tuple(_SCIPY_VERSION)) >= (1, 6)
 _MAX_SUPPORT = 128
-# Dense directions can also make the subsequent exact reduction expensive.
+# Bound the dense coefficient arrays for searches using general directions.
 _MAX_SPECTRAL_COEFFICIENTS = 128_000
+
+
+class _RankOneTerm(NamedTuple):
+    key: Any
+    vector: Matrix
+    form: Matrix  # Exact affine coefficients of vector.T * S_key(y) * vector.
 
 
 class _Direction(NamedTuple):
@@ -36,10 +45,214 @@ class _Direction(NamedTuple):
     sign: int
 
 
-def _direction_columns(
+def _rank_one_term(
+    key: Any, vector: Matrix, x0: Matrix, space: Matrix,
+    *,
+    remaining_time: Callable[[], Optional[float]],
+) -> _RankOneTerm:
+    row = (vector * vector.T).reshape(1, x0.rows)
+    offset = cast(Matrix, matmul(row, x0, time_limit=remaining_time))
+    linear = cast(Matrix, matmul(row, space, time_limit=remaining_time))
+    return _RankOneTerm(key, vector, offset.row_join(linear))
+
+
+def _round_vector(vector: np.ndarray, bound: int) -> Tuple[int, ...]:
+    """Round a chart vector and clear denominators, up to sign and scale."""
+    fractions = [Fraction(float(v)).limit_denominator(bound) for v in vector]
+    common = 1
+    for f in fractions:
+        common = common * f.denominator // gcd(common, f.denominator)
+    integers = [f.numerator * (common // f.denominator) for f in fractions]
+    divisor = 0
+    for i in integers:
+        divisor = gcd(divisor, i)
+    if not divisor:
+        return ()
+    if next(i for i in integers if i) < 0:
+        divisor = -divisor
+    return tuple(i // divisor for i in integers)
+
+
+def _rounded_positive_eigendirections(
+    matrix: np.ndarray,
+    *,
+    bounds: Sequence[int],
+    eigenvalue_rtol: float = 0.,
+    largest: Optional[int] = None,
+    remaining_time: Callable[[], Optional[float]],
+) -> Iterator[Tuple[int, ...]]:
+    """Yield distinct rational directions from the positive eigenspace."""
+    try:
+        eigenvalues, vectors = np.linalg.eigh(matrix)
+    except np.linalg.LinAlgError:
+        return
+    indices = np.flatnonzero(eigenvalues > max(eigenvalues[-1]*eigenvalue_rtol, 0.))
+    if largest is not None:
+        indices = indices[::-1][:largest]
+    seen = set()
+    for index in indices:
+        vector = vectors[:, index]
+        vector = vector / vector[np.argmax(np.abs(vector))]
+        for bound in bounds:
+            remaining = remaining_time()
+            if remaining is not None and remaining <= 0:
+                return
+            direction = _round_vector(vector, bound)
+            if direction and direction not in seen:
+                seen.add(direction)
+                yield direction
+
+
+def _nonnegative_weights(
+    equations: Matrix,
+    rhs: Matrix,
+    *,
+    remaining_time: Callable[[], Optional[float]],
+) -> Optional[Matrix]:
+    """Reconstruct nonnegative weights and check every equation over QQ."""
+    try:
+        weights, _ = solve_undetermined_linear(equations, rhs, time_limit=remaining_time)
+    except ValueError:
+        return None
+    if (any(w.is_nonnegative is not True for (w,) in weights.tolist())
+            or matmul(equations, weights, time_limit=remaining_time) != rhs):
+        return None
+    return weights
+
+
+def _lp_supports(
+    coefficients: np.ndarray,
+    objective: np.ndarray,
+    *,
+    remaining_time: Callable[[], Optional[float]],
+    objective_row: Optional[int] = None,
+) -> Iterator[np.ndarray]:
+    """Propose nonnegative supports with zero pairing on the equality rows.
+
+    If supplied, objective_row replaces the given cost with the indicated
+    coefficient row and requires a negative pairing on that row.
+    """
+    if not np.isfinite(coefficients).all():
+        return
+    scale = np.max(np.abs(coefficients), axis=0)
+    coefficients /= np.where(scale == 0, 1, scale)
+    if objective_row is not None:
+        objective = coefficients[objective_row]
+        coefficients = np.delete(coefficients, objective_row, axis=0)
+    scale = np.max(np.abs(coefficients), axis=1, keepdims=True)
+    coefficients /= np.where(scale == 0, 1, scale)
+    remaining = remaining_time()
+    if remaining is not None and remaining <= 0:
+        return
+    budget = min(0.25, remaining) if remaining is not None else 0.25
+    callback = None
+    if _HAS_HIGHS:
+        method = 'highs'
+        options = {'time_limit': budget, 'primal_feasibility_tolerance': 1e-9}
+    else:
+        method = 'simplex'
+        options = {'tol': 1e-9, 'maxiter': 1000}
+        check_lp_time = ArithmeticTimeout.make_checker(time_limit=budget)
+
+        def callback(_):
+            check_lp_time()
+
+    width, count = coefficients.shape
+    try:
+        result = linprog(objective, A_eq=np.vstack([coefficients, np.ones(count)]),
+            b_eq=np.r_[np.zeros(width), 1.], bounds=(0, None), method=method,
+            options=options, callback=callback)
+    except ArithmeticTimeout:
+        remaining_time()
+        return
+    remaining_time()
+    if result.success and (objective_row is None or result.fun < -1e-9):
+        support = np.flatnonzero(result.x > 1e-10)
+        if 0 < len(support) <= _MAX_SUPPORT:
+            yield support
+        if not _HAS_HIGHS:
+            # Simplex can leave small positive weights outside the true support.
+            trimmed = support[result.x[support] > 1e-8]
+            if 0 < len(trimmed) <= _MAX_SUPPORT and len(trimmed) != len(support):
+                yield trimmed
+
+
+def find_exposing_nullspace(
+    blocks: Dict[Any, Tuple[Matrix, Matrix]],
+    *,
+    y: Optional[np.ndarray] = None,
+    dual: Optional[Mapping[Any, Optional[np.ndarray]]] = None,
+    directions: Optional[Sequence[Tuple[Any, Matrix]]] = None,
+    coordinate_level: int = 2,
+    remaining_time: Callable[[], Optional[float]],
+) -> Dict[Any, Matrix]:
+    """Return the first exact exposure from dual, joint or spectral supports.
+
+    Supplied directions are tried before the coordinate search.
+    The coordinate level is independent: 0 disables it, 1 tries the
+    nonnegative diagonal cone, and 2 also tries the diagonally dominant cone.
+    """
+    if coordinate_level not in (0, 1, 2):
+        raise ValueError("coordinate_level must be 0, 1 or 2")
+    supports = chain(
+        _dual_supports(blocks, dual, remaining_time=remaining_time),
+        _supplied_direction_supports(blocks, directions, remaining_time=remaining_time),
+        _coordinate_supports(blocks, level=coordinate_level, remaining_time=remaining_time),
+        _spectral_supports(blocks, y, remaining_time=remaining_time),
+    )
+    return _expose_supports(supports, remaining_time=remaining_time)
+
+
+def _dual_supports(
+    blocks: Dict[Any, Tuple[Matrix, Matrix]],
+    dual: Optional[Mapping[Any, Optional[np.ndarray]]],
+    *,
+    remaining_time: Callable[[], Optional[float]],
+) -> Iterator[List[_RankOneTerm]]:
+    """Propose singleton supports directly from rounded dual eigenvectors."""
+    if not dual or not all(is_zz_qq_mat(m) for pair in blocks.values() for m in pair):
+        return
+    for key, z in dual.items():
+        remaining = remaining_time()
+        if remaining is not None and remaining <= 0:
+            return
+        if key not in blocks or z is None:
+            continue
+        x0, space = blocks[key]
+        n = sqrtsize_of_mat(x0.rows)
+        if n == 0 or z.shape != (n, n) or not np.isfinite(z).all():
+            continue
+        for direction in _rounded_positive_eigendirections(
+            z, bounds=(1, 4, 16, 64), largest=2, remaining_time=remaining_time,
+        ):
+            v = Matrix(direction)
+            yield [_rank_one_term(key, v, x0, space, remaining_time=remaining_time)]
+
+
+def _coordinate_term(
+    blocks: Dict[Any, Tuple[Matrix, Matrix]],
+    sizes: Dict[Any, int],
+    direction: _Direction,
+) -> _RankOneTerm:
+    """Form exact coefficients by indexing the few nonzero entries of each atom."""
+    key, i, j, sign = direction
+    x0, space = blocks[key]
+    n = sizes[key]
+    offset, linear = x0[i*(n+1), :], space[i*(n+1), :]
+    vector = Matrix.zeros(n, 1)
+    vector[i] = 1
+    if sign:
+        offset += x0[j*(n+1), :] + sign*(x0[i*n+j, :] + x0[j*n+i, :])
+        linear += space[j*(n+1), :] + sign*(space[i*n+j, :] + space[j*n+i, :])
+        vector[j] = sign
+    return _RankOneTerm(key, vector, offset.row_join(linear))
+
+
+def _coordinate_columns(
     blocks: Dict[Any, Tuple[Matrix, Matrix]],
     sizes: Dict[Any, int],
     pairs: bool,
+    *,
     remaining_time: Callable[[], Optional[float]],
 ) -> Tuple[np.ndarray, List[_Direction]]:
     """
@@ -66,123 +279,25 @@ def _direction_columns(
     return np.concatenate(columns, axis=0).T, directions
 
 
-def _verify_support(
+def _coordinate_supports(
     blocks: Dict[Any, Tuple[Matrix, Matrix]],
-    sizes: Dict[Any, int],
-    directions: Sequence[_Direction],
+    *,
+    level: int,
     remaining_time: Callable[[], Optional[float]],
-) -> Dict[Any, Matrix]:
-    """Reconstruct weights over QQ and check the entire affine identity."""
-    forms = []
-    for key, i, j, sign in directions:
-        x0, space = blocks[key]
-        n = sizes[key]
-        offset, linear = x0[i*(n+1), :], space[i*(n+1), :]
-        if sign:
-            offset += x0[j*(n+1), :] + sign*(x0[i*n+j, :] + x0[j*n+i, :])
-            linear += space[j*(n+1), :] + sign*(space[i*n+j, :] + space[j*n+i, :])
-        forms.append(offset.row_join(linear))
-        remaining_time()
-
-    vectors: Dict[Any, List[Matrix]] = {}
-    for index in _positive_support(forms, remaining_time):
-        key, i, j, sign = directions[index]
-        vector = Matrix.zeros(sizes[key], 1)
-        vector[i] = 1
-        if sign:
-            vector[j] = sign
-        vectors.setdefault(key, []).append(vector)
-    return {key: Matrix.hstack(*basis) for key, basis in vectors.items()}
-
-
-def _positive_support(
-    forms: Sequence[Matrix],
-    remaining_time: Callable[[], Optional[float]],
-) -> List[int]:
-    """Return the positive indices of a normalized QQ dependence, if verified."""
-    equations = Matrix.vstack(*forms).T.col_join(Matrix.ones(1, len(forms)))
-    rhs = Matrix.zeros(equations.rows, 1)
-    rhs[-1] = 1
-    try:
-        weights, _ = solve_undetermined_linear(equations, rhs, time_limit=remaining_time)
-    except ValueError:
-        return []
-    values = [row[0] for row in weights.tolist()]
-    if any(weight.is_nonnegative is not True for weight in values) or equations * weights != rhs:
-        return []
-    return [i for i, weight in enumerate(values) if weight.is_positive]
-
-
-def _candidate_supports(
-    coefficients: np.ndarray,
-    objective: np.ndarray,
-    remaining_time: Callable[[], Optional[float]],
-) -> Iterator[np.ndarray]:
-    """Propose small supports with nonnegative weights using a numerical LP."""
-    if not np.isfinite(coefficients).all():
-        return
-    # Positive column and row scaling preserves the possible supports.
-    for axis in (0, 1):
-        scale = np.max(np.abs(coefficients), axis=axis, keepdims=True)
-        scale[scale == 0] = 1
-        coefficients /= scale
-    remaining = remaining_time()
-    if remaining is not None and remaining <= 0:
-        return
-    budget = min(0.25, remaining) if remaining is not None else 0.25
-    callback = None
-    if _HAS_HIGHS:
-        method = 'highs'
-        options = {'time_limit': budget, 'primal_feasibility_tolerance': 1e-9}
-    else:
-        method = 'simplex'
-        options = {'tol': 1e-9, 'maxiter': 1000}
-        check_lp_time = ArithmeticTimeout.make_checker(budget)
-
-        def callback(_):
-            check_lp_time()
-
-    width, count = coefficients.shape
-    try:
-        result = linprog(objective, A_eq=np.vstack([coefficients, np.ones(count)]),
-            b_eq=np.r_[np.zeros(width), 1.], bounds=(0, None), method=method,
-            options=options, callback=callback)
-    except ArithmeticTimeout:
-        remaining_time()
-        return
-    remaining_time()
-    if result.success:
-        support = np.flatnonzero(result.x > 1e-10)
-        if 0 < len(support) <= _MAX_SUPPORT:
-            yield support
-        if not _HAS_HIGHS:
-            # Simplex can leave small positive weights outside the true support.
-            trimmed = support[result.x[support] > 1e-8]
-            if 0 < len(trimmed) <= _MAX_SUPPORT and len(trimmed) != len(support):
-                yield trimmed
-
-
-def find_joint_exposing_nullspace(
-    blocks: Dict[Any, Tuple[Matrix, Matrix]],
-    remaining_time: Callable[[], Optional[float]],
-) -> Dict[Any, Matrix]:
-    """Find necessary nullspaces of rational symmetric affine PSD blocks.
-
-    Use the nonnegative diagonal cone, followed by the diagonally dominant
-    cone, to search for a nonzero exposing certificate. The linear program
-    proposes a support. Positive rational weights must certify that the sum
-    of the selected quadratic forms vanishes on the whole affine space.
-    Since the forms are individually nonnegative at feasible points, each
-    supported direction is a necessary kernel vector in its block.
+) -> Iterator[List[_RankOneTerm]]:
+    """Propose supports from the diagonal cone and diagonally dominant cone.
 
     See Permenter and Parrilo, arXiv:1408.4685v3, Section 3.2.
     """
+    if level == 0:
+        return
     sizes = {key: sqrtsize_of_mat(x0.rows) for key, (x0, _) in blocks.items() if x0.rows}
     if not sizes or not all(is_zz_qq_mat(m) for k in sizes for m in blocks[k]):
-        return {}
+        return
 
     width = blocks[next(iter(sizes))][1].cols + 1
-    for pairs in (False, True):
+
+    for pairs in ((False, True) if level == 2 else (False,)):
         count = sum(n*n if pairs else n for n in sizes.values())
         # Bound the dense numerical search and the exact support solve.
         if count > 2048 or count*width > 1_000_000:
@@ -190,33 +305,14 @@ def find_joint_exposing_nullspace(
         remaining = remaining_time()
         if remaining is not None and remaining <= 0:
             break
-        coefficients, directions = _direction_columns(blocks, sizes, pairs, remaining_time)
-        for indices in _candidate_supports(coefficients, np.zeros(count), remaining_time):
-            nullspace = _verify_support(blocks, sizes, [directions[i] for i in indices], remaining_time)
-            if nullspace:
-                return nullspace
-    return {}
-
-
-def _round_vector(vector: np.ndarray, bound: int) -> Tuple[int, ...]:
-    """Round a chart vector and clear denominators, up to sign and scale."""
-    fractions = [Fraction(float(v)).limit_denominator(bound) for v in vector]
-    common = 1
-    for f in fractions:
-        common = common * f.denominator // gcd(common, f.denominator)
-    integers = [f.numerator * (common // f.denominator) for f in fractions]
-    divisor = 0
-    for i in integers:
-        divisor = gcd(divisor, i)
-    if not divisor:
-        return ()
-    if next(i for i in integers if i) < 0:
-        divisor = -divisor
-    return tuple(i // divisor for i in integers)
+        coefficients, directions = _coordinate_columns(blocks, sizes, pairs, remaining_time=remaining_time)
+        for indices in _lp_supports(coefficients, np.zeros(count), remaining_time=remaining_time):
+            yield [_coordinate_term(blocks, sizes, directions[i]) for i in indices]
 
 
 def _spectral_directions(
     matrix: np.ndarray,
+    *,
     remaining_time: Callable[[], Optional[float]],
 ) -> List[Tuple[Tuple[int, ...], float]]:
     """Choose a few short directions near the numerical nullspace of a block."""
@@ -265,80 +361,117 @@ def _spectral_directions(
     return sorted(candidates.items(), key=lambda pair: pair[1])[:32]
 
 
-def find_spectral_exposing_nullspace(
+def _spectral_supports(
     blocks: Dict[Any, Tuple[Matrix, Matrix]],
-    y: np.ndarray,
+    y: Optional[np.ndarray],
+    *,
     remaining_time: Callable[[], Optional[float]],
-) -> Dict[Any, Matrix]:
-    """Search for a joint exposure using rounded charts of near-zero eigenspaces.
-
-    The numerical point only proposes directions. A verified nonnegative
-    dependence must hold in the original QQ pencil, including its constant
-    term, before any direction can restrict the feasible set.
-    """
-    if not np.isfinite(y).all():
-        return {}
+) -> Iterator[List[_RankOneTerm]]:
+    """Propose supports using rounded charts of the near-kernels at y."""
+    if y is None or not np.isfinite(y).all():
+        return
     # Bound work spent on dense coefficient arrays and chart enumeration.
     sizes = {k: sqrtsize_of_mat(a.rows) for k, (a, _) in blocks.items() if a.rows}
     sizes = {k: n for k, n in sizes.items() if n <= 24}
     if not sizes or not all(is_zz_qq_mat(m) for k in sizes for m in blocks[k]):
-        return {}
+        return
     width = y.size + 1
     if sum(n*n for n in sizes.values()) * width > _MAX_SPECTRAL_COEFFICIENTS:
-        return {}
+        return
 
     directions = []
     pencils = {}
     for key, n in sizes.items():
         remaining = remaining_time()
         if remaining is not None and remaining <= 0:
-            return {}
+            return
         a, A = blocks[key]
         pencil = rep_matrix_to_numpy(a.row_join(A))
         if not np.isfinite(pencil).all():
             continue
         with np.errstate(over='ignore', invalid='ignore'):
             matrix = (pencil[:, 0] + pencil[:, 1:] @ y).reshape(n, n)
-        for vector, residual in _spectral_directions(matrix, remaining_time):
+        for vector, residual in _spectral_directions(matrix, remaining_time=remaining_time):
             directions.append((key, Matrix(vector), residual))
         pencils[key] = pencil
-    return _expose_directions(blocks, directions, pencils, remaining_time)
+    yield from _direction_supports(blocks, directions, pencils, remaining_time=remaining_time)
 
 
-def find_direction_exposing_nullspace(
+def _supplied_direction_supports(
     blocks: Dict[Any, Tuple[Matrix, Matrix]],
-    directions: Sequence[Tuple[Any, Matrix]],
+    directions: Optional[Sequence[Tuple[Any, Matrix]]],
+    *,
     remaining_time: Callable[[], Optional[float]],
-) -> Dict[Any, Matrix]:
-    """Try a bounded list of rational directions against the full affine pencil."""
+) -> Iterator[List[_RankOneTerm]]:
+    """Propose supports using only the supplied rational directions."""
     if not directions or len(directions) > _MAX_SUPPORT:
-        return {}
+        return
     keys = dict.fromkeys(k for k, _ in directions)
     if any(k not in blocks or v.shape != (sqrtsize_of_mat(blocks[k][0].rows), 1)
            or not is_zz_qq_mat(v) for k, v in directions):
-        return {}
+        return
     if (sum(blocks[k][0].rows * (1 + blocks[k][1].cols) for k in keys)
             > _MAX_SPECTRAL_COEFFICIENTS):
-        return {}
+        return
     if not all(is_zz_qq_mat(m) for k in keys for m in blocks[k]):
-        return {}
+        return
     pencils = {}
     for k in keys:
         remaining_time()
         a, A = blocks[k]
         pencils[k] = rep_matrix_to_numpy(a.row_join(A))
-    return _expose_directions(blocks, [(k, v, 0.) for k, v in directions],
-                              pencils, remaining_time)
+    yield from _direction_supports(
+        blocks, [(k, v, 0.) for k, v in directions], pencils, remaining_time=remaining_time,
+    )
 
 
-def _expose_directions(
+def _positive_support(
+    forms: Sequence[Matrix],
+    *,
+    remaining_time: Callable[[], Optional[float]],
+) -> List[int]:
+    """Return the positive indices of a normalized QQ dependence, if verified."""
+    if len(forms) == 1:
+        return [0] if forms[0].is_zero_matrix else []
+    equations = Matrix.vstack(*forms).T.col_join(Matrix.ones(1, len(forms)))
+    rhs = Matrix.zeros(equations.rows, 1)
+    rhs[-1] = 1
+    weights = _nonnegative_weights(equations, rhs, remaining_time=remaining_time)
+    return [] if weights is None else [i for i, (w,) in enumerate(weights.tolist()) if w.is_positive]
+
+
+def _expose_supports(
+    supports: Iterator[List[_RankOneTerm]],
+    *,
+    remaining_time: Callable[[], Optional[float]],
+) -> Dict[Any, Matrix]:
+    """Verify zero pairing before imposing the corresponding kernel vectors.
+
+    At a feasible point each form is nonnegative. A zero sum with positive
+    weights therefore forces every positively weighted direction into the kernel.
+    """
+    for terms in supports:
+        nullspace: Dict[Any, List[Matrix]] = {}
+        for index in _positive_support([term.form for term in terms],
+                                       remaining_time=remaining_time):
+            key, vector, _ = terms[index]
+            nullspace.setdefault(key, []).append(vector)
+        if nullspace:
+            return {key: Matrix.hstack(*basis) for key, basis in nullspace.items()}
+    return {}
+
+
+def _direction_supports(
     blocks: Dict[Any, Tuple[Matrix, Matrix]],
     directions: Sequence[Tuple[Any, Matrix, float]],
     pencils: Dict[Any, np.ndarray],
+    *,
     remaining_time: Callable[[], Optional[float]],
-) -> Dict[Any, Matrix]:
+    objective_row: Optional[int] = None,
+) -> Iterator[List[_RankOneTerm]]:
+    """Propose atom supports numerically and form their exact affine coefficients."""
     if not directions:
-        return {}
+        return
     columns, costs = [], []
     for key, vector, cost in directions:
         v = rep_matrix_to_numpy(vector).ravel()
@@ -346,20 +479,12 @@ def _expose_directions(
             columns.append(np.outer(v, v).reshape(-1) @ pencils[key])
         costs.append(cost)
         remaining_time()
-    for indices in _candidate_supports(np.asarray(columns).T, np.asarray(costs), remaining_time):
-        forms: List[Matrix] = []
-        vectors: List[Tuple[Any, Matrix]] = []
-        for index in indices:
-            key, direction, _ = directions[index]
-            a, A = blocks[key]
-            weights = (direction * direction.T).reshape(1, a.rows)
-            forms.append(cast(Matrix, matmul(weights, a.row_join(A), time_limit=remaining_time)))
-            vectors.append((key, direction))
-            remaining_time()
-        nullspace: Dict[Any, List[Matrix]] = {}
-        for index in _positive_support(forms, remaining_time):
-            key, direction = vectors[index]
-            nullspace.setdefault(key, []).append(direction)
-        if nullspace:
-            return {key: Matrix.hstack(*basis) for key, basis in nullspace.items()}
-    return {}
+
+    for indices in _lp_supports(
+        np.asarray(columns).T, np.asarray(costs), remaining_time=remaining_time,
+        objective_row=objective_row,
+    ):
+        yield [
+            _rank_one_term(key, vector, *blocks[key], remaining_time=remaining_time)
+            for key, vector, _ in (directions[i] for i in indices)
+        ]
