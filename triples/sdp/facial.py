@@ -197,6 +197,7 @@ def find_exposing_nullspace(
     supports = chain(
         _dual_supports(blocks, dual, remaining_time=remaining_time),
         _supplied_direction_supports(blocks, directions, remaining_time=remaining_time),
+        _dual_supports(blocks, dual, joint=True, remaining_time=remaining_time),
         _coordinate_supports(blocks, level=coordinate_level, remaining_time=remaining_time),
         _spectral_supports(blocks, y, remaining_time=remaining_time),
     )
@@ -207,11 +208,16 @@ def _dual_supports(
     blocks: Dict[Any, Tuple[Matrix, Matrix]],
     dual: Optional[Mapping[Any, Optional[np.ndarray]]],
     *,
+    joint: bool = False,
     remaining_time: Callable[[], Optional[float]],
 ) -> Iterator[List[_RankOneTerm]]:
-    """Propose singleton supports directly from rounded dual eigenvectors."""
-    if not dual or not all(is_zz_qq_mat(m) for pair in blocks.values() for m in pair):
+    """Try rounded dual eigenvectors individually or in a joint support."""
+    if not dual:
         return
+    if not joint and not all(is_zz_qq_mat(m) for pair in blocks.values() for m in pair):
+        return
+
+    directions = []
     for key, z in dual.items():
         remaining = remaining_time()
         if remaining is not None and remaining <= 0:
@@ -220,13 +226,20 @@ def _dual_supports(
             continue
         x0, space = blocks[key]
         n = sqrtsize_of_mat(x0.rows)
-        if n == 0 or z.shape != (n, n) or not np.isfinite(z).all():
+        if n == 0 or (joint and n > _MAX_SUPPORT) or z.shape != (n, n) or not np.isfinite(z).all():
             continue
-        for direction in _rounded_positive_eigendirections(
-            z, bounds=(1, 4, 16, 64), largest=2, remaining_time=remaining_time,
+        for vector in _rounded_positive_eigendirections(
+            z, bounds=(1, 4, 16, 64), largest=4 if joint else 2,
+            eigenvalue_rtol=1e-4 if joint else 0., remaining_time=remaining_time,
         ):
-            v = Matrix(direction)
-            yield [_rank_one_term(key, v, x0, space, remaining_time=remaining_time)]
+            if not joint:
+                yield [_rank_one_term(key, Matrix(vector), x0, space, remaining_time=remaining_time)]
+            elif max(map(abs, vector)) <= 512:
+                directions.append((key, Matrix(vector)))
+        if len(directions) > _MAX_SUPPORT:
+            return
+    if len(directions) > 1:
+        yield from _supplied_direction_supports(blocks, directions, remaining_time=remaining_time)
 
 
 def _coordinate_term(

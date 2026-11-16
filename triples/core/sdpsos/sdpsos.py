@@ -244,6 +244,9 @@ class SDPSOSSolver(ProofNode):
         eigenvalue exceeds this threshold. By default, continue the search.
     normalize: bool
         Use automatic normalization before solving SDP. Default is True.
+    recovery_rounds: int
+        Maximum number of retries on certified faces per SDP. Use 0 to disable
+        these retries. Default is 2.
     verbose: bool
         Whether to print the progress. Default is False.
     """
@@ -258,6 +261,7 @@ class SDPSOSSolver(ProofNode):
         "preordering": "linear-progressive",
         "unstable_eig_threshold": None,
         "normalize": True,
+        "recovery_rounds": 2,
         "verbose": False,
     }
 
@@ -447,6 +451,7 @@ class SDPSOSSolver(ProofNode):
                     time_limit=configs['expected_end_time'] - perf_counter(),
                     allow_numer=configs['allow_numer'],
                     normalize=configs['normalize'],
+                    recovery_rounds=configs['recovery_rounds'],
                     kwargs=configs['solve_kwargs']
                 )
 
@@ -581,6 +586,7 @@ def SDPSOS(
     preordering: str = 'linear-progressive',
     unstable_eig_threshold: Optional[float] = None,
     normalize: bool = True,
+    recovery_rounds: int = 2,
     verbose: bool = False,
     time_limit: float = 3600.,
 ) -> Optional["Solution"]:
@@ -615,6 +621,9 @@ def SDPSOS(
         exact solution by rationalization.
     solve_kwargs: Dict[str, Any]
         Extra keyword arguments to pass to the SDP solver.
+    recovery_rounds: int
+        Maximum number of retries on certified faces per SDP. Use 0 to disable
+        these retries. Default is 2.
     ineq_constraints_with_trivial: bool
         Whether to add the trivial inequality constraint 1 >= 0. This is used to generate the
         quadratic module. Default is True.
@@ -692,6 +701,7 @@ def SDPSOS(
             "ineq_constraints_with_trivial": ineq_constraints_with_trivial,
             "preordering": preordering,
             "normalize": normalize,
+            "recovery_rounds": recovery_rounds,
             "unstable_eig_threshold": unstable_eig_threshold,
             "verbose": verbose,
         }

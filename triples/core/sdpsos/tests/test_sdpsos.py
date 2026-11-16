@@ -52,9 +52,10 @@ class SDPSOSProblems:
         return 4 - a*b**2*c**3, [a, b, c, b-a, c-b], [a*b + b*c + c*a - 3]
 
     @classmethod
-    def problem_spectral_face_recovery(cls):
+    @depends_on_clarabel
+    def problem_joint_dual_face_recovery(cls):
         g, h = r**2 - 2, s**2 - 2
-        return g*h*(r**2 - 1)*(s**2 - 1) + (r*s + r + s + 2)**2, [g, h, g*h], []
+        return (g*h*(r**2 - 1)*(s**2 - 1) + (r*s + r + s + 2)**2).expand(), [g, h], []
 
     @classmethod
     def problem_schur6_enhanced(cls):

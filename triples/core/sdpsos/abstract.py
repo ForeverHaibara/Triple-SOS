@@ -160,6 +160,7 @@ class SOSElement:
 
     def solve(self,
         solver: Optional[str] = None,
+        *,
         solve_child: bool = True,
         propagate_to_parent: bool = True,
         verbose: bool = False,
@@ -167,13 +168,14 @@ class SOSElement:
         allow_numer: int = 0,
         normalize: bool = True,
         kwargs: Dict[Any, Any] = {},
-        recovery_with_equalities: bool = False,
+        recovery_rounds: int = 2,
+        recovery_with_equalities: bool = False
     ) -> Optional[Matrix]:
         """
         Solve the SOS problem. Arguments are passed to `SDPProblem.solve`.
         """
         end_time = perf_counter() + time_limit if isinstance(time_limit, (int, float)) else None
-        time_limit = ArithmeticTimeout.make_checker(time_limit)
+        time_limit = ArithmeticTimeout.make_checker(time_limit=time_limit)
         if self._sdp is None:
             self.construct(verbose=verbose, time_limit=time_limit)
         time_limit()
@@ -182,6 +184,7 @@ class SOSElement:
                 propagate_to_parent=propagate_to_parent, verbose=verbose,
                 time_limit=rest_time, allow_numer=allow_numer,
                 normalize=normalize, kwargs=kwargs,
+                recovery_rounds=recovery_rounds,
                 recovery_with_equalities=recovery_with_equalities)
 
     def as_solution(self, *args, **kwargs):
