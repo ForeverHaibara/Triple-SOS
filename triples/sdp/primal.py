@@ -1,4 +1,3 @@
-from time import perf_counter
 from typing import Dict, List, Union, Optional, Tuple, Any, TYPE_CHECKING
 
 from numpy import ndarray
@@ -19,6 +18,8 @@ from .utils import exprs_to_arrays
 if TYPE_CHECKING:
     from sympy import Expr
     from sympy.core.relational import Relational
+
+    from .arithmetic import TimeLimit
 
 class SDPPrimal(TransformablePrimal):
     """
@@ -346,7 +347,7 @@ class SDPPrimal(TransformablePrimal):
         solve_child: bool = True,
         propagate_to_parent: bool = True,
         verbose: bool = False,
-        time_limit: Optional[float] = None,
+        time_limit: 'TimeLimit' = None,
         kwargs: Dict[Any, Any] = {}
     ) -> Optional[Matrix]:
         """
@@ -391,7 +392,7 @@ class SDPPrimal(TransformablePrimal):
             Whether to allow the backend SDP solver to print the log. Defaults to False.
             This argument will be suppressed if `kwargs` contains a `verbose` key.
 
-        time_limit : Optional[float]
+        time_limit : TimeLimit
             Time limit in seconds for the solver. If None, no time limit is set. Defaults to None.
             When time limit is reached, the solver will try to terminate the process and raise
             an Exception. Only a few solvers support time limit, e.g., 'mosek', 'clarabel' and 'qics',
@@ -414,7 +415,7 @@ class SDPPrimal(TransformablePrimal):
         propagate_to_parent: bool = True,
         verbose: bool = False,
         allow_numer: int = 0,
-        time_limit: Optional[float] = None,
+        time_limit: 'TimeLimit' = None,
         kwargs: Dict[Any, Any] = {}
     ) -> Optional[Matrix]:
         """
@@ -442,7 +443,7 @@ class SDPPrimal(TransformablePrimal):
             Whether to allow inexact, numerical feasible solutions. This is useful when the
             SDP is weakly feasible and no rational solution is found successfully.
 
-        time_limit : Optional[float]
+        time_limit : TimeLimit
             Time limit in seconds for the solver. If None, no time limit is set. Defaults to None.
             When time limit is reached, the solver will try to terminate the process and raise
             an Exception. Only a few solvers support time limit, e.g., 'mosek', 'clarabel' and 'qics',
@@ -459,8 +460,7 @@ class SDPPrimal(TransformablePrimal):
             The solution of the SDP problem. If it fails, return None.
         """
         original_self = self
-        end_time = perf_counter() + time_limit if isinstance(time_limit, (int, float)) else None
-        _time_limit = ArithmeticTimeout.make_checker(time_limit)
+        check_time = ArithmeticTimeout.make_checker(time_limit)
         if solve_child:
             self = self.get_last_child()
 
@@ -480,7 +480,7 @@ class SDPPrimal(TransformablePrimal):
             spaces.append(diag)
             objective = np.array([0]*self.dof + [-1], dtype=np.float64)
             constraints = [(objective, 5, '<')] # avoid unboundness
-            _time_limit()
+            check_time()
         except ArithmeticTimeout as e:
             raise SDPTimeoutError.from_kwargs() from e
 
@@ -488,8 +488,13 @@ class SDPPrimal(TransformablePrimal):
         kwargs = kwargs.copy()
         if ('verbose' not in kwargs) and float(verbose) > 1:
             kwargs['verbose'] = verbose
-        if end_time is not None and ('time_limit' not in kwargs):
-            kwargs['time_limit'] = end_time - perf_counter()
+        if 'time_limit' not in kwargs:
+            try:
+                remaining = check_time.remaining()
+            except ArithmeticTimeout as e:
+                raise SDPTimeoutError.from_kwargs() from e
+            if remaining is not None:
+                kwargs['time_limit'] = remaining
 
         sol = solve_numerical_primal_sdp(
             (x0, spaces), objective=objective, constraints=constraints,
@@ -503,7 +508,7 @@ class SDPPrimal(TransformablePrimal):
         try:
             y = _get_numerical_y(attempt, self.size.values())
             if y is not None:
-                _time_limit()
+                check_time()
                 solution = self.rationalize(y, verbose=verbose,
                     rationalizers=[RationalizeWithMask(), RationalizeSimultaneously([1,1260,1260**3])])
                 if solution is not None:

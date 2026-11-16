@@ -5,7 +5,7 @@ using sympy.Rational or numpy for matrix computations.
 """
 
 from time import perf_counter
-from typing import List, Tuple, Union, Optional, Callable, TYPE_CHECKING
+from typing import List, Tuple, Union, Optional, TYPE_CHECKING
 
 from numpy import ndarray, int64, isnan, inf, kron, result_type
 from numpy import iinfo as np_iinfo
@@ -24,14 +24,15 @@ else:
     from scipy.sparse import eye as sparse_eye
 
 from .matop import (
-    ArithmeticTimeout,
-    SDM, DDM, DFM,
+    ArithmeticTimeout, SDM, DDM, DFM,
     is_zz_qq_mat, vec2mat, reshape, primitive,
     rep_matrix_to_scipy, rep_matrix_from_numpy
 )
 
 if TYPE_CHECKING:
     from sympy import MatrixBase
+
+    from .matop import TimeLimit, TimeChecker
 
 _INT32_MAX = np_iinfo('int32').max # 2147483647
 _INT64_MAX = np_iinfo('int64').max # 9223372036854775807
@@ -137,7 +138,7 @@ def matlshift(A: RepMatrix, B: int) -> RepMatrix:
 def _matmul_dense_rational(
     A: RepMatrix,
     B: RepMatrix,
-    time_limit: Callable[[], None]
+    check_time: 'TimeChecker'
 ) -> Optional[RepMatrix]:
     """
     Try native dense multiplication for moderately large rational products.
@@ -156,9 +157,9 @@ def _matmul_dense_rational(
     if not isinstance(left.rep, DFM):
         return None
     right = right.to_dense()
-    time_limit()
+    check_time()
     result = left.matmul(right).to_sparse()
-    time_limit()
+    check_time()
     return Matrix._fromrep(result)
 
 
@@ -166,7 +167,7 @@ def matmul(
     A: MatrixLike,
     B: MatrixLike,
     return_shape: Optional[Tuple[int, int]] = None,
-    time_limit: Optional[Union[Callable, float]] = None,
+    time_limit: 'TimeLimit' = None,
 ) -> MatrixLike:
     """
     Fast, low-level implementation of symbolic matrix multiplication.
@@ -236,10 +237,10 @@ def matmul(
             return reshape(C, return_shape)
         return C
 
-    time_limit = ArithmeticTimeout.make_checker(time_limit)
+    check_time = ArithmeticTimeout.make_checker(time_limit)
     A = rep_matrix_from_numpy(A)
     B = rep_matrix_from_numpy(B)
-    time_limit()
+    check_time()
 
     return_shape = return_shape or (A.shape[0], B.shape[-1])
     if A.shape[0] == 0 or B.shape[0] == 0 or B.shape[-1] == 0:
@@ -254,7 +255,7 @@ def matmul(
 
     # Repeatedly finding a common denominator can cost more than the product,
     # particularly when applying a rational change of coordinates to Gram blocks.
-    dense = _matmul_dense_rational(A0, B0, time_limit=time_limit)
+    dense = _matmul_dense_rational(A0, B0, check_time=check_time)
     if dense is not None:
         return reshape(dense, return_shape)
 
@@ -265,20 +266,20 @@ def matmul(
         _MAXA = abs(A).max()
         if isnan(_MAXA) or _MAXA == inf or _MAXA > _INT64_MAX:
             raise OverflowError
-        time_limit()
+        check_time()
 
         q2, B = primitive(B._rep)
         B = rep_matrix_to_scipy(B, dtype=int64)
         _MAXB = abs(B).max()
         if isnan(_MAXB) or _MAXB == inf or _MAXB > _INT64_MAX or int(_MAXA) * int(_MAXB) * B.shape[0] > _INT64_MAX:
             raise OverflowError
-        time_limit()
+        check_time()
     except (OverflowError, TypeError):
         return default(A0, B0)
 
     q1q2 = q1 * q2
     C = (A @ B).reshape(return_shape)
-    time_limit()
+    check_time()
     C = rep_matrix_from_numpy(C) * q1q2
     return C
 
@@ -300,7 +301,7 @@ def _matmul_multiple_sparray(A, B):
 def matmul_multiple(
     A: MatrixLike,
     B: MatrixLike,
-    time_limit: Optional[Union[Callable, float]] = None,
+    time_limit: 'TimeLimit' = None,
 ) -> MatrixLike:
     """
     Perform multiple matrix multiplications. This can be regarded as a 3-dim tensor multiplication.
@@ -350,10 +351,10 @@ def matmul_multiple(
     if (_is_scipy_sparse(A) or _is_scipy_sparse(B)) \
             and _is_numeric_matrix(A) and _is_numeric_matrix(B):
         return _matmul_multiple_sparray(A, B)
-    time_limit = ArithmeticTimeout.make_checker(time_limit)
+    check_time = ArithmeticTimeout.make_checker(time_limit)
     A = rep_matrix_from_numpy(A)
     B = rep_matrix_from_numpy(B)
-    time_limit()
+    check_time()
 
     if A.shape[0] == 0 or B.shape[0] == 0 or B.shape[1] == 0:
         return Matrix.zeros(A.shape[0], B.shape[0]*B.shape[1])
@@ -364,7 +365,7 @@ def matmul_multiple(
         for i in range(A.shape[0]):
             Aij = vec2mat(A[i,:])
             eq = matmul(Aij, B, return_shape = (1, Aij.shape[0]*B.shape[1]),
-                        time_limit=time_limit)
+                        time_limit=check_time)
             eq_rows.append(eq)
         return Matrix.vstack(*eq_rows)
 
@@ -388,7 +389,7 @@ def matmul_multiple(
         _MAXA = _sparse_abs_max(A)
         if isnan(_MAXA) or _MAXA == inf or _MAXA > _INT64_MAX:
             raise OverflowError
-        time_limit()
+        check_time()
 
         q2, B = primitive(B._rep)
         B = rep_matrix_to_scipy(B, dtype=int64)
@@ -396,7 +397,7 @@ def matmul_multiple(
         if isnan(_MAXB) or _MAXB == inf or _MAXB > _INT64_MAX \
                 or int(_MAXA) * int(_MAXB) * n > _INT64_MAX:
             raise OverflowError
-        time_limit()
+        check_time()
     except (OverflowError, TypeError):
         return default(A0, B0)
 
@@ -412,7 +413,7 @@ def matmul_multiple(
         A = A.toarray().reshape((N, n, n))
         B = B.toarray()
         C = (A @ B).reshape((N, n*m))
-    time_limit()
+    check_time()
 
     if _VERBOSE_MATMUL_MULTIPLE:
         print('>> Time for %s matmul:' % ('sparse' if use_sparse else 'numpy'), perf_counter() - time0)
@@ -445,7 +446,7 @@ def symmetric_bilinear(
     A: MatrixLike,
     is_A_vec: bool = False,
     return_shape: Optional[Tuple[int, int]] = None,
-    time_limit: Optional[Union[Callable, float]] = None,
+    time_limit: 'TimeLimit' = None,
 ) -> MatrixLike:
     """
     Compute U.T * A * U efficiently.
@@ -497,9 +498,10 @@ def symmetric_bilinear(
     [116.0, 172.0],
     [170.0, 252.0]])
     """
+    check_time = ArithmeticTimeout.make_checker(time_limit)
     if is_A_vec:
         A = vec2mat(A)
-    M = matmul(U.T, matmul(A, U, time_limit=time_limit), time_limit=time_limit)
+    M = matmul(U.T, matmul(A, U, time_limit=check_time), time_limit=check_time)
     if return_shape is not None:
         return reshape(M, return_shape)
     return M
@@ -508,7 +510,7 @@ def symmetric_bilinear(
 def symmetric_bilinear_multiple(
     U: MatrixLike,
     A: MatrixLike,
-    time_limit: Optional[Union[Callable, float]] = None,
+    time_limit: 'TimeLimit' = None,
 ) -> MatrixLike:
     """
     Perform multiple symmetric bilinear products U^T * Ai * U.
@@ -527,11 +529,11 @@ def symmetric_bilinear_multiple(
     if (_is_scipy_sparse(A) or _is_scipy_sparse(U)) \
             and _is_numeric_matrix(A) and _is_numeric_matrix(U):
         return _symmetric_bilinear_multiple_sparray(U, A)
-    time_limit = ArithmeticTimeout.make_checker(time_limit)
+    check_time = ArithmeticTimeout.make_checker(time_limit)
     A = rep_matrix_from_numpy(A)
     U = rep_matrix_from_numpy(U)
 
-    time_limit()
+    check_time()
 
     A0, U0 = A, U
     def default(A: Matrix, U: Matrix):
@@ -542,7 +544,7 @@ def symmetric_bilinear_multiple(
             # Aij = vec2mat(space[i,:])
             # eq = U.T * Aij * U
             eq = symmetric_bilinear(U, A[i,:], is_A_vec = True,
-                    return_shape = (1, U.shape[1]**2), time_limit = time_limit)
+                    return_shape = (1, U.shape[1]**2), time_limit=check_time)
             eq_rows[i] = eq
         eq_mat = Matrix.vstack(*eq_rows)
         if _VERBOSE_MATMUL_MULTIPLE:
@@ -566,14 +568,14 @@ def symmetric_bilinear_multiple(
         _MAXA = _sparse_abs_max(A)
         if isnan(_MAXA) or _MAXA == inf or _MAXA > _INT64_MAX:
             raise OverflowError
-        time_limit()
+        check_time()
 
         q2, U = primitive(U._rep)
         U = rep_matrix_to_scipy(U, dtype=int64)
         _MAXU = _sparse_abs_max(U)
         if isnan(_MAXU) or _MAXU == inf or _MAXU > _INT64_MAX:
             raise OverflowError
-        time_limit()
+        check_time()
 
 
         if _VERBOSE_MATMUL_MULTIPLE:
@@ -587,7 +589,7 @@ def symmetric_bilinear_multiple(
                 A = A.toarray().reshape((N, n, n))
                 U = U.toarray()
                 C = (U.T @ A @ U).reshape((N, m**2))
-            time_limit()
+            check_time()
             C = rep_matrix_from_numpy(C)
 
             if _VERBOSE_MATMUL_MULTIPLE:

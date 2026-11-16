@@ -16,13 +16,13 @@ def test_joint_exposure(sign):
     T = Matrix([[1, sign], [1, -sign]]) if sign else Matrix.eye(2)
     sdp = SDPProblem.from_matrix({'gram': T.T * gram * T, 'bound': Matrix([[p-a]])})
 
-    directions = find_exposing_nullspace(sdp._x0_and_space, remaining_time=lambda: None)
+    directions = find_exposing_nullspace(sdp._x0_and_space)
     assert directions == {'gram': Matrix([1, sign]), 'bound': Matrix([1])}
     # The supplied bound direction needs a second atom to expose the face.
     for level in (0, 1, 2):
         result = find_exposing_nullspace(
             sdp._x0_and_space, directions=[('bound', Matrix([1]))],
-            coordinate_level=level, remaining_time=lambda: None,
+            coordinate_level=level,
         )
         assert result == (directions if level == 2 or (level == 1 and not sign) else {})
     child = sdp.constrain_nullspace(directions)
@@ -35,17 +35,15 @@ def test_joint_exposure(sign):
 def test_strictly_feasibility():
     # Strictly feasible SDP has no face.
     sdp = SDPProblem.from_matrix([Matrix([[a]]), Matrix([[1-a]])])
-    assert find_exposing_nullspace(sdp._x0_and_space,
-            remaining_time=lambda: None) == {}
+    assert find_exposing_nullspace(sdp._x0_and_space) == {}
 
 
 def test_dual_exposure():
     gram = (3 * Matrix.eye(3) - Matrix.ones(3)) * a
     sdp = SDPProblem.from_matrix({'gram': gram})
     blocks = sdp._x0_and_space
-    # assert find_exposing_nullspace(blocks, remaining_time=lambda: None) == {}
     assert find_exposing_nullspace(
-        blocks, dual={'gram': np.ones((3, 3))}, remaining_time=lambda: None,
+        blocks, dual={'gram': np.ones((3, 3))},
     ) == {'gram': Matrix.ones(3, 1)}
 
 
@@ -57,13 +55,12 @@ def test_spectral_joint_exposure(bound):
         'gram': gram, 'bound': Matrix([[bound-a]]), 'constant': Matrix([[1]]),
     })
     blocks = sdp._x0_and_space
-    assert find_exposing_nullspace(blocks, remaining_time=lambda: None) == {}
+    assert find_exposing_nullspace(blocks) == {}
 
     # This dual hint proposes a direction whose form is a, rather than
     # identically zero. The shared verifier must proceed to the joint search.
     directions = find_exposing_nullspace(
         blocks, y=np.array([1e-7]), dual={'gram': np.ones((3, 3))},
-        remaining_time=lambda: None,
     )
     if bound:
         # The same approximate kernel is present, but the pencil has interior.

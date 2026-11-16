@@ -1,4 +1,3 @@
-from time import perf_counter
 from typing import Tuple, List, Dict, Union, Optional, Any, Callable, NamedTuple, Sequence, TYPE_CHECKING
 
 import numpy as np
@@ -27,6 +26,7 @@ if TYPE_CHECKING:
     from sympy.core.relational import Relational
 
     from .abstract import Decomp
+    from .arithmetic import TimeChecker, TimeLimit
 
 def _get_unique_symbols(used_symbols, dof: int, xname: str = 'y'):
     """
@@ -52,7 +52,7 @@ def _get_unique_symbols(used_symbols, dof: int, xname: str = 'y'):
 
 
 def _prepare_feasibility_blocks(blocks: Dict[Any, Tuple[Matrix, Matrix]],
-        normalize: bool, *, check_time: Callable[[], None]
+        normalize: bool, *, check_time: 'TimeChecker'
 ) -> Tuple[Dict[Any, Tuple[np.ndarray, np.ndarray]], Tuple[Tuple[Any, float], ...]]:
     """Convert affine PSD blocks to numerical blocks with an appended margin."""
     numerical, scales = {}, []
@@ -572,7 +572,7 @@ class SDPProblem(TransformableDual):
         add_force_zeros: bool = False,
         equal_entries: List[Tuple[int, int]] = [],
         add_equal_entries: bool = True,
-        time_limit: Optional[Union[Callable, float]] = None,
+        time_limit: 'TimeLimit' = None,
     ) -> Tuple['SDPProblem', Tuple[Matrix, Matrix]]:
         """
         Assume the SDP problem can be rewritten in the form of
@@ -599,7 +599,7 @@ class SDPProblem(TransformableDual):
             If True, constrain the pair (i,j) and (j,i) entries of a symmetric
             matrix to be equal when solving the linear system. This is important to be
             True unless the constraint has been provided in the `equal_entries` argument.
-        time_limit: Optional[Union[Callable, float]]
+        time_limit: TimeLimit
             Try to raise the ArithmeticTimeout Exception when timeout is detected.
             If callable, it should be a function to check timeout and raise the Exception.
 
@@ -647,7 +647,7 @@ class SDPProblem(TransformableDual):
             >>> sdp.S[0].trace() # doctest: +SKIP
             0.0864750551103711
         """
-        time_limit = ArithmeticTimeout.make_checker(time_limit)
+        check_time = ArithmeticTimeout.make_checker(time_limit)
 
         if splits is None:
             splits = [sqrtsize_of_mat(eq.shape[1])]
@@ -675,11 +675,11 @@ class SDPProblem(TransformableDual):
                     else: # avoid overwriting by .extend
                         force_zeros[j] = force_zeros[j] + list(range(j-i, j-i+n))
                 offset += n**2
-        time_limit()
+        check_time()
 
         x0, space = solve_csr_linear(eq, rhs,
             x0_equal_indices=equal_entries, force_zeros=force_zeros, # type: ignore
-            time_limit=time_limit)
+            time_limit=check_time)
         n = sum([_**2 for _ in sizes])
 
         sdp = cls.from_full_x0_and_space(x0[:n,:], space[:n,:], splits)
@@ -786,7 +786,7 @@ class SDPProblem(TransformableDual):
         return super().as_params()
 
     def rationalize(self, y: np.ndarray, verbose: bool = False,
-            time_limit: Optional[Union[Callable, float]] = None, **kwargs) -> Optional[Tuple[Matrix, 'Decomp']]:
+            time_limit: 'TimeLimit' = None, **kwargs) -> Optional[Tuple[Matrix, 'Decomp']]:
         """
         Rationalize a NumPy vector `y`. If verbose == True, display the numerical eigenvalues
         before rationalization.
@@ -829,7 +829,7 @@ class SDPProblem(TransformableDual):
         solve_child: bool = True,
         propagate_to_parent: bool = True,
         verbose: bool = False,
-        time_limit: Optional[float] = None,
+        time_limit: 'TimeLimit' = None,
         kwargs: Dict[Any, Any] = {}
     ) -> Optional[Matrix]:
         """
@@ -874,7 +874,7 @@ class SDPProblem(TransformableDual):
             Whether to allow the backend SDP solver to print the log. Defaults to False.
             This argument will be suppressed if `kwargs` contains a `verbose` key.
 
-        time_limit : Optional[float]
+        time_limit : TimeLimit
             Time limit in seconds for the solver. If None, no time limit is set. Defaults to None.
             When time limit is reached, the solver will try to terminate the process and raise
             an Exception. Only a few solvers support time limit, e.g., 'mosek', 'clarabel' and 'qics',
@@ -1022,14 +1022,11 @@ class SDPProblem(TransformableDual):
     def _solve_face_with_equalities(self,
         nullspace: Dict[Any, Matrix],
         *,
-        remaining_time: Callable[[], Optional[float]],
+        check_time: 'TimeChecker',
         solver: Optional[str],
         normalize: bool, kwargs: Dict[Any, Any]
     ) -> Optional[Tuple[Matrix, 'Decomp']]:
         """Probe a face in the original parameter coordinates, then verify over QQ."""
-        def check_time() -> None:
-            remaining_time()
-
         eqs, rhs = _nullspace_equations(self._x0_and_space, nullspace, time_limit=check_time)
         if _is_column_separated(eqs):
             return None # The exact parameterization already has a sparse fast path.
@@ -1067,7 +1064,7 @@ class SDPProblem(TransformableDual):
         objective[-1] = -1
         constraints = [(equality, target[rows], '=='), (objective, 0, '<'), (objective, -5, '>')]
         options = kwargs.copy()
-        remaining = remaining_time()
+        remaining = check_time.remaining()
         if remaining is not None:
             if remaining <= 0:
                 return None
@@ -1094,7 +1091,7 @@ class SDPProblem(TransformableDual):
     def _recover_on_exposed_face(self,
         attempts: Sequence[SDPNumericalResult],
         *,
-        remaining_time: Callable[[], Optional[float]],
+        check_time: 'TimeChecker',
         solver: Optional[str],
         verbose: bool,
         normalize: bool,
@@ -1105,21 +1102,16 @@ class SDPProblem(TransformableDual):
     ) -> Optional[Tuple[Matrix, 'Decomp']]:
         """Retry on a certified face and verify the lifted solution in this SDP.
 
-        remaining_time checks the overall deadline and returns the seconds
-        available for another numerical solve, or None for no solver limit.
         The temporary reduction is local to this retry. Return None if there
         is no certified direction or the retry cannot recover a solution.
         """
-        def check_time() -> None:
-            remaining_time()
-
         # Check the newest hints first and run the hint-independent search once.
         for index in reversed(range(len(attempts))):
             hint = attempts[index]
             nullspace = find_exposing_nullspace(
                 self._x0_and_space, y=_get_numerical_y(hint), dual=hint.dual_blocks,
                 coordinate_level=0 if index else 2,
-                remaining_time=remaining_time,
+                time_limit=check_time,
             )
             if nullspace:
                 break
@@ -1132,7 +1124,7 @@ class SDPProblem(TransformableDual):
             # try to solve with face equations
             # without explicitly forming the child node
             solution = self._solve_face_with_equalities(
-                nullspace, remaining_time=remaining_time,
+                nullspace, check_time=check_time,
                 solver=solver, normalize=normalize, kwargs=retry_kwargs)
             if solution is not None:
                 if verbose:
@@ -1150,7 +1142,7 @@ class SDPProblem(TransformableDual):
         if verbose:
             print(f"Retry SDP on an exposed face: {_format_sdp_summary(child, short=2)}")
         if child.size:
-            remaining = remaining_time()
+            remaining = check_time.remaining()
             if remaining is not None:
                 if remaining <= 0:
                     return None
@@ -1170,7 +1162,7 @@ class SDPProblem(TransformableDual):
                 return None
         else:
             y = Matrix.zeros(A.cols, 1)
-        remaining_time()
+        check_time()
         return DualRationalizer(self).decompose(A @ y + b)
 
     def _solve_feasibility_models(
@@ -1179,8 +1171,8 @@ class SDPProblem(TransformableDual):
         block_scales: Tuple[Tuple[Any, float], ...],
         models: Sequence[_FeasibilityModel],
         *,
-        time_limit: Callable[[], None],
-        remaining_time: Callable[[], Optional[float]],
+        check_time: 'TimeChecker',
+        check_recovery_time: 'TimeChecker',
         solver: Optional[str],
         verbose: bool,
         certify_infeasibility: bool,
@@ -1190,27 +1182,18 @@ class SDPProblem(TransformableDual):
         attempts: List[SDPNumericalResult] = []
         for index, model in enumerate(models):
             options = kwargs
-            check_attempt_time: Callable[[], Optional[float]] = time_limit
-            attempt_remaining_time = remaining_time
+            check_attempt_time = check_time
+            check_certificate_time = check_recovery_time
             if index:
                 previous = attempts[-1].result
                 if previous.inf_or_unb or not (previous.inaccurate or previous.error):
                     break
-                available = remaining_time()
+                available = check_recovery_time.remaining()
                 budget = 30. if available is None else min(30., available / 2)
                 if budget <= 0:
                     break
                 options = dict(kwargs, time_limit=budget)
-                deadline = perf_counter() + budget
-
-                def check_budget() -> float:
-                    remaining = remaining_time()
-                    left = deadline - perf_counter()
-                    if left <= 0:
-                        raise ArithmeticTimeout()
-                    return left if remaining is None else min(left, remaining)
-
-                check_attempt_time = attempt_remaining_time = check_budget
+                check_attempt_time = check_certificate_time = check_recovery_time.with_limit(budget)
 
             try:
                 result = solve_numerical_dual_sdp(
@@ -1232,7 +1215,7 @@ class SDPProblem(TransformableDual):
                 if (certify_infeasibility and result.dual is not None
                         and (result.inf_or_unb or result.error)):
                     separator = DualRationalizer(self).rationalize_infeasibility(
-                        attempt.dual_blocks, remaining_time=attempt_remaining_time,
+                        attempt.dual_blocks, time_limit=check_certificate_time,
                     )
                     if separator is not None:
                         certificate, decompositions = separator
@@ -1244,11 +1227,11 @@ class SDPProblem(TransformableDual):
                     if attempts and not isinstance(e, SDPTimeoutError):
                         raise SDPTimeoutError(attempts[-1].result) from e
                     raise
-                remaining_time()
+                check_recovery_time()
             except SDPError:
                 if not index:
                     raise
-                remaining_time()
+                check_recovery_time()
         return attempts, None
 
     def solve(self,
@@ -1257,7 +1240,7 @@ class SDPProblem(TransformableDual):
         solve_child: bool = True,
         propagate_to_parent: bool = True,
         verbose: bool = False,
-        time_limit: Optional[float] = None,
+        time_limit: 'TimeLimit' = None,
         allow_numer: int = 0,
         normalize: bool = True,
         retry_relaxation: float = 0.,
@@ -1290,7 +1273,7 @@ class SDPProblem(TransformableDual):
         verbose : bool
             Whether to print the progress of the solver. Defaults to False.
 
-        time_limit : Optional[float]
+        time_limit : TimeLimit
             Time limit in seconds for the solver. If None, no time limit is set. Defaults to None.
             When time limit is reached, the solver will try to terminate the process and raise
             an Exception. Only a few solvers support time limit, e.g., 'mosek', 'clarabel' and 'qics',
@@ -1459,8 +1442,7 @@ class SDPProblem(TransformableDual):
         if not np.isfinite(retry_relaxation) or retry_relaxation < 0:
             raise ValueError("retry_relaxation must be finite and nonnegative")
         original_self = self
-        end_time = perf_counter() + time_limit if isinstance(time_limit, (int, float)) else None
-        _time_limit = ArithmeticTimeout.make_checker(time_limit=time_limit)
+        check_time = ArithmeticTimeout.make_checker(time_limit)
 
         if solve_child:
             self = self.get_last_child()
@@ -1475,7 +1457,7 @@ class SDPProblem(TransformableDual):
 
         try:
             x0_and_space, block_scales = _prepare_feasibility_blocks(
-                self._x0_and_space, normalize, check_time=_time_limit)
+                self._x0_and_space, normalize, check_time=check_time)
             models = _feasibility_models(self.dof, retry_relaxation)
         except ArithmeticTimeout as e:
             raise SDPTimeoutError.from_kwargs() from e
@@ -1483,25 +1465,21 @@ class SDPProblem(TransformableDual):
         kwargs = kwargs.copy()
         if ('verbose' not in kwargs) and float(verbose) > 1:
             kwargs['verbose'] = verbose
-        if end_time is not None and ('time_limit' not in kwargs):
-            kwargs['time_limit'] = end_time - perf_counter()
-
-        backend_limit = kwargs.get('time_limit')
-        backend_end_time = perf_counter() + backend_limit if backend_limit is not None else None
-        if end_time is not None:
-            backend_end_time = end_time if backend_end_time is None else min(end_time, backend_end_time)
-
-        def remaining_time() -> Optional[float]:
-            _time_limit()
-            if backend_end_time is not None:
-                return backend_end_time - perf_counter()
-            return None
-
         sol = None
         try:
+            check_recovery_time = check_time
+            if 'time_limit' not in kwargs:
+                remaining = check_time.remaining()
+                if remaining is not None:
+                    kwargs['time_limit'] = remaining
+            elif kwargs['time_limit'] is not None:
+                # Keep the explicit backend cap soft for recovery. The solve
+                # deadline still raises, even when reading the backend cap.
+                check_recovery_time = check_time.with_limit(kwargs['time_limit'], enforce=False)
+
             attempts, solution = self._solve_feasibility_models(
-                x0_and_space, block_scales, models, time_limit=_time_limit,
-                remaining_time=remaining_time, solver=solver, verbose=verbose,
+                x0_and_space, block_scales, models, check_time=check_time,
+                check_recovery_time=check_recovery_time, solver=solver, verbose=verbose,
                 certify_infeasibility=certify_infeasibility, kwargs=kwargs,
             )
             initial = attempts[0]
@@ -1509,7 +1487,7 @@ class SDPProblem(TransformableDual):
             y = _get_numerical_y(initial)
             if solution is None and recovery_rounds > 0:
                 solution = self._recover_on_exposed_face(attempts,
-                    remaining_time=remaining_time, solver=solver, verbose=verbose,
+                    check_time=check_recovery_time, solver=solver, verbose=verbose,
                     normalize=normalize, kwargs=kwargs, recovery_rounds=recovery_rounds,
                     recovery_with_equalities=recovery_with_equalities,
                     certify_infeasibility=certify_infeasibility)
@@ -1727,7 +1705,7 @@ class SDPProblem(TransformableDual):
             A dictionary mapping each key to a list of masks of row indices
             as zero diagonals. If a key is missing, it defaults to mask
             no diagonals.
-        time_limit : Optional[Union[float, Callable[[], bool]]]
+        time_limit : TimeLimit
             The time limit in seconds.
 
         Returns
@@ -1812,7 +1790,7 @@ class SDPProblem(TransformableDual):
         return super().constrain_block_structures(blocks)
 
     def constrain_coordinate_faces(self, level: int = 2, to_child: bool = True,
-            time_limit: Optional[Union[Callable, float]] = None) -> 'SDPProblem':
+            time_limit: 'TimeLimit' = None) -> 'SDPProblem':
         """
         Repeatedly reduce the PSD blocks using exact coordinate certificates.
         This is an extension of `constrain_zero_diagonals`.
@@ -1828,7 +1806,7 @@ class SDPProblem(TransformableDual):
                 e_i + e_j and e_i - e_j.
         to_child : bool
             Whether to reduce the child blocks.
-        time_limit : Optional[Union[float, Callable[[], bool]]]
+        time_limit : TimeLimit
             The time limit in seconds.
 
         Returns

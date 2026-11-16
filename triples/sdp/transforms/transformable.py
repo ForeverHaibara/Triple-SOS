@@ -1,6 +1,5 @@
-from typing import List, Tuple, Dict, Optional, Union, Callable, Any, TYPE_CHECKING
+from typing import List, Tuple, Dict, Optional, Any, TYPE_CHECKING
 from collections import Counter
-from time import perf_counter
 
 from sympy.matrices import MutableDenseMatrix as Matrix
 
@@ -15,6 +14,7 @@ if TYPE_CHECKING:
     from sympy import Symbol
 
     from .transform import SDPTransformation
+    from ..arithmetic import TimeLimit
 
 
 def _format_sdp_summary(sdp: SDPProblemBase, short: int) -> str:
@@ -159,7 +159,7 @@ class TransformableProblem(SDPProblemBase):
         return args
 
     def constrain_affine(self, A: Matrix, b: Matrix, to_child: bool=True,
-            time_limit: Optional[Union[Callable, float]]=None) -> 'TransformableProblem':
+            time_limit: "TimeLimit"=None) -> 'TransformableProblem':
         """
         Constrain the affine transformation of the SDP problem.
         """
@@ -167,7 +167,7 @@ class TransformableProblem(SDPProblemBase):
             A=A, b=b, to_child=to_child, time_limit=time_limit)
 
     def constrain_equations(self, eqs: Matrix, rhs: Matrix, to_child: bool=True,
-            time_limit: Optional[Union[Callable, float]]=None) -> 'TransformableProblem':
+            time_limit: "TimeLimit"=None) -> 'TransformableProblem':
         """
         Constrain the equations of the SDP problem.
         """
@@ -175,7 +175,7 @@ class TransformableProblem(SDPProblemBase):
             eqs=eqs, rhs=rhs, to_child=to_child, time_limit=time_limit)
 
     def constrain_columnspace(self, columnspace: Dict[Any, Matrix], to_child: bool=True,
-            time_limit: Optional[Union[Callable, float]]=None) -> 'TransformableProblem':
+            time_limit: "TimeLimit"=None) -> 'TransformableProblem':
         """
         Constrain the columnspace of the SDP problem.
         """
@@ -183,7 +183,7 @@ class TransformableProblem(SDPProblemBase):
             columnspace=columnspace, to_child=to_child, time_limit=time_limit)
 
     def constrain_nullspace(self, nullspace: Dict[Any, Matrix], to_child: bool=True,
-            time_limit: Optional[Union[Callable, float]]=None) -> 'TransformableProblem':
+            time_limit: "TimeLimit"=None) -> 'TransformableProblem':
         """
         Constrain the nullspace of the SDP problem.
         """
@@ -191,7 +191,7 @@ class TransformableProblem(SDPProblemBase):
             nullspace=nullspace, to_child=to_child, time_limit=time_limit)
 
     def constrain_congruence(self, basis: Dict[Any, Matrix],
-            time_limit: Optional[Union[Callable, float]]=None) -> 'TransformableProblem':
+            time_limit: "TimeLimit"=None) -> 'TransformableProblem':
         """
         Constrain the congruence of the SDP problem.
         """
@@ -204,7 +204,7 @@ class TransformableProblem(SDPProblemBase):
         return get_block_structures(self)
 
     def constrain_zero_diagonals(self, extractions: Optional[Dict[Any, List[int]]]=None, masks: Optional[Dict[Any, List[int]]]=None,
-            time_limit: Optional[Union[Callable, float]]=None) -> 'TransformableProblem':
+            time_limit: "TimeLimit"=None) -> 'TransformableProblem':
         return SDPRowExtraction.apply(self,
             extractions=extractions, masks=masks, time_limit=time_limit)
 
@@ -237,7 +237,7 @@ class TransformableDual(TransformableProblem):
         return SDPLinearTransform.apply_from_equations(self, eqs, rhs)
 
     def constrain_coordinate_faces(self, level: int = 2, to_child: bool = True,
-            time_limit: Optional[Union[Callable, float]] = None) -> 'TransformableDual':
+            time_limit: "TimeLimit" = None) -> 'TransformableDual':
         """Repeatedly reduce the PSD blocks using exact coordinate certificates.
 
         Level 1 searches for nonnegative combinations of the diagonal forms
@@ -252,17 +252,12 @@ class TransformableDual(TransformableProblem):
         if level == 0:
             return node
 
-        deadline = perf_counter() + time_limit if isinstance(time_limit, (int, float)) else None
         check_time = ArithmeticTimeout.make_checker(time_limit)
-
-        def remaining_time() -> Optional[float]:
-            remaining = check_time()
-            return deadline - perf_counter() if deadline is not None else remaining
 
         while node.dof > 0:
             check_time()
             nullspace = find_exposing_nullspace(node._x0_and_space,
-                coordinate_level=level, remaining_time=remaining_time)
+                coordinate_level=level, time_limit=check_time)
             if not nullspace:
                 return node
             node = node.constrain_nullspace(nullspace, to_child=False, time_limit=check_time)

@@ -1,6 +1,5 @@
 from abc import ABC, abstractmethod
-from time import perf_counter
-from typing import Union, Optional, Tuple, List, Dict, Callable, Generator, Any, Mapping
+from typing import Union, Optional, Tuple, List, Dict, Callable, Generator, Any, Mapping, TYPE_CHECKING
 
 import numpy as np
 from sympy import Rational, MatrixBase, nsimplify
@@ -21,6 +20,9 @@ from .facial import (
     _MAX_SPECTRAL_COEFFICIENTS, _direction_supports, _nonnegative_weights,
     _rounded_positive_eigendirections,
 )
+
+if TYPE_CHECKING:
+    from .arithmetic import TimeLimit
 
 Decomp = Dict[Any, Tuple[Matrix, Matrix, List[Rational]]]
 InfeasibilityCertificate = Dict[Any, Matrix]
@@ -105,7 +107,7 @@ class DualRationalizer:
         return y, decomps
 
     def nullspaces_lll(
-        self, y: np.ndarray, *, time_limit: Optional[Union[Callable, float]] = None,
+        self, y: np.ndarray, *, time_limit: "TimeLimit" = None,
     ) -> Dict[Any, Matrix]:
         """
         Infer the nullspaces of PSD matrices by the LLL algorithm, see [1].
@@ -157,10 +159,10 @@ class DualRationalizer:
         return V
 
     def rationalize_lll(self, y: np.ndarray,
-            *, time_limit: Optional[Union[Callable, float]] = None) -> Optional[Tuple[Matrix, Decomp]]:
-        time_limit = ArithmeticTimeout.make_checker(time_limit=time_limit)
+            *, time_limit: "TimeLimit" = None) -> Optional[Tuple[Matrix, Decomp]]:
+        check_time = ArithmeticTimeout.make_checker(time_limit)
 
-        V = self.nullspaces_lll(y, time_limit=time_limit)
+        V = self.nullspaces_lll(y, time_limit=check_time)
         eq_space = []
         eq_rhs = []
         for key, (x0, space) in self.x0_and_space.items():
@@ -168,16 +170,16 @@ class DualRationalizer:
             rhs = matmul_multiple(x0.T, V[key], time_limit = time_limit)
             eq_space.append(y_space.T)
             eq_rhs.append(-rhs.T)
-            time_limit()
+            check_time()
 
         eq_space = Matrix.vstack(*eq_space)
         eq_rhs = Matrix.vstack(*eq_rhs)
         for candidate in recover_affine_candidates(
-                eq_space, eq_rhs, y, self.ROUND_DENOMS[:3], time_limit=time_limit):
+                eq_space, eq_rhs, y, self.ROUND_DENOMS[:3], time_limit=check_time):
             result = self.decompose(candidate)
             if result is not None:
                 return result
-            time_limit()
+            check_time()
 
         try:
             x0, space = solve_undetermined_linear(eq_space, eq_rhs, time_limit = time_limit)
@@ -197,19 +199,19 @@ class DualRationalizer:
                 result = self.decompose(y)
                 if result is not None:
                     return result
-                time_limit()
+                check_time()
 
     def rationalize(self,
         y: np.ndarray,
         *,
-        time_limit: Optional[Union[Callable, float]] = None
+        time_limit: "TimeLimit" = None
     ) -> Optional[Tuple[Matrix, Decomp]]:
         """Recover rational feasible parameters and PSD decompositions, or return None."""
-        time_limit = ArithmeticTimeout.make_checker(time_limit=time_limit)
+        check_time = ArithmeticTimeout.make_checker(time_limit)
 
         if not isinstance(y, np.ndarray):
             y = rep_matrix_to_numpy(y)
-            time_limit()
+            check_time()
         y = y.astype(float)
         y0 = y.copy()
 
@@ -220,7 +222,7 @@ class DualRationalizer:
 
         # eigvalsh = self.eigvalsh(y)
         mineig_y0 = self.mineig(y0)
-        time_limit()
+        check_time()
 
         for denom in self.ROUND_DENOMS:
             y = np.round(y0 * denom) / denom
@@ -229,7 +231,7 @@ class DualRationalizer:
                 result = self.decompose(y)
                 if result is not None:
                     return result
-                time_limit()
+                check_time()
 
         if abs(mineig_y0) < 1e-4:
             result = self.rationalize_lll(y0, time_limit = time_limit)
@@ -242,7 +244,7 @@ class DualRationalizer:
         self,
         dual: Mapping[Any, Optional[np.ndarray]],
         *,
-        remaining_time: Optional[Callable[[], Optional[float]]] = None,
+        time_limit: "TimeLimit" = None,
     ) -> Optional[Tuple[InfeasibilityCertificate, Decomp]]:
         """Recover a rational strong infeasibility certificate, or return None.
 
@@ -258,22 +260,14 @@ class DualRationalizer:
                 > _MAX_SPECTRAL_COEFFICIENTS):
             return None
 
-        deadline = perf_counter() + 0.5
-
-        def probe_time() -> float:
-            remaining = remaining_time() if remaining_time is not None else None
-            budget = deadline - perf_counter()
-            if remaining is not None:
-                budget = min(budget, remaining)
-            if budget <= 0:
-                raise ArithmeticTimeout()
-            return budget
+        check_time = ArithmeticTimeout.make_checker(time_limit)
+        check_probe_time = check_time.with_limit(0.5)
 
         try:
             pencils = {}
             directions: List[Tuple[Any, Matrix, float]] = []
             for key in keys:
-                probe_time()
+                check_probe_time()
                 a, A = blocks[key]
                 z = dual[key]
                 n = sqrtsize_of_mat(a.rows)
@@ -281,7 +275,7 @@ class DualRationalizer:
                         or not (is_zz_qq_mat(a) and is_zz_qq_mat(A))):
                     continue
                 atoms = list(_rounded_positive_eigendirections(
-                    z, bounds=(4, 16, 64, 256), eigenvalue_rtol=1e-5, remaining_time=probe_time,
+                    z, bounds=(4, 16, 64, 256), eigenvalue_rtol=1e-5, check_time=check_probe_time,
                 ))
                 if len(directions) + len(atoms) > 512:
                     return None
@@ -290,12 +284,12 @@ class DualRationalizer:
                     directions.extend((key, Matrix(v), 0.) for v in atoms)
 
             for terms in _direction_supports(
-                blocks, directions, pencils, remaining_time=probe_time, objective_row=0,
+                blocks, directions, pencils, check_time=check_probe_time, objective_row=0,
             ):
                 equations = Matrix.vstack(*(term.form for term in terms)).T
                 rhs = Matrix.zeros(equations.rows, 1)
                 rhs[0] = -1
-                weights = _nonnegative_weights(equations, rhs, remaining_time=probe_time)
+                weights = _nonnegative_weights(equations, rhs, check_time=check_probe_time)
                 if weights is None:
                     continue
                 certificate: InfeasibilityCertificate = {}
@@ -305,18 +299,17 @@ class DualRationalizer:
                         atoms_by_key.setdefault(key, []).append((v.T, w))
                 decomps: Decomp = {}
                 for key, atoms in atoms_by_key.items():
-                    probe_time()
+                    check_probe_time()
                     rows, diag = zip(*atoms)
                     U = Matrix.vstack(*rows)
                     Z = U.T @ Matrix.diag(*diag) @ U
                     certificate[key] = Z
                     decomps[key] = (Z, U, list(diag))
-                probe_time()
+                check_probe_time()
                 return certificate, decomps
         except ArithmeticTimeout:
             # A local search may time out without exhausting the solve deadline.
-            if remaining_time is not None:
-                remaining_time()
+            check_time()
         return None
 
 

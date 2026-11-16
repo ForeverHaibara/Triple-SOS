@@ -90,4 +90,4 @@ def test_infeasibility_solve_timeout():
 
     with pytest.raises(ArithmeticTimeout):
         DualRationalizer(sdp).rationalize_infeasibility(
-            dual, remaining_time=remaining_time)
+            dual, time_limit=remaining_time)

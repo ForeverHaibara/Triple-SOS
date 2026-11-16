@@ -364,7 +364,7 @@ class SOSPoly(AtomSOSElement):
                 remaining_rounds -= 1
                 nullspace = find_exposing_nullspace(
                     node._x0_and_space, directions=[(key, Matrix(v)) for key, v in candidates],
-                    coordinate_level=0, remaining_time=check_time)
+                    coordinate_level=0, time_limit=check_time)
             else:
                 break
             if not nullspace:

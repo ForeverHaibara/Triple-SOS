@@ -4,8 +4,8 @@ from fractions import Fraction
 from itertools import chain
 from math import gcd
 from typing import (
-    Any, Callable, Dict, Iterator, List, Mapping,
-    NamedTuple, Optional, Sequence, Tuple, cast
+    Any, Dict, Iterator, List, Mapping,
+    NamedTuple, Optional, Sequence, Tuple, cast, TYPE_CHECKING
 )
 import numpy as np
 from scipy import __version__ as _SCIPY_VERSION
@@ -18,6 +18,9 @@ from .arithmetic import (
     ArithmeticTimeout, is_zz_qq_mat, matmul, rep_matrix_to_numpy,
     solve_undetermined_linear, sqrtsize_of_mat,
 )
+
+if TYPE_CHECKING:
+    from .arithmetic import TimeChecker, TimeLimit
 
 _HAS_HIGHS = tuple(version_tuple(_SCIPY_VERSION)) >= (1, 6)
 _MAX_SUPPORT = 128
@@ -48,11 +51,11 @@ class _Direction(NamedTuple):
 def _rank_one_term(
     key: Any, vector: Matrix, x0: Matrix, space: Matrix,
     *,
-    remaining_time: Callable[[], Optional[float]],
+    check_time: 'TimeChecker',
 ) -> _RankOneTerm:
     row = (vector * vector.T).reshape(1, x0.rows)
-    offset = cast(Matrix, matmul(row, x0, time_limit=remaining_time))
-    linear = cast(Matrix, matmul(row, space, time_limit=remaining_time))
+    offset = cast(Matrix, matmul(row, x0, time_limit=check_time))
+    linear = cast(Matrix, matmul(row, space, time_limit=check_time))
     return _RankOneTerm(key, vector, offset.row_join(linear))
 
 
@@ -79,7 +82,7 @@ def _rounded_positive_eigendirections(
     bounds: Sequence[int],
     eigenvalue_rtol: float = 0.,
     largest: Optional[int] = None,
-    remaining_time: Callable[[], Optional[float]],
+    check_time: 'TimeChecker',
 ) -> Iterator[Tuple[int, ...]]:
     """Yield distinct rational directions from the positive eigenspace."""
     try:
@@ -94,7 +97,7 @@ def _rounded_positive_eigendirections(
         vector = vectors[:, index]
         vector = vector / vector[np.argmax(np.abs(vector))]
         for bound in bounds:
-            remaining = remaining_time()
+            remaining = check_time.remaining()
             if remaining is not None and remaining <= 0:
                 return
             direction = _round_vector(vector, bound)
@@ -107,15 +110,15 @@ def _nonnegative_weights(
     equations: Matrix,
     rhs: Matrix,
     *,
-    remaining_time: Callable[[], Optional[float]],
+    check_time: 'TimeChecker',
 ) -> Optional[Matrix]:
     """Reconstruct nonnegative weights and check every equation over QQ."""
     try:
-        weights, _ = solve_undetermined_linear(equations, rhs, time_limit=remaining_time)
+        weights, _ = solve_undetermined_linear(equations, rhs, time_limit=check_time)
     except ValueError:
         return None
     if (any(w.is_nonnegative is not True for (w,) in weights.tolist())
-            or matmul(equations, weights, time_limit=remaining_time) != rhs):
+            or matmul(equations, weights, time_limit=check_time) != rhs):
         return None
     return weights
 
@@ -124,7 +127,7 @@ def _lp_supports(
     coefficients: np.ndarray,
     objective: np.ndarray,
     *,
-    remaining_time: Callable[[], Optional[float]],
+    check_time: 'TimeChecker',
     objective_row: Optional[int] = None,
 ) -> Iterator[np.ndarray]:
     """Propose nonnegative supports with zero pairing on the equality rows.
@@ -141,31 +144,32 @@ def _lp_supports(
         coefficients = np.delete(coefficients, objective_row, axis=0)
     scale = np.max(np.abs(coefficients), axis=1, keepdims=True)
     coefficients /= np.where(scale == 0, 1, scale)
-    remaining = remaining_time()
+    remaining = check_time.remaining()
     if remaining is not None and remaining <= 0:
         return
-    budget = min(0.25, remaining) if remaining is not None else 0.25
+    check_lp_time = check_time.with_limit(0.25)
     callback = None
     if _HAS_HIGHS:
         method = 'highs'
-        options = {'time_limit': budget, 'primal_feasibility_tolerance': 1e-9}
+        options = {'primal_feasibility_tolerance': 1e-9}
     else:
         method = 'simplex'
         options = {'tol': 1e-9, 'maxiter': 1000}
-        check_lp_time = ArithmeticTimeout.make_checker(time_limit=budget)
 
         def callback(_):
             check_lp_time()
 
     width, count = coefficients.shape
     try:
+        if _HAS_HIGHS:
+            options['time_limit'] = check_lp_time.remaining()
         result = linprog(objective, A_eq=np.vstack([coefficients, np.ones(count)]),
             b_eq=np.r_[np.zeros(width), 1.], bounds=(0, None), method=method,
             options=options, callback=callback)
     except ArithmeticTimeout:
-        remaining_time()
+        check_time()
         return
-    remaining_time()
+    check_time()
     if result.success and (objective_row is None or result.fun < -1e-9):
         support = np.flatnonzero(result.x > 1e-10)
         if 0 < len(support) <= _MAX_SUPPORT:
@@ -184,7 +188,7 @@ def find_exposing_nullspace(
     dual: Optional[Mapping[Any, Optional[np.ndarray]]] = None,
     directions: Optional[Sequence[Tuple[Any, Matrix]]] = None,
     coordinate_level: int = 2,
-    remaining_time: Callable[[], Optional[float]],
+    time_limit: 'TimeLimit' = None,
 ) -> Dict[Any, Matrix]:
     """Return the first exact exposure from dual, joint or spectral supports.
 
@@ -194,14 +198,15 @@ def find_exposing_nullspace(
     """
     if coordinate_level not in (0, 1, 2):
         raise ValueError("coordinate_level must be 0, 1 or 2")
+    check_time = ArithmeticTimeout.make_checker(time_limit)
     supports = chain(
-        _dual_supports(blocks, dual, remaining_time=remaining_time),
-        _supplied_direction_supports(blocks, directions, remaining_time=remaining_time),
-        _dual_supports(blocks, dual, joint=True, remaining_time=remaining_time),
-        _coordinate_supports(blocks, level=coordinate_level, remaining_time=remaining_time),
-        _spectral_supports(blocks, y, remaining_time=remaining_time),
+        _dual_supports(blocks, dual, check_time=check_time),
+        _supplied_direction_supports(blocks, directions, check_time=check_time),
+        _dual_supports(blocks, dual, joint=True, check_time=check_time),
+        _coordinate_supports(blocks, level=coordinate_level, check_time=check_time),
+        _spectral_supports(blocks, y, check_time=check_time),
     )
-    return _expose_supports(supports, remaining_time=remaining_time)
+    return _expose_supports(supports, check_time=check_time)
 
 
 def _dual_supports(
@@ -209,7 +214,7 @@ def _dual_supports(
     dual: Optional[Mapping[Any, Optional[np.ndarray]]],
     *,
     joint: bool = False,
-    remaining_time: Callable[[], Optional[float]],
+    check_time: 'TimeChecker',
 ) -> Iterator[List[_RankOneTerm]]:
     """Try rounded dual eigenvectors individually or in a joint support."""
     if not dual:
@@ -219,7 +224,7 @@ def _dual_supports(
 
     directions = []
     for key, z in dual.items():
-        remaining = remaining_time()
+        remaining = check_time.remaining()
         if remaining is not None and remaining <= 0:
             return
         if key not in blocks or z is None:
@@ -230,16 +235,16 @@ def _dual_supports(
             continue
         for vector in _rounded_positive_eigendirections(
             z, bounds=(1, 4, 16, 64), largest=4 if joint else 2,
-            eigenvalue_rtol=1e-4 if joint else 0., remaining_time=remaining_time,
+            eigenvalue_rtol=1e-4 if joint else 0., check_time=check_time,
         ):
             if not joint:
-                yield [_rank_one_term(key, Matrix(vector), x0, space, remaining_time=remaining_time)]
+                yield [_rank_one_term(key, Matrix(vector), x0, space, check_time=check_time)]
             elif max(map(abs, vector)) <= 512:
                 directions.append((key, Matrix(vector)))
         if len(directions) > _MAX_SUPPORT:
             return
     if len(directions) > 1:
-        yield from _supplied_direction_supports(blocks, directions, remaining_time=remaining_time)
+        yield from _supplied_direction_supports(blocks, directions, check_time=check_time)
 
 
 def _coordinate_term(
@@ -266,7 +271,7 @@ def _coordinate_columns(
     sizes: Dict[Any, int],
     pairs: bool,
     *,
-    remaining_time: Callable[[], Optional[float]],
+    check_time: 'TimeChecker',
 ) -> Tuple[np.ndarray, List[_Direction]]:
     """
     Return floating-point coefficients of the rank-one test forms.
@@ -288,7 +293,7 @@ def _coordinate_columns(
             for sign in (1, -1):
                 columns.append(diagonal_sum + sign*cross)
                 directions.extend(_Direction(key, int(a), int(b), sign) for a, b in zip(i, j))
-        remaining_time()
+        check_time()
     return np.concatenate(columns, axis=0).T, directions
 
 
@@ -296,7 +301,7 @@ def _coordinate_supports(
     blocks: Dict[Any, Tuple[Matrix, Matrix]],
     *,
     level: int,
-    remaining_time: Callable[[], Optional[float]],
+    check_time: 'TimeChecker',
 ) -> Iterator[List[_RankOneTerm]]:
     """Propose supports from the diagonal cone and diagonally dominant cone.
 
@@ -315,18 +320,18 @@ def _coordinate_supports(
         # Bound the dense numerical search and the exact support solve.
         if count > 2048 or count*width > 1_000_000:
             break
-        remaining = remaining_time()
+        remaining = check_time.remaining()
         if remaining is not None and remaining <= 0:
             break
-        coefficients, directions = _coordinate_columns(blocks, sizes, pairs, remaining_time=remaining_time)
-        for indices in _lp_supports(coefficients, np.zeros(count), remaining_time=remaining_time):
+        coefficients, directions = _coordinate_columns(blocks, sizes, pairs, check_time=check_time)
+        for indices in _lp_supports(coefficients, np.zeros(count), check_time=check_time):
             yield [_coordinate_term(blocks, sizes, directions[i]) for i in indices]
 
 
 def _spectral_directions(
     matrix: np.ndarray,
     *,
-    remaining_time: Callable[[], Optional[float]],
+    check_time: 'TimeChecker',
 ) -> List[Tuple[Tuple[int, ...], float]]:
     """Choose a few short directions near the numerical nullspace of a block."""
     if not np.isfinite(matrix).all():
@@ -360,7 +365,7 @@ def _spectral_directions(
     for i in range(n):
         add(tuple(int(j == i) for j in range(n)))
     for rank in range(1, min(n, near_zero + 1)):
-        remaining_time()
+        check_time()
         W = vectors[:, order[:rank]]
         _, _, pivots = qr(W.T, mode='economic', pivoting=True)
         try:
@@ -378,7 +383,7 @@ def _spectral_supports(
     blocks: Dict[Any, Tuple[Matrix, Matrix]],
     y: Optional[np.ndarray],
     *,
-    remaining_time: Callable[[], Optional[float]],
+    check_time: 'TimeChecker',
 ) -> Iterator[List[_RankOneTerm]]:
     """Propose supports using rounded charts of the near-kernels at y."""
     if y is None or not np.isfinite(y).all():
@@ -395,7 +400,7 @@ def _spectral_supports(
     directions = []
     pencils = {}
     for key, n in sizes.items():
-        remaining = remaining_time()
+        remaining = check_time.remaining()
         if remaining is not None and remaining <= 0:
             return
         a, A = blocks[key]
@@ -404,17 +409,17 @@ def _spectral_supports(
             continue
         with np.errstate(over='ignore', invalid='ignore'):
             matrix = (pencil[:, 0] + pencil[:, 1:] @ y).reshape(n, n)
-        for vector, residual in _spectral_directions(matrix, remaining_time=remaining_time):
+        for vector, residual in _spectral_directions(matrix, check_time=check_time):
             directions.append((key, Matrix(vector), residual))
         pencils[key] = pencil
-    yield from _direction_supports(blocks, directions, pencils, remaining_time=remaining_time)
+    yield from _direction_supports(blocks, directions, pencils, check_time=check_time)
 
 
 def _supplied_direction_supports(
     blocks: Dict[Any, Tuple[Matrix, Matrix]],
     directions: Optional[Sequence[Tuple[Any, Matrix]]],
     *,
-    remaining_time: Callable[[], Optional[float]],
+    check_time: 'TimeChecker',
 ) -> Iterator[List[_RankOneTerm]]:
     """Propose supports using only the supplied rational directions."""
     if not directions or len(directions) > _MAX_SUPPORT:
@@ -430,18 +435,18 @@ def _supplied_direction_supports(
         return
     pencils = {}
     for k in keys:
-        remaining_time()
+        check_time()
         a, A = blocks[k]
         pencils[k] = rep_matrix_to_numpy(a.row_join(A))
     yield from _direction_supports(
-        blocks, [(k, v, 0.) for k, v in directions], pencils, remaining_time=remaining_time,
+        blocks, [(k, v, 0.) for k, v in directions], pencils, check_time=check_time,
     )
 
 
 def _positive_support(
     forms: Sequence[Matrix],
     *,
-    remaining_time: Callable[[], Optional[float]],
+    check_time: 'TimeChecker',
 ) -> List[int]:
     """Return the positive indices of a normalized QQ dependence, if verified."""
     if len(forms) == 1:
@@ -449,14 +454,14 @@ def _positive_support(
     equations = Matrix.vstack(*forms).T.col_join(Matrix.ones(1, len(forms)))
     rhs = Matrix.zeros(equations.rows, 1)
     rhs[-1] = 1
-    weights = _nonnegative_weights(equations, rhs, remaining_time=remaining_time)
+    weights = _nonnegative_weights(equations, rhs, check_time=check_time)
     return [] if weights is None else [i for i, (w,) in enumerate(weights.tolist()) if w.is_positive]
 
 
 def _expose_supports(
     supports: Iterator[List[_RankOneTerm]],
     *,
-    remaining_time: Callable[[], Optional[float]],
+    check_time: 'TimeChecker',
 ) -> Dict[Any, Matrix]:
     """Verify zero pairing before imposing the corresponding kernel vectors.
 
@@ -466,7 +471,7 @@ def _expose_supports(
     for terms in supports:
         nullspace: Dict[Any, List[Matrix]] = {}
         for index in _positive_support([term.form for term in terms],
-                                       remaining_time=remaining_time):
+                                       check_time=check_time):
             key, vector, _ = terms[index]
             nullspace.setdefault(key, []).append(vector)
         if nullspace:
@@ -479,7 +484,7 @@ def _direction_supports(
     directions: Sequence[Tuple[Any, Matrix, float]],
     pencils: Dict[Any, np.ndarray],
     *,
-    remaining_time: Callable[[], Optional[float]],
+    check_time: 'TimeChecker',
     objective_row: Optional[int] = None,
 ) -> Iterator[List[_RankOneTerm]]:
     """Propose atom supports numerically and form their exact affine coefficients."""
@@ -491,13 +496,13 @@ def _direction_supports(
         with np.errstate(over='ignore', invalid='ignore'):
             columns.append(np.outer(v, v).reshape(-1) @ pencils[key])
         costs.append(cost)
-        remaining_time()
+        check_time()
 
     for indices in _lp_supports(
-        np.asarray(columns).T, np.asarray(costs), remaining_time=remaining_time,
+        np.asarray(columns).T, np.asarray(costs), check_time=check_time,
         objective_row=objective_row,
     ):
         yield [
-            _rank_one_term(key, vector, *blocks[key], remaining_time=remaining_time)
+            _rank_one_term(key, vector, *blocks[key], check_time=check_time)
             for key, vector, _ in (directions[i] for i in indices)
         ]

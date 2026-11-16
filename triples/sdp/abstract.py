@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from time import perf_counter
 from typing import Dict, Tuple, List, Union, Optional, Any, Iterable, NamedTuple, TYPE_CHECKING
 
 import numpy as np
@@ -19,6 +18,7 @@ if TYPE_CHECKING:
     from sympy import Expr, Symbol
     from sympy.core.relational import Relational
 
+    from .arithmetic import TimeLimit
     from .backends import SDPResult
 
 Decomp = Dict[Any, Tuple[Matrix, Matrix, List[Rational]]]
@@ -286,14 +286,13 @@ class SDPProblemBase(ABC):
         solve_child: bool = True,
         propagate_to_parent: bool = True,
         verbose: bool = False,
-        time_limit: Optional[float] = None,
+        time_limit: 'TimeLimit' = None,
         kwargs: Dict[Any, Any] = {}
     ) -> Optional[Matrix]:
         """
         Solve the SDP problem with a given objective and constraints.
         """
-        end_time = perf_counter() + time_limit if isinstance(time_limit, (int, float)) else None
-        time_limit = ArithmeticTimeout.make_checker(time_limit)
+        check_time = ArithmeticTimeout.make_checker(time_limit)
 
         original_self = self
         obj = self.exprs_to_arrays([objective])[0]
@@ -316,7 +315,7 @@ class SDPProblemBase(ABC):
                 ineq_lhs, ineq_rhs = self.propagate_affine_to_child(ineq_lhs, -ineq_rhs, recursive=True)
                 eq_lhs, eq_rhs = self.propagate_affine_to_child(eq_lhs, -eq_rhs, recursive=True)
                 ineq_rhs, eq_rhs = -ineq_rhs, -eq_rhs
-                time_limit()
+                check_time()
                 self = self.get_last_child()
         except ArithmeticTimeout as e:
             raise SDPTimeoutError.from_kwargs() from e
@@ -326,8 +325,13 @@ class SDPProblemBase(ABC):
         kwargs = kwargs.copy()
         if 'verbose' not in kwargs:
             kwargs['verbose'] = verbose
-        if end_time is not None and ('time_limit' not in kwargs):
-            kwargs['time_limit'] = end_time - perf_counter()
+        if 'time_limit' not in kwargs:
+            try:
+                remaining = check_time.remaining()
+            except ArithmeticTimeout as e:
+                raise SDPTimeoutError.from_kwargs() from e
+            if remaining is not None:
+                kwargs['time_limit'] = remaining
 
         sol = self._solve_numerical_sdp(objective=obj[0],
                     constraints=cons, solver=solver,
@@ -339,7 +343,7 @@ class SDPProblemBase(ABC):
         try:
             if y is not None:
                 y = rep_matrix_from_numpy(y)
-                time_limit()
+                check_time()
                 self.register_y(y, project=True, perturb=True,
                     propagate_to_parent=propagate_to_parent)
                 y = original_self.y
