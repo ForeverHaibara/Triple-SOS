@@ -1774,7 +1774,7 @@ class SDPProblem(TransformableDual):
          [2, 1],
          [1, 4]])}
         """
-        return super().constrain_zero_diagonals(extractions, masks, time_limit)
+        return super().constrain_zero_diagonals(extractions, masks, time_limit=time_limit)
 
     def constrain_block_structures(self, blocks = None) -> 'SDPProblem':
         """
@@ -1810,3 +1810,54 @@ class SDPProblem(TransformableDual):
          ('M2', 1): Matrix([[x + y + 1]])}
         """
         return super().constrain_block_structures(blocks)
+
+    def constrain_coordinate_faces(self, level: int = 2, to_child: bool = True,
+            time_limit: Optional[Union[Callable, float]] = None) -> 'SDPProblem':
+        """
+        Repeatedly reduce the PSD blocks using exact coordinate certificates.
+        This is an extension of `constrain_zero_diagonals`.
+        See more illustration in [1].
+
+        Parameters
+        ----------
+        level : int
+            The level of the reduction.
+            * 0: disabled
+            * 1: nonnegative combinations of diagonal entries
+            * 2: nonnegative combinations of forms in directions
+                e_i + e_j and e_i - e_j.
+        to_child : bool
+            Whether to reduce the child blocks.
+        time_limit : Optional[Union[float, Callable[[], bool]]]
+            The time limit in seconds.
+
+        Returns
+        -------
+        SDPProblem
+            The transformed SDP problem.
+
+        References
+        ----------
+        .. [1] Permenter F. & Parrilo P.A. (2014), Partial facial reduction: simplified,
+            equivalent SDPs via approximations of the PSD cone, Math. Program., 171, 1-54.
+
+        Examples
+        --------
+        >>> from sympy import Matrix, symbols
+        >>> y1, y2, y3 = symbols('y1 y2 y3')
+        >>> A = Matrix([
+        ... [  1,      -y1,        0,  -y3],
+        ... [-y1, 2*y2 - 1,       y3,    0],
+        ... [  0,       y3, 2*y1 - 1,  -y2],
+        ... [-y3,        0,       -y2,   1]])
+        >>> sdp = SDPProblem.from_matrix({'A': A}, gens=(y1, y2, y3))
+        >>> sdp2 = sdp.constrain_coordinate_faces()
+        >>> sdp2.S_from_y() # doctest: +NORMALIZE_WHITESPACE
+        {'A': Matrix([
+         [1, 0],
+         [0, 1]])}
+        >>> sdp2.dof
+        0
+        """
+        return super().constrain_coordinate_faces(level,
+            to_child=to_child, time_limit=time_limit)

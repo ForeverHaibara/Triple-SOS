@@ -1,5 +1,6 @@
 from typing import List, Tuple, Dict, Optional, Union, Callable, Any, TYPE_CHECKING
 from collections import Counter
+from time import perf_counter
 
 from sympy.matrices import MutableDenseMatrix as Matrix
 
@@ -7,7 +8,7 @@ from .linear import SDPLinearTransform, SDPMatrixTransform, SDPCongruence
 from .parametric import SDPDeparametrization
 from .polytope import get_zero_diagonals, SDPRowExtraction
 from .diagonalize import get_block_structures, SDPBlockDiagonalization
-from ..arithmetic import is_empty_matrix
+from ..arithmetic import ArithmeticTimeout, is_empty_matrix
 from ..abstract import SDPProblemBase
 
 if TYPE_CHECKING:
@@ -234,6 +235,40 @@ class TransformableDual(TransformableProblem):
                 is_empty_matrix(rhs, check_all_zeros=True):
             return self
         return SDPLinearTransform.apply_from_equations(self, eqs, rhs)
+
+    def constrain_coordinate_faces(self, level: int = 2, to_child: bool = True,
+            time_limit: Optional[Union[Callable, float]] = None) -> 'TransformableDual':
+        """Repeatedly reduce the PSD blocks using exact coordinate certificates.
+
+        Level 1 searches for nonnegative combinations of the diagonal forms
+        that vanish identically across the blocks. Level 2 also uses the
+        forms in directions e_i + e_j and e_i - e_j. Level 0 disables
+        the search. Start at the last child if to_child is True.
+        """
+        from ..facial import find_exposing_nullspace
+        if level not in (0, 1, 2):
+            raise ValueError("level must be 0, 1 or 2")
+        node = self.get_last_child() if to_child else self
+        if level == 0:
+            return node
+
+        deadline = perf_counter() + time_limit if isinstance(time_limit, (int, float)) else None
+        check_time = ArithmeticTimeout.make_checker(time_limit)
+
+        def remaining_time() -> Optional[float]:
+            remaining = check_time()
+            return deadline - perf_counter() if deadline is not None else remaining
+
+        while node.dof > 0:
+            check_time()
+            nullspace = find_exposing_nullspace(node._x0_and_space,
+                coordinate_level=level, remaining_time=remaining_time)
+            if not nullspace:
+                return node
+            node = node.constrain_nullspace(nullspace, to_child=False, time_limit=check_time)
+
+        return node
+
 
 class TransformablePrimal(TransformableProblem):
     def constrain_symmetry(self) -> SDPProblemBase:

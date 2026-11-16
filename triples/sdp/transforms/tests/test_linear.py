@@ -41,7 +41,7 @@ def fd_example4():
 def fd_example5():
     # [1] Section 5.1.2 Example 3
     y1, y2, y3 = a, b, c
-    A = Matrix.diag(
+    A = Matrix(
         [[  1, -y1,  0,   0],
          [-y1,  y3,  0,   0],
          [  0,   0, y2,  y3],
@@ -98,6 +98,22 @@ def test_dual_matrix_transform():
         assert sdpp.dof == 0 and sdpp.size == {'A': 2}
         sdp.solve()
         assert sdp.as_params() == {y1: 1, y2: 1, y3: 0}
+
+
+def test_constrain_coordinate_faces():
+    sdp = fd_example2()
+    sdpp = sdp.constrain_coordinate_faces(level=2)
+    assert sdpp.dof == 0 and sdpp.size == {'A': 2}
+    sdpp.solve()
+    assert sdp.as_params() == {a: 1, b: 1, c: 0}
+    assert sdp.S['A'] == Matrix.diag(Matrix([[1,-1],[-1,1]]), Matrix([[1,-1],[-1,1]]))
+
+    sdp = fd_example5()
+    sdpp = sdp.constrain_coordinate_faces(level=1)
+    assert sdpp.dof == 0 and sdpp.size == {'A': 1}
+    sdpp.solve()
+    assert sdp.as_params() == {a: 0, b: 0, c: 0}
+    assert sdp.S['A'] == Matrix.diag(1,0,0,0)
 
 
 def test_dual_congruence():

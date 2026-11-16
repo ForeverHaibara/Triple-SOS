@@ -360,6 +360,7 @@ class AtomSOSElement(SOSElement):
             self.sdpp.constrain_block_structures()
 
         self.sdpp.constrain_zero_diagonals(time_limit=time_limit)
+        # self.sdpp.constrain_coordinate_faces(time_limit=time_limit)
 
 
     def _get_equation_system(self, parameters: List['Symbol']=[], domain=None) -> SOSEquationSystem:

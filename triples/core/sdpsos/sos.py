@@ -385,7 +385,7 @@ class SOSPoly(AtomSOSElement):
     ):
         time_limit = ArithmeticTimeout.make_checker(time_limit)
 
-        # wedderburn decomposition + constrain zero diagonals
+        # Wedderburn decomposition and facial reductions
         super()._post_construct(
             wedderburn=wedderburn,
             verbose=verbose,

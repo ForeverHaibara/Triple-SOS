@@ -1,18 +1,22 @@
+from sympy import Rational
+from sympy.abc import a
 from sympy.matrices import MutableDenseMatrix as Matrix
 
-from .test_linear import fd_example2, fd_example5
+from .test_linear import fd_example2
+from ...dual import SDPProblem
 
 def test_sdp_row_extraction():
-    sdp = fd_example5()
+    sdp = SDPProblem.from_matrix({
+        'A': Matrix([[0, 2*a+1], [2*a+1, 1-a]])
+    })
 
-    sdpp = sdp.constrain_zero_diagonals()\
-              .constrain_zero_diagonals()
+    sdpp = sdp.constrain_zero_diagonals()
     assert sdpp.dof == 0 and sdpp.size == {'A': 1}
 
     sdp.solve()
-    assert sdpp.S == {'A': Matrix([[1]])}
-    assert sdp.y == Matrix([0, 0, 0])
-    assert sdp.S == sdp.S_from_y([0, 0, 0])
+    assert sdpp.S == {'A': Matrix([[Rational(3, 2)]])}
+    assert sdp.y == Matrix([Rational(-1, 2)])
+    assert sdp.S['A'] == Matrix([[0, 0], [0, Rational(3, 2)]])
     U, S = sdp.decompositions['A']
     assert (U.T @ Matrix.diag(*S) @ U == sdp.S['A'])
 
