@@ -41,6 +41,7 @@ class DualBackendCVXOPT(DualBackend):
     [1] https://cvxopt.org/userguide/coneprog.html#semidefinite-programming
     """
     _dependencies = ('cvxopt',)
+    _solver_name = 'cvxopt'
 
     _opt_ineq_to_1d = False
     _opt_eq_to_ineq = False
@@ -83,15 +84,26 @@ class DualBackendCVXOPT(DualBackend):
         if y is not None:
             y = np_array(y).flatten()
 
-        result = {'y': y}
         status = sol['status']
+        result = {
+            'y': y, 'status': status, 'info': sol,
+            'iterations': sol.get('iterations'),
+            'primal_residual': sol.get('primal infeasibility'),
+            'dual_residual': sol.get('dual infeasibility'),
+        }
+        for name, key in (('dual', 'zs'), ('slack', 'ss')):
+            if sol.get(key) is not None:
+                result[name] = [np_array(mat, dtype=float) for mat in sol[key]]
 
         if status == 'optimal':
             result['optimal'] = True
         elif status == 'primal infeasible':
             result['infeasible'] = True
         elif status == 'dual infeasible':
-            if self.is_feasible(y, tol_fsb_abs=configs.tol_fsb_abs, tol_fsb_rel=configs.tol_fsb_rel):
+            if y is not None and self.is_feasible(y,
+                    tol_fsb_abs=configs.tol_fsb_abs, tol_fsb_rel=configs.tol_fsb_rel):
                 result['unbounded'] = True
             result['inf_or_unb'] = True
+        elif status == 'unknown':
+            result['inaccurate'] = True
         return result

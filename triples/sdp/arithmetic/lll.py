@@ -8,6 +8,8 @@ from .matop import ArithmeticTimeout, FLINT_TYPE
 if TYPE_CHECKING:
     from sympy.matrices import MutableDenseMatrix as Matrix
 
+    from .matop import TimeLimit
+
 try:
     from sympy.polys.matrices.exceptions import DMRankError, DMShapeError, DMValueError, DMDomainError
 except ImportError:
@@ -17,14 +19,14 @@ except ImportError:
     DMDomainError = ValueError
 
 
-def _ddm_lll(x, delta=QQ(3, 4), return_transform=False, time_limit=None):
+def _ddm_lll(x, delta=QQ(3, 4), return_transform=False, time_limit: "TimeLimit" = None):
     if QQ(1, 4) >= delta or delta >= QQ(1, 1):
         raise DMValueError("delta must lie in range (0.25, 1)")
     if x.shape[0] > x.shape[1]:
         raise DMShapeError("input matrix must have shape (m, n) with m <= n")
     if x.domain != ZZ:
         raise DMDomainError("input matrix domain must be ZZ")
-    time_limit = ArithmeticTimeout.make_checker(time_limit)
+    check_time = ArithmeticTimeout.make_checker(time_limit)
     m = x.shape[0]
     n = x.shape[1]
     k = 1
@@ -65,17 +67,17 @@ def _ddm_lll(x, delta=QQ(3, 4), return_transform=False, time_limit=None):
             except ZeroDivisionError:
                 raise DMRankError(linear_dependent_error)
             y_star[i] = [y_star[i][z] - mu[i][j] * y_star[j][z] for z in range(n)]
-            time_limit()
+            check_time()
         g_star[i] = dot_rows(y_star, y_star, (i, i)) # type: ignore
     while k < m:
         if not mu_small(k, k - 1):
             reduce_row(T, mu, y, (k, k - 1))
-            time_limit()
+            check_time()
         if lovasz_condition(k):
             for l in range(k - 2, -1, -1):
                 if not mu_small(k, l):
                     reduce_row(T, mu, y, (k, l))
-                    time_limit()
+                    check_time()
             k += 1
         else:
             nu = mu[k][k - 1]
@@ -96,24 +98,24 @@ def _ddm_lll(x, delta=QQ(3, 4), return_transform=False, time_limit=None):
             if return_transform:
                 T[k], T[k - 1] = T[k - 1], T[k] # type: ignore
             k = max(k - 1, 1)
-            time_limit()
+            check_time()
     # assert all(lovasz_condition(i) for i in range(1, m))
     # assert all(mu_small(i, j) for i in range(m) for j in range(i))
     return y, T
 
 
-def ddm_lll(x, delta=QQ(3, 4), time_limit=None):
+def ddm_lll(x, delta=QQ(3, 4), time_limit: "TimeLimit" = None):
     return _ddm_lll(x, delta=delta, return_transform=False, time_limit=time_limit)[0]
 
-def ddm_lll_transform(x, delta=QQ(3, 4), time_limit=None):
+def ddm_lll_transform(x, delta=QQ(3, 4), time_limit: "TimeLimit" = None):
     return _ddm_lll(x, delta=delta, return_transform=True, time_limit=time_limit)
 
-def lll(x: "Matrix", delta=QQ(3, 4), time_limit=None):
+def lll(x: "Matrix", delta=QQ(3, 4), time_limit: "TimeLimit" = None):
     """
     Compute the LLL-reduced basis of a given matrix.
     Adapted from SymPy 1.12 to support SymPy < 1.12.
     """
-    time_limit = ArithmeticTimeout.make_checker(time_limit)
+    check_time = ArithmeticTimeout.make_checker(time_limit)
     if x.shape[0] == 0 or x.shape[1] == 0:
         # Calling .lll() on 0*0 DFM matrix could cause kernel crash:
         # https://github.com/flintlib/python-flint/issues/351
@@ -121,7 +123,7 @@ def lll(x: "Matrix", delta=QQ(3, 4), time_limit=None):
 
     dM = x._rep.convert_to(ZZ)
     rep = dM.rep
-    time_limit()
+    check_time()
 
     if len(FLINT_TYPE):
         # flint is installed
@@ -132,7 +134,7 @@ def lll(x: "Matrix", delta=QQ(3, 4), time_limit=None):
             if not isinstance(ZZ.one, (fmpz, int)):
                 rep = [[fmpz(z) for z in row] for row in rep]
             rep = fmpz_mat(rep)
-            time_limit()
+            check_time()
 
         def to_float(x):
             if QQ.of_type(x):
@@ -147,6 +149,6 @@ def lll(x: "Matrix", delta=QQ(3, 4), time_limit=None):
         new_rep = DDM(new_rep, x.shape, ZZ)
     else:
         rep = rep.to_ddm()
-        new_rep = ddm_lll(rep, delta=delta, time_limit=time_limit)
+        new_rep = ddm_lll(rep, delta=delta, time_limit=check_time)
     dM2 = dM.from_rep(new_rep)
     return x._fromrep(dM2)

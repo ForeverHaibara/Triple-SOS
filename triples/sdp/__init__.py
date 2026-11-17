@@ -12,7 +12,7 @@ from .primal import SDPPrimal
 from .cone import ConeSDPBuilder
 
 from .arithmetic import congruence, ArithmeticTimeout
-from .backends import SDPError, SDPTimeoutError
+from .backends import SDPError, SDPInfeasibleError, SDPTimeoutError
 from .wedderburn import character_table, symmetry_adapted_basis, young_symmetrizers
 
 __all__ = [
@@ -22,6 +22,6 @@ __all__ = [
     'ConeSDPBuilder',
 
     'congruence', 'ArithmeticTimeout',
-    'SDPError', 'SDPTimeoutError',
+    'SDPError', 'SDPInfeasibleError', 'SDPTimeoutError',
     'character_table', 'symmetry_adapted_basis', 'young_symmetrizers'
 ]

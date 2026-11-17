@@ -160,6 +160,7 @@ class SOSElement:
 
     def solve(self,
         solver: Optional[str] = None,
+        *,
         solve_child: bool = True,
         propagate_to_parent: bool = True,
         verbose: bool = False,
@@ -167,12 +168,15 @@ class SOSElement:
         allow_numer: int = 0,
         normalize: bool = True,
         kwargs: Dict[Any, Any] = {},
+        recovery_rounds: int = 2,
+        retry_relaxation: float = 0.,
+        recovery_with_equalities: bool = False
     ) -> Optional[Matrix]:
         """
         Solve the SOS problem. Arguments are passed to `SDPProblem.solve`.
         """
         end_time = perf_counter() + time_limit if isinstance(time_limit, (int, float)) else None
-        time_limit = ArithmeticTimeout.make_checker(time_limit)
+        time_limit = ArithmeticTimeout.make_checker(time_limit=time_limit)
         if self._sdp is None:
             self.construct(verbose=verbose, time_limit=time_limit)
         time_limit()
@@ -180,7 +184,10 @@ class SOSElement:
         return self.sdp.solve(solver=solver, solve_child=solve_child,
                 propagate_to_parent=propagate_to_parent, verbose=verbose,
                 time_limit=rest_time, allow_numer=allow_numer,
-                normalize=normalize, kwargs=kwargs)
+                normalize=normalize, kwargs=kwargs,
+                recovery_rounds=recovery_rounds,
+                retry_relaxation=retry_relaxation,
+                recovery_with_equalities=recovery_with_equalities)
 
     def as_solution(self, *args, **kwargs):
         raise NotImplementedError
@@ -353,6 +360,7 @@ class AtomSOSElement(SOSElement):
             self.sdpp.constrain_block_structures()
 
         self.sdpp.constrain_zero_diagonals(time_limit=time_limit)
+        # self.sdpp.constrain_coordinate_faces(time_limit=time_limit)
 
 
     def _get_equation_system(self, parameters: List['Symbol']=[], domain=None) -> SOSEquationSystem:

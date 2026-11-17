@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Tuple, Union, Optional, Callable
+from typing import Any, Dict, List, Tuple, TYPE_CHECKING
 
 from sympy.matrices import MutableDenseMatrix as Matrix
 from sympy.polys.domains import ZZ
@@ -9,6 +9,10 @@ from sympy.matrices.repmatrix import RepMatrix
 from .transform import SDPTransformation, SDPIdentityTransform
 from .linear import SDPMatrixTransform
 from ..arithmetic import ArithmeticTimeout, sqrtsize_of_mat, solve_undetermined_linear, matmul
+
+if TYPE_CHECKING:
+    from ..arithmetic import TimeLimit
+
 
 def complement(n: int, mask: List[int]) -> List[int]:
     """Get the complement of a mask."""
@@ -138,7 +142,7 @@ class SDPRowExtraction(SDPMatrixTransform):
 
     @classmethod
     def apply(cls, parent_node, extractions: Dict[Any, List[int]]=None, masks: Dict[Any, List[int]]=None,
-            time_limit: Optional[Union[Callable, float]]=None):
+            time_limit: 'TimeLimit'=None):
         if parent_node.is_dual:
             return DualRowExtraction.apply(parent_node, extractions=extractions, masks=masks, time_limit=time_limit)
         elif parent_node.is_primal:
@@ -146,13 +150,15 @@ class SDPRowExtraction(SDPMatrixTransform):
         raise TypeError('Parent_node should be a SDPProblemBase object.')
 
     @classmethod
-    def apply_zero_diagonals(cls, parent_node):
+    def apply_zero_diagonals(cls, parent_node, time_limit: 'TimeLimit' = None):
+        check_time = ArithmeticTimeout.make_checker(time_limit)
         child_node = None
         while True:
+            check_time()
             zero_diagonals = get_zero_diagonals(parent_node)
             if not any(len(_) for _ in zero_diagonals.values()):
                 break
-            child_node = cls.apply(parent_node, masks=zero_diagonals)
+            child_node = cls.apply(parent_node, masks=zero_diagonals, time_limit=check_time)
             if child_node is None or child_node is parent_node:
                 break
             parent_node = child_node
@@ -198,12 +204,12 @@ class SDPRowExtraction(SDPMatrixTransform):
 class DualRowExtraction(SDPRowExtraction):
     @classmethod
     def apply(cls, parent_node, extractions: Dict[Any, List[int]]=None, masks: Dict[Any, List[int]]=None,
-                time_limit: Optional[Union[Callable, float]]=None):
+                time_limit: 'TimeLimit'=None):
         if not parent_node.is_dual:
             raise TypeError('Parent_node should be a SDPProblem object.')
 
         if masks is None and extractions is None:
-            return cls.apply_zero_diagonals(parent_node)
+            return cls.apply_zero_diagonals(parent_node, time_limit=time_limit)
 
         if masks is not None:
             masks = {key: masks.get(key, ()) for key in parent_node.keys()}
@@ -215,7 +221,7 @@ class DualRowExtraction(SDPRowExtraction):
             extractions = {key: extractions.get(key, ()) for key in parent_node.keys()}
             masks = {key: complement(n, extractions[key]) for key, n in parent_node.size.items()}
 
-        time_limit = ArithmeticTimeout.make_checker(time_limit)
+        check_time = ArithmeticTimeout.make_checker(time_limit)
 
         def _get_new_params(x0_and_space, extractions, masks):
             eqs = []
@@ -239,7 +245,7 @@ class DualRowExtraction(SDPRowExtraction):
 
             eqs = Matrix.vstack(*eqs)
             rhs = Matrix.vstack(*rhs)
-            trans_x0, trans_space = solve_undetermined_linear(eqs, -rhs, time_limit=time_limit)
+            trans_x0, trans_space = solve_undetermined_linear(eqs, -rhs, time_limit=check_time)
 
             new_x0_and_space = {}
             for key, (x0, space) in x0_and_space.items():
@@ -247,7 +253,7 @@ class DualRowExtraction(SDPRowExtraction):
                 new_x0 = x0[nonzero_inds[key],:] + space2 * trans_x0
                 new_space = space2 * trans_space
                 new_x0_and_space[key] = (new_x0, new_space)
-                time_limit()
+                check_time()
             return new_x0_and_space, trans_space, trans_x0
 
         x0_and_space = parent_node._x0_and_space

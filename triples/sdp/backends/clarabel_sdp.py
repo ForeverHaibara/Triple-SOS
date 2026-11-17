@@ -20,6 +20,7 @@ class DualBackendCLARABEL(DualBackend):
     [1] https://clarabel.org/stable/python/getting_started_py/
     """
     _dependencies = ('clarabel', 'scipy')
+    _solver_name = 'clarabel'
 
     _opt_isometric  = 'col'
     _opt_sparse     = 'csc'
@@ -69,7 +70,22 @@ class DualBackendCLARABEL(DualBackend):
 
         status = sol.status
         y = np.array(sol.x).flatten() if sol.x is not None else None
-        result = {'y': y}
+        result = {
+            'y': y, 'status': str(status),
+            'iterations': sol.iterations, 'solve_time': sol.solve_time,
+            'primal_residual': sol.r_prim, 'dual_residual': sol.r_dual,
+            'info': {'s': sol.s, 'z': sol.z,
+                     'obj_val': sol.obj_val, 'obj_val_dual': sol.obj_val_dual},
+        }
+        for name, vector in (('dual', sol.z), ('slack', sol.s)):
+            if vector is None:
+                continue
+            blocks, offset = [], 0
+            for n in self.mat_sizes:
+                end = offset + n*(n+1)//2
+                blocks.append(self._matrix_from_isometric(vector[offset:end], n, 'col'))
+                offset = end
+            result[name] = blocks
 
         if status in (s.Solved, s.AlmostSolved):
             result['optimal'] = True
@@ -81,7 +97,10 @@ class DualBackendCLARABEL(DualBackend):
                 result['unbounded'] = True
             result['inf_or_unb'] = True
 
-        if status in (s.MaxIterations, s.MaxTime, s.InsufficientProgress):
+        if status in (s.AlmostSolved, s.AlmostPrimalInfeasible, s.AlmostDualInfeasible,
+                      s.MaxIterations, s.MaxTime, s.InsufficientProgress):
             result['inaccurate'] = True
+        if status == s.NumericalError:
+            result['error'] = True
 
         return result

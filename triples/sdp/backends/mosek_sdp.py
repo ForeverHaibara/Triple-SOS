@@ -39,6 +39,7 @@ class DualBackendMOSEK(DualBackend):
     [3] https://docs.mosek.com/latest/pythonfusion/tutorial-sdo-shared.html#doc-tutorial-sdo
     """
     _dependencies = ('mosek',)
+    _solver_name = 'mosek'
 
     _opt_isometric  = 'row'
     _opt_ineq_to_1d = False
@@ -90,7 +91,7 @@ class DualBackendMOSEK(DualBackend):
 
     def _solve(self, configs: SolverConfigs):
         from mosek.fusion import Model, AccSolutionStatus
-        from mosek.fusion import SolutionStatus, ProblemStatus
+        from mosek.fusion import SolutionStatus, ProblemStatus, SolutionError
         result = {}
         with Model("SDP") as M:
             x = self._add_variables_to_model(M)
@@ -110,6 +111,18 @@ class DualBackendMOSEK(DualBackend):
 
             ss = M.getProblemStatus()
             ps = M.getPrimalSolutionStatus()
+            result['status'] = str(ps)
+            result['info'] = {'problem_status': str(ss),
+                              'dual_status': str(M.getDualSolutionStatus())}
+            dual = []
+            for i, n in enumerate(self.mat_sizes):
+                try:
+                    vector = M.getConstraint("A%d"%i).dual()
+                except SolutionError:
+                    dual.append(None)
+                else:
+                    dual.append(self._matrix_from_isometric(vector, n, 'row'))
+            result['dual'] = dual
             if ps == SolutionStatus.Optimal:
                 result['optimal'] = True
             elif ss == ProblemStatus.PrimalInfeasible:

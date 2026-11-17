@@ -1,4 +1,4 @@
-from typing import List, Tuple, Dict, Optional, Union, Callable, Any, TYPE_CHECKING
+from typing import List, Tuple, Dict, Optional, Any, TYPE_CHECKING
 from collections import Counter
 
 from sympy.matrices import MutableDenseMatrix as Matrix
@@ -7,13 +7,26 @@ from .linear import SDPLinearTransform, SDPMatrixTransform, SDPCongruence
 from .parametric import SDPDeparametrization
 from .polytope import get_zero_diagonals, SDPRowExtraction
 from .diagonalize import get_block_structures, SDPBlockDiagonalization
-from ..arithmetic import is_empty_matrix
+from ..arithmetic import ArithmeticTimeout, is_empty_matrix
 from ..abstract import SDPProblemBase
 
 if TYPE_CHECKING:
     from sympy import Symbol
 
     from .transform import SDPTransformation
+    from ..arithmetic import TimeLimit
+
+
+def _format_sdp_summary(sdp: SDPProblemBase, short: int) -> str:
+    if short <= 0:
+        return str(sdp)
+    if short == 1:
+        sizes = sorted(sdp.size.values(), reverse=True)
+        return f"<dof={sdp.dof}, size={sizes}>"
+    counts = Counter(sdp.size.values())
+    terms = [f"{size}²×{count}" if count > 1 else f"{size}²"
+             for size, count in sorted(counts.items(), reverse=True)]
+    return f"<dof={sdp.dof}, size=({' + '.join(terms)})>"
 
 
 def _propagate_args_to_last(self, next_node, func, recursive, *args):
@@ -65,22 +78,10 @@ class TransformableProblem(SDPProblemBase):
         """
         Print the dependency graph of the SDP problem.
         """
-        def _get_sdp_str(sdp):
-            if int(short) <= 0:
-                sdp_str = sdp.__str__()
-            elif int(short) == 1:
-                size = sorted(sdp.size.values(), reverse=True)
-                sdp_str = f"<dof={sdp.dof}, size={size}>"
-            else:
-                cnt = Counter(sdp.size.values())
-                items = sorted(cnt.items(), reverse=True)
-                size = [f"{k}²×{v}" if v > 1 else f"{k}²" for k, v in items]
-                sdp_str = f"<dof={sdp.dof}, size=({' + '.join(size)})>"
-            return sdp_str
-
+        short = int(short)
         _MAXLEN = 30
         _PAD = (_MAXLEN - 10) // 2
-        print(" " * _PAD + "SDPProblem" + " " * _PAD + _get_sdp_str(self))
+        print(" " * _PAD + "SDPProblem" + " " * _PAD + _format_sdp_summary(self, short))
         sdp = self
 
         def _formatter(a):
@@ -92,7 +93,7 @@ class TransformableProblem(SDPProblemBase):
         while len(sdp.children):
             sdp2 = sdp.children[-1]
             transform = sdp.common_transform(sdp2)
-            sdp_str = _get_sdp_str(sdp2)
+            sdp_str = _format_sdp_summary(sdp2, short)
             print(_formatter(transform.__class__.__name__) + " " + sdp_str)
             sdp = sdp2
 
@@ -158,7 +159,7 @@ class TransformableProblem(SDPProblemBase):
         return args
 
     def constrain_affine(self, A: Matrix, b: Matrix, to_child: bool=True,
-            time_limit: Optional[Union[Callable, float]]=None) -> 'TransformableProblem':
+            time_limit: "TimeLimit"=None) -> 'TransformableProblem':
         """
         Constrain the affine transformation of the SDP problem.
         """
@@ -166,7 +167,7 @@ class TransformableProblem(SDPProblemBase):
             A=A, b=b, to_child=to_child, time_limit=time_limit)
 
     def constrain_equations(self, eqs: Matrix, rhs: Matrix, to_child: bool=True,
-            time_limit: Optional[Union[Callable, float]]=None) -> 'TransformableProblem':
+            time_limit: "TimeLimit"=None) -> 'TransformableProblem':
         """
         Constrain the equations of the SDP problem.
         """
@@ -174,7 +175,7 @@ class TransformableProblem(SDPProblemBase):
             eqs=eqs, rhs=rhs, to_child=to_child, time_limit=time_limit)
 
     def constrain_columnspace(self, columnspace: Dict[Any, Matrix], to_child: bool=True,
-            time_limit: Optional[Union[Callable, float]]=None) -> 'TransformableProblem':
+            time_limit: "TimeLimit"=None) -> 'TransformableProblem':
         """
         Constrain the columnspace of the SDP problem.
         """
@@ -182,7 +183,7 @@ class TransformableProblem(SDPProblemBase):
             columnspace=columnspace, to_child=to_child, time_limit=time_limit)
 
     def constrain_nullspace(self, nullspace: Dict[Any, Matrix], to_child: bool=True,
-            time_limit: Optional[Union[Callable, float]]=None) -> 'TransformableProblem':
+            time_limit: "TimeLimit"=None) -> 'TransformableProblem':
         """
         Constrain the nullspace of the SDP problem.
         """
@@ -190,7 +191,7 @@ class TransformableProblem(SDPProblemBase):
             nullspace=nullspace, to_child=to_child, time_limit=time_limit)
 
     def constrain_congruence(self, basis: Dict[Any, Matrix],
-            time_limit: Optional[Union[Callable, float]]=None) -> 'TransformableProblem':
+            time_limit: "TimeLimit"=None) -> 'TransformableProblem':
         """
         Constrain the congruence of the SDP problem.
         """
@@ -203,7 +204,7 @@ class TransformableProblem(SDPProblemBase):
         return get_block_structures(self)
 
     def constrain_zero_diagonals(self, extractions: Optional[Dict[Any, List[int]]]=None, masks: Optional[Dict[Any, List[int]]]=None,
-            time_limit: Optional[Union[Callable, float]]=None) -> 'TransformableProblem':
+            time_limit: "TimeLimit"=None) -> 'TransformableProblem':
         return SDPRowExtraction.apply(self,
             extractions=extractions, masks=masks, time_limit=time_limit)
 
@@ -234,6 +235,35 @@ class TransformableDual(TransformableProblem):
                 is_empty_matrix(rhs, check_all_zeros=True):
             return self
         return SDPLinearTransform.apply_from_equations(self, eqs, rhs)
+
+    def constrain_coordinate_faces(self, level: int = 2, to_child: bool = True,
+            time_limit: "TimeLimit" = None) -> 'TransformableDual':
+        """Repeatedly reduce the PSD blocks using exact coordinate certificates.
+
+        Level 1 searches for nonnegative combinations of the diagonal forms
+        that vanish identically across the blocks. Level 2 also uses the
+        forms in directions e_i + e_j and e_i - e_j. Level 0 disables
+        the search. Start at the last child if to_child is True.
+        """
+        from ..facial import find_exposing_nullspace
+        if level not in (0, 1, 2):
+            raise ValueError("level must be 0, 1 or 2")
+        node = self.get_last_child() if to_child else self
+        if level == 0:
+            return node
+
+        check_time = ArithmeticTimeout.make_checker(time_limit)
+
+        while node.dof > 0:
+            check_time()
+            nullspace = find_exposing_nullspace(node._x0_and_space,
+                coordinate_level=level, time_limit=check_time)
+            if not nullspace:
+                return node
+            node = node.constrain_nullspace(nullspace, to_child=False, time_limit=check_time)
+
+        return node
+
 
 class TransformablePrimal(TransformableProblem):
     def constrain_symmetry(self) -> SDPProblemBase:

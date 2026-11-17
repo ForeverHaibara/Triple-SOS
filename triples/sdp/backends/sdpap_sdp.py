@@ -22,6 +22,7 @@ class DualBackendSDPAP(DualBackend):
     [2] https://sdpa-python.github.io/docs/installation/
     """
     _dependencies = ('sdpap',)
+    _solver_name = 'sdpa'
 
     _opt_ineq_to_1d = False
     _opt_eq_to_ineq = False
@@ -48,16 +49,19 @@ class DualBackendSDPAP(DualBackend):
             'epsilonDash': configs.tol_gap_rel,
         }
         option.update(configs.solver_options)
-        y, _, sdpapinfo, timeinfo, sdpainfo = sdpap.solve(*self._get_ABCKJ(), option=option)
+        y, dual, sdpapinfo, timeinfo, sdpainfo = sdpap.solve(*self._get_ABCKJ(), option=option)
 
         # y might be a scipy sparse matrix, so convert it to numpy array
         # check format of y and convert it to numpy array
         if (not isinstance(y, np.ndarray)) and hasattr(y, 'toarray'):
             y = y.toarray()
-        y = np.array(y).flatten()
+        if y is not None:
+            y = np.array(y).flatten()
 
-        result = {'y': y}
         status = sdpapinfo['phasevalue']
+        result = {'y': y, 'status': status,
+                  'info': {'dual': dual, 'sdpapinfo': sdpapinfo,
+                           'timeinfo': timeinfo, 'sdpainfo': sdpainfo}}
         if status == 'pdOPT':
             result['optimal'] = True
         elif status in ('pINF', 'pdINF','dUNBD'):

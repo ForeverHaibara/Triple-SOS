@@ -1,8 +1,9 @@
-from sympy.abc import a, b, c, d, x, y, z
+from sympy.abc import a, b, c, d, r, s, x, y, z
 
 from ..sdpsos import SDPSOS
 from ....sdp.backends.clarabel_sdp import DualBackendCLARABEL
 from ....testing.doctest_parser import solution_checker
+from ....utils import pl
 
 import pytest
 
@@ -45,11 +46,46 @@ class SDPSOSProblems:
         return a*(a-b)*(a-c)*(a-d)+b*(b-c)*(b-d)*(b-a)\
             +c*(c-d)*(c-a)*(c-b)+d*(d-a)*(d-b)*(d-c)+a*b*c*d, [], []
 
+    @classmethod
+    def problem_joint_face_recovery(cls):
+        # vasile 32012
+        return 4 - a*b**2*c**3, [a, b, c, b-a, c-b], [a*b + b*c + c*a - 3]
+
+    @classmethod
+    @depends_on_clarabel
+    def problem_joint_dual_face_recovery(cls):
+        g, h = r**2 - 2, s**2 - 2
+        return (g*h*(r**2 - 1)*(s**2 - 1) + (r*s + r + s + 2)**2).expand(), [g, h], []
+
+    @classmethod
+    def problem_schur6_enhanced(cls):
+        return pl('s(a4(a-b)(a-c))-5p(a-b)2'), [a,b,c], [], {'lift_degree_limit': 2}
+
+    @classmethod
+    def problem_schur6_enhanced_scaled(cls):
+        return pl('s(a4(a-b)(a-c))-5p(a-b)2').as_expr().xreplace({
+            b: 2*b, c: 3*c
+        }), [a,b,c], [], {'lift_degree_limit': 2}
+
+    @classmethod
+    def problem_isosceles_right(cls):
+        return pl('s(a3(a-b)(a-c)(a2-b2-c2)2)'), [a,b,c], [], {'lift_degree_limit': 2}
+
+    # @classmethod
+    # def problem_symmetric_quaternary_degree6(cls):
+    #     # Slow. Need not test.
+    #     return pl('s(((((a+b-c)(a+b-d)-2ab)2+2(ab)2)-(a+b-c-d)2(c-d)2)(a-b)2)',
+    #         (a, b, c, d), 'sym'), [], [], {'lift_degree_limit': 4}
+
 
 @pytest.mark.slow
 @pytest.mark.parametrize("problem", SDPSOSProblems.collect().values(),
     ids=SDPSOSProblems.collect().keys())
 def test_sdpsos(problem):
     solver = 'clarabel' if HAS_CLARABEL else None
-    sol = SDPSOS(*problem(), solver=solver)
+    data = problem()
+    kwargs = {}
+    if len(data) >= 4:
+        data, kwargs = data[:3], data[3]
+    sol = SDPSOS(*data, solver=solver, **kwargs)
     assert solution_checker(sol)

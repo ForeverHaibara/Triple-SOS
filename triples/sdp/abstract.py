@@ -1,6 +1,5 @@
 from abc import ABC, abstractmethod
-from time import perf_counter
-from typing import Dict, Tuple, List, Union, Optional, Any, TYPE_CHECKING
+from typing import Dict, Tuple, List, Union, Optional, Any, Iterable, NamedTuple, TYPE_CHECKING
 
 import numpy as np
 from sympy import MatrixBase, Rational
@@ -19,9 +18,52 @@ if TYPE_CHECKING:
     from sympy import Expr, Symbol
     from sympy.core.relational import Relational
 
+    from .arithmetic import TimeLimit
     from .backends import SDPResult
 
 Decomp = Dict[Any, Tuple[Matrix, Matrix, List[Rational]]]
+
+
+class SDPNumericalResult(NamedTuple):
+    """A backend result together with the problem's numerical formulation.
+
+    relaxed counts the auxiliary variables appended to result.y.
+    For a relaxed dual pencil, block_scales contains (key, divisor) pairs
+    in solver order. The current eigenvalue relaxation has slack
+    S(y)/divisor - t*I, where t is the first appended variable.
+    """
+    result: 'SDPResult'
+    relaxed: int
+    block_scales: Tuple[Tuple[Any, float], ...]
+
+    @property
+    def dual_blocks(self) -> Dict[Any, Optional['ndarray']]:
+        """Backend dual blocks indexed by pencil key, in the backend's scaling."""
+        if self.result.dual is None:
+            return {}
+        return {key: Z for (key, _), Z in zip(self.block_scales, self.result.dual)}
+
+
+def _get_numerical_y(attempt: SDPNumericalResult,
+        primal_sizes: Optional[Iterable[int]] = None) -> Optional['ndarray']:
+    y = attempt.result.y
+    if y is None or not attempt.relaxed:
+        return y
+    if attempt.result.infeasible:
+        return None
+
+    split = len(y) - attempt.relaxed
+    if primal_sizes is None:
+        return y[:split]
+
+    # The first auxiliary variable shifts the diagonal of each primal block.
+    # Only used in primal forms of SDPs.
+    restored = y[:split].copy()
+    offset = 0
+    for n in primal_sizes:
+        restored[offset:offset+n**2:n+1] += y[split]
+        offset += n**2
+    return restored
 
 
 class SDPProblemBase(ABC):
@@ -36,8 +78,28 @@ class SDPProblemBase(ABC):
     _transforms: List
     _x0_and_space: Dict[Any, Tuple[Matrix, Matrix]]
     def __init__(self, *args, **kwargs) -> None:
-        # record the numerical solutions
-        self._ys = []
+        self._numerical_results: List[SDPNumericalResult] = []
+
+    @property
+    def numerical_results(self) -> Tuple[SDPNumericalResult, ...]:
+        """
+        Numerical attempts made at this node, including unsuccessful attempts.
+        Results are recorded before rationalization and parent propagation.
+        A feasibility solve may append an eigenvalue relaxation to `result.y`.
+        Results from transformed child problems belong to the child node.
+        """
+        return tuple(self._numerical_results)
+
+    @property
+    def _ys(self) -> List['ndarray']:
+        """Numerical iterates in the original coordinates of this node."""
+        ys = []
+        primal_sizes = self.size.values() if self.is_primal else None
+        for attempt in self._numerical_results:
+            y = _get_numerical_y(attempt, primal_sizes)
+            if y is not None:
+                ys.append(y.copy())
+        return ys
 
     def _init_space(self, arg: Union[list, Dict], argname: str) -> Dict[Any, Matrix]:
         """
@@ -224,14 +286,13 @@ class SDPProblemBase(ABC):
         solve_child: bool = True,
         propagate_to_parent: bool = True,
         verbose: bool = False,
-        time_limit: Optional[float] = None,
+        time_limit: 'TimeLimit' = None,
         kwargs: Dict[Any, Any] = {}
     ) -> Optional[Matrix]:
         """
         Solve the SDP problem with a given objective and constraints.
         """
-        end_time = perf_counter() + time_limit if isinstance(time_limit, (int, float)) else None
-        time_limit = ArithmeticTimeout.make_checker(time_limit)
+        check_time = ArithmeticTimeout.make_checker(time_limit)
 
         original_self = self
         obj = self.exprs_to_arrays([objective])[0]
@@ -254,7 +315,7 @@ class SDPProblemBase(ABC):
                 ineq_lhs, ineq_rhs = self.propagate_affine_to_child(ineq_lhs, -ineq_rhs, recursive=True)
                 eq_lhs, eq_rhs = self.propagate_affine_to_child(eq_lhs, -eq_rhs, recursive=True)
                 ineq_rhs, eq_rhs = -ineq_rhs, -eq_rhs
-                time_limit()
+                check_time()
                 self = self.get_last_child()
         except ArithmeticTimeout as e:
             raise SDPTimeoutError.from_kwargs() from e
@@ -264,21 +325,25 @@ class SDPProblemBase(ABC):
         kwargs = kwargs.copy()
         if 'verbose' not in kwargs:
             kwargs['verbose'] = verbose
-        if end_time is not None and ('time_limit' not in kwargs):
-            kwargs['time_limit'] = end_time - perf_counter()
+        if 'time_limit' not in kwargs:
+            try:
+                remaining = check_time.remaining()
+            except ArithmeticTimeout as e:
+                raise SDPTimeoutError.from_kwargs() from e
+            if remaining is not None:
+                kwargs['time_limit'] = remaining
 
         sol = self._solve_numerical_sdp(objective=obj[0],
                     constraints=cons, solver=solver,
                     return_result=True, kwargs=kwargs)
+        self._numerical_results.append(SDPNumericalResult(sol, 0, ()))
         y = sol.y
-        if y is not None:
-            self._ys.append(y)
         sol.raises()
 
         try:
             if y is not None:
                 y = rep_matrix_from_numpy(y)
-                time_limit()
+                check_time()
                 self.register_y(y, project=True, perturb=True,
                     propagate_to_parent=propagate_to_parent)
                 y = original_self.y

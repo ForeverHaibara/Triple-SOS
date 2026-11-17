@@ -3,13 +3,14 @@ import sys
 import numpy as np
 from scipy import sparse
 from sympy import Rational, primerange
+from sympy.external.gmpy import GROUND_TYPES
 from sympy import MutableDenseMatrix as Matrix
 from ..matmul import (
     kronecker_product, matadd, matlshift, matmul, matmul_multiple,
     symmetric_bilinear, symmetric_bilinear_multiple,
     _decompose_int64_to_level_digits
 )
-from ..matop import FLINT_TYPE, USE_SCIPY_ARRAY
+from ..matop import USE_SCIPY_ARRAY
 
 
 if USE_SCIPY_ARRAY:
@@ -27,7 +28,7 @@ def sparse_dense(A):
 def test_matlshift():
     A = Matrix([1, 2**63 - 1, -2**63, 2**64, -2**64, -1234, 12345678901234])
     func = ['to_sdm', 'to_ddm', 'to_dfm']
-    if not FLINT_TYPE:
+    if GROUND_TYPES != 'flint':
         func = func[:2]
     for f in func:
         dm = A._rep
@@ -82,6 +83,14 @@ def test_matmul():
     C, C2 = matmul(A/7, 2*B/3), matmul(2*B/3, A/7, return_shape=(4,1))
     assert C._rep.domain.is_RR and max((C - 2*A @ B/21).applyfunc(abs)) < 1e-10
     assert C2._rep.domain.is_RR and max((C2 - 2*(B @ A).reshape(4,1)/21).applyfunc(abs)) < 1e-10
+
+    # Unlike the int64 path, the exact fallback must handle unrelated
+    # denominators and products that exceed machine integer size.
+    A = Matrix(64, 32, lambda i, j: Rational(i + j + 1, 2**70 + 3*(i % 2)))
+    B = Matrix(32, 64, lambda i, j: Rational(2**65 + j, i + 2) if (i-j) % 32 < 3 else 0)
+    expected = Matrix(64, 64,
+        lambda i, j: sum(A[i, (j+k) % 32] * B[(j+k) % 32, j] for k in range(3)))
+    assert matmul(A, B, return_shape=(32, 128)) == expected.reshape(32, 128)
 
 
 def test_sparse_matadd_and_matmul():

@@ -71,19 +71,57 @@ MatrixLike = Union[MatrixBase, ndarray, sparray]
 MatrixT = TypeVar('MatrixT', MatrixBase, ndarray, sparray)
 
 
+TimeLimit = Optional[Union[float, Callable[[], Optional[float]], 'TimeChecker']]
+
+
 class ArithmeticTimeout(Exception):
     @classmethod
-    def make_checker(cls, time_limit: Optional[Union[Callable, float]] = None) -> Callable[[], None]:
-        """Returns a callable that raises an Exception when called if time exceeds current_time + time_limit."""
-        if time_limit is None:
-            return lambda : None
+    def make_checker(cls, time_limit: TimeLimit = None) -> 'TimeChecker':
+        """Normalize a time limit without restarting an existing checker."""
+        if isinstance(time_limit, TimeChecker):
+            return time_limit
         if callable(time_limit):
-           return time_limit
-        future = perf_counter() + time_limit
-        def checker():
-            if perf_counter() > future:
-                raise cls()
-        return checker
+            return TimeChecker(callback=time_limit, exception=cls)
+        return TimeChecker(time_limit, exception=cls)
+
+
+class TimeChecker:
+    """A callable deadline check that can also report seconds left."""
+
+    def __init__(self, seconds: Optional[float] = None, *,
+            callback: Optional[Callable[[], Optional[float]]] = None,
+            exception: type = ArithmeticTimeout, enforce: bool = True):
+        self._deadline = None if seconds is None else perf_counter() + seconds
+        self._callback = callback
+        self._exception = exception
+        self._enforce = enforce
+
+    def __call__(self) -> None:
+        self.remaining()
+
+    def remaining(self) -> Optional[float]:
+        """Return seconds left, or None if no numeric limit is available.
+
+        Run the same checks as calling the checker directly.
+        """
+        outer = self._callback() if self._callback is not None else None
+        if self._deadline is None:
+            return outer
+        left = self._deadline - perf_counter()
+        if outer is not None:
+            left = min(left, outer)
+        if self._enforce and left <= 0:
+            raise self._exception()
+        return left
+
+    def with_limit(self, seconds: float, *, enforce: bool = True) -> 'TimeChecker':
+        """Start a local limit while continuing to check the enclosing limit.
+
+        With enforce=False, the local cap affects the reported time only.
+        """
+        return TimeChecker(seconds, callback=self.remaining,
+            exception=self._exception, enforce=enforce)
+
 
 def is_empty_matrix(M: Union[Matrix, ndarray], check_all_zeros: bool = False) -> bool:
     """

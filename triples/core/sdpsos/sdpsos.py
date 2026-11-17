@@ -239,12 +239,17 @@ class SDPSOSSolver(ProofNode):
     preordering: str
         The preordering method for extending the generators of the quadratic module. It can be
         'none', 'linear', 'linear-progressive'. Default is 'linear-progressive'.
-    unstable_eig_threshold: float
-        If it fails to rationalize but the smallest eigenvalue of the SDP is larger than
-        `unstable_eig_threshold`, then it considers the problem as numerically unstable
-        and stops further search. Default is -0.1.
+    unstable_eig_threshold: Optional[float]
+        Optional early stop after rationalization failure if the smallest
+        eigenvalue exceeds this threshold. By default, continue the search.
     normalize: bool
         Use automatic normalization before solving SDP. Default is True.
+    retry_relaxation: float
+        Positive amount of PSD relaxation for a numerical retry after a stalled
+        solve. The candidate is verified against the original SDP. Default is 0.
+    recovery_rounds: int
+        Maximum number of retries on certified faces per SDP. Use 0 to disable
+        these retries. Default is 2.
     verbose: bool
         Whether to print the progress. Default is False.
     """
@@ -257,8 +262,10 @@ class SDPSOSSolver(ProofNode):
         "solve_kwargs": {},
         "ineq_constraints_with_trivial": True,
         "preordering": "linear-progressive",
-        "unstable_eig_threshold": -0.1,
+        "unstable_eig_threshold": None,
         "normalize": True,
+        "retry_relaxation": 0.,
+        "recovery_rounds": 2,
         "verbose": False,
     }
 
@@ -335,7 +342,9 @@ class SDPSOSSolver(ProofNode):
         else:
             sos = SOSPoly(poly.zero, poly.gens,
                 qmodule = qmodule + poly_qmodule, ideal = ideal,
-                symmetry = symmetry.perm_group, roots = roots, degree=degree
+                symmetry = symmetry.perm_group, roots = roots, degree=degree,
+                # The zero target represents N - F*D, whose degree is known here.
+                is_homogeneous=self.problem.is_homogeneous,
             )
         sos.construct(
             wedderburn=configs['wedderburn'],
@@ -423,6 +432,7 @@ class SDPSOSSolver(ProofNode):
         eq_constraints = problem.eq_constraints
 
         verbose = configs["verbose"]
+        unstable_eig_threshold = configs["unstable_eig_threshold"]
 
         degree = poly.total_degree() + lift_degree
 
@@ -445,6 +455,8 @@ class SDPSOSSolver(ProofNode):
                     time_limit=configs['expected_end_time'] - perf_counter(),
                     allow_numer=configs['allow_numer'],
                     normalize=configs['normalize'],
+                    retry_relaxation=configs['retry_relaxation'],
+                    recovery_rounds=configs['recovery_rounds'],
                     kwargs=configs['solve_kwargs']
                 )
 
@@ -473,15 +485,15 @@ class SDPSOSSolver(ProofNode):
                     self.state = -1
                     self.finished = True
                     break
-                elif isinstance(e, SDPRationalizeError):
-                    # XXX: this is very heuristic
+                elif (unstable_eig_threshold is not None and sos_problem is not None
+                      and isinstance(e, SDPRationalizeError)):
                     y = e.y
                     if y is not None:
                         dr = DualRationalizer(sos_problem.sdpp)
                         # y[:-1] to discard the eigenvalue relaxation,
                         # see source code in SDPProblem.solve
                         mineig = dr.mineig(y[:-1])
-                        if mineig > configs["unstable_eig_threshold"]:
+                        if mineig > unstable_eig_threshold:
                             # we think that it is numerically unstable
                             self.state = -1
                             self.finished = True
@@ -577,8 +589,10 @@ def SDPSOS(
     solve_kwargs: Dict[str, Any] = {},
     ineq_constraints_with_trivial: bool = True,
     preordering: str = 'linear-progressive',
-    unstable_eig_threshold: float = -0.1,
+    unstable_eig_threshold: Optional[float] = None,
     normalize: bool = True,
+    retry_relaxation: float = 0.,
+    recovery_rounds: int = 2,
     verbose: bool = False,
     time_limit: float = 3600.,
 ) -> Optional["Solution"]:
@@ -613,16 +627,21 @@ def SDPSOS(
         exact solution by rationalization.
     solve_kwargs: Dict[str, Any]
         Extra keyword arguments to pass to the SDP solver.
+    recovery_rounds: int
+        Maximum number of retries on certified faces per SDP. Use 0 to disable
+        these retries. Default is 2.
+    retry_relaxation: float
+        Positive amount of PSD relaxation for a bounded numerical retry after
+        an inaccurate or failed solve. Default is 0 (disabled).
     ineq_constraints_with_trivial: bool
         Whether to add the trivial inequality constraint 1 >= 0. This is used to generate the
         quadratic module. Default is True.
     preordering: str
         The preordering method for extending the generators of the quadratic module. It can be
         'none', 'linear', 'linear-progressive'. Default is 'linear-progressive'.
-    unstable_eig_threshold: float
-        If it fails to rationalize but the smallest eigenvalue of the SDP is larger than
-        `unstable_eig_threshold`, then it considers the problem as numerically unstable
-        and stops further search. Default is -0.1.
+    unstable_eig_threshold: Optional[float]
+        Optional early stop after rationalization failure if the smallest
+        eigenvalue exceeds this threshold. By default, continue the search.
     normalize: bool
         Use automatic normalization before solving SDP. Default is True.
     verbose: bool
@@ -691,6 +710,8 @@ def SDPSOS(
             "ineq_constraints_with_trivial": ineq_constraints_with_trivial,
             "preordering": preordering,
             "normalize": normalize,
+            "retry_relaxation": retry_relaxation,
+            "recovery_rounds": recovery_rounds,
             "unstable_eig_threshold": unstable_eig_threshold,
             "verbose": verbose,
         }

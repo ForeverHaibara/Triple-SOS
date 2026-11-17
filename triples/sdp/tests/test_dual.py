@@ -1,10 +1,13 @@
+import numpy as np
 import sympy as sp
 from sympy.abc import a, x, t
 from sympy.matrices import MutableDenseMatrix as Matrix
 
 import pytest
 
+from ..backends import SDPError
 from ..dual import SDPProblem
+from ..rationalize import SDPRationalizeError
 
 class DualObjProblems:
     """
@@ -41,3 +44,47 @@ def test_dual_solve_obj(problem, tol=1e-5):
     assert sdp.solve_obj(obj, constraints)
     val2 = obj.xreplace(sdp.as_params())
     assert abs(val2 - val) < tol
+
+
+def test_dual_numerical_history():
+    pytest.importorskip('clarabel')
+    sdp = SDPProblem.from_matrix({'S': Matrix([[a, 1], [1, a]]),
+                                  'bound': Matrix([[2-a]])})
+    with pytest.raises(SDPError) as exc:
+        sdp.solve_obj(a, solver='clarabel', kwargs={'max_iters': 1})
+    first, = sdp.numerical_results
+    assert first.result is exc.value.result
+    assert first.relaxed == 0
+    assert first.result.inaccurate
+    assert np.allclose(sdp._ys[0], first.result.y)
+
+    assert sdp.solve(solver='clarabel')
+    attempt = sdp.numerical_results[-1]
+    result = attempt.result
+    assert attempt.relaxed == 1
+    assert tuple(key for key, _ in attempt.block_scales) == ('S', 'bound')
+    y = sdp._ys[-1]
+    assert np.allclose(y, result.y[:-1])
+    matrices = sdp.S_from_y(y)
+    for (key, scale), slack in zip(attempt.block_scales, result.slack):
+        restored = scale * (slack + result.y[-1]*np.eye(slack.shape[0]))
+        assert np.allclose(restored, np.array(matrices[key], dtype=float), atol=1e-6)
+    dual = [matrix/scale for matrix, (_, scale) in zip(result.dual, attempt.block_scales)]
+    assert abs(np.trace(dual[0]) - dual[1][0, 0]) < 1e-6
+
+
+def test_dual_recovers_on_an_exposed_face():
+    pytest.importorskip('clarabel')
+    p = sp.Rational(1, 13)
+    a, b, c = sp.symbols('a b c')
+    pencil = Matrix([[1, a-p, b-p], [a-p, b-p, c-p], [b-p, c-p, 0]])
+    T = Matrix([[1, 1, 0], [0, 1, 1], [1, 0, 1]])
+    sdp = SDPProblem.from_matrix(T.T * pencil * T)
+    options = {'solver': 'clarabel', 'normalize': False, 'kwargs': {'max_iters': 5}}
+
+    with pytest.raises(SDPRationalizeError):
+        sdp.solve(recovery_rounds=0, **options)
+
+    assert sdp.solve(**options) == Matrix([p, p, p])
+    assert sdp.S[0] == T.T * sp.diag(1, 0, 0) * T
+    assert sdp.get_last_child() is sdp

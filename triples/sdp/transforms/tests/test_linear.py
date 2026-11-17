@@ -7,6 +7,7 @@ References
 [1] Permenter F. & Parrilo P.A. (2014), Partial facial reduction: simplified,
     equivalent SDPs via approximations of the PSD cone, Math. Program., 171, 1-54.
 """
+import pytest
 from sympy import symbols, linear_eq_to_matrix
 from sympy import MutableDenseMatrix as Matrix
 from sympy.abc import a, b, c, x, t
@@ -40,7 +41,7 @@ def fd_example4():
 def fd_example5():
     # [1] Section 5.1.2 Example 3
     y1, y2, y3 = a, b, c
-    A = Matrix.diag(
+    A = Matrix(
         [[  1, -y1,  0,   0],
          [-y1,  y3,  0,   0],
          [  0,   0, y2,  y3],
@@ -99,6 +100,22 @@ def test_dual_matrix_transform():
         assert sdp.as_params() == {y1: 1, y2: 1, y3: 0}
 
 
+def test_constrain_coordinate_faces():
+    sdp = fd_example2()
+    sdpp = sdp.constrain_coordinate_faces(level=2)
+    assert sdpp.dof == 0 and sdpp.size == {'A': 2}
+    sdpp.solve()
+    assert sdp.as_params() == {a: 1, b: 1, c: 0}
+    assert sdp.S['A'] == Matrix.diag(Matrix([[1,-1],[-1,1]]), Matrix([[1,-1],[-1,1]]))
+
+    sdp = fd_example5()
+    sdpp = sdp.constrain_coordinate_faces(level=1)
+    assert sdpp.dof == 0 and sdpp.size == {'A': 1}
+    sdpp.solve()
+    assert sdp.as_params() == {a: 0, b: 0, c: 0}
+    assert sdp.S['A'] == Matrix.diag(1,0,0,0)
+
+
 def test_dual_congruence():
     sdp = fd_example2()
 
@@ -139,3 +156,33 @@ def test_linear_transform_solve_obj():
 
     sdp.solve_obj(-t)
     assert abs(sdp.as_params()[t] - 1.5) < 1e-5
+
+
+@pytest.mark.parametrize('principal', [True, False])
+def test_dual_matrix_transform_nullspace_propagation(principal):
+    W = Matrix([[1, 0], [0, 1], [2, -1]])
+    S = W * Matrix([[a, b], [b, 1]]) * W.T
+    sdp = SDPProblem.from_matrix({'A': S, 'B': Matrix([[2]]), 'zero': Matrix([[0]])})
+    V = Matrix([-2, 1, 1])
+    if principal:
+        first = sdp.constrain_nullspace({'A': V, 'zero': Matrix([[1]])})
+    else:
+        first = sdp.constrain_columnspace({'A': W, 'zero': Matrix.zeros(1, 0)}, to_child=False)
+    assert first.size == {'A': 2, 'B': 1}
+    y = Matrix([3, 1])
+    A, offset = sdp.common_transform(first).get_y_transform_from_child()
+    parent_block = sdp.S_from_y(A*y + offset)['A']
+    expected = parent_block.extract([1, 2], [1, 2]) if principal else W.T * parent_block * W
+    assert first.S_from_y(y)['A'] == expected
+    assert sdp.constrain_nullspace({'A': V, 'zero': Matrix([[1]])}) is first
+
+    # The direction has zero entries on the retained indices, but its image
+    # under the transpose of the lift is nonzero.
+    second = sdp.constrain_nullspace({'A': Matrix([1, 0, 0])})
+    assert second.size == {'A': 1, 'B': 1}
+    assert second.dof == 0
+    sdp.solve()
+    assert sdp.y == Matrix([0, 0])
+    assert sdp.S['A'] == W[:, 1] * W[:, 1].T
+    U, diag = sdp.decompositions['A']
+    assert U.T * Matrix.diag(*diag) * U == sdp.S['A']
