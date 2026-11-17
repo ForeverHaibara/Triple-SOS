@@ -220,6 +220,15 @@ var settingsDefinition = {children: {
                         type: "checkbox",
                         defaultValue: false,
                         settingPath: "sos.sdpSOS.allowNumer"
+                    },
+                    recoveryRounds: {
+                        name: "Recovery Rounds",
+                        description: "Number of rounds of numerical facial reduction for SDP SOS.",
+                        type: "number",
+                        defaultValue: 2,
+                        min: 0,
+                        step: 1,
+                        settingPath: "sos.sdpSOS.recoveryRounds"
                     }
                 }
             },
@@ -766,6 +775,7 @@ function getSOSConfigs() {
             lift_degree_limit: sos.sdpSOS.liftDegreeLimit,
             wedderburn: sos.sdpSOS.wedderburn,
             allow_numer: sos.sdpSOS.allowNumer,
+            recovery_rounds: sos.sdpSOS.recoveryRounds,
             // decompose_method: document.getElementById("setting_method_SDPSOS_reduced_decompose").checked?'reduce':'raw',
         }
     }
