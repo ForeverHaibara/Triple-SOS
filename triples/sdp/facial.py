@@ -12,7 +12,6 @@ from typing import (
 import numpy as np
 from scipy import __version__ as _SCIPY_VERSION
 from scipy.linalg import qr
-from scipy.optimize import linprog
 from sympy import MutableDenseMatrix as Matrix
 from sympy.external.importtools import version_tuple
 
@@ -146,6 +145,9 @@ def _lp_supports(
         coefficients = np.delete(coefficients, objective_row, axis=0)
     scale = np.max(np.abs(coefficients), axis=1, keepdims=True)
     coefficients /= np.where(scale == 0, 1, scale)
+
+    from scipy.optimize import linprog
+
     remaining = check_time.remaining()
     if remaining is not None and remaining <= 0:
         return

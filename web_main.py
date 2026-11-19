@@ -1,18 +1,13 @@
-from typing import Tuple, List, Dict, Union, Optional
+from typing import Tuple, List, Dict, Union, Optional, TYPE_CHECKING
 
 from flask import Flask, render_template, request, jsonify
 from flask_socketio import SocketIO, join_room, leave_room
 from flask_cors import CORS
 
-from sympy import Poly, Expr, Symbol, Rational
-from sympy.combinatorics import PermutationGroup
-
-from triples.utils.text_process import pl, coefficient_triangle_latex
-from triples.utils import (
-    optimize_poly, Root
-)
-from triples.core import Solution
-from triples.gui.sos_manager import SOSManager
+if TYPE_CHECKING:
+    from sympy import Poly, Expr, Symbol
+    from sympy.combinatorics import PermutationGroup
+    from triples.core import Solution
 
 class SOS_WEB(Flask):
     def __init__(self, *args, **kwargs):
@@ -63,6 +58,10 @@ def preprocess():
     req_input = req["poly"]
     if len(req_input.strip()) == 0:
         return jsonify()
+
+    from sympy import Symbol
+    from triples.gui.sos_manager import SOSManager
+    from triples.utils.text_process import pl
 
     gens = tuple(Symbol(_) for _ in req["gens"])
     perm = SOSManager.parse_perm_group(req["perm"])
@@ -157,6 +156,8 @@ def chained_actions(sid, **kwargs):
 
     solution = None
     try:
+        from triples.gui.sos_manager import SOSManager
+
         ineq_constraints = SOSManager.parse_constraints_dict(
             kwargs["ineq_constraints"], kwargs["parser"])
         eq_constraints = SOSManager.parse_constraints_dict(
@@ -207,10 +208,13 @@ def chained_actions(sid, **kwargs):
 
 def _findroots(
     sid: int,
-    expr: Union[Poly, Tuple[Poly, Poly]],
+    expr: Union["Poly", Tuple["Poly", "Poly"]],
     *,
     timestamp: int = 0,
 ):
+    from sympy import Poly, Rational
+    from triples.utils import optimize_poly
+
     poly = expr
     roots = []
     if isinstance(poly, Poly) and (poly.domain.is_ZZ or poly.domain.is_QQ):
@@ -229,14 +233,16 @@ def _findroots(
 
 
 def _sum_of_squares(
-    expr: Expr,
-    ineq_constraints: Dict[Expr, Expr],
-    eq_constraints: Dict[Expr, Expr],
+    expr: "Expr",
+    ineq_constraints: Dict["Expr", "Expr"],
+    eq_constraints: Dict["Expr", "Expr"],
     *,
     methods: Optional[List[str]] = None,
     time_limit: float = 300.,
     configs: dict = {}
-) -> Optional[Solution]:
+) -> Optional["Solution"]:
+    from triples.gui.sos_manager import SOSManager
+
     return SOSManager.sum_of_squares(
         expr,
         ineq_constraints,
@@ -249,14 +255,16 @@ def _sum_of_squares(
 
 def _emit_sos_result(
     sid: int,
-    solution: Solution,
+    solution: "Solution",
     *,
-    gens: Tuple[Symbol, ...],
-    symmetry: PermutationGroup,
+    gens: Tuple["Symbol", ...],
+    symmetry: "PermutationGroup",
     rewrite_symmetry: bool = True,
     to_string_configs: dict = {},
     timestamp: int = 0,
 ) -> dict:
+    from sympy import Symbol
+
     if rewrite_symmetry:
         solution = solution.rewrite_symmetry(gens, symmetry)
 
@@ -281,6 +289,9 @@ def _emit_sos_result(
 
 @app.route('/process/latexcoeffs', methods=['POST'])
 def get_latex_coeffs():
+    from triples.gui.sos_manager import SOSManager
+    from triples.utils.text_process import coefficient_triangle_latex
+
     req = request.get_json()
     parser_configs = req["parser_configs"]
     parser = SOSManager.make_parser(req["gens"], req["perm"],
@@ -314,6 +325,8 @@ if __name__ == '__main__':
     PORT = 5000
 
     if DEPLOY:
+        from triples.gui.sos_manager import SOSManager
+
         HOST = '0.0.0.0'
 
         SOSManager.verbose = False
